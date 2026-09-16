@@ -19,6 +19,7 @@ node "/Users/benji/Desktop/Personal and learning/agent-chatroom-mcp/dist/swarm.j
 
 - `--agents N`: total agents including the verifier (default 4). Use the number the user said; if they said "a few" use 4, "lots" use 8.
 - `--apply`: lets the verifier implement the agreed fix on a new git branch and prove it with tests. Pass it when the user says "fix" and the project is a git repo; omit for "decide", "investigate", "debate".
+- `--full-access`: workers may edit files and run anything, each on its own git worktree/branch so parallel edits cannot collide; the verifier merges. Pass it when the user says the agents should "do anything", "run code", "edit", or have "full access".
 - `--codex k`: run k of the workers on OpenAI Codex instead of Claude (default 0). Use when the user asks for mixed models.
 - `--named`: show real agent names inside worker rooms (default: pseudonyms, which reduce identity bias).
 - `--timeout`: minutes before stragglers are killed (default 30).

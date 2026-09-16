@@ -5,7 +5,7 @@
  *
  *   npx tsx src/swarm.ts "<task>" --agents 6 --cwd /path/to/project [--codex 2] [--apply] [--timeout 30]
  */
-import { spawn, type ChildProcess } from "node:child_process";
+import { spawn, spawnSync, type ChildProcess } from "node:child_process";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -22,7 +22,7 @@ const flag = (name: string, def?: string) => {
 const has = (name: string) => argv.includes(`--${name}`);
 const task = argv.find((a, i) => !a.startsWith("--") && (i === 0 || !argv[i - 1].startsWith("--")));
 if (!task) {
-  console.error('usage: swarm "<task>" [--agents 6] [--cwd dir] [--codex 0] [--apply] [--named] [--timeout 30] [--port 7717]');
+  console.error('usage: swarm "<task>" [--agents 6] [--cwd dir] [--codex 0] [--apply] [--full-access] [--named] [--timeout 30] [--port 7717]');
   process.exit(2);
 }
 const TOTAL = Math.max(2, Number(flag("agents", "4")));
@@ -31,6 +31,9 @@ const CWD = resolve(flag("cwd", process.cwd())!);
 const CODEX = Math.min(WORKERS, Number(flag("codex", "0")));
 const APPLY = has("apply");
 const ANON = !has("named"); // worker rooms are anonymous unless --named
+const FULL = has("full-access"); // workers may edit files and run anything; each gets its own git worktree
+const READ_TOOLS = ["mcp__chatroom__*", "Read", "Grep", "Glob", "Bash", "WebSearch", "WebFetch"];
+const WRITE_TOOLS = [...READ_TOOLS, "Edit", "Write", "MultiEdit", "NotebookEdit"];
 const TIMEOUT_MIN = Number(flag("timeout", "30"));
 const PORT = Number(flag("port", process.env.PORT ?? "7717"));
 const URL_ = `http://127.0.0.1:${PORT}`;
@@ -127,6 +130,21 @@ async function tailRooms(rooms: string[]) {
   }
 }
 
+/** With --full-access, give each worker its own git worktree so parallel edits cannot collide. */
+const isGitRepo = spawnSync("git", ["-C", CWD, "rev-parse", "--is-inside-work-tree"], { encoding: "utf8" }).stdout?.trim() === "true";
+function workerCwd(name: string): string {
+  if (!FULL || !isGitRepo) return CWD;
+  const dir = resolve(CWD, ".swarm-worktrees", SWARM_ID, name);
+  const branch = `swarm/${SWARM_ID}/${name}`;
+  const r = spawnSync("git", ["-C", CWD, "worktree", "add", "-b", branch, dir], { encoding: "utf8" });
+  if (r.status !== 0) {
+    log(`worktree for ${name} failed (${r.stderr.trim()}); using ${CWD}`);
+    return CWD;
+  }
+  log(`${name} works in ${dir} (branch ${branch})`);
+  return dir;
+}
+
 // ---------- main ----------
 interface Plan {
   summary: string;
@@ -138,7 +156,7 @@ interface Plan {
 await ensureHub();
 log(`swarm ${SWARM_ID}: ${TOTAL} agents (${WORKERS} workers + verifier), project ${CWD}`);
 log("planning…");
-const planRaw = await runClaude("planner", prompt("planner.md", { TASK: task, CWD, WORKERS, MAX_GROUPS: Math.max(1, Math.floor(WORKERS / 2)) }), ["Read", "Grep", "Glob", "Bash"], CWD);
+const planRaw = await runClaude("planner", prompt("planner.md", { TASK: task, CWD, WORKERS, MAX_GROUPS: Math.max(1, Math.floor(WORKERS / 2)) }), READ_TOOLS.filter((t) => !t.startsWith("mcp__")), CWD);
 let plan: Plan;
 try {
   plan = JSON.parse(planRaw.slice(planRaw.indexOf("{"), planRaw.lastIndexOf("}") + 1));
@@ -167,7 +185,7 @@ const runs: Promise<{ name: string; text: string }>[] = [];
 let codexLeft = CODEX;
 
 // verifier joins the leads room first so it is present for every report
-const verifierTools = ["mcp__chatroom__*", "Read", "Grep", "Glob", "Bash", ...(APPLY ? ["Edit", "Write"] : [])];
+const verifierTools = APPLY || FULL ? WRITE_TOOLS : READ_TOOLS;
 runs.push(
   runClaude(
     "verifier",
@@ -182,9 +200,11 @@ runs.push(
       VERIFIER_DIRECTIVE: plan.verifier_directive,
       LEADS_ROOM: leadsRoom,
       LEADS_N: plan.groups.length + 1,
-      APPLY_CLAUSE: APPLY
-        ? "You MAY modify files to apply the agreed fix on a new git branch and run the tests to prove it works; report the branch name in your vote."
-        : "Do NOT modify any files; verify by reading and running read-only commands only.",
+      APPLY_CLAUSE:
+        APPLY || FULL
+          ? "You MAY modify files to apply the agreed fix on a new git branch and run the tests to prove it works; report the branch name in your vote." +
+            (FULL && isGitRepo ? ` Workers may have committed on branches named swarm/${SWARM_ID}/<name>; inspect and merge or cherry-pick from them as needed.` : "")
+          : "Do NOT modify any files; verify by reading and running read-only commands only.",
     }),
     verifierTools,
     CWD,
@@ -214,9 +234,16 @@ for (const g of plan.groups) {
       LEADS_ROOM: leadsRoom,
       AFTER_CONCLUSION: isLead ? prompt("lead-tail.md", { LEADS_ROOM: leadsRoom, NAME: name, AGENT: agent, GROUP_TITLE: g.title }) : "`leave_room` and finish.",
     };
-    const text = prompt("worker.md", vars);
+    const wcwd = workerCwd(name);
+    const text = prompt("worker.md", {
+      ...vars,
+      CWD: wcwd,
+      WRITE_RULE: FULL
+        ? `You MAY modify files and run anything; you are on your own git branch in ${wcwd}. Commit what you want the verifier to test and say so in the room.`
+        : "Do NOT modify any files.",
+    });
     log(`launching ${name}${isLead ? " (lead)" : ""}`);
-    runs.push((useCodex ? runCodex(name, text, CWD) : runClaude(name, text, ["mcp__chatroom__*", "Read", "Grep", "Glob", "Bash"], CWD)).then((t) => ({ name, text: t })));
+    runs.push((useCodex ? runCodex(name, text, wcwd) : runClaude(name, text, FULL ? WRITE_TOOLS : READ_TOOLS, wcwd)).then((t) => ({ name, text: t })));
   }
 }
 
@@ -249,5 +276,6 @@ console.log("\n==================== FINAL ANSWER ====================");
 console.log(leads.conclusion?.text ?? "NO CONSENSUS");
 console.log("\n==================== VERIFIER ====================");
 console.log(results.find((r) => r.name === "verifier")?.text ?? "(none)");
+if (FULL && isGitRepo) console.log(`worker branches: git -C "${CWD}" branch --list "swarm/${SWARM_ID}/*"   (worktrees under .swarm-worktrees/${SWARM_ID}/)`);
 console.log(`\nreport: ${resolve(OUT, "report.md")}`);
 process.exit(leads.conclusion ? 0 : 1);

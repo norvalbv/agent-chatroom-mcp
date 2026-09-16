@@ -1,0 +1,32 @@
+{
+  "name": "agent-chatroom-mcp",
+  "version": "0.1.0",
+  "description": "MCP server that gives AI agents (Claude Code, Codex, ...) a shared chatroom with consensus primitives",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "tsx src/index.ts",
+    "smoke": "tsx scripts/smoke.ts",
+    "debate": "bash scripts/debate.sh"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "MIT",
+  "type": "module",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "express": "^5.2.1",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.6",
+    "@types/node": "^22.20.3",
+    "tsx": "^4.23.13",
+    "typescript": "^7.0.2"
+  },
+  "bin": {
+    "agent-chatroom-mcp": "dist/index.js"
+  }
+}

@@ -26,8 +26,11 @@ if ! curl -sf "http://127.0.0.1:${PORT}/" >/dev/null; then
   for _ in $(seq 1 50); do curl -sf "http://127.0.0.1:${PORT}/" >/dev/null && break; sleep 0.2; done
 fi
 
+LENSES=("cost and simplicity" "risk and failure modes" "the people who have to operate and maintain it" "the strongest case against the obvious answer" "what changes in a year" "evidence from real-world use")
+IDX=0
 render_prompt() { # name agent
-  sed -e "s|{{NAME}}|$1|g" -e "s|{{AGENT}}|$2|g" -e "s|{{ROOM}}|$ROOM|g" -e "s|{{N}}|$N|g" -e "s|{{TOPIC}}|$TOPIC|g" prompts/participant.md
+  local lens="${LENSES[$((IDX % ${#LENSES[@]}))]}"; IDX=$((IDX + 1))
+  sed -e "s|{{NAME}}|$1|g" -e "s|{{AGENT}}|$2|g" -e "s|{{ROOM}}|$ROOM|g" -e "s|{{N}}|$N|g" -e "s|{{TOPIC}}|$TOPIC|g" -e "s|{{LENS}}|$lens|g" prompts/participant.md
 }
 
 MCP_JSON="$LOGS/mcp.json"

@@ -31,6 +31,7 @@ const CWD = resolve(flag("cwd", process.cwd())!);
 const CODEX = Math.min(WORKERS, Number(flag("codex", "0")));
 const APPLY = has("apply");
 const ANON = !has("named"); // worker rooms are anonymous unless --named
+const LENSES = ["reproduce and measure before theorising", "the simplest fix that could work", "what could go wrong with the obvious fix", "what the tests and history say", "the maintainer who inherits this in a year"];
 const FULL = has("full-access"); // workers may edit files and run anything; each gets its own git worktree
 const READ_TOOLS = ["mcp__chatroom__*", "Read", "Grep", "Glob", "Bash", "WebSearch", "WebFetch"];
 const WRITE_TOOLS = [...READ_TOOLS, "Edit", "Write", "MultiEdit", "NotebookEdit"];
@@ -231,6 +232,7 @@ for (const g of plan.groups) {
       ROOM: room,
       N: g.workers,
       ANON: String(ANON),
+      LENS: LENSES[(i - 1) % LENSES.length],
       LEADS_ROOM: leadsRoom,
       AFTER_CONCLUSION: isLead ? prompt("lead-tail.md", { LEADS_ROOM: leadsRoom, NAME: name, AGENT: agent, GROUP_TITLE: g.title }) : "`leave_room` and finish.",
     };

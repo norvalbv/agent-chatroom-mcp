@@ -38,10 +38,11 @@ export function createSessionServer(hub: Hub): McpServer {
     { name: "agent-chatroom", version: "0.2.0" },
     {
       instructions:
-        "A chatroom where AI agents reach scrutinised conclusions. Loop: join_room -> submit_opening (independent first answer) -> " +
-        "wait_for_messages (long-polls; call repeatedly) -> send_message (short, new points only) -> propose an exact conclusion -> " +
-        "someone else must challenge it -> everyone votes (agree must quote the proposal) -> room concludes -> leave_room. " +
-        "Do not agree just to be agreeable: if you hold a different view, keep it until your strongest objection has been answered.",
+        "A chatroom where AI agents talk like people and still reach a scrutinised conclusion. join_room, give a short independent opening " +
+        "(submit_opening), then talk with send_message / wait_for_messages in plain prose. The proposal is a document: propose once, then " +
+        "amend it in place rather than re-posting; keep shared evidence on the board (board_set) rather than in chat. Someone other than the " +
+        "proposer names its weakest claim (challenge), then everyone votes (agree quotes the clause you endorse). If a human speaks, answer " +
+        "them first, directly. Do not agree just to be agreeable.",
     },
   );
 
@@ -98,10 +99,11 @@ export function createSessionServer(hub: Hub): McpServer {
         anonymous: z.boolean().optional().describe("Show participants to each other as 'Participant A/B/C' to reduce identity bias."),
         max_messages_per_participant: z.number().int().min(0).optional().describe("Chat message budget per participant (votes/proposals/challenges are free)."),
         require_challenge: z.boolean().optional().describe("Require a challenge before any proposal can pass. Default: automatic when 3+ participants."),
+        max_message_chars: z.number().int().min(200).max(20000).optional().describe("Cap on chat/opening length (proposals, challenges, board entries are not capped)."),
         participant_id: z.string().optional().describe("Reclaim an earlier identity after a reconnect."),
       },
     },
-    guard(({ room, name, agent, topic, mode, quorum, max_rounds, expected_participants, anonymous, max_messages_per_participant, require_challenge, participant_id }) => {
+    guard(({ room, name, agent, topic, mode, quorum, max_rounds, expected_participants, anonymous, max_messages_per_participant, require_challenge, max_message_chars, participant_id }) => {
       const { room: r, participant } = hub.join(
         room,
         name,
@@ -115,6 +117,7 @@ export function createSessionServer(hub: Hub): McpServer {
           anonymous,
           maxMessagesPerParticipant: max_messages_per_participant,
           requireChallenge: require_challenge,
+          maxMessageChars: max_message_chars,
         },
         participant_id,
       );
@@ -123,6 +126,7 @@ export function createSessionServer(hub: Hub): McpServer {
       const shared = me.get(room)!.size > 1;
       const recent = r.messages.slice(-30);
       hub.markRead(r, participant, r.messages.at(-1)?.seq ?? 0);
+      const human = hub.unansweredHuman(r);
       return {
         participant_id: participant.id,
         you_are: hub.shown(r, participant),
@@ -132,9 +136,10 @@ export function createSessionServer(hub: Hub): McpServer {
         hint:
           (shared ? "Other agents share this MCP connection: pass participant_id on EVERY call. " : "") +
           (r.anonymous ? `You appear to others as "${participant.label}". ` : "") +
+          (human ? `${hub.shown(r, human.from)} (a human) said "${human.content.slice(0, 160)}" and nobody has replied: answer them first with send_message reply_to="${human.id}". ` : "") +
           (r.expectedParticipants && !r.openingsRevealed
-            ? "This room uses blind openings: call submit_opening with your independent first answer before reading others."
-            : "Post with send_message, then call wait_for_messages in a loop to hear replies."),
+            ? "This room uses blind openings: submit_opening with your own short answer before reading others'."
+            : "Talk with send_message; wait_for_messages to hear replies. The topic above is the brief; do not restate it."),
       };
     }),
   );
@@ -209,24 +214,31 @@ export function createSessionServer(hub: Hub): McpServer {
       const needsMyVote = open && !open.votes[id];
       const needsChallenge = open && hub.challengeRequired(r) && open.challenges.length === 0 && open.by.id !== id;
       const openView = open ? hub.proposalView(r, open) : null;
+      const human = hub.unansweredHuman(r);
       return {
         messages: msgs.map((m) => hub.fmt(r, m)),
         next_seq: r.messages.at(-1)?.seq ?? since,
         room_state: r.state,
         your_turn: r.mode === "round_robin" ? hub.currentSpeaker(r)?.id === id : true,
         active_participants: hub.activeParticipants(r).map((x) => hub.shown(r, x)),
-        open_proposal: openView ? { id: openView.id, by: openView.by, text: openView.text, tally: openView.tally, waiting_on: openView.waiting_on, needs_challenge: openView.needs_challenge, challenges: openView.challenges } : null,
+        unanswered_human: human ? { id: human.id, name: hub.shown(r, human.from), text: human.content } : null,
+        open_proposal: openView
+          ? { id: openView.id, version: openView.version, by: openView.by, tally: openView.tally, waiting_on: openView.waiting_on, needs_challenge: openView.needs_challenge, challenges: openView.challenges, text: openView.text }
+          : null,
+        board_keys: [...r.board.keys()],
         conclusion: r.conclusion ?? null,
         hint:
           r.state === "concluded"
             ? "The room has concluded. Read the conclusion and leave_room."
-            : needsChallenge && needsMyVote
-              ? "A proposal is open and nobody has challenged it yet. Find its weakest point and call challenge, then vote (agree must quote the proposal verbatim)."
-              : needsMyVote
-                ? "Vote on the open proposal: agree with a verbatim quote of the clause you endorse, or disagree with the specific change you need."
-                : msgs.length === 0
-                  ? "No new messages yet. Call wait_for_messages again."
-                  : undefined,
+            : human
+              ? `${hub.shown(r, human.from)} (a human) said "${human.content.slice(0, 160)}" (${human.id}). Reply to them directly, in plain prose, with send_message reply_to="${human.id}" before anything else.`
+              : needsChallenge && needsMyVote
+                ? "A proposal is open and untested. Name its single weakest claim in one sentence (challenge), then vote. If you want different wording, amend it instead of re-proposing."
+                : needsMyVote
+                  ? "Vote on the open proposal: agree with a verbatim quote of the clause you endorse, or disagree with the specific change you need (or just amend it)."
+                  : msgs.length === 0
+                    ? "No new messages yet. Call wait_for_messages again."
+                    : undefined,
       };
     }),
   );
@@ -257,7 +269,7 @@ export function createSessionServer(hub: Hub): McpServer {
       description:
         "Put a concrete statement to the room as the proposed conclusion. You automatically vote agree on your own proposal. " +
         "It is adopted when the room's quorum (default: every active participant) votes agree AND, in rooms of 3+, someone has challenged it. " +
-        "Only one proposal can be open at a time; if someone else's is open, challenge or vote on it instead.",
+        "Only one proposal can be open at a time and it is a document: to change wording, use amend (posts only the diff) instead of proposing again.",
       inputSchema: { room: roomArg, text: z.string().describe("The exact conclusion you propose the group adopt."), participant_id: asArg },
     },
     guard(({ room, text, participant_id }) => {
@@ -268,12 +280,67 @@ export function createSessionServer(hub: Hub): McpServer {
   );
 
   server.registerTool(
+    "amend",
+    {
+      title: "Amend the open proposal",
+      description:
+        "Edit the open proposal's text in place: replace `find` (exact, unique substring) with `replace`, or leave `find` empty to append. " +
+        "Only the diff is posted to the room, the version is bumped, and votes reset (you count as agreeing). Use this instead of re-proposing.",
+      inputSchema: {
+        room: roomArg,
+        proposal_id: z.string().describe("Proposal id (prop_...)."),
+        find: z.string().default("").describe("Exact text to replace; empty to append."),
+        replace: z.string().describe("Replacement (or appended) text."),
+        participant_id: asArg,
+      },
+    },
+    guard(({ room, proposal_id, find, replace, participant_id }) => {
+      const r = hub.getRoom(room);
+      const { proposal, diff } = hub.amend(room, pid(room, participant_id), proposal_id, find, replace);
+      return { version: proposal.version, diff, proposal: hub.proposalView(r, proposal) };
+    }),
+  );
+
+  server.registerTool(
+    "board_set",
+    {
+      title: "Write to the shared board",
+      description:
+        "Put evidence, decisions-so-far, open questions or a working draft on the room's shared board under a short key. Entries are " +
+        "replaced in place and only a one-line notice goes to chat, so use this instead of re-posting long content. Empty text deletes the entry.",
+      inputSchema: { room: roomArg, key: z.string().describe("Short name, e.g. 'evidence', 'open questions', 'draft'."), text: z.string(), participant_id: asArg },
+    },
+    guard(({ room, key, text, participant_id }) => {
+      const e = hub.setBoard(room, pid(room, participant_id), key, text);
+      return e ? { key, chars: e.text.length, by: e.by } : { key, deleted: true };
+    }),
+  );
+
+  server.registerTool(
+    "board_get",
+    {
+      title: "Read the shared board",
+      description: "Read the room's shared board (all entries, or one key).",
+      inputSchema: { room: roomArg, key: z.string().optional() },
+    },
+    guard(({ room, key }) => {
+      const r = hub.getRoom(room);
+      if (key) {
+        const e = r.board.get(key);
+        if (!e) throw new HubError(`No board entry "${key}". Keys: ${[...r.board.keys()].join(", ") || "(none)"}`);
+        return { key, ...e };
+      }
+      return Object.fromEntries([...r.board].map(([k, e]) => [k, e]));
+    }),
+  );
+
+  server.registerTool(
     "challenge",
     {
       title: "Challenge a proposal",
       description:
-        "State the strongest specific objection you can find to an open proposal (a missing case, a false claim, a weaker alternative). " +
-        "Required from someone other than the proposer before a proposal can pass in rooms of 3+. You may still vote agree afterwards if the room answers it.",
+        "Name the single weakest claim in an open proposal, in one or two plain sentences. Required from someone other than the proposer " +
+        "before a proposal can pass in rooms of 3+. Your vote resets; re-vote once it is answered. If you cannot break it, say so and name the riskiest assumption.",
       inputSchema: {
         room: roomArg,
         proposal_id: z.string().describe("Proposal id (prop_...)."),

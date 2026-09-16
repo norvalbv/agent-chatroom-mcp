@@ -50,7 +50,7 @@ const c = await connect("third");
 
 const tools = (await a.client.listTools()).tools.map((t) => t.name).sort();
 console.log("tools:", tools.join(", "));
-assert.deepEqual(tools, ["challenge", "join_room", "leave_room", "list_rooms", "propose", "read_messages", "room_status", "send_message", "submit_opening", "vote", "wait_for_messages"]);
+assert.deepEqual(tools, ["amend", "board_get", "board_set", "challenge", "join_room", "leave_room", "list_rooms", "propose", "read_messages", "room_status", "send_message", "submit_opening", "vote", "wait_for_messages"]);
 
 // ---------------- two-party room: blind openings, long-poll, propose, vote ----------------
 {
@@ -78,8 +78,9 @@ assert.deepEqual(tools, ["challenge", "join_room", "leave_room", "list_rooms", "
   const ob = await b.call("submit_opening", { room, content: "Tabs: accessible, user-configurable width." });
   assert.equal(ob.revealed, true);
   const woke = await wakeP;
-  assert.ok(woke.messages.some((m: string) => m.includes("[OPENING] Tabs")), "A did not receive B's opening");
-  assert.ok(!woke.messages.some((m: string) => m.includes("[OPENING] Spaces")), "own messages must not be echoed back");
+  assert.ok(woke.messages.some((m: string) => m.includes("Tabs: accessible")), "A did not receive B's opening");
+  assert.ok(!woke.messages.some((m: string) => m.includes("[OPENING]")), "openings must not carry a ritual prefix");
+  assert.ok(!woke.messages.some((m: string) => m.includes("Spaces: consistent")), "own messages must not be echoed back");
 
   // Stale-send guard: B has not read A's next message, so B's send is refused with the unread messages attached.
   await b.call("wait_for_messages", { room, timeout_ms: 0 });
@@ -139,8 +140,12 @@ assert.deepEqual(tools, ["challenge", "join_room", "leave_room", "list_rooms", "
   // Human interjection via HTTP bypasses budgets and the guard, and shows up as agent "human".
   const hp = await fetch(`${HTTP}/rooms/${room}/messages`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ name: "benji", content: "Chair here: pick one, quickly." }) });
   assert.equal(hp.status, 200);
+  const humanMsg = (await hp.json()) as { id: string };
   const seenByC = await c.call("wait_for_messages", { room, timeout_ms: 0 });
   assert.ok(seenByC.messages.some((m: string) => m.includes("Participant D: Chair here")), "human message not delivered under pseudonym");
+  // A is out of budget, but answering an unanswered human is always allowed
+  await a.call("wait_for_messages", { room, timeout_ms: 0 });
+  await a.call("send_message", { room, content: "On it, chair. Alpha or Beta, deciding now.", reply_to: humanMsg.id });
 
   // Challenge gate: everyone agrees but nobody challenged -> not concluded, system nudge instead.
   const pr = await a.call("propose", { room, text: "The name shall be Alpha." });
@@ -159,7 +164,7 @@ assert.deepEqual(tools, ["challenge", "join_room", "leave_room", "list_rooms", "
   // the human is an observer for quorum: nobody waits for benji's vote
   assert.ok(!vc.proposal.waiting_on.includes("Participant D"), "humans must not block quorum");
   const nudge = await c.call("read_messages", { room, since_seq: 0 });
-  assert.ok(nudge.some((m: string) => m.includes("nobody has tried to break it")), "missing challenge nudge");
+  assert.ok(nudge.some((m: string) => m.includes("nobody has tested it")), "missing challenge nudge");
   let status = await a.call("room_status", { room });
   assert.equal(status.state, "open", "must not conclude without a challenge");
   const ch = await b.call("challenge", { room, proposal_id: pr.id, objection: "Alpha collides with the existing 'alpha' release channel name; suggest Alpha-Prime." });
@@ -181,12 +186,63 @@ assert.deepEqual(tools, ["challenge", "join_room", "leave_room", "list_rooms", "
   await a.call("join_room", { room, name: "claude-1", agent: "claude" });
   await b.call("join_room", { room, name: "codex-1", agent: "codex" });
   await fetch(`${HTTP}/rooms/${room}/messages`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ name: "benji", content: "I am watching." }) });
+  await a.call("wait_for_messages", { room, timeout_ms: 0 });
+  await a.call("send_message", { room, content: "Noted benji, we'll keep it short." });
   const pr = await a.call("propose", { room, text: "Ship it on Friday afternoon." });
   const hv = await fetch(`${HTTP}/rooms/${room}/vote`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ name: "benji", proposal_id: pr.id, vote: "disagree", reason: "never on a Friday" }) });
   assert.equal(hv.status, 200);
   const st = await a.call("room_status", { room });
   assert.equal(st.proposals[0].status, "rejected", "human disagree must veto");
   assert.equal(st.state, "open");
+}
+
+// ---------------- proposal as a document (amend), board, human-first gate, per-room char cap ----------------
+{
+  const room = "doc";
+  await a.call("join_room", { room, name: "claude-1", agent: "claude", topic: "Pick a colour", max_message_chars: 300 });
+  await b.call("join_room", { room, name: "codex-1", agent: "codex" });
+  await assert.rejects(a.call("send_message", { room, content: "x".repeat(301) }), /allows 300/);
+  // a human speaks; propose is refused once until someone answers them
+  await fetch(`${HTTP}/rooms/${room}/messages`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ name: "benji", content: "hello team, what about teal?" }) });
+  const w = await a.call("wait_for_messages", { room, timeout_ms: 0 });
+  assert.equal(w.unanswered_human.name, "benji");
+  assert.match(w.hint, /Reply to them directly/);
+  await assert.rejects(a.call("propose", { room, text: "Blue." }), /nobody has answered/);
+  const st0 = await a.call("room_status", { room });
+  assert.equal(st0.unanswered_human.text, "hello team, what about teal?");
+  await a.call("send_message", { room, content: "Hi benji! Teal is a strong option, we'll weigh it against blue.", reply_to: w.unanswered_human.id });
+  const st1 = await a.call("room_status", { room });
+  assert.equal(st1.unanswered_human, null, "reply_to must clear the unanswered-human gate");
+  // a second human message: the gate warns once, then a retry proceeds (bounded, no livelock)
+  await fetch(`${HTTP}/rooms/${room}/messages`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ name: "benji", content: "and green?" }) });
+  await a.call("wait_for_messages", { room, timeout_ms: 0 });
+  await assert.rejects(a.call("propose", { room, text: "Blue." }), /nobody has answered/);
+  const pr = await a.call("propose", { room, text: "The colour is blue, because it is calm and readable." });
+  assert.equal(pr.version, 1);
+  // board: long evidence lives here, chat only gets a one-line notice
+  const bs = await b.call("board_set", { room, key: "evidence", text: "Survey of 12 users: 9 preferred blue, 2 teal, 1 green. " + "detail ".repeat(200) });
+  assert.ok(bs.chars > 1000);
+  const notice = (await b.call("read_messages", { room, since_seq: 0 })).at(-1) as string;
+  assert.match(notice, /\[BOARD\] added board entry "evidence" \(\d+ chars/);
+  assert.ok(notice.length < 200, "board notice must not carry the content");
+  const bg = await a.call("board_get", { room, key: "evidence" });
+  assert.match(bg.text, /9 preferred blue/);
+  // amend: only the diff is posted, version bumps, votes reset except the amender
+  await b.call("wait_for_messages", { room, timeout_ms: 0 });
+  await assert.rejects(b.call("amend", { room, proposal_id: pr.id, find: "purple", replace: "teal" }), /does not occur/);
+  const am = await b.call("amend", { room, proposal_id: pr.id, find: "because it is calm and readable", replace: "because 9 of 12 surveyed users preferred it" });
+  assert.equal(am.version, 2);
+  assert.match(am.proposal.text, /9 of 12 surveyed/);
+  assert.deepEqual(am.proposal.waiting_on, ["claude-1"], "amender counts as agreeing; others must re-vote");
+  const amendMsg = (await a.call("read_messages", { room, since_seq: 0 })).at(-1) as string;
+  assert.match(amendMsg, /AMENDED .* to v2: "because it is calm and readable" → "because 9 of 12 surveyed users preferred it"/);
+  assert.ok(!amendMsg.includes("The colour is blue"), "amend must post the diff, not the whole proposal");
+  await assert.rejects(a.call("propose", { room, text: "A competing proposal" }), /use amend/);
+  const v = await a.call("vote", { room, proposal_id: pr.id, vote: "agree", quote: "9 of 12 surveyed users preferred it" });
+  assert.equal(v.room_state, "concluded");
+  const stats = (await (await fetch(`${HTTP}/rooms/${room}/stats`)).json()) as { amendments: number; board_entries: number; unanswered_human_messages: number };
+  assert.equal(stats.amendments, 1);
+  assert.equal(stats.board_entries, 1);
 }
 
 // ---------------- round-robin room with turn enforcement and stall ----------------

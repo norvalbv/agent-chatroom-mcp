@@ -22,7 +22,7 @@ const flag = (name: string, def?: string) => {
 const has = (name: string) => argv.includes(`--${name}`);
 const task = argv.find((a, i) => !a.startsWith("--") && (i === 0 || !argv[i - 1].startsWith("--")));
 if (!task) {
-  console.error('usage: swarm "<task>" [--agents 6] [--cwd dir] [--codex 0] [--apply] [--timeout 30] [--port 7717]');
+  console.error('usage: swarm "<task>" [--agents 6] [--cwd dir] [--codex 0] [--apply] [--named] [--timeout 30] [--port 7717]');
   process.exit(2);
 }
 const TOTAL = Math.max(2, Number(flag("agents", "4")));
@@ -30,6 +30,7 @@ const WORKERS = TOTAL - 1; // one seat is the verifier
 const CWD = resolve(flag("cwd", process.cwd())!);
 const CODEX = Math.min(WORKERS, Number(flag("codex", "0")));
 const APPLY = has("apply");
+const ANON = !has("named"); // worker rooms are anonymous unless --named
 const TIMEOUT_MIN = Number(flag("timeout", "30"));
 const PORT = Number(flag("port", process.env.PORT ?? "7717"));
 const URL_ = `http://127.0.0.1:${PORT}`;
@@ -209,6 +210,7 @@ for (const g of plan.groups) {
       DIRECTIVE: g.directive,
       ROOM: room,
       N: g.workers,
+      ANON: String(ANON),
       LEADS_ROOM: leadsRoom,
       AFTER_CONCLUSION: isLead ? prompt("lead-tail.md", { LEADS_ROOM: leadsRoom, NAME: name, AGENT: agent, GROUP_TITLE: g.title }) : "`leave_room` and finish.",
     };

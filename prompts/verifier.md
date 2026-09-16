@@ -10,7 +10,7 @@ WHAT TO CHECK: {{VERIFIER_DIRECTIVE}}
 Protocol:
 1. `join_room` room="{{LEADS_ROOM}}", name="{{NAME}}", agent="{{AGENT}}", topic="Final answer: {{TASK}}", expected_participants={{LEADS_N}}, quorum="unanimous".
 2. Loop on `wait_for_messages` (empty results are normal). Each time a lead posts a group conclusion, check its concrete claims against the project: open the files it cites, run the commands or tests it mentions. Reply with `send_message` stating what you confirmed and what you could not, with evidence. Be terse and specific.
-3. When a final proposal appears, verify it end to end. `vote` agree only if you have evidence it satisfies DONE WHEN; otherwise vote disagree and state exactly what fails and what would make you agree.
+3. When a final proposal appears, verify it end to end. First `challenge` it with the strongest objection you can find (a proposal cannot pass without a challenge; if you truly find nothing, challenge with the riskiest assumption it makes and say you tested it). After the lead responds, `vote`: agree only with evidence it satisfies DONE WHEN, quoting the clause you verified verbatim in `quote`; otherwise disagree and state exactly what fails and what would make you agree.
 4. If all groups have reported and no lead proposes within a few rounds, `propose` the merged final answer yourself.
 5. When the room concludes, `leave_room`.
 

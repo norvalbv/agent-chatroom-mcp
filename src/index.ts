@@ -4,10 +4,14 @@
  * Streamable HTTP (MCP endpoint at /mcp). A single Hub is shared by all
  * sessions, which is what makes it a chatroom rather than N private servers.
  *
- * Also exposes tiny read-only JSON endpoints so a human can watch:
- *   GET /rooms                      -> room summaries
- *   GET /rooms/:room/messages?since=0
- *   GET /rooms/:room/transcript     -> plain text
+ * Also exposes a live dashboard and JSON endpoints so humans can watch and interject:
+ *   GET  /ui                          -> dashboard
+ *   GET  /rooms                       -> room summaries (real names, even in anonymous rooms)
+ *   GET  /rooms/:room/messages?since=0
+ *   GET  /rooms/:room/transcript      -> plain text
+ *   GET  /rooms/:room/stats
+ *   POST /rooms/:room/messages {name, content} -> speak as a human participant
+ *   POST /rooms/:room/vote {name, proposal_id, vote, reason} -> human vote (disagree = veto)
  */
 import { randomUUID } from "node:crypto";
 import { resolve } from "node:path";
@@ -16,6 +20,7 @@ import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/
 import express from "express";
 import { Hub, HubError } from "./hub.js";
 import { createSessionServer } from "./server.js";
+import { UI_HTML } from "./ui.js";
 
 const PORT = Number(process.env.PORT ?? 7717);
 const HOST = process.env.HOST ?? "127.0.0.1";
@@ -60,21 +65,52 @@ const sessionRoute = async (req: express.Request, res: express.Response) => {
 app.get("/mcp", sessionRoute);
 app.delete("/mcp", sessionRoute);
 
-// ---- human-facing read-only endpoints ----
-app.get("/", (_req, res) => res.json({ name: "agent-chatroom-mcp", mcp: "/mcp", rooms: "/rooms", sessions: transports.size }));
-app.get("/rooms", (_req, res) => res.json(hub.listRooms()));
+// ---- human-facing endpoints ----
+const notFound = (res: express.Response, e: unknown) => res.status(404).send(e instanceof HubError ? e.message : String(e));
+app.get("/", (_req, res) => res.json({ name: "agent-chatroom-mcp", mcp: "/mcp", ui: "/ui", rooms: "/rooms", sessions: transports.size }));
+app.get("/ui", (_req, res) => res.type("html").send(UI_HTML));
+app.get("/rooms", (_req, res) => res.json(hub.listRooms(true)));
 app.get("/rooms/:room", (req, res) => {
   try {
-    res.json(hub.summary(hub.getRoom(req.params.room)));
+    res.json(hub.summary(hub.getRoom(req.params.room), true));
   } catch (e) {
-    res.status(404).send(e instanceof HubError ? e.message : String(e));
+    notFound(res, e);
+  }
+});
+app.get("/rooms/:room/stats", (req, res) => {
+  try {
+    res.json(hub.stats(hub.getRoom(req.params.room)));
+  } catch (e) {
+    notFound(res, e);
   }
 });
 app.get("/rooms/:room/messages", (req, res) => {
   try {
     res.json(hub.read(req.params.room, Number(req.query.since ?? 0), Number(req.query.limit ?? 500)));
   } catch (e) {
-    res.status(404).send(e instanceof HubError ? e.message : String(e));
+    notFound(res, e);
+  }
+});
+// A human interjecting from the dashboard or curl. Humans bypass budgets and the stale-send guard.
+app.post("/rooms/:room/messages", (req, res) => {
+  try {
+    const { name, content } = (req.body ?? {}) as { name?: string; content?: string };
+    const { participant } = hub.join(req.params.room, (name || "human").trim(), "human");
+    const m = hub.send(req.params.room, participant.id, String(content ?? ""), undefined, true);
+    res.json(m);
+  } catch (e) {
+    res.status(400).send(e instanceof HubError ? e.message : String(e));
+  }
+});
+// A human voting from the dashboard: agree is advisory, disagree vetoes.
+app.post("/rooms/:room/vote", (req, res) => {
+  try {
+    const { name, proposal_id, vote, reason } = (req.body ?? {}) as { name?: string; proposal_id?: string; vote?: "agree" | "disagree" | "abstain"; reason?: string };
+    const { participant } = hub.join(req.params.room, (name || "human").trim(), "human");
+    const pr = hub.vote(req.params.room, participant.id, String(proposal_id), vote ?? "abstain", reason);
+    res.json(hub.proposalView(hub.getRoom(req.params.room), pr, true));
+  } catch (e) {
+    res.status(400).send(e instanceof HubError ? e.message : String(e));
   }
 });
 app.get("/rooms/:room/transcript", (req, res) => {
@@ -85,10 +121,10 @@ app.get("/rooms/:room/transcript", (req, res) => {
         r.messages.map((m) => `#${m.seq} [${m.ts}] ${m.from.name} (${m.kind}): ${m.content}`).join("\n") + "\n",
     );
   } catch (e) {
-    res.status(404).send(e instanceof HubError ? e.message : String(e));
+    notFound(res, e);
   }
 });
 
 app.listen(PORT, HOST, () => {
-  console.error(`agent-chatroom-mcp listening on http://${HOST}:${PORT}/mcp${DATA_DIR ? ` (persisting to ${DATA_DIR})` : " (in-memory)"}`);
+  console.error(`agent-chatroom-mcp: MCP at http://${HOST}:${PORT}/mcp, dashboard at http://${HOST}:${PORT}/ui${DATA_DIR ? ` (persisting to ${DATA_DIR})` : " (in-memory)"}`);
 });

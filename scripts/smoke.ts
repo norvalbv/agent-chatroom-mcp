@@ -1,15 +1,15 @@
 /**
- * End-to-end smoke test: starts the server, connects two MCP clients (as two
- * agents would), and walks through join -> blind openings -> chat -> propose ->
- * vote -> consensus, asserting each step. Run: npm run smoke
+ * End-to-end smoke test: starts the server, connects MCP clients as agents
+ * would, and walks through every mechanic, asserting each step.
+ * Run: npm run smoke
  */
 import { spawn } from "node:child_process";
 import assert from "node:assert/strict";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 
-const PORT = 7733;
-const URL_ = `http://127.0.0.1:${PORT}/mcp`;
+const PORT = Number(process.env.PORT ?? 7733);
+const HTTP = `http://127.0.0.1:${PORT}`;
 
 const server = spawn("npx", ["tsx", "src/index.ts"], { env: { ...process.env, PORT: String(PORT) }, stdio: ["ignore", "inherit", "inherit"] });
 const stop = () => server.kill();
@@ -18,7 +18,7 @@ process.on("exit", stop);
 async function waitForServer() {
   for (let i = 0; i < 50; i++) {
     try {
-      await fetch(`http://127.0.0.1:${PORT}/`);
+      await fetch(`${HTTP}/`);
       return;
     } catch {
       await new Promise((r) => setTimeout(r, 200));
@@ -29,7 +29,7 @@ async function waitForServer() {
 
 async function connect(name: string) {
   const client = new Client({ name, version: "0.0.0" });
-  await client.connect(new StreamableHTTPClientTransport(new URL(URL_)));
+  await client.connect(new StreamableHTTPClientTransport(new URL(`${HTTP}/mcp`)));
   const call = async (tool: string, args: Record<string, unknown> = {}) => {
     const res = (await client.callTool({ name: tool, arguments: args })) as { isError?: boolean; content: { text: string }[] };
     const text = res.content[0]?.text ?? "";
@@ -46,99 +46,187 @@ async function connect(name: string) {
 await waitForServer();
 const a = await connect("claude");
 const b = await connect("codex");
-const room = "smoke";
+const c = await connect("third");
 
 const tools = (await a.client.listTools()).tools.map((t) => t.name).sort();
 console.log("tools:", tools.join(", "));
-assert.deepEqual(tools, ["join_room", "leave_room", "list_rooms", "propose", "read_messages", "room_status", "send_message", "submit_opening", "vote", "wait_for_messages"]);
+assert.deepEqual(tools, ["challenge", "join_room", "leave_room", "list_rooms", "propose", "read_messages", "room_status", "send_message", "submit_opening", "vote", "wait_for_messages"]);
 
-const ja = await a.call("join_room", { room, name: "claude-1", agent: "claude", topic: "Tabs or spaces?", expected_participants: 2 });
-assert.equal(ja.you_are, "claude-1");
+// ---------------- two-party room: blind openings, long-poll, propose, vote ----------------
+{
+  const room = "pair";
+  const ja = await a.call("join_room", { room, name: "claude-1", agent: "claude", topic: "Tabs or spaces?", expected_participants: 2 });
+  assert.equal(ja.you_are, "claude-1");
 
-// A waits before B has joined: should time out with no messages.
-const t0 = Date.now();
-const empty = await a.call("wait_for_messages", { room, timeout_ms: 300 });
-assert.equal(empty.messages.length, 0);
-assert.ok(Date.now() - t0 >= 280, "should have waited");
+  const t0 = Date.now();
+  const empty = await a.call("wait_for_messages", { room, timeout_ms: 300 });
+  assert.equal(empty.messages.length, 0);
+  assert.ok(Date.now() - t0 >= 280, "should have waited");
 
-const jb = await b.call("join_room", { room, name: "codex-1", agent: "codex" });
-assert.equal(jb.room.active_count, 2);
+  const jb = await b.call("join_room", { room, name: "codex-1", agent: "codex" });
+  assert.equal(jb.room.active_count, 2);
 
-// Blind openings: A's is held until B submits.
-const oa = await a.call("submit_opening", { room, content: "Spaces: consistent rendering everywhere." });
-assert.equal(oa.revealed, false);
-assert.deepEqual(oa.waiting_on, ["codex-1"]);
-const before = await b.call("read_messages", { room });
-assert.ok(!before.some((m: string) => m.includes("[OPENING]")), "opening leaked early");
+  const oa = await a.call("submit_opening", { room, content: "Spaces: consistent rendering everywhere." });
+  assert.equal(oa.revealed, false);
+  assert.deepEqual(oa.waiting_on, ["codex-1"]);
+  const before = await b.call("read_messages", { room });
+  assert.ok(!before.some((m: string) => m.includes("[OPENING]")), "opening leaked early");
 
-// A drains the "codex-1 joined" notice, then long-polls; B's submission should wake it up.
-const drained = await a.call("wait_for_messages", { room, timeout_ms: 0 });
-assert.ok(drained.messages.some((m: string) => m.includes("joined")));
-const wakeP = a.call("wait_for_messages", { room, timeout_ms: 10_000 });
-const ob = await b.call("submit_opening", { room, content: "Tabs: accessible, user-configurable width." });
-assert.equal(ob.revealed, true);
-const woke = await wakeP;
-assert.ok(woke.messages.some((m: string) => m.includes("[OPENING] Tabs")), "A did not receive B's opening");
-assert.ok(!woke.messages.some((m: string) => m.includes("[OPENING] Spaces")), "own messages must not be echoed back");
-const log = await a.call("read_messages", { room });
-assert.ok(log.some((m: string) => m.includes("[OPENING] Spaces")), "own opening should be in the log");
+  const drained = await a.call("wait_for_messages", { room, timeout_ms: 0 });
+  assert.ok(drained.messages.some((m: string) => m.includes("joined")));
+  const wakeP = a.call("wait_for_messages", { room, timeout_ms: 10_000 });
+  const ob = await b.call("submit_opening", { room, content: "Tabs: accessible, user-configurable width." });
+  assert.equal(ob.revealed, true);
+  const woke = await wakeP;
+  assert.ok(woke.messages.some((m: string) => m.includes("[OPENING] Tabs")), "A did not receive B's opening");
+  assert.ok(!woke.messages.some((m: string) => m.includes("[OPENING] Spaces")), "own messages must not be echoed back");
 
-// Free chat + reply.
-const s1 = await a.call("send_message", { room, content: "Could we compromise: spaces in this repo, editor-configurable via .editorconfig?" });
-const got = await b.call("wait_for_messages", { room, timeout_ms: 2000 });
-assert.ok(got.messages.some((m: string) => m.includes("compromise")));
-await b.call("send_message", { room, content: "Works for me.", reply_to: s1.id });
+  // Stale-send guard: B has not read A's next message, so B's send is refused with the unread messages attached.
+  await b.call("wait_for_messages", { room, timeout_ms: 0 });
+  await a.call("send_message", { room, content: "Compromise: spaces here, editor-configurable via .editorconfig?" });
+  await assert.rejects(b.call("send_message", { room, content: "Tabs forever" }), /arrived while you were composing[\s\S]*Compromise/);
+  const gotB = await b.call("wait_for_messages", { room, timeout_ms: 0 });
+  assert.ok(gotB.messages.some((m: string) => m.includes("Compromise")));
+  await b.call("send_message", { room, content: "Works for me." });
+  // ...and force=true bypasses it.
+  await b.call("send_message", { room, content: "PS: also fine with 2-space indent.", force: true });
 
-// Propose + vote -> unanimous consensus.
-const pr = await b.call("propose", { room, text: "Use spaces (2), enforce via .editorconfig and formatter." });
-assert.equal(pr.status, "open");
-assert.deepEqual(pr.waiting_on, ["claude-1"]);
-await assert.rejects(a.call("propose", { room, text: "a competing proposal" }), /already open/);
-const pending = await a.call("wait_for_messages", { room, timeout_ms: 2000 });
-assert.equal(pending.proposals_awaiting_your_vote.length, 1);
-const v = await a.call("vote", { room, proposal_id: pr.id, vote: "agree", reason: "fine", confidence: 0.8 });
-assert.equal(v.room_state, "concluded");
-assert.match(v.conclusion.text, /spaces/);
+  const pr = await b.call("propose", { room, text: "Use spaces (2), enforce via .editorconfig and formatter." });
+  assert.equal(pr.status, "open");
+  assert.deepEqual(pr.waiting_on, ["claude-1"]);
+  assert.equal(pr.needs_challenge, false, "2-party rooms do not require a challenge");
+  await assert.rejects(a.call("propose", { room, text: "a competing proposal" }), /already open/);
 
-// Sending after conclusion is rejected.
-await assert.rejects(a.call("send_message", { room, content: "one more" }), /concluded/);
+  // Read-to-vote: agree without a quote, or with a fabricated quote, is refused.
+  await assert.rejects(a.call("vote", { room, proposal_id: pr.id, vote: "agree" }), /must include `quote`/);
+  await assert.rejects(a.call("vote", { room, proposal_id: pr.id, vote: "agree", quote: "use tabs everywhere always" }), /not in the proposal/);
+  await assert.rejects(a.call("vote", { room, proposal_id: pr.id, vote: "disagree", reason: "no" }), /specific change/);
+  const v = await a.call("vote", { room, proposal_id: pr.id, vote: "agree", quote: "enforce via .editorconfig", confidence: 0.8 });
+  assert.equal(v.room_state, "concluded");
+  assert.match(v.conclusion.text, /spaces/);
+  await assert.rejects(a.call("send_message", { room, content: "one more" }), /concluded/);
+}
 
-// Human endpoints.
-const rooms = (await (await fetch(`http://127.0.0.1:${PORT}/rooms`)).json()) as { name: string; state: string }[];
-assert.equal(rooms[0].state, "concluded");
-const transcript = await (await fetch(`http://127.0.0.1:${PORT}/rooms/${room}/transcript`)).text();
-assert.match(transcript, /CONSENSUS REACHED/);
+// ---------------- three-party anonymous room: challenge gate, budgets, human interjection ----------------
+{
+  const room = "trio";
+  const ja = await a.call("join_room", { room, name: "claude-1", agent: "claude", topic: "Pick a name", anonymous: true, max_messages_per_participant: 2 });
+  assert.equal(ja.you_are, "Participant A");
+  const jb = await b.call("join_room", { room, name: "codex-1", agent: "codex" });
+  assert.equal(jb.you_are, "Participant B");
+  const jc = await c.call("join_room", { room, name: "gemini-1", agent: "gemini" });
+  assert.equal(jc.you_are, "Participant C");
+  // agents never see real names or agent types...
+  const st = await b.call("room_status", { room });
+  assert.deepEqual(
+    st.participants.map((p: { name: string; agent: string }) => [p.name, p.agent]),
+    [["Participant A", "hidden"], ["Participant B", "hidden"], ["Participant C", "hidden"]],
+  );
+  assert.ok(!JSON.stringify(st).includes("claude-1"));
+  // ...but the human HTTP view does.
+  const human = (await (await fetch(`${HTTP}/rooms/${room}`)).json()) as { participants: { name: string; label: string }[] };
+  assert.equal(human.participants[0].name, "claude-1");
+  assert.equal(human.participants[0].label, "Participant A");
 
-// Round-robin room with turn enforcement.
-await a.call("join_room", { room: "rr", name: "claude-1", agent: "claude", mode: "round_robin", max_rounds: 2 });
-await b.call("join_room", { room: "rr", name: "codex-1", agent: "codex" });
-await assert.rejects(b.call("send_message", { room: "rr", content: "me first" }), /turn/);
-await a.call("send_message", { room: "rr", content: "hello" });
-const rb = await b.call("wait_for_messages", { room: "rr", timeout_ms: 500 });
-assert.equal(rb.your_turn, true);
-await b.call("send_message", { room: "rr", content: "hi" });
-await a.call("send_message", { room: "rr", content: "round 2" });
-await b.call("send_message", { room: "rr", content: "round 2 too" });
-const st = await a.call("room_status", { room: "rr" });
-assert.equal(st.state, "stalled");
+  // Budget: 2 chat messages each.
+  await a.call("send_message", { room, content: "I say Alpha." });
+  await b.call("wait_for_messages", { room, timeout_ms: 0 });
+  await b.call("send_message", { room, content: "I say Beta." });
+  await a.call("wait_for_messages", { room, timeout_ms: 0 });
+  await a.call("send_message", { room, content: "Alpha is shorter." });
+  await a.call("wait_for_messages", { room, timeout_ms: 0 });
+  await assert.rejects(a.call("send_message", { room, content: "a third" }), /used your 2 messages/);
+  // Human interjection via HTTP bypasses budgets and the guard, and shows up as agent "human".
+  const hp = await fetch(`${HTTP}/rooms/${room}/messages`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ name: "benji", content: "Chair here: pick one, quickly." }) });
+  assert.equal(hp.status, 200);
+  const seenByC = await c.call("wait_for_messages", { room, timeout_ms: 0 });
+  assert.ok(seenByC.messages.some((m: string) => m.includes("Participant D: Chair here")), "human message not delivered under pseudonym");
 
-// One MCP connection hosting two identities (subagents sharing a session) must pass participant_id.
-const j1 = await a.call("join_room", { room: "shared", name: "sub-1", agent: "claude" });
-const j2 = await a.call("join_room", { room: "shared", name: "sub-2", agent: "claude" });
-assert.match(j2.hint, /participant_id/);
-await assert.rejects(a.call("send_message", { room: "shared", content: "who am I?" }), /several participants/);
-const sm = await a.call("send_message", { room: "shared", content: "hi from sub-1", participant_id: j1.participant_id });
-assert.match(sm.sent, /sub-1/);
-const heard = await a.call("wait_for_messages", { room: "shared", timeout_ms: 200, participant_id: j2.participant_id });
-assert.ok(heard.messages.some((m: string) => m.includes("hi from sub-1")));
-await a.call("leave_room", { room: "shared", participant_id: j2.participant_id });
-await a.call("send_message", { room: "shared", content: "alone now, no id needed" });
+  // Challenge gate: everyone agrees but nobody challenged -> not concluded, system nudge instead.
+  const pr = await a.call("propose", { room, text: "The name shall be Alpha." });
+  assert.equal(pr.needs_challenge, true);
+  await b.call("wait_for_messages", { room, timeout_ms: 0 });
+  await c.call("wait_for_messages", { room, timeout_ms: 0 });
+  // the human "benji" is now an active participant too; humans vote without quotes
+  const hv = await fetch(`${HTTP}/rooms/${room}`).then((r) => r.json()) as { participants: { name: string; id: string }[] };
+  assert.ok(hv.participants.find((p) => p.name === "benji"));
+  await assert.rejects(a.call("challenge", { room, proposal_id: pr.id, objection: "Alpha is a bad name because it is generic." }), /own proposal/);
+  await assert.rejects(b.call("challenge", { room, proposal_id: pr.id, objection: "meh" }), /at least 20/);
+  const vb = await b.call("vote", { room, proposal_id: pr.id, vote: "agree", quote: "name shall be Alpha" });
+  assert.equal(vb.room_state, "open");
+  const vc = await c.call("vote", { room, proposal_id: pr.id, vote: "agree", quote: "The name shall be Alpha" });
+  assert.equal(vc.room_state, "open");
+  // the human is an observer for quorum: nobody waits for benji's vote
+  assert.ok(!vc.proposal.waiting_on.includes("Participant D"), "humans must not block quorum");
+  const nudge = await c.call("read_messages", { room, since_seq: 0 });
+  assert.ok(nudge.some((m: string) => m.includes("nobody has tried to break it")), "missing challenge nudge");
+  let status = await a.call("room_status", { room });
+  assert.equal(status.state, "open", "must not conclude without a challenge");
+  const ch = await b.call("challenge", { room, proposal_id: pr.id, objection: "Alpha collides with the existing 'alpha' release channel name; suggest Alpha-Prime." });
+  assert.equal(ch.challenges.length, 1);
+  assert.deepEqual(ch.waiting_on, ["Participant B"], "challenger's vote must be reset");
+  status = await a.call("room_status", { room });
+  assert.equal(status.state, "open", "a challenge must be answered before the proposal can pass");
+  // proposer answers (budget exhausted for chat, so use force? no: budgets apply; answer via a fresh vote reason is enough here)
+  await b.call("wait_for_messages", { room, timeout_ms: 0 });
+  const rv = await b.call("vote", { room, proposal_id: pr.id, vote: "agree", quote: "name shall be Alpha", reason: "release channel is being renamed anyway" });
+  assert.equal(rv.room_state, "concluded", "re-vote after challenge should conclude");
+  const stats = (await (await fetch(`${HTTP}/rooms/${room}/stats`)).json()) as { challenges: number; per_participant: unknown[] };
+  assert.equal(stats.challenges, 1);
+}
 
-await a.call("leave_room", { room: "rr" });
-await b.call("leave_room", { room: "rr" });
+// ---------------- human veto from the dashboard endpoint ----------------
+{
+  const room = "veto";
+  await a.call("join_room", { room, name: "claude-1", agent: "claude" });
+  await b.call("join_room", { room, name: "codex-1", agent: "codex" });
+  await fetch(`${HTTP}/rooms/${room}/messages`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ name: "benji", content: "I am watching." }) });
+  const pr = await a.call("propose", { room, text: "Ship it on Friday afternoon." });
+  const hv = await fetch(`${HTTP}/rooms/${room}/vote`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ name: "benji", proposal_id: pr.id, vote: "disagree", reason: "never on a Friday" }) });
+  assert.equal(hv.status, 200);
+  const st = await a.call("room_status", { room });
+  assert.equal(st.proposals[0].status, "rejected", "human disagree must veto");
+  assert.equal(st.state, "open");
+}
+
+// ---------------- round-robin room with turn enforcement and stall ----------------
+{
+  await a.call("join_room", { room: "rr", name: "claude-1", agent: "claude", mode: "round_robin", max_rounds: 2 });
+  await b.call("join_room", { room: "rr", name: "codex-1", agent: "codex" });
+  await assert.rejects(b.call("send_message", { room: "rr", content: "me first" }), /turn/);
+  await a.call("send_message", { room: "rr", content: "hello" });
+  const rb = await b.call("wait_for_messages", { room: "rr", timeout_ms: 500 });
+  assert.equal(rb.your_turn, true);
+  await b.call("send_message", { room: "rr", content: "hi" });
+  await a.call("send_message", { room: "rr", content: "round 2" });
+  await b.call("send_message", { room: "rr", content: "round 2 too" });
+  const st = await a.call("room_status", { room: "rr" });
+  assert.equal(st.state, "stalled");
+  await a.call("leave_room", { room: "rr" });
+  await b.call("leave_room", { room: "rr" });
+}
+
+// ---------------- one connection hosting two identities ----------------
+{
+  const j1 = await a.call("join_room", { room: "shared", name: "sub-1", agent: "claude" });
+  const j2 = await a.call("join_room", { room: "shared", name: "sub-2", agent: "claude" });
+  assert.match(j2.hint, /participant_id/);
+  await assert.rejects(a.call("send_message", { room: "shared", content: "who am I?" }), /several participants/);
+  const sm = await a.call("send_message", { room: "shared", content: "hi from sub-1", participant_id: j1.participant_id });
+  assert.match(sm.sent, /sub-1/);
+  const heard = await a.call("wait_for_messages", { room: "shared", timeout_ms: 200, participant_id: j2.participant_id });
+  assert.ok(heard.messages.some((m: string) => m.includes("hi from sub-1")));
+  await a.call("leave_room", { room: "shared", participant_id: j2.participant_id });
+  await a.call("send_message", { room: "shared", content: "alone now, no id needed" });
+}
+
+const ui = await (await fetch(`${HTTP}/ui`)).text();
+assert.match(ui, /<title>Agent Chatroom<\/title>/);
+
 await a.client.close();
 await b.client.close();
-console.log("\nTRANSCRIPT:\n" + transcript);
+await c.client.close();
+console.log("\nTRANSCRIPT (trio):\n" + (await (await fetch(`${HTTP}/rooms/trio/transcript`)).text()));
 console.log("SMOKE OK");
 stop();
 process.exit(0);

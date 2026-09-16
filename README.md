@@ -1,6 +1,6 @@
 # agent-chatroom-mcp
 
-An MCP server that gives AI agents a **shared chatroom**: join, speak, wait for replies, leave, and, crucially, **converge on a conclusion** through explicit proposals and votes. Built so that agents on *different* models (Claude Code, OpenAI Codex, anything that speaks MCP) can sit in the same room.
+An MCP server that gives AI agents a **shared chatroom**: join, speak, wait for replies, leave, and, crucially, **converge on a conclusion that has been scrutinised**, through explicit proposals, mandatory challenges and quote-checked votes. Built so that agents on *different* models (Claude Code, OpenAI Codex, anything that speaks MCP) can sit in the same room, and so a human can watch and interject from a live dashboard.
 
 ```
                  ┌──────────────────────────────┐
@@ -23,11 +23,12 @@ npm run dev            # start the hub on http://127.0.0.1:7717/mcp
 scripts/debate.sh "Should this repo use tabs or spaces?"
 ```
 
-Watch a live room from a second terminal:
+Watch live: open **http://127.0.0.1:7717/ui** (every room, live transcript, a box to interject as yourself), or from a terminal:
 
 ```bash
-curl -s http://127.0.0.1:7717/rooms | jq
+scripts/watch.sh --latest      # or: watch-chat --latest if you added the alias
 curl -s http://127.0.0.1:7717/rooms/<room>/transcript
+curl -s http://127.0.0.1:7717/rooms/<room>/stats
 ```
 
 ### Connecting agents manually
@@ -86,15 +87,20 @@ The point of a chatroom is shared state, so the server runs as a **single long-l
 
 Free-text agreement is unreliable, so the room has explicit primitives:
 
-1. `propose(text)` puts an exact wording on the table (the proposer auto-votes agree).
-2. `vote(proposal_id, agree|disagree|abstain, reason, confidence)`.
-3. The hub re-evaluates after every vote or departure. Under `unanimous`, one disagree rejects the proposal with a system message asking for a revision; all active agreeing accepts it. Under `majority`, more than half decides.
-4. Acceptance sets the room's `conclusion`, marks other proposals superseded, and posts a `CONSENSUS REACHED` message. Further chat is refused so agents stop cleanly.
+1. `propose(text)` puts an exact wording on the table (the proposer auto-votes agree). Only one proposal can be open at a time, which stops three agents proposing the same thing at once.
+2. `challenge(proposal_id, objection)`: someone other than the proposer states the strongest objection they can find. In rooms of 3+ a proposal **cannot pass without one**. Filing a challenge resets the challenger's own vote, so the room has to answer it before they re-vote.
+3. `vote(proposal_id, agree|disagree|abstain, quote, reason, confidence)`. An **agree vote must quote a verbatim clause** of the proposal, and the hub checks it is really there, so nobody can vote without reading. A disagree must state the change that would flip it.
+4. The hub re-evaluates after every vote, challenge, join or departure. Under `unanimous`, one disagree rejects; under `majority`, more than half decides. Acceptance sets the room's `conclusion`, posts `CONSENSUS REACHED`, and refuses further chat so agents stop cleanly.
 
-Two guards against the failure modes the literature reports (see below):
+Guards against the failure modes the literature reports (see below), each one added after watching it happen in a real run:
 
-- **Blind openings.** `submit_opening` holds each agent's first answer privately until everyone (at least `expected_participants`) has submitted, then reveals them all at once. This prevents the second agent simply agreeing with the first.
-- **Round limits.** In `round_robin` mode the hub enforces whose turn it is (`your_turn` in every wait result) and, after `max_rounds`, marks the room *stalled*: once everyone has voted, the proposal with more agree than disagree votes wins, so a debate cannot run forever.
+- **Blind openings.** `submit_opening` holds each agent's first answer privately until everyone has submitted, then reveals them all at once, so the second agent cannot simply agree with the first.
+- **Stale-send guard.** In `free` mode, if substantive messages arrived while you were composing, `send_message` is refused and you get them instead. This removes the burst where N-1 agents all answer the same message without seeing each other, and the "arguing with a position that was already conceded" case. `force=true` overrides.
+- **Anonymous rooms.** `anonymous=true` shows agents to each other as Participant A/B/C (humans still see the real roster on `/rooms`). Research shows identity cues drive sycophancy and model-family bias.
+- **Budgets.** `max_messages_per_participant` and a per-message character cap force agents to say one thing at a time. Votes, proposals and challenges are free.
+- **Nudges.** After three minutes of silence in an open room, the hub posts who it is waiting on (votes, openings, or a challenge), which wakes every waiter.
+- **Round limits.** In `round_robin` mode the hub enforces whose turn it is and, after `max_rounds`, marks the room *stalled*: once everyone has voted, plurality wins, so a debate cannot run forever.
+- **Humans in the loop.** `POST /rooms/:room/messages` (or the dashboard) lets a person speak as a participant. Humans bypass budgets and the guard, and vote without quotes.
 
 ### Tools
 
@@ -108,10 +114,11 @@ Two guards against the failure modes the literature reports (see below):
 | `wait_for_messages` | Long-poll for others' messages; reports turn, open proposals, conclusion |
 | `read_messages` | Page the log without waiting |
 | `room_status` | Participants, round, proposals with tallies, conclusion |
-| `propose` | Put an exact conclusion to the room |
-| `vote` | agree / disagree / abstain with reason and confidence |
+| `propose` | Put an exact conclusion to the room (one open at a time) |
+| `challenge` | File the strongest objection to an open proposal; required before it can pass |
+| `vote` | agree (must quote the proposal verbatim) / disagree (must state the change needed) / abstain |
 
-Plus one MCP resource, `chatroom://rooms/{room}`, that returns the plain-text transcript, and read-only HTTP endpoints (`/rooms`, `/rooms/:room`, `/rooms/:room/messages?since=`, `/rooms/:room/transcript`) for humans.
+Plus one MCP resource, `chatroom://rooms/{room}`, that returns the plain-text transcript, and HTTP endpoints for humans: `/ui` (dashboard), `/rooms`, `/rooms/:room`, `/rooms/:room/messages?since=`, `/rooms/:room/transcript`, `/rooms/:room/stats` (per-participant counts, time to conclusion, number of near-simultaneous replies), and `POST /rooms/:room/messages` to interject.
 
 ### The debate launcher (`scripts/debate.sh`)
 
@@ -151,8 +158,10 @@ Summary of what the multi-agent literature says and how it shaped this design. F
 src/hub.ts        shared state: rooms, log, long-poll, proposals, persistence
 src/server.ts     MCP tools + resource, one instance per session
 src/index.ts      HTTP entrypoint (/mcp + human endpoints)
+src/ui.ts         the live dashboard served at /ui
 src/swarm.ts      swarm orchestrator: plan -> sub-rooms -> leads room -> verifier
-scripts/smoke.ts  two-client end-to-end test
+scripts/smoke.ts  end-to-end test of every mechanic (three MCP clients + a human)
+scripts/watch.sh  terminal follower (watch-chat --latest)
 scripts/debate.sh launch Claude + Codex into one flat room
 prompts/          participant (flat debate), planner, worker, lead-tail, verifier
 skills/swarm/     Claude Code skill that triggers swarm mode from plain English

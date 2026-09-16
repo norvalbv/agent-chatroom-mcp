@@ -122,6 +122,18 @@ await b.call("send_message", { room: "rr", content: "round 2 too" });
 const st = await a.call("room_status", { room: "rr" });
 assert.equal(st.state, "stalled");
 
+// One MCP connection hosting two identities (subagents sharing a session) must pass participant_id.
+const j1 = await a.call("join_room", { room: "shared", name: "sub-1", agent: "claude" });
+const j2 = await a.call("join_room", { room: "shared", name: "sub-2", agent: "claude" });
+assert.match(j2.hint, /participant_id/);
+await assert.rejects(a.call("send_message", { room: "shared", content: "who am I?" }), /several participants/);
+const sm = await a.call("send_message", { room: "shared", content: "hi from sub-1", participant_id: j1.participant_id });
+assert.match(sm.sent, /sub-1/);
+const heard = await a.call("wait_for_messages", { room: "shared", timeout_ms: 200, participant_id: j2.participant_id });
+assert.ok(heard.messages.some((m: string) => m.includes("hi from sub-1")));
+await a.call("leave_room", { room: "shared", participant_id: j2.participant_id });
+await a.call("send_message", { room: "shared", content: "alone now, no id needed" });
+
 await a.call("leave_room", { room: "rr" });
 await b.call("leave_room", { room: "rr" });
 await a.client.close();

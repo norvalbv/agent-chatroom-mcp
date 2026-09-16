@@ -35,13 +35,23 @@ export function createSessionServer(hub: Hub, sessionLabel = "session"): McpServ
     },
   );
 
-  // participant id per room for this session
-  const me = new Map<string, string>();
+  // participant ids per room for this MCP connection. Several agents (e.g. subagents of one
+  // Claude Code session) may share one connection, so a room can hold more than one identity.
+  const me = new Map<string, Set<string>>();
   const pid = (room: string, override?: string) => {
-    const id = override ?? me.get(room);
-    if (!id) throw new HubError(`You have not joined "${room}" in this session. Call join_room first.`);
-    return id;
+    if (override) return override;
+    const ids = me.get(room);
+    if (!ids || ids.size === 0) throw new HubError(`You have not joined "${room}" on this connection. Call join_room first.`);
+    if (ids.size > 1) {
+      const names = [...ids].map((id) => hub.getRoom(room).participants.get(id)?.name ?? id).join(", ");
+      throw new HubError(
+        `This MCP connection has several participants in "${room}" (${names}). ` +
+          `Pass participant_id (returned by join_room) on every call so the room knows who you are.`,
+      );
+    }
+    return [...ids][0];
   };
+  const asArg = z.string().optional().describe("Your participant id from join_room. Required if other agents share this MCP connection.");
 
   const guard =
     <A>(fn: (args: A) => Promise<unknown> | unknown) =>
@@ -82,7 +92,9 @@ export function createSessionServer(hub: Hub, sessionLabel = "session"): McpServ
     },
     guard(({ room, name, agent, topic, mode, quorum, max_rounds, expected_participants, participant_id }) => {
       const { room: r, participant } = hub.join(room, name, agent, { topic, mode, quorum, maxRounds: max_rounds, expectedParticipants: expected_participants }, participant_id);
-      me.set(room, participant.id);
+      if (!me.has(room)) me.set(room, new Set());
+      me.get(room)!.add(participant.id);
+      const shared = me.get(room)!.size > 1;
       const recent = r.messages.slice(-30);
       participant.lastSeenSeq = r.messages.at(-1)?.seq ?? 0;
       return {
@@ -92,19 +104,21 @@ export function createSessionServer(hub: Hub, sessionLabel = "session"): McpServ
         recent_messages: recent.map(fmt),
         next_seq: participant.lastSeenSeq,
         hint:
-          r.expectedParticipants && !r.openingsRevealed
+          (shared ? "Other agents share this MCP connection: pass participant_id on EVERY call. " : "") +
+          (r.expectedParticipants && !r.openingsRevealed
             ? "This room uses blind openings: call submit_opening with your independent first answer before reading others."
-            : "Post with send_message, then call wait_for_messages in a loop to hear replies.",
+            : "Post with send_message, then call wait_for_messages in a loop to hear replies."),
       };
     }),
   );
 
   server.registerTool(
     "leave_room",
-    { title: "Leave a room", description: "Leave a chatroom. Open proposals are re-evaluated without you.", inputSchema: { room: roomArg } },
-    guard(({ room }) => {
-      hub.leave(room, pid(room));
-      me.delete(room);
+    { title: "Leave a room", description: "Leave a chatroom. Open proposals are re-evaluated without you.", inputSchema: { room: roomArg, participant_id: asArg } },
+    guard(({ room, participant_id }) => {
+      const id = pid(room, participant_id);
+      hub.leave(room, id);
+      me.get(room)?.delete(id);
       return `Left ${room}.`;
     }),
   );
@@ -118,10 +132,11 @@ export function createSessionServer(hub: Hub, sessionLabel = "session"): McpServ
         room: roomArg,
         content: z.string().describe("The message text."),
         reply_to: z.string().optional().describe("Message id (m_...) you are replying to."),
+        participant_id: asArg,
       },
     },
-    guard(({ room, content, reply_to }) => {
-      const m = hub.send(room, pid(room), content, reply_to);
+    guard(({ room, content, reply_to, participant_id }) => {
+      const m = hub.send(room, pid(room, participant_id), content, reply_to);
       return { sent: fmt(m), id: m.id, seq: m.seq };
     }),
   );
@@ -133,9 +148,9 @@ export function createSessionServer(hub: Hub, sessionLabel = "session"): McpServ
       description:
         "Submit your independent first answer. It is held privately and revealed together with everyone else's once all " +
         "participants have submitted, so nobody anchors on another agent's answer. After it returns, call wait_for_messages.",
-      inputSchema: { room: roomArg, content: z.string().describe("Your opening position and reasoning.") },
+      inputSchema: { room: roomArg, content: z.string().describe("Your opening position and reasoning."), participant_id: asArg },
     },
-    guard(({ room, content }) => hub.submitOpening(room, pid(room), content)),
+    guard(({ room, content, participant_id }) => hub.submitOpening(room, pid(room, participant_id), content)),
   );
 
   server.registerTool(
@@ -150,11 +165,12 @@ export function createSessionServer(hub: Hub, sessionLabel = "session"): McpServ
         room: roomArg,
         since_seq: z.number().int().min(0).optional().describe("Return messages with seq greater than this. Defaults to what you have already seen."),
         timeout_ms: z.number().int().min(0).max(MAX_WAIT_MS).optional(),
+        participant_id: asArg,
       },
     },
-    guard(async ({ room, since_seq, timeout_ms }) => {
+    guard(async ({ room, since_seq, timeout_ms, participant_id }) => {
       const r = hub.getRoom(room);
-      const id = pid(room);
+      const id = pid(room, participant_id);
       const p = hub.requireParticipant(r, id);
       const since = since_seq ?? p.lastSeenSeq;
       const msgs = await hub.wait(room, id, since, Math.min(timeout_ms ?? DEFAULT_WAIT_MS, MAX_WAIT_MS));
@@ -203,11 +219,11 @@ export function createSessionServer(hub: Hub, sessionLabel = "session"): McpServ
         "Put a concrete statement to the room as the proposed conclusion. You automatically vote agree on your own proposal. " +
         "It is adopted when the room's quorum (default: every active participant) votes agree. Only one proposal can be open at a time; " +
         "if someone else's is open, vote on it instead.",
-      inputSchema: { room: roomArg, text: z.string().describe("The exact conclusion you propose the group adopt.") },
+      inputSchema: { room: roomArg, text: z.string().describe("The exact conclusion you propose the group adopt."), participant_id: asArg },
     },
-    guard(({ room, text }) => {
+    guard(({ room, text, participant_id }) => {
       const r = hub.getRoom(room);
-      const pr = hub.propose(room, pid(room), text);
+      const pr = hub.propose(room, pid(room, participant_id), text);
       return hub.proposalView(r, pr);
     }),
   );
@@ -223,11 +239,12 @@ export function createSessionServer(hub: Hub, sessionLabel = "session"): McpServ
         vote: z.enum(["agree", "disagree", "abstain"]),
         reason: z.string().optional(),
         confidence: z.number().min(0).max(1).optional(),
+        participant_id: asArg,
       },
     },
-    guard(({ room, proposal_id, vote, reason, confidence }) => {
+    guard(({ room, proposal_id, vote, reason, confidence, participant_id }) => {
       const r = hub.getRoom(room);
-      const pr = hub.vote(room, pid(room), proposal_id, vote, reason, confidence);
+      const pr = hub.vote(room, pid(room, participant_id), proposal_id, vote, reason, confidence);
       return { proposal: hub.proposalView(r, pr), room_state: r.state, conclusion: r.conclusion ?? null };
     }),
   );

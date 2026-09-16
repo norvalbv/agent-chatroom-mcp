@@ -9,6 +9,8 @@ One command runs the whole thing: a planner agent splits the task into sub-quest
 
 ## Run it
 
+Always run the orchestrator below. Do NOT hand-roll the swarm by spawning subagents that call the chatroom tools yourself: the script handles planning, room layout, the verifier and the report.
+
 ```bash
 node "/Users/benji/Desktop/Personal and learning/agent-chatroom-mcp/dist/swarm.js" "<task in the user's words>" \
   --agents <N> --cwd "<absolute path of the project the user means, usually the current working directory>" \

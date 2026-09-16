@@ -76,7 +76,7 @@ export interface RoomOptions {
   mode?: RoomMode;
   quorum?: Quorum;
   maxRounds?: number;
-  /** Blind openings are revealed only once this many participants have submitted one. */
+  /** Blind openings are revealed, and proposals can be accepted, only once this many participants have joined. */
   expectedParticipants?: number;
 }
 
@@ -222,6 +222,7 @@ export class Hub {
       this.persist({ type: "join", room: roomName, p: participant });
       this.post(room, "system", participant, `${participant.name} rejoined the room.`);
     }
+    for (const pr of room.proposals.values()) if (pr.status === "open") this.evaluate(room, pr);
     return { room, participant };
   }
 
@@ -395,6 +396,13 @@ export class Hub {
     const p = this.requireParticipant(room, pid);
     if (room.state === "concluded") throw new HubError(`Room "${roomName}" has already concluded.`);
     if (!text.trim()) throw new HubError("Proposal text is empty.");
+    const open = [...room.proposals.values()].find((pr) => pr.status === "open");
+    if (open) {
+      throw new HubError(
+        `Proposal ${open.id} by ${open.by.name} is already open: "${open.text.slice(0, 200)}". ` +
+          `Vote on it (agree, or disagree with the change you need) instead of proposing a new one.`,
+      );
+    }
     const proposal: Proposal = {
       id: shortId("prop"),
       room: roomName,
@@ -450,6 +458,8 @@ export class Hub {
     if (pr.status !== "open" || room.state === "concluded") return;
     const active = this.activeParticipants(room);
     if (active.length === 0) return;
+    // Do not let an early majority decide before everyone expected has arrived.
+    if (room.expectedParticipants && room.participants.size < room.expectedParticipants) return;
     const votes = active.map((p) => pr.votes[p.id]?.vote);
     const agree = votes.filter((v) => v === "agree").length;
     const disagree = votes.filter((v) => v === "disagree").length;

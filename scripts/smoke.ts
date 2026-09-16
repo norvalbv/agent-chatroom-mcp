@@ -93,6 +93,7 @@ await b.call("send_message", { room, content: "Works for me.", reply_to: s1.id }
 const pr = await b.call("propose", { room, text: "Use spaces (2), enforce via .editorconfig and formatter." });
 assert.equal(pr.status, "open");
 assert.deepEqual(pr.waiting_on, ["claude-1"]);
+await assert.rejects(a.call("propose", { room, text: "a competing proposal" }), /already open/);
 const pending = await a.call("wait_for_messages", { room, timeout_ms: 2000 });
 assert.equal(pending.proposals_awaiting_your_vote.length, 1);
 const v = await a.call("vote", { room, proposal_id: pr.id, vote: "agree", reason: "fine", confidence: 0.8 });

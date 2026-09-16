@@ -9,7 +9,8 @@
     "start": "node dist/index.js",
     "dev": "tsx src/index.ts",
     "smoke": "tsx scripts/smoke.ts",
-    "debate": "bash scripts/debate.sh"
+    "debate": "bash scripts/debate.sh",
+    "swarm": "node dist/swarm.js"
   },
   "keywords": [],
   "author": "",
@@ -27,6 +28,7 @@
     "typescript": "^7.0.2"
   },
   "bin": {
-    "agent-chatroom-mcp": "dist/index.js"
+    "agent-chatroom-mcp": "dist/index.js",
+    "agent-swarm": "dist/swarm.js"
   }
 }

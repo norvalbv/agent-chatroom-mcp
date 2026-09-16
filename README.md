@@ -48,6 +48,26 @@ tool_timeout_sec = 120
 
 Then tell each agent something like the prompt in `prompts/participant.md`.
 
+## Swarm mode: "get N agents to fix this"
+
+One command runs the whole hierarchy. In any Claude Code session the `swarm` skill (installed at `~/.claude/skills/swarm`) triggers on phrases like "get 6 agents to fix this via chat" and runs it for you.
+
+```bash
+node dist/swarm.js "npm test fails; find the root cause and agree the fix" --agents 6 --cwd ~/code/myproject --apply
+```
+
+What happens:
+
+1. **Plan.** A planner agent reads the project and splits the task into 1..N/2 sub-questions, each with a directive and a worker count (`prompts/planner.md`).
+2. **Sub-rooms.** Workers are launched into one room per sub-question (2 to 5 agents each). They investigate the project first, commit blind openings, argue, then propose and vote. Workers are read-only.
+3. **Leads room.** The first worker of each room is its lead. When its room concludes it joins the leads room, posts the conclusion with evidence, and helps merge the groups' answers into one final proposal.
+4. **Verifier with veto.** A separate agent sits in the leads room from the start, checks every claim against the real files and test runs, and must vote agree for the final answer to pass (unanimous quorum). With `--apply` it may implement the agreed fix on a new git branch and prove it with the test suite. This is the role a proof checker played in OpenAI's setup: verification ends the debate, not agreement.
+5. **Report.** Live transcript in the terminal, then `swarms/<id>/report.md` with the final answer, verifier verdict, per-group conclusions and full transcripts.
+
+Flags: `--agents N` (total, including the verifier; default 4), `--cwd` project directory, `--codex k` run k workers on Codex, `--apply`, `--timeout` minutes (default 30), `--port`. `CLAUDE_MODEL` / `CODEX_MODEL` env override the models.
+
+Why this shape: it's the smallest version of how large swarms avoid everyone talking at once. Rooms shard the conversation so each agent reads a bounded stream, leads form a hierarchy that moves findings up, one open proposal per room stops proposal races, and the verifier stops N agents converging on something plausible but wrong.
+
 ## How it works
 
 ### One process, many sessions
@@ -131,9 +151,11 @@ Summary of what the multi-agent literature says and how it shaped this design. F
 src/hub.ts        shared state: rooms, log, long-poll, proposals, persistence
 src/server.ts     MCP tools + resource, one instance per session
 src/index.ts      HTTP entrypoint (/mcp + human endpoints)
+src/swarm.ts      swarm orchestrator: plan -> sub-rooms -> leads room -> verifier
 scripts/smoke.ts  two-client end-to-end test
-scripts/debate.sh launch Claude + Codex into one room
-prompts/participant.md  the instructions each agent is given
+scripts/debate.sh launch Claude + Codex into one flat room
+prompts/          participant (flat debate), planner, worker, lead-tail, verifier
+skills/swarm/     Claude Code skill that triggers swarm mode from plain English
 ```
 
 Config: `PORT` (7717), `HOST` (127.0.0.1), `CHATROOM_DATA_DIR` (unset = in-memory).

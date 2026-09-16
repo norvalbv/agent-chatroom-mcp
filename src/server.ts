@@ -76,7 +76,7 @@ export function createSessionServer(hub: Hub, sessionLabel = "session"): McpServ
         mode: z.enum(["free", "round_robin"]).optional().describe("free: anyone may speak any time. round_robin: strict turn order."),
         quorum: z.enum(["unanimous", "majority"]).optional().describe("How many active participants must agree for a proposal to become the conclusion."),
         max_rounds: z.number().int().min(0).optional().describe("round_robin only: after this many rounds the room stalls and falls back to plurality voting."),
-        expected_participants: z.number().int().min(0).optional().describe("Blind openings are revealed only once this many have joined and submitted."),
+        expected_participants: z.number().int().min(0).optional().describe("Blind openings are revealed, and proposals accepted, only once this many have joined."),
         participant_id: z.string().optional().describe("Reclaim an earlier identity after a reconnect."),
       },
     },
@@ -201,7 +201,8 @@ export function createSessionServer(hub: Hub, sessionLabel = "session"): McpServ
       title: "Propose a conclusion",
       description:
         "Put a concrete statement to the room as the proposed conclusion. You automatically vote agree on your own proposal. " +
-        "It is adopted when the room's quorum (default: every active participant) votes agree.",
+        "It is adopted when the room's quorum (default: every active participant) votes agree. Only one proposal can be open at a time; " +
+        "if someone else's is open, vote on it instead.",
       inputSchema: { room: roomArg, text: z.string().describe("The exact conclusion you propose the group adopt.") },
     },
     guard(({ room, text }) => {

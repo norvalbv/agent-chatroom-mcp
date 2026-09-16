@@ -4,7 +4,8 @@
 #
 #   scripts/debate.sh "Should this repo use tabs or spaces?" [room-name]
 #
-# Env: PORT (default 7717), CLAUDE_MODEL, CODEX_MODEL, N_CLAUDE (default 1), N_CODEX (default 1)
+# Env: PORT (default 7717), CLAUDE_MODEL, CODEX_MODEL, N_CLAUDE (default 1), N_CODEX (default 1),
+#      PROMPT=participant|minimal (which prompts/<name>.md to give each agent; default participant)
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -30,7 +31,7 @@ LENSES=("cost and simplicity" "risk and failure modes" "the people who have to o
 IDX=0
 render_prompt() { # name agent
   local lens="${LENSES[$((IDX % ${#LENSES[@]}))]}"; IDX=$((IDX + 1))
-  sed -e "s|{{NAME}}|$1|g" -e "s|{{AGENT}}|$2|g" -e "s|{{ROOM}}|$ROOM|g" -e "s|{{N}}|$N|g" -e "s|{{TOPIC}}|$TOPIC|g" -e "s|{{LENS}}|$lens|g" prompts/participant.md
+  sed -e "s|{{NAME}}|$1|g" -e "s|{{AGENT}}|$2|g" -e "s|{{ROOM}}|$ROOM|g" -e "s|{{N}}|$N|g" -e "s|{{TOPIC}}|$TOPIC|g" -e "s|{{LENS}}|$lens|g" "prompts/${PROMPT:-participant}.md"
 }
 
 MCP_JSON="$LOGS/mcp.json"

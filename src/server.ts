@@ -229,7 +229,9 @@ export function createSessionServer(hub: Hub): McpServer {
         conclusion: r.conclusion ?? null,
         hint:
           r.state === "concluded"
-            ? "The room has concluded. Read the conclusion and leave_room."
+            ? human
+              ? `The room has concluded, but ${hub.shown(r, human.from)} (a human) asked "${human.content.slice(0, 160)}". Answer them (send_message reply_to="${human.id}"), then leave_room.`
+              : "The room has concluded. Read the conclusion and leave_room."
             : human
               ? `${hub.shown(r, human.from)} (a human) said "${human.content.slice(0, 160)}" (${human.id}). Reply to them directly, in plain prose, with send_message reply_to="${human.id}" before anything else.`
               : needsChallenge && needsMyVote

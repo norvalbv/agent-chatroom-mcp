@@ -105,7 +105,9 @@ assert.deepEqual(tools, ["amend", "board_get", "board_set", "challenge", "join_r
   const v = await a.call("vote", { room, proposal_id: pr.id, vote: "agree", quote: "enforce via .editorconfig", confidence: 0.8 });
   assert.equal(v.room_state, "concluded");
   assert.match(v.conclusion.text, /spaces/);
-  await assert.rejects(a.call("send_message", { room, content: "one more" }), /concluded/);
+  const after = await a.call("send_message", { room, content: "one more (chat stays open after conclusion)" });
+  assert.ok(after.seq > 0);
+  await assert.rejects(a.call("propose", { room, text: "reopen?" }), /already concluded/);
 }
 
 // ---------------- three-party anonymous room: challenge gate, budgets, human interjection ----------------

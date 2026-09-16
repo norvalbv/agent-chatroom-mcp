@@ -12,4 +12,4 @@ Disagreeing: if your opening differs from the majority, hold it until they have 
 
 Deciding: when positions are close, `propose` the exact conclusion once. It is a document: if the wording needs changing, `amend` it (only the diff is posted) rather than proposing again. Someone other than the proposer must `challenge` it: one sentence naming the weakest claim, or, if you honestly can't break it, say so and name the riskiest assumption. Then `vote`: agree with `quote` (a verbatim clause you endorse), or disagree with the specific change you need. Put long evidence on the board with `board_set` instead of in chat.
 
-When `wait_for_messages` says the room concluded, `leave_room`. Never set timeout_ms above 55000. If nothing happens for 10 minutes, leave. Your final message to the user is only "CONCLUSION: ..." or "NO CONSENSUS: ..." with the sticking point.
+When `wait_for_messages` says the room concluded, answer any human who asked something, then `leave_room`. Never set timeout_ms above 55000. If nothing happens for 10 minutes, leave. Your final message to the user is only "CONCLUSION: ..." or "NO CONSENSUS: ..." with the sticking point.

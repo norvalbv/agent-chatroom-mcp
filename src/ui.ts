@@ -51,7 +51,7 @@ export const UI_HTML = `<!doctype html>
 
   /* ---- main ---- */
   main { display:grid; grid-template-rows:auto minmax(0,1fr) auto; min-height:0; background:var(--bg) }
-  header { background:var(--panel); border-bottom:1px solid var(--line); padding:14px 22px 12px }
+  header { background:var(--panel); border-bottom:1px solid var(--line); padding:14px 22px 12px; max-height:46vh; overflow:auto }
   .title { display:flex; align-items:center; gap:10px; flex-wrap:wrap }
   .title h2 { margin:0; font-size:16px; font-weight:700; letter-spacing:-.01em }
   .chip { font-size:11px; font-weight:600; padding:2px 8px; border-radius:999px; background:var(--panel2); color:var(--dim) }
@@ -70,6 +70,10 @@ export const UI_HTML = `<!doctype html>
   .card .lbl { font-size:11px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:var(--acc); display:flex; align-items:center; gap:8px }
   .card.concl .lbl { color:var(--ok) }
   .card .txt { margin-top:6px; white-space:pre-wrap; word-break:break-word }
+  .card .txt.clamp { max-height:7.5em; overflow:hidden; position:relative }
+  .card .txt.clamp::after { content:""; position:absolute; inset:auto 0 0 0; height:2.5em; background:linear-gradient(transparent, var(--panel)) }
+  .card.concl .txt.clamp::after { background:linear-gradient(transparent, var(--ok-bg)) }
+  .card .more { background:none; border:0; color:var(--acc); font-size:12px; padding:4px 0 0 }
   .tally { display:flex; align-items:center; gap:10px; margin-top:10px; font-size:12px; color:var(--dim) }
   .bar { flex:1; height:6px; background:var(--panel2); border-radius:999px; overflow:hidden; display:flex }
   .bar i { display:block; height:100% } .bar .a { background:var(--ok) } .bar .d { background:var(--bad) }
@@ -145,6 +149,7 @@ export const UI_HTML = `<!doctype html>
     } catch { $('#sub').textContent = 'hub unreachable'; }
   }
 
+  const expanded = new Set();
   function head(r) {
     if (!r) return;
     const open = r.proposals.find(p => p.status === 'open');
@@ -153,17 +158,23 @@ export const UI_HTML = `<!doctype html>
     let cards = '';
     if (open) {
       const a = open.tally.agree, d = open.tally.disagree;
-      cards += '<div class="card prop"><div class="lbl">Open proposal <span class="chip">' + esc(open.id) + '</span> <span style="font-weight:500;text-transform:none;letter-spacing:0;color:var(--dim)">by ' + esc(open.by) + '</span></div><div class="txt">' + esc(open.text) + '</div>'
+      cards += '<div class="card prop"><div class="lbl">Open proposal <span class="chip">' + esc(open.id) + '</span> <span style="font-weight:500;text-transform:none;letter-spacing:0;color:var(--dim)">by ' + esc(open.by) + '</span></div><div class="txt clamp" data-c="prop">' + esc(open.text) + '</div><button class="more" data-t="prop">show more</button>'
         + '<div class="tally"><div class="bar"><i class="a" style="width:' + (100*a/voters) + '%"></i><i class="d" style="width:' + (100*d/voters) + '%"></i></div><span>' + a + ' agree · ' + d + ' disagree' + (open.waiting_on.length ? ' · waiting on ' + esc(open.waiting_on.join(', ')) : '') + '</span>'
         + (open.needs_challenge ? '<span class="need">needs a challenge</span>' : '') + '<button class="vbtn" data-p="' + open.id + '" data-v="agree">Agree</button><button class="vbtn veto" data-p="' + open.id + '" data-v="disagree">Veto</button></div>'
         + (open.challenges.length ? '<div class="tally" style="display:block">' + open.challenges.map(c => '<div><b>' + esc(c.by) + '</b> challenged: ' + esc(c.objection.slice(0,240)) + (c.objection.length>240?'…':'') + '</div>').join('') + '</div>' : '') + '</div>';
     }
-    if (r.conclusion) cards += '<div class="card concl"><div class="lbl">Conclusion <span style="font-weight:500;text-transform:none;letter-spacing:0;color:var(--dim)">' + rel(r.conclusion.decidedAt) + '</span></div><div class="txt">' + esc(r.conclusion.text) + '</div></div>';
+    if (r.conclusion) cards += '<div class="card concl"><div class="lbl">Conclusion <span style="font-weight:500;text-transform:none;letter-spacing:0;color:var(--dim)">' + rel(r.conclusion.decidedAt) + '</span></div><div class="txt clamp" data-c="concl">' + esc(r.conclusion.text) + '</div><button class="more" data-t="concl">show more</button></div>';
     $('#head').innerHTML = '<div class="title"><h2>' + esc(r.name) + '</h2><span class="chip ' + r.state + '">' + r.state + '</span><span class="chip">' + r.mode.replace('_',' ') + '</span><span class="chip">' + r.quorum + '</span>' + (r.anonymous ? '<span class="chip">anonymous</span>' : '') + '<span class="chip">' + r.message_count + ' msgs</span></div>'
       + (r.topic ? '<div class="topic">' + esc(r.topic) + '</div>' : '')
       + '<div class="people">' + people + '</div>'
       + '<div class="tools"><label><input type="checkbox" id="hs" ' + (hideSys?'checked':'') + '/> hide system notices</label><label><input type="checkbox" id="as" ' + (autoScroll?'checked':'') + '/> follow new messages</label><a href="/rooms/' + encodeURIComponent(r.name) + '/transcript" target="_blank">transcript</a><a href="/rooms/' + encodeURIComponent(r.name) + '/stats" target="_blank">stats</a></div>'
       + cards;
+    for (const b of document.querySelectorAll('header .more')) {
+      const t = b.dataset.t, box = document.querySelector('header .txt[data-c="' + t + '"]');
+      if (box.scrollHeight <= box.clientHeight + 4 && !expanded.has(t)) { b.style.display = 'none'; }
+      if (expanded.has(t)) { box.classList.remove('clamp'); b.textContent = 'show less'; }
+      b.onclick = () => { if (expanded.has(t)) expanded.delete(t); else expanded.add(t); head(r); };
+    }
     $('#hs').onchange = (e) => { hideSys = e.target.checked; store.set('hideSys', hideSys); rerender(); };
     $('#as').onchange = (e) => { autoScroll = e.target.checked; };
     $('#sendbtn').disabled = r.state === 'concluded';

@@ -383,9 +383,7 @@ export class Hub {
   send(roomName: string, pid: string, content: string, replyTo?: string, force = false): Message {
     const room = this.getRoom(roomName);
     const p = this.requireParticipant(room, pid);
-    if (room.state === "concluded") {
-      throw new HubError(`Room "${roomName}" has concluded: ${room.conclusion?.text}. No further messages are needed.`);
-    }
+    // Chat stays open after a conclusion so humans can still be answered; only proposals close.
     if (!content.trim()) throw new HubError("Message content is empty.");
     if (content.length > room.maxMessageChars) {
       throw new HubError(`Message is ${content.length} chars; this room allows ${room.maxMessageChars}. Say less: one claim, one reason, one ask.`);

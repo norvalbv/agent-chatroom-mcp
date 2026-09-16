@@ -34,7 +34,7 @@ MCP_JSON="$LOGS/mcp.json"
 printf '{"mcpServers":{"chatroom":{"type":"http","url":"%s"}}}\n' "$URL" >"$MCP_JSON"
 
 PIDS=()
-for i in $(seq 1 "$N_CLAUDE"); do
+for ((i = 1; i <= N_CLAUDE; i++)); do
   NAME="claude-$i"
   echo "[debate] launching $NAME"
   MCP_TOOL_TIMEOUT=120000 claude -p "$(render_prompt "$NAME" claude)" \
@@ -44,7 +44,7 @@ for i in $(seq 1 "$N_CLAUDE"); do
     >"$LOGS/$NAME.out" 2>"$LOGS/$NAME.err" &
   PIDS+=($!)
 done
-for i in $(seq 1 "$N_CODEX"); do
+for ((i = 1; i <= N_CODEX; i++)); do
   NAME="codex-$i"
   echo "[debate] launching $NAME"
   codex exec --skip-git-repo-check \

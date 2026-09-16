@@ -136,7 +136,7 @@ export function createSessionServer(hub: Hub): McpServer {
         hint:
           (shared ? "Other agents share this MCP connection: pass participant_id on EVERY call. " : "") +
           (r.anonymous ? `You appear to others as "${participant.label}". ` : "") +
-          (human ? `${hub.shown(r, human.from)} (a human) said "${human.content.slice(0, 160)}" and nobody has replied: answer them first with send_message reply_to="${human.id}". ` : "") +
+          (human && hub.responderFor(r, human, participant.id).mine ? `${hub.shown(r, human.from)} (a human) said "${human.content.slice(0, 160)}" and nobody has replied: answer them first, briefly, with send_message reply_to="${human.id}". ` : "") +
           (r.expectedParticipants && !r.openingsRevealed
             ? "This room uses blind openings: submit_opening with your own short answer before reading others'."
             : "Talk with send_message; wait_for_messages to hear replies. The topic above is the brief; do not restate it."),
@@ -215,13 +215,14 @@ export function createSessionServer(hub: Hub): McpServer {
       const needsChallenge = open && hub.challengeRequired(r) && open.challenges.length === 0 && open.by.id !== id;
       const openView = open ? hub.proposalView(r, open) : null;
       const human = hub.unansweredHuman(r);
+      const resp = human ? hub.responderFor(r, human, id) : null;
       return {
         messages: msgs.map((m) => hub.fmt(r, m)),
         next_seq: r.messages.at(-1)?.seq ?? since,
         room_state: r.state,
         your_turn: r.mode === "round_robin" ? hub.currentSpeaker(r)?.id === id : true,
         active_participants: hub.activeParticipants(r).map((x) => hub.shown(r, x)),
-        unanswered_human: human ? { id: human.id, name: hub.shown(r, human.from), text: human.content } : null,
+        unanswered_human: human ? { id: human.id, name: hub.shown(r, human.from), text: human.content, responder: resp!.who, you_answer: resp!.mine } : null,
         open_proposal: openView
           ? { id: openView.id, version: openView.version, by: openView.by, tally: openView.tally, waiting_on: openView.waiting_on, needs_challenge: openView.needs_challenge, challenges: openView.challenges, text: openView.text }
           : null,
@@ -229,12 +230,15 @@ export function createSessionServer(hub: Hub): McpServer {
         conclusion: r.conclusion ?? null,
         hint:
           r.state === "concluded"
-            ? human
-              ? `The room has concluded, but ${hub.shown(r, human.from)} (a human) asked "${human.content.slice(0, 160)}". Answer them (send_message reply_to="${human.id}"), then leave_room.`
+            ? human && resp!.mine
+              ? `The room has concluded, but ${hub.shown(r, human.from)} (a human) said "${human.content.slice(0, 160)}". You answer them (send_message reply_to="${human.id}", briefly), then leave_room.`
               : "The room has concluded. Read the conclusion and leave_room."
-            : human
-              ? `${hub.shown(r, human.from)} (a human) said "${human.content.slice(0, 160)}" (${human.id}). Reply to them directly, in plain prose, with send_message reply_to="${human.id}" before anything else.`
-              : needsChallenge && needsMyVote
+            : human && resp!.mine
+              ? `${hub.shown(r, human.from)} (a human) said "${human.content.slice(0, 160)}" (${human.id}). You are the one answering: reply with send_message reply_to="${human.id}"` +
+                (hub.isSmallTalk(human) ? ", one short friendly line, nothing else." : ", directly and briefly, before anything else.")
+              : human
+                ? `${hub.shown(r, human.from)} said "${human.content.slice(0, 80)}"; ${resp!.who} is answering, you don't need to. Carry on.`
+                : needsChallenge && needsMyVote
                 ? "A proposal is open and untested. Name its single weakest claim in one sentence (challenge), then vote. If you want different wording, amend it instead of re-proposing."
                 : needsMyVote
                   ? "Vote on the open proposal: agree with a verbatim quote of the clause you endorse, or disagree with the specific change you need (or just amend it)."

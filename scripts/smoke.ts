@@ -66,6 +66,7 @@ assert.deepEqual(tools, ["amend", "board_get", "board_set", "challenge", "join_r
   const jb = await b.call("join_room", { room, name: "codex-1", agent: "codex" });
   assert.equal(jb.room.active_count, 2);
 
+  await assert.rejects(a.call("submit_opening", { room, content: "Spaces. " + "because ".repeat(60) }), /capped at 400/);
   const oa = await a.call("submit_opening", { room, content: "Spaces: consistent rendering everywhere." });
   assert.equal(oa.revealed, false);
   assert.deepEqual(oa.waiting_on, ["codex-1"]);
@@ -209,8 +210,16 @@ assert.deepEqual(tools, ["amend", "board_get", "board_set", "challenge", "join_r
   await fetch(`${HTTP}/rooms/${room}/messages`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ name: "benji", content: "hello team, what about teal?" }) });
   const w = await a.call("wait_for_messages", { room, timeout_ms: 0 });
   assert.equal(w.unanswered_human.name, "benji");
-  assert.match(w.hint, /Reply to them directly/);
-  await assert.rejects(a.call("propose", { room, text: "Blue." }), /nobody has answered/);
+  assert.equal(w.unanswered_human.you_answer, true, "first asker is nominated to answer");
+  assert.match(w.hint, /You are the one answering/);
+  const wb = await b.call("wait_for_messages", { room, timeout_ms: 0 });
+  assert.equal(wb.unanswered_human.you_answer, false);
+  assert.match(wb.hint, /claude-1 is answering, you don't need to/);
+  // register: a greeting gets a greeting, not an essay
+  await fetch(`${HTTP}/rooms/${room}/messages`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ name: "benji", content: "hi all" }) });
+  const w2 = await a.call("wait_for_messages", { room, timeout_ms: 0 });
+  await assert.rejects(a.call("send_message", { room, content: "Hello benji! State of play: " + "x".repeat(240), reply_to: w2.unanswered_human.id }), /greeting gets a greeting/);
+  await a.call("send_message", { room, content: "Hi benji!", reply_to: w2.unanswered_human.id });
   const st0 = await a.call("room_status", { room });
   assert.equal(st0.unanswered_human.text, "hello team, what about teal?");
   await a.call("send_message", { room, content: "Hi benji! Teal is a strong option, we'll weigh it against blue.", reply_to: w.unanswered_human.id });

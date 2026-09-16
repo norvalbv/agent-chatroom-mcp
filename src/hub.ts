@@ -121,6 +121,8 @@ export interface Room {
   board: Map<string, BoardEntry>;
   /** human message ids the propose-gate has already warned about (once each) */
   humanWarned: Set<string>;
+  /** who has been asked to answer each human message, so three agents do not all say hello */
+  responders: Map<string, { pid: string; at: number }>;
 }
 
 type Opts = Required<RoomOptions>;
@@ -214,6 +216,7 @@ export class Hub {
       openingsRevealed: false,
       board: new Map(),
       humanWarned: new Set(),
+      responders: new Map(),
     };
     this.rooms.set(name, room);
     return room;
@@ -388,6 +391,16 @@ export class Hub {
     if (content.length > room.maxMessageChars) {
       throw new HubError(`Message is ${content.length} chars; this room allows ${room.maxMessageChars}. Say less: one claim, one reason, one ask.`);
     }
+    const target = replyTo ? room.messages.find((m) => m.id === replyTo) : undefined;
+    if (target && target.from.agent === "human" && p.agent !== "human") {
+      const cap = this.isSmallTalk(target) ? 240 : 900;
+      if (content.length > cap) {
+        throw new HubError(
+          `${this.shown(room, target.from)} wrote ${target.content.length} characters; match their register. Replies to that message are capped at ${cap} characters` +
+            (this.isSmallTalk(target) ? " (a greeting gets a greeting, not a status report)." : "."),
+        );
+      }
+    }
     if (room.maxMessagesPerParticipant && p.messageCount >= room.maxMessagesPerParticipant && p.agent !== "human" && !this.unansweredHuman(room)) {
       throw new HubError(
         `You have used your ${room.maxMessagesPerParticipant} messages in this room. You can still propose, challenge and vote.`,
@@ -548,7 +561,8 @@ export class Hub {
     const p = this.requireParticipant(room, pid);
     if (room.openingsRevealed) throw new HubError("Openings have already been revealed in this room; use send_message.");
     if (!content.trim()) throw new HubError("Opening statement is empty.");
-    if (content.length > room.maxMessageChars) throw new HubError(`Opening is ${content.length} chars; this room allows ${room.maxMessageChars}.`);
+    const cap = Math.min(room.maxMessageChars, 400);
+    if (content.length > cap) throw new HubError(`Opening is ${content.length} chars; openings are capped at ${cap}. One or two sentences: your answer and the main reason. Detail goes in the discussion or on the board.`);
     room.openings.set(p.id, content);
     this.persist({ type: "opening", room: roomName, pid: p.id, content });
     const waiting = this.openingsWaitingOn(room);
@@ -573,24 +587,42 @@ export class Hub {
   isAnswered(room: Room, human: Message): boolean {
     const p = room.participants.get(human.from.id);
     const names = [human.from.name, p?.label].filter(Boolean).map((n) => n!.toLowerCase());
+    // a later human message means an un-addressed "hi benji" reply belongs to that one, not this one
+    const nextHumanSeq = room.messages.find((m) => m.seq > human.seq && m.kind === "chat" && m.from.agent === "human")?.seq ?? Infinity;
     return room.messages.some(
       (m) =>
         m.seq > human.seq &&
         m.kind === "chat" &&
         m.from.agent !== "human" &&
-        (m.replyTo === human.id || names.some((n) => m.content.toLowerCase().includes(n))),
+        (m.replyTo === human.id || (m.seq < nextHumanSeq && names.some((n) => m.content.toLowerCase().includes(n)))),
     );
   }
 
-  /** The newest human chat message nobody has answered yet. */
+  /** The newest human chat message nobody has answered yet (older unanswered ones still count). */
   unansweredHuman(room: Room): Message | undefined {
     for (let i = room.messages.length - 1; i >= 0; i--) {
       const m = room.messages[i];
-      if (m.kind === "chat" && m.from.agent === "human" && m.tag !== "opening") {
-        return this.isAnswered(room, m) ? undefined : m;
-      }
+      if (m.kind === "chat" && m.from.agent === "human" && m.tag !== "opening" && !this.isAnswered(room, m)) return m;
     }
     return undefined;
+  }
+
+  /** Small talk is anything short with no question in it. */
+  isSmallTalk(m: Message): boolean {
+    return m.content.trim().length < 60 && !m.content.includes("?");
+  }
+
+  /**
+   * Nominate one agent to answer a human message. The first agent to ask gets it; if they
+   * have not replied within 20s the next asker takes over. Everyone else is told it is covered.
+   */
+  responderFor(room: Room, human: Message, pid: string): { mine: boolean; who: string } {
+    const cur = room.responders.get(human.id);
+    if (!cur || (cur.pid !== pid && Date.now() - cur.at > 20_000) || !room.participants.get(cur.pid)?.active) {
+      room.responders.set(human.id, { pid, at: Date.now() });
+      return { mine: true, who: this.shown(room, room.participants.get(pid)!) };
+    }
+    return { mine: cur.pid === pid, who: this.shown(room, room.participants.get(cur.pid)!) };
   }
 
   // ---------- shared board ----------

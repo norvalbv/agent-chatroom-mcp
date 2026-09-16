@@ -170,6 +170,7 @@ export class Hub {
       max_rounds: room.maxRounds || null,
       expected_participants: room.expectedParticipants || null,
       state: room.state,
+      created_at: room.createdAt,
       openings: room.openingsRevealed
         ? "revealed"
         : `${room.openings.size} submitted, waiting for ${this.openingsWaitingOn(room).join(", ") || "nobody"}`,

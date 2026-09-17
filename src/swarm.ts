@@ -266,6 +266,15 @@ const altSeats: { agent: "codex" | "openrouter"; model: string }[] = [
   ...Array.from({ length: OPENROUTER }, (_, i) => ({ agent: "openrouter" as const, model: OPENROUTER_MODELS[i % Math.max(1, OPENROUTER_MODELS.length)] })),
 ];
 const ALT = altSeats.length;
+/** Seats the alt providers take, walked from the back so k asked for is k launched, never the lead. */
+const altSlots = new Set<string>();
+for (let back = 0; back < Math.max(0, ...plan.groups.map((g) => g.workers)) && altSlots.size < ALT; back++) {
+  for (const g of plan.groups) {
+    if (altSlots.size >= ALT) break;
+    const i = g.workers - back;
+    if (g.workers > 1 && i > (FLAT ? 0 : 1)) altSlots.add(`${g.id}:${i}`);
+  }
+}
 let workerIndex = 0;
 
 // verifier joins the leads room first so it is present for every report
@@ -299,7 +308,7 @@ runs.push(
 for (const g of plan.groups) {
   const room = FLAT ? leadsRoom : `${SWARM_ID}-${g.id}`;
   for (let i = 1; i <= g.workers; i++) {
-    const alt = altSeats.length > 0 && g.workers > 1 && (FLAT ? i > g.workers - ALT : i === g.workers) ? altSeats.shift() : undefined; // an alt provider never takes the lead seat
+    const alt = altSlots.has(`${g.id}:${i}`) ? altSeats.shift() : undefined; // an alt provider never takes the lead seat
     const agent = alt?.agent ?? "claude";
     const isLead = !FLAT && i === 1;
     const model = alt ? alt.model : isLead ? LEAD_MODEL : MODELS.length ? MODELS[workerIndex++ % MODELS.length] : undefined;

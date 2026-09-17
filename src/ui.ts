@@ -72,6 +72,7 @@ export const UI_HTML = `<!doctype html>
   .brand h1 { font-size:14px; font-weight:700; margin:0; letter-spacing:-.01em; line-height:1.2 }
   .brand .sub { color:var(--dim); font-size:12px } .brand .sub.bad { color:var(--bad) }
   .brand .sp { flex:1 }
+  .rctl { display:flex; flex-wrap:wrap; gap:4px 5px; padding:0 12px 10px; align-items:center } .rctl select, .lf select, .lf input { font-size:12px; padding:4px 6px; background:var(--panel2); color:inherit; border:1px solid var(--panel2); border-radius:6px } .lf { display:flex; flex-wrap:wrap; gap:6px; padding:6px 16px; align-items:center; background:var(--panel); border-bottom:1px solid var(--line) } .lf input { flex:1 1 140px } .chip.tog { cursor:pointer; opacity:.45; border:0 } .chip.tog.on { opacity:1 } .rctl .btn { margin-left:auto }
   .filter { padding:0 12px 10px } .filter input { width:100%; font-size:13px; padding:7px 10px; background:var(--panel2) }
   .policy { margin:0 12px 6px; font-size:11.5px; color:var(--dim); background:var(--acc-bg); border-radius:8px; padding:4px 9px; cursor:pointer; overflow:hidden; text-overflow:ellipsis; white-space:nowrap } .policy b { color:var(--acc-fg); font-weight:600 }
   #rooms { overflow:auto; flex:1; padding:0 8px 24px }
@@ -88,7 +89,8 @@ export const UI_HTML = `<!doctype html>
   .room .u.q { background:var(--panel2); color:var(--dim2) }
 
   /* ---------- transcript ---------- */
-  #main { display:grid; grid-template-columns:minmax(0,1fr); grid-template-rows:auto minmax(0,1fr) auto; min-height:0; min-width:0; background:var(--bg); position:relative }
+  #main { display:grid; grid-template-columns:minmax(0,1fr); grid-template-rows:auto auto minmax(0,1fr) auto; min-height:0; min-width:0; background:var(--bg); position:relative }
+  #main > * { min-width:0 } .lf > * { min-width:0 } .lf select { max-width:45% }
   #head { background:var(--panel); border-bottom:1px solid var(--line); padding:10px 16px; display:grid; grid-template-columns:minmax(0,1fr) auto; row-gap:4px; align-items:center }
   #head .t1 { display:flex; align-items:center; gap:8px; min-width:0; flex-wrap:wrap }
   #head h2 { margin:0; font-size:15px; font-weight:700; letter-spacing:-.01em; white-space:nowrap }
@@ -190,6 +192,7 @@ export const UI_HTML = `<!doctype html>
     #tabbar button { border:0; background:transparent; padding:10px 0 9px; font-size:12px; font-weight:600; color:var(--dim); display:flex; flex-direction:column; align-items:center; gap:2px }
     #tabbar button.on { color:var(--acc-fg) } #tabbar button .n { font-size:10px; background:var(--acc); color:#fff; border-radius:999px; padding:0 6px }
     #compose { grid-template-columns:minmax(0,1fr) auto } #compose #name { display:none }
+    .lf { padding:6px 12px } .lf input { flex:1 1 100% }
     #head { padding:8px 12px; display:flex; flex-wrap:wrap; gap:6px } #head .t1 { flex:1 1 100% } #head .acts { flex:1 1 100%; justify-content:flex-end } #head .topic { flex:1 1 100% } #log { padding:10px 12px } .body,.card,.row { max-width:100% }
     #tabbar { grid-column:1 }
     #newpill { bottom:130px }
@@ -201,11 +204,13 @@ export const UI_HTML = `<!doctype html>
 <aside id="rail">
   <div class="brand"><div class="mark">✻</div><div><h1>Agent Chatroom</h1><div class="sub" id="sub">connecting…</div></div><div class="sp"></div><button class="btn icon" id="theme" title="Toggle theme">◐</button></div>
   <div class="filter"><input id="filter" placeholder="Filter rooms" /></div>
+  <div class="rctl" id="rctl"><select id="sort" title="Sort rooms"><option value="newest">Newest</option><option value="active">Most active</option><option value="msgs">Most messages</option><option value="name">Name</option></select><button class="chip tog on" data-st="live" title="Show open and stalled rooms">live</button><button class="chip tog on" data-st="concluded">concluded</button><button class="chip tog on" data-st="closed">closed</button><button class="chip tog" id="showarch" title="Include archived rooms">archived</button><button class="btn" id="archdead" title="Hide every room nobody is in. Transcripts are kept; they reappear under 'archived'.">Archive dead</button></div>
   <div class="policy" id="policy" title="Which provider and model every request_agent launches as. Click to change.">recruits: …</div>
   <div id="rooms"></div>
 </aside>
 <main id="main">
   <div id="head"><div class="t1"><h2>Pick a room</h2></div></div>
+  <div class="lf" id="lf"><button class="chip tog on" data-k="chat">chat</button><button class="chip tog on" data-k="cards">proposals</button><button class="chip tog on" data-k="vote">votes</button><button class="chip tog on" data-k="board">board</button><button class="chip tog on" data-k="system">system</button><select id="whof" title="Only messages from, or addressed to, one participant"><option value="">everyone</option></select><input id="msgq" placeholder="Search messages" /></div>
   <div id="log"><div class="empty">Pick a room on the left.</div></div>
   <button id="newpill">↓ new messages</button>
   <form id="compose">
@@ -256,6 +261,43 @@ export const UI_HTML = `<!doctype html>
   var lastSender = null;
   var tab = store.get('tab', 'decision');
   var showNotices = store.get('notices', false);
+  // rooms rail: sort, state filter, archived toggle
+  var sortBy = store.get('sort', 'newest'), stOff = store.get('stOff', {}), showArch = /[?&]archived=1/.test(location.search) || store.get('showArch', false);
+  var stKey = function (r) { return (r.state === 'open' || r.state === 'stalled') ? 'live' : r.state; };
+  var roomCmp = function (a, b) {
+    if (sortBy === 'name') return a.name.localeCompare(b.name);
+    if (sortBy === 'active') return (b.active_count || 0) - (a.active_count || 0) || b.created_at.localeCompare(a.created_at);
+    if (sortBy === 'msgs') return (b.message_count || 0) - (a.message_count || 0) || b.created_at.localeCompare(a.created_at);
+    return b.created_at.localeCompare(a.created_at);
+  };
+  $('#sort').value = sortBy;
+  $('#sort').onchange = function () { sortBy = $('#sort').value; store.set('sort', sortBy); renderRooms(); };
+  $$('#rctl .tog[data-st]').forEach(function (b) {
+    b.classList.toggle('on', !stOff[b.dataset.st]);
+    b.onclick = function () { stOff[b.dataset.st] = !stOff[b.dataset.st]; store.set('stOff', stOff); b.classList.toggle('on', !stOff[b.dataset.st]); renderRooms(); };
+  });
+  $('#showarch').classList.toggle('on', showArch);
+  $('#showarch').onclick = function () { showArch = !showArch; store.set('showArch', showArch); $('#showarch').classList.toggle('on', showArch); refreshRooms(); };
+  $('#archdead').onclick = async function () {
+    if (!window.confirm('Archive every room nobody is in? Nothing is deleted: transcripts stay on disk and the rooms reappear under "archived".')) return;
+    var res = await fetch('/rooms/archive-dead', { method: 'POST', headers: hdrs(), body: JSON.stringify({ name: myName() }) });
+    var out = res.ok ? await res.json() : { archived: [] };
+    $('#sub').textContent = 'archived ' + out.archived.length + ' rooms';
+    refreshRooms();
+  };
+  // transcript filter: kinds, one participant, text
+  var kindOff = {}, msgQuery = '', whoF = '';
+  var kindGroup = function (m) { return m.kind === 'chat' ? 'chat' : (m.kind === 'proposal' || m.kind === 'amend' || m.kind === 'challenge' || m.kind === 'conclusion') ? 'cards' : m.kind === 'vote' ? 'vote' : m.kind === 'board' ? 'board' : m.kind === 'system' ? 'system' : 'other'; };
+  var visible = function (m) {
+    if (kindOff[kindGroup(m)]) return false;
+    if (whoF && m.from.name !== whoF && m.content.indexOf('@' + whoF) < 0) return false;
+    if (msgQuery && (m.content + ' ' + m.from.name).toLowerCase().indexOf(msgQuery) < 0) return false;
+    return true;
+  };
+  $$('#lf .tog[data-k]').forEach(function (b) { b.onclick = function () { kindOff[b.dataset.k] = !kindOff[b.dataset.k]; b.classList.toggle('on', !kindOff[b.dataset.k]); rerender(); toBottom(); }; });
+  var qTimer = null;
+  $('#msgq').oninput = function () { clearTimeout(qTimer); qTimer = setTimeout(function () { msgQuery = $('#msgq').value.trim().toLowerCase(); rerender(); }, 150); };
+  $('#whof').onchange = function () { whoF = $('#whof').value; rerender(); };
   var expanded = {};
   var lastSeen = store.get('lastSeen', {});   // room -> latest seq the human has looked at
   var openRuns = store.get('openRuns', {});
@@ -313,10 +355,12 @@ export const UI_HTML = `<!doctype html>
   function renderRooms() {
     var q = ($('#filter').value || '').toLowerCase();
     var live = rooms.filter(function (r) { return r.state === 'open' || r.state === 'stalled'; }).length;
-    $('#sub').className = 'sub'; $('#sub').textContent = live + ' live · ' + rooms.length + ' rooms';
+    var shown = 0;
     var groups = {}, order = [];
-    rooms.slice().sort(function (a, b) { return b.created_at.localeCompare(a.created_at); }).forEach(function (r) {
+    rooms.slice().sort(roomCmp).forEach(function (r) {
+      if (stOff[stKey(r)]) return;
       if (q && r.name.toLowerCase().indexOf(q) < 0 && (r.topic || '').toLowerCase().indexOf(q) < 0) return;
+      shown++;
       var g = runOf(r.name) || 'other';
       if (!groups[g]) { groups[g] = []; order.push(g); }
       groups[g].push(r);
@@ -324,12 +368,13 @@ export const UI_HTML = `<!doctype html>
     // a run with a live room floats up; within a run the main/leads room first
     order.sort(function (a, b) {
       var la = groups[a].some(function (r) { return r.state === 'open' || r.state === 'stalled'; }), lb = groups[b].some(function (r) { return r.state === 'open' || r.state === 'stalled'; });
-      if (la !== lb) return la ? -1 : 1; return 0;
+      if (la !== lb) return la ? -1 : 1; return roomCmp(groups[a][0], groups[b][0]);
     });
+    $('#sub').className = 'sub'; $('#sub').textContent = live + ' live · ' + shown + ' of ' + rooms.length + ' rooms' + (showArch ? ' incl. archived' : '');
     var html = order.map(function (g) {
       var rs = groups[g].slice().sort(function (a, b) {
         var ra = /-(room|leads)$/.test(a.name) ? 0 : 1, rb = /-(room|leads)$/.test(b.name) ? 0 : 1;
-        return ra !== rb ? ra - rb : a.created_at.localeCompare(b.created_at);
+        return ra !== rb ? ra - rb : sortBy === 'newest' ? a.created_at.localeCompare(b.created_at) : roomCmp(a, b);
       });
       var liveN = rs.filter(function (r) { return r.state === 'open' || r.state === 'stalled'; }).length;
       var closed = openRuns[g] === false && !rs.some(function (r) { return r.name === sel; });
@@ -359,12 +404,17 @@ export const UI_HTML = `<!doctype html>
     if (r.openings && r.openings !== 'revealed' && (r.state === 'open')) chips += '<span class="chip">openings: ' + esc(r.openings.replace(/, waiting for nobody$/, '')) + '</span>';
     var act = '<a class="btn hidephone" href="/rooms/' + encodeURIComponent(r.name) + '/transcript" target="_blank" title="Plain-text transcript">Transcript</a>'
       + ((r.state === 'open' || r.state === 'stalled') ? '<button class="btn danger" id="closeroom" title="Close this room without a conclusion">Close room</button>' : '')
+      + '<button class="btn" id="archroom" title="' + (r.archived ? 'Show this room in listings again' : 'Hide this room from listings; the transcript is kept') + '">' + (r.archived ? 'Unarchive' : 'Archive') + '</button>'
       + '<button class="btn icon" id="toginspect" title="Inspector">☰</button>';
     var topicOpen = !!expanded['topic'];
     $('#head').innerHTML = '<div class="t1"><h2>' + esc(r.name) + '</h2>' + chips + '</div><div class="acts">' + act + '</div>'
       + '<div class="topic' + (topicOpen ? ' open' : '') + '" id="topic" title="Click to expand">' + esc(r.topic || '(no topic)') + '</div>';
     $('#topic').onclick = function () { expanded['topic'] = !expanded['topic']; renderHead(r); };
     var cb = $('#closeroom'); if (cb) cb.onclick = function () { closeRoom(r); };
+    var ab = $('#archroom'); if (ab) ab.onclick = function () { archiveRoom(r); };
+    var wf = $('#whof'), keep = wf.value;
+    wf.innerHTML = '<option value="">everyone</option>' + r.participants.slice().sort(function (a, b) { return a.name.localeCompare(b.name); }).map(function (p) { return '<option value="' + esc(p.name) + '">' + esc(p.name) + (p.active ? '' : ' (left)') + '</option>'; }).join('');
+    wf.value = keep; if (wf.value !== keep) { whoF = ''; }
     $('#toginspect').onclick = function () {
       if (innerWidth <= 720) { setView('inspect'); return; }
       if (innerWidth <= 1100) { document.body.classList.toggle('inspect-open'); return; }
@@ -394,6 +444,7 @@ export const UI_HTML = `<!doctype html>
     return '<div class="who"><b>' + esc(m.from.name) + '</b>' + roleTag({ agent: m.from.agent, role: p.role }) + (m.from.agent && m.from.agent !== 'human' ? '<span class="agent">' + esc(m.from.agent) + '</span>' : '') + (extra || '') + quietBadge(m) + '<span class="seq">#' + m.seq + '</span><span class="t" title="' + esc(m.ts) + '">' + fmtTs(m.ts) + '</span></div>';
   }
   function renderMsg(m) {
+    if (!visible(m)) return;
     var log = $('#log');
     var d = document.createElement('div');
     d.dataset.seq = m.seq;
@@ -586,6 +637,11 @@ export const UI_HTML = `<!doctype html>
     await fetch('/rooms/' + encodeURIComponent(r.name) + '/close', { method: 'POST', headers: hdrs(), body: JSON.stringify({ name: myName(), reason: 'closed from dashboard' }) });
     refreshRooms();
   }
+  async function archiveRoom(r) {
+    var res = await fetch('/rooms/' + encodeURIComponent(r.name) + '/archive', { method: 'POST', headers: hdrs(), body: JSON.stringify({ name: myName(), archived: !r.archived }) });
+    if (!res.ok) { $('#sub').className = 'sub bad'; $('#sub').textContent = await res.text(); return; }
+    refreshRooms();
+  }
   function select(name) {
     if (sel && seen) { lastSeen[sel] = seen; store.set('lastSeen', lastSeen); }
     sel = name; seen = 0; msgs = []; lastSender = null; unreadPill = 0; stats = null; expanded = {};
@@ -652,7 +708,7 @@ export const UI_HTML = `<!doctype html>
   // ---------- polling ----------
   async function refreshRooms() {
     try {
-      var res = await fetch('/rooms'); if (!res.ok) throw new Error();
+      var res = await fetch('/rooms' + (showArch ? '?archived=1' : '')); if (!res.ok) throw new Error();
       rooms = await res.json();
       if (!sel && rooms.length) {
         var live = rooms.filter(function (r) { return r.state === 'open'; }).sort(function (a, b) { return b.created_at.localeCompare(a.created_at); });

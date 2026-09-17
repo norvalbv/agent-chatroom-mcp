@@ -164,7 +164,22 @@ app.post("/agents/:name/stop", (req, res) => {
   if (!requireToken(req, res)) return;
   res.json({ stopped: spawner.stop(req.params.name) });
 });
-app.get("/rooms", (_req, res) => res.json(hub.listRooms(true)));
+app.get("/rooms", (req, res) => res.json(hub.listRooms(true, req.query.archived === "1" || req.query.archived === "all")));
+// Archive: hide from listings, keep everything. Body {name, archived:false} un-archives. POST /rooms/archive-dead sweeps every room nobody is in.
+app.post("/rooms/archive-dead", (req, res) => {
+  if (!requireToken(req, res)) return;
+  const { name } = (req.body ?? {}) as { name?: string };
+  res.json({ archived: hub.archiveDead((name || "human").trim()) });
+});
+app.post("/rooms/:room/archive", (req, res) => {
+  if (!requireToken(req, res)) return;
+  try {
+    const { name, archived } = (req.body ?? {}) as { name?: string; archived?: boolean };
+    res.json(hub.summary(hub.archiveRoom(req.params.room, (name || "human").trim(), archived !== false), true));
+  } catch (e) {
+    res.status(400).type("text/plain").send(e instanceof HubError ? e.message : "error");
+  }
+});
 app.get("/rooms/:room", (req, res) => {
   try {
     res.json(hub.summary(hub.getRoom(req.params.room), true));

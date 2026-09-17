@@ -193,6 +193,8 @@ export interface Room {
   chair?: string;
   createdAt: string;
   state: RoomState;
+  /** Hidden from listings (dashboard, list_rooms) but fully kept on disk; set by a human or the archive-dead sweep. */
+  archived?: boolean;
   conclusion?: { text: string; proposalId: string; decidedAt: string; version?: number; tally?: { agree: number; disagree: number; abstain: number }; electorate?: ElectorateSummary; unresolved_objections?: { by: string; objection: string }[] };
   /** identical silence nudges are posted at most twice */
   lastNudge?: { text: string; count: number };
@@ -251,6 +253,7 @@ type Event =
   | { type: "state"; room: string; state: RoomState; conclusion?: Room["conclusion"] }
   | { type: "opening"; room: string; pid: string; content: string }
   | { type: "openings_revealed"; room: string }
+  | { type: "archive"; room: string; archived: boolean; by: string; ts: string }
   | { type: "board_manifest"; room: string; bytes: number; kind: "full" | "delta" | "empty" }
   | { type: "board"; room: string; key: string; entry: BoardEntry | null }
   | { type: "amend"; room: string; proposalId: string; text: string; version: number; updatedAt?: string; votes: Proposal["votes"]; challenges?: Challenge[] }
@@ -311,8 +314,8 @@ export class Hub {
 
   // ---------- rooms ----------
 
-  listRooms(reveal = false) {
-    return [...this.rooms.values()].map((r) => this.summary(r, reveal));
+  listRooms(reveal = false, includeArchived = false) {
+    return [...this.rooms.values()].filter((r) => includeArchived || !r.archived).map((r) => this.summary(r, reveal));
   }
 
   getRoom(name: string): Room {
@@ -434,6 +437,7 @@ export class Hub {
       code_state: room.codeState ?? null,
       hold: this.hold(room) ? { by: this.hold(room)!.by, reason: this.hold(room)!.text } : null,
       state: room.state,
+      archived: !!room.archived,
       created_at: room.createdAt,
       openings: room.openingsRevealed
         ? "revealed"
@@ -2075,6 +2079,30 @@ export class Hub {
     return room;
   }
 
+  /**
+   * Hide a room from listings without deleting anything: the transcript stays on disk and GET /rooms/:room still
+   * answers. An open room is closed first (nobody is in it to object; if someone were, it would not be dead).
+   */
+  archiveRoom(roomName: string, by: string, archived = true): Room {
+    const room = this.getRoom(roomName);
+    if (archived && (room.state === "open" || room.state === "stalled") && this.activeParticipants(room).length === 0) this.closeRoom(roomName, by, "archived");
+    if (archived && (room.state === "open" || room.state === "stalled")) throw new HubError(`Room "${roomName}" still has participants; close it first.`);
+    room.archived = archived;
+    this.persist({ type: "archive", room: roomName, archived, by, ts: now() });
+    return room;
+  }
+
+  /** A dead room has nobody in it and was not created in the last ten minutes (a launcher pre-creates rooms before seats join). */
+  isDead(room: Room): boolean {
+    return this.activeParticipants(room).length === 0 && Date.now() - Date.parse(room.createdAt) > 10 * 60_000;
+  }
+
+  archiveDead(by: string): string[] {
+    const done: string[] = [];
+    for (const r of [...this.rooms.values()]) if (!r.archived && this.isDead(r)) { this.archiveRoom(r.name, by); done.push(r.name); }
+    return done;
+  }
+
   // ---------- liveness ----------
 
   /** Mark participants inactive after `idleMs` without any activity in a room that has not concluded. */
@@ -2240,6 +2268,11 @@ export class Hub {
           case "openings_revealed": {
             const room = this.rooms.get(ev.room);
             if (room) room.openingsRevealed = true;
+            break;
+          }
+          case "archive": {
+            const room = this.rooms.get(ev.room);
+            if (room) room.archived = ev.archived;
             break;
           }
           case "board": {

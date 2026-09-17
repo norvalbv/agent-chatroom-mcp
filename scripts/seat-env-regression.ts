@@ -62,7 +62,7 @@ async function harness(entry: string, env: Record<string, string>, argv: string[
       cache.set(name, mod); return mod;
     }
     const base = name.replace(/^\.\//, '').replace(/\.js$/, '');
-    assert.ok(['env', 'spawner', 'swarm', 'openrouter'].includes(base), `unmocked import ${name}`);
+    assert.ok(['env', 'spawner', 'swarm', 'openrouter', 'respawn'].includes(base), `unmocked import ${name}`); // respawn.ts is pure: real import
     // Only these explicitly allowlisted source files are read from disk.
     const source = readFileSync(path.join(root, 'src', `${base}.ts`), 'utf8');
     const code = transformSync(source, { loader: 'ts', format: 'esm', target: 'es2022' }).code;

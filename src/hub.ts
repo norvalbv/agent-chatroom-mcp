@@ -43,6 +43,10 @@ export interface Participant {
   role?: Role;
   /** proposal id -> version of its text this participant was last sent (wait_for_messages ships text only when it changes) */
   seenProposal?: Record<string, number>;
+  /** Ephemeral delivery receipts. A reconnect/rejoin starts with a full board manifest. */
+  lastBoardSeen?: number;
+  boardFollow?: string[];
+  seenBoardKeys?: string[];
   /** the conclusion text has been sent to this participant once */
   seenConclusion?: boolean;
   /** proposal id a blocking leave_room was already refused for (the second call proceeds) */
@@ -181,6 +185,8 @@ export interface Room {
   refusals?: Record<string, number>;
   /** Only versioned rooms have a complete guarded-call observation epoch. */
   telemetryVersion?: 1;
+  /** board wait receipts: count + serialized manifest bytes (telemetryVersion rooms only) */
+
   callOutcomes?: Record<string, CallOutcomes>;
   boardManifests?: BoardManifestStats;
   /** git HEAD and dirty state of the project when the room was created */
@@ -203,6 +209,11 @@ export interface Room {
   openingsWarned?: boolean;
   /** shared blackboard: named entries agents update in place instead of re-posting */
   board: Map<string, BoardEntry>;
+  /** Reconstructed from every board event, including deletes and system writes. */
+  boardVersion: number;
+  boardVersions: Map<string, number>;
+  /** Version at the latest board event, so gaps without events still count as waits. */
+  lastBoardEventVersion?: number;
   /** human message ids the propose-gate has already warned about (once each) */
   humanWarned: Set<string>;
   /** who has been asked to answer each human message, so three agents do not all say hello */
@@ -343,6 +354,8 @@ export class Hub {
       openings: new Map(),
       openingsRevealed: false,
       board: new Map(),
+      boardVersion: 0,
+      boardVersions: new Map(),
       humanWarned: new Set(),
       responders: new Map(),
     };
@@ -510,6 +523,9 @@ export class Hub {
       this.persist({ type: "join", room: roomName, p: participant });
       this.post(room, "system", undefined, `${this.shown(room, participant)} rejoined the room.`);
     }
+    // Reclaiming even an active seat is an explicit delivery reset (lost response recovery).
+    delete participant.lastBoardSeen;
+    delete participant.seenBoardKeys;
     for (const pr of room.proposals.values()) if (pr.status === "open") this.evaluate(room, pr);
     return { room, participant };
   }
@@ -1197,8 +1213,8 @@ export class Hub {
   recordBoardManifest(roomName: string, envelope: { board_keys?: string[]; board_delta?: { keys: string[]; tombstones: string[] } }): void {
     const room = this.getRoom(roomName);
     const kind = envelope.board_keys !== undefined ? "full" : envelope.board_delta !== undefined ? "delta" : "empty";
-    // The MCP text renderer uses two-space indentation. Empty manifests ship no field/bytes.
-    const bytes = kind === "empty" ? 0 : Buffer.byteLength(JSON.stringify(envelope, null, 2));
+    // Wire bytes as JSON.stringify writes them (contract/board-delta item 8: no-change [] is 2 bytes).
+    const bytes = Hub.manifestBytes(envelope);
     this.applyBoardManifest(room, bytes, kind);
     this.persist({ type: "board_manifest", room: roomName, bytes, kind });
   }
@@ -1232,6 +1248,76 @@ export class Hub {
   /** Distinct connections among a set of participants (two names on one connection are one agent). */
   static sessionsOf(ps: Participant[]): number {
     return new Set(ps.map((p) => p.session ?? `nosession:${p.id}`)).size;
+  }
+
+  /** Wire bytes of a board envelope as JSON.stringify writes it. */
+  static manifestBytes(envelope: Record<string, unknown>): number {
+    return Buffer.byteLength(JSON.stringify(envelope));
+  }
+
+  boardManifestTelemetry(room: Room): { waits: number; board_bytes_total: number; board_bytes_mean: number } {
+    const t = room.boardManifests;
+    const waits = t?.waits ?? 0;
+    return { waits, board_bytes_total: t?.bytes ?? 0, board_bytes_mean: waits ? Math.round((t!.bytes / waits) * 10) / 10 : 0 };
+  }
+
+  /**
+   * Board discovery for one seat, assembled synchronously AFTER the poll wake
+   * (concurrent waits for a seat serialize here). This is an at-most-once response
+   * receipt, NOT a network ack: a lost response is recovered by rejoin/reclaim or
+   * a restart, each of which resets to a full manifest. Omitted follow keeps the
+   * current subscription; [] follows only mandatory coordination keys; [""] all.
+   * Any subscription change (narrowing included) resets so stale out-of-scope keys
+   * are dropped and new-scope keys are backfilled. Discovery filtering is not
+   * authorization: verify/, claim/, required pending inbox and hold keys are never
+   * hidden, and explicit board_get remains unrestricted.
+   */
+  boardManifest(roomName: string, pid: string, follow?: string[], forceFull = false): {
+    board_keys?: string[]; board_delta?: { keys: string[]; tombstones: string[] }; board_reset?: boolean;
+  } {
+    const room = this.getRoom(roomName);
+    const p = this.requireParticipant(room, pid);
+    const nextFollow = follow === undefined ? undefined : [...new Set(follow)];
+    const changed = nextFollow !== undefined && !forceFull &&
+      (p.boardFollow === undefined || p.boardFollow.length !== nextFollow.length ||
+        p.boardFollow.some((x, i) => x !== nextFollow[i]));
+    if (nextFollow !== undefined) p.boardFollow = nextFollow;
+    const prefixes = forceFull ? undefined : p.boardFollow;
+    const pending = new Set(this.unacknowledged(room));
+    const visible = [...room.board].filter(([key, entry]) => {
+      if (this.boardEntryExpired(room, key, entry)) return false;
+      return prefixes === undefined || prefixes.some((prefix) => key.startsWith(prefix)) ||
+        key.startsWith("verify/") || key.startsWith("claim/") || pending.has(key) || key === `hold/${room.name}`;
+    }).map(([key]) => key);
+    const previous = new Set(p.seenBoardKeys ?? []);
+    const current = new Set(visible);
+    const first = p.lastBoardSeen === undefined || forceFull;
+    const prevSeen = p.lastBoardSeen;
+    p.lastBoardSeen = room.boardVersion;
+    p.seenBoardKeys = visible;
+    if (first || changed) {
+      const envelope = { board_keys: visible, board_reset: true };
+      this.recordBoardManifest(roomName, envelope);
+      return envelope;
+    }
+    const keys = visible.filter((key) => !previous.has(key) || (room.boardVersions.get(key) ?? 0) > (prevSeen ?? 0));
+    // Also covers subscription contraction and clock-driven expiry with no new board event.
+    const tombstones = [...previous].filter((key) => !current.has(key));
+    if (keys.length || tombstones.length) {
+      const envelope = { board_delta: { keys, tombstones } };
+      this.recordBoardManifest(roomName, envelope);
+      return envelope;
+    }
+    this.recordBoardManifest(roomName, {});
+    return {};
+  }
+
+  /** Single reducer for live and replay board mutations; deletes retain a version tombstone. */
+  private applyBoard(room: Room, key: string, entry: BoardEntry | null) {
+    room.boardVersion++;
+    room.boardVersions.set(key, room.boardVersion);
+    if (entry) room.board.set(key, entry);
+    else room.board.delete(key);
   }
 
   setBoard(roomName: string, pid: string, key: string, text: string, opts: BoardExpiryOptions & { ifAbsent?: boolean; ifByMe?: boolean; overwrite?: boolean } = {}): BoardEntry | null {
@@ -1274,7 +1360,7 @@ export class Hub {
       );
     }
     if (!text.trim()) {
-      room.board.delete(key);
+      this.applyBoard(room, key, null);
       this.persist({ type: "board", room: roomName, key, entry: null });
       this.post(room, "board", p, `cleared board entry "${key}"`);
       if (key === `hold/${room.name}`) for (const pr of room.proposals.values()) if (pr.status === "open") this.evaluate(room, pr);
@@ -1288,7 +1374,7 @@ export class Hub {
       ...(key.startsWith("verify/") ? { codeState: Hub.codeState(this.cwd) } : {}),
       ...(note ? { acknowledgedTextHash: Hub.noteHash(note.text) } : {}),
     };
-    room.board.set(key, entry);
+    this.applyBoard(room, key, entry);
     this.persist({ type: "board", room: roomName, key, entry });
     this.post(room, "board", p, `${previous ? "updated" : "added"} board entry "${key}" (${text.length} chars; read it with board_get)`);
     if (key.endsWith(".ack") || key.startsWith("verify/")) for (const pr of room.proposals.values()) if (pr.status === "open") this.evaluate(room, pr);
@@ -1300,7 +1386,7 @@ export class Hub {
     const room = this.getRoom(roomName);
     if (!Hub.BOARD_KEY.test(key)) throw new HubError("Invalid board key.");
     const entry: BoardEntry = { text, by: byName, updatedAt: now() };
-    room.board.set(key, entry);
+    this.applyBoard(room, key, entry);
     this.persist({ type: "board", room: roomName, key, entry });
     this.post(room, "board", undefined, `${byName} added board entry "${key}" (${text.length} chars; read it with board_get)`);
     return entry;
@@ -1320,7 +1406,7 @@ export class Hub {
     // Replacing an open note consumes no extra slot. A changed text hash invalidates its old ack.
     const otherOpen = [...to.board.entries()].filter(([k, e]) => k !== full && this.inboxOpen(to, k, e)).length;
     if (this.inboxOpen(to, full, entry) && otherOpen >= 10) throw new HubError(`${toRoom} already has 10 inbox notes awaiting acknowledgement; wait for them to be acknowledged or cleared.`);
-    to.board.set(full, entry);
+    this.applyBoard(to, full, entry);
     this.persist({ type: "board", room: toRoom, key: full, entry });
     this.post(to, "system", undefined, `Note from ${p.name} in ${fromRoom} on the board as "${full}"${ackRequired ? ` (acknowledge by writing "${full}.ack")` : ""}: ${text.slice(0, 160)}${text.length > 160 ? "…" : ""}`);
     return { key: full, entry };
@@ -1880,6 +1966,9 @@ export class Hub {
           case "join":
           case "leave": {
             const room = this.rooms.get(ev.room);
+            // Delivery cursors are deliberately process-local: replay/rejoin must backfill.
+            delete ev.p.lastBoardSeen;
+            delete ev.p.seenBoardKeys;
             // Participants from a previous process are restored as inactive; they must rejoin.
             const legacyP = ev.p as Partial<Participant> & Pick<Participant, "id" | "name" | "agent" | "joinedAt" | "lastActiveAt" | "lastSeenSeq">;
             room?.participants.set(ev.p.id, { ...legacyP, label: legacyP.label ?? legacyP.name, messageCount: legacyP.messageCount ?? 0, active: false });
@@ -1942,8 +2031,7 @@ export class Hub {
           case "board": {
             const room = this.rooms.get(ev.room);
             if (!room) break;
-            if (ev.entry) room.board.set(ev.key, ev.entry);
-            else room.board.delete(ev.key);
+            this.applyBoard(room, ev.key, ev.entry);
             break;
           }
           case "amend": {

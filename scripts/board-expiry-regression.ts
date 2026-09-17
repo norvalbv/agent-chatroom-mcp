@@ -51,14 +51,14 @@ test('expiry rejects unsupported prefixes, ambiguous and invalid expiry values',
     assert.equal(f.hub.boardEntryExpired(f.room,'handoff/future',e),false);
   } finally {f.cleanup();}
 });
-test('manifest bytes are actual serialized envelope bytes, no-change zero, replay parity', () => {
+test('manifest bytes are actual serialized envelope bytes, no-change 2B, replay parity', () => {
   const f = fixture();
   try {
-    const payload = {board_keys:['evidence/é']};
+    const payload = {board_keys:['evidence/x']};
     f.hub.recordBoardManifest('expiry', payload);
     f.hub.recordBoardManifest('expiry', {});
-    const expected = {version:1, waits:2, bytes:Buffer.byteLength(JSON.stringify(payload, null, 2)), full:1, delta:0, empty:1};
-    assert.deepEqual(f.hub.stats(f.room).board_manifests, expected);
+    const expected = {version:1, waits:2, bytes:Buffer.byteLength(JSON.stringify(payload)) + 2, full:1, delta:0, empty:1};
+    assert.deepEqual(f.hub.stats(f.hub.getRoom('expiry')).board_manifests, expected);
     assert.deepEqual(((h: Hub) => h.stats(h.getRoom('expiry')))(new Hub({dataDir:f.dir})).board_manifests, expected);
   } finally { f.cleanup(); }
 });

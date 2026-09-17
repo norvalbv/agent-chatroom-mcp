@@ -1,0 +1,82 @@
+Provenance RED capture: assertions from union-alpha-6 #75 added to scripts/bench-harness.test.ts
+State: runner provenance support (hub_version capture, provenance_scope, dist-tree build hash) temporarily removed; tasks/scorer absent (oracle-2 pending).
+Branch:
+swarm/swarm-bench-room/bench-2
+Command: node --import tsx scripts/bench-harness.test.ts
+TAP version 13
+# Subtest: runner exists
+ok 1 - runner exists
+  ---
+  duration_ms: 0.288833
+  type: 'test'
+  ...
+# Subtest: refuses unsafe, malformed and out-of-range ports before running a hub
+ok 2 - refuses unsafe, malformed and out-of-range ports before running a hub
+  ---
+  duration_ms: 391.656458
+  type: 'test'
+  ...
+# Subtest: refuses root reuse without overwriting contents
+ok 3 - refuses root reuse without overwriting contents
+  ---
+  duration_ms: 76.459708
+  type: 'test'
+  ...
+# Subtest: two stub hubs emit artifact verdicts, separate workspaces and comparable frozen inputs
+not ok 4 - two stub hubs emit artifact verdicts, separate workspaces and comparable frozen inputs
+  ---
+  duration_ms: 84.873959
+  type: 'test'
+  location: '/Users/benji/Desktop/Personal and learning/agent-chatroom-mcp/.swarm-worktrees/swarm-bench-room/bench-2/scripts/bench-harness.test.ts:15:1564'
+  failureType: 'testCodeFailure'
+  error: |-
+    Error: ENOENT: no such file or directory, lstat '/Users/benji/Desktop/Personal and learning/agent-chatroom-mcp/.swarm-worktrees/swarm-bench-room/bench-2/tasks'
+    
+    
+    1 !== 0
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 0
+  actual: 1
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (/Users/benji/Desktop/Personal and learning/agent-chatroom-mcp/.swarm-worktrees/swarm-bench-room/bench-2/scripts/bench-harness.test.ts:63:9)
+    process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: hub startup failure is infra, not task failure, and excluded from delta
+not ok 5 - hub startup failure is infra, not task failure, and excluded from delta
+  ---
+  duration_ms: 79.629625
+  type: 'test'
+  location: '/Users/benji/Desktop/Personal and learning/agent-chatroom-mcp/.swarm-worktrees/swarm-bench-room/bench-2/scripts/bench-harness.test.ts:15:3385'
+  failureType: 'testCodeFailure'
+  error: |-
+    Error: ENOENT: no such file or directory, lstat '/Users/benji/Desktop/Personal and learning/agent-chatroom-mcp/.swarm-worktrees/swarm-bench-room/bench-2/tasks'
+    
+    
+    1 !== 0
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 0
+  actual: 1
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (/Users/benji/Desktop/Personal and learning/agent-chatroom-mcp/.swarm-worktrees/swarm-bench-room/bench-2/scripts/bench-harness.test.ts:85:9)
+    process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+1..5
+# tests 5
+# suites 0
+# pass 3
+# fail 2
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 636.476917
+EXIT=1

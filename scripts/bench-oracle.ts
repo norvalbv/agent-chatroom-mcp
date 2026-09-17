@@ -1,0 +1,20 @@
+/** Minimal task/scorer contract for the harness. oracle-2 owns the full fixtures + oracle-tasks regression. */
+import { spawnSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
+import { basename, dirname, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+type OracleConfig = { kind: string; expected: string; distractors?: string[] };
+export function loadTask(taskDir: string) {
+  const config = JSON.parse(readFileSync(join(taskDir, 'oracle', 'oracle.json'), 'utf8')) as OracleConfig;
+  const task_id = JSON.parse(readFileSync(join(taskDir, 'task.json'), 'utf8')).task_id as string;
+  return { task_id, oracle: { kind: config.kind }, config };
+}
+export async function scoreTask(taskDir: string, workspace: string) {
+  const config = JSON.parse(readFileSync(join(taskDir, 'oracle', 'oracle.json'), 'utf8')) as OracleConfig;
+  const scorerPath = resolve(dirname(fileURLToPath(import.meta.url)), 'score-fact-check.ts');
+  const command = `node --import tsx ${basename(scorerPath)} <workspace>/answer.txt oracle/oracle.json`;
+  const run = spawnSync(process.execPath, ['--import', 'tsx', scorerPath, join(workspace, 'answer.txt'), join(taskDir, 'oracle', 'oracle.json')], { encoding: 'utf8', timeout: 10000 });
+  if (run.error || run.status === null || run.status > 2) return { passed: false, reason: 'infra', oracle: { kind: config.kind, command, exit_code: null } };
+  const scored = JSON.parse(run.stdout) as { score: number };
+  return { passed: scored.score === 1, reason: scored.score === 1 ? 'oracle-pass' : 'oracle-fail', oracle: { kind: config.kind, command, exit_code: run.status } };
+}

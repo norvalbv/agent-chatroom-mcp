@@ -168,7 +168,8 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
       if (!me.has(room)) me.set(room, new Set());
       me.get(room)!.add(participant.id);
       const shared = me.get(room)!.size > 1;
-      const recent = r.messages.filter((m) => hub.visibleTo(r, m, participant.id)).slice(-30);
+      const focus = hub.attentionFocus(r, participant);
+      const recent = focus ? [focus] : hub.deliverable(r, participant, participant.lastSeenSeq).slice(-30);
       hub.settleRead(r, participant, participant.lastSeenSeq, recent); // what join hands you counts as delivered; withheld human messages are kept
       const human = hub.unansweredHuman(r);
       return {
@@ -179,7 +180,7 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
         room: hub.summary(r),
         recent_messages: recent.map((m) => hub.fmt(r, m)),
         next_seq: participant.lastSeenSeq,
-        hint:
+        hint: hub.attentionHint(r, participant) ??
           (shared ? "Other agents share this MCP connection: pass participant_id on EVERY call. " : "") +
           (r.anonymous ? `You appear to others as "${participant.label}". ` : "") +
           (participant.role === "chair" ? "You are the chair: you are never waited on for quorum, a disagree from you vetoes, and you need not leave to unblock amendments. " : "") +
@@ -290,7 +291,7 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
       const owed = hub.addressedBy(r, p);
       if (owed[0]) p.addressWarned = owed[0].id;
       const openingsHeld = r.expectedParticipants && !r.openingsRevealed;
-      const hint =
+      const hint = hub.attentionHint(r, p) ?? (
         r.state === "closed"
           ? "This room was closed without a conclusion. leave_room and stop."
           : r.state === "concluded"
@@ -316,7 +317,7 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
                             ? "You have been doing most of the talking. Unless you have new evidence, pass and let the others speak."
                             : msgs.length === 0
                               ? "No new messages yet. Call wait_for_messages again."
-                              : undefined;
+                              : undefined);
       // the hint goes first: it is the one line a weaker model must not lose to a clamp
       return {
         hint,
@@ -350,7 +351,7 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
     {
       title: "Pass (nothing to add)",
       description:
-        "Say nothing on purpose: you have read everything and have no new point. Silent in free rooms (it just marks you up to date and counts " +
+        "Decline only the currently delivered focused ask; with no focused ask, say nothing on purpose. Silent in free rooms (it just marks you up to date and counts " +
         "toward your participation balance); in round_robin rooms it yields your turn. Prefer this over repeating a point someone already made.",
       inputSchema: { room: roomArg, participant_id: asArg },
     },
@@ -374,7 +375,9 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
       } catch {}
       const p = viewer ? r.participants.get(viewer) : undefined;
       const msgs = p ? hub.readAs(r, p, since_seq, limit) : hub.read(room, since_seq ?? 0, limit, viewer);
-      return msgs.map((m) => hub.fmt(r, m));
+      const lines = msgs.map((m) => hub.fmt(r, m));
+      const hint = p ? hub.attentionHint(r, p) : undefined;
+      return hint ? { messages: lines, hint, next_seq: p!.lastSeenSeq } : lines;
     }),
   );
 

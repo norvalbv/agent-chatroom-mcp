@@ -53,6 +53,10 @@ export interface Participant {
   addressRefused?: string;
   /** mentions at or below this seq are answered (a pass covers everything before it) */
   answeredSeq?: number;
+  /** Last ask actually delivered; bare pass declines only this id. */
+  focusedAsk?: string;
+  declinedAsks?: string[];
+  declinedAt?: Record<string, number>;
 }
 
 export interface Message {
@@ -211,6 +215,7 @@ export type CallOutcomes = Record<CallOutcome, number>;
 type Event =
   | { type: "room"; room: string; opts: Opts; createdAt: string; telemetryVersion?: 1 }
   | { type: "message"; msg: Message }
+  | { type: "attention"; room: string; pid: string; lastSeenSeq: number; withheld: number[]; quietReceipts: number[]; focusedAsk?: string; declinedAsks: string[]; declinedAt?: Record<string, number> }
   | { type: "join" | "leave"; room: string; p: Participant }
   | { type: "proposal"; proposal: Proposal }
   | { type: "vote"; room: string; proposalId: string; pid: string; entry: Proposal["votes"][string] }
@@ -597,6 +602,8 @@ export class Hub {
 
   /** Messages this participant has not seen: new pushable ones plus previously withheld ones that are now visible. */
   deliverable(room: Room, p: Participant, since: number): Message[] {
+    const focus = this.attentionFocus(room, p);
+    if (focus) return [focus];
     const held = new Set(p.withheld ?? []);
     return room.messages.filter((m) => m.from.id !== p.id && ((m.seq > since && this.pushableTo(room, m, p.id)) || (held.has(m.seq) && this.visibleTo(room, m, p.id))));
   }
@@ -667,17 +674,35 @@ export class Hub {
     const receipts = new Set(p.quietReceipts ?? []);
     for (const m of delivered) if (m.quiet) receipts.add(m.seq);
     if (receipts.size) p.quietReceipts = [...receipts];
-    const still = (p.withheld ?? []).filter((seq) => !deliveredSeqs.has(seq));
-    for (const m of room.messages) if (m.seq > since && m.seq <= ceiling && m.from.id !== p.id && !this.visibleTo(room, m, p.id) && !still.includes(m.seq)) still.push(m.seq);
-    p.withheld = still.length > 200 ? still.slice(-200) : still;
+    const still = new Set((p.withheld ?? []).filter((seq) => !deliveredSeqs.has(seq)));
+    // Keep every skipped push body, including noise before the focused ask. Quiet
+    // bystander bodies are not push debt; explicit read still exposes them.
+    for (const m of room.messages) {
+      if (m.seq <= since || m.seq > ceiling || m.from.id === p.id || deliveredSeqs.has(m.seq)) continue;
+      if (this.pushableTo(room, m, p.id) || !this.visibleTo(room, m, p.id)) still.add(m.seq);
+    }
+    p.withheld = [...still];
+    const focus = this.attentionFocus(room, p);
+    if (focus && deliveredSeqs.has(focus.seq)) p.focusedAsk = focus.id;
     this.markRead(room, p, ceiling);
+    this.persistAttention(room, p);
   }
 
-  /** Anything the hub hands a known participant counts as delivered: read_messages settles the cursor up to the last message returned. */
+  private persistAttention(room: Room, p: Participant) {
+    this.persist({ type: "attention", room: room.name, pid: p.id, lastSeenSeq: p.lastSeenSeq,
+      withheld: p.withheld ?? [], quietReceipts: p.quietReceipts ?? [],
+      focusedAsk: p.focusedAsk, declinedAsks: p.declinedAsks ?? [], declinedAt: p.declinedAt ?? {} });
+  }
+
+  /** Explicit reads retain quiet-log access, but outstanding asks still take focus. */
   readAs(room: Room, p: Participant, sinceSeq: number | undefined, limit: number): Message[] {
     const since = sinceSeq ?? p.lastSeenSeq;
-    const msgs = room.messages.filter((m) => m.seq > since && this.visibleTo(room, m, p.id)).slice(0, limit);
-    if (msgs.length) this.settleRead(room, p, Math.min(since, p.lastSeenSeq), msgs, Math.max(p.lastSeenSeq, msgs.at(-1)!.seq));
+    const focus = this.attentionFocus(room, p);
+    const held = new Set(p.withheld ?? []);
+    const msgs = focus ? [focus] : room.messages.filter((m) =>
+      (m.seq > since || held.has(m.seq)) && this.visibleTo(room, m, p.id)).slice(0, limit);
+    if (msgs.length) this.settleRead(room, p, Math.min(since, p.lastSeenSeq), msgs,
+      focus ? undefined : Math.max(p.lastSeenSeq, msgs.at(-1)!.seq));
     return msgs;
   }
 
@@ -730,7 +755,7 @@ export class Hub {
       if (speaker && speaker.id !== p.id) {
         throw new HubError(`It is ${this.shown(room, speaker)}'s turn to speak, not yours. Call wait_for_messages until your_turn is true.`);
       }
-    } else if (!force && p.agent !== "human") {
+    } else if (!force && p.agent !== "human" && !this.resolvesAddress(room, p, content, replyTo)) {
       // Stale-send guard: never talk past messages you have not read.
       const unread = this.unread(room, p);
       if (unread.length) {
@@ -738,7 +763,7 @@ export class Hub {
         this.settleRead(room, p, p.lastSeenSeq, unread);
         throw new HubError(
           `${unread.length} message(s) arrived while you were composing. Read them (below); then retry send_message with force=true if your point is still new, or call wait_for_messages.`,
-          { unread: unread.map((m) => this.fmt(room, m)), next_seq: room.messages.at(-1)!.seq },
+          { hint: this.attentionHint(room, p), unread: unread.map((m) => this.fmt(room, m)), next_seq: room.messages.at(-1)!.seq },
         );
       }
     }
@@ -764,9 +789,11 @@ export class Hub {
       if (targets.length === 0) throw new HubError("A quiet message must @-name at least one agent (not a human). Quiet is not privacy: everyone can still read it.");
       audience = [...new Set([p.id, ...targets])];
     }
+    if (this.attentionFocus(room, p) || p.withheld?.length) this.settleRead(room, p, p.lastSeenSeq, []);
     const msg = this.post(room, "chat", p, content, { replyTo, ...(quiet ? { quiet: true, audience } : {}) });
     p.messageCount += 1;
     p.lastSeenSeq = Math.max(p.lastSeenSeq, msg.seq);
+    this.persistAttention(room, p);
     return msg;
   }
 
@@ -1006,9 +1033,13 @@ export class Hub {
     const room = this.getRoom(roomName);
     const p = this.requireParticipant(room, pid);
     p.passes = (p.passes ?? 0) + 1;
-    this.settleRead(room, p, p.lastSeenSeq, []);
-    // a pass answers every mention before it, so it leaves addressed_to_you and the wait gate alone
-    p.answeredSeq = room.messages.at(-1)?.seq ?? 0;
+    // No delivered focus means no decline. Never acknowledge unseen asks.
+    if (p.focusedAsk && (this.addressedBy(room, p).some((m) => m.id === p.focusedAsk) || room.messages.some((m) => m.id === p.focusedAsk && m.from.agent === "human" && !this.isAnswered(room, m)))) {
+      p.declinedAsks = [...new Set([...(p.declinedAsks ?? []), p.focusedAsk])];
+      p.declinedAt = { ...(p.declinedAt ?? {}), [p.focusedAsk]: room.messages.at(-1)?.seq ?? 0 };
+      p.focusedAsk = undefined;
+      this.persistAttention(room, p);
+    }
     let yielded = false;
     if (room.mode === "round_robin" && this.currentSpeaker(room)?.id === p.id) {
       this.advanceTurn(room);
@@ -1088,32 +1119,51 @@ export class Hub {
     return [...ids];
   }
 
-  /**
-   * A participant who was shown an @-addressed message by their last wait_for_messages and has neither
-   * replied nor passed does not get to wait again straight away: the second wait is refused once, with
-   * the message. Weak models loop on wait_for_messages past a hint; a refusal is what they read.
+  /** Compatibility hook: repeated waits now deliver focus instead of throwing. */
+  answerBeforeWaiting(_room: Room, _p: Participant, _since: number): void {}
+
+  /** RE-TARGET hub-carries-what-it-knows: only linked chat resolves agent debt.
+   * reply_to resolves exactly its target. Without reply_to, @-back resolves the
+   * oldest outstanding ask from EACH named sender. Other post kinds never do.
    */
-  answerBeforeWaiting(room: Room, p: Participant, since: number): void {
-    if (p.agent === "human" || p.role === "chair" || room.state === "concluded" || room.state === "closed") return;
-    const owed = this.addressedBy(room, p)[0];
-    if (!owed || p.addressWarned !== owed.id || p.addressRefused === owed.id) return;
-    p.addressRefused = owed.id;
-    // the refusal is the delivery: whatever arrived meanwhile travels with it, so the reply is not refused as stale
-    const unread = this.deliverable(room, p, since);
-    this.settleRead(room, p, since, unread);
-    throw new HubError(`${this.shown(room, owed.from)} addressed you in #${owed.seq} and you have not answered. Reply (send_message reply_to="${owed.id}") or call pass before waiting again.`, {
-      message: this.fmt(room, owed),
-      unread: unread.map((m) => this.fmt(room, m)),
-      next_seq: room.messages.at(-1)?.seq ?? since,
-    });
+  addressedBy(room: Room, p: Participant): Message[] {
+    const declined = new Set(p.declinedAsks ?? []);
+    const pending: Message[] = [];
+    for (const m of room.messages) {
+      for (let i = pending.length - 1; i >= 0; i--) if ((p.declinedAt?.[pending[i].id] ?? Infinity) < m.seq) pending.splice(i, 1);
+      if (m.kind !== "chat" || m.tag === "opening") continue;
+      if (m.from.id === p.id) {
+        if (m.replyTo) {
+          const i = pending.findIndex((ask) => ask.id === m.replyTo);
+          if (i >= 0) pending.splice(i, 1);
+        } else {
+          for (const sender of m.mentions ?? []) {
+            const i = pending.findIndex((ask) => ask.from.id === sender);
+            if (i >= 0) pending.splice(i, 1);
+          }
+        }
+      } else if (m.from.agent !== "human" && m.mentions?.includes(p.id) && this.pushableTo(room, m, p.id)) pending.push(m);
+    }
+    return pending.filter((m) => !declined.has(m.id));
   }
 
-  /** Was this participant addressed by name in any recent message they have not yet answered? */
-  addressedBy(room: Room, p: Participant): Message[] {
-    // openings are revealed as chat but nobody has spoken yet; a pass answers everything before it
-    const recent = room.messages.filter((m) => m.kind === "chat" && m.tag !== "opening" && m.seq > (p.answeredSeq ?? 0) && m.mentions?.includes(p.id) && m.from.id !== p.id && this.pushableTo(room, m, p.id)).slice(-10);
-    // anything they posted afterwards (chat, vote, challenge, proposal) is an answer
-    return recent.filter((m) => !room.messages.some((r) => r.seq > m.seq && r.from.id === p.id));
+  attentionFocus(room: Room, p: Participant): Message | undefined {
+    if (p.agent === "human" || p.role === "chair" || room.state === "closed" || room.state === "concluded") return;
+    const human = [...room.messages].reverse().find((m) => m.kind === "chat" && m.tag !== "opening" &&
+      m.from.agent === "human" && !this.isAnswered(room, m) && !p.declinedAsks?.includes(m.id) && this.responderFor(room, m, p.id).mine);
+    return human ?? this.addressedBy(room, p)[0];
+  }
+
+  attentionHint(room: Room, p: Participant): string | undefined {
+    const ask = this.attentionFocus(room, p);
+    if (!ask) return;
+    return `${ask.from.agent === "human" ? "You are the one answering this human. " : ""}${this.shown(room, ask.from)} addressed you directly in #${ask.seq}. Reply with send_message reply_to="${ask.id}" or call pass to decline only this focused ask. Other messages remain queued.`;
+  }
+
+  private resolvesAddress(room: Room, p: Participant, content: string, replyTo?: string): boolean {
+    const focus = this.attentionFocus(room, p);
+    if (replyTo && (focus?.id === replyTo || this.addressedBy(room, p).some((m) => m.id === replyTo))) return true;
+    return !replyTo && this.addressedBy(room, p).some((m) => this.mentionsIn(room, content).includes(m.from.id));
   }
 
   /**
@@ -1812,6 +1862,12 @@ export class Hub {
           continue;
         }
         switch (ev.type) {
+          case "attention": {
+            const p = this.rooms.get(ev.room)?.participants.get(ev.pid);
+            if (p) Object.assign(p, { lastSeenSeq: ev.lastSeenSeq, withheld: ev.withheld,
+              quietReceipts: ev.quietReceipts, focusedAsk: ev.focusedAsk, declinedAsks: ev.declinedAsks, declinedAt: ev.declinedAt });
+            break;
+          }
           case "room": {
             // older logs may lack newer options; fill defaults
             const legacy = ev.opts as Partial<Opts>;

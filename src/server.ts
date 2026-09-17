@@ -227,6 +227,10 @@ export function createSessionServer(hub: Hub): McpServer {
           ? { id: openView.id, version: openView.version, by: openView.by, tally: openView.tally, waiting_on: openView.waiting_on, needs_challenge: openView.needs_challenge, challenges: openView.challenges, text: openView.text }
           : null,
         board_keys: [...r.board.keys()],
+        your_share: (() => {
+          const sh = hub.share(r, p);
+          return { messages: sh.mine, of_last: sh.of, fair: sh.fair, over: sh.over };
+        })(),
         conclusion: r.conclusion ?? null,
         hint:
           r.state === "concluded"
@@ -242,11 +246,25 @@ export function createSessionServer(hub: Hub): McpServer {
                 ? "A proposal is open and untested. Name its single weakest claim in one sentence (challenge), then vote. If you want different wording, amend it instead of re-proposing."
                 : needsMyVote
                   ? "Vote on the open proposal: agree with a verbatim quote of the clause you endorse, or disagree with the specific change you need (or just amend it)."
-                  : msgs.length === 0
-                    ? "No new messages yet. Call wait_for_messages again."
-                    : undefined,
+                  : hub.share(r, p).over
+                    ? "You have been doing most of the talking. Unless you have new evidence, pass and let the others speak."
+                    : msgs.length === 0
+                      ? "No new messages yet. Call wait_for_messages again."
+                      : undefined,
       };
     }),
+  );
+
+  server.registerTool(
+    "pass",
+    {
+      title: "Pass (nothing to add)",
+      description:
+        "Say nothing on purpose: you have read everything and have no new point. Silent in free rooms (it just marks you up to date and counts " +
+        "toward your participation balance); in round_robin rooms it yields your turn. Prefer this over repeating a point someone already made.",
+      inputSchema: { room: roomArg, participant_id: asArg },
+    },
+    guard(({ room, participant_id }) => hub.pass(room, pid(room, participant_id))),
   );
 
   server.registerTool(

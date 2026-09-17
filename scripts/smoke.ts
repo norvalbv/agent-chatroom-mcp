@@ -50,7 +50,7 @@ const c = await connect("third");
 
 const tools = (await a.client.listTools()).tools.map((t) => t.name).sort();
 console.log("tools:", tools.join(", "));
-assert.deepEqual(tools, ["amend", "board_get", "board_set", "challenge", "join_room", "leave_room", "list_rooms", "propose", "read_messages", "room_status", "send_message", "submit_opening", "vote", "wait_for_messages"]);
+assert.deepEqual(tools, ["amend", "board_get", "board_set", "challenge", "join_room", "leave_room", "list_rooms", "pass", "propose", "read_messages", "room_status", "send_message", "submit_opening", "vote", "wait_for_messages"]);
 
 // ---------------- two-party room: blind openings, long-poll, propose, vote ----------------
 {
@@ -272,11 +272,40 @@ assert.deepEqual(tools, ["amend", "board_get", "board_set", "challenge", "join_r
   assert.equal(stats.board_entries, 1);
 }
 
-// ---------------- round-robin room with turn enforcement and stall ----------------
+// ---------------- participation share: a monologuing agent is told to pass ----------------
+{
+  const room = "share";
+  await a.call("join_room", { room, name: "claude-1", agent: "claude" });
+  await b.call("join_room", { room, name: "codex-1", agent: "codex" });
+  await c.call("join_room", { room, name: "gemini-1", agent: "gemini" });
+  await a.call("send_message", { room, content: "Point one." });
+  await b.call("wait_for_messages", { room, timeout_ms: 0 });
+  await b.call("send_message", { room, content: "Noted." });
+  for (const t of ["Point two.", "Point three."]) {
+    await a.call("wait_for_messages", { room, timeout_ms: 0 });
+    await a.call("send_message", { room, content: t });
+  }
+  // A has 3 of the last 4: over 1.5x fair share (1/3) while the room is active
+  const w = await a.call("wait_for_messages", { room, timeout_ms: 0 });
+  assert.equal(w.your_share.over, true);
+  assert.match(w.hint, /pass and let the others speak/);
+  await assert.rejects(a.call("send_message", { room, content: "Point five." }), /Let the others speak/);
+  const ps = await a.call("pass", { room });
+  assert.equal(ps.yielded_turn, false);
+  await a.call("send_message", { room, content: "Reply to a human is always allowed: benji, hi.", force: true });
+  const stats = (await (await fetch(`${HTTP}/rooms/${room}/stats`)).json()) as { per_participant: { name: string; passes: number }[] };
+  assert.equal(stats.per_participant.find((p) => p.name === "claude-1")!.passes, 1);
+}
+
+// ---------------- round-robin room with turn enforcement, pass, and stall ----------------
 {
   await a.call("join_room", { room: "rr", name: "claude-1", agent: "claude", mode: "round_robin", max_rounds: 2 });
   await b.call("join_room", { room: "rr", name: "codex-1", agent: "codex" });
   await assert.rejects(b.call("send_message", { room: "rr", content: "me first" }), /turn/);
+  const pa = await a.call("pass", { room: "rr" });
+  assert.equal(pa.yielded_turn, true, "pass must yield the turn in round_robin");
+  await b.call("send_message", { room: "rr", content: "thanks, my turn then" });
+  await a.call("wait_for_messages", { room: "rr", timeout_ms: 0 });
   await a.call("send_message", { room: "rr", content: "hello" });
   const rb = await b.call("wait_for_messages", { room: "rr", timeout_ms: 500 });
   assert.equal(rb.your_turn, true);

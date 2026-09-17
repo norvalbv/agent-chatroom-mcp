@@ -30,6 +30,8 @@ export interface Participant {
   messageCount: number;
   /** seqs of messages withheld from this participant (human messages awaiting their nominated reply) */
   withheld?: number[];
+  /** explicit "nothing to add" turns */
+  passes?: number;
 }
 
 export interface Message {
@@ -296,6 +298,7 @@ export class Hub {
         name: p.name,
         agent: p.agent,
         chat_messages: p.messageCount,
+        passes: p.passes ?? 0,
         chars: room.messages.filter((m) => m.from.id === p.id && m.kind === "chat").reduce((a, m) => a + m.content.length, 0),
       })),
       proposals: room.proposals.size,
@@ -450,6 +453,18 @@ export class Hub {
           `${unread.length} message(s) arrived while you were composing. Read them first (included below); ` +
             `then resend only if your point is still new. Pass force=true to send anyway.`,
           { unread: unread.map((m) => this.fmt(room, m)), next_seq: room.messages.at(-1)!.seq },
+        );
+      }
+    }
+    if (!force && !target && p.agent !== "human" && room.mode === "free") {
+      const sh = this.share(room, p);
+      const last = room.messages.at(-1);
+      const roomActive = last && Date.now() - Date.parse(last.ts) < 20_000;
+      if (sh.over && roomActive) {
+        throw new HubError(
+          `You have sent ${sh.mine} of the last ${sh.of} messages (fair share is about ${Math.round(sh.fair * sh.of)}). Let the others speak: call pass, ` +
+            `or wait_for_messages. Send again only with genuinely new evidence (force=true).`,
+          { your_share: sh },
         );
       }
     }
@@ -610,6 +625,33 @@ export class Hub {
       if (p) this.post(room, "chat", p, content, { tag: "opening" });
     }
     if (room.mode === "round_robin") room.round = 2;
+  }
+
+  // ---------- participation share ----------
+
+  /** This agent's share of the recent agent-to-agent chat (last 12 messages, openings and humans excluded). */
+  share(room: Room, p: Participant): { mine: number; of: number; fair: number; over: boolean } {
+    const recent = room.messages.filter((m) => m.kind === "chat" && m.tag !== "opening" && m.from.agent !== "human").slice(-12);
+    const mine = recent.filter((m) => m.from.id === p.id).length;
+    const n = Math.max(1, this.voters(room).length);
+    const fair = 1 / n;
+    const over = n >= 3 && recent.length >= 4 && mine / recent.length > fair * 1.5;
+    return { mine, of: recent.length, fair: Math.round(fair * 100) / 100, over };
+  }
+
+  /** "I have read everything and have nothing to add." Silent in free mode; yields the turn in round_robin. */
+  pass(roomName: string, pid: string): { yielded_turn: boolean; next_seq: number } {
+    const room = this.getRoom(roomName);
+    const p = this.requireParticipant(room, pid);
+    p.passes = (p.passes ?? 0) + 1;
+    this.markRead(room, p, room.messages.at(-1)?.seq ?? 0);
+    let yielded = false;
+    if (room.mode === "round_robin" && this.currentSpeaker(room)?.id === p.id) {
+      this.advanceTurn(room);
+      yielded = true;
+      this.post(room, "system", undefined, `${this.shown(room, p)} passes.`);
+    }
+    return { yielded_turn: yielded, next_seq: room.messages.at(-1)?.seq ?? 0 };
   }
 
   // ---------- humans in the loop ----------

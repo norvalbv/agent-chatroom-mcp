@@ -112,6 +112,14 @@ for (const scenario of ['missing', 'same', 'existing', 'duplicate'] as const) te
   assert.equal(snapshot(), before);
 });
 
+test('successor join without the reserved token is refused before any seat exists', () => {
+  const f = fixture(); register(f.hub, f.room.name, 'old', 'next');
+  const before = [...room(f.hub, f.room.name).participants.values()].map((p: any) => p.id).sort().join(',');
+  assert.throws(() => f.hub.join(f.room.name, 'next', 'test'), HubError);
+  assert.equal([...room(f.hub, f.room.name).participants.values()].map((p: any) => p.id).sort().join(','), before, 'no participant must be created');
+  assert.equal((f.old as any).replacedBy, undefined, 'no link without the proof');
+});
+
 test('reservation rejects a wrong or missing join token without consuming it', () => {
   const f = fixture(); register(f.hub, f.room.name, 'old', 'next');
   for (const opts of [{}, { replacementToken: 'wrong' }]) {

@@ -47,6 +47,10 @@ Every prompt automatically carries the project's settled axes (`docs/decisions/`
 
 Report: the final answer, the verifier's verdict (VERIFIED / NOT VERIFIED and its evidence), one line per sub-room or break-out conclusion, unresolved objections carried into the conclusion, and the report path `swarms/<id>/report.md` (also written if the terminal output is lost). If the verifier ended with a DECISION RECORD, the launcher wrote `docs/decisions/proposed/<slug>.md`; promote it with `guard-decisions add <slug> --target --new ...` only if the human agrees, then regenerate `docs/research-index.md` with `scripts/research-index.sh`. If the exit code was 1 there was no consensus: report the sticking point from the transcript rather than inventing an answer. If a room was closed by a human, say so.
 
+## Integrating what a build lobby produced
+
+Merge only branches named in the conclusion that carry a `verify/*` entry, in ranked order, onto `integration/<run>`; after every merge `npm run build && PORT=7733 npx tsx scripts/smoke.ts`; then run every branch's own regression script (`scripts/*-regression.ts`, `scripts/*.test.ts`; `NODE_OPTIONS=--experimental-vm-modules` for seat-env-regression; macOS has no `timeout`). A test that was green on its branch and is red integrated is fixed as a test, never by loosening the hub. Fast-forward main, push, restart the hub. Record the round with `guard-decisions add ... --target --new --evidence-change`, copy the report into `docs/` with keys redacted, regenerate `docs/research-index.md`.
+
 ## Requirements and gotchas
 
 - Tests: `npm run build && PORT=7733 npx tsx scripts/smoke.ts` must print `SMOKE OK` before committing hub changes.

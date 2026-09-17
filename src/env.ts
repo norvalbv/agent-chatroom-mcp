@@ -14,10 +14,21 @@ export const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 /** Minimize human-control credentials in seats; this is not a same-user filesystem sandbox. */
 export const SEAT_ENV_EXCLUSIONS: readonly string[] = Object.freeze(["CHATROOM_HUMAN_TOKEN"]);
 
+/** Per-seat commit attribution without changing shared repository or global git config. */
+export function seatGitIdentity(name: string): NodeJS.ProcessEnv {
+  return {
+    GIT_AUTHOR_NAME: name,
+    GIT_AUTHOR_EMAIL: `${name}@swarm.local`,
+    GIT_COMMITTER_NAME: name,
+    GIT_COMMITTER_EMAIL: `${name}@swarm.local`,
+  };
+}
+
 /** Clone rather than mutate the launcher/hub's environment: controller auth must keep working. */
-export function seatChildEnv(env: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
+export function seatChildEnv(env: NodeJS.ProcessEnv = process.env, name?: string): NodeJS.ProcessEnv {
   const childEnv: NodeJS.ProcessEnv = { ...env, MCP_TOOL_TIMEOUT: "120000" };
   for (const key of SEAT_ENV_EXCLUSIONS) delete childEnv[key];
+  if (name !== undefined) Object.assign(childEnv, seatGitIdentity(name));
   return childEnv;
 }
 

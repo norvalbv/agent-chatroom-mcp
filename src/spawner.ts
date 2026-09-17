@@ -262,7 +262,7 @@ export class Spawner {
       if (agent === "openrouter") args[args.indexOf("--cwd") + 1] = seatCwd;
       else if (agent === "codex") args[args.indexOf("-C") + 1] = seatCwd;
       const outStream = createWriteStream(log);
-      const child = spawn(cmd, args, { cwd: seatCwd, env: seatChildEnv(), stdio: ["ignore", "pipe", "pipe"] });
+      const child = spawn(cmd, args, { cwd: seatCwd, env: seatChildEnv(process.env, req.canEdit ? name : undefined), stdio: ["ignore", "pipe", "pipe"] });
       child.stdout?.pipe(outStream);
       child.stderr?.pipe(outStream);
       rec.pid = child.pid;

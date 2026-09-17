@@ -183,10 +183,12 @@ async function withRespawn(name: string, room: string, mk: (nm: string, note: st
 
 /** Last exit code per seat name; withRespawn reads it to tell a crash from a finished seat. */
 const exitCodes = new Map<string, number | null>();
+/** Only successfully isolated workers receive seat commit attribution (never planner/verifier). */
+const writeWorkers = new Set<string>();
 
 function runProc(name: string, cmd: string, args: string[], cwd: string, outFile: string, outViaFile = false): Promise<string> {
   return new Promise((res) => {
-    const child = spawn(cmd, args, { cwd, env: seatChildEnv(), stdio: ["ignore", "pipe", "pipe"] });
+    const child = spawn(cmd, args, { cwd, env: seatChildEnv(process.env, writeWorkers.has(name) ? name : undefined), stdio: ["ignore", "pipe", "pipe"] });
     children.push(child);
     let out = "";
     let err = "";
@@ -252,6 +254,7 @@ function workerCwd(name: string): string {
       log(`could not link node_modules into ${dir}: ${e instanceof Error ? e.message : String(e)}`);
     }
   }
+  writeWorkers.add(name);
   log(`${name} works in ${dir} (branch ${branch})`);
   return dir;
 }
@@ -412,12 +415,15 @@ for (const g of plan.groups) {
         `\nWorking directory: ${wcwd}; you may read the project and run commands. ${writeRule} A verifier named "verifier" sits in the room and the final proposal needs its agree vote. Organise yourselves: claim areas on the board, recruit or break out into sub-rooms with request_agent when depth is needed, and bring results back here.`
       : SETTLED + "\n" + prompt("worker.md", { ...vars, NAME: nm, CWD: wcwd, WRITE_RULE: writeRule });
     const mayWrite = FULL && !readOnlyWorkers.has(name);
-    const mk = (nm: string, note: string) =>
-      agent === "codex"
+    const mk = (nm: string, note: string) => {
+      // Replacements reuse the original successful worktree but commit under their new seat name.
+      if (writeWorkers.has(name)) writeWorkers.add(nm);
+      return agent === "codex"
         ? runCodex(nm, buildText(nm) + note, wcwd, model)
         : agent === "openrouter"
           ? runOpenRouter(nm, buildText(nm) + note, wcwd, model, mayWrite)
           : runClaude(nm, buildText(nm) + note, mayWrite ? WRITE_TOOLS : READ_TOOLS, wcwd, model);
+    };
     runs.push(withRespawn(name, room, mk).then((t) => ({ name, text: t })));
   }
 }

@@ -71,7 +71,7 @@ const PLANNER_MODEL = flag("planner-model", VERIFIER_MODEL);
 // Codex seats: --codex k spreads k workers over --codex-models (rotated), default the current OpenAI line-up
 const CODEX_MODELS = (flag("codex-models", process.env.CODEX_MODELS ?? process.env.CODEX_MODEL ?? "gpt-6-astra,gpt-5.6-sol,gpt-5.6-terra") || "").split(",").map((m) => m.trim()).filter(Boolean);
 // OpenRouter seats: --openrouter k spreads k workers over --openrouter-models (rotated); any OpenRouter slug works
-const OPENROUTER_MODELS = (flag("openrouter-models", process.env.OPENROUTER_MODELS ?? process.env.OPENROUTER_MODEL ?? "stealth/union-alpha") || "").split(",").map((m) => m.trim()).filter(Boolean);
+const OPENROUTER_MODELS = (flag("openrouter-models", process.env.OPENROUTER_MODELS ?? process.env.OPENROUTER_MODEL ?? "deepseek/deepseek-v4-flash-0731") || "").split(",").map((m) => m.trim()).filter(Boolean);
 /** --verifier-openrouter <slug>: the verifier seat on an OpenRouter model instead of Claude (a run can then cost nothing) */
 const VERIFIER_OPENROUTER = flag("verifier-openrouter");
 /** --openrouter-reasoning low|medium|high: passed to every OpenRouter seat (models without a reasoning parameter ignore it) */

@@ -661,7 +661,7 @@ export const UI_HTML = `<!doctype html>
     try { var p = (await (await fetch('/policy')).json()).recruits || {}; $('#policy').innerHTML = 'recruits: <b>' + esc(p.agent ? p.agent + (p.model ? ' · ' + p.model : '') : 'as requested') + '</b>'; } catch (e) {}
   }
   $('#policy').onclick = async function () {
-    var v = window.prompt('Pin every recruit to a provider and model (e.g. "openrouter stealth/union-alpha"), or "any" to let agents choose:', 'openrouter stealth/union-alpha');
+    var v = window.prompt('Pin every recruit to a provider and model (e.g. "openrouter deepseek/deepseek-v4-flash-0731"), or "any" to let agents choose:', 'openrouter deepseek/deepseek-v4-flash-0731');
     if (v === null) return;
     var parts = v.trim().split(/\s+/);
     var body = parts[0] === 'any' ? { agent: 'any', model: 'any' } : { agent: parts[0], model: parts[1] || 'any' };

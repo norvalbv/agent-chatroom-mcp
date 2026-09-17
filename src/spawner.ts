@@ -107,7 +107,7 @@ export interface RecruitPolicy {
 /** Default: the free model only. CHATROOM_RECRUIT_AGENT / CHATROOM_RECRUIT_MODEL override the default at start; "any" unpins. */
 export function policyFromEnv(env: NodeJS.ProcessEnv = process.env): RecruitPolicy {
   const agent = env.CHATROOM_RECRUIT_AGENT ?? "openrouter";
-  const model = env.CHATROOM_RECRUIT_MODEL ?? "stealth/union-alpha";
+  const model = env.CHATROOM_RECRUIT_MODEL ?? "deepseek/deepseek-v4-flash-0731";
   return { agent: agent === "any" ? undefined : (agent as AgentKind), model: model === "any" ? undefined : model };
 }
 

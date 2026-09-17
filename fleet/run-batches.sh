@@ -5,7 +5,7 @@
 set -u
 cd "$(dirname "$0")/.."
 FIRST="$1"; WAIT_PID="${2:-}"
-MODEL="${MODEL:-stealth/union-alpha}"
+MODEL="${MODEL:-deepseek/deepseek-v4-flash-0731}"
 if [ -n "$WAIT_PID" ]; then while kill -0 "$WAIT_PID" 2>/dev/null; do sleep 30; done; fi
 SUMMARIES="$FIRST"
 newest() { ls -td swarms/fleet-*/ | head -1; }

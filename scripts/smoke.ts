@@ -44,7 +44,7 @@ async function connect(name: string) {
 }
 
 await waitForServer();
-assert.deepEqual((await (await fetch(`${HTTP}/policy`)).json()).recruits, { agent: "openrouter", model: "stealth/union-alpha" }, "default recruit policy is the free model only");
+assert.deepEqual((await (await fetch(`${HTTP}/policy`)).json()).recruits, { agent: "openrouter", model: "deepseek/deepseek-v4-flash-0731" }, "default recruit policy is the free model only");
 const a = await connect("claude");
 const b = await connect("codex");
 const c = await connect("third");
@@ -818,19 +818,19 @@ assert.deepEqual(tools, ["amend", "board_get", "board_set", "challenge", "join_r
 
 {
   // the hub's recruit policy wins over what a request asks for, and is settable live
-  await fetch(`${HTTP}/policy`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ agent: "openrouter", model: "stealth/union-alpha" }) });
+  await fetch(`${HTTP}/policy`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ agent: "openrouter", model: "deepseek/deepseek-v4-flash-0731" }) });
   const room = "policy";
   await a.call("join_room", { room, name: "claude-1", agent: "claude", expected_participants: 2 });
   const asked = await a.call("request_agent", { room, name: "helper", agent: "codex", model: "gpt-6-astra", brief: "A brief that is comfortably longer than twenty characters for the policy test." });
   assert.equal(asked.agent, "openrouter", "a codex request is launched as the pinned provider");
-  assert.equal(asked.model, "stealth/union-alpha", "and the pinned model");
+  assert.equal(asked.model, "deepseek/deepseek-v4-flash-0731", "and the pinned model");
   const log = (await a.call("read_messages", { room, since_seq: 0 })) as string[];
   assert.ok(log.some((m) => /pinned to openrouter\/stealth\/union-alpha/.test(m)), "the override is announced in the room");
   const set = await fetch(`${HTTP}/policy`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ agent: "any", model: "any" }) });
   assert.equal((await set.json()).recruits.agent, undefined, "any unpins");
   const asked2 = await a.call("request_agent", { room, name: "helper2", agent: "codex", brief: "A brief that is comfortably longer than twenty characters for the policy test." });
   assert.equal(asked2.agent, "codex", "unpinned: launched as requested");
-  await fetch(`${HTTP}/policy`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ agent: "openrouter", model: "stealth/union-alpha" }) });
+  await fetch(`${HTTP}/policy`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ agent: "openrouter", model: "deepseek/deepseek-v4-flash-0731" }) });
   await a.call("leave_room", { room, reason: "smoke: section finished, nothing owed" });
 }
 

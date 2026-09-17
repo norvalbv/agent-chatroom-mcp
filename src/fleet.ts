@@ -7,7 +7,7 @@
  * next swarm) reads. Runs are read-only by default: they find, reproduce, rank and hand back a
  * consensus; building it is a separate step with its own tests.
  *
- *   node dist/fleet.js fleet/self-improvement.json --model stealth/union-alpha [--agents 12] [--timeout 50]
+ *   node dist/fleet.js fleet/self-improvement.json --model deepseek/deepseek-v4-flash-0731 [--agents 12] [--timeout 50]
  *        [--stagger 20] [--only hub,seat] [--skip ui] [--full-access] [--cwd dir] [--port 7717]
  */
 import { spawn } from "node:child_process";
@@ -44,7 +44,7 @@ interface Spec {
   areas: Area[];
 }
 const spec = JSON.parse(readFileSync(file, "utf8")) as Spec;
-const MODEL = flag("model", process.env.OPENROUTER_MODEL ?? "stealth/union-alpha")!;
+const MODEL = flag("model", process.env.OPENROUTER_MODEL ?? "deepseek/deepseek-v4-flash-0731")!;
 const AGENTS = Number(flag("agents", "12"));
 const TIMEOUT = Number(flag("timeout", "50"));
 const STAGGER = Number(flag("stagger", "20"));

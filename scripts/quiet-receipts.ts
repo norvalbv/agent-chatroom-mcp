@@ -12,6 +12,7 @@ const next = (p: typeof reader) => hub.wait(name, p.id, p.lastSeenSeq, 0);
 for (const p of [writer, peer, reader, observer]) await next(p);
 
 const root = hub.send(name, writer.id, "@peer first quiet body", undefined, true, true);
+assert.ok((await next(peer)).some((m) => m.id === root.id), "named recipient receives quiet body by push");
 const reply = hub.send(name, peer.id, "second quiet body", root.id, true, true);
 const pulled = hub.readAs(room, reader, root.seq - 1, 1);
 assert.deepEqual(pulled.map((m) => m.seq), [root.seq], "limited explicit read delivers only root");
@@ -22,6 +23,9 @@ assert.deepEqual(await next(observer), [], "quiet bodies do not push to bystande
 assert.equal(hub.surfaceThread(room, root.id, "regression"), 2);
 const deliveredReader = await next(reader);
 const deliveredObserver = await next(observer);
+const deliveredPeer = await next(peer);
+assert.ok(!deliveredPeer.some((m) => m.id === root.id || m.id === reply.id), "audience must not receive old bodies again on surface");
+assert.ok(deliveredPeer.some((m) => m.content.includes("is now public")), "audience still sees publicization notice");
 console.log(JSON.stringify({ pulled: pulled.map((m) => m.seq), reader: deliveredReader.map((m) => m.seq), observer: deliveredObserver.map((m) => m.seq) }));
 assert.ok(!deliveredReader.some((m) => m.id === root.id), "already-read quiet body must not be redelivered on surface");
 assert.ok(deliveredReader.some((m) => m.id === reply.id), "unread reply in a partly read thread must be delivered");

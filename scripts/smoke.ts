@@ -115,7 +115,7 @@ assert.deepEqual(tools, ["amend", "board_get", "board_set", "challenge", "join_r
 // ---------------- three-party anonymous room: challenge gate, budgets, human interjection ----------------
 {
   const room = "trio";
-  const ja = await a.call("join_room", { room, name: "claude-1", agent: "claude", topic: "Pick a name", anonymous: true, max_messages_per_participant: 2 });
+  const ja = await a.call("join_room", { room, name: "claude-1", agent: "claude", topic: "Pick a name", anonymous: true, max_messages_per_participant: 3 });
   assert.equal(ja.you_are, "Participant A");
   const jb = await b.call("join_room", { room, name: "codex-1", agent: "codex" });
   assert.equal(jb.you_are, "Participant B");
@@ -128,19 +128,24 @@ assert.deepEqual(tools, ["amend", "board_get", "board_set", "challenge", "join_r
     [["Participant A", "hidden"], ["Participant B", "hidden"], ["Participant C", "hidden"]],
   );
   assert.ok(!JSON.stringify(st).includes("claude-1"));
+  await a.call("send_message", { room, content: "@B what do you think?" });
+  const wbm = await b.call("wait_for_messages", { room, timeout_ms: 0 });
+  assert.equal(wbm.addressed_to_you.length, 1, "@B must resolve to Participant B in an anonymous room");
+  await b.call("send_message", { room, content: "Beta, obviously.", reply_to: wbm.addressed_to_you[0].id });
+  await a.call("wait_for_messages", { room, timeout_ms: 0 });
   // ...but the human HTTP view does.
   const human = (await (await fetch(`${HTTP}/rooms/${room}`)).json()) as { participants: { name: string; label: string }[] };
   assert.equal(human.participants[0].name, "claude-1");
   assert.equal(human.participants[0].label, "Participant A");
 
-  // Budget: 2 chat messages each.
+  // Budget: 3 chat messages each (A already spent one on the @B question).
   await a.call("send_message", { room, content: "I say Alpha." });
   await b.call("wait_for_messages", { room, timeout_ms: 0 });
   await b.call("send_message", { room, content: "I say Beta." });
   await a.call("wait_for_messages", { room, timeout_ms: 0 });
   await a.call("send_message", { room, content: "Alpha is shorter." });
   await a.call("wait_for_messages", { room, timeout_ms: 0 });
-  await assert.rejects(a.call("send_message", { room, content: "a third" }), /used your 2 messages/);
+  await assert.rejects(a.call("send_message", { room, content: "a third" }), /used your 3 messages/);
   // Human interjection via HTTP bypasses budgets and the guard, and shows up as agent "human".
   const hp = await fetch(`${HTTP}/rooms/${room}/messages`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ name: "benji", content: "Chair here: pick one, quickly." }) });
   assert.equal(hp.status, 200);
@@ -293,6 +298,16 @@ assert.deepEqual(tools, ["amend", "board_get", "board_set", "challenge", "join_r
   const ps = await a.call("pass", { room });
   assert.equal(ps.yielded_turn, false);
   await a.call("send_message", { room, content: "Reply to a human is always allowed: benji, hi.", force: true });
+  // @mention: the addressed agent gets an obligation flag and is exempt from the share guard
+  await c.call("wait_for_messages", { room, timeout_ms: 0 });
+  await c.call("send_message", { room, content: "@claude-1 what is your evidence for point three?" });
+  const wa = await a.call("wait_for_messages", { room, timeout_ms: 0 });
+  assert.equal(wa.addressed_to_you.length, 1);
+  assert.equal(wa.addressed_to_you[0].from, "gemini-1");
+  assert.match(wa.hint, /addressed you directly/);
+  await a.call("send_message", { room, content: "Evidence: the benchmark in the README.", reply_to: wa.addressed_to_you[0].id });
+  const wa2 = await a.call("wait_for_messages", { room, timeout_ms: 0 });
+  assert.equal(wa2.addressed_to_you.length, 0, "answering clears the obligation");
   const stats = (await (await fetch(`${HTTP}/rooms/${room}/stats`)).json()) as { per_participant: { name: string; passes: number }[] };
   assert.equal(stats.per_participant.find((p) => p.name === "claude-1")!.passes, 1);
 }

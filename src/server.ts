@@ -160,8 +160,9 @@ export function createSessionServer(hub: Hub): McpServer {
     {
       title: "Send a message",
       description:
-        "Post a message to the room. One claim, one reason, one ask. If messages arrived while you were composing, the send is refused and " +
-        "you get them instead: read them, then resend only if your point is still new (or pass force=true).",
+        "Post a message to the room. One claim, one reason, one ask. Address someone with @name (or @B in anonymous rooms) to give them the floor; " +
+        "they are told to reply or pass. If messages arrived while you were composing, the send is refused and you get them instead: " +
+        "read them, then resend only if your point is still new (or pass force=true).",
       inputSchema: {
         room: roomArg,
         content: z.string().describe("The message text."),
@@ -227,6 +228,7 @@ export function createSessionServer(hub: Hub): McpServer {
           ? { id: openView.id, version: openView.version, by: openView.by, tally: openView.tally, waiting_on: openView.waiting_on, needs_challenge: openView.needs_challenge, challenges: openView.challenges, text: openView.text }
           : null,
         board_keys: [...r.board.keys()],
+        addressed_to_you: hub.addressedBy(r, p).map((m) => ({ id: m.id, from: hub.shown(r, m.from), text: m.content.slice(0, 200) })),
         your_share: (() => {
           const sh = hub.share(r, p);
           return { messages: sh.mine, of_last: sh.of, fair: sh.fair, over: sh.over };
@@ -246,8 +248,10 @@ export function createSessionServer(hub: Hub): McpServer {
                 ? "A proposal is open and untested. Name its single weakest claim in one sentence (challenge), then vote. If you want different wording, amend it instead of re-proposing."
                 : needsMyVote
                   ? "Vote on the open proposal: agree with a verbatim quote of the clause you endorse, or disagree with the specific change you need (or just amend it)."
-                  : hub.share(r, p).over
-                    ? "You have been doing most of the talking. Unless you have new evidence, pass and let the others speak."
+                  : hub.addressedBy(r, p).length
+                    ? `${hub.shown(r, hub.addressedBy(r, p)[0].from)} addressed you directly. Reply (reply_to="${hub.addressedBy(r, p)[0].id}") or pass.`
+                    : hub.share(r, p).over
+                      ? "You have been doing most of the talking. Unless you have new evidence, pass and let the others speak."
                     : msgs.length === 0
                       ? "No new messages yet. Call wait_for_messages again."
                       : undefined,

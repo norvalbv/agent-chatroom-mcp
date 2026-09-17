@@ -46,6 +46,8 @@ export interface Message {
   proposalId?: string;
   /** "opening" marks a blind opening revealed in a batch */
   tag?: "opening";
+  /** participant ids named with @ in the content */
+  mentions?: string[];
 }
 
 export interface BoardEntry {
@@ -456,7 +458,7 @@ export class Hub {
         );
       }
     }
-    if (!force && !target && p.agent !== "human" && room.mode === "free") {
+    if (!force && !target && p.agent !== "human" && room.mode === "free" && this.addressedBy(room, p).length === 0) {
       const sh = this.share(room, p);
       const last = room.messages.at(-1);
       const roomActive = last && Date.now() - Date.parse(last.ts) < 20_000;
@@ -550,6 +552,10 @@ export class Hub {
       ts: now(),
       ...extra,
     };
+    if (kind === "chat") {
+      const mentions = this.mentionsIn(room, content);
+      if (mentions.length) msg.mentions = mentions;
+    }
     room.messages.push(msg);
     if (from) from.lastActiveAt = msg.ts;
     this.persist({ type: "message", msg });
@@ -695,6 +701,25 @@ export class Hub {
       (x) => x.name.toLowerCase() === key || x.label.toLowerCase() === key || x.label.toLowerCase() === `participant ${key}`,
     );
     return p?.id;
+  }
+
+  /** All participants named with @ anywhere in a message: @claude-2, @B, @"Participant B". */
+  mentionsIn(room: Room, content: string): string[] {
+    const ids = new Set<string>();
+    for (const m of content.matchAll(/@([\w-]+(?: [A-Za-z]\b)?)/g)) {
+      const key = m[1].toLowerCase();
+      for (const p of room.participants.values()) {
+        const label = p.label.toLowerCase();
+        if (p.name.toLowerCase() === key || label === key || label === `participant ${key}` || (key.length === 1 && label.endsWith(` ${key}`))) ids.add(p.id);
+      }
+    }
+    return [...ids];
+  }
+
+  /** Was this participant addressed by name in any recent message they have not yet answered? */
+  addressedBy(room: Room, p: Participant): Message[] {
+    const recent = room.messages.slice(-10).filter((m) => m.kind === "chat" && m.mentions?.includes(p.id) && m.from.id !== p.id);
+    return recent.filter((m) => !room.messages.some((r) => r.seq > m.seq && r.from.id === p.id && r.kind === "chat"));
   }
 
   /**

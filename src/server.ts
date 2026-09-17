@@ -576,14 +576,15 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
           new_room: z.string().optional().describe("Spawn a sub-team into this new room instead of yours; they report back with post_to_room."),
           room_topic: z.string().optional().describe("Topic for the new room."),
           count: z.number().int().min(1).max(3).optional().describe("How many to spawn (default 2 for a new room, 1 otherwise)."),
+          replacing: z.string().optional().describe("Exact departed nonhuman seat to replace; single recruit in this room only."),
           area: z.string().optional().describe("Claim this area (claim/<area>) for the newcomers first; refused if someone else owns it."),
           participant_id: asArg,
         },
       },
-      guard("request_agent", ({ room, brief, name, agent, model, cwd, can_edit, new_room, room_topic, count, area, participant_id }) => {
+      guard("request_agent", ({ room, brief, name, agent, model, cwd, can_edit, new_room, room_topic, count, area, replacing, participant_id }) => {
         const r = hub.getRoom(room);
         const me_ = hub.requireParticipant(r, pid(room, participant_id));
-        const recs = spawner.request({ room, brief, requestedBy: me_.name, requestedByShown: hub.shown(r, me_), parentTopic: r.topic, name, agent, model, cwd, canEdit: can_edit, newRoom: new_room, roomTopic: room_topic, count, area });
+        const recs = spawner.request({ room, brief, requestedBy: me_.name, requestedByShown: hub.shown(r, me_), parentTopic: r.topic, name, agent, model, cwd, canEdit: can_edit, newRoom: new_room, roomTopic: room_topic, count, area, replacing });
         const who = recs.map((x) => x.name).join(", ");
         hub.announce(room, `${hub.shown(r, me_)} recruited ${who} (${recs[0].agent}${recs[0].model ? `/${recs[0].model}` : ""}${new_room ? `, into ${new_room}` : ""}${area ? `, area ${area}` : ""}): ${brief.slice(0, 200)}${brief.length > 200 ? "…" : ""}`);
         return { spawned: recs.map((x) => x.name), room: recs[0].room, depth: recs[0].depth, agent: recs[0].agent, model: recs[0].model ?? null, cwd: recs[0].cwd, logs: recs.map((x) => x.log), hint: "They will join within a minute or two. Carry on; you will see them arrive." };

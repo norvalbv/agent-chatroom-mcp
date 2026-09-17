@@ -12,7 +12,7 @@ import { fileURLToPath } from "node:url";
 export const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
 /** Minimize human-control credentials in seats; this is not a same-user filesystem sandbox. */
-export const SEAT_ENV_EXCLUSIONS: readonly string[] = Object.freeze(["CHATROOM_HUMAN_TOKEN"]);
+export const SEAT_ENV_EXCLUSIONS: readonly string[] = Object.freeze(["CHATROOM_HUMAN_TOKEN", "CHATROOM_LAUNCHER_TOKEN"]);
 
 /** Clone rather than mutate the launcher/hub's environment: controller auth must keep working. */
 export function seatChildEnv(env: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {

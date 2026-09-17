@@ -54,3 +54,25 @@ export function respawnDecision(i: RespawnInput): RespawnDecision {
   if (active < floor) return { respawn: true, reason: `${active} active seats is below the floor of ${floor}` };
   return { respawn: false, reason: `completed: ${active} active seats (floor ${floor}), ${claims.length ? "claims handed over" : "no claim left behind"}` };
 }
+
+/**
+ * Launcher-side registration: the launcher (which knows the process exited) calls the hub's
+ * POST /rooms/:room/replacements before launching the successor, and passes the returned
+ * one-use join proof to the successor in its brief. The launcher credential itself never
+ * reaches the successor: it is excluded from seat environments (src/env.ts).
+ */
+export async function registerRespawn(
+  url: string, room: string, previousName: string, name: string,
+  token: string | undefined, request: typeof fetch = fetch, reason = "",
+): Promise<string> {
+  if (!token) throw new Error('Respawn requires CHATROOM_LAUNCHER_TOKEN; refusing to launch an unregistered replacement.');
+  const response = await request(`${url}/rooms/${encodeURIComponent(room)}/replacements`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', 'x-chatroom-launcher-token': token },
+    body: JSON.stringify({ replacement_of: previousName, name }),
+  });
+  if (!response.ok) throw new Error(`Replacement registration failed (${response.status}); refusing to launch an unregistered replacement.`);
+  const result = await response.json() as { replacementToken?: unknown };
+  if (typeof result.replacementToken !== "string" || !result.replacementToken) throw new Error("Replacement registration returned no join proof.");
+  return `\n\nYou replace ${previousName}, who dropped out of this room${reason ? ` (${reason})` : ""}. The launcher has registered this replacement with the hub. On your first join_room call use name=${JSON.stringify(name)} and replacement_token=${JSON.stringify(result.replacementToken)}. This one-use join proof is only for this reserved seat: do not post it to chat or board. Before anything else read the board (board_get) and the recent messages (read_messages since_seq=0 is too much: read the last 40), take over any unfinished claim/* entry of theirs, and say in one line that you have.`;
+}

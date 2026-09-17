@@ -10,6 +10,7 @@ import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, realpathSyn
 import { dirname, resolve } from "node:path";
 import { collectRoomSnapshot, renderRunReport, writeRunResult, type RunResult, type RoomSnapshot } from "./result.js";
 import { settledAxes } from "./settled.js";
+import { registerRespawn } from "./respawn.js";
 import { fileURLToPath } from "node:url";
 import { loadDotEnv, seatChildEnv } from "./env.js";
 import { respawnDecision, type RespawnRoom } from "./respawn.js";
@@ -161,22 +162,29 @@ function runCodex(name: string, text: string, cwd: string, model?: string): Prom
  */
 async function withRespawn(name: string, room: string, mk: (nm: string, note: string) => Promise<string>): Promise<string> {
   let out = await mk(name, "");
-  let last = name;
+  let previousName = name;
   for (let i = 1; RESPAWN && i <= 3; i++) {
     if (STOPPING || Date.now() > RUN_STARTED + TIMEOUT_MIN * 60_000 - 5 * 60_000) break;
     let summary: RespawnRoom | null = null;
     try {
       summary = (await (await fetch(`${URL_}/rooms/${encodeURIComponent(room)}`)).json()) as RespawnRoom;
     } catch {}
-    const d = respawnDecision({ name: last, exitCode: exitCodes.get(last) ?? null, attempt: i, room: summary });
+    const d = respawnDecision({ name: previousName, exitCode: exitCodes.get(previousName) ?? null, attempt: i, room: summary });
     if (!d.respawn) {
-      log(`${last} exited; not respawning: ${d.reason}`);
+      log(`${previousName} exited; not respawning: ${d.reason}`);
       break;
     }
     const nm = `${name}-r${i}`;
-    log(`${last} exited while ${room} is ${summary?.state}; respawning as ${nm}: ${d.reason}`);
-    out = await mk(nm, `\n\nYou replace ${last}, who dropped out of this room (${d.reason}). Before anything else read the board (board_get) and the recent messages (read_messages since_seq=0 is too much: read the last 40), take over any unfinished claim/* entry of theirs, and say in one line that you have.`);
-    last = nm;
+    let note: string;
+    try {
+      note = await registerRespawn(URL_, room, previousName, nm, process.env.CHATROOM_LAUNCHER_TOKEN, undefined, d.reason);
+    } catch (error) {
+      log(`Not respawning ${previousName}: ${error instanceof Error ? error.message : "replacement registration failed"}`);
+      break;
+    }
+    log(`${previousName} exited while ${room} is ${summary?.state}; respawning as ${nm}: ${d.reason}`);
+    out = await mk(nm, note);
+    previousName = nm;
   }
   return out;
 }

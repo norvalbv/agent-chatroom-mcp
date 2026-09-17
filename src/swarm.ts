@@ -23,7 +23,7 @@ const has = (name: string) => argv.includes(`--${name}`);
 const BOOL_FLAGS = new Set(["--apply", "--full-access", "--named"]);
 const task = argv.find((a, i) => !a.startsWith("--") && (i === 0 || !argv[i - 1].startsWith("--") || BOOL_FLAGS.has(argv[i - 1])));
 if (!task) {
-  console.error('usage: swarm "<task>" [--agents 6] [--cwd dir] [--models sonnet,haiku] [--lead-model opus] [--verifier-model opus] [--planner-model opus] [--codex 0] [--apply] [--full-access] [--named] [--timeout 30] [--port 7717]');
+  console.error('usage: swarm "<task>" [--agents 6] [--cwd dir] [--models sonnet,haiku] [--lead-model opus] [--verifier-model opus] [--planner-model opus] [--codex k] [--codex-models gpt-6-astra,gpt-5.6-sol,gpt-5.6-terra] [--apply] [--full-access] [--named] [--timeout 30] [--port 7717]');
   process.exit(2);
 }
 const TOTAL = Math.max(2, Number(flag("agents", "4")));
@@ -38,7 +38,10 @@ const FULL = has("full-access");
 const MODELS = (flag("models", process.env.CLAUDE_MODEL ?? "") || "").split(",").map((m) => m.trim()).filter(Boolean);
 const LEAD_MODEL = flag("lead-model", MODELS[0]);
 const VERIFIER_MODEL = flag("verifier-model", LEAD_MODEL);
-const PLANNER_MODEL = flag("planner-model", VERIFIER_MODEL); // workers may edit files and run anything; each gets its own git worktree
+const PLANNER_MODEL = flag("planner-model", VERIFIER_MODEL);
+// Codex seats: --codex k spreads k workers over --codex-models (rotated), default the current OpenAI line-up
+const CODEX_MODELS = (flag("codex-models", process.env.CODEX_MODELS ?? process.env.CODEX_MODEL ?? "gpt-6-astra,gpt-5.6-sol,gpt-5.6-terra") || "").split(",").map((m) => m.trim()).filter(Boolean);
+let codexIndex = 0; // workers may edit files and run anything; each gets its own git worktree
 const READ_TOOLS = ["mcp__chatroom__*", "Read", "Grep", "Glob", "Bash", "WebSearch", "WebFetch"];
 const WRITE_TOOLS = [...READ_TOOLS, "Edit", "Write", "MultiEdit", "NotebookEdit"];
 const TIMEOUT_MIN = Number(flag("timeout", "30"));
@@ -88,10 +91,10 @@ function runClaude(name: string, text: string, tools: string[], cwd: string, mod
   return runProc(name, "claude", args, cwd, outFile);
 }
 
-function runCodex(name: string, text: string, cwd: string): Promise<string> {
+function runCodex(name: string, text: string, cwd: string, model?: string): Promise<string> {
   const outFile = resolve(OUT, `${name}.out`);
   const args = ["exec", "--skip-git-repo-check", "-C", cwd, "-c", `mcp_servers.chatroom.url="${URL_}/mcp"`, "-c", "mcp_servers.chatroom.tool_timeout_sec=120", "-o", outFile];
-  if (process.env.CODEX_MODEL) args.push("-m", process.env.CODEX_MODEL);
+  if (model) args.push("-m", model);
   args.push(text);
   return runProc(name, "codex", args, cwd, outFile, true);
 }
@@ -255,9 +258,9 @@ for (const g of plan.groups) {
           ? `You MAY modify files and run anything; you are on your own git branch in ${wcwd}. Commit what you want the verifier to test and say so in the room.`
           : "Do NOT modify any files.",
     });
-    const model = isLead ? LEAD_MODEL : MODELS.length ? MODELS[workerIndex++ % MODELS.length] : undefined;
+    const model = useCodex ? CODEX_MODELS[codexIndex++ % Math.max(1, CODEX_MODELS.length)] : isLead ? LEAD_MODEL : MODELS.length ? MODELS[workerIndex++ % MODELS.length] : undefined;
     log(`launching ${name}${isLead ? " (lead)" : ""}${model ? ` [${model}]` : ""}`);
-    runs.push((useCodex ? runCodex(name, text, wcwd) : runClaude(name, text, FULL && !readOnlyWorkers.has(name) ? WRITE_TOOLS : READ_TOOLS, wcwd, model)).then((t) => ({ name, text: t })));
+    runs.push((useCodex ? runCodex(name, text, wcwd, model) : runClaude(name, text, FULL && !readOnlyWorkers.has(name) ? WRITE_TOOLS : READ_TOOLS, wcwd, model)).then((t) => ({ name, text: t })));
   }
 }
 

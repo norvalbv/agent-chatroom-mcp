@@ -172,7 +172,9 @@ export const UI_HTML = `<!doctype html>
       + (open ? '<span class="chip alert">proposal open' + (open.needs_challenge ? ' · needs challenge' : '') + '</span>' : '')
       + (r.unanswered_human ? '<span class="chip alert">waiting on a reply to ' + esc(r.unanswered_human.name) + '</span>' : '')
       + '<span class="topic" title="' + esc(r.topic) + '">' + esc(r.topic) + '</span>'
+      + ((r.state === 'open' || r.state === 'stalled') ? '<button class="closebtn" style="margin:0" id="closeroom-h" title="Close this room without a conclusion">Close room</button>' : '')
       + '<button class="iconbtn" id="togdet" title="Toggle details panel">☰</button>';
+    const ch = $('#closeroom-h'); if (ch) ch.onclick = () => closeRoom(r);
     $('#togdet').onclick = () => { document.body.classList.toggle('nodetails'); store.set('nodetails', document.body.classList.contains('nodetails')); };
     $('#sendbtn').disabled = r.state === 'closed';
   }
@@ -201,12 +203,17 @@ export const UI_HTML = `<!doctype html>
     h += '<div class="sec tools"><h3>View</h3><label><input type="checkbox" id="hs" ' + (hideSys?'checked':'') + '/> hide join/leave notices</label><label><input type="checkbox" id="as" ' + (autoScroll?'checked':'') + '/> follow new messages</label><div class="links"><a href="/rooms/' + encodeURIComponent(r.name) + '/transcript" target="_blank">transcript</a><a href="/rooms/' + encodeURIComponent(r.name) + '/stats" target="_blank">stats</a><a href="/rooms/' + encodeURIComponent(r.name) + '" target="_blank">json</a></div>'
       + '<div style="font-size:12px;color:var(--dim2);margin-top:8px">' + r.mode.replace('_',' ') + ' · ' + r.quorum + (r.anonymous ? ' · anonymous to agents' : '') + '</div></div>';
     $('#details').innerHTML = h;
-    const cb = $('#closeroom'); if (cb) cb.onclick = async () => { if (!window.confirm('Close ' + r.name + '? Agents still in it will be told to leave.')) return; await fetch('/rooms/' + encodeURIComponent(r.name) + '/close', { method:'POST', headers: hdrs(), body: JSON.stringify({ name: $('#name').value || 'human', reason: 'closed from dashboard' }) }); rooms(); poll(); };
+    const cb = $('#closeroom'); if (cb) cb.onclick = () => closeRoom(r);
     $('#hs').onchange = (e) => { hideSys = e.target.checked; store.set('hideSys', hideSys); rerender(); };
     $('#as').onchange = (e) => { autoScroll = e.target.checked; };
     for (const b of document.querySelectorAll('#details .more')) b.onclick = () => { const k = b.dataset.x; if (expanded.has(k)) expanded.delete(k); else expanded.add(k); details(r); };
   }
 
+  async function closeRoom(r) {
+    if (!window.confirm('Close ' + r.name + '? No conclusion will be recorded and agents still in it will be told to leave.')) return;
+    await fetch('/rooms/' + encodeURIComponent(r.name) + '/close', { method:'POST', headers: hdrs(), body: JSON.stringify({ name: $('#name').value || 'human', reason: 'closed from dashboard' }) });
+    rooms(); poll();
+  }
   function select(name) { sel = name; seen = 0; all = []; lastSender = null; $('#log').innerHTML = ''; history.replaceState(null, '', '?room=' + encodeURIComponent(name)); rooms(); poll(); }
   function render(m) {
     const log = $('#log');

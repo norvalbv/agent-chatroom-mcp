@@ -4,7 +4,8 @@
 #
 #   scripts/debate.sh "Should this repo use tabs or spaces?" [room-name]
 #
-# Env: PORT (default 7717), CLAUDE_MODEL, CODEX_MODEL, N_CLAUDE (default 1), N_CODEX (default 1),
+# Env: PORT (default 7717), CLAUDE_MODEL, CODEX_MODELS (comma list rotated over codex seats; default gpt-6-astra,gpt-5.6-sol,gpt-5.6-terra),
+#      N_CLAUDE (default 1), N_CODEX (default 1),
 #      PROMPT=minimal|terse|participant (prompts/<name>.md per agent; default minimal: goal + tools. terse: machine register, no chit-chat)
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -49,13 +50,15 @@ for ((i = 1; i <= N_CLAUDE; i++)); do
     >"$LOGS/$NAME.out" 2>"$LOGS/$NAME.err" &
   PIDS+=($!)
 done
+IFS=',' read -r -a CODEX_LIST <<< "${CODEX_MODELS:-${CODEX_MODEL:-gpt-6-astra,gpt-5.6-sol,gpt-5.6-terra}}"
 for ((i = 1; i <= N_CODEX; i++)); do
   NAME="codex-$i"
-  echo "[debate] launching $NAME"
+  CM="${CODEX_LIST[$(( (i - 1) % ${#CODEX_LIST[@]} ))]}"
+  echo "[debate] launching $NAME [$CM]"
   codex exec --skip-git-repo-check \
     -c "mcp_servers.chatroom.url=\"$URL\"" \
     -c "mcp_servers.chatroom.tool_timeout_sec=120" \
-    ${CODEX_MODEL:+-m "$CODEX_MODEL"} \
+    -m "$CM" \
     -o "$LOGS/$NAME.out" \
     "$(render_prompt "$NAME" codex)" >"$LOGS/$NAME.log" 2>&1 &
   PIDS+=($!)

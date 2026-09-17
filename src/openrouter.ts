@@ -25,6 +25,11 @@ const BASE = (process.env.OPENROUTER_BASE_URL ?? "https://openrouter.ai/api/v1")
 const KEY = process.env.OPENROUTER_API_KEY ?? "";
 const REASONING = flag("reasoning");
 const REQUEST_TIMEOUT_MS = Number(flag("request-timeout-ms", "180000"));
+/** attempts per request; the backoff is 2s doubling to a 45s cap with jitter, so 8 attempts ride out ~3 minutes of 429s (a fleet of free seats sees them) */
+const RETRIES = Math.max(1, Number(flag("retries", "8")));
+let rateLimited = 0;
+/** how long a seat keeps retrying 429s before giving up (default 20 min; the launcher's --timeout bounds it anyway) */
+const RATE_LIMIT_PATIENCE_MS = Number(flag("rate-limit-patience-min", "20")) * 60_000;
 const say = (s: string) => process.stderr.write(`${s}\n`);
 
 if (!PROMPT.trim()) {
@@ -51,7 +56,9 @@ export function openRouterProvider(model: string, reasoning?: string): ChatProvi
     label: `openrouter ${model}`,
     async complete(messages: Msg[], tools: ToolDef[]): Promise<Reply> {
       let wait = 2000;
-      for (let attempt = 1; attempt <= 5; attempt++) {
+      // a rate limit is weather, not a failure: keep retrying it for as long as the seat's budget allows
+      const deadline = Date.now() + RATE_LIMIT_PATIENCE_MS;
+      for (let attempt = 1; ; attempt++) {
         let res: Response | undefined;
         let body: Completion = {};
         let netErr = "";
@@ -90,10 +97,16 @@ export function openRouterProvider(model: string, reasoning?: string): ChatProvi
             usage: body.usage,
           };
         }
-        const retriable = !!netErr || res!.status === 429 || res!.status >= 500 || body.error?.code === 429 || (body.error?.code ?? 0) >= 500;
-        say(`[openrouter] ${err}${retriable && attempt < 5 ? ` — retry ${attempt}/4 in ${wait / 1000}s` : ""}`);
-        if (!retriable || attempt === 5) throw new Error(`OpenRouter: ${err}`);
-        await new Promise((r) => setTimeout(r, wait));
+        const is429 = res?.status === 429 || body.error?.code === 429;
+        if (is429) rateLimited++;
+        const retriable = !!netErr || is429 || (res?.status ?? 0) >= 500 || (body.error?.code ?? 0) >= 500;
+        // Retry-After / X-RateLimit-Reset when the provider says how long; otherwise doubling with jitter, capped
+        const hinted = Number(res?.headers.get("retry-after")) * 1000 || Math.max(0, Number(res?.headers.get("x-ratelimit-reset")) - Date.now()) || 0;
+        const delay = hinted > 0 && hinted < 120_000 ? hinted + 500 : Math.min(45_000, wait) * (0.7 + Math.random() * 0.6);
+        const more = is429 ? Date.now() + delay < deadline : attempt < RETRIES;
+        say(`[openrouter] ${err.slice(0, 160)}${retriable && more ? ` — retry ${attempt} in ${Math.round(delay / 1000)}s` : ""}`);
+        if (!retriable || !more) throw new Error(`OpenRouter: ${err}`);
+        await new Promise((r) => setTimeout(r, delay));
         wait *= 2;
       }
       throw new Error("unreachable");
@@ -113,5 +126,6 @@ const result = await runSeat(openRouterProvider(MODEL, REASONING), {
   maxContextChars: Number(flag("max-context-chars", "240000")),
   log: say,
 });
+if (rateLimited) say(`[openrouter ${MODEL}] ${rateLimited} rate-limited request(s) retried`);
 process.stdout.write(`${result.final}\n`);
 process.exit(result.ok ? 0 : 1);

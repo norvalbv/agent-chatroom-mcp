@@ -40,6 +40,8 @@ const spawner = new Spawner({
   defaultCwd: resolve(process.env.CHATROOM_DEFAULT_CWD ?? process.cwd()),
   logDir: resolve(process.env.CHATROOM_LOG_DIR ?? "logs/spawned"),
   dryRun: process.env.CHATROOM_SPAWN_DRY === "1",
+  // a fleet of a hundred read-only seats is a legitimate machine-wide count; the default 24 was sized for one run
+  maxLive: process.env.CHATROOM_MAX_LIVE_AGENTS ? Number(process.env.CHATROOM_MAX_LIVE_AGENTS) : undefined,
 });
 spawner.attach({
   isHeld: (room) => {

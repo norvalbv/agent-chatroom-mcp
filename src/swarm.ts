@@ -26,7 +26,7 @@ const has = (name: string) => argv.includes(`--${name}`);
 const BOOL_FLAGS = new Set(["--apply", "--full-access", "--named", "--flat"]);
 const task = argv.find((a, i) => !a.startsWith("--") && (i === 0 || !argv[i - 1].startsWith("--") || BOOL_FLAGS.has(argv[i - 1])));
 if (!task) {
-  console.error('usage: swarm "<task>" [--flat] [--done-when text] [--verify text] [--agents 6] [--cwd dir] [--models sonnet,haiku] [--lead-model opus] [--verifier-model opus] [--planner-model opus] [--codex k] [--codex-models gpt-6-astra,gpt-5.6-sol,gpt-5.6-terra] [--openrouter k] [--openrouter-models deepseek/deepseek-v4.1-flash,...] [--apply] [--full-access] [--named] [--timeout 30] [--port 7717]');
+  console.error('usage: swarm "<task>" [--flat] [--done-when text] [--verify text] [--agents 6] [--cwd dir] [--models sonnet,haiku] [--lead-model opus] [--verifier-model opus] [--planner-model opus] [--codex k] [--codex-models gpt-6-astra,gpt-5.6-sol,gpt-5.6-terra] [--openrouter k] [--openrouter-models deepseek/deepseek-v4.1-flash,...] [--verifier-openrouter slug] [--openrouter-reasoning low|medium|high] [--apply] [--full-access] [--named] [--timeout 30] [--port 7717]');
   process.exit(2);
 }
 const TOTAL = Math.max(2, Number(flag("agents", "4")));
@@ -53,9 +53,11 @@ const PLANNER_MODEL = flag("planner-model", VERIFIER_MODEL);
 const CODEX_MODELS = (flag("codex-models", process.env.CODEX_MODELS ?? process.env.CODEX_MODEL ?? "gpt-6-astra,gpt-5.6-sol,gpt-5.6-terra") || "").split(",").map((m) => m.trim()).filter(Boolean);
 // OpenRouter seats: --openrouter k spreads k workers over --openrouter-models (rotated); any OpenRouter slug works
 const OPENROUTER_MODELS = (flag("openrouter-models", process.env.OPENROUTER_MODELS ?? process.env.OPENROUTER_MODEL ?? "deepseek/deepseek-v4.1-flash,google/gemini-3.8-flash,z-ai/glm-5.3") || "").split(",").map((m) => m.trim()).filter(Boolean);
+/** --verifier-openrouter <slug>: the verifier seat on an OpenRouter model instead of Claude (a run can then cost nothing) */
+const VERIFIER_OPENROUTER = flag("verifier-openrouter");
 /** --openrouter-reasoning low|medium|high: passed to every OpenRouter seat (models without a reasoning parameter ignore it) */
 const OPENROUTER_REASONING = flag("openrouter-reasoning", process.env.OPENROUTER_REASONING);
-if (OPENROUTER > 0 && !process.env.OPENROUTER_API_KEY) {
+if ((OPENROUTER > 0 || VERIFIER_OPENROUTER) && !process.env.OPENROUTER_API_KEY) {
   console.error("--openrouter needs OPENROUTER_API_KEY (https://openrouter.ai/keys); a dead seat still counts toward the room's expected participants, so refusing to launch.");
   process.exit(2);
 }
@@ -139,7 +141,11 @@ function runProc(name: string, cmd: string, args: string[], cwd: string, outFile
     let out = "";
     let err = "";
     child.stdout?.on("data", (d) => (out += d));
-    child.stderr?.on("data", (d) => (err += d));
+    child.stderr?.on("data", (d) => {
+      err += d;
+      // a seat's rate-limit retries, provider errors and budget exits are worth seeing live, not only in its log at exit
+      for (const line of String(d).split("\n")) if (/retry|provider error|budget spent|step cap|could not leave|OpenRouter:/.test(line)) log(`${name}: ${line.replace(/^\[openrouter [^\]]*\] /, "").slice(0, 160)}`);
+    });
     child.on("close", (code) => {
       writeFileSync(resolve(OUT, `${name}.log`), err);
       if (!outViaFile) writeFileSync(outFile, out);
@@ -294,12 +300,9 @@ let workerIndex = 0;
 
 // verifier joins the leads room first so it is present for every report
 const verifierTools = APPLY || FULL ? WRITE_TOOLS : READ_TOOLS;
-runs.push(
-  runClaude(
-    "verifier",
-    SETTLED + "\n" + prompt("verifier.md", {
+const verifierText = SETTLED + "\n" + prompt("verifier.md", {
       NAME: "verifier",
-      AGENT: "claude",
+      AGENT: VERIFIER_OPENROUTER ? "openrouter" : "claude",
       TOTAL,
       CWD,
       TASK: task,
@@ -313,11 +316,9 @@ runs.push(
           ? "You MAY modify files to apply the agreed fix on a new git branch and run the tests to prove it works; report the branch name in your vote." +
             (FULL && isGitRepo ? ` Workers may have committed on branches named swarm/${SWARM_ID}/<name>; inspect and merge or cherry-pick from them as needed.` : "")
           : "Do NOT modify any files; verify by reading and running read-only commands only.",
-    }),
-    verifierTools,
-    CWD,
-    VERIFIER_MODEL,
-  ).then((text) => ({ name: "verifier", text })),
+    });
+runs.push(
+  (VERIFIER_OPENROUTER ? runOpenRouter("verifier", verifierText, CWD, VERIFIER_OPENROUTER, APPLY || FULL) : runClaude("verifier", verifierText, verifierTools, CWD, VERIFIER_MODEL)).then((text) => ({ name: "verifier", text })),
 );
 
 for (const g of plan.groups) {
@@ -368,6 +369,8 @@ for (const g of plan.groups) {
   }
 }
 
+// stopping the launcher stops its seats: an orphaned seat keeps polling the provider with nobody to collect its result
+for (const sig of ["SIGTERM", "SIGINT"] as const) process.on(sig, () => { log(`${sig}: stopping ${children.length} agent(s)`); for (const c of children) c.kill(); setTimeout(() => process.exit(130), 3000).unref(); });
 const tail = setInterval(() => tailRooms([...groupRooms, leadsRoom]), 2000);
 const timeout = setTimeout(() => {
   log(`timeout after ${TIMEOUT_MIN} min; stopping agents`);

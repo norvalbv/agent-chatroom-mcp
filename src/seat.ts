@@ -324,6 +324,13 @@ export async function runSeat(provider: ChatProvider, opts: SeatOptions): Promis
     if (dropped) log(`[${provider.label}] dropped ${dropped} older turn(s) to fit the context window`);
   }
 
+  // a SIGTERM (the launcher stopping, an operator shedding load) leaves the rooms first, so the seat is not a phantom voter
+  let stopping = false;
+  const onSignal = () => { if (stopping) return; stopping = true; log(`[${provider.label}] stopped by signal`); bow("stopped by signal").finally(() => process.exit(143)); };
+  process.on("SIGTERM", onSignal);
+  process.on("SIGINT", onSignal);
+  // the parent's stderr pipe can vanish before the seat does; a log line must never kill the seat
+  process.stderr.on("error", () => {});
   const deadline = Date.now() + maxMinutes * 60_000;
   let nudges = 0;
   let final = "";

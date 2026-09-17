@@ -1,0 +1,77 @@
+{
+  "preamble": "SELF-IMPROVEMENT FLEET. You are one room of a fleet of rooms, each on a different area of this repository: the MCP chatroom hub and swarm orchestrator you are sitting in (src/, prompts/, scripts/, docs/, skills/). Your job is to make the system better and to hand back a consensus that a maintainer will build from, not to build it yourself: this run is READ-ONLY. Method: read the code and the recorded evidence (docs/decisions/ for the settled axes and their evidence, docs/*.md for prior swarm reports, data/*.jsonl for real transcripts), use the tools yourself and note what confuses or wastes you, reproduce anything you call a bug (a small script, a tool call sequence, a transcript moment with seq numbers), and for research fetch real papers (web_fetch on https://export.arxiv.org/api/query?search_query=... returns Atom XML; cite arXiv ids) and say concretely what to build from them. Respect the settled axes; contradict one only as an explicit RE-TARGET with evidence. Claim sub-areas on the board (claim/<name>) so nobody duplicates work; break out into a sub-room with request_agent only when depth needs it, and bring results back. EVIDENCE RULE (the verifier enforces it): an item exists only if it carries at least one of (a) a reproduction you ran in this room (the exact commands or tool calls and their output, on the board under evidence/<item>), (b) a transcript citation (room name and seq numbers from data/*.jsonl or docs/*.md), or (c) an arXiv id whose abstract you fetched in this room and quoted on the board under sources/<arxiv-id> with one line on what it shows. Opinions, memories of papers and unfetched citations are not evidence and get struck. Conclude with ONE proposal that is a RANKED LIST: each item = what to change, the evidence (by the rule above), how to build it (a sentence or two a maintainer can act on), where it belongs (enforce-in-hub | seat-side | launcher | prompt-only | docs), and its cost. Rank by impact on convergence quality, correctness and context cost. Someone other than the proposer must challenge its weakest claim; the verifier must reproduce at least the top three items and check that every ranked item's evidence exists on the board before agreeing; an item without evidence is struck, not softened. The verifier ends with a DECISION RECORD. Never pkill or killall; if you start a test hub, use a port above 8000 and stop it by pid.",
+  "areas": [
+    {
+      "id": "consensus",
+      "title": "Consensus mechanics",
+      "brief": "src/hub.ts propose/amend/challenge/vote/evaluate/conclude, standing disagrees, version-stamped votes, the challenge gate, quorum floors, the chair role. Where can a room conclude on text nobody re-read, deadlock, or pass a bad document? Where does the mechanic cost more calls than it buys?",
+      "lenses": [
+        "LENS A: ways a room concludes wrongly (passes a bad or unread document).",
+        "LENS B: ways a room fails to conclude (deadlocks, floors, cost of the mechanics)."
+      ]
+    },
+    {
+      "id": "delivery",
+      "title": "Delivery and context cost",
+      "brief": "wait_for_messages, read_messages, the stale-send refusal, hints, quiet delivery, board manifests, the openings deadline, answerBeforeWaiting. Measure from data/*.jsonl what agents are sent that they already hold, what refusals repeat, and where a hint fails to move a model. Propose what the hub should carry instead."
+    },
+    {
+      "id": "seat",
+      "title": "The seat and its providers",
+      "brief": "src/seat.ts and src/openrouter.ts: the loop you are running in right now. Tool results, the hint lift, context trimming, reasoning passthrough, the budget and exit path, local tools (what a Claude seat gets that you do not), the kill guard. What confused you today, from the inside?"
+    },
+    {
+      "id": "launcher",
+      "title": "Launcher, spawner, recruitment, fleet",
+      "brief": "src/swarm.ts, src/spawner.ts, src/fleet.ts, prompts/recruit.md: shapes (planned, flat, fleet), caps, worktrees, timeouts, how runs end, what the report captures and misses, how a run should hand its result to the next one."
+    },
+    {
+      "id": "prompts",
+      "title": "Prompts, skill, docs, decision records",
+      "brief": "prompts/*.md, skills/swarm/SKILL.md, README.md, docs/decisions/*.md and docs/research-index.md. Where does the prompt say what the hub should enforce? What is stale, contradictory or missing? Which decision records lack evidence or have a revisit-when that has already fired?"
+    },
+    {
+      "id": "ui",
+      "title": "The human dashboard",
+      "brief": "src/ui.ts served at /ui and the HTTP routes it uses in src/index.ts. Read the source (you have no browser): what would a human watching twelve agents still not be able to see or do? Which routes are missing? Keep it single-file and dependency-free."
+    },
+    {
+      "id": "research-debate",
+      "title": "Research: multi-agent debate and consensus",
+      "brief": "Fetch and read recent arXiv work (2024-2026) on multi-agent debate, sycophancy, consensus stopping rules, verification, minority opinions, role assignment. docs/research-index.md lists what was already read; add sources, do not re-summarise. For each finding say precisely what mechanism to build in this hub and how you would measure that it helps.",
+      "lenses": [
+        "LENS A: mechanisms to ADD to this hub (what the literature says would raise convergence quality and how to measure it).",
+        "LENS B: mechanisms to REMOVE or simplify (what the literature says is theatre, costs context and does not move outcomes; propose deletions with evidence)."
+      ]
+    },
+    {
+      "id": "research-coordination",
+      "title": "Research: agent coordination, tools and context",
+      "brief": "Fetch and read recent arXiv work on tool-use protocols, context management for long-running agents, shared memory and blackboards, task allocation and recruitment in agent teams, failure recovery. For each finding say precisely what to build here (hub, seat or launcher) and how to measure it.",
+      "lenses": [
+        "LENS A: shared memory, blackboards and cross-team information flow.",
+        "LENS B: task allocation, recruitment, budgets and failure recovery in long-running agent teams."
+      ]
+    },
+    {
+      "id": "testing",
+      "title": "Tests, verification and regression",
+      "brief": "scripts/smoke.ts, scripts/openrouter-smoke.ts, scripts/seat-trial.ts. Which mechanics have no test? Which recent bugs (see docs/deepseek-review-swarm.md and docs/union-alpha-rebuild-*.md) would a test have caught? Propose the smallest set of new checks with the highest coverage, and a way to run a real-model trial cheaply."
+    },
+    {
+      "id": "telemetry",
+      "title": "Telemetry and measurement",
+      "brief": "/rooms/:room/stats, refusal counting, cost and token usage, what a run's report records. What should the hub measure so the next self-improvement swarm counts instead of estimates? Design the smallest set of numbers and where they come from."
+    },
+    {
+      "id": "safety",
+      "title": "Safety and security",
+      "brief": "Briefs and board entries as a prompt-injection surface, keys (see the .env change and why keys must never be pasted into a room), the kill guard in seats, full-access worktrees, human token routes, what a rogue or confused seat could do to the hub or the machine. Propose the smallest set of hub-enforced guards."
+    },
+    {
+      "id": "human",
+      "title": "The human in the loop",
+      "brief": "The chair role, human interjection and the one-responder rule, briefs, reports, decision records to promote, what the human is asked to do and when. From the transcripts in data/*.jsonl and docs/*.md: where did a human have to intervene, and what would have let the system carry on without them?"
+    }
+  ]
+}

@@ -107,6 +107,16 @@ export interface Challenge {
   blocking?: boolean;
 }
 
+export interface ElectorateSummary {
+  electorate: number;
+  agree: number;
+  disagree: number;
+  abstain: number;
+  excluded_leavers: number;
+  distinct_sessions: number;
+  denominator: "electorate";
+}
+
 export interface Proposal {
   id: string;
   room: string;
@@ -169,7 +179,7 @@ export interface Room {
   chair?: string;
   createdAt: string;
   state: RoomState;
-  conclusion?: { text: string; proposalId: string; decidedAt: string; version?: number; tally?: { agree: number; disagree: number; abstain: number }; unresolved_objections?: { by: string; objection: string }[] };
+  conclusion?: { text: string; proposalId: string; decidedAt: string; version?: number; tally?: { agree: number; disagree: number; abstain: number }; electorate?: ElectorateSummary; unresolved_objections?: { by: string; objection: string }[] };
   /** identical silence nudges are posted at most twice */
   lastNudge?: { text: string; count: number };
   /** Lifetime refusal counts keyed by tool and bounded reason class (no bodies, no ids). */
@@ -438,6 +448,11 @@ export class Hub {
         chars: room.messages.filter((m) => m.from.id === p.id && m.kind === "chat").reduce((a, m) => a + m.content.length, 0),
       })),
       proposals: room.proposals.size,
+      proposal_electorates: [...room.proposals.values()].filter((pr) => pr.status === "open").map((pr) => ({
+        proposal_id: pr.id, ...this.electorateSummary(room, pr),
+      })),
+      // Legacy conclusions did not record an electorate; do not reconstruct a false historical denominator.
+      conclusion_electorate: room.conclusion?.electorate ?? null,
       amendments: [...room.proposals.values()].reduce((a, p) => a + (p.version - 1), 0),
       challenges: [...room.proposals.values()].reduce((a, p) => a + p.challenges.length, 0),
       board_entries: room.board.size,
@@ -511,7 +526,7 @@ export class Hub {
     if (p.agent === "human" || p.role === "chair") return undefined;
     const open = [...room.proposals.values()].find((pr) => pr.status === "open");
     if (!open) return undefined;
-    const others = this.voters(room).filter((x) => x.id !== p.id);
+    const others = this.electorate(room, open, p.id).members;
     if (room.expectedParticipants !== 1 && Hub.sessionsOf(others) < 2) {
       return { proposal: open, reason: `the room would be left with ${others.length} voter(s), and a room of one cannot conclude, so ${open.id} could never pass` };
     }
@@ -564,6 +579,45 @@ export class Hub {
    */
   unarrived(room: Room): number {
     return Math.max(0, room.expectedParticipants - this.everJoinedVoters(room).length);
+  }
+
+  /**
+   * Proposal membership: ordinary leavers are excluded, ordinary late joiners are not counted.
+   * If attrition drops the surviving snapshot below the independent-connection floor, the
+   * earliest joined eligible voters on new connections replace it (Map order breaks timestamp
+   * ties). This is pure, including for hypothetical departures, and is reproducible after replay.
+   * Missing/empty snapshots are legacy rooms and retain their all-voter compatibility.
+   */
+  electorate(room: Room, pr: Proposal, leavingId?: string) {
+    const all = this.voters(room).filter((p) => p.id !== leavingId);
+    const snapshot = pr.snapshot?.length ? new Set(pr.snapshot) : undefined;
+    const members = snapshot ? all.filter((p) => snapshot.has(p.id)) : [...all];
+    const replacements: Participant[] = [];
+    const identity = (p: Participant) => p.session ?? p.id;
+    const sessions = new Set(members.map(identity));
+    if (snapshot && room.expectedParticipants !== 1 && sessions.size < 2) {
+      for (const p of [...all].sort((a, b) => a.joinedAt.localeCompare(b.joinedAt))) {
+        if (sessions.has(identity(p))) continue;
+        members.push(p);
+        replacements.push(p);
+        sessions.add(identity(p));
+        if (sessions.size >= 2) break;
+      }
+    }
+    const excluded = snapshot ? [...snapshot].filter((id) => id === leavingId || !room.participants.get(id)?.active)
+      .map((id) => ({ id, reason: "left-before-close" as const })) : [];
+    return { members, replacements, excluded, distinctSessions: sessions.size };
+  }
+
+  private electorateSummary(room: Room, pr: Proposal): ElectorateSummary {
+    const e = this.electorate(room, pr);
+    const tally = { agree: 0, disagree: 0, abstain: 0 };
+    for (const p of e.members) {
+      const vote = pr.votes[p.id]?.vote;
+      if (vote) tally[vote]++;
+    }
+    return { electorate: e.members.length, ...tally, excluded_leavers: e.excluded.length,
+      distinct_sessions: e.distinctSessions, denominator: "electorate" };
   }
 
   /** "[chair]" etc. after a name; nothing for workers. */
@@ -1569,7 +1623,7 @@ export class Hub {
   blockedBy(room: Room, pr: Proposal): string[] {
     if (pr.status !== "open") return [];
     const out: string[] = [];
-    const active = this.voters(room);
+    const active = this.electorate(room, pr).members;
     const unarrived = this.unarrived(room);
     if (unarrived > 0) out.push(`quorum floor: ${unarrived} of the ${room.expectedParticipants} expected participant(s) have never joined (request_agent, or a human closes the room)`);
     else if (room.expectedParticipants !== 1 && Hub.sessionsOf(active) < 2) out.push(`quorum floor: ${active.length} voter(s) left and a room of one cannot conclude (request_agent, or a human closes the room)`);
@@ -1584,19 +1638,16 @@ export class Hub {
     if (openCh.length) out.push(this.challengeAdvice(room, openCh));
     if (room.requireVerification && !this.verifiedBy(room, pr)) out.push(`a verify/* board entry by someone other than ${this.shown(room, pr.by)} naming ${pr.id}`);
     if (this.hold(room)) out.push(`hold by ${this.hold(room)!.by}`);
-    if (!Object.values(pr.votes).some((v) => (v.version ?? 1) === pr.version) && pr.version > 1) out.push(`no vote cast on v${pr.version} yet (carried-over agrees alone cannot pass a new version)`);
+    if (!active.some((p) => pr.votes[p.id] && (pr.votes[p.id].version ?? 1) === pr.version) && pr.version > 1) out.push(`no vote cast on v${pr.version} yet (carried-over agrees alone cannot pass a new version)`);
     return out;
   }
 
   proposalView(room: Room, pr: Proposal, reveal = false, withText = true) {
-    const active = this.voters(room);
+    const active = this.electorate(room, pr).members;
     const nm = (x: { id: string; name: string }) => (reveal ? x.name : this.shown(room, x));
-    const tally = { agree: 0, disagree: 0, abstain: 0 };
-    for (const p of active) {
-      const v = pr.votes[p.id]?.vote;
-      if (v) tally[v] += 1;
-    }
-    for (const d of this.standingDisagrees(pr)) if (!active.some((p) => p.id === d.id)) tally.disagree += 1;
+    const decided = pr.status === "accepted" && room.conclusion?.proposalId === pr.id ? room.conclusion : undefined;
+    const summary = decided ? decided.electorate : this.electorateSummary(room, pr);
+    const tally = decided?.tally ?? (summary ? { agree: summary.agree, disagree: summary.disagree, abstain: summary.abstain } : { agree: 0, disagree: 0, abstain: 0 });
     const needsChallenge = this.challengeRequired(room) && !this.hasQualifyingChallenge(room, pr) && pr.status === "open";
     return {
       id: pr.id,
@@ -1607,7 +1658,10 @@ export class Hub {
       status: pr.status,
       created_at: pr.createdAt,
       tally,
-      waiting_on: active.filter((p) => !pr.votes[p.id]).map((p) => nm(p)),
+      electorate: summary ?? null,
+      // Dissent remains binding under the existing rules even when its author is not counted.
+      outside_electorate_disagrees: this.standingDisagrees(pr).filter((d) => !active.some((p) => p.id === d.id)).map((d) => nm(d)),
+      waiting_on: pr.status === "open" ? active.filter((p) => !pr.votes[p.id]).map((p) => nm(p)) : [],
       needs_challenge: needsChallenge,
       blocked_by: this.blockedBy(room, pr),
       challenges: pr.challenges.map((c) => ({ id: c.id, by: nm(c.by), objection: c.objection, status: c.status ?? "open", blocking: c.blocking !== false, version: c.version })),
@@ -1635,8 +1689,8 @@ export class Hub {
   private evaluate(room: Room, pr: Proposal) {
     if (pr.status !== "open" || room.state === "concluded" || room.state === "closed") return;
     const all = this.voters(room);
-    const snap = pr.snapshot ? all.filter((p) => pr.snapshot!.includes(p.id)) : all;
-    const active = snap.length ? snap : all;
+    const electorate = this.electorate(room, pr);
+    const active = electorate.members;
     if (active.length === 0) return;
     const stuck = (text: string) => {
       if (pr.stuckNotice === text) return;
@@ -1655,9 +1709,9 @@ export class Hub {
       }
       return;
     }
-    if (room.expectedParticipants !== 1 && Hub.sessionsOf(this.voters(room)) < 2) {
+    if (room.expectedParticipants !== 1 && electorate.distinctSessions < 2) {
       if (everyoneVoted && agree === active.length) {
-        stuck(`${pr.id} v${pr.version} has the agreement of everyone still present (${agree}) but only ${this.voters(room).length} voter(s) remain and a room of one cannot conclude: nobody here can conclude it. Recruit (request_agent), or a human closes the room.`);
+        stuck(`${pr.id} v${pr.version} has the agreement of everyone still present (${agree}) but only ${active.length} voter(s) remain and a room of one cannot conclude: nobody here can conclude it. Recruit (request_agent), or a human closes the room.`);
       }
       return;
     }
@@ -1684,7 +1738,9 @@ export class Hub {
       accepted = false;
       notPassed = true;
     }
-    if (accepted && pr.version > 1 && !Object.values(pr.votes).some((v) => (v.version ?? 1) === pr.version)) {
+    // A replacement cannot merely supply the floor for an already sufficient majority.
+    if (accepted && electorate.replacements.some((p) => !pr.votes[p.id])) return;
+    if (accepted && pr.version > 1 && !active.some((p) => pr.votes[p.id] && (pr.votes[p.id].version ?? 1) === pr.version)) {
       stuck(`${pr.id} v${pr.version} carries only agrees cast on earlier versions; a version cannot pass until someone votes on its current text. Re-vote (quote a clause of v${pr.version}) to conclude.`);
       return;
     }
@@ -1730,8 +1786,9 @@ export class Hub {
     for (const other of room.proposals.values()) if (other.id !== pr.id && other.status === "open") other.status = "superseded";
     const unresolved = pr.challenges.filter((c) => (c.status ?? "open") === "open").map((c) => ({ by: this.shown(room, c.by), objection: c.objection }));
     for (const c of pr.challenges) if ((c.status ?? "open") === "open") c.status = "overruled";
-    const view = this.proposalView(room, pr, false, false);
-    room.conclusion = { text: pr.text, proposalId: pr.id, decidedAt: now(), version: pr.version, tally: view.tally, unresolved_objections: unresolved };
+    const electorate = this.electorateSummary(room, pr);
+    const tally = { agree: electorate.agree, disagree: electorate.disagree, abstain: electorate.abstain };
+    room.conclusion = { text: pr.text, proposalId: pr.id, decidedAt: now(), version: pr.version, tally, electorate, unresolved_objections: unresolved };
     this.persist({ type: "proposal", proposal: pr });
     this.setState(room, "concluded");
     if (room.nudgeTimer) clearTimeout(room.nudgeTimer);
@@ -1739,7 +1796,7 @@ export class Hub {
       room,
       "conclusion",
       undefined,
-      `CONSENSUS REACHED on ${pr.id} v${pr.version} (${view.tally.agree}/${this.voters(room).length} agree; ${pr.text.length} chars, text in room_status/conclusion)` +
+      `CONSENSUS REACHED on ${pr.id} v${pr.version} (${electorate.agree}/${electorate.electorate} agree; ${electorate.excluded_leavers} leavers-before-close excluded; quorum=${room.quorum}; ${pr.text.length} chars, text in room_status/conclusion)` +
         (unresolved.length ? `\nUnresolved objections, overruled: ${unresolved.map((u) => `${u.by}: "${u.objection.slice(0, 300)}${u.objection.length > 300 ? "…" : ""}"`).join(" | ")}` : ""),
       { proposalId: pr.id },
     );

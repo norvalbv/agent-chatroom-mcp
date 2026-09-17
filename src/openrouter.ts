@@ -21,7 +21,7 @@ const flag = (name: string, def?: string) => {
 const has = (name: string) => argv.includes(`--${name}`);
 const pIdx = argv.indexOf("-p");
 const PROMPT = (pIdx >= 0 ? argv[pIdx + 1] : flag("prompt")) ?? "";
-const MODEL = flag("model", process.env.OPENROUTER_MODEL ?? "deepseek/deepseek-v4.1-flash")!;
+const MODEL = flag("model", process.env.OPENROUTER_MODEL ?? "stealth/union-alpha")!;
 const BASE = (process.env.OPENROUTER_BASE_URL ?? "https://openrouter.ai/api/v1").replace(/\/+$/, "");
 const KEY = process.env.OPENROUTER_API_KEY ?? "";
 const REASONING = flag("reasoning");

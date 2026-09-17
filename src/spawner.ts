@@ -97,7 +97,22 @@ const READ_TOOLS = ["mcp__chatroom__*", "Read", "Grep", "Glob", "Bash", "WebSear
 const WRITE_TOOLS = [...READ_TOOLS, "Edit", "Write", "MultiEdit", "NotebookEdit"];
 const runPrefix = (room: string) => /^(swarm-[0-9]{6}(?:-[a-z0-9]{4})?)-/.exec(room)?.[1] ?? room;
 
+/** Which provider and model every recruit is launched as, whatever was asked for. Live, settable from the dashboard (POST /policy). */
+export interface RecruitPolicy {
+  /** force this provider for every recruit; undefined = as requested */
+  agent?: AgentKind;
+  /** force this model for every recruit; undefined = as requested (or the provider's default) */
+  model?: string;
+}
+/** Default: the free model only. CHATROOM_RECRUIT_AGENT / CHATROOM_RECRUIT_MODEL override the default at start; "any" unpins. */
+export function policyFromEnv(env: NodeJS.ProcessEnv = process.env): RecruitPolicy {
+  const agent = env.CHATROOM_RECRUIT_AGENT ?? "openrouter";
+  const model = env.CHATROOM_RECRUIT_MODEL ?? "stealth/union-alpha";
+  return { agent: agent === "any" ? undefined : (agent as AgentKind), model: model === "any" ? undefined : model };
+}
+
 export class Spawner {
+  policy: RecruitPolicy = policyFromEnv();
   readonly agents: SpawnedAgent[] = [];
   private readonly children = new Map<string, ChildProcess>();
   private counter = 0;
@@ -150,14 +165,17 @@ export class Spawner {
     if (cumRun + count > maxCumRun) refuse(`this run has used its ${maxCumRun} cumulative recruits.`);
     if (!req.newRoom && this.live(req.room).length + count > maxPerRoom) refuse(`${req.room} already has ${maxPerRoom} recruits live; spawn into a new room instead (new_room).`);
 
-    let agent = req.agent ?? "claude";
-    // CHATROOM_RECRUIT_AGENT / CHATROOM_RECRUIT_MODEL pin every recruit to one provider (a run on a free model with no other quota)
-    if (process.env.CHATROOM_RECRUIT_AGENT && agent !== process.env.CHATROOM_RECRUIT_AGENT) {
-      this.hooks?.announce(req.room, `Recruits in this hub are pinned to ${process.env.CHATROOM_RECRUIT_AGENT}${process.env.CHATROOM_RECRUIT_MODEL ? `/${process.env.CHATROOM_RECRUIT_MODEL}` : ""}; ${req.requestedBy}'s ${agent} request was launched as that instead.`);
-      agent = process.env.CHATROOM_RECRUIT_AGENT as AgentKind;
-      req = { ...req, model: process.env.CHATROOM_RECRUIT_MODEL ?? undefined };
+    let agent = req.agent ?? this.policy.agent ?? "claude";
+    // the hub's recruit policy wins over the request: provider and model both (a run on a free model with no other quota)
+    const wanted = `${req.agent ?? "(default)"}${req.model ? `/${req.model}` : ""}`;
+    if (this.policy.agent && agent !== this.policy.agent) agent = this.policy.agent;
+    if (this.policy.model && req.model !== this.policy.model) req = { ...req, model: this.policy.model };
+    if (!req.model && this.policy.agent === agent && this.policy.model) req = { ...req, model: this.policy.model };
+    const launched = `${agent}${req.model ? `/${req.model}` : ""}`;
+    if ((req.agent && req.agent !== agent) || (this.policy.model && (req.agent ?? "") && wanted !== launched && wanted !== `(default)`)) {
+      this.hooks?.announce(req.room, `Recruits in this hub are pinned to ${launched}; ${req.requestedBy}'s ${wanted} request was launched as that instead.`);
     }
-    if (agent === "openrouter" && !process.env.OPENROUTER_API_KEY) throw new HubError("An OpenRouter seat needs OPENROUTER_API_KEY in the hub's environment; recruit a claude or codex agent instead, or ask the human to set the key and restart the hub.");
+    if (agent === "openrouter" && !process.env.OPENROUTER_API_KEY && !this.opts.dryRun) throw new HubError("An OpenRouter seat needs OPENROUTER_API_KEY in the hub's environment; recruit a claude or codex agent instead, or ask the human to set the key and restart the hub.");
     const base = (req.name?.trim() || `${agent}-recruit`).replace(/[^\w-]/g, "-").slice(0, 32);
     const names: string[] = [];
     for (let i = 0; i < count; i++) {

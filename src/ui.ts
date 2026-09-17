@@ -73,6 +73,7 @@ export const UI_HTML = `<!doctype html>
   .brand .sub { color:var(--dim); font-size:12px } .brand .sub.bad { color:var(--bad) }
   .brand .sp { flex:1 }
   .filter { padding:0 12px 10px } .filter input { width:100%; font-size:13px; padding:7px 10px; background:var(--panel2) }
+  .policy { margin:0 12px 6px; font-size:11.5px; color:var(--dim); background:var(--acc-bg); border-radius:8px; padding:4px 9px; cursor:pointer; overflow:hidden; text-overflow:ellipsis; white-space:nowrap } .policy b { color:var(--acc-fg); font-weight:600 }
   #rooms { overflow:auto; flex:1; padding:0 8px 24px }
   .run { margin-top:10px }
   .run > .rh { display:flex; align-items:center; gap:8px; padding:6px 8px 4px; font-size:11px; font-weight:700; letter-spacing:.07em; text-transform:uppercase; color:var(--dim2); cursor:pointer; user-select:none }
@@ -200,6 +201,7 @@ export const UI_HTML = `<!doctype html>
 <aside id="rail">
   <div class="brand"><div class="mark">✻</div><div><h1>Agent Chatroom</h1><div class="sub" id="sub">connecting…</div></div><div class="sp"></div><button class="btn icon" id="theme" title="Toggle theme">◐</button></div>
   <div class="filter"><input id="filter" placeholder="Filter rooms" /></div>
+  <div class="policy" id="policy" title="Which provider and model every request_agent launches as. Click to change.">recruits: …</div>
   <div id="rooms"></div>
 </aside>
 <main id="main">
@@ -598,6 +600,20 @@ export const UI_HTML = `<!doctype html>
   $$('#tabbar button').forEach(function (b) { b.onclick = function () { setView(b.dataset.view); }; });
   $$('#tabs button[data-tab]').forEach(function (b) { b.onclick = function () { tab = b.dataset.tab; store.set('tab', tab); renderPane(); if (tab === 'stats') fetchStats(true); }; });
   $('#filter').oninput = renderRooms;
+  // recruit policy: pinned provider/model for every request_agent, live on the hub
+  async function loadPolicy() {
+    try { var p = (await (await fetch('/policy')).json()).recruits || {}; $('#policy').innerHTML = 'recruits: <b>' + esc(p.agent ? p.agent + (p.model ? ' · ' + p.model : '') : 'as requested') + '</b>'; } catch (e) {}
+  }
+  $('#policy').onclick = async function () {
+    var v = window.prompt('Pin every recruit to a provider and model (e.g. "openrouter stealth/union-alpha"), or "any" to let agents choose:', 'openrouter stealth/union-alpha');
+    if (v === null) return;
+    var parts = v.trim().split(/\s+/);
+    var body = parts[0] === 'any' ? { agent: 'any', model: 'any' } : { agent: parts[0], model: parts[1] || 'any' };
+    var res = await fetch('/policy', { method: 'POST', headers: hdrs(), body: JSON.stringify(body) });
+    if (!res.ok) window.alert(await res.text());
+    loadPolicy();
+  };
+  loadPolicy(); setInterval(loadPolicy, 15000);
 
   document.addEventListener('click', async function (e) {
     var rb = e.target.closest('.room'); if (rb) return select(rb.dataset.r);

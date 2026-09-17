@@ -20,7 +20,7 @@ import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/
 import express from "express";
 import { Hub, HubError } from "./hub.js";
 import { createSessionServer } from "./server.js";
-import { Spawner } from "./spawner.js";
+import { Spawner, type RecruitPolicy } from "./spawner.js";
 import { UI_HTML } from "./ui.js";
 import { loadDotEnv } from "./env.js";
 loadDotEnv(); // a gitignored .env fills in OPENROUTER_API_KEY etc. when the hub was started without it
@@ -145,6 +145,19 @@ const notFound = (res: express.Response, e: unknown) => res.status(404).type("te
 app.get("/", (_req, res) => res.json({ name: "agent-chatroom-mcp", mcp: "/mcp", ui: "/ui", rooms: "/rooms", sessions: transports.size, caps: { max_live_per_room: Hub.MAX_LIVE_PER_ROOM, max_rooms_per_run: Hub.MAX_ROOMS_PER_RUN }, code_state: Hub.codeState(resolve(process.env.CHATROOM_DEFAULT_CWD ?? process.cwd())) ?? null }));
 app.get("/ui", (_req, res) => res.type("html").send(UI_HTML));
 app.get("/config", (_req, res) => res.json({ human_token_required: Boolean(HUMAN_TOKEN) }));
+// Recruit policy: which provider/model every request_agent launches as. Readable by anyone, settable by the human (token if configured).
+app.get("/policy", (_req, res) => res.json({ recruits: spawner.policy }));
+app.post("/policy", (req, res) => {
+  if (!requireToken(req, res)) return;
+  const b = (req.body ?? {}) as { agent?: string | null; model?: string | null };
+  const agent = b.agent === null || b.agent === "any" || b.agent === "" ? undefined : b.agent;
+  if (agent && !["claude", "codex", "openrouter"].includes(agent)) {
+    res.status(400).type("text/plain").send("agent must be claude, codex, openrouter or any");
+    return;
+  }
+  spawner.policy = { agent: agent as RecruitPolicy["agent"], model: b.model === null || b.model === "any" || b.model === "" ? undefined : b.model ?? undefined };
+  res.json({ recruits: spawner.policy });
+});
 app.get("/agents", (_req, res) => res.json(spawner.agents.map((a) => ({ ...a, brief: a.brief.slice(0, 300) }))));
 app.post("/agents/:name/stop", (req, res) => {
   if (!requireToken(req, res)) return;

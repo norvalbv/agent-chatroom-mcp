@@ -25,7 +25,7 @@ assert.ok(existsSync("dist/openrouter.js"), "run `npm run build` first: the spaw
 
 // The hub inherits the stub endpoint, so seats it spawns talk to the stub too.
 const hub = spawn("npx", ["tsx", "src/index.ts"], {
-  env: { ...process.env, PORT: String(HUB_PORT), OPENROUTER_API_KEY: "test-key", OPENROUTER_BASE_URL: STUB, CHATROOM_LOG_DIR: "/tmp/openrouter-smoke-logs" },
+  env: { ...process.env, PORT: String(HUB_PORT), OPENROUTER_API_KEY: "test-key", OPENROUTER_BASE_URL: STUB, CHATROOM_LOG_DIR: "/tmp/openrouter-smoke-logs", CHATROOM_RECRUIT_MODEL: "any" },
   stdio: ["ignore", "inherit", "inherit"],
 });
 process.on("exit", () => hub.kill());
@@ -199,7 +199,7 @@ const quitRoom = (await (await fetch(`${HUB}/rooms/openrouter-quit`)).json()) as
 assert.equal(quitRoom.participants.find((p) => p.name === "deepseek-3")?.active, false, `a seat that finished by narrating stayed active:\n${quitErr}`);
 
 // ---------- 4. no key, no seat: a dead seat must never be counted into a quorum ----------
-const probe = new Spawner({ mcpUrl: `${HUB}/mcp`, defaultCwd: process.cwd(), logDir: "/tmp/openrouter-smoke-logs", dryRun: true });
+const probe = new Spawner({ mcpUrl: `${HUB}/mcp`, defaultCwd: process.cwd(), logDir: "/tmp/openrouter-smoke-logs", dryRun: false }); // a real spawner: the key check runs before anything launches
 const key = process.env.OPENROUTER_API_KEY;
 delete process.env.OPENROUTER_API_KEY;
 assert.throws(() => probe.request({ room: ROOM, brief: "A brief that is comfortably longer than twenty characters.", requestedBy: "claude-1", agent: "openrouter" }), /OPENROUTER_API_KEY/);

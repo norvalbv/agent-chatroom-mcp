@@ -118,3 +118,25 @@ test('conclusion cannot bypass the bounded seat completion barrier',async()=>{
  }
  }finally{rmSync(f.root,{recursive:true,force:true});}
 });
+
+test('frozen records seat budget (model, minutes, steps) matched across both arms',async()=>{
+ const f=fixture();try{
+ const result=invoke([task,f.stub,f.stub,String(await freePair()),'--root',f.output,'--timeout-ms','4000','--seat-entry',f.seat],{OPENROUTER_MODEL:'deepseek/deepseek-v4-flash-0731'});
+ assert.equal(result.status,0,result.stderr+result.stdout);
+ const a=JSON.parse(readFileSync(join(f.output,'A','manifest.json'),'utf8'));
+ const b=JSON.parse(readFileSync(join(f.output,'B','manifest.json'),'utf8'));
+ assert.deepEqual(a.frozen.seat_budget,{model:'deepseek/deepseek-v4-flash-0731',max_minutes:3,max_steps:60});
+ assert.deepEqual(a.frozen.seat_budget,b.frozen.seat_budget,'single-seat control arms must share one matched budget');
+ }finally{rmSync(f.root,{recursive:true,force:true});}
+});
+test('real seat wrapper defaults to the briefed deepseek model when OPENROUTER_MODEL is unset',async()=>{
+ const f=wrapperFixture();try{
+ const result=invoke([task,f.stub,f.stub,String(await freePair()),'--root',f.output,'--timeout-ms','4000','--seat-entry',wrapper],{BENCH_SEAT_ENTRY:f.seat,OPENROUTER_API_KEY:'mock-provider-key',CHATROOM_MCP_URL:'http://invalid-parent:1/mcp'});
+ assert.equal(result.status,0,result.stderr);
+ for(const arm of ['A','B']){
+  const report=JSON.parse(readFileSync(join(f.output,arm,'workspace','seat-report.json'),'utf8'));
+  assert.equal(report.model,'deepseek/deepseek-v4-flash-0731',`arm ${arm} seat must use briefed model`);
+  assert.ok(report.seat_pid>0);assert.equal(report.exit_code,0);
+ }
+ }finally{rmSync(f.root,{recursive:true,force:true});}
+});

@@ -113,3 +113,55 @@ test('frozen scorer identity changes when the executed fact scorer copy changes'
   assert.notEqual(snapshots[0].fact_scorer_sha256,snapshots[1].fact_scorer_sha256);
  }finally{rmSync(f.root,{recursive:true,force:true});}
 });
+
+test('verdicts carry the canonical five-outcome vocabulary mapped from reason',async()=>{
+ const f=fixture();try{
+  const other=join(f.root,'hub-b.mjs');writeFileSync(other,readFileSync(f.stub,'utf8').replace('stub-v1','stub-v2'));
+  const ok=invoke([task,f.stub,other,String(await freePair()),'--root',f.output,'--timeout-ms','3000'],{STUB_ANSWER:'  Society for Formal Methods, Vienna\n'});
+  assert.equal(ok.status,0,ok.stderr+ok.stdout);
+  for(const arm of ['A','B']){const v=JSON.parse(readFileSync(join(f.output,arm,'bench-result.json'),'utf8'));assert.equal(v.outcome,'task_pass');assert.equal(v.reason,'oracle-pass');}
+  const crash=invoke([task,join(f.root,'missing.mjs'),join(f.root,'missing.mjs'),String(await freePair()),'--root',f.output+'-c','--timeout-ms','300']);
+  assert.equal(crash.status,0,crash.stderr);
+  for(const arm of ['A','B']){const v=JSON.parse(readFileSync(join(f.output+'-c',arm,'bench-result.json'),'utf8'));assert.equal(v.outcome,'infrastructure_error');assert.equal(v.reason,'infra');}
+ }finally{rmSync(f.root,{recursive:true,force:true});}
+});
+test('parse failure is its own outcome: concluded room with no answer artifact is parse_failure, not infra or task_fail',async()=>{
+ const f=fixture();try{
+  // The stub concludes the room but (no STUB_ANSWER) writes no answer.txt at all.
+  const result=invoke([task,f.stub,f.stub,String(await freePair()),'--root',f.output,'--timeout-ms','3000'],{});
+  assert.equal(result.status,0,result.stderr+result.stdout);
+  for(const arm of ['A','B']){
+   const v=JSON.parse(readFileSync(join(f.output,arm,'bench-result.json'),'utf8'));
+   assert.equal(v.reason,'parse-failure');assert.equal(v.outcome,'parse_failure');assert.equal(v.passed,false);
+   assert.equal(existsSync(join(f.output,arm,'workspace','answer.txt')),false);
+  }
+  const comparison=JSON.parse(readFileSync(join(f.output,'bench-compare.json'),'utf8'));
+  assert.equal(comparison.comparable,false,'parse failure is not a measured task outcome');assert.equal(comparison.delta,null);
+ }finally{rmSync(f.root,{recursive:true,force:true});}
+});
+test('TRIAL_HUB_ENTRY env selects and records the path, entry sha256 and whole-dist sha256 of the hub served',async()=>{
+ const f=fixture();try{
+  const other=join(f.root,'hub-b.mjs');writeFileSync(other,readFileSync(f.stub,'utf8').replace('stub-v1','stub-v2'));
+  const result=invoke([task,'env','env',String(await freePair()),'--root',f.output,'--timeout-ms','3000'],{STUB_ANSWER:'Society for Formal Methods, Vienna',TRIAL_HUB_ENTRY:f.stub,TRIAL_HUB_ENTRY_B:other});
+  assert.equal(result.status,0,result.stderr+result.stdout);
+  for(const arm of ['A','B']){
+   const manifest=JSON.parse(readFileSync(join(f.output,arm,'manifest.json'),'utf8'));
+   const expected=arm==='A'?f.stub:other;
+   assert.equal(manifest.hub_entry_env,arm==='A'?'TRIAL_HUB_ENTRY':'TRIAL_HUB_ENTRY_B');
+   assert.equal(manifest.hub_entry,expected);
+   assert.ok(manifest.hub_entry_sha256,'entry sha256 recorded');
+   assert.equal(manifest.hub_build_sha256,manifest.hub_entry_sha256,'non-dist stub documented as entry-only hash');
+   const v=JSON.parse(readFileSync(join(f.output,arm,'bench-result.json'),'utf8'));
+   assert.equal(v.hub_entry,expected);assert.equal(v.outcome,'task_pass');
+  }
+  const frozen=JSON.parse(readFileSync(join(f.output,'A','manifest.json'),'utf8')).frozen;
+  assert.equal(frozen.trial_hub_entry,f.stub);
+ }finally{rmSync(f.root,{recursive:true,force:true});}
+});
+test('TRIAL_HUB_ENTRY env missing is a clean refusal, not a crash',async()=>{
+ const f=fixture();try{
+  const result=invoke([task,'env','env',String(await freePair()),'--root',f.output,'--timeout-ms','300'],{});
+  assert.notEqual(result.status,0);assert.match(result.stderr,/TRIAL_HUB_ENTRY/);
+  assert.equal(existsSync(f.output),false);
+ }finally{rmSync(f.root,{recursive:true,force:true});}
+});

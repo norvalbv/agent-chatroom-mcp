@@ -53,6 +53,10 @@ Report: the final answer, the verifier's verdict (VERIFIED / NOT VERIFIED and it
 
 Merge only branches named in the conclusion that carry a `verify/*` entry, in ranked order, onto `integration/<run>`; after every merge `npm run build && PORT=7733 npx tsx scripts/smoke.ts`; then run every branch's own regression script (`scripts/*-regression.ts`, `scripts/*.test.ts`; `NODE_OPTIONS=--experimental-vm-modules` for seat-env-regression; macOS has no `timeout`). A test that was green on its branch and is red integrated is fixed as a test, never by loosening the hub. Two runs that both touched the wait path (e.g. an attention gate and board deltas) conflict in `src/hub.ts`/`src/server.ts`: resolve as the union of both mechanisms, then re-run both runs' suites; a test from one run that encodes the other's superseded contract is rewritten to the certified contract. Fast-forward main, push, restart the hub. Record the round with `guard-decisions add ... --target --new --evidence-change`, copy the report into `docs/` with keys redacted, regenerate `docs/research-index.md`.
 
+## Reviving a room whose seats died
+
+Rooms outlive seats: the board, handoffs, inbox entries and worktree branches stay on the hub and on disk. `node dist/revive.js --room <name> --brief-file <file> [--names a,b] [--write --cwd-for a=<worktree>,b=<worktree>] [--verifier] [--model <slug>] [--max-minutes 60]` puts fresh seats into an existing room with a brief that starts "read every handoff/*, claim/*, inbox/* and verify/* entry, then take over"; builders get `--write` and their predecessor's worktree so they continue on the same branch; crashes (non-zero exit) are relaunched up to three times, leaves are not. Used on 2026-09-17 after OpenRouter withdrew the free model mid-run: six rooms revived with 17 seats. Revive children first and the lobby last, with the lobby told to wait for the children's conclusions.
+
 ## Requirements and gotchas
 
 - Tests: `npm run build && PORT=7733 npx tsx scripts/smoke.ts` must print `SMOKE OK` before committing hub changes.

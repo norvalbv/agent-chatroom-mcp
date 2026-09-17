@@ -527,7 +527,8 @@ assert.deepEqual(tools, ["amend", "board_get", "board_set", "challenge", "join_r
   const rc = await c.call("read_messages", { room, since_seq: 0 });
   assert.ok(rc.some((m: string) => m.includes("[quiet → codex-1] @codex-1 which worktree")), "quiet is not privacy: read_messages shows it");
   await c.call("send_message", { room, content: "Carrying on with the public discussion." });
-  await b.call("wait_for_messages", { room, timeout_ms: 0 });
+  // addressed and shown once already: the next wait without an answer is refused, and the refusal delivers the unread
+  await assert.rejects(b.call("wait_for_messages", { room, timeout_ms: 0 }), /addressed you in #\d+[\s\S]*Carrying on with the public/);
   await b.call("send_message", { room, content: "fix/auth-2", quiet: true, reply_to: q.id });
   await a.call("wait_for_messages", { room, timeout_ms: 0 });
   await a.call("send_message", { room, content: "Thanks, making this public for the record.", reply_to: q.id, quiet: true, surface: true });
@@ -649,6 +650,99 @@ assert.deepEqual(tools, ["amend", "board_get", "board_set", "challenge", "join_r
   assert.equal(st.state, "concluded", "the room concludes rather than waiting on the departed agent");
   assert.match(st.conclusion.text, /settle this/, "the conclusion is recorded");
   assert.equal(ja.room.expected_participants, 3, "the expectation itself is untouched; only who is awaited changed");
+}
+
+{
+  // an @-addressed message is answered before the next wait: the second wait without a reply is refused once, then proceeds.
+  // Regression: OpenRouter seats looped on wait_for_messages past "X addressed you" and never replied.
+  const room = "owed";
+  await a.call("join_room", { room, name: "claude-1", agent: "claude", expected_participants: 2 });
+  await b.call("join_room", { room, name: "deepseek-1", agent: "openrouter" });
+  await a.call("submit_opening", { room, content: "A opens" });
+  const so = await b.call("submit_opening", { room, content: "B opens" });
+  assert.equal(so.revealed, true);
+  await a.call("wait_for_messages", { room, timeout_ms: 0 });
+  await b.call("wait_for_messages", { room, timeout_ms: 0 });
+  await a.call("send_message", { room, content: "@deepseek-1 which file did you mean?" });
+  const w1 = await b.call("wait_for_messages", { room, timeout_ms: 0 });
+  assert.equal(w1.addressed_to_you.length, 1, "the addressed message is listed");
+  assert.match(w1.hint, /addressed you directly/);
+  await assert.rejects(b.call("wait_for_messages", { room, timeout_ms: 0 }), /addressed you in #\d+ and you have not answered/, "the second wait without an answer is refused");
+  await b.call("wait_for_messages", { room, timeout_ms: 0 }); // refused once, then it proceeds
+  await b.call("send_message", { room, content: "I meant src/hub.ts." }); // no force: the refusal delivered the unread
+  await b.call("wait_for_messages", { room, timeout_ms: 0 });
+  await b.call("wait_for_messages", { room, timeout_ms: 0 }); // answered: no refusal
+  // a pass counts as an answer
+  await a.call("wait_for_messages", { room, timeout_ms: 0 });
+  await a.call("send_message", { room, content: "@deepseek-1 anything to add?", force: true });
+  await b.call("wait_for_messages", { room, timeout_ms: 0 });
+  await b.call("pass", { room });
+  await b.call("wait_for_messages", { room, timeout_ms: 0 });
+  await a.call("leave_room", { room });
+  await b.call("leave_room", { room });
+}
+
+{
+  // openings that never arrive are revealed after a silence instead of holding the room: everyone joined -> at the first
+  // nudge; someone never joined -> one warning, then the next nudge reveals. A short nudge timer on a second hub.
+  const PORT2 = PORT + 1;
+  const HTTP2 = `http://127.0.0.1:${PORT2}`;
+  const server2 = spawn("npx", ["tsx", "src/index.ts"], { env: { ...process.env, PORT: String(PORT2), CHATROOM_SPAWN_DRY: "1", CHATROOM_NUDGE_AFTER_MS: "1200", CHATROOM_LOG_DIR: "/tmp/chatroom-smoke-spawn2" }, stdio: ["ignore", "inherit", "inherit"] });
+  process.on("exit", () => server2.kill());
+  for (let i = 0; i < 50; i++) {
+    try {
+      await fetch(`${HTTP2}/`);
+      break;
+    } catch {
+      await new Promise((r) => setTimeout(r, 200));
+    }
+  }
+  const mk = async (name: string) => {
+    const client = new Client({ name, version: "0.0.0" });
+    await client.connect(new StreamableHTTPClientTransport(new URL(`${HTTP2}/mcp`)));
+    return async (tool: string, args: Record<string, unknown> = {}) => {
+      const res = (await client.callTool({ name: tool, arguments: args })) as { isError?: boolean; content: { text: string }[] };
+      const text = res.content[0]?.text ?? "";
+      if (res.isError) throw new Error(`${name}.${tool}: ${text}`);
+      return JSON.parse(text);
+    };
+  };
+  const x = await mk("x");
+  const y = await mk("y");
+  const z = await mk("z");
+  const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+  {
+    const room = "stale-openings";
+    await x("join_room", { room, name: "claude-1", agent: "claude", expected_participants: 3 });
+    await y("join_room", { room, name: "claude-2", agent: "claude" });
+    await z("join_room", { room, name: "deepseek-1", agent: "openrouter" });
+    const s = await x("submit_opening", { room, content: "X opens" });
+    assert.match(s.hint, /Chat is not blocked/, "submit_opening says chat is open meanwhile");
+    await y("submit_opening", { room, content: "Y opens" });
+    const w = await x("wait_for_messages", { room, timeout_ms: 0 });
+    assert.equal(w.openings.chat_blocked, false);
+    await sleep(2000); // the third never opens; everyone has joined, so the first silence reveals
+    const log = (await x("read_messages", { room, since_seq: 0 })) as string[];
+    assert.ok(log.some((m) => /Opening answers \(2 of 3, written independently; revealed after/.test(m)), `openings were not revealed after the silence:\n${log.join("\n")}`);
+    assert.ok(log.some((m) => m.includes("X opens")) && log.some((m) => m.includes("Y opens")));
+    assert.ok(!log.some((m) => /Still waiting for openings/.test(m)), "no warning when everyone expected has already joined");
+    await assert.rejects(z("submit_opening", { room, content: "too late" }), /already been revealed/);
+  }
+  {
+    const room = "stale-openings-unarrived";
+    await x("join_room", { room, name: "claude-1", agent: "claude", expected_participants: 3 });
+    await y("join_room", { room, name: "claude-2", agent: "claude" });
+    await x("submit_opening", { room, content: "X opens" });
+    await y("submit_opening", { room, content: "Y opens" });
+    await sleep(2000);
+    let log = (await x("read_messages", { room, since_seq: 0 })) as string[];
+    assert.ok(log.some((m) => /Still waiting for openings from .*1 more participant\(s\) to join.*Chat is open meanwhile/.test(m)), `one warning first when someone never joined:\n${log.join("\n")}`);
+    assert.ok(!log.some((m) => /Opening answers/.test(m)), "not revealed at the first silence while a seat is missing");
+    await sleep(2000);
+    log = (await x("read_messages", { room, since_seq: 0 })) as string[];
+    assert.ok(log.some((m) => /Opening answers \(2 of 3.*revealed after/.test(m)), `revealed at the second silence:\n${log.join("\n")}`);
+  }
+  server2.kill();
 }
 
 const ui = await (await fetch(`${HTTP}/ui`)).text();

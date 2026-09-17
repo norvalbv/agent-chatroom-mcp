@@ -216,7 +216,14 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
         "participants have submitted, so nobody anchors on another agent's answer. Hard cap 400 characters regardless of the room's max_message_chars: one or two sentences. After it returns, call wait_for_messages.",
       inputSchema: { room: roomArg, content: z.string().describe("Your opening position and the main reason, under 400 characters."), participant_id: asArg },
     },
-    guard("submit_opening", ({ room, content, participant_id }) => hub.submitOpening(room, pid(room, participant_id), content)),
+    guard("submit_opening", ({ room, content, participant_id }) => {
+      const r = hub.getRoom(room);
+      const out = hub.submitOpening(room, pid(room, participant_id), content);
+      const mins = Math.round(r.nudgeAfterMs / 60000);
+      return out.revealed
+        ? out
+        : { ...out, hint: `Openings are revealed when everyone has submitted, or after ${mins} min of silence without the rest (the hub reveals what it has). Chat is not blocked meanwhile: wait_for_messages, and speak if you have something to say.` };
+    }),
   );
 
   server.registerTool(
@@ -240,6 +247,7 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
       const id = pid(room, participant_id);
       const p = hub.requireParticipant(r, id);
       const since = since_seq ?? p.lastSeenSeq;
+      hub.answerBeforeWaiting(r, p, since);
       const msgs = await hub.wait(room, id, since, Math.min(timeout_ms ?? DEFAULT_WAIT_MS, MAX_WAIT_MS));
       const open = [...r.proposals.values()].find((pr) => pr.status === "open");
       const needsMyVote = open && !open.votes[id] && p.agent !== "human" && p.role !== "chair";
@@ -257,6 +265,8 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
       const block = hub.leavingWouldBlock(r, p);
       const human = hub.unansweredHuman(r);
       const resp = human ? hub.responderFor(r, human, id) : null;
+      const owed = hub.addressedBy(r, p);
+      if (owed[0]) p.addressWarned = owed[0].id;
       return {
         messages: msgs.map((m) => hub.fmt(r, m)),
         next_seq: r.messages.at(-1)?.seq ?? since,
@@ -265,7 +275,7 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
         your_role: p.role ?? "worker",
         active_participants: hub.activeParticipants(r).map((x) => hub.shown(r, x) + hub.roleTag(x)),
         humans_present: hub.activeParticipants(r).filter((x) => x.agent === "human").map((x) => x.name),
-        openings: r.expectedParticipants && !r.openingsRevealed ? { submitted: r.openings.size, expected: r.expectedParticipants, waiting_on: hub.openingsWaitingOn(r), revealed: false } : undefined,
+        openings: r.expectedParticipants && !r.openingsRevealed ? { submitted: r.openings.size, expected: r.expectedParticipants, waiting_on: hub.openingsWaitingOn(r), revealed: false, chat_blocked: false, revealed_after_silence_min: Math.round(r.nudgeAfterMs / 60000) } : undefined,
         unanswered_human: human && resp!.mine ? { id: human.id, name: hub.shown(r, human.from), text: human.content, you_answer: true } : human ? { name: hub.shown(r, human.from), responder: resp!.who, you_answer: false } : null,
         open_proposal: openView
           ? { id: openView.id, version: openView.version, by: openView.by, chars: openView.chars, tally: openView.tally, waiting_on: openView.waiting_on, needs_challenge: openView.needs_challenge, blocked_by: openView.blocked_by, challenges: openView.challenges, ...("text" in openView ? { text: openView.text } : { text_omitted: openView.text_omitted }) }

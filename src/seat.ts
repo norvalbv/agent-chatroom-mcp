@@ -1,0 +1,404 @@
+/**
+ * A seat: one process, one agent, one MCP session (identity-is-the-connection) for models that have
+ * no agentic CLI of their own. Everything provider-independent lives here: the local project tools,
+ * the hub tools bridged over MCP with their full descriptions and the hub's instructions, the system
+ * prompt, the step loop, context trimming, the wall-clock budget, and leaving the room on the way out.
+ * A provider (src/openrouter.ts, or a future direct-API one) only implements `ChatProvider.complete`.
+ *
+ * Parity target: what `claude -p` and `codex exec` give a model for free. The differences that hurt a
+ * weaker model are handled here rather than left to its prompt: the hub's `hint` is repeated as a user
+ * turn when it is about this seat, reasoning blocks are passed back so tool use stays coherent, and
+ * the seat leaves the room (instead of vanishing) when its budget or a provider error ends it.
+ */
+import { spawn } from "node:child_process";
+import { readdirSync, readFileSync, statSync } from "node:fs";
+import { relative, resolve } from "node:path";
+import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
+
+// ---------- wire types (OpenAI chat-completions shape, snake_case as providers send it) ----------
+export interface ToolCall {
+  id: string;
+  type: "function";
+  function: { name: string; arguments: string };
+}
+export type Msg =
+  | { role: "system" | "user"; content: string }
+  | { role: "assistant"; content: string | null; tool_calls?: ToolCall[]; reasoning_details?: unknown[] }
+  | { role: "tool"; tool_call_id: string; content: string };
+export interface ToolDef {
+  type: "function";
+  function: { name: string; description?: string; parameters: Record<string, unknown> };
+}
+export interface Usage {
+  prompt_tokens: number;
+  completion_tokens: number;
+  cost: number;
+}
+/** One model turn as the loop consumes it. `reasoningDetails` is passed back verbatim on the next request. */
+export interface Reply {
+  content: string;
+  toolCalls: ToolCall[];
+  reasoningDetails?: unknown[];
+  usage?: Partial<Usage>;
+}
+export interface ChatProvider {
+  /** shown in logs, e.g. "openrouter deepseek/deepseek-v4.1-flash" */
+  label: string;
+  complete(messages: Msg[], tools: ToolDef[]): Promise<Reply>;
+}
+
+export interface SeatOptions {
+  prompt: string;
+  mcpUrl?: string;
+  cwd: string;
+  /** may modify files and run mutating commands */
+  write?: boolean;
+  /** offer run_command (default true) */
+  shell?: boolean;
+  /** wall-clock budget; the seat leaves its rooms and stops when it runs out (default 45) */
+  maxMinutes?: number;
+  /** safety cap on model turns, not a pacing device (default 600) */
+  maxSteps?: number;
+  /** clamp on a local tool result (default 6000); hub results get five times this */
+  maxToolChars?: number;
+  /** transcript size before the oldest turns are dropped (default 240000) */
+  maxContextChars?: number;
+  log?: (line: string) => void;
+}
+export interface SeatResult {
+  final: string;
+  usage: Usage;
+  steps: number;
+  /** false when a provider error ended the run */
+  ok: boolean;
+}
+
+/** Tool result shape we look at for hints; everything else is passed through untouched. */
+interface HubView {
+  hint?: string;
+  room_state?: string;
+  addressed_to_you?: unknown[];
+  unanswered_human?: { you_answer?: boolean } | null;
+  open_proposal?: unknown;
+}
+
+// ---------- local tools: the project, read-only unless write ----------
+/**
+ * Not a sandbox: the CLI seats get a real shell too and the write rule lives in the prompt. This
+ * only stops a read-only seat from mutating the checkout by accident, which weaker models do.
+ */
+const MUTATING = /(^|[;&|]\s*)(rm|mv|cp|chmod|chown|truncate|dd|kill|pkill|shutdown)\s|sed\s+-i|tee\s|(?<![0-9])>>?\s*[^&|]|git\s+(commit|checkout|reset|clean|push|rebase|merge|stash|apply|restore)|npm\s+(i|install|uninstall|publish)|(yarn|pnpm|pip|brew|cargo)\s+(add|install|remove)/;
+/** A `>` inside quotes writes nothing, so the guard above is tested against the unquoted text. */
+const unquoted = (command: string) => command.replace(/'[^']*'|"[^"]*"/g, '""');
+
+type LocalTool = { def: ToolDef; run: (a: Record<string, string>) => string | Promise<string> };
+
+export function localTools(cwd: string, write: boolean, shell: boolean, clamp: (s: string) => string): LocalTool[] {
+  const inside = (p: string) => {
+    const abs = resolve(cwd, p);
+    if (abs !== cwd && !abs.startsWith(`${cwd}/`)) throw new Error(`${p} is outside the working directory ${cwd}`);
+    return abs;
+  };
+  const sh = (command: string) =>
+    new Promise<string>((res) => {
+      const child = spawn("bash", ["-lc", command], { cwd, stdio: ["ignore", "pipe", "pipe"] });
+      let out = "";
+      const timer = setTimeout(() => child.kill(), 120_000);
+      child.stdout.on("data", (d) => (out += d));
+      child.stderr.on("data", (d) => (out += d));
+      child.on("close", (code) => {
+        clearTimeout(timer);
+        res(clamp(`exit ${code}\n${out.trim() || "(no output)"}`));
+      });
+    });
+  const fn = (name: string, description: string, properties: Record<string, unknown>, required: string[] = []): ToolDef => ({
+    type: "function",
+    function: { name, description, parameters: { type: "object", properties, required } },
+  });
+
+  const tools: LocalTool[] = [
+    {
+      def: fn("read_file", "Read a UTF-8 file in the working directory. Returns numbered lines.", { path: { type: "string" }, start: { type: "integer", description: "1-based first line (default 1)" }, limit: { type: "integer", description: "how many lines (default 400)" } }, ["path"]),
+      run: (a) => {
+        const start = Math.max(1, Number(a.start ?? 1));
+        const limit = Math.max(1, Number(a.limit ?? 400));
+        const lines = readFileSync(inside(a.path), "utf8").split("\n");
+        return clamp(
+          lines
+            .slice(start - 1, start - 1 + limit)
+            .map((l, i) => `${start + i}\t${l}`)
+            .join("\n") || "(empty)",
+        );
+      },
+    },
+    {
+      def: fn("list_dir", "List a directory in the working directory.", { path: { type: "string", description: "default '.'" } }),
+      run: (a) => {
+        const dir = inside(a.path ?? ".");
+        return clamp(
+          readdirSync(dir)
+            .filter((f) => f !== "node_modules" && f !== ".git")
+            .map((f) => {
+              try {
+                return statSync(resolve(dir, f)).isDirectory() ? `${f}/` : f;
+              } catch {
+                return f;
+              }
+            })
+            .join("\n") || "(empty)",
+        );
+      },
+    },
+    {
+      def: fn("search", "Search file contents under the working directory (grep -rn, node_modules and .git excluded).", { pattern: { type: "string" }, path: { type: "string", description: "default '.'" } }, ["pattern"]),
+      run: (a) =>
+        new Promise<string>((res) => {
+          const child = spawn("grep", ["-rnI", "--exclude-dir=node_modules", "--exclude-dir=.git", "--exclude-dir=dist", "-e", a.pattern, relative(cwd, inside(a.path ?? ".")) || "."], { cwd, stdio: ["ignore", "pipe", "pipe"] });
+          let out = "";
+          const timer = setTimeout(() => child.kill(), 60_000);
+          child.stdout.on("data", (d) => (out += d));
+          child.on("close", () => {
+            clearTimeout(timer);
+            res(clamp(out.trim() || "(no matches)"));
+          });
+        }),
+    },
+    {
+      def: fn("web_fetch", "Fetch a public http(s) URL and return its text (HTML tags stripped, 30s limit). Use for documentation, papers and references you cite.", { url: { type: "string" } }, ["url"]),
+      run: async (a) => {
+        const url = new URL(a.url);
+        if (!/^https?:$/.test(url.protocol)) throw new Error("only http(s) URLs");
+        const res = await fetch(url, { signal: AbortSignal.timeout(30_000), headers: { "User-Agent": "agent-chatroom-seat/0.2 (+https://github.com/norvalbv/agent-chatroom-mcp)" } });
+        const raw = await res.text();
+        const text = /html/i.test(res.headers.get("content-type") ?? "")
+          ? raw
+              .replace(/<(script|style|noscript)[\s\S]*?<\/\1>/gi, " ")
+              .replace(/<[^>]+>/g, " ")
+              .replace(/&(amp|lt|gt|quot|#39|nbsp);/g, (m) => ({ "&amp;": "&", "&lt;": "<", "&gt;": ">", "&quot;": '"', "&#39;": "'", "&nbsp;": " " })[m] ?? m)
+              .replace(/[ \t]+/g, " ")
+              .replace(/\n\s*\n+/g, "\n")
+          : raw;
+        return clamp(`HTTP ${res.status}\n${text.trim() || "(empty)"}`);
+      },
+    },
+  ];
+  if (shell)
+    tools.push({
+      def: fn("run_command", `Run a bash command in ${cwd} (120s limit). ${write ? "You may modify files and commit." : "Read-only: mutating commands are refused."}`, { command: { type: "string" } }, ["command"]),
+      run: (a) => (!write && MUTATING.test(unquoted(a.command)) ? `Refused: this seat is read-only, so "${a.command.slice(0, 120)}" was not run. Investigate and report instead.` : sh(a.command)),
+    });
+  return tools;
+}
+
+/** Providers differ on which JSON Schema keywords they tolerate; strip the ones nothing needs. */
+export const cleanSchema = (v: unknown): unknown => {
+  if (Array.isArray(v)) return v.map(cleanSchema);
+  if (v && typeof v === "object") {
+    const out: Record<string, unknown> = {};
+    for (const [k, val] of Object.entries(v as Record<string, unknown>)) {
+      if (k === "$schema" || k === "additionalProperties") continue;
+      out[k] = cleanSchema(val);
+    }
+    return out;
+  }
+  return v;
+};
+
+/**
+ * What an agentic CLI would have told the model about itself and the chatroom. The hub's own
+ * instructions (the same text Claude Code and Codex inject) come first; the rest is the loop a
+ * weaker model tends to get wrong: act on the hint, answer when addressed, leave instead of vanishing.
+ */
+export function systemPrompt(cwd: string, hubInstructions: string | undefined, write: boolean, shell: boolean): string {
+  const local = ["read_file", "list_dir", "search", "web_fetch", ...(shell ? ["run_command"] : [])].join(", ");
+  return [
+    `You are an autonomous AI agent holding a seat in a shared chatroom with other AI agents (and sometimes a human), working in ${cwd}. Nobody is at the keyboard: never ask the user anything, act with tools, and keep going until your brief is done.`,
+    hubInstructions ? `About the chatroom, from the hub: ${hubInstructions}` : "",
+    "How to work here:",
+    "- Do what your brief says, in order: join the room it names, then submit_opening if the room uses openings, then loop on wait_for_messages (timeout_ms at most 55000) and act on what comes back. An empty wait is normal; call it again.",
+    "- Every wait_for_messages result ends with a `hint` and lists `addressed_to_you`. Do what the hint says before waiting again: reply when someone addresses you (send_message with reply_to), answer a human first, vote when a proposal needs your vote, challenge when it needs a challenge. If you have nothing to add, call pass; do not go quiet.",
+    "- Read tool results. When the hub refuses a call it says why and what to do instead; do that, do not repeat the same call.",
+    "- Talk like a colleague: short messages, one claim and one reason each, plain prose. Put evidence and drafts on the board (board_set) rather than in chat. Openings are capped at 400 characters.",
+    "- Do not agree to be agreeable; disagree with a specific change. Do not re-propose: amend the open proposal in place.",
+    `- Leave with leave_room when the room has concluded or closed, or when your brief says to; then reply with one final message and no tool calls. Local tools on this machine: ${local}${write ? " (you may modify files)" : " (read-only)"}.`,
+  ]
+    .filter(Boolean)
+    .join("\n");
+}
+
+/** Hints that are about this seat, not the room in general: those are worth a user turn. */
+function actionable(view: HubView): boolean {
+  if (!view.hint) return false;
+  if (view.room_state === "concluded" || view.room_state === "closed") return true;
+  if (view.addressed_to_you?.length) return true;
+  if (view.unanswered_human?.you_answer) return true;
+  return /^(Vote|A proposal is open)/.test(view.hint);
+}
+
+export async function runSeat(provider: ChatProvider, opts: SeatOptions): Promise<SeatResult> {
+  const cwd = resolve(opts.cwd);
+  const write = opts.write ?? false;
+  const shell = opts.shell ?? true;
+  const maxMinutes = opts.maxMinutes ?? 45;
+  const maxSteps = opts.maxSteps ?? 600;
+  const maxToolChars = opts.maxToolChars ?? 6000;
+  const maxContextChars = opts.maxContextChars ?? 240_000;
+  const log = opts.log ?? ((s: string) => process.stderr.write(`${s}\n`));
+  const clampTo = (n: number) => (s: string) => (s.length > n ? `${s.slice(0, n)}\n…[truncated, ${s.length} chars total]` : s);
+  const clampLocal = clampTo(maxToolChars);
+  // hub results carry the proposal text and end with the hint; a clamp that eats the hint is worse than a long result
+  const clampHub = clampTo(maxToolChars * 5);
+
+  const local = localTools(cwd, write, shell, clampLocal);
+  const tools: ToolDef[] = local.map((t) => t.def);
+  const hubTools = new Set<string>();
+  const client = new Client({ name: "seat", version: "0.2.0" });
+  let instructions: string | undefined;
+  if (opts.mcpUrl) {
+    await client.connect(new StreamableHTTPClientTransport(new URL(opts.mcpUrl)));
+    instructions = client.getInstructions();
+    for (const t of (await client.listTools()).tools) {
+      hubTools.add(t.name);
+      const schema = (cleanSchema(t.inputSchema) ?? {}) as Record<string, unknown>;
+      if (!schema.type) schema.type = "object";
+      if (!schema.properties) schema.properties = {};
+      // full descriptions: they are the guidance; a model that never sees them cannot follow them
+      tools.push({ type: "function", function: { name: t.name, description: t.description, parameters: schema } });
+    }
+    log(`[${provider.label}] ${hubTools.size} hub tools + ${local.length} local tools; budget ${maxMinutes} min`);
+  } else {
+    log(`[${provider.label}] no MCP url: running with local tools only`);
+  }
+
+  const joined = new Set<string>();
+  async function callTool(name: string, args: Record<string, string>): Promise<string> {
+    const mine = local.find((t) => t.def.function.name === name);
+    if (mine) return String(await mine.run(args));
+    if (!hubTools.has(name)) return `No tool named ${name}. Available: ${[...hubTools, ...local.map((t) => t.def.function.name)].join(", ")}`;
+    // 55s long-polls (wait_for_messages) must not trip the SDK's default 60s request timeout
+    const r = (await client.callTool({ name, arguments: args }, undefined, { timeout: 180_000 })) as { isError?: boolean; content?: { type: string; text?: string }[] };
+    const text = (r.content ?? [])
+      .map((c) => c.text ?? "")
+      .join("\n")
+      .trim();
+    if (!r.isError && name === "join_room" && args.room) joined.add(args.room);
+    if (!r.isError && name === "leave_room" && args.room) joined.delete(args.room);
+    return clampHub((r.isError ? "ERROR: " : "") + (text || "(no content)"));
+  }
+
+  /** On the way out for a reason the model did not choose, leave every room so nobody waits on an empty seat. */
+  async function bow(reason: string) {
+    for (const room of [...joined]) {
+      try {
+        await client.callTool({ name: "leave_room", arguments: { room } }, undefined, { timeout: 30_000 });
+        log(`[${provider.label}] left ${room}: ${reason}`);
+      } catch (e) {
+        log(`[${provider.label}] could not leave ${room}: ${e instanceof Error ? e.message : String(e)}`);
+      }
+    }
+  }
+
+  const messages: Msg[] = [
+    { role: "system", content: systemPrompt(cwd, instructions, write, shell) },
+    { role: "user", content: opts.prompt },
+  ];
+  const usage: Usage = { prompt_tokens: 0, completion_tokens: 0, cost: 0 };
+  const size = () => JSON.stringify(messages).length;
+
+  /** Drop whole turns (an assistant message with its tool results and any hint that followed) from the front. */
+  function trim() {
+    let dropped = 0;
+    while (size() > maxContextChars && messages.length > 3) {
+      let end = 3;
+      while (end < messages.length && messages[end].role !== "assistant") end++;
+      messages.splice(2, end - 2);
+      dropped++;
+    }
+    if (dropped) log(`[${provider.label}] dropped ${dropped} older turn(s) to fit the context window`);
+  }
+
+  const deadline = Date.now() + maxMinutes * 60_000;
+  let nudges = 0;
+  let final = "";
+  let lastHint = "";
+  let ok = true;
+  let steps = 0;
+  for (steps = 1; steps <= maxSteps; steps++) {
+    if (Date.now() > deadline) {
+      log(`[${provider.label}] ${maxMinutes} min budget spent`);
+      await bow(`${maxMinutes} min budget spent`);
+      break;
+    }
+    trim();
+    let reply: Reply;
+    try {
+      reply = await provider.complete(messages, tools);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      log(`[${provider.label}] provider error: ${msg}`);
+      await bow(`provider error: ${msg.slice(0, 120)}`);
+      final = final || `ERROR: ${msg}`;
+      ok = false;
+      break;
+    }
+    usage.prompt_tokens += reply.usage?.prompt_tokens ?? 0;
+    usage.completion_tokens += reply.usage?.completion_tokens ?? 0;
+    usage.cost += reply.usage?.cost ?? 0;
+    const calls = reply.toolCalls;
+    messages.push({
+      role: "assistant",
+      content: reply.content || null,
+      ...(calls.length ? { tool_calls: calls } : {}),
+      // reasoning models continue a thought across tool calls; without this the next turn starts cold
+      ...(reply.reasoningDetails?.length ? { reasoning_details: reply.reasoningDetails } : {}),
+    });
+    if (reply.content.trim()) final = reply.content.trim();
+    if (!calls.length) {
+      // a model that narrates instead of acting gets two nudges, then we take its text as final
+      if (nudges++ < 2 && opts.mcpUrl && joined.size) {
+        log(`[${provider.label}] step ${steps}: no tool call; nudging`);
+        messages.push({ role: "user", content: "You made no tool call. If your brief is not finished, act with a tool now (wait_for_messages / send_message / vote / leave_room). If it is finished and you have left the room, say so in one line." });
+        continue;
+      }
+      break;
+    }
+    for (const call of calls) {
+      let args: Record<string, string> = {};
+      try {
+        args = call.function.arguments ? JSON.parse(call.function.arguments) : {};
+      } catch {
+        messages.push({ role: "tool", tool_call_id: call.id, content: `Your arguments were not valid JSON: ${call.function.arguments?.slice(0, 200)}` });
+        continue;
+      }
+      log(`[${provider.label}] step ${steps}: ${call.function.name} ${JSON.stringify(args).slice(0, 160)}`);
+      let result: string;
+      try {
+        result = await callTool(call.function.name, args);
+      } catch (e) {
+        result = `ERROR: ${e instanceof Error ? e.message : String(e)}`;
+      }
+      messages.push({ role: "tool", tool_call_id: call.id, content: result });
+      // the hub's hint is the one line that matters most and the one a weak model skips inside a long JSON result
+      if (hubTools.has(call.function.name) && !result.startsWith("ERROR:")) {
+        try {
+          const view = JSON.parse(result) as HubView;
+          if (actionable(view) && view.hint !== lastHint) {
+            lastHint = view.hint!;
+            messages.push({ role: "user", content: `Hub: ${view.hint}` });
+          }
+        } catch {
+          /* not JSON: nothing to lift */
+        }
+      }
+    }
+    if (steps === maxSteps) {
+      log(`[${provider.label}] step cap ${maxSteps} reached`);
+      await bow(`step cap ${maxSteps} reached`);
+    }
+  }
+
+  log(`[${provider.label}] ${steps} step(s), ${usage.prompt_tokens} prompt + ${usage.completion_tokens} completion tokens${usage.cost ? `, $${usage.cost.toFixed(4)}` : ""}`);
+  if (opts.mcpUrl) await client.close().catch(() => {});
+  return { final: final || "(no final message)", usage, steps, ok };
+}

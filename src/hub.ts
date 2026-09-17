@@ -45,6 +45,10 @@ export interface Participant {
   seenConclusion?: boolean;
   /** proposal id a blocking leave_room was already refused for (the second call proceeds) */
   leaveWarned?: string;
+  /** id of the addressed message this participant was last shown by wait_for_messages (the next wait without an answer is refused once) */
+  addressWarned?: string;
+  /** id of the addressed message a wait_for_messages was already refused for (the call after that proceeds) */
+  addressRefused?: string;
 }
 
 export interface Message {
@@ -246,6 +250,8 @@ export class Hub {
   static readonly MAX_ROOMS = 500;
   static MAX_ROOMS_PER_RUN = Number(process.env.CHATROOM_MAX_ROOMS_PER_RUN ?? 12);
   static MAX_LIVE_PER_ROOM = Number(process.env.CHATROOM_MAX_LIVE_PER_ROOM ?? 12);
+  /** silence before the hub nudges a room (and reveals stale openings); CHATROOM_NUDGE_AFTER_MS lets tests shorten it */
+  static DEFAULT_NUDGE_MS = Number(process.env.CHATROOM_NUDGE_AFTER_MS ?? 180_000);
   static readonly ROOM_NAME = /^[a-zA-Z0-9_-]{1,64}$/;
 
   /** git HEAD and whether the working tree is dirty, so a citation or a verification names the tree it was read against. */
@@ -279,7 +285,7 @@ export class Hub {
       maxMessagesPerParticipant: opts.maxMessagesPerParticipant ?? 0,
       maxMessageChars: opts.maxMessageChars ?? 4000,
       requireChallenge: opts.requireChallenge ?? "auto",
-      nudgeAfterMs: opts.nudgeAfterMs ?? 180_000,
+      nudgeAfterMs: opts.nudgeAfterMs ?? Hub.DEFAULT_NUDGE_MS,
       requireVerification: opts.requireVerification ?? false,
       ...(opts.chair ? { chair: opts.chair } : {}),
     };
@@ -848,7 +854,15 @@ export class Hub {
         const blockers = this.blockedBy(room, open);
         text = `${mins} min of silence. Proposal ${open.id} v${open.version} is open; blocked by: ${blockers.join("; ") || "nothing (re-evaluating)"}.`;
       } else if (!room.openingsRevealed && room.expectedParticipants) {
-        text = `${mins} min of silence. Still waiting for openings from ${this.openingsWaitingOn(room).join(", ")}.`;
+        // An opening that has not arrived after a silence is not coming: reveal what there is rather than
+        // hold twelve agents for one. Everyone expected has joined -> reveal now; someone never joined ->
+        // one warning first, then reveal at the next silence.
+        text = `${mins} min of silence. Still waiting for openings from ${this.openingsWaitingOn(room).join(", ")}. Chat is open meanwhile; the openings are revealed at the next ${mins} min of silence.`;
+        const warned = room.lastNudge?.text === text;
+        if (room.openings.size > 0 && (this.unarrived(room) === 0 || warned)) {
+          this.revealOpenings(room, `revealed after ${mins} min of silence without one from ${this.openingsWaitingOn(room).join(", ")}, who can still speak in chat`);
+          return;
+        }
       } else {
         const talkers = [...room.participants.values()].filter((p) => p.active && p.agent !== "human").sort((a, b) => b.messageCount - a.messageCount);
         text = `${mins} min of silence. If the discussion has converged, ${talkers[0] ? this.shown(room, talkers[0]) : "someone"} should propose a conclusion.`;
@@ -884,10 +898,10 @@ export class Hub {
     return { revealed: room.openingsRevealed, waiting_on: waiting };
   }
 
-  private revealOpenings(room: Room) {
+  private revealOpenings(room: Room, note?: string) {
     room.openingsRevealed = true;
     this.persist({ type: "openings_revealed", room: room.name });
-    this.post(room, "system", undefined, `Opening answers (${room.openings.size}, written independently):`);
+    this.post(room, "system", undefined, `Opening answers (${room.openings.size}${note ? ` of ${room.expectedParticipants}` : ""}, written independently${note ? `; ${note}` : ""}):`);
     for (const [pid, content] of room.openings) {
       const p = room.participants.get(pid);
       if (p) this.post(room, "chat", p, content, { tag: "opening" });
@@ -913,6 +927,8 @@ export class Hub {
     const p = this.requireParticipant(room, pid);
     p.passes = (p.passes ?? 0) + 1;
     this.settleRead(room, p, p.lastSeenSeq, []);
+    // a pass is an answer as far as the wait gate is concerned
+    for (const m of this.addressedBy(room, p)) p.addressRefused = m.id;
     let yielded = false;
     if (room.mode === "round_robin" && this.currentSpeaker(room)?.id === p.id) {
       this.advanceTurn(room);
@@ -976,6 +992,26 @@ export class Hub {
       }
     }
     return [...ids];
+  }
+
+  /**
+   * A participant who was shown an @-addressed message by their last wait_for_messages and has neither
+   * replied nor passed does not get to wait again straight away: the second wait is refused once, with
+   * the message. Weak models loop on wait_for_messages past a hint; a refusal is what they read.
+   */
+  answerBeforeWaiting(room: Room, p: Participant, since: number): void {
+    if (p.agent === "human" || p.role === "chair" || room.state === "concluded" || room.state === "closed") return;
+    const owed = this.addressedBy(room, p)[0];
+    if (!owed || p.addressWarned !== owed.id || p.addressRefused === owed.id) return;
+    p.addressRefused = owed.id;
+    // the refusal is the delivery: whatever arrived meanwhile travels with it, so the reply is not refused as stale
+    const unread = this.deliverable(room, p, since);
+    this.settleRead(room, p, since, unread);
+    throw new HubError(`${this.shown(room, owed.from)} addressed you in #${owed.seq} and you have not answered. Reply (send_message reply_to="${owed.id}") or call pass before waiting again.`, {
+      message: this.fmt(room, owed),
+      unread: unread.map((m) => this.fmt(room, m)),
+      next_seq: room.messages.at(-1)?.seq ?? since,
+    });
   }
 
   /** Was this participant addressed by name in any recent message they have not yet answered? */

@@ -34,15 +34,24 @@ process.on("exit", () => hub.kill());
 interface Turn {
   content: string | null;
   tool_calls?: unknown[];
+  reasoning_details?: unknown[];
+  /** stub latency before answering, to let a wall-clock budget expire mid-run */
+  delay_ms?: number;
 }
 interface Body {
-  messages: { role: string; content?: string }[];
-  tools: { function: { name: string; parameters: Record<string, unknown> } }[];
+  messages: { role: string; content?: string; reasoning_details?: unknown[] }[];
+  tools: { function: { name: string; description?: string; parameters: Record<string, unknown> } }[];
 }
 const call = (id: string, name: string, args: unknown) => ({ id, type: "function", function: { name, arguments: JSON.stringify(args) } });
+const BUDGET_ROOM = "openrouter-budget";
 const scripts: Record<string, Turn[]> = {
   seat: [
-    { content: null, tool_calls: [call("c1", "join_room", { room: ROOM, name: "deepseek-1", agent: "openrouter", topic: "Does the OpenRouter seat work?", expected_participants: 2 })] },
+    {
+      content: null,
+      tool_calls: [call("c1", "join_room", { room: ROOM, name: "deepseek-1", agent: "openrouter", topic: "Does the OpenRouter seat work?", expected_participants: 2 })],
+      // a reasoning model's thought must ride along on the next request, or its tool use starts cold each turn
+      reasoning_details: [{ type: "reasoning.text", text: "join first, then look around", format: "unknown", index: 0 }],
+    },
     { content: null, tool_calls: [call("c2", "read_file", { path: "package.json", limit: 3 }), call("c3", "search", { pattern: "OpenRouter seat" })] },
     { content: null, tool_calls: [call("c4", "send_message", { room: ROOM, content: "hello from the openrouter seat" })] },
     { content: null, tool_calls: [call("c5", "run_command", { command: "rm -rf /tmp/openrouter-smoke-should-not-run" })] },
@@ -54,8 +63,15 @@ const scripts: Record<string, Turn[]> = {
     { content: null, tool_calls: [call("r2", "send_message", { room: RECRUIT_ROOM, content: "recruit reporting: spawned by request_agent" })] },
     { content: null, tool_calls: [call("r3", "leave_room", { room: RECRUIT_ROOM })] },
   ],
+  // a seat that would wait forever: its wall-clock budget must make it leave the room, not vanish from it
+  budget: [
+    { content: null, tool_calls: [call("b1", "join_room", { room: BUDGET_ROOM, name: "deepseek-2", agent: "openrouter", expected_participants: 1 })] },
+    { content: null, tool_calls: [call("b2", "wait_for_messages", { room: BUDGET_ROOM, timeout_ms: 0 })], delay_ms: 1500 },
+    { content: null, tool_calls: [call("b3", "wait_for_messages", { room: BUDGET_ROOM, timeout_ms: 0 })] },
+    { content: null, tool_calls: [call("b4", "wait_for_messages", { room: BUDGET_ROOM, timeout_ms: 0 })] },
+  ],
 };
-const turns: Record<string, number> = { seat: 0, recruit: 0 };
+const turns: Record<string, number> = { seat: 0, recruit: 0, budget: 0 };
 const bodies: Record<string, Body | undefined> = {};
 const stub = createServer((req, res) => {
   let raw = "";
@@ -64,12 +80,15 @@ const stub = createServer((req, res) => {
     assert.equal(req.url, "/chat/completions");
     assert.equal(req.headers.authorization, "Bearer test-key");
     const body = JSON.parse(raw) as Body;
-    // recruit.md briefs the newcomer on its lineage; that is how we tell the two seats apart
-    const which = /recruited by/.test(body.messages[1]?.content ?? "") ? "recruit" : "seat";
+    // recruit.md briefs the newcomer on its lineage; that is how we tell the seats apart
+    const brief = body.messages[1]?.content ?? "";
+    const which = /recruited by/.test(brief) ? "recruit" : /BUDGET TRIAL/.test(brief) ? "budget" : "seat";
     bodies[which] = body;
-    const message = scripts[which][turns[which]++] ?? { content: `CONCLUSION: the OpenRouter ${which} drives the chatroom tools.` };
-    res.writeHead(200, { "Content-Type": "application/json" });
-    res.end(JSON.stringify({ choices: [{ finish_reason: message.tool_calls ? "tool_calls" : "stop", message }], usage: { prompt_tokens: 10, completion_tokens: 2, cost: 0 } }));
+    const { delay_ms, ...message } = scripts[which][turns[which]++] ?? { content: `CONCLUSION: the OpenRouter ${which} drives the chatroom tools.` };
+    setTimeout(() => {
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ choices: [{ finish_reason: message.tool_calls ? "tool_calls" : "stop", message }], usage: { prompt_tokens: 10, completion_tokens: 2, cost: 0 } }));
+    }, delay_ms ?? 0);
   });
 });
 await new Promise<void>((r) => stub.listen(STUB_PORT, "127.0.0.1", r));
@@ -98,7 +117,15 @@ const joinTool = offered.find((t) => t.function.name === "join_room");
 assert.ok(joinTool, "join_room was not offered to the model");
 assert.equal(joinTool.function.parameters.type, "object");
 assert.ok(!("$schema" in joinTool.function.parameters), "$schema should be stripped from tool schemas");
-assert.ok(offered.some((t) => t.function.name === "read_file") && offered.some((t) => t.function.name === "run_command"), "local tools were not offered");
+assert.ok((joinTool.function.description?.length ?? 0) > 100, "hub tool descriptions travel in full: they are the guidance");
+assert.ok(offered.some((t) => t.function.name === "read_file") && offered.some((t) => t.function.name === "run_command") && offered.some((t) => t.function.name === "web_fetch"), "local tools were not offered");
+// parity with the CLIs: the hub's MCP instructions are in the system prompt, and the loop a weak model gets wrong is spelled out
+const system = bodies.seat?.messages[0];
+assert.equal(system?.role, "system");
+assert.ok(system?.content?.includes("Do not agree just to be agreeable"), "the hub's instructions are not in the system prompt");
+assert.ok(system?.content?.includes("addressed_to_you"), "the system prompt does not explain the hint loop");
+const carried = (bodies.seat?.messages ?? []).find((m) => m.role === "assistant" && JSON.stringify(m.reasoning_details ?? []).includes("join first, then look around"));
+assert.ok(carried, "reasoning_details from a tool-call turn were not passed back on the next request");
 assert.ok(results[0]?.includes("you_are"), `join_room did not succeed: ${results[0]}`);
 assert.ok(/1\t\{/.test(results[1] ?? ""), `read_file did not return numbered lines: ${results[1]}`);
 assert.ok(results[2]?.includes("openrouter.ts"), `search found nothing: ${results[2]}`);
@@ -135,14 +162,27 @@ assert.ok(recruited.includes("recruit reporting: spawned by request_agent"), `th
 const listed = (await (await fetch(`${HUB}/agents`)).json()) as { name: string; agent: string; model: string }[];
 assert.ok(listed.some((a) => a.name === "or-recruit" && a.agent === "openrouter" && a.model === "stub/model"), `not listed as an openrouter recruit: ${JSON.stringify(listed)}`);
 
-// ---------- 3. no key, no seat: a dead seat must never be counted into a quorum ----------
+// ---------- 3. the budget ends a seat by leaving the room, not by vanishing from it ----------
+const budget = spawn("npx", ["tsx", "src/openrouter.ts", "-p", "BUDGET TRIAL: join the room and wait.", "--mcp-url", `${HUB}/mcp`, "--model", "stub/model", "--max-minutes", "0.02"], {
+  env: { ...process.env, OPENROUTER_API_KEY: "test-key", OPENROUTER_BASE_URL: STUB },
+  stdio: ["ignore", "pipe", "pipe"],
+});
+let budgetErr = "";
+budget.stderr.on("data", (d) => (budgetErr += d));
+assert.equal(await new Promise<number | null>((r) => budget.on("close", r)), 0, `budget seat exited non-zero:\n${budgetErr}`);
+assert.match(budgetErr, /budget spent/, `the budget did not end the run:\n${budgetErr}`);
+assert.ok(turns.budget < scripts.budget.length, `the budget seat kept going: ${turns.budget} turns`);
+const budgetTranscript = await (await fetch(`${HUB}/rooms/${BUDGET_ROOM}/transcript`)).text();
+assert.ok(budgetTranscript.includes("deepseek-2 left the room."), `the seat did not leave on the budget:\n${budgetTranscript}`);
+
+// ---------- 4. no key, no seat: a dead seat must never be counted into a quorum ----------
 const probe = new Spawner({ mcpUrl: `${HUB}/mcp`, defaultCwd: process.cwd(), logDir: "/tmp/openrouter-smoke-logs", dryRun: true });
 const key = process.env.OPENROUTER_API_KEY;
 delete process.env.OPENROUTER_API_KEY;
 assert.throws(() => probe.request({ room: ROOM, brief: "A brief that is comfortably longer than twenty characters.", requestedBy: "claude-1", agent: "openrouter" }), /OPENROUTER_API_KEY/);
 process.env.OPENROUTER_API_KEY = key;
 
-console.log(`OPENROUTER SMOKE OK (seat: ${turns.seat} turns, recruit: ${turns.recruit} turns)`);
+console.log(`OPENROUTER SMOKE OK (seat: ${turns.seat} turns, recruit: ${turns.recruit} turns, budget seat left after ${turns.budget} turns)`);
 await client.close().catch(() => {});
 stub.close();
 hub.kill();

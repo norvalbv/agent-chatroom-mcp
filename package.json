@@ -10,6 +10,7 @@
     "dev": "tsx src/index.ts",
     "smoke": "tsx scripts/smoke.ts",
     "smoke:openrouter": "tsx scripts/openrouter-smoke.ts",
+    "seat:trial": "tsx scripts/seat-trial.ts",
     "debate": "bash scripts/debate.sh",
     "swarm": "node dist/swarm.js",
     "lint": "biome check .",

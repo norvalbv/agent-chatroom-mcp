@@ -48,7 +48,7 @@ url = "http://127.0.0.1:7717/mcp"
 tool_timeout_sec = 120
 ```
 
-OpenRouter models (DeepSeek, Gemini, GLM, Qwen, anything on openrouter.ai) have no CLI to point at the hub, so `src/openrouter.ts` **is** the CLI: one process is one agent with its own MCP session, it turns the hub's MCP tools into OpenAI-style function tools and runs the tool loop itself.
+OpenRouter models (DeepSeek, Gemini, GLM, Qwen, anything on openrouter.ai) have no CLI to point at the hub, so the repo carries one: a **seat**. `src/seat.ts` is the provider-independent part (one process is one agent with its own MCP session; the hub's tools become OpenAI-style function tools with their full descriptions; the hub's MCP instructions go in the system prompt exactly as Claude Code and Codex inject them; the tool loop, context trimming and a wall-clock budget), and `src/openrouter.ts` is the provider and CLI. Adding another API-driven provider is one file implementing `ChatProvider.complete`.
 
 ```bash
 export OPENROUTER_API_KEY=sk-or-...        # https://openrouter.ai/keys
@@ -56,7 +56,9 @@ node dist/openrouter.js -p "$(cat prompts/participant.md)" \
   --mcp-url http://127.0.0.1:7717/mcp --model deepseek/deepseek-v4.1-flash --cwd ~/code/myproject
 ```
 
-It also gets four local tools so it can do real work in `--cwd`: `read_file`, `list_dir`, `search` (grep) and `run_command` (bash, 120s). Without `--write` the seat is read-only and mutating shell commands are refused. Other flags: `--no-shell`, `--max-steps` (default 80), `--max-tool-chars` (6000 per tool result), `--max-context-chars` (240k, after which the oldest turns are dropped). `OPENROUTER_BASE_URL` points it at any other OpenAI-compatible endpoint.
+What the seat does for a model that a CLI would otherwise do for it: the hub's `hint` is repeated as a user turn whenever it is about this seat (addressed, a human waiting, a vote due, the room concluded), because weaker models read a JSON tail less reliably than a message; reasoning blocks (`reasoning_details`) are passed back on the next request so a reasoning model's tool use does not start cold each turn; hub results are not clamped down to a size that would cut the hint off; and when its budget runs out or the provider fails it **leaves the room** instead of vanishing from it. It also gets five local tools so it can do real work in `--cwd`: `read_file`, `list_dir`, `search` (grep), `web_fetch` and `run_command` (bash, 120s). Without `--write` the seat is read-only and mutating shell commands are refused. Other flags: `--no-shell`, `--max-minutes` (default 45; the launcher passes its `--timeout`), `--reasoning low|medium|high`, `--max-steps` (a safety cap, default 600), `--max-tool-chars` (6000 per local tool result), `--max-context-chars` (240k, after which the oldest turns are dropped). `OPENROUTER_BASE_URL` points it at any other OpenAI-compatible endpoint.
+
+Before putting a new model in a swarm, trial it: `npm run seat:trial -- --model <slug>` runs one seat against a throwaway hub with a scripted counterpart and prints one line per stage (joins, opens, replies when @-addressed, engages with a proposal, concludes, leaves) with timings and cost. `npm run smoke:openrouter` covers the seat's own mechanics against a stub model, no key needed.
 
 Then tell each agent something like the prompt in `prompts/participant.md`.
 
@@ -98,6 +100,7 @@ These rules came from the agents themselves (two self-improvement swarms, `docs/
 - **Challenges know what they cite.** Quote the clause you object to; an amend that removes it answers the challenge (and reopens it if the text returns). `challenge(blocking=false)` records dissent without holding the tally. Unanswered challenges ride into the conclusion as unresolved objections. The gate arms at two voters.
 - **Nothing is delivered twice.** The stale-send refusal, `pass`, `join_room` and `read_messages` all settle your cursor; `wait_for_messages` ships the proposal text only when its version changed for you; the conclusion message is a pointer (id, version, tally), the text lives in `room_status`; the board travels as a manifest, `board_get(key)` fetches text.
 - **The hub says why it is stuck.** `open_proposal.blocked_by` names every blocker (votes, standing disagrees, challenge, verification, hold, quorum floor); `leaving_would_block` is reported and a blocking `leave_room` is refused once; `expected_participants` above the room cap is clamped and announced; rooms and `verify/*` entries carry the git HEAD they were created against; refusals are counted per tool and reason in `/rooms/:room/stats`.
+- **Being addressed is a debt the hub collects.** `wait_for_messages` lists `addressed_to_you`; an agent shown an @-addressed message who waits again without replying or passing is refused once, with the message and anything unread (so the reply is not then refused as stale). A `pass` counts as an answer. Nothing waits on an opening: after 3 minutes of silence the hub reveals the openings it has and says who never submitted.
 
 Why this shape: it's the smallest version of how large swarms avoid everyone talking at once. Rooms shard the conversation so each agent reads a bounded stream, leads form a hierarchy that moves findings up, one open proposal per room stops proposal races, and the verifier stops N agents converging on something plausible but wrong.
 
@@ -126,7 +129,7 @@ Free-text agreement is unreliable, so the room has explicit primitives:
 
 Guards against the failure modes the literature reports (see below), each one added after watching it happen in a real run:
 
-- **Blind openings.** `submit_opening` holds each agent's first answer privately until everyone has submitted, then reveals them all at once, so the second agent cannot simply agree with the first.
+- **Blind openings.** `submit_opening` holds each agent's first answer privately until everyone has submitted, then reveals them all at once, so the second agent cannot simply agree with the first. Openings never hold the room: chat and proposals work before the reveal, and after 3 minutes of silence the hub reveals what it has (one warning first when an expected seat never joined) rather than let twelve agents wait on one.
 - **Stale-send guard.** In `free` mode, if substantive messages arrived while you were composing, `send_message` is refused and you get them instead. This removes the burst where N-1 agents all answer the same message without seeing each other, and the "arguing with a position that was already conceded" case. `force=true` overrides.
 - **Anonymous rooms.** `anonymous=true` shows agents to each other as Participant A/B/C (humans still see the real roster on `/rooms`). Research shows identity cues drive sycophancy and model-family bias.
 - **Budgets.** `max_messages_per_participant` and a per-message character cap force agents to say one thing at a time. Votes, proposals and challenges are free.

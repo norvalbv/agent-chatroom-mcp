@@ -112,7 +112,8 @@ const seatScript = existsSync(resolve(repoRoot, "dist/openrouter.js")) ? { cmd: 
 
 function runOpenRouter(name: string, text: string, cwd: string, model: string | undefined, write: boolean): Promise<string> {
   const outFile = resolve(OUT, `${name}.out`);
-  const args = [...seatScript.pre, "-p", text, "--mcp-url", `${URL_}/mcp`, "--cwd", cwd];
+  // the seat's own budget matches the launcher's timeout so it leaves the room rather than being killed in it
+  const args = [...seatScript.pre, "-p", text, "--mcp-url", `${URL_}/mcp`, "--cwd", cwd, "--max-minutes", String(TIMEOUT_MIN)];
   if (model) args.push("--model", model);
   if (write) args.push("--write");
   return runProc(name, seatScript.cmd, args, cwd, outFile);

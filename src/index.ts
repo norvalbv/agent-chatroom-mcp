@@ -19,6 +19,7 @@ import { createMcpExpressApp } from "@modelcontextprotocol/sdk/server/express.js
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import express from "express";
 import { Hub, HubError } from "./hub.js";
+import { parseReplyWindowMinutes } from "./reply-metrics.js";
 import { createSessionServer } from "./server.js";
 import { Spawner, type RecruitPolicy } from "./spawner.js";
 import { UI_HTML } from "./ui.js";
@@ -172,8 +173,15 @@ app.get("/rooms/:room", (req, res) => {
   }
 });
 app.get("/rooms/:room/stats", (req, res) => {
+  let replyWindowMinutes: number;
   try {
-    res.json(hub.stats(hub.getRoom(req.params.room)));
+    replyWindowMinutes = parseReplyWindowMinutes(req.query.reply_window_minutes);
+  } catch (e) {
+    res.status(400).json({ error: (e as Error).message });
+    return;
+  }
+  try {
+    res.json(hub.stats(hub.getRoom(req.params.room), replyWindowMinutes));
   } catch (e) {
     notFound(res, e);
   }

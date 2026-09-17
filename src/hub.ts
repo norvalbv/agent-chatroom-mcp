@@ -11,6 +11,7 @@ import { createHash, randomBytes } from "node:crypto";
 import { spawnSync } from "node:child_process";
 import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { analyzeReplyMetrics, type ReplyMetricEvent } from "./reply-metrics.js";
 
 export type MessageKind = "chat" | "system" | "proposal" | "amend" | "challenge" | "vote" | "conclusion" | "board";
 export type Vote = "agree" | "disagree" | "abstain";
@@ -241,6 +242,8 @@ export class Hub {
   private readonly dataDir?: string;
   /** project directory whose git state is stamped on rooms and verify entries */
   private readonly cwd?: string;
+  /** Ordered metric inputs retain historical membership, including in-memory rooms. */
+  private readonly replyMetricEvents = new Map<string, ReplyMetricEvent[]>();
 
   constructor(opts: { dataDir?: string; cwd?: string } = {}) {
     this.dataDir = opts.dataDir;
@@ -408,7 +411,7 @@ export class Hub {
     };
   }
 
-  stats(room: Room) {
+  stats(room: Room, replyWindowMinutes = 15) {
     const first = room.messages[0]?.ts;
     const last = room.messages.at(-1)?.ts;
     const chat = room.messages.filter((m) => m.kind === "chat" && m.tag !== "opening");
@@ -427,6 +430,11 @@ export class Hub {
     return {
       room: room.name,
       state: room.state,
+      reply_metrics: analyzeReplyMetrics(this.replyMetricEvents.get(room.name) ?? [], {
+        windowMinutes: replyWindowMinutes,
+        asOf: now(),
+        ...(room.state === "closed" || room.state === "concluded" ? { observationEnd: this.replyMetricObservationEnd(room.name) } : {}),
+      }),
       duration_ms: first && last ? Date.parse(last) - Date.parse(first) : 0,
       time_to_conclusion_ms: room.conclusion && first ? Date.parse(room.conclusion.decidedAt) - Date.parse(first) : null,
       messages_by_kind: room.messages.reduce<Record<string, number>>((a, m) => ((a[m.kind] = (a[m.kind] ?? 0) + 1), a), {}),
@@ -1793,7 +1801,35 @@ export class Hub {
 
   // ---------- persistence (append-only JSONL per room) ----------
 
+  private recordReplyMetricEvent(ev: Event) {
+    const roomName = "room" in ev ? ev.room : ev.type === "message" ? ev.msg.room : ev.proposal.room;
+    const events = this.replyMetricEvents.get(roomName) ?? [];
+    // Keep only analyzer inputs: no chat bodies, names, sessions or mutable participant references.
+    const metric: ReplyMetricEvent = { type: ev.type };
+    if (ev.type === "message") {
+      const m = ev.msg;
+      metric.msg = { id: m.id, seq: m.seq, ts: m.ts, kind: m.kind, tag: m.tag,
+        from: { id: m.from.id, agent: m.from.agent }, mentions: m.mentions?.slice(), replyTo: m.replyTo };
+    } else if (ev.type === "join" || ev.type === "leave") {
+      metric.p = { id: ev.p.id, agent: ev.p.agent };
+    } else if (ev.type === "room") metric.createdAt = ev.createdAt;
+    else if (ev.type === "refusal" || ev.type === "call_completion") metric.ts = ev.ts;
+    else if (ev.type === "state" && ev.conclusion) metric.conclusion = { decidedAt: ev.conclusion.decidedAt };
+    else if (ev.type === "proposal") metric.proposal = { createdAt: ev.proposal.createdAt, updatedAt: ev.proposal.updatedAt };
+    else if (ev.type === "vote") metric.entry = { ts: ev.entry.ts };
+    else if (ev.type === "challenge") metric.challenge = { ts: ev.challenge.ts };
+    else if (ev.type === "board") metric.entry = ev.entry ? { updatedAt: ev.entry.updatedAt } : null;
+    else if (ev.type === "amend") metric.updatedAt = ev.updatedAt;
+    events.push(metric);
+    this.replyMetricEvents.set(roomName, events);
+  }
+
+  private replyMetricObservationEnd(roomName: string): string | undefined {
+    return analyzeReplyMetrics(this.replyMetricEvents.get(roomName) ?? []).observation_end ?? undefined;
+  }
+
   private persist(ev: Event) {
+    this.recordReplyMetricEvent(ev);
     if (!this.dataDir) return;
     const roomName = "room" in ev ? ev.room : ev.type === "message" ? ev.msg.room : ev.proposal.room;
     appendFileSync(join(this.dataDir, `${roomName}.jsonl`), JSON.stringify(ev) + "\n");
@@ -1811,6 +1847,7 @@ export class Hub {
           console.error(`[hub] skipping unreadable line in ${file} (truncated write?)`);
           continue;
         }
+        this.recordReplyMetricEvent(ev);
         switch (ev.type) {
           case "room": {
             // older logs may lack newer options; fill defaults

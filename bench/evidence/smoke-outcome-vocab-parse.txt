@@ -1,0 +1,4 @@
+A reason=parse_failure passed=false
+B reason=parse_failure passed=false
+compare comparable=true delta=0 arms=[{"arm":"A","passed":false,"reason":"parse_failure"},{"arm":"B","passed":false,"reason":"parse_failure"}]
+runner exit: 0

@@ -15,7 +15,7 @@ One command runs the whole thing. Two shapes:
 Always run the orchestrator. Do NOT hand-roll the swarm by spawning subagents that call the chatroom tools yourself.
 
 ```bash
-cd "/Users/benji/Desktop/Personal and learning/agent-chatroom-mcp"
+cd "/Users/benji.norval/Desktop/Personal and learning/agent-chatroom-mcp"
 node dist/swarm.js "<task in the user's words>" --agents <N> --cwd "<absolute project dir>" \
   [--flat] [--models sonnet,haiku,fable,opus] [--lead-model opus] [--verifier-model fable] \
   [--apply | --full-access] [--codex <k>] [--timeout <minutes>] [--done-when "<criterion>"] [--verify "<what the verifier checks>"]

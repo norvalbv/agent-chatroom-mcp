@@ -180,38 +180,54 @@ export const UI_HTML = `<!doctype html>
     $('#sendbtn').disabled = r.state === 'closed';
   }
 
-  function details(r) {
-    if (!r) return;
-    const open = r.proposals.find(p => p.status === 'open');
-    const voters = r.participants.filter(p => p.active && p.agent !== 'human').length || 1;
-    let h = '<div class="sec"><h3>Topic</h3>' + clampBlock('topic', r.topic || '(none)') + '</div>';
-    // what each person is on: their role tag and every claim/<area> they own or belong to
-    const areasOf = (name) => Object.keys(r.board || {}).filter(k => k.startsWith('claim/')).filter(k => { try { const c = JSON.parse(r.board[k].text); return c.owner === name || (Array.isArray(c.team) && c.team.includes(name)); } catch { return r.board[k].by === name; } }).map(k => k.slice(6));
-    h += '<div class="sec"><h3>People <span>' + r.participants.filter(p=>p.active).length + ' active</span></h3>' + r.participants.map(p => '<div class="person' + (p.active?'':' off') + '">' + av(p.name) + '<span>' + esc(p.name) + (p.role && p.role !== 'worker' ? ' <span class="chip">' + esc(p.role) + '</span>' : '') + (r.chair === p.name && (!p.role || p.role === 'worker') ? ' <span class="chip">chair</span>' : '') + '</span>' + (areasOf(p.name).length ? '<span class="areas">' + areasOf(p.name).map(esc).join(', ') + '</span>' : '') + '<span class="role">' + esc(p.label ? p.label + ' · ' : '') + esc(p.agent) + '</span></div>').join('') + '</div>';
-    if (r.conclusion) h += '<div class="sec"><h3>Conclusion <span>' + rel(r.conclusion.decidedAt) + '</span></h3><div class="card concl">' + clampBlock('concl', r.conclusion.text) + '</div></div>';
-    if (open) {
-      const a = open.tally.agree, d = open.tally.disagree;
-      h += '<div class="sec"><h3>Open proposal <span>v' + open.version + '</span></h3><div class="card"><div class="meta"><span>' + esc(open.id) + '</span><span>by ' + esc(open.by) + '</span></div>' + clampBlock('prop', open.text)
-        + '<div class="tally"><div class="bar"><i class="a" style="width:' + (100*a/voters) + '%"></i><i class="d" style="width:' + (100*d/voters) + '%"></i></div><span>' + a + ' / ' + voters + ' agree' + (d ? ', ' + d + ' against' : '') + '</span></div>'
-        + (open.waiting_on.length ? '<div class="need" style="color:var(--dim);font-weight:400">waiting on ' + esc(open.waiting_on.join(', ')) + '</div>' : '')
-        + (open.needs_challenge ? '<div class="need">needs a challenge before it can pass</div>' : '')
-        + open.challenges.map(c => '<div class="ch"><b>' + esc(c.by) + '</b>: ' + esc(c.objection.slice(0,300)) + (c.objection.length>300?'…':'') + '</div>').join('')
-        + '<div class="vrow"><button class="vbtn" data-p="' + open.id + '" data-v="agree">Agree</button><button class="vbtn veto" data-p="' + open.id + '" data-v="disagree">Veto</button></div></div></div>';
-    }
-    const past = r.proposals.filter(p => p.status !== 'open' && p.status !== 'accepted');
-    if (past.length) h += '<div class="sec"><h3>Earlier proposals</h3>' + past.map(p => '<div class="person"><span class="chip">' + p.status + '</span><span style="font-size:12px;color:var(--dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(p.text.slice(0,80)) + '</span></div>').join('') + '</div>';
-    const bk = Object.keys(r.board || {});
-    if (bk.length) h += '<div class="sec"><h3>Board</h3>' + bk.map(k => '<div class="board"><div class="k">' + esc(k) + '<span>' + esc(r.board[k].by) + ' · ' + rel(r.board[k].updated_at) + '</span></div>' + clampBlock('board:' + k, r.board[k].text) + '</div>').join('') + '</div>';
-    if (r.state === 'open' || r.state === 'stalled') h += '<div class="sec"><button class="closebtn" id="closeroom">Close this room (no conclusion)</button></div>';
-    h += '<div class="sec tools"><h3>View</h3><label><input type="checkbox" id="hs" ' + (hideSys?'checked':'') + '/> hide join/leave notices</label><label><input type="checkbox" id="as" ' + (autoScroll?'checked':'') + '/> follow new messages</label><div class="links"><a href="/rooms/' + encodeURIComponent(r.name) + '/transcript" target="_blank">transcript</a><a href="/rooms/' + encodeURIComponent(r.name) + '/stats" target="_blank">stats</a><a href="/rooms/' + encodeURIComponent(r.name) + '" target="_blank">json</a></div>'
-      + '<div style="font-size:12px;color:var(--dim2);margin-top:8px">' + r.mode.replace('_',' ') + ' · ' + r.quorum + (r.anonymous ? ' · anonymous to agents' : '') + '</div></div>';
-    $('#details').innerHTML = h;
-    const cb = $('#closeroom'); if (cb) cb.onclick = () => closeRoom(r);
-    $('#hs').onchange = (e) => { hideSys = e.target.checked; store.set('hideSys', hideSys); rerender(); };
-    $('#as').onchange = (e) => { autoScroll = e.target.checked; };
-    for (const b of document.querySelectorAll('#details .more')) b.onclick = () => { const k = b.dataset.x; if (expanded.has(k)) expanded.delete(k); else expanded.add(k); details(r); };
+  // PART:inspector — summary-only decision renderer and inspector orchestration.
+  let inspectorTab = store.get('inspectorTab', 'decision');
+  function inspectorBlock(key, text) {
+    // Escape keys as well as text: board/proposal identifiers are not markup.
+    return clampBlock(esc(key), String(text || ''));
   }
-
+  function renderProposal(r) {
+    const open = (r.proposals || []).find(p => p.status === 'open');
+    let h = '<section class="sec"><h3>Room brief</h3>' + inspectorBlock('topic:' + r.name, r.topic || 'No topic set.') + '</section>';
+    if (r.hold) h += '<section class="sec"><div class="need">On hold · ' + esc(r.hold.by) + '</div>' + inspectorBlock('hold:' + r.name, r.hold.reason) + '</section>';
+    if (r.unanswered_human) h += '<section class="sec"><h3>Human awaiting reply</h3><div class="need">' + esc(r.unanswered_human.name) + '</div>' + inspectorBlock('human:' + r.unanswered_human.id, r.unanswered_human.text) + '</section>';
+    if (r.conclusion) h += '<section class="sec"><h3>Conclusion</h3><div class="card concl">' + inspectorBlock('conclusion:' + r.name, r.conclusion.text) + '</div></section>';
+    if (open) {
+      const tally = open.tally || {}, blockers = open.blocked_by || [];
+      h += '<section class="sec"><h3>Open proposal <span>v' + esc(open.version) + '</span></h3><div class="card"><div class="meta"><code>' + esc(open.id) + '</code><span>by ' + esc(open.by) + '</span></div>' + inspectorBlock('proposal:' + open.id + ':' + open.version, open.text)
+        + '<div class="tally" aria-label="Vote tally"><span class="chip open">' + Number(tally.agree || 0) + ' agree</span><span class="chip alert">' + Number(tally.disagree || 0) + ' disagree</span><span class="chip">' + Number(tally.abstain || 0) + ' abstain</span></div>'
+        + '<div class="meta">Quorum: ' + esc(r.quorum) + ' · counts supplied by hub</div>';
+      h += '<h4>Blockers</h4>' + (blockers.length ? '<ul class="blockers">' + blockers.map(b => '<li class="need">' + esc(b) + '</li>').join('') + '</ul>' : '<div class="meta">No blockers reported by hub.</div>');
+      if (open.needs_challenge) h += '<div class="need">A scrutiny challenge is still required.</div>';
+      if ((open.waiting_on || []).length) h += '<div class="meta">Awaiting votes: ' + esc(open.waiting_on.join(', ')) + '</div>';
+      h += '<h4>Challenges</h4>' + ((open.challenges || []).length ? open.challenges.map(c => '<div class="ch"><b>' + esc(c.by) + '</b> <span class="chip">' + esc(c.status || 'open') + '</span> <span class="chip">' + (c.blocking === false ? 'non-blocking' : 'blocking') + '</span><div class="meta">v' + esc(c.version) + '</div>' + inspectorBlock('challenge:' + c.id, c.objection) + '</div>').join('') : '<div class="meta">No challenges filed.</div>');
+      h += '<h4>Votes</h4>' + ((open.votes || []).length ? open.votes.map(v => '<div class="ch"><b>' + esc(v.name) + '</b> <span class="chip">' + esc(v.vote) + '</span><div class="meta">' + (v.version !== undefined ? 'v' + esc(v.version) : 'version unspecified') + (v.stale ? ' · ' + esc(v.stale) : '') + (v.confidence !== undefined ? ' · confidence ' + esc(v.confidence) : '') + '</div>' + (v.reason ? inspectorBlock('vote:' + open.id + ':' + v.name, v.reason) : '') + '</div>').join('') : '<div class="meta">No votes yet.</div>');
+      h += '<p class="meta">Human agreement is advisory; a disagreement vetoes.</p><div class="vrow"><button type="button" class="vbtn" data-p="' + esc(open.id) + '" data-v="agree">Agree (advisory)</button><button type="button" class="vbtn veto" data-p="' + esc(open.id) + '" data-v="disagree">Veto</button><button type="button" class="vbtn" data-p="' + esc(open.id) + '" data-v="abstain">Abstain</button></div></div></section>';
+    } else if (!r.conclusion) h += '<section class="sec"><h3>Decision</h3><div class="empty">No open proposal. Discussion is still in progress.</div></section>';
+    const past = (r.proposals || []).filter(p => p.status !== 'open');
+    if (past.length) h += '<section class="sec"><h3>Proposal history</h3>' + past.map(p => '<div class="card"><span class="chip">' + esc(p.status) + '</span> <code>' + esc(p.id) + '</code> · v' + esc(p.version) + (p.text ? inspectorBlock('past:' + p.id, p.text) : '<p class="meta">Text omitted by hub; see transcript.</p>') + '</div>').join('') + '</section>';
+    return h;
+  }
+  function details(r) {
+    if (!r) { $('#details').innerHTML = '<div class="empty">Choose a room to inspect its work.</div>'; return; }
+    const tabs = [['decision','Decision'],['agents','Agents'],['board','Board'],['stats','Stats']];
+    if (!tabs.some(t => t[0] === inspectorTab)) inspectorTab = 'decision';
+    const root = $('#details'), focus = root.contains(document.activeElement) ? document.activeElement.id : null;
+    let h = '<div class="inspector-tabs" role="tablist" aria-label="Room inspector">' + tabs.map(t => '<button type="button" role="tab" id="inspector-tab-' + t[0] + '" data-inspector-tab="' + t[0] + '" aria-controls="inspector-panel" aria-selected="' + (inspectorTab === t[0]) + '" tabindex="' + (inspectorTab === t[0] ? '0' : '-1') + '">' + t[1] + '</button>').join('') + '</div><div class="inspector-panel" id="inspector-panel" role="tabpanel" tabindex="0" aria-labelledby="inspector-tab-' + inspectorTab + '">';
+    if (inspectorTab === 'decision') h += renderProposal(r);
+    if (inspectorTab === 'agents') h += typeof renderPeople === 'function' ? renderPeople(r) : '<section class="sec"><h3>Agents</h3>' + (r.participants || []).map(p => '<div class="person"><b>' + esc(p.name) + '</b> <span class="chip">' + esc(p.role || 'worker') + '</span> ' + (p.active ? 'active' : 'left') + '</div>').join('') + '</section>';
+    if (inspectorTab === 'board') h += typeof renderBoard === 'function' ? renderBoard(r) : '<section class="sec"><h3>Board</h3>' + Object.entries(r.board || {}).map(([k,e]) => '<div class="board"><h4>' + esc(k) + '</h4>' + inspectorBlock('board:' + k, e.text) + '</div>').join('') + '</section>';
+    if (inspectorTab === 'stats') h += typeof renderStats === 'function' ? renderStats(r) : '<section class="sec"><h3>Room statistics</h3><p>' + Number(r.message_count || 0) + ' messages · ' + Number(r.active_count || 0) + ' active participants</p></section>';
+    h += '</div><section class="sec tools"><h3>Transcript tools</h3><label><input type="checkbox" id="hs" ' + (hideSys ? 'checked' : '') + '> Hide join/leave notices</label><label><input type="checkbox" id="as" ' + (autoScroll ? 'checked' : '') + '> Follow new messages</label><div class="links"><a href="/rooms/' + encodeURIComponent(r.name) + '/transcript" target="_blank" rel="noopener">Transcript ↗</a><a href="/rooms/' + encodeURIComponent(r.name) + '/stats" target="_blank" rel="noopener">Stats JSON ↗</a></div>' + ((r.state === 'open' || r.state === 'stalled') ? '<button type="button" class="closebtn" id="closeroom">Close room without conclusion</button>' : '') + '</section>';
+    root.innerHTML = h;
+    if (focus) document.getElementById(focus)?.focus({preventScroll:true});
+    root.querySelectorAll('[data-inspector-tab]').forEach(b => b.onclick = () => { inspectorTab = b.dataset.inspectorTab; store.set('inspectorTab', inspectorTab); details(r); document.getElementById('inspector-tab-' + inspectorTab).focus({preventScroll:true}); });
+    root.querySelectorAll('[data-x]').forEach(b => b.onclick = () => { const key = b.dataset.x; expanded.has(key) ? expanded.delete(key) : expanded.add(key); details(r); });
+    const close = $('#closeroom'); if (close) close.onclick = () => closeRoom(r);
+    $('#hs').onchange = e => { hideSys = e.target.checked; store.set('hideSys', hideSys); rerender(); };
+    $('#as').onchange = e => { autoScroll = e.target.checked; if (autoScroll) $('#log').scrollTop = $('#log').scrollHeight; };
+  }
+  // END PART:inspector
   async function closeRoom(r) {
     if (!window.confirm('Close ' + r.name + '? No conclusion will be recorded and agents still in it will be told to leave.')) return;
     await fetch('/rooms/' + encodeURIComponent(r.name) + '/close', { method:'POST', headers: hdrs(), body: JSON.stringify({ name: $('#name').value || 'human', reason: 'closed from dashboard' }) });

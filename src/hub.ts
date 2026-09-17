@@ -749,6 +749,8 @@ export class Hub {
       return { mine: pid === to, who: this.shown(room, room.participants.get(to)!) };
     }
     const cur = room.responders.get(human.id);
+    // once answered, the nomination is final: no takeover after the TTL
+    if (cur && this.isAnswered(room, human)) return { mine: cur.pid === pid, who: this.shown(room, room.participants.get(cur.pid) ?? { id: cur.pid, name: "someone" }) };
     if (!cur || (cur.pid !== pid && Date.now() - cur.at > 20_000) || !room.participants.get(cur.pid)?.active) {
       room.responders.set(human.id, { pid, at: Date.now() });
       return { mine: true, who: this.shown(room, room.participants.get(pid)!) };

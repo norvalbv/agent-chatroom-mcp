@@ -168,7 +168,8 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
       if (!me.has(room)) me.set(room, new Set());
       me.get(room)!.add(participant.id);
       const shared = me.get(room)!.size > 1;
-      const recent = r.messages.filter((m) => hub.visibleTo(r, m, participant.id)).slice(-30);
+      const focus = hub.attentionFocus(r, participant);
+      const recent = focus ? [focus] : hub.deliverable(r, participant, participant.lastSeenSeq).slice(-30);
       hub.settleRead(r, participant, participant.lastSeenSeq, recent); // what join hands you counts as delivered; withheld human messages are kept
       const human = hub.unansweredHuman(r);
       return {
@@ -179,7 +180,7 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
         room: hub.summary(r),
         recent_messages: recent.map((m) => hub.fmt(r, m)),
         next_seq: participant.lastSeenSeq,
-        hint:
+        hint: hub.attentionHint(r, participant) ??
           (shared ? "Other agents share this MCP connection: pass participant_id on EVERY call. " : "") +
           (r.anonymous ? `You appear to others as "${participant.label}". ` : "") +
           (participant.role === "chair" ? "You are the chair: you are never waited on for quorum, a disagree from you vetoes, and you need not leave to unblock amendments. " : "") +
@@ -277,7 +278,6 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
       // the proposal text travels only when its version changed since this participant was last sent it
       const seenVersion = open ? (p.seenProposal?.[open.id] ?? 0) : 0;
       const openView = open ? hub.proposalView(r, open, false, seenVersion !== open.version) : null;
-      if (open) p.seenProposal = { ...(p.seenProposal ?? {}), [open.id]: open.version };
       const conclusion = r.conclusion
         ? p.seenConclusion
           ? { proposal_id: r.conclusion.proposalId, version: r.conclusion.version ?? null, chars: r.conclusion.text.length, unresolved_objections: r.conclusion.unresolved_objections ?? [], text_omitted: "already sent to you; room_status carries the full text" }
@@ -287,10 +287,20 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
       const block = hub.leavingWouldBlock(r, p);
       const human = hub.unansweredHuman(r);
       const resp = human ? hub.responderFor(r, human, id) : null;
+      const focus = hub.attentionFocus(r, p);
+      if (focus) return {
+        hint: hub.attentionHint(r, p), messages: msgs.map((m) => hub.fmt(r, m)),
+        next_seq: p.lastSeenSeq, room_state: r.state, your_turn: r.mode === "free" || hub.currentSpeaker(r)?.id === id,
+        your_role: p.role ?? "worker", humans_present: hub.activeParticipants(r).filter((x) => x.agent === "human").map((x) => x.name),
+        unanswered_human: human ? (resp!.mine ? { id: human.id, name: hub.shown(r, human.from), text: human.content, you_answer: true } : { name: hub.shown(r, human.from), responder: resp!.who, you_answer: false }) : null,
+        addressed_to_you: [{ id: focus.id, from: hub.shown(r, focus.from), text: focus.content }],
+        open_proposal: null, conclusion: null, leaving_would_block: !!block,
+      };
+      if (open) p.seenProposal = { ...(p.seenProposal ?? {}), [open.id]: open.version };
       const owed = hub.addressedBy(r, p);
       if (owed[0]) p.addressWarned = owed[0].id;
       const openingsHeld = r.expectedParticipants && !r.openingsRevealed;
-      const hint =
+      const hint = hub.attentionHint(r, p) ?? (
         r.state === "closed"
           ? "This room was closed without a conclusion. leave_room and stop."
           : r.state === "concluded"
@@ -316,7 +326,7 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
                             ? "You have been doing most of the talking. Unless you have new evidence, pass and let the others speak."
                             : msgs.length === 0
                               ? "No new messages yet. Call wait_for_messages again."
-                              : undefined;
+                              : undefined);
       // the hint goes first: it is the one line a weaker model must not lose to a clamp
       return {
         hint,
@@ -350,7 +360,7 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
     {
       title: "Pass (nothing to add)",
       description:
-        "Say nothing on purpose: you have read everything and have no new point. Silent in free rooms (it just marks you up to date and counts " +
+        "Decline only the currently delivered focused ask; with no focused ask, say nothing on purpose. Silent in free rooms (it just marks you up to date and counts " +
         "toward your participation balance); in round_robin rooms it yields your turn. Prefer this over repeating a point someone already made.",
       inputSchema: { room: roomArg, participant_id: asArg },
     },
@@ -374,7 +384,8 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
       } catch {}
       const p = viewer ? r.participants.get(viewer) : undefined;
       const msgs = p ? hub.readAs(r, p, since_seq, limit) : hub.read(room, since_seq ?? 0, limit, viewer);
-      return msgs.map((m) => hub.fmt(r, m));
+      const hint = p ? hub.attentionHint(r, p) : undefined;
+      return msgs.map((m) => hub.fmt(r, m) + (hint ? `\n[HINT] ${hint}` : ""));
     }),
   );
 

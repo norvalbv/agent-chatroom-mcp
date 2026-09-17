@@ -11,7 +11,7 @@ import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/
 const PORT = Number(process.env.PORT ?? 7733);
 const HTTP = `http://127.0.0.1:${PORT}`;
 
-const server = spawn("npx", ["tsx", "src/index.ts"], { env: { ...process.env, PORT: String(PORT), CHATROOM_SPAWN_DRY: "1", CHATROOM_LOG_DIR: "/tmp/chatroom-smoke-spawn" }, stdio: ["ignore", "inherit", "inherit"] });
+const server = spawn("npx", ["tsx", "src/index.ts"], { env: { ...process.env, PORT: String(PORT), CHATROOM_SPAWN_DRY: "1", CHATROOM_LOG_DIR: "/tmp/chatroom-smoke-spawn", CHATROOM_MAX_LIVE_PER_ROOM: "12" }, stdio: ["ignore", "inherit", "inherit"] });
 const stop = () => server.kill();
 process.on("exit", stop);
 
@@ -277,6 +277,9 @@ assert.deepEqual(tools, ["amend", "board_get", "board_set", "challenge", "join_r
   await fetch(`${HTTP}/rooms/${room}/messages`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ name: "benji", content: "and green?" }) });
   await a.call("wait_for_messages", { room, timeout_ms: 0 });
   await assert.rejects(a.call("propose", { room, text: "Blue." }), /nobody has answered/);
+  // the second human ask is still the focused debt: reply to it before proceeding
+  const wgreen = await a.call("wait_for_messages", { room, timeout_ms: 0 });
+  await a.call("send_message", { room, content: "benji: green noted too, we'll compare all three.", reply_to: wgreen.addressed_to_you[0].id });
   const pr = await a.call("propose", { room, text: "The colour is blue, because it is calm and readable." });
   assert.equal(pr.version, 1);
   // board: long evidence lives here, chat only gets a one-line notice
@@ -529,8 +532,11 @@ assert.deepEqual(tools, ["amend", "board_get", "board_set", "challenge", "join_r
   const rc = await c.call("read_messages", { room, since_seq: 0 });
   assert.ok(rc.some((m: string) => m.includes("[quiet → codex-1] @codex-1 which worktree")), "quiet is not privacy: read_messages shows it");
   await c.call("send_message", { room, content: "Carrying on with the public discussion." });
-  // addressed and shown once already: the next wait without an answer is refused, and the refusal delivers the unread
-  await assert.rejects(b.call("wait_for_messages", { room, timeout_ms: 0 }), /addressed you in #\d+[\s\S]*Carrying on with the public/);
+  // Addressed focus repeats without mixing public noise or throwing.
+  const qAgain = await b.call("wait_for_messages", { room, timeout_ms: 0 });
+  assert.equal(qAgain.messages.length, 1);
+  assert.ok(qAgain.messages[0].includes("which worktree"));
+  assert.ok(!qAgain.messages.some((m: string) => m.includes("Carrying on with the public")));
   await b.call("send_message", { room, content: "fix/auth-2", quiet: true, reply_to: q.id });
   await a.call("wait_for_messages", { room, timeout_ms: 0 });
   await a.call("send_message", { room, content: "Thanks, making this public for the record.", reply_to: q.id, quiet: true, surface: true });
@@ -670,8 +676,7 @@ assert.deepEqual(tools, ["amend", "board_get", "board_set", "challenge", "join_r
 }
 
 {
-  // an @-addressed message is answered before the next wait: the second wait without a reply is refused once, then proceeds.
-  // Regression: OpenRouter seats looped on wait_for_messages past "X addressed you" and never replied.
+  // RE-TARGET: focus repeats, unrelated activity is not an answer, and pass declines only delivered focus.
   const room = "owed";
   await a.call("join_room", { room, name: "claude-1", agent: "claude", expected_participants: 2 });
   await b.call("join_room", { room, name: "deepseek-1", agent: "openrouter" });
@@ -680,30 +685,35 @@ assert.deepEqual(tools, ["amend", "board_get", "board_set", "challenge", "join_r
   assert.equal(so.revealed, true);
   await a.call("wait_for_messages", { room, timeout_ms: 0 });
   await b.call("wait_for_messages", { room, timeout_ms: 0 });
-  await a.call("send_message", { room, content: "@deepseek-1 which file did you mean?" });
+  const firstAsk = await a.call("send_message", { room, content: "@deepseek-1 which file did you mean?" });
   const w1 = await b.call("wait_for_messages", { room, timeout_ms: 0 });
-  assert.equal(w1.addressed_to_you.length, 1, "the addressed message is listed");
-  assert.match(w1.hint, /addressed you directly/);
-  await assert.rejects(b.call("wait_for_messages", { room, timeout_ms: 0 }), /addressed you in #\d+ and you have not answered/, "the second wait without an answer is refused");
-  await b.call("wait_for_messages", { room, timeout_ms: 0 }); // refused once, then it proceeds
-  await b.call("send_message", { room, content: "I meant src/hub.ts." }); // no force: the refusal delivered the unread
+  assert.equal(w1.addressed_to_you.length, 1);
+  assert.match(w1.hint, /reply_to=.*pass/i);
+  const repeated = await b.call("wait_for_messages", { room, timeout_ms: 0 });
+  assert.deepEqual(repeated.messages, w1.messages, "outstanding ask repeats without exception");
+  await b.call("send_message", { room, content: "An unrelated status update.", force: true });
+  const stillOwed = await b.call("wait_for_messages", { room, timeout_ms: 0 });
+  assert.equal(stillOwed.addressed_to_you.length, 1, "unrelated post is not an answer");
+  await b.call("send_message", { room, content: "I meant src/hub.ts.", reply_to: firstAsk.id });
   await b.call("wait_for_messages", { room, timeout_ms: 0 });
-  await b.call("wait_for_messages", { room, timeout_ms: 0 }); // answered: no refusal
-  // a pass answers everything before it: two outstanding mentions, then a pass, then no refusal and nothing listed
   await a.call("wait_for_messages", { room, timeout_ms: 0 });
   await a.call("send_message", { room, content: "@deepseek-1 anything to add?", force: true });
   await a.call("send_message", { room, content: "@deepseek-1 and did you check the tests?", force: true });
   const w2 = await b.call("wait_for_messages", { room, timeout_ms: 0 });
-  assert.equal(w2.addressed_to_you.length, 2);
+  assert.equal(w2.messages.length, 1);
+  assert.ok(w2.messages[0].includes("anything to add"));
   await b.call("pass", { room });
-  const w3 = await b.call("wait_for_messages", { room, timeout_ms: 0 }); // not refused: the pass covered both
-  assert.equal(w3.addressed_to_you.length, 0, "a discharged mention must not be listed again");
-  await b.call("wait_for_messages", { room, timeout_ms: 0 });
-  // a fresh mention after a pass is a fresh debt, and reply_to takes the printed seq
+  const w3 = await b.call("wait_for_messages", { room, timeout_ms: 0 });
+  assert.equal(w3.messages.length, 1);
+  assert.ok(w3.messages[0].includes("check the tests"), "second ask survives focused pass");
+  await b.call("pass", { room });
+  assert.equal((await b.call("wait_for_messages", { room, timeout_ms: 0 })).addressed_to_you.length, 0);
   await a.call("send_message", { room, content: "@deepseek-1 one more thing?", force: true });
   const w4 = await b.call("wait_for_messages", { room, timeout_ms: 0 });
   assert.equal(w4.addressed_to_you.length, 1);
-  await assert.rejects(b.call("wait_for_messages", { room, timeout_ms: 0 }), /addressed you in #\d+/, "a new mention after a pass is refused again");
+  const readFocus = await b.call("read_messages", { room });
+  assert.equal(readFocus.length, 1);
+  assert.ok(readFocus[0].includes("one more thing"));
   const seq = Number(/#(\d+)/.exec(w4.messages.at(-1))![1]);
   const rep = await b.call("send_message", { room, content: "No, that is all.", reply_to: `#${seq}` });
   assert.ok(rep.sent.includes("No, that is all."));
@@ -716,7 +726,7 @@ assert.deepEqual(tools, ["amend", "board_get", "board_set", "challenge", "join_r
   // nudge; someone never joined -> one warning, then the next nudge reveals. A short nudge timer on a second hub.
   const PORT2 = PORT + 1;
   const HTTP2 = `http://127.0.0.1:${PORT2}`;
-  const server2 = spawn("npx", ["tsx", "src/index.ts"], { env: { ...process.env, PORT: String(PORT2), CHATROOM_SPAWN_DRY: "1", CHATROOM_NUDGE_AFTER_MS: "1200", CHATROOM_LOG_DIR: "/tmp/chatroom-smoke-spawn2" }, stdio: ["ignore", "inherit", "inherit"] });
+  const server2 = spawn("npx", ["tsx", "src/index.ts"], { env: { ...process.env, PORT: String(PORT2), CHATROOM_SPAWN_DRY: "1", CHATROOM_NUDGE_AFTER_MS: "1200", CHATROOM_LOG_DIR: "/tmp/chatroom-smoke-spawn2", CHATROOM_MAX_LIVE_PER_ROOM: "12" }, stdio: ["ignore", "inherit", "inherit"] });
   process.on("exit", () => server2.kill());
   for (let i = 0; i < 50; i++) {
     try {

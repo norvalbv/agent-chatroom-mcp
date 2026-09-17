@@ -36,6 +36,8 @@ export interface Participant {
   session?: string;
   /** seqs of messages withheld from this participant (human messages awaiting their nominated reply) */
   withheld?: number[];
+  /** Sparse receipts for delivered quiet bodies, retained only until their thread is surfaced. */
+  quietReceipts?: number[];
   /** explicit "nothing to add" turns */
   passes?: number;
   role?: Role;
@@ -606,18 +608,25 @@ export class Hub {
     return [...rows.values()].map((r) => ({ ...r, participants: [...r.participants] }));
   }
 
-  /** Make a quiet thread public: clear quiet on the chain and re-park its seqs for everyone outside the audience, once. */
+  /** Make a quiet thread public: re-park only unseen bodies outside the audience and consume their receipts. */
   surfaceThread(room: Room, rootId: string, reason: string): number {
     const root = room.messages.find((x) => x.id === rootId);
     if (!root || !root.quiet) return 0;
     const chain = room.messages.filter((m) => m.quiet && this.threadRoot(room, m).id === root.id);
     const audience = new Set(root.audience ?? []);
     for (const m of chain) m.quiet = false;
-    for (const p of this.activeParticipants(room)) {
-      if (audience.has(p.id)) continue;
-      const held = new Set(p.withheld ?? []);
-      for (const m of chain) if (m.seq <= p.lastSeenSeq) held.add(m.seq); // already past their cursor: re-park so it is delivered
-      p.withheld = [...held];
+    const surfacedSeqs = new Set(chain.map((m) => m.seq));
+    for (const p of room.participants.values()) {
+      const receipts = new Set(p.quietReceipts ?? []);
+      if (p.active && !audience.has(p.id)) {
+        const held = new Set(p.withheld ?? []);
+        for (const m of chain) if (m.seq <= p.lastSeenSeq && !receipts.has(m.seq)) held.add(m.seq);
+        p.withheld = [...held];
+      }
+      // Inactive participants and audience members also no longer need these receipts.
+      const remaining = [...receipts].filter((seq) => !surfacedSeqs.has(seq));
+      if (remaining.length) p.quietReceipts = remaining;
+      else delete p.quietReceipts;
     }
     this.post(room, "system", undefined, `Quiet thread ${root.id} (${chain.length} messages between ${[...audience].map((id) => this.shown(room, room.participants.get(id) ?? { id, name: id })).join(", ")}) is now public: ${reason}.`);
     return chain.length;
@@ -635,6 +644,9 @@ export class Hub {
   settleRead(room: Room, p: Participant, since: number, delivered: Message[], upTo?: number) {
     const ceiling = upTo ?? room.messages.at(-1)?.seq ?? since;
     const deliveredSeqs = new Set(delivered.map((m) => m.seq));
+    const receipts = new Set(p.quietReceipts ?? []);
+    for (const m of delivered) if (m.quiet) receipts.add(m.seq);
+    if (receipts.size) p.quietReceipts = [...receipts];
     const still = (p.withheld ?? []).filter((seq) => !deliveredSeqs.has(seq));
     for (const m of room.messages) if (m.seq > since && m.seq <= ceiling && m.from.id !== p.id && !this.visibleTo(room, m, p.id) && !still.includes(m.seq)) still.push(m.seq);
     p.withheld = still.length > 200 ? still.slice(-200) : still;

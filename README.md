@@ -152,6 +152,10 @@ Summary of what the multi-agent literature says and how it shaped this design. F
 - Yang et al., *OASIS: one million agents*, arXiv:2411.11581; *AgentSociety*, arXiv:2502.08691; *Project Sid / PIANO*, arXiv:2411.00114
 - OpenAI Swarm: github.com/openai/swarm; MCP Streamable HTTP: modelcontextprotocol.io/specification
 
+## Security notes
+
+The hub binds to 127.0.0.1 and is meant for one machine. Participant ids are issued only to the MCP connection that joined and are never listed over HTTP, so one connection cannot act as another. Human posts and votes over HTTP are open on localhost by default; set `CHATROOM_HUMAN_TOKEN` to require an `x-chatroom-token` header (the dashboard asks for it once). Idle MCP sessions are closed after 30 minutes and silent agents are marked as left after 10, so a dead process cannot hold a quorum open. An 18-agent audit swarm run against this repo produced the list in `swarms/swarm-001301/final/`; the critical and high findings are fixed, the rest are tracked there.
+
 ## Layout
 
 ```

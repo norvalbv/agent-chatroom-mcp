@@ -116,6 +116,7 @@ export interface Room {
   proposals: Map<string, Proposal>;
   /** round_robin bookkeeping */
   turnIndex: number;
+  turnPid?: string;
   round: number;
   /** long-poll waiters */
   waiters: Set<() => void>;
@@ -139,12 +140,12 @@ type Event =
   | { type: "join" | "leave"; room: string; p: Participant }
   | { type: "proposal"; proposal: Proposal }
   | { type: "vote"; room: string; proposalId: string; pid: string; entry: Proposal["votes"][string] }
-  | { type: "challenge"; room: string; proposalId: string; challenge: Challenge }
+  | { type: "challenge"; room: string; proposalId: string; challenge: Challenge; votes?: Proposal["votes"] }
   | { type: "state"; room: string; state: RoomState; conclusion?: Room["conclusion"] }
   | { type: "opening"; room: string; pid: string; content: string }
   | { type: "openings_revealed"; room: string }
   | { type: "board"; room: string; key: string; entry: BoardEntry | null }
-  | { type: "amend"; room: string; proposalId: string; text: string; version: number; votes: Proposal["votes"] };
+  | { type: "amend"; room: string; proposalId: string; text: string; version: number; votes: Proposal["votes"]; challenges?: Challenge[] };
 
 const now = () => new Date().toISOString();
 const shortId = (prefix: string) => `${prefix}_${randomBytes(4).toString("hex")}`;
@@ -179,16 +180,20 @@ export class Hub {
 
   getRoom(name: string): Room {
     const r = this.rooms.get(name);
-    if (!r) throw new HubError(`Room "${name}" does not exist. Use join_room (it auto-creates) or list_rooms.`);
+    if (!r) throw new HubError(Hub.ROOM_NAME.test(name) ? `Room "${name}" does not exist. Use join_room (it auto-creates) or list_rooms.` : "Invalid room name.");
     return r;
   }
+
+  static readonly MAX_ROOMS = 500;
+  static readonly ROOM_NAME = /^[a-zA-Z0-9_-]{1,64}$/;
 
   createRoom(name: string, opts: RoomOptions = {}): Room {
     const existing = this.rooms.get(name);
     if (existing) return existing;
-    if (!/^[a-zA-Z0-9_-]{1,64}$/.test(name)) {
-      throw new HubError(`Room name "${name}" must match [a-zA-Z0-9_-]{1,64}.`);
+    if (!Hub.ROOM_NAME.test(name)) {
+      throw new HubError(`Room name must match [a-zA-Z0-9_-]{1,64}.`);
     }
+    if (this.rooms.size >= Hub.MAX_ROOMS) throw new HubError(`Room limit (${Hub.MAX_ROOMS}) reached.`);
     const full: Opts = {
       topic: opts.topic ?? "",
       mode: opts.mode ?? "free",
@@ -260,7 +265,6 @@ export class Hub {
       round: room.round,
       current_turn: room.mode === "round_robin" && speaker ? nm(speaker) : null,
       participants: [...room.participants.values()].map((p) => ({
-        ...(reveal ? { id: p.id } : {}),
         name: nm(p),
         ...(reveal && room.anonymous ? { label: p.label } : {}),
         agent: reveal || !room.anonymous ? p.agent : "hidden",
@@ -317,8 +321,11 @@ export class Hub {
   join(roomName: string, name: string, agent: string, opts: RoomOptions = {}, reclaimId?: string): { room: Room; participant: Participant } {
     const room = this.createRoom(roomName, opts);
     if (!name.trim()) throw new HubError("A display name is required to join.");
+    if (name.length > 64) throw new HubError("Display names are capped at 64 characters.");
+    if (!/^[^\n\r<>]+$/.test(name)) throw new HubError("Display names cannot contain newlines or angle brackets.");
 
     let participant = reclaimId ? room.participants.get(reclaimId) : undefined;
+    if (participant && participant.name !== name) throw new HubError("participant_id does not belong to that name.");
     if (!participant) participant = [...room.participants.values()].find((p) => p.name === name && !p.active);
     // Humans are identified by name alone (they come in over plain HTTP with no session), so they always reclaim.
     if (!participant && agent === "human") participant = [...room.participants.values()].find((p) => p.name === name && p.agent === "human");
@@ -378,9 +385,13 @@ export class Hub {
   }
 
   currentSpeaker(room: Room): Participant | undefined {
-    const active = this.activeParticipants(room);
-    if (active.length === 0) return undefined;
-    return active[room.turnIndex % active.length];
+    const v = this.voters(room);
+    if (v.length === 0) return undefined;
+    const cur = room.turnPid ? v.find((p) => p.id === room.turnPid) : undefined;
+    if (cur) return cur;
+    // previous speaker left (or none yet): floor goes to the first voter after their position
+    room.turnPid = v[room.turnIndex % v.length].id;
+    return v[room.turnIndex % v.length];
   }
 
   // ---------- messages ----------
@@ -484,8 +495,11 @@ export class Hub {
   }
 
   private advanceTurn(room: Room) {
-    const active = this.activeParticipants(room);
-    room.turnIndex = (room.turnIndex + 1) % Math.max(active.length, 1);
+    const v = this.voters(room);
+    if (v.length === 0) return;
+    const i = Math.max(0, v.findIndex((p) => p.id === room.turnPid));
+    room.turnIndex = (i + 1) % v.length;
+    room.turnPid = v[room.turnIndex].id;
     if (room.turnIndex === 0) {
       room.round += 1;
       if (room.maxRounds && room.round > room.maxRounds && room.state === "open") {
@@ -819,13 +833,16 @@ export class Hub {
       next = pr.text.replace(find, replace);
     }
     if (next === pr.text) throw new HubError("That amendment changes nothing.");
+    const changed = Math.abs(next.length - pr.text.length) + (find ? find.length : 0);
+    const stale = changed > pr.text.length * 0.25 && pr.challenges.length > 0;
     pr.text = next;
     pr.version += 1;
     pr.votes = { [p.id]: { vote: "agree", name: p.name, ts: now(), reason: `amended to v${pr.version}` } };
-    this.persist({ type: "amend", room: roomName, proposalId, text: pr.text, version: pr.version, votes: pr.votes });
+    if (stale) pr.challenges = []; // the challenged text no longer exists; the gate must be satisfied again
+    this.persist({ type: "amend", room: roomName, proposalId, text: pr.text, version: pr.version, votes: pr.votes, challenges: pr.challenges });
     const clip = (t: string, n: number) => (t.length > n ? t.slice(0, n) + "…" : t);
     const diff = find ? `"${clip(find, 160)}" → "${clip(replace, 240)}"` : `appended "${clip(replace, 240)}"`;
-    this.post(room, "amend", p, `AMENDED ${proposalId} to v${pr.version}: ${diff}\n(votes reset; read the current text in room_status and re-vote)`, { proposalId });
+    this.post(room, "amend", p, `AMENDED ${proposalId} to v${pr.version}: ${diff}\n(votes reset${stale ? ", earlier challenges no longer apply" : ""}; read the current text in room_status and re-vote)`, { proposalId });
     return { proposal: pr, diff };
   }
 
@@ -887,7 +904,7 @@ export class Hub {
     // A challenge must be answered: the challenger's own vote (if any) is reset and must be re-cast
     // after the room has responded, so the proposal cannot pass in the same breath.
     delete pr.votes[p.id];
-    this.persist({ type: "challenge", room: roomName, proposalId, challenge });
+    this.persist({ type: "challenge", room: roomName, proposalId, challenge, votes: pr.votes });
     this.post(
       room,
       "challenge",
@@ -895,6 +912,7 @@ export class Hub {
       `${objection}\n(challenge to ${proposalId}; ${this.shown(room, p)} re-votes once it is answered)`,
       { proposalId },
     );
+    this.evaluate(room, pr); // a non-voter's challenge can unpark an already-unanimous proposal
     return pr;
   }
 
@@ -955,7 +973,7 @@ export class Hub {
     if (pr.status !== "open" || room.state === "concluded") return;
     const active = this.voters(room);
     if (active.length === 0) return;
-    if (room.expectedParticipants && room.participants.size < room.expectedParticipants) return;
+    if (room.expectedParticipants && this.voters(room).length < room.expectedParticipants) return;
     const humanVeto = this.activeParticipants(room).some((p) => p.agent === "human" && pr.votes[p.id]?.vote === "disagree");
     const votes = active.map((p) => pr.votes[p.id]?.vote);
     const agree = votes.filter((v) => v === "agree").length;
@@ -1016,6 +1034,27 @@ export class Hub {
     this.persist({ type: "state", room: room.name, state, conclusion: room.conclusion });
   }
 
+  // ---------- liveness ----------
+
+  /** Mark participants inactive after `idleMs` without any activity in a room that has not concluded. */
+  sweepIdle(idleMs: number): number {
+    let n = 0;
+    const cutoff = Date.now() - idleMs;
+    for (const room of this.rooms.values()) {
+      if (room.state === "concluded") continue;
+      for (const p of room.participants.values()) {
+        if (p.active && p.agent !== "human" && Date.parse(p.lastActiveAt) < cutoff) {
+          p.active = false;
+          this.persist({ type: "leave", room: room.name, p });
+          this.post(room, "system", undefined, `${this.shown(room, p)} went quiet for ${Math.round(idleMs / 60000)} min and was marked as left.`);
+          for (const pr of room.proposals.values()) if (pr.status === "open") this.evaluate(room, pr);
+          n++;
+        }
+      }
+    }
+    return n;
+  }
+
   // ---------- persistence (append-only JSONL per room) ----------
 
   private persist(ev: Event) {
@@ -1029,7 +1068,13 @@ export class Hub {
     for (const file of readdirSync(this.dataDir).filter((f) => f.endsWith(".jsonl"))) {
       const lines = readFileSync(join(this.dataDir, file), "utf8").split("\n").filter(Boolean);
       for (const line of lines) {
-        const ev = JSON.parse(line) as Event;
+        let ev: Event;
+        try {
+          ev = JSON.parse(line) as Event;
+        } catch {
+          console.error(`[hub] skipping unreadable line in ${file} (truncated write?)`);
+          continue;
+        }
         switch (ev.type) {
           case "room": {
             // older logs may lack newer options; fill defaults
@@ -1073,7 +1118,10 @@ export class Hub {
           }
           case "challenge": {
             const pr = this.rooms.get(ev.room)?.proposals.get(ev.proposalId);
-            pr?.challenges.push(ev.challenge);
+            if (pr) {
+              pr.challenges.push(ev.challenge);
+              if (ev.votes) pr.votes = ev.votes;
+            }
             break;
           }
           case "state": {
@@ -1105,6 +1153,7 @@ export class Hub {
               pr.text = ev.text;
               pr.version = ev.version;
               pr.votes = ev.votes;
+              if (ev.challenges) pr.challenges = ev.challenges;
             }
             break;
           }

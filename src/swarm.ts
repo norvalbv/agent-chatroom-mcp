@@ -20,7 +20,8 @@ const flag = (name: string, def?: string) => {
   return i >= 0 ? argv[i + 1] : def;
 };
 const has = (name: string) => argv.includes(`--${name}`);
-const task = argv.find((a, i) => !a.startsWith("--") && (i === 0 || !argv[i - 1].startsWith("--")));
+const BOOL_FLAGS = new Set(["--apply", "--full-access", "--named"]);
+const task = argv.find((a, i) => !a.startsWith("--") && (i === 0 || !argv[i - 1].startsWith("--") || BOOL_FLAGS.has(argv[i - 1])));
 if (!task) {
   console.error('usage: swarm "<task>" [--agents 6] [--cwd dir] [--models sonnet,haiku] [--lead-model opus] [--verifier-model opus] [--planner-model opus] [--codex 0] [--apply] [--full-access] [--named] [--timeout 30] [--port 7717]');
   process.exit(2);
@@ -43,7 +44,7 @@ const WRITE_TOOLS = [...READ_TOOLS, "Edit", "Write", "MultiEdit", "NotebookEdit"
 const TIMEOUT_MIN = Number(flag("timeout", "30"));
 const PORT = Number(flag("port", process.env.PORT ?? "7717"));
 const URL_ = `http://127.0.0.1:${PORT}`;
-const SWARM_ID = `swarm-${new Date().toISOString().slice(11, 19).replace(/:/g, "")}`;
+const SWARM_ID = `swarm-${new Date().toISOString().slice(11, 19).replace(/:/g, "")}-${Math.random().toString(36).slice(2, 6)}`;
 const OUT = resolve(repoRoot, "swarms", SWARM_ID);
 mkdirSync(OUT, { recursive: true });
 
@@ -138,13 +139,15 @@ async function tailRooms(rooms: string[]) {
 
 /** With --full-access, give each worker its own git worktree so parallel edits cannot collide. */
 const isGitRepo = spawnSync("git", ["-C", CWD, "rev-parse", "--is-inside-work-tree"], { encoding: "utf8" }).stdout?.trim() === "true";
+const readOnlyWorkers = new Set<string>();
 function workerCwd(name: string): string {
   if (!FULL || !isGitRepo) return CWD;
   const dir = resolve(CWD, ".swarm-worktrees", SWARM_ID, name);
   const branch = `swarm/${SWARM_ID}/${name}`;
   const r = spawnSync("git", ["-C", CWD, "worktree", "add", "-b", branch, dir], { encoding: "utf8" });
   if (r.status !== 0) {
-    log(`worktree for ${name} failed (${r.stderr.trim()}); using ${CWD}`);
+    log(`worktree for ${name} failed (${r.stderr.trim()}); ${name} will run READ-ONLY in ${CWD}`);
+    readOnlyWorkers.add(name);
     return CWD;
   }
   log(`${name} works in ${dir} (branch ${branch})`);
@@ -247,14 +250,14 @@ for (const g of plan.groups) {
     const text = prompt("worker.md", {
       ...vars,
       CWD: wcwd,
-      WRITE_RULE: FULL
-        ? `You MAY modify files and run anything; you are on your own git branch in ${wcwd}. Commit what you want the verifier to test and say so in the room.`
-        : "Do NOT modify any files.",
+      WRITE_RULE:
+        FULL && !readOnlyWorkers.has(name)
+          ? `You MAY modify files and run anything; you are on your own git branch in ${wcwd}. Commit what you want the verifier to test and say so in the room.`
+          : "Do NOT modify any files.",
     });
-    const model = isLead ? LEAD_MODEL : MODELS.length ? MODELS[workerIndex % MODELS.length] : undefined;
-    workerIndex++;
+    const model = isLead ? LEAD_MODEL : MODELS.length ? MODELS[workerIndex++ % MODELS.length] : undefined;
     log(`launching ${name}${isLead ? " (lead)" : ""}${model ? ` [${model}]` : ""}`);
-    runs.push((useCodex ? runCodex(name, text, wcwd) : runClaude(name, text, FULL ? WRITE_TOOLS : READ_TOOLS, wcwd, model)).then((t) => ({ name, text: t })));
+    runs.push((useCodex ? runCodex(name, text, wcwd) : runClaude(name, text, FULL && !readOnlyWorkers.has(name) ? WRITE_TOOLS : READ_TOOLS, wcwd, model)).then((t) => ({ name, text: t })));
   }
 }
 

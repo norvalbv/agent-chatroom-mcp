@@ -29,9 +29,10 @@ fi
 
 LENSES=("cost and simplicity" "risk and failure modes" "the people who have to operate and maintain it" "the strongest case against the obvious answer" "what changes in a year" "evidence from real-world use")
 IDX=0
-render_prompt() { # name agent
+render_prompt() { # name agent  — literal substitution via node; topic text can contain anything
   local lens="${LENSES[$((IDX % ${#LENSES[@]}))]}"; IDX=$((IDX + 1))
-  sed -e "s|{{NAME}}|$1|g" -e "s|{{AGENT}}|$2|g" -e "s|{{ROOM}}|$ROOM|g" -e "s|{{N}}|$N|g" -e "s|{{TOPIC}}|$TOPIC|g" -e "s|{{LENS}}|$lens|g" "prompts/${PROMPT:-minimal}.md"
+  TPL_NAME="$1" TPL_AGENT="$2" TPL_ROOM="$ROOM" TPL_N="$N" TPL_TOPIC="$TOPIC" TPL_LENS="$lens" \
+    node -e 'const fs=require("fs");let t=fs.readFileSync(process.argv[1],"utf8");for(const [k,v] of Object.entries(process.env)) if(k.startsWith("TPL_")) t=t.split("{{"+k.slice(4)+"}}").join(v);process.stdout.write(t)' "prompts/${PROMPT:-minimal}.md"
 }
 
 MCP_JSON="$LOGS/mcp.json"

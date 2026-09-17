@@ -33,7 +33,13 @@ const fail = (err: unknown) => ({
   ],
 });
 
-export function createSessionServer(hub: Hub): McpServer {
+export interface SessionServer {
+  server: McpServer;
+  /** Mark every participant this connection owns as left (called when the transport closes). */
+  leaveAll(): void;
+}
+
+export function createSessionServer(hub: Hub): SessionServer {
   const server = new McpServer(
     { name: "agent-chatroom", version: "0.2.0" },
     {
@@ -48,8 +54,11 @@ export function createSessionServer(hub: Hub): McpServer {
 
   const me = new Map<string, Set<string>>();
   const pid = (room: string, override?: string) => {
-    if (override) return override;
     const ids = me.get(room);
+    if (override) {
+      if (!ids?.has(override)) throw new HubError("That participant_id was not issued to this connection. Use the id join_room returned to you.");
+      return override;
+    }
     if (!ids || ids.size === 0) throw new HubError(`You have not joined "${room}" on this connection. Call join_room first.`);
     if (ids.size > 1) {
       const r = hub.getRoom(room);
@@ -424,5 +433,15 @@ export function createSessionServer(hub: Hub): McpServer {
     },
   );
 
-  return server;
+  const leaveAll = () => {
+    for (const [room, ids] of me) {
+      for (const id of ids) {
+        try {
+          hub.leave(room, id);
+        } catch {}
+      }
+      ids.clear();
+    }
+  };
+  return { server, leaveAll };
 }

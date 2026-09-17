@@ -26,49 +26,83 @@ const PORT = Number(process.env.PORT ?? 7717);
 const HOST = process.env.HOST ?? "127.0.0.1";
 const DATA_DIR = process.env.CHATROOM_DATA_DIR ? resolve(process.env.CHATROOM_DATA_DIR) : undefined;
 
-const hub = new Hub({ dataDir: DATA_DIR });
-const app = createMcpExpressApp({ host: HOST });
-app.use(express.json({ limit: "2mb" }));
+const HUMAN_TOKEN = process.env.CHATROOM_HUMAN_TOKEN; // optional shared secret for the human POST routes
+const MAX_SESSIONS = 500;
+const SESSION_IDLE_MS = 30 * 60_000;
+const PARTICIPANT_IDLE_MS = 10 * 60_000;
 
-const transports = new Map<string, StreamableHTTPServerTransport>();
+const hub = new Hub({ dataDir: DATA_DIR });
+const app = createMcpExpressApp({ host: HOST }); // already parses JSON bodies (100kb)
+
+const transports = new Map<string, { t: StreamableHTTPServerTransport; leaveAll: () => void; lastSeen: number }>();
 
 app.post("/mcp", async (req, res) => {
   const sessionId = req.header("mcp-session-id");
-  let transport = sessionId ? transports.get(sessionId) : undefined;
-  if (!transport) {
-    if (sessionId) {
-      res.status(404).json({ jsonrpc: "2.0", error: { code: -32001, message: "Unknown session; re-initialize." }, id: null });
-      return;
-    }
-    transport = new StreamableHTTPServerTransport({
-      sessionIdGenerator: () => randomUUID(),
-      onsessioninitialized: (id) => {
-        transports.set(id, transport!);
-      },
-    });
-    transport.onclose = () => {
-      if (transport?.sessionId) transports.delete(transport.sessionId);
-    };
-    await createSessionServer(hub).connect(transport);
+  const entry = sessionId ? transports.get(sessionId) : undefined;
+  if (entry) {
+    entry.lastSeen = Date.now();
+    await entry.t.handleRequest(req, res, req.body);
+    return;
   }
+  if (sessionId) {
+    res.status(404).json({ jsonrpc: "2.0", error: { code: -32001, message: "Unknown session; re-initialize." }, id: null });
+    return;
+  }
+  if (transports.size >= MAX_SESSIONS) {
+    res.status(503).type("text/plain").send("Too many sessions");
+    return;
+  }
+  const session = createSessionServer(hub);
+  const transport = new StreamableHTTPServerTransport({
+    sessionIdGenerator: () => randomUUID(),
+    onsessioninitialized: (id) => {
+      transports.set(id, { t: transport, leaveAll: session.leaveAll, lastSeen: Date.now() });
+    },
+  });
+  transport.onclose = () => {
+    session.leaveAll();
+    if (transport.sessionId) transports.delete(transport.sessionId);
+  };
+  await session.server.connect(transport);
   await transport.handleRequest(req, res, req.body);
 });
 
 const sessionRoute = async (req: express.Request, res: express.Response) => {
-  const transport = transports.get(req.header("mcp-session-id") ?? "");
-  if (!transport) {
-    res.status(400).send("Missing or unknown mcp-session-id");
+  const entry = transports.get(req.header("mcp-session-id") ?? "");
+  if (!entry) {
+    res.status(400).type("text/plain").send("Missing or unknown mcp-session-id");
     return;
   }
-  await transport.handleRequest(req, res);
+  entry.lastSeen = Date.now();
+  await entry.t.handleRequest(req, res);
+};
+
+// Liveness: close idle MCP sessions and mark silent agents as left, so a dead process cannot block a quorum forever.
+setInterval(() => {
+  const now = Date.now();
+  for (const [id, e] of transports) {
+    if (now - e.lastSeen > SESSION_IDLE_MS) {
+      e.leaveAll();
+      e.t.close().catch(() => {});
+      transports.delete(id);
+    }
+  }
+  hub.sweepIdle(PARTICIPANT_IDLE_MS);
+}, 60_000).unref();
+
+const requireToken = (req: express.Request, res: express.Response): boolean => {
+  if (!HUMAN_TOKEN || req.header("x-chatroom-token") === HUMAN_TOKEN) return true;
+  res.status(401).type("text/plain").send("x-chatroom-token required");
+  return false;
 };
 app.get("/mcp", sessionRoute);
 app.delete("/mcp", sessionRoute);
 
 // ---- human-facing endpoints ----
-const notFound = (res: express.Response, e: unknown) => res.status(404).send(e instanceof HubError ? e.message : String(e));
+const notFound = (res: express.Response, e: unknown) => res.status(404).type("text/plain").send(e instanceof HubError ? e.message : "error");
 app.get("/", (_req, res) => res.json({ name: "agent-chatroom-mcp", mcp: "/mcp", ui: "/ui", rooms: "/rooms", sessions: transports.size }));
 app.get("/ui", (_req, res) => res.type("html").send(UI_HTML));
+app.get("/config", (_req, res) => res.json({ human_token_required: Boolean(HUMAN_TOKEN) }));
 app.get("/rooms", (_req, res) => res.json(hub.listRooms(true)));
 app.get("/rooms/:room", (req, res) => {
   try {
@@ -93,32 +127,34 @@ app.get("/rooms/:room/messages", (req, res) => {
 });
 // A human interjecting from the dashboard or curl. Humans bypass budgets and the stale-send guard.
 app.post("/rooms/:room/messages", (req, res) => {
+  if (!requireToken(req, res)) return;
   try {
     const { name, content } = (req.body ?? {}) as { name?: string; content?: string };
     const { participant } = hub.join(req.params.room, (name || "human").trim(), "human");
     const m = hub.send(req.params.room, participant.id, String(content ?? ""), undefined, true);
     res.json(m);
   } catch (e) {
-    res.status(400).send(e instanceof HubError ? e.message : String(e));
+    res.status(400).type("text/plain").send(e instanceof HubError ? e.message : "error");
   }
 });
 // A human voting from the dashboard: agree is advisory, disagree vetoes.
 app.post("/rooms/:room/vote", (req, res) => {
+  if (!requireToken(req, res)) return;
   try {
     const { name, proposal_id, vote, reason } = (req.body ?? {}) as { name?: string; proposal_id?: string; vote?: "agree" | "disagree" | "abstain"; reason?: string };
     const { participant } = hub.join(req.params.room, (name || "human").trim(), "human");
     const pr = hub.vote(req.params.room, participant.id, String(proposal_id), vote ?? "abstain", reason);
     res.json(hub.proposalView(hub.getRoom(req.params.room), pr, true));
   } catch (e) {
-    res.status(400).send(e instanceof HubError ? e.message : String(e));
+    res.status(400).type("text/plain").send(e instanceof HubError ? e.message : "error");
   }
 });
 app.get("/rooms/:room/transcript", (req, res) => {
   try {
     const r = hub.getRoom(req.params.room);
     res.type("text/plain").send(
-      `# ${r.name}\nTopic: ${r.topic}\nState: ${r.state}${r.conclusion ? `\nConclusion: ${r.conclusion.text}` : ""}\n\n` +
-        r.messages.map((m) => `#${m.seq} [${m.ts}] ${m.from.name} (${m.kind}): ${m.content}`).join("\n") + "\n",
+      `# ${r.name}\nTopic: ${r.topic.replace(/\n/g, "\n    ")}\nState: ${r.state}${r.conclusion ? `\nConclusion: ${r.conclusion.text.replace(/\n/g, "\n    ")}` : ""}\n\n` +
+        r.messages.map((m) => `#${m.seq} [${m.ts}] ${m.from.name} (${m.kind}): ${m.content.replace(/\n/g, "\n    ")}`).join("\n") + "\n",
     );
   } catch (e) {
     notFound(res, e);

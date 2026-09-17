@@ -128,6 +128,9 @@ export const UI_HTML = `<!doctype html>
 <div id="details"></div>
 <script>
   const $ = (s) => document.querySelector(s);
+  let TOKEN = null;
+  fetch('/config').then(r => r.json()).then(c => { if (c.human_token_required) { TOKEN = (function(){ try { return localStorage.getItem('chatroom-token'); } catch { return null; } })() || window.prompt('This hub requires a token for human messages (CHATROOM_HUMAN_TOKEN):'); try { localStorage.setItem('chatroom-token', TOKEN || ''); } catch {} } }).catch(() => {});
+  const hdrs = () => ({ 'content-type':'application/json', ...(TOKEN ? { 'x-chatroom-token': TOKEN } : {}) });
   const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
   const store = { get: (k, d) => { try { const v = localStorage.getItem(k); return v === null ? d : JSON.parse(v); } catch { return d; } }, set: (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} } };
   let sel = new URLSearchParams(location.search).get('room') || null, seen = 0, roomsCache = [], lastSender = null, hideSys = store.get('hideSys', true), autoScroll = true, all = [];
@@ -237,14 +240,14 @@ export const UI_HTML = `<!doctype html>
     const v = e.target.closest('.vbtn'); if (!v || !sel) return;
     const reason = v.dataset.v === 'disagree' ? (window.prompt('Why? This vetoes the proposal.') || '') : '';
     if (v.dataset.v === 'disagree' && !reason) return;
-    await fetch('/rooms/' + encodeURIComponent(sel) + '/vote', { method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({ name: $('#name').value || 'human', proposal_id: v.dataset.p, vote: v.dataset.v, reason }) });
+    await fetch('/rooms/' + encodeURIComponent(sel) + '/vote', { method:'POST', headers: hdrs(), body: JSON.stringify({ name: $('#name').value || 'human', proposal_id: v.dataset.p, vote: v.dataset.v, reason }) });
     rooms(); poll();
   });
   $('#say').addEventListener('submit', async (e) => {
     e.preventDefault(); if (!sel) return;
     const content = $('#text').value.trim(); if (!content) return;
     $('#sendbtn').disabled = true;
-    await fetch('/rooms/' + encodeURIComponent(sel) + '/messages', { method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({ name: $('#name').value || 'human', content }) });
+    await fetch('/rooms/' + encodeURIComponent(sel) + '/messages', { method:'POST', headers: hdrs(), body: JSON.stringify({ name: $('#name').value || 'human', content }) });
     $('#text').value = ''; $('#text').style.height = ''; $('#sendbtn').disabled = false; poll();
   });
   $('#text').addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); $('#say').requestSubmit(); } });

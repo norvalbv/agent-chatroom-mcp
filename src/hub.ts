@@ -50,6 +50,9 @@ export interface Message {
   tag?: "opening";
   /** participant ids named with @ in the content */
   mentions?: string[];
+  /** quiet: pushed only to `audience` (sender + mentions); still in the log for everyone */
+  quiet?: boolean;
+  audience?: string[];
 }
 
 export interface BoardEntry {
@@ -303,6 +306,10 @@ export class Hub {
       latest_seq: room.messages.at(-1)?.seq ?? 0,
       proposals: [...room.proposals.values()].map((pr) => this.proposalView(room, pr, reveal)),
       board: Object.fromEntries([...room.board].map(([k, e]) => [k, { text: e.text, by: e.by, updated_at: e.updatedAt }])),
+      quiet: (() => {
+        const qs = room.messages.filter((m) => m.quiet);
+        return { messages: qs.length, unsurfaced_threads: new Set(qs.map((m) => this.threadRoot(room, m).id)).size };
+      })(),
       unanswered_human: (() => {
         const m = this.unansweredHuman(room);
         return m ? { id: m.id, name: m.from.name, text: m.content } : null;
@@ -434,10 +441,68 @@ export class Hub {
     return this.deliverable(room, p, p.lastSeenSeq).filter((m) => m.kind !== "system" && !(m.from.agent === "human" && this.isAnswered(room, m)));
   }
 
-  /** Messages this participant has not seen: new visible ones plus previously withheld ones that are now visible. */
+  /** Push predicate: quiet messages are pushed only to their audience. Everything else defers to visibleTo. Never used by read(). */
+  pushableTo(room: Room, m: Message, pid: string | undefined): boolean {
+    if (m.quiet && pid && !(m.audience ?? []).includes(pid)) return false;
+    return this.visibleTo(room, m, pid);
+  }
+
+  /** Messages this participant has not seen: new pushable ones plus previously withheld ones that are now visible. */
   deliverable(room: Room, p: Participant, since: number): Message[] {
     const held = new Set(p.withheld ?? []);
-    return room.messages.filter((m) => m.from.id !== p.id && ((m.seq > since && this.visibleTo(room, m, p.id)) || (held.has(m.seq) && this.visibleTo(room, m, p.id))));
+    return room.messages.filter((m) => m.from.id !== p.id && ((m.seq > since && this.pushableTo(room, m, p.id)) || (held.has(m.seq) && this.visibleTo(room, m, p.id))));
+  }
+
+  /** Root of a quiet thread: follow reply_to up to the first quiet message. */
+  threadRoot(room: Room, m: Message): Message {
+    let cur = m;
+    for (let i = 0; i < 50 && cur.replyTo; i++) {
+      const parent = room.messages.find((x) => x.id === cur.replyTo);
+      if (!parent || !parent.quiet) break;
+      cur = parent;
+    }
+    return cur;
+  }
+
+  /** Quiet threads this participant is not part of, collapsed to counts (content excluded). */
+  quietActivity(room: Room, p: Participant, since: number) {
+    const rows = new Map<string, { thread_id: string; participants: Set<string>; message_count: number; chars: number; last_seq: number }>();
+    for (const m of room.messages) {
+      if (!m.quiet || m.seq <= since || (m.audience ?? []).includes(p.id)) continue;
+      const root = this.threadRoot(room, m);
+      const row = rows.get(root.id) ?? { thread_id: root.id, participants: new Set<string>(), message_count: 0, chars: 0, last_seq: 0 };
+      for (const id of m.audience ?? []) row.participants.add(this.shown(room, room.participants.get(id) ?? { id, name: id }));
+      row.message_count++;
+      row.chars += m.content.length;
+      row.last_seq = Math.max(row.last_seq, m.seq);
+      rows.set(root.id, row);
+    }
+    return [...rows.values()].map((r) => ({ ...r, participants: [...r.participants] }));
+  }
+
+  /** Make a quiet thread public: clear quiet on the chain and re-park its seqs for everyone outside the audience, once. */
+  surfaceThread(room: Room, rootId: string, reason: string): number {
+    const root = room.messages.find((x) => x.id === rootId);
+    if (!root || !root.quiet) return 0;
+    const chain = room.messages.filter((m) => m.quiet && this.threadRoot(room, m).id === root.id);
+    const audience = new Set(root.audience ?? []);
+    for (const m of chain) m.quiet = false;
+    for (const p of this.activeParticipants(room)) {
+      if (audience.has(p.id)) continue;
+      const held = new Set(p.withheld ?? []);
+      for (const m of chain) if (m.seq <= p.lastSeenSeq) held.add(m.seq); // already past their cursor: re-park so it is delivered
+      p.withheld = [...held];
+    }
+    this.post(room, "system", undefined, `Quiet thread ${root.id} (${chain.length} messages between ${[...audience].map((id) => this.shown(room, room.participants.get(id) ?? { id, name: id })).join(", ")}) is now public: ${reason}.`);
+    return chain.length;
+  }
+
+  /** Surface every quiet thread whose message id is cited in `text`. */
+  surfaceCited(room: Room, text: string, reason: string) {
+    for (const id of new Set(text.match(/m_[0-9a-f]{8}/g) ?? [])) {
+      const m = room.messages.find((x) => x.id === id);
+      if (m?.quiet) this.surfaceThread(room, this.threadRoot(room, m).id, reason);
+    }
   }
 
   /** Advance the read cursor, remembering anything withheld so it is delivered later. */
@@ -445,13 +510,19 @@ export class Hub {
     const deliveredSeqs = new Set(delivered.map((m) => m.seq));
     const still = (p.withheld ?? []).filter((seq) => !deliveredSeqs.has(seq));
     for (const m of room.messages) if (m.seq > since && m.from.id !== p.id && !this.visibleTo(room, m, p.id) && !still.includes(m.seq)) still.push(m.seq);
-    p.withheld = still;
+    p.withheld = still.length > 200 ? still.slice(-200) : still;
     this.markRead(room, p, room.messages.at(-1)?.seq ?? since);
   }
 
-  send(roomName: string, pid: string, content: string, replyTo?: string, force = false): Message {
+  send(roomName: string, pid: string, content: string, replyTo?: string, force = false, quiet = false, surface = false): Message {
     const room = this.getRoom(roomName);
     const p = this.requireParticipant(room, pid);
+    if (quiet && p.agent === "human") throw new HubError("Humans speak to the room; quiet is for agent working exchanges.");
+    if (surface && replyTo) {
+      const parent = room.messages.find((m) => m.id === replyTo);
+      if (parent?.quiet) this.surfaceThread(room, this.threadRoot(room, parent).id, `${this.shown(room, p)} surfaced it`);
+      quiet = false; // a surfacing reply is public by definition
+    }
     // Chat stays open after a conclusion so humans can still be answered; only proposals close.
     if (!content.trim()) throw new HubError("Message content is empty.");
     if (content.length > room.maxMessageChars) {
@@ -501,7 +572,7 @@ export class Hub {
         );
       }
     }
-    if (!force && !target && p.agent !== "human" && room.mode === "free" && this.addressedBy(room, p).length === 0) {
+    if (!force && !quiet && !target && p.agent !== "human" && room.mode === "free" && this.addressedBy(room, p).length === 0) {
       const sh = this.share(room, p);
       const last = room.messages.at(-1);
       const roomActive = last && Date.now() - Date.parse(last.ts) < 20_000;
@@ -514,7 +585,16 @@ export class Hub {
       }
     }
     if (room.mode === "round_robin") this.advanceTurn(room);
-    const msg = this.post(room, "chat", p, content, { replyTo });
+    let audience: string[] | undefined;
+    if (quiet) {
+      const mentions = this.mentionsIn(room, content).filter((id) => id !== p.id);
+      const parent = replyTo ? room.messages.find((m) => m.id === replyTo) : undefined;
+      const inherited = parent?.quiet ? (parent.audience ?? []) : [];
+      const targets = [...new Set([...mentions, ...inherited])].filter((id) => room.participants.get(id)?.agent !== "human");
+      if (targets.length === 0) throw new HubError("A quiet message must @-name at least one agent (not a human). Quiet is not privacy: everyone can still read it.");
+      audience = [...new Set([p.id, ...targets])];
+    }
+    const msg = this.post(room, "chat", p, content, { replyTo, ...(quiet ? { quiet: true, audience } : {}) });
     p.messageCount += 1;
     p.lastSeenSeq = Math.max(p.lastSeenSeq, msg.seq);
     return msg;
@@ -584,7 +664,8 @@ export class Hub {
   fmt(room: Room, m: Message): string {
     const tag = m.kind === "chat" ? "" : `[${m.kind.toUpperCase()}] `;
     const who = m.from.id === "system" ? "system" : this.shown(room, m.from);
-    return `#${m.seq} ${who}: ${tag}${m.content}`;
+    const q = m.audience ? `[${m.quiet ? "quiet" : "was quiet"} → ${m.audience.filter((id) => id !== m.from.id).map((id) => this.shown(room, room.participants.get(id) ?? { id, name: id })).join(", ")}] ` : "";
+    return `#${m.seq} ${who}: ${q}${tag}${m.content}`;
   }
 
   private post(room: Room, kind: MessageKind, from: Participant | undefined, content: string, extra: Partial<Message> = {}): Message {
@@ -690,7 +771,7 @@ export class Hub {
 
   /** This agent's share of the recent agent-to-agent chat (last 12 messages, openings and humans excluded). */
   share(room: Room, p: Participant): { mine: number; of: number; fair: number; over: boolean } {
-    const recent = room.messages.filter((m) => m.kind === "chat" && m.tag !== "opening" && m.from.agent !== "human").slice(-12);
+    const recent = room.messages.filter((m) => m.kind === "chat" && m.tag !== "opening" && m.from.agent !== "human" && !m.quiet).slice(-12);
     const mine = recent.filter((m) => m.from.id === p.id).length;
     const n = Math.max(1, this.voters(room).length);
     const fair = 1 / n;
@@ -771,7 +852,7 @@ export class Hub {
 
   /** Was this participant addressed by name in any recent message they have not yet answered? */
   addressedBy(room: Room, p: Participant): Message[] {
-    const recent = room.messages.slice(-10).filter((m) => m.kind === "chat" && m.mentions?.includes(p.id) && m.from.id !== p.id);
+    const recent = room.messages.filter((m) => m.kind === "chat" && m.mentions?.includes(p.id) && m.from.id !== p.id && this.pushableTo(room, m, p.id)).slice(-10);
     return recent.filter((m) => !room.messages.some((r) => r.seq > m.seq && r.from.id === p.id && r.kind === "chat"));
   }
 
@@ -848,7 +929,7 @@ export class Hub {
     return new Set(ps.map((p) => p.session ?? `nosession:${p.id}`)).size;
   }
 
-  setBoard(roomName: string, pid: string, key: string, text: string, opts: { ifAbsent?: boolean; ifByMe?: boolean } = {}): BoardEntry | null {
+  setBoard(roomName: string, pid: string, key: string, text: string, opts: { ifAbsent?: boolean; ifByMe?: boolean; overwrite?: boolean } = {}): BoardEntry | null {
     const room = this.getRoom(roomName);
     const p = this.requireParticipant(room, pid);
     if (!Hub.BOARD_KEY.test(key)) throw new HubError("Board keys are short names like 'evidence', 'open questions', 'claim/auth', 'verify/auth'.");
@@ -880,6 +961,12 @@ export class Hub {
     }
     if (opts.ifAbsent && previous) throw new HubError(`"${key}" already exists (by ${previous.by}, ${previous.updatedAt}).`, { existing: previous });
     if (opts.ifByMe && previous && previous.by !== p.name) throw new HubError(`"${key}" was written by ${previous.by}, not you. Use post_to_room or a different key.`);
+    if (previous && previous.by !== p.name && !opts.overwrite && text.trim()) {
+      throw new HubError(
+        `"${key}" was written by ${previous.by} at ${previous.updatedAt}; replacing it would discard their text. Merge with the current content below and resend with overwrite=true, or use your own key.`,
+        { current: previous },
+      );
+    }
     if (!text.trim()) {
       room.board.delete(key);
       this.persist({ type: "board", room: roomName, key, entry: null });
@@ -887,6 +974,7 @@ export class Hub {
       if (key === `hold/${room.name}`) for (const pr of room.proposals.values()) if (pr.status === "open") this.evaluate(room, pr);
       return null;
     }
+    this.surfaceCited(room, text, `cited on the board under ${key}`);
     const entry: BoardEntry = { text, by: p.name, updatedAt: now() };
     room.board.set(key, entry);
     this.persist({ type: "board", room: roomName, key, entry });
@@ -997,6 +1085,7 @@ export class Hub {
           `Reply to them first with send_message reply_to="${human.id}" in plain prose, then propose.`,
       );
     }
+    this.surfaceCited(room, text, "cited in a proposal");
     const proposal: Proposal = {
       id: shortId("prop"),
       room: roomName,
@@ -1025,6 +1114,7 @@ export class Hub {
     if (pr.status !== "open") throw new HubError(`Proposal ${proposalId} is already ${pr.status}.`);
     if (pr.by.id === p.id) throw new HubError("You cannot challenge your own proposal; someone else must.");
     if (objection.trim().length < 20) throw new HubError("A challenge must state a specific objection (at least 20 characters).");
+    this.surfaceCited(room, objection, "cited in a challenge");
     const challenge: Challenge = { by: { id: p.id, name: p.name }, objection, ts: now() };
     pr.challenges.push(challenge);
     // A challenge must be answered: the challenger's own vote (if any) is reset and must be re-cast
@@ -1180,6 +1270,7 @@ export class Hub {
   }
 
   private conclude(room: Room, pr: Proposal) {
+    for (const m of room.messages) if (m.quiet) this.surfaceThread(room, this.threadRoot(room, m).id, "room concluded");
     pr.status = "accepted";
     for (const other of room.proposals.values()) if (other.id !== pr.id && other.status === "open") other.status = "superseded";
     room.conclusion = { text: pr.text, proposalId: pr.id, decidedAt: now() };

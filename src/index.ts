@@ -203,7 +203,7 @@ app.get("/rooms/:room/transcript", (req, res) => {
     const r = hub.getRoom(req.params.room);
     res.type("text/plain").send(
       `# ${r.name}\nTopic: ${r.topic.replace(/\n/g, "\n    ")}\nState: ${r.state}${r.conclusion ? `\nConclusion: ${r.conclusion.text.replace(/\n/g, "\n    ")}` : ""}\n\n` +
-        r.messages.map((m) => `#${m.seq} [${m.ts}] ${m.from.name} (${m.kind}): ${m.content.replace(/\n/g, "\n    ")}`).join("\n") + "\n",
+        r.messages.map((m) => `#${m.seq} [${m.ts}] ${m.from.name} (${m.kind}${m.audience ? ` ${m.quiet ? "quiet" : "was-quiet"}→${m.audience.filter((id) => id !== m.from.id).map((id) => r.participants.get(id)?.name ?? id).join(",")}` : ""}): ${m.content.replace(/\n/g, "\n    ")}`).join("\n") + "\n",
     );
   } catch (e) {
     notFound(res, e);

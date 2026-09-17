@@ -229,7 +229,7 @@ export const UI_HTML = `<!doctype html>
     const long = m.content.length > 900;
     const d = document.createElement('div');
     d.className = 'msg' + (cont ? ' cont' : '');
-    d.innerHTML = av(m.from.name) + '<div><div class="who"><b>' + esc(m.from.name) + '</b>' + (kind ? '<span class="k ' + kind + '">' + kind + '</span>' : '') + (m.replyTo ? '<span class="t">↩ reply</span>' : '') + '<span class="t" title="#' + m.seq + '">' + fmtT(m.ts) + '</span></div>'
+    d.innerHTML = av(m.from.name) + '<div><div class="who"><b>' + esc(m.from.name) + '</b>' + (kind ? '<span class="k ' + kind + '">' + kind + '</span>' : '') + (m.replyTo ? '<span class="t">↩ reply</span>' : '') + (m.quiet ? '<span class="k vote" title="pushed only to the named agents; everyone can still read it">quiet</span>' : '') + '<span class="t" title="#' + m.seq + '">' + fmtT(m.ts) + '</span></div>'
       + '<div class="body ' + kind + (long ? ' clamp' : '') + '">' + esc(m.content) + '</div>' + (long ? '<button class="more">show more</button>' : '') + '</div>';
     log.appendChild(d);
     if (long) d.querySelector('.more').onclick = (e) => { const b = d.querySelector('.body'); b.classList.toggle('clamp'); e.target.textContent = b.classList.contains('clamp') ? 'show more' : 'show less'; };

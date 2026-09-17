@@ -474,6 +474,42 @@ assert.deepEqual(tools, ["amend", "board_get", "board_set", "challenge", "join_r
   assert.equal(st.state, "concluded", "an independent verify entry naming the proposal passes it");
 }
 
+// ---------------- quiet (addressed) delivery and the board overwrite guard ----------------
+{
+  const room = "quiet";
+  await a.call("join_room", { room, name: "claude-1", agent: "claude" });
+  await b.call("join_room", { room, name: "codex-1", agent: "codex" });
+  await c.call("join_room", { room, name: "gemini-1", agent: "gemini" });
+  for (const x of [a, b, c]) await x.call("wait_for_messages", { room, timeout_ms: 0 });
+  await assert.rejects(a.call("send_message", { room, content: "psst", quiet: true }), /must @-name at least one agent/);
+  const q = await a.call("send_message", { room, content: "@codex-1 which worktree are you on?", quiet: true });
+  assert.match(q.sent, /\[quiet → codex-1\]/);
+  const wb = await b.call("wait_for_messages", { room, timeout_ms: 0 });
+  assert.ok(wb.messages.some((m: string) => m.includes("which worktree")));
+  assert.equal(wb.addressed_to_you.length, 1);
+  const wc = await c.call("wait_for_messages", { room, timeout_ms: 0 });
+  assert.ok(!wc.messages.some((m: string) => m.includes("which worktree")), "quiet message must not be pushed to bystanders");
+  assert.equal(wc.quiet_activity.length, 1);
+  assert.equal(wc.quiet_activity[0].message_count, 1);
+  const rc = await c.call("read_messages", { room, since_seq: 0 });
+  assert.ok(rc.some((m: string) => m.includes("[quiet → codex-1] @codex-1 which worktree")), "quiet is not privacy: read_messages shows it");
+  await c.call("send_message", { room, content: "Carrying on with the public discussion." });
+  await b.call("wait_for_messages", { room, timeout_ms: 0 });
+  await b.call("send_message", { room, content: "fix/auth-2", quiet: true, reply_to: q.id });
+  await a.call("wait_for_messages", { room, timeout_ms: 0 });
+  await a.call("send_message", { room, content: "Thanks, making this public for the record.", reply_to: q.id, quiet: true, surface: true });
+  const wc2 = await c.call("wait_for_messages", { room, timeout_ms: 0 });
+  assert.ok(wc2.messages.some((m: string) => m.includes("which worktree")), "surfaced thread must be delivered to the bystander");
+  assert.ok(wc2.messages.some((m: string) => m.includes("is now public")));
+  const tr = await (await fetch(`${HTTP}/rooms/${room}/transcript`)).text();
+  assert.match(tr, /\(chat was-quiet→codex-1\): @codex-1 which worktree/);
+  await a.call("board_set", { room, key: "notes", text: "A's notes: the bug is in auth.ts" });
+  await assert.rejects(b.call("board_set", { room, key: "notes", text: "B's notes" }), /replacing it would discard their text[\s\S]*A's notes/);
+  await b.call("board_set", { room, key: "notes", text: "A's notes: the bug is in auth.ts\nB's notes: reproduced on main", overwrite: true });
+  const merged = await a.call("board_get", { room, key: "notes" });
+  assert.match(merged.text, /A's notes[\s\S]*B's notes/);
+}
+
 const ui = await (await fetch(`${HTTP}/ui`)).text();
 assert.match(ui, /<title>Agent Chatroom<\/title>/);
 

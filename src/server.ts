@@ -177,18 +177,22 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
       description:
         "Post a message to the room. One claim, one reason, one ask. Address someone with @name (or @B in anonymous rooms) to give them the floor; " +
         "they are told to reply or pass. If messages arrived while you were composing, the send is refused and you get them instead: " +
-        "read them, then resend only if your point is still new (or pass force=true).",
+        "read them, then resend only if your point is still new (or pass force=true). quiet=true pushes an @-message only to the agents named, " +
+        "to save everyone else's context; it is NOT privacy: the message stays in the log, anyone can read_messages it, the human always sees it, and it " +
+        "becomes public the moment anyone cites it. Use quiet for working exchanges only, never for a directive or anything someone is asked to act on.",
       inputSchema: {
         room: roomArg,
         content: z.string().describe("The message text."),
         reply_to: z.string().optional().describe("Message id (m_...) you are replying to."),
         force: z.boolean().optional().describe("Send even if there are unread messages."),
+        quiet: z.boolean().optional().describe("Push only to the @-named agents (still logged and readable by all)."),
+        surface: z.boolean().optional().describe("With reply_to into a quiet thread: make the whole thread public."),
         participant_id: asArg,
       },
     },
-    guard(({ room, content, reply_to, force, participant_id }) => {
+    guard(({ room, content, reply_to, force, quiet, surface, participant_id }) => {
       const r = hub.getRoom(room);
-      const m = hub.send(room, pid(room, participant_id), content, reply_to, force);
+      const m = hub.send(room, pid(room, participant_id), content, reply_to, force, quiet, surface);
       return { sent: hub.fmt(r, m), id: m.id, seq: m.seq };
     }),
   );
@@ -243,6 +247,7 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
           ? { id: openView.id, version: openView.version, by: openView.by, tally: openView.tally, waiting_on: openView.waiting_on, needs_challenge: openView.needs_challenge, challenges: openView.challenges, text: openView.text }
           : null,
         board_keys: [...r.board.keys()],
+        quiet_activity: hub.quietActivity(r, p, since),
         addressed_to_you: hub.addressedBy(r, p).map((m) => ({ id: m.id, from: hub.shown(r, m.from), text: m.content.slice(0, 200) })),
         your_share: (() => {
           const sh = hub.share(r, p);
@@ -292,7 +297,7 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
     "read_messages",
     {
       title: "Read message history",
-      description: "Read messages from the room log without waiting. Use since_seq to page.",
+      description: "Read messages from the room log without waiting, including quiet messages between others (marked [quiet → names]). Use since_seq to page.",
       inputSchema: { room: roomArg, since_seq: z.number().int().min(0).default(0), limit: z.number().int().min(1).max(500).default(200), participant_id: asArg },
     },
     guard(({ room, since_seq, limit, participant_id }) => {
@@ -363,11 +368,12 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
         text: z.string(),
         if_absent: z.boolean().optional().describe("Create only; fail if the key exists (atomic claim)."),
         if_by_me: z.boolean().optional().describe("Update only if you wrote the existing entry."),
+        overwrite: z.boolean().optional().describe("Replace another author's entry (refused otherwise, with their current text returned so you can merge)."),
         participant_id: asArg,
       },
     },
-    guard(({ room, key, text, if_absent, if_by_me, participant_id }) => {
-      const e = hub.setBoard(room, pid(room, participant_id), key, text, { ifAbsent: if_absent, ifByMe: if_by_me });
+    guard(({ room, key, text, if_absent, if_by_me, overwrite, participant_id }) => {
+      const e = hub.setBoard(room, pid(room, participant_id), key, text, { ifAbsent: if_absent, ifByMe: if_by_me, overwrite });
       return e ? { key, chars: e.text.length, by: e.by } : { key, deleted: true };
     }),
   );

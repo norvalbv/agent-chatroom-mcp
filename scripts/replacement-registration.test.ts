@@ -178,6 +178,25 @@ test('replay restores the token gate: no silent reactivation after restart', () 
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
+test('stale token after the successor departs resurrects nothing and recommends nobody', () => {
+  const f = fixture(); register(f.hub, f.room.name, 'old', 'next');
+  const next = joinSuccessor(f.hub, f.room.name, 'next');
+  leave(f.hub, f.room.name, next.id);
+  // the successor is itself departed and has no registered successor of its own
+  assert.match(error(f), /no replacement is recorded\.$/);
+  assert.throws(() => f.hub.join(f.room.name, 'next', 'test', { replacementToken: 'stale' } as any), HubError);
+  assert.equal([...room(f.hub, f.room.name).participants.values()].some((p: any) => p.name === 'next' && p.active), false);
+});
+
+test('outstanding quiet ask owed by the predecessor is inherited by the successor', () => {
+  const f = fixture();
+  const ask = f.hub.send(f.room.name, f.sender.id, '@old quietly report', undefined, true, true);
+  assert.equal(ask.audience?.includes(f.old.id), true, 'quiet ask is in the predecessor audience');
+  register(f.hub, f.room.name, f.old.id, 'next');
+  const next = joinSuccessor(f.hub, f.room.name, 'next');
+  assert.equal(focusOf(f.hub, f.room.name, next.id)?.id, ask.id, 'quiet directed ask is inherited');
+});
+
 // ---------- NEW: outstanding directed-ask handoff to the replacement ----------
 
 test('outstanding directed ask is offered to the registered replacement', () => {

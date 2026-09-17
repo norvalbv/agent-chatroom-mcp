@@ -1384,7 +1384,8 @@ export class Hub {
             if (i >= 0) pending.splice(i, 1);
           }
         }
-      } else if (m.from.agent !== "human" && (m.mentions?.includes(p.id) || inherited.has(m.id)) && this.pushableTo(room, m, p.id)) pending.push(m);
+      } else if (m.from.agent !== "human" &&
+        ((m.mentions?.includes(p.id) && this.pushableTo(room, m, p.id)) || inherited.has(m.id))) pending.push(m);
     }
     return pending.filter((m) => !declined.has(m.id));
   }

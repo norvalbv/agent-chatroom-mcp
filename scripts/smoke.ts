@@ -212,16 +212,31 @@ assert.deepEqual(tools, ["amend", "board_get", "board_set", "challenge", "join_r
   assert.equal(w.unanswered_human.name, "benji");
   assert.equal(w.unanswered_human.you_answer, true, "first asker is nominated to answer");
   assert.match(w.hint, /You are the one answering/);
+  // withheld delivery: B does not even see the human message until A has answered
   const wb = await b.call("wait_for_messages", { room, timeout_ms: 0 });
   assert.equal(wb.unanswered_human.you_answer, false);
-  assert.match(wb.hint, /claude-1 is answering, you don't need to/);
-  // register: a greeting gets a greeting, not an essay
+  assert.ok(!wb.messages.some((m: string) => m.includes("teal")), "human message must be withheld from non-responders");
+  assert.match(wb.hint, /claude-1 is answering it/);
+  // register: a greeting gets a greeting, not an essay, with or without reply_to
   await fetch(`${HTTP}/rooms/${room}/messages`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ name: "benji", content: "hi all" }) });
   const w2 = await a.call("wait_for_messages", { room, timeout_ms: 0 });
-  await assert.rejects(a.call("send_message", { room, content: "Hello benji! State of play: " + "x".repeat(240), reply_to: w2.unanswered_human.id }), /greeting gets a greeting/);
-  await a.call("send_message", { room, content: "Hi benji!", reply_to: w2.unanswered_human.id });
+  await assert.rejects(a.call("send_message", { room, content: "Hello benji! State of play: " + "x".repeat(240) }), /greeting gets a greeting/);
+  await a.call("send_message", { room, content: "Hi benji!" });
+  // now B sees both the greeting and the reply, and a second greeting is refused
+  const wb2 = await b.call("wait_for_messages", { room, timeout_ms: 0 });
+  assert.ok(wb2.messages.some((m: string) => m.includes("hi all")) && wb2.messages.some((m: string) => m.includes("Hi benji!")), "withheld message must arrive with its reply");
+  await assert.rejects(b.call("send_message", { room, content: "Hello benji, me too!" }), /already answered/);
+  // @addressing: only the named agent may answer
+  await fetch(`${HTTP}/rooms/${room}/messages`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ name: "benji", content: "@codex-1 which do you prefer?" }) });
+  const wa = await a.call("wait_for_messages", { room, timeout_ms: 0 });
+  assert.equal(wa.unanswered_human.you_answer, false);
+  await assert.rejects(a.call("send_message", { room, content: "benji, I prefer blue." }), /addressed that to codex-1/);
+  const wb3 = await b.call("wait_for_messages", { room, timeout_ms: 0 });
+  assert.equal(wb3.unanswered_human.you_answer, true);
+  await b.call("send_message", { room, content: "benji: teal, narrowly." });
   const st0 = await a.call("room_status", { room });
   assert.equal(st0.unanswered_human.text, "hello team, what about teal?");
+  await a.call("wait_for_messages", { room, timeout_ms: 0 });
   await a.call("send_message", { room, content: "Hi benji! Teal is a strong option, we'll weigh it against blue.", reply_to: w.unanswered_human.id });
   const st1 = await a.call("room_status", { room });
   assert.equal(st1.unanswered_human, null, "reply_to must clear the unanswered-human gate");

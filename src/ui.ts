@@ -123,7 +123,7 @@ export const UI_HTML = `<!doctype html>
 <main>
   <header id="head"><div class="empty" style="padding:0">Pick a room</div></header>
   <div id="log"></div>
-  <form id="say"><input id="name" placeholder="your name" value="benji" /><textarea id="text" rows="1" placeholder="Say something as a human (Enter to send, Shift+Enter for a new line)"></textarea><button class="send" id="sendbtn">Send</button></form>
+  <form id="say"><input id="name" placeholder="your name" value="benji" /><textarea id="text" rows="1" placeholder="Say something (one agent will answer; start with @name or @all to choose who)"></textarea><button class="send" id="sendbtn">Send</button></form>
 </main>
 <div id="details"></div>
 <script>

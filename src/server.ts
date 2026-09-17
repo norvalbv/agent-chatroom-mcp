@@ -124,7 +124,7 @@ export function createSessionServer(hub: Hub): McpServer {
       if (!me.has(room)) me.set(room, new Set());
       me.get(room)!.add(participant.id);
       const shared = me.get(room)!.size > 1;
-      const recent = r.messages.slice(-30);
+      const recent = r.messages.filter((m) => hub.visibleTo(r, m, participant.id)).slice(-30);
       hub.markRead(r, participant, r.messages.at(-1)?.seq ?? 0);
       const human = hub.unansweredHuman(r);
       return {
@@ -222,7 +222,7 @@ export function createSessionServer(hub: Hub): McpServer {
         room_state: r.state,
         your_turn: r.mode === "round_robin" ? hub.currentSpeaker(r)?.id === id : true,
         active_participants: hub.activeParticipants(r).map((x) => hub.shown(r, x)),
-        unanswered_human: human ? { id: human.id, name: hub.shown(r, human.from), text: human.content, responder: resp!.who, you_answer: resp!.mine } : null,
+        unanswered_human: human && resp!.mine ? { id: human.id, name: hub.shown(r, human.from), text: human.content, you_answer: true } : human ? { name: hub.shown(r, human.from), responder: resp!.who, you_answer: false } : null,
         open_proposal: openView
           ? { id: openView.id, version: openView.version, by: openView.by, tally: openView.tally, waiting_on: openView.waiting_on, needs_challenge: openView.needs_challenge, challenges: openView.challenges, text: openView.text }
           : null,
@@ -237,7 +237,7 @@ export function createSessionServer(hub: Hub): McpServer {
               ? `${hub.shown(r, human.from)} (a human) said "${human.content.slice(0, 160)}" (${human.id}). You are the one answering: reply with send_message reply_to="${human.id}"` +
                 (hub.isSmallTalk(human) ? ", one short friendly line, nothing else." : ", directly and briefly, before anything else.")
               : human
-                ? `${hub.shown(r, human.from)} said "${human.content.slice(0, 80)}"; ${resp!.who} is answering, you don't need to. Carry on.`
+                ? `${hub.shown(r, human.from)} (a human) said something; ${resp!.who} is answering it. You will see it with the reply. Carry on.`
                 : needsChallenge && needsMyVote
                 ? "A proposal is open and untested. Name its single weakest claim in one sentence (challenge), then vote. If you want different wording, amend it instead of re-proposing."
                 : needsMyVote
@@ -254,11 +254,15 @@ export function createSessionServer(hub: Hub): McpServer {
     {
       title: "Read message history",
       description: "Read messages from the room log without waiting. Use since_seq to page.",
-      inputSchema: { room: roomArg, since_seq: z.number().int().min(0).default(0), limit: z.number().int().min(1).max(500).default(200) },
+      inputSchema: { room: roomArg, since_seq: z.number().int().min(0).default(0), limit: z.number().int().min(1).max(500).default(200), participant_id: asArg },
     },
-    guard(({ room, since_seq, limit }) => {
+    guard(({ room, since_seq, limit, participant_id }) => {
       const r = hub.getRoom(room);
-      return hub.read(room, since_seq, limit).map((m) => hub.fmt(r, m));
+      let viewer: string | undefined;
+      try {
+        viewer = pid(room, participant_id);
+      } catch {}
+      return hub.read(room, since_seq, limit, viewer).map((m) => hub.fmt(r, m));
     }),
   );
 

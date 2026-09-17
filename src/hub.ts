@@ -28,6 +28,8 @@ export interface Participant {
   lastSeenSeq: number;
   active: boolean;
   messageCount: number;
+  /** seqs of messages withheld from this participant (human messages awaiting their nominated reply) */
+  withheld?: number[];
 }
 
 export interface Message {
@@ -380,7 +382,23 @@ export class Hub {
 
   /** Substantive messages from others that this participant has not read yet (system notices do not count). */
   unread(room: Room, p: Participant): Message[] {
-    return room.messages.filter((m) => m.seq > p.lastSeenSeq && m.from.id !== p.id && m.kind !== "system");
+    // system notices, and human messages someone else has already answered, never block a send
+    return this.deliverable(room, p, p.lastSeenSeq).filter((m) => m.kind !== "system" && !(m.from.agent === "human" && this.isAnswered(room, m)));
+  }
+
+  /** Messages this participant has not seen: new visible ones plus previously withheld ones that are now visible. */
+  deliverable(room: Room, p: Participant, since: number): Message[] {
+    const held = new Set(p.withheld ?? []);
+    return room.messages.filter((m) => m.from.id !== p.id && ((m.seq > since && this.visibleTo(room, m, p.id)) || (held.has(m.seq) && this.visibleTo(room, m, p.id))));
+  }
+
+  /** Advance the read cursor, remembering anything withheld so it is delivered later. */
+  private settleRead(room: Room, p: Participant, since: number, delivered: Message[]) {
+    const deliveredSeqs = new Set(delivered.map((m) => m.seq));
+    const still = (p.withheld ?? []).filter((seq) => !deliveredSeqs.has(seq));
+    for (const m of room.messages) if (m.seq > since && m.from.id !== p.id && !this.visibleTo(room, m, p.id) && !still.includes(m.seq)) still.push(m.seq);
+    p.withheld = still;
+    this.markRead(room, p, room.messages.at(-1)?.seq ?? since);
   }
 
   send(roomName: string, pid: string, content: string, replyTo?: string, force = false): Message {
@@ -391,15 +409,28 @@ export class Hub {
     if (content.length > room.maxMessageChars) {
       throw new HubError(`Message is ${content.length} chars; this room allows ${room.maxMessageChars}. Say less: one claim, one reason, one ask.`);
     }
-    const target = replyTo ? room.messages.find((m) => m.id === replyTo) : undefined;
-    if (target && target.from.agent === "human" && p.agent !== "human") {
-      const cap = this.isSmallTalk(target) ? 240 : 900;
-      if (content.length > cap) {
+    const target = p.agent === "human" ? undefined : this.addressedHuman(room, content, replyTo);
+    if (target) {
+      const small = this.isSmallTalk(target);
+      const to = this.addressee(room, target);
+      const answered = this.isAnswered(room, target);
+      const resp = this.responderFor(room, target, p.id);
+      if (to && to !== "all" && to !== p.id) {
+        throw new HubError(`${this.shown(room, target.from)} addressed that to ${resp.who}, not you. Leave it to them.`);
+      }
+      if (small && answered && !resp.mine) {
         throw new HubError(
-          `${this.shown(room, target.from)} wrote ${target.content.length} characters; match their register. Replies to that message are capped at ${cap} characters` +
-            (this.isSmallTalk(target) ? " (a greeting gets a greeting, not a status report)." : "."),
+          `${resp.who} already answered ${this.shown(room, target.from)}'s "${target.content.slice(0, 60)}". One reply is enough; do not address them again unless they ask you something.`,
         );
       }
+      const cap = small ? 240 : 900;
+      if (content.length > cap) {
+        throw new HubError(
+          `${this.shown(room, target.from)} wrote ${target.content.length} characters; match their register. A reply to that message is capped at ${cap} characters` +
+            (small ? " (a greeting gets a greeting, not a status report)." : ". Answer the question; keep the debate out of it."),
+        );
+      }
+      if (!replyTo) replyTo = target.id; // record the addressing so the room knows it was answered
     }
     if (room.maxMessagesPerParticipant && p.messageCount >= room.maxMessagesPerParticipant && p.agent !== "human" && !this.unansweredHuman(room)) {
       throw new HubError(
@@ -453,9 +484,9 @@ export class Hub {
     }
   }
 
-  read(roomName: string, sinceSeq = 0, limit = 200): Message[] {
+  read(roomName: string, sinceSeq = 0, limit = 200, viewerPid?: string): Message[] {
     const room = this.getRoom(roomName);
-    return room.messages.filter((m) => m.seq > sinceSeq).slice(0, limit);
+    return room.messages.filter((m) => m.seq > sinceSeq && this.visibleTo(room, m, viewerPid)).slice(0, limit);
   }
 
   /**
@@ -465,7 +496,7 @@ export class Hub {
   async wait(roomName: string, pid: string | undefined, sinceSeq: number, timeoutMs: number): Promise<Message[]> {
     const room = this.getRoom(roomName);
     const p = pid ? room.participants.get(pid) : undefined;
-    const pending = () => room.messages.filter((m) => m.seq > sinceSeq && m.from.id !== p?.id);
+    const pending = () => (p ? this.deliverable(room, p, sinceSeq) : room.messages.filter((m) => m.seq > sinceSeq));
     let msgs = pending();
     if (msgs.length === 0 && timeoutMs > 0) {
       await new Promise<void>((resolve) => {
@@ -482,7 +513,7 @@ export class Hub {
       });
       msgs = pending();
     }
-    if (p) this.markRead(room, p, room.messages.at(-1)?.seq ?? sinceSeq);
+    if (p) this.settleRead(room, p, sinceSeq, msgs);
     return msgs;
   }
 
@@ -612,17 +643,69 @@ export class Hub {
     return m.content.trim().length < 60 && !m.content.includes("?");
   }
 
+  /** "@name ..." or "@all ..." at the start of a human message picks who should answer. */
+  addressee(room: Room, human: Message): string | "all" | undefined {
+    const m = /^@([\w-]+(?: [A-Za-z]\b)?)/.exec(human.content.trim());
+    if (!m) return undefined;
+    const key = m[1].toLowerCase();
+    if (key === "all" || key === "everyone") return "all";
+    const p = [...room.participants.values()].find(
+      (x) => x.name.toLowerCase() === key || x.label.toLowerCase() === key || x.label.toLowerCase() === `participant ${key}`,
+    );
+    return p?.id;
+  }
+
   /**
-   * Nominate one agent to answer a human message. The first agent to ask gets it; if they
-   * have not replied within 20s the next asker takes over. Everyone else is told it is covered.
+   * Nominate one agent to answer a human message. An @-addressed agent gets it; otherwise the
+   * first agent to ask. If the nominee has not replied within 20s (60s when @-addressed) the
+   * next asker takes over. Everyone else is told it is covered.
    */
   responderFor(room: Room, human: Message, pid: string): { mine: boolean; who: string } {
+    const to = this.addressee(room, human);
+    if (to === "all") return { mine: true, who: "everyone" };
+    const age = Date.now() - Date.parse(human.ts);
+    if (to && room.participants.get(to)?.active && age < 60_000) {
+      return { mine: pid === to, who: this.shown(room, room.participants.get(to)!) };
+    }
     const cur = room.responders.get(human.id);
     if (!cur || (cur.pid !== pid && Date.now() - cur.at > 20_000) || !room.participants.get(cur.pid)?.active) {
       room.responders.set(human.id, { pid, at: Date.now() });
       return { mine: true, who: this.shown(room, room.participants.get(pid)!) };
     }
     return { mine: cur.pid === pid, who: this.shown(room, room.participants.get(cur.pid)!) };
+  }
+
+  /**
+   * Withheld delivery: an unanswered human message is shown only to its nominated responder
+   * (for up to 20s, 60s when @-addressed). Everyone else sees it together with the reply, so
+   * there is nothing to react to.
+   */
+  visibleTo(room: Room, m: Message, pid: string | undefined): boolean {
+    if (!pid || m.kind !== "chat" || m.from.agent !== "human" || m.from.id === pid) return true;
+    if (this.isAnswered(room, m)) return true;
+    const to = this.addressee(room, m);
+    const age = Date.now() - Date.parse(m.ts);
+    if (age > (to && to !== "all" ? 60_000 : 20_000)) return true;
+    return this.responderFor(room, m, pid).mine;
+  }
+
+  /** The human message a non-human chat message is addressing, if any. */
+  addressedHuman(room: Room, content: string, replyTo?: string): Message | undefined {
+    if (replyTo) {
+      const t = room.messages.find((m) => m.id === replyTo);
+      if (t?.from.agent === "human") return t;
+    }
+    const lower = content.toLowerCase();
+    const humans = [...room.participants.values()].filter((p) => p.agent === "human");
+    for (let i = room.messages.length - 1; i >= 0; i--) {
+      const m = room.messages[i];
+      if (m.kind !== "chat" || m.from.agent !== "human") continue;
+      const p = humans.find((h) => h.id === m.from.id);
+      const names = [m.from.name, p?.label].filter(Boolean).map((n) => n!.toLowerCase());
+      if (names.some((n) => lower.includes(n))) return m;
+      break; // only the most recent human message can be addressed by name
+    }
+    return undefined;
   }
 
   // ---------- shared board ----------

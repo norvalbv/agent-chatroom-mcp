@@ -38,9 +38,9 @@ with different text invalidates that coverage as before.
 `version`, `waits`, `bytes`, `full`, `delta`, `empty` (plus a flattened
 `board_bytes_total`/`board_bytes_mean` view via `boardManifestTelemetry`). Each
 sample is persisted as a `board_manifest` event and replayed. `bytes` counts
-UTF-8 bytes of the standalone manifest envelope exactly as JSON.stringify writes
-it: a reset/full envelope, a delta envelope, or `{}` (2 bytes) when nothing
-changed. This is **not** total MCP/HTTP/socket framing and is not an
+UTF-8 bytes of the standalone manifest envelope with the MCP text renderer’s
+two-space indentation: a reset/full or delta envelope, or zero when board fields
+are omitted. The internal empty return `{}` is not embedded in the response. This is **not** total MCP/HTTP/socket framing and is not an
 acknowledgement of successful network delivery. Historic rooms without samples
 report `null`.
 Historical logs without successful wait receipts cannot establish aggregate

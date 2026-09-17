@@ -52,7 +52,7 @@ test('follow persists; expansion backfills; narrowing resets; gates stay visible
   } finally { f.cleanup(); }
 });
 
-test('leave/rejoin, active reconnect, and full board_get reset recover dropped delta', () => {
+test('leave/rejoin, active reconnect, and explicit hub reset recover dropped delta', () => {
   const f = fixture(); try {
     f.hub.setBoard(f.name, f.a.id, 'evidence/a', 'v1');
     f.manifest();

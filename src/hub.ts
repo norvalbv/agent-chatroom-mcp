@@ -1213,7 +1213,7 @@ export class Hub {
   recordBoardManifest(roomName: string, envelope: { board_keys?: string[]; board_delta?: { keys: string[]; tombstones: string[] } }): void {
     const room = this.getRoom(roomName);
     const kind = envelope.board_keys !== undefined ? "full" : envelope.board_delta !== undefined ? "delta" : "empty";
-    // Wire bytes as JSON.stringify writes them (contract/board-delta item 8: no-change [] is 2 bytes).
+    // Standalone manifest envelope in MCP text encoding; no embedded fields means zero bytes.
     const bytes = Hub.manifestBytes(envelope);
     this.applyBoardManifest(room, bytes, kind);
     this.persist({ type: "board_manifest", room: roomName, bytes, kind });
@@ -1250,9 +1250,9 @@ export class Hub {
     return new Set(ps.map((p) => p.session ?? `nosession:${p.id}`)).size;
   }
 
-  /** Wire bytes of a board envelope as JSON.stringify writes it. */
+  /** UTF-8 bytes of standalone pretty-JSON board fields, not HTTP/MCP framing. */
   static manifestBytes(envelope: Record<string, unknown>): number {
-    return Buffer.byteLength(JSON.stringify(envelope));
+    return Object.keys(envelope).length ? Buffer.byteLength(JSON.stringify(envelope, null, 2)) : 0;
   }
 
   boardManifestTelemetry(room: Room): { waits: number; board_bytes_total: number; board_bytes_mean: number } {

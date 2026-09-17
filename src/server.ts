@@ -384,7 +384,8 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
       } catch {}
       const p = viewer ? r.participants.get(viewer) : undefined;
       const msgs = p ? hub.readAs(r, p, since_seq, limit) : hub.read(room, since_seq ?? 0, limit, viewer);
-      return msgs.map((m) => hub.fmt(r, m));
+      const hint = p ? hub.attentionHint(r, p) : undefined;
+      return msgs.map((m) => hub.fmt(r, m) + (hint ? `\n[HINT] ${hint}` : ""));
     }),
   );
 

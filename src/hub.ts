@@ -168,8 +168,11 @@ export interface Room {
   conclusion?: { text: string; proposalId: string; decidedAt: string; version?: number; tally?: { agree: number; disagree: number; abstain: number }; unresolved_objections?: { by: string; objection: string }[] };
   /** identical silence nudges are posted at most twice */
   lastNudge?: { text: string; count: number };
-  /** refusal telemetry: tool -> reason -> count (no bodies, no ids) */
+  /** Lifetime refusal counts keyed by tool and bounded reason class (no bodies, no ids). */
   refusals?: Record<string, number>;
+  /** Only versioned rooms have a complete guarded-call observation epoch. */
+  telemetryVersion?: 1;
+  callOutcomes?: Record<string, CallOutcomes>;
   /** git HEAD and dirty state of the project when the room was created */
   codeState?: CodeState;
   participants: Map<string, Participant>;
@@ -198,8 +201,11 @@ export interface Room {
 
 type Opts = Required<Omit<RoomOptions, "chair">> & { chair?: string };
 
+export type CallOutcome = "success" | "hub_refusal" | "error";
+export type CallOutcomes = Record<CallOutcome, number>;
+
 type Event =
-  | { type: "room"; room: string; opts: Opts; createdAt: string }
+  | { type: "room"; room: string; opts: Opts; createdAt: string; telemetryVersion?: 1 }
   | { type: "message"; msg: Message }
   | { type: "join" | "leave"; room: string; p: Participant }
   | { type: "proposal"; proposal: Proposal }
@@ -210,7 +216,8 @@ type Event =
   | { type: "openings_revealed"; room: string }
   | { type: "board"; room: string; key: string; entry: BoardEntry | null }
   | { type: "amend"; room: string; proposalId: string; text: string; version: number; votes: Proposal["votes"]; challenges?: Challenge[] }
-  | { type: "refusal"; room: string; tool: string; reason: string };
+  | { type: "refusal"; room: string; tool: string; reason: string; ts?: string; participant?: string | null }
+  | { type: "call_completion"; room: string; tool: string; outcome: CallOutcome; ts: string; participant: string | null };
 
 const now = () => new Date().toISOString();
 const shortId = (prefix: string) => `${prefix}_${randomBytes(4).toString("hex")}`;
@@ -304,7 +311,8 @@ export class Hub {
     if (requested > Hub.MAX_LIVE_PER_ROOM) full.expectedParticipants = Hub.MAX_LIVE_PER_ROOM;
     const room = this.materialiseRoom(name, full, now());
     room.codeState = Hub.codeState(this.cwd);
-    this.persist({ type: "room", room: name, opts: full, createdAt: room.createdAt });
+    room.telemetryVersion = 1;
+    this.persist({ type: "room", room: name, opts: full, createdAt: room.createdAt, telemetryVersion: 1 });
     if (requested > Hub.MAX_LIVE_PER_ROOM) this.post(room, "system", undefined, `expected_participants ${requested} exceeds this hub's cap of ${Hub.MAX_LIVE_PER_ROOM} live agents per room; clamped to ${Hub.MAX_LIVE_PER_ROOM} so the room can still conclude.`);
     return room;
   }
@@ -405,6 +413,13 @@ export class Hub {
     for (let i = 1; i < chat.length; i++) {
       if (chat[i].from.id !== chat[i - 1].from.id && Date.parse(chat[i].ts) - Date.parse(chat[i - 1].ts) < 5000) bursts++;
     }
+    const callOutcomes = room.callOutcomes ?? {};
+    const tools = new Set([...Object.keys(callOutcomes), ...Object.keys(room.refusals ?? {}).map((key) => key.split(": ")[0])]);
+    const refusalRates = Object.fromEntries([...tools].map((tool) => {
+      const counts = callOutcomes[tool];
+      const total = counts ? counts.success + counts.hub_refusal + counts.error : 0;
+      return [tool, room.telemetryVersion === 1 && total > 0 ? counts.hub_refusal / total : "unknown"];
+    }));
     return {
       room: room.name,
       state: room.state,
@@ -423,6 +438,9 @@ export class Hub {
       challenges: [...room.proposals.values()].reduce((a, p) => a + p.challenges.length, 0),
       board_entries: room.board.size,
       refusals: room.refusals ?? {},
+      call_outcomes: callOutcomes,
+      refusal_rates: refusalRates,
+      refusal_rate_coverage: room.telemetryVersion === 1 ? "complete" : "unknown",
       near_simultaneous_replies: bursts,
       unanswered_human_messages: room.messages.filter((m) => m.kind === "chat" && m.from.agent === "human" && !this.isAnswered(room, m)).length,
     };
@@ -829,15 +847,33 @@ export class Hub {
     return msg;
   }
 
-  /** Refusal telemetry: tool and reason class only, no body, no participant. Persisted so the next swarm can count instead of estimate. */
-  recordRefusal(roomName: string | undefined, tool: string, message: string) {
+  /** Internal actor ids are authenticated by the MCP connection; never included in public stats. */
+  recordRefusal(roomName: string | undefined, tool: string, _message: string, participant: string | null = null) {
     const room = roomName ? this.rooms.get(roomName) : undefined;
     if (!room) return;
-    const reason = message.replace(/[0-9]+/g, "N").replace(/"[^"]*"/g, '"…"').slice(0, 80);
+    // Error messages can interpolate submitted text/secrets. Never persist a raw prefix.
+    const reason = "hub_guard";
     const key = `${tool}: ${reason}`;
     room.refusals = room.refusals ?? {};
     room.refusals[key] = (room.refusals[key] ?? 0) + 1;
-    this.persist({ type: "refusal", room: room.name, tool, reason });
+    this.persist({ type: "refusal", room: room.name, tool, reason, ts: now(), participant });
+  }
+
+  /** Completed MCP guard invocations for existing rooms only; no arguments or error text.
+   * Pending calls, schema rejections outside guard, roomless calls and failed room creation
+   * are excluded. The rate uses this event's matched numerator, never lifetime refusals.
+   */
+  recordCallCompletion(roomName: string | undefined, tool: string, outcome: CallOutcome, participant: string | null) {
+    const room = roomName ? this.rooms.get(roomName) : undefined;
+    if (!room) return;
+    this.applyCallCompletion(room, tool, outcome);
+    this.persist({ type: "call_completion", room: room.name, tool, outcome, ts: now(), participant });
+  }
+
+  private applyCallCompletion(room: Room, tool: string, outcome: CallOutcome) {
+    room.callOutcomes ??= {};
+    const counts = room.callOutcomes[tool] ??= { success: 0, hub_refusal: 0, error: 0 };
+    counts[outcome]++;
   }
 
   /** Post a system notice from outside the hub (e.g. a recruitment). */
@@ -1685,7 +1721,8 @@ export class Hub {
               nudgeAfterMs: legacy.nudgeAfterMs ?? 180_000,
               requireVerification: legacy.requireVerification ?? false,
             };
-            this.materialiseRoom(ev.room, opts, ev.createdAt);
+            const room = this.materialiseRoom(ev.room, opts, ev.createdAt);
+            room.telemetryVersion = ev.telemetryVersion;
             break;
           }
           case "message":
@@ -1716,6 +1753,11 @@ export class Hub {
               pr.challenges.push(ev.challenge);
               if (ev.votes) pr.votes = ev.votes;
             }
+            break;
+          }
+          case "call_completion": {
+            const room = this.rooms.get(ev.room);
+            if (room) this.applyCallCompletion(room, ev.tool, ev.outcome);
             break;
           }
           case "refusal": {

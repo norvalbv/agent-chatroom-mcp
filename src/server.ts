@@ -11,7 +11,7 @@
 import { McpServer, ResourceTemplate } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
-import { Hub, HubError, ROLES } from "./hub.js";
+import { Hub, HubError, ROLES, type CallOutcome } from "./hub.js";
 import type { Spawner } from "./spawner.js";
 
 export const DEFAULT_WAIT_MS = 55_000; // gaps over 55s were 62-77% of sub-room wall time; wait() wakes on events so latency is unchanged
@@ -78,16 +78,36 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
   const asArg = z.string().optional().describe("Your participant id from join_room. Required if other agents share this MCP connection.");
   const roomArg = z.string().describe("Room name, e.g. 'debate-1'.");
 
+  // Resolve only identities this connection owns. A forged/ambiguous override is
+  // deliberately null; never attribute a failed authentication to the claimed seat.
+  const telemetryActor = (room: string | undefined, override: unknown): string | null => {
+    const ids = room ? me.get(room) : undefined;
+    if (typeof override === "string") return ids?.has(override) ? override : null;
+    return ids?.size === 1 ? [...ids][0] : null;
+  };
   const guard =
     <A>(tool: string, fn: (args: A) => Promise<unknown> | unknown) =>
     async (args: A) => {
+      const a = args as { room?: unknown; from_room?: unknown; participant_id?: unknown };
+      const room = typeof a?.room === "string" ? a.room : typeof a?.from_room === "string" ? a.from_room : undefined;
+      let participant = telemetryActor(room, a?.participant_id);
+      let outcome: CallOutcome = "error";
       try {
-        return ok(await fn(args));
+        const data = await fn(args);
+        const result = ok(data);
+        // join_room can create a second identity: use its issued id, not an ambiguous
+        // post-join default. leave_room retains the authenticated pre-call actor.
+        if (tool === "join_room") participant = telemetryActor(room, (data as { participant_id?: string })?.participant_id);
+        outcome = "success";
+        return result;
       } catch (e) {
-        // refusal telemetry: tool + reason class, no body, so the next swarm can count refusals instead of estimating them
-        const a = args as { room?: unknown; from_room?: unknown };
-        if (e instanceof HubError) hub.recordRefusal(typeof a?.room === "string" ? a.room : typeof a?.from_room === "string" ? a.from_room : undefined, tool, e.message);
+        if (e instanceof HubError) {
+          outcome = "hub_refusal";
+          hub.recordRefusal(room, tool, e.message, participant);
+        }
         return fail(e);
+      } finally {
+        hub.recordCallCompletion(room, tool, outcome, participant);
       }
     };
 

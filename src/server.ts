@@ -320,7 +320,8 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
                               : undefined;
       // Snapshot AFTER the poll wake: concurrent waits serialize their per-participant cursor here.
       const board = hub.boardManifest(room, id, follow);
-      hub.recordBoardManifest(room, board);
+      hub.recordBoardManifest(room, board); // persisted pretty-byte counters (delta branch)
+      hub.observeBoardManifest(r, board); // compact since-process-start counters (stats branch)
       // the hint goes first: it is the one line a weaker model must not lose to a clamp
       return {
         hint,

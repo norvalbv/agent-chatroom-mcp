@@ -263,8 +263,30 @@ export class HubError extends Error {
   }
 }
 
+/** Exact manifest-only envelope shipped by a wait. Delta implementations may call
+ * observeBoardManifest after cursor advancement; this observer never reads cursors. */
+export interface BoardManifestObservation {
+  board_keys?: string[];
+  board_delta?: { keys: string[]; tombstones: string[] };
+}
+
+interface BoardManifestCounters {
+  waits_observed: number;
+  full_baseline_manifest_bytes: number;
+  shipped_manifest_bytes: number;
+  keys_shipped: number;
+  deleted_tombstones_shipped: number;
+}
+const emptyBoardManifestCounters = (): BoardManifestCounters => ({
+  waits_observed: 0, full_baseline_manifest_bytes: 0, shipped_manifest_bytes: 0,
+  keys_shipped: 0, deleted_tombstones_shipped: 0,
+});
+const manifestBytes = (payload: unknown) => Buffer.byteLength(JSON.stringify(payload), "utf8");
+
 export class Hub {
   readonly rooms = new Map<string, Room>();
+  /** Observed waits only: deliberately not restored from historical room logs. */
+  private readonly boardManifestObserved = new WeakMap<Room, BoardManifestCounters>();
   private readonly dataDir?: string;
   /** project directory whose git state is stamped on rooms and verify entries */
   private readonly cwd?: string;
@@ -437,6 +459,35 @@ export class Hub {
     };
   }
 
+  /** Optional integration hook for full or delta wait responses. Call exactly once
+   * per successfully returned wait, with only its manifest envelope. */
+  observeBoardManifest(room: Room, envelope: BoardManifestObservation): void {
+    const counters = this.boardManifestObserved.get(room) ?? emptyBoardManifestCounters();
+    counters.waits_observed++;
+    counters.full_baseline_manifest_bytes += manifestBytes({ board_keys: [...room.board.keys()] });
+    counters.shipped_manifest_bytes += manifestBytes(envelope);
+    counters.keys_shipped += envelope.board_keys?.length ?? envelope.board_delta?.keys.length ?? 0;
+    counters.deleted_tombstones_shipped += envelope.board_delta?.tombstones.length ?? 0;
+    this.boardManifestObserved.set(room, counters);
+  }
+
+  private boardManifestStats(room: Room) {
+    const entriesByPrefix: Record<string, number> = {
+      "claim/": 0, "evidence/": 0, "sources/": 0, "handoff/": 0,
+      "inbox/": 0, "verify/": 0, other: 0,
+    };
+    for (const key of room.board.keys()) {
+      const prefix = key.includes("/") ? key.slice(0, key.indexOf("/") + 1) : "other";
+      entriesByPrefix[Object.hasOwn(entriesByPrefix, prefix) ? prefix : "other"]++;
+    }
+    return {
+      coverage: "since-process-start" as const,
+      ...(this.boardManifestObserved.get(room) ?? emptyBoardManifestCounters()),
+      current_full_manifest_bytes: manifestBytes({ board_keys: [...room.board.keys()] }),
+      entries_by_prefix: entriesByPrefix,
+    };
+  }
+
   stats(room: Room) {
     const first = room.messages[0]?.ts;
     const last = room.messages.at(-1)?.ts;
@@ -475,7 +526,8 @@ export class Hub {
       amendments: [...room.proposals.values()].reduce((a, p) => a + (p.version - 1), 0),
       challenges: [...room.proposals.values()].reduce((a, p) => a + p.challenges.length, 0),
       board_entries: room.board.size,
-      board_manifests: room.boardManifests ?? null,
+      board_manifests: room.boardManifests ?? null, // persisted pretty-byte counters (delta branch)
+      board_manifest: this.boardManifestStats(room), // compact since-process-start counters (stats branch)
       refusals: room.refusals ?? {},
       call_outcomes: callOutcomes,
       refusal_rates: refusalRates,

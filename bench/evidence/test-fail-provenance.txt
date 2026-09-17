@@ -1,5 +1,5 @@
 Provenance RED capture: assertions from union-alpha-6 #75 added to scripts/bench-harness.test.ts
-State: runner provenance support (hub_version capture, provenance_scope, dist-tree build hash) temporarily removed; tasks/scorer absent (oracle-2 pending).
+State: runner provenance support (hub_version capture, provenance_scope, dist-tree build hash) temporarily removed; tasks/scorer absent (oracle-2 pending). NOTE (bench-2, after u6 #99): this red is MASKED, not clean — test 4 fails on the missing task/scorer contract before the provenance assertions are reached. A clean provenance red will be re-captured after oracle-2's fixtures land.
 Branch:
 swarm/swarm-bench-room/bench-2
 Command: node --import tsx scripts/bench-harness.test.ts

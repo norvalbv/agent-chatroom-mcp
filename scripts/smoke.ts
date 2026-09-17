@@ -825,7 +825,7 @@ assert.deepEqual(tools, ["amend", "board_get", "board_set", "challenge", "join_r
   assert.equal(asked.agent, "openrouter", "a codex request is launched as the pinned provider");
   assert.equal(asked.model, "deepseek/deepseek-v4-flash-0731", "and the pinned model");
   const log = (await a.call("read_messages", { room, since_seq: 0 })) as string[];
-  assert.ok(log.some((m) => /pinned to openrouter\/stealth\/union-alpha/.test(m)), "the override is announced in the room");
+  assert.ok(log.some((m) => /pinned to openrouter\/deepseek\/deepseek-v4-flash-0731/.test(m)), "the override is announced in the room");
   const set = await fetch(`${HTTP}/policy`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ agent: "any", model: "any" }) });
   assert.equal((await set.json()).recruits.agent, undefined, "any unpins");
   const asked2 = await a.call("request_agent", { room, name: "helper2", agent: "codex", brief: "A brief that is comfortably longer than twenty characters for the policy test." });

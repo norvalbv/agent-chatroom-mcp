@@ -272,14 +272,6 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
       const since = since_seq ?? p.lastSeenSeq;
       hub.answerBeforeWaiting(r, p, since);
       const msgs = await hub.wait(room, id, since, Math.min(timeout_ms ?? DEFAULT_WAIT_MS, MAX_WAIT_MS));
-      const focus = hub.attentionFocus(r, p);
-      if (focus) return {
-        hint: hub.attentionHint(r, p), messages: msgs.map((m) => hub.fmt(r, m)),
-        next_seq: p.lastSeenSeq, room_state: r.state, your_turn: r.mode === "free" || hub.currentSpeaker(r)?.id === id,
-        your_role: p.role ?? "worker", humans_present: hub.activeParticipants(r).filter((x) => x.agent === "human").map((x) => x.name),
-        addressed_to_you: [{ id: focus.id, from: hub.shown(r, focus.from), text: focus.content }],
-        open_proposal: null, conclusion: null, leaving_would_block: !!hub.leavingWouldBlock(r, p),
-      };
       const open = [...r.proposals.values()].find((pr) => pr.status === "open");
       const needsMyVote = open && !open.votes[id] && p.agent !== "human" && p.role !== "chair";
       const needsChallenge = open && hub.challengeRequired(r) && !open.challenges.some((c) => c.blocking !== false) && open.by.id !== id;
@@ -296,6 +288,15 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
       const block = hub.leavingWouldBlock(r, p);
       const human = hub.unansweredHuman(r);
       const resp = human ? hub.responderFor(r, human, id) : null;
+      const focus = hub.attentionFocus(r, p);
+      if (focus) return {
+        hint: hub.attentionHint(r, p), messages: msgs.map((m) => hub.fmt(r, m)),
+        next_seq: p.lastSeenSeq, room_state: r.state, your_turn: r.mode === "free" || hub.currentSpeaker(r)?.id === id,
+        your_role: p.role ?? "worker", humans_present: hub.activeParticipants(r).filter((x) => x.agent === "human").map((x) => x.name),
+        unanswered_human: human ? (resp!.mine ? { id: human.id, name: hub.shown(r, human.from), text: human.content, you_answer: true } : { name: hub.shown(r, human.from), responder: resp!.who, you_answer: false }) : null,
+        addressed_to_you: [{ id: focus.id, from: hub.shown(r, focus.from), text: focus.content }],
+        open_proposal: null, conclusion: null, leaving_would_block: !!block,
+      };
       const owed = hub.addressedBy(r, p);
       if (owed[0]) p.addressWarned = owed[0].id;
       const openingsHeld = r.expectedParticipants && !r.openingsRevealed;
@@ -383,9 +384,7 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
       } catch {}
       const p = viewer ? r.participants.get(viewer) : undefined;
       const msgs = p ? hub.readAs(r, p, since_seq, limit) : hub.read(room, since_seq ?? 0, limit, viewer);
-      const lines = msgs.map((m) => hub.fmt(r, m));
-      const hint = p ? hub.attentionHint(r, p) : undefined;
-      return hint ? { messages: lines, hint, next_seq: p!.lastSeenSeq } : lines;
+      return msgs.map((m) => hub.fmt(r, m));
     }),
   );
 

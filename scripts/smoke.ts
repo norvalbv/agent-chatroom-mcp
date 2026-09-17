@@ -277,6 +277,9 @@ assert.deepEqual(tools, ["amend", "board_get", "board_set", "challenge", "join_r
   await fetch(`${HTTP}/rooms/${room}/messages`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ name: "benji", content: "and green?" }) });
   await a.call("wait_for_messages", { room, timeout_ms: 0 });
   await assert.rejects(a.call("propose", { room, text: "Blue." }), /nobody has answered/);
+  // the second human ask is still the focused debt: reply to it before proceeding
+  const wgreen = await a.call("wait_for_messages", { room, timeout_ms: 0 });
+  await a.call("send_message", { room, content: "benji: green noted too, we'll compare all three.", reply_to: wgreen.addressed_to_you[0].id });
   const pr = await a.call("propose", { room, text: "The colour is blue, because it is calm and readable." });
   assert.equal(pr.version, 1);
   // board: long evidence lives here, chat only gets a one-line notice

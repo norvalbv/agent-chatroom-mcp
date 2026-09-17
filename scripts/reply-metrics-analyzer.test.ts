@@ -131,3 +131,26 @@ test("live, persisted replay and reloaded hub share the same historical analyzer
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+// Closure can be years old: never age a closed room using today's wall clock.
+test("closed hub uses last observed event rather than analysis wall clock", () => {
+  const dir = mkdtempSync(join(tmpdir(), "reply-metric-closed-"));
+  try {
+    const hub = new Hub({ dataDir: dir });
+    const { room: closed, participant: a } = hub.join("closed-metric", "asker", "test", { expectedParticipants: 0 });
+    const { participant: b } = hub.join("closed-metric", "target", "test");
+    hub.send(closed.name, a.id, "@target Check", undefined, true);
+    hub.send(closed.name, b.id, "Checked", undefined, true);
+    hub.closeRoom(closed.name, "test");
+    const metrics = (hub.stats(closed) as any).reply_metrics;
+    const events = readFileSync(join(dir, "closed-metric.jsonl"), "utf8").trim().split("\n").map(line => JSON.parse(line));
+    const replay = analyzeReplyMetrics(events);
+    assert.equal(metrics.observation_end, replay.observation_end);
+    assert.equal(metrics.mature_live_mentions, 0);
+    assert.equal(metrics.pending_live_mentions, 1);
+    const reloaded = new Hub({ dataDir: dir });
+    assert.equal((reloaded.stats(reloaded.rooms.get(closed.name)!) as any).reply_metrics.observation_end, replay.observation_end);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});

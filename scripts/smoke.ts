@@ -11,7 +11,7 @@ import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/
 const PORT = Number(process.env.PORT ?? 7733);
 const HTTP = `http://127.0.0.1:${PORT}`;
 
-const server = spawn("npx", ["tsx", "src/index.ts"], { env: { ...process.env, PORT: String(PORT), CHATROOM_SPAWN_DRY: "1", CHATROOM_LOG_DIR: "/tmp/chatroom-smoke-spawn" }, stdio: ["ignore", "inherit", "inherit"] });
+const server = spawn("npx", ["tsx", "src/index.ts"], { env: { ...process.env, PORT: String(PORT), CHATROOM_SPAWN_DRY: "1", CHATROOM_LOG_DIR: "/tmp/chatroom-smoke-spawn", CHATROOM_MAX_LIVE_PER_ROOM: "12" }, stdio: ["ignore", "inherit", "inherit"] });
 const stop = () => server.kill();
 process.on("exit", stop);
 
@@ -726,7 +726,7 @@ assert.deepEqual(tools, ["amend", "board_get", "board_set", "challenge", "join_r
   // nudge; someone never joined -> one warning, then the next nudge reveals. A short nudge timer on a second hub.
   const PORT2 = PORT + 1;
   const HTTP2 = `http://127.0.0.1:${PORT2}`;
-  const server2 = spawn("npx", ["tsx", "src/index.ts"], { env: { ...process.env, PORT: String(PORT2), CHATROOM_SPAWN_DRY: "1", CHATROOM_NUDGE_AFTER_MS: "1200", CHATROOM_LOG_DIR: "/tmp/chatroom-smoke-spawn2" }, stdio: ["ignore", "inherit", "inherit"] });
+  const server2 = spawn("npx", ["tsx", "src/index.ts"], { env: { ...process.env, PORT: String(PORT2), CHATROOM_SPAWN_DRY: "1", CHATROOM_NUDGE_AFTER_MS: "1200", CHATROOM_LOG_DIR: "/tmp/chatroom-smoke-spawn2", CHATROOM_MAX_LIVE_PER_ROOM: "12" }, stdio: ["ignore", "inherit", "inherit"] });
   process.on("exit", () => server2.kill());
   for (let i = 0; i < 50; i++) {
     try {

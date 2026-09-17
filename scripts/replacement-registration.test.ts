@@ -177,11 +177,13 @@ test('ask answered before registration does not become the replacement focus', (
   assert.equal(focusOf(f.hub, f.room.name, next.id), undefined);
 });
 
-test('replacement pass on the inherited ask stops it being the focus', () => {
+test('replacement pass on the inherited ask stops it being the focus', async () => {
   const f = fixture();
   f.hub.send(f.room.name, f.sender.id, '@old please report', undefined, true);
   register(f.hub, f.room.name, f.old.id, 'next');
   const next = joinSuccessor(f.hub, f.room.name, 'next');
+  const delivered = await f.hub.wait(f.room.name, next.id, 0, 0);
+  assert.equal(delivered[0]?.id, focusOf(f.hub, f.room.name, next.id)?.id);
   f.hub.pass(f.room.name, next.id);
   assert.equal(focusOf(f.hub, f.room.name, next.id), undefined);
 });

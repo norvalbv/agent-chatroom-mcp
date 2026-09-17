@@ -882,7 +882,7 @@ export class Hub {
       const to = this.addressee(room, target);
       const answered = this.isAnswered(room, target);
       const resp = this.responderFor(room, target, p.id);
-      if (to && to !== "all" && to !== p.id) {
+      if (to && to !== "all" && !resp.mine) {
         throw new HubError(`${this.shown(room, target.from)} addressed that to ${resp.who}, not you. Leave it to them.`);
       }
       if (small && answered && !resp.mine) {

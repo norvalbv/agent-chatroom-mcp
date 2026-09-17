@@ -11,7 +11,26 @@ import { fileURLToPath } from "node:url";
 
 export const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
-export function loadDotEnv(dir = repoRoot): string[] {
+/** Minimize human-control credentials in seats; this is not a same-user filesystem sandbox. */
+export const SEAT_ENV_EXCLUSIONS: readonly string[] = Object.freeze(["CHATROOM_HUMAN_TOKEN"]);
+
+/** Clone rather than mutate the launcher/hub's environment: controller auth must keep working. */
+export function seatChildEnv(env: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
+  const childEnv: NodeJS.ProcessEnv = { ...env, MCP_TOOL_TIMEOUT: "120000" };
+  for (const key of SEAT_ENV_EXCLUSIONS) delete childEnv[key];
+  return childEnv;
+}
+
+export interface DotEnvOptions {
+  /** Keys that must not be reintroduced from .env (e.g. human-control credentials in seats). */
+  exclude?: readonly string[];
+  /** Injectable target for synthetic tests; controller callers retain process.env by default. */
+  env?: NodeJS.ProcessEnv;
+}
+
+export function loadDotEnv(dir = repoRoot, options: DotEnvOptions = {}): string[] {
+  const env = options.env ?? process.env;
+  const excluded = new Set(options.exclude ?? []);
   const file = resolve(dir, ".env");
   if (!existsSync(file)) return [];
   const loaded: string[] = [];
@@ -19,11 +38,11 @@ export function loadDotEnv(dir = repoRoot): string[] {
     const line = raw.trim();
     if (!line || line.startsWith("#")) continue;
     const m = /^(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$/.exec(line);
-    if (!m) continue;
+    if (!m || excluded.has(m[1])) continue;
     let value = m[2].trim();
     if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) value = value.slice(1, -1);
-    if (process.env[m[1]] === undefined) {
-      process.env[m[1]] = value;
+    if (env[m[1]] === undefined) {
+      env[m[1]] = value;
       loaded.push(m[1]);
     }
   }

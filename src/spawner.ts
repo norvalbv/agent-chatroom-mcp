@@ -13,6 +13,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { HubError } from "./hub.js";
 import { settledAxes } from "./settled.js";
+import { seatChildEnv } from "./env.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(here, "..");
@@ -243,7 +244,7 @@ export class Spawner {
       if (agent === "openrouter") args[args.indexOf("--cwd") + 1] = seatCwd;
       else if (agent === "codex") args[args.indexOf("-C") + 1] = seatCwd;
       const outStream = createWriteStream(log);
-      const child = spawn(cmd, args, { cwd: seatCwd, env: { ...process.env, MCP_TOOL_TIMEOUT: "120000" }, stdio: ["ignore", "pipe", "pipe"] });
+      const child = spawn(cmd, args, { cwd: seatCwd, env: seatChildEnv(), stdio: ["ignore", "pipe", "pipe"] });
       child.stdout?.pipe(outStream);
       child.stderr?.pipe(outStream);
       rec.pid = child.pid;

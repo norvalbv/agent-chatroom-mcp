@@ -10,7 +10,7 @@ import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, symlinkSync
 import { dirname, resolve } from "node:path";
 import { settledAxes } from "./settled.js";
 import { fileURLToPath } from "node:url";
-import { loadDotEnv } from "./env.js";
+import { loadDotEnv, seatChildEnv } from "./env.js";
 loadDotEnv();
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -168,7 +168,7 @@ async function withRespawn(name: string, room: string, mk: (nm: string, note: st
 
 function runProc(name: string, cmd: string, args: string[], cwd: string, outFile: string, outViaFile = false): Promise<string> {
   return new Promise((res) => {
-    const child = spawn(cmd, args, { cwd, env: { ...process.env, MCP_TOOL_TIMEOUT: "120000" }, stdio: ["ignore", "pipe", "pipe"] });
+    const child = spawn(cmd, args, { cwd, env: seatChildEnv(), stdio: ["ignore", "pipe", "pipe"] });
     children.push(child);
     let out = "";
     let err = "";

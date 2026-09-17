@@ -28,6 +28,8 @@ export interface Participant {
   lastSeenSeq: number;
   active: boolean;
   messageCount: number;
+  /** identity of the connection/process that joined; distinct sessions are what the team floor and verify gate count */
+  session?: string;
   /** seqs of messages withheld from this participant (human messages awaiting their nominated reply) */
   withheld?: number[];
   /** explicit "nothing to add" turns */
@@ -54,6 +56,8 @@ export interface BoardEntry {
   text: string;
   by: string;
   updatedAt: string;
+  /** set on inbox/* entries posted with ack_required */
+  ackRequired?: boolean;
 }
 
 export interface Challenge {
@@ -73,6 +77,10 @@ export interface Proposal {
   status: "open" | "accepted" | "rejected" | "superseded";
   /** bumped by every amend; the text in `text` is always the current version */
   version: number;
+  /** when the current text was written (creation or last amend) */
+  updatedAt?: string;
+  /** voters present when the proposal was made; unanimity is taken over these (late joiners are not waited on) */
+  snapshot?: string[];
   /** set once the "needs a challenge" nudge has been posted */
   nudged?: boolean;
 }
@@ -94,6 +102,8 @@ export interface RoomOptions {
   requireChallenge?: boolean | "auto";
   /** Post a nudge after this much silence in an open room (0 = never). */
   nudgeAfterMs?: number;
+  /** Swarm mode: a proposal needs a verify/* board entry by someone else (bound to the proposal) before it can pass. */
+  requireVerification?: boolean;
 }
 
 export interface Room {
@@ -108,6 +118,7 @@ export interface Room {
   maxMessageChars: number;
   requireChallenge: boolean | "auto";
   nudgeAfterMs: number;
+  requireVerification: boolean;
   createdAt: string;
   state: RoomState;
   conclusion?: { text: string; proposalId: string; decidedAt: string };
@@ -185,7 +196,14 @@ export class Hub {
   }
 
   static readonly MAX_ROOMS = 500;
+  static MAX_ROOMS_PER_RUN = Number(process.env.CHATROOM_MAX_ROOMS_PER_RUN ?? 12);
+  static MAX_LIVE_PER_ROOM = Number(process.env.CHATROOM_MAX_LIVE_PER_ROOM ?? 12);
   static readonly ROOM_NAME = /^[a-zA-Z0-9_-]{1,64}$/;
+  /** "swarm-093235-fsxs-leads" -> "swarm-093235-fsxs" */
+  static runPrefix(name: string): string | undefined {
+    const m = /^(swarm-[0-9]{6}(?:-[a-z0-9]{4})?)-/.exec(name);
+    return m?.[1];
+  }
 
   createRoom(name: string, opts: RoomOptions = {}): Room {
     const existing = this.rooms.get(name);
@@ -205,7 +223,13 @@ export class Hub {
       maxMessageChars: opts.maxMessageChars ?? 4000,
       requireChallenge: opts.requireChallenge ?? "auto",
       nudgeAfterMs: opts.nudgeAfterMs ?? 180_000,
+      requireVerification: opts.requireVerification ?? false,
     };
+    // Per-run room cap: rooms sharing a swarm prefix (swarm-<id>-*) are counted together.
+    const prefix = Hub.runPrefix(name);
+    if (prefix && [...this.rooms.keys()].filter((r) => Hub.runPrefix(r) === prefix && this.rooms.get(r)!.state === "open").length >= Hub.MAX_ROOMS_PER_RUN) {
+      throw new HubError(`Room limit for this run (${Hub.MAX_ROOMS_PER_RUN} open rooms with prefix ${prefix}) reached. Close or conclude a room first.`);
+    }
     const room = this.materialiseRoom(name, full, now());
     this.persist({ type: "room", room: name, opts: full, createdAt: room.createdAt });
     return room;
@@ -257,6 +281,8 @@ export class Hub {
       anonymous: room.anonymous,
       max_messages_per_participant: room.maxMessagesPerParticipant || null,
       require_challenge: this.challengeRequired(room),
+      require_verification: room.requireVerification,
+      hold: this.hold(room) ? { by: this.hold(room)!.by, reason: this.hold(room)!.text } : null,
       state: room.state,
       created_at: room.createdAt,
       openings: room.openingsRevealed
@@ -318,7 +344,7 @@ export class Hub {
 
   // ---------- participants ----------
 
-  join(roomName: string, name: string, agent: string, opts: RoomOptions = {}, reclaimId?: string): { room: Room; participant: Participant } {
+  join(roomName: string, name: string, agent: string, opts: RoomOptions = {}, reclaimId?: string, session?: string): { room: Room; participant: Participant } {
     const room = this.createRoom(roomName, opts);
     if (!name.trim()) throw new HubError("A display name is required to join.");
     if (name.length > 64) throw new HubError("Display names are capped at 64 characters.");
@@ -333,6 +359,10 @@ export class Hub {
       if ([...room.participants.values()].some((p) => p.name === name && p.active)) {
         throw new HubError(`Someone named "${name}" is already active in "${roomName}". Pick another name.`);
       }
+      if (agent !== "human" && this.voters(room).length >= Hub.MAX_LIVE_PER_ROOM) {
+        this.post(room, "system", undefined, `Cap hit: ${Hub.MAX_LIVE_PER_ROOM} live agents in this room; ${name} could not join. Recruit into a new room instead.`);
+        throw new HubError(`Room "${roomName}" already has ${Hub.MAX_LIVE_PER_ROOM} live agents (per-run cap). Open a sub-room instead.`);
+      }
       const n = room.participants.size;
       participant = {
         id: shortId("p"),
@@ -344,6 +374,7 @@ export class Hub {
         lastSeenSeq: 0,
         active: true,
         messageCount: 0,
+        session,
       };
       room.participants.set(participant.id, participant);
       this.persist({ type: "join", room: roomName, p: participant });
@@ -351,6 +382,7 @@ export class Hub {
     } else if (!participant.active) {
       participant.active = true;
       participant.lastActiveAt = now();
+      if (session) participant.session = session;
       this.persist({ type: "join", room: roomName, p: participant });
       this.post(room, "system", undefined, `${this.shown(room, participant)} rejoined the room.`);
     }
@@ -600,6 +632,7 @@ export class Hub {
           .filter((p) => !open.votes[p.id])
           .map((p) => this.shown(room, p));
         const needsChallenge = this.challengeRequired(room) && open.challenges.length === 0;
+        const needsVerify = room.requireVerification && !this.verifiedBy(room, open);
         this.post(
           room,
           "system",
@@ -607,6 +640,7 @@ export class Hub {
           `${mins} min of silence. Proposal ${open.id} is open` +
             (waiting.length ? `; still waiting for votes from ${waiting.join(", ")}` : "") +
             (needsChallenge ? `; it also needs a challenge from someone other than ${this.shown(room, open.by)} before it can pass` : "") +
+            (needsVerify ? `; and a verify/* board entry by someone else naming ${open.id}` : "") +
             ".",
         );
       } else if (!room.openingsRevealed && room.openings.size) {
@@ -798,23 +832,96 @@ export class Hub {
 
   // ---------- shared board ----------
 
-  setBoard(roomName: string, pid: string, key: string, text: string): BoardEntry | null {
+  static readonly BOARD_KEY = /^[\w .:/-]{1,80}$/;
+
+  hold(room: Room): BoardEntry | undefined {
+    return room.board.get(`hold/${room.name}`);
+  }
+
+  /** inbox/* entries that asked for an acknowledgement and have none yet. */
+  unacknowledged(room: Room): string[] {
+    return [...room.board.entries()].filter(([k, e]) => k.startsWith("inbox/") && !k.endsWith(".ack") && e.ackRequired && !room.board.has(`${k}.ack`)).map(([k]) => k);
+  }
+
+  /** Distinct connections among a set of participants (two names on one connection are one agent). */
+  static sessionsOf(ps: Participant[]): number {
+    return new Set(ps.map((p) => p.session ?? `nosession:${p.id}`)).size;
+  }
+
+  setBoard(roomName: string, pid: string, key: string, text: string, opts: { ifAbsent?: boolean; ifByMe?: boolean } = {}): BoardEntry | null {
     const room = this.getRoom(roomName);
     const p = this.requireParticipant(room, pid);
-    if (!/^[\w .:/-]{1,60}$/.test(key)) throw new HubError("Board keys are short names like 'evidence', 'open questions', 'draft'.");
+    if (!Hub.BOARD_KEY.test(key)) throw new HubError("Board keys are short names like 'evidence', 'open questions', 'claim/auth', 'verify/auth'.");
     if (text.length > 8000) throw new HubError("Board entries are capped at 8000 characters.");
     const previous = room.board.get(key);
+    // reserved prefixes (enforced here, the single write site)
+    if (key.startsWith("inbox/") && !key.endsWith(".ack")) throw new HubError("inbox/* entries are written by post_to_room from another room. To acknowledge one, write '<key>.ack'.");
+    if (key.startsWith("hold/")) {
+      if (key !== `hold/${room.name}`) throw new HubError(`A hold for this room is the key "hold/${room.name}".`);
+      if (previous && previous.by !== p.name) throw new HubError(`The hold was placed by ${previous.by}; only they (or a human) can clear or change it.`);
+    }
+    if (key.startsWith("claim/")) {
+      if (previous && previous.by !== p.name) throw new HubError(`claim "${key}" is owned by ${previous.by} (since ${previous.updatedAt}). Join their team via help/ or join-request/, or pick another area.`);
+      if (text.trim()) {
+        let parsed: { status?: string; team?: unknown } | undefined;
+        try {
+          parsed = JSON.parse(text);
+        } catch {
+          throw new HubError('claim/* entries are JSON: {"area":..., "owner":..., "team":[names], "status":"open|fixed|verified", "note":...}');
+        }
+        if (parsed && (parsed.status === "fixed" || parsed.status === "verified")) {
+          const team = Array.isArray(parsed.team) ? (parsed.team as unknown[]).map(String) : [];
+          const members = this.activeParticipants(room).filter((x) => team.includes(x.name) && x.agent !== "human");
+          if (members.length < 2 || Hub.sessionsOf(members) < 2) {
+            throw new HubError(`A claim can only be marked ${parsed.status} by a team of 2+ distinct active agents; team=${JSON.stringify(team)} has ${members.length} active on ${Hub.sessionsOf(members)} connection(s).`);
+          }
+        }
+      }
+    }
+    if (opts.ifAbsent && previous) throw new HubError(`"${key}" already exists (by ${previous.by}, ${previous.updatedAt}).`, { existing: previous });
+    if (opts.ifByMe && previous && previous.by !== p.name) throw new HubError(`"${key}" was written by ${previous.by}, not you. Use post_to_room or a different key.`);
     if (!text.trim()) {
       room.board.delete(key);
       this.persist({ type: "board", room: roomName, key, entry: null });
       this.post(room, "board", p, `cleared board entry "${key}"`);
+      if (key === `hold/${room.name}`) for (const pr of room.proposals.values()) if (pr.status === "open") this.evaluate(room, pr);
       return null;
     }
     const entry: BoardEntry = { text, by: p.name, updatedAt: now() };
     room.board.set(key, entry);
     this.persist({ type: "board", room: roomName, key, entry });
     this.post(room, "board", p, `${previous ? "updated" : "added"} board entry "${key}" (${text.length} chars; read it with board_get)`);
+    if (key.endsWith(".ack") || key.startsWith("verify/")) for (const pr of room.proposals.values()) if (pr.status === "open") this.evaluate(room, pr);
     return entry;
+  }
+
+  /** System-initiated board write on someone's behalf (e.g. a claim made at recruitment); no membership needed. */
+  setBoardAs(roomName: string, byName: string, key: string, text: string): BoardEntry {
+    const room = this.getRoom(roomName);
+    if (!Hub.BOARD_KEY.test(key)) throw new HubError("Invalid board key.");
+    const entry: BoardEntry = { text, by: byName, updatedAt: now() };
+    room.board.set(key, entry);
+    this.persist({ type: "board", room: roomName, key, entry });
+    this.post(room, "board", undefined, `${byName} added board entry "${key}" (${text.length} chars; read it with board_get)`);
+    return entry;
+  }
+
+  /** Cross-room note: written into the target room's board under inbox/<from>/<key> without joining it. */
+  postToRoom(fromRoom: string, pid: string, toRoom: string, key: string, text: string, ackRequired = false): { key: string; entry: BoardEntry } {
+    const from = this.getRoom(fromRoom);
+    const p = this.requireParticipant(from, pid);
+    if (toRoom === fromRoom) throw new HubError("That is your own room; use board_set.");
+    const to = this.getRoom(toRoom);
+    if (!/^[\w .:-]{1,40}$/.test(key)) throw new HubError("Inbox keys are short names without slashes.");
+    if (text.length > 8000) throw new HubError("Notes are capped at 8000 characters.");
+    const live = [...to.board.keys()].filter((k) => k.startsWith("inbox/") && !k.endsWith(".ack")).length;
+    if (live >= 10) throw new HubError(`${toRoom} already has 10 inbox notes; wait for them to be acknowledged or cleared.`);
+    const full = `inbox/${fromRoom}/${key}`;
+    const entry: BoardEntry = { text, by: p.name, updatedAt: now(), ...(ackRequired ? { ackRequired: true } : {}) };
+    to.board.set(full, entry);
+    this.persist({ type: "board", room: toRoom, key: full, entry });
+    this.post(to, "system", undefined, `Note from ${p.name} in ${fromRoom} on the board as "${full}"${ackRequired ? ` (acknowledge by writing "${full}.ack")` : ""}: ${text.slice(0, 160)}${text.length > 160 ? "…" : ""}`);
+    return { key: full, entry };
   }
 
   // ---------- proposals as documents ----------
@@ -844,6 +951,7 @@ export class Hub {
     const stale = changed > pr.text.length * 0.25 && pr.challenges.length > 0;
     pr.text = next;
     pr.version += 1;
+    pr.updatedAt = now();
     pr.votes = { [p.id]: { vote: "agree", name: p.name, ts: now(), reason: `amended to v${pr.version}` } };
     if (stale) pr.challenges = []; // the challenged text no longer exists; the gate must be satisfied again
     this.persist({ type: "amend", room: roomName, proposalId, text: pr.text, version: pr.version, votes: pr.votes, challenges: pr.challenges });
@@ -872,6 +980,15 @@ export class Hub {
           `Do not re-propose: use amend to change its wording, challenge it, or vote on it.`,
       );
     }
+    const voters = this.voters(room);
+    if (room.expectedParticipants !== 1 && Hub.sessionsOf(voters) < 2) {
+      throw new HubError("A room of one cannot conclude: at least two agents on different connections must be present. Recruit (request_agent) or ask someone to join.");
+    }
+    if (room.requireVerification && ![...room.board.keys()].some((k) => k.startsWith("verify/"))) {
+      throw new HubError("This room requires verification: before proposing, put the command you actually ran, its cwd/commit and its exit code on the board under verify/<area>. Someone else must then run it and write their own verify/* entry naming the proposal id.");
+    }
+    const unacked = this.unacknowledged(room);
+    if (unacked.length) throw new HubError(`Acknowledge the notes from other rooms first (write "<key>.ack"): ${unacked.join(", ")}`);
     const human = this.unansweredHuman(room);
     if (human && !room.humanWarned.has(human.id)) {
       room.humanWarned.add(human.id);
@@ -890,6 +1007,8 @@ export class Hub {
       challenges: [],
       status: "open",
       version: 1,
+      updatedAt: now(),
+      snapshot: voters.map((v) => v.id),
     };
     room.proposals.set(proposal.id, proposal);
     this.persist({ type: "proposal", proposal });
@@ -976,9 +1095,26 @@ export class Hub {
   }
 
   /** Re-check whether a proposal has reached the room's quorum. */
+  /** A verify/* entry by a different agent (different connection), newer than the proposal text, naming the proposal. */
+  verifiedBy(room: Room, pr: Proposal): BoardEntry | undefined {
+    const proposer = room.participants.get(pr.by.id);
+    for (const [k, e] of room.board) {
+      if (!k.startsWith("verify/") || k.endsWith(".partial")) continue;
+      if (e.by === pr.by.name) continue;
+      const author = [...room.participants.values()].find((x) => x.name === e.by);
+      if (author && proposer && author.session && author.session === proposer.session) continue; // same process, two names
+      if (pr.updatedAt && e.updatedAt < pr.updatedAt) continue;
+      if (!e.text.includes(pr.id)) continue;
+      return e;
+    }
+    return undefined;
+  }
+
   private evaluate(room: Room, pr: Proposal) {
     if (pr.status !== "open" || room.state === "concluded" || room.state === "closed") return;
-    const active = this.voters(room);
+    const all = this.voters(room);
+    const snap = pr.snapshot ? all.filter((p) => pr.snapshot!.includes(p.id)) : all;
+    const active = snap.length ? snap : all;
     if (active.length === 0) return;
     if (room.expectedParticipants && this.voters(room).length < room.expectedParticipants) return;
     const humanVeto = this.activeParticipants(room).some((p) => p.agent === "human" && pr.votes[p.id]?.vote === "disagree");
@@ -1002,6 +1138,23 @@ export class Hub {
     if (humanVeto) {
       accepted = false;
       rejected = true;
+    }
+    // late joiners are not waited on, but a disagree from anyone active still counts
+    if (accepted && room.quorum === "unanimous" && all.some((p) => pr.votes[p.id]?.vote === "disagree")) {
+      accepted = false;
+      rejected = true;
+    }
+    if (accepted && this.hold(room)) {
+      if (!pr.nudged) this.post(room, "system", undefined, `${pr.id} has the votes but the room is on hold by ${this.hold(room)!.by}: ${this.hold(room)!.text.slice(0, 120)}. It passes when the hold is cleared.`);
+      pr.nudged = true;
+      return;
+    }
+    if (accepted && room.requireVerification && !this.verifiedBy(room, pr)) {
+      if (!pr.nudged) {
+        this.post(room, "system", undefined, `${pr.id} has the votes but no verification: someone other than ${this.shown(room, pr.by)} (on a different connection) must run the fix and write verify/<area> naming ${pr.id}, dated after the current text.`);
+      }
+      pr.nudged = true;
+      return;
     }
 
     // Adversarial gate: unanimous agreement without a single challenge is suspicious.
@@ -1062,8 +1215,8 @@ export class Hub {
   // ---------- liveness ----------
 
   /** Mark participants inactive after `idleMs` without any activity in a room that has not concluded. */
-  sweepIdle(idleMs: number): number {
-    let n = 0;
+  sweepIdle(idleMs: number): string[] {
+    const swept: string[] = [];
     const cutoff = Date.now() - idleMs;
     for (const room of this.rooms.values()) {
       if (room.state === "concluded" || room.state === "closed") continue;
@@ -1073,11 +1226,11 @@ export class Hub {
           this.persist({ type: "leave", room: room.name, p });
           this.post(room, "system", undefined, `${this.shown(room, p)} went quiet for ${Math.round(idleMs / 60000)} min and was marked as left.`);
           for (const pr of room.proposals.values()) if (pr.status === "open") this.evaluate(room, pr);
-          n++;
+          swept.push(p.name);
         }
       }
     }
-    return n;
+    return swept;
   }
 
   // ---------- persistence (append-only JSONL per room) ----------
@@ -1115,6 +1268,7 @@ export class Hub {
               maxMessageChars: legacy.maxMessageChars ?? 4000,
               requireChallenge: legacy.requireChallenge ?? "auto",
               nudgeAfterMs: legacy.nudgeAfterMs ?? 180_000,
+              requireVerification: legacy.requireVerification ?? false,
             };
             this.materialiseRoom(ev.room, opts, ev.createdAt);
             break;

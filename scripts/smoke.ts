@@ -50,7 +50,7 @@ const c = await connect("third");
 
 const tools = (await a.client.listTools()).tools.map((t) => t.name).sort();
 console.log("tools:", tools.join(", "));
-assert.deepEqual(tools, ["amend", "board_get", "board_set", "challenge", "join_room", "leave_room", "list_agents", "list_rooms", "pass", "propose", "read_messages", "request_agent", "room_status", "send_message", "submit_opening", "vote", "wait_for_messages"]);
+assert.deepEqual(tools, ["amend", "board_get", "board_set", "challenge", "join_room", "leave_room", "list_agents", "list_rooms", "pass", "post_to_room", "propose", "read_messages", "request_agent", "room_status", "send_message", "submit_opening", "vote", "wait_for_messages"]);
 
 // ---------------- two-party room: blind openings, long-poll, propose, vote ----------------
 {
@@ -395,10 +395,11 @@ assert.deepEqual(tools, ["amend", "board_get", "board_set", "challenge", "join_r
   const room = "recruit";
   await a.call("join_room", { room, name: "claude-1", agent: "claude" });
   const sp = await a.call("request_agent", { room, brief: "Check whether the failing test is flaky by running it 5 times; report the pass count.", model: "haiku" });
-  assert.match(sp.spawned, /claude-recruit-1/);
+  assert.match(sp.spawned[0], /claude-recruit-1/);
+  assert.equal(sp.depth, 1);
   const notice = (await a.call("read_messages", { room, since_seq: 0 })).at(-1) as string;
   assert.match(notice, /claude-1 recruited claude-recruit-1 \(claude\/haiku\)/);
-  const rendered = (await import("node:fs")).readFileSync(sp.log, "utf8");
+  const rendered = (await import("node:fs")).readFileSync(sp.logs[0], "utf8");
   assert.match(rendered, /recruited into the `chatroom` MCP room `recruit` by claude-1/);
   assert.match(rendered, /running it 5 times/);
   const la = await a.call("list_agents", { room });
@@ -407,6 +408,70 @@ assert.deepEqual(tools, ["amend", "board_get", "board_set", "challenge", "join_r
   await assert.rejects(a.call("request_agent", { room, brief: "x" }), /20-4000/);
   const agents = (await (await fetch(`${HTTP}/agents`)).json()) as unknown[];
   assert.equal(agents.length, 1);
+  // sub-team into a new room with an area claim: two recruits, room pre-configured for verification
+  const st = await a.call("request_agent", { room, brief: "Investigate the auth module for the session bug and report a verified fix.", new_room: "recruit-auth", area: "auth" });
+  assert.equal(st.spawned.length, 2);
+  assert.equal(st.room, "recruit-auth");
+  const sub = await a.call("room_status", { room: "recruit-auth" });
+  assert.equal(sub.require_verification, true);
+  assert.equal(sub.require_challenge, true);
+  const claim = await a.call("board_get", { room: "recruit-auth", key: "claim/auth" });
+  assert.match(claim.text, /"owner":"claude-1"/);
+  const r2 = (await import("node:fs")).readFileSync(st.logs[1], "utf8");
+  assert.match(r2, /your teammates are claude-recruit-2/);
+  assert.match(r2, /post_to_room\(from_room="recruit-auth", to_room="recruit"/);
+}
+
+// ---------------- swarm protocol: team floor, claims, hold, cross-room notes, verification gate ----------------
+{
+  const room = "proto";
+  await a.call("join_room", { room, name: "claude-1", agent: "claude" });
+  // team floor: one agent cannot conclude alone
+  await assert.rejects(a.call("propose", { room, text: "I decide alone." }), /room of one/);
+  const jb = await b.call("join_room", { room, name: "codex-1", agent: "codex" });
+  void jb;
+  // two names on one connection are still one agent
+  await a.call("join_room", { room: "solo", name: "x1", agent: "claude" });
+  const x2 = await a.call("join_room", { room: "solo", name: "x2", agent: "claude" });
+  await assert.rejects(a.call("propose", { room: "solo", text: "sock puppets", participant_id: x2.participant_id }), /room of one/);
+  // claims: create-then-owner-only, if_absent conflict names the owner
+  await a.call("board_set", { room, key: "claim/auth", text: JSON.stringify({ area: "auth", owner: "claude-1", team: ["claude-1"], status: "open" }), if_absent: true });
+  await assert.rejects(b.call("board_set", { room, key: "claim/auth", text: "{}", if_absent: true }), /owned by claude-1/);
+  await assert.rejects(b.call("board_set", { room, key: "claim/auth", text: "{}" }), /owned by claude-1/);
+  await assert.rejects(a.call("board_set", { room, key: "claim/auth", text: JSON.stringify({ area: "auth", owner: "claude-1", team: ["claude-1"], status: "fixed" }) }), /team of 2\+/);
+  await a.call("board_set", { room, key: "claim/auth", text: JSON.stringify({ area: "auth", owner: "claude-1", team: ["claude-1", "codex-1"], status: "fixed" }) });
+  // cross-room note with ack gate
+  await c.call("join_room", { room: "proto-other", name: "gemini-1", agent: "gemini" });
+  await assert.rejects(a.call("board_set", { room, key: "inbox/proto-other/x", text: "forged" }), /written by post_to_room/);
+  const note = await c.call("post_to_room", { from_room: "proto-other", to_room: room, key: "need-ref", text: "Which commit has the auth fix? We depend on it.", ack_required: true });
+  assert.equal(note.key, "inbox/proto-other/need-ref");
+  await assert.rejects(a.call("propose", { room, text: "Ship." }), /Acknowledge the notes/);
+  await a.call("board_set", { room, key: "inbox/proto-other/need-ref.ack", text: "commit abc123 on branch fix/auth" });
+  // hold: proposal with the votes does not pass while held; clearing the hold passes it
+  await b.call("board_set", { room, key: `hold/${room}`, text: "pause: reproducing on main first" });
+  await assert.rejects(a.call("board_set", { room, key: `hold/${room}`, text: "" }), /placed by codex-1/);
+  const pr = await a.call("propose", { room, text: "Fix: reorder the session check in auth.ts." });
+  await b.call("wait_for_messages", { room, timeout_ms: 0 });
+  const v1 = await b.call("vote", { room, proposal_id: pr.id, vote: "agree", quote: "reorder the session check" });
+  assert.equal(v1.room_state, "open", "held room must not conclude");
+  await b.call("board_set", { room, key: `hold/${room}`, text: "" });
+  const st2 = await a.call("room_status", { room });
+  assert.equal(st2.state, "concluded", "clearing the hold passes the already-voted proposal");
+}
+{
+  // verification gate: needs a verify/* entry by another agent on another connection, naming the proposal, dated after the text
+  const room = "verify";
+  await a.call("join_room", { room, name: "claude-1", agent: "claude", require_verification: true, require_challenge: false });
+  await b.call("join_room", { room, name: "codex-1", agent: "codex" });
+  await assert.rejects(a.call("propose", { room, text: "Fix is done." }), /requires verification/);
+  await a.call("board_set", { room, key: "verify/auth", text: "ran: npm test (cwd /tmp/x, commit abc) exit 0" });
+  const pr = await a.call("propose", { room, text: "Fix is done: see verify/auth." });
+  await b.call("wait_for_messages", { room, timeout_ms: 0 });
+  let v = await b.call("vote", { room, proposal_id: pr.id, vote: "agree", quote: "Fix is done: see verify/auth" });
+  assert.equal(v.room_state, "open", "proposer's own verify entry must not clear the gate");
+  await b.call("board_set", { room, key: "verify/auth-recheck", text: `ran: npm test (cwd /tmp/x, commit abc) exit 0 — verifies ${pr.id}` });
+  const st = await a.call("room_status", { room });
+  assert.equal(st.state, "concluded", "an independent verify entry naming the proposal passes it");
 }
 
 const ui = await (await fetch(`${HTTP}/ui`)).text();

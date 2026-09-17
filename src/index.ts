@@ -39,6 +39,30 @@ const spawner = new Spawner({
   logDir: resolve(process.env.CHATROOM_LOG_DIR ?? "logs/spawned"),
   dryRun: process.env.CHATROOM_SPAWN_DRY === "1",
 });
+spawner.attach({
+  isHeld: (room) => {
+    try {
+      return Boolean(hub.hold(hub.getRoom(room)));
+    } catch {
+      return false;
+    }
+  },
+  claimArea: (room, requester, area, team) => {
+    const r = hub.getRoom(room);
+    const existing = r.board.get(`claim/${area}`);
+    if (existing && existing.by !== requester) throw new HubError(`claim/${area} is owned by ${existing.by}; recruit into their team instead.`);
+    hub.setBoardAs(room, requester, `claim/${area}`, JSON.stringify({ area, owner: requester, team: [requester, ...team], status: "open", note: "claimed at recruitment" }));
+  },
+  ensureRoom: (room, topic) => {
+    hub.createRoom(room, { topic, requireChallenge: true, requireVerification: true, expectedParticipants: 0 });
+  },
+  announce: (room, text) => {
+    try {
+      hub.announce(room, text);
+    } catch {}
+  },
+  liveAgents: () => [...hub.rooms.values()].filter((r) => r.state === "open" || r.state === "stalled").reduce((n, r) => n + hub.voters(r).length, 0),
+});
 process.on("exit", () => spawner.stopAll());
 process.on("SIGINT", () => process.exit(0));
 process.on("SIGTERM", () => process.exit(0));
@@ -97,7 +121,7 @@ setInterval(() => {
       transports.delete(id);
     }
   }
-  hub.sweepIdle(PARTICIPANT_IDLE_MS);
+  for (const name of hub.sweepIdle(PARTICIPANT_IDLE_MS)) spawner.stop(name); // a quiet-but-alive recruit frees its slot
 }, 60_000).unref();
 
 const requireToken = (req: express.Request, res: express.Response): boolean => {
@@ -145,7 +169,7 @@ app.post("/rooms/:room/messages", (req, res) => {
   if (!requireToken(req, res)) return;
   try {
     const { name, content } = (req.body ?? {}) as { name?: string; content?: string };
-    const { participant } = hub.join(req.params.room, (name || "human").trim(), "human");
+    const { participant } = hub.join(req.params.room, (name || "human").trim(), "human", {}, undefined, `http:${name || "human"}`);
     const m = hub.send(req.params.room, participant.id, String(content ?? ""), undefined, true);
     res.json(m);
   } catch (e) {
@@ -157,7 +181,7 @@ app.post("/rooms/:room/vote", (req, res) => {
   if (!requireToken(req, res)) return;
   try {
     const { name, proposal_id, vote, reason } = (req.body ?? {}) as { name?: string; proposal_id?: string; vote?: "agree" | "disagree" | "abstain"; reason?: string };
-    const { participant } = hub.join(req.params.room, (name || "human").trim(), "human");
+    const { participant } = hub.join(req.params.room, (name || "human").trim(), "human", {}, undefined, `http:${name || "human"}`);
     const pr = hub.vote(req.params.room, participant.id, String(proposal_id), vote ?? "abstain", reason);
     res.json(hub.proposalView(hub.getRoom(req.params.room), pr, true));
   } catch (e) {

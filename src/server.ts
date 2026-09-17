@@ -9,6 +9,7 @@
  * wait_for_messages -> propose -> challenge -> vote -> room concludes -> leave_room.
  */
 import { McpServer, ResourceTemplate } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { Hub, HubError } from "./hub.js";
 import type { Spawner } from "./spawner.js";
@@ -54,6 +55,7 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
   );
 
   const me = new Map<string, Set<string>>();
+  const sessionKey = randomUUID(); // one connection = one agent, whatever names it uses
   const pid = (room: string, override?: string) => {
     const ids = me.get(room);
     if (override) {
@@ -109,11 +111,12 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
         anonymous: z.boolean().optional().describe("Show participants to each other as 'Participant A/B/C' to reduce identity bias."),
         max_messages_per_participant: z.number().int().min(0).optional().describe("Chat message budget per participant (votes/proposals/challenges are free)."),
         require_challenge: z.boolean().optional().describe("Require a challenge before any proposal can pass. Default: automatic when 3+ participants."),
+        require_verification: z.boolean().optional().describe("Swarm mode: a proposal needs a verify/* board entry by someone else (naming the proposal id) before it can pass."),
         max_message_chars: z.number().int().min(200).max(20000).optional().describe("Cap on chat/opening length (proposals, challenges, board entries are not capped)."),
         participant_id: z.string().optional().describe("Reclaim an earlier identity after a reconnect."),
       },
     },
-    guard(({ room, name, agent, topic, mode, quorum, max_rounds, expected_participants, anonymous, max_messages_per_participant, require_challenge, max_message_chars, participant_id }) => {
+    guard(({ room, name, agent, topic, mode, quorum, max_rounds, expected_participants, anonymous, max_messages_per_participant, require_challenge, require_verification, max_message_chars, participant_id }) => {
       const { room: r, participant } = hub.join(
         room,
         name,
@@ -127,9 +130,11 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
           anonymous,
           maxMessagesPerParticipant: max_messages_per_participant,
           requireChallenge: require_challenge,
+          requireVerification: require_verification,
           maxMessageChars: max_message_chars,
         },
         participant_id,
+        sessionKey,
       );
       if (!me.has(room)) me.set(room, new Set());
       me.get(room)!.add(participant.id);
@@ -352,11 +357,40 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
       description:
         "Put evidence, decisions-so-far, open questions or a working draft on the room's shared board under a short key. Entries are " +
         "replaced in place and only a one-line notice goes to chat, so use this instead of re-posting long content. Empty text deletes the entry.",
-      inputSchema: { room: roomArg, key: z.string().describe("Short name, e.g. 'evidence', 'open questions', 'draft'."), text: z.string(), participant_id: asArg },
+      inputSchema: {
+        room: roomArg,
+        key: z.string().describe("Short name, e.g. 'evidence', 'open questions', 'draft'. Reserved: claim/<area> (JSON, create-then-owner-only), verify/<area> (a command you ran, its cwd/commit, exit code, and the proposal id), hold/<room> (pause; author-only), inbox/* (written by post_to_room; acknowledge with '<key>.ack')."),
+        text: z.string(),
+        if_absent: z.boolean().optional().describe("Create only; fail if the key exists (atomic claim)."),
+        if_by_me: z.boolean().optional().describe("Update only if you wrote the existing entry."),
+        participant_id: asArg,
+      },
     },
-    guard(({ room, key, text, participant_id }) => {
-      const e = hub.setBoard(room, pid(room, participant_id), key, text);
+    guard(({ room, key, text, if_absent, if_by_me, participant_id }) => {
+      const e = hub.setBoard(room, pid(room, participant_id), key, text, { ifAbsent: if_absent, ifByMe: if_by_me });
       return e ? { key, chars: e.text.length, by: e.by } : { key, deleted: true };
+    }),
+  );
+
+  server.registerTool(
+    "post_to_room",
+    {
+      title: "Send a note to another room",
+      description:
+        "Pass information to a team you are not part of: the note lands on that room's board as inbox/<your room>/<key> with a one-line notice, " +
+        "without you joining (so you never affect their vote). With ack_required, that room cannot propose until someone there writes '<key>.ack'.",
+      inputSchema: {
+        from_room: z.string().describe("A room you are in."),
+        to_room: z.string().describe("The room to notify."),
+        key: z.string().describe("Short name, e.g. 'result', 'need-help', 'commit-ref'."),
+        text: z.string(),
+        ack_required: z.boolean().optional(),
+        participant_id: asArg,
+      },
+    },
+    guard(({ from_room, to_room, key, text, ack_required, participant_id }) => {
+      const r = hub.postToRoom(from_room, pid(from_room, participant_id), to_room, key, text, ack_required);
+      return { to_room, key: r.key, chars: r.entry.text.length, notified: true };
     }),
   );
 
@@ -440,15 +474,20 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
           model: z.string().optional().describe("Model override, e.g. 'sonnet', 'haiku', 'opus', or a Codex model id."),
           cwd: z.string().optional().describe("Directory the newcomer works in (default: the hub's default project dir)."),
           can_edit: z.boolean().optional().describe("Allow the newcomer to modify files (default false: investigate and report)."),
+          new_room: z.string().optional().describe("Spawn a sub-team into this new room instead of yours; they report back with post_to_room."),
+          room_topic: z.string().optional().describe("Topic for the new room."),
+          count: z.number().int().min(1).max(3).optional().describe("How many to spawn (default 2 for a new room, 1 otherwise)."),
+          area: z.string().optional().describe("Claim this area (claim/<area>) for the newcomers first; refused if someone else owns it."),
           participant_id: asArg,
         },
       },
-      guard(({ room, brief, name, agent, model, cwd, can_edit, participant_id }) => {
+      guard(({ room, brief, name, agent, model, cwd, can_edit, new_room, room_topic, count, area, participant_id }) => {
         const r = hub.getRoom(room);
         const me_ = hub.requireParticipant(r, pid(room, participant_id));
-        const rec = spawner.request({ room, brief, requestedBy: me_.name, name, agent, model, cwd, canEdit: can_edit });
-        hub.announce(room, `${hub.shown(r, me_)} recruited ${rec.name} (${rec.agent}${rec.model ? `/${rec.model}` : ""}): ${brief.slice(0, 200)}${brief.length > 200 ? "…" : ""}`);
-        return { spawned: rec.name, agent: rec.agent, model: rec.model ?? null, cwd: rec.cwd, log: rec.log, hint: "They will join within a minute or two. Carry on; you will see them arrive." };
+        const recs = spawner.request({ room, brief, requestedBy: me_.name, name, agent, model, cwd, canEdit: can_edit, newRoom: new_room, roomTopic: room_topic, count, area });
+        const who = recs.map((x) => x.name).join(", ");
+        hub.announce(room, `${hub.shown(r, me_)} recruited ${who} (${recs[0].agent}${recs[0].model ? `/${recs[0].model}` : ""}${new_room ? `, into ${new_room}` : ""}${area ? `, area ${area}` : ""}): ${brief.slice(0, 200)}${brief.length > 200 ? "…" : ""}`);
+        return { spawned: recs.map((x) => x.name), room: recs[0].room, depth: recs[0].depth, agent: recs[0].agent, model: recs[0].model ?? null, cwd: recs[0].cwd, logs: recs.map((x) => x.log), hint: "They will join within a minute or two. Carry on; you will see them arrive." };
       }),
     );
 
@@ -458,7 +497,7 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
       guard(({ room }) =>
         spawner.agents
           .filter((a) => !room || a.room === room)
-          .map((a) => ({ name: a.name, room: a.room, agent: a.agent, model: a.model ?? null, requested_by: a.requestedBy, running: a.endedAt === undefined, exit_code: a.exitCode ?? null, brief: a.brief.slice(0, 160) })),
+          .map((a) => ({ name: a.name, room: a.room, report_to: a.reportTo ?? null, agent: a.agent, model: a.model ?? null, requested_by: a.requestedBy, depth: a.depth, running: a.endedAt === undefined, exit_code: a.exitCode ?? null, brief: a.brief.slice(0, 160) })),
       ),
     );
   }

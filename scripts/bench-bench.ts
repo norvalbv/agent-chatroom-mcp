@@ -55,7 +55,8 @@ async function main() {
  const scorer=await import(pathToFileURL(scorerPath).href);
  const task=scorer.loadTask(taskDir);
  const taskBefore=hashTree(taskDir);const scorerBefore=hashFile(scorerPath);
- const frozen={task_sha256:taskBefore,scorer_sha256:scorerBefore,fact_scorer_sha256:factScorerBefore,task_id:task.task_id,timeout_ms:timeout,room:'benchmark',brief:readFileSync(join(taskDir,'public','brief.txt'),'utf8')};
+ const providerEntry=resolve(process.env.BENCH_SEAT_ENTRY??resolve(dirname(scorerPath),'../dist/openrouter.js'));
+ const frozen={seat_entry_sha256:seatArg?hashFile(seatArg):null,provider_entry_sha256:seatArg?hashFile(providerEntry):null,expected_participants:seatArg?1:0,task_sha256:taskBefore,scorer_sha256:scorerBefore,fact_scorer_sha256:factScorerBefore,task_id:task.task_id,timeout_ms:timeout,room:'benchmark',brief:readFileSync(join(taskDir,'public','brief.txt'),'utf8')};
  mkdirSync(root);const results:any[]=[];
  for(const [index,entryArg] of [aArg,bArg].entries()) {
   const arm=index===0?'A':'B',armRoot=join(root,arm),workspace=join(armRoot,'workspace');
@@ -80,17 +81,29 @@ async function main() {
     await delay(30);
    }
    if(!ready)throw Error('Hub did not become ready');manifest.booted_at=new Date().toISOString();save();
-   if(seatArg){seat=spawn(process.execPath,[seatArg],{cwd:workspace,env,stdio:['ignore',fd,fd]});manifest.seat_pid=seat.pid;seat.on('exit',(code,signal)=>{manifest.seat_exit_code=code;manifest.seat_exit_signal=signal;save();});}
- const created=await fetch(`${url}/rooms/benchmark/create`,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({topic:frozen.brief,expected_participants:0,quorum:'unanimous',require_challenge:true,require_verification:false}),signal:AbortSignal.timeout(timeout)});
+ const created=await fetch(`${url}/rooms/benchmark/create`,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({topic:frozen.brief,expected_participants:frozen.expected_participants,quorum:'unanimous',require_challenge:true,require_verification:false}),signal:AbortSignal.timeout(timeout)});
    if(!created.ok)throw Error(`Room create HTTP ${created.status}`);
-   while(!conclusions(join(armRoot,'data','benchmark.jsonl'))){if(child.exitCode!==null||spawnError)throw Error('Hub exited before conclusion');if(Date.now()-started>=timeout){verdict.reason='timeout';throw Error('Conclusion timeout');}await delay(30);}
-   // Stop the process before reading artifacts; chat conclusion is only a completion signal.
+   let seatError:Error|undefined;
+   if(seatArg){
+    // Hub credentials stay scrubbed; allow only this provider's credentials into the seat.
+    const seatEnv={...env,CHATROOM_MCP_URL:`${url}/mcp`,BENCH_SEAT_ENTRY:providerEntry,BENCH_HUB_ENTRY:entry};
+    for(const key of ['OPENROUTER_API_KEY','OPENROUTER_BASE_URL','OPENROUTER_MODEL'])if(process.env[key])Object.assign(seatEnv,{[key]:process.env[key]});
+    seat=spawn(process.execPath,[seatArg],{cwd:workspace,env:seatEnv,stdio:['ignore',fd,fd]});manifest.seat_pid=seat.pid;
+    seat.on('error',error=>{seatError=error;});
+    seat.on('exit',(code,signal)=>{manifest.seat_exit_code=code;manifest.seat_exit_signal=signal;manifest.seat_completed_at=new Date().toISOString();save();});save();
+   }
+   const checkSeat=()=>{if(seatError)throw seatError;if(seat&&(seat.signalCode!==null||(seat.exitCode!==null&&seat.exitCode!==0)))throw Error(`Seat failed: ${seat.exitCode??seat.signalCode}`);};
+   while(!conclusions(join(armRoot,'data','benchmark.jsonl'))){checkSeat();if(child.exitCode!==null||spawnError)throw Error('Hub exited before conclusion');if(Date.now()-started>=timeout){verdict.reason='timeout';throw Error('Conclusion timeout');}await delay(30);}
+   // Conclusion precedes wrapper artifact writes. Keep the hub alive until the seat exits.
+   while(seat&&seat.exitCode===null&&seat.signalCode===null){checkSeat();if(Date.now()-started>=timeout){verdict.reason='timeout';throw Error('Seat completion timeout');}await delay(30);}
+   checkSeat();
    await stop(child);
+   manifest.scoring_started_at=new Date().toISOString();
    if(hashTree(taskDir)!==taskBefore||hashFile(scorerPath)!==scorerBefore||hashFile(factScorerPath)!==factScorerBefore){verdict.reason='tamper';throw Error('Frozen task or scorer changed');}
    Object.assign(verdict,await scorer.scoreTask(taskDir,workspace));
   }catch(error){manifest.error=String(error);}
   finally {
-   if(child)await stop(child);if(seat)await stop(seat);if(fd!==undefined)closeSync(fd);
+   if(seat)await stop(seat);if(child)await stop(child);if(fd!==undefined)closeSync(fd);
    let after:string|null=null;try{after=hashTree(taskDir);}catch{}
    const unchanged=after===taskBefore&&hashFile(scorerPath)===scorerBefore&&hashFile(factScorerPath)===factScorerBefore;
    verdict.anti_tamper={...verdict.anti_tamper,hash_before:taskBefore,hash_after:after,unchanged};

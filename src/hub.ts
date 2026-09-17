@@ -1360,6 +1360,31 @@ export class Hub {
     return pr.challenges.filter((c) => (c.status ?? "open") === "open" && c.blocking !== false);
   }
 
+  /** Is this challenge independent scrutiny of a proposal by `proposerId`? True when it comes from a
+   *  different participant on a different connection; a same-session alias counts as the proposer
+   *  (identity-is-the-connection). Sessionless participants fall back to distinct-id, so legacy
+   *  separate HTTP callers and tests keep working. */
+  private independentChallenger(room: Room, c: Challenge, proposerId: string): boolean {
+    if (c.by.id === proposerId) return false;
+    const challenger = room.participants.get(c.by.id);
+    const proposer = room.participants.get(proposerId);
+    const cs = challenger?.session;
+    const ps = proposer?.session;
+    if (cs && ps) return cs !== ps; // both sessions known: the connection is the identity
+    return true; // missing either side: fall back to distinct participant ids (already checked)
+  }
+
+  /** Open blocking challenges from a challenger independent of the proposer's connection: the only ones that count as live scrutiny. */
+  private qualifyingChallenges(room: Room, pr: Proposal): Challenge[] {
+    return this.openChallenges(pr).filter((c) => this.independentChallenger(room, c, pr.by.id));
+  }
+
+  /** Has this proposal received independent scrutiny at all? A challenge conceded or answered still proves
+   * the proposal was tested from another connection; a same-session alias never does, in any status. */
+  private hasQualifyingChallenge(room: Room, pr: Proposal): boolean {
+    return pr.challenges.some((c) => c.blocking !== false && this.independentChallenger(room, c, pr.by.id));
+  }
+
   challenge(roomName: string, pid: string, proposalId: string, objection: string, blocking = true): Proposal {
     const room = this.getRoom(roomName);
     const p = this.requireParticipant(room, pid);
@@ -1367,6 +1392,12 @@ export class Hub {
     if (!pr) throw new HubError(`No proposal "${proposalId}" in "${roomName}".`);
     if (pr.status !== "open") throw new HubError(`Proposal ${proposalId} is already ${pr.status}.`);
     if (pr.by.id === p.id) throw new HubError("You cannot challenge your own proposal; someone else must.");
+    if (blocking && !this.independentChallenger(room, { by: { id: p.id, name: p.name }, objection, ts: now(), version: pr.version }, pr.by.id)) {
+      throw new HubError(
+        `${this.shown(room, p)} shares a connection with the proposer ${this.shown(room, pr.by)}: a blocking challenge must come from a different session (identity-is-the-connection). ` +
+        `A non-blocking objection is still allowed, and a different connection must challenge before this proposal can pass.`,
+      );
+    }
     if (objection.trim().length < 20) throw new HubError("A challenge must state a specific objection (at least 20 characters).");
     this.surfaceCited(room, objection, "cited in a challenge");
     const cites = this.citedSpan(pr.text, objection);
@@ -1441,8 +1472,11 @@ export class Hub {
     const waiting = active.filter((p) => !pr.votes[p.id]).map((p) => this.shown(room, p));
     if (waiting.length) out.push(`votes from ${waiting.join(", ")}`);
     for (const d of this.standingDisagrees(pr)) out.push(`a standing disagree from ${this.shown(room, room.participants.get(d.id) ?? d)}${room.participants.get(d.id)?.active ? "" : " (who has left)"}: they re-vote, or the text they objected to is amended`);
-    if (this.challengeRequired(room) && !pr.challenges.some((c) => c.blocking !== false)) out.push(`a challenge from someone other than ${this.shown(room, pr.by)}`);
-    const openCh = this.openChallenges(pr);
+    if (this.challengeRequired(room) && !this.hasQualifyingChallenge(room, pr)) {
+      out.push(`a challenge from someone other than ${this.shown(room, pr.by)} (on a different connection)`);
+      if (pr.challenges.length) out.push(`its only blocking challenge(s) share the proposer's connection and do not count as scrutiny: a different connection must challenge`);
+    }
+    const openCh = this.qualifyingChallenges(room, pr);
     if (openCh.length) out.push(`open challenge(s) from ${openCh.map((c) => this.shown(room, c.by)).join(", ")}: amend the cited text or they re-vote`);
     if (room.requireVerification && !this.verifiedBy(room, pr)) out.push(`a verify/* board entry by someone other than ${this.shown(room, pr.by)} naming ${pr.id}`);
     if (this.hold(room)) out.push(`hold by ${this.hold(room)!.by}`);
@@ -1459,7 +1493,7 @@ export class Hub {
       if (v) tally[v] += 1;
     }
     for (const d of this.standingDisagrees(pr)) if (!active.some((p) => p.id === d.id)) tally.disagree += 1;
-    const needsChallenge = this.challengeRequired(room) && !pr.challenges.some((c) => c.blocking !== false) && pr.status === "open";
+    const needsChallenge = this.challengeRequired(room) && !this.hasQualifyingChallenge(room, pr) && pr.status === "open";
     return {
       id: pr.id,
       by: nm(pr.by),
@@ -1558,13 +1592,17 @@ export class Hub {
       return;
     }
 
-    // Adversarial gate: unanimous agreement without a single challenge is suspicious.
-    if (accepted && this.challengeRequired(room) && !pr.challenges.some((c) => c.blocking !== false)) {
-      stuck(`Everyone agrees with ${pr.id} but nobody has tested it. Someone other than ${this.shown(room, pr.by)} should name its weakest claim (challenge) before it passes.`);
+    // Adversarial gate: unanimous agreement without independent scrutiny is suspicious, even when a
+    // stored (legacy or replayed) challenge from the proposer's own connection claims otherwise.
+    if (accepted && this.challengeRequired(room) && !this.hasQualifyingChallenge(room, pr)) {
+      stuck(pr.challenges.length
+        ? `${pr.id} has no qualifying challenge: its only blocking challenge(s) share the proposer's connection, which does not count as scrutiny (identity-is-the-connection). Someone other than ${this.shown(room, pr.by)} on a different connection must challenge before it can pass.`
+        : `Everyone agrees with ${pr.id} but nobody has tested it. Someone other than ${this.shown(room, pr.by)} (on a different connection) should name its weakest claim (challenge) before it passes.`);
       return;
     }
-    if (accepted && this.openChallenges(pr).length) {
-      stuck(`${pr.id} has the votes but ${this.openChallenges(pr).map((c) => this.shown(room, c.by)).join(", ")} challenged v${pr.version} and it is unanswered: amend the text it cites, or the challenger re-votes.`);
+    const openCh = this.qualifyingChallenges(room, pr);
+    if (accepted && openCh.length) {
+      stuck(`${pr.id} has the votes but ${openCh.map((c) => this.shown(room, c.by)).join(", ")} challenged v${pr.version} and it is unanswered: amend the text it cites, or the challenger re-votes.`);
       return;
     }
 

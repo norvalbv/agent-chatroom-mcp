@@ -12,7 +12,7 @@ import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { Hub, HubError } from '../src/hub.js';
 import { createSessionServer } from '../src/server.js';
 
-const CODES = new Set(['expiry-prefix', 'ownership', 'auth', 'key-format', 'size', 'state']);
+const CODES = new Set(['expiry-prefix', 'ownership', 'auth', 'key-format', 'size', 'state', 'hub_guard']);
 const SECRET = 'SECRET_SHOULD_NEVER_BECOME_A_REASON';
 Hub.DEFAULT_NUDGE_MS = 0;
 
@@ -76,11 +76,11 @@ test('expiry-prefix and ownership failures persist distinct reason codes', async
   } finally { await f.cleanup(); }
 });
 
-test('new reasons are closed enum codes with specific classes and state fallback', async () => {
+test('new reasons are closed enum codes with specific classes and unknown fallback', async () => {
   const f = await fixture();
   try {
     for (const e of f.refusals) assert.ok(CODES.has(e.reason), `unknown reason ${e.reason}`);
-    assert.deepEqual(f.refusals.map(e => e.reason), ['expiry-prefix','ownership','auth','key-format','size','state','state']);
+    assert.deepEqual(f.refusals.map(e => e.reason), ['expiry-prefix','ownership','auth','key-format','size','state','hub_guard']);
   } finally { await f.cleanup(); }
 });
 

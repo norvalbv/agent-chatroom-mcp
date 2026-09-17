@@ -5,7 +5,7 @@
 #   scripts/debate.sh "Should this repo use tabs or spaces?" [room-name]
 #
 # Env: PORT (default 7717), CLAUDE_MODEL, CODEX_MODEL, N_CLAUDE (default 1), N_CODEX (default 1),
-#      PROMPT=minimal|participant (which prompts/<name>.md to give each agent; default minimal: goal + tools, no protocol)
+#      PROMPT=minimal|terse|participant (prompts/<name>.md per agent; default minimal: goal + tools. terse: machine register, no chit-chat)
 set -euo pipefail
 cd "$(dirname "$0")/.."
 

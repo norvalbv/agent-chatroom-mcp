@@ -75,7 +75,9 @@ const inside = (p: string) => {
  * Not a sandbox: the CLI seats get a real shell too and the write rule lives in the prompt. This
  * only stops a read-only seat from mutating the checkout by accident, which weaker models do.
  */
-const MUTATING = /(^|[;&|]\s*)(rm|mv|cp|chmod|chown|truncate|dd|kill|pkill|shutdown)\s|sed\s+-i|tee\s|>>?\s*[^&|]|git\s+(commit|checkout|reset|clean|push|rebase|merge|stash|apply|restore)|npm\s+(i|install|uninstall|publish)|(yarn|pnpm|pip|brew|cargo)\s+(add|install|remove)/;
+const MUTATING = /(^|[;&|]\s*)(rm|mv|cp|chmod|chown|truncate|dd|kill|pkill|shutdown)\s|sed\s+-i|tee\s|(?<![0-9])>>?\s*[^&|]|git\s+(commit|checkout|reset|clean|push|rebase|merge|stash|apply|restore)|npm\s+(i|install|uninstall|publish)|(yarn|pnpm|pip|brew|cargo)\s+(add|install|remove)/;
+/** A `>` inside quotes writes nothing, so the guard above is tested against the unquoted text. */
+const unquoted = (command: string) => command.replace(/'[^']*'|"[^"]*"/g, '""');
 const sh = (command: string) =>
   new Promise<string>((res) => {
     const child = spawn("bash", ["-lc", command], { cwd: CWD, stdio: ["ignore", "pipe", "pipe"] });
@@ -190,7 +192,7 @@ if (SHELL)
         },
       },
     },
-    run: (a) => (!WRITE && MUTATING.test(a.command) ? `Refused: this seat is read-only, so "${a.command.slice(0, 120)}" was not run. Investigate and report instead.` : sh(a.command)),
+    run: (a) => (!WRITE && MUTATING.test(unquoted(a.command)) ? `Refused: this seat is read-only, so "${a.command.slice(0, 120)}" was not run. Investigate and report instead.` : sh(a.command)),
   });
 
 // ---------- hub tools over MCP ----------

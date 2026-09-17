@@ -389,8 +389,8 @@ writeFileSync(resolve(OUT, "report.md"), report);
   // a decision-record-shaped verdict is written where the next run's settledAxes() can find it once a human promotes it
   const verdict = results.find((r) => r.name === "verifier")?.text ?? "";
   const rec = /DECISION RECORD[\s\S]*$/.exec(verdict)?.[0];
-  // the verifier answers in markdown, so the slug arrives bolded and code-quoted: **Slug:** `the-slug`
-  const slug = /slug:\**\s*`?([a-z0-9-]{3,80})/i.exec(rec ?? "")?.[1];
+  // markdown puts the colon either side of the emphasis: **Slug:** `x` and **Slug**: `x` both count
+  const slug = /slug\**:\**\s*`?([a-z0-9-]{3,80})/i.exec(rec ?? "")?.[1];
   if (rec && slug && existsSync(resolve(CWD, "docs", "decisions"))) {
     const dir = resolve(CWD, "docs", "decisions", "proposed");
     mkdirSync(dir, { recursive: true });

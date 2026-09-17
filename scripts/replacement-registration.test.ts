@@ -246,3 +246,22 @@ test('replacement pass on the inherited ask stops it being the focus', async () 
   f.hub.pass(f.room.name, next.id);
   assert.equal(focusOf(f.hub, f.room.name, next.id), undefined);
 });
+
+test('consumed exact token cannot reactivate a departed successor', () => {
+  const f = fixture(); register(f.hub, f.room.name, 'old', 'next');
+  const next = joinSuccessor(f.hub, f.room.name, 'next');
+  leave(f.hub, f.room.name, next.id);
+  assert.throws(() => joinSuccessor(f.hub, f.room.name, 'next'), HubError);
+  assert.equal(next.active, false);
+});
+
+test('chain does not resurrect an inherited ask answered by intermediate successor', () => {
+  const f = fixture();
+  const ask = f.hub.send(f.room.name, f.sender.id, '@old report', undefined, true);
+  register(f.hub, f.room.name, 'old', 'next');
+  const next = joinSuccessor(f.hub, f.room.name, 'next');
+  f.hub.send(f.room.name, next.id, 'done', ask.id, true);
+  register(f.hub, f.room.name, 'next', 'last');
+  const last = joinSuccessor(f.hub, f.room.name, 'last');
+  assert.equal(focusOf(f.hub, f.room.name, last.id), undefined);
+});

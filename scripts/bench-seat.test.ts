@@ -59,7 +59,7 @@ function wrapperFixture(){
  const data=process.env.CHATROOM_DATA_DIR;let created=false;let registered=false;
  http.createServer((req,res)=>{res.setHeader('content-type','application/json');
  if(req.url==='/rooms'){res.end('{"rooms":[],"version":"wrapper-test"}');return;}
- if(req.url.endsWith('/create')){created=true;fs.writeFileSync(path.join(data,'hub-env.json'),JSON.stringify({credential:process.env.OPENROUTER_API_KEY??null}));res.end('{}');return;}
+ if(req.url.endsWith('/create')){let b='';req.on('data',c=>b+=c);req.on('end',()=>{fs.writeFileSync(path.join(data,'create.json'),b);});created=true;fs.writeFileSync(path.join(data,'hub-env.json'),JSON.stringify({credential:process.env.OPENROUTER_API_KEY??null}));res.end('{}');return;}
  if(req.url==='/register'){if(!created){res.statusCode=409;res.end('{}');return;}registered=true;fs.writeFileSync(path.join(data,'registered'),'yes');res.end('{}');return;}
  if(req.url==='/conclude'&&registered){fs.writeFileSync(path.join(data,'benchmark.jsonl'),JSON.stringify({type:'state',state:'concluded',conclusion:{text:'Society for Formal Methods, Vienna'}})+'\\n');res.end('{}');return;}
  res.statusCode=404;res.end('{}');}).listen(Number(process.env.PORT),'127.0.0.1');`);
@@ -89,6 +89,8 @@ test('actual wrapper registers after room creation, receives seat-only credentia
  const verdict=JSON.parse(readFileSync(join(dir,'bench-result.json'),'utf8'));
  assert.equal(verdict.passed,true,JSON.stringify({manifest,verdict}));
  assert.equal(manifest.seat_exit_code,0);
+ const policy=JSON.parse(readFileSync(join(dir,'data','create.json'),'utf8'));
+ assert.equal(policy.expected_participants,1);assert.equal(policy.require_challenge,false,'a solo seat cannot obtain independent challenge');
  assert.equal(readFileSync(join(dir,'data','registered'),'utf8'),'yes');
  assert.equal(JSON.parse(readFileSync(join(dir,'data','hub-env.json'),'utf8')).credential,null);
  assert.equal(readFileSync(join(dir,'workspace','provider-finished'),'utf8'),'yes');
@@ -110,6 +112,8 @@ test('conclusion cannot bypass the bounded seat completion barrier',async()=>{
  const result=invoke([task,f.stub,f.stub,String(await freePair()),'--root',f.output,'--timeout-ms','1200','--seat-entry',wrapper],{BENCH_SEAT_ENTRY:f.seat,OPENROUTER_API_KEY:'mock-provider-key',MOCK_DELAY:'5000'});
  assert.equal(result.status,0,result.stderr);
  for(const arm of ['A','B']){
+ assert.equal(readFileSync(join(f.output,arm,'data','registered'),'utf8'),'yes');
+ assert.ok(existsSync(join(f.output,arm,'data','benchmark.jsonl')),'conclusion happened before barrier timeout');
  const verdict=JSON.parse(readFileSync(join(f.output,arm,'bench-result.json'),'utf8'));assert.equal(verdict.reason,'timeout');assert.equal(verdict.passed,false);
  }
  }finally{rmSync(f.root,{recursive:true,force:true});}

@@ -1250,12 +1250,22 @@ export class Hub {
   isAnswered(room: Room, human: Message): boolean {
     // a later human message means an un-addressed "hi benji" reply belongs to that one, not this one
     const nextHumanSeq = room.messages.find((m) => m.seq > human.seq && m.kind === "chat" && m.from.agent === "human")?.seq ?? Infinity;
+    // ...except from the seat the hub itself asked to answer (the nominated responder) or the seat the human addressed:
+    // their named reply is the answer whenever it lands. Without this, an ask addressed to a seat that then died was
+    // re-served to every fresh seat for an hour because its answers arrived after the human's next message and
+    // without reply_to (swarm-214936-s3jy-room #587; answered at #694, #720, #731, #732).
+    const addressed = this.addressee(room, human);
+    // Only an ask whose named addressee has left is "orphaned"; un-addressed and @all asks keep the strict rule, so a
+    // generic reply after two un-addressed asks still attaches to the newer one.
+    const orphaned = !!addressed && addressed !== "all" && !room.participants.get(addressed)?.active;
+    const nominated = orphaned ? room.responders.get(human.id)?.pid : undefined;
     return room.messages.some(
       (m) =>
         m.seq > human.seq &&
         m.kind === "chat" &&
         m.from.agent !== "human" &&
-        (m.replyTo === human.id || (m.seq < nextHumanSeq && this.namesHuman(room, human, m.content))),
+        (m.replyTo === human.id ||
+          ((m.seq < nextHumanSeq || m.from.id === nominated || (addressed !== "all" && m.from.id === addressed)) && this.namesHuman(room, human, m.content))),
     );
   }
 

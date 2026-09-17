@@ -1,0 +1,178 @@
+TAP version 13
+# Subtest: runner exists
+ok 1 - runner exists
+  ---
+  duration_ms: 0.571541
+  type: 'test'
+  ...
+# Subtest: refuses unsafe, malformed and out-of-range ports before running a hub
+ok 2 - refuses unsafe, malformed and out-of-range ports before running a hub
+  ---
+  duration_ms: 468.026
+  type: 'test'
+  ...
+# Subtest: refuses root reuse without overwriting contents
+ok 3 - refuses root reuse without overwriting contents
+  ---
+  duration_ms: 90.221625
+  type: 'test'
+  ...
+# Subtest: two stub hubs emit artifact verdicts, separate workspaces and comparable frozen inputs
+ok 4 - two stub hubs emit artifact verdicts, separate workspaces and comparable frozen inputs
+  ---
+  duration_ms: 794.380333
+  type: 'test'
+  ...
+# Subtest: hub startup failure is infrastructure_error, not task failure, and excluded from delta
+ok 5 - hub startup failure is infrastructure_error, not task failure, and excluded from delta
+  ---
+  duration_ms: 185.121459
+  type: 'test'
+  ...
+# Subtest: frozen scorer identity changes when the executed fact scorer copy changes
+ok 6 - frozen scorer identity changes when the executed fact scorer copy changes
+  ---
+  duration_ms: 1589.356209
+  type: 'test'
+  ...
+# Subtest: real-seat mode spawns one seat per arm and records seat provenance
+ok 7 - real-seat mode spawns one seat per arm and records seat provenance
+  ---
+  duration_ms: 919.9195
+  type: 'test'
+  ...
+# Subtest: refuses seat mode when the seat entry is missing
+ok 8 - refuses seat mode when the seat entry is missing
+  ---
+  duration_ms: 78.352042
+  type: 'test'
+  ...
+# Subtest: real wrapper fails fast with an explicit missing MCP URL diagnostic
+ok 9 - real wrapper fails fast with an explicit missing MCP URL diagnostic
+  ---
+  duration_ms: 20.241834
+  type: 'test'
+  ...
+# Subtest: actual wrapper registers after room creation, receives seat-only credentials, and completes answer before scoring
+ok 10 - actual wrapper registers after room creation, receives seat-only credentials, and completes answer before scoring
+  ---
+  duration_ms: 1926.418458
+  type: 'test'
+  ...
+# Subtest: provider failure is infrastructure, not an empty answer task failure
+ok 11 - provider failure is infrastructure, not an empty answer task failure
+  ---
+  duration_ms: 830.734959
+  type: 'test'
+  ...
+# Subtest: conclusion cannot bypass the bounded seat completion barrier
+ok 12 - conclusion cannot bypass the bounded seat completion barrier
+  ---
+  duration_ms: 3062.827834
+  type: 'test'
+  ...
+# Subtest: inclusiveDates hidden case: equal-endpoints
+ok 13 - inclusiveDates hidden case: equal-endpoints
+  ---
+  duration_ms: 3.092042
+  type: 'test'
+  ...
+# Subtest: inclusiveDates hidden case: leap-day
+ok 14 - inclusiveDates hidden case: leap-day
+  ---
+  duration_ms: 0.281292
+  type: 'test'
+  ...
+# Subtest: inclusiveDates hidden case: non-leap-year
+ok 15 - inclusiveDates hidden case: non-leap-year
+  ---
+  duration_ms: 0.212958
+  type: 'test'
+  ...
+# Subtest: inclusiveDates hidden case: year-boundary
+ok 16 - inclusiveDates hidden case: year-boundary
+  ---
+  duration_ms: 0.563166
+  type: 'test'
+  ...
+# Subtest: inclusiveDates hidden case: month-boundary
+ok 17 - inclusiveDates hidden case: month-boundary
+  ---
+  duration_ms: 0.269541
+  type: 'test'
+  ...
+# Subtest: inclusiveDates hidden case: reversed-range
+ok 18 - inclusiveDates hidden case: reversed-range
+  ---
+  duration_ms: 0.61175
+  type: 'test'
+  ...
+# Subtest: inclusiveDates hidden case: normalized-invalid-day
+ok 19 - inclusiveDates hidden case: normalized-invalid-day
+  ---
+  duration_ms: 0.282709
+  type: 'test'
+  ...
+# Subtest: inclusiveDates hidden case: invalid-month
+ok 20 - inclusiveDates hidden case: invalid-month
+  ---
+  duration_ms: 0.19875
+  type: 'test'
+  ...
+# Subtest: inclusiveDates hidden case: non-string
+ok 21 - inclusiveDates hidden case: non-string
+  ---
+  duration_ms: 0.381916
+  type: 'test'
+  ...
+# Subtest: both fixture variants exist and differ only by the one-line inclusive-bound fix
+ok 22 - both fixture variants exist and differ only by the one-line inclusive-bound fix
+  ---
+  duration_ms: 0.439333
+  type: 'test'
+  ...
+# Subtest: broken fails hidden oracle; one-line t<=e fix passes all nine named oracles
+ok 23 - broken fails hidden oracle; one-line t<=e fix passes all nine named oracles
+  ---
+  duration_ms: 201.559875
+  type: 'test'
+  ...
+# Subtest: wrong patch gives named-oracle-failure JSON; double-run is byte-identical
+ok 24 - wrong patch gives named-oracle-failure JSON; double-run is byte-identical
+  ---
+  duration_ms: 298.636542
+  type: 'test'
+  ...
+# Subtest: loadTask/scoreTask dispatch the correct bug-fix artifact and repeat deterministically
+ok 25 - loadTask/scoreTask dispatch the correct bug-fix artifact and repeat deterministically
+  ---
+  duration_ms: 336.337833
+  type: 'test'
+  ...
+# Subtest: fact-check exact/normalized controls pass; negation and right-value/wrong-format exit 1
+ok 26 - fact-check exact/normalized controls pass; negation and right-value/wrong-format exit 1
+  ---
+  duration_ms: 1568.352833
+  type: 'test'
+  ...
+# Subtest: hub crash maps to infrastructure_error, excluded from task comparison
+ok 27 - hub crash maps to infrastructure_error, excluded from task comparison
+  ---
+  duration_ms: 184.791208
+  type: 'test'
+  ...
+# Subtest: outcome vocabulary: task_pass/task_fail/parse_failure distinct; missing artifact is not infra
+ok 28 - outcome vocabulary: task_pass/task_fail/parse_failure distinct; missing artifact is not infra
+  ---
+  duration_ms: 607.525875
+  type: 'test'
+  ...
+1..28
+# tests 28
+# suites 0
+# pass 28
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 6977.38925

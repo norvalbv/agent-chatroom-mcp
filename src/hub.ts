@@ -44,6 +44,10 @@ export interface Participant {
   role?: Role;
   /** proposal id -> version of its text this participant was last sent (wait_for_messages ships text only when it changes) */
   seenProposal?: Record<string, number>;
+  /** Ephemeral delivery receipts. A reconnect/rejoin starts with a full board manifest. */
+  lastBoardSeen?: number;
+  boardFollow?: string[];
+  seenBoardKeys?: string[];
   /** the conclusion text has been sent to this participant once */
   seenConclusion?: boolean;
   /** proposal id a blocking leave_room was already refused for (the second call proceeds) */
@@ -85,7 +89,12 @@ export interface CodeState {
   at: string;
 }
 
+export interface BoardExpiryOptions { ttlSeconds?: number; expiresAt?: string }
+export interface BoardManifestStats { version: 1; waits: number; bytes: number; full: number; delta: number; empty: number }
+
 export interface BoardEntry {
+  /** Logical archive time: body remains explicitly retrievable. */
+  expiresAt?: string;
   text: string;
   by: string;
   updatedAt: string;
@@ -110,6 +119,16 @@ export interface Challenge {
   cites?: string;
   /** false: recorded dissent that does not hold the proposal or satisfy the challenge gate */
   blocking?: boolean;
+}
+
+export interface ElectorateSummary {
+  electorate: number;
+  agree: number;
+  disagree: number;
+  abstain: number;
+  excluded_leavers: number;
+  distinct_sessions: number;
+  denominator: "electorate";
 }
 
 export interface Proposal {
@@ -174,14 +193,17 @@ export interface Room {
   chair?: string;
   createdAt: string;
   state: RoomState;
-  conclusion?: { text: string; proposalId: string; decidedAt: string; version?: number; tally?: { agree: number; disagree: number; abstain: number }; unresolved_objections?: { by: string; objection: string }[] };
+  conclusion?: { text: string; proposalId: string; decidedAt: string; version?: number; tally?: { agree: number; disagree: number; abstain: number }; electorate?: ElectorateSummary; unresolved_objections?: { by: string; objection: string }[] };
   /** identical silence nudges are posted at most twice */
   lastNudge?: { text: string; count: number };
   /** Lifetime refusal counts keyed by tool and bounded reason class (no bodies, no ids). */
   refusals?: Record<string, number>;
   /** Only versioned rooms have a complete guarded-call observation epoch. */
   telemetryVersion?: 1;
+  /** board wait receipts: count + serialized manifest bytes (telemetryVersion rooms only) */
+
   callOutcomes?: Record<string, CallOutcomes>;
+  boardManifests?: BoardManifestStats;
   /** git HEAD and dirty state of the project when the room was created */
   codeState?: CodeState;
   participants: Map<string, Participant>;
@@ -202,6 +224,11 @@ export interface Room {
   openingsWarned?: boolean;
   /** shared blackboard: named entries agents update in place instead of re-posting */
   board: Map<string, BoardEntry>;
+  /** Reconstructed from every board event, including deletes and system writes. */
+  boardVersion: number;
+  boardVersions: Map<string, number>;
+  /** Version at the latest board event, so gaps without events still count as waits. */
+  lastBoardEventVersion?: number;
   /** human message ids the propose-gate has already warned about (once each) */
   humanWarned: Set<string>;
   /** who has been asked to answer each human message, so three agents do not all say hello */
@@ -224,6 +251,7 @@ type Event =
   | { type: "state"; room: string; state: RoomState; conclusion?: Room["conclusion"] }
   | { type: "opening"; room: string; pid: string; content: string }
   | { type: "openings_revealed"; room: string }
+  | { type: "board_manifest"; room: string; bytes: number; kind: "full" | "delta" | "empty" }
   | { type: "board"; room: string; key: string; entry: BoardEntry | null }
   | { type: "amend"; room: string; proposalId: string; text: string; version: number; updatedAt?: string; votes: Proposal["votes"]; challenges?: Challenge[] }
   | { type: "refusal"; room: string; tool: string; reason: string; ts?: string; participant?: string | null }
@@ -242,8 +270,30 @@ export class HubError extends Error {
   }
 }
 
+/** Exact manifest-only envelope shipped by a wait. Delta implementations may call
+ * observeBoardManifest after cursor advancement; this observer never reads cursors. */
+export interface BoardManifestObservation {
+  board_keys?: string[];
+  board_delta?: { keys: string[]; tombstones: string[] };
+}
+
+interface BoardManifestCounters {
+  waits_observed: number;
+  full_baseline_manifest_bytes: number;
+  shipped_manifest_bytes: number;
+  keys_shipped: number;
+  deleted_tombstones_shipped: number;
+}
+const emptyBoardManifestCounters = (): BoardManifestCounters => ({
+  waits_observed: 0, full_baseline_manifest_bytes: 0, shipped_manifest_bytes: 0,
+  keys_shipped: 0, deleted_tombstones_shipped: 0,
+});
+const manifestBytes = (payload: unknown) => Buffer.byteLength(JSON.stringify(payload), "utf8");
+
 export class Hub {
   readonly rooms = new Map<string, Room>();
+  /** Observed waits only: deliberately not restored from historical room logs. */
+  private readonly boardManifestObserved = new WeakMap<Room, BoardManifestCounters>();
   private readonly dataDir?: string;
   /** project directory whose git state is stamped on rooms and verify entries */
   private readonly cwd?: string;
@@ -344,6 +394,8 @@ export class Hub {
       openings: new Map(),
       openingsRevealed: false,
       board: new Map(),
+      boardVersion: 0,
+      boardVersions: new Map(),
       humanWarned: new Set(),
       responders: new Map(),
     };
@@ -403,7 +455,7 @@ export class Hub {
       latest_seq: room.messages.at(-1)?.seq ?? 0,
       proposals: [...room.proposals.values()].map((pr) => this.proposalView(room, pr, reveal, pr.status === "open" || pr.status === "accepted")),
       // agents get a manifest (board_get <key> fetches text); the human dashboard (reveal) gets the text
-      board: Object.fromEntries([...room.board].map(([k, e]) => [k, { ...(reveal ? { text: e.text } : {}), by: e.by, chars: e.text.length, updated_at: e.updatedAt }])),
+      board: Object.fromEntries([...room.board].filter(([k, e]) => reveal || !this.boardEntryExpired(room, k, e)).map(([k, e]) => [k, { ...(reveal ? { text: e.text } : {}), by: e.by, chars: e.text.length, updated_at: e.updatedAt }])),
       quiet: (() => {
         const qs = room.messages.filter((m) => m.quiet);
         return { messages: qs.length, unsurfaced_threads: new Set(qs.map((m) => this.threadRoot(room, m).id)).size };
@@ -413,6 +465,35 @@ export class Hub {
         return m ? { id: m.id, name: m.from.name, text: m.content } : null;
       })(),
       conclusion: room.conclusion ?? null,
+    };
+  }
+
+  /** Optional integration hook for full or delta wait responses. Call exactly once
+   * per successfully returned wait, with only its manifest envelope. */
+  observeBoardManifest(room: Room, envelope: BoardManifestObservation): void {
+    const counters = this.boardManifestObserved.get(room) ?? emptyBoardManifestCounters();
+    counters.waits_observed++;
+    counters.full_baseline_manifest_bytes += manifestBytes({ board_keys: [...room.board.keys()] });
+    counters.shipped_manifest_bytes += manifestBytes(envelope);
+    counters.keys_shipped += envelope.board_keys?.length ?? envelope.board_delta?.keys.length ?? 0;
+    counters.deleted_tombstones_shipped += envelope.board_delta?.tombstones.length ?? 0;
+    this.boardManifestObserved.set(room, counters);
+  }
+
+  private boardManifestStats(room: Room) {
+    const entriesByPrefix: Record<string, number> = {
+      "claim/": 0, "evidence/": 0, "sources/": 0, "handoff/": 0,
+      "inbox/": 0, "verify/": 0, other: 0,
+    };
+    for (const key of room.board.keys()) {
+      const prefix = key.includes("/") ? key.slice(0, key.indexOf("/") + 1) : "other";
+      entriesByPrefix[Object.hasOwn(entriesByPrefix, prefix) ? prefix : "other"]++;
+    }
+    return {
+      coverage: "since-process-start" as const,
+      ...(this.boardManifestObserved.get(room) ?? emptyBoardManifestCounters()),
+      current_full_manifest_bytes: manifestBytes({ board_keys: [...room.board.keys()] }),
+      entries_by_prefix: entriesByPrefix,
     };
   }
 
@@ -451,9 +532,16 @@ export class Hub {
         chars: room.messages.filter((m) => m.from.id === p.id && m.kind === "chat").reduce((a, m) => a + m.content.length, 0),
       })),
       proposals: room.proposals.size,
+      proposal_electorates: [...room.proposals.values()].filter((pr) => pr.status === "open").map((pr) => ({
+        proposal_id: pr.id, ...this.electorateSummary(room, pr),
+      })),
+      // Legacy conclusions did not record an electorate; do not reconstruct a false historical denominator.
+      conclusion_electorate: room.conclusion?.electorate ?? null,
       amendments: [...room.proposals.values()].reduce((a, p) => a + (p.version - 1), 0),
       challenges: [...room.proposals.values()].reduce((a, p) => a + p.challenges.length, 0),
       board_entries: room.board.size,
+      board_manifests: room.boardManifests ?? null, // persisted pretty-byte counters (delta branch)
+      board_manifest: this.boardManifestStats(room), // compact since-process-start counters (stats branch)
       refusals: room.refusals ?? {},
       call_outcomes: callOutcomes,
       refusal_rates: refusalRates,
@@ -515,6 +603,9 @@ export class Hub {
       this.persist({ type: "join", room: roomName, p: participant });
       this.post(room, "system", undefined, `${this.shown(room, participant)} rejoined the room.`);
     }
+    // Reclaiming even an active seat is an explicit delivery reset (lost response recovery).
+    delete participant.lastBoardSeen;
+    delete participant.seenBoardKeys;
     for (const pr of room.proposals.values()) if (pr.status === "open") this.evaluate(room, pr);
     return { room, participant };
   }
@@ -524,7 +615,7 @@ export class Hub {
     if (p.agent === "human" || p.role === "chair") return undefined;
     const open = [...room.proposals.values()].find((pr) => pr.status === "open");
     if (!open) return undefined;
-    const others = this.voters(room).filter((x) => x.id !== p.id);
+    const others = this.electorate(room, open, p.id).members;
     if (room.expectedParticipants !== 1 && Hub.sessionsOf(others) < 2) {
       return { proposal: open, reason: `the room would be left with ${others.length} voter(s), and a room of one cannot conclude, so ${open.id} could never pass` };
     }
@@ -577,6 +668,45 @@ export class Hub {
    */
   unarrived(room: Room): number {
     return Math.max(0, room.expectedParticipants - this.everJoinedVoters(room).length);
+  }
+
+  /**
+   * Proposal membership: ordinary leavers are excluded, ordinary late joiners are not counted.
+   * If attrition drops the surviving snapshot below the independent-connection floor, the
+   * earliest joined eligible voters on new connections replace it (Map order breaks timestamp
+   * ties). This is pure, including for hypothetical departures, and is reproducible after replay.
+   * Missing/empty snapshots are legacy rooms and retain their all-voter compatibility.
+   */
+  electorate(room: Room, pr: Proposal, leavingId?: string) {
+    const all = this.voters(room).filter((p) => p.id !== leavingId);
+    const snapshot = pr.snapshot?.length ? new Set(pr.snapshot) : undefined;
+    const members = snapshot ? all.filter((p) => snapshot.has(p.id)) : [...all];
+    const replacements: Participant[] = [];
+    const identity = (p: Participant) => p.session ?? p.id;
+    const sessions = new Set(members.map(identity));
+    if (snapshot && room.expectedParticipants !== 1 && sessions.size < 2) {
+      for (const p of [...all].sort((a, b) => a.joinedAt.localeCompare(b.joinedAt))) {
+        if (sessions.has(identity(p))) continue;
+        members.push(p);
+        replacements.push(p);
+        sessions.add(identity(p));
+        if (sessions.size >= 2) break;
+      }
+    }
+    const excluded = snapshot ? [...snapshot].filter((id) => id === leavingId || !room.participants.get(id)?.active)
+      .map((id) => ({ id, reason: "left-before-close" as const })) : [];
+    return { members, replacements, excluded, distinctSessions: sessions.size };
+  }
+
+  private electorateSummary(room: Room, pr: Proposal): ElectorateSummary {
+    const e = this.electorate(room, pr);
+    const tally = { agree: 0, disagree: 0, abstain: 0 };
+    for (const p of e.members) {
+      const vote = pr.votes[p.id]?.vote;
+      if (vote) tally[vote]++;
+    }
+    return { electorate: e.members.length, ...tally, excluded_leavers: e.excluded.length,
+      distinct_sessions: e.distinctSessions, denominator: "electorate" };
   }
 
   /** "[chair]" etc. after a name; nothing for workers. */
@@ -1239,6 +1369,37 @@ export class Hub {
 
   // ---------- shared board ----------
 
+  private boardExpiry(key: string, opts: BoardExpiryOptions): string | undefined {
+    if (opts.ttlSeconds === undefined && opts.expiresAt === undefined) return undefined;
+    if (!key.startsWith("handoff/") && !key.startsWith("inbox/")) throw new HubError("Expiry is supported only for handoff/ and inbox/ entries.");
+    if (opts.ttlSeconds !== undefined && opts.expiresAt !== undefined) throw new HubError("Use ttl_seconds or expires_at, not both.");
+    if (opts.ttlSeconds !== undefined && (!Number.isFinite(opts.ttlSeconds) || opts.ttlSeconds <= 0)) throw new HubError("ttl_seconds must be finite and positive.");
+    const at = opts.ttlSeconds !== undefined ? Date.now() + opts.ttlSeconds * 1000 : Date.parse(opts.expiresAt!);
+    if (!Number.isFinite(at) || Math.abs(at) > 8.64e15) throw new HubError("Invalid expires_at or ttl_seconds.");
+    return new Date(at).toISOString();
+  }
+
+  /** Expiry archives visibility only. Required inbox notes remain visible until current-text ack. */
+  boardEntryExpired(room: Room, key: string, entry: BoardEntry, at = Date.now()): boolean {
+    if (!entry.expiresAt || at < Date.parse(entry.expiresAt)) return false;
+    if (entry.ackRequired && this.inboxOpen(room, key, entry)) return false;
+    return true;
+  }
+
+  recordBoardManifest(roomName: string, envelope: { board_keys?: string[]; board_delta?: { keys: string[]; tombstones: string[] } }): void {
+    const room = this.getRoom(roomName);
+    const kind = envelope.board_keys !== undefined ? "full" : envelope.board_delta !== undefined ? "delta" : "empty";
+    // Standalone manifest envelope in MCP text encoding; no embedded fields means zero bytes.
+    const bytes = Hub.manifestBytes(envelope);
+    this.applyBoardManifest(room, bytes, kind);
+    this.persist({ type: "board_manifest", room: roomName, bytes, kind });
+  }
+
+  private applyBoardManifest(room: Room, bytes: number, kind: "full" | "delta" | "empty"): void {
+    const stats = room.boardManifests ??= { version: 1, waits: 0, bytes: 0, full: 0, delta: 0, empty: 0 };
+    stats.waits++; stats.bytes += bytes; stats[kind]++;
+  }
+
   static readonly BOARD_KEY = /^[\w .:/-]{1,80}$/;
 
   hold(room: Room): BoardEntry | undefined {
@@ -1265,11 +1426,82 @@ export class Hub {
     return new Set(ps.map((p) => p.session ?? `nosession:${p.id}`)).size;
   }
 
-  setBoard(roomName: string, pid: string, key: string, text: string, opts: { ifAbsent?: boolean; ifByMe?: boolean; overwrite?: boolean } = {}): BoardEntry | null {
+  /** UTF-8 bytes of standalone pretty-JSON board fields, not HTTP/MCP framing. */
+  static manifestBytes(envelope: Record<string, unknown>): number {
+    return Object.keys(envelope).length ? Buffer.byteLength(JSON.stringify(envelope, null, 2)) : 0;
+  }
+
+  boardManifestTelemetry(room: Room): { waits: number; board_bytes_total: number; board_bytes_mean: number } {
+    const t = room.boardManifests;
+    const waits = t?.waits ?? 0;
+    return { waits, board_bytes_total: t?.bytes ?? 0, board_bytes_mean: waits ? Math.round((t!.bytes / waits) * 10) / 10 : 0 };
+  }
+
+  /**
+   * Board discovery for one seat, assembled synchronously AFTER the poll wake
+   * (concurrent waits for a seat serialize here). This is an at-most-once response
+   * receipt, NOT a network ack: a lost response is recovered by rejoin/reclaim or
+   * a restart, each of which resets to a full manifest. Omitted follow keeps the
+   * current subscription; [] follows only mandatory coordination keys; [""] all.
+   * Any subscription change (narrowing included) resets so stale out-of-scope keys
+   * are dropped and new-scope keys are backfilled. Discovery filtering is not
+   * authorization: verify/, claim/, required pending inbox and hold keys are never
+   * hidden, and explicit board_get remains unrestricted.
+   */
+  boardManifest(roomName: string, pid: string, follow?: string[], forceFull = false): {
+    board_keys?: string[]; board_delta?: { keys: string[]; tombstones: string[] }; board_reset?: boolean;
+  } {
+    const room = this.getRoom(roomName);
+    const p = this.requireParticipant(room, pid);
+    const nextFollow = follow === undefined ? undefined : [...new Set(follow)];
+    const changed = nextFollow !== undefined && !forceFull &&
+      (p.boardFollow === undefined || p.boardFollow.length !== nextFollow.length ||
+        p.boardFollow.some((x, i) => x !== nextFollow[i]));
+    if (nextFollow !== undefined) p.boardFollow = nextFollow;
+    const prefixes = forceFull ? undefined : p.boardFollow;
+    const pending = new Set(this.unacknowledged(room));
+    const visible = [...room.board].filter(([key, entry]) => {
+      if (this.boardEntryExpired(room, key, entry)) return false;
+      return prefixes === undefined || prefixes.some((prefix) => key.startsWith(prefix)) ||
+        key.startsWith("verify/") || key.startsWith("claim/") || pending.has(key) || key === `hold/${room.name}`;
+    }).map(([key]) => key);
+    const previous = new Set(p.seenBoardKeys ?? []);
+    const current = new Set(visible);
+    const first = p.lastBoardSeen === undefined || forceFull;
+    const prevSeen = p.lastBoardSeen;
+    p.lastBoardSeen = room.boardVersion;
+    p.seenBoardKeys = visible;
+    if (first || changed) {
+      const envelope = { board_keys: visible, board_reset: true };
+      this.recordBoardManifest(roomName, envelope);
+      return envelope;
+    }
+    const keys = visible.filter((key) => !previous.has(key) || (room.boardVersions.get(key) ?? 0) > (prevSeen ?? 0));
+    // Also covers subscription contraction and clock-driven expiry with no new board event.
+    const tombstones = [...previous].filter((key) => !current.has(key));
+    if (keys.length || tombstones.length) {
+      const envelope = { board_delta: { keys, tombstones } };
+      this.recordBoardManifest(roomName, envelope);
+      return envelope;
+    }
+    this.recordBoardManifest(roomName, {});
+    return {};
+  }
+
+  /** Single reducer for live and replay board mutations; deletes retain a version tombstone. */
+  private applyBoard(room: Room, key: string, entry: BoardEntry | null) {
+    room.boardVersion++;
+    room.boardVersions.set(key, room.boardVersion);
+    if (entry) room.board.set(key, entry);
+    else room.board.delete(key);
+  }
+
+  setBoard(roomName: string, pid: string, key: string, text: string, opts: BoardExpiryOptions & { ifAbsent?: boolean; ifByMe?: boolean; overwrite?: boolean } = {}): BoardEntry | null {
     const room = this.getRoom(roomName);
     const p = this.requireParticipant(room, pid);
     if (!Hub.BOARD_KEY.test(key)) throw new HubError("Board keys are short names like 'evidence', 'open questions', 'claim/auth', 'verify/auth'.");
     if (text.length > 8000) throw new HubError("Board entries are capped at 8000 characters.");
+    const expiresAt = this.boardExpiry(key, opts);
     const previous = room.board.get(key);
     // reserved prefixes (enforced here, the single write site)
     if (key.startsWith("inbox/") && !key.endsWith(".ack")) throw new HubError("inbox/* entries are written by post_to_room from another room. To acknowledge one, write '<key>.ack'.");
@@ -1304,7 +1536,7 @@ export class Hub {
       );
     }
     if (!text.trim()) {
-      room.board.delete(key);
+      this.applyBoard(room, key, null);
       this.persist({ type: "board", room: roomName, key, entry: null });
       this.post(room, "board", p, `cleared board entry "${key}"`);
       if (key === `hold/${room.name}`) for (const pr of room.proposals.values()) if (pr.status === "open") this.evaluate(room, pr);
@@ -1314,10 +1546,11 @@ export class Hub {
     const note = key.startsWith("inbox/") && key.endsWith(".ack") ? room.board.get(key.slice(0, -4)) : undefined;
     const entry: BoardEntry = {
       text, by: p.name, updatedAt: now(),
+      ...(expiresAt ? { expiresAt } : {}),
       ...(key.startsWith("verify/") ? { codeState: Hub.codeState(this.cwd) } : {}),
       ...(note ? { acknowledgedTextHash: Hub.noteHash(note.text) } : {}),
     };
-    room.board.set(key, entry);
+    this.applyBoard(room, key, entry);
     this.persist({ type: "board", room: roomName, key, entry });
     this.post(room, "board", p, `${previous ? "updated" : "added"} board entry "${key}" (${text.length} chars; read it with board_get)`);
     if (key.endsWith(".ack") || key.startsWith("verify/")) for (const pr of room.proposals.values()) if (pr.status === "open") this.evaluate(room, pr);
@@ -1329,14 +1562,14 @@ export class Hub {
     const room = this.getRoom(roomName);
     if (!Hub.BOARD_KEY.test(key)) throw new HubError("Invalid board key.");
     const entry: BoardEntry = { text, by: byName, updatedAt: now() };
-    room.board.set(key, entry);
+    this.applyBoard(room, key, entry);
     this.persist({ type: "board", room: roomName, key, entry });
     this.post(room, "board", undefined, `${byName} added board entry "${key}" (${text.length} chars; read it with board_get)`);
     return entry;
   }
 
   /** Cross-room note: written into the target room's board under inbox/<from>/<key> without joining it. */
-  postToRoom(fromRoom: string, pid: string, toRoom: string, key: string, text: string, ackRequired = false): { key: string; entry: BoardEntry } {
+  postToRoom(fromRoom: string, pid: string, toRoom: string, key: string, text: string, ackRequired = false, opts: BoardExpiryOptions = {}): { key: string; entry: BoardEntry } {
     const from = this.getRoom(fromRoom);
     const p = this.requireParticipant(from, pid);
     if (toRoom === fromRoom) throw new HubError("That is your own room; use board_set.");
@@ -1344,11 +1577,12 @@ export class Hub {
     if (!/^[\w .:-]{1,40}$/.test(key)) throw new HubError("Inbox keys are short names without slashes.");
     if (text.length > 8000) throw new HubError("Notes are capped at 8000 characters.");
     const full = `inbox/${fromRoom}/${key}`;
-    const entry: BoardEntry = { text, by: p.name, updatedAt: now(), ...(ackRequired ? { ackRequired: true } : {}) };
+    const expiresAt = this.boardExpiry(full, opts);
+    const entry: BoardEntry = { text, by: p.name, updatedAt: now(), ...(expiresAt ? { expiresAt } : {}), ...(ackRequired ? { ackRequired: true } : {}) };
     // Replacing an open note consumes no extra slot. A changed text hash invalidates its old ack.
     const otherOpen = [...to.board.entries()].filter(([k, e]) => k !== full && this.inboxOpen(to, k, e)).length;
     if (this.inboxOpen(to, full, entry) && otherOpen >= 10) throw new HubError(`${toRoom} already has 10 inbox notes awaiting acknowledgement; wait for them to be acknowledged or cleared.`);
-    to.board.set(full, entry);
+    this.applyBoard(to, full, entry);
     this.persist({ type: "board", room: toRoom, key: full, entry });
     this.post(to, "system", undefined, `Note from ${p.name} in ${fromRoom} on the board as "${full}"${ackRequired ? ` (acknowledge by writing "${full}.ack")` : ""}: ${text.slice(0, 160)}${text.length > 160 ? "…" : ""}`);
     return { key: full, entry };
@@ -1639,7 +1873,7 @@ export class Hub {
   blockedBy(room: Room, pr: Proposal): string[] {
     if (pr.status !== "open") return [];
     const out: string[] = [];
-    const active = this.voters(room);
+    const active = this.electorate(room, pr).members;
     const unarrived = this.unarrived(room);
     if (unarrived > 0) out.push(`quorum floor: ${unarrived} of the ${room.expectedParticipants} expected participant(s) have never joined (request_agent, or a human closes the room)`);
     else if (room.expectedParticipants !== 1 && Hub.sessionsOf(active) < 2) out.push(`quorum floor: ${active.length} voter(s) left and a room of one cannot conclude (request_agent, or a human closes the room)`);
@@ -1654,19 +1888,16 @@ export class Hub {
     if (openCh.length) out.push(this.challengeAdvice(room, openCh));
     if (room.requireVerification && !this.verifiedBy(room, pr)) out.push(`a verify/* board entry by someone other than ${this.shown(room, pr.by)} naming ${pr.id}`);
     if (this.hold(room)) out.push(`hold by ${this.hold(room)!.by}`);
-    if (!Object.values(pr.votes).some((v) => (v.version ?? 1) === pr.version) && pr.version > 1) out.push(`no vote cast on v${pr.version} yet (carried-over agrees alone cannot pass a new version)`);
+    if (!active.some((p) => pr.votes[p.id] && (pr.votes[p.id].version ?? 1) === pr.version) && pr.version > 1) out.push(`no vote cast on v${pr.version} yet (carried-over agrees alone cannot pass a new version)`);
     return out;
   }
 
   proposalView(room: Room, pr: Proposal, reveal = false, withText = true) {
-    const active = this.voters(room);
+    const active = this.electorate(room, pr).members;
     const nm = (x: { id: string; name: string }) => (reveal ? x.name : this.shown(room, x));
-    const tally = { agree: 0, disagree: 0, abstain: 0 };
-    for (const p of active) {
-      const v = pr.votes[p.id]?.vote;
-      if (v) tally[v] += 1;
-    }
-    for (const d of this.standingDisagrees(pr)) if (!active.some((p) => p.id === d.id)) tally.disagree += 1;
+    const decided = pr.status === "accepted" && room.conclusion?.proposalId === pr.id ? room.conclusion : undefined;
+    const summary = decided ? decided.electorate : this.electorateSummary(room, pr);
+    const tally = decided?.tally ?? (summary ? { agree: summary.agree, disagree: summary.disagree, abstain: summary.abstain } : { agree: 0, disagree: 0, abstain: 0 });
     const needsChallenge = this.challengeRequired(room) && !this.hasQualifyingChallenge(room, pr) && pr.status === "open";
     return {
       id: pr.id,
@@ -1677,7 +1908,10 @@ export class Hub {
       status: pr.status,
       created_at: pr.createdAt,
       tally,
-      waiting_on: active.filter((p) => !pr.votes[p.id]).map((p) => nm(p)),
+      electorate: summary ?? null,
+      // Dissent remains binding under the existing rules even when its author is not counted.
+      outside_electorate_disagrees: this.standingDisagrees(pr).filter((d) => !active.some((p) => p.id === d.id)).map((d) => nm(d)),
+      waiting_on: pr.status === "open" ? active.filter((p) => !pr.votes[p.id]).map((p) => nm(p)) : [],
       needs_challenge: needsChallenge,
       blocked_by: this.blockedBy(room, pr),
       challenges: pr.challenges.map((c) => ({ id: c.id, by: nm(c.by), objection: c.objection, status: c.status ?? "open", blocking: c.blocking !== false, version: c.version })),
@@ -1705,8 +1939,8 @@ export class Hub {
   private evaluate(room: Room, pr: Proposal) {
     if (pr.status !== "open" || room.state === "concluded" || room.state === "closed") return;
     const all = this.voters(room);
-    const snap = pr.snapshot ? all.filter((p) => pr.snapshot!.includes(p.id)) : all;
-    const active = snap.length ? snap : all;
+    const electorate = this.electorate(room, pr);
+    const active = electorate.members;
     if (active.length === 0) return;
     const stuck = (text: string) => {
       if (pr.stuckNotice === text) return;
@@ -1725,9 +1959,9 @@ export class Hub {
       }
       return;
     }
-    if (room.expectedParticipants !== 1 && Hub.sessionsOf(this.voters(room)) < 2) {
+    if (room.expectedParticipants !== 1 && electorate.distinctSessions < 2) {
       if (everyoneVoted && agree === active.length) {
-        stuck(`${pr.id} v${pr.version} has the agreement of everyone still present (${agree}) but only ${this.voters(room).length} voter(s) remain and a room of one cannot conclude: nobody here can conclude it. Recruit (request_agent), or a human closes the room.`);
+        stuck(`${pr.id} v${pr.version} has the agreement of everyone still present (${agree}) but only ${active.length} voter(s) remain and a room of one cannot conclude: nobody here can conclude it. Recruit (request_agent), or a human closes the room.`);
       }
       return;
     }
@@ -1754,7 +1988,9 @@ export class Hub {
       accepted = false;
       notPassed = true;
     }
-    if (accepted && pr.version > 1 && !Object.values(pr.votes).some((v) => (v.version ?? 1) === pr.version)) {
+    // A replacement cannot merely supply the floor for an already sufficient majority.
+    if (accepted && electorate.replacements.some((p) => !pr.votes[p.id])) return;
+    if (accepted && pr.version > 1 && !active.some((p) => pr.votes[p.id] && (pr.votes[p.id].version ?? 1) === pr.version)) {
       stuck(`${pr.id} v${pr.version} carries only agrees cast on earlier versions; a version cannot pass until someone votes on its current text. Re-vote (quote a clause of v${pr.version}) to conclude.`);
       return;
     }
@@ -1800,8 +2036,9 @@ export class Hub {
     for (const other of room.proposals.values()) if (other.id !== pr.id && other.status === "open") other.status = "superseded";
     const unresolved = pr.challenges.filter((c) => (c.status ?? "open") === "open").map((c) => ({ by: this.shown(room, c.by), objection: c.objection }));
     for (const c of pr.challenges) if ((c.status ?? "open") === "open") c.status = "overruled";
-    const view = this.proposalView(room, pr, false, false);
-    room.conclusion = { text: pr.text, proposalId: pr.id, decidedAt: now(), version: pr.version, tally: view.tally, unresolved_objections: unresolved };
+    const electorate = this.electorateSummary(room, pr);
+    const tally = { agree: electorate.agree, disagree: electorate.disagree, abstain: electorate.abstain };
+    room.conclusion = { text: pr.text, proposalId: pr.id, decidedAt: now(), version: pr.version, tally, electorate, unresolved_objections: unresolved };
     this.persist({ type: "proposal", proposal: pr });
     this.setState(room, "concluded");
     if (room.nudgeTimer) clearTimeout(room.nudgeTimer);
@@ -1809,7 +2046,7 @@ export class Hub {
       room,
       "conclusion",
       undefined,
-      `CONSENSUS REACHED on ${pr.id} v${pr.version} (${view.tally.agree}/${this.voters(room).length} agree; ${pr.text.length} chars, text in room_status/conclusion)` +
+      `CONSENSUS REACHED on ${pr.id} v${pr.version} (${electorate.agree}/${electorate.electorate} agree; ${electorate.excluded_leavers} leavers-before-close excluded; quorum=${room.quorum}; ${pr.text.length} chars, text in room_status/conclusion)` +
         (unresolved.length ? `\nUnresolved objections, overruled: ${unresolved.map((u) => `${u.by}: "${u.objection.slice(0, 300)}${u.objection.length > 300 ? "…" : ""}"`).join(" | ")}` : ""),
       { proposalId: pr.id },
     );
@@ -1943,6 +2180,9 @@ export class Hub {
           case "join":
           case "leave": {
             const room = this.rooms.get(ev.room);
+            // Delivery cursors are deliberately process-local: replay/rejoin must backfill.
+            delete ev.p.lastBoardSeen;
+            delete ev.p.seenBoardKeys;
             // Participants from a previous process are restored as inactive; they must rejoin.
             const legacyP = ev.p as Partial<Participant> & Pick<Participant, "id" | "name" | "agent" | "joinedAt" | "lastActiveAt" | "lastSeenSeq">;
             room?.participants.set(ev.p.id, { ...legacyP, label: legacyP.label ?? legacyP.name, messageCount: legacyP.messageCount ?? 0, active: false });
@@ -1965,6 +2205,11 @@ export class Hub {
               pr.challenges.push(ev.challenge);
               if (ev.votes) pr.votes = ev.votes;
             }
+            break;
+          }
+          case "board_manifest": {
+            const room = this.rooms.get(ev.room);
+            if (room) this.applyBoardManifest(room, ev.bytes, ev.kind);
             break;
           }
           case "call_completion": {
@@ -2000,8 +2245,7 @@ export class Hub {
           case "board": {
             const room = this.rooms.get(ev.room);
             if (!room) break;
-            if (ev.entry) room.board.set(ev.key, ev.entry);
-            else room.board.delete(ev.key);
+            this.applyBoard(room, ev.key, ev.entry);
             break;
           }
           case "amend": {

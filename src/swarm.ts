@@ -12,6 +12,7 @@ import { collectRoomSnapshot, renderRunReport, writeRunResult, type RunResult, t
 import { settledAxes } from "./settled.js";
 import { fileURLToPath } from "node:url";
 import { loadDotEnv, seatChildEnv } from "./env.js";
+import { respawnDecision, type RespawnRoom } from "./respawn.js";
 loadDotEnv();
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -153,25 +154,35 @@ function runCodex(name: string, text: string, cwd: string, model?: string): Prom
 }
 
 /**
- * A seat that exits while its room is still open (rate-limited to death, crashed, budget mis-set) is relaunched
- * under a suffixed name with a note to read the board first, up to three times and never in the last five minutes.
- * The launcher, not a teammate, is the reliable respawner: a room can lose the seat that would have recruited.
+ * A seat that exits while its room is still open is relaunched under a suffixed name only when the room still needs
+ * it: it crashed (non-zero exit), it left a claim/* with no handoff/*, the room fell below its floor, or it is the
+ * verifier. A seat that finished, handed over and left is not replaced merely because the room is open; the first
+ * respawning launcher did that 70 times in two runs (src/respawn.ts). Up to three times and never in the last five minutes.
  */
 async function withRespawn(name: string, room: string, mk: (nm: string, note: string) => Promise<string>): Promise<string> {
   let out = await mk(name, "");
+  let last = name;
   for (let i = 1; RESPAWN && i <= 3; i++) {
     if (STOPPING || Date.now() > RUN_STARTED + TIMEOUT_MIN * 60_000 - 5 * 60_000) break;
-    let state = "missing";
+    let summary: RespawnRoom | null = null;
     try {
-      state = ((await (await fetch(`${URL_}/rooms/${encodeURIComponent(room)}`)).json()) as { state: string }).state;
+      summary = (await (await fetch(`${URL_}/rooms/${encodeURIComponent(room)}`)).json()) as RespawnRoom;
     } catch {}
-    if (state !== "open" && state !== "stalled") break;
+    const d = respawnDecision({ name: last, exitCode: exitCodes.get(last) ?? null, attempt: i, room: summary });
+    if (!d.respawn) {
+      log(`${last} exited; not respawning: ${d.reason}`);
+      break;
+    }
     const nm = `${name}-r${i}`;
-    log(`${name} exited while ${room} is ${state}; respawning as ${nm}`);
-    out = await mk(nm, `\n\nYou replace ${name}, who dropped out of this room. Before anything else read the board (board_get) and the recent messages (read_messages since_seq=0 is too much: read the last 40), take over any unfinished claim/* entry of theirs, and say in one line that you have.`);
+    log(`${last} exited while ${room} is ${summary?.state}; respawning as ${nm}: ${d.reason}`);
+    out = await mk(nm, `\n\nYou replace ${last}, who dropped out of this room (${d.reason}). Before anything else read the board (board_get) and the recent messages (read_messages since_seq=0 is too much: read the last 40), take over any unfinished claim/* entry of theirs, and say in one line that you have.`);
+    last = nm;
   }
   return out;
 }
+
+/** Last exit code per seat name; withRespawn reads it to tell a crash from a finished seat. */
+const exitCodes = new Map<string, number | null>();
 
 function runProc(name: string, cmd: string, args: string[], cwd: string, outFile: string, outViaFile = false): Promise<string> {
   return new Promise((res) => {
@@ -189,6 +200,7 @@ function runProc(name: string, cmd: string, args: string[], cwd: string, outFile
       writeFileSync(resolve(OUT, `${name}.log`), err);
       if (!outViaFile) writeFileSync(outFile, out);
       const final = outViaFile ? safeRead(outFile) : out;
+      exitCodes.set(name, code);
       log(`${name} exited (${code})`);
       res(final.trim());
     });

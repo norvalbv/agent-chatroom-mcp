@@ -113,3 +113,19 @@ test('persisted reason contains no raw error text, argument values or secrets', 
     }
   } finally { await f.cleanup(); }
 });
+
+test('runtime malformed typed codes cannot escape the persisted allowlist', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'refusal-runtime-code-'));
+  try {
+    const hub = new Hub({ dataDir: dir });
+    hub.join('runtime-codes', 'author', 'test');
+    // JS callers can bypass the TypeScript union; validate again at persistence.
+    const error = new HubError('private message');
+    Object.assign(error, { code: SECRET });
+    hub.recordRefusal('runtime-codes', 'board_set', error);
+    const events = readFileSync(join(dir, 'runtime-codes.jsonl'), 'utf8').trim().split('\n').map(line => JSON.parse(line));
+    const refusal = events.find(event => event.type === 'refusal');
+    assert.equal(refusal.reason, 'hub_guard');
+    assert.ok(!JSON.stringify(refusal).includes(SECRET));
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});

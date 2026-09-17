@@ -32,7 +32,13 @@ export async function collectRoomSnapshot(baseUrl: string, name: string): Promis
 }
 export function readRunResult(path: string): RunResult {
   const r = JSON.parse(readFileSync(path, 'utf8'));
-  if (r?.schemaVersion !== 1 || typeof r.run?.id !== 'string' || typeof r.leadRoom !== 'string' || !Array.isArray(r.rooms) || !r.verifier || !(r.verifier.output === null || typeof r.verifier.output === 'string') || r.rooms.some((room: any) => typeof room?.name !== 'string' || !(room.payload === null || (typeof room.payload === 'object' && !Array.isArray(room.payload))))) throw new Error(`Invalid or unsupported run result: ${path}`);
+  const bad = (why: string): never => { throw new Error(`Invalid or unsupported run result (${why}): ${path}`); };
+  if (r?.schemaVersion !== 1 || typeof r.run?.id !== 'string' || typeof r.leadRoom !== 'string' || !Array.isArray(r.rooms) || !r.verifier || !(r.verifier.output === null || typeof r.verifier.output === 'string') || r.rooms.some((room: any) => typeof room?.name !== 'string' || !(room.payload === null || (typeof room.payload === 'object' && !Array.isArray(room.payload))))) bad('structure');
+  // The lead room must exist, and a present conclusion must be a string: an artifact that
+  // names a room we never captured, or a typed conclusion field, is corrupt, not empty.
+  const lead = r.rooms.find((room: any) => room.name === r.leadRoom);
+  if (!lead) bad(`lead room ${r.leadRoom} not captured`);
+  if (lead.payload !== null && lead.payload.conclusion !== undefined && lead.payload.conclusion !== null && typeof lead.payload.conclusion.text !== 'string' && typeof lead.payload.conclusion.text !== 'undefined') bad('lead conclusion.text is not a string');
   return r as RunResult;
 }
 export function writeRunResult(path: string, artifact: RunResult): void {

@@ -27,5 +27,18 @@ try {
     assert.ok(renderRunReport(loaded).includes(payload.conclusion.text));
     assert.equal(loaded.rooms[0].transcript.text, '# raw\ntranscript\n');
   }
+  // Present-but-invalid artifacts must throw (lead room missing; typed conclusion). A captured
+  // payload of null with a recorded collection error stays valid (offline, not corrupt).
+  const base: any = { schemaVersion: 1, run: { id: 's', startedAt: 'x', completedAt: 'x', task: 't', doneWhen: 'd' }, project: { cwd: dir, canonicalPath: dir, git: null }, leadRoom: 'lead', verifier: { name: 'verifier', output: null }, reportPath: 'r', artifactPath: 'a' };
+  const room = (name: string, payload: any) => ({ name, payload, error: null, transcript: { text: null, sourceUrl: 'u', error: null } });
+  for (const [name, artifact] of [['missing lead room', { ...base, rooms: [room('other', { state: 'concluded', conclusion: { text: 'x' } })] }] as const, ['numeric conclusion', { ...base, rooms: [room('lead', { state: 'concluded', conclusion: { text: 42 } })] }] as const]) {
+    const p = resolve(dir, `${name.replace(/ /g, '-')}.json`);
+    writeRunResult(p, artifact as any);
+    assert.throws(() => readRunResult(p), Error, `${name} must be rejected`);
+  }
+  const offline = { ...base, rooms: [room('lead', null)], collectionErrors: ['lead payload: hub down'] } as any;
+  const pOffline = resolve(dir, 'offline.json');
+  writeRunResult(pOffline, offline);
+  assert.equal(readRunResult(pOffline).rooms[0].payload, null);
   console.log('RESULT ARTIFACT REGRESSION OK');
 } finally { rmSync(dir, { recursive: true, force: true }); }

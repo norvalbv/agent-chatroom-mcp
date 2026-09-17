@@ -1,0 +1,6 @@
+smoke: isolated hub boot on 127.0.0.1:28473 (>8000)
+git rev-parse HEAD: 712a931d6737a8399fcf8a8a5acb8d6edf753cd0
+branch: swarm/swarm-bench-room/bench-2
+dist/index.js sha256: e06269669aad82053683b05d9be058902e4a687ec363cf401b504d0e79dcb8fb
+GET /rooms -> [] (hub serves and binds)
+hub killed after probe; exit 143 (SIGTERM) as expected

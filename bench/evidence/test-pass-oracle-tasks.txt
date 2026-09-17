@@ -2,91 +2,91 @@ TAP version 13
 # Subtest: inclusiveDates hidden case: equal-endpoints
 ok 1 - inclusiveDates hidden case: equal-endpoints
   ---
-  duration_ms: 2.790708
+  duration_ms: 2.657
   type: 'test'
   ...
 # Subtest: inclusiveDates hidden case: leap-day
 ok 2 - inclusiveDates hidden case: leap-day
   ---
-  duration_ms: 0.218292
+  duration_ms: 0.267333
   type: 'test'
   ...
 # Subtest: inclusiveDates hidden case: non-leap-year
 ok 3 - inclusiveDates hidden case: non-leap-year
   ---
-  duration_ms: 0.192458
+  duration_ms: 0.466333
   type: 'test'
   ...
 # Subtest: inclusiveDates hidden case: year-boundary
 ok 4 - inclusiveDates hidden case: year-boundary
   ---
-  duration_ms: 0.444375
+  duration_ms: 0.270042
   type: 'test'
   ...
 # Subtest: inclusiveDates hidden case: month-boundary
 ok 5 - inclusiveDates hidden case: month-boundary
   ---
-  duration_ms: 0.267625
+  duration_ms: 0.24975
   type: 'test'
   ...
 # Subtest: inclusiveDates hidden case: reversed-range
 ok 6 - inclusiveDates hidden case: reversed-range
   ---
-  duration_ms: 0.355
+  duration_ms: 0.415542
   type: 'test'
   ...
 # Subtest: inclusiveDates hidden case: normalized-invalid-day
 ok 7 - inclusiveDates hidden case: normalized-invalid-day
   ---
-  duration_ms: 0.214291
+  duration_ms: 0.25325
   type: 'test'
   ...
 # Subtest: inclusiveDates hidden case: invalid-month
 ok 8 - inclusiveDates hidden case: invalid-month
   ---
-  duration_ms: 0.160459
+  duration_ms: 0.1855
   type: 'test'
   ...
 # Subtest: inclusiveDates hidden case: non-string
 ok 9 - inclusiveDates hidden case: non-string
   ---
-  duration_ms: 0.328625
+  duration_ms: 0.311584
   type: 'test'
   ...
 # Subtest: both fixture variants exist and differ only by the one-line inclusive-bound fix
 ok 10 - both fixture variants exist and differ only by the one-line inclusive-bound fix
   ---
-  duration_ms: 0.399042
+  duration_ms: 0.368166
   type: 'test'
   ...
 # Subtest: broken fails hidden oracle; one-line t<=e fix passes all nine named oracles
 ok 11 - broken fails hidden oracle; one-line t<=e fix passes all nine named oracles
   ---
-  duration_ms: 161.674875
+  duration_ms: 158.017083
   type: 'test'
   ...
 # Subtest: wrong patch gives named-oracle-failure JSON; double-run is byte-identical
 ok 12 - wrong patch gives named-oracle-failure JSON; double-run is byte-identical
   ---
-  duration_ms: 228.384959
+  duration_ms: 217.723667
   type: 'test'
   ...
 # Subtest: loadTask/scoreTask dispatch the correct bug-fix artifact and repeat deterministically
 ok 13 - loadTask/scoreTask dispatch the correct bug-fix artifact and repeat deterministically
   ---
-  duration_ms: 294.918
+  duration_ms: 290.343375
   type: 'test'
   ...
 # Subtest: fact-check exact/normalized controls pass; negation and right-value/wrong-format exit 1
 ok 14 - fact-check exact/normalized controls pass; negation and right-value/wrong-format exit 1
   ---
-  duration_ms: 1514.884375
+  duration_ms: 1440.030375
   type: 'test'
   ...
 # Subtest: hub crash maps to infra_error (wire reason=infra), excluded from task comparison
 ok 15 - hub crash maps to infra_error (wire reason=infra), excluded from task comparison
   ---
-  duration_ms: 172.707042
+  duration_ms: 170.408917
   type: 'test'
   ...
 1..15
@@ -97,4 +97,4 @@ ok 15 - hub crash maps to infra_error (wire reason=infra), excluded from task co
 # cancelled 0
 # skipped 0
 # todo 0
-# duration_ms 2470.775459
+# duration_ms 2364.981542

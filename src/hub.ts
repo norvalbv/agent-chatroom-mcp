@@ -8,6 +8,7 @@
  * by the plain HTTP endpoints (humans), or by tests.
  */
 import { randomBytes } from "node:crypto";
+import { spawnSync } from "node:child_process";
 import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
@@ -16,6 +17,9 @@ export type Vote = "agree" | "disagree" | "abstain";
 export type Quorum = "unanimous" | "majority";
 export type RoomMode = "free" | "round_robin";
 export type RoomState = "open" | "concluded" | "stalled" | "closed";
+/** Role is a display tag plus one quorum rule (chair is never waited on but may veto). It is never a persona. */
+export type Role = "worker" | "chair" | "lead" | "verifier" | "recruit";
+export const ROLES: Role[] = ["worker", "chair", "lead", "verifier", "recruit"];
 
 export interface Participant {
   id: string;
@@ -34,6 +38,13 @@ export interface Participant {
   withheld?: number[];
   /** explicit "nothing to add" turns */
   passes?: number;
+  role?: Role;
+  /** proposal id -> version of its text this participant was last sent (wait_for_messages ships text only when it changes) */
+  seenProposal?: Record<string, number>;
+  /** the conclusion text has been sent to this participant once */
+  seenConclusion?: boolean;
+  /** proposal id a blocking leave_room was already refused for (the second call proceeds) */
+  leaveWarned?: string;
 }
 
 export interface Message {
@@ -55,18 +66,35 @@ export interface Message {
   audience?: string[];
 }
 
+export interface CodeState {
+  head: string;
+  dirty: boolean;
+  at: string;
+}
+
 export interface BoardEntry {
   text: string;
   by: string;
   updatedAt: string;
+  /** verify/* entries: the tree the verification ran against */
+  codeState?: CodeState;
   /** set on inbox/* entries posted with ack_required */
   ackRequired?: boolean;
 }
 
 export interface Challenge {
+  id?: string;
   by: { id: string; name: string };
   objection: string;
   ts: string;
+  /** proposal version the objection was written against */
+  version?: number;
+  /** open: unanswered. answered: the cited text was amended away. conceded: the challenger re-voted agree. overruled: the room concluded over it. */
+  status?: "open" | "answered" | "conceded" | "overruled";
+  /** the span of the proposal the objection quotes, if it quotes one (used to decide when an amend answers it) */
+  cites?: string;
+  /** false: recorded dissent that does not hold the proposal or satisfy the challenge gate */
+  blocking?: boolean;
 }
 
 export interface Proposal {
@@ -75,7 +103,7 @@ export interface Proposal {
   by: { id: string; name: string };
   text: string;
   createdAt: string;
-  votes: Record<string, { vote: Vote; reason?: string; quote?: string; confidence?: number; name: string; ts: string }>;
+  votes: Record<string, { vote: Vote; reason?: string; quote?: string; confidence?: number; name: string; ts: string; version?: number }>;
   challenges: Challenge[];
   status: "open" | "accepted" | "rejected" | "superseded";
   /** bumped by every amend; the text in `text` is always the current version */
@@ -86,6 +114,10 @@ export interface Proposal {
   snapshot?: string[];
   /** set once the "needs a challenge" nudge has been posted */
   nudged?: boolean;
+  /** version for which the "did not pass, amend it" notice was posted */
+  notPassedVersion?: number;
+  /** last "stuck because" notice, so it is posted once per state change */
+  stuckNotice?: string;
 }
 
 export interface RoomOptions {
@@ -107,6 +139,8 @@ export interface RoomOptions {
   nudgeAfterMs?: number;
   /** Swarm mode: a proposal needs a verify/* board entry by someone else (bound to the proposal) before it can pass. */
   requireVerification?: boolean;
+  /** Name of the participant honoured as chair (exempt from quorum, may veto). Set at creation, or by the first joiner to claim role=chair. */
+  chair?: string;
 }
 
 export interface Room {
@@ -122,9 +156,16 @@ export interface Room {
   requireChallenge: boolean | "auto";
   nudgeAfterMs: number;
   requireVerification: boolean;
+  chair?: string;
   createdAt: string;
   state: RoomState;
-  conclusion?: { text: string; proposalId: string; decidedAt: string };
+  conclusion?: { text: string; proposalId: string; decidedAt: string; version?: number; tally?: { agree: number; disagree: number; abstain: number }; unresolved_objections?: { by: string; objection: string }[] };
+  /** identical silence nudges are posted at most twice */
+  lastNudge?: { text: string; count: number };
+  /** refusal telemetry: tool -> reason -> count (no bodies, no ids) */
+  refusals?: Record<string, number>;
+  /** git HEAD and dirty state of the project when the room was created */
+  codeState?: CodeState;
   participants: Map<string, Participant>;
   messages: Message[];
   proposals: Map<string, Proposal>;
@@ -146,7 +187,7 @@ export interface Room {
   responders: Map<string, { pid: string; at: number }>;
 }
 
-type Opts = Required<RoomOptions>;
+type Opts = Required<Omit<RoomOptions, "chair">> & { chair?: string };
 
 type Event =
   | { type: "room"; room: string; opts: Opts; createdAt: string }
@@ -159,7 +200,8 @@ type Event =
   | { type: "opening"; room: string; pid: string; content: string }
   | { type: "openings_revealed"; room: string }
   | { type: "board"; room: string; key: string; entry: BoardEntry | null }
-  | { type: "amend"; room: string; proposalId: string; text: string; version: number; votes: Proposal["votes"]; challenges?: Challenge[] };
+  | { type: "amend"; room: string; proposalId: string; text: string; version: number; votes: Proposal["votes"]; challenges?: Challenge[] }
+  | { type: "refusal"; room: string; tool: string; reason: string };
 
 const now = () => new Date().toISOString();
 const shortId = (prefix: string) => `${prefix}_${randomBytes(4).toString("hex")}`;
@@ -177,9 +219,12 @@ export class HubError extends Error {
 export class Hub {
   readonly rooms = new Map<string, Room>();
   private readonly dataDir?: string;
+  /** project directory whose git state is stamped on rooms and verify entries */
+  private readonly cwd?: string;
 
-  constructor(opts: { dataDir?: string } = {}) {
+  constructor(opts: { dataDir?: string; cwd?: string } = {}) {
     this.dataDir = opts.dataDir;
+    this.cwd = opts.cwd;
     if (this.dataDir) {
       mkdirSync(this.dataDir, { recursive: true });
       this.replay();
@@ -202,6 +247,15 @@ export class Hub {
   static MAX_ROOMS_PER_RUN = Number(process.env.CHATROOM_MAX_ROOMS_PER_RUN ?? 12);
   static MAX_LIVE_PER_ROOM = Number(process.env.CHATROOM_MAX_LIVE_PER_ROOM ?? 12);
   static readonly ROOM_NAME = /^[a-zA-Z0-9_-]{1,64}$/;
+
+  /** git HEAD and whether the working tree is dirty, so a citation or a verification names the tree it was read against. */
+  static codeState(cwd?: string): CodeState | undefined {
+    if (!cwd) return undefined;
+    const head = spawnSync("git", ["-C", cwd, "rev-parse", "--short", "HEAD"], { encoding: "utf8" });
+    if (head.status !== 0) return undefined;
+    const st = spawnSync("git", ["-C", cwd, "status", "--porcelain"], { encoding: "utf8" });
+    return { head: head.stdout.trim(), dirty: st.stdout.trim().length > 0, at: now() };
+  }
   /** "swarm-093235-fsxs-leads" -> "swarm-093235-fsxs" */
   static runPrefix(name: string): string | undefined {
     const m = /^(swarm-[0-9]{6}(?:-[a-z0-9]{4})?)-/.exec(name);
@@ -227,14 +281,20 @@ export class Hub {
       requireChallenge: opts.requireChallenge ?? "auto",
       nudgeAfterMs: opts.nudgeAfterMs ?? 180_000,
       requireVerification: opts.requireVerification ?? false,
+      ...(opts.chair ? { chair: opts.chair } : {}),
     };
     // Per-run room cap: rooms sharing a swarm prefix (swarm-<id>-*) are counted together.
     const prefix = Hub.runPrefix(name);
     if (prefix && [...this.rooms.keys()].filter((r) => Hub.runPrefix(r) === prefix && this.rooms.get(r)!.state === "open").length >= Hub.MAX_ROOMS_PER_RUN) {
       throw new HubError(`Room limit for this run (${Hub.MAX_ROOMS_PER_RUN} open rooms with prefix ${prefix}) reached. Close or conclude a room first.`);
     }
+    // a threshold above the live cap can never be met (a 14-agent flat run deadlocked on it): clamp and say so
+    const requested = full.expectedParticipants;
+    if (requested > Hub.MAX_LIVE_PER_ROOM) full.expectedParticipants = Hub.MAX_LIVE_PER_ROOM;
     const room = this.materialiseRoom(name, full, now());
+    room.codeState = Hub.codeState(this.cwd);
     this.persist({ type: "room", room: name, opts: full, createdAt: room.createdAt });
+    if (requested > Hub.MAX_LIVE_PER_ROOM) this.post(room, "system", undefined, `expected_participants ${requested} exceeds this hub's cap of ${Hub.MAX_LIVE_PER_ROOM} live agents per room; clamped to ${Hub.MAX_LIVE_PER_ROOM} so the room can still conclude.`);
     return room;
   }
 
@@ -285,6 +345,9 @@ export class Hub {
       max_messages_per_participant: room.maxMessagesPerParticipant || null,
       require_challenge: this.challengeRequired(room),
       require_verification: room.requireVerification,
+      opening_max_chars: Math.min(room.maxMessageChars, 400),
+      max_live_agents: Hub.MAX_LIVE_PER_ROOM,
+      code_state: room.codeState ?? null,
       hold: this.hold(room) ? { by: this.hold(room)!.by, reason: this.hold(room)!.text } : null,
       state: room.state,
       created_at: room.createdAt,
@@ -293,10 +356,12 @@ export class Hub {
         : `${room.openings.size} submitted, waiting for ${this.openingsWaitingOn(room, reveal).join(", ") || "nobody"}`,
       round: room.round,
       current_turn: room.mode === "round_robin" && speaker ? nm(speaker) : null,
+      chair: room.chair ? (reveal || !room.anonymous ? room.chair : this.shown(room, room.participants.get([...room.participants.values()].find((p) => p.name === room.chair)?.id ?? "") ?? { id: "", name: room.chair })) : null,
       participants: [...room.participants.values()].map((p) => ({
         name: nm(p),
         ...(reveal && room.anonymous ? { label: p.label } : {}),
         agent: reveal || !room.anonymous ? p.agent : "hidden",
+        role: p.role ?? "worker",
         active: p.active,
         messages: p.messageCount,
         last_active_at: p.lastActiveAt,
@@ -304,8 +369,9 @@ export class Hub {
       active_count: active.length,
       message_count: room.messages.length,
       latest_seq: room.messages.at(-1)?.seq ?? 0,
-      proposals: [...room.proposals.values()].map((pr) => this.proposalView(room, pr, reveal)),
-      board: Object.fromEntries([...room.board].map(([k, e]) => [k, { text: e.text, by: e.by, updated_at: e.updatedAt }])),
+      proposals: [...room.proposals.values()].map((pr) => this.proposalView(room, pr, reveal, pr.status === "open" || pr.status === "accepted")),
+      // agents get a manifest (board_get <key> fetches text); the human dashboard (reveal) gets the text
+      board: Object.fromEntries([...room.board].map(([k, e]) => [k, { ...(reveal ? { text: e.text } : {}), by: e.by, chars: e.text.length, updated_at: e.updatedAt }])),
       quiet: (() => {
         const qs = room.messages.filter((m) => m.quiet);
         return { messages: qs.length, unsurfaced_threads: new Set(qs.map((m) => this.threadRoot(room, m).id)).size };
@@ -344,6 +410,7 @@ export class Hub {
       amendments: [...room.proposals.values()].reduce((a, p) => a + (p.version - 1), 0),
       challenges: [...room.proposals.values()].reduce((a, p) => a + p.challenges.length, 0),
       board_entries: room.board.size,
+      refusals: room.refusals ?? {},
       near_simultaneous_replies: bursts,
       unanswered_human_messages: room.messages.filter((m) => m.kind === "chat" && m.from.agent === "human" && !this.isAnswered(room, m)).length,
     };
@@ -351,8 +418,14 @@ export class Hub {
 
   // ---------- participants ----------
 
-  join(roomName: string, name: string, agent: string, opts: RoomOptions = {}, reclaimId?: string, session?: string): { room: Room; participant: Participant } {
+  join(roomName: string, name: string, agent: string, opts: RoomOptions = {}, reclaimId?: string, session?: string, role?: Role): { room: Room; participant: Participant } {
     const room = this.createRoom(roomName, opts);
+    if (role && !ROLES.includes(role)) throw new HubError(`role must be one of ${ROLES.join(", ")}.`);
+    if (role === "chair") {
+      // the chair is bound to a name: the room option (set at creation) or, failing that, the first claimant
+      if (room.chair && room.chair !== name) throw new HubError(`This room's chair is ${room.chair}. Join without role=chair.`);
+      room.chair = name;
+    }
     if (!name.trim()) throw new HubError("A display name is required to join.");
     if (name.length > 64) throw new HubError("Display names are capped at 64 characters.");
     if (!/^[^\n\r<>]+$/.test(name)) throw new HubError("Display names cannot contain newlines or angle brackets.");
@@ -382,14 +455,16 @@ export class Hub {
         active: true,
         messageCount: 0,
         session,
+        ...(role && role !== "worker" ? { role } : {}),
       };
       room.participants.set(participant.id, participant);
       this.persist({ type: "join", room: roomName, p: participant });
-      this.post(room, "system", undefined, `${this.shown(room, participant)}${room.anonymous ? "" : ` (${agent})`} joined the room.`);
+      this.post(room, "system", undefined, `${this.shown(room, participant)}${room.anonymous ? "" : ` (${agent})`}${this.roleTag(participant)} joined the room.`);
     } else if (!participant.active) {
       participant.active = true;
       participant.lastActiveAt = now();
       if (session) participant.session = session;
+      if (role && role !== "worker") participant.role = role;
       this.persist({ type: "join", room: roomName, p: participant });
       this.post(room, "system", undefined, `${this.shown(room, participant)} rejoined the room.`);
     }
@@ -397,9 +472,30 @@ export class Hub {
     return { room, participant };
   }
 
+  /** Why this participant's departure would leave the open proposal unpassable, if it would. */
+  leavingWouldBlock(room: Room, p: Participant): { proposal: Proposal; reason: string } | undefined {
+    if (p.agent === "human" || p.role === "chair") return undefined;
+    const open = [...room.proposals.values()].find((pr) => pr.status === "open");
+    if (!open) return undefined;
+    const others = this.voters(room).filter((x) => x.id !== p.id);
+    if (room.expectedParticipants && others.length < room.expectedParticipants && this.voters(room).length >= room.expectedParticipants) {
+      return { proposal: open, reason: `the room expects ${room.expectedParticipants} participants and would drop to ${others.length}, so ${open.id} could never pass` };
+    }
+    return undefined;
+  }
+
   leave(roomName: string, pid: string): void {
     const room = this.getRoom(roomName);
     const p = this.requireParticipant(room, pid);
+    const block = this.leavingWouldBlock(room, p);
+    if (block && p.leaveWarned !== block.proposal.id) {
+      p.leaveWarned = block.proposal.id;
+      const mine = block.proposal.votes[p.id]?.vote;
+      throw new HubError(
+        `Leaving now would block ${block.proposal.id}: ${block.reason}. ${mine ? `You voted ${mine}.` : "You have not voted: vote or pass first."} ` +
+          "Call leave_room again to leave anyway.",
+      );
+    }
     p.active = false;
     p.lastActiveAt = now();
     this.persist({ type: "leave", room: roomName, p });
@@ -420,7 +516,12 @@ export class Hub {
 
   /** Participants whose votes are required for quorum. Humans are chairs/observers: they may veto but are never waited on. */
   voters(room: Room): Participant[] {
-    return this.activeParticipants(room).filter((p) => p.agent !== "human");
+    return this.activeParticipants(room).filter((p) => p.agent !== "human" && p.role !== "chair");
+  }
+
+  /** "[chair]" etc. after a name; nothing for workers. */
+  roleTag(p: { role?: Role }): string {
+    return p.role && p.role !== "worker" ? ` [${p.role}]` : "";
   }
 
   currentSpeaker(room: Room): Participant | undefined {
@@ -506,12 +607,21 @@ export class Hub {
   }
 
   /** Advance the read cursor, remembering anything withheld so it is delivered later. */
-  private settleRead(room: Room, p: Participant, since: number, delivered: Message[]) {
+  settleRead(room: Room, p: Participant, since: number, delivered: Message[], upTo?: number) {
+    const ceiling = upTo ?? room.messages.at(-1)?.seq ?? since;
     const deliveredSeqs = new Set(delivered.map((m) => m.seq));
     const still = (p.withheld ?? []).filter((seq) => !deliveredSeqs.has(seq));
-    for (const m of room.messages) if (m.seq > since && m.from.id !== p.id && !this.visibleTo(room, m, p.id) && !still.includes(m.seq)) still.push(m.seq);
+    for (const m of room.messages) if (m.seq > since && m.seq <= ceiling && m.from.id !== p.id && !this.visibleTo(room, m, p.id) && !still.includes(m.seq)) still.push(m.seq);
     p.withheld = still.length > 200 ? still.slice(-200) : still;
-    this.markRead(room, p, room.messages.at(-1)?.seq ?? since);
+    this.markRead(room, p, ceiling);
+  }
+
+  /** Anything the hub hands a known participant counts as delivered: read_messages settles the cursor up to the last message returned. */
+  readAs(room: Room, p: Participant, sinceSeq: number | undefined, limit: number): Message[] {
+    const since = sinceSeq ?? p.lastSeenSeq;
+    const msgs = room.messages.filter((m) => m.seq > since && this.visibleTo(room, m, p.id)).slice(0, limit);
+    if (msgs.length) this.settleRead(room, p, Math.min(since, p.lastSeenSeq), msgs, Math.max(p.lastSeenSeq, msgs.at(-1)!.seq));
+    return msgs;
   }
 
   send(roomName: string, pid: string, content: string, replyTo?: string, force = false, quiet = false, surface = false): Message {
@@ -565,9 +675,10 @@ export class Hub {
       // Stale-send guard: never talk past messages you have not read.
       const unread = this.unread(room, p);
       if (unread.length) {
+        // the refusal IS the delivery: settle the cursor so the same batch is not shipped again by the next wait
+        this.settleRead(room, p, p.lastSeenSeq, unread);
         throw new HubError(
-          `${unread.length} message(s) arrived while you were composing. Read them first (included below); ` +
-            `then resend only if your point is still new. Pass force=true to send anyway.`,
+          `${unread.length} message(s) arrived while you were composing. Read them (below); then retry send_message with force=true if your point is still new, or call wait_for_messages.`,
           { unread: unread.map((m) => this.fmt(room, m)), next_seq: room.messages.at(-1)!.seq },
         );
       }
@@ -663,7 +774,7 @@ export class Hub {
   /** Plain-text rendering of a message as agents see it (pseudonyms in anonymous rooms). */
   fmt(room: Room, m: Message): string {
     const tag = m.kind === "chat" ? "" : `[${m.kind.toUpperCase()}] `;
-    const who = m.from.id === "system" ? "system" : this.shown(room, m.from);
+    const who = m.from.id === "system" ? "system" : this.shown(room, m.from) + this.roleTag(room.participants.get(m.from.id) ?? {});
     const q = m.audience ? `[${m.quiet ? "quiet" : "was quiet"} → ${m.audience.filter((id) => id !== m.from.id).map((id) => this.shown(room, room.participants.get(id) ?? { id, name: id })).join(", ")}] ` : "";
     return `#${m.seq} ${who}: ${q}${tag}${m.content}`;
   }
@@ -691,6 +802,17 @@ export class Hub {
     return msg;
   }
 
+  /** Refusal telemetry: tool and reason class only, no body, no participant. Persisted so the next swarm can count instead of estimate. */
+  recordRefusal(roomName: string | undefined, tool: string, message: string) {
+    const room = roomName ? this.rooms.get(roomName) : undefined;
+    if (!room) return;
+    const reason = message.replace(/[0-9]+/g, "N").replace(/"[^"]*"/g, '"…"').slice(0, 80);
+    const key = `${tool}: ${reason}`;
+    room.refusals = room.refusals ?? {};
+    room.refusals[key] = (room.refusals[key] ?? 0) + 1;
+    this.persist({ type: "refusal", room: room.name, tool, reason });
+  }
+
   /** Post a system notice from outside the hub (e.g. a recruitment). */
   announce(roomName: string, text: string): Message {
     return this.post(this.getRoom(roomName), "system", undefined, text);
@@ -708,27 +830,20 @@ export class Hub {
       if (room.state === "concluded" || this.activeParticipants(room).length === 0) return;
       const open = [...room.proposals.values()].find((pr) => pr.status === "open");
       const mins = Math.round(room.nudgeAfterMs / 60000);
+      let text: string;
       if (open) {
-        const waiting = this.voters(room)
-          .filter((p) => !open.votes[p.id])
-          .map((p) => this.shown(room, p));
-        const needsChallenge = this.challengeRequired(room) && open.challenges.length === 0;
-        const needsVerify = room.requireVerification && !this.verifiedBy(room, open);
-        this.post(
-          room,
-          "system",
-          undefined,
-          `${mins} min of silence. Proposal ${open.id} is open` +
-            (waiting.length ? `; still waiting for votes from ${waiting.join(", ")}` : "") +
-            (needsChallenge ? `; it also needs a challenge from someone other than ${this.shown(room, open.by)} before it can pass` : "") +
-            (needsVerify ? `; and a verify/* board entry by someone else naming ${open.id}` : "") +
-            ".",
-        );
-      } else if (!room.openingsRevealed && room.openings.size) {
-        this.post(room, "system", undefined, `${mins} min of silence. Still waiting for openings from ${this.openingsWaitingOn(room).join(", ")}.`);
+        const blockers = this.blockedBy(room, open);
+        text = `${mins} min of silence. Proposal ${open.id} v${open.version} is open; blocked by: ${blockers.join("; ") || "nothing (re-evaluating)"}.`;
+      } else if (!room.openingsRevealed && room.expectedParticipants) {
+        text = `${mins} min of silence. Still waiting for openings from ${this.openingsWaitingOn(room).join(", ")}.`;
       } else {
-        this.post(room, "system", undefined, `${mins} min of silence. If the discussion has converged, someone should propose a conclusion.`);
+        const talkers = [...room.participants.values()].filter((p) => p.active && p.agent !== "human").sort((a, b) => b.messageCount - a.messageCount);
+        text = `${mins} min of silence. If the discussion has converged, ${talkers[0] ? this.shown(room, talkers[0]) : "someone"} should propose a conclusion.`;
       }
+      // the same nudge is posted at most twice; a third identical one adds nothing
+      if (room.lastNudge?.text === text && room.lastNudge.count >= 2) return;
+      room.lastNudge = room.lastNudge?.text === text ? { text, count: room.lastNudge.count + 1 } : { text, count: 1 };
+      this.post(room, "system", undefined, text);
     }, room.nudgeAfterMs);
     room.nudgeTimer.unref();
   }
@@ -784,7 +899,7 @@ export class Hub {
     const room = this.getRoom(roomName);
     const p = this.requireParticipant(room, pid);
     p.passes = (p.passes ?? 0) + 1;
-    this.markRead(room, p, room.messages.at(-1)?.seq ?? 0);
+    this.settleRead(room, p, p.lastSeenSeq, []);
     let yielded = false;
     if (room.mode === "round_robin" && this.currentSpeaker(room)?.id === p.id) {
       this.advanceTurn(room);
@@ -975,7 +1090,7 @@ export class Hub {
       return null;
     }
     this.surfaceCited(room, text, `cited on the board under ${key}`);
-    const entry: BoardEntry = { text, by: p.name, updatedAt: now() };
+    const entry: BoardEntry = { text, by: p.name, updatedAt: now(), ...(key.startsWith("verify/") ? { codeState: Hub.codeState(this.cwd) } : {}) };
     room.board.set(key, entry);
     this.persist({ type: "board", room: roomName, key, entry });
     this.post(room, "board", p, `${previous ? "updated" : "added"} board entry "${key}" (${text.length} chars; read it with board_get)`);
@@ -1014,45 +1129,90 @@ export class Hub {
 
   // ---------- proposals as documents ----------
 
+  /** ~200 chars of the proposal around the closest thing to `find`, for a bad-find refusal (never the whole document). */
+  private closest(text: string, find: string): string {
+    const probe = find.trim().slice(0, 24);
+    let i = probe ? text.indexOf(probe) : -1;
+    if (i < 0) {
+      const word = find.trim().split(/\s+/).find((w) => w.length > 5);
+      i = word ? text.indexOf(word) : -1;
+    }
+    const at = Math.max(0, i < 0 ? 0 : i - 40);
+    return (at ? "…" : "") + text.slice(at, at + 200) + (at + 200 < text.length ? "…" : "");
+  }
+
   /**
-   * Edit the open proposal in place. Posts only the diff, bumps the version, and
-   * resets everyone's vote except the amender's (the text they are agreeing to changed).
+   * Edit the open proposal in place. Posts only the diff and bumps the version. An amend never creates or restores a vote:
+   * an existing agree survives only while its quoted clause still appears verbatim in the new text (the amender's included).
+   * A challenge is answered when the text it cites is gone, and reopens if a later amend brings that text back.
    */
-  amend(roomName: string, pid: string, proposalId: string, find: string, replace: string): { proposal: Proposal; diff: string } {
+  amend(roomName: string, pid: string, proposalId: string, find: string, replace: string, replaceAll = false): { proposal: Proposal; diff: string; answered: string[]; reopened: string[] } {
     const room = this.getRoom(roomName);
     const p = this.requireParticipant(room, pid);
     const pr = room.proposals.get(proposalId);
     if (!pr) throw new HubError(`No proposal "${proposalId}" in "${roomName}".`);
     if (pr.status !== "open") throw new HubError(`Proposal ${proposalId} is ${pr.status}; only open proposals can be amended.`);
     let next: string;
-    if (!find) {
+    if (replaceAll) {
+      if (!replace.trim()) throw new HubError("replace_all needs the full new text.");
+      next = replace;
+    } else if (!find) {
       if (!replace.trim()) throw new HubError("Nothing to append.");
       next = pr.text.trimEnd() + "\n" + replace;
     } else {
       const n = pr.text.split(find).length - 1;
-      if (n === 0) throw new HubError(`"${find.slice(0, 80)}" does not occur in the proposal. Copy the exact text to replace. Current text:\n${pr.text}`);
+      if (n === 0) {
+        throw new HubError(
+          `"${find.slice(0, 80)}" does not occur in ${proposalId} v${pr.version} (${pr.text.length} chars). Copy the exact text to replace; the closest passage is: "${this.closest(pr.text, find)}". For a whole rewrite use replace_all=true.`,
+        );
+      }
       if (n > 1) throw new HubError(`"${find.slice(0, 80)}" occurs ${n} times; include more context so it is unique.`);
       next = pr.text.replace(find, replace);
     }
     if (next === pr.text) throw new HubError("That amendment changes nothing.");
-    const changed = Math.abs(next.length - pr.text.length) + (find ? find.length : 0);
-    const stale = changed > pr.text.length * 0.25 && pr.challenges.length > 0;
     pr.text = next;
     pr.version += 1;
     pr.updatedAt = now();
-    pr.votes = { [p.id]: { vote: "agree", name: p.name, ts: now(), reason: `amended to v${pr.version}` } };
-    if (stale) pr.challenges = []; // the challenged text no longer exists; the gate must be satisfied again
+    pr.notPassedVersion = undefined;
+    pr.stuckNotice = undefined;
+    const kept: Proposal["votes"] = {};
+    for (const [id, v] of Object.entries(pr.votes)) if (v.vote === "agree" && v.quote && norm(next).includes(norm(v.quote))) kept[id] = v;
+    pr.votes = kept;
+    const answered: string[] = [];
+    const reopened: string[] = [];
+    for (const c of pr.challenges) {
+      if (!c.cites) continue;
+      const present = norm(next).includes(norm(c.cites));
+      if ((c.status ?? "open") === "open" && c.blocking !== false && !present) {
+        c.status = "answered";
+        answered.push(this.shown(room, c.by));
+      } else if (c.status === "answered" && present) {
+        c.status = "open";
+        reopened.push(this.shown(room, c.by));
+      }
+    }
     this.persist({ type: "amend", room: roomName, proposalId, text: pr.text, version: pr.version, votes: pr.votes, challenges: pr.challenges });
     const clip = (t: string, n: number) => (t.length > n ? t.slice(0, n) + "…" : t);
-    const diff = find ? `"${clip(find, 160)}" → "${clip(replace, 240)}"` : `appended "${clip(replace, 240)}"`;
-    this.post(room, "amend", p, `AMENDED ${proposalId} to v${pr.version}: ${diff}\n(votes reset${stale ? ", earlier challenges no longer apply" : ""}; read the current text in room_status and re-vote)`, { proposalId });
-    return { proposal: pr, diff };
+    const diff = replaceAll ? `replaced the whole text (${pr.text.length} chars)` : find ? `"${clip(find, 160)}" → "${clip(replace, 240)}"` : `appended "${clip(replace, 240)}"`;
+    const survived = Object.values(kept).map((v) => this.shown(room, { id: "", name: v.name }));
+    this.post(
+      room,
+      "amend",
+      p,
+      `AMENDED ${proposalId} to v${pr.version}: ${diff}\n(votes reset${survived.length ? ` except ${survived.join(", ")}, whose quoted clause survived` : ""}; the new text arrives with your next wait_for_messages` +
+        (answered.length ? `; challenge by ${answered.join(", ")} answered: the cited text is gone` : "") +
+        (reopened.length ? `; challenge by ${reopened.join(", ")} REOPENED: the cited text is back` : "") +
+        ")",
+      { proposalId },
+    );
+    this.evaluate(room, pr);
+    return { proposal: pr, diff, answered, reopened };
   }
 
   // ---------- consensus ----------
 
   challengeRequired(room: Room): boolean {
-    if (room.requireChallenge === "auto") return this.voters(room).length >= 3;
+    if (room.requireChallenge === "auto") return this.voters(room).length >= 2;
     return room.requireChallenge;
   }
 
@@ -1092,7 +1252,7 @@ export class Hub {
       by: { id: p.id, name: p.name },
       text,
       createdAt: now(),
-      votes: { [p.id]: { vote: "agree", name: p.name, ts: now(), reason: "proposer" } },
+      votes: { [p.id]: { vote: "agree", name: p.name, ts: now(), reason: "proposer", version: 1 } },
       challenges: [],
       status: "open",
       version: 1,
@@ -1106,7 +1266,18 @@ export class Hub {
     return proposal;
   }
 
-  challenge(roomName: string, pid: string, proposalId: string, objection: string): Proposal {
+  /** The span of the proposal an objection quotes (longest quoted run that occurs in the text), if any. */
+  private citedSpan(text: string, objection: string): string | undefined {
+    const spans = [...objection.matchAll(/["“]([^"”]{12,})["”]/g)].map((m) => m[1]).filter((q) => norm(text).includes(norm(q)));
+    return spans.sort((a, b) => b.length - a.length)[0];
+  }
+
+  /** Blocking challenges that have not been answered or conceded. */
+  openChallenges(pr: Proposal): Challenge[] {
+    return pr.challenges.filter((c) => (c.status ?? "open") === "open" && c.blocking !== false);
+  }
+
+  challenge(roomName: string, pid: string, proposalId: string, objection: string, blocking = true): Proposal {
     const room = this.getRoom(roomName);
     const p = this.requireParticipant(room, pid);
     const pr = room.proposals.get(proposalId);
@@ -1115,17 +1286,20 @@ export class Hub {
     if (pr.by.id === p.id) throw new HubError("You cannot challenge your own proposal; someone else must.");
     if (objection.trim().length < 20) throw new HubError("A challenge must state a specific objection (at least 20 characters).");
     this.surfaceCited(room, objection, "cited in a challenge");
-    const challenge: Challenge = { by: { id: p.id, name: p.name }, objection, ts: now() };
+    const cites = this.citedSpan(pr.text, objection);
+    const challenge: Challenge = { id: shortId("ch"), by: { id: p.id, name: p.name }, objection, ts: now(), version: pr.version, status: "open", blocking, ...(cites ? { cites } : {}) };
     pr.challenges.push(challenge);
-    // A challenge must be answered: the challenger's own vote (if any) is reset and must be re-cast
+    // A blocking challenge must be answered: the challenger's own vote (if any) is reset and must be re-cast
     // after the room has responded, so the proposal cannot pass in the same breath.
-    delete pr.votes[p.id];
+    if (blocking) delete pr.votes[p.id];
     this.persist({ type: "challenge", room: roomName, proposalId, challenge, votes: pr.votes });
     this.post(
       room,
       "challenge",
       p,
-      `${objection}\n(challenge to ${proposalId}; ${this.shown(room, p)} re-votes once it is answered)`,
+      `${objection}\n(${blocking ? "challenge" : "non-blocking objection"} to ${proposalId} v${pr.version}${cites ? `, citing "${cites.slice(0, 80)}${cites.length > 80 ? "…" : ""}"` : ""}; ` +
+        (blocking ? `${this.shown(room, p)} re-votes once it is answered` : "recorded, carried into the conclusion if still open") +
+        ")",
       { proposalId },
     );
     this.evaluate(room, pr); // a non-voter's challenge can unpark an already-unanimous proposal
@@ -1138,21 +1312,27 @@ export class Hub {
     const proposal = room.proposals.get(proposalId);
     if (!proposal) throw new HubError(`No proposal "${proposalId}" in "${roomName}". See room_status for open proposals.`);
     if (proposal.status !== "open") throw new HubError(`Proposal ${proposalId} is already ${proposal.status}.`);
+    const prior = proposal.votes[p.id];
+    if (p.agent === "human" && prior && prior.vote === vote && (prior.version ?? proposal.version) === proposal.version) return proposal; // repeat human votes are idempotent
     if (p.agent !== "human") {
       if (vote === "agree") {
         if (!quote || quote.trim().length < 15) {
           throw new HubError("An agree vote must include `quote`: a verbatim clause (15+ chars) from the proposal you are endorsing. Read it before you vote.");
         }
         if (!norm(proposal.text).includes(norm(quote))) {
-          throw new HubError(`Your quote is not in the proposal text. Quote it verbatim. Proposal text:\n${proposal.text}`);
+          throw new HubError(`Your quote is not in ${proposalId} v${proposal.version} (${proposal.text.length} chars). Quote it verbatim; the closest passage is: "${this.closest(proposal.text, quote)}"`);
+        }
+        if (this.openChallenges(proposal).length && (!reason || reason.trim().length < 20)) {
+          throw new HubError(`A challenge is open on ${proposalId}; an agree now needs \`reason\` (20+ chars) saying why the objection does not hold, not only a quote.`);
         }
       }
       if (vote === "disagree" && (!reason || reason.trim().length < 20)) {
         throw new HubError("A disagree vote must include `reason` stating the specific change that would make you agree (20+ chars).");
       }
     }
-    const entry = { vote, reason, quote, confidence, name: p.name, ts: now() };
+    const entry = { vote, reason, quote, confidence, name: p.name, ts: now(), version: proposal.version };
     proposal.votes[p.id] = entry;
+    if (vote === "agree") for (const c of proposal.challenges) if (c.by.id === p.id && (c.status ?? "open") === "open") c.status = "conceded";
     this.persist({ type: "vote", room: roomName, proposalId, pid: p.id, entry });
     const conf = confidence !== undefined ? ` (confidence ${confidence})` : "";
     this.post(room, "vote", p, `${this.shown(room, p)} votes ${vote.toUpperCase()} on ${proposalId}${conf}${reason ? `: ${reason}` : ""}`, { proposalId });
@@ -1160,7 +1340,32 @@ export class Hub {
     return proposal;
   }
 
-  proposalView(room: Room, pr: Proposal, reveal = false) {
+  /** Disagree votes cast against the current text by anyone, present or departed: an objection outlives the agent who filed it. */
+  standingDisagrees(pr: Proposal): { id: string; name: string }[] {
+    return Object.entries(pr.votes)
+      .filter(([, v]) => v.vote === "disagree" && (v.version ?? pr.version) === pr.version)
+      .map(([id, v]) => ({ id, name: v.name }));
+  }
+
+  /** Everything that stops an open proposal from passing right now, in words an agent can act on. */
+  blockedBy(room: Room, pr: Proposal): string[] {
+    if (pr.status !== "open") return [];
+    const out: string[] = [];
+    const active = this.voters(room);
+    if (room.expectedParticipants && active.length < room.expectedParticipants) out.push(`quorum floor: ${active.length} voters present, the room expects ${room.expectedParticipants} (request_agent, or a human closes the room)`);
+    const waiting = active.filter((p) => !pr.votes[p.id]).map((p) => this.shown(room, p));
+    if (waiting.length) out.push(`votes from ${waiting.join(", ")}`);
+    for (const d of this.standingDisagrees(pr)) out.push(`a standing disagree from ${this.shown(room, room.participants.get(d.id) ?? d)}${room.participants.get(d.id)?.active ? "" : " (who has left)"}: they re-vote, or the text they objected to is amended`);
+    if (this.challengeRequired(room) && !pr.challenges.some((c) => c.blocking !== false)) out.push(`a challenge from someone other than ${this.shown(room, pr.by)}`);
+    const openCh = this.openChallenges(pr);
+    if (openCh.length) out.push(`open challenge(s) from ${openCh.map((c) => this.shown(room, c.by)).join(", ")}: amend the cited text or they re-vote`);
+    if (room.requireVerification && !this.verifiedBy(room, pr)) out.push(`a verify/* board entry by someone other than ${this.shown(room, pr.by)} naming ${pr.id}`);
+    if (this.hold(room)) out.push(`hold by ${this.hold(room)!.by}`);
+    if (!Object.values(pr.votes).some((v) => (v.version ?? 1) === pr.version) && pr.version > 1) out.push(`no vote cast on v${pr.version} yet (carried-over agrees alone cannot pass a new version)`);
+    return out;
+  }
+
+  proposalView(room: Room, pr: Proposal, reveal = false, withText = true) {
     const active = this.voters(room);
     const nm = (x: { id: string; name: string }) => (reveal ? x.name : this.shown(room, x));
     const tally = { agree: 0, disagree: 0, abstain: 0 };
@@ -1168,19 +1373,22 @@ export class Hub {
       const v = pr.votes[p.id]?.vote;
       if (v) tally[v] += 1;
     }
-    const needsChallenge = this.challengeRequired(room) && pr.challenges.length === 0 && pr.status === "open";
+    for (const d of this.standingDisagrees(pr)) if (!active.some((p) => p.id === d.id)) tally.disagree += 1;
+    const needsChallenge = this.challengeRequired(room) && !pr.challenges.some((c) => c.blocking !== false) && pr.status === "open";
     return {
       id: pr.id,
       by: nm(pr.by),
       version: pr.version,
-      text: pr.text,
+      ...(withText ? { text: pr.text } : { text_omitted: `unchanged since v${pr.version}; room_status carries the full text` }),
+      chars: pr.text.length,
       status: pr.status,
       created_at: pr.createdAt,
       tally,
       waiting_on: active.filter((p) => !pr.votes[p.id]).map((p) => nm(p)),
       needs_challenge: needsChallenge,
-      challenges: pr.challenges.map((c) => ({ by: nm(c.by), objection: c.objection })),
-      votes: Object.entries(pr.votes).map(([id, v]) => ({ name: nm({ id, name: v.name }), vote: v.vote, confidence: v.confidence, reason: v.reason })),
+      blocked_by: this.blockedBy(room, pr),
+      challenges: pr.challenges.map((c) => ({ id: c.id, by: nm(c.by), objection: c.objection, status: c.status ?? "open", blocking: c.blocking !== false, version: c.version })),
+      votes: Object.entries(pr.votes).map(([id, v]) => ({ name: nm({ id, name: v.name }), vote: v.vote, confidence: v.confidence, reason: v.reason, version: v.version, ...(v.version !== undefined && v.version !== pr.version ? { stale: `cast at v${v.version}` } : {}) })),
     };
   }
 
@@ -1206,66 +1414,78 @@ export class Hub {
     const snap = pr.snapshot ? all.filter((p) => pr.snapshot!.includes(p.id)) : all;
     const active = snap.length ? snap : all;
     if (active.length === 0) return;
-    if (room.expectedParticipants && this.voters(room).length < room.expectedParticipants) return;
-    const humanVeto = this.activeParticipants(room).some((p) => p.agent === "human" && pr.votes[p.id]?.vote === "disagree");
+    const stuck = (text: string) => {
+      if (pr.stuckNotice === text) return;
+      pr.stuckNotice = text;
+      this.post(room, "system", undefined, text);
+    };
     const votes = active.map((p) => pr.votes[p.id]?.vote);
     const agree = votes.filter((v) => v === "agree").length;
-    const disagree = votes.filter((v) => v === "disagree").length;
+    const standing = this.standingDisagrees(pr);
+    const disagree = new Set([...active.filter((p) => pr.votes[p.id]?.vote === "disagree").map((p) => p.id), ...standing.map((d) => d.id)]).size;
     const everyoneVoted = votes.every(Boolean);
+    if (room.expectedParticipants && this.voters(room).length < room.expectedParticipants) {
+      if (everyoneVoted && agree === active.length) {
+        stuck(`${pr.id} v${pr.version} has the agreement of everyone present (${agree}) but the room expects ${room.expectedParticipants} participants and has ${this.voters(room).length}: nobody here can conclude it. Recruit (request_agent), wait for the missing joiners, or a human closes the room.`);
+      }
+      return;
+    }
+    const humanVeto = this.activeParticipants(room).some((p) => (p.agent === "human" || p.role === "chair") && pr.votes[p.id]?.vote === "disagree");
 
     let accepted = false;
-    let rejected = false;
+    let notPassed = false;
     if (room.quorum === "unanimous") {
-      if (disagree > 0) rejected = true;
+      if (disagree > 0) notPassed = true;
       else if (everyoneVoted && agree === active.length) accepted = true;
     } else {
       const needed = Math.floor(active.length / 2) + 1;
       if (agree >= needed) accepted = true;
-      else if (disagree >= needed) rejected = true;
-      else if (everyoneVoted) rejected = true;
+      else if (disagree >= needed) notPassed = true;
+      else if (everyoneVoted) notPassed = true;
     }
-    if (!accepted && !rejected && room.state === "stalled" && everyoneVoted && agree > disagree) accepted = true;
-    if (humanVeto) {
+    if (!accepted && !notPassed && room.state === "stalled" && everyoneVoted && agree > disagree) accepted = true;
+    if (humanVeto || (standing.length && room.quorum === "unanimous")) {
       accepted = false;
-      rejected = true;
+      notPassed = true;
     }
     // late joiners are not waited on, but a disagree from anyone active still counts
     if (accepted && room.quorum === "unanimous" && all.some((p) => pr.votes[p.id]?.vote === "disagree")) {
       accepted = false;
-      rejected = true;
+      notPassed = true;
+    }
+    if (accepted && pr.version > 1 && !Object.values(pr.votes).some((v) => (v.version ?? 1) === pr.version)) {
+      stuck(`${pr.id} v${pr.version} carries only agrees cast on earlier versions; a version cannot pass until someone votes on its current text. Re-vote (quote a clause of v${pr.version}) to conclude.`);
+      return;
     }
     if (accepted && this.hold(room)) {
-      if (!pr.nudged) this.post(room, "system", undefined, `${pr.id} has the votes but the room is on hold by ${this.hold(room)!.by}: ${this.hold(room)!.text.slice(0, 120)}. It passes when the hold is cleared.`);
-      pr.nudged = true;
+      stuck(`${pr.id} has the votes but the room is on hold by ${this.hold(room)!.by}: ${this.hold(room)!.text.slice(0, 120)}. It passes when the hold is cleared.`);
       return;
     }
     if (accepted && room.requireVerification && !this.verifiedBy(room, pr)) {
-      if (!pr.nudged) {
-        this.post(room, "system", undefined, `${pr.id} has the votes but no verification: someone other than ${this.shown(room, pr.by)} (on a different connection) must run the fix and write verify/<area> naming ${pr.id}, dated after the current text.`);
-      }
-      pr.nudged = true;
+      stuck(`${pr.id} has the votes but no verification: someone other than ${this.shown(room, pr.by)} (on a different connection) must run the fix and write verify/<area> naming ${pr.id}, dated after the current text.`);
       return;
     }
 
     // Adversarial gate: unanimous agreement without a single challenge is suspicious.
-    if (accepted && this.challengeRequired(room) && pr.challenges.length === 0) {
-      if (!pr.nudged) {
-        pr.nudged = true;
-        this.post(
-          room,
-          "system",
-          undefined,
-          `Everyone agrees with ${pr.id} but nobody has tested it. Someone other than ${this.shown(room, pr.by)} should name its weakest claim (challenge) before it passes.`,
-        );
-      }
+    if (accepted && this.challengeRequired(room) && !pr.challenges.some((c) => c.blocking !== false)) {
+      stuck(`Everyone agrees with ${pr.id} but nobody has tested it. Someone other than ${this.shown(room, pr.by)} should name its weakest claim (challenge) before it passes.`);
+      return;
+    }
+    if (accepted && this.openChallenges(pr).length) {
+      stuck(`${pr.id} has the votes but ${this.openChallenges(pr).map((c) => this.shown(room, c.by)).join(", ")} challenged v${pr.version} and it is unanswered: amend the text it cites, or the challenger re-votes.`);
       return;
     }
 
     if (accepted) this.conclude(room, pr);
-    else if (rejected) {
-      pr.status = "rejected";
-      this.persist({ type: "proposal", proposal: pr });
-      this.post(room, "system", undefined, `Proposal ${pr.id} was rejected (${agree} agree / ${disagree} disagree). Address the objections and propose a revision.`);
+    else if (notPassed && pr.notPassedVersion !== pr.version) {
+      pr.notPassedVersion = pr.version;
+      const who = standing.map((d) => this.shown(room, room.participants.get(d.id) ?? d));
+      this.post(
+        room,
+        "system",
+        undefined,
+        `Proposal ${pr.id} v${pr.version} did not pass (${agree} agree / ${disagree} disagree${who.length ? `; standing objection from ${who.join(", ")}` : ""}). It stays open: amend it in place — amend proposal_id="${pr.id}" find="<exact text>" replace="<new text>" — or the objector re-votes. Do not propose a new document.`,
+      );
     }
   }
 
@@ -1273,11 +1493,21 @@ export class Hub {
     for (const m of room.messages) if (m.quiet) this.surfaceThread(room, this.threadRoot(room, m).id, "room concluded");
     pr.status = "accepted";
     for (const other of room.proposals.values()) if (other.id !== pr.id && other.status === "open") other.status = "superseded";
-    room.conclusion = { text: pr.text, proposalId: pr.id, decidedAt: now() };
+    const unresolved = pr.challenges.filter((c) => (c.status ?? "open") === "open").map((c) => ({ by: this.shown(room, c.by), objection: c.objection }));
+    for (const c of pr.challenges) if ((c.status ?? "open") === "open") c.status = "overruled";
+    const view = this.proposalView(room, pr, false, false);
+    room.conclusion = { text: pr.text, proposalId: pr.id, decidedAt: now(), version: pr.version, tally: view.tally, unresolved_objections: unresolved };
     this.persist({ type: "proposal", proposal: pr });
     this.setState(room, "concluded");
     if (room.nudgeTimer) clearTimeout(room.nudgeTimer);
-    this.post(room, "conclusion", undefined, `CONSENSUS REACHED on ${pr.id}: ${pr.text}`, { proposalId: pr.id });
+    this.post(
+      room,
+      "conclusion",
+      undefined,
+      `CONSENSUS REACHED on ${pr.id} v${pr.version} (${view.tally.agree}/${this.voters(room).length} agree; ${pr.text.length} chars, text in room_status/conclusion)` +
+        (unresolved.length ? `\nUnresolved objections, overruled: ${unresolved.map((u) => `${u.by}: "${u.objection.slice(0, 300)}${u.objection.length > 300 ? "…" : ""}"`).join(" | ")}` : ""),
+      { proposalId: pr.id },
+    );
   }
 
   private setState(room: Room, state: RoomState) {
@@ -1391,6 +1621,15 @@ export class Hub {
             if (pr) {
               pr.challenges.push(ev.challenge);
               if (ev.votes) pr.votes = ev.votes;
+            }
+            break;
+          }
+          case "refusal": {
+            const room = this.rooms.get(ev.room);
+            if (room) {
+              const key = `${ev.tool}: ${ev.reason}`;
+              room.refusals = room.refusals ?? {};
+              room.refusals[key] = (room.refusals[key] ?? 0) + 1;
             }
             break;
           }

@@ -32,7 +32,7 @@ const MAX_SESSIONS = 500;
 const SESSION_IDLE_MS = 30 * 60_000;
 const PARTICIPANT_IDLE_MS = 10 * 60_000;
 
-const hub = new Hub({ dataDir: DATA_DIR });
+const hub = new Hub({ dataDir: DATA_DIR, cwd: resolve(process.env.CHATROOM_DEFAULT_CWD ?? process.cwd()) });
 const spawner = new Spawner({
   mcpUrl: `http://${HOST}:${PORT}/mcp`,
   defaultCwd: resolve(process.env.CHATROOM_DEFAULT_CWD ?? process.cwd()),
@@ -62,6 +62,7 @@ spawner.attach({
     } catch {}
   },
   liveAgents: () => [...hub.rooms.values()].filter((r) => r.state === "open" || r.state === "stalled").reduce((n, r) => n + hub.voters(r).length, 0),
+  roomTopic: (room) => hub.rooms.get(room)?.topic,
 });
 process.on("exit", () => spawner.stopAll());
 process.on("SIGINT", () => process.exit(0));
@@ -134,7 +135,7 @@ app.delete("/mcp", sessionRoute);
 
 // ---- human-facing endpoints ----
 const notFound = (res: express.Response, e: unknown) => res.status(404).type("text/plain").send(e instanceof HubError ? e.message : "error");
-app.get("/", (_req, res) => res.json({ name: "agent-chatroom-mcp", mcp: "/mcp", ui: "/ui", rooms: "/rooms", sessions: transports.size }));
+app.get("/", (_req, res) => res.json({ name: "agent-chatroom-mcp", mcp: "/mcp", ui: "/ui", rooms: "/rooms", sessions: transports.size, caps: { max_live_per_room: Hub.MAX_LIVE_PER_ROOM, max_rooms_per_run: Hub.MAX_ROOMS_PER_RUN }, code_state: Hub.codeState(resolve(process.env.CHATROOM_DEFAULT_CWD ?? process.cwd())) ?? null }));
 app.get("/ui", (_req, res) => res.type("html").send(UI_HTML));
 app.get("/config", (_req, res) => res.json({ human_token_required: Boolean(HUMAN_TOKEN) }));
 app.get("/agents", (_req, res) => res.json(spawner.agents.map((a) => ({ ...a, brief: a.brief.slice(0, 300) }))));

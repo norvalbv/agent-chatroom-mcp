@@ -98,6 +98,7 @@ export const UI_HTML = `<!doctype html>
   .person { display:flex; align-items:center; gap:8px; padding:4px 0; font-size:13px }
   .person.off { opacity:.45 } .person .av { width:22px; height:22px; font-size:10px; margin:0 }
   .person .role { color:var(--dim2); font-size:11px; margin-left:auto }
+  .person .areas { color:var(--acc); font-size:11px; margin-left:8px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:40% }
   .card { border:1px solid var(--line); border-radius:12px; padding:10px 12px; background:var(--bg) }
   .card.concl { border-color:color-mix(in srgb, var(--ok) 40%, transparent); background:var(--ok-bg) }
   .card .meta { font-size:12px; color:var(--dim); margin-bottom:6px; display:flex; gap:8px; flex-wrap:wrap }
@@ -184,7 +185,9 @@ export const UI_HTML = `<!doctype html>
     const open = r.proposals.find(p => p.status === 'open');
     const voters = r.participants.filter(p => p.active && p.agent !== 'human').length || 1;
     let h = '<div class="sec"><h3>Topic</h3>' + clampBlock('topic', r.topic || '(none)') + '</div>';
-    h += '<div class="sec"><h3>People <span>' + r.participants.filter(p=>p.active).length + ' active</span></h3>' + r.participants.map(p => '<div class="person' + (p.active?'':' off') + '">' + av(p.name) + '<span>' + esc(p.name) + '</span><span class="role">' + esc(p.label ? p.label + ' · ' : '') + esc(p.agent) + '</span></div>').join('') + '</div>';
+    // what each person is on: their role tag and every claim/<area> they own or belong to
+    const areasOf = (name) => Object.keys(r.board || {}).filter(k => k.startsWith('claim/')).filter(k => { try { const c = JSON.parse(r.board[k].text); return c.owner === name || (Array.isArray(c.team) && c.team.includes(name)); } catch { return r.board[k].by === name; } }).map(k => k.slice(6));
+    h += '<div class="sec"><h3>People <span>' + r.participants.filter(p=>p.active).length + ' active</span></h3>' + r.participants.map(p => '<div class="person' + (p.active?'':' off') + '">' + av(p.name) + '<span>' + esc(p.name) + (p.role && p.role !== 'worker' ? ' <span class="chip">' + esc(p.role) + '</span>' : '') + (r.chair === p.name && (!p.role || p.role === 'worker') ? ' <span class="chip">chair</span>' : '') + '</span>' + (areasOf(p.name).length ? '<span class="areas">' + areasOf(p.name).map(esc).join(', ') + '</span>' : '') + '<span class="role">' + esc(p.label ? p.label + ' · ' : '') + esc(p.agent) + '</span></div>').join('') + '</div>';
     if (r.conclusion) h += '<div class="sec"><h3>Conclusion <span>' + rel(r.conclusion.decidedAt) + '</span></h3><div class="card concl">' + clampBlock('concl', r.conclusion.text) + '</div></div>';
     if (open) {
       const a = open.tally.agree, d = open.tally.disagree;

@@ -88,7 +88,7 @@ assert.deepEqual(tools, ["amend", "board_get", "board_set", "challenge", "join_r
   await a.call("send_message", { room, content: "Compromise: spaces here, editor-configurable via .editorconfig?" });
   await assert.rejects(b.call("send_message", { room, content: "Tabs forever" }), /arrived while you were composing[\s\S]*Compromise/);
   const gotB = await b.call("wait_for_messages", { room, timeout_ms: 0 });
-  assert.ok(gotB.messages.some((m: string) => m.includes("Compromise")));
+  assert.equal(gotB.messages.length, 0, "a refused send counts as delivery: the same batch must not be shipped again");
   await b.call("send_message", { room, content: "Works for me." });
   // ...and force=true bypasses it.
   await b.call("send_message", { room, content: "PS: also fine with 2-space indent.", force: true });
@@ -96,16 +96,38 @@ assert.deepEqual(tools, ["amend", "board_get", "board_set", "challenge", "join_r
   const pr = await b.call("propose", { room, text: "Use spaces (2), enforce via .editorconfig and formatter." });
   assert.equal(pr.status, "open");
   assert.deepEqual(pr.waiting_on, ["claude-1"]);
-  assert.equal(pr.needs_challenge, false, "2-party rooms do not require a challenge");
+  assert.equal(pr.needs_challenge, true, "the challenge gate is on from two voters (RE-TARGET consensus-requires-scrutiny)");
   await assert.rejects(a.call("propose", { room, text: "a competing proposal" }), /already open/);
 
   // Read-to-vote: agree without a quote, or with a fabricated quote, is refused.
   await assert.rejects(a.call("vote", { room, proposal_id: pr.id, vote: "agree" }), /must include `quote`/);
-  await assert.rejects(a.call("vote", { room, proposal_id: pr.id, vote: "agree", quote: "use tabs everywhere always" }), /not in the proposal/);
+  await assert.rejects(a.call("vote", { room, proposal_id: pr.id, vote: "agree", quote: "use tabs everywhere always" }), /not in prop_/);
   await assert.rejects(a.call("vote", { room, proposal_id: pr.id, vote: "disagree", reason: "no" }), /specific change/);
-  const v = await a.call("vote", { room, proposal_id: pr.id, vote: "agree", quote: "enforce via .editorconfig", confidence: 0.8 });
+  const v0 = await a.call("vote", { room, proposal_id: pr.id, vote: "agree", quote: "enforce via .editorconfig", confidence: 0.8 });
+  assert.equal(v0.room_state, "open", "two agreeing agents do not conclude without a challenge");
+  const ch = await a.call("challenge", { room, proposal_id: pr.id, objection: 'The clause "enforce via .editorconfig and formatter" names no formatter, so nothing enforces it.' });
+  assert.equal(ch.challenges[0].status, "open");
+  assert.ok(!("text" in ch), "challenge returns a manifest, not the document");
+  // the proposer answers by amending the cited text: the challenge is answered by the hub, nobody gets a free vote
+  await b.call("wait_for_messages", { room, timeout_ms: 0 });
+  const am = await b.call("amend", { room, proposal_id: pr.id, find: "enforce via .editorconfig and formatter", replace: "enforce via .editorconfig and prettier" });
+  assert.deepEqual(am.challenges_answered, ["claude-1"]);
+  assert.deepEqual([...am.proposal.waiting_on].sort(), ["claude-1", "codex-1"], "an amend never creates a vote");
+  const wa = await a.call("wait_for_messages", { room, timeout_ms: 0 });
+  assert.match(wa.open_proposal.text, /prettier/, "a new version is shipped in full");
+  const wa2 = await a.call("wait_for_messages", { room, timeout_ms: 0 });
+  assert.ok(!("text" in wa2.open_proposal) && /unchanged since v2/.test(wa2.open_proposal.text_omitted), "an unchanged version is not re-shipped");
+  const va = await a.call("vote", { room, proposal_id: pr.id, vote: "agree", quote: "editorconfig and prettier" });
+  assert.equal(va.room_state, "open");
+  const v = await b.call("vote", { room, proposal_id: pr.id, vote: "agree", quote: ".editorconfig and prettier" });
   assert.equal(v.room_state, "concluded");
-  assert.match(v.conclusion.text, /spaces/);
+  assert.equal(v.conclusion.proposal_id, pr.id);
+  assert.ok(!("text" in v.conclusion), "vote returns a pointer to the conclusion, not the text");
+  const stc = await a.call("room_status", { room });
+  assert.match(stc.conclusion.text, /spaces/);
+  const concl = (await a.call("read_messages", { room, since_seq: 0 })).find((m: string) => m.includes("CONSENSUS REACHED")) as string;
+  assert.match(concl, /CONSENSUS REACHED on prop_[0-9a-f]+ v2 \(2\/2 agree/);
+  assert.ok(!concl.includes("Use spaces (2)"), "the conclusion message must not repost the proposal");
   await a.call("wait_for_messages", { room, timeout_ms: 0 });
   const after = await a.call("send_message", { room, content: "one more (chat stays open after conclusion)" });
   assert.ok(after.seq > 0);
@@ -201,8 +223,13 @@ assert.deepEqual(tools, ["amend", "board_get", "board_set", "challenge", "join_r
   const hv = await fetch(`${HTTP}/rooms/${room}/vote`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ name: "benji", proposal_id: pr.id, vote: "disagree", reason: "never on a Friday" }) });
   assert.equal(hv.status, 200);
   const st = await a.call("room_status", { room });
-  assert.equal(st.proposals[0].status, "rejected", "human disagree must veto");
+  assert.equal(st.proposals[0].status, "open", "a failed tally leaves the document open for amendment");
+  assert.ok(st.proposals[0].blocked_by.some((x: string) => x.includes("standing disagree from benji")), "the veto is named as the blocker");
   assert.equal(st.state, "open");
+  const notPassed = (await a.call("read_messages", { room, since_seq: 0 })).find((m: string) => m.includes("did not pass")) as string;
+  assert.match(notPassed, /amend proposal_id="prop_[0-9a-f]+" find=/, "the notice names amend, never re-propose");
+  const am = await a.call("amend", { room, proposal_id: pr.id, find: "Friday afternoon", replace: "Monday morning" });
+  assert.equal(am.proposal.tally.disagree, 0, "a disagree stands only against the version it was cast on");
 }
 
 // ---------------- proposal as a document (amend), board, human-first gate, per-room char cap ----------------
@@ -264,14 +291,19 @@ assert.deepEqual(tools, ["amend", "board_get", "board_set", "challenge", "join_r
   await assert.rejects(b.call("amend", { room, proposal_id: pr.id, find: "purple", replace: "teal" }), /does not occur/);
   const am = await b.call("amend", { room, proposal_id: pr.id, find: "because it is calm and readable", replace: "because 9 of 12 surveyed users preferred it" });
   assert.equal(am.version, 2);
-  assert.match(am.proposal.text, /9 of 12 surveyed/);
-  assert.deepEqual(am.proposal.waiting_on, ["claude-1"], "amender counts as agreeing; others must re-vote");
+  assert.match(am.diff, /9 of 12 surveyed/);
+  assert.deepEqual([...am.proposal.waiting_on].sort(), ["claude-1", "codex-1"], "the amender gets no vote for amending");
   const amendMsg = (await a.call("read_messages", { room, since_seq: 0 })).at(-1) as string;
   assert.match(amendMsg, /AMENDED .* to v2: "because it is calm and readable" → "because 9 of 12 surveyed users preferred it"/);
   assert.ok(!amendMsg.includes("The colour is blue"), "amend must post the diff, not the whole proposal");
   await assert.rejects(a.call("propose", { room, text: "A competing proposal" }), /use amend/);
-  const v = await a.call("vote", { room, proposal_id: pr.id, vote: "agree", quote: "9 of 12 surveyed users preferred it" });
+  const chd = await b.call("challenge", { room, proposal_id: pr.id, objection: "Twelve users is a small survey; say so in the text." });
+  assert.equal(chd.challenges[0].status, "open");
+  await assert.rejects(a.call("vote", { room, proposal_id: pr.id, vote: "agree", quote: "9 of 12 surveyed users preferred it" }), /needs `reason`/);
+  await a.call("vote", { room, proposal_id: pr.id, vote: "agree", quote: "9 of 12 surveyed users preferred it", reason: "small, but it is the only survey we have and it is cited" });
+  const v = await b.call("vote", { room, proposal_id: pr.id, vote: "agree", quote: "9 of 12 surveyed users preferred it", reason: "agreed, the citation makes the size visible" });
   assert.equal(v.room_state, "concluded");
+  assert.deepEqual(v.conclusion.unresolved_objections, [], "a challenger's agree concedes their challenge");
   const stats = (await (await fetch(`${HTTP}/rooms/${room}/stats`)).json()) as { amendments: number; board_entries: number; unanswered_human_messages: number };
   assert.equal(stats.amendments, 1);
   assert.equal(stats.board_entries, 1);
@@ -452,7 +484,8 @@ assert.deepEqual(tools, ["amend", "board_get", "board_set", "challenge", "join_r
   await assert.rejects(a.call("board_set", { room, key: `hold/${room}`, text: "" }), /placed by codex-1/);
   const pr = await a.call("propose", { room, text: "Fix: reorder the session check in auth.ts." });
   await b.call("wait_for_messages", { room, timeout_ms: 0 });
-  const v1 = await b.call("vote", { room, proposal_id: pr.id, vote: "agree", quote: "reorder the session check" });
+  await b.call("challenge", { room, proposal_id: pr.id, objection: "Reordering may skip the CSRF check; confirm the order of middleware." });
+  const v1 = await b.call("vote", { room, proposal_id: pr.id, vote: "agree", quote: "reorder the session check", reason: "checked: CSRF runs before the session middleware" });
   assert.equal(v1.room_state, "open", "held room must not conclude");
   await b.call("board_set", { room, key: `hold/${room}`, text: "" });
   const st2 = await a.call("room_status", { room });
@@ -508,6 +541,89 @@ assert.deepEqual(tools, ["amend", "board_get", "board_set", "challenge", "join_r
   await b.call("board_set", { room, key: "notes", text: "A's notes: the bug is in auth.ts\nB's notes: reproduced on main", overwrite: true });
   const merged = await a.call("board_get", { room, key: "notes" });
   assert.match(merged.text, /A's notes[\s\S]*B's notes/);
+}
+
+// ---------------- what the agents asked for: objections outlive their author, blockers named, roles, manifests ----------------
+{
+  const room = "self";
+  const ja = await a.call("join_room", { room, name: "claude-1", agent: "claude", expected_participants: 2, role: "lead" });
+  assert.equal(ja.your_role, "lead");
+  const jb = await b.call("join_room", { room, name: "codex-1", agent: "codex" });
+  const jc = await c.call("join_room", { room, name: "chair-x", agent: "claude", role: "chair" });
+  assert.match(jc.hint, /You are the chair/);
+  await assert.rejects(b.call("join_room", { room, name: "codex-1", agent: "codex", role: "chair", participant_id: jb.participant_id }), /chair is chair-x/);
+  const w0 = await a.call("wait_for_messages", { room, timeout_ms: 0 });
+  assert.equal(w0.openings.expected, 2, "openings progress is reported on wait");
+  await a.call("submit_opening", { room, content: "A opens" });
+  await b.call("submit_opening", { room, content: "B opens" });
+  const w1 = await b.call("wait_for_messages", { room, timeout_ms: 0 });
+  assert.ok(w1.messages.some((m: string) => m.includes("claude-1 [lead]: A opens")), "role tag missing from delivered lines");
+  assert.ok(w1.active_participants.includes("chair-x [chair]"));
+  const pr = await a.call("propose", { room, text: "Ship the reorder fix; the risk is the cache warmup path." });
+  assert.ok(!("text" in pr), "propose returns a manifest, not an echo");
+  assert.deepEqual(pr.waiting_on, ["codex-1"], "the chair is never waited on");
+  // a dissenter leaves: the objection outlives the agent, and the first leave is refused because it would drop the room below its floor
+  await b.call("wait_for_messages", { room, timeout_ms: 0 });
+  const vb = await b.call("vote", { room, proposal_id: pr.id, vote: "disagree", reason: "the cache warmup path needs a test before this ships" });
+  assert.equal(vb.proposal.status, "open");
+  await assert.rejects(b.call("leave_room", { room }), /Leaving now would block/);
+  await b.call("leave_room", { room });
+  const w2 = await a.call("wait_for_messages", { room, timeout_ms: 0 });
+  assert.ok(w2.open_proposal.blocked_by.some((x: string) => /standing disagree from codex-1 \(who has left\)/.test(x)), "a departed dissenter still blocks, by name");
+  assert.ok(w2.open_proposal.blocked_by.some((x: string) => x.startsWith("quorum floor")), "the quorum floor is named, not silent");
+  assert.ok(w2.messages.some((m: string) => m.includes("nobody here can conclude it")), "evaluate() says why it is stuck");
+  // the chair challenges quoting a clause; a non-blocking objection is recorded without holding the tally
+  const ch = await c.call("challenge", { room, proposal_id: pr.id, objection: 'The clause "the risk is the cache warmup path" is asserted, not tested.' });
+  assert.equal(ch.challenges[0].status, "open");
+  const ch2 = await c.call("challenge", { room, proposal_id: pr.id, objection: "Minor: the commit message should mention the reorder.", blocking: false });
+  assert.equal(ch2.challenges[1].blocking, false);
+  // amending the cited text answers the challenge and clears the version-stamped disagree; the amender gets no vote
+  const am = await a.call("amend", { room, proposal_id: pr.id, find: "the risk is the cache warmup path", replace: "the cache warmup path is covered by test/warmup.test.ts" });
+  assert.deepEqual(am.challenges_answered, ["chair-x"]);
+  assert.equal(am.proposal.tally.disagree, 0);
+  assert.deepEqual(am.proposal.waiting_on, ["claude-1"]);
+  await assert.rejects(a.call("amend", { room, proposal_id: pr.id, find: "no such text here at all", replace: "x" }), /closest passage is/);
+  // a chair's disagree vetoes; its agree does not count toward quorum
+  const cv = await c.call("vote", { room, proposal_id: pr.id, vote: "disagree", reason: "name the test file's assertion, not only the file" });
+  assert.ok(cv.proposal.blocked_by.some((x: string) => x.includes("standing disagree from chair-x")));
+  await c.call("vote", { room, proposal_id: pr.id, vote: "abstain" }); // an abstain lifts the veto without conceding the chair's objection
+  // the dissenter rejoins; the new version is shipped once, then withheld until it changes
+  await b.call("join_room", { room, name: "codex-1", agent: "codex", participant_id: jb.participant_id });
+  const wb1 = await b.call("wait_for_messages", { room, timeout_ms: 0 });
+  assert.match(wb1.open_proposal.text, /warmup\.test\.ts/);
+  const wb2 = await b.call("wait_for_messages", { room, timeout_ms: 0 });
+  assert.ok(!("text" in wb2.open_proposal), "unchanged proposal text must not be re-shipped");
+  await a.call("vote", { room, proposal_id: pr.id, vote: "agree", quote: "covered by test/warmup.test.ts" });
+  const vb2 = await b.call("vote", { room, proposal_id: pr.id, vote: "agree", quote: "covered by test/warmup.test.ts" });
+  assert.equal(vb2.room_state, "concluded");
+  assert.equal(vb2.conclusion.unresolved_objections.length, 1, "an unanswered objection is carried into the conclusion");
+  const st = await a.call("room_status", { room });
+  assert.equal(st.conclusion.unresolved_objections[0].by, "chair-x");
+  assert.equal(st.conclusion.tally.agree, 2, "the chair's agree is not in the tally");
+  const concl = (await c.call("read_messages", { room, since_seq: 0 })).find((m: string) => m.includes("CONSENSUS REACHED")) as string;
+  assert.match(concl, /Unresolved objections, overruled: chair-x/);
+  // read_messages settles the cursor; the board travels as a manifest; refusals are counted
+  await a.call("read_messages", { room });
+  const w3 = await a.call("wait_for_messages", { room, timeout_ms: 0 });
+  assert.equal(w3.messages.length, 0, "read_messages counts as delivery");
+  await a.call("board_set", { room, key: "notes", text: "long ".repeat(100) });
+  const man = await b.call("board_get", { room });
+  assert.equal(man.notes.chars, 500);
+  assert.ok(!("text" in man.notes), "keyless board_get is a manifest");
+  const st2 = await a.call("room_status", { room });
+  assert.ok(!("text" in st2.board.notes), "room_status carries a board manifest");
+  const stats = (await (await fetch(`${HTTP}/rooms/${room}/stats`)).json()) as { refusals: Record<string, number> };
+  assert.ok(Object.values(stats.refusals).reduce((x, y) => x + y, 0) >= 2, "refusals are counted per tool and reason");
+}
+{
+  // a threshold above the live cap is clamped and announced, and rooms carry the git state they were created against
+  const room = "clamp";
+  const j = await a.call("join_room", { room, name: "claude-1", agent: "claude", expected_participants: 99 });
+  assert.equal(j.room.expected_participants, 12, "expected_participants is clamped to the live cap");
+  assert.ok(j.recent_messages.some((m: string) => m.includes("clamped to 12")));
+  assert.equal(j.room.opening_max_chars, 400);
+  assert.ok(j.room.code_state === null || typeof j.room.code_state.head === "string");
+  await a.call("leave_room", { room });
 }
 
 const ui = await (await fetch(`${HTTP}/ui`)).text();

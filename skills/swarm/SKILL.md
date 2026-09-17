@@ -1,38 +1,49 @@
 ---
 name: swarm
-description: Run a swarm of N AI agents that discuss a problem in a shared chatroom and converge on a verified answer. Use whenever the user asks to get "N agents", "a swarm", "multiple agents", "a few agents" or "agents in a chat" to fix, solve, decide, investigate or debate something (e.g. "get 6 agents to fix this via chat", "have a swarm figure out why X fails", "spin up agents to decide Y"). Also for "/swarm <task>".
+description: Run a swarm of N AI agents that discuss a problem in a shared chatroom and converge on a verified answer. Use whenever the user asks to get "N agents", "a swarm", "multiple agents", "a few agents" or "agents in a chat" to fix, solve, decide, investigate, brainstorm or debate something (e.g. "get 6 agents to fix this via chat", "have a swarm figure out why X fails", "spin up agents to decide Y", "let 12 agents brainstorm Z"). Also for "/swarm <task>".
 ---
 
 # Swarm
 
-One command runs the whole thing: a planner agent splits the task into sub-questions, worker agents investigate each one in their own chatroom, each room's lead carries its conclusion to a leads room, and a verifier agent with veto power checks the claims against the real project before the final vote.
+One command runs the whole thing. Two shapes:
+
+- **Planned** (default): a planner agent splits the task into sub-questions, worker agents investigate each in their own room, each room's lead carries its conclusion to a leads room, and a verifier with a unanimous-quorum vote checks the claims against the real project. Use when the sub-questions are obvious (bugs, fixes, a design with known parts).
+- **Flat** (`--flat`): no planner. Every agent gets the raw question in ONE room on the minimal prompt and organises itself: claims areas on the board, recruits with `request_agent`, breaks out into sub-rooms and brings results back. The verifier sits in the same room. Use for brainstorms, open questions, "what should we do about X", anything where the shape of the work is itself unknown. Benji prefers this when the task is loose.
 
 ## Run it
 
-Always run the orchestrator below. Do NOT hand-roll the swarm by spawning subagents that call the chatroom tools yourself: the script handles planning, room layout, the verifier and the report.
+Always run the orchestrator. Do NOT hand-roll the swarm by spawning subagents that call the chatroom tools yourself.
 
 ```bash
-node "/Users/benji/Desktop/Personal and learning/agent-chatroom-mcp/dist/swarm.js" "<task in the user's words>" \
-  --agents <N> --cwd "<absolute path of the project the user means, usually the current working directory>" \
-  [--apply] [--codex <k>] [--timeout <minutes>]
+cd "/Users/benji/Desktop/Personal and learning/agent-chatroom-mcp"
+node dist/swarm.js "<task in the user's words>" --agents <N> --cwd "<absolute project dir>" \
+  [--flat] [--models sonnet,haiku,fable,opus] [--lead-model opus] [--verifier-model fable] \
+  [--apply | --full-access] [--codex <k>] [--timeout <minutes>] [--done-when "<criterion>"] [--verify "<what the verifier checks>"]
 ```
 
-- `--agents N`: total agents including the verifier (default 4). Use the number the user said; if they said "a few" use 4, "lots" use 8.
-- `--apply`: lets the verifier implement the agreed fix on a new git branch and prove it with tests. Pass it when the user says "fix" and the project is a git repo; omit for "decide", "investigate", "debate".
-- `--full-access`: workers may edit files and run anything, each on its own git worktree/branch so parallel edits cannot collide; the verifier merges. Pass it when the user says the agents should "do anything", "run code", "edit", or have "full access".
-- `--codex k`: run k of the workers on OpenAI Codex (`codex exec`) instead of Claude (default 0), rotating over `--codex-models` (default `gpt-6-astra,gpt-5.6-sol,gpt-5.6-terra`). Use when the user asks for mixed models, Codex, or GPT.
-- `--models sonnet,haiku`, `--lead-model opus`, `--verifier-model opus`, `--planner-model opus`: Claude model mix. For big cheap runs use `--models sonnet,sonnet,haiku --lead-model opus --verifier-model opus`.
-- `--named`: show real agent names inside worker rooms (default: pseudonyms, which reduce identity bias).
-- `--timeout`: minutes before stragglers are killed (default 30).
+- `--agents N`: total including the verifier (default 4). "a few" = 4, "lots" = 8. **Flat mode caps at 12** (one room holds 12 live agents; the launcher refuses more instead of deadlocking).
+- `--models a,b,c`: Claude model mix rotated over workers. Aliases that work: `haiku`, `sonnet`, `opus`, `fable`. `--lead-model` (planned only), `--verifier-model`, `--planner-model`. A good mixed run: `--models sonnet,haiku,fable,sonnet,opus --lead-model opus --verifier-model fable`.
+- `--codex k`: k workers on OpenAI Codex (`codex exec`), rotating over `--codex-models` (`gpt-6-astra,gpt-5.6-sol,gpt-5.6-terra`). **Only when the user asks and has quota**; a Codex seat that dies on quota still counts toward the room's expected participants. Codex hooks need trusting once (`/hooks` in Codex) before its gates run.
+- `--apply`: the verifier may implement the agreed fix on a new git branch and prove it with tests. `--full-access`: workers edit files too, each on its own worktree/branch; the verifier merges.
+- `--named`: real names inside worker rooms (default pseudonyms). Flat rooms name agents by model (`sonnet-1`, `fable-6`) so the dashboard shows the mix.
+- `--timeout`: minutes before stragglers are killed (default 30; use 45 for 12+ agents or research-heavy briefs).
 
-Tell the user they can watch live at http://127.0.0.1:7717/ui (and interject there as a human).
+Every prompt automatically carries the project's settled axes (`docs/decisions/`), the sources already read, and the last six prior runs (`swarms/*/report.md`), so tell agents to ratify or refute by reference rather than re-derive.
 
-Run it in the foreground with a Bash timeout of at least 35 minutes. It prints the live transcript as the rooms talk, then a FINAL ANSWER and VERIFIER section, and writes `swarms/<id>/report.md` in the agent-chatroom-mcp repo.
+## Running it and watching
+
+- Check the hub first: `curl -s localhost:7717/` (it is started automatically if absent, with `CHATROOM_DATA_DIR=data CHATROOM_DEFAULT_CWD="$PWD" PORT=7717 node dist/index.js`). **Never restart the hub while a swarm is running**: it kills every live agent session.
+- Run the launcher in the background (`nohup ... > swarm.log &`) and follow it with a Monitor or `tail -f`; a 12-agent run takes 20 to 45 minutes. Do not block a foreground Bash on it.
+- Dashboard: http://127.0.0.1:7717/ui shows every room, each person's role tag and claimed areas, the open proposal and the board; the human can interject there. Terminal: `watch-chat --latest`.
+- To chair a run yourself, join the leads room (planned) or the single room (flat) with the chatroom MCP as `chair-claude` with `role="chair"`: you are never waited on for quorum, your disagree vetoes, and you need not leave to unblock amendments. Post the brief on the board, challenge the weakest claim, vote with a verbatim quote. Do not do the agents' work for them.
+- Follow a room cheaply over HTTP (`/rooms/<room>/messages?since=N`) rather than polling `wait_for_messages`, which ships the open proposal whenever its version changes.
 
 ## Afterwards
 
-Relay to the user: the final answer, the verifier's verdict (VERIFIED / NOT VERIFIED and its evidence), one line per sub-room conclusion, and the report path. If `--apply` was used, name the branch the verifier created. If the exit code was 1 there was no consensus: report the sticking point from the leads room transcript rather than inventing an answer.
+Report: the final answer, the verifier's verdict (VERIFIED / NOT VERIFIED and its evidence), one line per sub-room or break-out conclusion, unresolved objections carried into the conclusion, and the report path `swarms/<id>/report.md` (also written if the terminal output is lost). If the verifier ended with a DECISION RECORD, the launcher wrote `docs/decisions/proposed/<slug>.md`; promote it with `guard-decisions add <slug> --target --new ...` only if the human agrees, then regenerate `docs/research-index.md` with `scripts/research-index.sh`. If the exit code was 1 there was no consensus: report the sticking point from the transcript rather than inventing an answer. If a room was closed by a human, say so.
 
-## Requirements
+## Requirements and gotchas
 
-The chatroom hub is started automatically on port 7717 if it is not already running. Codex workers need OpenAI quota; if they fail to start, rerun without `--codex`.
+- Tests: `npm run build && PORT=7733 npx tsx scripts/smoke.ts` must print `SMOKE OK` before committing hub changes.
+- `expected_participants` above 12 is clamped by the hub and announced; a proposal that fails a vote stays open for `amend`; the challenge gate is on from two voters; `read_messages` and refused sends count as delivery.
+- Keep this skill in sync with `src/swarm.ts` flags and `prompts/` whenever they change (both copies: `skills/swarm/SKILL.md` in the repo and `~/.claude/skills/swarm/SKILL.md`).

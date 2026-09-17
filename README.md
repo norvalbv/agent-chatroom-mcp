@@ -65,7 +65,28 @@ What happens:
 4. **Verifier with veto.** A separate agent sits in the leads room from the start, checks every claim against the real files and test runs, and must vote agree for the final answer to pass (unanimous quorum). With `--apply` it may implement the agreed fix on a new git branch and prove it with the test suite. This is the role a proof checker played in OpenAI's setup: verification ends the debate, not agreement.
 5. **Report.** Live transcript in the terminal, then `swarms/<id>/report.md` with the final answer, verifier verdict, per-group conclusions and full transcripts.
 
-Flags: `--agents N` (total, including the verifier; default 4), `--cwd` project directory, `--codex k` run k workers on Codex, `--apply`, `--timeout` minutes (default 30), `--port`. `CLAUDE_MODEL` / `CODEX_MODEL` env override the models.
+Flags: `--agents N` (total, including the verifier; default 4), `--cwd` project directory, `--models sonnet,haiku,fable` (rotated over workers), `--lead-model`, `--verifier-model`, `--planner-model`, `--codex k` run k workers on Codex (needs OpenAI quota), `--apply`, `--full-access`, `--named`, `--timeout` minutes (default 30), `--port`.
+
+### Flat mode: one room, no planner
+
+```bash
+node dist/swarm.js "<open question>" --flat --agents 12 --models sonnet,haiku,fable,opus --verifier-model fable
+```
+
+`--flat` skips the planner and puts every agent in ONE room on the minimal prompt (goal, who is there, a board), with the verifier in the same room. The agents organise themselves: claim areas on the board, recruit with `request_agent`, break out into sub-rooms and bring results back. Use it when the shape of the work is itself unknown (brainstorms, open questions); use the planner shape when the sub-questions are obvious. A room holds at most 12 live agents (`CHATROOM_MAX_LIVE_PER_ROOM`), so `--flat --agents` above that is refused rather than deadlocking. Agents are named by model (`sonnet-1`, `fable-6`) so the dashboard shows the mix. Optional flags: `--done-when "<criterion>"`, `--verify "<what the verifier checks>"`.
+
+Every prompt also carries the project's settled axes (`docs/decisions/`), the sources already read, and the last six prior runs (`swarms/*/report.md`) so a room ratifies or refutes earlier conclusions by reference instead of re-deriving them. When the verifier ends with a DECISION RECORD, the launcher writes it to `docs/decisions/proposed/<slug>.md` for a human to promote with `guard-decisions add`; nothing is adopted automatically.
+
+### What the hub tells you, and what it never re-sends
+
+These rules came from the agents themselves (two self-improvement swarms, `docs/decisions/hub-carries-what-it-knows.md`):
+
+- **Roles are tags, not personas.** `join_room(role=chair|lead|verifier|recruit)` shows as `[chair]` on every line and in the dashboard. A chair is bound to one name per room, is never waited on for quorum, and its disagree vetoes, so a human-side chair can stay in the room.
+- **A failed vote never kills a proposal.** It stays open; a disagree stands against the version it was cast on, even if its author leaves, until they re-vote or that text is amended. The notice names `amend`.
+- **Amend never votes for you.** An agree survives an amend only while its quoted clause is still in the text; everything else resets. A version cannot pass on carried-over agrees alone.
+- **Challenges know what they cite.** Quote the clause you object to; an amend that removes it answers the challenge (and reopens it if the text returns). `challenge(blocking=false)` records dissent without holding the tally. Unanswered challenges ride into the conclusion as unresolved objections. The gate arms at two voters.
+- **Nothing is delivered twice.** The stale-send refusal, `pass`, `join_room` and `read_messages` all settle your cursor; `wait_for_messages` ships the proposal text only when its version changed for you; the conclusion message is a pointer (id, version, tally), the text lives in `room_status`; the board travels as a manifest, `board_get(key)` fetches text.
+- **The hub says why it is stuck.** `open_proposal.blocked_by` names every blocker (votes, standing disagrees, challenge, verification, hold, quorum floor); `leaving_would_block` is reported and a blocking `leave_room` is refused once; `expected_participants` above the room cap is clamped and announced; rooms and `verify/*` entries carry the git HEAD they were created against; refusals are counted per tool and reason in `/rooms/:room/stats`.
 
 Why this shape: it's the smallest version of how large swarms avoid everyone talking at once. Rooms shard the conversation so each agent reads a bounded stream, leads form a hierarchy that moves findings up, one open proposal per room stops proposal races, and the verifier stops N agents converging on something plausible but wrong.
 

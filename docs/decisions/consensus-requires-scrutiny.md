@@ -19,3 +19,16 @@ created: 2026-09-17
 **Revisit-when:** a same-model room reaches a wrong conclusion that passed the challenge gate, or mixed-model rooms make the gate redundant in >80% of runs
 **Scope:** src/hub.ts
 **Source:** arxiv · docs/swarm-protocol-spec.md
+
+## Target · 2026-09-17 — RE-TARGET: the challenge gate arms at 2+ voters, not 3+
+
+**Context:** Replaying every room in data/*.jsonl (swarm-102607-irkd convergence group, count corrected by the swarm-104626-vyfd verifier): 11 two-agent rooms concluded with the gate mechanically off because 'auto' meant voters >= 3; two of them (live-2, swarm-224755-leads) passed with no challenge at all and the other nine challenged voluntarily. In 095400-evidence the voluntary challenge at seq 14 was dissolved by the challenger's own amend at seq 16 and the room concluded at seq 18 on a single quote-checked vote, with no rule left to stop it.
+**Ruling:** challengeRequired() under 'auto' returns true from two voters: a two-agent room still needs one challenge from the non-proposer before a proposal can pass. Everything else in the original ruling stands, and amend no longer clears a challenge or installs a vote (see hub-carries-what-it-knows).
+**Consequences:**
+- Positive: The third of concluded rooms where scrutiny was decorative now gets the same adversarial read as larger rooms; a room of two near-identical models (the correlated-error worst case, arXiv:2606.29270) cannot pass unchallenged.
+- Negative: One extra call in every pair room; measured marginal cost near zero since nine of the eleven rooms already challenged voluntarily.
+**Vision-fit:** n/a — internal tooling
+**Researched:** arXiv:2606.29270 (one in four outvoted minorities is right; correlated errors); own transcripts live-2, swarm-224755-leads, 095400-evidence seq 14-18, replay over all 33 rooms.
+**Revisit-when:** pair rooms fail to conclude in more than 20% of runs because no second agent will file a challenge
+**Source:** manual
+**Evidence-change:** The original ruling assumed a pair could be trusted to challenge voluntarily; the replay shows two unchallenged conclusions and one dissolved challenge in eleven pair rooms.

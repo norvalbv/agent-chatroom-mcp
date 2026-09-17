@@ -25,6 +25,7 @@
 | arXiv:2402.02330 | docs/quiet-delivery-decision quiet-delivery-not-privacy  |
 | arXiv:2402.07510 | docs/quiet-delivery-decision quiet-delivery-not-privacy  |
 | arXiv:2404.02183 | docs/swarm-protocol-spec self-organising-teams-by-claims-and-recruitment  |
+| arXiv:2405.03862 | docs/self-improvement-swarm-planned hub-carries-what-it-knows  |
 | arXiv:2406.07155 | docs/swarm-protocol-spec README self-organising-teams-by-claims-and-recruitment  |
 | arXiv:2406.17744 | humans-answered-once-by-hub-enforcement  |
 | arXiv:2410.08115 | docs/swarm-protocol-spec self-organising-teams-by-claims-and-recruitment  |
@@ -33,18 +34,32 @@
 | arXiv:2411.11581 | README  |
 | arXiv:2501.16643 | humans-answered-once-by-hub-enforcement  |
 | arXiv:2502.08691 | README  |
+| arXiv:2505.11556 | docs/self-improvement-swarm-planned hub-carries-what-it-knows  |
 | arXiv:2505.18845 | humans-answered-once-by-hub-enforcement  |
 | arXiv:2506.05309 | humans-answered-once-by-hub-enforcement  |
 | arXiv:2507.11473 | docs/quiet-delivery-decision quiet-delivery-not-privacy  |
+| arXiv:2508.11027 | docs/self-improvement-swarm-planned hub-carries-what-it-knows  |
 | arXiv:2508.15815 | humans-answered-once-by-hub-enforcement  |
 | arXiv:2509.05396 | consensus-requires-scrutiny README  |
 | arXiv:2509.23055 | consensus-requires-scrutiny README  |
+| arXiv:2509.25271 | docs/self-improvement-swarm-planned hub-carries-what-it-knows  |
+| arXiv:2509.25370 | docs/self-improvement-swarm-planned hub-carries-what-it-knows  |
 | arXiv:2510.07517 | consensus-requires-scrutiny README  |
 | arXiv:2510.12697 | consensus-requires-scrutiny README  |
 | arXiv:2511.17315 | humans-answered-once-by-hub-enforcement  |
 | arXiv:2512.09187 | docs/quiet-delivery-decision quiet-delivery-not-privacy  |
+| arXiv:2601.10102 | docs/self-improvement-swarm-planned hub-carries-what-it-knows  |
+| arXiv:2601.17152 | docs/self-improvement-swarm-planned hub-carries-what-it-knows  |
+| arXiv:2602.12285 | docs/self-improvement-swarm-planned hub-carries-what-it-knows  |
 | arXiv:2603.11409 | humans-answered-once-by-hub-enforcement  |
+| arXiv:2603.15183 | docs/self-improvement-swarm-flat docs/self-improvement-swarm-planned hub-carries-what-it-knows  |
+| arXiv:2604.02668 | docs/self-improvement-swarm-planned hub-carries-what-it-knows  |
+| arXiv:2605.01750 | docs/self-improvement-swarm-planned hub-carries-what-it-knows  |
 | arXiv:2605.05626 | humans-answered-once-by-hub-enforcement  |
+| arXiv:2606.05037 | docs/self-improvement-swarm-planned hub-carries-what-it-knows  |
+| arXiv:2606.21666 | docs/self-improvement-swarm-planned hub-carries-what-it-knows  |
+| arXiv:2606.29270 | consensus-requires-scrutiny docs/self-improvement-swarm-planned hub-carries-what-it-knows  |
 | arXiv:2607.15648 | humans-answered-once-by-hub-enforcement  |
+| arXiv:2608.02758 | docs/self-improvement-swarm-planned hub-carries-what-it-knows  |
 | arXiv:2609.13076 | humans-answered-once-by-hub-enforcement  |
 | arXiv:cs/9810005 | docs/swarm-protocol-spec done-means-independently-verified  |

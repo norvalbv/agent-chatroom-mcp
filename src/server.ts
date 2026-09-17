@@ -11,10 +11,10 @@
 import { McpServer, ResourceTemplate } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
-import { Hub, HubError } from "./hub.js";
+import { Hub, HubError, ROLES } from "./hub.js";
 import type { Spawner } from "./spawner.js";
 
-export const DEFAULT_WAIT_MS = 25_000;
+export const DEFAULT_WAIT_MS = 55_000; // gaps over 55s were 62-77% of sub-room wall time; wait() wakes on events so latency is unchanged
 export const MAX_WAIT_MS = 55_000; // stay under typical MCP client tool timeouts (Codex 60s)
 
 const ok = (data: unknown) => ({
@@ -77,11 +77,14 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
   const roomArg = z.string().describe("Room name, e.g. 'debate-1'.");
 
   const guard =
-    <A>(fn: (args: A) => Promise<unknown> | unknown) =>
+    <A>(tool: string, fn: (args: A) => Promise<unknown> | unknown) =>
     async (args: A) => {
       try {
         return ok(await fn(args));
       } catch (e) {
+        // refusal telemetry: tool + reason class, no body, so the next swarm can count refusals instead of estimating them
+        const a = args as { room?: unknown; from_room?: unknown };
+        if (e instanceof HubError) hub.recordRefusal(typeof a?.room === "string" ? a.room : typeof a?.from_room === "string" ? a.from_room : undefined, tool, e.message);
         return fail(e);
       }
     };
@@ -89,7 +92,7 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
   server.registerTool(
     "list_rooms",
     { title: "List rooms", description: "List all chatrooms with participants, state and any conclusion.", inputSchema: {} },
-    guard(() => hub.listRooms()),
+    guard("list_rooms", () => hub.listRooms()),
   );
 
   server.registerTool(
@@ -112,11 +115,13 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
         max_messages_per_participant: z.number().int().min(0).optional().describe("Chat message budget per participant (votes/proposals/challenges are free)."),
         require_challenge: z.boolean().optional().describe("Require a challenge before any proposal can pass. Default: automatic when 3+ participants."),
         require_verification: z.boolean().optional().describe("Swarm mode: a proposal needs a verify/* board entry by someone else (naming the proposal id) before it can pass."),
-        max_message_chars: z.number().int().min(200).max(20000).optional().describe("Cap on chat/opening length (proposals, challenges, board entries are not capped)."),
+        max_message_chars: z.number().int().min(200).max(20000).optional().describe("Cap on chat length (proposals, challenges are not capped; board entries 8000; openings are always capped at 400)."),
         participant_id: z.string().optional().describe("Reclaim an earlier identity after a reconnect."),
+        role: z.enum(ROLES as [string, ...string[]]).optional().describe("Display tag, not a persona: worker (default) | chair (human-side: never waited on for quorum, may veto; bound to one name per room) | lead | verifier | recruit."),
+        chair: z.string().optional().describe("When creating the room: the name that will be honoured as chair."),
       },
     },
-    guard(({ room, name, agent, topic, mode, quorum, max_rounds, expected_participants, anonymous, max_messages_per_participant, require_challenge, require_verification, max_message_chars, participant_id }) => {
+    guard("join_room", ({ room, name, agent, topic, mode, quorum, max_rounds, expected_participants, anonymous, max_messages_per_participant, require_challenge, require_verification, max_message_chars, participant_id, role, chair }) => {
       const { room: r, participant } = hub.join(
         room,
         name,
@@ -132,25 +137,30 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
           requireChallenge: require_challenge,
           requireVerification: require_verification,
           maxMessageChars: max_message_chars,
+          chair,
         },
         participant_id,
         sessionKey,
+        role as import("./hub.js").Role | undefined,
       );
       if (!me.has(room)) me.set(room, new Set());
       me.get(room)!.add(participant.id);
       const shared = me.get(room)!.size > 1;
       const recent = r.messages.filter((m) => hub.visibleTo(r, m, participant.id)).slice(-30);
-      hub.markRead(r, participant, r.messages.at(-1)?.seq ?? 0);
+      hub.settleRead(r, participant, participant.lastSeenSeq, recent); // what join hands you counts as delivered; withheld human messages are kept
       const human = hub.unansweredHuman(r);
       return {
         participant_id: participant.id,
         you_are: hub.shown(r, participant),
+        your_role: participant.role ?? "worker",
+        humans_present: hub.activeParticipants(r).filter((x) => x.agent === "human").map((x) => x.name),
         room: hub.summary(r),
         recent_messages: recent.map((m) => hub.fmt(r, m)),
         next_seq: participant.lastSeenSeq,
         hint:
           (shared ? "Other agents share this MCP connection: pass participant_id on EVERY call. " : "") +
           (r.anonymous ? `You appear to others as "${participant.label}". ` : "") +
+          (participant.role === "chair" ? "You are the chair: you are never waited on for quorum, a disagree from you vetoes, and you need not leave to unblock amendments. " : "") +
           (human && hub.responderFor(r, human, participant.id).mine ? `${hub.shown(r, human.from)} (a human) said "${human.content.slice(0, 160)}" and nobody has replied: answer them first, briefly, with send_message reply_to="${human.id}". ` : "") +
           (r.expectedParticipants && !r.openingsRevealed
             ? "This room uses blind openings: submit_opening with your own short answer before reading others'."
@@ -161,8 +171,8 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
 
   server.registerTool(
     "leave_room",
-    { title: "Leave a room", description: "Leave a chatroom. Open proposals are re-evaluated without you.", inputSchema: { room: roomArg, participant_id: asArg } },
-    guard(({ room, participant_id }) => {
+    { title: "Leave a room", description: "Leave a chatroom. Open proposals are re-evaluated without you. If your leaving would make the open proposal unpassable (quorum floor), the first call is refused with the reason; call again to leave anyway.", inputSchema: { room: roomArg, participant_id: asArg } },
+    guard("leave_room", ({ room, participant_id }) => {
       const id = pid(room, participant_id);
       hub.leave(room, id);
       me.get(room)?.delete(id);
@@ -190,7 +200,7 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
         participant_id: asArg,
       },
     },
-    guard(({ room, content, reply_to, force, quiet, surface, participant_id }) => {
+    guard("send_message", ({ room, content, reply_to, force, quiet, surface, participant_id }) => {
       const r = hub.getRoom(room);
       const m = hub.send(room, pid(room, participant_id), content, reply_to, force, quiet, surface);
       return { sent: hub.fmt(r, m), id: m.id, seq: m.seq };
@@ -203,10 +213,10 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
       title: "Submit a blind opening statement",
       description:
         "Submit your independent first answer. It is held privately and revealed together with everyone else's once all " +
-        "participants have submitted, so nobody anchors on another agent's answer. After it returns, call wait_for_messages.",
-      inputSchema: { room: roomArg, content: z.string().describe("Your opening position and reasoning."), participant_id: asArg },
+        "participants have submitted, so nobody anchors on another agent's answer. Hard cap 400 characters regardless of the room's max_message_chars: one or two sentences. After it returns, call wait_for_messages.",
+      inputSchema: { room: roomArg, content: z.string().describe("Your opening position and the main reason, under 400 characters."), participant_id: asArg },
     },
-    guard(({ room, content, participant_id }) => hub.submitOpening(room, pid(room, participant_id), content)),
+    guard("submit_opening", ({ room, content, participant_id }) => hub.submitOpening(room, pid(room, participant_id), content)),
   );
 
   server.registerTool(
@@ -215,25 +225,36 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
       title: "Wait for new messages",
       description:
         "Long-poll for messages from other participants. Returns immediately if there are unread messages, otherwise waits up to " +
-        "timeout_ms (default 25s, max 55s) for one to arrive. Call it again if it returns nothing; that is normal. " +
-        "Also reports your_turn (round_robin rooms), open proposals needing your vote or a challenge, and whether the room has concluded.",
+        "timeout_ms (default 55s, max 55s) for one to arrive. Call it again if it returns nothing; that is normal. " +
+        "Also reports the open proposal (its text only when the version changed since you last saw it), what blocks it, whether your leaving would block it, " +
+        "openings progress, humans present, your_turn (round_robin rooms), and whether the room has concluded.",
       inputSchema: {
         room: roomArg,
         since_seq: z.number().int().min(0).optional().describe("Return messages with seq greater than this. Defaults to what you have already seen."),
-        timeout_ms: z.number().int().min(0).max(MAX_WAIT_MS).optional(),
+        timeout_ms: z.number().int().min(0).max(MAX_WAIT_MS).optional().describe("Milliseconds to wait for a message; omit for 55000, 0 to poll without waiting; values above 55000 are rejected."),
         participant_id: asArg,
       },
     },
-    guard(async ({ room, since_seq, timeout_ms, participant_id }) => {
+    guard("wait_for_messages", async ({ room, since_seq, timeout_ms, participant_id }) => {
       const r = hub.getRoom(room);
       const id = pid(room, participant_id);
       const p = hub.requireParticipant(r, id);
       const since = since_seq ?? p.lastSeenSeq;
       const msgs = await hub.wait(room, id, since, Math.min(timeout_ms ?? DEFAULT_WAIT_MS, MAX_WAIT_MS));
       const open = [...r.proposals.values()].find((pr) => pr.status === "open");
-      const needsMyVote = open && !open.votes[id];
-      const needsChallenge = open && hub.challengeRequired(r) && open.challenges.length === 0 && open.by.id !== id;
-      const openView = open ? hub.proposalView(r, open) : null;
+      const needsMyVote = open && !open.votes[id] && p.agent !== "human" && p.role !== "chair";
+      const needsChallenge = open && hub.challengeRequired(r) && !open.challenges.some((c) => c.blocking !== false) && open.by.id !== id;
+      // the proposal text travels only when its version changed since this participant was last sent it
+      const seenVersion = open ? (p.seenProposal?.[open.id] ?? 0) : 0;
+      const openView = open ? hub.proposalView(r, open, false, seenVersion !== open.version) : null;
+      if (open) p.seenProposal = { ...(p.seenProposal ?? {}), [open.id]: open.version };
+      const conclusion = r.conclusion
+        ? p.seenConclusion
+          ? { proposal_id: r.conclusion.proposalId, version: r.conclusion.version ?? null, chars: r.conclusion.text.length, unresolved_objections: r.conclusion.unresolved_objections ?? [], text_omitted: "already sent to you; room_status carries the full text" }
+          : r.conclusion
+        : null;
+      if (r.conclusion) p.seenConclusion = true;
+      const block = hub.leavingWouldBlock(r, p);
       const human = hub.unansweredHuman(r);
       const resp = human ? hub.responderFor(r, human, id) : null;
       return {
@@ -241,11 +262,15 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
         next_seq: r.messages.at(-1)?.seq ?? since,
         room_state: r.state,
         your_turn: r.mode === "round_robin" ? hub.currentSpeaker(r)?.id === id : true,
-        active_participants: hub.activeParticipants(r).map((x) => hub.shown(r, x)),
+        your_role: p.role ?? "worker",
+        active_participants: hub.activeParticipants(r).map((x) => hub.shown(r, x) + hub.roleTag(x)),
+        humans_present: hub.activeParticipants(r).filter((x) => x.agent === "human").map((x) => x.name),
+        openings: r.expectedParticipants && !r.openingsRevealed ? { submitted: r.openings.size, expected: r.expectedParticipants, waiting_on: hub.openingsWaitingOn(r), revealed: false } : undefined,
         unanswered_human: human && resp!.mine ? { id: human.id, name: hub.shown(r, human.from), text: human.content, you_answer: true } : human ? { name: hub.shown(r, human.from), responder: resp!.who, you_answer: false } : null,
         open_proposal: openView
-          ? { id: openView.id, version: openView.version, by: openView.by, tally: openView.tally, waiting_on: openView.waiting_on, needs_challenge: openView.needs_challenge, challenges: openView.challenges, text: openView.text }
+          ? { id: openView.id, version: openView.version, by: openView.by, chars: openView.chars, tally: openView.tally, waiting_on: openView.waiting_on, needs_challenge: openView.needs_challenge, blocked_by: openView.blocked_by, challenges: openView.challenges, ...("text" in openView ? { text: openView.text } : { text_omitted: openView.text_omitted }) }
           : null,
+        leaving_would_block: block ? block.reason : false,
         board_keys: [...r.board.keys()],
         quiet_activity: hub.quietActivity(r, p, since),
         addressed_to_you: hub.addressedBy(r, p).map((m) => ({ id: m.id, from: hub.shown(r, m.from), text: m.content.slice(0, 200) })),
@@ -253,7 +278,7 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
           const sh = hub.share(r, p);
           return { messages: sh.mine, of_last: sh.of, fair: sh.fair, over: sh.over };
         })(),
-        conclusion: r.conclusion ?? null,
+        conclusion,
         hint:
           r.state === "closed"
             ? "This room was closed without a conclusion. leave_room and stop."
@@ -269,7 +294,7 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
                 : needsChallenge && needsMyVote
                 ? "A proposal is open and untested. Name its single weakest claim in one sentence (challenge), then vote. If you want different wording, amend it instead of re-proposing."
                 : needsMyVote
-                  ? "Vote on the open proposal: agree with a verbatim quote of the clause you endorse, or disagree with the specific change you need (or just amend it)."
+                  ? `Vote on the open proposal: agree with a verbatim quote of the clause you endorse, or disagree with the specific change you need (or just amend it).${open && hub.standingDisagrees(open).length === 0 && r.quorum === "unanimous" && openView!.waiting_on.length === 1 ? " Your vote decides it: a disagree keeps it open for amendment, it does not kill it." : ""}`
                   : hub.addressedBy(r, p).length
                     ? `${hub.shown(r, hub.addressedBy(r, p)[0].from)} addressed you directly. Reply (reply_to="${hub.addressedBy(r, p)[0].id}") or pass.`
                     : hub.share(r, p).over
@@ -290,30 +315,34 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
         "toward your participation balance); in round_robin rooms it yields your turn. Prefer this over repeating a point someone already made.",
       inputSchema: { room: roomArg, participant_id: asArg },
     },
-    guard(({ room, participant_id }) => hub.pass(room, pid(room, participant_id))),
+    guard("pass", ({ room, participant_id }) => hub.pass(room, pid(room, participant_id))),
   );
 
   server.registerTool(
     "read_messages",
     {
       title: "Read message history",
-      description: "Read messages from the room log without waiting, including quiet messages between others (marked [quiet → names]). Use since_seq to page.",
-      inputSchema: { room: roomArg, since_seq: z.number().int().min(0).default(0), limit: z.number().int().min(1).max(500).default(200), participant_id: asArg },
+      description:
+        "Read messages from the room log without waiting, including quiet messages between others (marked [quiet → names]). " +
+        "Defaults to what you have not been sent yet and counts as delivery (your cursor moves); pass since_seq=0 for the whole log.",
+      inputSchema: { room: roomArg, since_seq: z.number().int().min(0).optional().describe("Return messages with seq greater than this; omit for your unread ones, 0 for everything."), limit: z.number().int().min(1).max(500).default(200), participant_id: asArg },
     },
-    guard(({ room, since_seq, limit, participant_id }) => {
+    guard("read_messages", ({ room, since_seq, limit, participant_id }) => {
       const r = hub.getRoom(room);
       let viewer: string | undefined;
       try {
         viewer = pid(room, participant_id);
       } catch {}
-      return hub.read(room, since_seq, limit, viewer).map((m) => hub.fmt(r, m));
+      const p = viewer ? r.participants.get(viewer) : undefined;
+      const msgs = p ? hub.readAs(r, p, since_seq, limit) : hub.read(room, since_seq ?? 0, limit, viewer);
+      return msgs.map((m) => hub.fmt(r, m));
     }),
   );
 
   server.registerTool(
     "room_status",
     { title: "Room status", description: "Participants, mode, round/turn, open proposals with challenges and vote tallies, and the conclusion if any.", inputSchema: { room: roomArg } },
-    guard(({ room }) => hub.summary(hub.getRoom(room))),
+    guard("room_status", ({ room }) => hub.summary(hub.getRoom(room))),
   );
 
   server.registerTool(
@@ -322,14 +351,15 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
       title: "Propose a conclusion",
       description:
         "Put a concrete statement to the room as the proposed conclusion. You automatically vote agree on your own proposal. " +
-        "It is adopted when the room's quorum (default: every active participant) votes agree AND, in rooms of 3+, someone has challenged it. " +
-        "Only one proposal can be open at a time and it is a document: to change wording, use amend (posts only the diff) instead of proposing again.",
+        "It is adopted when the room's quorum (default: every active participant) votes agree AND, in rooms of 2+, someone has challenged it. " +
+        "Only one proposal can be open at a time and it is a document: to change wording, use amend (posts only the diff) instead of proposing again. " +
+        "A proposal that fails a vote stays open for amendment; it is never closed by a tally.",
       inputSchema: { room: roomArg, text: z.string().describe("The exact conclusion you propose the group adopt."), participant_id: asArg },
     },
-    guard(({ room, text, participant_id }) => {
+    guard("propose", ({ room, text, participant_id }) => {
       const r = hub.getRoom(room);
       const pr = hub.propose(room, pid(room, participant_id), text);
-      return hub.proposalView(r, pr);
+      return hub.proposalView(r, pr, false, false);
     }),
   );
 
@@ -338,20 +368,22 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
     {
       title: "Amend the open proposal",
       description:
-        "Edit the open proposal's text in place: replace `find` (exact, unique substring) with `replace`, or leave `find` empty to append. " +
-        "Only the diff is posted to the room, the version is bumped, and votes reset (you count as agreeing). Use this instead of re-proposing.",
+        "Edit the open proposal's text in place: replace `find` (exact, unique substring) with `replace`, leave `find` empty to append, or pass replace_all=true to swap the whole text. " +
+        "Only the diff is posted, the version is bumped, and votes reset EXCEPT agrees whose quoted clause still appears verbatim; you get no vote for amending, so vote after you amend. " +
+        "A challenge is answered automatically when the text it cites is gone. Use this instead of re-proposing.",
       inputSchema: {
         room: roomArg,
         proposal_id: z.string().describe("Proposal id (prop_...)."),
         find: z.string().default("").describe("Exact text to replace; empty to append."),
-        replace: z.string().describe("Replacement (or appended) text."),
+        replace: z.string().describe("Replacement (or appended) text, or the whole new text with replace_all."),
+        replace_all: z.boolean().optional().describe("Replace the entire text (keeps id, version chain and vote semantics)."),
         participant_id: asArg,
       },
     },
-    guard(({ room, proposal_id, find, replace, participant_id }) => {
+    guard("amend", ({ room, proposal_id, find, replace, replace_all, participant_id }) => {
       const r = hub.getRoom(room);
-      const { proposal, diff } = hub.amend(room, pid(room, participant_id), proposal_id, find, replace);
-      return { version: proposal.version, diff, proposal: hub.proposalView(r, proposal) };
+      const { proposal, diff, answered, reopened } = hub.amend(room, pid(room, participant_id), proposal_id, find, replace, replace_all);
+      return { version: proposal.version, diff, challenges_answered: answered, challenges_reopened: reopened, proposal: hub.proposalView(r, proposal, false, false) };
     }),
   );
 
@@ -372,7 +404,7 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
         participant_id: asArg,
       },
     },
-    guard(({ room, key, text, if_absent, if_by_me, overwrite, participant_id }) => {
+    guard("board_set", ({ room, key, text, if_absent, if_by_me, overwrite, participant_id }) => {
       const e = hub.setBoard(room, pid(room, participant_id), key, text, { ifAbsent: if_absent, ifByMe: if_by_me, overwrite });
       return e ? { key, chars: e.text.length, by: e.by } : { key, deleted: true };
     }),
@@ -384,7 +416,7 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
       title: "Send a note to another room",
       description:
         "Pass information to a team you are not part of: the note lands on that room's board as inbox/<your room>/<key> with a one-line notice, " +
-        "without you joining (so you never affect their vote). With ack_required, that room cannot propose until someone there writes '<key>.ack'.",
+        "without you joining (so you never affect their vote). With ack_required, that room cannot propose until someone there acknowledges it with board_set(room, key=\"inbox/<from room>/<key>.ack\", text=\"ack\").",
       inputSchema: {
         from_room: z.string().describe("A room you are in."),
         to_room: z.string().describe("The room to notify."),
@@ -394,7 +426,7 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
         participant_id: asArg,
       },
     },
-    guard(({ from_room, to_room, key, text, ack_required, participant_id }) => {
+    guard("post_to_room", ({ from_room, to_room, key, text, ack_required, participant_id }) => {
       const r = hub.postToRoom(from_room, pid(from_room, participant_id), to_room, key, text, ack_required);
       return { to_room, key: r.key, chars: r.entry.text.length, notified: true };
     }),
@@ -404,17 +436,17 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
     "board_get",
     {
       title: "Read the shared board",
-      description: "Read the room's shared board (all entries, or one key).",
-      inputSchema: { room: roomArg, key: z.string().optional() },
+      description: "Read one board entry's text (key), or without a key the manifest of all entries (key, author, size, updated) so you fetch only what you need.",
+      inputSchema: { room: roomArg, key: z.string().optional().describe("Entry to read in full; omit for the manifest.") },
     },
-    guard(({ room, key }) => {
+    guard("board_get", ({ room, key }) => {
       const r = hub.getRoom(room);
       if (key) {
         const e = r.board.get(key);
         if (!e) throw new HubError(`No board entry "${key}". Keys: ${[...r.board.keys()].join(", ") || "(none)"}`);
         return { key, ...e };
       }
-      return Object.fromEntries([...r.board].map(([k, e]) => [k, e]));
+      return Object.fromEntries([...r.board].map(([k, e]) => [k, { by: e.by, chars: e.text.length, updated_at: e.updatedAt, ...(e.ackRequired ? { ack_required: true } : {}) }]));
     }),
   );
 
@@ -424,18 +456,20 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
       title: "Challenge a proposal",
       description:
         "Name the single weakest claim in an open proposal, in one or two plain sentences. Required from someone other than the proposer " +
-        "before a proposal can pass in rooms of 3+. Your vote resets; re-vote once it is answered. If you cannot break it, say so and name the riskiest assumption.",
+        "before a proposal can pass in rooms of 2+. Quote the clause you object to in double quotes: the hub then knows which text answers it, and an amend that removes that text answers the challenge automatically (it reopens if the text comes back). " +
+        "Your vote resets; re-vote once it is answered. If you are about to concede in the same breath, do not challenge: vote, or file it with blocking=false. Unanswered challenges are carried into the conclusion as unresolved objections.",
       inputSchema: {
         room: roomArg,
         proposal_id: z.string().describe("Proposal id (prop_...)."),
-        objection: z.string().describe("The specific objection, with evidence if you have it."),
+        objection: z.string().describe("The specific objection, with evidence if you have it, quoting the clause it targets."),
+        blocking: z.boolean().optional().describe("Default true. false records dissent without holding the proposal or satisfying the challenge gate; it is still carried into the conclusion if unanswered."),
         participant_id: asArg,
       },
     },
-    guard(({ room, proposal_id, objection, participant_id }) => {
+    guard("challenge", ({ room, proposal_id, objection, blocking, participant_id }) => {
       const r = hub.getRoom(room);
-      const pr = hub.challenge(room, pid(room, participant_id), proposal_id, objection);
-      return hub.proposalView(r, pr);
+      const pr = hub.challenge(room, pid(room, participant_id), proposal_id, objection, blocking ?? true);
+      return hub.proposalView(r, pr, false, false);
     }),
   );
 
@@ -444,8 +478,8 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
     {
       title: "Vote on a proposal",
       description:
-        "Vote on a proposal. agree requires `quote`: a verbatim clause (15+ chars) from the proposal you endorse, checked by the server. " +
-        "disagree requires `reason` stating the specific change that would make you agree. Optional confidence 0-1.",
+        "Vote on a proposal. agree requires `quote`: a verbatim clause (15+ chars) from the proposal you endorse, checked by the server; while a challenge is open it also needs `reason`. " +
+        "disagree requires `reason` stating the specific change that would make you agree; a disagree keeps the proposal open for amendment (it never kills it) and stands until you re-vote or that text is amended. Optional confidence 0-1.",
       inputSchema: {
         room: roomArg,
         proposal_id: z.string().describe("Proposal id (prop_...)."),
@@ -456,10 +490,10 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
         participant_id: asArg,
       },
     },
-    guard(({ room, proposal_id, vote, quote, reason, confidence, participant_id }) => {
+    guard("vote", ({ room, proposal_id, vote, quote, reason, confidence, participant_id }) => {
       const r = hub.getRoom(room);
       const pr = hub.vote(room, pid(room, participant_id), proposal_id, vote, reason, confidence, quote);
-      return { proposal: hub.proposalView(r, pr), room_state: r.state, conclusion: r.conclusion ?? null };
+      return { proposal: hub.proposalView(r, pr, false, false), room_state: r.state, conclusion: r.conclusion ? { proposal_id: r.conclusion.proposalId, version: r.conclusion.version ?? null, chars: r.conclusion.text.length, unresolved_objections: r.conclusion.unresolved_objections ?? [] } : null };
     }),
   );
 
@@ -487,10 +521,10 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
           participant_id: asArg,
         },
       },
-      guard(({ room, brief, name, agent, model, cwd, can_edit, new_room, room_topic, count, area, participant_id }) => {
+      guard("request_agent", ({ room, brief, name, agent, model, cwd, can_edit, new_room, room_topic, count, area, participant_id }) => {
         const r = hub.getRoom(room);
         const me_ = hub.requireParticipant(r, pid(room, participant_id));
-        const recs = spawner.request({ room, brief, requestedBy: me_.name, name, agent, model, cwd, canEdit: can_edit, newRoom: new_room, roomTopic: room_topic, count, area });
+        const recs = spawner.request({ room, brief, requestedBy: me_.name, requestedByShown: hub.shown(r, me_), parentTopic: r.topic, name, agent, model, cwd, canEdit: can_edit, newRoom: new_room, roomTopic: room_topic, count, area });
         const who = recs.map((x) => x.name).join(", ");
         hub.announce(room, `${hub.shown(r, me_)} recruited ${who} (${recs[0].agent}${recs[0].model ? `/${recs[0].model}` : ""}${new_room ? `, into ${new_room}` : ""}${area ? `, area ${area}` : ""}): ${brief.slice(0, 200)}${brief.length > 200 ? "…" : ""}`);
         return { spawned: recs.map((x) => x.name), room: recs[0].room, depth: recs[0].depth, agent: recs[0].agent, model: recs[0].model ?? null, cwd: recs[0].cwd, logs: recs.map((x) => x.log), hint: "They will join within a minute or two. Carry on; you will see them arrive." };
@@ -500,7 +534,7 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
     server.registerTool(
       "list_agents",
       { title: "List recruited agents", description: "Recruited agents in this room (or all rooms): who asked for them, their brief, and whether they are still running.", inputSchema: { room: z.string().optional() } },
-      guard(({ room }) =>
+      guard("list_agents", ({ room }) =>
         spawner.agents
           .filter((a) => !room || a.room === room)
           .map((a) => ({ name: a.name, room: a.room, report_to: a.reportTo ?? null, agent: a.agent, model: a.model ?? null, requested_by: a.requestedBy, depth: a.depth, running: a.endedAt === undefined, exit_code: a.exitCode ?? null, brief: a.brief.slice(0, 160) })),

@@ -8,6 +8,7 @@
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
+import { settledAxes } from "./settled.js";
 import { fileURLToPath } from "node:url";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -20,10 +21,10 @@ const flag = (name: string, def?: string) => {
   return i >= 0 ? argv[i + 1] : def;
 };
 const has = (name: string) => argv.includes(`--${name}`);
-const BOOL_FLAGS = new Set(["--apply", "--full-access", "--named"]);
+const BOOL_FLAGS = new Set(["--apply", "--full-access", "--named", "--flat"]);
 const task = argv.find((a, i) => !a.startsWith("--") && (i === 0 || !argv[i - 1].startsWith("--") || BOOL_FLAGS.has(argv[i - 1])));
 if (!task) {
-  console.error('usage: swarm "<task>" [--agents 6] [--cwd dir] [--models sonnet,haiku] [--lead-model opus] [--verifier-model opus] [--planner-model opus] [--codex k] [--codex-models gpt-6-astra,gpt-5.6-sol,gpt-5.6-terra] [--apply] [--full-access] [--named] [--timeout 30] [--port 7717]');
+  console.error('usage: swarm "<task>" [--flat] [--done-when text] [--verify text] [--agents 6] [--cwd dir] [--models sonnet,haiku] [--lead-model opus] [--verifier-model opus] [--planner-model opus] [--codex k] [--codex-models gpt-6-astra,gpt-5.6-sol,gpt-5.6-terra] [--apply] [--full-access] [--named] [--timeout 30] [--port 7717]');
   process.exit(2);
 }
 const TOTAL = Math.max(2, Number(flag("agents", "4")));
@@ -34,6 +35,12 @@ const APPLY = has("apply");
 const ANON = !has("named"); // worker rooms are anonymous unless --named
 const LENSES = ["reproduce and measure before theorising", "the simplest fix that could work", "what could go wrong with the obvious fix", "what the tests and history say", "the maintainer who inherits this in a year"];
 const FULL = has("full-access");
+/**
+ * --flat: no planner, no pre-assigned sub-rooms. Every agent gets the raw task in ONE room on the
+ * minimal prompt and organises itself (board claims, request_agent, break-out rooms). The verifier sits
+ * in the same room. Use it when the shape of the work is itself unknown (brainstorms, open questions).
+ */
+const FLAT = has("flat");
 // model mix: --models sonnet,sonnet,haiku (rotated over workers), --lead-model, --verifier-model, --planner-model
 const MODELS = (flag("models", process.env.CLAUDE_MODEL ?? "") || "").split(",").map((m) => m.trim()).filter(Boolean);
 const LEAD_MODEL = flag("lead-model", MODELS[0]);
@@ -55,35 +62,7 @@ const log = (s: string) => console.log(`\x1b[2m[${new Date().toISOString().slice
 const prompt = (file: string, vars: Record<string, string | number>) =>
   Object.entries(vars).reduce((s, [k, v]) => s.split(`{{${k}}}`).join(String(v)), readFileSync(resolve(repoRoot, "prompts", file), "utf8"));
 
-// ---------- settled axes (devkit decision log) ----------
-/**
- * If the target project keeps a devkit decision log (docs/decisions/*.md), every agent is told what is
- * already settled and which sources have already been read, so research is not repeated and a reversal
- * has to be argued as a re-target with new evidence.
- */
-function settledAxes(cwd: string): string {
-  const dir = resolve(cwd, "docs", "decisions");
-  if (!existsSync(dir)) return "";
-  const files = readdirSync(dir).filter((f) => f.endsWith(".md") && f !== "INDEX.md");
-  if (!files.length) return "";
-  const rows: string[] = [];
-  const sources = new Set<string>();
-  for (const f of files) {
-    const t = readFileSync(resolve(dir, f), "utf8");
-    const title = /^## Target[^\n]*— ([^\n]+)/m.exec(t)?.[1] ?? f.replace(/\.md$/, "");
-    const ruling = /\*\*(?:Ruling|Decision)[^*]*\*\*:?\s*([^\n]+)/i.exec(t)?.[1] ?? "";
-    rows.push(`- ${f.replace(/\.md$/, "")}: ${title.replace(/\*/g, "").trim()}${ruling ? ` — ${ruling.trim().slice(0, 240)}` : ""}`);
-    for (const id of t.match(/arXiv:[a-z-]*\/?[0-9]{4}\.[0-9]{4,5}|arXiv:cs\/[0-9]{7}|10\.[0-9]{4,}\/[^ ),;]+/g) ?? []) sources.add(id);
-  }
-  return (
-    "SETTLED AXES (this project's decision log, docs/decisions/; do NOT re-research or re-argue these; cite them by slug. " +
-    "If you find evidence that contradicts one, say so explicitly as 'RE-TARGET <slug>: <evidence>' rather than silently deciding differently):\n" +
-    rows.join("\n") +
-    "\n\nSOURCES ALREADY READ (do not re-fetch or re-summarise; new research must add sources not in this list): " +
-    [...sources].sort().join(", ") +
-    "\n"
-  );
-}
+// ---------- settled axes: see src/settled.ts ----------
 
 // ---------- hub ----------
 async function ensureHub() {
@@ -196,17 +175,51 @@ interface Plan {
 }
 
 await ensureHub();
+if (FLAT) {
+  const info = (await (await fetch(URL_)).json()) as { caps?: { max_live_per_room: number } };
+  const cap = info.caps?.max_live_per_room ?? 12;
+  if (TOTAL > cap) {
+    console.error(`--flat puts every agent in one room and this hub caps a room at ${cap} live agents; --agents ${TOTAL} could never conclude. Use --agents ${cap} or start the hub with CHATROOM_MAX_LIVE_PER_ROOM=${TOTAL}.`);
+    process.exit(2);
+  }
+}
 log(`swarm ${SWARM_ID}: ${TOTAL} agents (${WORKERS} workers + verifier), project ${CWD}`);
-log("planning…");
-const SETTLED = settledAxes(CWD);
+/** Earlier runs in this checkout: a room should ratify or refute them by reference, not re-derive them. */
+function priorRuns(): string {
+  const dir = resolve(repoRoot, "swarms");
+  if (!existsSync(dir)) return "";
+  const rows = readdirSync(dir)
+    .filter((d) => existsSync(resolve(dir, d, "report.md")))
+    .sort()
+    .slice(-6)
+    .map((d) => {
+      const t = readFileSync(resolve(dir, d, "report.md"), "utf8");
+      const task = /\*\*Task:\*\* ([^\n]+)/.exec(t)?.[1] ?? "";
+      const state = /## Final answer \(([a-z]+)\)/.exec(t)?.[1] ?? "?";
+      return `- ${d} (${state}): ${task.slice(0, 160)}${task.length > 160 ? "…" : ""} — swarms/${d}/report.md`;
+    });
+  return rows.length ? `PRIOR RUNS in this checkout (read the report before re-deriving; ratify or refute by reference):\n${rows.join("\n")}\n` : "";
+}
+const SETTLED = settledAxes(CWD) + priorRuns();
 if (SETTLED) log(`decision log found: ${SETTLED.split("\n").length - 4} settled axes injected into every prompt`);
-const planRaw = await runClaude("planner", prompt("planner.md", { TASK: task, CWD, WORKERS, MAX_GROUPS: Math.max(1, Math.floor(WORKERS / 2)) }) + "\n\n" + SETTLED, READ_TOOLS.filter((t) => !t.startsWith("mcp__")), CWD, PLANNER_MODEL);
 let plan: Plan;
-try {
-  plan = JSON.parse(planRaw.slice(planRaw.indexOf("{"), planRaw.lastIndexOf("}") + 1));
-} catch {
-  console.error("planner did not return JSON:\n" + planRaw);
-  process.exit(1);
+if (FLAT) {
+  log("flat mode: no planner; everyone in one room");
+  plan = {
+    summary: task,
+    done_when: flag("done-when", "The room has adopted one proposal that answers the task, challenged and verified.")!,
+    groups: [{ id: "room", title: "Room", workers: WORKERS, directive: task }],
+    verifier_directive: flag("verify", "Check the concrete claims in the final proposal against the files, transcripts or commands they cite; agree only with evidence.")!,
+  };
+} else {
+  log("planning…");
+  const planRaw = await runClaude("planner", prompt("planner.md", { TASK: task, CWD, WORKERS, MAX_GROUPS: Math.max(1, Math.floor(WORKERS / 2)) }) + "\n\n" + SETTLED, READ_TOOLS.filter((t) => !t.startsWith("mcp__")), CWD, PLANNER_MODEL);
+  try {
+    plan = JSON.parse(planRaw.slice(planRaw.indexOf("{"), planRaw.lastIndexOf("}") + 1));
+  } catch {
+    console.error("planner did not return JSON:\n" + planRaw);
+    process.exit(1);
+  }
 }
 // normalise worker counts to exactly WORKERS
 let sum = plan.groups.reduce((a, g) => a + (g.workers || 1), 0);
@@ -223,8 +236,8 @@ while (sum > WORKERS) {
 writeFileSync(resolve(OUT, "plan.json"), JSON.stringify(plan, null, 2));
 log(`plan: ${plan.groups.map((g) => `${g.title} ×${g.workers}`).join(" | ")}`);
 
-const leadsRoom = `${SWARM_ID}-leads`;
-const groupRooms = plan.groups.map((g) => `${SWARM_ID}-${g.id}`);
+const leadsRoom = FLAT ? `${SWARM_ID}-room` : `${SWARM_ID}-leads`;
+const groupRooms = FLAT ? [] : plan.groups.map((g) => `${SWARM_ID}-${g.id}`);
 const runs: Promise<{ name: string; text: string }>[] = [];
 let codexLeft = CODEX;
 let workerIndex = 0;
@@ -241,10 +254,10 @@ runs.push(
       CWD,
       TASK: task,
       DONE_WHEN: plan.done_when,
-      GROUP_LIST: plan.groups.map((g) => g.title).join("; "),
+      GROUP_LIST: FLAT ? "none: every agent is in this one room with you, and may recruit or break out into sub-rooms" : plan.groups.map((g) => g.title).join("; "),
       VERIFIER_DIRECTIVE: plan.verifier_directive,
       LEADS_ROOM: leadsRoom,
-      LEADS_N: plan.groups.length + 1,
+      LEADS_N: FLAT ? TOTAL : plan.groups.length + 1,
       APPLY_CLAUSE:
         APPLY || FULL
           ? "You MAY modify files to apply the agreed fix on a new git branch and run the tests to prove it works; report the branch name in your vote." +
@@ -258,13 +271,16 @@ runs.push(
 );
 
 for (const g of plan.groups) {
-  const room = `${SWARM_ID}-${g.id}`;
+  const room = FLAT ? leadsRoom : `${SWARM_ID}-${g.id}`;
   for (let i = 1; i <= g.workers; i++) {
-    const useCodex = codexLeft > 0 && i === g.workers && g.workers > 1; // codex never takes the lead seat
+    const useCodex = codexLeft > 0 && g.workers > 1 && (FLAT ? i > g.workers - CODEX : i === g.workers); // codex never takes the lead seat
     if (useCodex) codexLeft--;
     const agent = useCodex ? "codex" : "claude";
-    const name = `${g.id}-${agent}-${i}`;
-    const isLead = i === 1;
+    const isLead = !FLAT && i === 1;
+    const model = useCodex ? CODEX_MODELS[codexIndex++ % Math.max(1, CODEX_MODELS.length)] : isLead ? LEAD_MODEL : MODELS.length ? MODELS[workerIndex++ % MODELS.length] : undefined;
+    // flat rooms name agents by model (sonnet-3, fable-6) so a human can see the mix at a glance
+    const name = FLAT ? `${(model ?? agent).replace(/[^a-z0-9]+/gi, "-").replace(/^gpt-/, "")}-${i}` : `${g.id}-${agent}-${i}`;
+    log(`launching ${name}${isLead ? " (lead)" : ""}${model ? ` [${model}]` : ""}`);
     const vars = {
       NAME: name,
       AGENT: agent,
@@ -282,16 +298,16 @@ for (const g of plan.groups) {
       AFTER_CONCLUSION: isLead ? prompt("lead-tail.md", { LEADS_ROOM: leadsRoom, NAME: name, AGENT: agent, GROUP_TITLE: g.title }) : "`leave_room` and finish.",
     };
     const wcwd = workerCwd(name);
-    const text = SETTLED + "\n" + prompt("worker.md", {
-      ...vars,
-      CWD: wcwd,
-      WRITE_RULE:
-        FULL && !readOnlyWorkers.has(name)
-          ? `You MAY modify files and run anything; you are on your own git branch in ${wcwd}. Commit what you want the verifier to test and say so in the room.`
-          : "Do NOT modify any files.",
-    });
-    const model = useCodex ? CODEX_MODELS[codexIndex++ % Math.max(1, CODEX_MODELS.length)] : isLead ? LEAD_MODEL : MODELS.length ? MODELS[workerIndex++ % MODELS.length] : undefined;
-    log(`launching ${name}${isLead ? " (lead)" : ""}${model ? ` [${model}]` : ""}`);
+    const writeRule =
+      FULL && !readOnlyWorkers.has(name)
+        ? `You MAY modify files and run anything; you are on your own git branch in ${wcwd}. Commit what you want the verifier to test and say so in the room.`
+        : "Do NOT modify any files.";
+    const text = FLAT
+      ? SETTLED +
+        "\n" +
+        prompt("minimal.md", { NAME: name, N: TOTAL, ROOM: room, TOPIC: task, AGENT: agent }) +
+        `\nWorking directory: ${wcwd}; you may read the project and run commands. ${writeRule} A verifier named "verifier" sits in the room and the final proposal needs its agree vote. Organise yourselves: claim areas on the board, recruit or break out into sub-rooms with request_agent when depth is needed, and bring results back here.`
+      : SETTLED + "\n" + prompt("worker.md", { ...vars, CWD: wcwd, WRITE_RULE: writeRule });
     runs.push((useCodex ? runCodex(name, text, wcwd, model) : runClaude(name, text, FULL && !readOnlyWorkers.has(name) ? WRITE_TOOLS : READ_TOOLS, wcwd, model)).then((t) => ({ name, text: t })));
   }
 }
@@ -313,13 +329,33 @@ const transcript = async (room: string) => (await (await fetch(`${URL_}/rooms/${
 const leads = await roomJson(leadsRoom).catch(() => ({ state: "missing", conclusion: null }));
 let report = `# ${SWARM_ID}\n\n**Task:** ${task}\n\n**Done when:** ${plan.done_when}\n\n## Final answer (${leads.state})\n\n${leads.conclusion?.text ?? "_no consensus reached_"}\n\n`;
 report += `## Verifier\n\n${results.find((r) => r.name === "verifier")?.text ?? "(none)"}\n\n## Groups\n\n`;
-for (const g of plan.groups) {
+for (const g of FLAT ? [] : plan.groups) {
   const r = await roomJson(`${SWARM_ID}-${g.id}`).catch(() => ({ state: "missing", conclusion: null }));
   report += `### ${g.title} (${r.state})\n\n${r.conclusion?.text ?? "_no consensus_"}\n\n`;
+}
+if (FLAT) {
+  // break-out rooms the agents created themselves
+  const all = (await (await fetch(`${URL_}/rooms`)).json()) as { name: string; state: string; conclusion: { text: string } | null }[];
+  for (const r of all.filter((x) => x.name.startsWith(SWARM_ID) && x.name !== leadsRoom)) {
+    groupRooms.push(r.name);
+    report += `### break-out ${r.name} (${r.state})\n\n${r.conclusion?.text ?? "_no consensus_"}\n\n`;
+  }
 }
 report += `## Transcripts\n\n`;
 for (const room of [leadsRoom, ...groupRooms]) report += "```\n" + (await transcript(room).catch(() => "(missing)")) + "```\n\n";
 writeFileSync(resolve(OUT, "report.md"), report);
+{
+  // a decision-record-shaped verdict is written where the next run's settledAxes() can find it once a human promotes it
+  const verdict = results.find((r) => r.name === "verifier")?.text ?? "";
+  const rec = /DECISION RECORD[\s\S]*$/.exec(verdict)?.[0];
+  const slug = /slug:\s*([a-z0-9-]{3,80})/i.exec(rec ?? "")?.[1];
+  if (rec && slug && existsSync(resolve(CWD, "docs", "decisions"))) {
+    const dir = resolve(CWD, "docs", "decisions", "proposed");
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(resolve(dir, `${slug}.md`), `# Proposed decision: ${slug}\n\nFrom ${SWARM_ID} (${leads.state}); report: swarms/${SWARM_ID}/report.md. A human promotes this into docs/decisions/ with \`guard-decisions add\`; nothing is adopted automatically.\n\n${rec}\n`);
+    log(`decision record proposed: docs/decisions/proposed/${slug}.md`);
+  }
+}
 
 console.log("\n==================== FINAL ANSWER ====================");
 console.log(leads.conclusion?.text ?? "NO CONSENSUS");

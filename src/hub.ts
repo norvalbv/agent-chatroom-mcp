@@ -578,6 +578,11 @@ export class Hub {
     return msg;
   }
 
+  /** Post a system notice from outside the hub (e.g. a recruitment). */
+  announce(roomName: string, text: string): Message {
+    return this.post(this.getRoom(roomName), "system", undefined, text);
+  }
+
   private notify(room: Room) {
     for (const wake of [...room.waiters]) wake();
   }

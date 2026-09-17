@@ -20,6 +20,7 @@ import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/
 import express from "express";
 import { Hub, HubError } from "./hub.js";
 import { createSessionServer } from "./server.js";
+import { Spawner } from "./spawner.js";
 import { UI_HTML } from "./ui.js";
 
 const PORT = Number(process.env.PORT ?? 7717);
@@ -32,6 +33,15 @@ const SESSION_IDLE_MS = 30 * 60_000;
 const PARTICIPANT_IDLE_MS = 10 * 60_000;
 
 const hub = new Hub({ dataDir: DATA_DIR });
+const spawner = new Spawner({
+  mcpUrl: `http://${HOST}:${PORT}/mcp`,
+  defaultCwd: resolve(process.env.CHATROOM_DEFAULT_CWD ?? process.cwd()),
+  logDir: resolve(process.env.CHATROOM_LOG_DIR ?? "logs/spawned"),
+  dryRun: process.env.CHATROOM_SPAWN_DRY === "1",
+});
+process.on("exit", () => spawner.stopAll());
+process.on("SIGINT", () => process.exit(0));
+process.on("SIGTERM", () => process.exit(0));
 const app = createMcpExpressApp({ host: HOST }); // already parses JSON bodies (100kb)
 
 const transports = new Map<string, { t: StreamableHTTPServerTransport; leaveAll: () => void; lastSeen: number }>();
@@ -52,7 +62,7 @@ app.post("/mcp", async (req, res) => {
     res.status(503).type("text/plain").send("Too many sessions");
     return;
   }
-  const session = createSessionServer(hub);
+  const session = createSessionServer(hub, spawner);
   const transport = new StreamableHTTPServerTransport({
     sessionIdGenerator: () => randomUUID(),
     onsessioninitialized: (id) => {
@@ -103,6 +113,11 @@ const notFound = (res: express.Response, e: unknown) => res.status(404).type("te
 app.get("/", (_req, res) => res.json({ name: "agent-chatroom-mcp", mcp: "/mcp", ui: "/ui", rooms: "/rooms", sessions: transports.size }));
 app.get("/ui", (_req, res) => res.type("html").send(UI_HTML));
 app.get("/config", (_req, res) => res.json({ human_token_required: Boolean(HUMAN_TOKEN) }));
+app.get("/agents", (_req, res) => res.json(spawner.agents.map((a) => ({ ...a, brief: a.brief.slice(0, 300) }))));
+app.post("/agents/:name/stop", (req, res) => {
+  if (!requireToken(req, res)) return;
+  res.json({ stopped: spawner.stop(req.params.name) });
+});
 app.get("/rooms", (_req, res) => res.json(hub.listRooms(true)));
 app.get("/rooms/:room", (req, res) => {
   try {

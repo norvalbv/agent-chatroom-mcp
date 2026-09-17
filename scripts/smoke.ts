@@ -11,7 +11,7 @@ import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/
 const PORT = Number(process.env.PORT ?? 7733);
 const HTTP = `http://127.0.0.1:${PORT}`;
 
-const server = spawn("npx", ["tsx", "src/index.ts"], { env: { ...process.env, PORT: String(PORT) }, stdio: ["ignore", "inherit", "inherit"] });
+const server = spawn("npx", ["tsx", "src/index.ts"], { env: { ...process.env, PORT: String(PORT), CHATROOM_SPAWN_DRY: "1", CHATROOM_LOG_DIR: "/tmp/chatroom-smoke-spawn" }, stdio: ["ignore", "inherit", "inherit"] });
 const stop = () => server.kill();
 process.on("exit", stop);
 
@@ -50,7 +50,7 @@ const c = await connect("third");
 
 const tools = (await a.client.listTools()).tools.map((t) => t.name).sort();
 console.log("tools:", tools.join(", "));
-assert.deepEqual(tools, ["amend", "board_get", "board_set", "challenge", "join_room", "leave_room", "list_rooms", "pass", "propose", "read_messages", "room_status", "send_message", "submit_opening", "vote", "wait_for_messages"]);
+assert.deepEqual(tools, ["amend", "board_get", "board_set", "challenge", "join_room", "leave_room", "list_agents", "list_rooms", "pass", "propose", "read_messages", "request_agent", "room_status", "send_message", "submit_opening", "vote", "wait_for_messages"]);
 
 // ---------------- two-party room: blind openings, long-poll, propose, vote ----------------
 {
@@ -388,6 +388,25 @@ assert.deepEqual(tools, ["amend", "board_get", "board_set", "challenge", "join_r
   assert.equal(st.state, "closed");
   assert.equal(st.active_count, 0);
   await assert.rejects(a.call("propose", { room, text: "x" }), /closed|have left/);
+}
+
+// ---------------- recruiting an agent into the room (dry-run spawner) ----------------
+{
+  const room = "recruit";
+  await a.call("join_room", { room, name: "claude-1", agent: "claude" });
+  const sp = await a.call("request_agent", { room, brief: "Check whether the failing test is flaky by running it 5 times; report the pass count.", model: "haiku" });
+  assert.match(sp.spawned, /claude-recruit-1/);
+  const notice = (await a.call("read_messages", { room, since_seq: 0 })).at(-1) as string;
+  assert.match(notice, /claude-1 recruited claude-recruit-1 \(claude\/haiku\)/);
+  const rendered = (await import("node:fs")).readFileSync(sp.log, "utf8");
+  assert.match(rendered, /recruited into the `chatroom` MCP room `recruit` by claude-1/);
+  assert.match(rendered, /running it 5 times/);
+  const la = await a.call("list_agents", { room });
+  assert.equal(la.length, 1);
+  assert.equal(la[0].requested_by, "claude-1");
+  await assert.rejects(a.call("request_agent", { room, brief: "x" }), /20-4000/);
+  const agents = (await (await fetch(`${HTTP}/agents`)).json()) as unknown[];
+  assert.equal(agents.length, 1);
 }
 
 const ui = await (await fetch(`${HTTP}/ui`)).text();

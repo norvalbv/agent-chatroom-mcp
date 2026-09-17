@@ -11,6 +11,7 @@
 import { McpServer, ResourceTemplate } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { Hub, HubError } from "./hub.js";
+import type { Spawner } from "./spawner.js";
 
 export const DEFAULT_WAIT_MS = 25_000;
 export const MAX_WAIT_MS = 55_000; // stay under typical MCP client tool timeouts (Codex 60s)
@@ -39,7 +40,7 @@ export interface SessionServer {
   leaveAll(): void;
 }
 
-export function createSessionServer(hub: Hub): SessionServer {
+export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer {
   const server = new McpServer(
     { name: "agent-chatroom", version: "0.2.0" },
     {
@@ -421,6 +422,46 @@ export function createSessionServer(hub: Hub): SessionServer {
       return { proposal: hub.proposalView(r, pr), room_state: r.state, conclusion: r.conclusion ?? null };
     }),
   );
+
+  if (spawner) {
+    server.registerTool(
+      "request_agent",
+      {
+        title: "Recruit a new agent into the room",
+        description:
+          "Spawn a fresh agent process that joins this room with a brief you write: a sub-task, a second pair of eyes, a specialist. " +
+          "It gets the board and recent messages, does the brief, reports back, and leaves. Caps apply (per room, per requester, machine-wide). " +
+          "Write the brief the way you would for a capable colleague who has not seen the conversation.",
+        inputSchema: {
+          room: roomArg,
+          brief: z.string().describe("What the new agent should do, with the context it needs and what 'done' looks like."),
+          name: z.string().optional().describe("Display name for the newcomer (default: <agent>-recruit-N)."),
+          agent: z.enum(["claude", "codex"]).optional().describe("Which CLI to spawn (default claude)."),
+          model: z.string().optional().describe("Model override, e.g. 'sonnet', 'haiku', 'opus', or a Codex model id."),
+          cwd: z.string().optional().describe("Directory the newcomer works in (default: the hub's default project dir)."),
+          can_edit: z.boolean().optional().describe("Allow the newcomer to modify files (default false: investigate and report)."),
+          participant_id: asArg,
+        },
+      },
+      guard(({ room, brief, name, agent, model, cwd, can_edit, participant_id }) => {
+        const r = hub.getRoom(room);
+        const me_ = hub.requireParticipant(r, pid(room, participant_id));
+        const rec = spawner.request({ room, brief, requestedBy: me_.name, name, agent, model, cwd, canEdit: can_edit });
+        hub.announce(room, `${hub.shown(r, me_)} recruited ${rec.name} (${rec.agent}${rec.model ? `/${rec.model}` : ""}): ${brief.slice(0, 200)}${brief.length > 200 ? "…" : ""}`);
+        return { spawned: rec.name, agent: rec.agent, model: rec.model ?? null, cwd: rec.cwd, log: rec.log, hint: "They will join within a minute or two. Carry on; you will see them arrive." };
+      }),
+    );
+
+    server.registerTool(
+      "list_agents",
+      { title: "List recruited agents", description: "Recruited agents in this room (or all rooms): who asked for them, their brief, and whether they are still running.", inputSchema: { room: z.string().optional() } },
+      guard(({ room }) =>
+        spawner.agents
+          .filter((a) => !room || a.room === room)
+          .map((a) => ({ name: a.name, room: a.room, agent: a.agent, model: a.model ?? null, requested_by: a.requestedBy, running: a.endedAt === undefined, exit_code: a.exitCode ?? null, brief: a.brief.slice(0, 160) })),
+      ),
+    );
+  }
 
   server.registerResource(
     "room-transcript",

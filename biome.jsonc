@@ -1,6 +1,10 @@
 {
   "$schema": "https://biomejs.dev/schemas/2.5.0/schema.json",
   "extends": ["@norvalbv/devkit/biome/base"],
+  // Style here is hand-maintained: double quotes, one dense line per statement, past biome's 320 cap.
+  // The pre-commit hook formats whatever it stages, so leave the formatter off and keep only the lint rules.
+  "formatter": { "enabled": false },
+  "javascript": { "formatter": { "quoteStyle": "double" } },
   "files": {
     "includes": ["**", "!node_modules", "!dist"]
   }

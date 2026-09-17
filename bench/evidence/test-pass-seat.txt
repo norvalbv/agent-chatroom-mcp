@@ -1,0 +1,22 @@
+TAP version 13
+# Subtest: real-seat mode spawns one seat per arm and records seat provenance
+ok 1 - real-seat mode spawns one seat per arm and records seat provenance
+  ---
+  duration_ms: 864.705667
+  type: 'test'
+  ...
+# Subtest: refuses seat mode when the seat entry is missing
+ok 2 - refuses seat mode when the seat entry is missing
+  ---
+  duration_ms: 78.872709
+  type: 'test'
+  ...
+1..2
+# tests 2
+# suites 0
+# pass 2
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 1026.524709

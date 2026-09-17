@@ -40,9 +40,10 @@ async function main() {
  if(!taskArg||!aArg||!bArg)throw Error('Usage: bench-bench.ts TASK HUB_A HUB_B [PORT] --root NEW_DIR [--timeout-ms N]');
  const port=Number(argv[0]&&!argv[0].startsWith('--')?argv.shift():18850);
  if(!Number.isInteger(port)||port<=8000||port>65534)throw Error('Invalid port: use integer port >8000 and <=65534 (two adjacent ports)');
- let rootArg:string|undefined;let timeout=60000;
- while(argv.length){const option=argv.shift();if(option==='--root')rootArg=argv.shift();else if(option==='--timeout-ms')timeout=Number(argv.shift());else throw Error(`Unknown option ${option}`);}
+ let rootArg:string|undefined;let timeout=60000;let seatArg:string|undefined;
+ while(argv.length){const option=argv.shift();if(option==='--root')rootArg=argv.shift();else if(option==='--timeout-ms')timeout=Number(argv.shift());else if(option==='--seat-entry')seatArg=resolve(argv.shift()!);else throw Error(`Unknown option ${option}`);}
  if(!Number.isFinite(timeout)||timeout<1)throw Error('Invalid timeout');
+ if(seatArg&&!existsSync(seatArg))throw Error(`Seat entry not found: ${seatArg}`);
  const root=resolve(rootArg??`/tmp/bench-${Date.now()}-${process.pid}`);
  if(existsSync(root))throw Error(`Refusing to reuse ${root}`);
  // Check both ports before creating output. Closing the probes is necessarily racy; boot failure is infra.
@@ -58,9 +59,10 @@ async function main() {
   const arm=index===0?'A':'B',armRoot=join(root,arm),workspace=join(armRoot,'workspace');
   mkdirSync(armRoot);mkdirSync(join(armRoot,'data'));
   const entry=resolve(entryArg);const started=Date.now();let child:ChildProcess|undefined;let fd:number|undefined;
-  const manifest:any={arm,port:port+index,root:armRoot,workspace,hub_entry:entry,hub_revision:revision(entry),hub_entry_sha256:hashFile(entry),hub_build_sha256:null,hub_version:null,provenance_scope:dirname(entry).endsWith('/dist')?'dist-tree; external dependencies not covered':'entry-only; imported modules not covered',frozen,started_at:new Date().toISOString()};
+  const manifest:any={arm,port:port+index,root:armRoot,workspace,seat_entry:seatArg??null,seat_pid:null,seat_exit_code:undefined,hub_entry:entry,hub_revision:revision(entry),hub_entry_sha256:hashFile(entry),hub_build_sha256:null,hub_version:null,provenance_scope:dirname(entry).endsWith('/dist')?'dist-tree; external dependencies not covered':'entry-only; imported modules not covered',frozen,started_at:new Date().toISOString()};
   // Hash the selected build's directory, not launcher HEAD. Non-dist stubs are hashed by entry.
   if(existsSync(entry))manifest.hub_build_sha256=dirname(entry).endsWith('/dist')?hashTree(dirname(entry)):manifest.hub_entry_sha256;
+  let seat:ChildProcess|undefined;
   const verdict:any={task_id:task.task_id,arm,hub_entry:entry,hub_revision:manifest.hub_revision,passed:false,reason:'infra',oracle:{kind:task.oracle.kind,command:null,exit_code:null},anti_tamper:{hash_before:taskBefore,hash_after:null,unchanged:false},diagnostics:{reply_metrics_path:null,mentions:null,reply_rate:null},duration_ms:0,checked_at:null};
   const save=()=>json(join(armRoot,'manifest.json'),manifest);save();
   try {
@@ -76,7 +78,8 @@ async function main() {
     await delay(30);
    }
    if(!ready)throw Error('Hub did not become ready');manifest.booted_at=new Date().toISOString();save();
-   const created=await fetch(`${url}/rooms/benchmark/create`,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({topic:frozen.brief,expected_participants:0,quorum:'unanimous',require_challenge:true,require_verification:false}),signal:AbortSignal.timeout(timeout)});
+   if(seatArg){seat=spawn(process.execPath,[seatArg],{cwd:workspace,env,stdio:['ignore',fd,fd]});manifest.seat_pid=seat.pid;seat.on('exit',(code,signal)=>{manifest.seat_exit_code=code;manifest.seat_exit_signal=signal;save();});}
+ const created=await fetch(`${url}/rooms/benchmark/create`,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({topic:frozen.brief,expected_participants:0,quorum:'unanimous',require_challenge:true,require_verification:false}),signal:AbortSignal.timeout(timeout)});
    if(!created.ok)throw Error(`Room create HTTP ${created.status}`);
    while(!conclusions(join(armRoot,'data','benchmark.jsonl'))){if(child.exitCode!==null||spawnError)throw Error('Hub exited before conclusion');if(Date.now()-started>=timeout){verdict.reason='timeout';throw Error('Conclusion timeout');}await delay(30);}
    // Stop the process before reading artifacts; chat conclusion is only a completion signal.
@@ -85,7 +88,7 @@ async function main() {
    Object.assign(verdict,await scorer.scoreTask(taskDir,workspace));
   }catch(error){manifest.error=String(error);}
   finally {
-   if(child)await stop(child);if(fd!==undefined)closeSync(fd);
+   if(child)await stop(child);if(seat)await stop(seat);if(fd!==undefined)closeSync(fd);
    let after:string|null=null;try{after=hashTree(taskDir);}catch{}
    const unchanged=after===taskBefore&&hashFile(scorerPath)===scorerBefore;
    verdict.anti_tamper={...verdict.anti_tamper,hash_before:taskBefore,hash_after:after,unchanged};

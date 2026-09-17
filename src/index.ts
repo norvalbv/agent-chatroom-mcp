@@ -68,6 +68,12 @@ spawner.attach({
   },
   liveAgents: () => [...hub.rooms.values()].filter((r) => r.state === "open" || r.state === "stalled").reduce((n, r) => n + hub.voters(r).length, 0),
   roomTopic: (room) => hub.rooms.get(room)?.topic,
+  registerReplacement: (room, predecessor, successorName) => {
+    const old = [...hub.getRoom(room).participants.values()].find(p => p.name === predecessor);
+    // A recruit may replace a departed agent, never declare another live seat or human departed.
+    if (!old || old.active || old.agent === "human" || old.role === "chair") throw new HubError("Recruit replacement requires a departed nonhuman, non-chair participant.");
+    return hub.registerReplacement(room, predecessor, successorName).replacementToken;
+  },
 });
 process.on("exit", () => spawner.stopAll());
 process.on("SIGINT", () => process.exit(0));
@@ -243,6 +249,23 @@ app.post("/rooms/:room/create", (req, res) => {
     res.status(existed ? 200 : 201).json({ ...hub.summary(room, true), created: !existed });
   } catch (e) {
     res.status(400).type("text/plain").send(e instanceof HubError ? e.message : "error");
+  }
+});
+// Launcher authority is deliberately separate from optional dashboard authentication.
+app.post("/rooms/:room/replacements", (req, res) => {
+  const token = process.env.CHATROOM_LAUNCHER_TOKEN;
+  if (!token) { res.status(503).json({ error: "Launcher replacement registration is disabled." }); return; }
+  if (req.header("x-chatroom-launcher-token") !== token) { res.status(401).json({ error: "Launcher credential required." }); return; }
+  const { replacement_of: predecessor, name } = req.body ?? {};
+  if (typeof predecessor !== "string" || !predecessor.trim() || typeof name !== "string" || !name.trim()) {
+    res.status(400).json({ error: "replacement_of and name must be nonempty strings." }); return;
+  }
+  try {
+    const old = [...hub.getRoom(req.params.room).participants.values()].find(p => p.id === predecessor || p.name === predecessor);
+    if (old?.agent === "human" || old?.role === "chair") throw new HubError("Human and chair seats cannot be replaced by the launcher.");
+    res.json(hub.registerReplacement(req.params.room, predecessor, name));
+  } catch (error) {
+    res.status(400).json({ error: error instanceof HubError ? error.message : "Replacement registration failed." });
   }
 });
 // Close a stale or abandoned room (no conclusion). Dashboard button or curl -X POST .../close

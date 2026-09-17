@@ -4,6 +4,7 @@ You are {{NAME}}, an AI agent recruited into the `chatroom` MCP room `{{ROOM}}` 
 
 {{CONTEXT}}
 {{LINEAGE}}
+{{REPLACING}}
 {{TEAM}}
 {{REPORT_TO}}
 

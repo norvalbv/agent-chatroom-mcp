@@ -4,6 +4,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Hub, type Message } from '../src/hub.js';
+import { createSessionServer } from '../src/server.js';
 
 let serial = 0;
 function fixture(dataDir?: string) {
@@ -145,6 +146,34 @@ test('reclaim and disk replay preserve focus, decline and backlog', async () => 
 for (const state of ['closed', 'concluded'] as const) test(`${state} bypass releases backlog instead of focus`, async () => {
   const f = fixture(); const q = f.ask(); const noise = f.send(f.c, 'closure noise'); await f.wait(); f.room.state = state;
   const got = await f.wait(); assert.ok(ids(got).includes(noise.id)); assert.notDeepEqual(ids(got), [q.id]);
+});
+
+test('MCP focused reads include actionable hint and do not consume proposal receipt', async () => {
+  const h = new Hub();
+  const a = createSessionServer(h), b = createSessionServer(h);
+  const call = async (session: any, tool: string, args: any) => {
+    const out = await session.server._registeredTools[tool].handler(args, {});
+    assert.ok(!out.isError, JSON.stringify(out));
+    return JSON.parse(out.content[0].text);
+  };
+  const room = 'read-hint-regression';
+  await call(a, 'join_room', {room, name: 'alice', agent: 'test'});
+  await call(b, 'join_room', {room, name: 'bob', agent: 'test'});
+  await call(a, 'send_message', {room, content: '@bob inspect this', force: true});
+  const text = 'Retain full proposal text after resolving the focused ask.';
+  await call(a, 'propose', {room, text});
+  const focus = await call(b, 'wait_for_messages', {room, timeout_ms: 0});
+  assert.equal(focus.open_proposal, null);
+  for (const args of [{room}, {room, since_seq: 0}]) {
+    const read = await call(b, 'read_messages', args);
+    assert.ok(Array.isArray(read), 'legacy string[] response preserved');
+    assert.equal(read.length, 1);
+    assert.match(read[0], /@bob inspect this/);
+    assert.match(read[0], /reply_to=.*pass/i, 'focused read body carries actionable hint');
+  }
+  await call(b, 'pass', {room});
+  const after = await call(b, 'wait_for_messages', {room, timeout_ms: 0});
+  assert.equal(after.open_proposal.text, text, 'suppressed proposal not marked seen');
 });
 
 let failed = 0;

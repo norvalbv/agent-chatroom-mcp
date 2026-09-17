@@ -533,8 +533,23 @@ assert.deepEqual(tools, ["amend", "board_get", "board_set", "challenge", "join_r
   await a.call("wait_for_messages", { room, timeout_ms: 0 });
   await a.call("send_message", { room, content: "Thanks, making this public for the record.", reply_to: q.id, quiet: true, surface: true });
   const wc2 = await c.call("wait_for_messages", { room, timeout_ms: 0 });
-  assert.ok(wc2.messages.some((m: string) => m.includes("which worktree")), "surfaced thread must be delivered to the bystander");
+  assert.ok(!wc2.messages.some((m: string) => m.includes("which worktree")), "already-read quiet body must not be redelivered on surface");
   assert.ok(wc2.messages.some((m: string) => m.includes("is now public")));
+  assert.ok(wc2.messages.some((m: string) => m.includes("fix/auth-2")), "unread quiet reply must still be delivered");
+  const history = await c.call("read_messages", { room, since_seq: 0 });
+  assert.ok(history.some((m: string) => m.includes("which worktree")), "explicit history reads may repeat surfaced bodies");
+  assert.ok(history.some((m: string) => m.includes("fix/auth-2")));
+
+  // A separate never-pulled thread must still arrive, even after a quiet-activity-only wait.
+  const unseen = await a.call("send_message", { room, content: "@codex-1 never-pulled quiet body", quiet: true });
+  const hidden = await c.call("wait_for_messages", { room, timeout_ms: 0 });
+  assert.ok(!hidden.messages.some((m: string) => m.includes("never-pulled quiet body")));
+  assert.equal(hidden.quiet_activity.length, 1);
+  await a.call("send_message", { room, content: "Publish the unread control.", reply_to: unseen.id, surface: true });
+  const surfacedUnseen = await c.call("wait_for_messages", { room, timeout_ms: 0 });
+  assert.ok(surfacedUnseen.messages.some((m: string) => m.includes("never-pulled quiet body")), "activity stubs are not body receipts");
+  assert.ok(surfacedUnseen.messages.some((m: string) => m.includes("is now public")));
+
   const tr = await (await fetch(`${HTTP}/rooms/${room}/transcript`)).text();
   assert.match(tr, /\(chat was-quiet→codex-1\): @codex-1 which worktree/);
   await a.call("board_set", { room, key: "notes", text: "A's notes: the bug is in auth.ts" });

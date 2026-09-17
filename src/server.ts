@@ -272,6 +272,14 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
       const since = since_seq ?? p.lastSeenSeq;
       hub.answerBeforeWaiting(r, p, since);
       const msgs = await hub.wait(room, id, since, Math.min(timeout_ms ?? DEFAULT_WAIT_MS, MAX_WAIT_MS));
+      const focus = hub.attentionFocus(r, p);
+      if (focus) return {
+        hint: hub.attentionHint(r, p), messages: msgs.map((m) => hub.fmt(r, m)),
+        next_seq: p.lastSeenSeq, room_state: r.state, your_turn: r.mode === "free" || hub.currentSpeaker(r)?.id === id,
+        your_role: p.role ?? "worker", humans_present: hub.activeParticipants(r).filter((x) => x.agent === "human").map((x) => x.name),
+        addressed_to_you: [{ id: focus.id, from: hub.shown(r, focus.from), text: focus.content }],
+        open_proposal: null, conclusion: null, leaving_would_block: !!hub.leavingWouldBlock(r, p),
+      };
       const open = [...r.proposals.values()].find((pr) => pr.status === "open");
       const needsMyVote = open && !open.votes[id] && p.agent !== "human" && p.role !== "chair";
       const needsChallenge = open && hub.challengeRequired(r) && !open.challenges.some((c) => c.blocking !== false) && open.by.id !== id;

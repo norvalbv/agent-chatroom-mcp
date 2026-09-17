@@ -669,6 +669,7 @@ export class Hub {
 
   /** Advance the read cursor, remembering anything withheld so it is delivered later. */
   settleRead(room: Room, p: Participant, since: number, delivered: Message[], upTo?: number) {
+    since = Math.min(since, p.lastSeenSeq);
     const ceiling = upTo ?? room.messages.at(-1)?.seq ?? since;
     const deliveredSeqs = new Set(delivered.map((m) => m.seq));
     const receipts = new Set(p.quietReceipts ?? []);

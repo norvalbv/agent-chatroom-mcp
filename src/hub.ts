@@ -283,23 +283,6 @@ export type RefusalCode =
 export const REFUSAL_CODES: readonly RefusalCode[] =
   ["expiry-prefix", "ownership", "auth", "key-format", "size", "state", "hub_guard"];
 
-/** Last-resort classification for HubErrors thrown without a typed code: match the
- * hub's own message templates by strict prefix, so submitted text can never choose
- * the category. Anything unrecognized stays hub_guard (unknown), never guessed. */
-export function refusalCodeFromMessage(message: string): RefusalCode {
-  const m = message ?? "";
-  if (m.startsWith("Expiry is supported only for") || m.startsWith("Use ttl_seconds or expires_at") ||
-      m.startsWith("ttl_seconds must be") || m.startsWith("Invalid expires_at or ttl_seconds")) return "expiry-prefix";
-  if (m.startsWith("You are not a participant of") || m.startsWith("You have left ")) return "auth";
-  if (m.startsWith("Board keys are short names") || m === "Invalid board key." ||
-      m.startsWith("A hold for this room is the key")) return "key-format";
-  if (m.startsWith("Board entries are capped") || m.startsWith("Notes are capped")) return "size";
-  if (m.includes(" already exists (by ")) return "state";
-  if (m.includes(" was written by ") || m.startsWith("The hold was placed by") ||
-      (m.startsWith('claim "') && m.includes(" is owned by "))) return "ownership";
-  return "hub_guard";
-}
-
 export class HubError extends Error {
   constructor(
     message: string,
@@ -1084,11 +1067,12 @@ export class Hub {
     const room = roomName ? this.rooms.get(roomName) : undefined;
     if (!room) return;
     // Error messages can interpolate submitted text/secrets. Persist exactly one
-    // closed-enum code: typed code when the throw site declared one, else a strict
-    // message-template match, else hub_guard (unknown). Never raw text or args.
+    // closed-enum code: only a typed code set by the throw site classifies a
+    // refusal; anything else (string errors, untyped HubErrors) stays hub_guard.
+    // Never raw text or args.
     const reason: RefusalCode = errorOrMessage instanceof HubError
-      ? (errorOrMessage.code ?? refusalCodeFromMessage(errorOrMessage.message))
-      : refusalCodeFromMessage(errorOrMessage ?? "");
+      ? (errorOrMessage.code ?? "hub_guard")
+      : "hub_guard";
     const key = `${tool}: ${reason}`;
     room.refusals = room.refusals ?? {};
     room.refusals[key] = (room.refusals[key] ?? 0) + 1;

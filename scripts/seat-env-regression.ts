@@ -1,5 +1,5 @@
 /** Hermetic callsite regression. No real subprocess, network, credential or .env access.
- * Run: node --experimental-vm-modules --import tsx scripts/seat-env-regression.ts
+ * Run: NODE_OPTIONS=--experimental-vm-modules npx tsx scripts/seat-env-regression.ts
  * VM executes complete TypeScript modules (transpiled by esbuild) with synthetic OS boundaries.
  * This tests minimization only; same-user filesystem access is NOT sandboxed.
  */
@@ -22,7 +22,7 @@ async function harness(entry: string, env: Record<string, string>, argv: string[
   const requests: { target: string; options: any }[] = [];
   let initialFetch = true;
   const proc = { env, argv: ['node', entry, ...argv], execPath: '/synthetic/node', cwd: () => '/fixture', on() {}, stdout: { write() {} }, stderr: { write() {} }, exit(code: number) { if (code) throw new Error(`unexpected exit ${code}`); } };
-  const fs = {
+  const fs = { realpathSync: (x: string) => x,
     existsSync: (f: string) => f.endsWith('.env'),
     readFileSync(f: string) {
       // Deliberately no delegated disk reads: even dotenv and prompts are in-memory fixtures.
@@ -53,7 +53,7 @@ async function harness(entry: string, env: Record<string, string>, argv: string[
     },
   });
   const cache = new Map<string, any>();
-  const mocks: Record<string, any> = { 'node:fs': fs, 'node:path': path, 'node:url': url, 'node:child_process': cp, './hub.js': { HubError: Error }, './settled.js': { settledAxes: () => '' }, './seat.js': { runSeat: async () => ({ final: 'fixture', ok: true }) } };
+  const mocks: Record<string, any> = { 'node:fs': fs, 'node:path': path, 'node:url': url, 'node:child_process': cp, './hub.js': { HubError: Error }, './settled.js': { settledAxes: () => '' }, './seat.js': { runSeat: async () => ({ final: 'fixture', ok: true }) }, './result.js': { collectRoomSnapshot: async (_base: string, name: string) => ({ name, payload: { state: 'concluded', conclusion: { text: 'fixture' } }, transcript: { text: '' } }), readRunResult: () => ({}), writeRunResult: () => undefined, renderRunReport: () => '' } };
   async function module(name: string): Promise<any> {
     if (cache.has(name)) return cache.get(name);
     if (mocks[name]) {

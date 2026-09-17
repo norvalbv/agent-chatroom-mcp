@@ -37,13 +37,13 @@ try {
   const body = "BODY-START\n\n## nested heading inside evidence\n\n" + "e".repeat(7500) + "\n\nBODY-END";
   await a.call("board_set", { room: "snap", key: "evidence/large", text: body });
   await a.call("propose", { room: "snap", text: "Adopt exact transport with\n\n## embedded heading\n\nand trailing whitespace  " });
-  await b.call("challenge", { room: "snap", proposal_id: (await a.call("room_status", { room: "snap" })).proposals.at(-1).id, objection: "challenge text retained verbatim" });
+  await b.call("challenge", { room: "snap", proposal_id: (await a.call("room_status", { room: "snap" })).proposals.at(-1).id, objection: 'The clause "Adopt exact transport with" is untested: challenge text retained verbatim' });
 
   const snapshot = await collectRoomSnapshot(HTTP, "snap");
   assert.equal(snapshot.error, null);
   assert.equal(snapshot.payload.board["evidence/large"].text, body, "board body must survive the real hub GET");
   assert.match(String(snapshot.payload.proposals[0].text), /## embedded heading/);
-  assert.equal(snapshot.payload.proposals[0].challenges[0].objection, "challenge text retained verbatim");
+  assert.equal(snapshot.payload.proposals[0].challenges[0].objection, 'The clause "Adopt exact transport with" is untested: challenge text retained verbatim');
 
   const artifact = { schemaVersion: 1 as const, run: { id: "swarm-int", startedAt: "2026-01-01T00:00:00Z", completedAt: "2026-01-01T00:01:00Z", task: "t", doneWhen: "d" }, project: { cwd: dataDir, canonicalPath: dataDir, git: null }, leadRoom: "snap", rooms: [snapshot], verifier: { name: "verifier" as const, output: null }, reportPath: resolve(dataDir, "report.md"), artifactPath: resolve(dataDir, "result.json") };
   writeRunResult(artifact.artifactPath, artifact);

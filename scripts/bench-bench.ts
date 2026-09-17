@@ -66,7 +66,7 @@ async function main() {
   // Hash the selected build's directory, not launcher HEAD. Non-dist stubs are hashed by entry.
   if(existsSync(entry))manifest.hub_build_sha256=dirname(entry).endsWith('/dist')?hashTree(dirname(entry)):manifest.hub_entry_sha256;
   let seat:ChildProcess|undefined;
-  const verdict:any={task_id:task.task_id,arm,hub_entry:entry,hub_revision:manifest.hub_revision,passed:false,reason:'infra',oracle:{kind:task.oracle.kind,command:null,exit_code:null},anti_tamper:{hash_before:taskBefore,hash_after:null,unchanged:false},diagnostics:{reply_metrics_path:null,mentions:null,reply_rate:null},duration_ms:0,checked_at:null};
+  const verdict:any={task_id:task.task_id,arm,hub_entry:entry,hub_revision:manifest.hub_revision,passed:false,reason:'infrastructure_error',oracle:{kind:task.oracle.kind,command:null,exit_code:null},anti_tamper:{hash_before:taskBefore,hash_after:null,unchanged:false},diagnostics:{reply_metrics_path:null,mentions:null,reply_rate:null},duration_ms:0,checked_at:null};
   const save=()=>json(join(armRoot,'manifest.json'),manifest);save();
   try {
    if(hashTree(taskDir)!==taskBefore||hashFile(scorerPath)!==scorerBefore||hashFile(factScorerPath)!==factScorerBefore){verdict.reason='tamper';throw Error('Frozen task or scorer changed');}
@@ -112,7 +112,7 @@ async function main() {
    manifest.stopped_at=verdict.checked_at;save();json(join(armRoot,'bench-result.json'),verdict);results.push(verdict);
   }
  }
- const comparable=results.every(v=>!['infra','timeout','tamper'].includes(v.reason));
+ const comparable=results.every(v=>!['infrastructure_error','timeout','tamper'].includes(v.reason));
  json(join(root,'bench-compare.json'),{task_id:task.task_id,arms:results.map(v=>({arm:v.arm,passed:v.passed,reason:v.reason})),comparable,delta:comparable?Number(results[1].passed)-Number(results[0].passed):null,delta_unit:'success indicator B minus A; single trial, not an effect estimate',frozen,checked_at:new Date().toISOString()});
  console.log(root);
 }

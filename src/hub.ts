@@ -1014,7 +1014,7 @@ export class Hub {
   /** All participants named with @ anywhere in a message: @claude-2, @B, @"Participant B". */
   mentionsIn(room: Room, content: string): string[] {
     const ids = new Set<string>();
-    for (const m of content.matchAll(/@((?:[Pp]articipant [A-Za-z](?![\w-]))|[\w-]+)/g)) {
+    for (const m of content.matchAll(/@((?:participant [A-Za-z](?![\w-]))|[\w-]+)/gi)) {
       const key = m[1].toLowerCase();
       for (const p of room.participants.values()) {
         const label = p.label.toLowerCase();

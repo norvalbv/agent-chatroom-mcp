@@ -23,13 +23,14 @@ for (const anonymous of [false, true]) {
     "@B a test",
     "@Participant B I have evidence",
     "@participant b, a test",
+    "@PARTICIPANT B I have evidence",
   ]) {
     test(`mention ${JSON.stringify(text)} anonymous=${anonymous}`, () => {
       const { hub, room, target } = fixture(anonymous);
       assert.deepEqual(hub.mentionsIn(room, text), [target.id]);
     });
   }
-  for (const text of ["@unknown I have evidence", "@union-alpha-280 a test", "@union-alpha-28-extra", "@Participant Z", "unaddressed prose"]) {
+  for (const text of ["@unknown I have evidence", "@union-alpha-280 a test", "@union-alpha-28-extra", "@Participant Z", "@Participant B-extra", "unaddressed prose"]) {
     test(`unknown mention ${JSON.stringify(text)} anonymous=${anonymous}`, () => {
       const { hub, room } = fixture(anonymous);
       assert.deepEqual(hub.mentionsIn(room, text), []);

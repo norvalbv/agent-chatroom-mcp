@@ -164,11 +164,29 @@ export function localTools(cwd: string, write: boolean, shell: boolean, clamp: (
         new Promise<string>((res) => {
           const child = spawn("grep", ["-rnI", "--exclude-dir=node_modules", "--exclude-dir=.git", "--exclude-dir=dist", "-e", a.pattern, relative(cwd, inside(a.path ?? ".")) || "."], { cwd, stdio: ["ignore", "pipe", "pipe"] });
           let out = "";
-          const timer = setTimeout(() => child.kill(), 60_000);
-          child.stdout.on("data", (d) => (out += d));
-          child.on("close", () => {
+          let err = "";
+          let settled = false;
+          const finish = (text: string) => {
+            if (settled) return;
+            settled = true;
             clearTimeout(timer);
-            res(clamp(out.trim() || "(no matches)"));
+            res(clamp(text));
+          };
+          const failure = (reason: string, detail = err) =>
+            finish(`ERROR: search failed (${reason})${detail.trim() ? `: ${detail.trim().slice(0, 4096)}` : ""}`);
+          const timer = setTimeout(() => {
+            failure("timeout after 60000ms");
+            child.kill("SIGKILL");
+          }, 60_000);
+          child.stdout.on("data", (d) => { if (!settled) out += d; });
+          // Drain all stderr, but retain only a bounded diagnostic.
+          child.stderr.on("data", (d) => { if (!settled) err = (err + d).slice(0, 4096); });
+          child.on("error", (error) => failure("spawn", error.message));
+          child.on("close", (code, signal) => {
+            if (signal) failure(`signal ${signal}`);
+            else if (code === 0) finish(out.trim() || "(no output)");
+            else if (code === 1) finish("(no matches)");
+            else failure(`exit ${code}`);
           });
         }),
     },

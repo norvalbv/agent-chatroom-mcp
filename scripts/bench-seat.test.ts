@@ -51,3 +51,66 @@ test('refuses seat mode when the seat entry is missing',async()=>{
   assert.notEqual(result.status,0);assert.match(result.stderr,/seat/i);
   }finally{rmSync(f.root,{recursive:true,force:true});}
 });
+
+const wrapper=resolve('bench/seat/real-seat.mjs');
+function wrapperFixture(){
+ const f=fixture();
+ writeFileSync(f.stub,`import http from 'node:http';import fs from 'node:fs';import path from 'node:path';
+ const data=process.env.CHATROOM_DATA_DIR;let created=false;let registered=false;
+ http.createServer((req,res)=>{res.setHeader('content-type','application/json');
+ if(req.url==='/rooms'){res.end('{"rooms":[],"version":"wrapper-test"}');return;}
+ if(req.url.endsWith('/create')){created=true;fs.writeFileSync(path.join(data,'hub-env.json'),JSON.stringify({credential:process.env.OPENROUTER_API_KEY??null}));res.end('{}');return;}
+ if(req.url==='/register'){if(!created){res.statusCode=409;res.end('{}');return;}registered=true;fs.writeFileSync(path.join(data,'registered'),'yes');res.end('{}');return;}
+ if(req.url==='/conclude'&&registered){fs.writeFileSync(path.join(data,'benchmark.jsonl'),JSON.stringify({type:'state',state:'concluded',conclusion:{text:'Society for Formal Methods, Vienna'}})+'\\n');res.end('{}');return;}
+ res.statusCode=404;res.end('{}');}).listen(Number(process.env.PORT),'127.0.0.1');`);
+ writeFileSync(f.seat,`import fs from 'node:fs';import path from 'node:path';
+ const args=process.argv.slice(2);const url=args[args.indexOf('--mcp-url')+1];
+ if(process.env.OPENROUTER_API_KEY!=='mock-provider-key')throw Error('missing provider credential');
+ if(!path.isAbsolute(process.env.BENCH_SEAT_ENTRY))throw Error('provider entry not absolute');
+ const registered=await fetch(new URL('/register',url),{method:'POST'});if(!registered.ok)throw Error('room not created before registration');
+ fs.writeFileSync('provider-env.json',JSON.stringify({url,entry:process.env.BENCH_SEAT_ENTRY,credential_present:true}));
+ if(process.env.MOCK_FAIL==='1')process.exit(23);
+ await fetch(new URL('/conclude',url),{method:'POST'});
+ await new Promise(r=>setTimeout(r,Number(process.env.MOCK_DELAY??500)));
+ fs.writeFileSync('provider-finished','yes');`);
+ return f;
+}
+test('real wrapper fails fast with an explicit missing MCP URL diagnostic',()=>{
+ const env={...process.env};delete env.CHATROOM_MCP_URL;
+ const result=spawnSync(process.execPath,[wrapper],{env,encoding:'utf8',timeout:2000});
+ assert.notEqual(result.status,0);assert.match(result.stderr,/CHATROOM_MCP_URL.*required/);
+});
+test('actual wrapper registers after room creation, receives seat-only credentials, and completes answer before scoring',async()=>{
+ const f=wrapperFixture();try{
+ const result=invoke([task,f.stub,f.stub,String(await freePair()),'--root',f.output,'--timeout-ms','4000','--seat-entry',wrapper],{BENCH_SEAT_ENTRY:f.seat,OPENROUTER_API_KEY:'mock-provider-key',CHATROOM_MCP_URL:'http://invalid-parent:1/mcp'});
+ assert.equal(result.status,0,result.stderr);
+ for(const arm of ['A','B']){
+ const dir=join(f.output,arm),manifest=JSON.parse(readFileSync(join(dir,'manifest.json'),'utf8'));
+ const verdict=JSON.parse(readFileSync(join(dir,'bench-result.json'),'utf8'));
+ assert.equal(verdict.passed,true,JSON.stringify({manifest,verdict}));
+ assert.equal(manifest.seat_exit_code,0);
+ assert.equal(readFileSync(join(dir,'data','registered'),'utf8'),'yes');
+ assert.equal(JSON.parse(readFileSync(join(dir,'data','hub-env.json'),'utf8')).credential,null);
+ assert.equal(readFileSync(join(dir,'workspace','provider-finished'),'utf8'),'yes');
+ assert.equal(readFileSync(join(dir,'workspace','answer.txt'),'utf8'),'Society for Formal Methods, Vienna');
+ const receipt=JSON.parse(readFileSync(join(dir,'workspace','provider-env.json'),'utf8'));
+ assert.equal(receipt.url,`http://127.0.0.1:${manifest.port}/mcp`);assert.equal(receipt.entry,f.seat);
+ }
+ }finally{rmSync(f.root,{recursive:true,force:true});}
+});
+test('provider failure is infrastructure, not an empty answer task failure',async()=>{
+ const f=wrapperFixture();try{
+ const result=invoke([task,f.stub,f.stub,String(await freePair()),'--root',f.output,'--timeout-ms','1800','--seat-entry',wrapper],{BENCH_SEAT_ENTRY:f.seat,OPENROUTER_API_KEY:'mock-provider-key',MOCK_FAIL:'1'});
+ assert.equal(result.status,0,result.stderr);
+ for(const arm of ['A','B'])assert.equal(JSON.parse(readFileSync(join(f.output,arm,'bench-result.json'),'utf8')).reason,'infra');
+ }finally{rmSync(f.root,{recursive:true,force:true});}
+});
+test('conclusion cannot bypass the bounded seat completion barrier',async()=>{
+ const f=wrapperFixture();try{
+ const result=invoke([task,f.stub,f.stub,String(await freePair()),'--root',f.output,'--timeout-ms','1200','--seat-entry',wrapper],{BENCH_SEAT_ENTRY:f.seat,OPENROUTER_API_KEY:'mock-provider-key',MOCK_DELAY:'5000'});
+ assert.equal(result.status,0,result.stderr);
+ for(const arm of ['A','B']){
+ const verdict=JSON.parse(readFileSync(join(f.output,arm,'bench-result.json'),'utf8'));assert.equal(verdict.reason,'timeout');assert.equal(verdict.passed,false);
+ }
+ }finally{rmSync(f.root,{recursive:true,force:true});}
+});

@@ -1,0 +1,131 @@
+TAP version 13
+# Subtest: real-seat mode spawns one seat per arm and records seat provenance
+ok 1 - real-seat mode spawns one seat per arm and records seat provenance
+  ---
+  duration_ms: 864.729
+  type: 'test'
+  ...
+# Subtest: refuses seat mode when the seat entry is missing
+ok 2 - refuses seat mode when the seat entry is missing
+  ---
+  duration_ms: 97.244292
+  type: 'test'
+  ...
+# Subtest: real wrapper fails fast with an explicit missing MCP URL diagnostic
+not ok 3 - real wrapper fails fast with an explicit missing MCP URL diagnostic
+  ---
+  duration_ms: 21.071416
+  type: 'test'
+  location: '/Users/benji/Desktop/Personal and learning/agent-chatroom-mcp/.swarm-worktrees/swarm-bench-room/bench-ab-1/scripts/bench-seat.test.ts:26:98'
+  failureType: 'testCodeFailure'
+  error: |-
+    The input did not match the regular expression /CHATROOM_MCP_URL.*required/. Input:
+    
+    'node:internal/url:825\n' +
+      '      href = bindingUrl.parse(input, base, true);\n' +
+      '                        ^\n' +
+      '\n' +
+      'TypeError: Invalid URL\n' +
+      '    at new URL (node:internal/url:825:25)\n' +
+      '    at file:///Users/benji/Desktop/Personal%20and%20learning/agent-chatroom-mcp/.swarm-worktrees/swarm-bench-room/bench-ab-1/bench/seat/real-seat.mjs:9:14\n' +
+      '    at ModuleJob.run (node:internal/modules/esm/module_job:345:25)\n' +
+      '    at async onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:665:26)\n' +
+      '    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:117:5) {\n' +
+      "  code: 'ERR_INVALID_URL',\n" +
+      "  input: ''\n" +
+      '}\n' +
+      '\n' +
+      'Node.js v22.20.0\n'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual: |-
+    node:internal/url:825
+          href = bindingUrl.parse(input, base, true);
+                            ^
+    
+    TypeError: Invalid URL
+        at new URL (node:internal/url:825:25)
+        at file:///Users/benji/Desktop/Personal%20and%20learning/agent-chatroom-mcp/.swarm-worktrees/swarm-bench-room/bench-ab-1/bench/seat/real-seat.mjs:9:14
+        at ModuleJob.run (node:internal/modules/esm/module_job:345:25)
+        at async onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:665:26)
+        at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:117:5) {
+      code: 'ERR_INVALID_URL',
+      input: ''
+    }
+    
+    Node.js v22.20.0
+    
+  operator: 'match'
+  stack: |-
+    TestContext.<anonymous> (/Users/benji/Desktop/Personal and learning/agent-chatroom-mcp/.swarm-worktrees/swarm-bench-room/bench-ab-1/scripts/bench-seat.test.ts:81:42)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: actual wrapper registers after room creation, receives seat-only credentials, and completes answer before scoring
+not ok 4 - actual wrapper registers after room creation, receives seat-only credentials, and completes answer before scoring
+  ---
+  duration_ms: 8620.036166
+  type: 'test'
+  location: '/Users/benji/Desktop/Personal and learning/agent-chatroom-mcp/.swarm-worktrees/swarm-bench-room/bench-ab-1/scripts/bench-seat.test.ts:26:410'
+  failureType: 'testCodeFailure'
+  error: |-
+    {"manifest":{"arm":"A","port":23000,"root":"/var/folders/9r/rmy4kywx6pl2hfzbw934txt40000gn/T/bench-seat-n00oId/run/A","workspace":"/var/folders/9r/rmy4kywx6pl2hfzbw934txt40000gn/T/bench-seat-n00oId/run/A/workspace","seat_entry":"/Users/benji/Desktop/Personal and learning/agent-chatroom-mcp/.swarm-worktrees/swarm-bench-room/bench-ab-1/bench/seat/real-seat.mjs","seat_pid":27302,"seat_exit_code":1,"hub_entry":"/var/folders/9r/rmy4kywx6pl2hfzbw934txt40000gn/T/bench-seat-n00oId/hub.mjs","hub_revision":null,"hub_entry_sha256":"49e5af352049a0502e864646a72c6f945f02198c6b7fc04533cf13a949839fdd","hub_build_sha256":"49e5af352049a0502e864646a72c6f945f02198c6b7fc04533cf13a949839fdd","hub_version":"wrapper-test","provenance_scope":"entry-only; imported modules not covered","frozen":{"task_sha256":"06ee1c3fba62df4b4caeb9da2ed2f0644530a9bf33215d767b757386342eb0d2","scorer_sha256":"2c9b2a769dd4a8d8bf284265c0e6902145fb0362230be7979a836782368c02e5","fact_scorer_sha256":"d5151dcedcda4546bedbf55345b642a98ffda4f861a4b8b0db9579fea24de78e","task_id":"bench-fact-check","timeout_ms":4000,"room":"benchmark","brief":"Read records.txt. Records about the three named researchers were transcribed from notes; one affiliation is wrong. Answer with only the single corrected affiliation, nothing else.\n"},"started_at":"2026-09-17T22:57:15.992Z","hub_pid":27301,"booted_at":"2026-09-17T22:57:16.038Z","seat_exit_signal":null,"error":"Error: Conclusion timeout","stopped_at":"2026-09-17T22:57:19.996Z"},"verdict":{"task_id":"bench-fact-check","arm":"A","hub_entry":"/var/folders/9r/rmy4kywx6pl2hfzbw934txt40000gn/T/bench-seat-n00oId/hub.mjs","hub_revision":null,"passed":false,"reason":"timeout","oracle":{"kind":"exact-answer","command":null,"exit_code":null},"anti_tamper":{"hash_before":"06ee1c3fba62df4b4caeb9da2ed2f0644530a9bf33215d767b757386342eb0d2","hash_after":"06ee1c3fba62df4b4caeb9da2ed2f0644530a9bf33215d767b757386342eb0d2","unchanged":true},"diagnostics":{"reply_metrics_path":null,"mentions":null,"reply_rate":null},"duration_ms":4014,"checked_at":"2026-09-17T22:57:19.996Z"}}
+    
+    false !== true
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  actual: false
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (/Users/benji/Desktop/Personal and learning/agent-chatroom-mcp/.swarm-worktrees/swarm-bench-room/bench-ab-1/scripts/bench-seat.test.ts:90:9)
+    process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: provider failure is infrastructure, not an empty answer task failure
+not ok 5 - provider failure is infrastructure, not an empty answer task failure
+  ---
+  duration_ms: 4241.046584
+  type: 'test'
+  location: '/Users/benji/Desktop/Personal and learning/agent-chatroom-mcp/.swarm-worktrees/swarm-bench-room/bench-ab-1/scripts/bench-seat.test.ts:26:1767'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    
+    'timeout' !== 'infra'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 'infra'
+  actual: 'timeout'
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (/Users/benji/Desktop/Personal and learning/agent-chatroom-mcp/.swarm-worktrees/swarm-bench-room/bench-ab-1/scripts/bench-seat.test.ts:105:36)
+    process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: conclusion cannot bypass the bounded seat completion barrier
+ok 6 - conclusion cannot bypass the bounded seat completion barrier
+  ---
+  duration_ms: 3047.790209
+  type: 'test'
+  ...
+1..6
+# tests 6
+# suites 0
+# pass 3
+# fail 3
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 17005.52175

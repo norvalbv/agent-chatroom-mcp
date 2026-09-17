@@ -12,17 +12,20 @@ function fixture(anonymous = false, mode: "free" | "round_robin" = "free") {
 }
 
 function snapshot(room: ReturnType<typeof fixture>["room"]) {
-  return JSON.stringify(room, (_key, value) => value instanceof Map ? [...value.entries()] : value instanceof Set ? [...value] : value);
+  return JSON.stringify(room, (key, value) => key === "nudgeTimer" || key === "openingsTimer" ? undefined : value instanceof Map ? [...value.entries()] : value instanceof Set ? [...value] : value);
 }
 
 function refusesWithoutMutation(f: ReturnType<typeof fixture>, content: string, options: { force?: boolean; quiet?: boolean; surface?: boolean; replyTo?: string } = {}) {
   const before = snapshot(f.room);
+  const timers = [f.room.nudgeTimer, f.room.openingsTimer];
   assert.throws(
     () => f.hub.send(f.room.name, f.sender.id, content, options.replyTo, options.force ?? true, options.quiet ?? false, options.surface ?? false),
     (error: unknown) => error instanceof HubError && /reviewer/i.test(error.message) && /left|departed|inactive/i.test(error.message),
     "departed mention must throw HubError naming reviewer",
   );
   assert.equal(snapshot(f.room), before, "refusal must not change any room, message, participant or delivery state");
+  assert.equal(f.room.nudgeTimer, timers[0], "nudge timer must be unchanged");
+  assert.equal(f.room.openingsTimer, timers[1], "openings timer must be unchanged");
 }
 
 for (const anonymous of [false, true]) {

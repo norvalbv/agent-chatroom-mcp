@@ -1020,10 +1020,18 @@ export class Hub {
 
   // ---------- humans in the loop ----------
 
+  /** Match human names literally and case-insensitively, never inside a larger word. */
+  private namesHuman(room: Room, human: Message, content: string): boolean {
+    const p = room.participants.get(human.from.id);
+    return [human.from.name, p?.label].some((name) => {
+      if (!name) return false;
+      const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      return new RegExp(`(?<!\\w)${escaped}(?!\\w)`, "i").test(content);
+    });
+  }
+
   /** A human chat message counts as answered once a non-human replies to it (reply_to) or names them afterwards. */
   isAnswered(room: Room, human: Message): boolean {
-    const p = room.participants.get(human.from.id);
-    const names = [human.from.name, p?.label].filter(Boolean).map((n) => n!.toLowerCase());
     // a later human message means an un-addressed "hi benji" reply belongs to that one, not this one
     const nextHumanSeq = room.messages.find((m) => m.seq > human.seq && m.kind === "chat" && m.from.agent === "human")?.seq ?? Infinity;
     return room.messages.some(
@@ -1031,7 +1039,7 @@ export class Hub {
         m.seq > human.seq &&
         m.kind === "chat" &&
         m.from.agent !== "human" &&
-        (m.replyTo === human.id || (m.seq < nextHumanSeq && names.some((n) => m.content.toLowerCase().includes(n)))),
+        (m.replyTo === human.id || (m.seq < nextHumanSeq && this.namesHuman(room, human, m.content))),
     );
   }
 
@@ -1051,7 +1059,7 @@ export class Hub {
 
   /** "@name ..." or "@all ..." at the start of a human message picks who should answer. */
   addressee(room: Room, human: Message): string | "all" | undefined {
-    const m = /^@([\w-]+(?: [A-Za-z]\b)?)/.exec(human.content.trim());
+    const m = /^@((?:[Pp]articipant [A-Za-z](?![\w-]))|[\w-]+)/.exec(human.content.trim());
     if (!m) return undefined;
     const key = m[1].toLowerCase();
     if (key === "all" || key === "everyone") return "all";
@@ -1144,14 +1152,10 @@ export class Hub {
       const t = room.messages.find((m) => m.id === replyTo);
       if (t?.from.agent === "human") return t;
     }
-    const lower = content.toLowerCase();
-    const humans = [...room.participants.values()].filter((p) => p.agent === "human");
     for (let i = room.messages.length - 1; i >= 0; i--) {
       const m = room.messages[i];
       if (m.kind !== "chat" || m.from.agent !== "human") continue;
-      const p = humans.find((h) => h.id === m.from.id);
-      const names = [m.from.name, p?.label].filter(Boolean).map((n) => n!.toLowerCase());
-      if (names.some((n) => lower.includes(n))) return m;
+      if (this.namesHuman(room, m, content)) return m;
       break; // only the most recent human message can be addressed by name
     }
     return undefined;

@@ -45,3 +45,5 @@ swarms/
 !.devkit/oxc/**
 !.devkit/vendored-skills/
 !.devkit/vendored-skills/**
+node_modules
+node_modules/

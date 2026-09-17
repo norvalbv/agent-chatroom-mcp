@@ -114,7 +114,7 @@ export interface Proposal {
   status: "open" | "accepted" | "rejected" | "superseded";
   /** bumped by every amend; the text in `text` is always the current version */
   version: number;
-  /** when the current text was written (creation or last amend) */
+  /** when the current text was written; absent means legacy freshness is unknown */
   updatedAt?: string;
   /** voters present when the proposal was made; unanimity is taken over these (late joiners are not waited on) */
   snapshot?: string[];
@@ -209,7 +209,7 @@ type Event =
   | { type: "opening"; room: string; pid: string; content: string }
   | { type: "openings_revealed"; room: string }
   | { type: "board"; room: string; key: string; entry: BoardEntry | null }
-  | { type: "amend"; room: string; proposalId: string; text: string; version: number; votes: Proposal["votes"]; challenges?: Challenge[] }
+  | { type: "amend"; room: string; proposalId: string; text: string; version: number; updatedAt?: string; votes: Proposal["votes"]; challenges?: Challenge[] }
   | { type: "refusal"; room: string; tool: string; reason: string };
 
 const now = () => new Date().toISOString();
@@ -1274,7 +1274,7 @@ export class Hub {
         reopened.push(this.shown(room, c.by));
       }
     }
-    this.persist({ type: "amend", room: roomName, proposalId, text: pr.text, version: pr.version, votes: pr.votes, challenges: pr.challenges });
+    this.persist({ type: "amend", room: roomName, proposalId, text: pr.text, version: pr.version, updatedAt: pr.updatedAt, votes: pr.votes, challenges: pr.challenges });
     const clip = (t: string, n: number) => (t.length > n ? t.slice(0, n) + "…" : t);
     const diff = replaceAll ? `replaced the whole text (${pr.text.length} chars)` : find ? `"${clip(find, 160)}" → "${clip(replace, 240)}"` : `appended "${clip(replace, 240)}"`;
     const survived = Object.values(kept).map((v) => this.shown(room, { id: "", name: v.name }));
@@ -1414,13 +1414,20 @@ export class Hub {
       }
     }
     const entry = { vote, reason, quote, confidence, name: p.name, ts: now(), version: proposal.version };
-    proposal.votes[p.id] = entry;
-    if (vote === "agree") for (const c of proposal.challenges) if (c.by.id === p.id && (c.status ?? "open") === "open") c.status = "conceded";
+    this.applyVote(proposal, p.id, entry);
     this.persist({ type: "vote", room: roomName, proposalId, pid: p.id, entry });
     const conf = confidence !== undefined ? ` (confidence ${confidence})` : "";
     this.post(room, "vote", p, `${this.shown(room, p)} votes ${vote.toUpperCase()} on ${proposalId}${conf}${reason ? `: ${reason}` : ""}`, { proposalId });
     this.evaluate(room, proposal);
     return proposal;
+  }
+
+  /** Apply the same concession transition live and on replay, including legacy vote events. */
+  private applyVote(pr: Proposal, pid: string, entry: Proposal["votes"][string]) {
+    pr.votes[pid] = entry;
+    if (entry.vote !== "agree" || (entry.version ?? pr.version) !== pr.version) return;
+    // An earlier-version challenge can remain open through amendments; a current agree concedes it too.
+    for (const c of pr.challenges) if (c.by.id === pid && (c.status ?? "open") === "open") c.status = "conceded";
   }
 
   /** Disagree votes cast against the current text by anyone, present or departed: an objection outlives the agent who filed it. */
@@ -1480,13 +1487,14 @@ export class Hub {
   /** Re-check whether a proposal has reached the room's quorum. */
   /** A verify/* entry by a different agent (different connection), newer than the proposal text, naming the proposal. */
   verifiedBy(room: Room, pr: Proposal): BoardEntry | undefined {
+    if (!pr.updatedAt) return undefined; // Legacy text timestamps are unknown, not fresh.
     const proposer = room.participants.get(pr.by.id);
     for (const [k, e] of room.board) {
       if (!k.startsWith("verify/") || k.endsWith(".partial")) continue;
       if (e.by === pr.by.name) continue;
       const author = [...room.participants.values()].find((x) => x.name === e.by);
       if (author && proposer && author.session && author.session === proposer.session) continue; // same process, two names
-      if (pr.updatedAt && e.updatedAt < pr.updatedAt) continue;
+      if (e.updatedAt < pr.updatedAt) continue;
       if (!e.text.includes(pr.id)) continue;
       return e;
     }
@@ -1707,7 +1715,7 @@ export class Hub {
           }
           case "vote": {
             const pr = this.rooms.get(ev.room)?.proposals.get(ev.proposalId);
-            if (pr) pr.votes[ev.pid] = ev.entry;
+            if (pr) this.applyVote(pr, ev.pid, ev.entry);
             break;
           }
           case "challenge": {
@@ -1755,6 +1763,8 @@ export class Hub {
             if (pr) {
               pr.text = ev.text;
               pr.version = ev.version;
+              // Missing legacy timestamps must clear the previous text's freshness.
+              pr.updatedAt = ev.updatedAt;
               pr.votes = ev.votes;
               if (ev.challenges) pr.challenges = ev.challenges;
             }

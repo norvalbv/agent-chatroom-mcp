@@ -14,6 +14,8 @@ export interface RespawnRoom {
   expected_participants?: number | null;
   participants: { name: string; agent: string; role?: string | null; active: boolean }[];
   board: Record<string, { by: string }>;
+  /** From the room summary; the quorum floor binds only while one is open. */
+  proposals?: { status: string }[];
 }
 
 export interface RespawnInput {
@@ -31,7 +33,14 @@ export interface RespawnDecision { respawn: boolean; reason: string }
 /** The smallest room that can still conclude under scrutiny: a proposer, a challenger and a verifier. */
 export const MIN_FLOOR = 3;
 
+/**
+ * The floor the room must keep. Between proposals a lobby may thin to its analysis and build seats without being
+ * refilled: replacements that arrive then read the board, find no claim and leave (lobby swarm-214936 was held at its
+ * quorum floor of 16 this way). Once a proposal is open the electorate matters, and the quorum floor binds.
+ */
 export function floorFor(room: RespawnRoom): number {
+  const open = (room.proposals ?? []).some((p) => p.status === "open");
+  if (!open) return MIN_FLOOR;
   const expected = room.expected_participants ?? 0;
   if (room.quorum === "unanimous") return Math.max(MIN_FLOOR, expected);
   return Math.max(MIN_FLOOR, Math.ceil(expected / 2));

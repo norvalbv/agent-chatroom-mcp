@@ -8,6 +8,7 @@ const room = (over: Partial<RespawnRoom> = {}): RespawnRoom => ({
   state: "open", quorum: "majority", expected_participants: 20,
   participants: [...Array.from({ length: 15 }, (_, i) => seat(`u-${i}`)), seat("verifier", true, "verifier"), seat("gone", false)],
   board: {},
+  proposals: [{ status: "open" }],
   ...over,
 });
 const decide = (over: Partial<Parameters<typeof respawnDecision>[0]> = {}) =>
@@ -39,6 +40,14 @@ assert.equal(decide({ exitCode: 1, room: null }).respawn, false);
 assert.equal(decide({ exitCode: 1, attempt: 4 }).respawn, false);
 // 10. Unanimous rooms need every expected seat.
 d = decide({ room: room({ quorum: "unanimous", expected_participants: 17 }) }); assert.equal(d.respawn, true, d.reason);
+// 12. The quorum floor binds only while a proposal is open: an analysis lobby thinning to 8 seats between proposals is
+//     not refilled (lobby swarm-214936 was held at 16 by replacements that found nothing to do), but three seats always are.
+d = decide({ room: room({ proposals: [], participants: [...Array.from({ length: 8 }, (_, i) => seat(`u-${i}`)), seat("gone", false)] }) });
+assert.equal(d.respawn, false, d.reason);
+d = decide({ room: room({ proposals: [{ status: "accepted" }], participants: [seat("u-0"), seat("u-1"), seat("gone", false)] }) });
+assert.equal(d.respawn, true, d.reason); assert.match(d.reason, /floor of 3/);
+d = decide({ room: room({ proposals: [{ status: "open" }], participants: [...Array.from({ length: 8 }, (_, i) => seat(`u-${i}`)), seat("gone", false)] }) });
+assert.equal(d.respawn, true, d.reason); assert.match(d.reason, /floor of 10/);
 // 11. Humans do not count toward the floor.
 d = decide({ room: room({ participants: [seat("u-0"), seat("u-1"), seat("benji", true, "worker", "human"), seat("gone", false)] }) });
 assert.equal(d.respawn, true, d.reason);

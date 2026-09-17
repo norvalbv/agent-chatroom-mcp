@@ -3,7 +3,7 @@
  * Swarm orchestrator: one command that turns "get N agents to solve X" into
  * plan -> sub-rooms of workers -> leads room -> verifier with veto -> report.
  *
- *   npx tsx src/swarm.ts "<task>" --agents 6 --cwd /path/to/project [--codex 2] [--apply] [--timeout 30]
+ *   npx tsx src/swarm.ts "<task>" --agents 6 --cwd /path/to/project [--codex 2] [--openrouter 2] [--apply] [--timeout 30]
  */
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
@@ -24,13 +24,14 @@ const has = (name: string) => argv.includes(`--${name}`);
 const BOOL_FLAGS = new Set(["--apply", "--full-access", "--named", "--flat"]);
 const task = argv.find((a, i) => !a.startsWith("--") && (i === 0 || !argv[i - 1].startsWith("--") || BOOL_FLAGS.has(argv[i - 1])));
 if (!task) {
-  console.error('usage: swarm "<task>" [--flat] [--done-when text] [--verify text] [--agents 6] [--cwd dir] [--models sonnet,haiku] [--lead-model opus] [--verifier-model opus] [--planner-model opus] [--codex k] [--codex-models gpt-6-astra,gpt-5.6-sol,gpt-5.6-terra] [--apply] [--full-access] [--named] [--timeout 30] [--port 7717]');
+  console.error('usage: swarm "<task>" [--flat] [--done-when text] [--verify text] [--agents 6] [--cwd dir] [--models sonnet,haiku] [--lead-model opus] [--verifier-model opus] [--planner-model opus] [--codex k] [--codex-models gpt-6-astra,gpt-5.6-sol,gpt-5.6-terra] [--openrouter k] [--openrouter-models deepseek/deepseek-v4.1-flash,...] [--apply] [--full-access] [--named] [--timeout 30] [--port 7717]');
   process.exit(2);
 }
 const TOTAL = Math.max(2, Number(flag("agents", "4")));
 const WORKERS = TOTAL - 1; // one seat is the verifier
 const CWD = resolve(flag("cwd", process.cwd())!);
 const CODEX = Math.min(WORKERS, Number(flag("codex", "0")));
+const OPENROUTER = Math.min(WORKERS - CODEX, Number(flag("openrouter", "0")));
 const APPLY = has("apply");
 const ANON = !has("named"); // worker rooms are anonymous unless --named
 const LENSES = ["reproduce and measure before theorising", "the simplest fix that could work", "what could go wrong with the obvious fix", "what the tests and history say", "the maintainer who inherits this in a year"];
@@ -48,7 +49,13 @@ const VERIFIER_MODEL = flag("verifier-model", LEAD_MODEL);
 const PLANNER_MODEL = flag("planner-model", VERIFIER_MODEL);
 // Codex seats: --codex k spreads k workers over --codex-models (rotated), default the current OpenAI line-up
 const CODEX_MODELS = (flag("codex-models", process.env.CODEX_MODELS ?? process.env.CODEX_MODEL ?? "gpt-6-astra,gpt-5.6-sol,gpt-5.6-terra") || "").split(",").map((m) => m.trim()).filter(Boolean);
-let codexIndex = 0; // workers may edit files and run anything; each gets its own git worktree
+// OpenRouter seats: --openrouter k spreads k workers over --openrouter-models (rotated); any OpenRouter slug works
+const OPENROUTER_MODELS = (flag("openrouter-models", process.env.OPENROUTER_MODELS ?? process.env.OPENROUTER_MODEL ?? "deepseek/deepseek-v4.1-flash,google/gemini-3.8-flash,z-ai/glm-5.3") || "").split(",").map((m) => m.trim()).filter(Boolean);
+if (OPENROUTER > 0 && !process.env.OPENROUTER_API_KEY) {
+  console.error("--openrouter needs OPENROUTER_API_KEY (https://openrouter.ai/keys); a dead seat still counts toward the room's expected participants, so refusing to launch.");
+  process.exit(2);
+}
+// workers may edit files and run anything; each gets its own git worktree
 const READ_TOOLS = ["mcp__chatroom__*", "Read", "Grep", "Glob", "Bash", "WebSearch", "WebFetch"];
 const WRITE_TOOLS = [...READ_TOOLS, "Edit", "Write", "MultiEdit", "NotebookEdit"];
 const TIMEOUT_MIN = Number(flag("timeout", "30"));
@@ -98,6 +105,17 @@ function runClaude(name: string, text: string, tools: string[], cwd: string, mod
   const args = ["-p", text, "--mcp-config", mcpJson, "--strict-mcp-config", "--allowedTools", tools.join(",")];
   if (model) args.push("--model", model);
   return runProc(name, "claude", args, cwd, outFile);
+}
+
+/** `node dist/openrouter.js`, or tsx on the source when the launcher itself is being run from source. */
+const seatScript = existsSync(resolve(repoRoot, "dist/openrouter.js")) ? { cmd: process.execPath, pre: [resolve(repoRoot, "dist/openrouter.js")] } : { cmd: "npx", pre: ["tsx", resolve(repoRoot, "src/openrouter.ts")] };
+
+function runOpenRouter(name: string, text: string, cwd: string, model: string | undefined, write: boolean): Promise<string> {
+  const outFile = resolve(OUT, `${name}.out`);
+  const args = [...seatScript.pre, "-p", text, "--mcp-url", `${URL_}/mcp`, "--cwd", cwd];
+  if (model) args.push("--model", model);
+  if (write) args.push("--write");
+  return runProc(name, seatScript.cmd, args, cwd, outFile);
 }
 
 function runCodex(name: string, text: string, cwd: string, model?: string): Promise<string> {
@@ -239,7 +257,15 @@ log(`plan: ${plan.groups.map((g) => `${g.title} ×${g.workers}`).join(" | ")}`);
 const leadsRoom = FLAT ? `${SWARM_ID}-room` : `${SWARM_ID}-leads`;
 const groupRooms = FLAT ? [] : plan.groups.map((g) => `${SWARM_ID}-${g.id}`);
 const runs: Promise<{ name: string; text: string }>[] = [];
-let codexLeft = CODEX;
+/**
+ * Alternate-provider seats: --codex k and --openrouter k take non-lead seats, rotating over their
+ * own model lists. Claude keeps the lead and verifier seats.
+ */
+const altSeats: { agent: "codex" | "openrouter"; model: string }[] = [
+  ...Array.from({ length: CODEX }, (_, i) => ({ agent: "codex" as const, model: CODEX_MODELS[i % Math.max(1, CODEX_MODELS.length)] })),
+  ...Array.from({ length: OPENROUTER }, (_, i) => ({ agent: "openrouter" as const, model: OPENROUTER_MODELS[i % Math.max(1, OPENROUTER_MODELS.length)] })),
+];
+const ALT = altSeats.length;
 let workerIndex = 0;
 
 // verifier joins the leads room first so it is present for every report
@@ -273,13 +299,12 @@ runs.push(
 for (const g of plan.groups) {
   const room = FLAT ? leadsRoom : `${SWARM_ID}-${g.id}`;
   for (let i = 1; i <= g.workers; i++) {
-    const useCodex = codexLeft > 0 && g.workers > 1 && (FLAT ? i > g.workers - CODEX : i === g.workers); // codex never takes the lead seat
-    if (useCodex) codexLeft--;
-    const agent = useCodex ? "codex" : "claude";
+    const alt = altSeats.length > 0 && g.workers > 1 && (FLAT ? i > g.workers - ALT : i === g.workers) ? altSeats.shift() : undefined; // an alt provider never takes the lead seat
+    const agent = alt?.agent ?? "claude";
     const isLead = !FLAT && i === 1;
-    const model = useCodex ? CODEX_MODELS[codexIndex++ % Math.max(1, CODEX_MODELS.length)] : isLead ? LEAD_MODEL : MODELS.length ? MODELS[workerIndex++ % MODELS.length] : undefined;
-    // flat rooms name agents by model (sonnet-3, fable-6) so a human can see the mix at a glance
-    const name = FLAT ? `${(model ?? agent).replace(/[^a-z0-9]+/gi, "-").replace(/^gpt-/, "")}-${i}` : `${g.id}-${agent}-${i}`;
+    const model = alt ? alt.model : isLead ? LEAD_MODEL : MODELS.length ? MODELS[workerIndex++ % MODELS.length] : undefined;
+    // flat rooms name agents by model (sonnet-3, deepseek-v4-1-flash-6) so a human can see the mix at a glance
+    const name = FLAT ? `${(model ?? agent).split("/").pop()!.replace(/[^a-z0-9]+/gi, "-").replace(/^gpt-/, "")}-${i}` : `${g.id}-${agent}-${i}`;
     log(`launching ${name}${isLead ? " (lead)" : ""}${model ? ` [${model}]` : ""}`);
     const vars = {
       NAME: name,
@@ -308,7 +333,14 @@ for (const g of plan.groups) {
         prompt("minimal.md", { NAME: name, N: TOTAL, ROOM: room, TOPIC: task, AGENT: agent }) +
         `\nWorking directory: ${wcwd}; you may read the project and run commands. ${writeRule} A verifier named "verifier" sits in the room and the final proposal needs its agree vote. Organise yourselves: claim areas on the board, recruit or break out into sub-rooms with request_agent when depth is needed, and bring results back here.`
       : SETTLED + "\n" + prompt("worker.md", { ...vars, CWD: wcwd, WRITE_RULE: writeRule });
-    runs.push((useCodex ? runCodex(name, text, wcwd, model) : runClaude(name, text, FULL && !readOnlyWorkers.has(name) ? WRITE_TOOLS : READ_TOOLS, wcwd, model)).then((t) => ({ name, text: t })));
+    const mayWrite = FULL && !readOnlyWorkers.has(name);
+    const run =
+      agent === "codex"
+        ? runCodex(name, text, wcwd, model)
+        : agent === "openrouter"
+          ? runOpenRouter(name, text, wcwd, model, mayWrite)
+          : runClaude(name, text, mayWrite ? WRITE_TOOLS : READ_TOOLS, wcwd, model);
+    runs.push(run.then((t) => ({ name, text: t })));
   }
 }
 

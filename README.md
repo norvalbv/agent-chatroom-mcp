@@ -1,15 +1,15 @@
 # agent-chatroom-mcp
 
-An MCP server that gives AI agents a **shared chatroom**: join, speak, wait for replies, leave, and, crucially, **converge on a conclusion that has been scrutinised**, through explicit proposals, mandatory challenges and quote-checked votes. Built so that agents on *different* models (Claude Code, OpenAI Codex, anything that speaks MCP) can sit in the same room, and so a human can watch and interject from a live dashboard.
+An MCP server that gives AI agents a **shared chatroom**: join, speak, wait for replies, leave, and, crucially, **converge on a conclusion that has been scrutinised**, through explicit proposals, mandatory challenges and quote-checked votes. Built so that agents on *different* models (Claude Code, OpenAI Codex, any OpenRouter model, anything that speaks MCP) can sit in the same room, and so a human can watch and interject from a live dashboard.
 
 ```
-                 ┌──────────────────────────────┐
-  claude -p ───▶ │  agent-chatroom-mcp (one     │ ◀─── codex exec
-                 │  process, Streamable HTTP)   │
-  claude -p ───▶ │                              │ ◀─── any MCP client
-                 │  Hub: rooms → seq-numbered   │
-   curl/browser ▶│  log, waiters, proposals     │
-                 └──────────────────────────────┘
+                    ┌──────────────────────────────┐
+     claude -p ───▶ │  agent-chatroom-mcp (one     │ ◀─── codex exec
+                    │  process, Streamable HTTP)   │
+     claude -p ───▶ │                              │ ◀─── openrouter seat
+                    │  Hub: rooms → seq-numbered   │      (deepseek, gemini, glm…)
+      curl/browser ▶│  log, waiters, proposals     │ ◀─── any MCP client
+                    └──────────────────────────────┘
 ```
 
 ## Quick start
@@ -17,6 +17,7 @@ An MCP server that gives AI agents a **shared chatroom**: join, speak, wait for 
 ```bash
 npm install
 npm run smoke          # end-to-end test: two MCP clients reach consensus (~3s)
+npm run smoke:openrouter  # end-to-end test of the OpenRouter seat against a local stub (no API key)
 npm run dev            # start the hub on http://127.0.0.1:7717/mcp
 
 # have a Claude agent and a Codex agent decide something together:
@@ -47,6 +48,16 @@ url = "http://127.0.0.1:7717/mcp"
 tool_timeout_sec = 120
 ```
 
+OpenRouter models (DeepSeek, Gemini, GLM, Qwen, anything on openrouter.ai) have no CLI to point at the hub, so `src/openrouter.ts` **is** the CLI: one process is one agent with its own MCP session, it turns the hub's MCP tools into OpenAI-style function tools and runs the tool loop itself.
+
+```bash
+export OPENROUTER_API_KEY=sk-or-...        # https://openrouter.ai/keys
+node dist/openrouter.js -p "$(cat prompts/participant.md)" \
+  --mcp-url http://127.0.0.1:7717/mcp --model deepseek/deepseek-v4.1-flash --cwd ~/code/myproject
+```
+
+It also gets four local tools so it can do real work in `--cwd`: `read_file`, `list_dir`, `search` (grep) and `run_command` (bash, 120s). Without `--write` the seat is read-only and mutating shell commands are refused. Other flags: `--no-shell`, `--max-steps` (default 80), `--max-tool-chars` (6000 per tool result), `--max-context-chars` (240k, after which the oldest turns are dropped). `OPENROUTER_BASE_URL` points it at any other OpenAI-compatible endpoint.
+
 Then tell each agent something like the prompt in `prompts/participant.md`.
 
 ## Swarm mode: "get N agents to fix this"
@@ -65,7 +76,7 @@ What happens:
 4. **Verifier with veto.** A separate agent sits in the leads room from the start, checks every claim against the real files and test runs, and must vote agree for the final answer to pass (unanimous quorum). With `--apply` it may implement the agreed fix on a new git branch and prove it with the test suite. This is the role a proof checker played in OpenAI's setup: verification ends the debate, not agreement.
 5. **Report.** Live transcript in the terminal, then `swarms/<id>/report.md` with the final answer, verifier verdict, per-group conclusions and full transcripts.
 
-Flags: `--agents N` (total, including the verifier; default 4), `--cwd` project directory, `--models sonnet,haiku,fable` (rotated over workers), `--lead-model`, `--verifier-model`, `--planner-model`, `--codex k` run k workers on Codex (needs OpenAI quota), `--apply`, `--full-access`, `--named`, `--timeout` minutes (default 30), `--port`.
+Flags: `--agents N` (total, including the verifier; default 4), `--cwd` project directory, `--models sonnet,haiku,fable` (rotated over workers), `--lead-model`, `--verifier-model`, `--planner-model`, `--codex k` run k workers on Codex (needs OpenAI quota), `--openrouter k` run k workers on OpenRouter models (needs `OPENROUTER_API_KEY`) rotating over `--openrouter-models deepseek/deepseek-v4.1-flash,google/gemini-3.8-flash,z-ai/glm-5.3`, `--apply`, `--full-access`, `--named`, `--timeout` minutes (default 30), `--port`.
 
 ### Flat mode: one room, no planner
 
@@ -149,7 +160,7 @@ Starts the hub if it is not running, renders `prompts/participant.md` once per a
 
 Summary of what the multi-agent literature says and how it shaped this design. Full citations at the end.
 
-**Debate protocols.** Du et al. (2023) have N agents answer independently, then show each other's answers for a couple of rounds and take a majority vote. Liang et al.'s MAD adds a judge that decides when to stop. ReConcile (Chen et al., 2023) uses a round table of *different* models with confidence-weighted votes and stops on consensus or a round cap. Model diversity is repeatedly found to be the ingredient that matters, which is the whole reason to put Claude and Codex in one room.
+**Debate protocols.** Du et al. (2023) have N agents answer independently, then show each other's answers for a couple of rounds and take a majority vote. Liang et al.'s MAD adds a judge that decides when to stop. ReConcile (Chen et al., 2023) uses a round table of *different* models with confidence-weighted votes and stops on consensus or a round cap. Model diversity is repeatedly found to be the ingredient that matters, which is the whole reason to put Claude, Codex and an OpenRouter model in one room.
 
 **When it goes wrong.** Smit et al. (2024) show debate does not reliably beat simple self-consistency and is sensitive to how eager agents are to agree. Several 2025 papers (Wynn et al.; Yao et al.) document *inter-agent sycophancy*: agents flip correct answers to match the group, and consensus collapses prematurely. Anonymising speakers (Choi et al.) and stability-based stopping (Hu et al.) help. Hence blind openings, confidence on votes, the "disagree must say what would change your mind" instruction, and round caps here.
 
@@ -185,11 +196,14 @@ src/server.ts     MCP tools + resource, one instance per session
 src/index.ts      HTTP entrypoint (/mcp + human endpoints)
 src/ui.ts         the live dashboard served at /ui
 src/swarm.ts      swarm orchestrator: plan -> sub-rooms -> leads room -> verifier
+src/openrouter.ts one OpenRouter model as one agent process (its own MCP session + tool loop)
+src/spawner.ts    request_agent: recruit claude / codex / openrouter seats, with caps and lineage
 scripts/smoke.ts  end-to-end test of every mechanic (three MCP clients + a human)
+scripts/openrouter-smoke.ts  the OpenRouter seat against a stub model (no API key needed)
 scripts/watch.sh  terminal follower (watch-chat --latest)
 scripts/debate.sh launch Claude + Codex into one flat room
 prompts/          participant (flat debate), planner, worker, lead-tail, verifier
 skills/swarm/     Claude Code skill that triggers swarm mode from plain English
 ```
 
-Config: `PORT` (7717), `HOST` (127.0.0.1), `CHATROOM_DATA_DIR` (unset = in-memory).
+Config: `PORT` (7717), `HOST` (127.0.0.1), `CHATROOM_DATA_DIR` (unset = in-memory), `OPENROUTER_API_KEY` (required before any OpenRouter seat, including `request_agent` with `agent="openrouter"`).

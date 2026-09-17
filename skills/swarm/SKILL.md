@@ -18,12 +18,13 @@ Always run the orchestrator. Do NOT hand-roll the swarm by spawning subagents th
 cd "/Users/benji.norval/Desktop/Personal and learning/agent-chatroom-mcp"
 node dist/swarm.js "<task in the user's words>" --agents <N> --cwd "<absolute project dir>" \
   [--flat] [--models sonnet,haiku,fable,opus] [--lead-model opus] [--verifier-model fable] \
-  [--apply | --full-access] [--codex <k>] [--timeout <minutes>] [--done-when "<criterion>"] [--verify "<what the verifier checks>"]
+  [--apply | --full-access] [--codex <k>] [--openrouter <k>] [--timeout <minutes>] [--done-when "<criterion>"] [--verify "<what the verifier checks>"]
 ```
 
 - `--agents N`: total including the verifier (default 4). "a few" = 4, "lots" = 8. **Flat mode caps at 12** (one room holds 12 live agents; the launcher refuses more instead of deadlocking).
 - `--models a,b,c`: Claude model mix rotated over workers. Aliases that work: `haiku`, `sonnet`, `opus`, `fable`. `--lead-model` (planned only), `--verifier-model`, `--planner-model`. A good mixed run: `--models sonnet,haiku,fable,sonnet,opus --lead-model opus --verifier-model fable`.
 - `--codex k`: k workers on OpenAI Codex (`codex exec`), rotating over `--codex-models` (`gpt-6-astra,gpt-5.6-sol,gpt-5.6-terra`). **Only when the user asks and has quota**; a Codex seat that dies on quota still counts toward the room's expected participants. Codex hooks need trusting once (`/hooks` in Codex) before its gates run.
+- `--openrouter k`: k workers on OpenRouter models (`src/openrouter.ts`, one process per agent), rotating over `--openrouter-models` (default `deepseek/deepseek-v4.1-flash,google/gemini-3.8-flash,z-ai/glm-5.3`; any slug from openrouter.ai/models works). Needs `OPENROUTER_API_KEY` exported — the launcher refuses to start without it rather than leaving dead seats in the quorum. Codex and OpenRouter seats share the non-lead seats, so `--codex k --openrouter m` needs `k + m <= agents - 1`. These seats get the chatroom tools plus `read_file` / `list_dir` / `search` / `run_command`, read-only unless `--full-access`.
 - `--apply`: the verifier may implement the agreed fix on a new git branch and prove it with tests. `--full-access`: workers edit files too, each on its own worktree/branch; the verifier merges.
 - `--named`: real names inside worker rooms (default pseudonyms). Flat rooms name agents by model (`sonnet-1`, `fable-6`) so the dashboard shows the mix.
 - `--timeout`: minutes before stragglers are killed (default 30; use 45 for 12+ agents or research-heavy briefs).

@@ -1,7 +1,7 @@
 {
   "name": "agent-chatroom-mcp",
   "version": "0.1.0",
-  "description": "MCP server that gives AI agents (Claude Code, Codex, ...) a shared chatroom with consensus primitives",
+  "description": "MCP server that gives AI agents (Claude Code, Codex, OpenRouter models, ...) a shared chatroom with consensus primitives",
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
@@ -9,6 +9,7 @@
     "start": "node dist/index.js",
     "dev": "tsx src/index.ts",
     "smoke": "tsx scripts/smoke.ts",
+    "smoke:openrouter": "tsx scripts/openrouter-smoke.ts",
     "debate": "bash scripts/debate.sh",
     "swarm": "node dist/swarm.js",
     "lint": "biome check .",
@@ -36,6 +37,7 @@
   },
   "bin": {
     "agent-chatroom-mcp": "dist/index.js",
-    "agent-swarm": "dist/swarm.js"
+    "agent-swarm": "dist/swarm.js",
+    "agent-openrouter": "dist/openrouter.js"
   }
 }

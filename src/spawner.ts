@@ -1,6 +1,7 @@
 /**
  * Spawner: lets a member of a room recruit new agents into the chat.
- * The hub process launches `claude -p` or `codex exec` with a rendered brief
+ * The hub process launches `claude -p`, `codex exec` or an OpenRouter seat
+ * (src/openrouter.ts, any OpenRouter model) with a rendered brief
  * that tells the newcomer which room to join and what to do. Lineage (parent,
  * depth) is recorded and caps keep a runaway "spawn more agents" loop from
  * taking the machine down: depth, live fan-out per requester, live per room,
@@ -16,6 +17,9 @@ import { settledAxes } from "./settled.js";
 const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(here, "..");
 
+/** Which runner backs a seat: the two CLIs, or an OpenRouter model driven by src/openrouter.ts. */
+export type AgentKind = "claude" | "codex" | "openrouter";
+
 export interface SpawnRequest {
   room: string;
   brief: string;
@@ -25,7 +29,7 @@ export interface SpawnRequest {
   /** topic of the room the request came from, so a recruit knows the task without asking */
   parentTopic?: string;
   name?: string;
-  agent?: "claude" | "codex";
+  agent?: AgentKind;
   model?: string;
   cwd?: string;
   canEdit?: boolean;
@@ -42,7 +46,7 @@ export interface SpawnedAgent {
   name: string;
   room: string;
   reportTo?: string;
-  agent: "claude" | "codex";
+  agent: AgentKind;
   model?: string;
   cwd: string;
   requestedBy: string;
@@ -142,6 +146,7 @@ export class Spawner {
     if (!req.newRoom && this.live(req.room).length + count > maxPerRoom) refuse(`${req.room} already has ${maxPerRoom} recruits live; spawn into a new room instead (new_room).`);
 
     const agent = req.agent ?? "claude";
+    if (agent === "openrouter" && !process.env.OPENROUTER_API_KEY) throw new HubError("An OpenRouter seat needs OPENROUTER_API_KEY in the hub's environment; recruit a claude or codex agent instead, or ask the human to set the key and restart the hub.");
     const base = (req.name?.trim() || `${agent}-recruit`).replace(/[^\w-]/g, "-").slice(0, 32);
     const names: string[] = [];
     for (let i = 0; i < count; i++) {
@@ -207,7 +212,13 @@ export class Spawner {
       writeFileSync(mcpJson, JSON.stringify({ mcpServers: { chatroom: { type: "http", url: o.mcpUrl } } }));
       let cmd: string;
       let args: string[];
-      if (agent === "codex") {
+      if (agent === "openrouter") {
+        // the seat is its own process (one MCP session per identity) and takes the hub URL directly
+        cmd = process.execPath;
+        args = [resolve(repoRoot, "dist", "openrouter.js"), "-p", prompt, "--mcp-url", o.mcpUrl, "--cwd", cwd];
+        if (req.model) args.push("--model", req.model);
+        if (req.canEdit) args.push("--write");
+      } else if (agent === "codex") {
         cmd = "codex";
         args = ["exec", "--skip-git-repo-check", "-C", cwd, "-c", `mcp_servers.chatroom.url="${o.mcpUrl}"`, "-c", "mcp_servers.chatroom.tool_timeout_sec=120"];
         if (req.model) args.push("-m", req.model);

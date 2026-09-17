@@ -123,13 +123,19 @@ await test('helper clone purity and API conformance', async () => {
   const h = await harness('env', syntheticEnv());
   const { seatChildEnv, SEAT_ENV_EXCLUSIONS } = h.exports;
   assert.ok(Array.isArray(SEAT_ENV_EXCLUSIONS) && SEAT_ENV_EXCLUSIONS.includes('CHATROOM_HUMAN_TOKEN'), 'SEAT_ENV_EXCLUSIONS declares token');
-  const env = seatChildEnv();
-  assert.notEqual(env, process.env, 'returns a clone');
+  const input = syntheticEnv();
+  const env = seatChildEnv(input);
+  assert.notEqual(env, input, 'returns a clone, not the input');
   assert.ok(Object.hasOwn(env, 'CHATROOM_HUMAN_TOKEN') === false, 'omits token from clone');
-  assert.ok(Object.hasOwn(process.env, 'CHATROOM_HUMAN_TOKEN') === true, 'parent env untouched');
+  assert.ok(Object.hasOwn(input, 'CHATROOM_HUMAN_TOKEN') === true, 'caller env untouched');
   assert.equal(env.MCP_TOOL_TIMEOUT, '120000', 'sets seat timeout');
   const frozen = Object.freeze({ OPENROUTER_API_KEY: PROVIDER, CHATROOM_HUMAN_TOKEN: HUMAN });
-  assert.deepEqual(seatChildEnv(frozen), { OPENROUTER_API_KEY: PROVIDER, MCP_TOOL_TIMEOUT: '120000' });
+  const out = seatChildEnv(frozen);
+  assert.equal(Object.keys(out).length, 2, 'clone is flat and exact');
+  assert.equal(out.OPENROUTER_API_KEY, PROVIDER, 'provider key preserved by value');
+  assert.equal(out.MCP_TOOL_TIMEOUT, '120000', 'seat timeout set');
+  assert.ok(Object.hasOwn(out, 'CHATROOM_HUMAN_TOKEN') === false, 'frozen input never mutated');
+  assert.equal(Object.hasOwn(frozen, 'CHATROOM_HUMAN_TOKEN'), true, 'frozen input still has its key');
 });
 await test('seat dotenv cannot bypass exclusion via unexpected key', async () => {
   const h = await harness('openrouter', {}, ['-p', 'synthetic prompt']);
@@ -142,7 +148,7 @@ await test('loadDotEnv exclusion option: token omitted, others loaded', async ()
   assert.equal(Object.hasOwn(h.env, 'CHATROOM_HUMAN_TOKEN'), false);
   assert.equal(h.env.OPENROUTER_API_KEY, PROVIDER);
   const reloaded = h.exports.loadDotEnv(undefined, { exclude: ['CHATROOM_HUMAN_TOKEN'] });
-  assert.deepEqual(reloaded, []); // existing values are never overridden
+  assert.equal(reloaded.length, 0); // existing values are never overridden
 });
 console.log(`SEAT ENV: ${failures ? `${failures} failed` : 'OK'} (synthetic only; minimization, NOT sandboxing)`);
 process.exitCode = failures ? 1 : 0;

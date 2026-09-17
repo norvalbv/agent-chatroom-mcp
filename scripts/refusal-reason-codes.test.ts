@@ -95,7 +95,8 @@ test('fresh Hub replay preserves discriminating tally keys and legacy hub_guard'
     // Historical events remain unknown: never retroactively infer their category.
     appendFileSync(f.path, JSON.stringify({type:'refusal', room:'reasons', tool:'board_set', reason:'hub_guard'}) + '\n');
     const legacyReplay = new Hub({dataDir:f.dir});
-    assert.deepEqual(legacyReplay.getRoom('reasons').refusals, {...before, 'board_set: hub_guard': before['board_set: hub_guard'] + 1});
+    const legacyCount = (before['board_set: hub_guard'] ?? 0) + 1;
+    assert.deepEqual(legacyReplay.getRoom('reasons').refusals, {...before, 'board_set: hub_guard': legacyCount});
   } finally { await f.cleanup(); }
 });
 

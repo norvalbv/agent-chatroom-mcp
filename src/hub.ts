@@ -478,8 +478,8 @@ export class Hub {
     const open = [...room.proposals.values()].find((pr) => pr.status === "open");
     if (!open) return undefined;
     const others = this.voters(room).filter((x) => x.id !== p.id);
-    if (room.expectedParticipants && others.length < room.expectedParticipants && this.voters(room).length >= room.expectedParticipants) {
-      return { proposal: open, reason: `the room expects ${room.expectedParticipants} participants and would drop to ${others.length}, so ${open.id} could never pass` };
+    if (room.expectedParticipants !== 1 && Hub.sessionsOf(others) < 2) {
+      return { proposal: open, reason: `the room would be left with ${others.length} voter(s), and a room of one cannot conclude, so ${open.id} could never pass` };
     }
     return undefined;
   }
@@ -517,6 +517,19 @@ export class Hub {
   /** Participants whose votes are required for quorum. Humans are chairs/observers: they may veto but are never waited on. */
   voters(room: Room): Participant[] {
     return this.activeParticipants(room).filter((p) => p.agent !== "human" && p.role !== "chair");
+  }
+
+  /** Voters who have ever joined, active or not. */
+  everJoinedVoters(room: Room): Participant[] {
+    return [...room.participants.values()].filter((p) => p.agent !== "human" && p.role !== "chair");
+  }
+
+  /**
+   * Expected participants who never joined. The floor counts arrivals, not attendance: whoever joined
+   * and left already had their turn, and waiting on them is what deadlocked a room with a dropout.
+   */
+  unarrived(room: Room): number {
+    return Math.max(0, room.expectedParticipants - this.everJoinedVoters(room).length);
   }
 
   /** "[chair]" etc. after a name; nothing for workers. */
@@ -853,7 +866,7 @@ export class Hub {
   openingsWaitingOn(room: Room, reveal = false): string[] {
     const active = this.voters(room);
     const missing = active.filter((p) => !room.openings.has(p.id)).map((p) => (reveal ? p.name : this.shown(room, p)));
-    const shortfall = Math.max(0, room.expectedParticipants - active.length);
+    const shortfall = this.unarrived(room);
     return shortfall > 0 ? [...missing, `${shortfall} more participant(s) to join`] : missing;
   }
 
@@ -1352,7 +1365,9 @@ export class Hub {
     if (pr.status !== "open") return [];
     const out: string[] = [];
     const active = this.voters(room);
-    if (room.expectedParticipants && active.length < room.expectedParticipants) out.push(`quorum floor: ${active.length} voters present, the room expects ${room.expectedParticipants} (request_agent, or a human closes the room)`);
+    const unarrived = this.unarrived(room);
+    if (unarrived > 0) out.push(`quorum floor: ${unarrived} of the ${room.expectedParticipants} expected participant(s) have never joined (request_agent, or a human closes the room)`);
+    else if (room.expectedParticipants !== 1 && Hub.sessionsOf(active) < 2) out.push(`quorum floor: ${active.length} voter(s) left and a room of one cannot conclude (request_agent, or a human closes the room)`);
     const waiting = active.filter((p) => !pr.votes[p.id]).map((p) => this.shown(room, p));
     if (waiting.length) out.push(`votes from ${waiting.join(", ")}`);
     for (const d of this.standingDisagrees(pr)) out.push(`a standing disagree from ${this.shown(room, room.participants.get(d.id) ?? d)}${room.participants.get(d.id)?.active ? "" : " (who has left)"}: they re-vote, or the text they objected to is amended`);
@@ -1424,9 +1439,16 @@ export class Hub {
     const standing = this.standingDisagrees(pr);
     const disagree = new Set([...active.filter((p) => pr.votes[p.id]?.vote === "disagree").map((p) => p.id), ...standing.map((d) => d.id)]).size;
     const everyoneVoted = votes.every(Boolean);
-    if (room.expectedParticipants && this.voters(room).length < room.expectedParticipants) {
+    const unarrived = this.unarrived(room);
+    if (unarrived > 0) {
       if (everyoneVoted && agree === active.length) {
-        stuck(`${pr.id} v${pr.version} has the agreement of everyone present (${agree}) but the room expects ${room.expectedParticipants} participants and has ${this.voters(room).length}: nobody here can conclude it. Recruit (request_agent), wait for the missing joiners, or a human closes the room.`);
+        stuck(`${pr.id} v${pr.version} has the agreement of everyone present (${agree}) but ${unarrived} of the ${room.expectedParticipants} expected participant(s) have never joined: nobody here can conclude it. Recruit (request_agent), wait for the missing joiners, or a human closes the room.`);
+      }
+      return;
+    }
+    if (room.expectedParticipants !== 1 && Hub.sessionsOf(this.voters(room)) < 2) {
+      if (everyoneVoted && agree === active.length) {
+        stuck(`${pr.id} v${pr.version} has the agreement of everyone still present (${agree}) but only ${this.voters(room).length} voter(s) remain and a room of one cannot conclude: nobody here can conclude it. Recruit (request_agent), or a human closes the room.`);
       }
       return;
     }

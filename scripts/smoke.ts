@@ -626,6 +626,31 @@ assert.deepEqual(tools, ["amend", "board_get", "board_set", "challenge", "join_r
   await a.call("leave_room", { room });
 }
 
+{
+  // a participant who joined and then dropped out is not awaited forever: the room still concludes on those present.
+  // Regression: expected_participants used to be compared against who is STILL here, so any dropout deadlocked the room.
+  const room = "dropout";
+  const ja = await a.call("join_room", { room, name: "claude-1", agent: "claude", expected_participants: 3 });
+  await b.call("join_room", { room, name: "codex-1", agent: "codex" });
+  const jc = await c.call("join_room", { room, name: "third-1", agent: "claude" });
+  await a.call("submit_opening", { room, content: "A opens" });
+  await b.call("submit_opening", { room, content: "B opens" });
+  await c.call("submit_opening", { room, content: "C opens" });
+  // the third agent leaves for good: two voters remain, which is still a real room
+  await c.call("leave_room", { room });
+  assert.ok(!jc.hint.includes("never"), "sanity: the third agent did join before leaving");
+  const pr = await a.call("propose", { room, text: "Two present agents can still settle this." });
+  await b.call("wait_for_messages", { room, timeout_ms: 0 });
+  await b.call("challenge", { room, proposal_id: pr.id, objection: 'The clause "still settle this" needs the quorum rule spelled out.' });
+  await a.call("vote", { room, proposal_id: pr.id, vote: "agree", quote: "present agents can still settle", reason: "The objection is answered: only voters still present are counted for quorum." });
+  const vb = await b.call("vote", { room, proposal_id: pr.id, vote: "agree", quote: "present agents can still settle", reason: "quorum rule is now stated" });
+  assert.equal(vb.proposal.status, "accepted", "a room whose dropout already joined must still be able to conclude");
+  const st = await a.call("room_status", { room });
+  assert.equal(st.state, "concluded", "the room concludes rather than waiting on the departed agent");
+  assert.match(st.conclusion.text, /settle this/, "the conclusion is recorded");
+  assert.equal(ja.room.expected_participants, 3, "the expectation itself is untouched; only who is awaited changed");
+}
+
 const ui = await (await fetch(`${HTTP}/ui`)).text();
 assert.match(ui, /<title>Agent Chatroom<\/title>/);
 

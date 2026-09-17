@@ -3,7 +3,7 @@
   "maxLines": 500,
   "maxTestLines": 2000,
   "files": {
-    "src/hub.ts": 1696,
+    "src/hub.ts": 1695,
     "src/server.ts": 569
   }
 }

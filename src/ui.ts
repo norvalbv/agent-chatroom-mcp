@@ -449,7 +449,7 @@ export const UI_HTML = `<!doctype html>
     var d = document.createElement('div');
     d.dataset.seq = m.seq;
     if (m.kind === 'system') {
-      var routine = /joined the room|left the room|rejoined|passes\\.$/.test(m.content);
+      var routine = /joined the room|left the room\\.$|rejoined|passes\\.$/.test(m.content); // a leave with a reason is never routine
       if (routine && !showNotices) return;
       lastSender = null;
       var concl = /^CONSENSUS REACHED/.test(m.content);
@@ -582,7 +582,7 @@ export const UI_HTML = `<!doctype html>
   function panePeople(r) {
     var rows = function (list) { return list.map(function (p) {
       var areas = areasOf(r, p.name);
-      return '<div class="person' + (p.active ? '' : ' off') + '">' + av(p.name, p.agent) + '<div><div class="n">' + esc(p.name) + roleTag(p) + '<span class="agent">' + esc(p.agent) + '</span></div><div class="a">' + esc(areas.join(', ')) + '</div></div><div class="s">' + p.messages + ' msg' + (p.messages === 1 ? '' : 's') + '<br>' + (p.active ? rel(p.last_active_at) : 'left') + '</div></div>';
+      return '<div class="person' + (p.active ? '' : ' off') + '">' + av(p.name, p.agent) + '<div><div class="n">' + esc(p.name) + roleTag(p) + '<span class="agent">' + esc(p.agent) + '</span></div><div class="a">' + esc(areas.join(', ')) + (p.left_reason ? (areas.length ? ' · ' : '') + 'left: ' + esc(p.left_reason) : '') + '</div></div><div class="s">' + p.messages + ' msg' + (p.messages === 1 ? '' : 's') + '<br>' + (p.active ? rel(p.last_active_at) : 'left') + '</div></div>';
     }).join(''); };
     var active = r.participants.filter(function (p) { return p.active; }), gone = r.participants.filter(function (p) { return !p.active; });
     return '<div class="sec"><h3>In the room <span class="sp"></span><span class="c">' + active.length + '</span></h3>' + (rows(active) || '<div class="empty" style="padding:16px">Nobody here.</div>') + '</div>'

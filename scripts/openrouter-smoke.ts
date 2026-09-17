@@ -56,12 +56,12 @@ const scripts: Record<string, Turn[]> = {
     { content: null, tool_calls: [call("c4", "send_message", { room: ROOM, content: "hello from the openrouter seat" })] },
     { content: null, tool_calls: [call("c5", "run_command", { command: "rm -rf /tmp/openrouter-smoke-should-not-run" })] },
     { content: null, tool_calls: [call("c6", "run_command", { command: "echo shell-works" })] },
-    { content: null, tool_calls: [call("c7", "leave_room", { room: ROOM })] },
+    { content: null, tool_calls: [call("c7", "leave_room", { room: ROOM, reason: "stub seat finished its scripted turns" })] },
   ],
   recruit: [
     { content: null, tool_calls: [call("r1", "join_room", { room: RECRUIT_ROOM, name: "or-recruit", agent: "openrouter", role: "recruit" })] },
     { content: null, tool_calls: [call("r2", "send_message", { room: RECRUIT_ROOM, content: "recruit reporting: spawned by request_agent" })] },
-    { content: null, tool_calls: [call("r3", "leave_room", { room: RECRUIT_ROOM })] },
+    { content: null, tool_calls: [call("r3", "leave_room", { room: RECRUIT_ROOM, reason: "stub recruit finished its scripted turns" })] },
   ],
   // a seat whose model stops calling tools without leaving: the loop's exit must still leave the room
   quit: [
@@ -182,7 +182,7 @@ assert.equal(await new Promise<number | null>((r) => budget.on("close", r)), 0, 
 assert.match(budgetErr, /budget spent/, `the budget did not end the run:\n${budgetErr}`);
 assert.ok(turns.budget < scripts.budget.length, `the budget seat kept going: ${turns.budget} turns`);
 const budgetTranscript = await (await fetch(`${HUB}/rooms/${BUDGET_ROOM}/transcript`)).text();
-assert.ok(budgetTranscript.includes("deepseek-2 left the room."), `the seat did not leave on the budget:\n${budgetTranscript}`);
+assert.ok(/deepseek-2 left the room: seat exiting: [0-9.]+ min budget spent/.test(budgetTranscript), `the seat did not leave on the budget:\n${budgetTranscript}`);
 
 // ---------- 3b. a model that stops calling tools is still taken out of the room ----------
 const quit = spawn("npx", ["tsx", "src/openrouter.ts", "-p", "QUIT TRIAL: join the room.", "--mcp-url", `${HUB}/mcp`, "--model", "stub/model", "--write"], {

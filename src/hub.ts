@@ -52,6 +52,10 @@ export interface Participant {
   seenConclusion?: boolean;
   /** proposal id a blocking leave_room was already refused for (the second call proceeds) */
   leaveWarned?: string;
+  /** a leave that abandons a claim or an unanswered ask was already refused once (the next call proceeds) */
+  leaveWarnedExit?: boolean;
+  /** why this participant left, as given to leave_room; shown in the room notice and the dashboard */
+  leaveReason?: string;
   /** id of the addressed message this participant was last shown by wait_for_messages (the next wait without an answer is refused once) */
   addressWarned?: string;
   /** id of the addressed message a wait_for_messages was already refused for (the call after that proceeds) */
@@ -453,6 +457,7 @@ export class Hub {
         active: p.active,
         messages: p.messageCount,
         last_active_at: p.lastActiveAt,
+        left_reason: p.active ? null : p.leaveReason ?? null,
       })),
       active_count: active.length,
       message_count: room.messages.length,
@@ -626,9 +631,10 @@ export class Hub {
     return undefined;
   }
 
-  leave(roomName: string, pid: string): void {
+  leave(roomName: string, pid: string, reason?: string): void {
     const room = this.getRoom(roomName);
     const p = this.requireParticipant(room, pid);
+    const why = reason?.trim() || undefined;
     const block = this.leavingWouldBlock(room, p);
     if (block && p.leaveWarned !== block.proposal.id) {
       p.leaveWarned = block.proposal.id;
@@ -640,9 +646,34 @@ export class Hub {
     }
     p.active = false;
     p.lastActiveAt = now();
+    if (why) p.leaveReason = why;
     this.persist({ type: "leave", room: roomName, p });
-    this.post(room, "system", undefined, `${this.shown(room, p)} left the room.`);
+    this.post(room, "system", undefined, `${this.shown(room, p)} left the room${why ? `: ${why}` : "."}`);
     for (const pr of room.proposals.values()) if (pr.status === "open") this.evaluate(room, pr);
+  }
+
+  /**
+   * Why an agent should not leave yet, or null. Refused once per participant (like the quorum-floor refusal): the
+   * point is to make the seat write the handoff or answer the ask, not to cage it. Humans and session cleanup skip it.
+   * A claim/* by this seat counts as handed over when a handoff/* by the same seat exists or the claim's JSON status
+   * says done/fixed/handed; the launcher's respawn rule (src/respawn.ts) reads the board the same way.
+   */
+  leaveRefusal(room: Room, p: Participant): string | null {
+    if (p.agent === "human" || p.leaveWarnedExit) return null;
+    const name = p.name;
+    const handedOff = [...room.board.entries()].some(([k, e]) => k.startsWith("handoff/") && e.by === name);
+    const orphaned = [...room.board.entries()].filter(([k, e]) => {
+      if (!k.startsWith("claim/") || e.by !== name || handedOff) return false;
+      try { const j = JSON.parse(e.text) as { status?: string }; if (/^(done|fixed|handed|handed-over|closed|complete|completed)$/i.test(j.status ?? "")) return false; } catch {}
+      return true;
+    }).map(([k]) => k);
+    const owed = this.addressedBy(room, p);
+    if (!orphaned.length && !owed.length) return null;
+    p.leaveWarnedExit = true;
+    const parts: string[] = [];
+    if (orphaned.length) parts.push(`you still own ${orphaned.slice(0, 3).join(", ")} with no handoff/* by you: board_set handoff/${orphaned[0].slice("claim/".length)} saying what is done, where it is, and what is undone (or mark the claim's status done)`);
+    if (owed.length) parts.push(`${this.shown(room, owed[0].from)} asked you at #${owed[0].seq}: reply (send_message reply_to="${owed[0].id}") or pass`);
+    return `Before you leave: ${parts.join("; ")}. Then leave_room again with your reason. Calling leave_room again now leaves anyway.`;
   }
 
   requireParticipant(room: Room, pid: string): Participant {

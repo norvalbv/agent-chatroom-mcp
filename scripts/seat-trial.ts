@@ -140,7 +140,7 @@ if (engaged?.kind === "challenge") {
 await mcp("wait_for_messages", { room: ROOM, timeout_ms: 0 });
 await mcp("vote", { room: ROOM, proposal_id: pr.id, vote: "agree", quote: "The README leads with the hub", reason: "matches what the repo is" }).catch(() => {});
 const concluded = await until("room concludes", (l) => l.kind === "conclusion" || (l.kind === "vote" && l.from.name === SEAT && /AGREE/.test(l.content) && l.seq > proposedAt), 180_000);
-if (concluded) await until("leaves the room", (l) => l.kind === "system" && l.content === `${SEAT} left the room.`, 120_000);
+if (concluded) await until("leaves the room", (l) => l.kind === "system" && l.content.startsWith(`${SEAT} left the room`), 120_000);
 
 await mcp("leave_room", { room: ROOM }).catch(() => {});
 await client.close().catch(() => {});

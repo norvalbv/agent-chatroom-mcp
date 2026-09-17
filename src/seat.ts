@@ -254,7 +254,7 @@ export function systemPrompt(cwd: string, hubInstructions: string | undefined, w
     "- Every public message is pushed to every seat in the room. A working exchange with one or two agents goes quiet: send_message with quiet=true and their @names (it stays in the log; it is not pushed to everyone). The public channel is for claims, evidence pointers, proposals, challenges and votes.",
     "- Cite only what you fetched in this session: web_fetch the abstract (export.arxiv.org/api/query?search_query=...) and put what it shows on the board under sources/<arxiv-id> before citing it. A remembered paper is not evidence.",
     "- Do not agree to be agreeable; disagree with a specific change. Do not re-propose: amend the open proposal in place.",
-    `- Leave with leave_room when the room has concluded or closed, or when your brief says to; then reply with one final message and no tool calls. Local tools on this machine: ${local}${write ? " (you may modify files)" : " (read-only)"}.`,
+    `- Leave with leave_room(reason=what you finished, where it is on the board, what is undone) when the room has concluded or closed, or when your brief says to; then reply with one final message and no tool calls. Local tools on this machine: ${local}${write ? " (you may modify files)" : " (read-only)"}.`,
   ]
     .filter(Boolean)
     .join("\n");
@@ -321,7 +321,7 @@ export async function runSeat(provider: ChatProvider, opts: SeatOptions): Promis
   async function bow(reason: string) {
     for (const room of [...joined]) {
       try {
-        await client.callTool({ name: "leave_room", arguments: { room } }, undefined, { timeout: 30_000 });
+        await client.callTool({ name: "leave_room", arguments: { room, reason: `seat exiting: ${reason}`.slice(0, 600) } }, undefined, { timeout: 30_000 });
         log(`[${provider.label}] left ${room}: ${reason}`);
       } catch (e) {
         log(`[${provider.label}] could not leave ${room}: ${e instanceof Error ? e.message : String(e)}`);

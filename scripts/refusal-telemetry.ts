@@ -73,7 +73,7 @@ try {
   assert.equal(events().filter((e) => e.type === "call_completion").at(-1).participant, secondId);
   assert.equal((await call("pass", { room: "rates" })).isError, true);
   assert.equal(events().filter((e) => e.type === "call_completion").at(-1).participant, null);
-  assert.notEqual((await call("leave_room", { room: "rates", participant_id: secondId })).isError, true);
+  assert.notEqual((await call("leave_room", { room: "rates", participant_id: secondId, reason: "telemetry check complete, nothing owed" })).isError, true);
   assert.equal(events().filter((e) => e.type === "call_completion").at(-1).participant, secondId);
 
   const replay = new Hub({ dataDir });

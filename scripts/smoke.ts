@@ -365,8 +365,8 @@ assert.deepEqual(tools, ["amend", "board_get", "board_set", "challenge", "join_r
   await b.call("send_message", { room: "rr", content: "round 2 too" });
   const st = await a.call("room_status", { room: "rr" });
   assert.equal(st.state, "stalled");
-  await a.call("leave_room", { room: "rr" });
-  await b.call("leave_room", { room: "rr" });
+  await a.call("leave_room", { room: "rr", reason: "smoke: section finished, nothing owed" });
+  await b.call("leave_room", { room: "rr", reason: "smoke: section finished, nothing owed" });
 }
 
 // ---------------- one connection hosting two identities ----------------
@@ -379,7 +379,7 @@ assert.deepEqual(tools, ["amend", "board_get", "board_set", "challenge", "join_r
   assert.match(sm.sent, /sub-1/);
   const heard = await a.call("wait_for_messages", { room: "shared", timeout_ms: 200, participant_id: j2.participant_id });
   assert.ok(heard.messages.some((m: string) => m.includes("hi from sub-1")));
-  await a.call("leave_room", { room: "shared", participant_id: j2.participant_id });
+  await a.call("leave_room", { room: "shared", participant_id: j2.participant_id, reason: "smoke: section finished, nothing owed" });
   await a.call("send_message", { room: "shared", content: "alone now, no id needed" });
 }
 
@@ -590,8 +590,8 @@ assert.deepEqual(tools, ["amend", "board_get", "board_set", "challenge", "join_r
   await b.call("wait_for_messages", { room, timeout_ms: 0 });
   const vb = await b.call("vote", { room, proposal_id: pr.id, vote: "disagree", reason: "the cache warmup path needs a test before this ships" });
   assert.equal(vb.proposal.status, "open");
-  await assert.rejects(b.call("leave_room", { room }), /Leaving now would block/);
-  await b.call("leave_room", { room });
+  await assert.rejects(b.call("leave_room", { room, reason: "smoke: section finished, nothing owed" }), /Leaving now would block/);
+  await b.call("leave_room", { room, reason: "smoke: section finished, nothing owed" });
   const w2 = await a.call("wait_for_messages", { room, timeout_ms: 0 });
   assert.ok(w2.open_proposal.blocked_by.some((x: string) => /standing disagree from codex-1 \(who has left\)/.test(x)), "a departed dissenter still blocks, by name");
   assert.ok(w2.open_proposal.blocked_by.some((x: string) => x.startsWith("quorum floor")), "the quorum floor is named, not silent");
@@ -647,7 +647,7 @@ assert.deepEqual(tools, ["amend", "board_get", "board_set", "challenge", "join_r
   assert.ok(j.recent_messages.some((m: string) => m.includes("clamped to 12")));
   assert.equal(j.room.opening_max_chars, 400);
   assert.ok(j.room.code_state === null || typeof j.room.code_state.head === "string");
-  await a.call("leave_room", { room });
+  await a.call("leave_room", { room, reason: "smoke: section finished, nothing owed" });
 }
 
 {
@@ -661,7 +661,7 @@ assert.deepEqual(tools, ["amend", "board_get", "board_set", "challenge", "join_r
   await b.call("submit_opening", { room, content: "B opens" });
   await c.call("submit_opening", { room, content: "C opens" });
   // the third agent leaves for good: two voters remain, which is still a real room
-  await c.call("leave_room", { room });
+  await c.call("leave_room", { room, reason: "smoke: section finished, nothing owed" });
   assert.ok(!jc.hint.includes("never"), "sanity: the third agent did join before leaving");
   const pr = await a.call("propose", { room, text: "Two present agents can still settle this." });
   await b.call("wait_for_messages", { room, timeout_ms: 0 });
@@ -717,8 +717,8 @@ assert.deepEqual(tools, ["amend", "board_get", "board_set", "challenge", "join_r
   const seq = Number(/#(\d+)/.exec(w4.messages.at(-1))![1]);
   const rep = await b.call("send_message", { room, content: "No, that is all.", reply_to: `#${seq}` });
   assert.ok(rep.sent.includes("No, that is all."));
-  await a.call("leave_room", { room });
-  await b.call("leave_room", { room });
+  await a.call("leave_room", { room, reason: "smoke: section finished, nothing owed" });
+  await b.call("leave_room", { room, reason: "smoke: section finished, nothing owed" });
 }
 
 {
@@ -813,7 +813,7 @@ assert.deepEqual(tools, ["amend", "board_get", "board_set", "challenge", "join_r
   assert.equal(j.room.topic, "policy first");
   const again = await fetch(`${HTTP}/rooms/${room}/create`, { method: "POST", headers: { "content-type": "application/json" }, body: "{}" });
   assert.equal(again.status, 200, "creating an existing room is idempotent");
-  await a.call("leave_room", { room });
+  await a.call("leave_room", { room, reason: "smoke: section finished, nothing owed" });
 }
 
 {
@@ -831,7 +831,7 @@ assert.deepEqual(tools, ["amend", "board_get", "board_set", "challenge", "join_r
   const asked2 = await a.call("request_agent", { room, name: "helper2", agent: "codex", brief: "A brief that is comfortably longer than twenty characters for the policy test." });
   assert.equal(asked2.agent, "codex", "unpinned: launched as requested");
   await fetch(`${HTTP}/policy`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ agent: "openrouter", model: "stealth/union-alpha" }) });
-  await a.call("leave_room", { room });
+  await a.call("leave_room", { room, reason: "smoke: section finished, nothing owed" });
 }
 
 const ui = await (await fetch(`${HTTP}/ui`)).text();

@@ -194,10 +194,26 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
 
   server.registerTool(
     "leave_room",
-    { title: "Leave a room", description: "Leave a chatroom. Open proposals are re-evaluated without you. If your leaving would make the open proposal unpassable (quorum floor), the first call is refused with the reason; call again to leave anyway.", inputSchema: { room: roomArg, participant_id: asArg } },
-    guard("leave_room", ({ room, participant_id }) => {
+    {
+      title: "Leave a room",
+      description:
+        "Leave a chatroom, saying why (reason): what you finished, where it is on the board (handoff/*), what you leave undone. The reason is posted in the room and shown in the dashboard, so others can recruit a replacement if they disagree. " +
+        "Refused once, with what to do first, if you still own a claim/* with no handoff/* or someone's @-ask to you is unanswered; refused once if your leaving would make the open proposal unpassable. Calling again leaves anyway.",
+      inputSchema: { room: roomArg, participant_id: asArg, reason: z.string().max(600).optional().describe("One line: what you finished, where it is (board key), what is undone. Required for agents.") },
+    },
+    guard("leave_room", ({ room, participant_id, reason }) => {
       const id = pid(room, participant_id);
-      hub.leave(room, id);
+      const r = hub.getRoom(room);
+      const p = hub.requireParticipant(r, id);
+      if (p.agent !== "human" && (reason ?? "").trim().length < 12) {
+        throw new HubError("leave_room needs a reason (one line): what you finished, where it is on the board (handoff/*), and what you leave undone. It is posted in the room so others can recruit if they disagree.");
+      }
+      const block = hub.leavingWouldBlock(r, p);
+      if (!block || p.leaveWarned === block.proposal.id) {
+        const refusal = hub.leaveRefusal(r, p);
+        if (refusal) throw new HubError(refusal);
+      }
+      hub.leave(room, id, reason);
       me.get(room)?.delete(id);
       return `Left ${room}.`;
     }),
@@ -618,7 +634,7 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
     for (const [room, ids] of me) {
       for (const id of ids) {
         try {
-          hub.leave(room, id);
+          hub.leave(room, id, "MCP session closed without leave_room");
         } catch {}
       }
       ids.clear();

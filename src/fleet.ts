@@ -15,6 +15,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { loadDotEnv } from "./env.js";
+import { consumeResult, lineFramer, type FleetHandoff } from "./fleet-result.js";
 loadDotEnv();
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -75,7 +76,7 @@ mkdirSync(OUT, { recursive: true });
 const log = (s: string) => console.log(`\x1b[2m[${new Date().toISOString().slice(11, 19)}]\x1b[0m ${s}`);
 log(`${FLEET_ID}: ${areas.length} run(s) × ${AGENTS} seats on ${MODEL} (${areas.length * AGENTS} agents), ${TIMEOUT} min each, ${STAGGER}s apart; summary at ${OUT}/summary.md`);
 
-interface Result {
+interface Result extends FleetHandoff {
   area: Area;
   swarmId?: string;
   exitCode: number | null;
@@ -95,7 +96,8 @@ process.on("SIGINT", () => {
 function runArea(area: Area): Promise<Result> {
   return new Promise((res) => {
     const task = `${spec.preamble}\n\nYOUR AREA: ${area.title}\n${area.brief}`;
-    const args = [resolve(repoRoot, "dist/swarm.js"), task, "--flat", "--agents", String(AGENTS), "--openrouter", String(AGENTS - 1), "--openrouter-models", MODEL, "--verifier-openrouter", MODEL, "--timeout", String(TIMEOUT), "--cwd", CWD, "--port", PORT];
+    const resultPath = resolve(OUT, `result-${area.id}.json`);
+    const args = [resolve(repoRoot, "dist/swarm.js"), task, "--result-path", resultPath, "--flat", "--agents", String(AGENTS), "--openrouter", String(AGENTS - 1), "--openrouter-models", MODEL, "--verifier-openrouter", MODEL, "--timeout", String(TIMEOUT), "--cwd", CWD, "--port", PORT];
     if (FULL) args.push("--full-access");
     if (REQUIRE_VERIFICATION) args.push("--require-verification");
     const child = spawn(process.execPath, args, { cwd: repoRoot, env: process.env, stdio: ["ignore", "pipe", "pipe"] });
@@ -105,10 +107,7 @@ function runArea(area: Area): Promise<Result> {
     let swarmId: string | undefined;
     let rateLimited = 0;
     const exits: string[] = [];
-    const onData = (d: Buffer) => {
-      const text = String(d);
-      buf += text;
-      for (const line of text.split("\n")) {
+    const onLine = (line: string) => {
         const m = /swarm (swarm-[0-9]{6}-[a-z0-9]{4}):/.exec(line);
         if (m && !swarmId) {
           swarmId = m[1];
@@ -118,25 +117,16 @@ function runArea(area: Area): Promise<Result> {
         const ex = /^\S*\s(\S+) exited \((\S+)\)/.exec(line.replace(/\x1b\[[0-9;]*m/g, ""));
         if (ex) exits.push(`${ex[1]}:${ex[2]}`);
         if (/CONSENSUS REACHED|NO CONSENSUS|timeout after|provider error|rate-limited/.test(line)) log(`${area.id}: ${line.replace(/\x1b\[[0-9;]*m/g, "").slice(0, 140)}`);
-      }
     };
-    child.stdout?.on("data", onData);
-    child.stderr?.on("data", onData);
+    const stdout = lineFramer(onLine), stderr = lineFramer(onLine);
+    child.stdout?.on("data", (d: Buffer) => { buf += String(d); stdout.push(String(d)); });
+    child.stderr?.on("data", (d: Buffer) => { buf += String(d); stderr.push(String(d)); });
     child.on("close", (code) => {
       writeFileSync(logFile, buf);
-      let conclusion = "";
-      let verdict = "";
-      let reportPath: string | undefined;
-      if (swarmId) {
-        reportPath = resolve(repoRoot, "swarms", swarmId, "report.md");
-        if (existsSync(reportPath)) {
-          const report = readFileSync(reportPath, "utf8");
-          conclusion = (/## Final answer[^\n]*\n\n([\s\S]*?)\n\n## /.exec(report)?.[1] ?? "").trim();
-          verdict = (/## Verifier[^\n]*\n\n([\s\S]*?)\n\n## /.exec(report)?.[1] ?? "").trim();
-        }
-      }
+      stdout.flush(); stderr.flush();
+      const handoff = consumeResult(resultPath, repoRoot, swarmId);
       log(`${area.id} finished (exit ${code}${rateLimited ? `, ${rateLimited} rate-limit lines` : ""})`);
-      res({ area, swarmId, exitCode: code, conclusion, verdict, rateLimited, exits, reportPath });
+      res({ area, exitCode: code, rateLimited, exits, ...handoff });
     });
   });
 }
@@ -162,6 +152,8 @@ const summary = [
       "",
       `Run: ${r.swarmId ?? "(never started)"} · exit ${r.exitCode} · ${r.exits.filter((e) => !/:0$/.test(e)).length} abnormal exit(s)${r.rateLimited ? ` · ${r.rateLimited} rate-limit lines` : ""}${r.reportPath ? ` · report: ${r.reportPath.replace(repoRoot + "/", "")}` : ""}`,
       "",
+      `Handoff: ${r.source}${r.resultPath ? ` · artifact: ${r.resultPath}` : ""}${r.error ? ` · ${r.error}` : ""}`,
+      "",
       r.conclusion ? `### Conclusion\n\n${r.conclusion}` : "### No conclusion",
       "",
       r.verdict ? `### Verifier\n\n${r.verdict}` : "",
@@ -177,35 +169,34 @@ if (CONSOLIDATE) {
   // summaries named) and merges them into one ranked consensus with the contradictions between areas named,
   // so the maintainer builds from one document with one decision record instead of twelve.
   const inputs = [...CONSOLIDATE_FROM.map((f) => readFileSync(resolve(f), "utf8")), ...(results.length ? [summary] : [])];
-  const digest = inputs
-    .map((t) => t.replace(/\n### Verifier[\s\S]*?(?=\n## |$)/g, "\n"))
-    .join("\n\n---\n\n")
-    .slice(0, 60_000);
+  // Preserve the complete input; agents page the file rather than silently losing its tail.
+  const digest = inputs.join("\n\n---\n\n");
   const consolidationFile = resolve(OUT, "consolidation-input.md");
   writeFileSync(consolidationFile, digest);
-  const task = `CONSOLIDATE THE FLEET. Rooms in a fleet of self-improvement swarms each concluded a ranked list for one area of this repository; they never saw each other. Their conclusions are in ${consolidationFile.replace(repoRoot + "/", "")} (read it with read_file; it is the only input that matters, the reports it names are under swarms/). Produce ONE ranked list across all areas: merge duplicates (name which areas raised each item), drop anything whose evidence does not hold when you check it against the code (file:line) or the transcripts, name every contradiction between areas and resolve it or mark it open, and keep for each item: what to change, the evidence, how to build it, where it belongs (enforce-in-hub | seat-side | launcher | prompt-only | docs), cost, and which areas proposed it. Rank by impact on convergence quality, correctness and context cost. This run is READ-ONLY. Someone other than the proposer challenges the weakest claim; the verifier reproduces the top five items before agreeing and ends with a DECISION RECORD. Never pkill or killall.`;
+  const task = `CONSOLIDATE THE FLEET. Rooms in a fleet of self-improvement swarms each concluded a ranked list for one area of this repository; they never saw each other. Their conclusions are in ${consolidationFile.replace(repoRoot + "/", "")} (read the COMPLETE file with read_file in pages; artifact links contain full offline board/proposal/transcript evidence, legacy reports are best-effort). Produce ONE ranked list across all areas: merge duplicates (name which areas raised each item), drop anything whose evidence does not hold when you check it against the code (file:line) or the transcripts, name every contradiction between areas and resolve it or mark it open, and keep for each item: what to change, the evidence, how to build it, where it belongs (enforce-in-hub | seat-side | launcher | prompt-only | docs), cost, and which areas proposed it. Rank by impact on convergence quality, correctness and context cost. This run is READ-ONLY. Someone other than the proposer challenges the weakest claim; the verifier reproduces the top five items before agreeing and ends with a DECISION RECORD. Never pkill or killall.`;
   log(`consolidating ${inputs.length} summary file(s) (${digest.length} chars) in one more run`);
   const r = await new Promise<Result>((res) => {
-    const args = [resolve(repoRoot, "dist/swarm.js"), task, "--flat", "--agents", String(AGENTS), "--openrouter", String(AGENTS - 1), "--openrouter-models", MODEL, "--verifier-openrouter", MODEL, "--timeout", String(TIMEOUT), "--cwd", CWD, "--port", PORT];
+    const resultPath = resolve(OUT, "result-consolidation.json");
+    const args = [resolve(repoRoot, "dist/swarm.js"), task, "--result-path", resultPath, "--flat", "--agents", String(AGENTS), "--openrouter", String(AGENTS - 1), "--openrouter-models", MODEL, "--verifier-openrouter", MODEL, "--timeout", String(TIMEOUT), "--cwd", CWD, "--port", PORT];
     const child = spawn(process.execPath, args, { cwd: repoRoot, env: process.env, stdio: ["ignore", "pipe", "pipe"] });
     children.push(child);
     let buf = "";
     let swarmId: string | undefined;
-    const onData = (d: Buffer) => {
-      buf += String(d);
-      const m = /swarm (swarm-[0-9]{6}-[a-z0-9]{4}):/.exec(String(d));
+    const onLine = (line: string) => {
+      const m = /swarm (swarm-[0-9]{6}-[a-z0-9]{4}):/.exec(line);
       if (m && !swarmId) log(`consolidation → ${m[1]}`), (swarmId = m[1]);
     };
-    child.stdout?.on("data", onData);
-    child.stderr?.on("data", onData);
+    const stdout = lineFramer(onLine), stderr = lineFramer(onLine);
+    child.stdout?.on("data", (d: Buffer) => { buf += String(d); stdout.push(String(d)); });
+    child.stderr?.on("data", (d: Buffer) => { buf += String(d); stderr.push(String(d)); });
     child.on("close", (code) => {
       writeFileSync(resolve(OUT, "consolidation.log"), buf);
-      const reportPath = swarmId ? resolve(repoRoot, "swarms", swarmId, "report.md") : undefined;
-      const report = reportPath && existsSync(reportPath) ? readFileSync(reportPath, "utf8") : "";
-      res({ area: { id: "consolidation", title: "Consolidation", brief: "" }, swarmId, exitCode: code, conclusion: (/## Final answer[^\n]*\n\n([\s\S]*?)\n\n## /.exec(report)?.[1] ?? "").trim(), verdict: (/## Verifier[^\n]*\n\n([\s\S]*?)\n\n## /.exec(report)?.[1] ?? "").trim(), rateLimited: 0, exits: [], reportPath });
+      stdout.flush(); stderr.flush();
+      const handoff = consumeResult(resultPath, repoRoot, swarmId);
+      res({ area: { id: "consolidation", title: "Consolidation", brief: "" }, exitCode: code, rateLimited: 0, exits: [], ...handoff });
     });
   });
-  writeFileSync(resolve(OUT, "consolidated.md"), `# ${FLEET_ID}: consolidated consensus\n\nRun: ${r.swarmId ?? "?"} · exit ${r.exitCode}${r.reportPath ? ` · ${r.reportPath.replace(repoRoot + "/", "")}` : ""}\n\n${r.conclusion || "_no consensus_"}\n\n## Verifier\n\n${r.verdict}\n`);
+  writeFileSync(resolve(OUT, "consolidated.md"), `# ${FLEET_ID}: consolidated consensus\n\nRun: ${r.swarmId ?? "?"} · exit ${r.exitCode}${r.reportPath ? ` · ${r.reportPath.replace(repoRoot + "/", "")}` : ""}\n\nHandoff: ${r.source}${r.resultPath ? ` · artifact: ${r.resultPath}` : ""}${r.error ? ` · ${r.error}` : ""}\n\n${r.conclusion || "_no consensus_"}\n\n## Verifier\n\n${r.verdict}\n`);
   log(`consolidation ${r.exitCode === 0 && r.conclusion ? "concluded" : "did not conclude"}: ${OUT}/consolidated.md`);
   process.exit(r.exitCode === 0 && r.conclusion ? 0 : 1);
 }

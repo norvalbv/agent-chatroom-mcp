@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "pins": {
+    "oxlint": "1.78.0",
+    "oxfmt": "0.63.0"
+  },
+  "antiSlop": false,
+  "baseDigest": "286a53fa85a98295e98c1a236f8538e806643f779fc27bf1ecb977078a341abf",
+  "configs": {
+    "oxlint": {
+      "path": ".oxlintrc.json",
+      "createdDigest": "fa25d82dc3c295514293ac58748dc18ecd30b246eecb58854eec0404dcef805c"
+    },
+    "oxfmt": {
+      "path": ".oxfmtrc.json",
+      "createdDigest": "ca3d163bab055381827226140568f3bef7eaac187cebd76878e0b63e9e442356"
+    }
+  },
+  "devkitRef": "v0.62.0"
+}

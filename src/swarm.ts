@@ -6,7 +6,7 @@
  *   npx tsx src/swarm.ts "<task>" --agents 6 --cwd /path/to/project [--codex 2] [--apply] [--timeout 30]
  */
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -54,6 +54,36 @@ mkdirSync(OUT, { recursive: true });
 const log = (s: string) => console.log(`\x1b[2m[${new Date().toISOString().slice(11, 19)}]\x1b[0m ${s}`);
 const prompt = (file: string, vars: Record<string, string | number>) =>
   Object.entries(vars).reduce((s, [k, v]) => s.split(`{{${k}}}`).join(String(v)), readFileSync(resolve(repoRoot, "prompts", file), "utf8"));
+
+// ---------- settled axes (devkit decision log) ----------
+/**
+ * If the target project keeps a devkit decision log (docs/decisions/*.md), every agent is told what is
+ * already settled and which sources have already been read, so research is not repeated and a reversal
+ * has to be argued as a re-target with new evidence.
+ */
+function settledAxes(cwd: string): string {
+  const dir = resolve(cwd, "docs", "decisions");
+  if (!existsSync(dir)) return "";
+  const files = readdirSync(dir).filter((f) => f.endsWith(".md") && f !== "INDEX.md");
+  if (!files.length) return "";
+  const rows: string[] = [];
+  const sources = new Set<string>();
+  for (const f of files) {
+    const t = readFileSync(resolve(dir, f), "utf8");
+    const title = /^## Target[^\n]*— ([^\n]+)/m.exec(t)?.[1] ?? f.replace(/\.md$/, "");
+    const ruling = /\*\*(?:Ruling|Decision)[^*]*\*\*:?\s*([^\n]+)/i.exec(t)?.[1] ?? "";
+    rows.push(`- ${f.replace(/\.md$/, "")}: ${title.replace(/\*/g, "").trim()}${ruling ? ` — ${ruling.trim().slice(0, 240)}` : ""}`);
+    for (const id of t.match(/arXiv:[a-z-]*\/?[0-9]{4}\.[0-9]{4,5}|arXiv:cs\/[0-9]{7}|10\.[0-9]{4,}\/[^ ),;]+/g) ?? []) sources.add(id);
+  }
+  return (
+    "SETTLED AXES (this project's decision log, docs/decisions/; do NOT re-research or re-argue these; cite them by slug. " +
+    "If you find evidence that contradicts one, say so explicitly as 'RE-TARGET <slug>: <evidence>' rather than silently deciding differently):\n" +
+    rows.join("\n") +
+    "\n\nSOURCES ALREADY READ (do not re-fetch or re-summarise; new research must add sources not in this list): " +
+    [...sources].sort().join(", ") +
+    "\n"
+  );
+}
 
 // ---------- hub ----------
 async function ensureHub() {
@@ -168,7 +198,9 @@ interface Plan {
 await ensureHub();
 log(`swarm ${SWARM_ID}: ${TOTAL} agents (${WORKERS} workers + verifier), project ${CWD}`);
 log("planning…");
-const planRaw = await runClaude("planner", prompt("planner.md", { TASK: task, CWD, WORKERS, MAX_GROUPS: Math.max(1, Math.floor(WORKERS / 2)) }), READ_TOOLS.filter((t) => !t.startsWith("mcp__")), CWD, PLANNER_MODEL);
+const SETTLED = settledAxes(CWD);
+if (SETTLED) log(`decision log found: ${SETTLED.split("\n").length - 4} settled axes injected into every prompt`);
+const planRaw = await runClaude("planner", prompt("planner.md", { TASK: task, CWD, WORKERS, MAX_GROUPS: Math.max(1, Math.floor(WORKERS / 2)) }) + "\n\n" + SETTLED, READ_TOOLS.filter((t) => !t.startsWith("mcp__")), CWD, PLANNER_MODEL);
 let plan: Plan;
 try {
   plan = JSON.parse(planRaw.slice(planRaw.indexOf("{"), planRaw.lastIndexOf("}") + 1));
@@ -202,7 +234,7 @@ const verifierTools = APPLY || FULL ? WRITE_TOOLS : READ_TOOLS;
 runs.push(
   runClaude(
     "verifier",
-    prompt("verifier.md", {
+    SETTLED + "\n" + prompt("verifier.md", {
       NAME: "verifier",
       AGENT: "claude",
       TOTAL,
@@ -250,7 +282,7 @@ for (const g of plan.groups) {
       AFTER_CONCLUSION: isLead ? prompt("lead-tail.md", { LEADS_ROOM: leadsRoom, NAME: name, AGENT: agent, GROUP_TITLE: g.title }) : "`leave_room` and finish.",
     };
     const wcwd = workerCwd(name);
-    const text = prompt("worker.md", {
+    const text = SETTLED + "\n" + prompt("worker.md", {
       ...vars,
       CWD: wcwd,
       WRITE_RULE:

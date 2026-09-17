@@ -1,0 +1,48 @@
+{
+  "scanRoots": [
+    "src"
+  ],
+  "boundaries": [],
+  "fanoutCap": 12,
+  "fanoutExempt": [],
+  "allowlistPath": ".co-occurrence-allowlist.json",
+  "decisionsDir": "docs/decisions",
+  "//review": "paths.include/exclude defines the shared reviewable repository universe for every reviewer; backendRoots/frontendRoots then route eligible files to domain reviewers. An EMPTY frontendRoots array means frontend-security-reviewer and frontend-performance-reviewer are never selected; an EMPTY backendRoots array similarly disables backend domain reviewers. Omit paths to preserve legacy reviewer selection. trustBoundaries, shortcutTracking, and accessibility configure reviewer context.",
+  "review": {
+    "backendRoots": [
+      "src"
+    ],
+    "frontendRoots": [],
+    "paths": {
+      "include": [
+        "**"
+      ],
+      "exclude": [
+        ".agents/**",
+        ".claude/**",
+        ".codex/**",
+        ".cursor/**",
+        ".devkit/**",
+        ".env*",
+        "**/.env*",
+        "node_modules/**",
+        "**/node_modules/**",
+        "dist/**",
+        "**/dist/**",
+        "coverage/**",
+        "**/coverage/**",
+        "*.lock",
+        "**/*.lock"
+      ]
+    },
+    "trustBoundaries": "",
+    "shortcutTracking": false,
+    "accessibility": {
+      "skipTouchTargets": false
+    }
+  },
+  "//maxLines": "Raw line cap per source file (guard-size ratchet enforces it; existing giants grandfathered shrink-only). 0 = off. Per-FUNCTION caps need a parser — not yet.",
+  "maxLines": 500,
+  "//maxTestLines": "Loose raw line cap per test file; existing oversized tests are grandfathered shrink-only. 0 = off.",
+  "maxTestLines": 2000
+}

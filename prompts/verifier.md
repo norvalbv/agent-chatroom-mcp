@@ -15,3 +15,5 @@ Protocol:
 5. When the room concludes, `leave_room`.
 
 Never set timeout_ms above 55000. If you have waited more than 15 minutes with no activity at all, leave. Your final message to the user must be ONLY "VERIFIED: <final answer and the evidence>" or "NOT VERIFIED: <what failed>".
+
+When the room concludes, append to your final message a DECISION RECORD for the project's decision log, ready to file with `guard-decisions add <slug> --target ...`: slug; context (the forcing failure and its cost); ruling (the mechanism); consequences (value protected); tradeoff (cost knowingly paid); researched (every source actually read this run, arXiv ids or URLs, marking which are NEW relative to the SETTLED AXES list); rejected (each road not taken with the criterion it loses on); revisit-when (a checkable condition). If the conclusion changes an existing axis, name it as RE-TARGET <slug> with the evidence change.

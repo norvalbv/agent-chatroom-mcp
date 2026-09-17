@@ -1,0 +1,9 @@
+{
+  "lineCountVersion": 2,
+  "maxLines": 500,
+  "maxTestLines": 2000,
+  "files": {
+    "src/hub.ts": 1434,
+    "src/server.ts": 535
+  }
+}

@@ -1,0 +1,195 @@
+#!/bin/sh
+# devkit generic pre-commit hook (POSIX sh). Runs the selected gate-engine set on every
+# commit. The block between the two `# devkit-guards` markers is devkit-owned and is the
+# only region init / removal touches — everything outside it is the consumer's own hook.
+
+# GUI git clients launch with a minimal PATH that omits user bin dirs, so `bun`/`bunx`
+# can go missing → the hook fails. Prepend the standard user install locations.
+for dir in "$HOME/.bun/bin" "$HOME/.local/bin"; do
+    [ -d "$dir" ] && case ":$PATH:" in *":$dir:"*) ;; *) PATH="$dir:$PATH" ;; esac
+done
+export PATH
+
+# >>> devkit-guards >>>
+# devkit:commit-terminal
+if [ -z "${DEVKIT_SHIP_ID:-}" ] && [ -z "${DEVKIT_REVIEW_ID:-}" ] && [ -z "${DEVKIT_NO_TELEMETRY:-}" ]; then
+    __dk_nonce="$(uuidgen 2>/dev/null || true)"
+    if [ -z "$__dk_nonce" ] && [ -r /dev/urandom ]; then
+        __dk_nonce="$(od -An -N16 -tx1 /dev/urandom 2>/dev/null | tr -d ' \n')" || __dk_nonce=""
+    fi
+    [ -n "$__dk_nonce" ] || __dk_nonce="$$-$(date +%s)"
+    DEVKIT_COMMIT_ID="commit-run-$__dk_nonce"
+    export DEVKIT_COMMIT_ID
+
+    __dk_t0="$(date +%s)"
+    __dk_esc() { printf '%s' "$1" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g'; }
+    __dk_repo() {
+        # Repo identity = origin remote name, else main checkout dirname, else basename — a commit
+        # run inside a temp worktree must not stamp the worktree's meaningless basename (sc-2000).
+        __dk_r="$(git remote get-url origin 2>/dev/null | sed -E 's#/+$##; s#\.git$##; s#.*[/:]##')"
+        if [ -z "$__dk_r" ]; then
+            __dk_c="$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null)"
+            [ -n "$__dk_c" ] && __dk_r="$(basename "$(dirname "$__dk_c")")"
+        fi
+        [ -n "$__dk_r" ] || __dk_r="$(basename "$(git rev-parse --show-toplevel 2>/dev/null)")"
+        printf '%s' "$__dk_r"
+    }
+    __dk_commit_result() {
+        [ -n "${__dk_done:-}" ] && return 0
+        __dk_done=1
+        __dk_tree="$(git write-tree 2>/dev/null)" || return 0
+        [ -n "$__dk_tree" ] || return 0
+        if [ "${1:-0}" -eq 0 ] && [ -n "${__dk_commit_state:-}" ]; then
+            printf '%s\n%s\n' "$DEVKIT_COMMIT_ID" "$__dk_tree" > "$__dk_commit_state" 2>/dev/null || true
+        fi
+        __dk_events="${DEVKIT_GATE_EVENTS:-$HOME/.devkit/telemetry/gate-events.jsonl}"
+        mkdir -p "$(dirname "$__dk_events")" 2>/dev/null || return 0
+        printf '{"type":"commit_result","ship_id":"%s","commit_tree":"%s","run_mode":"commit","repo":"%s","branch":"%s","exit_code":%d,"duration_s":%d,"ts":"%s"}\n' \
+            "$(__dk_esc "$DEVKIT_COMMIT_ID")" "$__dk_tree" \
+            "$(__dk_esc "$(__dk_repo)")" \
+            "$(__dk_esc "$(git rev-parse --abbrev-ref HEAD 2>/dev/null)")" \
+            "${1:-0}" "$(( $(date +%s) - __dk_t0 ))" \
+            "$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$__dk_events" 2>/dev/null || true
+        if [ "${1:-0}" -ne 0 ] && [ -n "${__dk_commit_state:-}" ]; then
+            rm -f "$__dk_commit_state" 2>/dev/null || true
+        fi
+    }
+    trap '__dk_commit_result "$?"' EXIT
+fi
+# /devkit:commit-terminal
+
+__dk_gate_selected() {
+    case "${DEVKIT_RUN_MODE:-}" in review|dry-gates) ;; *) return 0 ;; esac
+    __dk_review_guards=$(printf '%s' "${DEVKIT_REVIEW_GUARDS:-}" | sed         -e 's/[[:space:]]*,[[:space:]]*/,/g'         -e 's/^[[:space:]]*//'         -e 's/[[:space:]]*$//')
+    case ",${__dk_review_guards}," in
+        *,"$1",*) return 0 ;;
+        *) return 1 ;;
+    esac
+}
+
+__dk_no_git_env() {
+    env -u GIT_ALTERNATE_OBJECT_DIRECTORIES \
+        -u GIT_CONFIG \
+        -u GIT_CONFIG_PARAMETERS \
+        -u GIT_CONFIG_COUNT \
+        -u GIT_OBJECT_DIRECTORY \
+        -u GIT_DIR \
+        -u GIT_WORK_TREE \
+        -u GIT_IMPLICIT_WORK_TREE \
+        -u GIT_GRAFT_FILE \
+        -u GIT_INDEX_FILE \
+        -u GIT_NO_REPLACE_OBJECTS \
+        -u GIT_REPLACE_REF_BASE \
+        -u GIT_PREFIX \
+        -u GIT_SHALLOW_FILE \
+        -u GIT_COMMON_DIR \
+        -u GIT_GLOB_PATHSPECS \
+        -u GIT_NOGLOB_PATHSPECS \
+        -u GIT_LITERAL_PATHSPECS \
+        -u GIT_ICASE_PATHSPECS "$@"
+}
+
+__dk_package_bin_dir="$(bun pm bin)"
+
+__dk_review_baseline_gate() {
+    [ -n "${DEVKIT_REVIEW_BASELINE_DIR:-}" ] || {
+        echo "devkit review: merge-base baseline runtime is missing — reinstall/rebuild Devkit." >&2
+        return 1
+    }
+    __dk_baseline_gate=
+    for __dk_candidate in "${DEVKIT_REVIEW_PACKAGE_ROOT:-}/gate-engine/review/baseline-gate.mjs" "${DEVKIT_REVIEW_PACKAGE_ROOT:-}/gate-engine/review/baseline-gate.mts"; do
+        if [ -f "$__dk_candidate" ]; then __dk_baseline_gate=$__dk_candidate; break; fi
+    done
+    [ -n "$__dk_baseline_gate" ] || {
+        echo "devkit review: baseline helper is missing — reinstall/rebuild Devkit." >&2
+        return 1
+    }
+    node "$__dk_baseline_gate" "$1" "$DEVKIT_REVIEW_BASELINE_DIR"
+}
+
+# devkit:biome-format
+# Format staged files with biome, then re-stage exactly those (scoped — never a blanket
+# `git add -u`, which would sweep unrelated working-tree changes into the commit). Only
+# re-add files with NO unstaged edits, so partially-staged files commit exactly as staged.
+STAGED_FMT=$(git diff --cached --name-only --diff-filter=ACM | grep -E '\.(tsx?|jsx?|css|json|jsonc|mjs)$' || true)
+if [ -n "$STAGED_FMT" ]; then
+    UNSTAGED_FMT_FILE=$(mktemp)
+    git diff --name-only | sort -u >"$UNSTAGED_FMT_FILE"
+    FMT_SAFE=$(printf '%s\n' "$STAGED_FMT" | grep -Fxvf "$UNSTAGED_FMT_FILE" || true)
+    rm -f "$UNSTAGED_FMT_FILE"
+    if [ -n "$FMT_SAFE" ]; then
+        echo "🎨 Formatting staged files..."
+        echo "$FMT_SAFE" | xargs "$__dk_package_bin_dir/biome" format --write 2>/dev/null || true
+        echo "$FMT_SAFE" | xargs git add -f
+    fi
+fi
+# /devkit:biome-format
+
+dk_review_det_failed=0
+__dk_gate_deterministic() {
+    dk_det_rc=0
+    __dk_no_git_env "$@" || dk_det_rc=$?
+    [ "$dk_det_rc" -eq 0 ] && return 0
+    case "${DEVKIT_RUN_MODE:-}" in review|dry-gates) ;; *) exit 1 ;; esac
+    dk_review_det_failed=1
+}
+
+# devkit:deterministic
+echo "🚧 Deterministic gates (aggregated)..."
+__dk_gate_deterministic "$__dk_package_bin_dir/guard-deterministic" --hook "${DK_HOOK_PATH:-$0}"
+# /devkit:deterministic
+
+if __dk_gate_selected comments; then
+# devkit:guard-comments
+echo "🧯 Changed-comment firewall..."
+ccrc=0
+__dk_no_git_env "$__dk_package_bin_dir/guard-comments" gate || ccrc=$?
+if [ "$ccrc" -eq 1 ]; then
+    exit 1
+elif [ "$ccrc" -eq 4 ]; then
+    echo "   guard-comments: NOT a rejection — staged comment evidence is unreadable or unsupported."
+    exit 1
+elif [ "$ccrc" -ne 0 ]; then
+    echo "   guard-comments: unexpected exit $ccrc — blocking the commit."
+    exit 1
+fi
+# ccrc 0 = clean, 1 = paragraph over the 2-line budget, 4 = unreadable/unsupported evidence; anything else blocks.
+# /devkit:guard-comments
+fi
+
+if __dk_gate_selected decisions; then
+# devkit:guard-decisions
+echo "🧭 Decision-log gate..."
+ddrc=0
+__dk_no_git_env "$__dk_package_bin_dir/guard-decisions" detect --gate || ddrc=$?
+if [ "$ddrc" -eq 1 ]; then
+    echo "   Record the decision target, or bypass a non-decision: GUARD_NO_LOG=1 git commit ..."
+    exit 1
+elif [ "$ddrc" -eq 3 ]; then
+    echo "   guard-decisions: judge unavailable — strict ship mode failed closed."
+    echo "   Follow the judge CLI remedy printed above, then re-run devkit ship (cleared judgements are cached)."
+    exit 1
+elif [ "$ddrc" -ne 0 ] && [ "$ddrc" -ne 2 ]; then
+    echo "   guard-decisions: unexpected exit $ddrc — blocking the commit."
+    exit 1
+fi
+# ddrc 0 = clean / staged / routine / bypassed, ddrc 2 = fail-open → continue; any other code blocks.
+# /devkit:guard-decisions
+fi
+
+if __dk_gate_selected qavis-advisory; then
+# devkit:guard-qavis-advisory
+qarc=0
+__dk_no_git_env "$__dk_package_bin_dir/guard-qavis-advisory" --gate || qarc=$?
+[ "$qarc" -eq 3 ] && exit 1
+# qarc 0 = continue (SILENT / advisory-only / receipt-cleared / qavis absent); 3 = strict-ship block
+# (the remedy — run qavis, or export GUARD_QAVIS_OK=1 — is printed by the bin).
+# /devkit:guard-qavis-advisory
+fi
+
+# devkit:review-deterministic-finalizer
+if [ "${dk_review_det_failed:-0}" -ne 0 ]; then exit 1; fi
+# /devkit:review-deterministic-finalizer
+# <<< devkit-guards <<<
+
+exit 0

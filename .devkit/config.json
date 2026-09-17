@@ -1,0 +1,53 @@
+{
+  "stack": "node-service",
+  "devkitRef": "v0.62.0",
+  "initVersion": 2,
+  "pkgRel": "",
+  "standalone": false,
+  "selfHost": false,
+  "components": {
+    "biome": true,
+    "tsconfig": true,
+    "skills": true,
+    "agents": true,
+    "searchSteering": false,
+    "agentHooks": false,
+    "husky": true,
+    "structure": false,
+    "fallow": false,
+    "antiSlop": false,
+    "searchCode": false,
+    "lineGrowth": true,
+    "adhd": false,
+    "priorArtGate": false,
+    "baseDrift": false,
+    "agentTargets": [
+      "claude",
+      "codex",
+      "cursor"
+    ],
+    "guards": [
+      "size",
+      "fanout",
+      "dup",
+      "clone",
+      "comments",
+      "decisions",
+      "qavis-advisory"
+    ],
+    "disabledGuards": []
+  },
+  "review": {
+    "enabled": false,
+    "guards": [
+      "size",
+      "fanout",
+      "dup",
+      "clone",
+      "comments",
+      "decisions",
+      "qavis-advisory"
+    ],
+    "decisionsDir": "docs/decisions"
+  }
+}

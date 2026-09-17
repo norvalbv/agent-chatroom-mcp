@@ -10,7 +10,11 @@
     "dev": "tsx src/index.ts",
     "smoke": "tsx scripts/smoke.ts",
     "debate": "bash scripts/debate.sh",
-    "swarm": "node dist/swarm.js"
+    "swarm": "node dist/swarm.js",
+    "lint": "biome check .",
+    "format": "biome check --write .",
+    "prepare": "husky && (command -v devkit >/dev/null 2>&1 && devkit sync-hook-runner || true)",
+    "guard:freeze": "guard-fanout freeze && guard-size freeze"
   },
   "keywords": [],
   "author": "",
@@ -25,7 +29,10 @@
     "@types/express": "^5.0.6",
     "@types/node": "^22.20.3",
     "tsx": "^4.23.13",
-    "typescript": "^7.0.2"
+    "typescript": "^7.0.2",
+    "@norvalbv/devkit": "git+https://github.com/norvalbv/devkit.git#v0.62.0",
+    "@biomejs/biome": "^2.5.0",
+    "husky": "^9.1.7"
   },
   "bin": {
     "agent-chatroom-mcp": "dist/index.js",

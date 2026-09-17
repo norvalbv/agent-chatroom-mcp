@@ -196,6 +196,19 @@ app.post("/rooms/:room/vote", (req, res) => {
     res.status(400).type("text/plain").send(e instanceof HubError ? e.message : "error");
   }
 });
+// A launcher creates a room with its policy (quorum, verification, expected seats) before any seat joins;
+// join_room settings only apply at creation, so without this the first seat to arrive decides the policy.
+app.post("/rooms/:room/create", (req, res) => {
+  if (!requireToken(req, res)) return;
+  try {
+    const b = (req.body ?? {}) as { topic?: string; quorum?: "unanimous" | "majority"; expected_participants?: number; require_verification?: boolean; require_challenge?: boolean; mode?: "free" | "round_robin"; max_message_chars?: number; anonymous?: boolean; chair?: string };
+    const existed = hub.listRooms().some((r) => r.name === req.params.room);
+    const room = hub.createRoom(req.params.room, { topic: b.topic, quorum: b.quorum, expectedParticipants: b.expected_participants, requireVerification: b.require_verification, requireChallenge: b.require_challenge, mode: b.mode, maxMessageChars: b.max_message_chars, anonymous: b.anonymous, chair: b.chair });
+    res.status(existed ? 200 : 201).json({ ...hub.summary(room, true), created: !existed });
+  } catch (e) {
+    res.status(400).type("text/plain").send(e instanceof HubError ? e.message : "error");
+  }
+});
 // Close a stale or abandoned room (no conclusion). Dashboard button or curl -X POST .../close
 app.post("/rooms/:room/close", (req, res) => {
   if (!requireToken(req, res)) return;

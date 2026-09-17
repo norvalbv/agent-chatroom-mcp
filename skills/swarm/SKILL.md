@@ -28,6 +28,9 @@ node dist/swarm.js "<task in the user's words>" --agents <N> --cwd "<absolute pr
 - `--apply`: the verifier may implement the agreed fix on a new git branch and prove it with tests. `--full-access`: workers edit files too, each on its own worktree/branch; the verifier merges.
 - `--named`: real names inside worker rooms (default pseudonyms). Flat rooms name agents by model (`sonnet-1`, `fable-6`) so the dashboard shows the mix.
 - `--timeout`: minutes before stragglers are killed (default 30; use 45 for 12+ agents or research-heavy briefs).
+- `--require-verification`: the launcher creates the room with `require_verification` before any seat joins (via `POST /rooms/:room/create`), so no proposal can pass without a `verify/*` board entry by someone other than its author naming it. Use it for build rooms: "done" is then hub-enforced, not a vote.
+- `--verifier-openrouter <slug>`: the verifier seat on an OpenRouter model (a run on a free model then costs nothing).
+- **Fleet** (`node dist/fleet.js fleet/<spec>.json --model <slug> [--only a,b] [--consolidate --consolidate-from <summary.md,...>] [--require-verification] [--full-access]`): one flat run per area from a JSON spec (areas with `lenses` become competing rooms), staggered, with every conclusion gathered into `swarms/fleet-<id>/summary.md`; `--consolidate` runs one more room that merges the summaries into one ranked consensus. Rate limits are per model and account: `stealth/union-alpha` allows 100 requests/min, which fits about 36 seats (three rooms); `fleet/run-batches.sh` runs the rest back to back.
 
 Every prompt automatically carries the project's settled axes (`docs/decisions/`), the sources already read, and the last six prior runs (`swarms/*/report.md`), so tell agents to ratify or refute by reference rather than re-derive.
 

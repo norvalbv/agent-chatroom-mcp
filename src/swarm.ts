@@ -23,10 +23,10 @@ const flag = (name: string, def?: string) => {
   return i >= 0 ? argv[i + 1] : def;
 };
 const has = (name: string) => argv.includes(`--${name}`);
-const BOOL_FLAGS = new Set(["--apply", "--full-access", "--named", "--flat"]);
+const BOOL_FLAGS = new Set(["--apply", "--full-access", "--named", "--flat", "--require-verification"]);
 const task = argv.find((a, i) => !a.startsWith("--") && (i === 0 || !argv[i - 1].startsWith("--") || BOOL_FLAGS.has(argv[i - 1])));
 if (!task) {
-  console.error('usage: swarm "<task>" [--flat] [--done-when text] [--verify text] [--agents 6] [--cwd dir] [--models sonnet,haiku] [--lead-model opus] [--verifier-model opus] [--planner-model opus] [--codex k] [--codex-models gpt-6-astra,gpt-5.6-sol,gpt-5.6-terra] [--openrouter k] [--openrouter-models deepseek/deepseek-v4.1-flash,...] [--verifier-openrouter slug] [--openrouter-reasoning low|medium|high] [--apply] [--full-access] [--named] [--timeout 30] [--port 7717]');
+  console.error('usage: swarm "<task>" [--flat] [--done-when text] [--verify text] [--agents 6] [--cwd dir] [--models sonnet,haiku] [--lead-model opus] [--verifier-model opus] [--planner-model opus] [--codex k] [--codex-models gpt-6-astra,gpt-5.6-sol,gpt-5.6-terra] [--openrouter k] [--openrouter-models deepseek/deepseek-v4.1-flash,...] [--verifier-openrouter slug] [--openrouter-reasoning low|medium|high] [--require-verification] [--apply] [--full-access] [--named] [--timeout 30] [--port 7717]');
   process.exit(2);
 }
 const TOTAL = Math.max(2, Number(flag("agents", "4")));
@@ -38,6 +38,8 @@ const APPLY = has("apply");
 const ANON = !has("named"); // worker rooms are anonymous unless --named
 const LENSES = ["reproduce and measure before theorising", "the simplest fix that could work", "what could go wrong with the obvious fix", "what the tests and history say", "the maintainer who inherits this in a year"];
 const FULL = has("full-access");
+/** --require-verification: the room is created by the launcher with require_verification, so no proposal passes without a verify/* board entry by someone other than its author naming it (hub-enforced "done") */
+const REQUIRE_VERIFICATION = has("require-verification");
 /**
  * --flat: no planner, no pre-assigned sub-rooms. Every agent gets the raw task in ONE room on the
  * minimal prompt and organises itself (board claims, request_agent, break-out rooms). The verifier sits
@@ -371,6 +373,15 @@ for (const g of plan.groups) {
 
 // stopping the launcher stops its seats: an orphaned seat keeps polling the provider with nobody to collect its result
 for (const sig of ["SIGTERM", "SIGINT"] as const) process.on(sig, () => { log(`${sig}: stopping ${children.length} agent(s)`); for (const c of children) c.kill(); setTimeout(() => process.exit(130), 3000).unref(); });
+// the launcher fixes the room's policy before any seat joins (join_room settings only apply at creation)
+if (REQUIRE_VERIFICATION) {
+  try {
+    const r = await fetch(`${URL_}/rooms/${encodeURIComponent(leadsRoom)}/create`, { method: "POST", headers: { "content-type": "application/json", ...(process.env.CHATROOM_HUMAN_TOKEN ? { "x-chatroom-token": process.env.CHATROOM_HUMAN_TOKEN } : {}) }, body: JSON.stringify({ topic: task, expected_participants: FLAT ? TOTAL : plan.groups.length + 1, require_verification: true, quorum: "unanimous" }) });
+    log(`${leadsRoom} created with require_verification (${r.status})`);
+  } catch (e) {
+    log(`could not pre-create ${leadsRoom}: ${e instanceof Error ? e.message : String(e)}`);
+  }
+}
 const tail = setInterval(() => tailRooms([...groupRooms, leadsRoom]), 2000);
 const timeout = setTimeout(() => {
   log(`timeout after ${TIMEOUT_MIN} min; stopping agents`);

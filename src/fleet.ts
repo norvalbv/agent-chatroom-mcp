@@ -25,7 +25,7 @@ const flag = (name: string, def?: string) => {
   return i >= 0 ? argv[i + 1] : def;
 };
 const has = (name: string) => argv.includes(`--${name}`);
-const BOOL = new Set(["--full-access", "--consolidate"]);
+const BOOL = new Set(["--full-access", "--consolidate", "--require-verification"]);
 const file = argv.find((a, i) => !a.startsWith("--") && (i === 0 || !argv[i - 1].startsWith("--") || BOOL.has(argv[i - 1])));
 if (!file || !existsSync(file)) {
   console.error("usage: fleet <areas.json> --model <openrouter slug> [--agents 12] [--timeout 50] [--stagger 20] [--only a,b|none] [--skip c] [--consolidate] [--consolidate-from summary.md,...] [--full-access] [--cwd dir] [--port 7717]");
@@ -50,6 +50,7 @@ const STAGGER = Number(flag("stagger", "20"));
 const CWD = resolve(flag("cwd", process.cwd())!);
 const PORT = flag("port", process.env.PORT ?? "7717")!;
 const FULL = has("full-access");
+const REQUIRE_VERIFICATION = has("require-verification");
 /** --consolidate: after the areas finish, one more run merges every conclusion into a single ranked consensus */
 const CONSOLIDATE = has("consolidate");
 /** --consolidate-from <summary.md>[,<summary.md>]: consolidate earlier fleets' summaries as well (or instead: with --only none) */
@@ -96,6 +97,7 @@ function runArea(area: Area): Promise<Result> {
     const task = `${spec.preamble}\n\nYOUR AREA: ${area.title}\n${area.brief}`;
     const args = [resolve(repoRoot, "dist/swarm.js"), task, "--flat", "--agents", String(AGENTS), "--openrouter", String(AGENTS - 1), "--openrouter-models", MODEL, "--verifier-openrouter", MODEL, "--timeout", String(TIMEOUT), "--cwd", CWD, "--port", PORT];
     if (FULL) args.push("--full-access");
+    if (REQUIRE_VERIFICATION) args.push("--require-verification");
     const child = spawn(process.execPath, args, { cwd: repoRoot, env: process.env, stdio: ["ignore", "pipe", "pipe"] });
     children.push(child);
     const logFile = resolve(OUT, `${area.id}.log`);

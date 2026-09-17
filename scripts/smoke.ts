@@ -775,6 +775,20 @@ assert.deepEqual(tools, ["amend", "board_get", "board_set", "challenge", "join_r
   server2.kill();
 }
 
+{
+  // a launcher fixes a room's policy before any seat joins; the first seat's join_room settings are then ignored
+  const room = "precreated";
+  const made = await fetch(`${HTTP}/rooms/${room}/create`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ topic: "policy first", expected_participants: 2, require_verification: true, quorum: "unanimous" }) });
+  assert.equal(made.status, 201);
+  const j = await a.call("join_room", { room, name: "claude-1", agent: "claude", expected_participants: 9, require_verification: false });
+  assert.equal(j.room.require_verification, true, "the creator's policy stands");
+  assert.equal(j.room.expected_participants, 2);
+  assert.equal(j.room.topic, "policy first");
+  const again = await fetch(`${HTTP}/rooms/${room}/create`, { method: "POST", headers: { "content-type": "application/json" }, body: "{}" });
+  assert.equal(again.status, 200, "creating an existing room is idempotent");
+  await a.call("leave_room", { room });
+}
+
 const ui = await (await fetch(`${HTTP}/ui`)).text();
 assert.match(ui, /<title>Agent Chatroom<\/title>/);
 

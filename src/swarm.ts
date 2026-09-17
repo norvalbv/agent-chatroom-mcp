@@ -22,7 +22,7 @@ const flag = (name: string, def?: string) => {
 const has = (name: string) => argv.includes(`--${name}`);
 const task = argv.find((a, i) => !a.startsWith("--") && (i === 0 || !argv[i - 1].startsWith("--")));
 if (!task) {
-  console.error('usage: swarm "<task>" [--agents 6] [--cwd dir] [--codex 0] [--apply] [--full-access] [--named] [--timeout 30] [--port 7717]');
+  console.error('usage: swarm "<task>" [--agents 6] [--cwd dir] [--models sonnet,haiku] [--lead-model opus] [--verifier-model opus] [--planner-model opus] [--codex 0] [--apply] [--full-access] [--named] [--timeout 30] [--port 7717]');
   process.exit(2);
 }
 const TOTAL = Math.max(2, Number(flag("agents", "4")));
@@ -32,7 +32,12 @@ const CODEX = Math.min(WORKERS, Number(flag("codex", "0")));
 const APPLY = has("apply");
 const ANON = !has("named"); // worker rooms are anonymous unless --named
 const LENSES = ["reproduce and measure before theorising", "the simplest fix that could work", "what could go wrong with the obvious fix", "what the tests and history say", "the maintainer who inherits this in a year"];
-const FULL = has("full-access"); // workers may edit files and run anything; each gets its own git worktree
+const FULL = has("full-access");
+// model mix: --models sonnet,sonnet,haiku (rotated over workers), --lead-model, --verifier-model, --planner-model
+const MODELS = (flag("models", process.env.CLAUDE_MODEL ?? "") || "").split(",").map((m) => m.trim()).filter(Boolean);
+const LEAD_MODEL = flag("lead-model", MODELS[0]);
+const VERIFIER_MODEL = flag("verifier-model", LEAD_MODEL);
+const PLANNER_MODEL = flag("planner-model", VERIFIER_MODEL); // workers may edit files and run anything; each gets its own git worktree
 const READ_TOOLS = ["mcp__chatroom__*", "Read", "Grep", "Glob", "Bash", "WebSearch", "WebFetch"];
 const WRITE_TOOLS = [...READ_TOOLS, "Edit", "Write", "MultiEdit", "NotebookEdit"];
 const TIMEOUT_MIN = Number(flag("timeout", "30"));
@@ -75,10 +80,10 @@ const children: ChildProcess[] = [];
 const mcpJson = resolve(OUT, "mcp.json");
 writeFileSync(mcpJson, JSON.stringify({ mcpServers: { chatroom: { type: "http", url: `${URL_}/mcp` } } }));
 
-function runClaude(name: string, text: string, tools: string[], cwd: string): Promise<string> {
+function runClaude(name: string, text: string, tools: string[], cwd: string, model?: string): Promise<string> {
   const outFile = resolve(OUT, `${name}.out`);
   const args = ["-p", text, "--mcp-config", mcpJson, "--strict-mcp-config", "--allowedTools", tools.join(",")];
-  if (process.env.CLAUDE_MODEL) args.push("--model", process.env.CLAUDE_MODEL);
+  if (model) args.push("--model", model);
   return runProc(name, "claude", args, cwd, outFile);
 }
 
@@ -157,7 +162,7 @@ interface Plan {
 await ensureHub();
 log(`swarm ${SWARM_ID}: ${TOTAL} agents (${WORKERS} workers + verifier), project ${CWD}`);
 log("planning…");
-const planRaw = await runClaude("planner", prompt("planner.md", { TASK: task, CWD, WORKERS, MAX_GROUPS: Math.max(1, Math.floor(WORKERS / 2)) }), READ_TOOLS.filter((t) => !t.startsWith("mcp__")), CWD);
+const planRaw = await runClaude("planner", prompt("planner.md", { TASK: task, CWD, WORKERS, MAX_GROUPS: Math.max(1, Math.floor(WORKERS / 2)) }), READ_TOOLS.filter((t) => !t.startsWith("mcp__")), CWD, PLANNER_MODEL);
 let plan: Plan;
 try {
   plan = JSON.parse(planRaw.slice(planRaw.indexOf("{"), planRaw.lastIndexOf("}") + 1));
@@ -184,6 +189,7 @@ const leadsRoom = `${SWARM_ID}-leads`;
 const groupRooms = plan.groups.map((g) => `${SWARM_ID}-${g.id}`);
 const runs: Promise<{ name: string; text: string }>[] = [];
 let codexLeft = CODEX;
+let workerIndex = 0;
 
 // verifier joins the leads room first so it is present for every report
 const verifierTools = APPLY || FULL ? WRITE_TOOLS : READ_TOOLS;
@@ -209,6 +215,7 @@ runs.push(
     }),
     verifierTools,
     CWD,
+    VERIFIER_MODEL,
   ).then((text) => ({ name: "verifier", text })),
 );
 
@@ -244,8 +251,10 @@ for (const g of plan.groups) {
         ? `You MAY modify files and run anything; you are on your own git branch in ${wcwd}. Commit what you want the verifier to test and say so in the room.`
         : "Do NOT modify any files.",
     });
-    log(`launching ${name}${isLead ? " (lead)" : ""}`);
-    runs.push((useCodex ? runCodex(name, text, wcwd) : runClaude(name, text, FULL ? WRITE_TOOLS : READ_TOOLS, wcwd)).then((t) => ({ name, text: t })));
+    const model = isLead ? LEAD_MODEL : MODELS.length ? MODELS[workerIndex % MODELS.length] : undefined;
+    workerIndex++;
+    log(`launching ${name}${isLead ? " (lead)" : ""}${model ? ` [${model}]` : ""}`);
+    runs.push((useCodex ? runCodex(name, text, wcwd) : runClaude(name, text, FULL ? WRITE_TOOLS : READ_TOOLS, wcwd, model)).then((t) => ({ name, text: t })));
   }
 }
 

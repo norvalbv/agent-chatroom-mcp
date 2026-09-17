@@ -278,7 +278,6 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
       // the proposal text travels only when its version changed since this participant was last sent it
       const seenVersion = open ? (p.seenProposal?.[open.id] ?? 0) : 0;
       const openView = open ? hub.proposalView(r, open, false, seenVersion !== open.version) : null;
-      if (open) p.seenProposal = { ...(p.seenProposal ?? {}), [open.id]: open.version };
       const conclusion = r.conclusion
         ? p.seenConclusion
           ? { proposal_id: r.conclusion.proposalId, version: r.conclusion.version ?? null, chars: r.conclusion.text.length, unresolved_objections: r.conclusion.unresolved_objections ?? [], text_omitted: "already sent to you; room_status carries the full text" }
@@ -297,6 +296,7 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
         addressed_to_you: [{ id: focus.id, from: hub.shown(r, focus.from), text: focus.content }],
         open_proposal: null, conclusion: null, leaving_would_block: !!block,
       };
+      if (open) p.seenProposal = { ...(p.seenProposal ?? {}), [open.id]: open.version };
       const owed = hub.addressedBy(r, p);
       if (owed[0]) p.addressWarned = owed[0].id;
       const openingsHeld = r.expectedParticipants && !r.openingsRevealed;

@@ -64,6 +64,9 @@ export interface Participant {
   declinedAt?: Record<string, number>;
   /** Explicit registration: the departed seat this successor took over (trusted launcher/recruit control, never name inference). */
   replacementOf?: string;
+  /** Outstanding nonhuman directed asks offered at explicit registration. */
+  inheritedAskIds?: string[];
+  pendingReplacementAskIds?: string[];
   /** Explicit registration: pid of the registered successor of this departed seat. */
   replacedBy?: string;
   /** One-use join proof: reserved successor name awaiting a join with the matching token. */
@@ -585,6 +588,7 @@ export class Hub {
     }
     // The launcher asserts the process exit; do not wait for the idle sweep to mark the old seat departed.
     const replacementToken = randomBytes(32).toString("hex");
+    old.pendingReplacementAskIds = this.addressedBy(room, old).map((m) => m.id);
     old.active = false;
     old.pendingReplacementName = successorName;
     old.pendingReplacementTokenHash = createHash("sha256").update(replacementToken).digest("hex");
@@ -626,6 +630,7 @@ export class Hub {
     if (!participant) participant = [...room.participants.values()].find((p) => p.name === name && !p.active);
     // Humans are identified by name alone (they come in over plain HTTP with no session), so they always reclaim.
     if (!participant && agent === "human") participant = [...room.participants.values()].find((p) => p.name === name && p.agent === "human");
+    if (participant && opts.replacementToken !== undefined) throw new HubError("Replacement token has already been consumed or is not reserved for this join.");
     if (!participant) {
       const reserved = [...room.participants.values()].find((p) => p.pendingReplacementName === name);
       const tokenHash = opts.replacementToken ? createHash("sha256").update(opts.replacementToken).digest("hex") : undefined;
@@ -657,21 +662,16 @@ export class Hub {
       if (predecessor) {
         participant.replacementOf = predecessor.id;
         predecessor.replacedBy = participant.id;
-        // Keep the reserved name + token hash: any later join under this name (e.g. after the
-        // successor itself leaves) still needs the one-use token; the hash replays from the log.
+        participant.inheritedAskIds = predecessor.pendingReplacementAskIds ?? [];
+        delete predecessor.pendingReplacementName;
+        delete predecessor.pendingReplacementTokenHash;
+        delete predecessor.pendingReplacementAskIds;
         this.persist({ type: "leave", room: roomName, p: predecessor });
       }
       room.participants.set(participant.id, participant);
       this.persist({ type: "join", room: roomName, p: participant });
       this.post(room, "system", undefined, `${this.shown(room, participant)}${room.anonymous ? "" : ` (${agent})`}${this.roleTag(participant)} joined the room.`);
     } else if (!participant.active) {
-      if (!reclaimId) {
-        const reserved = [...room.participants.values()].find((r) => r.pendingReplacementName === name);
-        const tokenHash = opts.replacementToken ? createHash("sha256").update(opts.replacementToken).digest("hex") : undefined;
-        if (reserved && (!tokenHash || tokenHash !== reserved.pendingReplacementTokenHash)) {
-          throw new HubError("A valid launcher replacement token for this room and name is required.");
-        }
-      }
       participant.active = true;
       participant.lastActiveAt = now();
       if (session) participant.session = session;
@@ -1361,15 +1361,9 @@ export class Hub {
    */
   addressedBy(room: Room, p: Participant): Message[] {
     const declined = new Set(p.declinedAsks ?? []);
-    // Explicit replacement registration inherits the departed seat's still-outstanding directed asks:
-    // computed from history each time (nothing is copied), asks the departed declined are never re-offered,
-    // and quiet asks stay with their original audience (quiet-delivery-not-privacy).
-    const inherited = new Set<string>();
-    for (const d of room.participants.values()) {
-      if (d.id === p.id || d.active) continue;
-      if (this.activeReplacement(room, d)?.id !== p.id) continue;
-      for (const m of this.addressedBy(room, d)) if (!d.declinedAsks?.includes(m.id)) inherited.add(m.id);
-    }
+    // Snapshot only outstanding debt at registration; successors settle it under their own
+    // identity. A later replacement snapshots that successor, not all earlier ancestors.
+    const inherited = new Set(p.inheritedAskIds ?? []);
     const pending: Message[] = [];
     for (const m of room.messages) {
       for (let i = pending.length - 1; i >= 0; i--) if ((p.declinedAt?.[pending[i].id] ?? Infinity) < m.seq) pending.splice(i, 1);

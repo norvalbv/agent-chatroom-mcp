@@ -150,30 +150,30 @@ test('registration and links survive reload without recommending inactive restor
     assert.equal((r.participants.get(f.old.id) as any).replacedBy, next.id);
     const sender = hub3.join(r.name, 'sender', 'test').participant;
     assert.match(error({ ...f, hub: hub3, room: r, sender }), /no replacement is recorded\.$/);
-    hub3.join(r.name, 'next', 'test', { replacementToken: tokens.get('next') } as any);
+    hub3.join(r.name, 'next', 'test', {}, next.id);
     assert.match(error({ ...f, hub: hub3, room: r, sender }), /replacement is "next"/);
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
-test('reactivating a token-bound successor name requires the token, also after reload', () => {
+test('consumed token cannot reclaim successor; existing explicit reclaim is unchanged', () => {
   const f = fixture(); register(f.hub, f.room.name, 'old', 'next');
   const next = joinSuccessor(f.hub, f.room.name, 'next');
   leave(f.hub, f.room.name, next.id);
-  assert.throws(() => f.hub.join(f.room.name, 'next', 'test'), HubError, 'silent by-name reactivation must be refused');
-  const again = f.hub.join(f.room.name, 'next', 'test', { replacementToken: tokens.get('next') } as any).participant as any;
+  assert.throws(() => joinSuccessor(f.hub, f.room.name, 'next'), HubError);
+  const again = f.hub.join(f.room.name, 'next', 'test', {}, next.id).participant as any;
   assert.equal(again.id, next.id);
   assert.equal(again.replacementOf, f.old.id);
 });
 
-test('replay restores the token gate: no silent reactivation after restart', () => {
+test('replay preserves token consumption and existing explicit reclaim', () => {
   const dir = mkdtempSync(join(tmpdir(), 'replacement-test-'));
   try {
     const f = fixture(dir); register(f.hub, f.room.name, 'old', 'next');
     const next = joinSuccessor(f.hub, f.room.name, 'next');
     leave(f.hub, f.room.name, next.id);
     const hub2 = new Hub({ dataDir: dir });
-    assert.throws(() => hub2.join(f.room.name, 'next', 'test'), HubError);
-    const again = hub2.join(f.room.name, 'next', 'test', { replacementToken: tokens.get('next') } as any).participant as any;
+    assert.throws(() => joinSuccessor(hub2, f.room.name, 'next'), HubError);
+    const again = hub2.join(f.room.name, 'next', 'test', {}, next.id).participant as any;
     assert.equal(again.replacementOf, f.old.id);
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
@@ -264,4 +264,38 @@ test('chain does not resurrect an inherited ask answered by intermediate success
   register(f.hub, f.room.name, 'next', 'last');
   const last = joinSuccessor(f.hub, f.room.name, 'last');
   assert.equal(focusOf(f.hub, f.room.name, last.id), undefined);
+});
+
+test('quiet inherited ask delivery reply and pass settle debt across replacement chains', async () => {
+  for (const resolution of ['reply', 'pass']) {
+    const f = fixture();
+    const ask = f.hub.send(f.room.name, f.sender.id, '@old quietly report', undefined, true, true);
+    const audience = [...ask.audience!];
+    register(f.hub, f.room.name, 'old', 'next');
+    const next = joinSuccessor(f.hub, f.room.name, 'next');
+    assert.deepEqual((await f.hub.wait(f.room.name, next.id, 0, 0)).map(m => m.id), [ask.id]);
+    if (resolution === 'reply') f.hub.send(f.room.name, next.id, 'done', ask.id, true);
+    else f.hub.pass(f.room.name, next.id);
+    assert.equal(focusOf(f.hub, f.room.name, next.id), undefined);
+    register(f.hub, f.room.name, 'next', 'last');
+    const last = joinSuccessor(f.hub, f.room.name, 'last');
+    assert.equal(focusOf(f.hub, f.room.name, last.id), undefined);
+    assert.deepEqual(ask.audience, audience, 'handoff does not rewrite historical audience');
+  }
+});
+
+test('pending ask snapshot and bound successor debt survive restart', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'replacement-debt-'));
+  try {
+    const f = fixture(dir);
+    const ask = f.hub.send(f.room.name, f.sender.id, '@old report', undefined, true);
+    register(f.hub, f.room.name, 'old', 'next');
+    const restored = new Hub({ dataDir: dir });
+    const next = joinSuccessor(restored, f.room.name, 'next');
+    assert.equal(focusOf(restored, f.room.name, next.id)?.id, ask.id);
+    const again = new Hub({ dataDir: dir });
+    assert.throws(() => joinSuccessor(again, f.room.name, 'next'), HubError);
+    again.join(f.room.name, 'next', 'test', {}, next.id);
+    assert.equal(focusOf(again, f.room.name, next.id)?.id, ask.id);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
 });

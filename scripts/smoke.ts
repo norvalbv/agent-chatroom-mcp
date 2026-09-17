@@ -545,7 +545,7 @@ assert.deepEqual(tools, ["amend", "board_get", "board_set", "challenge", "join_r
   const hidden = await c.call("wait_for_messages", { room, timeout_ms: 0 });
   assert.ok(!hidden.messages.some((m: string) => m.includes("never-pulled quiet body")));
   assert.equal(hidden.quiet_activity.length, 1);
-  await a.call("send_message", { room, content: "Publish the unread control.", reply_to: unseen.id, surface: true });
+  await a.call("send_message", { room, content: "Publish the unread control.", reply_to: unseen.id, surface: true, force: true });
   const surfacedUnseen = await c.call("wait_for_messages", { room, timeout_ms: 0 });
   assert.ok(surfacedUnseen.messages.some((m: string) => m.includes("never-pulled quiet body")), "activity stubs are not body receipts");
   assert.ok(surfacedUnseen.messages.some((m: string) => m.includes("is now public")));

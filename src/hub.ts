@@ -80,7 +80,12 @@ export interface CodeState {
   at: string;
 }
 
+export interface BoardExpiryOptions { ttlSeconds?: number; expiresAt?: string }
+export interface BoardManifestStats { version: 1; waits: number; bytes: number; full: number; delta: number; empty: number }
+
 export interface BoardEntry {
+  /** Logical archive time: body remains explicitly retrievable. */
+  expiresAt?: string;
   text: string;
   by: string;
   updatedAt: string;
@@ -177,6 +182,7 @@ export interface Room {
   /** Only versioned rooms have a complete guarded-call observation epoch. */
   telemetryVersion?: 1;
   callOutcomes?: Record<string, CallOutcomes>;
+  boardManifests?: BoardManifestStats;
   /** git HEAD and dirty state of the project when the room was created */
   codeState?: CodeState;
   participants: Map<string, Participant>;
@@ -218,6 +224,7 @@ type Event =
   | { type: "state"; room: string; state: RoomState; conclusion?: Room["conclusion"] }
   | { type: "opening"; room: string; pid: string; content: string }
   | { type: "openings_revealed"; room: string }
+  | { type: "board_manifest"; room: string; bytes: number; kind: "full" | "delta" | "empty" }
   | { type: "board"; room: string; key: string; entry: BoardEntry | null }
   | { type: "amend"; room: string; proposalId: string; text: string; version: number; updatedAt?: string; votes: Proposal["votes"]; challenges?: Challenge[] }
   | { type: "refusal"; room: string; tool: string; reason: string; ts?: string; participant?: string | null }
@@ -441,6 +448,7 @@ export class Hub {
       amendments: [...room.proposals.values()].reduce((a, p) => a + (p.version - 1), 0),
       challenges: [...room.proposals.values()].reduce((a, p) => a + p.challenges.length, 0),
       board_entries: room.board.size,
+      board_manifests: room.boardManifests ?? null,
       refusals: room.refusals ?? {},
       call_outcomes: callOutcomes,
       refusal_rates: refusalRates,
@@ -1169,6 +1177,37 @@ export class Hub {
 
   // ---------- shared board ----------
 
+  private boardExpiry(key: string, opts: BoardExpiryOptions): string | undefined {
+    if (opts.ttlSeconds === undefined && opts.expiresAt === undefined) return undefined;
+    if (!key.startsWith("handoff/") && !key.startsWith("inbox/")) throw new HubError("Expiry is supported only for handoff/ and inbox/ entries.");
+    if (opts.ttlSeconds !== undefined && opts.expiresAt !== undefined) throw new HubError("Use ttl_seconds or expires_at, not both.");
+    if (opts.ttlSeconds !== undefined && (!Number.isFinite(opts.ttlSeconds) || opts.ttlSeconds <= 0)) throw new HubError("ttl_seconds must be finite and positive.");
+    const at = opts.ttlSeconds !== undefined ? Date.now() + opts.ttlSeconds * 1000 : Date.parse(opts.expiresAt!);
+    if (!Number.isFinite(at) || Math.abs(at) > 8.64e15) throw new HubError("Invalid expires_at or ttl_seconds.");
+    return new Date(at).toISOString();
+  }
+
+  /** Expiry archives visibility only. Required inbox notes remain visible until current-text ack. */
+  boardEntryExpired(room: Room, key: string, entry: BoardEntry, at = Date.now()): boolean {
+    if (!entry.expiresAt || at < Date.parse(entry.expiresAt)) return false;
+    if (entry.ackRequired && this.inboxOpen(room, key, entry)) return false;
+    return true;
+  }
+
+  recordBoardManifest(roomName: string, envelope: { board_keys?: string[]; board_delta?: { keys: string[]; tombstones: string[] } }): void {
+    const room = this.getRoom(roomName);
+    const kind = envelope.board_keys !== undefined ? "full" : envelope.board_delta !== undefined ? "delta" : "empty";
+    // The MCP text renderer uses two-space indentation. Empty manifests ship no field/bytes.
+    const bytes = kind === "empty" ? 0 : Buffer.byteLength(JSON.stringify(envelope, null, 2));
+    this.applyBoardManifest(room, bytes, kind);
+    this.persist({ type: "board_manifest", room: roomName, bytes, kind });
+  }
+
+  private applyBoardManifest(room: Room, bytes: number, kind: "full" | "delta" | "empty"): void {
+    const stats = room.boardManifests ??= { version: 1, waits: 0, bytes: 0, full: 0, delta: 0, empty: 0 };
+    stats.waits++; stats.bytes += bytes; stats[kind]++;
+  }
+
   static readonly BOARD_KEY = /^[\w .:/-]{1,80}$/;
 
   hold(room: Room): BoardEntry | undefined {
@@ -1195,11 +1234,12 @@ export class Hub {
     return new Set(ps.map((p) => p.session ?? `nosession:${p.id}`)).size;
   }
 
-  setBoard(roomName: string, pid: string, key: string, text: string, opts: { ifAbsent?: boolean; ifByMe?: boolean; overwrite?: boolean } = {}): BoardEntry | null {
+  setBoard(roomName: string, pid: string, key: string, text: string, opts: BoardExpiryOptions & { ifAbsent?: boolean; ifByMe?: boolean; overwrite?: boolean } = {}): BoardEntry | null {
     const room = this.getRoom(roomName);
     const p = this.requireParticipant(room, pid);
     if (!Hub.BOARD_KEY.test(key)) throw new HubError("Board keys are short names like 'evidence', 'open questions', 'claim/auth', 'verify/auth'.");
     if (text.length > 8000) throw new HubError("Board entries are capped at 8000 characters.");
+    const expiresAt = this.boardExpiry(key, opts);
     const previous = room.board.get(key);
     // reserved prefixes (enforced here, the single write site)
     if (key.startsWith("inbox/") && !key.endsWith(".ack")) throw new HubError("inbox/* entries are written by post_to_room from another room. To acknowledge one, write '<key>.ack'.");
@@ -1244,6 +1284,7 @@ export class Hub {
     const note = key.startsWith("inbox/") && key.endsWith(".ack") ? room.board.get(key.slice(0, -4)) : undefined;
     const entry: BoardEntry = {
       text, by: p.name, updatedAt: now(),
+      ...(expiresAt ? { expiresAt } : {}),
       ...(key.startsWith("verify/") ? { codeState: Hub.codeState(this.cwd) } : {}),
       ...(note ? { acknowledgedTextHash: Hub.noteHash(note.text) } : {}),
     };
@@ -1266,7 +1307,7 @@ export class Hub {
   }
 
   /** Cross-room note: written into the target room's board under inbox/<from>/<key> without joining it. */
-  postToRoom(fromRoom: string, pid: string, toRoom: string, key: string, text: string, ackRequired = false): { key: string; entry: BoardEntry } {
+  postToRoom(fromRoom: string, pid: string, toRoom: string, key: string, text: string, ackRequired = false, opts: BoardExpiryOptions = {}): { key: string; entry: BoardEntry } {
     const from = this.getRoom(fromRoom);
     const p = this.requireParticipant(from, pid);
     if (toRoom === fromRoom) throw new HubError("That is your own room; use board_set.");
@@ -1274,7 +1315,8 @@ export class Hub {
     if (!/^[\w .:-]{1,40}$/.test(key)) throw new HubError("Inbox keys are short names without slashes.");
     if (text.length > 8000) throw new HubError("Notes are capped at 8000 characters.");
     const full = `inbox/${fromRoom}/${key}`;
-    const entry: BoardEntry = { text, by: p.name, updatedAt: now(), ...(ackRequired ? { ackRequired: true } : {}) };
+    const expiresAt = this.boardExpiry(full, opts);
+    const entry: BoardEntry = { text, by: p.name, updatedAt: now(), ...(expiresAt ? { expiresAt } : {}), ...(ackRequired ? { ackRequired: true } : {}) };
     // Replacing an open note consumes no extra slot. A changed text hash invalidates its old ack.
     const otherOpen = [...to.board.entries()].filter(([k, e]) => k !== full && this.inboxOpen(to, k, e)).length;
     if (this.inboxOpen(to, full, entry) && otherOpen >= 10) throw new HubError(`${toRoom} already has 10 inbox notes awaiting acknowledgement; wait for them to be acknowledged or cleared.`);
@@ -1860,6 +1902,11 @@ export class Hub {
               pr.challenges.push(ev.challenge);
               if (ev.votes) pr.votes = ev.votes;
             }
+            break;
+          }
+          case "board_manifest": {
+            const room = this.rooms.get(ev.room);
+            if (room) this.applyBoardManifest(room, ev.bytes, ev.kind);
             break;
           }
           case "call_completion": {

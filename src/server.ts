@@ -260,11 +260,12 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
       inputSchema: {
         room: roomArg,
         since_seq: z.number().int().min(0).optional().describe("Return messages with seq greater than this. Defaults to what you have already seen."),
+        follow: z.array(z.string().max(80)).max(100).optional().describe("Follow board key prefixes; omitted keeps your subscription, [] follows only mandatory coordination keys. Use [\"\"] for all. Rejoin or board_get without key resets a lost manifest."),
         timeout_ms: z.number().int().min(0).max(MAX_WAIT_MS).optional().describe("Milliseconds to wait for a message; omit for 55000, 0 to poll without waiting; values above 55000 are rejected."),
         participant_id: asArg,
       },
     },
-    guard("wait_for_messages", async ({ room, since_seq, timeout_ms, participant_id }) => {
+    guard("wait_for_messages", async ({ room, since_seq, timeout_ms, follow, participant_id }) => {
       const r = hub.getRoom(room);
       const id = pid(room, participant_id);
       const p = hub.requireParticipant(r, id);
@@ -317,6 +318,9 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
                             : msgs.length === 0
                               ? "No new messages yet. Call wait_for_messages again."
                               : undefined;
+      // Snapshot AFTER the poll wake: concurrent waits serialize their per-participant cursor here.
+      const board = hub.boardManifest(room, id, follow);
+      hub.recordBoardManifest(room, board);
       // the hint goes first: it is the one line a weaker model must not lose to a clamp
       return {
         hint,
@@ -333,7 +337,7 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
           ? { id: openView.id, version: openView.version, by: openView.by, chars: openView.chars, tally: openView.tally, waiting_on: openView.waiting_on, needs_challenge: openView.needs_challenge, blocked_by: openView.blocked_by, challenges: openView.challenges, ...("text" in openView ? { text: openView.text } : { text_omitted: openView.text_omitted }) }
           : null,
         leaving_would_block: block ? block.reason : false,
-        board_keys: [...r.board.keys()],
+        ...board,
         quiet_activity: hub.quietActivity(r, p, since),
         addressed_to_you: hub.addressedBy(r, p).map((m) => ({ id: m.id, from: hub.shown(r, m.from), text: m.content.slice(0, 200) })),
         your_share: (() => {
@@ -437,14 +441,16 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
         room: roomArg,
         key: z.string().describe("Short name, e.g. 'evidence', 'open questions', 'draft'. Reserved: claim/<area> (JSON, create-then-owner-only), verify/<area> (a command you ran, its cwd/commit, exit code, and the proposal id), hold/<room> (pause; author-only), inbox/* (written by post_to_room; acknowledge with '<key>.ack')."),
         text: z.string(),
+        ttl_seconds: z.number().positive().finite().optional().describe("Expiry for handoff/inbox only; body remains retrievable by key."),
+        expires_at: z.string().optional().describe("Absolute expiry timestamp; use instead of ttl_seconds."),
         if_absent: z.boolean().optional().describe("Create only; fail if the key exists (atomic claim)."),
         if_by_me: z.boolean().optional().describe("Update only if you wrote the existing entry."),
         overwrite: z.boolean().optional().describe("Replace another author's entry (refused otherwise, with their current text returned so you can merge)."),
         participant_id: asArg,
       },
     },
-    guard("board_set", ({ room, key, text, if_absent, if_by_me, overwrite, participant_id }) => {
-      const e = hub.setBoard(room, pid(room, participant_id), key, text, { ifAbsent: if_absent, ifByMe: if_by_me, overwrite });
+    guard("board_set", ({ room, key, text, if_absent, if_by_me, overwrite, ttl_seconds, expires_at, participant_id }) => {
+      const e = hub.setBoard(room, pid(room, participant_id), key, text, { ifAbsent: if_absent, ifByMe: if_by_me, overwrite, ttlSeconds: ttl_seconds, expiresAt: expires_at });
       return e ? { key, chars: e.text.length, by: e.by } : { key, deleted: true };
     }),
   );
@@ -462,11 +468,13 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
         key: z.string().describe("Short name, e.g. 'result', 'need-help', 'commit-ref'."),
         text: z.string(),
         ack_required: z.boolean().optional(),
+        ttl_seconds: z.number().positive().finite().optional().describe("Archive after this time, but required notes stay visible until acknowledged."),
+        expires_at: z.string().optional().describe("Absolute archive time; use instead of ttl_seconds."),
         participant_id: asArg,
       },
     },
-    guard("post_to_room", ({ from_room, to_room, key, text, ack_required, participant_id }) => {
-      const r = hub.postToRoom(from_room, pid(from_room, participant_id), to_room, key, text, ack_required);
+    guard("post_to_room", ({ from_room, to_room, key, text, ack_required, ttl_seconds, expires_at, participant_id }) => {
+      const r = hub.postToRoom(from_room, pid(from_room, participant_id), to_room, key, text, ack_required, { ttlSeconds: ttl_seconds, expiresAt: expires_at });
       return { to_room, key: r.key, chars: r.entry.text.length, notified: true };
     }),
   );
@@ -483,9 +491,11 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
       if (key) {
         const e = r.board.get(key);
         if (!e) throw new HubError(`No board entry "${key}". Keys: ${[...r.board.keys()].join(", ") || "(none)"}`);
-        return { key, ...e };
+        return { key, ...e, ...(hub.boardEntryExpired(r, key, e) ? { expired: true, tombstone: "Archived by expiry; excluded from manifests, retained for explicit retrieval." } : {}) };
       }
-      return Object.fromEntries([...r.board].map(([k, e]) => [k, { by: e.by, chars: e.text.length, updated_at: e.updatedAt, ...(e.ackRequired ? { ack_required: true } : {}) }]));
+      // Observers can still read boards; reset only the identified seat(s) on this connection.
+      for (const id of me.get(room) ?? []) if (r.participants.get(id)?.active) hub.boardManifest(room, id, undefined, true);
+      return Object.fromEntries([...r.board].filter(([k, e]) => !hub.boardEntryExpired(r, k, e)).map(([k, e]) => [k, { by: e.by, chars: e.text.length, updated_at: e.updatedAt, ...(e.ackRequired ? { ack_required: true } : {}) }]));
     }),
   );
 

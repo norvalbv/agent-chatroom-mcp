@@ -6,8 +6,9 @@
  *   npx tsx src/swarm.ts "<task>" --agents 6 --cwd /path/to/project [--codex 2] [--openrouter 2] [--apply] [--timeout 30]
  */
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, symlinkSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, realpathSync, symlinkSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
+import { collectRoomSnapshot, renderRunReport, writeRunResult, type RunResult, type RoomSnapshot } from "./result.js";
 import { settledAxes } from "./settled.js";
 import { fileURLToPath } from "node:url";
 import { loadDotEnv } from "./env.js";
@@ -26,7 +27,7 @@ const has = (name: string) => argv.includes(`--${name}`);
 const BOOL_FLAGS = new Set(["--apply", "--full-access", "--named", "--flat", "--require-verification", "--respawn"]);
 const task = argv.find((a, i) => !a.startsWith("--") && (i === 0 || !argv[i - 1].startsWith("--") || BOOL_FLAGS.has(argv[i - 1])));
 if (!task) {
-  console.error('usage: swarm "<task>" [--flat] [--done-when text] [--verify text] [--agents 6] [--cwd dir] [--models sonnet,haiku] [--lead-model opus] [--verifier-model opus] [--planner-model opus] [--codex k] [--codex-models gpt-6-astra,gpt-5.6-sol,gpt-5.6-terra] [--openrouter k] [--openrouter-models deepseek/deepseek-v4.1-flash,...] [--verifier-openrouter slug] [--openrouter-reasoning low|medium|high] [--require-verification] [--quorum unanimous|majority] [--prompt loop.md] [--respawn] [--apply] [--full-access] [--named] [--timeout 30] [--port 7717]');
+  console.error('usage: swarm "<task>" [--flat] [--done-when text] [--verify text] [--agents 6] [--cwd dir] [--models sonnet,haiku] [--lead-model opus] [--verifier-model opus] [--planner-model opus] [--codex k] [--codex-models gpt-6-astra,gpt-5.6-sol,gpt-5.6-terra] [--openrouter k] [--openrouter-models deepseek/deepseek-v4.1-flash,...] [--verifier-openrouter slug] [--openrouter-reasoning low|medium|high] [--require-verification] [--quorum unanimous|majority] [--prompt loop.md] [--respawn] [--apply] [--full-access] [--named] [--timeout 30] [--port 7717] [--result-path path]');
   process.exit(2);
 }
 const TOTAL = Math.max(2, Number(flag("agents", "4")));
@@ -47,6 +48,12 @@ const FLAT_PROMPT = flag("prompt", "minimal.md")!;
 /** --respawn: a seat that exits while its room is still open is relaunched (up to 3 times) with a note to read the board first */
 const RESPAWN = has("respawn");
 const RUN_STARTED = Date.now();
+// Capture target identity before workers can change its revision.
+const gitIdentity = () => {
+  const git = (...args: string[]) => { const r = spawnSync("git", ["-C", CWD, ...args], { encoding: "utf8" }); if (r.status !== 0) throw new Error(r.stderr); return r.stdout.trim(); };
+  try { return { root: realpathSync(git("rev-parse", "--show-toplevel")), commonDir: realpathSync(resolve(CWD, git("rev-parse", "--git-common-dir"))), revision: git("rev-parse", "HEAD"), branch: git("branch", "--show-current"), dirty: git("status", "--porcelain").length > 0 }; } catch { return null; }
+};
+const PROJECT_IDENTITY = { cwd: CWD, canonicalPath: realpathSync(CWD), git: gitIdentity() };
 /** set by the signal handler: a seat that exits because the launcher is stopping is not a drop to respawn */
 let STOPPING = false;
 /**
@@ -426,26 +433,38 @@ clearInterval(tail);
 await tailRooms([...groupRooms, leadsRoom]);
 
 // ---------- report ----------
-const roomJson = async (room: string) => (await (await fetch(`${URL_}/rooms/${room}`)).json()) as { state: string; conclusion: { text: string } | null };
-const transcript = async (room: string) => (await (await fetch(`${URL_}/rooms/${room}/transcript`)).text()).replace(/\n#/g, "\n\\#");
-const leads = await roomJson(leadsRoom).catch(() => ({ state: "missing", conclusion: null }));
-let report = `# ${SWARM_ID}\n\n**Task:** ${task}\n\n**Done when:** ${plan.done_when}\n\n## Final answer (${leads.state})\n\n${leads.conclusion?.text ?? "_no consensus reached_"}\n\n`;
-report += `## Verifier\n\n${results.find((r) => r.name === "verifier")?.text ?? "(none)"}\n\n## Groups\n\n`;
-for (const g of FLAT ? [] : plan.groups) {
-  const r = await roomJson(`${SWARM_ID}-${g.id}`).catch(() => ({ state: "missing", conclusion: null }));
-  report += `### ${g.title} (${r.state})\n\n${r.conclusion?.text ?? "_no consensus_"}\n\n`;
+const collectionErrors: string[] = [];
+const fetchText = async (url: string) => {
+  const response = await fetch(url);
+  if (!response.ok) throw new Error(`HTTP ${response.status}: ${url}`);
+  return response.text();
+};
+// Fetch full GET payload for every room, including dynamically created break-outs.
+try {
+  const all = JSON.parse(await fetchText(`${URL_}/rooms`)) as { name: string }[];
+  for (const room of all.filter(r => r.name.startsWith(`${SWARM_ID}-`) && r.name !== leadsRoom)) groupRooms.push(room.name);
+} catch (e) { collectionErrors.push(`Room discovery: ${String(e)}`); }
+const snapshots: RoomSnapshot[] = [];
+for (const name of new Set([leadsRoom, ...groupRooms])) {
+  const snapshot = await collectRoomSnapshot(URL_, name);
+  if (snapshot.error) collectionErrors.push(`${name} payload: ${snapshot.error}`);
+  if (snapshot.transcript.error) collectionErrors.push(`${name} transcript: ${snapshot.transcript.error}`);
+  snapshots.push(snapshot);
 }
-if (FLAT) {
-  // break-out rooms the agents created themselves
-  const all = (await (await fetch(`${URL_}/rooms`)).json()) as { name: string; state: string; conclusion: { text: string } | null }[];
-  for (const r of all.filter((x) => x.name.startsWith(SWARM_ID) && x.name !== leadsRoom)) {
-    groupRooms.push(r.name);
-    report += `### break-out ${r.name} (${r.state})\n\n${r.conclusion?.text ?? "_no consensus_"}\n\n`;
-  }
-}
-report += `## Transcripts\n\n`;
-for (const room of [leadsRoom, ...groupRooms]) report += "```\n" + (await transcript(room).catch(() => "(missing)")) + "```\n\n";
-writeFileSync(resolve(OUT, "report.md"), report);
+const leads = snapshots.find(r => r.name === leadsRoom)?.payload ?? { state: "missing", conclusion: null };
+const artifactPath = resolve(flag("result-path", resolve(OUT, "result.json"))!);
+const artifact: RunResult = {
+  schemaVersion: 1,
+  run: { id: SWARM_ID, startedAt: new Date(RUN_STARTED).toISOString(), completedAt: new Date().toISOString(), task, doneWhen: plan.done_when },
+  project: PROJECT_IDENTITY,
+  leadRoom: leadsRoom,
+  rooms: snapshots,
+  verifier: { name: "verifier", output: results.find(r => r.name === "verifier")?.text ?? null },
+  reportPath: resolve(OUT, "report.md"), artifactPath, collectionErrors,
+};
+writeRunResult(resolve(OUT, "result.json"), artifact);
+if (artifactPath !== resolve(OUT, "result.json")) writeRunResult(artifactPath, artifact);
+writeFileSync(artifact.reportPath, renderRunReport(artifact));
 {
   // a decision-record-shaped verdict is written where the next run's settledAxes() can find it once a human promotes it
   const verdict = results.find((r) => r.name === "verifier")?.text ?? "";

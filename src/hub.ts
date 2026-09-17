@@ -1368,8 +1368,15 @@ export class Hub {
     if (pr.status !== "open") throw new HubError(`Proposal ${proposalId} is already ${pr.status}.`);
     if (pr.by.id === p.id) throw new HubError("You cannot challenge your own proposal; someone else must.");
     if (objection.trim().length < 20) throw new HubError("A challenge must state a specific objection (at least 20 characters).");
-    this.surfaceCited(room, objection, "cited in a challenge");
     const cites = this.citedSpan(pr.text, objection);
+    if (blocking && !cites) {
+      throw new HubError(
+        `A blocking challenge must quote a matching proposal span (12+ characters) in double quotes. ` +
+          `Copy the text from ${proposalId} v${pr.version}; the closest passage is: "${this.closest(pr.text, objection)}". ` +
+          `Use blocking=false to record uncited dissent without holding the proposal.`,
+      );
+    }
+    this.surfaceCited(room, objection, "cited in a challenge");
     const challenge: Challenge = { id: shortId("ch"), by: { id: p.id, name: p.name }, objection, ts: now(), version: pr.version, status: "open", blocking, ...(cites ? { cites } : {}) };
     pr.challenges.push(challenge);
     // A blocking challenge must be answered: the challenger's own vote (if any) is reset and must be re-cast
@@ -1430,6 +1437,20 @@ export class Hub {
       .map(([id, v]) => ({ id, name: v.name }));
   }
 
+  /** Legacy uncited blockers cannot be answered by amending an imaginary target. */
+  private challengeAdvice(room: Room, challenges: Challenge[]): string {
+    const anchored = challenges.filter((c) => c.cites);
+    const legacy = challenges.filter((c) => !c.cites);
+    const advice: string[] = [];
+    if (anchored.length) advice.push(`open challenge(s) from ${anchored.map((c) => this.shown(room, c.by)).join(", ")}: amend the cited text or they re-vote`);
+    for (const c of legacy) {
+      const author = this.shown(room, c.by);
+      const action = room.participants.get(c.by.id)?.active ? "re-vote agree" : "return/rejoin with their original identity and re-vote agree";
+      advice.push(`legacy uncited challenge from ${author}: no cited amendment target; ${author} must ${action} with a reason to concede, or a human closes the room`);
+    }
+    return advice.join("; ");
+  }
+
   /** Everything that stops an open proposal from passing right now, in words an agent can act on. */
   blockedBy(room: Room, pr: Proposal): string[] {
     if (pr.status !== "open") return [];
@@ -1443,7 +1464,7 @@ export class Hub {
     for (const d of this.standingDisagrees(pr)) out.push(`a standing disagree from ${this.shown(room, room.participants.get(d.id) ?? d)}${room.participants.get(d.id)?.active ? "" : " (who has left)"}: they re-vote, or the text they objected to is amended`);
     if (this.challengeRequired(room) && !pr.challenges.some((c) => c.blocking !== false)) out.push(`a challenge from someone other than ${this.shown(room, pr.by)}`);
     const openCh = this.openChallenges(pr);
-    if (openCh.length) out.push(`open challenge(s) from ${openCh.map((c) => this.shown(room, c.by)).join(", ")}: amend the cited text or they re-vote`);
+    if (openCh.length) out.push(this.challengeAdvice(room, openCh));
     if (room.requireVerification && !this.verifiedBy(room, pr)) out.push(`a verify/* board entry by someone other than ${this.shown(room, pr.by)} naming ${pr.id}`);
     if (this.hold(room)) out.push(`hold by ${this.hold(room)!.by}`);
     if (!Object.values(pr.votes).some((v) => (v.version ?? 1) === pr.version) && pr.version > 1) out.push(`no vote cast on v${pr.version} yet (carried-over agrees alone cannot pass a new version)`);
@@ -1564,7 +1585,7 @@ export class Hub {
       return;
     }
     if (accepted && this.openChallenges(pr).length) {
-      stuck(`${pr.id} has the votes but ${this.openChallenges(pr).map((c) => this.shown(room, c.by)).join(", ")} challenged v${pr.version} and it is unanswered: amend the text it cites, or the challenger re-votes.`);
+      stuck(`${pr.id} has the votes but ${this.challengeAdvice(room, this.openChallenges(pr))}.`);
       return;
     }
 

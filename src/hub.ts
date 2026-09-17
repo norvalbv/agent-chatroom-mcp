@@ -15,7 +15,7 @@ export type MessageKind = "chat" | "system" | "proposal" | "amend" | "challenge"
 export type Vote = "agree" | "disagree" | "abstain";
 export type Quorum = "unanimous" | "majority";
 export type RoomMode = "free" | "round_robin";
-export type RoomState = "open" | "concluded" | "stalled";
+export type RoomState = "open" | "concluded" | "stalled" | "closed";
 
 export interface Participant {
   id: string;
@@ -585,7 +585,7 @@ export class Hub {
   /** After a period of silence in an open room, remind people what is blocking. */
   private armNudge(room: Room) {
     if (room.nudgeTimer) clearTimeout(room.nudgeTimer);
-    if (!room.nudgeAfterMs || room.state === "concluded") return;
+    if (!room.nudgeAfterMs || room.state === "concluded" || room.state === "closed") return;
     room.nudgeTimer = setTimeout(() => {
       if (room.state === "concluded" || this.activeParticipants(room).length === 0) return;
       const open = [...room.proposals.values()].find((pr) => pr.status === "open");
@@ -856,7 +856,7 @@ export class Hub {
   propose(roomName: string, pid: string, text: string): Proposal {
     const room = this.getRoom(roomName);
     const p = this.requireParticipant(room, pid);
-    if (room.state === "concluded") throw new HubError(`Room "${roomName}" has already concluded.`);
+    if (room.state === "concluded" || room.state === "closed") throw new HubError(`Room "${roomName}" is ${room.state}.`);
     if (!text.trim()) throw new HubError("Proposal text is empty.");
     const open = [...room.proposals.values()].find((pr) => pr.status === "open");
     if (open) {
@@ -970,7 +970,7 @@ export class Hub {
 
   /** Re-check whether a proposal has reached the room's quorum. */
   private evaluate(room: Room, pr: Proposal) {
-    if (pr.status !== "open" || room.state === "concluded") return;
+    if (pr.status !== "open" || room.state === "concluded" || room.state === "closed") return;
     const active = this.voters(room);
     if (active.length === 0) return;
     if (room.expectedParticipants && this.voters(room).length < room.expectedParticipants) return;
@@ -1034,6 +1034,24 @@ export class Hub {
     this.persist({ type: "state", room: room.name, state, conclusion: room.conclusion });
   }
 
+  /** Close a room without a conclusion (stale, abandoned, or a human decided to stop it). */
+  closeRoom(roomName: string, by: string, reason = ""): Room {
+    const room = this.getRoom(roomName);
+    if (room.state === "concluded") throw new HubError("Room already concluded.");
+    if (room.state === "closed") return room;
+    for (const pr of room.proposals.values()) if (pr.status === "open") pr.status = "superseded";
+    for (const p of room.participants.values()) {
+      if (p.active) {
+        p.active = false;
+        this.persist({ type: "leave", room: roomName, p });
+      }
+    }
+    this.setState(room, "closed");
+    if (room.nudgeTimer) clearTimeout(room.nudgeTimer);
+    this.post(room, "system", undefined, `Room closed by ${by}${reason ? `: ${reason}` : ""}. No conclusion was recorded.`);
+    return room;
+  }
+
   // ---------- liveness ----------
 
   /** Mark participants inactive after `idleMs` without any activity in a room that has not concluded. */
@@ -1041,7 +1059,7 @@ export class Hub {
     let n = 0;
     const cutoff = Date.now() - idleMs;
     for (const room of this.rooms.values()) {
-      if (room.state === "concluded") continue;
+      if (room.state === "concluded" || room.state === "closed") continue;
       for (const p of room.participants.values()) {
         if (p.active && p.agent !== "human" && Date.parse(p.lastActiveAt) < cutoff) {
           p.active = false;

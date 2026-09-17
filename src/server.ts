@@ -244,7 +244,9 @@ export function createSessionServer(hub: Hub): SessionServer {
         })(),
         conclusion: r.conclusion ?? null,
         hint:
-          r.state === "concluded"
+          r.state === "closed"
+            ? "This room was closed without a conclusion. leave_room and stop."
+            : r.state === "concluded"
             ? human && resp!.mine
               ? `The room has concluded, but ${hub.shown(r, human.from)} (a human) said "${human.content.slice(0, 160)}". You answer them (send_message reply_to="${human.id}", briefly), then leave_room.`
               : "The room has concluded. Read the conclusion and leave_room."

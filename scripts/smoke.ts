@@ -109,7 +109,7 @@ assert.deepEqual(tools, ["amend", "board_get", "board_set", "challenge", "join_r
   await a.call("wait_for_messages", { room, timeout_ms: 0 });
   const after = await a.call("send_message", { room, content: "one more (chat stays open after conclusion)" });
   assert.ok(after.seq > 0);
-  await assert.rejects(a.call("propose", { room, text: "reopen?" }), /already concluded/);
+  await assert.rejects(a.call("propose", { room, text: "reopen?" }), /is concluded/);
 }
 
 // ---------------- three-party anonymous room: challenge gate, budgets, human interjection ----------------
@@ -376,6 +376,18 @@ assert.deepEqual(tools, ["amend", "board_get", "board_set", "challenge", "join_r
   const st = await a.call("room_status", { room });
   const dropper = st.participants.find((p: { name: string }) => p.name === "dropper-1");
   assert.equal(dropper.active, false, "closed session must leave the room");
+}
+
+// ---------------- closing a stale room ----------------
+{
+  const room = "stale";
+  await a.call("join_room", { room, name: "claude-1", agent: "claude" });
+  const cr = await fetch(`${HTTP}/rooms/${room}/close`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ name: "benji", reason: "stale" }) });
+  assert.equal(cr.status, 200);
+  const st = await a.call("room_status", { room });
+  assert.equal(st.state, "closed");
+  assert.equal(st.active_count, 0);
+  await assert.rejects(a.call("propose", { room, text: "x" }), /closed|have left/);
 }
 
 const ui = await (await fetch(`${HTTP}/ui`)).text();

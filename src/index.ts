@@ -149,6 +149,16 @@ app.post("/rooms/:room/vote", (req, res) => {
     res.status(400).type("text/plain").send(e instanceof HubError ? e.message : "error");
   }
 });
+// Close a stale or abandoned room (no conclusion). Dashboard button or curl -X POST .../close
+app.post("/rooms/:room/close", (req, res) => {
+  if (!requireToken(req, res)) return;
+  try {
+    const { name, reason } = (req.body ?? {}) as { name?: string; reason?: string };
+    res.json(hub.summary(hub.closeRoom(req.params.room, (name || "human").trim(), reason), true));
+  } catch (e) {
+    res.status(400).type("text/plain").send(e instanceof HubError ? e.message : "error");
+  }
+});
 app.get("/rooms/:room/transcript", (req, res) => {
   try {
     const r = hub.getRoom(req.params.room);

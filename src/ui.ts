@@ -49,7 +49,9 @@ export const UI_HTML = `<!doctype html>
   .room .m { color:var(--dim); font-size:12px; margin-top:1px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; padding-left:16px }
   .dot { width:8px; height:8px; border-radius:50%; flex:none; background:var(--dim2) }
   .dot.open { background:var(--ok); box-shadow:0 0 0 3px color-mix(in srgb, var(--ok) 25%, transparent) }
-  .dot.stalled { background:var(--warn) } .dot.concluded { background:var(--acc) }
+  .dot.stalled { background:var(--warn) } .dot.concluded { background:var(--acc) } .dot.closed { background:var(--dim2) }
+  .chip.closed { background:var(--panel2); color:var(--dim2) }
+  .closebtn { border:1px solid var(--line); background:transparent; color:var(--bad); border-radius:8px; padding:5px 10px; font-size:12px; margin-top:8px }
 
   /* ---- middle: chat ---- */
   main { display:grid; grid-template-rows:auto minmax(0,1fr) auto; min-height:0; background:var(--bg) }
@@ -155,9 +157,9 @@ export const UI_HTML = `<!doctype html>
       roomsCache = await (await fetch('/rooms')).json();
       $('#sub').textContent = roomsCache.filter(r => r.state === 'open').length + ' live · ' + roomsCache.length + ' total';
       const sorted = [...roomsCache].sort((a,b) => b.created_at.localeCompare(a.created_at));
-      const live = sorted.filter(r => r.state !== 'concluded'), done = sorted.filter(r => r.state === 'concluded');
+      const live = sorted.filter(r => r.state === 'open' || r.state === 'stalled'), done = sorted.filter(r => r.state === 'concluded' || r.state === 'closed');
       const item = (r) => '<button class="room' + (r.name===sel?' sel':'') + '" data-r="' + esc(r.name) + '"><div class="n"><span class="dot ' + r.state + '"></span><span class="t">' + esc(r.name) + '</span></div><div class="m">' + (r.topic ? esc(r.topic) : r.message_count + ' messages') + '</div></button>';
-      $('#rooms').innerHTML = (live.length ? '<div class="group">Live</div>' + live.map(item).join('') : '') + (done.length ? '<div class="group">Concluded</div>' + done.map(item).join('') : '') || '<div class="empty">No rooms yet</div>';
+      $('#rooms').innerHTML = (live.length ? '<div class="group">Live</div>' + live.map(item).join('') : '') + (done.length ? '<div class="group">Finished</div>' + done.map(item).join('') : '') || '<div class="empty">No rooms yet</div>';
       if (!sel && sorted.length) select((live[0] || sorted[0]).name);
       if (sel) { const r = roomsCache.find(r => r.name===sel); head(r); details(r); }
     } catch { $('#sub').textContent = 'hub unreachable'; }
@@ -172,7 +174,7 @@ export const UI_HTML = `<!doctype html>
       + '<span class="topic" title="' + esc(r.topic) + '">' + esc(r.topic) + '</span>'
       + '<button class="iconbtn" id="togdet" title="Toggle details panel">☰</button>';
     $('#togdet').onclick = () => { document.body.classList.toggle('nodetails'); store.set('nodetails', document.body.classList.contains('nodetails')); };
-    $('#sendbtn').disabled = false;
+    $('#sendbtn').disabled = r.state === 'closed';
   }
 
   function details(r) {
@@ -195,9 +197,11 @@ export const UI_HTML = `<!doctype html>
     if (past.length) h += '<div class="sec"><h3>Earlier proposals</h3>' + past.map(p => '<div class="person"><span class="chip">' + p.status + '</span><span style="font-size:12px;color:var(--dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(p.text.slice(0,80)) + '</span></div>').join('') + '</div>';
     const bk = Object.keys(r.board || {});
     if (bk.length) h += '<div class="sec"><h3>Board</h3>' + bk.map(k => '<div class="board"><div class="k">' + esc(k) + '<span>' + esc(r.board[k].by) + ' · ' + rel(r.board[k].updated_at) + '</span></div>' + clampBlock('board:' + k, r.board[k].text) + '</div>').join('') + '</div>';
+    if (r.state === 'open' || r.state === 'stalled') h += '<div class="sec"><button class="closebtn" id="closeroom">Close this room (no conclusion)</button></div>';
     h += '<div class="sec tools"><h3>View</h3><label><input type="checkbox" id="hs" ' + (hideSys?'checked':'') + '/> hide join/leave notices</label><label><input type="checkbox" id="as" ' + (autoScroll?'checked':'') + '/> follow new messages</label><div class="links"><a href="/rooms/' + encodeURIComponent(r.name) + '/transcript" target="_blank">transcript</a><a href="/rooms/' + encodeURIComponent(r.name) + '/stats" target="_blank">stats</a><a href="/rooms/' + encodeURIComponent(r.name) + '" target="_blank">json</a></div>'
       + '<div style="font-size:12px;color:var(--dim2);margin-top:8px">' + r.mode.replace('_',' ') + ' · ' + r.quorum + (r.anonymous ? ' · anonymous to agents' : '') + '</div></div>';
     $('#details').innerHTML = h;
+    const cb = $('#closeroom'); if (cb) cb.onclick = async () => { if (!window.confirm('Close ' + r.name + '? Agents still in it will be told to leave.')) return; await fetch('/rooms/' + encodeURIComponent(r.name) + '/close', { method:'POST', headers: hdrs(), body: JSON.stringify({ name: $('#name').value || 'human', reason: 'closed from dashboard' }) }); rooms(); poll(); };
     $('#hs').onchange = (e) => { hideSys = e.target.checked; store.set('hideSys', hideSys); rerender(); };
     $('#as').onchange = (e) => { autoScroll = e.target.checked; };
     for (const b of document.querySelectorAll('#details .more')) b.onclick = () => { const k = b.dataset.x; if (expanded.has(k)) expanded.delete(k); else expanded.add(k); details(r); };

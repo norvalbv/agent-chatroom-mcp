@@ -39,6 +39,8 @@ export interface SessionServer {
   server: McpServer;
   /** Mark every participant this connection owns as left (called when the transport closes). */
   leaveAll(): void;
+  /** the session key stamped on every participant this connection joins as (Participant.session) */
+  sessionKey: string;
 }
 
 export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer {
@@ -193,7 +195,7 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
       inputSchema: {
         room: roomArg,
         content: z.string().describe("The message text."),
-        reply_to: z.string().optional().describe("Message id (m_...) you are replying to."),
+        reply_to: z.string().optional().describe("The message you are replying to: its id (m_...) or its seq as printed (\"#12\")."),
         force: z.boolean().optional().describe("Send even if there are unread messages."),
         quiet: z.boolean().optional().describe("Push only to the @-named agents (still logged and readable by all)."),
         surface: z.boolean().optional().describe("With reply_to into a quiet thread: make the whole thread public."),
@@ -222,7 +224,7 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
       const mins = Math.round(r.nudgeAfterMs / 60000);
       return out.revealed
         ? out
-        : { ...out, hint: `Openings are revealed when everyone has submitted, or after ${mins} min of silence without the rest (the hub reveals what it has). Chat is not blocked meanwhile: wait_for_messages, and speak if you have something to say.` };
+        : { ...out, hint: `Openings are revealed when everyone has submitted, or ${mins} min after the first opening if the rest never arrive (the hub reveals what it has; chat does not delay it). Chat is not blocked meanwhile: wait_for_messages, and speak if you have something to say.` };
     }),
   );
 
@@ -267,7 +269,37 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
       const resp = human ? hub.responderFor(r, human, id) : null;
       const owed = hub.addressedBy(r, p);
       if (owed[0]) p.addressWarned = owed[0].id;
+      const openingsHeld = r.expectedParticipants && !r.openingsRevealed;
+      const hint =
+        r.state === "closed"
+          ? "This room was closed without a conclusion. leave_room and stop."
+          : r.state === "concluded"
+            ? human && resp!.mine
+              ? `The room has concluded, but ${hub.shown(r, human.from)} (a human) said "${human.content.slice(0, 160)}". You answer them (send_message reply_to="${human.id}", briefly), then leave_room.`
+              : "The room has concluded. Read the conclusion and leave_room."
+            : human && resp!.mine
+              ? `${hub.shown(r, human.from)} (a human) said "${human.content.slice(0, 160)}" (${human.id}). You are the one answering: reply with send_message reply_to="${human.id}"` +
+                (hub.isSmallTalk(human) ? ", one short friendly line, nothing else." : ", directly and briefly, before anything else.")
+              : human
+                ? `${hub.shown(r, human.from)} (a human) said something; ${resp!.who} is answering it. You will see it with the reply. Carry on.`
+                : needsChallenge && needsMyVote
+                  ? "A proposal is open and untested. Name its single weakest claim in one sentence (challenge), then vote. If you want different wording, amend it instead of re-proposing."
+                  : needsMyVote
+                    ? `Vote on the open proposal: agree with a verbatim quote of the clause you endorse, or disagree with the specific change you need (or just amend it).${open && hub.standingDisagrees(open).length === 0 && r.quorum === "unanimous" && openView!.waiting_on.length === 1 ? " Your vote decides it: a disagree keeps it open for amendment, it does not kill it." : ""}`
+                    : needsChallenge && open && open.by.id !== id
+                      ? `${open.id} cannot pass until someone other than its author names its weakest claim (challenge). You have voted; if you can see a weak claim, challenge it now.`
+                      : owed.length
+                        ? `${hub.shown(r, owed[0].from)} addressed you directly. Reply (reply_to="${owed[0].id}") or pass.`
+                        : openingsHeld && r.openings.has(id)
+                          ? `Your opening is in; waiting for ${hub.openingsWaitingOn(r).join(", ")}. The hub reveals what it has on the deadline (within ${Math.round(r.nudgeAfterMs / 60000)} min of the first opening). Chat is open meanwhile: speak if you have something, otherwise wait_for_messages.`
+                          : hub.share(r, p).over
+                            ? "You have been doing most of the talking. Unless you have new evidence, pass and let the others speak."
+                            : msgs.length === 0
+                              ? "No new messages yet. Call wait_for_messages again."
+                              : undefined;
+      // the hint goes first: it is the one line a weaker model must not lose to a clamp
       return {
+        hint,
         messages: msgs.map((m) => hub.fmt(r, m)),
         next_seq: r.messages.at(-1)?.seq ?? since,
         room_state: r.state,
@@ -275,7 +307,7 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
         your_role: p.role ?? "worker",
         active_participants: hub.activeParticipants(r).map((x) => hub.shown(r, x) + hub.roleTag(x)),
         humans_present: hub.activeParticipants(r).filter((x) => x.agent === "human").map((x) => x.name),
-        openings: r.expectedParticipants && !r.openingsRevealed ? { submitted: r.openings.size, expected: r.expectedParticipants, waiting_on: hub.openingsWaitingOn(r), revealed: false, chat_blocked: false, revealed_after_silence_min: Math.round(r.nudgeAfterMs / 60000) } : undefined,
+        openings: r.expectedParticipants && !r.openingsRevealed ? { submitted: r.openings.size, expected: r.expectedParticipants, waiting_on: hub.openingsWaitingOn(r), revealed: false, chat_blocked: false, deadline_min_after_first: Math.round(r.nudgeAfterMs / 60000) } : undefined,
         unanswered_human: human && resp!.mine ? { id: human.id, name: hub.shown(r, human.from), text: human.content, you_answer: true } : human ? { name: hub.shown(r, human.from), responder: resp!.who, you_answer: false } : null,
         open_proposal: openView
           ? { id: openView.id, version: openView.version, by: openView.by, chars: openView.chars, tally: openView.tally, waiting_on: openView.waiting_on, needs_challenge: openView.needs_challenge, blocked_by: openView.blocked_by, challenges: openView.challenges, ...("text" in openView ? { text: openView.text } : { text_omitted: openView.text_omitted }) }
@@ -289,29 +321,6 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
           return { messages: sh.mine, of_last: sh.of, fair: sh.fair, over: sh.over };
         })(),
         conclusion,
-        hint:
-          r.state === "closed"
-            ? "This room was closed without a conclusion. leave_room and stop."
-            : r.state === "concluded"
-            ? human && resp!.mine
-              ? `The room has concluded, but ${hub.shown(r, human.from)} (a human) said "${human.content.slice(0, 160)}". You answer them (send_message reply_to="${human.id}", briefly), then leave_room.`
-              : "The room has concluded. Read the conclusion and leave_room."
-            : human && resp!.mine
-              ? `${hub.shown(r, human.from)} (a human) said "${human.content.slice(0, 160)}" (${human.id}). You are the one answering: reply with send_message reply_to="${human.id}"` +
-                (hub.isSmallTalk(human) ? ", one short friendly line, nothing else." : ", directly and briefly, before anything else.")
-              : human
-                ? `${hub.shown(r, human.from)} (a human) said something; ${resp!.who} is answering it. You will see it with the reply. Carry on.`
-                : needsChallenge && needsMyVote
-                ? "A proposal is open and untested. Name its single weakest claim in one sentence (challenge), then vote. If you want different wording, amend it instead of re-proposing."
-                : needsMyVote
-                  ? `Vote on the open proposal: agree with a verbatim quote of the clause you endorse, or disagree with the specific change you need (or just amend it).${open && hub.standingDisagrees(open).length === 0 && r.quorum === "unanimous" && openView!.waiting_on.length === 1 ? " Your vote decides it: a disagree keeps it open for amendment, it does not kill it." : ""}`
-                  : hub.addressedBy(r, p).length
-                    ? `${hub.shown(r, hub.addressedBy(r, p)[0].from)} addressed you directly. Reply (reply_to="${hub.addressedBy(r, p)[0].id}") or pass.`
-                    : hub.share(r, p).over
-                      ? "You have been doing most of the talking. Unless you have new evidence, pass and let the others speak."
-                    : msgs.length === 0
-                      ? "No new messages yet. Call wait_for_messages again."
-                      : undefined,
       };
     }),
   );
@@ -575,5 +584,8 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
       ids.clear();
     }
   };
-  return { server, leaveAll };
+  return {
+    sessionKey,
+    server,
+    leaveAll };
 }

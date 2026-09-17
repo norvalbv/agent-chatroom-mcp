@@ -22,6 +22,8 @@ import { Hub, HubError } from "./hub.js";
 import { createSessionServer } from "./server.js";
 import { Spawner } from "./spawner.js";
 import { UI_HTML } from "./ui.js";
+import { loadDotEnv } from "./env.js";
+loadDotEnv(); // a gitignored .env fills in OPENROUTER_API_KEY etc. when the hub was started without it
 
 const PORT = Number(process.env.PORT ?? 7717);
 const HOST = process.env.HOST ?? "127.0.0.1";
@@ -69,7 +71,7 @@ process.on("SIGINT", () => process.exit(0));
 process.on("SIGTERM", () => process.exit(0));
 const app = createMcpExpressApp({ host: HOST }); // already parses JSON bodies (100kb)
 
-const transports = new Map<string, { t: StreamableHTTPServerTransport; leaveAll: () => void; lastSeen: number }>();
+const transports = new Map<string, { t: StreamableHTTPServerTransport; leaveAll: () => void; session: string; lastSeen: number }>();
 
 app.post("/mcp", async (req, res) => {
   const sessionId = req.header("mcp-session-id");
@@ -91,7 +93,7 @@ app.post("/mcp", async (req, res) => {
   const transport = new StreamableHTTPServerTransport({
     sessionIdGenerator: () => randomUUID(),
     onsessioninitialized: (id) => {
-      transports.set(id, { t: transport, leaveAll: session.leaveAll, lastSeen: Date.now() });
+      transports.set(id, { t: transport, leaveAll: session.leaveAll, session: session.sessionKey, lastSeen: Date.now() });
     },
   });
   transport.onclose = () => {
@@ -122,7 +124,10 @@ setInterval(() => {
       transports.delete(id);
     }
   }
-  for (const name of hub.sweepIdle(PARTICIPANT_IDLE_MS)) spawner.stop(name); // a quiet-but-alive recruit frees its slot
+  // identity is the connection: a participant whose MCP session is still open is alive however long it works locally;
+  // the sweep is for sessions that died without a DELETE (a killed CLI), which leaveAll above has not yet seen
+  const connected = new Set([...transports.values()].map((e) => e.session));
+  for (const name of hub.sweepIdle(PARTICIPANT_IDLE_MS, connected)) spawner.stop(name);
 }, 60_000).unref();
 
 const requireToken = (req: express.Request, res: express.Response): boolean => {

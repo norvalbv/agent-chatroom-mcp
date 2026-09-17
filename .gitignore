@@ -1,4 +1,4 @@
-node_modules/
+node_modules
 dist/
 data/
 *.log
@@ -45,3 +45,4 @@ swarms/
 !.devkit/oxc/**
 !.devkit/vendored-skills/
 !.devkit/vendored-skills/**
+.env

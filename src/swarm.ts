@@ -6,10 +6,12 @@
  *   npx tsx src/swarm.ts "<task>" --agents 6 --cwd /path/to/project [--codex 2] [--openrouter 2] [--apply] [--timeout 30]
  */
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, readdirSync, symlinkSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { settledAxes } from "./settled.js";
 import { fileURLToPath } from "node:url";
+import { loadDotEnv } from "./env.js";
+loadDotEnv();
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(here, "..");
@@ -51,6 +53,8 @@ const PLANNER_MODEL = flag("planner-model", VERIFIER_MODEL);
 const CODEX_MODELS = (flag("codex-models", process.env.CODEX_MODELS ?? process.env.CODEX_MODEL ?? "gpt-6-astra,gpt-5.6-sol,gpt-5.6-terra") || "").split(",").map((m) => m.trim()).filter(Boolean);
 // OpenRouter seats: --openrouter k spreads k workers over --openrouter-models (rotated); any OpenRouter slug works
 const OPENROUTER_MODELS = (flag("openrouter-models", process.env.OPENROUTER_MODELS ?? process.env.OPENROUTER_MODEL ?? "deepseek/deepseek-v4.1-flash,google/gemini-3.8-flash,z-ai/glm-5.3") || "").split(",").map((m) => m.trim()).filter(Boolean);
+/** --openrouter-reasoning low|medium|high: passed to every OpenRouter seat (models without a reasoning parameter ignore it) */
+const OPENROUTER_REASONING = flag("openrouter-reasoning", process.env.OPENROUTER_REASONING);
 if (OPENROUTER > 0 && !process.env.OPENROUTER_API_KEY) {
   console.error("--openrouter needs OPENROUTER_API_KEY (https://openrouter.ai/keys); a dead seat still counts toward the room's expected participants, so refusing to launch.");
   process.exit(2);
@@ -116,6 +120,7 @@ function runOpenRouter(name: string, text: string, cwd: string, model: string | 
   const args = [...seatScript.pre, "-p", text, "--mcp-url", `${URL_}/mcp`, "--cwd", cwd, "--max-minutes", String(TIMEOUT_MIN)];
   if (model) args.push("--model", model);
   if (write) args.push("--write");
+  if (OPENROUTER_REASONING) args.push("--reasoning", OPENROUTER_REASONING);
   return runProc(name, seatScript.cmd, args, cwd, outFile);
 }
 
@@ -180,6 +185,15 @@ function workerCwd(name: string): string {
     log(`worktree for ${name} failed (${r.stderr.trim()}); ${name} will run READ-ONLY in ${CWD}`);
     readOnlyWorkers.add(name);
     return CWD;
+  }
+  // a worktree has no node_modules; link the main checkout's so `npm run build` and the tests work there
+  const mods = resolve(CWD, "node_modules");
+  if (existsSync(mods) && !existsSync(resolve(dir, "node_modules"))) {
+    try {
+      symlinkSync(mods, resolve(dir, "node_modules"), "dir");
+    } catch (e) {
+      log(`could not link node_modules into ${dir}: ${e instanceof Error ? e.message : String(e)}`);
+    }
   }
   log(`${name} works in ${dir} (branch ${branch})`);
   return dir;

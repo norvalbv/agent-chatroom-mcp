@@ -20,3 +20,19 @@ created: 2026-09-17
 **Scope:** src/spawner.ts,src/hub.ts,prompts/recruit.md
 **Source:** arxiv · docs/swarm-protocol-spec.md
 - 2026-09-17 — request_agent and the swarm launcher gained a third seat kind, openrouter: src/openrouter.ts is itself the CLI (one process = one MCP session = one identity), converting the hub's MCP tools into OpenAI-style function tools and running the tool loop, plus four local tools (read_file, list_dir, search, run_command) that are read-only unless --write. Routing an existing CLI at OpenRouter was tried first and rejected: codex 0.154 reserves its built-in model_providers and no longer exposes wire_api, so a chat-completions gateway cannot be configured, and claude -p speaks the Anthropic Messages API which OpenRouter does not serve. Seats are allocated from one alt-provider queue (--codex k plus --openrouter m over the non-lead seats), and both the launcher and the spawner refuse an OpenRouter seat without OPENROUTER_API_KEY rather than leaving a dead seat in the quorum.
+
+## Target · 2026-09-17 — Recruitment is bounded by the room, the machine and the run, not by a per-agent quota
+
+**Context:** The original ruling rejected uncapped recruitment because Self-Organized Agents offers no ceiling and MacNet shows gains saturate; six caps were coded, only three of which express that argument (12 live per room, 24 live machine-wide, 40 cumulative per run). The per-requester quota of 3 expressed nothing in the research and blocked the one agent whose job is to recruit independent reviewers.
+**Ruling:** The per-requester cap is off by default (CHATROOM_MAX_RECRUITS_PER_AGENT can set one); depth, per-room, machine-wide, cumulative-per-room and cumulative-per-run caps stay as the saturation ceilings; a request still spawns at most 3 at a time.
+**Consequences:**
+- Positive: A verifier or integrator can recruit as many reviewers as the room and run ceilings allow, which is what a rebuild run needs; runaway spawning is still bounded by counters the hub owns.
+- Negative: One agent can now consume a room's whole recruit budget alone; the room-level cumulative cap (12) is the only thing stopping that, so a bad brief loop costs up to 12 seats rather than 3.
+**Vision-fit:** n/a — internal tooling
+**Researched:** MacNet (saturation of multi-agent gains) as cited in the original entry; no source supports a per-requester number.
+**Rejected:** Raising the quota to another guess (5, 6): still a number without evidence; making the verifier exempt only (the integrator hit the same need).
+**Anchored-bet:** [BET] room and run ceilings alone bound runaway recruitment in practice
+**Revisit-when:** a run where one agent's recruits exhaust a room's cumulative cap and block others from recruiting; or a measured run where recruits beyond three per requester added nothing
+**Scope:** src/spawner.ts
+**Source:** manual
+**Evidence-change:** swarm-160711-etdp (ten stealth/union-alpha seats + Claude verifier rebuilding the dashboard with --full-access): the verifier was refused its fourth recruit ('may have at most 3 recruits running (has 3)') while spawning reviewers into a break-out room; Benji asked whether the 3 was research-backed. It was a code default (spawner.ts maxPerRequester ?? 3) with no evidence behind it; the original entry's revisit-when ('caps block a run that would have converged') fired.

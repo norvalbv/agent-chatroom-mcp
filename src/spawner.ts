@@ -123,7 +123,9 @@ export class Spawner {
     const maxDepth = o.maxDepth ?? 2;
     const maxPerRoom = o.maxPerRoom ?? 12;
     const maxLive = o.maxLive ?? 24;
-    const maxPerRequester = o.maxPerRequester ?? 3;
+    // per-requester: off by default. The ceilings that MacNet-style saturation argues for are the room, machine and run caps below;
+    // a per-agent quota only stopped a verifier recruiting the reviewers it needed (swarm-160711-etdp). CHATROOM_MAX_RECRUITS_PER_AGENT sets one.
+    const maxPerRequester = o.maxPerRequester ?? Number(process.env.CHATROOM_MAX_RECRUITS_PER_AGENT ?? Infinity);
     const maxCumRoom = o.maxCumulativePerRoom ?? 12;
     const maxCumRun = o.maxCumulativePerRun ?? 40;
     const refuse = (msg: string) => {
@@ -138,7 +140,7 @@ export class Spawner {
     const depth = this.depthOf(req.requestedBy) + 1;
     if (depth > maxDepth) refuse(`recruits may not recruit beyond depth ${maxDepth} (${req.requestedBy} is at depth ${depth - 1}). Ask an original member to recruit.`);
     const mine = this.agents.filter((a) => a.requestedBy === req.requestedBy && a.endedAt === undefined).length;
-    if (mine + count > maxPerRequester) refuse(`${req.requestedBy} may have at most ${maxPerRequester} recruits running (has ${mine}). Wait for one to finish or ask a teammate to recruit.`);
+    if (Number.isFinite(maxPerRequester) && mine + count > maxPerRequester) refuse(`${req.requestedBy} may have at most ${maxPerRequester} recruits running (has ${mine}). Wait for one to finish or ask a teammate to recruit.`);
     const liveAll = (this.hooks?.liveAgents() ?? this.live().length) + count;
     if (liveAll > maxLive) refuse(`${maxLive} live agents machine-wide would be exceeded (${liveAll - count} now). Wait for some to finish.`);
     const cumRoom = this.agents.filter((a) => a.room === target).length;

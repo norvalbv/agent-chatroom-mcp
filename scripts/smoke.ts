@@ -672,12 +672,24 @@ assert.deepEqual(tools, ["amend", "board_get", "board_set", "challenge", "join_r
   await b.call("send_message", { room, content: "I meant src/hub.ts." }); // no force: the refusal delivered the unread
   await b.call("wait_for_messages", { room, timeout_ms: 0 });
   await b.call("wait_for_messages", { room, timeout_ms: 0 }); // answered: no refusal
-  // a pass counts as an answer
+  // a pass answers everything before it: two outstanding mentions, then a pass, then no refusal and nothing listed
   await a.call("wait_for_messages", { room, timeout_ms: 0 });
   await a.call("send_message", { room, content: "@deepseek-1 anything to add?", force: true });
-  await b.call("wait_for_messages", { room, timeout_ms: 0 });
+  await a.call("send_message", { room, content: "@deepseek-1 and did you check the tests?", force: true });
+  const w2 = await b.call("wait_for_messages", { room, timeout_ms: 0 });
+  assert.equal(w2.addressed_to_you.length, 2);
   await b.call("pass", { room });
+  const w3 = await b.call("wait_for_messages", { room, timeout_ms: 0 }); // not refused: the pass covered both
+  assert.equal(w3.addressed_to_you.length, 0, "a discharged mention must not be listed again");
   await b.call("wait_for_messages", { room, timeout_ms: 0 });
+  // a fresh mention after a pass is a fresh debt, and reply_to takes the printed seq
+  await a.call("send_message", { room, content: "@deepseek-1 one more thing?", force: true });
+  const w4 = await b.call("wait_for_messages", { room, timeout_ms: 0 });
+  assert.equal(w4.addressed_to_you.length, 1);
+  await assert.rejects(b.call("wait_for_messages", { room, timeout_ms: 0 }), /addressed you in #\d+/, "a new mention after a pass is refused again");
+  const seq = Number(/#(\d+)/.exec(w4.messages.at(-1))![1]);
+  const rep = await b.call("send_message", { room, content: "No, that is all.", reply_to: `#${seq}` });
+  assert.ok(rep.sent.includes("No, that is all."));
   await a.call("leave_room", { room });
   await b.call("leave_room", { room });
 }
@@ -721,11 +733,19 @@ assert.deepEqual(tools, ["amend", "board_get", "board_set", "challenge", "join_r
     await y("submit_opening", { room, content: "Y opens" });
     const w = await x("wait_for_messages", { room, timeout_ms: 0 });
     assert.equal(w.openings.chat_blocked, false);
-    await sleep(2000); // the third never opens; everyone has joined, so the first silence reveals
+    const wz = await z("wait_for_messages", { room, timeout_ms: 0 });
+    assert.equal(wz.openings.chat_blocked, false);
+    const wx = await x("wait_for_messages", { room, timeout_ms: 0 });
+    assert.match(wx.hint, /Your opening is in; waiting for/, "a held seat is told what it waits for");
+    // the room keeps talking: the deadline is not a silence timer, so chat must not push the reveal back
+    for (let i = 0; i < 4; i++) {
+      await sleep(400);
+      await z("send_message", { room, content: `still investigating ${i}`, force: true });
+    }
+    await sleep(600); // the third never opens; everyone has joined, so the deadline reveals
     const log = (await x("read_messages", { room, since_seq: 0 })) as string[];
-    assert.ok(log.some((m) => /Opening answers \(2 of 3, written independently; revealed after/.test(m)), `openings were not revealed after the silence:\n${log.join("\n")}`);
+    assert.ok(log.some((m) => /Opening answers \(2 of 3, written independently; revealed on the/.test(m)), `openings were not revealed on the deadline while the room talked:\n${log.join("\n")}`);
     assert.ok(log.some((m) => m.includes("X opens")) && log.some((m) => m.includes("Y opens")));
-    assert.ok(!log.some((m) => /Still waiting for openings/.test(m)), "no warning when everyone expected has already joined");
     await assert.rejects(z("submit_opening", { room, content: "too late" }), /already been revealed/);
   }
   {
@@ -734,13 +754,23 @@ assert.deepEqual(tools, ["amend", "board_get", "board_set", "challenge", "join_r
     await y("join_room", { room, name: "claude-2", agent: "claude" });
     await x("submit_opening", { room, content: "X opens" });
     await y("submit_opening", { room, content: "Y opens" });
-    await sleep(2000);
+    await sleep(1800);
     let log = (await x("read_messages", { room, since_seq: 0 })) as string[];
-    assert.ok(log.some((m) => /Still waiting for openings from .*1 more participant\(s\) to join.*Chat is open meanwhile/.test(m)), `one warning first when someone never joined:\n${log.join("\n")}`);
-    assert.ok(!log.some((m) => /Opening answers/.test(m)), "not revealed at the first silence while a seat is missing");
-    await sleep(2000);
+    assert.ok(log.some((m) => /Openings deadline: still waiting for .*1 more participant\(s\) to join.*Chat is open meanwhile/.test(m)), `one warning first when someone never joined:\n${log.join("\n")}`);
+    assert.ok(!log.some((m) => /Opening answers/.test(m)), "not revealed at the first deadline while a seat is missing");
+    await sleep(1500);
     log = (await x("read_messages", { room, since_seq: 0 })) as string[];
-    assert.ok(log.some((m) => /Opening answers \(2 of 3.*revealed after/.test(m)), `revealed at the second silence:\n${log.join("\n")}`);
+    assert.ok(log.some((m) => /Opening answers \(2 of 3.*revealed on the/.test(m)), `revealed at the second deadline:\n${log.join("\n")}`);
+  }
+  {
+    // nobody opens at all: the room is still released (twice the period from creation)
+    const room = "no-openings";
+    await x("join_room", { room, name: "claude-1", agent: "claude", expected_participants: 2 });
+    await y("join_room", { room, name: "claude-2", agent: "claude" });
+    await sleep(3000);
+    const log = (await x("read_messages", { room, since_seq: 0 })) as string[];
+    assert.ok(log.some((m) => /Opening answers \(0 of 2.*nobody submitted one/.test(m)), `a room with no openings was never released:\n${log.join("\n")}`);
+    await assert.rejects(x("submit_opening", { room, content: "late" }), /already been revealed/);
   }
   server2.kill();
 }

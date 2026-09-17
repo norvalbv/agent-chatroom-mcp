@@ -63,6 +63,15 @@ const scripts: Record<string, Turn[]> = {
     { content: null, tool_calls: [call("r2", "send_message", { room: RECRUIT_ROOM, content: "recruit reporting: spawned by request_agent" })] },
     { content: null, tool_calls: [call("r3", "leave_room", { room: RECRUIT_ROOM })] },
   ],
+  // a seat whose model stops calling tools without leaving: the loop's exit must still leave the room
+  quit: [
+    { content: null, tool_calls: [call("q1", "join_room", { room: "openrouter-quit", name: "deepseek-3", agent: "openrouter", expected_participants: 1 })] },
+    // even a --write seat may not pattern-kill: that took a whole swarm down once
+    { content: null, tool_calls: [call("q2", "run_command", { command: "pkill -f 'dist/index.js'" }), call("q3", "run_command", { command: "echo write-ok > /tmp/openrouter-smoke-write-ok && cat /tmp/openrouter-smoke-write-ok" })] },
+    { content: "I think we are done here." },
+    { content: "Done." },
+    { content: "Done." },
+  ],
   // a seat that would wait forever: its wall-clock budget must make it leave the room, not vanish from it
   budget: [
     { content: null, tool_calls: [call("b1", "join_room", { room: BUDGET_ROOM, name: "deepseek-2", agent: "openrouter", expected_participants: 1 })] },
@@ -71,7 +80,7 @@ const scripts: Record<string, Turn[]> = {
     { content: null, tool_calls: [call("b4", "wait_for_messages", { room: BUDGET_ROOM, timeout_ms: 0 })] },
   ],
 };
-const turns: Record<string, number> = { seat: 0, recruit: 0, budget: 0 };
+const turns: Record<string, number> = { seat: 0, recruit: 0, budget: 0, quit: 0 };
 const bodies: Record<string, Body | undefined> = {};
 const stub = createServer((req, res) => {
   let raw = "";
@@ -82,7 +91,7 @@ const stub = createServer((req, res) => {
     const body = JSON.parse(raw) as Body;
     // recruit.md briefs the newcomer on its lineage; that is how we tell the seats apart
     const brief = body.messages[1]?.content ?? "";
-    const which = /recruited by/.test(brief) ? "recruit" : /BUDGET TRIAL/.test(brief) ? "budget" : "seat";
+    const which = /recruited by/.test(brief) ? "recruit" : /BUDGET TRIAL/.test(brief) ? "budget" : /QUIT TRIAL/.test(brief) ? "quit" : "seat";
     bodies[which] = body;
     const { delay_ms, ...message } = scripts[which][turns[which]++] ?? { content: `CONCLUSION: the OpenRouter ${which} drives the chatroom tools.` };
     setTimeout(() => {
@@ -174,6 +183,20 @@ assert.match(budgetErr, /budget spent/, `the budget did not end the run:\n${budg
 assert.ok(turns.budget < scripts.budget.length, `the budget seat kept going: ${turns.budget} turns`);
 const budgetTranscript = await (await fetch(`${HUB}/rooms/${BUDGET_ROOM}/transcript`)).text();
 assert.ok(budgetTranscript.includes("deepseek-2 left the room."), `the seat did not leave on the budget:\n${budgetTranscript}`);
+
+// ---------- 3b. a model that stops calling tools is still taken out of the room ----------
+const quit = spawn("npx", ["tsx", "src/openrouter.ts", "-p", "QUIT TRIAL: join the room.", "--mcp-url", `${HUB}/mcp`, "--model", "stub/model", "--write"], {
+  env: { ...process.env, OPENROUTER_API_KEY: "test-key", OPENROUTER_BASE_URL: STUB },
+  stdio: ["ignore", "pipe", "pipe"],
+});
+let quitErr = "";
+quit.stderr.on("data", (d) => (quitErr += d));
+assert.equal(await new Promise<number | null>((r) => quit.on("close", r)), 0, `quit seat exited non-zero:\n${quitErr}`);
+const quitResults = (bodies.quit?.messages ?? []).filter((m) => m.role === "tool").map((m) => m.content ?? "");
+assert.ok(quitResults[1]?.startsWith("Refused:") && /pkill/.test(quitResults[1]), `a write seat ran a pattern kill: ${quitResults[1]}`);
+assert.ok(quitResults[2]?.includes("write-ok"), `a write seat could not write: ${quitResults[2]}`);
+const quitRoom = (await (await fetch(`${HUB}/rooms/openrouter-quit`)).json()) as { participants: { name: string; active: boolean }[] };
+assert.equal(quitRoom.participants.find((p) => p.name === "deepseek-3")?.active, false, `a seat that finished by narrating stayed active:\n${quitErr}`);
 
 // ---------- 4. no key, no seat: a dead seat must never be counted into a quorum ----------
 const probe = new Spawner({ mcpUrl: `${HUB}/mcp`, defaultCwd: process.cwd(), logDir: "/tmp/openrouter-smoke-logs", dryRun: true });

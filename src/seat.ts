@@ -88,7 +88,12 @@ interface HubView {
  * Not a sandbox: the CLI seats get a real shell too and the write rule lives in the prompt. This
  * only stops a read-only seat from mutating the checkout by accident, which weaker models do.
  */
-const MUTATING = /(^|[;&|]\s*)(rm|mv|cp|chmod|chown|truncate|dd|kill|pkill|shutdown)\s|sed\s+-i|tee\s|(?<![0-9])>>?\s*[^&|]|git\s+(commit|checkout|reset|clean|push|rebase|merge|stash|apply|restore)|npm\s+(i|install|uninstall|publish)|(yarn|pnpm|pip|brew|cargo)\s+(add|install|remove)/;
+const MUTATING = /(^|[;&|]\s*)(rm|mv|cp|chmod|chown|truncate|dd|kill|pkill|shutdown)\s|sed\s+-i|tee\s|(?<![0-9])>>?\s*(?!\/dev\/null)[^&|]|git\s+(?!stash (list|show)|clean -n|apply --check)(commit|checkout|reset|clean|push|rebase|merge|stash|apply|restore)|npm\s+(i|install|uninstall|publish)|(yarn|pnpm|pip|brew|cargo)\s+(add|install|remove)/;
+/**
+ * Always on, even with write access: a seat shares the machine with the hub, its siblings and the launcher,
+ * all of them node processes. A pattern kill takes the whole swarm down (it did, once). Kill by pid only.
+ */
+const LETHAL = /(^|[;&|]\s*)(pkill|killall)\b|kill\s+(-\w+\s+)*(-1|0)\b|kill\s+--\s+-|kill\s+-9\s+-1/;
 /** A `>` inside quotes writes nothing, so the guard above is tested against the unquoted text. */
 const unquoted = (command: string) => command.replace(/'[^']*'|"[^"]*"/g, '""');
 
@@ -185,8 +190,13 @@ export function localTools(cwd: string, write: boolean, shell: boolean, clamp: (
   ];
   if (shell)
     tools.push({
-      def: fn("run_command", `Run a bash command in ${cwd} (120s limit). ${write ? "You may modify files and commit." : "Read-only: mutating commands are refused."}`, { command: { type: "string" } }, ["command"]),
-      run: (a) => (!write && MUTATING.test(unquoted(a.command)) ? `Refused: this seat is read-only, so "${a.command.slice(0, 120)}" was not run. Investigate and report instead.` : sh(a.command)),
+      def: fn("run_command", `Run a bash command in ${cwd} (120s limit). ${write ? "You may modify files and commit." : "Read-only: mutating commands are refused."} Never pkill/killall: other agents and the hub are node processes here; stop a process you started by its pid (kill $(lsof -ti:PORT)).`, { command: { type: "string" } }, ["command"]),
+      run: (a) =>
+        LETHAL.test(unquoted(a.command))
+          ? `Refused: "${a.command.slice(0, 120)}" was not run. pkill, killall and kill -1/0 would take down the hub, the other seats and the launcher, which are node processes on this machine too. Stop only what you started, by pid: kill $(lsof -ti:PORT) for a hub you started on PORT.`
+          : !write && MUTATING.test(unquoted(a.command))
+            ? `Refused: this seat is read-only, so "${a.command.slice(0, 120)}" was not run. Investigate and report instead.`
+            : sh(a.command),
     });
   return tools;
 }
@@ -227,13 +237,9 @@ export function systemPrompt(cwd: string, hubInstructions: string | undefined, w
     .join("\n");
 }
 
-/** Hints that are about this seat, not the room in general: those are worth a user turn. */
+/** Every hint but the idle one is an instruction to this seat: those are worth a user turn. */
 function actionable(view: HubView): boolean {
-  if (!view.hint) return false;
-  if (view.room_state === "concluded" || view.room_state === "closed") return true;
-  if (view.addressed_to_you?.length) return true;
-  if (view.unanswered_human?.you_answer) return true;
-  return /^(Vote|A proposal is open)/.test(view.hint);
+  return !!view.hint && !view.hint.startsWith("No new messages");
 }
 
 export async function runSeat(provider: ChatProvider, opts: SeatOptions): Promise<SeatResult> {
@@ -399,6 +405,13 @@ export async function runSeat(provider: ChatProvider, opts: SeatOptions): Promis
   }
 
   log(`[${provider.label}] ${steps} step(s), ${usage.prompt_tokens} prompt + ${usage.completion_tokens} completion tokens${usage.cost ? `, $${usage.cost.toFixed(4)}` : ""}`);
-  if (opts.mcpUrl) await client.close().catch(() => {});
+  if (opts.mcpUrl) {
+    // a finish that skipped leave_room would leave an active voter behind until the idle sweep
+    if (joined.size) await bow("finished without leaving");
+    // client.close() alone sends no DELETE, so the hub would not see the session end
+    const transport = client.transport as { terminateSession?: () => Promise<void> } | undefined;
+    await transport?.terminateSession?.().catch(() => {});
+    await client.close().catch(() => {});
+  }
   return { final: final || "(no final message)", usage, steps, ok };
 }

@@ -9,6 +9,8 @@
  */
 import { resolve } from "node:path";
 import { type ChatProvider, type Msg, type Reply, type ToolCall, type ToolDef, runSeat } from "./seat.js";
+import { loadDotEnv } from "./env.js";
+loadDotEnv();
 
 const argv = process.argv.slice(2);
 const flag = (name: string, def?: string) => {
@@ -22,6 +24,7 @@ const MODEL = flag("model", process.env.OPENROUTER_MODEL ?? "deepseek/deepseek-v
 const BASE = (process.env.OPENROUTER_BASE_URL ?? "https://openrouter.ai/api/v1").replace(/\/+$/, "");
 const KEY = process.env.OPENROUTER_API_KEY ?? "";
 const REASONING = flag("reasoning");
+const REQUEST_TIMEOUT_MS = Number(flag("request-timeout-ms", "180000"));
 const say = (s: string) => process.stderr.write(`${s}\n`);
 
 if (!PROMPT.trim()) {
@@ -49,26 +52,35 @@ export function openRouterProvider(model: string, reasoning?: string): ChatProvi
     async complete(messages: Msg[], tools: ToolDef[]): Promise<Reply> {
       let wait = 2000;
       for (let attempt = 1; attempt <= 5; attempt++) {
-        const res = await fetch(`${BASE}/chat/completions`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${KEY}`,
-            "HTTP-Referer": "https://github.com/norvalbv/agent-chatroom-mcp",
-            "X-OpenRouter-Title": "agent-chatroom-mcp",
-          },
-          body: JSON.stringify({
-            model,
-            messages,
-            tools,
-            parallel_tool_calls: true,
-            usage: { include: true },
-            ...(reasoning ? { reasoning: { effort: reasoning } } : {}),
-          }),
-        });
-        const body = (await res.json().catch(() => ({}) as Completion)) as Completion;
-        // OpenRouter reports upstream failures both as HTTP errors and as an `error` on a 200
-        const err = !res.ok || body.error ? (body.error?.message ?? `HTTP ${res.status}`) : "";
+        let res: Response | undefined;
+        let body: Completion = {};
+        let netErr = "";
+        try {
+          // a stalled request would park the seat inside this call, past its budget and out of the room's reach
+          res = await fetch(`${BASE}/chat/completions`, {
+            method: "POST",
+            signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${KEY}`,
+              "HTTP-Referer": "https://github.com/norvalbv/agent-chatroom-mcp",
+              "X-OpenRouter-Title": "agent-chatroom-mcp",
+            },
+            body: JSON.stringify({
+              model,
+              messages,
+              tools,
+              parallel_tool_calls: true,
+              usage: { include: true },
+              ...(reasoning ? { reasoning: { effort: reasoning } } : {}),
+            }),
+          });
+          body = (await res.json().catch(() => ({}) as Completion)) as Completion;
+        } catch (e) {
+          netErr = e instanceof Error ? e.message : String(e);
+        }
+        // OpenRouter reports upstream failures both as HTTP errors and as an `error` on a 200; the network reports them as throws
+        const err = netErr || (!res!.ok || body.error ? (body.error?.message ?? `HTTP ${res!.status}`) : "");
         if (!err) {
           const m = body.choices?.[0]?.message;
           return {
@@ -78,7 +90,7 @@ export function openRouterProvider(model: string, reasoning?: string): ChatProvi
             usage: body.usage,
           };
         }
-        const retriable = res.status === 429 || res.status >= 500 || body.error?.code === 429 || (body.error?.code ?? 0) >= 500;
+        const retriable = !!netErr || res!.status === 429 || res!.status >= 500 || body.error?.code === 429 || (body.error?.code ?? 0) >= 500;
         say(`[openrouter] ${err}${retriable && attempt < 5 ? ` — retry ${attempt}/4 in ${wait / 1000}s` : ""}`);
         if (!retriable || attempt === 5) throw new Error(`OpenRouter: ${err}`);
         await new Promise((r) => setTimeout(r, wait));

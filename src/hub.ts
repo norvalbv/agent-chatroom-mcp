@@ -49,6 +49,8 @@ export interface Participant {
   addressWarned?: string;
   /** id of the addressed message a wait_for_messages was already refused for (the call after that proceeds) */
   addressRefused?: string;
+  /** mentions at or below this seq are answered (a pass covers everything before it) */
+  answeredSeq?: number;
 }
 
 export interface Message {
@@ -183,6 +185,9 @@ export interface Room {
   openings: Map<string, string>;
   openingsRevealed: boolean;
   nudgeTimer?: NodeJS.Timeout;
+  /** absolute deadline for the opening reveal, armed at creation and re-armed by the first opening; not reset by chat */
+  openingsTimer?: NodeJS.Timeout;
+  openingsWarned?: boolean;
   /** shared blackboard: named entries agents update in place instead of re-posting */
   board: Map<string, BoardEntry>;
   /** human message ids the propose-gate has already warned about (once each) */
@@ -323,6 +328,7 @@ export class Hub {
       responders: new Map(),
     };
     this.rooms.set(name, room);
+    this.armOpeningsDeadline(room, room.nudgeAfterMs * 2); // the zero-openings case; the first opening tightens it to one period
     return room;
   }
 
@@ -647,6 +653,8 @@ export class Hub {
     const room = this.getRoom(roomName);
     const p = this.requireParticipant(room, pid);
     if (quiet && p.agent === "human") throw new HubError("Humans speak to the room; quiet is for agent working exchanges.");
+    // reply_to takes the id (m_...) or the seq as printed ("#12" or "12"), since delivered lines show the seq
+    if (replyTo && /^#?\d+$/.test(replyTo)) replyTo = room.messages.find((m) => m.seq === Number(replyTo!.replace("#", "")))?.id ?? replyTo;
     if (surface && replyTo) {
       const parent = room.messages.find((m) => m.id === replyTo);
       if (parent?.quiet) this.surfaceThread(room, this.threadRoot(room, parent).id, `${this.shown(room, p)} surfaced it`);
@@ -854,15 +862,8 @@ export class Hub {
         const blockers = this.blockedBy(room, open);
         text = `${mins} min of silence. Proposal ${open.id} v${open.version} is open; blocked by: ${blockers.join("; ") || "nothing (re-evaluating)"}.`;
       } else if (!room.openingsRevealed && room.expectedParticipants) {
-        // An opening that has not arrived after a silence is not coming: reveal what there is rather than
-        // hold twelve agents for one. Everyone expected has joined -> reveal now; someone never joined ->
-        // one warning first, then reveal at the next silence.
-        text = `${mins} min of silence. Still waiting for openings from ${this.openingsWaitingOn(room).join(", ")}. Chat is open meanwhile; the openings are revealed at the next ${mins} min of silence.`;
-        const warned = room.lastNudge?.text === text;
-        if (room.openings.size > 0 && (this.unarrived(room) === 0 || warned)) {
-          this.revealOpenings(room, `revealed after ${mins} min of silence without one from ${this.openingsWaitingOn(room).join(", ")}, who can still speak in chat`);
-          return;
-        }
+        // the reveal itself runs on the openings deadline (not reset by chat); this is only the reminder
+        text = `${mins} min of silence. Still waiting for openings from ${this.openingsWaitingOn(room).join(", ")}. Chat is open meanwhile; the openings are revealed on their deadline regardless.`;
       } else {
         const talkers = [...room.participants.values()].filter((p) => p.active && p.agent !== "human").sort((a, b) => b.messageCount - a.messageCount);
         text = `${mins} min of silence. If the discussion has converged, ${talkers[0] ? this.shown(room, talkers[0]) : "someone"} should propose a conclusion.`;
@@ -891,14 +892,43 @@ export class Hub {
     if (!content.trim()) throw new HubError("Opening statement is empty.");
     const cap = Math.min(room.maxMessageChars, 400);
     if (content.length > cap) throw new HubError(`Opening is ${content.length} chars; openings are capped at ${cap}. One or two sentences: your answer and the main reason. Detail goes in the discussion or on the board.`);
+    const first = room.openings.size === 0;
     room.openings.set(p.id, content);
     this.persist({ type: "opening", room: roomName, pid: p.id, content });
+    if (first) this.armOpeningsDeadline(room, room.nudgeAfterMs); // the clock starts with the first opening, and chat does not reset it
     const waiting = this.openingsWaitingOn(room);
     if (waiting.length === 0) this.revealOpenings(room);
     return { revealed: room.openingsRevealed, waiting_on: waiting };
   }
 
+  /**
+   * An opening that has not arrived by the deadline is not coming: reveal what there is rather than hold
+   * twelve agents for one. Everyone expected has joined -> reveal; someone never joined -> one warning,
+   * then reveal one period later. Armed at creation (two periods, the zero-openings case) and re-armed
+   * by the first opening (one period). Unlike the silence nudge, a talking room does not push it back.
+   */
+  private armOpeningsDeadline(room: Room, ms: number) {
+    if (room.openingsTimer) clearTimeout(room.openingsTimer);
+    if (!room.expectedParticipants || room.openingsRevealed || !ms) return;
+    room.openingsTimer = setTimeout(() => {
+      room.openingsTimer = undefined;
+      if (room.openingsRevealed || room.state === "concluded" || room.state === "closed") return;
+      const mins = Math.round(room.nudgeAfterMs / 60000);
+      const waiting = this.openingsWaitingOn(room).join(", ");
+      if (this.unarrived(room) > 0 && !room.openingsWarned) {
+        room.openingsWarned = true;
+        this.post(room, "system", undefined, `Openings deadline: still waiting for ${waiting}. Chat is open meanwhile; whatever has arrived is revealed in ${mins} min.`);
+        this.armOpeningsDeadline(room, room.nudgeAfterMs);
+        return;
+      }
+      this.revealOpenings(room, room.openings.size ? `revealed on the ${mins} min deadline without one from ${waiting}, who can still speak in chat` : `nobody submitted one; ${waiting} can still speak in chat`);
+    }, ms);
+    room.openingsTimer.unref();
+  }
+
   private revealOpenings(room: Room, note?: string) {
+    if (room.openingsTimer) clearTimeout(room.openingsTimer);
+    room.openingsTimer = undefined;
     room.openingsRevealed = true;
     this.persist({ type: "openings_revealed", room: room.name });
     this.post(room, "system", undefined, `Opening answers (${room.openings.size}${note ? ` of ${room.expectedParticipants}` : ""}, written independently${note ? `; ${note}` : ""}):`);
@@ -927,8 +957,8 @@ export class Hub {
     const p = this.requireParticipant(room, pid);
     p.passes = (p.passes ?? 0) + 1;
     this.settleRead(room, p, p.lastSeenSeq, []);
-    // a pass is an answer as far as the wait gate is concerned
-    for (const m of this.addressedBy(room, p)) p.addressRefused = m.id;
+    // a pass answers every mention before it, so it leaves addressed_to_you and the wait gate alone
+    p.answeredSeq = room.messages.at(-1)?.seq ?? 0;
     let yielded = false;
     if (room.mode === "round_robin" && this.currentSpeaker(room)?.id === p.id) {
       this.advanceTurn(room);
@@ -1016,8 +1046,10 @@ export class Hub {
 
   /** Was this participant addressed by name in any recent message they have not yet answered? */
   addressedBy(room: Room, p: Participant): Message[] {
-    const recent = room.messages.filter((m) => m.kind === "chat" && m.mentions?.includes(p.id) && m.from.id !== p.id && this.pushableTo(room, m, p.id)).slice(-10);
-    return recent.filter((m) => !room.messages.some((r) => r.seq > m.seq && r.from.id === p.id && r.kind === "chat"));
+    // openings are revealed as chat but nobody has spoken yet; a pass answers everything before it
+    const recent = room.messages.filter((m) => m.kind === "chat" && m.tag !== "opening" && m.seq > (p.answeredSeq ?? 0) && m.mentions?.includes(p.id) && m.from.id !== p.id && this.pushableTo(room, m, p.id)).slice(-10);
+    // anything they posted afterwards (chat, vote, challenge, proposal) is an answer
+    return recent.filter((m) => !room.messages.some((r) => r.seq > m.seq && r.from.id === p.id));
   }
 
   /**
@@ -1216,6 +1248,8 @@ export class Hub {
         );
       }
       if (n > 1) throw new HubError(`"${find.slice(0, 80)}" occurs ${n} times; include more context so it is unique.`);
+      // a one-word find in a long document splices wherever that word happens to sit ("findings" for "find"); ask for a span
+      if (find.trim().length < 16 && pr.text.length > 2000) throw new HubError(`"${find}" is too short a find for a ${pr.text.length}-char document; copy at least 16 characters of the passage so the replacement lands where you mean.`);
       next = pr.text.replace(find, replace);
     }
     if (next === pr.text) throw new HubError("That amendment changes nothing.");
@@ -1594,12 +1628,14 @@ export class Hub {
   // ---------- liveness ----------
 
   /** Mark participants inactive after `idleMs` without any activity in a room that has not concluded. */
-  sweepIdle(idleMs: number): string[] {
+  /** Mark silent participants as left, except those whose MCP session is in `connected`: a seat building in its worktree for 20 minutes is working, not gone. */
+  sweepIdle(idleMs: number, connected?: Set<string>): string[] {
     const swept: string[] = [];
     const cutoff = Date.now() - idleMs;
     for (const room of this.rooms.values()) {
       if (room.state === "concluded" || room.state === "closed") continue;
       for (const p of room.participants.values()) {
+        if (p.session && connected?.has(p.session)) continue;
         if (p.active && p.agent !== "human" && Date.parse(p.lastActiveAt) < cutoff) {
           p.active = false;
           this.persist({ type: "leave", room: room.name, p });

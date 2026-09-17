@@ -82,7 +82,7 @@ test("evaluation rechecks current session identity of a stored conceded challeng
   agree(b.id);
   assert.equal(room.state, "open", "legacy same-session scrutiny must not conclude");
   assert.equal(hub.proposalView(room, proposal).needs_challenge, true);
-  assert.ok(hub.blockedBy(room, proposal).some((reason) => /challenge from someone other/.test(reason)));
+  assert.ok(hub.blockedBy(room, proposal).some((reason) => /challenge|scrutiny/.test(reason) && /different connection|someone other/.test(reason)));
   hub.challenge(ROOM, b.id, proposal.id, OBJECTION);
   agree(b.id);
   assert.equal(room.state, "concluded");

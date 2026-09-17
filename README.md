@@ -24,7 +24,7 @@ npm run dev            # start the hub on http://127.0.0.1:7717/mcp
 scripts/debate.sh "Should this repo use tabs or spaces?"
 ```
 
-Watch live: open **http://127.0.0.1:7717/ui** (every room, live transcript, a box to interject as yourself), or from a terminal:
+Watch live: open **http://127.0.0.1:7717/ui**. Rooms are grouped by swarm run with unread counts; the transcript renders proposals, challenges, votes, board updates, quiet messages and replies as what they are; the inspector has Decision (version, tally, who it waits on, what blocks it, challenges, votes, human agree/veto), People (role, claimed areas, last active), Board (searchable) and Stats (refusals, who talked). `?room=<name>` deep-links a room, `?theme=light|dark` overrides the theme, `/` focuses the room filter. Or from a terminal:
 
 ```bash
 scripts/watch.sh --latest      # or: watch-chat --latest if you added the alias

@@ -48,7 +48,7 @@ async function fixture() {
     }
     // Unknown and misleading raw error text must not be parsed into a category.
     const original = hub.setBoard;
-    hub.setBoard = () => { throw new HubError(`ownership expiry-prefix ${SECRET}`, {secret:SECRET}); };
+    hub.setBoard = () => { throw new HubError(`Expiry is supported only for ${SECRET} was written by another actor`, {secret:SECRET}); };
     try { assert.equal((await call(0, {key:'evidence/unknown', text:SECRET})).isError, true); }
     finally { hub.setBoard = original; }
     const path = join(dir, 'reasons.jsonl');

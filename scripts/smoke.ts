@@ -198,7 +198,7 @@ assert.deepEqual(tools, ["amend", "board_get", "board_set", "challenge", "join_r
   assert.ok(nudge.some((m: string) => m.includes("nobody has tested it")), "missing challenge nudge");
   let status = await a.call("room_status", { room });
   assert.equal(status.state, "open", "must not conclude without a challenge");
-  const ch = await b.call("challenge", { room, proposal_id: pr.id, objection: "Alpha collides with the existing 'alpha' release channel name; suggest Alpha-Prime." });
+  const ch = await b.call("challenge", { room, proposal_id: pr.id, objection: '"The name shall be Alpha" collides with the existing alpha release channel name; suggest Alpha-Prime.' });
   assert.equal(ch.challenges.length, 1);
   assert.deepEqual(ch.waiting_on, ["Participant B"], "challenger's vote must be reset");
   status = await a.call("room_status", { room });
@@ -297,7 +297,7 @@ assert.deepEqual(tools, ["amend", "board_get", "board_set", "challenge", "join_r
   assert.match(amendMsg, /AMENDED .* to v2: "because it is calm and readable" → "because 9 of 12 surveyed users preferred it"/);
   assert.ok(!amendMsg.includes("The colour is blue"), "amend must post the diff, not the whole proposal");
   await assert.rejects(a.call("propose", { room, text: "A competing proposal" }), /use amend/);
-  const chd = await b.call("challenge", { room, proposal_id: pr.id, objection: "Twelve users is a small survey; say so in the text." });
+  const chd = await b.call("challenge", { room, proposal_id: pr.id, objection: '"9 of 12 surveyed users preferred it" rests on a small survey; say so in the text.' });
   assert.equal(chd.challenges[0].status, "open");
   await assert.rejects(a.call("vote", { room, proposal_id: pr.id, vote: "agree", quote: "9 of 12 surveyed users preferred it" }), /needs `reason`/);
   await a.call("vote", { room, proposal_id: pr.id, vote: "agree", quote: "9 of 12 surveyed users preferred it", reason: "small, but it is the only survey we have and it is cited" });
@@ -484,7 +484,7 @@ assert.deepEqual(tools, ["amend", "board_get", "board_set", "challenge", "join_r
   await assert.rejects(a.call("board_set", { room, key: `hold/${room}`, text: "" }), /placed by codex-1/);
   const pr = await a.call("propose", { room, text: "Fix: reorder the session check in auth.ts." });
   await b.call("wait_for_messages", { room, timeout_ms: 0 });
-  await b.call("challenge", { room, proposal_id: pr.id, objection: "Reordering may skip the CSRF check; confirm the order of middleware." });
+  await b.call("challenge", { room, proposal_id: pr.id, objection: '"reorder the session check" may skip the CSRF check; confirm the order of middleware.' });
   const v1 = await b.call("vote", { room, proposal_id: pr.id, vote: "agree", quote: "reorder the session check", reason: "checked: CSRF runs before the session middleware" });
   assert.equal(v1.room_state, "open", "held room must not conclude");
   await b.call("board_set", { room, key: `hold/${room}`, text: "" });

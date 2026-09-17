@@ -684,6 +684,17 @@ export class Hub {
   send(roomName: string, pid: string, content: string, replyTo?: string, force = false, quiet = false, surface = false): Message {
     const room = this.getRoom(roomName);
     const p = this.requireParticipant(room, pid);
+    // Validate before any delivery, surfacing or turn mutation, even on forced sends.
+    // Keep departed identities in mentionsIn: filtering them there would silently lose the ask.
+    // Rejoin/reclaim reactivates the same pid (and name); no name-similarity replacement is inferred.
+    const departed = this.mentionsIn(room, content)
+      .map((id) => room.participants.get(id)!)
+      .filter((participant) => !participant.active);
+    if (departed.length) {
+      throw new HubError(
+        `Cannot send: ${departed.map((participant) => `"${participant.name}"`).join(", ")} ${departed.length === 1 ? "has" : "have"} left the room. Remove the departed @-mention or address an active participant; no replacement is recorded.`,
+      );
+    }
     if (quiet && p.agent === "human") throw new HubError("Humans speak to the room; quiet is for agent working exchanges.");
     // reply_to takes the id (m_...) or the seq as printed ("#12" or "12"), since delivered lines show the seq
     if (replyTo && /^#?\d+$/.test(replyTo)) replyTo = room.messages.find((m) => m.seq === Number(replyTo!.replace("#", "")))?.id ?? replyTo;

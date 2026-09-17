@@ -42,18 +42,17 @@ test('follow persists; expansion backfills; narrowing resets; gates stay visible
     assert.deepEqual(f.manifest(), {});
     assert.deepEqual(f.manifest(f.a.id, ['evidence/', 'sources/']), { board_keys: ['evidence/a', 'sources/a', ...gates], board_reset: true });
     assert.deepEqual(f.manifest(f.a.id, []), { board_keys: [...gates], board_reset: true });
+    assert.deepEqual(f.manifest(f.a.id, ['evidence/']), { board_keys: ['evidence/a', ...gates], board_reset: true });
+    f.hub.setBoard(f.name, f.a.id, 'evidence/a', 'v2');
+    assert.deepEqual(f.manifest(), { board_delta: { keys: ['evidence/a'], tombstones: [] } });
     f.hub.setBoard(f.name, f.a.id, 'sources/a', 'v2');
     assert.deepEqual(f.manifest(), {});
-    f.hub.setBoard(f.name, f.a.id, 'evidence/a', 'v2');
-    assert.deepEqual(f.manifest(f.a.id, ['evidence/']), { board_keys: ['evidence/a', ...gates], board_reset: true });
-    f.hub.setBoard(f.name, f.a.id, 'evidence/a', 'v3');
-    assert.deepEqual(f.manifest(), { board_delta: { keys: ['evidence/a'], tombstones: [] } });
     f.hub.setBoard(f.name, f.a.id, 'inbox/sender/request.ack', 'ack');
     assert.deepEqual(f.manifest(), { board_delta: { keys: [], tombstones: ['inbox/sender/request'] } });
   } finally { f.cleanup(); }
 });
 
-test('leave/rejoin, active reconnect, and full board_get reset recover dropped delta', () => {
+test('leave/rejoin, active reconnect, and explicit hub reset recover dropped delta', () => {
   const f = fixture(); try {
     f.hub.setBoard(f.name, f.a.id, 'evidence/a', 'v1');
     f.manifest();
@@ -66,6 +65,15 @@ test('leave/rejoin, active reconnect, and full board_get reset recover dropped d
     assert.deepEqual(f.manifest(), { board_keys: ['evidence/a'], board_reset: true });
     assert.deepEqual(f.manifest(f.a.id, null, true), { board_keys: ['evidence/a'], board_reset: true });
     assert.deepEqual(f.manifest(), {});
+  } finally { f.cleanup(); }
+});
+
+test('a refused/errored manifest call leaves the board cursor untouched', () => {
+  const f = fixture(); try {
+    f.manifest();
+    f.hub.setBoard(f.name, f.a.id, 'evidence/a', 'v2');
+    assert.throws(() => f.hub.boardManifest(f.name, 'p_missing'), /not a participant/);
+    assert.deepEqual(f.manifest(), { board_delta: { keys: ['evidence/a'], tombstones: [] } });
   } finally { f.cleanup(); }
 });
 
@@ -87,7 +95,7 @@ test('replay reconstructs board versions and tombstones but resets delivery curs
 
 test('assemble after poll wake; concurrent completions do not duplicate delta', async () => {
   const f = fixture(); try {
-    const first = f.manifest();
+    f.manifest();
     const seq = f.hub.getRoom(f.name).messages.at(-1)!.seq;
     const poll = f.hub.wait(f.name, f.a.id, seq, 2000);
     f.hub.setBoard(f.name, f.b.id, 'evidence/late', 'arrived while waiting');
@@ -96,7 +104,7 @@ test('assemble after poll wake; concurrent completions do not duplicate delta', 
     assert.deepEqual(results, [{ board_delta: { keys: ['evidence/late'], tombstones: [] } }, {}]);
     const st = f.hub.boardManifestTelemetry(f.hub.getRoom(f.name));
     assert.equal(st.waits, 3);
-    assert.equal(st.board_bytes_total, JSON.stringify(first).length + JSON.stringify(results[0]).length + JSON.stringify(results[1]).length);
-    assert.ok(st.board_bytes_mean > 0);
+    assert.equal(st.board_bytes_total, Hub.manifestBytes({ board_keys: [], board_reset: true }) + Hub.manifestBytes(results[0]) + Hub.manifestBytes({}));
+    assert.equal(st.board_bytes_mean, Math.round((st.board_bytes_total / 3) * 10) / 10);
   } finally { f.cleanup(); }
 });

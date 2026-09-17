@@ -58,7 +58,7 @@ test('manifest bytes are actual serialized envelope bytes, no-change zero, repla
     f.hub.recordBoardManifest('expiry', payload);
     f.hub.recordBoardManifest('expiry', {});
     const expected = {version:1, waits:2, bytes:Buffer.byteLength(JSON.stringify(payload, null, 2)), full:1, delta:0, empty:1};
-    assert.deepEqual(f.hub.stats(f.room).board_manifests, expected);
+    assert.deepEqual(f.hub.stats(f.hub.getRoom('expiry')).board_manifests, expected);
     assert.deepEqual(((h: Hub) => h.stats(h.getRoom('expiry')))(new Hub({dataDir:f.dir})).board_manifests, expected);
   } finally { f.cleanup(); }
 });

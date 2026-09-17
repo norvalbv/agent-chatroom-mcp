@@ -196,6 +196,7 @@ export interface Room {
   /** Only versioned rooms have a complete guarded-call observation epoch. */
   telemetryVersion?: 1;
   /** board wait receipts: count + serialized manifest bytes (telemetryVersion rooms only) */
+
   callOutcomes?: Record<string, CallOutcomes>;
   boardManifests?: BoardManifestStats;
   /** git HEAD and dirty state of the project when the room was created */
@@ -1318,8 +1319,8 @@ export class Hub {
   recordBoardManifest(roomName: string, envelope: { board_keys?: string[]; board_delta?: { keys: string[]; tombstones: string[] } }): void {
     const room = this.getRoom(roomName);
     const kind = envelope.board_keys !== undefined ? "full" : envelope.board_delta !== undefined ? "delta" : "empty";
-    // The MCP text renderer uses two-space indentation. Empty manifests ship no field/bytes.
-    const bytes = kind === "empty" ? 0 : Buffer.byteLength(JSON.stringify(envelope, null, 2));
+    // Standalone manifest envelope in MCP text encoding; no embedded fields means zero bytes.
+    const bytes = Hub.manifestBytes(envelope);
     this.applyBoardManifest(room, bytes, kind);
     this.persist({ type: "board_manifest", room: roomName, bytes, kind });
   }
@@ -1355,31 +1356,27 @@ export class Hub {
     return new Set(ps.map((p) => p.session ?? `nosession:${p.id}`)).size;
   }
 
-  /** Wire bytes of a delta envelope as JSON.stringify writes it. */
+  /** UTF-8 bytes of standalone pretty-JSON board fields, not HTTP/MCP framing. */
   static manifestBytes(envelope: Record<string, unknown>): number {
-    return Buffer.byteLength(JSON.stringify(envelope), "utf8");
+    return Object.keys(envelope).length ? Buffer.byteLength(JSON.stringify(envelope, null, 2)) : 0;
   }
 
   boardManifestTelemetry(room: Room): { waits: number; board_bytes_total: number; board_bytes_mean: number } {
     const t = room.boardManifests;
     const waits = t?.waits ?? 0;
-    return { waits, board_bytes_total: t?.bytes ?? 0, board_bytes_mean: waits && t ? Math.round((t.bytes / waits) * 10) / 10 : 0 };
-  }
-
-  /** Single reducer for live and replay board mutations; deletes retain a version tombstone. */
-  private applyBoard(room: Room, key: string, entry: BoardEntry | null) {
-    room.boardVersion++;
-    room.boardVersions.set(key, room.boardVersion);
-    if (entry) room.board.set(key, entry);
-    else room.board.delete(key);
+    return { waits, board_bytes_total: t?.bytes ?? 0, board_bytes_mean: waits ? Math.round((t!.bytes / waits) * 10) / 10 : 0 };
   }
 
   /**
-   * Assemble only AFTER a long poll wakes. Synchronous assembly serializes concurrent
-   * waits for a seat. This is an at-most-once response receipt, not a transport ack;
-   * a lost response is recovered by leaving and rejoining (the only cursor reset),
-   * and board_get stays an unconsumed read path. Omitted follow keeps the
-   * subscription; [] follows only the mandatory gate entries.
+   * Board discovery for one seat, assembled synchronously AFTER the poll wake
+   * (concurrent waits for a seat serialize here). This is an at-most-once response
+   * receipt, NOT a network ack: a lost response is recovered by rejoin/reclaim or
+   * a restart, each of which resets to a full manifest. Omitted follow keeps the
+   * current subscription; [] follows only mandatory coordination keys; [""] all.
+   * Any subscription change (narrowing included) resets so stale out-of-scope keys
+   * are dropped and new-scope keys are backfilled. Discovery filtering is not
+   * authorization: verify/, claim/, required pending inbox and hold keys are never
+   * hidden, and explicit board_get remains unrestricted.
    */
   boardManifest(roomName: string, pid: string, follow?: string[], forceFull = false): {
     board_keys?: string[]; board_delta?: { keys: string[]; tombstones: string[] }; board_reset?: boolean;
@@ -1387,8 +1384,6 @@ export class Hub {
     const room = this.getRoom(roomName);
     const p = this.requireParticipant(room, pid);
     const nextFollow = follow === undefined ? undefined : [...new Set(follow)];
-    // Any subscription change (narrowing or widening) is a reset: the seat must relearn
-    // the whole matching set so stale out-of-scope keys are dropped and new ones backfilled.
     const changed = nextFollow !== undefined && !forceFull &&
       (p.boardFollow === undefined || p.boardFollow.length !== nextFollow.length ||
         p.boardFollow.some((x, i) => x !== nextFollow[i]));
@@ -1396,12 +1391,9 @@ export class Hub {
     const prefixes = forceFull ? undefined : p.boardFollow;
     const pending = new Set(this.unacknowledged(room));
     const visible = [...room.board].filter(([key, entry]) => {
-      // TTL is supplied by the lifecycle component; never let subscriptions hide gates.
-      const lifecycle = this as Hub & { boardEntryExpired?: (room: Room, key: string, entry: BoardEntry) => boolean };
-      if (lifecycle.boardEntryExpired?.(room, key, entry)) return false;
+      if (this.boardEntryExpired(room, key, entry)) return false;
       return prefixes === undefined || prefixes.some((prefix) => key.startsWith(prefix)) ||
-        key.startsWith("verify/") || key.startsWith("claim/") || pending.has(key) ||
-        key === `hold/${room.name}`;
+        key.startsWith("verify/") || key.startsWith("claim/") || pending.has(key) || key === `hold/${room.name}`;
     }).map(([key]) => key);
     const previous = new Set(p.seenBoardKeys ?? []);
     const current = new Set(visible);
@@ -1411,6 +1403,7 @@ export class Hub {
     p.seenBoardKeys = visible;
     if (first || changed) {
       const envelope = { board_keys: visible, board_reset: true };
+      this.recordBoardManifest(roomName, envelope);
       return envelope;
     }
     const keys = visible.filter((key) => !previous.has(key) || (room.boardVersions.get(key) ?? 0) > (prevSeen ?? 0));
@@ -1418,10 +1411,19 @@ export class Hub {
     const tombstones = [...previous].filter((key) => !current.has(key));
     if (keys.length || tombstones.length) {
       const envelope = { board_delta: { keys, tombstones } };
+      this.recordBoardManifest(roomName, envelope);
       return envelope;
     }
-    const envelope = {};
-    return envelope;
+    this.recordBoardManifest(roomName, {});
+    return {};
+  }
+
+  /** Single reducer for live and replay board mutations; deletes retain a version tombstone. */
+  private applyBoard(room: Room, key: string, entry: BoardEntry | null) {
+    room.boardVersion++;
+    room.boardVersions.set(key, room.boardVersion);
+    if (entry) room.board.set(key, entry);
+    else room.board.delete(key);
   }
 
   setBoard(roomName: string, pid: string, key: string, text: string, opts: BoardExpiryOptions & { ifAbsent?: boolean; ifByMe?: boolean; overwrite?: boolean } = {}): BoardEntry | null {

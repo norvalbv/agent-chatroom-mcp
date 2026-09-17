@@ -319,9 +319,9 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
                               ? "No new messages yet. Call wait_for_messages again."
                               : undefined;
       // Snapshot AFTER the poll wake: concurrent waits serialize their per-participant cursor here.
+      // boardManifest records its own telemetry; assembly happens here, after the poll wake.
       const board = hub.boardManifest(room, id, follow);
-      hub.recordBoardManifest(room, board); // persisted pretty-byte counters (delta branch)
-      hub.observeBoardManifest(r, board); // compact since-process-start counters (stats branch)
+      hub.observeBoardManifest(r, board); // compact since-process-start observer; legacy recording is in assembly
       // the hint goes first: it is the one line a weaker model must not lose to a clamp
       return {
         hint,

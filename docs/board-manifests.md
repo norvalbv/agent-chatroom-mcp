@@ -35,11 +35,13 @@ with different text invalidates that coverage as before.
 ## Measurement scope
 
 `/rooms/:room/stats` exposes `board_manifests` after the first observed wait:
-`version`, `waits`, `bytes`, `full`, `delta`, `empty`. Each sample is persisted
-and replayed. `bytes` counts UTF-8 bytes of the standalone manifest envelope,
-serialized with the same two-space indentation as MCP text responses, including
-reset markers and property names. No board fields means zero manifest bytes.
-This is **not** total MCP/HTTP/socket framing and is not an acknowledgement of
-successful network delivery. Historic rooms without samples report `null`.
+`version`, `waits`, `bytes`, `full`, `delta`, `empty` (plus a flattened
+`board_bytes_total`/`board_bytes_mean` view via `boardManifestTelemetry`). Each
+sample is persisted as a `board_manifest` event and replayed. `bytes` counts
+UTF-8 bytes of the standalone manifest envelope with the MCP text renderer’s
+two-space indentation: a reset/full or delta envelope, or zero when board fields
+are omitted. The internal empty return `{}` is not embedded in the response. This is **not** total MCP/HTTP/socket framing and is not an
+acknowledgement of successful network delivery. Historic rooms without samples
+report `null`.
 Historical logs without successful wait receipts cannot establish aggregate
 historic wait traffic; replay schedules must be labelled counterfactual.

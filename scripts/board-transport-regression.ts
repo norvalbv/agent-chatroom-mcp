@@ -38,5 +38,15 @@ try {
  assert.deepEqual(afterFull.board_delta.keys,['evidence/after'],'board_get does not consume wait cursor');
  const stats = hub.stats(hub.getRoom(room)).board_manifests;
  assert.equal(stats?.waits,4); assert.equal(stats?.empty,1);
+ const b = hub.join(room,'B','test',{},undefined,'b').participant;
+ hub.send(room,b.id,'@A Please examine this change.',undefined,true);
+ await call('wait_for_messages',{room,timeout_ms:0}); // establishes address warning
+ hub.setBoardAs(room,'system','evidence/refusal','not consumed');
+ const beforeCursor = [...hub.getRoom(room).participants.values()].find(p=>p.name==='A')!.lastBoardSeen;
+ const refused = await client.callTool({name:'wait_for_messages',arguments:{room,timeout_ms:0}});
+ assert.equal(refused.isError,true);
+ assert.equal([...hub.getRoom(room).participants.values()].find(p=>p.name==='A')!.lastBoardSeen,beforeCursor);
+ await call('pass',{room});
+ assert.deepEqual((await call('wait_for_messages',{room,timeout_ms:0})).board_delta.keys,['evidence/refusal']);
  console.log('BOARD TRANSPORT OK');
 } finally {await client.close();await session.server.close();}

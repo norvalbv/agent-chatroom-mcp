@@ -264,10 +264,47 @@ const now = () => new Date().toISOString();
 const shortId = (prefix: string) => `${prefix}_${randomBytes(4).toString("hex")}`;
 const norm = (s: string) => s.toLowerCase().replace(/\s+/g, " ").replace(/[“”]/g, '"').replace(/[‘’]/g, "'").trim();
 
+/**
+ * Closed set of privacy-safe refusal reason codes persisted in trial artifacts:
+ * the persisted reason is exactly one of these tokens, never raw error text,
+ * argument values or secrets. hub_guard is retained for legacy events and as the
+ * conservative fallback for errors that cannot be classified safely; extend only
+ * with evidence of a distinct, benign, reproducible failure class.
+ */
+export type RefusalCode =
+  | "expiry-prefix"  // expiry options given for a key whose prefix cannot expire
+  | "ownership"      // overwriting another author's board entry, claim or hold
+  | "auth"           // unknown, inactive or unauthenticated actor
+  | "key-format"     // malformed board or inbox key
+  | "size"           // content above the size cap
+  | "state"          // valid actor and args, refused by room or entry state
+  | "hub_guard";     // unknown or unclassifiable (legacy catch-all)
+
+export const REFUSAL_CODES: readonly RefusalCode[] =
+  ["expiry-prefix", "ownership", "auth", "key-format", "size", "state", "hub_guard"];
+
+/** Last-resort classification for HubErrors thrown without a typed code: match the
+ * hub's own message templates by strict prefix, so submitted text can never choose
+ * the category. Anything unrecognized stays hub_guard (unknown), never guessed. */
+export function refusalCodeFromMessage(message: string): RefusalCode {
+  const m = message ?? "";
+  if (m.startsWith("Expiry is supported only for") || m.startsWith("Use ttl_seconds or expires_at") ||
+      m.startsWith("ttl_seconds must be") || m.startsWith("Invalid expires_at or ttl_seconds")) return "expiry-prefix";
+  if (m.startsWith("You are not a participant of") || m.startsWith("You have left ")) return "auth";
+  if (m.startsWith("Board keys are short names") || m === "Invalid board key." ||
+      m.startsWith("A hold for this room is the key")) return "key-format";
+  if (m.startsWith("Board entries are capped") || m.startsWith("Notes are capped")) return "size";
+  if (m.includes(" already exists (by ")) return "state";
+  if (m.includes(" was written by ") || m.startsWith("The hold was placed by") ||
+      (m.startsWith('claim "') && m.includes(" is owned by "))) return "ownership";
+  return "hub_guard";
+}
+
 export class HubError extends Error {
   constructor(
     message: string,
     public data?: unknown,
+    public code?: RefusalCode,
   ) {
     super(message);
   }
@@ -647,8 +684,8 @@ export class Hub {
 
   requireParticipant(room: Room, pid: string): Participant {
     const p = room.participants.get(pid);
-    if (!p) throw new HubError(`You are not a participant of "${room.name}". Call join_room first.`);
-    if (!p.active) throw new HubError(`You have left "${room.name}". Call join_room again to rejoin.`);
+    if (!p) throw new HubError(`You are not a participant of "${room.name}". Call join_room first.`, undefined, "auth");
+    if (!p.active) throw new HubError(`You have left "${room.name}". Call join_room again to rejoin.`, undefined, "auth");
     return p;
   }
 
@@ -1043,11 +1080,15 @@ export class Hub {
   }
 
   /** Internal actor ids are authenticated by the MCP connection; never included in public stats. */
-  recordRefusal(roomName: string | undefined, tool: string, _message: string, participant: string | null = null) {
+  recordRefusal(roomName: string | undefined, tool: string, errorOrMessage: string | HubError, participant: string | null = null) {
     const room = roomName ? this.rooms.get(roomName) : undefined;
     if (!room) return;
-    // Error messages can interpolate submitted text/secrets. Never persist a raw prefix.
-    const reason = "hub_guard";
+    // Error messages can interpolate submitted text/secrets. Persist exactly one
+    // closed-enum code: typed code when the throw site declared one, else a strict
+    // message-template match, else hub_guard (unknown). Never raw text or args.
+    const reason: RefusalCode = errorOrMessage instanceof HubError
+      ? (errorOrMessage.code ?? refusalCodeFromMessage(errorOrMessage.message))
+      : refusalCodeFromMessage(errorOrMessage ?? "");
     const key = `${tool}: ${reason}`;
     room.refusals = room.refusals ?? {};
     room.refusals[key] = (room.refusals[key] ?? 0) + 1;
@@ -1375,11 +1416,11 @@ export class Hub {
 
   private boardExpiry(key: string, opts: BoardExpiryOptions): string | undefined {
     if (opts.ttlSeconds === undefined && opts.expiresAt === undefined) return undefined;
-    if (!key.startsWith("handoff/") && !key.startsWith("inbox/")) throw new HubError("Expiry is supported only for handoff/ and inbox/ entries.");
-    if (opts.ttlSeconds !== undefined && opts.expiresAt !== undefined) throw new HubError("Use ttl_seconds or expires_at, not both.");
-    if (opts.ttlSeconds !== undefined && (!Number.isFinite(opts.ttlSeconds) || opts.ttlSeconds <= 0)) throw new HubError("ttl_seconds must be finite and positive.");
+    if (!key.startsWith("handoff/") && !key.startsWith("inbox/")) throw new HubError("Expiry is supported only for handoff/ and inbox/ entries.", undefined, "expiry-prefix");
+    if (opts.ttlSeconds !== undefined && opts.expiresAt !== undefined) throw new HubError("Use ttl_seconds or expires_at, not both.", undefined, "expiry-prefix");
+    if (opts.ttlSeconds !== undefined && (!Number.isFinite(opts.ttlSeconds) || opts.ttlSeconds <= 0)) throw new HubError("ttl_seconds must be finite and positive.", undefined, "expiry-prefix");
     const at = opts.ttlSeconds !== undefined ? Date.now() + opts.ttlSeconds * 1000 : Date.parse(opts.expiresAt!);
-    if (!Number.isFinite(at) || Math.abs(at) > 8.64e15) throw new HubError("Invalid expires_at or ttl_seconds.");
+    if (!Number.isFinite(at) || Math.abs(at) > 8.64e15) throw new HubError("Invalid expires_at or ttl_seconds.", undefined, "expiry-prefix");
     return new Date(at).toISOString();
   }
 
@@ -1503,18 +1544,18 @@ export class Hub {
   setBoard(roomName: string, pid: string, key: string, text: string, opts: BoardExpiryOptions & { ifAbsent?: boolean; ifByMe?: boolean; overwrite?: boolean } = {}): BoardEntry | null {
     const room = this.getRoom(roomName);
     const p = this.requireParticipant(room, pid);
-    if (!Hub.BOARD_KEY.test(key)) throw new HubError("Board keys are short names like 'evidence', 'open questions', 'claim/auth', 'verify/auth'.");
-    if (text.length > 8000) throw new HubError("Board entries are capped at 8000 characters.");
+    if (!Hub.BOARD_KEY.test(key)) throw new HubError("Board keys are short names like 'evidence', 'open questions', 'claim/auth', 'verify/auth'.", undefined, "key-format");
+    if (text.length > 8000) throw new HubError("Board entries are capped at 8000 characters.", undefined, "size");
     const expiresAt = this.boardExpiry(key, opts);
     const previous = room.board.get(key);
     // reserved prefixes (enforced here, the single write site)
     if (key.startsWith("inbox/") && !key.endsWith(".ack")) throw new HubError("inbox/* entries are written by post_to_room from another room. To acknowledge one, write '<key>.ack'.");
     if (key.startsWith("hold/")) {
-      if (key !== `hold/${room.name}`) throw new HubError(`A hold for this room is the key "hold/${room.name}".`);
-      if (previous && previous.by !== p.name) throw new HubError(`The hold was placed by ${previous.by}; only they (or a human) can clear or change it.`);
+      if (key !== `hold/${room.name}`) throw new HubError(`A hold for this room is the key "hold/${room.name}".`, undefined, "key-format");
+      if (previous && previous.by !== p.name) throw new HubError(`The hold was placed by ${previous.by}; only they (or a human) can clear or change it.`, undefined, "ownership");
     }
     if (key.startsWith("claim/")) {
-      if (previous && previous.by !== p.name) throw new HubError(`claim "${key}" is owned by ${previous.by} (since ${previous.updatedAt}). Join their team via help/ or join-request/, or pick another area.`);
+      if (previous && previous.by !== p.name) throw new HubError(`claim "${key}" is owned by ${previous.by} (since ${previous.updatedAt}). Join their team via help/ or join-request/, or pick another area.`, undefined, "ownership");
       if (text.trim()) {
         let parsed: { status?: string; team?: unknown } | undefined;
         try {
@@ -1531,12 +1572,13 @@ export class Hub {
         }
       }
     }
-    if (opts.ifAbsent && previous) throw new HubError(`"${key}" already exists (by ${previous.by}, ${previous.updatedAt}).`, { existing: previous });
-    if (opts.ifByMe && previous && previous.by !== p.name) throw new HubError(`"${key}" was written by ${previous.by}, not you. Use post_to_room or a different key.`);
+    if (opts.ifAbsent && previous) throw new HubError(`"${key}" already exists (by ${previous.by}, ${previous.updatedAt}).`, { existing: previous }, "state");
+    if (opts.ifByMe && previous && previous.by !== p.name) throw new HubError(`"${key}" was written by ${previous.by}, not you. Use post_to_room or a different key.`, undefined, "ownership");
     if (previous && previous.by !== p.name && !opts.overwrite && text.trim()) {
       throw new HubError(
         `"${key}" was written by ${previous.by} at ${previous.updatedAt}; replacing it would discard their text. Merge with the current content below and resend with overwrite=true, or use your own key.`,
         { current: previous },
+        "ownership",
       );
     }
     if (!text.trim()) {
@@ -1564,7 +1606,7 @@ export class Hub {
   /** System-initiated board write on someone's behalf (e.g. a claim made at recruitment); no membership needed. */
   setBoardAs(roomName: string, byName: string, key: string, text: string): BoardEntry {
     const room = this.getRoom(roomName);
-    if (!Hub.BOARD_KEY.test(key)) throw new HubError("Invalid board key.");
+    if (!Hub.BOARD_KEY.test(key)) throw new HubError("Invalid board key.", undefined, "key-format");
     const entry: BoardEntry = { text, by: byName, updatedAt: now() };
     this.applyBoard(room, key, entry);
     this.persist({ type: "board", room: roomName, key, entry });
@@ -1578,8 +1620,8 @@ export class Hub {
     const p = this.requireParticipant(from, pid);
     if (toRoom === fromRoom) throw new HubError("That is your own room; use board_set.");
     const to = this.getRoom(toRoom);
-    if (!/^[\w .:-]{1,40}$/.test(key)) throw new HubError("Inbox keys are short names without slashes.");
-    if (text.length > 8000) throw new HubError("Notes are capped at 8000 characters.");
+    if (!/^[\w .:-]{1,40}$/.test(key)) throw new HubError("Inbox keys are short names without slashes.", undefined, "key-format");
+    if (text.length > 8000) throw new HubError("Notes are capped at 8000 characters.", undefined, "size");
     const full = `inbox/${fromRoom}/${key}`;
     const expiresAt = this.boardExpiry(full, opts);
     const entry: BoardEntry = { text, by: p.name, updatedAt: now(), ...(expiresAt ? { expiresAt } : {}), ...(ackRequired ? { ackRequired: true } : {}) };

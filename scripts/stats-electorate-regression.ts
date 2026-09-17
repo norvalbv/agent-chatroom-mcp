@@ -32,8 +32,8 @@ test("stats retains existing fields and reads never mutate room/cursors", () => 
   for (const key of LEGACY_KEYS) assert.ok(key in first, `legacy key ${key}`);
   assert.ok(Array.isArray(first.proposal_electorates), "stats must expose proposal_electorates");
   assert.equal(first.conclusion_electorate, null);
-  // reply_metrics.as_of is the read time by design; everything else must be byte-identical between reads.
-  const stable = (x: Record<string, any>) => { const c = structuredClone(x); if (c.reply_metrics) delete c.reply_metrics.as_of; return c; };
+  // reply_metrics.as_of and observation_end (open room) are the read time by design; everything else must be byte-identical between reads.
+  const stable = (x: Record<string, any>) => { const c = structuredClone(x); if (c.reply_metrics) { delete c.reply_metrics.as_of; delete c.reply_metrics.observation_end; } return c; };
   assert.deepEqual(stable(stats()), stable(first), "consecutive stats reads must be identical");
   assert.deepEqual(room, before, "stats must not mutate any room state or participant cursor");
 });

@@ -8,7 +8,7 @@
  * live overall, cumulative per room and per run, and a wall-clock limit.
  */
 import { spawn, type ChildProcess } from "node:child_process";
-import { mkdirSync, readFileSync, writeFileSync, createWriteStream } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync, createWriteStream } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { HubError } from "./hub.js";
@@ -16,6 +16,8 @@ import { settledAxes } from "./settled.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(here, "..");
+
+const seatBuild = resolve(repoRoot, "dist", "openrouter.js");
 
 /** Which runner backs a seat: the two CLIs, or an OpenRouter model driven by src/openrouter.ts. */
 export type AgentKind = "claude" | "codex" | "openrouter";
@@ -213,9 +215,9 @@ export class Spawner {
       let cmd: string;
       let args: string[];
       if (agent === "openrouter") {
-        // the seat is its own process (one MCP session per identity) and takes the hub URL directly
-        cmd = process.execPath;
-        args = [resolve(repoRoot, "dist", "openrouter.js"), "-p", prompt, "--mcp-url", o.mcpUrl, "--cwd", cwd];
+        // dist/ is gitignored, so a hub run from source has no build for the seat to load
+        cmd = existsSync(seatBuild) ? process.execPath : "npx";
+        args = [...(existsSync(seatBuild) ? [seatBuild] : ["tsx", resolve(repoRoot, "src", "openrouter.ts")]), "-p", prompt, "--mcp-url", o.mcpUrl, "--cwd", cwd];
         if (req.model) args.push("--model", req.model);
         if (req.canEdit) args.push("--write");
       } else if (agent === "codex") {

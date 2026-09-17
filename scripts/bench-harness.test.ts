@@ -64,7 +64,7 @@ test('two stub hubs emit artifact verdicts, separate workspaces and comparable f
  for(const arm of ['A','B']) {
   const dir=join(f.output,arm); const verdict=JSON.parse(readFileSync(join(dir,'bench-result.json'),'utf8'));
   for(const key of keys) assert.ok(Object.hasOwn(verdict,key),key);
-  assert.equal(verdict.arm,arm); assert.equal(verdict.passed,true); assert.equal(verdict.reason,'oracle-pass');
+  assert.equal(verdict.arm,arm); assert.equal(verdict.passed,true); assert.equal(verdict.reason,'task_pass');
   assert.equal(verdict.hub_entry,arm==='A'?f.stub:other); assert.equal(verdict.anti_tamper.unchanged,true);
   assert.equal(verdict.oracle.kind,'exact-answer'); assert.equal(verdict.oracle.exit_code,0);
   assert.ok(verdict.duration_ms>=0); assert.ok(Number.isFinite(Date.parse(verdict.checked_at)));
@@ -78,14 +78,14 @@ test('two stub hubs emit artifact verdicts, separate workspaces and comparable f
  assert.equal(comparison.delta,0); assert.equal(comparison.comparable,true);
  }finally{rmSync(f.root,{recursive:true,force:true});}
 });
-test('hub startup failure is infra, not task failure, and excluded from delta',async()=>{
+test('hub startup failure is infrastructure_error, not task failure, and excluded from delta',async()=>{
  const f=fixture();try {
  const missing=join(f.root,'missing.mjs');
  const result=invoke([task,missing,missing,String(await freePair()),'--root',f.output,'--timeout-ms','300']);
  assert.equal(result.status,0,result.stderr);
  for(const arm of ['A','B']) {
  const v=JSON.parse(readFileSync(join(f.output,arm,'bench-result.json'),'utf8'));
- assert.equal(v.reason,'infra');assert.equal(v.passed,false);
+ assert.equal(v.reason,'infrastructure_error');assert.equal(v.passed,false);
  }
  const comparison=JSON.parse(readFileSync(join(f.output,'bench-compare.json'),'utf8'));
  assert.equal(comparison.delta,null);assert.equal(comparison.comparable,false);

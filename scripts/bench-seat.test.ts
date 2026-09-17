@@ -104,7 +104,7 @@ test('provider failure is infrastructure, not an empty answer task failure',asyn
  const f=wrapperFixture();try{
  const result=invoke([task,f.stub,f.stub,String(await freePair()),'--root',f.output,'--timeout-ms','1800','--seat-entry',wrapper],{BENCH_SEAT_ENTRY:f.seat,OPENROUTER_API_KEY:'mock-provider-key',MOCK_FAIL:'1'});
  assert.equal(result.status,0,result.stderr);
- for(const arm of ['A','B'])assert.equal(JSON.parse(readFileSync(join(f.output,arm,'bench-result.json'),'utf8')).reason,'infra');
+ for(const arm of ['A','B'])assert.equal(JSON.parse(readFileSync(join(f.output,arm,'bench-result.json'),'utf8')).reason,'infrastructure_error');
  }finally{rmSync(f.root,{recursive:true,force:true});}
 });
 test('conclusion cannot bypass the bounded seat completion barrier',async()=>{

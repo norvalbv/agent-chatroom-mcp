@@ -78,7 +78,7 @@ test('wrong patch gives named-oracle-failure JSON; double-run is byte-identical'
     assert.equal(result.score, 0);
     assert.ok(result.oracle_results.some((r: any) => r.name === 'equal-endpoints' && r.exit_code === 1));
     const scored = await scoreTask(bug, dir);
-    assert.equal(scored.passed, false); assert.equal(scored.reason, 'oracle-fail');
+    assert.equal(scored.passed, false); assert.equal(scored.reason, 'task_fail');
     assert.equal(scored.oracle.exit_code, 1);
     assert.ok((scored as any).oracle_results.some((r: any) => r.name === 'equal-endpoints' && r.exit_code === 1));
   } finally { rmSync(root, { recursive: true, force: true }); }
@@ -99,18 +99,19 @@ test('fact-check exact/normalized controls pass; negation and right-value/wrong-
     assert.equal(loadTask(fact).oracle.kind, 'exact-answer');
     cpSync(join(fact, 'public'), root, { recursive: true });
     assert.equal(existsSync(join(root, 'oracle')), false);
-    for (const [answer, score] of [
-      [expected, 1], ['  SOCIETY  FOR FORMAL METHODS, Vienna\n', 1],
-      ['The answer is NOT Society for Formal Methods, Vienna', 0],
-      [JSON.stringify({ answer: expected }), 0], [`The answer is ${expected}`, 0],
-      ['Institute for Computational Reasoning, Berlin', 0], ['', 0],
+    for (const [answer, status] of [
+      [expected, 0], ['  SOCIETY  FOR FORMAL METHODS, Vienna\n', 0],
+      ['The answer is NOT Society for Formal Methods, Vienna', 1],
+      [`The answer is ${expected}`, 1],
+      ['Institute for Computational Reasoning, Berlin', 1],
+      [JSON.stringify({ answer: expected }), 3], ['', 3],
     ] as const) {
       writeFileSync(join(root, 'answer.txt'), answer);
       const a = invoke(resolve('scripts/score-fact-check.ts'), [join(root, 'answer.txt'), join(fact, 'oracle/oracle.json')]);
       const b = invoke(resolve('scripts/score-fact-check.ts'), [join(root, 'answer.txt'), join(fact, 'oracle/oracle.json')]);
-      assert.equal(a.status, score ? 0 : 1, a.stderr); assert.equal(b.status, a.status);
-      assert.equal(JSON.parse(a.stdout).score, score); assert.equal(a.stdout, b.stdout);
-      assert.equal((await scoreTask(fact, root)).passed, score === 1);
+      assert.equal(a.status, status, a.stderr); assert.equal(b.status, a.status);
+      assert.equal(JSON.parse(a.stdout).score, status === 0 ? 1 : 0); assert.equal(a.stdout, b.stdout);
+      assert.equal((await scoreTask(fact, root)).passed, status === 0);
     }
     // Optional DIFFICULTY guard only; withdrawn by audit #163, NOT a validity test.
     // The supplied reference is legitimate retrieval evidence. Do not enable this
@@ -119,7 +120,7 @@ test('fact-check exact/normalized controls pass; negation and right-value/wrong-
     assert.equal(normalize(expected), 'society for formal methods, vienna');
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
-test('hub crash maps to infra_error (wire reason=infra), excluded from task comparison', () => {
+test('hub crash maps to infrastructure_error, excluded from task comparison', () => {
   const root = temporary(); try {
     // Exercise the real runner crash path without binding ports or starting a hub:
     // only its preflight port probe is mocked. Child process genuinely exits 23.
@@ -131,7 +132,7 @@ test('hub crash maps to infra_error (wire reason=infra), excluded from task comp
     assert.equal(run.status, 0, run.stderr);
     for (const arm of ['A', 'B']) {
       const verdict = JSON.parse(readFileSync(join(output, arm, 'bench-result.json'), 'utf8'));
-      assert.equal(verdict.reason, 'infra'); assert.equal(verdict.passed, false);
+      assert.equal(verdict.reason, 'infrastructure_error'); assert.equal(verdict.passed, false);
       assert.equal(verdict.oracle.exit_code, null);
     }
     const comparison = JSON.parse(readFileSync(join(output, 'bench-compare.json'), 'utf8'));
@@ -139,5 +140,46 @@ test('hub crash maps to infra_error (wire reason=infra), excluded from task comp
     // Current runner emits a single-pair delta, not aggregate pass_rate. An infra
     // pair must not become a numeric failure rate under either representation.
     assert.ok(comparison.pass_rate === undefined || comparison.pass_rate === null);
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test('outcome vocabulary: task_pass/task_fail/parse_failure distinct; missing artifact is not infra', async () => {
+  const root = temporary(); try {
+    // fact-check: missing/unreadable/empty/prohibited-format answer => parse_failure
+    cpSync(join(fact, 'public'), root, { recursive: true });
+    rmSync(join(root, 'answer.txt'), { force: true });
+    let scored = await scoreTask(fact, root);
+    assert.equal(scored.passed, false);
+    assert.equal(scored.reason, 'parse_failure', 'missing answer.txt must be parse_failure, not infra');
+    writeFileSync(join(root, 'answer.txt'), '   \n  ');
+    scored = await scoreTask(fact, root);
+    assert.equal(scored.reason, 'parse_failure', 'empty answer must be parse_failure');
+    writeFileSync(join(root, 'answer.txt'), JSON.stringify({ answer: expected }));
+    scored = await scoreTask(fact, root);
+    assert.equal(scored.reason, 'parse_failure', 'correct value in prohibited JSON format must be parse_failure');
+    writeFileSync(join(root, 'answer.txt'), 'The answer is NOT Society for Formal Methods, Vienna');
+    scored = await scoreTask(fact, root);
+    assert.equal(scored.reason, 'task_fail', 'well-formed wrong answer is task_fail');
+    assert.equal(scored.oracle.exit_code, 1);
+    writeFileSync(join(root, 'answer.txt'), expected);
+    scored = await scoreTask(fact, root);
+    assert.equal(scored.reason, 'task_pass');
+    assert.equal(scored.passed, true);
+    rmSync(root, { recursive: true, force: true });
+    // bug-fix: artifact-load failure is parse_failure, not task_fail
+    const dir = mkdtempSync(join(tmpdir(), 'oracle-taxonomy-bug-'));
+    cpSync(join(bug, 'public'), dir, { recursive: true });
+    rmSync(join(dir, 'dates.ts'), { force: true });  // artifact missing => parse_failure
+    scored = await scoreTask(bug, dir);
+    assert.equal(scored.reason, 'parse_failure', 'artifact-load failure must be parse_failure');
+    writeFileSync(join(dir, 'dates.ts'), readFileSync(join(bug, 'fixtures/broken/dates.ts'), 'utf8'));
+    scored = await scoreTask(bug, dir);
+    assert.equal(scored.reason, 'task_fail', 'loadable but wrong artifact is task_fail');
+    assert.ok((scored as any).oracle_results.some((r: any) => r.name === 'equal-endpoints' && r.exit_code === 1));
+    writeFileSync(join(dir, 'dates.ts'), readFileSync(join(bug, 'fixtures/correct/dates.ts'), 'utf8'));
+    scored = await scoreTask(bug, dir);
+    assert.equal(scored.reason, 'task_pass');
+    assert.equal(scored.passed, true);
+    rmSync(dir, { recursive: true, force: true });
   } finally { rmSync(root, { recursive: true, force: true }); }
 });

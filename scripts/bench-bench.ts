@@ -81,7 +81,7 @@ async function main() {
     await delay(30);
    }
    if(!ready)throw Error('Hub did not become ready');manifest.booted_at=new Date().toISOString();save();
- const created=await fetch(`${url}/rooms/benchmark/create`,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({topic:frozen.brief,expected_participants:frozen.expected_participants,quorum:'unanimous',require_challenge:true,require_verification:false}),signal:AbortSignal.timeout(timeout)});
+ const created=await fetch(`${url}/rooms/benchmark/create`,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({topic:frozen.brief,expected_participants:frozen.expected_participants,quorum:'unanimous',require_challenge:!seatArg,require_verification:false}),signal:AbortSignal.timeout(timeout)});
    if(!created.ok)throw Error(`Room create HTTP ${created.status}`);
    let seatError:Error|undefined;
    if(seatArg){

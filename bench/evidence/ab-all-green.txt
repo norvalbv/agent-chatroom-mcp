@@ -1,0 +1,172 @@
+TAP version 13
+# Subtest: runner exists
+ok 1 - runner exists
+  ---
+  duration_ms: 0.314709
+  type: 'test'
+  ...
+# Subtest: refuses unsafe, malformed and out-of-range ports before running a hub
+ok 2 - refuses unsafe, malformed and out-of-range ports before running a hub
+  ---
+  duration_ms: 464.262334
+  type: 'test'
+  ...
+# Subtest: refuses root reuse without overwriting contents
+ok 3 - refuses root reuse without overwriting contents
+  ---
+  duration_ms: 82.7925
+  type: 'test'
+  ...
+# Subtest: two stub hubs emit artifact verdicts, separate workspaces and comparable frozen inputs
+ok 4 - two stub hubs emit artifact verdicts, separate workspaces and comparable frozen inputs
+  ---
+  duration_ms: 789.746291
+  type: 'test'
+  ...
+# Subtest: hub startup failure is infra, not task failure, and excluded from delta
+ok 5 - hub startup failure is infra, not task failure, and excluded from delta
+  ---
+  duration_ms: 189.010959
+  type: 'test'
+  ...
+# Subtest: frozen scorer identity changes when the executed fact scorer copy changes
+ok 6 - frozen scorer identity changes when the executed fact scorer copy changes
+  ---
+  duration_ms: 1638.630375
+  type: 'test'
+  ...
+# Subtest: real-seat mode spawns one seat per arm and records seat provenance
+ok 7 - real-seat mode spawns one seat per arm and records seat provenance
+  ---
+  duration_ms: 902.102417
+  type: 'test'
+  ...
+# Subtest: refuses seat mode when the seat entry is missing
+ok 8 - refuses seat mode when the seat entry is missing
+  ---
+  duration_ms: 84.006667
+  type: 'test'
+  ...
+# Subtest: real wrapper fails fast with an explicit missing MCP URL diagnostic
+ok 9 - real wrapper fails fast with an explicit missing MCP URL diagnostic
+  ---
+  duration_ms: 21.726833
+  type: 'test'
+  ...
+# Subtest: actual wrapper registers after room creation, receives seat-only credentials, and completes answer before scoring
+ok 10 - actual wrapper registers after room creation, receives seat-only credentials, and completes answer before scoring
+  ---
+  duration_ms: 1972.522084
+  type: 'test'
+  ...
+# Subtest: provider failure is infrastructure, not an empty answer task failure
+ok 11 - provider failure is infrastructure, not an empty answer task failure
+  ---
+  duration_ms: 821.678708
+  type: 'test'
+  ...
+# Subtest: conclusion cannot bypass the bounded seat completion barrier
+ok 12 - conclusion cannot bypass the bounded seat completion barrier
+  ---
+  duration_ms: 3026.055291
+  type: 'test'
+  ...
+# Subtest: inclusiveDates hidden case: equal-endpoints
+ok 13 - inclusiveDates hidden case: equal-endpoints
+  ---
+  duration_ms: 5.747542
+  type: 'test'
+  ...
+# Subtest: inclusiveDates hidden case: leap-day
+ok 14 - inclusiveDates hidden case: leap-day
+  ---
+  duration_ms: 0.652875
+  type: 'test'
+  ...
+# Subtest: inclusiveDates hidden case: non-leap-year
+ok 15 - inclusiveDates hidden case: non-leap-year
+  ---
+  duration_ms: 0.48725
+  type: 'test'
+  ...
+# Subtest: inclusiveDates hidden case: year-boundary
+ok 16 - inclusiveDates hidden case: year-boundary
+  ---
+  duration_ms: 0.708459
+  type: 'test'
+  ...
+# Subtest: inclusiveDates hidden case: month-boundary
+ok 17 - inclusiveDates hidden case: month-boundary
+  ---
+  duration_ms: 0.599042
+  type: 'test'
+  ...
+# Subtest: inclusiveDates hidden case: reversed-range
+ok 18 - inclusiveDates hidden case: reversed-range
+  ---
+  duration_ms: 0.760709
+  type: 'test'
+  ...
+# Subtest: inclusiveDates hidden case: normalized-invalid-day
+ok 19 - inclusiveDates hidden case: normalized-invalid-day
+  ---
+  duration_ms: 0.660417
+  type: 'test'
+  ...
+# Subtest: inclusiveDates hidden case: invalid-month
+ok 20 - inclusiveDates hidden case: invalid-month
+  ---
+  duration_ms: 0.41875
+  type: 'test'
+  ...
+# Subtest: inclusiveDates hidden case: non-string
+ok 21 - inclusiveDates hidden case: non-string
+  ---
+  duration_ms: 0.438875
+  type: 'test'
+  ...
+# Subtest: both fixture variants exist and differ only by the one-line inclusive-bound fix
+ok 22 - both fixture variants exist and differ only by the one-line inclusive-bound fix
+  ---
+  duration_ms: 1.018292
+  type: 'test'
+  ...
+# Subtest: broken fails hidden oracle; one-line t<=e fix passes all nine named oracles
+ok 23 - broken fails hidden oracle; one-line t<=e fix passes all nine named oracles
+  ---
+  duration_ms: 208.899291
+  type: 'test'
+  ...
+# Subtest: wrong patch gives named-oracle-failure JSON; double-run is byte-identical
+ok 24 - wrong patch gives named-oracle-failure JSON; double-run is byte-identical
+  ---
+  duration_ms: 278.7395
+  type: 'test'
+  ...
+# Subtest: loadTask/scoreTask dispatch the correct bug-fix artifact and repeat deterministically
+ok 25 - loadTask/scoreTask dispatch the correct bug-fix artifact and repeat deterministically
+  ---
+  duration_ms: 331.352125
+  type: 'test'
+  ...
+# Subtest: fact-check exact/normalized controls pass; negation and right-value/wrong-format exit 1
+ok 26 - fact-check exact/normalized controls pass; negation and right-value/wrong-format exit 1
+  ---
+  duration_ms: 1648.042916
+  type: 'test'
+  ...
+# Subtest: hub crash maps to infra_error (wire reason=infra), excluded from task comparison
+ok 27 - hub crash maps to infra_error (wire reason=infra), excluded from task comparison
+  ---
+  duration_ms: 186.213667
+  type: 'test'
+  ...
+1..27
+# tests 27
+# suites 0
+# pass 27
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 6930.318

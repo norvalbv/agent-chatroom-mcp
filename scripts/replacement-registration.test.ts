@@ -142,8 +142,31 @@ test('registration and links survive reload without recommending inactive restor
     assert.equal((r.participants.get(f.old.id) as any).replacedBy, next.id);
     const sender = hub3.join(r.name, 'sender', 'test').participant;
     assert.match(error({ ...f, hub: hub3, room: r, sender }), /no replacement is recorded\.$/);
-    hub3.join(r.name, 'next', 'test');
+    hub3.join(r.name, 'next', 'test', { replacementToken: tokens.get('next') } as any);
     assert.match(error({ ...f, hub: hub3, room: r, sender }), /replacement is "next"/);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('reactivating a token-bound successor name requires the token, also after reload', () => {
+  const f = fixture(); register(f.hub, f.room.name, 'old', 'next');
+  const next = joinSuccessor(f.hub, f.room.name, 'next');
+  leave(f.hub, f.room.name, next.id);
+  assert.throws(() => f.hub.join(f.room.name, 'next', 'test'), HubError, 'silent by-name reactivation must be refused');
+  const again = f.hub.join(f.room.name, 'next', 'test', { replacementToken: tokens.get('next') } as any).participant as any;
+  assert.equal(again.id, next.id);
+  assert.equal(again.replacementOf, f.old.id);
+});
+
+test('replay restores the token gate: no silent reactivation after restart', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'replacement-test-'));
+  try {
+    const f = fixture(dir); register(f.hub, f.room.name, 'old', 'next');
+    const next = joinSuccessor(f.hub, f.room.name, 'next');
+    leave(f.hub, f.room.name, next.id);
+    const hub2 = new Hub({ dataDir: dir });
+    assert.throws(() => hub2.join(f.room.name, 'next', 'test'), HubError);
+    const again = hub2.join(f.room.name, 'next', 'test', { replacementToken: tokens.get('next') } as any).participant as any;
+    assert.equal(again.replacementOf, f.old.id);
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 

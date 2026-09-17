@@ -657,14 +657,21 @@ export class Hub {
       if (predecessor) {
         participant.replacementOf = predecessor.id;
         predecessor.replacedBy = participant.id;
-        delete predecessor.pendingReplacementName;
-        delete predecessor.pendingReplacementTokenHash;
+        // Keep the reserved name + token hash: any later join under this name (e.g. after the
+        // successor itself leaves) still needs the one-use token; the hash replays from the log.
         this.persist({ type: "leave", room: roomName, p: predecessor });
       }
       room.participants.set(participant.id, participant);
       this.persist({ type: "join", room: roomName, p: participant });
       this.post(room, "system", undefined, `${this.shown(room, participant)}${room.anonymous ? "" : ` (${agent})`}${this.roleTag(participant)} joined the room.`);
     } else if (!participant.active) {
+      if (!reclaimId) {
+        const reserved = [...room.participants.values()].find((r) => r.pendingReplacementName === name);
+        const tokenHash = opts.replacementToken ? createHash("sha256").update(opts.replacementToken).digest("hex") : undefined;
+        if (reserved && (!tokenHash || tokenHash !== reserved.pendingReplacementTokenHash)) {
+          throw new HubError("A valid launcher replacement token for this room and name is required.");
+        }
+      }
       participant.active = true;
       participant.lastActiveAt = now();
       if (session) participant.session = session;

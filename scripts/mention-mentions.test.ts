@@ -43,7 +43,7 @@ test("mentions are deduplicated while multiple recipients remain resolved", () =
   assert.deepEqual(hub.mentionsIn(room, "@union-alpha-28 I agree; @B: yes. @observer a test"), [target.id, observer.id]);
 });
 
-test("quiet mention routes pushes, remains pullable, and pass clears addressed debt", () => {
+test("quiet mention routes pushes, remains pullable, and pass clears only a delivered ask", async () => {
   const { hub, room, sender, target, observer } = fixture();
   const message = hub.send(room.name, sender.id, "@union-alpha-28 I have evidence", undefined, true, true);
   assert.deepEqual(message.mentions, [target.id]);
@@ -53,6 +53,11 @@ test("quiet mention routes pushes, remains pullable, and pass clears addressed d
   assert.equal(hub.read(room.name, 0, 200, observer.id).some(m => m.id === message.id), true);
   assert.deepEqual(hub.addressedBy(room, target).map(m => m.id), [message.id]);
   assert.deepEqual(hub.addressedBy(room, observer), []);
+  // Attention gate (swarm-200839): a bare pass before the ask has been delivered never declines it.
+  hub.pass(room.name, target.id);
+  assert.deepEqual(hub.addressedBy(room, target).map(m => m.id), [message.id]);
+  // Delivery focuses the ask; a pass now declines exactly that ask.
+  await hub.wait(room.name, target.id, target.lastSeenSeq, 0);
   hub.pass(room.name, target.id);
   assert.deepEqual(hub.addressedBy(room, target), []);
   assert.throws(() => hub.send(room.name, sender.id, "@unknown a test", undefined, true, true), /quiet/i);

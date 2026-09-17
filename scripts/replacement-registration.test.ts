@@ -188,6 +188,15 @@ test('stale token after the successor departs resurrects nothing and recommends 
   assert.equal([...room(f.hub, f.room.name).participants.values()].some((p: any) => p.name === 'next' && p.active), false);
 });
 
+test('quiet ask the predecessor already answered before registration is not inherited', () => {
+  const f = fixture();
+  const ask = f.hub.send(f.room.name, f.sender.id, '@old quietly report', undefined, true, true);
+  f.hub.send(f.room.name, f.old.id, 'quietly done', ask.id, true, true);
+  register(f.hub, f.room.name, f.old.id, 'next');
+  const next = joinSuccessor(f.hub, f.room.name, 'next');
+  assert.equal(focusOf(f.hub, f.room.name, next.id), undefined, 'answered quiet debt must not resurrect');
+});
+
 test('outstanding quiet ask owed by the predecessor is inherited by the successor', () => {
   const f = fixture();
   const ask = f.hub.send(f.room.name, f.sender.id, '@old quietly report', undefined, true, true);

@@ -61,7 +61,7 @@ await test("mock: partial matches cannot hide exit errors; stderr is bounded", a
     child.emit("close", 2, null);
     const text = await result;
     assert.match(text, /^ERROR: search failed \(exit 2\): diagnostic/);
-    assert.ok(text.length < 4500, "diagnostic is bounded before caller clamp");
+    assert.ok(text.slice("ERROR: search failed (exit 2): ".length).length <= 200, "diagnostic is bounded to 200 chars before caller clamp");
   });
 });
 await test("mock: signal termination is an error", async () => {

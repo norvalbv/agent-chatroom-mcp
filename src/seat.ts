@@ -173,14 +173,14 @@ export function localTools(cwd: string, write: boolean, shell: boolean, clamp: (
             res(clamp(text));
           };
           const failure = (reason: string, detail = err) =>
-            finish(`ERROR: search failed (${reason})${detail.trim() ? `: ${detail.trim().slice(0, 4096)}` : ""}`);
+            finish(`ERROR: search failed (${reason})${detail.trim() ? `: ${detail.trim().slice(0, 200)}` : ""}`);
           const timer = setTimeout(() => {
             failure("timeout after 60000ms");
             child.kill("SIGKILL");
           }, 60_000);
           child.stdout.on("data", (d) => { if (!settled) out += d; });
           // Drain all stderr, but retain only a bounded diagnostic.
-          child.stderr.on("data", (d) => { if (!settled) err = (err + d).slice(0, 4096); });
+          child.stderr.on("data", (d) => { if (!settled) err = (err + d).slice(0, 200); });
           child.on("error", (error) => failure("spawn", error.message));
           child.on("close", (code, signal) => {
             if (signal) failure(`signal ${signal}`);

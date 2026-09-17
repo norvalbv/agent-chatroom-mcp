@@ -1068,10 +1068,13 @@ export class Hub {
     if (!room) return;
     // Error messages can interpolate submitted text/secrets. Persist exactly one
     // closed-enum code: only a typed code set by the throw site classifies a
-    // refusal; anything else (string errors, untyped HubErrors) stays hub_guard.
-    // Never raw text or args.
+    // refusal, and it must be a member of REFUSAL_CODES at runtime (JS callers
+    // can bypass the TS union); anything else (string errors, untyped HubErrors,
+    // out-of-enum codes) stays hub_guard. Never raw text or args.
     const reason: RefusalCode = errorOrMessage instanceof HubError
-      ? (errorOrMessage.code ?? "hub_guard")
+      && errorOrMessage.code !== undefined
+      && REFUSAL_CODES.includes(errorOrMessage.code)
+      ? errorOrMessage.code
       : "hub_guard";
     const key = `${tool}: ${reason}`;
     room.refusals = room.refusals ?? {};

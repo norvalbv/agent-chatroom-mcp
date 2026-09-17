@@ -1,0 +1,75 @@
+TAP version 13
+# Subtest: runner exists
+ok 1 - runner exists
+  ---
+  duration_ms: 0.369833
+  type: 'test'
+  ...
+# Subtest: refuses unsafe, malformed and out-of-range ports before running a hub
+ok 2 - refuses unsafe, malformed and out-of-range ports before running a hub
+  ---
+  duration_ms: 457.382583
+  type: 'test'
+  ...
+# Subtest: refuses root reuse without overwriting contents
+ok 3 - refuses root reuse without overwriting contents
+  ---
+  duration_ms: 103.53875
+  type: 'test'
+  ...
+# Subtest: two stub hubs emit artifact verdicts, separate workspaces and comparable frozen inputs
+ok 4 - two stub hubs emit artifact verdicts, separate workspaces and comparable frozen inputs
+  ---
+  duration_ms: 866.0445
+  type: 'test'
+  ...
+# Subtest: hub startup failure is infra, not task failure, and excluded from delta
+ok 5 - hub startup failure is infra, not task failure, and excluded from delta
+  ---
+  duration_ms: 228.323959
+  type: 'test'
+  ...
+# Subtest: frozen scorer identity changes when the executed fact scorer copy changes
+not ok 6 - frozen scorer identity changes when the executed fact scorer copy changes
+  ---
+  duration_ms: 1765.971542
+  type: 'test'
+  location: '/Users/benji/Desktop/Personal and learning/agent-chatroom-mcp/.swarm-worktrees/swarm-bench-room/bench-ab-1/scripts/bench-harness.test.ts:15:4081'
+  failureType: 'testCodeFailure'
+  error: 'executed scorer dependency must be frozen'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+    task_sha256: '06ee1c3fba62df4b4caeb9da2ed2f0644530a9bf33215d767b757386342eb0d2'
+    scorer_sha256: '2c9b2a769dd4a8d8bf284265c0e6902145fb0362230be7979a836782368c02e5'
+    task_id: 'bench-fact-check'
+    timeout_ms: 3000
+    room: 'benchmark'
+    brief: |-
+      Read records.txt. Records about the three named researchers were transcribed from notes; one affiliation is wrong. Answer with only the single corrected affiliation, nothing else.
+      
+  actual:
+    task_sha256: '06ee1c3fba62df4b4caeb9da2ed2f0644530a9bf33215d767b757386342eb0d2'
+    scorer_sha256: '2c9b2a769dd4a8d8bf284265c0e6902145fb0362230be7979a836782368c02e5'
+    task_id: 'bench-fact-check'
+    timeout_ms: 3000
+    room: 'benchmark'
+    brief: |-
+      Read records.txt. Records about the three named researchers were transcribed from notes; one affiliation is wrong. Answer with only the single corrected affiliation, nothing else.
+      
+  operator: 'notDeepStrictEqual'
+  stack: |-
+    TestContext.<anonymous> (/Users/benji/Desktop/Personal and learning/agent-chatroom-mcp/.swarm-worktrees/swarm-bench-room/bench-ab-1/scripts/bench-harness.test.ts:112:10)
+    process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+1..6
+# tests 6
+# suites 0
+# pass 5
+# fail 1
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 3581.691416

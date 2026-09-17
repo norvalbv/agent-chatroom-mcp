@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, cpSync, symlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { resolve, join } from 'node:path';
 import { createServer } from 'node:net';
@@ -89,5 +89,27 @@ test('hub startup failure is infra, not task failure, and excluded from delta',a
  }
  const comparison=JSON.parse(readFileSync(join(f.output,'bench-compare.json'),'utf8'));
  assert.equal(comparison.delta,null);assert.equal(comparison.comparable,false);
+ }finally{rmSync(f.root,{recursive:true,force:true});}
+});
+
+test('frozen scorer identity changes when the executed fact scorer copy changes',async()=>{
+ const f=fixture();try{
+  const scripts=join(f.root,'scripts');mkdirSync(scripts);
+  writeFileSync(join(f.root,'package.json'),JSON.stringify({type:'module'}));
+  symlinkSync(resolve('node_modules'),join(f.root,'node_modules'),'dir');
+  for(const name of ['bench-bench.ts','bench-oracle.ts','score-fact-check.ts'])cpSync(resolve('scripts',name),join(scripts,name));
+  const snapshots=[];
+  for(const iteration of [0,1]){
+   if(iteration)writeFileSync(join(scripts,'score-fact-check.ts'),readFileSync(join(scripts,'score-fact-check.ts'),'utf8')+'\n// dependency mutation in isolated copy\n');
+   const output=join(f.root,'run-'+iteration);
+   const result=spawnSync(process.execPath,['--import','tsx',join(scripts,'bench-bench.ts'),task,f.stub,f.stub,String(await freePair()),'--root',output,'--timeout-ms','3000'],{encoding:'utf8',env:{...process.env,STUB_ANSWER:'Society for Formal Methods, Vienna'},timeout:20000});
+   assert.equal(result.status,0,result.stderr);
+   const a=JSON.parse(readFileSync(join(output,'A','manifest.json'),'utf8'));
+   const b=JSON.parse(readFileSync(join(output,'B','manifest.json'),'utf8'));
+   assert.deepEqual(a.frozen,b.frozen);
+   snapshots.push(a.frozen);
+  }
+  assert.notDeepEqual(snapshots[0],snapshots[1],'executed scorer dependency must be frozen');
+  assert.notEqual(snapshots[0].fact_scorer_sha256,snapshots[1].fact_scorer_sha256);
  }finally{rmSync(f.root,{recursive:true,force:true});}
 });

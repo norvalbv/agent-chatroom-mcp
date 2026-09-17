@@ -68,6 +68,15 @@ test('leave/rejoin, active reconnect, and full board_get reset recover dropped d
   } finally { f.cleanup(); }
 });
 
+test('a refused/errored manifest call leaves the board cursor untouched', () => {
+  const f = fixture(); try {
+    f.manifest();
+    f.hub.setBoard(f.name, f.a.id, 'evidence/a', 'v2');
+    assert.throws(() => f.hub.boardManifest(f.name, 'p_missing'), /not a participant/);
+    assert.deepEqual(f.manifest(), { board_delta: { keys: ['evidence/a'], tombstones: [] } });
+  } finally { f.cleanup(); }
+});
+
 test('replay reconstructs board versions and tombstones but resets delivery cursors', () => {
   const f = fixture(); try {
     f.hub.setBoard(f.name, f.a.id, 'evidence/a', 'v1');

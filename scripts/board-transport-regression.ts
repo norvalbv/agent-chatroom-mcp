@@ -43,8 +43,11 @@ try {
  await call('wait_for_messages',{room,timeout_ms:0}); // establishes address warning
  hub.setBoardAs(room,'system','evidence/refusal','not consumed');
  const beforeCursor = [...hub.getRoom(room).participants.values()].find(p=>p.name==='A')!.lastBoardSeen;
- const refused = await client.callTool({name:'wait_for_messages',arguments:{room,timeout_ms:0}});
- assert.equal(refused.isError,true);
+ // Attention gate (swarm-200839, 2f2cacb): the wait after an unanswered mention is not refused; it delivers only the
+ // outstanding ask and ships no board fields, so the board cursor must still be untouched.
+ const focused = await call('wait_for_messages',{room,timeout_ms:0});
+ assert.equal(focused.addressed_to_you?.length,1,JSON.stringify(focused).slice(0,300));
+ assert.ok(!('board_delta' in focused) && !('board_keys' in focused),'focused envelope ships no board fields');
  assert.equal([...hub.getRoom(room).participants.values()].find(p=>p.name==='A')!.lastBoardSeen,beforeCursor);
  await call('pass',{room});
  assert.deepEqual((await call('wait_for_messages',{room,timeout_ms:0})).board_delta.keys,['evidence/refusal']);

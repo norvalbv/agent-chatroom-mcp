@@ -37,11 +37,13 @@ for (const anonymous of [false, true]) {
   }
 }
 
-test("mixed active and departed recipients are rejected atomically", () => {
-  const f = fixture();
-  f.hub.leave(f.room.name, f.target.id);
-  refusesWithoutMutation(f, "@observer and @reviewer please respond", { quiet: true });
-});
+for (const quiet of [false, true]) {
+  test(`mixed active and departed recipients rejected atomically, quiet=${quiet}`, () => {
+    const f = fixture();
+    f.hub.leave(f.room.name, f.target.id);
+    refusesWithoutMutation(f, "@observer and @reviewer please respond", { quiet });
+  });
+}
 
 test("departed refusal precedes stale-send cursor settlement", () => {
   const f = fixture();

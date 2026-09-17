@@ -1,6 +1,9 @@
 /** Board telemetry contract: npx tsx scripts/stats-regression.ts */
 import assert from 'node:assert/strict';
 import { Hub } from '../src/hub.js';
+import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
+import { createSessionServer } from '../src/server.js';
 
 Hub.DEFAULT_NUDGE_MS = 0;
 const hub = new Hub();
@@ -42,4 +45,29 @@ assert.deepEqual(stats().board_manifest, stats().board_manifest, 'stats reads mu
 assert.equal(participant.lastSeenSeq, cursor);
 const fresh = new Hub();
 assert.equal((fresh.stats(fresh.createRoom('fresh')) as any).board_manifest.waits_observed, 0);
+// The actual MCP wait path must invoke the observer, not just direct callers.
+const session = createSessionServer(fresh);
+const client = new Client({ name: 'stats-regression', version: '1' });
+const [ct, st] = InMemoryTransport.createLinkedPair();
+await session.server.connect(st);
+await client.connect(ct);
+try {
+  const call = async (name: string, args: Record<string, unknown>) => {
+    const result = await client.callTool({ name, arguments: args });
+    assert.ok(!result.isError, JSON.stringify(result));
+    return JSON.parse((result.content as { text: string }[])[0].text);
+  };
+  await call('join_room', { room: 'wire', name: 'tester' });
+  const wired = fresh.getRoom('wire');
+  wired.board.set('sources/雪', entry);
+  const reply = await call('wait_for_messages', { room: 'wire', timeout_ms: 0 });
+  const manifest = { board_keys: reply.board_keys };
+  const measured = (fresh.stats(wired) as any).board_manifest;
+  assert.equal(measured.waits_observed, 1, 'successful MCP wait observed exactly once');
+  assert.equal(measured.shipped_manifest_bytes, bytes(manifest));
+  assert.deepEqual((fresh.stats(wired) as any).board_manifest, measured);
+} finally {
+  await client.close();
+  await session.server.close();
+}
 console.log('STATS BOARD REGRESSION OK');

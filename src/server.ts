@@ -317,6 +317,8 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
                             : msgs.length === 0
                               ? "No new messages yet. Call wait_for_messages again."
                               : undefined;
+      const board = { board_keys: [...r.board.keys()] };
+      hub.observeBoardManifest(r, board);
       // the hint goes first: it is the one line a weaker model must not lose to a clamp
       return {
         hint,
@@ -333,7 +335,7 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
           ? { id: openView.id, version: openView.version, by: openView.by, chars: openView.chars, tally: openView.tally, waiting_on: openView.waiting_on, needs_challenge: openView.needs_challenge, blocked_by: openView.blocked_by, challenges: openView.challenges, ...("text" in openView ? { text: openView.text } : { text_omitted: openView.text_omitted }) }
           : null,
         leaving_would_block: block ? block.reason : false,
-        board_keys: [...r.board.keys()],
+        ...board,
         quiet_activity: hub.quietActivity(r, p, since),
         addressed_to_you: hub.addressedBy(r, p).map((m) => ({ id: m.id, from: hub.shown(r, m.from), text: m.content.slice(0, 200) })),
         your_share: (() => {

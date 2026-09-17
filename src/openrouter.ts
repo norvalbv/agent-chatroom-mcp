@@ -9,8 +9,9 @@
  */
 import { resolve } from "node:path";
 import { type ChatProvider, type Msg, type Reply, type ToolCall, type ToolDef, runSeat } from "./seat.js";
-import { loadDotEnv } from "./env.js";
-loadDotEnv();
+import { loadDotEnv, SEAT_ENV_EXCLUSIONS } from "./env.js";
+// Do not reload the human-control token omitted by the launcher/spawner.
+loadDotEnv(undefined, { exclude: SEAT_ENV_EXCLUSIONS });
 
 const argv = process.argv.slice(2);
 const flag = (name: string, def?: string) => {

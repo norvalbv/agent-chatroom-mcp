@@ -1,0 +1,100 @@
+TAP version 13
+# Subtest: inclusiveDates hidden case: equal-endpoints
+ok 1 - inclusiveDates hidden case: equal-endpoints
+  ---
+  duration_ms: 2.790708
+  type: 'test'
+  ...
+# Subtest: inclusiveDates hidden case: leap-day
+ok 2 - inclusiveDates hidden case: leap-day
+  ---
+  duration_ms: 0.218292
+  type: 'test'
+  ...
+# Subtest: inclusiveDates hidden case: non-leap-year
+ok 3 - inclusiveDates hidden case: non-leap-year
+  ---
+  duration_ms: 0.192458
+  type: 'test'
+  ...
+# Subtest: inclusiveDates hidden case: year-boundary
+ok 4 - inclusiveDates hidden case: year-boundary
+  ---
+  duration_ms: 0.444375
+  type: 'test'
+  ...
+# Subtest: inclusiveDates hidden case: month-boundary
+ok 5 - inclusiveDates hidden case: month-boundary
+  ---
+  duration_ms: 0.267625
+  type: 'test'
+  ...
+# Subtest: inclusiveDates hidden case: reversed-range
+ok 6 - inclusiveDates hidden case: reversed-range
+  ---
+  duration_ms: 0.355
+  type: 'test'
+  ...
+# Subtest: inclusiveDates hidden case: normalized-invalid-day
+ok 7 - inclusiveDates hidden case: normalized-invalid-day
+  ---
+  duration_ms: 0.214291
+  type: 'test'
+  ...
+# Subtest: inclusiveDates hidden case: invalid-month
+ok 8 - inclusiveDates hidden case: invalid-month
+  ---
+  duration_ms: 0.160459
+  type: 'test'
+  ...
+# Subtest: inclusiveDates hidden case: non-string
+ok 9 - inclusiveDates hidden case: non-string
+  ---
+  duration_ms: 0.328625
+  type: 'test'
+  ...
+# Subtest: both fixture variants exist and differ only by the one-line inclusive-bound fix
+ok 10 - both fixture variants exist and differ only by the one-line inclusive-bound fix
+  ---
+  duration_ms: 0.399042
+  type: 'test'
+  ...
+# Subtest: broken fails hidden oracle; one-line t<=e fix passes all nine named oracles
+ok 11 - broken fails hidden oracle; one-line t<=e fix passes all nine named oracles
+  ---
+  duration_ms: 161.674875
+  type: 'test'
+  ...
+# Subtest: wrong patch gives named-oracle-failure JSON; double-run is byte-identical
+ok 12 - wrong patch gives named-oracle-failure JSON; double-run is byte-identical
+  ---
+  duration_ms: 228.384959
+  type: 'test'
+  ...
+# Subtest: loadTask/scoreTask dispatch the correct bug-fix artifact and repeat deterministically
+ok 13 - loadTask/scoreTask dispatch the correct bug-fix artifact and repeat deterministically
+  ---
+  duration_ms: 294.918
+  type: 'test'
+  ...
+# Subtest: fact-check exact/normalized controls pass; negation and right-value/wrong-format exit 1
+ok 14 - fact-check exact/normalized controls pass; negation and right-value/wrong-format exit 1
+  ---
+  duration_ms: 1514.884375
+  type: 'test'
+  ...
+# Subtest: hub crash maps to infra_error (wire reason=infra), excluded from task comparison
+ok 15 - hub crash maps to infra_error (wire reason=infra), excluded from task comparison
+  ---
+  duration_ms: 172.707042
+  type: 'test'
+  ...
+1..15
+# tests 15
+# suites 0
+# pass 15
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 2470.775459

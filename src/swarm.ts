@@ -47,6 +47,8 @@ const FLAT_PROMPT = flag("prompt", "minimal.md")!;
 /** --respawn: a seat that exits while its room is still open is relaunched (up to 3 times) with a note to read the board first */
 const RESPAWN = has("respawn");
 const RUN_STARTED = Date.now();
+/** set by the signal handler: a seat that exits because the launcher is stopping is not a drop to respawn */
+let STOPPING = false;
 /**
  * --flat: no planner, no pre-assigned sub-rooms. Every agent gets the raw task in ONE room on the
  * minimal prompt and organises itself (board claims, request_agent, break-out rooms). The verifier sits
@@ -151,7 +153,7 @@ function runCodex(name: string, text: string, cwd: string, model?: string): Prom
 async function withRespawn(name: string, room: string, mk: (nm: string, note: string) => Promise<string>): Promise<string> {
   let out = await mk(name, "");
   for (let i = 1; RESPAWN && i <= 3; i++) {
-    if (Date.now() > RUN_STARTED + TIMEOUT_MIN * 60_000 - 5 * 60_000) break;
+    if (STOPPING || Date.now() > RUN_STARTED + TIMEOUT_MIN * 60_000 - 5 * 60_000) break;
     let state = "missing";
     try {
       state = ((await (await fetch(`${URL_}/rooms/${encodeURIComponent(room)}`)).json()) as { state: string }).state;
@@ -402,7 +404,7 @@ for (const g of plan.groups) {
 }
 
 // stopping the launcher stops its seats: an orphaned seat keeps polling the provider with nobody to collect its result
-for (const sig of ["SIGTERM", "SIGINT"] as const) process.on(sig, () => { log(`${sig}: stopping ${children.length} agent(s)`); for (const c of children) c.kill(); setTimeout(() => process.exit(130), 3000).unref(); });
+for (const sig of ["SIGTERM", "SIGINT"] as const) process.on(sig, () => { STOPPING = true; log(`${sig}: stopping ${children.length} agent(s)`); for (const c of children) c.kill(); setTimeout(() => process.exit(130), 3000).unref(); });
 // the launcher fixes the room's policy before any seat joins (join_room settings only apply at creation)
 if (REQUIRE_VERIFICATION || QUORUM) {
   try {

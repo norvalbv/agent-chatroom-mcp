@@ -1219,7 +1219,7 @@ export class Hub {
   boardManifestTelemetry(room: Room): { waits: number; board_bytes_total: number; board_bytes_mean: number } {
     const t = room.boardManifestStats;
     const waits = t?.waits ?? 0;
-    return { waits, board_bytes_total: t?.bytes ?? 0, board_bytes_mean: waits ? Math.round((t.bytes / waits) * 10) / 10 : 0 };
+    return { waits, board_bytes_total: t?.bytes ?? 0, board_bytes_mean: waits && t ? Math.round((t.bytes / waits) * 10) / 10 : 0 };
   }
 
   private recordBoardManifest(room: Room, envelope: Record<string, unknown>) {
@@ -1239,9 +1239,10 @@ export class Hub {
 
   /**
    * Assemble only AFTER a long poll wakes. Synchronous assembly serializes concurrent
-   * waits for a seat. This is an at-most-once response receipt, not a transport ack:
-   * lost responses are recovered by rejoin or an explicit full board_get manifest.
-   * Omitted follow keeps the subscription; [] follows only mandatory gate entries.
+   * waits for a seat. This is an at-most-once response receipt, not a transport ack;
+   * a lost response is recovered by leaving and rejoining (the only cursor reset),
+   * and board_get stays an unconsumed read path. Omitted follow keeps the
+   * subscription; [] follows only the mandatory gate entries.
    */
   boardManifest(roomName: string, pid: string, follow?: string[], forceFull = false): {
     board_keys?: string[]; board_delta?: { keys: string[]; tombstones: string[] }; board_reset?: boolean;
@@ -1262,7 +1263,8 @@ export class Hub {
       const lifecycle = this as Hub & { boardEntryExpired?: (room: Room, key: string, entry: BoardEntry) => boolean };
       if (lifecycle.boardEntryExpired?.(room, key, entry)) return false;
       return prefixes === undefined || prefixes.some((prefix) => key.startsWith(prefix)) ||
-        key.startsWith("verify/") || key.startsWith("claim/") || pending.has(key);
+        key.startsWith("verify/") || key.startsWith("claim/") || pending.has(key) ||
+        key === `hold/${room.name}`;
     }).map(([key]) => key);
     const previous = new Set(p.seenBoardKeys ?? []);
     const current = new Set(visible);

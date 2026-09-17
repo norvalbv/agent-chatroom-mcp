@@ -7,8 +7,8 @@
  * taking the machine down: depth, live fan-out per requester, live per room,
  * live overall, cumulative per room and per run, and a wall-clock limit.
  */
-import { spawn, type ChildProcess } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, writeFileSync, createWriteStream } from "node:fs";
+import { spawn, spawnSync, type ChildProcess } from "node:child_process";
+import { existsSync, mkdirSync, readFileSync, writeFileSync, createWriteStream, symlinkSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { HubError } from "./hub.js";
@@ -120,14 +120,14 @@ export class Spawner {
 
   request(req: SpawnRequest): SpawnedAgent[] {
     const o = this.opts;
-    const maxDepth = o.maxDepth ?? 2;
+    const maxDepth = o.maxDepth ?? Number(process.env.CHATROOM_MAX_RECRUIT_DEPTH ?? 2);
     const maxPerRoom = o.maxPerRoom ?? 12;
     const maxLive = o.maxLive ?? 24;
     // per-requester: off by default. The ceilings that MacNet-style saturation argues for are the room, machine and run caps below;
     // a per-agent quota only stopped a verifier recruiting the reviewers it needed (swarm-160711-etdp). CHATROOM_MAX_RECRUITS_PER_AGENT sets one.
     const maxPerRequester = o.maxPerRequester ?? Number(process.env.CHATROOM_MAX_RECRUITS_PER_AGENT ?? Infinity);
-    const maxCumRoom = o.maxCumulativePerRoom ?? 12;
-    const maxCumRun = o.maxCumulativePerRun ?? 40;
+    const maxCumRoom = o.maxCumulativePerRoom ?? Number(process.env.CHATROOM_MAX_RECRUITS_PER_ROOM ?? 12);
+    const maxCumRun = o.maxCumulativePerRun ?? Number(process.env.CHATROOM_MAX_RECRUITS_PER_RUN ?? 40);
     const refuse = (msg: string) => {
       this.hooks?.announce(req.room, `Cap hit: ${msg}`);
       throw new HubError(msg);
@@ -203,7 +203,7 @@ export class Spawner {
             : "You are the only recruit on this brief.",
         )
         .split("{{REPORT_TO}}").join(req.newRoom ? `This is a sub-room; when it concludes, post the conclusion to the parent room with post_to_room(from_room="${target}", to_room="${req.room}", key="result").` : "")
-        .split("{{WRITE_RULE}}").join(req.canEdit ? "You MAY edit files and run anything here; if you change code, do it on your own git worktree/branch and say which." : "Do NOT modify files; investigate and report.");
+        .split("{{WRITE_RULE}}").join(req.canEdit ? "You MAY edit files and run anything here. You are in your own git worktree on your own branch (git branch --show-current); commit there and name the branch in the room. Never touch the main checkout." : "Do NOT modify files; investigate and report.");
 
       if (o.dryRun) {
         writeFileSync(log, `[dry-run] would launch ${agent} in ${cwd}\n\n${prompt}`);
@@ -232,8 +232,12 @@ export class Spawner {
         args = ["-p", prompt, "--mcp-config", mcpJson, "--strict-mcp-config", "--allowedTools", (req.canEdit ? WRITE_TOOLS : READ_TOOLS).join(",")];
         if (req.model) args.push("--model", req.model);
       }
+      // a write-enabled recruit works in its own worktree and branch, never in the shared checkout
+      const seatCwd = req.canEdit && !o.dryRun ? (this.worktreeFor(cwd, target, name) ?? cwd) : cwd;
+      if (agent === "openrouter") args[args.indexOf("--cwd") + 1] = seatCwd;
+      else if (agent === "codex") args[args.indexOf("-C") + 1] = seatCwd;
       const outStream = createWriteStream(log);
-      const child = spawn(cmd, args, { cwd, env: { ...process.env, MCP_TOOL_TIMEOUT: "120000" }, stdio: ["ignore", "pipe", "pipe"] });
+      const child = spawn(cmd, args, { cwd: seatCwd, env: { ...process.env, MCP_TOOL_TIMEOUT: "120000" }, stdio: ["ignore", "pipe", "pipe"] });
       child.stdout?.pipe(outStream);
       child.stderr?.pipe(outStream);
       rec.pid = child.pid;
@@ -252,6 +256,24 @@ export class Spawner {
       out.push(rec);
     }
     return out;
+  }
+
+  /** `git worktree add` for one recruit: .swarm-worktrees/<room>/<name> on branch swarm/<room>/<name>, node_modules linked so builds and tests work there. */
+  private worktreeFor(cwd: string, room: string, name: string): string | undefined {
+    const top = spawnSync("git", ["-C", cwd, "rev-parse", "--show-toplevel"], { encoding: "utf8" });
+    if (top.status !== 0) return undefined;
+    const root = top.stdout.trim();
+    const dir = resolve(root, ".swarm-worktrees", room, name);
+    if (existsSync(dir)) return dir;
+    const r = spawnSync("git", ["-C", root, "worktree", "add", "-b", `swarm/${room}/${name}`, dir], { encoding: "utf8" });
+    if (r.status !== 0) return undefined;
+    const mods = resolve(root, "node_modules");
+    if (existsSync(mods) && !existsSync(resolve(dir, "node_modules"))) {
+      try {
+        symlinkSync(mods, resolve(dir, "node_modules"), "dir");
+      } catch {}
+    }
+    return dir;
   }
 
   stop(name: string): boolean {

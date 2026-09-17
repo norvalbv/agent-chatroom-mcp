@@ -15,8 +15,11 @@ export function settledAxes(cwd: string): string {
   const sources = new Set<string>();
   for (const f of files) {
     const t = readFileSync(resolve(dir, f), "utf8");
-    const title = /^## Target[^\n]*— ([^\n]+)/m.exec(t)?.[1] ?? f.replace(/\.md$/, "");
-    const ruling = /\*\*(?:Ruling|Decision)[^*]*\*\*:?\s*([^\n]+)/i.exec(t)?.[1] ?? "";
+    // a record accumulates Targets; the newest one is the current ruling (the first was injected for a day and said 3+ voters while the hub enforced 2+)
+    const blocks = t.split(/\n(?=## Target)/).filter((b) => b.startsWith("## Target"));
+    const cur = blocks.length ? blocks[blocks.length - 1] : t;
+    const title = /^## Target[^\n]*— ([^\n]+)/m.exec(cur)?.[1] ?? f.replace(/\.md$/, "");
+    const ruling = /\*\*(?:Ruling|Decision)[^*]*\*\*:?\s*([^\n]+)/i.exec(cur)?.[1] ?? "";
     rows.push(`- ${f.replace(/\.md$/, "")}: ${title.replace(/\*/g, "").trim()}${ruling ? ` — ${ruling.trim().slice(0, 240)}` : ""}`);
     for (const id of t.match(/arXiv:[a-z-]*\/?[0-9]{4}\.[0-9]{4,5}|arXiv:cs\/[0-9]{7}|10\.[0-9]{4,}\/[^ ),;]+/g) ?? []) sources.add(id);
   }

@@ -64,6 +64,8 @@ export interface SeatOptions {
   maxToolChars?: number;
   /** transcript size before the oldest turns are dropped (default 240000) */
   maxContextChars?: number;
+  /** how many empty wait_for_messages results to absorb locally before spending a model turn (default 3): idle polling is most of a seat's provider requests */
+  idleWaits?: number;
   log?: (line: string) => void;
 }
 export interface SeatResult {
@@ -77,6 +79,7 @@ export interface SeatResult {
 /** Tool result shape we look at for hints; everything else is passed through untouched. */
 interface HubView {
   hint?: string;
+  messages?: unknown[];
   room_state?: string;
   addressed_to_you?: unknown[];
   unanswered_human?: { you_answer?: boolean } | null;
@@ -230,6 +233,8 @@ export function systemPrompt(cwd: string, hubInstructions: string | undefined, w
     "- Every wait_for_messages result ends with a `hint` and lists `addressed_to_you`. Do what the hint says before waiting again: reply when someone addresses you (send_message with reply_to), answer a human first, vote when a proposal needs your vote, challenge when it needs a challenge. If you have nothing to add, call pass; do not go quiet.",
     "- Read tool results. When the hub refuses a call it says why and what to do instead; do that, do not repeat the same call.",
     "- Talk like a colleague: short messages, one claim and one reason each, plain prose. Put evidence and drafts on the board (board_set) rather than in chat. Openings are capped at 400 characters.",
+    "- Every public message is pushed to every seat in the room. A working exchange with one or two agents goes quiet: send_message with quiet=true and their @names (it stays in the log; it is not pushed to everyone). The public channel is for claims, evidence pointers, proposals, challenges and votes.",
+    "- Cite only what you fetched in this session: web_fetch the abstract (export.arxiv.org/api/query?search_query=...) and put what it shows on the board under sources/<arxiv-id> before citing it. A remembered paper is not evidence.",
     "- Do not agree to be agreeable; disagree with a specific change. Do not re-propose: amend the open proposal in place.",
     `- Leave with leave_room when the room has concluded or closed, or when your brief says to; then reply with one final message and no tool calls. Local tools on this machine: ${local}${write ? " (you may modify files)" : " (read-only)"}.`,
   ]
@@ -250,6 +255,7 @@ export async function runSeat(provider: ChatProvider, opts: SeatOptions): Promis
   const maxSteps = opts.maxSteps ?? 600;
   const maxToolChars = opts.maxToolChars ?? 6000;
   const maxContextChars = opts.maxContextChars ?? 240_000;
+  const idleWaits = Math.max(1, opts.idleWaits ?? 3);
   const log = opts.log ?? ((s: string) => process.stderr.write(`${s}\n`));
   const clampTo = (n: number) => (s: string) => (s.length > n ? `${s.slice(0, n)}\n…[truncated, ${s.length} chars total]` : s);
   const clampLocal = clampTo(maxToolChars);
@@ -390,6 +396,23 @@ export async function runSeat(provider: ChatProvider, opts: SeatOptions): Promis
         result = await callTool(call.function.name, args);
       } catch (e) {
         result = `ERROR: ${e instanceof Error ? e.message : String(e)}`;
+      }
+      // an empty wait is not worth a model turn (each one is a provider request against a shared per-minute limit): repeat it locally first
+      if (call.function.name === "wait_for_messages" && idleWaits > 1) {
+        for (let k = 1; k < idleWaits && !stopping && Date.now() < deadline; k++) {
+          let v: HubView | undefined;
+          try {
+            v = result.startsWith("ERROR:") ? undefined : (JSON.parse(result) as HubView);
+          } catch {}
+          if (!v || (v.messages?.length ?? 0) > 0 || actionable(v)) break;
+          log(`[${provider.label}] step ${steps}: empty wait ${k}/${idleWaits - 1}; waiting again without a model turn`);
+          try {
+            result = await callTool(call.function.name, args);
+          } catch (e) {
+            result = `ERROR: ${e instanceof Error ? e.message : String(e)}`;
+            break;
+          }
+        }
       }
       messages.push({ role: "tool", tool_call_id: call.id, content: result });
       // the hub's hint is the one line that matters most and the one a weak model skips inside a long JSON result

@@ -6,7 +6,7 @@
  *   npx tsx src/swarm.ts "<task>" --agents 6 --cwd /path/to/project [--codex 2] [--openrouter 2] [--apply] [--timeout 30]
  */
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, readdirSync, symlinkSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { settledAxes } from "./settled.js";
 import { fileURLToPath } from "node:url";
@@ -23,10 +23,10 @@ const flag = (name: string, def?: string) => {
   return i >= 0 ? argv[i + 1] : def;
 };
 const has = (name: string) => argv.includes(`--${name}`);
-const BOOL_FLAGS = new Set(["--apply", "--full-access", "--named", "--flat", "--require-verification"]);
+const BOOL_FLAGS = new Set(["--apply", "--full-access", "--named", "--flat", "--require-verification", "--respawn"]);
 const task = argv.find((a, i) => !a.startsWith("--") && (i === 0 || !argv[i - 1].startsWith("--") || BOOL_FLAGS.has(argv[i - 1])));
 if (!task) {
-  console.error('usage: swarm "<task>" [--flat] [--done-when text] [--verify text] [--agents 6] [--cwd dir] [--models sonnet,haiku] [--lead-model opus] [--verifier-model opus] [--planner-model opus] [--codex k] [--codex-models gpt-6-astra,gpt-5.6-sol,gpt-5.6-terra] [--openrouter k] [--openrouter-models deepseek/deepseek-v4.1-flash,...] [--verifier-openrouter slug] [--openrouter-reasoning low|medium|high] [--require-verification] [--apply] [--full-access] [--named] [--timeout 30] [--port 7717]');
+  console.error('usage: swarm "<task>" [--flat] [--done-when text] [--verify text] [--agents 6] [--cwd dir] [--models sonnet,haiku] [--lead-model opus] [--verifier-model opus] [--planner-model opus] [--codex k] [--codex-models gpt-6-astra,gpt-5.6-sol,gpt-5.6-terra] [--openrouter k] [--openrouter-models deepseek/deepseek-v4.1-flash,...] [--verifier-openrouter slug] [--openrouter-reasoning low|medium|high] [--require-verification] [--quorum unanimous|majority] [--prompt loop.md] [--respawn] [--apply] [--full-access] [--named] [--timeout 30] [--port 7717]');
   process.exit(2);
 }
 const TOTAL = Math.max(2, Number(flag("agents", "4")));
@@ -40,6 +40,13 @@ const LENSES = ["reproduce and measure before theorising", "the simplest fix tha
 const FULL = has("full-access");
 /** --require-verification: the room is created by the launcher with require_verification, so no proposal passes without a verify/* board entry by someone other than its author naming it (hub-enforced "done") */
 const REQUIRE_VERIFICATION = has("require-verification");
+/** --quorum unanimous|majority: the room's quorum, fixed by the launcher at creation (a forty-seat lobby cannot run on unanimity) */
+const QUORUM = flag("quorum") as "unanimous" | "majority" | undefined;
+/** --prompt <file in prompts/>: the flat-mode brief template (default minimal.md; loop.md for a self-improvement lobby) */
+const FLAT_PROMPT = flag("prompt", "minimal.md")!;
+/** --respawn: a seat that exits while its room is still open is relaunched (up to 3 times) with a note to read the board first */
+const RESPAWN = has("respawn");
+const RUN_STARTED = Date.now();
 /**
  * --flat: no planner, no pre-assigned sub-rooms. Every agent gets the raw task in ONE room on the
  * minimal prompt and organises itself (board claims, request_agent, break-out rooms). The verifier sits
@@ -136,6 +143,27 @@ function runCodex(name: string, text: string, cwd: string, model?: string): Prom
   return runProc(name, "codex", args, cwd, outFile, true);
 }
 
+/**
+ * A seat that exits while its room is still open (rate-limited to death, crashed, budget mis-set) is relaunched
+ * under a suffixed name with a note to read the board first, up to three times and never in the last five minutes.
+ * The launcher, not a teammate, is the reliable respawner: a room can lose the seat that would have recruited.
+ */
+async function withRespawn(name: string, room: string, mk: (nm: string, note: string) => Promise<string>): Promise<string> {
+  let out = await mk(name, "");
+  for (let i = 1; RESPAWN && i <= 3; i++) {
+    if (Date.now() > RUN_STARTED + TIMEOUT_MIN * 60_000 - 5 * 60_000) break;
+    let state = "missing";
+    try {
+      state = ((await (await fetch(`${URL_}/rooms/${encodeURIComponent(room)}`)).json()) as { state: string }).state;
+    } catch {}
+    if (state !== "open" && state !== "stalled") break;
+    const nm = `${name}-r${i}`;
+    log(`${name} exited while ${room} is ${state}; respawning as ${nm}`);
+    out = await mk(nm, `\n\nYou replace ${name}, who dropped out of this room. Before anything else read the board (board_get) and the recent messages (read_messages since_seq=0 is too much: read the last 40), take over any unfinished claim/* entry of theirs, and say in one line that you have.`);
+  }
+  return out;
+}
+
 function runProc(name: string, cmd: string, args: string[], cwd: string, outFile: string, outViaFile = false): Promise<string> {
   return new Promise((res) => {
     const child = spawn(cmd, args, { cwd, env: { ...process.env, MCP_TOOL_TIMEOUT: "120000" }, stdio: ["ignore", "pipe", "pipe"] });
@@ -229,11 +257,13 @@ log(`swarm ${SWARM_ID}: ${TOTAL} agents (${WORKERS} workers + verifier), project
 function priorRuns(): string {
   const dir = resolve(repoRoot, "swarms");
   if (!existsSync(dir)) return "";
+  // run ids are HHMMSS, so a name sort mixes days; the report is written when a run ends, so its time orders runs
   const rows = readdirSync(dir)
     .filter((d) => existsSync(resolve(dir, d, "report.md")))
-    .sort()
+    .map((d) => ({ d, at: statSync(resolve(dir, d, "report.md")).mtimeMs }))
+    .sort((a, b) => a.at - b.at)
     .slice(-6)
-    .map((d) => {
+    .map(({ d }) => {
       const t = readFileSync(resolve(dir, d, "report.md"), "utf8");
       const task = /\*\*Task:\*\* ([^\n]+)/.exec(t)?.[1] ?? "";
       const state = /## Final answer \(([a-z]+)\)/.exec(t)?.[1] ?? "?";
@@ -320,7 +350,7 @@ const verifierText = SETTLED + "\n" + prompt("verifier.md", {
           : "Do NOT modify any files; verify by reading and running read-only commands only.",
     });
 runs.push(
-  (VERIFIER_OPENROUTER ? runOpenRouter("verifier", verifierText, CWD, VERIFIER_OPENROUTER, APPLY || FULL) : runClaude("verifier", verifierText, verifierTools, CWD, VERIFIER_MODEL)).then((text) => ({ name: "verifier", text })),
+  withRespawn("verifier", leadsRoom, (nm, note) => (VERIFIER_OPENROUTER ? runOpenRouter(nm, verifierText.split("verifier\"").join(`${nm}\"`) + note, CWD, VERIFIER_OPENROUTER, APPLY || FULL) : runClaude(nm, verifierText + note, verifierTools, CWD, VERIFIER_MODEL))).then((text) => ({ name: "verifier", text })),
 );
 
 for (const g of plan.groups) {
@@ -354,30 +384,30 @@ for (const g of plan.groups) {
       FULL && !readOnlyWorkers.has(name)
         ? `You MAY modify files and run anything; you are on your own git branch in ${wcwd}. Commit what you want the verifier to test and say so in the room.`
         : "Do NOT modify any files.";
-    const text = FLAT
+    const buildText = (nm: string) => FLAT
       ? SETTLED +
         "\n" +
-        prompt("minimal.md", { NAME: name, N: TOTAL, ROOM: room, TOPIC: task, AGENT: agent }) +
+        prompt(FLAT_PROMPT, { NAME: nm, N: TOTAL, ROOM: room, TOPIC: task, AGENT: agent }) +
         `\nWorking directory: ${wcwd}; you may read the project and run commands. ${writeRule} A verifier named "verifier" sits in the room and the final proposal needs its agree vote. Organise yourselves: claim areas on the board, recruit or break out into sub-rooms with request_agent when depth is needed, and bring results back here.`
-      : SETTLED + "\n" + prompt("worker.md", { ...vars, CWD: wcwd, WRITE_RULE: writeRule });
+      : SETTLED + "\n" + prompt("worker.md", { ...vars, NAME: nm, CWD: wcwd, WRITE_RULE: writeRule });
     const mayWrite = FULL && !readOnlyWorkers.has(name);
-    const run =
+    const mk = (nm: string, note: string) =>
       agent === "codex"
-        ? runCodex(name, text, wcwd, model)
+        ? runCodex(nm, buildText(nm) + note, wcwd, model)
         : agent === "openrouter"
-          ? runOpenRouter(name, text, wcwd, model, mayWrite)
-          : runClaude(name, text, mayWrite ? WRITE_TOOLS : READ_TOOLS, wcwd, model);
-    runs.push(run.then((t) => ({ name, text: t })));
+          ? runOpenRouter(nm, buildText(nm) + note, wcwd, model, mayWrite)
+          : runClaude(nm, buildText(nm) + note, mayWrite ? WRITE_TOOLS : READ_TOOLS, wcwd, model);
+    runs.push(withRespawn(name, room, mk).then((t) => ({ name, text: t })));
   }
 }
 
 // stopping the launcher stops its seats: an orphaned seat keeps polling the provider with nobody to collect its result
 for (const sig of ["SIGTERM", "SIGINT"] as const) process.on(sig, () => { log(`${sig}: stopping ${children.length} agent(s)`); for (const c of children) c.kill(); setTimeout(() => process.exit(130), 3000).unref(); });
 // the launcher fixes the room's policy before any seat joins (join_room settings only apply at creation)
-if (REQUIRE_VERIFICATION) {
+if (REQUIRE_VERIFICATION || QUORUM) {
   try {
-    const r = await fetch(`${URL_}/rooms/${encodeURIComponent(leadsRoom)}/create`, { method: "POST", headers: { "content-type": "application/json", ...(process.env.CHATROOM_HUMAN_TOKEN ? { "x-chatroom-token": process.env.CHATROOM_HUMAN_TOKEN } : {}) }, body: JSON.stringify({ topic: task, expected_participants: FLAT ? TOTAL : plan.groups.length + 1, require_verification: true, quorum: "unanimous" }) });
-    log(`${leadsRoom} created with require_verification (${r.status})`);
+    const r = await fetch(`${URL_}/rooms/${encodeURIComponent(leadsRoom)}/create`, { method: "POST", headers: { "content-type": "application/json", ...(process.env.CHATROOM_HUMAN_TOKEN ? { "x-chatroom-token": process.env.CHATROOM_HUMAN_TOKEN } : {}) }, body: JSON.stringify({ topic: task, expected_participants: FLAT ? TOTAL : plan.groups.length + 1, require_verification: REQUIRE_VERIFICATION, quorum: QUORUM ?? "unanimous" }) });
+    log(`${leadsRoom} created with quorum=${QUORUM ?? "unanimous"}${REQUIRE_VERIFICATION ? ", require_verification" : ""} (${r.status})`);
   } catch (e) {
     log(`could not pre-create ${leadsRoom}: ${e instanceof Error ? e.message : String(e)}`);
   }

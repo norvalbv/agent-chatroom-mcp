@@ -124,6 +124,7 @@ const result = await runSeat(openRouterProvider(MODEL, REASONING), {
   maxSteps: Number(flag("max-steps", "600")),
   maxToolChars: Number(flag("max-tool-chars", "6000")),
   maxContextChars: Number(flag("max-context-chars", "240000")),
+  idleWaits: Number(flag("idle-waits", "3")),
   log: say,
 });
 if (rateLimited) say(`[openrouter ${MODEL}] ${rateLimited} rate-limited request(s) retried`);

@@ -7,7 +7,7 @@
  * It is deliberately transport-agnostic so it can be driven by MCP tools,
  * by the plain HTTP endpoints (humans), or by tests.
  */
-import { randomBytes } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import { spawnSync } from "node:child_process";
 import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -86,6 +86,8 @@ export interface BoardEntry {
   codeState?: CodeState;
   /** set on inbox/* entries posted with ack_required */
   ackRequired?: boolean;
+  /** inbox/*.ack entries cover only the note text hashed when acknowledged. */
+  acknowledgedTextHash?: string;
 }
 
 export interface Challenge {
@@ -1115,9 +1117,19 @@ export class Hub {
     return room.board.get(`hold/${room.name}`);
   }
 
-  /** inbox/* entries that asked for an acknowledgement and have none yet. */
+  private static noteHash(text: string): string {
+    return createHash("sha256").update(text).digest("hex");
+  }
+
+  /** Shared coverage check; legacy acks without coverage are conservative. */
+  private inboxOpen(room: Room, key: string, entry: BoardEntry): boolean {
+    return key.startsWith("inbox/") && !key.endsWith(".ack") &&
+      room.board.get(`${key}.ack`)?.acknowledgedTextHash !== Hub.noteHash(entry.text);
+  }
+
+  /** inbox/* entries still requiring acknowledgement of their current text. */
   unacknowledged(room: Room): string[] {
-    return [...room.board.entries()].filter(([k, e]) => k.startsWith("inbox/") && !k.endsWith(".ack") && e.ackRequired && !room.board.has(`${k}.ack`)).map(([k]) => k);
+    return [...room.board.entries()].filter(([k, e]) => e.ackRequired && this.inboxOpen(room, k, e)).map(([k]) => k);
   }
 
   /** Distinct connections among a set of participants (two names on one connection are one agent). */
@@ -1171,7 +1183,12 @@ export class Hub {
       return null;
     }
     this.surfaceCited(room, text, `cited on the board under ${key}`);
-    const entry: BoardEntry = { text, by: p.name, updatedAt: now(), ...(key.startsWith("verify/") ? { codeState: Hub.codeState(this.cwd) } : {}) };
+    const note = key.startsWith("inbox/") && key.endsWith(".ack") ? room.board.get(key.slice(0, -4)) : undefined;
+    const entry: BoardEntry = {
+      text, by: p.name, updatedAt: now(),
+      ...(key.startsWith("verify/") ? { codeState: Hub.codeState(this.cwd) } : {}),
+      ...(note ? { acknowledgedTextHash: Hub.noteHash(note.text) } : {}),
+    };
     room.board.set(key, entry);
     this.persist({ type: "board", room: roomName, key, entry });
     this.post(room, "board", p, `${previous ? "updated" : "added"} board entry "${key}" (${text.length} chars; read it with board_get)`);
@@ -1198,10 +1215,11 @@ export class Hub {
     const to = this.getRoom(toRoom);
     if (!/^[\w .:-]{1,40}$/.test(key)) throw new HubError("Inbox keys are short names without slashes.");
     if (text.length > 8000) throw new HubError("Notes are capped at 8000 characters.");
-    const live = [...to.board.keys()].filter((k) => k.startsWith("inbox/") && !k.endsWith(".ack")).length;
-    if (live >= 10) throw new HubError(`${toRoom} already has 10 inbox notes; wait for them to be acknowledged or cleared.`);
     const full = `inbox/${fromRoom}/${key}`;
     const entry: BoardEntry = { text, by: p.name, updatedAt: now(), ...(ackRequired ? { ackRequired: true } : {}) };
+    // Replacing an open note consumes no extra slot. A changed text hash invalidates its old ack.
+    const otherOpen = [...to.board.entries()].filter(([k, e]) => k !== full && this.inboxOpen(to, k, e)).length;
+    if (this.inboxOpen(to, full, entry) && otherOpen >= 10) throw new HubError(`${toRoom} already has 10 inbox notes awaiting acknowledgement; wait for them to be acknowledged or cleared.`);
     to.board.set(full, entry);
     this.persist({ type: "board", room: toRoom, key: full, entry });
     this.post(to, "system", undefined, `Note from ${p.name} in ${fromRoom} on the board as "${full}"${ackRequired ? ` (acknowledge by writing "${full}.ack")` : ""}: ${text.slice(0, 160)}${text.length > 160 ? "…" : ""}`);

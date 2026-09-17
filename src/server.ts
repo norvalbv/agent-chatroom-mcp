@@ -260,7 +260,7 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
       inputSchema: {
         room: roomArg,
         since_seq: z.number().int().min(0).optional().describe("Return messages with seq greater than this. Defaults to what you have already seen."),
-        follow: z.array(z.string().max(80)).max(100).optional().describe("Follow board key prefixes; omitted keeps your subscription, [] follows only mandatory coordination keys. Use [\"\"] for all. Rejoin or board_get without key resets a lost manifest."),
+        follow: z.array(z.string().max(80)).max(100).optional().describe("Follow board key prefixes; omitted keeps your subscription, [] follows only mandatory coordination keys. Use [\"\"] for all. Rejoin resets a lost manifest."),
         timeout_ms: z.number().int().min(0).max(MAX_WAIT_MS).optional().describe("Milliseconds to wait for a message; omit for 55000, 0 to poll without waiting; values above 55000 are rejected."),
         participant_id: asArg,
       },
@@ -493,8 +493,6 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
         if (!e) throw new HubError(`No board entry "${key}". Keys: ${[...r.board.keys()].join(", ") || "(none)"}`);
         return { key, ...e, ...(hub.boardEntryExpired(r, key, e) ? { expired: true, tombstone: "Archived by expiry; excluded from manifests, retained for explicit retrieval." } : {}) };
       }
-      // Observers can still read boards; reset only the identified seat(s) on this connection.
-      for (const id of me.get(room) ?? []) if (r.participants.get(id)?.active) hub.boardManifest(room, id, undefined, true);
       return Object.fromEntries([...r.board].filter(([k, e]) => !hub.boardEntryExpired(r, k, e)).map(([k, e]) => [k, { by: e.by, chars: e.text.length, updated_at: e.updatedAt, ...(e.ackRequired ? { ack_required: true } : {}) }]));
     }),
   );

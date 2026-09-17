@@ -31,11 +31,12 @@ try {
  await call('board_set',{room,key:'handoff/old',text:'archive',expires_at:'2000-01-01T00:00:00Z'});
  const archived = await call('board_get',{room,key:'handoff/old'});
  assert.equal(archived.text,'archive'); assert.equal(archived.expired,true); assert.ok(archived.tombstone);
+ hub.setBoardAs(room,'system','evidence/after','still unseen');
  const full = await call('board_get',{room});
  assert.ok(!('handoff/old' in full)); assert.ok('other/no' in full);
  const afterFull = await call('wait_for_messages',{room,timeout_ms:0});
- assert.ok(!afterFull.board_keys && !afterFull.board_delta,'full board_get resets delivery snapshot');
+ assert.deepEqual(afterFull.board_delta.keys,['evidence/after'],'board_get does not consume wait cursor');
  const stats = hub.stats(hub.getRoom(room)).board_manifests;
- assert.equal(stats?.waits,4); assert.equal(stats?.empty,2);
+ assert.equal(stats?.waits,4); assert.equal(stats?.empty,1);
  console.log('BOARD TRANSPORT OK');
 } finally {await client.close();await session.server.close();}

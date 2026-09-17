@@ -50,10 +50,12 @@ async function main() {
  for(const p of [port,port+1]){const probe=createServer();await new Promise<void>((ok,no)=>{probe.once('error',no);probe.listen(p,'127.0.0.1',()=>probe.close(()=>ok()));});}
  const taskDir=realpathSync(resolve(taskArg));
  const scorerPath=resolve(dirname(fileURLToPath(import.meta.url)),'bench-oracle.ts');
+ const factScorerPath=resolve(dirname(scorerPath),'score-fact-check.ts');
+ const factScorerBefore=hashFile(factScorerPath);
  const scorer=await import(pathToFileURL(scorerPath).href);
  const task=scorer.loadTask(taskDir);
  const taskBefore=hashTree(taskDir);const scorerBefore=hashFile(scorerPath);
- const frozen={task_sha256:taskBefore,scorer_sha256:scorerBefore,task_id:task.task_id,timeout_ms:timeout,room:'benchmark',brief:readFileSync(join(taskDir,'public','brief.txt'),'utf8')};
+ const frozen={task_sha256:taskBefore,scorer_sha256:scorerBefore,fact_scorer_sha256:factScorerBefore,task_id:task.task_id,timeout_ms:timeout,room:'benchmark',brief:readFileSync(join(taskDir,'public','brief.txt'),'utf8')};
  mkdirSync(root);const results:any[]=[];
  for(const [index,entryArg] of [aArg,bArg].entries()) {
   const arm=index===0?'A':'B',armRoot=join(root,arm),workspace=join(armRoot,'workspace');
@@ -66,7 +68,7 @@ async function main() {
   const verdict:any={task_id:task.task_id,arm,hub_entry:entry,hub_revision:manifest.hub_revision,passed:false,reason:'infra',oracle:{kind:task.oracle.kind,command:null,exit_code:null},anti_tamper:{hash_before:taskBefore,hash_after:null,unchanged:false},diagnostics:{reply_metrics_path:null,mentions:null,reply_rate:null},duration_ms:0,checked_at:null};
   const save=()=>json(join(armRoot,'manifest.json'),manifest);save();
   try {
-   if(hashTree(taskDir)!==taskBefore||hashFile(scorerPath)!==scorerBefore){verdict.reason='tamper';throw Error('Frozen task or scorer changed');}
+   if(hashTree(taskDir)!==taskBefore||hashFile(scorerPath)!==scorerBefore||hashFile(factScorerPath)!==factScorerBefore){verdict.reason='tamper';throw Error('Frozen task or scorer changed');}
    cpSync(join(taskDir,'public'),workspace,{recursive:true,errorOnExist:true,force:false});
    const env={...process.env};for(const key of Object.keys(env))if(key.startsWith('CHATROOM_')||/API_KEY|TOKEN|SECRET|PASSWORD|CREDENTIAL/i.test(key))delete env[key];
    Object.assign(env,{PORT:String(port+index),HOST:'127.0.0.1',CHATROOM_DATA_DIR:join(armRoot,'data'),CHATROOM_DEFAULT_CWD:workspace,CHATROOM_LOG_DIR:join(armRoot,'spawned')});
@@ -84,13 +86,13 @@ async function main() {
    while(!conclusions(join(armRoot,'data','benchmark.jsonl'))){if(child.exitCode!==null||spawnError)throw Error('Hub exited before conclusion');if(Date.now()-started>=timeout){verdict.reason='timeout';throw Error('Conclusion timeout');}await delay(30);}
    // Stop the process before reading artifacts; chat conclusion is only a completion signal.
    await stop(child);
-   if(hashTree(taskDir)!==taskBefore||hashFile(scorerPath)!==scorerBefore){verdict.reason='tamper';throw Error('Frozen task or scorer changed');}
+   if(hashTree(taskDir)!==taskBefore||hashFile(scorerPath)!==scorerBefore||hashFile(factScorerPath)!==factScorerBefore){verdict.reason='tamper';throw Error('Frozen task or scorer changed');}
    Object.assign(verdict,await scorer.scoreTask(taskDir,workspace));
   }catch(error){manifest.error=String(error);}
   finally {
    if(child)await stop(child);if(seat)await stop(seat);if(fd!==undefined)closeSync(fd);
    let after:string|null=null;try{after=hashTree(taskDir);}catch{}
-   const unchanged=after===taskBefore&&hashFile(scorerPath)===scorerBefore;
+   const unchanged=after===taskBefore&&hashFile(scorerPath)===scorerBefore&&hashFile(factScorerPath)===factScorerBefore;
    verdict.anti_tamper={...verdict.anti_tamper,hash_before:taskBefore,hash_after:after,unchanged};
    if(!unchanged){verdict.passed=false;verdict.reason='tamper';}
    verdict.duration_ms=Date.now()-started;verdict.checked_at=new Date().toISOString();

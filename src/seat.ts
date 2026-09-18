@@ -614,15 +614,16 @@ export async function runSeat(provider: ChatProvider, opts: SeatOptions): Promis
       } catch (e) {
         result = `ERROR: ${e instanceof Error ? e.message : String(e)}`;
       }
-      // an empty wait is not worth a model turn (each one is a provider request against a shared per-minute limit): repeat it locally first
+      // a non-actionable wait (empty, or nothing but chatter irrelevant to this seat) is not worth a model
+      // turn (each one is a provider request against a shared per-minute limit): repeat it locally first
       if (call.function.name === "wait_for_messages" && idleWaits > 1) {
         for (let k = 1; k < idleWaits && !stopping && Date.now() < deadline; k++) {
           let v: HubView | undefined;
           try {
             v = result.startsWith("ERROR:") ? undefined : (JSON.parse(result) as HubView);
           } catch {}
-          if (!v || (v.messages?.length ?? 0) > 0 || actionable(v)) break;
-          log(`[${provider.label}] step ${steps}: empty wait ${k}/${idleWaits - 1}; waiting again without a model turn`);
+          if (!v || actionable(v)) break;
+          log(`[${provider.label}] step ${steps}: non-actionable wait ${k}/${idleWaits - 1}; waiting again without a model turn`);
           try {
             result = await callTool(call.function.name, args);
           } catch (e) {

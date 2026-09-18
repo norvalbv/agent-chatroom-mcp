@@ -29,6 +29,7 @@ export const offlineScripts = [
   'handoff-regression.ts',
   'handoff-task-fixture.test.ts',
   'human-answering.test.ts',
+  'idlewaits-actionable-regression.ts',
   'mention-mentions.test.ts',
   'openrouter-cache-regression.ts',
   'regression-replay.ts',

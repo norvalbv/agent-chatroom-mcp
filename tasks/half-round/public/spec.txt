@@ -1,0 +1,21 @@
+HALF-ROUND: decimal text to 16-bit floating point
+
+Format. A binary16 number is 16 bits: 1 sign bit s, 5 exponent bits E and 10 fraction bits F.
+  * If E is 0: the value is (-1)^s * (F / 1024) * 2^-14        (F = 0 gives a zero; zeros keep their sign).
+  * If E is 1 to 30: the value is (-1)^s * (1 + F / 1024) * 2^(E - 15).
+  * If E is 31 and F is 0: the value is infinity, with sign s. (No input in inputs.txt produces a NaN.)
+The bit pattern is written as four lowercase hexadecimal digits: (s * 32768 + E * 1024 + F) in hex.
+
+Input. Each line of inputs.txt is one decimal number: an optional sign (+ or -), digits with an
+optional decimal point, and an optional exponent (e or E, an optional sign, digits). Its meaning is the
+exact mathematical value written, with unlimited precision. Examples: 3.5 -0.000 1.25e-3 +65504.
+
+Conversion. For each input, give the bit pattern of the binary16 number that is nearest to the
+exact value of the input. Where two binary16 numbers are equally near, take the one whose fraction
+field F is even (round half to even; for the largest finite value, 65504, the neighbour above it is
+taken to be 65536 = 2^16 for this comparison, and a value that rounds to 65536 or more is infinity).
+The exact value of the input is what is rounded, not any approximation of it. A value that rounds to
+zero gives a zero with the sign of the input, so -0 and -1e-9 both give 8000.
+
+OUTPUT: the bit patterns for the lines of inputs.txt, in order, separated by single spaces on one
+line.

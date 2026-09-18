@@ -63,6 +63,7 @@ export const offlineScripts = [
   'seat-env-regression.ts',
   'seat-git-config-regression.ts',
   'gleam-task.test.ts',
+  'half-round-task.test.ts',
   'sched-trace-task.test.ts',
   'seat-search-regression.ts',
   'spawner-run-prefix.test.ts',

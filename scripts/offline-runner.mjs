@@ -39,6 +39,7 @@ export const offlineScripts = [
   'human-answering.test.ts',
   'leave-post-conclusion-regression.ts',
   'idlewaits-actionable-regression.ts',
+  'lease-lock-tasks.test.ts',
   'mention-mentions.test.ts',
   'openrouter-cache-regression.ts',
   'paper-rq1-table.test.ts',

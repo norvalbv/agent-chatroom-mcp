@@ -1,7 +1,7 @@
 ARROW language specification
 
 An ARROW program is a sequence of lines. Tokens on a line are separated by single spaces, and
-parentheses are separate tokens. Indentation is ignored. Names are case-sensitive words made of
+parentheses are separate tokens. Indentation is ignored, and so are blank lines and lines that start with #. Names are case-sensitive words made of
 letters. Integer literals are written with an optional leading minus sign attached to the digits.
 
 VALUES

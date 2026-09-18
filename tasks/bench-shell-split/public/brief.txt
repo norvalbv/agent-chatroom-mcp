@@ -1,3 +1,0 @@
-Implement shellSplit in split.ts exactly as specified in README.md. The README is the complete specification of the required behavior; the stub currently throws. Keep the exported function name and signature.
-
-Modify split.ts in this workspace; a chat answer alone is not a submitted code repair. Use no network or dependencies. The evaluator runs private tests against your code after completion.

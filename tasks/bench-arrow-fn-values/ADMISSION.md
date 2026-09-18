@@ -10,7 +10,7 @@ Oracle: `fixtures/reference/arrow.py` and `arrow.mjs` (independent, different st
 ## Attack
 - sonnet-3: fresh 110-line Python interpreter from `public/` only (reference and oracle unopened until after); all 22 values matched. Found a spec gap (`#` comment and blank lines undefined; fixed, sentence added). Also observed that the program's own comments announced the corner ("functions built inside procedures", "a counter whose state lives in a local").
 - sonnet-2: fresh 60-line JS interpreter from `public/` only, oracle unseen until after; 22 of 22 matched, no alternate reading, no gaming path.
-No defect remains.
+Both re-ran their spec-only interpreters, unchanged, on the comment-stripped v2 `program.arrow` (the only diff from v1 is nine deleted comment lines): 22 of 22 matched the oracle. Caveat: each saw v1's oracle after their first solve, so v2 confirms determinacy of the same answer, not blindness to it. No defect remains.
 
 ## Arm A pilots: one Claude Sonnet seat, `scripts/bench-rq1.ts tasks/bench-arrow-fn-values A <seed> --root <dir> --model sonnet`
 **Forking path, kept on the record:** v1 (program with corner-announcing comments) was piloted first; v2 removed the comments and is the task as shipped. The rate for the admission rule is v2's ten seeds; v1's seeds are excluded.

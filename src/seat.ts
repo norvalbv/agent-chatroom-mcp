@@ -66,6 +66,14 @@ export interface SeatOptions {
   maxContextChars?: number;
   /** how many empty wait_for_messages results to absorb locally before spending a model turn (default 3): idle polling is most of a seat's provider requests */
   idleWaits?: number;
+  /** PROACTIVE HANDOFF (R1): fraction of maxSteps at which a seat still holding work hands off instead of running to the cap (default 0.75). */
+  handoffStepFraction?: number;
+  /** cumulative prompt-token budget that triggers handoff (default 6_000_000; clean exits cluster at 4-6M prompt tokens, verify/context-pressure-logs) */
+  handoffPromptTokens?: number;
+  /** transcript fraction of maxContextChars that triggers handoff BEFORE trim() drops turns (default 0.9) */
+  handoffContextFraction?: number;
+  /** opt out of proactive handoff entirely (default false) */
+  noHandoff?: boolean;
   log?: (line: string) => void;
 }
 export interface SeatResult {
@@ -74,6 +82,10 @@ export interface SeatResult {
   steps: number;
   /** false when a provider error ended the run */
   ok: boolean;
+  /** claim areas this seat handed off (handoff/<area> written) before leaving; empty when none */
+  handoffs: string[];
+  /** true when the run ended because proactive context-pressure handoff fired (as opposed to finishing, the cap, the budget or an error) */
+  handedOff: boolean;
 }
 
 /** Tool result shape we look at for hints; everything else is passed through untouched. */
@@ -351,12 +363,57 @@ export async function runSeat(provider: ChatProvider, opts: SeatOptions): Promis
     return clampHub((r.isError ? "ERROR: " : "") + (text || "(no content)"));
   }
 
-  /** On the way out for a reason the model did not choose, leave every room so nobody waits on an empty seat. */
+  /** PROACTIVE HANDOFF (R1): best-effort board_get manifest -> handoff/<area> for every claim/* this seat
+   * holds in a room, so a replacement can pick the work up and leave_room is never refused for an orphaned
+   * claim. Pure MCP calls, every one wrapped; a board outage must not block the seat from leaving.
+   * Returns the areas handed off. */
+  async function writeHandoffs(): Promise<string[]> {
+    if (!opts.mcpUrl) return [];
+    const areas: string[] = [];
+    for (const room of [...joined]) {
+      const as = joinedAs.get(room) ?? "";
+      let manifestText = "";
+      try {
+        const r = (await client.callTool({ name: "board_get", arguments: { room } }, undefined, { timeout: 30_000 })) as { isError?: boolean; content?: { type: string; text?: string }[] };
+        manifestText = (r.content ?? []).map((c) => c.text ?? "").join("\n").trim();
+        if (r.isError || !manifestText) throw new Error(manifestText || "empty manifest");
+      } catch (e) {
+        log(`[${provider.label}] handoff: could not read board of ${room}: ${e instanceof Error ? e.message : String(e)}`);
+        continue;
+      }
+      let entries: Record<string, { by?: string }> = {};
+      try {
+        entries = JSON.parse(manifestText) as Record<string, { by?: string }>;
+      } catch {
+        log(`[${provider.label}] handoff: manifest of ${room} was not JSON; skipping`);
+        continue;
+      }
+      for (const [key, meta] of Object.entries(entries)) {
+        if (!key.startsWith("claim/") || !(meta.by && meta.by === as)) continue;
+        const area = key.slice("claim/".length);
+        const text = `Handoff from ${as} under context pressure (step ${steps}/${maxSteps}, ${usage.prompt_tokens} cumulative prompt tokens, transcript ${size()} chars) before the brief was done. Done: see ${key} on this board. Where: room ${room} board. Undone: the brief in the seat's launch prompt continues from here; a replacement should read ${key} and this handoff and finish it.`.slice(0, 600);
+        try {
+          const res = (await client.callTool({ name: "board_set", arguments: { room, key: `handoff/${area}`, text } }, undefined, { timeout: 30_000 })) as { isError?: boolean };
+          if (res.isError) throw new Error("board_set refused");
+          areas.push(area);
+          log(`[${provider.label}] handoff ${room}: wrote handoff/${area}`);
+        } catch (e) {
+          log(`[${provider.label}] handoff ${room}: could not write handoff/${area}: ${e instanceof Error ? e.message : String(e)}`);
+        }
+      }
+    }
+    return areas;
+  }
+
+  /** On the way out for a reason the model did not choose, hand claims over (handoff/*) then leave every
+   * room so nobody waits on an empty seat. */
   async function bow(reason: string) {
+    const handed = await writeHandoffs();
+    const suffix = handed.length ? `; handed off: ${handed.join(", ")}` : "";
     for (const room of [...joined]) {
       try {
-        await client.callTool({ name: "leave_room", arguments: { room, reason: `seat exiting: ${reason}`.slice(0, 600) } }, undefined, { timeout: 30_000 });
-        log(`[${provider.label}] left ${room}: ${reason}`);
+        await client.callTool({ name: "leave_room", arguments: { room, reason: `seat exiting: ${reason}${suffix}`.slice(0, 600) } }, undefined, { timeout: 30_000 });
+        log(`[${provider.label}] left ${room}: ${reason}${suffix}`);
       } catch (e) {
         log(`[${provider.label}] could not leave ${room}: ${e instanceof Error ? e.message : String(e)}`);
       }
@@ -390,6 +447,19 @@ export async function runSeat(provider: ChatProvider, opts: SeatOptions): Promis
   // the parent's stderr pipe can vanish before the seat does; a log line must never kill the seat
   process.stderr.on("error", () => {});
   const deadline = Date.now() + maxMinutes * 60_000;
+  // PROACTIVE HANDOFF thresholds (R1). Picked from verify/context-pressure-logs: clean exits cluster at
+  // 90-130 steps / 2.96-5.86M prompt tokens; the three seats that never handed off died at 203-411 steps.
+  // Defaults: hand off at 75% of maxSteps (so a replacement still has budget), at ~6M cumulative prompt
+  // tokens, or when the transcript reaches 90% of maxContextChars -- BEFORE trim() would drop turns.
+  const noHandoff = opts.noHandoff ?? false;
+  const handoffStepFraction = opts.handoffStepFraction ?? 0.75;
+  const handoffPromptTokens = opts.handoffPromptTokens ?? 6_000_000;
+  const handoffContextFraction = opts.handoffContextFraction ?? 0.9;
+  const handoffStep = Math.max(1, Math.min(Math.ceil(handoffStepFraction * maxSteps), Math.max(1, maxSteps - 1)));
+  const handoffContextChars = Math.floor(handoffContextFraction * maxContextChars);
+  const pressured = () => steps >= handoffStep || usage.prompt_tokens >= handoffPromptTokens || size() > handoffContextChars;
+  let handedOff = false;
+  const handoffs: string[] = [];
   let nudges = 0;
   let final = "";
   let lastHint = "";
@@ -402,6 +472,25 @@ export async function runSeat(provider: ChatProvider, opts: SeatOptions): Promis
     if (Date.now() > deadline) {
       log(`[${provider.label}] ${maxMinutes} min budget spent`);
       await bow(`${maxMinutes} min budget spent`);
+      break;
+    }
+    // PROACTIVE HANDOFF: at pressure, write handoff/* for our claims, leave with a reason naming them,
+    // and terminate as a clean ok run BEFORE the cap, the budget or trim() can kill the work silently.
+    if (!noHandoff && joined.size && pressured()) {
+      const areas = await writeHandoffs();
+      handedOff = true;
+      handoffs.push(...areas);
+      const why = `proactive handoff on context pressure (step ${steps}/${maxSteps}, ${usage.prompt_tokens} prompt + ${usage.completion_tokens} completion tokens, transcript ${size()} chars)${areas.length ? `; handed off: ${areas.join(", ")}` : ""}`;
+      log(`[${provider.label}] ${why}`);
+      for (const room of [...joined]) {
+        try {
+          await client.callTool({ name: "leave_room", arguments: { room, reason: `seat exiting: ${why}`.slice(0, 600) } }, undefined, { timeout: 30_000 });
+          joined.delete(room);
+          log(`[${provider.label}] left ${room}: ${why}`);
+        } catch (e) {
+          log(`[${provider.label}] could not leave ${room}: ${e instanceof Error ? e.message : String(e)}`);
+        }
+      }
       break;
     }
     trim();
@@ -489,7 +578,7 @@ export async function runSeat(provider: ChatProvider, opts: SeatOptions): Promis
     }
   }
 
-  log(`[${provider.label}] ${steps} step(s), ${usage.prompt_tokens} prompt + ${usage.completion_tokens} completion tokens${usage.cost ? `, $${usage.cost.toFixed(4)}` : ""}`);
+  log(`[${provider.label}] ${steps} step(s), ${usage.prompt_tokens} prompt + ${usage.completion_tokens} completion tokens${usage.cost ? `, $${usage.cost.toFixed(4)}` : ""}${handedOff ? `, handed off before the cap: ${handoffs.join(", ") || "no claims"}` : ""}`);
   if (opts.mcpUrl) {
     // a finish that skipped leave_room would leave an active voter behind until the idle sweep
     if (joined.size) await bow("finished without leaving");
@@ -498,5 +587,5 @@ export async function runSeat(provider: ChatProvider, opts: SeatOptions): Promis
     await transport?.terminateSession?.().catch(() => {});
     await client.close().catch(() => {});
   }
-  return { final: final || "(no final message)", usage, steps, ok };
+  return { final: final || "(no final message)", usage, steps, ok, handoffs, handedOff };
 }

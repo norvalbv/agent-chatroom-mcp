@@ -37,6 +37,8 @@ export const offlineScripts = [
   'handoff-task-fixture.test.ts',
   'hold-until-actionable-regression.ts',
   'human-answering.test.ts',
+  'layer-rules-400-task.test.ts',
+  'layer-views-task.test.ts',
   'leave-post-conclusion-regression.ts',
   'idlewaits-actionable-regression.ts',
   'lease-lock-tasks.test.ts',

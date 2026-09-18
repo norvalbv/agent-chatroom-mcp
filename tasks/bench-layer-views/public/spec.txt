@@ -1,0 +1,59 @@
+LAYERS language specification (version 1)
+
+A LAYERS program is a sequence of lines. Tokens on a line are separated by single spaces.
+Blank lines and lines starting with # are ignored. Key names are lowercase words. Integer
+literals have an optional leading minus sign attached to the digits. All values are integers
+of unbounded size.
+
+LAYERS
+  LAYER n r    names a layer n with rank r (an integer). Every rule line after it, up to the
+               next LAYER line, belongs to layer n. A name that has been opened before is the
+               same layer: rules are added to it, and its rank stays the rank given on its
+               first LAYER line (a later number is ignored).
+  A smaller rank is stronger. If two different layers have the same rank, the one that was
+  opened first (by its first LAYER line) is stronger.
+
+RULES (each belongs to the layer above it)
+  SET k e          a rule for key k: its value is expression e
+  SET k e WHEN g   the same, but the rule takes part only if expression g is nonzero
+  UNSET k          a rule for key k: the key has no value; it reads as 0
+  UNSET k WHEN g   the same, but the rule takes part only if g is nonzero
+  SEAL k           not a rule for k's value: it seals key k at this layer (see WINNERS)
+  SHOW k1 k2 ...   names the keys whose values are the program's output, in that order
+
+EXPRESSIONS (prefix notation, one token per operator, name or number)
+  $k reads the value of key k.
+  + a b   - a b   * a b   sum, difference, product
+  / a b   floor division (rounds toward negative infinity); 0 if b is 0
+  % a b   modulo with a = (a / b) * b + (a % b) under that floor division; 0 if b is 0
+  < a b   1 if a < b, else 0        = a b   1 if a equals b, else 0
+  AND a b   OR a b   NOT a   1 or 0 by the usual truth rules on nonzero values
+  MIN a b   MAX a b   ABS a
+  IF c a b   a if c is nonzero, else b
+
+WINNERS
+  Every key has exactly one value: the value its winning rule gives it. A key that has no
+  winning rule reads 0.
+  1. The candidates for key k are its SET and UNSET rules whose WHEN condition (if any) is
+     nonzero.
+  2. If any layer has a SEAL k, take the strongest such layer; every candidate that belongs to
+     a layer weaker than it is discarded. (A sealing layer need not have a rule for k itself.)
+  3. Among the remaining candidates the winner is the one from the strongest layer; if that
+     layer has several, the one on the latest line.
+  A program never depends on itself: no key's value needs its own value to be worked out.
+
+VIEWS
+  The strength of layers is the order given above (smaller rank first, then first opened).
+  The view of a layer L is the program with every layer stronger than L left out entirely:
+  their rules and their SEAL lines do not exist in that view. L itself and every weaker layer
+  stay. The value of a key in a view is found by the WINNERS steps applied only to the rules
+  that remain in that view.
+  A $k inside an expression (the value expression or the WHEN condition) of a rule that belongs
+  to layer M reads the value of k in the view of M, whatever view that rule is being
+  considered in. The rules of layer M therefore never see anything a stronger layer does.
+  SHOW reads each key in the view of the strongest layer, that is, in the whole program.
+  Example: LAYER base 50; SET a 1; SET b + $a 10; LAYER top 10; SET a 5; SET c + $a 1; SHOW a b c
+  prints 5 11 6: b's only rule belongs to base, so it reads a in the view of base (a = 1);
+  c's rule belongs to top, so it reads a in the view of top (a = 5).
+
+The program's output is the value of each key in the SHOW line, in order.

@@ -75,6 +75,7 @@ export const offlineScripts = [
   'sched-trace-task.test.ts',
   'seat-search-regression.ts',
   'spawner-run-prefix.test.ts',
+  'stamp-ledger-task.test.ts',
   'stamp-task.test.ts',
   'strtod-task.test.ts',
   'stats-electorate-regression.ts',

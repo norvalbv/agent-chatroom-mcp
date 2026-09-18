@@ -1,0 +1,136 @@
+SET base 1000
+SET rate 3
+SET width 7
+SET m 5
+DEF gcd a b
+IF = b 0
+RET a
+END
+RET CALL gcd b % a b
+END
+PRINT CALL gcd 1071 462
+PRINT CALL gcd 2520 1001
+DEF collatz n
+SET steps 0
+WHILE < 1 n
+IF % n 2
+SET n + * 3 n 1
+ELSE
+SET n / n 2
+END
+SET steps + steps 1
+END
+RET steps
+END
+PRINT CALL collatz 27
+PRINT CALL collatz 97
+DEF digsum n
+SET s 0
+WHILE < 0 n
+SET s + s % n 10
+SET n / n 10
+END
+RET s
+END
+PRINT CALL digsum 987654321
+PRINT CALL digsum POW 2 64
+DEF isprime n
+IF < n 2
+RET 0
+END
+SET d 2
+WHILE NOT < n * d d
+IF = % n d 0
+RET 0
+END
+SET d + d 1
+END
+RET 1
+END
+SET count 0
+SET i 1
+WHILE < i 60
+IF CALL isprime i
+SET count + count 1
+PUSH P i
+END
+SET i + i 1
+END
+PRINT count
+PRINT AT P -1
+PRINT AT P 10
+DEF fibs n
+SET a 0
+SET b 1
+REPEAT n
+SETS a b b + a b
+END
+RET a
+END
+PRINT CALL fibs 50
+PRINT CALL fibs 90
+DEF interest years
+SET amount base
+REPEAT years
+SET amount + amount / * amount rate 100
+END
+RET amount
+END
+PRINT CALL interest 10
+PRINT base
+DEF bumpall n
+GLOBAL base
+REPEAT n
+SET base + base rate
+END
+RET base
+END
+PRINT CALL bumpall 4
+PRINT base
+DEF report m
+DEF scale x
+RET * x m
+END
+SET t 0
+SET j 1
+WHILE < j 5
+SET t + t CALL scale j
+SET j + j 1
+END
+RET t
+END
+PRINT CALL report 10
+PRINT CALL report 2
+DEF bucket v
+RET / v width
+END
+PRINT CALL bucket 100
+PRINT CALL bucket 6
+DEF mixed n
+SET n + n NEXT rate
+RET n
+END
+PRINT CALL mixed 10
+PRINT rate
+PRINT CALL mixed 10
+DEF walk n
+SET acc 0
+SET k 0
+WHILE < k n
+SET k + k 1
+IF = % k 3 0
+CONTINUE
+END
+IF < 20 k
+BREAK
+END
+SET acc + acc k
+END
+RET acc
+END
+PRINT CALL walk 30
+PRINT CALL walk 5
+PRINT CALL digsum CALL fibs 60
+PRINT % - 0 17 5
+PRINT / - 0 17 5
+PRINT MAX MIN 8 3 - 0 2

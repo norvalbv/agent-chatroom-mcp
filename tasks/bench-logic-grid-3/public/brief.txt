@@ -1,0 +1,46 @@
+8 houses stand in a row, numbered 1 (leftmost) to 8 (rightmost). Each house has exactly one household. Every household is described by five attributes, and within each attribute all 8 values are used exactly once (no two houses share a value):
+- person: Ada, Ben, Cyd, Dee, Eli, Fay, Gus, Hal
+- color: red, blue, green, yellow, white, black, orange, purple
+- pet: cat, dog, fish, bird, snake, horse, rabbit, turtle
+- drink: tea, coffee, milk, juice, water, cider, soda, cocoa
+- hobby: chess, golf, sailing, painting, running, cooking, knitting, archery
+
+"The X" always means the household with that attribute value (for example "the tea drinker" is the household whose drink is tea). Every statement below is true, and together they determine the arrangement uniquely:
+
+1. The sailing fan and the tea drinker live in neighbouring houses (house numbers differ by exactly 1).
+2. The bird owner and the cocoa drinker live in neighbouring houses (house numbers differ by exactly 1).
+3. The juice drinker is in a lower-numbered house than the fish owner (not necessarily adjacent).
+4. Cyd and the horse owner are the same household.
+5. The black house and the horse owner are NOT the same household.
+6. The fish owner and the purple house live in neighbouring houses (house numbers differ by exactly 1).
+7. Gus and the juice drinker live in neighbouring houses (house numbers differ by exactly 1).
+8. The cooking fan is in the house immediately to the left of the purple house (house number exactly 1 lower).
+9. The snake owner and Hal are NOT the same household.
+10. Fay is in a lower-numbered house than the tea drinker (not necessarily adjacent).
+11. The black house is in a lower-numbered house than the dog owner (not necessarily adjacent).
+12. The yellow house and the soda drinker live in neighbouring houses (house numbers differ by exactly 1).
+13. The sailing fan is in the house immediately to the left of the coffee drinker (house number exactly 1 lower).
+14. The turtle owner and the knitting fan live in neighbouring houses (house numbers differ by exactly 1).
+15. The sailing fan and the water drinker are NOT the same household.
+16. The cat owner is in a lower-numbered house than Cyd (not necessarily adjacent).
+17. The turtle owner is in the house immediately to the left of the golf fan (house number exactly 1 lower).
+18. The blue house is in a lower-numbered house than the rabbit owner (not necessarily adjacent).
+19. The cooking fan and the milk drinker are NOT the same household.
+20. The dog owner is in a lower-numbered house than the knitting fan (not necessarily adjacent).
+21. The bird owner and the tea drinker are the same household.
+22. The tea drinker is in the house immediately to the left of the red house (house number exactly 1 lower).
+23. The black house is in a lower-numbered house than the water drinker (not necessarily adjacent).
+24. The green house and Cyd live in neighbouring houses (house numbers differ by exactly 1).
+25. Dee is in a lower-numbered house than the tea drinker (not necessarily adjacent).
+26. Ada and the cocoa drinker live in neighbouring houses (house numbers differ by exactly 1).
+27. The fish owner is in a lower-numbered house than the black house (not necessarily adjacent).
+28. Fay is in a lower-numbered house than the water drinker (not necessarily adjacent).
+29. Cyd and the painting fan live in neighbouring houses (house numbers differ by exactly 1).
+30. The black house is in a lower-numbered house than the chess fan (not necessarily adjacent).
+31. The dog owner and Hal live in neighbouring houses (house numbers differ by exactly 1).
+32. The cooking fan and the white house are the same household.
+33. The running fan is in the house immediately to the left of Fay (house number exactly 1 lower).
+34. The snake owner and Ben are NOT the same household.
+35. Ben and the cocoa drinker are NOT the same household.
+
+Question: which drink does each household have, from house 1 to house 8? Answer with only the 8 drinks in house order, separated by a comma and a single space (for example: tea, coffee, milk, juice, water, cider, soda, cocoa), nothing else.

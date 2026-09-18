@@ -28,7 +28,7 @@ const server=http.createServer((req,res)=>{res.setHeader('content-type','applica
   return {root, stub, seat, output: join(root,'run')};
 }
 async function freePair() {
-  for(let p=23000;p<24000;p+=2){const s=[createServer(),createServer()];try{await Promise.all(s.map((x,i)=>new Promise<void>((ok,no)=>{x.once('error',no);x.listen(p+i,'127.0.0.1',ok);})));return p;}catch{}finally{await Promise.all(s.map(x=>new Promise<void>(ok=>x.close(()=>ok()))));}}
+  const base=20000+((process.pid*2654435761)%20000);for(let p=base;p<Math.min(base+400,65000);p+=2){const s=[createServer(),createServer()];try{await Promise.all(s.map((x,i)=>new Promise<void>((ok,no)=>{x.once('error',no);x.listen(p+i,'127.0.0.1',ok);})));return p;}catch{}finally{await Promise.all(s.map(x=>new Promise<void>(ok=>x.close(()=>ok()))));}}
   throw Error('no ports');
 }
 import { createServer } from 'node:net';
@@ -115,6 +115,28 @@ test('conclusion cannot bypass the bounded seat completion barrier',async()=>{
  assert.equal(readFileSync(join(f.output,arm,'data','registered'),'utf8'),'yes');
  assert.ok(existsSync(join(f.output,arm,'data','benchmark.jsonl')),'conclusion happened before barrier timeout');
  const verdict=JSON.parse(readFileSync(join(f.output,arm,'bench-result.json'),'utf8'));assert.equal(verdict.reason,'timeout');assert.equal(verdict.passed,false);
+ }
+ }finally{rmSync(f.root,{recursive:true,force:true});}
+});
+
+test('frozen records seat budget (model, minutes, steps) matched across both arms',async()=>{
+ const f=fixture();try{
+ const result=invoke([task,f.stub,f.stub,String(await freePair()),'--root',f.output,'--timeout-ms','4000','--seat-entry',f.seat],{OPENROUTER_MODEL:'deepseek/deepseek-v4-flash-0731'});
+ assert.equal(result.status,0,result.stderr+result.stdout);
+ const a=JSON.parse(readFileSync(join(f.output,'A','manifest.json'),'utf8'));
+ const b=JSON.parse(readFileSync(join(f.output,'B','manifest.json'),'utf8'));
+ assert.deepEqual(a.frozen.seat_budget,{model:'deepseek/deepseek-v4-flash-0731',max_minutes:3,max_steps:60});
+ assert.deepEqual(a.frozen.seat_budget,b.frozen.seat_budget,'single-seat control arms must share one matched budget');
+ }finally{rmSync(f.root,{recursive:true,force:true});}
+});
+test('real seat wrapper defaults to the briefed deepseek model when OPENROUTER_MODEL is unset',async()=>{
+ const f=wrapperFixture();try{
+ const result=invoke([task,f.stub,f.stub,String(await freePair()),'--root',f.output,'--timeout-ms','4000','--seat-entry',wrapper],{BENCH_SEAT_ENTRY:f.seat,OPENROUTER_API_KEY:'mock-provider-key',CHATROOM_MCP_URL:'http://invalid-parent:1/mcp'});
+ assert.equal(result.status,0,result.stderr);
+ for(const arm of ['A','B']){
+  const report=JSON.parse(readFileSync(join(f.output,arm,'workspace','seat-report.json'),'utf8'));
+  assert.equal(report.model,'deepseek/deepseek-v4-flash-0731',`arm ${arm} seat must use briefed model`);
+  assert.ok(report.seat_pid>0);assert.equal(report.exit_code,0);
  }
  }finally{rmSync(f.root,{recursive:true,force:true});}
 });

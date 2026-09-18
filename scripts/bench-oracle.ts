@@ -2,7 +2,7 @@
  * Outcome vocabulary (lobby req 3): task_pass | task_fail | parse_failure | infrastructure_error.
  */
 import { spawnSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 type OracleConfig = { kind: string; expected: string; distractors?: string[] };
@@ -40,10 +40,13 @@ export async function scoreTask(taskDir: string, workspace: string) {
   }
   const scorerPath = resolve(dirname(fileURLToPath(import.meta.url)), 'score-fact-check.ts');
   const command = `node --import tsx ${basename(scorerPath)} <workspace>/answer.txt oracle/oracle.json`;
-  const run = spawnSync(process.execPath, ['--import', 'tsx', scorerPath, join(workspace, 'answer.txt'), join(taskDir, 'oracle', 'oracle.json')], { encoding: 'utf8', timeout: 10000 });
+  const answerPath = join(workspace, 'answer.txt');
+  if (!existsSync(answerPath)) return { passed: false, reason: 'parse_failure', oracle: { kind: config.kind, command, exit_code: null } };
+  const run = spawnSync(process.execPath, ['--import', 'tsx', scorerPath, answerPath, join(taskDir, 'oracle', 'oracle.json')], { encoding: 'utf8', timeout: 10000 });
   const oracle = { kind: config.kind, command, exit_code: run.status };
-  // exit 3 = parse_failure (missing/unreadable/empty/prohibited-format answer); exit 0/1 = task verdicts.
-  if (run.status === 2 || run.error || run.status === null) return { passed: false, reason: 'infrastructure_error', oracle };
+  // exit 3 = parse_failure (JSON-wrapped/empty/prohibited answer artifacts from score-fact-check.ts); exit 2/unspawnable = infrastructure_error.
+  if (run.error || run.status === null) return { passed: false, reason: 'infrastructure_error', oracle };
+  if (run.status === 2 || run.status > 3) return { passed: false, reason: 'infrastructure_error', oracle };
   if (run.status === 3) return { passed: false, reason: 'parse_failure', oracle };
   let scored: { score: number };
   try { scored = JSON.parse(run.stdout) as { score: number }; }

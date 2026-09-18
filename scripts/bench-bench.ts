@@ -11,6 +11,14 @@ import { createServer } from 'node:net';
 import { pathToFileURL, fileURLToPath } from 'node:url';
 const delay=(ms:number)=>new Promise(r=>setTimeout(r,ms));
 const json=(path:string,value:unknown)=>writeFileSync(path,JSON.stringify(value,null,2)+'\n');
+/** Canonical outcome vocabulary: five task-outcome labels plus the integrity guard. reason keeps detail. */
+const OUTCOME:Record<string,string>={'task_pass':'task_pass','task_fail':'task_fail','parse_failure':'parse_failure','timeout':'timeout','infrastructure_error':'infrastructure_error','tamper':'tamper','oracle-pass':'task_pass','oracle-fail':'task_fail','parse-failure':'parse_failure','infra':'infrastructure_error'};
+/** Resolve a hub argument: a path, 'env', 'env:NAME', or bare env name (arm A: TRIAL_HUB_ENTRY, arm B: TRIAL_HUB_ENTRY_B falling back to A). */
+function resolveHub(arg:string,index:number){const envName=arg==='env'?(index===0?'TRIAL_HUB_ENTRY':'TRIAL_HUB_ENTRY_B'):(arg.startsWith('env:')?arg.slice(4):null);
+ if(envName){const value=process.env[envName]??(index===1&&envName==='TRIAL_HUB_ENTRY_B'?process.env.TRIAL_HUB_ENTRY:undefined);
+  if(!value)throw Error(`${envName} must be set when the hub argument is '${arg}'`);
+  return {entry:resolve(value),env:envName};}
+ return {entry:resolve(arg),env:null};}
 function hashTree(path:string):string {
  const hash=createHash('sha256');
  const visit=(p:string)=>{const st=lstatSync(p);if(st.isSymbolicLink())throw Error(`Symlink not permitted: ${p}`);
@@ -48,6 +56,7 @@ async function main() {
  if(existsSync(root))throw Error(`Refusing to reuse ${root}`);
  // Check both ports before creating output. Closing the probes is necessarily racy; boot failure is infra.
  for(const p of [port,port+1]){const probe=createServer();await new Promise<void>((ok,no)=>{probe.once('error',no);probe.listen(p,'127.0.0.1',()=>probe.close(()=>ok()));});}
+ const hubA=resolveHub(aArg,0),hubB=resolveHub(bArg,1);
  const taskDir=realpathSync(resolve(taskArg));
  const scorerPath=resolve(dirname(fileURLToPath(import.meta.url)),'bench-oracle.ts');
  const factScorerPath=resolve(dirname(scorerPath),'score-fact-check.ts');
@@ -56,13 +65,13 @@ async function main() {
  const task=scorer.loadTask(taskDir);
  const taskBefore=hashTree(taskDir);const scorerBefore=hashFile(scorerPath);
  const providerEntry=resolve(process.env.BENCH_SEAT_ENTRY??resolve(dirname(scorerPath),'../dist/openrouter.js'));
- const frozen={seat_entry_sha256:seatArg?hashFile(seatArg):null,provider_entry_sha256:seatArg?hashFile(providerEntry):null,expected_participants:seatArg?1:0,task_sha256:taskBefore,scorer_sha256:scorerBefore,fact_scorer_sha256:factScorerBefore,task_id:task.task_id,timeout_ms:timeout,room:'benchmark',brief:readFileSync(join(taskDir,'public','brief.txt'),'utf8')};
+ const frozen={trial_hub_entry:process.env.TRIAL_HUB_ENTRY??null,seat_budget:{model:process.env.OPENROUTER_MODEL??'deepseek/deepseek-v4-flash-0731',max_minutes:Number(process.env.BENCH_MAX_MINUTES??'3'),max_steps:60},seat_entry_sha256:seatArg?hashFile(seatArg):null,provider_entry_sha256:seatArg?hashFile(providerEntry):null,expected_participants:seatArg?1:0,task_sha256:taskBefore,scorer_sha256:scorerBefore,fact_scorer_sha256:factScorerBefore,task_id:task.task_id,timeout_ms:timeout,room:'benchmark',brief:readFileSync(join(taskDir,'public','brief.txt'),'utf8')};
  mkdirSync(root);const results:any[]=[];
  for(const [index,entryArg] of [aArg,bArg].entries()) {
   const arm=index===0?'A':'B',armRoot=join(root,arm),workspace=join(armRoot,'workspace');
   mkdirSync(armRoot);mkdirSync(join(armRoot,'data'));
-  const entry=resolve(entryArg);const started=Date.now();let child:ChildProcess|undefined;let fd:number|undefined;
-  const manifest:any={arm,port:port+index,root:armRoot,workspace,seat_entry:seatArg??null,seat_pid:null,seat_exit_code:undefined,hub_entry:entry,hub_revision:revision(entry),hub_entry_sha256:hashFile(entry),hub_build_sha256:null,hub_version:null,provenance_scope:dirname(entry).endsWith('/dist')?'dist-tree; external dependencies not covered':'entry-only; imported modules not covered',frozen,started_at:new Date().toISOString()};
+  const resolved=index===0?hubA:hubB;const entry=resolved.entry;const started=Date.now();let child:ChildProcess|undefined;let fd:number|undefined;
+  const manifest:any={arm,port:port+index,root:armRoot,workspace,seat_entry:seatArg??null,seat_pid:null,seat_exit_code:undefined,hub_entry:entry,hub_entry_env:resolved.env,hub_revision:revision(entry),hub_entry_sha256:hashFile(entry),hub_build_sha256:null,hub_version:null,provenance_scope:dirname(entry).endsWith('/dist')?'dist-tree; external dependencies not covered':'entry-only; imported modules not covered',frozen,started_at:new Date().toISOString()};
   // Hash the selected build's directory, not launcher HEAD. Non-dist stubs are hashed by entry.
   if(existsSync(entry))manifest.hub_build_sha256=dirname(entry).endsWith('/dist')?hashTree(dirname(entry)):manifest.hub_entry_sha256;
   let seat:ChildProcess|undefined;
@@ -109,11 +118,14 @@ async function main() {
    verdict.anti_tamper={...verdict.anti_tamper,hash_before:taskBefore,hash_after:after,unchanged};
    if(!unchanged){verdict.passed=false;verdict.reason='tamper';}
    verdict.duration_ms=Date.now()-started;verdict.checked_at=new Date().toISOString();
+   verdict.outcome=OUTCOME[verdict.reason]??verdict.reason;
    manifest.stopped_at=verdict.checked_at;save();json(join(armRoot,'bench-result.json'),verdict);results.push(verdict);
   }
  }
+ // Only infrastructure_error / timeout / tamper void comparability; task_fail and parse_failure are
+ // measured failures (count as 0) so an arm pair with them stays comparable (delta 0), per bench spec.
  const comparable=results.every(v=>!['infrastructure_error','timeout','tamper'].includes(v.reason));
- json(join(root,'bench-compare.json'),{task_id:task.task_id,arms:results.map(v=>({arm:v.arm,passed:v.passed,reason:v.reason})),comparable,delta:comparable?Number(results[1].passed)-Number(results[0].passed):null,delta_unit:'success indicator B minus A; single trial, not an effect estimate',frozen,checked_at:new Date().toISOString()});
+ json(join(root,'bench-compare.json'),{task_id:task.task_id,arms:results.map(v=>({arm:v.arm,passed:v.passed,reason:v.reason,outcome:v.outcome})),comparable,delta:comparable?Number(results[1].passed)-Number(results[0].passed):null,delta_unit:'success indicator B minus A; single trial, not an effect estimate',outcome_vocabulary:['task_pass','task_fail','parse_failure','timeout','infrastructure_error','tamper'],frozen,checked_at:new Date().toISOString()});
  console.log(root);
 }
 main().catch(error=>{console.error(String(error));process.exitCode=1;});

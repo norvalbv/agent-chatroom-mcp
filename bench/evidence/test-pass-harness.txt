@@ -2,40 +2,69 @@ TAP version 13
 # Subtest: runner exists
 ok 1 - runner exists
   ---
-  duration_ms: 0.268375
+  duration_ms: 0.312875
   type: 'test'
   ...
 # Subtest: refuses unsafe, malformed and out-of-range ports before running a hub
 ok 2 - refuses unsafe, malformed and out-of-range ports before running a hub
   ---
-  duration_ms: 356.620667
+  duration_ms: 428.686167
   type: 'test'
   ...
 # Subtest: refuses root reuse without overwriting contents
 ok 3 - refuses root reuse without overwriting contents
   ---
-  duration_ms: 72.127209
+  duration_ms: 79.405542
   type: 'test'
   ...
 # Subtest: two stub hubs emit artifact verdicts, separate workspaces and comparable frozen inputs
 ok 4 - two stub hubs emit artifact verdicts, separate workspaces and comparable frozen inputs
   ---
-  duration_ms: 776.649708
+  duration_ms: 787.53725
   type: 'test'
   ...
-# Subtest: hub startup failure is infra, not task failure, and excluded from delta
-ok 5 - hub startup failure is infra, not task failure, and excluded from delta
+# Subtest: hub startup failure is infrastructure_error, not task failure, and excluded from delta
+ok 5 - hub startup failure is infrastructure_error, not task failure, and excluded from delta
   ---
-  duration_ms: 195.022958
+  duration_ms: 208.687917
   type: 'test'
   ...
-1..5
-# tests 5
+# Subtest: frozen scorer identity changes when the executed fact scorer copy changes
+ok 6 - frozen scorer identity changes when the executed fact scorer copy changes
+  ---
+  duration_ms: 1581.622917
+  type: 'test'
+  ...
+# Subtest: verdicts carry the canonical five-outcome vocabulary mapped from reason
+ok 7 - verdicts carry the canonical five-outcome vocabulary mapped from reason
+  ---
+  duration_ms: 951.793375
+  type: 'test'
+  ...
+# Subtest: parse failure is its own outcome: concluded room with no answer artifact is parse_failure, not infra or task_fail
+ok 8 - parse failure is its own outcome: concluded room with no answer artifact is parse_failure, not infra or task_fail
+  ---
+  duration_ms: 702.726292
+  type: 'test'
+  ...
+# Subtest: TRIAL_HUB_ENTRY env selects and records the path, entry sha256 and whole-dist sha256 of the hub served
+ok 9 - TRIAL_HUB_ENTRY env selects and records the path, entry sha256 and whole-dist sha256 of the hub served
+  ---
+  duration_ms: 783.36675
+  type: 'test'
+  ...
+# Subtest: TRIAL_HUB_ENTRY env missing is a clean refusal, not a crash
+ok 10 - TRIAL_HUB_ENTRY env missing is a clean refusal, not a crash
+  ---
+  duration_ms: 76.067041
+  type: 'test'
+  ...
+1..10
+# tests 10
 # suites 0
-# pass 5
+# pass 10
 # fail 0
 # cancelled 0
 # skipped 0
 # todo 0
-# duration_ms 1404.007542
-HARNESS_EXIT=0
+# duration_ms 5689.472708

@@ -1,0 +1,13 @@
+{
+  "model": "deepseek/deepseek-v4-flash-0731",
+  "mcp_url": "http://127.0.0.1:29501/mcp",
+  "hub_entry": "/Users/benji/Desktop/Personal and learning/agent-chatroom-mcp/.swarm-worktrees/swarm-bench-room/oracle-2/dist/index.js",
+  "seat_pid": 82551,
+  "exit_code": 0,
+  "exit_signal": null,
+  "error": null,
+  "duration_ms": 32592,
+  "log_chars": 1205,
+  "answer_chars": 45,
+  "finished_at": "2026-09-18T00:01:41.115Z"
+}

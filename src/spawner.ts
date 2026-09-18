@@ -14,6 +14,8 @@ import { fileURLToPath } from "node:url";
 import { HubError } from "./hub.js";
 import { settledAxes } from "./settled.js";
 import { seatChildEnv } from "./env.js";
+import { claudeArgs } from "./claude-args.js";
+import { parseClaudeCliOutput, type SeatUsageRollup } from "./result.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(here, "..");
@@ -63,6 +65,8 @@ export interface SpawnedAgent {
   exitCode?: number | null;
   pid?: number;
   log: string;
+  /** claude recruits only: usage parsed from --output-format json stdout once the seat exits; undefined until then, null if unparseable */
+  usage?: SeatUsageRollup | null;
 }
 
 export interface SpawnerHooks {
@@ -120,6 +124,9 @@ export function policyFromEnv(env: NodeJS.ProcessEnv = process.env): RecruitPoli
   const model = env.CHATROOM_RECRUIT_MODEL ?? "deepseek/deepseek-v4-flash-0731";
   return { agent: agent === "any" ? undefined : (agent as AgentKind), model: model === "any" ? undefined : model };
 }
+
+/** CHATROOM_CLAUDE_FULL=1: claude recruits get today's full (non-lean) flags too, matching the launcher's --claude-full opt-out (propagated to the hub's env when swarm.ts spawns it). */
+const CLAUDE_FULL = process.env.CHATROOM_CLAUDE_FULL === "1";
 
 export class Spawner {
   policy: RecruitPolicy = policyFromEnv();
@@ -289,8 +296,7 @@ export class Spawner {
         args.push(prompt);
       } else {
         cmd = "claude";
-        args = ["-p", prompt, "--mcp-config", mcpJson, "--strict-mcp-config", "--allowedTools", (req.canEdit ? WRITE_TOOLS : READ_TOOLS).join(",")];
-        if (req.model) args.push("--model", req.model);
+        args = claudeArgs({ text: prompt, mcpJson, tools: req.canEdit ? WRITE_TOOLS : READ_TOOLS, model: req.model, full: CLAUDE_FULL });
       }
       // a write-enabled recruit works in its own worktree and branch, never in the shared checkout
       const seatCwd = req.canEdit && !o.dryRun ? (this.worktreeFor(cwd, target, name) ?? cwd) : cwd;
@@ -298,6 +304,10 @@ export class Spawner {
       else if (agent === "codex") args[args.indexOf("-C") + 1] = seatCwd;
       const outStream = createWriteStream(log);
       const child = spawn(cmd, args, { cwd: seatCwd, env: seatChildEnv(process.env, req.canEdit ? name : undefined), stdio: ["ignore", "pipe", "pipe"] });
+      // for claude, a second listener alongside pipe() gets the same bytes: the log stays human-readable
+      // while this buffer stays clean stdout-only for --output-format json parsing (stderr never mixed in).
+      let claudeStdout = "";
+      if (agent === "claude") child.stdout?.on("data", (d) => (claudeStdout += d));
       child.stdout?.pipe(outStream);
       child.stderr?.pipe(outStream);
       rec.pid = child.pid;
@@ -311,6 +321,7 @@ export class Spawner {
         clearTimeout(wall);
         rec.endedAt = new Date().toISOString();
         rec.exitCode = code;
+        if (agent === "claude") rec.usage = parseClaudeCliOutput(claudeStdout.trim()).usage;
         this.children.delete(name);
         try {
           this.checkConsolidators();

@@ -99,7 +99,9 @@ export interface SpawnerOptions {
 
 const READ_TOOLS = ["mcp__chatroom__*", "Read", "Grep", "Glob", "Bash", "WebSearch", "WebFetch"];
 const WRITE_TOOLS = [...READ_TOOLS, "Edit", "Write", "MultiEdit", "NotebookEdit"];
-const runPrefix = (room: string) => /^(swarm-[0-9]{6}(?:-[a-z0-9]{4})?)-/.exec(room)?.[1] ?? room;
+/** The run prefix a launcher run owns: swarm-<6 digits>[-<4 chars>]-… (same shape as Hub.runPrefix). */
+const RUN_PREFIX = /^(swarm-[0-9]{6}(?:-[a-z0-9]{4})?)-/;
+const runPrefix = (room: string) => RUN_PREFIX.exec(room)?.[1] ?? room;
 
 /** Which provider and model every recruit is launched as, whatever was asked for. Live, settable from the dashboard (POST /policy). */
 export interface RecruitPolicy {
@@ -155,7 +157,18 @@ export class Spawner {
 
     if (req.brief.trim().length < 20 || req.brief.length > 4000) throw new HubError("A brief of 20-4000 characters is required: say what to do and what done looks like.");
     const count = Math.max(1, Math.min(3, req.count ?? (req.newRoom ? 2 : 1)));
-    const target = req.newRoom ?? req.room;
+    // A break-out requested without a run prefix would be created under the LITERAL name: the launcher's
+    // result artifact gathers rooms by startsWith(runPrefix) (src/swarm.ts:471) and the per-run recruit
+    // caps group by runPrefix (src/spawner.ts:172, src/hub.ts:388), so an unprefixed break-out would be
+    // silently absent from result.json rooms[] and escape the per-run cap. Inherit the requester's prefix:
+    // "brk-foo" from a "swarm-<id>[-<suffix>]-…" room is ensured as "<prefix>-brk-foo". Names stay
+    // sanitized [a-zA-Z0-9_-] and within the hub's 64-char room-name limit.
+    let newRoom = req.newRoom;
+    const requesterPrefix = RUN_PREFIX.exec(req.room)?.[1];
+    if (newRoom && requesterPrefix && !RUN_PREFIX.test(newRoom)) {
+      newRoom = `${requesterPrefix}-${newRoom}`.replace(/[^a-zA-Z0-9_-]/g, "-").slice(0, 64);
+    }
+    const target = newRoom ?? req.room;
     if (req.replacing !== undefined && (!req.replacing.trim() || req.newRoom || count !== 1)) {
       throw new HubError("Replacement requires one recruit in the same room and an exact predecessor name.");
     }
@@ -191,7 +204,7 @@ export class Spawner {
       while (this.agents.some((a) => a.name === n && a.endedAt === undefined)) n = `${base}-${++this.counter}`;
       names.push(n);
     }
-    if (req.newRoom) this.hooks?.ensureRoom(req.newRoom, req.roomTopic ?? req.brief.slice(0, 200));
+    if (newRoom) this.hooks?.ensureRoom(newRoom, req.roomTopic ?? req.brief.slice(0, 200));
     if (req.area) this.hooks?.claimArea(target, req.requestedBy, req.area, names);
 
     const cwd = resolve(req.cwd ?? o.defaultCwd);

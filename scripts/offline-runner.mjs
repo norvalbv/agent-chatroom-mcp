@@ -37,6 +37,7 @@ export const offlineScripts = [
   'result-fleet-regression.ts',
   'seat-env-regression.ts',
   'seat-search-regression.ts',
+  'spawner-run-prefix.test.ts',
   'stats-electorate-regression.ts',
   'stats-integration-regression.ts',
   'stats-regression.ts',

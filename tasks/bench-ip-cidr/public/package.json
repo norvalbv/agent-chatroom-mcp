@@ -1,0 +1,5 @@
+{
+  "name": "bench-ip-cidr-workspace",
+  "private": true,
+  "type": "module"
+}

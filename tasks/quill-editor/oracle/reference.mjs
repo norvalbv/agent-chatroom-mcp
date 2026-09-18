@@ -13,13 +13,12 @@ export function run(text, variant = VARIANT) {
   let buf = []; let cur = -1; let clip = []; const hist = []; const out = [];
   const snap = () => ({ buf: buf.map(l => ({ w: l.w, names: new Set(l.names) })), cur, clip: [...clip] });
   const restore = s => { buf = s.buf.map(l => ({ w: l.w, names: new Set(l.names) })); cur = s.cur; };
-  const same = (a, b) => a.cur === b.cur && a.buf.length === b.buf.length && a.buf.every((l, i) => l.w === b.buf[i].w && l.names.size === b.buf[i].names.size);
   const clamp = () => { if (!buf.length) cur = -1; };
   function step(t) {
     const c = t[0];
     const before = snap();
     let changes = false;
-    const commit = () => { if (variant === 'undoCountsNoops' || !same(before, snap())) hist.push(before); };
+    const commit = () => { hist.push(before); };
     if (c === 'ADD' || c === 'INS') {
       const line = { w: t[1], names: new Set() };
       if (!buf.length) { buf.push(line); cur = 0; }
@@ -28,6 +27,7 @@ export function run(text, variant = VARIANT) {
       if (c === 'INS' && buf.length > 1) cur = cur; // cursor onto the new line (same index)
       commit();
     } else if (c === 'DEL') {
+      if (!buf.length && variant === 'undoCountsNoops') hist.push(before);
       if (buf.length) { buf.splice(cur, 1); if (variant === 'delCursorPrev') cur = Math.max(0, cur - 1); else if (cur >= buf.length) cur = buf.length - 1; clamp(); commit(); }
     } else if (c === 'UP') { if (buf.length) cur = Math.max(0, cur - Number(t[1])); }
     else if (c === 'DN') { if (buf.length) cur = Math.min(buf.length - 1, cur + Number(t[1])); }

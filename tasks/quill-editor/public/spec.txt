@@ -26,8 +26,9 @@ COMMANDS
   MARK m     attach the name m to the cursor line. Nothing happens if the buffer is empty.
   GO m       move the cursor to the line that carries the name m. Nothing happens if no
              line carries m.
-  SWAP       the cursor line and the line after it trade places in the buffer; the cursor
-             stays on the line it was on. Nothing happens if the cursor is on the last line.
+  SWAP       the cursor line and the line after it trade places in the buffer. The cursor
+             stays on the same line it was on, which has moved: its position in the
+             buffer is now one later. Nothing happens if the cursor is on the last line.
   YANK n     replace the clipboard with the words of n lines, starting at the cursor line
              and going toward the end (fewer if the buffer ends first). The buffer is
              not changed.
@@ -40,10 +41,11 @@ COMMANDS
              empty the new lines become the whole buffer. The clipboard is not changed.
              Nothing happens if the clipboard is empty.
   UNDO       take back the most recent command that changed the lines of the buffer (ADD,
-             INS, DEL, SWAP, CUT or PASTE, and only when it actually did change them),
+             INS, DEL, SWAP, CUT or PASTE, and only when it actually inserted, removed or
+             reordered lines),
              restoring the buffer (its lines, their order and the names each line carried)
              and the cursor exactly as they were just before that command. Commands that changed no lines (UP, DN, FIRST, LAST, MARK, GO,
-             YANK, SHOW, DUMP, and any of the line-changing commands that did nothing)
+             YANK, SHOW, DUMP, and any of those six that found nothing to do)
              are not in the history. UNDO is never itself in the history. The history
              is unlimited. The clipboard is never restored. UNDO with an empty history
              does nothing.

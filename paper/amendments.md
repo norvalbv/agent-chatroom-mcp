@@ -82,5 +82,28 @@ reader of §4 alone would expect Claude-seat turn counts in this paper to requir
 transcript file and to be labeled approximate, and that expectation would be wrong for anything produced by
 this harness.
 
+## 2026-09-18 — `--seed` is a naming/pairing key, not a control on any random element
+
+**Protocol text:** §5 ("Seeds") says "A seed fixes the arm's random elements (task order within a batch,
+sampling temperature seed where the provider exposes one, and — for arm C — which seat name maps to which
+room role where that is randomized)."
+
+**Gap found (checked directly against `scripts/bench-rq1.ts`, not assumed):** the harness's `--seed`
+argument is used only to name and pair result files (`<task>-<arm>-seed<seed>/result.json`) and, in
+`bench-grid.ts`, to find arm A's matching arm C result. It is never passed to the `claude` CLI — `claude
+--help` (checked this run) has no `--seed` or `--temperature` flag to pass it to — and it does not
+randomize which seat name maps to which room role: arm C always launches `seat-1`, `seat-2`, `seat-3` in
+that fixed order regardless of seed value. Each harness invocation also runs exactly one task, so there is
+no batch to order.
+
+**What this means for RQ1:** "same seed value reused across arms" (§5) is honored in the narrow sense that
+arm A and arm C for a given seed number are paired and their budgets/timing compared — but the seed
+currently controls no actual source of randomness. Two runs of the same (task, arm) with different seed
+numbers are expected to differ only through the model's own non-determinism (§8's "Provider
+nondeterminism"), not through any harness-controlled random element. A reader must not interpret
+same-vs-different seed numbers as a controlled variable the way §5 describes; it is a bookkeeping label for
+pairing and deduplication only, until/unless the claude CLI exposes a sampling-seed flag or the harness adds
+its own seat-role randomization keyed on seed.
+
 <!-- Further entries appended by item 1/2/3 builders as deviations are found; do not remove this notice
 until the room concludes. -->

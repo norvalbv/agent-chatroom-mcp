@@ -18,6 +18,42 @@ export type Vote = "agree" | "disagree" | "abstain";
 export type Quorum = "unanimous" | "majority" | "supermajority";
 export type RoomMode = "free" | "round_robin";
 export type RoomState = "open" | "concluded" | "stalled" | "closed";
+
+/** The machine-readable head a verify/* entry must lead with (docs/swarm-protocol-spec.md:26, section C.3). */
+export interface VerifyHead {
+  proposal: string;
+  command: string;
+  cwd: string;
+  exit_code: number;
+  output_tail: string;
+  commit?: string;
+}
+
+/** Canonical wording for what a verify/* entry must contain, quoted verbatim by refusals and prompts. */
+export const VERIFY_HEAD_EXAMPLE = '{"proposal":"<PROPOSAL_ID>","command":"<what you ran>","cwd":"<working dir>","exit_code":0,"output_tail":"<last lines of real output>"}';
+
+/**
+ * A verify/* entry must lead with one line of JSON matching VerifyHead; free prose may follow. This is
+ * shape-checking, not prose-parsing: it cannot prove the command was really run, only that a second agent
+ * committed to a specific, attributable, re-runnable claim instead of typing "looks fine" or "BLOCKED".
+ */
+export function parseVerifyHead(text: string): VerifyHead | undefined {
+  const nl = text.indexOf("\n");
+  const head = (nl === -1 ? text : text.slice(0, nl)).trim();
+  if (!head.startsWith("{")) return undefined;
+  let obj: unknown;
+  try {
+    obj = JSON.parse(head);
+  } catch {
+    return undefined;
+  }
+  if (typeof obj !== "object" || obj === null) return undefined;
+  const o = obj as Record<string, unknown>;
+  if (typeof o.proposal !== "string" || typeof o.command !== "string" || typeof o.cwd !== "string") return undefined;
+  if (typeof o.exit_code !== "number" || typeof o.output_tail !== "string") return undefined;
+  if (o.commit !== undefined && typeof o.commit !== "string") return undefined;
+  return o as unknown as VerifyHead;
+}
 /** Role is a display tag plus one quorum rule (chair is never waited on but may veto). It is never a persona. */
 export type Role = "worker" | "chair" | "lead" | "verifier" | "recruit";
 export const ROLES: Role[] = ["worker", "chair", "lead", "verifier", "recruit"];
@@ -2104,7 +2140,7 @@ export class Hub {
     }
     const openCh = this.qualifyingChallenges(room, pr);
     if (openCh.length) out.push(this.challengeAdvice(room, openCh));
-    if (room.requireVerification && !this.verifiedBy(room, pr)) out.push(`a verify/* board entry by someone other than ${this.shown(room, pr.by)} naming ${pr.id}`);
+    if (room.requireVerification && !this.verifiedBy(room, pr)) out.push(this.verifyHeadRefusal(room, pr));
     if (this.hold(room)) out.push(`hold by ${this.hold(room)!.by}`);
     if (!active.some((p) => pr.votes[p.id] && (pr.votes[p.id].version ?? 1) === pr.version) && pr.version > 1) out.push(`no vote cast on v${pr.version} yet (carried-over agrees alone cannot pass a new version)`);
     return out;
@@ -2138,7 +2174,11 @@ export class Hub {
   }
 
   /** Re-check whether a proposal has reached the room's quorum. */
-  /** A verify/* entry by a different agent (different connection), newer than the proposal text, naming the proposal. */
+  /**
+   * A verify/* entry by a different agent (different connection), newer than the proposal text, whose first
+   * line is a parseable VerifyHead naming this proposal with exit_code 0. Content-blind free text (a "BLOCKED"
+   * or "PARTIAL" entry that never ran a passing command) never counts, however it names the proposal.
+   */
   verifiedBy(room: Room, pr: Proposal): BoardEntry | undefined {
     if (!pr.updatedAt) return undefined; // Legacy text timestamps are unknown, not fresh.
     const proposer = room.participants.get(pr.by.id);
@@ -2148,10 +2188,16 @@ export class Hub {
       const author = [...room.participants.values()].find((x) => x.name === e.by);
       if (author && proposer && author.session && author.session === proposer.session) continue; // same process, two names
       if (e.updatedAt < pr.updatedAt) continue;
-      if (!e.text.includes(pr.id)) continue;
+      const head = parseVerifyHead(e.text);
+      if (!head || head.exit_code !== 0 || head.proposal !== pr.id) continue;
       return e;
     }
     return undefined;
+  }
+
+  /** What exactly to write, named precisely enough that "an entry exists but doesn't count" is never a mystery. */
+  private verifyHeadRefusal(room: Room, pr: Proposal): string {
+    return `a verify/* board entry by someone other than ${this.shown(room, pr.by)} (on a different connection) whose first line is JSON ${VERIFY_HEAD_EXAMPLE.replace("<PROPOSAL_ID>", pr.id)} — commit is optional; exit_code must be 0 for the entry to count`;
   }
 
   private evaluate(room: Room, pr: Proposal) {
@@ -2217,7 +2263,7 @@ export class Hub {
       return;
     }
     if (accepted && room.requireVerification && !this.verifiedBy(room, pr)) {
-      stuck(`${pr.id} has the votes but no verification: someone other than ${this.shown(room, pr.by)} (on a different connection) must run the fix and write verify/<area> naming ${pr.id}, dated after the current text.`);
+      stuck(`${pr.id} has the votes but no verification: ${this.verifyHeadRefusal(room, pr)}, dated after the current text.`);
       return;
     }
 

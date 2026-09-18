@@ -607,6 +607,14 @@ export const UI_HTML = `<!doctype html>
         var e = r.board[k], open = !!expanded['b:' + k];
         var summary = '';
         if (g === 'claim') { try { var c = JSON.parse(e.text); summary = (c.owner ? 'owner ' + c.owner : '') + (c.status ? ' · ' + c.status : '') + (c.team && c.team.length ? ' · team ' + c.team.join(', ') : ''); } catch (x) {} }
+        if (g === 'verify') {
+          try {
+            var head = JSON.parse((e.text || '').split('\n')[0]);
+            summary = (head && typeof head.exit_code === 'number' && head.proposal)
+              ? (head.exit_code === 0 ? 'exit 0 (pass)' : 'exit ' + head.exit_code + ' (does not satisfy the gate)') + ' · verifies ' + head.proposal + (head.command ? ' · ' + head.command : '')
+              : 'no parseable JSON head — does not satisfy require_verification';
+          } catch (x) { summary = 'no parseable JSON head — does not satisfy require_verification'; }
+        }
         return '<div class="bentry ' + g + (open ? ' open' : '') + '"><div class="bh" data-b="' + esc(k) + '"><span class="pre">' + g + '</span><span class="k" title="' + esc(k) + '">' + esc(k.replace(/^(claim|verify|hold|inbox)\\//, '')) + '</span><span class="m">' + esc(e.by) + ' · ' + rel(e.updated_at) + ' · ' + e.chars + 'c</span></div>'
           + '<div class="bb">' + (summary ? '<div style="color:var(--dim);margin-bottom:6px">' + esc(summary) + '</div>' : '') + withMentions(esc(e.text || '')) + '</div></div>';
       }).join('') + '</div>';

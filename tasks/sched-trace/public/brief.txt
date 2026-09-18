@@ -1,0 +1,5 @@
+Read spec.txt (the SCHED scheduler) and jobs.txt. Determine the completion time of every job
+when the jobs are run under that specification.
+
+Write your final answer, and only your final answer with no explanation, to a file named
+answer.txt in your current working directory, in the output format given at the end of spec.txt.

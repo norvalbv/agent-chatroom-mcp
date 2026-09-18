@@ -28,8 +28,7 @@ What happens in each tick t, strictly in this order
      below 0) and its wait counter goes back to 0. The running job and sleeping jobs do
      not age.
   4. DISPATCH.
-     a. PREEMPT: if there is a running job that is not in its switch tick (see below) and
-        either (i) READY contains a job whose current priority number is strictly smaller
+     a. PREEMPT: if there is a running job and either (i) READY contains a job whose current priority number is strictly smaller
         than the running job's, or (ii) the running job's run counter is 3 or more and READY
         contains a job whose current priority number is smaller than or equal to the running
         job's, then the running job goes back to READY (wait counter 0) and there is no

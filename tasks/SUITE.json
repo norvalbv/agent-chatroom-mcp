@@ -94,11 +94,14 @@
     },
     {
       "id": "stamp-2",
-      "status": "pending",
+      "status": "primary",
       "family": "scope-capture",
-      "arm_a": null,
+      "arm_a": {
+        "pass": 5,
+        "n": 10
+      },
       "admission": "tasks/stamp-2/ADMISSION.md",
-      "note": "10-seed screen in progress at the time of writing; update when reported"
+      "note": "same STAMP spec as stamp-interpreter, new program with several nested-DEF spots; one family with stamp-interpreter (statistics unit = family)"
     },
     {
       "id": "stamp-helpers",
@@ -273,6 +276,14 @@
       "arm_a": null,
       "admission": "paper/amendments.md",
       "note": "retired: its handoff scorer cannot be measured on arm A"
+    },
+    {
+      "id": "bench-printf-format-2",
+      "status": "pending",
+      "family": "libc-exact-number",
+      "arm_a": null,
+      "admission": "tasks/bench-printf-format-2/ADMISSION.md",
+      "note": "sonnet-7's printf dial (length modifiers, %u, negative x/X/o, star width/precision; 3012 cases); same family as bench-printf-format; screening in progress"
     }
   ]
 }

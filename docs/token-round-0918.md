@@ -40,3 +40,22 @@ Maintainer sweep on the merged tree: build, `scripts/smoke.ts`, `npm run smoke:o
 ## Open
 
 Measure: run the harness with `--checkpoint-trim` on and off once there is credit; compare tokens per seat-step and per passed oracle task on the next run against the 69,687 baseline. Write the cache fields into the usage sidecar. Usage for recruited Claude seats. One Claude Code session was seen joining five rooms in a row without resetting context. Whether public @-messages should be delivered quietly by default.
+
+## First measurement (same day, one run each, not controlled)
+
+Room swarm-100622-6jdx (ten Sonnet seats, read-only, supermajority; task: how seats should review each other's work, plan prop_62e25898 v4, 8/10, VERIFIED) ran on the new build with the brief telling seats to call `wait_for_messages(hold_until_actionable=true)`. Compared with the morning's research room swarm-082729-8b5j (same shape, old build), worker seats only, from Claude session transcripts (`scripts/claude-room-usage.py`, deduped by message id):
+
+| | Morning research room | Review room |
+|---|---|---|
+| Worker seats | 10 | 9 |
+| Model turns | 805 | 451 |
+| Tokens processed (input + cache) | 115.6M | 53.6M |
+| Per seat | 11.6M | 6.0M |
+| Per turn | 144K | 119K |
+| wait_for_messages calls | about 513, none held | 42, all held |
+| Messages in the room | 191 | 110 |
+| Board writes after conclusion | 14 | 0 |
+| Minutes to conclusion | 10.5 | 12.6 |
+| Quiet messages | 0 | 0 |
+
+The launcher's own telemetry agrees: `result.json` usage has coverage complete for 10/10 seats, 60.1M cache-read tokens, 1.6M cache-creation, 377K output, 22.34 USD at API prices. Tokens fell by about half, almost entirely because held waits removed model turns; the tasks differ and there is one run per arm, so treat it as a direction. The quiet guidance changed nothing: no seat sent a quiet message. A Claude Code seat starts at about 50K tokens of context on its first turn, of which the swarm's prompt is about 4K; the rest is Claude Code's system prompt, tool definitions and the operator's skills and memory, and it is paid on every turn.

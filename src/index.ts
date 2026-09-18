@@ -51,7 +51,14 @@ const spawner = new Spawner({
 // process exits (heartbeat-as-liveness keeps the seat alive); the concluded event, not process
 // close, is what must trigger the lobby's consolidator seat (lobby item 3)
 hub.onRoomState = (room, state) => {
-  if (state === "concluded") spawner.checkConsolidators();
+  if (state !== "concluded") return;
+  try {
+    spawner.checkConsolidators();
+  } catch (e) {
+    // a refused consolidator spawn (cap/depth/held lobby) must never break the vote that concluded the
+    // child room: announce and swallow, mirroring the child-close handler in spawner.ts
+    hub.announce(room, `Consolidator spawn check failed: ${(e as Error).message}`);
+  }
 };
 spawner.attach({
   isHeld: (room) => {

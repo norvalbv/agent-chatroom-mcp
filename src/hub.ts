@@ -1800,7 +1800,9 @@ export class Hub {
    * voter who is not the owner (never verified sorts first), ties broken by earliest join. Hub-chosen,
    * never client-supplied, so a claimant cannot pick their own reviewer by writing it into the JSON. */
   private assignReviewer(room: Room, owner: Participant): Participant | undefined {
-    const candidates = this.voters(room).filter((x) => x.id !== owner.id);
+    // identity-is-the-connection: a second name on the owner's own MCP session is not "someone
+    // else" (the same sock-puppet case verifiedBy() already excludes for authorship, hub.ts ~2190).
+    const candidates = this.voters(room).filter((x) => x.id !== owner.id && !(x.session && owner.session && x.session === owner.session));
     if (!candidates.length) return undefined;
     return candidates.slice().sort((a, b) =>
       (a.lastVerifiedAt ?? "").localeCompare(b.lastVerifiedAt ?? "") || a.joinedAt.localeCompare(b.joinedAt))[0];

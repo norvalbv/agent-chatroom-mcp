@@ -54,6 +54,17 @@ test("reviewer is assigned once at creation; a later edit to the same claim does
   assert.equal(second.reviewer, first.reviewer, "reviewer stays put across an update to the same key");
 });
 
+test("a sock-puppet second identity on the owner's own session is never assigned as reviewer (identity-is-the-connection)", () => {
+  const h = new Hub();
+  const name = `reviewer-assign-sockpuppet-${++serial}`;
+  const { room, participant: owner } = h.join(name, "owner", "test", {}, undefined, "shared-session");
+  const { participant: ownerAlt } = h.join(name, "owner-helper", "test", {}, undefined, "shared-session"); // same session, second name
+  const { participant: carol } = h.join(name, "carol", "test", {}, undefined, "carol-session");
+  const entry = h.setBoard(room.name, owner.id, "claim/sockpuppet", JSON.stringify({ area: "sockpuppet", owner: "owner", status: "open" }))!;
+  assert.equal(entry.reviewer, carol.name, "the only real second connection is carol; the owner's own second identity must not be picked");
+  assert.notEqual(entry.reviewer, ownerAlt.name);
+});
+
 // ---------- notification: claimant and reviewer both told, reviewer's is addressed ----------
 
 test("both the claimant and the reviewer are told, and the reviewer's notice is addressed (mentions them)", () => {

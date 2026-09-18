@@ -85,8 +85,14 @@ export function rollupUsage(runs: readonly ({ usage?: SeatUsageRollup | null } |
  * `--output-format text` would have produced) plus its usage. Usage is `null` (unknown, not zero) when
  * the blob is not the expected JSON shape or carries no cost figure — a claude CLI version without
  * `total_cost_usd` must not be reported as a free run.
+ *
+ * `numTurns`/`durationMs`/`durationApiMs` come from the same envelope (confirmed live against a real
+ * `claude -p --output-format json` call, RQ1 harness board key `evidence/claude-json-envelope`) and are
+ * `undefined`, never 0-filled, when the field is absent or non-numeric — a claude seat has no step loop
+ * so `num_turns` is the only real turn count available, and an old CLI without it must not read as
+ * "zero turns".
  */
-export function parseClaudeCliOutput(raw: string): { text: string; usage: SeatUsageRollup | null } {
+export function parseClaudeCliOutput(raw: string): { text: string; usage: SeatUsageRollup | null; numTurns?: number; durationMs?: number; durationApiMs?: number } {
   let parsed: any;
   try {
     parsed = JSON.parse(raw);
@@ -94,12 +100,16 @@ export function parseClaudeCliOutput(raw: string): { text: string; usage: SeatUs
     return { text: raw, usage: null };
   }
   const text = typeof parsed?.result === "string" ? parsed.result : raw;
+  const extra: { numTurns?: number; durationMs?: number; durationApiMs?: number } = {};
+  if (typeof parsed?.num_turns === "number") extra.numTurns = parsed.num_turns;
+  if (typeof parsed?.duration_ms === "number") extra.durationMs = parsed.duration_ms;
+  if (typeof parsed?.duration_api_ms === "number") extra.durationApiMs = parsed.duration_api_ms;
   const cost = parsed?.total_cost_usd ?? parsed?.cost_usd;
-  if (typeof cost !== "number") return { text, usage: null };
+  if (typeof cost !== "number") return { text, usage: null, ...extra };
   const u = parsed?.usage ?? {};
   const usage: SeatUsageRollup = { cost };
   for (const k of CLAUDE_ONLY_USAGE_FIELDS) if (typeof u[k] === "number") usage[k] = u[k];
-  return { text, usage };
+  return { text, usage, ...extra };
 }
 /** Fetch the existing full room endpoint; no board/body projection or text slicing. */
 export async function collectRoomSnapshot(baseUrl: string, name: string): Promise<RoomSnapshot> {

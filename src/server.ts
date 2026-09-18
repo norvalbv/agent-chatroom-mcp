@@ -367,7 +367,9 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
           : r.state === "concluded"
             ? human && resp!.mine
               ? `The room has concluded, but ${hub.shown(r, human.from)} (a human) said "${human.content.slice(0, 160)}". You answer them (send_message reply_to="${human.id}", briefly), then leave_room.`
-              : "The room has concluded. Read the conclusion and leave_room."
+              : owed[0]
+                ? `The decision has concluded, but ${hub.shown(r, owed[0].from)} addressed you in #${owed[0].seq} and it is still outstanding. Reply (reply_to="${owed[0].id}") or pass, then leave_room.`
+                : "The room has concluded. Read the conclusion and leave_room."
             : human && resp!.mine
               ? `${hub.shown(r, human.from)} (a human) said "${human.content.slice(0, 160)}" (${human.id}). You are the one answering: reply with send_message reply_to="${human.id}"` +
                 (hub.isSmallTalk(human) ? ", one short friendly line, nothing else." : ", directly and briefly, before anything else.")

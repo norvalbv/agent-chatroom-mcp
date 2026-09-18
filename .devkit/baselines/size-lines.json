@@ -4,8 +4,8 @@
   "maxTestLines": 2000,
   "files": {
     "src/hub.ts": 2504,
-    "src/seat.ts": 642,
-    "src/server.ts": 650,
+    "src/seat.ts": 668,
+    "src/server.ts": 676,
     "src/swarm.ts": 514,
     "src/ui.ts": 739
   }

@@ -5,7 +5,7 @@
  * reasoning blocks passed back) and the CLI the launcher and the spawner call.
  *
  *   openrouter -p "<brief>" --mcp-url http://127.0.0.1:7717/mcp [--model slug] [--cwd dir] [--write]
- *              [--no-shell] [--max-minutes 45] [--reasoning low|medium|high]
+ *              [--no-shell] [--max-minutes 45] [--reasoning low|medium|high] [--checkpoint-trim]
  */
 import { randomUUID } from "node:crypto";
 import { resolve } from "node:path";
@@ -36,7 +36,7 @@ const RATE_LIMIT_PATIENCE_MS = Number(flag("rate-limit-patience-min", "20")) * 6
 const say = (s: string) => process.stderr.write(`${s}\n`);
 
 if (!PROMPT.trim()) {
-  say('usage: openrouter -p "<prompt>" --mcp-url <url> [--model slug] [--cwd dir] [--write] [--no-shell] [--max-minutes 45] [--reasoning low|medium|high]');
+  say('usage: openrouter -p "<prompt>" --mcp-url <url> [--model slug] [--cwd dir] [--write] [--no-shell] [--max-minutes 45] [--reasoning low|medium|high] [--checkpoint-trim]');
   process.exit(2);
 }
 if (!KEY && BASE.startsWith("https://openrouter.ai")) {
@@ -164,6 +164,7 @@ const result = await runSeat(openRouterProvider(MODEL, REASONING), {
   handoffContextFraction: Number(flag("handoff-context-fraction", process.env.SEAT_HANDOFF_CONTEXT_FRACTION ?? "0.9")),
   handoffIdleTurns: Number(flag("handoff-idle-turns", process.env.SEAT_HANDOFF_IDLE_TURNS ?? "20")),
   noHandoff: has("no-handoff") || process.env.SEAT_NO_HANDOFF === "1",
+  checkpointTrim: has("checkpoint-trim"),
   log: say,
 });
 if (rateLimited) say(`[openrouter ${MODEL}] ${rateLimited} rate-limited request(s) retried`);

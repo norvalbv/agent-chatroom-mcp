@@ -33,8 +33,10 @@ await a.call("join_room", { room, name: "A", agent: "test" });
 await b.call("join_room", { room, name: "B", agent: "test" });
 await c.call("join_room", { room, name: "C", agent: "test" });
 
-// A owns a claim with no handoff/*; C addresses B and never gets a reply. Both would refuse leave_room today.
-let r = await a.call("board_set", { room, key: "claim/metrics", text: JSON.stringify({ owner: "A", status: "open" }) });
+// A owns a claim with no handoff/*, and wrote its status straight into the claim's note instead of a separate
+// handoff/* (common in practice); C addresses B and never gets a reply. Both would refuse leave_room today.
+const claimNote = "reproduced the bug on main, root cause is in trim(); patch not yet written";
+let r = await a.call("board_set", { room, key: "claim/metrics", text: JSON.stringify({ owner: "A", status: "open", note: claimNote }) });
 assert.ok(!r.error, "claim written: " + r.text);
 r = await b.call("board_set", { room, key: "verify/build", text: "npm run build; cwd=/repo; commit abc123; exit 0" });
 assert.ok(!r.error, "verify written: " + r.text);
@@ -61,8 +63,10 @@ assert.ok(!r.error, "C agreed: " + r.text);
 const rm = hub.getRoom(room);
 assert.equal(rm.state, "concluded", "room concluded");
 
-// The hub released the claim itself, in one system line, without anyone writing a handoff/*.
-assert.ok(!rm.board.has("claim/metrics"), "claim/metrics was released by the hub on conclusion");
+// The hub announced the release itself, in one system line, without anyone writing a handoff/* — but the claim's
+// own content (including a seat's note, when that is the only record of what it did) is not destroyed.
+assert.ok(rm.board.has("claim/metrics"), "claim/metrics is not deleted: its content is not the only place work was recorded");
+assert.match(JSON.parse(rm.board.get("claim/metrics")!.text).note, /root cause is in trim/, "the claim's note survives conclusion");
 const releaseNotice = rm.messages.filter((m) => m.kind === "system" && /released/.test(m.content)).at(-1);
 assert.ok(releaseNotice, "a system line announced the release");
 assert.match(releaseNotice!.content, /claim\/metrics/);
@@ -100,7 +104,7 @@ assert.ok(!r.error, "handoff written: " + r.text);
 hub.closeRoom(room2, "benji", "abandoned, human closed it");
 const rm2 = hub.getRoom(room2);
 assert.equal(rm2.state, "closed");
-assert.ok(!rm2.board.has("claim/thing"), "claim/thing released on close");
+assert.ok(rm2.board.has("claim/thing"), "claim/thing is released (announced), not deleted, on close");
 assert.ok(rm2.board.has("handoff/other"), "handoff/other written before close survives");
 
 // closeRoom already deactivated D (abandoned-room cleanup); a seat that reconnects afterwards (the launcher's

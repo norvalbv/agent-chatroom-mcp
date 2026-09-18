@@ -2246,18 +2246,16 @@ export class Hub {
 
   /**
    * Once a room concludes or closes nobody can join a team or take over an area in it, so a claim/*'s ownership
-   * lock no longer serves any purpose. Released here, in one system line, so seats are never asked to write a
-   * claim release or a handoff/* just to leave (leaveRefusal, leavingWouldBlock). verify/* and handoff/* are left
-   * alone: they are the evidentiary record and must stay readable (board_get) after the room is done.
+   * lock no longer serves any purpose. Announced here, in one system line, so seats are never asked to write a
+   * claim release or a handoff/* just to leave (leaveRefusal, leavingWouldBlock). The entries themselves are left
+   * on the board untouched, not deleted: a seat's note/status/team JSON is sometimes the only record of what it
+   * did (some write that directly into claim/* instead of a separate handoff/*), so it must stay readable via
+   * board_get exactly like verify/* and handoff/* are.
    */
   private releaseClaims(room: Room, why: string): void {
     const claims = [...room.board.keys()].filter((k) => k.startsWith("claim/"));
     if (!claims.length) return;
-    for (const k of claims) {
-      this.applyBoard(room, k, null);
-      this.persist({ type: "board", room: room.name, key: k, entry: null });
-    }
-    this.post(room, "system", undefined, `${why}: released ${claims.length} claim/* entr${claims.length === 1 ? "y" : "ies"} (${claims.join(", ")}) — nobody needs to hand off in a room nobody can act in.`);
+    this.post(room, "system", undefined, `${why}: released ${claims.length} claim/* entr${claims.length === 1 ? "y" : "ies"} (${claims.join(", ")}) — nobody needs to hand off in a room nobody can act in; their content stays on the board (board_get).`);
   }
 
   private setState(room: Room, state: RoomState) {

@@ -52,6 +52,7 @@ export const offlineScripts = [
   'route-auth-regression.ts',
   'refusal-telemetry.ts',
   'shelf-lang-tasks.test.ts',
+  'arrow-task.test.ts',
   'quiet-guidance-regression.ts',
   'quiet-receipts.ts',
   'quill-task.test.ts',

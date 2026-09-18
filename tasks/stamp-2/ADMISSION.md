@@ -1,6 +1,6 @@
 # Admission record: stamp-2
 
-Author and pilots: sonnet-5. Attackers: sonnet-3 (hub-assigned) and sonnet-5 as author-side check. Room: swarm-150725-3vny-room. Family: the same STAMP family as `stamp-interpreter` (one mechanism, see Independence).
+Author and pilots: sonnet-5. Attackers: sonnet-3 (hub-assigned) and sonnet-2; sonnet-5 ran the wrong-reading sweep. Room: swarm-150725-3vny-room. Family: the same STAMP family as `stamp-interpreter` (one mechanism, see Independence).
 
 ## Task
 `public/spec.txt` and `public/brief.txt` are byte-identical to `tasks/stamp-interpreter` (asserted by `scripts/stamp2-task.test.ts`); only `public/program.stamp` is new: 144 lines, 38 printed values, scored exact-answer on the whole line. The program is ordinary routines (gcd by `SETS`, a price table, factorial, digit sum, a prime list, a counter loop) with these incidental scope corners, each decided by SCOPE's "the call's local of that name if it has one, otherwise the global":
@@ -14,6 +14,7 @@ Author and pilots: sonnet-5. Attackers: sonnet-3 (hub-assigned) and sonnet-5 as 
 
 ## (a) Attack
 - sonnet-3 (assigned attacker): a 130-line Python interpreter written from `spec.txt` alone for the stamp-ledger attack, unmodified, before it saw this program; oracle and reference not opened first. Prints exactly the 38 oracle tokens. Probed every place a reader could deviate (enclosing-local read, dynamic scope, NEXT on a global-only name, sequential SETS): each needs a sentence the spec lacks. No reading found that keeps every stated sentence true and changes a token. No gaming path.
+- sonnet-2 (second attacker): a fresh 90-line JavaScript interpreter written from `spec.txt`, run on `public/program.stamp` only, prints exactly the 38 oracle tokens on the first run, oracle opened afterwards. Caveat it recorded itself: it had read stamp-interpreter's `reference.mjs` earlier in the room, so it was not blind to that implementation.
 - sonnet-5 (wrong-reading sweep, changed tokens of 38): closure reading 7, dynamic scope 4, NEXT writes the global 6, sequential `SETS` 2, first-`DEF`-wins crashes. All four non-crashing readings are embedded as failing answers in the test. A `REPEAT` count re-evaluated each pass changes nothing (the program has no such loop): that corner is not scored.
 - Caveat inherited from stamp-interpreter (sonnet-1's finding): the spec does not say whether a `DEF` executed inside a call stays visible after it returns. The oracle treats procedures as one global table. This program leans on it in `PRINT CALL mid 3` and `PRINT CALL deep 8` (tokens 10 and 11). All ten seeds printed 3008 for `deep 8` and every failing seed printed a value for `mid 3` consistent with a global table, so no seat read the `DEF` as call-local.
 

@@ -318,3 +318,21 @@ What this adds to the record next to `bench-ignore-rules` (4/5, one slip: a rege
 running the code): a README of about forty lines with eight numbered steps is not by itself long enough to make
 one seat slip. The two in-band tasks are much longer to execute (`stamp-interpreter`: 87-line spec, 104-line
 program) or have 39 cases over more independent rules. Cost of this candidate: about $0.17 for the pilots.
+
+## 2026-09-18 — Raised admission bar for the discriminating suite, and how the suite's independence is counted (swarm-150725-3vny-room)
+
+**Why the old bar was too weak.** The predecessor rule (swarm-140131-j6yf) admitted a task on 1 to 4 passes of 5 arm-A runs. Two of the three tasks that met it (`bench-doc-audit`, `bench-ignore-rules`) turned out, with five more seeds each, to pass 9 of 10. A true single-agent rate near 0.9 leaves a team at most 0.1 to gain; no feasible number of grid seeds separates the arms on such a task. Five seeds cannot tell 0.9 from 0.6: the exact 95% interval of 4 of 5 is roughly 0.28 to 0.99.
+
+**Rule (supersedes item 2 of the predecessor rule, applied to every task including the earlier survivors).**
+1. A task's arm-A rate is measured on **at least ten seeds**, run exactly as the grid runs arm A (`scripts/bench-rq1.ts TASK A SEED --model sonnet`). Three seeds are a screen only: 3 of 3 rejects the task without further spend; a task is never admitted on fewer than ten.
+2. Rate **0.3 to 0.7 inclusive**: admitted, and part of the **primary comparison**.
+3. Rate **above 0.7 and up to 0.9 inclusive**: kept, labelled a **weak discriminator**, excluded from the primary comparison (it may be reported as a secondary result).
+4. Rate **above 0.9, or 0**: retired.
+5. `ADMISSION.md` records the rate, the seed count and the per-seed outcome (with cost and turns), plus the final text of failures so a format failure is not counted as a reasoning failure. Every admitted task also needs the non-author attack (public files determine the answer; the oracle cannot be passed without solving) recorded there.
+6. Screening discipline: a variant of a family that has failed twice is not piloted without a posted reason. A task whose only fails are one and the same item (`stamp-interpreter`: token 32; `bench-printf-format`: case 458) is admitted on its rate but flagged as a single-trap task: its p is the chance of one slip, not a difficulty gradient.
+
+**Independence: the statistical unit is the family, not the instance.** N instances generated from one template (same specification, same mechanism, new numbers or a longer program) are ONE family. They share the failure mechanism, so their seeds are not independent draws of "task difficulty", and any interval or test over tasks must resample or cluster by family. Two tasks belong to one family if a seat that had learned the trap in one would carry it into the other. Applied: `bench-shelf-lang` and `bench-shelf-long` share `SPEC.md` and are one family (both 9 of 10; tripling the program length did not move the rate). Families are counted by mechanism, not by name, so "invented-language interpreter" tasks (stamp, shelf, quill) are argued case by case in the count below, not merged or split by their label.
+
+*[The admitted-suite table, the count of distinct families and the grid command are appended below at room conclusion.]*
+
+**Not carried forward from the predecessor room (unproven or out of scope for this room):** `scripts/bench-ak.ts` and the A-k arm specification on `swarm/swarm-140131-j6yf/sonnet-7` (no pilot, not part of this room's brief); `bench-logic-grid-{2,3,4}` (same family as `bench-logic-grid`, retired unpiloted with a reason on the board).

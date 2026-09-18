@@ -23,6 +23,7 @@ export const offlineScripts = [
   'board-manifest-regression.ts',
   'board-transport-regression.ts',
   'challenge-session-regression.ts',
+  'claude-lean-flags-regression.ts',
   'claude-usage-regression.ts',
   'consolidator-spawn-regression.ts',
   'departed-mentions.test.ts',
@@ -68,7 +69,7 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
     { name: 'runner self-tests', command: process.execPath, args: ['scripts/offline-runner.test.mjs'] },
     // Fleet CLI fixtures consume dist: compile every run rather than testing stale output.
     { name: 'build', command: process.execPath, args: ['node_modules/typescript/bin/tsc'] },
-    ...offlineScripts.map(file => ({ name: file, command: process.execPath, args: [...(file === 'seat-env-regression.ts' ? ['--experimental-vm-modules'] : []), '--import', 'tsx', `scripts/${file}`] })),
+    ...offlineScripts.map(file => ({ name: file, command: process.execPath, args: [...(file === 'seat-env-regression.ts' || file === 'claude-lean-flags-regression.ts' ? ['--experimental-vm-modules'] : []), '--import', 'tsx', `scripts/${file}`] })),
   ];
   process.exitCode = runCommands(commands, { cwd });
 }

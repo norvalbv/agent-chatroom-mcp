@@ -107,3 +107,64 @@ its own seat-role randomization keyed on seed.
 
 <!-- Further entries appended by item 1/2/3 builders as deviations are found; do not remove this notice
 until the room concludes. -->
+
+## 2026-09-18 — A run the deadline killed gets outcome `timeout`, not scored against the workspace
+
+**Bug found (swarm-125438-jp20-room item 3, bench-bug-fix-C-seed1/result.json from the first grid run,
+`bench/results/rq1-grid1/`):** all 3 of that room's seats were killed by the harness's own deadline (`exit_code
+143`, `usage: null` per seat), yet the run was still recorded `outcome: "task_pass"`, `cost_usd: 0`,
+`turns.coverage: "none"` — the workspace file just happened to be untouched and score as a pass, which is not
+the same as the run having had a fair attempt. Downstream, `bench-grid.ts`'s resumability logic
+(`skip:done` once `result.json` exists) then treated this bogus result as permanently finished, and arm A for
+that same seed was refused forever (`matchArmABudget` correctly throws on a non-positive paired cost, but
+nothing ever re-ran arm C to produce a real one).
+
+**Decision:** `timeout` is already in the five-outcome vocabulary fixed by
+`docs/decisions/measure-task-success-on-a-machine-oracle.md` (`task_pass`, `task_fail`, `parse_failure`,
+`timeout`, `infrastructure_error`) but nothing in the harness ever produced it. `scripts/bench-rq1.ts` now
+tracks `killed_by_deadline` per seat (true only when *its own* deadline timer sent the kill, not any other
+exit/signal) and, whenever any seat was killed by the deadline, records `outcome: "timeout"` unconditionally
+— ahead of and instead of `scoreTask()` — regardless of whether the untouched/partial workspace would
+otherwise have scored a pass or fail. A killed run is not a measurement of the mechanic; it is a measurement
+of the deadline. `scripts/bench-grid.ts` no longer treats an on-disk `timeout` result as finished: on the next
+invocation it removes that run's directory and retries it, the same as an interrupted run with no
+`result.json` at all, so a timed-out arm C automatically unblocks its paired arm A on a later grid invocation
+instead of staying stuck.
+
+**Usage capture surviving a kill:** `claude -p --output-format json` prints its single JSON blob only on a
+clean exit, so a killed seat's usage was unrecoverable outright. Both arms now run
+`--output-format stream-json --verbose` (`src/claude-args.ts`, additive `outputFormat` option — the launcher
+and `request_agent` recruit paths are unaffected and still default to `--output-format json`, per
+`token-cost-is-resent-context`'s "so recruits report usage" ruling; this is a harness-only opt-in, not a
+policy change). stdout is now NDJSON, one event per line, so a kill still leaves every event flushed before it
+on the pipe. Confirmed live against the real CLI (`claude -p "Say hello..." --output-format stream-json
+--verbose`, this room, one API call): the trailing `type:"result"` event has the identical shape
+`parseClaudeCliOutput` already parses (`total_cost_usd`, `usage.{input,output,cache_*}_tokens`, `num_turns`,
+`duration_ms`, `duration_api_ms`), so a clean-exit run's result fields are unchanged. `total_cost_usd` exists
+*only* on that trailing `result` event — a killed seat's real cost genuinely cannot be recovered from the
+stream (confirmed by the same live call: intermediate `type:"assistant"` events carry per-turn token usage but
+no cost field) — so `usage` correctly stays `null` for a killed seat, exactly as an unmodified clean-exit
+failure already read, and `rollupUsage` keeps marking it `coverage: "none"`/`cost_usd: 0` without zero-filling
+an unknown cost as a real one. What *does* survive a kill is per-turn token counts, kept as a new, separate,
+purely additive `partial_usage` field (`output_tokens` summed, latest `input_tokens`/cache token counts,
+`assistant_messages_observed`) on each seat record — forensic signal only, never read by `rollupUsage` or any
+cost-summing code, so it cannot silently inflate a reported spend.
+
+## 2026-09-18 — Default deadline raised from 300000ms to 900000ms
+
+**Evidence (`bench/results/rq1-grid1/bench-bug-fix-C-seed1/data/rq1.jsonl` timestamps, the first grid run):**
+room created 12:47:49Z; the blind-openings reveal (3 seats, code task) did not land until 12:50:08Z — 139s
+spent just on independent openings, before any seat could read another's answer, propose, edit a file,
+challenge or verify. That left only ~149s of the old 300000ms deadline for everything else a code-task room
+needs (file edits, a proposal, a challenge, a verification command's exit code, a vote) — mechanically not
+enough, and part of why that room never concluded (compounded by item 1's tool gap). For comparison,
+`bench-fact-check-C-seed1` (a simple recall task, same seat count) revealed at 34s and concluded at 111s total
+— the 300s default was never actually tight for the easy task, only the code one.
+
+**Decision:** `scripts/bench-rq1.ts`'s default `--timeout-ms` (and therefore `--deadline-ms`, which defaults
+to it) is now 900000ms (15 minutes): the observed 139s reveal, plus real room-mechanics round trips (edit,
+propose, a `verify/*` command's own exit code, challenge, vote) a code task needs and the old default never
+gave a chance to happen, with headroom rather than a value tuned to exactly clear the one observed run. Not
+derived from a distribution of many runs (this harness had none to draw from before this fix) — revisit once
+the grid has produced enough real timing data to size it more precisely instead of from a single room's
+timestamps.

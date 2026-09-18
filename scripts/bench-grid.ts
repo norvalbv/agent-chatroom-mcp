@@ -19,7 +19,7 @@
  */
 import { spawn, type ChildProcess } from "node:child_process";
 import { createServer } from "node:net";
-import { existsSync, mkdirSync, readFileSync, readdirSync, statSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { matchArmABudget } from "./rq1-usage-budget.js";
 
@@ -195,9 +195,23 @@ export async function runGrid(args: ParsedGridArgs, opts: { log?: (s: string) =>
   for (const item of plan) {
     const resultPath = join(item.runDir, "result.json");
     if (existsSync(resultPath)) {
-      log(`[skip:done] ${item.taskLabel} ${item.arm} seed${item.seed}`);
-      summary.skipped_done++;
-      continue;
+      // Item 3 (paper/amendments.md): a "timeout" result never got a fair attempt (the deadline killed a
+      // seat) — treating it as finished would permanently strand every downstream run that depends on it
+      // (e.g. arm A's paired budget derivation, which is exactly what happened in bench-bug-fix-C-seed1:
+      // it was mis-scored task_pass and skip:done kept re-serving that bogus result forever). Retry it
+      // instead of skipping, same as an interrupted run with no result.json at all.
+      let outcome: string | null = null;
+      try {
+        outcome = readGridResult(resultPath).outcome;
+      } catch {}
+      if (outcome === "timeout") {
+        log(`[retry:timeout] ${item.taskLabel} ${item.arm} seed${item.seed}: prior run was killed at the deadline, re-running`);
+        rmSync(item.runDir, { recursive: true, force: true });
+      } else {
+        log(`[skip:done] ${item.taskLabel} ${item.arm} seed${item.seed}`);
+        summary.skipped_done++;
+        continue;
+      }
     }
     if (costCapHit) {
       log(`[skip:cost-cap] ${item.taskLabel} ${item.arm} seed${item.seed}`);

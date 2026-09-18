@@ -171,6 +171,32 @@ test("runGrid: arm A without a paired arm C result is an infra-fail, not a silen
   }
 });
 
+test("runGrid: a prior 'timeout' result is retried, not treated as done forever (item 3)", async () => {
+  const f = fixture();
+  try {
+    const args = parseArgs(["--tasks", "bench-fact-check", "--seeds", "1", "--arms", "C", "--tasks-dir", f.tasksDir, "--results-dir", f.resultsDir, "--runner", f.runner]);
+    process.env.STUB_OUTCOME = "timeout";
+    process.env.STUB_COST = "0";
+    const first = await runGrid(args, { log: () => {}, portStart: 24060 });
+    assert.equal(first.ran, 1);
+    assert.equal(readGridResult(join(f.resultsDir, "bench-fact-check-C-seed1", "result.json")).outcome, "timeout");
+    // A second invocation must retry the timed-out run (a killed seat never got a fair attempt), not
+    // permanently skip:done it — this time the stub reports success.
+    delete process.env.STUB_OUTCOME;
+    delete process.env.STUB_COST;
+    const second = await runGrid(args, { log: () => {}, portStart: 24070 });
+    assert.equal(second.ran, 1, "the timed-out run must be retried");
+    assert.equal(second.skipped_done, 0);
+    assert.equal(readGridResult(join(f.resultsDir, "bench-fact-check-C-seed1", "result.json")).outcome, "task_pass");
+    const calls = invocations(f.invocationsLog);
+    assert.equal(calls.length, 2, "the stub runner was invoked once for the timeout attempt and once more for the retry");
+  } finally {
+    delete process.env.STUB_OUTCOME;
+    delete process.env.STUB_COST;
+    rmSync(f.dir, { recursive: true, force: true });
+  }
+});
+
 test("sumExistingCost / readGridResult: sums cost_usd across every result.json under a dir", () => {
   const f = fixture();
   try {

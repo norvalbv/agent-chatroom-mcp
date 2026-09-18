@@ -17,11 +17,33 @@
  *     [--runner scripts/bench-rq1.ts] [--tasks-dir tasks] [--seats N] [--timeout-ms N] [--deadline-ms N]
  *     [--hub-entry PATH] [--port-base 19850]
  */
-import { spawnSync } from "node:child_process";
+import { spawn, type ChildProcess } from "node:child_process";
 import { createServer } from "node:net";
 import { existsSync, mkdirSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { matchArmABudget } from "./rq1-usage-budget.js";
+
+// Item 5 (orphans): spawnSync would block this process's event loop, so a SIGINT/SIGTERM sent to this
+// script while a run is in flight could not be handled until that run finished on its own — the signal
+// forwarding below needs `spawn` (async) to stay responsive. `currentChild` is the one in-flight
+// scripts/bench-rq1.ts invocation; SIGTERM lets it run its own cascade (item 5's fix there) before this
+// process exits, SIGKILL is the last resort for a child that ignores that.
+let currentChild: ChildProcess | null = null;
+function killCurrentChild(signal: NodeJS.Signals) {
+  if (currentChild && currentChild.pid && currentChild.exitCode === null && currentChild.signalCode === null) {
+    try {
+      currentChild.kill(signal);
+    } catch {}
+  }
+}
+function cascadeStop(exitCode: number) {
+  killCurrentChild("SIGTERM");
+  setTimeout(() => killCurrentChild("SIGKILL"), 1500).unref();
+  setTimeout(() => process.exit(exitCode), 1600).unref();
+}
+process.on("SIGINT", () => cascadeStop(130));
+process.on("SIGTERM", () => cascadeStop(143));
+process.on("exit", () => killCurrentChild("SIGKILL"));
 
 export interface GridRunResult {
   outcome: string;
@@ -229,9 +251,18 @@ export async function runGrid(args: ParsedGridArgs, opts: { log?: (s: string) =>
     }
 
     log(`[run] node --import tsx ${args.runner} ${runnerArgs.join(" ")}`);
-    const result = spawnSync(process.execPath, ["--import", "tsx", args.runner, ...runnerArgs], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
-    if (result.status !== 0 || !existsSync(resultPath)) {
-      log(`[infra-fail] ${item.taskLabel} ${item.arm} seed${item.seed}: exit ${result.status}, stderr: ${result.stderr?.slice(-2000)}`);
+    const { status, stderr } = await new Promise<{ status: number | null; stderr: string }>((resolveRun) => {
+      const child = spawn(process.execPath, ["--import", "tsx", args.runner, ...runnerArgs], { stdio: ["ignore", "pipe", "pipe"] });
+      currentChild = child;
+      let stderrBuf = "";
+      child.stderr?.on("data", (d) => (stderrBuf += d));
+      child.on("close", (code) => {
+        if (currentChild === child) currentChild = null;
+        resolveRun({ status: code, stderr: stderrBuf });
+      });
+    });
+    if (status !== 0 || !existsSync(resultPath)) {
+      log(`[infra-fail] ${item.taskLabel} ${item.arm} seed${item.seed}: exit ${status}, stderr: ${stderr.slice(-2000)}`);
       summary.infra_failed++;
       continue;
     }

@@ -63,6 +63,27 @@ async function stop(child: ChildProcess) {
   }
 }
 
+// Item 5 (orphans): the hub and every claude seat are tracked here so a SIGINT/SIGTERM/uncaught exit of
+// this script kills them too, instead of leaving them reparented to pid 1. `exit` handlers must be
+// synchronous, so this issues SIGKILL directly rather than the graceful stop() above.
+const trackedChildren = new Set<ChildProcess>();
+function track(child: ChildProcess): ChildProcess {
+  trackedChildren.add(child);
+  child.once("exit", () => trackedChildren.delete(child));
+  return child;
+}
+process.on("exit", () => {
+  for (const child of trackedChildren) {
+    if (child.exitCode === null && child.signalCode === null && child.pid) {
+      try {
+        child.kill("SIGKILL");
+      } catch {}
+    }
+  }
+});
+process.on("SIGINT", () => process.exit(130));
+process.on("SIGTERM", () => process.exit(143));
+
 export interface SeatRecord {
   name: string;
   argv: string[];
@@ -82,7 +103,7 @@ export interface SeatRecord {
 function runClaudeSeat(name: string, args: string[], cwd: string, deadlineMs: number): Promise<SeatRecord> {
   return new Promise((res) => {
     const startedAt = new Date();
-    const child = spawn("claude", args, { cwd, env: seatChildEnv(process.env, name), stdio: ["ignore", "pipe", "pipe"] });
+    const child = track(spawn("claude", args, { cwd, env: seatChildEnv(process.env, name), stdio: ["ignore", "pipe", "pipe"] }));
     let out = "";
     let err = "";
     child.stdout?.on("data", (d) => (out += d));
@@ -229,7 +250,7 @@ async function main() {
     for (const key of Object.keys(hubEnv)) if (key.startsWith("CHATROOM_") || /API_KEY|TOKEN|SECRET|PASSWORD|CREDENTIAL/i.test(key)) delete hubEnv[key];
     Object.assign(hubEnv, { PORT: String(port), HOST: "127.0.0.1", CHATROOM_INSECURE_LOCAL: "1", CHATROOM_DATA_DIR: dataDir, CHATROOM_DEFAULT_CWD: workspace, CHATROOM_LOG_DIR: join(root, "spawned") });
     const fd = openSync(join(root, "hub.log"), "w");
-    const hubChild = spawn(process.execPath, [hubEntry], { cwd: workspace, env: hubEnv, stdio: ["ignore", fd, fd] });
+    const hubChild = track(spawn(process.execPath, [hubEntry], { cwd: workspace, env: hubEnv, stdio: ["ignore", fd, fd] }));
     const url = `http://127.0.0.1:${port}`;
     let ready = false;
     let hubVersion: string | null = null;

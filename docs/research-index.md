@@ -11,6 +11,7 @@
 | arXiv:2304.13835 | humans-answered-once-by-hub-enforcement  |
 | arXiv:2305.14325 | consensus-requires-scrutiny README  |
 | arXiv:2305.19118 | consensus-requires-scrutiny README  |
+| arXiv:2306.05685 | measure-task-success-on-a-machine-oracle  |
 | arXiv:2307.03172 | docs/fleet-174517-summary hub-carries-what-it-knows  |
 | arXiv:2308.00352 | board-delta-manifests-and-single-electorate docs/board-electorate-swarm-200859 docs/quiet-delivery-decision docs/self-improvement-lobby-swarm-190103 docs/swarm-protocol-spec done-means-independently-verified humans-answered-once-by-hub-enforcement proposal-is-a-document quiet-delivery-not-privacy README  |
 | arXiv:2308.07201 | minimal-prompt-hub-carries-coordination README  |
@@ -50,6 +51,7 @@
 | arXiv:2505.18845 | humans-answered-once-by-hub-enforcement  |
 | arXiv:2506.05309 | humans-answered-once-by-hub-enforcement  |
 | arXiv:2507.11473 | docs/quiet-delivery-decision quiet-delivery-not-privacy  |
+| arXiv:2508.06433 | self-organising-teams-by-claims-and-recruitment  |
 | arXiv:2508.11027 | docs/self-improvement-swarm-planned hub-carries-what-it-knows  |
 | arXiv:2508.12683 | hub-carries-what-it-knows  |
 | arXiv:2508.15815 | humans-answered-once-by-hub-enforcement  |
@@ -58,6 +60,7 @@
 | arXiv:2509.25271 | docs/self-improvement-swarm-planned hub-carries-what-it-knows  |
 | arXiv:2509.25370 | docs/self-improvement-swarm-planned hub-carries-what-it-knows  |
 | arXiv:2510.07517 | consensus-requires-scrutiny README  |
+| arXiv:2510.11967 | self-organising-teams-by-claims-and-recruitment  |
 | arXiv:2510.12697 | consensus-requires-scrutiny README  |
 | arXiv:2511.03718 | hub-carries-what-it-knows  |
 | arXiv:2511.17315 | humans-answered-once-by-hub-enforcement  |
@@ -65,6 +68,7 @@
 | arXiv:2601.08815 | hub-carries-what-it-knows  |
 | arXiv:2601.10102 | docs/self-improvement-swarm-planned hub-carries-what-it-knows  |
 | arXiv:2601.17152 | docs/self-improvement-swarm-planned hub-carries-what-it-knows  |
+| arXiv:2601.18285 | self-organising-teams-by-claims-and-recruitment  |
 | arXiv:2602.12285 | docs/self-improvement-swarm-planned hub-carries-what-it-knows  |
 | arXiv:2602.23193 | docs/fleet-181630-summary  |
 | arXiv:2603.10123 | hub-carries-what-it-knows  |
@@ -86,8 +90,9 @@
 | arXiv:2607.16109 | board-delta-manifests-and-single-electorate  |
 | arXiv:2608.02758 | docs/self-improvement-swarm-planned hub-carries-what-it-knows  |
 | arXiv:2608.26081 | board-delta-manifests-and-single-electorate self-organising-teams-by-claims-and-recruitment  |
-| arXiv:2608.30373 | docs/self-improvement-lobby-swarm-190103 done-means-independently-verified  |
-| arXiv:2609.00683 | done-means-independently-verified  |
-| arXiv:2609.03619 | board-delta-manifests-and-single-electorate docs/board-electorate-swarm-200859 done-means-independently-verified self-organising-teams-by-claims-and-recruitment  |
+| arXiv:2608.30373 | docs/self-improvement-lobby-swarm-190103 done-means-independently-verified measure-task-success-on-a-machine-oracle  |
+| arXiv:2609.00683 | done-means-independently-verified measure-task-success-on-a-machine-oracle  |
+| arXiv:2609.02942 | measure-task-success-on-a-machine-oracle  |
+| arXiv:2609.03619 | board-delta-manifests-and-single-electorate docs/board-electorate-swarm-200859 done-means-independently-verified measure-task-success-on-a-machine-oracle self-organising-teams-by-claims-and-recruitment  |
 | arXiv:2609.13076 | humans-answered-once-by-hub-enforcement  |
 | arXiv:cs/9810005 | docs/swarm-protocol-spec done-means-independently-verified  |

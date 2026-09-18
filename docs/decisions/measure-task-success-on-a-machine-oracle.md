@@ -1,0 +1,22 @@
+---
+slug: measure-task-success-on-a-machine-oracle
+created: 2026-09-18
+---
+
+# measure-task-success-on-a-machine-oracle
+
+## Target · 2026-09-18 — A hub mechanic is judged by a machine-checked task outcome on the same brief across two builds
+
+**Context:** Every number this project had was a process metric (reply rate, manifest bytes, tally) and the papers it read (arXiv:2608.30373, arXiv:2609.03619, arXiv:2609.00683) say process measures are not task success. The attention gate's own A/B moved a reply proxy from 70.7% to 81.4% while nobody knew whether either room reached a correct answer.
+**Ruling:** A benchmark harness (branch swarm/swarm-bench-room/oracle-2, merged at c36b6b9, tip 3b3ea43): a runner that records the hub entry sha256 and whole-dist sha256 of the build each arm actually served, two oracle tasks with fixtures hidden by filesystem isolation (bench-fact-check, bench-bug-fix with hidden tests) scored by answer-only full-string equality after documented conservative normalization, five separate outcomes (task_pass, task_fail, parse_failure, timeout, infrastructure_error) with the comparable delta excluding only infrastructure, timeout and tamper, and a budget-matched single-seat control arm. A mechanic's effect is the delta on these tasks between two hub builds on the same brief; a vote is not the terminal check, the oracle is.
+**Consequences:**
+- Positive: Positive: 'better' now has a number a machine produces; the first such run exists. Negative: one task, one seed per arm is direction only; oracle tasks must not be answerable from the brief or one public page, so task authoring is real work.
+- Negative: The first real A/B on the attention gate went the wrong way: the pre-gate build (main at 356ef86) passed the fact-check task and the current build (oracle-2 dist at e870e70) failed it, delta -1, comparable, anti-tamper clean. One run, and the two builds differ by every mechanic merged that day, so this is a bundled-build association, not gate causality. Launch-time hash closure (pinning executable, hub entry, HEAD, brief and scorer into each arm at launch) is still owed; today's provenance is post hoc.
+**Vision-fit:** n/a — internal tooling; the project exists to know whether its own mechanics help
+**Researched:** OpenAI Navier-Stokes run (primary via mirror, verify/openai-navier-stokes-primary): a machine check ended the run, not a vote. arXiv:2306.05685 (LLM-as-judge validity limits) and arXiv:2609.02942 fetched by the lobby's judge-research seat: deterministic oracle primary, human-preference agreement is not correctness; containment scoring refuted by a negation counterexample (evidence/oracle-audit-plan-u19). Debate room (prop_b856908d): the single-seat control arm at matched budget answers 'does debate beat one seat at equal spend'.
+**Rejected:** LLM-judge scoring as the primary check (loses: surface bias and counterfactual insensitivity per the fetched sources); substring or containment oracles (loses: a negated answer passes); a no-answer-in-public guard (withdrawn: public sources with answers are legitimate retrieval); reply-rate as a success proxy (loses: consensus is not correctness, both A/B arms reached 6/6 consensus).
+**Anchored-bet:** [BET] two hidden-fixture oracle tasks and hashed builds are enough to rank hub mechanics; more tasks and seeds sharpen the estimate, they do not change the method
+**Revisit-when:** a mechanic that improves the oracle delta on both tasks across at least three seeds is later found to hurt rooms in practice; or an oracle task turns out answerable from the brief or a single public page
+**Scope:** scripts/live-after-trial.ts,scripts/bench-*.ts,scripts/oracle-tasks.test.ts,scripts/score-fact-check.ts,tasks/,bench/
+**Source:** manual
+**Evidence-change:** swarm-214936 goal 1: bench room swarm-bench-room concluded prop_42e4421c v3 3/3 at 00:42Z on 2026-09-18 after two revivals (the free model was withdrawn mid-run); verify/bench-ab-1, verify/outcome-vocabulary-811eb0f, verify/oracle-2-outcome-vocab, verify/merge-c36b6b9, verify/bench-prop42-lobby11, verify/oracle-4-prop42e4421c; 34/34 offline tests at the merged HEAD; merged on main at 858d24d; lobby ranked list prop_658c9541 v4 4/0 at 00:52Z; report docs/measurement-swarm-214936.md.

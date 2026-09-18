@@ -1,0 +1,115 @@
+{
+  "schemaVersion": 1,
+  "task_id": "bench-fact-check",
+  "arm": "A",
+  "seed": 4,
+  "model": "sonnet",
+  "outcome": "task_pass",
+  "passed": true,
+  "reason": "task_pass",
+  "oracle": {
+    "kind": "exact-answer",
+    "command": "node --import tsx score-fact-check.ts <workspace>/answer.txt oracle/oracle.json",
+    "exit_code": 0
+  },
+  "anti_tamper": {
+    "hash_before": "c0a189fb38f6c856b55b915ffb7a4b2a173267ebe7c4e2219a5b491251713d5d",
+    "hash_after": "c0a189fb38f6c856b55b915ffb7a4b2a173267ebe7c4e2219a5b491251713d5d",
+    "unchanged": true
+  },
+  "seats": [
+    {
+      "name": "single",
+      "argv": [
+        "claude",
+        "-p",
+        "Read records.txt. Records about the three named researchers were transcribed from notes; one affiliation is wrong. Answer with only the single corrected affiliation, nothing else.\n\nWrite your final answer, and only your final answer with no explanation, to a file named answer.txt in your current working directory.",
+        "--mcp-config",
+        "/Users/benji/Desktop/Personal and learning/agent-chatroom-mcp/bench/results/rq1-grid2/bench-fact-check-A-seed4/mcp-empty.json",
+        "--strict-mcp-config",
+        "--allowedTools",
+        "Read,Write,Bash,Glob,Grep",
+        "--tools",
+        "Read,Write,Bash,Glob,Grep",
+        "--disable-slash-commands",
+        "--setting-sources",
+        "project",
+        "--exclude-dynamic-system-prompt-sections",
+        "--output-format",
+        "stream-json",
+        "--verbose",
+        "--model",
+        "sonnet",
+        "--max-budget-usd",
+        "0.546719"
+      ],
+      "exit_code": 0,
+      "signal": null,
+      "started_at": "2026-09-18T13:29:32.882Z",
+      "completed_at": "2026-09-18T13:29:39.232Z",
+      "num_turns": 3,
+      "duration_ms": 4853,
+      "duration_api_ms": 5808,
+      "usage": {
+        "cost": 0.0299904,
+        "input_tokens": 6,
+        "cache_read_input_tokens": 53062,
+        "cache_creation_input_tokens": 3850,
+        "output_tokens": 294
+      },
+      "text": "Society for Formal Methods, Vienna",
+      "killed_by_deadline": false,
+      "partial_usage": null
+    }
+  ],
+  "usage": {
+    "steps": 0,
+    "prompt_tokens": 0,
+    "completion_tokens": 0,
+    "cost_usd": 0.0299904,
+    "seats": 1,
+    "seats_with_usage": 1,
+    "coverage": "complete",
+    "input_tokens": 6,
+    "cache_read_input_tokens": 53062,
+    "cache_creation_input_tokens": 3850,
+    "output_tokens": 294
+  },
+  "turns": {
+    "per_seat": [
+      {
+        "name": "single",
+        "num_turns": 3
+      }
+    ],
+    "summed": 3,
+    "seats": 1,
+    "seats_with_turns": 1,
+    "coverage": "complete"
+  },
+  "wall_clock": {
+    "started_at": "2026-09-18T13:29:32.882Z",
+    "completed_at": "2026-09-18T13:29:39.232Z",
+    "duration_ms": 6350
+  },
+  "budget": {
+    "max_budget_usd": 0.546719,
+    "deadline_ms": 50675
+  },
+  "build": {
+    "head_revision": "620fcf3149020dce952056d608920ce9e2cafade",
+    "hub_entry": null,
+    "hub_entry_sha256": null,
+    "hub_revision": null
+  },
+  "frozen": {
+    "task_sha256": "c0a189fb38f6c856b55b915ffb7a4b2a173267ebe7c4e2219a5b491251713d5d",
+    "scorer_sha256": "05e2b771931c3d11e8c75fd6536b23c3bf1d7cf77e634832ed58654b86e82733",
+    "fact_scorer_sha256": "6b8b3e98c8c408ecd6715a38db9263488644d27c01a11c5bab3172acd5539832",
+    "task_id": "bench-fact-check",
+    "timeout_ms": 900000,
+    "seats": 1
+  },
+  "error": null,
+  "checked_at": "2026-09-18T13:29:39.321Z"
+}

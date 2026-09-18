@@ -1,0 +1,200 @@
+{
+  "schemaVersion": 1,
+  "task_id": "bench-fact-check",
+  "arm": "C",
+  "seed": 4,
+  "model": "sonnet",
+  "outcome": "task_pass",
+  "passed": true,
+  "reason": "task_pass",
+  "oracle": {
+    "kind": "exact-answer",
+    "command": "node --import tsx score-fact-check.ts <workspace>/answer.txt oracle/oracle.json",
+    "exit_code": 0
+  },
+  "anti_tamper": {
+    "hash_before": "c0a189fb38f6c856b55b915ffb7a4b2a173267ebe7c4e2219a5b491251713d5d",
+    "hash_after": "c0a189fb38f6c856b55b915ffb7a4b2a173267ebe7c4e2219a5b491251713d5d",
+    "unchanged": true
+  },
+  "seats": [
+    {
+      "name": "seat-1",
+      "argv": [
+        "claude",
+        "-p",
+        "Read records.txt. Records about the three named researchers were transcribed from notes; one affiliation is wrong. Answer with only the single corrected affiliation, nothing else.\n\nThe room's final agreed proposal text must be exactly your answer and nothing else (no explanation) — that text is read as the submitted answer once the room concludes.\n\nJoin room rq1 as seat-1 (agent claude, expected_participants 3). Leave the room once it has concluded.",
+        "--mcp-config",
+        "/Users/benji/Desktop/Personal and learning/agent-chatroom-mcp/bench/results/rq1-grid2/bench-fact-check-C-seed4/mcp.json",
+        "--strict-mcp-config",
+        "--allowedTools",
+        "mcp__chatroom__*,Read,Write,Bash,Glob,Grep",
+        "--tools",
+        "Read,Write,Bash,Glob,Grep",
+        "--disable-slash-commands",
+        "--setting-sources",
+        "project",
+        "--exclude-dynamic-system-prompt-sections",
+        "--output-format",
+        "stream-json",
+        "--verbose",
+        "--model",
+        "sonnet"
+      ],
+      "exit_code": 0,
+      "signal": null,
+      "started_at": "2026-09-18T13:28:41.769Z",
+      "completed_at": "2026-09-18T13:29:32.287Z",
+      "num_turns": 16,
+      "duration_ms": 49218,
+      "duration_api_ms": 44968,
+      "usage": {
+        "cost": 0.1682626,
+        "input_tokens": 32,
+        "cache_read_input_tokens": 487063,
+        "cache_creation_input_tokens": 12347,
+        "output_tokens": 2034
+      },
+      "text": "The room concluded unanimously with the answer: **Society for Formal Methods, Vienna** (correcting Mira Chen's mis-transcribed affiliation).",
+      "killed_by_deadline": false,
+      "partial_usage": null
+    },
+    {
+      "name": "seat-2",
+      "argv": [
+        "claude",
+        "-p",
+        "Read records.txt. Records about the three named researchers were transcribed from notes; one affiliation is wrong. Answer with only the single corrected affiliation, nothing else.\n\nThe room's final agreed proposal text must be exactly your answer and nothing else (no explanation) — that text is read as the submitted answer once the room concludes.\n\nJoin room rq1 as seat-2 (agent claude, expected_participants 3). Leave the room once it has concluded.",
+        "--mcp-config",
+        "/Users/benji/Desktop/Personal and learning/agent-chatroom-mcp/bench/results/rq1-grid2/bench-fact-check-C-seed4/mcp.json",
+        "--strict-mcp-config",
+        "--allowedTools",
+        "mcp__chatroom__*,Read,Write,Bash,Glob,Grep",
+        "--tools",
+        "Read,Write,Bash,Glob,Grep",
+        "--disable-slash-commands",
+        "--setting-sources",
+        "project",
+        "--exclude-dynamic-system-prompt-sections",
+        "--output-format",
+        "stream-json",
+        "--verbose",
+        "--model",
+        "sonnet"
+      ],
+      "exit_code": 0,
+      "signal": null,
+      "started_at": "2026-09-18T13:28:41.770Z",
+      "completed_at": "2026-09-18T13:29:29.381Z",
+      "num_turns": 14,
+      "duration_ms": 46463,
+      "duration_api_ms": 46752,
+      "usage": {
+        "cost": 0.1555304,
+        "input_tokens": 28,
+        "cache_read_input_tokens": 417502,
+        "cache_creation_input_tokens": 11134,
+        "output_tokens": 2638
+      },
+      "text": "The room concluded unanimously with the corrected affiliation: **Society for Formal Methods, Vienna**.",
+      "killed_by_deadline": false,
+      "partial_usage": null
+    },
+    {
+      "name": "seat-3",
+      "argv": [
+        "claude",
+        "-p",
+        "Read records.txt. Records about the three named researchers were transcribed from notes; one affiliation is wrong. Answer with only the single corrected affiliation, nothing else.\n\nThe room's final agreed proposal text must be exactly your answer and nothing else (no explanation) — that text is read as the submitted answer once the room concludes.\n\nJoin room rq1 as seat-3 (agent claude, expected_participants 3). Leave the room once it has concluded.",
+        "--mcp-config",
+        "/Users/benji/Desktop/Personal and learning/agent-chatroom-mcp/bench/results/rq1-grid2/bench-fact-check-C-seed4/mcp.json",
+        "--strict-mcp-config",
+        "--allowedTools",
+        "mcp__chatroom__*,Read,Write,Bash,Glob,Grep",
+        "--tools",
+        "Read,Write,Bash,Glob,Grep",
+        "--disable-slash-commands",
+        "--setting-sources",
+        "project",
+        "--exclude-dynamic-system-prompt-sections",
+        "--output-format",
+        "stream-json",
+        "--verbose",
+        "--model",
+        "sonnet"
+      ],
+      "exit_code": 0,
+      "signal": null,
+      "started_at": "2026-09-18T13:28:41.771Z",
+      "completed_at": "2026-09-18T13:29:29.020Z",
+      "num_turns": 20,
+      "duration_ms": 46063,
+      "duration_api_ms": 44798,
+      "usage": {
+        "cost": 0.22292599999999999,
+        "input_tokens": 40,
+        "cache_read_input_tokens": 639155,
+        "cache_creation_input_tokens": 15428,
+        "output_tokens": 3224
+      },
+      "text": "The room concluded unanimously with the answer: **Society for Formal Methods, Vienna** — this is Mira Chen's corrected affiliation (records.txt line 6 identifies her original \"Institute for Computational Reasoning, Berlin\" entry as the transcription error).",
+      "killed_by_deadline": false,
+      "partial_usage": null
+    }
+  ],
+  "usage": {
+    "steps": 0,
+    "prompt_tokens": 0,
+    "completion_tokens": 0,
+    "cost_usd": 0.546719,
+    "seats": 3,
+    "seats_with_usage": 3,
+    "coverage": "complete",
+    "input_tokens": 100,
+    "cache_read_input_tokens": 1543720,
+    "cache_creation_input_tokens": 38909,
+    "output_tokens": 7896
+  },
+  "turns": {
+    "per_seat": [
+      {
+        "name": "seat-1",
+        "num_turns": 16
+      },
+      {
+        "name": "seat-2",
+        "num_turns": 14
+      },
+      {
+        "name": "seat-3",
+        "num_turns": 20
+      }
+    ],
+    "summed": 50,
+    "seats": 3,
+    "seats_with_turns": 3,
+    "coverage": "complete"
+  },
+  "wall_clock": {
+    "started_at": "2026-09-18T13:28:41.612Z",
+    "completed_at": "2026-09-18T13:29:32.287Z",
+    "duration_ms": 50675
+  },
+  "budget": null,
+  "build": {
+    "head_revision": "620fcf3149020dce952056d608920ce9e2cafade",
+    "hub_entry": "/Users/benji/Desktop/Personal and learning/agent-chatroom-mcp/dist/index.js",
+    "hub_entry_sha256": "66f9d135c47604f02e01b482a0bdbceff9f5ed14080ab0438069f9043166b1d8",
+    "hub_revision": "620fcf3149020dce952056d608920ce9e2cafade"
+  },
+  "frozen": {
+    "task_sha256": "c0a189fb38f6c856b55b915ffb7a4b2a173267ebe7c4e2219a5b491251713d5d",
+    "scorer_sha256": "05e2b771931c3d11e8c75fd6536b23c3bf1d7cf77e634832ed58654b86e82733",
+    "fact_scorer_sha256": "6b8b3e98c8c408ecd6715a38db9263488644d27c01a11c5bab3172acd5539832",
+    "task_id": "bench-fact-check",
+    "timeout_ms": 900000,
+    "seats": 3
+  },
+  "error": null,
+  "checked_at": "2026-09-18T13:29:32.400Z"
+}

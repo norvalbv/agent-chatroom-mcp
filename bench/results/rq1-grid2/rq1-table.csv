@@ -1,0 +1,5 @@
+task,arm,n,task_pass,task_fail,parse_failure,timeout,infrastructure_error,comparable_n,success_rate,cost_per_correct_usd,mean_input_tokens,mean_cache_read_tokens,mean_cache_creation_tokens,mean_output_tokens,mean_turns,turns_partial_coverage,mean_wall_ms,partial_coverage
+bench-bug-fix,A,5,5,0,0,0,0,5,1,0.050680880000000005,10,96948.4,5107.8,970.2,5,false,16348.2,false
+bench-bug-fix,C,5,5,0,0,0,0,5,1,0.96828976,139.6,2460867.8,64097,21594.2,72,false,126189.2,false
+bench-fact-check,A,5,5,0,0,0,0,5,1,0.03178552,6.4,56974.6,3973.2,345.8,3.4,false,7835.4,false
+bench-fact-check,C,5,5,0,0,0,0,5,1,0.59848484,103.6,1622936.2,42764.6,9944.6,52,false,54621.4,false

@@ -1,0 +1,20 @@
+@@ -10,4 +10,2 @@
+ r06-grove
+-dup-amber
+-dup-delta
+ dup-birch
+@@ -28,2 +28,3 @@
+ dup-birch
++a1-ember
+ dup-amber
+@@ -51,4 +51,4 @@
+ dup-amber
+-dup-birch
+-dup-cedar
++a2-amber
++a3-grove
+ r53-amber
+@@ -73,2 +73,3 @@
+ dup-cedar
++a4-birch
+ r70-birch

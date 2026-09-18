@@ -9,6 +9,7 @@
  */
 import { resolve } from "node:path";
 import { type ChatProvider, type Msg, type Reply, type ToolCall, type ToolDef, runSeat } from "./seat.js";
+import { handoffMarkerLine } from "./seat-handoff-report.js";
 import { loadDotEnv, SEAT_ENV_EXCLUSIONS } from "./env.js";
 // Do not reload the human-control token omitted by the launcher/spawner.
 loadDotEnv(undefined, { exclude: SEAT_ENV_EXCLUSIONS });
@@ -129,5 +130,7 @@ const result = await runSeat(openRouterProvider(MODEL, REASONING), {
   log: say,
 });
 if (rateLimited) say(`[openrouter ${MODEL}] ${rateLimited} rate-limited request(s) retried`);
+const marker = handoffMarkerLine(result);
+if (marker) process.stdout.write(`${marker}\n`);
 process.stdout.write(`${result.final}\n`);
 process.exit(result.ok ? 0 : 1);

@@ -61,10 +61,10 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
   const pid = (room: string, override?: string) => {
     const ids = me.get(room);
     if (override) {
-      if (!ids?.has(override)) throw new HubError("That participant_id was not issued to this connection. Use the id join_room returned to you.");
+      if (!ids?.has(override)) throw new HubError("That participant_id was not issued to this connection. Use the id join_room returned to you.", undefined, "auth");
       return override;
     }
-    if (!ids || ids.size === 0) throw new HubError(`You have not joined "${room}" on this connection. Call join_room first.`);
+    if (!ids || ids.size === 0) throw new HubError(`You have not joined "${room}" on this connection. Call join_room first.`, undefined, "auth");
     if (ids.size > 1) {
       const r = hub.getRoom(room);
       const names = [...ids].map((id) => r.participants.get(id)?.name ?? id).join(", ");
@@ -103,7 +103,7 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
       } catch (e) {
         if (e instanceof HubError) {
           outcome = "hub_refusal";
-          hub.recordRefusal(room, tool, e.message, participant);
+          hub.recordRefusal(room, tool, e, participant);
         }
         return fail(e);
       } finally {

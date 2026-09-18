@@ -302,14 +302,23 @@ export class Spawner {
       const seatCwd = req.canEdit && !o.dryRun ? (this.worktreeFor(cwd, target, name) ?? cwd) : cwd;
       if (agent === "openrouter") args[args.indexOf("--cwd") + 1] = seatCwd;
       else if (agent === "codex") args[args.indexOf("-C") + 1] = seatCwd;
-      const outStream = createWriteStream(log);
       const child = spawn(cmd, args, { cwd: seatCwd, env: seatChildEnv(process.env, req.canEdit ? name : undefined), stdio: ["ignore", "pipe", "pipe"] });
-      // for claude, a second listener alongside pipe() gets the same bytes: the log stays human-readable
-      // while this buffer stays clean stdout-only for --output-format json parsing (stderr never mixed in).
+      // claude always runs --output-format json now (telemetry), so its raw stdout is a JSON blob, not the
+      // plain final-answer text every other seat's log holds. Buffer stdout+stderr instead of piping them
+      // live, and on close write only the unwrapped text (matches runClaude's outFile in swarm.ts) so a
+      // human tailing this recruit's log still sees prose, never JSON — --claude-full does not change this
+      // either, since --output-format json itself is unconditional (a telemetry fix, not a lean-flags
+      // opt-out concern). Every other agent kind keeps piping straight to the log file as before.
       let claudeStdout = "";
-      if (agent === "claude") child.stdout?.on("data", (d) => (claudeStdout += d));
-      child.stdout?.pipe(outStream);
-      child.stderr?.pipe(outStream);
+      let claudeStderr = "";
+      if (agent === "claude") {
+        child.stdout?.on("data", (d) => (claudeStdout += d));
+        child.stderr?.on("data", (d) => (claudeStderr += d));
+      } else {
+        const outStream = createWriteStream(log);
+        child.stdout?.pipe(outStream);
+        child.stderr?.pipe(outStream);
+      }
       rec.pid = child.pid;
       this.children.set(name, child);
       const wall = setTimeout(() => {
@@ -321,7 +330,11 @@ export class Spawner {
         clearTimeout(wall);
         rec.endedAt = new Date().toISOString();
         rec.exitCode = code;
-        if (agent === "claude") rec.usage = parseClaudeCliOutput(claudeStdout.trim()).usage;
+        if (agent === "claude") {
+          const { text, usage } = parseClaudeCliOutput(claudeStdout.trim());
+          writeFileSync(log, claudeStderr + text);
+          rec.usage = usage;
+        }
         this.children.delete(name);
         try {
           this.checkConsolidators();

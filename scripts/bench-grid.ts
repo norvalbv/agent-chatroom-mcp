@@ -15,12 +15,12 @@
  *   node --import tsx scripts/bench-grid.ts --tasks bench-fact-check,bench-bug-fix --seeds 1,2,3
  *     [--arms A,C] [--model sonnet] [--max-cost-usd 5] [--results-dir bench/results/rq1]
  *     [--runner scripts/bench-rq1.ts] [--tasks-dir tasks] [--seats N] [--timeout-ms N] [--deadline-ms N]
- *     [--hub-entry PATH] [--port-base 19850]
+ *     [--hub-entry PATH] [--port-base 19850] [--include-retired]
  */
 import { spawn, type ChildProcess } from "node:child_process";
 import { createServer } from "node:net";
 import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { basename, join, resolve } from "node:path";
 import { matchArmABudget } from "./rq1-usage-budget.js";
 
 // Item 5 (orphans): spawnSync would block this process's event loop, so a SIGINT/SIGTERM sent to this
@@ -106,6 +106,16 @@ export function parseArgs(argv: string[], tasksDirDefault = "tasks"): ParsedGrid
   const tasksDir = flag("tasks-dir", tasksDirDefault)!;
   const taskDirs = tasksArg.split(",").map((t) => resolve(tasksDir, t.trim()));
   for (const d of taskDirs) if (!existsSync(d)) throw new Error(`Task directory not found: ${d}`);
+  // tasks/SUITE.json is the machine-readable status of every task; only primary and weak tasks run by default.
+  const suitePath = join(tasksDir, "SUITE.json");
+  if (existsSync(suitePath) && !argv.includes("--include-retired")) {
+    const suite = JSON.parse(readFileSync(suitePath, "utf8")) as { tasks: { id: string; status: string }[] };
+    for (const d of taskDirs) {
+      const entry = suite.tasks.find((t) => t.id === basename(d));
+      if (!entry) throw new Error(`Task ${basename(d)} is not listed in ${suitePath}; list it or pass --include-retired`);
+      if (entry.status !== "primary" && entry.status !== "weak") throw new Error(`Task ${basename(d)} is ${entry.status} in ${suitePath}; refusing without --include-retired`);
+    }
+  }
   const seeds: number[] = [];
   for (const part of seedsArg.split(",")) {
     const m = part.trim().match(/^(\d+)-(\d+)$/);

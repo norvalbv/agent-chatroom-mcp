@@ -166,6 +166,26 @@ test("arm A: no answer.txt written is parse_failure, not a crash, and usage is n
   }
 });
 
+test("arm C: hub boot failure still writes a result.json (infrastructure_error), never crashes with no artifact", async () => {
+  const stubDir = stubClaudeDir();
+  const missingHub = join(tmpdir(), `bench-rq1-missing-hub-${process.pid}.mjs`);
+  const port = await freePort();
+  const root = join(tmpdir(), `bench-rq1-hubfail-${process.pid}-${Date.now()}`);
+  try {
+    const r = invoke([task, "C", "1", "--root", root, "--port", String(port), "--seats", "1", "--hub-entry", missingHub, "--timeout-ms", "3000"], {
+      PATH: `${stubDir}${delimiter}${process.env.PATH}`,
+    });
+    assert.equal(r.status, 0, r.stderr + r.stdout);
+    const result = JSON.parse(readFileSync(join(root, "result.json"), "utf8"));
+    assert.equal(result.outcome, "infrastructure_error");
+    assert.equal(result.passed, false);
+    assert.ok(result.error, "the failure reason is recorded, not silently swallowed");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+    rmSync(stubDir, { recursive: true, force: true });
+  }
+});
+
 test("arm C: N stub seats join a stub hub that concludes immediately; conclusion text becomes answer.txt; usage sums across seats", async () => {
   const stubDir = stubClaudeDir();
   const hubEntry = stubHubDir(EXPECTED);

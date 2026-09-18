@@ -198,12 +198,19 @@ async function main() {
     ? "Modify the relevant source file(s) in this shared working directory directly; when the room reaches a proposal you agree with, its text should summarize the fix, but the file edits are the submission."
     : "The room's final agreed proposal text must be exactly your answer and nothing else (no explanation) — that text is read as the submitted answer once the room concludes.";
 
-  let seatRecords: SeatRecord[];
-  let startedAt: Date;
-  let completedAt: Date;
+  let seatRecords: SeatRecord[] = [];
+  let startedAt = new Date();
+  let completedAt = new Date();
   let hubEntrySha256: string | null = null;
   let hubRevision: string | null = null;
+  // Any thrown error below (hub boot failure, room-create failure, mid-run tamper) still produces a
+  // written verdict, matching bench-bench.ts's try/catch/finally convention: a crash with no artifact
+  // is indistinguishable from a run that was never attempted, which is worse for the grid runner (item
+  // 5) than a recorded infrastructure_error/tamper outcome.
+  let failureReason: "infrastructure_error" | "tamper" | null = null;
+  let failureMessage: string | null = null;
 
+  try {
   if (armArg === "A") {
     startedAt = new Date();
     const mcpJson = join(root, "mcp-empty.json");
@@ -280,14 +287,22 @@ async function main() {
     if (conclusion && !isCodeTask) writeFileSync(join(workspace, "answer.txt"), conclusion.text);
   }
 
-  if (hashTree(taskDir) !== taskBefore || hashFile(scorerPath) !== scorerBefore || hashFile(factScorerPath) !== factScorerBefore) {
-    throw new Error("Frozen task or scorer changed during run (tamper)");
+    if (hashTree(taskDir) !== taskBefore || hashFile(scorerPath) !== scorerBefore || hashFile(factScorerPath) !== factScorerBefore) {
+      failureReason = "tamper";
+    }
+  } catch (error) {
+    completedAt = new Date();
+    failureMessage = String(error);
+    failureReason = /tamper/i.test(failureMessage) ? "tamper" : "infrastructure_error";
   }
-  const scored = await scorer.scoreTask(taskDir, workspace);
+
+  // Re-hash regardless of the branch above: a failure path may still have left the fixture touched,
+  // and a clean run's anti_tamper record must reflect the real post-run state either way.
   const after = hashTree(taskDir);
   const unchanged = after === taskBefore && hashFile(scorerPath) === scorerBefore && hashFile(factScorerPath) === factScorerBefore;
-  const outcome = unchanged ? scored.reason : "tamper";
-  const passed = unchanged && scored.passed;
+  const scored = !failureReason && unchanged ? await scorer.scoreTask(taskDir, workspace) : { passed: false, reason: failureReason ?? "tamper", oracle: { kind: task.oracle.kind, command: null, exit_code: null } };
+  const outcome = !unchanged ? "tamper" : (failureReason ?? scored.reason);
+  const passed = unchanged && !failureReason && scored.passed;
 
   const usage = rollupUsage(seatRecords.map((s) => ({ usage: s.usage })));
   const turnsKnown = seatRecords.filter((s) => typeof s.num_turns === "number");
@@ -309,6 +324,7 @@ async function main() {
     budget: armArg === "A" ? { max_budget_usd: maxBudgetUsd ? Number(maxBudgetUsd) : null, deadline_ms: deadlineMs } : null,
     build: { head_revision: revision(repoRoot), hub_entry: armArg === "C" ? hubEntry : null, hub_entry_sha256: hubEntrySha256, hub_revision: hubRevision },
     frozen: { task_sha256: taskBefore, scorer_sha256: scorerBefore, fact_scorer_sha256: factScorerBefore, task_id: task.task_id, timeout_ms: timeoutMs, seats: armArg === "C" ? seats : 1 },
+    error: failureMessage,
     checked_at: new Date().toISOString(),
   };
   json(join(root, "result.json"), result);

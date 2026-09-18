@@ -64,3 +64,15 @@ The predecessor's seeds 1 to 5 and its arm C run have no raw files left, so the 
 Seeds 11-15: 2 of 5 (cost 0.4129 USD). With seeds 6-10 (2 of 5): **4 of 10 = 0.4 on seeds with raw files**; with the predecessor's recorded 3 of 5: 7 of 15 = 0.47. Every failure in every batch is case 458.
 Arm C repeat (`scripts/bench-rq1.ts tasks/bench-printf-format C 1 --root <dir> --port 19861`): room concluded inside the deadline, 52 turns summed, cost 0.7181 USD, 88 s wall clock, outcome task_fail: the concluded implementation fails case 458 and nothing else, as in the predecessor's arm C run. Again a proof that the room can conclude on this task, not evidence that a team helps.
 Pass-rate note for the grid: the best-supported single-agent rate for this task is the pooled one (with printf-format-2's ten seeds, whose seats fail the same case: 9 of 25 = 0.36 over 25 seeds), not the 0.5 of the predecessor's first ten.
+
+## Primary record: seeds 6 to 20 (pre-registered by the verifier), all with raw files
+Seeds 16 to 20, same command and scorer:
+| seed | outcome | cost USD | turns | failing cases |
+|---|---|---|---|---|
+| 16 | task_pass | 0.0859 | 5 | |
+| 17 | task_fail | 0.0834 | 5 | case-458 only |
+| 18 | task_fail | 0.0790 | 5 | case-458 only |
+| 19 | task_fail | 0.0726 | 4 | case-458 only |
+| 20 | task_fail | 0.0813 | 4 | case-458 only |
+
+Seeds 11-20 (the pre-registered fresh ten): 3 of 10 pass. **Primary record, seeds 6-20: 5 of 15 = 0.333** (passes 7, 8, 13, 15, 16; exact 95% interval roughly 0.12 to 0.62), inside the 0.3 to 0.7 band, and near its lower edge. The predecessor's seeds 1-5 (3 of 5) are recorded above but have no raw files, so they are not part of the primary record; with them the rate is 8 of 20 = 0.40. Pooled with printf-format-2's ten seeds (same trap, 2 of 10): 10 of 30 = 0.33. Every one of the 20 failures in the raw-backed and v2 records fails case 458 (or its `*` twin in v2) and nothing else. Cost of seeds 16-20: 0.4022 USD.

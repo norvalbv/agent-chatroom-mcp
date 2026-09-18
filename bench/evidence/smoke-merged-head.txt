@@ -1,0 +1,5 @@
+smoke: isolated end-to-end on 127.0.0.1:28910 (>8000), npm run smoke (PORT set)
+git rev-parse HEAD: c36b6b939da8f0d751ec05513c36e0871d252e57
+branch: swarm/swarm-bench-room/oracle-2
+dist/index.js sha256: e06269669aad82053683b05d9be058902e4a687ec363cf401b504d0e79dcb8fb (post-gate pinned, unchanged by rebuild)
+full mechanic walk: create -> join -> openings -> propose -> challenge -> vote -> consensus; SMOKE OK

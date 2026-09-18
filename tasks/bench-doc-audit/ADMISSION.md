@@ -33,3 +33,6 @@ Failure, seed 4: only `parseBool` failed. The seat added `trim()` but did not ad
 
 ## Extra seeds (added after the admission decision, to size the effect a grid can detect)
 Seeds 6 to 10, same command: all five task_pass, cost 0.0507, 0.0489, 0.0611, 0.0547, 0.0486 USD, 4 to 6 turns. Ten-seed arm A pass rate: 9 of 10 (exact 95% interval for the true rate roughly 0.55 to 1.0). The admission rule (1 to 4 of the first five) is met, but the true single-agent rate is probably near 0.9, so a team cannot beat it by more than about 0.1 and a grid needs many seeds per task to see that.
+
+## Status under the raised bar (swarm-150725-3vny-room; rule in paper/amendments.md)
+Arm A seeds: 10 (seeds 1-10 above). Pass rate 9 of 10 = 0.90; per-seed outcomes: seed 4 task_fail, every other seed task_pass. The raised bar admits a task to the primary comparison only at 0.3 to 0.7. 0.90 sits in the 0.7 to 0.9 band: **WEAK discriminator, kept, excluded from the primary comparison**. It is not retired (retirement is above 0.9 or at 0). The earlier "1 to 4 of the first five" admission is superseded.

@@ -120,6 +120,7 @@ test("arm A: single seat, no mcp tools, writes answer.txt, records usage/turns/a
     assert.equal(result.usage.input_tokens, 120);
     assert.equal(result.usage.cache_read_input_tokens, 40);
     assert.equal(result.usage.output_tokens, 30);
+    assert.equal(result.seats[0].text, "seat done", "the seat's final response text is kept alongside the scored outcome");
     const argv: string[] = result.seats[0].argv;
     assert.ok(argv.includes("--output-format"));
     assert.ok(!argv.some((a) => a.includes("mcp__chatroom")), "arm A must not carry chatroom mcp tools");

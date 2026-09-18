@@ -317,7 +317,11 @@ async function main() {
     reason: outcome,
     oracle: scored.oracle,
     anti_tamper: { hash_before: taskBefore, hash_after: after, unchanged },
-    seats: seatRecords.map((s) => ({ name: s.name, argv: s.argv, exit_code: s.exit_code, signal: s.signal, started_at: s.started_at, completed_at: s.completed_at, num_turns: s.num_turns, duration_ms: s.duration_ms, duration_api_ms: s.duration_api_ms, usage: s.usage })),
+    // `text` is the seat's own final response (exactly what --output-format text would have printed),
+    // kept alongside the scored outcome so a parse_failure/task_fail can be told apart after the fact:
+    // did the seat compute the right answer and simply not write it where the scorer looked
+    // (instruction-following/format failure) or never solve the task at all (reasoning failure)?
+    seats: seatRecords.map((s) => ({ name: s.name, argv: s.argv, exit_code: s.exit_code, signal: s.signal, started_at: s.started_at, completed_at: s.completed_at, num_turns: s.num_turns, duration_ms: s.duration_ms, duration_api_ms: s.duration_api_ms, usage: s.usage, text: s.text })),
     usage,
     turns: { per_seat: seatRecords.map((s) => ({ name: s.name, num_turns: s.num_turns })), summed: turnsKnown.reduce((a, s) => a + (s.num_turns ?? 0), 0), seats: seatRecords.length, seats_with_turns: turnsKnown.length, coverage: turnsKnown.length === 0 ? "none" : turnsKnown.length === seatRecords.length ? "complete" : "partial" },
     wall_clock: { started_at: startedAt.toISOString(), completed_at: completedAt.toISOString(), duration_ms: completedAt.getTime() - startedAt.getTime() },

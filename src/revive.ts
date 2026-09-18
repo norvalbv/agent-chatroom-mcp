@@ -47,7 +47,7 @@ const promptFor = (name: string, note: string) => {
 
 const children: ReturnType<typeof spawn>[] = [];
 function runSeat(name: string, note: string): Promise<number | null> {
-  const cwd = cwdFor[name] ?? repoRoot;
+  const cwd = cwdFor[name] ?? cwdFor[name.replace(/-r\d+$/, "")] ?? repoRoot; // a replacement continues in its predecessor's worktree
   const seatArgs = ["dist/openrouter.js", "-p", promptFor(name, note), "--model", MODEL, "--mcp-url", `${URL_}/mcp`, "--cwd", cwd, "--max-minutes", String(MAX_MIN)];
   if (WRITE && !name.startsWith("verifier")) seatArgs.push("--write");
   const fd = openSync(resolve(OUT, `${name}.log`), "a");
@@ -60,7 +60,7 @@ function runSeat(name: string, note: string): Promise<number | null> {
 }
 async function withRespawn(name: string): Promise<void> {
   let code = await runSeat(name, "");
-  for (let i = 1; i <= 3 && code !== 0; i++) {
+  for (let i = 1; i <= 3 && code !== 0 && code !== 143 && code !== null; i++) { // 143/null: stopped on purpose
     let state = "missing";
     try { state = ((await (await fetch(`${URL_}/rooms/${encodeURIComponent(ROOM)}`)).json()) as { state: string }).state; } catch {}
     if (state !== "open" && state !== "stalled") break;

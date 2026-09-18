@@ -48,6 +48,9 @@ d = decide({ room: room({ proposals: [{ status: "accepted" }], participants: [se
 assert.equal(d.respawn, true, d.reason); assert.match(d.reason, /floor of 3/);
 d = decide({ room: room({ proposals: [{ status: "open" }], participants: [...Array.from({ length: 8 }, (_, i) => seat(`u-${i}`)), seat("gone", false)] }) });
 assert.equal(d.respawn, true, d.reason); assert.match(d.reason, /floor of 10/);
+// 13. A deliberate SIGTERM (exit 143, or a signal with no code) is an operator stopping the seat, not a crash: no respawn.
+d = decide({ exitCode: 143 }); assert.equal(d.respawn, false, d.reason); assert.match(d.reason, /signal/);
+d = decide({ exitCode: null }); assert.equal(d.respawn, false, d.reason);
 // 11. Humans do not count toward the floor.
 d = decide({ room: room({ participants: [seat("u-0"), seat("u-1"), seat("benji", true, "worker", "human"), seat("gone", false)] }) });
 assert.equal(d.respawn, true, d.reason);

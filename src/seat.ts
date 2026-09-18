@@ -375,7 +375,7 @@ export async function runSeat(provider: ChatProvider, opts: SeatOptions): Promis
 
   // a SIGTERM (the launcher stopping, an operator shedding load) leaves the rooms first, so the seat is not a phantom voter
   let stopping = false;
-  const onSignal = () => { if (stopping) return; stopping = true; log(`[${provider.label}] stopped by signal`); bow("stopped by signal").finally(() => process.exit(143)); };
+  const onSignal = () => { if (stopping) return; stopping = true; log(`[${provider.label}] stopped by signal`); bow("stopped by signal").then(() => opts.mcpUrl ? client.transport && (client.transport as { terminateSession?: () => Promise<void> }).terminateSession?.() : undefined).catch(() => {}).finally(() => process.exit(143)); };
   process.on("SIGTERM", onSignal);
   process.on("SIGINT", onSignal);
   // the parent's stderr pipe can vanish before the seat does; a log line must never kill the seat

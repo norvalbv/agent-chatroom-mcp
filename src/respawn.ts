@@ -53,7 +53,10 @@ export function respawnDecision(i: RespawnInput): RespawnDecision {
   if (i.attempt > max) return { respawn: false, reason: `retry cap (${max}) reached` };
   const me = i.room.participants.find((p) => p.name === i.name);
   if (i.name === "verifier" || me?.role === "verifier") return { respawn: true, reason: "the verifier seat is required" };
-  if (i.exitCode !== 0) return { respawn: true, reason: `exit code ${i.exitCode ?? "signal"} is a failure, not completion` };
+  // 143 is SIGTERM: an operator (or the launcher itself) stopped the seat on purpose; bench-3 was killed by hand and
+  // relaunched three times before this line existed.
+  if (i.exitCode === 143 || i.exitCode === null) return { respawn: false, reason: "stopped by signal, not a crash" };
+  if (i.exitCode !== 0) return { respawn: true, reason: `exit code ${i.exitCode} is a failure, not completion` };
   const claims = Object.entries(i.room.board).filter(([k, v]) => k.startsWith("claim/") && v.by === i.name).map(([k]) => k);
   const handoffs = new Set(Object.entries(i.room.board).filter(([k, v]) => k.startsWith("handoff/") && v.by === i.name).map(([k]) => k.slice("handoff/".length)));
   const orphaned = claims.filter((k) => !handoffs.has(k.slice("claim/".length)));

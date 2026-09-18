@@ -50,6 +50,7 @@ export const offlineScripts = [
   'refusal-telemetry.ts',
   'quiet-guidance-regression.ts',
   'quiet-receipts.ts',
+  'quill-task.test.ts',
   'quorum-supermajority-regression.ts',
   'read-digest-regression.ts',
   'reply-metrics-analyzer.test.ts',

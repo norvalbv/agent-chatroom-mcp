@@ -300,6 +300,45 @@ app.post("/rooms/:room/close", (req, res) => {
     res.status(400).type("text/plain").send(e instanceof HubError ? e.message : "error");
   }
 });
+
+// Human dashboard kick: force-leave a seat by reusing the leave path (hub.kick). Fail closed:
+// requireToken (index.ts) returns true for everyone when CHATROOM_HUMAN_TOKEN is unset, so the kick
+// route refuses 503 on its own in that case; with the token configured, wrong/absent x-chatroom-token
+// is 401; bad payloads 400; unknown room/participant 404; human and chair seats are not kickable.
+app.post("/rooms/:room/kick", (req, res) => {
+  if (!HUMAN_TOKEN) {
+    res.status(503).type("text/plain").send("kick requires CHATROOM_HUMAN_TOKEN to be configured (fail closed).");
+    return;
+  }
+  if (!requireToken(req, res)) return;
+  let room: ReturnType<typeof hub.getRoom>;
+  try {
+    room = hub.getRoom(req.params.room);
+  } catch (e) {
+    notFound(res, e);
+    return;
+  }
+  try {
+    const { name, reason } = (req.body ?? {}) as { name?: string; reason?: string };
+    if (typeof name !== "string" || !name.trim()) {
+      res.status(400).type("text/plain").send("name is required: the participant to kick.");
+      return;
+    }
+    const target = [...room.participants.values()].find((p) => p.name === name.trim());
+    if (!target) {
+      res.status(404).type("text/plain").send(`No participant named "${name.trim()}" in this room.`);
+      return;
+    }
+    if (!target.active) {
+      res.status(400).type("text/plain").send(`Participant "${name.trim()}" has already left this room.`);
+      return;
+    }
+    const kicked = hub.kick(req.params.room, target.id, reason);
+    res.json({ kicked: kicked.name, active: kicked.active, leave_reason: kicked.leaveReason });
+  } catch (e) {
+    res.status(400).type("text/plain").send(e instanceof HubError ? e.message : "kick failed.");
+  }
+});
 app.get("/rooms/:room/transcript", (req, res) => {
   try {
     const r = hub.getRoom(req.params.room);

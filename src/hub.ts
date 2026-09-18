@@ -755,6 +755,52 @@ export class Hub {
     for (const pr of room.proposals.values()) if (pr.status === "open") this.evaluate(room, pr);
   }
 
+
+  /**
+   * Human dashboard kick: force-leave a seat by reusing the leave path (hub.leave) with force
+   * semantics. The double-refusal guards (proposal-block twice, leaveRefusal) are pre-armed so a
+   * human kick is never refused: leaveWarned is set to the open proposal that would block, and
+   * leaveWarnedExit marks the refusal as already given. The kick also releases the seat's claims:
+   * every claim/* JSON owned by the seat is rewritten to status "handed" with note
+   * "kicked-by-human", and one handoff/kick-<name> breadcrumb is written AS the kicked seat so the
+   * launcher's respawn rule (src/respawn.ts: claims/handoffs by name) sees the seat as handed over
+   * and does not respawn it. The leave event is persisted like any other leave (replay-safe).
+   */
+  kick(roomName: string, pid: string, reason?: string): Participant {
+    const room = this.getRoom(roomName);
+    const p = this.requireParticipant(room, pid);
+    if (p.agent === "human") throw new HubError(`The human observer seat "${p.name}" is the kicker, not a kick target.`);
+    if (p.role === "chair") throw new HubError(`The chair seat "${p.name}" cannot be kicked from the dashboard.`);
+    const block = this.leavingWouldBlock(room, p);
+    if (block) p.leaveWarned = block.proposal.id;
+    p.leaveWarnedExit = true;
+    // Release the kicked seat's claims: status handed + note kicked-by-human (hub.leaveRefusal and
+    // the launcher read claim status / handoff-by-same-seat; v2 spec).
+    for (const [key, entry] of [...room.board.entries()]) {
+      if (!key.startsWith("claim/") || entry.by !== p.name) continue;
+      try {
+        const j = JSON.parse(entry.text) as Record<string, unknown>;
+        j.status = "handed";
+        const note = Array.isArray(j.note) ? (j.note as unknown[]).map(String) : typeof j.note === "string" ? [j.note] : [];
+        if (!note.includes("kicked-by-human")) note.push("kicked-by-human");
+        j.note = note;
+        const next: BoardEntry = { text: JSON.stringify(j), by: entry.by, updatedAt: now() };
+        this.applyBoard(room, key, next);
+        this.persist({ type: "board", room: roomName, key, entry: next });
+      } catch {
+        // unparseable claim: leave it; the handoff breadcrumb still covers it
+      }
+    }
+    const owned = [...room.board.entries()].some(([k, e]) => k.startsWith("claim/") && e.by === p.name);
+    if (owned) {
+      const why = reason?.trim() ? reason.trim() : "no reason given";
+      this.setBoardAs(roomName, p.name, `handoff/kick-${p.name}`,
+        `Kicked by human (${why}). Claims released: status "handed", note "kicked-by-human". Do not respawn this seat.`);
+    }
+    const why = reason?.trim() ? `kicked by human: ${reason.trim()}` : "kicked by human";
+    this.leave(roomName, pid, why);
+    return p;
+  }
   /**
    * Why an agent should not leave yet, or null. Refused once per participant (like the quorum-floor refusal): the
    * point is to make the seat write the handoff or answer the ask, not to cage it. Humans and session cleanup skip it.

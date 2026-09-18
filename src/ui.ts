@@ -163,7 +163,7 @@ export const UI_HTML = `<!doctype html>
   .person:last-child { border:0 } .person.off { opacity:.5 }
   .person .n { font-weight:600; font-size:13px; display:flex; gap:6px; align-items:center; flex-wrap:wrap } .person .n .agent { font-weight:400; color:var(--dim2); font-size:11px }
   .person .a { color:var(--acc-fg); font-size:11.5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap } .person .a:empty::before { content:"no claimed area"; color:var(--dim2) }
-  .person .s { text-align:right; font-size:11px; color:var(--dim2); font-variant-numeric:tabular-nums; line-height:1.3 }
+  .person .s { text-align:right; font-size:11px; color:var(--dim2); font-variant-numeric:tabular-nums; line-height:1.3 } .person .s .kk { padding:2px 8px; font-size:11px; border-radius:6px; margin-top:3px }
   .bsearch { width:100%; margin-bottom:10px; font-size:13px; padding:7px 10px; background:var(--panel2) }
   .bgroup { margin-bottom:14px }
   .bentry { border:1px solid var(--line); border-radius:10px; margin-bottom:6px; background:var(--panel2); --clampbg:var(--panel2) }
@@ -265,7 +265,17 @@ export const UI_HTML = `<!doctype html>
   // People tab: click a person to see their recent steps (heartbeats with the command, path or pattern)
   var personOpen = null, activity = {};
   async function fetchActivity(name) { try { var res = await fetch('/rooms/' + encodeURIComponent(sel) + '/participants/' + encodeURIComponent(name) + '/activity'); if (res.ok) { activity[name] = await res.json(); if (tab === 'people') renderPane(); } } catch (e) {} }
-  document.addEventListener('click', function (e) { var row = e.target.closest && e.target.closest('.person'); if (!row || e.target.closest('.act')) return; var n = row.dataset.person; personOpen = personOpen === n ? null : n; if (personOpen) fetchActivity(personOpen); renderPane(); });
+  async function kickPerson(name) {
+    if (!TOKEN) { window.alert('This hub has no CHATROOM_HUMAN_TOKEN configured: kick is fail-closed (503).'); return; }
+    var reason = window.prompt('Kick @' + name + ' from the dashboard? The reason is shown in the room log.', 'kicked from dashboard');
+    if (reason === null) return;
+    try {
+      var res = await fetch('/rooms/' + encodeURIComponent(sel) + '/kick', { method: 'POST', headers: hdrs(), body: JSON.stringify({ name: name, reason: reason }) });
+      if (!res.ok) { window.alert('Kick failed (' + res.status + '): ' + (await res.text())); return; }
+    } catch (e) { window.alert('Kick request failed: ' + e); return; }
+    refreshRooms();
+  }
+  document.addEventListener('click', function (e) { var kb = e.target.closest && e.target.closest('[data-kick]'); if (kb) { kickPerson(kb.dataset.kick); return; } var row = e.target.closest && e.target.closest('.person'); if (!row || e.target.closest('.act')) return; var n = row.dataset.person; personOpen = personOpen === n ? null : n; if (personOpen) fetchActivity(personOpen); renderPane(); });
   setInterval(function () { if (personOpen && tab === 'people' && !document.hidden) fetchActivity(personOpen); }, 3000);
   // rooms rail: sort, state filter, archived toggle
   var sortBy = store.get('sort', 'newest'), stOff = store.get('stOff', {}), showArch = /[?&]archived=1/.test(location.search) || store.get('showArch', false);
@@ -588,7 +598,7 @@ export const UI_HTML = `<!doctype html>
   function panePeople(r) {
     var rows = function (list) { return list.map(function (p) {
       var areas = areasOf(r, p.name);
-      return '<div class="person' + (p.active ? '' : ' off') + (personOpen === p.name ? ' sel' : '') + '" data-person="' + esc(p.name) + '">' + av(p.name, p.agent) + '<div><div class="n">' + esc(p.name) + roleTag(p) + '<span class="agent">' + esc(p.agent) + '</span></div><div class="a">' + esc(areas.join(', ')) + (p.left_reason ? (areas.length ? ' · ' : '') + 'left: ' + esc(p.left_reason) : '') + '</div></div><div class="s">' + p.messages + ' msg' + (p.messages === 1 ? '' : 's') + '<br>' + (p.active ? (p.working && p.working.at > (p.last_active_at || '') ? 'working: ' + esc(p.working.tool) + ' · ' + rel(p.working.at) : rel(p.last_seen_at || p.last_active_at)) : 'left') + '</div>' + (personOpen === p.name ? '<div class="act" id="act">' + (activity[p.name] ? (activity[p.name].length ? activity[p.name].map(function (a) { return '<div><span class="st">#' + a.step + ' ' + rel(a.at) + '</span> <span class="tl">' + esc(a.tool) + '</span> ' + esc(a.detail || '') + '</div>'; }).join('') : 'No heartbeats yet (only seats started after 2026-09-18 send them).') : 'Loading…') + '</div>' : '') + '</div>';
+      return '<div class="person' + (p.active ? '' : ' off') + (personOpen === p.name ? ' sel' : '') + '" data-person="' + esc(p.name) + '">' + av(p.name, p.agent) + '<div><div class="n">' + esc(p.name) + roleTag(p) + '<span class="agent">' + esc(p.agent) + '</span></div><div class="a">' + esc(areas.join(', ')) + (p.left_reason ? (areas.length ? ' · ' : '') + 'left: ' + esc(p.left_reason) : '') + '</div></div><div class="s">' + p.messages + ' msg' + (p.messages === 1 ? '' : 's') + '<br>' + (p.active ? (p.working && p.working.at > (p.last_active_at || '') ? 'working: ' + esc(p.working.tool) + ' · ' + rel(p.working.at) : rel(p.last_seen_at || p.last_active_at)) : 'left') + (p.active && p.agent !== 'human' ? '<br><button class=\"btn danger kk\" data-kick=\"' + esc(p.name) + '\" title=\"Kick this seat from the dashboard (reuses the leave path)\" onclick=\"event.stopPropagation()\">kick</button>' : '') + '</div>' + (personOpen === p.name ? '<div class=\"act\" id="act">' + (activity[p.name] ? (activity[p.name].length ? activity[p.name].map(function (a) { return '<div><span class="st">#' + a.step + ' ' + rel(a.at) + '</span> <span class="tl">' + esc(a.tool) + '</span> ' + esc(a.detail || '') + '</div>'; }).join('') : 'No heartbeats yet (only seats started after 2026-09-18 send them).') : 'Loading…') + '</div>' : '') + '</div>';
     }).join(''); };
     var active = r.participants.filter(function (p) { return p.active; }), gone = r.participants.filter(function (p) { return !p.active; });
     return '<div class="sec"><h3>In the room <span class="sp"></span><span class="c">' + active.length + '</span></h3>' + (rows(active) || '<div class="empty" style="padding:16px">Nobody here.</div>') + '</div>'

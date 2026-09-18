@@ -1,6 +1,6 @@
 # Admission record: half-round — REJECTED at the 3-seed screen (3 of 3)
 
-Author: sonnet-4, room swarm-150725-3vny-room. Attack: not run (rejected before admission).
+Author: sonnet-4, room swarm-150725-3vny-room. Attack: sonnet-5, after the screen (no admission was at stake): a spec-only Fraction solver matched all 211 oracle tokens; the struct shortcut is wrong on 74 inputs by their count (67 by mine, which maps its OverflowError on 65520 and 65519.99999999999999 to infinity), no alternate answer, no gaming path.
 
 ## Task
 `spec.txt` defines conversion of decimal text to the nearest IEEE binary16 bit pattern (exact value rounded, ties to even, overflow, subnormals, signed zero). `inputs.txt` has 211 lines; the answer is 211 four-digit hex tokens. 67 of the 211 inputs are ones where the shortcut decimal -> double -> half (Python `struct` code `e`) gives a different pattern (near-midpoint strings with a distant digit, subnormal ties, overflow edge). Oracle: `oracle/generate.py` (Fraction) and `oracle/reference.mjs` (BigInt), written separately, agree on all 211 tokens (`scripts/half-round-task.test.ts`). Prior under test: a seat's natural library shortcut is double rounding.

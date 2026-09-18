@@ -1,0 +1,6 @@
+# Rejected task designs (sonnet-7, room swarm-150725-3vny)
+
+## bench-layer-rules v1 (family: layered rule resolution / later overrides earlier), REJECTED at the 3-seed screen
+Invented layered-config language (`LAYER n rank`, `SET k e [WHEN g]`, `UNSET`, `SEAL`, `$k` references, 44 keys, 121 lines, exact 44-value answer, reference resolver plus a checked-in seeded generator). Every rule stated in `spec.txt`, including the reopened-layer rank rule, the equal-rank tie, the seal semantics and "every key has exactly one value, its winning rule's". Oracle: exact answer from `oracle/reference.mjs`; the imperative top-to-bottom distractor differs in 27 of 44 tokens.
+Arm A, one Claude Sonnet seat through `scripts/bench-rq1.ts`, default flags: seeds 1, 2, 3 = 3 of 3 task_pass, cost 0.0506 / 0.0519 / 0.0528 USD (0.155 total), 4 turns each. Rejected at 3 of 3 per the ledger rule.
+Reason (consistent with insight/implied-corner in the predecessor room): every counter-prior corner was stated, and a memoised recursive resolver is the natural script. No v2 filed: the only way to lower the rate is to leave a corner unstated, which trades the ceiling for a spec ambiguity the attacker would rightly reject.

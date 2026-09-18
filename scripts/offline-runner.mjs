@@ -41,6 +41,7 @@ export const offlineScripts = [
   'idlewaits-actionable-regression.ts',
   'lease-lock-tasks.test.ts',
   'shelf-quiet-task.test.ts',
+  'stamp-helpers-task.test.ts',
   'mention-mentions.test.ts',
   'openrouter-cache-regression.ts',
   'paper-rq1-table.test.ts',

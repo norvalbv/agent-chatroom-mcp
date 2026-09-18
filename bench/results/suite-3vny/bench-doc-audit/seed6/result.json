@@ -1,0 +1,113 @@
+{
+  "schemaVersion": 1,
+  "task_id": "bench-doc-audit",
+  "arm": "A",
+  "seed": 6,
+  "model": "sonnet",
+  "outcome": "task_pass",
+  "passed": true,
+  "reason": "task_pass",
+  "oracle": {
+    "kind": "doc-audit",
+    "command": "node --import tsx oracle/score.ts <workspace>",
+    "exit_code": 0
+  },
+  "anti_tamper": {
+    "hash_before": "328d71a1ef56d5d3bdc8e7ad18c38c651670fd97b4e46d630f0495ad64b0f163",
+    "hash_after": "328d71a1ef56d5d3bdc8e7ad18c38c651670fd97b4e46d630f0495ad64b0f163",
+    "unchanged": true
+  },
+  "seats": [
+    {
+      "name": "single",
+      "argv": [
+        "claude",
+        "-p",
+        "The lib/ directory contains eight small utility functions, one per file. README.md documents the exact required behavior of each. Some of the functions do not behave as documented. Find every discrepancy between the code in lib/ and README.md and fix the code (not the README). Keep each function's name, signature and file location.\n\nModify the files under lib/ in this workspace; a chat answer alone is not a submitted code repair. Use no network or dependencies. The evaluator runs private tests against your code after completion.\n\nModify the relevant source file(s) in your current working directory directly to implement the fix described above. Your edit to the existing file(s) is the submission; do not create any other output file.",
+        "--mcp-config",
+        "/tmp/pilot-x-doc-audit-seed6/mcp-empty.json",
+        "--strict-mcp-config",
+        "--allowedTools",
+        "Read,Edit,Write,MultiEdit,Bash,Glob,Grep",
+        "--tools",
+        "Read,Edit,Write,MultiEdit,Bash,Glob,Grep",
+        "--disable-slash-commands",
+        "--setting-sources",
+        "project",
+        "--exclude-dynamic-system-prompt-sections",
+        "--output-format",
+        "stream-json",
+        "--verbose",
+        "--model",
+        "sonnet"
+      ],
+      "exit_code": 0,
+      "signal": null,
+      "started_at": "2026-09-18T14:47:08.637Z",
+      "completed_at": "2026-09-18T14:47:29.571Z",
+      "num_turns": 5,
+      "duration_ms": 19564,
+      "duration_api_ms": 20066,
+      "usage": {
+        "cost": 0.050650200000000006,
+        "input_tokens": 8,
+        "cache_read_input_tokens": 30871,
+        "cache_creation_input_tokens": 5938,
+        "output_tokens": 1958
+      },
+      "text": "I compared each function in `lib/` against `README.md` and fixed every mismatch I found. All eight had at least one. I haven't run any tests or the code itself; I only printed the edited files to check the changes.\n\n- **`slugify`**: a run of non-alphanumeric characters now becomes a single \"-\" instead of one \"-\" per character.\n- **`chunk`**: the last, shorter chunk is no longer dropped.\n- **`median`**: it now sorts a copy numerically, so `nums` isn't modified and 10 sorts above 9.\n- **`formatBytes`**: 1024 now formats as \"1 KB\" instead of \"1024 B\".\n- **`parseBool`**: it now trims whitespace and accepts \"on\" and \"off\".\n- **`daysBetween`**: it no longer takes the absolute value, so dates in the wrong order give a negative number.\n- **`dedupe`**: it now treats NaN as a duplicate of NaN, per SameValueZero.\n- **`wrapText`**: the width check now counts the space between words, so lines no longer run one character over `width`.\n\nOne edge case I left alone: `formatBytes` uses `toFixed(1)`, so a value just under a unit boundary, such as 1048575 bytes, prints as \"1024 KB\" rather than rolling up to \"1 MB\". The README's rule (\"largest unit for which the value is at least 1\") doesn't clearly cover that case, so I didn't change it.",
+      "killed_by_deadline": false,
+      "partial_usage": null
+    }
+  ],
+  "usage": {
+    "steps": 0,
+    "prompt_tokens": 0,
+    "completion_tokens": 0,
+    "cost_usd": 0.050650200000000006,
+    "seats": 1,
+    "seats_with_usage": 1,
+    "coverage": "complete",
+    "input_tokens": 8,
+    "cache_read_input_tokens": 30871,
+    "cache_creation_input_tokens": 5938,
+    "output_tokens": 1958
+  },
+  "turns": {
+    "per_seat": [
+      {
+        "name": "single",
+        "num_turns": 5
+      }
+    ],
+    "summed": 5,
+    "seats": 1,
+    "seats_with_turns": 1,
+    "coverage": "complete"
+  },
+  "wall_clock": {
+    "started_at": "2026-09-18T14:47:08.637Z",
+    "completed_at": "2026-09-18T14:47:29.572Z",
+    "duration_ms": 20935
+  },
+  "budget": {
+    "max_budget_usd": null,
+    "deadline_ms": 900000
+  },
+  "build": {
+    "head_revision": "8e65765b71623adf4a3f88a287bff1736550b36e",
+    "hub_entry": null,
+    "hub_entry_sha256": null,
+    "hub_revision": null
+  },
+  "frozen": {
+    "task_sha256": "328d71a1ef56d5d3bdc8e7ad18c38c651670fd97b4e46d630f0495ad64b0f163",
+    "scorer_sha256": "f4b645c670ae4655aec1189e4d7320294115f0e3c6da3b5ba41a7ee3b1cd00f8",
+    "fact_scorer_sha256": "6b8b3e98c8c408ecd6715a38db9263488644d27c01a11c5bab3172acd5539832",
+    "task_id": "bench-doc-audit",
+    "timeout_ms": 900000,
+    "seats": 1
+  },
+  "error": null,
+  "checked_at": "2026-09-18T14:47:29.829Z"
+}

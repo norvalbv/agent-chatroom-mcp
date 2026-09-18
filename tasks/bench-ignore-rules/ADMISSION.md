@@ -37,3 +37,6 @@ Seeds 6 to 10, same command, run against the final brief (with the "do not run g
 
 ## Status under the raised bar (swarm-150725-3vny-room; rule in paper/amendments.md)
 Arm A seeds: 10 (seeds 1-10 above). Pass rate 9 of 10 = 0.90; per-seed outcomes: seed 4 task_fail, every other seed task_pass. The raised bar admits a task to the primary comparison only at 0.3 to 0.7. 0.90 sits in the 0.7 to 0.9 band: **WEAK discriminator, kept, excluded from the primary comparison**. It is not retired (retirement is above 0.9 or at 0). The earlier "1 to 4 of the first five" admission is superseded.
+
+## Raw evidence
+Ten arm A `result.json` files, the submitted `ignore.ts` of each seed, and the arm C `result.json` are under `bench/results/suite-3vny/bench-ignore-rules/` (`seed1` to `seed10`, `C-seed1`), recovered from the predecessor room's pilot roots (`/tmp/pilot-ir-seed1-5`, `/tmp/pilot-x-ignore-rules-seed6-10`, `/tmp/pilot-ir-C1`). Read back from the files: seed 4 `task_fail`, all others `task_pass` (9 of 10); costs equal the tables above. Seeds 1 to 5 ran before the "do not run git" sentence was added to the brief, as recorded above.

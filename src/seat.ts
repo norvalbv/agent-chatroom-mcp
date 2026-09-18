@@ -11,7 +11,7 @@
  * the seat leaves the room (instead of vanishing) when its budget or a provider error ends it.
  */
 import { spawn } from "node:child_process";
-import { readdirSync, readFileSync, statSync } from "node:fs";
+import { readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { relative, resolve } from "node:path";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
@@ -66,6 +66,8 @@ export interface SeatOptions {
   maxContextChars?: number;
   /** how many empty wait_for_messages results to absorb locally before spending a model turn (default 3): idle polling is most of a seat's provider requests */
   idleWaits?: number;
+  /** R4 usage telemetry: when set, on exit the seat writes {steps, prompt_tokens, completion_tokens, cost} here — the <name>.usage.json sidecar the launcher collects next to the seat's .out. Never touches stdout, so the .out text stays the seat's final answer. */
+  usageSidecar?: string;
   log?: (line: string) => void;
 }
 export interface SeatResult {
@@ -497,6 +499,13 @@ export async function runSeat(provider: ChatProvider, opts: SeatOptions): Promis
     const transport = client.transport as { terminateSession?: () => Promise<void> } | undefined;
     await transport?.terminateSession?.().catch(() => {});
     await client.close().catch(() => {});
+  }
+  if (opts.usageSidecar) {
+    try {
+      writeFileSync(opts.usageSidecar, JSON.stringify({ steps, prompt_tokens: usage.prompt_tokens, completion_tokens: usage.completion_tokens, cost: usage.cost }, null, 2));
+    } catch (e) {
+      log(`[${provider.label}] could not write usage sidecar ${opts.usageSidecar}: ${e instanceof Error ? e.message : String(e)}`);
+    }
   }
   return { final: final || "(no final message)", usage, steps, ok };
 }

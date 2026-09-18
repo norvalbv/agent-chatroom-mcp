@@ -8,7 +8,7 @@
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, realpathSync, symlinkSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
-import { collectRoomSnapshot, renderRunReport, writeRunResult, type RunResult, type RoomSnapshot } from "./result.js";
+import { collectRoomSnapshot, renderRunReport, writeRunResult, rollupUsage, type RunResult, type RoomSnapshot, type SeatUsageRollup } from "./result.js";
 import { settledAxes } from "./settled.js";
 import { registerRespawn } from "./respawn.js";
 import { fileURLToPath } from "node:url";
@@ -126,32 +126,44 @@ const children: ChildProcess[] = [];
 const mcpJson = resolve(OUT, "mcp.json");
 writeFileSync(mcpJson, JSON.stringify({ mcpServers: { chatroom: { type: "http", url: `${URL_}/mcp` } } }));
 
-function runClaude(name: string, text: string, tools: string[], cwd: string, model?: string): Promise<string> {
+function runClaude(name: string, text: string, tools: string[], cwd: string, model?: string): Promise<SeatOutcome> {
   const outFile = resolve(OUT, `${name}.out`);
   const args = ["-p", text, "--mcp-config", mcpJson, "--strict-mcp-config", "--allowedTools", tools.join(",")];
   if (model) args.push("--model", model);
-  return runProc(name, "claude", args, cwd, outFile);
+  return runProc(name, "claude", args, cwd, outFile).then((t) => ({ text: t, usage: readSeatUsage(resolve(OUT, `${name}.usage.json`)) }));
 }
 
+// ---------- R4 usage telemetry ----------
+/** Per-seat outcome: the seat's final text (exactly what its .out held) plus its usage, or null when the seat never reported usage (unknown, never zero-filled). */
+export interface SeatRun { name: string; text: string; usage: SeatUsageRollup | null; }
+export type SeatOutcome = Omit<SeatRun, "name">;
+/** Parse the <name>.usage.json sidecar the seat wrote next to its .out; null when absent or invalid. */
+const readSeatUsage = (sidecar: string): SeatUsageRollup | null => {
+  try {
+    const u = JSON.parse(readFileSync(sidecar, "utf8")) as Record<string, unknown>;
+    return u && typeof u === "object" && ["steps", "prompt_tokens", "completion_tokens", "cost"].every((k) => typeof u[k] === "number") ? (u as unknown as SeatUsageRollup) : null;
+  } catch { return null; }
+};
 /** `node dist/openrouter.js`, or tsx on the source when the launcher itself is being run from source. */
 const seatScript = existsSync(resolve(repoRoot, "dist/openrouter.js")) ? { cmd: process.execPath, pre: [resolve(repoRoot, "dist/openrouter.js")] } : { cmd: "npx", pre: ["tsx", resolve(repoRoot, "src/openrouter.ts")] };
 
-function runOpenRouter(name: string, text: string, cwd: string, model: string | undefined, write: boolean): Promise<string> {
+function runOpenRouter(name: string, text: string, cwd: string, model: string | undefined, write: boolean): Promise<SeatOutcome> {
   const outFile = resolve(OUT, `${name}.out`);
+  const sidecar = resolve(OUT, `${name}.usage.json`);
   // the seat's own budget matches the launcher's timeout so it leaves the room rather than being killed in it
-  const args = [...seatScript.pre, "-p", text, "--mcp-url", `${URL_}/mcp`, "--cwd", cwd, "--max-minutes", String(TIMEOUT_MIN)];
+  const args = [...seatScript.pre, "-p", text, "--mcp-url", `${URL_}/mcp`, "--cwd", cwd, "--max-minutes", String(TIMEOUT_MIN), "--usage-sidecar", sidecar];
   if (model) args.push("--model", model);
   if (write) args.push("--write");
   if (OPENROUTER_REASONING) args.push("--reasoning", OPENROUTER_REASONING);
-  return runProc(name, seatScript.cmd, args, cwd, outFile);
+  return runProc(name, seatScript.cmd, args, cwd, outFile).then((t) => ({ text: t, usage: readSeatUsage(sidecar) }));
 }
 
-function runCodex(name: string, text: string, cwd: string, model?: string): Promise<string> {
+function runCodex(name: string, text: string, cwd: string, model?: string): Promise<SeatOutcome> {
   const outFile = resolve(OUT, `${name}.out`);
   const args = ["exec", "--skip-git-repo-check", "-C", cwd, "-c", `mcp_servers.chatroom.url="${URL_}/mcp"`, "-c", "mcp_servers.chatroom.tool_timeout_sec=120", "-o", outFile];
   if (model) args.push("-m", model);
   args.push(text);
-  return runProc(name, "codex", args, cwd, outFile, true);
+  return runProc(name, "codex", args, cwd, outFile, true).then((t) => ({ text: t, usage: readSeatUsage(resolve(OUT, `${name}.usage.json`)) }));
 }
 
 /**
@@ -160,8 +172,8 @@ function runCodex(name: string, text: string, cwd: string, model?: string): Prom
  * verifier. A seat that finished, handed over and left is not replaced merely because the room is open; the first
  * respawning launcher did that 70 times in two runs (src/respawn.ts). Up to three times and never in the last five minutes.
  */
-async function withRespawn(name: string, room: string, mk: (nm: string, note: string) => Promise<string>): Promise<string> {
-  let out = await mk(name, "");
+async function withRespawn(name: string, room: string, mk: (nm: string, note: string) => Promise<SeatOutcome>): Promise<SeatOutcome> {
+  let out: SeatOutcome = await mk(name, "");
   let previousName = name;
   for (let i = 1; RESPAWN && i <= 3; i++) {
     if (STOPPING || Date.now() > RUN_STARTED + TIMEOUT_MIN * 60_000 - 5 * 60_000) break;
@@ -316,7 +328,7 @@ if (FLAT) {
   };
 } else {
   log("planning…");
-  const planRaw = await runClaude("planner", prompt("planner.md", { TASK: task, CWD, WORKERS, MAX_GROUPS: Math.max(1, Math.floor(WORKERS / 2)) }) + "\n\n" + SETTLED, READ_TOOLS.filter((t) => !t.startsWith("mcp__")), CWD, PLANNER_MODEL);
+  const planRaw = (await runClaude("planner", prompt("planner.md", { TASK: task, CWD, WORKERS, MAX_GROUPS: Math.max(1, Math.floor(WORKERS / 2)) }) + "\n\n" + SETTLED, READ_TOOLS.filter((t) => !t.startsWith("mcp__")), CWD, PLANNER_MODEL)).text;
   try {
     plan = JSON.parse(planRaw.slice(planRaw.indexOf("{"), planRaw.lastIndexOf("}") + 1));
   } catch {
@@ -341,7 +353,7 @@ log(`plan: ${plan.groups.map((g) => `${g.title} ×${g.workers}`).join(" | ")}`);
 
 const leadsRoom = FLAT ? `${SWARM_ID}-room` : `${SWARM_ID}-leads`;
 const groupRooms = FLAT ? [] : plan.groups.map((g) => `${SWARM_ID}-${g.id}`);
-const runs: Promise<{ name: string; text: string }>[] = [];
+const runs: Promise<SeatRun>[] = [];
 /**
  * Alternate-provider seats: --codex k and --openrouter k take non-lead seats, rotating over their
  * own model lists. Claude keeps the lead and verifier seats.
@@ -382,7 +394,7 @@ const verifierText = SETTLED + "\n" + prompt("verifier.md", {
           : "Do NOT modify any files; verify by reading and running read-only commands only.",
     });
 runs.push(
-  withRespawn("verifier", leadsRoom, (nm, note) => (VERIFIER_OPENROUTER ? runOpenRouter(nm, verifierText.split("verifier\"").join(`${nm}\"`) + note, CWD, VERIFIER_OPENROUTER, APPLY || FULL) : runClaude(nm, verifierText + note, verifierTools, CWD, VERIFIER_MODEL))).then((text) => ({ name: "verifier", text })),
+  withRespawn("verifier", leadsRoom, (nm, note) => (VERIFIER_OPENROUTER ? runOpenRouter(nm, verifierText.split("verifier\"").join(`${nm}\"`) + note, CWD, VERIFIER_OPENROUTER, APPLY || FULL) : runClaude(nm, verifierText + note, verifierTools, CWD, VERIFIER_MODEL))).then((o) => ({ name: "verifier", text: o.text, usage: o.usage })),
 );
 
 for (const g of plan.groups) {
@@ -432,7 +444,7 @@ for (const g of plan.groups) {
           ? runOpenRouter(nm, buildText(nm) + note, wcwd, model, mayWrite)
           : runClaude(nm, buildText(nm) + note, mayWrite ? WRITE_TOOLS : READ_TOOLS, wcwd, model);
     };
-    runs.push(withRespawn(name, room, mk).then((t) => ({ name, text: t })));
+    runs.push(withRespawn(name, room, mk).then((o) => ({ name, text: o.text, usage: o.usage })));
   }
 }
 
@@ -453,7 +465,23 @@ const timeout = setTimeout(() => {
   for (const c of children) c.kill();
 }, TIMEOUT_MIN * 60_000);
 
-const results = await Promise.all(runs);
+// R4: persist incrementally — a crash keeps the usage of every run that had already finished (partials, never zero-filled).
+const persistIncremental = (done: SeatRun[]) => {
+  writeRunResult(resolve(OUT, "result.json"), {
+    schemaVersion: 1,
+    run: { id: SWARM_ID, startedAt: new Date(RUN_STARTED).toISOString(), completedAt: new Date().toISOString(), task, doneWhen: plan.done_when },
+    project: PROJECT_IDENTITY,
+    leadRoom: leadsRoom,
+    rooms: [],
+    verifier: { name: "verifier", output: null },
+    reportPath: resolve(OUT, "report.md"),
+    artifactPath: resolve(flag("result-path", resolve(OUT, "result.json"))!),
+    collectionErrors: [`incremental checkpoint: ${done.length}/${runs.length} runs complete`],
+    usage: rollupUsage(done),
+  });
+};
+const completedRuns: SeatRun[] = [];
+const results = await Promise.all(runs.map(async (p) => { const r = await p; completedRuns.push(r); persistIncremental(completedRuns); return r; }));
 clearTimeout(timeout);
 clearInterval(tail);
 await tailRooms([...groupRooms, leadsRoom]);
@@ -486,7 +514,7 @@ const artifact: RunResult = {
   leadRoom: leadsRoom,
   rooms: snapshots,
   verifier: { name: "verifier", output: results.find(r => r.name === "verifier")?.text ?? null },
-  reportPath: resolve(OUT, "report.md"), artifactPath, collectionErrors,
+  reportPath: resolve(OUT, "report.md"), artifactPath, collectionErrors, usage: rollupUsage(results),
 };
 writeRunResult(resolve(OUT, "result.json"), artifact);
 if (artifactPath !== resolve(OUT, "result.json")) writeRunResult(artifactPath, artifact);

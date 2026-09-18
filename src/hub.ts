@@ -70,6 +70,17 @@ export interface Participant {
   focusedAsk?: string;
   declinedAsks?: string[];
   declinedAt?: Record<string, number>;
+  /** Explicit registration: the departed seat this successor took over (trusted launcher/recruit control, never name inference). */
+  replacementOf?: string;
+  /** Outstanding nonhuman directed asks offered at explicit registration. */
+  inheritedAskIds?: string[];
+  pendingReplacementAskIds?: string[];
+  /** Explicit registration: pid of the registered successor of this departed seat. */
+  replacedBy?: string;
+  /** One-use join proof: reserved successor name awaiting a join with the matching token. */
+  pendingReplacementName?: string;
+  /** sha256 of the one-use token handed to the launcher for that successor name. */
+  pendingReplacementTokenHash?: string;
 }
 
 export interface Message {
@@ -183,6 +194,12 @@ export interface RoomOptions {
   requireVerification?: boolean;
   /** Name of the participant honoured as chair (exempt from quorum, may veto). Set at creation, or by the first joiner to claim role=chair. */
   chair?: string;
+}
+
+/** Join-time options: room policy plus the one-use launcher replacement proof (never a room-level option). */
+export interface JoinOptions extends RoomOptions {
+  /** One-use token issued by registerReplacement; required to join under a reserved successor name. */
+  replacementToken?: string;
 }
 
 export interface Room {
@@ -568,7 +585,46 @@ export class Hub {
 
   // ---------- participants ----------
 
-  join(roomName: string, name: string, agent: string, opts: RoomOptions = {}, reclaimId?: string, session?: string, role?: Role): { room: Room; participant: Participant } {
+  /** Trusted launcher control only: the departed process is known by the launcher, not inferred by the hub.
+   * Registers an explicit old->new replacement, deactivates the predecessor immediately and reserves the
+   * successor name behind a one-use token the successor must present at join. */
+  registerReplacement(roomName: string, predecessor: string, successorName: string): { replacementToken: string } {
+    const room = this.getRoom(roomName);
+    const old = room.participants.get(predecessor) ?? [...room.participants.values()].find((p) => p.name === predecessor);
+    if (!old) throw new HubError("Replacement predecessor is not registered in this room.");
+    if (!successorName.trim() || successorName.length > 64 || !/^[^\n\r<>]+$/.test(successorName)) throw new HubError("Invalid replacement display name.");
+    if (old.replacedBy || old.pendingReplacementName) throw new HubError("A replacement is already registered for this participant.");
+    if ([...room.participants.values()].some((p) => p.name === successorName || p.pendingReplacementName === successorName)) {
+      throw new HubError("Replacement must be a new, unreserved participant name.");
+    }
+    // The launcher asserts the process exit; do not wait for the idle sweep to mark the old seat departed.
+    const replacementToken = randomBytes(32).toString("hex");
+    old.pendingReplacementAskIds = this.addressedBy(room, old).map((m) => m.id);
+    old.active = false;
+    old.pendingReplacementName = successorName;
+    old.pendingReplacementTokenHash = createHash("sha256").update(replacementToken).digest("hex");
+    this.persist({ type: "leave", room: roomName, p: old });
+    this.post(room, "system", undefined, `${this.shown(room, old)} left the room; the launcher registered a replacement seat.`);
+    for (const pr of room.proposals.values()) if (pr.status === "open") this.evaluate(room, pr);
+    return { replacementToken };
+  }
+
+  /** Follow only explicit links; restored or subsequently departed successors are never recommended. */
+  private activeReplacement(room: Room, old: Participant): Participant | undefined {
+    const seen = new Set([old.id]);
+    let current = old;
+    let active: Participant | undefined;
+    while (current.replacedBy) {
+      const next = room.participants.get(current.replacedBy);
+      if (!next || seen.has(next.id)) break;
+      seen.add(next.id);
+      if (next.active) active = next;
+      current = next;
+    }
+    return active;
+  }
+
+  join(roomName: string, name: string, agent: string, opts: JoinOptions = {}, reclaimId?: string, session?: string, role?: Role): { room: Room; participant: Participant } {
     const room = this.createRoom(roomName, opts);
     if (role && !ROLES.includes(role)) throw new HubError(`role must be one of ${ROLES.join(", ")}.`);
     if (role === "chair") {
@@ -589,7 +645,13 @@ export class Hub {
     if (!participant) participant = [...room.participants.values()].find((p) => p.name === name && !p.active);
     // Humans are identified by name alone (they come in over plain HTTP with no session), so they always reclaim.
     if (!participant && agent === "human") participant = [...room.participants.values()].find((p) => p.name === name && p.agent === "human");
+    if (participant && opts.replacementToken !== undefined) throw new HubError("Replacement token has already been consumed or is not reserved for this join.");
     if (!participant) {
+      const reserved = [...room.participants.values()].find((p) => p.pendingReplacementName === name);
+      const tokenHash = opts.replacementToken ? createHash("sha256").update(opts.replacementToken).digest("hex") : undefined;
+      if (reserved ? !tokenHash || tokenHash !== reserved.pendingReplacementTokenHash : opts.replacementToken !== undefined) {
+        throw new HubError("A valid launcher replacement token for this room and name is required.");
+      }
       if ([...room.participants.values()].some((p) => p.name === name && p.active)) {
         throw new HubError(`Someone named "${name}" is already active in "${roomName}". Pick another name.`);
       }
@@ -611,6 +673,16 @@ export class Hub {
         session,
         ...(role && role !== "worker" ? { role } : {}),
       };
+      const predecessor = [...room.participants.values()].find((p) => p.pendingReplacementName === name);
+      if (predecessor) {
+        participant.replacementOf = predecessor.id;
+        predecessor.replacedBy = participant.id;
+        participant.inheritedAskIds = predecessor.pendingReplacementAskIds ?? [];
+        delete predecessor.pendingReplacementName;
+        delete predecessor.pendingReplacementTokenHash;
+        delete predecessor.pendingReplacementAskIds;
+        this.persist({ type: "leave", room: roomName, p: predecessor });
+      }
       room.participants.set(participant.id, participant);
       this.persist({ type: "join", room: roomName, p: participant });
       this.post(room, "system", undefined, `${this.shown(room, participant)}${room.anonymous ? "" : ` (${agent})`}${this.roleTag(participant)} joined the room.`);
@@ -903,6 +975,13 @@ export class Hub {
       .map((id) => room.participants.get(id)!)
       .filter((participant) => !participant.active && participant.agent !== "human" && participant.id !== replyAuthor);
     if (departed.length) {
+      // Rejoin/reclaim reactivates the same pid (and name); no name-similarity replacement is inferred.
+      const replacements = departed.map((participant) => this.activeReplacement(room, participant));
+      if (replacements.some(Boolean)) {
+        throw new HubError(`Cannot send: ${departed.map((participant, i) =>
+          `"${participant.name}" has left the room; ${replacements[i] ? `their replacement is "${replacements[i]!.name}"` : "no replacement is recorded"}`,
+        ).join("; ")}. Remove the departed @-mention or address an active participant.`);
+      }
       throw new HubError(
         `Cannot send: ${departed.map((participant) => `"${participant.name}"`).join(", ")} ${departed.length === 1 ? "has" : "have"} left the room. Remove the departed @-mention or address an active participant; no replacement is recorded.`,
       );
@@ -1337,6 +1416,9 @@ export class Hub {
    */
   addressedBy(room: Room, p: Participant): Message[] {
     const declined = new Set(p.declinedAsks ?? []);
+    // Snapshot only outstanding debt at registration; successors settle it under their own
+    // identity. A later replacement snapshots that successor, not all earlier ancestors.
+    const inherited = new Set(p.inheritedAskIds ?? []);
     const pending: Message[] = [];
     for (const m of room.messages) {
       for (let i = pending.length - 1; i >= 0; i--) if ((p.declinedAt?.[pending[i].id] ?? Infinity) < m.seq) pending.splice(i, 1);
@@ -1351,7 +1433,8 @@ export class Hub {
             if (i >= 0) pending.splice(i, 1);
           }
         }
-      } else if (m.from.agent !== "human" && m.mentions?.includes(p.id) && this.pushableTo(room, m, p.id)) pending.push(m);
+      } else if (m.from.agent !== "human" &&
+        ((m.mentions?.includes(p.id) && this.pushableTo(room, m, p.id)) || inherited.has(m.id))) pending.push(m);
     }
     return pending.filter((m) => !declined.has(m.id));
   }

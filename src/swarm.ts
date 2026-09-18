@@ -10,6 +10,7 @@ import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, realpathSyn
 import { dirname, resolve } from "node:path";
 import { collectRoomSnapshot, renderRunReport, writeRunResult, type RunResult, type RoomSnapshot } from "./result.js";
 import { settledAxes } from "./settled.js";
+import { registerRespawn } from "./respawn.js";
 import { fileURLToPath } from "node:url";
 import { loadDotEnv, seatChildEnv } from "./env.js";
 import { respawnDecision, type RespawnRoom } from "./respawn.js";
@@ -161,32 +162,41 @@ function runCodex(name: string, text: string, cwd: string, model?: string): Prom
  */
 async function withRespawn(name: string, room: string, mk: (nm: string, note: string) => Promise<string>): Promise<string> {
   let out = await mk(name, "");
-  let last = name;
+  let previousName = name;
   for (let i = 1; RESPAWN && i <= 3; i++) {
     if (STOPPING || Date.now() > RUN_STARTED + TIMEOUT_MIN * 60_000 - 5 * 60_000) break;
     let summary: RespawnRoom | null = null;
     try {
       summary = (await (await fetch(`${URL_}/rooms/${encodeURIComponent(room)}`)).json()) as RespawnRoom;
     } catch {}
-    const d = respawnDecision({ name: last, exitCode: exitCodes.get(last) ?? null, attempt: i, room: summary });
+    const d = respawnDecision({ name: previousName, exitCode: exitCodes.get(previousName) ?? null, attempt: i, room: summary });
     if (!d.respawn) {
-      log(`${last} exited; not respawning: ${d.reason}`);
+      log(`${previousName} exited; not respawning: ${d.reason}`);
       break;
     }
     const nm = `${name}-r${i}`;
-    log(`${last} exited while ${room} is ${summary?.state}; respawning as ${nm}: ${d.reason}`);
-    out = await mk(nm, `\n\nYou replace ${last}, who dropped out of this room (${d.reason}). Before anything else read the board (board_get) and the recent messages (read_messages since_seq=0 is too much: read the last 40), take over any unfinished claim/* entry of theirs, and say in one line that you have.`);
-    last = nm;
+    let note: string;
+    try {
+      note = await registerRespawn(URL_, room, previousName, nm, process.env.CHATROOM_LAUNCHER_TOKEN, undefined, d.reason);
+    } catch (error) {
+      log(`Not respawning ${previousName}: ${error instanceof Error ? error.message : "replacement registration failed"}`);
+      break;
+    }
+    log(`${previousName} exited while ${room} is ${summary?.state}; respawning as ${nm}: ${d.reason}`);
+    out = await mk(nm, note);
+    previousName = nm;
   }
   return out;
 }
 
 /** Last exit code per seat name; withRespawn reads it to tell a crash from a finished seat. */
 const exitCodes = new Map<string, number | null>();
+/** Only successfully isolated workers receive seat commit attribution (never planner/verifier). */
+const writeWorkers = new Set<string>();
 
 function runProc(name: string, cmd: string, args: string[], cwd: string, outFile: string, outViaFile = false): Promise<string> {
   return new Promise((res) => {
-    const child = spawn(cmd, args, { cwd, env: seatChildEnv(), stdio: ["ignore", "pipe", "pipe"] });
+    const child = spawn(cmd, args, { cwd, env: seatChildEnv(process.env, writeWorkers.has(name) ? name : undefined), stdio: ["ignore", "pipe", "pipe"] });
     children.push(child);
     let out = "";
     let err = "";
@@ -252,6 +262,7 @@ function workerCwd(name: string): string {
       log(`could not link node_modules into ${dir}: ${e instanceof Error ? e.message : String(e)}`);
     }
   }
+  writeWorkers.add(name);
   log(`${name} works in ${dir} (branch ${branch})`);
   return dir;
 }
@@ -412,12 +423,15 @@ for (const g of plan.groups) {
         `\nWorking directory: ${wcwd}; you may read the project and run commands. ${writeRule} A verifier named "verifier" sits in the room and the final proposal needs its agree vote. Organise yourselves: claim areas on the board, recruit or break out into sub-rooms with request_agent when depth is needed, and bring results back here.`
       : SETTLED + "\n" + prompt("worker.md", { ...vars, NAME: nm, CWD: wcwd, WRITE_RULE: writeRule });
     const mayWrite = FULL && !readOnlyWorkers.has(name);
-    const mk = (nm: string, note: string) =>
-      agent === "codex"
+    const mk = (nm: string, note: string) => {
+      // Replacements reuse the original successful worktree but commit under their new seat name.
+      if (writeWorkers.has(name)) writeWorkers.add(nm);
+      return agent === "codex"
         ? runCodex(nm, buildText(nm) + note, wcwd, model)
         : agent === "openrouter"
           ? runOpenRouter(nm, buildText(nm) + note, wcwd, model, mayWrite)
           : runClaude(nm, buildText(nm) + note, mayWrite ? WRITE_TOOLS : READ_TOOLS, wcwd, model);
+    };
     runs.push(withRespawn(name, room, mk).then((t) => ({ name, text: t })));
   }
 }

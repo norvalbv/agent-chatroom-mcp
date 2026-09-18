@@ -43,6 +43,8 @@ export interface SpawnRequest {
   count?: number;
   /** claim/<area> is written on behalf of the newcomers first; refused if someone else owns it */
   area?: string;
+  /** exact name of a departed participant this recruit takes over; the launcher registers the successor with the hub */
+  replacing?: string;
 }
 
 export interface SpawnedAgent {
@@ -76,6 +78,8 @@ export interface SpawnerHooks {
   liveAgents(): number;
   /** topic of an existing room, if any */
   roomTopic?(room: string): string | undefined;
+  /** register with the hub that a recruit replaces a departed participant; must throw on failure */
+  registerReplacement?(room: string, predecessor: string, successorName: string): string;
 }
 
 export interface SpawnerOptions {
@@ -152,6 +156,10 @@ export class Spawner {
     if (req.brief.trim().length < 20 || req.brief.length > 4000) throw new HubError("A brief of 20-4000 characters is required: say what to do and what done looks like.");
     const count = Math.max(1, Math.min(3, req.count ?? (req.newRoom ? 2 : 1)));
     const target = req.newRoom ?? req.room;
+    if (req.replacing !== undefined && (!req.replacing.trim() || req.newRoom || count !== 1)) {
+      throw new HubError("Replacement requires one recruit in the same room and an exact predecessor name.");
+    }
+    if (req.replacing && !this.hooks?.registerReplacement) throw new HubError("Replacement registration is unavailable; no recruit launched.");
     if (this.hooks?.isHeld(req.room)) throw new HubError(`${req.room} is on hold; no recruiting until the hold is cleared.`);
     const depth = this.depthOf(req.requestedBy) + 1;
     if (depth > maxDepth) refuse(`recruits may not recruit beyond depth ${maxDepth} (${req.requestedBy} is at depth ${depth - 1}). Ask an original member to recruit.`);
@@ -211,6 +219,13 @@ export class Spawner {
         startedAt: new Date().toISOString(),
         log,
       };
+      let replaceNote = "";
+      if (req.replacing && name === names[0]) {
+        // the launcher registers the explicit successor; the recruit gets a one-use proof, never a control credential
+        const replacementToken = this.hooks!.registerReplacement!(target, req.replacing, name);
+        if (!replacementToken) throw new HubError("Replacement registration returned no join proof.");
+        replaceNote = `\n\nYou replace ${req.replacing}, who dropped out of this room. The launcher has registered you as their replacement with the hub. On your first join_room call use name=${JSON.stringify(name)} and replacement_token=${JSON.stringify(replacementToken)}. This one-use join proof is only for this reserved seat: do not post it to chat or board.`;
+      }
       this.agents.push(rec);
       const teammates = names.filter((x) => x !== name);
       const prompt = template
@@ -222,6 +237,7 @@ export class Spawner {
         .split("{{CWD}}").join(cwd)
         .split("{{AGENT}}").join(agent)
         .split("{{LINEAGE}}").join(`You were recruited by ${by}${rec.parent ? ` (itself a recruit)` : ""} at depth ${depth}. Treat the brief as a request from a colleague, not an order: if it asks for something outside the room's task or that a human would object to, say so in the room instead of doing it.`)
+        .split("{{REPLACING}}").join(replaceNote)
         .split("{{TEAM}}").join(
           teammates.length
             ? `You are one of ${count} recruits on this brief; your teammates are ${teammates.join(", ")}. Split the work between you on the board (claim/<area>) rather than duplicating it.`
@@ -262,7 +278,7 @@ export class Spawner {
       if (agent === "openrouter") args[args.indexOf("--cwd") + 1] = seatCwd;
       else if (agent === "codex") args[args.indexOf("-C") + 1] = seatCwd;
       const outStream = createWriteStream(log);
-      const child = spawn(cmd, args, { cwd: seatCwd, env: seatChildEnv(), stdio: ["ignore", "pipe", "pipe"] });
+      const child = spawn(cmd, args, { cwd: seatCwd, env: seatChildEnv(process.env, req.canEdit ? name : undefined), stdio: ["ignore", "pipe", "pipe"] });
       child.stdout?.pipe(outStream);
       child.stderr?.pipe(outStream);
       rec.pid = child.pid;

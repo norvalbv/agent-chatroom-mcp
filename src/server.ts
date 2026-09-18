@@ -138,12 +138,13 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
         require_challenge: z.boolean().optional().describe("Require a challenge before any proposal can pass. Default: automatic when 3+ participants."),
         require_verification: z.boolean().optional().describe("Swarm mode: a proposal needs a verify/* board entry by someone else (naming the proposal id) before it can pass."),
         max_message_chars: z.number().int().min(200).max(20000).optional().describe("Cap on chat length (proposals, challenges are not capped; board entries 8000; openings are always capped at 400)."),
+        replacement_token: z.string().optional().describe("One-use proof supplied for this reserved replacement seat."),
         participant_id: z.string().optional().describe("Reclaim an earlier identity after a reconnect."),
         role: z.enum(ROLES as [string, ...string[]]).optional().describe("Display tag, not a persona: worker (default) | chair (human-side: never waited on for quorum, may veto; bound to one name per room) | lead | verifier | recruit."),
         chair: z.string().optional().describe("When creating the room: the name that will be honoured as chair."),
       },
     },
-    guard("join_room", ({ room, name, agent, topic, mode, quorum, max_rounds, expected_participants, anonymous, max_messages_per_participant, require_challenge, require_verification, max_message_chars, participant_id, role, chair }) => {
+    guard("join_room", ({ room, name, agent, topic, mode, quorum, max_rounds, expected_participants, anonymous, max_messages_per_participant, require_challenge, require_verification, max_message_chars, replacement_token, participant_id, role, chair }) => {
       const { room: r, participant } = hub.join(
         room,
         name,
@@ -160,6 +161,7 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
           requireVerification: require_verification,
           maxMessageChars: max_message_chars,
           chair,
+          replacementToken: replacement_token,
         },
         participant_id,
         sessionKey,
@@ -592,14 +594,15 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
           new_room: z.string().optional().describe("Spawn a sub-team into this new room instead of yours; they report back with post_to_room."),
           room_topic: z.string().optional().describe("Topic for the new room."),
           count: z.number().int().min(1).max(3).optional().describe("How many to spawn (default 2 for a new room, 1 otherwise)."),
+          replacing: z.string().optional().describe("Exact departed nonhuman seat to replace; single recruit in this room only."),
           area: z.string().optional().describe("Claim this area (claim/<area>) for the newcomers first; refused if someone else owns it."),
           participant_id: asArg,
         },
       },
-      guard("request_agent", ({ room, brief, name, agent, model, cwd, can_edit, new_room, room_topic, count, area, participant_id }) => {
+      guard("request_agent", ({ room, brief, name, agent, model, cwd, can_edit, new_room, room_topic, count, area, replacing, participant_id }) => {
         const r = hub.getRoom(room);
         const me_ = hub.requireParticipant(r, pid(room, participant_id));
-        const recs = spawner.request({ room, brief, requestedBy: me_.name, requestedByShown: hub.shown(r, me_), parentTopic: r.topic, name, agent, model, cwd, canEdit: can_edit, newRoom: new_room, roomTopic: room_topic, count, area });
+        const recs = spawner.request({ room, brief, requestedBy: me_.name, requestedByShown: hub.shown(r, me_), parentTopic: r.topic, name, agent, model, cwd, canEdit: can_edit, newRoom: new_room, roomTopic: room_topic, count, area, replacing });
         const who = recs.map((x) => x.name).join(", ");
         hub.announce(room, `${hub.shown(r, me_)} recruited ${who} (${recs[0].agent}${recs[0].model ? `/${recs[0].model}` : ""}${new_room ? `, into ${new_room}` : ""}${area ? `, area ${area}` : ""}): ${brief.slice(0, 200)}${brief.length > 200 ? "…" : ""}`);
         return { spawned: recs.map((x) => x.name), room: recs[0].room, depth: recs[0].depth, agent: recs[0].agent, model: recs[0].model ?? null, cwd: recs[0].cwd, logs: recs.map((x) => x.log), hint: "They will join within a minute or two. Carry on; you will see them arrive." };

@@ -17,7 +17,7 @@ const PROVIDER = 'synthetic-provider';
 const fixture = '# synthetic fixture ONLY\nCHATROOM_HUMAN_TOKEN=synthetic-human\nOPENROUTER_API_KEY=synthetic-provider\nOTHER_CONFIG="fixture-value"\n';
 const syntheticEnv = () => ({ CHATROOM_HUMAN_TOKEN: HUMAN, OPENROUTER_API_KEY: PROVIDER, ANTHROPIC_API_KEY: 'synthetic-anthropic', OPENAI_API_KEY: 'synthetic-openai', PATH: '/synthetic/bin', HOME: '/synthetic/home', MCP_TOOL_TIMEOUT: '1' });
 type Capture = { cmd: string; args: string[]; options: any };
-async function harness(entry: string, env: Record<string, string>, argv: string[] = []) {
+async function harness(entry: string, env: Record<string, string>, argv: string[] = [], worktrees: "none" | "success" | "fail" = "none") {
   const calls: Capture[] = [];
   const requests: { target: string; options: any }[] = [];
   let initialFetch = true;
@@ -27,6 +27,7 @@ async function harness(entry: string, env: Record<string, string>, argv: string[
     readFileSync(f: string) {
       // Deliberately no delegated disk reads: even dotenv and prompts are in-memory fixtures.
       if (f.endsWith('.env')) return fixture;
+      if (f.endsWith('/prompts/planner.md')) return 'Synthetic fixture prompt planner';
       if (f.includes('/prompts/')) return 'Synthetic fixture prompt {{NAME}} {{ROOM}} {{TOPIC}}';
       throw new Error(`unexpected fixture read: ${f}`);
     },
@@ -39,10 +40,17 @@ async function harness(entry: string, env: Record<string, string>, argv: string[
       child.stdout = new EventEmitter(); child.stdout.pipe = () => {};
       child.stderr = new EventEmitter(); child.stderr.pipe = () => {};
       child.pid = 42; child.kill = () => {}; child.unref = () => {};
-      setImmediate(() => child.emit('close', 0));
+      setImmediate(() => {
+        if (args.some(a => a.includes('Synthetic fixture prompt planner'))) child.stdout.emit('data', JSON.stringify({ summary: 'fixture', done_when: 'done', groups: [{ id: 'room', title: 'room', workers: 3, directive: 'fixture' }], verifier_directive: 'fixture' }));
+        child.emit('close', 0);
+      });
       return child;
     },
-    spawnSync() { return { status: 1, stdout: '', stderr: '' }; },
+    spawnSync(_cmd: string, args: string[]) {
+      if (args.includes('--is-inside-work-tree')) return { status: 0, stdout: worktrees === 'none' ? 'false' : 'true', stderr: '' };
+      if (args.includes('worktree')) return { status: worktrees === 'success' ? 0 : 1, stdout: '', stderr: 'synthetic failure' };
+      return { status: 1, stdout: '', stderr: '' };
+    },
   };
   const context = vm.createContext({ process: proc, console: { log() {}, error() {} }, setTimeout, clearTimeout, setInterval, clearInterval, Date, URL, AbortSignal,
     async fetch(target: string, options?: any) {
@@ -151,4 +159,37 @@ await test('loadDotEnv exclusion option: token omitted, others loaded', async ()
   assert.equal(reloaded.length, 0); // existing values are never overridden
 });
 console.log(`SEAT ENV: ${failures ? `${failures} failed` : 'OK'} (synthetic only; minimization, NOT sandboxing)`);
+process.exitCode = failures ? 1 : 0;
+
+// Commit attribution at the actual subprocess boundaries, not source-string checks.
+const gitKeys = ['GIT_AUTHOR_NAME', 'GIT_AUTHOR_EMAIL', 'GIT_COMMITTER_NAME', 'GIT_COMMITTER_EMAIL'];
+const humanIdentity = Object.fromEntries(gitKeys.map(k => [k, `inherited-${k}`]));
+function checkIdentity(call: Capture, name?: string) {
+  for (const key of gitKeys) assert.equal(call.options.env[key], name ? (key.endsWith('EMAIL') ? `${name}@swarm.local` : name) : humanIdentity[key], key);
+}
+for (const agent of ['claude', 'codex', 'openrouter']) for (const canEdit of [false, true]) await test(`authorship spawner ${agent} canEdit=${canEdit}`, async () => {
+  const h = await harness('spawner', { ...syntheticEnv(), ...humanIdentity }, [], 'success');
+  const spawner = new h.exports.Spawner({ mcpUrl: 'http://synthetic.invalid/mcp', defaultCwd: '/fixture', logDir: '/fixture/logs' });
+  spawner.request({ room: 'synthetic-room', requestedBy: 'parent', brief: 'Verify synthetic commit attribution only', agent, name: 'seat-abc', canEdit });
+  assert.equal(h.calls.length, 1); checkIdentity(h.calls[0], canEdit ? 'seat-abc' : undefined);
+});
+for (const worktrees of ['none', 'success', 'fail'] as const) for (const full of [false, true]) await test(`authorship swarm full=${full} worktrees=${worktrees}`, async () => {
+  const h = await harness('swarm', { ...syntheticEnv(), ...humanIdentity }, ['synthetic task', '--flat', '--agents', '4', '--codex', '1', '--openrouter', '1', ...(full ? ['--full-access'] : [])], worktrees);
+  const seats = h.calls.filter(c => !c.args.some(a => a.endsWith('/dist/index.js')));
+  assert.equal(seats.length, 4);
+  for (const call of seats) {
+    const name = path.basename(call.options.cwd);
+    const worker = call.options.cwd.includes('/.swarm-worktrees/');
+    checkIdentity(call, worker && full && worktrees === 'success' ? name : undefined);
+  }
+  assert.equal(seats.filter(c => c.options.cwd.includes('/.swarm-worktrees/')).length, full && worktrees === 'success' ? 3 : 0);
+});
+await test('authorship planner initializes before workers, no identity injection', async () => {
+  const h = await harness('swarm', { ...syntheticEnv(), ...humanIdentity }, ['synthetic task', '--agents', '4', '--full-access'], 'success');
+  const seats = h.calls.filter(c => !c.args.some(a => a.endsWith('/dist/index.js')));
+  assert.equal(seats.length, 5);
+  checkIdentity(seats[0]); // planner runs before worker worktrees exist
+  checkIdentity(seats[1]); // verifier is never a worker
+});
+console.log(`SEAT ENV + AUTHORSHIP: ${failures ? `${failures} failed` : 'OK'}`);
 process.exitCode = failures ? 1 : 0;

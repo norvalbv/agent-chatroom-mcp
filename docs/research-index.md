@@ -88,7 +88,7 @@
 | arXiv:2606.21666 | docs/self-improvement-swarm-planned hub-carries-what-it-knows  |
 | arXiv:2606.27009 | docs/union-alpha-rebuild-swarm-160711-etdp  |
 | arXiv:2606.27457 | docs/token-round-0918 token-cost-is-resent-context  |
-| arXiv:2606.29270 | consensus-requires-scrutiny docs/self-improvement-swarm-planned hub-carries-what-it-knows  |
+| arXiv:2606.29270 | consensus-requires-scrutiny docs/self-improvement-swarm-planned done-means-independently-verified hub-carries-what-it-knows  |
 | arXiv:2607.15648 | humans-answered-once-by-hub-enforcement  |
 | arXiv:2607.16109 | board-delta-manifests-and-single-electorate  |
 | arXiv:2608.02758 | docs/self-improvement-swarm-planned hub-carries-what-it-knows  |

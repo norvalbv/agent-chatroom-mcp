@@ -1,0 +1,135 @@
+SET x 5
+SET i 100
+SET k 0
+DEF jsum i lo hi t
+SET s 0
+SET i lo
+WHILE NOT < hi i
+SET s + s t
+SET i + i 1
+END
+RET s
+END
+DEF twice x
+RET + x x
+END
+DEF inner b
+RET + b x
+END
+DEF outer a
+SET x 100
+RET CALL inner a
+END
+DEF swap2 a b
+SET tmp a
+SET a b
+SET b tmp
+END
+DEF fact n
+IF < n 2
+RET 1
+END
+RET * n CALL fact - n 1
+END
+DEF inc2 a
+SET a + a 2
+RET a
+END
+DEF wrap b
+RET CALL inc2 b
+END
+DEF h a
+SET y 7
+RET + a y
+END
+DEF h2 a
+SET y 7
+SET a y
+RET a
+END
+DEF count n
+SET total 0
+SET j 0
+WHILE < j n
+SET total + total NEXT j
+END
+RET total
+END
+DEF pick c u v
+IF c
+RET u
+END
+RET v
+END
+PRINT CALL jsum i 1 4 * i i
+PRINT i
+PRINT CALL jsum i 1 3 CALL jsum k 1 i + k i
+PRINT i
+PRINT k
+PRINT CALL twice NEXT k
+PRINT k
+PRINT CALL twice + k 1
+PRINT CALL outer + x 1
+PRINT x
+SET p 3
+SET q 8
+CALL swap2 p q
+PRINT p
+PRINT q
+CALL swap2 p + q 1
+PRINT p
+PRINT q
+CALL swap2 p 9
+PRINT p
+PRINT CALL fact 5
+SET m 4
+PRINT CALL fact m
+SET v 10
+PRINT CALL wrap v
+PRINT v
+PRINT CALL wrap + v 0
+PRINT v
+SET y 1
+PRINT CALL h y
+PRINT y
+PRINT CALL h2 y
+PRINT y
+SET w 0
+PRINT CALL count MIN 4 NEXT w
+PRINT w
+SET c 0
+PRINT CALL jsum i 1 MIN 6 NEXT c * i 2
+PRINT c
+PRINT i
+SET n 3
+PRINT CALL count n
+PRINT CALL pick NEXT n NEXT n NEXT n
+PRINT n
+PRINT CALL pick 0 NEXT n NEXT n
+PRINT n
+REPEAT 3
+PRINT CALL jsum i 1 n + i x
+SET n - n 1
+END
+PRINT n
+DEF up a
+SET a + a 1
+END
+DEF up2 a b
+CALL up a
+CALL up b
+CALL up a
+END
+SET e 0
+SET f 0
+CALL up2 e f
+PRINT e
+PRINT f
+CALL up2 e e
+PRINT e
+CALL up2 + e 1 f
+PRINT e
+PRINT f
+SET g 2
+PRINT CALL jsum g g 5 CALL count g
+PRINT g

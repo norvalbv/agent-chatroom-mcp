@@ -30,6 +30,7 @@ export const offlineScripts = [
   'handoff-task-fixture.test.ts',
   'human-answering.test.ts',
   'mention-mentions.test.ts',
+  'openrouter-cache-regression.ts',
   'regression-replay.ts',
   'recruit-prefix-regression.ts',
   'route-auth-regression.ts',

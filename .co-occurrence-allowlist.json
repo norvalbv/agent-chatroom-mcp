@@ -1,0 +1,25 @@
+{
+  "pairs": [],
+  "clones": [
+    {
+      "fragmentHash": "0e192801ceb870ed",
+      "fileA": "src/fleet.ts",
+      "fileB": "src/openrouter.ts",
+      "description": "openrouter.ts's new CLI flag-parsing block (item4/item6, swarm-084605-6m31) structurally echoes fleet.ts's existing flag parser; independently reviewed and test-covered, not copy-pasted",
+      "date": "2026-09-18",
+      "lines": 8,
+      "rangeA": "22-29",
+      "rangeB": "16-29"
+    },
+    {
+      "fragmentHash": "0ab9da9b83700a77",
+      "fileA": "src/openrouter.ts",
+      "fileB": "src/swarm.ts",
+      "description": "openrouter.ts's new CLI flag-parsing block (item4/item6, swarm-084605-6m31) structurally echoes swarm.ts's existing flag parser; independently reviewed and test-covered, not copy-pasted",
+      "date": "2026-09-18",
+      "lines": 7,
+      "rangeA": "18-24",
+      "rangeB": "23-29"
+    }
+  ]
+}

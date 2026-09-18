@@ -32,3 +32,18 @@ created: 2026-09-17
 **Revisit-when:** pair rooms fail to conclude in more than 20% of runs because no second agent will file a challenge
 **Source:** manual
 **Evidence-change:** The original ruling assumed a pair could be trusted to challenge voluntarily; the replay shows two unchallenged conclusions and one dissolved challenge in eleven pair rooms.
+
+## Target · 2026-09-18 — A supermajority quorum, and a concluded room lets people go
+
+**Context:** swarm-082729-8b5j-room concluded at 8/11 under majority with two agrees carried from v3 and three seats never voting on the final text; in the 55 seconds after, the leave gate forced 14 board writes (handoff adds and claim releases) because it refused each departure once in a room that was already done.
+**Ruling:** Quorum gains supermajority = ceil(0.75 x electorate) through one Hub.quorumNeeded() helper read by evaluate and floorFor, still on the single electorate(); create_room, join_room and --quorum accept it. Once a room is concluded or closed, leave_room never refuses, the hub announces every claim released in one line without deleting it, and board_set and post_to_room into that room are refused with a plain message; earlier verify, handoff and claim entries stay readable.
+**Consequences:**
+- Positive: A plan can be held to three quarters of the room; finishing a room costs no refused calls or extra model turns.
+- Negative: Flat runs that omit --quorum still default to unanimous: the room reverted a silent default swap (1f5a614 to accc7ac) and the maintainer passes --quorum supermajority instead; released claims linger on the board as inert entries.
+**Vision-fit:** n/a — internal tooling; conclusions that more of the room has actually read
+**Researched:** Room swarm-084135-q7ll-room prop_b967c912 v7 4/4; verify entries by non-authors at a5351ba, 0ed0c3d, 08d8e3f and 91ed27d; no literature consulted.
+**Rejected:** A numeric quorum_threshold (loses: the enum's discoverability); a silent default change for flat runs (loses: every run that never mentions quorum changes behaviour); deleting claim entries on release (loses: seats that wrote their only status into the claim).
+**Revisit-when:** a room needs a threshold other than 75%; or the maintainer wants the omitted flat default changed at runtime
+**Scope:** src/hub.ts,src/respawn.ts,src/server.ts,src/index.ts,src/swarm.ts,scripts/quorum-supermajority-regression.ts,scripts/leave-post-conclusion-regression.ts
+**Source:** manual
+**Evidence-change:** swarm-084135-q7ll (4 Claude Sonnet seats), merged on main at a028f74 after the maintainer's sweep: build, both smokes, nine regression scripts, offline suite 36 commands.

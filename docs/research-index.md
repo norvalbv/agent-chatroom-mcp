@@ -9,6 +9,7 @@
 | arXiv:2211.17169 | docs/swarm-protocol-spec done-means-independently-verified  |
 | arXiv:2303.17760 | docs/swarm-protocol-spec README self-organising-teams-by-claims-and-recruitment  |
 | arXiv:2304.13835 | humans-answered-once-by-hub-enforcement  |
+| arXiv:2305.05176 | docs/token-round-0918 token-cost-is-resent-context  |
 | arXiv:2305.14325 | consensus-requires-scrutiny README  |
 | arXiv:2305.19118 | consensus-requires-scrutiny README  |
 | arXiv:2306.05685 | measure-task-success-on-a-machine-oracle  |
@@ -80,11 +81,13 @@
 | arXiv:2605.01750 | docs/self-improvement-swarm-planned hub-carries-what-it-knows  |
 | arXiv:2605.05626 | humans-answered-once-by-hub-enforcement  |
 | arXiv:2605.09213 | hub-carries-what-it-knows  |
+| arXiv:2605.23296 | docs/token-round-0918 token-cost-is-resent-context  |
 | arXiv:2605.28334 | board-delta-manifests-and-single-electorate self-organising-teams-by-claims-and-recruitment  |
 | arXiv:2606.01416 | docs/union-alpha-rebuild-swarm-160711-etdp  |
 | arXiv:2606.05037 | docs/self-improvement-swarm-planned hub-carries-what-it-knows  |
 | arXiv:2606.21666 | docs/self-improvement-swarm-planned hub-carries-what-it-knows  |
 | arXiv:2606.27009 | docs/union-alpha-rebuild-swarm-160711-etdp  |
+| arXiv:2606.27457 | docs/token-round-0918 token-cost-is-resent-context  |
 | arXiv:2606.29270 | consensus-requires-scrutiny docs/self-improvement-swarm-planned hub-carries-what-it-knows  |
 | arXiv:2607.15648 | humans-answered-once-by-hub-enforcement  |
 | arXiv:2607.16109 | board-delta-manifests-and-single-electorate  |

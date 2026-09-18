@@ -19,3 +19,18 @@ created: 2026-09-17
 **Revisit-when:** a task where minimal-prompt rooms fail to converge in 2x the guided time, or a mixed-model room needs protocol scaffolding to include a weaker model
 **Scope:** prompts/**,scripts/debate.sh
 **Source:** collab · docs/swarm-protocol-spec.md
+
+## Target · 2026-09-18 — RE-TARGET: the minimal prompt carries one sentence of quiet guidance
+
+**Context:** Guidance to use quiet=true for working exchanges lived only in prompts/loop.md and the send_message description. The loop.md lobby sent 66 quiet messages; every minimal.md room sent 0, and in swarm-082729-8b5j-room 55 of 72 chat messages were @-addressed yet pushed to all 11 seats, a full-context turn each for ten seats with no use for them.
+**Ruling:** minimal.md, recruit.md and worker.md carry one short sentence: working exchanges with named seats are quiet; claims, evidence pointers, proposals, challenges, votes and anything someone must act on are public. scripts/quiet-guidance-regression.ts fails if a flat-run prompt lacks it. The read-digest convention stays out of minimal.md.
+**Consequences:**
+- Positive: Addressed working chatter stops costing every other seat a turn.
+- Negative: A narrow exception to 'tool descriptions alone are enough', paid in a few prompt words on every turn; the hub still delivers public @-messages to everyone.
+**Vision-fit:** n/a — internal tooling; the hub carries coordination, the prompt carries only what the hub cannot
+**Researched:** Measured on the hub's own quiet counters across swarm-214936-s3jy-room and four rooms of 2026-09-18; built as item 3 of swarm-084605-6m31 (7a57cb7, verify/item3 by a non-author).
+**Rejected:** Leaving it to the tool description (loses: measured 0 quiet messages in every minimal-prompt room).
+**Revisit-when:** minimal-prompt rooms still send no quiet messages on the next run, which would argue for quiet-by-default delivery of @-messages in the hub instead of prompt words
+**Scope:** prompts/minimal.md,prompts/recruit.md,prompts/worker.md,prompts/loop.md,scripts/quiet-guidance-regression.ts
+**Source:** manual
+**Evidence-change:** Maintainer note #77 in swarm-084605-6m31-room with the counts above; merged on main at da412ce.

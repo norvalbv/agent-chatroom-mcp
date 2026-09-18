@@ -340,6 +340,8 @@ const manifestBytes = (payload: unknown) => Buffer.byteLength(JSON.stringify(pay
 
 export class Hub {
   readonly rooms = new Map<string, Room>();
+  /** Fired on every room state transition (setState); the consolidator spawn listens for "concluded". */
+  onRoomState?: (room: string, state: RoomState) => void;
   /** Observed waits only: deliberately not restored from historical room logs. */
   private readonly boardManifestObserved = new WeakMap<Room, BoardManifestCounters>();
   private readonly dataDir?: string;
@@ -2230,6 +2232,7 @@ export class Hub {
   private setState(room: Room, state: RoomState) {
     room.state = state;
     this.persist({ type: "state", room: room.name, state, conclusion: room.conclusion });
+    this.onRoomState?.(room.name, state);
   }
 
   /** Close a room without a conclusion (stale, abandoned, or a human decided to stop it). */

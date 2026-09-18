@@ -103,4 +103,19 @@ spawner.request({ room: lobbyC, requestedBy: "lobby-seat-c", brief, count: 2, ne
 spawner.checkConsolidators();
 assert.equal(consolidators(lobbyC).length, 0, "no consolidator when the lobby room state is unknown");
 
+// ---------- 8. Child room concluded while its seat process is still alive: no close event ever fires ----------
+// heartbeat-as-liveness keeps the seat process up and the idle sweep away, so the ONLY trigger is the
+// hub-side room-concluded event; process exit must not be part of the gate (lobby review finding).
+const lobbyD = "lobby-d";
+roomState.set(lobbyD, "open");
+roomState.set("child-d1", "concluded");
+roomState.set("child-d2", "concluded");
+const recsD = spawner.request({ room: lobbyD, requestedBy: "lobby-seat-d", brief, count: 2, newRoom: "child-d1", parentTopic: "rank the lobby list" });
+const dim = spawner as unknown as { agents: SpawnedAgent[] };
+for (const r of recsD) dim.agents.find((a) => a.name === r.name)!.endedAt = undefined; // process still alive after conclusion
+spawner.checkConsolidators(); // this is what hub.onRoomState("concluded") invokes
+assert.equal(consolidators(lobbyD).length, 1, "a concluded child room with a still-alive seat process must still spawn exactly one consolidator");
+spawner.checkConsolidators();
+assert.equal(consolidators(lobbyD).length, 1, "and it still never fires twice");
+
 console.log("CONSOLIDATOR-SPAWN OK");

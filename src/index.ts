@@ -47,6 +47,12 @@ const spawner = new Spawner({
   // a fleet of a hundred read-only seats is a legitimate machine-wide count; the default 24 was sized for one run
   maxLive: process.env.CHATROOM_MAX_LIVE_AGENTS ? Number(process.env.CHATROOM_MAX_LIVE_AGENTS) : undefined,
 });
+// a child break-out room concludes when its own hub state transitions, possibly before its seat
+// process exits (heartbeat-as-liveness keeps the seat alive); the concluded event, not process
+// close, is what must trigger the lobby's consolidator seat (lobby item 3)
+hub.onRoomState = (room, state) => {
+  if (state === "concluded") spawner.checkConsolidators();
+};
 spawner.attach({
   isHeld: (room) => {
     try {

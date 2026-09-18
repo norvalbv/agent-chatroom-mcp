@@ -320,7 +320,9 @@ export class Spawner {
    * seat once the LAST child concludes, so no lobby seat waits for a manually nominated drafter (fleet.ts already
    * has launch-time --consolidate for flat fleets; this is the request_agent(new_room) equivalent). Fires at most
    * once per lobby, is skipped while a proposal is open in the lobby (it is still deliberating), and is skipped
-   * when the lobby room itself is unknown, concluded or closed. Called on every child close (above) and by tests.
+   * when the lobby room itself is unknown, concluded or closed. Called on every child close (above) and on every
+   * hub room-state transition to "concluded" (wired in src/index.ts), so a child whose seat process stays alive
+   * after its room concludes (heartbeat-as-liveness) still triggers. The gate is room state only, never process exit.
    */
   checkConsolidators(): void {
     if (!this.hooks?.roomState) return;
@@ -337,7 +339,7 @@ export class Spawner {
       const lobbyState = this.hooks.roomState(lobby);
       if (lobbyState !== "open" && lobbyState !== "stalled") continue; // unknown/closed/concluded lobby: never fire into it
       if (this.hooks.openProposal?.(lobby)) continue; // the lobby is still deliberating; no consolidator yet
-      const everyConcluded = children.every((c) => c.endedAt !== undefined && this.hooks?.roomState?.(c.room) === "concluded");
+      const everyConcluded = children.every((c) => this.hooks?.roomState?.(c.room) === "concluded");
       if (!everyConcluded) continue; // only when the LAST child room has concluded
       this.consolidatorsFired.add(lobby);
       const by = children[0].requestedBy;

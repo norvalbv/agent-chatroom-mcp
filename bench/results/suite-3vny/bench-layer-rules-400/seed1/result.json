@@ -1,0 +1,113 @@
+{
+  "schemaVersion": 1,
+  "task_id": "bench-layer-rules-400",
+  "arm": "A",
+  "seed": 1,
+  "model": "sonnet",
+  "outcome": "task_pass",
+  "passed": true,
+  "reason": "task_pass",
+  "oracle": {
+    "kind": "exact-answer",
+    "command": "node --import tsx score-fact-check.ts <workspace>/answer.txt oracle/oracle.json",
+    "exit_code": 0
+  },
+  "anti_tamper": {
+    "hash_before": "2f3e91d8639aff38259b26dfc4424b40d6f3fdb0918cfb791740d2f8c4061749",
+    "hash_after": "2f3e91d8639aff38259b26dfc4424b40d6f3fdb0918cfb791740d2f8c4061749",
+    "unchanged": true
+  },
+  "seats": [
+    {
+      "name": "single",
+      "argv": [
+        "claude",
+        "-p",
+        "Read spec.txt (the LAYERS language) and program.layers. Determine exactly what the program\noutputs under that specification.\n\nWrite your final answer, and only your final answer with no explanation, to a file named\nanswer.txt in your current working directory: the output values in order, separated by single\nspaces, on one line.\n\nWrite your final answer, and only your final answer with no explanation, to a file named answer.txt in your current working directory.",
+        "--mcp-config",
+        "/tmp/s6pilot/lr400-A1/mcp-empty.json",
+        "--strict-mcp-config",
+        "--allowedTools",
+        "Read,Write,Bash,Glob,Grep",
+        "--tools",
+        "Read,Write,Bash,Glob,Grep",
+        "--disable-slash-commands",
+        "--setting-sources",
+        "project",
+        "--exclude-dynamic-system-prompt-sections",
+        "--output-format",
+        "stream-json",
+        "--verbose",
+        "--model",
+        "sonnet"
+      ],
+      "exit_code": 0,
+      "signal": null,
+      "started_at": "2026-09-18T15:42:13.446Z",
+      "completed_at": "2026-09-18T15:42:38.952Z",
+      "num_turns": 5,
+      "duration_ms": 22744,
+      "duration_api_ms": 23604,
+      "usage": {
+        "cost": 0.1452502,
+        "input_tokens": 8,
+        "cache_read_input_tokens": 73276,
+        "cache_creation_input_tokens": 27668,
+        "output_tokens": 1885
+      },
+      "text": "I ran the whole program through a small interpreter I wrote for the LAYERS spec and saved its output to `answer.txt`. The file holds 400 space-separated values on one line, one for each key named in the single SHOW line.\n\nI didn't hand-check any of the values. The interpreter follows the spec's layer ranking, SEAL, WHEN and floor-division rules, and it read all 1266 lines of `program.layers`, not just the first 750 that were displayed.",
+      "killed_by_deadline": false,
+      "partial_usage": null
+    }
+  ],
+  "usage": {
+    "steps": 0,
+    "prompt_tokens": 0,
+    "completion_tokens": 0,
+    "cost_usd": 0.1452502,
+    "seats": 1,
+    "seats_with_usage": 1,
+    "coverage": "complete",
+    "input_tokens": 8,
+    "cache_read_input_tokens": 73276,
+    "cache_creation_input_tokens": 27668,
+    "output_tokens": 1885
+  },
+  "turns": {
+    "per_seat": [
+      {
+        "name": "single",
+        "num_turns": 5
+      }
+    ],
+    "summed": 5,
+    "seats": 1,
+    "seats_with_turns": 1,
+    "coverage": "complete"
+  },
+  "wall_clock": {
+    "started_at": "2026-09-18T15:42:13.446Z",
+    "completed_at": "2026-09-18T15:42:38.953Z",
+    "duration_ms": 25507
+  },
+  "budget": {
+    "max_budget_usd": null,
+    "deadline_ms": 900000
+  },
+  "build": {
+    "head_revision": "2208ad3ba43da5158f58edcdbeb41b451368381a",
+    "hub_entry": null,
+    "hub_entry_sha256": null,
+    "hub_revision": null
+  },
+  "frozen": {
+    "task_sha256": "2f3e91d8639aff38259b26dfc4424b40d6f3fdb0918cfb791740d2f8c4061749",
+    "scorer_sha256": "f4b645c670ae4655aec1189e4d7320294115f0e3c6da3b5ba41a7ee3b1cd00f8",
+    "fact_scorer_sha256": "6b8b3e98c8c408ecd6715a38db9263488644d27c01a11c5bab3172acd5539832",
+    "task_id": "bench-layer-rules-400",
+    "timeout_ms": 900000,
+    "seats": 1
+  },
+  "error": null,
+  "checked_at": "2026-09-18T15:42:39.051Z"
+}

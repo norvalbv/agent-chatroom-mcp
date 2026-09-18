@@ -307,12 +307,20 @@ export async function runSeat(provider: ChatProvider, opts: SeatOptions): Promis
   const hubBase = opts.mcpUrl?.replace(/\/mcp\/?$/, "");
   let stepNo = 0;
   /** Fire-and-forget: local work makes no hub calls, so this is how the room can tell a busy seat from a dead one. */
-  function heartbeat(tool: string) {
+  /** What to show a human watching: the command, the path, the pattern, the URL, or the room call's gist. */
+  const detailOf = (tool: string, args: Record<string, string>): string => {
+    for (const k of ["command", "path", "pattern", "url", "key"]) if (args[k]) return String(args[k]);
+    if (tool === "send_message") return String(args.content ?? "").slice(0, 120);
+    if (tool === "wait_for_messages") return `timeout ${args.timeout_ms ?? "?"}ms`;
+    return "";
+  };
+  function heartbeat(tool: string, args: Record<string, string> = {}) {
     if (!hubBase) return;
+    const detail = String(detailOf(tool, args)).slice(0, 300);
     for (const room of joined) {
       const pid = pids.get(room);
       if (!pid) continue;
-      fetch(`${hubBase}/rooms/${encodeURIComponent(room)}/heartbeat`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ participant_id: pid, tool, step: stepNo }), signal: AbortSignal.timeout(5_000) }).catch(() => {});
+      fetch(`${hubBase}/rooms/${encodeURIComponent(room)}/heartbeat`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ participant_id: pid, tool, step: stepNo, detail }), signal: AbortSignal.timeout(5_000) }).catch(() => {});
     }
   }
   /** What the model must not forget when older turns are dropped: its rooms, names and participant ids. */
@@ -324,7 +332,8 @@ export async function runSeat(provider: ChatProvider, opts: SeatOptions): Promis
       return `You are already in room "${args.room}" as ${joinedAs.get(args.room)}${pids.get(args.room) ? ` (participant_id ${pids.get(args.room)})` : ""}. No need to join again, and do not join under another name. Continue with wait_for_messages or read_messages.`;
     }
     const mine = local.find((t) => t.def.function.name === name);
-    if (mine) { heartbeat(name); return String(await mine.run(args)); }
+    if (mine) { heartbeat(name, args); return String(await mine.run(args)); }
+    if (name !== "join_room" && name !== "wait_for_messages") heartbeat(name, args); // room calls too, so the feed is complete
     if (!hubTools.has(name)) return `No tool named ${name}. Available: ${[...hubTools, ...local.map((t) => t.def.function.name)].join(", ")}`;
     // 55s long-polls (wait_for_messages) must not trip the SDK's default 60s request timeout
     const r = (await client.callTool({ name, arguments: args }, undefined, { timeout: 180_000 })) as { isError?: boolean; content?: { type: string; text?: string }[] };

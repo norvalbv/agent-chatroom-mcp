@@ -57,7 +57,9 @@ export interface Participant {
   /** why this participant left, as given to leave_room; shown in the room notice and the dashboard */
   leaveReason?: string;
   /** last heartbeat from the seat process: local work makes no hub calls, so this is how the room knows it is alive. Ephemeral. */
-  working?: { tool: string; step: number; at: string };
+  working?: { tool: string; step: number; at: string; detail?: string };
+  /** the last 60 heartbeats: what the seat ran, step by step (dashboard: click a person). Ephemeral. */
+  activity?: { tool: string; step: number; at: string; detail: string }[];
   /** id of the addressed message this participant was last shown by wait_for_messages (the next wait without an answer is refused once) */
   addressWarned?: string;
   /** id of the addressed message a wait_for_messages was already refused for (the call after that proceeds) */
@@ -2165,10 +2167,21 @@ export class Hub {
    * when. Local tools never reach the hub, so without this a builder on step 71 of a build looked like "1 msg, 12m ago"
    * and nobody could tell it from a dead seat. Not persisted: it is about the process, not the room's history.
    */
-  heartbeat(roomName: string, pid: string, info: { tool: string; step: number }): void {
+  heartbeat(roomName: string, pid: string, info: { tool: string; step: number; detail?: string }): void {
     const room = this.getRoom(roomName);
     const p = this.requireParticipant(room, pid);
-    p.working = { tool: String(info.tool).slice(0, 40), step: Number(info.step) || 0, at: now() };
+    const detail = String(info.detail ?? "").replace(/\s+/g, " ").trim().slice(0, 300);
+    p.working = { tool: String(info.tool).slice(0, 40), step: Number(info.step) || 0, at: now(), ...(detail ? { detail } : {}) };
+    (p.activity ??= []).push({ tool: p.working.tool, step: p.working.step, at: p.working.at, detail });
+    if (p.activity.length > 60) p.activity.splice(0, p.activity.length - 60);
+  }
+
+  /** A participant's recent steps, oldest first (GET /rooms/:room/participants/:name/activity). */
+  activity(roomName: string, name: string): { tool: string; step: number; at: string; detail: string }[] {
+    const room = this.getRoom(roomName);
+    const p = [...room.participants.values()].filter((x) => x.name === name).sort((a, b) => (b.active ? 1 : 0) - (a.active ? 1 : 0))[0];
+    if (!p) throw new HubError(`No participant named "${name}" in "${roomName}".`);
+    return p.activity ?? [];
   }
 
   /** Latest of the last hub call and the last heartbeat. */

@@ -179,10 +179,18 @@ app.post("/rooms/:room/heartbeat", (req, res) => {
   try {
     const { participant_id, tool, step } = (req.body ?? {}) as { participant_id?: string; tool?: string; step?: number };
     if (!participant_id) return res.status(400).type("text/plain").send("participant_id required");
-    hub.heartbeat(req.params.room, participant_id, { tool: tool ?? "?", step: step ?? 0 });
+    const { detail } = (req.body ?? {}) as { detail?: string };
+    hub.heartbeat(req.params.room, participant_id, { tool: tool ?? "?", step: step ?? 0, detail });
     res.json({ ok: true });
   } catch (e) {
     res.status(400).type("text/plain").send(e instanceof HubError ? e.message : "error");
+  }
+});
+app.get("/rooms/:room/participants/:name/activity", (req, res) => {
+  try {
+    res.json(hub.activity(req.params.room, req.params.name));
+  } catch (e) {
+    notFound(res, e);
   }
 });
 app.post("/rooms/:room/archive", (req, res) => {

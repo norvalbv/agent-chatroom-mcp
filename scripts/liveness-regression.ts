@@ -36,4 +36,16 @@ assert.deepEqual(hub.sweepIdle(10 * 60_000, new Set()), ["bench-3"]);
 // 4. Heartbeats for a departed or unknown participant are refused, not recorded.
 assert.throws(() => hub.heartbeat(room.name, "p_nobody", { tool: "x", step: 1 }), /not a participant/);
 assert.throws(() => hub.heartbeat(room.name, a.id, { tool: "x", step: 1 }), /have left/);
+// 5. Each heartbeat carries what the seat is doing (the command text, a path, a pattern) and the hub keeps the last 60
+//    per participant, so a click on a person in the dashboard shows their recent steps, not just "run_command".
+const c = hub.join(room.name, "bench-5", "openrouter", {}, undefined, "s-c").participant;
+for (let i = 1; i <= 70; i++) hub.heartbeat(room.name, c.id, { tool: "run_command", step: i, detail: `cd worktree && git log --oneline -${i}` });
+const act = hub.activity(room.name, "bench-5");
+assert.equal(act.length, 60, "ring buffer of 60");
+assert.equal(act.at(-1)?.step, 70); assert.equal(act[0].step, 11);
+assert.match(act.at(-1)!.detail, /git log --oneline -70/);
+assert.equal(hub.summary(room, true).participants.find((p) => p.name === "bench-5")!.working?.detail, "cd worktree && git log --oneline -70");
+hub.heartbeat(room.name, c.id, { tool: "read_file", step: 71, detail: "x".repeat(1000) });
+assert.ok(hub.activity(room.name, "bench-5").at(-1)!.detail.length <= 300, "detail is capped");
+assert.throws(() => hub.activity(room.name, "nobody"), /No participant/);
 console.log("LIVENESS OK");

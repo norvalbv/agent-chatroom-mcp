@@ -3,7 +3,10 @@
   "maxLines": 500,
   "maxTestLines": 2000,
   "files": {
-    "src/hub.ts": 1695,
-    "src/server.ts": 569
+    "src/hub.ts": 2528,
+    "src/seat.ts": 669,
+    "src/server.ts": 692,
+    "src/swarm.ts": 514,
+    "src/ui.ts": 739
   }
 }

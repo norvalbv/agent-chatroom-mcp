@@ -34,6 +34,10 @@ export interface Usage {
   prompt_tokens: number;
   completion_tokens: number;
   cost: number;
+  /** tokens the provider billed at a cache-read discount this run, when it reports the field (a $ signal, not a cut to prompt_tokens: see docs/decisions or evidence/openrouter-prompt-caching). */
+  cached_tokens?: number;
+  cache_creation_tokens?: number;
+  cache_discount?: number;
 }
 /** One model turn as the loop consumes it. `reasoningDetails` is passed back verbatim on the next request. */
 export interface Reply {
@@ -68,6 +72,30 @@ export interface SeatOptions {
   idleWaits?: number;
   /** R4 usage telemetry: when set, on exit the seat writes {steps, prompt_tokens, completion_tokens, cost} here — the <name>.usage.json sidecar the launcher collects next to the seat's .out. Never touches stdout, so the .out text stays the seat's final answer. */
   usageSidecar?: string;
+  /** PROACTIVE HANDOFF (R1): fraction of maxSteps at which a seat still holding work hands off instead of running to the cap (default 0.75). */
+  handoffStepFraction?: number;
+  /** absolute step at which to hand off, overriding handoffStepFraction (lobby test spec --handoff-step-max) */
+  handoffStepMax?: number;
+  /** cumulative prompt-token budget that triggers handoff (default 6_000_000; clean exits cluster at 4-6M prompt tokens, verify/context-pressure-logs) */
+  handoffPromptTokens?: number;
+  /** transcript fraction of maxContextChars that triggers handoff BEFORE trim() drops turns (default 0.9) */
+  handoffContextFraction?: number;
+  /** opt out of proactive handoff entirely (default false) */
+  noHandoff?: boolean;
+  /** IDLE-RUN TRIGGER (R2): consecutive model turns with no actionable hub hint and no outbound
+   * send_message/board_set before a seat hands off, on top of the steps/tokens/context-fraction
+   * triggers above (default 20; 0 disables this trigger only). Catches a seat that keeps spending
+   * model turns — wandering local tool calls, or hub churn that never rises to actionable — without
+   * ever producing room-visible work, distinct from context pressure. */
+  handoffIdleTurns?: number;
+  /**
+   * Cache-stable trimming (default off: legacy per-step FIFO trim back to the ceiling). When on, a trim
+   * still triggers at maxContextChars but drops down to a lower floor in one shot and marks the drop with
+   * a single checkpoint message, so trimming fires as an infrequent, periodic checkpoint instead of on
+   * roughly every other step — the transcript grows append-only (and so keeps a stable, cacheable prefix)
+   * between checkpoints, rather than invalidating the provider's prompt cache almost every turn.
+   */
+  checkpointTrim?: boolean;
   log?: (line: string) => void;
 }
 export interface SeatResult {
@@ -76,6 +104,10 @@ export interface SeatResult {
   steps: number;
   /** false when a provider error ended the run */
   ok: boolean;
+  /** claim areas this seat handed off (handoff/<area> written) before leaving; empty when none */
+  handoffs: string[];
+  /** true when the run ended because proactive context-pressure handoff fired (as opposed to finishing, the cap, the budget or an error) */
+  handedOff: boolean;
 }
 
 /** Tool result shape we look at for hints; everything else is passed through untouched. */
@@ -288,6 +320,7 @@ export async function runSeat(provider: ChatProvider, opts: SeatOptions): Promis
   const maxToolChars = opts.maxToolChars ?? 6000;
   const maxContextChars = opts.maxContextChars ?? 240_000;
   const idleWaits = Math.max(1, opts.idleWaits ?? 3);
+  const checkpointTrim = opts.checkpointTrim ?? false;
   const log = opts.log ?? ((s: string) => process.stderr.write(`${s}\n`));
   const clampTo = (n: number) => (s: string) => (s.length > n ? `${s.slice(0, n)}\n…[truncated, ${s.length} chars total]` : s);
   const clampLocal = clampTo(maxToolChars);
@@ -365,12 +398,57 @@ export async function runSeat(provider: ChatProvider, opts: SeatOptions): Promis
     return clampHub((r.isError ? "ERROR: " : "") + (text || "(no content)"));
   }
 
-  /** On the way out for a reason the model did not choose, leave every room so nobody waits on an empty seat. */
+  /** PROACTIVE HANDOFF (R1): best-effort board_get manifest -> handoff/<area> for every claim/* this seat
+   * holds in a room, so a replacement can pick the work up and leave_room is never refused for an orphaned
+   * claim. Pure MCP calls, every one wrapped; a board outage must not block the seat from leaving.
+   * Returns the areas handed off. */
+  async function writeHandoffs(): Promise<string[]> {
+    if (!opts.mcpUrl) return [];
+    const areas: string[] = [];
+    for (const room of [...joined]) {
+      const as = joinedAs.get(room) ?? "";
+      let manifestText = "";
+      try {
+        const r = (await client.callTool({ name: "board_get", arguments: { room } }, undefined, { timeout: 30_000 })) as { isError?: boolean; content?: { type: string; text?: string }[] };
+        manifestText = (r.content ?? []).map((c) => c.text ?? "").join("\n").trim();
+        if (r.isError || !manifestText) throw new Error(manifestText || "empty manifest");
+      } catch (e) {
+        log(`[${provider.label}] handoff: could not read board of ${room}: ${e instanceof Error ? e.message : String(e)}`);
+        continue;
+      }
+      let entries: Record<string, { by?: string }> = {};
+      try {
+        entries = JSON.parse(manifestText) as Record<string, { by?: string }>;
+      } catch {
+        log(`[${provider.label}] handoff: manifest of ${room} was not JSON; skipping`);
+        continue;
+      }
+      for (const [key, meta] of Object.entries(entries)) {
+        if (!key.startsWith("claim/") || !(meta.by && meta.by === as)) continue;
+        const area = key.slice("claim/".length);
+        const text = `Handoff from ${as} under context pressure (step ${steps}/${maxSteps}, ${usage.prompt_tokens} cumulative prompt tokens, transcript ${size()} chars) before the brief was done. Done: see ${key} on this board. Where: room ${room} board. Undone: the brief in the seat's launch prompt continues from here; a replacement should read ${key} and this handoff and finish it.`.slice(0, 600);
+        try {
+          const res = (await client.callTool({ name: "board_set", arguments: { room, key: `handoff/${area}`, text } }, undefined, { timeout: 30_000 })) as { isError?: boolean };
+          if (res.isError) throw new Error("board_set refused");
+          areas.push(area);
+          log(`[${provider.label}] handoff ${room}: wrote handoff/${area}`);
+        } catch (e) {
+          log(`[${provider.label}] handoff ${room}: could not write handoff/${area}: ${e instanceof Error ? e.message : String(e)}`);
+        }
+      }
+    }
+    return areas;
+  }
+
+  /** On the way out for a reason the model did not choose, hand claims over (handoff/*) then leave every
+   * room so nobody waits on an empty seat. */
   async function bow(reason: string) {
+    const handed = await writeHandoffs();
+    const suffix = handed.length ? `; handed off: ${handed.join(", ")}` : "";
     for (const room of [...joined]) {
       try {
-        await client.callTool({ name: "leave_room", arguments: { room, reason: `seat exiting: ${reason}`.slice(0, 600) } }, undefined, { timeout: 30_000 });
-        log(`[${provider.label}] left ${room}: ${reason}`);
+        await client.callTool({ name: "leave_room", arguments: { room, reason: `seat exiting: ${reason}${suffix}`.slice(0, 600) } }, undefined, { timeout: 30_000 });
+        log(`[${provider.label}] left ${room}: ${reason}${suffix}`);
       } catch (e) {
         log(`[${provider.label}] could not leave ${room}: ${e instanceof Error ? e.message : String(e)}`);
       }
@@ -384,16 +462,33 @@ export async function runSeat(provider: ChatProvider, opts: SeatOptions): Promis
   const usage: Usage = { prompt_tokens: 0, completion_tokens: 0, cost: 0 };
   const size = () => JSON.stringify(messages).length;
 
-  /** Drop whole turns (an assistant message with its tool results and any hint that followed) from the front. */
+  // checkpointTrim's floor: how far below the ceiling a firing drops to. Low enough that many steps of
+  // pure append pass before the ceiling is hit again, so trimming is an infrequent checkpoint rather than
+  // a near-every-step FIFO splice that would invalidate a provider prompt cache on ~half of all turns.
+  const CHECKPOINT_FLOOR_RATIO = 0.5;
+
+  /**
+   * Drop whole turns (an assistant message with its tool results and any hint that followed) from the
+   * front. Legacy mode (checkpointTrim off) drops just enough to sit under the ceiling, which tends to
+   * refire on roughly every other step once a seat rides the ceiling — cache-hostile, since it edits the
+   * middle of the transcript almost every turn. checkpointTrim instead drops down to a lower floor in one
+   * shot and marks the cut with a single checkpoint message, so the transcript is append-only (and its
+   * prefix stable across consecutive requests) between the rarer firings.
+   */
   function trim() {
+    if (size() <= maxContextChars) return;
+    const target = checkpointTrim ? Math.round(maxContextChars * CHECKPOINT_FLOOR_RATIO) : maxContextChars;
     let dropped = 0;
-    while (size() > maxContextChars && messages.length > 3) {
+    while (size() > target && messages.length > 3) {
       let end = 3;
       while (end < messages.length && messages[end].role !== "assistant") end++;
       messages.splice(2, end - 2);
       dropped++;
     }
-    if (dropped) log(`[${provider.label}] dropped ${dropped} older turn(s) to fit the context window`);
+    if (dropped) {
+      if (checkpointTrim) messages.splice(2, 0, { role: "user", content: `[checkpoint: ${dropped} earlier turn(s) elided to stay within the context window]` });
+      log(`[${provider.label}] dropped ${dropped} older turn(s) to fit the context window${checkpointTrim ? " (checkpoint)" : ""}`);
+    }
   }
 
   // a SIGTERM (the launcher stopping, an operator shedding load) leaves the rooms first, so the seat is not a phantom voter
@@ -404,6 +499,33 @@ export async function runSeat(provider: ChatProvider, opts: SeatOptions): Promis
   // the parent's stderr pipe can vanish before the seat does; a log line must never kill the seat
   process.stderr.on("error", () => {});
   const deadline = Date.now() + maxMinutes * 60_000;
+  // PROACTIVE HANDOFF thresholds (R1). Picked from verify/context-pressure-logs: clean exits cluster at
+  // 90-130 steps / 2.96-5.86M prompt tokens; the three seats that never handed off died at 203-411 steps.
+  // Defaults: hand off at 75% of maxSteps (so a replacement still has budget), at ~6M cumulative prompt
+  // tokens, or when the transcript reaches 90% of maxContextChars -- BEFORE trim() would drop turns.
+  const noHandoff = opts.noHandoff ?? false;
+  const handoffStepFraction = opts.handoffStepFraction ?? 0.75;
+  const handoffPromptTokens = opts.handoffPromptTokens ?? 6_000_000;
+  const handoffContextFraction = opts.handoffContextFraction ?? 0.9;
+  const handoffStep = opts.handoffStepMax
+    ? Math.max(1, Math.min(opts.handoffStepMax, Math.max(1, maxSteps - 1)))
+    : Math.max(1, Math.min(Math.ceil(handoffStepFraction * maxSteps), Math.max(1, maxSteps - 1)));
+  const handoffContextChars = Math.floor(handoffContextFraction * maxContextChars);
+  const handoffIdleTurns = opts.handoffIdleTurns ?? 20;
+  let idleRunStreak = 0;
+  /** Which threshold fired, or undefined if none did; also the phrase used in the handoff reason. */
+  const pressureCause = (): string | undefined =>
+    steps >= handoffStep
+      ? "step cap approaching"
+      : usage.prompt_tokens >= handoffPromptTokens
+        ? "prompt-token budget"
+        : size() > handoffContextChars
+          ? "context fraction"
+          : handoffIdleTurns > 0 && idleRunStreak >= handoffIdleTurns
+            ? `idle run (${idleRunStreak} consecutive turns with no actionable hint and no outbound message/board write)`
+            : undefined;
+  let handedOff = false;
+  const handoffs: string[] = [];
   let nudges = 0;
   let final = "";
   let lastHint = "";
@@ -416,6 +538,26 @@ export async function runSeat(provider: ChatProvider, opts: SeatOptions): Promis
     if (Date.now() > deadline) {
       log(`[${provider.label}] ${maxMinutes} min budget spent`);
       await bow(`${maxMinutes} min budget spent`);
+      break;
+    }
+    // PROACTIVE HANDOFF: at pressure, write handoff/* for our claims, leave with a reason naming them,
+    // and terminate as a clean ok run BEFORE the cap, the budget or trim() can kill the work silently.
+    const cause = noHandoff || !joined.size ? undefined : pressureCause();
+    if (cause) {
+      const areas = await writeHandoffs();
+      handedOff = true;
+      handoffs.push(...areas);
+      const why = `proactive handoff on ${cause} (step ${steps}/${maxSteps}, ${usage.prompt_tokens} prompt + ${usage.completion_tokens} completion tokens, transcript ${size()} chars)${areas.length ? `; handed off: ${areas.join(", ")}` : ""}`;
+      log(`[${provider.label}] ${why}`);
+      for (const room of [...joined]) {
+        try {
+          await client.callTool({ name: "leave_room", arguments: { room, reason: `seat exiting: ${why}`.slice(0, 600) } }, undefined, { timeout: 30_000 });
+          joined.delete(room);
+          log(`[${provider.label}] left ${room}: ${why}`);
+        } catch (e) {
+          log(`[${provider.label}] could not leave ${room}: ${e instanceof Error ? e.message : String(e)}`);
+        }
+      }
       break;
     }
     trim();
@@ -433,6 +575,9 @@ export async function runSeat(provider: ChatProvider, opts: SeatOptions): Promis
     usage.prompt_tokens += reply.usage?.prompt_tokens ?? 0;
     usage.completion_tokens += reply.usage?.completion_tokens ?? 0;
     usage.cost += reply.usage?.cost ?? 0;
+    if (reply.usage?.cached_tokens) usage.cached_tokens = (usage.cached_tokens ?? 0) + reply.usage.cached_tokens;
+    if (reply.usage?.cache_creation_tokens) usage.cache_creation_tokens = (usage.cache_creation_tokens ?? 0) + reply.usage.cache_creation_tokens;
+    if (reply.usage?.cache_discount) usage.cache_discount = (usage.cache_discount ?? 0) + reply.usage.cache_discount;
     const calls = reply.toolCalls;
     messages.push({
       role: "assistant",
@@ -451,6 +596,10 @@ export async function runSeat(provider: ChatProvider, opts: SeatOptions): Promis
       }
       break;
     }
+    // IDLE-RUN TRIGGER (R2): this step counts toward idleRunStreak only if it neither produced
+    // outbound room work (send_message/board_set) nor received an actionable hub hint.
+    let stepHadOutboundWrite = false;
+    let stepHadActionableHint = false;
     for (const call of calls) {
       let args: Record<string, string> = {};
       try {
@@ -459,6 +608,7 @@ export async function runSeat(provider: ChatProvider, opts: SeatOptions): Promis
         messages.push({ role: "tool", tool_call_id: call.id, content: `Your arguments were not valid JSON: ${call.function.arguments?.slice(0, 200)}` });
         continue;
       }
+      if (call.function.name === "send_message" || call.function.name === "board_set") stepHadOutboundWrite = true;
       log(`[${provider.label}] step ${steps}: ${call.function.name} ${JSON.stringify(args).slice(0, 160)}`);
       let result: string;
       try {
@@ -466,15 +616,16 @@ export async function runSeat(provider: ChatProvider, opts: SeatOptions): Promis
       } catch (e) {
         result = `ERROR: ${e instanceof Error ? e.message : String(e)}`;
       }
-      // an empty wait is not worth a model turn (each one is a provider request against a shared per-minute limit): repeat it locally first
+      // a non-actionable wait (empty, or nothing but chatter irrelevant to this seat) is not worth a model
+      // turn (each one is a provider request against a shared per-minute limit): repeat it locally first
       if (call.function.name === "wait_for_messages" && idleWaits > 1) {
         for (let k = 1; k < idleWaits && !stopping && Date.now() < deadline; k++) {
           let v: HubView | undefined;
           try {
             v = result.startsWith("ERROR:") ? undefined : (JSON.parse(result) as HubView);
           } catch {}
-          if (!v || (v.messages?.length ?? 0) > 0 || actionable(v)) break;
-          log(`[${provider.label}] step ${steps}: empty wait ${k}/${idleWaits - 1}; waiting again without a model turn`);
+          if (!v || actionable(v)) break;
+          log(`[${provider.label}] step ${steps}: non-actionable wait ${k}/${idleWaits - 1}; waiting again without a model turn`);
           try {
             result = await callTool(call.function.name, args);
           } catch (e) {
@@ -488,22 +639,26 @@ export async function runSeat(provider: ChatProvider, opts: SeatOptions): Promis
       if (hubTools.has(call.function.name) && !result.startsWith("ERROR:")) {
         try {
           const view = JSON.parse(result) as HubView;
-          if (actionable(view) && view.hint !== lastHint) {
-            lastHint = view.hint!;
-            messages.push({ role: "user", content: `Hub: ${view.hint}` });
+          if (actionable(view)) {
+            stepHadActionableHint = true;
+            if (view.hint !== lastHint) {
+              lastHint = view.hint!;
+              messages.push({ role: "user", content: `Hub: ${view.hint}` });
+            }
           }
         } catch {
           /* not JSON: nothing to lift */
         }
       }
     }
+    idleRunStreak = stepHadOutboundWrite || stepHadActionableHint ? 0 : idleRunStreak + 1;
     if (steps === maxSteps) {
       log(`[${provider.label}] step cap ${maxSteps} reached`);
       await bow(`step cap ${maxSteps} reached`);
     }
   }
 
-  log(`[${provider.label}] ${steps} step(s), ${usage.prompt_tokens} prompt + ${usage.completion_tokens} completion tokens${usage.cost ? `, $${usage.cost.toFixed(4)}` : ""}`);
+  log(`[${provider.label}] ${steps} step(s), ${usage.prompt_tokens} prompt + ${usage.completion_tokens} completion tokens${usage.cost ? `, $${usage.cost.toFixed(4)}` : ""}${usage.cached_tokens ? `, ${usage.cached_tokens} cached tok` : ""}${usage.cache_discount ? `, $${usage.cache_discount.toFixed(4)} cache discount` : ""}${handedOff ? `, handed off before the cap: ${handoffs.join(", ") || "no claims"}` : ""}`);
   if (opts.mcpUrl) {
     // a finish that skipped leave_room would leave an active voter behind until the idle sweep
     if (joined.size) await bow("finished without leaving");
@@ -519,5 +674,5 @@ export async function runSeat(provider: ChatProvider, opts: SeatOptions): Promis
       log(`[${provider.label}] could not write usage sidecar ${opts.usageSidecar}: ${e instanceof Error ? e.message : String(e)}`);
     }
   }
-  return { final: final || "(no final message)", usage, steps, ok };
+  return { final: final || "(no final message)", usage, steps, ok, handoffs, handedOff };
 }

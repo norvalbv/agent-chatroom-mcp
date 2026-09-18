@@ -5,10 +5,12 @@
  * reasoning blocks passed back) and the CLI the launcher and the spawner call.
  *
  *   openrouter -p "<brief>" --mcp-url http://127.0.0.1:7717/mcp [--model slug] [--cwd dir] [--write]
- *              [--no-shell] [--max-minutes 45] [--reasoning low|medium|high]
+ *              [--no-shell] [--max-minutes 45] [--reasoning low|medium|high] [--checkpoint-trim]
  */
+import { randomUUID } from "node:crypto";
 import { resolve } from "node:path";
 import { type ChatProvider, type Msg, type Reply, type ToolCall, type ToolDef, runSeat } from "./seat.js";
+import { handoffMarkerLine } from "./seat-handoff-report.js";
 import { loadDotEnv, SEAT_ENV_EXCLUSIONS } from "./env.js";
 // Do not reload the human-control token omitted by the launcher/spawner.
 loadDotEnv(undefined, { exclude: SEAT_ENV_EXCLUSIONS });
@@ -36,7 +38,7 @@ const RATE_LIMIT_PATIENCE_MS = Number(flag("rate-limit-patience-min", "20")) * 6
 const say = (s: string) => process.stderr.write(`${s}\n`);
 
 if (!PROMPT.trim()) {
-  say('usage: openrouter -p "<prompt>" --mcp-url <url> [--model slug] [--cwd dir] [--write] [--no-shell] [--max-minutes 45] [--reasoning low|medium|high] [--usage-sidecar path]');
+  say('usage: openrouter -p "<prompt>" --mcp-url <url> [--model slug] [--cwd dir] [--write] [--no-shell] [--max-minutes 45] [--reasoning low|medium|high] [--usage-sidecar path] [--checkpoint-trim]');
   process.exit(2);
 }
 if (!KEY && BASE.startsWith("https://openrouter.ai")) {
@@ -44,17 +46,45 @@ if (!KEY && BASE.startsWith("https://openrouter.ai")) {
   process.exit(2);
 }
 
+/** cache_control breakpoints are only required for providers that do not cache automatically (sources/openrouter-prompt-caching, swarm-082729-8b5j-room): Anthropic and Google. DeepSeek (this project's default) and the rest cache automatically and must not be touched. */
+const EXPLICIT_CACHE_MODELS = /^(anthropic|google)\//i;
+
 interface Completion {
   choices?: {
     finish_reason?: string;
     message?: { content?: string | { text?: string }[] | null; tool_calls?: ToolCall[]; reasoning_details?: unknown[] };
   }[];
-  usage?: { prompt_tokens?: number; completion_tokens?: number; cost?: number };
+  // cache field names vary by upstream shape OpenRouter proxies: OpenAI-style (prompt_tokens_details.cached_tokens),
+  // Anthropic-style (cache_read_input_tokens/cache_creation_input_tokens) and OpenRouter's own cache_discount ($ saved).
+  usage?: {
+    prompt_tokens?: number;
+    completion_tokens?: number;
+    cost?: number;
+    cache_discount?: number;
+    prompt_tokens_details?: { cached_tokens?: number };
+    cache_read_input_tokens?: number;
+    cache_creation_input_tokens?: number;
+  };
   error?: { message?: string; code?: number };
 }
 const textOf = (c: string | { text?: string }[] | null | undefined): string => (typeof c === "string" ? c : Array.isArray(c) ? c.map((p) => p.text ?? "").join("") : "");
+/** Normalize whichever cache-hit field shape the upstream returned, so callers read one field regardless of provider. */
+const cacheFieldsOf = (usage: Completion["usage"]) => ({
+  cached_tokens: usage?.prompt_tokens_details?.cached_tokens ?? usage?.cache_read_input_tokens,
+  cache_creation_tokens: usage?.cache_creation_input_tokens,
+  cache_discount: usage?.cache_discount,
+});
+/** Anthropic/Google need an explicit breakpoint; DeepSeek and the rest must be sent byte-identical to stay cache-hittable. */
+const withCacheControl = (messages: Msg[], model: string): unknown[] =>
+  EXPLICIT_CACHE_MODELS.test(model)
+    ? messages.map((m, i) => (i === 0 && m.role === "system" ? { ...m, content: [{ type: "text", text: m.content, cache_control: { type: "ephemeral" } }] } : m))
+    : messages;
 
 export function openRouterProvider(model: string, reasoning?: string): ChatProvider {
+  // One id per seat process, sent on every request so OpenRouter's sticky routing (10 min) can hold a
+  // seat's consecutive turns on the same upstream instance — without it automatic caching can miss even
+  // on a byte-identical prefix (evidence/openrouter-sticky-routing-gap, swarm-082729-8b5j-room).
+  const sessionId = randomUUID();
   return {
     label: `openrouter ${model}`,
     async complete(messages: Msg[], tools: ToolDef[]): Promise<Reply> {
@@ -75,13 +105,15 @@ export function openRouterProvider(model: string, reasoning?: string): ChatProvi
               Authorization: `Bearer ${KEY}`,
               "HTTP-Referer": "https://github.com/norvalbv/agent-chatroom-mcp",
               "X-OpenRouter-Title": "agent-chatroom-mcp",
+              "x-session-id": sessionId,
             },
             body: JSON.stringify({
               model,
-              messages,
+              messages: withCacheControl(messages, model),
               tools,
               parallel_tool_calls: true,
               usage: { include: true },
+              session_id: sessionId,
               ...(reasoning ? { reasoning: { effort: reasoning } } : {}),
             }),
           });
@@ -97,7 +129,7 @@ export function openRouterProvider(model: string, reasoning?: string): ChatProvi
             content: textOf(m?.content),
             toolCalls: m?.tool_calls ?? [],
             reasoningDetails: m?.reasoning_details,
-            usage: body.usage,
+            usage: { prompt_tokens: body.usage?.prompt_tokens, completion_tokens: body.usage?.completion_tokens, cost: body.usage?.cost, ...cacheFieldsOf(body.usage) },
           };
         }
         const is429 = res?.status === 429 || body.error?.code === 429;
@@ -129,8 +161,17 @@ const result = await runSeat(openRouterProvider(MODEL, REASONING), {
   maxContextChars: Number(flag("max-context-chars", "240000")),
   idleWaits: Number(flag("idle-waits", "3")),
   usageSidecar: USAGE_SIDECAR ? resolve(USAGE_SIDECAR) : undefined,
+  handoffStepMax: has("handoff-step-max") ? Number(flag("handoff-step-max", "0")) || undefined : undefined,
+  handoffStepFraction: Number(flag("handoff-step-fraction", process.env.SEAT_HANDOFF_STEP_FRACTION ?? "0.75")),
+  handoffPromptTokens: Number(flag("handoff-prompt-tokens", process.env.SEAT_HANDOFF_PROMPT_TOKENS ?? "6000000")),
+  handoffContextFraction: Number(flag("handoff-context-fraction", process.env.SEAT_HANDOFF_CONTEXT_FRACTION ?? "0.9")),
+  handoffIdleTurns: Number(flag("handoff-idle-turns", process.env.SEAT_HANDOFF_IDLE_TURNS ?? "20")),
+  noHandoff: has("no-handoff") || process.env.SEAT_NO_HANDOFF === "1",
+  checkpointTrim: has("checkpoint-trim"),
   log: say,
 });
 if (rateLimited) say(`[openrouter ${MODEL}] ${rateLimited} rate-limited request(s) retried`);
+const marker = handoffMarkerLine(result);
+if (marker) process.stdout.write(`${marker}\n`);
 process.stdout.write(`${result.final}\n`);
 process.exit(result.ok ? 0 : 1);

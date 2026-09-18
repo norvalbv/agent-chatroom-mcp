@@ -49,6 +49,7 @@ export const offlineScripts = [
   'respawn-regression.ts',
   'result-fleet-compat.ts',
   'result-fleet-regression.ts',
+  'reviewer-assignment-regression.ts',
   'seat-env-regression.ts',
   'seat-git-config-regression.ts',
   'seat-search-regression.ts',

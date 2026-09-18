@@ -97,6 +97,16 @@ const MUTATING = /(^|[;&|]\s*)(rm|mv|cp|chmod|chown|truncate|dd|kill|pkill|shutd
  * all of them node processes. A pattern kill takes the whole swarm down (it did, once). Kill by pid only.
  */
 const LETHAL = /(^|[;&|]\s*)(pkill|killall)\b|kill\s+(-\w+\s+)*(-1|0)\b|kill\s+--\s+-|kill\s+-9\s+-1/;
+/**
+ * Always on, even with write access. `git config` writes the repository config (with --global,
+ * the machine's) that every git worktree of the same checkout reads. Seats are authored by
+ * GIT_AUTHOR_NAME/GIT_COMMITTER_NAME at launch, never by git config; one seat renamed every commit
+ * author for an hour (docs/measurement-swarm-214936.md:5).
+ */
+// any form: git config ... , and git with global flags before config (git --no-pager config,
+// git -c k=v config), which the plain `git config` pattern would miss. Generalized per
+// openrouter-recruit-14's review.
+const GITCONFIG = /(^|[;&|]\s*)git(\s+-[^\s]+(\s+[^\s]+)?)*\s+config\b/;
 /** A `>` inside quotes writes nothing, so the guard above is tested against the unquoted text. */
 const unquoted = (command: string) => command.replace(/'[^']*'|"[^"]*"/g, '""');
 
@@ -211,13 +221,15 @@ export function localTools(cwd: string, write: boolean, shell: boolean, clamp: (
   ];
   if (shell)
     tools.push({
-      def: fn("run_command", `Run a bash command in ${cwd} (120s limit). ${write ? "You may modify files and commit." : "Read-only: mutating commands are refused."} Never pkill/killall: other agents and the hub are node processes here; stop a process you started by its pid (kill $(lsof -ti:PORT)).`, { command: { type: "string" } }, ["command"]),
+      def: fn("run_command", `Run a bash command in ${cwd} (120s limit). ${write ? "You may modify files and commit." : "Read-only: mutating commands are refused."} Never run git config: every worktree shares the repository config. Never pkill/killall: other agents and the hub are node processes here; stop a process you started by its pid (kill $(lsof -ti:PORT)).`, { command: { type: "string" } }, ["command"]),
       run: (a) =>
         LETHAL.test(unquoted(a.command))
           ? `Refused: "${a.command.slice(0, 120)}" was not run. pkill, killall and kill -1/0 would take down the hub, the other seats and the launcher, which are node processes on this machine too. Stop only what you started, by pid: kill $(lsof -ti:PORT) for a hub you started on PORT.`
-          : !write && MUTATING.test(unquoted(a.command))
-            ? `Refused: this seat is read-only, so "${a.command.slice(0, 120)}" was not run. Investigate and report instead.`
-            : sh(a.command),
+          : GITCONFIG.test(unquoted(a.command))
+            ? `Refused: "${a.command.slice(0, 120)}" was not run. git config writes the repository config that every worktree of this checkout shares (one seat renamed every commit author for an hour). Seat identity comes from GIT_AUTHOR_NAME/GIT_COMMITTER_NAME env, never git config; ask the launcher to set those instead.`
+            : !write && MUTATING.test(unquoted(a.command))
+              ? `Refused: this seat is read-only, so "${a.command.slice(0, 120)}" was not run. Investigate and report instead.`
+              : sh(a.command),
     });
   return tools;
 }

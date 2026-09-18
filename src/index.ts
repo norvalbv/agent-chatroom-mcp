@@ -31,6 +31,11 @@ const HOST = process.env.HOST ?? "127.0.0.1";
 const DATA_DIR = process.env.CHATROOM_DATA_DIR ? resolve(process.env.CHATROOM_DATA_DIR) : undefined;
 
 const HUMAN_TOKEN = process.env.CHATROOM_HUMAN_TOKEN; // optional shared secret for the human POST routes
+// Controller authority fails closed: with no token the human POST routes refuse, unless the operator explicitly
+// opts into insecure loopback-only operation (CHATROOM_INSECURE_LOCAL=1 with a loopback HOST) — the dashboard's
+// localhost case. Remote binds never unlock the controller without a token.
+const INSECURE_LOCAL = process.env.CHATROOM_INSECURE_LOCAL === "1";
+const LOOPBACK_HOST = HOST === "127.0.0.1" || HOST === "localhost" || HOST === "::1";
 const MAX_SESSIONS = 500;
 const SESSION_IDLE_MS = 30 * 60_000;
 const PARTICIPANT_IDLE_MS = 10 * 60_000;
@@ -143,8 +148,14 @@ setInterval(() => {
 }, 60_000).unref();
 
 const requireToken = (req: express.Request, res: express.Response): boolean => {
-  if (!HUMAN_TOKEN || req.header("x-chatroom-token") === HUMAN_TOKEN) return true;
-  res.status(401).type("text/plain").send("x-chatroom-token required");
+  if (HUMAN_TOKEN) {
+    if (req.header("x-chatroom-token") === HUMAN_TOKEN) return true;
+    res.status(401).type("text/plain").send("x-chatroom-token required");
+    return false;
+  }
+  // No token configured: refuse by default; only the explicit loopback opt-in restores local dashboard use.
+  if (INSECURE_LOCAL && LOOPBACK_HOST) return true;
+  res.status(403).type("text/plain").send("controller authority closed: set CHATROOM_HUMAN_TOKEN, or CHATROOM_INSECURE_LOCAL=1 with HOST on loopback");
   return false;
 };
 app.get("/mcp", sessionRoute);
@@ -154,7 +165,7 @@ app.delete("/mcp", sessionRoute);
 const notFound = (res: express.Response, e: unknown) => res.status(404).type("text/plain").send(e instanceof HubError ? e.message : "error");
 app.get("/", (_req, res) => res.json({ name: "agent-chatroom-mcp", mcp: "/mcp", ui: "/ui", rooms: "/rooms", sessions: transports.size, caps: { max_live_per_room: Hub.MAX_LIVE_PER_ROOM, max_rooms_per_run: Hub.MAX_ROOMS_PER_RUN }, code_state: Hub.codeState(resolve(process.env.CHATROOM_DEFAULT_CWD ?? process.cwd())) ?? null }));
 app.get("/ui", (_req, res) => res.type("html").send(UI_HTML));
-app.get("/config", (_req, res) => res.json({ human_token_required: Boolean(HUMAN_TOKEN) }));
+app.get("/config", (_req, res) => res.json({ human_token_required: Boolean(HUMAN_TOKEN) || !(INSECURE_LOCAL && LOOPBACK_HOST) }));
 // Recruit policy: which provider/model every request_agent launches as. Readable by anyone, settable by the human (token if configured).
 app.get("/policy", (_req, res) => res.json({ recruits: spawner.policy }));
 app.post("/policy", (req, res) => {

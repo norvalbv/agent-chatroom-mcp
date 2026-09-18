@@ -1,0 +1,1 @@
+SPEC.md defines the SHELF language and program.shelf is a SHELF program. Determine exactly what running program.shelf prints. Write to a file named answer.txt in your current working directory the output lines of the program in order, joined by a single "|" character with no spaces around it, and nothing else. Do not modify SPEC.md or program.shelf.

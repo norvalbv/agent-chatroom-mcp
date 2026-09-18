@@ -1,0 +1,25 @@
+# id arrival burst priority flag   (flag B = blocks for I/O, see spec; - = never blocks)
+A 2 3 2 B
+B 5 3 1 B
+C 8 7 2 B
+D 9 5 2 B
+E 9 5 1 B
+F 32 7 1 B
+G 32 7 2 B
+H 34 2 2 B
+I 36 7 0 B
+J 37 4 3 B
+K 38 5 2 B
+L 59 2 2 B
+M 62 7 1 B
+N 63 3 3 -
+O 65 5 1 B
+P 67 5 3 B
+Q 67 6 3 -
+R 89 6 2 B
+S 91 3 4 B
+T 92 3 1 B
+U 94 7 3 -
+V 97 7 0 -
+W 121 4 0 B
+X 121 2 0 B

@@ -1,0 +1,90 @@
+SET n 100
+SET k 7
+DEF inc x
+RET (+ x 1)
+END
+DEF twice f x
+RET (call f (call f x))
+END
+PRINT (call inc 5)
+PRINT (call twice inc 5)
+PRINT (call twice (fn (y) (* y 2)) 3)
+SET dbl (fn (y) (* y 2))
+PRINT (call twice dbl 4)
+PRINT (call (fn (a b) (- a b)) 10 3)
+DEF adder n
+RET (fn (x) (+ x n))
+END
+SET add5 (call adder 5)
+PRINT (call add5 1)
+PRINT (call twice add5 0)
+SET n 1000
+PRINT (call add5 1)
+DEF scaler m
+SET k (* m 2)
+RET (fn (x) (* x k))
+END
+SET times3 (call scaler 3)
+PRINT (call times3 5)
+PRINT k
+DEF makecount
+SET c 0
+RET (fn () (+ c 1))
+END
+SET cnt (call makecount)
+PRINT (call cnt)
+SET c 41
+PRINT (call cnt)
+DEF bumpc
+GLOBAL c
+SET c (+ c 1)
+RET c
+END
+PRINT (call bumpc)
+PRINT (call cnt)
+DEF f x
+RET (* x 10)
+END
+DEF g x
+RET (+ x 3)
+END
+DEF compose f g
+RET (fn (x) (call f (call g x)))
+END
+SET h (call compose inc dbl)
+PRINT (call h 4)
+DEF pick which
+IF which
+RET (fn (x) (call f x))
+END
+RET (fn (x) (call g x))
+END
+SET p1 (call pick 1)
+SET p0 (call pick 0)
+PRINT (call p1 2)
+PRINT (call p0 2)
+DEF apply2 op a b
+RET (call op a b)
+END
+DEF curry op a
+RET (fn (b) (call apply2 op a b))
+END
+SET mul (fn (a b) (* a b))
+SET times4 (call curry mul 4)
+PRINT (call times4 5)
+SET op 0
+SET a 9
+SET times9 (call curry mul 9)
+PRINT (call times9 2)
+DEF loopsum n
+SET t 0
+SET i 0
+REPEAT n
+SET i (+ i 1)
+SET t (+ t (call (fn (z) (+ z i)) 10))
+END
+RET t
+END
+PRINT (call loopsum 3)
+PRINT (call twice (call adder 2) 1)
+PRINT (call (call adder 1) 1)

@@ -1005,8 +1005,10 @@ export class Hub {
       const to = this.addressee(room, target);
       const answered = this.isAnswered(room, target);
       const resp = this.responderFor(room, target, p.id);
-      // An addressee that has left cannot answer: the ask is orphaned and anyone may take it.
-      if (to && to !== "all" && to !== p.id && room.participants.get(to)?.active) {
+      // Union of two rooms' rules: an addressee that has left cannot answer, so the ask is orphaned and anyone may take
+      // it (swarm-214936 lobby); and the hub's nominated or successor responder may answer for a live addressee
+      // (human-area takeover, ea78cf9). Refused only when the live addressee is someone else and you are not the responder.
+      if (to && to !== "all" && to !== p.id && room.participants.get(to)?.active && !resp.mine) {
         throw new HubError(`${this.shown(room, target.from)} addressed that to ${resp.who}, not you. Leave it to them.`);
       }
       if (small && answered && !resp.mine) {

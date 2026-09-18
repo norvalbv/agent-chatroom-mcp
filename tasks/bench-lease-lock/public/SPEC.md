@@ -1,6 +1,6 @@
 # LEASE, a lock service with leased locks and wait queues
 
-A lock service guards five resources, R1 to R5. Clients are named C1 to C8. `events.log` is the complete input: one event per line, in the order the service processes them. A line has the form
+A lock service guards five resources, R1 to R5. Clients are named C1 to C8. `events.txt` is the complete input: one event per line, in the order the service processes them. A line has the form
 
     <tick> <client> <action> <resource> [<lease>]
 

@@ -13,13 +13,13 @@ import { loadTask, scoreTask } from './bench-oracle.ts';
 import { parseLog, simulate } from '../tasks/bench-lease-lock/fixtures/reference/lease.mjs';
 
 const dir = resolve('tasks/bench-lease-lock');
-const log = readFileSync(resolve(dir, 'public/events.log'), 'utf8');
+const log = readFileSync(resolve(dir, 'public/events.txt'), 'utf8');
 const expected = JSON.parse(readFileSync(resolve(dir, 'oracle/oracle.json'), 'utf8')).expected as string;
 
 test('bench-lease-lock: JS and Python simulators agree with the frozen oracle', () => {
   assert.equal(loadTask(dir).oracle.kind, 'exact-answer');
   assert.equal(simulate(parseLog(log)), expected);
-  const py = spawnSync('python3', [resolve(dir, 'fixtures/reference/lease.py'), resolve(dir, 'public/events.log')], { encoding: 'utf8' });
+  const py = spawnSync('python3', [resolve(dir, 'fixtures/reference/lease.py'), resolve(dir, 'public/events.txt')], { encoding: 'utf8' });
   assert.equal(py.status, 0, py.stderr);
   assert.equal(py.stdout.trim(), expected);
 });
@@ -29,7 +29,7 @@ test('bench-lease-lock: every plausible wrong reading gives a different answer',
 });
 
 test('bench-lease-lock: public files do not contain the answer', () => {
-  for (const f of ['SPEC.md', 'events.log', 'brief.txt']) assert.ok(!readFileSync(resolve(dir, 'public', f), 'utf8').includes(expected), f);
+  for (const f of ['SPEC.md', 'events.txt', 'brief.txt']) assert.ok(!readFileSync(resolve(dir, 'public', f), 'utf8').includes(expected), f);
 });
 
 test('bench-lease-lock: scoreTask outcome vocabulary', async () => {

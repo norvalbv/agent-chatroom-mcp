@@ -52,6 +52,19 @@ const spawner = new Spawner({
   // a fleet of a hundred read-only seats is a legitimate machine-wide count; the default 24 was sized for one run
   maxLive: process.env.CHATROOM_MAX_LIVE_AGENTS ? Number(process.env.CHATROOM_MAX_LIVE_AGENTS) : undefined,
 });
+// a child break-out room concludes when its own hub state transitions, possibly before its seat
+// process exits (heartbeat-as-liveness keeps the seat alive); the concluded event, not process
+// close, is what must trigger the lobby's consolidator seat (lobby item 3)
+hub.onRoomState = (room, state) => {
+  if (state !== "concluded") return;
+  try {
+    spawner.checkConsolidators();
+  } catch (e) {
+    // a refused consolidator spawn (cap/depth/held lobby) must never break the vote that concluded the
+    // child room: announce and swallow, mirroring the child-close handler in spawner.ts
+    hub.announce(room, `Consolidator spawn check failed: ${(e as Error).message}`);
+  }
+};
 spawner.attach({
   isHeld: (room) => {
     try {
@@ -76,6 +89,20 @@ spawner.attach({
   },
   liveAgents: () => [...hub.rooms.values()].filter((r) => r.state === "open" || r.state === "stalled").reduce((n, r) => n + hub.voters(r).length, 0),
   roomTopic: (room) => hub.rooms.get(room)?.topic,
+  roomState: (room) => {
+    try {
+      return hub.getRoom(room).state;
+    } catch {
+      return undefined;
+    }
+  },
+  openProposal: (room) => {
+    try {
+      return [...hub.getRoom(room).proposals.values()].some((p) => p.status === "open");
+    } catch {
+      return false;
+    }
+  },
   registerReplacement: (room, predecessor, successorName) => {
     const old = [...hub.getRoom(room).participants.values()].find(p => p.name === predecessor);
     // A recruit may replace a departed agent, never declare another live seat or human departed.

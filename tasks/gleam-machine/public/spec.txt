@@ -1,0 +1,55 @@
+GLEAM-8: a small accumulator machine
+
+State
+  * Two registers, A and X. Each holds an integer from 0 to 255. Both start at 0.
+  * A memory of 32 cells, numbered 0 to 31. Each holds an integer from 0 to 255. All start at 0.
+  * Three flags, Z, N and C, each 0 or 1. All start at 0.
+  * A return stack, initially empty.
+
+Program text
+  One instruction per line. A line may start with a label, a name followed by a colon, and the
+  label then names the instruction on that line (a label may also stand alone on a line, and then
+  names the next instruction). Text after a semicolon is a comment. Blank lines are ignored.
+  Execution starts at the first instruction and continues line by line until HLT executes.
+
+Operands
+  A "value" operand v has one of three forms and gives a number from 0 to 255:
+    #n     the number n itself
+    n      the content of memory cell n
+    n,X    the content of memory cell (n + X) mod 32
+  A "cell" operand m (used by STA and STX) is n or n,X and names a memory cell in the same way.
+  A "label" operand names an instruction.
+
+Instructions
+  LDA v     A gets v            LDX v     X gets v
+  STA m     cell m gets A       STX m     cell m gets X
+  ADC v     A gets A + v + C    SBC v     A gets A - v - C     (C is its value before the instruction)
+  CMP v     compares A with v; changes no register, see the flag rule
+  INX       X gets X + 1        DEX       X gets X - 1
+  ASL       A gets 2A           LSR       A gets floor(A / 2)
+  ROL       A gets 2A + C       ROR       A gets floor(A / 2) + 128 * C   (C before the instruction)
+  SEC       C becomes 1         CLC       C becomes 0
+  BEQ l  branch if Z = 1        BNE l  branch if Z = 0
+  BCS l  branch if C = 1        BCC l  branch if C = 0
+  BMI l  branch if N = 1        BPL l  branch if N = 0
+  JMP l  jump to l              JSR l  push the address of the next instruction, then jump to l
+  RTS    pop an address and jump to it
+  OUT    output the value of A as decimal digits
+  OUTX   output the value of X as decimal digits
+  HLT    stop
+
+Result and flags
+  Every instruction whose entry above gives it a "gets" (LDA, LDX, ADC, SBC, INX, DEX, ASL, LSR,
+  ROL, ROR) and CMP has a RESULT r, the true integer value of the expression given for it, computed
+  without any wrapping: for LDA and LDX it is the value loaded, for ADC it is A + v + C, for SBC it
+  is A - v - C, for CMP it is A - v, for INX it is X + 1, for DEX it is X - 1, for ASL it is 2A, for
+  LSR it is floor(A / 2), for ROL it is 2A + C, for ROR it is floor(A / 2) + 128C. The register
+  named in the entry (A, or X for LDX, INX and DEX) receives r mod 256, taken as a number from 0 to
+  255 (CMP changes no register). After that, and for every such instruction alike:
+     C = 1 if r is less than 0 or greater than 255, otherwise 0;
+     Z = 1 if r mod 256 is 0, otherwise 0;
+     N = 1 if r mod 256 is 128 or more, otherwise 0.
+  STA, STX, SEC, CLC, the branches, JMP, JSR, RTS, OUT, OUTX and HLT change no flag other than as
+  stated for SEC and CLC.
+
+OUTPUT: the numbers printed by OUT and OUTX, in order, separated by single spaces on one line.

@@ -1,0 +1,113 @@
+{
+  "schemaVersion": 1,
+  "task_id": "bench-patch-apply",
+  "arm": "A",
+  "seed": 3,
+  "model": "sonnet",
+  "outcome": "task_pass",
+  "passed": true,
+  "reason": "task_pass",
+  "oracle": {
+    "kind": "patch-apply",
+    "command": "node --import tsx oracle/score.ts <workspace>",
+    "exit_code": 0
+  },
+  "anti_tamper": {
+    "hash_before": "2827889d0a44f6ed3fc6c25b339cb64e0b8554d162fe90ac844716b8a04a76b4",
+    "hash_after": "2827889d0a44f6ed3fc6c25b339cb64e0b8554d162fe90ac844716b8a04a76b4",
+    "unchanged": true
+  },
+  "seats": [
+    {
+      "name": "single",
+      "argv": [
+        "claude",
+        "-p",
+        "Implement applyPatch in patch.ts exactly as specified in SPEC.md (in this workspace). Keep the exported names applyPatch and PatchError. Every rule in SPEC.md is tested, including error cases and edge cases. Modify patch.ts in this workspace directly; a chat answer alone is not a submitted implementation. Use no network or dependencies. The evaluator runs private tests against your patch.ts after completion.\n\nModify the relevant source file(s) in your current working directory directly to implement the fix described above. Your edit to the existing file(s) is the submission; do not create any other output file.",
+        "--mcp-config",
+        "/tmp/s6pilot/patch-A3/mcp-empty.json",
+        "--strict-mcp-config",
+        "--allowedTools",
+        "Read,Edit,Write,MultiEdit,Bash,Glob,Grep",
+        "--tools",
+        "Read,Edit,Write,MultiEdit,Bash,Glob,Grep",
+        "--disable-slash-commands",
+        "--setting-sources",
+        "project",
+        "--exclude-dynamic-system-prompt-sections",
+        "--output-format",
+        "stream-json",
+        "--verbose",
+        "--model",
+        "sonnet"
+      ],
+      "exit_code": 0,
+      "signal": null,
+      "started_at": "2026-09-18T15:12:35.347Z",
+      "completed_at": "2026-09-18T15:13:05.570Z",
+      "num_turns": 4,
+      "duration_ms": 29180,
+      "duration_api_ms": 28792,
+      "usage": {
+        "cost": 0.06879640000000001,
+        "input_tokens": 6,
+        "cache_read_input_tokens": 20327,
+        "cache_creation_input_tokens": 7740,
+        "output_tokens": 3265
+      },
+      "text": "I implemented `applyPatch` in `patch.ts` following SPEC.md, with `applyPatch` and `PatchError` still exported. I ran only the three examples from the spec, and all three return the expected output. I didn't write tests for the error and edge cases, so those are untested.\n\nThe file has no imports, so it uses no dependencies or network.",
+      "killed_by_deadline": false,
+      "partial_usage": null
+    }
+  ],
+  "usage": {
+    "steps": 0,
+    "prompt_tokens": 0,
+    "completion_tokens": 0,
+    "cost_usd": 0.06879640000000001,
+    "seats": 1,
+    "seats_with_usage": 1,
+    "coverage": "complete",
+    "input_tokens": 6,
+    "cache_read_input_tokens": 20327,
+    "cache_creation_input_tokens": 7740,
+    "output_tokens": 3265
+  },
+  "turns": {
+    "per_seat": [
+      {
+        "name": "single",
+        "num_turns": 4
+      }
+    ],
+    "summed": 4,
+    "seats": 1,
+    "seats_with_turns": 1,
+    "coverage": "complete"
+  },
+  "wall_clock": {
+    "started_at": "2026-09-18T15:12:35.347Z",
+    "completed_at": "2026-09-18T15:13:05.571Z",
+    "duration_ms": 30224
+  },
+  "budget": {
+    "max_budget_usd": null,
+    "deadline_ms": 900000
+  },
+  "build": {
+    "head_revision": "fa6b7cfb7208e02cab93ca4932dda3760556a49a",
+    "hub_entry": null,
+    "hub_entry_sha256": null,
+    "hub_revision": null
+  },
+  "frozen": {
+    "task_sha256": "2827889d0a44f6ed3fc6c25b339cb64e0b8554d162fe90ac844716b8a04a76b4",
+    "scorer_sha256": "f4b645c670ae4655aec1189e4d7320294115f0e3c6da3b5ba41a7ee3b1cd00f8",
+    "fact_scorer_sha256": "6b8b3e98c8c408ecd6715a38db9263488644d27c01a11c5bab3172acd5539832",
+    "task_id": "bench-patch-apply",
+    "timeout_ms": 900000,
+    "seats": 1
+  },
+  "error": null,
+  "checked_at": "2026-09-18T15:13:05.678Z"
+}

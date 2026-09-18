@@ -1,0 +1,113 @@
+{
+  "schemaVersion": 1,
+  "task_id": "bench-strtod",
+  "arm": "A",
+  "seed": 2,
+  "model": "sonnet",
+  "outcome": "task_pass",
+  "passed": true,
+  "reason": "task_pass",
+  "oracle": {
+    "kind": "strtod",
+    "command": "node --import tsx oracle/score.ts <workspace>",
+    "exit_code": 0
+  },
+  "anti_tamper": {
+    "hash_before": "d10075044f03dcb628748a72d379c9e3ef412a1dc14aa64ce857c6e04c4dd4f3",
+    "hash_after": "d10075044f03dcb628748a72d379c9e3ef412a1dc14aa64ce857c6e04c4dd4f3",
+    "unchanged": true
+  },
+  "seats": [
+    {
+      "name": "single",
+      "argv": [
+        "claude",
+        "-p",
+        "Implement strtod in strtod.ts exactly as specified in README.md. The README is the complete specification of the required behavior; the stub currently throws. Keep the exported function name and signature. Implement the conversion in strtod.ts itself: do not run any other program.\n\nModify strtod.ts in this workspace; a chat answer alone is not a submitted implementation. Use no network or dependencies. The evaluator runs private tests against your code after completion.\n\nModify the relevant source file(s) in your current working directory directly to implement the fix described above. Your edit to the existing file(s) is the submission; do not create any other output file.",
+        "--mcp-config",
+        "/tmp/s6pilot/strtod-A2/mcp-empty.json",
+        "--strict-mcp-config",
+        "--allowedTools",
+        "Read,Edit,Write,MultiEdit,Bash,Glob,Grep",
+        "--tools",
+        "Read,Edit,Write,MultiEdit,Bash,Glob,Grep",
+        "--disable-slash-commands",
+        "--setting-sources",
+        "project",
+        "--exclude-dynamic-system-prompt-sections",
+        "--output-format",
+        "stream-json",
+        "--verbose",
+        "--model",
+        "sonnet"
+      ],
+      "exit_code": 0,
+      "signal": null,
+      "started_at": "2026-09-18T15:38:53.043Z",
+      "completed_at": "2026-09-18T15:39:37.212Z",
+      "num_turns": 4,
+      "duration_ms": 41869,
+      "duration_api_ms": 43220,
+      "usage": {
+        "cost": 0.06767519999999999,
+        "input_tokens": 6,
+        "cache_read_input_tokens": 20361,
+        "cache_creation_input_tokens": 6602,
+        "output_tokens": 3608
+      },
+      "text": "I implemented `strtod` in `strtod.ts` following the README, but I haven't run it or any tests. That includes the four README examples. I only wrote the code.\n\n- **Parsing:** it skips whitespace, reads the sign, then tries hexadecimal, infinity, NaN and decimal in that order. Each form takes the longest match. If nothing matches, it returns positive zero with `end` 0.\n- **Rounding:** the value is computed exactly with `BigInt` and rounded once to the nearest binary64, ties to even. Subnormals, negative zero and overflow to infinity follow from the same step.\n- **Very long input:** exponent digits are clamped to ±10⁹. Values whose magnitude is clearly far above or below the binary64 range are returned as infinity or zero without exact arithmetic. The clamp is only wrong if the digit string itself is around a billion characters long.\n- **NaN:** any NaN comes back as `nan`, whatever its sign or payload.",
+      "killed_by_deadline": false,
+      "partial_usage": null
+    }
+  ],
+  "usage": {
+    "steps": 0,
+    "prompt_tokens": 0,
+    "completion_tokens": 0,
+    "cost_usd": 0.06767519999999999,
+    "seats": 1,
+    "seats_with_usage": 1,
+    "coverage": "complete",
+    "input_tokens": 6,
+    "cache_read_input_tokens": 20361,
+    "cache_creation_input_tokens": 6602,
+    "output_tokens": 3608
+  },
+  "turns": {
+    "per_seat": [
+      {
+        "name": "single",
+        "num_turns": 4
+      }
+    ],
+    "summed": 4,
+    "seats": 1,
+    "seats_with_turns": 1,
+    "coverage": "complete"
+  },
+  "wall_clock": {
+    "started_at": "2026-09-18T15:38:53.042Z",
+    "completed_at": "2026-09-18T15:39:37.213Z",
+    "duration_ms": 44171
+  },
+  "budget": {
+    "max_budget_usd": null,
+    "deadline_ms": 900000
+  },
+  "build": {
+    "head_revision": "6da18244a9ac26e6536fe8f845467cd054e8ad01",
+    "hub_entry": null,
+    "hub_entry_sha256": null,
+    "hub_revision": null
+  },
+  "frozen": {
+    "task_sha256": "d10075044f03dcb628748a72d379c9e3ef412a1dc14aa64ce857c6e04c4dd4f3",
+    "scorer_sha256": "f4b645c670ae4655aec1189e4d7320294115f0e3c6da3b5ba41a7ee3b1cd00f8",
+    "fact_scorer_sha256": "6b8b3e98c8c408ecd6715a38db9263488644d27c01a11c5bab3172acd5539832",
+    "task_id": "bench-strtod",
+    "timeout_ms": 900000,
+    "seats": 1
+  },
+  "error": null,
+  "checked_at": "2026-09-18T15:39:37.333Z"
+}

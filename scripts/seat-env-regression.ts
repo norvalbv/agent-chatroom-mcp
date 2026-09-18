@@ -61,7 +61,7 @@ async function harness(entry: string, env: Record<string, string>, argv: string[
     },
   });
   const cache = new Map<string, any>();
-  const mocks: Record<string, any> = { 'node:fs': fs, 'node:path': path, 'node:url': url, 'node:child_process': cp, './hub.js': { HubError: Error }, './settled.js': { settledAxes: () => '' }, './seat.js': { runSeat: async () => ({ final: 'fixture', ok: true }) }, './result.js': { collectRoomSnapshot: async (_base: string, name: string) => ({ name, payload: { state: 'concluded', conclusion: { text: 'fixture' } }, transcript: { text: '' } }), readRunResult: () => ({}), writeRunResult: () => undefined, renderRunReport: () => '' } };
+  const mocks: Record<string, any> = { 'node:fs': fs, 'node:path': path, 'node:url': url, 'node:child_process': cp, './hub.js': { HubError: Error }, './settled.js': { settledAxes: () => '' }, './seat.js': { runSeat: async () => ({ final: 'fixture', ok: true }) }, './result.js': { collectRoomSnapshot: async (_base: string, name: string) => ({ name, payload: { state: 'concluded', conclusion: { text: 'fixture' } }, transcript: { text: '' } }), readRunResult: () => ({}), writeRunResult: () => undefined, renderRunReport: () => '', rollupUsage: () => undefined, parseClaudeCliOutput: (raw: string) => ({ text: raw, usage: null }) } };
   async function module(name: string): Promise<any> {
     if (cache.has(name)) return cache.get(name);
     if (mocks[name]) {
@@ -105,7 +105,11 @@ await test('swarm all provider seats, hub env and controller header', async () =
   const hub = h.calls.filter(c => c.args.some(a => a.endsWith('/dist/index.js')));
   const seats = h.calls.filter(c => !hub.includes(c));
   assert.equal(hub.length, 1); assert.equal(hub[0].options.env.CHATROOM_HUMAN_TOKEN, HUMAN, 'hub controller credential retained');
-  assert.equal(seats.length, 4); assert.ok(seats.some(c => c.cmd === 'codex')); assert.ok(seats.some(c => c.cmd === 'claude')); assert.ok(seats.some(c => c.args.includes('/fixture/src/openrouter.ts')));
+  assert.equal(seats.length, 4); assert.ok(seats.some(c => c.cmd === 'codex')); assert.ok(seats.some(c => c.args.includes('/fixture/src/openrouter.ts')));
+  const claudeSeat = seats.find(c => c.cmd === 'claude');
+  assert.ok(claudeSeat, 'a claude seat was spawned');
+  const outputFormatAt = claudeSeat!.args.indexOf('--output-format');
+  assert.ok(outputFormatAt >= 0 && claudeSeat!.args[outputFormatAt + 1] === 'json', 'runClaude requests --output-format json so the seat reports usage (R4 goal 2)');
   const create = h.requests.find(r => r.target.endsWith('/create'));
   assert.equal(create?.options.headers['x-chatroom-token'], HUMAN, 'launcher control auth retained');
   assert.equal(h.env.CHATROOM_HUMAN_TOKEN, HUMAN, 'launcher env unchanged');

@@ -136,7 +136,18 @@ export function renderRunReport(r: RunResult): string {
   let text = `# ${r.run.id}\n\n**Task:** ${r.run.task}\n\n**Done when:** ${r.run.doneWhen}\n\n## Final answer (${lead?.state ?? 'missing'})\n\n${lead?.conclusion?.text ?? '_no consensus reached_'}\n\n## Verifier\n\n${r.verifier.output ?? '(none)'}\n\n## Groups\n\n`;
   for (const room of r.rooms.filter(room => room.name !== r.leadRoom)) text += `### ${room.name} (${room.payload?.state ?? 'missing'})\n\n${room.payload?.conclusion?.text ?? '_no consensus_'}\n\n`;
   text += `## Result artifact\n\nAuthoritative full room snapshots, board evidence and raw transcripts: ${r.artifactPath}\n\n`;
-  if (r.usage) text += `## Usage\n\n${r.usage.steps} steps, ${r.usage.prompt_tokens} prompt + ${r.usage.completion_tokens} completion tokens, $${r.usage.cost_usd.toFixed(4)} across ${r.usage.seats} seat(s); ${r.usage.seats_with_usage}/${r.usage.seats} reported usage (coverage: ${r.usage.coverage})\n\n`;
+  if (r.usage) {
+    // claude seats have no steps/prompt_tokens/completion_tokens; without this, a claude-only run's real
+    // cost and tokens would print as "0 steps, 0 prompt + 0 completion tokens" and read as a free run.
+    const claudeBits = [
+      r.usage.input_tokens !== undefined ? `${r.usage.input_tokens} input` : null,
+      r.usage.cache_read_input_tokens !== undefined ? `${r.usage.cache_read_input_tokens} cache-read` : null,
+      r.usage.cache_creation_input_tokens !== undefined ? `${r.usage.cache_creation_input_tokens} cache-creation` : null,
+      r.usage.output_tokens !== undefined ? `${r.usage.output_tokens} output` : null,
+    ].filter((s): s is string => s !== null);
+    const claudeSuffix = claudeBits.length ? ` (claude: ${claudeBits.join(', ')} tokens)` : '';
+    text += `## Usage\n\n${r.usage.steps} steps, ${r.usage.prompt_tokens} prompt + ${r.usage.completion_tokens} completion tokens${claudeSuffix}, $${r.usage.cost_usd.toFixed(4)} across ${r.usage.seats} seat(s); ${r.usage.seats_with_usage}/${r.usage.seats} reported usage (coverage: ${r.usage.coverage})\n\n`;
+  }
   if (r.collectionErrors?.length) text += `Collection errors (partial snapshot):\n${r.collectionErrors.map(e => `- ${e}`).join('\n')}\n\n`;
   text += '## Transcripts\n\n';
   for (const room of r.rooms) text += '```\n' + (room.transcript.text ?? `(missing: ${room.transcript.error})`).replace(/\n#/g, '\n\\#') + '```\n\n';

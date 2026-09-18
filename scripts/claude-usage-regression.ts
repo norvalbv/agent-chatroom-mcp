@@ -19,7 +19,7 @@ import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:f
 import { tmpdir } from "node:os";
 import { delimiter, resolve } from "node:path";
 
-const { parseClaudeCliOutput, rollupUsage } = await import("../src/result.js");
+const { parseClaudeCliOutput, rollupUsage, renderRunReport } = await import("../src/result.js");
 
 const dir = mkdtempSync(resolve(tmpdir(), "claude-usage-regression-"));
 try {
@@ -92,6 +92,24 @@ try {
 
   const openrouterOnly = [{ name: "openrouter-1", text: "x", usage: { steps: 1, prompt_tokens: 10, completion_tokens: 5, cost: 0.001 } }];
   assert.deepEqual(rollupUsage(openrouterOnly), { steps: 1, prompt_tokens: 10, completion_tokens: 5, cost_usd: 0.001, seats: 1, seats_with_usage: 1, coverage: "complete" }, "(d) an all-openrouter rollup has no claude-only keys at all (shape unchanged)");
+
+  // (e) renderRunReport surfaces the claude-only numbers: a claude-only run must not read as a free run
+  // just because it has no steps/prompt_tokens/completion_tokens.
+  const claudeOnlyArtifact = {
+    schemaVersion: 1 as const,
+    run: { id: "swarm-claude-only", startedAt: "2026-01-01T00:00:00Z", completedAt: "2026-01-01T00:01:00Z", task: "t", doneWhen: "d" },
+    project: { cwd: dir, canonicalPath: dir, git: null },
+    leadRoom: "lead",
+    rooms: [{ name: "lead", payload: { state: "concluded", conclusion: { text: "done" } }, error: null, transcript: { text: "t", sourceUrl: "u", error: null } }],
+    verifier: { name: "verifier" as const, output: "ok" },
+    reportPath: resolve(dir, "report.md"),
+    artifactPath: resolve(dir, "result.json"),
+    usage: rollupUsage([{ name: "claude-verifier", text: "y", usage: seatOutcome.usage }]),
+  };
+  const claudeOnlyReport = renderRunReport(claudeOnlyArtifact);
+  assert.ok(claudeOnlyReport.includes("0 steps, 0 prompt + 0 completion tokens"), "(e) claude seats genuinely have no steps/prompt/completion counts");
+  assert.ok(claudeOnlyReport.includes("12 input, 3 cache-read, 0 cache-creation, 8 output tokens"), "(e) but the real claude token counts are printed, not hidden");
+  assert.ok(claudeOnlyReport.includes("$0.0007"), "(e) and the real cost is printed, not $0.0000");
 
   console.log("CLAUDE USAGE REGRESSION OK");
 } finally {

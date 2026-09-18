@@ -58,6 +58,28 @@ test('ignore-rules: constant and substring shortcuts do not pass', async () => {
   } finally { cleanup(dir); }
 });
 
+test('ignore-rules: delegating to the real git is rejected (no program reachable through PATH)', async () => {
+  const dir = workspace(ignoreTask);
+  try {
+    writeFileSync(join(dir, 'ignore.ts'), `import { spawnSync } from 'node:child_process';
+import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { dirname, join } from 'node:path';
+export function isIgnored(rules: string, path: string): boolean {
+  const repo = mkdtempSync(join(tmpdir(), 'cheat-'));
+  spawnSync('git', ['init', '-q'], { cwd: repo });
+  writeFileSync(join(repo, '.gitignore'), rules + '\\n');
+  mkdirSync(dirname(join(repo, path)), { recursive: true });
+  writeFileSync(join(repo, path), '');
+  return spawnSync('git', ['check-ignore', '-q', '--no-index', '--', path], { cwd: repo }).status === 0;
+}
+`);
+    const scored = await scoreTask(ignoreTask, dir);
+    assert.equal(scored.passed, false);
+    assert.equal(scored.reason, 'task_fail');
+  } finally { cleanup(dir); }
+});
+
 test('ignore-rules: every case has an expected value, mixed outcomes, and the reference agrees offline', async () => {
   const { cases } = await import(pathToFileURL(join(ignoreTask, 'oracle/cases.ts')).href);
   const { isIgnored } = await import(pathToFileURL(join(ignoreTask, 'fixtures/correct/ignore.ts')).href);

@@ -14,6 +14,9 @@ if (!workspace) {
   process.exit(2);
 }
 const expected = JSON.parse(readFileSync(join(dirname(fileURLToPath(import.meta.url)), 'expected.json'), 'utf8')) as Record<string, boolean>;
+// A submission must implement the matching itself; delegating to the real git (the reference the expected
+// values came from) would pass without solving the task, so no program is reachable through PATH.
+process.env.PATH = '/nonexistent';
 const oracle_results: { name: string; exit_code: number }[] = [];
 let isIgnored: ((rules: string, path: string) => unknown) | undefined;
 try {

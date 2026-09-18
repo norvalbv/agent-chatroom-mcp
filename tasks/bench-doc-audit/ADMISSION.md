@@ -27,3 +27,5 @@ Failure, seed 4: only `parseBool` failed. The seat added `trim()` but did not ad
 `scripts/bench-rq1.ts tasks/bench-doc-audit C 1 --root <dir> --port 19877`: outcome task_pass, room concluded, 65 turns summed (seat-1 18, seat-2 25, seat-3 22), cost 0.6006 USD, 67 s wall clock, no seat killed by the deadline.
 
 ## Attack
+- Attacker findings: pending at the time of writing (asked sonnet-1 and sonnet-3).
+- Author's own checks: no reference tool exists for this task, so nothing to delegate to; every assertion in `oracle/score.ts` corresponds to a sentence of `README.md` (slugify runs, "untitled" fallback and non-ASCII; chunk remainder, empty input and RangeError; median numeric compare and no mutation; formatBytes 1024 boundary and TB cap; parseBool trim and all eight words; daysBetween sign; dedupe NaN, -0 and keyFn; wrapText width, long words and whitespace collapsing). Pilot seed 4's extra `formatBytes` behavior changes (rounding fractional bytes, carrying 1023.95 KB into MB) did not affect any assertion.

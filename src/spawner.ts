@@ -154,6 +154,15 @@ export class Spawner {
   }
 
   request(req: SpawnRequest): SpawnedAgent[] {
+    // Item 2 (swarm-125438-jp20): a benchmark hub (CHATROOM_NO_RECRUIT=1) refuses every recruitment
+    // outright, before any cap or policy check runs — a protocol-fixed seat count must stay fixed, and
+    // this also means no provider key this process might hold (or that leaked back in via .env; see
+    // src/index.ts's loadDotEnv call) can ever reach a spawned child.
+    if (process.env.CHATROOM_NO_RECRUIT === "1") {
+      const msg = `Recruitment is disabled for this hub (CHATROOM_NO_RECRUIT=1): a protocol-fixed room (e.g. a benchmark run) may not recruit.`;
+      this.hooks?.announce(req.room, msg);
+      throw new HubError(msg);
+    }
     const o = this.opts;
     const maxDepth = o.maxDepth ?? Number(process.env.CHATROOM_MAX_RECRUIT_DEPTH ?? 2);
     const maxPerRoom = o.maxPerRoom ?? 12;

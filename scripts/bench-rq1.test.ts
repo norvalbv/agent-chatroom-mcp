@@ -19,9 +19,12 @@ function invoke(args: string[], env: Record<string, string> = {}) {
   return spawnSync(process.execPath, ["--import", "tsx", runner, ...args], { encoding: "utf8", env: { ...process.env, ...env }, timeout: 30000 });
 }
 
-/** A stub `claude` on PATH: echoes back --output-format json with a canned result/usage/num_turns/duration_ms,
- * optionally writing STUB_ANSWER_FILE (answer.txt) into --mcp-config's sibling cwd via env-provided cwd hint. */
-function stubClaudeDir(behavior: "answer" | "no-answer" | "edit-file" = "answer") {
+/** A stub `claude` on PATH: requires --output-format stream-json --verbose (the real CLI's contract for
+ * a --print run whose stdout is NDJSON, one event per line — bench-rq1.ts item 3), echoes one
+ * `type:"assistant"` usage event, then a canned `type:"result"` line with usage/num_turns/duration_ms.
+ * "kill" behavior instead sleeps after the assistant event so the harness's own deadline timer has to
+ * SIGTERM it, with no `result` line ever emitted — proving usage/outcome recording survives a kill. */
+function stubClaudeDir(behavior: "answer" | "no-answer" | "edit-file" | "kill" = "answer") {
   const dir = mkdtempSync(join(tmpdir(), "bench-rq1-stub-"));
   const bin = join(dir, "claude");
   writeFileSync(
@@ -30,10 +33,13 @@ function stubClaudeDir(behavior: "answer" | "no-answer" | "edit-file" = "answer"
       "#!/usr/bin/env node",
       "const fs=require('node:fs');",
       "const args=process.argv.slice(2);",
-      "if(!args.includes('--output-format')||args[args.indexOf('--output-format')+1]!=='json'){process.stderr.write('expected --output-format json\\n');process.exit(1);}",
+      "if(!args.includes('--output-format')||args[args.indexOf('--output-format')+1]!=='stream-json'||!args.includes('--verbose')){process.stderr.write('expected --output-format stream-json --verbose\\n');process.exit(1);}",
       `const behavior=process.env.STUB_BEHAVIOR||'answer';`,
       `if(behavior==='answer')fs.writeFileSync('answer.txt',process.env.STUB_ANSWER||${JSON.stringify(EXPECTED)});`,
-      "process.stdout.write(JSON.stringify({type:'result',subtype:'success',is_error:false,result:'seat done',num_turns:3,duration_ms:842,duration_api_ms:910,total_cost_usd:0.0041,usage:{input_tokens:120,cache_read_input_tokens:40,cache_creation_input_tokens:12,output_tokens:30}}));",
+      "process.stdout.write(JSON.stringify({type:'assistant',message:{usage:{input_tokens:80,output_tokens:15,cache_read_input_tokens:10,cache_creation_input_tokens:5}}})+'\\n');",
+      "if(behavior==='kill'){setInterval(()=>{},1000);}else{",
+      "process.stdout.write(JSON.stringify({type:'result',subtype:'success',is_error:false,result:'seat done',num_turns:3,duration_ms:842,duration_api_ms:910,total_cost_usd:0.0041,usage:{input_tokens:120,cache_read_input_tokens:40,cache_creation_input_tokens:12,output_tokens:30}})+'\\n');",
+      "}",
       "",
     ].join("\n"),
   );
@@ -128,7 +134,7 @@ test("arm A: single seat, no mcp tools, writes answer.txt, records usage/turns/a
     assert.deepEqual(mcpConfig, { mcpServers: {} });
     assert.ok(Number.isFinite(Date.parse(result.wall_clock.started_at)));
     assert.ok(result.wall_clock.duration_ms >= 0);
-    assert.equal(result.budget.deadline_ms, 300000);
+    assert.equal(result.budget.deadline_ms, 900000, "item 4: default deadline raised from 300000ms, sized from bug-fix-C-seed1's 139s reveal-alone evidence (paper/amendments.md)");
   } finally {
     rmSync(root, { recursive: true, force: true });
     rmSync(stubDir, { recursive: true, force: true });
@@ -161,6 +167,29 @@ test("arm A: no answer.txt written is parse_failure, not a crash, and usage is n
     const result = JSON.parse(readFileSync(join(root, "result.json"), "utf8"));
     assert.equal(result.outcome, "parse_failure");
     assert.equal(result.passed, false);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+    rmSync(stubDir, { recursive: true, force: true });
+  }
+});
+
+test("arm A: a seat killed at the deadline is recorded outcome timeout, not scored task_pass, and keeps whatever partial usage streamed before the kill (item 3)", () => {
+  const stubDir = stubClaudeDir("kill");
+  const root = join(tmpdir(), `bench-rq1-kill-${process.pid}-${Date.now()}`);
+  try {
+    const r = invoke([task, "A", "3", "--root", root, "--deadline-ms", "500"], { PATH: `${stubDir}${delimiter}${process.env.PATH}`, STUB_BEHAVIOR: "kill" });
+    assert.equal(r.status, 0, r.stderr + r.stdout);
+    const result = JSON.parse(readFileSync(join(root, "result.json"), "utf8"));
+    assert.equal(result.outcome, "timeout", "a killed seat must not be scored as if it completed");
+    assert.equal(result.passed, false);
+    assert.equal(result.seats[0].killed_by_deadline, true);
+    assert.equal(result.seats[0].exit_code, null, "SIGTERM leaves exit_code null (a signal, not a code)");
+    assert.equal(result.seats[0].signal, "SIGTERM");
+    assert.equal(result.usage.coverage, "none", "unknown cost is never zero-filled into the rollup");
+    assert.equal(result.usage.cost_usd, 0);
+    assert.ok(result.seats[0].partial_usage, "the assistant event streamed before the kill must survive it");
+    assert.equal(result.seats[0].partial_usage.output_tokens, 15);
+    assert.equal(result.seats[0].partial_usage.assistant_messages_observed, 1);
   } finally {
     rmSync(root, { recursive: true, force: true });
     rmSync(stubDir, { recursive: true, force: true });
@@ -209,6 +238,37 @@ test("arm C: N stub seats join a stub hub that concludes immediately; conclusion
     assert.equal(result.budget, null);
   } finally {
     rmSync(root, { recursive: true, force: true });
+    rmSync(stubDir, { recursive: true, force: true });
+  }
+});
+
+test("item1: arm A and arm C carry identical built-in tools for the code task; mcp is the only arm-specific addition", async () => {
+  const stubDir = stubClaudeDir();
+  const codeTask = resolve("tasks/bench-bug-fix");
+  const rootA = join(tmpdir(), `bench-rq1-parityA-${process.pid}-${Date.now()}`);
+  const rootC = join(tmpdir(), `bench-rq1-parityC-${process.pid}-${Date.now()}`);
+  const hubEntry = stubHubDir(EXPECTED);
+  const port = await freePort();
+  try {
+    const rA = invoke([codeTask, "A", "1", "--root", rootA], { PATH: `${stubDir}${delimiter}${process.env.PATH}` });
+    assert.equal(rA.status, 0, rA.stderr + rA.stdout);
+    const resultA = JSON.parse(readFileSync(join(rootA, "result.json"), "utf8"));
+    const argvA: string[] = resultA.seats[0].argv;
+    const toolsA = argvA[argvA.indexOf("--tools") + 1].split(",").sort();
+
+    const rC = invoke([codeTask, "C", "1", "--root", rootC, "--port", String(port), "--seats", "1", "--hub-entry", hubEntry, "--timeout-ms", "10000"], {
+      PATH: `${stubDir}${delimiter}${process.env.PATH}`,
+    });
+    assert.equal(rC.status, 0, rC.stderr + rC.stdout);
+    const resultC = JSON.parse(readFileSync(join(rootC, "result.json"), "utf8"));
+    const argvC: string[] = resultC.seats[0].argv;
+    const toolsC = argvC[argvC.indexOf("--tools") + 1].split(",").sort();
+
+    assert.deepEqual(toolsC, toolsA, "arm C's built-in tools must be identical to arm A's (chatroom mcp tools are --allowedTools only, not --tools)");
+    assert.ok(toolsA.includes("Bash"), "the code task's built-in tools must include Bash on both arms");
+  } finally {
+    rmSync(rootA, { recursive: true, force: true });
+    rmSync(rootC, { recursive: true, force: true });
     rmSync(stubDir, { recursive: true, force: true });
   }
 });

@@ -17,17 +17,23 @@ export interface ClaudeArgsOptions {
   model?: string;
   /** --claude-full / CHATROOM_CLAUDE_FULL=1: restores today's flags, none of the lean additions below. */
   full?: boolean;
+  /** "json" (default): a single blob printed only on clean exit. "stream-json": NDJSON emitted as the
+   * seat works, so a caller that kills the process mid-run still has whatever was flushed before the
+   * kill (bench-rq1.ts item 3 — usage must survive a kill, not just clean exits). Requires --verbose,
+   * per the CLI's own refusal ("--output-format=stream-json requires --verbose", confirmed live). */
+  outputFormat?: "json" | "stream-json";
 }
 
 /** --tools governs only the built-in tool set; it does not take MCP tool names (those are already scoped by --mcp-config --strict-mcp-config). */
 const builtinOnly = (tools: string[]) => tools.filter((t) => !t.startsWith("mcp__"));
 
-export function claudeArgs({ text, mcpJson, tools, model, full }: ClaudeArgsOptions): string[] {
+export function claudeArgs({ text, mcpJson, tools, model, full, outputFormat }: ClaudeArgsOptions): string[] {
   const args = ["-p", text, "--mcp-config", mcpJson, "--strict-mcp-config", "--allowedTools", tools.join(",")];
   if (!full) {
     args.push("--tools", builtinOnly(tools).join(","), "--disable-slash-commands", "--setting-sources", "project", "--exclude-dynamic-system-prompt-sections");
   }
-  args.push("--output-format", "json");
+  if (outputFormat === "stream-json") args.push("--output-format", "stream-json", "--verbose");
+  else args.push("--output-format", "json");
   if (model) args.push("--model", model);
   return args;
 }

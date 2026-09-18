@@ -1,4 +1,3 @@
-# ---- part 1: plain functions and procedures
 SET n 100
 SET k 7
 DEF inc x
@@ -13,8 +12,6 @@ PRINT (call twice (fn (y) (* y 2)) 3)
 SET dbl (fn (y) (* y 2))
 PRINT (call twice dbl 4)
 PRINT (call (fn (a b) (- a b)) 10 3)
-
-# ---- part 2: functions built inside procedures
 DEF adder n
 RET (fn (x) (+ x n))
 END
@@ -30,8 +27,6 @@ END
 SET times3 (call scaler 3)
 PRINT (call times3 5)
 PRINT k
-
-# ---- part 3: a counter whose state lives in a local
 DEF makecount
 SET c 0
 RET (fn () (+ c 1))
@@ -47,8 +42,6 @@ RET c
 END
 PRINT (call bumpc)
 PRINT (call cnt)
-
-# ---- part 4: composing functions
 DEF f x
 RET (* x 10)
 END
@@ -70,8 +63,6 @@ SET p1 (call pick 1)
 SET p0 (call pick 0)
 PRINT (call p1 2)
 PRINT (call p0 2)
-
-# ---- part 5: functions that pass functions on
 DEF apply2 op a b
 RET (call op a b)
 END

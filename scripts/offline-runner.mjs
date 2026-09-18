@@ -26,6 +26,8 @@ export const offlineScripts = [
   'consolidator-spawn-regression.ts',
   'departed-mentions.test.ts',
   'electorate-regression.ts',
+  'handoff-regression.ts',
+  'handoff-task-fixture.test.ts',
   'human-answering.test.ts',
   'mention-mentions.test.ts',
   'regression-replay.ts',

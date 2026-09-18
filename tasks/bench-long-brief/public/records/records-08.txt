@@ -1,0 +1,480 @@
+RECORD 281	RESEARCHER Dorothy Buolamwini
+  AFFILIATION Section of Language Semantics, Oslo
+  YEARS 1946-1972
+  PUBLICATIONS 12
+  TOPIC type systems
+  NOTE This record derives from a 1978 archives index volume; verify the years and the affiliation against the current faculty register.
+  VERIFY-DETAIL Cross-check publication count against the union bibliography; flag any record whose count is not in [5,45).
+  VERIFY-DETAIL Cross-check the topic against the department research themes listing; one theme per record is expected.
+  VERIFY-DETAIL Cross-check the year range monotonicity: end year must be at least the start year and within the range of the department archive.
+  VERIFY-DETAIL Cross-check the researcher name spelling against the index of contributors; diacritics are transcribed as plain ASCII.
+  VERIFY-DETAIL Cross-check the affiliation against the society membership rolls; two affiliations are swapped in this batch.
+  ACK RECORD 281 verified at ledger entry 281
+RECORD 282	RESEARCHER Frances Gosling
+  AFFILIATION Institute of Quantum Compilers, Delft
+  YEARS 1921-1922
+  PUBLICATIONS 14
+  TOPIC abstract interpretation
+  NOTE This record derives from a 1978 archives index volume; verify the years and the affiliation against the current faculty register.
+  VERIFY-DETAIL Cross-check publication count against the union bibliography; flag any record whose count is not in [5,45).
+  VERIFY-DETAIL Cross-check the topic against the department research themes listing; one theme per record is expected.
+  VERIFY-DETAIL Cross-check the year range monotonicity: end year must be at least the start year and within the range of the department archive.
+  VERIFY-DETAIL Cross-check the researcher name spelling against the index of contributors; diacritics are transcribed as plain ASCII.
+  VERIFY-DETAIL Cross-check the affiliation against the society membership rolls; two affiliations are swapped in this batch.
+  ACK RECORD 282 verified at ledger entry 282
+RECORD 283	RESEARCHER Niklaus Allen
+  AFFILIATION Institute for Computational Reasoning, Berlin
+  YEARS 1939-1990
+  PUBLICATIONS 21
+  TOPIC static analysis
+  NOTE This record derives from a 1978 archives index volume; verify the years and the affiliation against the current faculty register.
+  VERIFY-DETAIL Cross-check publication count against the union bibliography; flag any record whose count is not in [5,45).
+  VERIFY-DETAIL Cross-check the topic against the department research themes listing; one theme per record is expected.
+  VERIFY-DETAIL Cross-check the year range monotonicity: end year must be at least the start year and within the range of the department archive.
+  VERIFY-DETAIL Cross-check the researcher name spelling against the index of contributors; diacritics are transcribed as plain ASCII.
+  VERIFY-DETAIL Cross-check the affiliation against the society membership rolls; two affiliations are swapped in this batch.
+  ACK RECORD 283 verified at ledger entry 283
+RECORD 284	RESEARCHER Niklaus Lovelace
+  AFFILIATION Unit of Distributed Protocols, Lisbon
+  YEARS 1900-1963
+  PUBLICATIONS 25
+  TOPIC program synthesis
+  NOTE This record derives from a 1978 archives index volume; verify the years and the affiliation against the current faculty register.
+  VERIFY-DETAIL Cross-check publication count against the union bibliography; flag any record whose count is not in [5,45).
+  VERIFY-DETAIL Cross-check the topic against the department research themes listing; one theme per record is expected.
+  VERIFY-DETAIL Cross-check the year range monotonicity: end year must be at least the start year and within the range of the department archive.
+  VERIFY-DETAIL Cross-check the researcher name spelling against the index of contributors; diacritics are transcribed as plain ASCII.
+  VERIFY-DETAIL Cross-check the affiliation against the society membership rolls; two affiliations are swapped in this batch.
+  ACK RECORD 284 verified at ledger entry 284
+RECORD 285	RESEARCHER Frances Cerf
+  AFFILIATION School of Concurrency, Aarhus
+  YEARS 1997-1998
+  PUBLICATIONS 8
+  TOPIC concurrency
+  NOTE This record derives from a 1978 archives index volume; verify the years and the affiliation against the current faculty register.
+  VERIFY-DETAIL Cross-check publication count against the union bibliography; flag any record whose count is not in [5,45).
+  VERIFY-DETAIL Cross-check the topic against the department research themes listing; one theme per record is expected.
+  VERIFY-DETAIL Cross-check the year range monotonicity: end year must be at least the start year and within the range of the department archive.
+  VERIFY-DETAIL Cross-check the researcher name spelling against the index of contributors; diacritics are transcribed as plain ASCII.
+  VERIFY-DETAIL Cross-check the affiliation against the society membership rolls; two affiliations are swapped in this batch.
+  ACK RECORD 285 verified at ledger entry 285
+RECORD 286	RESEARCHER Margaret Perlman
+  AFFILIATION Division of Abstract Interpretation, Leuven
+  YEARS 1935-1956
+  PUBLICATIONS 35
+  TOPIC program synthesis
+  NOTE This record derives from a 1978 archives index volume; verify the years and the affiliation against the current faculty register.
+  VERIFY-DETAIL Cross-check publication count against the union bibliography; flag any record whose count is not in [5,45).
+  VERIFY-DETAIL Cross-check the topic against the department research themes listing; one theme per record is expected.
+  VERIFY-DETAIL Cross-check the year range monotonicity: end year must be at least the start year and within the range of the department archive.
+  VERIFY-DETAIL Cross-check the researcher name spelling against the index of contributors; diacritics are transcribed as plain ASCII.
+  VERIFY-DETAIL Cross-check the affiliation against the society membership rolls; two affiliations are swapped in this batch.
+  ACK RECORD 286 verified at ledger entry 286
+RECORD 287	RESEARCHER Frances Dijkstra
+  AFFILIATION School of Static Analysis, Warsaw
+  YEARS 1928-1975
+  PUBLICATIONS 26
+  TOPIC concurrency
+  NOTE This record derives from a 1978 archives index volume; verify the years and the affiliation against the current faculty register.
+  VERIFY-DETAIL Cross-check publication count against the union bibliography; flag any record whose count is not in [5,45).
+  VERIFY-DETAIL Cross-check the topic against the department research themes listing; one theme per record is expected.
+  VERIFY-DETAIL Cross-check the year range monotonicity: end year must be at least the start year and within the range of the department archive.
+  VERIFY-DETAIL Cross-check the researcher name spelling against the index of contributors; diacritics are transcribed as plain ASCII.
+  VERIFY-DETAIL Cross-check the affiliation against the society membership rolls; two affiliations are swapped in this batch.
+  ACK RECORD 287 verified at ledger entry 287
+RECORD 288	RESEARCHER Ken Allen
+  AFFILIATION Laboratory for Systems Research, Zurich
+  YEARS 1990-2019
+  PUBLICATIONS 22
+  TOPIC type systems
+  NOTE This record derives from a 1978 archives index volume; verify the years and the affiliation against the current faculty register.
+  VERIFY-DETAIL Cross-check publication count against the union bibliography; flag any record whose count is not in [5,45).
+  VERIFY-DETAIL Cross-check the topic against the department research themes listing; one theme per record is expected.
+  VERIFY-DETAIL Cross-check the year range monotonicity: end year must be at least the start year and within the range of the department archive.
+  VERIFY-DETAIL Cross-check the researcher name spelling against the index of contributors; diacritics are transcribed as plain ASCII.
+  VERIFY-DETAIL Cross-check the affiliation against the society membership rolls; two affiliations are swapped in this batch.
+  ACK RECORD 288 verified at ledger entry 288
+RECORD 289	RESEARCHER John Knuth
+  AFFILIATION Department of Applied Logic, Utrecht
+  YEARS 1928-1950
+  PUBLICATIONS 5
+  TOPIC program synthesis
+  NOTE This record derives from a 1978 archives index volume; verify the years and the affiliation against the current faculty register.
+  VERIFY-DETAIL Cross-check publication count against the union bibliography; flag any record whose count is not in [5,45).
+  VERIFY-DETAIL Cross-check the topic against the department research themes listing; one theme per record is expected.
+  VERIFY-DETAIL Cross-check the year range monotonicity: end year must be at least the start year and within the range of the department archive.
+  VERIFY-DETAIL Cross-check the researcher name spelling against the index of contributors; diacritics are transcribed as plain ASCII.
+  VERIFY-DETAIL Cross-check the affiliation against the society membership rolls; two affiliations are swapped in this batch.
+  ACK RECORD 289 verified at ledger entry 289
+RECORD 290	RESEARCHER Joy Turing
+  AFFILIATION Institute of Quantum Compilers, Delft
+  YEARS 1953-1997
+  PUBLICATIONS 17
+  TOPIC type systems
+  NOTE This record derives from a 1978 archives index volume; verify the years and the affiliation against the current faculty register.
+  VERIFY-DETAIL Cross-check publication count against the union bibliography; flag any record whose count is not in [5,45).
+  VERIFY-DETAIL Cross-check the topic against the department research themes listing; one theme per record is expected.
+  VERIFY-DETAIL Cross-check the year range monotonicity: end year must be at least the start year and within the range of the department archive.
+  VERIFY-DETAIL Cross-check the researcher name spelling against the index of contributors; diacritics are transcribed as plain ASCII.
+  VERIFY-DETAIL Cross-check the affiliation against the society membership rolls; two affiliations are swapped in this batch.
+  ACK RECORD 290 verified at ledger entry 290
+RECORD 291	RESEARCHER Katherine Vaughan
+  AFFILIATION Center for Verified Software, Edinburgh
+  YEARS 1944-1985
+  PUBLICATIONS 28
+  TOPIC model checking
+  NOTE This record derives from a 1978 archives index volume; verify the years and the affiliation against the current faculty register.
+  VERIFY-DETAIL Cross-check publication count against the union bibliography; flag any record whose count is not in [5,45).
+  VERIFY-DETAIL Cross-check the topic against the department research themes listing; one theme per record is expected.
+  VERIFY-DETAIL Cross-check the year range monotonicity: end year must be at least the start year and within the range of the department archive.
+  VERIFY-DETAIL Cross-check the researcher name spelling against the index of contributors; diacritics are transcribed as plain ASCII.
+  VERIFY-DETAIL Cross-check the affiliation against the society membership rolls; two affiliations are swapped in this batch.
+  ACK RECORD 291 verified at ledger entry 291
+RECORD 292	RESEARCHER Joy Hopper
+  AFFILIATION Center for Runtime Verification, Nancy
+  YEARS 1983-2055
+  PUBLICATIONS 16
+  TOPIC model checking
+  NOTE This record derives from a 1978 archives index volume; verify the years and the affiliation against the current faculty register.
+  VERIFY-DETAIL Cross-check publication count against the union bibliography; flag any record whose count is not in [5,45).
+  VERIFY-DETAIL Cross-check the topic against the department research themes listing; one theme per record is expected.
+  VERIFY-DETAIL Cross-check the year range monotonicity: end year must be at least the start year and within the range of the department archive.
+  VERIFY-DETAIL Cross-check the researcher name spelling against the index of contributors; diacritics are transcribed as plain ASCII.
+  VERIFY-DETAIL Cross-check the affiliation against the society membership rolls; two affiliations are swapped in this batch.
+  ACK RECORD 292 verified at ledger entry 292
+RECORD 293	RESEARCHER Linus Gosling
+  AFFILIATION Department of Applied Logic, Utrecht
+  YEARS 1983-2022
+  PUBLICATIONS 21
+  TOPIC model checking
+  NOTE This record derives from a 1978 archives index volume; verify the years and the affiliation against the current faculty register.
+  VERIFY-DETAIL Cross-check publication count against the union bibliography; flag any record whose count is not in [5,45).
+  VERIFY-DETAIL Cross-check the topic against the department research themes listing; one theme per record is expected.
+  VERIFY-DETAIL Cross-check the year range monotonicity: end year must be at least the start year and within the range of the department archive.
+  VERIFY-DETAIL Cross-check the researcher name spelling against the index of contributors; diacritics are transcribed as plain ASCII.
+  VERIFY-DETAIL Cross-check the affiliation against the society membership rolls; two affiliations are swapped in this batch.
+  ACK RECORD 293 verified at ledger entry 293
+RECORD 294	RESEARCHER Ken Gosling
+  AFFILIATION Division of Model Checking, Bratislava
+  YEARS 1901-1955
+  PUBLICATIONS 18
+  TOPIC model checking
+  NOTE This record derives from a 1978 archives index volume; verify the years and the affiliation against the current faculty register.
+  VERIFY-DETAIL Cross-check publication count against the union bibliography; flag any record whose count is not in [5,45).
+  VERIFY-DETAIL Cross-check the topic against the department research themes listing; one theme per record is expected.
+  VERIFY-DETAIL Cross-check the year range monotonicity: end year must be at least the start year and within the range of the department archive.
+  VERIFY-DETAIL Cross-check the researcher name spelling against the index of contributors; diacritics are transcribed as plain ASCII.
+  VERIFY-DETAIL Cross-check the affiliation against the society membership rolls; two affiliations are swapped in this batch.
+  ACK RECORD 294 verified at ledger entry 294
+RECORD 295	RESEARCHER Niklaus Vaughan
+  AFFILIATION Division of Abstract Interpretation, Leuven
+  YEARS 1950-1956
+  PUBLICATIONS 38
+  TOPIC program synthesis
+  NOTE This record derives from a 1978 archives index volume; verify the years and the affiliation against the current faculty register.
+  VERIFY-DETAIL Cross-check publication count against the union bibliography; flag any record whose count is not in [5,45).
+  VERIFY-DETAIL Cross-check the topic against the department research themes listing; one theme per record is expected.
+  VERIFY-DETAIL Cross-check the year range monotonicity: end year must be at least the start year and within the range of the department archive.
+  VERIFY-DETAIL Cross-check the researcher name spelling against the index of contributors; diacritics are transcribed as plain ASCII.
+  VERIFY-DETAIL Cross-check the affiliation against the society membership rolls; two affiliations are swapped in this batch.
+  ACK RECORD 295 verified at ledger entry 295
+RECORD 296	RESEARCHER Alan Knuth
+  AFFILIATION Division of Abstract Interpretation, Leuven
+  YEARS 1943-1947
+  PUBLICATIONS 14
+  TOPIC model checking
+  NOTE This record derives from a 1978 archives index volume; verify the years and the affiliation against the current faculty register.
+  VERIFY-DETAIL Cross-check publication count against the union bibliography; flag any record whose count is not in [5,45).
+  VERIFY-DETAIL Cross-check the topic against the department research themes listing; one theme per record is expected.
+  VERIFY-DETAIL Cross-check the year range monotonicity: end year must be at least the start year and within the range of the department archive.
+  VERIFY-DETAIL Cross-check the researcher name spelling against the index of contributors; diacritics are transcribed as plain ASCII.
+  VERIFY-DETAIL Cross-check the affiliation against the society membership rolls; two affiliations are swapped in this batch.
+  ACK RECORD 296 verified at ledger entry 296
+RECORD 297	RESEARCHER Radia Johnson
+  AFFILIATION Unit of Distributed Protocols, Lisbon
+  YEARS 1990-2066
+  PUBLICATIONS 24
+  TOPIC session types
+  NOTE This record derives from a 1978 archives index volume; verify the years and the affiliation against the current faculty register.
+  VERIFY-DETAIL Cross-check publication count against the union bibliography; flag any record whose count is not in [5,45).
+  VERIFY-DETAIL Cross-check the topic against the department research themes listing; one theme per record is expected.
+  VERIFY-DETAIL Cross-check the year range monotonicity: end year must be at least the start year and within the range of the department archive.
+  VERIFY-DETAIL Cross-check the researcher name spelling against the index of contributors; diacritics are transcribed as plain ASCII.
+  VERIFY-DETAIL Cross-check the affiliation against the society membership rolls; two affiliations are swapped in this batch.
+  ACK RECORD 297 verified at ledger entry 297
+RECORD 298	RESEARCHER Alan Goldwasser
+  AFFILIATION Society for Formal Methods, Vienna
+  YEARS 1999-2010
+  PUBLICATIONS 32
+  TOPIC verification
+  NOTE This record derives from a 1978 archives index volume; verify the years and the affiliation against the current faculty register.
+  VERIFY-DETAIL Cross-check publication count against the union bibliography; flag any record whose count is not in [5,45).
+  VERIFY-DETAIL Cross-check the topic against the department research themes listing; one theme per record is expected.
+  VERIFY-DETAIL Cross-check the year range monotonicity: end year must be at least the start year and within the range of the department archive.
+  VERIFY-DETAIL Cross-check the researcher name spelling against the index of contributors; diacritics are transcribed as plain ASCII.
+  VERIFY-DETAIL Cross-check the affiliation against the society membership rolls; two affiliations are swapped in this batch.
+  ACK RECORD 298 verified at ledger entry 298
+RECORD 299	RESEARCHER Frances Johnson
+  AFFILIATION School of Static Analysis, Warsaw
+  YEARS 1921-1995
+  PUBLICATIONS 10
+  TOPIC abstract interpretation
+  NOTE This record derives from a 1978 archives index volume; verify the years and the affiliation against the current faculty register.
+  VERIFY-DETAIL Cross-check publication count against the union bibliography; flag any record whose count is not in [5,45).
+  VERIFY-DETAIL Cross-check the topic against the department research themes listing; one theme per record is expected.
+  VERIFY-DETAIL Cross-check the year range monotonicity: end year must be at least the start year and within the range of the department archive.
+  VERIFY-DETAIL Cross-check the researcher name spelling against the index of contributors; diacritics are transcribed as plain ASCII.
+  VERIFY-DETAIL Cross-check the affiliation against the society membership rolls; two affiliations are swapped in this batch.
+  ACK RECORD 299 verified at ledger entry 299
+RECORD 300	RESEARCHER Shafi Buolamwini
+  AFFILIATION Institute of Quantum Compilers, Delft
+  YEARS 1953-1983
+  PUBLICATIONS 14
+  TOPIC concurrency
+  NOTE This record derives from a 1978 archives index volume; verify the years and the affiliation against the current faculty register.
+  VERIFY-DETAIL Cross-check publication count against the union bibliography; flag any record whose count is not in [5,45).
+  VERIFY-DETAIL Cross-check the topic against the department research themes listing; one theme per record is expected.
+  VERIFY-DETAIL Cross-check the year range monotonicity: end year must be at least the start year and within the range of the department archive.
+  VERIFY-DETAIL Cross-check the researcher name spelling against the index of contributors; diacritics are transcribed as plain ASCII.
+  VERIFY-DETAIL Cross-check the affiliation against the society membership rolls; two affiliations are swapped in this batch.
+  ACK RECORD 300 verified at ledger entry 300
+RECORD 301	RESEARCHER Radia Gosling
+  AFFILIATION Department of Automated Reasoning, Waterloo
+  YEARS 1973-2030
+  PUBLICATIONS 26
+  TOPIC static analysis
+  NOTE This record derives from a 1978 archives index volume; verify the years and the affiliation against the current faculty register.
+  VERIFY-DETAIL Cross-check publication count against the union bibliography; flag any record whose count is not in [5,45).
+  VERIFY-DETAIL Cross-check the topic against the department research themes listing; one theme per record is expected.
+  VERIFY-DETAIL Cross-check the year range monotonicity: end year must be at least the start year and within the range of the department archive.
+  VERIFY-DETAIL Cross-check the researcher name spelling against the index of contributors; diacritics are transcribed as plain ASCII.
+  VERIFY-DETAIL Cross-check the affiliation against the society membership rolls; two affiliations are swapped in this batch.
+  ACK RECORD 301 verified at ledger entry 301
+RECORD 302	RESEARCHER Margaret Torvalds
+  AFFILIATION Department of Applied Logic, Utrecht
+  YEARS 1945-1958
+  PUBLICATIONS 42
+  TOPIC program synthesis
+  NOTE This record derives from a 1978 archives index volume; verify the years and the affiliation against the current faculty register.
+  VERIFY-DETAIL Cross-check publication count against the union bibliography; flag any record whose count is not in [5,45).
+  VERIFY-DETAIL Cross-check the topic against the department research themes listing; one theme per record is expected.
+  VERIFY-DETAIL Cross-check the year range monotonicity: end year must be at least the start year and within the range of the department archive.
+  VERIFY-DETAIL Cross-check the researcher name spelling against the index of contributors; diacritics are transcribed as plain ASCII.
+  VERIFY-DETAIL Cross-check the affiliation against the society membership rolls; two affiliations are swapped in this batch.
+  ACK RECORD 302 verified at ledger entry 302
+RECORD 303	RESEARCHER Vint Dijkstra
+  AFFILIATION Division of Model Checking, Bratislava
+  YEARS 1919-1971
+  PUBLICATIONS 8
+  TOPIC session types
+  NOTE This record derives from a 1978 archives index volume; verify the years and the affiliation against the current faculty register.
+  VERIFY-DETAIL Cross-check publication count against the union bibliography; flag any record whose count is not in [5,45).
+  VERIFY-DETAIL Cross-check the topic against the department research themes listing; one theme per record is expected.
+  VERIFY-DETAIL Cross-check the year range monotonicity: end year must be at least the start year and within the range of the department archive.
+  VERIFY-DETAIL Cross-check the researcher name spelling against the index of contributors; diacritics are transcribed as plain ASCII.
+  VERIFY-DETAIL Cross-check the affiliation against the society membership rolls; two affiliations are swapped in this batch.
+  ACK RECORD 303 verified at ledger entry 303
+RECORD 304	RESEARCHER Margaret Knuth
+  AFFILIATION Institute for Computational Reasoning, Berlin
+  YEARS 1979-2006
+  PUBLICATIONS 30
+  TOPIC type systems
+  NOTE This record derives from a 1978 archives index volume; verify the years and the affiliation against the current faculty register.
+  VERIFY-DETAIL Cross-check publication count against the union bibliography; flag any record whose count is not in [5,45).
+  VERIFY-DETAIL Cross-check the topic against the department research themes listing; one theme per record is expected.
+  VERIFY-DETAIL Cross-check the year range monotonicity: end year must be at least the start year and within the range of the department archive.
+  VERIFY-DETAIL Cross-check the researcher name spelling against the index of contributors; diacritics are transcribed as plain ASCII.
+  VERIFY-DETAIL Cross-check the affiliation against the society membership rolls; two affiliations are swapped in this batch.
+  ACK RECORD 304 verified at ledger entry 304
+RECORD 305	RESEARCHER Frances Wirth
+  AFFILIATION Department of Applied Logic, Utrecht
+  YEARS 1930-1963
+  PUBLICATIONS 30
+  TOPIC type systems
+  NOTE This record derives from a 1978 archives index volume; verify the years and the affiliation against the current faculty register.
+  VERIFY-DETAIL Cross-check publication count against the union bibliography; flag any record whose count is not in [5,45).
+  VERIFY-DETAIL Cross-check the topic against the department research themes listing; one theme per record is expected.
+  VERIFY-DETAIL Cross-check the year range monotonicity: end year must be at least the start year and within the range of the department archive.
+  VERIFY-DETAIL Cross-check the researcher name spelling against the index of contributors; diacritics are transcribed as plain ASCII.
+  VERIFY-DETAIL Cross-check the affiliation against the society membership rolls; two affiliations are swapped in this batch.
+  ACK RECORD 305 verified at ledger entry 305
+RECORD 306	RESEARCHER Niklaus Liskov
+  AFFILIATION Group of Session Types, Gothenburg
+  YEARS 1972-2033
+  PUBLICATIONS 44
+  TOPIC type systems
+  NOTE This record derives from a 1978 archives index volume; verify the years and the affiliation against the current faculty register.
+  VERIFY-DETAIL Cross-check publication count against the union bibliography; flag any record whose count is not in [5,45).
+  VERIFY-DETAIL Cross-check the topic against the department research themes listing; one theme per record is expected.
+  VERIFY-DETAIL Cross-check the year range monotonicity: end year must be at least the start year and within the range of the department archive.
+  VERIFY-DETAIL Cross-check the researcher name spelling against the index of contributors; diacritics are transcribed as plain ASCII.
+  VERIFY-DETAIL Cross-check the affiliation against the society membership rolls; two affiliations are swapped in this batch.
+  ACK RECORD 306 verified at ledger entry 306
+RECORD 307	RESEARCHER Hedy Johnson
+  AFFILIATION School of Concurrency, Aarhus
+  YEARS 1969-1998
+  PUBLICATIONS 37
+  TOPIC program synthesis
+  NOTE This record derives from a 1978 archives index volume; verify the years and the affiliation against the current faculty register.
+  VERIFY-DETAIL Cross-check publication count against the union bibliography; flag any record whose count is not in [5,45).
+  VERIFY-DETAIL Cross-check the topic against the department research themes listing; one theme per record is expected.
+  VERIFY-DETAIL Cross-check the year range monotonicity: end year must be at least the start year and within the range of the department archive.
+  VERIFY-DETAIL Cross-check the researcher name spelling against the index of contributors; diacritics are transcribed as plain ASCII.
+  VERIFY-DETAIL Cross-check the affiliation against the society membership rolls; two affiliations are swapped in this batch.
+  ACK RECORD 307 verified at ledger entry 307
+RECORD 308	RESEARCHER Margaret Allen
+  AFFILIATION Center for Verified Software, Edinburgh
+  YEARS 1958-2022
+  PUBLICATIONS 35
+  TOPIC session types
+  NOTE This record derives from a 1978 archives index volume; verify the years and the affiliation against the current faculty register.
+  VERIFY-DETAIL Cross-check publication count against the union bibliography; flag any record whose count is not in [5,45).
+  VERIFY-DETAIL Cross-check the topic against the department research themes listing; one theme per record is expected.
+  VERIFY-DETAIL Cross-check the year range monotonicity: end year must be at least the start year and within the range of the department archive.
+  VERIFY-DETAIL Cross-check the researcher name spelling against the index of contributors; diacritics are transcribed as plain ASCII.
+  VERIFY-DETAIL Cross-check the affiliation against the society membership rolls; two affiliations are swapped in this batch.
+  ACK RECORD 308 verified at ledger entry 308
+RECORD 309	RESEARCHER Ada Thompson
+  AFFILIATION Faculty of Communication Protocols, Barcelona
+  YEARS 1928-1960
+  PUBLICATIONS 9
+  TOPIC static analysis
+  NOTE This record derives from a 1978 archives index volume; verify the years and the affiliation against the current faculty register.
+  VERIFY-DETAIL Cross-check publication count against the union bibliography; flag any record whose count is not in [5,45).
+  VERIFY-DETAIL Cross-check the topic against the department research themes listing; one theme per record is expected.
+  VERIFY-DETAIL Cross-check the year range monotonicity: end year must be at least the start year and within the range of the department archive.
+  VERIFY-DETAIL Cross-check the researcher name spelling against the index of contributors; diacritics are transcribed as plain ASCII.
+  VERIFY-DETAIL Cross-check the affiliation against the society membership rolls; two affiliations are swapped in this batch.
+  ACK RECORD 309 verified at ledger entry 309
+RECORD 310	RESEARCHER John Hamilton
+  AFFILIATION Center for Verified Software, Edinburgh
+  YEARS 1963-2041
+  PUBLICATIONS 29
+  TOPIC concurrency
+  NOTE This record derives from a 1978 archives index volume; verify the years and the affiliation against the current faculty register.
+  VERIFY-DETAIL Cross-check publication count against the union bibliography; flag any record whose count is not in [5,45).
+  VERIFY-DETAIL Cross-check the topic against the department research themes listing; one theme per record is expected.
+  VERIFY-DETAIL Cross-check the year range monotonicity: end year must be at least the start year and within the range of the department archive.
+  VERIFY-DETAIL Cross-check the researcher name spelling against the index of contributors; diacritics are transcribed as plain ASCII.
+  VERIFY-DETAIL Cross-check the affiliation against the society membership rolls; two affiliations are swapped in this batch.
+  ACK RECORD 310 verified at ledger entry 310
+RECORD 311	RESEARCHER Grace Lovelace
+  AFFILIATION Institute of Quantum Compilers, Delft
+  YEARS 1985-2019
+  PUBLICATIONS 12
+  TOPIC static analysis
+  NOTE This record derives from a 1978 archives index volume; verify the years and the affiliation against the current faculty register.
+  VERIFY-DETAIL Cross-check publication count against the union bibliography; flag any record whose count is not in [5,45).
+  VERIFY-DETAIL Cross-check the topic against the department research themes listing; one theme per record is expected.
+  VERIFY-DETAIL Cross-check the year range monotonicity: end year must be at least the start year and within the range of the department archive.
+  VERIFY-DETAIL Cross-check the researcher name spelling against the index of contributors; diacritics are transcribed as plain ASCII.
+  VERIFY-DETAIL Cross-check the affiliation against the society membership rolls; two affiliations are swapped in this batch.
+  ACK RECORD 311 verified at ledger entry 311
+RECORD 312	RESEARCHER Katherine Buolamwini
+  AFFILIATION Division of Model Checking, Bratislava
+  YEARS 1977-2018
+  PUBLICATIONS 20
+  TOPIC concurrency
+  NOTE This record derives from a 1978 archives index volume; verify the years and the affiliation against the current faculty register.
+  VERIFY-DETAIL Cross-check publication count against the union bibliography; flag any record whose count is not in [5,45).
+  VERIFY-DETAIL Cross-check the topic against the department research themes listing; one theme per record is expected.
+  VERIFY-DETAIL Cross-check the year range monotonicity: end year must be at least the start year and within the range of the department archive.
+  VERIFY-DETAIL Cross-check the researcher name spelling against the index of contributors; diacritics are transcribed as plain ASCII.
+  VERIFY-DETAIL Cross-check the affiliation against the society membership rolls; two affiliations are swapped in this batch.
+  ACK RECORD 312 verified at ledger entry 312
+RECORD 313	RESEARCHER Ken Hopper
+  AFFILIATION Division of Abstract Interpretation, Leuven
+  YEARS 1996-2059
+  PUBLICATIONS 22
+  TOPIC session types
+  NOTE This record derives from a 1978 archives index volume; verify the years and the affiliation against the current faculty register.
+  VERIFY-DETAIL Cross-check publication count against the union bibliography; flag any record whose count is not in [5,45).
+  VERIFY-DETAIL Cross-check the topic against the department research themes listing; one theme per record is expected.
+  VERIFY-DETAIL Cross-check the year range monotonicity: end year must be at least the start year and within the range of the department archive.
+  VERIFY-DETAIL Cross-check the researcher name spelling against the index of contributors; diacritics are transcribed as plain ASCII.
+  VERIFY-DETAIL Cross-check the affiliation against the society membership rolls; two affiliations are swapped in this batch.
+  ACK RECORD 313 verified at ledger entry 313
+RECORD 314	RESEARCHER Linus McCarthy
+  AFFILIATION Group for Program Analysis, Milan
+  YEARS 1972-1977
+  PUBLICATIONS 34
+  TOPIC static analysis
+  NOTE This record derives from a 1978 archives index volume; verify the years and the affiliation against the current faculty register.
+  VERIFY-DETAIL Cross-check publication count against the union bibliography; flag any record whose count is not in [5,45).
+  VERIFY-DETAIL Cross-check the topic against the department research themes listing; one theme per record is expected.
+  VERIFY-DETAIL Cross-check the year range monotonicity: end year must be at least the start year and within the range of the department archive.
+  VERIFY-DETAIL Cross-check the researcher name spelling against the index of contributors; diacritics are transcribed as plain ASCII.
+  VERIFY-DETAIL Cross-check the affiliation against the society membership rolls; two affiliations are swapped in this batch.
+  ACK RECORD 314 verified at ledger entry 314
+RECORD 315	RESEARCHER Frances Hamilton
+  AFFILIATION Society for Formal Methods, Vienna
+  YEARS 1903-1904
+  PUBLICATIONS 26
+  TOPIC type systems
+  NOTE This record derives from a 1978 archives index volume; verify the years and the affiliation against the current faculty register.
+  VERIFY-DETAIL Cross-check publication count against the union bibliography; flag any record whose count is not in [5,45).
+  VERIFY-DETAIL Cross-check the topic against the department research themes listing; one theme per record is expected.
+  VERIFY-DETAIL Cross-check the year range monotonicity: end year must be at least the start year and within the range of the department archive.
+  VERIFY-DETAIL Cross-check the researcher name spelling against the index of contributors; diacritics are transcribed as plain ASCII.
+  VERIFY-DETAIL Cross-check the affiliation against the society membership rolls; two affiliations are swapped in this batch.
+  ACK RECORD 315 verified at ledger entry 315
+RECORD 316	RESEARCHER Grace Turing
+  AFFILIATION School of Concurrency, Aarhus
+  YEARS 1978-1991
+  PUBLICATIONS 19
+  TOPIC type systems
+  NOTE This record derives from a 1978 archives index volume; verify the years and the affiliation against the current faculty register.
+  VERIFY-DETAIL Cross-check publication count against the union bibliography; flag any record whose count is not in [5,45).
+  VERIFY-DETAIL Cross-check the topic against the department research themes listing; one theme per record is expected.
+  VERIFY-DETAIL Cross-check the year range monotonicity: end year must be at least the start year and within the range of the department archive.
+  VERIFY-DETAIL Cross-check the researcher name spelling against the index of contributors; diacritics are transcribed as plain ASCII.
+  VERIFY-DETAIL Cross-check the affiliation against the society membership rolls; two affiliations are swapped in this batch.
+  ACK RECORD 316 verified at ledger entry 316
+RECORD 317	RESEARCHER John Turing
+  AFFILIATION Department of Applied Logic, Utrecht
+  YEARS 1956-1986
+  PUBLICATIONS 26
+  TOPIC verification
+  NOTE This record derives from a 1978 archives index volume; verify the years and the affiliation against the current faculty register.
+  VERIFY-DETAIL Cross-check publication count against the union bibliography; flag any record whose count is not in [5,45).
+  VERIFY-DETAIL Cross-check the topic against the department research themes listing; one theme per record is expected.
+  VERIFY-DETAIL Cross-check the year range monotonicity: end year must be at least the start year and within the range of the department archive.
+  VERIFY-DETAIL Cross-check the researcher name spelling against the index of contributors; diacritics are transcribed as plain ASCII.
+  VERIFY-DETAIL Cross-check the affiliation against the society membership rolls; two affiliations are swapped in this batch.
+  ACK RECORD 317 verified at ledger entry 317
+RECORD 318	RESEARCHER Radia Turing
+  AFFILIATION Society for Formal Methods, Vienna
+  YEARS 1985-2022
+  PUBLICATIONS 28
+  TOPIC verification
+  NOTE This record derives from a 1978 archives index volume; verify the years and the affiliation against the current faculty register.
+  VERIFY-DETAIL Cross-check publication count against the union bibliography; flag any record whose count is not in [5,45).
+  VERIFY-DETAIL Cross-check the topic against the department research themes listing; one theme per record is expected.
+  VERIFY-DETAIL Cross-check the year range monotonicity: end year must be at least the start year and within the range of the department archive.
+  VERIFY-DETAIL Cross-check the researcher name spelling against the index of contributors; diacritics are transcribed as plain ASCII.
+  VERIFY-DETAIL Cross-check the affiliation against the society membership rolls; two affiliations are swapped in this batch.
+  ACK RECORD 318 verified at ledger entry 318
+RECORD 319	RESEARCHER Ken Torvalds
+  AFFILIATION Section of Language Semantics, Oslo
+  YEARS 1904-1964
+  PUBLICATIONS 18
+  TOPIC session types
+  NOTE This record derives from a 1978 archives index volume; verify the years and the affiliation against the current faculty register.
+  VERIFY-DETAIL Cross-check publication count against the union bibliography; flag any record whose count is not in [5,45).
+  VERIFY-DETAIL Cross-check the topic against the department research themes listing; one theme per record is expected.
+  VERIFY-DETAIL Cross-check the year range monotonicity: end year must be at least the start year and within the range of the department archive.
+  VERIFY-DETAIL Cross-check the researcher name spelling against the index of contributors; diacritics are transcribed as plain ASCII.
+  VERIFY-DETAIL Cross-check the affiliation against the society membership rolls; two affiliations are swapped in this batch.
+  ACK RECORD 319 verified at ledger entry 319
+RECORD 320	RESEARCHER Linus Torvalds
+  AFFILIATION Laboratory for Systems Research, Zurich
+  YEARS 1938-1993
+  PUBLICATIONS 34
+  TOPIC program synthesis
+  NOTE This record derives from a 1978 archives index volume; verify the years and the affiliation against the current faculty register.
+  VERIFY-DETAIL Cross-check publication count against the union bibliography; flag any record whose count is not in [5,45).
+  VERIFY-DETAIL Cross-check the topic against the department research themes listing; one theme per record is expected.
+  VERIFY-DETAIL Cross-check the year range monotonicity: end year must be at least the start year and within the range of the department archive.
+  VERIFY-DETAIL Cross-check the researcher name spelling against the index of contributors; diacritics are transcribed as plain ASCII.
+  VERIFY-DETAIL Cross-check the affiliation against the society membership rolls; two affiliations are swapped in this batch.
+  ACK RECORD 320 verified at ledger entry 320

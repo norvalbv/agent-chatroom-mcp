@@ -1,0 +1,4 @@
+{
+  "kind": "handoff",
+  "note": "No completion expected: the brief is deliberately longer than the frozen seat budget (3 min / 60 steps / 240k context). The measured outcome is the survival verdict: seat exit code 0, at least one handoff/* board entry in the arm's data dir, and a leave_room reason naming the handoff(s). Runner-side enforcement (seat-exit-as-completion barrier + survival verdict in bench-bench) belongs to R9.1 (lobby claim/goal-4-hash-closure); until it lands, treat this task's task answer as parse_failure and read handoff survival from the arm data dir."
+}

@@ -1,0 +1,5 @@
+{
+  "name": "bench-strtod-workspace",
+  "private": true,
+  "type": "module"
+}

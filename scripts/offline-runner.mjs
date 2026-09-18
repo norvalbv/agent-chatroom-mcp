@@ -41,6 +41,7 @@ export const offlineScripts = [
   'idlewaits-actionable-regression.ts',
   'mention-mentions.test.ts',
   'openrouter-cache-regression.ts',
+  'oracle-tasks-spec-audit.test.ts',
   'paper-rq1-table.test.ts',
   'regression-replay.ts',
   'recruit-prefix-regression.ts',

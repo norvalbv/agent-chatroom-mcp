@@ -13,10 +13,16 @@ export function loadTask(taskDir: string) {
 }
 export async function scoreTask(taskDir: string, workspace: string) {
   const config = JSON.parse(readFileSync(join(taskDir, 'oracle', 'oracle.json'), 'utf8')) as OracleConfig;
-  if (config.kind === 'inclusive-dates') {
-    const scorerPath = resolve(taskDir, 'oracle', 'score.ts');
+  // Any non-'exact-answer' kind with its own oracle/score.ts is a code task: run that script
+  // against the workspace and read back {score, oracle_results}. This branch has no dates-specific
+  // logic — it is the generic private-test artifact scorer, matching bench-rq1.ts's own isCodeTask
+  // test (`kind !== 'exact-answer'`) so new kinds (e.g. 'refactor-preserve', 'concurrency-order')
+  // get it for free without a bench-oracle.ts edit per task. The existsSync guard lets a kind with
+  // no score.ts (e.g. bench-long-brief's 'handoff') fall through unaffected.
+  const codeScorerPath = resolve(taskDir, 'oracle', 'score.ts');
+  if (config.kind !== 'exact-answer' && existsSync(codeScorerPath)) {
     const command = 'node --import tsx oracle/score.ts <workspace>';
-    const run = spawnSync(process.execPath, ['--import', 'tsx', scorerPath, workspace], { encoding: 'utf8', timeout: 10000 });
+    const run = spawnSync(process.execPath, ['--import', 'tsx', codeScorerPath, workspace], { encoding: 'utf8', timeout: 10000 });
     const oracle = { kind: config.kind, command, exit_code: run.status };
     if (run.error || (run.status !== 0 && run.status !== 1)) {
       return { passed: false, reason: 'infrastructure_error', oracle, oracle_results: [] };

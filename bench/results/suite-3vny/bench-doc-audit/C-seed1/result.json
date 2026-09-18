@@ -1,0 +1,200 @@
+{
+  "schemaVersion": 1,
+  "task_id": "bench-doc-audit",
+  "arm": "C",
+  "seed": 1,
+  "model": "sonnet",
+  "outcome": "task_pass",
+  "passed": true,
+  "reason": "task_pass",
+  "oracle": {
+    "kind": "doc-audit",
+    "command": "node --import tsx oracle/score.ts <workspace>",
+    "exit_code": 0
+  },
+  "anti_tamper": {
+    "hash_before": "206a766d5548e6d5a46ce3c1cf055837db831253c9033d867f484f1b126850e3",
+    "hash_after": "206a766d5548e6d5a46ce3c1cf055837db831253c9033d867f484f1b126850e3",
+    "unchanged": true
+  },
+  "seats": [
+    {
+      "name": "seat-1",
+      "argv": [
+        "claude",
+        "-p",
+        "The lib/ directory contains eight small utility functions, one per file. README.md documents the exact required behavior of each. Some of the functions do not behave as documented. Find every discrepancy between the code in lib/ and README.md and fix the code (not the README). Keep each function's name, signature and file location.\n\nModify the files under lib/ in this workspace; a chat answer alone is not a submitted code repair. Use no network or dependencies. The evaluator runs private tests against your code after completion.\n\nModify the relevant source file(s) in this shared working directory directly; when the room reaches a proposal you agree with, its text should summarize the fix, but the file edits are the submission.\n\nJoin room rq1 as seat-1 (agent claude, expected_participants 3). Leave the room once it has concluded.",
+        "--mcp-config",
+        "/tmp/pilot-da-C1/mcp.json",
+        "--strict-mcp-config",
+        "--allowedTools",
+        "mcp__chatroom__*,Read,Edit,Write,MultiEdit,Bash,Glob,Grep",
+        "--tools",
+        "Read,Edit,Write,MultiEdit,Bash,Glob,Grep",
+        "--disable-slash-commands",
+        "--setting-sources",
+        "project",
+        "--exclude-dynamic-system-prompt-sections",
+        "--output-format",
+        "stream-json",
+        "--verbose",
+        "--model",
+        "sonnet"
+      ],
+      "exit_code": 0,
+      "signal": null,
+      "started_at": "2026-09-18T14:35:48.325Z",
+      "completed_at": "2026-09-18T14:36:54.152Z",
+      "num_turns": 18,
+      "duration_ms": 64660,
+      "duration_api_ms": 45117,
+      "usage": {
+        "cost": 0.1683244,
+        "input_tokens": 26,
+        "cache_read_input_tokens": 282242,
+        "cache_creation_input_tokens": 16034,
+        "output_tokens": 4652
+      },
+      "text": "I fixed all eight functions in `lib/` to match the README, the room reached consensus (3/3), and I've left it.\n\nMy check was a quick script covering six of the eight functions (`chunk`, `median`, `wrapText`, `formatBytes`, `slugify`, `daysBetween`), and its output matched the README. The other two seats ran their own checks and reported matching output. I did not run any full test suite, and `dedupe` and `parseBool` were not in my script.\n\n- **`chunk`**: the last, shorter chunk was being dropped; it is now kept.\n- **`daysBetween`**: it returned an absolute value; it is now signed, negative when `b` is before `a`.\n- **`dedupe`**: it used `indexOf`, which never matches `NaN`; it now uses a `Set`, so duplicates follow SameValueZero.\n- **`formatBytes`**: exactly 1024 was printed as `1024 B`; it now gives `1 KB`.\n- **`median`**: it sorted as strings and mutated the input; it now sorts numerically on a copy.\n- **`parseBool`**: it now trims whitespace and accepts `on` and `off`.\n- **`slugify`**: each non-alphanumeric character became its own `-`; runs now collapse into one.\n- **`wrapText`**: it ignored the joining space when measuring a line, so lines could exceed `width`; it now counts it.\n\nOne edge case is left as is, which the room agreed was what the README literally says. `formatBytes(1048575)` prints `1024 KB` rather than rounding up to `1 MB`.\n\nThe other two seats were editing the same files at the same time. That left a duplicated `on`/`off` check in `parseBool.ts`, which I removed, and `dedupe.ts` was rewritten by someone else (it is correct).",
+      "killed_by_deadline": false,
+      "partial_usage": null
+    },
+    {
+      "name": "seat-2",
+      "argv": [
+        "claude",
+        "-p",
+        "The lib/ directory contains eight small utility functions, one per file. README.md documents the exact required behavior of each. Some of the functions do not behave as documented. Find every discrepancy between the code in lib/ and README.md and fix the code (not the README). Keep each function's name, signature and file location.\n\nModify the files under lib/ in this workspace; a chat answer alone is not a submitted code repair. Use no network or dependencies. The evaluator runs private tests against your code after completion.\n\nModify the relevant source file(s) in this shared working directory directly; when the room reaches a proposal you agree with, its text should summarize the fix, but the file edits are the submission.\n\nJoin room rq1 as seat-2 (agent claude, expected_participants 3). Leave the room once it has concluded.",
+        "--mcp-config",
+        "/tmp/pilot-da-C1/mcp.json",
+        "--strict-mcp-config",
+        "--allowedTools",
+        "mcp__chatroom__*,Read,Edit,Write,MultiEdit,Bash,Glob,Grep",
+        "--tools",
+        "Read,Edit,Write,MultiEdit,Bash,Glob,Grep",
+        "--disable-slash-commands",
+        "--setting-sources",
+        "project",
+        "--exclude-dynamic-system-prompt-sections",
+        "--output-format",
+        "stream-json",
+        "--verbose",
+        "--model",
+        "sonnet"
+      ],
+      "exit_code": 0,
+      "signal": null,
+      "started_at": "2026-09-18T14:35:48.326Z",
+      "completed_at": "2026-09-18T14:36:54.153Z",
+      "num_turns": 25,
+      "duration_ms": 64696,
+      "duration_api_ms": 56989,
+      "usage": {
+        "cost": 0.22403700000000001,
+        "input_tokens": 36,
+        "cache_read_input_tokens": 425880,
+        "cache_creation_input_tokens": 20084,
+        "output_tokens": 5730
+      },
+      "text": "I fixed all eight functions in `lib/` to match README.md, and the room reached consensus (3/3) on the fix. My spot checks ran clean for chunk, median, dedupe, parseBool, wrapText and daysBetween. I didn't run slugify or formatBytes myself. seat-1's board check covered slugify and formatBytes (\"1 KB\"). seat-3 reported that `tsc` in strict mode passes, but I didn't run that myself.\n\n- **`chunk`:** it dropped the final shorter remainder chunk; it now keeps it.\n- **`daysBetween`:** it returned an absolute value; it is now signed, negative when `b` is before `a`.\n- **`dedupe`:** the `indexOf` check treated NaN as never equal to itself, so NaNs weren't deduplicated; it now uses a `Set`.\n- **`formatBytes`:** 1024 printed as \"1024 B\"; it now gives \"1 KB\".\n- **`median`:** it sorted as strings and mutated the input; it now sorts numerically on a copy.\n- **`parseBool`:** it didn't trim whitespace and didn't accept \"on\" or \"off\"; both are fixed.\n- **`slugify`:** each non-alphanumeric character became its own \"-\"; runs now collapse to one.\n- **`wrapText`:** the joining space wasn't counted, so lines could exceed `width`; it is now counted.\n\nOne edge I left as the README literally states it: 1048575 bytes prints as \"1024 KB\" rather than \"1 MB\". The README picks the largest unit whose value is at least 1, and 1048575 is under 1 MB.\n\nI've left the room.",
+      "killed_by_deadline": false,
+      "partial_usage": null
+    },
+    {
+      "name": "seat-3",
+      "argv": [
+        "claude",
+        "-p",
+        "The lib/ directory contains eight small utility functions, one per file. README.md documents the exact required behavior of each. Some of the functions do not behave as documented. Find every discrepancy between the code in lib/ and README.md and fix the code (not the README). Keep each function's name, signature and file location.\n\nModify the files under lib/ in this workspace; a chat answer alone is not a submitted code repair. Use no network or dependencies. The evaluator runs private tests against your code after completion.\n\nModify the relevant source file(s) in this shared working directory directly; when the room reaches a proposal you agree with, its text should summarize the fix, but the file edits are the submission.\n\nJoin room rq1 as seat-3 (agent claude, expected_participants 3). Leave the room once it has concluded.",
+        "--mcp-config",
+        "/tmp/pilot-da-C1/mcp.json",
+        "--strict-mcp-config",
+        "--allowedTools",
+        "mcp__chatroom__*,Read,Edit,Write,MultiEdit,Bash,Glob,Grep",
+        "--tools",
+        "Read,Edit,Write,MultiEdit,Bash,Glob,Grep",
+        "--disable-slash-commands",
+        "--setting-sources",
+        "project",
+        "--exclude-dynamic-system-prompt-sections",
+        "--output-format",
+        "stream-json",
+        "--verbose",
+        "--model",
+        "sonnet"
+      ],
+      "exit_code": 0,
+      "signal": null,
+      "started_at": "2026-09-18T14:35:48.326Z",
+      "completed_at": "2026-09-18T14:36:54.672Z",
+      "num_turns": 22,
+      "duration_ms": 65068,
+      "duration_api_ms": 54614,
+      "usage": {
+        "cost": 0.208247,
+        "input_tokens": 32,
+        "cache_read_input_tokens": 371155,
+        "cache_creation_input_tokens": 19691,
+        "output_tokens": 5403
+      },
+      "text": "I fixed all eight functions in `lib/` so they match the README. The room concluded with a 3/3 vote on the proposal, and I've left it. I only type-checked, which passes with `tsc --strict --target es2020`. I didn't run behavior tests myself, though seat-1 and seat-2 ran their own spot checks and reported matching output.\n\n- **`slugify`:** now collapses each run of non-alphanumeric characters into a single \"-\" instead of one \"-\" per character.\n- **`chunk`:** now keeps the shorter remainder chunk instead of dropping it.\n- **`median`:** now sorts a copy numerically instead of sorting the caller's array in place with the default string sort.\n- **`formatBytes`:** 1024 now formats as \"1 KB\" instead of \"1024 B\".\n- **`parseBool`:** now trims whitespace and accepts \"on\" and \"off\".\n- **`daysBetween`:** now returns a signed difference instead of the absolute value.\n- **`dedupe`:** now uses a `Set`, so NaN counts as a duplicate of NaN.\n- **`wrapText`:** now counts the joining space, so lines no longer exceed `width`.\n\nIn `formatBytes`, a value like 1048575 still prints \"1024 KB\" instead of moving up to MB. I left it because the README says to pick the largest unit where the value is at least 1, and this follows that literally. If the private tests expect rounding to carry into the next unit, that function would need one more change.\n\nA failed `sed` command of mine had created a stray `lib/rapText.ts`. I removed it, and `lib/` now holds only the eight original files.",
+      "killed_by_deadline": false,
+      "partial_usage": null
+    }
+  ],
+  "usage": {
+    "steps": 0,
+    "prompt_tokens": 0,
+    "completion_tokens": 0,
+    "cost_usd": 0.6006084,
+    "seats": 3,
+    "seats_with_usage": 3,
+    "coverage": "complete",
+    "input_tokens": 94,
+    "cache_read_input_tokens": 1079277,
+    "cache_creation_input_tokens": 55809,
+    "output_tokens": 15785
+  },
+  "turns": {
+    "per_seat": [
+      {
+        "name": "seat-1",
+        "num_turns": 18
+      },
+      {
+        "name": "seat-2",
+        "num_turns": 25
+      },
+      {
+        "name": "seat-3",
+        "num_turns": 22
+      }
+    ],
+    "summed": 65,
+    "seats": 3,
+    "seats_with_turns": 3,
+    "coverage": "complete"
+  },
+  "wall_clock": {
+    "started_at": "2026-09-18T14:35:48.068Z",
+    "completed_at": "2026-09-18T14:36:54.672Z",
+    "duration_ms": 66604
+  },
+  "budget": null,
+  "build": {
+    "head_revision": "e054f168faa69c76007356e2fefcfbcb2c08e7eb",
+    "hub_entry": "/Users/benji/Desktop/Personal and learning/agent-chatroom-mcp/.swarm-worktrees/swarm-140131-j6yf/sonnet-6/dist/index.js",
+    "hub_entry_sha256": "66f9d135c47604f02e01b482a0bdbceff9f5ed14080ab0438069f9043166b1d8",
+    "hub_revision": "0f84d03c048c8c444d54475257bdced3dfeb5011"
+  },
+  "frozen": {
+    "task_sha256": "206a766d5548e6d5a46ce3c1cf055837db831253c9033d867f484f1b126850e3",
+    "scorer_sha256": "f4b645c670ae4655aec1189e4d7320294115f0e3c6da3b5ba41a7ee3b1cd00f8",
+    "fact_scorer_sha256": "6b8b3e98c8c408ecd6715a38db9263488644d27c01a11c5bab3172acd5539832",
+    "task_id": "bench-doc-audit",
+    "timeout_ms": 900000,
+    "seats": 3
+  },
+  "error": null,
+  "checked_at": "2026-09-18T14:36:54.787Z"
+}

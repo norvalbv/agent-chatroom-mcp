@@ -1,7 +1,0 @@
-{
-  "kind": "exact-answer",
-  "expected": "cider, juice, milk, soda, water, tea, cocoa, coffee",
-  "distractors": [
-    "tea, coffee, milk, juice, water, cider, soda, cocoa"
-  ]
-}

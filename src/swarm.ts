@@ -439,10 +439,14 @@ for (const g of plan.groups) {
 // stopping the launcher stops its seats: an orphaned seat keeps polling the provider with nobody to collect its result
 for (const sig of ["SIGTERM", "SIGINT"] as const) process.on(sig, () => { STOPPING = true; log(`${sig}: stopping ${children.length} agent(s)`); for (const c of children) c.kill(); setTimeout(() => process.exit(130), 3000).unref(); });
 // the launcher fixes the room's policy before any seat joins (join_room settings only apply at creation)
-if (REQUIRE_VERIFICATION || QUORUM) {
+// a flat run with no explicit --quorum used to fall through to the hub's "unanimous" default; the maintainer
+// wants 75% as the default for flat runs instead, so an omitted flag resolves to supermajority under --flat
+// (an explicit --quorum unanimous|majority|supermajority always wins; non-flat runs are unaffected).
+const EFFECTIVE_QUORUM = QUORUM ?? (FLAT ? "supermajority" : undefined);
+if (REQUIRE_VERIFICATION || EFFECTIVE_QUORUM) {
   try {
-    const r = await fetch(`${URL_}/rooms/${encodeURIComponent(leadsRoom)}/create`, { method: "POST", headers: { "content-type": "application/json", ...(process.env.CHATROOM_HUMAN_TOKEN ? { "x-chatroom-token": process.env.CHATROOM_HUMAN_TOKEN } : {}) }, body: JSON.stringify({ topic: task, expected_participants: FLAT ? TOTAL : plan.groups.length + 1, require_verification: REQUIRE_VERIFICATION, quorum: QUORUM ?? "unanimous" }) });
-    log(`${leadsRoom} created with quorum=${QUORUM ?? "unanimous"}${REQUIRE_VERIFICATION ? ", require_verification" : ""} (${r.status})`);
+    const r = await fetch(`${URL_}/rooms/${encodeURIComponent(leadsRoom)}/create`, { method: "POST", headers: { "content-type": "application/json", ...(process.env.CHATROOM_HUMAN_TOKEN ? { "x-chatroom-token": process.env.CHATROOM_HUMAN_TOKEN } : {}) }, body: JSON.stringify({ topic: task, expected_participants: FLAT ? TOTAL : plan.groups.length + 1, require_verification: REQUIRE_VERIFICATION, quorum: EFFECTIVE_QUORUM ?? "unanimous" }) });
+    log(`${leadsRoom} created with quorum=${EFFECTIVE_QUORUM ?? "unanimous"}${REQUIRE_VERIFICATION ? ", require_verification" : ""} (${r.status})`);
   } catch (e) {
     log(`could not pre-create ${leadsRoom}: ${e instanceof Error ? e.message : String(e)}`);
   }

@@ -182,3 +182,139 @@ gave a chance to happen, with headroom rather than a value tuned to exactly clea
 derived from a distribution of many runs (this harness had none to draw from before this fix) — revisit once
 the grid has produced enough real timing data to size it more precisely instead of from a single room's
 timestamps.
+
+## 2026-09-18 — `bench-long-brief` retired from the RQ1 accuracy comparison, not built (sonnet-1, swarm-140131-j6yf-room)
+
+**Protocol text:** §3 (quoted above, "A known wiring gap in one existing task") treats `bench-long-brief` as
+"not yet usable for RQ1-RQ3's primary task-success metric" and says it should be "added once its handoff
+scorer is wired" — i.e. the pre-registered expectation was that the scorer gap would eventually be closed,
+not that the task would be dropped. This room's brief gave the explicit option to build the missing
+`"handoff"` case in `scripts/bench-oracle.ts`/`scripts/bench-rq1.ts` **or retire the task**.
+
+**Why building it is not viable, let alone small (checked directly against this checkout):**
+
+1. **The fixture is calibrated against the wrong harness.** `tasks/bench-long-brief/README.md` and
+   `scripts/handoff-task-fixture.test.ts` derive the task's difficulty from `src/seat.ts`'s internal
+   step/context-budget constants (`MAX_STEPS=60`, `MAX_CONTEXT_CHARS=240_000`, `MAX_TOOL_CHARS=6000`,
+   `READ_WINDOW=400`) and the `r1-proactive-handoff` mechanic (`docs/decisions/r1-proactive-handoff.md`) that
+   fires on *that* internal engine's own step/token counters. `scripts/bench-rq1.ts` (the runner this suite's
+   grid actually uses, confirmed by reading it directly) spawns the real `claude` CLI as a subprocess via
+   `claudeArgs()` — that CLI has no step-count or context-budget ceiling flag (already established in this
+   file's first entry, "No token/turn ceiling in the `claude` CLI"), so there is no lever in the real-Sonnet
+   harness to force a seat to hit the budget this fixture assumes. The 20-file/84KB brief size is not
+   inherently too large for a real Claude Code seat with its own much larger context window and no externally
+   imposed step cap; nothing makes it exceed a *real* seat's budget the way it provably exceeds the internal
+   engine's frozen one.
+2. **The metric is asymmetric by construction, which breaks the comparison this whole suite exists to make.**
+   `bench-rq1.ts` gives arm A `--tools` with no `mcp__chatroom__*` entries at all (`baseTools` only, no
+   `mcpJson` chatroom server) — a single arm-A seat has no `board_set`, no `claim/*`, no `leave_room`-with-
+   reason concept to hand off through. "Handoff survival" (`handoff/*` board entry + `leave_room` reason) is
+   a room-native mechanic; it cannot be measured on arm A at all, symmetric or not. A task whose oracle only
+   arm C can even attempt is not an accuracy-comparison task under
+   `docs/decisions/measure-task-success-on-a-machine-oracle.md` ("a hub mechanic is judged by a machine-
+   checked task outcome on the same brief **across two builds**" — here it would be across two *arms*, and
+   one arm structurally cannot produce the measured signal). It is a robustness/survival metric for room
+   mechanics specifically, not a "team vs. one agent" accuracy task, which is this room's actual charge.
+
+**Decision:** `bench-long-brief` is retired from the admitted task suite and from every grid command this
+room produces (§5 of the room brief). It is not deleted (its fixture and `README.md`'s documentation of the
+R9.1 dependency remain valid as a record of *why* it doesn't fit this harness), but it must not be passed to
+`scripts/bench-grid.ts --tasks`. `paper/protocol.md` §3's line "added once its handoff scorer is wired" is
+superseded by this entry: the scorer gap will not be closed for this suite, for the structural reason in
+point 2 above, not merely because it is a lot of engineering effort.
+
+## 2026-09-18 — Small cross-document tasks are a ceiling family for real Sonnet, arm A (sonnet-1)
+
+**Finding:** five different `bench-cross-doc-*` task designs (on-call roster 4-hop relay; the same relay with
+a primary/secondary field-indirection trap; a stale-vs-ratified budget figure needing an 85% recompute; both
+of those again with the brief not naming which files to read or that a conflict exists; a three-document
+policy-precedence task requiring a conference exception to override a more textually salient regional
+amendment) were each piloted 5x on arm A (real Sonnet, `scripts/bench-rq1.ts`, exactly as the grid runs it).
+All 25 runs (5 designs x 5 seeds) scored `task_pass`, 0 failures, ~$0.03/run, 4-8 turns each. Full numbers on
+the room board, keys `pilot/bench-cross-doc-oncall-v1`, `-v2`, `-v3-and-budget-v2-and-precedence-v1`.
+
+**Why (not merely "the trap wasn't clever enough"):** `scripts/bench-rq1.ts` gives arm A `Read, Write, Bash,
+Glob, Grep`, a 900s deadline and no turn ceiling. A task directory with 3-4 short files is cheap enough that
+a capable agentic seat reads every file in it as a matter of course — there is no realistic pressure to stop
+early or guess from a single file, and `Bash` lets it verify any arithmetic exactly (`120000*0.85=102000` was
+computed via a shell one-liner in the transcript, not mental math), which is why even a rounding-flavored
+design didn't discriminate either. Multi-hop indirection and multi-way precedence logic, which are exactly
+the traps this suite's task-family list suggests, are well within a tool-using Sonnet's reach when the total
+reading material is small. This is a negative result specific to *small* cross-document tasks under *this*
+harness's generous budget, not evidence that cross-document tasks in general cannot discriminate — a
+scaled-up version (more files, genuine skim/skip risk) converges with the long-brief-constraint family
+(`claim/data-cleaning-and-long-brief-constraint`, sonnet-5) and was not pursued further here to avoid
+duplicating that work; see that family's admitted tasks for whether scale succeeds where these five did not.
+A sixth design tested the scale hypothesis directly: `bench-cross-doc-notes`, ten short standup-note files, the
+original launch date (March 14) in file 3 and a quiet correction (March 21) in file 8, no hint in the brief that
+a correction exists or which file holds it. 5/5 `task_pass` (~$0.02-0.20/run, 4-16 turns; the costly outlier
+still passed). The seats used `Grep` for the project name, which turns file count into a non-obstacle: a
+distinctive keyword makes N files as cheap as one. Scale only costs attention when the deciding sentence
+cannot be found by a keyword search (no shared distinctive term, or a correction phrased without the entity
+name). Total for this family: 30 arm-A runs over six designs, 30/30 pass, ~$1.26.
+`bench-cross-doc-oncall`, `bench-cross-doc-budget`, `bench-cross-doc-precedence` and `bench-cross-doc-notes`
+are not included in the admitted suite.
+
+## 2026-09-18 — Data-cleaning candidate `bench-ledger-parse` rejected: 3/5, then 5/5 after the brief was made unambiguous (sonnet-1)
+
+A code task: repair a naive `parseLedger` for a bank CSV export whose quirks (BOM, CRLF, quoted commas,
+doubled quotes, an embedded newline in a quoted payee, quoted thousands-separated amounts, `DD Mon YYYY` dates,
+float-cents such as 19.99, padded payees) sit in a handful of rows of a 300-row public sample, with a second
+hidden 240-row export moving the quirks to other rows (private-test oracle, generic code scorer). Scorer and
+both fixtures were verified (broken fixture fails 6 of 7 named checks, correct passes 7 of 7).
+
+- v1, five arm-A runs: 3 `task_pass`, 2 `task_fail` (~$0.07-0.12/run, 5-12 turns). Seed 1 missed the `DD Mon
+  YYYY` dates (a real reasoning miss). Seed 2 collapsed the newline inside a quoted payee, which the v1 brief
+  did not forbid (the passing seats kept it and said the brief did not ask to normalise): an ambiguity in the
+  task, not a reasoning failure, so the 3/5 is not admissible evidence of discrimination.
+- v2 (brief now states that characters inside the payee are kept as written): 5/5 `task_pass`, ~$0.067/run,
+  6-8 turns. Seats scanned the whole sample, found every quirk class, and the two that were only guesses
+  (US-style dates, currency symbols) do not appear in the hidden export.
+
+Rejected by the admission rule (5/5). Cost of this candidate: ~$0.76 across 10 runs. It is the closest any
+of this author's seven designs came to a split, and the split was half ambiguity. A trap that the agent's own
+scan of the provided data can reveal is found by a seat that scans the data.
+
+## 2026-09-18 — `bench-pipe-errata` rejected: a spec plus a later errata document is implemented, not traced (sonnet-1)
+
+Exact-answer task: a 14-operation list-transform language (`spec.txt`), a later `errata.txt` that overrides
+or withdraws parts of it (an erratum amending an erratum, a conditional erratum keyed on list parity, an
+astral-plane input item whose length differs between UTF-16 units and code points), a 30-line program over
+12 strings, six PRINT lines to concatenate into one answer. Expected answer produced by a JavaScript
+reference and independently reproduced by a separate Python implementation (byte-identical). The design
+borrowed the "many independent counter-prior quirks, program too long to trace by hand" lever that produced
+the room's first split (`stamp-interpreter`, sonnet-2) and added a cross-document precedence layer on top.
+
+Arm A, five runs: 5/5 `task_pass`, ~$0.038/run, 3 turns each. Every seat wrote an interpreter in a scratch
+script implementing both documents at once and printed its output; two stated "I did not hand-check the
+trace; the answer is the script's output". The errata add no difficulty for a seat that implements rather
+than reasons: applying an override is one more `if` in the script. Twelve operations with one line of
+semantics each are within a single careful script; `stamp-interpreter` differs in having a nested-scope
+language (closures, `GLOBAL`, `SETS`) where the semantics interact, which is what a script can get wrong.
+
+Family tally for this author: 8 designs (three cross-document puzzles at 2-4 files, one at 10 files, one
+three-document precedence puzzle, a CSV data-quirk parser, this errata interpreter, plus the retired
+long-brief) and 45 arm-A runs, 0 admitted, about $2.6 of the room's pilot budget.
+
+## 2026-09-18 — `bench-url-resolve` rejected at the 3-seed screen: a complete spec for real-world semantics, 3/3 (sonnet-1)
+
+Built on the maintainer's second lever (faithful reimplementation of real-world semantics with many
+interacting rules, expected values from a real reference). `resolveUrl(base, ref)` for http(s): a complete
+eight-step README (whitespace and control stripping, backslashes only in the front, "http:foo" against an http
+base being relative but "https:foo" being a host, default-port removal, `%2e` dot segments, three different
+percent-encode sets, an empty `?` or `#` kept). The oracle was 100 hidden (base, ref) cases, 38 curated and 62
+seeded-random, whose expected values were produced by node's real `URL`. Before any pilot, a README-only
+reference written by the task author agreed with node's `URL` on 38,924 generated (base, ref) pairs with zero
+mismatches (after restricting hosts to plain ASCII, which the README states), so the README determines every
+expected value. The scorer rejects any use of the `URL` class (source scan plus the global deleted at run
+time); a `new URL` cheat scored 0, the stub 0/100, the reference 100/100.
+
+Arm A, screen of three seeds: 3/3 `task_pass`, ~$0.056/run, 4 turns each. No seat compared its code with
+`URL` in a shell; each wrote the resolver in one pass and every final message reports only the edge cases the
+README leaves open (an all-zero port, lone surrogates, characters after a port colon), none of which the oracle
+tests. Rejected under the maintainer's rule (stop at 3/3); seeds 4 and 5 were not spent.
+
+What this adds to the record next to `bench-ignore-rules` (4/5, one slip: a regex-escaping bug plus never
+running the code): a README of about forty lines with eight numbered steps is not by itself long enough to make
+one seat slip. The two in-band tasks are much longer to execute (`stamp-interpreter`: 87-line spec, 104-line
+program) or have 39 cases over more independent rules. Cost of this candidate: about $0.17 for the pilots.

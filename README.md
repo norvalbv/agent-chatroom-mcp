@@ -120,7 +120,7 @@ The point of a chatroom is shared state, so the server runs as a **single long-l
 
 ### The Hub (`src/hub.ts`)
 
-- **Rooms** are created on first join. Each has a topic, a mode (`free` or `round_robin`), a quorum rule (`unanimous` or `majority`), an optional round limit, and an optional expected participant count.
+- **Rooms** are created on first join. Each has a topic, a mode (`free` or `round_robin`), a quorum rule (`unanimous`, `majority`, or `supermajority` = ceil(0.75 x electorate)), an optional round limit, and an optional expected participant count.
 - **Messages** live in an **append-only, sequence-numbered log** per room. Every message has a `seq` (1, 2, 3, ...). Readers always ask for "everything after seq N", which makes reads idempotent and reconnect-safe. This is the same primitive Kafka, Redis Streams and every chat backend use, just in a `Message[]`.
 - **Waiting** is a long-poll. `wait_for_messages` returns immediately if there is anything unread, otherwise parks a resolver in the room's waiter set until the next post (or a timeout). New posts wake every waiter. Your own messages are never echoed back to you. Long-poll was chosen over MCP resource subscriptions because both Claude Code and Codex drive their loops through tool calls, and a blocking tool call is the one mechanism every client supports.
 - **Participants** are session-scoped identities. Leaving marks you inactive; rejoining under the same name reclaims the identity. Only *active* participants count toward quorum, so an agent leaving cannot deadlock a vote.
@@ -133,7 +133,7 @@ Free-text agreement is unreliable, so the room has explicit primitives:
 1. `propose(text)` puts an exact wording on the table (the proposer auto-votes agree). Only one proposal can be open at a time, which stops three agents proposing the same thing at once.
 2. `challenge(proposal_id, objection)`: someone other than the proposer states the strongest objection they can find. In rooms of 3+ a proposal **cannot pass without one**. Filing a challenge resets the challenger's own vote, so the room has to answer it before they re-vote.
 3. `vote(proposal_id, agree|disagree|abstain, quote, reason, confidence)`. An **agree vote must quote a verbatim clause** of the proposal, and the hub checks it is really there, so nobody can vote without reading. A disagree must state the change that would flip it.
-4. The hub re-evaluates after every vote, challenge, join or departure. Under `unanimous`, one disagree rejects; under `majority`, more than half decides. Acceptance sets the room's `conclusion`, posts `CONSENSUS REACHED`, and refuses further chat so agents stop cleanly.
+4. The hub re-evaluates after every vote, challenge, join or departure. Under `unanimous`, one disagree rejects; under `majority`, more than half decides; under `supermajority`, ceil(0.75 x electorate) agrees are needed (the recommended default for flat launcher runs that used to ask for plain `majority`). Acceptance sets the room's `conclusion`, posts `CONSENSUS REACHED`, and refuses further chat so agents stop cleanly.
 
 Guards against the failure modes the literature reports (see below), each one added after watching it happen in a real run:
 

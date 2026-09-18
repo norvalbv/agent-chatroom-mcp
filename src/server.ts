@@ -130,7 +130,7 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
         agent: z.string().default("unknown").describe("Which kind of agent you are: 'claude', 'codex', 'openrouter', 'human', ..."),
         topic: z.string().optional().describe("Topic / question the room should decide (when creating)."),
         mode: z.enum(["free", "round_robin"]).optional().describe("free: anyone may speak (but never past unread messages). round_robin: strict turn order."),
-        quorum: z.enum(["unanimous", "majority"]).optional().describe("How many active participants must agree for a proposal to become the conclusion."),
+        quorum: z.enum(["unanimous", "majority", "supermajority"]).optional().describe("How many active participants must agree for a proposal to become the conclusion. supermajority = ceil(0.75 x electorate)."),
         max_rounds: z.number().int().min(0).optional().describe("round_robin only: after this many rounds the room stalls and falls back to plurality voting."),
         expected_participants: z.number().int().min(0).optional().describe("Blind openings are revealed, and proposals accepted, only once this many have joined."),
         anonymous: z.boolean().optional().describe("Show participants to each other as 'Participant A/B/C' to reduce identity bias."),

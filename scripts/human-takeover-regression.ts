@@ -21,7 +21,7 @@ const tests: [string, () => void][] = [
   ['replayed departure still authorizes successor', () => {
     const dir = mkdtempSync(join(tmpdir(), 'human-takeover-'));
     try {
-      const f = fixture(dir); f.h.leave(f.room.name, f.alice.id, true);
+      const f = fixture(dir); f.h.leave(f.room.name, f.alice.id);
       const replay = new Hub({ dataDir: dir }); const room = replay.getRoom(f.room.name);
       const { participant: bob } = replay.join(room.name, 'bob', 'test', {}, f.bob.id, 'session-b');
       assert.equal(replay.attentionFocus(room, bob)?.id, f.ask.id);
@@ -30,7 +30,7 @@ const tests: [string, () => void][] = [
   }],
   ['takeover preserves question and greeting register caps', () => {
     for (const [text, cap] of [['@alice Can you check progress?', 900], ['@alice hello', 240]] as const) {
-      const f = fixture(); f.ask.content = text; f.h.leave(f.room.name, f.alice.id, true);
+      const f = fixture(); f.ask.content = text; f.h.leave(f.room.name, f.alice.id);
       assert.equal(f.h.attentionFocus(f.room, f.bob)?.id, f.ask.id);
       assert.throws(() => f.h.send(f.room.name, f.bob.id, 'x'.repeat(cap + 1), f.ask.id, true), /capped at/);
       assert.doesNotThrow(() => f.h.send(f.room.name, f.bob.id, 'x'.repeat(cap), f.ask.id, true));
@@ -43,7 +43,7 @@ const tests: [string, () => void][] = [
     assert.doesNotThrow(() => f.reply(f.carol.id));
   }],
   ['departure hands reply authorization to current nominee', () => {
-    const f = fixture(); f.h.leave(f.room.name, f.alice.id, true);
+    const f = fixture(); f.h.leave(f.room.name, f.alice.id);
     assert.equal(f.h.attentionFocus(f.room, f.bob)?.id, f.ask.id);
     assert.equal(f.h.responderFor(f.room, f.ask, f.bob.id).mine, true);
     assert.doesNotThrow(() => f.reply(f.bob.id));

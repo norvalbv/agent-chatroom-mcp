@@ -36,11 +36,12 @@ assert.equal(hub.responderFor(room, ask2, a.id).mine, true);
 hub.send(room.name, benji.id, "unrelated third human message");
 hub.send(room.name, b.id, "@benji I was not asked but here is a thought.", undefined, true);
 assert.equal(hub.isAnswered(room, ask2), false, "an un-nominated reply after a later human message does not answer");
-// The ask's addressee has left: anyone may answer it with reply_to (the gate "addressed to X, not you" must not
-// protect a seat that is gone), and naming the human is allowed even when the human is not currently active.
+// The ask's addressee has left: the hub hands the ask to its nominated successor (human-takeover contract), who may
+// answer it with reply_to; naming the human is allowed even when the human is not currently active.
 const ask3 = hub.send(room.name, benji.id, "@lobby-9 a third question, to a seat that will leave", undefined, true);
 hub.leave(room.name, c.id, "budget");
 hub.leave(room.name, benji.id);
+assert.equal(hub.responderFor(room, ask3, b.id).mine, true, "b becomes the successor responder");
 const reply = hub.send(room.name, b.id, "@benji answering the orphaned ask with reply_to", ask3.id, true);
 assert.equal(reply.replyTo, ask3.id);
 assert.equal(hub.isAnswered(room, ask3), true, "a reply_to from anyone answers an orphaned ask");

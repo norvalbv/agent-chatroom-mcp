@@ -1026,10 +1026,11 @@ export class Hub {
       const to = this.addressee(room, target);
       const answered = this.isAnswered(room, target);
       const resp = this.responderFor(room, target, p.id);
-      // Union of two rooms' rules: an addressee that has left cannot answer, so the ask is orphaned and anyone may take
-      // it (swarm-214936 lobby); and the hub's nominated or successor responder may answer for a live addressee
-      // (human-area takeover, ea78cf9). Refused only when the live addressee is someone else and you are not the responder.
-      if (to && to !== "all" && to !== p.id && room.participants.get(to)?.active && !resp.mine) {
+      // The human room's verified contract (ea78cf9, human-takeover-regression): only the hub's responder may answer a
+      // targeted human ask: the addressee while live and within its window, then the nominated successor. An ask whose
+      // addressee left is therefore not open to everyone; it is handed to the current nominee (supersedes the
+      // maintainer's "anyone may take an orphaned ask" fix of 9b69261, whose test now asserts the nominee path).
+      if (to && to !== "all" && !resp.mine) {
         throw new HubError(`${this.shown(room, target.from)} addressed that to ${resp.who}, not you. Leave it to them.`);
       }
       if (small && answered && !resp.mine) {

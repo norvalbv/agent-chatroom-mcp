@@ -61,25 +61,63 @@ async function waitReady(): Promise<void> {
   throw new Error("hub did not become ready");
 }
 
-/** Scripted fake provider: join -> claim/long-brief -> endless empty waits. Never finishes the brief. */
-function fakeProvider(): ChatProvider {
+/** Scripted fake provider: join -> claim/<area> -> endless empty waits. Never finishes the brief. */
+function fakeProvider(room: string, area: string): ChatProvider {
   let phase: "join" | "claim" | "wait" = "join";
-  const reply = (toolCalls: ToolCall[], usage?: Partial<{ prompt_tokens: number; completion_tokens: number }>): Reply => ({ content: "", toolCalls, usage: { prompt_tokens: usage?.prompt_tokens ?? 100, completion_tokens: usage?.completion_tokens ?? 10 } as { prompt_tokens?: number; completion_tokens?: number } });
+  const reply = (toolCalls: ToolCall[]): Reply => ({ content: "", toolCalls, usage: { prompt_tokens: 100, completion_tokens: 10 } as { prompt_tokens?: number; completion_tokens?: number } });
   return {
     label: "fake provider",
     async complete(): Promise<Reply> {
       if (phase === "join") {
         phase = "claim";
-        return reply([{ id: "c1", type: "function", function: { name: "join_room", arguments: JSON.stringify({ room: ROOM, name: SEAT, agent: "openrouter" }) } }]);
+        return reply([{ id: "c1", type: "function", function: { name: "join_room", arguments: JSON.stringify({ room, name: SEAT, agent: "openrouter" }) } }]);
       }
       if (phase === "claim") {
         phase = "wait";
-        const claim = JSON.stringify({ area: CLAIM, owner: SEAT, team: [SEAT], status: "open", note: "failing-first fixture claim" });
-        return reply([{ id: "c2", type: "function", function: { name: "board_set", arguments: JSON.stringify({ room: ROOM, key: `claim/${CLAIM}`, text: claim }) } }]);
+        const claim = JSON.stringify({ area, owner: SEAT, team: [SEAT], status: "open", note: "failing-first fixture claim" });
+        return reply([{ id: "c2", type: "function", function: { name: "board_set", arguments: JSON.stringify({ room, key: `claim/${area}`, text: claim }) } }]);
       }
-      return reply([{ id: "c3", type: "function", function: { name: "wait_for_messages", arguments: JSON.stringify({ room: ROOM, timeout_ms: 40 }) } }]);
+      return reply([{ id: "c3", type: "function", function: { name: "wait_for_messages", arguments: JSON.stringify({ room, timeout_ms: 40 }) } }]);
     },
   };
+}
+
+/** Full contract check for one scenario: handoff board event after the claim, leave reason naming it, ok+steps+handoffs on the result. */
+async function runCase(name: string, area: string, maxSteps: number, expectHandoffAt: number, extra: Partial<import("../src/seat.js").SeatOptions> = {}) {
+  const result = await runSeat(fakeProvider(name, area), {
+    prompt: `You are ${SEAT} in room ${name}. Join the room and claim ${area}. The brief is very long and cannot be finished; stay and keep waiting.`,
+    mcpUrl: `${HUB}/mcp`,
+    cwd: dataDir,
+    maxMinutes: 2,
+    maxSteps,
+    maxToolChars: 4000,
+    maxContextChars: 40000,
+    idleWaits: 1,
+    log: () => {},
+    ...extra,
+  });
+  assert.equal(result.ok, true, `[${name}] seat must terminate cleanly, got ok=${result.ok} final=${result.final}`);
+  assert.ok(result.steps < maxSteps, `[${name}] seat must hand off BEFORE maxSteps=${maxSteps}, but exited after step ${result.steps}`);
+  assert.ok(result.steps <= expectHandoffAt, `[${name}] seat must hand off by step ${expectHandoffAt}, exited at ${result.steps}`);
+  const handoffs = (result as { handoffs?: string[] }).handoffs ?? [];
+  assert.ok(handoffs.includes(area), `[${name}] SeatResult must report handed-off area "${area}", got ${JSON.stringify(handoffs)}`);
+
+  const logPath = join(dataDir, `${name}.jsonl`);
+  assert.ok(existsSync(logPath), `[${name}] hub must persist room log at ${logPath}`);
+  const events = readFileSync(logPath, "utf8").split("\n").filter(Boolean).map((l) => JSON.parse(l));
+  const board = events.filter((e: any) => e.type === "board" && e.key);
+  const handoffEvs = board.filter((e: any) => e.key === `handoff/${area}`);
+  assert.ok(handoffEvs.length > 0, `[${name}] no handoff/<area> board event in the room log`);
+  assert.ok(handoffEvs.every((e: any) => e.entry?.by === SEAT, `[${name}] handoff/* must be authored by the leaving seat`));
+  const claimEvs = board.filter((e: any) => e.key === `claim/${area}`);
+  assert.ok(claimEvs.length > 0, `[${name}] fixture claim was never written`);
+  assert.ok(events.indexOf(handoffEvs.at(-1)) > events.indexOf(claimEvs.at(-1)), `[${name}] handoff/* must be written after the claim exists`);
+  const leaves = events.filter((e: any) => e.type === "leave");
+  assert.ok(leaves.length > 0, `[${name}] no leave_room event in the room log`);
+  const reasons = leaves.map((e: any) => e.p?.leaveReason ?? "").join(" | ");
+  assert.match(reasons, /handoff/i, `[${name}] leave_room reason must name the handoff, got: ${reasons}`);
+  assert.ok(events.indexOf(leaves.at(-1)) > events.indexOf(handoffEvs.at(-1)), `[${name}] leave_room must come after handoff/* is written`);
+  console.log(`PASS ${name}: steps=${result.steps}/${maxSteps} handoffs=${JSON.stringify(handoffs)} ok=${result.ok}`);
 }
 
 try {
@@ -98,32 +136,11 @@ try {
     log: () => {},
   });
 
-  // --- assertions: the proactive handoff contract ---
-  assert.equal(result.ok, true, `seat must terminate cleanly, got ok=${result.ok} final=${result.final}`);
-  assert.ok(result.steps < MAX_STEPS, `seat must hand off BEFORE maxSteps=${MAX_STEPS}, but exited after step ${result.steps}`);
-  const handoffs = (result as { handoffs?: string[] }).handoffs ?? [];
-  assert.ok(handoffs.includes(CLAIM), `SeatResult must report handed-off area "${CLAIM}", got ${JSON.stringify(handoffs)}`);
-
-  const logPath = join(dataDir, `${ROOM}.jsonl`);
-  assert.ok(existsSync(logPath), `hub must persist room log at ${logPath}`);
-  const events = readFileSync(logPath, "utf8").split("\n").filter(Boolean).map((l) => JSON.parse(l));
-  const board = events.filter((e: any) => e.type === "board" && e.key);
-  const handoffEvs = board.filter((e: any) => e.key === `handoff/${CLAIM}`);
-  assert.ok(handoffEvs.length > 0, "no handoff/<area> board event by the seat in the room log");
-  assert.ok(handoffEvs.every((e: any) => e.entry?.by === SEAT), "handoff/* must be authored by the leaving seat");
-  const claimEvs = board.filter((e: any) => e.key === `claim/${CLAIM}`);
-  assert.ok(claimEvs.length > 0, "fixture claim was never written");
-  const claimIdx = events.indexOf(claimEvs.at(-1));
-  const handoffIdx = events.indexOf(handoffEvs.at(-1));
-  assert.ok(handoffIdx > claimIdx, "handoff/* must be written after the claim exists");
-  const leaves = events.filter((e: any) => e.type === "leave");
-  assert.ok(leaves.length > 0, "no leave_room event in the room log");
-  const reasons = leaves.map((e: any) => e.p?.leaveReason ?? "").join(" | ");
-  assert.match(reasons, /handoff/i, `leave_room reason must name the handoff, got: ${reasons}`);
-  const leaveIdx = events.indexOf(leaves.at(-1));
-  assert.ok(leaveIdx > handoffIdx, "leave_room must come after handoff/* is written");
-
-  console.log(`PASS handoff-regression: steps=${result.steps}/${MAX_STEPS} handoffs=${JSON.stringify(handoffs)} ok=${result.ok}`);
+  // --- assertions (two scenarios, one hub) ---
+  // A) default fraction path: ceil(0.75 * 12) = 9 -> hand off at step 9, before the cap
+  await runCase(ROOM, CLAIM, MAX_STEPS, 9);
+  // B) lobby test spec (draft/r1-test-and-measure): --handoff-step-max 8 with maxSteps=600
+  await runCase("handoff-regression-b", "alpha", 600, 8, { handoffStepMax: 8 });
 } finally {
   if (hub && hub.exitCode === null && hub.signalCode === null) hub.kill();
   await new Promise((r) => setTimeout(r, 300));

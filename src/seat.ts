@@ -68,6 +68,8 @@ export interface SeatOptions {
   idleWaits?: number;
   /** PROACTIVE HANDOFF (R1): fraction of maxSteps at which a seat still holding work hands off instead of running to the cap (default 0.75). */
   handoffStepFraction?: number;
+  /** absolute step at which to hand off, overriding handoffStepFraction (lobby test spec --handoff-step-max) */
+  handoffStepMax?: number;
   /** cumulative prompt-token budget that triggers handoff (default 6_000_000; clean exits cluster at 4-6M prompt tokens, verify/context-pressure-logs) */
   handoffPromptTokens?: number;
   /** transcript fraction of maxContextChars that triggers handoff BEFORE trim() drops turns (default 0.9) */
@@ -455,7 +457,9 @@ export async function runSeat(provider: ChatProvider, opts: SeatOptions): Promis
   const handoffStepFraction = opts.handoffStepFraction ?? 0.75;
   const handoffPromptTokens = opts.handoffPromptTokens ?? 6_000_000;
   const handoffContextFraction = opts.handoffContextFraction ?? 0.9;
-  const handoffStep = Math.max(1, Math.min(Math.ceil(handoffStepFraction * maxSteps), Math.max(1, maxSteps - 1)));
+  const handoffStep = opts.handoffStepMax
+    ? Math.max(1, Math.min(opts.handoffStepMax, Math.max(1, maxSteps - 1)))
+    : Math.max(1, Math.min(Math.ceil(handoffStepFraction * maxSteps), Math.max(1, maxSteps - 1)));
   const handoffContextChars = Math.floor(handoffContextFraction * maxContextChars);
   const pressured = () => steps >= handoffStep || usage.prompt_tokens >= handoffPromptTokens || size() > handoffContextChars;
   let handedOff = false;

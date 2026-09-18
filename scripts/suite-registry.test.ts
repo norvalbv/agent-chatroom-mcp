@@ -23,14 +23,15 @@ test('every entry has a family and an admission record that exists', () => {
     if (t.status !== 'pending') assert.ok(existsSync(t.admission), `${t.id}: ${t.admission} missing`);
   }
 });
-test('statuses agree with the raised bar: primary 0.3-0.7, weak above 0.7 to 0.9, retired above 0.9 or 0, all on at least 10 seeds for primary and weak', () => {
+test('statuses agree with the bar: primary 0.3-0.7, weak above 0.7 to 0.9, low above 0 and below 0.3, retired above 0.9 or 0, all on at least 10 seeds for primary, weak and low', () => {
   for (const t of suite.tasks) {
-    assert.ok(['primary', 'weak', 'retired', 'pending'].includes(t.status), `${t.id}: status ${t.status}`);
+    assert.ok(['primary', 'weak', 'low', 'retired', 'pending'].includes(t.status), `${t.id}: status ${t.status}`);
     if (t.status === 'pending') { assert.equal(t.arm_a, null, `${t.id}: pending has no rate yet`); continue; }
     if (t.arm_a === null) { assert.equal(t.status, 'retired', `${t.id}: only a retired task may lack a rate`); continue; }
     const rate = t.arm_a.pass / t.arm_a.n;
     if (t.status === 'primary') { assert.ok(t.arm_a.n >= 10 && rate >= 0.3 && rate <= 0.7, `${t.id}: primary needs n>=10 and 0.3-0.7`); }
     else if (t.status === 'weak') { assert.ok(t.arm_a.n >= 10 && rate > 0.7 && rate <= 0.9, `${t.id}: weak needs n>=10 and (0.7, 0.9]`); }
+    else if (t.status === 'low') { assert.ok(t.arm_a.n >= 10 && rate > 0 && rate < 0.3, `${t.id}: low needs n>=10 and (0, 0.3)`); }
     else assert.ok(rate > 0.9 || rate === 0, `${t.id}: retired needs a rate above 0.9 or 0`);
   }
 });
@@ -43,16 +44,17 @@ test("each admission record carries the entry's arm A count, and weak or retired
     const pattern = new RegExp(`\\b${pass} (of|/|out of) ?${n}\\b|\\b${pass}/${n}\\b|\\b(${n}|${words[n] ?? n}) seeds?,? ${pass} pass`, 'i');
     assert.ok(pattern.test(text), `${t.id}: ${t.admission} does not state ${pass} of ${n}`);
     if (t.status === 'weak') assert.match(text, /weak/i, `${t.id}: record does not say weak`);
+    if (t.status === 'low') assert.match(text, /below|low/i, `${t.id}: record does not say low`);
     if (t.status === 'retired') assert.match(text, /reject|retired|ceiling/i, `${t.id}: record does not say retired`);
   }
 });
-test('bench-grid refuses retired and pending tasks and unlisted ones, allows primary and weak, and --include-retired overrides', () => {
+test('bench-grid refuses retired and pending tasks and unlisted ones, allows primary, weak and low, and --include-retired overrides', () => {
   const dir = mkdtempSync(join(tmpdir(), 'suite-registry-'));
   try {
-    for (const n of ['p', 'w', 'r', 'x', 'u']) mkdirSync(join(dir, n));
-    writeFileSync(join(dir, 'SUITE.json'), JSON.stringify({ tasks: [{ id: 'p', status: 'primary' }, { id: 'w', status: 'weak' }, { id: 'r', status: 'retired' }, { id: 'x', status: 'pending' }] }));
+    for (const n of ['p', 'w', 'l', 'r', 'x', 'u']) mkdirSync(join(dir, n));
+    writeFileSync(join(dir, 'SUITE.json'), JSON.stringify({ tasks: [{ id: 'p', status: 'primary' }, { id: 'w', status: 'weak' }, { id: 'l', status: 'low' }, { id: 'r', status: 'retired' }, { id: 'x', status: 'pending' }] }));
     const run = (tasks: string, ...extra: string[]) => parseArgs(['--tasks', tasks, '--seeds', '1', '--tasks-dir', dir, ...extra]);
-    assert.equal(run('p,w').taskDirs.length, 2);
+    assert.equal(run('p,w,l').taskDirs.length, 3);
     assert.throws(() => run('r'), /retired.*refusing/);
     assert.throws(() => run('x'), /pending.*refusing/);
     assert.throws(() => run('p,u'), /not listed/);

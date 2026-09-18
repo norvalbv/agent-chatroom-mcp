@@ -630,7 +630,6 @@ export class Hub {
     if (role === "chair") {
       // the chair is bound to a name: the room option (set at creation) or, failing that, the first claimant
       if (room.chair && room.chair !== name) throw new HubError(`This room's chair is ${room.chair}. Join without role=chair.`);
-      room.chair = name;
     }
     if (!name.trim()) throw new HubError("A display name is required to join.");
     if (name.length > 64) throw new HubError("Display names are capped at 64 characters.");
@@ -694,6 +693,8 @@ export class Hub {
       this.persist({ type: "join", room: roomName, p: participant });
       this.post(room, "system", undefined, `${this.shown(room, participant)} rejoined the room.`);
     }
+    // Bind the chair only after admission succeeds: rejected joins must not reserve it.
+    if (role === "chair") room.chair = name;
     // Reclaiming even an active seat is an explicit delivery reset (lost response recovery).
     delete participant.lastBoardSeen;
     delete participant.seenBoardKeys;

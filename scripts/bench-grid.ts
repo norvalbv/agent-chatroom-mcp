@@ -113,7 +113,7 @@ export function parseArgs(argv: string[], tasksDirDefault = "tasks"): ParsedGrid
     for (const d of taskDirs) {
       const entry = suite.tasks.find((t) => t.id === basename(d));
       if (!entry) throw new Error(`Task ${basename(d)} is not listed in ${suitePath}; list it or pass --include-retired`);
-      if (entry.status !== "primary" && entry.status !== "weak") throw new Error(`Task ${basename(d)} is ${entry.status} in ${suitePath}; refusing without --include-retired`);
+      if (!["primary", "weak", "low"].includes(entry.status)) throw new Error(`Task ${basename(d)} is ${entry.status} in ${suitePath}; refusing without --include-retired`);
     }
   }
   const seeds: number[] = [];

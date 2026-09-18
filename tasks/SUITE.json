@@ -3,10 +3,11 @@
   "statuses": [
     "primary",
     "weak",
+    "low",
     "retired",
     "pending"
   ],
-  "note": "Machine-readable suite status. bench-grid refuses any task that is not primary or weak unless --include-retired. Families are counted by mechanism (paper/amendments.md); the statistical unit is the family.",
+  "note": "Machine-readable suite status. bench-grid refuses any task that is not primary, weak or low unless --include-retired. Families are counted by mechanism (paper/amendments.md); the statistical unit is the family. low = 0 < rate < 0.3 on ten seeds, weak = 0.7 < rate <= 0.9; both are kept and excluded from the primary comparison.",
   "tasks": [
     {
       "id": "stamp-interpreter",
@@ -279,11 +280,14 @@
     },
     {
       "id": "bench-printf-format-2",
-      "status": "pending",
+      "status": "low",
       "family": "libc-exact-number",
-      "arm_a": null,
+      "arm_a": {
+        "pass": 2,
+        "n": 10
+      },
       "admission": "tasks/bench-printf-format-2/ADMISSION.md",
-      "note": "sonnet-7's printf dial (length modifiers, %u, negative x/X/o, star width/precision; 3012 cases); same family as bench-printf-format; screening in progress"
+      "note": "sonnet-7's printf dial (length modifiers, %u, negative x/X/o, star width/precision; 3012 cases), fresh seeds; all 8 fails are the two %.17g of 1e-07 cases; same family and same single trap as bench-printf-format (pooled 7 of 20)"
     }
   ]
 }

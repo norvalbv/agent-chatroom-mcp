@@ -40,6 +40,7 @@ export const offlineScripts = [
   'leave-post-conclusion-regression.ts',
   'idlewaits-actionable-regression.ts',
   'lease-lock-tasks.test.ts',
+  'shelf-quiet-task.test.ts',
   'mention-mentions.test.ts',
   'openrouter-cache-regression.ts',
   'oracle-tasks-printf.test.ts',

@@ -12,7 +12,13 @@ import { fileURLToPath } from "node:url";
 export const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
 /** Minimize human-control credentials in seats; this is not a same-user filesystem sandbox. */
-export const SEAT_ENV_EXCLUSIONS: readonly string[] = Object.freeze(["CHATROOM_HUMAN_TOKEN", "CHATROOM_LAUNCHER_TOKEN", "CHATROOM_INSECURE_LOCAL"]);
+export const SEAT_ENV_EXCLUSIONS: readonly string[] = Object.freeze([
+  "CHATROOM_HUMAN_TOKEN",
+  "CHATROOM_LAUNCHER_TOKEN",
+  "CHATROOM_INSECURE_LOCAL",
+  // scripts/guard-baseline-freeze.mjs: bypasses the .devkit/baselines/** self-freeze guard. Maintainer-only.
+  "CHATROOM_BASELINE_FREEZE_OVERRIDE",
+]);
 
 /** Per-seat commit attribution without changing shared repository or global git config. */
 export function seatGitIdentity(name: string): NodeJS.ProcessEnv {

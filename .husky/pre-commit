@@ -10,6 +10,17 @@ for dir in "$HOME/.bun/bin" "$HOME/.local/bin"; do
 done
 export PATH
 
+# >>> baseline-freeze-guard >>>
+# Rank 3 (swarm-100622-6jdx peer-review plan): an author cannot self-freeze their own quality
+# baseline. Deliberately OUTSIDE the devkit-owned region below (see that region's own header
+# comment: `devkit sync-hook-runner` only touches between the devkit-guards markers), so a
+# devkit sync never removes it. See scripts/guard-baseline-freeze.mjs for the mechanism and the
+# maintainer override (CHATROOM_BASELINE_FREEZE_OVERRIDE, never available to a seat).
+if ! node scripts/guard-baseline-freeze.mjs; then
+    exit 1
+fi
+# <<< baseline-freeze-guard <<<
+
 # >>> devkit-guards >>>
 # devkit:commit-terminal
 if [ -z "${DEVKIT_SHIP_ID:-}" ] && [ -z "${DEVKIT_REVIEW_ID:-}" ] && [ -z "${DEVKIT_NO_TELEMETRY:-}" ]; then

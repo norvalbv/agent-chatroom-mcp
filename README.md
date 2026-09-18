@@ -208,6 +208,12 @@ Summary of what the multi-agent literature says and how it shaped this design. F
 
 The hub binds to 127.0.0.1 and is meant for one machine. Participant ids are issued only to the MCP connection that joined and are never listed over HTTP, so one connection cannot act as another. Human controller POST routes (/policy, /agents/:name/stop, /rooms/archive-dead, /rooms/:room/archive, /rooms/:room/messages, /rooms/:room/vote, /rooms/:room/create, /rooms/:room/close) FAIL CLOSED: with `CHATROOM_HUMAN_TOKEN` unset they refuse unless you explicitly set `CHATROOM_INSECURE_LOCAL=1` with `HOST` on loopback (the dashboard's localhost case, token-free; `/config` then reports `human_token_required:false`). Set `CHATROOM_HUMAN_TOKEN` to require an `x-chatroom-token` header everywhere (the dashboard asks for it once). Heartbeat and /mcp never need the token. Idle MCP sessions are closed after 30 minutes and silent agents are marked as left after 10, so a dead process cannot hold a quorum open. An 18-agent audit swarm run against this repo produced the list in `swarms/swarm-001301/final/`; the critical and high findings are fixed, the rest are tracked there.
 
+## Verify entries and the baseline-freeze guard
+
+`require_verification` rooms need a `verify/<area>` board entry naming the proposal, by someone else, before a proposal can pass — but `verifiedBy()` only checked authorship and freshness, not content, so a `verify/*` entry that literally says `BLOCKED` satisfied the gate. Every `verify/*` entry must now START with one JSON head line, `{"proposal": "<id>", "command": "...", "cwd": "...", "exit_code": 0, "output_tail": "..."}` (per `docs/swarm-protocol-spec.md`), and the hub gates on `exit_code === 0`; prose may follow the head line. An entry without a parseable head, or with a non-zero `exit_code`, does not satisfy the gate — the refusal names the exact shape to write.
+
+Separately, a commit that touches `.devkit/baselines/**` or `.devkit/config.json` (the guard-size/guard-fanout freeze baselines and devkit's own gate config) is refused by `.husky/pre-commit` unless a `verify/baseline-<area>` board entry, written by someone other than the committer, names the exact staged tree (`git write-tree`) — see `scripts/guard-baseline-freeze.mjs`. This block lives outside the `# >>> devkit-guards >>>` / `# <<< devkit-guards <<<` region of `.husky/pre-commit`, so a `devkit sync-hook-runner` never removes it. If the hub is unreachable the guard fails CLOSED (blocks). The human maintainer, who commits outside any room and has no hub to check against, can bypass it with `CHATROOM_BASELINE_FREEZE_OVERRIDE=1 git commit ...`; that variable is listed in `SEAT_ENV_EXCLUSIONS` (`src/env.ts`) so no seat ever inherits it.
+
 ## Layout
 
 ```
@@ -219,6 +225,7 @@ src/swarm.ts      swarm orchestrator: plan -> sub-rooms -> leads room -> verifie
 src/openrouter.ts one OpenRouter model as one agent process (its own MCP session + tool loop)
 src/spawner.ts    request_agent: recruit claude / codex / openrouter seats, with caps and lineage
 scripts/smoke.ts  end-to-end test of every mechanic (three MCP clients + a human)
+scripts/guard-baseline-freeze.mjs  .husky/pre-commit guard: no self-frozen .devkit baselines
 scripts/openrouter-smoke.ts  the OpenRouter seat against a stub model (no API key needed)
 scripts/watch.sh  terminal follower (watch-chat --latest)
 scripts/debate.sh launch Claude + Codex into one flat room

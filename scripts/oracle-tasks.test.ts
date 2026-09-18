@@ -155,6 +155,33 @@ test('hub crash maps to infrastructure_error, excluded from task comparison', ()
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
+test('scoreTask dispatch is keyed on oracle/score.ts presence, not the literal kind "inclusive-dates"', async () => {
+  const root = temporary(); try {
+    // A task whose kind is neither 'exact-answer' nor 'inclusive-dates' but that ships its own
+    // oracle/score.ts must still use the private-tests {score, oracle_results} contract.
+    const fakeTaskDir = join(root, 'fake-task');
+    cpSync(bug, fakeTaskDir, { recursive: true });
+    writeFileSync(join(fakeTaskDir, 'oracle', 'oracle.json'), JSON.stringify({ kind: 'custom-code-kind' }));
+    // score.ts uses top-level await; without a nearby package.json declaring ESM, Node/tsx would
+    // misparse it as CommonJS once copied outside the repo tree (unrelated to the dispatch under test).
+    writeFileSync(join(fakeTaskDir, 'package.json'), JSON.stringify({ type: 'module' }));
+    const dir = join(root, 'ws');
+    cpSync(join(bug, 'fixtures', 'correct'), dir, { recursive: true });
+    const scored = await scoreTask(fakeTaskDir, dir);
+    assert.equal(scored.reason, 'task_pass');
+    assert.equal((scored as any).oracle.kind, 'custom-code-kind');
+    assert.ok((scored as any).oracle_results, 'must carry the named-oracle-results shape, not the fact-check shape');
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+test('bench-long-brief\'s "handoff" kind has no oracle/score.ts, so it still falls through to the text-answer path (parse_failure on missing answer.txt), unaffected by generic dispatch', async () => {
+  const longBrief = resolve('tasks/bench-long-brief');
+  assert.equal(existsSync(join(longBrief, 'oracle', 'score.ts')), false);
+  const root = temporary(); try {
+    const scored = await scoreTask(longBrief, root);
+    assert.equal(scored.reason, 'parse_failure');
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
 test('outcome vocabulary: task_pass/task_fail/parse_failure distinct; missing artifact is not infra', async () => {
   const root = temporary(); try {
     // fact-check: missing/unreadable/empty/prohibited-format answer => parse_failure

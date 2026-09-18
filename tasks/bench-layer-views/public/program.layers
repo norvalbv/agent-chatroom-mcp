@@ -1,0 +1,1265 @@
+# layered configuration
+LAYER base 50
+SET kaa + 39 25
+SET kab + - % 18 8 IF < 32 $kaa $kaa $kaa IF < MIN $kaa 7 MIN $kaa $kaa IF < $kaa 32 39 -9 - $kaa $kaa
+SET kac / $kaa 4
+SET kad MAX IF < MIN $kab $kab IF < 37 $kac 29 $kab % 38 4 - 4 7 + + $kab -5 MIN $kab $kac
+SET kae + 1 $kab
+SET kaf IF < / - $kaa 21 3 MAX - $kaa $kac + $kab $kae - MAX $kac $kaa IF < 30 8 -5 16 + MAX 6 $kab + $kae $kac
+SET kag + + IF < -5 7 38 $kaa IF < $kac $kac 24 -2 - + 6 19 / $kab 5
+SET kag % $kad 7
+SET kah - -1 $kad
+SET kai - MAX % 38 7 + $kae $kaa - IF < $kag $kag $kab $kac MAX $kab $kah
+SET kaj + 27 $kaf
+SET kaj + -2 $kac
+SET kak + 27 $kab
+SET kak % $kag 10
+SET kal + $kad $kac
+SET kam * $kac 4
+SET kam MIN $kad $kag
+SET kan + + 12 $kae MIN $kam $kak
+SET kao + MIN $kac $kab + $kam -7
+SET kap + % / $kac 4 4 + MIN $kag $kai MAX $kae 9
+SET kaq MAX + $kae $kad + $kal $kan
+SET kar % IF < + 18 $kal MAX $kac $kac MAX $kaf $kaf MIN -6 $kaj 9
+SET kas + + $kai $kai + $kac $kam
+SET kat - -6 $kaq
+SET kau + $kar $kaa
+SET kav MIN + IF < $kar $kan 10 $kas % $kab 6 IF < MIN $kao 4 + $kap 19 IF < 9 $kap $kan $kab * 20 3
+SET kav + $kaq $kai
+SET kaw % $kam 8
+SET kax - MIN / 0 2 * 36 2 IF < % 35 9 / 28 4 - 24 $kas + $kam $kah
+SET kay MIN -5 $kaw
+SET kaz / MIN -2 $kac 5
+SET kba MIN + - $kac $kao + $kat 22 MIN + $kaf $kaq IF < 39 $kao $kaa $kav
+SET kbb * MAX $kas $kaf 4
+SET kbc - - 5 22 / 8 4
+SET kbd + % * $kbc 4 11 / MAX $kay 35 3
+SET kbe - % $kac 4 % $kao 3
+SET kbf + * MIN $kaw 23 3 * * $kau 3 3
+SET kbf MIN $kau $kac
+SET kbg - * / $kah 5 2 IF < + 28 $kbe % $kaf 6 * $kay 4 - 6 $kak
+SET kbg - $kac -6
+SET kbh IF < $kbe $kan $kap $kaz
+SET kbi - IF < MIN $kau 19 - $kap $kak % 22 7 MIN $kak $kaf + / -7 2 + 35 22
+SET kbj MAX $kba 7
+SET kbk MAX MAX + $kag $kbf + $kau 27 IF < - $kbj $kaq MAX $kar $kax - $kba 26 IF < $kam $kam $kao $kan
+SET kbl - * * $kbk 3 4 + + -8 $kal MAX 17 2
+SET kbm % - / $kbb 5 % $kay 3 4
+SET kbn / + $kbe $kan 3
+SET kbo % + MAX $kbi $kbl + $kbj $kaw 6
+SET kbp + IF < $kaz $kbe $kap $kal MAX $kbb $kbb
+SET kbq * + $kap 17 2
+SET kbr - MIN $kbj $kaq IF < $kbf $kap $kbh $kbk
+SET kbs % $kbr 8
+SET kbt / + MIN $kbm $kbf IF < $kbq $kbl $kat $kbd 3
+SET kbu IF < - IF < $kas $kbm 28 $kbs MAX 20 32 / + $kbq $kaw 4 IF < - 19 $kbj MIN 19 $kbq % $kbm 10 MIN $kbm 25 IF < + $kav $kbh + $kbl $kbp * 19 3 + -1 -5
+SET kbv + / IF < $kav $kbl $kau $kbn 2 MAX + $kbp $kbf - $kbc $kas
+SET kbw * IF < $kay $kbt 14 $kbn 3
+SET kbx MAX + + $kbj $kbr MIN 9 $kat IF < % $kbw 3 + $kbu $kbc + $kbo 22 + 2 $kbe
+SET kby + MAX * $kbk 4 / 22 4 % IF < $kbi 17 $kbf $kax 8
+SET kbz MIN - - $kbq $kbk IF < $kbb -2 $kby $kbg MAX MIN $kbv $kbu + $kbc 1
+SET kca + $kbn $kbp
+SET kcb * * MIN $kbw $kbe 3 3
+SET kcc - IF < 20 $kbd $kbm $kbz MAX 38 38
+SET kcd - IF < % $kbe 8 - $kbk $kbj + 16 $kbd / 28 5 + - $kaz $kca MIN $kbo $kbk
+SET kce MAX * MIN $kbe $kbk 2 MIN MIN 20 $kbi / $kbv 3
+SET kcf % + + 1 $kbb + $kbo $kbd 11
+SET kcf MIN $kcd $kbs
+SET kcg MIN % + $kbm 32 9 / + 21 $kbf 3
+SET kch + MAX MIN $kbw $kbh + $kbh $kbu * MIN $kcf $kcf 3
+SET kci % $kbq 8
+SET kcj - 19 $kbu
+SET kck * MIN MIN -8 $kce + -2 -6 4
+SET kcl IF < $kbk 4 $kce $kck
+SET kcm % $kbq 4
+SET kcn - + 26 $kbw IF < $kbq 37 $kca $kbu
+SET kco / + % $kce 4 + $kbq $kbo 4
+SET kcp IF < IF < + $kck $kbo * 20 3 MAX 29 $kby + $kbl 18 / MIN $kbt 30 2 % - 5 $kbp 3 + MIN $kby $kcn + 12 $kcg
+SET kcp MAX $kbr $kci
+SET kcq + $kbn $kbr
+SET kcr / * + $kby $kbr 4 3
+SET kcs + - IF < 28 $kcp $kbr $kce IF < $kbt -9 30 $kcr + % 16 10 + $kbv -3
+SET kct + $kch $kbt
+SET kcu + $kcg $kce
+SET kcv * $kcg 2
+SET kcw MIN IF < + 4 33 * $kcf 4 - 30 37 % 36 10 - % 23 5 / $kcf 5
+SET kcx + + + $kbv $kcm % $kcv 10 MIN - $kcp $kco + $kcn -7
+SET kcy / % + $kci 30 5 2
+SET kcz + + MAX $kcg $kcd * $kbx 4 MAX - $kby $kcl % $kct 7
+SET kda MIN $kbx 28
+SET kdb + 21 $kcc
+SET kdc + MAX MIN $kby $kcw * $kca 2 - - $kco $kcd / $kcs 4
+SET kdd / + $kca $kcp 2
+SET kde * $kcl 3
+SET kdf * MIN $kde $kcp 4
+SET kdg MAX * $kcy 3 / -9 5
+SET kdh - * - $kdb $kcn 4 MIN / $kdb 2 * $kcg 2
+SET kdi + 2 $kcq
+SET kdj - - * $kcn 2 * 19 2 % MAX 19 33 7
+SET kdk + $kdf 22
+SET kdl * + $kde $kcv 3
+SET kdm - + $kcu 6 + 24 $kdj
+SET kdn * + - $kdf $kco / $kdj 2 3
+SET kdo + $kdc $kcv
+SET kdp / + * $kdh 2 / $kdo 3 2
+SET kdq MAX MAX * $kdg 4 + $kcs $kdh - + 11 $kcs * $kdd 4
+SET kdr + $kdp $kde
+SET kds MAX 23 $kcw
+SET kdt - - MIN $kds $kdl + $kdh 30 - + -1 $kdg IF < 27 $kdg $kdk $kdp
+SET kdu % - -2 $kdt 4
+SET kdv / 4 2
+SET kdw * * MAX $kdp -1 3 4
+SET kdx MAX $kdn $kcu
+SET kdy + * + $kdf -4 4 * + $kdp $kds 2
+SET kdz + * $kdp 4 / 8 2
+SET kea / $kdn 3
+SET keb IF < MIN + $kdb $kdn - -9 $kdq + MIN $kdb $kdp - $kdq 2 / MIN $kdq $kdh 3 - % 39 3 IF < $kdm -2 $kdj $kdf
+SET kec - 24 9
+SET ked - + -1 $kdn IF < $kea $kde $kdw $kdz
+SET kee - MAX + $kea 22 / $kdf 5 MAX - 14 -3 + $kdt -6
+SET kef % MAX $kdw $kdc 9
+SET keg + - MAX 30 $kdm % $keb 3 / IF < $kdh 26 7 27 2
+SET keh MAX + 18 $kdp / 11 5
+SET kei MAX + + $kdu $kdp * $keg 2 - * 15 4 + $kdk 23
+SET kej - IF < IF < $ked 4 $kdj 8 / $kdq 2 - 27 $kdf % $kdj 8 * + $kdv -8 4
+SET kek / * $kej 4 4
+SET kel % - -4 $kdu 4
+SET kem % $kek 7
+SET ken IF < IF < % $kec 8 + $keh $kek % $kej 11 / $kdo 2 * MIN -3 $keb 3 + * $kef 3 + 20 $kdr MAX * $kef 3 + 6 $kdn
+SET ken + $kdy 38
+SET keo + $ken $kdy
+SET kep MAX IF < MIN $keb $kea - $kdx 22 + $keh 25 MIN $keb 13 - + $kdp 3 MAX $kds $kef
+SET keq + IF < $kdv $kdo $kdq $kdp MAX $kdm $kea
+SET ker + - - $kdv $kdr + $kdy 3 / * $kea 2 3
+SET kes % 7 9
+SET ket MAX * / $kdz 5 3 + + $kef $keb + 11 25
+SET ket + $kdy $kel
+SET keu + $kef $ker
+SET kev - - MIN $kdy $kec MIN $ker $kdu + MAX $kes $kdv * 3 2
+SET kew + MAX $kei $kef MAX $keo $ked
+SET kex MIN * + $keq $ken 4 + + $kea -9 + $ken 24
+SET key % + $kex $kex 10
+SET kez MAX 18 28
+SET kfa % + + $kem $ken + $kev 35 7
+SET kfb + $kee 12
+SET kfc / * - $kfa -1 3 5
+SET kfd + $kfb $kej
+SET kfe - 27 $ken
+LAYER team 30
+SET kae * 17 4
+SET kal - $kae 3
+SET kal % + $kag $kaa 8
+SET kan + + $kaa $kag + $kaa $kam
+SET kan IF < - $kah $kad + $kaa $kai + $kaa $kaj + $kal 15
+SET kap - + $kal 19 + 24 $kam WHEN = % $kad 2 0
+SET kat % % $kai 6 10 WHEN NOT < $kae 9
+UNSET kay WHEN < $kax 21
+SET kaz + MAX MIN 30 $kat + $kat $kad / % $kag 11 4
+SET kba / MIN $kag $kar 4 WHEN < $kay -1
+UNSET kbd WHEN < $kai 22
+SEAL kbh
+UNSET kbi
+SET kbj + % $kap 5 + $kav $kaw
+SET kbo * $kay 2 WHEN < $kaq 14
+SET kbp - + % $kbo 7 IF < $kat $kar $kaq $kat - / $kbo 2 + $kat 27
+UNSET kbq WHEN NOT < $kbk 6
+SET kbq - $kbd $kbn
+SET kbr * + $kar 20 4
+SET kbr / + $kay $kar 4
+SET kbv MIN 12 $kbh WHEN < $kba 30
+SET kbx IF < - IF < $kbv $kbu $kaw $kaw * $kbd 4 + MIN $kbg $kbr - $kbd $kbd % * $kba 3 5 * IF < -5 $kbk $kbt $kbe 4 WHEN < $kbm 22
+SET kcg - IF < 32 $kbr $kbr $kcb IF < $kbf 0 $kby $kbv WHEN < $kcd -1
+SET kcg / $kbo 4
+SET kch - MIN $kbd $kbi IF < $kbs $kce $kbk $kbe WHEN < $kca 17
+SET kcm % $kby 10 WHEN < $kbs 21
+SET kco - IF < $kbu $kbw 12 $kbq + $kbw $kbt WHEN < $kbw 24
+SET kcs + / $kco 3 * $kbv 3 WHEN < $kbx 24
+SET kcs IF < $kci 7 4 $kcn
+SET kcu + IF < $kca 15 $kcn 19 + 25 32 WHEN NOT < $kcl 5
+SET kcx - $kcs 19 WHEN < $kck 2
+SET kcy + $kcp 5 WHEN < $kca 8
+UNSET kcz
+SET kda MIN - $kcr $kch / $kcm 3 WHEN < $kcd 5
+SET kdd % 16 11
+SET kdg * - $kda $kcg 4 WHEN < $kcn 5
+SET kdg MIN + $kde $kcm % 37 8
+SET kdj + 13 $kcy WHEN NOT < $kdd 18
+SET kdl - $kch $kcj
+SET kdm % MIN $kdc $kci 10 WHEN = % $kco 3 1
+SET kdm MIN / $kdg 3 + 21 $kcr
+SET kdn - $kdc $kcx
+SET kdn 11
+SET kdo + IF < $kcz 14 12 $kcr * $kcm 3 WHEN < $kdm 21
+UNSET kdr
+SET kds MIN 5 $kdn
+SET kdt + / $kct 3 MIN $kdb $kct
+SET kdt 6
+UNSET kdu
+SET kdv % IF < / 21 5 % $kdu 11 + $kdq $kcs - $kdk -5 4
+SET kdv * 15 2
+SET keb + * 18 4 + -2 8 WHEN < $kdt 22
+SET kec MAX 24 $kdn WHEN NOT < $kdw 0
+SET kef - % 17 6 + $kea $kdw WHEN NOT < $kdf 14
+SET kef $kdm
+SET keg - MIN $ked $kdc + $kee $kdw
+SET kej + + % $kdu 6 - $keg $kdj % MIN 38 40 4
+SET kej IF < IF < $kec 26 $kdu 10 + 6 $kdz + $keg $kdf MAX $kdq 35
+SET kem + + / $kds 4 MAX $kdo -6 + % $kdy 8 + -7 $kdx WHEN < $kdt 17
+UNSET ken
+UNSET keu
+UNSET kev
+SET kex MAX * * $keu 3 2 MAX MAX $ked $kem - $kem $kep
+SET kex MAX IF < 2 32 $kem 11 + $keh 22
+SEAL kez
+SEAL kfb
+UNSET kfc WHEN = % $kfa 2 1
+SEAL kfd
+SET kfe * - MIN -1 $kem MIN $kfa $kew 3
+SET kfe $kef
+SET kfl / 20 4 WHEN NOT < $kff 6
+SEAL kfm
+UNSET kfp
+SET kft + - $kfn 29 - 5 $keu
+SET kft * 20 3
+SET kfu / - $ket $keu 4 WHEN < $kfo 0
+SET kfu * - 12 -4 2
+SET kfy * + + $kfm $kfn IF < 16 $kfr $kfb $kfd 3
+SET kga + IF < / $kez 3 MIN 35 $kfm / $kfw 3 IF < 9 $kfh 11 $kfu - MIN $kfc $kfz MIN $kez $kfz
+SEAL kgc
+SET kgh + MIN % $kfz 4 MIN $kfm 18 MIN + $kfw $kgf - $kfd $kfu
+SET kgh % + 33 $kfv 3
+SET kgk + + - $kgf $kfx + $kfu $kfv - / $kfy 4 / $kfi 2 WHEN < $kfg 11
+SET kgn + + MAX $kgj 9 + $kfs $kfk + MAX $kfj $kfr IF < $kgl $kfl $kgd 3
+SET kgq IF < MAX MIN 11 34 % $kgf 4 * / $kfm 5 2 IF < MIN $kgb 6 MIN $kfr $kga MAX $kft $kfr % 19 10 + * 3 4 % 11 8 WHEN = % $kfx 4 1
+SET kgr * / MAX 40 17 2 4
+UNSET kgu
+SET kha / + MIN $kgo $kgj + $kgd $kgb 5 WHEN NOT < $kfw 14
+SET khb % MAX + 33 37 IF < $kgv $kgz 15 $kgc 6
+SET khc MIN 22 16 WHEN = % $kgn 4 1
+SET khd + + 35 $kgf * 30 2
+SET khf + $kgn $kgr WHEN < $kgz -2
+SET khg % % $kgn 10 8 WHEN = % $kgz 4 1
+UNSET khi
+SET khm - + MIN $khl $kgy / 10 2 % + 29 $khl 11 WHEN = % $kgo 2 0
+SET khn + + + 22 18 + $kgr $kha * IF < $kgq 13 $khi $kgr 4 WHEN < $kha 14
+UNSET kho WHEN = % $khm 4 0
+SET khp % IF < $kgy $khh $kgq $kho 6
+SET khp MIN + $khb $khc MAX $kgu 23
+SET khs - - + $kgw $khh MAX 5 $kgv IF < MAX $khp 6 MAX 39 $khg MIN $kgo $khc + $kgx $kgq WHEN NOT < $khn 1
+SET kht / $kgw 3 WHEN NOT < $khf 9
+LAYER site 30
+SET kac + MAX + 23 38 MAX $kab $kaa + + -6 $kaa % $kab 6
+SET kad MIN $kab $kac WHEN = % $kac 2 1
+SET kai % 27 7 WHEN NOT < $kaf 6
+SEAL kaj
+SET kak IF < $kae 14 5 $kae WHEN = % $kab 2 1
+UNSET kao WHEN = % $kad 3 0
+SET kas / + $kac 38 4
+SET kav MIN $kaf -8
+SEAL kax
+SET kaz - $kak $kam
+SET kba MAX MIN 33 $kad + $kaa $kan
+SET kba + / $kac 5 + $kay 17
+UNSET kbc WHEN < $kam 20
+SET kbc MAX $kaf $kav
+SET kbd MIN MIN MIN $kac $kar + $kab 14 + + $kbc $kba - $kav $kam WHEN NOT < $kak 15
+SET kbf * $kad 4
+SET kbn % - $kay $kbh 7
+SET kbo / $kbi 3
+UNSET kbs WHEN < $kat 29
+UNSET kbx
+SET kca + * MAX $kbx $kbb 4 MAX - 5 $kbd MIN 28 $kbq
+SET kcc % 14 7 WHEN < $kbo 16
+SET kce + - $kbv $kbl + $kbu $kbf
+SET kce 23
+SET kcg + + IF < $kbo $kcb 23 26 / $kca 5 MAX + $kbq -5 MAX 1 $kbt
+SET kci * 21 3 WHEN NOT < $kbo 10
+SET kcl * - 22 $kbs 3
+SET kcs + $kbq $kbu
+SET kcu MAX $kbs 23 WHEN < $kcc 1
+SET kcw + + + $kbt $kcs / -9 3 + + -5 3 + 11 -8
+UNSET kda
+SET kdd + IF < $kch $kcg 34 $kcq MIN -5 $kch
+SET kdh * % MIN $kcw $kcj 6 3 WHEN = % $kco 2 0
+SET kdi + % $kcz 9 / 4 4 WHEN < $kda 7
+UNSET kdk
+SET kdq MAX + -5 $kct / $kcq 4 WHEN = % $kcs 4 0
+SET kdu - $kdj $kdg WHEN NOT < $kcx 14
+UNSET kdv
+SET kdv $kcx
+SET kdy / - $kdm $kdo 2 WHEN < $kdv 15
+SET kdy MAX MAX 12 $kdc * 12 2
+SET keb + MAX - -7 8 IF < $kdt $kdr $kdb 3 MAX + $kdc $kdi MIN -2 15 WHEN = % $kdy 3 0
+SET kec % / MAX $kcy $kcy 5 3
+SET kec * + $kdr 40 4
+SET ked - 9 $kdr
+SET ked / 39 4
+SET kee IF < IF < % $kde 10 + $kdc $keb IF < $kdg $keb $kdm 6 + $kdu $kds IF < + 39 37 + 12 $kdg + $kec $kdd + $kdd $kdt / + 19 $kdb 2 + MIN $kdl $kec + $kdt $kdb
+SET kef * % % $kee 9 3 2 WHEN < $kdz -2
+SET kei MAX / 22 4 - $kdk $keb WHEN NOT < $kdq 7
+SET kek MIN $kdv 24 WHEN = % $kdj 2 0
+SET ken MIN + 20 $kdz / $kee 4 WHEN = % $kdo 3 1
+SET kes - IF < - $kdr 20 MIN 0 $kec + $keh $kem * 39 2 IF < MAX $ked $kdz + $keo $keh + $keh 40 % $kdu 7 WHEN < $ked 20
+SET keu % + $keh $kep 7
+SET keu / % $kep 6 3
+SET kex * MIN + -6 9 MAX 5 $kec 4
+SET key IF < * % $kev 7 4 * - $keq $kei 2 + - 34 $ket IF < $ken 28 $kdy $keb + - $keh $ket - $kdu $kex WHEN NOT < $keg 14
+SET kfc + $kev $keg WHEN < $kec 8
+UNSET kfg WHEN < $kff 19
+SET kfi + IF < $kfb $ken 21 $kew + 31 $kfd
+SET kfj + $kfa $kff
+SET kfn MIN $kfc $keq WHEN < $keq 0
+SET kfn $ker
+SET kfq * + 7 26 2
+SET kfr + + 25 $kfq + $kfo $key
+SEAL kfs
+SET kft + - / 33 2 * 6 3 * / 13 5 3 WHEN < $kfc 15
+SET kfv + / $kfb 3 MAX $kfl 28 WHEN = % $kfu 2 0
+SET kfz + MIN $kfq 21 - $kfx $kfi WHEN < $kfh 6
+SET kgc * 36 3
+SET kgi * $kfi 3
+SET kgk * MAX $kfj $kgi 3 WHEN NOT < $kgi 9
+SET kgn MAX MAX MIN 26 $kfu * $kgl 2 MAX + $kfv 15 * $kgi 4 WHEN = % $kfm 4 1
+SET kgo MAX - $kfz $kfw + $kgk 34 WHEN = % $kfv 3 1
+UNSET kgt WHEN < $kfr 22
+SEAL kgw
+SET kgx IF < + + $kgf 40 IF < $kgo 38 -1 6 * - $kft -7 3 + + 34 $kgh MAX 16 21 - - $kgq -7 MAX $kgn $kgw
+SET kgx / $kgu 3
+SET kgz % -6 5
+SET kha IF < 40 $kgc $kgm $kgg WHEN < $kgk 12
+SET khb IF < MAX $kgi $kgs / 4 5 / $kga 5 MAX $kfx $kha WHEN < $kgr 4
+SET khd - $kgr $kgq WHEN < $khc 12
+SET khg - IF < MIN 1 $kgh * $kgh 2 IF < -7 $kgu $khc $kgn - $kgl $kgi - / $kgv 2 IF < $kgm $kgf $kgz $kgt WHEN NOT < $khc 1
+SET khh + / $kgv 4 MAX $kgi $kgs
+SET khk MIN - + $kgw $khd + -8 $kgy - MAX $kgz 24 MIN $khf 9 WHEN NOT < $kgh 12
+SET khm MAX % $kgi 9 + 13 $kgp
+SET khm % $kgz 4
+UNSET kho
+SET khq + / $kgt 3 IF < -8 $khd 7 -1
+SET khs + $kgo -8
+SET khv * - 21 $kho 4
+SET khx * IF < MAX 8 $khd + $khq $khl - $kgv 40 MAX $khs $khc 4 WHEN < $khd 1
+SET khx + - 13 13 - $kha $khe
+SET khy - MIN IF < $khn 27 $khw $kht IF < $kha $kha $khh $khm + % $kgx 5 MAX -6 40
+LAYER region 20
+SET kac / $kaa 3
+SET kah - 30 $kac WHEN < $kaa 0
+SET kai * -5 3
+SET kaj % % + $kah 30 9 8
+SET kaj + + $kab $kac MAX $kad $kac
+SET kak MIN 5 $kad
+SET kan * $kai 4 WHEN NOT < $kaa 16
+UNSET kao
+UNSET kar WHEN < $kah 10
+SET kas % $kai 3 WHEN NOT < $kar 8
+SET kav + MAX - 32 $kae + $kad $kar + + 22 $kai MIN $kao $kah
+SET kaw MAX $kac $kaq WHEN = % $kal 2 1
+SEAL kay
+SET kaz + + $kac $kac IF < $kac $kas 19 $kaq
+SET kba + - * 19 3 + $kav $kam / MIN $kad 33 3
+SET kba $kaw
+SET kbg + $kac $kaz WHEN = % $kaz 4 1
+SET kbg + $kar $kat
+SET kbm + % -7 8 / $kbj 2
+SET kbo - $kao $kaz
+SET kbp + MAX MAX $kbl $kbm % 7 9 + + $kbb $kbd MIN -1 $kao
+SET kbt MAX % - $kas $kau 4 - % $kav 4 MAX $kbn $kbl WHEN = % $kay 3 1
+SEAL kbx
+SET kcd / IF < 5 $kbf $kbe $kca 3
+SET kce / + + -2 34 + $kbt -3 3 WHEN = % $kbd 2 0
+SET kci + + $kbe $kbs + $kcg $kbi WHEN = % $kbm 3 1
+SET kcj + + -5 19 + $kbt 3
+SET kcj / + $kci $kbv 5
+SET kco % - MIN -6 7 MAX $kbq 34 7 WHEN = % $kbo 3 0
+SET kco / 38 4
+SEAL kcp
+SET kcp $kbo
+SET kcq + MAX + -3 21 - $kco $kbp + + 35 8 IF < $kco $kbp $kcm $kbt
+SET kcr + IF < $kcn 22 $kcg $kci MAX $kbx $kcc
+SET kcs MIN -6 $kbo WHEN NOT < $kbw 8
+SET kcs IF < $kcl $kbr $kby -7
+SET kct - + MIN $kcn $kbz MAX $kbt $kbr - MAX $kcn $kcd * $kch 4
+SET kcv - % + $kcf $kbu 4 + + $kcr 39 + $kcu 6
+SET kcw MAX $kcc $kcp WHEN < $kcb 1
+SET kcw IF < $kbu $kcv $kcv $kck
+SET kcx IF < $kcw $kcr $kbu $kcb WHEN = % $kbv 3 1
+SET kcy + MIN / $kby 5 MAX $kbu $kcd MAX MIN $kbz -4 IF < 31 $kcn $kcq 25 WHEN = % $kbu 3 1
+SET kcz - - $kcw 37 MIN $kcf $kct WHEN = % $kcp 3 0
+SET kcz / $kcl 3
+SET kdb * + $kbz $kci 4
+SET kdd * IF < + 27 $kdc + $kcq $kcq MAX 23 $kcs * $kck 3 2 WHEN < $kcx 9
+SET kdd $kct
+SET kdh - $kdd $kcf WHEN < $kcp 23
+SET kdi MIN $kck -6 WHEN = % $kdg 3 1
+SET kdl MIN MIN $kdb $kcu MAX 37 $kcl
+SET kdl + + $kcu $kcv IF < $kck $kcw $kcz $kdf
+SET kdq + - - $kdg $kcr - $kdo $kcm IF < - $kco $kdn / $kcr 4 IF < -4 $kdp $kcq $kdh + 32 -9
+SET kdq + $kdb $kco
+SET kds + + $kdq -2 % $kco 8
+SET kdu + $kcy $kdb WHEN < $kdj 2
+SET kdu $kcv
+SET kdx MIN / MIN $kcy $kcv 3 % - $kdv $kdf 4
+SET kdx + $kcw 18
+SET kdy + MAX $kdc $kdq IF < $kdh $kdx $kcx $kdi WHEN < $kdx 29
+SET kdz MIN MIN + $kdp 4 + $kdd $kde MIN + $kcz $kdq + $kds $kdp
+SET kec + $kdr -4 WHEN = % $kdp 4 1
+SET kej % IF < / 9 5 MIN 5 $keh IF < $kec $kdl $kee 4 / $kdf 4 7
+SET kek % + - -1 $kdo MAX $kdw $kdg 10 WHEN = % $kdy 3 0
+SET kel + 1 40 WHEN = % $kdy 2 0
+SET keo + MAX 2 $kdx IF < $kdx $kds $kdm $kej WHEN < $ked 12
+SET kep MAX / * $kel 4 2 - * 10 4 MAX $kef $kdn
+SET kep + + $kdt $kdz - 17 15
+SET keu - $ket $kdw WHEN = % $kdw 4 1
+SET keu 34
+SET kew - IF < $kej $keq 25 $ken - $kep $ken WHEN = % $keg 3 0
+SET kez * - $ked 13 3 WHEN = % $ker 3 0
+SET kez 31
+UNSET kfb WHEN < $keb 2
+UNSET kfe WHEN NOT < $kes 15
+SET kff + % $ker 5 MIN $kfe $kek WHEN < $kfe 7
+SET kfg IF < - + $keo $kec + $kfe $kel MIN MAX $kei 16 + $kez $keu + IF < 24 7 $kes $keo + $kfe $keh IF < IF < 35 $ked $ked $keh % $kfc 4 % 3 10 - $keq $keg WHEN < $kek 19
+SET kfk + $kew -8 WHEN < $kez 9
+SET kfn IF < + MIN $kep 11 - $kem $ket / / $keo 2 3 IF < IF < $kev 26 $kev -3 * $kep 3 / $ker 4 / 15 5 + - $kfh 31 IF < $kel $kfc $kfc 29 WHEN < $keq 26
+SET kfp * $kfi 4
+SET kfp % + 32 $kfi 6
+SET kfr - $kev 10 WHEN = % $kex 3 0
+SET kfs + / $kex 5 IF < $kfp $kez 16 $kes WHEN < $kfb 20
+SEAL kfu
+SET kfy + - % $kfa 4 - 25 18 IF < + $kez $kfc + 18 $kfe IF < $kft 37 $kfk $kfd % 40 11 WHEN < $kfj 17
+SET kga + + * $kfc 4 % 6 5 IF < MIN $kfo $kfl % $kfa 9 + $kff 16 / 30 2 WHEN < $kfc 25
+SET kga + + $kfi $kfr + $kfp 1
+SET kgd + + % $kfi 9 IF < -1 22 $kfk $kfq - + $kfy $kgc - $kfc $kfe
+SET kgh MIN $kge $kfn
+SET kgk + + $kfq $kfo MAX $kgd $kge
+UNSET kgm WHEN = % $kgj 3 0
+SET kgq % + * $kgo 3 MAX $kfo 9 3 WHEN < $kgi 9
+UNSET kgs
+UNSET kgt WHEN < $kft 3
+SET kgw * + IF < $kgv $kgg $kft $kgd MIN $kgo $kgg 4
+UNSET kgx WHEN < $kga 23
+SET kgz MAX MIN $kgo $kgf / $kgr 4
+SET kgz - $kgv 21
+SET kha / * + 34 $kgb 3 4
+SEAL khb
+SET khc / 25 3
+SET khc $kgc
+SET khd MAX MIN $kgl 22 - $kga $kgo WHEN < $kgg 2
+SET khg MAX % - 4 $kgg 3 * + $kgg $khf 3
+SET khj - 4 -8 WHEN NOT < $kgi 1
+SET khk + MIN $kgi 30 MIN $kgg 17 WHEN NOT < $khh 18
+SET khk % + 1 $kgy 5
+SET khm % * $kgv 2 9
+SET khm + + $khg $kgj - 39 $khj
+UNSET kho WHEN < $khj 28
+SET khr + 21 $kgu WHEN < $khl 2
+SET kht + IF < + $kgp 15 % $khb 7 MIN $khs $khj - $khi $khq + / 32 5 - 30 36 WHEN < $khr 14
+SET khu MIN - $kgy -6 + $kgz $kgz WHEN NOT < $kgw 2
+SET khv * MIN IF < 26 26 $khn 33 / $kht 5 2 WHEN < $khq 13
+SET khy - - MIN $kgz -8 % $khx 9 - * $khn 4 MIN $khq $kgu
+SET khz / $kha 3 WHEN = % $kgw 2 0
+SET kib * % MAX 6 $khp 3 4 WHEN NOT < $khv 11
+SET kic % + + 11 $khf IF < $khb 2 $khe -3 10 WHEN < $khf 19
+SET kid MAX / 7 3 - $khy 37
+SET kif / 6 4 WHEN = % $khh 2 0
+SEAL kig
+UNSET kij WHEN = % $khm 4 0
+SEAL kin
+SET kin 17
+SET kip * - - $kij $kik - $khl $kie 4 WHEN < $kio 5
+SET kiq MIN - $khw 26 + -3 16 WHEN < $kif 26
+UNSET kit
+SET kiu MIN + MIN 38 $kic * 32 4 IF < MAX $kig $kid MAX $kin $kim + $khy 22 + 33 $khx
+SET kiv * $kil 4 WHEN < $khy 16
+SET kix IF < $kia $kht $kil $kiw WHEN = % $kiv 4 0
+SET kiz / $kic 3 WHEN < $kid -2
+UNSET kja WHEN NOT < $kie 11
+SET kjd MIN $kin $khz WHEN NOT < $kio 18
+SET kjf * * $kjd 4 3
+SET kjg IF < MIN $kie $kio + $kic $kic + $kiw -3 - $kil 24
+SET kjh + IF < + $kid $kif * 7 2 + $kik 1 + $kif $kix IF < / $kjg 2 + $kiw $kig MAX $kjd $kih MAX $kit $kik
+SET kji * * MAX $kjb $kie 3 2
+SET kji * + $kjg -6 4
+SET kjj MIN / + 23 $kip 2 / + $kif $kik 4
+SET kjk - $kjf $kij WHEN < $kji 22
+SET kjl * + + 9 27 + 24 17 2
+UNSET kjo
+SET kjq MAX / $kiw 4 + -5 $kjh
+SET kjr % - $kjg $kiu 9
+SET kjr MAX $kjn -2
+SET kjy % 4 11
+SET kkc - IF < % 0 5 % 27 10 + $kkb $kjk / $kjp 3 / * $kja 4 5 WHEN < $kjo 4
+SET kkc + + 8 $kjg MAX $kjm $kjx
+SET kkd MIN MIN MIN 0 $kjp MIN 17 $kjm MAX / $kjd 5 * $kjg 2 WHEN = % $kjk 4 1
+SET kkd $kjm
+SEAL kke
+SET kkg * - + 28 $kjf / $kjz 5 4 WHEN = % $kjv 2 0
+SET kkg - 32 $kjk
+SET kki MAX $kjr $kjo
+SET kkq MIN - + $kkj $kjx MIN 18 $kkj - % 3 10 MAX $kjq $kke WHEN < $kjs 19
+SET kkt MAX - $kjw $kkk + -5 7 WHEN < $kjr 25
+SET kkw IF < $kkf $kkj $kkr $kjx
+SET kkw - 37 $kkj
+SET kla IF < * * $kko 3 4 IF < + $kjw 24 IF < 36 40 $kky -1 * 25 3 MAX 34 $kjy IF < * $kkd 3 MAX $kkw $kjy + -6 $kkn / $kjy 4 + + $kky $kkc + $kka $kkd WHEN < $kkq 14
+SEAL klb
+UNSET klc
+SET kle + 20 $kky WHEN NOT < $kkc 8
+SET klf + $kkc $kkp WHEN NOT < $kkr 2
+SET kll - + MIN $kkn 32 / $kko 4 + / $kli 4 * 14 2 WHEN < $kkv 0
+SET kll 0
+SET klm IF < $kkv 35 $kla $kld WHEN < $kle 20
+SET kln * 28 3 WHEN < $kkz 22
+SET klo * 2 3 WHEN = % $kkw 2 0
+SEAL klr
+SET klu * + -6 -8 2 WHEN = % $kll 3 0
+UNSET klx WHEN < $kls 30
+SET kmb + MAX / $klo 2 + -4 $klq - + 26 $kli IF < $kma $kkz $klj $kld
+SET kmb + + $klw $klo IF < -5 $klr 25 $klf
+SET kmh + - 9 -5 IF < $klr $klh 3 $kmb WHEN NOT < $kma 15
+UNSET kmn
+SET kmr * / - $kln -5 2 2 WHEN = % $kme 3 0
+SET kms / IF < - $kmc 29 % $kmr 3 / 29 2 MIN $kmm $kmi 3 WHEN < $kmh 21
+SET kms $klw
+SET kna - MAX -5 $kmh + $kmw 28
+SET knc MAX MAX MAX 39 $kmt + $kmz $kma % MAX $kmn $kly 11
+UNSET knd
+SET knf * + $kmw $kne 2 WHEN = % $kmv 2 1
+SET knj MIN IF < - $kms $kmu - 28 $knb MAX $knh 22 - 8 1 % + -2 $kne 11
+SET knk + * 38 2 - $kna $kmo
+SET knl + 40 25 WHEN NOT < $kmq 0
+SET knn MAX + 12 $kmp + $knc 38 WHEN < $knm 5
+UNSET kno
+SET knv MAX MIN $kmr 4 * $knn 4
+SET koa / $knx 4
+SET koc / 24 5
+SET koe / - $kns $knq 2
+SET koh MAX + 24 0 + 7 35
+SET koh - + $koe 10 + $kof $knv
+SET kok MIN $knv $kod
+SET kop IF < + $knx $koa IF < 40 $kok -2 30 - $koj $knl MAX $koe $knv WHEN < $knw 30
+SET koq MIN 19 $knv WHEN = % $knn 3 1
+SET koy IF < + * $knx 4 + 15 $kop IF < * $kov 2 / 13 5 - 37 $kou + $kny $kod + MIN $kon $koj % $knv 8 / - $knw $koi 5
+SET koz MIN MIN * $kos 4 / 18 3 + + 28 $knx + $knx 15 WHEN < $kom -1
+SET koz 38
+SET kpa + $koo 0
+SET kpc IF < - $kod 16 / $kny 2 / $kox 4 + $koj $kos
+SET kpf MAX + $koy $kog MIN $koz $koe
+SET kpj + 36 $kph WHEN NOT < $kpa 13
+SET kpj + / $koi 4 * $kor 2
+LAYER user 20
+SET kaa + 29 16
+SET kaa - 17 5
+SET kad MAX MAX + 32 22 - $kaa $kac / MIN 26 -6 5 WHEN NOT < $kac 10
+UNSET kai
+SET kam + $kai -1 WHEN < $kag 15
+SET kar + MIN 30 $kag IF < $kai $kae $kac 33 WHEN = % $kam 4 1
+SET kau MAX 22 $kaf WHEN = % $kao 3 1
+SET kau - 38 -8
+SEAL kbd
+SET kbn IF < MIN MAX 27 40 * $kbe 3 MAX MIN $kav $kaw + $kbi $kaq * MIN 1 $kbk 3 + - $kaz 6 MAX 7 $kax
+SET kbn - + $kaj $kaj + $kbd $kaz
+UNSET kbo WHEN < $kav 14
+SET kbo $kba
+SET kbq IF < $kap 11 $kbo $kap
+SET kbw MIN MAX - 16 $kbs - -8 $kax - + -2 $kat / 36 2 WHEN < $kbj 11
+SET kbx * $kbg 2
+SET kby IF < $kbn $kbs $kbr 27
+SET kby + MAX $kbd $kaz + $kbx $kba
+SET kca + 33 $kaz
+SET kcc IF < / $kbn 2 + -5 $kca - 0 0 - -7 $kby WHEN NOT < $kbg 12
+SET kce % $kbr 11 WHEN < $kbn 5
+SET kce / + 4 $kbp 5
+SET kcq / 4 3 WHEN < $kcg 3
+SET kcs MIN % MAX $kbq $kcm 3 - % $kbq 4 MIN $kcn $kbw WHEN NOT < $kbx 17
+SET kcu MAX MAX + 15 $kby + $kck 14 IF < MAX 21 35 MAX -2 $kbv % -7 7 - $kbw $kbw
+SET kcy / - -2 15 4
+SET kdc MIN - * $kbz 3 MIN $kcm $kcn + + $kcq $kda - $kcx -6
+SET kdd MIN - $kdb $kcn * $kck 4 WHEN NOT < $kcn 4
+SET kdh + IF < 33 $kcv 8 40 + $kdc $kcy
+SEAL kdk
+SET kdk MAX 29 $kdh
+SET kdm IF < $kco $kcl $kcz $kcv
+UNSET kds WHEN < $kcv -1
+SET kdu MAX 16 $kdl
+SET kdv - MIN 25 $kcs + 11 $kdh WHEN = % $kdu 3 1
+SEAL kdy
+SET kdy MIN $kdv $kcu
+SET keb + IF < - $kdm $kcx IF < $kdf 25 12 36 MAX $kdb 21 IF < 30 $kdd $kdp $kdc - MAX 15 6 / $kdb 3 WHEN < $kdg 12
+SET ked IF < + MIN $kdd $kdi + 36 $kec * / 12 5 2 IF < MIN $kdw $kda - $kdo $kdo * $kdq 2 + $kdx $kdv + + $kdm $kdp * $kdd 4 WHEN = % $kdn 2 0
+SET ked MIN * $kdg 2 MAX 19 $kdx
+SET kef + $kdc 40
+SET kei MAX $kea $kdw
+SET kei $kdy
+SET kem IF < $kdn 4 $keg $kdi
+UNSET ken
+SET keo - 26 $kdq WHEN NOT < $kdq 19
+SEAL kes
+SET ket / 19 2 WHEN < $kec 20
+SET ket 2
+SET kfa % - IF < -4 $kea $keb $ket MAX $keb $kev 3 WHEN < $kee 25
+SET kfc MIN % $kew 6 - $kea -4 WHEN < $kef 16
+SET kfe * 22 2
+SET kfh - $ket $kev
+SEAL kfi
+SET kfi - IF < $kex $ken $kex 27 MIN $kef $kem
+SET kfr % $ken 11
+UNSET kfx
+SET kfx MIN MAX $kfp $kew * 34 2
+SET kga MIN % $kfd 10 - $kfm $kex WHEN < $kfd 19
+SET kga MAX + 13 $kfp - $kfs $kfn
+SET kgb % IF < $kfq $kfb $kfs $kfi 7 WHEN < $kfs 2
+SET kgc MAX + $kfs $kfk IF < $kfb $kfs 4 $kfc
+SET kge MAX $kfm $kfz
+SET kge 8
+SET kgf + 38 0 WHEN = % $kfb 4 0
+SET kgn + $kgi $kfn WHEN < $kgc -2
+SET kgt IF < * - $kfv $kgh 3 - * $kga 2 * $kfu 4 * + $kfx $kge 4 IF < - $kfx 1 MIN -7 $kgr - $kfq $kgb IF < $kfp 6 $kgr $kgj WHEN < $kfw 9
+SET kgu MAX IF < + -6 $kgp MAX $kgo $kgj MIN $kgp $kfv * $kgg 4 MIN MIN -9 $kgm - $kge 22
+SET kgw + MIN $kgi $kgo / $kgf 5
+SET kgx - IF < * $kgh 2 + 31 33 - $kfx $kgd IF < $kgg $kgo $kfy $kgb / MAX $kgg -9 5 WHEN = % $kgs 4 1
+SET khb + MAX + 27 $kfy + $kgj $kgm IF < * $kgd 2 + 33 $kgy / $kgw 2 IF < $kgv $kgk $kgt -5
+SET khc MAX MAX $kgh 17 - $kgi 12
+SET khf + IF < 16 $kgm $kgp $kgt - $kgr 34
+SET khj IF < $khe $kgm $kgq 35 WHEN < $khg -2
+SET khk + + $kgs 8 + $kgl $kgm
+SET khn MAX / MAX 38 $kgt 4 % + 12 $kgr 8
+SET khr MIN $kgv $khc WHEN NOT < $khe 9
+SET khs * $kgs 2 WHEN < $khb 9
+SET kht MAX 6 -9
+SET kht + MIN $khf 40 MAX $khg $khs
+SET khy / $khs 5 WHEN = % $kgu 3 0
+SET kib MAX + + $khv $khx MAX $khy $kgy * MIN $khq $khg 2
+SET kic MAX MAX 10 $khq % $khj 4
+SEAL kif
+UNSET kil
+SET kit MAX MAX * $khp 3 MAX $khv 11 IF < * $kig 3 + $khq $khp / 3 2 + $khs -1
+UNSET kiv WHEN < $khy 7
+SET kiv * $khs 4
+SET kiy MAX % / $kiu 5 8 + / -6 2 * $khy 2 WHEN = % $kip 4 0
+UNSET kja
+SET kja + $kir $kib
+SET kjb + 12 30 WHEN NOT < $kif 8
+SET kjc * $khz 4
+SET kjh * $kiv 2
+UNSET kjl
+SET kjn IF < $kio 19 $kjm $kjj
+SET kjp MAX 13 $kjj
+SET kjq * $kiw 2 WHEN = % $kja 4 1
+UNSET kjt
+SET kjt MIN $kja $kir
+SET kjv - $kjr 25
+UNSET kkb WHEN < $kjn 7
+SET kke * $kjm 4 WHEN < $kjq 15
+SET kke + 40 $kjg
+SET kki MIN IF < % $kji 7 % $kke 11 + -9 $kjh MIN $kjh $kjr MAX + 5 $kka IF < 29 17 -2 $kkh
+SET kkj - + IF < $kjl $kjx -9 $kkg - $kjf 8 MAX * -8 3 MIN $kjp $kkg
+SET kkj - $kjw $kka
+SEAL kkl
+SET kkm MIN $kjz $kjp
+UNSET kkn
+SET kko + + - $kke $kjw * $kkc 3 + * $kkh 3 MIN $kkj 6
+SET kkp % IF < - 6 40 + 40 $kjs IF < $kjv 25 22 $kjw MAX $kka 23 9 WHEN < $kjo 2
+SET kkp + + $kkk $kkk + 25 $kjy
+SET kkq + % $kkh 3 + 8 17
+SET kkq % + $kjn 19 3
+SET kkr - 28 $kke WHEN NOT < $kkg 14
+SET kkr - 37 $kjx
+SET kks + / + $kke $kkl 2 IF < + 32 -1 MAX $kkg $kjo MIN $kjq $kkg MIN $kjv 33 WHEN < $kjp 27
+UNSET kkt
+SET kkt 29
+SET kkz * $kkr 2
+SET kla + 39 $kke
+SET kld * $kki 4 WHEN = % $kkj 2 0
+SET kld % % $kky 9 7
+SET klf MIN $kkw $kkr
+SET klh + IF < + 37 3 MAX 5 $klc - $klg $kkw IF < $kld $klc $kkf $kki + MAX $kkj $kkr % $kke 10 WHEN = % $kkk 3 0
+SET kli MIN MAX $kkp $klc + $klg $kkv
+SET kll + MAX IF < $kkj $kkm 19 39 - 18 $klg * + $kky 5 2 WHEN < $kkp 3
+UNSET kln
+SET klw + -3 $klh WHEN < $klr 23
+SET kma MIN IF < + $klg 15 IF < $kli 25 $klk $klc * $klt 3 + $klx $klj * - 3 $kla 3
+SET kmb + - $kkz -7 % 4 9
+SET kmc + + + 18 5 + $kkz $klf / IF < $klc $klz $kle $klj 3
+SET kmj / $klj 3
+SET kmk - + + $kmf $klv IF < $kli $kma $klu $kmg + - $klt $kly IF < $klu $kmh $kmj $kly
+SET kmk - + $klh $klu * $kme 2
+SET kmo - $kls $kls
+SET kms MIN MIN IF < 29 11 $kmm $kmm MAX $kme -1 / MAX 35 $kmq 4
+SET kmv + + 20 $kmf MIN 0 18 WHEN = % $kmi 4 0
+UNSET kmy WHEN < $kmi 13
+SET knb - MIN 32 $kmb - 38 $kmf
+SET knj MIN MAX + $kmq $kmz * 23 3 / - 17 $kmt 4
+SET kno * 29 4
+SET kno MAX * $kni 4 + $knh $kmm
+UNSET kny
+SET koc IF < $kny $kne 8 $knm
+SET kod + 19 $kng
+SET koj MIN - 21 $koh MIN $knv $knh
+SET koj + - 21 -7 + $koi $kns
+UNSET kop
+SET kor + % $knw 5 MAX $koo $knq
+SET kov + $kol $kns WHEN < $knw 9
+SET kov + + 6 $koa % $koe 4
+SET kox IF < IF < $kor $knt $kou 26 - $kom $kom + $kon $knu / 6 3
+SET koz + % + $knz $kox 8 / + 3 24 5 WHEN < $koy 20
+SET koz $kof
+SET kpc / - 11 $kpb 3 WHEN = % $koa 4 1
+SET kpf - % $koj 4 - -4 $kow WHEN < $kpc 21
+SET kpi * MIN + $kow $kof * $kpg 2 3 WHEN = % $kpg 3 1
+SET kpi + $kpg $kok
+LAYER override 10
+SET kaf IF < $kaa $kad 9 $kaa WHEN = % $kad 4 0
+SEAL kan
+SET kau + MAX -5 $kaf MAX $kah $kah WHEN = % $kam 3 0
+SET kax - $kai $kao
+SET kbb + IF < 2 $kaj $kay 30 - $kah 22 WHEN NOT < $kap 9
+SET kbb % $kan 11
+SET kbc + $kab $kad WHEN < $kab 10
+SET kbd - % -9 5 / $kao 2 WHEN NOT < $kal 12
+SET kbk + MAX $kbb $kbi * $kah 4 WHEN NOT < $kaw 9
+SET kbk + + $kbi $kal MIN $kan $kbj
+SET kbl + - MIN $kbj $kbd MIN $kaz $kay * MAX $kas $kan 3 WHEN < $kak 10
+SET kbl * - 36 $kao 2
+SEAL kch
+SET kch * / $kcg 2 3
+SET kcj MAX MAX / $kcd 4 + $kbz $kbi * * $kbq 4 3 WHEN < $kbr 20
+SET kdl - MAX - $kda $kcl + $kco $kcj MIN + -9 $kcr + $kck $kcr WHEN < $kct 30
+SET kdl + % $kdk 10 + -4 -9
+SET kdz - - MAX $kdi $kdv - $kcw $kda + / 17 2 * $kcv 3 WHEN < $kdm 24
+SET ked IF < $kdo 16 $kdz 12
+SET kef + % 19 11 + $kdw 38
+SET keo + - MAX $kdo $kdx / $ked 2 * - $kei $kds 3
+SET kfd + 34 $kep WHEN NOT < $kex 15
+SET kff MIN + * $key 2 IF < $ked $kec $kel 13 * / -3 3 2
+SET kfi + - MIN $kej $keh - -6 36 - % $kee 8 MIN $keo -8
+SET kfk + IF < $keq -6 $ken $keq + $ker $kel
+SET kfn IF < MIN MIN $keo 39 % 11 9 * * $kfg 4 2 + - 30 $kfa - $kff -5 MIN + $ket 7 MIN $kfa $kew
+SET kfs / MIN -7 $kfb 2
+SET kfy / $kex 3
+SET kfy -8
+UNSET kgd
+SET kgd IF < $kfq 21 $kfw $kfi
+SET kgi + MIN + $kgg $kge + $kgf $kfw / / $kfq 2 2 WHEN NOT < $kfv 19
+SET kgo % MIN MIN 7 $kfo MIN $kgh $kgb 10 WHEN = % $kge 4 1
+UNSET kgr
+LAYER override 10
+SET khg MIN + + $kgf $kgp IF < 23 $kgk $kgt $khe + - $kgr $kgh IF < 39 $khb -4 $khc
+SET khm MIN $khd $kgk
+SET kif + 40 $khk
+SET kji + 39 $kii WHEN < $kiq 1
+SET kjn - 9 $kiw WHEN NOT < $kjg 6
+UNSET kjq
+SET kjt + IF < * $kjo 4 * $kiv 2 / $kjg 4 MIN $kjn $kiq MIN / $kjo 5 - $kiz -2
+SET kkh MIN * + 28 $kjk 2 % * 27 3 11 WHEN < $kjk 0
+UNSET kki WHEN NOT < $kju 3
+SET kkj - $kjg -4
+SET kkl IF < - 20 1 - $kkg $kjp + $kkk 38 MIN -3 $kjn
+SET kkp - 16 17
+UNSET kmf WHEN < $klm 25
+SET kmf % $kmd 8
+SET kmj % $klf 4 WHEN = % $klw 3 0
+SET kmp MAX MIN % $klu 8 - 2 $kmb % MAX 27 10 11
+SET kmv + IF < $klv $kmj $kma $kmr + 35 40 WHEN < $kly 8
+SEAL kmx
+SET kmx $klw
+SEAL kmy
+SET kmz / / MAX $kmg -7 3 2
+SET kna + + IF < $kme $kmx $kmb 35 MIN $kmx 35 IF < MAX $kmf $kmm / -2 4 - $kma $kmh MAX -9 15 WHEN < $klw 16
+SET knc MAX $kmt $kmv
+UNSET kns
+SET knt + + $kmp $kna * 34 4
+SET knv * MIN - 6 $kmx + $knf $kmx 2
+SET kof MAX + $kni $kob + $knh 25
+SET koo - + + $koc $kob + $knt -5 + % $knt 4 MAX $kno $koe
+UNSET koq
+SET kot + / MAX $kom $knq 5 % MAX $kog $koa 5 WHEN = % $kod 4 0
+SET kot IF < 39 $koa $kob $koa
+SET kpc - + + $kom 35 % $kox 10 % + $kod $koz 10 WHEN = % $kot 3 0
+SEAL kpf
+LAYER team 30
+SET khw IF < % % $kgv 9 4 + MIN $khv $khn IF < $khv $kgs $khl $kgz + MIN 36 40 * $khj 2 + MAX $kgy 11 - $khb 27
+SET khw % * -7 2 11
+UNSET khx
+SET khy IF < $kha 36 $khv $khj WHEN < $khl 17
+SET khy $kgy
+SET khz - 23 $kht
+UNSET kia
+SET kib * % 2 5 3
+UNSET kic WHEN NOT < $khz 13
+SET kid + + - $khb $khb - $khl -4 IF < + $khr -1 + $khx $kho - 3 36 + $kic $khk WHEN = % $khs 4 1
+SET kif IF < % $kic 10 MAX $khs $khe MIN 37 -3 - $khw $khg
+SET kif * - $khk 27 3
+SEAL kii
+SET kij MIN * 37 2 + $khw $kig
+SET kij MIN - $khz $kho + 7 $khf
+SET kik + $kho -4
+SET kil + IF < IF < $kia $khv $khv 21 + $khr $khi - $khn $khq IF < $kij $khj $khl $khs + + $kie $kie * $khp 3 WHEN = % $kho 2 0
+SET kil 38
+UNSET kin WHEN NOT < $khs 9
+SET kip * % $kho 4 3
+SET kiq IF < $khn 40 $khw $khp WHEN < $kia 15
+SET kiq MIN MIN $kht $kif - $kih $khn
+UNSET kiu WHEN = % $khz 2 1
+SET kix - 6 $khv WHEN < $kil 30
+SET kja - $kig $khz
+SET kjh * % $kip 5 2 WHEN < $kio 21
+SET kji + * MAX $kij -6 2 * IF < $kjb $kil $kip $kjb 2 WHEN < $kie 2
+SET kji * $kio 2
+SET kjm MIN MAX 34 $kja MIN $kiw $kiy
+UNSET kjn
+SET kjn $kjj
+SET kju + $kjf $kiq
+SET kjv + $kjo $kjc WHEN = % $kju 3 1
+SET kjw - $kjl $kjn
+SET kjx MAX * MAX -5 5 2 - * $kjw 3 MIN 9 17 WHEN < $kjq 21
+SET kjy - + % $kjm 7 + $kjs $kjn + IF < $kja $kju 7 $kjx + 26 $kjt WHEN < $kjk 0
+SET kjz * 36 4
+SET kkg MAX $kji $kjn WHEN < $kjj 18
+SET kkh * + - $kkb $kjo + 20 $kjf 3 WHEN NOT < $kjs 14
+SET kki - IF < + $kjy $kjm * $kjv 2 * 37 3 IF < $kjz $kjm $kkc $kjl MIN + $kjm $kjy * $kka 2 WHEN = % $kkf 2 1
+SET kkj % * + 11 -9 3 5
+SET kkj IF < $kju $kjf $kkf $kjp
+UNSET kkk WHEN = % $kki 3 1
+SET kkl + IF < IF < 27 $kjt 7 26 IF < 9 $kkf $kjk $kkj * 19 4 MIN 22 $kkh IF < MIN $kjz $kkd + $kjq 33 - 19 25 - $kkj $kkh
+SEAL kkm
+SET kkm MAX - 40 $kkh * $kkd 2
+SET kkr / / $kjv 5 4 WHEN = % $kjp 3 1
+SET kkt * - $kjw 37 3 WHEN < $kkc 24
+SET kkt * - -1 16 2
+SET kkx + MAX $kkc -8 IF < 11 $kkj 32 $kkd WHEN = % $kju 4 0
+SET kla + + $kkp $kjy * $kkt 3
+SET kla IF < * 1 4 MIN $kks $kki % $kkg 7 + $kkj $kkn
+SET kln MIN + $klf -4 - 37 $kks
+SET klq IF < $kld $klj $klc 26 WHEN < $kkz -2
+SET klq 36
+SET klr - $kld $kkn
+SET kls + $klc 37 WHEN = % $kkz 2 0
+SET klt % IF < * $kkz 3 + $kku $kle - $kls -1 IF < $kld $klp 35 $klq 7
+SEAL klv
+SET klw MAX $klc $klk WHEN = % $klq 3 1
+SET kma - + MAX 30 $klc * -5 2 IF < - $klt $kly + $klh $klz / $kln 2 + 0 $klq WHEN < $klv 17
+SET kma + MAX 15 30 MIN $klr $kky
+SET kme - $klo $kma WHEN < $kle 7
+UNSET kmf
+SET kmk - + - 27 4 + $kli -1 MAX - $klr $klx - $klq $klk
+SET kml MAX + / $kls 2 * $kmc 3 MIN IF < 15 12 $kmc $klk * $klj 4 WHEN NOT < $klw 10
+SET kml - % $klr 4 % $klo 8
+SET kmv + * $kmf 3 - $kmd $kmi
+SET kmv 28
+SET kmw - * -2 2 + $kmi $kmd
+SET kne - % / $kmk 3 4 / + $kmo 25 5
+SET kni IF < $kmt $kmk $kmk 10 WHEN NOT < $knc 3
+SET knj + $kmh $knh WHEN NOT < $kna 16
+SET knm MIN - + $kmt $kmp + 8 $kmp / - $kmj $knc 3 WHEN NOT < $kmx 3
+SET knm + IF < $kmj 22 $kni $kmw / 33 5
+SET knn MIN * IF < -8 $kmu $kmk 0 3 MIN IF < -1 $knh $kml $knc + $kna 2 WHEN = % $kml 4 0
+SET kno IF < IF < -2 $kmz $knd $kng MIN $kmo $kmz - 37 $knh MAX $kmk $knm
+SET knt MIN $kmu 17 WHEN < $knp 15
+SET knu + - MIN $kmv 14 + $knn $knh IF < MIN $kng $knd - -5 $knq MAX 1 $kmu - 11 15 WHEN < $knl 9
+SEAL knw
+SET knx IF < + IF < $knc $kmv $knc -2 * $knr 4 % IF < 22 $kmx 35 32 8 * IF < 33 $knw 0 2 2 IF < + $kmy 25 - $knp $knp + $kmw $kni - $knk $knh
+SET koa - + MIN $kmz -4 + $knj 15 MIN + $knm -5 % $kmz 7
+SEAL kob
+SET koe + * % $knm 9 2 % MIN 5 $knl 6 WHEN < $knt -1
+SET kol MIN + $knm $kod % $knp 6
+SET kom IF < MIN * -6 4 * $koc 3 MIN + $knn $knt MAX $koi $knp MIN + 40 $knk MAX $kok $knj - % -8 9 + 31 $kno
+SET koo * MIN $knv 27 3 WHEN < $knq 17
+SET kor + / $knn 5 % $koe 8
+SET kou % IF < / $kos 3 * -7 4 MIN 35 $kog / $koe 3 8 WHEN < $koq 7
+SET kow - $knt $kog WHEN < $kol 12
+SET koy % IF < + $kob 33 IF < 37 $koe 32 -7 / 20 3 * $kod 3 4 WHEN < $kob 7
+SET koy $kop
+SET koz + MIN + $kny $koi - $koc $koc MAX MIN $knv $koj - $koe $knv WHEN NOT < $kon 8
+SET kpb - - $kov $koz + $kpa 27
+SET kpe MAX - MAX $koa -7 - $kpc 12 % MIN $kop $koq 3 WHEN < $kow 5
+SET kpf / MIN $kpe 19 3 WHEN = % $kow 4 0
+SET kpf $kos
+UNSET kpg
+SET kph * -8 4
+SET kpj + 26 -1 WHEN = % $koi 3 1
+LAYER base 50
+SET kkg + % + $kjh $kjp 4 + IF < $kka $kjk $kjh $kjh * $kjf 3
+SET kkh IF < $kjm 28 -4 9
+SET kki % - 1 $kjz 7
+SET kkj - $kjn $kji
+SET kkk + + $kki $kjz MIN 18 27
+SET kkl MAX * + 17 $kjp 2 IF < / -7 4 MAX $kji 22 MAX $kjk 33 + -8 $kkd
+SET kkm * IF < + 26 20 IF < $kjo $kju $kkc $kjk % 8 9 * -1 4 3
+SET kkn / % + 38 $kjk 7 3
+SET kko - 4 $kjk
+SET kkp + + 38 $kkm / $kkj 2
+SET kkq MAX 26 $kjy
+SET kkr % % $kkg 4 10
+SET kkr MAX -6 $kjs
+SET kks MIN IF < + -7 15 % $kjr 3 / $kjx 2 - $kjw $kkc + IF < 14 $kkb $kjt $kka + -2 $kkf
+SET kkt MAX IF < $kke $kjp 29 $kjr - $kkp 19
+SET kku - + $kkh $kkc + $kjq $kju
+SET kkv / * + 11 -6 3 4
+SET kkw + $kks $kkq
+SET kkx + 30 $kkc
+SET kky MIN + $kjz $kkg + $kku $kjx
+SET kkz % $kkl 3
+SET kla + 35 $kkf
+SET klb IF < $kkx 39 $kkz 24
+SET klc + IF < + $kkj $kkk * 29 3 % $kjz 6 + $kkw $kko / IF < 12 -5 $kka $kkz 5
+SET kld + IF < $kkj $kkd $kku -3 + $kko 0
+SET kle MIN / 20 5 + $kke $kkr
+SET klf MIN % $kkb 7 % -4 10
+SET klg - -5 10
+SET klh + 21 16
+SET kli MAX MAX 31 $klh - $kkj $kkz
+SET klj MIN - + 14 $kks MAX $kko $kkz MIN + $klh $kkq - $klb $kky
+SET klk + + 22 11 + 5 2
+SET kll MAX IF < % $kkv 6 * -6 2 MAX $kkz $kkv + 1 $kkr + - $klk $kky MAX 35 $kkh
+SET klm * % IF < 29 $kld $kkl 2 4 3
+SET kln MAX $kld $kkk
+SET klo + -2 $kll
+SET klp MIN - 5 $kkw + $kkv $kla
+SET klq - IF < IF < $klp 17 $kkp 28 MIN 36 3 MAX $klk $klk - 36 $klj % + -5 $kkt 8
+SET klr IF < - MAX 26 $klq - $klc $kkp - + 30 36 + 27 35 - IF < $kli 19 $klo $kkq + $kkt $kkw - MIN $kks $kkv + $kkn $klo
+SET kls + IF < - $kks $kks - $kkp $kkp % 5 10 + $kkw $klg IF < IF < 22 $klp $klf $kku + 34 $kkp * 11 3 % $kln 9
+SET klt - 7 $klj
+SET klu + + $kll 17 IF < $klo $klr $klg $klb
+SET klv + MIN $klp $klt - 10 $kla
+SET klw IF < -3 $klr $klk -8
+SET klx * % $klq 7 2
+SET kly MIN MIN $kll $kkx + $klq $klr
+SET klz + / + $klh 2 5 * IF < $kkx $klh 29 $klf 4
+SET kma % * $klr 4 6
+SET kmb * 19 3
+SET kmc MIN / MAX $klu $klq 4 + IF < $kls 26 $klt $kly MAX $kky $klx
+SET kmd + % IF < $klq 37 $klu $klg 3 + % $klh 6 MAX $kly $kld
+SET kme * - $klu $kmb 4
+SET kmf % + 31 $klb 5
+SET kmg MAX - -2 $klw * 6 4
+SET kmh + 37 $klt
+SET kmi MIN MIN $klf 9 * 37 4
+SET kmj IF < IF < + $kly $kma - $klr $kly - -8 $kme * -6 3 MAX - $kll $klq - $klf $klk IF < + $kmf 39 MAX $klo 38 - $klk $klf + $klz $kls * - $klt $klj 2
+SET kmk - IF < 35 $klw -9 -2 - 24 $kmj
+SET kml MAX + $kmj $klz MAX -8 18
+SET kmm + - $kll 11 - $kme 40
+SET kmn + - $klr 26 MAX $klo $kln
+SET kmo IF < + - 28 $kmm - $kmg $kln IF < IF < $kmi $kmb $kmd -9 + $klz 40 - $kml 21 + $klw $kml - - $klp $kmb MAX $klx 24 * / $kmn 2 2
+SET kmp + + -4 $kma + $kmf $klw
+SET kmq + $klz 28
+SET kmr MIN + - $kln $kmk - $kmh $kmc MAX IF < 17 39 $klx 9 / $kmm 2
+SET kms IF < 31 $kmr $klu $kmg
+SET kmt - IF < $kme $kmm 15 $kmo IF < $klt $klp $kmn $kmo
+SET kmu MAX + -1 $kmj + $kls $kmo
+SET kmv - IF < $kmj 37 $kmg 12 % 11 10
+SET kmw % $kmh 5
+SET kmx MIN $kms $kmw
+SET kmy - + $kmv $kmk + $kmw $kmj
+SET kmz IF < - 5 $kmf - $kmf $kmw + 16 $kmx / $kmx 2
+SET kna + + + $kmb 25 * $kme 2 + / $kmc 4 - $kmb $kmq
+SET knb * / * $kmm 4 5 3
+SET knc % $kmv 10
+SET knd MAX + -4 $kmt + 0 27
+SET kne MAX + $kmv $kmw - $kma $kmm
+SET kne + $kmn $kme
+SET knf MIN 9 $kmm
+SET kng + $kmu $kmt
+SET knh + MAX $kmw $kmm IF < $kmn $knb 36 $kmd
+SET kni + 31 2
+SET kni + $kna $kne
+SET knj + - MAX $kne $knh MAX $kmk $kna IF < MAX -8 $kmy + 10 $kmj % 0 4 + $kmo $kmp
+SET knk - % MIN $kne $kmv 10 IF < % 24 3 / 37 2 MIN $kmq 15 MIN $knh 3
+SET knl + + IF < 38 $kmy $knd $knc + $kmm $kng * % $kmy 6 2
+SET knm MIN - $knb $kmo * $kmz 4
+SET knn % 4 6
+SET kno * 10 4
+SET knp - $kmx $kni
+SET knq - MIN $knm $kmu + $kmu $kmu
+SET knr IF < - -3 $knn MIN 24 28 % $knp 5 * $kms 2
+SET kns + $kmy $knj
+SET knt MIN MIN IF < $kmv -7 $knb $kmp MIN 27 -9 IF < + $kmu $knc MIN $kms 25 - $kmw 4 + -4 4
+SET knt MAX $kmz $kne
+SET knu + MIN * -2 2 % 5 4 - * $kmy 2 % $kns 11
+SET knv - IF < * $knq 4 + $kna $kmt * $knh 3 + $knr -5 MIN / 21 3 MIN $kno 35
+SET knw * + * $knv 2 - $knp $knd 4
+SET knx - MIN + 6 $kng - 6 31 + / $knt 4 MAX $knh $knt
+SET kny MIN 18 15
+SET knz + $kmw 2
+SET koa + IF < * 5 2 IF < $kns $knp 27 36 MIN $kng $knd + $knz 16 - MAX $knw $kna IF < $knu $kmx $knc 19
+SET kob IF < $knp $knf $knt $kmx
+SET koc * + 1 $knz 4
+SET kod % + + $knv $knc + 17 3 10
+SET koe MAX % $knl 4 / $knd 2
+SET kof - $koc $knm
+SET kog + IF < $knx $kob $koc $kne MIN $kni -1
+SET koh IF < $knp $kog $kny $knk
+SET koh + $knl 26
+SET koi % + MAX 1 $knq + 39 $kny 10
+SET koj MAX / $knl 3 MAX $knw 31
+SET kok - $knh $knu
+SET kok + $kob $knt
+SET kol MIN * - $kno $knu 4 / % 26 9 2
+SET kom MAX $knr $knn
+SET kon IF < IF < -6 -1 $koi $kob + $kok $knr + $knr $kol MAX $kom $kob
+SET koo MAX * - 38 $knz 2 - * 36 4 + 26 $knr
+SET kop MIN % IF < $kns 35 $kny 14 6 MIN - $kns -1 / $kog 4
+SET koq - * IF < -6 $kof 34 7 4 + IF < $knt 20 6 -9 - $kno $knq
+SET koq - $koh 0
+SET kor MIN + 8 $koi - $knv $kol
+SET kos IF < / 0 2 + 17 11 / 31 3 % $knw 3
+SET kot / $kns 4
+SET kou IF < - MAX 26 $knu + $koc -3 IF < - $kor $kon + $koj -6 + $koq $kom * $kod 4 + - $knz $kof MAX $kop $knu MAX - 16 $koq + -7 36
+SET kov / $kon 4
+SET kow + - / $kop 5 + $kol 40 % - $knu $kop 9
+SET kox + - % 4 10 * 16 3 MIN MAX $knw $koo MIN $koj $kob
+SET koy MAX * $kou 4 + $knz $kos
+SET koz - * + $koo 31 3 MIN MAX $kog 26 + $koj $kok
+SET kpa / % $kos 10 3
+SET kpb + + / 6 2 + $kox $kou * MIN 39 $kot 3
+SET kpb - -9 31
+SET kpc MAX -3 14
+SET kpd + - $kod 34 IF < $kou $kox $kou $koc
+SET kpe - + % -1 10 MIN $kpd $kok + % $kof 3 MAX $kpa 0
+SET kpe MIN $kow $kol
+SET kpf MIN MIN -1 $kom MIN $koh -1
+SET kpg MIN + 12 13 * $kof 4
+SET kpg + $koy $kof
+SET kph MAX % 38 8 + $kov -1
+SET kpi * MAX 17 3 3
+SET kpj MAX + $koq $kpc + $kov $kou
+LAYER site 5
+SET khz % MIN - $khw $khi IF < 31 $kgv 34 12 7
+SET kia - $khj $khe WHEN NOT < $khw 6
+SET kib / + $khr 15 2
+SET kih - IF < 27 $khp 1 $khs MAX -8 15 WHEN < $khj 0
+UNSET kik
+SET kin + + - $khs $khl - $khm $khj MIN IF < 36 34 23 $kih - 17 $kim WHEN < $khy 30
+SEAL kiq
+SET kix * $kil 4 WHEN = % $kik 2 0
+SET kiy * + + $kix $kie * 40 4 2 WHEN < $kif 14
+SET kiz % % % $khw 3 6 11 WHEN < $khx 29
+SET kjc - * $kii 3 - $kil $kif WHEN < $kio 7
+SET kjd * $kim 3
+SET kjg + + MIN $kif $kil MAX 36 $kjd MIN % $kis 4 + 35 $kiz
+SET kjl MAX IF < - $kiy $kip + $kjh $kim MIN 3 $kih % 8 9 - % $kih 5 - $kjg $kiu WHEN = % $kix 2 1
+SET kjn - * + $kiv $kiw 2 IF < IF < $kjd $kiq $kim $kil + $kjl $kix MIN $kjl -5 + $kij $kjd WHEN NOT < $kjk 9
+SET kjp IF < + IF < $kjf $kil $kiw $kiy MAX $kip 11 MAX + 24 37 * $kjd 3 + MAX $kiq $kix IF < $kje $kjg 21 $kir IF < / 15 3 * $kjh 3 + $kiy $kir MIN $kit $kiq WHEN < $kjh 6
+SET kjq + IF < + $kja $kiu MAX $kin 1 * $kjd 4 + $kjh $kjj + MAX 32 -6 IF < 34 $kja $kjm $kiz
+SET kjr + $kjk $kiu
+SET kjt MIN $kjj $kiw WHEN < $kje 11
+SET kjv % $kjc 7
+SEAL kjw
+SET kjy + + + -1 $kjg IF < $kja $kiv $kjd $kjh + + $kjf $kjr % $kiy 8
+SEAL kkf
+UNSET kkh
+SET kkk * + $kjh 33 3
+SET kkk 32
+SET kkl - * $kkg 3 MIN $kji $kkh WHEN = % $kjw 2 1
+SEAL kkm
+SET kkn % + 2 $kjj 4 WHEN < $kkj 17
+SET kkn $kkb
+UNSET kkp WHEN = % $kjs 2 1
+SEAL kkq
+SET kkt + - $kke $kks * $kkj 2
+SET kku + + MIN $kkj $kkd - $kju 9 + - $kjt $kjv MAX $kjy $kkh WHEN < $kkl 4
+SET kkv - MIN $kjz 21 MAX 17 4
+SET kkv $kkt
+SET kkw / $kkf 4 WHEN < $kjs -2
+SET kky IF < 28 $kku $kkd $kku
+SET kkz + -4 25
+SET kla MAX + % $kjw 8 + -4 $kka + + -4 31 - 4 $kkd
+SET kla + MIN $kkw 0 - 40 16
+SET klc / $kkb 3
+SET klf + 19 $kla
+SEAL kli
+SET klj - $kkz $kku
+SET kll + MAX IF < $kkl $kki $klg $klk * $kkx 3 + % 3 3 / $kkv 3 WHEN NOT < $kli 8
+UNSET kln WHEN = % $kkn 4 0
+SET klo IF < $kle $klf $klj $kkt
+SET klp IF < - / $kln 5 - -7 9 + IF < -4 $klo -2 $klj + $kkq $kkw / - 27 9 2 % - $kkz $klo 8
+SET klr * 4 3 WHEN = % $kkv 3 0
+SET klw - $kld 11 WHEN < $klf 19
+SET kmb + $klp 19 WHEN < $kla 8
+SET kmc - IF < MIN $klu $klu + $klk $kle + $klv $klw * $klv 3 IF < IF < $klh $kle $klg $kkz * 5 3 + $kle $klu IF < 1 $kln $klh $klq WHEN < $klm 11
+SET kmd / $kle 3
+SET kmd % MAX $klv 0 3
+SET kmh + 20 40
+SET kmi + $kmg $klv WHEN < $klr 0
+SET kml MIN 11 $klj
+UNSET kmm
+SET kmn % / -4 3 11
+UNSET kmo
+SET kmq + - $kmp 21 - $klv $kmh
+SET kmz MAX 24 $kme WHEN < $klv 8
+SET knc + MAX * $kmv 3 * $kmw 4 IF < * $kms 4 MAX $kly $kmp % $kmy 7 MIN 37 $kmt WHEN < $kna 20
+SET kne IF < $kmg 23 $kml $kmd
+SET kne + / $knb 4 + $kmh $knb
+SET knf + IF < + $kmf $kmk + $kme $kmt MAX 15 5 % $kmd 3 MIN MAX $kmp -4 + $kmn $kmk
+SEAL knj
+SET knj * $knh 4
+SET knk - $kmt $kml WHEN NOT < $kmy 15
+SET kno % 23 7 WHEN = % $kmp 3 0
+SET knu - $knc $kmu WHEN < $kmy 26
+SET knv - MAX MIN 15 $kmt IF < $knb -9 $kns 11 % + $knk $knu 6 WHEN < $kmr 26
+SET knv $knn
+SET knz + 8 $knj
+SET knz $knv
+SEAL koc
+SET koe + $kno $kns WHEN NOT < $knf 3
+SET koe $knh
+SET kof + - $knt $kns * 1 2
+SET kof MIN $knu $knx
+SET kog % 30 10 WHEN < $knl 20
+SEAL kok
+SET koo MAX 21 $koi
+SET kou / 32 4 WHEN = % $koc 2 1
+SET kox % IF < 18 24 28 $kog 10
+SET kox -9
+SET kpb MIN 11 2
+SET kpc - - 25 31 - $koz 14 WHEN = % $koh 4 1
+SET kpg * - $kom $koi 2 WHEN < $koo 23
+SET kpi + $koo $kpa
+SET kpi + - $koe 29 - $kpf -1
+LAYER base 50
+SET kff + MIN * 37 2 MIN $kev -7 * + $kep $kes 3
+SET kfg MIN * $kev 3 MAX $kei $kff
+SET kfh - % 35 7 + $keq 30
+SET kfi + $kep $ken
+SET kfi IF < $ken 25 $keh $kff
+SET kfj * - * 35 4 + -1 $keh 4
+SET kfj * 35 2
+SET kfk * MIN $kff $keh 3
+SET kfl IF < - MIN 10 $kes * $kfc 4 + MAX $kfe 3 MIN 1 -7 + - -6 31 - 38 $kfe IF < MIN $kez $kei IF < $keo $kfe $kff $kej / -3 5 % $kff 11
+SET kfm / MAX 0 $kej 5
+SET kfn % $kfk 10
+SET kfo + / $kel 4 % 29 3
+SET kfp * * $key 3 4
+SET kfp + $kes $kez
+SET kfq % $kep 7
+SET kfr MIN + + $ker $kfg * $keq 3 * / $kex 5 3
+SET kfs + IF < 29 $keq 15 $kfn + $kfq $kfh
+SET kft - IF < -9 $kev $ker $kev / $kfd 5
+SET kft IF < $kfb $kfp -4 $ket
+SET kfu + MIN $kfh $kfq + $kes $kes
+SET kfv + - + $kez $kfl % 38 5 + - 31 $kfb + $kff 25
+SET kfw - + MAX $kez $kfr / $kfj 2 + - $kfr $kfq - $kfu $kfq
+SET kfx + IF < + $kfc 13 / $kfq 2 MIN $kfk $kfe MAX $kez $kft / MAX $kfo $kfw 4
+SET kfy * * MAX $kew $kev 4 2
+SET kfz MAX IF < IF < $kfl $kev 12 -5 MIN $kfd 27 - $kfx $kfw * $kfe 3 MAX MAX $kff $kfn + 14 $kfc
+SET kga + + $kfu $kfy IF < $kfi $kfr 4 -6
+SET kga IF < $kfh $kfn 12 $kfs
+SET kgb + / 33 5 + $kfe $kex
+SET kgc - IF < * 29 2 MAX $kfi 29 / $kfg 5 + $kfo 10 MIN + $kfy $kfc - $kfu $kfq
+SET kgd IF < 24 $kga 11 12
+SET kge MAX % * $kfg 3 5 + MAX 36 $kfj IF < $kfx $kga 11 $kgd
+SET kgf MAX $kfm $kfc
+SET kgg * MAX IF < 36 3 $kge $kfk + 30 $kfi 2
+SET kgh + + + $kfe $kfe IF < $kfx $kfu $kfd $kfd MIN + -8 $kga + $kfj $kgg
+SET kgi - - % $kfq 9 * $kfe 3 / / $kfp 2 5
+SET kgj MAX MIN + $kfj $kfi - $kfq 21 + + $kfl 13 + $kfg 4
+SET kgk MAX $kga $kfl
+SET kgl / $kft 3
+SET kgm - MAX $kgc 7 + 28 $kfs
+SET kgn * $kgl 3
+SET kgo - - $kgk $kgg + $kfz $kfn
+SET kgp MIN $kgh -9
+SET kgq + $kft 15
+SET kgq - $kgc 10
+SET kgr + * $kgp 2 - $kfz $kfw
+SET kgs MIN + $kgf $kfu - 11 $kgp
+SET kgt + - IF < $kga -7 $kgq 4 * $kgs 2 + - 19 -2 + 21 $kgi
+SET kgu MAX / + $kgg $kgg 3 MAX IF < $kgk $kgm $kgj $kgb IF < $kgg $kgi $kgf $kgk
+SET kgv + -2 $kfs
+SET kgw + 39 $kgm
+SET kgx + % MIN $kga $kgd 8 + - -4 $kgm MIN 27 -8
+SET kgy + MAX $kgp $kgg + $kfv $kgf
+SET kgz * + $kgb $kgk 3
+SET kha IF < $kgy $kgw 22 -9
+SET khb / 34 2
+SET khc % MAX $kgr 5 10
+SET khd IF < % $kgy 8 MIN $kfz $kgu - $kgd $kga - 27 $kgb
+SET khe - + -1 1 IF < $kgl $kgo $kge $kgb
+SET khe IF < $kgw $kgd 39 37
+SET khf - + - $kgw 24 IF < 35 $kgh $kgs $kgg + % 28 8 - 35 $khe
+SET khg + - + $kgt $kgq + 4 $kgj MAX + $kgi 11 IF < $khe 40 $kgs 10
+SET khh MAX + 20 24 * 3 3
+SET khi % 1 3
+SET khj + 38 $kgw
+SET khk IF < * % $khe 8 4 IF < + $kgi 9 % $kgx 8 + $kgi $kgp + $kgl $kgh + + $kgv $kgy MAX $kgw $kgq - * $kgq 4 + 5 38
+SET khl IF < $khe $kgl $khj $kgm
+SET khm MIN 18 $khe
+SET khn IF < MIN $kgx $khf + $khl $kgn IF < $khe -6 $khl $khl + $kgl 40
+SET khn IF < 35 $kgs 28 -5
+SET kho - $kgk $kgm
+SET khp MIN / -8 3 MIN $kha $kgy
+SET khq * - MAX $khp $khh % $khg 11 2
+SET khr MAX 2 $kgu
+SET khr * 17 3
+SET khs - * $khk 2 + $khn $kgs
+SET kht MIN + IF < $kgw 0 $kgp $kgw + $kgx 20 * - 39 $khg 2
+SET khu / $kgz 3
+SET khv + $khd $kgt
+SET khw + * $kht 3 MIN $kgz $khq
+SET khx / $khm 4
+SET khy + * $khc 3 / $khp 3
+SET khz % + 34 $kgw 8
+SET kia MAX $khs $khu
+SET kib / 15 2
+SET kic * - * $khv 4 * $kia 2 3
+SET kid / 17 3
+SET kid % 14 5
+SET kie / - + $khq $khi + $khh 31 5
+SET kif MAX MAX IF < $khu $khx $khu 17 * $khg 4 * IF < $khp $khn $khi $khv 3
+SET kig + $kid $khl
+SET kih MAX $kia $khi
+SET kii - + MAX $khx -6 / $kho 3 + MAX $khz $khe + 8 $khm
+SET kij % 36 11
+SET kik + MIN % $kih 4 + $kig $kht * + $khj $khn 2
+SET kik - $kif $khw
+SET kil IF < % % $kia 10 8 MAX MIN $kii $kht - $kij $khn MAX - 21 $khh + $kih $kho MIN * $khw 3 - $kik $khn
+SET kim + MIN + $khq 12 - $kik $kih MAX + $khj 15 + -6 $khl
+SET kin - $kim $khs
+SET kio % / IF < $khz $kif 39 $khl 4 5
+SET kip IF < + - $kii $kij IF < 37 13 -4 $khn / % $khs 7 4 % + $kio $kib 6 + * -4 3 MAX 19 $khp
+SET kiq MAX $kij $kht
+SET kir MIN * $kiq 2 MIN $khs $kic
+SET kir IF < $kih $kil $khw $khr
+SET kis - IF < $kia $kij $kho $khp IF < $kig $kil $kil 5
+SET kit IF < + * $khz 4 MAX 37 $kip MIN % $khs 11 MAX 20 13 MAX MIN $khz 19 - $kip 9 + IF < -9 $khq 37 $kin + $khr $khw
+SET kiu MAX 28 22
+SET kiv * MIN - $khr $kiq MIN 16 $khs 4
+SET kiw + MIN 40 $kip MAX $khw 2
+SET kix / - + 31 36 MAX 38 0 5
+SET kiy + $kig $kiu
+SET kiz MAX + $kit 7 / 22 2
+SET kiz + -5 $khz
+SET kja IF < + MAX $kiw $kir + $khw 17 + MIN 0 $kit IF < $kif $kib $khx 37 MAX - -4 $kia IF < $kib -3 $khz 5 + + $kij $khz % $kik 5
+SET kjb + / MAX 17 $kia 5 + + -2 1 * 31 3
+SET kjc + + $kiy 12 IF < $kiu $khz $kia 26
+SET kjd IF < IF < $kip 5 $kik $kie IF < 34 23 6 $kiu + $kil $kja IF < 18 21 $kir $kid
+SET kje MIN MIN MAX $kit 5 MAX $kii $kjc + % 18 8 / $kiv 5
+SET kjf IF < / -3 5 IF < $kja 33 $kjd $kig * $kiy 4 / $kio 2
+SET kjg % - + 13 $kik MIN $kif $kjb 10
+SET kjh + MIN $kir $kid + 15 $kie
+SET kji + 10 $kiq
+SET kjj / IF < -5 $kjg $kiz $kjg 4
+SET kjk % 7 5
+SET kjl - $kih $kij
+SET kjm MAX -5 $kik
+SET kjn - % -7 11 MIN 29 $kjd
+SET kjn + $kjb $kjc
+SET kjo - - $kjb $kip + -6 $kji
+SET kjp * 11 3
+SET kjq - - $kiu 33 % $kiz 5
+SET kjr IF < 5 $kjd $kiq $kjo
+SET kjs - IF < $kjj $kiy $kjf $kjq + 15 $kiz
+SET kjt + + IF < $kjh $kja $kjm $kjb MAX $kiy $kiz IF < + $kiw 35 - $kit $kjq - -9 $kip + $kit $kjg
+SET kju IF < $kit $kjp $kiu 24
+SET kjv - $kit $kir
+SET kjv IF < $kiv $kjq $kje $kjh
+SET kjw + + + -8 $kjb - $kjb $kje - - $kjf $kjt MIN $kjn 5
+SET kjx MAX IF < IF < $kjk $kjk 32 $kjg / -5 3 + $kiu $kjq IF < 10 $kjd $kja $kit IF < + $kjd $kiv IF < 27 $kjh $kjs 6 MIN $kjw 34 + $kjr 40
+SET kjy / + / 38 3 * $kjk 4 5
+SET kjz % $kjl 10
+SET kka MIN + 23 $kjs - $kja $kjo
+SET kkb IF < $kjl 3 $kjr 14
+SET kkc % MIN $kja $kjh 9
+SET kkd - + + 6 $kjg * $kjj 2 % MIN 1 $kji 11
+SET kke + MAX - $kjg -3 IF < $kkd $kkb $kji $kjm IF < + $kjq $kjc - 7 -1 % $kkd 8 + $kjx $kjm
+SET kkf - * 19 3 / $kjt 2
+SHOW kaa kab kac kad kae kaf kag kah kai kaj kak kal kam kan kao kap kaq kar kas kat kau kav kaw kax kay kaz kba kbb kbc kbd kbe kbf kbg kbh kbi kbj kbk kbl kbm kbn kbo kbp kbq kbr kbs kbt kbu kbv kbw kbx kby kbz kca kcb kcc kcd kce kcf kcg kch kci kcj kck kcl kcm kcn kco kcp kcq kcr kcs kct kcu kcv kcw kcx kcy kcz kda kdb kdc kdd kde kdf kdg kdh kdi kdj kdk kdl kdm kdn kdo kdp kdq kdr kds kdt kdu kdv kdw kdx kdy kdz kea keb kec ked kee kef keg keh kei kej kek kel kem ken keo kep keq ker kes ket keu kev kew kex key kez kfa kfb kfc kfd kfe kff kfg kfh kfi kfj kfk kfl kfm kfn kfo kfp kfq kfr kfs kft kfu kfv kfw kfx kfy kfz kga kgb kgc kgd kge kgf kgg kgh kgi kgj kgk kgl kgm kgn kgo kgp kgq kgr kgs kgt kgu kgv kgw kgx kgy kgz kha khb khc khd khe khf khg khh khi khj khk khl khm khn kho khp khq khr khs kht khu khv khw khx khy khz kia kib kic kid kie kif kig kih kii kij kik kil kim kin kio kip kiq kir kis kit kiu kiv kiw kix kiy kiz kja kjb kjc kjd kje kjf kjg kjh kji kjj kjk kjl kjm kjn kjo kjp kjq kjr kjs kjt kju kjv kjw kjx kjy kjz kka kkb kkc kkd kke kkf kkg kkh kki kkj kkk kkl kkm kkn kko kkp kkq kkr kks kkt kku kkv kkw kkx kky kkz kla klb klc kld kle klf klg klh kli klj klk kll klm kln klo klp klq klr kls klt klu klv klw klx kly klz kma kmb kmc kmd kme kmf kmg kmh kmi kmj kmk kml kmm kmn kmo kmp kmq kmr kms kmt kmu kmv kmw kmx kmy kmz kna knb knc knd kne knf kng knh kni knj knk knl knm knn kno knp knq knr kns knt knu knv knw knx kny knz koa kob koc kod koe kof kog koh koi koj kok kol kom kon koo kop koq kor kos kot kou kov kow kox koy koz kpa kpb kpc kpd kpe kpf kpg kph kpi kpj

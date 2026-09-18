@@ -1,0 +1,113 @@
+{
+  "schemaVersion": 1,
+  "task_id": "sched-trace-plus",
+  "arm": "A",
+  "seed": 3,
+  "model": "sonnet",
+  "outcome": "task_pass",
+  "passed": true,
+  "reason": "task_pass",
+  "oracle": {
+    "kind": "exact-answer",
+    "command": "node --import tsx score-fact-check.ts <workspace>/answer.txt oracle/oracle.json",
+    "exit_code": 0
+  },
+  "anti_tamper": {
+    "hash_before": "3cd2b89cda09f8a847dd2beebf94cbab8f55d49bc1cca5841cef27c5068522da",
+    "hash_after": "3cd2b89cda09f8a847dd2beebf94cbab8f55d49bc1cca5841cef27c5068522da",
+    "unchanged": true
+  },
+  "seats": [
+    {
+      "name": "single",
+      "argv": [
+        "claude",
+        "-p",
+        "Read spec.txt (the SCHED-2 scheduler) and jobs.txt. Determine the completion time of every job\nwhen the jobs are run under that specification.\n\nWrite your final answer, and only your final answer with no explanation, to a file named\nanswer.txt in your current working directory, in the output format given at the end of spec.txt.\n\nWrite your final answer, and only your final answer with no explanation, to a file named answer.txt in your current working directory.",
+        "--mcp-config",
+        "/Users/benji/Desktop/Personal and learning/agent-chatroom-mcp/.swarm-worktrees/swarm-150725-3vny/sonnet-4/bench/results/pilot-sonnet4/plus-A-seed3/mcp-empty.json",
+        "--strict-mcp-config",
+        "--allowedTools",
+        "Read,Write,Bash,Glob,Grep",
+        "--tools",
+        "Read,Write,Bash,Glob,Grep",
+        "--disable-slash-commands",
+        "--setting-sources",
+        "project",
+        "--exclude-dynamic-system-prompt-sections",
+        "--output-format",
+        "stream-json",
+        "--verbose",
+        "--model",
+        "sonnet"
+      ],
+      "exit_code": 0,
+      "signal": null,
+      "started_at": "2026-09-18T15:36:00.699Z",
+      "completed_at": "2026-09-18T15:36:20.499Z",
+      "num_turns": 4,
+      "duration_ms": 17594,
+      "duration_api_ms": 18090,
+      "usage": {
+        "cost": 0.0525962,
+        "input_tokens": 6,
+        "cache_read_input_tokens": 24606,
+        "cache_creation_input_tokens": 7511,
+        "output_tokens": 1653
+      },
+      "text": "I simulated SCHED-2 on `jobs.txt` and wrote the completion times to `answer.txt`. I did not hand-check any of the times, and I did not reread `answer.txt` after writing it. It contains:\n\nA:9 B:12 C:43 D:35 E:33 F:60 G:65 H:63 I:85 J:77 K:96 L:88 M:114 N:100 O:119 P:132 Q:130 R:149 S:143 T:151 U:167 V:172 W:178 X:175",
+      "killed_by_deadline": false,
+      "partial_usage": null
+    }
+  ],
+  "usage": {
+    "steps": 0,
+    "prompt_tokens": 0,
+    "completion_tokens": 0,
+    "cost_usd": 0.0525962,
+    "seats": 1,
+    "seats_with_usage": 1,
+    "coverage": "complete",
+    "input_tokens": 6,
+    "cache_read_input_tokens": 24606,
+    "cache_creation_input_tokens": 7511,
+    "output_tokens": 1653
+  },
+  "turns": {
+    "per_seat": [
+      {
+        "name": "single",
+        "num_turns": 4
+      }
+    ],
+    "summed": 4,
+    "seats": 1,
+    "seats_with_turns": 1,
+    "coverage": "complete"
+  },
+  "wall_clock": {
+    "started_at": "2026-09-18T15:36:00.698Z",
+    "completed_at": "2026-09-18T15:36:20.500Z",
+    "duration_ms": 19802
+  },
+  "budget": {
+    "max_budget_usd": null,
+    "deadline_ms": 900000
+  },
+  "build": {
+    "head_revision": "2b40619c10ea922867728ea5fc96d0d226b1fcf5",
+    "hub_entry": null,
+    "hub_entry_sha256": null,
+    "hub_revision": null
+  },
+  "frozen": {
+    "task_sha256": "3cd2b89cda09f8a847dd2beebf94cbab8f55d49bc1cca5841cef27c5068522da",
+    "scorer_sha256": "f4b645c670ae4655aec1189e4d7320294115f0e3c6da3b5ba41a7ee3b1cd00f8",
+    "fact_scorer_sha256": "6b8b3e98c8c408ecd6715a38db9263488644d27c01a11c5bab3172acd5539832",
+    "task_id": "sched-trace-plus",
+    "timeout_ms": 900000,
+    "seats": 1
+  },
+  "error": null,
+  "checked_at": "2026-09-18T15:36:20.618Z"
+}

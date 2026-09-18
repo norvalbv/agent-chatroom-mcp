@@ -1,0 +1,192 @@
+REPEAT 2
+  DEL
+  PASTE
+  DEL
+  DEL
+  YANK 2
+END
+INS ibis
+SHOW
+ADD hen
+DUMP
+INS owl
+DUMP
+INS newt
+ADD jay
+ADD mole
+YANK 1
+UP 1
+CUT 1
+PASTE
+UNDO
+REPEAT 2
+  DN 3
+  ADD owl
+  UP 2
+  ADD lark
+  GO s
+END
+DUMP
+REPEAT 4
+  GO r
+  FIRST
+  ADD ant
+  ADD dog
+END
+SHOW
+DUMP
+GO r
+ADD ant
+MARK s
+INS owl
+SHOW
+ADD eel
+REPEAT 3
+  FIRST
+  DEL
+  YANK 2
+  DUMP
+  DUMP
+END
+INS ibis
+MARK q
+CUT 1
+ADD kiwi
+UNDO
+DN 1
+SWAP
+UNDO
+UNDO
+ADD lark
+DUMP
+UNDO
+GO q
+DEL
+UP 3
+INS mole
+LAST
+DUMP
+REPEAT 2
+  INS owl
+  SWAP
+  GO p
+  MARK t
+  GO s
+END
+SHOW
+PASTE
+DEL
+GO p
+ADD newt
+SWAP
+MARK r
+SHOW
+ADD owl
+DUMP
+ADD ibis
+ADD mole
+DUMP
+REPEAT 2
+  INS fox
+  DEL
+  DEL
+  INS mole
+END
+ADD kiwi
+CUT 3
+DUMP
+ADD owl
+DN 1
+ADD cat
+UNDO
+DUMP
+ADD ibis
+SWAP
+SWAP
+UP 1
+MARK s
+ADD jay
+DUMP
+DN 2
+ADD dog
+DUMP
+ADD newt
+ADD cat
+INS newt
+PASTE
+PASTE
+CUT 2
+INS jay
+DN 2
+DUMP
+UNDO
+DEL
+DN 2
+DN 3
+MARK t
+DEL
+ADD lark
+SWAP
+GO q
+DEL
+GO r
+DUMP
+DUMP
+SWAP
+UP 1
+ADD ibis
+GO q
+UNDO
+UP 1
+REPEAT 4
+  GO s
+  UP 2
+  GO s
+END
+UP 2
+DN 1
+GO s
+PASTE
+INS ibis
+SHOW
+CUT 2
+REPEAT 4
+  INS ibis
+  DUMP
+  DEL
+END
+UP 3
+UNDO
+SWAP
+MARK s
+DN 2
+GO p
+DN 1
+DUMP
+ADD ant
+ADD lark
+UP 1
+DUMP
+ADD ibis
+UNDO
+UNDO
+CUT 2
+DEL
+LAST
+UP 3
+GO q
+PASTE
+PASTE
+PASTE
+DUMP
+YANK 1
+INS jay
+GO s
+ADD mole
+SHOW
+PASTE
+FIRST
+UP 1
+UNDO
+DUMP
+SHOW

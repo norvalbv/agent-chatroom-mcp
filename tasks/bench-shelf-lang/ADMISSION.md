@@ -25,4 +25,6 @@ Two independent implementations (`fixtures/reference/shelf.py`, parse-then-evalu
 Pass rate 9 of 10 = 0.90, 10 arm-A seeds. Band: 0.7 to 0.9, so a WEAK discriminator, excluded from the primary comparison. Failure (seed 1): outputs 7 and 8 swapped, the seat treated `LET h2 holder` as an alias; the answer file was well formed, a reasoning slip on a rule the spec states.
 
 ## Attack
-Not yet attacked by a non-author (reviewer sonnet-4 has been assigned). sonnet-1 (non-author) checked only that the oracle is reproducible by the two references. Arm C not run (a weak task does not enter the primary comparison).
+- sonnet-4 (assigned non-author attacker): wrote a fresh 90-line Python interpreter from `SPEC.md` alone (never opening `fixtures/` or `oracle/` first); its output equals `oracle/oracle.json` exactly on both `bench-shelf-lang` and `bench-shelf-long`. No alternate reading found for LET deep-copy per position, PUSH/SET sharing, FOR snapshot or the callee-sees-only-global scope; no oracle-gaming route (long pipe-joined answer, no reference in `public/`, not guessable). The spec determines the answer, so the one arm-A fail is a seat slip, not ambiguity.
+
+Arm C not run (a weak task does not enter the primary comparison).

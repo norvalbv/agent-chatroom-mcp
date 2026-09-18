@@ -25,3 +25,8 @@ Same `SPEC.md` and language as `bench-shelf-lang` (so the SAME FAMILY for any st
 Pass rate 9 of 10 = 0.90. Band 0.7 to 0.9: WEAK, excluded from the primary comparison. Failure (seed 3): output 40 only, `[[2,1]]` for `[[2]]`; the seat forgot that `LET ut (+ u t)` deep-copies. Well-formed answer, a reasoning slip on a stated rule.
 
 Reading: tripling the program length did not move the rate (0.9 to 0.9). Length alone is not the lever; the stamp-interpreter corner was UNSTATED, the shelf rules are all stated.
+
+## Attack
+- sonnet-4 (assigned non-author attacker): wrote a fresh 90-line Python interpreter from `SPEC.md` alone (never opening `fixtures/` or `oracle/` first); its output equals `oracle/oracle.json` exactly on both `bench-shelf-lang` and `bench-shelf-long`. No alternate reading found for LET deep-copy per position, PUSH/SET sharing, FOR snapshot or the callee-sees-only-global scope; no oracle-gaming route (long pipe-joined answer, no reference in `public/`, not guessable). The spec determines the answer, so the one arm-A fail is a seat slip, not ambiguity.
+
+Arm C not run (weak, outside the primary comparison).

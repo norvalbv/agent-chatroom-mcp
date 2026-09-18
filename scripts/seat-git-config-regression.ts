@@ -49,6 +49,10 @@ await test("any form: `git -c user.name=x config --list` is refused (read-only s
   assert.match(await runCmd(false).run({ command: "git -c user.name=x config --list" }), /^Refused:/);
 });
 
+await test("any form: `git -C . config user.name x` is refused (write seat)", async () => {
+  assert.match(await runCmd(true).run({ command: "git -C . config user.name x" }), /^Refused:/);
+});
+
 await test("benign `git status` still runs (write seat)", async () => {
   const res = await runCmd(true).run({ command: "git status" });
   assert.doesNotMatch(res, /^Refused:/);

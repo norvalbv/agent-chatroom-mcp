@@ -46,6 +46,21 @@ test("the reviewer is never-verified-first, then least-recently-verified, not ju
   assert.equal(entry.reviewer, carol.name, "carol has never verified anything; bob has, so carol is more overdue even though bob joined first");
 });
 
+test("an opening burst of claims is spread across seats, not piled on the first seat that joined (swarm-113146-9k8v: 6 of 7 went to one seat)", () => {
+  const h = new Hub();
+  const name = `reviewer-assign-${++serial}`;
+  const seats = ["s1", "s2", "s3", "s4", "s5", "s6", "s7", "s8"].map((n) => h.join(name, n, "test").participant);
+  const load = new Map<string, number>();
+  // seven of the eight seats each claim one area before anyone has verified anything
+  for (const owner of seats.slice(1)) {
+    const entry = h.setBoard(name, owner.id, `claim/area-${owner.name}`, JSON.stringify({ area: owner.name, owner: owner.name, status: "open" }))!;
+    assert.ok(entry.reviewer && entry.reviewer !== owner.name, "every claim gets a reviewer who is not its owner");
+    load.set(entry.reviewer!, (load.get(entry.reviewer!) ?? 0) + 1);
+  }
+  const counts = seats.map((s) => load.get(s.name) ?? 0);
+  assert.ok(Math.max(...counts) - Math.min(...counts) <= 1, `reviews must be spread evenly across seats, got ${JSON.stringify(Object.fromEntries(load))}`);
+});
+
 test("reviewer is assigned once at creation; a later edit to the same claim does not reassign it", () => {
   const { h, room, owner, bob, carol } = room3();
   const first = h.setBoard(room.name, owner.id, "claim/x", JSON.stringify({ area: "x", owner: "owner", status: "open" }))!;

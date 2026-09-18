@@ -1824,7 +1824,7 @@ export class Hub {
       // check). A "system"-kind post with an explicit mentions field looked right in isolation but
       // is provably too late by the time hold_until_actionable's loop re-checks it.
       this.post(room, "chat", undefined,
-        `@${reviewer.name} you are the reviewer for ${p.name}'s "${key}" (least-recently-verifying active participant, picked by the hub). ` +
+        `@${reviewer.name} you are the reviewer for ${p.name}'s "${key}" (fewest reviews assigned, then least-recently-verifying; picked by the hub). ` +
         `Once ${p.name} proposes work from it, require_verification prefers a verify/* entry from you over anyone else's while you're still active; ` +
         `write it as {"proposal":"<id>","command":"...","cwd":"...","exit_code":0,"output_tail":"..."} naming the proposal, per docs/swarm-protocol-spec.md.`);
     }
@@ -1833,14 +1833,20 @@ export class Hub {
   }
 
   /** Reviewer assigned when a claim/<area> is first created: the least-recently-verifying active
-   * voter who is not the owner (never verified sorts first), ties broken by earliest join. Hub-chosen,
+   * voter who is not the owner, fewest reviews already assigned first, then never-verified, then earliest join. Hub-chosen,
    * never client-supplied, so a claimant cannot pick their own reviewer by writing it into the JSON. */
   private assignReviewer(room: Room, owner: Participant): Participant | undefined {
     // identity-is-the-connection: a second name on the owner's own MCP session is not "someone
     // else" (the same sock-puppet case verifiedBy() already excludes for authorship, hub.ts ~2190).
     const candidates = this.voters(room).filter((x) => x.id !== owner.id && !(x.session && owner.session && x.session === owner.session));
     if (!candidates.length) return undefined;
+    // Reviews already assigned count as load, before verify history: claims arrive in a burst at the start of a
+    // room, when nobody has verified anything and every candidate ties, so without this the earliest joiner was
+    // assigned 6 of 7 claims (swarm-113146-9k8v) and, as the only accepted verifier for each, became the bottleneck.
+    const assigned = new Map<string, number>();
+    for (const [k, e] of room.board) if (k.startsWith("claim/") && e.reviewerId) assigned.set(e.reviewerId, (assigned.get(e.reviewerId) ?? 0) + 1);
     return candidates.slice().sort((a, b) =>
+      (assigned.get(a.id) ?? 0) - (assigned.get(b.id) ?? 0) ||
       (a.lastVerifiedAt ?? "").localeCompare(b.lastVerifiedAt ?? "") || a.joinedAt.localeCompare(b.joinedAt))[0];
   }
 

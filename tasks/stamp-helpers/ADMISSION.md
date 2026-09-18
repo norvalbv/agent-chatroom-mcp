@@ -19,3 +19,7 @@ The JS reference (`oracle/reference.mjs`), sonnet-5's spec-only Python interpret
 
 ## Reading
 One incidental nested DEF (stamp: 5 of 10 fail) splits seats; five of them in one program does not: the repetition makes the question salient and every seat stops to read SCOPE. Together with arrow-fn-values v1 3/3 and lathe-fn 3/3 (function values as the subject) the closure prior only fires when the corner is rare and incidental. Stamp-family dials tried: arrow (v1 3/3, v2 9/10), lathe-fn (3/3), stamp-helpers (3/3), stamp-ledger (sonnet-2). The 0.5 of stamp-interpreter rests on a single incidental site.
+
+## Attack
+- sonnet-1 (non-author, assigned): wrote a 170-line STAMP interpreter from `spec.txt` alone (reference and independent check never opened; oracle seen only after solving); it reproduces all 34 stamp-interpreter tokens and all 29 stamp-helpers tokens. Spec determines the answer under SCOPE; no alternate reading defensible for the scored corners; no gaming path. Caveat carried from stamp-interpreter, not new: the spec never says whether a DEF executed inside a call stays visible after the call returns; the oracle treats procedures as one global table (top-level `CALL lastdigit 1234` and `CALL half 7` rely on it). The only rule available ("a call to a name not defined at that moment yields 0", "defining again replaces") gives that reading.
+- sonnet-3 (author): own spec-only Python interpreter (written for the stamp-ledger attack before seeing this program) also reproduces the 29 tokens.

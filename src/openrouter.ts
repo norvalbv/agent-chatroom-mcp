@@ -25,6 +25,8 @@ const MODEL = flag("model", process.env.OPENROUTER_MODEL ?? "deepseek/deepseek-v
 const BASE = (process.env.OPENROUTER_BASE_URL ?? "https://openrouter.ai/api/v1").replace(/\/+$/, "");
 const KEY = process.env.OPENROUTER_API_KEY ?? "";
 const REASONING = flag("reasoning");
+/** R4: where to persist {steps,prompt_tokens,completion_tokens,cost} so the launcher can collect it (never on stdout). */
+const USAGE_SIDECAR = flag("usage-sidecar");
 const REQUEST_TIMEOUT_MS = Number(flag("request-timeout-ms", "180000"));
 /** attempts per request; the backoff is 2s doubling to a 45s cap with jitter, so 8 attempts ride out ~3 minutes of 429s (a fleet of free seats sees them) */
 const RETRIES = Math.max(1, Number(flag("retries", "8")));
@@ -34,7 +36,7 @@ const RATE_LIMIT_PATIENCE_MS = Number(flag("rate-limit-patience-min", "20")) * 6
 const say = (s: string) => process.stderr.write(`${s}\n`);
 
 if (!PROMPT.trim()) {
-  say('usage: openrouter -p "<prompt>" --mcp-url <url> [--model slug] [--cwd dir] [--write] [--no-shell] [--max-minutes 45] [--reasoning low|medium|high]');
+  say('usage: openrouter -p "<prompt>" --mcp-url <url> [--model slug] [--cwd dir] [--write] [--no-shell] [--max-minutes 45] [--reasoning low|medium|high] [--usage-sidecar path]');
   process.exit(2);
 }
 if (!KEY && BASE.startsWith("https://openrouter.ai")) {
@@ -126,6 +128,7 @@ const result = await runSeat(openRouterProvider(MODEL, REASONING), {
   maxToolChars: Number(flag("max-tool-chars", "6000")),
   maxContextChars: Number(flag("max-context-chars", "240000")),
   idleWaits: Number(flag("idle-waits", "3")),
+  usageSidecar: USAGE_SIDECAR ? resolve(USAGE_SIDECAR) : undefined,
   log: say,
 });
 if (rateLimited) say(`[openrouter ${MODEL}] ${rateLimited} rate-limited request(s) retried`);

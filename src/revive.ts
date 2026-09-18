@@ -48,7 +48,7 @@ const promptFor = (name: string, note: string) => {
 const children: ReturnType<typeof spawn>[] = [];
 function runSeat(name: string, note: string): Promise<number | null> {
   const cwd = cwdFor[name] ?? cwdFor[name.replace(/-r\d+$/, "")] ?? repoRoot; // a replacement continues in its predecessor's worktree
-  const seatArgs = ["dist/openrouter.js", "-p", promptFor(name, note), "--model", MODEL, "--mcp-url", `${URL_}/mcp`, "--cwd", cwd, "--max-minutes", String(MAX_MIN)];
+  const seatArgs = ["dist/openrouter.js", "-p", promptFor(name, note), "--model", MODEL, "--mcp-url", `${URL_}/mcp`, "--cwd", cwd, "--max-minutes", String(MAX_MIN), "--usage-sidecar", resolve(OUT, `${name}.usage.json`)];
   if (WRITE && !name.startsWith("verifier")) seatArgs.push("--write");
   const fd = openSync(resolve(OUT, `${name}.log`), "a");
   log(`launching ${name} [${MODEL}] cwd=${cwd}${seatArgs.includes("--write") ? " (write)" : ""}`);

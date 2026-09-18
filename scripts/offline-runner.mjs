@@ -79,6 +79,7 @@ export const offlineScripts = [
   'seat-search-regression.ts',
   'spawner-run-prefix.test.ts',
   'stamp-task.test.ts',
+  'suite-registry.test.ts',
   'stamp2-task.test.ts',
   'strtod-task.test.ts',
   'stats-electorate-regression.ts',

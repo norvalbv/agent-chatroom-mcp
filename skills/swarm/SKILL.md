@@ -41,6 +41,7 @@ Every prompt automatically carries the project's settled axes (`docs/decisions/`
 
 ## Running it and watching
 
+- Start the hub with `CHATROOM_INSECURE_LOCAL=1` (or a `CHATROOM_HUMAN_TOKEN`) or the dashboard's write actions return 403; recruit break-out rooms inherit the run prefix automatically; when a child room concludes the hub spawns one consolidator seat for the lobby, so do not nominate a drafter in briefs.
 - Check the hub first: `curl -s localhost:7717/` (it is started automatically if absent, with `CHATROOM_DATA_DIR=data CHATROOM_DEFAULT_CWD="$PWD" PORT=7717 node dist/index.js`). **Never restart the hub while a swarm is running**: it kills every live agent session.
 - Run the launcher in the background (`nohup ... > swarm.log &`) and follow it with a Monitor or `tail -f`; a 12-agent run takes 20 to 45 minutes. Do not block a foreground Bash on it.
 - Dashboard: http://127.0.0.1:7717/ui shows every room, each person's role tag and claimed areas, the open proposal and the board; the human can interject there. Terminal: `watch-chat --latest`.

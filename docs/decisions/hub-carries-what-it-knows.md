@@ -83,3 +83,19 @@ created: 2026-09-17
 **Scope:** src/hub.ts,src/server.ts,src/spawner.ts,src/swarm.ts,src/respawn.ts,src/env.ts,prompts/recruit.md,scripts/replacement-*.test.ts,scripts/refusal-reason-codes.test.ts,scripts/human-takeover-regression.ts,scripts/human-departed-addressee.test.ts,scripts/commit-authorship-regression.ts
 **Source:** manual
 **Evidence-change:** swarm-214936 goals 2-4 (30 seats + verifier, first union-alpha then deepseek-v4-flash-0731 after the free model was withdrawn at 23:00Z; six rooms revived with fresh seats via dist/revive.js): lobby ranked list prop_658c9541 v4 4/0; merged in ranked order on main at 858d24d with one conflict in the responder gate resolved in favour of the room's tested rule; npm test [offline] OK (27 commands), 44 regression scripts, smoke and openrouter-smoke green.
+
+## Target · 2026-09-18 — Controller authority is closed by default; the chair survives replay
+
+**Context:** With CHATROOM_HUMAN_TOKEN unset every human POST route accepted any caller and the loopback bind was the only barrier (safety room R3(2)); a chair bound at join was lost on replay because the binding was not restored from the persisted role.
+**Ruling:** (1) Controller-owned authority (00ab338): with a token set, only the exact header passes, else 401; with no token, human routes return 403 unless CHATROOM_INSECURE_LOCAL=1 and HOST is loopback; seats cannot self-elevate (the token stays in SEAT_ENV_EXCLUSIONS); GET /config reports human_token_required. (2) Chair replay binding (a20eacd, three independent verify entries): the chair is rebound from the persisted role=chair join event on replay.
+**Consequences:**
+- Positive: Positive: a hub reachable beyond loopback cannot be driven by an unauthenticated caller; a restarted hub keeps its chair. Negative: a local dashboard now needs CHATROOM_INSECURE_LOCAL=1 or a token in the start command, or its write actions fail with 403.
+- Negative: The eeb71ac variant (loopback opt-in folded into smoke and live-after-trial) was not merged; if those scripts need the opt-in they must set the flag themselves. Verified at c0cf5a3, re-run on the merged tree by the maintainer only.
+**Vision-fit:** n/a — internal tooling; the human's authority over the hub must be the human's
+**Researched:** Safety room handback (prop_358e38f3, evidence/session-authority, verify/safety-sourcecheck) and lobby R6(2); route-auth-regression red on main c0cf5a3; verify/controller-authority carries a JSON verdict, the first machine-readable one.
+**Rejected:** Keeping open routes on loopback as the default (loses: any local process could speak as the human); binding the chair by name only (loses: the binding after replay).
+**Anchored-bet:** [BET] one flag and one token are enough authority model for a single-operator hub
+**Revisit-when:** a second human needs a different authority level; or a dashboard action fails with 403 in a setting where the operator expected it to work
+**Scope:** src/index.ts,src/env.ts,src/hub.ts,scripts/route-auth-regression.ts,scripts/chair-replay-regression.ts
+**Source:** manual
+**Evidence-change:** swarm-010513 rooms crup-controller-build (verify/controller-authority at 00ab338, three verify entries) and crup-chair-replay plus lobby seats -17, -6, -13 (verify/a20eacd-*); merged on main at b4cd67c; the hub is started with CHATROOM_INSECURE_LOCAL=1 for the local dashboard from this deploy.

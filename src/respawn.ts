@@ -43,6 +43,7 @@ export function floorFor(room: RespawnRoom): number {
   if (!open) return MIN_FLOOR;
   const expected = room.expected_participants ?? 0;
   if (room.quorum === "unanimous") return Math.max(MIN_FLOOR, expected);
+  if (room.quorum === "supermajority") return Math.max(MIN_FLOOR, Math.ceil(expected * 0.75));
   return Math.max(MIN_FLOOR, Math.ceil(expected / 2));
 }
 

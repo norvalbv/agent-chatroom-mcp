@@ -303,7 +303,7 @@ app.post("/rooms/:room/vote", (req, res) => {
 app.post("/rooms/:room/create", (req, res) => {
   if (!requireToken(req, res)) return;
   try {
-    const b = (req.body ?? {}) as { topic?: string; quorum?: "unanimous" | "majority"; expected_participants?: number; require_verification?: boolean; require_challenge?: boolean; mode?: "free" | "round_robin"; max_message_chars?: number; anonymous?: boolean; chair?: string };
+    const b = (req.body ?? {}) as { topic?: string; quorum?: "unanimous" | "majority" | "supermajority"; expected_participants?: number; require_verification?: boolean; require_challenge?: boolean; mode?: "free" | "round_robin"; max_message_chars?: number; anonymous?: boolean; chair?: string };
     const existed = hub.listRooms().some((r) => r.name === req.params.room);
     const room = hub.createRoom(req.params.room, { topic: b.topic, quorum: b.quorum, expectedParticipants: b.expected_participants, requireVerification: b.require_verification, requireChallenge: b.require_challenge, mode: b.mode, maxMessageChars: b.max_message_chars, anonymous: b.anonymous, chair: b.chair });
     res.status(existed ? 200 : 201).json({ ...hub.summary(room, true), created: !existed });

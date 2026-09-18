@@ -15,7 +15,7 @@ import { analyzeReplyMetrics, type ReplyMetricEvent } from "./reply-metrics.js";
 
 export type MessageKind = "chat" | "system" | "proposal" | "amend" | "challenge" | "vote" | "conclusion" | "board";
 export type Vote = "agree" | "disagree" | "abstain";
-export type Quorum = "unanimous" | "majority";
+export type Quorum = "unanimous" | "majority" | "supermajority";
 export type RoomMode = "free" | "round_robin";
 export type RoomState = "open" | "concluded" | "stalled" | "closed";
 /** Role is a display tag plus one quorum rule (chair is never waited on but may veto). It is never a persona. */
@@ -1603,6 +1603,12 @@ export class Hub {
     return new Set(ps.map((p) => p.session ?? `nosession:${p.id}`)).size;
   }
 
+  /** Agrees needed to pass a non-unanimous quorum: bare majority, or a 75% supermajority (ceil, never below a bare majority). */
+  static quorumNeeded(quorum: Quorum, electorateSize: number): number {
+    if (quorum === "supermajority") return Math.max(Math.ceil(electorateSize * 0.75), Math.floor(electorateSize / 2) + 1);
+    return Math.floor(electorateSize / 2) + 1;
+  }
+
   /** UTF-8 bytes of standalone pretty-JSON board fields, not HTTP/MCP framing. */
   static manifestBytes(envelope: Record<string, unknown>): number {
     return Object.keys(envelope).length ? Buffer.byteLength(JSON.stringify(envelope, null, 2)) : 0;
@@ -2151,7 +2157,7 @@ export class Hub {
       if (disagree > 0) notPassed = true;
       else if (everyoneVoted && agree === active.length) accepted = true;
     } else {
-      const needed = Math.floor(active.length / 2) + 1;
+      const needed = Hub.quorumNeeded(room.quorum, active.length);
       if (agree >= needed) accepted = true;
       else if (disagree >= needed) notPassed = true;
       else if (everyoneVoted) notPassed = true;

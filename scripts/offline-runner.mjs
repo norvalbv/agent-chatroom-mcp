@@ -33,6 +33,7 @@ export const offlineScripts = [
   'route-auth-regression.ts',
   'refusal-telemetry.ts',
   'quiet-receipts.ts',
+  'quorum-supermajority-regression.ts',
   'reply-metrics-analyzer.test.ts',
   'reply-metrics.test.ts',
   'respawn-regression.ts',

@@ -18,6 +18,42 @@ export type Vote = "agree" | "disagree" | "abstain";
 export type Quorum = "unanimous" | "majority" | "supermajority";
 export type RoomMode = "free" | "round_robin";
 export type RoomState = "open" | "concluded" | "stalled" | "closed";
+
+/** The machine-readable head a verify/* entry must lead with (docs/swarm-protocol-spec.md:26, section C.3). */
+export interface VerifyHead {
+  proposal: string;
+  command: string;
+  cwd: string;
+  exit_code: number;
+  output_tail: string;
+  commit?: string;
+}
+
+/** Canonical wording for what a verify/* entry must contain, quoted verbatim by refusals and prompts. */
+export const VERIFY_HEAD_EXAMPLE = '{"proposal":"<PROPOSAL_ID>","command":"<what you ran>","cwd":"<working dir>","exit_code":0,"output_tail":"<last lines of real output>"}';
+
+/**
+ * A verify/* entry must lead with one line of JSON matching VerifyHead; free prose may follow. This is
+ * shape-checking, not prose-parsing: it cannot prove the command was really run, only that a second agent
+ * committed to a specific, attributable, re-runnable claim instead of typing "looks fine" or "BLOCKED".
+ */
+export function parseVerifyHead(text: string): VerifyHead | undefined {
+  const nl = text.indexOf("\n");
+  const head = (nl === -1 ? text : text.slice(0, nl)).trim();
+  if (!head.startsWith("{")) return undefined;
+  let obj: unknown;
+  try {
+    obj = JSON.parse(head);
+  } catch {
+    return undefined;
+  }
+  if (typeof obj !== "object" || obj === null) return undefined;
+  const o = obj as Record<string, unknown>;
+  if (typeof o.proposal !== "string" || typeof o.command !== "string" || typeof o.cwd !== "string") return undefined;
+  if (typeof o.exit_code !== "number" || typeof o.output_tail !== "string") return undefined;
+  if (o.commit !== undefined && typeof o.commit !== "string") return undefined;
+  return o as unknown as VerifyHead;
+}
 /** Role is a display tag plus one quorum rule (chair is never waited on but may veto). It is never a persona. */
 export type Role = "worker" | "chair" | "lead" | "verifier" | "recruit";
 export const ROLES: Role[] = ["worker", "chair", "lead", "verifier", "recruit"];
@@ -56,6 +92,8 @@ export interface Participant {
   leaveWarnedExit?: boolean;
   /** why this participant left, as given to leave_room; shown in the room notice and the dashboard */
   leaveReason?: string;
+  /** Timestamp of this participant's most recent non-empty verify/* board write, room-scoped. Best-effort like working/activity below: read live, not replayed across a process restart. Used to pick the least-recently-verifying reviewer at claim time. */
+  lastVerifiedAt?: string;
   /** last heartbeat from the seat process: local work makes no hub calls, so this is how the room knows it is alive. Ephemeral. */
   working?: { tool: string; step: number; at: string; detail?: string };
   /** the last 60 heartbeats: what the seat ran, step by step (dashboard: click a person). Ephemeral. */
@@ -123,6 +161,9 @@ export interface BoardEntry {
   ackRequired?: boolean;
   /** inbox/*.ack entries cover only the note text hashed when acknowledged. */
   acknowledgedTextHash?: string;
+  /** claim/* entries only: the reviewer the hub assigned at creation (name/id), never client-supplied. */
+  reviewer?: string;
+  reviewerId?: string;
 }
 
 export interface Challenge {
@@ -509,7 +550,7 @@ export class Hub {
       latest_seq: room.messages.at(-1)?.seq ?? 0,
       proposals: [...room.proposals.values()].map((pr) => this.proposalView(room, pr, reveal, pr.status === "open" || pr.status === "accepted")),
       // agents get a manifest (board_get <key> fetches text); the human dashboard (reveal) gets the text
-      board: Object.fromEntries([...room.board].filter(([k, e]) => reveal || !this.boardEntryExpired(room, k, e)).map(([k, e]) => [k, { ...(reveal ? { text: e.text } : {}), by: e.by, chars: e.text.length, updated_at: e.updatedAt }])),
+      board: Object.fromEntries([...room.board].filter(([k, e]) => reveal || !this.boardEntryExpired(room, k, e)).map(([k, e]) => [k, { ...(reveal ? { text: e.text } : {}), by: e.by, chars: e.text.length, updated_at: e.updatedAt, ...(e.reviewer ? { reviewer: e.reviewer } : {}) }])),
       quiet: (() => {
         const qs = room.messages.filter((m) => m.quiet);
         return { messages: qs.length, unsurfaced_threads: new Set(qs.map((m) => this.threadRoot(room, m).id)).size };
@@ -1723,6 +1764,8 @@ export class Hub {
       if (key !== `hold/${room.name}`) throw new HubError(`A hold for this room is the key "hold/${room.name}".`, undefined, "key-format");
       if (previous && previous.by !== p.name) throw new HubError(`The hold was placed by ${previous.by}; only they (or a human) can clear or change it.`, undefined, "ownership");
     }
+    // Assigned once, at creation only: later edits (status updates, notes) keep the same reviewer.
+    let reviewer: Participant | undefined;
     if (key.startsWith("claim/")) {
       if (previous && previous.by !== p.name) throw new HubError(`claim "${key}" is owned by ${previous.by} (since ${previous.updatedAt}). Join their team via help/ or join-request/, or pick another area.`, undefined, "ownership");
       if (text.trim()) {
@@ -1740,6 +1783,7 @@ export class Hub {
           }
         }
       }
+      reviewer = previous ? undefined : this.assignReviewer(room, p);
     }
     if (opts.ifAbsent && previous) throw new HubError(`"${key}" already exists (by ${previous.by}, ${previous.updatedAt}).`, { existing: previous }, "state");
     if (opts.ifByMe && previous && previous.by !== p.name) throw new HubError(`"${key}" was written by ${previous.by}, not you. Use post_to_room or a different key.`, undefined, "ownership");
@@ -1759,17 +1803,59 @@ export class Hub {
     }
     this.surfaceCited(room, text, `cited on the board under ${key}`);
     const note = key.startsWith("inbox/") && key.endsWith(".ack") ? room.board.get(key.slice(0, -4)) : undefined;
+    if (key.startsWith("verify/")) p.lastVerifiedAt = now();
     const entry: BoardEntry = {
       text, by: p.name, updatedAt: now(),
       ...(expiresAt ? { expiresAt } : {}),
       ...(key.startsWith("verify/") ? { codeState: Hub.codeState(this.cwd) } : {}),
       ...(note ? { acknowledgedTextHash: Hub.noteHash(note.text) } : {}),
+      ...(reviewer ? { reviewer: reviewer.name, reviewerId: reviewer.id }
+        : previous?.reviewer ? { reviewer: previous.reviewer, reviewerId: previous.reviewerId } : {}),
     };
     this.applyBoard(room, key, entry);
     this.persist({ type: "board", room: roomName, key, entry });
-    this.post(room, "board", p, `${previous ? "updated" : "added"} board entry "${key}" (${text.length} chars; read it with board_get)`);
+    this.post(room, "board", p, `${previous ? "updated" : "added"} board entry "${key}" (${text.length} chars; read it with board_get)`
+      + (reviewer ? ` — reviewer: ${reviewer.name}` : ""));
+    if (reviewer) {
+      // kind "chat", not "system": addressedBy()/actionableNow() resolve an owed @-mention from
+      // *content*, independent of lastSeenSeq, so it reliably wakes a held wait_for_messages even
+      // though hub.wait() already advances this participant's lastSeenSeq past this very message
+      // in the same call that delivers it (settleRead runs before the caller's actionableNow
+      // check). A "system"-kind post with an explicit mentions field looked right in isolation but
+      // is provably too late by the time hold_until_actionable's loop re-checks it.
+      this.post(room, "chat", undefined,
+        `@${reviewer.name} you are the reviewer for ${p.name}'s "${key}" (least-recently-verifying active participant, picked by the hub). ` +
+        `Once ${p.name} proposes work from it, require_verification prefers a verify/* entry from you over anyone else's while you're still active; ` +
+        `write it as {"proposal":"<id>","command":"...","cwd":"...","exit_code":0,"output_tail":"..."} naming the proposal, per docs/swarm-protocol-spec.md.`);
+    }
     if (key.endsWith(".ack") || key.startsWith("verify/")) for (const pr of room.proposals.values()) if (pr.status === "open") this.evaluate(room, pr);
     return entry;
+  }
+
+  /** Reviewer assigned when a claim/<area> is first created: the least-recently-verifying active
+   * voter who is not the owner (never verified sorts first), ties broken by earliest join. Hub-chosen,
+   * never client-supplied, so a claimant cannot pick their own reviewer by writing it into the JSON. */
+  private assignReviewer(room: Room, owner: Participant): Participant | undefined {
+    // identity-is-the-connection: a second name on the owner's own MCP session is not "someone
+    // else" (the same sock-puppet case verifiedBy() already excludes for authorship, hub.ts ~2190).
+    const candidates = this.voters(room).filter((x) => x.id !== owner.id && !(x.session && owner.session && x.session === owner.session));
+    if (!candidates.length) return undefined;
+    return candidates.slice().sort((a, b) =>
+      (a.lastVerifiedAt ?? "").localeCompare(b.lastVerifiedAt ?? "") || a.joinedAt.localeCompare(b.joinedAt))[0];
+  }
+
+  /** The active reviewer assigned to the claim(s) `authorName` owns, if any: the most recently
+   * created claim/* entry they authored that still has an active reviewer. Falls back across
+   * claims so a stale/handed-off claim does not shadow a live one. */
+  private activeReviewerFor(room: Room, authorName: string): Participant | undefined {
+    const claims = [...room.board.entries()]
+      .filter(([k, e]) => k.startsWith("claim/") && e.by === authorName && e.reviewerId)
+      .sort(([, a], [, b]) => b.updatedAt.localeCompare(a.updatedAt));
+    for (const [, e] of claims) {
+      const rev = room.participants.get(e.reviewerId!);
+      if (rev?.active) return rev;
+    }
+    return undefined;
   }
 
   /** System-initiated board write on someone's behalf (e.g. a claim made at recruitment); no membership needed. */
@@ -2104,7 +2190,7 @@ export class Hub {
     }
     const openCh = this.qualifyingChallenges(room, pr);
     if (openCh.length) out.push(this.challengeAdvice(room, openCh));
-    if (room.requireVerification && !this.verifiedBy(room, pr)) out.push(`a verify/* board entry by someone other than ${this.shown(room, pr.by)} naming ${pr.id}`);
+    if (room.requireVerification && !this.verifiedBy(room, pr)) out.push(this.verifyHeadRefusal(room, pr));
     if (this.hold(room)) out.push(`hold by ${this.hold(room)!.by}`);
     if (!active.some((p) => pr.votes[p.id] && (pr.votes[p.id].version ?? 1) === pr.version) && pr.version > 1) out.push(`no vote cast on v${pr.version} yet (carried-over agrees alone cannot pass a new version)`);
     return out;
@@ -2138,20 +2224,39 @@ export class Hub {
   }
 
   /** Re-check whether a proposal has reached the room's quorum. */
-  /** A verify/* entry by a different agent (different connection), newer than the proposal text, naming the proposal. */
+  /**
+   * A verify/* entry by a different agent (different connection), newer than the proposal text, whose first
+   * line is a parseable VerifyHead naming this proposal with exit_code 0. Content-blind free text (a "BLOCKED"
+   * or "PARTIAL" entry that never ran a passing command) never counts, however it names the proposal.
+   */
   verifiedBy(room: Room, pr: Proposal): BoardEntry | undefined {
     if (!pr.updatedAt) return undefined; // Legacy text timestamps are unknown, not fresh.
     const proposer = room.participants.get(pr.by.id);
+    // An active assigned reviewer (Hub.assignReviewer, set at claim/<area> creation) is preferred:
+    // only their entry counts while they are still in the room. Once they leave, any qualifying
+    // non-author entry counts again, so an absent reviewer never deadlocks the room.
+    const reviewer = this.activeReviewerFor(room, pr.by.name);
     for (const [k, e] of room.board) {
       if (!k.startsWith("verify/") || k.endsWith(".partial")) continue;
       if (e.by === pr.by.name) continue;
       const author = [...room.participants.values()].find((x) => x.name === e.by);
       if (author && proposer && author.session && author.session === proposer.session) continue; // same process, two names
+      if (reviewer && e.by !== reviewer.name) continue;
       if (e.updatedAt < pr.updatedAt) continue;
-      if (!e.text.includes(pr.id)) continue;
+      const head = parseVerifyHead(e.text);
+      if (!head || head.exit_code !== 0 || head.proposal !== pr.id) continue;
       return e;
     }
     return undefined;
+  }
+
+  /** What exactly to write, named precisely enough that "an entry exists but doesn't count" is never a mystery. */
+  private verifyHeadRefusal(room: Room, pr: Proposal): string {
+    const reviewer = this.activeReviewerFor(room, pr.by.name);
+    const who = reviewer
+      ? `your assigned reviewer, ${this.shown(room, reviewer)} (falls back to anyone else once they leave the room),`
+      : `someone other than ${this.shown(room, pr.by)} (on a different connection)`;
+    return `a verify/* board entry from ${who} whose first line is JSON ${VERIFY_HEAD_EXAMPLE.replace("<PROPOSAL_ID>", pr.id)} — commit is optional; exit_code must be 0 for the entry to count`;
   }
 
   private evaluate(room: Room, pr: Proposal) {
@@ -2217,7 +2322,7 @@ export class Hub {
       return;
     }
     if (accepted && room.requireVerification && !this.verifiedBy(room, pr)) {
-      stuck(`${pr.id} has the votes but no verification: someone other than ${this.shown(room, pr.by)} (on a different connection) must run the fix and write verify/<area> naming ${pr.id}, dated after the current text.`);
+      stuck(`${pr.id} has the votes but no verification: ${this.verifyHeadRefusal(room, pr)}, dated after the current text.`);
       return;
     }
 

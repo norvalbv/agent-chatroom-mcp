@@ -19,6 +19,7 @@ export function runCommands(commands, { cwd, timeout = 120_000 } = {}) {
 export const offlineScripts = [
   'archive-regression.ts',
   'attention-gate-regression.ts',
+  'baseline-freeze-guard-regression.ts',
   'board-expiry-regression.ts',
   'board-manifest-regression.ts',
   'board-transport-regression.ts',
@@ -49,6 +50,7 @@ export const offlineScripts = [
   'respawn-regression.ts',
   'result-fleet-compat.ts',
   'result-fleet-regression.ts',
+  'reviewer-assignment-regression.ts',
   'seat-env-regression.ts',
   'seat-git-config-regression.ts',
   'seat-search-regression.ts',
@@ -61,6 +63,7 @@ export const offlineScripts = [
   'tool-surface-regression.ts',
   'trim-checkpoint-regression.ts',
   'uncited-challenge-regression.ts',
+  'verify-verdict-regression.ts',
 ];
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

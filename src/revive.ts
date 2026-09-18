@@ -40,7 +40,7 @@ const promptFor = (name: string, note: string) => {
     `Its previous seats all died at once when their model was withdrawn; the room, its board and its git branches survived. Before anything else: room_status, then board_get with no key for the manifest and read every handoff/*, claim/*, inbox/* and verify/* entry, then read_messages for the last 60 messages. ` +
     `Take over the unfinished work those entries describe; do not redo what a handoff says is done. ${note}\n\n${brief}\n\n` +
     (verifier
-      ? `You are the verifier: reproduce what the builders claim on a throwaway hub (PORT above 8000, stop it by pid: kill $(lsof -ti:PORT), never pkill), write verify/* entries naming branch, commit and what you ran, challenge the weakest claim of any proposal, and vote only on evidence.`
+      ? `You are the verifier: reproduce what the builders claim on a throwaway hub (PORT above 8000, stop it by pid: kill $(lsof -ti:PORT), never pkill), write verify/* entries whose first line is JSON {"proposal":"<id>","command":"<what you ran>","cwd":"<working dir>","exit_code":0,"output_tail":"<last lines of real output>"} (commit optional; prose may follow) with exit_code 0, challenge the weakest claim of any proposal, and vote only on evidence.`
       : `Colleagues in this room now: ${names.filter((n) => n !== name).join(", ")}. Coordinate with quiet messages; keep the public channel for claims, evidence, the proposal and votes.`) +
     ` Recruit with agent="openrouter" only if a slice needs more hands. When the room concludes, leave_room with a one-line reason. Never set timeout_ms above 55000.`;
 };

@@ -80,6 +80,10 @@ export interface SpawnerHooks {
   roomTopic?(room: string): string | undefined;
   /** register with the hub that a recruit replaces a departed participant; must throw on failure */
   registerReplacement?(room: string, predecessor: string, successorName: string): string;
+  /** current state of a room ("open" | "concluded" | "stalled" | "closed"); undefined when unknown. Consolidator spawn asks this. */
+  roomState?(room: string): string | undefined;
+  /** whether a room currently has an open proposal. Consolidator spawn skips the lobby while one is open. */
+  openProposal?(room: string): boolean;
 }
 
 export interface SpawnerOptions {
@@ -121,6 +125,8 @@ export class Spawner {
   private readonly children = new Map<string, ChildProcess>();
   private counter = 0;
   private hooks?: SpawnerHooks;
+  /** lobbies that already got their consolidator seat, so it fires exactly once per lobby */
+  private readonly consolidatorsFired = new Set<string>();
 
   constructor(private readonly opts: SpawnerOptions) {
     mkdirSync(opts.logDir, { recursive: true });
@@ -293,10 +299,51 @@ export class Spawner {
         rec.endedAt = new Date().toISOString();
         rec.exitCode = code;
         this.children.delete(name);
+        try {
+          this.checkConsolidators();
+        } catch (e) {
+          // never let a consolidator spawn failure crash the hub: announce and move on
+          this.hooks?.announce(rec.reportTo ?? target, `Consolidator spawn check failed: ${(e as Error).message}`);
+        }
       });
       out.push(rec);
     }
     return out;
+  }
+
+  /** The consolidator seat's only job: assemble the ranked list from the children's conclusions and inbox entries. */
+  static readonly CONSOLIDATOR_BRIEF =
+    "Assemble the ranked list from the children's conclusions and inbox/* board entries, propose it to the lobby, then leave with a reason.";
+
+  /**
+   * Consolidator spawn (lobby item 3): a lobby that spawned child break-out rooms gets ONE fresh consolidator
+   * seat once the LAST child concludes, so no lobby seat waits for a manually nominated drafter (fleet.ts already
+   * has launch-time --consolidate for flat fleets; this is the request_agent(new_room) equivalent). Fires at most
+   * once per lobby, is skipped while a proposal is open in the lobby (it is still deliberating), and is skipped
+   * when the lobby room itself is unknown, concluded or closed. Called on every child close (above) and by tests.
+   */
+  checkConsolidators(): void {
+    if (!this.hooks?.roomState) return;
+    // children of a lobby are agents spawned with new_room set: they report to the lobby
+    const byLobby = new Map<string, SpawnedAgent[]>();
+    for (const a of this.agents) {
+      if (!a.reportTo) continue;
+      const list = byLobby.get(a.reportTo);
+      if (list) list.push(a);
+      else byLobby.set(a.reportTo, [a]);
+    }
+    for (const [lobby, children] of byLobby) {
+      if (children.length === 0 || this.consolidatorsFired.has(lobby)) continue; // once per lobby
+      const lobbyState = this.hooks.roomState(lobby);
+      if (lobbyState !== "open" && lobbyState !== "stalled") continue; // unknown/closed/concluded lobby: never fire into it
+      if (this.hooks.openProposal?.(lobby)) continue; // the lobby is still deliberating; no consolidator yet
+      const everyConcluded = children.every((c) => c.endedAt !== undefined && this.hooks?.roomState?.(c.room) === "concluded");
+      if (!everyConcluded) continue; // only when the LAST child room has concluded
+      this.consolidatorsFired.add(lobby);
+      const by = children[0].requestedBy;
+      this.hooks?.announce(lobby, `All ${children.length} child room(s) of this lobby have concluded; starting one consolidator seat to assemble the ranked list.`);
+      this.request({ room: lobby, count: 1, name: "consolidator", requestedBy: by, requestedByShown: by, brief: Spawner.CONSOLIDATOR_BRIEF });
+    }
   }
 
   /** `git worktree add` for one recruit: .swarm-worktrees/<room>/<name> on branch swarm/<room>/<name>, node_modules linked so builds and tests work there. */

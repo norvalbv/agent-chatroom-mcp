@@ -71,6 +71,20 @@ spawner.attach({
   },
   liveAgents: () => [...hub.rooms.values()].filter((r) => r.state === "open" || r.state === "stalled").reduce((n, r) => n + hub.voters(r).length, 0),
   roomTopic: (room) => hub.rooms.get(room)?.topic,
+  roomState: (room) => {
+    try {
+      return hub.getRoom(room).state;
+    } catch {
+      return undefined;
+    }
+  },
+  openProposal: (room) => {
+    try {
+      return [...hub.getRoom(room).proposals.values()].some((p) => p.status === "open");
+    } catch {
+      return false;
+    }
+  },
   registerReplacement: (room, predecessor, successorName) => {
     const old = [...hub.getRoom(room).participants.values()].find(p => p.name === predecessor);
     // A recruit may replace a departed agent, never declare another live seat or human departed.

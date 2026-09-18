@@ -2,10 +2,12 @@
  * Arm A: one claude seat, no chatroom tools, the task brief plus a minimal "where to put your answer"
  * scaffold. Arm C: a chatroom room on a hub this script starts, the fixed seat count for the task, the
  * full hub surface (challenge + verification on). Both launch seats through claudeArgs() so the only
- * difference between arms is the arm itself, per item 1's requirement.
+ * difference between arms is the arm itself, per item 1's requirement. Both arms run
+ * --output-format stream-json (item 3): a seat killed at the deadline still leaves whatever it streamed
+ * before the kill, instead of losing its usage entirely to a clean-exit-only json blob.
  *
  * node --import tsx scripts/bench-rq1.ts TASK_DIR ARM SEED --root DIR [--model sonnet] [--port N]
- *   [--seats N] [--timeout-ms N] [--max-budget-usd N] [--deadline-ms N] [--hub-entry PATH]
+ *   [--seats N] [--timeout-ms N, default 900000] [--max-budget-usd N] [--deadline-ms N] [--hub-entry PATH]
  *
  * ARM is A or C. Fixtures stay hidden exactly as scripts/bench-bench.ts already does (public/ copied
  * into workspace/, oracle/ and fixtures/ never copied); scoring is the *unmodified*
@@ -63,6 +65,19 @@ async function stop(child: ChildProcess) {
   }
 }
 
+/** Token signal salvaged from `--output-format stream-json` messages seen before a seat was killed —
+ * item 3: claude's real cost figure (`total_cost_usd`) only exists on the final `result` event, so a
+ * killed seat's cost genuinely stays unknown (usage:null, exactly as an unmodified clean-exit failure
+ * already reads), but the per-turn token counts on `type:"assistant"` events do survive a kill and are
+ * worth keeping as forensic signal distinct from the authoritative `usage` field. */
+export interface PartialUsage {
+  output_tokens: number;
+  input_tokens?: number;
+  cache_read_input_tokens?: number;
+  cache_creation_input_tokens?: number;
+  assistant_messages_observed: number;
+}
+
 export interface SeatRecord {
   name: string;
   argv: string[];
@@ -76,18 +91,59 @@ export interface SeatRecord {
   duration_ms: number | null;
   duration_api_ms: number | null;
   stderr_tail: string;
+  /** true only when *our* deadline timer sent the kill signal, distinct from any other exit/signal. */
+  killed_by_deadline: boolean;
+  /** Non-null only when the seat was killed before a `result` event arrived but at least one
+   * `assistant` event was observed first; null (not zero-filled) otherwise. */
+  partial_usage: PartialUsage | null;
 }
 
-/** Spawn one `claude` seat (bare command name, resolved off PATH so tests can stub it); enforce a wall-clock cap since the CLI has no such flag itself. */
+/** Spawn one `claude` seat (bare command name, resolved off PATH so tests can stub it); enforce a wall-clock cap since the CLI has no such flag itself.
+ * Seats run with `--output-format stream-json` (see src/claude-args.ts): stdout is NDJSON, one event per
+ * line, so a kill mid-run still leaves every event flushed before the kill on disk/in the buffer — a
+ * clean-exit-only `--output-format json` blob loses everything to a SIGTERM (item 3). */
 function runClaudeSeat(name: string, args: string[], cwd: string, deadlineMs: number): Promise<SeatRecord> {
   return new Promise((res) => {
     const startedAt = new Date();
     const child = spawn("claude", args, { cwd, env: seatChildEnv(process.env, name), stdio: ["ignore", "pipe", "pipe"] });
-    let out = "";
+    let buffered = "";
+    let resultLine: string | null = null;
     let err = "";
-    child.stdout?.on("data", (d) => (out += d));
+    const partial: PartialUsage = { output_tokens: 0, assistant_messages_observed: 0 };
+    let killedByDeadline = false;
+    const consumeLine = (line: string) => {
+      const trimmed = line.trim();
+      if (!trimmed) return;
+      let evt: any;
+      try {
+        evt = JSON.parse(trimmed);
+      } catch {
+        return;
+      }
+      if (evt?.type === "result") {
+        resultLine = trimmed;
+        return;
+      }
+      if (evt?.type === "assistant" && evt.message?.usage) {
+        const u = evt.message.usage;
+        partial.assistant_messages_observed += 1;
+        if (typeof u.output_tokens === "number") partial.output_tokens += u.output_tokens;
+        if (typeof u.input_tokens === "number") partial.input_tokens = u.input_tokens;
+        if (typeof u.cache_read_input_tokens === "number") partial.cache_read_input_tokens = u.cache_read_input_tokens;
+        if (typeof u.cache_creation_input_tokens === "number") partial.cache_creation_input_tokens = u.cache_creation_input_tokens;
+      }
+    };
+    child.stdout?.on("data", (d) => {
+      buffered += d;
+      let idx: number;
+      while ((idx = buffered.indexOf("\n")) >= 0) {
+        consumeLine(buffered.slice(0, idx));
+        buffered = buffered.slice(idx + 1);
+      }
+    });
     child.stderr?.on("data", (d) => (err += d));
     const killer = setTimeout(() => {
+      killedByDeadline = true;
       child.kill("SIGTERM");
       setTimeout(() => {
         if (child.exitCode === null && child.signalCode === null) child.kill("SIGKILL");
@@ -95,12 +151,13 @@ function runClaudeSeat(name: string, args: string[], cwd: string, deadlineMs: nu
     }, deadlineMs);
     child.on("close", (code, signal) => {
       clearTimeout(killer);
+      if (buffered.trim()) consumeLine(buffered);
       const completedAt = new Date();
-      const raw = out.trim();
+      const raw = (resultLine ?? "").trim();
       const { text, usage } = parseClaudeCliOutput(raw);
       let parsed: any = null;
       try {
-        parsed = JSON.parse(raw);
+        parsed = resultLine ? JSON.parse(resultLine) : null;
       } catch {}
       res({
         name,
@@ -115,6 +172,8 @@ function runClaudeSeat(name: string, args: string[], cwd: string, deadlineMs: nu
         duration_ms: typeof parsed?.duration_ms === "number" ? parsed.duration_ms : null,
         duration_api_ms: typeof parsed?.duration_api_ms === "number" ? parsed.duration_api_ms : null,
         stderr_tail: err.slice(-4000),
+        killed_by_deadline: killedByDeadline,
+        partial_usage: !resultLine && partial.assistant_messages_observed > 0 ? partial : null,
       });
     });
   });
@@ -159,7 +218,10 @@ async function main() {
   const port = Number(flag("port", "19850"));
   if (!Number.isInteger(port) || port <= 8000 || port > 65534) throw new Error("Invalid port: use integer port >8000 and <=65534");
   const seats = Math.max(1, Number(flag("seats", "3")));
-  const timeoutMs = Number(flag("timeout-ms", "300000"));
+  // Item 4 (paper/amendments.md): the old 300000ms default left a 3-seat room with blind openings only
+  // ~150s for any real work — bench-bug-fix-C-seed1's own reveal alone (data/rq1.jsonl timestamps) took
+  // 139s. 900000ms (15min) budgets for that reveal plus edit/propose/challenge/verify-command round trips.
+  const timeoutMs = Number(flag("timeout-ms", "900000"));
   if (!Number.isFinite(timeoutMs) || timeoutMs < 1) throw new Error("Invalid --timeout-ms");
   const maxBudgetUsd = flag("max-budget-usd");
   const deadlineMs = Number(flag("deadline-ms", String(timeoutMs)));
@@ -217,7 +279,7 @@ async function main() {
     json(mcpJson, { mcpServers: {} });
     const text = `${briefText}\n${scaffoldSingle}`;
     const tools = isCodeTask ? ["Read", "Edit", "Write", "MultiEdit", "Bash", "Glob", "Grep"] : ["Read", "Write", "Bash", "Glob", "Grep"];
-    const args = claudeArgs({ text, mcpJson, tools, model });
+    const args = claudeArgs({ text, mcpJson, tools, model, outputFormat: "stream-json" });
     if (maxBudgetUsd) args.push("--max-budget-usd", maxBudgetUsd);
     seatRecords = [await runClaudeSeat("single", args, workspace, deadlineMs)];
     completedAt = new Date();
@@ -276,7 +338,7 @@ async function main() {
     for (let i = 1; i <= seats; i++) {
       const name = `seat-${i}`;
       const text = `${briefText}\n${scaffoldRoom}\n\nJoin room ${room} as ${name} (agent claude, expected_participants ${seats}). Leave the room once it has concluded.`;
-      const args = claudeArgs({ text, mcpJson, tools, model });
+      const args = claudeArgs({ text, mcpJson, tools, model, outputFormat: "stream-json" });
       seatPromises.push(runClaudeSeat(name, args, workspace, deadlineMs));
     }
     seatRecords = await Promise.all(seatPromises);
@@ -300,9 +362,17 @@ async function main() {
   // and a clean run's anti_tamper record must reflect the real post-run state either way.
   const after = hashTree(taskDir);
   const unchanged = after === taskBefore && hashFile(scorerPath) === scorerBefore && hashFile(factScorerPath) === factScorerBefore;
-  const scored = !failureReason && unchanged ? await scorer.scoreTask(taskDir, workspace) : { passed: false, reason: failureReason ?? "tamper", oracle: { kind: task.oracle.kind, command: null, exit_code: null } };
-  const outcome = !unchanged ? "tamper" : (failureReason ?? scored.reason);
-  const passed = unchanged && !failureReason && scored.passed;
+  // Item 3 (paper/amendments.md): a seat our own deadline killed never got a fair attempt — even when the
+  // workspace happens to look untouched/correct, scoring it would misrepresent a cut-off run as a pass or
+  // fail. "timeout" is already in the five-outcome vocabulary (docs/decisions/measure-task-success-on-a-
+  // machine-oracle.md) but nothing produced it; this is the first producer, checked ahead of scoreTask.
+  const killedByDeadline = seatRecords.some((s) => s.killed_by_deadline);
+  const scored =
+    !failureReason && !killedByDeadline && unchanged
+      ? await scorer.scoreTask(taskDir, workspace)
+      : { passed: false, reason: failureReason ?? (killedByDeadline ? "timeout" : "tamper"), oracle: { kind: task.oracle.kind, command: null, exit_code: null } };
+  const outcome = !unchanged ? "tamper" : (failureReason ?? (killedByDeadline ? "timeout" : scored.reason));
+  const passed = unchanged && !failureReason && !killedByDeadline && scored.passed;
 
   const usage = rollupUsage(seatRecords.map((s) => ({ usage: s.usage })));
   const turnsKnown = seatRecords.filter((s) => typeof s.num_turns === "number");
@@ -321,7 +391,7 @@ async function main() {
     // kept alongside the scored outcome so a parse_failure/task_fail can be told apart after the fact:
     // did the seat compute the right answer and simply not write it where the scorer looked
     // (instruction-following/format failure) or never solve the task at all (reasoning failure)?
-    seats: seatRecords.map((s) => ({ name: s.name, argv: s.argv, exit_code: s.exit_code, signal: s.signal, started_at: s.started_at, completed_at: s.completed_at, num_turns: s.num_turns, duration_ms: s.duration_ms, duration_api_ms: s.duration_api_ms, usage: s.usage, text: s.text })),
+    seats: seatRecords.map((s) => ({ name: s.name, argv: s.argv, exit_code: s.exit_code, signal: s.signal, started_at: s.started_at, completed_at: s.completed_at, num_turns: s.num_turns, duration_ms: s.duration_ms, duration_api_ms: s.duration_api_ms, usage: s.usage, text: s.text, killed_by_deadline: s.killed_by_deadline, partial_usage: s.partial_usage })),
     usage,
     turns: { per_seat: seatRecords.map((s) => ({ name: s.name, num_turns: s.num_turns })), summed: turnsKnown.reduce((a, s) => a + (s.num_turns ?? 0), 0), seats: seatRecords.length, seats_with_turns: turnsKnown.length, coverage: turnsKnown.length === 0 ? "none" : turnsKnown.length === seatRecords.length ? "complete" : "partial" },
     wall_clock: { started_at: startedAt.toISOString(), completed_at: completedAt.toISOString(), duration_ms: completedAt.getTime() - startedAt.getTime() },

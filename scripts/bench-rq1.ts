@@ -209,6 +209,10 @@ async function main() {
   // 5) than a recorded infrastructure_error/tamper outcome.
   let failureReason: "infrastructure_error" | "tamper" | null = null;
   let failureMessage: string | null = null;
+  // Item 1 (swarm-125438-jp20): both arms must see the same built-in tools; the chatroom mcp tools are
+  // arm C's only addition on top of this shared list (claudeArgs()'s --tools strips mcp__* entries, so
+  // --tools is exactly baseTools on both arms).
+  const baseTools = isCodeTask ? ["Read", "Edit", "Write", "MultiEdit", "Bash", "Glob", "Grep"] : ["Read", "Write", "Bash", "Glob", "Grep"];
 
   try {
   if (armArg === "A") {
@@ -216,8 +220,7 @@ async function main() {
     const mcpJson = join(root, "mcp-empty.json");
     json(mcpJson, { mcpServers: {} });
     const text = `${briefText}\n${scaffoldSingle}`;
-    const tools = isCodeTask ? ["Read", "Edit", "Write", "MultiEdit", "Bash", "Glob", "Grep"] : ["Read", "Write", "Bash", "Glob", "Grep"];
-    const args = claudeArgs({ text, mcpJson, tools, model });
+    const args = claudeArgs({ text, mcpJson, tools: baseTools, model });
     if (maxBudgetUsd) args.push("--max-budget-usd", maxBudgetUsd);
     seatRecords = [await runClaudeSeat("single", args, workspace, deadlineMs)];
     completedAt = new Date();
@@ -227,7 +230,11 @@ async function main() {
     mkdirSync(dataDir, { recursive: true });
     const hubEnv = { ...process.env };
     for (const key of Object.keys(hubEnv)) if (key.startsWith("CHATROOM_") || /API_KEY|TOKEN|SECRET|PASSWORD|CREDENTIAL/i.test(key)) delete hubEnv[key];
-    Object.assign(hubEnv, { PORT: String(port), HOST: "127.0.0.1", CHATROOM_INSECURE_LOCAL: "1", CHATROOM_DATA_DIR: dataDir, CHATROOM_DEFAULT_CWD: workspace, CHATROOM_LOG_DIR: join(root, "spawned") });
+    // Item 2 (swarm-125438-jp20): a benchmark hub must refuse recruitment outright, in addition to (not
+    // instead of) stripping provider keys above — src/index.ts's loadDotEnv() would otherwise silently
+    // refill a deleted OPENROUTER_API_KEY from the repo's .env, and CHATROOM_NO_RECRUIT=1 both stops that
+    // reload (src/index.ts) and makes every request_agent call fail closed (src/spawner.ts), regardless.
+    Object.assign(hubEnv, { PORT: String(port), HOST: "127.0.0.1", CHATROOM_INSECURE_LOCAL: "1", CHATROOM_NO_RECRUIT: "1", CHATROOM_DATA_DIR: dataDir, CHATROOM_DEFAULT_CWD: workspace, CHATROOM_LOG_DIR: join(root, "spawned") });
     const fd = openSync(join(root, "hub.log"), "w");
     const hubChild = spawn(process.execPath, [hubEntry], { cwd: workspace, env: hubEnv, stdio: ["ignore", fd, fd] });
     const url = `http://127.0.0.1:${port}`;
@@ -271,7 +278,7 @@ async function main() {
     }
     const mcpJson = join(root, "mcp.json");
     json(mcpJson, { mcpServers: { chatroom: { type: "http", url: `${url}/mcp` } } });
-    const tools = ["mcp__chatroom__*", "Read", "Grep", "Glob", ...(isCodeTask ? ["Edit", "Write", "MultiEdit"] : [])];
+    const tools = ["mcp__chatroom__*", ...baseTools];
     const seatPromises: Promise<SeatRecord>[] = [];
     for (let i = 1; i <= seats; i++) {
       const name = `seat-${i}`;

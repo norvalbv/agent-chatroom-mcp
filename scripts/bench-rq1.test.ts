@@ -213,6 +213,37 @@ test("arm C: N stub seats join a stub hub that concludes immediately; conclusion
   }
 });
 
+test("item1: arm A and arm C carry identical built-in tools for the code task; mcp is the only arm-specific addition", async () => {
+  const stubDir = stubClaudeDir();
+  const codeTask = resolve("tasks/bench-bug-fix");
+  const rootA = join(tmpdir(), `bench-rq1-parityA-${process.pid}-${Date.now()}`);
+  const rootC = join(tmpdir(), `bench-rq1-parityC-${process.pid}-${Date.now()}`);
+  const hubEntry = stubHubDir(EXPECTED);
+  const port = await freePort();
+  try {
+    const rA = invoke([codeTask, "A", "1", "--root", rootA], { PATH: `${stubDir}${delimiter}${process.env.PATH}` });
+    assert.equal(rA.status, 0, rA.stderr + rA.stdout);
+    const resultA = JSON.parse(readFileSync(join(rootA, "result.json"), "utf8"));
+    const argvA: string[] = resultA.seats[0].argv;
+    const toolsA = argvA[argvA.indexOf("--tools") + 1].split(",").sort();
+
+    const rC = invoke([codeTask, "C", "1", "--root", rootC, "--port", String(port), "--seats", "1", "--hub-entry", hubEntry, "--timeout-ms", "10000"], {
+      PATH: `${stubDir}${delimiter}${process.env.PATH}`,
+    });
+    assert.equal(rC.status, 0, rC.stderr + rC.stdout);
+    const resultC = JSON.parse(readFileSync(join(rootC, "result.json"), "utf8"));
+    const argvC: string[] = resultC.seats[0].argv;
+    const toolsC = argvC[argvC.indexOf("--tools") + 1].split(",").sort();
+
+    assert.deepEqual(toolsC, toolsA, "arm C's built-in tools must be identical to arm A's (chatroom mcp tools are --allowedTools only, not --tools)");
+    assert.ok(toolsA.includes("Bash"), "the code task's built-in tools must include Bash on both arms");
+  } finally {
+    rmSync(rootA, { recursive: true, force: true });
+    rmSync(rootC, { recursive: true, force: true });
+    rmSync(stubDir, { recursive: true, force: true });
+  }
+});
+
 test("arm C: hidden fixtures never copied into the seat-visible workspace", async () => {
   const stubDir = stubClaudeDir();
   const hubEntry = stubHubDir(EXPECTED);

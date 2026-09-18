@@ -41,6 +41,8 @@ export function seatChildEnv(env: NodeJS.ProcessEnv = process.env, name?: string
 export interface DotEnvOptions {
   /** Keys that must not be reintroduced from .env (e.g. human-control credentials in seats). */
   exclude?: readonly string[];
+  /** Skip any .env line whose key matches (e.g. provider credentials for a hub that must never hold one). */
+  excludePattern?: RegExp;
   /** Injectable target for synthetic tests; controller callers retain process.env by default. */
   env?: NodeJS.ProcessEnv;
 }
@@ -55,7 +57,7 @@ export function loadDotEnv(dir = repoRoot, options: DotEnvOptions = {}): string[
     const line = raw.trim();
     if (!line || line.startsWith("#")) continue;
     const m = /^(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$/.exec(line);
-    if (!m || excluded.has(m[1])) continue;
+    if (!m || excluded.has(m[1]) || (options.excludePattern && options.excludePattern.test(m[1]))) continue;
     let value = m[2].trim();
     if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) value = value.slice(1, -1);
     if (env[m[1]] === undefined) {

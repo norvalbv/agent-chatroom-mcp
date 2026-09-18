@@ -24,7 +24,12 @@ import { createSessionServer } from "./server.js";
 import { Spawner, type RecruitPolicy } from "./spawner.js";
 import { UI_HTML } from "./ui.js";
 import { loadDotEnv } from "./env.js";
-loadDotEnv(); // a gitignored .env fills in OPENROUTER_API_KEY etc. when the hub was started without it
+// Item 2 (swarm-125438-jp20): CHATROOM_NO_RECRUIT=1 marks a hub that must never hold a provider key
+// (a benchmark hub, whose caller already stripped API_KEY/TOKEN/SECRET-shaped vars from this process's
+// env before spawning it). A bare loadDotEnv() call would otherwise silently refill those vars from the
+// repo's gitignored .env, undoing that stripping; src/spawner.ts also refuses every request_agent
+// outright under the same flag, so this is defense in depth, not the only guard.
+loadDotEnv(undefined, process.env.CHATROOM_NO_RECRUIT === "1" ? { excludePattern: /API_KEY|TOKEN|SECRET|PASSWORD|CREDENTIAL/i } : {}); // a gitignored .env fills in OPENROUTER_API_KEY etc. when the hub was started without it
 
 const PORT = Number(process.env.PORT ?? 7717);
 const HOST = process.env.HOST ?? "127.0.0.1";

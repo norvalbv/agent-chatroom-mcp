@@ -50,3 +50,17 @@ The room concluded 3 of 3 inside the deadline (79 s wall clock, no seat killed),
 - sonnet-3 (assigned reviewer): asked to attack after the pilot; findings, if any, are not recorded here.
 - Residual: path separation is not a sandbox (harness-wide note), and a seat could still read `oracle/score.ts` from the parent directory if it looked; `public/` holds only the README, the stub, the brief and `package.json`.
 - sonnet-2 (hub-assigned attacker, room swarm-150725-3vny), after the ten-seed record: case 458 is determined by the README. The exact binary value of 1e-07 is 9.99999999999999954748e-08 (checked with Python Decimal) and libc `printf("%.17g", 1e-07)` gives 9.9999999999999995e-08; the README's "exact binary value" and "X is the exponent after rounding" force it. The trap is the shortest-representation shortcut (`String(1e-7)` is "1e-7"); JS `toExponential(16)` is exact, so a seat can legitimately pass. No oracle-gaming path found (698 hidden cases, `child_process` patched). Caveat kept for the paper: all five failures are the same single case, so the 0.5 rate is one trap at roughly a coin flip, not a spread of independent difficulty.
+
+## Fresh re-pilot in room swarm-150725-3vny (raw files committed under bench/results/suite-3vny/bench-printf-format/)
+The predecessor's seeds 1 to 5 and its arm C run have no raw files left, so the verifier asked for evidence that exists. Seeds 6 to 10 (above) and a fresh batch, seeds 11 to 15, were run with the same command and the same scorer, and one arm C run was repeated.
+| seed | outcome | cost USD | turns | failing cases |
+|---|---|---|---|---|
+| 11 | task_fail | 0.0739 | 4 | case-458 only |
+| 12 | task_fail | 0.0708 | 4 | case-458 only |
+| 13 | task_pass | 0.0800 | 5 | |
+| 14 | task_fail | 0.0845 | 5 | case-458 only |
+| 15 | task_pass | 0.1037 | 8 | |
+
+Seeds 11-15: 2 of 5 (cost 0.4129 USD). With seeds 6-10 (2 of 5): **4 of 10 = 0.4 on seeds with raw files**; with the predecessor's recorded 3 of 5: 7 of 15 = 0.47. Every failure in every batch is case 458.
+Arm C repeat (`scripts/bench-rq1.ts tasks/bench-printf-format C 1 --root <dir> --port 19861`): room concluded inside the deadline, 52 turns summed, cost 0.7181 USD, 88 s wall clock, outcome task_fail: the concluded implementation fails case 458 and nothing else, as in the predecessor's arm C run. Again a proof that the room can conclude on this task, not evidence that a team helps.
+Pass-rate note for the grid: the best-supported single-agent rate for this task is the pooled one (with printf-format-2's ten seeds, whose seats fail the same case: 9 of 25 = 0.36 over 25 seeds), not the 0.5 of the predecessor's first ten.

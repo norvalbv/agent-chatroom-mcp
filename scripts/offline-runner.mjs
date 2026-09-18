@@ -28,6 +28,7 @@ export const offlineScripts = [
   'electorate-regression.ts',
   'human-answering.test.ts',
   'mention-mentions.test.ts',
+  'openrouter-cache-regression.ts',
   'regression-replay.ts',
   'recruit-prefix-regression.ts',
   'route-auth-regression.ts',

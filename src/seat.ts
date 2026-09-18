@@ -34,6 +34,10 @@ export interface Usage {
   prompt_tokens: number;
   completion_tokens: number;
   cost: number;
+  /** tokens the provider billed at a cache-read discount this run, when it reports the field (a $ signal, not a cut to prompt_tokens: see docs/decisions or evidence/openrouter-prompt-caching). */
+  cached_tokens?: number;
+  cache_creation_tokens?: number;
+  cache_discount?: number;
 }
 /** One model turn as the loop consumes it. `reasoningDetails` is passed back verbatim on the next request. */
 export interface Reply {
@@ -431,6 +435,9 @@ export async function runSeat(provider: ChatProvider, opts: SeatOptions): Promis
     usage.prompt_tokens += reply.usage?.prompt_tokens ?? 0;
     usage.completion_tokens += reply.usage?.completion_tokens ?? 0;
     usage.cost += reply.usage?.cost ?? 0;
+    if (reply.usage?.cached_tokens) usage.cached_tokens = (usage.cached_tokens ?? 0) + reply.usage.cached_tokens;
+    if (reply.usage?.cache_creation_tokens) usage.cache_creation_tokens = (usage.cache_creation_tokens ?? 0) + reply.usage.cache_creation_tokens;
+    if (reply.usage?.cache_discount) usage.cache_discount = (usage.cache_discount ?? 0) + reply.usage.cache_discount;
     const calls = reply.toolCalls;
     messages.push({
       role: "assistant",
@@ -501,7 +508,7 @@ export async function runSeat(provider: ChatProvider, opts: SeatOptions): Promis
     }
   }
 
-  log(`[${provider.label}] ${steps} step(s), ${usage.prompt_tokens} prompt + ${usage.completion_tokens} completion tokens${usage.cost ? `, $${usage.cost.toFixed(4)}` : ""}`);
+  log(`[${provider.label}] ${steps} step(s), ${usage.prompt_tokens} prompt + ${usage.completion_tokens} completion tokens${usage.cost ? `, $${usage.cost.toFixed(4)}` : ""}${usage.cached_tokens ? `, ${usage.cached_tokens} cached tok` : ""}${usage.cache_discount ? `, $${usage.cache_discount.toFixed(4)} cache discount` : ""}`);
   if (opts.mcpUrl) {
     // a finish that skipped leave_room would leave an active voter behind until the idle sweep
     if (joined.size) await bow("finished without leaving");

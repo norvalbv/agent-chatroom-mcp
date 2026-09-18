@@ -10,6 +10,9 @@ const text = "Keep the established safe wording for this proposal.";
 const quote = "established safe wording";
 const reason = "New evidence answers this objection adequately.";
 const delay = () => new Promise((resolve) => setTimeout(resolve, 15));
+/** A parseable verify/* head: first line JSON {proposal, command, cwd, exit_code, output_tail}, exit_code 0. */
+const verifyHead = (proposalId: string) =>
+  JSON.stringify({ proposal: proposalId, command: "npm test", cwd: "/tmp/x", exit_code: 0, output_tail: `ran checks for ${proposalId}` });
 
 function fixture(requireVerification = false) {
   const dir = mkdtempSync(join(tmpdir(), "chatroom-replay-"));
@@ -18,7 +21,7 @@ function fixture(requireVerification = false) {
   const a = hub.join(name, "A", "test", { expectedParticipants: 3, nudgeAfterMs: 0, requireVerification }, undefined, "session-a").participant;
   const b = hub.join(name, "B", "test", {}, undefined, "session-b").participant;
   const c = hub.join(name, "C", "test", {}, undefined, "session-c").participant;
-  if (requireVerification) hub.setBoard(name, b.id, "verify/pre", "baseline checks ran");
+  if (requireVerification) hub.setBoard(name, b.id, "verify/pre", verifyHead("n/a"));
   const pr = hub.propose(name, a.id, text);
   const log = join(dir, `${name}.jsonl`);
   const replay = () => {
@@ -68,7 +71,7 @@ test("amend persists its timestamp and replay rejects pre-amend verification", a
   const f = fixture(true);
   try {
     await delay();
-    f.hub.setBoard(f.name, f.b.id, "verify/final", `ran checks for ${f.pr.id}`);
+    f.hub.setBoard(f.name, f.b.id, "verify/final", verifyHead(f.pr.id));
     assert.ok(f.hub.verifiedBy(f.hub.getRoom(f.name), f.pr));
     f.parity();
     await delay();
@@ -80,7 +83,7 @@ test("amend persists its timestamp and replay rejects pre-amend verification", a
     assert.equal(amend.updatedAt, f.pr.updatedAt);
     f.parity();
     await delay();
-    f.hub.setBoard(f.name, f.b.id, "verify/final", `ran amended checks for ${f.pr.id}`);
+    f.hub.setBoard(f.name, f.b.id, "verify/final", verifyHead(f.pr.id));
     f.parity();
     const fresh = f.replay();
     assert.ok(fresh.hub.verifiedBy(fresh.room, fresh.pr));
@@ -91,7 +94,7 @@ test("legacy amend without timestamp cannot establish verification freshness", a
   const f = fixture(true);
   try {
     await delay();
-    f.hub.setBoard(f.name, f.b.id, "verify/final", `ran checks for ${f.pr.id}`);
+    f.hub.setBoard(f.name, f.b.id, "verify/final", verifyHead(f.pr.id));
     await delay();
     f.hub.amend(f.name, f.a.id, f.pr.id, "", "Add another independent requirement.");
     f.rewrite((events) => { for (const e of events) if (e.type === "amend") delete e.updatedAt; });
@@ -102,7 +105,7 @@ test("legacy amend without timestamp cannot establish verification freshness", a
     await delay();
     r.hub.amend(f.name, f.a.id, f.pr.id, "", "Fresh timestamped amendment.");
     await delay();
-    r.hub.setBoard(f.name, f.b.id, "verify/final", `ran fresh checks for ${f.pr.id}`);
+    r.hub.setBoard(f.name, f.b.id, "verify/final", verifyHead(f.pr.id));
     const restored = f.replay();
     assert.ok(restored.hub.verifiedBy(restored.room, restored.pr), "known new amendment can restore freshness");
   } finally { f.cleanup(); }

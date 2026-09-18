@@ -497,19 +497,24 @@ assert.deepEqual(tools, ["amend", "board_get", "board_set", "challenge", "join_r
   assert.equal(st2.state, "concluded", "clearing the hold passes the already-voted proposal");
 }
 {
-  // verification gate: needs a verify/* entry by another agent on another connection, naming the proposal, dated after the text
+  // verification gate: needs a verify/* entry by another agent on another connection whose first line is JSON
+  // {proposal, command, cwd, exit_code, output_tail} naming this proposal's id with exit_code 0. A self-authored,
+  // unparseable, mismatched-proposal or non-zero-exit_code entry does not count (rank1-verify-verdicts).
   const room = "verify";
   await a.call("join_room", { room, name: "claude-1", agent: "claude", require_verification: true, require_challenge: false });
   await b.call("join_room", { room, name: "codex-1", agent: "codex" });
   await assert.rejects(a.call("propose", { room, text: "Fix is done." }), /requires verification/);
-  await a.call("board_set", { room, key: "verify/auth", text: "ran: npm test (cwd /tmp/x, commit abc) exit 0" });
+  await a.call("board_set", { room, key: "verify/auth", text: `{"proposal":"placeholder","command":"npm test","cwd":"/tmp/x","exit_code":0,"output_tail":"9 passed"}` });
   const pr = await a.call("propose", { room, text: "Fix is done: see verify/auth." });
   await b.call("wait_for_messages", { room, timeout_ms: 0 });
   let v = await b.call("vote", { room, proposal_id: pr.id, vote: "agree", quote: "Fix is done: see verify/auth" });
   assert.equal(v.room_state, "open", "proposer's own verify entry must not clear the gate");
-  await b.call("board_set", { room, key: "verify/auth-recheck", text: `ran: npm test (cwd /tmp/x, commit abc) exit 0 — verifies ${pr.id}` });
+  await b.call("board_set", { room, key: "verify/auth-failed", text: `{"proposal":"${pr.id}","command":"npm test","cwd":"/tmp/x","exit_code":1,"output_tail":"1 failed"}` });
+  const stFailed = await a.call("room_status", { room });
+  assert.equal(stFailed.state, "open", "a verify entry with a non-zero exit_code does not satisfy the gate");
+  await b.call("board_set", { room, key: "verify/auth-recheck", text: `{"proposal":"${pr.id}","command":"npm test","cwd":"/tmp/x","exit_code":0,"output_tail":"9 passed — verifies ${pr.id}"}` });
   const st = await a.call("room_status", { room });
-  assert.equal(st.state, "concluded", "an independent verify entry naming the proposal passes it");
+  assert.equal(st.state, "concluded", "an independent verify entry with a parseable head naming the proposal and exit_code 0 passes it");
 }
 
 // ---------------- quiet (addressed) delivery and the board overwrite guard ----------------

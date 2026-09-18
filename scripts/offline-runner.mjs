@@ -61,6 +61,7 @@ export const offlineScripts = [
   'tool-surface-regression.ts',
   'trim-checkpoint-regression.ts',
   'uncited-challenge-regression.ts',
+  'verify-verdict-regression.ts',
 ];
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

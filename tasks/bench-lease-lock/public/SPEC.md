@@ -1,6 +1,6 @@
 # LEASE, a lock service with leased locks and wait queues
 
-A lock service guards five resources, R1 to R5. Clients are named C1 to C8. `events.log` is the complete input: one event per line, in the order the service processes them. A line has the form
+A lock service guards five resources, R1 to R5. Clients are named C1 to C8. `events.txt` is the complete input: one event per line, in the order the service processes them. A line has the form
 
     <tick> <client> <action> <resource> [<lease>]
 
@@ -12,7 +12,7 @@ Each resource has:
 
 - a holder: one client, or nobody;
 - if it has a holder, a deadline: a tick number;
-- a wait queue: an ordered list of entries, each being a client together with a lease length. It starts empty.
+- a wait queue: an ordered list of requests, each being a client together with a lease length. It starts empty.
 
 At the start every resource has nobody as holder and an empty queue.
 
@@ -25,10 +25,9 @@ The service never wakes up by itself. Before it processes an event that names re
 `LOCK X n`, by client c. First apply the expiry check to X. Then:
 
 - if X has nobody as holder, c becomes the holder with deadline equal to the tick plus n;
-- otherwise, if c is neither the holder nor already in X's wait queue, the entry (c, n) is added to the end of X's wait queue;
-- in every other case nothing changes.
+- otherwise the request (c, n) is added to the end of X's wait queue.
 
-`UNLOCK X`, by client c. First apply the expiry check to X. Then, if c is the holder of X, c stops being the holder. If the wait queue is not empty, its first entry (d, m) is removed from the queue and d becomes the holder with deadline equal to the tick plus m; if the queue is empty, X is left with nobody as holder. If c is not the holder of X, nothing changes.
+`UNLOCK X`, by client c. First apply the expiry check to X. Then, if c is the holder of X, c stops being the holder. If the wait queue is not empty, its first request (d, m) is removed from the queue and d becomes the holder with deadline equal to the tick plus m; if the queue is empty, X is left with nobody as holder. If c is not the holder of X, nothing changes.
 
 `RENEW X n`, by client c. First apply the expiry check to X. Then, if c is the holder of X, its deadline becomes the tick plus n. Otherwise nothing changes.
 

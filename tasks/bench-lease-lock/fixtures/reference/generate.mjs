@@ -1,4 +1,4 @@
-// Deterministic generator: node generate.mjs <seed> prints events.log text. Search picks a seed where every wrong reading disagrees with the spec.
+// Deterministic generator: node generate.mjs <seed> prints events.txt text. Search picks a seed where every wrong reading disagrees with the spec.
 import { simulate, parseLog } from './lease.mjs';
 function rng(seed) { let s = seed >>> 0; return () => { s = (s + 0x6D2B79F5) >>> 0; let t = s; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
 export function gen(seed, n = 104) {
@@ -26,7 +26,7 @@ if (process.argv[1]?.endsWith('generate.mjs') && process.argv[2] === 'search') {
   for (let seed = 1; seed < 400; seed++) {
     const text = gen(seed); const ev = parseLog(text);
     const spec = simulate(ev);
-    const diffs = ['relock-refreshes', 'requeue-updates', 'eager'].map(v => simulate(ev, v) !== spec);
+    const diffs = ['skip-holder', 'dedupe', 'eager'].map(v => simulate(ev, v) !== spec);
     const nfree = spec.split(' ').filter(p => p.includes(':free')).length;
     const relockN = ev.filter(e => e.action === 'LOCK').length;
     if (diffs.every(Boolean) && nfree <= 1) console.log(seed, spec, relockN);

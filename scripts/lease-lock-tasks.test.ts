@@ -13,23 +13,23 @@ import { loadTask, scoreTask } from './bench-oracle.ts';
 import { parseLog, simulate } from '../tasks/bench-lease-lock/fixtures/reference/lease.mjs';
 
 const dir = resolve('tasks/bench-lease-lock');
-const log = readFileSync(resolve(dir, 'public/events.log'), 'utf8');
+const log = readFileSync(resolve(dir, 'public/events.txt'), 'utf8');
 const expected = JSON.parse(readFileSync(resolve(dir, 'oracle/oracle.json'), 'utf8')).expected as string;
 
 test('bench-lease-lock: JS and Python simulators agree with the frozen oracle', () => {
   assert.equal(loadTask(dir).oracle.kind, 'exact-answer');
   assert.equal(simulate(parseLog(log)), expected);
-  const py = spawnSync('python3', [resolve(dir, 'fixtures/reference/lease.py'), resolve(dir, 'public/events.log')], { encoding: 'utf8' });
+  const py = spawnSync('python3', [resolve(dir, 'fixtures/reference/lease.py'), resolve(dir, 'public/events.txt')], { encoding: 'utf8' });
   assert.equal(py.status, 0, py.stderr);
   assert.equal(py.stdout.trim(), expected);
 });
 
 test('bench-lease-lock: every plausible wrong reading gives a different answer', () => {
-  for (const v of ['relock-refreshes', 'requeue-updates', 'eager']) assert.notEqual(simulate(parseLog(log), v), expected, v);
+  for (const v of ['skip-holder', 'dedupe', 'eager']) assert.notEqual(simulate(parseLog(log), v), expected, v);
 });
 
 test('bench-lease-lock: public files do not contain the answer', () => {
-  for (const f of ['SPEC.md', 'events.log', 'brief.txt']) assert.ok(!readFileSync(resolve(dir, 'public', f), 'utf8').includes(expected), f);
+  for (const f of ['SPEC.md', 'events.txt', 'brief.txt']) assert.ok(!readFileSync(resolve(dir, 'public', f), 'utf8').includes(expected), f);
 });
 
 test('bench-lease-lock: scoreTask outcome vocabulary', async () => {
@@ -37,7 +37,7 @@ test('bench-lease-lock: scoreTask outcome vocabulary', async () => {
   try {
     writeFileSync(join(d, 'answer.txt'), expected + '\n');
     assert.equal((await scoreTask(dir, d)).reason, 'task_pass');
-    writeFileSync(join(d, 'answer.txt'), simulate(parseLog(log), 'relock-refreshes'));
+    writeFileSync(join(d, 'answer.txt'), simulate(parseLog(log), 'skip-holder'));
     assert.equal((await scoreTask(dir, d)).reason, 'task_fail');
     rmSync(join(d, 'answer.txt'));
     assert.equal((await scoreTask(dir, d)).reason, 'parse_failure');

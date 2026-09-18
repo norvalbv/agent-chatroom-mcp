@@ -29,7 +29,7 @@ def main(path):
         if act == 'LOCK':
             if r.holder is None:
                 r.holder, r.deadline = c, tick + n
-            elif r.holder != c and all(w != c for w, _ in r.q):
+            else:
                 r.q.append((c, n))
         elif act == 'UNLOCK':
             if r.holder == c:

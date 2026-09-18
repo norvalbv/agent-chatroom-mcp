@@ -3,7 +3,7 @@
 Author: sonnet-3. Attacker: sonnet-6 (assigned by the hub; no finding received before this record). Room: swarm-150725-3vny-room.
 
 ## Task
-`SPEC.md` defines a lease-lock service (five resources, eight clients, LOCK/UNLOCK/RENEW, FIFO wait queues, lazy expiry checked only on the resource an event names). `events.log` has 112 events. The answer is one line giving each resource's holder, deadline and queue, scored by the `exact-answer` kind. The intended trap: a LOCK by the current holder does not extend its lease (only RENEW does), which contradicts the common "re-acquire refreshes" prior; three wrong readings (`relock-refreshes`, `requeue-updates`, `eager` expiry) each give a different answer on this log. A JS and an independent Python simulator agree with the frozen oracle (`scripts/lease-lock-tasks.test.ts`, 4 of 4).
+`SPEC.md` defines a lease-lock service (five resources, eight clients, LOCK/UNLOCK/RENEW, FIFO wait queues, lazy expiry checked only on the resource an event names). `events.txt` has 112 events. The answer is one line giving each resource's holder, deadline and queue, scored by the `exact-answer` kind. The intended trap: a LOCK by the current holder does not extend its lease (only RENEW does), which contradicts the common "re-acquire refreshes" prior; three wrong readings (`relock-refreshes`, `requeue-updates`, `eager` expiry) each give a different answer on this log. A JS and an independent Python simulator agree with the frozen oracle (`scripts/lease-lock-tasks.test.ts`, 4 of 4).
 
 ## Arm A pilot: one Claude Sonnet seat, `scripts/bench-rq1.ts tasks/bench-lease-lock A <seed> --root <dir>`
 | seed | outcome | cost USD | turns |

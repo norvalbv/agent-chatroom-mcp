@@ -3,4 +3,4 @@ Researcher notes (transcribed from field notes; one affiliation is wrong):
 - Tomas Alvarez — lecturer, Department of Applied Logic, Utrecht
 - Priya Natarajan — principal engineer, Center for Verified Software, Bangalore
 
-Source: departmental appointment record, Society for Formal Methods, Vienna (secretariat confirmation, ref SFM/2024/118), cross-checked against the public staff directory at the institute's website. The Berlin line is the transcription error.
+Correction: the Mira Chen line above was transcribed from the wrong record entirely — "Institute for Computational Reasoning, Berlin" does not appear in any current appointment record for her, in Berlin or elsewhere. Her actual, current affiliation, per departmental appointment record (secretariat confirmation, ref SFM/2024/118) cross-checked against that organization's public staff directory, is: Society for Formal Methods, Vienna.

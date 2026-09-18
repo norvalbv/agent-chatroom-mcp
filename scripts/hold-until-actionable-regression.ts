@@ -49,13 +49,13 @@ test("actionableNow: true when a vote is owed on the open proposal", () => {
   assert.equal(h.actionableNow(room, bob), true);
 });
 
-test("actionableNow: true on an unanswered human message, even for a bystander", () => {
+test("actionableNow: true for the nominated responder to an unanswered human message, but NOT for a bystander", () => {
   const { h, room, alice, bob } = fixture();
   const { participant: carol } = h.join(room.name, "carol", "test");
   const { participant: dave } = h.join(room.name, "dave", "human");
-  h.send(room.name, dave.id, "can someone confirm status", undefined, true);
-  assert.equal(h.actionableNow(room, bob), true, "nominated responder");
-  assert.equal(h.actionableNow(room, carol), true, "bystander still told a human spoke");
+  h.send(room.name, dave.id, "@bob can you confirm status", undefined, true);
+  assert.equal(h.actionableNow(room, bob), true, "bob is the nominated responder (attentionFocus)");
+  assert.equal(h.actionableNow(room, carol), false, "an unanswered human message is withheld from bystanders (visibleTo) until answered or aged out; carol has nothing to act on yet and must stay held");
   void alice;
 });
 

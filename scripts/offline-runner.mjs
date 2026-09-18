@@ -48,6 +48,7 @@ export const offlineScripts = [
   'recruit-prefix-regression.ts',
   'route-auth-regression.ts',
   'refusal-telemetry.ts',
+  'shelf-lang-tasks.test.ts',
   'quiet-guidance-regression.ts',
   'quiet-receipts.ts',
   'quorum-supermajority-regression.ts',

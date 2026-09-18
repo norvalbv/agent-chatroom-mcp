@@ -25,11 +25,11 @@
       "status": "primary",
       "family": "libc-exact-number",
       "arm_a": {
-        "pass": 5,
+        "pass": 4,
         "n": 10
       },
       "admission": "tasks/bench-printf-format/ADMISSION.md",
-      "note": "single-trap: all five fails are case 458"
+      "note": "single-trap: every fail is case 458 (%.17g of 1e-07); primary record = raw-backed fresh seeds 6-15 (seeds 1-5 and the predecessor arm C are recorded but unrecoverable); pooled printf family incl. bench-printf-format-2 is 9 of 25"
     },
     {
       "id": "bench-doc-audit",
@@ -287,7 +287,7 @@
         "n": 10
       },
       "admission": "tasks/bench-printf-format-2/ADMISSION.md",
-      "note": "sonnet-7's printf dial (length modifiers, %u, negative x/X/o, star width/precision; 3012 cases), fresh seeds; all 8 fails are the two %.17g of 1e-07 cases; same family and same single trap as bench-printf-format (pooled 7 of 20)"
+      "note": "sonnet-7's printf dial (length modifiers, %u, negative x/X/o, star width/precision; 3012 cases), fresh seeds; all 8 fails are the two %.17g of 1e-07 cases; same family and same single trap as bench-printf-format (pooled with bench-printf-format seeds 6-15: 6 of 20 on the raw-backed seeds, 9 of 25 counting the recorded predecessor seeds)"
     }
   ]
 }

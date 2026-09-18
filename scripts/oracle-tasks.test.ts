@@ -120,6 +120,18 @@ test('fact-check exact/normalized controls pass; negation and right-value/wrong-
     assert.equal(normalize(expected), 'society for formal methods, vienna');
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
+test('records.txt licenses exactly one corrected affiliation, not two (RQ1 grid item 6)', () => {
+  // Regression for the swarm-125438-jp20 fix: the pre-fix text only named the Vienna org as the
+  // *source of the confirmation*, which a real Sonnet seat in every arm (A and C) read as leaving
+  // "Institute for Computational Reasoning, Vienna" (city-only swap) equally defensible — see
+  // bench/results/rq1-grid1/bench-fact-check-{A,C}-seed1/result.json. The text must now foreclose
+  // that reading explicitly, not merely cite Vienna as a source.
+  const text = readFileSync(join(fact, 'public/records.txt'), 'utf8');
+  const norm = normalize(text);
+  assert.ok(norm.includes(normalize('does not appear in any current appointment record for her, in Berlin or elsewhere')), 'must explicitly rule out any Vienna-city variant of the original institute name');
+  assert.ok(norm.includes(normalize('Her actual, current affiliation')) && norm.includes(normalize(expected)), 'must directly state the corrected affiliation, not merely cite it as a record source');
+  assert.ok(!/^source:/im.test(text.split('\n\n').at(-1) ?? ''), 'must not reintroduce the withdrawn "Source: ..." phrasing that only cited Vienna as the confirming org');
+});
 test('hub crash maps to infrastructure_error, excluded from task comparison', () => {
   const root = temporary(); try {
     // Exercise the real runner crash path without binding ports or starting a hub:

@@ -21,6 +21,7 @@ export const offlineScripts = [
   'attention-gate-regression.ts',
   'baseline-freeze-guard-regression.ts',
   'bench-grid.test.ts',
+  'bench-orphan-regression.ts',
   'bench-rq1.test.ts',
   'board-expiry-regression.ts',
   'board-manifest-regression.ts',

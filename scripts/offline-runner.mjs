@@ -51,6 +51,7 @@ export const offlineScripts = [
   'stats-integration-regression.ts',
   'stats-regression.ts',
   'test-inbox-handover.ts',
+  'tool-surface-regression.ts',
   'uncited-challenge-regression.ts',
 ];
 

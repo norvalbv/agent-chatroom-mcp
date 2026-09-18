@@ -76,6 +76,12 @@ export interface SeatOptions {
   handoffContextFraction?: number;
   /** opt out of proactive handoff entirely (default false) */
   noHandoff?: boolean;
+  /** IDLE-RUN TRIGGER (R2): consecutive model turns with no actionable hub hint and no outbound
+   * send_message/board_set before a seat hands off, on top of the steps/tokens/context-fraction
+   * triggers above (default 20; 0 disables this trigger only). Catches a seat that keeps spending
+   * model turns — wandering local tool calls, or hub churn that never rises to actionable — without
+   * ever producing room-visible work, distinct from context pressure. */
+  handoffIdleTurns?: number;
   log?: (line: string) => void;
 }
 export interface SeatResult {
@@ -473,7 +479,19 @@ export async function runSeat(provider: ChatProvider, opts: SeatOptions): Promis
     ? Math.max(1, Math.min(opts.handoffStepMax, Math.max(1, maxSteps - 1)))
     : Math.max(1, Math.min(Math.ceil(handoffStepFraction * maxSteps), Math.max(1, maxSteps - 1)));
   const handoffContextChars = Math.floor(handoffContextFraction * maxContextChars);
-  const pressured = () => steps >= handoffStep || usage.prompt_tokens >= handoffPromptTokens || size() > handoffContextChars;
+  const handoffIdleTurns = opts.handoffIdleTurns ?? 20;
+  let idleRunStreak = 0;
+  /** Which threshold fired, or undefined if none did; also the phrase used in the handoff reason. */
+  const pressureCause = (): string | undefined =>
+    steps >= handoffStep
+      ? "step cap approaching"
+      : usage.prompt_tokens >= handoffPromptTokens
+        ? "prompt-token budget"
+        : size() > handoffContextChars
+          ? "context fraction"
+          : handoffIdleTurns > 0 && idleRunStreak >= handoffIdleTurns
+            ? `idle run (${idleRunStreak} consecutive turns with no actionable hint and no outbound message/board write)`
+            : undefined;
   let handedOff = false;
   const handoffs: string[] = [];
   let nudges = 0;
@@ -492,11 +510,12 @@ export async function runSeat(provider: ChatProvider, opts: SeatOptions): Promis
     }
     // PROACTIVE HANDOFF: at pressure, write handoff/* for our claims, leave with a reason naming them,
     // and terminate as a clean ok run BEFORE the cap, the budget or trim() can kill the work silently.
-    if (!noHandoff && joined.size && pressured()) {
+    const cause = noHandoff || !joined.size ? undefined : pressureCause();
+    if (cause) {
       const areas = await writeHandoffs();
       handedOff = true;
       handoffs.push(...areas);
-      const why = `proactive handoff on context pressure (step ${steps}/${maxSteps}, ${usage.prompt_tokens} prompt + ${usage.completion_tokens} completion tokens, transcript ${size()} chars)${areas.length ? `; handed off: ${areas.join(", ")}` : ""}`;
+      const why = `proactive handoff on ${cause} (step ${steps}/${maxSteps}, ${usage.prompt_tokens} prompt + ${usage.completion_tokens} completion tokens, transcript ${size()} chars)${areas.length ? `; handed off: ${areas.join(", ")}` : ""}`;
       log(`[${provider.label}] ${why}`);
       for (const room of [...joined]) {
         try {
@@ -542,6 +561,10 @@ export async function runSeat(provider: ChatProvider, opts: SeatOptions): Promis
       }
       break;
     }
+    // IDLE-RUN TRIGGER (R2): this step counts toward idleRunStreak only if it neither produced
+    // outbound room work (send_message/board_set) nor received an actionable hub hint.
+    let stepHadOutboundWrite = false;
+    let stepHadActionableHint = false;
     for (const call of calls) {
       let args: Record<string, string> = {};
       try {
@@ -550,6 +573,7 @@ export async function runSeat(provider: ChatProvider, opts: SeatOptions): Promis
         messages.push({ role: "tool", tool_call_id: call.id, content: `Your arguments were not valid JSON: ${call.function.arguments?.slice(0, 200)}` });
         continue;
       }
+      if (call.function.name === "send_message" || call.function.name === "board_set") stepHadOutboundWrite = true;
       log(`[${provider.label}] step ${steps}: ${call.function.name} ${JSON.stringify(args).slice(0, 160)}`);
       let result: string;
       try {
@@ -579,15 +603,19 @@ export async function runSeat(provider: ChatProvider, opts: SeatOptions): Promis
       if (hubTools.has(call.function.name) && !result.startsWith("ERROR:")) {
         try {
           const view = JSON.parse(result) as HubView;
-          if (actionable(view) && view.hint !== lastHint) {
-            lastHint = view.hint!;
-            messages.push({ role: "user", content: `Hub: ${view.hint}` });
+          if (actionable(view)) {
+            stepHadActionableHint = true;
+            if (view.hint !== lastHint) {
+              lastHint = view.hint!;
+              messages.push({ role: "user", content: `Hub: ${view.hint}` });
+            }
           }
         } catch {
           /* not JSON: nothing to lift */
         }
       }
     }
+    idleRunStreak = stepHadOutboundWrite || stepHadActionableHint ? 0 : idleRunStreak + 1;
     if (steps === maxSteps) {
       log(`[${provider.label}] step cap ${maxSteps} reached`);
       await bow(`step cap ${maxSteps} reached`);

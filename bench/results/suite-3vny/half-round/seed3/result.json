@@ -1,0 +1,113 @@
+{
+  "schemaVersion": 1,
+  "task_id": "half-round",
+  "arm": "A",
+  "seed": 3,
+  "model": "sonnet",
+  "outcome": "task_pass",
+  "passed": true,
+  "reason": "task_pass",
+  "oracle": {
+    "kind": "exact-answer",
+    "command": "node --import tsx score-fact-check.ts <workspace>/answer.txt oracle/oracle.json",
+    "exit_code": 0
+  },
+  "anti_tamper": {
+    "hash_before": "f18e50ffba26b8ca5b16f9ac4f489bcc84470d9010821f7e9b3be842ccc7c671",
+    "hash_after": "f18e50ffba26b8ca5b16f9ac4f489bcc84470d9010821f7e9b3be842ccc7c671",
+    "unchanged": true
+  },
+  "seats": [
+    {
+      "name": "single",
+      "argv": [
+        "claude",
+        "-p",
+        "Read spec.txt (HALF-ROUND) and inputs.txt. Convert every line of inputs.txt as the specification says.\n\nWrite your final answer, and only your final answer with no explanation, to a file named\nanswer.txt in your current working directory, in the output format given at the end of spec.txt.\n\nWrite your final answer, and only your final answer with no explanation, to a file named answer.txt in your current working directory.",
+        "--mcp-config",
+        "/Users/benji/Desktop/Personal and learning/agent-chatroom-mcp/.swarm-worktrees/swarm-150725-3vny/sonnet-4/bench/results/pilot-sonnet4/half-A-seed3/mcp-empty.json",
+        "--strict-mcp-config",
+        "--allowedTools",
+        "Read,Write,Bash,Glob,Grep",
+        "--tools",
+        "Read,Write,Bash,Glob,Grep",
+        "--disable-slash-commands",
+        "--setting-sources",
+        "project",
+        "--exclude-dynamic-system-prompt-sections",
+        "--output-format",
+        "stream-json",
+        "--verbose",
+        "--model",
+        "sonnet"
+      ],
+      "exit_code": 0,
+      "signal": null,
+      "started_at": "2026-09-18T15:31:52.085Z",
+      "completed_at": "2026-09-18T15:32:11.381Z",
+      "num_turns": 4,
+      "duration_ms": 16787,
+      "duration_api_ms": 17276,
+      "usage": {
+        "cost": 0.0513876,
+        "input_tokens": 6,
+        "cache_read_input_tokens": 25633,
+        "cache_creation_input_tokens": 8091,
+        "output_tokens": 1282
+      },
+      "text": "I converted all 211 lines of `inputs.txt` and wrote the result to `answer.txt` as one line of space-separated four-digit hex patterns. I did the conversion with a short Python script using exact fractions, so no input was rounded before the final step. I checked that the output has 211 entries. I also spot-checked a few lines by hand: 65519.99999999999999 gives 7bff, 65520 gives 7c00, and the 40495.99999999999999999999 line gives 78f1.",
+      "killed_by_deadline": false,
+      "partial_usage": null
+    }
+  ],
+  "usage": {
+    "steps": 0,
+    "prompt_tokens": 0,
+    "completion_tokens": 0,
+    "cost_usd": 0.0513876,
+    "seats": 1,
+    "seats_with_usage": 1,
+    "coverage": "complete",
+    "input_tokens": 6,
+    "cache_read_input_tokens": 25633,
+    "cache_creation_input_tokens": 8091,
+    "output_tokens": 1282
+  },
+  "turns": {
+    "per_seat": [
+      {
+        "name": "single",
+        "num_turns": 4
+      }
+    ],
+    "summed": 4,
+    "seats": 1,
+    "seats_with_turns": 1,
+    "coverage": "complete"
+  },
+  "wall_clock": {
+    "started_at": "2026-09-18T15:31:52.085Z",
+    "completed_at": "2026-09-18T15:32:11.381Z",
+    "duration_ms": 19296
+  },
+  "budget": {
+    "max_budget_usd": null,
+    "deadline_ms": 900000
+  },
+  "build": {
+    "head_revision": "19d1b28a30a01da552304d81bec8d99637d7de23",
+    "hub_entry": null,
+    "hub_entry_sha256": null,
+    "hub_revision": null
+  },
+  "frozen": {
+    "task_sha256": "f18e50ffba26b8ca5b16f9ac4f489bcc84470d9010821f7e9b3be842ccc7c671",
+    "scorer_sha256": "f4b645c670ae4655aec1189e4d7320294115f0e3c6da3b5ba41a7ee3b1cd00f8",
+    "fact_scorer_sha256": "6b8b3e98c8c408ecd6715a38db9263488644d27c01a11c5bab3172acd5539832",
+    "task_id": "half-round",
+    "timeout_ms": 900000,
+    "seats": 1
+  },
+  "error": null,
+  "checked_at": "2026-09-18T15:32:11.468Z"
+}

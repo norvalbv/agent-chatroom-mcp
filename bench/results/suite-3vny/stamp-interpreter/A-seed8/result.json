@@ -1,0 +1,113 @@
+{
+  "schemaVersion": 1,
+  "task_id": "stamp-interpreter",
+  "arm": "A",
+  "seed": 8,
+  "model": "sonnet",
+  "outcome": "task_pass",
+  "passed": true,
+  "reason": "task_pass",
+  "oracle": {
+    "kind": "exact-answer",
+    "command": "node --import tsx score-fact-check.ts <workspace>/answer.txt oracle/oracle.json",
+    "exit_code": 0
+  },
+  "anti_tamper": {
+    "hash_before": "f51c4b3040d05591c84c643f228f190ceb59bea4fb0bd4fcf72f48bdc9355ff5",
+    "hash_after": "f51c4b3040d05591c84c643f228f190ceb59bea4fb0bd4fcf72f48bdc9355ff5",
+    "unchanged": true
+  },
+  "seats": [
+    {
+      "name": "single",
+      "argv": [
+        "claude",
+        "-p",
+        "Read spec.txt (the STAMP language) and program.stamp. Determine exactly what the program outputs\nwhen run under that specification.\n\nWrite your final answer, and only your final answer with no explanation, to a file named\nanswer.txt in your current working directory: the printed values in order, separated by single\nspaces, on one line.\n\nWrite your final answer, and only your final answer with no explanation, to a file named answer.txt in your current working directory.",
+        "--mcp-config",
+        "/Users/benji/Desktop/Personal and learning/agent-chatroom-mcp/.swarm-worktrees/swarm-140131-j6yf/sonnet-2/bench/results/pilot-sonnet2/stamp2-A-seed8/mcp-empty.json",
+        "--strict-mcp-config",
+        "--allowedTools",
+        "Read,Write,Bash,Glob,Grep",
+        "--tools",
+        "Read,Write,Bash,Glob,Grep",
+        "--disable-slash-commands",
+        "--setting-sources",
+        "project",
+        "--exclude-dynamic-system-prompt-sections",
+        "--output-format",
+        "stream-json",
+        "--verbose",
+        "--model",
+        "sonnet"
+      ],
+      "exit_code": 0,
+      "signal": null,
+      "started_at": "2026-09-18T14:28:27.381Z",
+      "completed_at": "2026-09-18T14:28:50.529Z",
+      "num_turns": 4,
+      "duration_ms": 21798,
+      "duration_api_ms": 22719,
+      "usage": {
+        "cost": 0.061862,
+        "input_tokens": 6,
+        "cache_read_input_tokens": 25500,
+        "cache_creation_input_tokens": 8659,
+        "output_tokens": 2106
+      },
+      "text": "I wrote the answer to `answer.txt`. I worked it out by tracing the program by hand against the spec, and did not run it through an interpreter.\n\nThe answer is:\n\n`105 100 101 101 102 101 2432902008176640000 0 7 101 7 7 7 3 15 0 0 4 6 30 0 27 10 23 1 1 3 1267650600228229401496703205376 1 0 0 -3 100 5`\n\nThese are the spots where the spec's rules change the result:\n- **`tick`:** it reads the global `total` (101), but `NEXT` on a name that isn't yet a local creates a local. So it returns 102 and the global stays 101.\n- **First `CALL early`:** `early` isn't defined yet, so it takes no arguments and yields 0.\n- **`fill`:** `k` is local to the call, so the global `k` stays 0.\n- **`outer` and `inner`:** scope is not lexical, so `inner` reads the global `a` (0) rather than `outer`'s `a`. `CALL outer 1` therefore gives 100, and `CALL inner 5` gives 5.",
+      "killed_by_deadline": false,
+      "partial_usage": null
+    }
+  ],
+  "usage": {
+    "steps": 0,
+    "prompt_tokens": 0,
+    "completion_tokens": 0,
+    "cost_usd": 0.061862,
+    "seats": 1,
+    "seats_with_usage": 1,
+    "coverage": "complete",
+    "input_tokens": 6,
+    "cache_read_input_tokens": 25500,
+    "cache_creation_input_tokens": 8659,
+    "output_tokens": 2106
+  },
+  "turns": {
+    "per_seat": [
+      {
+        "name": "single",
+        "num_turns": 4
+      }
+    ],
+    "summed": 4,
+    "seats": 1,
+    "seats_with_turns": 1,
+    "coverage": "complete"
+  },
+  "wall_clock": {
+    "started_at": "2026-09-18T14:28:27.381Z",
+    "completed_at": "2026-09-18T14:28:50.530Z",
+    "duration_ms": 23149
+  },
+  "budget": {
+    "max_budget_usd": null,
+    "deadline_ms": 900000
+  },
+  "build": {
+    "head_revision": "0f84d03c048c8c444d54475257bdced3dfeb5011",
+    "hub_entry": null,
+    "hub_entry_sha256": null,
+    "hub_revision": null
+  },
+  "frozen": {
+    "task_sha256": "f51c4b3040d05591c84c643f228f190ceb59bea4fb0bd4fcf72f48bdc9355ff5",
+    "scorer_sha256": "7a92e4f75c59ce15fbfc5cef02d6e1257782d155923f18e85c58c1e56b15fa7f",
+    "fact_scorer_sha256": "6b8b3e98c8c408ecd6715a38db9263488644d27c01a11c5bab3172acd5539832",
+    "task_id": "stamp-interpreter",
+    "timeout_ms": 900000,
+    "seats": 1
+  },
+  "error": null,
+  "checked_at": "2026-09-18T14:28:50.623Z"
+}

@@ -182,3 +182,210 @@ gave a chance to happen, with headroom rather than a value tuned to exactly clea
 derived from a distribution of many runs (this harness had none to draw from before this fix) — revisit once
 the grid has produced enough real timing data to size it more precisely instead of from a single room's
 timestamps.
+
+## 2026-09-18 — `bench-long-brief` retired from the RQ1 accuracy comparison, not built (sonnet-1, swarm-140131-j6yf-room)
+
+**Protocol text:** §3 (quoted above, "A known wiring gap in one existing task") treats `bench-long-brief` as
+"not yet usable for RQ1-RQ3's primary task-success metric" and says it should be "added once its handoff
+scorer is wired" — i.e. the pre-registered expectation was that the scorer gap would eventually be closed,
+not that the task would be dropped. This room's brief gave the explicit option to build the missing
+`"handoff"` case in `scripts/bench-oracle.ts`/`scripts/bench-rq1.ts` **or retire the task**.
+
+**Why building it is not viable, let alone small (checked directly against this checkout):**
+
+1. **The fixture is calibrated against the wrong harness.** `tasks/bench-long-brief/README.md` and
+   `scripts/handoff-task-fixture.test.ts` derive the task's difficulty from `src/seat.ts`'s internal
+   step/context-budget constants (`MAX_STEPS=60`, `MAX_CONTEXT_CHARS=240_000`, `MAX_TOOL_CHARS=6000`,
+   `READ_WINDOW=400`) and the `r1-proactive-handoff` mechanic (`docs/decisions/r1-proactive-handoff.md`) that
+   fires on *that* internal engine's own step/token counters. `scripts/bench-rq1.ts` (the runner this suite's
+   grid actually uses, confirmed by reading it directly) spawns the real `claude` CLI as a subprocess via
+   `claudeArgs()` — that CLI has no step-count or context-budget ceiling flag (already established in this
+   file's first entry, "No token/turn ceiling in the `claude` CLI"), so there is no lever in the real-Sonnet
+   harness to force a seat to hit the budget this fixture assumes. The 20-file/84KB brief size is not
+   inherently too large for a real Claude Code seat with its own much larger context window and no externally
+   imposed step cap; nothing makes it exceed a *real* seat's budget the way it provably exceeds the internal
+   engine's frozen one.
+2. **The metric is asymmetric by construction, which breaks the comparison this whole suite exists to make.**
+   `bench-rq1.ts` gives arm A `--tools` with no `mcp__chatroom__*` entries at all (`baseTools` only, no
+   `mcpJson` chatroom server) — a single arm-A seat has no `board_set`, no `claim/*`, no `leave_room`-with-
+   reason concept to hand off through. "Handoff survival" (`handoff/*` board entry + `leave_room` reason) is
+   a room-native mechanic; it cannot be measured on arm A at all, symmetric or not. A task whose oracle only
+   arm C can even attempt is not an accuracy-comparison task under
+   `docs/decisions/measure-task-success-on-a-machine-oracle.md` ("a hub mechanic is judged by a machine-
+   checked task outcome on the same brief **across two builds**" — here it would be across two *arms*, and
+   one arm structurally cannot produce the measured signal). It is a robustness/survival metric for room
+   mechanics specifically, not a "team vs. one agent" accuracy task, which is this room's actual charge.
+
+**Decision:** `bench-long-brief` is retired from the admitted task suite and from every grid command this
+room produces (§5 of the room brief). It is not deleted (its fixture and `README.md`'s documentation of the
+R9.1 dependency remain valid as a record of *why* it doesn't fit this harness), but it must not be passed to
+`scripts/bench-grid.ts --tasks`. `paper/protocol.md` §3's line "added once its handoff scorer is wired" is
+superseded by this entry: the scorer gap will not be closed for this suite, for the structural reason in
+point 2 above, not merely because it is a lot of engineering effort.
+
+## 2026-09-18 — Small cross-document tasks are a ceiling family for real Sonnet, arm A (sonnet-1)
+
+**Finding:** five different `bench-cross-doc-*` task designs (on-call roster 4-hop relay; the same relay with
+a primary/secondary field-indirection trap; a stale-vs-ratified budget figure needing an 85% recompute; both
+of those again with the brief not naming which files to read or that a conflict exists; a three-document
+policy-precedence task requiring a conference exception to override a more textually salient regional
+amendment) were each piloted 5x on arm A (real Sonnet, `scripts/bench-rq1.ts`, exactly as the grid runs it).
+All 25 runs (5 designs x 5 seeds) scored `task_pass`, 0 failures, ~$0.03/run, 4-8 turns each. Full numbers on
+the room board, keys `pilot/bench-cross-doc-oncall-v1`, `-v2`, `-v3-and-budget-v2-and-precedence-v1`.
+
+**Why (not merely "the trap wasn't clever enough"):** `scripts/bench-rq1.ts` gives arm A `Read, Write, Bash,
+Glob, Grep`, a 900s deadline and no turn ceiling. A task directory with 3-4 short files is cheap enough that
+a capable agentic seat reads every file in it as a matter of course — there is no realistic pressure to stop
+early or guess from a single file, and `Bash` lets it verify any arithmetic exactly (`120000*0.85=102000` was
+computed via a shell one-liner in the transcript, not mental math), which is why even a rounding-flavored
+design didn't discriminate either. Multi-hop indirection and multi-way precedence logic, which are exactly
+the traps this suite's task-family list suggests, are well within a tool-using Sonnet's reach when the total
+reading material is small. This is a negative result specific to *small* cross-document tasks under *this*
+harness's generous budget, not evidence that cross-document tasks in general cannot discriminate — a
+scaled-up version (more files, genuine skim/skip risk) converges with the long-brief-constraint family
+(`claim/data-cleaning-and-long-brief-constraint`, sonnet-5) and was not pursued further here to avoid
+duplicating that work; see that family's admitted tasks for whether scale succeeds where these five did not.
+A sixth design tested the scale hypothesis directly: `bench-cross-doc-notes`, ten short standup-note files, the
+original launch date (March 14) in file 3 and a quiet correction (March 21) in file 8, no hint in the brief that
+a correction exists or which file holds it. 5/5 `task_pass` (~$0.02-0.20/run, 4-16 turns; the costly outlier
+still passed). The seats used `Grep` for the project name, which turns file count into a non-obstacle: a
+distinctive keyword makes N files as cheap as one. Scale only costs attention when the deciding sentence
+cannot be found by a keyword search (no shared distinctive term, or a correction phrased without the entity
+name). Total for this family: 30 arm-A runs over six designs, 30/30 pass, ~$1.26.
+`bench-cross-doc-oncall`, `bench-cross-doc-budget`, `bench-cross-doc-precedence` and `bench-cross-doc-notes`
+are not included in the admitted suite.
+
+## 2026-09-18 — Data-cleaning candidate `bench-ledger-parse` rejected: 3/5, then 5/5 after the brief was made unambiguous (sonnet-1)
+
+A code task: repair a naive `parseLedger` for a bank CSV export whose quirks (BOM, CRLF, quoted commas,
+doubled quotes, an embedded newline in a quoted payee, quoted thousands-separated amounts, `DD Mon YYYY` dates,
+float-cents such as 19.99, padded payees) sit in a handful of rows of a 300-row public sample, with a second
+hidden 240-row export moving the quirks to other rows (private-test oracle, generic code scorer). Scorer and
+both fixtures were verified (broken fixture fails 6 of 7 named checks, correct passes 7 of 7).
+
+- v1, five arm-A runs: 3 `task_pass`, 2 `task_fail` (~$0.07-0.12/run, 5-12 turns). Seed 1 missed the `DD Mon
+  YYYY` dates (a real reasoning miss). Seed 2 collapsed the newline inside a quoted payee, which the v1 brief
+  did not forbid (the passing seats kept it and said the brief did not ask to normalise): an ambiguity in the
+  task, not a reasoning failure, so the 3/5 is not admissible evidence of discrimination.
+- v2 (brief now states that characters inside the payee are kept as written): 5/5 `task_pass`, ~$0.067/run,
+  6-8 turns. Seats scanned the whole sample, found every quirk class, and the two that were only guesses
+  (US-style dates, currency symbols) do not appear in the hidden export.
+
+Rejected by the admission rule (5/5). Cost of this candidate: ~$0.76 across 10 runs. It is the closest any
+of this author's seven designs came to a split, and the split was half ambiguity. A trap that the agent's own
+scan of the provided data can reveal is found by a seat that scans the data.
+
+## 2026-09-18 — `bench-pipe-errata` rejected: a spec plus a later errata document is implemented, not traced (sonnet-1)
+
+Exact-answer task: a 14-operation list-transform language (`spec.txt`), a later `errata.txt` that overrides
+or withdraws parts of it (an erratum amending an erratum, a conditional erratum keyed on list parity, an
+astral-plane input item whose length differs between UTF-16 units and code points), a 30-line program over
+12 strings, six PRINT lines to concatenate into one answer. Expected answer produced by a JavaScript
+reference and independently reproduced by a separate Python implementation (byte-identical). The design
+borrowed the "many independent counter-prior quirks, program too long to trace by hand" lever that produced
+the room's first split (`stamp-interpreter`, sonnet-2) and added a cross-document precedence layer on top.
+
+Arm A, five runs: 5/5 `task_pass`, ~$0.038/run, 3 turns each. Every seat wrote an interpreter in a scratch
+script implementing both documents at once and printed its output; two stated "I did not hand-check the
+trace; the answer is the script's output". The errata add no difficulty for a seat that implements rather
+than reasons: applying an override is one more `if` in the script. Twelve operations with one line of
+semantics each are within a single careful script; `stamp-interpreter` differs in having a nested-scope
+language (closures, `GLOBAL`, `SETS`) where the semantics interact, which is what a script can get wrong.
+
+Family tally for this author: 8 designs (three cross-document puzzles at 2-4 files, one at 10 files, one
+three-document precedence puzzle, a CSV data-quirk parser, this errata interpreter, plus the retired
+long-brief) and 45 arm-A runs, 0 admitted, about $2.6 of the room's pilot budget.
+
+## 2026-09-18 — `bench-url-resolve` rejected at the 3-seed screen: a complete spec for real-world semantics, 3/3 (sonnet-1)
+
+Built on the maintainer's second lever (faithful reimplementation of real-world semantics with many
+interacting rules, expected values from a real reference). `resolveUrl(base, ref)` for http(s): a complete
+eight-step README (whitespace and control stripping, backslashes only in the front, "http:foo" against an http
+base being relative but "https:foo" being a host, default-port removal, `%2e` dot segments, three different
+percent-encode sets, an empty `?` or `#` kept). The oracle was 100 hidden (base, ref) cases, 38 curated and 62
+seeded-random, whose expected values were produced by node's real `URL`. Before any pilot, a README-only
+reference written by the task author agreed with node's `URL` on 38,924 generated (base, ref) pairs with zero
+mismatches (after restricting hosts to plain ASCII, which the README states), so the README determines every
+expected value. The scorer rejects any use of the `URL` class (source scan plus the global deleted at run
+time); a `new URL` cheat scored 0, the stub 0/100, the reference 100/100.
+
+Arm A, screen of three seeds: 3/3 `task_pass`, ~$0.056/run, 4 turns each. No seat compared its code with
+`URL` in a shell; each wrote the resolver in one pass and every final message reports only the edge cases the
+README leaves open (an all-zero port, lone surrogates, characters after a port colon), none of which the oracle
+tests. Rejected under the maintainer's rule (stop at 3/3); seeds 4 and 5 were not spent.
+
+What this adds to the record next to `bench-ignore-rules` (4/5, one slip: a regex-escaping bug plus never
+running the code): a README of about forty lines with eight numbered steps is not by itself long enough to make
+one seat slip. The two in-band tasks are much longer to execute (`stamp-interpreter`: 87-line spec, 104-line
+program) or have 39 cases over more independent rules. Cost of this candidate: about $0.17 for the pilots.
+
+## 2026-09-18 — Raised admission bar for the discriminating suite, and how the suite's independence is counted (swarm-150725-3vny-room)
+
+**Why the old bar was too weak.** The predecessor rule (swarm-140131-j6yf) admitted a task on 1 to 4 passes of 5 arm-A runs. Two of the three tasks that met it (`bench-doc-audit`, `bench-ignore-rules`) turned out, with five more seeds each, to pass 9 of 10. A true single-agent rate near 0.9 leaves a team at most 0.1 to gain; no feasible number of grid seeds separates the arms on such a task. Five seeds cannot tell 0.9 from 0.6: the exact 95% interval of 4 of 5 is roughly 0.28 to 0.99.
+
+**Rule (supersedes item 2 of the predecessor rule, applied to every task including the earlier survivors).**
+1. A task's arm-A rate is measured on **at least ten seeds**, run exactly as the grid runs arm A (`scripts/bench-rq1.ts TASK A SEED --model sonnet`). Three seeds are a screen only: 3 of 3 rejects the task without further spend; a task is never admitted on fewer than ten.
+2. Rate **0.3 to 0.7 inclusive**: admitted, and part of the **primary comparison**.
+3. Rate **above 0.7 and up to 0.9 inclusive**: kept, labelled a **weak discriminator**, excluded from the primary comparison (it may be reported as a secondary result).
+4. Rate **above 0.9, or 0**: retired.
+4a. Rate **above 0 and below 0.3** (added in this room after `bench-printf-format-2` went 2 of 10; the rule as first written left this range unassigned, so this is a gap filled after seeing one outcome and is recorded as such): kept, labelled a **low discriminator** (status `low` in `tasks/SUITE.json`), excluded from the primary comparison, symmetric to item 3.
+5. `ADMISSION.md` records the rate, the seed count and the per-seed outcome (with cost and turns), plus the final text of failures so a format failure is not counted as a reasoning failure. Every admitted task also needs the non-author attack (public files determine the answer; the oracle cannot be passed without solving) recorded there.
+6. Screening discipline: a variant of a family that has failed twice is not piloted without a posted reason. A task whose only fails are one and the same item (`stamp-interpreter`: token 32; `bench-printf-format`: case 458) is admitted on its rate but flagged as a single-trap task: its p is the chance of one slip, not a difficulty gradient.
+
+**Independence: the statistical unit is the family, not the instance.** N instances generated from one template (same specification, same mechanism, new numbers or a longer program) are ONE family. They share the failure mechanism, so their seeds are not independent draws of "task difficulty", and any interval or test over tasks must resample or cluster by family. Two tasks belong to one family if a seat that had learned the trap in one would carry it into the other. Applied: `bench-shelf-lang` and `bench-shelf-long` share `SPEC.md` and are one family (both 9 of 10; tripling the program length did not move the rate). Families are counted by mechanism, not by name, so "invented-language interpreter" tasks (stamp, shelf, quill) are argued case by case in the count below, not merged or split by their label.
+
+**How the pilot rate may be used (selection bias and interval).** A task enters the primary comparison because its ten pilot seeds landed in 0.3 to 0.7. A task whose true rate is 0.85 lands there about 18 percent of the time (7 percent at 0.9), and admitted tasks regress toward the mean, so **the pilot rate is not an estimate of the grid rate**, and **pilot seeds are excluded from every grid analysis** (the grid runs fresh seeds, arm A and arm C both). The exact 95% interval of 5 of 10 is about 0.19 to 0.81: "primary band" means "not shown to be near ceiling", not "p is 0.5".
+
+**Dials and families.** When a task is made harder by turning a dial on an existing task (more scored items, longer execution, more interacting rules, salience of the rules removed), it is the same family as its parent, recorded as such, and its pilot is a forking path: the parent's number stays in its `ADMISSION.md` next to the dial's. A stamp-style sibling (same mechanism, new surface) is a task for the bar but one family for the statistics.
+
+**Two further rules learned in this room.**
+1. *A failure signature shared by every failing seed must be traced to a sentence.* If all failing seeds miss the same single item, `ADMISSION.md` names the mechanism and the sentence of the specification the failure rests on. An attacker's matching solver does not establish determinacy on its own: it can silently normalise a clause that has no effect under the oracle. `sched-trace-plus` v1 went 5 of 10 with all five failures on one token; the cause was a dead clause ("a running job that is not in its switch tick" is vacuous under the literal text), two attackers (sonnet-3 and sonnet-5) silently dropped that clause, their solvers never had the exemption, and the third (sonnet-6) read it as a carried flag and produced B:13, and with the clause deleted (v2, same oracle) the task went 3 of 3. It is recorded as an ambiguity result, not a rate. (`bench-quill-editor` v1, 0 of 3 with three identical answers, is the same failure from the other side.) For every admitted task `ADMISSION.md` lists the specification clauses that the attackers' solvers do not exercise or that are inert under the oracle.
+2. *A failed variant stays on the record.* A task tuned after a poor pilot (a salience dial, a longer program, comments stripped) keeps the pre-tuning numbers in `ADMISSION.md` next to the tuned ones, and only the tuned version's fresh seeds count towards the rate.
+
+## 2026-09-18 — Result of the second suite room: what is admitted, what is weak, why so little is in band (swarm-150725-3vny-room)
+
+**Primary comparison (0.3 to 0.7 on ten arm-A seeds, non-author attack recorded):** three tasks in two families.
+| task | arm A | fails | family (by mechanism) |
+|---|---|---|---|
+| `stamp-interpreter` | 5 of 10 = 0.50 | all five: output 32 (`100` expected, `101` given; a nested DEF read as a lexical closure) | invented-language execution where a natural implementation architecture (an environment chain) contradicts the one stated scope rule |
+| `bench-printf-format` | 5 of 15 = 0.33 on seeds 6 to 20 (the raw-backed record, fixed in advance as seeds 6 to 20 before seeds 16 to 20 ran; seeds 6 to 10 from the earlier pilot, 11 to 20 fresh; 95% interval about 0.12 to 0.62; seeds 6 to 15 alone are 4 of 10 = 0.40); the predecessor's five unrecoverable seeds 1 to 5 (3 of 5) are recorded only in `ADMISSION.md` | all ten fails across seeds 6 to 20: case 458 alone (`%.17g` of 1e-07) | exact numeric formatting where a host built-in (shortest representation) is wrong at one case the README settles |
+| `stamp-2` | 5 of 10 = 0.50 | all five: outputs 9 and 10 (`1027` and `1008` for `3007` and `3005`; the enclosing call's parameter leaks into the innermost DEF, a partial-closure reading); every seat hand-traced, none ran code | same family as `stamp-interpreter`: byte-identical STAMP specification, a new 144-line program (38 outputs) with a different nested-DEF site |
+All three are **single-trap tasks**: every failure of any of them is the same one item (or item pair), so the rate measures how often one slip happens, not a gradient of difficulty, and an arm-C win requires a seat that happens to know that one case. `stamp-interpreter` also carries a reliance recorded in its `ADMISSION.md`: the specification never says whether a DEF executed inside a call remains callable after the call, and the oracle treats procedures as one global table (all ten arm-A seeds of `stamp-interpreter` read it that way, so it is not what drives the failures; `stamp-2` relies on it in two top-level calls).
+
+**Weak discriminators (0.7 to 0.9 on ten seeds; kept, excluded from the primary comparison):** `bench-doc-audit` 9 of 10, `bench-ignore-rules` 9 of 10, `bench-shelf-lang` 9 of 10, `bench-shelf-long` 9 of 10 (same specification, program three times longer, 58 outputs), `sched-trace` 9 of 10 (predecessor task, five more seeds this room; its dial `sched-trace-plus` is retired), `bench-arrow-fn-values` v2 9 of 10 (v1, with comments announcing the corner, was 3 of 3). These six cluster at 0.9 with one slip each; **that cluster is single-slip noise, not a difficulty tier**, and no seed count makes a team distinguishable from one agent on them. Below the band, `bench-printf-format-2` (2 of 10) is low (rule 4a).
+
+**Retired at the three-seed screen (3 of 3, or above 0.9 on more):** in this room `oops-dispatch`, `bench-eager-forms`, `gleam-machine`, `half-round`, `bench-strtod`, `bench-lease-lock` (two designs, 6 of 6), `quill-editor` (v2, after a v1 that was an ambiguity), `jensen-machine`, `bench-patch-apply`, a patch-execution variant, `lode-values`, `lathe-fn`, `stamp-ledger`, `stamp-helpers`, `bench-shelf-quiet`, `bench-layer-rules` (three scales: 44 keys, 400 keys, views), `bench-logic-grid` (retired after one timeout and two passes: the only pressure is wall clock, not accuracy), `sched-trace-plus`; from the predecessor room about twenty more across eight families (see the entries above and `tasks/REJECTED-*.md`). About 45 candidate designs in all; three are in band (two families), and all three are single-trap.
+
+**Distinct families.** The admitted (primary) suite has **three tasks in two families**: scope-capture prior in an invented language (`stamp-interpreter`, `stamp-2`), and exact numeric formatting against a host built-in (`bench-printf-format`). Counting the weak tasks as well, ten kept tasks fall into five families by mechanism: (1) invented-language scope execution (`stamp-interpreter`, `stamp-2`, `bench-arrow-fn-values`), (2) exact numeric formatting (`bench-printf-format`, `bench-printf-format-2`), (3) code to a README scored by private cases (`bench-doc-audit`, `bench-ignore-rules`), (4) list copy/share semantics (`bench-shelf-lang`, `bench-shelf-long`), (5) tick-scheduler simulation (`sched-trace`). Tasks made by turning a dial on a parent, or by writing a stamp sibling on the same specification, are the same family as the parent. Two families cannot support a claim about tasks in general, only about these two mechanisms; the paper's statistics take the family as the unit, analyse each primary family separately, and do not pool seeds across tasks of one family as if independent.
+
+**Replicates of the stamp mechanism reproduced 0.5 in one of three new same-specification programs.** On the byte-identical STAMP specification, `stamp-2` (a new program, a different nested-DEF site) went 5 of 10; `stamp-ledger` (one incidental nested-DEF site) and `stamp-helpers` (five nested-helper sites) both went 3 of 3, as did the function-value tasks `bench-arrow-fn-values` v1 and `lathe-fn`. So the stamp family's rate depends on the program: of the four programs on the one specification, two sit at 0.5 and two at 1.0. The corner splits seats only when it is rare in the program (one nested chain) and incidental, not repeated at several independent sites; with several sites in one program the seats say "the scoping rules change the results" and read SCOPE. Two in-band programs are still one family and one mechanism.
+
+**Why about forty-five candidates were not in band (diagnosis, stated as a hypothesis the pilots support, not a proved cause).**
+1. *A rule that is stated is followed, at any length.* Tasks whose surprising behaviour is a clause of the specification (an enumerated case, a general flag rule, eager evaluation, a by-name rule, value semantics, a 400-key layered override) went 3 of 3 or 9 of 10. One general rule becomes one helper function in the seat's own code and every instruction inherits it. Length, rule count and item count did not move the rate: `shelf-long` (three times longer), `sched-trace-plus` v2 (24 jobs, about 180 ticks, three more interacting rules; v1 is the ambiguity result), `layer-rules-400`.
+2. *Tools are not the ceiling.* Seats have Bash and write a simulator or an interpreter; hand-tracing a fully stated 45-line specification over 106 lines was also reliable (`shelf-quiet`, three seats, no script). A brief that forbade running any program (`bench-strtod`) still went 3 of 3, so "no self-test" is not the ceiling cause either.
+3. *Naming the mechanism in the specification's own words is a cue seats act on.* `half-round` said "exact value" and all three seats chose exact rational arithmetic up front; `bench-strtod` said "in a single rounding step" and all three used BigInt with one explicit tie-to-even step. `bench-printf-format`'s README also says "exact binary value", so this is a narrower claim: what splits seats is one rare case among many, on a seat that checks only a sample, not the absence of a cue.
+4. *What does split seats is a forced design decision in the seat's own code that the specification answers only through a general rule, with a strong prior pointing the other way.* stamp: a nested DEF forces "which environment does it capture" (natural: the enclosing one; specification: none). printf: writing the formatter forces "how do I get the digits and the exponent" (natural: the host's shortest representation). If the wrong behaviour needs no branch in the natural code (`lease-lock`: "if free take else queue" is literally correct) the task sits at 1.0. When that decision is the program's subject, as with function values, the seats read the rule (`arrow` v1, `lathe-fn`).
+5. *Small-file reading tasks are a ceiling.* Cross-document conflicts (six designs, 30 of 30), data cleaning, CIDR, URL resolution and early-constraint briefs: seats Grep for the distinctive keyword and read every file, so file count is not an obstacle.
+6. *A text defect looks like difficulty.* 0.5 with every failure on one token can be a dead or ambiguous clause (`sched-trace-plus` v1, `quill-editor` v1, `bench-prose-tally` v1 in the predecessor room); see rule 1 above. Rule used in this room: a failing token shared by every failing seat triggers a read of the specification before the rate counts.
+
+**The printf dial went the other way.** `bench-printf-format-2` (the same README extended with length modifiers and `*`, 3012 hidden cases) went 2 of 10 on its own seeds 1 to 10 (a new task, so none of them was ever a tuning run): low under rule 4a, out of the primary comparison. All eight failures are the same two cases (`%.17g` of 1e-07 and its `*` variant), with no failure among the 2314 new cases; an offline re-score of the earlier failing seats shows they fail an identical 726-case set, so the printf failures are one root cause (one decision, how the exponent of a value just below a power of ten is chosen), and adding cases or rule clusters cannot spread them. `bench-printf-format` (v1) is primary on its own 5 of 15 (raw-backed seeds 6 to 20, at the lower edge of the band and **the weakest primary**; the predecessor's seeds 1 to 5 and its arm C run had no files left, so fresh seeds and a fresh arm C run replaced them), but choosing v1 over v2 is selection after the fact: v1 (seeds 6 to 20) and v2 pooled are 7 of 25 = 0.28, or 10 of 30 = 0.33 counting the recorded seeds 1 to 5, and the grid rate on `bench-printf-format` should be expected nearer 0.3 than 0.5. It stays one family and one trap.
+
+**Dial results.** Salience (`shelf-quiet`, comments and the dedicated section removed: 3 of 3; `arrow` comments stripped: 3 of 3 to 9 of 10), length (`shelf-long`: 9 of 10 to 9 of 10), scale and interacting rules (`sched-trace-plus`, `layer-rules-400`, `layer-views`), item count (`half-round` 211 items, `bench-printf-format-2` 3012 cases) and stamp-style siblings produced one second in-band program (`stamp-2`) and no second family. The maintainer's expectation that a dial would find one was tested and not met; that result is recorded, not padded.
+
+**Cost of this room's screening.** Arm A runs cost $0.03 to $0.15 each (`bench-printf-format` about $0.085, `stamp-interpreter` about $0.057, most tasks $0.04 to $0.06); a real three-seat arm C run cost $0.57 to $0.71 (about 8 to 12.5 times arm A), from one run per task. See the room's ledger for the total and the grid entry below for the estimate.
+
+**Grid command and cost estimate for the primary suite (swarm-150725-3vny-room).**
+
+Run from the repo root (real Sonnet seats, never port 7717). The command is resumable: re-running it after an interruption skips every (task, arm, seed) whose `result.json` exists and retries a `timeout` result. Arm C always runs before its paired arm A, because arm A's budget and wall clock are arm C's realized spend on the same (task, seed).
+
+```
+node --import tsx scripts/bench-grid.ts --tasks stamp-interpreter,stamp-2,bench-printf-format --seeds 101,102,103,104,105,106,107,108,109,110,111,112,113,114,115,116,117,118,119,120,121,122,123,124,125,126,127,128,129,130,131,132,133,134,135,136,137,138,139,140 --arms A,C --model sonnet --max-cost-usd 95 --results-dir bench/results/rq1-suite --port-base 19850
+```
+
+The seed list is written out on purpose (macOS `seq -s, 1 40` ends with a comma and `parseArgs` then reads 41 seeds). In the grid arm A is budget-matched to arm C: it gets arm C's realized spend and wall clock on the same (task, seed), unlike the pilots' unbudgeted arm A, so a grid arm A rate can differ from the pilot rate for that reason too. Seeds 101 to 140 are fresh: the pilot seeds (1 to 20) are the tuning and selection set and are excluded from every grid analysis. Seeds are pairing labels, not randomness (`--seed` controls no random element of a run), so the fresh-seed rule is bookkeeping that prevents re-analysing tuning runs; the real statistical protection against selection is that the primary tasks were chosen on the pilot outcomes and are re-measured on runs that played no part in the choice. `--max-cost-usd` stops the grid before the next run once the running total would pass it, so a capped grid ends on a whole pair. The flags were checked against `parseArgs` in `scripts/bench-grid.ts`; the task ids resolve to `tasks/stamp-interpreter`, `tasks/stamp-2` and `tasks/bench-printf-format`. The grid takes an explicit `--tasks` list, so no retired task can be run by accident.
+
+Cost, from this room's real pilots: arm A about $0.057 per run on `stamp-interpreter` (10 runs, 4 turns), about $0.051 on `stamp-2` (10 runs, 4 turns) and about $0.083 on `bench-printf-format` (seeds 6 to 20, 5 to 8 turns). Arm C (three seats) cost $0.706 on `stamp-interpreter` (59 turns, 53 s), $0.640 on `stamp-2` (55 turns, 61 s) and $0.718 on `bench-printf-format` (52 turns, 88 s; the earlier run cost $0.669), **one or two runs each**, so the arm C figure is the least certain number here. One (task, seed) pair is therefore $0.76 (`stamp-interpreter`), $0.69 (`stamp-2`) and $0.80 (`bench-printf-format`): $2.26 for one seed of all three tasks. Forty seeds is 120 pairs, about $90 (hence the 95 cap); twenty seeds about $45; ten about $23. Run sequentially at about 100 to 120 s per pair, 120 pairs take about 3.5 hours.
+
+What that sample can show (two-proportion test, two-sided alpha 0.05, 80 percent power): with an arm A rate of 0.5, a team rate of 0.8 needs about 39 seeds per task per arm and 0.7 needs about 93. Forty seeds per task therefore detects only a large team advantage; a smaller one is not excluded by a null result. The statistical unit is the family, not the task: `stamp-interpreter` and `stamp-2` are one family (the same specification, the same mechanism, two programs) and `bench-printf-format` is the other; each is a single-trap task whose pilot rate is one-program (stamp) or one-case (printf) evidence. Analyse each family separately, do not pool seeds across the two stamp programs as if independent, and remember that the pilot rate is selected (a task lands in 0.3 to 0.7 partly by luck) so the grid rate may differ from 0.5. The arm C evidence so far is n=1 for each stamp program (`stamp-interpreter` and `stamp-2`: passed, room concluded 3 of 3) and n=2 for `bench-printf-format` (both concluded 3 of 3 inside the deadline and both failed on case 458 alone, so three seats did not catch the slip that six of the ten single seats also made).
+
+**Not carried forward from the predecessor room (unproven or out of scope for this room):** `scripts/bench-ak.ts` and the A-k arm specification on `swarm/swarm-140131-j6yf/sonnet-7` (no pilot, not part of this room's brief); `bench-logic-grid-{2,3,4}` (same family as `bench-logic-grid`, retired unpiloted with a reason on the board).

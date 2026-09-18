@@ -1,0 +1,64 @@
+SCHED-2: a single-CPU tick scheduler with a shared I/O device
+
+Time is a sequence of whole ticks numbered 0, 1, 2, ... The CPU can do one unit of work per
+tick. jobs.txt lists each job as: id, arrival tick, burst (units of work needed), priority,
+and a flag (B or -); lines starting with # are comments. A lower priority number means MORE
+urgent (0 is the most urgent).
+
+State kept during the run
+  * The READY set: jobs that want the CPU but are not running.
+  * At most one RUNNING job.
+  * SLEEPING jobs (blocked on I/O) with the tick at which they wake.
+  * LAST: the job that performed the most recent work tick (none before the first work tick).
+  * DEVICE: the tick at which the I/O device next becomes free (0 at the start).
+  * Every job has: remaining work, a current priority (starts as its listed priority), a
+    wait counter (starts 0), a since-block counter (starts 0), a run counter (starts 0)
+    and a spent counter (starts 0).
+
+What happens in each tick t, strictly in this order
+  1. WAKE. Every sleeping job whose wake tick is t joins READY; its current priority number
+     decreases by 1 (never below 0) as a reward for having waited on I/O, and its spent counter
+     goes back to 0. If several jobs wake in the same tick, they join READY in the order in which
+     they went to sleep.
+  2. ARRIVE. Every job whose arrival tick is t joins READY (in the order of jobs.txt).
+     A job that joins READY in steps 1 or 2 gets wait counter 0.
+  3. AGE. Every job that was already in READY before this tick (i.e. did not join in steps
+     1-2 of this tick) has its wait counter increased by 1. If the counter then equals 5
+     (4 for jobs whose flag is B), the job's current priority number decreases by 1 (never
+     below 0) and its wait counter goes back to 0. The running job and sleeping jobs do
+     not age.
+  4. DISPATCH.
+     a. PREEMPT: if there is a running job and either (i) READY contains a job whose current priority number is strictly smaller
+        than the running job's, or (ii) the running job's run counter is 3 or more and READY
+        contains a job whose current priority number is smaller than or equal to the running
+        job's, then the running job goes back to READY (wait counter 0) and there is no
+        running job.
+     b. PICK: if there is no running job and READY is not empty, the job in READY with the
+        smallest current priority number becomes the running job (ties: earlier arrival
+        tick first; still tied: alphabetically smaller id first). It leaves READY, its wait
+        counter is 0, and its run counter is 0. (A job that was just sent back to READY by
+        step 4a may be picked again at once.) If LAST exists and is a different job, this
+        tick is the picked job's SWITCH tick (it is running but does no work this tick). If
+        LAST is none or is the same job, there is no switch tick.
+  5. RUN. If there is a running job:
+       * if this is its switch tick, nothing else happens this tick;
+       * otherwise it performs one unit of work: its remaining work decreases by 1, its
+         since-block counter increases by 1, its run counter increases by 1, its spent counter
+         increases by 1, and LAST becomes this job. Then, in this order:
+           - if its spent counter is now 6, its current priority number increases by 1 (never
+             above 5) and its spent counter goes back to 0;
+           - if remaining work is 0, the job FINISHES with completion time t+1 and there is
+             no running job;
+           - otherwise, if its flag is B and its since-block counter is 2, the job goes to
+             sleep and there is no running job: its since-block counter goes back to 0, the
+             device starts serving it at tick s = the larger of t+1 and DEVICE, its wake tick
+             is s+3, and DEVICE becomes s+3.
+     If there is no running job the CPU idles this tick, and LAST becomes none.
+  A job keeps its (possibly changed) priority number for the rest of the run, including
+  while asleep and after it is preempted. A job's spent counter also goes back to 0 when the job
+  arrives.
+
+The run ends when every job has finished.
+
+OUTPUT: for each job in the order of jobs.txt, id:completion_time, separated by single
+spaces, for example: X:12 Y:7

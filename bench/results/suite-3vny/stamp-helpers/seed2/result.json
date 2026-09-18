@@ -1,0 +1,113 @@
+{
+  "schemaVersion": 1,
+  "task_id": "stamp-helpers",
+  "arm": "A",
+  "seed": 2,
+  "model": "sonnet",
+  "outcome": "task_pass",
+  "passed": true,
+  "reason": "task_pass",
+  "oracle": {
+    "kind": "exact-answer",
+    "command": "node --import tsx score-fact-check.ts <workspace>/answer.txt oracle/oracle.json",
+    "exit_code": 0
+  },
+  "anti_tamper": {
+    "hash_before": "8d594595b1d8789c8fbb6fa152c32ad449910203536811bf6e9a3bc56540829a",
+    "hash_after": "8d594595b1d8789c8fbb6fa152c32ad449910203536811bf6e9a3bc56540829a",
+    "unchanged": true
+  },
+  "seats": [
+    {
+      "name": "single",
+      "argv": [
+        "claude",
+        "-p",
+        "Read spec.txt (the STAMP language) and program.stamp. Determine exactly what the program outputs\nwhen run under that specification.\n\nWrite your final answer, and only your final answer with no explanation, to a file named\nanswer.txt in your current working directory: the printed values in order, separated by single\nspaces, on one line.\n\nWrite your final answer, and only your final answer with no explanation, to a file named answer.txt in your current working directory.",
+        "--mcp-config",
+        "/tmp/sth-s2/mcp-empty.json",
+        "--strict-mcp-config",
+        "--allowedTools",
+        "Read,Write,Bash,Glob,Grep",
+        "--tools",
+        "Read,Write,Bash,Glob,Grep",
+        "--disable-slash-commands",
+        "--setting-sources",
+        "project",
+        "--exclude-dynamic-system-prompt-sections",
+        "--output-format",
+        "stream-json",
+        "--verbose",
+        "--model",
+        "sonnet"
+      ],
+      "exit_code": 0,
+      "signal": null,
+      "started_at": "2026-09-18T15:46:18.388Z",
+      "completed_at": "2026-09-18T15:46:43.777Z",
+      "num_turns": 4,
+      "duration_ms": 24118,
+      "duration_api_ms": 24920,
+      "usage": {
+        "cost": 0.0521786,
+        "input_tokens": 6,
+        "cache_read_input_tokens": 20803,
+        "cache_creation_input_tokens": 6553,
+        "output_tokens": 2074
+      },
+      "text": "I wrote the answer to `answer.txt`. I worked it out by hand from the spec and did not run it, so it is unchecked:\n\n`8 111 118 10 32 21 27 1 4 2100 600 100 0 105 210 7 11 11 5 6 4 10 40 0 10 25 9 20 3`\n\nMost of the values are ordinary arithmetic. The ones that depend on the scoping rules are:\n\n- **`lastdigit`:** it reads the global `base` (10), not `digitsum`'s parameter, so the digit sums are all taken in decimal.\n- **`gcdinfo`:** `count` inside `modstep` is a fresh local, so the global `count` and the counter in `gcdinfo` stay 0. That gives `gcd * 100`, and the later `PRINT count` gives 0.\n- **`trisum`:** `term` reads the global `i` (7), so each term is 21 and the totals are 105 and 210.\n- **`outerp`:** `innerp` sees the globals `a` = 5 and `b` = 6, so both calls give 11 and the globals stay 5 and 6.\n- **`fill`:** `NEXT seq` creates a local counter, so the global `seq` prints 0.",
+      "killed_by_deadline": false,
+      "partial_usage": null
+    }
+  ],
+  "usage": {
+    "steps": 0,
+    "prompt_tokens": 0,
+    "completion_tokens": 0,
+    "cost_usd": 0.0521786,
+    "seats": 1,
+    "seats_with_usage": 1,
+    "coverage": "complete",
+    "input_tokens": 6,
+    "cache_read_input_tokens": 20803,
+    "cache_creation_input_tokens": 6553,
+    "output_tokens": 2074
+  },
+  "turns": {
+    "per_seat": [
+      {
+        "name": "single",
+        "num_turns": 4
+      }
+    ],
+    "summed": 4,
+    "seats": 1,
+    "seats_with_turns": 1,
+    "coverage": "complete"
+  },
+  "wall_clock": {
+    "started_at": "2026-09-18T15:46:18.387Z",
+    "completed_at": "2026-09-18T15:46:43.777Z",
+    "duration_ms": 25390
+  },
+  "budget": {
+    "max_budget_usd": null,
+    "deadline_ms": 900000
+  },
+  "build": {
+    "head_revision": "3546eb168c0f589b962239009cb5fbe41f3c37da",
+    "hub_entry": null,
+    "hub_entry_sha256": null,
+    "hub_revision": null
+  },
+  "frozen": {
+    "task_sha256": "8d594595b1d8789c8fbb6fa152c32ad449910203536811bf6e9a3bc56540829a",
+    "scorer_sha256": "05e2b771931c3d11e8c75fd6536b23c3bf1d7cf77e634832ed58654b86e82733",
+    "fact_scorer_sha256": "6b8b3e98c8c408ecd6715a38db9263488644d27c01a11c5bab3172acd5539832",
+    "task_id": "stamp-helpers",
+    "timeout_ms": 900000,
+    "seats": 1
+  },
+  "error": null,
+  "checked_at": "2026-09-18T15:46:43.869Z"
+}

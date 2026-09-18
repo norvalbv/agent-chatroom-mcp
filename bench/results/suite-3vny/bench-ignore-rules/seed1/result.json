@@ -1,0 +1,113 @@
+{
+  "schemaVersion": 1,
+  "task_id": "bench-ignore-rules",
+  "arm": "A",
+  "seed": 1,
+  "model": "sonnet",
+  "outcome": "task_pass",
+  "passed": true,
+  "reason": "task_pass",
+  "oracle": {
+    "kind": "ignore-rules",
+    "command": "node --import tsx oracle/score.ts <workspace>",
+    "exit_code": 0
+  },
+  "anti_tamper": {
+    "hash_before": "753b7a8d273fe30d80b3435c797de25e54e622197d94e7863e5336629110ecac",
+    "hash_after": "753b7a8d273fe30d80b3435c797de25e54e622197d94e7863e5336629110ecac",
+    "unchanged": true
+  },
+  "seats": [
+    {
+      "name": "single",
+      "argv": [
+        "claude",
+        "-p",
+        "Implement isIgnored in ignore.ts exactly as specified in README.md. The README is the complete specification of the required behavior; the stub currently throws. Keep the exported function name and signature.\n\nModify ignore.ts in this workspace; a chat answer alone is not a submitted code repair. Use no network or dependencies. The evaluator runs private tests against your code after completion.\n\nModify the relevant source file(s) in your current working directory directly to implement the fix described above. Your edit to the existing file(s) is the submission; do not create any other output file.",
+        "--mcp-config",
+        "/tmp/pilot-ir-seed1/mcp-empty.json",
+        "--strict-mcp-config",
+        "--allowedTools",
+        "Read,Edit,Write,MultiEdit,Bash,Glob,Grep",
+        "--tools",
+        "Read,Edit,Write,MultiEdit,Bash,Glob,Grep",
+        "--disable-slash-commands",
+        "--setting-sources",
+        "project",
+        "--exclude-dynamic-system-prompt-sections",
+        "--output-format",
+        "stream-json",
+        "--verbose",
+        "--model",
+        "sonnet"
+      ],
+      "exit_code": 0,
+      "signal": null,
+      "started_at": "2026-09-18T14:29:20.752Z",
+      "completed_at": "2026-09-18T14:29:41.608Z",
+      "num_turns": 4,
+      "duration_ms": 19524,
+      "duration_api_ms": 20471,
+      "usage": {
+        "cost": 0.0427512,
+        "input_tokens": 6,
+        "cache_read_input_tokens": 19586,
+        "cache_creation_input_tokens": 4409,
+        "output_tokens": 2009
+      },
+      "text": "I implemented `isIgnored` in `ignore.ts` following the README rules. I haven't run it or any tests.\n\n**Ambiguous spec case:** a pattern like `/**` becomes `**` after the leading `/` is dropped, so it matches only one component. That gives the same result for files anyway, because the top-level directory candidate matches first.\n\n**Skipped rules:** a rule that becomes empty after stripping (for example a line that is just `/` or `!`) is skipped. The README doesn't say what to do with those.",
+      "killed_by_deadline": false,
+      "partial_usage": null
+    }
+  ],
+  "usage": {
+    "steps": 0,
+    "prompt_tokens": 0,
+    "completion_tokens": 0,
+    "cost_usd": 0.0427512,
+    "seats": 1,
+    "seats_with_usage": 1,
+    "coverage": "complete",
+    "input_tokens": 6,
+    "cache_read_input_tokens": 19586,
+    "cache_creation_input_tokens": 4409,
+    "output_tokens": 2009
+  },
+  "turns": {
+    "per_seat": [
+      {
+        "name": "single",
+        "num_turns": 4
+      }
+    ],
+    "summed": 4,
+    "seats": 1,
+    "seats_with_turns": 1,
+    "coverage": "complete"
+  },
+  "wall_clock": {
+    "started_at": "2026-09-18T14:29:20.751Z",
+    "completed_at": "2026-09-18T14:29:41.609Z",
+    "duration_ms": 20858
+  },
+  "budget": {
+    "max_budget_usd": null,
+    "deadline_ms": 900000
+  },
+  "build": {
+    "head_revision": "0f84d03c048c8c444d54475257bdced3dfeb5011",
+    "hub_entry": null,
+    "hub_entry_sha256": null,
+    "hub_revision": null
+  },
+  "frozen": {
+    "task_sha256": "753b7a8d273fe30d80b3435c797de25e54e622197d94e7863e5336629110ecac",
+    "scorer_sha256": "f4b645c670ae4655aec1189e4d7320294115f0e3c6da3b5ba41a7ee3b1cd00f8",
+    "fact_scorer_sha256": "6b8b3e98c8c408ecd6715a38db9263488644d27c01a11c5bab3172acd5539832",
+    "task_id": "bench-ignore-rules",
+    "timeout_ms": 900000,
+    "seats": 1
+  },
+  "error": null,
+  "checked_at": "2026-09-18T14:29:41.709Z"
+}

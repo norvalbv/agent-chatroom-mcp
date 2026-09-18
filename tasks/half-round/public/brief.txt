@@ -1,0 +1,4 @@
+Read spec.txt (HALF-ROUND) and inputs.txt. Convert every line of inputs.txt as the specification says.
+
+Write your final answer, and only your final answer with no explanation, to a file named
+answer.txt in your current working directory, in the output format given at the end of spec.txt.

@@ -1,0 +1,293 @@
+{
+  "version": 1,
+  "statuses": [
+    "primary",
+    "weak",
+    "low",
+    "retired",
+    "pending"
+  ],
+  "note": "Machine-readable suite status. bench-grid refuses any task that is not primary, weak or low unless --include-retired. Families are counted by mechanism (paper/amendments.md); the statistical unit is the family. low = 0 < rate < 0.3 on ten seeds, weak = 0.7 < rate <= 0.9; both are kept and excluded from the primary comparison.",
+  "tasks": [
+    {
+      "id": "stamp-interpreter",
+      "status": "primary",
+      "family": "scope-capture",
+      "arm_a": {
+        "pass": 5,
+        "n": 10
+      },
+      "admission": "tasks/stamp-interpreter/ADMISSION.md",
+      "note": "single-trap: all five fails are output 32; one-program estimate, replicates did not reproduce 0.5"
+    },
+    {
+      "id": "bench-printf-format",
+      "status": "primary",
+      "family": "libc-exact-number",
+      "arm_a": {
+        "pass": 5,
+        "n": 15
+      },
+      "admission": "tasks/bench-printf-format/ADMISSION.md",
+      "note": "single-trap: every fail is case 458 (%.17g of 1e-07); primary record = pre-registered raw-backed fresh seeds 6-20 (5 of 15 = 0.33, the weakest primary; seeds 1-5 and the predecessor arm C are recorded but unrecoverable); pooled printf family incl. bench-printf-format-2: 7 of 25 raw-backed, 10 of 30 with the recorded seeds"
+    },
+    {
+      "id": "bench-doc-audit",
+      "status": "weak",
+      "family": "readme-private-tests",
+      "arm_a": {
+        "pass": 9,
+        "n": 10
+      },
+      "admission": "tasks/bench-doc-audit/ADMISSION.md"
+    },
+    {
+      "id": "bench-ignore-rules",
+      "status": "weak",
+      "family": "readme-private-tests",
+      "arm_a": {
+        "pass": 9,
+        "n": 10
+      },
+      "admission": "tasks/bench-ignore-rules/ADMISSION.md"
+    },
+    {
+      "id": "bench-shelf-lang",
+      "status": "weak",
+      "family": "list-copy-share",
+      "arm_a": {
+        "pass": 9,
+        "n": 10
+      },
+      "admission": "tasks/bench-shelf-lang/ADMISSION.md"
+    },
+    {
+      "id": "bench-shelf-long",
+      "status": "weak",
+      "family": "list-copy-share",
+      "arm_a": {
+        "pass": 9,
+        "n": 10
+      },
+      "admission": "tasks/bench-shelf-long/ADMISSION.md",
+      "note": "same SPEC as bench-shelf-lang"
+    },
+    {
+      "id": "sched-trace",
+      "status": "weak",
+      "family": "tick-scheduler",
+      "arm_a": {
+        "pass": 9,
+        "n": 10
+      },
+      "admission": "tasks/sched-trace/ADMISSION.md"
+    },
+    {
+      "id": "bench-arrow-fn-values",
+      "status": "weak",
+      "family": "scope-capture",
+      "arm_a": {
+        "pass": 9,
+        "n": 10
+      },
+      "admission": "tasks/bench-arrow-fn-values/ADMISSION.md",
+      "note": "v2 (comments stripped); v1 3/3 is a forking path"
+    },
+    {
+      "id": "stamp-2",
+      "status": "primary",
+      "family": "scope-capture",
+      "arm_a": {
+        "pass": 5,
+        "n": 10
+      },
+      "admission": "tasks/stamp-2/ADMISSION.md",
+      "note": "same STAMP spec as stamp-interpreter, new program with several nested-DEF spots; one family with stamp-interpreter (statistics unit = family)"
+    },
+    {
+      "id": "stamp-helpers",
+      "status": "retired",
+      "family": "scope-capture",
+      "arm_a": {
+        "pass": 3,
+        "n": 3
+      },
+      "admission": "tasks/stamp-helpers/ADMISSION.md"
+    },
+    {
+      "id": "bench-shelf-quiet",
+      "status": "retired",
+      "family": "list-copy-share",
+      "arm_a": {
+        "pass": 3,
+        "n": 3
+      },
+      "admission": "tasks/bench-shelf-quiet/ADMISSION.md"
+    },
+    {
+      "id": "sched-trace-plus",
+      "status": "retired",
+      "family": "tick-scheduler",
+      "arm_a": {
+        "pass": 3,
+        "n": 3
+      },
+      "admission": "tasks/sched-trace-plus/ADMISSION.md",
+      "note": "v2 counted; v1 5/10 was a dead clause (ambiguity)"
+    },
+    {
+      "id": "bench-layer-rules-400",
+      "status": "retired",
+      "family": "layered-rules",
+      "arm_a": {
+        "pass": 3,
+        "n": 3
+      },
+      "admission": "tasks/bench-layer-rules-400/ADMISSION.md"
+    },
+    {
+      "id": "bench-layer-views",
+      "status": "retired",
+      "family": "layered-rules",
+      "arm_a": {
+        "pass": 3,
+        "n": 3
+      },
+      "admission": "tasks/bench-layer-views/ADMISSION.md",
+      "note": "three valid runs; one run excluded as an output-format failure"
+    },
+    {
+      "id": "bench-strtod",
+      "status": "retired",
+      "family": "libc-exact-number",
+      "arm_a": {
+        "pass": 3,
+        "n": 3
+      },
+      "admission": "tasks/bench-strtod/ADMISSION.md"
+    },
+    {
+      "id": "half-round",
+      "status": "retired",
+      "family": "libc-exact-number",
+      "arm_a": {
+        "pass": 3,
+        "n": 3
+      },
+      "admission": "tasks/half-round/ADMISSION.md"
+    },
+    {
+      "id": "bench-lease-lock",
+      "status": "retired",
+      "family": "event-log-state-machine",
+      "arm_a": {
+        "pass": 3,
+        "n": 3
+      },
+      "admission": "tasks/bench-lease-lock/ADMISSION.md",
+      "note": "v2 counted; v1 also 3/3"
+    },
+    {
+      "id": "gleam-machine",
+      "status": "retired",
+      "family": "invented-machine",
+      "arm_a": {
+        "pass": 3,
+        "n": 3
+      },
+      "admission": "tasks/gleam-machine/ADMISSION.md"
+    },
+    {
+      "id": "quill-editor",
+      "status": "retired",
+      "family": "invented-machine",
+      "arm_a": {
+        "pass": 3,
+        "n": 3
+      },
+      "admission": "tasks/quill-editor/ADMISSION.md",
+      "note": "v2 counted; v1 0/3 was a spec ambiguity"
+    },
+    {
+      "id": "jensen-machine",
+      "status": "retired",
+      "family": "invented-machine",
+      "arm_a": {
+        "pass": 3,
+        "n": 3
+      },
+      "admission": "tasks/jensen-machine/ADMISSION.md"
+    },
+    {
+      "id": "bench-eager-forms",
+      "status": "retired",
+      "family": "invented-machine",
+      "arm_a": {
+        "pass": 3,
+        "n": 3
+      },
+      "admission": "tasks/bench-eager-forms/REJECTED.md"
+    },
+    {
+      "id": "oops-dispatch",
+      "status": "retired",
+      "family": "invented-machine",
+      "arm_a": {
+        "pass": 3,
+        "n": 3
+      },
+      "admission": "tasks/oops-dispatch/REJECTED.md"
+    },
+    {
+      "id": "bench-patch-apply",
+      "status": "retired",
+      "family": "readme-private-tests",
+      "arm_a": {
+        "pass": 3,
+        "n": 3
+      },
+      "admission": "tasks/bench-patch-apply/ADMISSION.md"
+    },
+    {
+      "id": "bench-bug-fix",
+      "status": "retired",
+      "family": "original-rq1",
+      "arm_a": {
+        "pass": 5,
+        "n": 5
+      },
+      "admission": "paper/amendments.md",
+      "note": "ceiling in the first grid: single agent and three-seat room both 5/5"
+    },
+    {
+      "id": "bench-fact-check",
+      "status": "retired",
+      "family": "original-rq1",
+      "arm_a": {
+        "pass": 5,
+        "n": 5
+      },
+      "admission": "paper/amendments.md",
+      "note": "ceiling in the first grid; its answer sits in records.txt by design (retrieval task)"
+    },
+    {
+      "id": "bench-long-brief",
+      "status": "retired",
+      "family": "original-rq1",
+      "arm_a": null,
+      "admission": "paper/amendments.md",
+      "note": "retired: its handoff scorer cannot be measured on arm A"
+    },
+    {
+      "id": "bench-printf-format-2",
+      "status": "low",
+      "family": "libc-exact-number",
+      "arm_a": {
+        "pass": 2,
+        "n": 10
+      },
+      "admission": "tasks/bench-printf-format-2/ADMISSION.md",
+      "note": "sonnet-7's printf dial (length modifiers, %u, negative x/X/o, star width/precision; 3012 cases), fresh seeds; all 8 fails are the two %.17g of 1e-07 cases; same family and same single trap as bench-printf-format"
+    }
+  ]
+}

@@ -1,0 +1,113 @@
+{
+  "schemaVersion": 1,
+  "task_id": "bench-shelf-quiet",
+  "arm": "A",
+  "seed": 1,
+  "model": "sonnet",
+  "outcome": "task_pass",
+  "passed": true,
+  "reason": "task_pass",
+  "oracle": {
+    "kind": "exact-answer",
+    "command": "node --import tsx score-fact-check.ts <workspace>/answer.txt oracle/oracle.json",
+    "exit_code": 0
+  },
+  "anti_tamper": {
+    "hash_before": "a2dbd86520c6bb04616053a2d4d77560ad504cbe0adf2687b32dbf4378c96435",
+    "hash_after": "a2dbd86520c6bb04616053a2d4d77560ad504cbe0adf2687b32dbf4378c96435",
+    "unchanged": true
+  },
+  "seats": [
+    {
+      "name": "single",
+      "argv": [
+        "claude",
+        "-p",
+        "SPEC.md defines the SHELF language and program.shelf is a SHELF program. Determine exactly what running program.shelf prints. Write to a file named answer.txt in your current working directory the output lines of the program in order, joined by a single \"|\" character with no spaces around it, and nothing else. Do not modify SPEC.md or program.shelf.\n\nWrite your final answer, and only your final answer with no explanation, to a file named answer.txt in your current working directory.",
+        "--mcp-config",
+        "/tmp/shq-s1/mcp-empty.json",
+        "--strict-mcp-config",
+        "--allowedTools",
+        "Read,Write,Bash,Glob,Grep",
+        "--tools",
+        "Read,Write,Bash,Glob,Grep",
+        "--disable-slash-commands",
+        "--setting-sources",
+        "project",
+        "--exclude-dynamic-system-prompt-sections",
+        "--output-format",
+        "stream-json",
+        "--verbose",
+        "--model",
+        "sonnet"
+      ],
+      "exit_code": 0,
+      "signal": null,
+      "started_at": "2026-09-18T15:33:19.304Z",
+      "completed_at": "2026-09-18T15:33:41.028Z",
+      "num_turns": 4,
+      "duration_ms": 20632,
+      "duration_api_ms": 21258,
+      "usage": {
+        "cost": 0.0485338,
+        "input_tokens": 6,
+        "cache_read_input_tokens": 19879,
+        "cache_creation_input_tokens": 5850,
+        "output_tokens": 2008
+      },
+      "text": "I worked out the output by hand from SPEC.md and wrote it to `answer.txt`; I didn't run the program, since there is no interpreter here. The file holds 23 lines joined by `|`.",
+      "killed_by_deadline": false,
+      "partial_usage": null
+    }
+  ],
+  "usage": {
+    "steps": 0,
+    "prompt_tokens": 0,
+    "completion_tokens": 0,
+    "cost_usd": 0.0485338,
+    "seats": 1,
+    "seats_with_usage": 1,
+    "coverage": "complete",
+    "input_tokens": 6,
+    "cache_read_input_tokens": 19879,
+    "cache_creation_input_tokens": 5850,
+    "output_tokens": 2008
+  },
+  "turns": {
+    "per_seat": [
+      {
+        "name": "single",
+        "num_turns": 4
+      }
+    ],
+    "summed": 4,
+    "seats": 1,
+    "seats_with_turns": 1,
+    "coverage": "complete"
+  },
+  "wall_clock": {
+    "started_at": "2026-09-18T15:33:19.304Z",
+    "completed_at": "2026-09-18T15:33:41.029Z",
+    "duration_ms": 21725
+  },
+  "budget": {
+    "max_budget_usd": null,
+    "deadline_ms": 900000
+  },
+  "build": {
+    "head_revision": "b37525ab47e3c644954a79f26e3307d5085fdedf",
+    "hub_entry": null,
+    "hub_entry_sha256": null,
+    "hub_revision": null
+  },
+  "frozen": {
+    "task_sha256": "a2dbd86520c6bb04616053a2d4d77560ad504cbe0adf2687b32dbf4378c96435",
+    "scorer_sha256": "05e2b771931c3d11e8c75fd6536b23c3bf1d7cf77e634832ed58654b86e82733",
+    "fact_scorer_sha256": "6b8b3e98c8c408ecd6715a38db9263488644d27c01a11c5bab3172acd5539832",
+    "task_id": "bench-shelf-quiet",
+    "timeout_ms": 900000,
+    "seats": 1
+  },
+  "error": null,
+  "checked_at": "2026-09-18T15:33:41.160Z"
+}

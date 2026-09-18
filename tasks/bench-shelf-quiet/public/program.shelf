@@ -1,0 +1,96 @@
+LET a (list 1 2 3)
+LET b a
+PUSH b 4
+PRINT a
+PRINT b
+
+DEF grow l
+PUSH l 1
+END
+DEF bump n l
+LET n (+ n 1)
+PUSH l n
+END
+
+LET row (list 0 0)
+LET grid (list)
+PUSH grid row
+PUSH grid row
+PUSH row 7
+PRINT grid
+LET copy grid
+RUN grow (idx copy 0)
+PRINT copy
+PRINT grid
+
+LET a1 (list 1 2)
+LET holder (list 0 0)
+SET holder 1 a1
+PUSH a1 3
+PRINT holder
+LET h2 holder
+PUSH a1 4
+PRINT h2
+PRINT holder
+
+LET q (list 1 2)
+FOR v q
+PUSH q (+ v 10)
+END
+PRINT q
+
+LET m (list (list 1) (list 2))
+FOR r m
+PUSH r 0
+END
+PRINT m
+FOR r m
+LET r2 r
+PUSH r2 9
+END
+PRINT m
+
+LET k 5
+LET acc (list)
+RUN bump k acc
+RUN bump k acc
+PRINT k
+PRINT acc
+
+LET p (list (list 1))
+LET out (list)
+PUSH out (+ p p)
+RUN grow (idx (idx out 0) 0)
+PRINT out
+PRINT p
+LET out2 (+ p p)
+RUN grow (idx out2 0)
+PRINT out2
+PRINT p
+
+LET g (list 1)
+DEF touch
+PUSH g 2
+LET g (list 100)
+PUSH g 3
+PRINT g
+END
+RUN touch
+PRINT g
+
+LET tot (list 0)
+LET pieces (list)
+REPEAT 3
+PUSH pieces tot
+PUSH tot 1
+END
+PRINT pieces
+LET frozen pieces
+PUSH tot 9
+PRINT frozen
+PRINT pieces
+IF (< (len pieces) 4)
+PRINT (len pieces)
+ELSE
+PRINT -1
+END

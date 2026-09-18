@@ -1,0 +1,60 @@
+QUILL line-editor language specification (version 1)
+
+A QUILL program is a sequence of commands, one per line. Tokens on a line are separated
+by single spaces. Indentation is ignored. Words (the text of a line, and mark names) are
+made of lower-case letters. Counts are non-negative integers.
+
+STATE
+  buffer     an ordered list of lines; each line holds one word. The buffer starts empty.
+  cursor     the line the editor is on, or nothing while the buffer is empty.
+  marks      names attached to lines. A name is attached to at most one line at a time;
+             a line may carry any number of names, and carries them with it: when the
+             line moves or is removed, its names go with it. A new line starts with none.
+  clipboard  a list of words, empty at the start.
+  history    the record used by UNDO (see UNDO).
+
+COMMANDS
+  ADD w      insert a new line holding w directly after the cursor line and move the
+             cursor onto it. If the buffer is empty the new line becomes the whole buffer.
+  INS w      the same, but the new line goes directly before the cursor line.
+  DEL        remove the cursor line. The cursor moves to the line that followed it, or,
+             if it was the last line, to the line that preceded it. Nothing happens if
+             the buffer is empty.
+  UP n       move the cursor n lines toward the start of the buffer, stopping at the
+             first line. DN n moves it toward the end, stopping at the last line.
+  FIRST      move the cursor to the first line. LAST moves it to the last line.
+  MARK m     attach the name m to the cursor line. Nothing happens if the buffer is empty.
+  GO m       move the cursor to the line that carries the name m. Nothing happens if no
+             line carries m.
+  SWAP       the cursor line and the line after it trade places in the buffer. The cursor
+             stays on the same line it was on, which has moved: its position in the
+             buffer is now one later. Nothing happens if the cursor is on the last line.
+  YANK n     replace the clipboard with the words of n lines, starting at the cursor line
+             and going toward the end (fewer if the buffer ends first). The buffer is
+             not changed.
+  CUT n      do YANK n, then remove those same lines from the buffer. The cursor moves to
+             the line that followed the removed block, or, if there was none, to the line
+             that preceded it. Nothing is removed and the clipboard is left alone if the
+             buffer is empty.
+  PASTE      insert one new line for each word on the clipboard, in order, directly after
+             the cursor line, and move the cursor onto the last of them. If the buffer is
+             empty the new lines become the whole buffer. The clipboard is not changed.
+             Nothing happens if the clipboard is empty.
+  UNDO       take back the most recent command that changed the lines of the buffer (ADD,
+             INS, DEL, SWAP, CUT or PASTE, and only when it actually inserted, removed or
+             reordered lines),
+             restoring the buffer (its lines, their order and the names each line carried)
+             and the cursor exactly as they were just before that command. Commands that changed no lines (UP, DN, FIRST, LAST, MARK, GO,
+             YANK, SHOW, DUMP, and any of those six that found nothing to do)
+             are not in the history. UNDO is never itself in the history. The history
+             is unlimited. The clipboard is never restored. UNDO with an empty history
+             does nothing.
+  SHOW       append the word of the cursor line to the output (nothing if there is none).
+  DUMP       append one output item: the words of the whole buffer from first to last,
+             joined by commas (the single character - if the buffer is empty).
+  REPEAT n   ... END   run the commands between REPEAT and its END n times (zero times if
+             n is 0). Blocks may nest. Every REPEAT is closed by its own END.
+
+OUTPUT
+  The output is the list of items appended by SHOW and DUMP, in order, separated by
+  single spaces.

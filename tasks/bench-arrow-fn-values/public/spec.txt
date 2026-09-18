@@ -1,0 +1,57 @@
+ARROW language specification
+
+An ARROW program is a sequence of lines. Tokens on a line are separated by single spaces, and
+parentheses are separate tokens. Indentation is ignored, and so are blank lines and lines that start with #. Names are case-sensitive words made of
+letters. Integer literals are written with an optional leading minus sign attached to the digits.
+
+VALUES
+  There are two kinds of value: integers (unbounded, no overflow) and function values. A name that
+  has never been assigned reads as the integer 0.
+
+EXPRESSIONS
+  An expression is an integer literal, a name, or a parenthesised form. Forms:
+    (+ a b)  (- a b)  (* a b)     sum, difference, product of integers
+    (/ a b)   floor division, rounding toward negative infinity; if b is 0 the result is 0
+    (% a b)   the remainder consistent with that floor division; if b is 0 the result is 0
+    (< a b)  (= a b)              1 when true, else 0
+    (if c a b)   the value of a when c is not 0, otherwise the value of b; only the chosen
+                 branch is evaluated
+    (fn (p q ...) body)   a function value with the given parameter names (possibly none) and
+                 the expression body
+    (call f e1 e2 ...)    evaluate f, then e1, e2, ... from left to right; then call f, see CALLS
+  The operands of every form except `if` are evaluated from left to right before the form is
+  applied. Anything that is not a function value used as f in a call makes the call yield 0.
+
+STATEMENTS
+  SET v e        evaluate e, then assign the result to v (see SCOPE)
+  PRINT e        evaluate e and append the result to the output
+  IF e ... END   run the body if e is not 0;  IF e ... ELSE ... END has a second body run otherwise
+  REPEAT e ... END   evaluate e once; run the body that many times (not at all if e <= 0)
+  DEF f p q ... END  defines a procedure: it is the same as running  SET f (fn (p q ...) ...)
+                 except that the body is a sequence of statements, run in order until RET
+  RET e          inside a procedure body: evaluate e and end the call, yielding that value.
+                 A procedure whose body ends without RET yields 0.
+  GLOBAL v       inside a procedure: from this point in the current call, v means the global
+                 variable v, for reads and for SET
+  Every IF, REPEAT and DEF is closed by its own END.
+
+CALLS
+  A call gives the called function a new set of local variables: its parameters, bound to the
+  argument values in order. (Calls in this language always pass exactly as many arguments as the
+  function has parameters.) Integers and function values are passed as they are.
+  The body then runs: for a `fn` the body expression is evaluated and its value is the value of
+  the call; for a procedure the statements run until RET.
+
+SCOPE
+  Statements outside any procedure use global variables.
+  Inside a call, a name that a SET executed in that call assigns (unless it was declared GLOBAL)
+  is a local variable of that call, in addition to the parameters.
+  Reading a name inside a call uses the call's local variable of that name if it has one,
+  otherwise the global variable of that name (0 if there is none).
+  A SET of a name that is not yet a local of the current call creates a local of that name; it
+  does not change any global of the same name.
+  Procedure names are ordinary global variables holding function values.
+
+OUTPUT
+  The output is the list of all printed values in order, written as decimal integers separated by
+  single spaces (a leading minus sign for negatives). A function value cannot be printed.

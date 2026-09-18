@@ -1,0 +1,128 @@
+SET base 10
+SET step 3
+SET i 7
+SET a 5
+SET b 6
+SET count 0
+DEF collatz n
+SET moves 0
+WHILE < 1 n
+IF % n 2
+SET n + * 3 n 1
+ELSE
+SET n / n 2
+END
+SET moves + moves 1
+END
+RET moves
+END
+PRINT CALL collatz 6
+PRINT CALL collatz 27
+PRINT CALL collatz 97
+DEF digitsum n base
+SET s 0
+DEF lastdigit v
+RET % v base
+END
+WHILE n
+SET s + s CALL lastdigit n
+SET n / n base
+END
+RET s
+END
+PRINT CALL digitsum 255 16
+PRINT CALL digitsum 255 2
+PRINT CALL digitsum 4096 8
+PRINT CALL digitsum 999 10
+PRINT CALL digitsum 1000 10
+PRINT CALL lastdigit 1234
+DEF gcdinfo x y
+SET count 0
+DEF modstep p q
+SET count + count 1
+RET % p q
+END
+WHILE y
+SET r CALL modstep x y
+SET x y
+SET y r
+END
+RET + * x 100 count
+END
+PRINT CALL gcdinfo 1071 462
+PRINT CALL gcdinfo 48 18
+PRINT CALL gcdinfo 17 5
+PRINT count
+DEF trisum n
+SET i 0
+SET t 0
+DEF term
+RET * i step
+END
+REPEAT n
+SET i + i 1
+SET t + t CALL term
+END
+RET t
+END
+PRINT CALL trisum 5
+PRINT CALL trisum 10
+PRINT i
+DEF outerp n
+SET a + n 1
+DEF midp
+SET b * a 2
+DEF innerp
+RET + a b
+END
+RET CALL innerp
+END
+RET CALL midp
+END
+PRINT CALL outerp 10
+PRINT CALL outerp 0
+PRINT a
+PRINT b
+DEF fill n
+SET cursor 0
+DEF put v
+PUSH out + * v 10 cursor
+SET cursor + cursor 1
+END
+REPEAT n
+SET z CALL put NEXT seq
+END
+RET LEN out
+END
+PRINT CALL fill 4
+PRINT AT out 0
+PRINT AT out 3
+PRINT seq
+DEF primecount lim
+SET found 0
+SET k 2
+WHILE < k + lim 1
+SET d 2
+SET isp 1
+WHILE AND isp < * d d + k 1
+IF = % k d 0
+SET isp 0
+END
+SET d + d 1
+END
+SET found + found isp
+SET k + k 1
+END
+RET found
+END
+PRINT CALL primecount 30
+PRINT CALL primecount 100
+DEF scale x
+DEF half v
+RET / v 2
+END
+RET + CALL half x CALL half + x 1
+END
+PRINT CALL scale 9
+PRINT CALL scale 20
+PRINT CALL half 7

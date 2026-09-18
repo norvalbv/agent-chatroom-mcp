@@ -292,22 +292,38 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
         "Long-poll for messages from other participants. Returns immediately if there are unread messages, otherwise waits up to " +
         "timeout_ms (default 55s, max 55s) for one to arrive. Call it again if it returns nothing; that is normal. " +
         "Also reports the open proposal (its text only when the version changed since you last saw it), what blocks it, whether your leaving would block it, " +
-        "openings progress, humans present, your_turn (round_robin rooms), and whether the room has concluded.",
+        "openings progress, humans present, your_turn (round_robin rooms), and whether the room has concluded. " +
+        "hold_until_actionable=true keeps holding through plain chatter (still returns by timeout_ms, nothing is dropped) so a client that cannot " +
+        "locally re-poll without spending a model turn still only wakes for something it must act on.",
       inputSchema: {
         room: roomArg,
         since_seq: z.number().int().min(0).optional().describe("Return messages with seq greater than this. Defaults to what you have already seen."),
         follow: z.array(z.string().max(80)).max(100).optional().describe("Follow board key prefixes; omitted keeps your subscription, [] follows only mandatory coordination keys. Use [\"\"] for all. Rejoin resets a lost manifest."),
         timeout_ms: z.number().int().min(0).max(MAX_WAIT_MS).optional().describe("Milliseconds to wait for a message; omit for 55000, 0 to poll without waiting; values above 55000 are rejected."),
+        hold_until_actionable: z.boolean().optional().describe("Opt-in: keep the long-poll open through messages that are not actionable for you (chatter) and only return once something is (addressed message, a vote/challenge you owe, a human message, or a conclusion) or timeout_ms elapses, whichever first. No message is lost either way."),
         participant_id: asArg,
       },
     },
-    guard("wait_for_messages", async ({ room, since_seq, timeout_ms, follow, participant_id }) => {
+    guard("wait_for_messages", async ({ room, since_seq, timeout_ms, follow, participant_id, hold_until_actionable }) => {
       const r = hub.getRoom(room);
       const id = pid(room, participant_id);
       const p = hub.requireParticipant(r, id);
       const since = since_seq ?? p.lastSeenSeq;
       hub.answerBeforeWaiting(r, p, since);
-      const msgs = await hub.wait(room, id, since, Math.min(timeout_ms ?? DEFAULT_WAIT_MS, MAX_WAIT_MS));
+      const waitBudgetMs = Math.min(timeout_ms ?? DEFAULT_WAIT_MS, MAX_WAIT_MS);
+      const waitDeadline = Date.now() + waitBudgetMs;
+      let msgs = await hub.wait(room, id, since, waitBudgetMs);
+      // Same effect as a client re-polling locally on a non-actionable result (the seat.ts idleWaits
+      // loop), but done server-side so a client with no such loop (e.g. a Claude Code seat, which pays
+      // a full-context turn on every wait_for_messages return) gets the saving too.
+      if (hold_until_actionable) {
+        while (!hub.actionableNow(r, p)) {
+          const remaining = waitDeadline - Date.now();
+          if (remaining <= 0) break;
+          const more = await hub.wait(room, id, p.lastSeenSeq, remaining);
+          if (more.length) msgs = msgs.concat(more);
+        }
+      }
       const open = [...r.proposals.values()].find((pr) => pr.status === "open");
       const needsMyVote = open && !open.votes[id] && p.agent !== "human" && p.role !== "chair";
       const needsChallenge = open && hub.challengeRequired(r) && !open.challenges.some((c) => c.blocking !== false) && open.by.id !== id;

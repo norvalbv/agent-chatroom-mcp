@@ -28,6 +28,7 @@ export const offlineScripts = [
   'electorate-regression.ts',
   'handoff-regression.ts',
   'handoff-task-fixture.test.ts',
+  'hold-until-actionable-regression.ts',
   'human-answering.test.ts',
   'idlewaits-actionable-regression.ts',
   'mention-mentions.test.ts',

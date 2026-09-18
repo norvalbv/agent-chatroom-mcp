@@ -1487,6 +1487,30 @@ export class Hub {
     return `${ask.from.agent === "human" ? "You are the one answering this human. " : ""}${this.shown(room, ask.from)} addressed you directly in #${ask.seq}. Reply with send_message reply_to="${ask.id}" or call pass to decline only this focused ask. Other messages remain queued.`;
   }
 
+  /**
+   * Whether wait_for_messages(hold_until_actionable) should stop holding and return to this
+   * participant now: an addressed/human ask, a vote or challenge owed on the open proposal, or
+   * the room concluding/closing. Plain chatter with none of these keeps the hold open until the
+   * caller's timeout, same as an idle poll does today.
+   *
+   * Deliberately NOT a blanket `unansweredHuman(room)` check: an unanswered human message is
+   * withheld from everyone but its nominated responder (visibleTo, ~L1541 — responderFor(...).mine
+   * gates it) until it is answered or ages out, so a bystander has nothing to act on and nothing
+   * to see yet. attentionFocus already returns it the moment this participant IS the responder.
+   * A blanket check would collapse every seat's hold the instant any human spoke anywhere,
+   * defeating the point for the maintainer-directs-Claude-Code-seats case this exists for.
+   */
+  actionableNow(room: Room, p: Participant): boolean {
+    if (room.state === "closed" || room.state === "concluded") return true;
+    if (this.attentionFocus(room, p)) return true;
+    if (this.addressedBy(room, p).length) return true;
+    const open = [...room.proposals.values()].find((pr) => pr.status === "open");
+    if (!open) return false;
+    const needsVote = !open.votes[p.id] && p.agent !== "human" && p.role !== "chair";
+    const needsChallenge = this.challengeRequired(room) && !open.challenges.some((c) => c.blocking !== false) && open.by.id !== p.id;
+    return needsVote || needsChallenge;
+  }
+
   private resolvesAddress(room: Room, p: Participant, content: string, replyTo?: string): boolean {
     const focus = this.attentionFocus(room, p);
     if (replyTo && (focus?.id === replyTo || this.addressedBy(room, p).some((m) => m.id === replyTo))) return true;

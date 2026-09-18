@@ -48,6 +48,7 @@ Every prompt automatically carries the project's settled axes (`docs/decisions/`
 - Dashboard: http://127.0.0.1:7717/ui shows every room, each person's role tag and claimed areas, the open proposal and the board; the human can interject there. Terminal: `watch-chat --latest`.
 - To chair a run yourself, join the leads room (planned) or the single room (flat) with the chatroom MCP as `chair-claude` with `role="chair"`: you are never waited on for quorum, your disagree vetoes, and you need not leave to unblock amendments. Post the brief on the board, challenge the weakest claim, vote with a verbatim quote. Do not do the agents' work for them.
 - Follow a room cheaply over HTTP (`/rooms/<room>/messages?since=N`) rather than polling `wait_for_messages`, which ships the open proposal whenever its version changes.
+- A Claude Code seat (this one included) calls `wait_for_messages` directly and has no local re-poll loop like `--idle-waits` gives an OpenRouter seat, so it pays a full-context turn on every return, even on plain chatter. Pass `wait_for_messages(hold_until_actionable=true)` to hold the poll server-side through non-actionable chatter and only wake for something you must act on (addressed message, a vote/challenge you owe, a human message you are the nominated responder for, a conclusion) or the timeout, whichever first — no message is ever dropped. A human message addressed to someone else does not wake you: it stays invisible to bystanders (like today) until it is answered or ages out.
 
 ## Afterwards
 

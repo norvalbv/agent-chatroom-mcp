@@ -13,7 +13,13 @@ export function loadTask(taskDir: string) {
 }
 export async function scoreTask(taskDir: string, workspace: string) {
   const config = JSON.parse(readFileSync(join(taskDir, 'oracle', 'oracle.json'), 'utf8')) as OracleConfig;
-  if (config.kind === 'inclusive-dates') {
+  // Generic private-tests dispatch: any task whose own oracle/score.ts exists uses that script's
+  // {score, oracle_results} JSON contract (originally written just for 'inclusive-dates', now keyed on
+  // the file's presence rather than that one literal kind string, so new code-artifact tasks can bring
+  // their own oracle/score.ts under any kind name without editing this dispatcher). 'exact-answer' and
+  // sentinel kinds with no score.ts (e.g. bench-long-brief's 'handoff') fall through to the text-answer
+  // path below unchanged.
+  if (config.kind !== 'exact-answer' && existsSync(join(taskDir, 'oracle', 'score.ts'))) {
     const scorerPath = resolve(taskDir, 'oracle', 'score.ts');
     const command = 'node --import tsx oracle/score.ts <workspace>';
     const run = spawnSync(process.execPath, ['--import', 'tsx', scorerPath, workspace], { encoding: 'utf8', timeout: 10000 });

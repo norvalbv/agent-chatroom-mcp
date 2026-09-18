@@ -356,6 +356,14 @@ export const UI_HTML = `<!doctype html>
     });
     return out;
   };
+  var reviewingOf = function (r, name) {
+    var out = [];
+    Object.keys(r.board || {}).forEach(function (k) {
+      if (k.indexOf('claim/') !== 0) return;
+      if (r.board[k].reviewer === name) out.push(k.slice(6));
+    });
+    return out;
+  };
 
   // ---------- rooms rail ----------
   function renderRooms() {
@@ -587,13 +595,14 @@ export const UI_HTML = `<!doctype html>
   }
   function panePeople(r) {
     var rows = function (list) { return list.map(function (p) {
-      var areas = areasOf(r, p.name);
-      return '<div class="person' + (p.active ? '' : ' off') + (personOpen === p.name ? ' sel' : '') + '" data-person="' + esc(p.name) + '">' + av(p.name, p.agent) + '<div><div class="n">' + esc(p.name) + roleTag(p) + '<span class="agent">' + esc(p.agent) + '</span></div><div class="a">' + esc(areas.join(', ')) + (p.left_reason ? (areas.length ? ' · ' : '') + 'left: ' + esc(p.left_reason) : '') + '</div></div><div class="s">' + p.messages + ' msg' + (p.messages === 1 ? '' : 's') + '<br>' + (p.active ? (p.working && p.working.at > (p.last_active_at || '') ? 'working: ' + esc(p.working.tool) + ' · ' + rel(p.working.at) : rel(p.last_seen_at || p.last_active_at)) : 'left') + '</div>' + (personOpen === p.name ? '<div class="act" id="act">' + (activity[p.name] ? (activity[p.name].length ? activity[p.name].map(function (a) { return '<div><span class="st">#' + a.step + ' ' + rel(a.at) + '</span> <span class="tl">' + esc(a.tool) + '</span> ' + esc(a.detail || '') + '</div>'; }).join('') : 'No heartbeats yet (only seats started after 2026-09-18 send them).') : 'Loading…') + '</div>' : '') + '</div>';
+      var areas = areasOf(r, p.name), reviewing = reviewingOf(r, p.name);
+      var aline = esc(areas.join(', ')) + (reviewing.length ? (areas.length ? ' · ' : '') + 'reviewing: ' + esc(reviewing.join(', ')) : '') + (p.left_reason ? (areas.length || reviewing.length ? ' · ' : '') + 'left: ' + esc(p.left_reason) : '');
+      return '<div class="person' + (p.active ? '' : ' off') + (personOpen === p.name ? ' sel' : '') + '" data-person="' + esc(p.name) + '">' + av(p.name, p.agent) + '<div><div class="n">' + esc(p.name) + roleTag(p) + '<span class="agent">' + esc(p.agent) + '</span></div><div class="a">' + aline + '</div></div><div class="s">' + p.messages + ' msg' + (p.messages === 1 ? '' : 's') + '<br>' + (p.active ? (p.working && p.working.at > (p.last_active_at || '') ? 'working: ' + esc(p.working.tool) + ' · ' + rel(p.working.at) : rel(p.last_seen_at || p.last_active_at)) : 'left') + '</div>' + (personOpen === p.name ? '<div class="act" id="act">' + (activity[p.name] ? (activity[p.name].length ? activity[p.name].map(function (a) { return '<div><span class="st">#' + a.step + ' ' + rel(a.at) + '</span> <span class="tl">' + esc(a.tool) + '</span> ' + esc(a.detail || '') + '</div>'; }).join('') : 'No heartbeats yet (only seats started after 2026-09-18 send them).') : 'Loading…') + '</div>' : '') + '</div>';
     }).join(''); };
     var active = r.participants.filter(function (p) { return p.active; }), gone = r.participants.filter(function (p) { return !p.active; });
     return '<div class="sec"><h3>In the room <span class="sp"></span><span class="c">' + active.length + '</span></h3>' + (rows(active) || '<div class="empty" style="padding:16px">Nobody here.</div>') + '</div>'
       + (gone.length ? '<div class="sec"><h3>Left <span class="sp"></span><span class="c">' + gone.length + '</span></h3>' + rows(gone) + '</div>' : '')
-      + '<div class="sec" style="font-size:12px;color:var(--dim2)">Areas come from claim/* board entries; the role tag is what the agent joined with.</div>';
+      + '<div class="sec" style="font-size:12px;color:var(--dim2)">Areas come from claim/* board entries; reviewing is the hub-assigned reviewer for that claim; the role tag is what the agent joined with.</div>';
   }
   function paneBoard(r) {
     var keys = Object.keys(r.board || {}).filter(function (k) { return !boardQuery || k.toLowerCase().indexOf(boardQuery.toLowerCase()) >= 0 || (r.board[k].text || '').toLowerCase().indexOf(boardQuery.toLowerCase()) >= 0; });
@@ -606,7 +615,7 @@ export const UI_HTML = `<!doctype html>
       h += '<div class="bgroup">' + groups[g].sort(function (a, b) { return (r.board[b].updated_at || '').localeCompare(r.board[a].updated_at || ''); }).map(function (k) {
         var e = r.board[k], open = !!expanded['b:' + k];
         var summary = '';
-        if (g === 'claim') { try { var c = JSON.parse(e.text); summary = (c.owner ? 'owner ' + c.owner : '') + (c.status ? ' · ' + c.status : '') + (c.team && c.team.length ? ' · team ' + c.team.join(', ') : ''); } catch (x) {} }
+        if (g === 'claim') { try { var c = JSON.parse(e.text); summary = (c.owner ? 'owner ' + c.owner : '') + (c.status ? ' · ' + c.status : '') + (c.team && c.team.length ? ' · team ' + c.team.join(', ') : ''); } catch (x) {} summary += e.reviewer ? ' · reviewer ' + e.reviewer : ''; }
         return '<div class="bentry ' + g + (open ? ' open' : '') + '"><div class="bh" data-b="' + esc(k) + '"><span class="pre">' + g + '</span><span class="k" title="' + esc(k) + '">' + esc(k.replace(/^(claim|verify|hold|inbox)\\//, '')) + '</span><span class="m">' + esc(e.by) + ' · ' + rel(e.updated_at) + ' · ' + e.chars + 'c</span></div>'
           + '<div class="bb">' + (summary ? '<div style="color:var(--dim);margin-bottom:6px">' + esc(summary) + '</div>' : '') + withMentions(esc(e.text || '')) + '</div></div>';
       }).join('') + '</div>';

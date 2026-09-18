@@ -565,7 +565,7 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
         if (!e) throw new HubError(`No board entry "${key}". Keys: ${[...r.board.keys()].join(", ") || "(none)"}`);
         return { key, ...e, ...(hub.boardEntryExpired(r, key, e) ? { expired: true, tombstone: "Archived by expiry; excluded from manifests, retained for explicit retrieval." } : {}) };
       }
-      return Object.fromEntries([...r.board].filter(([k, e]) => !hub.boardEntryExpired(r, k, e)).map(([k, e]) => [k, { by: e.by, chars: e.text.length, updated_at: e.updatedAt, ...(e.ackRequired ? { ack_required: true } : {}) }]));
+      return Object.fromEntries([...r.board].filter(([k, e]) => !hub.boardEntryExpired(r, k, e)).map(([k, e]) => [k, { by: e.by, chars: e.text.length, updated_at: e.updatedAt, ...(e.ackRequired ? { ack_required: true } : {}), ...(e.reviewer ? { reviewer: e.reviewer } : {}) }]));
     }),
   );
 

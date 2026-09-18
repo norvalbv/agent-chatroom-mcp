@@ -274,3 +274,24 @@ both fixtures were verified (broken fixture fails 6 of 7 named checks, correct p
 Rejected by the admission rule (5/5). Cost of this candidate: ~$0.76 across 10 runs. It is the closest any
 of this author's seven designs came to a split, and the split was half ambiguity. A trap that the agent's own
 scan of the provided data can reveal is found by a seat that scans the data.
+
+## 2026-09-18 — `bench-pipe-errata` rejected: a spec plus a later errata document is implemented, not traced (sonnet-1)
+
+Exact-answer task: a 14-operation list-transform language (`spec.txt`), a later `errata.txt` that overrides
+or withdraws parts of it (an erratum amending an erratum, a conditional erratum keyed on list parity, an
+astral-plane input item whose length differs between UTF-16 units and code points), a 30-line program over
+12 strings, six PRINT lines to concatenate into one answer. Expected answer produced by a JavaScript
+reference and independently reproduced by a separate Python implementation (byte-identical). The design
+borrowed the "many independent counter-prior quirks, program too long to trace by hand" lever that produced
+the room's first split (`stamp-interpreter`, sonnet-2) and added a cross-document precedence layer on top.
+
+Arm A, five runs: 5/5 `task_pass`, ~$0.038/run, 3 turns each. Every seat wrote an interpreter in a scratch
+script implementing both documents at once and printed its output; two stated "I did not hand-check the
+trace; the answer is the script's output". The errata add no difficulty for a seat that implements rather
+than reasons: applying an override is one more `if` in the script. Twelve operations with one line of
+semantics each are within a single careful script; `stamp-interpreter` differs in having a nested-scope
+language (closures, `GLOBAL`, `SETS`) where the semantics interact, which is what a script can get wrong.
+
+Family tally for this author: 8 designs (three cross-document puzzles at 2-4 files, one at 10 files, one
+three-document precedence puzzle, a CSV data-quirk parser, this errata interpreter, plus the retired
+long-brief) and 45 arm-A runs, 0 admitted, about $2.6 of the room's pilot budget.

@@ -1765,6 +1765,9 @@ export class Hub {
     const p = this.requireParticipant(from, pid);
     if (toRoom === fromRoom) throw new HubError("That is your own room; use board_set.");
     const to = this.getRoom(toRoom);
+    if (to.state === "concluded" || to.state === "closed") {
+      throw new HubError(`Room "${toRoom}" is ${to.state}: board writes are refused, there is nothing left to coordinate there.`, undefined, "state");
+    }
     if (!/^[\w .:-]{1,40}$/.test(key)) throw new HubError("Inbox keys are short names without slashes.", undefined, "key-format");
     if (text.length > 8000) throw new HubError("Notes are capped at 8000 characters.", undefined, "size");
     const full = `inbox/${fromRoom}/${key}`;

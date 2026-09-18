@@ -90,6 +90,15 @@ r = await c.call("board_set", { room, key: "evidence/final", text: "final note" 
 assert.ok(r.error && /concluded/.test(r.text), "board_set is refused outright post-conclusion: " + r.text);
 r = await c.call("board_get", { room, key: "verify/build" });
 assert.ok(!r.error && /exit 0/.test(r.text), "board_get still reads pre-conclusion entries: " + r.text);
+
+// A cross-room note (post_to_room) into the concluded room's board is refused outright too, not only the room's
+// own board_set: the target room's state is what matters, not which room the writer is calling from.
+const reporter = await seat("reporter");
+r = await reporter.call("join_room", { room: "leave-post-conclusion-reporter", name: "Reporter", agent: "test" });
+assert.ok(!r.error, "reporter joins its own room: " + r.text);
+r = await reporter.call("post_to_room", { from_room: "leave-post-conclusion-reporter", to_room: room, key: "late-note", text: "too late from another room" });
+assert.ok(r.error && /concluded/.test(r.text), "post_to_room into a concluded room is refused outright: " + r.text);
+
 r = await c.call("leave_room", { room, reason: "room concluded, nothing left to do" });
 assert.ok(!r.error, "C's leave succeeds: " + r.text);
 

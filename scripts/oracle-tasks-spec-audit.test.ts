@@ -58,26 +58,32 @@ test('ignore-rules: constant and substring shortcuts do not pass', async () => {
   } finally { cleanup(dir); }
 });
 
-test('ignore-rules: delegating to the real git is rejected (no program reachable through PATH)', async () => {
-  const dir = workspace(ignoreTask);
-  try {
-    writeFileSync(join(dir, 'ignore.ts'), `import { spawnSync } from 'node:child_process';
+test('ignore-rules: delegating to the real git is rejected, by bare name and by absolute path', async () => {
+  const gitPath = spawnSync('sh', ['-c', 'command -v git'], { encoding: 'utf8' }).stdout.trim();
+  for (const [label, importLine, callTarget] of [
+    ['bare name via spawnSync', "import { spawnSync as run } from 'node:child_process';", "'git'"],
+    ['absolute path via execFileSync', "import { execFileSync as run } from 'node:child_process';", JSON.stringify(gitPath || '/usr/bin/git')],
+  ] as const) {
+    const dir = workspace(ignoreTask);
+    try {
+      writeFileSync(join(dir, 'ignore.ts'), `${importLine}
 import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 export function isIgnored(rules: string, path: string): boolean {
   const repo = mkdtempSync(join(tmpdir(), 'cheat-'));
-  spawnSync('git', ['init', '-q'], { cwd: repo });
+  run(${callTarget}, ['init', '-q'], { cwd: repo });
   writeFileSync(join(repo, '.gitignore'), rules + '\\n');
   mkdirSync(dirname(join(repo, path)), { recursive: true });
   writeFileSync(join(repo, path), '');
-  return spawnSync('git', ['check-ignore', '-q', '--no-index', '--', path], { cwd: repo }).status === 0;
+  try { const r: any = run(${callTarget}, ['check-ignore', '-q', '--no-index', '--', path], { cwd: repo }); return r?.status === undefined ? true : r.status === 0; } catch { return false; }
 }
 `);
-    const scored = await scoreTask(ignoreTask, dir);
-    assert.equal(scored.passed, false);
-    assert.equal(scored.reason, 'task_fail');
-  } finally { cleanup(dir); }
+      const scored = await scoreTask(ignoreTask, dir);
+      assert.equal(scored.passed, false, label);
+      assert.equal(scored.reason, 'task_fail', label);
+    } finally { cleanup(dir); }
+  }
 });
 
 test('ignore-rules: every case has an expected value, mixed outcomes, and the reference agrees offline', async () => {

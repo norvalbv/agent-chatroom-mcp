@@ -4,7 +4,9 @@
  * exit 0: all pass; exit 1: artifact failure; exit 2: invocation error.
  * Path separation is not a sandbox. Run untrusted code in a restricted process.
  */
+import childProcess from 'node:child_process';
 import { readFileSync } from 'node:fs';
+import { syncBuiltinESMExports } from 'node:module';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { cases } from './cases.ts';
@@ -15,8 +17,13 @@ if (!workspace) {
 }
 const expected = JSON.parse(readFileSync(join(dirname(fileURLToPath(import.meta.url)), 'expected.json'), 'utf8')) as Record<string, boolean>;
 // A submission must implement the matching itself; delegating to the real git (the reference the expected
-// values came from) would pass without solving the task, so no program is reachable through PATH.
-process.env.PATH = '/nonexistent';
+// values came from) would pass without solving the task, so process creation is disabled before it loads.
+// Every child_process entry point throws, and syncBuiltinESMExports makes the named ESM imports see that.
+// This is a guard against an honest shortcut, not a sandbox.
+for (const name of ['spawn', 'spawnSync', 'exec', 'execSync', 'execFile', 'execFileSync', 'fork'] as const) {
+  (childProcess as any)[name] = () => { throw new Error('child processes are not available to a submission'); };
+}
+syncBuiltinESMExports();
 const oracle_results: { name: string; exit_code: number }[] = [];
 let isIgnored: ((rules: string, path: string) => unknown) | undefined;
 try {

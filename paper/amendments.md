@@ -254,3 +254,23 @@ cannot be found by a keyword search (no shared distinctive term, or a correction
 name). Total for this family: 30 arm-A runs over six designs, 30/30 pass, ~$1.26.
 `bench-cross-doc-oncall`, `bench-cross-doc-budget`, `bench-cross-doc-precedence` and `bench-cross-doc-notes`
 are not included in the admitted suite.
+
+## 2026-09-18 — Data-cleaning candidate `bench-ledger-parse` rejected: 3/5, then 5/5 after the brief was made unambiguous (sonnet-1)
+
+A code task: repair a naive `parseLedger` for a bank CSV export whose quirks (BOM, CRLF, quoted commas,
+doubled quotes, an embedded newline in a quoted payee, quoted thousands-separated amounts, `DD Mon YYYY` dates,
+float-cents such as 19.99, padded payees) sit in a handful of rows of a 300-row public sample, with a second
+hidden 240-row export moving the quirks to other rows (private-test oracle, generic code scorer). Scorer and
+both fixtures were verified (broken fixture fails 6 of 7 named checks, correct passes 7 of 7).
+
+- v1, five arm-A runs: 3 `task_pass`, 2 `task_fail` (~$0.07-0.12/run, 5-12 turns). Seed 1 missed the `DD Mon
+  YYYY` dates (a real reasoning miss). Seed 2 collapsed the newline inside a quoted payee, which the v1 brief
+  did not forbid (the passing seats kept it and said the brief did not ask to normalise): an ambiguity in the
+  task, not a reasoning failure, so the 3/5 is not admissible evidence of discrimination.
+- v2 (brief now states that characters inside the payee are kept as written): 5/5 `task_pass`, ~$0.067/run,
+  6-8 turns. Seats scanned the whole sample, found every quirk class, and the two that were only guesses
+  (US-style dates, currency symbols) do not appear in the hidden export.
+
+Rejected by the admission rule (5/5). Cost of this candidate: ~$0.76 across 10 runs. It is the closest any
+of this author's seven designs came to a split, and the split was half ambiguity. A trap that the agent's own
+scan of the provided data can reveal is found by a seat that scans the data.

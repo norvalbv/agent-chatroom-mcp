@@ -103,7 +103,10 @@ const LETHAL = /(^|[;&|]\s*)(pkill|killall)\b|kill\s+(-\w+\s+)*(-1|0)\b|kill\s+-
  * GIT_AUTHOR_NAME/GIT_COMMITTER_NAME at launch, never by git config; one seat renamed every commit
  * author for an hour (docs/measurement-swarm-214936.md:5).
  */
-const GITCONFIG = /(^|[;&|]\s*)git\s+config\b/;
+// any form: git config ... , and git with global flags before config (git --no-pager config,
+// git -c k=v config), which the plain `git config` pattern would miss. Generalized per
+// openrouter-recruit-14's review.
+const GITCONFIG = /(^|[;&|]\s*)git(\s+-[^\s]+(\s+[^\s]+)?)*\s+config\b/;
 /** A `>` inside quotes writes nothing, so the guard above is tested against the unquoted text. */
 const unquoted = (command: string) => command.replace(/'[^']*'|"[^"]*"/g, '""');
 

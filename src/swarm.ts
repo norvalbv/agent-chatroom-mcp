@@ -41,7 +41,7 @@ const APPLY = has("apply");
 const ANON = !has("named"); // worker rooms are anonymous unless --named
 const LENSES = ["reproduce and measure before theorising", "the simplest fix that could work", "what could go wrong with the obvious fix", "what the tests and history say", "the maintainer who inherits this in a year"];
 const FULL = has("full-access");
-/** --require-verification: the room is created by the launcher with require_verification, so no proposal passes without a verify/* board entry by someone other than its author naming it (hub-enforced "done") */
+/** --require-verification: the room is created by the launcher with require_verification, so no proposal passes without a verify/* board entry by someone other than its author (or the assigned reviewer, once one is active) whose first line parses as JSON {proposal,command,cwd,exit_code,output_tail} naming it with exit_code 0 (hub-enforced "done") */
 const REQUIRE_VERIFICATION = has("require-verification");
 /** --quorum unanimous|majority|supermajority: the room's quorum, fixed by the launcher at creation (a forty-seat lobby cannot run on unanimity); supermajority = ceil(0.75 x electorate), the recommended default for flat runs that used to ask for plain majority */
 const QUORUM = flag("quorum") as "unanimous" | "majority" | "supermajority" | undefined;

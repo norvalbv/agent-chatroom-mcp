@@ -1,0 +1,4 @@
+{
+  "kind": "exact-answer",
+  "expected": "R1:C2@157[C4] R2:C2@153[] R3:free[] R4:C5@150[C3,C4] R5:C8@151[]"
+}

@@ -46,6 +46,15 @@ prior. No transcript is kept beyond `result.json`, so no seat's reasoning about 
 attack did not try an alternate reading of `NEXT` on a non-local or of `SETS` ordering; the program's other 33
 tokens matched in all ten seeds, which is indirect evidence those are unambiguous.
 
+Caveat found by sonnet-1's attack (recorded at the verifier's request): the spec is silent on whether a `DEF`
+executed inside a call stays visible after that call returns. SCOPE's list of what a call's locals contain
+names only `SET`, `SETS` and `NEXT`, and "Defining the same name again replaces it" reads as one global table
+of procedures, which is how `oracle/reference.mjs` and the independent checker treat it. The program leans on this
+once: the final `PRINT CALL inner 5` runs `inner` from the top level after `outer` has returned. That this is not
+what drives the failures is evidenced by the ten seeds: all ten (five passes, five fails) printed `5` for that
+token, so no seat read the `DEF` as call-local. It remains a text gap a stricter revision should close by
+one sentence; it was left as is because changing the spec now would void the ten seeds.
+
 ## (b) Arm A pilot: one Claude Sonnet seat, `scripts/bench-rq1.ts tasks/stamp-interpreter A <seed> --root <dir>`, default flags
 
 | seed | outcome | cost USD | turns | answer.txt (only if it diverges from expected) |

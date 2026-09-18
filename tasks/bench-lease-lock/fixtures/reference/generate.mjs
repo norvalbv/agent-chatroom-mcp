@@ -26,7 +26,7 @@ if (process.argv[1]?.endsWith('generate.mjs') && process.argv[2] === 'search') {
   for (let seed = 1; seed < 400; seed++) {
     const text = gen(seed); const ev = parseLog(text);
     const spec = simulate(ev);
-    const diffs = ['relock-refreshes', 'requeue-updates', 'eager'].map(v => simulate(ev, v) !== spec);
+    const diffs = ['skip-holder', 'dedupe', 'eager'].map(v => simulate(ev, v) !== spec);
     const nfree = spec.split(' ').filter(p => p.includes(':free')).length;
     const relockN = ev.filter(e => e.action === 'LOCK').length;
     if (diffs.every(Boolean) && nfree <= 1) console.log(seed, spec, relockN);

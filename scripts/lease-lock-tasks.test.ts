@@ -25,7 +25,7 @@ test('bench-lease-lock: JS and Python simulators agree with the frozen oracle', 
 });
 
 test('bench-lease-lock: every plausible wrong reading gives a different answer', () => {
-  for (const v of ['relock-refreshes', 'requeue-updates', 'eager']) assert.notEqual(simulate(parseLog(log), v), expected, v);
+  for (const v of ['skip-holder', 'dedupe', 'eager']) assert.notEqual(simulate(parseLog(log), v), expected, v);
 });
 
 test('bench-lease-lock: public files do not contain the answer', () => {
@@ -37,7 +37,7 @@ test('bench-lease-lock: scoreTask outcome vocabulary', async () => {
   try {
     writeFileSync(join(d, 'answer.txt'), expected + '\n');
     assert.equal((await scoreTask(dir, d)).reason, 'task_pass');
-    writeFileSync(join(d, 'answer.txt'), simulate(parseLog(log), 'relock-refreshes'));
+    writeFileSync(join(d, 'answer.txt'), simulate(parseLog(log), 'skip-holder'));
     assert.equal((await scoreTask(dir, d)).reason, 'task_fail');
     rmSync(join(d, 'answer.txt'));
     assert.equal((await scoreTask(dir, d)).reason, 'parse_failure');

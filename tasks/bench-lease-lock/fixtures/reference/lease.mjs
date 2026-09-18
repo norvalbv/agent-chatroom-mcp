@@ -1,4 +1,4 @@
-// Reference simulator for the LEASE spec. `variant` selects a deliberately wrong reading, used only to prove the log discriminates.
+// Reference simulator for the LEASE spec. `variant` selects a deliberately wrong reading (skip-holder, dedupe, eager), used only to prove the log discriminates.
 export function parseLog(text) {
   return text.split('\n').map(l => l.trim()).filter(l => l && !l.startsWith('#')).map(l => {
     const p = l.split(/\s+/);
@@ -20,12 +20,9 @@ export function simulate(events, variant = 'spec') {
     if (variant !== 'eager') expire(r, ev.tick);
     if (ev.action === 'LOCK') {
       if (r.holder === null) { r.holder = ev.client; r.deadline = ev.tick + ev.lease; }
-      else if (r.holder === ev.client) { if (variant === 'relock-refreshes') r.deadline = ev.tick + ev.lease; }
-      else {
-        const q = r.queue.find(e => e.client === ev.client);
-        if (!q) r.queue.push({ client: ev.client, lease: ev.lease });
-        else if (variant === 'requeue-updates') q.lease = ev.lease;
-      }
+      else if (variant === 'skip-holder' && r.holder === ev.client) { /* wrong: holder cannot queue behind itself */ }
+      else if (variant === 'dedupe' && (r.holder === ev.client || r.queue.some(e => e.client === ev.client))) { /* wrong: one request per client */ }
+      else r.queue.push({ client: ev.client, lease: ev.lease });
     } else if (ev.action === 'UNLOCK') {
       if (r.holder === ev.client) handOver(r, ev.tick);
     } else if (ev.action === 'RENEW') {

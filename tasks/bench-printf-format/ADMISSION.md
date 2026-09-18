@@ -20,7 +20,18 @@ See "Attack" below.
 | 4 | task_pass | 0.084 | 5 | 46s |
 | 5 | task_fail | 0.084 | 5 | 44s |
 
-Pass rate 3 of 5 (in the 1 to 4 band). Mean cost 0.087 USD per run. Screening followed the maintainer's rule: three seeds first (2 of 3, so it survived the 3 of 3 rejection screen), then seeds 4 and 5.
+Pass rate 3 of 5 in the predecessor room. Mean cost 0.087 USD per run. Screening followed the maintainer's rule: three seeds first (2 of 3, so it survived the 3 of 3 rejection screen), then seeds 4 and 5.
+
+### Seeds 6 to 10 (room swarm-150725-3vny, same command, same scorer as the hardened one)
+| seed | outcome | cost USD | turns | failing cases |
+|---|---|---|---|---|
+| 6 | task_fail | 0.1014 | 8 | case-458 only |
+| 7 | task_pass | 0.0753 | 5 | |
+| 8 | task_pass | 0.0814 | 5 | |
+| 9 | task_fail | 0.0866 | 6 | case-458 only |
+| 10 | task_fail | 0.0802 | 5 | case-458 only |
+
+**Ten-seed arm A pass rate: 5 of 10 = 0.5** (seeds 1,2,4,7,8 pass; 3,5,6,9,10 fail), inside the 0.3 to 0.7 admission band under the raised bar. Exact 95% interval for the true rate roughly 0.19 to 0.81. Cost of the extra five: 0.4249 USD. All five failures across the ten seeds fail case 458 and nothing else; every failing seat ran only a spot check of a handful of formats and never compared with a real printf, which is a checkable behaviour a team's verifier could supply. One family (printf-format); it is one task, not several independent ones.
 
 **Both failures are the same single case out of 698, so the band is fragile and a reader should weigh it accordingly.** Case 458: `format("%.17g", 1e-07)`, expected `9.9999999999999995e-08` (the exact binary value of 1e-07 is 9.99999999999999954748e-08, so its exponent is -8), the seat's function returned `1e-07`. Both seats say they used exact BigInt rounding, so the slip is in choosing the decimal exponent for a value just below a power of ten (the README's `%g` rule says X is the exponent "after rounding", `%e` and `%g` both need the exact value's exponent), which is a genuine implementation error against a rule the README states, not a format or ambiguity failure. Every other case passed in both failing runs. Re-scoring all five workspaces with the hardened scorer gives the same five outcomes.
 

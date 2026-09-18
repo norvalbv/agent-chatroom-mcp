@@ -578,7 +578,11 @@ export class Hub {
     if (name.length > 64) throw new HubError("Display names are capped at 64 characters.");
     if (!/^[^\n\r<>]+$/.test(name)) throw new HubError("Display names cannot contain newlines or angle brackets.");
 
-    let participant = reclaimId ? room.participants.get(reclaimId) : undefined;
+    // Identity is the connection: the session that already holds this name in this room is asking again (a model
+    // that dropped context and forgot it had joined). Give it its own seat back instead of "pick another name",
+    // which is how bench-3 became bench-3b next to its own live seat.
+    const mine = session ? [...room.participants.values()].find((p) => p.active && p.session === session && p.name === name) : undefined;
+    let participant = mine ?? (reclaimId ? room.participants.get(reclaimId) : undefined);
     if (participant && participant.name !== name) throw new HubError("participant_id does not belong to that name.");
     if (!participant) participant = [...room.participants.values()].find((p) => p.name === name && !p.active);
     // Humans are identified by name alone (they come in over plain HTTP with no session), so they always reclaim.

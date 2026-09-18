@@ -315,7 +315,14 @@ export async function runSeat(provider: ChatProvider, opts: SeatOptions): Promis
       fetch(`${hubBase}/rooms/${encodeURIComponent(room)}/heartbeat`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ participant_id: pid, tool, step: stepNo }), signal: AbortSignal.timeout(5_000) }).catch(() => {});
     }
   }
+  /** What the model must not forget when older turns are dropped: its rooms, names and participant ids. */
+  const identityCard = () => (joined.size ? `\n\nYOU ARE ALREADY IN: ${[...joined].map((r) => `room "${r}" as ${joinedAs.get(r) ?? "?"}${pids.get(r) ? ` (participant_id ${pids.get(r)})` : ""}`).join("; ")}. Do not call join_room for these rooms again and never join under another name; continue with wait_for_messages, read_messages, send_message, board_get.` : "");
+  const joinedAs = new Map<string, string>();
   async function callTool(name: string, args: Record<string, string>): Promise<string> {
+    if (name === "join_room" && args.room && joined.has(args.room)) {
+      // the seat knows it is one model: a repeat join (same or new name) is context loss, not a second agent
+      return `You are already in room "${args.room}" as ${joinedAs.get(args.room)}${pids.get(args.room) ? ` (participant_id ${pids.get(args.room)})` : ""}. No need to join again, and do not join under another name. Continue with wait_for_messages or read_messages.`;
+    }
     const mine = local.find((t) => t.def.function.name === name);
     if (mine) { heartbeat(name); return String(await mine.run(args)); }
     if (!hubTools.has(name)) return `No tool named ${name}. Available: ${[...hubTools, ...local.map((t) => t.def.function.name)].join(", ")}`;
@@ -327,6 +334,7 @@ export async function runSeat(provider: ChatProvider, opts: SeatOptions): Promis
       .trim();
     if (!r.isError && name === "join_room" && args.room) {
       joined.add(args.room);
+      joinedAs.set(args.room, args.name ?? "?");
       const m = /"participant_id":\s*"([^"]+)"/.exec(text);
       if (m) pids.set(args.room, m[1]);
     }
@@ -378,8 +386,10 @@ export async function runSeat(provider: ChatProvider, opts: SeatOptions): Promis
   let lastHint = "";
   let ok = true;
   let steps = 0;
+  const basePrompt = messages[0].content;
   for (steps = 1; steps <= maxSteps; steps++) {
     stepNo = steps;
+    messages[0] = { role: "system", content: basePrompt + identityCard() };
     if (Date.now() > deadline) {
       log(`[${provider.label}] ${maxMinutes} min budget spent`);
       await bow(`${maxMinutes} min budget spent`);

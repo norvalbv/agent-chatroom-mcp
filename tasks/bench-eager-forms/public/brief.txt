@@ -1,0 +1,1 @@
+SPEC.md defines the EAGER language and program.eager is an EAGER program. Determine exactly what running program.eager outputs. Write to a file named answer.txt in your current working directory the output values in order, separated by single spaces on one line, and nothing else. Do not modify SPEC.md or program.eager.

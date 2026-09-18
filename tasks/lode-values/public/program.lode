@@ -1,0 +1,167 @@
+DEF grow xs n
+  WHILE n
+    PUSH xs n
+    SET n - n 1
+  END
+  RET LEN xs
+END
+DEF sum xs
+  SET i 0
+  SET s 0
+  WHILE < i LEN xs
+    SET s + s AT xs i
+    SET i + i 1
+  END
+  RET s
+END
+DEF rev xs
+  LIST r
+  WHILE LEN xs
+    POPTO xs x
+    PUSH r x
+  END
+  RET r
+END
+DEF wrap x
+  LIST w
+  PUSH w x
+  PUSH w x
+  RET w
+END
+DEF tr mm
+  LIST t
+  SET j 0
+  WHILE < j LEN AT mm 0
+    LIST col
+    SET i 0
+    WHILE < i LEN mm
+      PUSH col AT AT mm i j
+      SET i + i 1
+    END
+    PUSH t col
+    SET j + j 1
+  END
+  RET t
+END
+DEF scale mm k
+  SET i 0
+  WHILE < i LEN mm
+    SET row AT mm i
+    SET j 0
+    WHILE < j LEN row
+      SETAT row j * k AT row j
+      SET j + j 1
+    END
+    SETAT mm i row
+    SET i + i 1
+  END
+  RET mm
+END
+DEF isort xs
+  SET i 1
+  WHILE < i LEN xs
+    SET k i
+    WHILE < 0 k
+      IF < AT xs k AT xs - k 1
+        SET tmp AT xs k
+        SETAT xs k AT xs - k 1
+        SETAT xs - k 1 tmp
+        SET k - k 1
+      ELSE
+        SET k 0
+      END
+    END
+    SET i + i 1
+  END
+  RET xs
+END
+DEF peek
+  RET total
+END
+DEF stash box v
+  PUSH box v
+  PUSH v 0
+  PUSH box v
+  RET box
+END
+LIST a
+PUSH a 1
+PUSH a 2
+PUSH a 3
+SET b a
+PUSH b 4
+PRINT a
+PRINT b
+PRINT CALL grow a 2
+PRINT a
+PRINT CALL sum a
+PRINT CALL rev a
+PRINT a
+PRINT = CALL rev CALL rev a a
+SET c CALL wrap a
+PUSH a 9
+PRINT c
+SET row AT c 0
+PUSH row 5
+PRINT c
+SETAT c 1 a
+PUSH a 10
+PRINT c
+PRINT a
+LIST m
+SET i 0
+WHILE < i 3
+  LIST row
+  SET j 0
+  WHILE < j 3
+    PUSH row * i j
+    SET j + j 1
+  END
+  PUSH m row
+  PUSH row 100
+  SET i + i 1
+END
+PRINT m
+PRINT CALL tr m
+SET m2 CALL scale m 10
+PRINT m
+PRINT m2
+PRINT = m CALL tr CALL tr m
+LIST q
+PUSH q 5
+PUSH q 3
+PUSH q 8
+PUSH q 1
+PUSH q 4
+SET sq CALL isort q
+PRINT q
+PRINT sq
+PRINT = q sq
+SET total 42
+PRINT CALL peek
+LIST cur
+LIST hist
+SET n 0
+WHILE < n 4
+  PUSH cur * n n
+  PUSH hist cur
+  SET n + n 1
+END
+PRINT hist
+PRINT LEN hist
+LIST box
+SET v 7
+SET w CALL stash box 1
+PRINT box
+PRINT w
+LIST v2
+PUSH v2 6
+SET z CALL stash box v2
+PRINT box
+PRINT v2
+PRINT z
+SET r1 CALL rev hist
+PRINT r1
+PRINT hist
+PRINT AT AT hist 3 3
+PRINT = AT hist 0 AT hist 1

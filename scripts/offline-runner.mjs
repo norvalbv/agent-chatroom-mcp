@@ -42,6 +42,7 @@ export const offlineScripts = [
   'mention-mentions.test.ts',
   'openrouter-cache-regression.ts',
   'oracle-tasks-printf.test.ts',
+  'oracle-tasks-printf2.test.ts',
   'oracle-tasks-spec-audit.test.ts',
   'oracle-tasks.test.ts',
   'paper-rq1-table.test.ts',

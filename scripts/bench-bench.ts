@@ -81,7 +81,7 @@ async function main() {
    if(hashTree(taskDir)!==taskBefore||hashFile(scorerPath)!==scorerBefore||hashFile(factScorerPath)!==factScorerBefore){verdict.reason='tamper';throw Error('Frozen task or scorer changed');}
    cpSync(join(taskDir,'public'),workspace,{recursive:true,errorOnExist:true,force:false});
    const env={...process.env};for(const key of Object.keys(env))if(key.startsWith('CHATROOM_')||/API_KEY|TOKEN|SECRET|PASSWORD|CREDENTIAL/i.test(key))delete env[key];
-   Object.assign(env,{PORT:String(port+index),HOST:'127.0.0.1',CHATROOM_DATA_DIR:join(armRoot,'data'),CHATROOM_DEFAULT_CWD:workspace,CHATROOM_LOG_DIR:join(armRoot,'spawned')});
+   Object.assign(env,{PORT:String(port+index),HOST:'127.0.0.1',CHATROOM_INSECURE_LOCAL:'1',CHATROOM_DATA_DIR:join(armRoot,'data'),CHATROOM_DEFAULT_CWD:workspace,CHATROOM_LOG_DIR:join(armRoot,'spawned')});
    fd=openSync(join(armRoot,'hub.log'),'w');child=spawn(process.execPath,[entry],{cwd:workspace,env,stdio:['ignore',fd,fd]});
    manifest.hub_pid=child.pid;let spawnError:Error|undefined;child.on('error',error=>{spawnError=error;});
    const url=`http://127.0.0.1:${port+index}`;let ready=false;

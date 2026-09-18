@@ -11,7 +11,7 @@ import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/
 const PORT = Number(process.env.PORT ?? 7733);
 const HTTP = `http://127.0.0.1:${PORT}`;
 
-const server = spawn("npx", ["tsx", "src/index.ts"], { env: { ...process.env, PORT: String(PORT), CHATROOM_SPAWN_DRY: "1", CHATROOM_LOG_DIR: "/tmp/chatroom-smoke-spawn", CHATROOM_MAX_LIVE_PER_ROOM: "12" }, stdio: ["ignore", "inherit", "inherit"] });
+const server = spawn("npx", ["tsx", "src/index.ts"], { env: { ...process.env, PORT: String(PORT), CHATROOM_SPAWN_DRY: "1", CHATROOM_LOG_DIR: "/tmp/chatroom-smoke-spawn", CHATROOM_MAX_LIVE_PER_ROOM: "12", CHATROOM_INSECURE_LOCAL: "1" }, stdio: ["ignore", "inherit", "inherit"] });
 const stop = () => server.kill();
 process.on("exit", stop);
 

@@ -29,6 +29,7 @@ export const offlineScripts = [
   'mention-mentions.test.ts',
   'regression-replay.ts',
   'recruit-prefix-regression.ts',
+  'route-auth-regression.ts',
   'refusal-telemetry.ts',
   'quiet-receipts.ts',
   'reply-metrics-analyzer.test.ts',

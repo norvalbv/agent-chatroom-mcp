@@ -1,0 +1,178 @@
+# ---- helpers
+DEF grow l
+PUSH l 1
+END
+DEF add l v
+PUSH l v
+END
+DEF twice l
+RUN grow l
+RUN grow l
+END
+DEF mk n
+LET r (list n n)
+PUSH r n
+PRINT r
+END
+DEF cp l
+LET c l
+PUSH c 99
+PRINT c
+END
+DEF setfirst l v
+SET l 0 v
+END
+DEF shadow
+LET x (list 5)
+PUSH x 6
+PRINT x
+END
+DEF viaglobal
+PUSH gl 7
+PRINT gl
+END
+DEF nest a b
+LET t (list a b)
+RUN grow (idx t 0)
+PRINT t
+PRINT a
+PRINT b
+END
+
+# ---- part 1: a diamond copied by LET
+LET x (list 1)
+LET d (list x x)
+PRINT d
+RUN grow (idx d 0)
+PRINT d
+PRINT x
+LET e (list x x)
+RUN grow (idx e 0)
+PRINT e
+LET big (list)
+PUSH big x
+PUSH big x
+RUN grow (idx big 1)
+PRINT big
+LET big2 big
+RUN grow (idx big2 0)
+PRINT big2
+PRINT big
+RUN grow x
+PRINT big
+PRINT big2
+
+# ---- part 2: procedures, parameters and scope
+LET gl (list 0)
+RUN shadow
+PRINT x
+RUN viaglobal
+PRINT gl
+LET w (list 1 2)
+RUN cp w
+PRINT w
+RUN mk 3
+RUN twice w
+PRINT w
+LET v (list 4)
+RUN nest w v
+PRINT w
+PRINT v
+LET pair (list w v)
+RUN setfirst pair 0
+PRINT pair
+PRINT w
+RUN setfirst w (list 8 8)
+PRINT w
+LET w2 w
+RUN grow (idx w2 0)
+PRINT w2
+PRINT w
+
+# ---- part 3: FOR snapshots and shared elements
+LET bag (list (list 1) (list 2) (list 3))
+LET n 0
+FOR item bag
+PUSH bag (list 0)
+RUN grow item
+END
+PRINT bag
+LET n2 (len bag)
+PRINT n2
+FOR item bag
+LET dup item
+PUSH dup 5
+END
+PRINT bag
+LET moved (list)
+FOR item bag
+PUSH moved item
+END
+PUSH moved 42
+PRINT (len bag)
+PRINT (len moved)
+FOR item moved
+IF (< (len bag) 100)
+PRINT item
+END
+END
+
+# ---- part 4: + shares, LET copies, SET stores the same object
+LET u (list (list 1))
+LET t (list (list 2))
+LET ut (+ u t)
+RUN grow (idx ut 1)
+PRINT t
+PRINT ut
+LET ut2 ut
+RUN grow (idx ut2 0)
+PRINT ut
+PRINT ut2
+LET cell (list 0 0 0)
+LET inner (list 7)
+SET cell 0 inner
+SET cell 1 inner
+SET cell 2 (list inner inner)
+PRINT cell
+RUN grow inner
+PRINT cell
+LET cell2 cell
+RUN grow inner
+PRINT cell2
+PRINT cell
+RUN grow (idx (idx cell 2) 0)
+PRINT cell
+PRINT cell2
+
+# ---- part 5: counters, REPEAT and aliasing through the global scope
+LET log (list)
+LET cnt (list 0)
+DEF tick
+PUSH cnt (len cnt)
+PUSH log cnt
+END
+REPEAT 3
+RUN tick
+END
+PRINT log
+LET snap log
+RUN tick
+PRINT snap
+PRINT log
+LET total 0
+FOR c cnt
+LET total (+ total c)
+END
+PRINT total
+REPEAT (len cnt)
+RUN tick
+END
+PRINT (len cnt)
+PRINT (len log)
+LET k (len snap)
+REPEAT k
+PUSH snap k
+END
+PRINT (len snap)
+PRINT (len log)
+PRINT (idx (idx log 0) 4)

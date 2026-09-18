@@ -8,7 +8,7 @@
  * Loop as an agent sees it: join_room -> submit_opening -> send_message /
  * wait_for_messages -> propose -> challenge -> vote -> room concludes -> leave_room.
  */
-import { McpServer, ResourceTemplate } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { McpServer, ResourceTemplate, type RegisteredTool } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { Hub, HubError, ROLES, type CallOutcome } from "./hub.js";
@@ -58,6 +58,19 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
 
   const me = new Map<string, Set<string>>();
   const sessionKey = randomUUID(); // one connection = one agent, whatever names it uses
+
+  // Session-scoped tool surface (Rank 5): join_room(tool_scope="restricted") drops the
+  // proposal-lifecycle tools from this connection's tools/list until it actually has
+  // something to do with them, so a reading/measuring seat isn't paying their schema
+  // bytes on every turn. The McpServer already gates both tools/list and tools/call on
+  // RegisteredTool.enabled, so disabling here is enforced at the real MCP dispatch layer.
+  let toolScope: "full" | "restricted" = "full";
+  const decisionTools: RegisteredTool[] = [];
+  const setToolScope = (scope: "full" | "restricted") => {
+    if (scope === toolScope) return;
+    toolScope = scope;
+    for (const t of decisionTools) (scope === "restricted" ? t.disable : t.enable).call(t);
+  };
   const pid = (room: string, override?: string) => {
     const ids = me.get(room);
     if (override) {
@@ -142,9 +155,11 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
         participant_id: z.string().optional().describe("Reclaim an earlier identity after a reconnect."),
         role: z.enum(ROLES as [string, ...string[]]).optional().describe("Display tag, not a persona: worker (default) | chair (human-side: never waited on for quorum, may veto; bound to one name per room) | lead | verifier | recruit."),
         chair: z.string().optional().describe("When creating the room: the name that will be honoured as chair."),
+        tool_scope: z.enum(["full", "restricted"]).optional().describe("restricted drops propose/amend/challenge/vote from this connection's tool list (smaller schema tax every turn); they come back automatically the moment a proposal is open in a room you're in. Default full."),
       },
     },
-    guard("join_room", ({ room, name, agent, topic, mode, quorum, max_rounds, expected_participants, anonymous, max_messages_per_participant, require_challenge, require_verification, max_message_chars, replacement_token, participant_id, role, chair }) => {
+    guard("join_room", ({ room, name, agent, topic, mode, quorum, max_rounds, expected_participants, anonymous, max_messages_per_participant, require_challenge, require_verification, max_message_chars, replacement_token, participant_id, role, chair, tool_scope }) => {
+      if (tool_scope) setToolScope(tool_scope);
       const { room: r, participant } = hub.join(
         room,
         name,
@@ -178,11 +193,13 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
         participant_id: participant.id,
         you_are: hub.shown(r, participant),
         your_role: participant.role ?? "worker",
+        tool_scope: toolScope,
         humans_present: hub.activeParticipants(r).filter((x) => x.agent === "human").map((x) => x.name),
         room: hub.summary(r),
         recent_messages: recent.map((m) => hub.fmt(r, m)),
         next_seq: participant.lastSeenSeq,
         hint: hub.attentionHint(r, participant) ??
+          (toolScope === "restricted" ? "tool_scope=restricted: propose/amend/challenge/vote are off your tool list; they re-enable automatically the moment a proposal is open in a room you're in. " : "") +
           (shared ? "Other agents share this MCP connection: pass participant_id on EVERY call. " : "") +
           (r.anonymous ? `You appear to others as "${participant.label}". ` : "") +
           (participant.role === "chair" ? "You are the chair: you are never waited on for quorum, a disagree from you vetoes, and you need not leave to unblock amendments. " : "") +
@@ -294,6 +311,15 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
       const open = [...r.proposals.values()].find((pr) => pr.status === "open");
       const needsMyVote = open && !open.votes[id] && p.agent !== "human" && p.role !== "chair";
       const needsChallenge = open && hub.challengeRequired(r) && !open.challenges.some((c) => c.blocking !== false) && open.by.id !== id;
+      // Rank 5 regain rule: a restricted session gets propose/amend/challenge/vote back the
+      // instant there is an open proposal in this room, since that is exactly when this
+      // participant may need any of them (to vote, to amend, to challenge). Mere chatter
+      // does not regain them.
+      let toolsRegainedNote = "";
+      if (toolScope === "restricted" && open) {
+        setToolScope("full");
+        toolsRegainedNote = "Tool surface restored: propose/amend/challenge/vote are available again (a proposal is open in this room). ";
+      }
       // the proposal text travels only when its version changed since this participant was last sent it
       const seenVersion = open ? (p.seenProposal?.[open.id] ?? 0) : 0;
       const openView = open ? hub.proposalView(r, open, false, seenVersion !== open.version) : null;
@@ -308,7 +334,7 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
       const resp = human ? hub.responderFor(r, human, id) : null;
       const focus = hub.attentionFocus(r, p);
       if (focus) return {
-        hint: hub.attentionHint(r, p), messages: msgs.map((m) => hub.fmt(r, m)),
+        hint: toolsRegainedNote ? toolsRegainedNote + (hub.attentionHint(r, p) ?? "") : hub.attentionHint(r, p), messages: msgs.map((m) => hub.fmt(r, m)),
         next_seq: p.lastSeenSeq, room_state: r.state, your_turn: r.mode === "free" || hub.currentSpeaker(r)?.id === id,
         your_role: p.role ?? "worker", humans_present: hub.activeParticipants(r).filter((x) => x.agent === "human").map((x) => x.name),
         unanswered_human: human ? (resp!.mine ? { id: human.id, name: hub.shown(r, human.from), text: human.content, you_answer: true } : { name: hub.shown(r, human.from), responder: resp!.who, you_answer: false }) : null,
@@ -352,7 +378,7 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
       hub.observeBoardManifest(r, board); // compact since-process-start observer; legacy recording is in assembly
       // the hint goes first: it is the one line a weaker model must not lose to a clamp
       return {
-        hint,
+        hint: toolsRegainedNote ? toolsRegainedNote + (hint ?? "") : hint,
         messages: msgs.map((m) => hub.fmt(r, m)),
         next_seq: r.messages.at(-1)?.seq ?? since,
         room_state: r.state,
@@ -418,7 +444,7 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
     guard("room_status", ({ room }) => hub.summary(hub.getRoom(room))),
   );
 
-  server.registerTool(
+  decisionTools.push(server.registerTool(
     "propose",
     {
       title: "Propose a conclusion",
@@ -434,9 +460,9 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
       const pr = hub.propose(room, pid(room, participant_id), text);
       return hub.proposalView(r, pr, false, false);
     }),
-  );
+  ));
 
-  server.registerTool(
+  decisionTools.push(server.registerTool(
     "amend",
     {
       title: "Amend the open proposal",
@@ -458,7 +484,7 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
       const { proposal, diff, answered, reopened } = hub.amend(room, pid(room, participant_id), proposal_id, find, replace, replace_all);
       return { version: proposal.version, diff, challenges_answered: answered, challenges_reopened: reopened, proposal: hub.proposalView(r, proposal, false, false) };
     }),
-  );
+  ));
 
   server.registerTool(
     "board_set",
@@ -527,7 +553,7 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
     }),
   );
 
-  server.registerTool(
+  decisionTools.push(server.registerTool(
     "challenge",
     {
       title: "Challenge a proposal",
@@ -548,9 +574,9 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
       const pr = hub.challenge(room, pid(room, participant_id), proposal_id, objection, blocking ?? true);
       return hub.proposalView(r, pr, false, false);
     }),
-  );
+  ));
 
-  server.registerTool(
+  decisionTools.push(server.registerTool(
     "vote",
     {
       title: "Vote on a proposal",
@@ -572,7 +598,7 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
       const pr = hub.vote(room, pid(room, participant_id), proposal_id, vote, reason, confidence, quote);
       return { proposal: hub.proposalView(r, pr, false, false), room_state: r.state, conclusion: r.conclusion ? { proposal_id: r.conclusion.proposalId, version: r.conclusion.version ?? null, chars: r.conclusion.text.length, unresolved_objections: r.conclusion.unresolved_objections ?? [] } : null };
     }),
-  );
+  ));
 
   if (spawner) {
     server.registerTool(

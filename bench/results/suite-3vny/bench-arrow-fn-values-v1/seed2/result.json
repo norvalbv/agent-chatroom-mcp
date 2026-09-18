@@ -1,0 +1,113 @@
+{
+  "schemaVersion": 1,
+  "task_id": "bench-arrow-fn-values",
+  "arm": "A",
+  "seed": 2,
+  "model": "sonnet",
+  "outcome": "task_pass",
+  "passed": true,
+  "reason": "task_pass",
+  "oracle": {
+    "kind": "exact-answer",
+    "command": "node --import tsx score-fact-check.ts <workspace>/answer.txt oracle/oracle.json",
+    "exit_code": 0
+  },
+  "anti_tamper": {
+    "hash_before": "37a8df65644bb6dd5a0664b1e5f8bca07dec951c139e24a68a05444167692091",
+    "hash_after": "37a8df65644bb6dd5a0664b1e5f8bca07dec951c139e24a68a05444167692091",
+    "unchanged": true
+  },
+  "seats": [
+    {
+      "name": "single",
+      "argv": [
+        "claude",
+        "-p",
+        "Read spec.txt (the ARROW language) and program.arrow. Determine exactly what the program prints under that specification.\n\nWrite your final answer, and only your final answer with no explanation, to a file named answer.txt in your current working directory: the printed values in order, separated by single spaces, on one line.\n\nWrite your final answer, and only your final answer with no explanation, to a file named answer.txt in your current working directory.",
+        "--mcp-config",
+        "/tmp/bench-pilot-sonnet1/arrow-seed2/mcp-empty.json",
+        "--strict-mcp-config",
+        "--allowedTools",
+        "Read,Write,Bash,Glob,Grep",
+        "--tools",
+        "Read,Write,Bash,Glob,Grep",
+        "--disable-slash-commands",
+        "--setting-sources",
+        "project",
+        "--exclude-dynamic-system-prompt-sections",
+        "--output-format",
+        "stream-json",
+        "--verbose",
+        "--model",
+        "sonnet"
+      ],
+      "exit_code": 0,
+      "signal": null,
+      "started_at": "2026-09-18T15:33:14.236Z",
+      "completed_at": "2026-09-18T15:33:35.253Z",
+      "num_turns": 4,
+      "duration_ms": 18399,
+      "duration_api_ms": 19367,
+      "usage": {
+        "cost": 0.040197399999999994,
+        "input_tokens": 6,
+        "cache_read_input_tokens": 20117,
+        "cache_creation_input_tokens": 5337,
+        "output_tokens": 1376
+      },
+      "text": "I wrote the answer to `answer.txt`:\n\n`6 7 12 16 7 101 200 1001 35 7 1 42 42 43 70 20 5 0 0 30 2001 1001`\n\nI worked this out by hand from the spec and did not run any interpreter. The main judgement call is that function values don't capture their surrounding variables. A name inside a call reads that call's own locals first, then the globals. That is why `add5` sees the global `n` and reflects the later `SET n 1000`. It is also why the `times4` and `times9` calls print 0, since the global `op` is 0 when they run.",
+      "killed_by_deadline": false,
+      "partial_usage": null
+    }
+  ],
+  "usage": {
+    "steps": 0,
+    "prompt_tokens": 0,
+    "completion_tokens": 0,
+    "cost_usd": 0.040197399999999994,
+    "seats": 1,
+    "seats_with_usage": 1,
+    "coverage": "complete",
+    "input_tokens": 6,
+    "cache_read_input_tokens": 20117,
+    "cache_creation_input_tokens": 5337,
+    "output_tokens": 1376
+  },
+  "turns": {
+    "per_seat": [
+      {
+        "name": "single",
+        "num_turns": 4
+      }
+    ],
+    "summed": 4,
+    "seats": 1,
+    "seats_with_turns": 1,
+    "coverage": "complete"
+  },
+  "wall_clock": {
+    "started_at": "2026-09-18T15:33:14.235Z",
+    "completed_at": "2026-09-18T15:33:35.253Z",
+    "duration_ms": 21018
+  },
+  "budget": {
+    "max_budget_usd": null,
+    "deadline_ms": 900000
+  },
+  "build": {
+    "head_revision": "2569d768f9101b7bbe934d0fa984b98155fb61c4",
+    "hub_entry": null,
+    "hub_entry_sha256": null,
+    "hub_revision": null
+  },
+  "frozen": {
+    "task_sha256": "37a8df65644bb6dd5a0664b1e5f8bca07dec951c139e24a68a05444167692091",
+    "scorer_sha256": "f4b645c670ae4655aec1189e4d7320294115f0e3c6da3b5ba41a7ee3b1cd00f8",
+    "fact_scorer_sha256": "6b8b3e98c8c408ecd6715a38db9263488644d27c01a11c5bab3172acd5539832",
+    "task_id": "bench-arrow-fn-values",
+    "timeout_ms": 900000,
+    "seats": 1
+  },
+  "error": null,
+  "checked_at": "2026-09-18T15:33:35.357Z"
+}

@@ -1,0 +1,113 @@
+{
+  "schemaVersion": 1,
+  "task_id": "bench-shelf-long",
+  "arm": "A",
+  "seed": 9,
+  "model": "sonnet",
+  "outcome": "task_pass",
+  "passed": true,
+  "reason": "task_pass",
+  "oracle": {
+    "kind": "exact-answer",
+    "command": "node --import tsx score-fact-check.ts <workspace>/answer.txt oracle/oracle.json",
+    "exit_code": 0
+  },
+  "anti_tamper": {
+    "hash_before": "0ce1305190ec84baeead14eb6892540744f783058e3746101f33f7f79f58219a",
+    "hash_after": "0ce1305190ec84baeead14eb6892540744f783058e3746101f33f7f79f58219a",
+    "unchanged": true
+  },
+  "seats": [
+    {
+      "name": "single",
+      "argv": [
+        "claude",
+        "-p",
+        "SPEC.md defines the SHELF language and program.shelf is a SHELF program. Determine exactly what running program.shelf prints. Write to a file named answer.txt in your current working directory the output lines of the program in order, joined by a single \"|\" character with no spaces around it, and nothing else. Do not modify SPEC.md or program.shelf.\n\nWrite your final answer, and only your final answer with no explanation, to a file named answer.txt in your current working directory.",
+        "--mcp-config",
+        "/tmp/bench-pilot-sonnet1/long-seed9/mcp-empty.json",
+        "--strict-mcp-config",
+        "--allowedTools",
+        "Read,Write,Bash,Glob,Grep",
+        "--tools",
+        "Read,Write,Bash,Glob,Grep",
+        "--disable-slash-commands",
+        "--setting-sources",
+        "project",
+        "--exclude-dynamic-system-prompt-sections",
+        "--output-format",
+        "stream-json",
+        "--verbose",
+        "--model",
+        "sonnet"
+      ],
+      "exit_code": 0,
+      "signal": null,
+      "started_at": "2026-09-18T15:16:01.256Z",
+      "completed_at": "2026-09-18T15:16:38.910Z",
+      "num_turns": 4,
+      "duration_ms": 33983,
+      "duration_api_ms": 32756,
+      "usage": {
+        "cost": 0.0773594,
+        "input_tokens": 6,
+        "cache_read_input_tokens": 21122,
+        "cache_creation_input_tokens": 8683,
+        "output_tokens": 3733
+      },
+      "text": "I worked out the program's output by hand and wrote it to `answer.txt`. I did not run it, since there is no SHELF interpreter here, so the answer rests on my reading of `SPEC.md`.\n\nThe `LET` copy rule was the part most likely to go wrong. A `LET` deep-copies the list and gives every nested occurrence its own new list. `PUSH`, `SET`, `RUN` arguments and `FOR` elements share the original object.",
+      "killed_by_deadline": false,
+      "partial_usage": null
+    }
+  ],
+  "usage": {
+    "steps": 0,
+    "prompt_tokens": 0,
+    "completion_tokens": 0,
+    "cost_usd": 0.0773594,
+    "seats": 1,
+    "seats_with_usage": 1,
+    "coverage": "complete",
+    "input_tokens": 6,
+    "cache_read_input_tokens": 21122,
+    "cache_creation_input_tokens": 8683,
+    "output_tokens": 3733
+  },
+  "turns": {
+    "per_seat": [
+      {
+        "name": "single",
+        "num_turns": 4
+      }
+    ],
+    "summed": 4,
+    "seats": 1,
+    "seats_with_turns": 1,
+    "coverage": "complete"
+  },
+  "wall_clock": {
+    "started_at": "2026-09-18T15:16:01.255Z",
+    "completed_at": "2026-09-18T15:16:38.912Z",
+    "duration_ms": 37657
+  },
+  "budget": {
+    "max_budget_usd": null,
+    "deadline_ms": 900000
+  },
+  "build": {
+    "head_revision": "fa4325f53b1d18fc4598df8f9eee21214ead67be",
+    "hub_entry": null,
+    "hub_entry_sha256": null,
+    "hub_revision": null
+  },
+  "frozen": {
+    "task_sha256": "0ce1305190ec84baeead14eb6892540744f783058e3746101f33f7f79f58219a",
+    "scorer_sha256": "f4b645c670ae4655aec1189e4d7320294115f0e3c6da3b5ba41a7ee3b1cd00f8",
+    "fact_scorer_sha256": "6b8b3e98c8c408ecd6715a38db9263488644d27c01a11c5bab3172acd5539832",
+    "task_id": "bench-shelf-long",
+    "timeout_ms": 900000,
+    "seats": 1
+  },
+  "error": null,
+  "checked_at": "2026-09-18T15:16:39.010Z"
+}

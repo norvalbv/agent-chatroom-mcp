@@ -127,6 +127,10 @@ const result = await runSeat(openRouterProvider(MODEL, REASONING), {
   maxToolChars: Number(flag("max-tool-chars", "6000")),
   maxContextChars: Number(flag("max-context-chars", "240000")),
   idleWaits: Number(flag("idle-waits", "3")),
+  handoffStepFraction: Number(flag("handoff-step-fraction", process.env.SEAT_HANDOFF_STEP_FRACTION ?? "0.75")),
+  handoffPromptTokens: Number(flag("handoff-prompt-tokens", process.env.SEAT_HANDOFF_PROMPT_TOKENS ?? "6000000")),
+  handoffContextFraction: Number(flag("handoff-context-fraction", process.env.SEAT_HANDOFF_CONTEXT_FRACTION ?? "0.9")),
+  noHandoff: has("no-handoff") || process.env.SEAT_NO_HANDOFF === "1",
   log: say,
 });
 if (rateLimited) say(`[openrouter ${MODEL}] ${rateLimited} rate-limited request(s) retried`);

@@ -8,7 +8,8 @@ Each was piloted on arm A (one Claude Sonnet seat) through `scripts/bench-rq1.ts
 | bench-refactor-preserve v2 | same code; brief states only the invariant (subtotal equals the sum of individually rounded line amounts) and says to verify the code against it | 5 of 5 | 0.0527, 0.0515, 0.1018, 0.0706, 0.0626 | 4 to 9 | ceiling: the seat derived round-per-line unaided |
 | bench-concurrency-order v1 | `applyUpdates` must apply out-of-order events in `seq` order; hidden cases for set/delete reordering | 5 of 5 | 0.0301, 0.0924, 0.0193, 0.0194, 0.0188 | 3 to 4 | ceiling: one explicit defect |
 | bench-shell-split | `shellSplit` from a complete POSIX word-splitting README; 31 cases, expected values from Python `shlex.split(posix=True)` | 5 of 5 | 0.0284, 0.0264, 0.0267, 0.0264, 0.0267 | 4 | ceiling: short spec, few interacting rules |
+| bench-ip-cidr | four IPv6/CIDR functions (normalize, expand, range, contains) from a complete README; 69 cases, expected values from Python `ipaddress` | 5 of 5 | 0.0416, 0.0393, 0.0422, 0.0436, 0.0397 | 4 | ceiling: IPv6 canonicalisation is well known to the model (tree in commit 7ae5e54) |
 
 An earlier version of bench-refactor-preserve was a pure refactor whose starting code already met the oracle; sonnet-3's admission attack showed a no-op submission passed every case, so a real defect was planted (v1 above).
 
-Spend on rejected tasks: about 0.69 USD.
+Spend on rejected tasks: about 1.03 USD.

@@ -26,6 +26,7 @@ test('arrow: a function value does not capture its creator (spot checks of the S
   assert.equal(t('SET c 9\nDEF mk\nSET c 3\nRET (fn () c)\nEND\nPRINT (call (call mk))'), '9');
   assert.equal(t('DEF b\nGLOBAL c\nSET c (+ c 1)\nRET c\nEND\nPRINT (call b)\nPRINT c'), '1 1');
   assert.equal(t('PRINT (call 5 (call (fn () 1)))'), '0');
+  assert.equal(t('DEF b\nRET x\nEND\nDEF a\nRET (call b)\nEND\nSET x 1\nDEF c\nSET x 2\nRET (call a)\nEND\nPRINT (call c)'), '1');
 });
 
 test('arrow: scoring accepts the frozen answer and rejects the closure reading', async () => {

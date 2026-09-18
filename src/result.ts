@@ -21,19 +21,32 @@ export interface RunResult {
   usage?: UsageRollup;
   collectionErrors?: string[];
 }
-/** Per-seat usage exactly as the seat persisted it in its <name>.usage.json sidecar (cost in USD). */
+/**
+ * Per-seat usage as the seat reported it (cost in USD). `steps`/`prompt_tokens`/`completion_tokens` come
+ * from the openrouter/codex `<name>.usage.json` sidecar; a claude seat (single `claude -p --output-format
+ * json` call, no step loop) instead reports `input_tokens`/`cache_read_input_tokens`/
+ * `cache_creation_input_tokens`/`output_tokens`. A field a seat's provider does not produce is simply
+ * absent (undefined), not 0: only `cost` is common to every provider and always required.
+ */
 export interface SeatUsageRollup {
-  steps: number;
-  prompt_tokens: number;
-  completion_tokens: number;
+  steps?: number;
+  prompt_tokens?: number;
+  completion_tokens?: number;
+  input_tokens?: number;
+  cache_read_input_tokens?: number;
+  cache_creation_input_tokens?: number;
+  output_tokens?: number;
   cost: number;
 }
+/** Present only on claude seats; included in a rollup only when a reporting seat actually has them. */
+const CLAUDE_ONLY_USAGE_FIELDS = ["input_tokens", "cache_read_input_tokens", "cache_creation_input_tokens", "output_tokens"] as const satisfies readonly (keyof SeatUsageRollup)[];
 export type UsageCoverage = "complete" | "partial" | "none";
 /**
  * Rolled-up usage for a run artifact. Unknown seats are never zero-filled: a seat that reported no
  * usage is counted in `seats` but not `seats_with_usage`, contributes nothing to the sums, and is
  * reflected by coverage "partial" (or "none" when no seat reported anything). A "none"/"partial"
- * rollup's sums must not be read as "the run cost nothing".
+ * rollup's sums must not be read as "the run cost nothing". The claude-only fields are included only
+ * when at least one reporting seat has them, so an all-openrouter/codex run's rollup shape is unchanged.
  */
 export interface UsageRollup {
   steps: number;
@@ -43,6 +56,10 @@ export interface UsageRollup {
   seats: number;
   seats_with_usage: number;
   coverage: UsageCoverage;
+  input_tokens?: number;
+  cache_read_input_tokens?: number;
+  cache_creation_input_tokens?: number;
+  output_tokens?: number;
 }
 /** Roll the launcher's per-seat outcomes into artifact.usage; undefined when there are no runs at all. */
 export function rollupUsage(runs: readonly ({ usage?: SeatUsageRollup | null } | undefined)[]): UsageRollup | undefined {
@@ -51,7 +68,7 @@ export function rollupUsage(runs: readonly ({ usage?: SeatUsageRollup | null } |
   const have = runs.filter((r) => r && r.usage != null);
   const sum = (k: keyof SeatUsageRollup) => have.reduce((a, r) => a + (r!.usage![k] ?? 0), 0);
   if (!have.length) return { steps: 0, prompt_tokens: 0, completion_tokens: 0, cost_usd: 0, seats, seats_with_usage: 0, coverage: "none" };
-  return {
+  const out: UsageRollup = {
     steps: sum("steps"),
     prompt_tokens: sum("prompt_tokens"),
     completion_tokens: sum("completion_tokens"),
@@ -60,6 +77,29 @@ export function rollupUsage(runs: readonly ({ usage?: SeatUsageRollup | null } |
     seats_with_usage: have.length,
     coverage: have.length === seats ? "complete" : "partial",
   };
+  for (const k of CLAUDE_ONLY_USAGE_FIELDS) if (have.some((r) => typeof r!.usage![k] === "number")) out[k] = sum(k);
+  return out;
+}
+/**
+ * Parse a `claude -p --output-format json` stdout blob into the seat's final text (exactly what
+ * `--output-format text` would have produced) plus its usage. Usage is `null` (unknown, not zero) when
+ * the blob is not the expected JSON shape or carries no cost figure — a claude CLI version without
+ * `total_cost_usd` must not be reported as a free run.
+ */
+export function parseClaudeCliOutput(raw: string): { text: string; usage: SeatUsageRollup | null } {
+  let parsed: any;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return { text: raw, usage: null };
+  }
+  const text = typeof parsed?.result === "string" ? parsed.result : raw;
+  const cost = parsed?.total_cost_usd ?? parsed?.cost_usd;
+  if (typeof cost !== "number") return { text, usage: null };
+  const u = parsed?.usage ?? {};
+  const usage: SeatUsageRollup = { cost };
+  for (const k of CLAUDE_ONLY_USAGE_FIELDS) if (typeof u[k] === "number") usage[k] = u[k];
+  return { text, usage };
 }
 /** Fetch the existing full room endpoint; no board/body projection or text slicing. */
 export async function collectRoomSnapshot(baseUrl: string, name: string): Promise<RoomSnapshot> {

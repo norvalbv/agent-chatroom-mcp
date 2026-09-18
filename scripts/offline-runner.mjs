@@ -23,6 +23,7 @@ export const offlineScripts = [
   'board-manifest-regression.ts',
   'board-transport-regression.ts',
   'challenge-session-regression.ts',
+  'claude-usage-regression.ts',
   'consolidator-spawn-regression.ts',
   'departed-mentions.test.ts',
   'electorate-regression.ts',
@@ -45,6 +46,7 @@ export const offlineScripts = [
   'stats-electorate-regression.ts',
   'stats-integration-regression.ts',
   'stats-regression.ts',
+  'telemetry-usage-regression.ts',
   'test-inbox-handover.ts',
   'uncited-challenge-regression.ts',
 ];

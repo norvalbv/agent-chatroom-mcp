@@ -8,7 +8,7 @@
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, realpathSync, symlinkSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
-import { collectRoomSnapshot, renderRunReport, writeRunResult, rollupUsage, type RunResult, type RoomSnapshot, type SeatUsageRollup } from "./result.js";
+import { collectRoomSnapshot, renderRunReport, writeRunResult, rollupUsage, parseClaudeCliOutput, type RunResult, type RoomSnapshot, type SeatUsageRollup } from "./result.js";
 import { settledAxes } from "./settled.js";
 import { registerRespawn } from "./respawn.js";
 import { fileURLToPath } from "node:url";
@@ -126,11 +126,22 @@ const children: ChildProcess[] = [];
 const mcpJson = resolve(OUT, "mcp.json");
 writeFileSync(mcpJson, JSON.stringify({ mcpServers: { chatroom: { type: "http", url: `${URL_}/mcp` } } }));
 
+/**
+ * R4 usage telemetry for claude seats: `--output-format json` turns stdout into one JSON blob carrying
+ * `result` (the seat's final text) alongside `usage`/`total_cost_usd`, in place of the plain text
+ * `--output-format text` (the CLI default) would have produced. runProc buffers that blob into outFile
+ * exactly as before; parseClaudeCliOutput splits it back into {text, usage} and the text is rewritten
+ * over outFile so the .out file holds the seat's final text exactly as today, never the raw JSON.
+ */
 function runClaude(name: string, text: string, tools: string[], cwd: string, model?: string): Promise<SeatOutcome> {
   const outFile = resolve(OUT, `${name}.out`);
-  const args = ["-p", text, "--mcp-config", mcpJson, "--strict-mcp-config", "--allowedTools", tools.join(",")];
+  const args = ["-p", text, "--mcp-config", mcpJson, "--strict-mcp-config", "--allowedTools", tools.join(","), "--output-format", "json"];
   if (model) args.push("--model", model);
-  return runProc(name, "claude", args, cwd, outFile).then((t) => ({ text: t, usage: readSeatUsage(resolve(OUT, `${name}.usage.json`)) }));
+  return runProc(name, "claude", args, cwd, outFile).then((raw) => {
+    const { text: final, usage } = parseClaudeCliOutput(raw);
+    writeFileSync(outFile, final);
+    return { text: final, usage };
+  });
 }
 
 // ---------- R4 usage telemetry ----------

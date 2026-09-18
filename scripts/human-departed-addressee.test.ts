@@ -36,4 +36,18 @@ assert.equal(hub.responderFor(room, ask2, a.id).mine, true);
 hub.send(room.name, benji.id, "unrelated third human message");
 hub.send(room.name, b.id, "@benji I was not asked but here is a thought.", undefined, true);
 assert.equal(hub.isAnswered(room, ask2), false, "an un-nominated reply after a later human message does not answer");
+// The ask's addressee has left: anyone may answer it with reply_to (the gate "addressed to X, not you" must not
+// protect a seat that is gone), and naming the human is allowed even when the human is not currently active.
+const ask3 = hub.send(room.name, benji.id, "@lobby-9 a third question, to a seat that will leave", undefined, true);
+hub.leave(room.name, c.id, "budget");
+hub.leave(room.name, benji.id);
+const reply = hub.send(room.name, b.id, "@benji answering the orphaned ask with reply_to", ask3.id, true);
+assert.equal(reply.replyTo, ask3.id);
+assert.equal(hub.isAnswered(room, ask3), true, "a reply_to from anyone answers an orphaned ask");
+// ...but a live addressee is still protected from others answering for them.
+const live = hub.join(room.name, "lobby-10", "openrouter", {}, undefined, "s-live").participant;
+const h2 = hub.join(room.name, "benji", "human").participant;
+const ask4 = hub.send(room.name, h2.id, "@lobby-10 only you please", undefined, true);
+assert.throws(() => hub.send(room.name, b.id, "@benji butting in", ask4.id, true), /addressed that to/);
+assert.ok(hub.send(room.name, live.id, "@benji here", ask4.id, true));
 console.log("HUMAN DEPARTED ADDRESSEE OK");

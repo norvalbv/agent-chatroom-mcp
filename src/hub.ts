@@ -894,9 +894,12 @@ export class Hub {
     // Validate before any delivery, surfacing or turn mutation, even on forced sends.
     // Keep departed identities in mentionsIn: filtering them there would silently lose the ask.
     // Rejoin/reclaim reactivates the same pid (and name); no name-similarity replacement is inferred.
+    // Humans are exempt: they come and go over HTTP and a reply to their ask must name them; so is the author of the
+    // message being replied to, whose ask outlives them (a reply_to is how the hub counts it answered).
+    const replyAuthor = replyTo ? room.messages.find((m) => m.id === replyTo)?.from.id : undefined;
     const departed = this.mentionsIn(room, content)
       .map((id) => room.participants.get(id)!)
-      .filter((participant) => !participant.active);
+      .filter((participant) => !participant.active && participant.agent !== "human" && participant.id !== replyAuthor);
     if (departed.length) {
       throw new HubError(
         `Cannot send: ${departed.map((participant) => `"${participant.name}"`).join(", ")} ${departed.length === 1 ? "has" : "have"} left the room. Remove the departed @-mention or address an active participant; no replacement is recorded.`,
@@ -921,7 +924,8 @@ export class Hub {
       const to = this.addressee(room, target);
       const answered = this.isAnswered(room, target);
       const resp = this.responderFor(room, target, p.id);
-      if (to && to !== "all" && to !== p.id) {
+      // An addressee that has left cannot answer: the ask is orphaned and anyone may take it.
+      if (to && to !== "all" && to !== p.id && room.participants.get(to)?.active) {
         throw new HubError(`${this.shown(room, target.from)} addressed that to ${resp.who}, not you. Leave it to them.`);
       }
       if (small && answered && !resp.mine) {

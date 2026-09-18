@@ -146,8 +146,12 @@ assert.ok(turns.seat >= scripts.seat.length, `the seat stopped after ${turns.sea
 const transcript = await (await fetch(`${HUB}/rooms/${ROOM}/transcript`)).text();
 assert.ok(transcript.includes("hello from the openrouter seat"), `the room did not receive the message:\n${transcript}`);
 assert.equal(transcript.match(/hello from the openrouter seat/g)?.length, 1, "the message was sent more than once");
-const room = (await (await fetch(`${HUB}/rooms/${ROOM}`)).json()) as { participants: { name: string; agent: string }[] };
+const room = (await (await fetch(`${HUB}/rooms/${ROOM}`)).json()) as { participants: { name: string; agent: string; working: { tool: string; step: number; at: string } | null; last_seen_at: string }[] };
 assert.ok(room.participants.some((p) => p.name === "deepseek-1" && p.agent === "openrouter"), `not in the room as an openrouter agent: ${JSON.stringify(room.participants)}`);
+// local tools make no hub calls: the seat process heartbeats them (POST /rooms/:room/heartbeat) so the room can tell busy from dead
+const seat1 = room.participants.find((p) => p.name === "deepseek-1")!;
+assert.ok(seat1.working && ["read_file", "search", "run_command"].includes(seat1.working.tool) && seat1.working.step >= 2, `the seat did not heartbeat its local work: ${JSON.stringify(seat1.working)}`);
+assert.ok(Date.parse(seat1.last_seen_at) >= Date.parse(seat1.working!.at), "last_seen_at covers the heartbeat");
 
 // ---------- 2. the seat as another agent recruits it ----------
 const client = new Client({ name: "recruiter", version: "0.0.0" });

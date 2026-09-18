@@ -171,6 +171,17 @@ app.post("/rooms/archive-dead", (req, res) => {
   const { name } = (req.body ?? {}) as { name?: string };
   res.json({ archived: hub.archiveDead((name || "human").trim()) });
 });
+// Seat liveness: the seat process posts its step and current tool; needs only its own participant id.
+app.post("/rooms/:room/heartbeat", (req, res) => {
+  try {
+    const { participant_id, tool, step } = (req.body ?? {}) as { participant_id?: string; tool?: string; step?: number };
+    if (!participant_id) return res.status(400).type("text/plain").send("participant_id required");
+    hub.heartbeat(req.params.room, participant_id, { tool: tool ?? "?", step: step ?? 0 });
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(400).type("text/plain").send(e instanceof HubError ? e.message : "error");
+  }
+});
 app.post("/rooms/:room/archive", (req, res) => {
   if (!requireToken(req, res)) return;
   try {

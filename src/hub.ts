@@ -56,6 +56,8 @@ export interface Participant {
   leaveWarnedExit?: boolean;
   /** why this participant left, as given to leave_room; shown in the room notice and the dashboard */
   leaveReason?: string;
+  /** last heartbeat from the seat process: local work makes no hub calls, so this is how the room knows it is alive. Ephemeral. */
+  working?: { tool: string; step: number; at: string };
   /** id of the addressed message this participant was last shown by wait_for_messages (the next wait without an answer is refused once) */
   addressWarned?: string;
   /** id of the addressed message a wait_for_messages was already refused for (the call after that proceeds) */
@@ -457,6 +459,8 @@ export class Hub {
         active: p.active,
         messages: p.messageCount,
         last_active_at: p.lastActiveAt,
+        last_seen_at: this.lastSeen(p),
+        working: p.working ?? null,
         left_reason: p.active ? null : p.leaveReason ?? null,
       })),
       active_count: active.length,
@@ -2148,6 +2152,22 @@ export class Hub {
 
   /** Mark participants inactive after `idleMs` without any activity in a room that has not concluded. */
   /** Mark silent participants as left, except those whose MCP session is in `connected`: a seat building in its worktree for 20 minutes is working, not gone. */
+  /**
+   * A seat's own liveness signal (POST /rooms/:room/heartbeat from src/seat.ts on every step): what it is doing and
+   * when. Local tools never reach the hub, so without this a builder on step 71 of a build looked like "1 msg, 12m ago"
+   * and nobody could tell it from a dead seat. Not persisted: it is about the process, not the room's history.
+   */
+  heartbeat(roomName: string, pid: string, info: { tool: string; step: number }): void {
+    const room = this.getRoom(roomName);
+    const p = this.requireParticipant(room, pid);
+    p.working = { tool: String(info.tool).slice(0, 40), step: Number(info.step) || 0, at: now() };
+  }
+
+  /** Latest of the last hub call and the last heartbeat. */
+  lastSeen(p: Participant): string {
+    return p.working && Date.parse(p.working.at) > Date.parse(p.lastActiveAt) ? p.working.at : p.lastActiveAt;
+  }
+
   sweepIdle(idleMs: number, connected?: Set<string>): string[] {
     const swept: string[] = [];
     const cutoff = Date.now() - idleMs;
@@ -2155,7 +2175,7 @@ export class Hub {
       if (room.state === "concluded" || room.state === "closed") continue;
       for (const p of room.participants.values()) {
         if (p.session && connected?.has(p.session)) continue;
-        if (p.active && p.agent !== "human" && Date.parse(p.lastActiveAt) < cutoff) {
+        if (p.active && p.agent !== "human" && Date.parse(this.lastSeen(p)) < cutoff) {
           p.active = false;
           this.persist({ type: "leave", room: room.name, p });
           this.post(room, "system", undefined, `${this.shown(room, p)} went quiet for ${Math.round(idleMs / 60000)} min and was marked as left.`);

@@ -302,9 +302,22 @@ export async function runSeat(provider: ChatProvider, opts: SeatOptions): Promis
   }
 
   const joined = new Set<string>();
+  /** participant id per room, from join_room's result, so the seat can heartbeat over HTTP without a room turn */
+  const pids = new Map<string, string>();
+  const hubBase = opts.mcpUrl?.replace(/\/mcp\/?$/, "");
+  let stepNo = 0;
+  /** Fire-and-forget: local work makes no hub calls, so this is how the room can tell a busy seat from a dead one. */
+  function heartbeat(tool: string) {
+    if (!hubBase) return;
+    for (const room of joined) {
+      const pid = pids.get(room);
+      if (!pid) continue;
+      fetch(`${hubBase}/rooms/${encodeURIComponent(room)}/heartbeat`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ participant_id: pid, tool, step: stepNo }), signal: AbortSignal.timeout(5_000) }).catch(() => {});
+    }
+  }
   async function callTool(name: string, args: Record<string, string>): Promise<string> {
     const mine = local.find((t) => t.def.function.name === name);
-    if (mine) return String(await mine.run(args));
+    if (mine) { heartbeat(name); return String(await mine.run(args)); }
     if (!hubTools.has(name)) return `No tool named ${name}. Available: ${[...hubTools, ...local.map((t) => t.def.function.name)].join(", ")}`;
     // 55s long-polls (wait_for_messages) must not trip the SDK's default 60s request timeout
     const r = (await client.callTool({ name, arguments: args }, undefined, { timeout: 180_000 })) as { isError?: boolean; content?: { type: string; text?: string }[] };
@@ -312,7 +325,11 @@ export async function runSeat(provider: ChatProvider, opts: SeatOptions): Promis
       .map((c) => c.text ?? "")
       .join("\n")
       .trim();
-    if (!r.isError && name === "join_room" && args.room) joined.add(args.room);
+    if (!r.isError && name === "join_room" && args.room) {
+      joined.add(args.room);
+      const m = /"participant_id":\s*"([^"]+)"/.exec(text);
+      if (m) pids.set(args.room, m[1]);
+    }
     if (!r.isError && name === "leave_room" && args.room) joined.delete(args.room);
     return clampHub((r.isError ? "ERROR: " : "") + (text || "(no content)"));
   }
@@ -362,6 +379,7 @@ export async function runSeat(provider: ChatProvider, opts: SeatOptions): Promis
   let ok = true;
   let steps = 0;
   for (steps = 1; steps <= maxSteps; steps++) {
+    stepNo = steps;
     if (Date.now() > deadline) {
       log(`[${provider.label}] ${maxMinutes} min budget spent`);
       await bow(`${maxMinutes} min budget spent`);

@@ -27,6 +27,7 @@ export const offlineScripts = [
   'departed-mentions.test.ts',
   'electorate-regression.ts',
   'human-answering.test.ts',
+  'leave-post-conclusion-regression.ts',
   'mention-mentions.test.ts',
   'regression-replay.ts',
   'recruit-prefix-regression.ts',

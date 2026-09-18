@@ -607,6 +607,8 @@ assert.deepEqual(tools, ["amend", "board_get", "board_set", "challenge", "join_r
   assert.equal(am.proposal.tally.disagree, 0);
   assert.deepEqual(am.proposal.waiting_on, ["claude-1"]);
   await assert.rejects(a.call("amend", { room, proposal_id: pr.id, find: "no such text here at all", replace: "x" }), /closest passage is/);
+  // the board travels as a manifest; written while the room is open, it must still be readable once concluded
+  await a.call("board_set", { room, key: "notes", text: "long ".repeat(100) });
   // a chair's disagree vetoes; its agree does not count toward quorum
   const cv = await c.call("vote", { room, proposal_id: pr.id, vote: "disagree", reason: "name the test file's assertion, not only the file" });
   assert.ok(cv.proposal.blocked_by.some((x: string) => x.includes("standing disagree from chair-x")));
@@ -630,12 +632,13 @@ assert.deepEqual(tools, ["amend", "board_get", "board_set", "challenge", "join_r
   await a.call("read_messages", { room });
   const w3 = await a.call("wait_for_messages", { room, timeout_ms: 0 });
   assert.equal(w3.messages.length, 0, "read_messages counts as delivery");
-  await a.call("board_set", { room, key: "notes", text: "long ".repeat(100) });
   const man = await b.call("board_get", { room });
-  assert.equal(man.notes.chars, 500);
+  assert.equal(man.notes.chars, 500, "a board entry written before conclusion is still readable after");
   assert.ok(!("text" in man.notes), "keyless board_get is a manifest");
   const st2 = await a.call("room_status", { room });
   assert.ok(!("text" in st2.board.notes), "room_status carries a board manifest");
+  // once concluded, board writes are refused outright; reads of what was written before are untouched
+  await assert.rejects(a.call("board_set", { room, key: "late-notes", text: "too late" }), /concluded: board writes are refused/);
   const stats = (await (await fetch(`${HTTP}/rooms/${room}/stats`)).json()) as { refusals: Record<string, number> };
   assert.ok(Object.values(stats.refusals).reduce((x, y) => x + y, 0) >= 2, "refusals are counted per tool and reason");
 }

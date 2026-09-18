@@ -728,6 +728,7 @@ export class Hub {
   /** Why this participant's departure would leave the open proposal unpassable, if it would. */
   leavingWouldBlock(room: Room, p: Participant): { proposal: Proposal; reason: string } | undefined {
     if (p.agent === "human" || p.role === "chair") return undefined;
+    if (room.state === "concluded" || room.state === "closed") return undefined; // nothing left to block
     const open = [...room.proposals.values()].find((pr) => pr.status === "open");
     if (!open) return undefined;
     const others = this.electorate(room, open, p.id).members;
@@ -760,12 +761,15 @@ export class Hub {
 
   /**
    * Why an agent should not leave yet, or null. Refused once per participant (like the quorum-floor refusal): the
-   * point is to make the seat write the handoff or answer the ask, not to cage it. Humans and session cleanup skip it.
+   * point is to make the seat write the handoff or answer the ask, not to cage it. Humans and session cleanup skip it,
+   * and so does a concluded or closed room: the hub has already released every claim/* itself (releaseClaims), so
+   * there is nothing left to hand off, and an unanswered ask in a room nobody can act in owes nobody anything.
    * A claim/* by this seat counts as handed over when a handoff/* by the same seat exists or the claim's JSON status
    * says done/fixed/handed; the launcher's respawn rule (src/respawn.ts) reads the board the same way.
    */
   leaveRefusal(room: Room, p: Participant): string | null {
     if (p.agent === "human" || p.leaveWarnedExit) return null;
+    if (room.state === "concluded" || room.state === "closed") return null; // the hub releases claims itself; nobody is owed a handoff in a room nobody can act in
     const name = p.name;
     const handedOff = [...room.board.entries()].some(([k, e]) => k.startsWith("handoff/") && e.by === name);
     const orphaned = [...room.board.entries()].filter(([k, e]) => {
@@ -1676,6 +1680,9 @@ export class Hub {
   setBoard(roomName: string, pid: string, key: string, text: string, opts: BoardExpiryOptions & { ifAbsent?: boolean; ifByMe?: boolean; overwrite?: boolean } = {}): BoardEntry | null {
     const room = this.getRoom(roomName);
     const p = this.requireParticipant(room, pid);
+    if (room.state === "concluded" || room.state === "closed") {
+      throw new HubError(`Room "${roomName}" is ${room.state}: board writes are refused, there is nothing left to coordinate. Earlier entries, including verify/* and handoff/*, are still readable with board_get.`, undefined, "state");
+    }
     if (!Hub.BOARD_KEY.test(key)) throw new HubError("Board keys are short names like 'evidence', 'open questions', 'claim/auth', 'verify/auth'.", undefined, "key-format");
     if (text.length > 8000) throw new HubError("Board entries are capped at 8000 characters.", undefined, "size");
     const expiresAt = this.boardExpiry(key, opts);
@@ -2228,6 +2235,23 @@ export class Hub {
         (unresolved.length ? `\nUnresolved objections, overruled: ${unresolved.map((u) => `${u.by}: "${u.objection.slice(0, 300)}${u.objection.length > 300 ? "…" : ""}"`).join(" | ")}` : ""),
       { proposalId: pr.id },
     );
+    this.releaseClaims(room, "Room concluded");
+  }
+
+  /**
+   * Once a room concludes or closes nobody can join a team or take over an area in it, so a claim/*'s ownership
+   * lock no longer serves any purpose. Released here, in one system line, so seats are never asked to write a
+   * claim release or a handoff/* just to leave (leaveRefusal, leavingWouldBlock). verify/* and handoff/* are left
+   * alone: they are the evidentiary record and must stay readable (board_get) after the room is done.
+   */
+  private releaseClaims(room: Room, why: string): void {
+    const claims = [...room.board.keys()].filter((k) => k.startsWith("claim/"));
+    if (!claims.length) return;
+    for (const k of claims) {
+      this.applyBoard(room, k, null);
+      this.persist({ type: "board", room: room.name, key: k, entry: null });
+    }
+    this.post(room, "system", undefined, `${why}: released ${claims.length} claim/* entr${claims.length === 1 ? "y" : "ies"} (${claims.join(", ")}) — nobody needs to hand off in a room nobody can act in.`);
   }
 
   private setState(room: Room, state: RoomState) {
@@ -2251,6 +2275,7 @@ export class Hub {
     this.setState(room, "closed");
     if (room.nudgeTimer) clearTimeout(room.nudgeTimer);
     this.post(room, "system", undefined, `Room closed by ${by}${reason ? `: ${reason}` : ""}. No conclusion was recorded.`);
+    this.releaseClaims(room, "Room closed");
     return room;
   }
 

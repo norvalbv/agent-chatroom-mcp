@@ -21,6 +21,7 @@ import { spawnSync } from "node:child_process";
 import { createServer } from "node:net";
 import { existsSync, mkdirSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { join, resolve } from "node:path";
+import { matchArmABudget } from "./rq1-usage-budget.js";
 
 export interface GridRunResult {
   outcome: string;
@@ -211,12 +212,15 @@ export async function runGrid(args: ParsedGridArgs, opts: { log?: (s: string) =>
         continue;
       }
       const armC = readGridResult(armCResultPath);
-      if (!(armC.cost_usd > 0) || !(armC.wall_clock_ms > 0)) {
+      let budget: { maxBudgetUsd: number; wallClockCapMs: number };
+      try {
+        budget = matchArmABudget({ costUsd: armC.cost_usd, wallClockMs: armC.wall_clock_ms });
+      } catch {
         log(`[infra-fail] ${item.taskLabel} A seed${item.seed}: paired arm C result has non-positive cost_usd/wall_clock duration, cannot derive a budget`);
         summary.infra_failed++;
         continue;
       }
-      runnerArgs.push("--max-budget-usd", String(armC.cost_usd), "--deadline-ms", String(Math.round(armC.wall_clock_ms)));
+      runnerArgs.push("--max-budget-usd", String(budget.maxBudgetUsd), "--deadline-ms", String(Math.round(budget.wallClockCapMs)));
     } else {
       const port = await freePort(portCounter);
       portCounter = port + 2;

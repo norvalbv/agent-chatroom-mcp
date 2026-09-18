@@ -182,6 +182,7 @@ test("bench-grid.ts: SIGTERM to the grid kills its in-flight scripts/bench-rq1.t
         "C",
         "--tasks-dir",
         resolve("tasks"),
+        "--include-retired",
         "--results-dir",
         resultsDir,
         "--runner",

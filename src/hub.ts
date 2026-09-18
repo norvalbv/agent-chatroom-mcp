@@ -679,6 +679,7 @@ export class Hub {
         throw new HubError(`Room "${roomName}" already has ${Hub.MAX_LIVE_PER_ROOM} live agents (per-run cap). Open a sub-room instead.`);
       }
       const n = room.participants.size;
+      if (role === "chair" && !room.chair) room.chair = name;
       participant = {
         id: shortId("p"),
         name,
@@ -2406,6 +2407,8 @@ export class Hub {
           case "join":
           case "leave": {
             const room = this.rooms.get(ev.room);
+            // Chair binding is room state, not participant state: replay it (rejection-safe, see join()).
+            if (ev.p.role === "chair" && room && !room.chair) room.chair = ev.p.name;
             // Delivery cursors are deliberately process-local: replay/rejoin must backfill.
             delete ev.p.lastBoardSeen;
             delete ev.p.seenBoardKeys;

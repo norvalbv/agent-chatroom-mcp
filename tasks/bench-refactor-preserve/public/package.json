@@ -1,0 +1,5 @@
+{
+  "name": "bench-refactor-preserve-workspace",
+  "private": true,
+  "type": "module"
+}

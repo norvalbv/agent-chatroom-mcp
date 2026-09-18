@@ -1,0 +1,5 @@
+{
+  "name": "bench-shell-split-workspace",
+  "private": true,
+  "type": "module"
+}

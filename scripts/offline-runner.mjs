@@ -30,6 +30,7 @@ export const offlineScripts = [
   'challenge-session-regression.ts',
   'claude-lean-flags-regression.ts',
   'claude-usage-regression.ts',
+  'oracle-tasks-refactor-concurrency.test.ts',
   'consolidator-spawn-regression.ts',
   'departed-mentions.test.ts',
   'electorate-regression.ts',

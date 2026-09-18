@@ -1,0 +1,5 @@
+{
+  "name": "bench-concurrency-order-workspace",
+  "private": true,
+  "type": "module"
+}

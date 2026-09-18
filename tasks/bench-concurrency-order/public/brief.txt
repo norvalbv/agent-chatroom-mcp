@@ -1,0 +1,7 @@
+applyUpdates(events) must produce the final key-value state as if the events had happened, and been applied, strictly in ascending `seq` order — not the order they appear in the `events` array.
+
+Events simulate delivery over an unreliable network: the array order is the arrival order, which can differ from the order the events actually occurred in (a later event can be delivered before an earlier one, individually, per key, or across different keys). Every `seq` value within a single call is unique. `op: 'set'` sets `key` to `value` (or '' if `value` is omitted); `op: 'delete'` removes `key` from the state if present, and is a no-op if the key is not present.
+
+Fix queue.ts so applyUpdates reconstructs the state as of the highest `seq` processed, i.e. equivalent to applying every event in `seq` order regardless of array position. Preserve the exported function signature exactly: applyUpdates(events: UpdateEvent[]): Record<string, string>.
+
+Modify queue.ts in this workspace; a chat answer alone is not a submitted code repair. Use no network or dependencies. The evaluator runs private tests against your code after completion.

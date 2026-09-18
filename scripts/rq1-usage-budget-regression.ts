@@ -1,23 +1,26 @@
 #!/usr/bin/env node
 /**
- * RQ1 harness items 2+3 (swarm-120129-s12h, claim/usage-budget): per-run result recording and arm A
- * budget matching.
+ * RQ1 harness item 3 (swarm-120129-s12h, claim/usage-budget): arm A budget matching.
  * RED before this change: scripts/rq1-usage-budget.ts does not exist, and parseClaudeCliOutput
  * (src/result.ts) does not surface num_turns/duration_ms/duration_api_ms from the claude CLI's
- * --output-format json envelope (only total_cost_usd/usage were parsed), so a per-run result cannot
- * carry a real turn count without external transcript parsing.
+ * --output-format json envelope (only total_cost_usd/usage were parsed).
  * GREEN after: parseClaudeCliOutput additionally returns { numTurns, durationMs, durationApiMs } (undefined
- * when the envelope lacks them, never 0-filled), and scripts/rq1-usage-budget.ts exports buildRunResult
- * (assembles the agreed bench/results/rq1/*.json shape) and matchArmABudget (arm A's --max-budget-usd +
- * wall-clock cap derived from arm C's measured, paired, within-task/within-seed spend — the claude CLI has
- * no turn-ceiling flag, confirmed against `claude --help`: only --max-budget-usd exists, print-mode only).
+ * when the envelope lacks them, never 0-filled), and scripts/rq1-usage-budget.ts exports matchArmABudget
+ * (arm A's --max-budget-usd + wall-clock cap derived from arm C's measured, paired, within-task/within-seed
+ * spend -- the claude CLI has no turn-ceiling flag, confirmed against `claude --help`: only
+ * --max-budget-usd exists, print-mode only) and isComparable (the shared outcome->comparable rule, so
+ * item 5's table/grid readers don't each redeclare it).
+ *
+ * Item 2 (per-run result recording) is fulfilled directly by scripts/bench-rq1.ts's own result.json
+ * assembly (board key `result-schema`), not duplicated here -- see scripts/rq1-run-pair-regression.ts for
+ * the end-to-end proof against that real harness.
  *
  *   npx tsx scripts/rq1-usage-budget-regression.ts
  */
 import assert from "node:assert/strict";
 
 const { parseClaudeCliOutput } = await import("../src/result.js");
-const { buildRunResult, matchArmABudget } = await import("./rq1-usage-budget.js");
+const { matchArmABudget, isComparable } = await import("./rq1-usage-budget.js");
 
 // (a) parseClaudeCliOutput surfaces num_turns/duration_ms/duration_api_ms from the same envelope that
 // already carries total_cost_usd/usage (real shape confirmed by sonnet-4's Haiku probe, board key
@@ -47,69 +50,12 @@ const { buildRunResult, matchArmABudget } = await import("./rq1-usage-budget.js"
   assert.equal(noTurns.durationMs, undefined, "(a2) missing duration_ms stays undefined, not 0");
 }
 
-// (b) buildRunResult assembles the shape pinned with sonnet-2/sonnet-3 in the room
-// (bench/results/rq1/<task>-<arm>-seed<seed>.json): schemaVersion, task, arm, seed, model, outcome,
-// comparable (matching the existing bench-compare.json field name and its timeout/infra/tamper
-// exclusion), usage{per_seat[],summed}, turns{value,approximated}, wall_clock{started_at,completed_at},
-// build{...}, argv[].
+// (b) isComparable: matches bench-bench.ts's own comparability rule exactly -- excludes only
+// timeout/infrastructure_error/tamper; task_fail and parse_failure stay comparable (measured failures,
+// not voided runs).
 {
-  const result = buildRunResult({
-    task: "bench-fact-check",
-    arm: "A",
-    seed: 1,
-    model: "claude-sonnet-5",
-    outcome: "task_pass",
-    seats: [
-      { name: "solo", usage: { cost: 0.0123, input_tokens: 100, cache_read_input_tokens: 40, cache_creation_input_tokens: 10, output_tokens: 25 } },
-    ],
-    turns: { value: 4, approximated: false },
-    startedAt: "2026-09-18T12:00:00.000Z",
-    completedAt: "2026-09-18T12:01:00.000Z",
-    build: { hub_entry_sha256: null, hub_build_sha256: null, hub_revision: "abc123", task_sha256: "task-hash", scorer_sha256: "scorer-hash" },
-    argv: ["-p", "brief text", "--output-format", "json"],
-  });
-  assert.equal(result.schemaVersion, 1);
-  assert.equal(result.task, "bench-fact-check");
-  assert.equal(result.arm, "A");
-  assert.equal(result.seed, 1);
-  assert.equal(result.outcome, "task_pass");
-  assert.equal(result.comparable, true, "(b) task_pass is comparable");
-  assert.equal(result.usage.per_seat.length, 1);
-  assert.equal(result.usage.per_seat[0].name, "solo");
-  assert.equal(result.usage.summed.cost_usd, 0.0123, "(b) summed usage reuses the existing rollupUsage logic");
-  assert.equal(result.usage.summed.coverage, "complete");
-  assert.deepEqual(result.turns, { value: 4, approximated: false });
-  assert.deepEqual(result.wall_clock, { started_at: "2026-09-18T12:00:00.000Z", completed_at: "2026-09-18T12:01:00.000Z" });
-  assert.equal(result.build.hub_revision, "abc123");
-  assert.deepEqual(result.argv, ["-p", "brief text", "--output-format", "json"]);
-
-  // (b2) comparable excludes exactly timeout/infrastructure_error/tamper, matching bench-bench.ts's own
-  // comparability rule -- task_fail and parse_failure stay comparable (measured failures, not voided runs).
-  for (const outcome of ["task_fail", "parse_failure"]) {
-    const r = buildRunResult({ task: "t", arm: "C", seed: 1, model: "m", outcome, seats: [], turns: { value: 0, approximated: false }, startedAt: "s", completedAt: "e", build: { hub_entry_sha256: null, hub_build_sha256: null, hub_revision: null, task_sha256: "x", scorer_sha256: "y" }, argv: [] });
-    assert.equal(r.comparable, true, `(b2) ${outcome} stays comparable`);
-  }
-  for (const outcome of ["timeout", "infrastructure_error", "tamper"]) {
-    const r = buildRunResult({ task: "t", arm: "C", seed: 1, model: "m", outcome, seats: [], turns: { value: 0, approximated: false }, startedAt: "s", completedAt: "e", build: { hub_entry_sha256: null, hub_build_sha256: null, hub_revision: null, task_sha256: "x", scorer_sha256: "y" }, argv: [] });
-    assert.equal(r.comparable, false, `(b2) ${outcome} voids comparability`);
-  }
-
-  // (b3) a seat that never reported usage is not zero-filled: it counts in `seats` but not
-  // `seats_with_usage`/the sums, and coverage reflects the gap -- matches src/result.ts's existing
-  // rollupUsage contract exactly (unknown never zero).
-  const partial = buildRunResult({
-    task: "t", arm: "C", seed: 2, model: "m", outcome: "task_pass",
-    seats: [
-      { name: "a", usage: { cost: 0.01 } },
-      { name: "b", usage: null },
-    ],
-    turns: { value: 1, approximated: false }, startedAt: "s", completedAt: "e",
-    build: { hub_entry_sha256: null, hub_build_sha256: null, hub_revision: null, task_sha256: "x", scorer_sha256: "y" }, argv: [],
-  });
-  assert.equal(partial.usage.summed.seats, 2);
-  assert.equal(partial.usage.summed.seats_with_usage, 1);
-  assert.equal(partial.usage.summed.coverage, "partial");
-  assert.equal(partial.usage.summed.cost_usd, 0.01, "(b3) only the reporting seat contributes to the sum");
+  for (const outcome of ["task_pass", "task_fail", "parse_failure"]) assert.equal(isComparable(outcome), true, `(b) ${outcome} stays comparable`);
+  for (const outcome of ["timeout", "infrastructure_error", "tamper"]) assert.equal(isComparable(outcome), false, `(b) ${outcome} voids comparability`);
 }
 
 // (c) matchArmABudget: arm A's --max-budget-usd is set to arm C's realized total cost_usd on the exact

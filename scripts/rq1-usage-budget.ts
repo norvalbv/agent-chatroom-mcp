@@ -1,78 +1,16 @@
 /**
- * RQ1 harness items 2+3 (swarm-120129-s12h, claim/usage-budget): per-run result recording and arm A
- * budget matching. Shape pinned with sonnet-2 (item 5, RQ1 table/grid reader) and sonnet-3 (item 1,
- * harness mode): bench/results/rq1/<task>-<arm>-seed<seed>.json.
+ * RQ1 harness item 3 (swarm-120129-s12h, claim/usage-budget): arm A budget matching. (Item 2, per-run
+ * result recording, is fulfilled directly by scripts/bench-rq1.ts's own result.json assembly — see board
+ * key `result-schema` — so nothing here duplicates that.)
  */
-import type { SeatUsageRollup, UsageRollup } from "../src/result.js";
-import { rollupUsage } from "../src/result.js";
 
-export interface RQ1SeatUsage {
-  name: string;
-  usage: SeatUsageRollup | null;
-}
-
-export interface RQ1RunResult {
-  schemaVersion: 1;
-  task: string;
-  arm: "A" | "C";
-  seed: number;
-  model: string;
-  outcome: string;
-  /** Matches bench-bench.ts's own comparability rule: excludes exactly timeout/infrastructure_error/tamper. */
-  comparable: boolean;
-  usage: {
-    per_seat: Array<{ name: string } & Partial<SeatUsageRollup>>;
-    summed: UsageRollup;
-  };
-  turns: { value: number; approximated: boolean };
-  wall_clock: { started_at: string; completed_at: string };
-  build: {
-    hub_entry_sha256: string | null;
-    hub_build_sha256: string | null;
-    hub_revision: string | null;
-    task_sha256: string;
-    scorer_sha256: string;
-  };
-  argv: string[];
-}
-
-/** Outcomes that void comparability (bench-bench.ts's own rule; task_fail/parse_failure stay comparable —
- * they are measured failures, not voided runs). */
+/** Outcomes that void comparability (bench-bench.ts's own rule, matching protocol.md §4: task_fail and
+ * parse_failure stay comparable — they are measured failures, not voided runs). Exported so a reader of
+ * scripts/bench-rq1.ts's result.json (item 5's table/grid scripts) derives `comparable` from `outcome`
+ * the same way everywhere, instead of each consumer re-declaring this set. */
 const NOT_COMPARABLE = new Set(["timeout", "infrastructure_error", "tamper"]);
-
-const EMPTY_ROLLUP: UsageRollup = { steps: 0, prompt_tokens: 0, completion_tokens: 0, cost_usd: 0, seats: 0, seats_with_usage: 0, coverage: "none" };
-
-export function buildRunResult(params: {
-  task: string;
-  arm: "A" | "C";
-  seed: number;
-  model: string;
-  outcome: string;
-  seats: RQ1SeatUsage[];
-  turns: { value: number; approximated: boolean };
-  startedAt: string;
-  completedAt: string;
-  build: RQ1RunResult["build"];
-  argv: string[];
-}): RQ1RunResult {
-  const summed = rollupUsage(params.seats.map((s) => ({ usage: s.usage }))) ?? EMPTY_ROLLUP;
-  return {
-    schemaVersion: 1,
-    task: params.task,
-    arm: params.arm,
-    seed: params.seed,
-    model: params.model,
-    outcome: params.outcome,
-    comparable: !NOT_COMPARABLE.has(params.outcome),
-    usage: {
-      per_seat: params.seats.map((s) => ({ name: s.name, ...(s.usage ?? {}) })),
-      summed,
-    },
-    turns: params.turns,
-    wall_clock: { started_at: params.startedAt, completed_at: params.completedAt },
-    build: params.build,
-    argv: params.argv,
-  };
+export function isComparable(outcome: string): boolean {
+  return !NOT_COMPARABLE.has(outcome);
 }
 
 /**

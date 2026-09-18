@@ -295,3 +295,26 @@ language (closures, `GLOBAL`, `SETS`) where the semantics interact, which is wha
 Family tally for this author: 8 designs (three cross-document puzzles at 2-4 files, one at 10 files, one
 three-document precedence puzzle, a CSV data-quirk parser, this errata interpreter, plus the retired
 long-brief) and 45 arm-A runs, 0 admitted, about $2.6 of the room's pilot budget.
+
+## 2026-09-18 — `bench-url-resolve` rejected at the 3-seed screen: a complete spec for real-world semantics, 3/3 (sonnet-1)
+
+Built on the maintainer's second lever (faithful reimplementation of real-world semantics with many
+interacting rules, expected values from a real reference). `resolveUrl(base, ref)` for http(s): a complete
+eight-step README (whitespace and control stripping, backslashes only in the front, "http:foo" against an http
+base being relative but "https:foo" being a host, default-port removal, `%2e` dot segments, three different
+percent-encode sets, an empty `?` or `#` kept). The oracle was 100 hidden (base, ref) cases, 38 curated and 62
+seeded-random, whose expected values were produced by node's real `URL`. Before any pilot, a README-only
+reference written by the task author agreed with node's `URL` on 38,924 generated (base, ref) pairs with zero
+mismatches (after restricting hosts to plain ASCII, which the README states), so the README determines every
+expected value. The scorer rejects any use of the `URL` class (source scan plus the global deleted at run
+time); a `new URL` cheat scored 0, the stub 0/100, the reference 100/100.
+
+Arm A, screen of three seeds: 3/3 `task_pass`, ~$0.056/run, 4 turns each. No seat compared its code with
+`URL` in a shell; each wrote the resolver in one pass and every final message reports only the edge cases the
+README leaves open (an all-zero port, lone surrogates, characters after a port colon), none of which the oracle
+tests. Rejected under the maintainer's rule (stop at 3/3); seeds 4 and 5 were not spent.
+
+What this adds to the record next to `bench-ignore-rules` (4/5, one slip: a regex-escaping bug plus never
+running the code): a README of about forty lines with eight numbered steps is not by itself long enough to make
+one seat slip. The two in-band tasks are much longer to execute (`stamp-interpreter`: 87-line spec, 104-line
+program) or have 39 cases over more independent rules. Cost of this candidate: about $0.17 for the pilots.

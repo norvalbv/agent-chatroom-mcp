@@ -1513,9 +1513,6 @@ export class Hub {
     if (room.state === "closed" || room.state === "concluded") return true;
     if (this.attentionFocus(room, p)) return true;
     if (this.addressedBy(room, p).length) return true;
-    // A hub-authored system line naming this participant (e.g. a reviewer assignment) wakes a held
-    // wait like a chat @-mention does, but carries no reply debt: addressedBy is chat-only on purpose.
-    if (room.messages.some((m) => m.seq > p.lastSeenSeq && m.kind === "system" && m.mentions?.includes(p.id) && this.pushableTo(room, m, p.id))) return true;
     const open = [...room.proposals.values()].find((pr) => pr.status === "open");
     if (!open) return false;
     const needsVote = !open.votes[p.id] && p.agent !== "human" && p.role !== "chair";
@@ -1784,11 +1781,16 @@ export class Hub {
     this.post(room, "board", p, `${previous ? "updated" : "added"} board entry "${key}" (${text.length} chars; read it with board_get)`
       + (reviewer ? ` — reviewer: ${reviewer.name}` : ""));
     if (reviewer) {
-      this.post(room, "system", undefined,
+      // kind "chat", not "system": addressedBy()/actionableNow() resolve an owed @-mention from
+      // *content*, independent of lastSeenSeq, so it reliably wakes a held wait_for_messages even
+      // though hub.wait() already advances this participant's lastSeenSeq past this very message
+      // in the same call that delivers it (settleRead runs before the caller's actionableNow
+      // check). A "system"-kind post with an explicit mentions field looked right in isolation but
+      // is provably too late by the time hold_until_actionable's loop re-checks it.
+      this.post(room, "chat", undefined,
         `@${reviewer.name} you are the reviewer for ${p.name}'s "${key}" (least-recently-verifying active participant, picked by the hub). ` +
         `Once ${p.name} proposes work from it, require_verification prefers a verify/* entry from you over anyone else's while you're still active; ` +
-        `write it as {"proposal":"<id>","command":"...","cwd":"...","exit_code":0,"output_tail":"..."} naming the proposal, per docs/swarm-protocol-spec.md.`,
-        { mentions: [reviewer.id] });
+        `write it as {"proposal":"<id>","command":"...","cwd":"...","exit_code":0,"output_tail":"..."} naming the proposal, per docs/swarm-protocol-spec.md.`);
     }
     if (key.endsWith(".ack") || key.startsWith("verify/")) for (const pr of room.proposals.values()) if (pr.status === "open") this.evaluate(room, pr);
     return entry;

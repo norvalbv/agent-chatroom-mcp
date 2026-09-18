@@ -8,10 +8,13 @@
  * Run: npx tsx scripts/reviewer-assignment-regression.ts
  */
 import assert from "node:assert/strict";
+import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { Hub } from "../src/hub.js";
+import { createSessionServer } from "../src/server.js";
 
-const cases: [string, () => void][] = [];
-function test(name: string, run: () => void) {
+const cases: [string, () => Promise<void> | void][] = [];
+function test(name: string, run: () => Promise<void> | void) {
   cases.push([name, run]);
 }
 
@@ -59,8 +62,14 @@ test("both the claimant and the reviewer are told, and the reviewer's notice is 
   h.setBoard(room.name, owner.id, "claim/notify", JSON.stringify({ area: "notify", owner: "owner", status: "open" }));
   const posted = room.messages.slice(before);
   assert.ok(posted.some((m) => m.kind === "board" && /reviewer: bob/.test(m.content)), "the claim-added board notice names the reviewer, visible to everyone including the claimant");
-  const toReviewer = posted.find((m) => m.kind === "system" && m.mentions?.includes(bob.id));
-  assert.ok(toReviewer, "a system line addresses the reviewer directly");
+  // kind "chat", not "system": addressedBy()/actionableNow() track an owed @-mention independent
+  // of lastSeenSeq (via reply_to/decline bookkeeping, not a seq cursor), which is what makes the
+  // wake in the next test survive hub.wait()'s settleRead already having advanced lastSeenSeq past
+  // this very message by the time hold_until_actionable re-checks actionableNow. A "system"-kind
+  // post looked right in isolation but loses the race every time (caught by sonnet-5's review).
+  const toReviewer = posted.find((m) => m.kind === "chat" && m.mentions?.includes(bob.id));
+  assert.ok(toReviewer, "a chat-kind, hub-authored line addresses the reviewer directly (from: system)");
+  assert.equal(toReviewer!.from.id, "system");
   assert.match(toReviewer!.content, /@bob/);
 });
 
@@ -78,6 +87,51 @@ test("actionableNow does not wake a bystander who is not the assigned reviewer",
   carol.lastSeenSeq = room.messages.at(-1)?.seq ?? 0;
   h.setBoard(room.name, owner.id, "claim/wake2", JSON.stringify({ area: "wake2", owner: "owner", status: "open" })); // bob gets picked (never-verified tie broken by join order)
   assert.equal(h.actionableNow(room, carol), false, "carol was not addressed; she is not woken by someone else's reviewer notice");
+});
+
+// ---------- live integration: the actual race hub.wait()'s settleRead creates ----------
+// Unit-level actionableNow checks above set lastSeenSeq BEFORE the triggering write, which never
+// exercises the real bug: server.ts's wait_for_messages calls hub.wait() first (which runs
+// settleRead and so advances lastSeenSeq past the delivered message in the SAME call), and only
+// THEN loops on actionableNow. A "system"-kind post with an explicit mentions field is already
+// "seen" by the time that loop checks it and silently rides out the full timeout instead of
+// waking promptly. Only a real two-connection wait_for_messages call over the MCP transport can
+// tell the two apart; this is the test sonnet-5's review asked for (#64).
+
+test("a held wait_for_messages wakes PROMPTLY (not just eventually) for the reviewer, over the real MCP tool", async () => {
+  const hub = new Hub();
+  const ownerSession = createSessionServer(hub);
+  const bobSession = createSessionServer(hub);
+  const ownerClient = new Client({ name: "owner", version: "1" });
+  const bobClient = new Client({ name: "bob", version: "1" });
+  const [oct, ost] = InMemoryTransport.createLinkedPair();
+  const [bct, bst] = InMemoryTransport.createLinkedPair();
+  await ownerSession.server.connect(ost);
+  await ownerClient.connect(oct);
+  await bobSession.server.connect(bst);
+  await bobClient.connect(bct);
+  const callAs = (client: Client) => async (name: string, args: Record<string, unknown>) => {
+    const r = await client.callTool({ name, arguments: args });
+    assert.ok(!r.isError, JSON.stringify(r));
+    return JSON.parse((r.content as { text: string }[])[0].text);
+  };
+  const asOwner = callAs(ownerClient);
+  const asBob = callAs(bobClient);
+
+  const room = "reviewer-wake-live";
+  await asOwner("join_room", { room, name: "owner", agent: "test" });
+  await asBob("join_room", { room, name: "bob", agent: "test" });
+
+  const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+  const started = Date.now();
+  const pending = asBob("wait_for_messages", { room, hold_until_actionable: true, timeout_ms: 3000 });
+  await sleep(30);
+  await asOwner("board_set", { room, key: "claim/live", text: JSON.stringify({ area: "live", owner: "owner", status: "open" }) }); // only bob is eligible: he is picked as reviewer
+
+  const result = await pending;
+  const elapsed = Date.now() - started;
+  assert.ok(elapsed < 2500, `must wake promptly on the reviewer notice, not ride out the 3000ms timeout: took ${elapsed}ms`);
+  assert.ok(result.messages.some((m: string) => /you are the reviewer/.test(m)), "the reviewer notice is in the delivered messages");
 });
 
 // ---------- require_verification: prefers the reviewer, falls back once they leave ----------
@@ -120,7 +174,7 @@ test("the reviewer is surfaced on the reveal-mode board summary (room view / das
 let failed = 0;
 for (const [name, run] of cases) {
   try {
-    run();
+    await run();
     console.log(`PASS ${name}`);
   } catch (error) {
     failed++;

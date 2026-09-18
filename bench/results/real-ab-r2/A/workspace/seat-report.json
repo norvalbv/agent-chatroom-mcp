@@ -1,0 +1,13 @@
+{
+  "model": "deepseek/deepseek-v4-flash-0731",
+  "mcp_url": "http://127.0.0.1:29500/mcp",
+  "hub_entry": "/tmp/before/dist/index.js",
+  "seat_pid": 79793,
+  "exit_code": 0,
+  "exit_signal": null,
+  "error": null,
+  "duration_ms": 115812,
+  "log_chars": 4587,
+  "answer_chars": 34,
+  "finished_at": "2026-09-18T00:01:07.705Z"
+}

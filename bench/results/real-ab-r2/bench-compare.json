@@ -1,0 +1,31 @@
+{
+  "task_id": "bench-fact-check",
+  "arms": [
+    {
+      "arm": "A",
+      "passed": true,
+      "reason": "task_pass"
+    },
+    {
+      "arm": "B",
+      "passed": false,
+      "reason": "task_fail"
+    }
+  ],
+  "comparable": true,
+  "delta": -1,
+  "delta_unit": "success indicator B minus A; single trial, not an effect estimate",
+  "frozen": {
+    "seat_entry_sha256": "c881c582e3afe9f367f11180884f671ed0a858f76c0fd774eed9f3168dbee04c",
+    "provider_entry_sha256": "9331630f01dd855951b3f1823bfb8846030cba59f7ada0c1a7fae49277f8bde8",
+    "expected_participants": 1,
+    "task_sha256": "06ee1c3fba62df4b4caeb9da2ed2f0644530a9bf33215d767b757386342eb0d2",
+    "scorer_sha256": "2acd428672ba37466d2dbd3b0d7ec6a441fbd371fec494ddf59f7346977a106d",
+    "fact_scorer_sha256": "6b8b3e98c8c408ecd6715a38db9263488644d27c01a11c5bab3172acd5539832",
+    "task_id": "bench-fact-check",
+    "timeout_ms": 300000,
+    "room": "benchmark",
+    "brief": "Read records.txt. Records about the three named researchers were transcribed from notes; one affiliation is wrong. Answer with only the single corrected affiliation, nothing else.\n"
+  },
+  "checked_at": "2026-09-18T00:01:41.230Z"
+}

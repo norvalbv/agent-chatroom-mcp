@@ -1,0 +1,25 @@
+{
+  "task_id": "bench-fact-check",
+  "arm": "A",
+  "hub_entry": "/tmp/before/dist/index.js",
+  "hub_revision": "356ef862166c5be2ec2db7d4076a5c790a562e6a",
+  "passed": true,
+  "reason": "task_pass",
+  "oracle": {
+    "kind": "exact-answer",
+    "command": "node --import tsx score-fact-check.ts <workspace>/answer.txt oracle/oracle.json",
+    "exit_code": 0
+  },
+  "anti_tamper": {
+    "hash_before": "06ee1c3fba62df4b4caeb9da2ed2f0644530a9bf33215d767b757386342eb0d2",
+    "hash_after": "06ee1c3fba62df4b4caeb9da2ed2f0644530a9bf33215d767b757386342eb0d2",
+    "unchanged": true
+  },
+  "diagnostics": {
+    "reply_metrics_path": null,
+    "mentions": null,
+    "reply_rate": null
+  },
+  "duration_ms": 116306,
+  "checked_at": "2026-09-18T00:01:08.022Z"
+}

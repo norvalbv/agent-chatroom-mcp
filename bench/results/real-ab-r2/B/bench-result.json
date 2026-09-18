@@ -1,0 +1,25 @@
+{
+  "task_id": "bench-fact-check",
+  "arm": "B",
+  "hub_entry": "/Users/benji/Desktop/Personal and learning/agent-chatroom-mcp/.swarm-worktrees/swarm-bench-room/oracle-2/dist/index.js",
+  "hub_revision": "e870e704fe2c3f8fe8203a9ff515208520d03836",
+  "passed": false,
+  "reason": "task_fail",
+  "oracle": {
+    "kind": "exact-answer",
+    "command": "node --import tsx score-fact-check.ts <workspace>/answer.txt oracle/oracle.json",
+    "exit_code": 1
+  },
+  "anti_tamper": {
+    "hash_before": "06ee1c3fba62df4b4caeb9da2ed2f0644530a9bf33215d767b757386342eb0d2",
+    "hash_after": "06ee1c3fba62df4b4caeb9da2ed2f0644530a9bf33215d767b757386342eb0d2",
+    "unchanged": true
+  },
+  "diagnostics": {
+    "reply_metrics_path": null,
+    "mentions": null,
+    "reply_rate": null
+  },
+  "duration_ms": 33205,
+  "checked_at": "2026-09-18T00:01:41.229Z"
+}

@@ -1,0 +1,63 @@
+TAP version 13
+# Subtest: real-seat mode spawns one seat per arm and records seat provenance
+ok 1 - real-seat mode spawns one seat per arm and records seat provenance
+  ---
+  duration_ms: 853.5605
+  type: 'test'
+  ...
+# Subtest: refuses seat mode when the seat entry is missing
+ok 2 - refuses seat mode when the seat entry is missing
+  ---
+  duration_ms: 83.691625
+  type: 'test'
+  ...
+# Subtest: real wrapper fails fast with an explicit missing MCP URL diagnostic
+ok 3 - real wrapper fails fast with an explicit missing MCP URL diagnostic
+  ---
+  duration_ms: 20.874375
+  type: 'test'
+  ...
+# Subtest: actual wrapper registers after room creation, receives seat-only credentials, and completes answer before scoring
+not ok 4 - actual wrapper registers after room creation, receives seat-only credentials, and completes answer before scoring
+  ---
+  duration_ms: 1969.290666
+  type: 'test'
+  location: '/Users/benji/Desktop/Personal and learning/agent-chatroom-mcp/.swarm-worktrees/swarm-bench-room/bench-ab-1/scripts/bench-seat.test.ts:26:410'
+  failureType: 'testCodeFailure'
+  error: |-
+    a solo seat cannot obtain independent challenge
+    
+    true !== false
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: false
+  actual: true
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (/Users/benji/Desktop/Personal and learning/agent-chatroom-mcp/.swarm-worktrees/swarm-bench-room/bench-ab-1/scripts/bench-seat.test.ts:93:54)
+    process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: provider failure is infrastructure, not an empty answer task failure
+ok 5 - provider failure is infrastructure, not an empty answer task failure
+  ---
+  duration_ms: 862.003041
+  type: 'test'
+  ...
+# Subtest: conclusion cannot bypass the bounded seat completion barrier
+ok 6 - conclusion cannot bypass the bounded seat completion barrier
+  ---
+  duration_ms: 3054.610375
+  type: 'test'
+  ...
+1..6
+# tests 6
+# suites 0
+# pass 5
+# fail 1
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 6947.926291

@@ -1,0 +1,6 @@
+Researcher notes (transcribed from field notes; one affiliation is wrong):
+- Mira Chen — senior researcher, Institute for Computational Reasoning, Berlin
+- Tomas Alvarez — lecturer, Department of Applied Logic, Utrecht
+- Priya Natarajan — principal engineer, Center for Verified Software, Bangalore
+
+Source: departmental appointment record, Society for Formal Methods, Vienna (secretariat confirmation, ref SFM/2024/118), cross-checked against the public staff directory at the institute's website. The Berlin line is the transcription error.

@@ -1,0 +1,46 @@
+TAP version 13
+# Subtest: real-seat mode spawns one seat per arm and records seat provenance
+ok 1 - real-seat mode spawns one seat per arm and records seat provenance
+  ---
+  duration_ms: 851.907625
+  type: 'test'
+  ...
+# Subtest: refuses seat mode when the seat entry is missing
+ok 2 - refuses seat mode when the seat entry is missing
+  ---
+  duration_ms: 95.156
+  type: 'test'
+  ...
+# Subtest: real wrapper fails fast with an explicit missing MCP URL diagnostic
+ok 3 - real wrapper fails fast with an explicit missing MCP URL diagnostic
+  ---
+  duration_ms: 19.474458
+  type: 'test'
+  ...
+# Subtest: actual wrapper registers after room creation, receives seat-only credentials, and completes answer before scoring
+ok 4 - actual wrapper registers after room creation, receives seat-only credentials, and completes answer before scoring
+  ---
+  duration_ms: 2027.497666
+  type: 'test'
+  ...
+# Subtest: provider failure is infrastructure, not an empty answer task failure
+ok 5 - provider failure is infrastructure, not an empty answer task failure
+  ---
+  duration_ms: 843.006459
+  type: 'test'
+  ...
+# Subtest: conclusion cannot bypass the bounded seat completion barrier
+ok 6 - conclusion cannot bypass the bounded seat completion barrier
+  ---
+  duration_ms: 3046.496792
+  type: 'test'
+  ...
+1..6
+# tests 6
+# suites 0
+# pass 6
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 6974.710334

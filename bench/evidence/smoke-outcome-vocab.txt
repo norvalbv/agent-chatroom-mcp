@@ -1,0 +1,4 @@
+A reason=task_pass passed=true sha=n/a
+B reason=task_pass passed=true sha=n/a
+compare comparable=true delta=0 arms=[{"arm":"A","passed":true,"reason":"task_pass"},{"arm":"B","passed":true,"reason":"task_pass"}]
+runner exit: 0

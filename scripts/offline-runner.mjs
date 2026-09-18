@@ -28,6 +28,7 @@ export const offlineScripts = [
   'human-answering.test.ts',
   'mention-mentions.test.ts',
   'regression-replay.ts',
+  'recruit-prefix-regression.ts',
   'refusal-telemetry.ts',
   'quiet-receipts.ts',
   'reply-metrics-analyzer.test.ts',

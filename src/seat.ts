@@ -66,6 +66,14 @@ export interface SeatOptions {
   maxContextChars?: number;
   /** how many empty wait_for_messages results to absorb locally before spending a model turn (default 3): idle polling is most of a seat's provider requests */
   idleWaits?: number;
+  /**
+   * Cache-stable trimming (default off: legacy per-step FIFO trim back to the ceiling). When on, a trim
+   * still triggers at maxContextChars but drops down to a lower floor in one shot and marks the drop with
+   * a single checkpoint message, so trimming fires as an infrequent, periodic checkpoint instead of on
+   * roughly every other step — the transcript grows append-only (and so keeps a stable, cacheable prefix)
+   * between checkpoints, rather than invalidating the provider's prompt cache almost every turn.
+   */
+  checkpointTrim?: boolean;
   log?: (line: string) => void;
 }
 export interface SeatResult {
@@ -286,6 +294,7 @@ export async function runSeat(provider: ChatProvider, opts: SeatOptions): Promis
   const maxToolChars = opts.maxToolChars ?? 6000;
   const maxContextChars = opts.maxContextChars ?? 240_000;
   const idleWaits = Math.max(1, opts.idleWaits ?? 3);
+  const checkpointTrim = opts.checkpointTrim ?? false;
   const log = opts.log ?? ((s: string) => process.stderr.write(`${s}\n`));
   const clampTo = (n: number) => (s: string) => (s.length > n ? `${s.slice(0, n)}\n…[truncated, ${s.length} chars total]` : s);
   const clampLocal = clampTo(maxToolChars);
@@ -382,16 +391,33 @@ export async function runSeat(provider: ChatProvider, opts: SeatOptions): Promis
   const usage: Usage = { prompt_tokens: 0, completion_tokens: 0, cost: 0 };
   const size = () => JSON.stringify(messages).length;
 
-  /** Drop whole turns (an assistant message with its tool results and any hint that followed) from the front. */
+  // checkpointTrim's floor: how far below the ceiling a firing drops to. Low enough that many steps of
+  // pure append pass before the ceiling is hit again, so trimming is an infrequent checkpoint rather than
+  // a near-every-step FIFO splice that would invalidate a provider prompt cache on ~half of all turns.
+  const CHECKPOINT_FLOOR_RATIO = 0.5;
+
+  /**
+   * Drop whole turns (an assistant message with its tool results and any hint that followed) from the
+   * front. Legacy mode (checkpointTrim off) drops just enough to sit under the ceiling, which tends to
+   * refire on roughly every other step once a seat rides the ceiling — cache-hostile, since it edits the
+   * middle of the transcript almost every turn. checkpointTrim instead drops down to a lower floor in one
+   * shot and marks the cut with a single checkpoint message, so the transcript is append-only (and its
+   * prefix stable across consecutive requests) between the rarer firings.
+   */
   function trim() {
+    if (size() <= maxContextChars) return;
+    const target = checkpointTrim ? Math.round(maxContextChars * CHECKPOINT_FLOOR_RATIO) : maxContextChars;
     let dropped = 0;
-    while (size() > maxContextChars && messages.length > 3) {
+    while (size() > target && messages.length > 3) {
       let end = 3;
       while (end < messages.length && messages[end].role !== "assistant") end++;
       messages.splice(2, end - 2);
       dropped++;
     }
-    if (dropped) log(`[${provider.label}] dropped ${dropped} older turn(s) to fit the context window`);
+    if (dropped) {
+      if (checkpointTrim) messages.splice(2, 0, { role: "user", content: `[checkpoint: ${dropped} earlier turn(s) elided to stay within the context window]` });
+      log(`[${provider.label}] dropped ${dropped} older turn(s) to fit the context window${checkpointTrim ? " (checkpoint)" : ""}`);
+    }
   }
 
   // a SIGTERM (the launcher stopping, an operator shedding load) leaves the rooms first, so the seat is not a phantom voter

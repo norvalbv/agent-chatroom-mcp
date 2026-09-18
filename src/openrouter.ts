@@ -5,7 +5,7 @@
  * reasoning blocks passed back) and the CLI the launcher and the spawner call.
  *
  *   openrouter -p "<brief>" --mcp-url http://127.0.0.1:7717/mcp [--model slug] [--cwd dir] [--write]
- *              [--no-shell] [--max-minutes 45] [--reasoning low|medium|high]
+ *              [--no-shell] [--max-minutes 45] [--reasoning low|medium|high] [--checkpoint-trim]
  */
 import { resolve } from "node:path";
 import { type ChatProvider, type Msg, type Reply, type ToolCall, type ToolDef, runSeat } from "./seat.js";
@@ -34,7 +34,7 @@ const RATE_LIMIT_PATIENCE_MS = Number(flag("rate-limit-patience-min", "20")) * 6
 const say = (s: string) => process.stderr.write(`${s}\n`);
 
 if (!PROMPT.trim()) {
-  say('usage: openrouter -p "<prompt>" --mcp-url <url> [--model slug] [--cwd dir] [--write] [--no-shell] [--max-minutes 45] [--reasoning low|medium|high]');
+  say('usage: openrouter -p "<prompt>" --mcp-url <url> [--model slug] [--cwd dir] [--write] [--no-shell] [--max-minutes 45] [--reasoning low|medium|high] [--checkpoint-trim]');
   process.exit(2);
 }
 if (!KEY && BASE.startsWith("https://openrouter.ai")) {
@@ -126,6 +126,7 @@ const result = await runSeat(openRouterProvider(MODEL, REASONING), {
   maxToolChars: Number(flag("max-tool-chars", "6000")),
   maxContextChars: Number(flag("max-context-chars", "240000")),
   idleWaits: Number(flag("idle-waits", "3")),
+  checkpointTrim: has("checkpoint-trim"),
   log: say,
 });
 if (rateLimited) say(`[openrouter ${MODEL}] ${rateLimited} rate-limited request(s) retried`);

@@ -1,4 +1,4 @@
-/** tasks/lode-values: the hidden reference must reproduce oracle.json, each plausible wrong reading must change the answer
+/** tasks/lathe-fn: the hidden reference must reproduce oracle.json, each plausible wrong reading must change the answer
  * (so the public program exercises every corner), the scorer must separate them, and public/ holds nothing hidden.
  * Run: node --import tsx --test scripts/quill-task.test.ts
  */
@@ -9,11 +9,11 @@ import { cpSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync }
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { loadTask, scoreTask } from './bench-oracle.ts';
-const task = resolve('tasks/lode-values');
+const task = resolve('tasks/lathe-fn');
 const expected = JSON.parse(readFileSync(join(task, 'oracle/oracle.json'), 'utf8')).expected as string;
-const program = join(task, 'public/program.lode');
+const program = join(task, 'public/program.lathe');
 const ref = (variant = '') => spawnSync(process.execPath, [join(task, 'oracle/reference.mjs'), program, variant], { encoding: 'utf8', timeout: 15000 });
-const WRONG_READINGS = ['aliasSet', 'aliasCall', 'aliasPush', 'aliasSetat', 'eqIdentity', 'globalsVisible'];
+const WRONG_READINGS = ['closureRead', 'closureWrite', 'callerVisible'];
 
 test('reference interpreter output equals oracle.json expected', () => {
   const run = ref();
@@ -25,17 +25,17 @@ test('every plausible wrong reading of the spec gives a different answer on the 
 });
 test('scoreTask: expected passes, a wrong reading and a missing file fail distinctly', async () => {
   assert.equal(loadTask(task).oracle.kind, 'exact-answer');
-  const root = mkdtempSync(join(tmpdir(), 'lode-task-'));
+  const root = mkdtempSync(join(tmpdir(), 'lathe-task-'));
   try {
     cpSync(join(task, 'public'), root, { recursive: true });
     assert.equal((await scoreTask(task, root)).reason, 'parse_failure');
     writeFileSync(join(root, 'answer.txt'), expected);
     assert.equal((await scoreTask(task, root)).reason, 'task_pass');
-    writeFileSync(join(root, 'answer.txt'), ref('aliasCall').stdout.trim());
+    writeFileSync(join(root, 'answer.txt'), ref('closureRead').stdout.trim());
     assert.equal((await scoreTask(task, root)).reason, 'task_fail');
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 test('public/ holds only the brief, the spec and the program', () => {
-  assert.deepEqual(readdirSync(join(task, 'public')).sort(), ['brief.txt', 'program.lode', 'spec.txt']);
+  assert.deepEqual(readdirSync(join(task, 'public')).sort(), ['brief.txt', 'program.lathe', 'spec.txt']);
   for (const f of readdirSync(join(task, 'public'))) assert.ok(!readFileSync(join(task, 'public', f), 'utf8').includes(expected));
 });

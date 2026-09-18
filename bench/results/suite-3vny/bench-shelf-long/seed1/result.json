@@ -1,0 +1,113 @@
+{
+  "schemaVersion": 1,
+  "task_id": "bench-shelf-long",
+  "arm": "A",
+  "seed": 1,
+  "model": "sonnet",
+  "outcome": "task_pass",
+  "passed": true,
+  "reason": "task_pass",
+  "oracle": {
+    "kind": "exact-answer",
+    "command": "node --import tsx score-fact-check.ts <workspace>/answer.txt oracle/oracle.json",
+    "exit_code": 0
+  },
+  "anti_tamper": {
+    "hash_before": "0ce1305190ec84baeead14eb6892540744f783058e3746101f33f7f79f58219a",
+    "hash_after": "0ce1305190ec84baeead14eb6892540744f783058e3746101f33f7f79f58219a",
+    "unchanged": true
+  },
+  "seats": [
+    {
+      "name": "single",
+      "argv": [
+        "claude",
+        "-p",
+        "SPEC.md defines the SHELF language and program.shelf is a SHELF program. Determine exactly what running program.shelf prints. Write to a file named answer.txt in your current working directory the output lines of the program in order, joined by a single \"|\" character with no spaces around it, and nothing else. Do not modify SPEC.md or program.shelf.\n\nWrite your final answer, and only your final answer with no explanation, to a file named answer.txt in your current working directory.",
+        "--mcp-config",
+        "/tmp/bench-pilot-sonnet1/long-seed1/mcp-empty.json",
+        "--strict-mcp-config",
+        "--allowedTools",
+        "Read,Write,Bash,Glob,Grep",
+        "--tools",
+        "Read,Write,Bash,Glob,Grep",
+        "--disable-slash-commands",
+        "--setting-sources",
+        "project",
+        "--exclude-dynamic-system-prompt-sections",
+        "--output-format",
+        "stream-json",
+        "--verbose",
+        "--model",
+        "sonnet"
+      ],
+      "exit_code": 0,
+      "signal": null,
+      "started_at": "2026-09-18T15:15:07.391Z",
+      "completed_at": "2026-09-18T15:15:42.016Z",
+      "num_turns": 4,
+      "duration_ms": 33545,
+      "duration_api_ms": 34252,
+      "usage": {
+        "cost": 0.07440939999999999,
+        "input_tokens": 6,
+        "cache_read_input_tokens": 21122,
+        "cache_creation_input_tokens": 8258,
+        "output_tokens": 3607
+      },
+      "text": "I've written the answer to `answer.txt`. I worked it out by tracing the program by hand against SPEC.md, and I did not run it, since there is no SHELF interpreter here.\n\nThe main points that decide the output:\n- **LET copies deeply.** Every `LET` of a list value produces independent lists at every nesting level. This affects `d`, `big2`, `ut`, `cell2`, `snap` and the `t` inside `nest`.\n- **PUSH, SET, `(list ...)`, `(+ ...)` and RUN share.** This is why `grow` on `inner` shows up everywhere `inner` was stored.\n- **FOR uses a snapshot.** The loop over `bag` runs three times even though it pushes onto `bag` as it goes.",
+      "killed_by_deadline": false,
+      "partial_usage": null
+    }
+  ],
+  "usage": {
+    "steps": 0,
+    "prompt_tokens": 0,
+    "completion_tokens": 0,
+    "cost_usd": 0.07440939999999999,
+    "seats": 1,
+    "seats_with_usage": 1,
+    "coverage": "complete",
+    "input_tokens": 6,
+    "cache_read_input_tokens": 21122,
+    "cache_creation_input_tokens": 8258,
+    "output_tokens": 3607
+  },
+  "turns": {
+    "per_seat": [
+      {
+        "name": "single",
+        "num_turns": 4
+      }
+    ],
+    "summed": 4,
+    "seats": 1,
+    "seats_with_turns": 1,
+    "coverage": "complete"
+  },
+  "wall_clock": {
+    "started_at": "2026-09-18T15:15:07.391Z",
+    "completed_at": "2026-09-18T15:15:42.017Z",
+    "duration_ms": 34626
+  },
+  "budget": {
+    "max_budget_usd": null,
+    "deadline_ms": 900000
+  },
+  "build": {
+    "head_revision": "fa4325f53b1d18fc4598df8f9eee21214ead67be",
+    "hub_entry": null,
+    "hub_entry_sha256": null,
+    "hub_revision": null
+  },
+  "frozen": {
+    "task_sha256": "0ce1305190ec84baeead14eb6892540744f783058e3746101f33f7f79f58219a",
+    "scorer_sha256": "f4b645c670ae4655aec1189e4d7320294115f0e3c6da3b5ba41a7ee3b1cd00f8",
+    "fact_scorer_sha256": "6b8b3e98c8c408ecd6715a38db9263488644d27c01a11c5bab3172acd5539832",
+    "task_id": "bench-shelf-long",
+    "timeout_ms": 900000,
+    "seats": 1
+  },
+  "error": null,
+  "checked_at": "2026-09-18T15:15:42.109Z"
+}

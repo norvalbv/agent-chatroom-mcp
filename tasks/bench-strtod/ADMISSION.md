@@ -20,3 +20,6 @@ Oracle: `oracle/gen_cases.py` computes expected values with Python (`float`, `fl
 
 ## Reading
 All three seats implemented the hexadecimal path with BigInt and a single explicit round-half-even step, the exact route the README's "single rounding step" sentence points to, and used the prefix grammar clause by clause. The brief's "do not run any other program" made every seat report "I haven't run it or any tests", so the near-ceiling rate is not a product of self-testing. The trap the design bet on (double rounding through Number arithmetic, a `Number()`-only parse) needs a seat that does not read "in a single rounding step". printf's split (5 of 10, one case, `%.17g` of 1e-07) is not reproduced by a stated-exactly reimplementation of a second libc function: stated exactness is followed. Same mechanism class as `bench-printf-format` (exact floating-point conversion, libc reimplementation); not retried.
+
+## Attack
+- verifier (hub-assigned): wrote a BigInt implementation from `README.md` alone, without opening fixtures, cases or expected values; `oracle/score.ts` gave score 1 on the first run (543 of 543), so the README determines every expected value. No oracle-gaming route found (543 exact bit patterns and end offsets; child_process disabled at scoring).

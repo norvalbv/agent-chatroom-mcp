@@ -1,0 +1,121 @@
+# layered configuration
+LAYER base 50
+SET kaa + 39 25
+SET kab + * - $kaa $kaa 2 + MAX $kaa $kaa MIN -8 $kaa
+SET kac + / $kaa 4 IF < $kab $kab $kaa $kab
+SET kad MAX + $kab -6 % 31 7
+SET kae % - MAX 19 $kab - $kab $kab 11
+SET kaf % $kae 7
+SET kag IF < 39 4 -5 $kae
+SET kah - * / $kaa 4 3 + + $kaa $kac / $kad 4
+SET kai % MIN $kaa $kaa 9
+SET kaj * + % 7 11 % -5 10 4
+SET kak MIN - 19 35 - $kaj $kah
+SET kal % + $kak $kab 7
+SET kam + * IF < $kai 34 $kae 0 3 * IF < $kah $kak $kag 22 3
+SET kan MAX MAX 21 5 - $kah $kaj
+SET kan MAX $kad $kab
+SET kao - + 35 14 - $kai $kag
+SET kap MAX 38 12
+LAYER team 30
+SET kab - + IF < $kaa $kaa $kaa -4 MIN 32 39 / * 18 4 5 WHEN = % $kaa 3 0
+SET kai - / $kab 2 % 31 10 WHEN = % $kag 3 1
+SET kaj - + + $kaf $kai MIN $kaf $kag + * 9 3 / $kah 2 WHEN = % $kag 3 0
+SET kal + $kac 1 WHEN = % $kai 2 0
+SET kal MAX IF < $kaa $kac $kai 21 - $kak 28
+SET kap + * - $kad -6 3 % + $kag $kai 3
+SET kap $kan
+UNSET kaq
+SEAL kar
+UNSET kas WHEN < $kam 15
+SET kau MAX $kas -1
+SET kay * - / 1 2 + $kaq $kav 3 WHEN < $kap 6
+SET kba / MIN -2 $kap 5 WHEN NOT < $kat 13
+SET kba + $kap $kaq
+SET kbc MAX % + $kav $kbb 6 % + $kau 14 7
+SET kbd MIN + 19 $kay MIN 21 39 WHEN < $kaw 18
+SEAL kbe
+UNSET kbg WHEN < $kbb 0
+SET kbg $kax
+SET kbk + * 27 3 IF < $kbc $kbb $kay 15
+SET kbl IF < $kbf $kbb $kbb $kbi WHEN = % $kbf 4 1
+SET kbm + IF < $kbe $kbj $kbj $kbi IF < $kbk $kbh $kbc $kbd WHEN NOT < $kbe 18
+SET kbr - + 23 22 + $kbi $kbg WHEN NOT < $kbi 10
+LAYER site 30
+SET kak + + 14 $kaf IF < -7 23 36 $kae
+SET kam + MAX + $kak $kah MAX 36 $kaj % * $kai 3 11 WHEN < $kac 17
+SET kan + MIN MAX 24 $kac % $kac 6 MAX % $kam 6 - 34 $kae WHEN < $kab 19
+SET kap + $kaj $kal WHEN = % $kaj 2 1
+SET kap + $kam $kan
+UNSET kaw WHEN = % $kat 3 1
+SET kaw $kap
+SET kbb * $kat 2 WHEN < $kaz -2
+LAYER user 20
+SET kag / + % 37 7 % $kaf 5 3
+SET kaj % + MIN 31 $kah IF < $kaa $kag 19 10 3
+SET kam + % IF < $kab $kab $kai $kad 4 MAX % 40 5 + 32 33
+SET kam + - $kad $kai IF < $kad $kag -6 $kac
+SET kaq / * 27 4 5 WHEN NOT < $kaf 13
+UNSET kaw WHEN = % $kap 2 0
+SET kax - + - $kal 17 MIN 38 $kal IF < + 7 $kav + $kao -4 - 6 $kav IF < $kat $kan $kar $kav WHEN NOT < $kau 7
+SET kax MIN / $kam 4 - $kat $kal
+SET kba - $kas $kar WHEN = % $kau 4 1
+LAYER override 10
+UNSET kaj WHEN < $kac 24
+SET kan - $kah $kal WHEN NOT < $kai 14
+SET kbc + -7 26
+SET kbc + $kaq $kau
+SET kbp % - $kbi 0 7
+LAYER user 20
+SET kba MAX - $kaq $kao + $kau 26
+SEAL kbd
+SET kbh + % * 38 4 6 MAX MIN $kax $kbe MIN $kbg $kba
+SET kbj - - MIN 9 $kbd MAX 27 $kbb * + $kbc $kbf 2
+SET kbj / $kbi 2
+SET kbm MAX 12 $kbk
+SET kbn + $kbb 7 WHEN = % $kbg 4 1
+SET kbr / IF < $kbh $kbh $kbn $kbo 2 WHEN = % $kbf 4 0
+LAYER base 50
+SET kap IF < $kai $kaj $kae $kad
+SET kaq MIN + + 38 $kao MAX $kae -3 - MAX $kak 34 / $kao 5
+SET kar / * MAX $kam $kao 4 3
+SET kas + 38 8
+SET kat + * - 26 33 2 IF < MIN $kaq 29 - $kao $kak - $kar $kao IF < $kap $kak $kas $kal
+SET kat + $kal -3
+SET kau + - $kas $kaq + $kal $kal
+SET kau + 27 $kak
+SET kav MAX $kaj $kaq
+SET kav MAX 22 $kam
+SET kaw * $kas 4
+SET kax + $kam $kan
+SET kay - MAX 25 $kap - 2 $kao
+SET kay + $kaq $kat
+SET kaz MAX MIN + $kau $kan - 24 23 + - 23 $kan MAX $kan 26
+SET kba + IF < % $kav 10 - $kat $kas * $kaq 4 * $kas 2 - * 0 4 MAX $kao $kaz
+SET kbb * * $kba 3 3
+LAYER site 5
+SET kbb 9
+SET kbc - MAX * 23 4 * 4 3 IF < / 22 3 * -9 3 + $kav $kaw % 22 6
+UNSET kbd WHEN < $kaw 11
+SET kbh + $kbc $kbe WHEN < $kbb 24
+SET kbi * $kaw 4
+SET kbm MIN $kbk $kbi WHEN < $kbh 0
+SEAL kbo
+LAYER base 50
+SET kbc % / - -2 $kba 5 5
+SET kbd + MAX / $kar 5 / $kbc 2 MAX + $kas $kat + $kau $kbb
+SET kbe IF < + - $kbb -8 MIN 19 $kax - % $kax 8 / 8 4 + MIN 2 $kat + $kbd $kav + / $kaw 2 * $kax 4
+SET kbf * MAX + $kau $kaw % $kbb 11 3
+SET kbg MIN 21 $kav
+SET kbh MAX / $kav 2 - $kay $kbc
+SET kbi % + / $kbc 3 * $kbd 3 8
+SET kbj MIN $kbe $kax
+SET kbk % / / 30 2 4 9
+SET kbl MIN $kbh 1
+SET kbm + + $kbj $kbl % $kbi 5
+SET kbn % - 13 23 9
+SET kbo - MIN $kbj 20 % $kbd 3
+SET kbp IF < - / $kbg 3 % $kbi 10 * + $kbe $kbh 4 + * -3 2 + 34 -1 IF < + 4 $kbg - $kbm -8 MIN $kbg $kbm + $kbe $kbh
+SET kbq MAX MAX $kbn $kbh * $kbl 2
+SET kbr MAX + 1 $kbf - $kbm -3
+SHOW kaa kab kac kad kae kaf kag kah kai kaj kak kal kam kan kao kap kaq kar kas kat kau kav kaw kax kay kaz kba kbb kbc kbd kbe kbf kbg kbh kbi kbj kbk kbl kbm kbn kbo kbp kbq kbr

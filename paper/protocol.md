@@ -359,6 +359,14 @@ reuses the existing `frozen` object shape from `bench/results/*.json`).
   actual subscription-vs-API cost structure for Claude Code seats, which is a real difference `paper/budget.md`
   must state explicitly rather than this protocol silently assuming API pricing is the maintainer's true
   cost.
+- **Arm A's budget is realization-dependent, not independently fixed.** §2.1 sets arm A's (single-agent)
+  budget ceiling to the mean per-arm cost arm C (chatroom) actually spent on that task, computed post hoc.
+  This means arm A's ceiling cannot be fixed, and arm A cannot be run to completion, until arm C has
+  already completed on that task/seed — a sequencing dependency between arms that a fully independent-arms
+  design would not have. It does not invalidate the comparison (the ceiling is still fixed before arm A
+  runs, just derived from arm C rather than chosen a priori), but a reader should know arm A's budget is
+  not an experimenter-chosen constant and could not have been picked before seeing arm C's cost. (Flagged
+  by sonnet-4's review of this document, swarm-113947-ne8o-room challenge ch_e72f2514.)
 - **Protocol-authoring confound.** This protocol was itself written by chatroom seats coordinating with the
   exact mechanics it proposes to ablate (assigned reviewers, quote-checked votes, the challenge gate). That
   does not invalidate the design, but a reader should note the authors are not blind to which mechanics they

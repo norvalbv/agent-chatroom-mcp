@@ -1,0 +1,103 @@
+\section{System}
+\label{sec:system}
+
+The system under study, \texttt{agent-chatroom-mcp}, is a coordination hub for large-language-model
+agents exposed over the Model Context Protocol (MCP). A single long-lived server process hosts one
+\texttt{Hub} object over MCP's Streamable HTTP transport; every client session --- a \texttt{claude -p}
+process, a \texttt{codex exec} process, or an OpenRouter-backed seat --- is bound to that one
+in-memory \texttt{Hub} instance, so all state for a given deployment (rooms, the message log,
+proposals, and the shared board) lives in one place. State is held only in memory unless a data
+directory is configured, in which case every state-changing event is appended to a per-room journal
+and replayed on restart.
+
+A \emph{room} is the unit of coordination: it has a topic, a mode (free-form or strict turn order), a
+quorum rule, an optional round limit, an optional expected-participant count, and an append-only,
+sequence-numbered message log. All reads are phrased as ``everything after sequence $N$'', which is
+what lets a polling client resume without re-reading history it has already seen.
+
+\subsection{Consensus primitives}
+\label{sec:system:primitives}
+
+Six mechanisms compose the hub's path from independent input to a scrutinized, machine-checkable
+conclusion. Each is stated here as implemented, not as originally intended, since this project's own
+development history (Section~\ref{sec:method}, and the amendment record cited throughout) shows more
+than one mechanic drifting from its documentation after being merged.
+
+\paragraph{Blind openings.} Before any other message is exchanged, every active participant submits a
+short, private first answer to the room's question. Nothing is revealed until every expected
+participant has submitted one, or a fixed deadline after the first submission elapses, whichever comes
+first. This is a structural anti-anchoring device: no participant's independent judgment can be
+conditioned on having read another's answer first, which is the specific failure mode debate-only
+protocols are documented to suffer.
+
+\paragraph{Proposal as a single amendable document.} At most one proposal is open in a room at a time.
+Rather than re-proposing, a participant edits the open proposal in place (find/replace), which bumps a
+version counter and posts only the diff to the room, keeping the room's transcript short relative to
+the document's history. An existing agreement vote survives an edit only if the exact clause it quoted
+is still present in the new text; otherwise it is dropped and must be re-cast.
+
+\paragraph{Quote-checked votes.} A vote to agree with the open proposal must include a verbatim
+quotation, at least fifteen characters long, that the hub itself verifies occurs in the proposal's
+current text after whitespace/case normalization. A vote to disagree must instead state, in at least
+twenty characters, what change would produce agreement. Both requirements are enforced for non-human
+participants only; the intent is to raise the cost of reflexive agreement (a documented failure mode of
+multi-agent debate under sycophantic pressure) by forcing demonstrable re-reading of the current text,
+not the participant's memory of an earlier version.
+
+\paragraph{The challenge gate.} In its default policy the hub requires at least one challenge --- a
+participant naming, in their own words, the weakest claim in the current proposal and quoting the
+span it targets --- before the proposal can pass, once the room has reached a minimum size. A challenge
+is answered automatically if a later amendment removes the text it cited, and reopens if that text
+returns. The mechanic exists specifically to block premature consensus; it does not adjudicate who is
+right, only that someone other than the proposer was made to look for a weakness before the room can
+conclude.
+
+\paragraph{Independent verification with an assigned reviewer.} When \texttt{require\_verification} is
+enabled, a proposal cannot conclude on votes alone: it additionally requires a board entry under the
+\texttt{verify/*} prefix whose first line parses as a fixed JSON object naming the exact proposal id
+and an \texttt{exit\_code} of zero, written by a different connection than the one that opened the
+proposal and dated after the proposal's last edit. A free-text entry that merely asserts success (or
+partial success, or that something is blocked) does not satisfy the gate; only a parseable, zero-exit
+verdict does. Reviewer assignment is not self-selected: the hub assigns a reviewer to each claimed area
+of work at the time it is claimed, preferring the active, non-owning participant with the fewest
+reviews already assigned, to avoid a single early joiner accumulating every review in a room that opens
+with a burst of simultaneous claims --- a failure mode this project's own development record shows
+occurring in an earlier, otherwise-identical room, and fixed in the commit immediately preceding this
+protocol's first live run.
+
+\paragraph{Single electorate, supermajority quorum.} One function computes the number of votes needed
+to pass a proposal from one consistently-read count of active participants (the ``electorate''), for
+every quorum rule the hub supports. The supermajority rule used throughout this paper's arm~C runs is
+the ceiling of three-quarters of the electorate; at the three-seat room size this protocol uses for arm
+C (Section~\ref{sec:method:arms}), that quorum is unanimous in practice, not a partial supermajority ---
+a consequence of room size that a reader comparing consensus difficulty across differently-sized rooms
+should not overlook.
+
+\paragraph{Actionable-only waiting.} A participant that opts into held waiting is not woken by every
+unread message; the hub instead holds the wait until something the participant must specifically act on
+arrives --- an address message, an owed vote, an owed challenge, or a room state change such as
+conclusion. This mechanism is a cost intervention, not a consensus primitive, and is reported for its
+measured effect on token spend in the cost accounting of Section~\ref{sec:results} rather than as a
+correctness mechanism.
+
+\subsection{Cost and telemetry surface}
+\label{sec:system:telemetry}
+
+Every metric this paper reports about cost, tokens, or wall time is read from fields that already exist
+in the system's own run artifacts, never computed from a new instrument added for this study. A run
+artifact carries a usage roll-up with a coverage flag of \texttt{complete}, \texttt{partial}, or
+\texttt{none}; a participant that reported no usage contributes zero to every sum and is never
+mistaken for a participant that legitimately cost nothing. Two disjoint token accountings exist side by
+side in the same roll-up and are never summed together: Claude seats report
+\texttt{input\_tokens}/\texttt{cache\_read\_input\_tokens}/\texttt{cache\_creation\_input\_tokens}/%
+\texttt{output\_tokens} from a single end-of-run response object; OpenRouter and Codex seats report
+\texttt{prompt\_tokens}/\texttt{completion\_tokens} from a separate per-seat sidecar file. Every arm in
+this paper's runs is Claude-only, so only the first accounting appears in the tables that follow, but
+the distinction matters for the cost figures drawn from this project's own multi-provider build rooms
+(Section~\ref{sec:results}), where the two accountings coexist in one room. A dollar cost field is
+populated by every provider and is the one number safely compared across arms without regard to
+accounting; it is Claude Code's own self-reported billed cost, not a repricing, wherever it is present.
+Cache-read tokens are billed at roughly one-tenth the price of a fresh input token on the Claude API
+used throughout this paper's runs; a token count and a dollar figure computed from the same run can
+therefore differ by an order of magnitude in what they suggest about work done, and every place this
+paper reports both, it states which one a given claim rests on.

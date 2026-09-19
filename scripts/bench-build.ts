@@ -129,6 +129,8 @@ async function main() {
   const runner = resolve(takeFlag(argv, "runner") ?? resolve(here, "bench-build-runner.ts"));
   const gridFingerprint = takeFlag(argv, 'grid-fingerprint') ?? null;
   if (gridFingerprint !== null && !/^[a-f0-9]{64}$/.test(gridFingerprint)) fail('invalid grid run fingerprint');
+  const gridManifest = takeFlag(argv, 'manifest-sha256') ?? null;
+  if (gridManifest !== null && !/^[a-f0-9]{64}$/.test(gridManifest)) fail('invalid grid manifest hash');
   if (!existsSync(runner)) fail(`runner not found: ${runner}`);
   const root = resolve(rootArg);
   // The build-suite preregistration fixes the room at four seats.  The older
@@ -240,7 +242,8 @@ async function main() {
     seat_records: raw.seats ?? null,
     effort,
     provenance: { grid_fingerprint: gridFingerprint, native_run_fingerprint: raw.run_fingerprint ?? null,
-      manifest_sha256: manifestHash, runner_sha256: wrapperHash, expected_task_sha256: launchTaskHash,
+      manifest_sha256: gridManifest ?? manifestHash, task_manifest_sha256: manifestHash,
+      runner_sha256: wrapperHash, expected_task_sha256: launchTaskHash,
       oracle_adapter_sha256_before: adapterHashBefore, oracle_adapter_sha256_after: adapterHashAfter, raw_result: "result.json", anti_tamper_unchanged: true, task_sha256_before_score: taskHashBeforeScore, task_sha256_after_score: taskHashAfterScore, runner },
   };
   writeFileSync(resolve(root, "build-result.json"), JSON.stringify(output, null, 2) + "\n");

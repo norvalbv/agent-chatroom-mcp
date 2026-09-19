@@ -1,7 +1,8 @@
 # Building the paper
 
-Integration branch: `integration/swarm-164742-5jvl-verifier`, commit `[FINAL COMMIT SHA -- filled
-in by the verifier at conclusion]`.
+Integration branch: `integration/swarm-164742-5jvl-verifier`. The paper, its generators and the built
+`main.pdf` are at commit `1f221d9`; the only later change on the branch is this line (a commit cannot
+name itself).
 
 ## What was installed (user-local, per the room brief; nothing system-wide)
 

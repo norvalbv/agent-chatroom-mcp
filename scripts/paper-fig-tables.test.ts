@@ -47,6 +47,21 @@ test("renderCostTable: mean output tokens and date range are shown, null renders
   assert.match(tex, /bench-printf-format & C \(chatroom\) & 0\/40 & undefined & -- & --/); // no runs -> no token/date data either
 });
 
+test("renderCostTable: caption's window sentence is derived from the rows' own date_range, not hand-typed (regression: verifier caught a stale hard-coded '07:44' that drifted from the actual '07:43' row)", () => {
+  const data: FigData = {
+    ...fixture(),
+    cost_per_correct: [
+      { task: "t", arm: "A", cost_per_correct: 0.1, n: 40, pass: 30, mean_output_tokens: 1700, date_range: ["2026-09-19T07:43:12.000Z", "2026-09-19T08:00:00.000Z"] },
+      { task: "t", arm: "C", cost_per_correct: 0.5, n: 40, pass: 40, mean_output_tokens: 14000, date_range: ["2026-09-19T07:50:00.000Z", "2026-09-19T11:30:00.000Z"] },
+      { task: "t", arm: "K", cost_per_correct: 0.6, n: 40, pass: 36, mean_output_tokens: 1719, date_range: ["2026-09-19T13:22:00.000Z", "2026-09-19T15:33:00.000Z"] },
+    ],
+  };
+  const tex = renderCostTable(data);
+  // Must take the EARLIEST across A and C (07:43, not a hand-typed 07:44) and the LATEST (11:30).
+  assert.match(tex, /Arms A and C ran together on 2026-09-19, 07:43--11:30 UTC/);
+  assert.match(tex, /arm K ran later the same day, 13:22--15:33 UTC/);
+});
+
 test("end-to-end CLI: regenerates both .tex files from the real committed fig-data.json", () => {
   const outDir = mkdtempSync(join(tmpdir(), "fig-tables-out-"));
   try {

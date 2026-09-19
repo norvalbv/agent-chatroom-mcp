@@ -61,6 +61,16 @@ running it.
   falsification criteria in both pre-registrations were stated in advance specifically to bound this
   risk, not to eliminate it.
 
+\item \textbf{A pre-registered prediction is confirmed on one program and refuted on the other, inside
+  one family.} \texttt{paper/prereg-arm-k.md}'s prediction~1 claims K vs.\ A is significant on both
+  \texttt{stamp} programs; this held for \texttt{stamp-2} (Holm $p=0.0090$) but not for
+  \texttt{stamp-interpreter} (Holm $p=1.000$), even though arm~C beats arm~A significantly on both
+  (Section~\ref{sec:discussion-beyond-sampling}). Because the two programs are one statistical unit by
+  this paper's own family rule, and \texttt{stamp-interpreter}'s single-agent rate is independently shown
+  to be volatile across sample sizes, this asymmetry should be read as a specific, reportable pattern at
+  the edge of what 40 paired seeds can resolve, not as a settled claim that deliberation beats sampling
+  on this task.
+
 \item \textbf{Statistical-test choice matters for one reported comparison.} Applying
   \texttt{protocol.md}\,\S5's literal per-comparison rule (two-proportion $z$-test unless a 2$\times$2
   cell count is below five) to \texttt{bench-printf-format}'s A-vs-C comparison (14/40 vs.\ 6/40, all

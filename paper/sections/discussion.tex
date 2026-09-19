@@ -48,25 +48,47 @@ not a distinct failure specific to the hub's mechanics.
 This room's brief asked, before any arm-K number existed, whether the chatroom's specific mechanics --
 blind openings against anchoring, a mandatory challenge before quorum, quote-verified votes, an
 independently assigned verifier -- contribute anything a plain sampling-and-selection baseline at the
-same cost does not. On this task suite we cannot show that they do. K vs.\ C is not significant on any
-of the three tasks under Fisher's exact test with Holm-Bonferroni correction across the pre-registered
-family of six comparisons (Section~\ref{sec:results}); the family-pooled comparison on the two
-\texttt{stamp} tasks (K~75/80 vs.\ C~80/80) is exploratory, outside that pre-registered family, and
-itself falls short of the conventional 0.05 threshold ($p=0.059$).
+same cost does not. K vs.\ C is not significant on any of the three tasks under Fisher's exact test with
+Holm-Bonferroni correction across the pre-registered family of six comparisons
+(Section~\ref{sec:results}); the family-pooled comparison on the two \texttt{stamp} tasks (K~75/80 vs.\
+C~80/80) is exploratory, outside that pre-registered family, and itself falls short of the conventional
+0.05 threshold ($p=0.059$). Taken alone, that would read as "no distinguishable difference between
+deliberation and sampling on this family." The full, pre-registered set of comparisons complicates that
+reading rather than confirming it.
 
-We are explicit that \emph{not significant is not the same claim as equal}. The pre-registration's own
-point forecast for arm~K's \texttt{stamp-interpreter} rate (0.99, from resampling the 40 pilot answers
-by plurality) overshot the realized 36/40 = 0.90, because the 40-run pilot pass rate that forecast was
-built on (0.825) itself overstated a freshly measured, larger-sample single-attempt rate (270/400 =
-0.675; Section~\ref{sec:results}). A comparison built on 40 paired seeds, against single-agent estimates
-that move this much between independently drawn samples of the identical harness and prompt, is
-under-powered to rule out a real but moderate difference between arm~K and arm~C in either direction --
-it is not evidence the two mechanisms are interchangeable, only evidence that this suite cannot yet
-distinguish them.
+\texttt{paper/prereg-arm-k.md}'s prediction~1 makes three separate claims, and the paper scores all
+three as written rather than the two \texttt{paper/amendments.md} scored when the arm-K result first
+came in: (i) point forecasts of about 0.99 on \texttt{stamp-interpreter} and about 0.90 on
+\texttt{stamp-2}; (ii) K vs.\ C not significant on either task; (iii) K vs.\ A \emph{significant} on
+both tasks. Claim~(ii) held on both tasks. Claim~(i) held, loosely, for \texttt{stamp-2} (forecast 0.90,
+observed 39/40 = 0.975) but not for \texttt{stamp-interpreter} (forecast 0.99, observed 36/40 = 0.90),
+for the reason given in Section~\ref{sec:results}: the pilot pass rate the forecast resampled from
+overstated the freshly measured single-attempt rate. Claim~(iii) is where the two \texttt{stamp}
+programs diverge: K beats A significantly on \texttt{stamp-2} (39/40 vs.\ 28/40, raw $p=0.0015$, Holm
+$p=0.0090$), matching the prediction, but \emph{not} on \texttt{stamp-interpreter} (36/40 vs.\ 33/40,
+raw $p=0.518$, Holm $p=1.000$) -- despite arm~C beating arm~A significantly on \emph{both}
+\texttt{stamp} programs (Section~\ref{sec:results}).
 
-What the data do support, stated at the size the evidence actually is: on the one family where the
-chatroom clearly beats a single agent, an unstructured, oracle-free sampling baseline built at the same
-price beats the single agent by a statistically indistinguishable amount. If the chatroom's specific
-consensus mechanics contribute something that independent sampling does not, this suite -- two tasks in
-one failure-mechanism family, one task in another -- is not powered to detect it, and a reader should
-not extrapolate a general claim about deliberation, in either direction, from these three tasks alone.
+That asymmetry is the most specific evidence in this paper for a difference between deliberation and
+sampling, and we report it as such rather than average it away. On \texttt{stamp-interpreter}, the
+structured chatroom shows a significant improvement over a single agent that the oracle-free sampling
+baseline, run at the same cost, does not reach; on \texttt{stamp-2}, both aggregation methods reach
+significance over the single agent, and neither reaches significance over the other. This is not
+evidence that deliberation is generally superior to sampling on this family -- the two programs share
+one failure mechanism and are one statistical unit throughout this paper precisely because of that
+(Section~\ref{sec:method}), and \texttt{stamp-interpreter}'s own single-agent rate was independently
+shown to be volatile across samples (0.50, 0.825, and 0.675 at $n=10$, $n=40$, and $n=400$ respectively;
+Section~\ref{sec:results}), so a comparison this close to the border of significance is exactly where
+that volatility would be expected to move a result across the 0.05 line by chance. We flag the pattern
+because the pre-registration asked for it to be scored, not because the sample size supports treating
+it as a settled mechanism.
+
+What the data support, stated at the size the evidence actually is: on the family where the chatroom
+clearly beats a single agent, an unstructured, oracle-free sampling baseline built at the same price
+beats the single agent by an amount not statistically distinguishable from the chatroom's on either
+program, and reaches conventional significance over the single agent on one of the two programs but not
+the other -- the same split the chatroom itself does not show. If the chatroom's specific consensus
+mechanics contribute something that independent sampling does not, this suite -- two programs in one
+failure-mechanism family, one task in another -- is not powered to isolate it cleanly, and a reader
+should not extrapolate a general claim about deliberation, in either direction, from these three tasks
+alone.

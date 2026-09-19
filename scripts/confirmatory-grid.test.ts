@@ -11,7 +11,7 @@ import { test } from "node:test";
 import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
-import { buildPlan, parseArgs, runGrid } from "./bench-grid.js";
+import { buildPlan, classifyRegime, confirmatoryOrder, parseArgs, runGrid } from "./bench-grid.js";
 
 const ARMS = ["A", "AH", "B", "K", "C"] as const;
 
@@ -205,6 +205,33 @@ test("missing arm-A thinking provenance is recorded as unknown, never calibrated
     delete process.env.STUB_MISSING_THINKING;
     rmSync(f.dir, { recursive: true, force: true });
   }
+});
+
+test("arms AH and B are refused without --confirmatory, so a legacy command cannot run them by accident", () => {
+  const f = fixture();
+  try {
+    assert.throws(() => parseArgs(["--tasks", "stamp-interpreter", "--seeds", "1", "--arms", "AH", "--tasks-dir", f.tasksDir]), /Invalid arm: AH/);
+  } finally {
+    rmSync(f.dir, { recursive: true, force: true });
+  }
+});
+
+test("rotation is (seed-501) mod 5 over [A, AH, B, K, C] and K precedes C for seeds 501-503 (no arm-C dependency)", () => {
+  assert.deepEqual(confirmatoryOrder(501), ["A", "AH", "B", "K", "C"]);
+  assert.deepEqual(confirmatoryOrder(502), ["AH", "B", "K", "C", "A"]);
+  assert.deepEqual(confirmatoryOrder(505), ["C", "A", "AH", "B", "K"]);
+  assert.deepEqual(confirmatoryOrder(506), confirmatoryOrder(501));
+  assert.deepEqual(confirmatoryOrder(901), confirmatoryOrder(901 - 5 * 3), "pilot seeds below and above the block rotate too");
+});
+
+test("classifyRegime: frozen 4000-token output threshold, unknown unless thinking is directly reported, a genuine 0 stays known", () => {
+  assert.equal(classifyRegime(1500, 900), "calibrated");
+  assert.equal(classifyRegime(3999, 0), "calibrated");
+  assert.equal(classifyRegime(4000, 3000), "long-thinking");
+  assert.equal(classifyRegime(1500, null), "unknown");
+  assert.equal(classifyRegime(null, 900), "unknown");
+  assert.equal(classifyRegime(Number.NaN, 900), "unknown");
+  assert.equal(classifyRegime(-1, 900), "unknown");
 });
 
 console.log("CONFIRMATORY GRID OK");

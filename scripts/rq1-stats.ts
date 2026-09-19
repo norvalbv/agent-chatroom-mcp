@@ -88,3 +88,16 @@ export function proportionTest(passA: number, failA: number, passC: number, fail
   if ([passA, failA, passC, failC].some((v) => v < 5)) return fisherExactTest(passA, failA, passC, failC);
   return twoProportionZTest(passA, passA + failA, passC, passC + failC);
 }
+
+/** Holm-Bonferroni step-down adjusted p-values (monotone, capped at 1), returned in input order. */
+export function holmBonferroni(pValues: number[]): number[] {
+  const m = pValues.length;
+  const order = pValues.map((p, i) => ({ p, i })).sort((a, b) => a.p - b.p);
+  const adjusted = new Array<number>(m);
+  let running = 0;
+  order.forEach(({ p, i }, rank) => {
+    running = Math.max(running, Math.min(1, (m - rank) * p));
+    adjusted[i] = running;
+  });
+  return adjusted;
+}

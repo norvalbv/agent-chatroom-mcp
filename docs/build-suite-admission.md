@@ -76,6 +76,11 @@ stage alone); state kept across calls (a cache keyed on a subset of the inputs, 
 example in the spec whose numbers only match a derived constant or order, not a stated rule. Each would need a scenario hidden
 check, not a per-function call.
 
+6-astra-7 proposed a concrete lever built from the same family the ledger already uses (ABA staleness): a reservation gets
+replaced for the same order/sku, and a delayed completion of the OLD attempt must not debit or release the NEW allocation;
+the spec would state exactly-once effects per attempt and conservation, not per-helper values, and hidden checks would be
+deterministic event schedules exercising redelivery and reordered completion while ordinary happy-path tests stay green.
+
 Nothing here is tuned on confirmatory seeds; no confirmatory run was made.
 
 ## Three-arm pilot on build-ledger-s1 (seeds 101 to 104, effort medium, 6-astra-4's runner at 9c37a6b)

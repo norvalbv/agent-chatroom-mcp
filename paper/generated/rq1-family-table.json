@@ -70,5 +70,74 @@
       "vs": "A",
       "p_value": 0.0033107363440666618
     }
+  ],
+  "costRatios": [
+    {
+      "task": "stamp-interpreter",
+      "a_cost_per_correct": 0.0703086484848485,
+      "c_cost_per_correct": 0.6017927550000001,
+      "c_over_a": 8.5592991469561
+    },
+    {
+      "task": "stamp-2",
+      "a_cost_per_correct": 0.09651402857142856,
+      "c_cost_per_correct": 0.5945629699999999,
+      "c_over_a": 6.160378742868172
+    },
+    {
+      "task": "bench-printf-format",
+      "a_cost_per_correct": 0.2733586571428571,
+      "c_cost_per_correct": 4.9657247,
+      "c_over_a": 18.165602479547278
+    }
+  ],
+  "cacheShares": [
+    {
+      "task": "stamp-interpreter",
+      "arm": "A",
+      "cache_read_share": 0.744049017671675
+    },
+    {
+      "task": "stamp-interpreter",
+      "arm": "C",
+      "cache_read_share": 0.9460848491530908
+    },
+    {
+      "task": "stamp-2",
+      "arm": "A",
+      "cache_read_share": 0.7266347014244132
+    },
+    {
+      "task": "stamp-2",
+      "arm": "C",
+      "cache_read_share": 0.9424865072946802
+    },
+    {
+      "task": "bench-printf-format",
+      "arm": "A",
+      "cache_read_share": 0.7835388578542994
+    },
+    {
+      "task": "bench-printf-format",
+      "arm": "C",
+      "cache_read_share": 0.9364012987464563
+    }
+  ],
+  "kExceedsC": [
+    {
+      "task": "bench-printf-format",
+      "exceed_count": 9,
+      "paired_n": 40
+    },
+    {
+      "task": "stamp-2",
+      "exceed_count": 10,
+      "paired_n": 40
+    },
+    {
+      "task": "stamp-interpreter",
+      "exceed_count": 19,
+      "paired_n": 40
+    }
   ]
 }

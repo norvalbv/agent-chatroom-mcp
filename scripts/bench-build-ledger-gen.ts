@@ -406,7 +406,8 @@ const LEDGER_SCORE = `/** Private oracle for a generated ledger task. node --imp
  * The workspace code runs only in a child process (oracle/run.ts) and is read back as plain data; this parent never imports it,
  * so a workspace cannot monkey-patch the comparison. A check passes when every key of the frozen expected value is deep-equal in the
  * result (extra fields and key order are ignored; the SPEC declares the snapshot shape frozen).
- * defect/<id>: scenario for a planted defect; regression/<id>: R* scenarios that hold in the original code.
+ * defect/<id>: scenario for a planted defect; regression/<id>: R* scenarios and the scenario of every catalogued defect that is NOT planted
+ * in this instance (they hold in the original code, so reintroducing one of those defects is scored as shipped).
  */
 import { spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
@@ -430,7 +431,7 @@ const run = (id: string) => !!got[id]?.ok && subset(expected[id], got[id].value)
 const oracle_results: { name: string; exit_code: number }[] = [];
 const caught_ids: string[] = [], missed_ids: string[] = [], regression_failed_ids: string[] = [];
 for (const id of inst.defects) { const ok = run(id); oracle_results.push({ name: 'defect/' + id, exit_code: ok ? 0 : 1 }); (ok ? caught_ids : missed_ids).push(id); }
-for (const id of Object.keys(expected).filter((k) => k.startsWith('R'))) { const ok = run(id); oracle_results.push({ name: 'regression/' + id, exit_code: ok ? 0 : 1 }); if (!ok) regression_failed_ids.push(id); }
+for (const id of Object.keys(expected).filter((k) => k.startsWith('R') || (k.startsWith('S') && !inst.defects.includes(k)))) { const ok = run(id); oracle_results.push({ name: 'regression/' + id, exit_code: ok ? 0 : 1 }); if (!ok) regression_failed_ids.push(id); }
 const score = missed_ids.length === 0 && regression_failed_ids.length === 0 ? 1 : 0;
 console.log(JSON.stringify({ score, oracle_results, defects_planted: inst.defects.length, defects_caught: caught_ids.length, defects_shipped: missed_ids.length + regression_failed_ids.length, regressions_failed: regression_failed_ids.length, caught_ids, missed_ids, regression_failed_ids }));
 process.exit(score === 1 ? 0 : 1);

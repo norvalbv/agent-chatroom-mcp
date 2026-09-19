@@ -215,3 +215,25 @@ for (const id of ['build-ledger-s1', 'build-ledger-s2']) {
     }
   });
 }
+
+import { LEDGER_DEFECTS } from './bench-build-ledger-gen.ts';
+for (const id of ['build-ledger-s1', 'build-ledger-s2']) {
+  test(`${id}: reintroducing any catalogued defect that was not planted is scored as a shipped regression`, () => {
+    const task = resolve('tasks', id);
+    const meta = JSON.parse(readFileSync(join(task, 'oracle/instance.json'), 'utf8'));
+    const inst = deriveLedger(meta.seed);
+    const unplanted = LEDGER_DEFECTS.filter((d) => !inst.defects.includes(d));
+    assert.ok(unplanted.length >= 4);
+    for (const d of unplanted) {
+      const dir = mkdtempSync(join(tmpdir(), 'build-ledger-re-'));
+      try {
+        cpSync(join(task, 'public'), dir, { recursive: true });
+        const wide = { ...inst, defects: [...inst.defects, d] };
+        for (const [f, body] of Object.entries(buildLedgerSrc(wide, new Set(inst.defects)))) writeFileSync(join(dir, 'src', f), body);
+        const r = score(task, dir);
+        assert.ok(r.out.regression_failed_ids.includes(d), `${d}: ${JSON.stringify(r.out.regression_failed_ids)}`);
+        assert.equal(r.out.score, 0);
+      } finally { rmSync(dir, { recursive: true, force: true }); }
+    }
+  });
+}

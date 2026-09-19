@@ -33,6 +33,7 @@ export const offlineScripts = [
   'claude-lean-flags-regression.ts',
   'claude-usage-regression.ts',
   'complementary-fix-task.test.ts',
+  'confirmatory-grid.test.ts',
   'consolidator-spawn-regression.ts',
   'conv-forensics.test.ts',
   'departed-mentions.test.ts',

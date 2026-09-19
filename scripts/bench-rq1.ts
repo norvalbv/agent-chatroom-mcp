@@ -11,7 +11,7 @@
  * json blob.
  *
  * node --import tsx scripts/bench-rq1.ts TASK_DIR ARM SEED --root DIR [--model sonnet] [--port N]
- *   [--seats N] [--timeout-ms N, default 900000] [--max-budget-usd N] [--deadline-ms N] [--hub-entry PATH]
+ *   [--seats N] [--timeout-ms N, default 900000] [--max-budget-usd N] [--effort low|medium|high] [--deadline-ms N] [--hub-entry PATH]
  *
  * ARM is A, B or C. Fixtures stay hidden exactly as scripts/bench-bench.ts already does (public/ copied
  * into workspace/, oracle/ and fixtures/ never copied); scoring is the *unmodified*
@@ -279,6 +279,8 @@ async function main() {
   const timeoutMs = Number(flag("timeout-ms", "900000"));
   if (!Number.isFinite(timeoutMs) || timeoutMs < 1) throw new Error("Invalid --timeout-ms");
   const maxBudgetUsd = flag("max-budget-usd");
+  const effortLevel = flag("effort") ?? null;
+  if (effortLevel !== null && !["low", "medium", "high"].includes(effortLevel)) throw new Error(`Invalid --effort: ${effortLevel} (low|medium|high)`);
   const deadlineMs = Number(flag("deadline-ms", String(timeoutMs)));
   const hubEntry = resolve(flag("hub-entry", resolve(repoRoot, "dist/index.js"))!);
 
@@ -307,6 +309,20 @@ async function main() {
   const workspace = join(root, "workspace");
   mkdirSync(workspace);
   cpSync(join(taskDir, "public"), workspace, { recursive: true, errorOnExist: true, force: false });
+
+  // Effort pinning: seats run with --setting-sources project and the CLI refuses --effort in -p mode, so the
+  // only handle is a project settings file. Measured (paper/amendments.md 2026-09-19) to bite only when the
+  // workspace is its own git root, so it is made one (the run root sits inside this repo). The reviewer's
+  // snapshot copy and every arm-C seat share this workspace tree, so one write pins every seat.
+  const effort: { level: string | null; settings_path: string | null; settings_sha256: string | null; own_git_root: boolean } = { level: effortLevel, settings_path: null, settings_sha256: null, own_git_root: false };
+  if (effortLevel) {
+    execFileSync("git", ["init", "-q"], { cwd: workspace });
+    mkdirSync(join(workspace, ".claude"));
+    json(join(workspace, ".claude", "settings.json"), { effortLevel });
+    effort.settings_path = ".claude/settings.json";
+    effort.settings_sha256 = hashFile(join(workspace, ".claude", "settings.json"));
+    effort.own_git_root = true;
+  }
 
   const scaffoldSingle = isCodeTask
     ? "Modify the relevant source file(s) in your current working directory directly to implement the fix described above. Your edit to the existing file(s) is the submission; do not create any other output file."
@@ -514,6 +530,7 @@ async function main() {
     usage,
     turns: { per_seat: seatRecords.map((s) => ({ name: s.name, num_turns: s.num_turns })), summed: turnsKnown.reduce((a, s) => a + (s.num_turns ?? 0), 0), seats: seatRecords.length, seats_with_turns: turnsKnown.length, coverage: turnsKnown.length === 0 ? "none" : turnsKnown.length === seatRecords.length ? "complete" : "partial" },
     wall_clock: { started_at: startedAt.toISOString(), completed_at: completedAt.toISOString(), duration_ms: completedAt.getTime() - startedAt.getTime() },
+    effort,
     budget: armArg === "A" ? { max_budget_usd: maxBudgetUsd ? Number(maxBudgetUsd) : null, deadline_ms: deadlineMs } : null,
     build,
     frozen: { task_sha256: taskBefore, scorer_sha256: scorerBefore, fact_scorer_sha256: factScorerBefore, task_id: task.task_id, timeout_ms: timeoutMs, seats: seatRecords.length },

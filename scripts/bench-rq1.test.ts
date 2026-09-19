@@ -35,6 +35,7 @@ function stubClaudeDir(behavior: "answer" | "no-answer" | "edit-file" | "kill" =
       "const args=process.argv.slice(2);",
       "if(process.env.STUB_MODELS){process.stdout.write(JSON.stringify({type:'system',subtype:'init',model:'served-init'})+'\\n');process.stdout.write(JSON.stringify({type:'assistant',message:{model:'served-fallback'}})+'\\n');}",
       "if(!args.includes('--output-format')||args[args.indexOf('--output-format')+1]!=='stream-json'||!args.includes('--verbose')){process.stderr.write('expected --output-format stream-json --verbose\\n');process.exit(1);}",
+      "if(process.env.STUB_SEEN_LOG){let st=null;try{st=fs.readFileSync('.claude/settings.json','utf8');}catch{}fs.appendFileSync(process.env.STUB_SEEN_LOG,JSON.stringify({cwd:process.cwd(),settings:st})+'\\n');}",
       `const behavior=process.env.STUB_BEHAVIOR||'answer';`,
       `if(behavior==='answer')fs.writeFileSync('answer.txt',process.env.STUB_ANSWER||${JSON.stringify(EXPECTED)});`,
       "process.stdout.write(JSON.stringify({type:'assistant',message:{usage:{input_tokens:80,output_tokens:15,cache_read_input_tokens:10,cache_creation_input_tokens:5}}})+'\\n');",
@@ -293,6 +294,7 @@ function stubClaudeDirArmB(review: "approve" | "revise") {
       "const fs=require('node:fs');",
       "const args=process.argv.slice(2);",
       "if(!args.includes('--output-format')||args[args.indexOf('--output-format')+1]!=='stream-json'||!args.includes('--verbose')){process.stderr.write('expected --output-format stream-json --verbose\\n');process.exit(1);}",
+      "if(process.env.STUB_SEEN_LOG){let st=null;try{st=fs.readFileSync('.claude/settings.json','utf8');}catch{}fs.appendFileSync(process.env.STUB_SEEN_LOG,JSON.stringify({cwd:process.cwd(),settings:st})+'\\n');}",
       "const who=process.env.GIT_AUTHOR_NAME||'';",
       `const review=${JSON.stringify(review)};`,
       "let text;",
@@ -564,5 +566,90 @@ test("provenance: rejected dist symlink still records infrastructure failure", a
   } finally {
     rmSync(parent, { recursive: true, force: true });
     rmSync(stubDir, { recursive: true, force: true });
+  }
+});
+
+const seenBy = (log: string) => readFileSync(log, "utf8").split("\n").filter(Boolean).map((l) => JSON.parse(l) as { cwd: string; settings: string | null });
+
+test("effort: --effort writes workspace/.claude/settings.json before the seat starts, and records level, path and hash", () => {
+  const stubDir = stubClaudeDir();
+  const root = join(tmpdir(), `bench-rq1-effort-${process.pid}-${Date.now()}`);
+  const log = join(tmpdir(), `bench-rq1-effort-log-${process.pid}-${Date.now()}`);
+  try {
+    const r = invoke([task, "A", "1", "--root", root, "--effort", "high"], { PATH: `${stubDir}${delimiter}${process.env.PATH}`, STUB_SEEN_LOG: log });
+    assert.equal(r.status, 0, r.stderr + r.stdout);
+    const seen = seenBy(log);
+    assert.equal(seen.length, 1);
+    assert.deepEqual(JSON.parse(seen[0].settings!), { effortLevel: "high" });
+    const result = JSON.parse(readFileSync(join(root, "result.json"), "utf8"));
+    assert.equal(result.effort.level, "high");
+    assert.equal(result.effort.settings_path, ".claude/settings.json");
+    assert.match(result.effort.settings_sha256, /^[a-f0-9]{64}$/);
+    assert.equal(result.effort.own_git_root, true, "the workspace must be its own git root: the maintainer measured the setting only in that layout");
+    assert.ok(existsSync(join(root, "workspace", ".git")));
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+    rmSync(stubDir, { recursive: true, force: true });
+    rmSync(log, { force: true });
+  }
+});
+
+test("effort: absent flag leaves no settings file and records effort.level null (existing behaviour unchanged)", () => {
+  const stubDir = stubClaudeDir();
+  const root = join(tmpdir(), `bench-rq1-noeffort-${process.pid}-${Date.now()}`);
+  const log = join(tmpdir(), `bench-rq1-noeffort-log-${process.pid}-${Date.now()}`);
+  try {
+    const r = invoke([task, "A", "1", "--root", root], { PATH: `${stubDir}${delimiter}${process.env.PATH}`, STUB_SEEN_LOG: log });
+    assert.equal(r.status, 0, r.stderr + r.stdout);
+    assert.equal(seenBy(log)[0].settings, null);
+    assert.equal(JSON.parse(readFileSync(join(root, "result.json"), "utf8")).effort.level, null);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+    rmSync(stubDir, { recursive: true, force: true });
+    rmSync(log, { force: true });
+  }
+});
+
+test("effort: an unknown level is refused before anything runs", () => {
+  const root = join(tmpdir(), `bench-rq1-badeffort-${process.pid}-${Date.now()}`);
+  const r = invoke([task, "A", "1", "--root", root, "--effort", "ludicrous"]);
+  assert.notEqual(r.status, 0);
+  assert.match(r.stderr, /--effort/);
+  assert.ok(!existsSync(root));
+});
+
+test("effort: arm B builder and reviewer both see the pinned setting", () => {
+  const stubDir = stubClaudeDirArmB("approve");
+  const root = join(tmpdir(), `bench-rq1-effort-b-${process.pid}-${Date.now()}`);
+  const log = join(tmpdir(), `bench-rq1-effort-b-log-${process.pid}-${Date.now()}`);
+  try {
+    const r = invoke([task, "B", "1", "--root", root, "--effort", "medium"], { PATH: `${stubDir}${delimiter}${process.env.PATH}`, STUB_SEEN_LOG: log });
+    assert.equal(r.status, 0, r.stderr + r.stdout);
+    const seen = seenBy(log);
+    assert.equal(seen.length, 2);
+    for (const s of seen) assert.deepEqual(JSON.parse(s.settings!), { effortLevel: "medium" });
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+    rmSync(stubDir, { recursive: true, force: true });
+    rmSync(log, { force: true });
+  }
+});
+
+test("effort: arm C seats all see the pinned setting", async () => {
+  const stubDir = stubClaudeDir();
+  const hubEntry = stubHubDir(EXPECTED);
+  const port = await freePort();
+  const root = join(tmpdir(), `bench-rq1-effort-c-${process.pid}-${Date.now()}`);
+  const log = join(tmpdir(), `bench-rq1-effort-c-log-${process.pid}-${Date.now()}`);
+  try {
+    const r = invoke([task, "C", "1", "--root", root, "--port", String(port), "--seats", "3", "--hub-entry", hubEntry, "--timeout-ms", "10000", "--effort", "low"], { PATH: `${stubDir}${delimiter}${process.env.PATH}`, STUB_SEEN_LOG: log });
+    assert.equal(r.status, 0, r.stderr + r.stdout);
+    const seen = seenBy(log);
+    assert.equal(seen.length, 3);
+    for (const s of seen) assert.deepEqual(JSON.parse(s.settings!), { effortLevel: "low" });
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+    rmSync(stubDir, { recursive: true, force: true });
+    rmSync(log, { force: true });
   }
 });

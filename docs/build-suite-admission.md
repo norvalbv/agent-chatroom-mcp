@@ -21,6 +21,7 @@ mean caught between 30 and 70 per cent over at least five runs.
 | build-rules-s1 | 24 rules over 8 modules, ~120 lines, one SPEC row per rule, 2 public tests encode the bug | 10 | 5 | 10 x5 | 5 of 5 | 0.057 to 0.072 | 28 to 33 |
 | build-rules-l3 | 120 rules over 20 modules, ~570 lines, 12 KB SPEC | 36 | 3 | 36, 35, 36 | 2 of 3 | 0.136 to 0.156 | 39 to 53 |
 | build-ledger-s1 | stateful warehouse, 6 modules, prose-only SPEC, missing rollback, leaked counter, wrong retry trigger, zombie backorder | 9 | 5 | 9 x5 | 5 of 5 | 0.053 to 0.072 | 28 to 35 |
+| build-ledger-s1 v2 (same-shape defects, S13 multi-lot return and S14 duplicate-sku lines planted, child-process oracle; seeds 11 to 15) | as above, 9 of 14 catalogued plants | 9 | 5 | 9,9,8,9,9 (S12 missed once) | 4 of 5 | 0.056 to 0.060 | 25 to 28 |
 | build-ledger-s1 at `effortLevel: low` (settings file in the workspace) | same | 9 | 5 | 9 x5 | 5 of 5 | 0.050 to 0.059 | 27 to 28 |
 
 Per-defect catch tables: every planted defect was caught n of n on billing, rules-s1 and ledger-s1. On rules-l3 one defect
@@ -37,6 +38,8 @@ The seat reads the whole codebase and SPEC in one pass and diffs them clause by 
 100 per cent: more defects and a plain giveaway-free style (billing), volume up to 120 rules (rules-l3: catch rate did not fall with
 size), prose-only spec with state-machine defects that need a call path across modules (ledger), a misleading public test (billing D10,
 rules), lower effort (ledger, low). This matches `tasks/complementary-fix/ADMISSION.md` and the roughly 45 earlier rejected candidates.
+
+fable-reviewer (evidence/fable-review) attacked the first ledger version and was right on five counts, all fixed in v2 (commit 55781dc): excision residue (blank lines, `&& true`), two unplanted bugs in the reference tree (repeated returns over a multi-lot shipment restocked the wrong lot; duplicate-sku lines leaked a reservation) now planted as S13 and S14 after fixing the reference, an in-process oracle that a workspace could spoof by patching `JSON.stringify` (now a child process, plain-data comparison, tested), whole-snapshot string equality (now subset deep-equal, SPEC declares the shape frozen, tested) and a SPEC sentence missing for S12. v2 arm-A result is the fifth row above: still at ceiling (44 of 45 plants caught).
 
 Reviewer findings on the first billing generator (sonnet-3, evidence/generator-review-s1) were correct and are why later families avoid
 the excision scars: unused imports and parameters left behind by the defect (`let cut` never reassigned, `roundHalfUp` imported but

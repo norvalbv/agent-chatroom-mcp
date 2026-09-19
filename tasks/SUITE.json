@@ -348,14 +348,11 @@
     },
     {
       "id": "build-ledger-s1",
-      "status": "retired",
+      "status": "pending",
       "family": "planted-defect-ledger",
-      "arm_a": {
-        "pass": 5,
-        "n": 5
-      },
+      "arm_a": null,
       "admission": "docs/build-suite-admission.md",
-      "note": "ceiling: 9 of 9 planted defects caught in 5 of 5 arm-A runs, also at effortLevel low"
+      "note": "v2 arm-A screen: 44 of 45 planted defects caught in 5 runs (4 of 5 task_pass); at ceiling, see docs/build-suite-admission.md"
     },
     {
       "id": "build-ledger-s2",

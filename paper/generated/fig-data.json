@@ -1,7 +1,7 @@
 {
   "generated_from": {
-    "suite_dir": "/Users/benji/Desktop/Personal and learning/agent-chatroom-mcp/.swarm-worktrees/swarm-164742-5jvl/sonnet-4/bench/results/rq1-suite",
-    "arm_k_dir": "/Users/benji/Desktop/Personal and learning/agent-chatroom-mcp/.swarm-worktrees/swarm-164742-5jvl/sonnet-4/bench/results/rq1-arm-k"
+    "suite_dir": "bench/results/rq1-suite",
+    "arm_k_dir": "bench/results/rq1-arm-k"
   },
   "pass_rates": [
     {

@@ -165,15 +165,27 @@ in different, non-overlapping time windows (Section~\ref{sec:results}). A single
 pass rate on \texttt{stamp-interpreter} differed noticeably across three measurements in this project's
 own data --- $0.50$ on the original ten-seed admission pilot, $0.825$ on the forty-seed grid, and
 $0.675$ on the four hundred individual arm-A attempts underlying arm~K's forty groups, measured the same
-afternoon as arm~K itself. Whether this reflects genuine drift in the underlying rate over time, as
-opposed to ordinary sampling noise at these sample sizes, is exactly what a window-control experiment is
-designed to distinguish, and this paper does not assume an answer before running one: if the single-agent
-rate does drift between windows, a comparison between arm~C and arm~K that spans different windows is
-confounded by that drift and not only by sampling noise at $n=40$. The window-control experiment
-addresses this directly: twenty fresh seeds (201--220) of arm~C and arm~K are run interleaved, seed by
-seed, on both interpreter tasks, so that whatever the underlying single-agent rate is doing on a given
-day affects both arms' seeds contemporaneously rather than one arm's seeds systematically earlier or
-later than the other's.
+afternoon as arm~K itself. A cause for at least part of this window-to-window difference was later
+identified directly, rather than left as an unexplained possibility: between approximately 15:30 and
+16:45 on the day of these runs, with no change to the harness, its flags, the Claude Code version, or the
+recorded model id, the model served under the pinned \texttt{sonnet} alias began producing substantially
+longer internal reasoning per turn --- a single-agent \texttt{stamp-interpreter} attempt's output tokens
+rose roughly six-fold (about 1.6K to about 10K) and its cost rose from about \$0.058 to \$0.18--\$0.26;
+arm~C seats showed the same shift (a three-seat room's cost rising from about \$0.60 to \$1.50--\$2.21).
+Both arm~K's fresh attempts and arm~C's original forty-seed record predate this shift (their realized
+costs match the earlier, lower regime), so they are not directly confounded by it against each other, but
+arm~K was never itself interleaved with arm~C's runs the way arm~A and arm~C were within the original
+grid, so this is established by matching cost signatures after the fact, not by design. Because a
+provider-side change of this kind cannot be ruled out as a general risk to any comparison that spans
+time, no number in this paper pools runs from before and after a detected regime boundary, and every
+reported cost figure states the date and the observed output-token scale it was measured at. The
+window-control experiment is the direct test of within-window validity: seeds of arm~C and arm~K run
+interleaved, seed by seed, on the same task, so that whatever the underlying single-agent rate or cost
+regime is doing on a given day affects both arms' seeds contemporaneously rather than one arm's seeds
+systematically earlier or later than the other's. Its original design (twenty seeds, 201--220, both
+interpreter tasks) was interrupted after three runs when the new, higher-cost regime made the planned
+run count exceed its budget; it was restarted at reduced scope --- \texttt{stamp-interpreter} only,
+seeds 201--212, entirely within the new regime --- and is reported under that revised design.
 This experiment is reported in Section~\ref{sec:results} if it completed by the time that section was
 finalized, and reported as pending, with the design above, if it did not; no partial set of its result
 files is read as a result at any point in this paper.

@@ -1,17 +1,23 @@
 /** RQ1 harness mode (paper/protocol.md section 1): runs one (task, arm, seed) on real Claude seats.
  * Arm A: one claude seat, no chatroom tools, the task brief plus a minimal "where to put your answer"
- * scaffold. Arm C: a chatroom room on a hub this script starts, the fixed seat count for the task, the
- * full hub surface (challenge + verification on). Both launch seats through claudeArgs() so the only
- * difference between arms is the arm itself, per item 1's requirement. Both arms run
- * --output-format stream-json (item 3): a seat killed at the deadline still leaves whatever it streamed
- * before the kill, instead of losing its usage entirely to a clean-exit-only json blob.
+ * scaffold. Arm B (protocol.md 2.1): a fixed no-chat builder+reviewer pipeline — builder produces an
+ * answer/patch, a separate reviewer instance sees only the builder's final message and the brief (no
+ * MCP tools, no shared room, cannot itself edit files) and either approves or sends back one revision
+ * request; at most one further builder pass. Arm C: a chatroom room on a hub this script starts, the
+ * fixed seat count for the task, the full hub surface (challenge + verification on). All arms launch
+ * seats through claudeArgs() so the only difference between arms is the arm itself, per item 1's
+ * requirement. All arms run --output-format stream-json (item 3): a seat killed at the deadline still
+ * leaves whatever it streamed before the kill, instead of losing its usage entirely to a clean-exit-only
+ * json blob.
  *
  * node --import tsx scripts/bench-rq1.ts TASK_DIR ARM SEED --root DIR [--model sonnet] [--port N]
  *   [--seats N] [--timeout-ms N, default 900000] [--max-budget-usd N] [--deadline-ms N] [--hub-entry PATH]
  *
- * ARM is A or C. Fixtures stay hidden exactly as scripts/bench-bench.ts already does (public/ copied
+ * ARM is A, B or C. Fixtures stay hidden exactly as scripts/bench-bench.ts already does (public/ copied
  * into workspace/, oracle/ and fixtures/ never copied); scoring is the *unmodified*
  * scripts/bench-oracle.ts scoreTask(), so a change here cannot silently change what counts as a pass.
+ * Arms B and C run to their own natural completion (§2.1: "not budget-matched like arm A"), so
+ * --max-budget-usd is arm-A-only and result.budget is null for B and C alike.
  */
 import { spawn, execFileSync, type ChildProcess } from "node:child_process";
 import { createHash } from "node:crypto";
@@ -200,6 +206,16 @@ function runClaudeSeat(name: string, args: string[], cwd: string, deadlineMs: nu
   });
 }
 
+/** Arm B's reviewer contract (protocol.md 2.1): exactly "APPROVE" (any case, leading text ignored) means
+ * no revision; anything else is a revision request, with a leading "REVISE:" label stripped since it adds
+ * nothing the builder's revision prompt needs. */
+function parseReviewDecision(text: string): { approved: boolean; feedback: string | null } {
+  const trimmed = text.trim();
+  if (/^APPROVE\b/i.test(trimmed)) return { approved: true, feedback: null };
+  const feedback = trimmed.replace(/^REVISE:\s*/i, "").trim() || trimmed;
+  return { approved: false, feedback };
+}
+
 /** Last `state:concluded` record in a room's jsonl log, or null (mirrors bench/seat/real-seat.mjs's own extraction). */
 function roomConclusion(logPath: string): { text: string } | null {
   if (!existsSync(logPath)) return null;
@@ -222,8 +238,8 @@ async function main() {
   const taskArg = argv.shift();
   const armArg = argv.shift();
   const seedArg = argv.shift();
-  if (!taskArg || (armArg !== "A" && armArg !== "C") || seedArg === undefined) {
-    throw new Error("Usage: bench-rq1.ts TASK_DIR ARM(A|C) SEED --root DIR [--model sonnet] [--port N] [--seats N] [--timeout-ms N] [--max-budget-usd N] [--deadline-ms N] [--hub-entry PATH]");
+  if (!taskArg || (armArg !== "A" && armArg !== "B" && armArg !== "C") || seedArg === undefined) {
+    throw new Error("Usage: bench-rq1.ts TASK_DIR ARM(A|B|C) SEED --root DIR [--model sonnet] [--port N] [--seats N] [--timeout-ms N] [--max-budget-usd N] [--deadline-ms N] [--hub-entry PATH]");
   }
   const seed = Number(seedArg);
   if (!Number.isInteger(seed)) throw new Error(`Invalid seed: ${seedArg}`);
@@ -296,6 +312,10 @@ async function main() {
   // arm C's only addition on top of this shared list (claudeArgs()'s --tools strips mcp__* entries, so
   // --tools is exactly baseTools on both arms).
   const baseTools = isCodeTask ? ["Read", "Edit", "Write", "MultiEdit", "Bash", "Glob", "Grep"] : ["Read", "Write", "Bash", "Glob", "Grep"];
+  // Arm B's reviewer stage (protocol.md 2.1: "either approves or sends back one revision request") never
+  // edits the submission itself — only the builder writes/patches, so the reviewer gets no Write/Edit/
+  // MultiEdit, just enough to inspect and (for code tasks) run it.
+  const reviewerTools = ["Read", "Bash", "Glob", "Grep"];
 
   try {
   if (armArg === "A") {
@@ -306,6 +326,33 @@ async function main() {
     const args = claudeArgs({ text, mcpJson, tools: baseTools, model, outputFormat: "stream-json" });
     if (maxBudgetUsd) args.push("--max-budget-usd", maxBudgetUsd);
     seatRecords = [await runClaudeSeat("single", args, workspace, deadlineMs)];
+    completedAt = new Date();
+  } else if (armArg === "B") {
+    // Protocol.md 2.1, arm B: "Two model instances in a fixed pipeline ... at most one revision round."
+    // Both stages share the builder's own workspace (the reviewer's "sees the builder's output" is the
+    // literal files on disk plus the builder's final message, not a copy) and neither carries MCP tools.
+    startedAt = new Date();
+    const mcpJson = join(root, "mcp-empty.json");
+    json(mcpJson, { mcpServers: {} });
+    const records: SeatRecord[] = [];
+    const builder1Text = `${briefText}\n${scaffoldSingle}`;
+    const builder1Args = claudeArgs({ text: builder1Text, mcpJson, tools: baseTools, model, outputFormat: "stream-json" });
+    const builder1 = await runClaudeSeat("builder-1", builder1Args, workspace, deadlineMs);
+    records.push(builder1);
+
+    const reviewText = `${briefText}\n\nYou are reviewing another engineer's submission for this task. Their final message was:\n"""\n${builder1.text}\n"""\nTheir work is already in your current working directory (${isCodeTask ? "the edited source file(s)" : "answer.txt"}). Do not edit any files yourself — you may only read and inspect.\nIf their submission is correct and complete, respond with exactly: APPROVE\nOtherwise respond with a message starting with "REVISE:" followed by one sentence describing what to fix.`;
+    const reviewerArgs = claudeArgs({ text: reviewText, mcpJson, tools: reviewerTools, model, outputFormat: "stream-json" });
+    const reviewer = await runClaudeSeat("reviewer", reviewerArgs, workspace, deadlineMs);
+    records.push(reviewer);
+
+    const decision = parseReviewDecision(reviewer.text);
+    if (!decision.approved && !reviewer.killed_by_deadline) {
+      const revisionText = `${briefText}\n${scaffoldSingle}\n\nA reviewer looked at your previous submission (still in this directory) and said:\n"""\n${decision.feedback}\n"""\nMake only the necessary changes to address the reviewer's feedback. This is your final revision; there is no further review round.`;
+      const builder2Args = claudeArgs({ text: revisionText, mcpJson, tools: baseTools, model, outputFormat: "stream-json" });
+      const builder2 = await runClaudeSeat("builder-2", builder2Args, workspace, deadlineMs);
+      records.push(builder2);
+    }
+    seatRecords = records;
     completedAt = new Date();
   } else {
     startedAt = new Date();
@@ -425,7 +472,7 @@ async function main() {
     wall_clock: { started_at: startedAt.toISOString(), completed_at: completedAt.toISOString(), duration_ms: completedAt.getTime() - startedAt.getTime() },
     budget: armArg === "A" ? { max_budget_usd: maxBudgetUsd ? Number(maxBudgetUsd) : null, deadline_ms: deadlineMs } : null,
     build: { head_revision: revision(repoRoot), hub_entry: armArg === "C" ? hubEntry : null, hub_entry_sha256: hubEntrySha256, hub_revision: hubRevision },
-    frozen: { task_sha256: taskBefore, scorer_sha256: scorerBefore, fact_scorer_sha256: factScorerBefore, task_id: task.task_id, timeout_ms: timeoutMs, seats: armArg === "C" ? seats : 1 },
+    frozen: { task_sha256: taskBefore, scorer_sha256: scorerBefore, fact_scorer_sha256: factScorerBefore, task_id: task.task_id, timeout_ms: timeoutMs, seats: seatRecords.length },
     error: failureMessage,
     checked_at: new Date().toISOString(),
   };

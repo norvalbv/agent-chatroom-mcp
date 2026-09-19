@@ -28,6 +28,13 @@ function thinking(record: SeatRecord): number | null {
   const values = Object.values(record.model_usage).map((m: any) => m?.thinkingTokens ?? m?.thinking_tokens ?? m?.reasoningTokens ?? m?.reasoning_tokens);
   return values.every(v => Number.isFinite(v) && v >= 0) ? values.reduce((a, b) => a + b, 0) : null;
 }
+export function classifyBuildFailure(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error);
+  if (message.startsWith('tamper:')) return 'tamper';
+  if (message.startsWith('invalid_room:')) return 'invalid_room';
+  if (message.startsWith('timeout:')) return 'timeout';
+  return 'infrastructure_error';
+}
 export function validateBuildRoom(dataDir: string, count: number, workspace: string) {
   const replay = new Hub({ dataDir }), room = replay.getRoom('build');
   const proposal = room.conclusion ? room.proposals.get(room.conclusion.proposalId) : undefined;
@@ -35,14 +42,15 @@ export function validateBuildRoom(dataDir: string, count: number, workspace: str
   const author = proposal ? room.participants.get(proposal.by.id) : undefined;
   const reviewer = verify ? [...room.participants.values()].find(p => p.name === verify.by) : undefined;
   const distinct = !!author?.session && !!reviewer?.session && author.session !== reviewer.session;
+  const assigned = !!author && !!reviewer && [...room.board.entries()].some(([key, entry]) => key.startsWith('claim/') && entry.by === author.name && entry.reviewerId === reviewer.id);
   const sessions = new Set([...room.participants.values()].map(p => p.session).filter(Boolean)).size;
   const policy = room.requireVerification === true && room.requireChallenge === true && room.quorum === 'supermajority' && room.expectedParticipants === count;
   let artifactHash: string | null = null;
   try { artifactHash = JSON.parse(verify?.text.split('\n')[0] ?? '{}').workspace_sha256 ?? null; } catch {}
   const finalHash = hashWorkspace(workspace);
   const artifactMatches = typeof artifactHash === 'string' && /^[a-f0-9]{64}$/.test(artifactHash) && artifactHash === finalHash;
-  return { required_policy: policy, verified_workspace_sha256: artifactHash, final_workspace_sha256: finalHash, artifact_matches: artifactMatches, state: room.state, proposal_id: proposal?.id ?? null,
-    verified: room.state === 'concluded' && !!verify && distinct && sessions >= count && policy && artifactMatches,
+  return { assigned_reviewer: assigned, required_policy: policy, verified_workspace_sha256: artifactHash, final_workspace_sha256: finalHash, artifact_matches: artifactMatches, state: room.state, proposal_id: proposal?.id ?? null,
+    verified: room.state === 'concluded' && !!verify && distinct && assigned && sessions >= count && policy && artifactMatches,
     verifier_session_distinct: distinct, distinct_sessions: sessions,
     verification_by: verify?.by ?? null, conclusion: room.conclusion ?? null };
 }
@@ -133,7 +141,7 @@ async function main() {
     }
   } catch (error) {
     errorText = String(error);
-    failure = /tamper/i.test(errorText) ? 'tamper' : /invalid_room/i.test(errorText) ? 'invalid_room' : /timeout/i.test(errorText) ? 'timeout' : 'infrastructure_error';
+    failure = classifyBuildFailure(error);
   } finally { if (hub) await stop(hub); if (hubFd !== null) closeSync(hubFd); }
   let after: string | null = null;
   try { after = hashTree(task); } catch (e) { failure = 'tamper'; errorText = String(e); }
@@ -146,7 +154,7 @@ async function main() {
   }
   const usage = rollupUsage(records.map(r => ({ usage: r.usage })));
   const completeCost = records.length > 0 && records.every(r => r.usage && Number.isFinite(r.usage.cost));
-  const runConfig = { task_sha256: before, generator_sha256: hashFile(join(here, 'bench-build-gen.ts')),
+  const runConfig = { seed: Number(seedArg), task_sha256: before, generator_sha256: hashFile(join(here, 'bench-build-gen.ts')),
     runner_sha256: build.runner_sha256, runtime_sha256: build.runtime_sha256, helpers_sha256: build.helpers_sha256,
     hub_build_sha256: build.hub_build_sha256, model, arm, effort_level: effortLevel,
     effort_settings_sha256: effort.settings_sha256, cap_usd: cap, deadline_ms: deadlineMs, seats: arm === 'C' ? count : null,

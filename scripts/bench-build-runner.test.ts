@@ -7,9 +7,13 @@ import { delimiter, join, resolve } from 'node:path';
 import { createServer } from 'node:net';
 import { Hub } from '../src/hub.js';
 import { hashTree, hashWorkspace, WORKSPACE_HASH_SCRIPT } from './bench-build-runtime.ts';
-import { validateBuildRoom } from './bench-build-runner.ts';
+import { classifyBuildFailure, validateBuildRoom } from './bench-build-runner.ts';
 
 const runner = resolve('scripts/bench-build-runner.ts');
+test('hub startup timeout is infrastructure failure, not seat protocol timeout', () => {
+  assert.equal(classifyBuildFailure(new Error('hub startup timed out')),'infrastructure_error');
+  assert.equal(classifyBuildFailure(new Error('timeout: seat deadline')),'timeout');
+});
 test('reviewer artifact helper matches host hashing and detects source changes', () => {
   const workspace=mkdtempSync(join(tmpdir(),'build-hash-parity-'));
   try {
@@ -84,6 +88,13 @@ test('a real four-session verified conclusion survives replay validation', () =>
     assert.equal(verdict.verified,true,JSON.stringify(verdict));
     assert.equal(verdict.distinct_sessions,4);
     assert.equal(verdict.verifier_session_distinct,true);
+    const assigned = room.board.get('claim/fix')!;
+    assert.ok(assigned.reviewerId);
+    const journal=join(dir,'build.jsonl');
+    const files=readFileSync(journal,'utf8');
+    writeFileSync(journal,files.split('\n').filter(line => !line.includes('"key":"claim/fix"')).join('\n'));
+    assert.equal(validateBuildRoom(dir,4,workspace).verified,false,'verification without a recorded reviewer assignment must fail');
+    writeFileSync(journal,files);
     writeFileSync(join(workspace,'source.txt'),'edited after verification');
     assert.equal(validateBuildRoom(dir,4,workspace).verified,false);
   } finally { clearTimeout(room.nudgeTimer);clearTimeout(room.openingsTimer);rmSync(dir,{recursive:true,force:true}); }

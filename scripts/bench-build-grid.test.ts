@@ -25,7 +25,7 @@ appendFileSync(${JSON.stringify(log)}, JSON.stringify({a})+'\\n');
 mkdirSync(root,{recursive:true});
 const unknown=process.env.STUB_UNKNOWN==='1';
 writeFileSync(join(root,'build-result.json'), JSON.stringify({
- schemaVersion:1, task_id:task.split('/').pop(), arm, seed:Number(seed),
+ schemaVersion:1, task_id:task.split('/').pop(), arm, seed:Number(seed), outcome:'completed',
  scores:{defects_caught:4,defects_total:9,defects_shipped:5,regression_failures:0,regressions_total:14},
  checks:{defects:[{name:'defect/D01',exit_code:0}],regressions:[{name:'regression/R01',exit_code:0}]},
  usage:{cost_usd:unknown?null:0.25,coverage:unknown?'partial':'complete',thinking_tokens:123,output_tokens:456},
@@ -74,6 +74,7 @@ test("grid passes the frozen execution contract and resumes only matching finger
     assert.equal(calls.length, 12);
     for (const call of calls) {
       assert.ok(call.includes("--run-fingerprint"));
+      assert.match(call[call.indexOf("--expected-task-sha256") + 1], /^[a-f0-9]{64}$/);
       assert.equal(call[call.indexOf("--effort") + 1], "medium");
       assert.equal(call[call.indexOf("--max-budget-usd") + 1], "2");
       assert.equal(call[call.indexOf("--seats") + 1], "4");
@@ -108,7 +109,12 @@ test("unknown terminal cost stops later cells and is never summed as zero", asyn
     const summary = await runBuildGrid(parsed, { log: () => {} });
     assert.equal(summary.ran, 1);
     assert.equal(summary.unknownCost, 1);
+    assert.equal(summary.invalid, 0);
     assert.equal(summary.halted, true);
     assert.equal(existsSync(join(f.results, "build-billing-s1-A-seed502")), false);
+    const resumed = await runBuildGrid(parsed, { log: () => {} });
+    assert.equal(resumed.skipped, 1);
+    assert.equal(resumed.unknownCost, 1);
+    assert.equal(resumed.halted, true);
   } finally { delete process.env.STUB_UNKNOWN; rmSync(f.dir, { recursive: true, force: true }); }
 });

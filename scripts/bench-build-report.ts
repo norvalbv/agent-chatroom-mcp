@@ -9,6 +9,7 @@ type RawBuildResult = {
   task_id?: unknown;
   arm?: unknown;
   seed?: unknown;
+  outcome?: unknown;
   scores?: Record<string, unknown>;
   checks?: { defects?: unknown; regressions?: unknown };
   usage?: { cost_usd?: unknown; coverage?: unknown; thinking_tokens?: unknown; output_tokens?: unknown };
@@ -23,6 +24,9 @@ export interface BuildReportRow {
   seed: number;
   status: "valid" | "invalid" | "missing";
   reason: string | null;
+  outcome: string | null;
+  protocol_failure: boolean;
+  cost_status: "complete" | "unknown" | "missing";
   defects_caught: number | null;
   defects_total: number | null;
   residual_plants: number | null;
@@ -43,7 +47,7 @@ export interface BuildReport {
   planned: { tasks: string[]; arms: Arm[]; seeds: number[] };
   rows: BuildReportRow[];
   per_defect: { task_id: string; defect_id: string; caught: number; n: number }[];
-  summary: { valid: number; invalid: number; missing: number; actual_over_cap: number; known_cost_usd: number };
+  summary: { valid: number; invalid: number; missing: number; protocol_failures: number; unknown_cost: number; actual_over_cap: number; known_cost_usd: number };
 }
 
 function natural(a: string, b: string) {
@@ -72,6 +76,9 @@ function checks(value: unknown, prefix: string): { checks: Check[]; reason?: str
 function invalidRow(task: string, arm: Arm, seed: number, reason: string, raw?: RawBuildResult): BuildReportRow {
   return {
     task_id: task, arm, seed, status: "invalid", reason,
+    outcome: typeof raw?.outcome === "string" ? raw.outcome : null,
+    protocol_failure: false,
+    cost_status: raw?.usage?.coverage === "complete" && typeof raw.usage.cost_usd === "number" ? "complete" : "unknown",
     defects_caught: null, defects_total: null, residual_plants: null, introduced_regressions: null,
     defects_shipped: null, cost_usd: typeof raw?.usage?.cost_usd === "number" ? raw.usage.cost_usd : null,
     thinking_tokens: typeof raw?.usage?.thinking_tokens === "number" ? raw.usage.thinking_tokens : null,
@@ -85,6 +92,8 @@ function invalidRow(task: string, arm: Arm, seed: number, reason: string, raw?: 
 
 function validateRaw(raw: RawBuildResult, task: string, arm: Arm, seed: number, cap: number): BuildReportRow {
   if (raw.task_id !== task || raw.arm !== arm || raw.seed !== seed) return invalidRow(task, arm, seed, "cell identity mismatch", raw);
+  if (typeof raw.outcome !== "string" || !["completed", "timeout", "invalid_room", "tamper", "infrastructure_error"].includes(raw.outcome)) return invalidRow(task, arm, seed, "unknown raw outcome", raw);
+  if (raw.outcome === "tamper" || raw.outcome === "infrastructure_error") return invalidRow(task, arm, seed, `non-scoreable outcome ${raw.outcome}`, raw);
   const fingerprint = raw.provenance?.run_fingerprint;
   if (typeof fingerprint !== "string" || !fingerprint) return invalidRow(task, arm, seed, "missing run fingerprint", raw);
   if (!raw.provenance?.manifest_sha256 || !raw.provenance.runner_sha256) return invalidRow(task, arm, seed, "incomplete launch provenance", raw);
@@ -105,15 +114,18 @@ function validateRaw(raw: RawBuildResult, task: string, arm: Arm, seed: number, 
   }
   const residual = defectSet.checks.length - caught;
   if (scores.defects_shipped !== residual + regressions) return invalidRow(task, arm, seed, "shipped score is not residual plus regressions", raw);
-  const cost = raw.usage?.cost_usd;
-  if (raw.usage?.coverage !== "complete" || typeof cost !== "number" || !Number.isFinite(cost) || cost < 0) return invalidRow(task, arm, seed, "unknown terminal cost", raw);
   if (!integer(raw.usage.thinking_tokens) || !integer(raw.usage.output_tokens) || !integer(raw.wall_clock_ms)) return invalidRow(task, arm, seed, "usage or wall time incomplete", raw);
+  const rawCost = raw.usage?.cost_usd;
+  const costComplete = raw.usage?.coverage === "complete" && typeof rawCost === "number" && Number.isFinite(rawCost) && rawCost >= 0;
+  const cost = costComplete ? rawCost : null;
+  const protocolFailure = raw.outcome === "timeout" || raw.outcome === "invalid_room";
   return {
-    task_id: task, arm, seed, status: "valid", reason: null,
+    task_id: task, arm, seed, status: "valid", reason: costComplete ? null : "unknown terminal cost",
+    outcome: raw.outcome, protocol_failure: protocolFailure, cost_status: costComplete ? "complete" : "unknown",
     defects_caught: caught, defects_total: defectSet.checks.length, residual_plants: residual,
     introduced_regressions: regressions, defects_shipped: residual + regressions,
     cost_usd: cost, thinking_tokens: raw.usage.thinking_tokens, output_tokens: raw.usage.output_tokens,
-    wall_clock_ms: raw.wall_clock_ms, actual_over_cap: cost > cap, run_fingerprint: fingerprint,
+    wall_clock_ms: raw.wall_clock_ms, actual_over_cap: cost === null ? null : cost > cap, run_fingerprint: fingerprint,
     defect_checks: defectSet.checks,
   };
 }
@@ -138,6 +150,7 @@ export function buildBuildReport(resultsDir: string, tasks: string[], arms: Arm[
     const raw = byCell.get(`${task}\0${arm}\0${seed}`);
     rows.push(raw ? validateRaw(raw, task, arm, seed, nominalCapUsd) : {
       task_id: task, arm, seed, status: "missing", reason: "planned cell absent",
+      outcome: null, protocol_failure: false, cost_status: "missing",
       defects_caught: null, defects_total: null, residual_plants: null, introduced_regressions: null,
       defects_shipped: null, cost_usd: null, thinking_tokens: null, output_tokens: null,
       wall_clock_ms: null, actual_over_cap: null, run_fingerprint: null, defect_checks: [],
@@ -165,6 +178,8 @@ export function buildBuildReport(resultsDir: string, tasks: string[], arms: Arm[
       valid: rows.filter((row) => row.status === "valid").length,
       invalid: rows.filter((row) => row.status === "invalid").length,
       missing: rows.filter((row) => row.status === "missing").length,
+      protocol_failures: rows.filter((row) => row.protocol_failure).length,
+      unknown_cost: rows.filter((row) => row.status === "valid" && row.cost_status === "unknown").length,
       actual_over_cap: rows.filter((row) => row.actual_over_cap === true).length,
       known_cost_usd: rows.reduce((sum, row) => sum + (row.cost_usd ?? 0), 0),
     },
@@ -177,14 +192,14 @@ function value(value: number | null, digits = 0): string {
 
 export function renderBuildReportMarkdown(report: BuildReport): string {
   const lines = [
-    "| task | arm | seed | status | caught | shipped | new regressions | cost USD | actual > nominal cap | thinking | wall ms |",
-    "|---|---:|---:|---|---:|---:|---:|---:|---|---:|---:|",
+    "| task | arm | seed | status | outcome | caught | shipped | new regressions | cost USD | actual > nominal cap | thinking | wall ms |",
+    "|---|---:|---:|---|---|---:|---:|---:|---:|---|---:|---:|",
   ];
   for (const row of report.rows) {
     const caught = row.defects_caught === null ? "-" : `${row.defects_caught}/${row.defects_total}`;
-    lines.push(`| ${row.task_id} | ${row.arm} | ${row.seed} | ${row.status} | ${caught} | ${value(row.defects_shipped)} | ${value(row.introduced_regressions)} | ${value(row.cost_usd, 4)} | ${row.actual_over_cap === null ? "-" : row.actual_over_cap ? "yes" : "no"} | ${value(row.thinking_tokens)} | ${value(row.wall_clock_ms)} |`);
+    lines.push(`| ${row.task_id} | ${row.arm} | ${row.seed} | ${row.status}${row.protocol_failure ? "/protocol_failure" : ""} | ${row.outcome ?? "-"} | ${caught} | ${value(row.defects_shipped)} | ${value(row.introduced_regressions)} | ${value(row.cost_usd, 4)} | ${row.actual_over_cap === null ? "-" : row.actual_over_cap ? "yes" : "no"} | ${value(row.thinking_tokens)} | ${value(row.wall_clock_ms)} |`);
   }
-  lines.push("", `Valid: ${report.summary.valid}; invalid: ${report.summary.invalid}; missing: ${report.summary.missing}; known cost: $${report.summary.known_cost_usd.toFixed(4)}.`, "", "### Per-defect arm-A catch table", "", "| task | defect | caught | n |", "|---|---|---:|---:|");
+  lines.push("", `Valid catch rows: ${report.summary.valid}; protocol failures: ${report.summary.protocol_failures}; invalid: ${report.summary.invalid}; missing: ${report.summary.missing}; unknown cost: ${report.summary.unknown_cost}; known cost: $${report.summary.known_cost_usd.toFixed(4)}.`, "", "### Per-defect arm-A catch table", "", "| task | defect | caught | n |", "|---|---|---:|---:|");
   for (const defect of report.per_defect) lines.push(`| ${defect.task_id} | ${defect.defect_id} | ${defect.caught} | ${defect.n} |`);
   return `${lines.join("\n")}\n`;
 }

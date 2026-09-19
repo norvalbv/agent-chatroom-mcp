@@ -48,11 +48,15 @@ equivalence:
    paper's prior cost finding then extends to this build family.
 5. No generated instance clears admission, or task review finds ambiguity,
    leakage, coupled defect tests, a contaminated manifest, or artificial padding.
-6. More than 10% of planned confirmatory cells are externally invalid because of
-   infrastructure failure, stale provenance, unknown cost, or incomplete oracle
-   execution. No missing cell is replaced after outcomes are known. An arm-caused
-   timeout, invalid room, or model-originated tamper is an observed protocol
-   failure, not externally missing data.
+6. More than 10% of planned confirmatory cells are non-scoreable for catch because
+   of infrastructure failure, compromised scoring integrity, stale provenance, or
+   incomplete oracle execution. No missing cell is replaced after outcomes are
+   known. An arm-caused timeout or invalid room is a scored protocol failure, not
+   missing catch data. Unknown authoritative cost removes only the realized-cost
+   analyses when the workspace and oracle remain scoreable.
+7. For either C-A or C-B, C's realized-cost ratio exceeds 1.25 or its ratio-of-sums
+   catch-per-dollar efficiency is below the comparator. A catch difference may
+   still be reported, but an advantage at comparable cost is unestablished.
 
 These are tests of one generated task family, not a general claim about all software
 engineering. Two sibling instances and their individual defects are correlated
@@ -60,12 +64,18 @@ evidence, not independent task families.
 
 ## Tasks, versions, and admission
 
-The generator emits `build-billing-s1` and `build-billing-s2`. Each has nine planted
-defects selected from one twelve-defect catalogue and spread across modules. The
-public tree contains the written specification, source, and tests; its tests must
-pass while the plants remain. The private tree contains one named
+The first generator version emitted `build-billing-s1` and `build-billing-s2`, but
+that version was rejected at ceiling and is not an admitted task. A replacement
+version must emit two new, versioned sibling task IDs from one generator before its
+admission runs begin. Each instance has six to twelve planted defects spread across
+modules. The public tree contains the written specification, source, and tests; its
+tests must pass while the plants remain. The private tree contains one named
 `defect/<id>` check per plant plus baseline-preserving `regression/<id>` checks.
 Neither private files nor the manifest's expected outcomes enter a model workspace.
+Before reading the oracle implementation, a non-author maps every hidden check to a
+quoted clause of the public specification. Hidden inputs may compose documented
+rules in an unmentioned way, but a check may not invent semantics absent from those
+clauses; the mapping is committed with the task review.
 
 The committed known-good manifest is part of the task version. It covers the
 generator seed/configuration, public tree, hidden oracle and scorer, runner, hub
@@ -74,7 +84,8 @@ before/after comparison would otherwise look unchanged. A change to a specificat
 clause, source plant, public test, private test, scorer, or generator creates a new
 version and invalidates all earlier development evidence for that version.
 
-Development/admission uses arm A seeds 1--5 at the pinned normal effort. An
+Development/admission uses arm A in consecutive, never-reused five-seed blocks at
+the pinned normal effort. An
 instance is admitted to this build experiment only when all five cells are valid,
 the mean `defects_caught / defects_total` is in the inclusive interval [0.30,
 0.70], public tests pass on the planted tree, every defect check fails on the
@@ -85,12 +96,14 @@ legacy `tasks/SUITE.json` all-or-nothing task-pass gate, which requires ten runs
 Until that separate schema is satisfied, these task entries remain `pending` there;
 the paper must not call them legacy-suite `primary` tasks.
 
-The per-defect catch table is always retained. A defect caught 5/5 is presumed too
-easy and is replaced. A defect caught 0/5 is reviewed against the public
-specification: a determined but hard defect may remain; an ambiguous, impossible,
-or coupled one is replaced. Any replacement produces a new task version and reruns
-the whole gate on fresh development seeds 6--10. The rejected version and its raw
-table remain on record. No rule is tuned on confirmatory seeds.
+The per-defect catch table is always retained. A 5/5 defect may remain as an easy
+anchor when the task-level mean clears the band and non-author review finds no
+giveaway; it is not automatically tuned away on five noisy trials. A defect caught
+0/5 is reviewed against the public specification: a determined but hard defect may
+remain; an ambiguous, impossible, coupled, or giveaway defect is replaced. Any
+replacement produces a new task version and reruns the whole gate on the next
+unused five-seed development block. The rejected version and its raw table remain
+on record. No rule is tuned on confirmatory seeds.
 
 ## Mechanical scores
 
@@ -110,21 +123,30 @@ fix. Each defect check must be isolated by a one-fix matrix: it fails on the pla
 tree, passes on its isolated fix, and unrelated defect checks retain their expected
 state. Regression checks pass on both the planted and reference trees.
 
+Public tests are part of the editable submission. They must all pass on the planted
+baseline, but an arm may correct a misleading public assertion when bringing the
+codebase into agreement with the specification. Editing a public test, or finishing
+with a public-test failure, is an observed task outcome and never anti-tamper
+invalidity. The scorer runs the complete public suite as a hidden regression check:
+a code fix that leaves the now-misleading assertion failing therefore ships a
+regression, while a spec-correct test update is allowed. Only private task fixtures,
+the scorer, executor, or frozen provenance inputs are protected integrity surfaces.
+
 The task, scorer, runner, effort settings, hub entry, whole hub build, launch HEAD,
 and served model observations are hashed or recorded before any seat starts and
 checked again before scoring. A model never receives the hidden tree. Timeout,
 infrastructure error, parse failure, tamper, and incomplete usage are retained as
-distinct outcomes. An arm-caused timeout, failure to establish the required room,
-unverified room conclusion, or model-originated workspace/oracle tamper is scored
-in the primary intention-to-treat catch analysis as zero caught and `N` residual
-plants; `defects_shipped` is at least `N`, and safety dominance cannot be claimed
-when introduced regressions cannot be measured. A benchmark-infrastructure failure,
-scorer failure, stale provenance, or missing authoritative cost is externally
-invalid and remains a planned missing cell. In particular, a seat killed before its
-terminal result has unknown authoritative cost if the runner cannot attribute the
-timeout to the arm, even if partial token usage exists; it is not a zero-cost cell
-and is ineligible for an equal-budget claim. Every raw outcome and any observed
-partial cost remains in the ledger.
+distinct outcomes. At an arm-caused timeout, failure to establish the required
+room, or unverified room conclusion, the machine oracle scores the workspace exactly
+as it stands. The catch and shipped scores remain in the primary intention-to-treat
+analysis and the row is flagged `protocol_failure`; a conclusion is not imputed.
+A benchmark-infrastructure or scorer failure, stale provenance, compromised hidden
+fixture/executor integrity, or otherwise unscoreable workspace remains a planned
+missing catch cell. Missing authoritative cost does not erase an otherwise valid
+catch score: it makes only the realized-cost and efficiency analyses missing. In
+particular, a seat killed before its terminal result may have unknown authoritative
+cost even when partial token usage exists; it is never recorded as zero cost. Every
+raw outcome and any observed partial cost remains in the ledger.
 
 ## Arms and equal-cap contract
 
@@ -147,8 +169,8 @@ are reported separately.
   change the scored workspace.
 - **C -- room:** four distinct MCP connections each receive M/4. The room requires
   claims, hub-assigned non-author review, a challenge, supermajority, a concluded
-  proposal, and a valid verification entry. A merely edited workspace without a
-  verified conclusion is invalid.
+  proposal, and a valid verification entry. Missing any coordination requirement
+  sets `protocol_failure=true`, but the intact workspace is still oracle-scored.
 
 The Claude CLI can overshoot a process cap on its last turn. Every seat's terminal
 cost is summed. A valid attempt launched with the fixed shares remains in the
@@ -157,12 +179,28 @@ overshoots would give C four outcome-dependent chances to be removed versus A's 
 It is labelled `actual_over_cap`, and the paper calls the design equal **nominal**
 cap, never equal realized spend. A sensitivity analysis uses only paired blocks in
 which both arms have complete cost and actual spend at or below M. An arm with
-unknown cost remains a planned invalid cell rather than zero-cost evidence. The
-spend ledger includes known partial spend and labels unknown remainders.
+unknown cost remains missing from that cost sensitivity rather than zero-cost
+evidence, without discarding its catch score. The spend ledger includes known
+partial spend and labels unknown remainders.
+
+The nominal cap is not evidence of equal realized cost when a seat stops far below
+it. M=2.00 did not bind A in exploratory screens, whose observed runs cost roughly
+0.05--0.16 USD. Accordingly, no result may be described as "at equal budget"
+without printing the realized C/A spend ratio beside that wording and identifying
+the design as equal nominal maximum opportunity. For each C-X comparison (`X` is A
+or B), the cost-complete paired cells report
+`sum(C cost) / sum(X cost)` and the ratio-of-sums efficiency
+`sum(catch_fraction) / sum(cost)`. The paper may claim a coordination advantage at
+comparable cost only if the C/X realized-cost ratio is at most 1.25 and C's
+ratio-of-sums efficiency is at least X's, in addition to the catch, missingness and
+safety gates. Otherwise it says only "higher catch at higher realized spend" (when
+true) and treats equal-cost room superiority as unestablished. This is a claim gate,
+not a fourth arm or an outcome-dependent exclusion from the catch analysis.
 
 ## Ordering, seeds, and analysis
 
-- Development/admission: seeds 1--5, or fresh 6--10 after a task-version change.
+- Development/admission: the next unused consecutive five-seed block; 1--5 were
+  consumed by rejected billing-v1, so the next candidate begins at 6--10.
 - Diagnostic three-arm pilot: seeds 101--103 on the first admitted instance.
 - Confirmatory: seeds 501--520 on both admitted instances.
 
@@ -184,24 +222,27 @@ descriptively and never interpreted as equivalence.
 Missing blocks are not replaced. For each comparison, the partially identified
 mean-difference range over all 20 planned blocks assigns every externally missing
 block -1 for the lower endpoint and +1 for the upper endpoint; the complete-block
-estimate and count are printed beside it. A room-advantage claim requires both the
+estimate and count are printed beside it. A family block is missing for a comparison
+if either arm lacks a scoreable catch result for either of its two instance cells;
+unknown cost alone does not make its catch block missing. A room-advantage claim requires both the
 complete-case multiplicity-adjusted lower confidence bound and this worst-case
 lower endpoint to exceed zero for both C-A and C-B. Arm-caused protocol failures
-are already observed zero-catch outcomes and are not missing blocks. If more than
-10% of planned cells are externally invalid, no confirmatory claim is made
+retain their as-is oracle scores and are not missing blocks. If more than
+10% of planned catch cells are non-scoreable, no confirmatory claim is made
 regardless of the complete cases. The actual-at-or-below-M sensitivity is reported
 separately and cannot replace the intention-to-treat result. Because there is one
 generator family, every interval describes run-to-run variation for this family
 and does not create a multi-family population claim. Regressions, protocol failures,
-and externally invalid outcomes are reported as counts and rates without severity
+and non-scoreable outcomes are reported as counts and rates without severity
 weighting.
 
 ## Artifact pipeline and resumability
 
 The pilot and confirmatory tables are generated, not transcribed. The table command
 must reject duplicate `(task, arm, seed)` cells, wrong task versions, stale hashes,
-missing seat provenance, incomplete hidden checks, and unknown-cost cells from the
-valid set. Nominal-cap overshoots are retained and flagged, not rejected. The
+missing seat provenance, and incomplete hidden checks. Unknown-cost cells remain
+catch-scoreable but are excluded and visibly counted in realized-cost summaries.
+Nominal-cap overshoots are retained and flagged, not rejected. The
 non-author verifier reruns the command and compares its generated Markdown/JSON
 output to the committed artifact.
 
@@ -216,7 +257,7 @@ the reviewed `bench-build-grid.ts` interface lands. Its fixed semantic content i
 
 ```sh
 node --import tsx scripts/bench-build-grid.ts \
-  --tasks build-billing-s1,build-billing-s2 \
+  --tasks ADMITTED_SIBLING_1,ADMITTED_SIBLING_2 \
   --arms A,B,C --seeds 501-520 \
   --results bench/results/build-suite-confirmatory \
   --model sonnet --effort medium --max-budget-usd 2.00 \
@@ -228,6 +269,9 @@ This room does not run that command. The nominal allocated total is
 upper bound because the CLI permits last-turn overshoot. Projected realized cost and
 wall time will be generated from the diagnostic pilot as a range, with the nominal
 allocation total shown separately rather than presented as a ceiling.
+`ADMITTED_SIBLING_1,ADMITTED_SIBLING_2` is a fail-closed placeholder after the
+billing-v1 rejection; the confirmatory-freeze amendment must replace it with the
+two exact admitted versioned IDs or there is no executable confirmatory protocol.
 
 ## Freeze and amendment log
 
@@ -263,6 +307,25 @@ catch protocol failures. Only failures outside the arm remain externally missing
 and a room-advantage claim additionally requires the worst-case partially identified
 lower endpoint over all 20 planned blocks to exceed zero for both comparisons. This
 amendment precedes those outcomes.
+
+### 2026-09-19 -- score-at-deadline, cost-comparability, and task-version amendment
+
+Before any pinned-effort admission or three-arm pilot, a second non-author attack
+showed that forcing a zero catch score at an arm timeout/non-conclusion discards the
+machine-observed task outcome, unknown cost need not make catch unknowable, M=2.00
+was 12--30 times the exploratory A spend, and the command still named rejected
+billing tasks. This amendment supersedes only the zero-score clause immediately
+above: an intact workspace is oracle-scored as-is at timeout or non-conclusion and
+flagged as a protocol failure. Unknown cost removes cost/efficiency evidence, not
+catch evidence. A C/X realized-cost ratio above 1.25 or lower ratio-of-sums
+efficiency prevents any claim of room advantage at comparable cost. A catch block
+is missing if either compared arm lacks either instance catch score. Billing-v1 is
+rejected at 5/5 ceiling (all five exploratory runs caught 9/9; archive commit
+`6669a46`), its development seeds 1--5 are consumed, and the command now fails
+closed on placeholder task IDs until two new versioned siblings pass admission.
+The same review confirmed that misleading public tests must be editable task output:
+their remaining failures count through the public-suite regression check rather than
+turning the cell into an anti-tamper exclusion.
 
 ## Development and pilot evidence (not yet observed at freeze)
 

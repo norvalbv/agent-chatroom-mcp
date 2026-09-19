@@ -1,0 +1,204 @@
+\subsection{System contributions: two measurement rounds and their cost findings}
+\label{sec:system-cost}
+
+Two rounds of work on this codebase, both run before this paper's own RQ1 grid and
+reported here as system (not RQ1) contributions, measured where the hub's token cost
+goes and how seats review each other's work. Both are dated 2026-09-18 and are recorded
+in full in \texttt{docs/token-round-0918.md} and \texttt{docs/review-round-0918.md}; every
+number in this subsection is copied from those two committed documents or from
+\texttt{paper/budget.md}'s independent re-verification of the same rooms' launcher
+telemetry, not re-derived from the underlying \texttt{swarms/*/result.json} files
+directly, since those run directories are not committed to this repository (they are
+local, machine-side artifacts; see the reproducibility note at the end of this
+subsection).
+
+\paragraph{The token round.} On 2026-09-17 the maintainer's OpenRouter account was
+exhausted after what \texttt{docs/token-round-0918.md} records as ``roughly 2 billion
+tokens'' that day; no finer-grained committed breakdown of that day's usage exists, so
+this paper reports the figure at the granularity the source document gives it and does
+not invent a per-room decomposition for it. Seats moved to Claude Code on Sonnet, capped
+at 15 agents, and a research room measured where the tokens were going before any fix
+was built. One instrumented seat ran 202 steps and processed 14,076,892 prompt tokens
+against 35,298 completion tokens (a $\sim$400:1 ratio); the average of 69,687 prompt
+tokens per step matches the hub's 240,000-character trim ceiling almost exactly, meaning
+the seat was, on average, resending close to its full allowed context on every turn. A
+fixed system-prompt-and-tool-schema tax of 5,000--6,900 tokens per turn was measured
+independently three times. \texttt{wait\_for\_messages} calls were 43.8\% of that seat's
+total tool calls, and idle-or-no-op calls were 39\% of all calls across the room. In one
+40-minute run, one shared document was read 86--89 times by 24--25 seats. Seats given no
+cap ran 203--411 steps and accumulated 10.9--18.9M prompt tokens each; seats that handed
+off proactively stopped at 90--130 steps and 3--6M tokens. Across Claude Code seats
+specifically, session transcripts showed a 97.0\% cache-read rate and, despite that,
+still a 174:1 ratio of billed input to output tokens: caching in this system cuts price,
+not the number of tokens a seat processes turn over turn.
+
+Four rooms built and shipped a seven-item plan from that research (\texttt{docs/token-round-0918.md}):
+a free re-poll loop that breaks only on an actionable result; the opt-in
+\texttt{wait\_for\_messages(hold\_until\_actionable=true)} mode that holds a seat's poll
+in the hub until something it must act on arrives; proactive handoff triggered on step
+count, prompt-token count, and context fraction; first-reader read digests plus one
+sentence of quiet-messaging guidance in the flat-run prompts; an OpenRouter sticky
+session id with recorded cache fields (mock-tested only); a session-scoped tool surface
+(\texttt{tool\_scope}); and an opt-in, default-off cache-stable checkpoint-trim flag,
+withheld by default because summarization carries a documented answer-quality risk
+\citep{Cim2026} and the oracle harness had no provider credit to test it against at the
+time. Model routing across cost tiers was considered and not built, for lack of any
+local measurement to size it (as distinct from the per-query cascades in
+\citet{Chen2023} and \citet{Moslem2026}, which this system does not implement).
+
+The same day produced one same-shape, same-day comparison, reported as a direction, not
+a controlled result (one run per arm, different tasks): a ten-seat, read-only room on the
+old build (the morning research room) against a ten-seat, read-only room on the new
+build with seats told to call \texttt{hold\_until\_actionable=true}. Table~\ref{tab:token-round-first-measurement}
+reproduces \texttt{docs/token-round-0918.md}'s own comparison, computed from Claude
+session transcripts (\texttt{scripts/claude-room-usage.py}, deduplicated by message id) --
+a measurement that depends on local, uncommitted transcript files and cannot be
+regenerated from this repository's committed artifacts alone (see the note at the end of
+this subsection).
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{lrr}
+\toprule
+ & Morning research room (old build) & Review room (new build, held waits) \\
+\midrule
+Worker seats & 10 & 9 \\
+Model turns & 805 & 451 \\
+Tokens processed (input + cache) & 115.6M & 53.6M \\
+Per seat & 11.6M & 6.0M \\
+Per turn & 144K & 119K \\
+\texttt{wait\_for\_messages} calls & $\sim$513, none held & 42, all held \\
+Messages in the room & 191 & 110 \\
+Minutes to conclusion & 10.5 & 12.6 \\
+\bottomrule
+\end{tabular}
+\caption{First same-day measurement of \texttt{hold\_until\_actionable}, from Claude
+session transcripts (\texttt{docs/token-round-0918.md}, ``First measurement''). Tokens
+processed fell by about half, almost entirely because held waits removed model turns;
+the two rooms ran different tasks and this is one run per arm, so it is reported as a
+direction only, not an effect estimate.}
+\label{tab:token-round-first-measurement}
+\end{table}
+
+The launcher's own \texttt{result.json} telemetry for the review room agrees with the
+transcript-derived figures: \texttt{usage.coverage} is \texttt{"complete"} for all 10
+seats, with 60.1M cache-read tokens, 1.6M cache-creation tokens, 377K output tokens, and
+a total API-list-price cost of \$22.34 (\texttt{docs/token-round-0918.md}; re-confirmed
+directly against that room's \texttt{result.json} in \texttt{paper/budget.md}).
+
+\paragraph{The review round.} A second round of work addressed a different gap: outside
+the hub, the maintainer's own pipeline is prompt, prior-art agent, plan, build, and a
+devkit review; inside a chatroom room, seats had been assigning each other work and
+committing without any of that review step. A read-only research room found that the
+hub's \texttt{verifiedBy()} check had been validating only that a \texttt{verify/*} board
+entry existed, never what it said: 3 of 37 verify entries in one sampled run explicitly
+called their own work PARTIAL, BLOCKED, or NOT GREEN and still satisfied the gate.
+Volunteered review load was also unevenly concentrated: 5 of 8 verify entries in that
+sample were written by one seat. Separately, commit \texttt{15d3717} had frozen new
+quality baselines in the same commit as the codebase growth those baselines exist to
+excuse. The same research found that a set of real, design-level defects from an earlier
+morning's work was caught only by a seat reading the diff by hand while the automated
+regression suite stayed green throughout: 0 of 3 real defects found that day were
+devkit-shaped, and 0 of 58 sampled verify entries mentioned a size or fan-out finding --
+peer review and the devkit's automated checks were catching near-disjoint classes of
+failure, so neither substitutes for the other. The devkit's own deterministic bundle
+costs about 2.4 seconds and no tokens per commit, but its duplication check had not
+actually run on any of the 12 commits sampled that day, and its real cost is the
+author's own retry turns rather than devkit's own runtime.
+
+Three rooms built on this finding (\texttt{docs/review-round-0918.md}): a
+\texttt{verify/*} entry now counts only with a machine-parseable JSON first line
+naming the exact proposal id with \texttt{exit\_code:0}, exactly the gate this paper's
+own methodology (\texttt{paper/protocol.md} \S9, this room's own rules) requires of
+every verification claimed within it; the hub assigns a reviewer automatically when a
+\texttt{claim/*} area is first taken (least-recently-verifying active non-owner,
+never the same connection), tells both parties, and prefers that reviewer's entry over
+anyone else's while they remain active; and a commit touching the devkit's own frozen
+baselines now requires a same-gate \texttt{verify/baseline-*} entry from a different
+seat, failing closed if the hub is unreachable. The same round also landed the ``lean
+Claude seats'' launch path (\texttt{src/claude-args.ts}): every \texttt{claude -p} seat
+is now launched with its \texttt{--tools} list restricted to that role's built-ins,
+\texttt{--disable-slash-commands}, \texttt{--setting-sources project}, and
+\texttt{--exclude-dynamic-system-prompt-sections}, opt-outable per seat via
+\texttt{--claude-full}. A first-turn context probe on Haiku fell from 27.2K to 20.7K
+tokens ($\sim$24\% reduction, one probe per combination, with 2--3K of measurement
+noise on top).
+
+Table~\ref{tab:review-round-cost} reproduces \texttt{docs/review-round-0918.md}'s own
+``Cost of the day, worker seats'' table in full: seven rooms run that day, from
+session-transcript-derived turn and token counts, with API-list-price dollar cost where
+the launcher's own \texttt{result.json} telemetry had \texttt{coverage: "complete"}.
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{lrrrr}
+\toprule
+Room & Seats & Turns & Tokens processed & Cost (API price) \\
+\midrule
+Token research (morning) & 10 & 805 & 115.6M & n/a \\
+Telemetry & 2 & 237 & 38.2M & n/a \\
+Quorum and leave & 3 & 517 & 103.1M & n/a \\
+Token build & 7 & 1{,}324 & 272.8M & n/a \\
+Review research (held waits) & 9 & 451 & 53.6M & \$22.34 \\
+Review build & 5 & 960 & 233.3M & \$70.97 \\
+Lean seat build & 4 & 385 & 64.7M & \$21.99 \\
+\bottomrule
+\end{tabular}
+\caption{\texttt{docs/review-round-0918.md}'s cost table, session-transcript-derived
+(worker seats only; the review-build room's \texttt{result.json} reports 6 seats
+because it also counts the verifier seat, which the transcript-derived worker count
+excludes -- \texttt{paper/budget.md} flags this population mismatch explicitly). About
+880M tokens across the day, 98--99\% of it cache reads. Held waits roughly halved a
+research room's token count (Table~\ref{tab:token-round-first-measurement}); build rooms
+did not get cheaper the same way, because a long Claude Code session's context only
+grows and there is, as of this writing, no handoff or compaction mechanism for Claude
+seats specifically.}
+\label{tab:review-round-cost}
+\end{table}
+
+\paragraph{Cache-read accounting, explained once here.} Every cost figure in this
+subsection, and every cost figure elsewhere in this paper that touches a Claude seat,
+is dominated by cache-read tokens billed at a fraction of the fresh-input rate: on the
+Claude Sonnet~5 rate card fetched for \texttt{paper/budget.md}
+(\url{https://platform.claude.com/docs/en/about-claude/pricing}), base input is
+\$2.00 per million tokens (MTok) and a cache-read hit is \$0.20/MTok -- exactly one
+tenth. This is why a room that resends nearly its entire transcript on every turn (the
+token round's own finding: 69,687 prompt tokens per step, matching the 240,000-character
+trim ceiling) does not cost ten times what its raw token count would suggest at the base
+rate: the review-build room's \$70.97 measured cost corresponds to a token profile that
+is 98--99\% cache reads, so its dollar cost is close to what the \emph{cache-read} rate,
+not the base input rate, would predict for that volume. Concretely, for that same room
+\texttt{paper/budget.md} records \texttt{usage.input\_tokens: 2{,}354},
+\texttt{usage.cache\_read\_input\_tokens: 279{,}597{,}966},
+\texttt{usage.cache\_creation\_input\_tokens: 2{,}108{,}427}, and
+\texttt{usage.output\_tokens: 657{,}972} against a measured \texttt{cost\_usd} of
+\$70.9735702 -- a raw repricing of these four fields at the published per-MTok rates
+undershoots the CLI-reported cost by 4.5\% for this room (and by 4.5--11.3\% across the
+three rooms \texttt{paper/budget.md} checked), a gap that document attributes,
+tentatively and without full attribution, to 1-hour cache writes (\$4/MTok on Sonnet~5,
+a premium tier above the 5-minute cache-write rate quoted above) or a data-residency
+multiplier not broken out in \texttt{result.json}'s fields. This paper
+therefore always reports the CLI's own measured \texttt{cost\_usd} as authoritative
+where it is available, and treats a from-scratch repricing of the four token fields as a
+sanity bound accurate to roughly 5--11\%, never as an exact reconstruction.
+
+\paragraph{A note on what is, and is not, reproducible from this repository.} The two
+per-room dollar figures and token-field breakdowns quoted above (Table~\ref{tab:review-round-cost}'s
+\$22.34/\$70.97/\$21.99 column, and this paragraph's four \texttt{usage} fields) come
+from each room's own \texttt{swarms/<room>/result.json}, which is the launcher's
+committed-schema run artifact (\texttt{src/result.ts}) but whose individual instances
+are not committed to this repository (the \texttt{swarms/} directory is gitignored); a
+reader can regenerate the same class of number for a fresh run by inspecting that run's
+own \texttt{result.json}, but cannot recompute \emph{these specific historical rooms'}
+numbers without those local files, which is why this paper cites them only through the
+two committed documents (\texttt{docs/token-round-0918.md}, \texttt{docs/review-round-0918.md})
+and \texttt{paper/budget.md}'s own re-verification, rather than asserting a direct
+read of an artifact this repository does not ship. The turn and token counts in both
+tables above (``Tokens processed'', ``Model turns'') are, separately, derived from local
+Claude Code session transcripts via \texttt{scripts/claude-room-usage.py}, an accounting
+this project's own system description (\texttt{paper/system.md} \S3) is explicit is
+\emph{not} the same quantity as \texttt{result.json}'s \texttt{usage} rollup (which is a
+run-level aggregate, not a per-seat breakdown, for Claude seats) and cannot be
+regenerated from this repository's committed artifacts alone.

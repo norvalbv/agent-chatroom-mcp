@@ -1,0 +1,47 @@
+[
+  {
+    "id": "S01",
+    "module": "see DEFECT_MODULE",
+    "kind": "cross-module-contract"
+  },
+  {
+    "id": "S02",
+    "module": "see DEFECT_MODULE",
+    "kind": "spec-vs-code"
+  },
+  {
+    "id": "S04",
+    "module": "see DEFECT_MODULE",
+    "kind": "cross-module-contract"
+  },
+  {
+    "id": "S05",
+    "module": "see DEFECT_MODULE",
+    "kind": "cross-module-contract"
+  },
+  {
+    "id": "S07",
+    "module": "see DEFECT_MODULE",
+    "kind": "spec-vs-code"
+  },
+  {
+    "id": "S10",
+    "module": "see DEFECT_MODULE",
+    "kind": "spec-vs-code"
+  },
+  {
+    "id": "S11",
+    "module": "see DEFECT_MODULE",
+    "kind": "cross-module-contract"
+  },
+  {
+    "id": "S12",
+    "module": "see DEFECT_MODULE",
+    "kind": "cross-module-contract"
+  },
+  {
+    "id": "S14",
+    "module": "see DEFECT_MODULE",
+    "kind": "cross-module-contract"
+  }
+]

@@ -421,31 +421,42 @@ const LEDGER_SCORE = `/** Private oracle for a generated ledger task. node --imp
  * result (extra fields and key order are ignored; the SPEC declares the snapshot shape frozen).
  * defect/<id>: scenario for a planted defect; regression/<id>: R* scenarios and the scenario of every catalogued defect that is NOT planted
  * in this instance (they hold in the original code, so reintroducing one of those defects is scored as shipped).
+ *
+ * Two layers against a workspace that tries to forge its own result (fable-review G1/G2; 6-astra-4's oracle-audit hardening):
+ * (1) the child is launched under Node's --permission allowlist naming only run.ts, scenarios.ts and the workspace itself as
+ * readable, with no inherited env and native TypeScript (no tsx, so no cwd-dependent loader resolution); it can never read
+ * expected.json, so even a source-informed forger cannot produce the *correct* values, only guesses. Symlinks under the
+ * workspace are rejected before launch. (2) the result itself still travels over a dedicated pipe (fd 3), not shared stdout,
+ * written only by run.ts's own captured fs.writeSync reference; an empty or malformed fd 3 is refused outright.
  */
 import { spawnSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { lstatSync, readFileSync, readdirSync, realpathSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 function readSingleResult(fd3: string | null | undefined): unknown {
-  // fable-review G1 and its early-exit variant: a workspace module could print a forged result on
-  // shared stdout (a second marker racing the real one, or a single forged one before ever letting
-  // this file's own trusted code run). A result read over a dedicated pipe (fd 3), written only once
-  // by run.ts's own captured fs.writeSync reference after the workspace import returns control, is not
-  // reachable by anything printed to stdout/stderr; an empty or malformed fd 3 (including a workspace
-  // that exits before run.ts's own write, or that also writes to fd 3 itself and corrupts the blob) is
-  // refused outright rather than guessed at.
   if (!fd3) return null;
   try { return JSON.parse(fd3); } catch { return null; }
 }
-
+function rejectSymlinks(path: string): void {
+  const stat = lstatSync(path);
+  if (stat.isSymbolicLink()) throw new Error('oracle infrastructure: workspace symlink is forbidden');
+  if (stat.isDirectory()) for (const name of readdirSync(path)) rejectSymlinks(join(path, name));
+}
 
 const workspace = process.argv[2];
 if (!workspace) { console.error('usage: score.ts WORKSPACE'); process.exit(2); }
 const here = dirname(fileURLToPath(import.meta.url));
-const REPO_ROOT = ${JSON.stringify(repoRoot)};
 const inst = JSON.parse(readFileSync(join(here, 'instance.json'), 'utf8'));
 const expected = JSON.parse(readFileSync(join(here, 'expected.json'), 'utf8'));
-const child = spawnSync(process.execPath, ['--import', 'tsx', join(here, 'run.ts'), resolve(workspace), String(inst.m)], { encoding: 'utf8', timeout: 60000, maxBuffer: 64 * 1024 * 1024, cwd: REPO_ROOT, stdio: ['ignore', 'pipe', 'pipe', 'pipe'] });
+const runner = realpathSync(join(here, 'run.ts'));
+const scenarios = realpathSync(join(here, 'scenarios.ts'));
+let candidate: string;
+try { candidate = realpathSync(resolve(workspace)); rejectSymlinks(candidate); }
+catch (error) { console.error(String(error)); console.log(JSON.stringify({ score: 0, oracle_results: [], defects_planted: inst.defects.length, defects_caught: 0, defects_shipped: inst.defects.length, regressions_failed: 0, caught_ids: [], missed_ids: inst.defects, regression_failed_ids: [] })); process.exit(1); }
+const child = spawnSync(process.execPath, [
+  '--permission', '--allow-fs-read=' + runner, '--allow-fs-read=' + scenarios, '--allow-fs-read=' + candidate,
+  runner, candidate, String(inst.m),
+], { encoding: 'utf8', timeout: 60000, maxBuffer: 64 * 1024 * 1024, env: {}, stdio: ['ignore', 'pipe', 'pipe', 'pipe'] });
 let got: Record<string, { ok: boolean; value?: unknown }> = {};
 got = (readSingleResult(child.output?.[3] as string | null) as typeof got) ?? {};
 function subset(exp: unknown, act: unknown): boolean {

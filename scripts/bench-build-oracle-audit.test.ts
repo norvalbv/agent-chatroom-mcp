@@ -91,7 +91,12 @@ test('scorer from an unrelated cwd never charges loader failure as shipped defec
   assert.equal(scored.defects_shipped,0);
 });
 
-test('DOCUMENTED RESIDUAL: a workspace that knows the private oracle forges its own dedicated fd and exits before the real write, defeating fd-isolation too — this requires reading oracle/run.ts, which no arm run through bench-rq1.ts ever sees (only public/ is copied into a workspace, and anti-tamper hashing checks the task tree is unchanged after scoring); it is not closeable without real OS-level process sandboxing, which this suite does not implement (same acknowledged limit as tasks/complementary-fix/oracle/score.ts\'s own comment: "Path separation is not a sandbox. Run untrusted code in a restricted process."). Recorded so nobody re-discovers this as a surprise.', () => {
+test('CLOSED (was a documented residual): a workspace that knows the private oracle and forges its own dedicated fd 3, reading '
+  + 'expected.json to get the correct values and exiting before the real write, is now blocked at the Node runtime level. The '
+  + 'ledger child runs under a --permission allowlist naming only run.ts, scenarios.ts and the workspace itself as readable, with '
+  + 'no inherited env, so fs.readFileSync(expected.json) throws ERR_ACCESS_DENIED inside the forged hook itself; nothing valid ever '
+  + 'reaches fd 3 for a broken tree. The remaining, even narrower limit: a forger that does not need the correct values (e.g. blind '
+  + 'guessing) still cannot produce a valid score without repairing the code, since guessed values will not match.', () => {
   const task = resolve('tasks/build-ledger-s1');
   const workspace = mkdtempSync(join(tmpdir(), 'build-oracle-fd3-'));
   try {
@@ -113,7 +118,7 @@ test('DOCUMENTED RESIDUAL: a workspace that knows the private oracle forges its 
 `);
     const run = spawnSync(process.execPath, ['--import', 'tsx', join(task, 'oracle', 'score.ts'), workspace], { encoding: 'utf8', timeout: 30_000 });
     const scored = JSON.parse(run.stdout);
-    // Documents, does not defend against: this succeeds (score 1) given source knowledge no real arm has.
-    assert.equal(scored.score, 1, 'if this ever fails, the residual limitation above is now fixed and this test/comment should be updated');
+    assert.equal(scored.score, 0, 'the permission allowlist should deny reading expected.json inside the forged hook');
+    assert.equal(scored.defects_caught, 0);
   } finally { rmSync(workspace, { recursive: true, force: true }); }
 });

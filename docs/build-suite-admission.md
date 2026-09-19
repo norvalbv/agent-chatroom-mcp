@@ -71,18 +71,20 @@ the trusted result off shared stdout onto a dedicated pipe (fd 3) that only `ora
 reference to `fs.writeSync` captured before any workspace import runs. This closes every attack that relied on stdout being a
 shared, guessable channel (both reviewers' own committed audit tests, `scripts/bench-build-oracle-audit.test.ts`, pass against it).
 
-It does **not** close a workspace that already knows the private oracle writes to fd 3 specifically: such a workspace can call
-`require('node:fs').writeSync(3, ...)` with a forged, well-formed blob itself and exit before the real write, and this still
-scores a false pass (`scripts/bench-build-oracle-audit.test.ts`'s last test documents this precisely and is expected to keep
-passing, i.e. keep succeeding as an attack, until someone closes it). The reason: `oracle/run.ts` imports the workspace's own
-code directly into its own process, so trusted and untrusted code share one JS realm, and nothing in that realm is truly private
-from code with the motivation and the fd number to look for it -- Node does not sandbox file descriptors within a process. A
-real arm run through `scripts/bench-rq1.ts` never has the source needed to mount this (only `public/` is copied into its
-workspace, and anti-tamper hashing verifies `oracle/` is byte-identical before and after scoring), so this is not exploitable
-by an honest or even an adversarial *arm* -- only by someone who has read this exact generator's source, which is the standard
-already stated for `tasks/complementary-fix/oracle/score.ts`: "Path separation is not a sandbox. Run untrusted code in a
-restricted process." Closing it fully needs real OS-level sandboxing (a separate, fd-restricted process or container for the
-workspace-importing step), which this room did not build.
+That fd-3-specific variant was itself closed for the ledger family (6-astra-4, commit 5e8402b, independently reviewed by
+fable-reviewer as "safe to integrate", merged into `scripts/bench-build-ledger-gen.ts`): the ledger oracle now launches its
+child under Node's `--permission` allowlist, naming only `run.ts`, `scenarios.ts` and the workspace itself as readable, with no
+inherited environment and native (tsx-free) TypeScript execution. `expected.json` is never on the allowlist, so a forged hook
+that tries to read it to produce correct values throws `ERR_ACCESS_DENIED` at the Node runtime level, not just a JS-realm
+convention -- this is enforced independently of whether the attacker also knows about fd 3. Symlinks under the workspace are
+rejected before launch. `scripts/bench-build-oracle-audit.test.ts`'s residual test (renamed "CLOSED (was a documented
+residual)") now asserts this fails to score, and does.
+
+The billing and rules oracles (`bench-build-gen.ts`, `bench-build-rules-gen.ts`) still use only the fd-3-without-permission-
+allowlist defense: both retired families (billing at ceiling from the first screen, rules including the 120-rule variant), so
+the same residual (a source-informed forger who knows the fd number and can still read `expected.json`) is not closed there.
+Porting the permission-allowlist mechanism to those two files is the next step if either family is ever revived; not done here
+since neither is admitted and both are lower priority than the ledger family used in the pilot.
 
 ## What was not tried (levers for a future round)
 

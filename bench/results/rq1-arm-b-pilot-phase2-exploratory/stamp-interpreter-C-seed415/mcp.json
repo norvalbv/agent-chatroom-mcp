@@ -1,8 +1,0 @@
-{
-  "mcpServers": {
-    "chatroom": {
-      "type": "http",
-      "url": "http://127.0.0.1:20325/mcp"
-    }
-  }
-}

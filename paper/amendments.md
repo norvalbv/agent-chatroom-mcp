@@ -551,3 +551,29 @@ value is not the cause; launch arguments are otherwise identical to the earlier 
 window than arm K. If the single-agent rate moves between windows rather than merely being noisy at n=40, the
 K vs C comparison is confounded by time. A contemporaneous arm-C sample interleaved with arm-K groups is the
 control that would settle it; it has not been run.
+
+## 2026-09-19 — The model behind the `sonnet` alias changed its thinking budget mid-study (maintainer session)
+
+Between about 15:30 and 16:45 local time on 2026-09-19, with no change to the harness, flags, project
+settings, Claude Code version (2.1.277 throughout) or the recorded model id (`claude-sonnet-5`), a
+single-agent attempt on `stamp-interpreter` went from about 1.6K output tokens and 0.058 USD (stable across
+the 400 morning attempts in `bench/results/rq1-arm-k` and the 60-run cap control at about 15:00) to about
+10K output tokens and 0.18 to 0.26 USD. Transcripts show the same action sequence (read spec and program,
+one thinking block, write answer.txt); the thinking block grew from about 1.3K to about 10.5K tokens. Arm C
+seats show the same shift (per-seat output tokens 4K to 9K in the morning, 18K to 25K afterwards; a
+three-seat run 0.60 USD in the morning, 1.50 to 2.21 USD afterwards). Ruled out: the `CLAUDE_EFFORT`
+environment variable inherited by seats (unsetting it changes nothing), a CLI update (none), instruction
+files on the path (none), project settings (unchanged since 2026-09-17). A project-level `effortLevel`
+setting does move the budget (low about 5K, medium about 7K, high about 11K output tokens) but even `low`
+is three times the morning figure, so the morning regime cannot be reproduced locally. The first
+same-window control group under the new regime passed 10 of 10 attempts.
+
+Consequences. (1) Every comparison in this paper is valid only within its own time window; arms A, C and
+the 40 arm-A budget-matched runs were interleaved per seed, arm K was not, and the morning-to-afternoon
+single-agent rate differences reported above may be partly this shift rather than sampling noise.
+(2) Cost figures are regime-specific and must carry their date and the observed output tokens per run.
+(3) The same-window control (`bench/results/rq1-window-control`) was stopped after 3 runs (5.76 USD) when the
+per-run cost made the planned 80 runs exceed their cap; it is being rerun at reduced scope, with all runs
+inside the new regime, and its result is reported separately from the morning grids. (4) Future protocol
+rule: record output tokens per run as a regime indicator, pin a dated model snapshot where the provider
+allows it, and never pool runs across a detected regime boundary.

@@ -389,3 +389,44 @@ Cost, from this room's real pilots: arm A about $0.057 per run on `stamp-interpr
 What that sample can show (two-proportion test, two-sided alpha 0.05, 80 percent power): with an arm A rate of 0.5, a team rate of 0.8 needs about 39 seeds per task per arm and 0.7 needs about 93. Forty seeds per task therefore detects only a large team advantage; a smaller one is not excluded by a null result. The statistical unit is the family, not the task: `stamp-interpreter` and `stamp-2` are one family (the same specification, the same mechanism, two programs) and `bench-printf-format` is the other; each is a single-trap task whose pilot rate is one-program (stamp) or one-case (printf) evidence. Analyse each family separately, do not pool seeds across the two stamp programs as if independent, and remember that the pilot rate is selected (a task lands in 0.3 to 0.7 partly by luck) so the grid rate may differ from 0.5. The arm C evidence so far is n=1 for each stamp program (`stamp-interpreter` and `stamp-2`: passed, room concluded 3 of 3) and n=2 for `bench-printf-format` (both concluded 3 of 3 inside the deadline and both failed on case 458 alone, so three seats did not catch the slip that six of the ten single seats also made).
 
 **Not carried forward from the predecessor room (unproven or out of scope for this room):** `scripts/bench-ak.ts` and the A-k arm specification on `swarm/swarm-140131-j6yf/sonnet-7` (no pilot, not part of this room's brief); `bench-logic-grid-{2,3,4}` (same family as `bench-logic-grid`, retired unpiloted with a reason on the board).
+
+## 2026-09-19 — Arm K, settled definition (supersedes "The A-k arm - precise definition" above where they differ) (swarm-122749-7x9q, sonnet-1)
+
+Written before any real arm-K run exists. `paper/prereg-arm-k.md` predictions are unchanged. Any later change to k, the caps or the
+selector is a forking path and must be logged here with the runs that preceded it.
+
+**k per task (settled).** k = floor(mean arm-C cost / mean arm-A cost) over the 40 finished seeds of `bench/results/rq1-suite`:
+stamp-interpreter 10 (0.602/0.058), stamp-2 8 (0.595/0.068), bench-printf-format 7 (0.745/0.096). The rule is kept because it is the
+only one fixed by data that exist before arm K (no arm-K number enters it), and flooring guarantees expected spend k x mean(A) does not
+exceed mean(C): 0.58, 0.54, 0.67 USD against 0.602, 0.595, 0.745. Matching is judged on realized spend: the per-seed sum over the k attempts
+(killed attempts included, unknown cost never summed as zero) is reported against the paired arm-C cost, and arm K must not exceed arm C's
+mean per task. If it does, that is reported as a defect of the matching, not repaired by dropping attempts.
+
+**Per-attempt caps (replaces C_cost/k).** Every attempt runs the unmodified arm-A path with `--max-budget-usd 0.30` and
+`--deadline-ms 150000`. Observed arm A maxima were 0.104 USD and 48 s, so the caps leave about 3x headroom and are not expected to bind. The
+caps do not bound the total (k x 0.30 exceeds arm C); the total is judged as above. An attempt killed by its cap or deadline stays in the
+group as a null vote (no answer / no signature), its cost counts, and it is recorded with its exit code. Attempts run with a bounded
+`--concurrency`; attempts do not communicate and no hub is involved. All k attempts are fresh runs, sub-seeded `seed*1000+i`; finished arm-A
+runs are never reused.
+
+**Selectors (no oracle input).**
+- *Exact-answer tasks (stamp-interpreter, stamp-2):* plurality of normalized answers, ties to the lowest sub-seed. This is self-consistency
+  (Wang et al., arXiv:2203.11171: sample several reasoning paths, take the most frequent final answer).
+- *Code tasks (bench-printf-format), PRIMARY:* MBR-exec (Shi, Fried, Ghazvininejad, Zettlemoyer, Wang, arXiv:2204.11454: run candidate
+  programs on inputs and select the one that agrees most with the others, marginalising over programs with the same behaviour). Each
+  attempt's `format.ts` is run on a fixed probe set of 9650 `format` calls generated deterministically from the public README (every
+  conversion x flag set x width x precision over the argument classes the README allows; `scripts/ak-select.ts`, `printfProbes`).
+  A candidate's score is the number of (other candidate, probe) pairs with identical output; highest wins, ties and no-signal to the
+  lowest sub-seed; a candidate that does not load, throws at import or times out gets no vote and no score. Probe inputs are never taken
+  from `oracle/` or `fixtures/`, and the selector takes attempt workspaces only, never a task directory (`scripts/ak-select.test.ts`
+  runs selection with both directories chmod 000 and then deleted, and shows the bench-rq1 anti-tamper hash changes when either is edited).
+- *Code tasks, SECONDARY (exploratory, not the headline):* plurality of whole execution signatures (all 9650 outputs identical), i.e. CodeT's
+  agreement classes (Chen et al., arXiv:2207.10397, dual execution agreement between candidates and generated tests) reduced to their
+  candidate side because the probe set is the fixed public-spec set, not model-generated tests.
+- *Why not the old self-written-tests rule:* nearly every attempt reports its own tests passing, so it selects nothing; CodeT's own point is that
+  the agreement signal, not the self-report, carries the information. Prereg prediction 2 says agreement selection will not help on printf; that
+  is a prediction to be tested, not a design goal, and the selector was not tuned on any printf result.
+
+**Reported for arm K** (in `bench/results/rq1-arm-k`, never in `rq1-suite`): K vs C and K vs A by Fisher exact, Holm-Bonferroni across the
+arm-K comparisons; cost per correct answer; the vote distribution per group; the oracle ceiling (any of the k attempts passes), labelled as
+NOT an arm, a bound on what selection could reach.

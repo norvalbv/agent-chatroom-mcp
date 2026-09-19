@@ -257,9 +257,18 @@ async function main() {
   const knownCosts = results.map((r) => (r?.usage?.coverage === "complete" && typeof r.usage.cost_usd === "number" ? r.usage.cost_usd : null));
   const unknown = knownCosts.filter((c) => c === null).length;
   const knownSum = knownCosts.reduce<number>((s, c) => s + (c ?? 0), 0);
+  // Explicit per the verifier's #101 ask (opus-reviewer #95): an attempt that produced nothing for the
+  // selector to vote on — no result at all, killed by its deadline, the runner itself failed/wedged
+  // (including the pool-level outer timeout above), or (code tasks only) its candidate never loaded — is a
+  // null vote, named here rather than left for a stats-side reader to reconstruct from outcome strings.
+  const loadedByIndex = "loaded" in selection && Array.isArray(selection.loaded) ? (selection.loaded as boolean[]) : null;
   const attemptsInfo = attemptRoots.map((r, i) => {
     const res = results[i];
     const seat = res?.seats?.[0];
+    const killedByDeadline = seat?.killed_by_deadline ?? false;
+    const runnerFailure = runnerFailures[i + 1] ?? null;
+    const candidateLoaded = loadedByIndex ? loadedByIndex[i] !== false : true;
+    const nullVote = !res || killedByDeadline || runnerFailure !== null || !candidateLoaded;
     return {
       index: i + 1,
       root: r,
@@ -271,8 +280,9 @@ async function main() {
       wall_ms: res?.wall_clock?.duration_ms ?? null,
       exit_code: seat?.exit_code ?? null,
       signal: seat?.signal ?? null,
-      killed_by_deadline: seat?.killed_by_deadline ?? false,
-      runner_failure: runnerFailures[i + 1] ?? null,
+      killed_by_deadline: killedByDeadline,
+      runner_failure: runnerFailure,
+      null_vote: nullVote,
     };
   });
   const result = {

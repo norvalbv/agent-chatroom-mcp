@@ -207,6 +207,7 @@ test("printf group end-to-end: MBR-exec selects the agreeing cluster, scored by 
     assert.equal(res.selection.winner_attempt, 2, "attempts 2 and 3 agree; lowest index of the modal cluster wins");
     assert.equal(res.passed, true, "the selected attempt is the correct implementation");
     assert.deepEqual(res.attempts.map((a: { passed: boolean }) => a.passed), [false, true, true, false]);
+    assert.deepEqual(res.attempts.map((a: { null_vote: boolean }) => a.null_vote), [false, false, false, false], "every candidate loaded and produced a signature, wrong or not: none are null votes");
     assert.equal(res.oracle_ceiling.any_attempt_passed, true);
     assert.equal(res.oracle_ceiling.n_passed, 2);
     const hashes = new Set<string>();
@@ -224,6 +225,27 @@ test("printf group end-to-end: MBR-exec selects the agreeing cluster, scored by 
     assert.equal(r2.status, 0, r2.stderr + r2.stdout);
     const att = JSON.parse(readFileSync(join(root2, "attempt-1", "result.json"), "utf8"));
     assert.notEqual(att.anti_tamper.hash_before, before, "a fixtures/ change changes the frozen hash");
+  } finally {
+    rmSync(work, { recursive: true, force: true });
+    rmSync(stubDir, { recursive: true, force: true });
+  }
+});
+
+test("a code candidate that fails to load (syntax error) is an explicit null vote, not silently excluded", () => {
+  const stubDir = stubCodeClaudeDir();
+  const work = mkdtempSync(join(tmpdir(), "bench-ak-unloadable-"));
+  const armCPath = writeArmCResult(work, 0.6, 100000);
+  try {
+    const impls = JSON.stringify({ 1: "this is not { typescript (((", 2: correctImpl, 3: correctImpl });
+    const r = invoke([printfTask, "3", "11", "--root", join(work, "run"), "--arm-c-result", armCPath], { PATH: `${stubDir}${delimiter}${process.env.PATH}`, STUB_IMPLS: impls });
+    assert.equal(r.status, 0, r.stderr + r.stdout);
+    const res = JSON.parse(readFileSync(join(work, "run", "result.json"), "utf8"));
+    assert.equal(res.selection.loaded[0], false, "the syntax-error candidate never produced a signature");
+    assert.equal(res.attempts[0].null_vote, true, "an unloadable candidate is a null vote even though its bench-rq1.ts run itself completed normally");
+    assert.equal(res.attempts[1].null_vote, false);
+    assert.equal(res.attempts[2].null_vote, false);
+    assert.equal(res.selection.winner_attempt, 2, "selection still picks a loadable, agreeing candidate");
+    assert.equal(res.passed, true);
   } finally {
     rmSync(work, { recursive: true, force: true });
     rmSync(stubDir, { recursive: true, force: true });
@@ -279,6 +301,8 @@ test("a killed or missing attempt stays in the group as a null vote; its unknown
     assert.equal(res.attempts.length, 3);
     assert.equal(res.attempts[1].outcome, "timeout");
     assert.equal(res.attempts[1].passed, false);
+    assert.equal(res.attempts[1].null_vote, true, "a deadline-killed attempt is an explicit null vote");
+    assert.equal(res.attempts[0].null_vote, false, "a normal attempt is not a null vote");
     assert.equal(res.usage.cost_usd, null, "unknown cost is null, not a sum that treats it as 0");
     assert.equal(res.usage.cost_usd_unknown_attempts, 1);
     assert.ok(Math.abs(res.usage.cost_usd_known_sum - 0.004) < 1e-9);
@@ -408,6 +432,7 @@ process.exit(r.status ?? 1);
     assert.equal(res.attempts[1].outcome, "no_result");
     assert.ok(res.attempts[1].runner_failure, "the wedged attempt is recorded as a runner failure, still present as a null vote");
     assert.match(res.attempts[1].runner_failure, /outer timeout/);
+    assert.equal(res.attempts[1].null_vote, true, "the pool-level outer-timeout kill is an explicit null vote, not a 4th unlabeled path");
     assert.equal(res.passed, true, "the two healthy attempts still let the group pass");
   } finally {
     rmSync(work, { recursive: true, force: true });

@@ -41,6 +41,7 @@ import { createServer } from "node:net";
 import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { basename, join, resolve } from "node:path";
 import { matchArmABudget } from "./rq1-usage-budget.js";
+import { classifyThinkingRegime, modelThinkingTokens, THINKING_REGIME_THRESHOLD } from "./confirmatory-regime.js";
 
 // Item 5 (orphans): spawnSync would block this process's event loop, so a SIGINT/SIGTERM sent to this
 // script while a run is in flight could not be handled until that run finished on its own — the signal
@@ -268,16 +269,15 @@ export function buildPlan(args: ParsedGridArgs): RunPlanItem[] {
  * thinking count, or a missing output count, is unknown. Output tokens are recorded but cannot classify: they include
  * the answer or code written, so a correct printf-format single attempt writes about 4K output at about 0.9K
  * thinking (pilot seed 901). Never learned from the confirmatory results themselves. */
-export const REGIME_THINKING_THRESHOLD = 4000;
+export const REGIME_THINKING_THRESHOLD = THINKING_REGIME_THRESHOLD;
 export type Regime = "calibrated" | "long-thinking" | "unknown";
-export function classifyRegime(output: number | null, thinking: number | null): Regime {
-  const ok = (v: number | null): v is number => typeof v === "number" && Number.isFinite(v) && v >= 0;
-  if (!ok(output) || !ok(thinking)) return "unknown";
-  return thinking < REGIME_THINKING_THRESHOLD ? "calibrated" : "long-thinking";
+/** Output is descriptive only; the one shared rule in confirmatory-regime.ts also drives the report. */
+export function classifyRegime(_output: number | null, thinking: number | null): Regime {
+  return classifyThinkingRegime(thinking);
 }
 
-/** Sums a modelUsage field over every model the seat reported; null (never zero) when none reported it. */
-function sumModelUsage(modelUsage: unknown, key: "thinkingTokens" | "outputTokens"): number | null {
+/** Sums output tokens over the models a seat reported; null (never zero) when none reported it. */
+function sumModelUsage(modelUsage: unknown, key: "outputTokens"): number | null {
   if (!modelUsage || typeof modelUsage !== "object") return null;
   const vals = Object.values(modelUsage as Record<string, any>).map((m) => m?.[key]).filter((v): v is number => typeof v === "number" && Number.isFinite(v) && v >= 0);
   return vals.length ? vals.reduce((a, b) => a + b, 0) : null;
@@ -298,7 +298,7 @@ export function writeSentinel(resultsDir: string): void {
       const r = JSON.parse(readFileSync(resultPath, "utf8"));
       const md = r.seats?.[0]?.model_usage;
       const output = sumModelUsage(md, "outputTokens") ?? (typeof r.seats?.[0]?.usage?.output_tokens === "number" ? r.seats[0].usage.output_tokens : null);
-      const thinking = sumModelUsage(md, "thinkingTokens");
+      const thinking = modelThinkingTokens(md);
       rec = { seed: Number(m[2]), outputTokens: output, thinkingTokens: thinking, regime: classifyRegime(output, thinking) };
     } catch {
       rec = { seed: Number(m[2]), outputTokens: null, thinkingTokens: null, regime: "unknown" };

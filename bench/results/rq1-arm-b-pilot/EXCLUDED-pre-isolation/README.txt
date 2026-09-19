@@ -1,0 +1,1 @@
+Excluded: arm-B runs made with f697390 where the reviewer had Bash in the builder workspace (protocol 2.1 boundary not enforced; 6-astra-20 #319). B402 was killed mid-run by sonnet-7. Kept for audit, never counted. C401 (valid, arm C unaffected) stays in place: pass, $0.778, 12769 output tokens.

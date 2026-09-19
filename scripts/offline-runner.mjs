@@ -26,6 +26,7 @@ export const offlineScripts = [
   'bench-hub-no-recruit-regression.ts',
   'bench-orphan-regression.ts',
   'bench-rq1.test.ts',
+  'bench-build.test.ts',
   'board-expiry-regression.ts',
   'board-manifest-regression.ts',
   'board-transport-regression.ts',

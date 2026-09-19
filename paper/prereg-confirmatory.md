@@ -22,6 +22,11 @@ five arms are run back-to-back before the next seed starts:
   in `paper/prereg-arm-k.md`.
 - **C:** the three-seat chatroom, all seats at medium effort.
 
+The grid iterates all 20 stamp-interpreter seeds before all 20
+bench-printf-format seeds.  It never separates the five arms within a seed, but
+a provider-regime boundary between task families remains possible and is handled
+by the per-task sentinel strata rather than pooling them.
+
 Every workspace is initialized as its own git root and the harness writes its
 workspace-root `.claude/settings.json`; every Claude invocation uses project
 settings.  The harness records the settings path/hash and direct terminal
@@ -32,8 +37,9 @@ The within-seed order is frozen to the left rotation of `[A, AH, B, K, C]` by
 `(seed - 501) mod 5`: seed 501 is `[A, AH, B, K, C]`, 502 is
 `[AH, B, K, C, A]`, and so on.  Thus every arm occupies every ordinal position
 once per five-seed block.  In confirmatory mode K has its frozen per-attempt cap
-and no longer waits for C; paired realized C cost is reported after both cells
-exist.  This makes the rotation possible without changing K's selector.
+and no longer waits for C; the separate paired C and K result artifacts are
+reported together after both cells exist (the K `matched_from` field is not
+backfilled).  This makes the rotation possible without changing K's selector.
 
 A and AH have the nonbinding runaway limits `--max-budget-usd 0.30` and
 `--deadline-ms 150000`; neither limit bound in the earlier 240 attempts.  B and
@@ -83,8 +89,8 @@ before any 501–520 cell.
 Seed 901, outside the confirmatory range, ran every arm on each task.  All costs
 were known, all listed seat exits were zero, and no deadline killed a seat.
 Thinking/output for B and C are sums of all terminal seats; K is the sum of all
-attempts.  The complete pilot cost was **$2.940826** and its elapsed wall time
-was 547.723 s.
+attempts.  The complete pilot cost was **$2.940826** and its **sum of cell wall
+durations** was 547.723 s (not a measured end-to-end grid elapsed time).
 
 | task | arm | outcome | cost USD | thinking tokens | output tokens | wall s | exit codes |
 |---|---|---|---:|---:|---:|---:|---|
@@ -116,9 +122,10 @@ node --import tsx scripts/bench-grid.ts --confirmatory \
 ```
 
 At the current pilot regime, simple 20-fold extrapolation is **$58.816520** and
-182.574 minutes (3.04 h); the command's $74 cap is that estimate plus a 25%
-reserve.  This is only a planning estimate: the cap is enforced on realized
-known cost and unknown spend halts the grid.
+182.574 minutes (3.04 h) of summed cell durations; end-to-end elapsed time can
+be higher.  The command's $74 cap is that estimate plus a 25% reserve.  This is
+only a planning estimate: the cap is checked between cells, so an in-flight
+cell may carry realized spend beyond it; unknown spend halts the grid.
 
 For a long-thinking contingency estimate, the dated window evidence uses stamp
 A about $0.20, C $1.4–2.2, K $1.7–2.3, assumes B about $0.50 and AH about
@@ -135,7 +142,8 @@ correct answer (unknown if any relevant cost is unknown), and thinking tokens pe
 run.  It directly calls two-sided `fisherExactTest` for the fixed 14-test family:
 for each of two tasks, B/C, AH/C, K/C, AH/A, B/A, K/A, and C/A.  It reports raw
 and Holm-adjusted p-values side by side; absent comparisons are padded with
-`p=1`, preserving conservative `m=14` on partial data.
+`p=1`, preserving conservative `m=14` on partial data rather than shrinking the
+family after observing which comparisons are available.
 
 The n=20 power calculations are unadjusted / conservative first-rank
 `0.05/14` threshold respectively: (.9,1) 0.0431745 / 0.0004156; (.8,1)
@@ -148,6 +156,17 @@ stratum splits reporting; unknown cost halts further capped launch; a cap/deadli
 that binds remains outcome data; invalid provenance remains unknown; and a
 pre-registered comparison whose adjusted p is not below .05 has not established
 a difference.  No equivalence margin or equality conclusion is authorized.
+
+The predictions below are directional/cost predictions, not equivalence tests:
+the stamp AH prediction is contradicted if AH has a lower pass rate than C with
+Holm-adjusted two-sided Fisher `p < .05`; its “matches” wording cannot be
+confirmed or falsified as equality without a predeclared equivalence margin.
+The B cost prediction is contradicted if complete-cost B mean cost/run is at
+least one third of C mean cost/run.  K “not significantly different” likewise
+cannot establish or falsify equality; an adjusted significant K/C difference is
+reported as contrary directional evidence, while a non-significant result stays
+inconclusive.  The printf no-aggregation prediction is contradicted when any of
+B, K, or C has a higher pass rate than A with adjusted `p < .05`.
 
 The maintainer's predictions, recorded verbatim, are:
 

@@ -95,7 +95,15 @@ export function scanExistingCost(resultsDir: string): { total: number; unknown: 
   let unknown = 0;
   for (const name of readdirSync(resultsDir)) {
     const resultPath = join(resultsDir, name, "result.json");
-    if (existsSync(resultPath)) {
+    if (!existsSync(resultPath)) {
+      // A launched cell that never wrote a result (crashed, killed, or failed after spending) has unknown
+      // cost, never zero, and that must survive a resume: the run directory is the launch journal.
+      try {
+        if (statSync(join(resultsDir, name)).isDirectory()) unknown++;
+      } catch {}
+      continue;
+    }
+    {
       try {
         const cost = readGridResult(resultPath).cost_usd;
         if (cost === null) unknown++;

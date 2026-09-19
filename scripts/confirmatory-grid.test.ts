@@ -119,11 +119,13 @@ test("confirmatory execution uses flat A/AH caps, natural B/C completion, fixed 
       assert.ok(call, `${arm} must run`);
       assert.equal(call.argv[call.argv.indexOf("--max-budget-usd") + 1], "0.3");
       assert.equal(call.argv[call.argv.indexOf("--deadline-ms") + 1], "150000");
+      assert.equal(call.argv[call.argv.indexOf("--effort") + 1], arm === "AH" ? "high" : "medium");
     }
     for (const arm of ["B", "C"] as const) {
       const call = ran.find((c) => c.arm === arm);
       assert.ok(call, `${arm} must run`);
       assert.equal(call.argv.includes("--max-budget-usd"), false, `${arm} runs to natural completion`);
+      assert.equal(call.argv[call.argv.indexOf("--effort") + 1], "medium");
     }
     const k = ran.find((c) => c.arm === "K");
     assert.ok(k);
@@ -232,6 +234,24 @@ test("classifyRegime: frozen 4000-token output threshold, unknown unless thinkin
   assert.equal(classifyRegime(null, 900), "unknown");
   assert.equal(classifyRegime(Number.NaN, 900), "unknown");
   assert.equal(classifyRegime(-1, 900), "unknown");
+});
+
+test("a launched cell with no result.json on disk is unknown spend on resume: a capped grid halts instead of reading it as zero", async () => {
+  const f = fixture();
+  try {
+    mkdirSync(join(f.resultsDir, "stamp-interpreter-A-seed501", "workspace"), { recursive: true });
+    const args = parseArgs([
+      "--tasks", "stamp-interpreter", "--seeds", "501", "--arms", "AH", "--confirmatory",
+      "--tasks-dir", f.tasksDir, "--results-dir", f.resultsDir, "--runner", f.runner, "--max-cost-usd", "1",
+    ]);
+    const summary = await runGrid(args, { log: () => {} });
+    assert.equal(summary.unknown_cost_groups, 1);
+    assert.equal(summary.ran, 0);
+    assert.equal(summary.skipped_cost_cap, 1);
+    assert.equal(calls(f.callsPath).length, 0);
+  } finally {
+    rmSync(f.dir, { recursive: true, force: true });
+  }
 });
 
 console.log("CONFIRMATORY GRID OK");

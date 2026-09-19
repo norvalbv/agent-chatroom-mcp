@@ -164,10 +164,11 @@ terminal. Valid cells are never rerun because their outcome is inconvenient.
 For each arm and seed, average the two instance catch fractions to one family-level
 block. Report per-instance and per-defect tables, but estimate C-A and C-B from the
 20 planned paired family blocks. Pairwise-complete blocks receive a paired bootstrap
-over seeds (10,000 resamples, PRNG seed 191133). The two one-sided lower confidence
-bounds use 97.5% percentiles each (Bonferroni family-wise alpha 0.05); a room-advantage
-claim requires both bounds above zero. Ordinary two-sided 95% intervals are also
-shown descriptively and never interpreted as equivalence.
+over seeds (10,000 resamples, PRNG seed 191133). Each one-sided 97.5% lower
+confidence bound is the 2.5th percentile of its bootstrap distribution (Bonferroni
+family-wise alpha 0.05 across the two comparisons); a room-advantage claim requires
+both bounds above zero. Ordinary two-sided 95% intervals are also shown
+descriptively and never interpreted as equivalence.
 
 Missing blocks are not replaced. For each comparison, the partially identified
 mean-difference range over all 20 planned blocks assigns every missing block -1 for

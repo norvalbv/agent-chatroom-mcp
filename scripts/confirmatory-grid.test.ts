@@ -119,11 +119,13 @@ test("confirmatory execution uses flat A/AH caps, natural B/C completion, fixed 
       assert.ok(call, `${arm} must run`);
       assert.equal(call.argv[call.argv.indexOf("--max-budget-usd") + 1], "0.3");
       assert.equal(call.argv[call.argv.indexOf("--deadline-ms") + 1], "150000");
+      assert.equal(call.argv[call.argv.indexOf("--effort") + 1], arm === "AH" ? "high" : "medium");
     }
     for (const arm of ["B", "C"] as const) {
       const call = ran.find((c) => c.arm === arm);
       assert.ok(call, `${arm} must run`);
       assert.equal(call.argv.includes("--max-budget-usd"), false, `${arm} runs to natural completion`);
+      assert.equal(call.argv[call.argv.indexOf("--effort") + 1], "medium");
     }
     const k = ran.find((c) => c.arm === "K");
     assert.ok(k);

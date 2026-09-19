@@ -1,0 +1,15 @@
+Repair scheduling.ts. It exports two independent functions; both must be correct.
+
+mergeIntervals(intervals): merges a list of closed intervals [start, end]. Two
+intervals that only touch (one interval's end equals the other's start) count
+as overlapping and must be merged into one. Input may be given in any order.
+
+tierRate(quantity, tiers): tiers is sorted ascending by `min`. Return the rate
+of the highest tier whose `min` the quantity has reached -- a tier applies
+once quantity is at least (inclusive of) that tier's min. If quantity is below
+every tier's min, return the first tier's rate.
+
+Preserve both exported function signatures. Modify scheduling.ts in this
+workspace; a chat answer alone is not a submitted code repair. Use no network
+or dependencies. The evaluator runs private tests against your code after
+completion.

@@ -1,1 +1,1 @@
-{"task_id":"build-billing-s1","build_suite":{"defect_ids":["D02","D03","D04","D07","D08","D09","D10","D11","D12"],"regression_ids":["R01","R02","R03","R04","R05","R06","R07","R08","R09","R10","R11","R12"]}}
+{"task_id":"build-billing-s1","build_suite":{"defect_ids":["D02","D03","D04","D07","D08","D09","D10","D11","D12"],"regression_ids":["R01","R02","R03","R04","R05","R06","R07","R08","R09","R10","R11","R12","D01","D05","D06"]}}

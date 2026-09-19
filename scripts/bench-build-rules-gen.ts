@@ -18,15 +18,14 @@ function rng(seed: number) {
 
 const NOUNS = ['shipping', 'handling', 'insurance', 'loyalty', 'referral', 'storage', 'restock', 'gift', 'warranty', 'priority', 'bulk', 'seasonal', 'pickup', 'rush', 'return', 'deposit', 'setup', 'support', 'license', 'upgrade', 'export', 'audit', 'onsite', 'archive'];
 const MODULE_NAMES = ['delivery', 'promotions', 'storage', 'service', 'accounts', 'fees', 'contracts', 'compliance', 'billing', 'catalog', 'credits', 'customs', 'inventory', 'invoicing', 'ledger', 'logistics', 'payroll', 'pricing', 'quotas', 'refunds', 'renewals', 'returns', 'reports', 'settlements', 'shipping', 'sourcing', 'subsidies', 'surcharges', 'tariffs', 'vendors'];
-let MODULES = MODULE_NAMES.slice(0, 8);
 type Rule = { id: string; module: string; fn: string; tmpl: string; kind: string; params: any; defect: boolean; misleading: boolean; variant: number };
-export type RulesInstance = { seed: number; rules: Rule[]; size: number; plants: number };
+export type RulesInstance = { seed: number; rules: Rule[]; size: number; plants: number; modules: string[] };
 const TEMPLATES = ['band', 'round', 'clamp', 'window', 'order', 'table', 'fallback', 'cap', 'cross'] as const;
 const KIND: Record<string, string> = { band: 'boundary', round: 'spec-vs-code', clamp: 'boundary', window: 'boundary', order: 'spec-vs-code', table: 'spec-vs-code', fallback: 'spec-vs-code', cap: 'boundary', cross: 'cross-module-contract' };
 const SUFFIX: Record<string, string> = { band: 'Band', round: 'Fee', clamp: 'Limit', window: 'Valid', order: 'Net', table: 'Rate', fallback: 'Code', cap: 'Free', cross: 'Quote' };
 
 export function deriveRules(seed: number, size = 24, plants = 10): RulesInstance {
-  MODULES = MODULE_NAMES.slice(0, Math.max(8, Math.round(size / 3)));
+  const MODULES = MODULE_NAMES.slice(0, Math.max(8, Math.round(size / 3)));
   const r = rng(seed);
   const int = (lo: number, hi: number) => lo + Math.floor(r() * (hi - lo + 1));
   const shuffle = <T>(xs: T[]) => { const a = [...xs]; for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(r() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
@@ -51,7 +50,7 @@ export function deriveRules(seed: number, size = 24, plants = 10): RulesInstance
       { pct: int(3, 17) };
     rules.push({ id: `${nouns[i]}${SUFFIX[t]}`, module: MODULES[i % MODULES.length], fn: `${nouns[i]}${SUFFIX[t]}`, tmpl: t, kind: KIND[t], params, defect: planted.has(i), misleading: misleading.has(i), variant: int(0, 1) });
   }
-  return { seed, rules, size, plants };
+  return { seed, rules, size, plants, modules: MODULES };
 }
 
 function code(r: Rule, bad: boolean): string {
@@ -113,7 +112,7 @@ export function buildRuleSrc(inst: RulesInstance, fixed: Set<string>): Record<st
   const files: Record<string, string> = {
     'units.ts': `export function roundHalfUp(x: number): number {\n  return x < 0 ? -Math.round(-x) : Math.round(x);\n}\n\nexport function toCents(dollars: number): number {\n  return Math.round(dollars * 100);\n}\n`,
   };
-  for (const m of MODULES) {
+  for (const m of inst.modules) {
     const rs = inst.rules.filter((r) => r.module === m);
     files[`${m}.ts`] = rs.map((r) => code(r, r.defect && !fixed.has(r.id))).join('\n');
     const imports = new Set<string>();
@@ -123,7 +122,7 @@ export function buildRuleSrc(inst: RulesInstance, fixed: Set<string>): Record<st
   return files;
 }
 
-const SPEC = (inst: RulesInstance) => `# Pricing rules specification
+const SPEC = (inst: RulesInstance, MODULES: string[]) => `# Pricing rules specification
 
 Every function below is exported from the module named in its heading. Amounts are integer cents unless a rule says
 otherwise. \`units.ts\` holds two helpers used by several modules; it is not itself changed by any rule.
@@ -140,7 +139,7 @@ export async function writeRulesTask(seed: number, out: string, size = 24, plant
   const good = buildRuleSrc(inst, new Set(inst.rules.filter((x) => x.defect).map((x) => x.id)));
   for (const [f, b] of Object.entries(bad)) { w(`public/src/${f}`, b); w(`fixtures/broken/src/${f}`, b); }
   for (const [f, b] of Object.entries(good)) w(`fixtures/correct/src/${f}`, b);
-  const load = async (dir: string) => { const m: Record<string, any> = {}; for (const n of ['units', ...MODULES]) m[n] = await import(pathToFileURL(resolve(dir, n + '.ts')).href + '?t=' + Math.random()); return m; };
+  const load = async (dir: string) => { const m: Record<string, any> = {}; for (const n of ['units', ...inst.modules]) m[n] = await import(pathToFileURL(resolve(dir, n + '.ts')).href + '?t=' + Math.random()); return m; };
   for (const d of ['fixtures/correct/src', 'fixtures/broken/src']) mkdirSync(resolve(out, d), { recursive: true });
   const gm = await load(resolve(out, 'fixtures/correct/src'));
   const bm = await load(resolve(out, 'fixtures/broken/src'));
@@ -156,13 +155,14 @@ export async function writeRulesTask(seed: number, out: string, size = 24, plant
       if (!differs) throw new Error(`defect ${r.id} indistinguishable`);
     }
     if (c.reg.some((a) => JSON.stringify(ev(gm, a)) !== JSON.stringify(ev(bm, a)))) throw new Error(`regression inputs of ${r.id} touch its defect`);
+    if (!r.defect) c.reg = [...c.reg, ...c.defect];
     checks.push({ id: r.id, module: r.module, fn: r.fn, defect: c.defect, reg: c.reg });
     expected[r.id] = { defect: c.defect.map((a) => ev(gm, a)), reg: c.reg.map((a) => ev(gm, a)) };
     const pub = r.misleading ? c.defect.filter((a) => JSON.stringify(ev(gm, a)) !== JSON.stringify(ev(bm, a)))[0] : (c.reg[c.reg.length - 1] ?? c.reg[0]);
     if (pub) (tests[r.module] ??= []).push(`test('${r.fn}', () => { assert.deepEqual(${r.module}.${r.fn}(${(pub as unknown[]).map((x) => JSON.stringify(x)).join(', ')}), ${JSON.stringify(ev(r.misleading ? bm : gm, pub as unknown[]))}); });`);
   }
-  for (const m of MODULES) w(`public/test/${m}.test.ts`, `import assert from 'node:assert/strict';\nimport { test } from 'node:test';\nimport * as ${m} from '../src/${m}.ts';\n\n${(tests[m] ?? []).join('\n')}\n`);
-  w('public/SPEC.md', SPEC(inst));
+  for (const m of inst.modules) w(`public/test/${m}.test.ts`, `import assert from 'node:assert/strict';\nimport { test } from 'node:test';\nimport * as ${m} from '../src/${m}.ts';\n\n${(tests[m] ?? []).join('\n')}\n`);
+  w('public/SPEC.md', SPEC(inst, inst.modules));
   w('public/brief.txt', BRIEF + '\n');
   w('task.json', JSON.stringify({ task_id: id, build_suite: { defect_ids: inst.rules.filter((r) => r.defect).map((r) => r.id), regression_ids: inst.rules.map((r) => r.id) } }) + '\n');
   w('oracle/oracle.json', JSON.stringify({ kind: 'planted-defects' }) + '\n');
@@ -170,40 +170,62 @@ export async function writeRulesTask(seed: number, out: string, size = 24, plant
   w('oracle/DEFECTS.json', JSON.stringify(inst.rules.filter((r) => r.defect).map((r) => ({ id: r.id, module: r.module, kind: r.kind, template: r.tmpl, public_test_encodes_bug: r.misleading })), null, 2) + '\n');
   w('oracle/expected.json', JSON.stringify(expected, null, 2) + '\n');
   w('oracle/score.ts', RULES_SCORE);
+  w('oracle/run.ts', RULES_RUN);
   w('README.md', `# ${id}\n\nGenerated by scripts/bench-build-rules-gen.ts (seed ${seed}, size ${size}); ${size} rules, ${inst.rules.filter((r) => r.defect).length} planted defects listed in oracle/DEFECTS.json. Only public/ reaches a seat.\n`);
   return inst;
 }
 
-const RULES_SCORE = `/** Private oracle for a generated rule-bank task. node --import tsx oracle/score.ts WORKSPACE
- * One defect/<id> check per planted rule (its boundary calls), one regression/<id> check per rule (calls that hold in the
- * original code). Prints {score, oracle_results, defects_planted, defects_caught, defects_shipped, regressions_failed, ...}.
- */
+const RULES_RUN = `/** Child of oracle/score.ts: calls every rule with every checked input and prints plain data. It never sees expected.json. */
 import { readFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+
+const stringify = JSON.stringify.bind(JSON);
+const write = process.stdout.write.bind(process.stdout);
+const workspace = process.argv[2];
+const here = dirname(fileURLToPath(import.meta.url));
+const inst = JSON.parse(readFileSync(join(here, 'instance.json'), 'utf8'));
+const mods: Record<string, any> = {};
+const broken = new Set<string>();
+for (const n of new Set<string>(inst.checks.map((c: any) => c.module))) {
+  try { mods[n] = await import(pathToFileURL(resolve(workspace, 'src', n + '.ts')).href); } catch { broken.add(n); }
+}
+const out: Record<string, { defect: unknown[]; reg: unknown[] }> = {};
+const call = (c: any, args: unknown[]) => { try { return broken.has(c.module) ? { ok: false } : { ok: true, value: JSON.parse(stringify(mods[c.module][c.fn](...args) ?? null)) }; } catch { return { ok: false }; } };
+for (const c of inst.checks) out[c.id] = { defect: c.defect.map((a: unknown[]) => call(c, a)), reg: c.reg.map((a: unknown[]) => call(c, a)) };
+write('\\n@@RESULT@@' + stringify(out) + '\\n');
+process.exit(0);
+`;
+
+const RULES_SCORE = `/** Private oracle for a generated rule-bank task. node --import tsx oracle/score.ts WORKSPACE
+ * The workspace runs only in a child process (oracle/run.ts) and comes back as plain data; this parent never imports it.
+ * One defect/<id> check per planted rule (its boundary calls), one regression/<id> check per rule (calls that hold in the original code;
+ * for an unplanted rule these include its boundary calls, so reintroducing that defect is scored as shipped).
+ * Prints {score, oracle_results, defects_planted, defects_caught, defects_shipped, regressions_failed, ...}.
+ */
+import { spawnSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
+import { dirname, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const workspace = process.argv[2];
 if (!workspace) { console.error('usage: score.ts WORKSPACE'); process.exit(2); }
 const here = dirname(fileURLToPath(import.meta.url));
 const inst = JSON.parse(readFileSync(join(here, 'instance.json'), 'utf8'));
 const expected = JSON.parse(readFileSync(join(here, 'expected.json'), 'utf8'));
-const mods: Record<string, any> = {};
-const broken = new Set<string>();
-for (const n of new Set<string>(inst.checks.map((c: any) => c.module))) {
-  try { mods[n] = await import(pathToFileURL(resolve(workspace, 'src', n + '.ts')).href + '?t=' + Date.now()); }
-  catch { broken.add(n); }
-}
-const J = (x: unknown) => JSON.stringify(x === undefined ? null : x);
-function run(c: any, which: 'defect' | 'reg'): boolean {
-  if (broken.has(c.module)) return false;
-  try { return c[which].every((args: unknown[], i: number) => J(mods[c.module][c.fn](...args)) === J(expected[c.id][which][i])); }
-  catch { return false; }
+const child = spawnSync(process.execPath, ['--import', 'tsx', join(here, 'run.ts'), resolve(workspace)], { encoding: 'utf8', timeout: 60000, maxBuffer: 64 * 1024 * 1024 });
+let got: Record<string, { defect: any[]; reg: any[] }> = {};
+try { got = JSON.parse(child.stdout.slice(child.stdout.lastIndexOf('@@RESULT@@') + 10)); } catch { got = {}; }
+function run(id: string, which: 'defect' | 'reg'): boolean {
+  const exp = expected[id][which], act = got[id]?.[which];
+  if (!act || act.length !== exp.length) return false;
+  return exp.every((e: unknown, i: number) => act[i]?.ok === true && JSON.stringify(act[i].value) === JSON.stringify(e));
 }
 const oracle_results: { name: string; exit_code: number }[] = [];
 const caught_ids: string[] = [], missed_ids: string[] = [], regression_failed_ids: string[] = [];
 for (const c of inst.checks) {
-  if (inst.defects.includes(c.id)) { const ok = run(c, 'defect'); oracle_results.push({ name: 'defect/' + c.id, exit_code: ok ? 0 : 1 }); (ok ? caught_ids : missed_ids).push(c.id); }
-  const ok = run(c, 'reg'); oracle_results.push({ name: 'regression/' + c.id, exit_code: ok ? 0 : 1 }); if (!ok) regression_failed_ids.push(c.id);
+  if (inst.defects.includes(c.id)) { const ok = run(c.id, 'defect'); oracle_results.push({ name: 'defect/' + c.id, exit_code: ok ? 0 : 1 }); (ok ? caught_ids : missed_ids).push(c.id); }
+  const ok = run(c.id, 'reg'); oracle_results.push({ name: 'regression/' + c.id, exit_code: ok ? 0 : 1 }); if (!ok) regression_failed_ids.push(c.id);
 }
 const score = missed_ids.length === 0 && regression_failed_ids.length === 0 ? 1 : 0;
 console.log(JSON.stringify({ score, oracle_results, defects_planted: inst.defects.length, defects_caught: caught_ids.length, defects_shipped: missed_ids.length + regression_failed_ids.length, regressions_failed: regression_failed_ids.length, caught_ids, missed_ids, regression_failed_ids }));

@@ -325,38 +325,56 @@ test('active before start and open ended', () => { assert.equal(isActive(subs[0]
   return t;
 }
 
-const ORACLE_SCORE = `/** Private oracle for a generated planted-defect task. Never copied into public/.
- * node --import tsx oracle/score.ts WORKSPACE
- * Output: {score, oracle_results, defects_planted, defects_caught, defects_shipped, regressions_failed, caught_ids, missed_ids, regression_failed_ids}.
- * score is 1 only when every planted defect is fixed and no regression check fails. Exit 0 = score 1, 1 = otherwise, 2 = usage.
- */
+const ORACLE_RUN = `/** Child of oracle/score.ts: runs every check against the workspace and prints plain data. It never sees expected.json. */
 import { readFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { CHECKS } from './checks.ts';
+
+const stringify = JSON.stringify.bind(JSON);
+const write = process.stdout.write.bind(process.stdout);
+const workspace = process.argv[2];
+const here = dirname(fileURLToPath(import.meta.url));
+const inst = JSON.parse(readFileSync(join(here, 'instance.json'), 'utf8'));
+const names = ['money', 'types', 'calendar', 'plans', 'proration', 'coupons', 'tax', 'invoice', 'dunning', 'report'];
+const mods: Record<string, any> = {};
+let loadError = false;
+for (const n of names) {
+  try { mods[n] = await import(pathToFileURL(resolve(workspace, 'src', n + '.ts')).href); } catch { loadError = true; }
+}
+const out: Record<string, { ok: boolean; value?: unknown }> = {};
+for (const id of Object.keys(CHECKS)) {
+  try { out[id] = loadError ? { ok: false } : { ok: true, value: JSON.parse(stringify(CHECKS[id](mods, inst.params))) }; } catch { out[id] = { ok: false }; }
+}
+write('\\n@@RESULT@@' + stringify(out) + '\\n');
+process.exit(0);
+`;
+
+const ORACLE_SCORE = `/** Private oracle for a generated planted-defect task. Never copied into public/.
+ * node --import tsx oracle/score.ts WORKSPACE
+ * The workspace runs only in a child process (oracle/run.ts) and comes back as plain data; this parent never imports it.
+ * defect/<id>: one per planted defect. regression/<id>: R* behaviours plus the check of every catalogued defect NOT planted here,
+ * so reintroducing one is scored as shipped. score is 1 only when every planted defect is fixed and no regression fails.
+ * Exit 0 = score 1, 1 = otherwise, 2 = usage.
+ */
+import { spawnSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
+import { dirname, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const workspace = process.argv[2];
 if (!workspace) { console.error('usage: score.ts WORKSPACE'); process.exit(2); }
 const here = dirname(fileURLToPath(import.meta.url));
 const inst = JSON.parse(readFileSync(join(here, 'instance.json'), 'utf8'));
 const expected = JSON.parse(readFileSync(join(here, 'expected.json'), 'utf8'));
-const names = ['money', 'types', 'calendar', 'plans', 'proration', 'coupons', 'tax', 'invoice', 'dunning', 'report'];
-
-const mods: Record<string, any> = {};
-let loadError = '';
-for (const n of names) {
-  try { mods[n] = await import(pathToFileURL(resolve(workspace, 'src', n + '.ts')).href + '?t=' + Date.now()); }
-  catch (e) { loadError = String(e); }
-}
-function run(id: string): boolean {
-  if (loadError) return false;
-  try { return JSON.stringify(CHECKS[id](mods, inst.params)) === JSON.stringify(expected[id]); }
-  catch { return false; }
-}
+const child = spawnSync(process.execPath, ['--import', 'tsx', join(here, 'run.ts'), resolve(workspace)], { encoding: 'utf8', timeout: 60000, maxBuffer: 64 * 1024 * 1024 });
+let got: Record<string, { ok: boolean; value?: unknown }> = {};
+try { got = JSON.parse(child.stdout.slice(child.stdout.lastIndexOf('@@RESULT@@') + 10)); } catch { got = {}; }
+const run = (id: string) => !!got[id]?.ok && JSON.stringify(got[id].value) === JSON.stringify(expected[id]);
 const oracle_results: { name: string; exit_code: number }[] = [];
 const caught_ids: string[] = [], missed_ids: string[] = [], regression_failed_ids: string[] = [];
 for (const id of inst.defects) { const ok = run(id); oracle_results.push({ name: 'defect/' + id, exit_code: ok ? 0 : 1 }); (ok ? caught_ids : missed_ids).push(id); }
-for (const id of Object.keys(CHECKS).filter((k) => k.startsWith('R'))) { const ok = run(id); oracle_results.push({ name: 'regression/' + id, exit_code: ok ? 0 : 1 }); if (!ok) regression_failed_ids.push(id); }
+for (const id of Object.keys(expected).filter((k) => k.startsWith('R') || (k.startsWith('D') && !inst.defects.includes(k)))) { const ok = run(id); oracle_results.push({ name: 'regression/' + id, exit_code: ok ? 0 : 1 }); if (!ok) regression_failed_ids.push(id); }
 const score = missed_ids.length === 0 && regression_failed_ids.length === 0 ? 1 : 0;
 console.log(JSON.stringify({
   score, oracle_results, defects_planted: inst.defects.length, defects_caught: caught_ids.length,
@@ -388,7 +406,7 @@ export const CHECKS: Record<string, (m: any, p: any) => unknown> = {
   R04: (m, p) => [m.plans.usageCharge(m.plans.PLANS.starter, 0), m.plans.usageCharge(m.plans.PLANS.starter, 7), m.plans.usageCharge(m.plans.PLANS.growth, 5), m.plans.usageCharge(m.plans.PLANS.starter, p.tierA - 1)],
   R05: (m) => [m.proration.prorate(3000, d(2025, 4, 1), d(2025, 5, 1), d(2025, 4, 11)), m.proration.prorateCredit(3000, d(2025, 4, 1), d(2025, 5, 1), d(2025, 4, 11)), m.proration.prorate(3000, d(2025, 4, 1), d(2025, 5, 1), d(2025, 5, 1))],
   R06: (m) => [m.coupons.applyCoupons(10000, [{ code: 'P', kind: 'percent', value: 1500 }]), m.coupons.applyCoupons(8000, [{ code: 'F', kind: 'fixed', value: 700 }]), m.coupons.applyCoupons(500, [])],
-  R07: (m) => [m.coupons.applyCoupons(10000, [{ code: 'A', kind: 'percent', value: 1000 }, { code: 'B', kind: 'percent', value: 500 }]), m.coupons.applyCoupons(10000, [{ code: 'P', kind: 'percent', value: 2000, maxCents: 5000 }])],
+  R07: (m) => [m.coupons.applyCoupons(10000, [{ code: 'P', kind: 'percent', value: 2000, maxCents: 5000 }]), m.coupons.applyCoupons(10000, [{ code: 'P', kind: 'percent', value: 2000 }])],
   R08: (m) => [m.tax.taxFor('X', 12345), m.tax.taxFor('Z', 999), m.tax.taxFor('Y', 5000), m.tax.taxFor('?', 5000)],
   R09: (m) => [m.invoice.buildInvoice({ customer: { id: 'c', region: 'Y', taxExempt: false }, planId: 'starter', units: 5 }), m.invoice.buildInvoice({ customer: { id: 'c', region: 'Z', taxExempt: false }, planId: 'growth', units: 3 })],
   R10: (m, p) => [m.dunning.lateFee(10000, d(2025, 6, 1), m.calendar.addDays(d(2025, 6, 1), 2)), m.dunning.lateFee(10000, d(2025, 6, 1), m.calendar.addDays(d(2025, 6, 1), p.grace + 30)), m.dunning.lateFee(9999999, d(2025, 6, 1), m.calendar.addDays(d(2025, 6, 1), p.grace + 30))],
@@ -407,12 +425,13 @@ export async function writeTask(seed: number, out: string): Promise<Instance> {
   for (const [f, body] of Object.entries(publicTests(inst))) w(`public/test/${f}`, body);
   w('public/SPEC.md', SPEC(inst.params));
   w('public/brief.txt', BRIEF + '\n');
-  w('task.json', JSON.stringify({ task_id: id, build_suite: { defect_ids: inst.defects, regression_ids: Array.from({ length: 12 }, (_, i) => 'R' + String(i + 1).padStart(2, '0')) } }) + '\n');
+  w('task.json', JSON.stringify({ task_id: id, build_suite: { defect_ids: inst.defects, regression_ids: [...Array.from({ length: 12 }, (_, i) => 'R' + String(i + 1).padStart(2, '0')), ...DEFECT_IDS.filter((d) => !inst.defects.includes(d))] } }) + '\n');
   w('oracle/oracle.json', JSON.stringify({ kind: 'planted-defects' }) + '\n');
   w('oracle/instance.json', JSON.stringify(inst, null, 2) + '\n');
   w('oracle/DEFECTS.json', JSON.stringify(inst.defects.map((k) => ({ id: k, module: DEFECT_MODULE[k], kind: DEFECT_KIND[k] })), null, 2) + '\n');
   w('oracle/checks.ts', ORACLE_CHECKS);
   w('oracle/score.ts', ORACLE_SCORE);
+  w('oracle/run.ts', ORACLE_RUN);
   const { CHECKS } = await import(pathToFileURL(resolve(out, 'oracle/checks.ts')).href + '?t=' + Date.now());
   const mods: Record<string, any> = {};
   for (const n of ['money', 'types', 'calendar', 'plans', 'proration', 'coupons', 'tax', 'invoice', 'dunning', 'report']) mods[n] = await import(pathToFileURL(resolve(out, 'fixtures/correct/src', n + '.ts')).href);

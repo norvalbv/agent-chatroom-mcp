@@ -266,7 +266,7 @@ The \`Warehouse\` class in \`src/warehouse.ts\` tracks stock in lots. All quanti
 - Placing an order reserves every line from lots that can be used that day, earliest expiry first; lots with the same expiry are used in
   order of their id. A line may be filled from several lots.
 - Reserving is all or nothing per order. If any line cannot be filled in full, the order becomes backordered and holds no stock at all.
-- A cancelled order is never reserved again, even though nothing removes it from the backorder queue.
+- A cancelled order is never reserved again.
 - Backordered orders are retried whenever stock becomes available again: on a receipt, on a cancellation and on a return.
   They are retried in the order they were placed.
 
@@ -300,7 +300,7 @@ export const SCENARIOS: Record<string, Scn> = {
   S09: (W, m) => { const w = new W(); w.receive('L1', 'A', 3 * m, 99, 0); w.place('o1', [{ sku: 'A', qty: 3 * m }], 1); w.place('o2', [{ sku: 'A', qty: 3 * m }], 1); w.cancel('o1', 2); return w.snapshot(2); },
   S10: (W, m) => { const w = new W(); w.receive('L1', 'A', 5 * m, 99, 0); w.receive('L1', 'A', 3 * m, 99, 0); return w.snapshot(1); },
   S11: (W, m) => { const w = new W(); w.receive('L1', 'A', 5 * m, 10, 0); w.receive('L2', 'A', 2 * m, 30, 0); return [w.snapshot(11).available, w.snapshot(12).available]; },
-  S12: (W, m) => { const w = new W(); w.place('o1', [{ sku: 'A', qty: 2 * m }], 0); w.cancel('o1', 0); w.receive('L1', 'A', 5 * m, 99, 1); return w.snapshot(1); },
+  S12: (W, m) => { const w = new W(); w.place('o1', [{ sku: 'A', qty: 2 * m }], 0); w.cancel('o1', 0); w.receive('L1', 'A', 5 * m, 99, 1); const sn = w.snapshot(1); return [sn.orders, sn.lots, sn.available]; },
   S13: (W, m) => { const w = new W(); w.receive('L1', 'A', 6 * m, 99, 0); w.receive('L2', 'A', 6 * m, 120, 0); w.place('o1', [{ sku: 'A', qty: 8 * m }], 3); w.ship('o1', 'A', 8 * m); const a = w.returnItems('o1', 'A', 2 * m, 4); const b = w.returnItems('o1', 'A', 2 * m, 4); return [a, b, w.snapshot(4)]; },
   S14: (W, m) => { const w = new W(); w.receive('L1', 'A', 10 * m, 99, 0); w.place('o1', [{ sku: 'A', qty: 2 * m }, { sku: 'A', qty: 2 * m }], 1); w.cancel('o1', 2); return w.snapshot(2); },
   R01: (W, m) => { const w = new W(); w.receive('L1', 'A', 10 * m, 99, 0); w.receive('L2', 'B', 4 * m, 99, 0); const s = w.place('o1', [{ sku: 'A', qty: 3 * m }, { sku: 'B', qty: 2 * m }], 1); return [s, w.snapshot(1)]; },

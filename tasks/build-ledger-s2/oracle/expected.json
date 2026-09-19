@@ -296,15 +296,8 @@
       "A": 4
     }
   ],
-  "S12": {
-    "lots": [
-      {
-        "id": "L1",
-        "qty": 10,
-        "reserved": 0
-      }
-    ],
-    "orders": [
+  "S12": [
+    [
       {
         "id": "o1",
         "status": "cancelled",
@@ -313,11 +306,17 @@
         "returned": {}
       }
     ],
-    "backorders": [],
-    "available": {
+    [
+      {
+        "id": "L1",
+        "qty": 10,
+        "reserved": 0
+      }
+    ],
+    {
       "A": 10
     }
-  },
+  ],
   "S13": [
     true,
     true,

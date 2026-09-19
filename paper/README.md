@@ -1,5 +1,8 @@
 # Building the paper
 
+Integration branch: `integration/swarm-164742-5jvl-verifier`, commit `[FINAL COMMIT SHA -- filled
+in by the verifier at conclusion]`.
+
 ## What was installed (user-local, per the room brief; nothing system-wide)
 
 - `brew install tectonic` (0.17.0) — a self-contained LaTeX engine that fetches its own
@@ -23,9 +26,11 @@ separate `bibtex`/`pdflatex` invocation is needed.
 ## Regenerating tables and figures
 
 Every number in `main.tex` is `\input`/`\includegraphics`'d from `paper/tables/*.tex` and
-`paper/figures/*.pdf`, each produced by a script under `scripts/paper-*.ts` (Node, run with
-`node --import tsx`) or `scripts/paper-*.py` (matplotlib) reading only committed paths under
-`bench/results/` and `swarms/`. To regenerate everything and diff against what's committed:
+`paper/figures/*.png`, each produced by a script under `scripts/paper-*.ts` (Node, run with
+`node --import tsx`) or `scripts/paper-fig.py` (matplotlib) reading only committed paths under
+`bench/results/rq1-suite` and `bench/results/rq1-arm-k`. `scripts/paper-number-audit.ts` additionally
+scans the rendered sections for numbers that don't trace back to a generated table/figure. To
+regenerate everything and diff against what's committed:
 
 ```
 bash paper/regen.sh
@@ -40,8 +45,8 @@ includes, per the room's "no hand-typed numbers" contract (`paper/figures.md`).
 bash paper/check-citations.sh
 ```
 
-Requires network access to `export.arxiv.org`; scans every `paper/*.md` file (not `.tex`) for
-arXiv links/ids and verifies each resolves and, where a title is given alongside it, that the
-title matches arXiv's own record. `refs.bib` entries are additionally cross-checked by
-`scripts/paper-check-refs-bib.ts` (every `\cite`-able key in `refs.bib` must carry an
-`arxiv = {...}` field whose id appears, resolved, in this same check).
+Requires network access to `export.arxiv.org`. Scans every `paper/*.md` file for arXiv links/ids
+and verifies each resolves and, where a title is given alongside it, that the title matches
+arXiv's own record; separately scans `paper/refs.bib` and verifies every entry's `eprint` field
+resolves and matches that entry's `title` field. Exit 0 only if every citation found (in the docs
+and in the bibliography actually used by `main.tex`) checks out.

@@ -1,6 +1,6 @@
 # Research for the planted-defect build suite (swarm-191133-4hqx)
 
-Only sources not already in docs/research-index.md. Read on 2026-09-19 at abstract level: arXiv:2406.09843, 2607.02606, 2603.23448, 2601.12307 and 2604.02460 from their abstract pages; arXiv:2308.16557, 2506.02954, 2607.22880, 2511.00872, 2604.16321 and 2603.20432 from search-result summaries only (title and one-line abstract). Nothing here was read in full text.
+Only sources not already in docs/research-index.md. Read on 2026-09-19 at abstract level: arXiv:2406.09843, 2607.02606, 2603.23448, 2601.12307, 2604.02460 and 2602.08146 from their abstract pages; arXiv:2308.16557, 2506.02954, 2607.22880, 2511.00872, 2604.16321 and 2603.20432 from search-result summaries only (title and one-line abstract). Nothing here was read in full text.
 
 ## 1. How defect-seeded and mutation-based evaluations are built and validated
 

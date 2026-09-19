@@ -1,13 +1,15 @@
-/** Offline forensic measurement, zero model spend: for the exact-answer primary family
- * (stamp-interpreter, stamp-2), is arm C's committed final answer the same as the plurality answer among
- * that seed's independent arm-K attempts?
+/** Offline consistency check, zero model spend: for the exact-answer primary family (stamp-interpreter,
+ * stamp-2), is arm C's committed final answer the same as the plurality answer among that seed's
+ * independent arm-K attempts, recomputed independently from raw votes rather than read back from the
+ * selector's own stored winner?
  *
- * This is a distinct question from "does arm C pass the oracle" (already reported) and from
- * evidence/arm-c-process-trace's self-reported in-transcript correction signal (this room, 5-6-sol-15):
- * it asks whether deliberation's *output* diverges from what k independent, non-communicating attempts
- * would have converged on anyway. If C almost always agrees with the K-plurality, the room's win on this
- * suite is aggregation-equivalent (voting would have found the same answer); if it often disagrees, there
- * is measured headroom for deliberation to do something voting could not.
+ * IMPORTANT (swarm-174126-0s5m room, reviewer finding by 5-6-sol-15): on the 80 seeds this currently runs
+ * against, arm C is oracle-correct 80/80, so "C's answer == K plurality" is logically identical to "K's
+ * selected answer passes the oracle" -- this script cannot measure new deliberation headroom or
+ * convergence on that data; it only independently re-verifies the already-published K pass counts. It
+ * would become informative the moment it is run against a task/arm-C sample that is NOT itself at ceiling,
+ * where it would separate "C reasons past what voting alone would find" from "C converges on the same
+ * answer voting would have found anyway". Kept for that future use, not cited as new evidence here.
  *
  * Reads only committed bench/results/rq1-suite (arm C's workspace/answer.txt) and bench/results/rq1-arm-k
  * (each K result.json's own precomputed selection, via bench-ak.ts's exported normalize/selectByMajorityVote

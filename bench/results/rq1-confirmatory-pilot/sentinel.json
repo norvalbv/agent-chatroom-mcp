@@ -1,0 +1,34 @@
+{
+  "bench-printf-format": {
+    "n": 1,
+    "min_thinking": 888,
+    "max_thinking": 888,
+    "min_output": 4180,
+    "max_output": 4180,
+    "regime": "calibrated",
+    "seeds": [
+      {
+        "seed": 901,
+        "output_tokens": 4180,
+        "thinking_tokens": 888,
+        "regime": "calibrated"
+      }
+    ]
+  },
+  "stamp-interpreter": {
+    "n": 1,
+    "min_thinking": 922,
+    "max_thinking": 922,
+    "min_output": 1512,
+    "max_output": 1512,
+    "regime": "calibrated",
+    "seeds": [
+      {
+        "seed": 901,
+        "output_tokens": 1512,
+        "thinking_tokens": 922,
+        "regime": "calibrated"
+      }
+    ]
+  }
+}

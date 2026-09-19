@@ -462,13 +462,16 @@ const child = spawnSync(process.execPath, [
   runner, candidate, String(inst.m),
 ], { encoding: 'utf8', timeout: 60000, maxBuffer: 64 * 1024 * 1024, env: {}, stdio: ['ignore', 'pipe', 'pipe', 'pipe'] });
 const fd3 = child.output?.[3] as string | null;
-if (!fd3 && (child.status !== 0 || (child.stderr ?? '').trim())) {
+if (!fd3) {
   // A legitimate run (correct, broken or adversarial candidate) always writes SOMETHING to fd 3: run.ts's own
   // import is wrapped so even a candidate that fails to import still produces an all-false result before exiting.
-  // An empty fd 3 alongside a nonzero exit or stderr means run.ts itself never reached that write -- our own
-  // scorer/harness broke, not the candidate -- so this is infrastructure, never a candidate's shipped defects.
-  console.error('oracle infrastructure: worker produced no result (' + (child.stderr ?? '').trim() + ')');
-  process.exit(2);
+  // An empty fd 3 is either tamper -- a permission wall the sandboxed child hit while attempting something
+  // forbidden (ERR_ACCESS_DENIED/EACCES), or a clean early exit(0) that never let run.ts's own write happen --
+  // or, only when neither of those signatures is present, our own scorer/harness genuinely broke (infrastructure).
+  const stderr = (child.stderr ?? '').trim();
+  const isTamper = child.status === 0 || /ERR_ACCESS_DENIED|EACCES/.test(stderr);
+  console.error((isTamper ? 'oracle infrastructure: tamper (' : 'oracle infrastructure: worker produced no result (') + stderr + ')');
+  process.exit(isTamper ? 3 : 2);
 }
 let got: Record<string, { ok: boolean; value?: unknown }> = (readSingleResult(fd3) as typeof got) ?? {};
 function subset(exp: unknown, act: unknown): boolean {

@@ -149,3 +149,19 @@ test('oracle worker startup failure is infrastructure, never observed defect mis
     assert.equal(run.stdout.trim(), '', 'worker failure must not enter caught/shipped denominators');
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
+
+for (const [kind, workerSource] of [
+  ['permission denial', "import { readFileSync } from 'node:fs'; readFileSync('/oracle-forbidden-file');\n"],
+  ['empty successful result', 'process.exit(0);\n'],
+] as const) test(`oracle ${kind} is non-scoreable tamper`, () => {
+  const root = mkdtempSync(join(tmpdir(), 'build-oracle-classification-'));
+  try {
+    const task = join(root, 'task');
+    cpSync(resolve('tasks/build-ledger-s1'), task, { recursive: true });
+    writeFileSync(join(task, 'oracle', 'run.ts'), workerSource);
+    const run = spawnSync(process.execPath, ['--import', import.meta.resolve('tsx'), join(task, 'oracle', 'score.ts'), join(task, 'fixtures', 'correct')],
+      { encoding: 'utf8', timeout: 30_000 });
+    assert.equal(run.status, 3, run.stderr || run.stdout);
+    assert.equal(run.stdout.trim(), '', 'tamper must not become an observed score');
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});

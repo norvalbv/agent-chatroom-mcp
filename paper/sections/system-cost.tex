@@ -176,23 +176,24 @@ Claude Sonnet~5 rate card fetched for \texttt{paper/budget.md}
 \$2.00 per million tokens (MTok) and a cache-read hit is \$0.20/MTok -- exactly one
 tenth. This is why a room that resends nearly its entire transcript on every turn (the
 token round's own finding: 69,687 prompt tokens per step, matching the 240,000-character
-trim ceiling) does not cost ten times what its raw token count would suggest at the base
-rate: the review-build room's \$70.97 measured cost corresponds to a token profile that
-is 98--99\% cache reads, so its dollar cost is close to what the \emph{cache-read} rate,
-not the base input rate, would predict for that volume. Concretely, for that same room
-\texttt{paper/budget.md} records \texttt{usage.input\_tokens: 2{,}354},
-\texttt{usage.cache\_read\_input\_tokens: 279{,}597{,}966},
-\texttt{usage.cache\_creation\_input\_tokens: 2{,}108{,}427}, and
+trim ceiling) costs roughly a tenth of what its raw token count would suggest at the
+base input rate, not the full base-rate price: the 233M-token review-build session
+(Table~\ref{tab:review-round-cost}) had about 280M cache-read tokens, which alone would
+cost about \$560 at the \$2.00/MTok base input rate, yet its measured cost was \$70.97,
+because those tokens were cache-read hits billed at \$0.20/MTok, not fresh input.
+Concretely, for that same session \texttt{paper/budget.md} records
+\texttt{usage.input\_tokens: 2{,}354}, \texttt{usage.cache\_read\_input\_tokens:
+279{,}597{,}966}, \texttt{usage.cache\_creation\_input\_tokens: 2{,}108{,}427}, and
 \texttt{usage.output\_tokens: 657{,}972} against a measured \texttt{cost\_usd} of
 \$70.9735702 -- a raw repricing of these four fields at the published per-MTok rates
-undershoots the CLI-reported cost by 4.5\% for this room (and by 4.5--11.3\% across the
-three rooms \texttt{paper/budget.md} checked), a gap that document attributes,
-tentatively and without full attribution, to 1-hour cache writes (\$4/MTok on Sonnet~5,
-a premium tier above the 5-minute cache-write rate quoted above) or a data-residency
-multiplier not broken out in \texttt{result.json}'s fields. This paper
+undershoots the CLI-reported cost by 4.5\% for this session (and by 4.5--11.3\% across
+the three rooms \texttt{paper/budget.md} checked), a gap that document attributes,
+tentatively and without full attribution, to 1-hour cache writes (a \$4/MTok premium
+tier on Sonnet~5, above the plain 5-minute cache-write rate of \$2.50/MTok) or a
+data-residency multiplier not broken out in \texttt{result.json}'s fields. This paper
 therefore always reports the CLI's own measured \texttt{cost\_usd} as authoritative
 where it is available, and treats a from-scratch repricing of the four token fields as a
-sanity bound accurate to roughly 5--11\%, never as an exact reconstruction.
+sanity bound accurate to 4.5--11.3\%, never as an exact reconstruction.
 
 \paragraph{A note on what is, and is not, reproducible from this repository.} The two
 per-room dollar figures and token-field breakdowns quoted above (Table~\ref{tab:review-round-cost}'s

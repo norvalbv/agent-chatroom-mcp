@@ -367,10 +367,36 @@ count. Scoreable timeout/non-conclusion workspaces therefore still run the oracl
 
 ## Development and pilot evidence (not yet observed at freeze)
 
-This section is intentionally empty in the development-freeze commit. It will name
-the integration branch and commit, admitted task versions and per-defect 5-seed
-tables, the non-author ambiguity/giveaway reviews, every rejected variant and why,
-the seed 101--103 A/B/C table (caught, shipped components, actual cost, thinking
-tokens, wall time, provenance coverage), the room spend ledger, and the generated
-20-seed projection. No value is filled from memory or chat prose when a committed
-machine-readable artifact exists.
+The development freeze above preceded these observations. No task is admitted and
+therefore no confirmatory run is authorized.
+
+- **Billing-v1 rejected:** five exploratory default-effort A runs each caught 9/9.
+  Raw results, workspaces, launch snapshot, hashes and an independent replay are
+  archived at commit `6669a46` (`bench/build-suite-evidence/billing-v1`); total
+  recorded cost is $0.4097492. The public task also contained local giveaway
+  residue. This evidence is immutable and is not called pinned-effort admission.
+- **Ledger-v2 rejected:** pinned-medium A caught 44/45 plants over five cells
+  (task-level 97.8%, outside [0.30,0.70]). The committed detailed run and per-defect
+  tables are `docs/build-suite-admission.md` and
+  `docs/build-suite-admission-runs.json` on generator evidence commit `e8dbd0c`.
+  Non-author attack additionally reproduced scorer spoofing, reference/spec bugs,
+  whole-snapshot coupling and giveaway residue in the reviewed version. A post-hoc
+  unplanted duplicate-SKU input was fixed by 6/15 exploratory seats, identifying a
+  promising future defect class but not admitting this version.
+- **Unequal-cap diagnostic, not the required pilot:** ledger-s1 seeds 101--103 were
+  run with A/B cap $0.60 and C cap $1.60, so they violate the common-cap contract;
+  the oracle was also corrected after inspecting apparent misses. Re-scoring gives
+  A, B and C 9/9 in every cell. The committed raw/as-run rows are
+  `docs/build-suite-pilot.json` at `e8dbd0c`. Board summary means per cell were A:
+  $0.056 and 21 s; B: $0.135 and 62 s; C: $0.83 and 78 s. C at $0.60 ended in
+  infrastructure error. These rows test the harness and demonstrate ceiling/cost,
+  but cannot satisfy the requested pilot on an admitted task.
+
+The admission falsifier therefore fired. There are no admitted sibling IDs to
+substitute for the fail-closed placeholders in the confirmatory command. A purely
+illustrative extrapolation of the unequal-cap one-instance means to the planned two
+instances is `40 * (0.056 + 0.135 + 0.83) = $40.84`; it is not the projected cost of
+a valid confirmatory design. The fixed nominal allocation remains $240 plus possible
+last-turn overshoot. A valid realized-cost projection requires a new sibling pair to
+pass admission and a common-cap diagnostic pilot. This room does not run seeds
+501--520.

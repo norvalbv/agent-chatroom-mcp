@@ -1,0 +1,146 @@
+{
+  "schemaVersion": 1,
+  "task_id": "build-rules-s1",
+  "arm": "A",
+  "seed": 3,
+  "model": "sonnet",
+  "outcome": "task_pass",
+  "passed": true,
+  "reason": "task_pass",
+  "oracle": {
+    "kind": "planted-defects",
+    "command": "node --import tsx oracle/score.ts <workspace>",
+    "exit_code": 0
+  },
+  "anti_tamper": {
+    "hash_before": "18d47274f4d6c330054edace6144337fe3f76ba3a861557ce497d54be65f9c21",
+    "hash_after": "18d47274f4d6c330054edace6144337fe3f76ba3a861557ce497d54be65f9c21",
+    "unchanged": true
+  },
+  "seats": [
+    {
+      "name": "single",
+      "argv": [
+        "claude",
+        "-p",
+        "The library in src/ must meet the rules in SPEC.md. The public tests in test/ pass today, but passing them does not prove the code meets the specification. Make the codebase conform to SPEC.md, keeping everything that already conforms working. Run the tests with: node --test test/*.test.ts. Do not create files outside this directory.\n\nModify the relevant source file(s) in your current working directory directly to implement the fix described above. Your edit to the existing file(s) is the submission; do not create any other output file.",
+        "--mcp-config",
+        "/tmp/sb8/r1-A-3/mcp-empty.json",
+        "--strict-mcp-config",
+        "--allowedTools",
+        "Read,Edit,Write,MultiEdit,Bash,Glob,Grep",
+        "--tools",
+        "Read,Edit,Write,MultiEdit,Bash,Glob,Grep",
+        "--disable-slash-commands",
+        "--setting-sources",
+        "project",
+        "--exclude-dynamic-system-prompt-sections",
+        "--output-format",
+        "stream-json",
+        "--verbose",
+        "--model",
+        "sonnet",
+        "--max-budget-usd",
+        "2"
+      ],
+      "exit_code": 0,
+      "signal": null,
+      "started_at": "2026-09-19T19:43:55.537Z",
+      "completed_at": "2026-09-19T19:44:29.869Z",
+      "num_turns": 8,
+      "duration_ms": 32715,
+      "duration_api_ms": 31100,
+      "usage": {
+        "cost": 0.075721,
+        "input_tokens": 16,
+        "cache_read_input_tokens": 80335,
+        "cache_creation_input_tokens": 8543,
+        "output_tokens": 2545
+      },
+      "text": "The code now follows SPEC.md, and all 21 tests pass. Two of those tests only passed before because they asserted the old, wrong behaviour, so I changed them.\n\n**Fixes in `src/`:**\n- **`depositValid`:** the window is now days 80–86, seven days. It ran through day 87 before.\n- **`insuranceRate`:** bronze and gold were swapped. Bronze is now 275 and gold 325.\n- **`referralBand`:** the 700 band now stops before 72, so 72 gives 1050.\n- **`handlingValid`:** the window is now days 22–34, thirteen days. It included day 35 before.\n- **`warrantyQuote`, `shippingQuote`, `handlingQuote`:** these took 3%, 9% and 8% of the dollar amount and then divided by 100 again, which gave a fee 100 times too small. They now take the percentage of the price in cents.\n- **`giftRate`:** gold and bronze were swapped. Gold is now 125 and bronze 200.\n- **`supportCode`:** unknown codes now cost 400 instead of 0.\n- **`onsiteCode`:** unknown codes now cost 240 instead of 0.\n\n**Tests I changed:**\n- **`test/promotions.test.ts`:** `referralBand(72)` now expects 1050.\n- **`test/service.test.ts`:** `handlingValid(35)` now expects `false`.\n\nBoth changes follow the spec's wording (\"from 72 upward\" and \"13 days starting on day 22\"). If you'd rather keep the old test values, the spec and those tests disagree, and you'd need to decide which one is right.\n\nThe rest already matched the spec and I left it alone.",
+      "killed_by_deadline": false,
+      "partial_usage": null,
+      "reported_models": {
+        "system_init": [
+          "claude-sonnet-5"
+        ],
+        "assistant": [
+          "claude-sonnet-5"
+        ],
+        "result_model_usage": [
+          "claude-sonnet-5"
+        ]
+      },
+      "model_usage": {
+        "claude-sonnet-5": {
+          "inputTokens": 16,
+          "outputTokens": 2545,
+          "cacheReadInputTokens": 80335,
+          "cacheCreationInputTokens": 8543,
+          "webSearchRequests": 0,
+          "costUSD": 0.075721,
+          "contextWindow": 1000000,
+          "maxOutputTokens": 64000,
+          "thinkingTokens": 553,
+          "canonicalModel": "claude-sonnet-5",
+          "provider": "firstParty",
+          "costBasis": "list"
+        }
+      }
+    }
+  ],
+  "usage": {
+    "steps": 0,
+    "prompt_tokens": 0,
+    "completion_tokens": 0,
+    "cost_usd": 0.075721,
+    "seats": 1,
+    "seats_with_usage": 1,
+    "coverage": "complete",
+    "input_tokens": 16,
+    "cache_read_input_tokens": 80335,
+    "cache_creation_input_tokens": 8543,
+    "output_tokens": 2545
+  },
+  "turns": {
+    "per_seat": [
+      {
+        "name": "single",
+        "num_turns": 8
+      }
+    ],
+    "summed": 8,
+    "seats": 1,
+    "seats_with_turns": 1,
+    "coverage": "complete"
+  },
+  "wall_clock": {
+    "started_at": "2026-09-19T19:43:55.536Z",
+    "completed_at": "2026-09-19T19:44:29.869Z",
+    "duration_ms": 34333
+  },
+  "budget": {
+    "max_budget_usd": 2,
+    "deadline_ms": 720000
+  },
+  "build": {
+    "captured_at": "2026-09-19T19:43:55.488Z",
+    "head_revision": "b339f44be395a7251262f9972dc25395f3fb9211",
+    "runner_sha256": "5c5efb306636ceae6b520f0361e17de9b2c31c587a1da0a92bdea4c41b554ae8",
+    "hub_entry": null,
+    "hub_entry_sha256": null,
+    "hub_revision": null,
+    "hub_build_sha256": null,
+    "provenance_scope": null
+  },
+  "frozen": {
+    "task_sha256": "18d47274f4d6c330054edace6144337fe3f76ba3a861557ce497d54be65f9c21",
+    "scorer_sha256": "f4b645c670ae4655aec1189e4d7320294115f0e3c6da3b5ba41a7ee3b1cd00f8",
+    "fact_scorer_sha256": "6b8b3e98c8c408ecd6715a38db9263488644d27c01a11c5bab3172acd5539832",
+    "task_id": "build-rules-s1",
+    "timeout_ms": 720000,
+    "seats": 1
+  },
+  "error": null,
+  "checked_at": "2026-09-19T19:44:30.024Z"
+}

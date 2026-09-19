@@ -12,6 +12,7 @@
 | arXiv:2305.05176 | docs/token-round-0918 token-cost-is-resent-context  |
 | arXiv:2305.14325 | consensus-requires-scrutiny README  |
 | arXiv:2305.19118 | consensus-requires-scrutiny README  |
+| arXiv:2306.03091 | docs/research-build-suite  |
 | arXiv:2306.05685 | measure-task-success-on-a-machine-oracle  |
 | arXiv:2307.03172 | docs/fleet-174517-summary hub-carries-what-it-knows  |
 | arXiv:2307.09009 | docs/measurement-design-audit-0919 docs/open-round-174126-report  |
@@ -54,6 +55,7 @@
 | arXiv:2502.08691 | README  |
 | arXiv:2502.08788 | docs/arm-b-next-step-research docs/open-round-174126-report  |
 | arXiv:2503.13657 | board-delta-manifests-and-single-electorate  |
+| arXiv:2504.21798 | docs/research-build-suite  |
 | arXiv:2505.11556 | docs/self-improvement-swarm-planned hub-carries-what-it-knows  |
 | arXiv:2505.18845 | humans-answered-once-by-hub-enforcement  |
 | arXiv:2506.02954 | docs/research-build-suite  |
@@ -91,6 +93,7 @@
 | arXiv:2603.13327 | board-delta-manifests-and-single-electorate  |
 | arXiv:2603.15183 | docs/self-improvement-swarm-flat docs/self-improvement-swarm-planned hub-carries-what-it-knows  |
 | arXiv:2603.20432 | docs/research-build-suite  |
+| arXiv:2603.21489 | docs/research-build-suite  |
 | arXiv:2603.23448 | docs/research-build-suite  |
 | arXiv:2604.02460 | docs/research-build-suite  |
 | arXiv:2604.02668 | docs/self-improvement-swarm-planned hub-carries-what-it-knows  |

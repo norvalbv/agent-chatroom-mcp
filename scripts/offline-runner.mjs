@@ -26,6 +26,7 @@ export const offlineScripts = [
   'bench-build-grid.test.ts',
   'bench-build-report.test.ts',
   'bench-build-report-audit.test.ts',
+  'bench-build-e2e-audit.test.ts',
   'bench-grid.test.ts',
   'bench-hub-no-recruit-regression.ts',
   'bench-orphan-regression.ts',

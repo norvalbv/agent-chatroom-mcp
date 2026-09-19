@@ -32,10 +32,13 @@ fraction of planted defects caught. The secondary estimand is C minus B; B minus
 is descriptive. Safety is reported beside every catch result as introduced hidden
 regression failures and total defects shipped.
 
-The claimed room advantage is falsified for this family if any of these occurs:
+The claimed room advantage is unsupported for this family if any of these occurs.
+An interval containing zero is absence of evidence for superiority, not evidence of
+equivalence:
 
-1. At the common cap, C's mean catch fraction is no greater than the better of A
-   and B, or the paired 95% interval for C minus that arm includes zero.
+1. At the common nominal cap, either simultaneous comparison C-A or C-B has a
+   non-positive mean or a one-sided multiplicity-adjusted lower confidence bound
+   at or below zero.
 2. C catches more plants but has a higher introduced-regression rate. That is a
    trade-off, not dominance.
 3. B matches C on catch and shipped scores while using less realized spend. The
@@ -137,10 +140,14 @@ are reported separately.
   verified conclusion is invalid.
 
 The Claude CLI can overshoot a process cap on its last turn. Every seat's terminal
-cost is summed. Any arm with unknown cost or summed cost above M is retained and
-labelled cap-noncompliant, but excluded from the equal-cap comparison; there is no
-post-hoc tolerance. The spend ledger includes known partial spend and labels unknown
-remainders rather than filling them with zero.
+cost is summed. A valid attempt launched with the fixed shares remains in the
+primary intention-to-treat comparison even when terminal spend exceeds M: excluding
+overshoots would give C four outcome-dependent chances to be removed versus A's one.
+It is labelled `actual_over_cap`, and the paper calls the design equal **nominal**
+cap, never equal realized spend. A sensitivity analysis uses only paired blocks in
+which both arms have complete cost and actual spend at or below M. An arm with
+unknown cost remains a planned invalid cell rather than zero-cost evidence. The
+spend ledger includes known partial spend and labels unknown remainders.
 
 ## Ordering, seeds, and analysis
 
@@ -156,19 +163,30 @@ terminal. Valid cells are never rerun because their outcome is inconvenient.
 
 For each arm and seed, average the two instance catch fractions to one family-level
 block. Report per-instance and per-defect tables, but estimate C-A and C-B from the
-20 paired family blocks. Use a paired bootstrap over seed blocks (10,000 resamples,
-PRNG seed 191133) for 95% intervals. Because there is one generator family, the
-interval describes run-to-run variation for this family and does not create a
-multi-family population claim. Regressions and invalid outcomes are reported as
-counts and rates without severity weighting.
+20 planned paired family blocks. Pairwise-complete blocks receive a paired bootstrap
+over seeds (10,000 resamples, PRNG seed 191133). The two one-sided lower confidence
+bounds use 97.5% percentiles each (Bonferroni family-wise alpha 0.05); a room-advantage
+claim requires both bounds above zero. Ordinary two-sided 95% intervals are also
+shown descriptively and never interpreted as equivalence.
+
+Missing blocks are not replaced. For each comparison, the partially identified
+mean-difference range over all 20 planned blocks assigns every missing block -1 for
+the lower bound and +1 for the upper bound; the complete-block estimate and count
+are printed beside it. If more than 10% of planned cells are invalid, no confirmatory
+claim is made regardless of the complete cases. The actual-at-or-below-M sensitivity
+is reported separately and cannot replace the intention-to-treat result. Because
+there is one generator family, every interval describes run-to-run variation for
+this family and does not create a multi-family population claim. Regressions and
+invalid outcomes are reported as counts and rates without severity weighting.
 
 ## Artifact pipeline and resumability
 
 The pilot and confirmatory tables are generated, not transcribed. The table command
 must reject duplicate `(task, arm, seed)` cells, wrong task versions, stale hashes,
-missing seat provenance, incomplete hidden checks, unknown cost, and cap violations.
-The non-author verifier reruns it and compares the generated Markdown/JSON output to
-the committed artifact.
+missing seat provenance, incomplete hidden checks, and unknown-cost cells from the
+valid set. Nominal-cap overshoots are retained and flagged, not rejected. The
+non-author verifier reruns the command and compares its generated Markdown/JSON
+output to the committed artifact.
 
 Resumption is hash-compatible: an existing cell is skipped only when its
 `build-result.json` is terminal and its task, generator, public tree, hidden tree,
@@ -188,10 +206,11 @@ node --import tsx scripts/bench-build-grid.ts \
   --seats 4 --deadline-ms 900000 --base-port 23000 --resume
 ```
 
-This room does not run that command. The hard cap upper bound is
-`20 seeds x 2 instances x 3 arms x 2.00 USD = 240 USD`; the projected realized
-cost and wall time will be generated from the diagnostic pilot as a range, not a
-single falsely precise number.
+This room does not run that command. The nominal allocated total is
+`20 seeds x 2 instances x 3 arms x 2.00 USD = 240 USD`. It is not a hard realized
+upper bound because the CLI permits last-turn overshoot. Projected realized cost and
+wall time will be generated from the diagnostic pilot as a range, with the nominal
+allocation total shown separately rather than presented as a ceiling.
 
 ## Freeze and amendment log
 
@@ -205,6 +224,17 @@ single falsely precise number.
    cell.
 3. Any later change is append-only here with its date, preceding observation, and
    affected cells. It cannot relabel earlier exploratory work as confirmatory.
+
+### 2026-09-19 -- nominal-cap intention-to-treat amendment
+
+Before any pinned-effort admission or three-arm pilot, non-author review of commit
+`9e1302b` identified an asymmetric exclusion: C has four opportunities for a final
+turn to overshoot while A has one, so dropping actual-over-M cells could select on
+arm and outcome. The protocol now retains every otherwise-valid nominal-cap attempt
+in the primary analysis, moves actual-at-or-below-M blocks to sensitivity analysis,
+and removes the false 240 USD hard-upper-bound wording. The same review required
+simultaneous C-A/C-B inference and explicit missing-block bounds; both are fixed
+above before those outcomes exist.
 
 ## Development and pilot evidence (not yet observed at freeze)
 

@@ -64,6 +64,40 @@ def fig_pass_rate(data, out_dir):
     return path
 
 
+def fig_cost_per_correct(data, out_dir):
+    """Figure: cost per correct answer by arm and task (log scale), the brief's minimum figure list.
+    A cell with zero task_pass (cost_per_correct is None, never 0) is drawn as an annotated gap, not a
+    bar at height 0, which would misread as "free"."""
+    tasks = sorted({c["task"] for c in data["cost_per_correct"]}, key=task_sort_key)
+    fig, ax = plt.subplots(figsize=(7, 4.2))
+    width = 0.25
+    x = range(len(tasks))
+    for ai, arm in enumerate(ARM_ORDER):
+        vals, undefined_x = [], []
+        offsets = [xi + (ai - 1) * width for xi in x]
+        for xi, t in zip(offsets, tasks):
+            row = next((c for c in data["cost_per_correct"] if c["task"] == t and c["arm"] == arm), None)
+            if row is None or row["cost_per_correct"] is None:
+                vals.append(0.0)
+                undefined_x.append(xi)
+            else:
+                vals.append(row["cost_per_correct"])
+        ax.bar(offsets, vals, width=width, label=ARM_LABEL[arm], color=ARM_COLOR[arm])
+        for xi in undefined_x:
+            ax.annotate("undefined\n(no pass)", (xi, 0), textcoords="offset points", xytext=(0, 4), ha="center", fontsize=7, rotation=90)
+    ax.set_xticks(list(x))
+    ax.set_xticklabels([TASK_LABEL.get(t, t) for t in tasks])
+    ax.set_yscale("log")
+    ax.set_ylabel("cost per correct answer, USD (log scale)")
+    ax.set_title("Cost per correct answer by arm and task")
+    ax.legend(loc="upper left", fontsize=8)
+    fig.tight_layout()
+    path = os.path.join(out_dir, "fig-cost-per-correct.png")
+    fig.savefig(path, dpi=150)
+    plt.close(fig)
+    return path
+
+
 def fig_cost_vs_accuracy(data, out_dir):
     """Figure: cost per correct answer (x, log scale) vs. pass rate (y), one point per (task, arm)."""
     fig, ax = plt.subplots(figsize=(7, 4.6))
@@ -143,6 +177,7 @@ def main():
             print(f"  - {w}", file=sys.stderr)
     written = [
         fig_pass_rate(data, out_dir),
+        fig_cost_per_correct(data, out_dir),
         fig_cost_vs_accuracy(data, out_dir),
         fig_vote_mechanism(data, out_dir),
     ]

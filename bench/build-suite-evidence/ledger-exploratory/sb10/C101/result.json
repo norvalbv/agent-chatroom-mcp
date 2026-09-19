@@ -1,0 +1,406 @@
+{
+  "run_config": {
+    "task_sha256": "9eb8c849256d84b6cc0c821c3107168de4e7875390859bd6abb902049fd8887a",
+    "generator_sha256": "c20ad6dd454532998796b64c1846ec85c5d128be9b0474f0dd0698300b3e56d4",
+    "runner_sha256": "aa5adceaf3c6367c87dd2806b5d727be0326a2dbb1965dc226aba4d315e8bc4c",
+    "runtime_sha256": "99366e4a45906fa5cb8104bfb116cfa3826ac01fa8aea856047b04fc4e6039ad",
+    "helpers_sha256": "1d451b9289e9b17325b826bd677de62b06d92c64ee52df2392fe33883a39b716",
+    "hub_build_sha256": "63eee82542aabe2e057a00f5aee98d036b4fc81e61eaf20531d8086441acc0f0",
+    "model": "sonnet",
+    "arm": "C",
+    "effort_level": "medium",
+    "effort_settings_sha256": "af1ef779182cc6e6bc8b2985a37b27915b5742ecb1a89015aeb1c721d732bc1d",
+    "cap_usd": 0.6,
+    "deadline_ms": 900000,
+    "seats": 4,
+    "allocations": [
+      0.25,
+      0.25,
+      0.25,
+      0.25
+    ]
+  },
+  "run_fingerprint": "8cce6fad827f96a2d7b5417e645190ef1a09d31a17b94a1bea2ba0069e1eab8c",
+  "schemaVersion": 1,
+  "task_id": "build-ledger-s1",
+  "arm": "C",
+  "seed": 101,
+  "model": "sonnet",
+  "outcome": "infrastructure_error",
+  "reason": "infrastructure_error",
+  "error": "Error: infrastructure_error: seat failed or spend unknown",
+  "anti_tamper": {
+    "hash_before": "9eb8c849256d84b6cc0c821c3107168de4e7875390859bd6abb902049fd8887a",
+    "hash_after": "9eb8c849256d84b6cc0c821c3107168de4e7875390859bd6abb902049fd8887a",
+    "unchanged": true
+  },
+  "effort": {
+    "level": "medium",
+    "settings_path": ".claude/settings.json",
+    "settings_sha256": "af1ef779182cc6e6bc8b2985a37b27915b5742ecb1a89015aeb1c721d732bc1d",
+    "own_git_root": true
+  },
+  "review_integrity": null,
+  "room_validation": null,
+  "seats": [
+    {
+      "name": "seat-2",
+      "argv": [
+        "claude",
+        "-p",
+        "The warehouse library in src/ must meet the specification in SPEC.md. The public tests in test/ pass today, but passing them does not prove the code meets the specification. Make the codebase conform to SPEC.md, keeping everything that already conforms working. Run the tests with: node --test test/*.test.ts. Do not create files outside this directory.\n\nModify the source files in this working directory. File edits are your submission.\nJoin room build as seat-2. Claim work on the board; the hub assigns reviewers. Have a non-author read and verify the final diff. Write verify/* with JSON first line {proposal,command,cwd,exit_code,output_tail} and actual exit_code 0. After tests and all edits, run node .bench-hash.mjs and add workspace_sha256 to that same JSON first line with its exact output. The final submitted workspace must match that independently verified hash; no edits afterward. Claims/evidence/proposals/votes are public; named working exchanges quiet. Use wait_for_messages hold_until_actionable=true. Leave after conclusion.",
+        "--mcp-config",
+        "/tmp/sb10/C101/mcp.json",
+        "--strict-mcp-config",
+        "--allowedTools",
+        "Read,Edit,Write,MultiEdit,Bash,Glob,Grep,mcp__chatroom__*",
+        "--tools",
+        "Read,Edit,Write,MultiEdit,Bash,Glob,Grep",
+        "--disable-slash-commands",
+        "--setting-sources",
+        "project",
+        "--exclude-dynamic-system-prompt-sections",
+        "--output-format",
+        "stream-json",
+        "--verbose",
+        "--model",
+        "sonnet",
+        "--max-budget-usd",
+        "0.15"
+      ],
+      "exit_code": 1,
+      "signal": null,
+      "started_at": "2026-09-19T19:48:30.806Z",
+      "completed_at": "2026-09-19T19:49:20.267Z",
+      "text": "{\"duration_api_ms\":40811,\"stop_reason\":\"tool_use\",\"session_id\":\"1958f3ca-cf4f-4733-8b1e-cf35b32cd0b7\",\"total_cost_usd\":0.15101280000000003,\"usage\":{\"input_tokens\":22,\"cache_creation_input_tokens\":13184,\"cache_read_input_tokens\":238885,\"output_tokens\":3551,\"output_tokens_details\":{\"thinking_tokens\":818},\"server_tool_use\":{\"web_search_requests\":0,\"web_fetch_requests\":0},\"service_tier\":\"standard\",\"cache_creation\":{\"ephemeral_1h_input_tokens\":13184,\"ephemeral_5m_input_tokens\":0},\"inference_geo\":\"not_available\",\"iterations\":[{\"input_tokens\":2,\"output_tokens\":421,\"cache_read_input_tokens\":25806,\"cache_creation_input_tokens\":943,\"cache_creation\":{\"ephemeral_5m_input_tokens\":0,\"ephemeral_1h_input_tokens\":943},\"type\":\"message\"}],\"speed\":\"standard\"},\"modelUsage\":{\"claude-sonnet-5\":{\"inputTokens\":24,\"outputTokens\":3785,\"cacheReadInputTokens\":265634,\"cacheCreationInputTokens\":14997,\"webSearchRequests\":0,\"costUSD\":0.15101280000000003,\"contextWindow\":1000000,\"maxOutputTokens\":64000,\"thinkingTokens\":818,\"canonicalModel\":\"claude-sonnet-5\",\"provider\":\"firstParty\",\"costBasis\":\"list\"}},\"permission_denials\":[],\"terminal_reason\":\"budget_exhausted\",\"fast_mode_state\":\"off\",\"fast_mode_disabled_reason\":\"sdk_opt_in_required\",\"subagent_stats\":{\"spawned\":0,\"requested\":{\"background\":0,\"foreground\":0,\"unset\":0},\"started_in_background\":0,\"max_depth\":0,\"spawned_by_subagents\":0,\"completed\":0,\"failed\":0,\"killed\":{\"parent\":0,\"user\":0,\"system\":0},\"refused\":{\"depth_limit\":0,\"concurrency_limit\":0,\"budget\":0},\"by_type\":{}},\"is_error\":true,\"num_turns\":16,\"subtype\":\"error_max_budget_usd\",\"errors\":[\"Reached maximum budget ($0.15)\"],\"type\":\"result\",\"duration_ms\":45345,\"uuid\":\"5f229169-6944-4419-b443-4dfdfdf6aaa2\",\"queued_turn_count\":0,\"result_index\":0}",
+      "usage": {
+        "cost": 0.15101280000000003,
+        "input_tokens": 22,
+        "cache_read_input_tokens": 238885,
+        "cache_creation_input_tokens": 13184,
+        "output_tokens": 3551
+      },
+      "num_turns": 16,
+      "duration_ms": 45345,
+      "duration_api_ms": 40811,
+      "stderr_tail": "",
+      "killed_by_deadline": false,
+      "partial_usage": null,
+      "reported_models": {
+        "system_init": [
+          "claude-sonnet-5"
+        ],
+        "assistant": [
+          "claude-sonnet-5"
+        ],
+        "result_model_usage": [
+          "claude-sonnet-5"
+        ]
+      },
+      "model_usage": {
+        "claude-sonnet-5": {
+          "inputTokens": 24,
+          "outputTokens": 3785,
+          "cacheReadInputTokens": 265634,
+          "cacheCreationInputTokens": 14997,
+          "webSearchRequests": 0,
+          "costUSD": 0.15101280000000003,
+          "contextWindow": 1000000,
+          "maxOutputTokens": 64000,
+          "thinkingTokens": 818,
+          "canonicalModel": "claude-sonnet-5",
+          "provider": "firstParty",
+          "costBasis": "list"
+        }
+      },
+      "budget_usd": 0.15,
+      "effort": {
+        "level": "medium",
+        "settings_path": ".claude/settings.json",
+        "settings_sha256": "af1ef779182cc6e6bc8b2985a37b27915b5742ecb1a89015aeb1c721d732bc1d",
+        "own_git_root": true
+      },
+      "thinking_tokens": 818
+    },
+    {
+      "name": "seat-1",
+      "argv": [
+        "claude",
+        "-p",
+        "The warehouse library in src/ must meet the specification in SPEC.md. The public tests in test/ pass today, but passing them does not prove the code meets the specification. Make the codebase conform to SPEC.md, keeping everything that already conforms working. Run the tests with: node --test test/*.test.ts. Do not create files outside this directory.\n\nModify the source files in this working directory. File edits are your submission.\nJoin room build as seat-1. Claim work on the board; the hub assigns reviewers. Have a non-author read and verify the final diff. Write verify/* with JSON first line {proposal,command,cwd,exit_code,output_tail} and actual exit_code 0. After tests and all edits, run node .bench-hash.mjs and add workspace_sha256 to that same JSON first line with its exact output. The final submitted workspace must match that independently verified hash; no edits afterward. Claims/evidence/proposals/votes are public; named working exchanges quiet. Use wait_for_messages hold_until_actionable=true. Leave after conclusion.",
+        "--mcp-config",
+        "/tmp/sb10/C101/mcp.json",
+        "--strict-mcp-config",
+        "--allowedTools",
+        "Read,Edit,Write,MultiEdit,Bash,Glob,Grep,mcp__chatroom__*",
+        "--tools",
+        "Read,Edit,Write,MultiEdit,Bash,Glob,Grep",
+        "--disable-slash-commands",
+        "--setting-sources",
+        "project",
+        "--exclude-dynamic-system-prompt-sections",
+        "--output-format",
+        "stream-json",
+        "--verbose",
+        "--model",
+        "sonnet",
+        "--max-budget-usd",
+        "0.15"
+      ],
+      "exit_code": 1,
+      "signal": null,
+      "started_at": "2026-09-19T19:48:30.799Z",
+      "completed_at": "2026-09-19T19:49:22.695Z",
+      "text": "{\"duration_api_ms\":42677,\"stop_reason\":\"tool_use\",\"session_id\":\"e185b86d-087c-4f48-9dea-9359be3409c9\",\"total_cost_usd\":0.1521514,\"usage\":{\"input_tokens\":20,\"cache_creation_input_tokens\":15449,\"cache_read_input_tokens\":217723,\"output_tokens\":3415,\"output_tokens_details\":{\"thinking_tokens\":710},\"server_tool_use\":{\"web_search_requests\":0,\"web_fetch_requests\":0},\"service_tier\":\"standard\",\"cache_creation\":{\"ephemeral_1h_input_tokens\":15449,\"ephemeral_5m_input_tokens\":0},\"inference_geo\":\"not_available\",\"iterations\":[{\"input_tokens\":2,\"output_tokens\":200,\"cache_read_input_tokens\":27504,\"cache_creation_input_tokens\":1510,\"cache_creation\":{\"ephemeral_5m_input_tokens\":0,\"ephemeral_1h_input_tokens\":1510},\"type\":\"message\"}],\"speed\":\"standard\"},\"modelUsage\":{\"claude-sonnet-5\":{\"inputTokens\":22,\"outputTokens\":3554,\"cacheReadInputTokens\":246737,\"cacheCreationInputTokens\":16805,\"webSearchRequests\":0,\"costUSD\":0.1521514,\"contextWindow\":1000000,\"maxOutputTokens\":64000,\"thinkingTokens\":710,\"canonicalModel\":\"claude-sonnet-5\",\"provider\":\"firstParty\",\"costBasis\":\"list\"}},\"permission_denials\":[],\"terminal_reason\":\"budget_exhausted\",\"fast_mode_state\":\"off\",\"fast_mode_disabled_reason\":\"sdk_opt_in_required\",\"subagent_stats\":{\"spawned\":0,\"requested\":{\"background\":0,\"foreground\":0,\"unset\":0},\"started_in_background\":0,\"max_depth\":0,\"spawned_by_subagents\":0,\"completed\":0,\"failed\":0,\"killed\":{\"parent\":0,\"user\":0,\"system\":0},\"refused\":{\"depth_limit\":0,\"concurrency_limit\":0,\"budget\":0},\"by_type\":{}},\"is_error\":true,\"num_turns\":16,\"subtype\":\"error_max_budget_usd\",\"errors\":[\"Reached maximum budget ($0.15)\"],\"type\":\"result\",\"duration_ms\":48643,\"uuid\":\"1f587e2d-dd46-49ee-ad6e-a3668add3d53\",\"queued_turn_count\":0,\"result_index\":0}",
+      "usage": {
+        "cost": 0.1521514,
+        "input_tokens": 20,
+        "cache_read_input_tokens": 217723,
+        "cache_creation_input_tokens": 15449,
+        "output_tokens": 3415
+      },
+      "num_turns": 16,
+      "duration_ms": 48643,
+      "duration_api_ms": 42677,
+      "stderr_tail": "",
+      "killed_by_deadline": false,
+      "partial_usage": null,
+      "reported_models": {
+        "system_init": [
+          "claude-sonnet-5"
+        ],
+        "assistant": [
+          "claude-sonnet-5"
+        ],
+        "result_model_usage": [
+          "claude-sonnet-5"
+        ]
+      },
+      "model_usage": {
+        "claude-sonnet-5": {
+          "inputTokens": 22,
+          "outputTokens": 3554,
+          "cacheReadInputTokens": 246737,
+          "cacheCreationInputTokens": 16805,
+          "webSearchRequests": 0,
+          "costUSD": 0.1521514,
+          "contextWindow": 1000000,
+          "maxOutputTokens": 64000,
+          "thinkingTokens": 710,
+          "canonicalModel": "claude-sonnet-5",
+          "provider": "firstParty",
+          "costBasis": "list"
+        }
+      },
+      "budget_usd": 0.15,
+      "effort": {
+        "level": "medium",
+        "settings_path": ".claude/settings.json",
+        "settings_sha256": "af1ef779182cc6e6bc8b2985a37b27915b5742ecb1a89015aeb1c721d732bc1d",
+        "own_git_root": true
+      },
+      "thinking_tokens": 710
+    },
+    {
+      "name": "seat-4",
+      "argv": [
+        "claude",
+        "-p",
+        "The warehouse library in src/ must meet the specification in SPEC.md. The public tests in test/ pass today, but passing them does not prove the code meets the specification. Make the codebase conform to SPEC.md, keeping everything that already conforms working. Run the tests with: node --test test/*.test.ts. Do not create files outside this directory.\n\nModify the source files in this working directory. File edits are your submission.\nJoin room build as seat-4. Claim work on the board; the hub assigns reviewers. Have a non-author read and verify the final diff. Write verify/* with JSON first line {proposal,command,cwd,exit_code,output_tail} and actual exit_code 0. After tests and all edits, run node .bench-hash.mjs and add workspace_sha256 to that same JSON first line with its exact output. The final submitted workspace must match that independently verified hash; no edits afterward. Claims/evidence/proposals/votes are public; named working exchanges quiet. Use wait_for_messages hold_until_actionable=true. Leave after conclusion.",
+        "--mcp-config",
+        "/tmp/sb10/C101/mcp.json",
+        "--strict-mcp-config",
+        "--allowedTools",
+        "Read,Edit,Write,MultiEdit,Bash,Glob,Grep,mcp__chatroom__*",
+        "--tools",
+        "Read,Edit,Write,MultiEdit,Bash,Glob,Grep",
+        "--disable-slash-commands",
+        "--setting-sources",
+        "project",
+        "--exclude-dynamic-system-prompt-sections",
+        "--output-format",
+        "stream-json",
+        "--verbose",
+        "--model",
+        "sonnet",
+        "--max-budget-usd",
+        "0.15"
+      ],
+      "exit_code": 1,
+      "signal": null,
+      "started_at": "2026-09-19T19:48:30.811Z",
+      "completed_at": "2026-09-19T19:49:27.190Z",
+      "text": "{\"duration_api_ms\":34514,\"stop_reason\":\"end_turn\",\"session_id\":\"26e11093-25de-420c-9600-31cb094276cb\",\"total_cost_usd\":0.150398,\"usage\":{\"input_tokens\":18,\"cache_creation_input_tokens\":15431,\"cache_read_input_tokens\":189614,\"output_tokens\":3381,\"output_tokens_details\":{\"thinking_tokens\":515},\"server_tool_use\":{\"web_search_requests\":0,\"web_fetch_requests\":0},\"service_tier\":\"standard\",\"cache_creation\":{\"ephemeral_1h_input_tokens\":15431,\"ephemeral_5m_input_tokens\":0},\"inference_geo\":\"not_available\",\"iterations\":[{\"input_tokens\":2,\"output_tokens\":144,\"cache_read_input_tokens\":26223,\"cache_creation_input_tokens\":2773,\"cache_creation\":{\"ephemeral_5m_input_tokens\":0,\"ephemeral_1h_input_tokens\":2773},\"type\":\"message\"}],\"speed\":\"standard\"},\"modelUsage\":{\"claude-sonnet-5\":{\"inputTokens\":20,\"outputTokens\":3926,\"cacheReadInputTokens\":218610,\"cacheCreationInputTokens\":16844,\"webSearchRequests\":0,\"costUSD\":0.150398,\"contextWindow\":1000000,\"maxOutputTokens\":64000,\"thinkingTokens\":515,\"canonicalModel\":\"claude-sonnet-5\",\"provider\":\"firstParty\",\"costBasis\":\"list\"}},\"permission_denials\":[],\"terminal_reason\":\"budget_exhausted\",\"fast_mode_state\":\"off\",\"fast_mode_disabled_reason\":\"sdk_opt_in_required\",\"subagent_stats\":{\"spawned\":0,\"requested\":{\"background\":0,\"foreground\":0,\"unset\":0},\"started_in_background\":0,\"max_depth\":0,\"spawned_by_subagents\":0,\"completed\":0,\"failed\":0,\"killed\":{\"parent\":0,\"user\":0,\"system\":0},\"refused\":{\"depth_limit\":0,\"concurrency_limit\":0,\"budget\":0},\"by_type\":{}},\"is_error\":true,\"num_turns\":15,\"subtype\":\"error_max_budget_usd\",\"errors\":[\"Reached maximum budget ($0.15)\"],\"type\":\"result\",\"duration_ms\":53947,\"uuid\":\"9c5f59fc-057b-41e5-989e-581ca54ad19d\",\"queued_turn_count\":0,\"result_index\":0}",
+      "usage": {
+        "cost": 0.150398,
+        "input_tokens": 18,
+        "cache_read_input_tokens": 189614,
+        "cache_creation_input_tokens": 15431,
+        "output_tokens": 3381
+      },
+      "num_turns": 15,
+      "duration_ms": 53947,
+      "duration_api_ms": 34514,
+      "stderr_tail": "",
+      "killed_by_deadline": false,
+      "partial_usage": null,
+      "reported_models": {
+        "system_init": [
+          "claude-sonnet-5"
+        ],
+        "assistant": [
+          "claude-sonnet-5"
+        ],
+        "result_model_usage": [
+          "claude-sonnet-5"
+        ]
+      },
+      "model_usage": {
+        "claude-sonnet-5": {
+          "inputTokens": 20,
+          "outputTokens": 3926,
+          "cacheReadInputTokens": 218610,
+          "cacheCreationInputTokens": 16844,
+          "webSearchRequests": 0,
+          "costUSD": 0.150398,
+          "contextWindow": 1000000,
+          "maxOutputTokens": 64000,
+          "thinkingTokens": 515,
+          "canonicalModel": "claude-sonnet-5",
+          "provider": "firstParty",
+          "costBasis": "list"
+        }
+      },
+      "budget_usd": 0.15,
+      "effort": {
+        "level": "medium",
+        "settings_path": ".claude/settings.json",
+        "settings_sha256": "af1ef779182cc6e6bc8b2985a37b27915b5742ecb1a89015aeb1c721d732bc1d",
+        "own_git_root": true
+      },
+      "thinking_tokens": 515
+    },
+    {
+      "name": "seat-3",
+      "argv": [
+        "claude",
+        "-p",
+        "The warehouse library in src/ must meet the specification in SPEC.md. The public tests in test/ pass today, but passing them does not prove the code meets the specification. Make the codebase conform to SPEC.md, keeping everything that already conforms working. Run the tests with: node --test test/*.test.ts. Do not create files outside this directory.\n\nModify the source files in this working directory. File edits are your submission.\nJoin room build as seat-3. Claim work on the board; the hub assigns reviewers. Have a non-author read and verify the final diff. Write verify/* with JSON first line {proposal,command,cwd,exit_code,output_tail} and actual exit_code 0. After tests and all edits, run node .bench-hash.mjs and add workspace_sha256 to that same JSON first line with its exact output. The final submitted workspace must match that independently verified hash; no edits afterward. Claims/evidence/proposals/votes are public; named working exchanges quiet. Use wait_for_messages hold_until_actionable=true. Leave after conclusion.",
+        "--mcp-config",
+        "/tmp/sb10/C101/mcp.json",
+        "--strict-mcp-config",
+        "--allowedTools",
+        "Read,Edit,Write,MultiEdit,Bash,Glob,Grep,mcp__chatroom__*",
+        "--tools",
+        "Read,Edit,Write,MultiEdit,Bash,Glob,Grep",
+        "--disable-slash-commands",
+        "--setting-sources",
+        "project",
+        "--exclude-dynamic-system-prompt-sections",
+        "--output-format",
+        "stream-json",
+        "--verbose",
+        "--model",
+        "sonnet",
+        "--max-budget-usd",
+        "0.15"
+      ],
+      "exit_code": 1,
+      "signal": null,
+      "started_at": "2026-09-19T19:48:30.808Z",
+      "completed_at": "2026-09-19T19:50:49.219Z",
+      "text": "{\"duration_api_ms\":39415,\"stop_reason\":\"end_turn\",\"session_id\":\"c24adbd9-ed36-4b5d-9ed4-79ef53fcb680\",\"total_cost_usd\":0.1689618,\"usage\":{\"input_tokens\":20,\"cache_creation_input_tokens\":16771,\"cache_read_input_tokens\":218993,\"output_tokens\":3318,\"output_tokens_details\":{\"thinking_tokens\":815},\"server_tool_use\":{\"web_search_requests\":0,\"web_fetch_requests\":0},\"service_tier\":\"standard\",\"cache_creation\":{\"ephemeral_1h_input_tokens\":16771,\"ephemeral_5m_input_tokens\":0},\"inference_geo\":\"not_available\",\"iterations\":[{\"input_tokens\":2,\"output_tokens\":352,\"cache_read_input_tokens\":27473,\"cache_creation_input_tokens\":2863,\"cache_creation\":{\"ephemeral_5m_input_tokens\":0,\"ephemeral_1h_input_tokens\":2863},\"type\":\"message\"}],\"speed\":\"standard\"},\"modelUsage\":{\"claude-sonnet-5\":{\"inputTokens\":22,\"outputTokens\":3924,\"cacheReadInputTokens\":249329,\"cacheCreationInputTokens\":19953,\"webSearchRequests\":0,\"costUSD\":0.1689618,\"contextWindow\":1000000,\"maxOutputTokens\":64000,\"thinkingTokens\":815,\"canonicalModel\":\"claude-sonnet-5\",\"provider\":\"firstParty\",\"costBasis\":\"list\"}},\"permission_denials\":[],\"terminal_reason\":\"budget_exhausted\",\"fast_mode_state\":\"off\",\"fast_mode_disabled_reason\":\"sdk_opt_in_required\",\"subagent_stats\":{\"spawned\":0,\"requested\":{\"background\":0,\"foreground\":0,\"unset\":0},\"started_in_background\":0,\"max_depth\":0,\"spawned_by_subagents\":0,\"completed\":0,\"failed\":0,\"killed\":{\"parent\":0,\"user\":0,\"system\":0},\"refused\":{\"depth_limit\":0,\"concurrency_limit\":0,\"budget\":0},\"by_type\":{}},\"is_error\":true,\"num_turns\":15,\"subtype\":\"error_max_budget_usd\",\"errors\":[\"Reached maximum budget ($0.15)\"],\"type\":\"result\",\"duration_ms\":135014,\"uuid\":\"49aaff3e-38fa-4e1c-9c45-9d0e08dfd55a\",\"queued_turn_count\":0,\"result_index\":0}",
+      "usage": {
+        "cost": 0.1689618,
+        "input_tokens": 20,
+        "cache_read_input_tokens": 218993,
+        "cache_creation_input_tokens": 16771,
+        "output_tokens": 3318
+      },
+      "num_turns": 15,
+      "duration_ms": 135014,
+      "duration_api_ms": 39415,
+      "stderr_tail": "",
+      "killed_by_deadline": false,
+      "partial_usage": null,
+      "reported_models": {
+        "system_init": [
+          "claude-sonnet-5"
+        ],
+        "assistant": [
+          "claude-sonnet-5"
+        ],
+        "result_model_usage": [
+          "claude-sonnet-5"
+        ]
+      },
+      "model_usage": {
+        "claude-sonnet-5": {
+          "inputTokens": 22,
+          "outputTokens": 3924,
+          "cacheReadInputTokens": 249329,
+          "cacheCreationInputTokens": 19953,
+          "webSearchRequests": 0,
+          "costUSD": 0.1689618,
+          "contextWindow": 1000000,
+          "maxOutputTokens": 64000,
+          "thinkingTokens": 815,
+          "canonicalModel": "claude-sonnet-5",
+          "provider": "firstParty",
+          "costBasis": "list"
+        }
+      },
+      "budget_usd": 0.15,
+      "effort": {
+        "level": "medium",
+        "settings_path": ".claude/settings.json",
+        "settings_sha256": "af1ef779182cc6e6bc8b2985a37b27915b5742ecb1a89015aeb1c721d732bc1d",
+        "own_git_root": true
+      },
+      "thinking_tokens": 815
+    }
+  ],
+  "usage": {
+    "steps": 0,
+    "prompt_tokens": 0,
+    "completion_tokens": 0,
+    "cost_usd": 0.6225240000000001,
+    "seats": 4,
+    "seats_with_usage": 4,
+    "coverage": "complete",
+    "input_tokens": 80,
+    "cache_read_input_tokens": 865215,
+    "cache_creation_input_tokens": 60835,
+    "output_tokens": 13665
+  },
+  "turns": {
+    "summed": 62
+  },
+  "wall_clock": {
+    "started_at": "2026-09-19T19:48:30.228Z",
+    "completed_at": "2026-09-19T19:50:49.255Z",
+    "duration_ms": 139027
+  },
+  "budget": {
+    "max_budget_usd": 0.6,
+    "deadline_ms": 900000,
+    "allocations": [
+      0.25,
+      0.25,
+      0.25,
+      0.25
+    ],
+    "overshoot_usd": 0.0225240000000001
+  },
+  "build": {
+    "head_revision": "bcaa38e9715a955fd54592bc56cf51b9dc65e33f",
+    "runner_sha256": "aa5adceaf3c6367c87dd2806b5d727be0326a2dbb1965dc226aba4d315e8bc4c",
+    "runtime_sha256": "99366e4a45906fa5cb8104bfb116cfa3826ac01fa8aea856047b04fc4e6039ad",
+    "helpers_sha256": "1d451b9289e9b17325b826bd677de62b06d92c64ee52df2392fe33883a39b716",
+    "hub_entry": "/Users/benji/Desktop/Personal and learning/agent-chatroom-mcp/.swarm-worktrees/swarm-191133-4hqx/sonnet-1/dist/index.js",
+    "hub_entry_sha256": "66f9d135c47604f02e01b482a0bdbceff9f5ed14080ab0438069f9043166b1d8",
+    "hub_build_sha256": "63eee82542aabe2e057a00f5aee98d036b4fc81e61eaf20531d8086441acc0f0",
+    "hub_revision": "bcaa38e9715a955fd54592bc56cf51b9dc65e33f",
+    "provenance_scope": "hub-directory-tree; external dependencies excluded"
+  }
+}

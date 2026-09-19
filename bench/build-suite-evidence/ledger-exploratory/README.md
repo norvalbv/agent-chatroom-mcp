@@ -1,0 +1,9 @@
+# Ledger exploratory artifact archive
+
+This preserves 25 existing final workspaces and raw runner results from `/tmp/sb4`, `/tmp/sb5`, `/tmp/sb6` (five each) and `/tmp/sb10` (ten). No new model runs were made. Despite a room message reporting these workspaces lost, all were still present when copied on 2026-09-19.
+
+`MANIFEST.json` lists each preserved file's original path, SHA-256, and byte count. Every listed copy was compared byte for byte against its source. Workspace `.git` metadata is excluded; source, tests, brief, specification, project effort settings and benchmark helper files are preserved. Pair reviewer snapshots are included. MCP connection configurations, hub logs and controller runtime data are not needed for source replay and are not archived here. Raw `result.json` includes each seat's recorded usage/provenance. `raw-summary.json` is derived directly from these files; unreported thinking tokens remain null.
+
+The raw records are immutable evidence, not corrected scores. Some contain known obsolete oracle verdicts or the budget-exhaustion infrastructure classification. In particular, `sb10/C101` records nominal cap $0.60, complete actual cost $0.622524 and `infrastructure_error`; independent later replay found all nine defects fixed. `C102`–`C104` used $1.60 while A/B used $0.60, so these are unequal-cap diagnostics, not an admitted-task or paired equal-cap experiment. Any new oracle replay must identify its scorer/task version separately and must not overwrite these original files.
+
+`sb4`–`sb6` preserve the 15 submissions underlying the post-hoc duplicate-SKU investigation. They do not establish prospective task admission. Original oracle task snapshots are not claimed to be included by this archive; raw provenance and repository history retain the recorded identifiers. Billing-v1's separately verified archive remains at `../billing-v1/`.

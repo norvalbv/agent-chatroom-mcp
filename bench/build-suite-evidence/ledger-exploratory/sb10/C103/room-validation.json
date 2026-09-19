@@ -1,0 +1,33 @@
+{
+  "required_policy": true,
+  "verified_workspace_sha256": "e82dd2cea33a446ecea772e4d21e7a73f99faab41b307aa1c1a11dd16462968f",
+  "final_workspace_sha256": "e82dd2cea33a446ecea772e4d21e7a73f99faab41b307aa1c1a11dd16462968f",
+  "artifact_matches": true,
+  "state": "concluded",
+  "proposal_id": "prop_9c01dab8",
+  "verified": true,
+  "verifier_session_distinct": true,
+  "distinct_sessions": 4,
+  "verification_by": "seat-4",
+  "conclusion": {
+    "text": "Adopt seat-2's edits in src/ (inventory.ts, orders.ts, backorder.ts, warehouse.ts): receive adds to lot; available respects expiry; same-expiry ties by ascending id; repeated skus aggregated; failed reserve rolls back all holds; cancelled orders never re-reserved; ship limited to remaining reserved; cancel releases only remaining; return discards when lot expiry < day. Tests pass; workspace_sha256 e82dd2cea33a446ecea772e4d21e7a73f99faab41b307aa1c1a11dd16462968f (retry now skips cancelled orders but leaves them in the queue, per SPEC \"nothing removes it\").\n AMENDMENT (seat-1): cancelled orders now stay in the backorder queue (spec: nothing removes them) but are skipped by retry; final workspace_sha256 e82dd2cea33a446ecea772e4d21e7a73f99faab41b307aa1c1a11dd16462968f, no further edits.",
+    "proposalId": "prop_9c01dab8",
+    "decidedAt": "2026-09-19T19:53:58.164Z",
+    "version": 3,
+    "tally": {
+      "agree": 3,
+      "disagree": 0,
+      "abstain": 0
+    },
+    "electorate": {
+      "electorate": 3,
+      "agree": 3,
+      "disagree": 0,
+      "abstain": 0,
+      "excluded_leavers": 1,
+      "distinct_sessions": 3,
+      "denominator": "electorate"
+    },
+    "unresolved_objections": []
+  }
+}

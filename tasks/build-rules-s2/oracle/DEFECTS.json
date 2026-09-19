@@ -1,0 +1,72 @@
+[
+  {
+    "id": "depositCode",
+    "module": "contracts",
+    "kind": "spec-vs-code",
+    "template": "fallback",
+    "public_test_encodes_bug": false
+  },
+  {
+    "id": "handlingLimit",
+    "module": "compliance",
+    "kind": "boundary",
+    "template": "clamp",
+    "public_test_encodes_bug": false
+  },
+  {
+    "id": "onsiteValid",
+    "module": "promotions",
+    "kind": "boundary",
+    "template": "window",
+    "public_test_encodes_bug": false
+  },
+  {
+    "id": "bulkLimit",
+    "module": "service",
+    "kind": "boundary",
+    "template": "clamp",
+    "public_test_encodes_bug": false
+  },
+  {
+    "id": "shippingValid",
+    "module": "accounts",
+    "kind": "boundary",
+    "template": "window",
+    "public_test_encodes_bug": true
+  },
+  {
+    "id": "shippingBand",
+    "module": "contracts",
+    "kind": "boundary",
+    "template": "band",
+    "public_test_encodes_bug": true
+  },
+  {
+    "id": "auditRate",
+    "module": "storage",
+    "kind": "spec-vs-code",
+    "template": "table",
+    "public_test_encodes_bug": false
+  },
+  {
+    "id": "onsiteFee",
+    "module": "fees",
+    "kind": "spec-vs-code",
+    "template": "round",
+    "public_test_encodes_bug": false
+  },
+  {
+    "id": "seasonalQuote",
+    "module": "contracts",
+    "kind": "cross-module-contract",
+    "template": "cross",
+    "public_test_encodes_bug": false
+  },
+  {
+    "id": "referralRate",
+    "module": "compliance",
+    "kind": "spec-vs-code",
+    "template": "table",
+    "public_test_encodes_bug": false
+  }
+]

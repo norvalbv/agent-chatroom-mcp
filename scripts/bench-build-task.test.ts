@@ -43,7 +43,7 @@ for (const id of INSTANCES) {
   test(`${id}: broken passes public tests, fails every defect check, passes every regression check`, () => {
     const { task, dir, inst } = ws(id, []);
     try {
-      const pub = spawnSync(process.execPath, ['--import', 'tsx', '--test', 'test/'], { cwd: dir, encoding: 'utf8', timeout: 60000 });
+      const pub = spawnSync(process.execPath, ['--test', 'test/*.test.ts'], { cwd: dir, encoding: 'utf8', timeout: 60000 });
       assert.equal(pub.status, 0, pub.stdout + pub.stderr);
       const r = score(task, dir);
       assert.equal(r.out.defects_caught, 0);
@@ -99,3 +99,152 @@ test('the two committed instances differ in planted defect set', () => {
   const b = JSON.parse(readFileSync('tasks/build-billing-s2/oracle/instance.json', 'utf8'));
   assert.notDeepEqual([...a.defects].sort(), [...b.defects].sort());
 });
+
+import { buildRuleSrc, deriveRules } from './bench-build-rules-gen.ts';
+
+for (const id of ['build-rules-s1', 'build-rules-s2', 'build-rules-l3']) {
+  const task = resolve('tasks', id);
+  const meta = JSON.parse(readFileSync(join(task, 'oracle/instance.json'), 'utf8'));
+  const inst = deriveRules(meta.seed, meta.size, meta.plants);
+  const planted: string[] = JSON.parse(readFileSync(join(task, 'oracle/instance.json'), 'utf8')).defects;
+  function rws(fixed: string[]) {
+    const dir = mkdtempSync(join(tmpdir(), 'build-rules-'));
+    cpSync(join(task, 'public'), dir, { recursive: true });
+    for (const [f, body] of Object.entries(buildRuleSrc(inst, new Set(fixed)))) writeFileSync(join(dir, 'src', f), body);
+    return dir;
+  }
+  test(`${id}: generator is deterministic and plants the requested count`, () => {
+    assert.equal(inst.rules.length, meta.size);
+    assert.deepEqual(planted, inst.rules.filter((r) => r.defect).map((r) => r.id));
+    assert.equal(planted.length, meta.plants);
+    assert.ok(!existsSync(join(task, 'public/oracle')));
+  });
+  test(`${id}: broken passes public tests, catches 0, no regression; correct scores 1`, () => {
+    const b = rws([]), c = rws(planted);
+    try {
+      const pub = spawnSync(process.execPath, ['--test', 'test/*.test.ts'], { cwd: b, encoding: 'utf8', timeout: 60000 });
+      assert.equal(pub.status, 0, pub.stdout + pub.stderr);
+      const rb = score(task, b);
+      assert.equal(rb.out.defects_caught, 0); assert.equal(rb.out.regressions_failed, 0);
+      const rc = score(task, c);
+      assert.equal(rc.status, 0, JSON.stringify(rc.out)); assert.equal(rc.out.defects_shipped, 0);
+    } finally { rmSync(b, { recursive: true, force: true }); rmSync(c, { recursive: true, force: true }); }
+  });
+  test(`${id}: fixing one planted rule flips exactly that defect check and no regression`, () => {
+    for (const d of planted) {
+      const dir = rws([d]);
+      try { const r = score(task, dir); assert.deepEqual(r.out.caught_ids, [d]); assert.equal(r.out.regressions_failed, 0); }
+      finally { rmSync(dir, { recursive: true, force: true }); }
+    }
+  });
+  test(`${id}: no comments in src`, () => {
+    for (const f of readdirSync(join(task, 'public/src'))) assert.ok(!/\/\/|\/\*/.test(readFileSync(join(task, 'public/src', f), 'utf8')), f);
+  });
+}
+
+import { buildLedgerSrc, deriveLedger } from './bench-build-ledger-gen.ts';
+
+for (const id of ['build-ledger-s1', 'build-ledger-s2']) {
+  const task = resolve('tasks', id);
+  const meta = JSON.parse(readFileSync(join(task, 'oracle/instance.json'), 'utf8'));
+  const inst = deriveLedger(meta.seed);
+  function lws(fixed: string[]) {
+    const dir = mkdtempSync(join(tmpdir(), 'build-ledger-'));
+    cpSync(join(task, 'public'), dir, { recursive: true });
+    for (const [f, body] of Object.entries(buildLedgerSrc(inst, new Set(fixed)))) writeFileSync(join(dir, 'src', f), body);
+    return dir;
+  }
+  test(`${id}: generator deterministic; broken passes public tests, catches 0, no regression; correct scores 1`, () => {
+    assert.deepEqual(meta.defects, inst.defects);
+    const b = lws([]), c = lws(inst.defects);
+    try {
+      const pub = spawnSync(process.execPath, ['--test', 'test/*.test.ts'], { cwd: b, encoding: 'utf8', timeout: 60000 });
+      assert.equal(pub.status, 0, pub.stdout + pub.stderr);
+      const rb = score(task, b);
+      assert.equal(rb.out.defects_caught, 0); assert.equal(rb.out.regressions_failed, 0);
+      const rc = score(task, c);
+      assert.equal(rc.status, 0, JSON.stringify(rc.out)); assert.equal(rc.out.defects_shipped, 0);
+    } finally { rmSync(b, { recursive: true, force: true }); rmSync(c, { recursive: true, force: true }); }
+  });
+  test(`${id}: fixing one planted defect flips exactly that check`, () => {
+    for (const d of inst.defects) {
+      const dir = lws([d]);
+      try { const r = score(task, dir); assert.deepEqual(r.out.caught_ids, [d], d); assert.equal(r.out.regressions_failed, 0, d); }
+      finally { rmSync(dir, { recursive: true, force: true }); }
+    }
+  });
+  test(`${id}: no comments in src`, () => {
+    for (const f of readdirSync(join(task, 'public/src'))) assert.ok(!/\/\/|\/\*/.test(readFileSync(join(task, 'public/src', f), 'utf8')), f);
+  });
+}
+
+for (const id of ['build-ledger-s1', 'build-ledger-s2']) {
+  const task = resolve('tasks', id);
+  const meta = JSON.parse(readFileSync(join(task, 'oracle/instance.json'), 'utf8'));
+  const inst = deriveLedger(meta.seed);
+  const mk = (fixed: string[]) => {
+    const dir = mkdtempSync(join(tmpdir(), 'build-ledger-x-'));
+    cpSync(join(task, 'public'), dir, { recursive: true });
+    for (const [f, body] of Object.entries(buildLedgerSrc(inst, new Set(fixed)))) writeFileSync(join(dir, 'src', f), body);
+    return dir;
+  };
+  test(`${id}: a workspace that monkey-patches JSON.stringify cannot spoof the oracle`, () => {
+    const dir = mk([]);
+    try {
+      const f = join(dir, 'src', 'warehouse.ts');
+      writeFileSync(f, readFileSync(f, 'utf8') + "\nconst real = JSON.stringify;\nJSON.stringify = ((v: any, ...r: any[]) => (v && typeof v === 'object' && 'oracle_results' in v ? real(v, ...r) : 'x')) as any;\n");
+      const r = score(task, dir);
+      assert.equal(r.out.defects_caught, 0);
+      assert.equal(r.out.score, 0);
+    } finally { rmSync(dir, { recursive: true, force: true }); }
+  });
+  test(`${id}: an extra snapshot field or reordered keys do not cost the arm a defect`, () => {
+    const dir = mk(inst.defects);
+    try {
+      const f = join(dir, 'src', 'warehouse.ts');
+      writeFileSync(f, readFileSync(f, 'utf8').replace("lots: [...this.inv.lots.values()].map((l) => ({ id: l.id,", "lots: [...this.inv.lots.values()].map((l) => ({ note: 'x', id: l.id,"));
+      const r = score(task, dir);
+      assert.equal(r.out.score, 1, JSON.stringify(r.out));
+    } finally { rmSync(dir, { recursive: true, force: true }); }
+  });
+  test(`${id}: planted and reference trees have the same line count per file and no trailing-space residue`, () => {
+    const a = buildLedgerSrc(inst, new Set()), b = buildLedgerSrc(inst, new Set(inst.defects));
+    for (const k of Object.keys(a)) {
+      assert.equal(a[k].split('\n').length, b[k].split('\n').length, `${k}: line count differs (excision scar)`);
+      assert.ok(!/[ \t]+$/m.test(a[k]) && !/[ \t]+$/m.test(b[k]), `${k}: trailing whitespace`);
+    }
+  });
+}
+
+import { LEDGER_DEFECTS } from './bench-build-ledger-gen.ts';
+for (const id of ['build-ledger-s1', 'build-ledger-s2']) {
+  test(`${id}: reintroducing any catalogued defect that was not planted is scored as a shipped regression`, () => {
+    const task = resolve('tasks', id);
+    const meta = JSON.parse(readFileSync(join(task, 'oracle/instance.json'), 'utf8'));
+    const inst = deriveLedger(meta.seed);
+    const unplanted = LEDGER_DEFECTS.filter((d) => !inst.defects.includes(d));
+    assert.ok(unplanted.length >= 4);
+    for (const d of unplanted) {
+      const dir = mkdtempSync(join(tmpdir(), 'build-ledger-re-'));
+      try {
+        cpSync(join(task, 'public'), dir, { recursive: true });
+        const wide = { ...inst, defects: [...inst.defects, d] };
+        for (const [f, body] of Object.entries(buildLedgerSrc(wide, new Set(inst.defects)))) writeFileSync(join(dir, 'src', f), body);
+        const r = score(task, dir);
+        assert.ok(r.out.regression_failed_ids.includes(d), `${d}: ${JSON.stringify(r.out.regression_failed_ids)}`);
+        assert.equal(r.out.score, 0);
+      } finally { rmSync(dir, { recursive: true, force: true }); }
+    }
+  });
+}
+
+for (const id of ['build-ledger-s1', 'build-ledger-s2']) {
+  test(`${id}: task.json build_suite matrix equals the oracle's defect/ and regression/ names exactly`, () => {
+    const task = resolve('tasks', id);
+    const meta = JSON.parse(readFileSync(join(task, 'task.json'), 'utf8'));
+    const r = score(task, resolve(task, 'fixtures/correct'));
+    const names: string[] = r.out.oracle_results.map((x: { name: string }) => x.name);
+    assert.deepEqual(names.filter((n) => n.startsWith('defect/')).map((n) => n.slice(7)).sort(), [...meta.build_suite.defect_ids].sort());
+    assert.deepEqual(names.filter((n) => n.startsWith('regression/')).map((n) => n.slice(11)).sort(), [...meta.build_suite.regression_ids].sort());
+  });
+}

@@ -1,0 +1,240 @@
+/** Deterministic artifact-to-table reducer for the planted-defect build suite. */
+import { existsSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
+import { basename, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+
+type Arm = "A" | "B" | "C";
+type Check = { name: string; exit_code: number };
+type RawBuildResult = {
+  task_id?: unknown;
+  arm?: unknown;
+  seed?: unknown;
+  scores?: Record<string, unknown>;
+  checks?: { defects?: unknown; regressions?: unknown };
+  usage?: { cost_usd?: unknown; coverage?: unknown; thinking_tokens?: unknown; output_tokens?: unknown };
+  wall_clock_ms?: unknown;
+  effort?: { level?: unknown; settings_sha256?: unknown; own_git_root?: unknown };
+  provenance?: { run_fingerprint?: unknown; manifest_sha256?: unknown; runner_sha256?: unknown; task_sha256_before_score?: unknown; task_sha256_after_score?: unknown };
+};
+
+export interface BuildReportRow {
+  task_id: string;
+  arm: Arm;
+  seed: number;
+  status: "valid" | "invalid" | "missing";
+  reason: string | null;
+  defects_caught: number | null;
+  defects_total: number | null;
+  residual_plants: number | null;
+  introduced_regressions: number | null;
+  defects_shipped: number | null;
+  cost_usd: number | null;
+  thinking_tokens: number | null;
+  output_tokens: number | null;
+  wall_clock_ms: number | null;
+  actual_over_cap: boolean | null;
+  run_fingerprint: string | null;
+  defect_checks: Check[];
+}
+
+export interface BuildReport {
+  schemaVersion: 1;
+  nominal_arm_cap_usd: number;
+  planned: { tasks: string[]; arms: Arm[]; seeds: number[] };
+  rows: BuildReportRow[];
+  per_defect: { task_id: string; defect_id: string; caught: number; n: number }[];
+  summary: { valid: number; invalid: number; missing: number; actual_over_cap: number; known_cost_usd: number };
+}
+
+function natural(a: string, b: string) {
+  return a.localeCompare(b, undefined, { numeric: true });
+}
+
+function integer(value: unknown): value is number {
+  return Number.isInteger(value) && Number(value) >= 0;
+}
+
+function checks(value: unknown, prefix: string): { checks: Check[]; reason?: string } {
+  if (!Array.isArray(value) || value.length === 0) return { checks: [], reason: `missing ${prefix} checks` };
+  const parsed: Check[] = [];
+  const names = new Set<string>();
+  for (const item of value) {
+    if (!item || typeof item !== "object") return { checks: [], reason: `malformed ${prefix} check` };
+    const { name, exit_code } = item as Check;
+    if (typeof name !== "string" || !name.startsWith(`${prefix}/`) || (exit_code !== 0 && exit_code !== 1)) return { checks: [], reason: `malformed ${prefix} check` };
+    if (names.has(name)) return { checks: [], reason: `duplicate check ${name}` };
+    names.add(name);
+    parsed.push({ name, exit_code });
+  }
+  return { checks: parsed.sort((a, b) => natural(a.name, b.name)) };
+}
+
+function invalidRow(task: string, arm: Arm, seed: number, reason: string, raw?: RawBuildResult): BuildReportRow {
+  return {
+    task_id: task, arm, seed, status: "invalid", reason,
+    defects_caught: null, defects_total: null, residual_plants: null, introduced_regressions: null,
+    defects_shipped: null, cost_usd: typeof raw?.usage?.cost_usd === "number" ? raw.usage.cost_usd : null,
+    thinking_tokens: typeof raw?.usage?.thinking_tokens === "number" ? raw.usage.thinking_tokens : null,
+    output_tokens: typeof raw?.usage?.output_tokens === "number" ? raw.usage.output_tokens : null,
+    wall_clock_ms: typeof raw?.wall_clock_ms === "number" ? raw.wall_clock_ms : null,
+    actual_over_cap: null,
+    run_fingerprint: typeof raw?.provenance?.run_fingerprint === "string" ? raw.provenance.run_fingerprint : null,
+    defect_checks: [],
+  };
+}
+
+function validateRaw(raw: RawBuildResult, task: string, arm: Arm, seed: number, cap: number): BuildReportRow {
+  if (raw.task_id !== task || raw.arm !== arm || raw.seed !== seed) return invalidRow(task, arm, seed, "cell identity mismatch", raw);
+  const fingerprint = raw.provenance?.run_fingerprint;
+  if (typeof fingerprint !== "string" || !fingerprint) return invalidRow(task, arm, seed, "missing run fingerprint", raw);
+  if (!raw.provenance?.manifest_sha256 || !raw.provenance.runner_sha256) return invalidRow(task, arm, seed, "incomplete launch provenance", raw);
+  if (!raw.provenance.task_sha256_before_score || raw.provenance.task_sha256_before_score !== raw.provenance.task_sha256_after_score) return invalidRow(task, arm, seed, "task hash changed", raw);
+  if (raw.effort?.level !== "medium" || !raw.effort.settings_sha256 || raw.effort.own_git_root !== true) return invalidRow(task, arm, seed, "effort provenance incomplete", raw);
+  const defectSet = checks(raw.checks?.defects, "defect");
+  if (defectSet.reason) return invalidRow(task, arm, seed, defectSet.reason, raw);
+  const regressionSet = checks(raw.checks?.regressions, "regression");
+  if (regressionSet.reason) return invalidRow(task, arm, seed, regressionSet.reason, raw);
+  const scores = raw.scores ?? {};
+  for (const field of ["defects_caught", "defects_total", "defects_shipped", "regression_failures", "regressions_total"]) {
+    if (!integer(scores[field])) return invalidRow(task, arm, seed, `invalid score ${field}`, raw);
+  }
+  const caught = defectSet.checks.filter((check) => check.exit_code === 0).length;
+  const regressions = regressionSet.checks.filter((check) => check.exit_code === 1).length;
+  if (scores.defects_total !== defectSet.checks.length || scores.regressions_total !== regressionSet.checks.length || scores.defects_caught !== caught || scores.regression_failures !== regressions) {
+    return invalidRow(task, arm, seed, "score/check disagreement", raw);
+  }
+  const residual = defectSet.checks.length - caught;
+  if (scores.defects_shipped !== residual + regressions) return invalidRow(task, arm, seed, "shipped score is not residual plus regressions", raw);
+  const cost = raw.usage?.cost_usd;
+  if (raw.usage?.coverage !== "complete" || typeof cost !== "number" || !Number.isFinite(cost) || cost < 0) return invalidRow(task, arm, seed, "unknown terminal cost", raw);
+  if (!integer(raw.usage.thinking_tokens) || !integer(raw.usage.output_tokens) || !integer(raw.wall_clock_ms)) return invalidRow(task, arm, seed, "usage or wall time incomplete", raw);
+  return {
+    task_id: task, arm, seed, status: "valid", reason: null,
+    defects_caught: caught, defects_total: defectSet.checks.length, residual_plants: residual,
+    introduced_regressions: regressions, defects_shipped: residual + regressions,
+    cost_usd: cost, thinking_tokens: raw.usage.thinking_tokens, output_tokens: raw.usage.output_tokens,
+    wall_clock_ms: raw.wall_clock_ms, actual_over_cap: cost > cap, run_fingerprint: fingerprint,
+    defect_checks: defectSet.checks,
+  };
+}
+
+export function buildBuildReport(resultsDir: string, tasks: string[], arms: Arm[], seeds: number[], nominalCapUsd: number): BuildReport {
+  if (!(nominalCapUsd > 0)) throw new Error("nominal cap must be positive");
+  const byCell = new Map<string, RawBuildResult>();
+  if (existsSync(resultsDir)) {
+    for (const entry of readdirSync(resultsDir).sort(natural)) {
+      const path = join(resultsDir, entry, "build-result.json");
+      if (!existsSync(path) || !statSync(path).isFile()) continue;
+      let raw: RawBuildResult;
+      try { raw = JSON.parse(readFileSync(path, "utf8")) as RawBuildResult; }
+      catch { throw new Error(`Malformed build-result.json: ${path}`); }
+      const key = `${raw.task_id}\0${raw.arm}\0${raw.seed}`;
+      if (byCell.has(key)) throw new Error(`Duplicate cell ${String(raw.task_id)} ${String(raw.arm)} ${String(raw.seed)}`);
+      byCell.set(key, raw);
+    }
+  }
+  const rows: BuildReportRow[] = [];
+  for (const task of tasks) for (const arm of arms) for (const seed of seeds) {
+    const raw = byCell.get(`${task}\0${arm}\0${seed}`);
+    rows.push(raw ? validateRaw(raw, task, arm, seed, nominalCapUsd) : {
+      task_id: task, arm, seed, status: "missing", reason: "planned cell absent",
+      defects_caught: null, defects_total: null, residual_plants: null, introduced_regressions: null,
+      defects_shipped: null, cost_usd: null, thinking_tokens: null, output_tokens: null,
+      wall_clock_ms: null, actual_over_cap: null, run_fingerprint: null, defect_checks: [],
+    });
+  }
+  const defectCounts = new Map<string, { task_id: string; defect_id: string; caught: number; n: number }>();
+  for (const row of rows.filter((item) => item.status === "valid" && item.arm === "A")) {
+    for (const check of row.defect_checks) {
+      const defectId = check.name.slice("defect/".length);
+      const key = `${row.task_id}\0${defectId}`;
+      const count = defectCounts.get(key) ?? { task_id: row.task_id, defect_id: defectId, caught: 0, n: 0 };
+      count.n += 1;
+      if (check.exit_code === 0) count.caught += 1;
+      defectCounts.set(key, count);
+    }
+  }
+  const perDefect = [...defectCounts.values()].sort((a, b) => natural(`${a.task_id}/${a.defect_id}`, `${b.task_id}/${b.defect_id}`));
+  return {
+    schemaVersion: 1,
+    nominal_arm_cap_usd: nominalCapUsd,
+    planned: { tasks, arms, seeds },
+    rows,
+    per_defect: perDefect,
+    summary: {
+      valid: rows.filter((row) => row.status === "valid").length,
+      invalid: rows.filter((row) => row.status === "invalid").length,
+      missing: rows.filter((row) => row.status === "missing").length,
+      actual_over_cap: rows.filter((row) => row.actual_over_cap === true).length,
+      known_cost_usd: rows.reduce((sum, row) => sum + (row.cost_usd ?? 0), 0),
+    },
+  };
+}
+
+function value(value: number | null, digits = 0): string {
+  return value === null ? "unknown" : digits ? value.toFixed(digits) : String(value);
+}
+
+export function renderBuildReportMarkdown(report: BuildReport): string {
+  const lines = [
+    "| task | arm | seed | status | caught | shipped | new regressions | cost USD | actual > nominal cap | thinking | wall ms |",
+    "|---|---:|---:|---|---:|---:|---:|---:|---|---:|---:|",
+  ];
+  for (const row of report.rows) {
+    const caught = row.defects_caught === null ? "-" : `${row.defects_caught}/${row.defects_total}`;
+    lines.push(`| ${row.task_id} | ${row.arm} | ${row.seed} | ${row.status} | ${caught} | ${value(row.defects_shipped)} | ${value(row.introduced_regressions)} | ${value(row.cost_usd, 4)} | ${row.actual_over_cap === null ? "-" : row.actual_over_cap ? "yes" : "no"} | ${value(row.thinking_tokens)} | ${value(row.wall_clock_ms)} |`);
+  }
+  lines.push("", `Valid: ${report.summary.valid}; invalid: ${report.summary.invalid}; missing: ${report.summary.missing}; known cost: $${report.summary.known_cost_usd.toFixed(4)}.`, "", "### Per-defect arm-A catch table", "", "| task | defect | caught | n |", "|---|---|---:|---:|");
+  for (const defect of report.per_defect) lines.push(`| ${defect.task_id} | ${defect.defect_id} | ${defect.caught} | ${defect.n} |`);
+  return `${lines.join("\n")}\n`;
+}
+
+function parseList(value: string | undefined, name: string): string[] {
+  if (!value) throw new Error(`--${name} is required`);
+  const values = value.split(",").map((item) => item.trim()).filter(Boolean);
+  if (!values.length || new Set(values).size !== values.length) throw new Error(`--${name} must be a unique comma-list`);
+  return values;
+}
+
+function parseSeedList(value: string | undefined): number[] {
+  const parts = parseList(value, "seeds");
+  const seeds: number[] = [];
+  for (const part of parts) {
+    const range = part.match(/^(\d+)-(\d+)$/);
+    if (range) for (let seed = Number(range[1]); seed <= Number(range[2]); seed++) seeds.push(seed);
+    else {
+      const seed = Number(part);
+      if (!Number.isInteger(seed)) throw new Error(`Invalid seed ${part}`);
+      seeds.push(seed);
+    }
+  }
+  return seeds;
+}
+
+function cliFlag(argv: string[], name: string): string | undefined {
+  const index = argv.indexOf(`--${name}`);
+  return index >= 0 ? argv[index + 1] : undefined;
+}
+
+function main() {
+  const argv = process.argv.slice(2);
+  const results = resolve(cliFlag(argv, "results") ?? "bench/results/build-suite");
+  const tasks = parseList(cliFlag(argv, "tasks"), "tasks");
+  const arms = parseList(cliFlag(argv, "arms") ?? "A,B,C", "arms") as Arm[];
+  if (arms.some((arm) => !["A", "B", "C"].includes(arm))) throw new Error("Invalid arm");
+  const seeds = parseSeedList(cliFlag(argv, "seeds"));
+  const cap = Number(cliFlag(argv, "arm-cap-usd") ?? "2");
+  const report = buildBuildReport(results, tasks, arms, seeds, cap);
+  const json = `${JSON.stringify(report, null, 2)}\n`;
+  const markdown = renderBuildReportMarkdown(report);
+  const outJson = cliFlag(argv, "out-json");
+  const outMarkdown = cliFlag(argv, "out-md");
+  if (outJson) writeFileSync(resolve(outJson), json);
+  if (outMarkdown) writeFileSync(resolve(outMarkdown), markdown);
+  if (!outJson && !outMarkdown) process.stdout.write(markdown);
+}
+
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  try { main(); }
+  catch (error) { process.stderr.write(`${error}\n`); process.exitCode = 1; }
+}

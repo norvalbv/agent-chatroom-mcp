@@ -23,6 +23,8 @@ export const offlineScripts = [
   'ak-select.test.ts',
   'bench-ak.test.ts',
   'bench-build-task.test.ts',
+  'bench-build-grid.test.ts',
+  'bench-build-report.test.ts',
   'bench-grid.test.ts',
   'bench-hub-no-recruit-regression.ts',
   'bench-orphan-regression.ts',

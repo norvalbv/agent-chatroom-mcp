@@ -22,7 +22,7 @@ export function tryReserve(inv: Inventory, order: Order, day: number): boolean {
     perSku.set(line.sku, plan);
   }
   if (!ok) {
-    
+    inv.unhold(perSku.get(order.lines[0].sku) ?? []);
     order.status = 'backordered';
     return false;
   }

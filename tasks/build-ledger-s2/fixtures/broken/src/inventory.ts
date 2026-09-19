@@ -7,7 +7,7 @@ export class Inventory {
   receive(id: string, sku: string, qty: number, expiry: number): void {
     const existing = this.lots.get(id);
     if (existing) {
-      existing.qty = qty;
+      existing.qty = existing.qty + qty;
     } else {
       this.lots.set(id, { id, sku, qty, expiry });
     }
@@ -24,14 +24,14 @@ export class Inventory {
   available(sku: string, day: number): number {
     let total = 0;
     for (const lot of this.lots.values()) {
-      if (lot.sku === sku && this.usable(lot, day)) total += this.free(lot);
+      if (lot.sku === sku && this.free(lot) > 0) total += this.free(lot);
     }
     return total;
   }
 
   plan(sku: string, qty: number, day: number): Alloc[] | null {
     const candidates = [...this.lots.values()].filter((l) => l.sku === sku && this.usable(l, day) && this.free(l) > 0);
-    candidates.sort((a, b) => a.expiry - b.expiry);
+    candidates.sort((a, b) => a.expiry - b.expiry || (a.id < b.id ? 1 : a.id > b.id ? -1 : 0));
     const out: Alloc[] = [];
     let need = qty;
     for (const lot of candidates) {

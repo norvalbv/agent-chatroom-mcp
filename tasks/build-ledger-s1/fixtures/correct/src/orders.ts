@@ -19,7 +19,7 @@ export function tryReserve(inv: Inventory, order: Order, day: number): boolean {
     if (!plan) { ok = false; break; }
     inv.hold(plan);
     held.push(...plan);
-    perSku.set(line.sku, plan);
+    perSku.set(line.sku, [...(perSku.get(line.sku) ?? []), ...plan]);
   }
   if (!ok) {
     inv.unhold(held);

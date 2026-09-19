@@ -177,3 +177,41 @@ for (const id of ['build-ledger-s1', 'build-ledger-s2']) {
     for (const f of readdirSync(join(task, 'public/src'))) assert.ok(!/\/\/|\/\*/.test(readFileSync(join(task, 'public/src', f), 'utf8')), f);
   });
 }
+
+for (const id of ['build-ledger-s1', 'build-ledger-s2']) {
+  const task = resolve('tasks', id);
+  const meta = JSON.parse(readFileSync(join(task, 'oracle/instance.json'), 'utf8'));
+  const inst = deriveLedger(meta.seed);
+  const mk = (fixed: string[]) => {
+    const dir = mkdtempSync(join(tmpdir(), 'build-ledger-x-'));
+    cpSync(join(task, 'public'), dir, { recursive: true });
+    for (const [f, body] of Object.entries(buildLedgerSrc(inst, new Set(fixed)))) writeFileSync(join(dir, 'src', f), body);
+    return dir;
+  };
+  test(`${id}: a workspace that monkey-patches JSON.stringify cannot spoof the oracle`, () => {
+    const dir = mk([]);
+    try {
+      const f = join(dir, 'src', 'warehouse.ts');
+      writeFileSync(f, readFileSync(f, 'utf8') + "\nconst real = JSON.stringify;\nJSON.stringify = ((v: any, ...r: any[]) => (v && typeof v === 'object' && 'oracle_results' in v ? real(v, ...r) : 'x')) as any;\n");
+      const r = score(task, dir);
+      assert.equal(r.out.defects_caught, 0);
+      assert.equal(r.out.score, 0);
+    } finally { rmSync(dir, { recursive: true, force: true }); }
+  });
+  test(`${id}: an extra snapshot field or reordered keys do not cost the arm a defect`, () => {
+    const dir = mk(inst.defects);
+    try {
+      const f = join(dir, 'src', 'warehouse.ts');
+      writeFileSync(f, readFileSync(f, 'utf8').replace("lots: [...this.inv.lots.values()].map((l) => ({ id: l.id,", "lots: [...this.inv.lots.values()].map((l) => ({ note: 'x', id: l.id,"));
+      const r = score(task, dir);
+      assert.equal(r.out.score, 1, JSON.stringify(r.out));
+    } finally { rmSync(dir, { recursive: true, force: true }); }
+  });
+  test(`${id}: planted and reference trees have the same line count per file and no trailing-space residue`, () => {
+    const a = buildLedgerSrc(inst, new Set()), b = buildLedgerSrc(inst, new Set(inst.defects));
+    for (const k of Object.keys(a)) {
+      assert.equal(a[k].split('\n').length, b[k].split('\n').length, `${k}: line count differs (excision scar)`);
+      assert.ok(!/[ \t]+$/m.test(a[k]) && !/[ \t]+$/m.test(b[k]), `${k}: trailing whitespace`);
+    }
+  });
+}

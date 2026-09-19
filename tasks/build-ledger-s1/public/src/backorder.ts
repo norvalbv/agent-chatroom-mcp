@@ -14,10 +14,10 @@ export class Backorders {
   }
 
   retry(inv: Inventory, orders: Map<string, Order>, day: number): void {
-    const ids = [...this.queue].sort((a, b) => size(orders.get(a)!) - size(orders.get(b)!));
+    const ids = [...this.queue];
     for (const id of ids) {
       const order = orders.get(id)!;
-      
+      if (order.status === 'reserved') { this.remove(id); continue; }
       if (tryReserve(inv, order, day)) this.remove(id);
     }
   }

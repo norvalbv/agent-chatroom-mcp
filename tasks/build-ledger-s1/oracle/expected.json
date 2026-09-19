@@ -8,6 +8,11 @@
           "id": "L1",
           "qty": 10,
           "reserved": 10
+        },
+        {
+          "id": "L2",
+          "qty": 10,
+          "reserved": 10
         }
       ],
       "orders": [
@@ -15,22 +20,26 @@
           "id": "o1",
           "status": "backordered",
           "remaining": {},
-          "shipped": {}
+          "shipped": {},
+          "returned": {}
         },
         {
           "id": "o2",
           "status": "reserved",
           "remaining": {
-            "A": 10
+            "A": 10,
+            "B": 10
           },
-          "shipped": {}
+          "shipped": {},
+          "returned": {}
         }
       ],
       "backorders": [
         "o1"
       ],
       "available": {
-        "A": 0
+        "A": 0,
+        "B": 0
       }
     }
   ],
@@ -54,7 +63,8 @@
         "remaining": {
           "A": 4
         },
-        "shipped": {}
+        "shipped": {},
+        "returned": {}
       }
     ],
     "backorders": [],
@@ -79,7 +89,8 @@
           "remaining": {
             "A": 4
           },
-          "shipped": {}
+          "shipped": {},
+          "returned": {}
         }
       ],
       "backorders": [],
@@ -108,7 +119,8 @@
           },
           "shipped": {
             "A": 6
-          }
+          },
+          "returned": {}
         }
       ],
       "backorders": [],
@@ -134,7 +146,8 @@
           "remaining": {},
           "shipped": {
             "A": 4
-          }
+          },
+          "returned": {}
         }
       ],
       "backorders": [],
@@ -166,6 +179,9 @@
           },
           "shipped": {
             "A": 10
+          },
+          "returned": {
+            "A": 10
           }
         }
       ],
@@ -177,31 +193,13 @@
   ],
   "S07": [
     true,
-    {
-      "lots": [
-        {
-          "id": "L1",
-          "qty": 12,
-          "reserved": 0
-        }
-      ],
-      "orders": [
-        {
-          "id": "o1",
-          "status": "reserved",
-          "remaining": {
-            "A": 0
-          },
-          "shipped": {
-            "A": 8
-          }
-        }
-      ],
-      "backorders": [],
-      "available": {
-        "A": 0
+    [
+      {
+        "id": "L1",
+        "qty": 12,
+        "reserved": 0
       }
-    }
+    ]
   ],
   "S08": {
     "lots": [
@@ -218,7 +216,8 @@
         "remaining": {
           "A": 10
         },
-        "shipped": {}
+        "shipped": {},
+        "returned": {}
       },
       {
         "id": "o2",
@@ -226,13 +225,15 @@
         "remaining": {
           "A": 2
         },
-        "shipped": {}
+        "shipped": {},
+        "returned": {}
       },
       {
         "id": "o3",
         "status": "backordered",
         "remaining": {},
-        "shipped": {}
+        "shipped": {},
+        "returned": {}
       }
     ],
     "backorders": [
@@ -255,7 +256,8 @@
         "id": "o1",
         "status": "cancelled",
         "remaining": {},
-        "shipped": {}
+        "shipped": {},
+        "returned": {}
       },
       {
         "id": "o2",
@@ -263,7 +265,8 @@
         "remaining": {
           "A": 6
         },
-        "shipped": {}
+        "shipped": {},
+        "returned": {}
       }
     ],
     "backorders": [],
@@ -287,42 +290,10 @@
   },
   "S11": [
     {
-      "lots": [
-        {
-          "id": "L1",
-          "qty": 10,
-          "reserved": 0
-        },
-        {
-          "id": "L2",
-          "qty": 4,
-          "reserved": 0
-        }
-      ],
-      "orders": [],
-      "backorders": [],
-      "available": {
-        "A": 4
-      }
+      "A": 4
     },
     {
-      "lots": [
-        {
-          "id": "L1",
-          "qty": 10,
-          "reserved": 0
-        },
-        {
-          "id": "L2",
-          "qty": 4,
-          "reserved": 0
-        }
-      ],
-      "orders": [],
-      "backorders": [],
-      "available": {
-        "A": 14
-      }
+      "A": 4
     }
   ],
   "S12": {
@@ -338,12 +309,72 @@
         "id": "o1",
         "status": "cancelled",
         "remaining": {},
-        "shipped": {}
+        "shipped": {},
+        "returned": {}
       }
     ],
     "backorders": [],
     "available": {
       "A": 10
+    }
+  },
+  "S13": [
+    true,
+    true,
+    {
+      "lots": [
+        {
+          "id": "L1",
+          "qty": 4,
+          "reserved": 0
+        },
+        {
+          "id": "L2",
+          "qty": 12,
+          "reserved": 0
+        }
+      ],
+      "orders": [
+        {
+          "id": "o1",
+          "status": "reserved",
+          "remaining": {
+            "A": 0
+          },
+          "shipped": {
+            "A": 16
+          },
+          "returned": {
+            "A": 8
+          }
+        }
+      ],
+      "backorders": [],
+      "available": {
+        "A": 16
+      }
+    }
+  ],
+  "S14": {
+    "lots": [
+      {
+        "id": "L1",
+        "qty": 20,
+        "reserved": 0
+      }
+    ],
+    "orders": [
+      {
+        "id": "o1",
+        "status": "cancelled",
+        "remaining": {},
+        "shipped": {},
+        "returned": {}
+      }
+    ],
+    "backorders": [],
+    "available": {
+      "A": 20
     }
   },
   "R01": [
@@ -369,7 +400,8 @@
             "A": 6,
             "B": 4
           },
-          "shipped": {}
+          "shipped": {},
+          "returned": {}
         }
       ],
       "backorders": [],
@@ -399,7 +431,8 @@
         "remaining": {
           "A": 8
         },
-        "shipped": {}
+        "shipped": {},
+        "returned": {}
       }
     ],
     "backorders": [],
@@ -432,7 +465,8 @@
         "remaining": {
           "A": 8
         },
-        "shipped": {}
+        "shipped": {},
+        "returned": {}
       },
       {
         "id": "o2",
@@ -440,7 +474,8 @@
         "remaining": {
           "A": 4
         },
-        "shipped": {}
+        "shipped": {},
+        "returned": {}
       }
     ],
     "backorders": [],
@@ -465,7 +500,8 @@
           "id": "o1",
           "status": "cancelled",
           "remaining": {},
-          "shipped": {}
+          "shipped": {},
+          "returned": {}
         }
       ],
       "backorders": [],
@@ -495,6 +531,9 @@
           },
           "shipped": {
             "A": 8
+          },
+          "returned": {
+            "A": 4
           }
         }
       ],
@@ -517,7 +556,8 @@
         "id": "o1",
         "status": "backordered",
         "remaining": {},
-        "shipped": {}
+        "shipped": {},
+        "returned": {}
       },
       {
         "id": "o2",
@@ -525,7 +565,8 @@
         "remaining": {
           "A": 2
         },
-        "shipped": {}
+        "shipped": {},
+        "returned": {}
       }
     ],
     "backorders": [
@@ -557,6 +598,9 @@
         },
         "shipped": {
           "A": 16
+        },
+        "returned": {
+          "A": 6
         }
       }
     ],

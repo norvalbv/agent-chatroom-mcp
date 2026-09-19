@@ -17,7 +17,7 @@ export class Backorders {
     const ids = [...this.queue];
     for (const id of ids) {
       const order = orders.get(id)!;
-      if (order.status === 'cancelled') { this.remove(id); continue; }
+      if (order.status !== 'backordered') { this.remove(id); continue; }
       if (tryReserve(inv, order, day)) this.remove(id);
     }
   }

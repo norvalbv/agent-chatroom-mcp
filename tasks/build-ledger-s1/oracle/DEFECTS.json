@@ -20,14 +20,9 @@
     "kind": "cross-module-contract"
   },
   {
-    "id": "S08",
+    "id": "S07",
     "module": "see DEFECT_MODULE",
     "kind": "spec-vs-code"
-  },
-  {
-    "id": "S09",
-    "module": "see DEFECT_MODULE",
-    "kind": "cross-module-contract"
   },
   {
     "id": "S10",
@@ -41,6 +36,11 @@
   },
   {
     "id": "S12",
+    "module": "see DEFECT_MODULE",
+    "kind": "cross-module-contract"
+  },
+  {
+    "id": "S14",
     "module": "see DEFECT_MODULE",
     "kind": "cross-module-contract"
   }

@@ -9,8 +9,8 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
-export const LEDGER_DEFECTS = ['S01', 'S02', 'S03', 'S04', 'S05', 'S06', 'S07', 'S08', 'S09', 'S10', 'S11', 'S12'] as const;
-export const LEDGER_KIND: Record<string, string> = { S01: 'cross-module-contract', S02: 'spec-vs-code', S03: 'boundary', S04: 'cross-module-contract', S05: 'cross-module-contract', S06: 'boundary', S07: 'spec-vs-code', S08: 'spec-vs-code', S09: 'cross-module-contract', S10: 'spec-vs-code', S11: 'cross-module-contract', S12: 'cross-module-contract' };
+export const LEDGER_DEFECTS = ['S01', 'S02', 'S03', 'S04', 'S05', 'S06', 'S07', 'S08', 'S09', 'S10', 'S11', 'S12', 'S13', 'S14'] as const;
+export const LEDGER_KIND: Record<string, string> = { S01: 'cross-module-contract', S02: 'spec-vs-code', S03: 'boundary', S04: 'cross-module-contract', S05: 'cross-module-contract', S06: 'boundary', S07: 'spec-vs-code', S08: 'spec-vs-code', S09: 'cross-module-contract', S10: 'spec-vs-code', S11: 'cross-module-contract', S12: 'cross-module-contract', S13: 'cross-module-contract', S14: 'cross-module-contract' };
 export type LedgerInstance = { seed: number; m: number; defects: string[] };
 
 function rng(seed: number) {
@@ -25,11 +25,16 @@ export function deriveLedger(seed: number): LedgerInstance {
 }
 
 export function buildLedgerSrc(inst: LedgerInstance, fixed: Set<string>): Record<string, string> {
+  const raw = buildLedgerRaw(inst, fixed);
+  return Object.fromEntries(Object.entries(raw).map(([k, v]) => [k, v.replace(/^[ \t]+\n/gm, '')]));
+}
+
+function buildLedgerRaw(inst: LedgerInstance, fixed: Set<string>): Record<string, string> {
   const bad = (id: string) => inst.defects.includes(id) && !fixed.has(id);
   return {
     'types.ts': `export type Line = { sku: string; qty: number };
 export type Lot = { id: string; sku: string; qty: number; expiry: number };
-export type Alloc = { lotId: string; qty: number };
+export type Alloc = { lotId: string; qty: number; back?: number };
 `,
     'inventory.ts': `import type { Alloc, Lot } from './types.ts';
 
@@ -57,14 +62,14 @@ export class Inventory {
   available(sku: string, day: number): number {
     let total = 0;
     for (const lot of this.lots.values()) {
-      if (lot.sku === sku && ${bad('S11') ? 'true' : 'this.usable(lot, day)'}) total += this.free(lot);
+      if (lot.sku === sku && ${bad('S11') ? 'this.free(lot) > 0' : 'this.usable(lot, day)'}) total += this.free(lot);
     }
     return total;
   }
 
   plan(sku: string, qty: number, day: number): Alloc[] | null {
     const candidates = [...this.lots.values()].filter((l) => l.sku === sku && this.usable(l, day) && this.free(l) > 0);
-    candidates.sort((a, b) => a.expiry - b.expiry${bad('S02') ? '' : ' || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)'});
+    candidates.sort((a, b) => a.expiry - b.expiry || (a.id < b.id ? ${bad('S02') ? '1' : '-1'} : a.id > b.id ? ${bad('S02') ? '-1' : '1'} : 0));
     const out: Alloc[] = [];
     let need = qty;
     for (const lot of candidates) {
@@ -112,10 +117,10 @@ export function tryReserve(inv: Inventory, order: Order, day: number): boolean {
     if (!plan) { ok = false; break; }
     inv.hold(plan);
     held.push(...plan);
-    perSku.set(line.sku, plan);
+    perSku.set(line.sku, ${bad('S14') ? 'plan' : '[...(perSku.get(line.sku) ?? []), ...plan]'});
   }
   if (!ok) {
-    ${bad('S01') ? '' : 'inv.unhold(held);'}
+    inv.unhold(${bad('S01') ? 'perSku.get(order.lines[0].sku) ?? []' : 'held'});
     order.status = 'backordered';
     return false;
   }
@@ -147,7 +152,7 @@ export class Backorders {
     const ids = ${bad('S08') ? '[...this.queue].sort((a, b) => size(orders.get(a)!) - size(orders.get(b)!))' : '[...this.queue]'};
     for (const id of ids) {
       const order = orders.get(id)!;
-      ${bad('S12') ? '' : "if (order.status === 'cancelled') { this.remove(id); continue; }"}
+      if (order.status ${bad('S12') ? "=== 'reserved'" : "!== 'backordered'"}) { this.remove(id); continue; }
       if (tryReserve(inv, order, day)) this.remove(id);
     }
   }
@@ -192,7 +197,7 @@ export class Warehouse {
       const take = Math.min(need, a.qty);
       this.inv.consume({ lotId: a.lotId, qty: take });
       a.qty -= take;
-      shipped.push({ lotId: a.lotId, qty: take });
+      shipped.push({ lotId: a.lotId, qty: take, back: 0 });
       need -= take;
     }
     order.remaining.set(sku, remaining.filter((a) => a.qty > 0));
@@ -203,13 +208,12 @@ export class Warehouse {
   cancel(id: string, day: number): boolean {
     const order = this.orders.get(id);
     if (!order || order.status === 'cancelled') return false;
+    ${bad('S09') ? 'this.backorders.retry(this.inv, this.orders, day);' : ''}
     if (order.status === 'reserved') {
-      for (const allocs of order.remaining.values()) this.inv.unhold(allocs);
-      ${bad('S05') ? 'for (const allocs of order.shipped.values()) this.inv.unhold(allocs);' : ''}
+      for (const map of ${bad('S05') ? '[order.remaining, order.shipped]' : '[order.remaining]'}) for (const allocs of map.values()) this.inv.unhold(allocs);
       order.remaining = new Map();
     }
     order.status = 'cancelled';
-    ${bad('S12') ? '' : 'this.backorders.remove(id);'}
     ${bad('S09') ? '' : 'this.backorders.retry(this.inv, this.orders, day);'}
     return true;
   }
@@ -224,9 +228,10 @@ export class Warehouse {
     let left = qty;
     for (const a of [...(order.shipped.get(sku) ?? [])].reverse()) {
       if (left <= 0) break;
-      const take = Math.min(left, a.qty);
+      const take = Math.min(left, a.qty${bad('S13') ? '' : ' - (a.back ?? 0)'});
+      a.back = (a.back ?? 0) + take;
       const lot = this.inv.lots.get(a.lotId)!;
-      if (${bad('S07') ? 'true' : 'this.inv.usable(lot, day)'}) lot.qty += take;
+      if (${bad('S07') ? 'lot.expiry >= day - 1' : 'this.inv.usable(lot, day)'}) lot.qty += take;
       left -= take;
     }
     this.backorders.retry(this.inv, this.orders, day);
@@ -237,7 +242,7 @@ export class Warehouse {
     const skus = [...new Set([...this.inv.lots.values()].map((l) => l.sku))].sort();
     return {
       lots: [...this.inv.lots.values()].map((l) => ({ id: l.id, qty: l.qty, reserved: this.inv.reserved.get(l.id) ?? 0 })).sort((a, b) => (a.id < b.id ? -1 : 1)),
-      orders: [...this.orders.values()].map((o) => ({ id: o.id, status: o.status, remaining: Object.fromEntries([...o.remaining].map(([k, v]) => [k, total(v)])), shipped: Object.fromEntries([...o.shipped].map(([k, v]) => [k, total(v)])) })).sort((a, b) => (a.id < b.id ? -1 : 1)),
+      orders: [...this.orders.values()].map((o) => ({ id: o.id, status: o.status, remaining: Object.fromEntries([...o.remaining].map(([k, v]) => [k, total(v)])), shipped: Object.fromEntries([...o.shipped].map(([k, v]) => [k, total(v)])), returned: Object.fromEntries([...o.returned]) })).sort((a, b) => (a.id < b.id ? -1 : 1)),
       backorders: [...this.backorders.queue],
       available: Object.fromEntries(skus.map((s) => [s, this.inv.available(s, day)])),
     };
@@ -261,38 +266,43 @@ The \`Warehouse\` class in \`src/warehouse.ts\` tracks stock in lots. All quanti
 - Placing an order reserves every line from lots that can be used that day, earliest expiry first; lots with the same expiry are used in
   order of their id. A line may be filled from several lots.
 - Reserving is all or nothing per order. If any line cannot be filled in full, the order becomes backordered and holds no stock at all.
+- A cancelled order is never reserved again, even though nothing removes it from the backorder queue.
 - Backordered orders are retried whenever stock becomes available again: on a receipt, on a cancellation and on a return.
-  They are retried in the order they were placed, and an order that has been cancelled is never retried.
+  They are retried in the order they were placed.
 
 ## Shipping, cancelling and returning
 - Shipping takes units out of an order's reservation and off the shelf. Units can be shipped in several steps; shipping more than is still
   reserved for that sku is refused. Once units have shipped, they are no longer reserved.
 - Cancelling an order releases only the units that are still reserved for it; units already shipped stay shipped.
+- Order lines may repeat a sku; their quantities add up.
 - A return puts units back on the shelf in the lot they came from, latest shipped units first. The units returned for a sku may never total
   more than was shipped for it; a return that would exceed that is refused and changes nothing. Units returning to a lot that can no longer
   be used that day are discarded instead of restocked.
 
 ## Snapshot
-- \`snapshot(day)\` reports lots (quantity and reserved), orders (status, remaining and shipped units per sku), the backorder queue and the
-  available stock per sku on that day.
+- \`snapshot(day)\` reports lots (quantity and reserved), orders (status, \`remaining\` units still reserved per sku, \`shipped\` units per sku
+  counted gross, that is not reduced by later returns, and \`returned\` units per sku), the backorder queue and the available stock per sku on
+  that day. Its shape is a frozen interface: do not add, rename or reorder fields.
 `;
 const BRIEF = `The warehouse library in src/ must meet the specification in SPEC.md. The public tests in test/ pass today, but passing them does not prove the code meets the specification. Make the codebase conform to SPEC.md, keeping everything that already conforms working. Run the tests with: node --test test/*.test.ts. Do not create files outside this directory.`;
 
 type Scn = (W: any, m: number) => unknown;
 const S = (w: any) => w;
 export const SCENARIOS: Record<string, Scn> = {
-  S01: (W, m) => { const w = new W(); w.receive('L1', 'A', 5 * m, 100, 0); const s1 = w.place('o1', [{ sku: 'A', qty: 2 * m }, { sku: 'B', qty: 1 }], 1); const s2 = w.place('o2', [{ sku: 'A', qty: 5 * m }], 1); return [s1, s2, w.snapshot(1)]; },
+  S01: (W, m) => { const w = new W(); w.receive('L1', 'A', 5 * m, 100, 0); w.receive('L2', 'B', 5 * m, 100, 0); const s1 = w.place('o1', [{ sku: 'A', qty: 2 * m }, { sku: 'B', qty: 2 * m }, { sku: 'C', qty: 1 }], 1); const s2 = w.place('o2', [{ sku: 'A', qty: 5 * m }, { sku: 'B', qty: 5 * m }], 1); return [s1, s2, w.snapshot(1)]; },
   S02: (W, m) => { const w = new W(); w.receive('L2', 'A', 3 * m, 50, 0); w.receive('L1', 'A', 3 * m, 50, 0); w.place('o1', [{ sku: 'A', qty: 2 * m }], 1); return w.snapshot(1); },
   S03: (W, m) => { const w = new W(); w.receive('L1', 'A', 4 * m, 10, 0); const s = w.place('o1', [{ sku: 'A', qty: 2 * m }], 10); return [s, w.snapshot(10)]; },
   S04: (W, m) => { const w = new W(); w.receive('L1', 'A', 10 * m, 99, 0); w.place('o1', [{ sku: 'A', qty: 4 * m }], 1); const a = w.ship('o1', 'A', 3 * m); const b = w.ship('o1', 'A', 3 * m); return [a, b, w.snapshot(2)]; },
   S05: (W, m) => { const w = new W(); w.receive('L1', 'A', 10 * m, 99, 0); w.place('o1', [{ sku: 'A', qty: 6 * m }], 1); w.ship('o1', 'A', 2 * m); const c = w.cancel('o1', 2); return [c, w.snapshot(2)]; },
   S06: (W, m) => { const w = new W(); w.receive('L1', 'A', 10 * m, 99, 0); w.place('o1', [{ sku: 'A', qty: 5 * m }], 1); w.ship('o1', 'A', 5 * m); const r = [w.returnItems('o1', 'A', 3 * m, 2), w.returnItems('o1', 'A', 2 * m, 2), w.returnItems('o1', 'A', 1, 2)]; return [r, w.snapshot(2)]; },
-  S07: (W, m) => { const w = new W(); w.receive('L1', 'A', 10 * m, 20, 0); w.place('o1', [{ sku: 'A', qty: 4 * m }], 5); w.ship('o1', 'A', 4 * m); const r = w.returnItems('o1', 'A', 4 * m, 21); return [r, w.snapshot(21)]; },
+  S07: (W, m) => { const w = new W(); w.receive('L1', 'A', 10 * m, 20, 0); w.place('o1', [{ sku: 'A', qty: 4 * m }], 5); w.ship('o1', 'A', 4 * m); const r = w.returnItems('o1', 'A', 4 * m, 21); return [r, w.snapshot(21).lots]; },
   S08: (W, m) => { const w = new W(); w.place('o1', [{ sku: 'A', qty: 5 * m }], 0); w.place('o2', [{ sku: 'A', qty: 1 * m }], 0); w.place('o3', [{ sku: 'A', qty: 3 * m }], 0); w.receive('L9', 'A', 6 * m, 99, 1); return w.snapshot(1); },
   S09: (W, m) => { const w = new W(); w.receive('L1', 'A', 3 * m, 99, 0); w.place('o1', [{ sku: 'A', qty: 3 * m }], 1); w.place('o2', [{ sku: 'A', qty: 3 * m }], 1); w.cancel('o1', 2); return w.snapshot(2); },
   S10: (W, m) => { const w = new W(); w.receive('L1', 'A', 5 * m, 99, 0); w.receive('L1', 'A', 3 * m, 99, 0); return w.snapshot(1); },
-  S11: (W, m) => { const w = new W(); w.receive('L1', 'A', 5 * m, 10, 0); w.receive('L2', 'A', 2 * m, 30, 0); return [w.snapshot(11), w.snapshot(10)]; },
+  S11: (W, m) => { const w = new W(); w.receive('L1', 'A', 5 * m, 10, 0); w.receive('L2', 'A', 2 * m, 30, 0); return [w.snapshot(11).available, w.snapshot(12).available]; },
   S12: (W, m) => { const w = new W(); w.place('o1', [{ sku: 'A', qty: 2 * m }], 0); w.cancel('o1', 0); w.receive('L1', 'A', 5 * m, 99, 1); return w.snapshot(1); },
+  S13: (W, m) => { const w = new W(); w.receive('L1', 'A', 6 * m, 99, 0); w.receive('L2', 'A', 6 * m, 120, 0); w.place('o1', [{ sku: 'A', qty: 8 * m }], 3); w.ship('o1', 'A', 8 * m); const a = w.returnItems('o1', 'A', 2 * m, 4); const b = w.returnItems('o1', 'A', 2 * m, 4); return [a, b, w.snapshot(4)]; },
+  S14: (W, m) => { const w = new W(); w.receive('L1', 'A', 10 * m, 99, 0); w.place('o1', [{ sku: 'A', qty: 2 * m }, { sku: 'A', qty: 2 * m }], 1); w.cancel('o1', 2); return w.snapshot(2); },
   R01: (W, m) => { const w = new W(); w.receive('L1', 'A', 10 * m, 99, 0); w.receive('L2', 'B', 4 * m, 99, 0); const s = w.place('o1', [{ sku: 'A', qty: 3 * m }, { sku: 'B', qty: 2 * m }], 1); return [s, w.snapshot(1)]; },
   R02: (W, m) => { const w = new W(); w.receive('L1', 'A', 3 * m, 40, 0); w.receive('L2', 'A', 3 * m, 30, 0); w.place('o1', [{ sku: 'A', qty: 4 * m }], 1); return w.snapshot(1); },
   R03: (W, m) => { const w = new W(); w.receive('L1', 'A', 10 * m, 99, 0); w.place('o1', [{ sku: 'A', qty: 4 * m }], 1); const a = w.ship('o1', 'A', 1 * m); const b = w.ship('o1', 'A', 9 * m); const c = w.ship('o1', 'A', 3 * m); return [a, b, c]; },
@@ -369,33 +379,58 @@ export async function writeLedgerTask(seed: number, out: string) {
   w('oracle/expected.json', JSON.stringify(expected, null, 2) + '\n');
   w('oracle/scenarios.ts', `export const SCENARIOS: Record<string, (W: any, m: number) => unknown> = {\n${Object.entries(SCENARIOS).map(([k, f]) => `  ${k}: ${f.toString()},`).join('\n')}\n};\n`);
   w('oracle/score.ts', LEDGER_SCORE);
+  w('oracle/run.ts', LEDGER_RUN);
   w('README.md', `# ${id}\n\nGenerated by scripts/bench-build-ledger-gen.ts (seed ${seed}). Planted: ${inst.defects.join(', ')}. Only public/ reaches a seat.\n`);
   return inst;
 }
 
+const LEDGER_RUN = `/** Child of oracle/score.ts: runs every scenario against the workspace and prints the results as data. It never sees expected.json. */
+import { dirname, resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
+import { SCENARIOS } from './scenarios.ts';
+
+const stringify = JSON.stringify.bind(JSON);
+const write = process.stdout.write.bind(process.stdout);
+const [workspace, mText] = process.argv.slice(2);
+const out: Record<string, { ok: boolean; value?: unknown }> = {};
+let W: any = null;
+try { W = (await import(pathToFileURL(resolve(workspace, 'src', 'warehouse.ts')).href)).Warehouse; } catch { W = null; }
+for (const id of Object.keys(SCENARIOS)) {
+  try { out[id] = W ? { ok: true, value: JSON.parse(stringify(SCENARIOS[id](W, Number(mText)))) } : { ok: false }; } catch { out[id] = { ok: false }; }
+}
+write('\\n@@RESULT@@' + stringify(out) + '\\n');
+process.exit(0);
+`;
+
 const LEDGER_SCORE = `/** Private oracle for a generated ledger task. node --import tsx oracle/score.ts WORKSPACE
- * defect/<id>: scenario snapshot equals the frozen correct one; regression/<id>: same for R* scenarios that hold in the original.
+ * The workspace code runs only in a child process (oracle/run.ts) and is read back as plain data; this parent never imports it,
+ * so a workspace cannot monkey-patch the comparison. A check passes when every key of the frozen expected value is deep-equal in the
+ * result (extra fields and key order are ignored; the SPEC declares the snapshot shape frozen).
+ * defect/<id>: scenario for a planted defect; regression/<id>: R* scenarios that hold in the original code.
  */
+import { spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
-import { fileURLToPath, pathToFileURL } from 'node:url';
-import { SCENARIOS } from './scenarios.ts';
+import { fileURLToPath } from 'node:url';
 
 const workspace = process.argv[2];
 if (!workspace) { console.error('usage: score.ts WORKSPACE'); process.exit(2); }
 const here = dirname(fileURLToPath(import.meta.url));
 const inst = JSON.parse(readFileSync(join(here, 'instance.json'), 'utf8'));
 const expected = JSON.parse(readFileSync(join(here, 'expected.json'), 'utf8'));
-let W: any = null;
-try { W = (await import(pathToFileURL(resolve(workspace, 'src', 'warehouse.ts')).href + '?t=' + Date.now())).Warehouse; } catch { W = null; }
-function run(id: string): boolean {
-  if (!W) return false;
-  try { return JSON.stringify(SCENARIOS[id](W, inst.m)) === JSON.stringify(expected[id]); } catch { return false; }
+const child = spawnSync(process.execPath, ['--import', 'tsx', join(here, 'run.ts'), resolve(workspace), String(inst.m)], { encoding: 'utf8', timeout: 60000, maxBuffer: 64 * 1024 * 1024 });
+let got: Record<string, { ok: boolean; value?: unknown }> = {};
+try { got = JSON.parse(child.stdout.slice(child.stdout.lastIndexOf('@@RESULT@@') + 10)); } catch { got = {}; }
+function subset(exp: unknown, act: unknown): boolean {
+  if (Array.isArray(exp)) return Array.isArray(act) && act.length === exp.length && exp.every((e, i) => subset(e, act[i]));
+  if (exp && typeof exp === 'object') return !!act && typeof act === 'object' && !Array.isArray(act) && Object.entries(exp).every(([k, v]) => subset(v, (act as any)[k]));
+  return Object.is(exp, act);
 }
+const run = (id: string) => !!got[id]?.ok && subset(expected[id], got[id].value);
 const oracle_results: { name: string; exit_code: number }[] = [];
 const caught_ids: string[] = [], missed_ids: string[] = [], regression_failed_ids: string[] = [];
 for (const id of inst.defects) { const ok = run(id); oracle_results.push({ name: 'defect/' + id, exit_code: ok ? 0 : 1 }); (ok ? caught_ids : missed_ids).push(id); }
-for (const id of Object.keys(SCENARIOS).filter((k) => k.startsWith('R'))) { const ok = run(id); oracle_results.push({ name: 'regression/' + id, exit_code: ok ? 0 : 1 }); if (!ok) regression_failed_ids.push(id); }
+for (const id of Object.keys(expected).filter((k) => k.startsWith('R'))) { const ok = run(id); oracle_results.push({ name: 'regression/' + id, exit_code: ok ? 0 : 1 }); if (!ok) regression_failed_ids.push(id); }
 const score = missed_ids.length === 0 && regression_failed_ids.length === 0 ? 1 : 0;
 console.log(JSON.stringify({ score, oracle_results, defects_planted: inst.defects.length, defects_caught: caught_ids.length, defects_shipped: missed_ids.length + regression_failed_ids.length, regressions_failed: regression_failed_ids.length, caught_ids, missed_ids, regression_failed_ids }));
 process.exit(score === 1 ? 0 : 1);

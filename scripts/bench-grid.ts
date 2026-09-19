@@ -262,15 +262,18 @@ export function buildPlan(args: ParsedGridArgs): RunPlanItem[] {
   return plan;
 }
 
-/** Frozen regime rule (paper/prereg-confirmatory.md): arm A output tokens under 4000 with a directly reported
- * thinking-token count is the calibrated (short-thinking) regime, 4000 or more is long-thinking, and a missing
- * or invalid value for either is unknown. Never learned from the confirmatory results themselves. */
-export const REGIME_OUTPUT_THRESHOLD = 4000;
+/** Frozen regime rule (paper/prereg-confirmatory.md): the regime is the thinking budget, so it is read from arm A's
+ * directly reported thinking tokens: under 4000 is the calibrated (short-thinking) regime, 4000 or more is
+ * long-thinking (about 10K in the amendments' long regime, about 1K in the calibrated one), and a missing or invalid
+ * thinking count, or a missing output count, is unknown. Output tokens are recorded but cannot classify: they include
+ * the answer or code written, so a correct printf-format single attempt writes about 4K output at about 0.9K
+ * thinking (pilot seed 901). Never learned from the confirmatory results themselves. */
+export const REGIME_THINKING_THRESHOLD = 4000;
 export type Regime = "calibrated" | "long-thinking" | "unknown";
 export function classifyRegime(output: number | null, thinking: number | null): Regime {
   const ok = (v: number | null): v is number => typeof v === "number" && Number.isFinite(v) && v >= 0;
   if (!ok(output) || !ok(thinking)) return "unknown";
-  return output < REGIME_OUTPUT_THRESHOLD ? "calibrated" : "long-thinking";
+  return thinking < REGIME_THINKING_THRESHOLD ? "calibrated" : "long-thinking";
 }
 
 /** Sums a modelUsage field over every model the seat reported; null (never zero) when none reported it. */

@@ -226,14 +226,16 @@ test("rotation is (seed-501) mod 5 over [A, AH, B, K, C] and K precedes C for se
   assert.deepEqual(confirmatoryOrder(901), confirmatoryOrder(901 - 5 * 3), "pilot seeds below and above the block rotate too");
 });
 
-test("classifyRegime: frozen 4000-token output threshold, unknown unless thinking is directly reported, a genuine 0 stays known", () => {
+test("classifyRegime: the frozen 4000 threshold is on thinking tokens; output alone (a code-writing task's 4K+) never makes a short-thinking seed long", () => {
   assert.equal(classifyRegime(1500, 900), "calibrated");
-  assert.equal(classifyRegime(3999, 0), "calibrated");
-  assert.equal(classifyRegime(4000, 3000), "long-thinking");
+  assert.equal(classifyRegime(4180, 888), "calibrated", "pilot printf-format seed 901: 4180 output tokens, 888 thinking");
+  assert.equal(classifyRegime(9000, 3999), "calibrated");
+  assert.equal(classifyRegime(12000, 4000), "long-thinking");
+  assert.equal(classifyRegime(1500, 0), "calibrated", "a genuine 0 is known");
   assert.equal(classifyRegime(1500, null), "unknown");
   assert.equal(classifyRegime(null, 900), "unknown");
-  assert.equal(classifyRegime(Number.NaN, 900), "unknown");
-  assert.equal(classifyRegime(-1, 900), "unknown");
+  assert.equal(classifyRegime(1500, Number.NaN), "unknown");
+  assert.equal(classifyRegime(1500, -1), "unknown");
 });
 
 test("a launched cell with no result.json on disk is unknown spend on resume: a capped grid halts instead of reading it as zero", async () => {

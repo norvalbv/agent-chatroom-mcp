@@ -214,6 +214,7 @@ async function main() {
     outcome: raw.outcome,
     scored_outcome: scored.reason,
     oracle_outcome: scored.reason,
+    public_suite_passed: null, // No separate public-suite execution is performed by this reducer.
     execution_outcome: raw.outcome,
     protocol_failure: raw.outcome !== 'completed',
     protocol_success: raw.outcome === 'completed',

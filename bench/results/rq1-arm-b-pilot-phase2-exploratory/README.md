@@ -15,12 +15,19 @@ extended. It must not be pooled with the pre-declared phase 1 cells in
 
 | arm | n | pass | cost USD |
 |---|---|---|---|
-| A | 10 | 4 | 0.621 |
-| B | 10 | 8 | 1.137 |
-| C | 10 | 10 | 5.448 |
+| A | 11 | 5 | 0.6861 |
+| B | 11 | 9 | 1.3001 |
+| C | 10 | 10 | 5.4475 |
 
-Total 7.21 USD, inside the 16 USD cap this phase declared on the room's ledger. All three arms have
-ten completed seeds; the runner was stopped after seed 415 and no partial cell is included here.
+Total 7.4337 USD, inside the 16 USD cap this phase declared on the room's ledger. Seeds 406-416.
+Arm C has ten cells, not eleven: seed 416's arm-C run was still in flight when the runner's range
+ended, and its directory in the seat's worktree has no `result.json`, so it is excluded rather than
+counted as a failure. The arms are therefore not seed-balanced at 416; that is a further reason not
+to read anything into these counts.
+
+The verifier first copied these cells while the runner was still going, mistaking a gap between
+seeds for the end, and said so in the room; this directory is the corrected copy, taken after
+`pgrep` showed no `run-arm-b-pilot` or `bench-rq1.ts` process left.
 
 All of these runs are in the short-thinking regime (see `paper/amendments.md` and the maintainer's
 same-window control at main c82124d), so they cannot be pooled across the regime boundary either.

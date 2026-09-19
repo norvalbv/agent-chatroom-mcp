@@ -27,10 +27,13 @@ matching (arXiv:2603.21489) motivate this comparison but do not answer it.
 
 ## Claims and falsifiers fixed before development results
 
-The primary estimand is the within-seed difference between arm C and arm A in the
-fraction of planted defects caught. The secondary estimand is C minus B; B minus A
-is descriptive. Safety is reported beside every catch result as introduced hidden
-regression failures and total defects shipped.
+The primary measurement estimand is the within-seed difference between arm C and
+arm A in the observed fraction of planted defects caught. The secondary measurement
+estimand is C minus B; B minus A is descriptive. A co-reported delivery estimand
+sets the catch fraction to zero when the arm did not complete its frozen protocol
+(`protocol_success=false`) while leaving the observed machine score unchanged.
+Safety is reported beside every catch result as introduced hidden regression
+failures and total observed defects shipped.
 
 The claimed room advantage is unsupported for this family if any of these occurs.
 An interval containing zero is absence of evidence for superiority, not evidence of
@@ -39,7 +42,8 @@ equivalence:
 1. At the common nominal cap, either simultaneous comparison C-A or C-B has a
    non-positive mean or a one-sided multiplicity-adjusted lower confidence bound
    at or below zero, or its worst-case partially identified mean-difference lower
-   endpoint over all 20 planned blocks is at or below zero.
+   endpoint over all 20 planned blocks is at or below zero. A room-advantage claim
+   must clear those same gates for both observed catch and protocol-adjusted catch.
 2. C catches more plants but has a higher introduced-regression rate. That is a
    trade-off, not dominance.
 3. B matches C on catch and shipped scores while using less realized spend. The
@@ -115,9 +119,13 @@ caught_fraction       = N_fixed / N
 residual_plants       = N - N_fixed
 introduced_regressions = R
 defects_shipped       = residual_plants + R
+protocol_success      = frozen arm protocol completed
+protocol_adjusted_catch = caught_fraction if protocol_success else 0
 ```
 
-The report always shows all four values. A deleted, disabled, duplicate, unnamed,
+The report always shows the four machine values plus the two protocol fields.
+`protocol_adjusted_catch` is a delivery-policy score, never relabelled as defects
+caught; no adjusted shipped count is invented. A deleted, disabled, duplicate, unnamed,
 malformed, or non-binary hidden check makes the cell invalid; it never counts as a
 fix. Each defect check must be isolated by a one-fix matrix: it fails on the planted
 tree, passes on its isolated fix, and unrelated defect checks retain their expected
@@ -232,6 +240,11 @@ family-wise alpha 0.05 across the two comparisons); a room-advantage claim requi
 both bounds above zero. Ordinary two-sided 95% intervals are also shown
 descriptively and never interpreted as equivalence.
 
+The identical block, bootstrap, multiplicity and partial-identification procedure
+is run separately for observed catch and protocol-adjusted catch. This creates two
+required gates, not extra opportunities to claim success: room advantage requires
+both C-A and C-B to clear under both estimands.
+
 Missing blocks are not replaced. For each comparison, the partially identified
 mean-difference range over all 20 planned blocks assigns every externally missing
 block -1 for the lower endpoint and +1 for the upper endpoint; the complete-block
@@ -341,6 +354,16 @@ their remaining failures count through the public-suite regression check rather 
 turning the cell into an anti-tamper exclusion. It also froze the stage/process/
 health/hash classifier inputs above so arm versus infrastructure failure is not
 chosen after the catch outcome is visible.
+
+### 2026-09-19 -- observed versus protocol-adjusted score naming
+
+Before any pinned-effort admission or three-arm pilot, executor review exposed an
+ambiguity between measuring the workspace and enforcing the delivery protocol. The
+oracle's `defects_caught` and `defects_shipped` now always mean observed workspace
+outcomes. `protocol_success` is separate, and `protocol_adjusted_catch` assigns zero
+only for that delivery estimand. A room-advantage claim must clear both observed and
+protocol-adjusted catch gates; the latter is never described as a measured defect
+count. Scoreable timeout/non-conclusion workspaces therefore still run the oracle.
 
 ## Development and pilot evidence (not yet observed at freeze)
 

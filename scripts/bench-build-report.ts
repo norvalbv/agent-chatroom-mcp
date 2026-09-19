@@ -26,6 +26,8 @@ export interface BuildReportRow {
   reason: string | null;
   outcome: string | null;
   protocol_failure: boolean;
+  protocol_success: boolean | null;
+  protocol_adjusted_catch_fraction: number | null;
   cost_status: "complete" | "unknown" | "missing";
   defects_caught: number | null;
   defects_total: number | null;
@@ -77,7 +79,7 @@ function invalidRow(task: string, arm: Arm, seed: number, reason: string, raw?: 
   return {
     task_id: task, arm, seed, status: "invalid", reason,
     outcome: typeof raw?.outcome === "string" ? raw.outcome : null,
-    protocol_failure: false,
+    protocol_failure: false, protocol_success: null, protocol_adjusted_catch_fraction: null,
     cost_status: raw?.usage?.coverage === "complete" && typeof raw.usage.cost_usd === "number" ? "complete" : "unknown",
     defects_caught: null, defects_total: null, residual_plants: null, introduced_regressions: null,
     defects_shipped: null, cost_usd: typeof raw?.usage?.cost_usd === "number" ? raw.usage.cost_usd : null,
@@ -121,7 +123,9 @@ function validateRaw(raw: RawBuildResult, task: string, arm: Arm, seed: number, 
   const protocolFailure = raw.outcome === "timeout" || raw.outcome === "invalid_room";
   return {
     task_id: task, arm, seed, status: "valid", reason: costComplete ? null : "unknown terminal cost",
-    outcome: raw.outcome, protocol_failure: protocolFailure, cost_status: costComplete ? "complete" : "unknown",
+    outcome: raw.outcome, protocol_failure: protocolFailure, protocol_success: !protocolFailure,
+    protocol_adjusted_catch_fraction: protocolFailure ? 0 : caught / defectSet.checks.length,
+    cost_status: costComplete ? "complete" : "unknown",
     defects_caught: caught, defects_total: defectSet.checks.length, residual_plants: residual,
     introduced_regressions: regressions, defects_shipped: residual + regressions,
     cost_usd: cost, thinking_tokens: raw.usage.thinking_tokens, output_tokens: raw.usage.output_tokens,
@@ -163,7 +167,7 @@ export function buildBuildReport(resultsDir: string, tasks: string[], arms: Arm[
     const raw = byCell.get(`${task}\0${arm}\0${seed}`);
     rows.push(raw ? validateRaw(raw, task, arm, seed, nominalCapUsd) : {
       task_id: task, arm, seed, status: "missing", reason: "planned cell absent",
-      outcome: null, protocol_failure: false, cost_status: "missing",
+      outcome: null, protocol_failure: false, protocol_success: null, protocol_adjusted_catch_fraction: null, cost_status: "missing",
       defects_caught: null, defects_total: null, residual_plants: null, introduced_regressions: null,
       defects_shipped: null, cost_usd: null, thinking_tokens: null, output_tokens: null,
       wall_clock_ms: null, actual_over_cap: null, run_fingerprint: null, defect_checks: [],

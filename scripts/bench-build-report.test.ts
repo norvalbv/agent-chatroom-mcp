@@ -71,6 +71,8 @@ test("report scores arm protocol failures as-is but rejects integrity failures",
     const c = report.rows.find((row) => row.arm === "C")!;
     assert.equal(c.status, "valid");
     assert.equal(c.protocol_failure, true);
+    assert.equal(c.protocol_success, false);
+    assert.equal(c.protocol_adjusted_catch_fraction, 0);
     assert.equal(c.defects_caught, 3);
     assert.equal(report.rows.find((row) => row.arm === "B")?.status, "invalid");
     assert.equal(report.summary.protocol_failures, 1);

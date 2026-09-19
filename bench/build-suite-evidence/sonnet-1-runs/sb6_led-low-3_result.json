@@ -1,0 +1,146 @@
+{
+  "schemaVersion": 1,
+  "task_id": "build-ledger-s1",
+  "arm": "A",
+  "seed": 3,
+  "model": "sonnet",
+  "outcome": "infrastructure_error",
+  "passed": false,
+  "reason": "infrastructure_error",
+  "oracle": {
+    "kind": "planted-defects",
+    "command": "node --import tsx oracle/score.ts <workspace>",
+    "exit_code": 1
+  },
+  "anti_tamper": {
+    "hash_before": "2503fbd1a2e0a61996c6bf9e9808e223de2100596fd90b131ee907b781bbf74a",
+    "hash_after": "2503fbd1a2e0a61996c6bf9e9808e223de2100596fd90b131ee907b781bbf74a",
+    "unchanged": true
+  },
+  "seats": [
+    {
+      "name": "single",
+      "argv": [
+        "claude",
+        "-p",
+        "The warehouse library in src/ must meet the specification in SPEC.md. The public tests in test/ pass today, but passing them does not prove the code meets the specification. Make the codebase conform to SPEC.md, keeping everything that already conforms working. Run the tests with: node --test test/*.test.ts. Do not create files outside this directory.\n\nModify the relevant source file(s) in your current working directory directly to implement the fix described above. Your edit to the existing file(s) is the submission; do not create any other output file.",
+        "--mcp-config",
+        "/tmp/sb6/led-low-3/mcp-empty.json",
+        "--strict-mcp-config",
+        "--allowedTools",
+        "Read,Edit,Write,MultiEdit,Bash,Glob,Grep",
+        "--tools",
+        "Read,Edit,Write,MultiEdit,Bash,Glob,Grep",
+        "--disable-slash-commands",
+        "--setting-sources",
+        "project",
+        "--exclude-dynamic-system-prompt-sections",
+        "--output-format",
+        "stream-json",
+        "--verbose",
+        "--model",
+        "sonnet",
+        "--max-budget-usd",
+        "3"
+      ],
+      "exit_code": 0,
+      "signal": null,
+      "started_at": "2026-09-19T19:35:56.277Z",
+      "completed_at": "2026-09-19T19:36:24.643Z",
+      "num_turns": 4,
+      "duration_ms": 25325,
+      "duration_api_ms": 18086,
+      "usage": {
+        "cost": 0.0512446,
+        "input_tokens": 8,
+        "cache_read_input_tokens": 30663,
+        "cache_creation_input_tokens": 6904,
+        "output_tokens": 1748
+      },
+      "text": "I changed the code in `src/` to match `SPEC.md`. The 5 public tests pass, but I didn't write new tests for the fixes, so the individual changes are untested.\n\n- **Receiving** (`src/inventory.ts`): stock received into an existing lot id now adds to the lot instead of replacing its quantity.\n- **Available stock** (`src/inventory.ts`): expired lots no longer count towards a sku's available stock.\n- **Lot order** (`src/inventory.ts`): lots with the same expiry are now used in order of their id.\n- **All or nothing** (`src/orders.ts`): a failed reservation now releases the lines it had already held, so a backordered order holds no stock.\n- **Retry order** (`src/backorder.ts`): backordered orders are retried in the order they were placed, not smallest first.\n- **Shipping** (`src/warehouse.ts`): shipping is limited to what is still reserved for that sku.\n- **Cancelling** (`src/warehouse.ts`): cancelling releases only the units still reserved, and units already shipped stay shipped. A cancelled order is also removed from the backorder queue, and cancelling now retries the remaining backorders.\n- **Returns** (`src/warehouse.ts`): repeated returns for the same order now go back latest shipped first, without counting units that were already returned.",
+      "killed_by_deadline": false,
+      "partial_usage": null,
+      "reported_models": {
+        "system_init": [
+          "claude-sonnet-5"
+        ],
+        "assistant": [
+          "claude-sonnet-5"
+        ],
+        "result_model_usage": [
+          "claude-sonnet-5"
+        ]
+      },
+      "model_usage": {
+        "claude-sonnet-5": {
+          "inputTokens": 8,
+          "outputTokens": 1748,
+          "cacheReadInputTokens": 30663,
+          "cacheCreationInputTokens": 6904,
+          "webSearchRequests": 0,
+          "costUSD": 0.0512446,
+          "contextWindow": 1000000,
+          "maxOutputTokens": 64000,
+          "thinkingTokens": 405,
+          "canonicalModel": "claude-sonnet-5",
+          "provider": "firstParty",
+          "costBasis": "list"
+        }
+      }
+    }
+  ],
+  "usage": {
+    "steps": 0,
+    "prompt_tokens": 0,
+    "completion_tokens": 0,
+    "cost_usd": 0.0512446,
+    "seats": 1,
+    "seats_with_usage": 1,
+    "coverage": "complete",
+    "input_tokens": 8,
+    "cache_read_input_tokens": 30663,
+    "cache_creation_input_tokens": 6904,
+    "output_tokens": 1748
+  },
+  "turns": {
+    "per_seat": [
+      {
+        "name": "single",
+        "num_turns": 4
+      }
+    ],
+    "summed": 4,
+    "seats": 1,
+    "seats_with_turns": 1,
+    "coverage": "complete"
+  },
+  "wall_clock": {
+    "started_at": "2026-09-19T19:35:56.277Z",
+    "completed_at": "2026-09-19T19:36:24.643Z",
+    "duration_ms": 28366
+  },
+  "budget": {
+    "max_budget_usd": 3,
+    "deadline_ms": 900000
+  },
+  "build": {
+    "captured_at": "2026-09-19T19:35:56.242Z",
+    "head_revision": "cd6169a9a99db82b00290d3e153342f9382adb15",
+    "runner_sha256": "5c5efb306636ceae6b520f0361e17de9b2c31c587a1da0a92bdea4c41b554ae8",
+    "hub_entry": null,
+    "hub_entry_sha256": null,
+    "hub_revision": null,
+    "hub_build_sha256": null,
+    "provenance_scope": null
+  },
+  "frozen": {
+    "task_sha256": "2503fbd1a2e0a61996c6bf9e9808e223de2100596fd90b131ee907b781bbf74a",
+    "scorer_sha256": "f4b645c670ae4655aec1189e4d7320294115f0e3c6da3b5ba41a7ee3b1cd00f8",
+    "fact_scorer_sha256": "6b8b3e98c8c408ecd6715a38db9263488644d27c01a11c5bab3172acd5539832",
+    "task_id": "build-ledger-s1",
+    "timeout_ms": 900000,
+    "seats": 1
+  },
+  "error": null,
+  "checked_at": "2026-09-19T19:36:24.886Z"
+}

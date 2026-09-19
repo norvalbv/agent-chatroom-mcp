@@ -1,0 +1,146 @@
+{
+  "schemaVersion": 1,
+  "task_id": "build-rules-s1",
+  "arm": "A",
+  "seed": 2,
+  "model": "sonnet",
+  "outcome": "task_pass",
+  "passed": true,
+  "reason": "task_pass",
+  "oracle": {
+    "kind": "planted-defects",
+    "command": "node --import tsx oracle/score.ts <workspace>",
+    "exit_code": 0
+  },
+  "anti_tamper": {
+    "hash_before": "18d47274f4d6c330054edace6144337fe3f76ba3a861557ce497d54be65f9c21",
+    "hash_after": "18d47274f4d6c330054edace6144337fe3f76ba3a861557ce497d54be65f9c21",
+    "unchanged": true
+  },
+  "seats": [
+    {
+      "name": "single",
+      "argv": [
+        "claude",
+        "-p",
+        "The library in src/ must meet the rules in SPEC.md. The public tests in test/ pass today, but passing them does not prove the code meets the specification. Make the codebase conform to SPEC.md, keeping everything that already conforms working. Run the tests with: node --test test/*.test.ts. Do not create files outside this directory.\n\nModify the relevant source file(s) in your current working directory directly to implement the fix described above. Your edit to the existing file(s) is the submission; do not create any other output file.",
+        "--mcp-config",
+        "/tmp/sb8/r1-A-2/mcp-empty.json",
+        "--strict-mcp-config",
+        "--allowedTools",
+        "Read,Edit,Write,MultiEdit,Bash,Glob,Grep",
+        "--tools",
+        "Read,Edit,Write,MultiEdit,Bash,Glob,Grep",
+        "--disable-slash-commands",
+        "--setting-sources",
+        "project",
+        "--exclude-dynamic-system-prompt-sections",
+        "--output-format",
+        "stream-json",
+        "--verbose",
+        "--model",
+        "sonnet",
+        "--max-budget-usd",
+        "2"
+      ],
+      "exit_code": 0,
+      "signal": null,
+      "started_at": "2026-09-19T19:43:55.545Z",
+      "completed_at": "2026-09-19T19:44:29.598Z",
+      "num_turns": 7,
+      "duration_ms": 32535,
+      "duration_api_ms": 31248,
+      "usage": {
+        "cost": 0.0731666,
+        "input_tokens": 14,
+        "cache_read_input_tokens": 67303,
+        "cache_creation_input_tokens": 8482,
+        "output_tokens": 2575
+      },
+      "text": "I've made the code follow SPEC.md, but 2 of the 21 public tests now fail. Those two tests assert values the spec contradicts:\n\n- **`referralBand(72)`:** the test expects 700. The spec says 1050 \"from 72 upward\", so the code now returns 1050.\n- **`handlingValid(35)`:** the test expects `true`. The spec gives 13 days starting on day 22, which is days 22–34, so the code now returns `false` for day 35.\n\nI followed the spec and left the tests alone. If you'd rather the tests win, revert those two boundaries. In `src/promotions.ts` that means `x < 72` back to `x <= 72`. In `src/service.ts` it means `day <= 34` back to `day <= 35`.\n\nChanges to `src/`:\n- **`delivery.ts`:** `depositValid` now covers days 80–86, which is 7 days.\n- **`promotions.ts`:** bronze and gold `insuranceRate` were swapped and are now 275 and 325. The `referralBand` boundary is described above.\n- **`service.ts`:** `handlingValid` change as described above.\n- **`fees.ts`:** gold and bronze `giftRate` were swapped and are now 125 and 200. `shippingQuote` now converts dollars to cents first and rounds half up in integer maths, which avoids floating-point rounding errors.\n- **`accounts.ts`:** `warrantyQuote` uses the same integer rounding.\n- **`compliance.ts`:** `handlingQuote` uses the same integer rounding, and `onsiteCode` now defaults to 240 instead of 0.\n- **`contracts.ts`:** `supportCode` now defaults to 400 instead of 0.\n\nThe other rules already matched the spec, so I left them unchanged.",
+      "killed_by_deadline": false,
+      "partial_usage": null,
+      "reported_models": {
+        "system_init": [
+          "claude-sonnet-5"
+        ],
+        "assistant": [
+          "claude-sonnet-5"
+        ],
+        "result_model_usage": [
+          "claude-sonnet-5"
+        ]
+      },
+      "model_usage": {
+        "claude-sonnet-5": {
+          "inputTokens": 14,
+          "outputTokens": 2575,
+          "cacheReadInputTokens": 67303,
+          "cacheCreationInputTokens": 8482,
+          "webSearchRequests": 0,
+          "costUSD": 0.0731666,
+          "contextWindow": 1000000,
+          "maxOutputTokens": 64000,
+          "thinkingTokens": 707,
+          "canonicalModel": "claude-sonnet-5",
+          "provider": "firstParty",
+          "costBasis": "list"
+        }
+      }
+    }
+  ],
+  "usage": {
+    "steps": 0,
+    "prompt_tokens": 0,
+    "completion_tokens": 0,
+    "cost_usd": 0.0731666,
+    "seats": 1,
+    "seats_with_usage": 1,
+    "coverage": "complete",
+    "input_tokens": 14,
+    "cache_read_input_tokens": 67303,
+    "cache_creation_input_tokens": 8482,
+    "output_tokens": 2575
+  },
+  "turns": {
+    "per_seat": [
+      {
+        "name": "single",
+        "num_turns": 7
+      }
+    ],
+    "summed": 7,
+    "seats": 1,
+    "seats_with_turns": 1,
+    "coverage": "complete"
+  },
+  "wall_clock": {
+    "started_at": "2026-09-19T19:43:55.544Z",
+    "completed_at": "2026-09-19T19:44:29.599Z",
+    "duration_ms": 34055
+  },
+  "budget": {
+    "max_budget_usd": 2,
+    "deadline_ms": 720000
+  },
+  "build": {
+    "captured_at": "2026-09-19T19:43:55.489Z",
+    "head_revision": "b339f44be395a7251262f9972dc25395f3fb9211",
+    "runner_sha256": "5c5efb306636ceae6b520f0361e17de9b2c31c587a1da0a92bdea4c41b554ae8",
+    "hub_entry": null,
+    "hub_entry_sha256": null,
+    "hub_revision": null,
+    "hub_build_sha256": null,
+    "provenance_scope": null
+  },
+  "frozen": {
+    "task_sha256": "18d47274f4d6c330054edace6144337fe3f76ba3a861557ce497d54be65f9c21",
+    "scorer_sha256": "f4b645c670ae4655aec1189e4d7320294115f0e3c6da3b5ba41a7ee3b1cd00f8",
+    "fact_scorer_sha256": "6b8b3e98c8c408ecd6715a38db9263488644d27c01a11c5bab3172acd5539832",
+    "task_id": "build-rules-s1",
+    "timeout_ms": 720000,
+    "seats": 1
+  },
+  "error": null,
+  "checked_at": "2026-09-19T19:44:29.759Z"
+}

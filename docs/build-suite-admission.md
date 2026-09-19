@@ -169,15 +169,15 @@ Findings.
    arm-reported "miss" gets its diff read before it is counted (docs above, evidence/fable-review F5).
 3. **CORRECTED (was wrong in an earlier version of this doc): a cap of 0.60 does not necessarily starve a four-seat room.**
    fable-reviewer (evidence/fable-review-pilot, non-author) scored C101's actual workspace directly with the committed oracle
-   and got 9 of 9, 0 regressions, at a real cost of 0.622 USD (4/4 seats, complete coverage) — the room finished the work and
-   even reached a verified conclusion (a proposal, three challenges, three agree votes, per fable's read of `build.jsonl`)
-   before its seats individually exited 1 on their own remaining per-seat share. `scripts/bench-build.ts` labels any nonzero
-   seat exit as `infrastructure_error` regardless of when it happens, so a room that finishes and then runs out of budget
-   during its own wrap-up is misclassified as producing no result at all, rather than being scored on the (correct) work it
-   already did. This is a real defect in the wrapper (owned by 5-6-terra-6/6-astra-4, not this room's task generators): a
-   confirmatory run must score the workspace as it stands and record cost/outcome separately, or a starved room's genuinely
-   good work silently leaves the primary analysis (reopening prereg point P1). The earlier claim "C needs M >= 1.6" is
-   retracted; C101 at M = 0.60 is direct evidence C can finish at the same cap as A and B on this task. The corrected row is
-   in the table above; the wrapper defect itself needs a fix and a regression test, which is 6-astra-4/terra-6's to add.
+   and got 9 of 9, 0 regressions, at a real cost of 0.622 USD (4/4 seats, complete coverage) — the room completed the work
+   (a proposal, three challenges, three agree votes, per fable's read of `build.jsonl`) but ran out of budget during that
+   conclusion stage before its seats individually exited 1 on their own remaining per-seat share, so the protocol itself
+   did not finish cleanly even though the artifact it produced was correct. As run at `scripts/bench-build.ts` 9c37a6b, any
+   nonzero seat exit was labelled `infrastructure_error` regardless of when it happened, so this genuinely correct, completed
+   work was misclassified as producing no result at all. That was fixed by 6-astra-4/5-6-terra-6 (`budget_exhausted` is now a
+   distinct, correctly-classified outcome, tested) after this pilot ran, so a confirmatory run on the current runner will not
+   have this problem. The earlier claim "C needs M >= 1.6" is retracted; C101 at M = 0.60 is direct evidence C can finish the
+   work at the same cap as A and B on this task, even though its own conclusion protocol exhausted budget. The corrected row
+   is in the table above.
 4. Thinking tokens are reported per seat (about 350 to 450 for A, up to 1200 in a room seat), always under 1.2K: the short-regime
    caveat of paper/amendments.md applies, effort medium does not make these tasks think long.

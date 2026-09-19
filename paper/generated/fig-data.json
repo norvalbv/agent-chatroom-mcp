@@ -1,0 +1,1098 @@
+{
+  "generated_from": {
+    "suite_dir": "/Users/benji/Desktop/Personal and learning/agent-chatroom-mcp/.swarm-worktrees/swarm-164742-5jvl/sonnet-4/bench/results/rq1-suite",
+    "arm_k_dir": "/Users/benji/Desktop/Personal and learning/agent-chatroom-mcp/.swarm-worktrees/swarm-164742-5jvl/sonnet-4/bench/results/rq1-arm-k"
+  },
+  "pass_rates": [
+    {
+      "task": "bench-printf-format",
+      "arm": "A",
+      "n": 40,
+      "pass": 14,
+      "rate": 0.35,
+      "ci_lo": 0.2213452887317629,
+      "ci_hi": 0.5049411916274231
+    },
+    {
+      "task": "bench-printf-format",
+      "arm": "C",
+      "n": 40,
+      "pass": 6,
+      "rate": 0.15,
+      "ci_lo": 0.0706118771732036,
+      "ci_hi": 0.2907232436648971
+    },
+    {
+      "task": "stamp-2",
+      "arm": "A",
+      "n": 40,
+      "pass": 28,
+      "rate": 0.7,
+      "ci_lo": 0.5456998118185505,
+      "ci_hi": 0.8192515477025347
+    },
+    {
+      "task": "stamp-2",
+      "arm": "C",
+      "n": 40,
+      "pass": 40,
+      "rate": 1,
+      "ci_lo": 0.9123783988027134,
+      "ci_hi": 1
+    },
+    {
+      "task": "stamp-interpreter",
+      "arm": "A",
+      "n": 40,
+      "pass": 33,
+      "rate": 0.825,
+      "ci_lo": 0.6805000966821229,
+      "ci_hi": 0.9125458625396409
+    },
+    {
+      "task": "stamp-interpreter",
+      "arm": "C",
+      "n": 40,
+      "pass": 40,
+      "rate": 1,
+      "ci_lo": 0.9123783988027134,
+      "ci_hi": 1
+    },
+    {
+      "task": "bench-printf-format",
+      "arm": "K",
+      "n": 40,
+      "pass": 7,
+      "rate": 0.175,
+      "ci_lo": 0.0874541374603592,
+      "ci_hi": 0.31949990331787714
+    },
+    {
+      "task": "stamp-2",
+      "arm": "K",
+      "n": 40,
+      "pass": 39,
+      "rate": 0.975,
+      "ci_lo": 0.8711863103652591,
+      "ci_hi": 0.9955731684973186
+    },
+    {
+      "task": "stamp-interpreter",
+      "arm": "K",
+      "n": 40,
+      "pass": 36,
+      "rate": 0.9,
+      "ci_lo": 0.769482247724777,
+      "ci_hi": 0.9604204713173937
+    }
+  ],
+  "cost_per_correct": [
+    {
+      "task": "bench-printf-format",
+      "arm": "A",
+      "cost_per_correct": 0.2733586571428571,
+      "n": 40,
+      "pass": 14
+    },
+    {
+      "task": "bench-printf-format",
+      "arm": "C",
+      "cost_per_correct": 4.9657247,
+      "n": 40,
+      "pass": 6
+    },
+    {
+      "task": "stamp-2",
+      "arm": "A",
+      "cost_per_correct": 0.09651402857142856,
+      "n": 40,
+      "pass": 28
+    },
+    {
+      "task": "stamp-2",
+      "arm": "C",
+      "cost_per_correct": 0.5945629699999999,
+      "n": 40,
+      "pass": 40
+    },
+    {
+      "task": "stamp-interpreter",
+      "arm": "A",
+      "cost_per_correct": 0.0703086484848485,
+      "n": 40,
+      "pass": 33
+    },
+    {
+      "task": "stamp-interpreter",
+      "arm": "C",
+      "cost_per_correct": 0.6017927550000001,
+      "n": 40,
+      "pass": 40
+    },
+    {
+      "task": "bench-printf-format",
+      "arm": "K",
+      "cost_per_correct": 3.869908971428571,
+      "n": 40,
+      "pass": 7
+    },
+    {
+      "task": "stamp-2",
+      "arm": "K",
+      "cost_per_correct": 0.5453555076923076,
+      "n": 40,
+      "pass": 39
+    },
+    {
+      "task": "stamp-interpreter",
+      "arm": "K",
+      "cost_per_correct": 0.6368455722222223,
+      "n": 40,
+      "pass": 36
+    }
+  ],
+  "vote_distributions": [
+    {
+      "task": "bench-printf-format",
+      "distribution": {
+        "7": 3,
+        "4-3": 13,
+        "5-2": 13,
+        "6-1": 11
+      }
+    },
+    {
+      "task": "stamp-2",
+      "distribution": {
+        "8": 10,
+        "7-1": 11,
+        "5-3": 3,
+        "6-2": 10,
+        "4-4": 1,
+        "6-1-1": 2,
+        "5-2-1": 3
+      }
+    },
+    {
+      "task": "stamp-interpreter",
+      "distribution": {
+        "10": 4,
+        "7-3": 4,
+        "6-4": 6,
+        "6-3-1": 2,
+        "5-4-1": 2,
+        "5-3-1-1": 2,
+        "7-2-1": 3,
+        "4-4-2": 1,
+        "8-2": 2,
+        "9-1": 6,
+        "6-2-2": 1,
+        "4-4-1-1": 2,
+        "6-2-1-1": 1,
+        "5-3-2": 1,
+        "8-1-1": 1,
+        "5-5": 1,
+        "5-2-2-1": 1
+      }
+    }
+  ],
+  "armk_group_votes": [
+    {
+      "task": "bench-printf-format",
+      "seed": 101,
+      "k": 7,
+      "winner_share": 0.5714285714285714,
+      "passed": false
+    },
+    {
+      "task": "bench-printf-format",
+      "seed": 102,
+      "k": 7,
+      "winner_share": 0.7142857142857143,
+      "passed": false
+    },
+    {
+      "task": "bench-printf-format",
+      "seed": 103,
+      "k": 7,
+      "winner_share": 0.5714285714285714,
+      "passed": false
+    },
+    {
+      "task": "bench-printf-format",
+      "seed": 104,
+      "k": 7,
+      "winner_share": 0.7142857142857143,
+      "passed": true
+    },
+    {
+      "task": "bench-printf-format",
+      "seed": 105,
+      "k": 7,
+      "winner_share": 0.5714285714285714,
+      "passed": false
+    },
+    {
+      "task": "bench-printf-format",
+      "seed": 106,
+      "k": 7,
+      "winner_share": 0.7142857142857143,
+      "passed": false
+    },
+    {
+      "task": "bench-printf-format",
+      "seed": 107,
+      "k": 7,
+      "winner_share": 0.5714285714285714,
+      "passed": true
+    },
+    {
+      "task": "bench-printf-format",
+      "seed": 108,
+      "k": 7,
+      "winner_share": 0.8571428571428571,
+      "passed": false
+    },
+    {
+      "task": "bench-printf-format",
+      "seed": 109,
+      "k": 7,
+      "winner_share": 0.5714285714285714,
+      "passed": true
+    },
+    {
+      "task": "bench-printf-format",
+      "seed": 110,
+      "k": 7,
+      "winner_share": 0.5714285714285714,
+      "passed": false
+    },
+    {
+      "task": "bench-printf-format",
+      "seed": 111,
+      "k": 7,
+      "winner_share": 0.7142857142857143,
+      "passed": false
+    },
+    {
+      "task": "bench-printf-format",
+      "seed": 112,
+      "k": 7,
+      "winner_share": 0.5714285714285714,
+      "passed": true
+    },
+    {
+      "task": "bench-printf-format",
+      "seed": 113,
+      "k": 7,
+      "winner_share": 0.5714285714285714,
+      "passed": true
+    },
+    {
+      "task": "bench-printf-format",
+      "seed": 114,
+      "k": 7,
+      "winner_share": 1,
+      "passed": false
+    },
+    {
+      "task": "bench-printf-format",
+      "seed": 115,
+      "k": 7,
+      "winner_share": 0.8571428571428571,
+      "passed": false
+    },
+    {
+      "task": "bench-printf-format",
+      "seed": 116,
+      "k": 7,
+      "winner_share": 0.8571428571428571,
+      "passed": false
+    },
+    {
+      "task": "bench-printf-format",
+      "seed": 117,
+      "k": 7,
+      "winner_share": 1,
+      "passed": false
+    },
+    {
+      "task": "bench-printf-format",
+      "seed": 118,
+      "k": 7,
+      "winner_share": 0.5714285714285714,
+      "passed": false
+    },
+    {
+      "task": "bench-printf-format",
+      "seed": 119,
+      "k": 7,
+      "winner_share": 0.8571428571428571,
+      "passed": false
+    },
+    {
+      "task": "bench-printf-format",
+      "seed": 120,
+      "k": 7,
+      "winner_share": 0.5714285714285714,
+      "passed": false
+    },
+    {
+      "task": "bench-printf-format",
+      "seed": 121,
+      "k": 7,
+      "winner_share": 0.8571428571428571,
+      "passed": false
+    },
+    {
+      "task": "bench-printf-format",
+      "seed": 122,
+      "k": 7,
+      "winner_share": 0.7142857142857143,
+      "passed": false
+    },
+    {
+      "task": "bench-printf-format",
+      "seed": 123,
+      "k": 7,
+      "winner_share": 0.7142857142857143,
+      "passed": true
+    },
+    {
+      "task": "bench-printf-format",
+      "seed": 124,
+      "k": 7,
+      "winner_share": 0.5714285714285714,
+      "passed": false
+    },
+    {
+      "task": "bench-printf-format",
+      "seed": 125,
+      "k": 7,
+      "winner_share": 0.8571428571428571,
+      "passed": false
+    },
+    {
+      "task": "bench-printf-format",
+      "seed": 126,
+      "k": 7,
+      "winner_share": 0.7142857142857143,
+      "passed": false
+    },
+    {
+      "task": "bench-printf-format",
+      "seed": 127,
+      "k": 7,
+      "winner_share": 0.5714285714285714,
+      "passed": false
+    },
+    {
+      "task": "bench-printf-format",
+      "seed": 128,
+      "k": 7,
+      "winner_share": 0.8571428571428571,
+      "passed": false
+    },
+    {
+      "task": "bench-printf-format",
+      "seed": 129,
+      "k": 7,
+      "winner_share": 0.5714285714285714,
+      "passed": true
+    },
+    {
+      "task": "bench-printf-format",
+      "seed": 130,
+      "k": 7,
+      "winner_share": 0.7142857142857143,
+      "passed": false
+    },
+    {
+      "task": "bench-printf-format",
+      "seed": 131,
+      "k": 7,
+      "winner_share": 0.7142857142857143,
+      "passed": false
+    },
+    {
+      "task": "bench-printf-format",
+      "seed": 132,
+      "k": 7,
+      "winner_share": 1,
+      "passed": false
+    },
+    {
+      "task": "bench-printf-format",
+      "seed": 133,
+      "k": 7,
+      "winner_share": 0.8571428571428571,
+      "passed": false
+    },
+    {
+      "task": "bench-printf-format",
+      "seed": 134,
+      "k": 7,
+      "winner_share": 0.8571428571428571,
+      "passed": false
+    },
+    {
+      "task": "bench-printf-format",
+      "seed": 135,
+      "k": 7,
+      "winner_share": 0.7142857142857143,
+      "passed": false
+    },
+    {
+      "task": "bench-printf-format",
+      "seed": 136,
+      "k": 7,
+      "winner_share": 0.7142857142857143,
+      "passed": false
+    },
+    {
+      "task": "bench-printf-format",
+      "seed": 137,
+      "k": 7,
+      "winner_share": 0.7142857142857143,
+      "passed": false
+    },
+    {
+      "task": "bench-printf-format",
+      "seed": 138,
+      "k": 7,
+      "winner_share": 0.7142857142857143,
+      "passed": false
+    },
+    {
+      "task": "bench-printf-format",
+      "seed": 139,
+      "k": 7,
+      "winner_share": 0.8571428571428571,
+      "passed": false
+    },
+    {
+      "task": "bench-printf-format",
+      "seed": 140,
+      "k": 7,
+      "winner_share": 0.8571428571428571,
+      "passed": false
+    },
+    {
+      "task": "stamp-2",
+      "seed": 101,
+      "k": 8,
+      "winner_share": 1,
+      "passed": true
+    },
+    {
+      "task": "stamp-2",
+      "seed": 102,
+      "k": 8,
+      "winner_share": 0.875,
+      "passed": true
+    },
+    {
+      "task": "stamp-2",
+      "seed": 103,
+      "k": 8,
+      "winner_share": 1,
+      "passed": true
+    },
+    {
+      "task": "stamp-2",
+      "seed": 104,
+      "k": 8,
+      "winner_share": 0.625,
+      "passed": false
+    },
+    {
+      "task": "stamp-2",
+      "seed": 105,
+      "k": 8,
+      "winner_share": 0.75,
+      "passed": true
+    },
+    {
+      "task": "stamp-2",
+      "seed": 106,
+      "k": 8,
+      "winner_share": 0.75,
+      "passed": true
+    },
+    {
+      "task": "stamp-2",
+      "seed": 107,
+      "k": 8,
+      "winner_share": 0.875,
+      "passed": true
+    },
+    {
+      "task": "stamp-2",
+      "seed": 108,
+      "k": 8,
+      "winner_share": 0.875,
+      "passed": true
+    },
+    {
+      "task": "stamp-2",
+      "seed": 109,
+      "k": 8,
+      "winner_share": 0.625,
+      "passed": true
+    },
+    {
+      "task": "stamp-2",
+      "seed": 110,
+      "k": 8,
+      "winner_share": 0.5,
+      "passed": true
+    },
+    {
+      "task": "stamp-2",
+      "seed": 111,
+      "k": 8,
+      "winner_share": 0.75,
+      "passed": true
+    },
+    {
+      "task": "stamp-2",
+      "seed": 112,
+      "k": 8,
+      "winner_share": 1,
+      "passed": true
+    },
+    {
+      "task": "stamp-2",
+      "seed": 113,
+      "k": 8,
+      "winner_share": 0.625,
+      "passed": true
+    },
+    {
+      "task": "stamp-2",
+      "seed": 114,
+      "k": 8,
+      "winner_share": 0.75,
+      "passed": true
+    },
+    {
+      "task": "stamp-2",
+      "seed": 115,
+      "k": 8,
+      "winner_share": 0.875,
+      "passed": true
+    },
+    {
+      "task": "stamp-2",
+      "seed": 116,
+      "k": 8,
+      "winner_share": 0.75,
+      "passed": true
+    },
+    {
+      "task": "stamp-2",
+      "seed": 117,
+      "k": 8,
+      "winner_share": 1,
+      "passed": true
+    },
+    {
+      "task": "stamp-2",
+      "seed": 118,
+      "k": 8,
+      "winner_share": 0.875,
+      "passed": true
+    },
+    {
+      "task": "stamp-2",
+      "seed": 119,
+      "k": 8,
+      "winner_share": 0.75,
+      "passed": true
+    },
+    {
+      "task": "stamp-2",
+      "seed": 120,
+      "k": 8,
+      "winner_share": 0.875,
+      "passed": true
+    },
+    {
+      "task": "stamp-2",
+      "seed": 121,
+      "k": 8,
+      "winner_share": 0.75,
+      "passed": true
+    },
+    {
+      "task": "stamp-2",
+      "seed": 122,
+      "k": 8,
+      "winner_share": 0.75,
+      "passed": true
+    },
+    {
+      "task": "stamp-2",
+      "seed": 123,
+      "k": 8,
+      "winner_share": 0.875,
+      "passed": true
+    },
+    {
+      "task": "stamp-2",
+      "seed": 124,
+      "k": 8,
+      "winner_share": 0.625,
+      "passed": true
+    },
+    {
+      "task": "stamp-2",
+      "seed": 125,
+      "k": 8,
+      "winner_share": 1,
+      "passed": true
+    },
+    {
+      "task": "stamp-2",
+      "seed": 126,
+      "k": 8,
+      "winner_share": 1,
+      "passed": true
+    },
+    {
+      "task": "stamp-2",
+      "seed": 127,
+      "k": 8,
+      "winner_share": 0.625,
+      "passed": true
+    },
+    {
+      "task": "stamp-2",
+      "seed": 128,
+      "k": 8,
+      "winner_share": 0.75,
+      "passed": true
+    },
+    {
+      "task": "stamp-2",
+      "seed": 129,
+      "k": 8,
+      "winner_share": 0.875,
+      "passed": true
+    },
+    {
+      "task": "stamp-2",
+      "seed": 130,
+      "k": 8,
+      "winner_share": 1,
+      "passed": true
+    },
+    {
+      "task": "stamp-2",
+      "seed": 131,
+      "k": 8,
+      "winner_share": 0.875,
+      "passed": true
+    },
+    {
+      "task": "stamp-2",
+      "seed": 132,
+      "k": 8,
+      "winner_share": 1,
+      "passed": true
+    },
+    {
+      "task": "stamp-2",
+      "seed": 133,
+      "k": 8,
+      "winner_share": 1,
+      "passed": true
+    },
+    {
+      "task": "stamp-2",
+      "seed": 134,
+      "k": 8,
+      "winner_share": 0.875,
+      "passed": true
+    },
+    {
+      "task": "stamp-2",
+      "seed": 135,
+      "k": 8,
+      "winner_share": 0.875,
+      "passed": true
+    },
+    {
+      "task": "stamp-2",
+      "seed": 136,
+      "k": 8,
+      "winner_share": 1,
+      "passed": true
+    },
+    {
+      "task": "stamp-2",
+      "seed": 137,
+      "k": 8,
+      "winner_share": 0.75,
+      "passed": true
+    },
+    {
+      "task": "stamp-2",
+      "seed": 138,
+      "k": 8,
+      "winner_share": 0.75,
+      "passed": true
+    },
+    {
+      "task": "stamp-2",
+      "seed": 139,
+      "k": 8,
+      "winner_share": 0.75,
+      "passed": true
+    },
+    {
+      "task": "stamp-2",
+      "seed": 140,
+      "k": 8,
+      "winner_share": 0.625,
+      "passed": true
+    },
+    {
+      "task": "stamp-interpreter",
+      "seed": 101,
+      "k": 10,
+      "winner_share": 0.7,
+      "passed": true
+    },
+    {
+      "task": "stamp-interpreter",
+      "seed": 102,
+      "k": 10,
+      "winner_share": 0.6,
+      "passed": true
+    },
+    {
+      "task": "stamp-interpreter",
+      "seed": 103,
+      "k": 10,
+      "winner_share": 0.6,
+      "passed": true
+    },
+    {
+      "task": "stamp-interpreter",
+      "seed": 104,
+      "k": 10,
+      "winner_share": 0.5,
+      "passed": true
+    },
+    {
+      "task": "stamp-interpreter",
+      "seed": 105,
+      "k": 10,
+      "winner_share": 0.6,
+      "passed": true
+    },
+    {
+      "task": "stamp-interpreter",
+      "seed": 106,
+      "k": 10,
+      "winner_share": 0.5,
+      "passed": true
+    },
+    {
+      "task": "stamp-interpreter",
+      "seed": 107,
+      "k": 10,
+      "winner_share": 0.7,
+      "passed": true
+    },
+    {
+      "task": "stamp-interpreter",
+      "seed": 108,
+      "k": 10,
+      "winner_share": 0.7,
+      "passed": true
+    },
+    {
+      "task": "stamp-interpreter",
+      "seed": 109,
+      "k": 10,
+      "winner_share": 0.4,
+      "passed": true
+    },
+    {
+      "task": "stamp-interpreter",
+      "seed": 110,
+      "k": 10,
+      "winner_share": 0.5,
+      "passed": true
+    },
+    {
+      "task": "stamp-interpreter",
+      "seed": 111,
+      "k": 10,
+      "winner_share": 0.8,
+      "passed": true
+    },
+    {
+      "task": "stamp-interpreter",
+      "seed": 112,
+      "k": 10,
+      "winner_share": 0.9,
+      "passed": true
+    },
+    {
+      "task": "stamp-interpreter",
+      "seed": 113,
+      "k": 10,
+      "winner_share": 0.6,
+      "passed": false
+    },
+    {
+      "task": "stamp-interpreter",
+      "seed": 114,
+      "k": 10,
+      "winner_share": 0.7,
+      "passed": true
+    },
+    {
+      "task": "stamp-interpreter",
+      "seed": 115,
+      "k": 10,
+      "winner_share": 0.6,
+      "passed": true
+    },
+    {
+      "task": "stamp-interpreter",
+      "seed": 116,
+      "k": 10,
+      "winner_share": 0.4,
+      "passed": false
+    },
+    {
+      "task": "stamp-interpreter",
+      "seed": 117,
+      "k": 10,
+      "winner_share": 0.6,
+      "passed": true
+    },
+    {
+      "task": "stamp-interpreter",
+      "seed": 118,
+      "k": 10,
+      "winner_share": 0.5,
+      "passed": true
+    },
+    {
+      "task": "stamp-interpreter",
+      "seed": 119,
+      "k": 10,
+      "winner_share": 0.6,
+      "passed": true
+    },
+    {
+      "task": "stamp-interpreter",
+      "seed": 120,
+      "k": 10,
+      "winner_share": 0.4,
+      "passed": false
+    },
+    {
+      "task": "stamp-interpreter",
+      "seed": 121,
+      "k": 10,
+      "winner_share": 0.8,
+      "passed": true
+    },
+    {
+      "task": "stamp-interpreter",
+      "seed": 122,
+      "k": 10,
+      "winner_share": 0.6,
+      "passed": false
+    },
+    {
+      "task": "stamp-interpreter",
+      "seed": 123,
+      "k": 10,
+      "winner_share": 0.9,
+      "passed": true
+    },
+    {
+      "task": "stamp-interpreter",
+      "seed": 124,
+      "k": 10,
+      "winner_share": 0.9,
+      "passed": true
+    },
+    {
+      "task": "stamp-interpreter",
+      "seed": 125,
+      "k": 10,
+      "winner_share": 1,
+      "passed": true
+    },
+    {
+      "task": "stamp-interpreter",
+      "seed": 126,
+      "k": 10,
+      "winner_share": 0.6,
+      "passed": true
+    },
+    {
+      "task": "stamp-interpreter",
+      "seed": 127,
+      "k": 10,
+      "winner_share": 0.5,
+      "passed": true
+    },
+    {
+      "task": "stamp-interpreter",
+      "seed": 128,
+      "k": 10,
+      "winner_share": 0.5,
+      "passed": true
+    },
+    {
+      "task": "stamp-interpreter",
+      "seed": 129,
+      "k": 10,
+      "winner_share": 0.7,
+      "passed": true
+    },
+    {
+      "task": "stamp-interpreter",
+      "seed": 130,
+      "k": 10,
+      "winner_share": 1,
+      "passed": true
+    },
+    {
+      "task": "stamp-interpreter",
+      "seed": 131,
+      "k": 10,
+      "winner_share": 0.7,
+      "passed": true
+    },
+    {
+      "task": "stamp-interpreter",
+      "seed": 132,
+      "k": 10,
+      "winner_share": 0.5,
+      "passed": true
+    },
+    {
+      "task": "stamp-interpreter",
+      "seed": 133,
+      "k": 10,
+      "winner_share": 1,
+      "passed": true
+    },
+    {
+      "task": "stamp-interpreter",
+      "seed": 134,
+      "k": 10,
+      "winner_share": 0.6,
+      "passed": true
+    },
+    {
+      "task": "stamp-interpreter",
+      "seed": 135,
+      "k": 10,
+      "winner_share": 1,
+      "passed": true
+    },
+    {
+      "task": "stamp-interpreter",
+      "seed": 136,
+      "k": 10,
+      "winner_share": 0.9,
+      "passed": true
+    },
+    {
+      "task": "stamp-interpreter",
+      "seed": 137,
+      "k": 10,
+      "winner_share": 0.9,
+      "passed": true
+    },
+    {
+      "task": "stamp-interpreter",
+      "seed": 138,
+      "k": 10,
+      "winner_share": 0.9,
+      "passed": true
+    },
+    {
+      "task": "stamp-interpreter",
+      "seed": 139,
+      "k": 10,
+      "winner_share": 0.7,
+      "passed": true
+    },
+    {
+      "task": "stamp-interpreter",
+      "seed": 140,
+      "k": 10,
+      "winner_share": 0.8,
+      "passed": true
+    }
+  ],
+  "cost_vs_accuracy": [
+    {
+      "task": "bench-printf-format",
+      "arm": "A",
+      "cost_per_correct": 0.2733586571428571,
+      "rate": 0.35
+    },
+    {
+      "task": "bench-printf-format",
+      "arm": "C",
+      "cost_per_correct": 4.9657247,
+      "rate": 0.15
+    },
+    {
+      "task": "stamp-2",
+      "arm": "A",
+      "cost_per_correct": 0.09651402857142856,
+      "rate": 0.7
+    },
+    {
+      "task": "stamp-2",
+      "arm": "C",
+      "cost_per_correct": 0.5945629699999999,
+      "rate": 1
+    },
+    {
+      "task": "stamp-interpreter",
+      "arm": "A",
+      "cost_per_correct": 0.0703086484848485,
+      "rate": 0.825
+    },
+    {
+      "task": "stamp-interpreter",
+      "arm": "C",
+      "cost_per_correct": 0.6017927550000001,
+      "rate": 1
+    },
+    {
+      "task": "bench-printf-format",
+      "arm": "K",
+      "cost_per_correct": 3.869908971428571,
+      "rate": 0.175
+    },
+    {
+      "task": "stamp-2",
+      "arm": "K",
+      "cost_per_correct": 0.5453555076923076,
+      "rate": 0.975
+    },
+    {
+      "task": "stamp-interpreter",
+      "arm": "K",
+      "cost_per_correct": 0.6368455722222223,
+      "rate": 0.9
+    }
+  ],
+  "warnings": []
+}

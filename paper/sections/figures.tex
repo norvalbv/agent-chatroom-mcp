@@ -20,10 +20,11 @@
   \caption{Cost per correct answer (API list price) by arm and task, log scale. Arm A is
   cheapest per correct answer on every task; arms C and K cost roughly the same as each other on the
   interpreter family and on \texttt{printf-format}, where both cost more per correct answer than arm A
-  despite passing less often (Table~\ref{tab:cost-per-correct}). All runs are from before the thinking-budget
-  regime shift documented in Section~\ref{sec:threats}: arms A/C ran 2026-09-19 07:44--11:30 UTC, arm K ran
-  later the same day, 13:22--15:33 UTC (Table~\ref{tab:cost-per-correct} gives exact per-row output-token
-  counts confirming both windows are pre-shift); not comparable to any run from after the shift.}
+  despite passing less often (Table~\ref{tab:cost-per-correct}). Every run here is judged pre-shift by
+  output tokens (Table~\ref{tab:cost-per-correct}), not by clock: arms A/C ran 2026-09-19 morning
+  (07:44--11:30 UTC); arm K ran that afternoon (13:22--15:33 UTC), which by clock overlaps the
+  thinking-budget regime shift documented in Section~\ref{sec:threats}, but arm K's output tokens match
+  the pre-shift level throughout. Not comparable to any run from after the shift.}
   \label{fig:cost-per-correct}
 \end{figure}
 
@@ -32,9 +33,10 @@
   \includegraphics[width=\linewidth]{figures/fig-cost-vs-accuracy.png}
   \caption{Cost per correct answer (log scale) against task success rate, one point per (task, arm).
   Arm A is always cheapest per correct answer; arm C and arm K are budget-matched per prereg but neither
-  buys accuracy on \texttt{printf-format}. All runs are from before the thinking-budget regime shift
-  documented in Section~\ref{sec:threats} (arms A/C: 2026-09-19 07:44--11:30 UTC; arm K: 13:22--15:33 UTC
-  the same day; see Table~\ref{tab:cost-per-correct} for per-row output-token confirmation).}
+  buys accuracy on \texttt{printf-format}. Every run is judged pre-shift by output tokens (arms A/C:
+  2026-09-19 morning, 07:44--11:30 UTC; arm K: that afternoon, 13:22--15:33 UTC, overlapping the shift
+  window by clock but not by its output tokens; see Table~\ref{tab:cost-per-correct} and
+  Section~\ref{sec:threats}).}
   \label{fig:cost-vs-accuracy}
 \end{figure}
 

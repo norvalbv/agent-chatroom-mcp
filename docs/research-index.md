@@ -67,6 +67,7 @@
 | arXiv:2510.07517 | consensus-requires-scrutiny README  |
 | arXiv:2510.11967 | self-organising-teams-by-claims-and-recruitment  |
 | arXiv:2510.12697 | consensus-requires-scrutiny README  |
+| arXiv:2510.20963 | docs/arm-c-process-trace  |
 | arXiv:2511.03718 | hub-carries-what-it-knows  |
 | arXiv:2511.17315 | humans-answered-once-by-hub-enforcement  |
 | arXiv:2512.09187 | docs/quiet-delivery-decision quiet-delivery-not-privacy  |

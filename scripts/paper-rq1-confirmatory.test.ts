@@ -7,6 +7,7 @@ import { join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { buildConfirmatoryTable, loadConfirmatoryRuns, renderConfirmatoryMarkdown, exactPower, type ConfirmatoryRun } from './paper-rq1-confirmatory.js';
 import { fisherExactTest, holmBonferroni } from './rq1-stats.js';
+import { modelThinkingTokens, classifyThinkingRegime } from './confirmatory-regime.js';
 
 function run(arm: string, seed: number, pass = true, task = 'stamp-interpreter'): ConfirmatoryRun {
   return { task_id: task, arm, seed, outcome: pass ? 'task_pass' : 'task_fail', cost_usd: 0.1, thinking_tokens: 1200, output_tokens: 1800, wall_ms: 10000, exit_codes: [0] };
@@ -48,11 +49,12 @@ test('unknown cost poisons totals; non-comparable outcomes remain listed; K null
   assert.equal(kc.denominator,1); assert.equal(kc.passes,0);
 });
 
-test('4000 is outside calibrated band and AH tokens cannot classify A', () => {
-  const a=run('A',501), ah=run('AH',501); a.output_tokens=3999;ah.output_tokens=10000;
+test('regime uses direct thinking: printf output4180/thinking888 is short; 4000 thinking is long; AH never classifies A', () => {
+  const a=run('A',501), ah=run('AH',501); a.output_tokens=4180;a.thinking_tokens=888;ah.thinking_tokens=10000;
   assert.equal(buildConfirmatoryTable([a,ah]).sentinels[0].regime,'calibrated');
-  a.output_tokens=4000;assert.equal(buildConfirmatoryTable([a,ah]).sentinels[0].regime,'long-thinking');
+  a.thinking_tokens=4000;assert.equal(buildConfirmatoryTable([a,ah]).sentinels[0].regime,'long-thinking');
   a.thinking_tokens=Number.NaN;assert.equal(buildConfirmatoryTable([a,ah]).sentinels[0].regime,'unknown');
+  a.thinking_tokens=0;a.output_tokens=null;assert.equal(buildConfirmatoryTable([a,ah]).sentinels[0].regime,'calibrated');
 });
 
 test('fresh seeds only; duplicate observations are refused', () => {
@@ -83,4 +85,30 @@ put(join(k,'attempt-1'),base);put(join(k,'attempt-2'),base);`);
     rmSync(join(dir,'stamp-interpreter-K-seed501','attempt-2','result.json'));
     assert.equal(loadConfirmatoryRuns(dir).runs.find(r=>r.arm==='K')!.thinking_tokens,null);
   } finally {rmSync(dir,{recursive:true,force:true});}
+});
+
+test('launch-journal directories with absent or malformed results remain failed observations with unknown spend', () => {
+  const dir=mkdtempSync(join(tmpdir(),'confirmatory-incomplete-'));
+  try {
+    mkdirSync(join(dir,'stamp-interpreter-A-seed501'));
+    mkdirSync(join(dir,'stamp-interpreter-B-seed501'));
+    writeFileSync(join(dir,'stamp-interpreter-B-seed501','result.json'),'{cut off');
+    const loaded=loadConfirmatoryRuns(dir);
+    assert.equal(loaded.runs.length,2);
+    assert.ok(loaded.runs.every(r=>r.outcome==='infrastructure_error'&&r.cost_usd===null));
+    const table=buildConfirmatoryTable(loaded.runs);
+    assert.equal(table.missing.length,198);
+    assert.equal(table.cells.find(c=>c.task==='stamp-interpreter'&&c.arm==='B'&&c.regime==='unknown')!.denominator,1);
+    assert.equal(loaded.warnings.length,2);
+  } finally {rmSync(dir,{recursive:true,force:true});}
+});
+
+ test('shared thinking helper requires complete model provenance and keeps reported zero', () => {
+  assert.equal(modelThinkingTokens({a:{thinkingTokens:0},b:{thinkingTokens:0}}),0);
+  assert.equal(modelThinkingTokens({a:{thinkingTokens:1200},b:{}}),null);
+  assert.equal(modelThinkingTokens({a:{thinkingTokens:1200},b:{thinkingTokens:3000}}),4200);
+  assert.equal(modelThinkingTokens({a:{thinkingTokens:-1}}),null);
+  assert.equal(modelThinkingTokens({}),null);
+  assert.equal(classifyThinkingRegime(3999),'calibrated');
+  assert.equal(classifyThinkingRegime(4000),'long-thinking');
 });

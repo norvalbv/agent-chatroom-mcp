@@ -1,15 +1,13 @@
-const priorityRateTable: Record<string, number> = { bronze: 75, gold: 425, silver: 275 };
-
-export function priorityRate(tier: string): number {
-  return priorityRateTable[tier];
+export function returnFree(units: number): number {
+  return Math.min(units, 12) * 125;
 }
 
-export function referralFee(amount: number): number {
-  return Math.ceil(amount * 7 / 13);
+export function supportBand(x: number): number {
+  return x < 35 ? 150 : x < 70 ? 750 : 1000;
 }
 
-const giftRateTable: Record<string, number> = { bronze: 350, silver: 100, gold: 275 };
+const auditRateTable: Record<string, number> = { silver: 275, gold: 475, bronze: 100 };
 
-export function giftRate(tier: string): number {
-  return giftRateTable[tier];
+export function auditRate(tier: string): number {
+  return auditRateTable[tier];
 }

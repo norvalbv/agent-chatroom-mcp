@@ -17,23 +17,26 @@ function rng(seed: number) {
 }
 
 const NOUNS = ['shipping', 'handling', 'insurance', 'loyalty', 'referral', 'storage', 'restock', 'gift', 'warranty', 'priority', 'bulk', 'seasonal', 'pickup', 'rush', 'return', 'deposit', 'setup', 'support', 'license', 'upgrade', 'export', 'audit', 'onsite', 'archive'];
-const MODULES = ['delivery', 'promotions', 'storage', 'service', 'accounts', 'fees', 'contracts', 'compliance'];
+const MODULE_NAMES = ['delivery', 'promotions', 'storage', 'service', 'accounts', 'fees', 'contracts', 'compliance', 'billing', 'catalog', 'credits', 'customs', 'inventory', 'invoicing', 'ledger', 'logistics', 'payroll', 'pricing', 'quotas', 'refunds', 'renewals', 'returns', 'reports', 'settlements', 'shipping', 'sourcing', 'subsidies', 'surcharges', 'tariffs', 'vendors'];
+let MODULES = MODULE_NAMES.slice(0, 8);
 type Rule = { id: string; module: string; fn: string; tmpl: string; kind: string; params: any; defect: boolean; misleading: boolean; variant: number };
-export type RulesInstance = { seed: number; rules: Rule[] };
+export type RulesInstance = { seed: number; rules: Rule[]; size: number; plants: number };
 const TEMPLATES = ['band', 'round', 'clamp', 'window', 'order', 'table', 'fallback', 'cap', 'cross'] as const;
 const KIND: Record<string, string> = { band: 'boundary', round: 'spec-vs-code', clamp: 'boundary', window: 'boundary', order: 'spec-vs-code', table: 'spec-vs-code', fallback: 'spec-vs-code', cap: 'boundary', cross: 'cross-module-contract' };
 const SUFFIX: Record<string, string> = { band: 'Band', round: 'Fee', clamp: 'Limit', window: 'Valid', order: 'Net', table: 'Rate', fallback: 'Code', cap: 'Free', cross: 'Quote' };
 
-export function deriveRules(seed: number): RulesInstance {
+export function deriveRules(seed: number, size = 24, plants = 10): RulesInstance {
+  MODULES = MODULE_NAMES.slice(0, Math.max(8, Math.round(size / 3)));
   const r = rng(seed);
   const int = (lo: number, hi: number) => lo + Math.floor(r() * (hi - lo + 1));
   const shuffle = <T>(xs: T[]) => { const a = [...xs]; for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(r() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
-  const nouns = shuffle(NOUNS);
-  const tmpls = shuffle([...TEMPLATES, ...TEMPLATES, ...TEMPLATES]).slice(0, 24);
-  const planted = new Set(shuffle([...Array(24).keys()]).slice(0, 10));
+  const pairs = shuffle(NOUNS.flatMap((n) => TEMPLATES.map((t) => [n, t] as const))).slice(0, size);
+  const nouns = pairs.map((p) => p[0]);
+  const tmpls = pairs.map((p) => p[1]);
+  const planted = new Set(shuffle([...Array(size).keys()]).slice(0, plants));
   const misleading = new Set([...planted].filter((i) => TEMPLATES[0] && ['band', 'cap', 'window', 'clamp'].includes(tmpls[i])).slice(0, 2));
   const rules: Rule[] = [];
-  for (let i = 0; i < 24; i++) {
+  for (let i = 0; i < size; i++) {
     const t = tmpls[i];
     const t1 = int(10, 60);
     const params: any =
@@ -46,9 +49,9 @@ export function deriveRules(seed: number): RulesInstance {
       t === 'fallback' ? { codes: ['a', 'b', 'c'].map((c) => `${c}${int(10, 99)}`), v: shuffle([int(2, 9) * 40, int(10, 15) * 40, int(16, 22) * 40]), dflt: int(6, 11) * 40 } :
       t === 'cap' ? { n: int(3, 12), price: int(4, 12) * 25 } :
       { pct: int(3, 17) };
-    rules.push({ id: `${nouns[i]}${SUFFIX[t]}`, module: MODULES[i % 8], fn: `${nouns[i]}${SUFFIX[t]}`, tmpl: t, kind: KIND[t], params, defect: planted.has(i), misleading: misleading.has(i), variant: int(0, 1) });
+    rules.push({ id: `${nouns[i]}${SUFFIX[t]}`, module: MODULES[i % MODULES.length], fn: `${nouns[i]}${SUFFIX[t]}`, tmpl: t, kind: KIND[t], params, defect: planted.has(i), misleading: misleading.has(i), variant: int(0, 1) });
   }
-  return { seed, rules };
+  return { seed, rules, size, plants };
 }
 
 function code(r: Rule, bad: boolean): string {
@@ -129,8 +132,8 @@ ${MODULES.map((m) => `## ${m}.ts\n\n${inst.rules.filter((r) => r.module === m).m
 
 const BRIEF = `The library in src/ must meet the rules in SPEC.md. The public tests in test/ pass today, but passing them does not prove the code meets the specification. Make the codebase conform to SPEC.md, keeping everything that already conforms working. Run the tests with: node --test test/*.test.ts. Do not create files outside this directory.`;
 
-export async function writeRulesTask(seed: number, out: string) {
-  const inst = deriveRules(seed);
+export async function writeRulesTask(seed: number, out: string, size = 24, plants = 10) {
+  const inst = deriveRules(seed, size, plants);
   const id = out.split('/').pop()!;
   const w = (rel: string, body: string) => { const f = join(out, rel); mkdirSync(dirname(f), { recursive: true }); writeFileSync(f, body); };
   const bad = buildRuleSrc(inst, new Set());
@@ -163,11 +166,11 @@ export async function writeRulesTask(seed: number, out: string) {
   w('public/brief.txt', BRIEF + '\n');
   w('task.json', JSON.stringify({ task_id: id }) + '\n');
   w('oracle/oracle.json', JSON.stringify({ kind: 'planted-defects' }) + '\n');
-  w('oracle/instance.json', JSON.stringify({ seed, family: 'rules', defects: inst.rules.filter((r) => r.defect).map((r) => r.id), rules: inst.rules, checks }, null, 2) + '\n');
+  w('oracle/instance.json', JSON.stringify({ seed, size, plants, family: 'rules', defects: inst.rules.filter((r) => r.defect).map((r) => r.id), rules: inst.rules, checks }, null, 2) + '\n');
   w('oracle/DEFECTS.json', JSON.stringify(inst.rules.filter((r) => r.defect).map((r) => ({ id: r.id, module: r.module, kind: r.kind, template: r.tmpl, public_test_encodes_bug: r.misleading })), null, 2) + '\n');
   w('oracle/expected.json', JSON.stringify(expected, null, 2) + '\n');
   w('oracle/score.ts', RULES_SCORE);
-  w('README.md', `# ${id}\n\nGenerated by scripts/bench-build-rules-gen.ts (seed ${seed}); 24 rules, ${inst.rules.filter((r) => r.defect).length} planted defects listed in oracle/DEFECTS.json. Only public/ reaches a seat.\n`);
+  w('README.md', `# ${id}\n\nGenerated by scripts/bench-build-rules-gen.ts (seed ${seed}, size ${size}); ${size} rules, ${inst.rules.filter((r) => r.defect).length} planted defects listed in oracle/DEFECTS.json. Only public/ reaches a seat.\n`);
   return inst;
 }
 
@@ -211,6 +214,8 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
   const seed = Number(process.argv[2]);
   if (!Number.isInteger(seed)) { console.error('usage: bench-build-rules-gen.ts <seed> [--out dir]'); process.exit(2); }
   const oi = process.argv.indexOf('--out');
+  const si = process.argv.indexOf('--size'), pi = process.argv.indexOf('--plants');
+  const size = si > 0 ? Number(process.argv[si + 1]) : 24, plants = pi > 0 ? Number(process.argv[pi + 1]) : 10;
   const out = resolve(oi > 0 ? process.argv[oi + 1] : `tasks/build-rules-s${seed}`);
-  writeRulesTask(seed, out).then((i) => console.log(i.rules.filter((r) => r.defect).map((r) => r.id).join(' ')));
+  writeRulesTask(seed, out, size, plants).then((i) => console.log(i.rules.filter((r) => r.defect).map((r) => r.id).join(' ')));
 }

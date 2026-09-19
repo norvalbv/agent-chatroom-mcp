@@ -1,15 +1,13 @@
-import { roundHalfUp } from './units.ts';
+const insuranceRateTable: Record<string, number> = { bronze: 325, gold: 275, silver: 150 };
 
-export function insuranceValid(day: number): boolean {
-  return day >= 40 && day <= 59;
+export function insuranceRate(tier: string): number {
+  return insuranceRateTable[tier];
 }
 
-export function priorityFree(units: number): number {
-  return Math.min(units, 5) * 225;
+export function upgradeFree(units: number): number {
+  return Math.min(units, 5) * 275;
 }
 
-
-export function giftNet(base: number, discount: number): number {
-  const net = base - discount;
-  return net + roundHalfUp(net * 1900 / 10000);
+export function referralBand(x: number): number {
+  return x < 27 ? 350 : x <= 72 ? 700 : 1050;
 }

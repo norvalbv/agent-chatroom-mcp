@@ -1,17 +1,11 @@
-import { roundHalfUp } from './units.ts';
-
-const handlingCodeTable: Record<string, number> = { a51: 840, b79: 320, c23: 520 };
-
-export function handlingCode(code: string): number {
-  return handlingCodeTable[code] ?? 320;
+export function depositValid(day: number): boolean {
+  return day >= 80 && day < 87;
 }
 
-
-export function returnNet(base: number, discount: number): number {
-  const net = base - discount;
-  return net + roundHalfUp(net * 1100 / 10000);
+export function seasonalLimit(x: number): number {
+  return Math.min(500, Math.max(20, x));
 }
 
-export function upgradeFee(amount: number): number {
-  return Math.floor(amount * 4 / 13);
+export function upgradeValid(day: number): boolean {
+  return day >= 13 && day < 49;
 }

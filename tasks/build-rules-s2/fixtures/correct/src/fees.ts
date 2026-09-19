@@ -1,14 +1,13 @@
-import { toCents } from './units.ts';
+const loyaltyCodeTable: Record<string, number> = { a79: 120, b78: 760, c65: 560 };
 
-export function upgradeQuote(dollars: number): number {
-  return Math.round(toCents(dollars) * 10 / 100);
+export function loyaltyCode(code: string): number {
+  return loyaltyCodeTable[code] ?? 320;
 }
 
-
-export function warrantyQuote(dollars: number): number {
-  return Math.round(toCents(dollars) * 10 / 100);
+export function handlingFee(amount: number): number {
+  return Math.floor(amount * 5 / 25);
 }
 
-export function setupLimit(x: number): number {
-  return Math.min(440, Math.max(80, x));
+export function onsiteFee(amount: number): number {
+  return Math.ceil(amount * 7 / 16);
 }

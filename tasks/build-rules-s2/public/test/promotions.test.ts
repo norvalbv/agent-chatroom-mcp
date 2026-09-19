@@ -2,6 +2,6 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import * as promotions from '../src/promotions.ts';
 
-test('onsiteBand', () => { assert.deepEqual(promotions.onsiteBand(25), 450); });
-test('handlingCode', () => { assert.deepEqual(promotions.handlingCode("c89"), 720); });
-test('restockBand', () => { assert.deepEqual(promotions.restockBand(124), 900); });
+test('supportValid', () => { assert.deepEqual(promotions.supportValid(118), false); });
+test('onsiteValid', () => { assert.deepEqual(promotions.onsiteValid(73), false); });
+test('archiveCode', () => { assert.deepEqual(promotions.archiveCode("c54"), 80); });

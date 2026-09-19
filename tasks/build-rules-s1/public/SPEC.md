@@ -5,48 +5,48 @@ otherwise. `units.ts` holds two helpers used by several modules; it is not itsel
 
 ## delivery.ts
 
-- `handlingCode`(code): a51 840, b79 320, c23 520; every other code costs 320.
-- `returnNet`(base, discount): the discount comes off first, then tax of 11% (in cents, rounded half up) is charged on what remains.
-- `upgradeFee`(amount): 4/13 of the amount, rounded down to a whole cent.
+- `depositValid`(day): true for the 7 days starting on day 80 (day 80 is the first), false otherwise.
+- `seasonalLimit`(x): x, but never below 20 and never above 500 (both limits are themselves allowed).
+- `upgradeValid`(day): true for the 36 days starting on day 13 (day 13 is the first), false otherwise.
 
 ## promotions.ts
 
-- `insuranceValid`(day): true for the 19 days starting on day 40 (day 40 is the first), false otherwise.
-- `priorityFree`(units): the first 6 units are charged 225 each; nothing is charged beyond that.
-- `giftNet`(base, discount): the discount comes off first, then tax of 19% (in cents, rounded half up) is charged on what remains.
+- `insuranceRate`(tier): bronze 275, gold 325, silver 150.
+- `upgradeFree`(units): the first 5 units are charged 275 each; nothing is charged beyond that.
+- `referralBand`(x): 350 for x below 27; 700 from 27 up to but not including 72; 1050 from 72 upward.
 
 ## storage.ts
 
-- `licenseBand`(x): 450 for x below 10; 600 from 10 up to but not including 30; 1200 from 30 upward.
-- `depositLimit`(x): x, but never below 20 and never above 380 (both limits are themselves allowed).
-- `archiveBand`(x): 400 for x below 27; 550 from 27 up to but not including 107; 850 from 107 upward.
+- `priorityCode`(code): a15 680, b55 520, c41 80; every other code costs 280.
+- `loyaltyRate`(tier): bronze 275, gold 75, silver 375.
+- `returnBand`(x): 200 for x below 11; 500 from 11 up to but not including 64; 1050 from 64 upward.
 
 ## service.ts
 
-- `referralRate`(tier): silver 125, bronze 400, gold 200.
-- `auditLimit`(x): x, but never below 40 and never above 500 (both limits are themselves allowed).
-- `supportFee`(amount): 4/10 of the amount, rounded up to a whole cent.
+- `bulkNet`(base, discount): the discount comes off first, then tax of 10% (in cents, rounded half up) is charged on what remains.
+- `handlingValid`(day): true for the 13 days starting on day 22 (day 22 is the first), false otherwise.
+- `referralNet`(base, discount): the discount comes off first, then tax of 10% (in cents, rounded half up) is charged on what remains.
 
 ## accounts.ts
 
-- `exportQuote`(dollars): a price in dollars in, the fee in cents out: 4% of the price, rounded half up to a whole cent.
-- `restockNet`(base, discount): the discount comes off first, then tax of 7% (in cents, rounded half up) is charged on what remains.
-- `onsiteQuote`(dollars): a price in dollars in, the fee in cents out: 12% of the price, rounded half up to a whole cent.
+- `warrantyQuote`(dollars): a price in dollars in, the fee in cents out: 3% of the price, rounded half up to a whole cent.
+- `auditFee`(amount): 7/13 of the amount, rounded down to a whole cent.
+- `referralLimit`(x): x, but never below 70 and never above 350 (both limits are themselves allowed).
 
 ## fees.ts
 
-- `warrantyCode`(code): a55 400, b63 320, c14 800; every other code costs 440.
-- `shippingLimit`(x): x, but never below 20 and never above 400 (both limits are themselves allowed).
-- `storageValid`(day): true for the 16 days starting on day 10 (day 10 is the first), false otherwise.
+- `giftRate`(tier): silver 425, gold 125, bronze 200.
+- `shippingQuote`(dollars): a price in dollars in, the fee in cents out: 9% of the price, rounded half up to a whole cent.
+- `insuranceFee`(amount): 8/10 of the amount, rounded to the nearest whole cent.
 
 ## contracts.ts
 
-- `pickupRate`(tier): gold 125, silver 425, bronze 175.
-- `setupValid`(day): true for the 9 days starting on day 102 (day 102 is the first), false otherwise.
-- `bulkCode`(code): a75 560, b34 80, c85 640; every other code costs 440.
+- `supportCode`(code): a13 440, b27 640, c49 200; every other code costs 400.
+- `licenseNet`(base, discount): the discount comes off first, then tax of 20% (in cents, rounded half up) is charged on what remains.
+- `onsiteValid`(day): true for the 28 days starting on day 121 (day 121 is the first), false otherwise.
 
 ## compliance.ts
 
-- `loyaltyFree`(units): the first 8 units are charged 275 each; nothing is charged beyond that.
-- `seasonalBand`(x): 450 for x below 18; 600 from 18 up to but not including 51; 900 from 51 upward.
-- `rushFree`(units): the first 3 units are charged 150 each; nothing is charged beyond that.
+- `onsiteCode`(code): a33 320, b89 480, c98 720; every other code costs 240.
+- `priorityLimit`(x): x, but never below 90 and never above 350 (both limits are themselves allowed).
+- `handlingQuote`(dollars): a price in dollars in, the fee in cents out: 8% of the price, rounded half up to a whole cent.

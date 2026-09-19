@@ -1,17 +1,13 @@
 import { toCents } from './units.ts';
-import { roundHalfUp } from './units.ts';
 
-export function exportQuote(dollars: number): number {
-  return Math.round(toCents(dollars) * 4 / 100);
+export function warrantyQuote(dollars: number): number {
+  return Math.round(toCents(dollars) * 3 / 100);
 }
 
-
-export function restockNet(base: number, discount: number): number {
-  const net = base - discount;
-  return net + roundHalfUp(net * 700 / 10000);
+export function auditFee(amount: number): number {
+  return Math.floor(amount * 7 / 13);
 }
 
-
-export function onsiteQuote(dollars: number): number {
-  return Math.round(toCents(dollars) * 12 / 100);
+export function referralLimit(x: number): number {
+  return Math.min(350, Math.max(70, x));
 }

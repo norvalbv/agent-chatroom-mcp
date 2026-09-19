@@ -1,0 +1,254 @@
+[
+  {
+    "id": "auditFree",
+    "module": "fees",
+    "kind": "boundary",
+    "template": "cap",
+    "public_test_encodes_bug": false
+  },
+  {
+    "id": "storageQuote",
+    "module": "contracts",
+    "kind": "cross-module-contract",
+    "template": "cross",
+    "public_test_encodes_bug": false
+  },
+  {
+    "id": "returnValid",
+    "module": "credits",
+    "kind": "boundary",
+    "template": "window",
+    "public_test_encodes_bug": false
+  },
+  {
+    "id": "rushLimit",
+    "module": "customs",
+    "kind": "boundary",
+    "template": "clamp",
+    "public_test_encodes_bug": false
+  },
+  {
+    "id": "referralBand",
+    "module": "payroll",
+    "kind": "boundary",
+    "template": "band",
+    "public_test_encodes_bug": false
+  },
+  {
+    "id": "priorityBand",
+    "module": "sourcing",
+    "kind": "boundary",
+    "template": "band",
+    "public_test_encodes_bug": false
+  },
+  {
+    "id": "storageValid",
+    "module": "subsidies",
+    "kind": "boundary",
+    "template": "window",
+    "public_test_encodes_bug": false
+  },
+  {
+    "id": "loyaltyCode",
+    "module": "surcharges",
+    "kind": "spec-vs-code",
+    "template": "fallback",
+    "public_test_encodes_bug": false
+  },
+  {
+    "id": "loyaltyFee",
+    "module": "tariffs",
+    "kind": "spec-vs-code",
+    "template": "round",
+    "public_test_encodes_bug": false
+  },
+  {
+    "id": "auditBand",
+    "module": "billing",
+    "kind": "boundary",
+    "template": "band",
+    "public_test_encodes_bug": false
+  },
+  {
+    "id": "bulkBand",
+    "module": "customs",
+    "kind": "boundary",
+    "template": "band",
+    "public_test_encodes_bug": false
+  },
+  {
+    "id": "storageLimit",
+    "module": "payroll",
+    "kind": "boundary",
+    "template": "clamp",
+    "public_test_encodes_bug": false
+  },
+  {
+    "id": "priorityLimit",
+    "module": "settlements",
+    "kind": "boundary",
+    "template": "clamp",
+    "public_test_encodes_bug": false
+  },
+  {
+    "id": "handlingValid",
+    "module": "shipping",
+    "kind": "boundary",
+    "template": "window",
+    "public_test_encodes_bug": true
+  },
+  {
+    "id": "onsiteQuote",
+    "module": "sourcing",
+    "kind": "cross-module-contract",
+    "template": "cross",
+    "public_test_encodes_bug": false
+  },
+  {
+    "id": "returnFree",
+    "module": "surcharges",
+    "kind": "boundary",
+    "template": "cap",
+    "public_test_encodes_bug": false
+  },
+  {
+    "id": "bulkValid",
+    "module": "tariffs",
+    "kind": "boundary",
+    "template": "window",
+    "public_test_encodes_bug": false
+  },
+  {
+    "id": "setupFee",
+    "module": "delivery",
+    "kind": "spec-vs-code",
+    "template": "round",
+    "public_test_encodes_bug": false
+  },
+  {
+    "id": "upgradeNet",
+    "module": "storage",
+    "kind": "spec-vs-code",
+    "template": "order",
+    "public_test_encodes_bug": false
+  },
+  {
+    "id": "insuranceCode",
+    "module": "fees",
+    "kind": "spec-vs-code",
+    "template": "fallback",
+    "public_test_encodes_bug": false
+  },
+  {
+    "id": "handlingRate",
+    "module": "contracts",
+    "kind": "spec-vs-code",
+    "template": "table",
+    "public_test_encodes_bug": false
+  },
+  {
+    "id": "returnLimit",
+    "module": "billing",
+    "kind": "boundary",
+    "template": "clamp",
+    "public_test_encodes_bug": false
+  },
+  {
+    "id": "pickupBand",
+    "module": "catalog",
+    "kind": "boundary",
+    "template": "band",
+    "public_test_encodes_bug": false
+  },
+  {
+    "id": "shippingValid",
+    "module": "invoicing",
+    "kind": "boundary",
+    "template": "window",
+    "public_test_encodes_bug": true
+  },
+  {
+    "id": "handlingQuote",
+    "module": "logistics",
+    "kind": "cross-module-contract",
+    "template": "cross",
+    "public_test_encodes_bug": false
+  },
+  {
+    "id": "priorityNet",
+    "module": "promotions",
+    "kind": "spec-vs-code",
+    "template": "order",
+    "public_test_encodes_bug": false
+  },
+  {
+    "id": "priorityFee",
+    "module": "service",
+    "kind": "spec-vs-code",
+    "template": "round",
+    "public_test_encodes_bug": false
+  },
+  {
+    "id": "loyaltyBand",
+    "module": "catalog",
+    "kind": "boundary",
+    "template": "band",
+    "public_test_encodes_bug": false
+  },
+  {
+    "id": "exportLimit",
+    "module": "customs",
+    "kind": "boundary",
+    "template": "clamp",
+    "public_test_encodes_bug": false
+  },
+  {
+    "id": "loyaltyNet",
+    "module": "invoicing",
+    "kind": "spec-vs-code",
+    "template": "order",
+    "public_test_encodes_bug": false
+  },
+  {
+    "id": "warrantyFee",
+    "module": "reports",
+    "kind": "spec-vs-code",
+    "template": "round",
+    "public_test_encodes_bug": false
+  },
+  {
+    "id": "insuranceFree",
+    "module": "settlements",
+    "kind": "boundary",
+    "template": "cap",
+    "public_test_encodes_bug": false
+  },
+  {
+    "id": "handlingFee",
+    "module": "shipping",
+    "kind": "spec-vs-code",
+    "template": "round",
+    "public_test_encodes_bug": false
+  },
+  {
+    "id": "supportFree",
+    "module": "sourcing",
+    "kind": "boundary",
+    "template": "cap",
+    "public_test_encodes_bug": false
+  },
+  {
+    "id": "depositLimit",
+    "module": "surcharges",
+    "kind": "boundary",
+    "template": "clamp",
+    "public_test_encodes_bug": false
+  },
+  {
+    "id": "auditNet",
+    "module": "vendors",
+    "kind": "spec-vs-code",
+    "template": "order",
+    "public_test_encodes_bug": false
+  }
+]

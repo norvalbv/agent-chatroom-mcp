@@ -1,11 +1,16 @@
-export function loyaltyFree(units: number): number {
-  return Math.min(units, 8) * 275;
+import { toCents } from './units.ts';
+
+const onsiteCodeTable: Record<string, number> = { a33: 320, b89: 480, c98: 720 };
+
+export function onsiteCode(code: string): number {
+  return onsiteCodeTable[code] ?? 240;
 }
 
-export function seasonalBand(x: number): number {
-  return x < 18 ? 450 : x < 51 ? 600 : 900;
+export function priorityLimit(x: number): number {
+  return Math.min(350, Math.max(90, x));
 }
 
-export function rushFree(units: number): number {
-  return Math.min(units, 3) * 150;
+
+export function handlingQuote(dollars: number): number {
+  return Math.round(toCents(dollars) * 8 / 100);
 }

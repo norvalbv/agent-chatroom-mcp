@@ -2,6 +2,6 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import * as fees from '../src/fees.ts';
 
-test('upgradeQuote', () => { assert.deepEqual(fees.upgradeQuote(0), 0); });
-test('warrantyQuote', () => { assert.deepEqual(fees.warrantyQuote(0), 0); });
-test('setupLimit', () => { assert.deepEqual(fees.setupLimit(436), 436); });
+test('loyaltyCode', () => { assert.deepEqual(fees.loyaltyCode("c65"), 560); });
+test('handlingFee', () => { assert.deepEqual(fees.handlingFee(250), 50); });
+test('onsiteFee', () => { assert.deepEqual(fees.onsiteFee(160), 70); });

@@ -1,18 +1,14 @@
-import { roundHalfUp } from './units.ts';
-
-const shippingRateTable: Record<string, number> = { gold: 100, bronze: 175, silver: 375 };
-
-export function shippingRate(tier: string): number {
-  return shippingRateTable[tier];
+export function handlingLimit(x: number): number {
+  if (x >= 260) return 259;
+  return Math.max(80, x);
 }
 
-const insuranceCodeTable: Record<string, number> = { a63: 320, b52: 720, c50: 440 };
-
-export function insuranceCode(code: string): number {
-  return insuranceCodeTable[code] ?? 440;
+export function restockFree(units: number): number {
+  return Math.min(units, 5) * 100;
 }
 
+const referralRateTable: Record<string, number> = { gold: 75, bronze: 200, silver: 425 };
 
-export function exportNet(base: number, discount: number): number {
-  return base + roundHalfUp(base * 1300 / 10000) - discount;
+export function referralRate(tier: string): number {
+  return referralRateTable[tier];
 }

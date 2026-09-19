@@ -1,36 +1,13 @@
 {
-  "depositLimit": {
-    "defect": [
-      200,
-      200
-    ],
-    "reg": [
-      70,
-      70,
-      73,
-      196
-    ]
-  },
-  "onsiteBand": {
-    "defect": [
-      600,
-      1250
-    ],
-    "reg": [
-      450,
-      450,
-      1250
-    ]
-  },
   "priorityRate": {
     "defect": [
-      75,
-      425,
-      275
+      350,
+      225,
+      125
     ],
     "reg": []
   },
-  "bulkValid": {
+  "supportValid": {
     "defect": [
       false
     ],
@@ -41,44 +18,72 @@
       false
     ]
   },
-  "loyaltyNet": {
+  "returnFree": {
     "defect": [
-      9860,
-      25192
-    ],
-    "reg": [
-      11600,
-      0
-    ]
-  },
-  "upgradeQuote": {
-    "defect": [
-      125,
-      1000,
-      30
-    ],
-    "reg": [
-      0
-    ]
-  },
-  "supportFree": {
-    "defect": [
-      625,
-      625
+      1500,
+      1500
     ],
     "reg": [
       0,
       125,
-      375
+      1250
     ]
   },
-  "shippingRate": {
+  "loyaltyBand": {
     "defect": [
-      100,
-      175,
-      375
+      650,
+      950
     ],
-    "reg": []
+    "reg": [
+      250,
+      250,
+      950
+    ]
+  },
+  "licenseCode": {
+    "defect": [
+      400,
+      400
+    ],
+    "reg": [
+      160,
+      400,
+      760
+    ]
+  },
+  "loyaltyCode": {
+    "defect": [
+      320,
+      320
+    ],
+    "reg": [
+      120,
+      760,
+      560
+    ]
+  },
+  "depositCode": {
+    "defect": [
+      400,
+      400
+    ],
+    "reg": [
+      200,
+      560,
+      680
+    ]
+  },
+  "handlingLimit": {
+    "defect": [
+      260,
+      260
+    ],
+    "reg": [
+      80,
+      80,
+      83,
+      256
+    ]
   },
   "archiveValid": {
     "defect": [
@@ -91,31 +96,7 @@
       false
     ]
   },
-  "handlingCode": {
-    "defect": [
-      440,
-      440
-    ],
-    "reg": [
-      480,
-      160,
-      720
-    ]
-  },
-  "referralFee": {
-    "defect": [
-      4,
-      6,
-      55,
-      538,
-      665
-    ],
-    "reg": [
-      0,
-      70
-    ]
-  },
-  "returnValid": {
+  "onsiteValid": {
     "defect": [
       false
     ],
@@ -126,136 +107,156 @@
       false
     ]
   },
-  "licenseLimit": {
+  "supportBand": {
     "defect": [
-      350,
-      350
+      750,
+      1000
     ],
     "reg": [
-      70,
-      70,
-      73,
-      346
+      150,
+      150,
+      1000
     ]
   },
-  "warrantyQuote": {
+  "bulkLimit": {
     "defect": [
-      125,
-      1000,
-      30
-    ],
-    "reg": [
-      0
-    ]
-  },
-  "auditFee": {
-    "defect": [
-      2,
-      2,
-      17,
-      160,
-      198
-    ],
-    "reg": [
-      0,
-      40
-    ]
-  },
-  "insuranceCode": {
-    "defect": [
-      440,
-      440
-    ],
-    "reg": [
       320,
-      720,
-      440
-    ]
-  },
-  "storageQuote": {
-    "defect": [
-      138,
-      1100,
-      33
+      320
     ],
     "reg": [
+      40,
+      40,
+      43,
+      316
+    ]
+  },
+  "shippingValid": {
+    "defect": [
+      false
+    ],
+    "reg": [
+      false,
+      true,
+      true,
+      false
+    ]
+  },
+  "handlingFee": {
+    "defect": [
+      1,
+      2,
+      20,
+      199,
+      246
+    ],
+    "reg": [
+      0,
+      50
+    ]
+  },
+  "shippingBand": {
+    "defect": [
+      600,
+      950
+    ],
+    "reg": [
+      200,
+      200,
+      950
+    ]
+  },
+  "restockFree": {
+    "defect": [
+      500,
+      500
+    ],
+    "reg": [
+      0,
+      100,
+      300
+    ]
+  },
+  "bulkNet": {
+    "defect": [
+      9860,
+      25192
+    ],
+    "reg": [
+      11600,
       0
     ]
   },
-  "restockBand": {
-    "defect": [
-      550,
-      900
-    ],
-    "reg": [
-      350,
-      350,
-      900
-    ]
-  },
-  "giftRate": {
-    "defect": [
-      350,
-      275,
-      100
-    ],
-    "reg": []
-  },
-  "rushFee": {
-    "defect": [
-      4,
-      5,
-      51,
-      500,
-      617
-    ],
-    "reg": [
-      0,
-      80
-    ]
-  },
-  "seasonalFree": {
-    "defect": [
-      2750,
-      2750
-    ],
-    "reg": [
-      0,
-      275,
-      2200
-    ]
-  },
-  "setupLimit": {
-    "defect": [
-      440,
-      440
-    ],
-    "reg": [
-      80,
-      80,
-      83,
-      436
-    ]
-  },
-  "pickupCode": {
+  "archiveCode": {
     "defect": [
       240,
       240
     ],
     "reg": [
-      600,
-      840,
+      640,
+      480,
       80
     ]
   },
-  "exportNet": {
+  "auditRate": {
     "defect": [
-      9605,
-      24540
+      475,
+      275,
+      100
+    ],
+    "reg": []
+  },
+  "shippingFee": {
+    "defect": [
+      3,
+      5,
+      50,
+      499,
+      617
     ],
     "reg": [
-      11300,
+      0,
+      50
+    ]
+  },
+  "referralNet": {
+    "defect": [
+      10115,
+      25843
+    ],
+    "reg": [
+      11900,
       0
     ]
+  },
+  "onsiteFee": {
+    "defect": [
+      4,
+      5,
+      45,
+      438,
+      540
+    ],
+    "reg": [
+      0,
+      70
+    ]
+  },
+  "seasonalQuote": {
+    "defect": [
+      63,
+      500,
+      15
+    ],
+    "reg": [
+      0
+    ]
+  },
+  "referralRate": {
+    "defect": [
+      200,
+      75,
+      425
+    ],
+    "reg": []
   }
 }

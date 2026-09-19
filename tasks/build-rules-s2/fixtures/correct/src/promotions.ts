@@ -1,13 +1,13 @@
-export function onsiteBand(x: number): number {
-  return x < 25 ? 450 : x < 68 ? 600 : 1250;
+export function supportValid(day: number): boolean {
+  return day >= 88 && day < 109;
 }
 
-const handlingCodeTable: Record<string, number> = { a31: 480, b23: 160, c89: 720 };
-
-export function handlingCode(code: string): number {
-  return handlingCodeTable[code] ?? 440;
+export function onsiteValid(day: number): boolean {
+  return day >= 34 && day < 64;
 }
 
-export function restockBand(x: number): number {
-  return x < 29 ? 350 : x < 84 ? 550 : 900;
+const archiveCodeTable: Record<string, number> = { a29: 640, b55: 480, c54: 80 };
+
+export function archiveCode(code: string): number {
+  return archiveCodeTable[code] ?? 240;
 }

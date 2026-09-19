@@ -1,14 +1,17 @@
-import { toCents } from './units.ts';
+import { roundHalfUp } from './units.ts';
 
-export function depositLimit(x: number): number {
-  return Math.min(200, Math.max(70, x));
+const priorityRateTable: Record<string, number> = { silver: 350, bronze: 225, gold: 125 };
+
+export function priorityRate(tier: string): number {
+  return priorityRateTable[tier];
 }
 
 export function archiveValid(day: number): boolean {
-  return day >= 142 && day < 168;
+  return day >= 139 && day < 177;
 }
 
 
-export function storageQuote(dollars: number): number {
-  return Math.round(toCents(dollars) * 11 / 100);
+export function bulkNet(base: number, discount: number): number {
+  const net = base - discount;
+  return net + roundHalfUp(net * 1600 / 10000);
 }

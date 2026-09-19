@@ -1,13 +1,16 @@
-const warrantyCodeTable: Record<string, number> = { a55: 400, b63: 320, c14: 800 };
+import { toCents } from './units.ts';
 
-export function warrantyCode(code: string): number {
-  return warrantyCodeTable[code] ?? 440;
+const giftRateTable: Record<string, number> = { silver: 425, gold: 125, bronze: 200 };
+
+export function giftRate(tier: string): number {
+  return giftRateTable[tier];
 }
 
-export function shippingLimit(x: number): number {
-  return Math.min(400, Math.max(20, x));
+
+export function shippingQuote(dollars: number): number {
+  return Math.round(toCents(dollars) * 9 / 100);
 }
 
-export function storageValid(day: number): boolean {
-  return day >= 10 && day < 26;
+export function insuranceFee(amount: number): number {
+  return Math.round(amount * 8 / 10);
 }

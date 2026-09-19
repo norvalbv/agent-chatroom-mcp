@@ -1,72 +1,72 @@
 [
   {
-    "id": "handlingCode",
+    "id": "depositValid",
     "module": "delivery",
-    "kind": "spec-vs-code",
-    "template": "fallback",
+    "kind": "boundary",
+    "template": "window",
     "public_test_encodes_bug": false
   },
   {
-    "id": "insuranceValid",
+    "id": "insuranceRate",
     "module": "promotions",
-    "kind": "boundary",
-    "template": "window",
-    "public_test_encodes_bug": true
+    "kind": "spec-vs-code",
+    "template": "table",
+    "public_test_encodes_bug": false
   },
   {
-    "id": "exportQuote",
+    "id": "warrantyQuote",
     "module": "accounts",
     "kind": "cross-module-contract",
     "template": "cross",
     "public_test_encodes_bug": false
   },
   {
-    "id": "pickupRate",
-    "module": "contracts",
+    "id": "giftRate",
+    "module": "fees",
     "kind": "spec-vs-code",
     "template": "table",
     "public_test_encodes_bug": false
   },
   {
-    "id": "loyaltyFree",
+    "id": "supportCode",
+    "module": "contracts",
+    "kind": "spec-vs-code",
+    "template": "fallback",
+    "public_test_encodes_bug": false
+  },
+  {
+    "id": "onsiteCode",
     "module": "compliance",
+    "kind": "spec-vs-code",
+    "template": "fallback",
+    "public_test_encodes_bug": false
+  },
+  {
+    "id": "handlingValid",
+    "module": "service",
     "kind": "boundary",
-    "template": "cap",
+    "template": "window",
     "public_test_encodes_bug": true
   },
   {
-    "id": "priorityFree",
+    "id": "shippingQuote",
+    "module": "fees",
+    "kind": "cross-module-contract",
+    "template": "cross",
+    "public_test_encodes_bug": false
+  },
+  {
+    "id": "referralBand",
     "module": "promotions",
     "kind": "boundary",
-    "template": "cap",
-    "public_test_encodes_bug": false
+    "template": "band",
+    "public_test_encodes_bug": true
   },
   {
-    "id": "auditLimit",
-    "module": "service",
-    "kind": "boundary",
-    "template": "clamp",
-    "public_test_encodes_bug": false
-  },
-  {
-    "id": "restockNet",
-    "module": "accounts",
-    "kind": "spec-vs-code",
-    "template": "order",
-    "public_test_encodes_bug": false
-  },
-  {
-    "id": "upgradeFee",
-    "module": "delivery",
-    "kind": "spec-vs-code",
-    "template": "round",
-    "public_test_encodes_bug": false
-  },
-  {
-    "id": "supportFee",
-    "module": "service",
-    "kind": "spec-vs-code",
-    "template": "round",
+    "id": "handlingQuote",
+    "module": "compliance",
+    "kind": "cross-module-contract",
+    "template": "cross",
     "public_test_encodes_bug": false
   }
 ]

@@ -1,0 +1,574 @@
+{
+  "S01": [
+    "backordered",
+    "reserved",
+    {
+      "lots": [
+        {
+          "id": "L1",
+          "qty": 10,
+          "reserved": 10
+        }
+      ],
+      "orders": [
+        {
+          "id": "o1",
+          "status": "backordered",
+          "remaining": {},
+          "shipped": {}
+        },
+        {
+          "id": "o2",
+          "status": "reserved",
+          "remaining": {
+            "A": 10
+          },
+          "shipped": {}
+        }
+      ],
+      "backorders": [
+        "o1"
+      ],
+      "available": {
+        "A": 0
+      }
+    }
+  ],
+  "S02": {
+    "lots": [
+      {
+        "id": "L1",
+        "qty": 6,
+        "reserved": 4
+      },
+      {
+        "id": "L2",
+        "qty": 6,
+        "reserved": 0
+      }
+    ],
+    "orders": [
+      {
+        "id": "o1",
+        "status": "reserved",
+        "remaining": {
+          "A": 4
+        },
+        "shipped": {}
+      }
+    ],
+    "backorders": [],
+    "available": {
+      "A": 8
+    }
+  },
+  "S03": [
+    "reserved",
+    {
+      "lots": [
+        {
+          "id": "L1",
+          "qty": 8,
+          "reserved": 4
+        }
+      ],
+      "orders": [
+        {
+          "id": "o1",
+          "status": "reserved",
+          "remaining": {
+            "A": 4
+          },
+          "shipped": {}
+        }
+      ],
+      "backorders": [],
+      "available": {
+        "A": 4
+      }
+    }
+  ],
+  "S04": [
+    true,
+    false,
+    {
+      "lots": [
+        {
+          "id": "L1",
+          "qty": 14,
+          "reserved": 2
+        }
+      ],
+      "orders": [
+        {
+          "id": "o1",
+          "status": "reserved",
+          "remaining": {
+            "A": 2
+          },
+          "shipped": {
+            "A": 6
+          }
+        }
+      ],
+      "backorders": [],
+      "available": {
+        "A": 12
+      }
+    }
+  ],
+  "S05": [
+    true,
+    {
+      "lots": [
+        {
+          "id": "L1",
+          "qty": 16,
+          "reserved": 0
+        }
+      ],
+      "orders": [
+        {
+          "id": "o1",
+          "status": "cancelled",
+          "remaining": {
+            "A": 8
+          },
+          "shipped": {
+            "A": 4
+          }
+        }
+      ],
+      "backorders": [],
+      "available": {
+        "A": 16
+      }
+    }
+  ],
+  "S06": [
+    [
+      true,
+      true,
+      false
+    ],
+    {
+      "lots": [
+        {
+          "id": "L1",
+          "qty": 20,
+          "reserved": 0
+        }
+      ],
+      "orders": [
+        {
+          "id": "o1",
+          "status": "reserved",
+          "remaining": {
+            "A": 0
+          },
+          "shipped": {
+            "A": 10
+          }
+        }
+      ],
+      "backorders": [],
+      "available": {
+        "A": 20
+      }
+    }
+  ],
+  "S07": [
+    true,
+    {
+      "lots": [
+        {
+          "id": "L1",
+          "qty": 12,
+          "reserved": 0
+        }
+      ],
+      "orders": [
+        {
+          "id": "o1",
+          "status": "reserved",
+          "remaining": {
+            "A": 0
+          },
+          "shipped": {
+            "A": 8
+          }
+        }
+      ],
+      "backorders": [],
+      "available": {
+        "A": 0
+      }
+    }
+  ],
+  "S08": {
+    "lots": [
+      {
+        "id": "L9",
+        "qty": 12,
+        "reserved": 12
+      }
+    ],
+    "orders": [
+      {
+        "id": "o1",
+        "status": "reserved",
+        "remaining": {
+          "A": 10
+        },
+        "shipped": {}
+      },
+      {
+        "id": "o2",
+        "status": "reserved",
+        "remaining": {
+          "A": 2
+        },
+        "shipped": {}
+      },
+      {
+        "id": "o3",
+        "status": "backordered",
+        "remaining": {},
+        "shipped": {}
+      }
+    ],
+    "backorders": [
+      "o3"
+    ],
+    "available": {
+      "A": 0
+    }
+  },
+  "S09": {
+    "lots": [
+      {
+        "id": "L1",
+        "qty": 6,
+        "reserved": 6
+      }
+    ],
+    "orders": [
+      {
+        "id": "o1",
+        "status": "cancelled",
+        "remaining": {
+          "A": 6
+        },
+        "shipped": {}
+      },
+      {
+        "id": "o2",
+        "status": "reserved",
+        "remaining": {
+          "A": 6
+        },
+        "shipped": {}
+      }
+    ],
+    "backorders": [],
+    "available": {
+      "A": 0
+    }
+  },
+  "S10": {
+    "lots": [
+      {
+        "id": "L1",
+        "qty": 16,
+        "reserved": 0
+      }
+    ],
+    "orders": [],
+    "backorders": [],
+    "available": {
+      "A": 16
+    }
+  },
+  "S11": [
+    {
+      "lots": [
+        {
+          "id": "L1",
+          "qty": 10,
+          "reserved": 0
+        },
+        {
+          "id": "L2",
+          "qty": 4,
+          "reserved": 0
+        }
+      ],
+      "orders": [],
+      "backorders": [],
+      "available": {
+        "A": 4
+      }
+    },
+    {
+      "lots": [
+        {
+          "id": "L1",
+          "qty": 10,
+          "reserved": 0
+        },
+        {
+          "id": "L2",
+          "qty": 4,
+          "reserved": 0
+        }
+      ],
+      "orders": [],
+      "backorders": [],
+      "available": {
+        "A": 14
+      }
+    }
+  ],
+  "S12": {
+    "lots": [
+      {
+        "id": "L1",
+        "qty": 10,
+        "reserved": 0
+      }
+    ],
+    "orders": [
+      {
+        "id": "o1",
+        "status": "cancelled",
+        "remaining": {},
+        "shipped": {}
+      }
+    ],
+    "backorders": [],
+    "available": {
+      "A": 10
+    }
+  },
+  "R01": [
+    "reserved",
+    {
+      "lots": [
+        {
+          "id": "L1",
+          "qty": 20,
+          "reserved": 6
+        },
+        {
+          "id": "L2",
+          "qty": 8,
+          "reserved": 4
+        }
+      ],
+      "orders": [
+        {
+          "id": "o1",
+          "status": "reserved",
+          "remaining": {
+            "A": 6,
+            "B": 4
+          },
+          "shipped": {}
+        }
+      ],
+      "backorders": [],
+      "available": {
+        "A": 14,
+        "B": 4
+      }
+    }
+  ],
+  "R02": {
+    "lots": [
+      {
+        "id": "L1",
+        "qty": 6,
+        "reserved": 2
+      },
+      {
+        "id": "L2",
+        "qty": 6,
+        "reserved": 6
+      }
+    ],
+    "orders": [
+      {
+        "id": "o1",
+        "status": "reserved",
+        "remaining": {
+          "A": 8
+        },
+        "shipped": {}
+      }
+    ],
+    "backorders": [],
+    "available": {
+      "A": 4
+    }
+  },
+  "R03": [
+    true,
+    false,
+    true
+  ],
+  "R04": {
+    "lots": [
+      {
+        "id": "L1",
+        "qty": 8,
+        "reserved": 8
+      },
+      {
+        "id": "L2",
+        "qty": 10,
+        "reserved": 4
+      }
+    ],
+    "orders": [
+      {
+        "id": "o1",
+        "status": "reserved",
+        "remaining": {
+          "A": 8
+        },
+        "shipped": {}
+      },
+      {
+        "id": "o2",
+        "status": "reserved",
+        "remaining": {
+          "A": 4
+        },
+        "shipped": {}
+      }
+    ],
+    "backorders": [],
+    "available": {
+      "A": 6
+    }
+  },
+  "R05": [
+    true,
+    false,
+    false,
+    {
+      "lots": [
+        {
+          "id": "L1",
+          "qty": 16,
+          "reserved": 0
+        }
+      ],
+      "orders": [
+        {
+          "id": "o1",
+          "status": "cancelled",
+          "remaining": {
+            "A": 8
+          },
+          "shipped": {}
+        }
+      ],
+      "backorders": [],
+      "available": {
+        "A": 16
+      }
+    }
+  ],
+  "R06": [
+    true,
+    false,
+    false,
+    {
+      "lots": [
+        {
+          "id": "L1",
+          "qty": 12,
+          "reserved": 0
+        }
+      ],
+      "orders": [
+        {
+          "id": "o1",
+          "status": "reserved",
+          "remaining": {
+            "A": 0
+          },
+          "shipped": {
+            "A": 8
+          }
+        }
+      ],
+      "backorders": [],
+      "available": {
+        "A": 12
+      }
+    }
+  ],
+  "R07": {
+    "lots": [
+      {
+        "id": "L1",
+        "qty": 4,
+        "reserved": 2
+      }
+    ],
+    "orders": [
+      {
+        "id": "o1",
+        "status": "backordered",
+        "remaining": {},
+        "shipped": {}
+      },
+      {
+        "id": "o2",
+        "status": "reserved",
+        "remaining": {
+          "A": 2
+        },
+        "shipped": {}
+      }
+    ],
+    "backorders": [
+      "o1"
+    ],
+    "available": {
+      "A": 2
+    }
+  },
+  "R08": {
+    "lots": [
+      {
+        "id": "L1",
+        "qty": 2,
+        "reserved": 0
+      },
+      {
+        "id": "L2",
+        "qty": 12,
+        "reserved": 0
+      }
+    ],
+    "orders": [
+      {
+        "id": "o1",
+        "status": "reserved",
+        "remaining": {
+          "A": 0
+        },
+        "shipped": {
+          "A": 16
+        }
+      }
+    ],
+    "backorders": [],
+    "available": {
+      "A": 14
+    }
+  }
+}

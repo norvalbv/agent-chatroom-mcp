@@ -102,9 +102,10 @@ test('the two committed instances differ in planted defect set', () => {
 
 import { buildRuleSrc, deriveRules } from './bench-build-rules-gen.ts';
 
-for (const id of ['build-rules-s1', 'build-rules-s2']) {
+for (const id of ['build-rules-s1', 'build-rules-s2', 'build-rules-l3']) {
   const task = resolve('tasks', id);
-  const inst = deriveRules(JSON.parse(readFileSync(join(task, 'oracle/instance.json'), 'utf8')).seed);
+  const meta = JSON.parse(readFileSync(join(task, 'oracle/instance.json'), 'utf8'));
+  const inst = deriveRules(meta.seed, meta.size, meta.plants);
   const planted: string[] = JSON.parse(readFileSync(join(task, 'oracle/instance.json'), 'utf8')).defects;
   function rws(fixed: string[]) {
     const dir = mkdtempSync(join(tmpdir(), 'build-rules-'));
@@ -112,10 +113,10 @@ for (const id of ['build-rules-s1', 'build-rules-s2']) {
     for (const [f, body] of Object.entries(buildRuleSrc(inst, new Set(fixed)))) writeFileSync(join(dir, 'src', f), body);
     return dir;
   }
-  test(`${id}: 24 rules, ten plants, generator is deterministic`, () => {
-    assert.equal(inst.rules.length, 24);
+  test(`${id}: generator is deterministic and plants the requested count`, () => {
+    assert.equal(inst.rules.length, meta.size);
     assert.deepEqual(planted, inst.rules.filter((r) => r.defect).map((r) => r.id));
-    assert.equal(planted.length, 10);
+    assert.equal(planted.length, meta.plants);
     assert.ok(!existsSync(join(task, 'public/oracle')));
   });
   test(`${id}: broken passes public tests, catches 0, no regression; correct scores 1`, () => {
@@ -133,6 +134,42 @@ for (const id of ['build-rules-s1', 'build-rules-s2']) {
     for (const d of planted) {
       const dir = rws([d]);
       try { const r = score(task, dir); assert.deepEqual(r.out.caught_ids, [d]); assert.equal(r.out.regressions_failed, 0); }
+      finally { rmSync(dir, { recursive: true, force: true }); }
+    }
+  });
+  test(`${id}: no comments in src`, () => {
+    for (const f of readdirSync(join(task, 'public/src'))) assert.ok(!/\/\/|\/\*/.test(readFileSync(join(task, 'public/src', f), 'utf8')), f);
+  });
+}
+
+import { buildLedgerSrc, deriveLedger } from './bench-build-ledger-gen.ts';
+
+for (const id of ['build-ledger-s1', 'build-ledger-s2']) {
+  const task = resolve('tasks', id);
+  const meta = JSON.parse(readFileSync(join(task, 'oracle/instance.json'), 'utf8'));
+  const inst = deriveLedger(meta.seed);
+  function lws(fixed: string[]) {
+    const dir = mkdtempSync(join(tmpdir(), 'build-ledger-'));
+    cpSync(join(task, 'public'), dir, { recursive: true });
+    for (const [f, body] of Object.entries(buildLedgerSrc(inst, new Set(fixed)))) writeFileSync(join(dir, 'src', f), body);
+    return dir;
+  }
+  test(`${id}: generator deterministic; broken passes public tests, catches 0, no regression; correct scores 1`, () => {
+    assert.deepEqual(meta.defects, inst.defects);
+    const b = lws([]), c = lws(inst.defects);
+    try {
+      const pub = spawnSync(process.execPath, ['--test', 'test/*.test.ts'], { cwd: b, encoding: 'utf8', timeout: 60000 });
+      assert.equal(pub.status, 0, pub.stdout + pub.stderr);
+      const rb = score(task, b);
+      assert.equal(rb.out.defects_caught, 0); assert.equal(rb.out.regressions_failed, 0);
+      const rc = score(task, c);
+      assert.equal(rc.status, 0, JSON.stringify(rc.out)); assert.equal(rc.out.defects_shipped, 0);
+    } finally { rmSync(b, { recursive: true, force: true }); rmSync(c, { recursive: true, force: true }); }
+  });
+  test(`${id}: fixing one planted defect flips exactly that check`, () => {
+    for (const d of inst.defects) {
+      const dir = lws([d]);
+      try { const r = score(task, dir); assert.deepEqual(r.out.caught_ids, [d], d); assert.equal(r.out.regressions_failed, 0, d); }
       finally { rmSync(dir, { recursive: true, force: true }); }
     }
   });

@@ -1,13 +1,16 @@
-const referralRateTable: Record<string, number> = { silver: 125, bronze: 400, gold: 200 };
+import { roundHalfUp } from './units.ts';
 
-export function referralRate(tier: string): number {
-  return referralRateTable[tier];
+export function bulkNet(base: number, discount: number): number {
+  const net = base - discount;
+  return net + roundHalfUp(net * 1000 / 10000);
 }
 
-export function auditLimit(x: number): number {
-  return Math.min(500, Math.max(40, x));
+export function handlingValid(day: number): boolean {
+  return day >= 22 && day < 35;
 }
 
-export function supportFee(amount: number): number {
-  return Math.ceil(amount * 4 / 10);
+
+export function referralNet(base: number, discount: number): number {
+  const net = base - discount;
+  return net + roundHalfUp(net * 1000 / 10000);
 }

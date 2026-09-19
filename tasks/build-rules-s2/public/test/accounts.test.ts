@@ -2,6 +2,6 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import * as accounts from '../src/accounts.ts';
 
-test('loyaltyNet', () => { assert.deepEqual(accounts.loyaltyNet(0, 0), 0); });
-test('licenseLimit', () => { assert.deepEqual(accounts.licenseLimit(346), 346); });
-test('seasonalFree', () => { assert.deepEqual(accounts.seasonalFree(8), 2200); });
+test('licenseCode', () => { assert.deepEqual(accounts.licenseCode("c17"), 760); });
+test('shippingValid', () => { assert.deepEqual(accounts.shippingValid(154), true); });
+test('referralNet', () => { assert.deepEqual(accounts.referralNet(0, 0), 0); });

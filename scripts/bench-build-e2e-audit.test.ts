@@ -14,6 +14,7 @@ test('native A result survives grid validation, report and compatible resume', a
   const oldPath = process.env.PATH;
   try {
     mkdirSync(join(task, 'public'), { recursive: true });
+    mkdirSync(join(task, 'public', 'test'));
     mkdirSync(join(task, 'oracle'));
     mkdirSync(bin);
     writeFileSync(join(task, 'task.json'), JSON.stringify({ task_id: 'contract-audit' }));
@@ -22,6 +23,11 @@ test('native A result survives grid validation, report and compatible resume', a
     writeFileSync(join(task, 'public', 'brief.txt'), 'Make value.txt contain fixed. Preserve stable.txt.');
     writeFileSync(join(task, 'public', 'value.txt'), 'broken');
     writeFileSync(join(task, 'public', 'stable.txt'), 'stable');
+    writeFileSync(join(task, 'public', 'test', 'smoke.test.ts'), `
+import assert from 'node:assert/strict';
+import { test } from 'node:test';
+test('public baseline remains runnable', () => assert.equal(1 + 1, 2));
+`);
     writeFileSync(join(task, 'oracle', 'score.ts'), `
 import { readFileSync } from 'node:fs';
 const w=process.argv[2];
@@ -53,6 +59,7 @@ console.log(JSON.stringify({type:'result',subtype:'success',is_error:false,resul
     assert.equal(report.rows[0].cost_usd, 0.001);
     assert.equal(report.rows[0].thinking_tokens, 3);
     assert.equal(report.rows[0].output_tokens, 7);
+    assert.equal(report.rows[0].public_suite_passed, null);
     const resumed = await runBuildGrid(args, { log() {} });
     assert.equal(resumed.ran, 0);
     assert.equal(resumed.skipped, 1);

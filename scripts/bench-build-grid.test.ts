@@ -4,7 +4,7 @@ import { test } from "node:test";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { buildBuildPlan, parseBuildGridArgs, runBuildGrid } from "./bench-build-grid.js";
+import { buildBuildPlan, parseBuildGridArgs, requestedManifestFingerprint, runBuildGrid } from "./bench-build-grid.js";
 
 function fixture() {
   const dir = mkdtempSync(join(tmpdir(), "bench-build-grid-"));
@@ -16,17 +16,24 @@ function fixture() {
   }
   const log = join(dir, "calls.jsonl");
   writeFileSync(log, "");
-  const runner = join(dir, "stub-runner.mjs");
+  mkdirSync(join(dir, "scripts"));
+  mkdirSync(join(dir, "src"));
+  mkdirSync(join(dir, "dist"));
+  writeFileSync(join(dir, "src", "helper.ts"), "export const helper = 1;\n");
+  writeFileSync(join(dir, "dist", "index.js"), "export const hub = 1;\n");
+  writeFileSync(join(dir, "scripts", "bench-build-runtime.ts"), "export const runtime = 1;\n");
+  const runner = join(dir, "scripts", "stub-runner.mjs");
   writeFileSync(runner, `import { appendFileSync, mkdirSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 const a=process.argv.slice(2), flag=n=>a[a.indexOf('--'+n)+1];
 const [task,arm,seed]=a, root=flag('root'), fp=flag('grid-fingerprint'), manifest=flag('manifest-sha256'), taskHash=flag('expected-task-sha256');
 appendFileSync(${JSON.stringify(log)}, JSON.stringify({a})+'\\n');
 mkdirSync(root,{recursive:true});
 if(process.env.STUB_MUTATE_TASK==='1')writeFileSync(join(task,'public','SPEC.md'),'mutated after grid freeze\\n');
+if(process.env.STUB_MUTATE_SUPPORT==='1')writeFileSync(join(dirname(process.argv[1]),'bench-build-runtime.ts'),'mutated after grid freeze\\n');
 const unknown=process.env.STUB_UNKNOWN==='1', outcome=process.env.STUB_OUTCOME||'completed';
 writeFileSync(join(root,'build-result.json'), JSON.stringify({
- schemaVersion:1, task_id:task.split('/').pop(), arm, seed:Number(seed), execution_outcome:outcome,
+ schemaVersion:1, task_id:task.split('/').pop(), arm, seed:Number(seed), execution_outcome:outcome, public_suite_passed:true,
  scores:{defects_caught:4,defects_total:9,defects_shipped:5,regression_failures:0,regressions_total:14},
  checks:{defects:[{name:'defect/D01',exit_code:0}],regressions:[{name:'regression/R01',exit_code:0}]},
  usage:{cost_usd:unknown?null:0.25,coverage:unknown?'partial':'complete',thinking_tokens:123,output_tokens:456},
@@ -104,7 +111,7 @@ test("resume refuses a stale result after task bytes change", async () => {
   } finally { rmSync(f.dir, { recursive: true, force: true }); }
 });
 
-test("grid freezes task hashes once before any cell can mutate a later launch", async () => {
+test("grid aborts before a later launch if an earlier cell mutates the frozen task", async () => {
   const f = fixture();
   try {
     process.env.STUB_MUTATE_TASK = "1";
@@ -112,12 +119,41 @@ test("grid freezes task hashes once before any cell can mutate a later launch", 
       "--tasks", "build-billing-s1", "--arms", "A,B", "--seeds", "501", "--tasks-dir", f.tasksDir,
       "--results", f.results, "--runner", f.runner, "--effort", "medium", "--max-budget-usd", "2",
     ]);
-    await runBuildGrid(parsed, { log: () => {} });
+    await assert.rejects(() => runBuildGrid(parsed, { log: () => {} }), /frozen task changed/i);
     const calls = readFileSync(f.log, "utf8").trim().split("\n").map((line) => JSON.parse(line).a as string[]);
-    const expected = calls.map((call) => call[call.indexOf("--expected-task-sha256") + 1]);
-    assert.equal(expected.length, 2);
-    assert.equal(expected[0], expected[1]);
+    assert.equal(calls.length, 1);
   } finally { delete process.env.STUB_MUTATE_TASK; rmSync(f.dir, { recursive: true, force: true }); }
+});
+
+test("grid aborts before a later launch if frozen executor support changes", async () => {
+  const f = fixture();
+  try {
+    process.env.STUB_MUTATE_SUPPORT = "1";
+    const parsed = parseBuildGridArgs([
+      "--tasks", "build-billing-s1", "--arms", "A,B", "--seeds", "501", "--tasks-dir", f.tasksDir,
+      "--results", f.results, "--runner", f.runner, "--effort", "medium", "--max-budget-usd", "2",
+    ]);
+    await assert.rejects(() => runBuildGrid(parsed, { log: () => {} }), /frozen manifest changed/i);
+    const calls = readFileSync(f.log, "utf8").trim().split("\n");
+    assert.equal(calls.length, 1);
+  } finally { delete process.env.STUB_MUTATE_SUPPORT; rmSync(f.dir, { recursive: true, force: true }); }
+});
+
+test("manifest binds src and the runner repository's default hub build", () => {
+  const f = fixture();
+  try {
+    const parsed = parseBuildGridArgs([
+      "--tasks", "build-billing-s1", "--arms", "C", "--seeds", "501", "--tasks-dir", f.tasksDir,
+      "--results", f.results, "--runner", f.runner, "--effort", "medium", "--max-budget-usd", "2",
+    ]);
+    const cell = buildBuildPlan(parsed)[0];
+    const initial = requestedManifestFingerprint(parsed, cell);
+    writeFileSync(join(f.dir, "src", "helper.ts"), "export const helper = 2;\n");
+    assert.notEqual(requestedManifestFingerprint(parsed, cell), initial);
+    const afterSrc = requestedManifestFingerprint(parsed, cell);
+    writeFileSync(join(f.dir, "dist", "index.js"), "export const hub = 2;\n");
+    assert.notEqual(requestedManifestFingerprint(parsed, cell), afterSrc);
+  } finally { rmSync(f.dir, { recursive: true, force: true }); }
 });
 
 test("unknown terminal cost stops later cells and is never summed as zero", async () => {

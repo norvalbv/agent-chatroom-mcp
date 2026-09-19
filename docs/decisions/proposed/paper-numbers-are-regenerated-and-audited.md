@@ -1,0 +1,14 @@
+# Proposed decision: paper-numbers-are-regenerated-and-audited
+
+From swarm-164742-5jvl (concluded); report: swarms/swarm-164742-5jvl/report.md. A human promotes this into docs/decisions/ with `guard-decisions add`; nothing is adopted automatically.
+
+DECISION RECORD** (for `guard-decisions add paper-numbers-are-regenerated-and-audited --target done-means-independently-verified`)
+- **slug:** paper-numbers-are-regenerated-and-audited
+- **context:** Drafts written by seven agents repeatedly contained numbers that were plausible but wrong. Examples: the 4 arm-K failures called "wrong-answer plurality" when 2 were ties; "32 where 100 is expected" when the wrong answer is 101 at token 32; "per-seed spend never exceeds arm C" when it did on 19/10/9 seeds; the printf A vs C z-test result read as Fisher. A caption edit also went uncommitted with its regenerated table. Each would have reached the PDF without a regeneration diff and a full read against the artifacts.
+- **ruling:** A paper claim counts only if (1) `paper/regen.sh` reruns every generator in `paper/regen-manifest.sh` and finds no git diff, (2) `scripts/paper-number-audit.ts` finds every decimal, fraction, "N of M" and percentage in the prose in a committed source, and (3) someone other than the author reads the whole PDF against the result files and recomputes the key statistics. Derived numbers (cost ratios, cache-read shares, per-seed counts, per-group vote splits) must be written to `paper/generated/*.json` by a script, not typed.
+- **consequences:** Every number traces to a file or a generator, and the regime and time-window facts come from the run timestamps and output tokens rather than from memory.
+- **tradeoff:** The audit only checks that a number exists somewhere in the sources; for example, it accepts a failure count as the complement of a pass count. So only the full human read catches misuse. Several rounds were spent re-wording, and parallel fixes collided twice.
+- **researched:** Nothing external was fetched this run. The workers fetched arXiv:2203.11171, arXiv:2204.11454 and arXiv:2207.10397 (NEW relative to the settled list) and confirmed them via check-citations. Everything else was repo artifacts: `bench/results/rq1-{suite,arm-k,drift-control}`, `tasks/*/ADMISSION.md`, `paper/*.md`, `docs/*-0918.md`.
+- **rejected:** Converting all prose numbers to `\newcommand` macros was rejected as too invasive for seven concurrent authors in the time available. Relying on the check-citations/regen diff alone was rejected because it cannot see numbers typed into prose.
+- **revisit-when:** The window control completes (24/24 in `bench/results/rq1-window-control`), or the prose numbers move to generated macros so the audit can check meaning and not just presence.
+- No RE-TARGET: this narrows `done-means-independently-verified` for papers and does not contradict it.

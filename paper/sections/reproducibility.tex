@@ -1,0 +1,89 @@
+% Expects \appendix to have been issued once by main.tex before this file is \input.
+\section{Reproducibility Appendix}
+\label{sec:reproducibility}
+
+\subsection{Build}
+
+Commit \texttt{41ff777} on branch \texttt{main} of \texttt{agent-chatroom-mcp}.
+
+\begin{verbatim}
+npm install
+npm run build
+npm test
+\end{verbatim}
+
+\texttt{npm test} runs \texttt{scripts/offline-runner.mjs}; its printed command count drifts over time
+and must be re-read at the commit actually used, not cited from this text
+(\texttt{paper/system.md}\,\S5).
+
+\subsection{RQ1 grid: arms A and C, seeds 101--140}
+
+\begin{verbatim}
+node --import tsx scripts/bench-grid.ts \
+  --tasks stamp-interpreter,stamp-2,bench-printf-format \
+  --seeds 101,102,103,104,105,106,107,108,109,110,111,112,113,114,115,116,117,118,119,120, \
+          121,122,123,124,125,126,127,128,129,130,131,132,133,134,135,136,137,138,139,140 \
+  --arms A,C --model sonnet --max-cost-usd 95 \
+  --results-dir bench/results/rq1-suite --port-base 19850
+\end{verbatim}
+
+(\texttt{paper/amendments.md}, "Grid command and cost estimate for the primary suite"; the seed list is
+written out in full because macOS's \texttt{seq -s, 1 40} appends a trailing comma that
+\texttt{scripts/bench-grid.ts}'s argument parser would otherwise read as a 41st, empty seed. The grid
+always runs arm~C before its paired arm~A for a given (task, seed), because arm~A's budget is derived
+from arm~C's realized spend.)
+
+\subsection{Arm K grid, seeds 101--140}
+
+\begin{verbatim}
+node --import tsx scripts/bench-grid.ts \
+  --tasks stamp-interpreter,stamp-2,bench-printf-format \
+  --seeds 101,...,140 --arms K \
+  --k stamp-interpreter=10,stamp-2=8,bench-printf-format=7 \
+  --model sonnet --results-dir bench/results/rq1-arm-k --port-base 19850
+\end{verbatim}
+
+paired against the arm-C results already written to \texttt{bench/results/rq1-suite}
+(\texttt{scripts/bench-grid.ts} refuses an arm-K group whose paired arm-C result does not exist under
+\texttt{--results-dir}). Each group internally invokes
+\texttt{scripts/bench-ak.ts TASK\_DIR K SEED --root ... --arm-c-result ...}, running $k$ unmodified
+arm-A attempts sub-seeded \texttt{seed*1000+i} and selecting one by the oracle-free rule for that task's
+kind (plurality of normalized answers for the two \texttt{stamp} tasks; MBR-exec execution agreement,
+primary, plus signature plurality, exploratory, for \texttt{bench-printf-format}; see
+Section~\ref{sec:method}).
+
+\subsection{Window control, seeds 201--220, interpreter family}
+
+Arm C and arm K interleaved per seed on \texttt{stamp-interpreter} and \texttt{stamp-2}, writing to
+\texttt{bench/results/rq1-window-control} (progress log: \texttt{logs/rq1-window-control.log}, not
+committed -- \texttt{logs/} is gitignored). The observed invocation sequence in that log matches
+\texttt{scripts/bench-grid.ts} run the same way as the two grids above, with
+\texttt{--seeds 201,...,220} and \texttt{--results-dir bench/results/rq1-window-control}; no committed
+wrapper script names this exact invocation, so a reader reproducing it should confirm the flags against
+\texttt{scripts/bench-grid.ts}'s own argument parser at the commit named in \S\ref{sec:reproducibility}.
+
+\subsection{Tables, statistics, and figures}
+
+\begin{verbatim}
+node --import tsx scripts/paper-rq1-table.ts bench/results/rq1-suite
+node --import tsx scripts/paper-rq1-armk.ts bench/results/rq1-suite bench/results/rq1-arm-k
+\end{verbatim}
+
+plus the figure-generating scripts under \texttt{scripts/paper-fig*.ts} (Section~\ref{sec:results}).
+Every table and figure script reads only committed \texttt{result.json} files under
+\texttt{bench/results/}; none accepts a hand-typed number, and \texttt{scripts/rq1-stats.ts} implements
+the two-proportion $z$-test, Fisher's exact test, and Holm-Bonferroni correction with no external
+statistics dependency.
+
+\subsection{Citation check and PDF build}
+
+\begin{verbatim}
+paper/check-citations.sh
+tectonic paper/main.tex
+\end{verbatim}
+
+Build tooling installed for this room, user-locally only (recorded with these exact commands in
+\texttt{paper/README.md}): \texttt{brew install tectonic}; \texttt{pip3 install --user
+--break-system-packages matplotlib} (the \texttt{--break-system-packages} flag was required on the
+build machine used, whose system Python refuses an unqualified \texttt{--user} install under
+PEP~668).

@@ -1,0 +1,47 @@
+\section{Limitations and Future Work}
+\label{sec:limitations}
+
+\subsection{Research questions not run}
+
+This study executed RQ1 (and its arm-K extension) only. RQ2 -- the chatroom against a no-chat
+builder-plus-reviewer pair (protocol \S2.1, arm~B) -- and RQ3 -- per-mechanic ablation across the seven
+hub mechanics listed in protocol \S2.3 -- are both pre-registered but have no execution behind them in
+this codebase: arm~B has never been run on any task here (\texttt{paper/budget.md}\,\S5: "the two
+cheapest-looking conditions are also the two with no cost evidence at all"), and none of the seven
+ablations has a real-model run. Both are listed as future work, not reported as negative results.
+
+\subsection{Task-suite retirements}
+
+\texttt{bench-long-brief} was retired from this suite (\texttt{paper/amendments.md}, 2026-09-18): its
+handoff/survival scoring is structurally unmeasurable on a single-seat arm~A, so it cannot support an
+accuracy comparison across arms under this study's method. Roughly 45 other candidate task designs --
+spanning cross-document retrieval, data cleaning, layered rule precedence, tick-scheduler simulation,
+and several invented-machine languages -- were piloted and rejected, either at ceiling (3 of 3, or above
+0.9 on ten seeds) or as ambiguous. None of that negative-result space is represented in the primary
+comparison; it is summarized, not reproduced, in \texttt{paper/amendments.md}.
+
+\subsection{Two families is not a benchmark}
+
+The admitted suite spans two failure-mechanism families (scope-capture; exact numeric formatting), not
+a broad benchmark. A mechanic, or an aggregation strategy, that helps on one family and hurts on the
+other is exactly the kind of result this suite exists to surface, but three tasks in two families cannot
+support a general claim about "code tasks" or "aggregation" beyond these two specific mechanisms
+(Section~\ref{sec:threats}).
+
+\subsection{System-level cost and process findings are separate contributions}
+
+The token-consumption round (\texttt{docs/token-round-0918.md}) and the peer-review round
+(\texttt{docs/review-round-0918.md}) measure this project's own build process, not the arms compared in
+Section~\ref{sec:results}; they are reported as system contributions in their own right
+(Section~\ref{sec:system}) with their own methodology, and are not folded into RQ1's task-success or
+cost-per-correct-answer numbers.
+
+\subsection{Future work}
+
+Completing RQ2 and RQ3; extending the window-control design (Section~\ref{sec:results}) to the printf
+task, which the current 20-seed control does not cover; a task suite broad enough to support
+family-level generalization across more than two failure mechanisms; and, if the chatroom's mechanics
+are ever shown to add value beyond sampling on a broader suite, testing whether a learned or structural
+minority-override mechanism (arXiv:2606.29270) could recover further value specifically on tasks like
+\texttt{bench-printf-format}, where the correct answer is not the population's plurality and no
+amount of aggregation-by-agreement can find it.

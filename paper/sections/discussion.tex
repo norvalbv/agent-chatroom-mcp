@@ -1,0 +1,94 @@
+\section{Discussion}
+\label{sec:discussion}
+
+\subsection{When aggregation helps}
+\label{sec:discussion-helps}
+
+On the scope-capture family, the single-agent pass rates (33/40 = 0.825 and 28/40 = 0.70 in the RQ1
+grid) mean the shared wrong answer -- every failing single-agent run on each task fails identically,
+on \texttt{stamp-interpreter} at one output token and on \texttt{stamp-2} at two -- is held by a
+\emph{minority} of attempts, not the plurality. Any procedure that aggregates several independent
+attempts toward their plurality answer recovers the correct answer whenever the correct answer is the
+plurality, which is true of nearly every group of attempts at these observed rates. This is true whether
+the aggregation is an explicit vote count (arm~K's plurality selector) or an emergent chatroom
+consensus reached through blind openings, proposal and challenge (arm~C): both land at pass rates that
+are not statistically distinguishable from each other on either \texttt{stamp} task
+(Section~\ref{sec:results}), despite arm~C additionally paying for mechanics -- a challenge gate, an
+independently assigned verifier, quote-checked votes -- that arm~K's non-communicating attempts never
+exercise at all.
+
+\subsection{When aggregation hurts}
+\label{sec:discussion-hurts}
+
+On \texttt{bench-printf-format} the single-agent pass rate is 14/40 = 0.35 (a fresh, independent
+400-attempt-class measurement puts the underlying rate closer to 0.31; Section~\ref{sec:results}), and
+the wrong behaviour -- incorrect \texttt{\%.17g} formatting of $1\times 10^{-7}$ -- is itself the
+population's \emph{modal} answer: 26 of the 40 single-agent runs in the RQ1 grid share it. Both
+aggregation methods therefore do worse than the single agent alone (K~7/40, C~6/40, versus A~14/40),
+against an oracle ceiling of 37/40 (at least one of $k=7$ independent attempts passing).
+
+The pre-registered calibration for arm~K's selector (\texttt{paper/amendments.md}, printf calibration
+entry) traces this precisely rather than leaving it as a bare number. The 40-attempt candidate pool
+partitions into exactly two signature classes -- 14 passing candidates agreeing with each other on
+every one of 9650 README-derived execution probes, and 26 failing candidates likewise agreeing with
+each other on every probe, the two classes disagreeing only on the 24 probes that exercise the one
+known trap. At $k=7$, a sampled group ties within whichever cluster is present and MBR-exec's winner is
+simply whichever cluster is the local majority in that draw; because the true pass rate is 0.35, the
+local majority is usually the wrong cluster (two independent closed forms bound the honest range without
+simulation: hypergeometric, drawing 7 without replacement from the fixed 14-pass/26-fail pool, gives
+0.1789; binomial, treating each draw as an independent 0.35 coin flip, gives 0.1998; the realized arm-K
+rate, 7/40 = 0.175, is consistent with both). The three-seat chatroom's independent discovery of the
+same wrong answer in 34 of 40 runs shows the same single-model bias operating inside deliberation --
+three agents reading the same specification tend to make the same misreading of the same one clause --
+not a distinct failure specific to the hub's mechanics.
+
+\subsection{Does deliberation add anything beyond sampling?}
+\label{sec:discussion-beyond-sampling}
+
+This room's brief asked, before any arm-K number existed, whether the chatroom's specific mechanics --
+blind openings against anchoring, a mandatory challenge before quorum, quote-verified votes, an
+independently assigned verifier -- contribute anything a plain sampling-and-selection baseline at the
+same cost does not. K vs.\ C is not significant on any of the three tasks under Fisher's exact test with
+Holm-Bonferroni correction across the pre-registered family of six comparisons
+(Section~\ref{sec:results}); the family-pooled comparison on the two \texttt{stamp} tasks (K~75/80 vs.\
+C~80/80) is exploratory, outside that pre-registered family, and itself falls short of the conventional
+0.05 threshold ($p=0.059$). Taken alone, that would read as "no distinguishable difference between
+deliberation and sampling on this family." The full, pre-registered set of comparisons complicates that
+reading rather than confirming it.
+
+\texttt{paper/prereg-arm-k.md}'s prediction~1 makes three separate claims, and the paper scores all
+three as written rather than the two \texttt{paper/amendments.md} scored when the arm-K result first
+came in: (i) point forecasts of about 0.99 on \texttt{stamp-interpreter} and about 0.90 on
+\texttt{stamp-2}; (ii) K vs.\ C not significant on either task; (iii) K vs.\ A \emph{significant} on
+both tasks. Claim~(ii) held on both tasks. Claim~(i) held, loosely, for \texttt{stamp-2} (forecast 0.90,
+observed 39/40 = 0.975) but not for \texttt{stamp-interpreter} (forecast 0.99, observed 36/40 = 0.90),
+for the reason given in Section~\ref{sec:results}: the pilot pass rate the forecast resampled from
+overstated the freshly measured single-attempt rate. Claim~(iii) is where the two \texttt{stamp}
+programs diverge: K beats A significantly on \texttt{stamp-2} (39/40 vs.\ 28/40, raw $p=0.0015$, Holm
+$p=0.0090$), matching the prediction, but \emph{not} on \texttt{stamp-interpreter} (36/40 vs.\ 33/40,
+raw $p=0.518$, Holm $p=1.000$) -- despite arm~C beating arm~A significantly on \emph{both}
+\texttt{stamp} programs (Section~\ref{sec:results}).
+
+That asymmetry is the most specific evidence in this paper for a difference between deliberation and
+sampling, and we report it as such rather than average it away. On \texttt{stamp-interpreter}, the
+structured chatroom shows a significant improvement over a single agent that the oracle-free sampling
+baseline, run at the same cost, does not reach; on \texttt{stamp-2}, both aggregation methods reach
+significance over the single agent, and neither reaches significance over the other. This is not
+evidence that deliberation is generally superior to sampling on this family -- the two programs share
+one failure mechanism and are one statistical unit throughout this paper precisely because of that
+(Section~\ref{sec:method}), and \texttt{stamp-interpreter}'s own single-agent rate was independently
+shown to be volatile across samples (0.50, 0.825, and 0.675 at $n=10$, $n=40$, and $n=400$ respectively;
+Section~\ref{sec:results}), so a comparison this close to the border of significance is exactly where
+that volatility would be expected to move a result across the 0.05 line by chance. We flag the pattern
+because the pre-registration asked for it to be scored, not because the sample size supports treating
+it as a settled mechanism.
+
+What the data support, stated at the size the evidence actually is: on the family where the chatroom
+clearly beats a single agent, an unstructured, oracle-free sampling baseline built at the same price
+beats the single agent by an amount not statistically distinguishable from the chatroom's on either
+program, and reaches conventional significance over the single agent on one of the two programs but not
+the other -- the same split the chatroom itself does not show. If the chatroom's specific consensus
+mechanics contribute something that independent sampling does not, this suite -- two programs in one
+failure-mechanism family, one task in another -- is not powered to isolate it cleanly, and a reader
+should not extrapolate a general claim about deliberation, in either direction, from these three tasks
+alone.

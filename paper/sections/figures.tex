@@ -20,7 +20,10 @@
   \caption{Cost per correct answer (API list price) by arm and task, log scale. Arm A is
   cheapest per correct answer on every task; arms C and K cost roughly the same as each other on the
   interpreter family and on \texttt{printf-format}, where both cost more per correct answer than arm A
-  despite passing less often (Table~\ref{tab:cost-per-correct}).}
+  despite passing less often (Table~\ref{tab:cost-per-correct}). All runs are from before the thinking-budget
+  regime shift documented in Section~\ref{sec:threats}: arms A/C ran 2026-09-19 07:44--11:30 UTC, arm K ran
+  later the same day, 13:22--15:33 UTC (Table~\ref{tab:cost-per-correct} gives exact per-row output-token
+  counts confirming both windows are pre-shift); not comparable to any run from after the shift.}
   \label{fig:cost-per-correct}
 \end{figure}
 
@@ -29,7 +32,9 @@
   \includegraphics[width=\linewidth]{figures/fig-cost-vs-accuracy.png}
   \caption{Cost per correct answer (log scale) against task success rate, one point per (task, arm).
   Arm A is always cheapest per correct answer; arm C and arm K are budget-matched per prereg but neither
-  buys accuracy on \texttt{printf-format}.}
+  buys accuracy on \texttt{printf-format}. All runs are from before the thinking-budget regime shift
+  documented in Section~\ref{sec:threats} (arms A/C: 2026-09-19 07:44--11:30 UTC; arm K: 13:22--15:33 UTC
+  the same day; see Table~\ref{tab:cost-per-correct} for per-row output-token confirmation).}
   \label{fig:cost-vs-accuracy}
 \end{figure}
 
@@ -38,10 +43,13 @@
   \includegraphics[width=\linewidth]{figures/fig-vote-mechanism.png}
   \caption{Mechanism figure: for every arm K group, the winning (plurality or MBR-exec) answer's vote
   share against whether the selected attempt passed the oracle. On the interpreter family a high vote
-  share tracks passing (the shared wrong answer is a minority when it occurs at all); on
-  \texttt{printf-format} a high vote share tracks \emph{failing} (the modal answer is the known
-  \texttt{\%.17g} of \texttt{1e-07} defect, so both plurality and MBR-exec selection amplify the wrong
-  cluster when it is the local majority). This is the empirical content behind
+  share mostly tracks passing, but not always: in 4 of 40 \texttt{stamp-interpreter} groups the shared
+  wrong answer itself is selected at parity with or ahead of the correct cluster (winner share 0.4--0.6;
+  2 of the 4 are exact 6-of-10 majorities for the wrong answer, 2 are 4-4 ties broken toward the wrong
+  cluster by the selector's lowest-sub-seed rule) --- voting recovers the correct answer only when it is
+  the plurality, not by construction. On \texttt{printf-format} a high vote share tracks \emph{failing}
+  (the modal answer is the known \texttt{\%.17g} of \texttt{1e-07} defect, so both plurality and MBR-exec
+  selection amplify the wrong cluster when it is the local majority). This is the empirical content behind
   paper/prereg-arm-k.md's prediction 2 and paper/amendments.md's printf selector calibration.}
   \label{fig:vote-mechanism}
 \end{figure}

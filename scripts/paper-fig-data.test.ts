@@ -7,12 +7,21 @@ import { join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 import { wilson95, buildFigData } from "./paper-fig-data.js";
 
-function suiteRun(task: string, arm: string, seed: number, outcome: string, cost = 0.01) {
+function suiteRun(task: string, arm: string, seed: number, outcome: string, cost = 0.01, opts: Partial<{ outputTokens: number; startedAt: string; completedAt: string }> = {}) {
   return {
     schemaVersion: 1 as const, task_id: task, arm, seed, model: "claude-sonnet-5", outcome, passed: outcome === "task_pass", reason: outcome,
-    usage: { cost_usd: cost, coverage: "complete" as const, seats: 1, seats_with_usage: 1 },
+    usage: { cost_usd: cost, coverage: "complete" as const, seats: 1, seats_with_usage: 1, output_tokens: opts.outputTokens ?? 1000 },
     turns: { summed: 5, coverage: "complete" as const },
-    wall_clock: { started_at: "2026-09-18T00:00:00.000Z", completed_at: "2026-09-18T00:01:00.000Z", duration_ms: 60000 },
+    wall_clock: { started_at: opts.startedAt ?? "2026-09-18T00:00:00.000Z", completed_at: opts.completedAt ?? "2026-09-18T00:01:00.000Z", duration_ms: 60000 },
+  };
+}
+
+function armKAttemptRun(task: string, subSeed: number, cost: number, outputTokens: number, startedAt: string) {
+  return {
+    schemaVersion: 1 as const, task_id: task, arm: "A", seed: subSeed, model: "claude-sonnet-5", outcome: "task_pass", passed: true, reason: "task_pass",
+    usage: { cost_usd: cost, coverage: "complete" as const, seats: 1, seats_with_usage: 1, output_tokens: outputTokens },
+    turns: { summed: 4, coverage: "complete" as const },
+    wall_clock: { started_at: startedAt, completed_at: startedAt, duration_ms: 20000 },
   };
 }
 
@@ -42,8 +51,20 @@ function writeSuite(dir: string, runs: ReturnType<typeof suiteRun>[]) {
 function writeArmK(dir: string, groups: ReturnType<typeof kGroup>[]) {
   groups.forEach((g) => {
     const d = join(dir, `${g.task_id}-K-seed${g.seed}`);
-    mkdirSync(d);
+    mkdirSync(d, { recursive: true });
     writeFileSync(join(d, "result.json"), JSON.stringify(g));
+  });
+}
+
+/** Writes attempt-level result.json files under <dir>/<task>-K-seed<seed>/attempt-N/result.json, mirroring
+ * the real harness's layout (scripts/bench-ak.ts), so armKCostPoints's attempt loader has something to read. */
+function writeArmKAttempts(dir: string, task: string, seed: number, attempts: ReturnType<typeof armKAttemptRun>[]) {
+  const groupDir = join(dir, `${task}-K-seed${seed}`);
+  mkdirSync(groupDir, { recursive: true });
+  attempts.forEach((a, i) => {
+    const d = join(groupDir, `attempt-${i + 1}`);
+    mkdirSync(d);
+    writeFileSync(join(d, "result.json"), JSON.stringify(a));
   });
 }
 
@@ -85,6 +106,31 @@ test("buildFigData: pass_rates includes arm K from the arm-K table, cost_vs_accu
     assert.equal(gv[0].passed, true);
     assert.ok(Math.abs(gv[1].winner_share - 1 / 3) < 1e-9, `seed 102 winner_share expected 1/3, got ${gv[1].winner_share}`);
     assert.equal(gv[1].passed, false);
+  } finally {
+    rmSync(suite, { recursive: true, force: true });
+    rmSync(armK, { recursive: true, force: true });
+  }
+});
+
+test("buildFigData: cost_per_correct carries mean_output_tokens and date_range for A/C and for K (regime-shift indicator, paper/amendments.md 2026-09-19)", () => {
+  const { suite, armK } = fixtureDirs();
+  try {
+    writeSuite(suite, [
+      suiteRun("t3", "A", 101, "task_pass", 0.1, { outputTokens: 1600, startedAt: "2026-09-19T07:44:00.000Z", completedAt: "2026-09-19T07:45:00.000Z" }),
+      suiteRun("t3", "A", 102, "task_pass", 0.1, { outputTokens: 1800, startedAt: "2026-09-19T08:00:00.000Z", completedAt: "2026-09-19T08:01:00.000Z" }),
+    ]);
+    writeArmKAttempts(armK, "t3", 101, [
+      armKAttemptRun("t3", 101001, 0.05, 1700, "2026-09-19T13:22:00.000Z"),
+      armKAttemptRun("t3", 101002, 0.05, 1750, "2026-09-19T13:23:00.000Z"),
+    ]);
+    writeArmK(armK, [kGroup("t3", 101, 2, true, { x: 2 }, 0.1)]);
+    const data = buildFigData(suite, armK);
+    const aCell = data.cost_per_correct.find((c) => c.task === "t3" && c.arm === "A")!;
+    assert.equal(aCell.mean_output_tokens, 1700); // mean(1600, 1800)
+    assert.deepEqual(aCell.date_range, ["2026-09-19T07:44:00.000Z", "2026-09-19T08:01:00.000Z"]);
+    const kCell = data.cost_per_correct.find((c) => c.task === "t3" && c.arm === "K")!;
+    assert.equal(kCell.mean_output_tokens, 1725); // mean(1700, 1750), from the attempt-level result.json files
+    assert.deepEqual(kCell.date_range, ["2026-09-19T13:22:00.000Z", "2026-09-19T13:23:00.000Z"]);
   } finally {
     rmSync(suite, { recursive: true, force: true });
     rmSync(armK, { recursive: true, force: true });

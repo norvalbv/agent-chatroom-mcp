@@ -10,10 +10,10 @@
  *   Defaults: SUITE_DIR=bench/results/rq1-suite ARM_K_DIR=bench/results/rq1-arm-k
  *   PATH default: paper/generated/fig-data.json
  */
-import { existsSync, mkdirSync, writeFileSync } from "node:fs";
-import { dirname, resolve } from "node:path";
+import { existsSync, mkdirSync, readdirSync, statSync, writeFileSync } from "node:fs";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { buildTable, computeCell, loadRunResults, type CellStats } from "./paper-rq1-table.js";
+import { buildTable, computeCell, loadRunResults, type CellStats, type RunResult } from "./paper-rq1-table.js";
 import { buildArmKTable, loadKGroups, type KTable } from "./paper-rq1-armk.js";
 
 /** Wilson score interval for a binomial proportion, 95% (z=1.959963985...). No external stats dependency,
@@ -45,6 +45,11 @@ export interface CostPoint {
   cost_per_correct: number | null; // null renders as "undefined (no task_pass)" — never 0 or Infinity
   n: number;
   pass: number;
+  /** Mean output_tokens per run/attempt (paper/amendments.md's 2026-09-19 "thinking budget" amendment:
+   * output tokens is the regime indicator). null only when no run carries the field. */
+  mean_output_tokens: number | null;
+  /** [min started_at, max completed_at] across every run/attempt contributing to this cell, ISO 8601. */
+  date_range: [string, string] | null;
 }
 
 export interface GroupVotePoint {
@@ -83,24 +88,67 @@ function armKPassRatePoints(kTable: KTable): PassRatePoint[] {
   });
 }
 
-function costPointsFromCells(cells: CellStats[]): CostPoint[] {
-  return cells.map((c) => ({
-    task: c.task,
-    arm: c.arm,
-    cost_per_correct: c.cost_per_correct === "undefined" ? null : c.cost_per_correct,
-    n: c.n,
-    pass: c.task_pass,
-  }));
+function mean(values: number[]): number | null {
+  return values.length ? values.reduce((a, b) => a + b, 0) / values.length : null;
 }
 
-function armKCostPoints(kTable: KTable): CostPoint[] {
-  return kTable.tasks.map((r) => ({
-    task: r.task,
-    arm: "K",
-    cost_per_correct: typeof r.cost_per_correct === "number" ? r.cost_per_correct : null,
-    n: r.k_groups,
-    pass: r.k_pass,
-  }));
+function dateRangeOf(runs: { wall_clock: { started_at: string; completed_at: string } }[]): [string, string] | null {
+  if (!runs.length) return null;
+  const starts = runs.map((r) => r.wall_clock.started_at).sort();
+  const ends = runs.map((r) => r.wall_clock.completed_at).sort();
+  return [starts[0], ends[ends.length - 1]];
+}
+
+function costPointsFromCells(cells: CellStats[], runsByTaskArm: Map<string, RunResult[]>): CostPoint[] {
+  return cells.map((c) => {
+    const runs = runsByTaskArm.get(`${c.task}|${c.arm}`) ?? [];
+    return {
+      task: c.task,
+      arm: c.arm,
+      cost_per_correct: c.cost_per_correct === "undefined" ? null : c.cost_per_correct,
+      n: c.n,
+      pass: c.task_pass,
+      mean_output_tokens: c.mean_tokens.output_tokens || null,
+      date_range: dateRangeOf(runs),
+    };
+  });
+}
+
+/** Reads every attempt-level result.json under armKDir/<task>-K-seed<seed>/attempt-N/ for a task (each
+ * attempt is itself a schemaVersion:1 arm-A-shaped run, written by the same harness that writes
+ * rq1-suite's runs — confirmed directly against a real attempt-1 result.json in this repo). This is the
+ * only source of a per-attempt output-token count for arm K: the group-level result.json (KGroup) has
+ * only a summed cost, no token breakdown. */
+function loadArmKAttemptRuns(armKDir: string, task: string, seedMin: number, seedMax: number): RunResult[] {
+  if (!existsSync(armKDir)) return [];
+  const out: RunResult[] = [];
+  for (const name of readdirSync(armKDir)) {
+    const m = /^(.+)-K-seed(\d+)$/.exec(name);
+    if (!m || m[1] !== task) continue;
+    const seed = Number(m[2]);
+    if (seed < seedMin || seed > seedMax) continue;
+    const groupDir = join(armKDir, name);
+    if (!statSync(groupDir).isDirectory()) continue;
+    const { runs } = loadRunResults(groupDir); // treats each attempt-N/result.json as one run
+    out.push(...runs);
+  }
+  return out;
+}
+
+function armKCostPoints(kTable: KTable, armKDir: string): CostPoint[] {
+  return kTable.tasks.map((r) => {
+    const attempts = loadArmKAttemptRuns(armKDir, r.task, ARM_K_SEED_MIN, ARM_K_SEED_MAX);
+    const outputTokens = attempts.map((a) => a.usage.output_tokens).filter((v): v is number => typeof v === "number");
+    return {
+      task: r.task,
+      arm: "K",
+      cost_per_correct: typeof r.cost_per_correct === "number" ? r.cost_per_correct : null,
+      n: r.k_groups,
+      pass: r.k_pass,
+      mean_output_tokens: mean(outputTokens),
+      date_range: dateRangeOf(attempts),
+    };
+  });
 }
 
 /** Same confirmatory seed window buildArmKTable defaults to (paper/amendments.md: pilot seeds 1-3 stay
@@ -115,8 +163,15 @@ export function buildFigData(suiteDir: string, armKDir: string): FigData {
   const { cells } = buildTable(runs);
   const kTable = buildArmKTable(runs, groups);
 
+  const runsByTaskArm = new Map<string, RunResult[]>();
+  for (const r of runs) {
+    const key = `${r.task_id}|${r.arm}`;
+    if (!runsByTaskArm.has(key)) runsByTaskArm.set(key, []);
+    runsByTaskArm.get(key)!.push(r);
+  }
+
   const pass_rates = [...passRatePointsFromCells(cells), ...armKPassRatePoints(kTable)];
-  const cost_per_correct = [...costPointsFromCells(cells), ...armKCostPoints(kTable)];
+  const cost_per_correct = [...costPointsFromCells(cells, runsByTaskArm), ...armKCostPoints(kTable, armKDir)];
   const vote_distributions = kTable.tasks.map((r) => ({ task: r.task, distribution: r.vote_distribution }));
   const armk_group_votes: GroupVotePoint[] = groups
     .filter((g) => g.seed >= ARM_K_SEED_MIN && g.seed <= ARM_K_SEED_MAX)

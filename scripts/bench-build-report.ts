@@ -9,13 +9,15 @@ type RawBuildResult = {
   task_id?: unknown;
   arm?: unknown;
   seed?: unknown;
-  outcome?: unknown;
+  execution_outcome?: unknown;
+  oracle_outcome?: unknown;
   scores?: Record<string, unknown>;
   checks?: { defects?: unknown; regressions?: unknown };
   usage?: { cost_usd?: unknown; coverage?: unknown; thinking_tokens?: unknown; output_tokens?: unknown };
+  seat_records?: { thinking_tokens?: unknown; usage?: { output_tokens?: unknown } | null }[];
   wall_clock_ms?: unknown;
   effort?: { level?: unknown; settings_sha256?: unknown; own_git_root?: unknown };
-  provenance?: { run_fingerprint?: unknown; manifest_sha256?: unknown; runner_sha256?: unknown; task_sha256_before_score?: unknown; task_sha256_after_score?: unknown };
+  provenance?: { grid_fingerprint?: unknown; native_run_fingerprint?: unknown; manifest_sha256?: unknown; runner_sha256?: unknown; task_sha256_before_score?: unknown; task_sha256_after_score?: unknown };
 };
 
 export interface BuildReportRow {
@@ -24,7 +26,8 @@ export interface BuildReportRow {
   seed: number;
   status: "valid" | "invalid" | "missing";
   reason: string | null;
-  outcome: string | null;
+  execution_outcome: string | null;
+  oracle_outcome: string | null;
   protocol_failure: boolean;
   protocol_success: boolean | null;
   protocol_adjusted_catch_fraction: number | null;
@@ -39,7 +42,8 @@ export interface BuildReportRow {
   output_tokens: number | null;
   wall_clock_ms: number | null;
   actual_over_cap: boolean | null;
-  run_fingerprint: string | null;
+  grid_fingerprint: string | null;
+  native_run_fingerprint: string | null;
   defect_checks: Check[];
 }
 
@@ -60,6 +64,10 @@ function integer(value: unknown): value is number {
   return Number.isInteger(value) && Number(value) >= 0;
 }
 
+function sha256(value: unknown): value is string {
+  return typeof value === "string" && /^[a-f0-9]{64}$/.test(value);
+}
+
 function checks(value: unknown, prefix: string): { checks: Check[]; reason?: string } {
   if (!Array.isArray(value) || value.length === 0) return { checks: [], reason: `missing ${prefix} checks` };
   const parsed: Check[] = [];
@@ -75,10 +83,19 @@ function checks(value: unknown, prefix: string): { checks: Check[]; reason?: str
   return { checks: parsed.sort((a, b) => natural(a.name, b.name)) };
 }
 
+function aggregateSeatField(raw: RawBuildResult, field: "thinking_tokens" | "output_tokens"): number | null {
+  const direct = raw.usage?.[field];
+  if (integer(direct)) return direct;
+  if (!Array.isArray(raw.seat_records) || raw.seat_records.length === 0) return null;
+  const values = raw.seat_records.map((seat) => field === "thinking_tokens" ? seat.thinking_tokens : seat.usage?.output_tokens);
+  return values.every(integer) ? values.reduce((sum, value) => sum + Number(value), 0) : null;
+}
+
 function invalidRow(task: string, arm: Arm, seed: number, reason: string, raw?: RawBuildResult): BuildReportRow {
   return {
     task_id: task, arm, seed, status: "invalid", reason,
-    outcome: typeof raw?.outcome === "string" ? raw.outcome : null,
+    execution_outcome: typeof raw?.execution_outcome === "string" ? raw.execution_outcome : null,
+    oracle_outcome: typeof raw?.oracle_outcome === "string" ? raw.oracle_outcome : null,
     protocol_failure: false, protocol_success: null, protocol_adjusted_catch_fraction: null,
     cost_status: raw?.usage?.coverage === "complete" && typeof raw.usage.cost_usd === "number" ? "complete" : "unknown",
     defects_caught: null, defects_total: null, residual_plants: null, introduced_regressions: null,
@@ -87,20 +104,21 @@ function invalidRow(task: string, arm: Arm, seed: number, reason: string, raw?: 
     output_tokens: typeof raw?.usage?.output_tokens === "number" ? raw.usage.output_tokens : null,
     wall_clock_ms: typeof raw?.wall_clock_ms === "number" ? raw.wall_clock_ms : null,
     actual_over_cap: null,
-    run_fingerprint: typeof raw?.provenance?.run_fingerprint === "string" ? raw.provenance.run_fingerprint : null,
+    grid_fingerprint: typeof raw?.provenance?.grid_fingerprint === "string" ? raw.provenance.grid_fingerprint : null,
+    native_run_fingerprint: typeof raw?.provenance?.native_run_fingerprint === "string" ? raw.provenance.native_run_fingerprint : null,
     defect_checks: [],
   };
 }
 
 function validateRaw(raw: RawBuildResult, task: string, arm: Arm, seed: number, cap: number): BuildReportRow {
   if (raw.task_id !== task || raw.arm !== arm || raw.seed !== seed) return invalidRow(task, arm, seed, "cell identity mismatch", raw);
-  if (typeof raw.outcome !== "string" || !["completed", "timeout", "invalid_room", "tamper", "infrastructure_error"].includes(raw.outcome)) return invalidRow(task, arm, seed, "unknown raw outcome", raw);
-  if (raw.outcome === "tamper" || raw.outcome === "infrastructure_error") return invalidRow(task, arm, seed, `non-scoreable outcome ${raw.outcome}`, raw);
-  const fingerprint = raw.provenance?.run_fingerprint;
-  if (typeof fingerprint !== "string" || !fingerprint) return invalidRow(task, arm, seed, "missing run fingerprint", raw);
-  if (!raw.provenance?.manifest_sha256 || !raw.provenance.runner_sha256) return invalidRow(task, arm, seed, "incomplete launch provenance", raw);
-  if (!raw.provenance.task_sha256_before_score || raw.provenance.task_sha256_before_score !== raw.provenance.task_sha256_after_score) return invalidRow(task, arm, seed, "task hash changed", raw);
-  if (raw.effort?.level !== "medium" || !raw.effort.settings_sha256 || raw.effort.own_git_root !== true) return invalidRow(task, arm, seed, "effort provenance incomplete", raw);
+  if (typeof raw.execution_outcome !== "string" || !["completed", "timeout", "invalid_room", "tamper", "infrastructure_error"].includes(raw.execution_outcome)) return invalidRow(task, arm, seed, "unknown execution outcome", raw);
+  if (raw.execution_outcome === "tamper" || raw.execution_outcome === "infrastructure_error") return invalidRow(task, arm, seed, `non-scoreable outcome ${raw.execution_outcome}`, raw);
+  const fingerprint = raw.provenance?.grid_fingerprint;
+  if (!sha256(fingerprint)) return invalidRow(task, arm, seed, "missing grid fingerprint", raw);
+  if (!sha256(raw.provenance?.native_run_fingerprint) || !sha256(raw.provenance?.manifest_sha256) || !sha256(raw.provenance?.runner_sha256)) return invalidRow(task, arm, seed, "incomplete launch provenance", raw);
+  if (!sha256(raw.provenance.task_sha256_before_score) || raw.provenance.task_sha256_before_score !== raw.provenance.task_sha256_after_score) return invalidRow(task, arm, seed, "task hash changed", raw);
+  if (raw.effort?.level !== "medium" || !sha256(raw.effort.settings_sha256) || raw.effort.own_git_root !== true) return invalidRow(task, arm, seed, "effort provenance incomplete", raw);
   const defectSet = checks(raw.checks?.defects, "defect");
   if (defectSet.reason) return invalidRow(task, arm, seed, defectSet.reason, raw);
   const regressionSet = checks(raw.checks?.regressions, "regression");
@@ -116,20 +134,24 @@ function validateRaw(raw: RawBuildResult, task: string, arm: Arm, seed: number, 
   }
   const residual = defectSet.checks.length - caught;
   if (scores.defects_shipped !== residual + regressions) return invalidRow(task, arm, seed, "shipped score is not residual plus regressions", raw);
-  if (!integer(raw.usage.thinking_tokens) || !integer(raw.usage.output_tokens) || !integer(raw.wall_clock_ms)) return invalidRow(task, arm, seed, "usage or wall time incomplete", raw);
+  if (!integer(raw.wall_clock_ms)) return invalidRow(task, arm, seed, "wall time incomplete", raw);
   const rawCost = raw.usage?.cost_usd;
   const costComplete = raw.usage?.coverage === "complete" && typeof rawCost === "number" && Number.isFinite(rawCost) && rawCost >= 0;
   const cost = costComplete ? rawCost : null;
-  const protocolFailure = raw.outcome === "timeout" || raw.outcome === "invalid_room";
+  const protocolFailure = raw.execution_outcome === "timeout" || raw.execution_outcome === "invalid_room";
   return {
     task_id: task, arm, seed, status: "valid", reason: costComplete ? null : "unknown terminal cost",
-    outcome: raw.outcome, protocol_failure: protocolFailure, protocol_success: !protocolFailure,
+    execution_outcome: raw.execution_outcome,
+    oracle_outcome: typeof raw.oracle_outcome === "string" ? raw.oracle_outcome : null,
+    protocol_failure: protocolFailure, protocol_success: !protocolFailure,
     protocol_adjusted_catch_fraction: protocolFailure ? 0 : caught / defectSet.checks.length,
     cost_status: costComplete ? "complete" : "unknown",
     defects_caught: caught, defects_total: defectSet.checks.length, residual_plants: residual,
     introduced_regressions: regressions, defects_shipped: residual + regressions,
-    cost_usd: cost, thinking_tokens: raw.usage.thinking_tokens, output_tokens: raw.usage.output_tokens,
-    wall_clock_ms: raw.wall_clock_ms, actual_over_cap: cost === null ? null : cost > cap, run_fingerprint: fingerprint,
+    cost_usd: cost, thinking_tokens: aggregateSeatField(raw, "thinking_tokens"), output_tokens: aggregateSeatField(raw, "output_tokens"),
+    wall_clock_ms: raw.wall_clock_ms, actual_over_cap: cost === null ? null : cost > cap,
+    grid_fingerprint: fingerprint,
+    native_run_fingerprint: typeof raw.provenance?.native_run_fingerprint === "string" ? raw.provenance.native_run_fingerprint : null,
     defect_checks: defectSet.checks,
   };
 }
@@ -167,10 +189,10 @@ export function buildBuildReport(resultsDir: string, tasks: string[], arms: Arm[
     const raw = byCell.get(`${task}\0${arm}\0${seed}`);
     rows.push(raw ? validateRaw(raw, task, arm, seed, nominalCapUsd) : {
       task_id: task, arm, seed, status: "missing", reason: "planned cell absent",
-      outcome: null, protocol_failure: false, protocol_success: null, protocol_adjusted_catch_fraction: null, cost_status: "missing",
+      execution_outcome: null, oracle_outcome: null, protocol_failure: false, protocol_success: null, protocol_adjusted_catch_fraction: null, cost_status: "missing",
       defects_caught: null, defects_total: null, residual_plants: null, introduced_regressions: null,
       defects_shipped: null, cost_usd: null, thinking_tokens: null, output_tokens: null,
-      wall_clock_ms: null, actual_over_cap: null, run_fingerprint: null, defect_checks: [],
+      wall_clock_ms: null, actual_over_cap: null, grid_fingerprint: null, native_run_fingerprint: null, defect_checks: [],
     });
   }
   const defectCounts = new Map<string, { task_id: string; defect_id: string; caught: number; n: number }>();
@@ -214,7 +236,7 @@ export function renderBuildReportMarkdown(report: BuildReport): string {
   ];
   for (const row of report.rows) {
     const caught = row.defects_caught === null ? "-" : `${row.defects_caught}/${row.defects_total}`;
-    lines.push(`| ${row.task_id} | ${row.arm} | ${row.seed} | ${row.status}${row.protocol_failure ? "/protocol_failure" : ""} | ${row.outcome ?? "-"} | ${caught} | ${value(row.defects_shipped)} | ${value(row.introduced_regressions)} | ${value(row.cost_usd, 4)} | ${row.actual_over_cap === null ? "-" : row.actual_over_cap ? "yes" : "no"} | ${value(row.thinking_tokens)} | ${value(row.wall_clock_ms)} |`);
+    lines.push(`| ${row.task_id} | ${row.arm} | ${row.seed} | ${row.status}${row.protocol_failure ? "/protocol_failure" : ""} | ${row.execution_outcome ?? "-"} | ${caught} | ${value(row.defects_shipped)} | ${value(row.introduced_regressions)} | ${value(row.cost_usd, 4)} | ${row.actual_over_cap === null ? "-" : row.actual_over_cap ? "yes" : "no"} | ${value(row.thinking_tokens)} | ${value(row.wall_clock_ms)} |`);
   }
   lines.push("", `Valid catch rows: ${report.summary.valid}; protocol failures: ${report.summary.protocol_failures}; invalid: ${report.summary.invalid}; missing: ${report.summary.missing}; unknown cost: ${report.summary.unknown_cost}; known cost: $${report.summary.known_cost_usd.toFixed(4)}.`, "", "### Per-defect arm-A catch table", "", "| task | defect | caught | n |", "|---|---|---:|---:|");
   for (const defect of report.per_defect) lines.push(`| ${defect.task_id} | ${defect.defect_id} | ${defect.caught} | ${defect.n} |`);

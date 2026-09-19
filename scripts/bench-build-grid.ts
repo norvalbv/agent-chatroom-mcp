@@ -54,11 +54,11 @@ type BuildResult = {
   task_id?: unknown;
   arm?: unknown;
   seed?: unknown;
-  outcome?: unknown;
+  execution_outcome?: unknown;
   scores?: Record<string, unknown>;
   usage?: { cost_usd?: unknown; coverage?: unknown };
   effort?: { level?: unknown; settings_sha256?: unknown; own_git_root?: unknown };
-  provenance?: { run_fingerprint?: unknown; task_sha256_before_score?: unknown; task_sha256_after_score?: unknown };
+  provenance?: { grid_fingerprint?: unknown; native_run_fingerprint?: unknown; task_sha256_before_score?: unknown; task_sha256_after_score?: unknown };
 };
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -204,13 +204,14 @@ function integerField(value: unknown): boolean {
   return Number.isInteger(value) && Number(value) >= 0;
 }
 
-function validateResult(result: BuildResult, cell: BuildPlanCell, fingerprint: string, effort: string): { valid: boolean; cost: number | null; reason?: string } {
+function validateResult(result: BuildResult, cell: BuildPlanCell, fingerprint: string, effort: string, expectedTaskSha256: string): { valid: boolean; cost: number | null; reason?: string } {
   if (result.task_id !== cell.taskLabel || result.arm !== cell.arm || result.seed !== cell.seed) return { valid: false, cost: null, reason: "cell identity mismatch" };
-  if (typeof result.outcome !== "string" || !["completed", "timeout", "invalid_room", "tamper", "infrastructure_error"].includes(result.outcome)) return { valid: false, cost: null, reason: "unknown raw outcome" };
-  if (result.outcome === "tamper" || result.outcome === "infrastructure_error") return { valid: false, cost: null, reason: `non-scoreable outcome ${result.outcome}` };
-  if (result.provenance?.run_fingerprint !== fingerprint) return { valid: false, cost: null, reason: "requested fingerprint mismatch" };
-  if (!result.provenance?.task_sha256_before_score || result.provenance.task_sha256_before_score !== result.provenance.task_sha256_after_score) return { valid: false, cost: null, reason: "task provenance mismatch" };
-  if (result.effort?.level !== effort || !result.effort.settings_sha256 || result.effort.own_git_root !== true) return { valid: false, cost: null, reason: "effort provenance incomplete" };
+  if (typeof result.execution_outcome !== "string" || !["completed", "timeout", "invalid_room", "tamper", "infrastructure_error"].includes(result.execution_outcome)) return { valid: false, cost: null, reason: "unknown execution outcome" };
+  if (result.execution_outcome === "tamper" || result.execution_outcome === "infrastructure_error") return { valid: false, cost: null, reason: `non-scoreable outcome ${result.execution_outcome}` };
+  if (result.provenance?.grid_fingerprint !== fingerprint) return { valid: false, cost: null, reason: "requested fingerprint mismatch" };
+  if (typeof result.provenance.native_run_fingerprint !== "string" || !/^[a-f0-9]{64}$/.test(result.provenance.native_run_fingerprint)) return { valid: false, cost: null, reason: "native fingerprint missing" };
+  if (result.provenance.task_sha256_before_score !== expectedTaskSha256 || result.provenance.task_sha256_before_score !== result.provenance.task_sha256_after_score) return { valid: false, cost: null, reason: "task provenance mismatch" };
+  if (result.effort?.level !== effort || typeof result.effort.settings_sha256 !== "string" || !/^[a-f0-9]{64}$/.test(result.effort.settings_sha256) || result.effort.own_git_root !== true) return { valid: false, cost: null, reason: "effort provenance incomplete" };
   const scores = result.scores ?? {};
   for (const field of ["defects_caught", "defects_total", "defects_shipped", "regression_failures", "regressions_total"]) {
     if (!integerField(scores[field])) return { valid: false, cost: null, reason: `invalid score ${field}` };
@@ -276,8 +277,8 @@ export async function runBuildGrid(args: BuildGridArgs, options: { log?: (messag
     const resultPath = join(cell.runDir, "build-result.json");
     if (existsSync(resultPath)) {
       const existing = JSON.parse(readFileSync(resultPath, "utf8")) as BuildResult;
-      if (existing.provenance?.run_fingerprint !== fingerprint) throw new Error(`Stale result fingerprint: ${resultPath}`);
-      const checked = validateResult(existing, cell, fingerprint, args.effort);
+      if (existing.provenance?.grid_fingerprint !== fingerprint) throw new Error(`Stale result fingerprint: ${resultPath}`);
+      const checked = validateResult(existing, cell, fingerprint, args.effort, taskSha256);
       if (!checked.valid) throw new Error(`Existing result is not resumable (${checked.reason}): ${resultPath}`);
       summary.skipped += 1;
       log(`skip:compatible ${cell.taskLabel} ${cell.arm} ${cell.seed}`);
@@ -296,7 +297,7 @@ export async function runBuildGrid(args: BuildGridArgs, options: { log?: (messag
       args.runner, cell.taskDir, cell.arm, String(cell.seed), "--root", cell.runDir,
       "--model", args.model, "--effort", args.effort, "--max-budget-usd", String(args.maxBudgetUsd),
       "--seats", String(args.seats), "--deadline-ms", String(args.deadlineMs), "--port", String(port),
-      "--run-fingerprint", fingerprint, "--expected-task-sha256", taskSha256,
+      "--grid-fingerprint", fingerprint, "--expected-task-sha256", taskSha256,
     ];
     if (args.hubEntry) childArgs.push("--hub-entry", args.hubEntry);
     log(`run ${cell.taskLabel} ${cell.arm} ${cell.seed}`);
@@ -310,7 +311,7 @@ export async function runBuildGrid(args: BuildGridArgs, options: { log?: (messag
       summary.halted = true;
       break;
     }
-    const checked = validateResult(JSON.parse(readFileSync(resultPath, "utf8")) as BuildResult, cell, fingerprint, args.effort);
+    const checked = validateResult(JSON.parse(readFileSync(resultPath, "utf8")) as BuildResult, cell, fingerprint, args.effort, taskSha256);
     if (!checked.valid) {
       summary.invalid += 1;
       const cost = observedCost(cell.runDir);

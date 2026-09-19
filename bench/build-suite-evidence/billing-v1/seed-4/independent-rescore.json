@@ -1,0 +1,106 @@
+{
+  "score": 1,
+  "oracle_results": [
+    {
+      "name": "defect/D02",
+      "exit_code": 0
+    },
+    {
+      "name": "defect/D03",
+      "exit_code": 0
+    },
+    {
+      "name": "defect/D04",
+      "exit_code": 0
+    },
+    {
+      "name": "defect/D07",
+      "exit_code": 0
+    },
+    {
+      "name": "defect/D08",
+      "exit_code": 0
+    },
+    {
+      "name": "defect/D09",
+      "exit_code": 0
+    },
+    {
+      "name": "defect/D10",
+      "exit_code": 0
+    },
+    {
+      "name": "defect/D11",
+      "exit_code": 0
+    },
+    {
+      "name": "defect/D12",
+      "exit_code": 0
+    },
+    {
+      "name": "regression/R01",
+      "exit_code": 0
+    },
+    {
+      "name": "regression/R02",
+      "exit_code": 0
+    },
+    {
+      "name": "regression/R03",
+      "exit_code": 0
+    },
+    {
+      "name": "regression/R04",
+      "exit_code": 0
+    },
+    {
+      "name": "regression/R05",
+      "exit_code": 0
+    },
+    {
+      "name": "regression/R06",
+      "exit_code": 0
+    },
+    {
+      "name": "regression/R07",
+      "exit_code": 0
+    },
+    {
+      "name": "regression/R08",
+      "exit_code": 0
+    },
+    {
+      "name": "regression/R09",
+      "exit_code": 0
+    },
+    {
+      "name": "regression/R10",
+      "exit_code": 0
+    },
+    {
+      "name": "regression/R11",
+      "exit_code": 0
+    },
+    {
+      "name": "regression/R12",
+      "exit_code": 0
+    }
+  ],
+  "defects_planted": 9,
+  "defects_caught": 9,
+  "defects_shipped": 0,
+  "regressions_failed": 0,
+  "caught_ids": [
+    "D02",
+    "D03",
+    "D04",
+    "D07",
+    "D08",
+    "D09",
+    "D10",
+    "D11",
+    "D12"
+  ],
+  "missed_ids": [],
+  "regression_failed_ids": []
+}

@@ -1,0 +1,124 @@
+{
+  "schema_version": 1,
+  "status": "rejected-ceiling-exploratory",
+  "effort_pinned": false,
+  "archive_author": "6-astra-7",
+  "task_id": "build-billing-s1",
+  "source_commit": "d7ba9633b670ea8f14796d0b81d10c32197f92ea",
+  "source_root": "/tmp/sb",
+  "task_snapshot_sha256": "420dd847c3084f61ea22a81d6356c1a9f256507cca6e2cb4cfb7e2734bec818a",
+  "hash_algorithm": "bench-rq1 hashTree: sorted recursive relative path + NUL + file bytes + NUL, sha256",
+  "runs": [
+    {
+      "seed": 1,
+      "raw_result": "seed-1/result.json",
+      "raw_result_sha256": "35d0a819846b6bc5e09530b518eefdd3063a13b59235e4ef6672e675db8553ea",
+      "workspace_sha256": "c1e5524af93a055aad342483de7822d42e6b872e7896ad2890be81803d326775",
+      "rescore_sha256": "ae43996358d3068541b36e23afda172cbca261b3339b1f8a3d70cd3f659eeb34",
+      "cost_usd": 0.08470259999999999,
+      "thinking_tokens": 263,
+      "caught": 9,
+      "shipped": 0,
+      "caught_ids": [
+        "D02",
+        "D03",
+        "D04",
+        "D07",
+        "D08",
+        "D09",
+        "D10",
+        "D11",
+        "D12"
+      ]
+    },
+    {
+      "seed": 2,
+      "raw_result": "seed-2/result.json",
+      "raw_result_sha256": "b3804c2b10c3237d79089d135eb0e3f4011e5ac1a002912dc6537596727c41f6",
+      "workspace_sha256": "c1e5524af93a055aad342483de7822d42e6b872e7896ad2890be81803d326775",
+      "rescore_sha256": "ae43996358d3068541b36e23afda172cbca261b3339b1f8a3d70cd3f659eeb34",
+      "cost_usd": 0.08465400000000001,
+      "thinking_tokens": 393,
+      "caught": 9,
+      "shipped": 0,
+      "caught_ids": [
+        "D02",
+        "D03",
+        "D04",
+        "D07",
+        "D08",
+        "D09",
+        "D10",
+        "D11",
+        "D12"
+      ]
+    },
+    {
+      "seed": 3,
+      "raw_result": "seed-3/result.json",
+      "raw_result_sha256": "a32b02350a2de458313a9354683c395dfe26b08f975257d22e36804ce3b576a2",
+      "workspace_sha256": "c1e5524af93a055aad342483de7822d42e6b872e7896ad2890be81803d326775",
+      "rescore_sha256": "ae43996358d3068541b36e23afda172cbca261b3339b1f8a3d70cd3f659eeb34",
+      "cost_usd": 0.08168940000000001,
+      "thinking_tokens": 182,
+      "caught": 9,
+      "shipped": 0,
+      "caught_ids": [
+        "D02",
+        "D03",
+        "D04",
+        "D07",
+        "D08",
+        "D09",
+        "D10",
+        "D11",
+        "D12"
+      ]
+    },
+    {
+      "seed": 4,
+      "raw_result": "seed-4/result.json",
+      "raw_result_sha256": "f4f53c4a59f1566ee16d2e6a9d1267c9f554e8e3f5ffbe5bcf2e348525156841",
+      "workspace_sha256": "c1e5524af93a055aad342483de7822d42e6b872e7896ad2890be81803d326775",
+      "rescore_sha256": "ae43996358d3068541b36e23afda172cbca261b3339b1f8a3d70cd3f659eeb34",
+      "cost_usd": 0.07464520000000001,
+      "thinking_tokens": 311,
+      "caught": 9,
+      "shipped": 0,
+      "caught_ids": [
+        "D02",
+        "D03",
+        "D04",
+        "D07",
+        "D08",
+        "D09",
+        "D10",
+        "D11",
+        "D12"
+      ]
+    },
+    {
+      "seed": 5,
+      "raw_result": "seed-5/result.json",
+      "raw_result_sha256": "ba928d5383161ac2dcbcd303f96e0fe0fea21d01e4f2dad36d7b12a4a6345f6e",
+      "workspace_sha256": "c1e5524af93a055aad342483de7822d42e6b872e7896ad2890be81803d326775",
+      "rescore_sha256": "ae43996358d3068541b36e23afda172cbca261b3339b1f8a3d70cd3f659eeb34",
+      "cost_usd": 0.084058,
+      "thinking_tokens": 317,
+      "caught": 9,
+      "shipped": 0,
+      "caught_ids": [
+        "D02",
+        "D03",
+        "D04",
+        "D07",
+        "D08",
+        "D09",
+        "D10",
+        "D11",
+        "D12"
+      ]
+    }
+  ],
+  "total_cost_usd": 0.40974920000000004
+}

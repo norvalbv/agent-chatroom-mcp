@@ -266,7 +266,7 @@ that is NOT covered.
   value is its annual amount divided by 12, rounded with \`roundHalfUp\`.
 `;
 
-const BRIEF = `The library in src/ must meet the specification in SPEC.md. The public tests in test/ pass today, but passing them does not prove the code meets the specification. Make the codebase conform to SPEC.md, keeping everything that already conforms working. Run the tests with: node --import tsx --test test/. Do not create files outside this directory.`;
+const BRIEF = `The library in src/ must meet the specification in SPEC.md. The public tests in test/ pass today, but passing them does not prove the code meets the specification. Make the codebase conform to SPEC.md, keeping everything that already conforms working. Run the tests with: node --test test/*.test.ts. Do not create files outside this directory.`;
 
 const d = (y: number, m: number, dd: number) => `{ y: ${y}, m: ${m}, d: ${dd} }`;
 export function publicTests(inst: Instance): Files {

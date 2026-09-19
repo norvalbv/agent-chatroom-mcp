@@ -43,7 +43,7 @@ for (const id of INSTANCES) {
   test(`${id}: broken passes public tests, fails every defect check, passes every regression check`, () => {
     const { task, dir, inst } = ws(id, []);
     try {
-      const pub = spawnSync(process.execPath, ['--import', 'tsx', '--test', 'test/'], { cwd: dir, encoding: 'utf8', timeout: 60000 });
+      const pub = spawnSync(process.execPath, ['--test', 'test/*.test.ts'], { cwd: dir, encoding: 'utf8', timeout: 60000 });
       assert.equal(pub.status, 0, pub.stdout + pub.stderr);
       const r = score(task, dir);
       assert.equal(r.out.defects_caught, 0);
@@ -99,3 +99,44 @@ test('the two committed instances differ in planted defect set', () => {
   const b = JSON.parse(readFileSync('tasks/build-billing-s2/oracle/instance.json', 'utf8'));
   assert.notDeepEqual([...a.defects].sort(), [...b.defects].sort());
 });
+
+import { buildRuleSrc, deriveRules } from './bench-build-rules-gen.ts';
+
+for (const id of ['build-rules-s1', 'build-rules-s2']) {
+  const task = resolve('tasks', id);
+  const inst = deriveRules(JSON.parse(readFileSync(join(task, 'oracle/instance.json'), 'utf8')).seed);
+  const planted: string[] = JSON.parse(readFileSync(join(task, 'oracle/instance.json'), 'utf8')).defects;
+  function rws(fixed: string[]) {
+    const dir = mkdtempSync(join(tmpdir(), 'build-rules-'));
+    cpSync(join(task, 'public'), dir, { recursive: true });
+    for (const [f, body] of Object.entries(buildRuleSrc(inst, new Set(fixed)))) writeFileSync(join(dir, 'src', f), body);
+    return dir;
+  }
+  test(`${id}: 24 rules, ten plants, generator is deterministic`, () => {
+    assert.equal(inst.rules.length, 24);
+    assert.deepEqual(planted, inst.rules.filter((r) => r.defect).map((r) => r.id));
+    assert.equal(planted.length, 10);
+    assert.ok(!existsSync(join(task, 'public/oracle')));
+  });
+  test(`${id}: broken passes public tests, catches 0, no regression; correct scores 1`, () => {
+    const b = rws([]), c = rws(planted);
+    try {
+      const pub = spawnSync(process.execPath, ['--test', 'test/*.test.ts'], { cwd: b, encoding: 'utf8', timeout: 60000 });
+      assert.equal(pub.status, 0, pub.stdout + pub.stderr);
+      const rb = score(task, b);
+      assert.equal(rb.out.defects_caught, 0); assert.equal(rb.out.regressions_failed, 0);
+      const rc = score(task, c);
+      assert.equal(rc.status, 0, JSON.stringify(rc.out)); assert.equal(rc.out.defects_shipped, 0);
+    } finally { rmSync(b, { recursive: true, force: true }); rmSync(c, { recursive: true, force: true }); }
+  });
+  test(`${id}: fixing one planted rule flips exactly that defect check and no regression`, () => {
+    for (const d of planted) {
+      const dir = rws([d]);
+      try { const r = score(task, dir); assert.deepEqual(r.out.caught_ids, [d]); assert.equal(r.out.regressions_failed, 0); }
+      finally { rmSync(dir, { recursive: true, force: true }); }
+    }
+  });
+  test(`${id}: no comments in src`, () => {
+    for (const f of readdirSync(join(task, 'public/src'))) assert.ok(!/\/\/|\/\*/.test(readFileSync(join(task, 'public/src', f), 'utf8')), f);
+  });
+}

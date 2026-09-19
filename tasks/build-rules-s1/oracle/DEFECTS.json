@@ -1,0 +1,72 @@
+[
+  {
+    "id": "handlingCode",
+    "module": "delivery",
+    "kind": "spec-vs-code",
+    "template": "fallback",
+    "public_test_encodes_bug": false
+  },
+  {
+    "id": "insuranceValid",
+    "module": "promotions",
+    "kind": "boundary",
+    "template": "window",
+    "public_test_encodes_bug": true
+  },
+  {
+    "id": "exportQuote",
+    "module": "accounts",
+    "kind": "cross-module-contract",
+    "template": "cross",
+    "public_test_encodes_bug": false
+  },
+  {
+    "id": "pickupRate",
+    "module": "contracts",
+    "kind": "spec-vs-code",
+    "template": "table",
+    "public_test_encodes_bug": false
+  },
+  {
+    "id": "loyaltyFree",
+    "module": "compliance",
+    "kind": "boundary",
+    "template": "cap",
+    "public_test_encodes_bug": true
+  },
+  {
+    "id": "priorityFree",
+    "module": "promotions",
+    "kind": "boundary",
+    "template": "cap",
+    "public_test_encodes_bug": false
+  },
+  {
+    "id": "auditLimit",
+    "module": "service",
+    "kind": "boundary",
+    "template": "clamp",
+    "public_test_encodes_bug": false
+  },
+  {
+    "id": "restockNet",
+    "module": "accounts",
+    "kind": "spec-vs-code",
+    "template": "order",
+    "public_test_encodes_bug": false
+  },
+  {
+    "id": "upgradeFee",
+    "module": "delivery",
+    "kind": "spec-vs-code",
+    "template": "round",
+    "public_test_encodes_bug": false
+  },
+  {
+    "id": "supportFee",
+    "module": "service",
+    "kind": "spec-vs-code",
+    "template": "round",
+    "public_test_encodes_bug": false
+  }
+]

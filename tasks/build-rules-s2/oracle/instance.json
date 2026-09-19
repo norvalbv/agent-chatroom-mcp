@@ -1,0 +1,986 @@
+{
+  "seed": 2,
+  "family": "rules",
+  "defects": [
+    "onsiteBand",
+    "bulkValid",
+    "loyaltyNet",
+    "upgradeQuote",
+    "archiveValid",
+    "auditFee",
+    "storageQuote",
+    "giftRate",
+    "rushFee",
+    "exportNet"
+  ],
+  "rules": [
+    {
+      "id": "depositLimit",
+      "module": "delivery",
+      "fn": "depositLimit",
+      "tmpl": "clamp",
+      "kind": "boundary",
+      "params": {
+        "lo": 70,
+        "hi": 200
+      },
+      "defect": false,
+      "misleading": false,
+      "variant": 0
+    },
+    {
+      "id": "onsiteBand",
+      "module": "promotions",
+      "fn": "onsiteBand",
+      "tmpl": "band",
+      "kind": "boundary",
+      "params": {
+        "t1": 25,
+        "t2": 68,
+        "a": 450,
+        "b": 600,
+        "c": 1250
+      },
+      "defect": true,
+      "misleading": true,
+      "variant": 0
+    },
+    {
+      "id": "priorityRate",
+      "module": "storage",
+      "fn": "priorityRate",
+      "tmpl": "table",
+      "kind": "spec-vs-code",
+      "params": {
+        "k": [
+          "bronze",
+          "gold",
+          "silver"
+        ],
+        "v": [
+          75,
+          425,
+          275
+        ]
+      },
+      "defect": false,
+      "misleading": false,
+      "variant": 1
+    },
+    {
+      "id": "bulkValid",
+      "module": "service",
+      "fn": "bulkValid",
+      "tmpl": "window",
+      "kind": "boundary",
+      "params": {
+        "start": 35,
+        "len": 38
+      },
+      "defect": true,
+      "misleading": false,
+      "variant": 0
+    },
+    {
+      "id": "loyaltyNet",
+      "module": "accounts",
+      "fn": "loyaltyNet",
+      "tmpl": "order",
+      "kind": "spec-vs-code",
+      "params": {
+        "bps": 1600
+      },
+      "defect": true,
+      "misleading": false,
+      "variant": 1
+    },
+    {
+      "id": "upgradeQuote",
+      "module": "fees",
+      "fn": "upgradeQuote",
+      "tmpl": "cross",
+      "kind": "cross-module-contract",
+      "params": {
+        "pct": 10
+      },
+      "defect": true,
+      "misleading": false,
+      "variant": 0
+    },
+    {
+      "id": "supportFree",
+      "module": "contracts",
+      "fn": "supportFree",
+      "tmpl": "cap",
+      "kind": "boundary",
+      "params": {
+        "n": 5,
+        "price": 125
+      },
+      "defect": false,
+      "misleading": false,
+      "variant": 1
+    },
+    {
+      "id": "shippingRate",
+      "module": "compliance",
+      "fn": "shippingRate",
+      "tmpl": "table",
+      "kind": "spec-vs-code",
+      "params": {
+        "k": [
+          "gold",
+          "bronze",
+          "silver"
+        ],
+        "v": [
+          100,
+          175,
+          375
+        ]
+      },
+      "defect": false,
+      "misleading": false,
+      "variant": 1
+    },
+    {
+      "id": "archiveValid",
+      "module": "delivery",
+      "fn": "archiveValid",
+      "tmpl": "window",
+      "kind": "boundary",
+      "params": {
+        "start": 142,
+        "len": 26
+      },
+      "defect": true,
+      "misleading": true,
+      "variant": 0
+    },
+    {
+      "id": "handlingCode",
+      "module": "promotions",
+      "fn": "handlingCode",
+      "tmpl": "fallback",
+      "kind": "spec-vs-code",
+      "params": {
+        "codes": [
+          "a31",
+          "b23",
+          "c89"
+        ],
+        "v": [
+          480,
+          160,
+          720
+        ],
+        "dflt": 440
+      },
+      "defect": false,
+      "misleading": false,
+      "variant": 0
+    },
+    {
+      "id": "referralFee",
+      "module": "storage",
+      "fn": "referralFee",
+      "tmpl": "round",
+      "kind": "spec-vs-code",
+      "params": {
+        "num": 7,
+        "den": 13,
+        "mode": "up"
+      },
+      "defect": false,
+      "misleading": false,
+      "variant": 0
+    },
+    {
+      "id": "returnValid",
+      "module": "service",
+      "fn": "returnValid",
+      "tmpl": "window",
+      "kind": "boundary",
+      "params": {
+        "start": 91,
+        "len": 22
+      },
+      "defect": false,
+      "misleading": false,
+      "variant": 0
+    },
+    {
+      "id": "licenseLimit",
+      "module": "accounts",
+      "fn": "licenseLimit",
+      "tmpl": "clamp",
+      "kind": "boundary",
+      "params": {
+        "lo": 70,
+        "hi": 350
+      },
+      "defect": false,
+      "misleading": false,
+      "variant": 1
+    },
+    {
+      "id": "warrantyQuote",
+      "module": "fees",
+      "fn": "warrantyQuote",
+      "tmpl": "cross",
+      "kind": "cross-module-contract",
+      "params": {
+        "pct": 10
+      },
+      "defect": false,
+      "misleading": false,
+      "variant": 0
+    },
+    {
+      "id": "auditFee",
+      "module": "contracts",
+      "fn": "auditFee",
+      "tmpl": "round",
+      "kind": "spec-vs-code",
+      "params": {
+        "num": 4,
+        "den": 25,
+        "mode": "up"
+      },
+      "defect": true,
+      "misleading": false,
+      "variant": 0
+    },
+    {
+      "id": "insuranceCode",
+      "module": "compliance",
+      "fn": "insuranceCode",
+      "tmpl": "fallback",
+      "kind": "spec-vs-code",
+      "params": {
+        "codes": [
+          "a63",
+          "b52",
+          "c50"
+        ],
+        "v": [
+          320,
+          720,
+          440
+        ],
+        "dflt": 440
+      },
+      "defect": false,
+      "misleading": false,
+      "variant": 0
+    },
+    {
+      "id": "storageQuote",
+      "module": "delivery",
+      "fn": "storageQuote",
+      "tmpl": "cross",
+      "kind": "cross-module-contract",
+      "params": {
+        "pct": 11
+      },
+      "defect": true,
+      "misleading": false,
+      "variant": 1
+    },
+    {
+      "id": "restockBand",
+      "module": "promotions",
+      "fn": "restockBand",
+      "tmpl": "band",
+      "kind": "boundary",
+      "params": {
+        "t1": 29,
+        "t2": 84,
+        "a": 350,
+        "b": 550,
+        "c": 900
+      },
+      "defect": false,
+      "misleading": false,
+      "variant": 1
+    },
+    {
+      "id": "giftRate",
+      "module": "storage",
+      "fn": "giftRate",
+      "tmpl": "table",
+      "kind": "spec-vs-code",
+      "params": {
+        "k": [
+          "bronze",
+          "silver",
+          "gold"
+        ],
+        "v": [
+          350,
+          275,
+          100
+        ]
+      },
+      "defect": true,
+      "misleading": false,
+      "variant": 1
+    },
+    {
+      "id": "rushFee",
+      "module": "service",
+      "fn": "rushFee",
+      "tmpl": "round",
+      "kind": "spec-vs-code",
+      "params": {
+        "num": 8,
+        "den": 16,
+        "mode": "up"
+      },
+      "defect": true,
+      "misleading": false,
+      "variant": 0
+    },
+    {
+      "id": "seasonalFree",
+      "module": "accounts",
+      "fn": "seasonalFree",
+      "tmpl": "cap",
+      "kind": "boundary",
+      "params": {
+        "n": 10,
+        "price": 275
+      },
+      "defect": false,
+      "misleading": false,
+      "variant": 1
+    },
+    {
+      "id": "setupLimit",
+      "module": "fees",
+      "fn": "setupLimit",
+      "tmpl": "clamp",
+      "kind": "boundary",
+      "params": {
+        "lo": 80,
+        "hi": 440
+      },
+      "defect": false,
+      "misleading": false,
+      "variant": 1
+    },
+    {
+      "id": "pickupCode",
+      "module": "contracts",
+      "fn": "pickupCode",
+      "tmpl": "fallback",
+      "kind": "spec-vs-code",
+      "params": {
+        "codes": [
+          "a61",
+          "b30",
+          "c36"
+        ],
+        "v": [
+          600,
+          840,
+          80
+        ],
+        "dflt": 240
+      },
+      "defect": false,
+      "misleading": false,
+      "variant": 1
+    },
+    {
+      "id": "exportNet",
+      "module": "compliance",
+      "fn": "exportNet",
+      "tmpl": "order",
+      "kind": "spec-vs-code",
+      "params": {
+        "bps": 1300
+      },
+      "defect": true,
+      "misleading": false,
+      "variant": 1
+    }
+  ],
+  "checks": [
+    {
+      "id": "depositLimit",
+      "module": "delivery",
+      "fn": "depositLimit",
+      "defect": [
+        [
+          200
+        ],
+        [
+          240
+        ]
+      ],
+      "reg": [
+        [
+          65
+        ],
+        [
+          70
+        ],
+        [
+          73
+        ],
+        [
+          196
+        ]
+      ]
+    },
+    {
+      "id": "onsiteBand",
+      "module": "promotions",
+      "fn": "onsiteBand",
+      "defect": [
+        [
+          25
+        ],
+        [
+          68
+        ]
+      ],
+      "reg": [
+        [
+          1
+        ],
+        [
+          24
+        ],
+        [
+          108
+        ]
+      ]
+    },
+    {
+      "id": "priorityRate",
+      "module": "storage",
+      "fn": "priorityRate",
+      "defect": [
+        [
+          "bronze"
+        ],
+        [
+          "gold"
+        ],
+        [
+          "silver"
+        ]
+      ],
+      "reg": []
+    },
+    {
+      "id": "bulkValid",
+      "module": "service",
+      "fn": "bulkValid",
+      "defect": [
+        [
+          73
+        ]
+      ],
+      "reg": [
+        [
+          34
+        ],
+        [
+          35
+        ],
+        [
+          72
+        ],
+        [
+          82
+        ]
+      ]
+    },
+    {
+      "id": "loyaltyNet",
+      "module": "accounts",
+      "fn": "loyaltyNet",
+      "defect": [
+        [
+          10000,
+          1500
+        ],
+        [
+          25050,
+          3333
+        ]
+      ],
+      "reg": [
+        [
+          10000,
+          0
+        ],
+        [
+          0,
+          0
+        ]
+      ]
+    },
+    {
+      "id": "upgradeQuote",
+      "module": "fees",
+      "fn": "upgradeQuote",
+      "defect": [
+        [
+          12.5
+        ],
+        [
+          99.99
+        ],
+        [
+          3
+        ]
+      ],
+      "reg": [
+        [
+          0
+        ]
+      ]
+    },
+    {
+      "id": "supportFree",
+      "module": "contracts",
+      "fn": "supportFree",
+      "defect": [
+        [
+          5
+        ],
+        [
+          8
+        ]
+      ],
+      "reg": [
+        [
+          0
+        ],
+        [
+          1
+        ],
+        [
+          3
+        ]
+      ]
+    },
+    {
+      "id": "shippingRate",
+      "module": "compliance",
+      "fn": "shippingRate",
+      "defect": [
+        [
+          "gold"
+        ],
+        [
+          "bronze"
+        ],
+        [
+          "silver"
+        ]
+      ],
+      "reg": []
+    },
+    {
+      "id": "archiveValid",
+      "module": "delivery",
+      "fn": "archiveValid",
+      "defect": [
+        [
+          168
+        ]
+      ],
+      "reg": [
+        [
+          141
+        ],
+        [
+          142
+        ],
+        [
+          167
+        ],
+        [
+          177
+        ]
+      ]
+    },
+    {
+      "id": "handlingCode",
+      "module": "promotions",
+      "fn": "handlingCode",
+      "defect": [
+        [
+          "zz-unknown"
+        ],
+        [
+          ""
+        ]
+      ],
+      "reg": [
+        [
+          "a31"
+        ],
+        [
+          "b23"
+        ],
+        [
+          "c89"
+        ]
+      ]
+    },
+    {
+      "id": "referralFee",
+      "module": "storage",
+      "fn": "referralFee",
+      "defect": [
+        [
+          7
+        ],
+        [
+          10
+        ],
+        [
+          101
+        ],
+        [
+          999
+        ],
+        [
+          1234
+        ]
+      ],
+      "reg": [
+        [
+          0
+        ],
+        [
+          130
+        ]
+      ]
+    },
+    {
+      "id": "returnValid",
+      "module": "service",
+      "fn": "returnValid",
+      "defect": [
+        [
+          113
+        ]
+      ],
+      "reg": [
+        [
+          90
+        ],
+        [
+          91
+        ],
+        [
+          112
+        ],
+        [
+          122
+        ]
+      ]
+    },
+    {
+      "id": "licenseLimit",
+      "module": "accounts",
+      "fn": "licenseLimit",
+      "defect": [
+        [
+          350
+        ],
+        [
+          390
+        ]
+      ],
+      "reg": [
+        [
+          65
+        ],
+        [
+          70
+        ],
+        [
+          73
+        ],
+        [
+          346
+        ]
+      ]
+    },
+    {
+      "id": "warrantyQuote",
+      "module": "fees",
+      "fn": "warrantyQuote",
+      "defect": [
+        [
+          12.5
+        ],
+        [
+          99.99
+        ],
+        [
+          3
+        ]
+      ],
+      "reg": [
+        [
+          0
+        ]
+      ]
+    },
+    {
+      "id": "auditFee",
+      "module": "contracts",
+      "fn": "auditFee",
+      "defect": [
+        [
+          7
+        ],
+        [
+          10
+        ],
+        [
+          101
+        ],
+        [
+          999
+        ],
+        [
+          1234
+        ]
+      ],
+      "reg": [
+        [
+          0
+        ],
+        [
+          250
+        ]
+      ]
+    },
+    {
+      "id": "insuranceCode",
+      "module": "compliance",
+      "fn": "insuranceCode",
+      "defect": [
+        [
+          "zz-unknown"
+        ],
+        [
+          ""
+        ]
+      ],
+      "reg": [
+        [
+          "a63"
+        ],
+        [
+          "b52"
+        ],
+        [
+          "c50"
+        ]
+      ]
+    },
+    {
+      "id": "storageQuote",
+      "module": "delivery",
+      "fn": "storageQuote",
+      "defect": [
+        [
+          12.5
+        ],
+        [
+          99.99
+        ],
+        [
+          3
+        ]
+      ],
+      "reg": [
+        [
+          0
+        ]
+      ]
+    },
+    {
+      "id": "restockBand",
+      "module": "promotions",
+      "fn": "restockBand",
+      "defect": [
+        [
+          29
+        ],
+        [
+          84
+        ]
+      ],
+      "reg": [
+        [
+          1
+        ],
+        [
+          28
+        ],
+        [
+          124
+        ]
+      ]
+    },
+    {
+      "id": "giftRate",
+      "module": "storage",
+      "fn": "giftRate",
+      "defect": [
+        [
+          "bronze"
+        ],
+        [
+          "silver"
+        ],
+        [
+          "gold"
+        ]
+      ],
+      "reg": []
+    },
+    {
+      "id": "rushFee",
+      "module": "service",
+      "fn": "rushFee",
+      "defect": [
+        [
+          7
+        ],
+        [
+          10
+        ],
+        [
+          101
+        ],
+        [
+          999
+        ],
+        [
+          1234
+        ]
+      ],
+      "reg": [
+        [
+          0
+        ],
+        [
+          160
+        ]
+      ]
+    },
+    {
+      "id": "seasonalFree",
+      "module": "accounts",
+      "fn": "seasonalFree",
+      "defect": [
+        [
+          10
+        ],
+        [
+          13
+        ]
+      ],
+      "reg": [
+        [
+          0
+        ],
+        [
+          1
+        ],
+        [
+          8
+        ]
+      ]
+    },
+    {
+      "id": "setupLimit",
+      "module": "fees",
+      "fn": "setupLimit",
+      "defect": [
+        [
+          440
+        ],
+        [
+          480
+        ]
+      ],
+      "reg": [
+        [
+          75
+        ],
+        [
+          80
+        ],
+        [
+          83
+        ],
+        [
+          436
+        ]
+      ]
+    },
+    {
+      "id": "pickupCode",
+      "module": "contracts",
+      "fn": "pickupCode",
+      "defect": [
+        [
+          "zz-unknown"
+        ],
+        [
+          ""
+        ]
+      ],
+      "reg": [
+        [
+          "a61"
+        ],
+        [
+          "b30"
+        ],
+        [
+          "c36"
+        ]
+      ]
+    },
+    {
+      "id": "exportNet",
+      "module": "compliance",
+      "fn": "exportNet",
+      "defect": [
+        [
+          10000,
+          1500
+        ],
+        [
+          25050,
+          3333
+        ]
+      ],
+      "reg": [
+        [
+          10000,
+          0
+        ],
+        [
+          0,
+          0
+        ]
+      ]
+    }
+  ]
+}

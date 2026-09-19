@@ -1,0 +1,72 @@
+[
+  {
+    "id": "onsiteBand",
+    "module": "promotions",
+    "kind": "boundary",
+    "template": "band",
+    "public_test_encodes_bug": true
+  },
+  {
+    "id": "bulkValid",
+    "module": "service",
+    "kind": "boundary",
+    "template": "window",
+    "public_test_encodes_bug": false
+  },
+  {
+    "id": "loyaltyNet",
+    "module": "accounts",
+    "kind": "spec-vs-code",
+    "template": "order",
+    "public_test_encodes_bug": false
+  },
+  {
+    "id": "upgradeQuote",
+    "module": "fees",
+    "kind": "cross-module-contract",
+    "template": "cross",
+    "public_test_encodes_bug": false
+  },
+  {
+    "id": "archiveValid",
+    "module": "delivery",
+    "kind": "boundary",
+    "template": "window",
+    "public_test_encodes_bug": true
+  },
+  {
+    "id": "auditFee",
+    "module": "contracts",
+    "kind": "spec-vs-code",
+    "template": "round",
+    "public_test_encodes_bug": false
+  },
+  {
+    "id": "storageQuote",
+    "module": "delivery",
+    "kind": "cross-module-contract",
+    "template": "cross",
+    "public_test_encodes_bug": false
+  },
+  {
+    "id": "giftRate",
+    "module": "storage",
+    "kind": "spec-vs-code",
+    "template": "table",
+    "public_test_encodes_bug": false
+  },
+  {
+    "id": "rushFee",
+    "module": "service",
+    "kind": "spec-vs-code",
+    "template": "round",
+    "public_test_encodes_bug": false
+  },
+  {
+    "id": "exportNet",
+    "module": "compliance",
+    "kind": "spec-vs-code",
+    "template": "order",
+    "public_test_encodes_bug": false
+  }
+]

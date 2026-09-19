@@ -237,3 +237,14 @@ for (const id of ['build-ledger-s1', 'build-ledger-s2']) {
     }
   });
 }
+
+for (const id of ['build-ledger-s1', 'build-ledger-s2']) {
+  test(`${id}: task.json build_suite matrix equals the oracle's defect/ and regression/ names exactly`, () => {
+    const task = resolve('tasks', id);
+    const meta = JSON.parse(readFileSync(join(task, 'task.json'), 'utf8'));
+    const r = score(task, resolve(task, 'fixtures/correct'));
+    const names: string[] = r.out.oracle_results.map((x: { name: string }) => x.name);
+    assert.deepEqual(names.filter((n) => n.startsWith('defect/')).map((n) => n.slice(7)).sort(), [...meta.build_suite.defect_ids].sort());
+    assert.deepEqual(names.filter((n) => n.startsWith('regression/')).map((n) => n.slice(11)).sort(), [...meta.build_suite.regression_ids].sort());
+  });
+}

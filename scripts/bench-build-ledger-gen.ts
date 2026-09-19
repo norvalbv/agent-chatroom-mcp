@@ -369,7 +369,8 @@ export async function writeLedgerTask(seed: number, out: string) {
   w('public/test/warehouse.test.ts', PUBLIC_TESTS(inst.m));
   w('public/SPEC.md', SPEC);
   w('public/brief.txt', BRIEF + '\n');
-  w('task.json', JSON.stringify({ task_id: id }) + '\n');
+  const regression_ids = Object.keys(SCENARIOS).filter((k) => k.startsWith('R') || (k.startsWith('S') && !inst.defects.includes(k)));
+  w('task.json', JSON.stringify({ task_id: id, build_suite: { defect_ids: inst.defects, regression_ids } }) + '\n');
   w('oracle/oracle.json', JSON.stringify({ kind: 'planted-defects' }) + '\n');
   w('oracle/instance.json', JSON.stringify({ seed, family: 'ledger', m: inst.m, defects: inst.defects }, null, 2) + '\n');
   w('oracle/DEFECTS.json', JSON.stringify(inst.defects.map((d) => ({ id: d, module: 'see DEFECT_MODULE', kind: LEDGER_KIND[d] })), null, 2) + '\n');

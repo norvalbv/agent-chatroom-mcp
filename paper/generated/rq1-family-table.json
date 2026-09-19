@@ -1,0 +1,74 @@
+{
+  "tests": [
+    {
+      "family": "interpreter (stamp-interpreter + stamp-2)",
+      "a": {
+        "family": "interpreter (stamp-interpreter + stamp-2)",
+        "arm": "A",
+        "pass": 61,
+        "fail": 19,
+        "n": 80
+      },
+      "c": {
+        "family": "interpreter (stamp-interpreter + stamp-2)",
+        "arm": "C",
+        "pass": 80,
+        "fail": 0,
+        "n": 80
+      },
+      "test": "fisher",
+      "p_value": 0.0000011353398833000084,
+      "p_holm": 0.0000022706797666000168,
+      "significant_holm_0_05": true
+    },
+    {
+      "family": "printf (bench-printf-format)",
+      "a": {
+        "family": "printf (bench-printf-format)",
+        "arm": "A",
+        "pass": 14,
+        "fail": 26,
+        "n": 40
+      },
+      "c": {
+        "family": "printf (bench-printf-format)",
+        "arm": "C",
+        "pass": 6,
+        "fail": 34,
+        "n": 40
+      },
+      "test": "fisher",
+      "p_value": 0.06916505597249191,
+      "p_holm": 0.06916505597249191,
+      "significant_holm_0_05": false
+    }
+  ],
+  "exploratory": [
+    {
+      "label": "interpreter family, K pooled",
+      "k": {
+        "pass": 75,
+        "n": 80
+      },
+      "other": {
+        "pass": 80,
+        "n": 80
+      },
+      "vs": "C",
+      "p_value": 0.05860673797220221
+    },
+    {
+      "label": "interpreter family, K pooled",
+      "k": {
+        "pass": 75,
+        "n": 80
+      },
+      "other": {
+        "pass": 61,
+        "n": 80
+      },
+      "vs": "A",
+      "p_value": 0.0033107363440666618
+    }
+  ]
+}

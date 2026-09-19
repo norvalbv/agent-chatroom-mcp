@@ -54,6 +54,7 @@ export const offlineScripts = [
   'oracle-tasks-spec-audit.test.ts',
   'oracle-tasks.test.ts',
   'paper-rq1-armk.test.ts',
+  'paper-rq1-family.test.ts',
   'paper-rq1-table.test.ts',
   'regression-replay.ts',
   'recruit-prefix-regression.ts',

@@ -54,6 +54,7 @@ type BuildResult = {
   task_id?: unknown;
   arm?: unknown;
   seed?: unknown;
+  outcome?: unknown;
   scores?: Record<string, unknown>;
   usage?: { cost_usd?: unknown; coverage?: unknown };
   effort?: { level?: unknown; settings_sha256?: unknown; own_git_root?: unknown };
@@ -180,12 +181,12 @@ function hashPath(path: string): string {
   return hash.digest("hex");
 }
 
-export function requestedFingerprint(args: BuildGridArgs, cell: BuildPlanCell): string {
+export function requestedFingerprint(args: BuildGridArgs, cell: BuildPlanCell, taskSha256 = hashPath(cell.taskDir)): string {
   const hubHash = args.hubEntry && existsSync(args.hubEntry) ? hashPath(args.hubEntry) : null;
   const contract = {
     schema: 1,
     task_id: cell.taskLabel,
-    task_sha256: hashPath(cell.taskDir),
+    task_sha256: taskSha256,
     runner_sha256: hashPath(args.runner),
     hub_sha256: hubHash,
     arm: cell.arm,
@@ -205,6 +206,8 @@ function integerField(value: unknown): boolean {
 
 function validateResult(result: BuildResult, cell: BuildPlanCell, fingerprint: string, effort: string): { valid: boolean; cost: number | null; reason?: string } {
   if (result.task_id !== cell.taskLabel || result.arm !== cell.arm || result.seed !== cell.seed) return { valid: false, cost: null, reason: "cell identity mismatch" };
+  if (typeof result.outcome !== "string" || !["completed", "timeout", "invalid_room", "tamper", "infrastructure_error"].includes(result.outcome)) return { valid: false, cost: null, reason: "unknown raw outcome" };
+  if (result.outcome === "tamper" || result.outcome === "infrastructure_error") return { valid: false, cost: null, reason: `non-scoreable outcome ${result.outcome}` };
   if (result.provenance?.run_fingerprint !== fingerprint) return { valid: false, cost: null, reason: "requested fingerprint mismatch" };
   if (!result.provenance?.task_sha256_before_score || result.provenance.task_sha256_before_score !== result.provenance.task_sha256_after_score) return { valid: false, cost: null, reason: "task provenance mismatch" };
   if (result.effort?.level !== effort || !result.effort.settings_sha256 || result.effort.own_git_root !== true) return { valid: false, cost: null, reason: "effort provenance incomplete" };
@@ -213,7 +216,7 @@ function validateResult(result: BuildResult, cell: BuildPlanCell, fingerprint: s
     if (!integerField(scores[field])) return { valid: false, cost: null, reason: `invalid score ${field}` };
   }
   const cost = result.usage?.cost_usd;
-  if (result.usage?.coverage !== "complete" || typeof cost !== "number" || !Number.isFinite(cost) || cost < 0) return { valid: false, cost: null, reason: "unknown terminal cost" };
+  if (result.usage?.coverage !== "complete" || typeof cost !== "number" || !Number.isFinite(cost) || cost < 0) return { valid: true, cost: null, reason: "unknown terminal cost" };
   return { valid: true, cost };
 }
 
@@ -245,22 +248,32 @@ export async function runBuildGrid(args: BuildGridArgs, options: { log?: (messag
   const log = options.log ?? console.log;
   mkdirSync(args.resultsDir, { recursive: true });
   const summary: BuildGridSummary = { ran: 0, skipped: 0, invalid: 0, unknownCost: 0, infraFailed: 0, halted: false, knownCostUsd: 0 };
+  // Freeze every task before the first child starts. A per-cell re-hash would let
+  // an earlier seat (or any concurrent writer) silently define a new version for
+  // later cells in the same invocation.
+  const taskHashes = new Map(args.taskDirs.map((taskDir) => [taskDir, hashPath(taskDir)]));
   let portCursor = args.basePort;
   for (const cell of buildBuildPlan(args)) {
     if (args.maxTotalCostUsd !== null && summary.knownCostUsd >= args.maxTotalCostUsd) {
       summary.halted = true;
       break;
     }
-    const fingerprint = requestedFingerprint(args, cell);
+    const taskSha256 = taskHashes.get(cell.taskDir)!;
+    const fingerprint = requestedFingerprint(args, cell, taskSha256);
     const resultPath = join(cell.runDir, "build-result.json");
     if (existsSync(resultPath)) {
       const existing = JSON.parse(readFileSync(resultPath, "utf8")) as BuildResult;
       if (existing.provenance?.run_fingerprint !== fingerprint) throw new Error(`Stale result fingerprint: ${resultPath}`);
       const checked = validateResult(existing, cell, fingerprint, args.effort);
-      if (!checked.valid || checked.cost === null) throw new Error(`Existing result is not resumable (${checked.reason}): ${resultPath}`);
+      if (!checked.valid) throw new Error(`Existing result is not resumable (${checked.reason}): ${resultPath}`);
       summary.skipped += 1;
-      summary.knownCostUsd += checked.cost;
       log(`skip:compatible ${cell.taskLabel} ${cell.arm} ${cell.seed}`);
+      if (checked.cost === null) {
+        summary.unknownCost += 1;
+        summary.halted = true;
+        break;
+      }
+      summary.knownCostUsd += checked.cost;
       continue;
     }
     if (existsSync(cell.runDir)) throw new Error(`Interrupted run directory requires quarantine before resume: ${cell.runDir}`);
@@ -270,7 +283,7 @@ export async function runBuildGrid(args: BuildGridArgs, options: { log?: (messag
       args.runner, cell.taskDir, cell.arm, String(cell.seed), "--root", cell.runDir,
       "--model", args.model, "--effort", args.effort, "--max-budget-usd", String(args.maxBudgetUsd),
       "--seats", String(args.seats), "--deadline-ms", String(args.deadlineMs), "--port", String(port),
-      "--run-fingerprint", fingerprint,
+      "--run-fingerprint", fingerprint, "--expected-task-sha256", taskSha256,
     ];
     if (args.hubEntry) childArgs.push("--hub-entry", args.hubEntry);
     log(`run ${cell.taskLabel} ${cell.arm} ${cell.seed}`);
@@ -282,9 +295,13 @@ export async function runBuildGrid(args: BuildGridArgs, options: { log?: (messag
       break;
     }
     const checked = validateResult(JSON.parse(readFileSync(resultPath, "utf8")) as BuildResult, cell, fingerprint, args.effort);
-    if (!checked.valid || checked.cost === null) {
+    if (!checked.valid) {
       summary.invalid += 1;
-      if (checked.reason === "unknown terminal cost") summary.unknownCost += 1;
+      summary.halted = true;
+      break;
+    }
+    if (checked.cost === null) {
+      summary.unknownCost += 1;
       summary.halted = true;
       break;
     }

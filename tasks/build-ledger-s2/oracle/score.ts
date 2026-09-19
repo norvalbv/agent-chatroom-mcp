@@ -45,16 +45,20 @@ const child = spawnSync(process.execPath, [
   runner, candidate, String(inst.m),
 ], { encoding: 'utf8', timeout: 60000, maxBuffer: 64 * 1024 * 1024, env: {}, stdio: ['ignore', 'pipe', 'pipe', 'pipe'] });
 const fd3 = child.output?.[3] as string | null;
+const stderr = (child.stderr ?? '').trim();
 const parsedFd3 = readSingleResult(fd3);
-if (parsedFd3 === null || typeof parsedFd3 !== 'object' || Array.isArray(parsedFd3)) {
-  // A legitimate run (correct, broken or adversarial candidate) always writes a well-formed JSON object to fd 3:
-  // run.ts's own import is wrapped so even a candidate that fails to import still produces an all-false result
-  // before exiting. Fd 3 being empty, unparseable or not an object is either tamper -- a permission wall the
-  // sandboxed child hit while attempting something forbidden (ERR_ACCESS_DENIED/EACCES), a clean early exit(0)
-  // that never let run.ts's own write happen, or a forged/garbage write -- or, only when none of those signatures
-  // is present, our own scorer/harness genuinely broke (infrastructure).
-  const stderr = (child.stderr ?? '').trim();
-  const isTamper = child.status === 0 || /ERR_ACCESS_DENIED|EACCES/.test(stderr) || (!!fd3 && parsedFd3 === null);
+const isValidObject = parsedFd3 !== null && typeof parsedFd3 === 'object' && !Array.isArray(parsedFd3);
+// Classification (checked in this order): a permission wall the sandboxed child hit while attempting something
+// forbidden is always tamper, regardless of exit status. Otherwise a nonzero exit -- the process itself failed
+// or was killed, for any reason, with or without a (possibly partial) fd 3 write -- is infrastructure, never a
+// candidate's shipped defects: run.ts's own final write and process.exit(0) are the only path to success, so
+// nothing a candidate does can make the *worker itself* fail; only our scorer/harness can. Only once both of
+// those are ruled out does an empty, unparseable or non-object fd 3 become tamper: run.ts always writes a
+// well-formed object before its own clean process.exit(0), so a clean exit without one means a candidate forged
+// or suppressed the write.
+const accessDenied = /ERR_ACCESS_DENIED|EACCES/.test(stderr);
+if (accessDenied || child.status !== 0 || !isValidObject) {
+  const isTamper = accessDenied || (child.status === 0 && !isValidObject);
   console.error((isTamper ? 'oracle infrastructure: tamper (' : 'oracle infrastructure: worker produced no result (') + stderr + ')');
   process.exit(isTamper ? 3 : 2);
 }

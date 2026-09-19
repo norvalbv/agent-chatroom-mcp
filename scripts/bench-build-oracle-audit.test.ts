@@ -150,10 +150,12 @@ test('oracle worker startup failure is infrastructure, never observed defect mis
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-for (const [kind, workerSource] of [
-  ['permission denial', "import { readFileSync } from 'node:fs'; readFileSync('/oracle-forbidden-file');\n"],
-  ['empty successful result', 'process.exit(0);\n'],
-] as const) test(`oracle ${kind} is non-scoreable tamper`, () => {
+for (const [kind, workerSource, expectedExit] of [
+  ['permission denial', "import { readFileSync } from 'node:fs'; readFileSync('/oracle-forbidden-file');\n", 3],
+  ['empty successful result', 'process.exit(0);\n', 3],
+  ['malformed result', "import { writeSync } from 'node:fs'; try { writeSync(3, 'not-json'); } catch {} process.stdout.write('@@RESULT@@not-json');\n", 3],
+  ['failed worker with partial output', "import { writeSync } from 'node:fs'; try { writeSync(3, '{}'); } catch {} process.stdout.write('@@RESULT@@{}'); process.exit(1);\n", 2],
+] as const) test(`oracle ${kind} is non-scoreable with classified exit`, () => {
   const root = mkdtempSync(join(tmpdir(), 'build-oracle-classification-'));
   try {
     const task = join(root, 'task');
@@ -161,8 +163,8 @@ for (const [kind, workerSource] of [
     writeFileSync(join(task, 'oracle', 'run.ts'), workerSource);
     const run = spawnSync(process.execPath, ['--import', import.meta.resolve('tsx'), join(task, 'oracle', 'score.ts'), join(task, 'fixtures', 'correct')],
       { encoding: 'utf8', timeout: 30_000 });
-    assert.equal(run.status, 3, run.stderr || run.stdout);
-    assert.equal(run.stdout.trim(), '', 'tamper must not become an observed score');
+    assert.equal(run.status, expectedExit, run.stderr || run.stdout);
+    assert.equal(run.stdout.trim(), '', 'invalid transport must not become an observed score');
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 

@@ -1,0 +1,13 @@
+# Proposed decision: build-suite-anti-tamper-oracle-classification
+
+From swarm-191133-4hqx (concluded); report: swarms/swarm-191133-4hqx/report.md. A human promotes this into docs/decisions/ with `guard-decisions add`; nothing is adopted automatically.
+
+DECISION RECORD
+- slug: build-suite-anti-tamper-oracle-classification
+- context: A machine oracle that runs untrusted candidate code in-process (even under a Node `--permission` sandbox) is repeatedly forgeable via its own result-transport channel; five separate forgery vectors were found live by non-author reviewers during this room, each requiring a real fix, not a caveat. Cost: ~1.5 hours of iterative adversarial testing after the "functional" oracle first shipped, across 3 seats plus the verifier.
+- ruling: classify a scored run's outcome from the child process's own exit signal first, transport content second — ERR_ACCESS_DENIED/EACCES in stderr is always tamper (distinct exit code, no stdout emitted); any other nonzero exit is infrastructure (distinct exit code, no stdout), regardless of what is on the transport channel; only a clean exit(0) with an empty, unparseable, or non-object transport payload is tamper. A clean exit(0) with a well-formed object is the only path to a real score.
+- consequences: protects the "no model judges a model" / anti-tamper guarantee the whole suite's credibility rests on; prevents a candidate from converting either genuine failure or deliberate forgery into a falsely favorable (or falsely unfavorable) score.
+- tradeoff: cost real room time and paid non-author review cycles (~2.7 to 7.7 USD of the 20 USD cap) that could have gone toward running the actual 3-arm pilot on more seeds; the admitted-task goal was not reached this round partly because of this.
+- researched (this run): ~17 new arXiv ids added via scripts/research-index.sh to docs/research-build-suite.md (not enumerated here; see that file) — NEW relative to the SETTLED AXES source list, not re-fetched by me.
+- rejected: (1) restoring one author's byte-identical prior fix wholesale — loses the strictly-stronger combination the two authors' fixes together provided (fd3 transport + permission sandboxing); (2) per-case patching as each new attack was found — loses generality, guaranteed to need another round on the next attack, which is exactly what happened three times before the general rule was written.
+- revisit-when: a confirmatory run is attempted on a future admitted task and the oracle again rejects a legitimate run as tamper/infrastructure (a false positive), or a new forgery vector is found that the exit-signal-first rule doesn't cover.

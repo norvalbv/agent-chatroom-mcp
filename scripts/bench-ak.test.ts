@@ -7,7 +7,7 @@ import { spawnSync } from "node:child_process";
 import { chmodSync, existsSync, mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { delimiter, resolve, join } from "node:path";
-import { selectByMajorityVote } from "./bench-ak.ts";
+import { selectByMajorityVote, runAttempt } from "./bench-ak.ts";
 
 const runner = resolve("scripts/bench-ak.ts");
 const task = resolve("tasks/bench-fact-check");
@@ -340,6 +340,77 @@ test("orphans: SIGTERM to bench-ak.ts kills every attempt runner and the claude 
     }
   } finally {
     child.kill("SIGKILL");
+    rmSync(stubDir, { recursive: true, force: true });
+  }
+});
+
+test("runAttempt: an outer timeout kills a wedged runner (one that never exits even though the claude under it is quiet) and resolves as a runner failure, not a hang", async () => {
+  const stubDir = mkdtempSync(join(tmpdir(), "bench-ak-wedge-"));
+  const wedgedRunner = join(stubDir, "wedged-runner.mjs");
+  const pidFile = join(stubDir, "pid");
+  // Simulates bench-rq1.ts itself wedging (e.g. stalled before spawning claude, or a pipe that never
+  // closes): the process just never exits, unlike a killed claude seat which bench-rq1.ts's own
+  // --deadline-ms already handles.
+  writeFileSync(wedgedRunner, `import { writeFileSync } from "node:fs";\nwriteFileSync(${JSON.stringify(pidFile)}, String(process.pid));\nsetInterval(() => {}, 1000);\n`);
+  const start = Date.now();
+  const result = await runAttempt(wedgedRunner, [], 500);
+  const elapsed = Date.now() - start;
+  try {
+    assert.equal(result.status, null, "a wedged runner never exits cleanly, so status is null, exactly like any other runner failure");
+    assert.match(result.stderr, /outer timeout/);
+    assert.ok(elapsed < 5000, `outer timeout must actually bound the wait (took ${elapsed} ms for a 500 ms timeout)`);
+    const pid = Number(readFileSync(pidFile, "utf8"));
+    await new Promise((ok) => setTimeout(ok, 300));
+    let alive = true;
+    try {
+      process.kill(pid, 0);
+    } catch {
+      alive = false;
+    }
+    assert.equal(alive, false, "the wedged process itself must be killed, not just abandoned");
+  } finally {
+    rmSync(stubDir, { recursive: true, force: true });
+  }
+});
+
+test("a single wedged attempt does not deadlock the pool: the group still finishes within the outer timeout, with the wedged attempt as a null vote", () => {
+  const stubDir = stubCodeClaudeDir();
+  const work = mkdtempSync(join(tmpdir(), "bench-ak-wedgepool-"));
+  const armCPath = writeArmCResult(work, 0.6, 100000);
+  // A stub stand-in for bench-rq1.ts itself wedging (stalled before spawning claude, or a pipe that never
+  // closes) rather than the claude seat under it hanging (which bench-rq1.ts's own --deadline-ms already
+  // catches): it ignores its args and simply never exits.
+  const wedgedRunner = join(stubDir, "wedged-runner.mjs");
+  writeFileSync(wedgedRunner, "setInterval(() => {}, 1000);\n");
+  const realRunner = resolve("scripts/bench-rq1.ts");
+  // A dispatcher runner: attempt 2 (sub-seed suffix) goes to the wedged stand-in, the rest to the real one.
+  const dispatchRunner = join(stubDir, "dispatch-runner.mjs");
+  writeFileSync(
+    dispatchRunner,
+    `import { spawnSync } from "node:child_process";
+const seed = process.argv[4];
+const target = seed.endsWith("2") ? ${JSON.stringify(wedgedRunner)} : ${JSON.stringify(realRunner)};
+const r = spawnSync(process.execPath, ["--import", "tsx", target, ...process.argv.slice(2)], { stdio: "inherit" });
+process.exit(r.status ?? 1);
+`,
+  );
+  try {
+    const start = Date.now();
+    const r = invoke(
+      [printfTask, "3", "9", "--root", join(work, "run"), "--arm-c-result", armCPath, "--runner", dispatchRunner, "--attempt-deadline-ms", "1000", "--concurrency", "3"],
+      { PATH: `${stubDir}${delimiter}${process.env.PATH}`, STUB_IMPLS: JSON.stringify({ 1: correctImpl, 3: correctImpl }) },
+    );
+    const elapsed = Date.now() - start;
+    assert.equal(r.status, 0, r.stderr + r.stdout);
+    assert.ok(elapsed < 40000, `the group must finish within the outer timeout (1000 ms deadline + 30000 ms slack), not hang forever (took ${elapsed} ms)`);
+    const res = JSON.parse(readFileSync(join(work, "run", "result.json"), "utf8"));
+    assert.equal(res.attempts.length, 3);
+    assert.equal(res.attempts[1].outcome, "no_result");
+    assert.ok(res.attempts[1].runner_failure, "the wedged attempt is recorded as a runner failure, still present as a null vote");
+    assert.match(res.attempts[1].runner_failure, /outer timeout/);
+    assert.equal(res.passed, true, "the two healthy attempts still let the group pass");
+  } finally {
+    rmSync(work, { recursive: true, force: true });
     rmSync(stubDir, { recursive: true, force: true });
   }
 });

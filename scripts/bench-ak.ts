@@ -34,6 +34,10 @@ export const normalize = (s: string) => s.normalize("NFKC").replace(/\s+/gu, " "
 export const DEFAULT_ATTEMPT_CAP_USD = 0.3;
 export const DEFAULT_ATTEMPT_DEADLINE_MS = 150000;
 
+/** Outer rail on runAttempt on top of bench-rq1.ts's own --deadline-ms (opus-reviewer): slack for the
+ * runner's own startup/teardown/tamper-hash-walk time before it's presumed wedged, not a deadline. */
+export const OUTER_TIMEOUT_SLACK_MS = 30000;
+
 /** oracle.kind -> selector name; a kind with none here is refused rather than picked arbitrarily. */
 const SELECTOR_BY_KIND: Record<string, "plurality" | "mbr-exec"> = { "exact-answer": "plurality", "printf-format": "mbr-exec" };
 
@@ -115,18 +119,31 @@ function selectPrintf(attemptWorkspaces: (string | null)[]) {
   return { winnerIndex: primary.winnerIndex, scores: primary.scores, loaded: sigs.map((s) => s !== null), votes: clusters, n_probes: probes.length, secondary: { rule: secondary.rule, winner_attempt: secondary.winnerIndex + 1, scores: secondary.scores } };
 }
 
-function runAttempt(runnerPath: string, args: string[]): Promise<{ status: number | null; stderr: string }> {
+/** `timeoutMs` is an outer rail on top of bench-rq1.ts's own --deadline-ms: bench-rq1.ts enforces the
+ * deadline on the claude seat it spawns, but if bench-rq1.ts itself wedges (hangs before spawning, stalls
+ * walking the tamper hash, or leaves a pipe open) nothing kills IT, and with --concurrency > 1 that
+ * deadlocks the pool permanently (opus-reviewer). Past the outer timeout this SIGKILLs the runner's whole
+ * process group and resolves with status null, exactly like any other runner failure — the attempt becomes
+ * a null vote in the group, its cost bounded by the cap like a deadline kill. */
+export function runAttempt(runnerPath: string, args: string[], timeoutMs: number): Promise<{ status: number | null; stderr: string }> {
   return new Promise((res) => {
     const child = spawn(process.execPath, ["--import", "tsx", runnerPath, ...args], { detached: true, stdio: ["ignore", "ignore", "pipe"] });
     trackedGroups.add(child);
     let err = "";
+    let timedOut = false;
+    const timer = setTimeout(() => {
+      timedOut = true;
+      killGroup(child, "SIGKILL");
+    }, timeoutMs);
     child.stderr?.on("data", (d) => (err = (err + d).slice(-4000)));
     child.on("close", (status) => {
+      clearTimeout(timer);
       trackedGroups.delete(child);
       killGroup(child, "SIGKILL"); // nothing of a finished attempt may outlive it
-      res({ status, stderr: err });
+      res({ status: timedOut ? null : status, stderr: timedOut ? `${err}\nrunAttempt: outer timeout (${timeoutMs} ms) exceeded, runner wedged; process group killed` : err });
     });
     child.on("error", (e) => {
+      clearTimeout(timer);
       trackedGroups.delete(child);
       res({ status: null, stderr: String(e) });
     });
@@ -203,7 +220,7 @@ async function main() {
       }
       renameSync(attemptRoot, `${attemptRoot}.partial-${Date.now()}`);
     }
-    const run = await runAttempt(runnerPath, [taskDir, "A", String(seed * 1000 + i + 1), "--root", attemptRoot, "--model", model, "--max-budget-usd", String(capUsd), "--deadline-ms", String(deadlineMs)]);
+    const run = await runAttempt(runnerPath, [taskDir, "A", String(seed * 1000 + i + 1), "--root", attemptRoot, "--model", model, "--max-budget-usd", String(capUsd), "--deadline-ms", String(deadlineMs)], deadlineMs + OUTER_TIMEOUT_SLACK_MS);
     if (run.status !== 0 && !readResult(attemptRoot)) runnerFailures[i + 1] = run.stderr || `exit ${run.status}`;
   });
   const wallMs = Date.now() - startedAt;

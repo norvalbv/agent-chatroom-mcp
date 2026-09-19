@@ -1,3 +1,15 @@
 \emph{Original window control (20 seeds, 201--220, arm C and arm K on both interpreter tasks, log \texttt{logs/rq1-window-control.log}): stopped after 3 runs when the regime shift made its cost cap unreachable (\texttt{paper/amendments.md}, 2026-09-19); none of its runs is committed or read as a result.}
 
-\emph{Redesigned window control: PENDING (0/24 runs committed to this branch at generation time); design: stamp-interpreter only, seeds 201--212, arm C and arm K interleaved per seed, entirely inside the post-shift regime (\texttt{bench/results/rq1-window-control}, log \texttt{logs/rq1-window-control-2.log}). Not reported as a result until all 24 land.}
+\emph{Redesigned window control: complete, 24/24 runs committed at generation time; design: stamp-interpreter only, seeds 201--212, arm C and arm K interleaved per seed (\texttt{bench/results/rq1-window-control}, log \texttt{logs/rq1-window-control-2.log}).}
+
+\begin{tabular}{llrrr}
+\toprule
+Cohort & Seeds & Single attempts & Arm C & Arm K \\
+\midrule
+Long cohort & 201--208 & 78/80 & 8/8 & 8/8 \\
+Crossover & 209 & 4/10 & 1/1 & 1/1 \\
+Short cohort & 210--212 & 15/30 & 2/3 & 2/3 \\
+\bottomrule
+\end{tabular}
+
+\emph{Entries are successes/attempts or successes/runs, generated from the committed results. The observed output-token boundary separates the cohorts: for seed 209, arm C completed before the boundary and arm K after it. Single attempts are the constituent K attempts, not an independent arm-A sample. Cohorts are never pooled; tiny within-cohort samples do not establish equivalence or resolve the original time-window comparison.}

@@ -58,6 +58,7 @@ export const offlineScripts = [
   'paper-rq1-armk.test.ts',
   'paper-rq1-family.test.ts',
   'paper-rq1-table.test.ts',
+  'paper-rq1-tex.test.ts',
   'regression-replay.ts',
   'recruit-prefix-regression.ts',
   'route-auth-regression.ts',

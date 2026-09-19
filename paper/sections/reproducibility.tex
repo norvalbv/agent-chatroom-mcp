@@ -68,14 +68,15 @@ Originally designed as arm~C and arm~K interleaved per seed on \texttt{stamp-int
 log: \texttt{logs/rq1-window-control.log}, not committed -- \texttt{logs/} is gitignored). This run was
 stopped after 3 runs (\$5.76) when the post-shift cost increase described in
 Section~\ref{sec:threats} made the planned 80 runs exceed the control's budget, and was redesigned,
-entirely inside the post-shift regime, at reduced scope: \texttt{stamp-interpreter} only, 12 seeds
+with the intent of staying inside the post-shift regime, at reduced scope: \texttt{stamp-interpreter} only, 12 seeds
 (201--212), log \texttt{logs/rq1-window-control-2.log} (\texttt{paper/amendments.md}, 2026-09-19
 thinking-budget entry). Both the original and redesigned runs match \texttt{scripts/bench-grid.ts} run
 the same way as the two grids above, with the corresponding \texttt{--tasks}, \texttt{--seeds}, and
 \texttt{--results-dir} flags; no committed wrapper script names either exact invocation, so a reader
 reproducing them should confirm the flags against \texttt{scripts/bench-grid.ts}'s own argument parser
-at the commit named in \S\ref{sec:reproducibility}. Its result is reported in Section~\ref{sec:results}
-as complete or pending as of that section's writing, never read from partial output.
+at the commit named in \S\ref{sec:reproducibility}. The completed result is committed in \texttt{c82124d}. Its output-token scale changed back during
+the control; Section~\ref{sec:results} reports separate long, crossover, and short cohorts generated
+from the committed results, never a pooled result across that boundary.
 
 \subsection{Tables, statistics, figures, and the prose-number audit}
 

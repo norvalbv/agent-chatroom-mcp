@@ -30,10 +30,13 @@ running it.
 
 \item \textbf{Arm K's timing window differs from arm C's.} The 40 arm-C runs analyzed here
   (\texttt{bench/results/rq1-suite}) were produced in an earlier grid than the 120 arm-K groups
-  (\texttt{bench/results/rq1-arm-k}). If the underlying single-agent success rate drifts between time
-  windows -- and Section~\ref{sec:results}'s fresh-attempt measurements show it does move, non-trivially,
-  even within the arm-K run's own lifetime -- the K-vs-C comparison is confounded by time, not only by
-  sampling noise. A contemporaneous, interleaved arm-C/arm-K sample
+  (\texttt{bench/results/rq1-arm-k}). Single-agent pass-rate estimates from independently drawn samples
+  of the identical harness and prompt differed substantially across those samples
+  (Section~\ref{sec:results}); whether that difference reflects real drift in the underlying rate over
+  time, or is simply sampling noise at these sample sizes, is not resolved by any analysis in this paper
+  -- no within-run drift analysis was performed. Either way, if the single-agent rate is not stable
+  across the time windows the two grids were run in, the K-vs-C comparison is confounded by time, not
+  only by sampling noise. A contemporaneous, interleaved arm-C/arm-K sample
   (\texttt{bench/results/rq1-window-control}, 20 seeds on both \texttt{stamp} tasks) was designed
   specifically to test this; its status as of this section is reported in
   Section~\ref{sec:results} rather than assumed complete.
@@ -42,9 +45,10 @@ running it.
   directions across independently drawn samples of the identical harness and prompt: for
   \texttt{stamp-interpreter}, 0.50 at $n=10$ in the admission pilot, 0.825 at $n=40$ in the RQ1 grid, and
   0.675 at $n=400$ in a fresh attempt-level measurement. A 60-run budget-cap control
-  (\texttt{bench/results/rq1-drift-control}, 18/30 at one cap and 23/30 at another) rules out the
-  attempt-level spending cap as the cause of this drift, but the underlying source of the drift is not
-  identified and is not claimed to be.
+  (\texttt{bench/results/rq1-drift-control}: 23/30 at a \$0.30 per-attempt cap, 18/30 at a \$0.58
+  per-attempt cap) rules out the attempt-level spending cap as the cause of this discrepancy between
+  samples, but the underlying source of the discrepancy -- real drift over time versus sampling noise at
+  these sample sizes -- is not identified and is not claimed to be.
 
 \item \textbf{Selector sensitivity on the printf task.} Arm~K's printf selector (execution agreement
   over 9650 probes) is demonstrably sensitive to the probe set: the two candidate clusters in the

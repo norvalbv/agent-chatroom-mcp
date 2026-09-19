@@ -17,6 +17,8 @@ import { fisherExactTest, holmBonferroni } from "./rq1-stats.js";
 export interface KAttempt {
   index: number;
   answer: string | null;
+  /** Harness-defined: no result, killed by cap/deadline, no answer (exact tasks) or candidate failed to load (code tasks). answer===null is NOT this: a code task never writes answer.txt. Optional because the current scripts/bench-ak.ts does not emit it yet; isNullVote() falls back to the outcome/killed/runner_failure fields it does emit. */
+  null_vote?: boolean;
   passed: boolean;
   outcome: string;
   killed_by_deadline?: boolean;
@@ -25,8 +27,9 @@ export interface KAttempt {
   cost_usd: number | null;
 }
 
-/** A null vote is an attempt that produced nothing to vote on: killed by its cap or deadline, the runner failed, or no result. An answer of null alone is not one (code tasks have no answer.txt). */
+/** A null vote is an attempt that produced nothing to vote on: killed by its cap or deadline, the runner failed, or no result. An answer of null alone is not one (code tasks have no answer.txt). Trusts an explicit null_vote field when the runner sets one; otherwise infers it from the fields scripts/bench-ak.ts does emit. */
 export function isNullVote(a: KAttempt): boolean {
+  if (typeof a.null_vote === "boolean") return a.null_vote;
   return a.killed_by_deadline === true || !!a.runner_failure || a.outcome === "timeout" || a.outcome === "no_result" || a.outcome === "infrastructure_error";
 }
 
@@ -53,6 +56,8 @@ export function loadKGroups(dir: string): { groups: KGroup[]; warnings: string[]
         warnings.push(`skipped (not an arm-K group result): ${name}/result.json`);
         continue;
       }
+      // null_vote is optional (see KAttempt/isNullVote): scripts/bench-ak.ts's actual output does not set it, and
+      // isNullVote() falls back to outcome/killed_by_deadline/runner_failure, which every real group does carry.
       groups.push(p as KGroup);
     } catch (e) {
       warnings.push(`skipped (invalid JSON): ${name}/result.json: ${String(e)}`);

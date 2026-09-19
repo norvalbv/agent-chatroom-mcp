@@ -21,7 +21,6 @@ export const offlineScripts = [
   'attention-gate-regression.ts',
   'baseline-freeze-guard-regression.ts',
   'ak-select.test.ts',
-  'ak-select-calibration.ts',
   'bench-ak.test.ts',
   'bench-grid.test.ts',
   'bench-hub-no-recruit-regression.ts',

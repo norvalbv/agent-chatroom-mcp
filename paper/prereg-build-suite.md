@@ -157,9 +157,10 @@ cost even when partial token usage exists; it is never recorded as zero cost. Ev
 raw outcome and any observed partial cost remains in the ledger.
 
 Outcome classification is mechanical and recorded before scoring. A
-`protocol_failure` is (a) the shared deadline firing after at least one seat was
-successfully spawned while the runner and, for C, hub remain alive, or (b) a
-healthy C hub reaching terminal seat completion without satisfying its frozen room
+`protocol_failure` is (a) the shared deadline or a seat's frozen dollar share being
+exhausted after at least one seat was successfully spawned while the runner and,
+for C, hub remain alive, or (b) a healthy C hub reaching terminal seat completion
+without satisfying its frozen room
 policy, historical claim/reviewer evidence, artifact-bound verification and
 conclusion checks. A process spawn/exec error, provider/API failure, hub startup
 failure or crash, HTTP 5xx, scorer exception, or unavailable frozen input is
@@ -287,7 +288,8 @@ node --import tsx scripts/bench-build-grid.ts \
   --arms A,B,C --seeds 501-520 \
   --results bench/results/build-suite-confirmatory \
   --model sonnet --effort medium --max-budget-usd 2.00 \
-  --seats 4 --deadline-ms 900000 --base-port 23000 --resume
+  --seats 4 --deadline-ms 900000 --base-port 23000 \
+  --hub-entry dist/index.js --resume
 ```
 
 This room does not run that command. The nominal allocated total is
@@ -383,14 +385,19 @@ therefore no confirmatory run is authorized.
   whole-snapshot coupling and giveaway residue in the reviewed version. A post-hoc
   unplanted duplicate-SKU input was fixed by 6/15 exploratory seats, identifying a
   promising future defect class but not admitting this version.
-- **Unequal-cap diagnostic, not the required pilot:** ledger-s1 seeds 101--103 were
-  run with A/B cap $0.60 and C cap $1.60, so they violate the common-cap contract;
-  the oracle was also corrected after inspecting apparent misses. Re-scoring gives
-  A, B and C 9/9 in every cell. The committed raw/as-run rows are
-  `docs/build-suite-pilot.json` at `e8dbd0c`. Board summary means per cell were A:
-  $0.056 and 21 s; B: $0.135 and 62 s; C: $0.83 and 78 s. C at $0.60 ended in
-  infrastructure error. These rows test the harness and demonstrate ceiling/cost,
-  but cannot satisfy the requested pilot on an admitted task.
+- **Mixed diagnostic, not the required pilot:** ledger-s1 A/B seeds 101--103 used a
+  $0.60 cap. C101 used the same nominal cap and, when its intact workspace was
+  scored, caught 9/9 with zero regressions at $0.6225; its seats exhausted their
+  shares during the conclusion ritual, an arm-caused protocol failure rather than
+  missing infrastructure. Replacement C102--104 used a $1.60 cap on different
+  seeds, so those rows are unequal-cap and unpaired. The oracle was also corrected
+  after inspecting apparent misses. All re-scored A, B, C workspaces caught 9/9.
+  The committed raw/as-run rows are `docs/build-suite-pilot.json` at `e8dbd0c`;
+  C101's independently audited raw evidence remained under `/tmp/sb10` rather than
+  the committed archive. Board summary means for the unequal-cap rows were A:
+  $0.056 and 21 s; B: $0.135 and 62 s; C: $0.83 and 78 s. These rows test the
+  harness and demonstrate ceiling, but cannot satisfy the requested pilot on an
+  admitted task.
 
 The admission falsifier therefore fired. There are no admitted sibling IDs to
 substitute for the fail-closed placeholders in the confirmatory command. A purely

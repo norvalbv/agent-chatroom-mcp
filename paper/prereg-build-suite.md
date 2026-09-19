@@ -420,8 +420,8 @@ therefore no confirmatory run is authorized.
 The admission falsifier therefore fired. There are no admitted sibling IDs to
 substitute for the fail-closed placeholders in the confirmatory command. A purely
 illustrative extrapolation of the unequal-cap one-instance means to the planned two
-instances is `40 * (0.056 + 0.135 + 0.83) = $40.84`; it is not the projected cost of
-a valid confirmatory design. The fixed nominal allocation remains $240 plus possible
+instances is $41.01 using the unrounded diagnostic row costs; it is not the projected
+cost of a valid confirmatory design. The fixed nominal allocation remains $240 plus possible
 last-turn overshoot. A valid realized-cost projection requires a new sibling pair to
 pass admission and a common-cap diagnostic pilot. This room does not run seeds
 501--520.

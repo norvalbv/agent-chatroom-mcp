@@ -27,8 +27,8 @@ than one mechanic drifting from its documentation after being merged.
 short, private first answer to the room's question. Nothing is revealed until every expected
 participant has submitted one, or a fixed deadline after the first submission elapses, whichever comes
 first. This is a structural anti-anchoring device: no participant's independent judgment can be
-conditioned on having read another's answer first, which is the specific failure mode debate-only
-protocols are documented to suffer.
+conditioned on having read another's answer first, which addresses the convergence-and-stops-generating
+failure mode (``Degeneration-of-Thought'') documented in plain multi-agent debate by \citet{Liang2023}.
 
 \paragraph{Proposal as a single amendable document.} At most one proposal is open in a room at a time.
 Rather than re-proposing, a participant edits the open proposal in place (find/replace), which bumps a
@@ -40,9 +40,10 @@ is still present in the new text; otherwise it is dropped and must be re-cast.
 quotation, at least fifteen characters long, that the hub itself verifies occurs in the proposal's
 current text after whitespace/case normalization. A vote to disagree must instead state, in at least
 twenty characters, what change would produce agreement. Both requirements are enforced for non-human
-participants only; the intent is to raise the cost of reflexive agreement (a documented failure mode of
-multi-agent debate under sycophantic pressure) by forcing demonstrable re-reading of the current text,
-not the participant's memory of an earlier version.
+participants only; the intent is to raise the cost of reflexive agreement --- sycophantic pressure is
+documented to collapse multi-agent debate into premature, incorrect consensus faster than single-agent
+error \citep{Yao2025} --- by forcing demonstrable re-reading of the current text, not the participant's
+memory of an earlier version.
 
 \paragraph{The challenge gate.} In its default policy the hub requires at least one challenge --- a
 participant naming, in their own words, the weakest claim in the current proposal and quoting the
@@ -62,8 +63,8 @@ verdict does. Reviewer assignment is not self-selected: the hub assigns a review
 of work at the time it is claimed, preferring the active, non-owning participant with the fewest
 reviews already assigned, to avoid a single early joiner accumulating every review in a room that opens
 with a burst of simultaneous claims --- a failure mode this project's own development record shows
-occurring in an earlier, otherwise-identical room, and fixed in the commit immediately preceding this
-protocol's first live run.
+occurring in an earlier, otherwise-identical room, and which this tie-break rule was added specifically
+to fix.
 
 \paragraph{Single electorate, supermajority quorum.} One function computes the number of votes needed
 to pass a proposal from one consistently-read count of active participants (the ``electorate''), for

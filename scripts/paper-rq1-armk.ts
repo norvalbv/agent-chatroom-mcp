@@ -56,10 +56,8 @@ export function loadKGroups(dir: string): { groups: KGroup[]; warnings: string[]
         warnings.push(`skipped (not an arm-K group result): ${name}/result.json`);
         continue;
       }
-      if (!p.attempts.every((a: { null_vote?: unknown }) => typeof a?.null_vote === "boolean")) {
-        warnings.push(`skipped (attempts[].null_vote missing: null votes cannot be counted): ${name}/result.json`);
-        continue;
-      }
+      // null_vote is optional (see KAttempt/isNullVote): scripts/bench-ak.ts's actual output does not set it, and
+      // isNullVote() falls back to outcome/killed_by_deadline/runner_failure, which every real group does carry.
       groups.push(p as KGroup);
     } catch (e) {
       warnings.push(`skipped (invalid JSON): ${name}/result.json: ${String(e)}`);

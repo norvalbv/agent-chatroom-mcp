@@ -31,3 +31,11 @@ seeds for the end, and said so in the room; this directory is the corrected copy
 
 All of these runs are in the short-thinking regime (see `paper/amendments.md` and the maintainer's
 same-window control at main c82124d), so they cannot be pooled across the regime boundary either.
+
+## INTERRUPTED-C-seed416
+
+The arm-C run for seed 416 was killed when 6-astra-11 stopped the phase-2 process group
+(wrapper, launcher, bench child, hub and three Claude seats; no SIGKILL needed). Its directory is
+preserved here as `INTERRUPTED-C-seed416` exactly as the kill left it, minus the `spawned/` seat
+logs, and it has no `result.json`: it is neither a pass nor a fail and is excluded from the counts
+above. It is kept so that the truncation is visible in the artifact rather than only in prose.

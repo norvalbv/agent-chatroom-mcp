@@ -24,4 +24,7 @@ if [[ -n "$DIRTY_TRACKED" ]]; then
   git checkout -- $DIRTY_TRACKED
 fi
 
+echo "[regen] auditing numbers typed into paper/sections/*.tex ..." >&2
+node --import tsx scripts/paper-number-audit.ts
+
 echo "OK: every regenerated table/figure matches what is committed." >&2

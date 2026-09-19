@@ -19,12 +19,20 @@ export interface KAttempt {
   answer: string | null;
   passed: boolean;
   outcome: string;
+  killed_by_deadline?: boolean;
+  runner_failure?: string | null;
   /** null = usage lost for this attempt; never summed as zero. */
   cost_usd: number | null;
 }
 
+/** A null vote is an attempt that produced nothing to vote on: killed by its cap or deadline, the runner failed, or no result. An answer of null alone is not one (code tasks have no answer.txt). */
+export function isNullVote(a: KAttempt): boolean {
+  return a.killed_by_deadline === true || !!a.runner_failure || a.outcome === "timeout" || a.outcome === "no_result" || a.outcome === "infrastructure_error";
+}
+
 export interface KGroup extends Omit<RunResult, "usage"> {
-  usage: { cost_usd: number | null; coverage: "complete" | "partial" | "none" };
+  /** coverage is absent in scripts/bench-ak.ts output, which writes cost_usd null instead when any attempt cost is unknown. */
+  usage: { cost_usd: number | null; coverage?: "complete" | "partial" | "none" };
   k: number;
   passed: boolean;
   selection: { rule: string; winner_attempt: number | null; votes: Record<string, number> };
@@ -40,7 +48,7 @@ export function loadKGroups(dir: string): { groups: KGroup[]; warnings: string[]
     if (!existsSync(path)) continue;
     try {
       const p = JSON.parse(readFileSync(path, "utf8"));
-      if (p?.schemaVersion !== 1 || p.arm !== "K" || typeof p.task_id !== "string" || typeof p.seed !== "number" ||
+      if ((p?.schemaVersion !== 1 && p?.schemaVersion !== 2) || p.arm !== "K" || typeof p.task_id !== "string" || typeof p.seed !== "number" ||
           !Array.isArray(p.attempts) || !p.usage || typeof p.selection?.votes !== "object") {
         warnings.push(`skipped (not an arm-K group result): ${name}/result.json`);
         continue;
@@ -119,8 +127,8 @@ export function buildArmKTable(suiteRuns: RunResult[], allGroups: KGroup[], opts
       null_attempts: 0, matched_cost_ok: null, vote_distribution: {}, ceiling: { any_pass: 0, groups: gs.length, rate: null },
     };
     // src/result.ts stores lost usage as cost_usd 0 with coverage none/partial, so a number alone is not "known".
-    const known = gs.filter((g) => typeof g.usage.cost_usd === "number" && g.usage.coverage === "complete" && g.attempts.every((a) => typeof a.cost_usd === "number"));
-    row.null_attempts = gs.reduce((n, g) => n + g.attempts.filter((a) => a.answer === null).length, 0);
+    const known = gs.filter((g) => typeof g.usage.cost_usd === "number" && (g.usage.coverage === undefined || g.usage.coverage === "complete") && g.attempts.every((a) => typeof a.cost_usd === "number"));
+    row.null_attempts = gs.reduce((n, g) => n + g.attempts.filter(isNullVote).length, 0);
     row.cost_unknown_groups = gs.length - known.length;
     row.mean_cost_known = mean(known.map((g) => g.usage.cost_usd as number));
     if (kPass > 0) row.cost_per_correct = row.cost_unknown_groups > 0 ? "unknown" : known.reduce((a, g) => a + (g.usage.cost_usd as number), 0) / kPass;

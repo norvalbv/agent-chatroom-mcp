@@ -22,6 +22,7 @@ export const offlineScripts = [
   'baseline-freeze-guard-regression.ts',
   'ak-select.test.ts',
   'bench-ak.test.ts',
+  'bench-build-oracle-audit.test.ts',
   'bench-build-task.test.ts',
   'bench-grid.test.ts',
   'bench-hub-no-recruit-regression.ts',

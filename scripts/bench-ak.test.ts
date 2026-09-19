@@ -373,6 +373,22 @@ test("runAttempt: an outer timeout kills a wedged runner (one that never exits e
   }
 });
 
+test("runAttempt: a runner that finishes just under the outer timeout is a normal exit; the timer neither fires nor kills it", async () => {
+  const stubDir = mkdtempSync(join(tmpdir(), "bench-ak-underdeadline-"));
+  const slowRunner = join(stubDir, "slow-runner.mjs");
+  // Legitimately slow, not wedged: exits 0 on its own after 700 ms, inside a 2500 ms outer rail. If a caller
+  // ever passed the bare deadline as the rail (no slack), an attempt like this would be killed as it finishes
+  // and would never write its own result.json with its usage.
+  writeFileSync(slowRunner, `setTimeout(() => process.exit(0), 700);\n`);
+  try {
+    const result = await runAttempt(slowRunner, [], 2500);
+    assert.equal(result.status, 0, "a runner that exits on its own before the rail keeps its real exit status");
+    assert.doesNotMatch(result.stderr, /outer timeout/);
+  } finally {
+    rmSync(stubDir, { recursive: true, force: true });
+  }
+});
+
 test("a single wedged attempt does not deadlock the pool: the group still finishes within the outer timeout, with the wedged attempt as a null vote", () => {
   const stubDir = stubCodeClaudeDir();
   const work = mkdtempSync(join(tmpdir(), "bench-ak-wedgepool-"));

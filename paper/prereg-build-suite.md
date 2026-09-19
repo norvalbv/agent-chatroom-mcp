@@ -135,10 +135,13 @@ Public tests are part of the editable submission. They must all pass on the plan
 baseline, but an arm may correct a misleading public assertion when bringing the
 codebase into agreement with the specification. Editing a public test, or finishing
 with a public-test failure, is an observed task outcome and never anti-tamper
-invalidity. The scorer runs the complete public suite as a hidden regression check:
-a code fix that leaves the now-misleading assertion failing therefore ships a
-regression, while a spec-correct test update is allowed. Only private task fixtures,
-the scorer, executor, or frozen provenance inputs are protected integrity surfaces.
+invalidity. The scorer records final public-suite status in its own field, outside
+the hidden regression count `R`; deleting or weakening an editable public test
+cannot improve `R`. Each non-misleading public behavior is independently re-expressed
+by a host-held regression check frozen before launch, while the declared misleading
+assertion is instead covered by a host-held spec-correct check. Only private task
+fixtures, the scorer, executor, or frozen provenance inputs are protected integrity
+surfaces.
 
 The task, scorer, runner, effort settings, hub entry, whole hub build, launch HEAD,
 and served model observations are hashed or recorded before any seat starts and
@@ -157,12 +160,13 @@ cost even when partial token usage exists; it is never recorded as zero cost. Ev
 raw outcome and any observed partial cost remains in the ledger.
 
 Outcome classification is mechanical and recorded before scoring. A
-`protocol_failure` is (a) the shared deadline or a seat's frozen dollar share being
-exhausted after at least one seat was successfully spawned while the runner and,
-for C, hub remain alive, or (b) a healthy C hub reaching terminal seat completion
-without satisfying its frozen room
-policy, historical claim/reviewer evidence, artifact-bound verification and
-conclusion checks. A process spawn/exec error, provider/API failure, hub startup
+`protocol_failure` is (a) the shared deadline firing after at least one seat was
+successfully spawned while the runner and, for C, hub remain alive; (b) any B or C
+stage exhausting its frozen dollar share with an intact scoreable workspace,
+including a non-zero seat exit after the provider reports `error_max_budget_usd`;
+or (c) a healthy C hub reaching terminal seat completion without satisfying its
+frozen room policy, historical claim/reviewer evidence, artifact-bound verification
+and conclusion checks. A process spawn/exec error, provider/API failure, hub startup
 failure or crash, HTTP 5xx, scorer exception, or unavailable frozen input is
 `infrastructure_error`. A pre/post mismatch in the task, private fixtures, scorer,
 executor, hub build, effort settings, or verification-bound workspace is `tamper`
@@ -221,9 +225,12 @@ not a fourth arm or an outcome-dependent exclusion from the catch analysis.
 
 ## Ordering, seeds, and analysis
 
-- Development/admission: the next unused consecutive five-seed block; 1--5 were
-  consumed by rejected billing-v1, so the next candidate begins at 6--10.
-- Diagnostic three-arm pilot: seeds 101--103 on the first admitted instance.
+- Development/admission: a new candidate version consumes the next declared
+  five-seed block. Seeds 1--5 were consumed by rejected billing-v1 and 11--15 by
+  rejected ledger-v2; 6--10 are retired unused rather than reused after later
+  development was observed. The next candidate begins at 16--20.
+- Diagnostic three-arm pilot: seeds 101--104 were consumed by the non-admitted
+  ledger diagnostic. A future first admitted instance uses 105--107.
 - Confirmatory: seeds 501--520 on both admitted instances.
 
 The seed is a pairing and ordering key, not a provider sampling seed. Within a seed,
@@ -336,30 +343,32 @@ and a room-advantage claim additionally requires the worst-case partially identi
 lower endpoint over all 20 planned blocks to exceed zero for both comparisons. This
 amendment precedes those outcomes.
 
-### 2026-09-19 -- score-at-deadline, cost-comparability, and task-version amendment
+### 2026-09-19 -- post-diagnostic score-at-deadline, cost-comparability, and task-version amendment
 
-Before any pinned-effort admission or three-arm pilot, a second non-author attack
-showed that forcing a zero catch score at an arm timeout/non-conclusion discards the
-machine-observed task outcome, unknown cost need not make catch unknowable, M=2.00
-was 12--30 times the exploratory A spend, and the command still named rejected
-billing tasks. This amendment supersedes only the zero-score clause immediately
-above: an intact workspace is oracle-scored as-is at timeout or non-conclusion and
-flagged as a protocol failure. Unknown cost removes cost/efficiency evidence, not
-catch evidence. A C/X realized-cost ratio above 1.25 or lower ratio-of-sums
-efficiency prevents any claim of room advantage at comparable cost. A catch block
-is missing if either compared arm lacks either instance catch score. Billing-v1 is
-rejected at 5/5 ceiling (all five exploratory runs caught 9/9; archive commit
-`6669a46`), its development seeds 1--5 are consumed, and the command now fails
-closed on placeholder task IDs until two new versioned siblings pass admission.
-The same review confirmed that misleading public tests must be editable task output:
-their remaining failures count through the public-suite regression check rather than
-turning the cell into an anti-tamper exclusion. It also froze the stage/process/
+After the ledger diagnostic had run, a second non-author attack showed that forcing
+a zero catch score at an arm timeout/non-conclusion discards the machine-observed
+task outcome, unknown cost need not make catch unknowable, observed C spend was far
+above A, and the command still named rejected billing tasks. The 1.25 realized-cost
+claim gate and score-as-is rule are therefore post-hoc to development seeds 11--15
+and diagnostic seeds 101--104; they are prospective only for a future admitted
+task and seeds 501--520. This amendment supersedes only the zero-score clause
+immediately above: an intact workspace is oracle-scored as-is at timeout,
+budget-exhaustion, or non-conclusion and flagged as a protocol failure. Unknown cost
+removes cost/efficiency evidence, not catch evidence. A C/X realized-cost ratio
+above 1.25 or lower ratio-of-sums efficiency prevents any claim of room advantage
+at comparable cost. A catch block is missing if either compared arm lacks either
+instance catch score. Billing-v1 is rejected at 5/5 ceiling (all five exploratory
+runs caught 9/9; archive commit `6669a46`), its development seeds 1--5 are consumed,
+and the command now fails closed on placeholder task IDs until two new versioned
+siblings pass admission. The same review confirmed that misleading public tests
+must be editable task output. Their final status is reported separately; hidden
+host-held checks, not editable tests, determine `R`. It also froze the stage/process/
 health/hash classifier inputs above so arm versus infrastructure failure is not
-chosen after the catch outcome is visible.
+chosen after future confirmatory catch outcomes are visible.
 
 ### 2026-09-19 -- observed versus protocol-adjusted score naming
 
-Before any pinned-effort admission or three-arm pilot, executor review exposed an
+After the ledger diagnostic but before any confirmatory cell, executor review exposed an
 ambiguity between measuring the workspace and enforcing the delivery protocol. The
 oracle's `defects_caught` and `defects_shipped` now always mean observed workspace
 outcomes. `protocol_success` is separate, and `protocol_adjusted_catch` assigns zero

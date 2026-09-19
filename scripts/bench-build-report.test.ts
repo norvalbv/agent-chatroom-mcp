@@ -8,7 +8,7 @@ import { buildBuildReport, renderBuildReportMarkdown } from "./bench-build-repor
 
 function result(task: string, arm: "A" | "B" | "C", seed: number, caught: number, cost: number | null, fingerprint = "f".repeat(64)) {
   return {
-    schemaVersion: 1, task_id: task, arm, seed, execution_outcome: "completed", oracle_outcome: "task_pass",
+    schemaVersion: 1, task_id: task, arm, seed, execution_outcome: "completed", oracle_outcome: "task_pass", public_suite_passed: true,
     scores: { defects_caught: caught, defects_total: 9, defects_shipped: 9 - caught, regression_failures: 0, regressions_total: 14 },
     checks: {
       defects: Array.from({ length: 9 }, (_, i) => ({ name: `defect/D${String(i + 1).padStart(2, "0")}`, exit_code: i < caught ? 0 : 1 })),
@@ -38,8 +38,8 @@ test("report keeps planned missing cells and flags actual nominal-cap overshoot"
     assert.equal(report.rows.find((r) => r.arm === "C")?.status, "missing");
     assert.equal(report.summary.missing, 1);
     const markdown = renderBuildReportMarkdown(report);
-    assert.match(markdown, /build-billing-s1 \| B \| 101 \| valid \| completed \| 5\/9 \| 4 \| 0 \| 2\.1000 \| yes/);
-    assert.match(markdown, /build-billing-s1 \| C \| 101 \| missing \| -/);
+    assert.match(markdown, /build-billing-s1 \| B \| 101 \| valid \| completed \| pass \| 5\/9 \| 4 \| 0 \| 2\.1000 \| yes/);
+    assert.match(markdown, /build-billing-s1 \| C \| 101 \| missing \| - \| -/);
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
@@ -93,6 +93,19 @@ test("report scores budget exhaustion and marks protocol failure", () => {
     assert.equal(report.rows[0].protocol_adjusted_catch_fraction, 0);
     assert.equal(report.rows[0].cost_usd, 0.6225);
     assert.equal(report.rows[0].actual_over_cap, true);
+    assert.equal(report.rows[0].public_suite_passed, true);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("report rejects a result that omits the separate public-suite status", () => {
+  const dir = mkdtempSync(join(tmpdir(), "bench-build-report-"));
+  try {
+    const missing = result("build-ledger-v2-s1", "A", 101, 4, 0.2);
+    delete (missing as { public_suite_passed?: boolean }).public_suite_passed;
+    put(dir, missing);
+    const report = buildBuildReport(dir, ["build-ledger-v2-s1"], ["A"], [101], 2);
+    assert.equal(report.rows[0].status, "invalid");
+    assert.match(report.rows[0].reason ?? "", /public suite/i);
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 

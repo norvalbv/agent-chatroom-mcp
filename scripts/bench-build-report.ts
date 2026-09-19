@@ -11,6 +11,7 @@ type RawBuildResult = {
   seed?: unknown;
   execution_outcome?: unknown;
   oracle_outcome?: unknown;
+  public_suite_passed?: unknown;
   scores?: Record<string, unknown>;
   checks?: { defects?: unknown; regressions?: unknown };
   usage?: { cost_usd?: unknown; coverage?: unknown; thinking_tokens?: unknown; output_tokens?: unknown };
@@ -28,6 +29,7 @@ export interface BuildReportRow {
   reason: string | null;
   execution_outcome: string | null;
   oracle_outcome: string | null;
+  public_suite_passed: boolean | null;
   protocol_failure: boolean;
   protocol_success: boolean | null;
   protocol_adjusted_catch_fraction: number | null;
@@ -96,6 +98,7 @@ function invalidRow(task: string, arm: Arm, seed: number, reason: string, raw?: 
     task_id: task, arm, seed, status: "invalid", reason,
     execution_outcome: typeof raw?.execution_outcome === "string" ? raw.execution_outcome : null,
     oracle_outcome: typeof raw?.oracle_outcome === "string" ? raw.oracle_outcome : null,
+    public_suite_passed: typeof raw?.public_suite_passed === "boolean" ? raw.public_suite_passed : null,
     protocol_failure: false, protocol_success: null, protocol_adjusted_catch_fraction: null,
     cost_status: raw?.usage?.coverage === "complete" && typeof raw.usage.cost_usd === "number" ? "complete" : "unknown",
     defects_caught: null, defects_total: null, residual_plants: null, introduced_regressions: null,
@@ -114,6 +117,7 @@ function validateRaw(raw: RawBuildResult, task: string, arm: Arm, seed: number, 
   if (raw.task_id !== task || raw.arm !== arm || raw.seed !== seed) return invalidRow(task, arm, seed, "cell identity mismatch", raw);
   if (typeof raw.execution_outcome !== "string" || !["completed", "timeout", "budget_exhausted", "invalid_room", "tamper", "infrastructure_error"].includes(raw.execution_outcome)) return invalidRow(task, arm, seed, "unknown execution outcome", raw);
   if (raw.execution_outcome === "tamper" || raw.execution_outcome === "infrastructure_error") return invalidRow(task, arm, seed, `non-scoreable outcome ${raw.execution_outcome}`, raw);
+  if (typeof raw.public_suite_passed !== "boolean") return invalidRow(task, arm, seed, "public suite status missing", raw);
   const fingerprint = raw.provenance?.grid_fingerprint;
   if (!sha256(fingerprint)) return invalidRow(task, arm, seed, "missing grid fingerprint", raw);
   if (!sha256(raw.provenance?.native_run_fingerprint) || !sha256(raw.provenance?.manifest_sha256) || !sha256(raw.provenance?.runner_sha256)) return invalidRow(task, arm, seed, "incomplete launch provenance", raw);
@@ -143,6 +147,7 @@ function validateRaw(raw: RawBuildResult, task: string, arm: Arm, seed: number, 
     task_id: task, arm, seed, status: "valid", reason: costComplete ? null : "unknown terminal cost",
     execution_outcome: raw.execution_outcome,
     oracle_outcome: typeof raw.oracle_outcome === "string" ? raw.oracle_outcome : null,
+    public_suite_passed: raw.public_suite_passed,
     protocol_failure: protocolFailure, protocol_success: !protocolFailure,
     protocol_adjusted_catch_fraction: protocolFailure ? 0 : caught / defectSet.checks.length,
     cost_status: costComplete ? "complete" : "unknown",
@@ -189,7 +194,7 @@ export function buildBuildReport(resultsDir: string, tasks: string[], arms: Arm[
     const raw = byCell.get(`${task}\0${arm}\0${seed}`);
     rows.push(raw ? validateRaw(raw, task, arm, seed, nominalCapUsd) : {
       task_id: task, arm, seed, status: "missing", reason: "planned cell absent",
-      execution_outcome: null, oracle_outcome: null, protocol_failure: false, protocol_success: null, protocol_adjusted_catch_fraction: null, cost_status: "missing",
+      execution_outcome: null, oracle_outcome: null, public_suite_passed: null, protocol_failure: false, protocol_success: null, protocol_adjusted_catch_fraction: null, cost_status: "missing",
       defects_caught: null, defects_total: null, residual_plants: null, introduced_regressions: null,
       defects_shipped: null, cost_usd: null, thinking_tokens: null, output_tokens: null,
       wall_clock_ms: null, actual_over_cap: null, grid_fingerprint: null, native_run_fingerprint: null, defect_checks: [],
@@ -231,12 +236,12 @@ function value(value: number | null, digits = 0): string {
 
 export function renderBuildReportMarkdown(report: BuildReport): string {
   const lines = [
-    "| task | arm | seed | status | outcome | caught | shipped | new regressions | cost USD | actual > nominal cap | thinking | wall ms |",
-    "|---|---:|---:|---|---|---:|---:|---:|---:|---|---:|---:|",
+    "| task | arm | seed | status | outcome | public suite | caught | shipped | new regressions | cost USD | actual > nominal cap | thinking | wall ms |",
+    "|---|---:|---:|---|---|---|---:|---:|---:|---:|---|---:|---:|",
   ];
   for (const row of report.rows) {
     const caught = row.defects_caught === null ? "-" : `${row.defects_caught}/${row.defects_total}`;
-    lines.push(`| ${row.task_id} | ${row.arm} | ${row.seed} | ${row.status}${row.protocol_failure ? "/protocol_failure" : ""} | ${row.execution_outcome ?? "-"} | ${caught} | ${value(row.defects_shipped)} | ${value(row.introduced_regressions)} | ${value(row.cost_usd, 4)} | ${row.actual_over_cap === null ? "-" : row.actual_over_cap ? "yes" : "no"} | ${value(row.thinking_tokens)} | ${value(row.wall_clock_ms)} |`);
+    lines.push(`| ${row.task_id} | ${row.arm} | ${row.seed} | ${row.status}${row.protocol_failure ? "/protocol_failure" : ""} | ${row.execution_outcome ?? "-"} | ${row.public_suite_passed === null ? "-" : row.public_suite_passed ? "pass" : "fail"} | ${caught} | ${value(row.defects_shipped)} | ${value(row.introduced_regressions)} | ${value(row.cost_usd, 4)} | ${row.actual_over_cap === null ? "-" : row.actual_over_cap ? "yes" : "no"} | ${value(row.thinking_tokens)} | ${value(row.wall_clock_ms)} |`);
   }
   lines.push("", `Valid catch rows: ${report.summary.valid}; protocol failures: ${report.summary.protocol_failures}; invalid: ${report.summary.invalid}; missing: ${report.summary.missing}; unknown cost: ${report.summary.unknown_cost}; known cost: $${report.summary.known_cost_usd.toFixed(4)}.`, "", "### Per-defect arm-A catch table", "", "| task | defect | caught | n |", "|---|---|---:|---:|");
   for (const defect of report.per_defect) lines.push(`| ${defect.task_id} | ${defect.defect_id} | ${defect.caught} | ${defect.n} |`);

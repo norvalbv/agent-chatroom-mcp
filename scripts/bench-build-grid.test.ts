@@ -26,7 +26,7 @@ mkdirSync(root,{recursive:true});
 if(process.env.STUB_MUTATE_TASK==='1')writeFileSync(join(task,'public','SPEC.md'),'mutated after grid freeze\\n');
 const unknown=process.env.STUB_UNKNOWN==='1', outcome=process.env.STUB_OUTCOME||'completed';
 writeFileSync(join(root,'build-result.json'), JSON.stringify({
- schemaVersion:1, task_id:task.split('/').pop(), arm, seed:Number(seed), execution_outcome:outcome,
+ schemaVersion:1, task_id:task.split('/').pop(), arm, seed:Number(seed), execution_outcome:outcome, public_suite_passed:true,
  scores:{defects_caught:4,defects_total:9,defects_shipped:5,regression_failures:0,regressions_total:14},
  checks:{defects:[{name:'defect/D01',exit_code:0}],regressions:[{name:'regression/R01',exit_code:0}]},
  usage:{cost_usd:unknown?null:0.25,coverage:unknown?'partial':'complete',thinking_tokens:123,output_tokens:456},

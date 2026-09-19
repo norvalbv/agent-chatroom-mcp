@@ -427,8 +427,12 @@ runs are never reused.
   the agreement signal, not the self-report, carries the information. Prereg prediction 2 says agreement selection will not help on printf; that
   is a prediction to be tested, not a design goal, and the selector was not tuned on any printf result.
 
-**All-null groups.** A group in which every attempt is a null vote (killed, no answer, no loadable candidate) submits nothing; it is scored
-as a fail (denominator stays 40), and its null-vote count is reported per task so the reader can see how much of arm K's result is starvation.
+**All-null groups.** Two different facts are counted separately, because they call for opposite responses. A *null vote* is harness-side:
+no result, killed by its cap or deadline, or a runner failure (including the pool's outer timeout); `null_attempts` counts only these and is the
+detector for attempts starved by the caps (a defect to fix and rerun, not a number to report). An *unloadable candidate* is selector-side: the
+attempt completed, wrote a result and spent its money (a real vote against the task), but its code gave the agreement selector no signature
+(`selection.loaded` false); it is reported in its own column, `unloadable_candidates`, and never folded into `null_attempts`. A group in which
+every attempt is either null or unloadable has nothing to submit; it is scored as a fail (denominator stays 40).
 
 A group whose selector has nothing to submit (all null votes) or whose selected attempt has no answer is an arm-K FAIL in the Fisher
 table, never excluded from the denominator; this is a restatement of the rule above so the written rule and the stats code cannot drift.

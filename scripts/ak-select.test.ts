@@ -107,3 +107,33 @@ test("a candidate that tries to shell out or dynamically require/import gets no 
     rmSync(tmp, { recursive: true, force: true });
   }
 });
+
+test("NaN/Infinity/-Infinity/-0 survive the JSON round-trip a probe file goes through (regression: JSON.stringify turns these into null)", () => {
+  const dir = mkdtempSync(join(tmpdir(), "ak-select-special-"));
+  try {
+    cpSync(join(task, "public"), dir, { recursive: true });
+    writeFileSync(
+      dir + "/format.ts",
+      'export function format(_fmt: string, ...a: unknown[]): string { return a.map((x) => (typeof x === "number" ? (Number.isNaN(x) ? "NaN" : Object.is(x, -0) ? "-0" : String(x)) : String(x))).join(","); }\n',
+    );
+    const probes = [
+      { fmt: "%f", args: [{ special: "nan" as const }] },
+      { fmt: "%f", args: [{ special: "inf" as const }] },
+      { fmt: "%f", args: [{ special: "-inf" as const }] },
+      { fmt: "%f", args: [{ special: "-0" as const }] },
+    ];
+    const sig = runCandidate(dir, probes)!;
+    assert.deepEqual(sig, ["ok:NaN", "ok:Infinity", "ok:-Infinity", "ok:-0"]);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("printfProbes: every arg round-trips through JSON.stringify/JSON.parse unchanged (catches the null-collapse bug directly)", () => {
+  const probes = printfProbes();
+  const roundTripped = JSON.parse(JSON.stringify(probes));
+  assert.deepEqual(roundTripped, probes);
+  const flatArgs = probes.flatMap((p) => p.args);
+  assert.ok(flatArgs.some((a) => typeof a === "object" && a !== null && "special" in a), "probe set exercises the special-float encoding");
+  assert.ok(!flatArgs.includes(null as never), "no arg is a bare non-finite number that JSON would silently collapse to null");
+});

@@ -22,7 +22,7 @@ function kGroup(task: string, seed: number, passes: boolean[], selectedPass: boo
     ...base(task, "K", seed, selectedPass, cost ?? 0),
     usage: { cost_usd: cost as number, coverage: cost === null ? "partial" : "complete", seats: passes.length, seats_with_usage: passes.length },
     k: passes.length, passed: selectedPass, selection: { rule: "r", winner_attempt: 1, votes },
-    attempts: passes.map((p, i) => ({ index: i + 1, answer: p ? "good" : "bad", passed: p, outcome: p ? "task_pass" : "task_fail", cost_usd: cost === null ? null : cost / passes.length })),
+    attempts: passes.map((p, i) => ({ index: i + 1, answer: p ? "good" : "bad", null_vote: false, passed: p, outcome: p ? "task_pass" : "task_fail", cost_usd: cost === null ? null : cost / passes.length })),
   } as KGroup;
 }
 
@@ -103,7 +103,16 @@ test("spend match is judged per seed over paired seeds, not against the whole-gr
   assert.equal(row.matched_cost_ok, false);
 });
 
-test("a group shaped like scripts/bench-ak.ts output (schemaVersion 2, code task, null answers) loads; only killed/absent attempts are null votes", () => {
+test("null votes come from the harness flag when present, not from answer===null (a code task has no answer.txt)", () => {
+  const runs = [base("printf", "A", 1, true), base("printf", "C", 1, true)];
+  const g = kGroup("printf", 1, [true, false, true], true, 0.5, { "(none)": 3 });
+  g.attempts.forEach((a) => (a.answer = null)); // code task: no answer.txt on any attempt
+  g.attempts[2].null_vote = true; // only this one failed to load
+  const t = buildArmKTable(runs, [g], ALL);
+  assert.equal(t.tasks.find((x) => x.task === "printf")!.null_attempts, 1);
+});
+
+test("a group shaped like scripts/bench-ak.ts output (schemaVersion 2, code task, null answers, no null_vote field) loads; only killed/absent attempts are null votes", () => {
   const dir = mkdtempSync(join(tmpdir(), "armk-load-"));
   try {
     const attempt = (i: number, over: object) => ({ index: i, root: "r", answer: null, outcome: "task_pass", passed: true, cost_usd: 0.08, turns: 5, wall_ms: 30000, exit_code: 0, signal: null, killed_by_deadline: false, runner_failure: null, ...over });

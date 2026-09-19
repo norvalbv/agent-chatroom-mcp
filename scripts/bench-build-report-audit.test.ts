@@ -5,7 +5,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { buildBuildReport } from './bench-build-report.js';
-import { runBuildGrid, type BuildGridArgs } from './bench-build-grid.js';
+import { requestedFingerprint, runBuildGrid, type BuildGridArgs } from './bench-build-grid.js';
 
 function measured(seed: number, taskHash: string) {
   return {
@@ -66,6 +66,28 @@ ${mode === 'invalid-result' ? "fs.writeFileSync(root+'/build-result.json',JSON.s
       assert.equal(summary.knownCostUsd, 0.23,
         'a score/provenance failure does not erase measured spend');
       assert.equal(summary.unknownCost, 0);
+    } finally { rmSync(base, { recursive: true, force: true }); }
+  });
+}
+
+for (const changed of ['src/helper.ts', 'dist/index.js']) {
+  test(`resume fingerprint binds native runner repository ${changed}`, () => {
+    const base = mkdtempSync(join(tmpdir(), 'build-native-provenance-'));
+    try {
+      for (const dir of ['scripts', 'src', 'dist', 'task']) mkdirSync(join(base, dir));
+      for (const file of ['scripts/bench-build.ts', 'scripts/bench-build-runner.ts', 'scripts/bench-build-runtime.ts', 'src/helper.ts', 'dist/index.js', 'task/brief.txt']) {
+        writeFileSync(join(base, file), `original ${file}`);
+      }
+      const args: BuildGridArgs = {
+        taskDirs: [join(base, 'task')], arms: ['C'], seeds: [1], resultsDir: join(base, 'results'),
+        runner: join(base, 'scripts', 'bench-build.ts'), model: 'stub', effort: 'medium',
+        maxBudgetUsd: 2, seats: 4, deadlineMs: 10_000, basePort: 23920, hubEntry: null, maxTotalCostUsd: null,
+      };
+      const cell = { taskDir: args.taskDirs[0], taskLabel: 'task', arm: 'C' as const, seed: 1, runDir: join(args.resultsDir, 'cell') };
+      const before = requestedFingerprint(args, cell);
+      writeFileSync(join(base, changed), `changed ${changed}`);
+      assert.notEqual(requestedFingerprint(args, cell), before,
+        'changing code the native runner actually serves must invalidate resume even with default hub-entry');
     } finally { rmSync(base, { recursive: true, force: true }); }
   });
 }

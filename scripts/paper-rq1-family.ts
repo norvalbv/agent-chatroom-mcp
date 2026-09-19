@@ -144,6 +144,39 @@ export function buildCacheShares(runs: RunResult[], tasks: string[], arms: strin
   return out;
 }
 
+/** For every FAILED arm-K group on a task, the exact vote split between the correct answer and every wrong
+ * answer, computed by joining selection.votes (per-answer counts) to attempts[].{answer,passed} (an
+ * attempt's own pass/fail), never by hand-matching answer text. Used to check claims like "the shared wrong
+ * answer was the plurality in N of 10 attempts" against the real per-seed split rather than a rounded
+ * summary (paper/sections/results.tex \S results-mechanism). */
+export interface FailingGroupVote {
+  seed: number;
+  correct_votes: number;
+  wrong_votes: number;
+  k: number;
+}
+
+/** selection.votes keys are whitespace-normalized (paper/prereg-arm-k.md's own reproduction script:
+ * `" ".join(open(p).read().split())`); attempts[].answer is the raw file content (may carry a trailing
+ * newline), so both sides must be normalized identically before comparing. */
+function normAnswer(a: string | null): string | null {
+  return a === null ? null : a.split(/\s+/).filter(Boolean).join(" ");
+}
+
+export function buildFailingGroupVotes(task: string, kGroups: ReturnType<typeof loadKGroups>["groups"]): FailingGroupVote[] {
+  return kGroups
+    .filter((g) => g.task_id === task && !g.passed && g.seed >= 101 && g.seed <= 140)
+    .map((g) => {
+      const correctAnswers = new Set(g.attempts.filter((a) => a.passed && a.answer !== null).map((a) => normAnswer(a.answer)));
+      let correct = 0, wrong = 0;
+      for (const [answer, count] of Object.entries(g.selection.votes)) {
+        if (correctAnswers.has(normAnswer(answer))) correct += count; else wrong += count;
+      }
+      return { seed: g.seed, correct_votes: correct, wrong_votes: wrong, k: g.k };
+    })
+    .sort((a, b) => a.seed - b.seed);
+}
+
 /** Per-seed count of arm-K groups whose realized cost exceeds their paired arm-C run's cost (prereg
  * matching is judged on the mean; this is the per-seed exception count, paper/sections/results.tex
  * \S results-cost). */
@@ -203,11 +236,13 @@ async function main() {
   const costRatios = buildCostRatios(runs, ALL_TASKS);
   const cacheShares = buildCacheShares(runs, ALL_TASKS);
   const kExceedsC = buildKExceedsC(runs, groups);
+  const failingGroupVotes: Record<string, FailingGroupVote[]> = {};
+  for (const task of ALL_TASKS) failingGroupVotes[task] = buildFailingGroupVotes(task, groups);
   const md = renderMarkdown(tests, exploratory, [...w1, ...w2]);
   const prefix = resolve(out ?? join(resolve(suite), "rq1-family-table"));
   mkdirSync(dirname(prefix), { recursive: true });
   writeFileSync(`${prefix}.md`, md);
-  writeFileSync(`${prefix}.json`, JSON.stringify({ tests, exploratory, costRatios, cacheShares, kExceedsC }, null, 2));
+  writeFileSync(`${prefix}.json`, JSON.stringify({ tests, exploratory, costRatios, cacheShares, kExceedsC, failingGroupVotes }, null, 2));
   console.log(md);
   console.error(`Wrote ${prefix}.md and ${prefix}.json`);
 }

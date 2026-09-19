@@ -329,8 +329,8 @@ async function main() {
     completedAt = new Date();
   } else if (armArg === "B") {
     // Protocol.md 2.1, arm B: "Two model instances in a fixed pipeline ... at most one revision round."
-    // Both stages share the builder's own workspace (the reviewer's "sees the builder's output" is the
-    // literal files on disk plus the builder's final message, not a copy) and neither carries MCP tools.
+    // The builder works in the scored workspace; the reviewer sees a snapshot copy of it plus the builder's
+    // final message, and neither carries MCP tools.
     // Protocol.md 2 requires "the same wall-clock timeout per task" across arms: deadlineMs is therefore
     // one total budget for the whole 2-3-stage pipeline, not a fresh deadlineMs re-granted to every
     // stage (a naive per-stage timer could let a 3-stage run take up to 3x arm A/C's wall-clock cap).
@@ -350,9 +350,13 @@ async function main() {
     // immediately, and the outer killed_by_deadline check below already forces outcome "timeout"
     // regardless of what (if anything) later stages did.
     if (!builder1.killed_by_deadline && remainingDeadline() > 0) {
-      const reviewText = `${briefText}\n\nYou are reviewing another engineer's submission for this task. Their final message was:\n"""\n${builder1.text}\n"""\nTheir work is already in your current working directory (${isCodeTask ? "the edited source file(s)" : "answer.txt"}). Do not edit any files yourself — you may only read and inspect.\nIf their submission is correct and complete, respond with exactly: APPROVE\nOtherwise respond with a message starting with "REVISE:" followed by one sentence describing what to fix.`;
+      const reviewText = `${briefText}\n\nYou are reviewing another engineer's submission for this task. Their final message was:\n"""\n${builder1.text}\n"""\nA snapshot of their work is in your current working directory (${isCodeTask ? "the edited source file(s)" : "answer.txt"}); it is a read-only copy for inspection, and nothing you change there is submitted.\nIf their submission is correct and complete, respond with exactly: APPROVE\nOtherwise respond with a message starting with "REVISE:" followed by one sentence describing what to fix.`;
       const reviewerArgs = claudeArgs({ text: reviewText, mcpJson, tools: reviewerTools, model, outputFormat: "stream-json" });
-      const reviewer = await runClaudeSeat("reviewer", reviewerArgs, workspace, remainingDeadline());
+      // Bash can write anywhere, so "reviewer cannot edit" is only enforced by giving it a snapshot copy:
+      // whatever it does there never reaches the workspace that gets scored or revised.
+      const reviewWorkspace = join(root, "review-workspace");
+      cpSync(workspace, reviewWorkspace, { recursive: true });
+      const reviewer = await runClaudeSeat("reviewer", reviewerArgs, reviewWorkspace, remainingDeadline());
       records.push(reviewer);
 
       const decision = parseReviewDecision(reviewer.text);

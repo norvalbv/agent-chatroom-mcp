@@ -377,19 +377,51 @@ function stubClaudeDirArmBSlowThenHang(builderSleepMs: number) {
   return dir;
 }
 
+test("arm B: the reviewer runs on a snapshot copy, so a reviewer that writes or deletes files cannot alter the scored workspace", () => {
+  const dir = mkdtempSync(join(tmpdir(), "bench-rq1-armb-tamper-stub-"));
+  writeFileSync(
+    join(dir, "claude"),
+    [
+      "#!/usr/bin/env node",
+      "const fs=require('node:fs');",
+      "const who=process.env.GIT_AUTHOR_NAME||'';",
+      "let text='ok';",
+      `if(who==='builder-1'){fs.writeFileSync('answer.txt',${JSON.stringify(EXPECTED)});text='builder-1 submission';}`,
+      "else if(who==='reviewer'){fs.writeFileSync('answer.txt','TAMPERED BY REVIEWER');fs.writeFileSync('reviewer-marker.txt',process.cwd());text='APPROVE';}",
+      "process.stdout.write(JSON.stringify({type:'assistant',message:{usage:{input_tokens:1,output_tokens:1}}})+'\\n');",
+      "process.stdout.write(JSON.stringify({type:'result',subtype:'success',is_error:false,result:text,num_turns:1,duration_ms:1,duration_api_ms:1,total_cost_usd:0.001,usage:{input_tokens:1,output_tokens:1}})+'\\n');",
+      "",
+    ].join("\n"),
+  );
+  chmodSync(join(dir, "claude"), 0o755);
+  const root = join(tmpdir(), `bench-rq1-b-tamper-${process.pid}-${Date.now()}`);
+  try {
+    const r = invoke([task, "B", "4", "--root", root], { PATH: `${dir}${delimiter}${process.env.PATH}` });
+    assert.equal(r.status, 0, r.stderr + r.stdout);
+    const result = JSON.parse(readFileSync(join(root, "result.json"), "utf8"));
+    assert.equal(readFileSync(join(root, "workspace", "answer.txt"), "utf8"), EXPECTED, "reviewer writes must not reach the scored workspace");
+    assert.equal(existsSync(join(root, "workspace", "reviewer-marker.txt")), false);
+    assert.equal(result.outcome, "task_pass");
+    assert.notEqual(readFileSync(join(root, "review-workspace", "reviewer-marker.txt"), "utf8"), join(root, "workspace"), "reviewer cwd is not the scored workspace");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test("arm B: the deadline is one shared wall-clock budget for the whole pipeline, not a fresh grant per stage", () => {
   const stubDir = stubClaudeDirArmBSlowThenHang(1000);
   const root = join(tmpdir(), `bench-rq1-b-deadline-${process.pid}-${Date.now()}`);
   try {
-    const r = invoke([task, "B", "3", "--root", root, "--deadline-ms", "1300"], { PATH: `${stubDir}${delimiter}${process.env.PATH}` });
+    const r = invoke([task, "B", "3", "--root", root, "--deadline-ms", "1800"], { PATH: `${stubDir}${delimiter}${process.env.PATH}` });
     assert.equal(r.status, 0, r.stderr + r.stdout);
     const result = JSON.parse(readFileSync(join(root, "result.json"), "utf8"));
     assert.equal(result.outcome, "timeout");
     assert.deepEqual(result.seats.map((s: any) => s.name), ["builder-1", "reviewer"], "the reviewer runs out of shared budget; a third (revision) stage never starts");
     assert.equal(result.seats[1].killed_by_deadline, true);
     assert.ok(
-      result.wall_clock.duration_ms < 2000,
-      `reviewer must be killed on the ~300ms REMAINING after builder-1's 1000ms sleep, not a fresh 1300ms (which would put total near 2300ms); got ${result.wall_clock.duration_ms}ms`,
+      result.wall_clock.duration_ms < 2600,
+      `reviewer must be killed on the budget REMAINING after builder-1's 1000ms sleep plus process startup, not a fresh 1800ms (which would put the total above ~2800ms); got ${result.wall_clock.duration_ms}ms`,
     );
   } finally {
     rmSync(root, { recursive: true, force: true });

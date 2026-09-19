@@ -81,6 +81,24 @@ replaced for the same order/sku, and a delayed completion of the OLD attempt mus
 the spec would state exactly-once effects per attempt and conservation, not per-helper values, and hidden checks would be
 deterministic event schedules exercising redelivery and reordered completion while ordinary happy-path tests stay green.
 
+## A finding worth recording precisely: giving the rule away in SPEC erased the one sub-ceiling signal found
+
+fable-reviewer (evidence/fable-review-2, non-author, zero spend, read-only against the /tmp/sb4-6 ledger v1 pilot workspaces I
+had already produced) found that of the two unplanted reference-tree bugs later fixed and turned into S13/S14 (see "Why it is
+at ceiling" above), one of them -- duplicate order lines for the same sku leaking a reservation -- was fixed by only 6 of 15
+Sonnet seats (40%), inside the 30-70% admission band, while the other (repeated returns over a multi-lot shipment) was fixed
+15 of 15. The duplicate-sku case differed in kind from every other defect in this suite: nothing in the SPEC or the code named
+the triggering input (two order lines with the same sku); a seat had to invent that scenario, not diff a sentence against a
+function. This was, on that evidence, the first and only sub-ceiling signal this room produced.
+
+Once it was formalized as the S14 plant, the SPEC gained the sentence "Order lines may repeat a sku; their quantities add up"
+so the fix could be scored deterministically. Every run since (14 of 14 observed: the ledger v2 five-seed screen and the
+three-arm pilot) caught S14. Stating the rule in the SPEC, which admission and giveaway review both require, removed exactly
+the difficulty that made it sub-ceiling. This is the same shape as `complementary-fix`'s retirement (the fix sat in the words
+of the brief) but caught prospectively rather than after a wasted screen, and it sharpens the future-work list above: the
+next family needs defects whose SPEC states an invariant or a worked example without naming the exact input shape that
+breaks it, so a seat must construct the case rather than look it up.
+
 Nothing here is tuned on confirmatory seeds; no confirmatory run was made.
 
 ## Three-arm pilot on build-ledger-s1 (seeds 101 to 104, effort medium, 6-astra-4's runner at 9c37a6b)

@@ -619,3 +619,29 @@ therefore tests the high-effort LABEL in whatever regime the provider serves, as
 and the afternoon's 78/80 long-thinking result cannot be reproduced on demand. If the long-thinking regime
 returns during the run the per-seed sentinel splits the data and AH-vs-A becomes informative in that
 stratum only.
+
+## 2026-09-19 — Planted-defect build suite: no task admitted at any size tried; verification note (maintainer session)
+
+Two rooms tried to build the suite the owner asked for (multi-module codebases with planted defects, scored on
+defects caught and shipped, one agent vs a pair vs a room at equal cost). Room swarm-191133-4hqx (8 mixed
+seats, 5/5) built three generators, seven instances, a two-score anti-tamper oracle and a three-arm executor,
+and admitted nothing: one Sonnet agent at medium effort caught 9/9, 10/10, 36/36 and 45/45 planted defects.
+Room swarm-212551-3vhd (Sonnet lead, Codex builder, Sonnet verifier) then scaled the ledger generator:
+15 modules 27/27 x3 seeds; 40 modules 347/360 = 96.4 per cent over 5 seeds (only defects S08/S09, retry and
+cancel ordering, were ever missed); 100 modules 180/180 x2 seeds, because replicating one generator into
+shards makes every shard's correct source byte-identical and both agents found the copy shortcut on their
+own, finishing for less than several honest 40-module runs. Spend: 7.81 USD (10 screens, 0.49 to 1.19 USD
+each) plus the first room's 7.7 USD. Details: `docs/build-suite-admission.md`, `docs/build-suite-ledger-scale.md`.
+
+Verification disclosure: the second room lost its Codex reviewer and its verifier when the hub process died at
+22:05 UTC; the surviving lead committed on the maintainer's instruction and left. The maintainer verified
+`6dea121` by rebuilding, running the 100-command offline suite and checking the diff touches no hub source;
+this is a maintainer reproduction, not the non-author room verification the other merges carry.
+
+What it means. Small-to-medium planted-defect codebases with a specification and public tests are at ceiling
+for one Sonnet agent; the only non-ceiling signal was a 40-module size with ordering defects across
+modules, and it sat at 0.96, far above the 0.30 to 0.70 admission band. The three-arm equal-cost pilot
+therefore has no admissible task and was not run; the one diagnostic run on a ceiling task (A, B and C each
+9/9, unequal caps) is not evidence about arms. Future generators need shard-specific specification
+parameters or genuine cross-shard coupling to defeat the copy shortcut, and defects whose detection needs a
+multi-step scenario rather than a local read.

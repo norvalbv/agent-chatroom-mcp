@@ -40,10 +40,19 @@ cost-per-correct-answer numbers.
 
 \subsection{Future work}
 
-Completing RQ2 and RQ3; extending the window-control design (Section~\ref{sec:results}) to the printf
-task, which the current 20-seed control does not cover; a task suite broad enough to support
-family-level generalization across more than two failure mechanisms; and, if the chatroom's mechanics
-are ever shown to add value beyond sampling on a broader suite, testing whether a learned or structural
-minority-override mechanism (arXiv:2606.29270) could recover further value specifically on tasks like
-\texttt{bench-printf-format}, where the correct answer is not the population's plurality and no
-amount of aggregation-by-agreement can find it.
+Completing RQ2 and RQ3; extending the window-control design (Section~\ref{sec:results}) to
+\texttt{stamp-2} and \texttt{bench-printf-format}, which the redesigned, reduced-scope control
+(Section~\ref{sec:reproducibility}) does not cover; a task suite broad enough to support family-level
+generalization across more than two failure mechanisms; and, if the chatroom's mechanics are ever shown
+to add value beyond sampling on a broader suite, testing whether a learned or structural minority-override
+mechanism (arXiv:2606.29270) could recover further value specifically on tasks like
+\texttt{bench-printf-format}, where the correct answer is not the population's plurality and no amount
+of aggregation-by-agreement can find it.
+
+The mid-study regime shift documented in Section~\ref{sec:threats} motivates three concrete protocol
+changes for any future run on this harness, stated in \texttt{paper/amendments.md} and repeated here
+because they bear directly on reproducibility: record output tokens per run as a regime indicator so a
+shift is visible immediately rather than discovered after the fact; pin a dated model snapshot where the
+provider allows it, rather than relying on a model alias whose behavior can change mid-session with no
+corresponding version bump; and never pool runs collected across a detected regime boundary into one
+estimate, even when, as here, the headline pass-rate numbers turn out not to have been affected.

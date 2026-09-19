@@ -1,6 +1,10 @@
 \documentclass[11pt]{article}
 
 % arXiv cs.MA submission. Build: tectonic main.tex (see paper/README.md).
+% Convention: every file under sections/ is self-contained -- it issues its own
+% \section{...}/\label{sec:...} (or \begin{abstract}...\end{abstract} for the abstract),
+% so this file only \input's them in order. Do not add \section/\label wrappers here;
+% that duplicates what the section files already declare.
 \usepackage[margin=1in]{geometry}
 \usepackage{amsmath,amssymb}
 \usepackage{graphicx}
@@ -19,48 +23,18 @@
 \begin{document}
 \maketitle
 
-\begin{abstract}
 \input{sections/abstract.tex}
-\end{abstract}
-
-\section{Introduction}
-\label{sec:intro}
-\input{sections/intro.tex}
-
-\section{Related Work}
-\label{sec:related-work}
+\input{sections/introduction.tex}
 \input{sections/related-work.tex}
-
-\section{System}
-\label{sec:system}
 \input{sections/system.tex}
-
-\section{Method}
-\label{sec:method}
 \input{sections/method.tex}
-
-\section{Results}
-\label{sec:results}
 \input{sections/results.tex}
-
-\section{Threats to Validity}
-\label{sec:threats}
 \input{sections/threats.tex}
-
-\section{Discussion}
-\label{sec:discussion}
 \input{sections/discussion.tex}
-
-\section{Limitations and Future Work}
-\label{sec:limitations}
 \input{sections/limitations.tex}
 
-\section*{Reproducibility Appendix}
-\label{sec:repro}
+\appendix
 \input{sections/reproducibility.tex}
-
-\section*{Disclosure Statement}
-\label{sec:disclosure}
 \input{sections/disclosure.tex}
 
 \bibliographystyle{plainnat}

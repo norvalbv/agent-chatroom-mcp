@@ -13,6 +13,12 @@ together for the admission gate (three for the 120-rule instance). Scoring: the 
 under `/tmp/sb*/` (not committed); the numbers below are copied from them. Admission bar (paper/amendments.md and the room brief):
 mean caught between 30 and 70 per cent over at least five runs.
 
+Raw per-run records (rescored with the committed oracle, cost, tokens, turns, wall time, per-seat `model_usage`, run roots) for the
+billing, rules and ledger-v2 runs: `docs/build-suite-admission-runs.json`. The build-rules-s1 row was rerun on the committed instance
+(55781dc) because a later generator edit changed which rules are drawn; the earlier 10 of 10 x5 on the previous draw is kept as
+history. The first ledger runs (v0, v1) and the low-effort run were scored with the oracle of their day and are recorded only here.
+Total real-model spend for admission: about 4.0 USD.
+
 ## Results (all at ceiling; none admitted)
 
 | task | shape | planted | runs | caught per run | task_pass | cost USD per run | wall s |

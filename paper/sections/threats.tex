@@ -44,28 +44,34 @@ running it.
   \texttt{stamp-interpreter} rose roughly sixfold (about 1.6K to about 10K output tokens per attempt,
   cost about \$0.058 to \$0.18--0.26) and the model's own thinking-block length grew from about 1.3K to
   about 10.5K tokens; the same shift appears in arm-C seats' per-seat output tokens and per-run cost
-  (\texttt{paper/amendments.md}, 2026-09-19 thinking-budget entry). The original 40-run RQ1 grid and the
-  400-attempt arm-K measurement discussed above were both run, and confirmed stable, before this shift;
-  the pass-rate numbers reported in this paper are therefore not put in question by it. What the shift
-  does affect: (i) every cost and token figure in this paper is regime-specific and must be read together
-  with its date and its observed output tokens per run, not extrapolated to a different time; (ii) the
-  window-control design (above) was originally interrupted mid-run by the cost increase this shift caused
-  and was redesigned at reduced scope, entirely inside the post-shift regime, once discovered
-  (Section~\ref{sec:reproducibility}); and (iii) no comparison in this paper should be read as valid
-  outside the specific time window its own runs were collected in. We report this as a confirmed
-  mechanism, not a hypothesis: it is the maintainer's own direct observation of the shift, not an
-  inference from the pass-rate numbers.
+  (\texttt{paper/amendments.md}, 2026-09-19 thinking-budget entry). The RQ1 grid (arms A and C) ran
+  entirely before 15:30 local time and shows no elevated output tokens. The 1000-attempt arm-K
+  measurement ran later, 14:22--16:33 local, so its later (\texttt{bench-printf-format}) attempts
+  overlap the 15:30--16:45 shift window \emph{by clock time}; nonetheless their output tokens (about
+  4.6K, matching the RQ1 grid's own \texttt{bench-printf-format} arm-A mean) show no elevation, so
+  arm~K's attempts are pre-shift by the output-token indicator, not by the clock -- the two do not agree,
+  and we report the indicator that is actually diagnostic of the mechanism rather than the wall-clock
+  window we originally assumed tracked it. The pass-rate numbers reported in this paper are therefore not
+  put in question by the shift. What the shift does affect: (i) every cost and token figure in this
+  paper is regime-specific and must be read together with its date and its observed output tokens per
+  run, not extrapolated to a different time; (ii) the window-control design (above) was originally
+  interrupted mid-run by the cost increase this shift caused and was redesigned at reduced scope,
+  entirely inside the post-shift regime, once discovered (Section~\ref{sec:reproducibility}); and (iii)
+  no comparison in this paper should be read as valid outside the specific output-token regime its own
+  runs were collected in, which is not always the same thing as its wall-clock window. We report the
+  shift itself as a confirmed mechanism, not a hypothesis: it is the maintainer's own direct observation,
+  not an inference from the pass-rate numbers.
 
 \item \textbf{Provider and estimate nondeterminism, independent of the regime shift above.}
   Single-agent pass-rate estimates were noisy in both directions across independently drawn samples of
-  the identical harness and prompt, all collected before the regime shift just described: for
-  \texttt{stamp-interpreter}, 0.50 at $n=10$ in the admission pilot, 0.825 at $n=40$ in the RQ1 grid, and
-  0.675 at $n=400$ in the arm-K attempt-level measurement. A 60-run budget-cap control
+  the identical harness and prompt, all collected in the pre-shift output-token regime described above:
+  for \texttt{stamp-interpreter}, 0.50 at $n=10$ in the admission pilot, 0.825 at $n=40$ in the RQ1 grid,
+  and 0.675 at $n=400$ in the arm-K attempt-level measurement. A 60-run budget-cap control
   (\texttt{bench/results/rq1-drift-control}: 23/30 at a \$0.30 per-attempt cap, 18/30 at a \$0.58
-  per-attempt cap, also pre-shift) rules out the attempt-level spending cap as the cause of this
-  discrepancy between samples, but the underlying source of it -- ordinary sampling noise at these
-  sample sizes, or some other pre-shift source of variation -- is not identified and is not claimed to
-  be; it is a separate, unresolved question from the confirmed post-shift regime change above.
+  per-attempt cap, also in the pre-shift regime) rules out the attempt-level spending cap as the cause of
+  this discrepancy between samples, but the underlying source of it -- ordinary sampling noise at these
+  sample sizes, or some other source of variation within the pre-shift regime -- is not identified and is
+  not claimed to be; it is a separate, unresolved question from the confirmed regime change above.
 
 \item \textbf{Selector sensitivity on the printf task.} Arm~K's printf selector (execution agreement
   over 9650 probes) is demonstrably sensitive to the probe set: the two candidate clusters in the

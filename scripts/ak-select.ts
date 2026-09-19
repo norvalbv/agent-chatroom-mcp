@@ -9,6 +9,12 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
+// Same guard oracle/score.ts applies to a candidate before importing it (tasks/bench-printf-format/oracle/score.ts):
+// a candidate is untrusted, model-written code and the selector runs it, so it gets the identical treatment the
+// oracle gives it, duplicated here (not imported from oracle/ — a selector import of oracle/ is the leak this guards
+// against) so a candidate cannot shell out, dynamically require/import, or reach node:vm / node:worker_threads.
+const FORBIDDEN_SOURCE = /child_process|execSync|spawnSync|\bspawn\(|node:(util|vm|worker_threads)|require\(|\bimport\s*\(/;
+
 export type Probe = { fmt: string; args: (number | string | { n: string })[] };
 /** One string per probe, or null when the candidate could not be loaded/run at all (no vote). */
 export type Signature = string[] | null;
@@ -41,7 +47,12 @@ const tsxUrl = import.meta.resolve("tsx");
 
 const DRIVER = `import { readFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
+import { syncBuiltinESMExports } from "node:module";
+import cp from "node:child_process";
+for (const k of ["spawn", "spawnSync", "exec", "execSync", "execFile", "execFileSync", "fork"]) cp[k] = () => { throw new Error("child processes are forbidden"); };
+syncBuiltinESMExports();
 const [entry, probeFile] = process.argv.slice(2);
+if (${FORBIDDEN_SOURCE.toString()}.test(readFileSync(entry, "utf8"))) { console.log(JSON.stringify(null)); process.exit(0); }
 const probes = JSON.parse(readFileSync(probeFile, "utf8"));
 const mod = await import(pathToFileURL(entry).href);
 const fn = mod.format;

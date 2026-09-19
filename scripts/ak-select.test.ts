@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { spawnSync } from "node:child_process";
-import { chmodSync, cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { delimiter, join, resolve } from "node:path";
 import { printfProbes, runCandidate, selectByMbrExec, selectBySignaturePlurality } from "./ak-select.ts";
@@ -86,6 +86,24 @@ test("selection runs with oracle/ and fixtures/ unreadable or absent, and the an
     assert.equal(selectByMbrExec(dirs.map((d) => runCandidate(d, probes))).winnerIndex, 0);
   } finally {
     for (const d of ["oracle", "fixtures"]) try { chmodSync(join(tmp, "locked", d), 0o755); } catch {}
+    rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+test("a candidate that tries to shell out or dynamically require/import gets no vote, not an exception, and never actually runs the forbidden call", () => {
+  const tmp = mkdtempSync(join(tmpdir(), "ak-select-danger-"));
+  try {
+    const marker = join(tmp, "ran-forbidden-code");
+    const dangerous = join(tmp, "danger");
+    cpSync(join(task, "public"), dangerous, { recursive: true });
+    writeFileSync(
+      join(dangerous, "format.ts"),
+      `import { execSync } from "node:child_process";\nexecSync(${JSON.stringify("touch " )} + ${JSON.stringify(marker)});\nexport function format(fmt: string): string { return fmt; }\n`,
+    );
+    const sig = runCandidate(dangerous, printfProbes().slice(0, 5));
+    assert.equal(sig, null, "the guard rejects the source before importing it: no signature, no vote");
+    assert.equal(existsSync(marker), false, "the forbidden call never actually ran");
+  } finally {
     rmSync(tmp, { recursive: true, force: true });
   }
 });

@@ -389,3 +389,128 @@ Cost, from this room's real pilots: arm A about $0.057 per run on `stamp-interpr
 What that sample can show (two-proportion test, two-sided alpha 0.05, 80 percent power): with an arm A rate of 0.5, a team rate of 0.8 needs about 39 seeds per task per arm and 0.7 needs about 93. Forty seeds per task therefore detects only a large team advantage; a smaller one is not excluded by a null result. The statistical unit is the family, not the task: `stamp-interpreter` and `stamp-2` are one family (the same specification, the same mechanism, two programs) and `bench-printf-format` is the other; each is a single-trap task whose pilot rate is one-program (stamp) or one-case (printf) evidence. Analyse each family separately, do not pool seeds across the two stamp programs as if independent, and remember that the pilot rate is selected (a task lands in 0.3 to 0.7 partly by luck) so the grid rate may differ from 0.5. The arm C evidence so far is n=1 for each stamp program (`stamp-interpreter` and `stamp-2`: passed, room concluded 3 of 3) and n=2 for `bench-printf-format` (both concluded 3 of 3 inside the deadline and both failed on case 458 alone, so three seats did not catch the slip that six of the ten single seats also made).
 
 **Not carried forward from the predecessor room (unproven or out of scope for this room):** `scripts/bench-ak.ts` and the A-k arm specification on `swarm/swarm-140131-j6yf/sonnet-7` (no pilot, not part of this room's brief); `bench-logic-grid-{2,3,4}` (same family as `bench-logic-grid`, retired unpiloted with a reason on the board).
+
+## 2026-09-19 — Arm K, settled definition (supersedes "The A-k arm - precise definition" above where they differ) (swarm-122749-7x9q, sonnet-1)
+
+Written before any real arm-K run exists. `paper/prereg-arm-k.md` predictions are unchanged. Any later change to k, the caps or the
+selector is a forking path and must be logged here with the runs that preceded it.
+
+**k per task (settled).** k = floor(mean arm-C cost / mean arm-A cost) over the 40 finished seeds of `bench/results/rq1-suite`:
+stamp-interpreter 10 (0.602/0.058), stamp-2 8 (0.595/0.068), bench-printf-format 7 (0.745/0.096). The rule is kept because it is the
+only one fixed by data that exist before arm K (no arm-K number enters it), and flooring guarantees expected spend k x mean(A) does not
+exceed mean(C): 0.58, 0.54, 0.67 USD against 0.602, 0.595, 0.745. Matching is judged on realized spend: the per-seed sum over the k attempts
+(killed attempts included, unknown cost never summed as zero) is reported against the paired arm-C cost, and arm K must not exceed arm C's
+mean per task. If it does, that is reported as a defect of the matching, not repaired by dropping attempts.
+
+**Per-attempt caps (replaces C_cost/k).** Every attempt runs the unmodified arm-A path with `--max-budget-usd 0.30` and
+`--deadline-ms 150000`. Observed arm A maxima were 0.104 USD and 48 s, so the caps leave about 3x headroom and are not expected to bind. The
+caps do not bound the total (k x 0.30 exceeds arm C); the total is judged as above. An attempt killed by its cap or deadline stays in the
+group as a null vote (no answer / no signature), its cost counts, and it is recorded with its exit code. Attempts run with a bounded
+`--concurrency`; attempts do not communicate and no hub is involved. All k attempts are fresh runs, sub-seeded `seed*1000+i`; finished arm-A
+runs are never reused.
+
+**Selectors (no oracle input).**
+- *Exact-answer tasks (stamp-interpreter, stamp-2):* plurality of normalized answers, ties to the lowest sub-seed. This is self-consistency
+  (Wang et al., arXiv:2203.11171: sample several reasoning paths, take the most frequent final answer).
+- *Code tasks (bench-printf-format), PRIMARY:* MBR-exec (Shi, Fried, Ghazvininejad, Zettlemoyer, Wang, arXiv:2204.11454: run candidate
+  programs on inputs and select the one that agrees most with the others, marginalising over programs with the same behaviour). Each
+  attempt's `format.ts` is run on a fixed probe set of 9650 `format` calls generated deterministically from the public README (every
+  conversion x flag set x width x precision over the argument classes the README allows; `scripts/ak-select.ts`, `printfProbes`).
+  A candidate's score is the number of (other candidate, probe) pairs with identical output; highest wins, ties and no-signal to the
+  lowest sub-seed; a candidate that does not load, throws at import or times out gets no vote and no score. Probe inputs are never taken
+  from `oracle/` or `fixtures/`, and the selector takes attempt workspaces only, never a task directory (`scripts/ak-select.test.ts`
+  runs selection with both directories chmod 000 and then deleted, and shows the bench-rq1 anti-tamper hash changes when either is edited).
+- *Code tasks, SECONDARY (exploratory, not the headline):* plurality of whole execution signatures (all 9650 outputs identical), i.e. CodeT's
+  agreement classes (Chen et al., arXiv:2207.10397, dual execution agreement between candidates and generated tests) reduced to their
+  candidate side because the probe set is the fixed public-spec set, not model-generated tests.
+- *Why not the old self-written-tests rule:* nearly every attempt reports its own tests passing, so it selects nothing; CodeT's own point is that
+  the agreement signal, not the self-report, carries the information. Prereg prediction 2 says agreement selection will not help on printf; that
+  is a prediction to be tested, not a design goal, and the selector was not tuned on any printf result.
+
+**All-null groups.** A group in which every attempt is a null vote (killed, no answer, no loadable candidate) submits nothing; it is scored
+as a fail (denominator stays 40), and its null-vote count is reported per task so the reader can see how much of arm K's result is starvation.
+
+A group whose selector has nothing to submit (all null votes) or whose selected attempt has no answer is an arm-K FAIL in the Fisher
+table, never excluded from the denominator; this is a restatement of the rule above so the written rule and the stats code cannot drift.
+
+**Holm family (fixed before any run).** The arm-K comparisons are 3 tasks x {K vs C, K vs A} = 6 two-sided Fisher exact tests (`fisherExactTest`
+directly, never the z-approximation switch), Holm-Bonferroni with m = 6 fixed even if some cells are missing or the grid is partial. Raw
+and adjusted p are both reported. Consequence stated up front: at m = 6 the best possible stamp-interpreter K vs A (40/40 vs 33/40, raw
+p = 0.0117) adjusts to about 0.070 at rank 1 and about 0.059 at rank 2 (Holm is step-down); it can be significant only at rank 3 or later
+(about 0.047), i.e. only if at least two other arm-K comparisons have smaller raw p-values and are themselves rejected first
+(e.g. stamp-2 K vs A at 40/40 vs 28/40, raw p = 0.000185, would rank ahead of it). The paper reports the raw and adjusted values for
+all six comparisons and does not shrink the family afterwards to rescue any one clause. The oracle ceiling is not
+a test and is outside the family.
+
+**printf selector calibration (pre-registered go/no-go, zero spend, run and thresholded before any real arm-K spend).**
+Using the 40 already-finished `bench-printf-format-A-seed10{1..40}` candidates in `bench/results/rq1-suite` (the same
+pool the prereg's own printf prediction was computed from — a forking-path risk noted and accepted, not re-tuned
+against this output) as a fixed resampling pool: 20000 draws of 7 without replacement, MBR-exec run on each draw's
+real `format.ts` files (never the `passed` field), scored against the real oracle result of the selected candidate.
+Degeneracy threshold, fixed before running: MBR-exec counts as degenerate if its selected-pass rate falls within
++/-0.05 of the single-attempt rate (0.350, i.e. in [0.300, 0.400]) — indistinguishable from a disguised random pick.
+
+Result: MBR-exec selects a passing candidate at about 0.179 (20000 draws without replacement from the fixed 40;
+signature-plurality: about 0.180), OUTSIDE the band — not degenerate, but on the harmful side, well below the
+single-attempt rate. (An earlier draft of this entry reported 0.197 using a custom xorshift32 PRNG whose weak
+low-order bits biased `Math.floor(rand() * small)` inside the Fisher-Yates shuffle — caught by opus-reviewer
+cross-checking against the closed form; the script now uses mulberry32 and the number matches the closed form to
+Monte Carlo noise.) This is not noise: all 14 passing candidates agree with each other on every one of 9650
+README-derived probes, all 26 failing candidates agree with each other on every probe too (the sole point of
+disagreement between the two clusters is the known `%.17g` of `1e-07` trap), so a sampled group of k=7 ties within
+each cluster and MBR-exec's winner is whichever cluster is the local majority in that draw. Correct is the
+population minority (14/40 = 0.35 < 0.5), so two closed forms bound the honest range, both exact, no simulation
+needed: **hypergeometric** (7 drawn without replacement from this fixed 14-pass/26-fail pool, the honest analogue
+of resampling this pool) sum_{x=4..7} C(14,x)C(26,7-x)/C(40,7) = **0.1789**, and **binomial** (7 iid draws with
+replacement at rate 0.35, the prereg's own plug-in-resampling convention for the stamp tasks) P(Binomial(7,0.35)
+>= 4) = **0.1998**. Neither is a prediction of the real arm-K run, whose k attempts are fresh draws from the
+underlying process, not from these 40 — say that so nobody later reads 0.179 or 0.200 as the arm-K printf
+prediction. **This is exactly prediction 2** ("any selector that rewards agreement... is predicted to land at or
+below 0.35"), sharpened: MBR-exec does not merely fail to help, it actively selects the modal wrong cluster in
+about 4 of 5 draws because that cluster is usually the local majority at k=7. The selector is kept as specified
+(the topic requires settling on ONE primary selector before the run, and this outcome is a predicted, not a
+disqualifying, result) but the paper must report this mechanism, not just the number, so a reader does not mistake
+selection collapse for "the model can't do agreement" when the real cause is a minority-correct base rate at odd k.
+
+A related bias, present only pre-fix and recorded because it is evidence the transport bug was biased rather than
+merely lossy: before the NaN/Infinity/-0 fix, 3 of the 14 passing candidates (never 0 of 26 failing) hung at the
+30s per-candidate timeout on the null-collapsed probes and returned no signature at all (opus-reviewer,
+findings/opus-reviewer-printf-calibration) — a correct implementation is more likely to validate/loop on an
+unexpected `null` argument than a sloppy one. This does not reproduce after the fix (confirmed: all 40 candidates
+now return a signature).
+
+A distinct bug this calibration caught and fixed before it could reach a real run: the probe driver originally
+passed `NaN`/`Infinity`/`-Infinity` as bare JS numbers through `JSON.stringify` to the child process, which
+silently turns all three into `null` (`-0` also loses its sign) — every such probe silently became
+`format(fmt, null)`. Fixed by tagging these four values (`{special: "nan"|"inf"|"-inf"|"-0"}`, alongside the
+existing bigint `{n: "..."}` tag) and decoding them in the driver; `scripts/ak-select.test.ts` now has a direct
+regression test for the round-trip and a value-level test that the driver produces the right formatted output for
+all four. Written up because a probe generator this silently wrong would have inflated disagreement between
+implementations that actually agree, and nobody would have known without this calibration.
+
+Who wrote `printfProbes()` and confirms they had not read `tasks/bench-printf-format/oracle/score.ts`'s test case
+data before writing it (opus-reviewer's process-hazard flag, findings/opus-reviewer-stats): sonnet-1. Reproducing:
+`node --import tsx scripts/ak-select-calibration.ts --draws 20000 --k 7`.
+
+**Frozen probe set and its sensitivity (opus-reviewer, findings/opus-reviewer-printf-calibration, independently
+reproduced the same defect and result off the unfixed 8b8a75f and confirmed this fix and these numbers).**
+`printfProbes()` at the commit this file was written against produces exactly 9650 probes,
+sha256 `ad2529177ee71fc050fd1aefa254a1a3108aef0cdf1e164a75c06d9ffbf1f05a` (`JSON.stringify` of the array). The
+40-candidate pool partitions into exactly two signature classes (identical pairs = C(14,2)+C(26,2) = 91+325 = 416,
+i.e. every passer is byte-identical to every other passer and every failer to every other failer) that differ on
+only 24 of the 9650 probes, all `%.17g`/`%.17G` of `1e-7`. This makes the selector's outcome sensitive to the probe
+set in a specific, disclosed way: drop precision `.17` or the value `1e-7` and all 40 signatures collapse to
+identical, every MBR-exec score ties, `argmax` returns index 0, and the selector degenerates to "always submit
+attempt 1" (about 0.35, the single-attempt rate) — richer probes make arm K's printf number worse, not better,
+because they let the selector see the majority-wrong agreement it otherwise couldn't. The probe set is frozen at
+the hash above; a future change to `printfProbes()` must record the new hash and re-run this calibration before
+the next real printf spend.
+
+**Consequence for the printf arm-K run:** run it anyway (both k and the selector are pre-registered and this
+result was predicted), but the paper must present it as a confirmation of prediction 2's mechanism, not a
+discovery, and must not present "arm K roughly matches arm A on printf" as evidence the selector is neutral —
+it is measured to actively hurt (about 0.20 vs 0.35), for the reason given above.
+
+**Reported for arm K** (in `bench/results/rq1-arm-k`, never in `rq1-suite`): K vs C and K vs A by Fisher exact, Holm-Bonferroni across the
+arm-K comparisons; cost per correct answer; the vote distribution per group; the oracle ceiling (any of the k attempts passes), labelled as
+NOT an arm, a bound on what selection could reach.

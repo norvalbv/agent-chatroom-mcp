@@ -37,12 +37,20 @@ console.log(`running each of the ${candidates.length} candidates on ${probes.len
 const sigs = candidates.map((c) => runCandidate(c.workspace, probes));
 sigs.forEach((s, i) => console.log(`  ${dirs[i]}: passed=${candidates[i].passed} loaded=${s !== null}`));
 
-// xorshift32, seeded, so the calibration is reproducible.
-let state = 1;
-function rand(): number {
-  state ^= state << 13; state ^= state >>> 17; state ^= state << 5;
-  return ((state >>> 0) % 1e9) / 1e9;
+// mulberry32, seeded, so the calibration is reproducible. (Not xorshift32: its low-order bits are weak,
+// which biases Math.floor(rand() * small) in Fisher-Yates exactly where it matters most — verified against
+// this script's own closed-form check below, where the original xorshift32 gave 0.197 against a true 0.179.)
+function mulberry32(seed: number) {
+  let a = seed;
+  return () => {
+    a |= 0;
+    a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
 }
+const rand = mulberry32(1);
 function sampleWithoutReplacement(n: number, count: number): number[] {
   const pool = Array.from({ length: n }, (_, i) => i);
   for (let i = pool.length - 1; i > 0; i--) {
@@ -63,23 +71,41 @@ function calibrate(selector: (s: ReturnType<typeof selectByMbrExec>["scores"] ex
   return wins / draws;
 }
 
-const single = candidates.filter((c) => c.passed).length / candidates.length;
+const nCorrect = candidates.filter((c) => c.passed).length;
+const nTotal = candidates.length;
+const single = nCorrect / nTotal;
 const mbr = calibrate(selectByMbrExec as any, "mbr-exec");
 const plur = calibrate(selectBySignaturePlurality as any, "signature-plurality");
-console.log(`\nsingle-attempt pass rate: ${single.toFixed(3)} (14/40)`);
-console.log(`MBR-exec (k=${k}, ${draws} draws): ${mbr.toFixed(3)}`);
-console.log(`signature-plurality (k=${k}, ${draws} draws): ${plur.toFixed(3)}`);
+
+// Exact closed forms — no simulation needed once the pool partitions into exactly two mutually-agreeing
+// clusters (verified above by pairwise agreement, not assumed): "majority cluster wins" reduces to "at
+// least ceil((k+1)/2) of the k draws are correct". Hypergeometric (draws without replacement from this
+// fixed 40, the honest analogue of resampling THIS pool) and binomial (draws with replacement, the
+// prereg's own plug-in-resampling convention for the stamp tasks) are reported side by side; neither is a
+// prediction of the real arm-K run, whose k attempts are fresh draws from the underlying process, not from
+// these 40.
+const nCk = (n: number, r: number) => {
+  let x = 1;
+  for (let i = 0; i < r; i++) x = (x * (n - i)) / (i + 1);
+  return x;
+};
+const majority = Math.ceil((k + 1) / 2);
+let hyper = 0;
+for (let c = majority; c <= Math.min(k, nCorrect); c++) hyper += (nCk(nCorrect, c) * nCk(nTotal - nCorrect, k - c)) / nCk(nTotal, k);
+let binom = 0;
+for (let c = majority; c <= k; c++) binom += nCk(k, c) * single ** c * (1 - single) ** (k - c);
+
+console.log(`\nsingle-attempt pass rate: ${single.toFixed(4)} (${nCorrect}/${nTotal})`);
+console.log(`MBR-exec (k=${k}, ${draws} draws, without replacement): ${mbr.toFixed(4)}`);
+console.log(`signature-plurality (k=${k}, ${draws} draws, without replacement): ${plur.toFixed(4)}`);
+console.log(`exact hypergeometric P(>= ${majority} of ${k} correct, drawn w/o replacement from ${nCorrect}/${nTotal}): ${hyper.toFixed(4)}`);
+console.log(`exact binomial P(Binomial(${k}, ${single.toFixed(4)}) >= ${majority}) (draws with replacement): ${binom.toFixed(4)}`);
 console.log(`\nDEGENERACY THRESHOLD (pre-registered): MBR-exec counts as degenerate if it falls within +/-0.05 of the`);
 console.log(`single-attempt rate (i.e. in [${(single - 0.05).toFixed(3)}, ${(single + 0.05).toFixed(3)}]) — indistinguishable`);
 console.log(`from a disguised random pick. Verdict: ${Math.abs(mbr - single) > 0.05 ? "NOT degenerate (selector separates signal)" : "DEGENERATE (selector adds no separation over chance)"}.`);
-console.log(`\nWhy MBR-exec lands BELOW the single-attempt rate on this pool (not merely undifferentiated): all 14 correct`);
-console.log(`candidates agree with each other on every one of the ${probes.length} probes, all 26 wrong candidates agree with`);
-console.log(`each other on every probe too (the single %.17g-of-1e-07 trap is the only place the two clusters differ), so a`);
-console.log(`sampled group of k ties within each cluster and MBR-exec's winner is whichever cluster is the local majority in`);
-console.log(`that draw. Correct is the population minority (14/40 = 0.35), so the analytical expectation is`);
-console.log(`P(Binomial(${k}, 0.35) >= ${Math.ceil((k + 1) / 2)}) = ${(() => {
-  const nCk = (n: number, r: number) => { let x = 1; for (let i = 0; i < r; i++) x = (x * (n - i)) / (i + 1); return x; };
-  let s = 0;
-  for (let c = Math.ceil((k + 1) / 2); c <= k; c++) s += nCk(k, c) * 0.35 ** c * 0.65 ** (k - c);
-  return s.toFixed(4);
-})()} (with replacement; this run draws without replacement from the fixed 40, so a close but not identical match is expected).`);
+console.log(`\nWhy MBR-exec lands BELOW the single-attempt rate on this pool (not merely undifferentiated): all ${nCorrect} correct`);
+console.log(`candidates agree with each other on every one of the ${probes.length} probes, all ${nTotal - nCorrect} wrong candidates agree`);
+console.log(`with each other on every probe too (the %.17g-of-1e-07 trap is the only place the two clusters differ), so a sampled`);
+console.log(`group of k ties within each cluster and MBR-exec's winner is whichever cluster is the local majority in that draw.`);
+console.log(`Correct is the population minority (${nCorrect}/${nTotal} = ${single.toFixed(3)}), so the closed forms above are the exact`);
+console.log(`expectation, matched by the ${draws}-draw simulation to within Monte Carlo noise.`);

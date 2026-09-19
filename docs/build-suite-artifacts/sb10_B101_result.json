@@ -1,0 +1,329 @@
+{
+  "run_config": {
+    "task_sha256": "9eb8c849256d84b6cc0c821c3107168de4e7875390859bd6abb902049fd8887a",
+    "generator_sha256": "c20ad6dd454532998796b64c1846ec85c5d128be9b0474f0dd0698300b3e56d4",
+    "runner_sha256": "aa5adceaf3c6367c87dd2806b5d727be0326a2dbb1965dc226aba4d315e8bc4c",
+    "runtime_sha256": "99366e4a45906fa5cb8104bfb116cfa3826ac01fa8aea856047b04fc4e6039ad",
+    "helpers_sha256": "1d451b9289e9b17325b826bd677de62b06d92c64ee52df2392fe33883a39b716",
+    "hub_build_sha256": null,
+    "model": "sonnet",
+    "arm": "B",
+    "effort_level": "medium",
+    "effort_settings_sha256": "af1ef779182cc6e6bc8b2985a37b27915b5742ecb1a89015aeb1c721d732bc1d",
+    "cap_usd": 0.6,
+    "deadline_ms": 900000,
+    "seats": null,
+    "allocations": [
+      0.5,
+      0.25,
+      0.25
+    ]
+  },
+  "run_fingerprint": "2d1d2b4020f13727eb0818d9ba01c890956a2d97229cb086ff61fd3fce2f425a",
+  "schemaVersion": 1,
+  "task_id": "build-ledger-s1",
+  "arm": "B",
+  "seed": 101,
+  "model": "sonnet",
+  "outcome": "completed",
+  "reason": "completed",
+  "error": null,
+  "anti_tamper": {
+    "hash_before": "9eb8c849256d84b6cc0c821c3107168de4e7875390859bd6abb902049fd8887a",
+    "hash_after": "9eb8c849256d84b6cc0c821c3107168de4e7875390859bd6abb902049fd8887a",
+    "unchanged": true
+  },
+  "effort": {
+    "level": "medium",
+    "settings_path": ".claude/settings.json",
+    "settings_sha256": "af1ef779182cc6e6bc8b2985a37b27915b5742ecb1a89015aeb1c721d732bc1d",
+    "own_git_root": true
+  },
+  "review_integrity": {
+    "workspace_sha256_before": "6d1703f228f42b947d6dd4eedb4ee12c0465546637570deeafb382de44c305be",
+    "workspace_sha256_after": "6d1703f228f42b947d6dd4eedb4ee12c0465546637570deeafb382de44c305be",
+    "unchanged": true
+  },
+  "room_validation": null,
+  "seats": [
+    {
+      "name": "builder-1",
+      "argv": [
+        "claude",
+        "-p",
+        "The warehouse library in src/ must meet the specification in SPEC.md. The public tests in test/ pass today, but passing them does not prove the code meets the specification. Make the codebase conform to SPEC.md, keeping everything that already conforms working. Run the tests with: node --test test/*.test.ts. Do not create files outside this directory.\n\nModify the source files in this working directory. File edits are your submission.",
+        "--mcp-config",
+        "/tmp/sb10/B101/mcp-empty.json",
+        "--strict-mcp-config",
+        "--allowedTools",
+        "Read,Edit,Write,MultiEdit,Bash,Glob,Grep",
+        "--tools",
+        "Read,Edit,Write,MultiEdit,Bash,Glob,Grep",
+        "--disable-slash-commands",
+        "--setting-sources",
+        "project",
+        "--exclude-dynamic-system-prompt-sections",
+        "--output-format",
+        "stream-json",
+        "--verbose",
+        "--model",
+        "sonnet",
+        "--max-budget-usd",
+        "0.3"
+      ],
+      "exit_code": 0,
+      "signal": null,
+      "started_at": "2026-09-19T19:48:30.246Z",
+      "completed_at": "2026-09-19T19:48:58.530Z",
+      "text": "I fixed the code in `src/` to match `SPEC.md`, and the public tests still pass (5 pass, 0 fail). I didn't write new tests for the fixed cases, so those fixes are untested.\n\nWhat I changed:\n- **Receiving:** stock received into an existing lot id now adds to the lot instead of replacing its quantity.\n- **Available stock:** expired lots no longer count towards a sku's available stock.\n- **Lot order:** lots with the same expiry are now used in ascending id order (it was descending).\n- **Reserving:** an order that can't be filled now releases everything it had reserved. It used to release only part of it. A sku that repeats across lines is now reserved as one summed quantity.\n- **Cancelled orders:** a cancelled order that is still in the backorder queue is skipped on retry and never reserved again. I left it in the queue rather than removing it, since the spec says nothing removes it.\n- **Shipping:** the limit is now what is still reserved for that sku. It used to be the original line quantity, which let repeated shipments exceed the reservation.\n- **Cancelling:** only the units still reserved are released. Units already shipped no longer have their reservation released a second time.\n- **Returns:** units going back to a lot are restocked on that lot's expiry day. They were being discarded one day early.\n\nI left the snapshot shape alone.",
+      "usage": {
+        "cost": 0.056708800000000004,
+        "input_tokens": 8,
+        "cache_read_input_tokens": 31894,
+        "cache_creation_input_tokens": 7656,
+        "output_tokens": 1969
+      },
+      "num_turns": 5,
+      "duration_ms": 26413,
+      "duration_api_ms": 24114,
+      "stderr_tail": "",
+      "killed_by_deadline": false,
+      "partial_usage": null,
+      "reported_models": {
+        "system_init": [
+          "claude-sonnet-5"
+        ],
+        "assistant": [
+          "claude-sonnet-5"
+        ],
+        "result_model_usage": [
+          "claude-sonnet-5"
+        ]
+      },
+      "model_usage": {
+        "claude-sonnet-5": {
+          "inputTokens": 8,
+          "outputTokens": 1969,
+          "cacheReadInputTokens": 31894,
+          "cacheCreationInputTokens": 7656,
+          "webSearchRequests": 0,
+          "costUSD": 0.056708800000000004,
+          "contextWindow": 1000000,
+          "maxOutputTokens": 64000,
+          "thinkingTokens": 529,
+          "canonicalModel": "claude-sonnet-5",
+          "provider": "firstParty",
+          "costBasis": "list"
+        }
+      },
+      "budget_usd": 0.3,
+      "effort": {
+        "level": "medium",
+        "settings_path": ".claude/settings.json",
+        "settings_sha256": "af1ef779182cc6e6bc8b2985a37b27915b5742ecb1a89015aeb1c721d732bc1d",
+        "own_git_root": true
+      },
+      "thinking_tokens": 529
+    },
+    {
+      "name": "reviewer",
+      "argv": [
+        "claude",
+        "-p",
+        "The warehouse library in src/ must meet the specification in SPEC.md. The public tests in test/ pass today, but passing them does not prove the code meets the specification. Make the codebase conform to SPEC.md, keeping everything that already conforms working. Run the tests with: node --test test/*.test.ts. Do not create files outside this directory.\n\nYou are reviewing another engineer's submission. Their final message:\nI fixed the code in `src/` to match `SPEC.md`, and the public tests still pass (5 pass, 0 fail). I didn't write new tests for the fixed cases, so those fixes are untested.\n\nWhat I changed:\n- **Receiving:** stock received into an existing lot id now adds to the lot instead of replacing its quantity.\n- **Available stock:** expired lots no longer count towards a sku's available stock.\n- **Lot order:** lots with the same expiry are now used in ascending id order (it was descending).\n- **Reserving:** an order that can't be filled now releases everything it had reserved. It used to release only part of it. A sku that repeats across lines is now reserved as one summed quantity.\n- **Cancelled orders:** a cancelled order that is still in the backorder queue is skipped on retry and never reserved again. I left it in the queue rather than removing it, since the spec says nothing removes it.\n- **Shipping:** the limit is now what is still reserved for that sku. It used to be the original line quantity, which let repeated shipments exceed the reservation.\n- **Cancelling:** only the units still reserved are released. Units already shipped no longer have their reservation released a second time.\n- **Returns:** units going back to a lot are restocked on that lot's expiry day. They were being discarded one day early.\n\nI left the snapshot shape alone.\nThis directory is a snapshot; edits here are not submitted. Respond exactly APPROVE or REVISE: followed by actionable corrections.",
+        "--mcp-config",
+        "/tmp/sb10/B101/mcp-empty.json",
+        "--strict-mcp-config",
+        "--allowedTools",
+        "Read,Bash,Glob,Grep",
+        "--tools",
+        "Read,Bash,Glob,Grep",
+        "--disable-slash-commands",
+        "--setting-sources",
+        "project",
+        "--exclude-dynamic-system-prompt-sections",
+        "--output-format",
+        "stream-json",
+        "--verbose",
+        "--model",
+        "sonnet",
+        "--max-budget-usd",
+        "0.15"
+      ],
+      "exit_code": 0,
+      "signal": null,
+      "started_at": "2026-09-19T19:48:58.569Z",
+      "completed_at": "2026-09-19T19:49:19.222Z",
+      "text": "APPROVE\n\nI read each claimed fix against `SPEC.md` in `src/` and found no violations. I did not run the tests or any new scenarios.\n\n- **Receiving:** `receive` adds to an existing lot.\n- **Available stock:** `available` only counts lots that are usable that day, and `usable` is `expiry >= day`, so a lot can be used on its expiry day.\n- **Lot order:** `plan` sorts by expiry, then by ascending id.\n- **Reserving:** `tryReserve` sums quantities per sku and releases everything it held if any sku can't be filled.\n- **Cancelled orders:** `retry` skips cancelled orders and leaves them in the queue.\n- **Shipping:** the limit is the units still in `remaining`.\n- **Cancelling:** only `remaining` is released.\n- **Returns:** the cap is shipped minus already returned, and the latest shipped units go back first. A lot is restocked only if `expiry >= day`.\n- **Retries:** they run on receive, cancel and return, in queue order.\n- **Snapshot:** the shape is unchanged.\n\nThe fixes have no new tests. Adding a few for the fixed cases would be worthwhile, but that is not a reason to hold the change.",
+      "usage": {
+        "cost": 0.0436634,
+        "input_tokens": 4,
+        "cache_read_input_tokens": 11477,
+        "cache_creation_input_tokens": 6595,
+        "output_tokens": 1498
+      },
+      "num_turns": 3,
+      "duration_ms": 19192,
+      "duration_api_ms": 18080,
+      "stderr_tail": "",
+      "killed_by_deadline": false,
+      "partial_usage": null,
+      "reported_models": {
+        "system_init": [
+          "claude-sonnet-5"
+        ],
+        "assistant": [
+          "claude-sonnet-5"
+        ],
+        "result_model_usage": [
+          "claude-sonnet-5"
+        ]
+      },
+      "model_usage": {
+        "claude-sonnet-5": {
+          "inputTokens": 4,
+          "outputTokens": 1498,
+          "cacheReadInputTokens": 11477,
+          "cacheCreationInputTokens": 6595,
+          "webSearchRequests": 0,
+          "costUSD": 0.0436634,
+          "contextWindow": 1000000,
+          "maxOutputTokens": 64000,
+          "thinkingTokens": 916,
+          "canonicalModel": "claude-sonnet-5",
+          "provider": "firstParty",
+          "costBasis": "list"
+        }
+      },
+      "budget_usd": 0.15,
+      "effort": {
+        "level": "medium",
+        "settings_path": ".claude/settings.json",
+        "settings_sha256": "af1ef779182cc6e6bc8b2985a37b27915b5742ecb1a89015aeb1c721d732bc1d",
+        "own_git_root": true
+      },
+      "thinking_tokens": 916
+    },
+    {
+      "name": "builder-2",
+      "argv": [
+        "claude",
+        "-p",
+        "The warehouse library in src/ must meet the specification in SPEC.md. The public tests in test/ pass today, but passing them does not prove the code meets the specification. Make the codebase conform to SPEC.md, keeping everything that already conforms working. Run the tests with: node --test test/*.test.ts. Do not create files outside this directory.\n\nModify the source files in this working directory. File edits are your submission.\nIndependent review feedback:\nAPPROVE\n\nI read each claimed fix against `SPEC.md` in `src/` and found no violations. I did not run the tests or any new scenarios.\n\n- **Receiving:** `receive` adds to an existing lot.\n- **Available stock:** `available` only counts lots that are usable that day, and `usable` is `expiry >= day`, so a lot can be used on its expiry day.\n- **Lot order:** `plan` sorts by expiry, then by ascending id.\n- **Reserving:** `tryReserve` sums quantities per sku and releases everything it held if any sku can't be filled.\n- **Cancelled orders:** `retry` skips cancelled orders and leaves them in the queue.\n- **Shipping:** the limit is the units still in `remaining`.\n- **Cancelling:** only `remaining` is released.\n- **Returns:** the cap is shipped minus already returned, and the latest shipped units go back first. A lot is restocked only if `expiry >= day`.\n- **Retries:** they run on receive, cancel and return, in queue order.\n- **Snapshot:** the shape is unchanged.\n\nThe fixes have no new tests. Adding a few for the fixed cases would be worthwhile, but that is not a reason to hold the change.\nApply the necessary revision.",
+        "--mcp-config",
+        "/tmp/sb10/B101/mcp-empty.json",
+        "--strict-mcp-config",
+        "--allowedTools",
+        "Read,Edit,Write,MultiEdit,Bash,Glob,Grep",
+        "--tools",
+        "Read,Edit,Write,MultiEdit,Bash,Glob,Grep",
+        "--disable-slash-commands",
+        "--setting-sources",
+        "project",
+        "--exclude-dynamic-system-prompt-sections",
+        "--output-format",
+        "stream-json",
+        "--verbose",
+        "--model",
+        "sonnet",
+        "--max-budget-usd",
+        "0.15"
+      ],
+      "exit_code": 0,
+      "signal": null,
+      "started_at": "2026-09-19T19:49:19.233Z",
+      "completed_at": "2026-09-19T19:49:34.756Z",
+      "text": "The review approved the code with no violations, so I left `src/` alone. Its one suggestion was to add tests for the fixed cases, and I added three to `test/warehouse.test.ts`:\n\n- **Expiry day:** a lot can be used on its expiry day but not the day after.\n- **Multi-sku reservation:** if one sku can't be filled, everything already reserved is released.\n- **Cancelled backorders:** a cancelled backordered order is not retried when stock arrives.\n\nAll 8 tests pass (the original 5 plus the 3 new ones). The reviewer checked the code by reading it and didn't run anything. The three new tests are the only executed check of these cases. Lot ordering, returns and the other spec points still have no direct tests.",
+      "usage": {
+        "cost": 0.0326308,
+        "input_tokens": 8,
+        "cache_read_input_tokens": 29124,
+        "cache_creation_input_tokens": 4070,
+        "output_tokens": 1051
+      },
+      "num_turns": 4,
+      "duration_ms": 14216,
+      "duration_api_ms": 12671,
+      "stderr_tail": "",
+      "killed_by_deadline": false,
+      "partial_usage": null,
+      "reported_models": {
+        "system_init": [
+          "claude-sonnet-5"
+        ],
+        "assistant": [
+          "claude-sonnet-5"
+        ],
+        "result_model_usage": [
+          "claude-sonnet-5"
+        ]
+      },
+      "model_usage": {
+        "claude-sonnet-5": {
+          "inputTokens": 8,
+          "outputTokens": 1051,
+          "cacheReadInputTokens": 29124,
+          "cacheCreationInputTokens": 4070,
+          "webSearchRequests": 0,
+          "costUSD": 0.0326308,
+          "contextWindow": 1000000,
+          "maxOutputTokens": 64000,
+          "thinkingTokens": 73,
+          "canonicalModel": "claude-sonnet-5",
+          "provider": "firstParty",
+          "costBasis": "list"
+        }
+      },
+      "budget_usd": 0.15,
+      "effort": {
+        "level": "medium",
+        "settings_path": ".claude/settings.json",
+        "settings_sha256": "af1ef779182cc6e6bc8b2985a37b27915b5742ecb1a89015aeb1c721d732bc1d",
+        "own_git_root": true
+      },
+      "thinking_tokens": 73
+    }
+  ],
+  "usage": {
+    "steps": 0,
+    "prompt_tokens": 0,
+    "completion_tokens": 0,
+    "cost_usd": 0.13300299999999998,
+    "seats": 3,
+    "seats_with_usage": 3,
+    "coverage": "complete",
+    "input_tokens": 20,
+    "cache_read_input_tokens": 72495,
+    "cache_creation_input_tokens": 18321,
+    "output_tokens": 4518
+  },
+  "turns": {
+    "summed": 12
+  },
+  "wall_clock": {
+    "started_at": "2026-09-19T19:48:30.228Z",
+    "completed_at": "2026-09-19T19:49:34.768Z",
+    "duration_ms": 64540
+  },
+  "budget": {
+    "max_budget_usd": 0.6,
+    "deadline_ms": 900000,
+    "allocations": [
+      0.5,
+      0.25,
+      0.25
+    ],
+    "overshoot_usd": 0
+  },
+  "build": {
+    "head_revision": "bcaa38e9715a955fd54592bc56cf51b9dc65e33f",
+    "runner_sha256": "aa5adceaf3c6367c87dd2806b5d727be0326a2dbb1965dc226aba4d315e8bc4c",
+    "runtime_sha256": "99366e4a45906fa5cb8104bfb116cfa3826ac01fa8aea856047b04fc4e6039ad",
+    "helpers_sha256": "1d451b9289e9b17325b826bd677de62b06d92c64ee52df2392fe33883a39b716",
+    "hub_entry": null,
+    "hub_entry_sha256": null,
+    "hub_build_sha256": null,
+    "hub_revision": null,
+    "provenance_scope": null
+  }
+}

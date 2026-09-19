@@ -1,0 +1,146 @@
+{
+  "schemaVersion": 1,
+  "task_id": "build-ledger-s1",
+  "arm": "A",
+  "seed": 11,
+  "model": "sonnet",
+  "outcome": "task_pass",
+  "passed": true,
+  "reason": "task_pass",
+  "oracle": {
+    "kind": "planted-defects",
+    "command": "node --import tsx oracle/score.ts <workspace>",
+    "exit_code": 0
+  },
+  "anti_tamper": {
+    "hash_before": "f92126ad6bd0976a9269a66d2265fcc2d04e09f46f023ccf669e2a16a59ad5d5",
+    "hash_after": "f92126ad6bd0976a9269a66d2265fcc2d04e09f46f023ccf669e2a16a59ad5d5",
+    "unchanged": true
+  },
+  "seats": [
+    {
+      "name": "single",
+      "argv": [
+        "claude",
+        "-p",
+        "The warehouse library in src/ must meet the specification in SPEC.md. The public tests in test/ pass today, but passing them does not prove the code meets the specification. Make the codebase conform to SPEC.md, keeping everything that already conforms working. Run the tests with: node --test test/*.test.ts. Do not create files outside this directory.\n\nModify the relevant source file(s) in your current working directory directly to implement the fix described above. Your edit to the existing file(s) is the submission; do not create any other output file.",
+        "--mcp-config",
+        "/tmp/sb7/led1-A-11/mcp-empty.json",
+        "--strict-mcp-config",
+        "--allowedTools",
+        "Read,Edit,Write,MultiEdit,Bash,Glob,Grep",
+        "--tools",
+        "Read,Edit,Write,MultiEdit,Bash,Glob,Grep",
+        "--disable-slash-commands",
+        "--setting-sources",
+        "project",
+        "--exclude-dynamic-system-prompt-sections",
+        "--output-format",
+        "stream-json",
+        "--verbose",
+        "--model",
+        "sonnet",
+        "--max-budget-usd",
+        "3"
+      ],
+      "exit_code": 0,
+      "signal": null,
+      "started_at": "2026-09-19T19:42:33.994Z",
+      "completed_at": "2026-09-19T19:43:02.125Z",
+      "num_turns": 4,
+      "duration_ms": 23995,
+      "duration_api_ms": 23097,
+      "usage": {
+        "cost": 0.0595812,
+        "input_tokens": 8,
+        "cache_read_input_tokens": 31066,
+        "cache_creation_input_tokens": 7578,
+        "output_tokens": 2304
+      },
+      "text": "I changed the code in `src/` to match SPEC.md. The public tests still pass (5 pass, 0 fail). I didn't add tests for the new behaviour, so the fixes themselves aren't exercised by any test.\n\nWhat I fixed:\n- **Receiving into an existing lot** (`src/inventory.ts`): it now adds to the lot instead of replacing its quantity.\n- **Available stock** (`src/inventory.ts`): expired lots no longer count towards a sku's available stock on a given day.\n- **Lot order** (`src/inventory.ts`): lots with the same expiry are now used in ascending id order. It was descending.\n- **Failed reservations** (`src/orders.ts`): a failed order now releases everything it had held. Before, it released only part of it.\n- **Repeated skus** (`src/orders.ts`): lines with the same sku are now added up and reserved together.\n- **Cancelled orders** (`src/backorder.ts`): a cancelled order left in the backorder queue is no longer reserved again on a retry. It is dropped from the queue instead.\n- **Shipping** (`src/warehouse.ts`): the limit is now what is still reserved for that sku, not the line quantity. Shipping more than that is refused.\n- **Cancelling** (`src/warehouse.ts`): it now releases only the units still reserved. Before, it also released shipped units, which corrupted the reserved counts.\n- **Returns** (`src/warehouse.ts`): units go back to a lot only if it can still be used that day, meaning its expiry is on or after the return day. The old check was one day too lenient.\n\nI didn't change `snapshot`, so its shape is as before.",
+      "killed_by_deadline": false,
+      "partial_usage": null,
+      "reported_models": {
+        "system_init": [
+          "claude-sonnet-5"
+        ],
+        "assistant": [
+          "claude-sonnet-5"
+        ],
+        "result_model_usage": [
+          "claude-sonnet-5"
+        ]
+      },
+      "model_usage": {
+        "claude-sonnet-5": {
+          "inputTokens": 8,
+          "outputTokens": 2304,
+          "cacheReadInputTokens": 31066,
+          "cacheCreationInputTokens": 7578,
+          "webSearchRequests": 0,
+          "costUSD": 0.0595812,
+          "contextWindow": 1000000,
+          "maxOutputTokens": 64000,
+          "thinkingTokens": 641,
+          "canonicalModel": "claude-sonnet-5",
+          "provider": "firstParty",
+          "costBasis": "list"
+        }
+      }
+    }
+  ],
+  "usage": {
+    "steps": 0,
+    "prompt_tokens": 0,
+    "completion_tokens": 0,
+    "cost_usd": 0.0595812,
+    "seats": 1,
+    "seats_with_usage": 1,
+    "coverage": "complete",
+    "input_tokens": 8,
+    "cache_read_input_tokens": 31066,
+    "cache_creation_input_tokens": 7578,
+    "output_tokens": 2304
+  },
+  "turns": {
+    "per_seat": [
+      {
+        "name": "single",
+        "num_turns": 4
+      }
+    ],
+    "summed": 4,
+    "seats": 1,
+    "seats_with_turns": 1,
+    "coverage": "complete"
+  },
+  "wall_clock": {
+    "started_at": "2026-09-19T19:42:33.993Z",
+    "completed_at": "2026-09-19T19:43:02.125Z",
+    "duration_ms": 28132
+  },
+  "budget": {
+    "max_budget_usd": 3,
+    "deadline_ms": 900000
+  },
+  "build": {
+    "captured_at": "2026-09-19T19:42:33.970Z",
+    "head_revision": "55781dc394165f61e83b952301001fb3ffd22bd8",
+    "runner_sha256": "5c5efb306636ceae6b520f0361e17de9b2c31c587a1da0a92bdea4c41b554ae8",
+    "hub_entry": null,
+    "hub_entry_sha256": null,
+    "hub_revision": null,
+    "hub_build_sha256": null,
+    "provenance_scope": null
+  },
+  "frozen": {
+    "task_sha256": "f92126ad6bd0976a9269a66d2265fcc2d04e09f46f023ccf669e2a16a59ad5d5",
+    "scorer_sha256": "f4b645c670ae4655aec1189e4d7320294115f0e3c6da3b5ba41a7ee3b1cd00f8",
+    "fact_scorer_sha256": "6b8b3e98c8c408ecd6715a38db9263488644d27c01a11c5bab3172acd5539832",
+    "task_id": "build-ledger-s1",
+    "timeout_ms": 900000,
+    "seats": 1
+  },
+  "error": null,
+  "checked_at": "2026-09-19T19:43:02.780Z"
+}

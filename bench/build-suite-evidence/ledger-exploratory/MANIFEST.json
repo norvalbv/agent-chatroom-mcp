@@ -1,0 +1,1758 @@
+{
+  "schema": 1,
+  "note": "As-found immutable artifacts; no new model runs or retrospective edits. Workspace .git metadata excluded; source/test/settings bytes preserved. Raw results may reflect known obsolete scorer and classifier bugs; corrected scores require explicit separate replay.",
+  "files": [
+    {
+      "path": "sb4/led1-A-1/workspace/SPEC.md",
+      "source": "/tmp/sb4/led1-A-1/workspace/SPEC.md",
+      "sha256": "5fa12a817d4716101c20344435d4efac981e870f07df947be04a8de5c23a4078",
+      "bytes": 2062
+    },
+    {
+      "path": "sb4/led1-A-1/workspace/brief.txt",
+      "source": "/tmp/sb4/led1-A-1/workspace/brief.txt",
+      "sha256": "2d37efab6e0daa4c765a10db649625d7105d37fee31dd5ddf2f63ef0544a1845",
+      "bytes": 354
+    },
+    {
+      "path": "sb4/led1-A-1/workspace/src/backorder.ts",
+      "source": "/tmp/sb4/led1-A-1/workspace/src/backorder.ts",
+      "sha256": "42a126de2c3eb033473c6c062f565cb8e78eeff44a7cc341da7ce8f682025f8b",
+      "bytes": 768
+    },
+    {
+      "path": "sb4/led1-A-1/workspace/src/inventory.ts",
+      "source": "/tmp/sb4/led1-A-1/workspace/src/inventory.ts",
+      "sha256": "397b5b00ce1fccb7bb83302846150cd0d72b3c5f3382aca6546531d24938a1d2",
+      "bytes": 1763
+    },
+    {
+      "path": "sb4/led1-A-1/workspace/src/orders.ts",
+      "source": "/tmp/sb4/led1-A-1/workspace/src/orders.ts",
+      "sha256": "3f53209910b18e09ecebb84317d93a95f43b24d5a4631ba9074ddf734c2854cd",
+      "bytes": 969
+    },
+    {
+      "path": "sb4/led1-A-1/workspace/src/types.ts",
+      "source": "/tmp/sb4/led1-A-1/workspace/src/types.ts",
+      "sha256": "314ef4745fd1e96dc041f022a9f16d2a279b5c62a90f2a2dc260327323c474a4",
+      "bytes": 177
+    },
+    {
+      "path": "sb4/led1-A-1/workspace/src/warehouse.ts",
+      "source": "/tmp/sb4/led1-A-1/workspace/src/warehouse.ts",
+      "sha256": "00c14141595605610adaf69e83f649c545ec636544fbc3f4636d92e4064f5f91",
+      "bytes": 3549
+    },
+    {
+      "path": "sb4/led1-A-1/workspace/test/warehouse.test.ts",
+      "source": "/tmp/sb4/led1-A-1/workspace/test/warehouse.test.ts",
+      "sha256": "749717eca9247f6574cbd579df212755b1a31e54a008fbcae6eb49f56e56cdf7",
+      "bytes": 1472
+    },
+    {
+      "path": "sb4/led1-A-1/result.json",
+      "source": "/tmp/sb4/led1-A-1/result.json",
+      "sha256": "1333823423c6d50a18ea2a3fe32c78ec37268449d2285b4c5f165eae13f5ba59",
+      "bytes": 5664
+    },
+    {
+      "path": "sb4/led1-A-2/workspace/SPEC.md",
+      "source": "/tmp/sb4/led1-A-2/workspace/SPEC.md",
+      "sha256": "5fa12a817d4716101c20344435d4efac981e870f07df947be04a8de5c23a4078",
+      "bytes": 2062
+    },
+    {
+      "path": "sb4/led1-A-2/workspace/brief.txt",
+      "source": "/tmp/sb4/led1-A-2/workspace/brief.txt",
+      "sha256": "2d37efab6e0daa4c765a10db649625d7105d37fee31dd5ddf2f63ef0544a1845",
+      "bytes": 354
+    },
+    {
+      "path": "sb4/led1-A-2/workspace/src/backorder.ts",
+      "source": "/tmp/sb4/led1-A-2/workspace/src/backorder.ts",
+      "sha256": "42a126de2c3eb033473c6c062f565cb8e78eeff44a7cc341da7ce8f682025f8b",
+      "bytes": 768
+    },
+    {
+      "path": "sb4/led1-A-2/workspace/src/inventory.ts",
+      "source": "/tmp/sb4/led1-A-2/workspace/src/inventory.ts",
+      "sha256": "397b5b00ce1fccb7bb83302846150cd0d72b3c5f3382aca6546531d24938a1d2",
+      "bytes": 1763
+    },
+    {
+      "path": "sb4/led1-A-2/workspace/src/orders.ts",
+      "source": "/tmp/sb4/led1-A-2/workspace/src/orders.ts",
+      "sha256": "b7227d6b41f54a0091228218f234db0a3cbc81e98d270cf94bf2ec26efc6d629",
+      "bytes": 1012
+    },
+    {
+      "path": "sb4/led1-A-2/workspace/src/types.ts",
+      "source": "/tmp/sb4/led1-A-2/workspace/src/types.ts",
+      "sha256": "314ef4745fd1e96dc041f022a9f16d2a279b5c62a90f2a2dc260327323c474a4",
+      "bytes": 177
+    },
+    {
+      "path": "sb4/led1-A-2/workspace/src/warehouse.ts",
+      "source": "/tmp/sb4/led1-A-2/workspace/src/warehouse.ts",
+      "sha256": "22c36f42c87581dde06f76ffa62422f1bd7e300e167b67f9183f9f322381fcd3",
+      "bytes": 3595
+    },
+    {
+      "path": "sb4/led1-A-2/workspace/test/warehouse.test.ts",
+      "source": "/tmp/sb4/led1-A-2/workspace/test/warehouse.test.ts",
+      "sha256": "749717eca9247f6574cbd579df212755b1a31e54a008fbcae6eb49f56e56cdf7",
+      "bytes": 1472
+    },
+    {
+      "path": "sb4/led1-A-2/result.json",
+      "source": "/tmp/sb4/led1-A-2/result.json",
+      "sha256": "1a5f7cabe6f099bcd18bf78de6b69849ffbd9d0d7b707df9bfb1d2446dd67d54",
+      "bytes": 5881
+    },
+    {
+      "path": "sb4/led1-A-3/workspace/SPEC.md",
+      "source": "/tmp/sb4/led1-A-3/workspace/SPEC.md",
+      "sha256": "5fa12a817d4716101c20344435d4efac981e870f07df947be04a8de5c23a4078",
+      "bytes": 2062
+    },
+    {
+      "path": "sb4/led1-A-3/workspace/brief.txt",
+      "source": "/tmp/sb4/led1-A-3/workspace/brief.txt",
+      "sha256": "2d37efab6e0daa4c765a10db649625d7105d37fee31dd5ddf2f63ef0544a1845",
+      "bytes": 354
+    },
+    {
+      "path": "sb4/led1-A-3/workspace/src/backorder.ts",
+      "source": "/tmp/sb4/led1-A-3/workspace/src/backorder.ts",
+      "sha256": "42a126de2c3eb033473c6c062f565cb8e78eeff44a7cc341da7ce8f682025f8b",
+      "bytes": 768
+    },
+    {
+      "path": "sb4/led1-A-3/workspace/src/inventory.ts",
+      "source": "/tmp/sb4/led1-A-3/workspace/src/inventory.ts",
+      "sha256": "397b5b00ce1fccb7bb83302846150cd0d72b3c5f3382aca6546531d24938a1d2",
+      "bytes": 1763
+    },
+    {
+      "path": "sb4/led1-A-3/workspace/src/orders.ts",
+      "source": "/tmp/sb4/led1-A-3/workspace/src/orders.ts",
+      "sha256": "b7227d6b41f54a0091228218f234db0a3cbc81e98d270cf94bf2ec26efc6d629",
+      "bytes": 1012
+    },
+    {
+      "path": "sb4/led1-A-3/workspace/src/types.ts",
+      "source": "/tmp/sb4/led1-A-3/workspace/src/types.ts",
+      "sha256": "314ef4745fd1e96dc041f022a9f16d2a279b5c62a90f2a2dc260327323c474a4",
+      "bytes": 177
+    },
+    {
+      "path": "sb4/led1-A-3/workspace/src/warehouse.ts",
+      "source": "/tmp/sb4/led1-A-3/workspace/src/warehouse.ts",
+      "sha256": "2e60ef31693262843c2e4a397c7674f63864b7cec980b741fb5c1c998184d4a5",
+      "bytes": 3587
+    },
+    {
+      "path": "sb4/led1-A-3/workspace/test/warehouse.test.ts",
+      "source": "/tmp/sb4/led1-A-3/workspace/test/warehouse.test.ts",
+      "sha256": "749717eca9247f6574cbd579df212755b1a31e54a008fbcae6eb49f56e56cdf7",
+      "bytes": 1472
+    },
+    {
+      "path": "sb4/led1-A-3/result.json",
+      "source": "/tmp/sb4/led1-A-3/result.json",
+      "sha256": "d4005609db979ac5a3f0bc2f7d014fc7dd078bd464d69bef2e58572c3dad56cf",
+      "bytes": 5932
+    },
+    {
+      "path": "sb4/led1-A-4/workspace/SPEC.md",
+      "source": "/tmp/sb4/led1-A-4/workspace/SPEC.md",
+      "sha256": "5fa12a817d4716101c20344435d4efac981e870f07df947be04a8de5c23a4078",
+      "bytes": 2062
+    },
+    {
+      "path": "sb4/led1-A-4/workspace/brief.txt",
+      "source": "/tmp/sb4/led1-A-4/workspace/brief.txt",
+      "sha256": "2d37efab6e0daa4c765a10db649625d7105d37fee31dd5ddf2f63ef0544a1845",
+      "bytes": 354
+    },
+    {
+      "path": "sb4/led1-A-4/workspace/src/backorder.ts",
+      "source": "/tmp/sb4/led1-A-4/workspace/src/backorder.ts",
+      "sha256": "42a126de2c3eb033473c6c062f565cb8e78eeff44a7cc341da7ce8f682025f8b",
+      "bytes": 768
+    },
+    {
+      "path": "sb4/led1-A-4/workspace/src/inventory.ts",
+      "source": "/tmp/sb4/led1-A-4/workspace/src/inventory.ts",
+      "sha256": "397b5b00ce1fccb7bb83302846150cd0d72b3c5f3382aca6546531d24938a1d2",
+      "bytes": 1763
+    },
+    {
+      "path": "sb4/led1-A-4/workspace/src/orders.ts",
+      "source": "/tmp/sb4/led1-A-4/workspace/src/orders.ts",
+      "sha256": "3f53209910b18e09ecebb84317d93a95f43b24d5a4631ba9074ddf734c2854cd",
+      "bytes": 969
+    },
+    {
+      "path": "sb4/led1-A-4/workspace/src/types.ts",
+      "source": "/tmp/sb4/led1-A-4/workspace/src/types.ts",
+      "sha256": "314ef4745fd1e96dc041f022a9f16d2a279b5c62a90f2a2dc260327323c474a4",
+      "bytes": 177
+    },
+    {
+      "path": "sb4/led1-A-4/workspace/src/warehouse.ts",
+      "source": "/tmp/sb4/led1-A-4/workspace/src/warehouse.ts",
+      "sha256": "9684ed395f7814b1280cfc3c8dfe9bd937d5e1f71eee36443050ae71d43052b3",
+      "bytes": 3593
+    },
+    {
+      "path": "sb4/led1-A-4/workspace/test/warehouse.test.ts",
+      "source": "/tmp/sb4/led1-A-4/workspace/test/warehouse.test.ts",
+      "sha256": "749717eca9247f6574cbd579df212755b1a31e54a008fbcae6eb49f56e56cdf7",
+      "bytes": 1472
+    },
+    {
+      "path": "sb4/led1-A-4/result.json",
+      "source": "/tmp/sb4/led1-A-4/result.json",
+      "sha256": "32e726289c34e54deea756c1c14a0579f386542ad24ceddaa7c2ce195ed01cd3",
+      "bytes": 6062
+    },
+    {
+      "path": "sb4/led1-A-5/workspace/SPEC.md",
+      "source": "/tmp/sb4/led1-A-5/workspace/SPEC.md",
+      "sha256": "5fa12a817d4716101c20344435d4efac981e870f07df947be04a8de5c23a4078",
+      "bytes": 2062
+    },
+    {
+      "path": "sb4/led1-A-5/workspace/brief.txt",
+      "source": "/tmp/sb4/led1-A-5/workspace/brief.txt",
+      "sha256": "2d37efab6e0daa4c765a10db649625d7105d37fee31dd5ddf2f63ef0544a1845",
+      "bytes": 354
+    },
+    {
+      "path": "sb4/led1-A-5/workspace/src/backorder.ts",
+      "source": "/tmp/sb4/led1-A-5/workspace/src/backorder.ts",
+      "sha256": "42a126de2c3eb033473c6c062f565cb8e78eeff44a7cc341da7ce8f682025f8b",
+      "bytes": 768
+    },
+    {
+      "path": "sb4/led1-A-5/workspace/src/inventory.ts",
+      "source": "/tmp/sb4/led1-A-5/workspace/src/inventory.ts",
+      "sha256": "397b5b00ce1fccb7bb83302846150cd0d72b3c5f3382aca6546531d24938a1d2",
+      "bytes": 1763
+    },
+    {
+      "path": "sb4/led1-A-5/workspace/src/orders.ts",
+      "source": "/tmp/sb4/led1-A-5/workspace/src/orders.ts",
+      "sha256": "a4b033d82c2be112e6eee14b95abdb1691b5650e672644fa6346090456cb8290",
+      "bytes": 1007
+    },
+    {
+      "path": "sb4/led1-A-5/workspace/src/types.ts",
+      "source": "/tmp/sb4/led1-A-5/workspace/src/types.ts",
+      "sha256": "314ef4745fd1e96dc041f022a9f16d2a279b5c62a90f2a2dc260327323c474a4",
+      "bytes": 177
+    },
+    {
+      "path": "sb4/led1-A-5/workspace/src/warehouse.ts",
+      "source": "/tmp/sb4/led1-A-5/workspace/src/warehouse.ts",
+      "sha256": "66f38f6c0f83331b41c2ada4a9060108c1e5436cc6445e9d8a825436b3ae8c77",
+      "bytes": 3582
+    },
+    {
+      "path": "sb4/led1-A-5/workspace/test/warehouse.test.ts",
+      "source": "/tmp/sb4/led1-A-5/workspace/test/warehouse.test.ts",
+      "sha256": "749717eca9247f6574cbd579df212755b1a31e54a008fbcae6eb49f56e56cdf7",
+      "bytes": 1472
+    },
+    {
+      "path": "sb4/led1-A-5/result.json",
+      "source": "/tmp/sb4/led1-A-5/result.json",
+      "sha256": "396053e014ee64f19707f1f4cab79960f88aad73da34cd63538b40e18e9c7294",
+      "bytes": 5803
+    },
+    {
+      "path": "sb5/led1-A-1/workspace/SPEC.md",
+      "source": "/tmp/sb5/led1-A-1/workspace/SPEC.md",
+      "sha256": "5fa12a817d4716101c20344435d4efac981e870f07df947be04a8de5c23a4078",
+      "bytes": 2062
+    },
+    {
+      "path": "sb5/led1-A-1/workspace/brief.txt",
+      "source": "/tmp/sb5/led1-A-1/workspace/brief.txt",
+      "sha256": "2d37efab6e0daa4c765a10db649625d7105d37fee31dd5ddf2f63ef0544a1845",
+      "bytes": 354
+    },
+    {
+      "path": "sb5/led1-A-1/workspace/src/backorder.ts",
+      "source": "/tmp/sb5/led1-A-1/workspace/src/backorder.ts",
+      "sha256": "42a126de2c3eb033473c6c062f565cb8e78eeff44a7cc341da7ce8f682025f8b",
+      "bytes": 768
+    },
+    {
+      "path": "sb5/led1-A-1/workspace/src/inventory.ts",
+      "source": "/tmp/sb5/led1-A-1/workspace/src/inventory.ts",
+      "sha256": "397b5b00ce1fccb7bb83302846150cd0d72b3c5f3382aca6546531d24938a1d2",
+      "bytes": 1763
+    },
+    {
+      "path": "sb5/led1-A-1/workspace/src/orders.ts",
+      "source": "/tmp/sb5/led1-A-1/workspace/src/orders.ts",
+      "sha256": "3f53209910b18e09ecebb84317d93a95f43b24d5a4631ba9074ddf734c2854cd",
+      "bytes": 969
+    },
+    {
+      "path": "sb5/led1-A-1/workspace/src/types.ts",
+      "source": "/tmp/sb5/led1-A-1/workspace/src/types.ts",
+      "sha256": "314ef4745fd1e96dc041f022a9f16d2a279b5c62a90f2a2dc260327323c474a4",
+      "bytes": 177
+    },
+    {
+      "path": "sb5/led1-A-1/workspace/src/warehouse.ts",
+      "source": "/tmp/sb5/led1-A-1/workspace/src/warehouse.ts",
+      "sha256": "590b428f57e7f56f02afff1eadd678ffb099a97b5bed9ac408ee5fb9c4c24924",
+      "bytes": 3585
+    },
+    {
+      "path": "sb5/led1-A-1/workspace/test/warehouse.test.ts",
+      "source": "/tmp/sb5/led1-A-1/workspace/test/warehouse.test.ts",
+      "sha256": "749717eca9247f6574cbd579df212755b1a31e54a008fbcae6eb49f56e56cdf7",
+      "bytes": 1472
+    },
+    {
+      "path": "sb5/led1-A-1/result.json",
+      "source": "/tmp/sb5/led1-A-1/result.json",
+      "sha256": "b814ac5aef48348379c3ee34ea3e9722c23a681c7b441601f94b71d8bd5a531c",
+      "bytes": 5690
+    },
+    {
+      "path": "sb5/led1-A-2/workspace/SPEC.md",
+      "source": "/tmp/sb5/led1-A-2/workspace/SPEC.md",
+      "sha256": "5fa12a817d4716101c20344435d4efac981e870f07df947be04a8de5c23a4078",
+      "bytes": 2062
+    },
+    {
+      "path": "sb5/led1-A-2/workspace/brief.txt",
+      "source": "/tmp/sb5/led1-A-2/workspace/brief.txt",
+      "sha256": "2d37efab6e0daa4c765a10db649625d7105d37fee31dd5ddf2f63ef0544a1845",
+      "bytes": 354
+    },
+    {
+      "path": "sb5/led1-A-2/workspace/src/backorder.ts",
+      "source": "/tmp/sb5/led1-A-2/workspace/src/backorder.ts",
+      "sha256": "42a126de2c3eb033473c6c062f565cb8e78eeff44a7cc341da7ce8f682025f8b",
+      "bytes": 768
+    },
+    {
+      "path": "sb5/led1-A-2/workspace/src/inventory.ts",
+      "source": "/tmp/sb5/led1-A-2/workspace/src/inventory.ts",
+      "sha256": "397b5b00ce1fccb7bb83302846150cd0d72b3c5f3382aca6546531d24938a1d2",
+      "bytes": 1763
+    },
+    {
+      "path": "sb5/led1-A-2/workspace/src/orders.ts",
+      "source": "/tmp/sb5/led1-A-2/workspace/src/orders.ts",
+      "sha256": "b7227d6b41f54a0091228218f234db0a3cbc81e98d270cf94bf2ec26efc6d629",
+      "bytes": 1012
+    },
+    {
+      "path": "sb5/led1-A-2/workspace/src/types.ts",
+      "source": "/tmp/sb5/led1-A-2/workspace/src/types.ts",
+      "sha256": "314ef4745fd1e96dc041f022a9f16d2a279b5c62a90f2a2dc260327323c474a4",
+      "bytes": 177
+    },
+    {
+      "path": "sb5/led1-A-2/workspace/src/warehouse.ts",
+      "source": "/tmp/sb5/led1-A-2/workspace/src/warehouse.ts",
+      "sha256": "2e60ef31693262843c2e4a397c7674f63864b7cec980b741fb5c1c998184d4a5",
+      "bytes": 3587
+    },
+    {
+      "path": "sb5/led1-A-2/workspace/test/warehouse.test.ts",
+      "source": "/tmp/sb5/led1-A-2/workspace/test/warehouse.test.ts",
+      "sha256": "749717eca9247f6574cbd579df212755b1a31e54a008fbcae6eb49f56e56cdf7",
+      "bytes": 1472
+    },
+    {
+      "path": "sb5/led1-A-2/result.json",
+      "source": "/tmp/sb5/led1-A-2/result.json",
+      "sha256": "1c5f3193393f163317216834603a37d53a965facf70f1b493a92bcdcaca6e75e",
+      "bytes": 5727
+    },
+    {
+      "path": "sb5/led1-A-3/workspace/SPEC.md",
+      "source": "/tmp/sb5/led1-A-3/workspace/SPEC.md",
+      "sha256": "5fa12a817d4716101c20344435d4efac981e870f07df947be04a8de5c23a4078",
+      "bytes": 2062
+    },
+    {
+      "path": "sb5/led1-A-3/workspace/brief.txt",
+      "source": "/tmp/sb5/led1-A-3/workspace/brief.txt",
+      "sha256": "2d37efab6e0daa4c765a10db649625d7105d37fee31dd5ddf2f63ef0544a1845",
+      "bytes": 354
+    },
+    {
+      "path": "sb5/led1-A-3/workspace/src/backorder.ts",
+      "source": "/tmp/sb5/led1-A-3/workspace/src/backorder.ts",
+      "sha256": "42a126de2c3eb033473c6c062f565cb8e78eeff44a7cc341da7ce8f682025f8b",
+      "bytes": 768
+    },
+    {
+      "path": "sb5/led1-A-3/workspace/src/inventory.ts",
+      "source": "/tmp/sb5/led1-A-3/workspace/src/inventory.ts",
+      "sha256": "397b5b00ce1fccb7bb83302846150cd0d72b3c5f3382aca6546531d24938a1d2",
+      "bytes": 1763
+    },
+    {
+      "path": "sb5/led1-A-3/workspace/src/orders.ts",
+      "source": "/tmp/sb5/led1-A-3/workspace/src/orders.ts",
+      "sha256": "3f53209910b18e09ecebb84317d93a95f43b24d5a4631ba9074ddf734c2854cd",
+      "bytes": 969
+    },
+    {
+      "path": "sb5/led1-A-3/workspace/src/types.ts",
+      "source": "/tmp/sb5/led1-A-3/workspace/src/types.ts",
+      "sha256": "314ef4745fd1e96dc041f022a9f16d2a279b5c62a90f2a2dc260327323c474a4",
+      "bytes": 177
+    },
+    {
+      "path": "sb5/led1-A-3/workspace/src/warehouse.ts",
+      "source": "/tmp/sb5/led1-A-3/workspace/src/warehouse.ts",
+      "sha256": "ac8af64d6363878a0499c4a00640c1a1db17c753491691cc04c47cae14001ed3",
+      "bytes": 3556
+    },
+    {
+      "path": "sb5/led1-A-3/workspace/test/warehouse.test.ts",
+      "source": "/tmp/sb5/led1-A-3/workspace/test/warehouse.test.ts",
+      "sha256": "749717eca9247f6574cbd579df212755b1a31e54a008fbcae6eb49f56e56cdf7",
+      "bytes": 1472
+    },
+    {
+      "path": "sb5/led1-A-3/result.json",
+      "source": "/tmp/sb5/led1-A-3/result.json",
+      "sha256": "9ea02d7342c06f30c0a77f4f50cef810fdad5ef12e2d92d33ddf3d2c70d434b8",
+      "bytes": 5613
+    },
+    {
+      "path": "sb5/led1-A-4/workspace/SPEC.md",
+      "source": "/tmp/sb5/led1-A-4/workspace/SPEC.md",
+      "sha256": "5fa12a817d4716101c20344435d4efac981e870f07df947be04a8de5c23a4078",
+      "bytes": 2062
+    },
+    {
+      "path": "sb5/led1-A-4/workspace/brief.txt",
+      "source": "/tmp/sb5/led1-A-4/workspace/brief.txt",
+      "sha256": "2d37efab6e0daa4c765a10db649625d7105d37fee31dd5ddf2f63ef0544a1845",
+      "bytes": 354
+    },
+    {
+      "path": "sb5/led1-A-4/workspace/src/backorder.ts",
+      "source": "/tmp/sb5/led1-A-4/workspace/src/backorder.ts",
+      "sha256": "42a126de2c3eb033473c6c062f565cb8e78eeff44a7cc341da7ce8f682025f8b",
+      "bytes": 768
+    },
+    {
+      "path": "sb5/led1-A-4/workspace/src/inventory.ts",
+      "source": "/tmp/sb5/led1-A-4/workspace/src/inventory.ts",
+      "sha256": "397b5b00ce1fccb7bb83302846150cd0d72b3c5f3382aca6546531d24938a1d2",
+      "bytes": 1763
+    },
+    {
+      "path": "sb5/led1-A-4/workspace/src/orders.ts",
+      "source": "/tmp/sb5/led1-A-4/workspace/src/orders.ts",
+      "sha256": "b7227d6b41f54a0091228218f234db0a3cbc81e98d270cf94bf2ec26efc6d629",
+      "bytes": 1012
+    },
+    {
+      "path": "sb5/led1-A-4/workspace/src/types.ts",
+      "source": "/tmp/sb5/led1-A-4/workspace/src/types.ts",
+      "sha256": "314ef4745fd1e96dc041f022a9f16d2a279b5c62a90f2a2dc260327323c474a4",
+      "bytes": 177
+    },
+    {
+      "path": "sb5/led1-A-4/workspace/src/warehouse.ts",
+      "source": "/tmp/sb5/led1-A-4/workspace/src/warehouse.ts",
+      "sha256": "590b428f57e7f56f02afff1eadd678ffb099a97b5bed9ac408ee5fb9c4c24924",
+      "bytes": 3585
+    },
+    {
+      "path": "sb5/led1-A-4/workspace/test/warehouse.test.ts",
+      "source": "/tmp/sb5/led1-A-4/workspace/test/warehouse.test.ts",
+      "sha256": "749717eca9247f6574cbd579df212755b1a31e54a008fbcae6eb49f56e56cdf7",
+      "bytes": 1472
+    },
+    {
+      "path": "sb5/led1-A-4/result.json",
+      "source": "/tmp/sb5/led1-A-4/result.json",
+      "sha256": "7e3cb37831321b57b4f17ee44504f374b8b03ee140f50e782107479b742d8cd0",
+      "bytes": 5911
+    },
+    {
+      "path": "sb5/led1-A-5/workspace/SPEC.md",
+      "source": "/tmp/sb5/led1-A-5/workspace/SPEC.md",
+      "sha256": "5fa12a817d4716101c20344435d4efac981e870f07df947be04a8de5c23a4078",
+      "bytes": 2062
+    },
+    {
+      "path": "sb5/led1-A-5/workspace/brief.txt",
+      "source": "/tmp/sb5/led1-A-5/workspace/brief.txt",
+      "sha256": "2d37efab6e0daa4c765a10db649625d7105d37fee31dd5ddf2f63ef0544a1845",
+      "bytes": 354
+    },
+    {
+      "path": "sb5/led1-A-5/workspace/src/backorder.ts",
+      "source": "/tmp/sb5/led1-A-5/workspace/src/backorder.ts",
+      "sha256": "8b872ac395f22ca417beef918e082aa4e0c6dd9dee2f37a9546bf2a281746424",
+      "bytes": 697
+    },
+    {
+      "path": "sb5/led1-A-5/workspace/src/inventory.ts",
+      "source": "/tmp/sb5/led1-A-5/workspace/src/inventory.ts",
+      "sha256": "397b5b00ce1fccb7bb83302846150cd0d72b3c5f3382aca6546531d24938a1d2",
+      "bytes": 1763
+    },
+    {
+      "path": "sb5/led1-A-5/workspace/src/orders.ts",
+      "source": "/tmp/sb5/led1-A-5/workspace/src/orders.ts",
+      "sha256": "890649b795ea978acb985e508ee9222358ed17dc1d4d8e0350730484f4d5ef84",
+      "bytes": 974
+    },
+    {
+      "path": "sb5/led1-A-5/workspace/src/types.ts",
+      "source": "/tmp/sb5/led1-A-5/workspace/src/types.ts",
+      "sha256": "314ef4745fd1e96dc041f022a9f16d2a279b5c62a90f2a2dc260327323c474a4",
+      "bytes": 177
+    },
+    {
+      "path": "sb5/led1-A-5/workspace/src/warehouse.ts",
+      "source": "/tmp/sb5/led1-A-5/workspace/src/warehouse.ts",
+      "sha256": "04e0e8b8942aec8c7f48515c4d63cfe0e91cf7d3d2a29e802e3e35dc422b56f6",
+      "bytes": 3577
+    },
+    {
+      "path": "sb5/led1-A-5/workspace/test/warehouse.test.ts",
+      "source": "/tmp/sb5/led1-A-5/workspace/test/warehouse.test.ts",
+      "sha256": "749717eca9247f6574cbd579df212755b1a31e54a008fbcae6eb49f56e56cdf7",
+      "bytes": 1472
+    },
+    {
+      "path": "sb5/led1-A-5/result.json",
+      "source": "/tmp/sb5/led1-A-5/result.json",
+      "sha256": "e2d80f0860215dcf9cab340c08761fa5969f0437b12f640be1bdf59c0e5bde87",
+      "bytes": 5699
+    },
+    {
+      "path": "sb6/led-low-1/workspace/.claude/settings.json",
+      "source": "/tmp/sb6/led-low-1/workspace/.claude/settings.json",
+      "sha256": "38f06c87778ad0c28809a4e8898db1e8a193dce50ac881c9aaa17c2a6832b247",
+      "bytes": 22
+    },
+    {
+      "path": "sb6/led-low-1/workspace/SPEC.md",
+      "source": "/tmp/sb6/led-low-1/workspace/SPEC.md",
+      "sha256": "5fa12a817d4716101c20344435d4efac981e870f07df947be04a8de5c23a4078",
+      "bytes": 2062
+    },
+    {
+      "path": "sb6/led-low-1/workspace/brief.txt",
+      "source": "/tmp/sb6/led-low-1/workspace/brief.txt",
+      "sha256": "2d37efab6e0daa4c765a10db649625d7105d37fee31dd5ddf2f63ef0544a1845",
+      "bytes": 354
+    },
+    {
+      "path": "sb6/led-low-1/workspace/src/backorder.ts",
+      "source": "/tmp/sb6/led-low-1/workspace/src/backorder.ts",
+      "sha256": "42a126de2c3eb033473c6c062f565cb8e78eeff44a7cc341da7ce8f682025f8b",
+      "bytes": 768
+    },
+    {
+      "path": "sb6/led-low-1/workspace/src/inventory.ts",
+      "source": "/tmp/sb6/led-low-1/workspace/src/inventory.ts",
+      "sha256": "274c3c38f13a493bb3fba507794b4f05c28721585ab1256743e71fce3856d12b",
+      "bytes": 1745
+    },
+    {
+      "path": "sb6/led-low-1/workspace/src/orders.ts",
+      "source": "/tmp/sb6/led-low-1/workspace/src/orders.ts",
+      "sha256": "ff7476c955711e5db4ffc793ddb72c08c1e9a83194e43461ce3f5a12ccb522cc",
+      "bytes": 1012
+    },
+    {
+      "path": "sb6/led-low-1/workspace/src/types.ts",
+      "source": "/tmp/sb6/led-low-1/workspace/src/types.ts",
+      "sha256": "314ef4745fd1e96dc041f022a9f16d2a279b5c62a90f2a2dc260327323c474a4",
+      "bytes": 177
+    },
+    {
+      "path": "sb6/led-low-1/workspace/src/warehouse.ts",
+      "source": "/tmp/sb6/led-low-1/workspace/src/warehouse.ts",
+      "sha256": "d71d2a46f1a7fdc6faa34e571fd935ec4fd41a312cdac78c2e1ba1b930f7bf0a",
+      "bytes": 3584
+    },
+    {
+      "path": "sb6/led-low-1/workspace/test/warehouse.test.ts",
+      "source": "/tmp/sb6/led-low-1/workspace/test/warehouse.test.ts",
+      "sha256": "749717eca9247f6574cbd579df212755b1a31e54a008fbcae6eb49f56e56cdf7",
+      "bytes": 1472
+    },
+    {
+      "path": "sb6/led-low-1/result.json",
+      "source": "/tmp/sb6/led-low-1/result.json",
+      "sha256": "2143087cdf6c73e1ab1cd06126c0468fde42c004b5572824161fa24d8be83a3f",
+      "bytes": 5594
+    },
+    {
+      "path": "sb6/led-low-2/workspace/.claude/settings.json",
+      "source": "/tmp/sb6/led-low-2/workspace/.claude/settings.json",
+      "sha256": "38f06c87778ad0c28809a4e8898db1e8a193dce50ac881c9aaa17c2a6832b247",
+      "bytes": 22
+    },
+    {
+      "path": "sb6/led-low-2/workspace/SPEC.md",
+      "source": "/tmp/sb6/led-low-2/workspace/SPEC.md",
+      "sha256": "5fa12a817d4716101c20344435d4efac981e870f07df947be04a8de5c23a4078",
+      "bytes": 2062
+    },
+    {
+      "path": "sb6/led-low-2/workspace/brief.txt",
+      "source": "/tmp/sb6/led-low-2/workspace/brief.txt",
+      "sha256": "2d37efab6e0daa4c765a10db649625d7105d37fee31dd5ddf2f63ef0544a1845",
+      "bytes": 354
+    },
+    {
+      "path": "sb6/led-low-2/workspace/src/backorder.ts",
+      "source": "/tmp/sb6/led-low-2/workspace/src/backorder.ts",
+      "sha256": "42a126de2c3eb033473c6c062f565cb8e78eeff44a7cc341da7ce8f682025f8b",
+      "bytes": 768
+    },
+    {
+      "path": "sb6/led-low-2/workspace/src/inventory.ts",
+      "source": "/tmp/sb6/led-low-2/workspace/src/inventory.ts",
+      "sha256": "274c3c38f13a493bb3fba507794b4f05c28721585ab1256743e71fce3856d12b",
+      "bytes": 1745
+    },
+    {
+      "path": "sb6/led-low-2/workspace/src/orders.ts",
+      "source": "/tmp/sb6/led-low-2/workspace/src/orders.ts",
+      "sha256": "3f53209910b18e09ecebb84317d93a95f43b24d5a4631ba9074ddf734c2854cd",
+      "bytes": 969
+    },
+    {
+      "path": "sb6/led-low-2/workspace/src/types.ts",
+      "source": "/tmp/sb6/led-low-2/workspace/src/types.ts",
+      "sha256": "314ef4745fd1e96dc041f022a9f16d2a279b5c62a90f2a2dc260327323c474a4",
+      "bytes": 177
+    },
+    {
+      "path": "sb6/led-low-2/workspace/src/warehouse.ts",
+      "source": "/tmp/sb6/led-low-2/workspace/src/warehouse.ts",
+      "sha256": "2e60ef31693262843c2e4a397c7674f63864b7cec980b741fb5c1c998184d4a5",
+      "bytes": 3587
+    },
+    {
+      "path": "sb6/led-low-2/workspace/test/warehouse.test.ts",
+      "source": "/tmp/sb6/led-low-2/workspace/test/warehouse.test.ts",
+      "sha256": "749717eca9247f6574cbd579df212755b1a31e54a008fbcae6eb49f56e56cdf7",
+      "bytes": 1472
+    },
+    {
+      "path": "sb6/led-low-2/result.json",
+      "source": "/tmp/sb6/led-low-2/result.json",
+      "sha256": "1036bc9b27ab4c67d3be46e07e780b6d3a548e4a2b0dbef9ccb93f0eefdab872",
+      "bytes": 5751
+    },
+    {
+      "path": "sb6/led-low-3/workspace/.claude/settings.json",
+      "source": "/tmp/sb6/led-low-3/workspace/.claude/settings.json",
+      "sha256": "38f06c87778ad0c28809a4e8898db1e8a193dce50ac881c9aaa17c2a6832b247",
+      "bytes": 22
+    },
+    {
+      "path": "sb6/led-low-3/workspace/SPEC.md",
+      "source": "/tmp/sb6/led-low-3/workspace/SPEC.md",
+      "sha256": "5fa12a817d4716101c20344435d4efac981e870f07df947be04a8de5c23a4078",
+      "bytes": 2062
+    },
+    {
+      "path": "sb6/led-low-3/workspace/brief.txt",
+      "source": "/tmp/sb6/led-low-3/workspace/brief.txt",
+      "sha256": "2d37efab6e0daa4c765a10db649625d7105d37fee31dd5ddf2f63ef0544a1845",
+      "bytes": 354
+    },
+    {
+      "path": "sb6/led-low-3/workspace/src/backorder.ts",
+      "source": "/tmp/sb6/led-low-3/workspace/src/backorder.ts",
+      "sha256": "8b872ac395f22ca417beef918e082aa4e0c6dd9dee2f37a9546bf2a281746424",
+      "bytes": 697
+    },
+    {
+      "path": "sb6/led-low-3/workspace/src/inventory.ts",
+      "source": "/tmp/sb6/led-low-3/workspace/src/inventory.ts",
+      "sha256": "274c3c38f13a493bb3fba507794b4f05c28721585ab1256743e71fce3856d12b",
+      "bytes": 1745
+    },
+    {
+      "path": "sb6/led-low-3/workspace/src/orders.ts",
+      "source": "/tmp/sb6/led-low-3/workspace/src/orders.ts",
+      "sha256": "890649b795ea978acb985e508ee9222358ed17dc1d4d8e0350730484f4d5ef84",
+      "bytes": 974
+    },
+    {
+      "path": "sb6/led-low-3/workspace/src/types.ts",
+      "source": "/tmp/sb6/led-low-3/workspace/src/types.ts",
+      "sha256": "314ef4745fd1e96dc041f022a9f16d2a279b5c62a90f2a2dc260327323c474a4",
+      "bytes": 177
+    },
+    {
+      "path": "sb6/led-low-3/workspace/src/warehouse.ts",
+      "source": "/tmp/sb6/led-low-3/workspace/src/warehouse.ts",
+      "sha256": "2e60ef31693262843c2e4a397c7674f63864b7cec980b741fb5c1c998184d4a5",
+      "bytes": 3587
+    },
+    {
+      "path": "sb6/led-low-3/workspace/test/warehouse.test.ts",
+      "source": "/tmp/sb6/led-low-3/workspace/test/warehouse.test.ts",
+      "sha256": "749717eca9247f6574cbd579df212755b1a31e54a008fbcae6eb49f56e56cdf7",
+      "bytes": 1472
+    },
+    {
+      "path": "sb6/led-low-3/result.json",
+      "source": "/tmp/sb6/led-low-3/result.json",
+      "sha256": "f8bdf09132d3be118795923ffa4caef55ba87723449032babb91a2cc3c2bcece",
+      "bytes": 5769
+    },
+    {
+      "path": "sb6/led-low-4/workspace/.claude/settings.json",
+      "source": "/tmp/sb6/led-low-4/workspace/.claude/settings.json",
+      "sha256": "38f06c87778ad0c28809a4e8898db1e8a193dce50ac881c9aaa17c2a6832b247",
+      "bytes": 22
+    },
+    {
+      "path": "sb6/led-low-4/workspace/SPEC.md",
+      "source": "/tmp/sb6/led-low-4/workspace/SPEC.md",
+      "sha256": "5fa12a817d4716101c20344435d4efac981e870f07df947be04a8de5c23a4078",
+      "bytes": 2062
+    },
+    {
+      "path": "sb6/led-low-4/workspace/brief.txt",
+      "source": "/tmp/sb6/led-low-4/workspace/brief.txt",
+      "sha256": "2d37efab6e0daa4c765a10db649625d7105d37fee31dd5ddf2f63ef0544a1845",
+      "bytes": 354
+    },
+    {
+      "path": "sb6/led-low-4/workspace/src/backorder.ts",
+      "source": "/tmp/sb6/led-low-4/workspace/src/backorder.ts",
+      "sha256": "8b872ac395f22ca417beef918e082aa4e0c6dd9dee2f37a9546bf2a281746424",
+      "bytes": 697
+    },
+    {
+      "path": "sb6/led-low-4/workspace/src/inventory.ts",
+      "source": "/tmp/sb6/led-low-4/workspace/src/inventory.ts",
+      "sha256": "274c3c38f13a493bb3fba507794b4f05c28721585ab1256743e71fce3856d12b",
+      "bytes": 1745
+    },
+    {
+      "path": "sb6/led-low-4/workspace/src/orders.ts",
+      "source": "/tmp/sb6/led-low-4/workspace/src/orders.ts",
+      "sha256": "3f53209910b18e09ecebb84317d93a95f43b24d5a4631ba9074ddf734c2854cd",
+      "bytes": 969
+    },
+    {
+      "path": "sb6/led-low-4/workspace/src/types.ts",
+      "source": "/tmp/sb6/led-low-4/workspace/src/types.ts",
+      "sha256": "314ef4745fd1e96dc041f022a9f16d2a279b5c62a90f2a2dc260327323c474a4",
+      "bytes": 177
+    },
+    {
+      "path": "sb6/led-low-4/workspace/src/warehouse.ts",
+      "source": "/tmp/sb6/led-low-4/workspace/src/warehouse.ts",
+      "sha256": "590b428f57e7f56f02afff1eadd678ffb099a97b5bed9ac408ee5fb9c4c24924",
+      "bytes": 3585
+    },
+    {
+      "path": "sb6/led-low-4/workspace/test/warehouse.test.ts",
+      "source": "/tmp/sb6/led-low-4/workspace/test/warehouse.test.ts",
+      "sha256": "749717eca9247f6574cbd579df212755b1a31e54a008fbcae6eb49f56e56cdf7",
+      "bytes": 1472
+    },
+    {
+      "path": "sb6/led-low-4/result.json",
+      "source": "/tmp/sb6/led-low-4/result.json",
+      "sha256": "65865f2ef26974c5143e4db90e2de4566244f016f4150fce8b515a57fd255c38",
+      "bytes": 5796
+    },
+    {
+      "path": "sb6/led-low-5/workspace/.claude/settings.json",
+      "source": "/tmp/sb6/led-low-5/workspace/.claude/settings.json",
+      "sha256": "38f06c87778ad0c28809a4e8898db1e8a193dce50ac881c9aaa17c2a6832b247",
+      "bytes": 22
+    },
+    {
+      "path": "sb6/led-low-5/workspace/SPEC.md",
+      "source": "/tmp/sb6/led-low-5/workspace/SPEC.md",
+      "sha256": "5fa12a817d4716101c20344435d4efac981e870f07df947be04a8de5c23a4078",
+      "bytes": 2062
+    },
+    {
+      "path": "sb6/led-low-5/workspace/brief.txt",
+      "source": "/tmp/sb6/led-low-5/workspace/brief.txt",
+      "sha256": "2d37efab6e0daa4c765a10db649625d7105d37fee31dd5ddf2f63ef0544a1845",
+      "bytes": 354
+    },
+    {
+      "path": "sb6/led-low-5/workspace/src/backorder.ts",
+      "source": "/tmp/sb6/led-low-5/workspace/src/backorder.ts",
+      "sha256": "8b872ac395f22ca417beef918e082aa4e0c6dd9dee2f37a9546bf2a281746424",
+      "bytes": 697
+    },
+    {
+      "path": "sb6/led-low-5/workspace/src/inventory.ts",
+      "source": "/tmp/sb6/led-low-5/workspace/src/inventory.ts",
+      "sha256": "274c3c38f13a493bb3fba507794b4f05c28721585ab1256743e71fce3856d12b",
+      "bytes": 1745
+    },
+    {
+      "path": "sb6/led-low-5/workspace/src/orders.ts",
+      "source": "/tmp/sb6/led-low-5/workspace/src/orders.ts",
+      "sha256": "890649b795ea978acb985e508ee9222358ed17dc1d4d8e0350730484f4d5ef84",
+      "bytes": 974
+    },
+    {
+      "path": "sb6/led-low-5/workspace/src/types.ts",
+      "source": "/tmp/sb6/led-low-5/workspace/src/types.ts",
+      "sha256": "314ef4745fd1e96dc041f022a9f16d2a279b5c62a90f2a2dc260327323c474a4",
+      "bytes": 177
+    },
+    {
+      "path": "sb6/led-low-5/workspace/src/warehouse.ts",
+      "source": "/tmp/sb6/led-low-5/workspace/src/warehouse.ts",
+      "sha256": "9637bef996bf353691ac74cfc9703e6772910f2bf002fe198bd39eb2a37cc290",
+      "bytes": 3600
+    },
+    {
+      "path": "sb6/led-low-5/workspace/test/warehouse.test.ts",
+      "source": "/tmp/sb6/led-low-5/workspace/test/warehouse.test.ts",
+      "sha256": "749717eca9247f6574cbd579df212755b1a31e54a008fbcae6eb49f56e56cdf7",
+      "bytes": 1472
+    },
+    {
+      "path": "sb6/led-low-5/result.json",
+      "source": "/tmp/sb6/led-low-5/result.json",
+      "sha256": "3cfc1f9f4d077114fdb4386137d266a3dee1092845c66a68a23f84bccad8b722",
+      "bytes": 5791
+    },
+    {
+      "path": "sb10/A101/workspace/.bench-hash.mjs",
+      "source": "/tmp/sb10/A101/workspace/.bench-hash.mjs",
+      "sha256": "7aa535618a46cef872de6b808969abfcac93aae8f1ee820fb8ea0bf77fa5fd43",
+      "bytes": 518
+    },
+    {
+      "path": "sb10/A101/workspace/.claude/settings.json",
+      "source": "/tmp/sb10/A101/workspace/.claude/settings.json",
+      "sha256": "af1ef779182cc6e6bc8b2985a37b27915b5742ecb1a89015aeb1c721d732bc1d",
+      "bytes": 30
+    },
+    {
+      "path": "sb10/A101/workspace/SPEC.md",
+      "source": "/tmp/sb10/A101/workspace/SPEC.md",
+      "sha256": "e85d209fd9a3aa6ce8f966aba6da50ff83ecc5d6569fabad949b45ff83865de3",
+      "bytes": 2351
+    },
+    {
+      "path": "sb10/A101/workspace/brief.txt",
+      "source": "/tmp/sb10/A101/workspace/brief.txt",
+      "sha256": "2d37efab6e0daa4c765a10db649625d7105d37fee31dd5ddf2f63ef0544a1845",
+      "bytes": 354
+    },
+    {
+      "path": "sb10/A101/workspace/src/backorder.ts",
+      "source": "/tmp/sb10/A101/workspace/src/backorder.ts",
+      "sha256": "3eb7ce7308c4b4f0f17745032e9cd64d7a72ef3997a6824003c956822f8c1b1f",
+      "bytes": 763
+    },
+    {
+      "path": "sb10/A101/workspace/src/inventory.ts",
+      "source": "/tmp/sb10/A101/workspace/src/inventory.ts",
+      "sha256": "4821a4c4fd05e89be09b34cd039d537255a17461d7ec1d0d7e36fd6fd66bfbd5",
+      "bytes": 1785
+    },
+    {
+      "path": "sb10/A101/workspace/src/orders.ts",
+      "source": "/tmp/sb10/A101/workspace/src/orders.ts",
+      "sha256": "a4b033d82c2be112e6eee14b95abdb1691b5650e672644fa6346090456cb8290",
+      "bytes": 1007
+    },
+    {
+      "path": "sb10/A101/workspace/src/types.ts",
+      "source": "/tmp/sb10/A101/workspace/src/types.ts",
+      "sha256": "2e472aeeb78a7a99a0d6a6beb4e7514be61bc17728738583565c5aedbeb7770d",
+      "bytes": 192
+    },
+    {
+      "path": "sb10/A101/workspace/src/warehouse.ts",
+      "source": "/tmp/sb10/A101/workspace/src/warehouse.ts",
+      "sha256": "86a170985bc40294786997bef03ae9500b86563da662cda7c28bf5dd37dd06e1",
+      "bytes": 3543
+    },
+    {
+      "path": "sb10/A101/workspace/test/warehouse.test.ts",
+      "source": "/tmp/sb10/A101/workspace/test/warehouse.test.ts",
+      "sha256": "749717eca9247f6574cbd579df212755b1a31e54a008fbcae6eb49f56e56cdf7",
+      "bytes": 1472
+    },
+    {
+      "path": "sb10/A101/result.json",
+      "source": "/tmp/sb10/A101/result.json",
+      "sha256": "b3d65855ce58d3a594341953cccc3c084cec249eb57c5de243777a9aa03d8ae3",
+      "bytes": 6491
+    },
+    {
+      "path": "sb10/A101/build-result.json",
+      "source": "/tmp/sb10/A101/build-result.json",
+      "sha256": "53fc6740696a1ab8e0449a8665eb9110231279705fcba68aa7bcfb75d3816583",
+      "bytes": 7610
+    },
+    {
+      "path": "sb10/A102/workspace/.bench-hash.mjs",
+      "source": "/tmp/sb10/A102/workspace/.bench-hash.mjs",
+      "sha256": "7aa535618a46cef872de6b808969abfcac93aae8f1ee820fb8ea0bf77fa5fd43",
+      "bytes": 518
+    },
+    {
+      "path": "sb10/A102/workspace/.claude/settings.json",
+      "source": "/tmp/sb10/A102/workspace/.claude/settings.json",
+      "sha256": "af1ef779182cc6e6bc8b2985a37b27915b5742ecb1a89015aeb1c721d732bc1d",
+      "bytes": 30
+    },
+    {
+      "path": "sb10/A102/workspace/SPEC.md",
+      "source": "/tmp/sb10/A102/workspace/SPEC.md",
+      "sha256": "e85d209fd9a3aa6ce8f966aba6da50ff83ecc5d6569fabad949b45ff83865de3",
+      "bytes": 2351
+    },
+    {
+      "path": "sb10/A102/workspace/brief.txt",
+      "source": "/tmp/sb10/A102/workspace/brief.txt",
+      "sha256": "2d37efab6e0daa4c765a10db649625d7105d37fee31dd5ddf2f63ef0544a1845",
+      "bytes": 354
+    },
+    {
+      "path": "sb10/A102/workspace/src/backorder.ts",
+      "source": "/tmp/sb10/A102/workspace/src/backorder.ts",
+      "sha256": "3eb7ce7308c4b4f0f17745032e9cd64d7a72ef3997a6824003c956822f8c1b1f",
+      "bytes": 763
+    },
+    {
+      "path": "sb10/A102/workspace/src/inventory.ts",
+      "source": "/tmp/sb10/A102/workspace/src/inventory.ts",
+      "sha256": "4821a4c4fd05e89be09b34cd039d537255a17461d7ec1d0d7e36fd6fd66bfbd5",
+      "bytes": 1785
+    },
+    {
+      "path": "sb10/A102/workspace/src/orders.ts",
+      "source": "/tmp/sb10/A102/workspace/src/orders.ts",
+      "sha256": "21cce8dfc5225b623e7c4a2c6226f0a2bc9daea70c1b3729d12661d64a15fcaa",
+      "bytes": 1087
+    },
+    {
+      "path": "sb10/A102/workspace/src/types.ts",
+      "source": "/tmp/sb10/A102/workspace/src/types.ts",
+      "sha256": "2e472aeeb78a7a99a0d6a6beb4e7514be61bc17728738583565c5aedbeb7770d",
+      "bytes": 192
+    },
+    {
+      "path": "sb10/A102/workspace/src/warehouse.ts",
+      "source": "/tmp/sb10/A102/workspace/src/warehouse.ts",
+      "sha256": "86a170985bc40294786997bef03ae9500b86563da662cda7c28bf5dd37dd06e1",
+      "bytes": 3543
+    },
+    {
+      "path": "sb10/A102/workspace/test/warehouse.test.ts",
+      "source": "/tmp/sb10/A102/workspace/test/warehouse.test.ts",
+      "sha256": "749717eca9247f6574cbd579df212755b1a31e54a008fbcae6eb49f56e56cdf7",
+      "bytes": 1472
+    },
+    {
+      "path": "sb10/A102/result.json",
+      "source": "/tmp/sb10/A102/result.json",
+      "sha256": "f83f2b6ead2682d6e88b54e87f7f51be8dfde4e7939f8feb71da4109cce5c3a4",
+      "bytes": 6555
+    },
+    {
+      "path": "sb10/A102/build-result.json",
+      "source": "/tmp/sb10/A102/build-result.json",
+      "sha256": "5a4caa51fc3dc87d2661c16cb9638395254091ab55ec89d6ab93437aa0d2fd7b",
+      "bytes": 7674
+    },
+    {
+      "path": "sb10/A103/workspace/.bench-hash.mjs",
+      "source": "/tmp/sb10/A103/workspace/.bench-hash.mjs",
+      "sha256": "7aa535618a46cef872de6b808969abfcac93aae8f1ee820fb8ea0bf77fa5fd43",
+      "bytes": 518
+    },
+    {
+      "path": "sb10/A103/workspace/.claude/settings.json",
+      "source": "/tmp/sb10/A103/workspace/.claude/settings.json",
+      "sha256": "af1ef779182cc6e6bc8b2985a37b27915b5742ecb1a89015aeb1c721d732bc1d",
+      "bytes": 30
+    },
+    {
+      "path": "sb10/A103/workspace/SPEC.md",
+      "source": "/tmp/sb10/A103/workspace/SPEC.md",
+      "sha256": "e85d209fd9a3aa6ce8f966aba6da50ff83ecc5d6569fabad949b45ff83865de3",
+      "bytes": 2351
+    },
+    {
+      "path": "sb10/A103/workspace/brief.txt",
+      "source": "/tmp/sb10/A103/workspace/brief.txt",
+      "sha256": "2d37efab6e0daa4c765a10db649625d7105d37fee31dd5ddf2f63ef0544a1845",
+      "bytes": 354
+    },
+    {
+      "path": "sb10/A103/workspace/src/backorder.ts",
+      "source": "/tmp/sb10/A103/workspace/src/backorder.ts",
+      "sha256": "3eb7ce7308c4b4f0f17745032e9cd64d7a72ef3997a6824003c956822f8c1b1f",
+      "bytes": 763
+    },
+    {
+      "path": "sb10/A103/workspace/src/inventory.ts",
+      "source": "/tmp/sb10/A103/workspace/src/inventory.ts",
+      "sha256": "4821a4c4fd05e89be09b34cd039d537255a17461d7ec1d0d7e36fd6fd66bfbd5",
+      "bytes": 1785
+    },
+    {
+      "path": "sb10/A103/workspace/src/orders.ts",
+      "source": "/tmp/sb10/A103/workspace/src/orders.ts",
+      "sha256": "05d14031649474f31af7838caedf66c33ed4155b7f57593972def6478baa27a9",
+      "bytes": 1087
+    },
+    {
+      "path": "sb10/A103/workspace/src/types.ts",
+      "source": "/tmp/sb10/A103/workspace/src/types.ts",
+      "sha256": "2e472aeeb78a7a99a0d6a6beb4e7514be61bc17728738583565c5aedbeb7770d",
+      "bytes": 192
+    },
+    {
+      "path": "sb10/A103/workspace/src/warehouse.ts",
+      "source": "/tmp/sb10/A103/workspace/src/warehouse.ts",
+      "sha256": "b61718ebb4ac733cb956f4f6e90c3b2edb42f804fa14f411100920f05d4531fa",
+      "bytes": 3535
+    },
+    {
+      "path": "sb10/A103/workspace/test/warehouse.test.ts",
+      "source": "/tmp/sb10/A103/workspace/test/warehouse.test.ts",
+      "sha256": "749717eca9247f6574cbd579df212755b1a31e54a008fbcae6eb49f56e56cdf7",
+      "bytes": 1472
+    },
+    {
+      "path": "sb10/A103/result.json",
+      "source": "/tmp/sb10/A103/result.json",
+      "sha256": "f5525d64c957da4891591bf6305325a03410bbd7162c66fed2f64cc6d2225eeb",
+      "bytes": 6705
+    },
+    {
+      "path": "sb10/A103/build-result.json",
+      "source": "/tmp/sb10/A103/build-result.json",
+      "sha256": "74d7ad668c9e45a751e0f1f5a302456b21b3f0f7dc97e0891a83ce41171475f7",
+      "bytes": 7824
+    },
+    {
+      "path": "sb10/B101/workspace/.bench-hash.mjs",
+      "source": "/tmp/sb10/B101/workspace/.bench-hash.mjs",
+      "sha256": "7aa535618a46cef872de6b808969abfcac93aae8f1ee820fb8ea0bf77fa5fd43",
+      "bytes": 518
+    },
+    {
+      "path": "sb10/B101/workspace/.claude/settings.json",
+      "source": "/tmp/sb10/B101/workspace/.claude/settings.json",
+      "sha256": "af1ef779182cc6e6bc8b2985a37b27915b5742ecb1a89015aeb1c721d732bc1d",
+      "bytes": 30
+    },
+    {
+      "path": "sb10/B101/workspace/SPEC.md",
+      "source": "/tmp/sb10/B101/workspace/SPEC.md",
+      "sha256": "e85d209fd9a3aa6ce8f966aba6da50ff83ecc5d6569fabad949b45ff83865de3",
+      "bytes": 2351
+    },
+    {
+      "path": "sb10/B101/workspace/brief.txt",
+      "source": "/tmp/sb10/B101/workspace/brief.txt",
+      "sha256": "2d37efab6e0daa4c765a10db649625d7105d37fee31dd5ddf2f63ef0544a1845",
+      "bytes": 354
+    },
+    {
+      "path": "sb10/B101/workspace/src/backorder.ts",
+      "source": "/tmp/sb10/B101/workspace/src/backorder.ts",
+      "sha256": "41c188349743c110918a4b2003167c9828e4c1f2a1097e538326e0d9c6f48a10",
+      "bytes": 810
+    },
+    {
+      "path": "sb10/B101/workspace/src/inventory.ts",
+      "source": "/tmp/sb10/B101/workspace/src/inventory.ts",
+      "sha256": "4821a4c4fd05e89be09b34cd039d537255a17461d7ec1d0d7e36fd6fd66bfbd5",
+      "bytes": 1785
+    },
+    {
+      "path": "sb10/B101/workspace/src/orders.ts",
+      "source": "/tmp/sb10/B101/workspace/src/orders.ts",
+      "sha256": "05d14031649474f31af7838caedf66c33ed4155b7f57593972def6478baa27a9",
+      "bytes": 1087
+    },
+    {
+      "path": "sb10/B101/workspace/src/types.ts",
+      "source": "/tmp/sb10/B101/workspace/src/types.ts",
+      "sha256": "2e472aeeb78a7a99a0d6a6beb4e7514be61bc17728738583565c5aedbeb7770d",
+      "bytes": 192
+    },
+    {
+      "path": "sb10/B101/workspace/src/warehouse.ts",
+      "source": "/tmp/sb10/B101/workspace/src/warehouse.ts",
+      "sha256": "b61718ebb4ac733cb956f4f6e90c3b2edb42f804fa14f411100920f05d4531fa",
+      "bytes": 3535
+    },
+    {
+      "path": "sb10/B101/workspace/test/warehouse.test.ts",
+      "source": "/tmp/sb10/B101/workspace/test/warehouse.test.ts",
+      "sha256": "9240d23abd9f06a4801d6a1d85f2f89d91a04005d339d5030c211d054126459b",
+      "bytes": 2235
+    },
+    {
+      "path": "sb10/B101/review-workspace/.bench-hash.mjs",
+      "source": "/tmp/sb10/B101/review-workspace/.bench-hash.mjs",
+      "sha256": "7aa535618a46cef872de6b808969abfcac93aae8f1ee820fb8ea0bf77fa5fd43",
+      "bytes": 518
+    },
+    {
+      "path": "sb10/B101/review-workspace/.claude/settings.json",
+      "source": "/tmp/sb10/B101/review-workspace/.claude/settings.json",
+      "sha256": "af1ef779182cc6e6bc8b2985a37b27915b5742ecb1a89015aeb1c721d732bc1d",
+      "bytes": 30
+    },
+    {
+      "path": "sb10/B101/review-workspace/SPEC.md",
+      "source": "/tmp/sb10/B101/review-workspace/SPEC.md",
+      "sha256": "e85d209fd9a3aa6ce8f966aba6da50ff83ecc5d6569fabad949b45ff83865de3",
+      "bytes": 2351
+    },
+    {
+      "path": "sb10/B101/review-workspace/brief.txt",
+      "source": "/tmp/sb10/B101/review-workspace/brief.txt",
+      "sha256": "2d37efab6e0daa4c765a10db649625d7105d37fee31dd5ddf2f63ef0544a1845",
+      "bytes": 354
+    },
+    {
+      "path": "sb10/B101/review-workspace/src/backorder.ts",
+      "source": "/tmp/sb10/B101/review-workspace/src/backorder.ts",
+      "sha256": "41c188349743c110918a4b2003167c9828e4c1f2a1097e538326e0d9c6f48a10",
+      "bytes": 810
+    },
+    {
+      "path": "sb10/B101/review-workspace/src/inventory.ts",
+      "source": "/tmp/sb10/B101/review-workspace/src/inventory.ts",
+      "sha256": "4821a4c4fd05e89be09b34cd039d537255a17461d7ec1d0d7e36fd6fd66bfbd5",
+      "bytes": 1785
+    },
+    {
+      "path": "sb10/B101/review-workspace/src/orders.ts",
+      "source": "/tmp/sb10/B101/review-workspace/src/orders.ts",
+      "sha256": "05d14031649474f31af7838caedf66c33ed4155b7f57593972def6478baa27a9",
+      "bytes": 1087
+    },
+    {
+      "path": "sb10/B101/review-workspace/src/types.ts",
+      "source": "/tmp/sb10/B101/review-workspace/src/types.ts",
+      "sha256": "2e472aeeb78a7a99a0d6a6beb4e7514be61bc17728738583565c5aedbeb7770d",
+      "bytes": 192
+    },
+    {
+      "path": "sb10/B101/review-workspace/src/warehouse.ts",
+      "source": "/tmp/sb10/B101/review-workspace/src/warehouse.ts",
+      "sha256": "b61718ebb4ac733cb956f4f6e90c3b2edb42f804fa14f411100920f05d4531fa",
+      "bytes": 3535
+    },
+    {
+      "path": "sb10/B101/review-workspace/test/warehouse.test.ts",
+      "source": "/tmp/sb10/B101/review-workspace/test/warehouse.test.ts",
+      "sha256": "749717eca9247f6574cbd579df212755b1a31e54a008fbcae6eb49f56e56cdf7",
+      "bytes": 1472
+    },
+    {
+      "path": "sb10/B101/result.json",
+      "source": "/tmp/sb10/B101/result.json",
+      "sha256": "4ff7d63fbbcf941942e28dadad31f93d8886549cfdf61a0f74280de7d2ec9781",
+      "bytes": 16613
+    },
+    {
+      "path": "sb10/B101/build-result.json",
+      "source": "/tmp/sb10/B101/build-result.json",
+      "sha256": "cdaf105f794b2931ce0838e97843b7701dd24e0a96d16c3e61d0994af726484a",
+      "bytes": 17484
+    },
+    {
+      "path": "sb10/B102/workspace/.bench-hash.mjs",
+      "source": "/tmp/sb10/B102/workspace/.bench-hash.mjs",
+      "sha256": "7aa535618a46cef872de6b808969abfcac93aae8f1ee820fb8ea0bf77fa5fd43",
+      "bytes": 518
+    },
+    {
+      "path": "sb10/B102/workspace/.claude/settings.json",
+      "source": "/tmp/sb10/B102/workspace/.claude/settings.json",
+      "sha256": "af1ef779182cc6e6bc8b2985a37b27915b5742ecb1a89015aeb1c721d732bc1d",
+      "bytes": 30
+    },
+    {
+      "path": "sb10/B102/workspace/SPEC.md",
+      "source": "/tmp/sb10/B102/workspace/SPEC.md",
+      "sha256": "e85d209fd9a3aa6ce8f966aba6da50ff83ecc5d6569fabad949b45ff83865de3",
+      "bytes": 2351
+    },
+    {
+      "path": "sb10/B102/workspace/brief.txt",
+      "source": "/tmp/sb10/B102/workspace/brief.txt",
+      "sha256": "2d37efab6e0daa4c765a10db649625d7105d37fee31dd5ddf2f63ef0544a1845",
+      "bytes": 354
+    },
+    {
+      "path": "sb10/B102/workspace/src/backorder.ts",
+      "source": "/tmp/sb10/B102/workspace/src/backorder.ts",
+      "sha256": "2bc09376f084de09977363db2781251bf691a2f3c1dba7ee1d3a24ab7e1490f2",
+      "bytes": 792
+    },
+    {
+      "path": "sb10/B102/workspace/src/inventory.ts",
+      "source": "/tmp/sb10/B102/workspace/src/inventory.ts",
+      "sha256": "4821a4c4fd05e89be09b34cd039d537255a17461d7ec1d0d7e36fd6fd66bfbd5",
+      "bytes": 1785
+    },
+    {
+      "path": "sb10/B102/workspace/src/orders.ts",
+      "source": "/tmp/sb10/B102/workspace/src/orders.ts",
+      "sha256": "05d14031649474f31af7838caedf66c33ed4155b7f57593972def6478baa27a9",
+      "bytes": 1087
+    },
+    {
+      "path": "sb10/B102/workspace/src/types.ts",
+      "source": "/tmp/sb10/B102/workspace/src/types.ts",
+      "sha256": "2e472aeeb78a7a99a0d6a6beb4e7514be61bc17728738583565c5aedbeb7770d",
+      "bytes": 192
+    },
+    {
+      "path": "sb10/B102/workspace/src/warehouse.ts",
+      "source": "/tmp/sb10/B102/workspace/src/warehouse.ts",
+      "sha256": "b61718ebb4ac733cb956f4f6e90c3b2edb42f804fa14f411100920f05d4531fa",
+      "bytes": 3535
+    },
+    {
+      "path": "sb10/B102/workspace/test/warehouse.test.ts",
+      "source": "/tmp/sb10/B102/workspace/test/warehouse.test.ts",
+      "sha256": "749717eca9247f6574cbd579df212755b1a31e54a008fbcae6eb49f56e56cdf7",
+      "bytes": 1472
+    },
+    {
+      "path": "sb10/B102/review-workspace/.bench-hash.mjs",
+      "source": "/tmp/sb10/B102/review-workspace/.bench-hash.mjs",
+      "sha256": "7aa535618a46cef872de6b808969abfcac93aae8f1ee820fb8ea0bf77fa5fd43",
+      "bytes": 518
+    },
+    {
+      "path": "sb10/B102/review-workspace/.claude/settings.json",
+      "source": "/tmp/sb10/B102/review-workspace/.claude/settings.json",
+      "sha256": "af1ef779182cc6e6bc8b2985a37b27915b5742ecb1a89015aeb1c721d732bc1d",
+      "bytes": 30
+    },
+    {
+      "path": "sb10/B102/review-workspace/SPEC.md",
+      "source": "/tmp/sb10/B102/review-workspace/SPEC.md",
+      "sha256": "e85d209fd9a3aa6ce8f966aba6da50ff83ecc5d6569fabad949b45ff83865de3",
+      "bytes": 2351
+    },
+    {
+      "path": "sb10/B102/review-workspace/brief.txt",
+      "source": "/tmp/sb10/B102/review-workspace/brief.txt",
+      "sha256": "2d37efab6e0daa4c765a10db649625d7105d37fee31dd5ddf2f63ef0544a1845",
+      "bytes": 354
+    },
+    {
+      "path": "sb10/B102/review-workspace/src/backorder.ts",
+      "source": "/tmp/sb10/B102/review-workspace/src/backorder.ts",
+      "sha256": "2bc09376f084de09977363db2781251bf691a2f3c1dba7ee1d3a24ab7e1490f2",
+      "bytes": 792
+    },
+    {
+      "path": "sb10/B102/review-workspace/src/inventory.ts",
+      "source": "/tmp/sb10/B102/review-workspace/src/inventory.ts",
+      "sha256": "4821a4c4fd05e89be09b34cd039d537255a17461d7ec1d0d7e36fd6fd66bfbd5",
+      "bytes": 1785
+    },
+    {
+      "path": "sb10/B102/review-workspace/src/orders.ts",
+      "source": "/tmp/sb10/B102/review-workspace/src/orders.ts",
+      "sha256": "05d14031649474f31af7838caedf66c33ed4155b7f57593972def6478baa27a9",
+      "bytes": 1087
+    },
+    {
+      "path": "sb10/B102/review-workspace/src/types.ts",
+      "source": "/tmp/sb10/B102/review-workspace/src/types.ts",
+      "sha256": "2e472aeeb78a7a99a0d6a6beb4e7514be61bc17728738583565c5aedbeb7770d",
+      "bytes": 192
+    },
+    {
+      "path": "sb10/B102/review-workspace/src/warehouse.ts",
+      "source": "/tmp/sb10/B102/review-workspace/src/warehouse.ts",
+      "sha256": "b61718ebb4ac733cb956f4f6e90c3b2edb42f804fa14f411100920f05d4531fa",
+      "bytes": 3535
+    },
+    {
+      "path": "sb10/B102/review-workspace/test/warehouse.test.ts",
+      "source": "/tmp/sb10/B102/review-workspace/test/warehouse.test.ts",
+      "sha256": "749717eca9247f6574cbd579df212755b1a31e54a008fbcae6eb49f56e56cdf7",
+      "bytes": 1472
+    },
+    {
+      "path": "sb10/B102/result.json",
+      "source": "/tmp/sb10/B102/result.json",
+      "sha256": "f1fe9ae803f6cf82892d316c56c198a71f7b8cd4a235fdc42f5ea2a666d0445f",
+      "bytes": 16643
+    },
+    {
+      "path": "sb10/B102/build-result.json",
+      "source": "/tmp/sb10/B102/build-result.json",
+      "sha256": "6d00ae21ce51b3a3863a0378a227ba0706ad6b9f81a45573ed37bd3eb969bb85",
+      "bytes": 17514
+    },
+    {
+      "path": "sb10/B103/workspace/.bench-hash.mjs",
+      "source": "/tmp/sb10/B103/workspace/.bench-hash.mjs",
+      "sha256": "7aa535618a46cef872de6b808969abfcac93aae8f1ee820fb8ea0bf77fa5fd43",
+      "bytes": 518
+    },
+    {
+      "path": "sb10/B103/workspace/.claude/settings.json",
+      "source": "/tmp/sb10/B103/workspace/.claude/settings.json",
+      "sha256": "af1ef779182cc6e6bc8b2985a37b27915b5742ecb1a89015aeb1c721d732bc1d",
+      "bytes": 30
+    },
+    {
+      "path": "sb10/B103/workspace/SPEC.md",
+      "source": "/tmp/sb10/B103/workspace/SPEC.md",
+      "sha256": "e85d209fd9a3aa6ce8f966aba6da50ff83ecc5d6569fabad949b45ff83865de3",
+      "bytes": 2351
+    },
+    {
+      "path": "sb10/B103/workspace/brief.txt",
+      "source": "/tmp/sb10/B103/workspace/brief.txt",
+      "sha256": "2d37efab6e0daa4c765a10db649625d7105d37fee31dd5ddf2f63ef0544a1845",
+      "bytes": 354
+    },
+    {
+      "path": "sb10/B103/workspace/src/backorder.ts",
+      "source": "/tmp/sb10/B103/workspace/src/backorder.ts",
+      "sha256": "2bc09376f084de09977363db2781251bf691a2f3c1dba7ee1d3a24ab7e1490f2",
+      "bytes": 792
+    },
+    {
+      "path": "sb10/B103/workspace/src/inventory.ts",
+      "source": "/tmp/sb10/B103/workspace/src/inventory.ts",
+      "sha256": "4821a4c4fd05e89be09b34cd039d537255a17461d7ec1d0d7e36fd6fd66bfbd5",
+      "bytes": 1785
+    },
+    {
+      "path": "sb10/B103/workspace/src/orders.ts",
+      "source": "/tmp/sb10/B103/workspace/src/orders.ts",
+      "sha256": "05d14031649474f31af7838caedf66c33ed4155b7f57593972def6478baa27a9",
+      "bytes": 1087
+    },
+    {
+      "path": "sb10/B103/workspace/src/types.ts",
+      "source": "/tmp/sb10/B103/workspace/src/types.ts",
+      "sha256": "2e472aeeb78a7a99a0d6a6beb4e7514be61bc17728738583565c5aedbeb7770d",
+      "bytes": 192
+    },
+    {
+      "path": "sb10/B103/workspace/src/warehouse.ts",
+      "source": "/tmp/sb10/B103/workspace/src/warehouse.ts",
+      "sha256": "b61718ebb4ac733cb956f4f6e90c3b2edb42f804fa14f411100920f05d4531fa",
+      "bytes": 3535
+    },
+    {
+      "path": "sb10/B103/workspace/test/warehouse.test.ts",
+      "source": "/tmp/sb10/B103/workspace/test/warehouse.test.ts",
+      "sha256": "15fc854012cdd1939748d4bdb922f8b39aa34e471aa7e3e90cbabf446a0dd79c",
+      "bytes": 2469
+    },
+    {
+      "path": "sb10/B103/review-workspace/.bench-hash.mjs",
+      "source": "/tmp/sb10/B103/review-workspace/.bench-hash.mjs",
+      "sha256": "7aa535618a46cef872de6b808969abfcac93aae8f1ee820fb8ea0bf77fa5fd43",
+      "bytes": 518
+    },
+    {
+      "path": "sb10/B103/review-workspace/.claude/settings.json",
+      "source": "/tmp/sb10/B103/review-workspace/.claude/settings.json",
+      "sha256": "af1ef779182cc6e6bc8b2985a37b27915b5742ecb1a89015aeb1c721d732bc1d",
+      "bytes": 30
+    },
+    {
+      "path": "sb10/B103/review-workspace/SPEC.md",
+      "source": "/tmp/sb10/B103/review-workspace/SPEC.md",
+      "sha256": "e85d209fd9a3aa6ce8f966aba6da50ff83ecc5d6569fabad949b45ff83865de3",
+      "bytes": 2351
+    },
+    {
+      "path": "sb10/B103/review-workspace/brief.txt",
+      "source": "/tmp/sb10/B103/review-workspace/brief.txt",
+      "sha256": "2d37efab6e0daa4c765a10db649625d7105d37fee31dd5ddf2f63ef0544a1845",
+      "bytes": 354
+    },
+    {
+      "path": "sb10/B103/review-workspace/src/backorder.ts",
+      "source": "/tmp/sb10/B103/review-workspace/src/backorder.ts",
+      "sha256": "2bc09376f084de09977363db2781251bf691a2f3c1dba7ee1d3a24ab7e1490f2",
+      "bytes": 792
+    },
+    {
+      "path": "sb10/B103/review-workspace/src/inventory.ts",
+      "source": "/tmp/sb10/B103/review-workspace/src/inventory.ts",
+      "sha256": "4821a4c4fd05e89be09b34cd039d537255a17461d7ec1d0d7e36fd6fd66bfbd5",
+      "bytes": 1785
+    },
+    {
+      "path": "sb10/B103/review-workspace/src/orders.ts",
+      "source": "/tmp/sb10/B103/review-workspace/src/orders.ts",
+      "sha256": "05d14031649474f31af7838caedf66c33ed4155b7f57593972def6478baa27a9",
+      "bytes": 1087
+    },
+    {
+      "path": "sb10/B103/review-workspace/src/types.ts",
+      "source": "/tmp/sb10/B103/review-workspace/src/types.ts",
+      "sha256": "2e472aeeb78a7a99a0d6a6beb4e7514be61bc17728738583565c5aedbeb7770d",
+      "bytes": 192
+    },
+    {
+      "path": "sb10/B103/review-workspace/src/warehouse.ts",
+      "source": "/tmp/sb10/B103/review-workspace/src/warehouse.ts",
+      "sha256": "b61718ebb4ac733cb956f4f6e90c3b2edb42f804fa14f411100920f05d4531fa",
+      "bytes": 3535
+    },
+    {
+      "path": "sb10/B103/review-workspace/test/warehouse.test.ts",
+      "source": "/tmp/sb10/B103/review-workspace/test/warehouse.test.ts",
+      "sha256": "749717eca9247f6574cbd579df212755b1a31e54a008fbcae6eb49f56e56cdf7",
+      "bytes": 1472
+    },
+    {
+      "path": "sb10/B103/result.json",
+      "source": "/tmp/sb10/B103/result.json",
+      "sha256": "b84131dbbc000d6e772d750d1712c6fd17523b2da411f587546269f8a54512cc",
+      "bytes": 16755
+    },
+    {
+      "path": "sb10/B103/build-result.json",
+      "source": "/tmp/sb10/B103/build-result.json",
+      "sha256": "bc2565dd4d5810ea32827f0d1c0674c5ffa9487c3bc40b0aab65c363a2755caa",
+      "bytes": 17626
+    },
+    {
+      "path": "sb10/C101/workspace/.bench-hash.mjs",
+      "source": "/tmp/sb10/C101/workspace/.bench-hash.mjs",
+      "sha256": "7aa535618a46cef872de6b808969abfcac93aae8f1ee820fb8ea0bf77fa5fd43",
+      "bytes": 518
+    },
+    {
+      "path": "sb10/C101/workspace/.claude/settings.json",
+      "source": "/tmp/sb10/C101/workspace/.claude/settings.json",
+      "sha256": "af1ef779182cc6e6bc8b2985a37b27915b5742ecb1a89015aeb1c721d732bc1d",
+      "bytes": 30
+    },
+    {
+      "path": "sb10/C101/workspace/SPEC.md",
+      "source": "/tmp/sb10/C101/workspace/SPEC.md",
+      "sha256": "e85d209fd9a3aa6ce8f966aba6da50ff83ecc5d6569fabad949b45ff83865de3",
+      "bytes": 2351
+    },
+    {
+      "path": "sb10/C101/workspace/brief.txt",
+      "source": "/tmp/sb10/C101/workspace/brief.txt",
+      "sha256": "2d37efab6e0daa4c765a10db649625d7105d37fee31dd5ddf2f63ef0544a1845",
+      "bytes": 354
+    },
+    {
+      "path": "sb10/C101/workspace/src/backorder.ts",
+      "source": "/tmp/sb10/C101/workspace/src/backorder.ts",
+      "sha256": "3eb7ce7308c4b4f0f17745032e9cd64d7a72ef3997a6824003c956822f8c1b1f",
+      "bytes": 763
+    },
+    {
+      "path": "sb10/C101/workspace/src/inventory.ts",
+      "source": "/tmp/sb10/C101/workspace/src/inventory.ts",
+      "sha256": "4821a4c4fd05e89be09b34cd039d537255a17461d7ec1d0d7e36fd6fd66bfbd5",
+      "bytes": 1785
+    },
+    {
+      "path": "sb10/C101/workspace/src/orders.ts",
+      "source": "/tmp/sb10/C101/workspace/src/orders.ts",
+      "sha256": "05d14031649474f31af7838caedf66c33ed4155b7f57593972def6478baa27a9",
+      "bytes": 1087
+    },
+    {
+      "path": "sb10/C101/workspace/src/types.ts",
+      "source": "/tmp/sb10/C101/workspace/src/types.ts",
+      "sha256": "2e472aeeb78a7a99a0d6a6beb4e7514be61bc17728738583565c5aedbeb7770d",
+      "bytes": 192
+    },
+    {
+      "path": "sb10/C101/workspace/src/warehouse.ts",
+      "source": "/tmp/sb10/C101/workspace/src/warehouse.ts",
+      "sha256": "b61718ebb4ac733cb956f4f6e90c3b2edb42f804fa14f411100920f05d4531fa",
+      "bytes": 3535
+    },
+    {
+      "path": "sb10/C101/workspace/test/warehouse.test.ts",
+      "source": "/tmp/sb10/C101/workspace/test/warehouse.test.ts",
+      "sha256": "749717eca9247f6574cbd579df212755b1a31e54a008fbcae6eb49f56e56cdf7",
+      "bytes": 1472
+    },
+    {
+      "path": "sb10/C101/result.json",
+      "source": "/tmp/sb10/C101/result.json",
+      "sha256": "588f5f6c93fa74c7d1374a01a93dc8a75be3e194734a3dd8e9e8dfa03fcf767c",
+      "bytes": 23851
+    },
+    {
+      "path": "sb10/C102/workspace/.bench-hash.mjs",
+      "source": "/tmp/sb10/C102/workspace/.bench-hash.mjs",
+      "sha256": "7aa535618a46cef872de6b808969abfcac93aae8f1ee820fb8ea0bf77fa5fd43",
+      "bytes": 518
+    },
+    {
+      "path": "sb10/C102/workspace/.claude/settings.json",
+      "source": "/tmp/sb10/C102/workspace/.claude/settings.json",
+      "sha256": "af1ef779182cc6e6bc8b2985a37b27915b5742ecb1a89015aeb1c721d732bc1d",
+      "bytes": 30
+    },
+    {
+      "path": "sb10/C102/workspace/SPEC.md",
+      "source": "/tmp/sb10/C102/workspace/SPEC.md",
+      "sha256": "e85d209fd9a3aa6ce8f966aba6da50ff83ecc5d6569fabad949b45ff83865de3",
+      "bytes": 2351
+    },
+    {
+      "path": "sb10/C102/workspace/brief.txt",
+      "source": "/tmp/sb10/C102/workspace/brief.txt",
+      "sha256": "2d37efab6e0daa4c765a10db649625d7105d37fee31dd5ddf2f63ef0544a1845",
+      "bytes": 354
+    },
+    {
+      "path": "sb10/C102/workspace/src/backorder.ts",
+      "source": "/tmp/sb10/C102/workspace/src/backorder.ts",
+      "sha256": "41c188349743c110918a4b2003167c9828e4c1f2a1097e538326e0d9c6f48a10",
+      "bytes": 810
+    },
+    {
+      "path": "sb10/C102/workspace/src/inventory.ts",
+      "source": "/tmp/sb10/C102/workspace/src/inventory.ts",
+      "sha256": "4821a4c4fd05e89be09b34cd039d537255a17461d7ec1d0d7e36fd6fd66bfbd5",
+      "bytes": 1785
+    },
+    {
+      "path": "sb10/C102/workspace/src/orders.ts",
+      "source": "/tmp/sb10/C102/workspace/src/orders.ts",
+      "sha256": "05d14031649474f31af7838caedf66c33ed4155b7f57593972def6478baa27a9",
+      "bytes": 1087
+    },
+    {
+      "path": "sb10/C102/workspace/src/types.ts",
+      "source": "/tmp/sb10/C102/workspace/src/types.ts",
+      "sha256": "2e472aeeb78a7a99a0d6a6beb4e7514be61bc17728738583565c5aedbeb7770d",
+      "bytes": 192
+    },
+    {
+      "path": "sb10/C102/workspace/src/warehouse.ts",
+      "source": "/tmp/sb10/C102/workspace/src/warehouse.ts",
+      "sha256": "b61718ebb4ac733cb956f4f6e90c3b2edb42f804fa14f411100920f05d4531fa",
+      "bytes": 3535
+    },
+    {
+      "path": "sb10/C102/workspace/test/warehouse.test.ts",
+      "source": "/tmp/sb10/C102/workspace/test/warehouse.test.ts",
+      "sha256": "749717eca9247f6574cbd579df212755b1a31e54a008fbcae6eb49f56e56cdf7",
+      "bytes": 1472
+    },
+    {
+      "path": "sb10/C102/result.json",
+      "source": "/tmp/sb10/C102/result.json",
+      "sha256": "2fd48106a46014544dc079bae8c5cfdc89d54f7ea7f584c8c99f235630f82e5f",
+      "bytes": 23333
+    },
+    {
+      "path": "sb10/C102/build-result.json",
+      "source": "/tmp/sb10/C102/build-result.json",
+      "sha256": "effda1f228f2678fc0b6fa046e1ac50cd621a5093c1eb2e565159c93293ef3ae",
+      "bytes": 22662
+    },
+    {
+      "path": "sb10/C102/room-validation.json",
+      "source": "/tmp/sb10/C102/room-validation.json",
+      "sha256": "fbf602d7c41b73278609186773d496e2b2f1cfd2069b01ac7b6afc2c556c4e94",
+      "bytes": 1359
+    },
+    {
+      "path": "sb10/C103/workspace/.bench-hash.mjs",
+      "source": "/tmp/sb10/C103/workspace/.bench-hash.mjs",
+      "sha256": "7aa535618a46cef872de6b808969abfcac93aae8f1ee820fb8ea0bf77fa5fd43",
+      "bytes": 518
+    },
+    {
+      "path": "sb10/C103/workspace/.claude/settings.json",
+      "source": "/tmp/sb10/C103/workspace/.claude/settings.json",
+      "sha256": "af1ef779182cc6e6bc8b2985a37b27915b5742ecb1a89015aeb1c721d732bc1d",
+      "bytes": 30
+    },
+    {
+      "path": "sb10/C103/workspace/SPEC.md",
+      "source": "/tmp/sb10/C103/workspace/SPEC.md",
+      "sha256": "e85d209fd9a3aa6ce8f966aba6da50ff83ecc5d6569fabad949b45ff83865de3",
+      "bytes": 2351
+    },
+    {
+      "path": "sb10/C103/workspace/brief.txt",
+      "source": "/tmp/sb10/C103/workspace/brief.txt",
+      "sha256": "2d37efab6e0daa4c765a10db649625d7105d37fee31dd5ddf2f63ef0544a1845",
+      "bytes": 354
+    },
+    {
+      "path": "sb10/C103/workspace/src/backorder.ts",
+      "source": "/tmp/sb10/C103/workspace/src/backorder.ts",
+      "sha256": "41c188349743c110918a4b2003167c9828e4c1f2a1097e538326e0d9c6f48a10",
+      "bytes": 810
+    },
+    {
+      "path": "sb10/C103/workspace/src/inventory.ts",
+      "source": "/tmp/sb10/C103/workspace/src/inventory.ts",
+      "sha256": "4821a4c4fd05e89be09b34cd039d537255a17461d7ec1d0d7e36fd6fd66bfbd5",
+      "bytes": 1785
+    },
+    {
+      "path": "sb10/C103/workspace/src/orders.ts",
+      "source": "/tmp/sb10/C103/workspace/src/orders.ts",
+      "sha256": "05d14031649474f31af7838caedf66c33ed4155b7f57593972def6478baa27a9",
+      "bytes": 1087
+    },
+    {
+      "path": "sb10/C103/workspace/src/types.ts",
+      "source": "/tmp/sb10/C103/workspace/src/types.ts",
+      "sha256": "2e472aeeb78a7a99a0d6a6beb4e7514be61bc17728738583565c5aedbeb7770d",
+      "bytes": 192
+    },
+    {
+      "path": "sb10/C103/workspace/src/warehouse.ts",
+      "source": "/tmp/sb10/C103/workspace/src/warehouse.ts",
+      "sha256": "b61718ebb4ac733cb956f4f6e90c3b2edb42f804fa14f411100920f05d4531fa",
+      "bytes": 3535
+    },
+    {
+      "path": "sb10/C103/workspace/test/warehouse.test.ts",
+      "source": "/tmp/sb10/C103/workspace/test/warehouse.test.ts",
+      "sha256": "749717eca9247f6574cbd579df212755b1a31e54a008fbcae6eb49f56e56cdf7",
+      "bytes": 1472
+    },
+    {
+      "path": "sb10/C103/result.json",
+      "source": "/tmp/sb10/C103/result.json",
+      "sha256": "bc9080c1750468aea4696973865cd2809a914875f02a54a270174c350a6efd43",
+      "bytes": 24956
+    },
+    {
+      "path": "sb10/C103/build-result.json",
+      "source": "/tmp/sb10/C103/build-result.json",
+      "sha256": "b65762cb120dbec080b0e3db3c8b57c829bd9a2edb80c7d68463ac4e2be0a17e",
+      "bytes": 23972
+    },
+    {
+      "path": "sb10/C103/room-validation.json",
+      "source": "/tmp/sb10/C103/room-validation.json",
+      "sha256": "a26bf597759bb8561037668591f38e7737e54e8b3ad16cdc1e057f39b4fcfb20",
+      "bytes": 1672
+    },
+    {
+      "path": "sb10/C104/workspace/.bench-hash.mjs",
+      "source": "/tmp/sb10/C104/workspace/.bench-hash.mjs",
+      "sha256": "7aa535618a46cef872de6b808969abfcac93aae8f1ee820fb8ea0bf77fa5fd43",
+      "bytes": 518
+    },
+    {
+      "path": "sb10/C104/workspace/.claude/settings.json",
+      "source": "/tmp/sb10/C104/workspace/.claude/settings.json",
+      "sha256": "af1ef779182cc6e6bc8b2985a37b27915b5742ecb1a89015aeb1c721d732bc1d",
+      "bytes": 30
+    },
+    {
+      "path": "sb10/C104/workspace/SPEC.md",
+      "source": "/tmp/sb10/C104/workspace/SPEC.md",
+      "sha256": "e85d209fd9a3aa6ce8f966aba6da50ff83ecc5d6569fabad949b45ff83865de3",
+      "bytes": 2351
+    },
+    {
+      "path": "sb10/C104/workspace/brief.txt",
+      "source": "/tmp/sb10/C104/workspace/brief.txt",
+      "sha256": "2d37efab6e0daa4c765a10db649625d7105d37fee31dd5ddf2f63ef0544a1845",
+      "bytes": 354
+    },
+    {
+      "path": "sb10/C104/workspace/src/backorder.ts",
+      "source": "/tmp/sb10/C104/workspace/src/backorder.ts",
+      "sha256": "2bc09376f084de09977363db2781251bf691a2f3c1dba7ee1d3a24ab7e1490f2",
+      "bytes": 792
+    },
+    {
+      "path": "sb10/C104/workspace/src/inventory.ts",
+      "source": "/tmp/sb10/C104/workspace/src/inventory.ts",
+      "sha256": "4821a4c4fd05e89be09b34cd039d537255a17461d7ec1d0d7e36fd6fd66bfbd5",
+      "bytes": 1785
+    },
+    {
+      "path": "sb10/C104/workspace/src/orders.ts",
+      "source": "/tmp/sb10/C104/workspace/src/orders.ts",
+      "sha256": "05d14031649474f31af7838caedf66c33ed4155b7f57593972def6478baa27a9",
+      "bytes": 1087
+    },
+    {
+      "path": "sb10/C104/workspace/src/types.ts",
+      "source": "/tmp/sb10/C104/workspace/src/types.ts",
+      "sha256": "2e472aeeb78a7a99a0d6a6beb4e7514be61bc17728738583565c5aedbeb7770d",
+      "bytes": 192
+    },
+    {
+      "path": "sb10/C104/workspace/src/warehouse.ts",
+      "source": "/tmp/sb10/C104/workspace/src/warehouse.ts",
+      "sha256": "b61718ebb4ac733cb956f4f6e90c3b2edb42f804fa14f411100920f05d4531fa",
+      "bytes": 3535
+    },
+    {
+      "path": "sb10/C104/workspace/test/warehouse.test.ts",
+      "source": "/tmp/sb10/C104/workspace/test/warehouse.test.ts",
+      "sha256": "749717eca9247f6574cbd579df212755b1a31e54a008fbcae6eb49f56e56cdf7",
+      "bytes": 1472
+    },
+    {
+      "path": "sb10/C104/result.json",
+      "source": "/tmp/sb10/C104/result.json",
+      "sha256": "1153d96a7e478b00daa1c1591ff9d9ab457518a5bd51fba966ef288c84d5f550",
+      "bytes": 24218
+    },
+    {
+      "path": "sb10/C104/build-result.json",
+      "source": "/tmp/sb10/C104/build-result.json",
+      "sha256": "d27f7007c132b94b6c12d605ac443069ff968bae5568cd8350a7b76f524166de",
+      "bytes": 23410
+    },
+    {
+      "path": "sb10/C104/room-validation.json",
+      "source": "/tmp/sb10/C104/room-validation.json",
+      "sha256": "7e2ad46f22bc67e6612d3ea8d00f83b296c0bed18cef92436d6c3fd50926c56b",
+      "bytes": 1496
+    }
+  ]
+}

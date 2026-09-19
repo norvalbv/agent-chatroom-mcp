@@ -1,0 +1,618 @@
+[
+ {
+  "task": "build-billing-s1",
+  "version": "fa8133a-e485fe4",
+  "arm": "A",
+  "label_seed": 1,
+  "outcome": "task_pass",
+  "cost_usd": 0.0847,
+  "output_tokens": 2634,
+  "turns": 10,
+  "wall_s": 43,
+  "defects_planted": 9,
+  "defects_caught": 9,
+  "missed_ids": [],
+  "regression_failed_ids": [],
+  "model_usage": [
+   {
+    "claude-sonnet-5": {
+     "inputTokens": 18,
+     "outputTokens": 2634,
+     "cacheReadInputTokens": 96553,
+     "cacheCreationInputTokens": 9754,
+     "webSearchRequests": 0,
+     "costUSD": 0.08470259999999999,
+     "contextWindow": 1000000,
+     "maxOutputTokens": 64000,
+     "thinkingTokens": 263,
+     "canonicalModel": "claude-sonnet-5",
+     "provider": "firstParty",
+     "costBasis": "list"
+    }
+   }
+  ],
+  "root": "/tmp/sb/s1-A-1"
+ },
+ {
+  "task": "build-billing-s1",
+  "version": "fa8133a-e485fe4",
+  "arm": "A",
+  "label_seed": 2,
+  "outcome": "task_pass",
+  "cost_usd": 0.0847,
+  "output_tokens": 2615,
+  "turns": 9,
+  "wall_s": 44,
+  "defects_planted": 9,
+  "defects_caught": 9,
+  "missed_ids": [],
+  "regression_failed_ids": [],
+  "model_usage": [
+   {
+    "claude-sonnet-5": {
+     "inputTokens": 18,
+     "outputTokens": 2615,
+     "cacheReadInputTokens": 96660,
+     "cacheCreationInputTokens": 9784,
+     "webSearchRequests": 0,
+     "costUSD": 0.08465400000000001,
+     "contextWindow": 1000000,
+     "maxOutputTokens": 64000,
+     "thinkingTokens": 393,
+     "canonicalModel": "claude-sonnet-5",
+     "provider": "firstParty",
+     "costBasis": "list"
+    }
+   }
+  ],
+  "root": "/tmp/sb/s1-A-2"
+ },
+ {
+  "task": "build-billing-s1",
+  "version": "fa8133a-e485fe4",
+  "arm": "A",
+  "label_seed": 3,
+  "outcome": "task_pass",
+  "cost_usd": 0.0817,
+  "output_tokens": 2491,
+  "turns": 9,
+  "wall_s": 44,
+  "defects_planted": 9,
+  "defects_caught": 9,
+  "missed_ids": [],
+  "regression_failed_ids": [],
+  "model_usage": [
+   {
+    "claude-sonnet-5": {
+     "inputTokens": 16,
+     "outputTokens": 2491,
+     "cacheReadInputTokens": 84937,
+     "cacheCreationInputTokens": 9940,
+     "webSearchRequests": 0,
+     "costUSD": 0.08168940000000001,
+     "contextWindow": 1000000,
+     "maxOutputTokens": 64000,
+     "thinkingTokens": 182,
+     "canonicalModel": "claude-sonnet-5",
+     "provider": "firstParty",
+     "costBasis": "list"
+    }
+   }
+  ],
+  "root": "/tmp/sb/s1-A-3"
+ },
+ {
+  "task": "build-billing-s1",
+  "version": "fa8133a-e485fe4",
+  "arm": "A",
+  "label_seed": 4,
+  "outcome": "task_pass",
+  "cost_usd": 0.0746,
+  "output_tokens": 2186,
+  "turns": 9,
+  "wall_s": 39,
+  "defects_planted": 9,
+  "defects_caught": 9,
+  "missed_ids": [],
+  "regression_failed_ids": [],
+  "model_usage": [
+   {
+    "claude-sonnet-5": {
+     "inputTokens": 16,
+     "outputTokens": 2186,
+     "cacheReadInputTokens": 81806,
+     "cacheCreationInputTokens": 9098,
+     "webSearchRequests": 0,
+     "costUSD": 0.07464520000000001,
+     "contextWindow": 1000000,
+     "maxOutputTokens": 64000,
+     "thinkingTokens": 311,
+     "canonicalModel": "claude-sonnet-5",
+     "provider": "firstParty",
+     "costBasis": "list"
+    }
+   }
+  ],
+  "root": "/tmp/sb/s1-A-4"
+ },
+ {
+  "task": "build-billing-s1",
+  "version": "fa8133a-e485fe4",
+  "arm": "A",
+  "label_seed": 5,
+  "outcome": "task_pass",
+  "cost_usd": 0.0841,
+  "output_tokens": 2636,
+  "turns": 10,
+  "wall_s": 47,
+  "defects_planted": 9,
+  "defects_caught": 9,
+  "missed_ids": [],
+  "regression_failed_ids": [],
+  "model_usage": [
+   {
+    "claude-sonnet-5": {
+     "inputTokens": 18,
+     "outputTokens": 2636,
+     "cacheReadInputTokens": 98190,
+     "cacheCreationInputTokens": 9506,
+     "webSearchRequests": 0,
+     "costUSD": 0.084058,
+     "contextWindow": 1000000,
+     "maxOutputTokens": 64000,
+     "thinkingTokens": 317,
+     "canonicalModel": "claude-sonnet-5",
+     "provider": "firstParty",
+     "costBasis": "list"
+    }
+   }
+  ],
+  "root": "/tmp/sb/s1-A-5"
+ },
+ {
+  "task": "build-rules-s1",
+  "version": "55781dc",
+  "arm": "A",
+  "label_seed": 1,
+  "outcome": "task_pass",
+  "cost_usd": 0.0749,
+  "output_tokens": 2662,
+  "turns": 8,
+  "wall_s": 36,
+  "defects_planted": 10,
+  "defects_caught": 10,
+  "missed_ids": [],
+  "regression_failed_ids": [],
+  "model_usage": [
+   {
+    "claude-sonnet-5": {
+     "inputTokens": 16,
+     "outputTokens": 2662,
+     "cacheReadInputTokens": 79070,
+     "cacheCreationInputTokens": 8109,
+     "webSearchRequests": 0,
+     "costUSD": 0.07490200000000002,
+     "contextWindow": 1000000,
+     "maxOutputTokens": 64000,
+     "thinkingTokens": 665,
+     "canonicalModel": "claude-sonnet-5",
+     "provider": "firstParty",
+     "costBasis": "list"
+    }
+   }
+  ],
+  "root": "/tmp/sb8/r1-A-1"
+ },
+ {
+  "task": "build-rules-s1",
+  "version": "55781dc",
+  "arm": "A",
+  "label_seed": 2,
+  "outcome": "task_pass",
+  "cost_usd": 0.0732,
+  "output_tokens": 2575,
+  "turns": 7,
+  "wall_s": 34,
+  "defects_planted": 10,
+  "defects_caught": 10,
+  "missed_ids": [],
+  "regression_failed_ids": [],
+  "model_usage": [
+   {
+    "claude-sonnet-5": {
+     "inputTokens": 14,
+     "outputTokens": 2575,
+     "cacheReadInputTokens": 67303,
+     "cacheCreationInputTokens": 8482,
+     "webSearchRequests": 0,
+     "costUSD": 0.0731666,
+     "contextWindow": 1000000,
+     "maxOutputTokens": 64000,
+     "thinkingTokens": 707,
+     "canonicalModel": "claude-sonnet-5",
+     "provider": "firstParty",
+     "costBasis": "list"
+    }
+   }
+  ],
+  "root": "/tmp/sb8/r1-A-2"
+ },
+ {
+  "task": "build-rules-s1",
+  "version": "55781dc",
+  "arm": "A",
+  "label_seed": 3,
+  "outcome": "task_pass",
+  "cost_usd": 0.0757,
+  "output_tokens": 2545,
+  "turns": 8,
+  "wall_s": 34,
+  "defects_planted": 10,
+  "defects_caught": 10,
+  "missed_ids": [],
+  "regression_failed_ids": [],
+  "model_usage": [
+   {
+    "claude-sonnet-5": {
+     "inputTokens": 16,
+     "outputTokens": 2545,
+     "cacheReadInputTokens": 80335,
+     "cacheCreationInputTokens": 8543,
+     "webSearchRequests": 0,
+     "costUSD": 0.075721,
+     "contextWindow": 1000000,
+     "maxOutputTokens": 64000,
+     "thinkingTokens": 553,
+     "canonicalModel": "claude-sonnet-5",
+     "provider": "firstParty",
+     "costBasis": "list"
+    }
+   }
+  ],
+  "root": "/tmp/sb8/r1-A-3"
+ },
+ {
+  "task": "build-rules-s1",
+  "version": "55781dc",
+  "arm": "A",
+  "label_seed": 4,
+  "outcome": "task_pass",
+  "cost_usd": 0.0683,
+  "output_tokens": 2539,
+  "turns": 7,
+  "wall_s": 33,
+  "defects_planted": 10,
+  "defects_caught": 10,
+  "missed_ids": [],
+  "regression_failed_ids": [],
+  "model_usage": [
+   {
+    "claude-sonnet-5": {
+     "inputTokens": 14,
+     "outputTokens": 2539,
+     "cacheReadInputTokens": 64920,
+     "cacheCreationInputTokens": 7485,
+     "webSearchRequests": 0,
+     "costUSD": 0.068342,
+     "contextWindow": 1000000,
+     "maxOutputTokens": 64000,
+     "thinkingTokens": 736,
+     "canonicalModel": "claude-sonnet-5",
+     "provider": "firstParty",
+     "costBasis": "list"
+    }
+   }
+  ],
+  "root": "/tmp/sb8/r1-A-4"
+ },
+ {
+  "task": "build-rules-s1",
+  "version": "55781dc",
+  "arm": "A",
+  "label_seed": 5,
+  "outcome": "task_pass",
+  "cost_usd": 0.0676,
+  "output_tokens": 2328,
+  "turns": 8,
+  "wall_s": 31,
+  "defects_planted": 10,
+  "defects_caught": 10,
+  "missed_ids": [],
+  "regression_failed_ids": [],
+  "model_usage": [
+   {
+    "claude-sonnet-5": {
+     "inputTokens": 14,
+     "outputTokens": 2328,
+     "cacheReadInputTokens": 66125,
+     "cacheCreationInputTokens": 7768,
+     "webSearchRequests": 0,
+     "costUSD": 0.067605,
+     "contextWindow": 1000000,
+     "maxOutputTokens": 64000,
+     "thinkingTokens": 556,
+     "canonicalModel": "claude-sonnet-5",
+     "provider": "firstParty",
+     "costBasis": "list"
+    }
+   }
+  ],
+  "root": "/tmp/sb8/r1-A-5"
+ },
+ {
+  "task": "build-rules-l3",
+  "version": "17aefe4",
+  "arm": "A",
+  "label_seed": 1,
+  "outcome": "task_pass",
+  "cost_usd": 0.1363,
+  "output_tokens": 3543,
+  "turns": 7,
+  "wall_s": 39,
+  "defects_planted": 36,
+  "defects_caught": 36,
+  "missed_ids": [],
+  "regression_failed_ids": [],
+  "model_usage": [
+   {
+    "claude-sonnet-5": {
+     "inputTokens": 14,
+     "outputTokens": 3543,
+     "cacheReadInputTokens": 112563,
+     "cacheCreationInputTokens": 19594,
+     "webSearchRequests": 0,
+     "costUSD": 0.1363466,
+     "contextWindow": 1000000,
+     "maxOutputTokens": 64000,
+     "thinkingTokens": 1022,
+     "canonicalModel": "claude-sonnet-5",
+     "provider": "firstParty",
+     "costBasis": "list"
+    }
+   }
+  ],
+  "root": "/tmp/sb3/l3-A-1"
+ },
+ {
+  "task": "build-rules-l3",
+  "version": "17aefe4",
+  "arm": "A",
+  "label_seed": 2,
+  "outcome": "task_fail",
+  "cost_usd": 0.148,
+  "output_tokens": 4310,
+  "turns": 10,
+  "wall_s": 52,
+  "defects_planted": 36,
+  "defects_caught": 35,
+  "missed_ids": [
+   "exportLimit"
+  ],
+  "regression_failed_ids": [],
+  "model_usage": [
+   {
+    "claude-sonnet-5": {
+     "inputTokens": 18,
+     "outputTokens": 4310,
+     "cacheReadInputTokens": 145163,
+     "cacheCreationInputTokens": 18968,
+     "webSearchRequests": 0,
+     "costUSD": 0.1480406,
+     "contextWindow": 1000000,
+     "maxOutputTokens": 64000,
+     "thinkingTokens": 1322,
+     "canonicalModel": "claude-sonnet-5",
+     "provider": "firstParty",
+     "costBasis": "list"
+    }
+   }
+  ],
+  "root": "/tmp/sb3/l3-A-2"
+ },
+ {
+  "task": "build-rules-l3",
+  "version": "17aefe4",
+  "arm": "A",
+  "label_seed": 3,
+  "outcome": "task_pass",
+  "cost_usd": 0.1564,
+  "output_tokens": 4642,
+  "turns": 10,
+  "wall_s": 53,
+  "defects_planted": 36,
+  "defects_caught": 36,
+  "missed_ids": [],
+  "regression_failed_ids": [],
+  "model_usage": [
+   {
+    "claude-sonnet-5": {
+     "inputTokens": 18,
+     "outputTokens": 4642,
+     "cacheReadInputTokens": 149442,
+     "cacheCreationInputTokens": 20021,
+     "webSearchRequests": 0,
+     "costUSD": 0.1564284,
+     "contextWindow": 1000000,
+     "maxOutputTokens": 64000,
+     "thinkingTokens": 1259,
+     "canonicalModel": "claude-sonnet-5",
+     "provider": "firstParty",
+     "costBasis": "list"
+    }
+   }
+  ],
+  "root": "/tmp/sb3/l3-A-3"
+ },
+ {
+  "task": "build-ledger-s1",
+  "version": "55781dc",
+  "arm": "A",
+  "label_seed": 11,
+  "outcome": "task_pass",
+  "cost_usd": 0.0596,
+  "output_tokens": 2304,
+  "turns": 4,
+  "wall_s": 28,
+  "defects_planted": 9,
+  "defects_caught": 9,
+  "missed_ids": [],
+  "regression_failed_ids": [],
+  "model_usage": [
+   {
+    "claude-sonnet-5": {
+     "inputTokens": 8,
+     "outputTokens": 2304,
+     "cacheReadInputTokens": 31066,
+     "cacheCreationInputTokens": 7578,
+     "webSearchRequests": 0,
+     "costUSD": 0.0595812,
+     "contextWindow": 1000000,
+     "maxOutputTokens": 64000,
+     "thinkingTokens": 641,
+     "canonicalModel": "claude-sonnet-5",
+     "provider": "firstParty",
+     "costBasis": "list"
+    }
+   }
+  ],
+  "root": "/tmp/sb7/led1-A-11"
+ },
+ {
+  "task": "build-ledger-s1",
+  "version": "55781dc",
+  "arm": "A",
+  "label_seed": 12,
+  "outcome": "task_pass",
+  "cost_usd": 0.057,
+  "output_tokens": 2124,
+  "turns": 4,
+  "wall_s": 27,
+  "defects_planted": 9,
+  "defects_caught": 9,
+  "missed_ids": [],
+  "regression_failed_ids": [],
+  "model_usage": [
+   {
+    "claude-sonnet-5": {
+     "inputTokens": 8,
+     "outputTokens": 2124,
+     "cacheReadInputTokens": 30994,
+     "cacheCreationInputTokens": 7392,
+     "webSearchRequests": 0,
+     "costUSD": 0.0570228,
+     "contextWindow": 1000000,
+     "maxOutputTokens": 64000,
+     "thinkingTokens": 720,
+     "canonicalModel": "claude-sonnet-5",
+     "provider": "firstParty",
+     "costBasis": "list"
+    }
+   }
+  ],
+  "root": "/tmp/sb7/led1-A-12"
+ },
+ {
+  "task": "build-ledger-s1",
+  "version": "55781dc",
+  "arm": "A",
+  "label_seed": 13,
+  "outcome": "task_fail",
+  "cost_usd": 0.0564,
+  "output_tokens": 2002,
+  "turns": 5,
+  "wall_s": 25,
+  "defects_planted": 9,
+  "defects_caught": 8,
+  "missed_ids": [
+   "S12"
+  ],
+  "regression_failed_ids": [],
+  "model_usage": [
+   {
+    "claude-sonnet-5": {
+     "inputTokens": 8,
+     "outputTokens": 2002,
+     "cacheReadInputTokens": 31354,
+     "cacheCreationInputTokens": 7524,
+     "webSearchRequests": 0,
+     "costUSD": 0.0564028,
+     "contextWindow": 1000000,
+     "maxOutputTokens": 64000,
+     "thinkingTokens": 591,
+     "canonicalModel": "claude-sonnet-5",
+     "provider": "firstParty",
+     "costBasis": "list"
+    }
+   }
+  ],
+  "root": "/tmp/sb7/led1-A-13"
+ },
+ {
+  "task": "build-ledger-s1",
+  "version": "55781dc",
+  "arm": "A",
+  "label_seed": 14,
+  "outcome": "task_pass",
+  "cost_usd": 0.0562,
+  "output_tokens": 2061,
+  "turns": 4,
+  "wall_s": 25,
+  "defects_planted": 9,
+  "defects_caught": 9,
+  "missed_ids": [],
+  "regression_failed_ids": [],
+  "model_usage": [
+   {
+    "claude-sonnet-5": {
+     "inputTokens": 8,
+     "outputTokens": 2061,
+     "cacheReadInputTokens": 30994,
+     "cacheCreationInputTokens": 7332,
+     "webSearchRequests": 0,
+     "costUSD": 0.0561528,
+     "contextWindow": 1000000,
+     "maxOutputTokens": 64000,
+     "thinkingTokens": 546,
+     "canonicalModel": "claude-sonnet-5",
+     "provider": "firstParty",
+     "costBasis": "list"
+    }
+   }
+  ],
+  "root": "/tmp/sb7/led1-A-14"
+ },
+ {
+  "task": "build-ledger-s1",
+  "version": "55781dc",
+  "arm": "A",
+  "label_seed": 15,
+  "outcome": "task_pass",
+  "cost_usd": 0.057,
+  "output_tokens": 2066,
+  "turns": 4,
+  "wall_s": 27,
+  "defects_planted": 9,
+  "defects_caught": 9,
+  "missed_ids": [],
+  "regression_failed_ids": [],
+  "model_usage": [
+   {
+    "claude-sonnet-5": {
+     "inputTokens": 8,
+     "outputTokens": 2066,
+     "cacheReadInputTokens": 30994,
+     "cacheCreationInputTokens": 7534,
+     "webSearchRequests": 0,
+     "costUSD": 0.0570108,
+     "contextWindow": 1000000,
+     "maxOutputTokens": 64000,
+     "thinkingTokens": 656,
+     "canonicalModel": "claude-sonnet-5",
+     "provider": "firstParty",
+     "costBasis": "list"
+    }
+   }
+  ],
+  "root": "/tmp/sb7/led1-A-15"
+ }
+]

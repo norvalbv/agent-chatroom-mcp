@@ -1,0 +1,146 @@
+{
+  "schemaVersion": 1,
+  "task_id": "build-billing-s1",
+  "arm": "A",
+  "seed": 4,
+  "model": "sonnet",
+  "outcome": "task_pass",
+  "passed": true,
+  "reason": "task_pass",
+  "oracle": {
+    "kind": "planted-defects",
+    "command": "node --import tsx oracle/score.ts <workspace>",
+    "exit_code": 0
+  },
+  "anti_tamper": {
+    "hash_before": "420dd847c3084f61ea22a81d6356c1a9f256507cca6e2cb4cfb7e2734bec818a",
+    "hash_after": "420dd847c3084f61ea22a81d6356c1a9f256507cca6e2cb4cfb7e2734bec818a",
+    "unchanged": true
+  },
+  "seats": [
+    {
+      "name": "single",
+      "argv": [
+        "claude",
+        "-p",
+        "The library in src/ must meet the specification in SPEC.md. The public tests in test/ pass today, but passing them does not prove the code meets the specification. Make the codebase conform to SPEC.md, keeping everything that already conforms working. Run the tests with: node --import tsx --test test/. Do not create files outside this directory.\n\nModify the relevant source file(s) in your current working directory directly to implement the fix described above. Your edit to the existing file(s) is the submission; do not create any other output file.",
+        "--mcp-config",
+        "/tmp/sb/s1-A-4/mcp-empty.json",
+        "--strict-mcp-config",
+        "--allowedTools",
+        "Read,Edit,Write,MultiEdit,Bash,Glob,Grep",
+        "--tools",
+        "Read,Edit,Write,MultiEdit,Bash,Glob,Grep",
+        "--disable-slash-commands",
+        "--setting-sources",
+        "project",
+        "--exclude-dynamic-system-prompt-sections",
+        "--output-format",
+        "stream-json",
+        "--verbose",
+        "--model",
+        "sonnet",
+        "--max-budget-usd",
+        "2"
+      ],
+      "exit_code": 0,
+      "signal": null,
+      "started_at": "2026-09-19T19:19:37.025Z",
+      "completed_at": "2026-09-19T19:20:16.941Z",
+      "num_turns": 9,
+      "duration_ms": 36587,
+      "duration_api_ms": 24136,
+      "usage": {
+        "cost": 0.07464520000000001,
+        "input_tokens": 16,
+        "cache_read_input_tokens": 81806,
+        "cache_creation_input_tokens": 9098,
+        "output_tokens": 2186
+      },
+      "text": "I changed the code in `src/` to match `SPEC.md`. The test run finished with 20 passing and 1 failing, and that failure is a test that contradicts the spec.\n\n`tsx` isn't installed here, so `node --import tsx --test test/` fails on import. I ran `node --test test/*.test.ts` instead, which uses Node's built-in type stripping.\n\nThe failing test is \"fee applies once the grace period is used up\" in `test/dunning.test.ts`. It expects a 500-cent fee at exactly 7 days late. The spec says no fee is charged while an invoice is \"at most 7 days past its due date\", so 7 days late should give 0. I followed the spec and left the test alone. That test's expectation should probably be changed to 8 days.\n\nWhat I changed:\n- **`calendar.ts`:** `addMonths` now clamps to the last day of a shorter target month instead of spilling into the next one.\n- **`coupons.ts`:** a percent coupon's discount is now capped at its `maxCents`.\n- **`dunning.ts`:** no fee at 7 days or fewer past due (`late <= GRACE_DAYS`).\n- **`invoice.ts`:** tax is now computed on the subtotal minus the discount. It also reads `taxExempt` instead of the non-existent `tax_exempt`.\n- **`plans.ts`:** `usageCharge` no longer double-charges the unit at each tier boundary (`prev = t.upTo`).\n- **`proration.ts`:** `remainingShare` divides by the real number of days from `start` to `end`, not a fixed 30.\n- **`report.ts`:** a subscription is no longer active on its end day. Annual subscriptions' monthly value now uses `roundHalfUp` instead of `Math.floor`.\n\nThe spec doesn't say whether the `maxCents` cap applies to each percent coupon or to the combined percent discount. I applied it per coupon.",
+      "killed_by_deadline": false,
+      "partial_usage": null,
+      "reported_models": {
+        "system_init": [
+          "claude-sonnet-5"
+        ],
+        "assistant": [
+          "claude-sonnet-5"
+        ],
+        "result_model_usage": [
+          "claude-sonnet-5"
+        ]
+      },
+      "model_usage": {
+        "claude-sonnet-5": {
+          "inputTokens": 16,
+          "outputTokens": 2186,
+          "cacheReadInputTokens": 81806,
+          "cacheCreationInputTokens": 9098,
+          "webSearchRequests": 0,
+          "costUSD": 0.07464520000000001,
+          "contextWindow": 1000000,
+          "maxOutputTokens": 64000,
+          "thinkingTokens": 311,
+          "canonicalModel": "claude-sonnet-5",
+          "provider": "firstParty",
+          "costBasis": "list"
+        }
+      }
+    }
+  ],
+  "usage": {
+    "steps": 0,
+    "prompt_tokens": 0,
+    "completion_tokens": 0,
+    "cost_usd": 0.07464520000000001,
+    "seats": 1,
+    "seats_with_usage": 1,
+    "coverage": "complete",
+    "input_tokens": 16,
+    "cache_read_input_tokens": 81806,
+    "cache_creation_input_tokens": 9098,
+    "output_tokens": 2186
+  },
+  "turns": {
+    "per_seat": [
+      {
+        "name": "single",
+        "num_turns": 9
+      }
+    ],
+    "summed": 9,
+    "seats": 1,
+    "seats_with_turns": 1,
+    "coverage": "complete"
+  },
+  "wall_clock": {
+    "started_at": "2026-09-19T19:19:37.025Z",
+    "completed_at": "2026-09-19T19:20:16.943Z",
+    "duration_ms": 39918
+  },
+  "budget": {
+    "max_budget_usd": 2,
+    "deadline_ms": 720000
+  },
+  "build": {
+    "captured_at": "2026-09-19T19:19:36.987Z",
+    "head_revision": "d7ba9633b670ea8f14796d0b81d10c32197f92ea",
+    "runner_sha256": "5c5efb306636ceae6b520f0361e17de9b2c31c587a1da0a92bdea4c41b554ae8",
+    "hub_entry": null,
+    "hub_entry_sha256": null,
+    "hub_revision": null,
+    "hub_build_sha256": null,
+    "provenance_scope": null
+  },
+  "frozen": {
+    "task_sha256": "420dd847c3084f61ea22a81d6356c1a9f256507cca6e2cb4cfb7e2734bec818a",
+    "scorer_sha256": "f4b645c670ae4655aec1189e4d7320294115f0e3c6da3b5ba41a7ee3b1cd00f8",
+    "fact_scorer_sha256": "6b8b3e98c8c408ecd6715a38db9263488644d27c01a11c5bab3172acd5539832",
+    "task_id": "build-billing-s1",
+    "timeout_ms": 720000,
+    "seats": 1
+  },
+  "error": null,
+  "checked_at": "2026-09-19T19:20:17.841Z"
+}

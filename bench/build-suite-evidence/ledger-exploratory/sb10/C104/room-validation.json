@@ -1,0 +1,33 @@
+{
+  "required_policy": true,
+  "verified_workspace_sha256": "e32460b54d1fb1e86b82d8f5f59827df9bca1e7ac9112384978d8eb407922ef8",
+  "final_workspace_sha256": "e32460b54d1fb1e86b82d8f5f59827df9bca1e7ac9112384978d8eb407922ef8",
+  "artifact_matches": true,
+  "state": "concluded",
+  "proposal_id": "prop_587522aa",
+  "verified": true,
+  "verifier_session_distinct": true,
+  "distinct_sessions": 4,
+  "verification_by": "seat-4",
+  "conclusion": {
+    "text": "Workspace edits (src/inventory.ts, orders.ts, backorder.ts, warehouse.ts) conform to SPEC: receive adds to existing lot; available ignores expired lots; same-expiry ties by ascending id; all-or-nothing reserve releases all held lines and merges repeated skus; cancelled orders never re-reserved; ship limited by remaining reserved; cancel releases only remaining; returns restock only if lot expiry >= day. Tests pass 5/5, workspace_sha256 e32460b54d1fb1e86b82d8f5f59827df9bca1e7ac9112384978d8eb407922ef8. Diff verified by non-authors seat-1, seat-2, seat-4 (verify/* entries); cancel leaves shipped units off the shelf.",
+    "proposalId": "prop_587522aa",
+    "decidedAt": "2026-09-19T19:53:47.074Z",
+    "version": 2,
+    "tally": {
+      "agree": 3,
+      "disagree": 0,
+      "abstain": 0
+    },
+    "electorate": {
+      "electorate": 4,
+      "agree": 3,
+      "disagree": 0,
+      "abstain": 0,
+      "excluded_leavers": 0,
+      "distinct_sessions": 4,
+      "denominator": "electorate"
+    },
+    "unresolved_objections": []
+  }
+}

@@ -1,0 +1,292 @@
+{
+  "depositValid": {
+    "defect": [
+      false
+    ],
+    "reg": [
+      false,
+      true,
+      true,
+      false
+    ]
+  },
+  "insuranceRate": {
+    "defect": [
+      275,
+      325,
+      150
+    ],
+    "reg": []
+  },
+  "priorityCode": {
+    "defect": [
+      280,
+      280
+    ],
+    "reg": [
+      680,
+      520,
+      80,
+      280,
+      280
+    ]
+  },
+  "bulkNet": {
+    "defect": [
+      9350,
+      23889
+    ],
+    "reg": [
+      11000,
+      0,
+      9350,
+      23889
+    ]
+  },
+  "warrantyQuote": {
+    "defect": [
+      38,
+      300,
+      9
+    ],
+    "reg": [
+      0
+    ]
+  },
+  "giftRate": {
+    "defect": [
+      425,
+      125,
+      200
+    ],
+    "reg": []
+  },
+  "supportCode": {
+    "defect": [
+      400,
+      400
+    ],
+    "reg": [
+      440,
+      640,
+      200
+    ]
+  },
+  "onsiteCode": {
+    "defect": [
+      240,
+      240
+    ],
+    "reg": [
+      320,
+      480,
+      720
+    ]
+  },
+  "seasonalLimit": {
+    "defect": [
+      500,
+      500
+    ],
+    "reg": [
+      20,
+      20,
+      23,
+      496,
+      500,
+      500
+    ]
+  },
+  "upgradeFree": {
+    "defect": [
+      1375,
+      1375
+    ],
+    "reg": [
+      0,
+      275,
+      825,
+      1375,
+      1375
+    ]
+  },
+  "loyaltyRate": {
+    "defect": [
+      275,
+      75,
+      375
+    ],
+    "reg": [
+      275,
+      75,
+      375
+    ]
+  },
+  "handlingValid": {
+    "defect": [
+      false
+    ],
+    "reg": [
+      false,
+      true,
+      true,
+      false
+    ]
+  },
+  "auditFee": {
+    "defect": [
+      3,
+      5,
+      54,
+      537,
+      664
+    ],
+    "reg": [
+      0,
+      70,
+      3,
+      5,
+      54,
+      537,
+      664
+    ]
+  },
+  "shippingQuote": {
+    "defect": [
+      113,
+      900,
+      27
+    ],
+    "reg": [
+      0
+    ]
+  },
+  "licenseNet": {
+    "defect": [
+      10200,
+      26060
+    ],
+    "reg": [
+      12000,
+      0,
+      10200,
+      26060
+    ]
+  },
+  "priorityLimit": {
+    "defect": [
+      350,
+      350
+    ],
+    "reg": [
+      90,
+      90,
+      93,
+      346,
+      350,
+      350
+    ]
+  },
+  "upgradeValid": {
+    "defect": [
+      false
+    ],
+    "reg": [
+      false,
+      true,
+      true,
+      false,
+      false
+    ]
+  },
+  "referralBand": {
+    "defect": [
+      700,
+      1050
+    ],
+    "reg": [
+      350,
+      350,
+      1050
+    ]
+  },
+  "returnBand": {
+    "defect": [
+      500,
+      1050
+    ],
+    "reg": [
+      200,
+      200,
+      1050,
+      500,
+      1050
+    ]
+  },
+  "referralNet": {
+    "defect": [
+      9350,
+      23889
+    ],
+    "reg": [
+      11000,
+      0,
+      9350,
+      23889
+    ]
+  },
+  "referralLimit": {
+    "defect": [
+      350,
+      350
+    ],
+    "reg": [
+      70,
+      70,
+      73,
+      346,
+      350,
+      350
+    ]
+  },
+  "insuranceFee": {
+    "defect": [
+      6,
+      8,
+      81,
+      799,
+      987
+    ],
+    "reg": [
+      0,
+      80,
+      6,
+      8,
+      81,
+      799,
+      987
+    ]
+  },
+  "onsiteValid": {
+    "defect": [
+      false
+    ],
+    "reg": [
+      false,
+      true,
+      true,
+      false,
+      false
+    ]
+  },
+  "handlingQuote": {
+    "defect": [
+      100,
+      800,
+      24
+    ],
+    "reg": [
+      0
+    ]
+  }
+}

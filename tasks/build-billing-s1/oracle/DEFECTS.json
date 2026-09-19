@@ -1,0 +1,47 @@
+[
+  {
+    "id": "D02",
+    "module": "calendar",
+    "kind": "boundary"
+  },
+  {
+    "id": "D03",
+    "module": "plans",
+    "kind": "boundary"
+  },
+  {
+    "id": "D04",
+    "module": "proration",
+    "kind": "spec-vs-code"
+  },
+  {
+    "id": "D07",
+    "module": "coupons",
+    "kind": "spec-vs-code"
+  },
+  {
+    "id": "D08",
+    "module": "invoice",
+    "kind": "cross-module-contract"
+  },
+  {
+    "id": "D09",
+    "module": "invoice",
+    "kind": "cross-module-contract"
+  },
+  {
+    "id": "D10",
+    "module": "dunning",
+    "kind": "misleading-test"
+  },
+  {
+    "id": "D11",
+    "module": "report",
+    "kind": "boundary"
+  },
+  {
+    "id": "D12",
+    "module": "report",
+    "kind": "cross-module-contract"
+  }
+]

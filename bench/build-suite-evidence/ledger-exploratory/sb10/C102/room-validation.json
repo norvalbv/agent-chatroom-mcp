@@ -1,0 +1,33 @@
+{
+  "required_policy": true,
+  "verified_workspace_sha256": "e82dd2cea33a446ecea772e4d21e7a73f99faab41b307aa1c1a11dd16462968f",
+  "final_workspace_sha256": "e82dd2cea33a446ecea772e4d21e7a73f99faab41b307aa1c1a11dd16462968f",
+  "artifact_matches": true,
+  "state": "concluded",
+  "proposal_id": "prop_1d6e14f8",
+  "verified": true,
+  "verifier_session_distinct": true,
+  "distinct_sessions": 4,
+  "verification_by": "seat-2",
+  "conclusion": {
+    "text": "Workspace edits fix: receive adds to lot; available ignores expired lots; same-expiry ties by id ascending; all-or-nothing reserve releases all held and merges repeated skus; cancelled orders are skipped by retry (never re-reserved) but stay in the backorder queue; ship limited to still-reserved units; cancel releases only remaining; returns restock only if lot usable on that day. Tests pass (5/5). workspace_sha256 e82dd2cea33a446ecea772e4d21e7a73f99faab41b307aa1c1a11dd16462968f",
+    "proposalId": "prop_1d6e14f8",
+    "decidedAt": "2026-09-19T19:52:07.965Z",
+    "version": 3,
+    "tally": {
+      "agree": 3,
+      "disagree": 0,
+      "abstain": 0
+    },
+    "electorate": {
+      "electorate": 4,
+      "agree": 3,
+      "disagree": 0,
+      "abstain": 0,
+      "excluded_leavers": 0,
+      "distinct_sessions": 4,
+      "denominator": "electorate"
+    },
+    "unresolved_objections": []
+  }
+}

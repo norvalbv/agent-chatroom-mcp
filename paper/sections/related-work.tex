@@ -1,0 +1,121 @@
+\section{Related work}
+\label{sec:related-work}
+
+We situate the hub against five bodies of work. Every citation below was fetched directly
+from \url{arxiv.org/abs/<id>} (never taken from memory or from a secondary summary); the
+full claim-by-claim accounting, including which parts of this system each source makes
+non-novel, lives in \texttt{paper/related-work.md} in the accompanying repository.
+
+\subsection{Multi-agent debate and deliberation}
+
+Multi-round debate among LLM instances improves factual accuracy and reasoning over
+single-model sampling \citep{Du2023}; this is the base claim the hub builds on, not a
+contribution of this paper. Plain debate is also known to fail in specific, documented
+ways that motivate the hub's structural gates rather than leaving them as untested design
+choices: agents converge and stop generating novel content without an enforced divergence
+mechanism \citep{Liang2023}; debate does not reliably beat simpler baselines such as
+self-consistency sampling-and-voting, and any benefit is protocol-dependent
+\citep{Smit2023}; excessive agreeableness collapses debate into premature, incorrect
+consensus faster than a single agent errs \citep{Yao2025}; debate suppresses the output
+diversity that open-ended tasks need \citep{Nguyen2026}; and a correct minority position
+can be outvoted with no mechanism to overturn it, though a learned meta-classifier can
+sometimes detect and reverse such cases \citep{He2026}. This system's blind-opening
+reveal, mandatory pre-quorum challenge, and quote-checked votes are a direct, but
+unmeasured beyond this paper's own RQ1, response to the first four failure modes; its
+supermajority quorum has no analogue of \citeauthor{He2026}'s override, so a correct
+minority is simply outvoted once quorum is reached, a limitation stated plainly in
+Section~\ref{sec:threats}. Per-agent reliability estimated from confidence signals can
+reweight contributions and catch shared misconceptions that plain majority voting cannot
+\citep{Jin2026}; the hub's nearest analogue is a \emph{structural} check (a named other
+seat produces a machine-checked verification verdict) rather than a \emph{learned} one,
+and we do not claim the structural version is better --- that comparison is untested here.
+
+\subsection{LLM software-engineering agent teams}
+
+Autonomous multi-agent cooperation on tasks without continuous human steering is
+established prior art \citep{Li2023,Wu2023}: role-playing agents can cooperate via
+inception prompting \citep{Li2023}, and general conversable multi-agent frameworks
+combine agents, humans and tools \citep{Wu2023}. This system does not claim to have
+invented multi-agent LLM collaboration; its structure is a specific hub protocol (quorum,
+challenge, verify gate) layered on top of free-form conversation, narrower than a
+general-purpose framework. The sharpest threat to any claim that this hub's benefit comes
+from its protocol rather than merely from sampling more agent instances is the finding
+that sampling-and-voting across more agent instances improves performance roughly in
+proportion to agent count, independent of other techniques \citep{Li2024}. Arm K in this
+paper's own RQ1 (Section~\ref{sec:method}) is designed specifically to separate ``more
+agents helped'' from ``the hub mechanics helped,'' using \citeauthor{Li2024}'s premise as
+the null it must be tested against rather than an assumption we can grant for free.
+
+\subsection{Verification, self-report reliability, and group-decision stability}
+
+The hub's electorate and quorum design draws on coalition-formation game theory rather
+than LLM-verification literature, and we are explicit that these are a different
+literature than ``can an LLM's self-report be trusted.'' Emotional dynamics can guarantee
+convergence to stable coalition outcomes under conditions where classical models do not
+converge \citep{Boehmer2022}; stability concepts have been analyzed for hedonic games
+with sequential, immediate-assignment arrival \citep{Bullinger2023}; and an anytime
+algorithm can bound coalition-structure quality relative to optimal, tightening the bound
+with more computation \citep{Sandholm1998}. These are cited only as background for the
+idea that a group admitting participants over time needs a stability argument, not
+because the hub implements any of their specific mechanisms --- the hub's supermajority
+quorum is a fixed heuristic, not a worst-case-guaranteed algorithm, and stating this
+precisely matters because a citation of \citeauthor{Sandholm1998} could otherwise be
+misread as claiming a formal guarantee the code does not provide. The question of whether
+an agent's own claim to have verified something can be trusted is answered here by the
+hub's own mechanism (a \texttt{verify/*} entry counts only if it parses as JSON with
+\texttt{exit\_code:0} and the exact proposal id, from a seat other than the proposer) and
+not by an external LLM self-report calibration paper; no such paper was found in this
+search, a gap we note rather than paper over.
+
+\subsection{Cost-aware agent systems}
+
+Cost-aware serving reduces spend by routing or cascading across models of different
+cost/quality at the level of a single query: an LLM cascade can achieve large cost
+savings at matched or better accuracy than always using the strongest model
+\citep{Chen2023}, and clustering queries to cheap models with escalation only for
+low-confidence cases retains most of the strongest model's accuracy at a fraction of the
+cost \citep{Moslem2026}. This hub's own cost-reduction work takes a different lever ---
+trimming resent conversational context within a single fixed model per room, rather than
+routing across models per query --- and has no escalation path: every seat in a room runs
+the same model tier for the room's duration. Parallelized context compaction gives
+fine-grained control over summary volume for long-running agent conversations
+\citep{Cim2026}; the hub does not compact or summarize room history at all, since its
+board exists precisely so long content lives outside chat rather than needing to be
+summarized within it, an architectural choice we assert but do not measure against
+compaction here. A related line maintains full dialogue history while generating
+intent-aware summaries and compact tool logs to manage growing context in multi-turn
+agents \citep{Su2026}; the hub's own incremental board-state synchronization solves a
+narrower problem (delta delivery of board keys to a participant's cursor) than
+intent-aware summarization of chat history.
+
+\subsection{Evaluation methodology for agent benchmarks}
+
+Strong LLMs used as judges reach over 80\% agreement with human preferences on
+chat-assistant comparisons \citep{Zheng2023}; that figure is a \emph{preference}-agreement
+ceiling, not a \emph{correctness} guarantee, and it is the reason this paper scores every
+task by a hidden-fixture machine oracle rather than by an LLM judge. Two further findings
+reinforce that choice: assigning asymmetric roles to a multi-agent panel of LLM judges
+introduces a systematic downward bias that the panel's own consensus process does not
+self-correct \citep{Song2026} --- a direct warning against ever using the hub's own
+challenge/vote structure, which superficially resembles a panel of judges, as the scorer
+of a benchmark task about the hub itself --- and rubric text can itself encode evaluative
+signal, letting scores be predicted from the rubric independent of the candidate response
+\citep{Bagaria2026}, so a rubric does not repair judge validity either. Synthetic
+long-context benchmarks with simple needle-retrieval overstate real capability, and
+richer needle configurations and multi-hop tasks are needed to resist this kind of gaming
+\citep{Hsieh2024}; the analogous lesson for this paper's own task suite is that a fixture
+answerable by one shallow pattern-match overstates what an oracle task measures, which is
+part of why Section~\ref{sec:method} reports task admission as a rate over ten or more
+seeds rather than a pass/fail on one.
+
+\subsection{The narrow, honest contribution claim}
+
+What we did not find in this search is a prior evaluation of a \emph{hub-enforced}
+combination of blind-opening reveal, mandatory pre-quorum challenge, quote-verified agree
+votes, a machine-parseable verification gate with a hub-assigned (not self-selected)
+reviewer, and a supermajority electorate counted per connection, applied to LLM agent
+coordination --- nor a benchmark of that combination against a budget-matched single
+agent and an oracle-free multi-sample selection baseline on hidden-fixture,
+machine-oracle tasks. That combination, and that comparison, is what this paper reports.
+It is a narrow claim about an untested combination of known parts, not a claim of a new
+debate mechanism or a new judging method.

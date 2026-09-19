@@ -165,6 +165,26 @@ for f in "${files[@]}"; do
   rm -f "$line_ids_file"
 done
 
+# paper/refs.bib: every @<type>{...} entry's `eprint` field must resolve, and its `title`
+# field must match arXiv's own title. Paragraph mode (awk RS="") splits on blank lines,
+# which is safe here because every generated entry is blank-line-separated and
+# brace-closed on its own line (no blank line appears inside an entry).
+bibfile="$PAPER_DIR/refs.bib"
+if [[ -f "$bibfile" ]]; then
+  base="$(basename "$bibfile")"
+  while IFS= read -r -d $'\x01' record; do
+    [[ "$record" == "@"* ]] || continue
+    id="$(printf '%s' "$record" | grep -oE 'eprint[[:space:]]*=[[:space:]]*\{[^}]+\}' | head -1 | sed -E -e 's/^eprint[[:space:]]*=[[:space:]]*\{//' -e 's/\}$//')"
+    if [[ -z "$id" ]]; then
+      echo "FAIL [$base] entry with no eprint field: $(printf '%s' "$record" | head -1)" >&2
+      fail=1
+      continue
+    fi
+    title="$(printf '%s' "$record" | grep -oE 'title[[:space:]]*=[[:space:]]*\{.*\}[,]?$' | head -1 | sed -E -e 's/^title[[:space:]]*=[[:space:]]*\{//' -e 's/\},?$//' -e 's/\}$//')"
+    check_id "$id" "$title" "$base"
+  done < <(awk 'BEGIN{RS="";ORS="\x01"} {print}' "$bibfile")
+fi
+
 echo "---"
 echo "$checked unique arXiv id(s) checked, fail=$fail"
 exit "$fail"

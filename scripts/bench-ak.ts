@@ -130,22 +130,28 @@ export function runAttempt(runnerPath: string, args: string[], timeoutMs: number
     const child = spawn(process.execPath, ["--import", "tsx", runnerPath, ...args], { detached: true, stdio: ["ignore", "ignore", "pipe"] });
     trackedGroups.add(child);
     let err = "";
-    let timedOut = false;
+    let settled = false;
+    // Resolve at most once. The timer resolves by itself (not only via "close"), so even if the group kill
+    // never lands the pool cannot deadlock; a later "close" is then a no-op apart from cleanup.
+    const finish = (status: number | null, stderr: string) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      res({ status, stderr });
+    };
     const timer = setTimeout(() => {
-      timedOut = true;
       killGroup(child, "SIGKILL");
+      finish(null, `${err}\nrunAttempt: outer timeout (${timeoutMs} ms) exceeded, runner wedged; process group killed`);
     }, timeoutMs);
     child.stderr?.on("data", (d) => (err = (err + d).slice(-4000)));
     child.on("close", (status) => {
-      clearTimeout(timer);
       trackedGroups.delete(child);
       killGroup(child, "SIGKILL"); // nothing of a finished attempt may outlive it
-      res({ status: timedOut ? null : status, stderr: timedOut ? `${err}\nrunAttempt: outer timeout (${timeoutMs} ms) exceeded, runner wedged; process group killed` : err });
+      finish(status, err);
     });
     child.on("error", (e) => {
-      clearTimeout(timer);
       trackedGroups.delete(child);
-      res({ status: null, stderr: String(e) });
+      finish(null, String(e));
     });
   });
 }

@@ -12,9 +12,17 @@ programs, though the two programs differ in how concentrated that minority is: o
 (\texttt{paper/prereg-arm-k.md}, "What the existing data already says"). Any procedure that aggregates
 several independent attempts toward their plurality answer recovers the correct answer whenever the
 correct answer is the plurality, which both single-agent pass rates satisfy with room to spare; the
-exceptions are recorded rather than assumed away: arm~K failed on \texttt{stamp-interpreter} in exactly
-the 4 of 40 groups where the shared wrong answer happened to be that group's own plurality
-(\texttt{paper/amendments.md}, 2026-09-19 arm-K result entry). This is true whether the aggregation is
+exceptions are recorded rather than assumed away. Arm~K failed on \texttt{stamp-interpreter} in exactly
+4 of 40 groups (seeds 113, 116, 120, 122), each with exactly 4 of 10 attempts correct; of these, 2
+(seeds 113 and 122) are groups where the shared wrong answer was the outright plurality (6 of 10), and 2
+(seeds 116 and 120) are 4-4 ties between the correct answer and one wrong answer, decided by the
+pre-registered tie-break rule (lowest sub-seed) in the wrong attempt's favor -- not, as an earlier
+account in \texttt{paper/amendments.md} stated, four plurality losses (a correction verified directly
+against each group's \texttt{selection.votes} in \texttt{bench/results/rq1-arm-k}). Both failure modes
+are consequences of the same underlying fact -- the correct answer was not always a comfortable majority
+of a given group's 10 attempts even though it is the population majority -- and both are properties of
+plain plurality voting, not of anything the chatroom's specific mechanics would avoid or reproduce
+differently. This is true whether the aggregation is
 an explicit vote count (arm~K's plurality selector) or an emergent chatroom consensus reached through
 blind openings, proposal and challenge (arm~C): both land at pass rates that are not statistically
 distinguishable from each other on either \texttt{stamp} task (Section~\ref{sec:results}), despite

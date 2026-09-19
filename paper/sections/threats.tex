@@ -35,8 +35,8 @@ running it.
   (\texttt{paper/amendments.md}, 2026-09-19 thinking-budget entry). If the single-agent rate is not
   stable across the time windows the two grids were run in, the K-vs-C comparison is confounded by time,
   not only by sampling noise. A contemporaneous, interleaved arm-C/arm-K sample
-  (\texttt{bench/results/rq1-window-control}) was designed specifically to test this; its status as of
-  this section is reported in Section~\ref{sec:results} rather than assumed complete.
+  (\texttt{bench/results/rq1-window-control}) was designed specifically to test this; its completed, regime-separated result is reported in Section~\ref{sec:results}. The crossover
+  seed is separated because its arm~C and arm~K runs straddle the boundary.
 
 \item \textbf{A confirmed, undocumented regime shift in the model behind the \texttt{sonnet} alias
   during this study.} Between approximately 15:30 and 16:45 local time on 2026-09-19, with no change to
@@ -56,7 +56,8 @@ running it.
   paper is regime-specific and must be read together with its date and its observed output tokens per
   run, not extrapolated to a different time; (ii) the window-control design (above) was originally
   interrupted mid-run by the cost increase this shift caused and was redesigned at reduced scope,
-  entirely inside the post-shift regime, once discovered (Section~\ref{sec:reproducibility}); and (iii)
+  with the intent of staying in the post-shift regime, but crossed a second observed boundary
+  before completion (Section~\ref{sec:reproducibility}); and (iii)
   no comparison in this paper should be read as valid outside the specific output-token regime its own
   runs were collected in, which is not always the same thing as its wall-clock window. We report the
   shift itself as a confirmed mechanism, not a hypothesis: it is the maintainer's own direct observation,

@@ -7,7 +7,7 @@
  *
  * Usage: node --import tsx scripts/paper-rq1-tex.ts SUITE_DIR ARM_K_DIR [--out-dir paper/tables]
  */
-import { existsSync, mkdirSync, readdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { computeCell, loadRunResults } from "./paper-rq1-table.js";
@@ -95,11 +95,35 @@ function windowControlStatus(suiteDirRoot: string): string {
   const dir = join(suiteDirRoot, "..", "rq1-window-control");
   const target = 24;
   const cells = Array.from({ length: 12 }, (_, i) => 201 + i).flatMap((s) => [`stamp-interpreter-C-seed${s}`, `stamp-interpreter-K-seed${s}`]);
-  const design = "design: stamp-interpreter only, seeds 201--212, arm C and arm K interleaved per seed, entirely inside the post-shift regime (\\texttt{bench/results/rq1-window-control}, log \\texttt{logs/rq1-window-control-2.log})";
+  const design = "design: stamp-interpreter only, seeds 201--212, arm C and arm K interleaved per seed (\\texttt{bench/results/rq1-window-control}, log \\texttt{logs/rq1-window-control-2.log})";
   const total = cells.filter((c) => existsSync(join(dir, c, "result.json"))).length;
   const origLine = "\\emph{Original window control (20 seeds, 201--220, arm C and arm K on both interpreter tasks, log \\texttt{logs/rq1-window-control.log}): stopped after 3 runs when the regime shift made its cost cap unreachable (\\texttt{paper/amendments.md}, 2026-09-19); none of its runs is committed or read as a result.}\n\n";
-  if (total >= target) return origLine + `\\emph{Redesigned window control: complete, ${total}/${target} runs committed at generation time; ${design}.}\n`;
-  return origLine + `\\emph{Redesigned window control: PENDING (${total}/${target} runs committed to this branch at generation time); ${design}. Not reported as a result until all ${target} land.}\n`;
+  if (total < target) return origLine + `\\emph{Redesigned window control: PENDING (${total}/${target} runs committed to this branch at generation time); ${design}. Not reported as a result until all ${target} land.}\n`;
+
+  // Cohorts follow the observed boundary documented in paper/amendments.md, not an inference
+  // from success rates. Seed 209 crosses that boundary between C and K and must stand alone.
+  const read = (arm: string, seed: number) => {
+    const path = join(dir, `stamp-interpreter-${arm}-seed${seed}`, "result.json");
+    const run = JSON.parse(readFileSync(path, "utf8"));
+    if (run.task_id !== "stamp-interpreter" || run.arm !== arm || run.seed !== seed ||
+        !["task_pass", "task_fail"].includes(run.outcome) ||
+        (arm === "K" && (!Array.isArray(run.attempts) || !run.attempts.length ||
+          run.attempts.some((attempt: { passed?: unknown }) => typeof attempt.passed !== "boolean")))) {
+      throw new Error(`Invalid completed window-control result: ${path}`);
+    }
+    return run;
+  };
+  let table = "\\begin{tabular}{llrrr}\n\\toprule\nCohort & Seeds & Single attempts & Arm C & Arm K \\\\\n\\midrule\n";
+  for (const [label, first, last] of [["Long cohort", 201, 208], ["Crossover", 209, 209], ["Short cohort", 210, 212]] as const) {
+    const seeds = Array.from({ length: last - first + 1 }, (_, i) => first + i);
+    const c = seeds.map((seed) => read("C", seed));
+    const k = seeds.map((seed) => read("K", seed));
+    const attempts = k.flatMap((run) => run.attempts as { passed: boolean }[]);
+    table += `${label} & ${first === last ? first : `${first}--${last}`} & ${attempts.filter((a) => a.passed).length}/${attempts.length} & ${c.filter((r) => r.outcome === "task_pass").length}/${c.length} & ${k.filter((r) => r.outcome === "task_pass").length}/${k.length} \\\\\n`;
+  }
+  table += "\\bottomrule\n\\end{tabular}\n";
+  return origLine + `\\emph{Redesigned window control: complete, ${total}/${target} runs committed at generation time; ${design}.}\n\n` + table +
+    "\n\\emph{Entries are successes/attempts or successes/runs, generated from the committed results. The observed output-token boundary separates the cohorts: for seed 209, arm C completed before the boundary and arm K after it. Single attempts are the constituent K attempts, not an independent arm-A sample. Cohorts are never pooled; tiny within-cohort samples do not establish equivalence or resolve the original time-window comparison.}\n";
 }
 
 async function main() {

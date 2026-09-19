@@ -181,7 +181,7 @@ export function renderArmKMarkdown(t: KTable): string {
   for (const r of t.tasks) for (const c of r.comparisons)
     md += `| ${r.task} | ${r.k_groups} | ${r.k_pass}/${r.k_groups} | ${c.vs} | ${c.other_pass}/${c.other_n} | ${fmt(c.p_value, 6)} | ${fmt(c.p_holm, 6)} | ${c.significant_holm_0_05 ?? "n/a"} |\n`;
   md += "\n### Cost (arm K cost is the sum over all k attempts, killed attempts included)\n\n";
-  md += "| task | mean K cost/seed (known) | groups with unknown cost | null votes | unloadable candidates | paired mean C cost | K-C paired diff | mean A cost (all seeds) | K <= C | K cost per correct |\n|---|---|---|---|---|---|---|---|---|---|\n";
+  md += "| task | mean K cost/seed (known) | groups with unknown cost | null votes (harness) | unloadable candidates (selector) | paired mean C cost | K-C paired diff | mean A cost (all seeds) | K <= C | K cost per correct |\n|---|---|---|---|---|---|---|---|---|---|\n";
   for (const r of t.tasks) {
     const cpc = typeof r.cost_per_correct === "number" ? `$${r.cost_per_correct.toFixed(4)}` : r.cost_per_correct;
     md += `| ${r.task} | ${fmt(r.mean_cost_known)} | ${r.cost_unknown_groups} | ${r.null_attempts} | ${r.unloadable_candidates} | ${fmt(r.mean_cost_c)} | ${fmt(r.paired_cost_diff)} | ${fmt(r.mean_cost_a)} | ${r.matched_cost_ok ?? "unknown"} | ${cpc} |\n`;

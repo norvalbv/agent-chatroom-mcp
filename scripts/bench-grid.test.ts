@@ -6,7 +6,7 @@ import { test } from "node:test";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { parseArgs, buildPlan, sumExistingCost, readGridResult, runGrid, type ParsedGridArgs } from "./bench-grid.js";
+import { parseArgs, buildPlan, sumExistingCost, scanExistingCost, readGridResult, runGrid, type ParsedGridArgs } from "./bench-grid.js";
 
 function makeStubRunner(dir: string, invocationsLog: string) {
   const stub = join(dir, "stub-bench-rq1.mjs");
@@ -207,6 +207,183 @@ test("sumExistingCost / readGridResult: sums cost_usd across every result.json u
       writeFileSync(join(runDir, "result.json"), JSON.stringify({ outcome: "task_pass", usage: { cost_usd: cost }, wall_clock: { duration_ms: 1 } }));
     }
     assert.ok(Math.abs(sumExistingCost(f.resultsDir) - 0.5) < 1e-9);
+  } finally {
+    rmSync(f.dir, { recursive: true, force: true });
+  }
+});
+
+function makeStubAk(dir: string, invocationsLog: string) {
+  const stub = join(dir, "stub-bench-ak.mjs");
+  // STUB_K_COST ("null" = unknown cost) controls cost_usd_total; the stub honours --resume by keeping an existing root.
+  writeFileSync(
+    stub,
+    `import { writeFileSync, mkdirSync, appendFileSync, existsSync } from 'node:fs';
+import { join } from 'node:path';
+const argv = process.argv.slice(2);
+const flag = (name) => { const i = argv.indexOf('--' + name); return i >= 0 ? argv[i + 1] : undefined; };
+const root = flag('root');
+appendFileSync(${JSON.stringify(invocationsLog)}, JSON.stringify({ argv, root, ak: true }) + '\\n');
+if (existsSync(root) && !argv.includes('--resume')) { console.error('root exists'); process.exit(1); }
+mkdirSync(root, { recursive: true });
+const raw = process.env.STUB_K_COST ?? '0.5';
+const result = { schemaVersion: 1, task_id: argv[0].split('/').pop(), arm: 'K', k: Number(argv[1]), seed: Number(argv[2]), outcome: 'task_pass', passed: true, usage: { cost_usd: raw === 'null' ? null : Number(raw), coverage: raw === 'null' ? 'partial' : 'complete' }, wall_clock: { duration_ms: 1000 }, attempts: [] };
+writeFileSync(join(root, 'result.json'), JSON.stringify(result));
+`,
+  );
+  return stub;
+}
+
+function akFixture() {
+  const f = fixture();
+  const akRunner = makeStubAk(f.dir, f.invocationsLog);
+  const cDir = join(f.dir, "c-results");
+  mkdirSync(join(cDir, "bench-fact-check-C-seed1"), { recursive: true });
+  writeFileSync(join(cDir, "bench-fact-check-C-seed1", "result.json"), JSON.stringify({ outcome: "task_pass", usage: { cost_usd: 0.6 }, wall_clock: { duration_ms: 5000 } }));
+  const armK = ["--tasks", "bench-fact-check", "--seeds", "1", "--arms", "K", "--k", "bench-fact-check=4", "--tasks-dir", f.tasksDir, "--results-dir", f.resultsDir, "--ak-runner", akRunner, "--c-results-dir", cDir];
+  return { ...f, akRunner, cDir, armK };
+}
+
+test("parseArgs: arm K needs a k for every task and a positive integer", () => {
+  const f = akFixture();
+  try {
+    assert.throws(() => parseArgs(["--tasks", "bench-fact-check", "--seeds", "1", "--arms", "K", "--tasks-dir", f.tasksDir]), /--k/);
+    assert.throws(() => parseArgs(["--tasks", "bench-fact-check", "--seeds", "1", "--arms", "K", "--k", "bench-fact-check=1", "--tasks-dir", f.tasksDir]), /k/);
+    const a = parseArgs(f.armK);
+    assert.equal(a.kByTask["bench-fact-check"], 4);
+  } finally {
+    rmSync(f.dir, { recursive: true, force: true });
+  }
+});
+
+test("runGrid: arm K is refused without the paired arm C result and never invokes the runner", async () => {
+  const f = akFixture();
+  try {
+    rmSync(join(f.cDir, "bench-fact-check-C-seed1"), { recursive: true });
+    const summary = await runGrid(parseArgs(f.armK), { log: () => {} });
+    assert.equal(summary.ran, 0);
+    assert.equal(summary.infra_failed, 1);
+    assert.equal(invocations(f.invocationsLog).length, 0);
+  } finally {
+    rmSync(f.dir, { recursive: true, force: true });
+  }
+});
+
+test("runGrid: arm K runs bench-ak with k, the paired C result, --resume and --concurrency; done groups are skipped", async () => {
+  const f = akFixture();
+  try {
+    const args = parseArgs([...f.armK, "--concurrency", "3"]);
+    const first = await runGrid(args, { log: () => {} });
+    assert.equal(first.ran, 1);
+    const call = invocations(f.invocationsLog)[0];
+    assert.deepEqual(call.argv.slice(1, 3), ["4", "1"]);
+    assert.equal(call.argv[call.argv.indexOf("--arm-c-result") + 1], join(f.cDir, "bench-fact-check-C-seed1", "result.json"));
+    assert.equal(call.argv[call.argv.indexOf("--concurrency") + 1], "3");
+    assert.ok(call.argv.includes("--resume"));
+    assert.equal(call.root, join(f.resultsDir, "bench-fact-check-K-seed1"));
+    assert.ok(Math.abs(first.total_cost_usd - 0.5) < 1e-9, "arm K cost is usage.cost_usd");
+    const second = await runGrid(args, { log: () => {} });
+    assert.equal(second.ran, 0);
+    assert.equal(second.skipped_done, 1);
+  } finally {
+    rmSync(f.dir, { recursive: true, force: true });
+  }
+});
+
+test("runGrid: an interrupted arm K group (dir without result.json) is resumed, not an infra-fail", async () => {
+  const f = akFixture();
+  try {
+    mkdirSync(join(f.resultsDir, "bench-fact-check-K-seed1", "attempt-1"), { recursive: true });
+    const summary = await runGrid(parseArgs(f.armK), { log: () => {} });
+    assert.equal(summary.ran, 1);
+    assert.equal(summary.infra_failed, 0);
+    assert.ok(invocations(f.invocationsLog)[0].argv.includes("--resume"));
+  } finally {
+    rmSync(f.dir, { recursive: true, force: true });
+  }
+});
+
+test("runGrid: unknown arm K cost is never summed as zero; it is reported and halts later runs under --max-cost-usd", async () => {
+  const f = akFixture();
+  try {
+    mkdirSync(join(f.cDir, "bench-fact-check-C-seed2"), { recursive: true });
+    writeFileSync(join(f.cDir, "bench-fact-check-C-seed2", "result.json"), JSON.stringify({ outcome: "task_pass", usage: { cost_usd: 0.6 }, wall_clock: { duration_ms: 5000 } }));
+    process.env.STUB_K_COST = "null";
+    const twoSeeds = [...f.armK];
+    twoSeeds[twoSeeds.indexOf("--seeds") + 1] = "1,2";
+    const args = parseArgs([...twoSeeds, "--max-cost-usd", "100"]);
+    const summary = await runGrid(args, { log: () => {} });
+    assert.equal(summary.ran, 1, "seed 2 must not start while a finished group has unknown cost");
+    assert.equal(summary.unknown_cost_groups, 1);
+    assert.equal(summary.skipped_cost_cap, 1);
+    assert.equal(summary.total_cost_usd, 0);
+    // A resumed grid must also see the unknown cost on disk.
+    const again = await runGrid(args, { log: () => {} });
+    assert.equal(again.unknown_cost_groups, 1);
+    assert.equal(again.ran, 0);
+  } finally {
+    delete process.env.STUB_K_COST;
+    rmSync(f.dir, { recursive: true, force: true });
+  }
+});
+
+test("readGridResult / scanExistingCost: cost_usd 0 with coverage partial or none, and malformed results, are unknown, not zero", () => {
+  const f = fixture();
+  try {
+    mkdirSync(f.resultsDir, { recursive: true });
+    const put = (name: string, body: string) => {
+      mkdirSync(join(f.resultsDir, name));
+      writeFileSync(join(f.resultsDir, name, "result.json"), body);
+    };
+    put("known", JSON.stringify({ outcome: "task_pass", usage: { cost_usd: 0.2, coverage: "complete" }, wall_clock: { duration_ms: 1 } }));
+    put("partial", JSON.stringify({ outcome: "task_pass", usage: { cost_usd: 0, coverage: "partial" }, wall_clock: { duration_ms: 1 } }));
+    put("none", JSON.stringify({ outcome: "task_pass", usage: { cost_usd: 0, coverage: "none" }, wall_clock: { duration_ms: 1 } }));
+    put("broken", "{");
+    assert.equal(readGridResult(join(f.resultsDir, "partial", "result.json")).cost_usd, null);
+    const scan = scanExistingCost(f.resultsDir);
+    assert.ok(Math.abs(scan.total - 0.2) < 1e-9);
+    assert.equal(scan.unknown, 3);
+  } finally {
+    rmSync(f.dir, { recursive: true, force: true });
+  }
+});
+
+test("runGrid: an arm K group that exits non-zero after launch is unknown cost and stops the grid", async () => {
+  const f = akFixture();
+  try {
+    const failing = join(f.dir, "failing-ak.mjs");
+    writeFileSync(failing, `import { mkdirSync } from 'node:fs';
+import { join } from 'node:path';
+const argv = process.argv.slice(2);
+mkdirSync(join(argv[argv.indexOf('--root') + 1], 'attempt-1'), { recursive: true });
+process.exit(1);
+`);
+    mkdirSync(join(f.cDir, "bench-fact-check-C-seed2"), { recursive: true });
+    writeFileSync(join(f.cDir, "bench-fact-check-C-seed2", "result.json"), JSON.stringify({ outcome: "task_pass", usage: { cost_usd: 0.6 }, wall_clock: { duration_ms: 5000 } }));
+    const argv = [...f.armK];
+    argv[argv.indexOf("--seeds") + 1] = "1,2";
+    argv[argv.indexOf("--ak-runner") + 1] = failing;
+    const summary = await runGrid(parseArgs(argv), { log: () => {} });
+    assert.equal(summary.infra_failed, 1, "seed 2 never starts");
+    assert.equal(summary.unknown_cost_groups, 1);
+    assert.equal(summary.ran, 0);
+  } finally {
+    rmSync(f.dir, { recursive: true, force: true });
+  }
+});
+
+test("runGrid: --c-seed-offset pairs a pilot seed with another seed's arm C result", async () => {
+  const f = akFixture();
+  try {
+    mkdirSync(join(f.cDir, "bench-fact-check-C-seed101"), { recursive: true });
+    writeFileSync(join(f.cDir, "bench-fact-check-C-seed101", "result.json"), JSON.stringify({ outcome: "task_pass", usage: { cost_usd: 0.6 }, wall_clock: { duration_ms: 5000 } }));
+    const argv = [...f.armK, "--c-seed-offset", "100"];
+    argv[argv.indexOf("--seeds") + 1] = "1";
+    rmSync(join(f.cDir, "bench-fact-check-C-seed1"), { recursive: true });
+    const summary = await runGrid(parseArgs(argv), { log: () => {} });
+    assert.equal(summary.ran, 1);
+    const call = invocations(f.invocationsLog)[0];
+    assert.match(call.argv[call.argv.indexOf("--arm-c-result") + 1], /C-seed101/);
+    assert.equal(call.argv[2], "1", "the K group keeps its own seed");
   } finally {
     rmSync(f.dir, { recursive: true, force: true });
   }

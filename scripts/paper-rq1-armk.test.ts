@@ -2,7 +2,10 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { holmBonferroni } from "./rq1-stats.js";
-import { buildArmKTable, renderArmKMarkdown, type KGroup } from "./paper-rq1-armk.js";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { buildArmKTable, loadKGroups, renderArmKMarkdown, type KGroup } from "./paper-rq1-armk.js";
 import type { RunResult } from "./paper-rq1-table.js";
 
 const ALL = { seedMin: 0, seedMax: 1e9 };
@@ -19,7 +22,7 @@ function kGroup(task: string, seed: number, passes: boolean[], selectedPass: boo
     ...base(task, "K", seed, selectedPass, cost ?? 0),
     usage: { cost_usd: cost as number, coverage: cost === null ? "partial" : "complete", seats: passes.length, seats_with_usage: passes.length },
     k: passes.length, passed: selectedPass, selection: { rule: "r", winner_attempt: 1, votes },
-    attempts: passes.map((p, i) => ({ index: i + 1, answer: p ? "good" : "bad", null_vote: false, passed: p, outcome: p ? "task_pass" : "task_fail", cost_usd: cost === null ? null : cost / passes.length })),
+    attempts: passes.map((p, i) => ({ index: i + 1, answer: p ? "good" : "bad", passed: p, outcome: p ? "task_pass" : "task_fail", cost_usd: cost === null ? null : cost / passes.length })),
   } as KGroup;
 }
 
@@ -100,25 +103,29 @@ test("spend match is judged per seed over paired seeds, not against the whole-gr
   assert.equal(row.matched_cost_ok, false);
 });
 
-test("null votes come from the harness flag, not from answer===null (a code task has no answer.txt)", () => {
-  const runs = [base("printf", "A", 1, true), base("printf", "C", 1, true)];
-  const g = kGroup("printf", 1, [true, false, true], true, 0.5, { "(none)": 3 });
-  g.attempts.forEach((a) => (a.answer = null)); // code task: no answer.txt on any attempt
-  g.attempts[2].null_vote = true; // only this one failed to load
-  const t = buildArmKTable(runs, [g], ALL);
-  assert.equal(t.tasks.find((x) => x.task === "printf")!.null_attempts, 1);
-});
-
-test("loadKGroups skips a group whose attempts carry no null_vote flag, with a warning", async () => {
-  const { mkdtempSync, mkdirSync, writeFileSync } = await import("node:fs");
-  const { tmpdir } = await import("node:os");
-  const { join } = await import("node:path");
-  const { loadKGroups } = await import("./paper-rq1-armk.js");
+test("a group shaped like scripts/bench-ak.ts output (schemaVersion 2, code task, null answers) loads; only killed/absent attempts are null votes", () => {
   const dir = mkdtempSync(join(tmpdir(), "armk-load-"));
-  const g = kGroup("t", 1, [true], true, 0.1, { good: 1 });
-  mkdirSync(join(dir, "t-K-seed1"));
-  writeFileSync(join(dir, "t-K-seed1", "result.json"), JSON.stringify({ ...g, attempts: [{ index: 1, answer: "x", passed: true, outcome: "task_pass", cost_usd: 0.1 }] }));
-  const r = loadKGroups(dir);
-  assert.equal(r.groups.length, 0);
-  assert.match(r.warnings[0], /null_vote/);
+  try {
+    const attempt = (i: number, over: object) => ({ index: i, root: "r", answer: null, outcome: "task_pass", passed: true, cost_usd: 0.08, turns: 5, wall_ms: 30000, exit_code: 0, signal: null, killed_by_deadline: false, runner_failure: null, ...over });
+    const group = {
+      schemaVersion: 2, task_id: "bench-printf-format", arm: "K", k: 4, seed: 101, model: "sonnet", selector: "mbr-exec",
+      selection: { rule: "mbr", winner_attempt: 1, votes: { "sig-a": 2, "sig-b": 1 } },
+      outcome: "task_pass", passed: true,
+      usage: { cost_usd: 0.32, cost_usd_known_sum: 0.32, cost_usd_unknown_attempts: 0 },
+      turns_total: 20, wall_clock: { duration_ms: 90000 },
+      attempts: [attempt(1, {}), attempt(2, { passed: false, outcome: "task_fail" }), attempt(3, { outcome: "timeout", passed: false, killed_by_deadline: true }), attempt(4, { outcome: "no_result", passed: false, cost_usd: 0.08 })],
+    };
+    mkdirSync(join(dir, "bench-printf-format-K-seed101"));
+    writeFileSync(join(dir, "bench-printf-format-K-seed101", "result.json"), JSON.stringify(group));
+    const { groups, warnings } = loadKGroups(dir);
+    assert.deepEqual(warnings, []);
+    assert.equal(groups.length, 1);
+    const runs = [base("bench-printf-format", "A", 101, true), base("bench-printf-format", "C", 101, true, 0.7)];
+    const row = buildArmKTable(runs, groups).tasks[0]!;
+    assert.equal(row.cost_unknown_groups, 0, "a null-free cost with no coverage field is known");
+    assert.equal(row.null_attempts, 2, "code-task answers are null for every attempt; only the killed and the no-result attempt are null votes");
+    assert.equal(row.ceiling.any_pass, 1);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });

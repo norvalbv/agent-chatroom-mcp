@@ -112,7 +112,7 @@ function invalidRow(task: string, arm: Arm, seed: number, reason: string, raw?: 
 
 function validateRaw(raw: RawBuildResult, task: string, arm: Arm, seed: number, cap: number): BuildReportRow {
   if (raw.task_id !== task || raw.arm !== arm || raw.seed !== seed) return invalidRow(task, arm, seed, "cell identity mismatch", raw);
-  if (typeof raw.execution_outcome !== "string" || !["completed", "timeout", "invalid_room", "tamper", "infrastructure_error"].includes(raw.execution_outcome)) return invalidRow(task, arm, seed, "unknown execution outcome", raw);
+  if (typeof raw.execution_outcome !== "string" || !["completed", "timeout", "budget_exhausted", "invalid_room", "tamper", "infrastructure_error"].includes(raw.execution_outcome)) return invalidRow(task, arm, seed, "unknown execution outcome", raw);
   if (raw.execution_outcome === "tamper" || raw.execution_outcome === "infrastructure_error") return invalidRow(task, arm, seed, `non-scoreable outcome ${raw.execution_outcome}`, raw);
   const fingerprint = raw.provenance?.grid_fingerprint;
   if (!sha256(fingerprint)) return invalidRow(task, arm, seed, "missing grid fingerprint", raw);
@@ -138,7 +138,7 @@ function validateRaw(raw: RawBuildResult, task: string, arm: Arm, seed: number, 
   const rawCost = raw.usage?.cost_usd;
   const costComplete = raw.usage?.coverage === "complete" && typeof rawCost === "number" && Number.isFinite(rawCost) && rawCost >= 0;
   const cost = costComplete ? rawCost : null;
-  const protocolFailure = raw.execution_outcome === "timeout" || raw.execution_outcome === "invalid_room";
+  const protocolFailure = raw.execution_outcome === "timeout" || raw.execution_outcome === "budget_exhausted" || raw.execution_outcome === "invalid_room";
   return {
     task_id: task, arm, seed, status: "valid", reason: costComplete ? null : "unknown terminal cost",
     execution_outcome: raw.execution_outcome,

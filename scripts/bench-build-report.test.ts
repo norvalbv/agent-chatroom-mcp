@@ -79,6 +79,23 @@ test("report scores arm protocol failures as-is but rejects integrity failures",
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
+test("report scores budget exhaustion and marks protocol failure", () => {
+  const dir = mkdtempSync(join(tmpdir(), "bench-build-report-"));
+  try {
+    const exhausted = result("build-ledger-v2-s1", "C", 101, 9, 0.6225);
+    exhausted.execution_outcome = "budget_exhausted";
+    put(dir, exhausted);
+    const report = buildBuildReport(dir, ["build-ledger-v2-s1"], ["C"], [101], 0.6);
+    assert.equal(report.rows[0].status, "valid");
+    assert.equal(report.rows[0].defects_caught, 9);
+    assert.equal(report.rows[0].protocol_failure, true);
+    assert.equal(report.rows[0].protocol_success, false);
+    assert.equal(report.rows[0].protocol_adjusted_catch_fraction, 0);
+    assert.equal(report.rows[0].cost_usd, 0.6225);
+    assert.equal(report.rows[0].actual_over_cap, true);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
 test("report refuses duplicate cells and missing provenance fingerprints", () => {
   const dir = mkdtempSync(join(tmpdir(), "bench-build-report-"));
   try {

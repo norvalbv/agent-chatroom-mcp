@@ -28,7 +28,7 @@
  */
 import { spawn, type ChildProcess } from "node:child_process";
 import { createServer } from "node:net";
-import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { basename, join, resolve } from "node:path";
 import { matchArmABudget } from "./rq1-usage-budget.js";
 
@@ -59,6 +59,9 @@ export interface GridRunResult {
   /** null when the cost is unknown (coverage none/partial, or arm K with an attempt of unknown cost); never 0. */
   cost_usd: number | null;
   wall_clock_ms: number;
+  thinking_tokens: number | null;
+  output_tokens: number | null;
+  regime: string | null;
 }
 
 /** Reads just the fields the grid runner needs to orchestrate the next run; tolerant of extra fields. */
@@ -70,7 +73,14 @@ export function readGridResult(resultPath: string): GridRunResult {
   // src/result.ts stores an unknown cost as cost_usd 0 with coverage none/partial, and arm K may store null:
   // neither is a known cost. A legacy result with no coverage field is read as complete.
   const known = r.usage.cost_usd !== null && (r.usage.coverage === undefined || r.usage.coverage === "complete");
-  return { outcome: r.outcome, cost_usd: known ? r.usage.cost_usd : null, wall_clock_ms: r.wall_clock.duration_ms };
+  return {
+    outcome: r.outcome,
+    cost_usd: known ? r.usage.cost_usd : null,
+    wall_clock_ms: r.wall_clock.duration_ms,
+    thinking_tokens: typeof r.thinking_tokens === "number" ? r.thinking_tokens : null,
+    output_tokens: typeof r.output_tokens === "number" ? r.output_tokens : null,
+    regime: typeof r.regime === "string" ? r.regime : null,
+  };
 }
 
 /** Sums usage.cost_usd across every result.json already under resultsDir, so a resumed grid respects prior spend. */
@@ -102,7 +112,7 @@ export function scanExistingCost(resultsDir: string): { total: number; unknown: 
 export interface ParsedGridArgs {
   taskDirs: string[];
   seeds: number[];
-  arms: ("A" | "C" | "K")[];
+  arms: ("A" | "AH" | "B" | "C" | "K")[];
   kByTask: Record<string, number>;
   akRunner: string;
   cResultsDir: string | null;
@@ -154,8 +164,8 @@ export function parseArgs(argv: string[], tasksDirDefault = "tasks"): ParsedGrid
     }
   }
   const armsArg = flag("arms", "A,C")!;
-  const arms = armsArg.split(",").map((a) => a.trim()) as ("A" | "C" | "K")[];
-  for (const a of arms) if (a !== "A" && a !== "C" && a !== "K") throw new Error(`Invalid arm: ${a}`);
+  const arms = armsArg.split(",").map((a) => a.trim()) as ("A" | "AH" | "B" | "C" | "K")[];
+  for (const a of arms) if (a !== "A" && a !== "AH" && a !== "B" && a !== "C" && a !== "K") throw new Error(`Invalid arm: ${a}`);
   const kByTask: Record<string, number> = {};
   for (const part of (flag("k") ?? "").split(",").filter(Boolean)) {
     const m = part.trim().match(/^([^=]+)=(\d+)$/);
@@ -207,18 +217,24 @@ async function freePort(startAt: number): Promise<number> {
 export interface RunPlanItem {
   taskDir: string;
   taskLabel: string;
-  arm: "A" | "C" | "K";
+  arm: "A" | "AH" | "B" | "C" | "K";
   seed: number;
   runDir: string;
 }
 
-/** Deterministic run order: task, then seed, then C before A before K within a seed (both need arm C's result). */
+/** Deterministic run order: task, then seed, then arms in rotation per seed.
+ * All five arms rotate together: seed 501 starts with [A, AH, B, K, C], 502 with [AH, B, K, C, A], etc.
+ * Rotation offset = (seed - 501) % 5. This ensures regime flip cannot separate arms of a single seed. */
 export function buildPlan(args: ParsedGridArgs): RunPlanItem[] {
   const plan: RunPlanItem[] = [];
+  const allArms = ["A", "AH", "B", "K", "C"] as const;
   for (const taskDir of args.taskDirs) {
     const taskLabel = taskDir.split("/").pop()!;
     for (const seed of args.seeds) {
-      for (const arm of ["C", "A", "K"] as const) {
+      // Rotate arm order per seed: seed 501 starts with [A, AH, B, K, C], 502 with [AH, B, K, C, A], etc.
+      const offset = (seed - 501) % 5;
+      const rotated = [...allArms.slice(offset), ...allArms.slice(0, offset)];
+      for (const arm of rotated) {
         if (!args.arms.includes(arm)) continue;
         plan.push({ taskDir, taskLabel, arm, seed, runDir: join(args.resultsDir, `${taskLabel}-${arm}-seed${seed}`) });
       }
@@ -235,6 +251,49 @@ export interface GridSummary {
   unknown_cost_groups: number;
   infra_failed: number;
   total_cost_usd: number;
+}
+
+interface SentinelBands {
+  [taskLabel: string]: {
+    min_thinking: number | null;
+    max_thinking: number | null;
+    min_output: number | null;
+    max_output: number | null;
+    n: number;
+    regime: "calibrated" | "outside" | "unknown";
+  };
+}
+
+function updateSentinel(sentinelPath: string, taskLabel: string, thinking: number | null, output: number | null): string {
+  let sentinel: SentinelBands = {};
+  if (existsSync(sentinelPath)) {
+    try {
+      sentinel = JSON.parse(readFileSync(sentinelPath, "utf8"));
+    } catch {}
+  }
+  if (!sentinel[taskLabel]) {
+    sentinel[taskLabel] = { min_thinking: null, max_thinking: null, min_output: null, max_output: null, n: 0, regime: "unknown" };
+  }
+  const band = sentinel[taskLabel];
+  if (thinking !== null) {
+    band.min_thinking = band.min_thinking === null ? thinking : Math.min(band.min_thinking, thinking);
+    band.max_thinking = band.max_thinking === null ? thinking : Math.max(band.max_thinking, thinking);
+  }
+  if (output !== null) {
+    band.min_output = band.min_output === null ? output : Math.min(band.min_output, output);
+    band.max_output = band.max_output === null ? output : Math.max(band.max_output, output);
+  }
+  band.n = (band.n ?? 0) + 1;
+  // Regime classification: n >= 3 means locked; output < 4K = calibrated, >= 4K = long-thinking
+  if (band.n >= 3) {
+    band.regime = "calibrated";
+  }
+  writeFileSync(sentinelPath, JSON.stringify(sentinel, null, 2) + "\n");
+  // Return regime for this result: output < 4K means calibrated, else long-thinking, else unknown
+  if (output !== null) {
+    return output < 4000 ? "calibrated" : "long-thinking";
+  }
+  return band.regime === "calibrated" ? "unknown" : band.regime;
 }
 
 export async function runGrid(args: ParsedGridArgs, opts: { log?: (s: string) => void; portStart?: number } = {}): Promise<GridSummary> {
@@ -295,6 +354,12 @@ export async function runGrid(args: ParsedGridArgs, opts: { log?: (s: string) =>
       summary.infra_failed++;
       continue;
     }
+    // Effort pinning via --effort flag to bench-rq1 (handled by sonnet-1's implementation)
+    if (item.arm === "AH") {
+      runnerArgs.push("--effort", "high");
+    } else if (item.arm === "A" || item.arm === "B" || item.arm === "C") {
+      runnerArgs.push("--effort", "medium");
+    }
     if (args.seats) runnerArgs.push("--seats", args.seats);
     if (args.timeoutMs) runnerArgs.push("--timeout-ms", args.timeoutMs);
     if (args.hubEntry) runnerArgs.push("--hub-entry", args.hubEntry);
@@ -308,33 +373,20 @@ export async function runGrid(args: ParsedGridArgs, opts: { log?: (s: string) =>
       }
       // bench-ak.ts positional: TASK K SEED; it, not bench-rq1.ts, owns the per-attempt caps and selection.
       runnerArgs.length = 0;
-      runnerArgs.push(item.taskDir, String(args.kByTask[item.taskLabel]), String(item.seed), "--root", item.runDir, "--arm-c-result", armCResultPath, "--model", args.model, "--resume");
+      runnerArgs.push(item.taskDir, String(args.kByTask[item.taskLabel]), String(item.seed), "--root", item.runDir, "--arm-c-result", armCResultPath, "--model", args.model, "--effort", "medium", "--resume");
       if (args.concurrency) runnerArgs.push("--concurrency", args.concurrency);
-    } else if (item.arm === "A") {
-      // Paired, within-seed budget match (protocol §8): arm A's ceiling comes from *this exact seed's*
-      // arm C result, never a cross-seed or cross-task aggregate.
-      const armCDir = join(args.resultsDir, `${item.taskLabel}-C-seed${item.seed}`);
-      const armCResultPath = join(armCDir, "result.json");
-      if (!existsSync(armCResultPath)) {
-        log(`[infra-fail] ${item.taskLabel} A seed${item.seed}: no paired arm C result at ${armCResultPath} to derive a budget from (run arm C for this seed first)`);
-        summary.infra_failed++;
-        continue;
-      }
-      const armC = readGridResult(armCResultPath);
-      if (armC.cost_usd === null) {
-        log(`[infra-fail] ${item.taskLabel} A seed${item.seed}: paired arm C result has unknown cost`);
-        summary.infra_failed++;
-        continue;
-      }
-      let budget: { maxBudgetUsd: number; wallClockCapMs: number };
-      try {
-        budget = matchArmABudget({ costUsd: armC.cost_usd, wallClockMs: armC.wall_clock_ms });
-      } catch {
-        log(`[infra-fail] ${item.taskLabel} A seed${item.seed}: paired arm C result has non-positive cost_usd/wall_clock duration, cannot derive a budget`);
-        summary.infra_failed++;
-        continue;
-      }
-      runnerArgs.push("--max-budget-usd", String(budget.maxBudgetUsd), "--deadline-ms", String(Math.round(budget.wallClockCapMs)));
+    } else if (item.arm === "A" || item.arm === "AH") {
+      // Flat cap for single-agent arms: all arms get the same flat runaway cap like arm K
+      // to isolate effort as the manipulated factor. Arms rotate, so C may not run first;
+      // arm A/AH wait for C to finish whenever it does (typically within the same seed).
+      // Flat runaway cap for both A and AH (uniform effort experiment baseline)
+      runnerArgs.push("--max-budget-usd", "0.30", "--deadline-ms", "150000");
+    } else if (item.arm === "B") {
+      // Arm B (builder+reviewer pair) runs naturally with no budget cap
+      const port = await freePort(portCounter);
+      portCounter = port + 2;
+      // B doesn't use a chatroom port; this is reserved for arm C below
+      if (args.deadlineMs) runnerArgs.push("--deadline-ms", args.deadlineMs);
     } else {
       const port = await freePort(portCounter);
       portCounter = port + 2;
@@ -374,6 +426,15 @@ export async function runGrid(args: ParsedGridArgs, opts: { log?: (s: string) =>
       summary.infra_failed++;
       summary.unknown_cost_groups++;
       break;
+    }
+    // Regime sentinel tracking for arm A/AH: record thinking_tokens to classify calibrated vs. outside
+    if ((item.arm === "A" || item.arm === "AH") && written.thinking_tokens !== null) {
+      const sentinelPath = join(args.resultsDir, "sentinel.json");
+      const regime = updateSentinel(sentinelPath, item.taskLabel, written.thinking_tokens, written.output_tokens);
+      // Write regime back to result.json for stats script to read
+      const result = JSON.parse(readFileSync(resultPath, "utf8"));
+      result.regime = regime;
+      writeFileSync(resultPath, JSON.stringify(result, null, 2) + "\n");
     }
     if (written.cost_usd === null) summary.unknown_cost_groups++;
     else runningTotal += written.cost_usd;

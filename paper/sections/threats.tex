@@ -69,11 +69,13 @@ running it.
   one family.} \texttt{paper/prereg-arm-k.md}'s prediction~1 claims K vs.\ A is significant on both
   \texttt{stamp} programs; this held for \texttt{stamp-2} (Holm $p=0.0090$) but not for
   \texttt{stamp-interpreter} (Holm $p=1.000$), even though arm~C beats arm~A significantly on both
-  (Section~\ref{sec:discussion-beyond-sampling}). Because the two programs are one statistical unit by
-  this paper's own family rule, and \texttt{stamp-interpreter}'s single-agent rate is independently shown
-  to be volatile across sample sizes, this asymmetry should be read as a specific, reportable pattern at
-  the edge of what 40 paired seeds can resolve, not as a settled claim that deliberation beats sampling
-  on this task.
+  (Section~\ref{sec:discussion-beyond-sampling}). We report this as a fact, not as evidence that
+  deliberation and sampling differ from each other: inferring a K-vs-C difference from a difference
+  between K's and C's own significance against A would be the difference-in-significance fallacy, and
+  the direct K-vs-C test is not significant on \texttt{stamp-interpreter}. Because the two programs are
+  one statistical unit by this paper's own family rule, and \texttt{stamp-interpreter}'s single-agent
+  rate is independently shown to be volatile across sample sizes, this pattern sits at the edge of what
+  40 paired seeds can resolve either way.
 
 \item \textbf{Statistical-test choice matters for one reported comparison.} Applying
   \texttt{protocol.md}\,\S5's literal per-comparison rule (two-proportion $z$-test unless a 2$\times$2

@@ -1,0 +1,28 @@
+[run] node --import tsx <repo>/scripts/bench-rq1.ts <repo>/tasks/stamp-interpreter A 901 --root <repo>/bench/results/rq1-confirmatory-pilot/stamp-interpreter-A-seed901 --model sonnet --effort medium --max-budget-usd 0.3 --deadline-ms 150000
+[done] stamp-interpreter A seed901: outcome=task_fail cost=$0.0493 running_total=$0.0493
+[run] node --import tsx <repo>/scripts/bench-rq1.ts <repo>/tasks/stamp-interpreter AH 901 --root <repo>/bench/results/rq1-confirmatory-pilot/stamp-interpreter-AH-seed901 --model sonnet --effort high --max-budget-usd 0.3 --deadline-ms 150000
+[done] stamp-interpreter AH seed901: outcome=task_pass cost=$0.0503 running_total=$0.0996
+[run] node --import tsx <repo>/scripts/bench-rq1.ts <repo>/tasks/stamp-interpreter B 901 --root <repo>/bench/results/rq1-confirmatory-pilot/stamp-interpreter-B-seed901 --model sonnet --effort medium
+[done] stamp-interpreter B seed901: outcome=task_fail cost=$0.0918 running_total=$0.1913
+[run] node --import tsx <repo>/scripts/bench-ak.ts <repo>/tasks/stamp-interpreter 10 901 --root <repo>/bench/results/rq1-confirmatory-pilot/stamp-interpreter-K-seed901 --model sonnet --effort medium --resume --concurrency 5
+[done] stamp-interpreter K seed901: outcome=task_fail cost=$0.5140 running_total=$0.7053
+[run] node --import tsx <repo>/scripts/bench-rq1.ts <repo>/tasks/stamp-interpreter C 901 --root <repo>/bench/results/rq1-confirmatory-pilot/stamp-interpreter-C-seed901 --model sonnet --effort medium --port 19850
+[done] stamp-interpreter C seed901: outcome=task_pass cost=$0.4189 running_total=$1.1242
+[run] node --import tsx <repo>/scripts/bench-rq1.ts <repo>/tasks/bench-printf-format A 901 --root <repo>/bench/results/rq1-confirmatory-pilot/bench-printf-format-A-seed901 --model sonnet --effort medium --max-budget-usd 0.3 --deadline-ms 150000
+[done] bench-printf-format A seed901: outcome=task_fail cost=$0.0815 running_total=$1.2057
+[run] node --import tsx <repo>/scripts/bench-rq1.ts <repo>/tasks/bench-printf-format AH 901 --root <repo>/bench/results/rq1-confirmatory-pilot/bench-printf-format-AH-seed901 --model sonnet --effort high --max-budget-usd 0.3 --deadline-ms 150000
+[done] bench-printf-format AH seed901: outcome=task_fail cost=$0.0922 running_total=$1.2979
+[run] node --import tsx <repo>/scripts/bench-rq1.ts <repo>/tasks/bench-printf-format B 901 --root <repo>/bench/results/rq1-confirmatory-pilot/bench-printf-format-B-seed901 --model sonnet --effort medium
+[done] bench-printf-format B seed901: outcome=task_fail cost=$0.1314 running_total=$1.4293
+[run] node --import tsx <repo>/scripts/bench-ak.ts <repo>/tasks/bench-printf-format 7 901 --root <repo>/bench/results/rq1-confirmatory-pilot/bench-printf-format-K-seed901 --model sonnet --effort medium --resume --concurrency 5
+[done] bench-printf-format K seed901: outcome=task_fail cost=$0.5951 running_total=$2.0244
+[run] node --import tsx <repo>/scripts/bench-rq1.ts <repo>/tasks/bench-printf-format C 901 --root <repo>/bench/results/rq1-confirmatory-pilot/bench-printf-format-C-seed901 --model sonnet --effort medium --port 19852
+[done] bench-printf-format C seed901: outcome=task_fail cost=$0.9164 running_total=$2.9408
+{
+  "ran": 10,
+  "skipped_done": 0,
+  "skipped_cost_cap": 0,
+  "unknown_cost_groups": 0,
+  "infra_failed": 0,
+  "total_cost_usd": 2.9408260000000004
+}

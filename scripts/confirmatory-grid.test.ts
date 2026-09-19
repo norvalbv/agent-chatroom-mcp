@@ -140,10 +140,9 @@ test("confirmatory execution uses flat A/AH caps, natural B/C completion, fixed 
 
     const sentinel = JSON.parse(readFileSync(join(f.resultsDir, "sentinel.json"), "utf8"));
     const taskSentinel = sentinel[basename(f.taskDir)];
-    assert.ok(taskSentinel, "arm-A tokens must be recorded as a per-task regime sentinel");
-    assert.equal(taskSentinel.n, 1, "AH is a treatment arm, not a regime sentinel; only arm A contributes one observation per seed");
-    assert.equal(taskSentinel.min_thinking, 7000);
-    assert.equal(taskSentinel.max_thinking, 7000);
+    assert.ok(Array.isArray(taskSentinel), "arm-A tokens must be recorded as per-seed regime-sentinel records");
+    assert.equal(taskSentinel.length, 1, "AH is a treatment arm, not a regime sentinel; only arm A contributes one observation per seed");
+    assert.deepEqual(taskSentinel[0], { seed: 501, outputTokens: 7200, thinkingTokens: 7000, regime: "long-thinking" });
   } finally {
     rmSync(f.dir, { recursive: true, force: true });
   }
@@ -200,9 +199,7 @@ test("missing arm-A thinking provenance is recorded as unknown, never calibrated
     const summary = await runGrid(args, { log: () => {} });
     assert.equal(summary.ran, 1);
     const sentinel = JSON.parse(readFileSync(join(f.resultsDir, "sentinel.json"), "utf8"))["stamp-interpreter"];
-    assert.equal(sentinel.regime, "unknown");
-    assert.equal(sentinel.min_thinking, null);
-    assert.equal(sentinel.max_thinking, null);
+    assert.deepEqual(sentinel, [{ seed: 501, outputTokens: 7200, thinkingTokens: null, regime: "unknown" }]);
   } finally {
     delete process.env.STUB_MISSING_THINKING;
     rmSync(f.dir, { recursive: true, force: true });
@@ -226,14 +223,16 @@ test("rotation is (seed-501) mod 5 over [A, AH, B, K, C] and K precedes C for se
   assert.deepEqual(confirmatoryOrder(901), confirmatoryOrder(901 - 5 * 3), "pilot seeds below and above the block rotate too");
 });
 
-test("classifyRegime: frozen 4000-token output threshold, unknown unless thinking is directly reported, a genuine 0 stays known", () => {
+test("classifyRegime: the frozen 4000 threshold is on thinking tokens; output alone (a code-writing task's 4K+) never makes a short-thinking seed long", () => {
   assert.equal(classifyRegime(1500, 900), "calibrated");
-  assert.equal(classifyRegime(3999, 0), "calibrated");
-  assert.equal(classifyRegime(4000, 3000), "long-thinking");
+  assert.equal(classifyRegime(4180, 888), "calibrated", "pilot printf-format seed 901: 4180 output tokens, 888 thinking");
+  assert.equal(classifyRegime(9000, 3999), "calibrated");
+  assert.equal(classifyRegime(12000, 4000), "long-thinking");
+  assert.equal(classifyRegime(1500, 0), "calibrated", "a genuine 0 is known");
   assert.equal(classifyRegime(1500, null), "unknown");
   assert.equal(classifyRegime(null, 900), "unknown");
-  assert.equal(classifyRegime(Number.NaN, 900), "unknown");
-  assert.equal(classifyRegime(-1, 900), "unknown");
+  assert.equal(classifyRegime(1500, Number.NaN), "unknown");
+  assert.equal(classifyRegime(1500, -1), "unknown");
 });
 
 test("a launched cell with no result.json on disk is unknown spend on resume: a capped grid halts instead of reading it as zero", async () => {

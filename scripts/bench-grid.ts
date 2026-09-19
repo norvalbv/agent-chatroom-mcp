@@ -262,15 +262,18 @@ export function buildPlan(args: ParsedGridArgs): RunPlanItem[] {
   return plan;
 }
 
-/** Frozen regime rule (paper/prereg-confirmatory.md): arm A output tokens under 4000 with a directly reported
- * thinking-token count is the calibrated (short-thinking) regime, 4000 or more is long-thinking, and a missing
- * or invalid value for either is unknown. Never learned from the confirmatory results themselves. */
-export const REGIME_OUTPUT_THRESHOLD = 4000;
+/** Frozen regime rule (paper/prereg-confirmatory.md): the regime is the thinking budget, so it is read from arm A's
+ * directly reported thinking tokens: under 4000 is the calibrated (short-thinking) regime, 4000 or more is
+ * long-thinking (about 10K in the amendments' long regime, about 1K in the calibrated one), and a missing or invalid
+ * thinking count, or a missing output count, is unknown. Output tokens are recorded but cannot classify: they include
+ * the answer or code written, so a correct printf-format single attempt writes about 4K output at about 0.9K
+ * thinking (pilot seed 901). Never learned from the confirmatory results themselves. */
+export const REGIME_THINKING_THRESHOLD = 4000;
 export type Regime = "calibrated" | "long-thinking" | "unknown";
 export function classifyRegime(output: number | null, thinking: number | null): Regime {
   const ok = (v: number | null): v is number => typeof v === "number" && Number.isFinite(v) && v >= 0;
   if (!ok(output) || !ok(thinking)) return "unknown";
-  return output < REGIME_OUTPUT_THRESHOLD ? "calibrated" : "long-thinking";
+  return thinking < REGIME_THINKING_THRESHOLD ? "calibrated" : "long-thinking";
 }
 
 /** Sums a modelUsage field over every model the seat reported; null (never zero) when none reported it. */
@@ -280,18 +283,12 @@ function sumModelUsage(modelUsage: unknown, key: "thinkingTokens" | "outputToken
   return vals.length ? vals.reduce((a, b) => a + b, 0) : null;
 }
 
-interface SentinelSeed { seed: number; output_tokens: number | null; thinking_tokens: number | null; regime: Regime }
-interface SentinelTask {
-  n: number;
-  min_thinking: number | null; max_thinking: number | null; min_output: number | null; max_output: number | null;
-  /** one class when every seed agrees, "mixed" otherwise; the per-seed records below are what analysis uses */
-  regime: Regime | "mixed";
-  seeds: SentinelSeed[];
-}
+interface SentinelSeed { seed: number; outputTokens: number | null; thinkingTokens: number | null; regime: Regime }
 
-/** Rebuilds `<resultsDir>/sentinel.json` from every arm-A result.json on disk (idempotent, so a resumed grid never double counts). */
+/** Rebuilds `<resultsDir>/sentinel.json` = { task: [{seed, outputTokens, thinkingTokens, regime}] } from every arm-A
+ * result.json on disk (idempotent, so a resumed grid never double counts; one record per seed, never a rolling extremum). */
 export function writeSentinel(resultsDir: string): void {
-  const out: Record<string, SentinelTask> = {};
+  const out: Record<string, SentinelSeed[]> = {};
   for (const name of readdirSync(resultsDir).sort()) {
     const m = name.match(/^(.+)-A-seed(-?\d+)$/);
     const resultPath = join(resultsDir, name, "result.json");
@@ -302,26 +299,13 @@ export function writeSentinel(resultsDir: string): void {
       const md = r.seats?.[0]?.model_usage;
       const output = sumModelUsage(md, "outputTokens") ?? (typeof r.seats?.[0]?.usage?.output_tokens === "number" ? r.seats[0].usage.output_tokens : null);
       const thinking = sumModelUsage(md, "thinkingTokens");
-      rec = { seed: Number(m[2]), output_tokens: output, thinking_tokens: thinking, regime: classifyRegime(output, thinking) };
+      rec = { seed: Number(m[2]), outputTokens: output, thinkingTokens: thinking, regime: classifyRegime(output, thinking) };
     } catch {
-      rec = { seed: Number(m[2]), output_tokens: null, thinking_tokens: null, regime: "unknown" };
+      rec = { seed: Number(m[2]), outputTokens: null, thinkingTokens: null, regime: "unknown" };
     }
-    (out[m[1]] ??= { n: 0, min_thinking: null, max_thinking: null, min_output: null, max_output: null, regime: "unknown", seeds: [] }).seeds.push(rec);
+    (out[m[1]] ??= []).push(rec);
   }
-  const extent = (vals: (number | null)[], f: (...n: number[]) => number) => {
-    const k = vals.filter((v): v is number => v !== null);
-    return k.length ? f(...k) : null;
-  };
-  for (const t of Object.values(out)) {
-    t.seeds.sort((a, b) => a.seed - b.seed);
-    t.n = t.seeds.length;
-    t.min_thinking = extent(t.seeds.map((x) => x.thinking_tokens), Math.min);
-    t.max_thinking = extent(t.seeds.map((x) => x.thinking_tokens), Math.max);
-    t.min_output = extent(t.seeds.map((x) => x.output_tokens), Math.min);
-    t.max_output = extent(t.seeds.map((x) => x.output_tokens), Math.max);
-    const classes = new Set(t.seeds.map((x) => x.regime));
-    t.regime = classes.size === 1 ? [...classes][0]! : "mixed";
-  }
+  for (const seeds of Object.values(out)) seeds.sort((a, b) => a.seed - b.seed);
   writeFileSync(join(resultsDir, "sentinel.json"), JSON.stringify(out, null, 2) + "\n");
 }
 

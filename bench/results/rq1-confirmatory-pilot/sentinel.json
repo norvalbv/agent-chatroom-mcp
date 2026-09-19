@@ -1,0 +1,18 @@
+{
+  "bench-printf-format": [
+    {
+      "seed": 901,
+      "outputTokens": 4180,
+      "thinkingTokens": 888,
+      "regime": "calibrated"
+    }
+  ],
+  "stamp-interpreter": [
+    {
+      "seed": 901,
+      "outputTokens": 1512,
+      "thinkingTokens": 922,
+      "regime": "calibrated"
+    }
+  ]
+}

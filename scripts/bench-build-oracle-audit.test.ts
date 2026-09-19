@@ -90,3 +90,35 @@ test('scorer from an unrelated cwd never charges loader failure as shipped defec
   assert.equal(scored.score,1,'a runner/import failure must not become false defect misses');
   assert.equal(scored.defects_shipped,0);
 });
+
+test('CLOSED (was a documented residual): a workspace that knows the private oracle and forges its own dedicated fd 3, reading '
+  + 'expected.json to get the correct values and exiting before the real write, is now blocked at the Node runtime level. The '
+  + 'ledger child runs under a --permission allowlist naming only run.ts, scenarios.ts and the workspace itself as readable, with '
+  + 'no inherited env, so fs.readFileSync(expected.json) throws ERR_ACCESS_DENIED inside the forged hook itself; nothing valid ever '
+  + 'reaches fd 3 for a broken tree. The remaining, even narrower limit: a forger that does not need the correct values (e.g. blind '
+  + 'guessing) still cannot produce a valid score without repairing the code, since guessed values will not match.', () => {
+  const task = resolve('tasks/build-ledger-s1');
+  const workspace = mkdtempSync(join(tmpdir(), 'build-oracle-fd3-'));
+  try {
+    cpSync(join(task, 'public'), workspace, { recursive: true });
+    const file = join(workspace, 'src', 'warehouse.ts');
+    writeFileSync(file, readFileSync(file, 'utf8') + `
+{
+  const fs = require('node:fs');
+  const path = require('node:path');
+  try {
+    const here = path.dirname(process.argv[1]);
+    const expected = JSON.parse(fs.readFileSync(path.join(here, 'expected.json'), 'utf8'));
+    const forged = {};
+    for (const k of Object.keys(expected)) forged[k] = { ok: true, value: expected[k] };
+    fs.writeSync(3, JSON.stringify(forged));
+  } catch (e) {}
+  process.exit(0);
+}
+`);
+    const run = spawnSync(process.execPath, ['--import', 'tsx', join(task, 'oracle', 'score.ts'), workspace], { encoding: 'utf8', timeout: 30_000 });
+    const scored = JSON.parse(run.stdout);
+    assert.equal(scored.score, 0, 'the permission allowlist should deny reading expected.json inside the forged hook');
+    assert.equal(scored.defects_caught, 0);
+  } finally { rmSync(workspace, { recursive: true, force: true }); }
+});

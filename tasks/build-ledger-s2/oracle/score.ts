@@ -4,39 +4,44 @@
  * result (extra fields and key order are ignored; the SPEC declares the snapshot shape frozen).
  * defect/<id>: scenario for a planted defect; regression/<id>: R* scenarios and the scenario of every catalogued defect that is NOT planted
  * in this instance (they hold in the original code, so reintroducing one of those defects is scored as shipped).
+ *
+ * Two layers against a workspace that tries to forge its own result (fable-review G1/G2; 6-astra-4's oracle-audit hardening):
+ * (1) the child is launched under Node's --permission allowlist naming only run.ts, scenarios.ts and the workspace itself as
+ * readable, with no inherited env and native TypeScript (no tsx, so no cwd-dependent loader resolution); it can never read
+ * expected.json, so even a source-informed forger cannot produce the *correct* values, only guesses. Symlinks under the
+ * workspace are rejected before launch. (2) the result itself still travels over a dedicated pipe (fd 3), not shared stdout,
+ * written only by run.ts's own captured fs.writeSync reference; an empty or malformed fd 3 is refused outright.
  */
 import { spawnSync } from 'node:child_process';
-import { readFileSync, realpathSync, lstatSync, readdirSync } from 'node:fs';
+import { lstatSync, readFileSync, readdirSync, realpathSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+function readSingleResult(fd3: string | null | undefined): unknown {
+  if (!fd3) return null;
+  try { return JSON.parse(fd3); } catch { return null; }
+}
+function rejectSymlinks(path: string): void {
+  const stat = lstatSync(path);
+  if (stat.isSymbolicLink()) throw new Error('oracle infrastructure: workspace symlink is forbidden');
+  if (stat.isDirectory()) for (const name of readdirSync(path)) rejectSymlinks(join(path, name));
+}
 
 const workspace = process.argv[2];
 if (!workspace) { console.error('usage: score.ts WORKSPACE'); process.exit(2); }
 const here = dirname(fileURLToPath(import.meta.url));
 const inst = JSON.parse(readFileSync(join(here, 'instance.json'), 'utf8'));
 const expected = JSON.parse(readFileSync(join(here, 'expected.json'), 'utf8'));
-// The worker may read its own code and the scenarios, never the expected-answer file.
-// Native TypeScript removes resolution of a cwd-relative tsx loader from the child.
-if (lstatSync(workspace).isSymbolicLink()) { console.error('oracle tamper: workspace root link'); process.exit(3); }
-const candidate = realpathSync(workspace), runner = realpathSync(join(here, 'run.ts'));
+const runner = realpathSync(join(here, 'run.ts'));
 const scenarios = realpathSync(join(here, 'scenarios.ts'));
-function rejectLinks(path: string): void {
-  const stat = lstatSync(path);
-  if (stat.isSymbolicLink()) throw new Error('oracle tamper: workspace symlink is forbidden');
-  if (stat.isDirectory()) for (const name of readdirSync(path)) rejectLinks(join(path, name));
-}
-try { rejectLinks(candidate); } catch (error) { console.error(String(error)); process.exit(3); }
-const child = spawnSync(process.execPath, ['--permission', '--allow-fs-read=' + candidate,
-  '--allow-fs-read=' + runner, '--allow-fs-read=' + scenarios, runner, candidate, String(inst.m)],
-  { encoding: 'utf8', timeout: 60000, maxBuffer: 64 * 1024 * 1024, env: {} });
-if (child.error || child.status !== 0) {
-  const tamper = /ERR_ACCESS_DENIED/.test(child.stderr ?? '');
-  console.error('oracle ' + (tamper ? 'tamper' : 'infrastructure') + ': worker failed: ' + (child.error?.message ?? child.stderr)); process.exit(tamper ? 3 : 2);
-}
-const frames = child.stdout.split('@@RESULT@@');
-if (frames.length !== 2) { console.error('oracle tamper: ambiguous worker result frame'); process.exit(3); }
+let candidate: string;
+try { candidate = realpathSync(resolve(workspace)); rejectSymlinks(candidate); }
+catch (error) { console.error(String(error)); console.log(JSON.stringify({ score: 0, oracle_results: [], defects_planted: inst.defects.length, defects_caught: 0, defects_shipped: inst.defects.length, regressions_failed: 0, caught_ids: [], missed_ids: inst.defects, regression_failed_ids: [] })); process.exit(1); }
+const child = spawnSync(process.execPath, [
+  '--permission', '--allow-fs-read=' + runner, '--allow-fs-read=' + scenarios, '--allow-fs-read=' + candidate,
+  runner, candidate, String(inst.m),
+], { encoding: 'utf8', timeout: 60000, maxBuffer: 64 * 1024 * 1024, env: {}, stdio: ['ignore', 'pipe', 'pipe', 'pipe'] });
 let got: Record<string, { ok: boolean; value?: unknown }> = {};
-try { got = JSON.parse(frames[1]); } catch { console.error('oracle tamper: malformed worker result'); process.exit(3); }
+got = (readSingleResult(child.output?.[3] as string | null) as typeof got) ?? {};
 function subset(exp: unknown, act: unknown): boolean {
   if (Array.isArray(exp)) return Array.isArray(act) && act.length === exp.length && exp.every((e, i) => subset(e, act[i]));
   if (exp && typeof exp === 'object') return !!act && typeof act === 'object' && !Array.isArray(act) && Object.entries(exp).every(([k, v]) => subset(v, (act as any)[k]));

@@ -10,6 +10,11 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
+// Repo root of THIS generator, baked as a literal into every generated oracle/score.ts so the private-scorer child
+// process resolves tsx (and everything else) the same way regardless of the caller's cwd or where a task instance
+// is generated to (fable-review G2: a scorer that inherits the caller's cwd is cwd-dependent and can silently fail).
+const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+
 export const DEFECT_IDS = ['D01', 'D02', 'D03', 'D04', 'D05', 'D06', 'D07', 'D08', 'D09', 'D10', 'D11', 'D12'] as const;
 export const DEFECT_KIND: Record<string, string> = {
   D01: 'spec-vs-code', D02: 'boundary', D03: 'boundary', D04: 'spec-vs-code', D05: 'spec-vs-code', D06: 'boundary',
@@ -325,14 +330,19 @@ test('active before start and open ended', () => { assert.equal(isActive(subs[0]
   return t;
 }
 
-const ORACLE_RUN = `/** Child of oracle/score.ts: runs every check against the workspace and prints plain data. It never sees expected.json. */
-import { readFileSync } from 'node:fs';
+const ORACLE_RUN = `/** Child of oracle/score.ts: runs every check against the workspace and prints plain data. It never sees expected.json.
+ * The result is written to fd 3 (a pipe score.ts owns), not stdout: stdout is shared with anything the workspace's own top-level
+ * code prints, including a hook that races or preempts us, so it is never trusted. writeSyncFd3 is captured BEFORE the workspace
+ * import runs, so a module that reassigns fs.writeSync afterward cannot change what this file itself calls. If the workspace's own
+ * code exits the process before this file's own write runs, fd 3 stays empty, which score.ts correctly reads as no result.
+ */
+import { readFileSync, writeSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { CHECKS } from './checks.ts';
 
+const writeSyncFd3 = writeSync;
 const stringify = JSON.stringify.bind(JSON);
-const write = process.stdout.write.bind(process.stdout);
 const workspace = process.argv[2];
 const here = dirname(fileURLToPath(import.meta.url));
 const inst = JSON.parse(readFileSync(join(here, 'instance.json'), 'utf8'));
@@ -346,7 +356,7 @@ const out: Record<string, { ok: boolean; value?: unknown }> = {};
 for (const id of Object.keys(CHECKS)) {
   try { out[id] = loadError ? { ok: false } : { ok: true, value: JSON.parse(stringify(CHECKS[id](mods, inst.params))) }; } catch { out[id] = { ok: false }; }
 }
-write('\\n@@RESULT@@' + stringify(out) + '\\n');
+writeSyncFd3(3, stringify(out));
 process.exit(0);
 `;
 
@@ -361,15 +371,28 @@ import { spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+function readSingleResult(fd3: string | null | undefined): unknown {
+  // fable-review G1 and its early-exit variant: a workspace module could print a forged result on
+  // shared stdout (a second marker racing the real one, or a single forged one before ever letting
+  // this file's own trusted code run). A result read over a dedicated pipe (fd 3), written only once
+  // by run.ts's own captured fs.writeSync reference after the workspace import returns control, is not
+  // reachable by anything printed to stdout/stderr; an empty or malformed fd 3 (including a workspace
+  // that exits before run.ts's own write, or that also writes to fd 3 itself and corrupts the blob) is
+  // refused outright rather than guessed at.
+  if (!fd3) return null;
+  try { return JSON.parse(fd3); } catch { return null; }
+}
+
 
 const workspace = process.argv[2];
 if (!workspace) { console.error('usage: score.ts WORKSPACE'); process.exit(2); }
 const here = dirname(fileURLToPath(import.meta.url));
+const REPO_ROOT = ${JSON.stringify(repoRoot)};
 const inst = JSON.parse(readFileSync(join(here, 'instance.json'), 'utf8'));
 const expected = JSON.parse(readFileSync(join(here, 'expected.json'), 'utf8'));
-const child = spawnSync(process.execPath, ['--import', 'tsx', join(here, 'run.ts'), resolve(workspace)], { encoding: 'utf8', timeout: 60000, maxBuffer: 64 * 1024 * 1024 });
+const child = spawnSync(process.execPath, ['--import', 'tsx', join(here, 'run.ts'), resolve(workspace)], { encoding: 'utf8', timeout: 60000, maxBuffer: 64 * 1024 * 1024, cwd: REPO_ROOT, stdio: ['ignore', 'pipe', 'pipe', 'pipe'] });
 let got: Record<string, { ok: boolean; value?: unknown }> = {};
-try { got = JSON.parse(child.stdout.slice(child.stdout.lastIndexOf('@@RESULT@@') + 10)); } catch { got = {}; }
+got = (readSingleResult(child.output?.[3] as string | null) as typeof got) ?? {};
 const run = (id: string) => !!got[id]?.ok && JSON.stringify(got[id].value) === JSON.stringify(expected[id]);
 const oracle_results: { name: string; exit_code: number }[] = [];
 const caught_ids: string[] = [], missed_ids: string[] = [], regression_failed_ids: string[] = [];

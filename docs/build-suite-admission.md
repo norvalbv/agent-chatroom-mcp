@@ -62,6 +62,30 @@ the excision scars: unused imports and parameters left behind by the defect (`le
 unused, `as any` with a snake_case property), and spec section names equal to module names. The ledger family keeps a defect the same
 shape as correct code.
 
+## Oracle hardening against a source-informed adversary: what closed, what did not
+
+fable-reviewer and 6-astra-4 both found that a workspace module could forge the private oracle's result by writing a fake
+completion marker itself (a `process.on('exit')` hook racing the real one, or code at import time that writes a single forged
+marker and calls `process.exit()` before the real scenario-running code ever executes). Fixed at 1f6f4a3/later commits by moving
+the trusted result off shared stdout onto a dedicated pipe (fd 3) that only `oracle/run.ts`'s own code writes to, using a
+reference to `fs.writeSync` captured before any workspace import runs. This closes every attack that relied on stdout being a
+shared, guessable channel (both reviewers' own committed audit tests, `scripts/bench-build-oracle-audit.test.ts`, pass against it).
+
+That fd-3-specific variant was itself closed for the ledger family (6-astra-4, commit 5e8402b, independently reviewed by
+fable-reviewer as "safe to integrate", merged into `scripts/bench-build-ledger-gen.ts`): the ledger oracle now launches its
+child under Node's `--permission` allowlist, naming only `run.ts`, `scenarios.ts` and the workspace itself as readable, with no
+inherited environment and native (tsx-free) TypeScript execution. `expected.json` is never on the allowlist, so a forged hook
+that tries to read it to produce correct values throws `ERR_ACCESS_DENIED` at the Node runtime level, not just a JS-realm
+convention -- this is enforced independently of whether the attacker also knows about fd 3. Symlinks under the workspace are
+rejected before launch. `scripts/bench-build-oracle-audit.test.ts`'s residual test (renamed "CLOSED (was a documented
+residual)") now asserts this fails to score, and does.
+
+The billing and rules oracles (`bench-build-gen.ts`, `bench-build-rules-gen.ts`) still use only the fd-3-without-permission-
+allowlist defense: both retired families (billing at ceiling from the first screen, rules including the 120-rule variant), so
+the same residual (a source-informed forger who knows the fd number and can still read `expected.json`) is not closed there.
+Porting the permission-allowlist mechanism to those two files is the next step if either family is ever revived; not done here
+since neither is admitted and both are lower priority than the ledger family used in the pilot.
+
 ## What was not tried (levers for a future round)
 
 1. Defects that only running code reveals (numeric drift under random inputs, ordering under concurrency) with the spec stating
@@ -112,8 +136,7 @@ C data point does exist (C101) alongside three higher-cap ones (C102-104); none 
 confirmatory design, which is left to paper/prereg-build-suite.md.
 
 Command shape: `node --import tsx scripts/bench-build.ts tasks/build-ledger-s1 <A|B|C> <seed> --root <dir> --max-budget-usd <M> --expected-task-sha256 <hash of the task tree>`
-(arm C also `--port <free>`). Raw rows: `docs/build-suite-pilot.json`. Caps: M = 0.60 for A and B, M = 1.60 for C (a room of four
-seats at M/4 each).
+(arm C also `--port <free>`). Raw rows: `docs/build-suite-pilot.json`.
 
 | arm | seed | caught / 9 (as run) | caught / 9 (S12 oracle fixed) | shipped | regressions failed | cost USD | thinking tokens per seat | wall s | turns |
 |---|---|---|---|---|---|---|---|---|---|

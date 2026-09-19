@@ -5,6 +5,7 @@ import { holmBonferroni } from "./rq1-stats.js";
 import { buildArmKTable, renderArmKMarkdown, type KGroup } from "./paper-rq1-armk.js";
 import type { RunResult } from "./paper-rq1-table.js";
 
+const ALL = { seedMin: 0, seedMax: 1e9 };
 function base(task: string, arm: string, seed: number, passed: boolean, cost = 0.1) {
   return {
     schemaVersion: 1 as const, task_id: task, arm, seed, model: "m", outcome: passed ? "task_pass" : "task_fail",
@@ -38,7 +39,7 @@ test("K vs C and K vs A Fisher with Holm across all K comparisons; ceiling label
       groups.push(kGroup(task, s, [true, false, true], task === "t1" ? true : s <= 5, 0.5, { good: 2, bad: 1 }));
     }
   }
-  const t = buildArmKTable(runs, groups);
+  const t = buildArmKTable(runs, groups, ALL);
   assert.equal(t.tasks.length, 2);
   const t1 = t.tasks.find((x) => x.task === "t1")!;
   assert.equal(t1.k_pass, 10);
@@ -58,7 +59,7 @@ test("K vs C and K vs A Fisher with Holm across all K comparisons; ceiling label
 test("unknown group cost is never summed as zero; cost_per_correct undefined", () => {
   const runs = [base("t", "A", 1, true), base("t", "C", 1, true)];
   const groups = [kGroup("t", 1, [true, true], true, 0.4, { good: 2 }), kGroup("t", 2, [true, true], true, null, { good: 2 })];
-  const t = buildArmKTable(runs, groups);
+  const t = buildArmKTable(runs, groups, ALL);
   const row = t.tasks[0];
   assert.equal(row.cost_unknown_groups, 1);
   assert.equal(row.mean_cost_known, 0.4);
@@ -68,7 +69,22 @@ test("unknown group cost is never summed as zero; cost_per_correct undefined", (
 test("null-vote groups (all attempts unanswered) count as fail in the denominator", () => {
   const runs = [base("t", "A", 1, true), base("t", "C", 1, true)];
   const g = kGroup("t", 1, [false, false], false, 0.1, { "(none)": 2 });
-  const t = buildArmKTable(runs, [g]);
+  const t = buildArmKTable(runs, [g], ALL);
   assert.equal(t.tasks[0].k_fail, 1);
   assert.equal(t.tasks[0].ceiling.any_pass, 0);
+});
+
+test("Holm family stays fixed at 6 on partial data; pilot seeds excluded; lost attempt cost is unknown", () => {
+  const runs: RunResult[] = [];
+  const groups: KGroup[] = [];
+  for (let s = 101; s <= 140; s++) { runs.push(base("t", "A", s, s <= 133), base("t", "C", s, true)); groups.push(kGroup("t", s, [true], true, 0.5, { good: 1 })); }
+  groups.push(kGroup("t", 1, [false], false, 0.5, { bad: 1 }));
+  const t = buildArmKTable(runs, groups);
+  assert.equal(t.tasks[0].k_groups, 40);
+  const vsA = t.tasks[0].comparisons.find((c) => c.vs === "A")!;
+  assert.equal(+vsA.p_value!.toFixed(6), 0.011738);
+  assert.equal(+vsA.p_holm!.toFixed(4), +(0.011738 * 6).toFixed(4));
+  const lost = kGroup("t", 101, [true, true], true, 0.4, { good: 2 });
+  lost.attempts[1].cost_usd = null;
+  assert.equal(buildArmKTable(runs, [lost], ALL).tasks[0].cost_unknown_groups, 1);
 });

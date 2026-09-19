@@ -88,18 +88,16 @@ function tableExploratory(exploratory: ReturnType<typeof buildExploratoryK>): st
 }
 
 function windowControlStatus(suiteDirRoot: string): string {
-  // Original design (20 seeds x 2 arms x 2 tasks = 80 runs) was stopped after 3 seed-pairs when the
-  // 2026-09-19 thinking-budget regime shift (paper/amendments.md) made its cost cap unreachable; it is
-  // reported here for completeness but is not the control this paper relies on.
-  const origDir = join(suiteDirRoot, "..", "rq1-window-control");
-  const origTotal = existsSync(origDir) ? readdirSync(origDir).filter((n) => existsSync(join(origDir, n, "result.json"))).length : 0;
-  // Redesigned control, entirely inside the new (post-shift) regime: stamp-interpreter only, seeds 201-212,
-  // arm C and arm K interleaved per seed = 24 runs.
-  const dir = join(suiteDirRoot, "..", "rq1-window-control-2");
+  // Original design (20 seeds x 2 arms x 2 tasks = 80 runs) was stopped after 3 runs (5.76 USD) when the
+  // 2026-09-19 thinking-budget regime shift (paper/amendments.md) made its cost cap unreachable; none of its
+  // runs is committed or read. The redesign writes into the same directory (only its log differs), so only
+  // the redesign's own cells are counted: stamp-interpreter, seeds 201-212, arm C and arm K = 24 runs.
+  const dir = join(suiteDirRoot, "..", "rq1-window-control");
   const target = 24;
-  const design = "design: stamp-interpreter only, seeds 201--212, arm C and arm K interleaved per seed, entirely inside the post-shift regime (\\texttt{bench/results/rq1-window-control-2}, log \\texttt{logs/rq1-window-control-2.log})";
-  const total = existsSync(dir) ? readdirSync(dir).filter((n) => existsSync(join(dir, n, "result.json"))).length : 0;
-  const origLine = `\\emph{Original window control (stopped after ${origTotal} runs when the regime shift made its cost cap unreachable; not used as a result): ${origTotal} runs committed at generation time, design was 20 seeds (201--220) x arm C/K x 2 interpreter tasks, \\texttt{bench/results/rq1-window-control}, log \\texttt{logs/rq1-window-control.log}.}\n\n`;
+  const cells = Array.from({ length: 12 }, (_, i) => 201 + i).flatMap((s) => [`stamp-interpreter-C-seed${s}`, `stamp-interpreter-K-seed${s}`]);
+  const design = "design: stamp-interpreter only, seeds 201--212, arm C and arm K interleaved per seed, entirely inside the post-shift regime (\\texttt{bench/results/rq1-window-control}, log \\texttt{logs/rq1-window-control-2.log})";
+  const total = cells.filter((c) => existsSync(join(dir, c, "result.json"))).length;
+  const origLine = "\\emph{Original window control (20 seeds, 201--220, arm C and arm K on both interpreter tasks, log \\texttt{logs/rq1-window-control.log}): stopped after 3 runs when the regime shift made its cost cap unreachable (\\texttt{paper/amendments.md}, 2026-09-19); none of its runs is committed or read as a result.}\n\n";
   if (total >= target) return origLine + `\\emph{Redesigned window control: complete, ${total}/${target} runs committed at generation time; ${design}.}\n`;
   return origLine + `\\emph{Redesigned window control: PENDING (${total}/${target} runs committed to this branch at generation time); ${design}. Not reported as a result until all ${target} land.}\n`;
 }

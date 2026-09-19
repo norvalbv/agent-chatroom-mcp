@@ -18,10 +18,10 @@ function fakeBench(result: unknown) {
   return { dir, path };
 }
 
-function seededTask(checks: unknown) {
+function seededTask(checks: unknown, manifest = { defect_ids: ["rounding", "cancel"], regression_ids: ["tax-exempt", "empty-order"] }) {
   const dir = mkdtempSync(join(tmpdir(), "bench-build-task-"));
   mkdirSync(join(dir, "oracle"));
-  writeFileSync(join(dir, "task.json"), JSON.stringify({ task_id: "seeded-orders-01" }));
+  writeFileSync(join(dir, "task.json"), JSON.stringify({ task_id: "seeded-orders-01", build_suite: manifest }));
   writeFileSync(join(dir, "oracle", "oracle.json"), JSON.stringify({ kind: "seeded-build" }));
   writeFileSync(join(dir, "oracle", "score.ts"), `console.log(${JSON.stringify(JSON.stringify({ score: 0, oracle_results: checks }))}); process.exit(1);`);
   return dir;
@@ -34,6 +34,7 @@ function invoke(task: string, root: string, fake: string, arm = "A") {
 const valid = {
   task_id: "seeded-orders-01", arm: "A", seed: 7,
   anti_tamper: { unchanged: true }, usage: { cost_usd: 0.4 },
+  effort: { level: "medium", settings_path: ".claude/settings.json", settings_sha256: "a".repeat(64), own_git_root: true },
   turns: { summed: 17 }, wall_clock: { duration_ms: 1234 },
   seats: [{ name: "single" }],
 };
@@ -72,6 +73,30 @@ test("refuses to make a score from an altered fixture or an unnamed hidden check
     assert.notEqual(run.status, 0);
     assert.equal(existsSync(join(root, "build-result.json")), false);
     assert.match(run.stderr, /anti-tamper|named defect|regression/i);
+  } finally { rmSync(task, { recursive: true, force: true }); rmSync(root, { recursive: true, force: true }); rmSync(fake.dir, { recursive: true, force: true }); }
+});
+
+test("refuses an incomplete hidden matrix instead of treating an omitted defect as caught", () => {
+  const task = seededTask(checks, { defect_ids: ["rounding", "cancel", "authorization"], regression_ids: ["tax-exempt", "empty-order"] });
+  const root = join(tmpdir(), `bench-build-incomplete-${process.pid}-${Date.now()}`);
+  const fake = fakeBench(valid);
+  try {
+    const run = invoke(task, root, fake.path);
+    assert.notEqual(run.status, 0);
+    assert.equal(existsSync(join(root, "build-result.json")), false);
+    assert.match(run.stderr, /matrix.*defect\/authorization/i);
+  } finally { rmSync(task, { recursive: true, force: true }); rmSync(root, { recursive: true, force: true }); rmSync(fake.dir, { recursive: true, force: true }); }
+});
+
+test("refuses an unpinned effort result rather than treating a CLI default as a measurement setting", () => {
+  const task = seededTask(checks);
+  const root = join(tmpdir(), `bench-build-effort-${process.pid}-${Date.now()}`);
+  const { effort: _ignored, ...withoutEffort } = valid;
+  const fake = fakeBench(withoutEffort);
+  try {
+    const run = invoke(task, root, fake.path);
+    assert.notEqual(run.status, 0);
+    assert.match(run.stderr, /effort.*settings/i);
   } finally { rmSync(task, { recursive: true, force: true }); rmSync(root, { recursive: true, force: true }); rmSync(fake.dir, { recursive: true, force: true }); }
 });
 

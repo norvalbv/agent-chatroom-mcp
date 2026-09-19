@@ -22,11 +22,13 @@ type RawResult = {
   arm: "A" | "B" | "C";
   seed: number;
   anti_tamper?: { unchanged?: boolean };
+  effort?: { level?: string; settings_path?: string; settings_sha256?: string; own_git_root?: boolean };
   usage?: { cost_usd?: number };
   turns?: { summed?: number };
   wall_clock?: { duration_ms?: number };
   seats?: unknown[];
 };
+type ExpectedMatrix = { defect_ids: string[]; regression_ids: string[] };
 
 const here = dirname(fileURLToPath(import.meta.url));
 const fail = (message: string): never => { throw new Error(`bench-build: ${message}`); };
@@ -73,6 +75,33 @@ function classify(checks: unknown): { defects: Check[]; regressions: Check[] } {
   return { defects, regressions };
 }
 
+function expectedMatrix(taskDir: string): ExpectedMatrix {
+  let parsed: { build_suite?: ExpectedMatrix };
+  try { parsed = JSON.parse(readFileSync(join(taskDir, "task.json"), "utf8")) as { build_suite?: ExpectedMatrix }; }
+  catch { fail("task.json is unreadable"); }
+  const matrix = parsed.build_suite;
+  if (!matrix || !Array.isArray(matrix.defect_ids) || !Array.isArray(matrix.regression_ids)) {
+    fail("task.json needs build_suite.defect_ids and build_suite.regression_ids");
+  }
+  for (const [kind, ids] of Object.entries(matrix)) {
+    if (!ids.length || ids.some((id) => typeof id !== "string" || !id || id.includes("/")) || new Set(ids).size !== ids.length) {
+      fail(`task.json has invalid ${kind}`);
+    }
+  }
+  return matrix;
+}
+
+function assertExactMatrix(matrix: ExpectedMatrix, checks: { defects: Check[]; regressions: Check[] }) {
+  for (const [kind, expected, actual] of [
+    ["defect", matrix.defect_ids, checks.defects.map((check) => check.name.slice("defect/".length))],
+    ["regression", matrix.regression_ids, checks.regressions.map((check) => check.name.slice("regression/".length))],
+  ] as const) {
+    const missing = expected.filter((id) => !actual.includes(id));
+    const unexpected = actual.filter((id) => !expected.includes(id));
+    if (missing.length || unexpected.length) fail(`private matrix mismatch for ${kind}: missing ${missing.map((id) => `${kind}/${id}`).join(",") || "none"}; unexpected ${unexpected.map((id) => `${kind}/${id}`).join(",") || "none"}`);
+  }
+}
+
 async function main() {
   const argv = process.argv.slice(2);
   const [taskDir, arm, seedText] = argv.splice(0, 3);
@@ -90,6 +119,7 @@ async function main() {
   // RQ1 runner defaults to three, so make the new suite's default explicit;
   // a recorded `--seats` permits the pre-registered 4--5-seat alternative.
   if (arm === "C" && !argv.includes("--seats")) argv.push("--seats", "4");
+  if (!argv.includes("--effort")) argv.push("--effort", "medium");
 
   const launched = spawnSync(process.execPath, ["--import", "tsx", runner, taskDir, arm!, String(seed), "--root", root, ...argv], { encoding: "utf8" });
   if (launched.status !== 0 || launched.error || launched.signal) {
@@ -103,17 +133,24 @@ async function main() {
   catch { fail("underlying result.json is not JSON"); }
   if (raw.arm !== arm || raw.seed !== seed) fail("underlying result does not match requested arm/seed");
   if (raw.anti_tamper?.unchanged !== true) fail("anti-tamper provenance is absent or reports a changed fixture");
+  const effort = raw.effort;
+  if (!effort || !["low", "medium", "high"].includes(effort.level ?? "") || effort.settings_path !== ".claude/settings.json" ||
+      !/^[a-f0-9]{64}$/.test(effort.settings_sha256 ?? "") || effort.own_git_root !== true) {
+    fail("underlying result lacks a pinned effort settings record");
+  }
 
   // bench-rq1 deliberately stores only its aggregate pass/fail. Re-score the
   // workspace from the private task oracle here; never let a runner-provided
   // summary impersonate per-defect evidence.
   const resolvedTask = resolve(taskDir);
+  const matrix = expectedMatrix(resolvedTask);
   const taskHashBeforeScore = hashTree(resolvedTask);
   const scorer = await import(new URL("./bench-oracle.ts", import.meta.url).href);
   const scored = await scorer.scoreTask(resolvedTask, resolve(root, "workspace"));
   const taskHashAfterScore = hashTree(resolvedTask);
   if (taskHashAfterScore !== taskHashBeforeScore) fail("private scorer changed its task fixture while scoring");
   const { defects, regressions } = classify(scored.oracle_results);
+  assertExactMatrix(matrix, { defects, regressions });
   const caught = defects.filter((check) => check.exit_code === 0).length;
   const regressionFailures = regressions.filter((check) => check.exit_code === 1).length;
   // A remaining plant is a shipped defect; a broken baseline-preserving case is
@@ -135,6 +172,7 @@ async function main() {
     turns: raw.turns?.summed ?? null,
     wall_clock_ms: raw.wall_clock?.duration_ms ?? null,
     seats: Array.isArray(raw.seats) ? raw.seats.length : null,
+    effort,
     provenance: { raw_result: "result.json", anti_tamper_unchanged: true, task_sha256_before_score: taskHashBeforeScore, task_sha256_after_score: taskHashAfterScore, runner },
   };
   writeFileSync(resolve(root, "build-result.json"), JSON.stringify(output, null, 2) + "\n");

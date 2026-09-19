@@ -7,7 +7,7 @@ import { spawnSync } from "node:child_process";
 import { chmodSync, existsSync, mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { delimiter, resolve, join } from "node:path";
-import { selectByMajorityVote, runAttempt } from "./bench-ak.ts";
+import { selectByMajorityVote, runAttempt, OUTER_TIMEOUT_SLACK_MS } from "./bench-ak.ts";
 
 const runner = resolve("scripts/bench-ak.ts");
 const task = resolve("tasks/bench-fact-check");
@@ -207,6 +207,7 @@ test("printf group end-to-end: MBR-exec selects the agreeing cluster, scored by 
     assert.equal(res.selection.winner_attempt, 2, "attempts 2 and 3 agree; lowest index of the modal cluster wins");
     assert.equal(res.passed, true, "the selected attempt is the correct implementation");
     assert.deepEqual(res.attempts.map((a: { passed: boolean }) => a.passed), [false, true, true, false]);
+    assert.deepEqual(res.attempts.map((a: { null_vote: boolean }) => a.null_vote), [false, false, false, false], "every candidate loaded and produced a signature, wrong or not: none are null votes");
     assert.equal(res.oracle_ceiling.any_attempt_passed, true);
     assert.equal(res.oracle_ceiling.n_passed, 2);
     const hashes = new Set<string>();
@@ -224,6 +225,27 @@ test("printf group end-to-end: MBR-exec selects the agreeing cluster, scored by 
     assert.equal(r2.status, 0, r2.stderr + r2.stdout);
     const att = JSON.parse(readFileSync(join(root2, "attempt-1", "result.json"), "utf8"));
     assert.notEqual(att.anti_tamper.hash_before, before, "a fixtures/ change changes the frozen hash");
+  } finally {
+    rmSync(work, { recursive: true, force: true });
+    rmSync(stubDir, { recursive: true, force: true });
+  }
+});
+
+test("a code candidate that fails to load (syntax error) gets no signature (selection.loaded false) but is not a null vote: it ran", () => {
+  const stubDir = stubCodeClaudeDir();
+  const work = mkdtempSync(join(tmpdir(), "bench-ak-unloadable-"));
+  const armCPath = writeArmCResult(work, 0.6, 100000);
+  try {
+    const impls = JSON.stringify({ 1: "this is not { typescript (((", 2: correctImpl, 3: correctImpl });
+    const r = invoke([printfTask, "3", "11", "--root", join(work, "run"), "--arm-c-result", armCPath], { PATH: `${stubDir}${delimiter}${process.env.PATH}`, STUB_IMPLS: impls });
+    assert.equal(r.status, 0, r.stderr + r.stdout);
+    const res = JSON.parse(readFileSync(join(work, "run", "result.json"), "utf8"));
+    assert.equal(res.selection.loaded[0], false, "the syntax-error candidate never produced a signature");
+    assert.equal(res.attempts[0].null_vote, false, "the attempt itself completed; only its candidate has no signature");
+    assert.equal(res.attempts[1].null_vote, false);
+    assert.equal(res.attempts[2].null_vote, false);
+    assert.equal(res.selection.winner_attempt, 2, "selection still picks a loadable, agreeing candidate");
+    assert.equal(res.passed, true);
   } finally {
     rmSync(work, { recursive: true, force: true });
     rmSync(stubDir, { recursive: true, force: true });
@@ -279,6 +301,8 @@ test("a killed or missing attempt stays in the group as a null vote; its unknown
     assert.equal(res.attempts.length, 3);
     assert.equal(res.attempts[1].outcome, "timeout");
     assert.equal(res.attempts[1].passed, false);
+    assert.equal(res.attempts[1].null_vote, true, "a deadline-killed attempt is an explicit null vote");
+    assert.equal(res.attempts[0].null_vote, false, "a normal attempt is not a null vote");
     assert.equal(res.usage.cost_usd, null, "unknown cost is null, not a sum that treats it as 0");
     assert.equal(res.usage.cost_usd_unknown_attempts, 1);
     assert.ok(Math.abs(res.usage.cost_usd_known_sum - 0.004) < 1e-9);
@@ -424,9 +448,60 @@ process.exit(r.status ?? 1);
     assert.equal(res.attempts[1].outcome, "no_result");
     assert.ok(res.attempts[1].runner_failure, "the wedged attempt is recorded as a runner failure, still present as a null vote");
     assert.match(res.attempts[1].runner_failure, /outer timeout/);
+    assert.equal(res.attempts[1].null_vote, true, "the pool-level outer-timeout kill is an explicit null vote, not a 4th unlabeled path");
     assert.equal(res.passed, true, "the two healthy attempts still let the group pass");
   } finally {
     rmSync(work, { recursive: true, force: true });
     rmSync(stubDir, { recursive: true, force: true });
+  }
+});
+
+test("an attempt that finishes just under its deadline is a normal vote with known cost: the outer rail carries slack beyond --attempt-deadline-ms", () => {
+  const stubDir = stubCodeClaudeDir();
+  const work = mkdtempSync(join(tmpdir(), "bench-ak-underdeadline-"));
+  const armCPath = writeArmCResult(work, 0.6, 100000);
+  try {
+    // 3.2 s of work against a 4 s deadline, plus runner startup and scoring: if the outer rail were exactly
+    // the deadline (no slack) it would SIGKILL this attempt before bench-rq1.ts writes its result.json.
+    const r = invoke([printfTask, "2", "12", "--root", join(work, "run"), "--arm-c-result", armCPath, "--attempt-deadline-ms", "4000", "--concurrency", "2"], { PATH: `${stubDir}${delimiter}${process.env.PATH}`, STUB_SLEEP_MS: "3200", STUB_IMPLS: JSON.stringify({ 1: correctImpl, 2: correctImpl }) });
+    assert.equal(r.status, 0, r.stderr + r.stdout);
+    const res = JSON.parse(readFileSync(join(work, "run", "result.json"), "utf8"));
+    for (const a of res.attempts) {
+      assert.equal(a.outcome, "task_pass", "finished under the deadline, scored normally");
+      assert.equal(a.null_vote, false);
+      assert.equal(a.runner_failure, null);
+      assert.equal(a.cost_usd, 0.002, "cost known, not lost to an outer-rail kill");
+    }
+    assert.ok(Math.abs(res.usage.cost_usd - 0.004) < 1e-9);
+  } finally {
+    rmSync(work, { recursive: true, force: true });
+    rmSync(stubDir, { recursive: true, force: true });
+  }
+});
+
+test("runAttempt: a runner finishing well under the total rail resolves at once with its own exit status, not killed", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "run-attempt-fast-"));
+  const fast = join(dir, "fast-runner.mjs");
+  writeFileSync(fast, "await new Promise((r) => setTimeout(r, 200));\nprocess.exit(0);\n");
+  try {
+    const start = Date.now();
+    const r = await runAttempt(fast, [], 3000 + OUTER_TIMEOUT_SLACK_MS);
+    assert.equal(r.status, 0);
+    assert.ok(Date.now() - start < 2000, "resolves when the runner exits, not when the rail expires");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("runAttempt: a runner running PAST the deadline but inside deadline + slack is not killed (a rail at exactly the deadline would race bench-rq1's own deadline handling and lose its salvaged usage)", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "run-attempt-slack-"));
+  const slow = join(dir, "slow-runner.mjs");
+  writeFileSync(slow, "await new Promise((r) => setTimeout(r, 1500));\nprocess.exit(0);\n");
+  try {
+    const deadlineMs = 1000; // the runner exits at ~1500ms: past the deadline, well inside the slack
+    const r = await runAttempt(slow, [], deadlineMs + OUTER_TIMEOUT_SLACK_MS);
+    assert.equal(r.status, 0, "must not be SIGKILLed at the deadline");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
   }
 });

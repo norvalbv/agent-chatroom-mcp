@@ -38,7 +38,7 @@ export interface KGroup extends Omit<RunResult, "usage"> {
   usage: { cost_usd: number | null; coverage?: "complete" | "partial" | "none" };
   k: number;
   passed: boolean;
-  selection: { rule: string; winner_attempt: number | null; votes: Record<string, number> };
+  selection: { rule: string; winner_attempt: number | null; votes: Record<string, number>; /** code tasks: per attempt, whether its candidate produced a signature */ loaded?: boolean[] };
   attempts: KAttempt[];
 }
 
@@ -92,6 +92,8 @@ export interface KTaskRow {
   mean_cost_a: number | null;
   /** Attempts with no answer (killed by cap/deadline or unparsable): null votes, still in the group and its cost. */
   null_attempts: number;
+  /** Selector-side, its own column: attempts that completed and were paid for but whose candidate has no signature (selection.loaded false). Never folded into null_attempts, the harness-side starvation detector. */
+  unloadable_candidates: number;
   /** Realized mean K spend per seed must not exceed arm C's (prereg). null when either is unknown. */
   matched_cost_ok: boolean | null;
   /** Vote distribution per group: sorted counts of distinct answers ("7-2-1") -> number of groups. */
@@ -129,11 +131,12 @@ export function buildArmKTable(suiteRuns: RunResult[], allGroups: KGroup[], opts
     const row: KTaskRow = {
       task, k_groups: gs.length, k_pass: kPass, k_fail: gs.length - kPass, comparisons: [],
       cost_per_correct: "undefined", mean_cost_known: null, cost_unknown_groups: 0, mean_cost_c: null, paired_cost_diff: null, mean_cost_a: null,
-      null_attempts: 0, matched_cost_ok: null, vote_distribution: {}, ceiling: { any_pass: 0, groups: gs.length, rate: null },
+      null_attempts: 0, unloadable_candidates: 0, matched_cost_ok: null, vote_distribution: {}, ceiling: { any_pass: 0, groups: gs.length, rate: null },
     };
     // src/result.ts stores lost usage as cost_usd 0 with coverage none/partial, so a number alone is not "known".
     const known = gs.filter((g) => typeof g.usage.cost_usd === "number" && (g.usage.coverage === undefined || g.usage.coverage === "complete") && g.attempts.every((a) => typeof a.cost_usd === "number"));
     row.null_attempts = gs.reduce((n, g) => n + g.attempts.filter(isNullVote).length, 0);
+    row.unloadable_candidates = gs.reduce((n, g) => n + g.attempts.filter((a, i) => !isNullVote(a) && g.selection.loaded?.[i] === false).length, 0);
     row.cost_unknown_groups = gs.length - known.length;
     row.mean_cost_known = mean(known.map((g) => g.usage.cost_usd as number));
     if (kPass > 0) row.cost_per_correct = row.cost_unknown_groups > 0 ? "unknown" : known.reduce((a, g) => a + (g.usage.cost_usd as number), 0) / kPass;
@@ -178,10 +181,10 @@ export function renderArmKMarkdown(t: KTable): string {
   for (const r of t.tasks) for (const c of r.comparisons)
     md += `| ${r.task} | ${r.k_groups} | ${r.k_pass}/${r.k_groups} | ${c.vs} | ${c.other_pass}/${c.other_n} | ${fmt(c.p_value, 6)} | ${fmt(c.p_holm, 6)} | ${c.significant_holm_0_05 ?? "n/a"} |\n`;
   md += "\n### Cost (arm K cost is the sum over all k attempts, killed attempts included)\n\n";
-  md += "| task | mean K cost/seed (known) | groups with unknown cost | null votes | paired mean C cost | K-C paired diff | mean A cost (all seeds) | K <= C | K cost per correct |\n|---|---|---|---|---|---|---|---|---|\n";
+  md += "| task | mean K cost/seed (known) | groups with unknown cost | null votes | unloadable candidates | paired mean C cost | K-C paired diff | mean A cost (all seeds) | K <= C | K cost per correct |\n|---|---|---|---|---|---|---|---|---|---|\n";
   for (const r of t.tasks) {
     const cpc = typeof r.cost_per_correct === "number" ? `$${r.cost_per_correct.toFixed(4)}` : r.cost_per_correct;
-    md += `| ${r.task} | ${fmt(r.mean_cost_known)} | ${r.cost_unknown_groups} | ${r.null_attempts} | ${fmt(r.mean_cost_c)} | ${fmt(r.paired_cost_diff)} | ${fmt(r.mean_cost_a)} | ${r.matched_cost_ok ?? "unknown"} | ${cpc} |\n`;
+    md += `| ${r.task} | ${fmt(r.mean_cost_known)} | ${r.cost_unknown_groups} | ${r.null_attempts} | ${r.unloadable_candidates} | ${fmt(r.mean_cost_c)} | ${fmt(r.paired_cost_diff)} | ${fmt(r.mean_cost_a)} | ${r.matched_cost_ok ?? "unknown"} | ${cpc} |\n`;
   }
   md += "\n### Vote distribution per group (sorted answer counts, e.g. 7-2-1 = seven attempts agree, two agree, one alone; none = no attempt answered)\n\n";
   for (const r of t.tasks) md += `- ${r.task}: ${Object.entries(r.vote_distribution).sort(([, a], [, b]) => b - a).map(([s, n]) => `${s} x${n}`).join(", ") || "n/a"}\n`;

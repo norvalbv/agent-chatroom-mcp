@@ -130,22 +130,28 @@ export function runAttempt(runnerPath: string, args: string[], timeoutMs: number
     const child = spawn(process.execPath, ["--import", "tsx", runnerPath, ...args], { detached: true, stdio: ["ignore", "ignore", "pipe"] });
     trackedGroups.add(child);
     let err = "";
-    let timedOut = false;
+    let settled = false;
+    // Resolve at most once. The timer resolves by itself (not only via "close"), so even if the group kill
+    // never lands the pool cannot deadlock; a later "close" is then a no-op apart from cleanup.
+    const finish = (status: number | null, stderr: string) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      res({ status, stderr });
+    };
     const timer = setTimeout(() => {
-      timedOut = true;
       killGroup(child, "SIGKILL");
+      finish(null, `${err}\nrunAttempt: outer timeout (${timeoutMs} ms) exceeded, runner wedged; process group killed`);
     }, timeoutMs);
     child.stderr?.on("data", (d) => (err = (err + d).slice(-4000)));
     child.on("close", (status) => {
-      clearTimeout(timer);
       trackedGroups.delete(child);
       killGroup(child, "SIGKILL"); // nothing of a finished attempt may outlive it
-      res({ status: timedOut ? null : status, stderr: timedOut ? `${err}\nrunAttempt: outer timeout (${timeoutMs} ms) exceeded, runner wedged; process group killed` : err });
+      finish(status, err);
     });
     child.on("error", (e) => {
-      clearTimeout(timer);
       trackedGroups.delete(child);
-      res({ status: null, stderr: String(e) });
+      finish(null, String(e));
     });
   });
 }
@@ -257,9 +263,17 @@ async function main() {
   const knownCosts = results.map((r) => (r?.usage?.coverage === "complete" && typeof r.usage.cost_usd === "number" ? r.usage.cost_usd : null));
   const unknown = knownCosts.filter((c) => c === null).length;
   const knownSum = knownCosts.reduce<number>((s, c) => s + (c ?? 0), 0);
+  // Explicit per the verifier's #101 ask (opus-reviewer #95): an attempt that produced nothing for the
+  // selector to vote on — no result at all, killed by its deadline, or the runner itself failed/wedged
+  // (including the pool-level outer timeout) — is a null vote, named here rather than left for a stats-side
+  // reader to reconstruct from outcome strings. A candidate that completed but fails to load is NOT one: it
+  // ran, and selection.loaded[i] === false records that it was given no signature.
   const attemptsInfo = attemptRoots.map((r, i) => {
     const res = results[i];
     const seat = res?.seats?.[0];
+    const killedByDeadline = seat?.killed_by_deadline ?? false;
+    const runnerFailure = runnerFailures[i + 1] ?? null;
+    const nullVote = !res || killedByDeadline || runnerFailure !== null;
     return {
       index: i + 1,
       root: r,
@@ -271,8 +285,9 @@ async function main() {
       wall_ms: res?.wall_clock?.duration_ms ?? null,
       exit_code: seat?.exit_code ?? null,
       signal: seat?.signal ?? null,
-      killed_by_deadline: seat?.killed_by_deadline ?? false,
-      runner_failure: runnerFailures[i + 1] ?? null,
+      killed_by_deadline: killedByDeadline,
+      runner_failure: runnerFailure,
+      null_vote: nullVote,
     };
   });
   const result = {

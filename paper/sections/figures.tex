@@ -21,8 +21,9 @@
   cheapest per correct answer on every task; arms C and K cost roughly the same as each other on the
   interpreter family and on \texttt{printf-format}, where both cost more per correct answer than arm A
   despite passing less often (Table~\ref{tab:cost-per-correct}). All runs are from before the thinking-budget
-  regime shift documented in Section~\ref{sec:threats} (2026-09-19, 07:44--11:30 UTC); not comparable to any
-  run from after the shift.}
+  regime shift documented in Section~\ref{sec:threats}: arms A/C ran 2026-09-19 07:44--11:30 UTC, arm K ran
+  later the same day, 13:22--15:33 UTC (Table~\ref{tab:cost-per-correct} gives exact per-row output-token
+  counts confirming both windows are pre-shift); not comparable to any run from after the shift.}
   \label{fig:cost-per-correct}
 \end{figure}
 
@@ -32,7 +33,8 @@
   \caption{Cost per correct answer (log scale) against task success rate, one point per (task, arm).
   Arm A is always cheapest per correct answer; arm C and arm K are budget-matched per prereg but neither
   buys accuracy on \texttt{printf-format}. All runs are from before the thinking-budget regime shift
-  documented in Section~\ref{sec:threats} (2026-09-19, 07:44--11:30 UTC).}
+  documented in Section~\ref{sec:threats} (arms A/C: 2026-09-19 07:44--11:30 UTC; arm K: 13:22--15:33 UTC
+  the same day; see Table~\ref{tab:cost-per-correct} for per-row output-token confirmation).}
   \label{fig:cost-vs-accuracy}
 \end{figure}
 

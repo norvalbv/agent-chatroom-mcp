@@ -92,63 +92,108 @@
       "arm": "A",
       "cost_per_correct": 0.2733586571428571,
       "n": 40,
-      "pass": 14
+      "pass": 14,
+      "mean_output_tokens": 4575.5,
+      "date_range": [
+        "2026-09-19T09:57:57.619Z",
+        "2026-09-19T11:30:42.302Z"
+      ]
     },
     {
       "task": "bench-printf-format",
       "arm": "C",
       "cost_per_correct": 4.9657247,
       "n": 40,
-      "pass": 6
+      "pass": 6,
+      "mean_output_tokens": 22707.775,
+      "date_range": [
+        "2026-09-19T09:56:40.894Z",
+        "2026-09-19T11:29:56.107Z"
+      ]
     },
     {
       "task": "stamp-2",
       "arm": "A",
       "cost_per_correct": 0.09651402857142856,
       "n": 40,
-      "pass": 28
+      "pass": 28,
+      "mean_output_tokens": 2295.925,
+      "date_range": [
+        "2026-09-19T08:42:14.204Z",
+        "2026-09-19T09:56:40.713Z"
+      ]
     },
     {
       "task": "stamp-2",
       "arm": "C",
       "cost_per_correct": 0.5945629699999999,
       "n": 40,
-      "pass": 40
+      "pass": 40,
+      "mean_output_tokens": 16186.625,
+      "date_range": [
+        "2026-09-19T08:41:06.554Z",
+        "2026-09-19T09:56:10.943Z"
+      ]
     },
     {
       "task": "stamp-interpreter",
       "arm": "A",
       "cost_per_correct": 0.0703086484848485,
       "n": 40,
-      "pass": 33
+      "pass": 33,
+      "mean_output_tokens": 1734.4,
+      "date_range": [
+        "2026-09-19T07:44:45.919Z",
+        "2026-09-19T08:41:06.378Z"
+      ]
     },
     {
       "task": "stamp-interpreter",
       "arm": "C",
       "cost_per_correct": 0.6017927550000001,
       "n": 40,
-      "pass": 40
+      "pass": 40,
+      "mean_output_tokens": 14222.175,
+      "date_range": [
+        "2026-09-19T07:43:12.673Z",
+        "2026-09-19T08:40:45.207Z"
+      ]
     },
     {
       "task": "bench-printf-format",
       "arm": "K",
       "cost_per_correct": 3.869908971428571,
       "n": 40,
-      "pass": 7
+      "pass": 7,
+      "mean_output_tokens": 4631.328571428571,
+      "date_range": [
+        "2026-09-19T14:32:04.908Z",
+        "2026-09-19T15:33:35.867Z"
+      ]
     },
     {
       "task": "stamp-2",
       "arm": "K",
       "cost_per_correct": 0.5453555076923076,
       "n": 40,
-      "pass": 39
+      "pass": 39,
+      "mean_output_tokens": 2242.884375,
+      "date_range": [
+        "2026-09-19T13:53:23.988Z",
+        "2026-09-19T14:32:04.433Z"
+      ]
     },
     {
       "task": "stamp-interpreter",
       "arm": "K",
       "cost_per_correct": 0.6368455722222223,
       "n": 40,
-      "pass": 36
+      "pass": 36,
+      "mean_output_tokens": 1719.265,
+      "date_range": [
+        "2026-09-19T13:22:43.225Z",
+        "2026-09-19T13:53:23.683Z"
+      ]
     }
   ],
   "vote_distributions": [

@@ -16,8 +16,8 @@ function fixture(): FigData {
       { task: "stamp-interpreter", arm: "A", n: 40, pass: 33, rate: 0.825, ci_lo: 0.681, ci_hi: 0.913 },
     ],
     cost_per_correct: [
-      { task: "stamp-2", arm: "K", cost_per_correct: 0.5454, n: 40, pass: 39 },
-      { task: "bench-printf-format", arm: "C", cost_per_correct: null, n: 40, pass: 0 },
+      { task: "stamp-2", arm: "K", cost_per_correct: 0.5454, n: 40, pass: 39, mean_output_tokens: 1725.3, date_range: ["2026-09-19T13:22:00.000Z", "2026-09-19T14:32:00.000Z"] },
+      { task: "bench-printf-format", arm: "C", cost_per_correct: null, n: 40, pass: 0, mean_output_tokens: null, date_range: null },
     ],
     vote_distributions: [],
     armk_group_votes: [],
@@ -39,6 +39,12 @@ test("renderCostTable: null cost_per_correct renders as 'undefined', never $0.00
   const tex = renderCostTable(fixture());
   assert.match(tex, /bench-printf-format & C \(chatroom\) & 0\/40 & undefined/);
   assert.doesNotMatch(tex, /\$0\.0000/);
+});
+
+test("renderCostTable: mean output tokens and date range are shown, null renders as --", () => {
+  const tex = renderCostTable(fixture());
+  assert.match(tex, /1,725 & 2026-09-19 13:22--14:32/); // rounded, same-day range collapses to one date + two times
+  assert.match(tex, /bench-printf-format & C \(chatroom\) & 0\/40 & undefined & -- & --/); // no runs -> no token/date data either
 });
 
 test("end-to-end CLI: regenerates both .tex files from the real committed fig-data.json", () => {

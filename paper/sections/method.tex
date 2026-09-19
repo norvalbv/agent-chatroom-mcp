@@ -168,27 +168,30 @@ Arm~C's forty-seed record on the interpreter family and arm~K's forty-fresh-seed
 in different, non-overlapping time windows (Section~\ref{sec:results}). A single Sonnet agent's own
 pass rate on \texttt{stamp-interpreter} differed noticeably across three measurements in this project's
 own data --- $0.50$ on the original ten-seed admission pilot, $0.825$ on the forty-seed grid, and
-$0.675$ on the four hundred individual arm-A attempts underlying arm~K's forty groups. Both the
-forty-seed grid and arm~K's fresh attempts, along with a separate sixty-run cap-value control run around
-the same time, were completed before approximately 15:30 on the day of these runs, so this specific gap
-sits entirely inside one time window and is not an artifact of the two measurements straddling different
-conditions; it remains unexplained by anything identified in this project to date, and is reported as
-such rather than attributed to a cause. A distinct, later regime change is relevant to this paper's
-\emph{other} within-day comparisons: between approximately 15:30 and 16:45, with no change to the
-harness, its flags, the Claude Code version, or the recorded model id, the model served under the
-\texttt{sonnet} alias began producing substantially longer internal reasoning per turn --- a single-agent
-\texttt{stamp-interpreter} attempt's output tokens rose roughly six-fold (about 1.6K to about 10K) and
-its cost rose from about \$0.058 to \$0.18--\$0.26; arm~C seats showed the same shift (a three-seat room's
-cost rising from about \$0.60 to \$1.50--\$2.21). Because a provider-side change of this kind cannot be
-ruled out as a general risk to any comparison that spans time, no number in this paper pools runs from
-before and after a detected regime boundary, and every reported cost figure states the date and the
-observed output-token scale it was measured at. The window-control experiment is the direct test of
-within-window validity for arm~C against arm~K specifically: seeds of both arms run interleaved, seed by
-seed, on the same task, so that whatever the underlying single-agent rate or cost regime is doing on a
-given day affects both arms' seeds contemporaneously rather than one arm's seeds systematically earlier
-or later than the other's. Its original design (twenty seeds, 201--220, both interpreter tasks) was
-interrupted after three runs when the new, higher-cost regime made the planned run count exceed its
-budget; it was restarted at reduced scope --- \texttt{stamp-interpreter} only, seeds 201--212, entirely
+$0.675$ on the four hundred individual arm-A attempts underlying arm~K's forty \texttt{stamp-interpreter}
+groups, all completed before the regime change described next, so this specific gap is not an artifact
+of the two measurements straddling different regimes; it remains unexplained by anything identified in
+this project to date, and is reported as such rather than attributed to a cause. A distinct regime
+change is relevant to this paper's \emph{other} within-day comparisons: on the day of these runs, with no
+change to the harness, its flags, the Claude Code version, or the recorded model id, the model served
+under the \texttt{sonnet} alias began, at some point, producing substantially longer internal reasoning
+per turn --- a single-agent \texttt{stamp-interpreter} attempt's output tokens rose roughly six-fold
+(about 1.6K to about 10K) and its cost rose from about \$0.058 to \$0.18--\$0.26; arm~C seats showed the
+same shift (a three-seat room's cost rising from about \$0.60 to \$1.50--\$2.21). This paper identifies
+which runs fall on which side of that boundary by the observed output-token scale of the run itself, not
+by wall-clock time alone: arm~K's later, clock-overlapping \texttt{bench-printf-format} attempts show
+output tokens matching the pre-shift \texttt{bench-printf-format} grid (about 4.6K on both), so they are
+treated as pre-shift despite running later in the day than \texttt{stamp-interpreter}'s clearly pre-shift
+attempts. Because a provider-side change of this kind cannot be ruled out as a general risk to any
+comparison that spans time, no number in this paper pools runs from before and after a detected regime
+boundary, and every reported cost figure states the date and the observed output-token scale it was
+measured at. The window-control experiment is the direct test of within-window validity for arm~C
+against arm~K specifically: seeds of both arms run interleaved, seed by seed, on the same task, so that
+whatever the underlying single-agent rate or cost regime is doing on a given day affects both arms'
+seeds contemporaneously rather than one arm's seeds systematically earlier or later than the other's.
+Its original design (twenty seeds, 201--220, both interpreter tasks) was interrupted after three runs
+when the new, higher-cost regime made the planned run count exceed its budget; it was restarted at
+reduced scope --- \texttt{stamp-interpreter} only, seeds 201--212, entirely
 within the new regime --- and is reported under that revised design, with only its complete result read
 as a result; a partial group of runs from the interrupted first attempt is not cited as evidence either
 way.

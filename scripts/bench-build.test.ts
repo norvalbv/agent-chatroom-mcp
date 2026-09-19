@@ -64,6 +64,7 @@ test("reduces named defect and regression checks to independent caught/shipped c
     assert.equal(out.turns, 17);
     assert.equal(out.outcome,'completed');
     assert.equal(out.oracle_outcome,'task_fail');
+    assert.equal(out.public_suite_passed,null);
     assert.equal(out.protocol_success,true);
     assert.equal(out.protocol_adjusted_catch_fraction,.5);
     assert.equal(out.provenance.grid_fingerprint,'b'.repeat(64));

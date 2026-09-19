@@ -33,7 +33,7 @@ function invoke(task: string, root: string, fake: string, arm = "A") {
 }
 
 const valid = {
-  task_id: "seeded-orders-01", arm: "A", seed: 7,
+  task_id: "seeded-orders-01", arm: "A", seed: 7, outcome: "completed",
   anti_tamper: { unchanged: true }, usage: { cost_usd: 0.4 },
   effort: { level: "medium", settings_path: ".claude/settings.json", settings_sha256: "a".repeat(64), own_git_root: true },
   turns: { summed: 17 }, wall_clock: { duration_ms: 1234 },
@@ -114,11 +114,26 @@ test("refuses an unpinned effort result rather than treating a CLI default as a 
 test("uses four seats for a room unless the pre-registered invocation overrides it", () => {
   const task = seededTask(checks);
   const root = join(tmpdir(), `bench-build-room-${process.pid}-${Date.now()}`);
-  const fake = fakeBench({ ...valid, arm: "C" });
+  const fake = fakeBench({ ...valid, arm: "C", room_validation: {state:"concluded",proposal_id:"p1",verified:true,verifier_session_distinct:true,distinct_sessions:4} });
   try {
     const run = invoke(task, root, fake.path, "C");
     assert.equal(run.status, 0, run.stderr);
     const argv: string[] = JSON.parse(readFileSync(join(root, "runner-argv.json"), "utf8"));
     assert.equal(argv[argv.indexOf("--seats") + 1], "4");
   } finally { rmSync(task, { recursive: true, force: true }); rmSync(root, { recursive: true, force: true }); rmSync(fake.dir, { recursive: true, force: true }); }
+});
+
+for (const [name, extra] of Object.entries({
+  timeout: {outcome:'timeout'},
+  invalidRoom: {outcome:'invalid_room'},
+  unknownCost: {usage:{cost_usd:null}},
+  negativeCost: {usage:{cost_usd:-1}},
+})) test(`refuses ${name} before running the private oracle`, () => {
+  const task=seededTask(checks), root=join(tmpdir(),`build-invalid-${process.pid}-${Date.now()}`);
+  const fake=fakeBench({...valid,...extra});
+  try {
+    const run=invoke(task,root,fake.path);
+    assert.notEqual(run.status,0, 'invalid runs must not receive a caught/shipped score');
+    assert.equal(existsSync(join(root,'build-result.json')),false);
+  } finally {rmSync(task,{recursive:true,force:true});rmSync(root,{recursive:true,force:true});rmSync(fake.dir,{recursive:true,force:true});}
 });

@@ -6,6 +6,8 @@ import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, wr
 import { tmpdir } from 'node:os';
 import { delimiter, join, resolve } from 'node:path';
 
+import { hashTree } from './bench-build-runtime.ts';
+
 const runner = resolve('scripts/bench-build.ts');
 const auditDeadline = 60_000;
 
@@ -50,7 +52,7 @@ console.log(JSON.stringify({type:'result',subtype:'success',is_error:false,resul
 
 function invoke(f: ReturnType<typeof fixture>, arm = 'A') {
   return spawnSync(process.execPath, ['--import', 'tsx', runner, f.task, arm, '1', '--root', f.root,
-    '--max-budget-usd', '0.1', '--deadline-ms', '10000'], {
+    '--expected-task-sha256', hashTree(f.task), '--max-budget-usd', '0.1', '--deadline-ms', '10000'], {
     encoding: 'utf8', timeout: auditDeadline,
     env: { ...process.env, PATH: f.bin + delimiter + process.env.PATH },
   });

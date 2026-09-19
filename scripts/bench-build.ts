@@ -1,14 +1,14 @@
 /**
  * Mechanical reducer for planted-defect build runs.
  *
- * This is intentionally a thin wrapper around bench-rq1.ts: that runner owns
+ * The stage-aware bench-build-runner.ts owns
  * copying only public fixtures, seat launch/provenance, and anti-tamper hashing.
  * A build task's private scorer must return named `defect/<id>` and
  * `regression/<id>` results (exit 0 fixed/preserved, exit 1 unfixed/broken).
  * The wrapper records the two pre-registered scores without any model judge.
  *
  * node --import tsx scripts/bench-build.ts TASK_DIR ARM(A|B|C) SEED --root DIR
- *   [--runner PATH] [all bench-rq1 flags]
+ *   [--runner PATH] [native runner flags]
  */
 import { spawnSync } from "node:child_process";
 import { existsSync, lstatSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
@@ -21,6 +21,12 @@ type RawResult = {
   task_id: string;
   arm: "A" | "B" | "C";
   seed: number;
+  outcome?: string;
+  error?: string;
+  run_config?: unknown;
+  run_fingerprint?: string;
+  review_integrity?: { unchanged?: boolean; workspace_sha256_before?: string; workspace_sha256_after?: string };
+  room_validation?: { state?: string; proposal_id?: string; verified?: boolean; verifier_session_distinct?: boolean; distinct_sessions?: number };
   anti_tamper?: { unchanged?: boolean };
   effort?: { level?: string; settings_path?: string; settings_sha256?: string; own_git_root?: boolean };
   usage?: { cost_usd?: number };
@@ -31,7 +37,7 @@ type RawResult = {
 type ExpectedMatrix = { defect_ids: string[]; regression_ids: string[] };
 
 const here = dirname(fileURLToPath(import.meta.url));
-const fail = (message: string): never => { throw new Error(`bench-build: ${message}`); };
+function fail(message: string): never { throw new Error(`bench-build: ${message}`); }
 
 function hashTree(path: string): string {
   const hash = createHash("sha256");
@@ -128,6 +134,13 @@ async function main() {
   if (arm === "C" && !argv.includes("--seats")) argv.push("--seats", "4");
   if (!argv.includes("--effort")) argv.push("--effort", "medium");
 
+  const resolvedTask = resolve(taskDir);
+  const matrix = expectedMatrix(resolvedTask);
+  const launchTaskHash = hashTree(resolvedTask);
+  const adapterPath = resolve(here, 'bench-oracle.ts');
+  const hashAdapter = () => createHash('sha256').update(readFileSync(adapterPath)).digest('hex');
+  const adapterHashBefore = hashAdapter();
+  const launchTaskId = JSON.parse(readFileSync(join(resolvedTask, 'task.json'), 'utf8')).task_id;
   const launched = spawnSync(process.execPath, ["--import", "tsx", runner, taskDir, arm!, String(seed), "--root", root, ...argv], { encoding: "utf8" });
   if (launched.status !== 0 || launched.error || launched.signal) {
     process.stderr.write(launched.stderr ?? "");
@@ -140,6 +153,17 @@ async function main() {
   catch { fail("underlying result.json is not JSON"); }
   if (raw.arm !== arm || raw.seed !== seed) fail("underlying result does not match requested arm/seed");
   if (raw.anti_tamper?.unchanged !== true) fail("anti-tamper provenance is absent or reports a changed fixture");
+  if (raw.outcome !== 'completed') fail(`underlying run ${raw.outcome ?? 'missing outcome'}: ${raw.error ?? 'not eligible for scoring'}`);
+  if (raw.task_id !== launchTaskId || hashTree(resolvedTask) !== launchTaskHash) fail('tamper: task changed during execution');
+  if (typeof raw.usage?.cost_usd !== 'number' || !Number.isFinite(raw.usage.cost_usd) || raw.usage.cost_usd < 0) fail('actual model cost is unknown or invalid');
+  if (arm === 'B') {
+    const r = raw.review_integrity;
+    if (r?.unchanged !== true || !/^[a-f0-9]{64}$/.test(r.workspace_sha256_before ?? '') || r.workspace_sha256_before !== r.workspace_sha256_after) fail('reviewer snapshot boundary is unverified or changed');
+  }
+  if (arm === 'C') {
+    const r = raw.room_validation;
+    if (r?.state !== 'concluded' || !r.proposal_id || r.verified !== true || r.verifier_session_distinct !== true || !(r.distinct_sessions! >= 4)) fail('room lacks independently verified conclusion');
+  }
   const effort = raw.effort;
   if (!effort || !["low", "medium", "high"].includes(effort.level ?? "") || effort.settings_path !== ".claude/settings.json" ||
       !/^[a-f0-9]{64}$/.test(effort.settings_sha256 ?? "") || effort.own_git_root !== true) {
@@ -149,13 +173,14 @@ async function main() {
   // bench-rq1 deliberately stores only its aggregate pass/fail. Re-score the
   // workspace from the private task oracle here; never let a runner-provided
   // summary impersonate per-defect evidence.
-  const resolvedTask = resolve(taskDir);
-  const matrix = expectedMatrix(resolvedTask);
   const taskHashBeforeScore = hashTree(resolvedTask);
+  if (hashAdapter() !== adapterHashBefore) fail('tamper: oracle adapter changed during execution');
   const scorer = await import(new URL("./bench-oracle.ts", import.meta.url).href);
   const scored = await scorer.scoreTask(resolvedTask, resolve(root, "workspace"));
   const taskHashAfterScore = hashTree(resolvedTask);
-  if (taskHashAfterScore !== taskHashBeforeScore) fail("private scorer changed its task fixture while scoring");
+  const adapterHashAfter = hashAdapter();
+  if (adapterHashAfter !== adapterHashBefore) fail('tamper: oracle adapter changed during scoring');
+  if (taskHashAfterScore !== taskHashBeforeScore) fail("tamper: private scorer changed fixture while scoring");
   const { defects, regressions } = classify(scored.oracle_results);
   assertExactMatrix(matrix, { defects, regressions });
   const caught = defects.filter((check) => check.exit_code === 0).length;
@@ -164,6 +189,9 @@ async function main() {
   // another shipped regression. They are deliberately additive, not a boolean.
   const output = {
     schemaVersion: 1,
+    outcome: scored.reason,
+    run_config: raw.run_config ?? null,
+    run_fingerprint: raw.run_fingerprint ?? null,
     task_id: raw.task_id,
     arm: raw.arm,
     seed: raw.seed,
@@ -179,8 +207,9 @@ async function main() {
     turns: raw.turns?.summed ?? null,
     wall_clock_ms: raw.wall_clock?.duration_ms ?? null,
     seats: Array.isArray(raw.seats) ? raw.seats.length : null,
+    seat_records: raw.seats ?? null,
     effort,
-    provenance: { raw_result: "result.json", anti_tamper_unchanged: true, task_sha256_before_score: taskHashBeforeScore, task_sha256_after_score: taskHashAfterScore, runner },
+    provenance: { oracle_adapter_sha256_before: adapterHashBefore, oracle_adapter_sha256_after: adapterHashAfter, raw_result: "result.json", anti_tamper_unchanged: true, task_sha256_before_score: taskHashBeforeScore, task_sha256_after_score: taskHashAfterScore, runner },
   };
   writeFileSync(resolve(root, "build-result.json"), JSON.stringify(output, null, 2) + "\n");
   process.stdout.write(`${resolve(root, "build-result.json")}\n`);

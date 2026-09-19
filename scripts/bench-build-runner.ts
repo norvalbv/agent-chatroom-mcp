@@ -1,6 +1,6 @@
 /** Stage-aware build executor. bench-build computes scores using the frozen oracle. */
 import { spawn, execFileSync } from 'node:child_process';
-import { closeSync, cpSync, existsSync, mkdirSync, openSync, readFileSync, realpathSync } from 'node:fs';
+import { closeSync, cpSync, existsSync, mkdirSync, openSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createServer } from 'node:net';
@@ -8,7 +8,7 @@ import { createHash, randomBytes } from 'node:crypto';
 import { claudeArgs } from '../src/claude-args.js';
 import { rollupUsage } from '../src/result.js';
 import { Hub } from '../src/hub.js';
-import { delay, hashFile, hashTree, json, revision, runClaudeSeat, stop, track, type SeatRecord } from './bench-build-runtime.ts';
+import { delay, hashFile, hashTree, hashWorkspace, WORKSPACE_HASH_SCRIPT, json, revision, runClaudeSeat, stop, track, type SeatRecord } from './bench-build-runtime.ts';
 const here = dirname(fileURLToPath(import.meta.url)), repoRoot = resolve(here, '..');
 const baseTools = ['Read', 'Edit', 'Write', 'MultiEdit', 'Bash', 'Glob', 'Grep'];
 type Effort = { level: string; settings_path: string; settings_sha256: string | null; own_git_root: boolean };
@@ -21,14 +21,14 @@ function pinEffort(workspace: string, level: string): Effort {
   json(settings, { effortLevel: level });
   const actual = execFileSync('git', ['-C', workspace, 'rev-parse', '--show-toplevel'], { encoding: 'utf8' }).trim();
   if (realpathSync(actual) !== realpathSync(workspace)) throw new Error('effort workspace is not its own git root');
-  return { level, settings_path: settings, settings_sha256: hashFile(settings), own_git_root: true };
+  return { level, settings_path: '.claude/settings.json', settings_sha256: hashFile(settings), own_git_root: true };
 }
 function thinking(record: SeatRecord): number | null {
   if (!record.model_usage || !Object.keys(record.model_usage).length) return null;
   const values = Object.values(record.model_usage).map((m: any) => m?.thinkingTokens ?? m?.thinking_tokens ?? m?.reasoningTokens ?? m?.reasoning_tokens);
   return values.every(v => Number.isFinite(v) && v >= 0) ? values.reduce((a, b) => a + b, 0) : null;
 }
-export function validateBuildRoom(dataDir: string, count: number) {
+export function validateBuildRoom(dataDir: string, count: number, workspace: string) {
   const replay = new Hub({ dataDir }), room = replay.getRoom('build');
   const proposal = room.conclusion ? room.proposals.get(room.conclusion.proposalId) : undefined;
   const verify = proposal && room.requireVerification ? replay.verifiedBy(room, proposal) : undefined;
@@ -36,8 +36,13 @@ export function validateBuildRoom(dataDir: string, count: number) {
   const reviewer = verify ? [...room.participants.values()].find(p => p.name === verify.by) : undefined;
   const distinct = !!author?.session && !!reviewer?.session && author.session !== reviewer.session;
   const sessions = new Set([...room.participants.values()].map(p => p.session).filter(Boolean)).size;
-  return { state: room.state, proposal_id: proposal?.id ?? null,
-    verified: room.state === 'concluded' && !!verify && distinct && sessions >= count,
+  const policy = room.requireVerification === true && room.requireChallenge === true && room.quorum === 'supermajority' && room.expectedParticipants === count;
+  let artifactHash: string | null = null;
+  try { artifactHash = JSON.parse(verify?.text.split('\n')[0] ?? '{}').workspace_sha256 ?? null; } catch {}
+  const finalHash = hashWorkspace(workspace);
+  const artifactMatches = typeof artifactHash === 'string' && /^[a-f0-9]{64}$/.test(artifactHash) && artifactHash === finalHash;
+  return { required_policy: policy, verified_workspace_sha256: artifactHash, final_workspace_sha256: finalHash, artifact_matches: artifactMatches, state: room.state, proposal_id: proposal?.id ?? null,
+    verified: room.state === 'concluded' && !!verify && distinct && sessions >= count && policy && artifactMatches,
     verifier_session_distinct: distinct, distinct_sessions: sessions,
     verification_by: verify?.by ?? null, conclusion: room.conclusion ?? null };
 }
@@ -55,10 +60,13 @@ async function main() {
   const rootArg = flag('root'); if (!rootArg) throw new Error('--root required');
   const root = resolve(rootArg); if (existsSync(root)) throw new Error('Refusing to reuse run root');
   const task = realpathSync(resolve(taskArg)), before = hashTree(task), model = flag('model', 'sonnet')!;
+  const expectedHash = flag('expected-task-sha256');
+  if (!expectedHash || !/^[a-f0-9]{64}$/.test(expectedHash) || expectedHash !== before) throw new Error('prelaunch task hash does not match the frozen --expected-task-sha256');
   const taskId = JSON.parse(readFileSync(join(task, 'task.json'), 'utf8')).task_id;
   const brief = readFileSync(join(task, 'public', 'brief.txt'), 'utf8');
   mkdirSync(root, { recursive: true });
   const workspace = join(root, 'workspace'); cpSync(join(task, 'public'), workspace, { recursive: true });
+  writeFileSync(join(workspace, '.bench-hash.mjs'), WORKSPACE_HASH_SCRIPT);
   const effort = pinEffort(workspace, effortLevel), started = Date.now(), deadlineAt = started + deadlineMs;
   const records: RunSeat[] = [];
   const emptyMcp = join(root, 'mcp-empty.json'); json(emptyMcp, { mcpServers: {} });
@@ -75,7 +83,7 @@ async function main() {
     const record = await runClaudeSeat(name, argv, cwd, deadlineAt - Date.now());
     const full = { ...record, budget_usd: budget, effort: settings, thinking_tokens: thinking(record) };
     records.push(full); json(join(root, name + '.json'), full);
-    if (hashFile(settings.settings_path) !== settings.settings_sha256) throw new Error('tamper: seat changed pinned effort');
+    if (hashFile(join(cwd, settings.settings_path)) !== settings.settings_sha256) throw new Error('tamper: seat changed pinned effort');
     if (record.killed_by_deadline) throw new Error('timeout: seat deadline');
     if (record.exit_code !== 0 || !record.usage) throw new Error('infrastructure_error: seat failed or spend unknown');
     return full;
@@ -115,11 +123,11 @@ async function main() {
       const created = await fetch(url + '/rooms/build/create', { method: 'POST', headers: { 'content-type': 'application/json', 'x-chatroom-token': token }, body: JSON.stringify({ topic: brief, expected_participants: count, quorum: 'supermajority', require_challenge: true, require_verification: true }) });
       if (!created.ok) throw new Error('room create HTTP ' + created.status);
       const mcp = join(root, 'mcp.json'); json(mcp, { mcpServers: { chatroom: { type: 'http', url: url + '/mcp' } } });
-      const attempts = await Promise.allSettled(Array.from({ length: count }, (_, i) => seat('seat-' + (i + 1), `${workPrompt}\nJoin room build as seat-${i + 1}. Claim work on the board; the hub assigns reviewers. Have a non-author read and verify the final diff. Write verify/* with JSON first line {proposal,command,cwd,exit_code,output_tail} and actual exit_code 0. Claims/evidence/proposals/votes are public; named working exchanges quiet. Use wait_for_messages hold_until_actionable=true. Leave after conclusion.`, workspace, cap / count, mcp, [...baseTools, 'mcp__chatroom__*'])));
+      const attempts = await Promise.allSettled(Array.from({ length: count }, (_, i) => seat('seat-' + (i + 1), `${workPrompt}\nJoin room build as seat-${i + 1}. Claim work on the board; the hub assigns reviewers. Have a non-author read and verify the final diff. Write verify/* with JSON first line {proposal,command,cwd,exit_code,output_tail} and actual exit_code 0. After tests and all edits, run node .bench-hash.mjs and add workspace_sha256 to that same JSON first line with its exact output. The final submitted workspace must match that independently verified hash; no edits afterward. Claims/evidence/proposals/votes are public; named working exchanges quiet. Use wait_for_messages hold_until_actionable=true. Leave after conclusion.`, workspace, cap / count, mcp, [...baseTools, 'mcp__chatroom__*'])));
       const rejected = attempts.find(a => a.status === 'rejected'); if (rejected?.status === 'rejected') throw rejected.reason;
       await stop(hub); hub = null;
       // Reuse the hub's verification parser and session rule, never seat prose.
-      roomValidation = validateBuildRoom(dataDir, count);
+      roomValidation = validateBuildRoom(dataDir, count, workspace);
       json(join(root, 'room-validation.json'), roomValidation);
       if (!roomValidation.verified) throw new Error('invalid_room: no independently verified conclusion');
     }

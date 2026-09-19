@@ -6,9 +6,25 @@ import { tmpdir } from 'node:os';
 import { delimiter, join, resolve } from 'node:path';
 import { createServer } from 'node:net';
 import { Hub } from '../src/hub.js';
+import { hashTree, hashWorkspace, WORKSPACE_HASH_SCRIPT } from './bench-build-runtime.ts';
 import { validateBuildRoom } from './bench-build-runner.ts';
 
 const runner = resolve('scripts/bench-build-runner.ts');
+test('reviewer artifact helper matches host hashing and detects source changes', () => {
+  const workspace=mkdtempSync(join(tmpdir(),'build-hash-parity-'));
+  try {
+    mkdirSync(join(workspace,'.git'));
+    writeFileSync(join(workspace,'.git','ignored'),'git metadata');
+    writeFileSync(join(workspace,'source.txt'),'verified');
+    writeFileSync(join(workspace,'.bench-hash.mjs'),WORKSPACE_HASH_SCRIPT);
+    const before=hashWorkspace(workspace);
+    const helper=spawnSync(process.execPath,['.bench-hash.mjs'],{cwd:workspace,encoding:'utf8'});
+    assert.equal(helper.status,0,helper.stderr);
+    assert.equal(helper.stdout.trim(),before);
+    writeFileSync(join(workspace,'source.txt'),'changed');
+    assert.notEqual(hashWorkspace(workspace),before);
+  } finally {rmSync(workspace,{recursive:true,force:true});}
+});
 async function run(arm: string, mode = 'normal') {
   const base = mkdtempSync(join(tmpdir(), 'build-executor-test-'));
   const root = join(base, 'run');
@@ -30,7 +46,7 @@ console.log(JSON.stringify({type:'result',subtype:'success',is_error:false,resul
   await new Promise<void>(ok => server.close(() => ok()));
   try {
     const child = spawnSync(process.execPath, ['--import','tsx',runner,task,arm,'1','--root',root,
-      '--max-budget-usd','1','--effort','medium','--port',String(port),'--deadline-ms','10000'],
+      '--expected-task-sha256',hashTree(task),'--max-budget-usd','1','--effort','medium','--port',String(port),'--deadline-ms','10000'],
       { encoding:'utf8', timeout:30_000, env:{...process.env,PATH:bin+delimiter+process.env.PATH} });
     assert.equal(child.status,0,child.stderr);
     return JSON.parse(readFileSync(join(root,'result.json'),'utf8'));
@@ -51,18 +67,25 @@ test('A pins project effort and sends the entire cap to its sole seat', async ()
 test('a real four-session verified conclusion survives replay validation', () => {
   const dir=mkdtempSync(join(tmpdir(),'build-room-valid-'));
   const h=new Hub({dataDir:dir});
-  const seats=Array.from({length:4},(_,i)=>h.join('build','seat-'+i,'test',{requireVerification:true,requireChallenge:false,expectedParticipants:4},undefined,'session-'+i).participant);
+  const seats=Array.from({length:4},(_,i)=>h.join('build','seat-'+i,'test',{requireVerification:true,requireChallenge:true,quorum:'supermajority',expectedParticipants:4},undefined,'session-'+i).participant);
   const room=h.getRoom('build');
+  const workspace=join(dir,'artifact');mkdirSync(workspace);writeFileSync(join(workspace,'source.txt'),'verified');
   try {
     h.setBoard('build',seats[0].id,'claim/fix',JSON.stringify({owner:'seat-0'}));
     h.setBoard('build',seats[0].id,'verify/placeholder','pending');
     const proposal=h.propose('build',seats[0].id,'Ship verified fixes.');
-    h.setBoard('build',seats[1].id,'verify/fix',JSON.stringify({proposal:proposal.id,command:'node --test',cwd:'/tmp/work',exit_code:0,output_tail:'pass'}));
-    for(const p of seats)h.vote('build',p.id,proposal.id,'agree',undefined,undefined,'Ship verified fixes');
-    const verdict=validateBuildRoom(dir,4);
-    assert.equal(verdict.verified,true);
+    h.challenge('build',seats[2].id,proposal.id,'"Ship verified fixes" needs test coverage of all branches.',true);
+    h.setBoard('build',seats[1].id,'verify/fix',JSON.stringify({proposal:proposal.id,command:'node --test',cwd:workspace,exit_code:0,output_tail:'pass',workspace_sha256:hashWorkspace(workspace)}));
+    for(const p of seats) {
+      if(room.state==='concluded') break;
+      h.vote('build',p.id,proposal.id,'agree','Reviewed the artifact and independently checked coverage.',undefined,'Ship verified fixes');
+    }
+    const verdict=validateBuildRoom(dir,4,workspace);
+    assert.equal(verdict.verified,true,JSON.stringify(verdict));
     assert.equal(verdict.distinct_sessions,4);
     assert.equal(verdict.verifier_session_distinct,true);
+    writeFileSync(join(workspace,'source.txt'),'edited after verification');
+    assert.equal(validateBuildRoom(dir,4,workspace).verified,false);
   } finally { clearTimeout(room.nudgeTimer);clearTimeout(room.openingsTimer);rmSync(dir,{recursive:true,force:true}); }
 });
 test('B allocates .5/.25/.25 and verifies the scored workspace around review', async () => {

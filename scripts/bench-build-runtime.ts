@@ -17,13 +17,14 @@ const repoRoot = resolve(here, "..");
 export const delay = (ms: number) => new Promise((r) => setTimeout(r, ms));
 export const json = (path: string, value: unknown) => writeFileSync(path, JSON.stringify(value, null, 2) + "\n");
 
-export function hashTree(path: string): string {
+export function hashTree(path: string, excluded = new Set<string>()): string {
   const hash = createHash("sha256");
   const visit = (p: string) => {
     const st = lstatSync(p);
     if (st.isSymbolicLink()) throw new Error(`Symlink not permitted: ${p}`);
-    if (st.isDirectory()) for (const name of readdirSync(p).sort()) visit(join(p, name));
-    else if (st.isFile()) {
+    if (st.isDirectory()) {
+      for (const name of readdirSync(p).sort()) if (!excluded.has(name)) visit(join(p, name));
+    } else if (st.isFile()) {
       hash.update(relative(path, p));
       hash.update("\0");
       hash.update(readFileSync(p));
@@ -207,3 +208,12 @@ export function runClaudeSeat(name: string, args: string[], cwd: string, deadlin
   });
 }
 
+
+export const hashWorkspace = (path: string) => hashTree(path, new Set(['.git']));
+export const WORKSPACE_HASH_SCRIPT = `import {createHash} from 'node:crypto';
+import {lstatSync,readdirSync,readFileSync} from 'node:fs';
+import {join,relative,resolve} from 'node:path';
+const root=resolve('.'),h=createHash('sha256');
+function visit(p){const s=lstatSync(p);if(s.isSymbolicLink())throw Error('symlink');if(s.isDirectory()){for(const n of readdirSync(p).sort())if(n!=='.git')visit(join(p,n));}else if(s.isFile()){h.update(relative(root,p));h.update('\\0');h.update(readFileSync(p));h.update('\\0');}}
+visit(root);console.log(h.digest('hex'));
+`;

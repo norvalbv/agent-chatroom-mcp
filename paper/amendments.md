@@ -427,6 +427,9 @@ runs are never reused.
   the agreement signal, not the self-report, carries the information. Prereg prediction 2 says agreement selection will not help on printf; that
   is a prediction to be tested, not a design goal, and the selector was not tuned on any printf result.
 
+**All-null groups.** A group in which every attempt is a null vote (killed, no answer, no loadable candidate) submits nothing; it is scored
+as a fail (denominator stays 40), and its null-vote count is reported per task so the reader can see how much of arm K's result is starvation.
+
 **Holm family (fixed before any run).** The arm-K comparisons are 3 tasks x {K vs C, K vs A} = 6 two-sided Fisher exact tests (`fisherExactTest`
 directly, never the z-approximation switch), Holm-Bonferroni with m = 6 fixed even if some cells are missing or the grid is partial. Raw
 and adjusted p are both reported. Consequence stated up front: at m = 6 the best possible stamp-interpreter K vs A (40/40 vs 33/40, raw

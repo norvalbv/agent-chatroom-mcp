@@ -5,10 +5,10 @@
  */
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { spawnSync } from "node:child_process";
-import { chmodSync, existsSync, mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from "node:fs";
+import { spawnSync, execFileSync } from "node:child_process";
+import { chmodSync, existsSync, mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, symlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { delimiter, resolve, join } from "node:path";
+import { delimiter, resolve, join, dirname } from "node:path";
 import { createServer } from "node:net";
 
 const runner = resolve("scripts/bench-rq1.ts");
@@ -33,12 +33,13 @@ function stubClaudeDir(behavior: "answer" | "no-answer" | "edit-file" | "kill" =
       "#!/usr/bin/env node",
       "const fs=require('node:fs');",
       "const args=process.argv.slice(2);",
+      "if(process.env.STUB_MODELS){process.stdout.write(JSON.stringify({type:'system',subtype:'init',model:'served-init'})+'\\n');process.stdout.write(JSON.stringify({type:'assistant',message:{model:'served-fallback'}})+'\\n');}",
       "if(!args.includes('--output-format')||args[args.indexOf('--output-format')+1]!=='stream-json'||!args.includes('--verbose')){process.stderr.write('expected --output-format stream-json --verbose\\n');process.exit(1);}",
       `const behavior=process.env.STUB_BEHAVIOR||'answer';`,
       `if(behavior==='answer')fs.writeFileSync('answer.txt',process.env.STUB_ANSWER||${JSON.stringify(EXPECTED)});`,
       "process.stdout.write(JSON.stringify({type:'assistant',message:{usage:{input_tokens:80,output_tokens:15,cache_read_input_tokens:10,cache_creation_input_tokens:5}}})+'\\n');",
       "if(behavior==='kill'){setInterval(()=>{},1000);}else{",
-      "process.stdout.write(JSON.stringify({type:'result',subtype:'success',is_error:false,result:'seat done',num_turns:3,duration_ms:842,duration_api_ms:910,total_cost_usd:0.0041,usage:{input_tokens:120,cache_read_input_tokens:40,cache_creation_input_tokens:12,output_tokens:30}})+'\\n');",
+      "process.stdout.write(JSON.stringify({type:'result',subtype:'success',is_error:false,result:'seat done',num_turns:3,duration_ms:842,duration_api_ms:910,total_cost_usd:0.0041,...(process.env.STUB_MODELS?{modelUsage:{'served-init':{thinkingTokens:17,canonicalModel:'snapshot-1'},'served-fallback':{outputTokens:3}}}:{}),usage:{input_tokens:120,cache_read_input_tokens:40,cache_creation_input_tokens:12,output_tokens:30}})+'\\n');",
       "}",
       "",
     ].join("\n"),
@@ -117,6 +118,10 @@ test("arm A: single seat, no mcp tools, writes answer.txt, records usage/turns/a
     assert.equal(result.arm, "A");
     assert.equal(result.seed, 1);
     assert.equal(result.model, "sonnet");
+    assert.equal(result.seats[0].model_usage, null);
+    assert.equal(result.seats[0].reported_models, null, "missing reported identity must remain unknown, never alias-filled");
+    assert.equal(result.build.hub_build_sha256, null, "arm A must not claim to have served a hub");
+    assert.match(result.build.runner_sha256, /^[a-f0-9]{64}$/);
     assert.equal(result.outcome, "task_pass");
     assert.equal(result.passed, true);
     assert.equal(result.seats.length, 1);
@@ -177,9 +182,10 @@ test("arm A: a seat killed at the deadline is recorded outcome timeout, not scor
   const stubDir = stubClaudeDir("kill");
   const root = join(tmpdir(), `bench-rq1-kill-${process.pid}-${Date.now()}`);
   try {
-    const r = invoke([task, "A", "3", "--root", root, "--deadline-ms", "500"], { PATH: `${stubDir}${delimiter}${process.env.PATH}`, STUB_BEHAVIOR: "kill" });
+    const r = invoke([task, "A", "3", "--root", root, "--deadline-ms", "500"], { PATH: `${stubDir}${delimiter}${process.env.PATH}`, STUB_BEHAVIOR: "kill", STUB_MODELS: "1" });
     assert.equal(r.status, 0, r.stderr + r.stdout);
     const result = JSON.parse(readFileSync(join(root, "result.json"), "utf8"));
+    assert.deepEqual(result.seats[0].reported_models, { system_init: ["served-init"], assistant: ["served-fallback"], result_model_usage: [] }, "model observations survive missing terminal result and usage-free assistant events");
     assert.equal(result.outcome, "timeout", "a killed seat must not be scored as if it completed");
     assert.equal(result.passed, false);
     assert.equal(result.seats[0].killed_by_deadline, true);
@@ -374,6 +380,121 @@ test("arm C: hidden fixtures never copied into the seat-visible workspace", asyn
     assert.equal(existsSync(join(root, "workspace", "oracle")), false);
   } finally {
     rmSync(root, { recursive: true, force: true });
+    rmSync(stubDir, { recursive: true, force: true });
+  }
+});
+
+
+test("provenance: preserves requested alias and every reported model source", () => {
+  const stubDir = stubClaudeDir();
+  const parent = mkdtempSync(join(tmpdir(), "bench-rq1-models-"));
+  const root = join(parent, "run");
+  try {
+    const run = invoke([task, "A", "1", "--root", root, "--model", "requested-alias"], {
+      PATH: `${stubDir}${delimiter}${process.env.PATH}`, STUB_MODELS: "1",
+    });
+    assert.equal(run.status, 0, run.stderr + run.stdout);
+    const result = JSON.parse(readFileSync(join(root, "result.json"), "utf8"));
+    assert.equal(result.model, "requested-alias");
+    assert.deepEqual(result.seats[0].model_usage, { "served-init": { thinkingTokens: 17, canonicalModel: "snapshot-1" }, "served-fallback": { outputTokens: 3 } });
+    assert.deepEqual(result.seats[0].reported_models, {
+      system_init: ["served-init"], assistant: ["served-fallback"],
+      result_model_usage: ["served-init", "served-fallback"],
+    });
+  } finally {
+    rmSync(parent, { recursive: true, force: true });
+    rmSync(stubDir, { recursive: true, force: true });
+  }
+});
+
+test("provenance: dist sibling changes distinguish builds with identical entry files", async () => {
+  const stubDir = stubClaudeDir();
+  const originalEntry = stubHubDir();
+  const parent = dirname(originalEntry);
+  const dist = join(parent, "dist");
+  mkdirSync(dist);
+  const hubEntry = join(dist, "index.mjs");
+  writeFileSync(hubEntry, "import './sibling.mjs';\n" + readFileSync(originalEntry, "utf8"));
+  const results: any[] = [];
+  try {
+    for (const value of [1, 2]) {
+      writeFileSync(join(dist, "sibling.mjs"), `export const value = ${value};\n`);
+      const root = join(parent, `run-${value}`);
+      const run = invoke([task, "C", String(value), "--root", root, "--port", String(await freePort()), "--seats", "1", "--hub-entry", hubEntry], {
+        PATH: `${stubDir}${delimiter}${process.env.PATH}`,
+      });
+      assert.equal(run.status, 0, run.stderr + run.stdout);
+      results.push(JSON.parse(readFileSync(join(root, "result.json"), "utf8")));
+    }
+    for (const result of results) {
+      assert.equal(result.outcome, "task_pass");
+      assert.match(result.build.hub_build_sha256, /^[a-f0-9]{64}$/);
+      assert.equal(result.build.provenance_scope, "dist-tree; external dependencies not covered");
+    }
+    assert.equal(results[0].build.hub_entry_sha256, results[1].build.hub_entry_sha256);
+    assert.notEqual(results[0].build.hub_build_sha256, results[1].build.hub_build_sha256);
+  } finally {
+    rmSync(parent, { recursive: true, force: true });
+    rmSync(stubDir, { recursive: true, force: true });
+  }
+});
+
+test("provenance: hub revision and entry hash describe launch, not post-startup files", async () => {
+  const stubDir = stubClaudeDir();
+  const hubEntry = stubHubDir();
+  const parent = dirname(hubEntry);
+  const root = join(parent, "run");
+  const gitEnv = { ...process.env, GIT_AUTHOR_NAME: "Fixture", GIT_AUTHOR_EMAIL: "fixture@example.test", GIT_COMMITTER_NAME: "Fixture", GIT_COMMITTER_EMAIL: "fixture@example.test" };
+  const git = (...args: string[]) => execFileSync("git", ["-C", parent, ...args], { encoding: "utf8", env: gitEnv, stdio: ["ignore", "pipe", "pipe"] }).trim();
+  try {
+    git("init");
+    git("add", "hub.mjs");
+    git("commit", "-m", "fixture initial");
+    const first = git("rev-parse", "HEAD");
+    git("commit", "--allow-empty", "-m", "fixture second");
+    const second = git("rev-parse", "HEAD");
+    git("update-ref", "HEAD", first);
+    const original = readFileSync(hubEntry, "utf8");
+    writeFileSync(hubEntry, `import {execFileSync} from 'node:child_process';\nexecFileSync('git',['-C',${JSON.stringify(parent)},'update-ref','HEAD',${JSON.stringify(second)}]);\n` + original);
+    const before = (await import("node:crypto")).createHash("sha256").update(readFileSync(hubEntry)).digest("hex");
+    writeFileSync(hubEntry, readFileSync(hubEntry, "utf8") + `\nfs.appendFileSync(${JSON.stringify(hubEntry)}, '\\n// changed after launch');\n`);
+    const expected = (await import("node:crypto")).createHash("sha256").update(readFileSync(hubEntry)).digest("hex");
+    assert.notEqual(before, expected);
+    const run = invoke([task, "C", "1", "--root", root, "--port", String(await freePort()), "--seats", "1", "--hub-entry", hubEntry], { PATH: `${stubDir}${delimiter}${process.env.PATH}` });
+    assert.equal(run.status, 0, run.stderr + run.stdout);
+    const result = JSON.parse(readFileSync(join(root, "result.json"), "utf8"));
+    assert.equal(result.outcome, "task_pass");
+    assert.equal(git("rev-parse", "HEAD"), second, "fixture must actually move HEAD at startup");
+    assert.equal(result.build.hub_revision, first);
+    assert.equal(result.build.hub_entry_sha256, expected);
+    assert.equal(result.build.hub_build_sha256, expected);
+    assert.equal(result.build.provenance_scope, "entry-only; imported modules not covered");
+  } finally {
+    rmSync(parent, { recursive: true, force: true });
+    rmSync(stubDir, { recursive: true, force: true });
+  }
+});
+
+
+test("provenance: rejected dist symlink still records infrastructure failure", async () => {
+  const stubDir = stubClaudeDir();
+  const originalEntry = stubHubDir();
+  const parent = dirname(originalEntry);
+  const dist = join(parent, "dist");
+  mkdirSync(dist);
+  const entry = join(dist, "index.mjs");
+  writeFileSync(entry, readFileSync(originalEntry));
+  symlinkSync(originalEntry, join(dist, "rejected.mjs"));
+  const root = join(parent, "run");
+  try {
+    const run = invoke([task, "C", "1", "--root", root, "--port", String(await freePort()), "--seats", "1", "--hub-entry", entry], { PATH: `${stubDir}${delimiter}${process.env.PATH}` });
+    assert.equal(run.status, 0, run.stderr + run.stdout);
+    const result = JSON.parse(readFileSync(join(root, "result.json"), "utf8"));
+    assert.equal(result.outcome, "infrastructure_error");
+    assert.match(result.error, /symlink/i);
+    assert.deepEqual(result.seats, [], "hash failure must happen before seats launch");
+  } finally {
+    rmSync(parent, { recursive: true, force: true });
     rmSync(stubDir, { recursive: true, force: true });
   }
 });

@@ -450,19 +450,34 @@ real `format.ts` files (never the `passed` field), scored against the real oracl
 Degeneracy threshold, fixed before running: MBR-exec counts as degenerate if its selected-pass rate falls within
 +/-0.05 of the single-attempt rate (0.350, i.e. in [0.300, 0.400]) — indistinguishable from a disguised random pick.
 
-Result: MBR-exec selects a passing candidate at about 0.197 (signature-plurality: about 0.200), OUTSIDE the band —
-not degenerate, but on the harmful side, well below the single-attempt rate. This is not noise: all 14 passing
-candidates agree with each other on every one of 9650 README-derived probes, all 26 failing candidates agree with
-each other on every probe too (the sole point of disagreement between the two clusters is the known `%.17g` of
-`1e-07` trap), so a sampled group of k=7 ties within each cluster and MBR-exec's winner is whichever cluster is
-the local majority in that draw. Correct is the population minority (14/40 = 0.35 < 0.5), so the analytical
-expectation (binomial, with replacement) is P(Binomial(7, 0.35) >= 4) = 0.1998, matching the resampled 0.197.
-**This is exactly prediction 2** ("any selector that rewards agreement... is predicted to land at or below 0.35"),
-sharpened: MBR-exec does not merely fail to help, it actively selects the modal wrong cluster in about 4 of 5 draws
-because that cluster is usually the local majority at k=7. The selector is kept as specified (the topic requires
-settling on ONE primary selector before the run, and this outcome is a predicted, not a disqualifying, result) but
-the paper must report this mechanism, not just the number, so a reader does not mistake selection collapse for
-"the model can't do agreement" when the real cause is a minority-correct base rate at odd k.
+Result: MBR-exec selects a passing candidate at about 0.179 (20000 draws without replacement from the fixed 40;
+signature-plurality: about 0.180), OUTSIDE the band — not degenerate, but on the harmful side, well below the
+single-attempt rate. (An earlier draft of this entry reported 0.197 using a custom xorshift32 PRNG whose weak
+low-order bits biased `Math.floor(rand() * small)` inside the Fisher-Yates shuffle — caught by opus-reviewer
+cross-checking against the closed form; the script now uses mulberry32 and the number matches the closed form to
+Monte Carlo noise.) This is not noise: all 14 passing candidates agree with each other on every one of 9650
+README-derived probes, all 26 failing candidates agree with each other on every probe too (the sole point of
+disagreement between the two clusters is the known `%.17g` of `1e-07` trap), so a sampled group of k=7 ties within
+each cluster and MBR-exec's winner is whichever cluster is the local majority in that draw. Correct is the
+population minority (14/40 = 0.35 < 0.5), so two closed forms bound the honest range, both exact, no simulation
+needed: **hypergeometric** (7 drawn without replacement from this fixed 14-pass/26-fail pool, the honest analogue
+of resampling this pool) sum_{x=4..7} C(14,x)C(26,7-x)/C(40,7) = **0.1789**, and **binomial** (7 iid draws with
+replacement at rate 0.35, the prereg's own plug-in-resampling convention for the stamp tasks) P(Binomial(7,0.35)
+>= 4) = **0.1998**. Neither is a prediction of the real arm-K run, whose k attempts are fresh draws from the
+underlying process, not from these 40 — say that so nobody later reads 0.179 or 0.200 as the arm-K printf
+prediction. **This is exactly prediction 2** ("any selector that rewards agreement... is predicted to land at or
+below 0.35"), sharpened: MBR-exec does not merely fail to help, it actively selects the modal wrong cluster in
+about 4 of 5 draws because that cluster is usually the local majority at k=7. The selector is kept as specified
+(the topic requires settling on ONE primary selector before the run, and this outcome is a predicted, not a
+disqualifying, result) but the paper must report this mechanism, not just the number, so a reader does not mistake
+selection collapse for "the model can't do agreement" when the real cause is a minority-correct base rate at odd k.
+
+A related bias, present only pre-fix and recorded because it is evidence the transport bug was biased rather than
+merely lossy: before the NaN/Infinity/-0 fix, 3 of the 14 passing candidates (never 0 of 26 failing) hung at the
+30s per-candidate timeout on the null-collapsed probes and returned no signature at all (opus-reviewer,
+findings/opus-reviewer-printf-calibration) — a correct implementation is more likely to validate/loop on an
+unexpected `null` argument than a sloppy one. This does not reproduce after the fix (confirmed: all 40 candidates
+now return a signature).
 
 A distinct bug this calibration caught and fixed before it could reach a real run: the probe driver originally
 passed `NaN`/`Infinity`/`-Infinity` as bare JS numbers through `JSON.stringify` to the child process, which

@@ -1,6 +1,6 @@
 /** Stage-aware build executor. bench-build computes scores using the frozen oracle. */
 import { spawn, execFileSync } from 'node:child_process';
-import { closeSync, cpSync, existsSync, mkdirSync, openSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
+import { closeSync, cpSync, existsSync, mkdirSync, openSync, readFileSync, readdirSync, realpathSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createServer } from 'node:net';
@@ -33,6 +33,7 @@ export function classifyBuildFailure(error: unknown): string {
   if (message.startsWith('tamper:')) return 'tamper';
   if (message.startsWith('invalid_room:')) return 'invalid_room';
   if (message.startsWith('timeout:')) return 'timeout';
+  if (message.startsWith('budget_exhausted:')) return 'budget_exhausted';
   return 'infrastructure_error';
 }
 export function validateBuildRoom(dataDir: string, count: number, workspace: string) {
@@ -81,7 +82,9 @@ async function main() {
   let failure: string | null = null, errorText: string | null = null;
   let reviewIntegrity: any = null, roomValidation: any = null;
   let hub: ReturnType<typeof spawn> | null = null, hubFd: number | null = null;
-  const build: any = { head_revision: revision(repoRoot), runner_sha256: hashFile(fileURLToPath(import.meta.url)), runtime_sha256: hashFile(join(here, 'bench-build-runtime.ts')), helpers_sha256: hashTree(join(repoRoot, 'src')), hub_entry: null, hub_entry_sha256: null, hub_build_sha256: null, hub_revision: null, provenance_scope: null };
+  const generatorHashes = () => Object.fromEntries(readdirSync(here).filter(name => /^bench-build(?:-[a-z]+)?-gen\.ts$/.test(name)).sort().map(name => [name, hashFile(join(here,name))]));
+  const frozenGenerators = generatorHashes();
+  const build: any = { generator_hashes: frozenGenerators, head_revision: revision(repoRoot), runner_sha256: hashFile(fileURLToPath(import.meta.url)), runtime_sha256: hashFile(join(here, 'bench-build-runtime.ts')), helpers_sha256: hashTree(join(repoRoot, 'src')), hub_entry: null, hub_entry_sha256: null, hub_build_sha256: null, hub_revision: null, provenance_scope: null };
   const seat = async (name: string, prompt: string, cwd: string, budget: number, mcp = emptyMcp, tools = baseTools) => {
     if (Date.now() >= deadlineAt) throw new Error('timeout: total arm deadline exhausted');
     // The room shares one pinned workspace; only B's copy needs separate initialization.
@@ -93,6 +96,7 @@ async function main() {
     records.push(full); json(join(root, name + '.json'), full);
     if (hashFile(join(cwd, settings.settings_path)) !== settings.settings_sha256) throw new Error('tamper: seat changed pinned effort');
     if (record.killed_by_deadline) throw new Error('timeout: seat deadline');
+    if (record.result_subtype === 'error_max_budget_usd' || record.terminal_reason === 'budget_exhausted') throw new Error('budget_exhausted: seat reached its allocated cap');
     if (record.exit_code !== 0 || !record.usage) throw new Error('infrastructure_error: seat failed or spend unknown');
     return full;
   };
@@ -103,10 +107,14 @@ async function main() {
       const builder = await seat('builder-1', workPrompt, workspace, cap * .5);
       const copy = join(root, 'review-workspace'); cpSync(workspace, copy, { recursive: true });
       const snapshotBefore = hashTree(workspace);
-      const review = await seat('reviewer', `${brief}\nYou are reviewing another engineer's submission. Their final message:\n${builder.text}\nThis directory is a snapshot; edits here are not submitted. Respond exactly APPROVE or REVISE: followed by actionable corrections.`, copy, cap * .25, emptyMcp, ['Read', 'Bash', 'Glob', 'Grep']);
-      const snapshotAfter = hashTree(workspace);
-      reviewIntegrity = { workspace_sha256_before: snapshotBefore, workspace_sha256_after: snapshotAfter, unchanged: snapshotBefore === snapshotAfter };
-      if (!reviewIntegrity.unchanged) throw new Error('tamper: reviewer changed scored workspace through snapshot boundary');
+      let review: RunSeat;
+      try {
+        review = await seat('reviewer', `${brief}\nYou are reviewing another engineer's submission. Their final message:\n${builder.text}\nThis directory is a snapshot; edits here are not submitted. Respond exactly APPROVE or REVISE: followed by actionable corrections.`, copy, cap * .25, emptyMcp, ['Read', 'Bash', 'Glob', 'Grep']);
+      } finally {
+        const snapshotAfter = hashTree(workspace);
+        reviewIntegrity = { workspace_sha256_before: snapshotBefore, workspace_sha256_after: snapshotAfter, unchanged: snapshotBefore === snapshotAfter };
+        if (!reviewIntegrity.unchanged) throw new Error('tamper: reviewer changed scored workspace through snapshot boundary');
+      }
       if (!/^APPROVE\s*$/i.test(review.text.trim())) await seat('builder-2', `${workPrompt}\nIndependent review feedback:\n${review.text}\nApply the necessary revision.`, workspace, cap * .25);
     }
     if (arm === 'C') {
@@ -132,7 +140,9 @@ async function main() {
       if (!created.ok) throw new Error('room create HTTP ' + created.status);
       const mcp = join(root, 'mcp.json'); json(mcp, { mcpServers: { chatroom: { type: 'http', url: url + '/mcp' } } });
       const attempts = await Promise.allSettled(Array.from({ length: count }, (_, i) => seat('seat-' + (i + 1), `${workPrompt}\nJoin room build as seat-${i + 1}. Claim work on the board; the hub assigns reviewers. Have a non-author read and verify the final diff. Write verify/* with JSON first line {proposal,command,cwd,exit_code,output_tail} and actual exit_code 0. After tests and all edits, run node .bench-hash.mjs and add workspace_sha256 to that same JSON first line with its exact output. The final submitted workspace must match that independently verified hash; no edits afterward. Claims/evidence/proposals/votes are public; named working exchanges quiet. Use wait_for_messages hold_until_actionable=true. Leave after conclusion.`, workspace, cap / count, mcp, [...baseTools, 'mcp__chatroom__*'])));
-      const rejected = attempts.find(a => a.status === 'rejected'); if (rejected?.status === 'rejected') throw rejected.reason;
+      const rejected = attempts.filter(a => a.status === 'rejected');
+      const failure = rejected.find(a => classifyBuildFailure(a.reason) === 'tamper') ?? rejected.find(a => classifyBuildFailure(a.reason) === 'infrastructure_error') ?? rejected[0];
+      if (failure) throw failure.reason;
       await stop(hub); hub = null;
       // Reuse the hub's verification parser and session rule, never seat prose.
       roomValidation = validateBuildRoom(dataDir, count, workspace);
@@ -146,7 +156,8 @@ async function main() {
   let after: string | null = null;
   try { after = hashTree(task); } catch (e) { failure = 'tamper'; errorText = String(e); }
   if (after !== before) failure = 'tamper';
-  if (hashFile(fileURLToPath(import.meta.url)) !== build.runner_sha256 ||
+  if (JSON.stringify(generatorHashes()) !== JSON.stringify(frozenGenerators) ||
+      hashFile(fileURLToPath(import.meta.url)) !== build.runner_sha256 ||
       hashFile(join(here, 'bench-build-runtime.ts')) !== build.runtime_sha256 ||
       hashTree(join(repoRoot, 'src')) !== build.helpers_sha256 ||
       (build.hub_entry && hashTree(dirname(build.hub_entry)) !== build.hub_build_sha256)) {
@@ -154,7 +165,7 @@ async function main() {
   }
   const usage = rollupUsage(records.map(r => ({ usage: r.usage })));
   const completeCost = records.length > 0 && records.every(r => r.usage && Number.isFinite(r.usage.cost));
-  const runConfig = { seed: Number(seedArg), task_sha256: before, generator_sha256: hashFile(join(here, 'bench-build-gen.ts')),
+  const runConfig = { seed: Number(seedArg), task_sha256: before, generator_hashes: frozenGenerators,
     runner_sha256: build.runner_sha256, runtime_sha256: build.runtime_sha256, helpers_sha256: build.helpers_sha256,
     hub_build_sha256: build.hub_build_sha256, model, arm, effort_level: effortLevel,
     effort_settings_sha256: effort.settings_sha256, cap_usd: cap, deadline_ms: deadlineMs, seats: arm === 'C' ? count : null,

@@ -108,6 +108,8 @@ export interface SeatRecord {
   started_at: string;
   completed_at: string;
   text: string;
+  result_subtype: string | null;
+  terminal_reason: string | null;
   usage: SeatUsageRollup | null;
   num_turns: number | null;
   duration_ms: number | null;
@@ -204,6 +206,8 @@ export function runClaudeSeat(name: string, args: string[], cwd: string, deadlin
         started_at: startedAt.toISOString(),
         completed_at: completedAt.toISOString(),
         text,
+        result_subtype: typeof parsed?.subtype === 'string' ? parsed.subtype : null,
+        terminal_reason: typeof parsed?.terminal_reason === 'string' ? parsed.terminal_reason : null,
         usage,
         num_turns: typeof parsed?.num_turns === "number" ? parsed.num_turns : null,
         duration_ms: typeof parsed?.duration_ms === "number" ? parsed.duration_ms : null,

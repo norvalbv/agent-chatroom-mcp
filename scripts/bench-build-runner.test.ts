@@ -42,8 +42,10 @@ async function run(arm: string, mode = 'normal') {
 const fs=require('node:fs');
 const a=process.argv.slice(2); const reviewer=a.some(x=>x.includes('reviewing another engineer'));
 if(${JSON.stringify(mode)}==='orphan-writer'){require('node:child_process').spawn(process.execPath,['-e',\"setTimeout(()=>require('node:fs').writeFileSync('value.txt','late orphan write'),1200)\"],{stdio:'ignore'}).unref();}
+if(${JSON.stringify(mode)}==='review-timeout'&&reviewer){fs.writeFileSync('../workspace/value.txt','reviewer changed before timeout');setInterval(()=>{},1000);}
 if(${JSON.stringify(mode)}==='review-tamper'&&reviewer)fs.writeFileSync('../workspace/value.txt','tampered');
-console.log(JSON.stringify({type:'result',subtype:'success',is_error:false,result:reviewer?'REVISE: check again':'done',num_turns:1,total_cost_usd:0.001,modelUsage:{stub:{thinkingTokens:9}},usage:{input_tokens:1,output_tokens:2,cache_read_input_tokens:0,cache_creation_input_tokens:0}}));
+console.log(JSON.stringify({type:'result',subtype:${JSON.stringify(mode)}==='budget'?'error_max_budget_usd':'success',is_error:${JSON.stringify(mode)}==='budget',result:reviewer?'REVISE: check again':'done',num_turns:1,total_cost_usd:0.001,modelUsage:{stub:{thinkingTokens:9}},usage:{input_tokens:1,output_tokens:2,cache_read_input_tokens:0,cache_creation_input_tokens:0}}));
+if(${JSON.stringify(mode)}==='budget')process.exitCode=1;
 `); chmodSync(stub, 0o755);
   const server = createServer();
   await new Promise<void>(ok => server.listen(0, '127.0.0.1', ok));
@@ -51,7 +53,7 @@ console.log(JSON.stringify({type:'result',subtype:'success',is_error:false,resul
   await new Promise<void>(ok => server.close(() => ok()));
   try {
     const child = spawnSync(process.execPath, ['--import','tsx',runner,task,arm,'1','--root',root,
-      '--expected-task-sha256',hashTree(task),'--max-budget-usd','1','--effort','medium','--port',String(port),'--deadline-ms','10000'],
+      '--expected-task-sha256',hashTree(task),'--max-budget-usd','1','--effort','medium','--port',String(port),'--deadline-ms',mode==='review-timeout'?'1500':'10000'],
       { encoding:'utf8', timeout:30_000, env:{...process.env,PATH:bin+delimiter+process.env.PATH} });
     assert.equal(child.status,0,child.stderr);
     if(mode==='orphan-writer'){
@@ -127,3 +129,7 @@ test('C allocates a quarter to four seats but rejects code without a verified co
 });
 
 test('seat completion stops its orphan tool process group before scoring', async () => { await run('A','orphan-writer'); });
+
+test('reviewer tamper still overrides a reviewer timeout', async () => { const r=await run('B','review-timeout'); assert.equal(r.outcome,'tamper'); assert.equal(r.review_integrity.unchanged,false); });
+
+test('budget-exhausted seats preserve known spend and are protocol outcomes', async () => { const r=await run('A','budget'); assert.equal(r.outcome,'budget_exhausted'); assert.equal(r.usage.cost_usd,.001); assert.equal(r.seats[0].result_subtype,'error_max_budget_usd'); });

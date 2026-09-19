@@ -19,7 +19,7 @@ function kGroup(task: string, seed: number, passes: boolean[], selectedPass: boo
     ...base(task, "K", seed, selectedPass, cost ?? 0),
     usage: { cost_usd: cost as number, coverage: cost === null ? "partial" : "complete", seats: passes.length, seats_with_usage: passes.length },
     k: passes.length, passed: selectedPass, selection: { rule: "r", winner_attempt: 1, votes },
-    attempts: passes.map((p, i) => ({ index: i + 1, answer: p ? "good" : "bad", passed: p, outcome: p ? "task_pass" : "task_fail", cost_usd: cost === null ? null : cost / passes.length })),
+    attempts: passes.map((p, i) => ({ index: i + 1, answer: p ? "good" : "bad", null_vote: false, passed: p, outcome: p ? "task_pass" : "task_fail", cost_usd: cost === null ? null : cost / passes.length })),
   } as KGroup;
 }
 
@@ -98,4 +98,27 @@ test("spend match is judged per seed over paired seeds, not against the whole-gr
   assert.equal(row.mean_cost_c, 0.2);
   assert.equal(row.paired_cost_diff, 0.3);
   assert.equal(row.matched_cost_ok, false);
+});
+
+test("null votes come from the harness flag, not from answer===null (a code task has no answer.txt)", () => {
+  const runs = [base("printf", "A", 1, true), base("printf", "C", 1, true)];
+  const g = kGroup("printf", 1, [true, false, true], true, 0.5, { "(none)": 3 });
+  g.attempts.forEach((a) => (a.answer = null)); // code task: no answer.txt on any attempt
+  g.attempts[2].null_vote = true; // only this one failed to load
+  const t = buildArmKTable(runs, [g], ALL);
+  assert.equal(t.tasks.find((x) => x.task === "printf")!.null_attempts, 1);
+});
+
+test("loadKGroups skips a group whose attempts carry no null_vote flag, with a warning", async () => {
+  const { mkdtempSync, mkdirSync, writeFileSync } = await import("node:fs");
+  const { tmpdir } = await import("node:os");
+  const { join } = await import("node:path");
+  const { loadKGroups } = await import("./paper-rq1-armk.js");
+  const dir = mkdtempSync(join(tmpdir(), "armk-load-"));
+  const g = kGroup("t", 1, [true], true, 0.1, { good: 1 });
+  mkdirSync(join(dir, "t-K-seed1"));
+  writeFileSync(join(dir, "t-K-seed1", "result.json"), JSON.stringify({ ...g, attempts: [{ index: 1, answer: "x", passed: true, outcome: "task_pass", cost_usd: 0.1 }] }));
+  const r = loadKGroups(dir);
+  assert.equal(r.groups.length, 0);
+  assert.match(r.warnings[0], /null_vote/);
 });

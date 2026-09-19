@@ -17,6 +17,8 @@ import { fisherExactTest, holmBonferroni } from "./rq1-stats.js";
 export interface KAttempt {
   index: number;
   answer: string | null;
+  /** Harness-defined: no result, killed by cap/deadline, no answer (exact tasks) or candidate failed to load (code tasks). answer===null is NOT this: a code task never writes answer.txt. */
+  null_vote: boolean;
   passed: boolean;
   outcome: string;
   /** null = usage lost for this attempt; never summed as zero. */
@@ -43,6 +45,10 @@ export function loadKGroups(dir: string): { groups: KGroup[]; warnings: string[]
       if (p?.schemaVersion !== 1 || p.arm !== "K" || typeof p.task_id !== "string" || typeof p.seed !== "number" ||
           !Array.isArray(p.attempts) || !p.usage || typeof p.selection?.votes !== "object") {
         warnings.push(`skipped (not an arm-K group result): ${name}/result.json`);
+        continue;
+      }
+      if (!p.attempts.every((a: { null_vote?: unknown }) => typeof a?.null_vote === "boolean")) {
+        warnings.push(`skipped (attempts[].null_vote missing: null votes cannot be counted): ${name}/result.json`);
         continue;
       }
       groups.push(p as KGroup);
@@ -120,7 +126,7 @@ export function buildArmKTable(suiteRuns: RunResult[], allGroups: KGroup[], opts
     };
     // src/result.ts stores lost usage as cost_usd 0 with coverage none/partial, so a number alone is not "known".
     const known = gs.filter((g) => typeof g.usage.cost_usd === "number" && g.usage.coverage === "complete" && g.attempts.every((a) => typeof a.cost_usd === "number"));
-    row.null_attempts = gs.reduce((n, g) => n + g.attempts.filter((a) => a.answer === null).length, 0);
+    row.null_attempts = gs.reduce((n, g) => n + g.attempts.filter((a) => a.null_vote).length, 0);
     row.cost_unknown_groups = gs.length - known.length;
     row.mean_cost_known = mean(known.map((g) => g.usage.cost_usd as number));
     if (kPass > 0) row.cost_per_correct = row.cost_unknown_groups > 0 ? "unknown" : known.reduce((a, g) => a + (g.usage.cost_usd as number), 0) / kPass;

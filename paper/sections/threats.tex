@@ -1,0 +1,73 @@
+\section{Threats to Validity}
+\label{sec:threats}
+
+Reused and extended from the pre-registration (\texttt{paper/protocol.md}\,\S8), with the arm-K-specific
+threats added by the later pre-registration (\texttt{paper/prereg-arm-k.md}) and by findings made while
+running it.
+
+\begin{itemize}
+
+\item \textbf{Single-codebase, two-family generalization.} All three admitted tasks come from a suite
+  screened on this project's own hub and its own \texttt{claude}-CLI harness; nothing here is evidence
+  about other multi-agent frameworks, and the two admitted failure families -- scope-capture in an
+  invented language, and exact numeric formatting against a host built-in -- do not license a claim
+  about coordination or aggregation in general (\texttt{paper/amendments.md}, "Result of the second
+  suite room").
+
+\item \textbf{Admission-rate selection bias.} A task enters the primary suite because its ten pilot
+  seeds landed in the pre-registered 0.3--0.7 pass-rate band; a task whose true rate is 0.85 lands there
+  by chance about 18\% of the time, and admitted tasks regress toward the mean on fresh seeds.
+  \texttt{bench-printf-format}'s admission record (5/15 = 0.33) is already flagged in
+  \texttt{tasks/SUITE.json} as the weakest primary task for this reason; its grid-seed rate (14/40 =
+  0.35) landed close to the admission rate, but this was not guaranteed in advance and should not be
+  read as validating the admission rule generally.
+
+\item \textbf{Arm A's budget is not an experimenter-chosen constant.} Protocol \S2.1 sets arm~A's
+  per-run ceiling to arm~C's own realized spend on the same (task, seed); arm~A cannot be run until
+  arm~C already has, a sequencing dependency a fully independent-arms design would not have (flagged
+  during the protocol's own review, room \texttt{swarm-113947-ne8o-room}, challenge
+  \texttt{ch\_e72f2514}).
+
+\item \textbf{Arm K's timing window differs from arm C's.} The 40 arm-C runs analyzed here
+  (\texttt{bench/results/rq1-suite}) were produced in an earlier grid than the 120 arm-K groups
+  (\texttt{bench/results/rq1-arm-k}). If the underlying single-agent success rate drifts between time
+  windows -- and Section~\ref{sec:results}'s fresh-attempt measurements show it does move, non-trivially,
+  even within the arm-K run's own lifetime -- the K-vs-C comparison is confounded by time, not only by
+  sampling noise. A contemporaneous, interleaved arm-C/arm-K sample
+  (\texttt{bench/results/rq1-window-control}, 20 seeds on both \texttt{stamp} tasks) was designed
+  specifically to test this; its status as of this section is reported in
+  Section~\ref{sec:results} rather than assumed complete.
+
+\item \textbf{Provider and estimate nondeterminism.} Single-agent pass-rate estimates were noisy in both
+  directions across independently drawn samples of the identical harness and prompt: for
+  \texttt{stamp-interpreter}, 0.50 at $n=10$ in the admission pilot, 0.825 at $n=40$ in the RQ1 grid, and
+  0.675 at $n=400$ in a fresh attempt-level measurement. A 60-run budget-cap control
+  (\texttt{bench/results/rq1-drift-control}, 18/30 at one cap and 23/30 at another) rules out the
+  attempt-level spending cap as the cause of this drift, but the underlying source of the drift is not
+  identified and is not claimed to be.
+
+\item \textbf{Selector sensitivity on the printf task.} Arm~K's printf selector (execution agreement
+  over 9650 probes) is demonstrably sensitive to the probe set: the two candidate clusters in the
+  40-attempt pool differ on exactly 24 of 9650 probes, all instances of the one known specification
+  trap. A probe generator that omitted that one case would make the selector degenerate to "always
+  submit the first attempt" (\texttt{paper/amendments.md}, printf calibration entry). The reported
+  arm-K printf number is a property of this specific, frozen probe set (its hash is recorded in that
+  entry) and should not be read as a general property of execution-agreement selection independent of
+  probe design.
+
+\item \textbf{Protocol-authoring confound.} The pre-registration, the task-admission rule, and the
+  arm-K design were themselves produced by chatroom seats coordinating through the mechanics under
+  evaluation; the authors of this study were not blind to which mechanics they expected to matter. The
+  falsification criteria in both pre-registrations were stated in advance specifically to bound this
+  risk, not to eliminate it.
+
+\item \textbf{Statistical-test choice matters for one reported comparison.} Applying
+  \texttt{protocol.md}\,\S5's literal per-comparison rule (two-proportion $z$-test unless a 2$\times$2
+  cell count is below five) to \texttt{bench-printf-format}'s A-vs-C comparison (14/40 vs.\ 6/40, all
+  four cells $\geq 5$) gives $p=0.039$; Fisher's exact test on the identical counts -- the test used
+  throughout for every arm-K comparison in the later pre-registration -- gives $p=0.069$. Which test is
+  reported as primary for this comparison, and why, is stated explicitly in Section~\ref{sec:results};
+  we surface the discrepancy here rather than silently reporting whichever number is more favorable to
+  either arm.
+
+\end{itemize}

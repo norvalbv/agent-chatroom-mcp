@@ -1,0 +1,25 @@
+\begin{abstract}
+We study whether a hub-enforced multi-agent chatroom -- blind independent opening answers, a
+challenge-gated propose/amend/vote cycle, and an independently verified conclusion -- outperforms a
+single language-model agent at matched budget, and whether any such advantage is distinguishable from
+the advantage of simply sampling several independent attempts and aggregating them with no
+deliberation at all. We evaluate three oracle-scored tasks with 40 paired seeds per arm: two programs
+from one invented-language scope-capture family, and one exact-numeric-formatting task where a host
+language's shortest-representation routine disagrees with the written specification at a single input.
+A single Claude Sonnet agent (arm~A) passes 33/40, 28/40 and 14/40; a three-seat chatroom with the full
+hub mechanics (arm~C) passes 40/40, 40/40 and 6/40; $k$ independent single-agent attempts submitted
+through an oracle-free selector, matched to arm~C's realized spend ($k=10,8,7$; arm~K), passes 36/40,
+39/40 and 7/40. On the family whose single-agent failures share one wrong answer that is not the
+plurality, both structured deliberation and unstructured sampling-and-selection recover the correct
+answer at a rate not statistically distinguishable from each other (Fisher's exact test,
+Holm-Bonferroni across a pre-registered family of six comparisons; a family-pooled, exploratory
+comparison gives K~75/80 vs.\ C~80/80, $p=0.059$) and significantly above the single agent. On the
+numeric-formatting task, where the wrong behaviour is itself the population's modal answer, both
+aggregation methods do worse than the single agent (K~7/40, C~6/40, A~14/40), against an oracle
+ceiling of 37/40. We report cost per correct answer for every arm, including the effect of large
+prompt-cache-read shares on billed cost, and two system-level cost measurements made on this
+codebase's own build process (a token-consumption round and a peer-review round). We do not find
+evidence that this hub's specific consensus mechanics contribute anything beyond what independent
+sampling and oracle-free selection already achieve on these tasks; whether they would on a broader
+task suite is a question this suite is not powered to answer, and we say so rather than extrapolate.
+\end{abstract}

@@ -43,18 +43,19 @@ failure mechanism, the family, not the individual task, is this paper's unit of 
 throughout.
 
 Our headline finding is not that the chatroom wins on the family where it does win -- it does, and by a
-large margin over a single agent -- but that, on that same family, an oracle-free sampling baseline
-built at the same cost wins by an amount that is not statistically distinguishable from the chatroom's.
-On the one task in the suite where the single-agent's own wrong answer happens to be the population's
-modal answer rather than a minority misreading, both aggregation strategies do worse than a single
-agent working alone. We report:
+large margin over a single agent on both programs of that family -- but that, on the same family, an
+oracle-free sampling baseline built at the same cost is not statistically distinguishable from the
+chatroom on either program, and itself beats the single agent significantly on one of the two programs
+but not the other. On the one task in the suite where the single-agent's own wrong answer happens to be
+the population's modal answer rather than a minority misreading, both aggregation strategies do worse
+than a single agent working alone. We report:
 
 \begin{enumerate}
 \item the head-to-head RQ1 result on all three tasks, with Fisher's exact test and Holm-Bonferroni
   correction, effect sizes, and raw and adjusted $p$-values reported side by side (Section~\ref{sec:results});
-\item the mechanism behind the two opposite outcomes -- when the population's shared wrong answer is
-  the plurality, aggregation of any kind hurts; when it is not, aggregation of any kind helps
-  (Section~\ref{sec:discussion});
+\item the mechanism behind the two opposite outcomes on these tasks -- when the population's shared
+  wrong answer is the plurality, aggregation of either kind hurts; when it is not, aggregation of either
+  kind helps (Section~\ref{sec:discussion});
 \item cost per correct answer for every arm, with the prompt-cache-read accounting that dominates
   billed cost on Claude seats made explicit (Section~\ref{sec:results});
 \item two system-level cost and process measurements made on this codebase's own build history -- a

@@ -11,15 +11,18 @@ hub mechanics (arm~C) passes 40/40, 40/40 and 6/40; $k$ independent single-agent
 through an oracle-free selector, matched to arm~C's realized spend ($k=10,8,7$; arm~K), passes 36/40,
 39/40 and 7/40. On the family whose single-agent failures share one wrong answer that is not the
 plurality, both structured deliberation and unstructured sampling-and-selection recover the correct
-answer at a rate not statistically distinguishable from each other (Fisher's exact test,
-Holm-Bonferroni across a pre-registered family of six comparisons; a family-pooled, exploratory
-comparison gives K~75/80 vs.\ C~80/80, $p=0.059$) and significantly above the single agent. On the
-numeric-formatting task, where the wrong behaviour is itself the population's modal answer, both
-aggregation methods do worse than the single agent (K~7/40, C~6/40, A~14/40), against an oracle
-ceiling of 37/40. We report cost per correct answer for every arm, including the effect of large
-prompt-cache-read shares on billed cost, and two system-level cost measurements made on this
-codebase's own build process (a token-consumption round and a peer-review round). We do not find
-evidence that this hub's specific consensus mechanics contribute anything beyond what independent
-sampling and oracle-free selection already achieve on these tasks; whether they would on a broader
-task suite is a question this suite is not powered to answer, and we say so rather than extrapolate.
+answer at a rate not statistically distinguishable from each other on either program (Fisher's exact
+test, Holm-Bonferroni across a pre-registered family of six comparisons; a family-pooled, exploratory
+comparison gives K~75/80 vs.\ C~80/80, $p=0.059$). The chatroom beats the single agent significantly on
+both programs of that family; the sampling baseline beats the single agent significantly on one of the
+two programs (Holm $p=0.009$) but not the other (Holm $p=1.000$), an asymmetry we report as the most
+specific evidence in this study for a difference between deliberation and sampling, at a sample size too
+small to treat as settled. On the numeric-formatting task, where the wrong behaviour is itself the
+population's modal answer, both aggregation methods do worse than the single agent (K~7/40, C~6/40,
+A~14/40), against an oracle ceiling of 37/40. We report cost per correct answer for every arm, including
+the effect of large prompt-cache-read shares on billed cost, and two system-level cost measurements made
+on this codebase's own build process (a token-consumption round and a peer-review round). The evidence
+does not let us conclude that this hub's specific consensus mechanics are interchangeable with
+independent sampling and oracle-free selection, nor that they clearly add something sampling does not;
+we report what is and is not distinguishable at this sample size rather than round either way.
 \end{abstract}

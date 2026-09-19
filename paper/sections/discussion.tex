@@ -5,24 +5,28 @@
 \label{sec:discussion-helps}
 
 On the scope-capture family, the single-agent pass rates (33/40 = 0.825 and 28/40 = 0.70 in the RQ1
-grid) mean the shared wrong answer -- every failing single-agent run on each task fails identically,
-on \texttt{stamp-interpreter} at one output token and on \texttt{stamp-2} at two -- is held by a
-\emph{minority} of attempts, not the plurality. Any procedure that aggregates several independent
-attempts toward their plurality answer recovers the correct answer whenever the correct answer is the
-plurality, which is true of nearly every group of attempts at these observed rates. This is true whether
-the aggregation is an explicit vote count (arm~K's plurality selector) or an emergent chatroom
-consensus reached through blind openings, proposal and challenge (arm~C): both land at pass rates that
-are not statistically distinguishable from each other on either \texttt{stamp} task
-(Section~\ref{sec:results}), despite arm~C additionally paying for mechanics -- a challenge gate, an
-independently assigned verifier, quote-checked votes -- that arm~K's non-communicating attempts never
-exercise at all.
+grid) mean the shared wrong answer is held by a \emph{minority} of attempts, not the plurality, on both
+programs, though the two programs differ in how concentrated that minority is: on
+\texttt{stamp-interpreter} all 7 failing runs share one byte-identical wrong answer, while on
+\texttt{stamp-2} the 12 failing runs split into two distinct wrong answers (11 sharing one, 1 the other)
+(\texttt{paper/prereg-arm-k.md}, "What the existing data already says"). Any procedure that aggregates
+several independent attempts toward their plurality answer recovers the correct answer whenever the
+correct answer is the plurality, which both single-agent pass rates satisfy with room to spare; the
+exceptions are recorded rather than assumed away: arm~K failed on \texttt{stamp-interpreter} in exactly
+the 4 of 40 groups where the shared wrong answer happened to be that group's own plurality
+(\texttt{paper/amendments.md}, 2026-09-19 arm-K result entry). This is true whether the aggregation is
+an explicit vote count (arm~K's plurality selector) or an emergent chatroom consensus reached through
+blind openings, proposal and challenge (arm~C): both land at pass rates that are not statistically
+distinguishable from each other on either \texttt{stamp} task (Section~\ref{sec:results}), despite
+arm~C additionally paying for mechanics -- a challenge gate, an independently assigned verifier,
+quote-checked votes -- that arm~K's non-communicating attempts never exercise at all.
 
 \subsection{When aggregation hurts}
 \label{sec:discussion-hurts}
 
 On \texttt{bench-printf-format} the single-agent pass rate is 14/40 = 0.35 (a fresh, independent
-400-attempt-class measurement puts the underlying rate closer to 0.31; Section~\ref{sec:results}), and
-the wrong behaviour -- incorrect \texttt{\%.17g} formatting of $1\times 10^{-7}$ -- is itself the
+280-attempt measurement puts the underlying rate closer to 0.311 -- 87/280; Section~\ref{sec:results}),
+and the wrong behaviour -- incorrect \texttt{\%.17g} formatting of $1\times 10^{-7}$ -- is itself the
 population's \emph{modal} answer: 26 of the 40 single-agent runs in the RQ1 grid share it. Both
 aggregation methods therefore do worse than the single agent alone (K~7/40, C~6/40, versus A~14/40),
 against an oracle ceiling of 37/40 (at least one of $k=7$ independent attempts passing).
@@ -37,10 +41,14 @@ simply whichever cluster is the local majority in that draw; because the true pa
 local majority is usually the wrong cluster (two independent closed forms bound the honest range without
 simulation: hypergeometric, drawing 7 without replacement from the fixed 14-pass/26-fail pool, gives
 0.1789; binomial, treating each draw as an independent 0.35 coin flip, gives 0.1998; the realized arm-K
-rate, 7/40 = 0.175, is consistent with both). The three-seat chatroom's independent discovery of the
-same wrong answer in 34 of 40 runs shows the same single-model bias operating inside deliberation --
-three agents reading the same specification tend to make the same misreading of the same one clause --
-not a distinct failure specific to the hub's mechanics.
+rate, 7/40 = 0.175, is consistent with both). The three-seat chatroom fails on 34 of 40 runs; the
+committed artifacts record the oracle's pass/fail verdict for each chatroom run but not which specific
+wrong answer a failing run produced, so we cannot cite evidence that all 34 chatroom failures are the
+same \texttt{\%.17g} case rather than a mix of independent misreadings. What the pass-rate alone still
+supports is that arm~C's chatroom process does not correct the single-model bias behind
+\texttt{bench-printf-format}'s failures any better than arm~K's selector does -- both land within one
+failure of each other (6/40 and 7/40) -- not a claim about which specific wrong answer each failing run
+produced.
 
 \subsection{Does deliberation add anything beyond sampling?}
 \label{sec:discussion-beyond-sampling}
@@ -62,8 +70,10 @@ came in: (i) point forecasts of about 0.99 on \texttt{stamp-interpreter} and abo
 \texttt{stamp-2}; (ii) K vs.\ C not significant on either task; (iii) K vs.\ A \emph{significant} on
 both tasks. Claim~(ii) held on both tasks. Claim~(i) held, loosely, for \texttt{stamp-2} (forecast 0.90,
 observed 39/40 = 0.975) but not for \texttt{stamp-interpreter} (forecast 0.99, observed 36/40 = 0.90),
-for the reason given in Section~\ref{sec:results}: the pilot pass rate the forecast resampled from
-overstated the freshly measured single-attempt rate. Claim~(iii) is where the two \texttt{stamp}
+for the reason given in Section~\ref{sec:results}: the forecast resampled (with replacement) the 40
+arm-A answers already collected in the RQ1 grid, and that grid's pass rate (0.825) itself overstated a
+freshly measured, larger and independently drawn single-attempt rate (0.675; Section~\ref{sec:results}).
+Claim~(iii) is where the two \texttt{stamp}
 programs diverge: K beats A significantly on \texttt{stamp-2} (39/40 vs.\ 28/40, raw $p=0.0015$, Holm
 $p=0.0090$), matching the prediction, but \emph{not} on \texttt{stamp-interpreter} (36/40 vs.\ 33/40,
 raw $p=0.518$, Holm $p=1.000$) -- despite arm~C beating arm~A significantly on \emph{both}

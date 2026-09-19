@@ -273,6 +273,78 @@ test("item1: arm A and arm C carry identical built-in tools for the code task; m
   }
 });
 
+/** A stub `claude` for arm B's builder+reviewer pipeline (protocol.md 2.1): behavior is keyed off
+ * GIT_AUTHOR_NAME, which seatChildEnv already sets per seat name (src/env.ts's seatGitIdentity), so the
+ * three sequential invocations (builder-1, reviewer, optional builder-2) can each answer differently
+ * without any new plumbing in bench-rq1.ts itself. `review` controls what the reviewer stub says. */
+function stubClaudeDirArmB(review: "approve" | "revise") {
+  const dir = mkdtempSync(join(tmpdir(), "bench-rq1-armb-stub-"));
+  const bin = join(dir, "claude");
+  writeFileSync(
+    bin,
+    [
+      "#!/usr/bin/env node",
+      "const fs=require('node:fs');",
+      "const args=process.argv.slice(2);",
+      "if(!args.includes('--output-format')||args[args.indexOf('--output-format')+1]!=='stream-json'||!args.includes('--verbose')){process.stderr.write('expected --output-format stream-json --verbose\\n');process.exit(1);}",
+      "const who=process.env.GIT_AUTHOR_NAME||'';",
+      `const review=${JSON.stringify(review)};`,
+      "let text;",
+      "if(who==='builder-1'){fs.writeFileSync('answer.txt', review==='revise'?'wrong affiliation':" + JSON.stringify(EXPECTED) + ");text='builder-1 submission';}",
+      "else if(who==='reviewer'){text = review==='approve' ? 'APPROVE' : 'REVISE: the affiliation is wrong, fix answer.txt';}",
+      `else if(who==='builder-2'){fs.writeFileSync('answer.txt', ${JSON.stringify(EXPECTED)});text='builder-2 revised submission';}`,
+      "else{text='unexpected role: '+who;}",
+      "process.stdout.write(JSON.stringify({type:'assistant',message:{usage:{input_tokens:80,output_tokens:15}}})+'\\n');",
+      "process.stdout.write(JSON.stringify({type:'result',subtype:'success',is_error:false,result:text,num_turns:2,duration_ms:500,duration_api_ms:520,total_cost_usd:0.002,usage:{input_tokens:100,output_tokens:20}})+'\\n');",
+      "",
+    ].join("\n"),
+  );
+  chmodSync(bin, 0o755);
+  return dir;
+}
+
+test("arm B: builder submits, reviewer approves, no revision round, no mcp tools either side, budget null", () => {
+  const stubDir = stubClaudeDirArmB("approve");
+  const root = join(tmpdir(), `bench-rq1-b-approve-${process.pid}-${Date.now()}`);
+  try {
+    const r = invoke([task, "B", "1", "--root", root], { PATH: `${stubDir}${delimiter}${process.env.PATH}` });
+    assert.equal(r.status, 0, r.stderr + r.stdout);
+    const result = JSON.parse(readFileSync(join(root, "result.json"), "utf8"));
+    assert.equal(result.arm, "B");
+    assert.equal(result.outcome, "task_pass");
+    assert.equal(result.passed, true);
+    assert.equal(result.seats.length, 2, "builder-1 and reviewer only, no revision round on approve");
+    assert.deepEqual(result.seats.map((s: any) => s.name), ["builder-1", "reviewer"]);
+    assert.equal(result.budget, null, "arm B runs to natural completion like arm C, not budget-matched like arm A");
+    for (const seat of result.seats) assert.ok(!seat.argv.some((a: string) => a.includes("mcp__chatroom")), "arm B must not carry chatroom mcp tools on either side");
+    const reviewerArgv: string[] = result.seats[1].argv;
+    const reviewerTools = reviewerArgv[reviewerArgv.indexOf("--tools") + 1].split(",");
+    assert.ok(!reviewerTools.includes("Write"), "the reviewer must not be able to edit the submission itself");
+    assert.ok(Math.abs(result.usage.cost_usd - 0.004) < 1e-9, "cost sums across both stages");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+    rmSync(stubDir, { recursive: true, force: true });
+  }
+});
+
+test("arm B: reviewer requests one revision, builder revises once, then scores the revised answer (no second review)", () => {
+  const stubDir = stubClaudeDirArmB("revise");
+  const root = join(tmpdir(), `bench-rq1-b-revise-${process.pid}-${Date.now()}`);
+  try {
+    const r = invoke([task, "B", "2", "--root", root], { PATH: `${stubDir}${delimiter}${process.env.PATH}` });
+    assert.equal(r.status, 0, r.stderr + r.stdout);
+    const result = JSON.parse(readFileSync(join(root, "result.json"), "utf8"));
+    assert.equal(result.seats.length, 3, "builder-1, reviewer, builder-2 — at most one revision round");
+    assert.deepEqual(result.seats.map((s: any) => s.name), ["builder-1", "reviewer", "builder-2"]);
+    assert.equal(readFileSync(join(root, "workspace", "answer.txt"), "utf8"), EXPECTED, "the revised answer, not the original wrong one, is what's on disk");
+    assert.equal(result.outcome, "task_pass");
+    assert.equal(result.passed, true);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+    rmSync(stubDir, { recursive: true, force: true });
+  }
+});
+
 test("arm C: hidden fixtures never copied into the seat-visible workspace", async () => {
   const stubDir = stubClaudeDir();
   const hubEntry = stubHubDir(EXPECTED);

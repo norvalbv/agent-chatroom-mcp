@@ -82,10 +82,18 @@ async function main() {
   let failure: string | null = null, errorText: string | null = null;
   let reviewIntegrity: any = null, roomValidation: any = null;
   let hub: ReturnType<typeof spawn> | null = null, hubFd: number | null = null;
+  let stage = 'initialization', failureStage: string | null = null;
+  let hubStarted = false, hubHealthyAtTerminal: boolean | null = null;
+  const observeHubHealth = async () => {
+    if (!hub || hub.exitCode !== null || hub.signalCode !== null) return false;
+    try { return (await fetch(`http://127.0.0.1:${port}/rooms`, { signal: AbortSignal.timeout(1000) })).ok; }
+    catch { return false; }
+  };
   const generatorHashes = () => Object.fromEntries(readdirSync(here).filter(name => /^bench-build(?:-[a-z]+)?-gen\.ts$/.test(name)).sort().map(name => [name, hashFile(join(here,name))]));
   const frozenGenerators = generatorHashes();
   const build: any = { generator_hashes: frozenGenerators, head_revision: revision(repoRoot), runner_sha256: hashFile(fileURLToPath(import.meta.url)), runtime_sha256: hashFile(join(here, 'bench-build-runtime.ts')), helpers_sha256: hashTree(join(repoRoot, 'src')), hub_entry: null, hub_entry_sha256: null, hub_build_sha256: null, hub_revision: null, provenance_scope: null };
   const seat = async (name: string, prompt: string, cwd: string, budget: number, mcp = emptyMcp, tools = baseTools) => {
+    stage = arm === 'C' ? 'room-seats' : name;
     if (Date.now() >= deadlineAt) throw new Error('timeout: total arm deadline exhausted');
     // The room shares one pinned workspace; only B's copy needs separate initialization.
     const settings = cwd === workspace ? effort : pinEffort(cwd, effortLevel);
@@ -118,6 +126,7 @@ async function main() {
       if (!/^APPROVE\s*$/i.test(review.text.trim())) await seat('builder-2', `${workPrompt}\nIndependent review feedback:\n${review.text}\nApply the necessary revision.`, workspace, cap * .25);
     }
     if (arm === 'C') {
+      stage = 'hub-startup';
       const probe = createServer();
       await new Promise<void>((ok, no) => { probe.once('error', no); probe.listen(port, '127.0.0.1', () => probe.close(() => ok())); });
       const entry = resolve(flag('hub-entry', join(repoRoot, 'dist', 'index.js'))!);
@@ -128,6 +137,7 @@ async function main() {
       Object.assign(hubEnv, { PORT: String(port), HOST: '127.0.0.1', CHATROOM_HUMAN_TOKEN: token, CHATROOM_NO_RECRUIT: '1', CHATROOM_DATA_DIR: dataDir, CHATROOM_DEFAULT_CWD: workspace, CHATROOM_LOG_DIR: join(root, 'spawned') });
       hubFd = openSync(join(root, 'hub.log'), 'w');
       hub = track(spawn(process.execPath, [entry], { cwd: workspace, env: hubEnv, stdio: ['ignore', hubFd, hubFd] }));
+      hubStarted = !!hub.pid;
       let spawnError: unknown; hub.once('error', e => { spawnError = e; });
       const url = `http://127.0.0.1:${port}`; let ready = false;
       while (Date.now() < Math.min(deadlineAt, started + 30000)) {
@@ -143,7 +153,9 @@ async function main() {
       const rejected = attempts.filter(a => a.status === 'rejected');
       const failure = rejected.find(a => classifyBuildFailure(a.reason) === 'tamper') ?? rejected.find(a => classifyBuildFailure(a.reason) === 'infrastructure_error') ?? rejected[0];
       if (failure) throw failure.reason;
+      hubHealthyAtTerminal = await observeHubHealth();
       await stop(hub); hub = null;
+      stage = 'room-validation';
       // Reuse the hub's verification parser and session rule, never seat prose.
       roomValidation = validateBuildRoom(dataDir, count, workspace);
       json(join(root, 'room-validation.json'), roomValidation);
@@ -151,8 +163,12 @@ async function main() {
     }
   } catch (error) {
     errorText = String(error);
+    failureStage = stage;
     failure = classifyBuildFailure(error);
-  } finally { if (hub) await stop(hub); if (hubFd !== null) closeSync(hubFd); }
+  } finally {
+    if (hub) { hubHealthyAtTerminal = await observeHubHealth(); await stop(hub); }
+    if (hubFd !== null) closeSync(hubFd);
+  }
   let after: string | null = null;
   try { after = hashTree(task); } catch (e) { failure = 'tamper'; errorText = String(e); }
   if (after !== before) failure = 'tamper';
@@ -172,6 +188,9 @@ async function main() {
     allocations: arm === 'B' ? [.5, .25, .25] : arm === 'C' ? Array(count).fill(1 / count) : [1] };
   const fingerprint = createHash('sha256').update(JSON.stringify(runConfig)).digest('hex');
   const result = { run_config: runConfig, run_fingerprint: fingerprint, schemaVersion: 1, task_id: taskId, arm, seed: Number(seedArg), model, outcome: failure ?? 'completed', reason: failure ?? 'completed', error: errorText,
+    outcome_evidence: { failure_stage: failureStage, deadline_fired: records.some(r => r.killed_by_deadline),
+      seat_processes: records.map(r => ({ exit_code: r.exit_code, signal: r.signal, killed_by_deadline: r.killed_by_deadline, result_subtype: r.result_subtype, terminal_reason: r.terminal_reason })),
+      hub_started: hubStarted, hub_healthy_at_terminal: hubHealthyAtTerminal },
     anti_tamper: { hash_before: before, hash_after: after, unchanged: after === before }, effort, review_integrity: reviewIntegrity, room_validation: roomValidation, seats: records,
     usage: { ...usage, cost_usd: completeCost ? usage!.cost_usd : null }, turns: { summed: records.reduce((n, r) => n + (r.num_turns ?? 0), 0) },
     wall_clock: { started_at: new Date(started).toISOString(), completed_at: new Date().toISOString(), duration_ms: Date.now() - started },

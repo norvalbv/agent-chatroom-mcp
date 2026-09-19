@@ -264,17 +264,16 @@ async function main() {
   const unknown = knownCosts.filter((c) => c === null).length;
   const knownSum = knownCosts.reduce<number>((s, c) => s + (c ?? 0), 0);
   // Explicit per the verifier's #101 ask (opus-reviewer #95): an attempt that produced nothing for the
-  // selector to vote on — no result at all, killed by its deadline, the runner itself failed/wedged
-  // (including the pool-level outer timeout above), or (code tasks only) its candidate never loaded — is a
-  // null vote, named here rather than left for a stats-side reader to reconstruct from outcome strings.
-  const loadedByIndex = "loaded" in selection && Array.isArray(selection.loaded) ? (selection.loaded as boolean[]) : null;
+  // selector to vote on — no result at all, killed by its deadline, or the runner itself failed/wedged
+  // (including the pool-level outer timeout) — is a null vote, named here rather than left for a stats-side
+  // reader to reconstruct from outcome strings. A candidate that completed but fails to load is NOT one: it
+  // ran, and selection.loaded[i] === false records that it was given no signature.
   const attemptsInfo = attemptRoots.map((r, i) => {
     const res = results[i];
     const seat = res?.seats?.[0];
     const killedByDeadline = seat?.killed_by_deadline ?? false;
     const runnerFailure = runnerFailures[i + 1] ?? null;
-    const candidateLoaded = loadedByIndex ? loadedByIndex[i] !== false : true;
-    const nullVote = !res || killedByDeadline || runnerFailure !== null || !candidateLoaded;
+    const nullVote = !res || killedByDeadline || runnerFailure !== null;
     return {
       index: i + 1,
       root: r,

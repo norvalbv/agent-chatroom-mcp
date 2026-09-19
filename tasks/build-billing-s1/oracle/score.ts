@@ -28,8 +28,8 @@ function run(id: string): boolean {
 }
 const oracle_results: { name: string; exit_code: number }[] = [];
 const caught_ids: string[] = [], missed_ids: string[] = [], regression_failed_ids: string[] = [];
-for (const id of inst.defects) { const ok = run(id); oracle_results.push({ name: id, exit_code: ok ? 0 : 1 }); (ok ? caught_ids : missed_ids).push(id); }
-for (const id of Object.keys(CHECKS).filter((k) => k.startsWith('R'))) { const ok = run(id); oracle_results.push({ name: id, exit_code: ok ? 0 : 1 }); if (!ok) regression_failed_ids.push(id); }
+for (const id of inst.defects) { const ok = run(id); oracle_results.push({ name: 'defect/' + id, exit_code: ok ? 0 : 1 }); (ok ? caught_ids : missed_ids).push(id); }
+for (const id of Object.keys(CHECKS).filter((k) => k.startsWith('R'))) { const ok = run(id); oracle_results.push({ name: 'regression/' + id, exit_code: ok ? 0 : 1 }); if (!ok) regression_failed_ids.push(id); }
 const score = missed_ids.length === 0 && regression_failed_ids.length === 0 ? 1 : 0;
 console.log(JSON.stringify({
   score, oracle_results, defects_planted: inst.defects.length, defects_caught: caught_ids.length,

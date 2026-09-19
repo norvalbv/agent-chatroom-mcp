@@ -135,9 +135,10 @@ Public tests are part of the editable submission. They must all pass on the plan
 baseline, but an arm may correct a misleading public assertion when bringing the
 codebase into agreement with the specification. Editing a public test, or finishing
 with a public-test failure, is an observed task outcome and never anti-tamper
-invalidity. The scorer records final public-suite status in its own field, outside
-the hidden regression count `R`; deleting or weakening an editable public test
-cannot improve `R`. Each non-misleading public behavior is independently re-expressed
+invalidity. The report includes final public-suite status (pass, fail, or unknown)
+in its own field, outside the hidden regression count `R`; missing descriptive
+telemetry does not discard an otherwise valid machine score, and deleting or
+weakening an editable public test cannot improve `R`. Each non-misleading public behavior is independently re-expressed
 by a host-held regression check frozen before launch, while the declared misleading
 assertion is instead covered by a host-held spec-correct check. Only private task
 fixtures, the scorer, executor, or frozen provenance inputs are protected integrity

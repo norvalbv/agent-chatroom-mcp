@@ -117,7 +117,6 @@ function validateRaw(raw: RawBuildResult, task: string, arm: Arm, seed: number, 
   if (raw.task_id !== task || raw.arm !== arm || raw.seed !== seed) return invalidRow(task, arm, seed, "cell identity mismatch", raw);
   if (typeof raw.execution_outcome !== "string" || !["completed", "timeout", "budget_exhausted", "invalid_room", "tamper", "infrastructure_error"].includes(raw.execution_outcome)) return invalidRow(task, arm, seed, "unknown execution outcome", raw);
   if (raw.execution_outcome === "tamper" || raw.execution_outcome === "infrastructure_error") return invalidRow(task, arm, seed, `non-scoreable outcome ${raw.execution_outcome}`, raw);
-  if (typeof raw.public_suite_passed !== "boolean") return invalidRow(task, arm, seed, "public suite status missing", raw);
   const fingerprint = raw.provenance?.grid_fingerprint;
   if (!sha256(fingerprint)) return invalidRow(task, arm, seed, "missing grid fingerprint", raw);
   if (!sha256(raw.provenance?.native_run_fingerprint) || !sha256(raw.provenance?.manifest_sha256) || !sha256(raw.provenance?.runner_sha256)) return invalidRow(task, arm, seed, "incomplete launch provenance", raw);
@@ -147,7 +146,7 @@ function validateRaw(raw: RawBuildResult, task: string, arm: Arm, seed: number, 
     task_id: task, arm, seed, status: "valid", reason: costComplete ? null : "unknown terminal cost",
     execution_outcome: raw.execution_outcome,
     oracle_outcome: typeof raw.oracle_outcome === "string" ? raw.oracle_outcome : null,
-    public_suite_passed: raw.public_suite_passed,
+    public_suite_passed: typeof raw.public_suite_passed === "boolean" ? raw.public_suite_passed : null,
     protocol_failure: protocolFailure, protocol_success: !protocolFailure,
     protocol_adjusted_catch_fraction: protocolFailure ? 0 : caught / defectSet.checks.length,
     cost_status: costComplete ? "complete" : "unknown",

@@ -59,7 +59,7 @@ console.log(JSON.stringify({type:'result',subtype:'success',is_error:false,resul
     assert.equal(report.rows[0].cost_usd, 0.001);
     assert.equal(report.rows[0].thinking_tokens, 3);
     assert.equal(report.rows[0].output_tokens, 7);
-    assert.equal(report.rows[0].public_suite_passed, true);
+    assert.equal(report.rows[0].public_suite_passed, null);
     const resumed = await runBuildGrid(args, { log() {} });
     assert.equal(resumed.ran, 0);
     assert.equal(resumed.skipped, 1);

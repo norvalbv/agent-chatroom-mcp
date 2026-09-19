@@ -97,15 +97,16 @@ test("report scores budget exhaustion and marks protocol failure", () => {
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
-test("report rejects a result that omits the separate public-suite status", () => {
+test("report retains measured scores when separate public-suite status is unknown", () => {
   const dir = mkdtempSync(join(tmpdir(), "bench-build-report-"));
   try {
     const missing = result("build-ledger-v2-s1", "A", 101, 4, 0.2);
     delete (missing as { public_suite_passed?: boolean }).public_suite_passed;
     put(dir, missing);
     const report = buildBuildReport(dir, ["build-ledger-v2-s1"], ["A"], [101], 2);
-    assert.equal(report.rows[0].status, "invalid");
-    assert.match(report.rows[0].reason ?? "", /public suite/i);
+    assert.equal(report.rows[0].status, "valid");
+    assert.equal(report.rows[0].public_suite_passed, null);
+    assert.equal(report.rows[0].defects_caught, 4);
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 

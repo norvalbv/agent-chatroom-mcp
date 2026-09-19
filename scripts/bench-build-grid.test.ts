@@ -24,9 +24,9 @@ const [task,arm,seed]=a, root=flag('root'), fp=flag('grid-fingerprint'), manifes
 appendFileSync(${JSON.stringify(log)}, JSON.stringify({a})+'\\n');
 mkdirSync(root,{recursive:true});
 if(process.env.STUB_MUTATE_TASK==='1')writeFileSync(join(task,'public','SPEC.md'),'mutated after grid freeze\\n');
-const unknown=process.env.STUB_UNKNOWN==='1';
+const unknown=process.env.STUB_UNKNOWN==='1', outcome=process.env.STUB_OUTCOME||'completed';
 writeFileSync(join(root,'build-result.json'), JSON.stringify({
- schemaVersion:1, task_id:task.split('/').pop(), arm, seed:Number(seed), execution_outcome:'completed',
+ schemaVersion:1, task_id:task.split('/').pop(), arm, seed:Number(seed), execution_outcome:outcome,
  scores:{defects_caught:4,defects_total:9,defects_shipped:5,regression_failures:0,regressions_total:14},
  checks:{defects:[{name:'defect/D01',exit_code:0}],regressions:[{name:'regression/R01',exit_code:0}]},
  usage:{cost_usd:unknown?null:0.25,coverage:unknown?'partial':'complete',thinking_tokens:123,output_tokens:456},
@@ -139,4 +139,22 @@ test("unknown terminal cost stops later cells and is never summed as zero", asyn
     assert.equal(resumed.unknownCost, 1);
     assert.equal(resumed.halted, true);
   } finally { delete process.env.STUB_UNKNOWN; rmSync(f.dir, { recursive: true, force: true }); }
+});
+
+test("budget exhaustion remains a resumable scored arm-caused outcome", async () => {
+  const f = fixture();
+  try {
+    process.env.STUB_OUTCOME = "budget_exhausted";
+    const parsed = parseBuildGridArgs([
+      "--tasks", "build-billing-s1", "--arms", "C", "--seeds", "501", "--tasks-dir", f.tasksDir,
+      "--results", f.results, "--runner", f.runner, "--effort", "medium", "--max-budget-usd", "2",
+    ]);
+    const first = await runBuildGrid(parsed, { log: () => {} });
+    assert.equal(first.ran, 1);
+    assert.equal(first.invalid, 0);
+    assert.equal(first.knownCostUsd, 0.25);
+    const resumed = await runBuildGrid(parsed, { log: () => {} });
+    assert.equal(resumed.skipped, 1);
+    assert.equal(resumed.invalid, 0);
+  } finally { delete process.env.STUB_OUTCOME; rmSync(f.dir, { recursive: true, force: true }); }
 });

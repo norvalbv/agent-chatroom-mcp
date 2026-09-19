@@ -224,7 +224,7 @@ function integerField(value: unknown): boolean {
 
 function validateResult(result: BuildResult, cell: BuildPlanCell, fingerprint: string, effort: string, expectedTaskSha256: string, expectedManifestSha256: string): { valid: boolean; cost: number | null; reason?: string } {
   if (result.task_id !== cell.taskLabel || result.arm !== cell.arm || result.seed !== cell.seed) return { valid: false, cost: null, reason: "cell identity mismatch" };
-  if (typeof result.execution_outcome !== "string" || !["completed", "timeout", "invalid_room", "tamper", "infrastructure_error"].includes(result.execution_outcome)) return { valid: false, cost: null, reason: "unknown execution outcome" };
+  if (typeof result.execution_outcome !== "string" || !["completed", "timeout", "budget_exhausted", "invalid_room", "tamper", "infrastructure_error"].includes(result.execution_outcome)) return { valid: false, cost: null, reason: "unknown execution outcome" };
   if (result.execution_outcome === "tamper" || result.execution_outcome === "infrastructure_error") return { valid: false, cost: null, reason: `non-scoreable outcome ${result.execution_outcome}` };
   if (result.provenance?.grid_fingerprint !== fingerprint) return { valid: false, cost: null, reason: "requested fingerprint mismatch" };
   if (result.provenance.manifest_sha256 !== expectedManifestSha256) return { valid: false, cost: null, reason: "requested manifest mismatch" };

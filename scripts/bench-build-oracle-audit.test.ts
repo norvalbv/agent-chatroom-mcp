@@ -8,9 +8,10 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { buildLedgerSrc, LEDGER_DEFECTS, writeLedgerTask } from './bench-build-ledger-gen.ts';
 
-function score(task: string, workspace: string) {
+function score(task: string, workspace: string, allowRejection = false) {
   const run = spawnSync(process.execPath, ['--import', 'tsx', join(task, 'oracle', 'score.ts'), workspace],
     { encoding: 'utf8', timeout: 30_000 });
+  if (allowRejection && Number.isInteger(run.status) && run.status! >= 2 && run.stderr.trim()) return null;
   assert.ok(run.status === 0 || run.status === 1, run.stderr);
   assert.ok(run.stdout.trim(), run.stderr || 'oracle emitted no JSON');
   return JSON.parse(run.stdout);
@@ -69,8 +70,23 @@ process.on('exit', () => {
 });
 `;
     writeFileSync(source, readFileSync(source, 'utf8') + mutation);
-    const scored = score(task, workspace);
+    const scored = score(task, workspace, true);
+    if (scored === null) return; // Explicit rejection is safe; counterfeit success is not.
     assert.equal(scored.defects_caught, 0, 'no planted function was repaired by this mutation');
     assert.equal(scored.score, 0);
   } finally { rmSync(workspace, { recursive: true, force: true }); }
+});
+
+test('scorer from an unrelated cwd never charges loader failure as shipped defects', () => {
+  const task=resolve('tasks/build-ledger-s1');
+  const run=spawnSync(process.execPath,['--import',import.meta.resolve('tsx'),join(task,'oracle','score.ts'),join(task,'fixtures','correct')],
+    {cwd:tmpdir(),encoding:'utf8',timeout:30_000});
+  assert.equal(run.error,undefined);
+  if(run.status!==0 && run.status!==1) {
+    assert.ok(run.stderr.trim(),'infrastructure rejection needs a diagnostic');
+    return;
+  }
+  const scored=JSON.parse(run.stdout);
+  assert.equal(scored.score,1,'a runner/import failure must not become false defect misses');
+  assert.equal(scored.defects_shipped,0);
 });

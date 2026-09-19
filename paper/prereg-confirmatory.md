@@ -57,6 +57,9 @@ Before this pre-registration, 12 real `stamp-interpreter` arm-A attempts in the
 actual nested workspace layout ran at seeds 901–903.  Values below are per run;
 cost is USD/run.  The settings were read by the seat, but this short-regime
 sample does **not** demonstrate a strong medium/high separation.
+The calibration table is transcribed from its run logs; its raw result files
+were not retained.  In contrast, the seed-901 pilot result files and grid log
+are committed as auditable evidence.
 
 | requested effort | n | pass | mean output tokens | thinking tokens (individual; mean) | mean cost |
 |---|---:|---:|---:|---|---:|

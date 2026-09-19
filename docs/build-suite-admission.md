@@ -103,9 +103,13 @@ Nothing here is tuned on confirmatory seeds; no confirmatory run was made.
 
 ## Three-arm pilot on build-ledger-s1 (seeds 101 to 104, effort medium, 6-astra-4's runner at 9c37a6b)
 
+**This is an unequal-cap diagnostic, not the pre-registered equal-cap comparison.** M = 0.60 for A and B, M = 1.60 for C (a room
+of four seats at M/4 each): C's cap is 2.7x A/B's because a first attempt at M = 0.60 for C starved every seat (see finding 3
+below) before it could do any work. A true equal-cap run (all three arms at the same M) is left to the confirmatory run in
+paper/prereg-build-suite.md, once a task exists whose difficulty makes some fixed M actually bind for a single agent.
+
 Command shape: `node --import tsx scripts/bench-build.ts tasks/build-ledger-s1 <A|B|C> <seed> --root <dir> --max-budget-usd <M> --expected-task-sha256 <hash of the task tree>`
-(arm C also `--port <free>`). Raw rows: `docs/build-suite-pilot.json`. Caps: M = 0.60 for A and B, M = 1.60 for C (a room of four
-seats at M/4 each).
+(arm C also `--port <free>`). Raw rows: `docs/build-suite-pilot.json`.
 
 | arm | seed | caught / 9 (as run) | caught / 9 (S12 oracle fixed) | shipped | regressions failed | cost USD | thinking tokens per seat | wall s | turns |
 |---|---|---|---|---|---|---|---|---|---|

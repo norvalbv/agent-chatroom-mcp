@@ -451,14 +451,26 @@ const expected = JSON.parse(readFileSync(join(here, 'expected.json'), 'utf8'));
 const runner = realpathSync(join(here, 'run.ts'));
 const scenarios = realpathSync(join(here, 'scenarios.ts'));
 let candidate: string;
-try { candidate = realpathSync(resolve(workspace)); rejectSymlinks(candidate); }
-catch (error) { console.error(String(error)); console.log(JSON.stringify({ score: 0, oracle_results: [], defects_planted: inst.defects.length, defects_caught: 0, defects_shipped: inst.defects.length, regressions_failed: 0, caught_ids: [], missed_ids: inst.defects, regression_failed_ids: [] })); process.exit(1); }
+try {
+  const resolved = resolve(workspace);
+  if (lstatSync(resolved).isSymbolicLink()) throw new Error('oracle infrastructure: workspace symlink is forbidden');
+  candidate = realpathSync(resolved);
+  rejectSymlinks(candidate);
+} catch (error) { console.error('oracle infrastructure: ' + String(error)); process.exit(3); }
 const child = spawnSync(process.execPath, [
   '--permission', '--allow-fs-read=' + runner, '--allow-fs-read=' + scenarios, '--allow-fs-read=' + candidate,
   runner, candidate, String(inst.m),
 ], { encoding: 'utf8', timeout: 60000, maxBuffer: 64 * 1024 * 1024, env: {}, stdio: ['ignore', 'pipe', 'pipe', 'pipe'] });
-let got: Record<string, { ok: boolean; value?: unknown }> = {};
-got = (readSingleResult(child.output?.[3] as string | null) as typeof got) ?? {};
+const fd3 = child.output?.[3] as string | null;
+if (!fd3 && (child.status !== 0 || (child.stderr ?? '').trim())) {
+  // A legitimate run (correct, broken or adversarial candidate) always writes SOMETHING to fd 3: run.ts's own
+  // import is wrapped so even a candidate that fails to import still produces an all-false result before exiting.
+  // An empty fd 3 alongside a nonzero exit or stderr means run.ts itself never reached that write -- our own
+  // scorer/harness broke, not the candidate -- so this is infrastructure, never a candidate's shipped defects.
+  console.error('oracle infrastructure: worker produced no result (' + (child.stderr ?? '').trim() + ')');
+  process.exit(2);
+}
+let got: Record<string, { ok: boolean; value?: unknown }> = (readSingleResult(fd3) as typeof got) ?? {};
 function subset(exp: unknown, act: unknown): boolean {
   if (Array.isArray(exp)) return Array.isArray(act) && act.length === exp.length && exp.every((e, i) => subset(e, act[i]));
   if (exp && typeof exp === 'object') return !!act && typeof act === 'object' && !Array.isArray(act) && Object.entries(exp).every(([k, v]) => subset(v, (act as any)[k]));

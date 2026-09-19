@@ -3,7 +3,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { spawnSync } from 'node:child_process';
-import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { buildLedgerSrc, LEDGER_DEFECTS, writeLedgerTask } from './bench-build-ledger-gen.ts';
@@ -121,4 +121,31 @@ test('CLOSED (was a documented residual): a workspace that knows the private ora
     assert.equal(scored.score, 0, 'the permission allowlist should deny reading expected.json inside the forged hook');
     assert.equal(scored.defects_caught, 0);
   } finally { rmSync(workspace, { recursive: true, force: true }); }
+});
+
+test('oracle rejects a workspace root symlink as non-scoreable tamper', () => {
+  const task = resolve('tasks/build-ledger-s1');
+  const root = mkdtempSync(join(tmpdir(), 'build-oracle-root-link-'));
+  try {
+    const link = join(root, 'workspace');
+    symlinkSync(join(task, 'fixtures', 'correct'), link, 'dir');
+    const run = spawnSync(process.execPath, ['--import', import.meta.resolve('tsx'), join(task, 'oracle', 'score.ts'), link],
+      { encoding: 'utf8', timeout: 30_000 });
+    assert.equal(run.status, 3, run.stderr || run.stdout);
+    assert.equal(run.stdout.trim(), '', 'tamper must not emit an observed defect score');
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test('oracle worker startup failure is infrastructure, never observed defect misses', () => {
+  const root = mkdtempSync(join(tmpdir(), 'build-oracle-worker-failure-'));
+  try {
+    const task = join(root, 'task');
+    cpSync(resolve('tasks/build-ledger-s1'), task, { recursive: true });
+    writeFileSync(join(task, 'oracle', 'run.ts'), 'throw new Error("injected worker startup failure");\n');
+    const run = spawnSync(process.execPath, ['--import', import.meta.resolve('tsx'), join(task, 'oracle', 'score.ts'), join(task, 'fixtures', 'correct')],
+      { encoding: 'utf8', timeout: 30_000 });
+    assert.equal(run.status, 2, run.stderr || run.stdout);
+    assert.match(run.stderr, /injected worker startup failure/);
+    assert.equal(run.stdout.trim(), '', 'worker failure must not enter caught/shipped denominators');
+  } finally { rmSync(root, { recursive: true, force: true }); }
 });

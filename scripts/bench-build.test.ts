@@ -127,13 +127,26 @@ for (const [name, extra] of Object.entries({
   timeout: {outcome:'timeout'},
   invalidRoom: {outcome:'invalid_room'},
   unknownCost: {usage:{cost_usd:null}},
-  negativeCost: {usage:{cost_usd:-1}},
-})) test(`refuses ${name} before running the private oracle`, () => {
+})) test(`retains measured caught/shipped for ${name} without inventing cost or protocol success`, () => {
+  const task=seededTask(checks), root=join(tmpdir(),`build-terminal-${process.pid}-${Date.now()}`);
+  const fake=fakeBench({...valid,...extra});
+  try {
+    const run=invoke(task,root,fake.path);
+    assert.equal(run.status,0,run.stderr);
+    const r=JSON.parse(readFileSync(join(root,'build-result.json'),'utf8'));
+    assert.equal(r.scores.defects_caught,1);
+    assert.equal(r.scores.defects_shipped,2);
+    assert.equal(r.execution_outcome,('outcome' in extra ? extra.outcome : 'completed'));
+    assert.equal(r.protocol_failure,name!=='unknownCost');
+    if(name==='unknownCost') assert.equal(r.usage.cost_usd,null);
+  } finally {rmSync(task,{recursive:true,force:true});rmSync(root,{recursive:true,force:true});rmSync(fake.dir,{recursive:true,force:true});}
+});
+for (const extra of [{usage:{cost_usd:-1}},{outcome:'infrastructure_error'},{outcome:'tamper'}]) test(`refuses corrupted or infrastructure-invalid records ${JSON.stringify(extra)}`, () => {
   const task=seededTask(checks), root=join(tmpdir(),`build-invalid-${process.pid}-${Date.now()}`);
   const fake=fakeBench({...valid,...extra});
   try {
     const run=invoke(task,root,fake.path);
-    assert.notEqual(run.status,0, 'invalid runs must not receive a caught/shipped score');
+    assert.notEqual(run.status,0);
     assert.equal(existsSync(join(root,'build-result.json')),false);
   } finally {rmSync(task,{recursive:true,force:true});rmSync(root,{recursive:true,force:true});rmSync(fake.dir,{recursive:true,force:true});}
 });

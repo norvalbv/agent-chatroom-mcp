@@ -29,7 +29,7 @@ type RawResult = {
   room_validation?: { state?: string; proposal_id?: string; verified?: boolean; verifier_session_distinct?: boolean; distinct_sessions?: number };
   anti_tamper?: { unchanged?: boolean };
   effort?: { level?: string; settings_path?: string; settings_sha256?: string; own_git_root?: boolean };
-  usage?: { cost_usd?: number };
+  usage?: { cost_usd?: number | null };
   turns?: { summed?: number };
   wall_clock?: { duration_ms?: number };
   seats?: unknown[];
@@ -153,14 +153,14 @@ async function main() {
   catch { fail("underlying result.json is not JSON"); }
   if (raw.arm !== arm || raw.seed !== seed) fail("underlying result does not match requested arm/seed");
   if (raw.anti_tamper?.unchanged !== true) fail("anti-tamper provenance is absent or reports a changed fixture");
-  if (raw.outcome !== 'completed') fail(`underlying run ${raw.outcome ?? 'missing outcome'}: ${raw.error ?? 'not eligible for scoring'}`);
+  if (!['completed','timeout','invalid_room'].includes(raw.outcome ?? '')) fail(`underlying run ${raw.outcome ?? 'missing outcome'}: ${raw.error ?? 'not eligible for scoring'}`);
   if (raw.task_id !== launchTaskId || hashTree(resolvedTask) !== launchTaskHash) fail('tamper: task changed during execution');
-  if (typeof raw.usage?.cost_usd !== 'number' || !Number.isFinite(raw.usage.cost_usd) || raw.usage.cost_usd < 0) fail('actual model cost is unknown or invalid');
-  if (arm === 'B') {
+  if (raw.usage?.cost_usd !== null && (typeof raw.usage?.cost_usd !== 'number' || !Number.isFinite(raw.usage.cost_usd) || raw.usage.cost_usd < 0)) fail('actual model cost is absent or invalid');
+  if (arm === 'B' && raw.outcome === 'completed') {
     const r = raw.review_integrity;
     if (r?.unchanged !== true || !/^[a-f0-9]{64}$/.test(r.workspace_sha256_before ?? '') || r.workspace_sha256_before !== r.workspace_sha256_after) fail('reviewer snapshot boundary is unverified or changed');
   }
-  if (arm === 'C') {
+  if (arm === 'C' && raw.outcome === 'completed') {
     const r = raw.room_validation;
     if (r?.state !== 'concluded' || !r.proposal_id || r.verified !== true || r.verifier_session_distinct !== true || !(r.distinct_sessions! >= 4)) fail('room lacks independently verified conclusion');
   }
@@ -190,6 +190,8 @@ async function main() {
   const output = {
     schemaVersion: 1,
     outcome: scored.reason,
+    execution_outcome: raw.outcome,
+    protocol_failure: raw.outcome !== 'completed',
     run_config: raw.run_config ?? null,
     run_fingerprint: raw.run_fingerprint ?? null,
     task_id: raw.task_id,

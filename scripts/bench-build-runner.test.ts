@@ -41,6 +41,7 @@ async function run(arm: string, mode = 'normal') {
   writeFileSync(stub, `#!/usr/bin/env node
 const fs=require('node:fs');
 const a=process.argv.slice(2); const reviewer=a.some(x=>x.includes('reviewing another engineer'));
+if(${JSON.stringify(mode)}==='orphan-writer'){require('node:child_process').spawn(process.execPath,['-e',\"setTimeout(()=>require('node:fs').writeFileSync('value.txt','late orphan write'),1200)\"],{stdio:'ignore'}).unref();}
 if(${JSON.stringify(mode)}==='review-tamper'&&reviewer)fs.writeFileSync('../workspace/value.txt','tampered');
 console.log(JSON.stringify({type:'result',subtype:'success',is_error:false,result:reviewer?'REVISE: check again':'done',num_turns:1,total_cost_usd:0.001,modelUsage:{stub:{thinkingTokens:9}},usage:{input_tokens:1,output_tokens:2,cache_read_input_tokens:0,cache_creation_input_tokens:0}}));
 `); chmodSync(stub, 0o755);
@@ -53,6 +54,10 @@ console.log(JSON.stringify({type:'result',subtype:'success',is_error:false,resul
       '--expected-task-sha256',hashTree(task),'--max-budget-usd','1','--effort','medium','--port',String(port),'--deadline-ms','10000'],
       { encoding:'utf8', timeout:30_000, env:{...process.env,PATH:bin+delimiter+process.env.PATH} });
     assert.equal(child.status,0,child.stderr);
+    if(mode==='orphan-writer'){
+      await new Promise(ok=>setTimeout(ok,1500));
+      assert.equal(readFileSync(join(root,'workspace','value.txt'),'utf8'),'broken','orphan tool must be stopped before scoring');
+    }
     return JSON.parse(readFileSync(join(root,'result.json'),'utf8'));
   } finally { rmSync(base,{recursive:true,force:true}); }
 }
@@ -120,3 +125,5 @@ test('C allocates a quarter to four seats but rejects code without a verified co
   assert.equal(r.outcome,'invalid_room');
   assert.match(r.build.hub_build_sha256,/^[a-f0-9]{64}$/);
 });
+
+test('seat completion stops its orphan tool process group before scoring', async () => { await run('A','orphan-writer'); });

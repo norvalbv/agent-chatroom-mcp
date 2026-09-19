@@ -46,10 +46,10 @@ export function revision(dir: string): string | null {
 }
 export async function stop(child: ChildProcess) {
   if (child.exitCode !== null || child.signalCode !== null || !child.pid) return;
-  child.kill("SIGTERM");
+  killTracked(child, "SIGTERM");
   await Promise.race([new Promise<void>((ok) => child.once("exit", () => ok())), delay(500)]);
   if (child.exitCode === null && child.signalCode === null) {
-    child.kill("SIGKILL");
+    killTracked(child, "SIGKILL");
     await Promise.race([new Promise<void>((ok) => child.once("exit", () => ok())), delay(500)]);
   }
 }
@@ -58,16 +58,28 @@ export async function stop(child: ChildProcess) {
 // this script kills them too, instead of leaving them reparented to pid 1. `exit` handlers must be
 // synchronous, so this issues SIGKILL directly rather than the graceful stop() above.
 const trackedChildren = new Set<ChildProcess>();
-export function track(child: ChildProcess): ChildProcess {
+const groupedChildren = new WeakSet<ChildProcess>();
+function killTracked(child: ChildProcess, signal: NodeJS.Signals) {
+  if (!child.pid) return;
+  try {
+    if (groupedChildren.has(child)) process.kill(-child.pid, signal);
+    else child.kill(signal);
+  } catch (error: any) { if (error.code !== 'ESRCH') throw error; }
+}
+export function track(child: ChildProcess, grouped = false): ChildProcess {
+  if (grouped) groupedChildren.add(child);
   trackedChildren.add(child);
-  child.once("exit", () => trackedChildren.delete(child));
+  child.once("exit", () => {
+    if (grouped) killTracked(child, 'SIGKILL');
+    trackedChildren.delete(child);
+  });
   return child;
 }
 process.on("exit", () => {
   for (const child of trackedChildren) {
     if (child.exitCode === null && child.signalCode === null && child.pid) {
       try {
-        child.kill("SIGKILL");
+        killTracked(child, "SIGKILL");
       } catch {}
     }
   }
@@ -119,7 +131,7 @@ export interface SeatRecord {
 export function runClaudeSeat(name: string, args: string[], cwd: string, deadlineMs: number): Promise<SeatRecord> {
   return new Promise((res) => {
     const startedAt = new Date();
-    const child = track(spawn("claude", args, { cwd, env: seatChildEnv(process.env, name), stdio: ["ignore", "pipe", "pipe"] }));
+    const child = track(spawn("claude", args, { cwd, detached: true, env: seatChildEnv(process.env, name), stdio: ["ignore", "pipe", "pipe"] }), true);
     let buffered = "";
     let resultLine: string | null = null;
     let err = "";
@@ -169,9 +181,9 @@ export function runClaudeSeat(name: string, args: string[], cwd: string, deadlin
     child.once("error", (e) => { err += String(e); });
     const killer = setTimeout(() => {
       killedByDeadline = true;
-      child.kill("SIGTERM");
+      killTracked(child, "SIGTERM");
       setTimeout(() => {
-        if (child.exitCode === null && child.signalCode === null) child.kill("SIGKILL");
+        if (child.exitCode === null && child.signalCode === null) killTracked(child, "SIGKILL");
       }, 2000).unref();
     }, deadlineMs);
     child.on("close", (code, signal) => {

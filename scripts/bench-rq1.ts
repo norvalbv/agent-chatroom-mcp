@@ -1,8 +1,8 @@
 /** RQ1 harness mode (paper/protocol.md section 1): runs one (task, arm, seed) on real Claude seats.
  * Arm A: one claude seat, no chatroom tools, the task brief plus a minimal "where to put your answer"
  * scaffold. Arm B (protocol.md 2.1): a fixed no-chat builder+reviewer pipeline — builder produces an
- * answer/patch, a separate reviewer instance sees only the builder's final message and the brief (no
- * MCP tools, no shared room, cannot itself edit files) and either approves or sends back one revision
+ * answer/patch, a separate reviewer instance sees the builder's final message, the brief and a throwaway
+ * snapshot copy of the workspace (no MCP tools, no shared room; its edits never reach the scored files) and either approves or sends back one revision
  * request; at most one further builder pass. Arm C: a chatroom room on a hub this script starts, the
  * fixed seat count for the task, the full hub surface (challenge + verification on). All arms launch
  * seats through claudeArgs() so the only difference between arms is the arm itself, per item 1's

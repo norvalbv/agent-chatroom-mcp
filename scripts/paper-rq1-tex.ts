@@ -35,18 +35,22 @@ const TASK_LABEL: Record<string, string> = {
   "bench-printf-format": "bench-printf-format",
 };
 
+/** Cost per correct answer is deliberately NOT a column here: sonnet-4's Table~\ref{tab:cost-per-correct}
+ * (paper/tables/cost-per-correct-table.tex) is the single source for that figure, with output tokens and
+ * a per-row date range so it also carries the regime disclosure; this table cites it rather than
+ * duplicating the number (verifier: "drop the cost column from Table 3, and \ref the kept table"). */
 function tablePerTask(suiteRuns: ReturnType<typeof loadRunResults>["runs"], kTable: ReturnType<typeof buildArmKTable>): string {
   const tasks = ["stamp-interpreter", "stamp-2", "bench-printf-format"];
-  let tex = "\\begin{tabular}{llrrl}\n\\toprule\nTask & Arm & Pass/$n$ & Success rate & Cost/correct \\\\\n\\midrule\n";
+  let tex = "\\begin{tabular}{llrr}\n\\toprule\nTask & Arm & Pass/$n$ & Success rate \\\\\n\\midrule\n";
   for (const task of tasks) {
     for (const arm of ["A", "C"] as const) {
       const cell = computeCell(task, arm, suiteRuns.filter((r) => r.task_id === task && r.arm === arm));
-      tex += `${esc(TASK_LABEL[task])} & ${arm} & ${cell.task_pass}/${cell.success_denominator} & ${pct(cell.success_rate)} & ${money(cell.cost_per_correct)} \\\\\n`;
+      tex += `${esc(TASK_LABEL[task])} & ${arm} & ${cell.task_pass}/${cell.success_denominator} & ${pct(cell.success_rate)} \\\\\n`;
     }
     const kRow = kTable.tasks.find((t) => t.task === task);
     if (kRow) {
       const rate = kRow.k_groups ? kRow.k_pass / kRow.k_groups : null;
-      tex += `${esc(TASK_LABEL[task])} & K & ${kRow.k_pass}/${kRow.k_groups} & ${pct(rate)} & ${money(kRow.cost_per_correct)} \\\\\n`;
+      tex += `${esc(TASK_LABEL[task])} & K & ${kRow.k_pass}/${kRow.k_groups} & ${pct(rate)} \\\\\n`;
     }
     tex += "\\addlinespace\n";
   }

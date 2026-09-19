@@ -35,11 +35,15 @@ const isK=argv.includes('--arm-c-result')||argv.includes('--resume');
 const arm=isK?'K':argv[1];
 const seed=Number(isK?argv[2]:argv[2]);
 appendFileSync(${JSON.stringify(callsPath)},JSON.stringify({argv,arm,seed})+'\\n');
+if(process.env.STUB_FAIL_ARM===arm)process.exit(2);
 mkdirSync(root,{recursive:true});
-const result={schemaVersion:2,task_id:basename(argv[0]),arm,seed,outcome:'task_pass',passed:true,
- usage:{cost_usd:0.01,coverage:'complete'},wall_clock:{duration_ms:10},
- thinking_tokens:arm==='A'?7000:arm==='AH'?11000:5000,output_tokens:arm==='A'?7200:arm==='AH'?11200:5200,
- seats:[],attempts:[],selection:{votes:{ok:1}}};
+const thinking=arm==='A'?7000:arm==='AH'?11000:5000;
+const output=arm==='A'?7200:arm==='AH'?11200:5200;
+const modelUsage=process.env.STUB_MISSING_THINKING==='1'&&arm==='A'?{served:{outputTokens:output}}:{served:{thinkingTokens:thinking,outputTokens:output}};
+const outcome=process.env.STUB_OUTCOME??'task_pass';
+const result={schemaVersion:2,task_id:basename(argv[0]),arm,seed,outcome,passed:outcome==='task_pass',
+ usage:{cost_usd:0.01,coverage:'complete',output_tokens:output},wall_clock:{duration_ms:10},
+ seats:[{model_usage:modelUsage,usage:{output_tokens:output}}],attempts:[],selection:{votes:{ok:1}}};
 writeFileSync(join(root,'result.json'),JSON.stringify(result));
 `,
   );
@@ -59,6 +63,7 @@ test("confirmatory plan accepts A/AH/B/K/C and balances ordinal position in each
       "--seeds", "501-505",
       "--arms", ARMS.join(","),
       "--k", "stamp-interpreter=10",
+      "--confirmatory",
       "--tasks-dir", f.tasksDir,
       "--results-dir", f.resultsDir,
     ]);
@@ -96,6 +101,7 @@ test("confirmatory execution uses flat A/AH caps, natural B/C completion, fixed 
       "--seeds", "501",
       "--arms", ARMS.join(","),
       "--k", "stamp-interpreter=10",
+      "--confirmatory",
       "--tasks-dir", f.tasksDir,
       "--results-dir", f.resultsDir,
       "--runner", f.runner,
@@ -123,6 +129,7 @@ test("confirmatory execution uses flat A/AH caps, natural B/C completion, fixed 
     assert.ok(k);
     assert.equal(k.argv[1], "10");
     assert.equal(k.argv.includes("--resume"), true);
+    assert.equal(k.argv[k.argv.indexOf("--effort") + 1], "medium", "every K attempt must inherit the pinned normal effort");
 
     const second = await runGrid(args, { log: () => {}, portStart: 24600 });
     assert.equal(second.ran, 0);
@@ -130,8 +137,72 @@ test("confirmatory execution uses flat A/AH caps, natural B/C completion, fixed 
     assert.equal(calls(f.callsPath).length, 5, "finished cells are not rerun");
 
     const sentinel = JSON.parse(readFileSync(join(f.resultsDir, "sentinel.json"), "utf8"));
-    assert.ok(sentinel[basename(f.taskDir)], "arm-A tokens must be recorded as a per-task regime sentinel");
+    const taskSentinel = sentinel[basename(f.taskDir)];
+    assert.ok(taskSentinel, "arm-A tokens must be recorded as a per-task regime sentinel");
+    assert.equal(taskSentinel.n, 1, "AH is a treatment arm, not a regime sentinel; only arm A contributes one observation per seed");
+    assert.equal(taskSentinel.min_thinking, 7000);
+    assert.equal(taskSentinel.max_thinking, 7000);
   } finally {
+    rmSync(f.dir, { recursive: true, force: true });
+  }
+});
+
+test("confirmatory resume keeps a finished timeout as data instead of outcome-adaptively rerunning it", async () => {
+  const f = fixture();
+  try {
+    process.env.STUB_OUTCOME = "timeout";
+    const args = parseArgs([
+      "--tasks", "stamp-interpreter", "--seeds", "501", "--arms", "C", "--confirmatory",
+      "--tasks-dir", f.tasksDir, "--results-dir", f.resultsDir, "--runner", f.runner,
+    ]);
+    const first = await runGrid(args, { log: () => {}, portStart: 24700 });
+    assert.equal(first.ran, 1);
+    delete process.env.STUB_OUTCOME;
+    const resumed = await runGrid(args, { log: () => {}, portStart: 24800 });
+    assert.equal(resumed.ran, 0, "a confirmatory timeout remains the registered outcome for that cell");
+    assert.equal(resumed.skipped_done, 1);
+    assert.equal(calls(f.callsPath).length, 1);
+  } finally {
+    delete process.env.STUB_OUTCOME;
+    rmSync(f.dir, { recursive: true, force: true });
+  }
+});
+
+test("confirmatory child failure makes spend unknown and halts a capped grid before another arm", async () => {
+  const f = fixture();
+  try {
+    process.env.STUB_FAIL_ARM = "A";
+    const args = parseArgs([
+      "--tasks", "stamp-interpreter", "--seeds", "501", "--arms", "A,AH", "--confirmatory",
+      "--tasks-dir", f.tasksDir, "--results-dir", f.resultsDir, "--runner", f.runner, "--max-cost-usd", "1",
+    ]);
+    const summary = await runGrid(args, { log: () => {} });
+    assert.equal(summary.ran, 0);
+    assert.equal(summary.infra_failed, 1);
+    assert.equal(summary.unknown_cost_groups, 1, "the failed child may have spent money; unknown is not zero");
+    assert.equal(calls(f.callsPath).length, 1, "AH must not start after spend becomes unknown");
+  } finally {
+    delete process.env.STUB_FAIL_ARM;
+    rmSync(f.dir, { recursive: true, force: true });
+  }
+});
+
+test("missing arm-A thinking provenance is recorded as unknown, never calibrated by output alone", async () => {
+  const f = fixture();
+  try {
+    process.env.STUB_MISSING_THINKING = "1";
+    const args = parseArgs([
+      "--tasks", "stamp-interpreter", "--seeds", "501", "--arms", "A", "--confirmatory",
+      "--tasks-dir", f.tasksDir, "--results-dir", f.resultsDir, "--runner", f.runner,
+    ]);
+    const summary = await runGrid(args, { log: () => {} });
+    assert.equal(summary.ran, 1);
+    const sentinel = JSON.parse(readFileSync(join(f.resultsDir, "sentinel.json"), "utf8"))["stamp-interpreter"];
+    assert.equal(sentinel.regime, "unknown");
+    assert.equal(sentinel.min_thinking, null);
+    assert.equal(sentinel.max_thinking, null);
+  } finally {
+    delete process.env.STUB_MISSING_THINKING;
     rmSync(f.dir, { recursive: true, force: true });
   }
 });

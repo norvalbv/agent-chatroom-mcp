@@ -1,4 +1,4 @@
-# Two independent boundary-inclusivity bugs (candidate, status: pending)
+# Two independent boundary-inclusivity bugs (RETIRED at the 3-seed screen: 3 of 3 arm-A passes, see ADMISSION.md)
 
 Only `public/` is copied into a seat's workspace. `public/scheduling.ts` and
 `fixtures/broken/scheduling.ts` are identical: two independent planted defects,
@@ -53,29 +53,7 @@ this task a test of whether a shared workspace (not necessarily the full
 challenge/verification gate) recovers complementary partial fixes that
 independent, non-communicating sampling structurally cannot.
 
-## Status: pending, not admitted
+## Status: retired
 
-No Claude spend has been made on this task yet. Per `paper/method.tex`'s
-admission rule, a 3-seed screen may reject a task early (three passes out of
-three) without spending the full ten seeds, but no task is admitted on fewer
-than ten. Before any admission pilot:
-
-1. A non-author read of `public/brief.txt` and `public/scheduling.ts` alone
-   (without this README) should independently derive both correct fixes, to
-   confirm the oracle is not looking for behavior the public files don't
-   determine.
-2. A cheap 3-seed arm-A screen (Claude, `scripts/bench-rq1.ts tasks/complementary-fix A <seed>`)
-   checks the two bugs are actually found and missed *independently* across
-   seeds (not perfectly correlated -- if every failing seed misses both bugs
-   together, there is no complementary-discovery signal to test, and the task
-   should be retired rather than tuned).
-3. Only after (1) and (2) does a 10-seed admission pilot, then an arm-C
-   pilot, get funded -- each spend logged on the room's board `ledger` key
-   first.
-
-**Falsifier, stated before any pilot spend:** if a 3-seed (or later 10-seed)
-arm-A screen shows the two bugs are missed in a perfectly correlated way (a
-single seed that misses one always misses the other, e.g. because a model
-skims the whole spec once and either reads carefully or doesn't), this task
-does not test complementary discovery and must be retired, not kept and
-re-tuned post hoc.
+The 3-seed arm-A screen passed 3 of 3 (ceiling); `screen/seed{1,2,3}-result.json` are the raw results and ADMISSION.md is the record.
+The text above is the design as written before the screen, kept so the rejection is reproducible.

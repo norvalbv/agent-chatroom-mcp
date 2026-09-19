@@ -29,7 +29,7 @@ function seededTask(checks: unknown, manifest = { defect_ids: ["rounding", "canc
 }
 
 function invoke(task: string, root: string, fake: string, arm = "A") {
-  return spawnSync(process.execPath, ["--import", "tsx", runner, task, arm, "7", "--root", root, "--runner", fake, "--run-fingerprint", "b".repeat(64)], { encoding: "utf8", timeout: 20_000 });
+  return spawnSync(process.execPath, ["--import", "tsx", runner, task, arm, "7", "--root", root, "--runner", fake, "--grid-fingerprint", "b".repeat(64)], { encoding: "utf8", timeout: 20_000 });
 }
 
 const valid = {
@@ -63,7 +63,10 @@ test("reduces named defect and regression checks to independent caught/shipped c
     assert.equal(out.usage.cost_usd, 0.4);
     assert.equal(out.turns, 17);
     assert.equal(out.outcome,'completed');
-    assert.equal(out.provenance.run_fingerprint,'b'.repeat(64));
+    assert.equal(out.oracle_outcome,'task_fail');
+    assert.equal(out.protocol_success,true);
+    assert.equal(out.protocol_adjusted_catch_fraction,.5);
+    assert.equal(out.provenance.grid_fingerprint,'b'.repeat(64));
     assert.match(out.provenance.manifest_sha256,/^[a-f0-9]{64}$/);
     assert.match(out.provenance.runner_sha256,/^[a-f0-9]{64}$/);
     assert.equal(out.usage.output_tokens,7);

@@ -23,6 +23,7 @@ type RawResult = {
   seed: number;
   outcome?: string;
   error?: string;
+  outcome_evidence?: Record<string, unknown>;
   run_config?: unknown;
   run_fingerprint?: string;
   review_integrity?: { unchanged?: boolean; workspace_sha256_before?: string; workspace_sha256_after?: string };
@@ -126,7 +127,7 @@ async function main() {
   const rootArg = takeFlag(argv, "root");
   if (!rootArg) fail("--root is required");
   const runner = resolve(takeFlag(argv, "runner") ?? resolve(here, "bench-build-runner.ts"));
-  const gridFingerprint = takeFlag(argv, 'run-fingerprint') ?? null;
+  const gridFingerprint = takeFlag(argv, 'grid-fingerprint') ?? null;
   if (gridFingerprint !== null && !/^[a-f0-9]{64}$/.test(gridFingerprint)) fail('invalid grid run fingerprint');
   if (!existsSync(runner)) fail(`runner not found: ${runner}`);
   const root = resolve(rootArg);
@@ -203,8 +204,12 @@ async function main() {
     schemaVersion: 1,
     outcome: raw.outcome,
     scored_outcome: scored.reason,
+    oracle_outcome: scored.reason,
     execution_outcome: raw.outcome,
     protocol_failure: raw.outcome !== 'completed',
+    protocol_success: raw.outcome === 'completed',
+    protocol_adjusted_catch_fraction: raw.outcome === 'completed' ? caught / defects.length : 0,
+    outcome_evidence: { ...raw.outcome_evidence, scorer_exit_code: scored.oracle.exit_code },
     run_config: raw.run_config ?? null,
     run_fingerprint: raw.run_fingerprint ?? null,
     task_id: raw.task_id,
@@ -227,7 +232,7 @@ async function main() {
     seats: Array.isArray(raw.seats) ? raw.seats.length : null,
     seat_records: raw.seats ?? null,
     effort,
-    provenance: { run_fingerprint: gridFingerprint, native_run_fingerprint: raw.run_fingerprint ?? null,
+    provenance: { grid_fingerprint: gridFingerprint, native_run_fingerprint: raw.run_fingerprint ?? null,
       manifest_sha256: manifestHash, runner_sha256: wrapperHash, expected_task_sha256: launchTaskHash,
       oracle_adapter_sha256_before: adapterHashBefore, oracle_adapter_sha256_after: adapterHashAfter, raw_result: "result.json", anti_tamper_unchanged: true, task_sha256_before_score: taskHashBeforeScore, task_sha256_after_score: taskHashAfterScore, runner },
   };

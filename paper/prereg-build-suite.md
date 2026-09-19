@@ -389,8 +389,10 @@ therefore no confirmatory run is authorized.
   `docs/build-suite-artifacts/MANIFEST.json` at evidence commit `e1cb5d2`. The
   public task also contained local giveaway residue. This evidence is immutable
   and is not called pinned-effort admission.
-- **Ledger-v2 rejected:** pinned-medium A caught 44/45 plants over five cells
-  (task-level 97.8%, outside [0.30,0.70]). The committed detailed run and per-defect
+- **Ledger-v2 rejected:** exploratory default-effort A caught 44/45 plants as run
+  over five cells (task-level 97.8%, outside [0.30,0.70]); after the S12 oracle
+  repair, re-scoring gives 45/45. These are ceiling evidence, not a pinned-effort
+  admission sample. The committed detailed run and per-defect
   tables are `docs/build-suite-admission.md` and
   `docs/build-suite-admission-runs.json` on generator evidence commit `e8dbd0c`.
   Their raw runner outputs are indexed in

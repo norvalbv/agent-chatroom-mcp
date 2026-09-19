@@ -21,9 +21,9 @@
  * scripts/bench-ak.ts (--ak-runner) once per (task, seed) group, root `<results-dir>/<task>-K-seed<N>`. It
  * is refused for a group whose paired arm C result (`<c-results-dir>/<task>-C-seed<N>/result.json`,
  * default --results-dir) does not exist. A group is finished iff its result.json exists; an interrupted
- * group is resumed with --resume so finished attempts inside it are not rerun. --concurrency N bounds the
+ * group is resumed with --resume so finished attempts inside it are not rerun. --c-seed-offset N pairs seed s with C seed s+N (pilot only: seeds 1-3 borrow C 101-103's budget). --concurrency N bounds the
  * attempts running at once inside one group. Arm K's cost is its result's usage.cost_usd, null
- * when any attempt's usage is unknown (as is any result whose usage.coverage is not complete); unknown is never summed as zero, and once any finished group has
+ * when any attempt's usage is unknown (as is any result whose usage.coverage is not complete); unknown is never summed as zero (a group that fails after launch counts as unknown and stops the grid), and once any finished group has
  * unknown cost --max-cost-usd cannot be trusted, so later runs are skipped as cost-cap.
  */
 import { spawn, type ChildProcess } from "node:child_process";
@@ -106,6 +106,7 @@ export interface ParsedGridArgs {
   kByTask: Record<string, number>;
   akRunner: string;
   cResultsDir: string | null;
+  cSeedOffset: number;
   concurrency: string | null;
   model: string;
   maxCostUsd: number | null;
@@ -179,6 +180,7 @@ export function parseArgs(argv: string[], tasksDirDefault = "tasks"): ParsedGrid
     kByTask,
     akRunner: resolve(flag("ak-runner", "scripts/bench-ak.ts")!),
     cResultsDir: flag("c-results-dir") ? resolve(flag("c-results-dir")!) : null,
+    cSeedOffset: Number(flag("c-seed-offset", "0")),
     concurrency: flag("concurrency") ?? null,
     resultsDir: resolve(flag("results-dir", "bench/results/rq1")!),
     runner: resolve(flag("runner", "scripts/bench-rq1.ts")!),
@@ -298,7 +300,7 @@ export async function runGrid(args: ParsedGridArgs, opts: { log?: (s: string) =>
     if (args.hubEntry) runnerArgs.push("--hub-entry", args.hubEntry);
 
     if (item.arm === "K") {
-      const armCResultPath = join(args.cResultsDir ?? args.resultsDir, `${item.taskLabel}-C-seed${item.seed}`, "result.json");
+      const armCResultPath = join(args.cResultsDir ?? args.resultsDir, `${item.taskLabel}-C-seed${item.seed + args.cSeedOffset}`, "result.json");
       if (!existsSync(armCResultPath)) {
         log(`[infra-fail] ${item.taskLabel} K seed${item.seed}: no paired arm C result at ${armCResultPath} (arm K is refused without it)`);
         summary.infra_failed++;
@@ -355,9 +357,24 @@ export async function runGrid(args: ParsedGridArgs, opts: { log?: (s: string) =>
     if (status !== 0 || !existsSync(resultPath)) {
       log(`[infra-fail] ${item.taskLabel} ${item.arm} seed${item.seed}: exit ${status}, stderr: ${stderr.slice(-2000)}`);
       summary.infra_failed++;
+      if (item.arm === "K") {
+        // A failed group may already hold paid attempts whose cost was never recorded: unknown, not zero, and a
+        // systematic failure must not walk on through the remaining groups.
+        summary.unknown_cost_groups++;
+        log(`[halt] arm K group ${item.taskLabel} seed${item.seed} failed after launch; its spend is unknown, stopping the grid`);
+        break;
+      }
       continue;
     }
-    const written = readGridResult(resultPath);
+    let written: GridRunResult;
+    try {
+      written = readGridResult(resultPath);
+    } catch (error) {
+      log(`[infra-fail] ${item.taskLabel} ${item.arm} seed${item.seed}: unreadable result.json after the run: ${String(error)}`);
+      summary.infra_failed++;
+      summary.unknown_cost_groups++;
+      break;
+    }
     if (written.cost_usd === null) summary.unknown_cost_groups++;
     else runningTotal += written.cost_usd;
     summary.total_cost_usd = runningTotal;

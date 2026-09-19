@@ -347,4 +347,46 @@ test("readGridResult / scanExistingCost: cost_usd 0 with coverage partial or non
   }
 });
 
+test("runGrid: an arm K group that exits non-zero after launch is unknown cost and stops the grid", async () => {
+  const f = akFixture();
+  try {
+    const failing = join(f.dir, "failing-ak.mjs");
+    writeFileSync(failing, `import { mkdirSync } from 'node:fs';
+import { join } from 'node:path';
+const argv = process.argv.slice(2);
+mkdirSync(join(argv[argv.indexOf('--root') + 1], 'attempt-1'), { recursive: true });
+process.exit(1);
+`);
+    mkdirSync(join(f.cDir, "bench-fact-check-C-seed2"), { recursive: true });
+    writeFileSync(join(f.cDir, "bench-fact-check-C-seed2", "result.json"), JSON.stringify({ outcome: "task_pass", usage: { cost_usd: 0.6 }, wall_clock: { duration_ms: 5000 } }));
+    const argv = [...f.armK];
+    argv[argv.indexOf("--seeds") + 1] = "1,2";
+    argv[argv.indexOf("--ak-runner") + 1] = failing;
+    const summary = await runGrid(parseArgs(argv), { log: () => {} });
+    assert.equal(summary.infra_failed, 1, "seed 2 never starts");
+    assert.equal(summary.unknown_cost_groups, 1);
+    assert.equal(summary.ran, 0);
+  } finally {
+    rmSync(f.dir, { recursive: true, force: true });
+  }
+});
+
+test("runGrid: --c-seed-offset pairs a pilot seed with another seed's arm C result", async () => {
+  const f = akFixture();
+  try {
+    mkdirSync(join(f.cDir, "bench-fact-check-C-seed101"), { recursive: true });
+    writeFileSync(join(f.cDir, "bench-fact-check-C-seed101", "result.json"), JSON.stringify({ outcome: "task_pass", usage: { cost_usd: 0.6 }, wall_clock: { duration_ms: 5000 } }));
+    const argv = [...f.armK, "--c-seed-offset", "100"];
+    argv[argv.indexOf("--seeds") + 1] = "1";
+    rmSync(join(f.cDir, "bench-fact-check-C-seed1"), { recursive: true });
+    const summary = await runGrid(parseArgs(argv), { log: () => {} });
+    assert.equal(summary.ran, 1);
+    const call = invocations(f.invocationsLog)[0];
+    assert.match(call.argv[call.argv.indexOf("--arm-c-result") + 1], /C-seed101/);
+    assert.equal(call.argv[2], "1", "the K group keeps its own seed");
+  } finally {
+    rmSync(f.dir, { recursive: true, force: true });
+  }
+});
+
 console.log("BENCH GRID OK");

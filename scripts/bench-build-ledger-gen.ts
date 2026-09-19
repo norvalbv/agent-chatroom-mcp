@@ -390,13 +390,20 @@ export async function writeLedgerTask(seed: number, out: string) {
   return inst;
 }
 
-const LEDGER_RUN = `/** Child of oracle/score.ts: runs every scenario against the workspace and prints the results as data. It never sees expected.json. */
+const LEDGER_RUN = `/** Child of oracle/score.ts: runs every scenario against the workspace and prints the results as data. It never sees expected.json.
+ * The result is written to fd 3 (a pipe score.ts owns), not stdout: stdout is shared with anything the workspace's own top-level
+ * code prints, including a hook that races or preempts us, so it is never trusted. writeSyncFd3 and the fs module reference are
+ * captured in a local closure BEFORE the workspace import runs, so a module that reassigns fs.writeSync afterward cannot change
+ * what this file itself calls. If the workspace's own code exits the process before this file's own write runs, fd 3 stays
+ * empty, which score.ts correctly reads as no result rather than a forged pass.
+ */
+import { writeSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { SCENARIOS } from './scenarios.ts';
 
+const writeSyncFd3 = writeSync;
 const stringify = JSON.stringify.bind(JSON);
-const write = process.stdout.write.bind(process.stdout);
 const [workspace, mText] = process.argv.slice(2);
 const out: Record<string, { ok: boolean; value?: unknown }> = {};
 let W: any = null;
@@ -404,7 +411,7 @@ try { W = (await import(pathToFileURL(resolve(workspace, 'src', 'warehouse.ts'))
 for (const id of Object.keys(SCENARIOS)) {
   try { out[id] = W ? { ok: true, value: JSON.parse(stringify(SCENARIOS[id](W, Number(mText)))) } : { ok: false }; } catch { out[id] = { ok: false }; }
 }
-write('\\n@@RESULT@@' + stringify(out) + '\\n');
+writeSyncFd3(3, stringify(out));
 process.exit(0);
 `;
 
@@ -419,17 +426,16 @@ import { spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-function readSingleResult(stdout: string): unknown {
-  // fable-review G1: a workspace module could register a process 'exit' hook (or forge output at
-  // import time) that prints a second, fabricated '@@RESULT@@' marker. Taking the last (or first)
-  // occurrence lets an attacker pick which one wins. Instead: a legitimate run.ts prints the marker
-  // exactly once; two or more occurrences is unambiguous evidence of tampering and is refused outright
-  // (scored as no result, never as a pass), so forging a marker can only cost the attacker, never help.
-  const marker = '@@RESULT@@';
-  let count = 0, at = -1;
-  for (let i = stdout.indexOf(marker); i !== -1; i = stdout.indexOf(marker, i + 1)) { count++; at = i; }
-  if (count !== 1) return null;
-  try { return JSON.parse(stdout.slice(at + marker.length)); } catch { return null; }
+function readSingleResult(fd3: string | null | undefined): unknown {
+  // fable-review G1 and its early-exit variant: a workspace module could print a forged result on
+  // shared stdout (a second marker racing the real one, or a single forged one before ever letting
+  // this file's own trusted code run). A result read over a dedicated pipe (fd 3), written only once
+  // by run.ts's own captured fs.writeSync reference after the workspace import returns control, is not
+  // reachable by anything printed to stdout/stderr; an empty or malformed fd 3 (including a workspace
+  // that exits before run.ts's own write, or that also writes to fd 3 itself and corrupts the blob) is
+  // refused outright rather than guessed at.
+  if (!fd3) return null;
+  try { return JSON.parse(fd3); } catch { return null; }
 }
 
 
@@ -439,9 +445,9 @@ const here = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = ${JSON.stringify(repoRoot)};
 const inst = JSON.parse(readFileSync(join(here, 'instance.json'), 'utf8'));
 const expected = JSON.parse(readFileSync(join(here, 'expected.json'), 'utf8'));
-const child = spawnSync(process.execPath, ['--import', 'tsx', join(here, 'run.ts'), resolve(workspace), String(inst.m)], { encoding: 'utf8', timeout: 60000, maxBuffer: 64 * 1024 * 1024, cwd: REPO_ROOT });
+const child = spawnSync(process.execPath, ['--import', 'tsx', join(here, 'run.ts'), resolve(workspace), String(inst.m)], { encoding: 'utf8', timeout: 60000, maxBuffer: 64 * 1024 * 1024, cwd: REPO_ROOT, stdio: ['ignore', 'pipe', 'pipe', 'pipe'] });
 let got: Record<string, { ok: boolean; value?: unknown }> = {};
-got = (readSingleResult(child.stdout) as typeof got) ?? {};
+got = (readSingleResult(child.output?.[3] as string | null) as typeof got) ?? {};
 function subset(exp: unknown, act: unknown): boolean {
   if (Array.isArray(exp)) return Array.isArray(act) && act.length === exp.length && exp.every((e, i) => subset(e, act[i]));
   if (exp && typeof exp === 'object') return !!act && typeof act === 'object' && !Array.isArray(act) && Object.entries(exp).every(([k, v]) => subset(v, (act as any)[k]));

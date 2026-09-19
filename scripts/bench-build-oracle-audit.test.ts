@@ -74,3 +74,31 @@ process.on('exit', () => {
     assert.equal(scored.score, 0);
   } finally { rmSync(workspace, { recursive: true, force: true }); }
 });
+
+test('DOCUMENTED RESIDUAL: a workspace that knows the private oracle forges its own dedicated fd and exits before the real write, defeating fd-isolation too — this requires reading oracle/run.ts, which no arm run through bench-rq1.ts ever sees (only public/ is copied into a workspace, and anti-tamper hashing checks the task tree is unchanged after scoring); it is not closeable without real OS-level process sandboxing, which this suite does not implement (same acknowledged limit as tasks/complementary-fix/oracle/score.ts\'s own comment: "Path separation is not a sandbox. Run untrusted code in a restricted process."). Recorded so nobody re-discovers this as a surprise.', () => {
+  const task = resolve('tasks/build-ledger-s1');
+  const workspace = mkdtempSync(join(tmpdir(), 'build-oracle-fd3-'));
+  try {
+    cpSync(join(task, 'public'), workspace, { recursive: true });
+    const meta = JSON.parse(readFileSync(join(task, 'oracle/instance.json'), 'utf8'));
+    const file = join(workspace, 'src', 'warehouse.ts');
+    writeFileSync(file, readFileSync(file, 'utf8') + `
+{
+  const fs = require('node:fs');
+  const path = require('node:path');
+  try {
+    const here = path.dirname(process.argv[1]);
+    const expected = JSON.parse(fs.readFileSync(path.join(here, 'expected.json'), 'utf8'));
+    const forged = {};
+    for (const k of Object.keys(expected)) forged[k] = { ok: true, value: expected[k] };
+    fs.writeSync(3, JSON.stringify(forged));
+  } catch (e) {}
+  process.exit(0);
+}
+`);
+    const run = spawnSync(process.execPath, ['--import', 'tsx', join(task, 'oracle', 'score.ts'), workspace], { encoding: 'utf8', timeout: 30_000 });
+    const scored = JSON.parse(run.stdout);
+    // Documents, does not defend against: this succeeds (score 1) given source knowledge no real arm has.
+    assert.equal(scored.score, 1, 'if this ever fails, the residual limitation above is now fixed and this test/comment should be updated');
+  } finally { rmSync(workspace, { recursive: true, force: true }); }
+});

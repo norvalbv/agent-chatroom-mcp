@@ -147,8 +147,11 @@ export function buildFigData(suiteDir: string, armKDir: string): FigData {
 
 async function main() {
   const argv = process.argv.slice(2);
-  const suiteDir = resolve(argv[0] && !argv[0].startsWith("--") ? argv.shift()! : "bench/results/rq1-suite");
-  const armKDir = resolve(argv[0] && !argv[0].startsWith("--") ? argv.shift()! : "bench/results/rq1-arm-k");
+  // Kept as given (not resolve()d to an absolute path): buildFigData records these verbatim in
+  // generated_from, and an absolute path would make fig-data.json differ byte-for-byte between a repo
+  // root, a worktree, and another machine's checkout even when every number in it is identical.
+  const suiteDir = argv[0] && !argv[0].startsWith("--") ? argv.shift()! : "bench/results/rq1-suite";
+  const armKDir = argv[0] && !argv[0].startsWith("--") ? argv.shift()! : "bench/results/rq1-arm-k";
   let out = "paper/generated/fig-data.json";
   while (argv.length) {
     const opt = argv.shift();

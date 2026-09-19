@@ -165,3 +165,16 @@ for (const [kind, workerSource] of [
     assert.equal(run.stdout.trim(), '', 'tamper must not become an observed score');
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
+
+test('oracle non-empty but malformed fd 3 transport is non-scoreable tamper, not all-missed defects', () => {
+  const root = mkdtempSync(join(tmpdir(), 'build-oracle-malformed-'));
+  try {
+    const task = join(root, 'task');
+    cpSync(resolve('tasks/build-ledger-s1'), task, { recursive: true });
+    writeFileSync(join(task, 'oracle', 'run.ts'), "require('node:fs').writeSync(3, 'not json'); process.exit(0);\n");
+    const run = spawnSync(process.execPath, ['--import', import.meta.resolve('tsx'), join(task, 'oracle', 'score.ts'), join(task, 'fixtures', 'correct')],
+      { encoding: 'utf8', timeout: 30_000 });
+    assert.equal(run.status, 3, run.stderr || run.stdout);
+    assert.equal(run.stdout.trim(), '', 'malformed transport must not become an observed score');
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});

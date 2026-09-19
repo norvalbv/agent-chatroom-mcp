@@ -462,18 +462,20 @@ const child = spawnSync(process.execPath, [
   runner, candidate, String(inst.m),
 ], { encoding: 'utf8', timeout: 60000, maxBuffer: 64 * 1024 * 1024, env: {}, stdio: ['ignore', 'pipe', 'pipe', 'pipe'] });
 const fd3 = child.output?.[3] as string | null;
-if (!fd3) {
-  // A legitimate run (correct, broken or adversarial candidate) always writes SOMETHING to fd 3: run.ts's own
-  // import is wrapped so even a candidate that fails to import still produces an all-false result before exiting.
-  // An empty fd 3 is either tamper -- a permission wall the sandboxed child hit while attempting something
-  // forbidden (ERR_ACCESS_DENIED/EACCES), or a clean early exit(0) that never let run.ts's own write happen --
-  // or, only when neither of those signatures is present, our own scorer/harness genuinely broke (infrastructure).
+const parsedFd3 = readSingleResult(fd3);
+if (parsedFd3 === null || typeof parsedFd3 !== 'object' || Array.isArray(parsedFd3)) {
+  // A legitimate run (correct, broken or adversarial candidate) always writes a well-formed JSON object to fd 3:
+  // run.ts's own import is wrapped so even a candidate that fails to import still produces an all-false result
+  // before exiting. Fd 3 being empty, unparseable or not an object is either tamper -- a permission wall the
+  // sandboxed child hit while attempting something forbidden (ERR_ACCESS_DENIED/EACCES), a clean early exit(0)
+  // that never let run.ts's own write happen, or a forged/garbage write -- or, only when none of those signatures
+  // is present, our own scorer/harness genuinely broke (infrastructure).
   const stderr = (child.stderr ?? '').trim();
-  const isTamper = child.status === 0 || /ERR_ACCESS_DENIED|EACCES/.test(stderr);
+  const isTamper = child.status === 0 || /ERR_ACCESS_DENIED|EACCES/.test(stderr) || (!!fd3 && parsedFd3 === null);
   console.error((isTamper ? 'oracle infrastructure: tamper (' : 'oracle infrastructure: worker produced no result (') + stderr + ')');
   process.exit(isTamper ? 3 : 2);
 }
-let got: Record<string, { ok: boolean; value?: unknown }> = (readSingleResult(fd3) as typeof got) ?? {};
+let got: Record<string, { ok: boolean; value?: unknown }> = parsedFd3 as typeof got;
 function subset(exp: unknown, act: unknown): boolean {
   if (Array.isArray(exp)) return Array.isArray(act) && act.length === exp.length && exp.every((e, i) => subset(e, act[i]));
   if (exp && typeof exp === 'object') return !!act && typeof act === 'object' && !Array.isArray(act) && Object.entries(exp).every(([k, v]) => subset(v, (act as any)[k]));

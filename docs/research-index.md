@@ -61,3 +61,45 @@
 | arXiv:2509.25271 | docs/self-improvement-swarm-planned hub-carries-what-it-knows  |
 | arXiv:2509.25370 | docs/self-improvement-swarm-planned hub-carries-what-it-knows  |
 | arXiv:2510.07517 | README consensus-requires-scrutiny  |
+| arXiv:2510.11967 | self-organising-teams-by-claims-and-recruitment  |
+| arXiv:2510.12697 | README consensus-requires-scrutiny  |
+| arXiv:2511.03718 | hub-carries-what-it-knows  |
+| arXiv:2511.17315 | humans-answered-once-by-hub-enforcement  |
+| arXiv:2512.09187 | docs/quiet-delivery-decision quiet-delivery-not-privacy  |
+| arXiv:2601.08815 | hub-carries-what-it-knows  |
+| arXiv:2601.10102 | docs/self-improvement-swarm-planned hub-carries-what-it-knows  |
+| arXiv:2601.17152 | docs/self-improvement-swarm-planned hub-carries-what-it-knows  |
+| arXiv:2601.18285 | self-organising-teams-by-claims-and-recruitment  |
+| arXiv:2602.12285 | docs/self-improvement-swarm-planned hub-carries-what-it-knows  |
+| arXiv:2602.23193 | docs/fleet-181630-summary  |
+| arXiv:2603.10123 | hub-carries-what-it-knows  |
+| arXiv:2603.11409 | humans-answered-once-by-hub-enforcement  |
+| arXiv:2603.13327 | board-delta-manifests-and-single-electorate  |
+| arXiv:2603.15183 | docs/self-improvement-swarm-flat docs/self-improvement-swarm-planned hub-carries-what-it-knows  |
+| arXiv:2604.02668 | docs/self-improvement-swarm-planned hub-carries-what-it-knows  |
+| arXiv:2604.03997 | board-delta-manifests-and-single-electorate  |
+| arXiv:2604.16529 | docs/open-round-discriminating-task-research  |
+| arXiv:2605.01750 | docs/self-improvement-swarm-planned hub-carries-what-it-knows  |
+| arXiv:2605.05626 | humans-answered-once-by-hub-enforcement  |
+| arXiv:2605.06028 | docs/open-round-discriminating-task-research  |
+| arXiv:2605.09213 | hub-carries-what-it-knows  |
+| arXiv:2605.23296 | docs/token-round-0918 token-cost-is-resent-context  |
+| arXiv:2605.28334 | board-delta-manifests-and-single-electorate self-organising-teams-by-claims-and-recruitment  |
+| arXiv:2606.01416 | docs/union-alpha-rebuild-swarm-160711-etdp  |
+| arXiv:2606.05037 | docs/self-improvement-swarm-planned hub-carries-what-it-knows  |
+| arXiv:2606.21666 | docs/self-improvement-swarm-planned hub-carries-what-it-knows  |
+| arXiv:2606.27009 | docs/union-alpha-rebuild-swarm-160711-etdp  |
+| arXiv:2606.27457 | docs/token-round-0918 token-cost-is-resent-context  |
+| arXiv:2606.29270 | consensus-requires-scrutiny docs/self-improvement-swarm-planned done-means-independently-verified hub-carries-what-it-knows  |
+| arXiv:2607.01661 | docs/open-round-discriminating-task-research  |
+| arXiv:2607.11250 | docs/open-round-discriminating-task-research  |
+| arXiv:2607.15648 | humans-answered-once-by-hub-enforcement  |
+| arXiv:2607.16109 | board-delta-manifests-and-single-electorate  |
+| arXiv:2608.02758 | docs/self-improvement-swarm-planned hub-carries-what-it-knows  |
+| arXiv:2608.26081 | board-delta-manifests-and-single-electorate self-organising-teams-by-claims-and-recruitment  |
+| arXiv:2608.30373 | docs/self-improvement-lobby-swarm-190103 done-means-independently-verified measure-task-success-on-a-machine-oracle  |
+| arXiv:2609.00683 | done-means-independently-verified measure-task-success-on-a-machine-oracle  |
+| arXiv:2609.02942 | measure-task-success-on-a-machine-oracle  |
+| arXiv:2609.03619 | board-delta-manifests-and-single-electorate docs/board-electorate-swarm-200859 done-means-independently-verified measure-task-success-on-a-machine-oracle self-organising-teams-by-claims-and-recruitment  |
+| arXiv:2609.13076 | humans-answered-once-by-hub-enforcement  |
+| arXiv:cs/9810005 | docs/swarm-protocol-spec done-means-independently-verified  |

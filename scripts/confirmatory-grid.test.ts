@@ -230,7 +230,7 @@ test("classifyRegime: the frozen 4000 threshold is on thinking tokens; output al
   assert.equal(classifyRegime(12000, 4000), "long-thinking");
   assert.equal(classifyRegime(1500, 0), "calibrated", "a genuine 0 is known");
   assert.equal(classifyRegime(1500, null), "unknown");
-  assert.equal(classifyRegime(null, 900), "unknown");
+  assert.equal(classifyRegime(null, 900), "calibrated", "missing output is descriptive-only");
   assert.equal(classifyRegime(1500, Number.NaN), "unknown");
   assert.equal(classifyRegime(1500, -1), "unknown");
 });

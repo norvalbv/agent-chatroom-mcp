@@ -16,6 +16,15 @@
  *     [--arms A,C] [--model sonnet] [--max-cost-usd 5] [--results-dir bench/results/rq1]
  *     [--runner scripts/bench-rq1.ts] [--tasks-dir tasks] [--seats N] [--timeout-ms N] [--deadline-ms N]
  *     [--hub-entry PATH] [--port-base 19850] [--include-retired]
+ *
+ * Arm K (paper/prereg-arm-k.md): `--arms K --k stamp-interpreter=10,stamp-2=8,bench-printf-format=7` runs
+ * scripts/bench-ak.ts (--ak-runner) once per (task, seed) group, root `<results-dir>/<task>-K-seed<N>`. It
+ * is refused for a group whose paired arm C result (`<c-results-dir>/<task>-C-seed<N>/result.json`,
+ * default --results-dir) does not exist. A group is finished iff its result.json exists; an interrupted
+ * group is resumed with --resume so finished attempts inside it are not rerun. --concurrency N bounds the
+ * attempts running at once inside one group. Arm K's cost is its result's cost_usd_total, which is null
+ * when any attempt's usage is unknown; unknown is never summed as zero, and once any finished group has
+ * unknown cost --max-cost-usd cannot be trusted, so later runs are skipped as cost-cap.
  */
 import { spawn, type ChildProcess } from "node:child_process";
 import { createServer } from "node:net";
@@ -47,13 +56,20 @@ process.on("exit", () => killCurrentChild("SIGKILL"));
 
 export interface GridRunResult {
   outcome: string;
-  cost_usd: number;
+  /** null only for arm K, when at least one attempt's cost is unknown. */
+  cost_usd: number | null;
   wall_clock_ms: number;
 }
 
 /** Reads just the fields the grid runner needs to orchestrate the next run; tolerant of extra fields. */
 export function readGridResult(resultPath: string): GridRunResult {
   const r = JSON.parse(readFileSync(resultPath, "utf8"));
+  if (r.arm === "K") {
+    if (typeof r.outcome !== "string" || !(r.cost_usd_total === null || typeof r.cost_usd_total === "number") || typeof r.wall_clock_ms !== "number") {
+      throw new Error(`Malformed arm K result.json (missing outcome/cost_usd_total/wall_clock_ms): ${resultPath}`);
+    }
+    return { outcome: r.outcome, cost_usd: r.cost_usd_total, wall_clock_ms: r.wall_clock_ms };
+  }
   if (typeof r.outcome !== "string" || typeof r.usage?.cost_usd !== "number" || typeof r.wall_clock?.duration_ms !== "number") {
     throw new Error(`Malformed result.json (missing outcome/usage.cost_usd/wall_clock.duration_ms): ${resultPath}`);
   }
@@ -62,13 +78,21 @@ export function readGridResult(resultPath: string): GridRunResult {
 
 /** Sums usage.cost_usd across every result.json already under resultsDir, so a resumed grid respects prior spend. */
 export function sumExistingCost(resultsDir: string): number {
-  if (!existsSync(resultsDir)) return 0;
+  return scanExistingCost(resultsDir).total;
+}
+
+/** Like sumExistingCost, but also counts finished results whose cost is unknown (null): those add nothing to `total` and must never be read as zero. */
+export function scanExistingCost(resultsDir: string): { total: number; unknown: number } {
+  if (!existsSync(resultsDir)) return { total: 0, unknown: 0 };
   let total = 0;
+  let unknown = 0;
   for (const name of readdirSync(resultsDir)) {
     const resultPath = join(resultsDir, name, "result.json");
     if (existsSync(resultPath)) {
       try {
-        total += readGridResult(resultPath).cost_usd;
+        const cost = readGridResult(resultPath).cost_usd;
+        if (cost === null) unknown++;
+        else total += cost;
       } catch {
         // Malformed/partial result.json from an interrupted run: not counted, will be retried (its dir
         // still "exists" though — see runDir's own existsSync guard below for why interrupted runs need
@@ -76,13 +100,17 @@ export function sumExistingCost(resultsDir: string): number {
       }
     }
   }
-  return total;
+  return { total, unknown };
 }
 
 export interface ParsedGridArgs {
   taskDirs: string[];
   seeds: number[];
-  arms: ("A" | "C")[];
+  arms: ("A" | "C" | "K")[];
+  kByTask: Record<string, number>;
+  akRunner: string;
+  cResultsDir: string | null;
+  concurrency: string | null;
   model: string;
   maxCostUsd: number | null;
   resultsDir: string;
@@ -129,8 +157,20 @@ export function parseArgs(argv: string[], tasksDirDefault = "tasks"): ParsedGrid
     }
   }
   const armsArg = flag("arms", "A,C")!;
-  const arms = armsArg.split(",").map((a) => a.trim()) as ("A" | "C")[];
-  for (const a of arms) if (a !== "A" && a !== "C") throw new Error(`Invalid arm: ${a}`);
+  const arms = armsArg.split(",").map((a) => a.trim()) as ("A" | "C" | "K")[];
+  for (const a of arms) if (a !== "A" && a !== "C" && a !== "K") throw new Error(`Invalid arm: ${a}`);
+  const kByTask: Record<string, number> = {};
+  for (const part of (flag("k") ?? "").split(",").filter(Boolean)) {
+    const m = part.trim().match(/^([^=]+)=(\d+)$/);
+    if (!m) throw new Error(`Invalid --k entry (want task=N): ${part}`);
+    kByTask[m[1]] = Number(m[2]);
+  }
+  if (arms.includes("K")) {
+    for (const d of taskDirs) {
+      const k = kByTask[basename(d)];
+      if (!Number.isInteger(k) || k < 2) throw new Error(`Arm K needs --k ${basename(d)}=N with an integer k >= 2 fixed before any run (paper/amendments.md)`);
+    }
+  }
   const maxCostArg = flag("max-cost-usd");
   const maxCostUsd = maxCostArg !== undefined ? Number(maxCostArg) : null;
   if (maxCostUsd !== null && !(maxCostUsd > 0)) throw new Error("--max-cost-usd must be a positive number");
@@ -140,6 +180,10 @@ export function parseArgs(argv: string[], tasksDirDefault = "tasks"): ParsedGrid
     arms,
     model: flag("model", "sonnet")!,
     maxCostUsd,
+    kByTask,
+    akRunner: resolve(flag("ak-runner", "scripts/bench-ak.ts")!),
+    cResultsDir: flag("c-results-dir") ? resolve(flag("c-results-dir")!) : null,
+    concurrency: flag("concurrency") ?? null,
     resultsDir: resolve(flag("results-dir", "bench/results/rq1")!),
     runner: resolve(flag("runner", "scripts/bench-rq1.ts")!),
     seats: flag("seats") ?? null,
@@ -165,18 +209,18 @@ async function freePort(startAt: number): Promise<number> {
 export interface RunPlanItem {
   taskDir: string;
   taskLabel: string;
-  arm: "A" | "C";
+  arm: "A" | "C" | "K";
   seed: number;
   runDir: string;
 }
 
-/** Deterministic run order: task, then seed, then C before A within a seed (arm A's budget needs arm C's result). */
+/** Deterministic run order: task, then seed, then C before A before K within a seed (both need arm C's result). */
 export function buildPlan(args: ParsedGridArgs): RunPlanItem[] {
   const plan: RunPlanItem[] = [];
   for (const taskDir of args.taskDirs) {
     const taskLabel = taskDir.split("/").pop()!;
     for (const seed of args.seeds) {
-      for (const arm of ["C", "A"] as const) {
+      for (const arm of ["C", "A", "K"] as const) {
         if (!args.arms.includes(arm)) continue;
         plan.push({ taskDir, taskLabel, arm, seed, runDir: join(args.resultsDir, `${taskLabel}-${arm}-seed${seed}`) });
       }
@@ -189,6 +233,8 @@ export interface GridSummary {
   ran: number;
   skipped_done: number;
   skipped_cost_cap: number;
+  /** finished arm K groups whose cost is unknown (never counted as zero) */
+  unknown_cost_groups: number;
   infra_failed: number;
   total_cost_usd: number;
 }
@@ -197,9 +243,10 @@ export async function runGrid(args: ParsedGridArgs, opts: { log?: (s: string) =>
   const log = opts.log ?? ((s: string) => console.log(s));
   mkdirSync(args.resultsDir, { recursive: true });
   const plan = buildPlan(args);
-  let runningTotal = sumExistingCost(args.resultsDir);
+  const existing = scanExistingCost(args.resultsDir);
+  let runningTotal = existing.total;
   let portCounter = opts.portStart ?? args.portBase;
-  const summary: GridSummary = { ran: 0, skipped_done: 0, skipped_cost_cap: 0, infra_failed: 0, total_cost_usd: runningTotal };
+  const summary: GridSummary = { ran: 0, skipped_done: 0, skipped_cost_cap: 0, unknown_cost_groups: existing.unknown, infra_failed: 0, total_cost_usd: runningTotal };
   let costCapHit = false;
 
   for (const item of plan) {
@@ -214,7 +261,8 @@ export async function runGrid(args: ParsedGridArgs, opts: { log?: (s: string) =>
       try {
         outcome = readGridResult(resultPath).outcome;
       } catch {}
-      if (outcome === "timeout") {
+      // Arm K keeps a killed attempt as a null vote inside the group, so its result is never retried.
+      if (outcome === "timeout" && item.arm !== "K") {
         log(`[retry:timeout] ${item.taskLabel} ${item.arm} seed${item.seed}: prior run was killed at the deadline, re-running`);
         rmSync(item.runDir, { recursive: true, force: true });
       } else {
@@ -228,6 +276,12 @@ export async function runGrid(args: ParsedGridArgs, opts: { log?: (s: string) =>
       summary.skipped_cost_cap++;
       continue;
     }
+    if (args.maxCostUsd !== null && summary.unknown_cost_groups > 0) {
+      log(`[cost-cap] ${summary.unknown_cost_groups} finished group(s) have unknown cost, so the running total $${runningTotal.toFixed(4)} is only a lower bound; halting before ${item.taskLabel} ${item.arm} seed${item.seed}`);
+      costCapHit = true;
+      summary.skipped_cost_cap++;
+      continue;
+    }
     if (args.maxCostUsd !== null && runningTotal >= args.maxCostUsd) {
       log(`[cost-cap] running total $${runningTotal.toFixed(4)} already >= --max-cost-usd $${args.maxCostUsd}; halting before ${item.taskLabel} ${item.arm} seed${item.seed}`);
       costCapHit = true;
@@ -236,7 +290,7 @@ export async function runGrid(args: ParsedGridArgs, opts: { log?: (s: string) =>
     }
 
     const runnerArgs = [item.taskDir, item.arm, String(item.seed), "--root", item.runDir, "--model", args.model];
-    if (existsSync(item.runDir) && !existsSync(resultPath)) {
+    if (item.arm !== "K" && existsSync(item.runDir) && !existsSync(resultPath)) {
       // A prior interrupted run left a partial directory (bench-rq1.ts refuses to reuse --root); this
       // run cannot proceed automatically without risking silently mis-scoring a half-written workspace.
       log(`[infra-fail] ${item.taskLabel} ${item.arm} seed${item.seed}: run dir exists without a result.json (interrupted prior run) — remove ${item.runDir} to retry`);
@@ -247,7 +301,18 @@ export async function runGrid(args: ParsedGridArgs, opts: { log?: (s: string) =>
     if (args.timeoutMs) runnerArgs.push("--timeout-ms", args.timeoutMs);
     if (args.hubEntry) runnerArgs.push("--hub-entry", args.hubEntry);
 
-    if (item.arm === "A") {
+    if (item.arm === "K") {
+      const armCResultPath = join(args.cResultsDir ?? args.resultsDir, `${item.taskLabel}-C-seed${item.seed}`, "result.json");
+      if (!existsSync(armCResultPath)) {
+        log(`[infra-fail] ${item.taskLabel} K seed${item.seed}: no paired arm C result at ${armCResultPath} (arm K is refused without it)`);
+        summary.infra_failed++;
+        continue;
+      }
+      // bench-ak.ts positional: TASK K SEED; it, not bench-rq1.ts, owns the per-attempt caps and selection.
+      runnerArgs.length = 0;
+      runnerArgs.push(item.taskDir, String(args.kByTask[item.taskLabel]), String(item.seed), "--root", item.runDir, "--arm-c-result", armCResultPath, "--model", args.model, "--resume");
+      if (args.concurrency) runnerArgs.push("--concurrency", args.concurrency);
+    } else if (item.arm === "A") {
       // Paired, within-seed budget match (protocol §8): arm A's ceiling comes from *this exact seed's*
       // arm C result, never a cross-seed or cross-task aggregate.
       const armCDir = join(args.resultsDir, `${item.taskLabel}-C-seed${item.seed}`);
@@ -258,6 +323,11 @@ export async function runGrid(args: ParsedGridArgs, opts: { log?: (s: string) =>
         continue;
       }
       const armC = readGridResult(armCResultPath);
+      if (armC.cost_usd === null) {
+        log(`[infra-fail] ${item.taskLabel} A seed${item.seed}: paired arm C result has unknown cost`);
+        summary.infra_failed++;
+        continue;
+      }
       let budget: { maxBudgetUsd: number; wallClockCapMs: number };
       try {
         budget = matchArmABudget({ costUsd: armC.cost_usd, wallClockMs: armC.wall_clock_ms });
@@ -274,9 +344,10 @@ export async function runGrid(args: ParsedGridArgs, opts: { log?: (s: string) =>
       if (args.deadlineMs) runnerArgs.push("--deadline-ms", args.deadlineMs);
     }
 
-    log(`[run] node --import tsx ${args.runner} ${runnerArgs.join(" ")}`);
+    const runnerPath = item.arm === "K" ? args.akRunner : args.runner;
+    log(`[run] node --import tsx ${runnerPath} ${runnerArgs.join(" ")}`);
     const { status, stderr } = await new Promise<{ status: number | null; stderr: string }>((resolveRun) => {
-      const child = spawn(process.execPath, ["--import", "tsx", args.runner, ...runnerArgs], { stdio: ["ignore", "pipe", "pipe"] });
+      const child = spawn(process.execPath, ["--import", "tsx", runnerPath, ...runnerArgs], { stdio: ["ignore", "pipe", "pipe"] });
       currentChild = child;
       let stderrBuf = "";
       child.stderr?.on("data", (d) => (stderrBuf += d));
@@ -291,10 +362,11 @@ export async function runGrid(args: ParsedGridArgs, opts: { log?: (s: string) =>
       continue;
     }
     const written = readGridResult(resultPath);
-    runningTotal += written.cost_usd;
+    if (written.cost_usd === null) summary.unknown_cost_groups++;
+    else runningTotal += written.cost_usd;
     summary.total_cost_usd = runningTotal;
     summary.ran++;
-    log(`[done] ${item.taskLabel} ${item.arm} seed${item.seed}: outcome=${written.outcome} cost=$${written.cost_usd.toFixed(4)} running_total=$${runningTotal.toFixed(4)}`);
+    log(`[done] ${item.taskLabel} ${item.arm} seed${item.seed}: outcome=${written.outcome} cost=${written.cost_usd === null ? "UNKNOWN" : "$" + written.cost_usd.toFixed(4)} running_total=$${runningTotal.toFixed(4)}`);
   }
   summary.total_cost_usd = runningTotal;
   return summary;

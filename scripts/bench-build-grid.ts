@@ -195,10 +195,12 @@ export function requestedFingerprint(args: BuildGridArgs, cell: BuildPlanCell, t
 
 export function requestedManifestFingerprint(args: BuildGridArgs, cell: BuildPlanCell, taskSha256 = hashPath(cell.taskDir)): string {
   const supportDir = dirname(args.runner);
+  const runnerRepo = resolve(supportDir, "..");
   const supportNames = ["bench-build-runner.ts", "bench-build-runtime.ts", "bench-oracle.ts"];
   const support = Object.fromEntries(supportNames.filter((name) => existsSync(join(supportDir, name))).map((name) => [name, hashPath(join(supportDir, name))]));
   const generators = Object.fromEntries(readdirSync(supportDir).filter((name) => /^bench-build(?:-[a-z]+)?-gen\.ts$/.test(name)).sort().map((name) => [name, hashPath(join(supportDir, name))]));
-  const repoSrc = resolve(here, "..", "src");
+  const repoSrc = resolve(runnerRepo, "src");
+  const hubEntry = args.hubEntry ?? resolve(runnerRepo, "dist", "index.js");
   const contract = {
     schema: 1,
     task_id: cell.taskLabel,
@@ -208,7 +210,7 @@ export function requestedManifestFingerprint(args: BuildGridArgs, cell: BuildPla
     support_sha256: support,
     generator_sha256: generators,
     helpers_sha256: existsSync(repoSrc) ? hashPath(repoSrc) : null,
-    hub_build_sha256: args.hubEntry && existsSync(args.hubEntry) ? hashPath(dirname(args.hubEntry)) : null,
+    hub_build_sha256: existsSync(hubEntry) ? hashPath(dirname(hubEntry)) : null,
     model: args.model,
     effort: args.effort,
     max_budget_usd: args.maxBudgetUsd,
@@ -299,6 +301,8 @@ export async function runBuildGrid(args: BuildGridArgs, options: { log?: (messag
     }
     const taskSha256 = taskHashes.get(cell.taskDir)!;
     const manifestSha256 = taskManifests.get(cell.taskDir)!;
+    if (hashPath(cell.taskDir) !== taskSha256) throw new Error(`Frozen task changed before launch: ${cell.taskDir}`);
+    if (requestedManifestFingerprint(args, cell, taskSha256) !== manifestSha256) throw new Error(`Frozen manifest changed before launch: ${cell.taskDir}`);
     const fingerprint = createHash("sha256").update(JSON.stringify({ schema: 2, manifest_sha256: manifestSha256, arm: cell.arm, seed: cell.seed })).digest("hex");
     const resultPath = join(cell.runDir, "build-result.json");
     if (existsSync(resultPath)) {

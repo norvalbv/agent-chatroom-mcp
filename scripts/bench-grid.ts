@@ -266,7 +266,7 @@ export function buildPlan(args: ParsedGridArgs): RunPlanItem[] {
 /** Frozen regime rule (paper/prereg-confirmatory.md): the regime is the thinking budget, so it is read from arm A's
  * directly reported thinking tokens: under 4000 is the calibrated (short-thinking) regime, 4000 or more is
  * long-thinking (about 10K in the amendments' long regime, about 1K in the calibrated one), and a missing or invalid
- * thinking count, or a missing output count, is unknown. Output tokens are recorded but cannot classify: they include
+ * thinking count is unknown; a missing output count does not matter. Output tokens are recorded but cannot classify: they include
  * the answer or code written, so a correct printf-format single attempt writes about 4K output at about 0.9K
  * thinking (pilot seed 901). Never learned from the confirmatory results themselves. */
 export const REGIME_THINKING_THRESHOLD = THINKING_REGIME_THRESHOLD;

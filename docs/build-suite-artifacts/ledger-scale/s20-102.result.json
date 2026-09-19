@@ -1,0 +1,154 @@
+{
+  "schemaVersion": 1,
+  "task_id": "build-ledger-scale20-s102",
+  "arm": "A",
+  "seed": 102,
+  "model": "sonnet",
+  "outcome": "task_pass",
+  "passed": true,
+  "reason": "task_pass",
+  "oracle": {
+    "kind": "planted-defects",
+    "command": "node --import tsx oracle/score.ts <workspace>",
+    "exit_code": 0
+  },
+  "anti_tamper": {
+    "hash_before": "53f96a16b31f0594ff92ced3bd46eb45fc25065df13e3febb6dd0d26cb9c97aa",
+    "hash_after": "53f96a16b31f0594ff92ced3bd46eb45fc25065df13e3febb6dd0d26cb9c97aa",
+    "unchanged": true
+  },
+  "seats": [
+    {
+      "name": "single",
+      "argv": [
+        "claude",
+        "-p",
+        "Each of the 20 independent warehouse libraries under src/wh01/ .. src/wh20/ must meet the specification in SPEC.md. The public tests in test/ pass today, but passing them does not prove that code meets the specification. Make every warehouse codebase conform to SPEC.md, keeping everything that already conforms working. Run the tests with: node --test test/*.test.ts. Do not create files outside this directory.\n\nModify the relevant source file(s) in your current working directory directly to implement the fix described above. Your edit to the existing file(s) is the submission; do not create any other output file.",
+        "--mcp-config",
+        "/tmp/lsr/s20-102/mcp-empty.json",
+        "--strict-mcp-config",
+        "--allowedTools",
+        "Read,Edit,Write,MultiEdit,Bash,Glob,Grep",
+        "--tools",
+        "Read,Edit,Write,MultiEdit,Bash,Glob,Grep",
+        "--disable-slash-commands",
+        "--setting-sources",
+        "project",
+        "--exclude-dynamic-system-prompt-sections",
+        "--output-format",
+        "stream-json",
+        "--verbose",
+        "--model",
+        "sonnet",
+        "--max-budget-usd",
+        "3"
+      ],
+      "exit_code": 0,
+      "signal": null,
+      "started_at": "2026-09-19T22:19:07.680Z",
+      "completed_at": "2026-09-19T22:23:50.448Z",
+      "num_turns": 65,
+      "duration_ms": 281405,
+      "duration_api_ms": 274850,
+      "usage": {
+        "cost": 1.0346088,
+        "input_tokens": 68,
+        "cache_read_input_tokens": 1921014,
+        "cache_creation_input_tokens": 88930,
+        "output_tokens": 29455
+      },
+      "text": "All 100 public tests still pass. No stray files were left behind (the sanity scripts were cleaned up).\n\n## Summary\n\nEach of the 20 warehouses had a unique mix of injected bugs across `inventory.ts`, `backorder.ts`, `orders.ts`, and `warehouse.ts` that public tests didn't catch. I found and fixed, per warehouse:\n\n- **`inventory.ts`**: `receive` replacing instead of adding to existing lots; `usable` off-by-one (`>` vs `>=` expiry); `available` not excluding expired lots; lot-id tie-break sorted descending instead of ascending in `plan`.\n- **`backorder.ts`**: retry order sorted by order size instead of preserving placement (FIFO) order; cancelled orders not removed from the retry queue.\n- **`orders.ts`**: `tryReserve` only released the first line's allocations on failure (leaking reservations on multi-line failures); repeated-sku lines overwrote each other's allocations instead of accumulating.\n- **`warehouse.ts`**: `ship` checked against the original order-line quantity instead of currently-reserved remaining (breaking on repeated skus and partial shipments); `cancel` sometimes unheld already-shipped units (double-releasing) or called backorder retry before releasing stock; `returnItems` didn't subtract previously-returned quantity from the allowed threshold, and used an off-by-one expiry check when deciding whether to restock a return.\n\nI verified the fixes both by re-running the existing 100 public tests (all pass) and with a targeted sanity script covering spec behaviors the public tests didn't exercise (add-not-replace receiving, id tie-breaks, repeated-sku lines, partial-failure unhold, backorder-queue cleanup on cancel, cumulative return limits, and expired-lot return discarding), spot-checked across several warehouses.",
+      "killed_by_deadline": false,
+      "partial_usage": null,
+      "reported_models": {
+        "system_init": [
+          "claude-sonnet-5"
+        ],
+        "assistant": [
+          "claude-sonnet-5"
+        ],
+        "result_model_usage": [
+          "claude-sonnet-5"
+        ]
+      },
+      "model_usage": {
+        "claude-sonnet-5": {
+          "inputTokens": 68,
+          "outputTokens": 29455,
+          "cacheReadInputTokens": 1921014,
+          "cacheCreationInputTokens": 88930,
+          "webSearchRequests": 0,
+          "costUSD": 1.0346088,
+          "contextWindow": 1000000,
+          "maxOutputTokens": 64000,
+          "thinkingTokens": 15353,
+          "canonicalModel": "claude-sonnet-5",
+          "provider": "firstParty",
+          "costBasis": "list"
+        }
+      }
+    }
+  ],
+  "usage": {
+    "steps": 0,
+    "prompt_tokens": 0,
+    "completion_tokens": 0,
+    "cost_usd": 1.0346088,
+    "seats": 1,
+    "seats_with_usage": 1,
+    "coverage": "complete",
+    "input_tokens": 68,
+    "cache_read_input_tokens": 1921014,
+    "cache_creation_input_tokens": 88930,
+    "output_tokens": 29455
+  },
+  "turns": {
+    "per_seat": [
+      {
+        "name": "single",
+        "num_turns": 65
+      }
+    ],
+    "summed": 65,
+    "seats": 1,
+    "seats_with_turns": 1,
+    "coverage": "complete"
+  },
+  "thinking_tokens": 15353,
+  "output_tokens": 29455,
+  "wall_clock": {
+    "started_at": "2026-09-19T22:19:07.680Z",
+    "completed_at": "2026-09-19T22:23:50.449Z",
+    "duration_ms": 282769
+  },
+  "effort": {
+    "level": "medium",
+    "settings_path": ".claude/settings.json",
+    "settings_sha256": "af1ef779182cc6e6bc8b2985a37b27915b5742ecb1a89015aeb1c721d732bc1d",
+    "own_git_root": true
+  },
+  "budget": {
+    "max_budget_usd": 3,
+    "deadline_ms": 900000
+  },
+  "build": {
+    "captured_at": "2026-09-19T22:19:07.667Z",
+    "head_revision": "a60ea7800a1eba62b6f648a3e48a23b82c6d02bf",
+    "runner_sha256": "bcca098aa373dd9a68fada48a809687b0418baff5649a9c6e57be4f3cb8a898d",
+    "hub_entry": null,
+    "hub_entry_sha256": null,
+    "hub_revision": null,
+    "hub_build_sha256": null,
+    "provenance_scope": null
+  },
+  "frozen": {
+    "task_sha256": "53f96a16b31f0594ff92ced3bd46eb45fc25065df13e3febb6dd0d26cb9c97aa",
+    "scorer_sha256": "f4b645c670ae4655aec1189e4d7320294115f0e3c6da3b5ba41a7ee3b1cd00f8",
+    "fact_scorer_sha256": "6b8b3e98c8c408ecd6715a38db9263488644d27c01a11c5bab3172acd5539832",
+    "task_id": "build-ledger-scale20-s102",
+    "timeout_ms": 900000,
+    "seats": 1
+  },
+  "error": null,
+  "checked_at": "2026-09-19T22:23:51.020Z"
+}

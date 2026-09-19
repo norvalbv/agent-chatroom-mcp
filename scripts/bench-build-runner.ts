@@ -11,6 +11,10 @@ import { Hub } from '../src/hub.js';
 import { delay, hashFile, hashTree, hashWorkspace, WORKSPACE_HASH_SCRIPT, json, revision, runClaudeSeat, stop, track, type SeatRecord } from './bench-build-runtime.ts';
 const here = dirname(fileURLToPath(import.meta.url)), repoRoot = resolve(here, '..');
 const baseTools = ['Read', 'Edit', 'Write', 'MultiEdit', 'Bash', 'Glob', 'Grep'];
+// A generator file name may have more than one hyphenated segment before -gen.ts (e.g. bench-build-ledger-scale-gen.ts,
+// a scaled sibling of bench-build-ledger-gen.ts): the old one-segment regex silently dropped such files from
+// generator_hashes, omitting them from launch provenance without erroring (6-astra-2, swarm-212551-3vhd).
+export const GENERATOR_FILE_RE = /^bench-build(?:-[a-z]+)*-gen\.ts$/;
 type Effort = { level: string; settings_path: string; settings_sha256: string | null; own_git_root: boolean };
 type RunSeat = SeatRecord & { budget_usd: number; effort: Effort; thinking_tokens: number | null };
 function pinEffort(workspace: string, level: string): Effort {
@@ -89,7 +93,7 @@ async function main() {
     try { return (await fetch(`http://127.0.0.1:${port}/rooms`, { signal: AbortSignal.timeout(1000) })).ok; }
     catch { return false; }
   };
-  const generatorHashes = () => Object.fromEntries(readdirSync(here).filter(name => /^bench-build(?:-[a-z]+)?-gen\.ts$/.test(name)).sort().map(name => [name, hashFile(join(here,name))]));
+  const generatorHashes = () => Object.fromEntries(readdirSync(here).filter(name => GENERATOR_FILE_RE.test(name)).sort().map(name => [name, hashFile(join(here,name))]));
   const frozenGenerators = generatorHashes();
   const build: any = { generator_hashes: frozenGenerators, head_revision: revision(repoRoot), runner_sha256: hashFile(fileURLToPath(import.meta.url)), runtime_sha256: hashFile(join(here, 'bench-build-runtime.ts')), helpers_sha256: hashTree(join(repoRoot, 'src')), hub_entry: null, hub_entry_sha256: null, hub_build_sha256: null, hub_revision: null, provenance_scope: null };
   const seat = async (name: string, prompt: string, cwd: string, budget: number, mcp = emptyMcp, tools = baseTools) => {

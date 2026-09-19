@@ -1,0 +1,137 @@
+[
+  {
+    "id": "wh01-S01",
+    "module": "wh01",
+    "kind": "cross-module-contract"
+  },
+  {
+    "id": "wh01-S02",
+    "module": "wh01",
+    "kind": "spec-vs-code"
+  },
+  {
+    "id": "wh01-S04",
+    "module": "wh01",
+    "kind": "cross-module-contract"
+  },
+  {
+    "id": "wh01-S06",
+    "module": "wh01",
+    "kind": "boundary"
+  },
+  {
+    "id": "wh01-S07",
+    "module": "wh01",
+    "kind": "spec-vs-code"
+  },
+  {
+    "id": "wh01-S08",
+    "module": "wh01",
+    "kind": "spec-vs-code"
+  },
+  {
+    "id": "wh01-S09",
+    "module": "wh01",
+    "kind": "cross-module-contract"
+  },
+  {
+    "id": "wh01-S10",
+    "module": "wh01",
+    "kind": "spec-vs-code"
+  },
+  {
+    "id": "wh01-S14",
+    "module": "wh01",
+    "kind": "cross-module-contract"
+  },
+  {
+    "id": "wh02-S01",
+    "module": "wh02",
+    "kind": "cross-module-contract"
+  },
+  {
+    "id": "wh02-S02",
+    "module": "wh02",
+    "kind": "spec-vs-code"
+  },
+  {
+    "id": "wh02-S03",
+    "module": "wh02",
+    "kind": "boundary"
+  },
+  {
+    "id": "wh02-S06",
+    "module": "wh02",
+    "kind": "boundary"
+  },
+  {
+    "id": "wh02-S07",
+    "module": "wh02",
+    "kind": "spec-vs-code"
+  },
+  {
+    "id": "wh02-S08",
+    "module": "wh02",
+    "kind": "spec-vs-code"
+  },
+  {
+    "id": "wh02-S10",
+    "module": "wh02",
+    "kind": "spec-vs-code"
+  },
+  {
+    "id": "wh02-S13",
+    "module": "wh02",
+    "kind": "cross-module-contract"
+  },
+  {
+    "id": "wh02-S14",
+    "module": "wh02",
+    "kind": "cross-module-contract"
+  },
+  {
+    "id": "wh03-S01",
+    "module": "wh03",
+    "kind": "cross-module-contract"
+  },
+  {
+    "id": "wh03-S03",
+    "module": "wh03",
+    "kind": "boundary"
+  },
+  {
+    "id": "wh03-S04",
+    "module": "wh03",
+    "kind": "cross-module-contract"
+  },
+  {
+    "id": "wh03-S05",
+    "module": "wh03",
+    "kind": "cross-module-contract"
+  },
+  {
+    "id": "wh03-S06",
+    "module": "wh03",
+    "kind": "boundary"
+  },
+  {
+    "id": "wh03-S08",
+    "module": "wh03",
+    "kind": "spec-vs-code"
+  },
+  {
+    "id": "wh03-S11",
+    "module": "wh03",
+    "kind": "cross-module-contract"
+  },
+  {
+    "id": "wh03-S12",
+    "module": "wh03",
+    "kind": "cross-module-contract"
+  },
+  {
+    "id": "wh03-S14",
+    "module": "wh03",
+    "kind": "cross-module-contract"
+  }
+]

@@ -1,0 +1,362 @@
+[
+  {
+    "id": "wh01-S01",
+    "module": "wh01",
+    "kind": "cross-module-contract"
+  },
+  {
+    "id": "wh01-S02",
+    "module": "wh01",
+    "kind": "spec-vs-code"
+  },
+  {
+    "id": "wh01-S03",
+    "module": "wh01",
+    "kind": "boundary"
+  },
+  {
+    "id": "wh01-S06",
+    "module": "wh01",
+    "kind": "boundary"
+  },
+  {
+    "id": "wh01-S07",
+    "module": "wh01",
+    "kind": "spec-vs-code"
+  },
+  {
+    "id": "wh01-S09",
+    "module": "wh01",
+    "kind": "cross-module-contract"
+  },
+  {
+    "id": "wh01-S10",
+    "module": "wh01",
+    "kind": "spec-vs-code"
+  },
+  {
+    "id": "wh01-S12",
+    "module": "wh01",
+    "kind": "cross-module-contract"
+  },
+  {
+    "id": "wh01-S14",
+    "module": "wh01",
+    "kind": "cross-module-contract"
+  },
+  {
+    "id": "wh02-S01",
+    "module": "wh02",
+    "kind": "cross-module-contract"
+  },
+  {
+    "id": "wh02-S03",
+    "module": "wh02",
+    "kind": "boundary"
+  },
+  {
+    "id": "wh02-S04",
+    "module": "wh02",
+    "kind": "cross-module-contract"
+  },
+  {
+    "id": "wh02-S05",
+    "module": "wh02",
+    "kind": "cross-module-contract"
+  },
+  {
+    "id": "wh02-S07",
+    "module": "wh02",
+    "kind": "spec-vs-code"
+  },
+  {
+    "id": "wh02-S08",
+    "module": "wh02",
+    "kind": "spec-vs-code"
+  },
+  {
+    "id": "wh02-S10",
+    "module": "wh02",
+    "kind": "spec-vs-code"
+  },
+  {
+    "id": "wh02-S11",
+    "module": "wh02",
+    "kind": "cross-module-contract"
+  },
+  {
+    "id": "wh02-S13",
+    "module": "wh02",
+    "kind": "cross-module-contract"
+  },
+  {
+    "id": "wh03-S01",
+    "module": "wh03",
+    "kind": "cross-module-contract"
+  },
+  {
+    "id": "wh03-S02",
+    "module": "wh03",
+    "kind": "spec-vs-code"
+  },
+  {
+    "id": "wh03-S03",
+    "module": "wh03",
+    "kind": "boundary"
+  },
+  {
+    "id": "wh03-S05",
+    "module": "wh03",
+    "kind": "cross-module-contract"
+  },
+  {
+    "id": "wh03-S06",
+    "module": "wh03",
+    "kind": "boundary"
+  },
+  {
+    "id": "wh03-S07",
+    "module": "wh03",
+    "kind": "spec-vs-code"
+  },
+  {
+    "id": "wh03-S08",
+    "module": "wh03",
+    "kind": "spec-vs-code"
+  },
+  {
+    "id": "wh03-S09",
+    "module": "wh03",
+    "kind": "cross-module-contract"
+  },
+  {
+    "id": "wh03-S13",
+    "module": "wh03",
+    "kind": "cross-module-contract"
+  },
+  {
+    "id": "wh04-S01",
+    "module": "wh04",
+    "kind": "cross-module-contract"
+  },
+  {
+    "id": "wh04-S02",
+    "module": "wh04",
+    "kind": "spec-vs-code"
+  },
+  {
+    "id": "wh04-S03",
+    "module": "wh04",
+    "kind": "boundary"
+  },
+  {
+    "id": "wh04-S05",
+    "module": "wh04",
+    "kind": "cross-module-contract"
+  },
+  {
+    "id": "wh04-S07",
+    "module": "wh04",
+    "kind": "spec-vs-code"
+  },
+  {
+    "id": "wh04-S08",
+    "module": "wh04",
+    "kind": "spec-vs-code"
+  },
+  {
+    "id": "wh04-S10",
+    "module": "wh04",
+    "kind": "spec-vs-code"
+  },
+  {
+    "id": "wh04-S11",
+    "module": "wh04",
+    "kind": "cross-module-contract"
+  },
+  {
+    "id": "wh04-S14",
+    "module": "wh04",
+    "kind": "cross-module-contract"
+  },
+  {
+    "id": "wh05-S02",
+    "module": "wh05",
+    "kind": "spec-vs-code"
+  },
+  {
+    "id": "wh05-S06",
+    "module": "wh05",
+    "kind": "boundary"
+  },
+  {
+    "id": "wh05-S07",
+    "module": "wh05",
+    "kind": "spec-vs-code"
+  },
+  {
+    "id": "wh05-S08",
+    "module": "wh05",
+    "kind": "spec-vs-code"
+  },
+  {
+    "id": "wh05-S09",
+    "module": "wh05",
+    "kind": "cross-module-contract"
+  },
+  {
+    "id": "wh05-S10",
+    "module": "wh05",
+    "kind": "spec-vs-code"
+  },
+  {
+    "id": "wh05-S11",
+    "module": "wh05",
+    "kind": "cross-module-contract"
+  },
+  {
+    "id": "wh05-S12",
+    "module": "wh05",
+    "kind": "cross-module-contract"
+  },
+  {
+    "id": "wh05-S14",
+    "module": "wh05",
+    "kind": "cross-module-contract"
+  },
+  {
+    "id": "wh06-S02",
+    "module": "wh06",
+    "kind": "spec-vs-code"
+  },
+  {
+    "id": "wh06-S03",
+    "module": "wh06",
+    "kind": "boundary"
+  },
+  {
+    "id": "wh06-S05",
+    "module": "wh06",
+    "kind": "cross-module-contract"
+  },
+  {
+    "id": "wh06-S06",
+    "module": "wh06",
+    "kind": "boundary"
+  },
+  {
+    "id": "wh06-S07",
+    "module": "wh06",
+    "kind": "spec-vs-code"
+  },
+  {
+    "id": "wh06-S08",
+    "module": "wh06",
+    "kind": "spec-vs-code"
+  },
+  {
+    "id": "wh06-S10",
+    "module": "wh06",
+    "kind": "spec-vs-code"
+  },
+  {
+    "id": "wh06-S13",
+    "module": "wh06",
+    "kind": "cross-module-contract"
+  },
+  {
+    "id": "wh06-S14",
+    "module": "wh06",
+    "kind": "cross-module-contract"
+  },
+  {
+    "id": "wh07-S01",
+    "module": "wh07",
+    "kind": "cross-module-contract"
+  },
+  {
+    "id": "wh07-S02",
+    "module": "wh07",
+    "kind": "spec-vs-code"
+  },
+  {
+    "id": "wh07-S03",
+    "module": "wh07",
+    "kind": "boundary"
+  },
+  {
+    "id": "wh07-S05",
+    "module": "wh07",
+    "kind": "cross-module-contract"
+  },
+  {
+    "id": "wh07-S06",
+    "module": "wh07",
+    "kind": "boundary"
+  },
+  {
+    "id": "wh07-S07",
+    "module": "wh07",
+    "kind": "spec-vs-code"
+  },
+  {
+    "id": "wh07-S08",
+    "module": "wh07",
+    "kind": "spec-vs-code"
+  },
+  {
+    "id": "wh07-S09",
+    "module": "wh07",
+    "kind": "cross-module-contract"
+  },
+  {
+    "id": "wh07-S13",
+    "module": "wh07",
+    "kind": "cross-module-contract"
+  },
+  {
+    "id": "wh08-S02",
+    "module": "wh08",
+    "kind": "spec-vs-code"
+  },
+  {
+    "id": "wh08-S04",
+    "module": "wh08",
+    "kind": "cross-module-contract"
+  },
+  {
+    "id": "wh08-S06",
+    "module": "wh08",
+    "kind": "boundary"
+  },
+  {
+    "id": "wh08-S07",
+    "module": "wh08",
+    "kind": "spec-vs-code"
+  },
+  {
+    "id": "wh08-S08",
+    "module": "wh08",
+    "kind": "spec-vs-code"
+  },
+  {
+    "id": "wh08-S10",
+    "module": "wh08",
+    "kind": "spec-vs-code"
+  },
+  {
+    "id": "wh08-S11",
+    "module": "wh08",
+    "kind": "cross-module-contract"
+  },
+  {
+    "id": "wh08-S12",
+    "module": "wh08",
+    "kind": "cross-module-contract"
+  },
+  {
+    "id": "wh08-S13",
+    "module": "wh08",
+    "kind": "cross-module-contract"
+  }
+]

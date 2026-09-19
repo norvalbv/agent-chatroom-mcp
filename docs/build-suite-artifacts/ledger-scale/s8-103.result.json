@@ -1,0 +1,154 @@
+{
+  "schemaVersion": 1,
+  "task_id": "build-ledger-scale8-s103",
+  "arm": "A",
+  "seed": 103,
+  "model": "sonnet",
+  "outcome": "task_pass",
+  "passed": true,
+  "reason": "task_pass",
+  "oracle": {
+    "kind": "planted-defects",
+    "command": "node --import tsx oracle/score.ts <workspace>",
+    "exit_code": 0
+  },
+  "anti_tamper": {
+    "hash_before": "9ac05d1da2c6149eee4f4093c4b0be2964a680a7634690fc31e1e6208ce80e45",
+    "hash_after": "9ac05d1da2c6149eee4f4093c4b0be2964a680a7634690fc31e1e6208ce80e45",
+    "unchanged": true
+  },
+  "seats": [
+    {
+      "name": "single",
+      "argv": [
+        "claude",
+        "-p",
+        "Each of the 8 independent warehouse libraries under src/wh01/ .. src/wh08/ must meet the specification in SPEC.md. The public tests in test/ pass today, but passing them does not prove that code meets the specification. Make every warehouse codebase conform to SPEC.md, keeping everything that already conforms working. Run the tests with: node --test test/*.test.ts. Do not create files outside this directory.\n\nModify the relevant source file(s) in your current working directory directly to implement the fix described above. Your edit to the existing file(s) is the submission; do not create any other output file.",
+        "--mcp-config",
+        "/tmp/lsr/s8-103/mcp-empty.json",
+        "--strict-mcp-config",
+        "--allowedTools",
+        "Read,Edit,Write,MultiEdit,Bash,Glob,Grep",
+        "--tools",
+        "Read,Edit,Write,MultiEdit,Bash,Glob,Grep",
+        "--disable-slash-commands",
+        "--setting-sources",
+        "project",
+        "--exclude-dynamic-system-prompt-sections",
+        "--output-format",
+        "stream-json",
+        "--verbose",
+        "--model",
+        "sonnet",
+        "--max-budget-usd",
+        "3"
+      ],
+      "exit_code": 0,
+      "signal": null,
+      "started_at": "2026-09-19T22:04:36.833Z",
+      "completed_at": "2026-09-19T22:07:03.648Z",
+      "num_turns": 35,
+      "duration_ms": 145898,
+      "duration_api_ms": 144805,
+      "usage": {
+        "cost": 0.490848,
+        "input_tokens": 40,
+        "cache_read_input_tokens": 789640,
+        "cache_creation_input_tokens": 43270,
+        "output_tokens": 15976
+      },
+      "text": "## Summary\n\nEach of the 8 warehouse libraries had a different subset of bugs relative to `SPEC.md`; I identified all distinct bugs by diffing the 8 copies against each other and the spec, then applied a single corrected version of each file (`inventory.ts`, `orders.ts`, `backorder.ts`, `warehouse.ts`) to all 8 directories. Fixed issues:\n\n- **`receive`**: was replacing lot quantity instead of adding to it.\n- **`usable`**: excluded a lot's expiry day itself; fixed to `expiry >= day` so lots are usable through their expiry day.\n- **`available`**: some variants summed free stock without checking usability, letting expired lots count.\n- **`plan` sort**: some variants sorted lots by id descending instead of ascending for same-expiry tie-breaks.\n- **`tryReserve`**: repeated-sku order lines were overwriting each other's allocations instead of accumulating; failed reservations only released the first line's holds instead of everything held so far.\n- **`Backorders.retry`**: some variants sorted the queue by order size instead of preserving placement order, or failed to remove non-backordered (e.g. cancelled) orders from the queue, risking re-reserving a cancelled order.\n- **`cancel`**: some variants retried backorders before releasing the cancelled order's stock (so newly freed units weren't visible to the retry), or incorrectly unheld already-shipped allocations alongside remaining ones.\n- **`ship`**: one variant checked against the original line quantity instead of currently reserved remaining stock.\n- **`returnItems`**: cumulative-returns cap wasn't checked in most variants (allowed over-returning across multiple calls); per-lot return amounts didn't account for prior partial returns from the same shipment allocation; and the \"lot still usable\" check used an off-by-one day comparison instead of the shared `usable` rule.\n\nAll 40 existing tests still pass (`node --test test/*.test.ts`), and all 8 warehouse directories are now byte-identical, correctly implementing the shared spec.",
+      "killed_by_deadline": false,
+      "partial_usage": null,
+      "reported_models": {
+        "system_init": [
+          "claude-sonnet-5"
+        ],
+        "assistant": [
+          "claude-sonnet-5"
+        ],
+        "result_model_usage": [
+          "claude-sonnet-5"
+        ]
+      },
+      "model_usage": {
+        "claude-sonnet-5": {
+          "inputTokens": 40,
+          "outputTokens": 15976,
+          "cacheReadInputTokens": 789640,
+          "cacheCreationInputTokens": 43270,
+          "webSearchRequests": 0,
+          "costUSD": 0.490848,
+          "contextWindow": 1000000,
+          "maxOutputTokens": 64000,
+          "thinkingTokens": 8753,
+          "canonicalModel": "claude-sonnet-5",
+          "provider": "firstParty",
+          "costBasis": "list"
+        }
+      }
+    }
+  ],
+  "usage": {
+    "steps": 0,
+    "prompt_tokens": 0,
+    "completion_tokens": 0,
+    "cost_usd": 0.490848,
+    "seats": 1,
+    "seats_with_usage": 1,
+    "coverage": "complete",
+    "input_tokens": 40,
+    "cache_read_input_tokens": 789640,
+    "cache_creation_input_tokens": 43270,
+    "output_tokens": 15976
+  },
+  "turns": {
+    "per_seat": [
+      {
+        "name": "single",
+        "num_turns": 35
+      }
+    ],
+    "summed": 35,
+    "seats": 1,
+    "seats_with_turns": 1,
+    "coverage": "complete"
+  },
+  "thinking_tokens": 8753,
+  "output_tokens": 15976,
+  "wall_clock": {
+    "started_at": "2026-09-19T22:04:36.833Z",
+    "completed_at": "2026-09-19T22:07:03.648Z",
+    "duration_ms": 146815
+  },
+  "effort": {
+    "level": "medium",
+    "settings_path": ".claude/settings.json",
+    "settings_sha256": "af1ef779182cc6e6bc8b2985a37b27915b5742ecb1a89015aeb1c721d732bc1d",
+    "own_git_root": true
+  },
+  "budget": {
+    "max_budget_usd": 3,
+    "deadline_ms": 900000
+  },
+  "build": {
+    "captured_at": "2026-09-19T22:04:36.817Z",
+    "head_revision": "a60ea7800a1eba62b6f648a3e48a23b82c6d02bf",
+    "runner_sha256": "bcca098aa373dd9a68fada48a809687b0418baff5649a9c6e57be4f3cb8a898d",
+    "hub_entry": null,
+    "hub_entry_sha256": null,
+    "hub_revision": null,
+    "hub_build_sha256": null,
+    "provenance_scope": null
+  },
+  "frozen": {
+    "task_sha256": "9ac05d1da2c6149eee4f4093c4b0be2964a680a7634690fc31e1e6208ce80e45",
+    "scorer_sha256": "f4b645c670ae4655aec1189e4d7320294115f0e3c6da3b5ba41a7ee3b1cd00f8",
+    "fact_scorer_sha256": "6b8b3e98c8c408ecd6715a38db9263488644d27c01a11c5bab3172acd5539832",
+    "task_id": "build-ledger-scale8-s103",
+    "timeout_ms": 900000,
+    "seats": 1
+  },
+  "error": null,
+  "checked_at": "2026-09-19T22:07:03.889Z"
+}

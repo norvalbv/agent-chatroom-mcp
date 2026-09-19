@@ -361,6 +361,126 @@
       "arm_a": null,
       "admission": "docs/build-suite-admission.md",
       "note": "same generator, seed 2; not screened"
+    },
+    {
+      "id": "build-ledger-scale3-s101",
+      "status": "pending",
+      "family": "planted-defect-ledger-scale",
+      "arm_a": null,
+      "admission": "docs/build-suite-admission.md",
+      "note": "scripts/bench-build-ledger-scale-gen.ts, 3 independent warehouse shards (15 src modules), same S01-S14 mechanism per shard; not yet screened, see room swarm-212551-3vhd-room"
+    },
+    {
+      "id": "build-ledger-scale3-s102",
+      "status": "pending",
+      "family": "planted-defect-ledger-scale",
+      "arm_a": null,
+      "admission": "docs/build-suite-admission.md",
+      "note": "scripts/bench-build-ledger-scale-gen.ts, 3 independent warehouse shards (15 src modules), same S01-S14 mechanism per shard; not yet screened, see room swarm-212551-3vhd-room"
+    },
+    {
+      "id": "build-ledger-scale3-s103",
+      "status": "pending",
+      "family": "planted-defect-ledger-scale",
+      "arm_a": null,
+      "admission": "docs/build-suite-admission.md",
+      "note": "scripts/bench-build-ledger-scale-gen.ts, 3 independent warehouse shards (15 src modules), same S01-S14 mechanism per shard; not yet screened, see room swarm-212551-3vhd-room"
+    },
+    {
+      "id": "build-ledger-scale3-s104",
+      "status": "pending",
+      "family": "planted-defect-ledger-scale",
+      "arm_a": null,
+      "admission": "docs/build-suite-admission.md",
+      "note": "scripts/bench-build-ledger-scale-gen.ts, 3 independent warehouse shards (15 src modules), same S01-S14 mechanism per shard; not yet screened, see room swarm-212551-3vhd-room"
+    },
+    {
+      "id": "build-ledger-scale3-s105",
+      "status": "pending",
+      "family": "planted-defect-ledger-scale",
+      "arm_a": null,
+      "admission": "docs/build-suite-admission.md",
+      "note": "scripts/bench-build-ledger-scale-gen.ts, 3 independent warehouse shards (15 src modules), same S01-S14 mechanism per shard; not yet screened, see room swarm-212551-3vhd-room"
+    },
+    {
+      "id": "build-ledger-scale8-s101",
+      "status": "pending",
+      "family": "planted-defect-ledger-scale",
+      "arm_a": null,
+      "admission": "docs/build-suite-admission.md",
+      "note": "scripts/bench-build-ledger-scale-gen.ts, 8 independent warehouse shards (40 src modules), same S01-S14 mechanism per shard; not yet screened, see room swarm-212551-3vhd-room"
+    },
+    {
+      "id": "build-ledger-scale8-s102",
+      "status": "pending",
+      "family": "planted-defect-ledger-scale",
+      "arm_a": null,
+      "admission": "docs/build-suite-admission.md",
+      "note": "scripts/bench-build-ledger-scale-gen.ts, 8 independent warehouse shards (40 src modules), same S01-S14 mechanism per shard; not yet screened, see room swarm-212551-3vhd-room"
+    },
+    {
+      "id": "build-ledger-scale8-s103",
+      "status": "pending",
+      "family": "planted-defect-ledger-scale",
+      "arm_a": null,
+      "admission": "docs/build-suite-admission.md",
+      "note": "scripts/bench-build-ledger-scale-gen.ts, 8 independent warehouse shards (40 src modules), same S01-S14 mechanism per shard; not yet screened, see room swarm-212551-3vhd-room"
+    },
+    {
+      "id": "build-ledger-scale8-s104",
+      "status": "pending",
+      "family": "planted-defect-ledger-scale",
+      "arm_a": null,
+      "admission": "docs/build-suite-admission.md",
+      "note": "scripts/bench-build-ledger-scale-gen.ts, 8 independent warehouse shards (40 src modules), same S01-S14 mechanism per shard; not yet screened, see room swarm-212551-3vhd-room"
+    },
+    {
+      "id": "build-ledger-scale8-s105",
+      "status": "pending",
+      "family": "planted-defect-ledger-scale",
+      "arm_a": null,
+      "admission": "docs/build-suite-admission.md",
+      "note": "scripts/bench-build-ledger-scale-gen.ts, 8 independent warehouse shards (40 src modules), same S01-S14 mechanism per shard; not yet screened, see room swarm-212551-3vhd-room"
+    },
+    {
+      "id": "build-ledger-scale20-s101",
+      "status": "pending",
+      "family": "planted-defect-ledger-scale",
+      "arm_a": null,
+      "admission": "docs/build-suite-admission.md",
+      "note": "scripts/bench-build-ledger-scale-gen.ts, 20 independent warehouse shards (100 src modules), same S01-S14 mechanism per shard; not yet screened, see room swarm-212551-3vhd-room"
+    },
+    {
+      "id": "build-ledger-scale20-s102",
+      "status": "pending",
+      "family": "planted-defect-ledger-scale",
+      "arm_a": null,
+      "admission": "docs/build-suite-admission.md",
+      "note": "scripts/bench-build-ledger-scale-gen.ts, 20 independent warehouse shards (100 src modules), same S01-S14 mechanism per shard; not yet screened, see room swarm-212551-3vhd-room"
+    },
+    {
+      "id": "build-ledger-scale20-s103",
+      "status": "pending",
+      "family": "planted-defect-ledger-scale",
+      "arm_a": null,
+      "admission": "docs/build-suite-admission.md",
+      "note": "scripts/bench-build-ledger-scale-gen.ts, 20 independent warehouse shards (100 src modules), same S01-S14 mechanism per shard; not yet screened, see room swarm-212551-3vhd-room"
+    },
+    {
+      "id": "build-ledger-scale20-s104",
+      "status": "pending",
+      "family": "planted-defect-ledger-scale",
+      "arm_a": null,
+      "admission": "docs/build-suite-admission.md",
+      "note": "scripts/bench-build-ledger-scale-gen.ts, 20 independent warehouse shards (100 src modules), same S01-S14 mechanism per shard; not yet screened, see room swarm-212551-3vhd-room"
+    },
+    {
+      "id": "build-ledger-scale20-s105",
+      "status": "pending",
+      "family": "planted-defect-ledger-scale",
+      "arm_a": null,
+      "admission": "docs/build-suite-admission.md",
+      "note": "scripts/bench-build-ledger-scale-gen.ts, 20 independent warehouse shards (100 src modules), same S01-S14 mechanism per shard; not yet screened, see room swarm-212551-3vhd-room"
     }
   ]
 }

@@ -257,7 +257,7 @@ export class Warehouse {
   };
 }
 
-const SPEC = `# Warehouse fulfilment specification
+export const SPEC = `# Warehouse fulfilment specification
 
 The \`Warehouse\` class in \`src/warehouse.ts\` tracks stock in lots. All quantities are whole units; days are integers.
 
@@ -289,7 +289,7 @@ The \`Warehouse\` class in \`src/warehouse.ts\` tracks stock in lots. All quanti
   counted gross, that is not reduced by later returns, and \`returned\` units per sku), the backorder queue and the available stock per sku on
   that day. Its shape is a frozen interface: do not add, rename or reorder fields.
 `;
-const BRIEF = `The warehouse library in src/ must meet the specification in SPEC.md. The public tests in test/ pass today, but passing them does not prove the code meets the specification. Make the codebase conform to SPEC.md, keeping everything that already conforms working. Run the tests with: node --test test/*.test.ts. Do not create files outside this directory.`;
+export const BRIEF = `The warehouse library in src/ must meet the specification in SPEC.md. The public tests in test/ pass today, but passing them does not prove the code meets the specification. Make the codebase conform to SPEC.md, keeping everything that already conforms working. Run the tests with: node --test test/*.test.ts. Do not create files outside this directory.`;
 
 type Scn = (W: any, m: number) => unknown;
 const S = (w: any) => w;
@@ -318,7 +318,7 @@ export const SCENARIOS: Record<string, Scn> = {
   R08: (W, m) => { const w = new W(); w.receive('L1', 'A', 6 * m, 99, 0); w.receive('L2', 'A', 6 * m, 120, 0); w.place('o1', [{ sku: 'A', qty: 8 * m }], 3); w.ship('o1', 'A', 8 * m); w.returnItems('o1', 'A', 3 * m, 4); return w.snapshot(4); },
 };
 
-const PUBLIC_TESTS = (m: number) => `import assert from 'node:assert/strict';
+export const PUBLIC_TESTS = (m: number) => `import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { Warehouse } from '../src/warehouse.ts';
 

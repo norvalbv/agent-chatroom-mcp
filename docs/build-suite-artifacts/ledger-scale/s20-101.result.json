@@ -1,0 +1,154 @@
+{
+  "schemaVersion": 1,
+  "task_id": "build-ledger-scale20-s101",
+  "arm": "A",
+  "seed": 101,
+  "model": "sonnet",
+  "outcome": "task_pass",
+  "passed": true,
+  "reason": "task_pass",
+  "oracle": {
+    "kind": "planted-defects",
+    "command": "node --import tsx oracle/score.ts <workspace>",
+    "exit_code": 0
+  },
+  "anti_tamper": {
+    "hash_before": "3e6bd34e55300dcfabeecaafaed68d9104991d7324e5760abde78bb09059a88d",
+    "hash_after": "3e6bd34e55300dcfabeecaafaed68d9104991d7324e5760abde78bb09059a88d",
+    "unchanged": true
+  },
+  "seats": [
+    {
+      "name": "single",
+      "argv": [
+        "claude",
+        "-p",
+        "Each of the 20 independent warehouse libraries under src/wh01/ .. src/wh20/ must meet the specification in SPEC.md. The public tests in test/ pass today, but passing them does not prove that code meets the specification. Make every warehouse codebase conform to SPEC.md, keeping everything that already conforms working. Run the tests with: node --test test/*.test.ts. Do not create files outside this directory.\n\nModify the relevant source file(s) in your current working directory directly to implement the fix described above. Your edit to the existing file(s) is the submission; do not create any other output file.",
+        "--mcp-config",
+        "/tmp/lsr/s20-101/mcp-empty.json",
+        "--strict-mcp-config",
+        "--allowedTools",
+        "Read,Edit,Write,MultiEdit,Bash,Glob,Grep",
+        "--tools",
+        "Read,Edit,Write,MultiEdit,Bash,Glob,Grep",
+        "--disable-slash-commands",
+        "--setting-sources",
+        "project",
+        "--exclude-dynamic-system-prompt-sections",
+        "--output-format",
+        "stream-json",
+        "--verbose",
+        "--model",
+        "sonnet",
+        "--max-budget-usd",
+        "3"
+      ],
+      "exit_code": 0,
+      "signal": null,
+      "started_at": "2026-09-19T22:16:14.149Z",
+      "completed_at": "2026-09-19T22:18:42.965Z",
+      "num_turns": 17,
+      "duration_ms": 147415,
+      "duration_api_ms": 145176,
+      "usage": {
+        "cost": 0.5140013999999999,
+        "input_tokens": 32,
+        "cache_read_input_tokens": 740847,
+        "cache_creation_input_tokens": 58747,
+        "output_tokens": 13078
+      },
+      "text": "All 20 warehouses now share one identical, spec-conformant implementation for each file, and all 100 public tests pass.\n\nFixed bugs found across the various warehouse variants:\n- **`receive`**: some warehouses replaced a lot's quantity instead of adding to it.\n- **`usable`**: some used `expiry > day` instead of `expiry >= day`, and `available`/return-restocking used inconsistent or missing expiry checks (some ignored expiry in `available` entirely).\n- **`plan`**: tie-breaking on same expiry sorted lot ids descending instead of ascending.\n- **`tryReserve`**: on a failed multi-line reservation, only the first line's sku got unheld (leaking holds on other skus); repeated-sku lines overwrote instead of accumulating their allocations.\n- **`backorder.retry`**: reordered the queue by order size instead of preserving placement order (FIFO).\n- **`ship`**: validated against the order line's original quantity instead of what's still reserved for that sku.\n- **`cancel`**: released holds on already-shipped allocations too (corrupting the reserved count, since those were already decremented on shipment), and in some variants retried backorders *before* releasing the cancelled order's stock.\n- **`returnItems`**: didn't account for previously-returned units when validating/allocating (double-counting across calls), and used an off-by-one expiry check (`day - 1`) when deciding whether to restock a lot.\n\nDiffs applied only to `src/wh01`–`wh20`; no files created outside the working directory.",
+      "killed_by_deadline": false,
+      "partial_usage": null,
+      "reported_models": {
+        "system_init": [
+          "claude-sonnet-5"
+        ],
+        "assistant": [
+          "claude-sonnet-5"
+        ],
+        "result_model_usage": [
+          "claude-sonnet-5"
+        ]
+      },
+      "model_usage": {
+        "claude-sonnet-5": {
+          "inputTokens": 32,
+          "outputTokens": 13078,
+          "cacheReadInputTokens": 740847,
+          "cacheCreationInputTokens": 58747,
+          "webSearchRequests": 0,
+          "costUSD": 0.5140013999999999,
+          "contextWindow": 1000000,
+          "maxOutputTokens": 64000,
+          "thinkingTokens": 7233,
+          "canonicalModel": "claude-sonnet-5",
+          "provider": "firstParty",
+          "costBasis": "list"
+        }
+      }
+    }
+  ],
+  "usage": {
+    "steps": 0,
+    "prompt_tokens": 0,
+    "completion_tokens": 0,
+    "cost_usd": 0.5140013999999999,
+    "seats": 1,
+    "seats_with_usage": 1,
+    "coverage": "complete",
+    "input_tokens": 32,
+    "cache_read_input_tokens": 740847,
+    "cache_creation_input_tokens": 58747,
+    "output_tokens": 13078
+  },
+  "turns": {
+    "per_seat": [
+      {
+        "name": "single",
+        "num_turns": 17
+      }
+    ],
+    "summed": 17,
+    "seats": 1,
+    "seats_with_turns": 1,
+    "coverage": "complete"
+  },
+  "thinking_tokens": 7233,
+  "output_tokens": 13078,
+  "wall_clock": {
+    "started_at": "2026-09-19T22:16:14.148Z",
+    "completed_at": "2026-09-19T22:18:42.965Z",
+    "duration_ms": 148817
+  },
+  "effort": {
+    "level": "medium",
+    "settings_path": ".claude/settings.json",
+    "settings_sha256": "af1ef779182cc6e6bc8b2985a37b27915b5742ecb1a89015aeb1c721d732bc1d",
+    "own_git_root": true
+  },
+  "budget": {
+    "max_budget_usd": 3,
+    "deadline_ms": 900000
+  },
+  "build": {
+    "captured_at": "2026-09-19T22:16:14.133Z",
+    "head_revision": "a60ea7800a1eba62b6f648a3e48a23b82c6d02bf",
+    "runner_sha256": "bcca098aa373dd9a68fada48a809687b0418baff5649a9c6e57be4f3cb8a898d",
+    "hub_entry": null,
+    "hub_entry_sha256": null,
+    "hub_revision": null,
+    "hub_build_sha256": null,
+    "provenance_scope": null
+  },
+  "frozen": {
+    "task_sha256": "3e6bd34e55300dcfabeecaafaed68d9104991d7324e5760abde78bb09059a88d",
+    "scorer_sha256": "f4b645c670ae4655aec1189e4d7320294115f0e3c6da3b5ba41a7ee3b1cd00f8",
+    "fact_scorer_sha256": "6b8b3e98c8c408ecd6715a38db9263488644d27c01a11c5bab3172acd5539832",
+    "task_id": "build-ledger-scale20-s101",
+    "timeout_ms": 900000,
+    "seats": 1
+  },
+  "error": null,
+  "checked_at": "2026-09-19T22:18:43.213Z"
+}

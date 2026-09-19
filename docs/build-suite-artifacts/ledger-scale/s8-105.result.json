@@ -1,0 +1,154 @@
+{
+  "schemaVersion": 1,
+  "task_id": "build-ledger-scale8-s105",
+  "arm": "A",
+  "seed": 105,
+  "model": "sonnet",
+  "outcome": "task_fail",
+  "passed": false,
+  "reason": "task_fail",
+  "oracle": {
+    "kind": "planted-defects",
+    "command": "node --import tsx oracle/score.ts <workspace>",
+    "exit_code": 1
+  },
+  "anti_tamper": {
+    "hash_before": "a4f004487b5f8d36b5bdf20954fc7985bda7d4ad20ec4ebbd9a6d73e49427f71",
+    "hash_after": "a4f004487b5f8d36b5bdf20954fc7985bda7d4ad20ec4ebbd9a6d73e49427f71",
+    "unchanged": true
+  },
+  "seats": [
+    {
+      "name": "single",
+      "argv": [
+        "claude",
+        "-p",
+        "Each of the 8 independent warehouse libraries under src/wh01/ .. src/wh08/ must meet the specification in SPEC.md. The public tests in test/ pass today, but passing them does not prove that code meets the specification. Make every warehouse codebase conform to SPEC.md, keeping everything that already conforms working. Run the tests with: node --test test/*.test.ts. Do not create files outside this directory.\n\nModify the relevant source file(s) in your current working directory directly to implement the fix described above. Your edit to the existing file(s) is the submission; do not create any other output file.",
+        "--mcp-config",
+        "/tmp/lsr/s8-105/mcp-empty.json",
+        "--strict-mcp-config",
+        "--allowedTools",
+        "Read,Edit,Write,MultiEdit,Bash,Glob,Grep",
+        "--tools",
+        "Read,Edit,Write,MultiEdit,Bash,Glob,Grep",
+        "--disable-slash-commands",
+        "--setting-sources",
+        "project",
+        "--exclude-dynamic-system-prompt-sections",
+        "--output-format",
+        "stream-json",
+        "--verbose",
+        "--model",
+        "sonnet",
+        "--max-budget-usd",
+        "3"
+      ],
+      "exit_code": 0,
+      "signal": null,
+      "started_at": "2026-09-19T22:11:06.379Z",
+      "completed_at": "2026-09-19T22:15:56.586Z",
+      "num_turns": 58,
+      "duration_ms": 289144,
+      "duration_api_ms": 285699,
+      "usage": {
+        "cost": 1.0492860000000002,
+        "input_tokens": 78,
+        "cache_read_input_tokens": 2343950,
+        "cache_creation_input_tokens": 69980,
+        "output_tokens": 30042
+      },
+      "text": "`src/` is untracked so there's no prior baseline to diff against — that's expected. All fixes are in place directly in the source files.\n\n## Summary\n\nI found and fixed 8 distinct spec violations that were scattered differently across the 8 independently-implemented warehouse codebases (all still passing the 40 public tests before and after, since the tests didn't exercise these edge cases):\n\n1. **`usable()` off-by-one** — lots were usable only *before* their expiry day (`expiry > day`); spec requires usable *through* the expiry day (`expiry >= day`).\n2. **`receive()` replacing instead of adding** — some variants overwrote `existing.qty = qty` instead of accumulating.\n3. **`available()` not excluding expired lots** — some variants summed free stock without checking `usable()`.\n4. **Lot tiebreak order reversed** — some `plan()` implementations sorted same-expiry lots by descending id instead of ascending.\n5. **Repeated-sku order lines not merged** — `tryReserve` overwrote a sku's allocation instead of accumulating when a sku appeared in multiple lines.\n6. **Partial rollback on failed reservation** — on a failed all-or-nothing reserve, some variants only unheld the first line's allocations instead of everything held so far, leaking phantom reservations.\n7. **Cancelled orders retried** — the backorder queue's retry skip-check only excluded `'reserved'` orders, so cancelled orders left in the queue could get silently re-reserved later; also fixed the queue to retry strictly in placement (FIFO) order instead of sorting by order size.\n8. **`cancel()` double-unholding shipped units** — some variants unheld `order.shipped` allocations too, double-decrementing the reserved counter (units already shipped aren't reserved).\n9. **`ship()` capped against original line qty, not remaining reserved** — allowed under-shipping to silently succeed instead of being refused per spec.\n10. **`returnItems()` cumulative-return cap missing** — some variants didn't subtract already-returned units before capping, and didn't subtract prior partial returns per allocation, allowing over-return.\n11. **Return restock day check off-by-one/wrong** — some variants used `expiry >= day - 1` instead of the proper `usable(lot, day)` check.\n\nI verified each fix with targeted scenarios (expiry-day usage, repeated-sku lines, cancel-then-retry, FIFO backorder retry, double-unhold, cumulative return cap, ship-beyond-remaining, id tiebreak) across all 8 warehouses, and the full `node --test test/*.test.ts` suite still passes (40/40).",
+      "killed_by_deadline": false,
+      "partial_usage": null,
+      "reported_models": {
+        "system_init": [
+          "claude-sonnet-5"
+        ],
+        "assistant": [
+          "claude-sonnet-5"
+        ],
+        "result_model_usage": [
+          "claude-sonnet-5"
+        ]
+      },
+      "model_usage": {
+        "claude-sonnet-5": {
+          "inputTokens": 78,
+          "outputTokens": 30042,
+          "cacheReadInputTokens": 2343950,
+          "cacheCreationInputTokens": 69980,
+          "webSearchRequests": 0,
+          "costUSD": 1.0492860000000002,
+          "contextWindow": 1000000,
+          "maxOutputTokens": 64000,
+          "thinkingTokens": 18627,
+          "canonicalModel": "claude-sonnet-5",
+          "provider": "firstParty",
+          "costBasis": "list"
+        }
+      }
+    }
+  ],
+  "usage": {
+    "steps": 0,
+    "prompt_tokens": 0,
+    "completion_tokens": 0,
+    "cost_usd": 1.0492860000000002,
+    "seats": 1,
+    "seats_with_usage": 1,
+    "coverage": "complete",
+    "input_tokens": 78,
+    "cache_read_input_tokens": 2343950,
+    "cache_creation_input_tokens": 69980,
+    "output_tokens": 30042
+  },
+  "turns": {
+    "per_seat": [
+      {
+        "name": "single",
+        "num_turns": 58
+      }
+    ],
+    "summed": 58,
+    "seats": 1,
+    "seats_with_turns": 1,
+    "coverage": "complete"
+  },
+  "thinking_tokens": 18627,
+  "output_tokens": 30042,
+  "wall_clock": {
+    "started_at": "2026-09-19T22:11:06.379Z",
+    "completed_at": "2026-09-19T22:15:56.587Z",
+    "duration_ms": 290208
+  },
+  "effort": {
+    "level": "medium",
+    "settings_path": ".claude/settings.json",
+    "settings_sha256": "af1ef779182cc6e6bc8b2985a37b27915b5742ecb1a89015aeb1c721d732bc1d",
+    "own_git_root": true
+  },
+  "budget": {
+    "max_budget_usd": 3,
+    "deadline_ms": 900000
+  },
+  "build": {
+    "captured_at": "2026-09-19T22:11:06.367Z",
+    "head_revision": "a60ea7800a1eba62b6f648a3e48a23b82c6d02bf",
+    "runner_sha256": "bcca098aa373dd9a68fada48a809687b0418baff5649a9c6e57be4f3cb8a898d",
+    "hub_entry": null,
+    "hub_entry_sha256": null,
+    "hub_revision": null,
+    "hub_build_sha256": null,
+    "provenance_scope": null
+  },
+  "frozen": {
+    "task_sha256": "a4f004487b5f8d36b5bdf20954fc7985bda7d4ad20ec4ebbd9a6d73e49427f71",
+    "scorer_sha256": "f4b645c670ae4655aec1189e4d7320294115f0e3c6da3b5ba41a7ee3b1cd00f8",
+    "fact_scorer_sha256": "6b8b3e98c8c408ecd6715a38db9263488644d27c01a11c5bab3172acd5539832",
+    "task_id": "build-ledger-scale8-s105",
+    "timeout_ms": 900000,
+    "seats": 1
+  },
+  "error": null,
+  "checked_at": "2026-09-19T22:15:56.816Z"
+}

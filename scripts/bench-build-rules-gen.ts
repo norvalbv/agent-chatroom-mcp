@@ -164,7 +164,7 @@ export async function writeRulesTask(seed: number, out: string, size = 24, plant
   for (const m of MODULES) w(`public/test/${m}.test.ts`, `import assert from 'node:assert/strict';\nimport { test } from 'node:test';\nimport * as ${m} from '../src/${m}.ts';\n\n${(tests[m] ?? []).join('\n')}\n`);
   w('public/SPEC.md', SPEC(inst));
   w('public/brief.txt', BRIEF + '\n');
-  w('task.json', JSON.stringify({ task_id: id }) + '\n');
+  w('task.json', JSON.stringify({ task_id: id, build_suite: { defect_ids: inst.rules.filter((r) => r.defect).map((r) => r.id), regression_ids: inst.rules.map((r) => r.id) } }) + '\n');
   w('oracle/oracle.json', JSON.stringify({ kind: 'planted-defects' }) + '\n');
   w('oracle/instance.json', JSON.stringify({ seed, size, plants, family: 'rules', defects: inst.rules.filter((r) => r.defect).map((r) => r.id), rules: inst.rules, checks }, null, 2) + '\n');
   w('oracle/DEFECTS.json', JSON.stringify(inst.rules.filter((r) => r.defect).map((r) => ({ id: r.id, module: r.module, kind: r.kind, template: r.tmpl, public_test_encodes_bug: r.misleading })), null, 2) + '\n');

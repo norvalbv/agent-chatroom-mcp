@@ -238,7 +238,7 @@ for (const id of ['build-ledger-s1', 'build-ledger-s2']) {
   });
 }
 
-for (const id of ['build-ledger-s1', 'build-ledger-s2']) {
+for (const id of ['build-ledger-s1', 'build-ledger-s2', 'build-billing-s1', 'build-billing-s2', 'build-rules-s1', 'build-rules-s2', 'build-rules-l3']) {
   test(`${id}: task.json build_suite matrix equals the oracle's defect/ and regression/ names exactly`, () => {
     const task = resolve('tasks', id);
     const meta = JSON.parse(readFileSync(join(task, 'task.json'), 'utf8'));

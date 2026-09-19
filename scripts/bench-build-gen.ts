@@ -407,7 +407,7 @@ export async function writeTask(seed: number, out: string): Promise<Instance> {
   for (const [f, body] of Object.entries(publicTests(inst))) w(`public/test/${f}`, body);
   w('public/SPEC.md', SPEC(inst.params));
   w('public/brief.txt', BRIEF + '\n');
-  w('task.json', JSON.stringify({ task_id: id }) + '\n');
+  w('task.json', JSON.stringify({ task_id: id, build_suite: { defect_ids: inst.defects, regression_ids: Array.from({ length: 12 }, (_, i) => 'R' + String(i + 1).padStart(2, '0')) } }) + '\n');
   w('oracle/oracle.json', JSON.stringify({ kind: 'planted-defects' }) + '\n');
   w('oracle/instance.json', JSON.stringify(inst, null, 2) + '\n');
   w('oracle/DEFECTS.json', JSON.stringify(inst.defects.map((k) => ({ id: k, module: DEFECT_MODULE[k], kind: DEFECT_KIND[k] })), null, 2) + '\n');

@@ -10,6 +10,8 @@ node --import tsx scripts/paper-rq1-table.ts bench/results/rq1-suite --out bench
 node --import tsx scripts/paper-rq1-armk.ts bench/results/rq1-suite bench/results/rq1-arm-k --out bench/results/rq1-arm-k/rq1-armk-table
 
 # --- claim/results-stats (sonnet-1): append your generator invocation below ---
+node --import tsx scripts/paper-rq1-family.ts bench/results/rq1-suite bench/results/rq1-arm-k --out paper/generated/rq1-family-table
+node --import tsx scripts/paper-rq1-tex.ts bench/results/rq1-suite bench/results/rq1-arm-k --out-dir paper/tables
 
 # --- claim/figures (sonnet-4): append your generator invocation(s) below ---
 node --import tsx scripts/paper-fig-data.ts bench/results/rq1-suite bench/results/rq1-arm-k --out paper/generated/fig-data.json

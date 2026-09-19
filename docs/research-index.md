@@ -40,6 +40,7 @@
 | arXiv:2406.07155 | docs/swarm-protocol-spec done-means-independently-verified README self-organising-teams-by-claims-and-recruitment  |
 | arXiv:2406.16008 | hub-carries-what-it-knows  |
 | arXiv:2406.17744 | humans-answered-once-by-hub-enforcement  |
+| arXiv:2407.01502 | docs/harness-provenance-review-174126 measure-task-success-on-a-machine-oracle  |
 | arXiv:2410.08115 | docs/swarm-protocol-spec self-organising-teams-by-claims-and-recruitment  |
 | arXiv:2410.10934 | docs/swarm-protocol-spec done-means-independently-verified  |
 | arXiv:2411.00114 | README  |

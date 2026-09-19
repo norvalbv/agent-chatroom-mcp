@@ -117,6 +117,10 @@ export interface SeatRecord {
   /** Non-null only when the seat was killed before a `result` event arrived but at least one
    * `assistant` event was observed first; null (not zero-filled) otherwise. */
   partial_usage: PartialUsage | null;
+  /** CLI-reported identifiers, not an attestation of provider weights or reasoning settings. */
+  reported_models: { system_init: string[]; assistant: string[]; result_model_usage: string[] } | null;
+  /** Unmodified terminal CLI usage by model, including reasoning fields when reported. */
+  model_usage: Record<string, unknown> | null;
 }
 
 /** Spawn one `claude` seat (bare command name, resolved off PATH so tests can stub it); enforce a wall-clock cap since the CLI has no such flag itself.
@@ -131,6 +135,10 @@ function runClaudeSeat(name: string, args: string[], cwd: string, deadlineMs: nu
     let resultLine: string | null = null;
     let err = "";
     const partial: PartialUsage = { output_tokens: 0, assistant_messages_observed: 0 };
+    const models = { system_init: new Set<string>(), assistant: new Set<string>(), result_model_usage: new Set<string>() };
+    const observeModel = (source: keyof typeof models, value: unknown) => {
+      if (typeof value === "string" && value.trim()) models[source].add(value);
+    };
     let killedByDeadline = false;
     const consumeLine = (line: string) => {
       const trimmed = line.trim();
@@ -141,7 +149,13 @@ function runClaudeSeat(name: string, args: string[], cwd: string, deadlineMs: nu
       } catch {
         return;
       }
+      // Identity observations must survive usage-free events and a missing terminal result.
+      if (evt?.type === "system" && evt.subtype === "init") observeModel("system_init", evt.model);
+      if (evt?.type === "assistant") observeModel("assistant", evt.message?.model);
       if (evt?.type === "result") {
+        if (evt.modelUsage && typeof evt.modelUsage === "object" && !Array.isArray(evt.modelUsage)) {
+          for (const id of Object.keys(evt.modelUsage)) observeModel("result_model_usage", id);
+        }
         resultLine = trimmed;
         return;
       }
@@ -195,6 +209,10 @@ function runClaudeSeat(name: string, args: string[], cwd: string, deadlineMs: nu
         stderr_tail: err.slice(-4000),
         killed_by_deadline: killedByDeadline,
         partial_usage: !resultLine && partial.assistant_messages_observed > 0 ? partial : null,
+        reported_models: Object.values(models).some((ids) => ids.size)
+          ? { system_init: [...models.system_init], assistant: [...models.assistant], result_model_usage: [...models.result_model_usage] }
+          : null,
+        model_usage: parsed?.modelUsage && typeof parsed.modelUsage === "object" && !Array.isArray(parsed.modelUsage) ? parsed.modelUsage : null,
       });
     });
   });
@@ -284,8 +302,11 @@ async function main() {
   let seatRecords: SeatRecord[] = [];
   let startedAt = new Date();
   let completedAt = new Date();
-  let hubEntrySha256: string | null = null;
-  let hubRevision: string | null = null;
+  const build = {
+    captured_at: new Date().toISOString(), head_revision: revision(repoRoot), runner_sha256: null as string | null,
+    hub_entry: armArg === "C" ? hubEntry : null, hub_entry_sha256: null as string | null,
+    hub_revision: null as string | null, hub_build_sha256: null as string | null, provenance_scope: null as string | null,
+  };
   // Any thrown error below (hub boot failure, room-create failure, mid-run tamper) still produces a
   // written verdict, matching bench-bench.ts's try/catch/finally convention: a crash with no artifact
   // is indistinguishable from a run that was never attempted, which is worse for the grid runner (item
@@ -298,6 +319,16 @@ async function main() {
   const baseTools = isCodeTask ? ["Read", "Edit", "Write", "MultiEdit", "Bash", "Glob", "Grep"] : ["Read", "Write", "Bash", "Glob", "Grep"];
 
   try {
+  // Snapshot before launching any child. Scope excludes dependencies and later file mutations;
+  // this records launch provenance, not an immutable execution environment.
+  build.runner_sha256 = hashFile(fileURLToPath(import.meta.url));
+  if (armArg === "C") {
+    build.hub_revision = revision(dirname(hubEntry));
+    build.hub_entry_sha256 = hashFile(hubEntry);
+    const isDist = dirname(hubEntry).endsWith("/dist");
+    build.provenance_scope = isDist ? "dist-tree; external dependencies not covered" : "entry-only; imported modules not covered";
+    if (existsSync(hubEntry)) build.hub_build_sha256 = isDist ? hashTree(dirname(hubEntry)) : build.hub_entry_sha256;
+  }
   if (armArg === "A") {
     startedAt = new Date();
     const mcpJson = join(root, "mcp-empty.json");
@@ -346,8 +377,6 @@ async function main() {
       throw new Error(spawnError ? String(spawnError) : hubChild.exitCode !== null ? `Hub exited ${hubChild.exitCode}` : "Hub did not become ready");
     }
     void hubVersion;
-    hubEntrySha256 = hashFile(hubEntry);
-    hubRevision = revision(dirname(hubEntry));
     const room = "rq1";
     const created = await fetch(`${url}/rooms/${room}/create`, {
       method: "POST",
@@ -419,12 +448,12 @@ async function main() {
     // kept alongside the scored outcome so a parse_failure/task_fail can be told apart after the fact:
     // did the seat compute the right answer and simply not write it where the scorer looked
     // (instruction-following/format failure) or never solve the task at all (reasoning failure)?
-    seats: seatRecords.map((s) => ({ name: s.name, argv: s.argv, exit_code: s.exit_code, signal: s.signal, started_at: s.started_at, completed_at: s.completed_at, num_turns: s.num_turns, duration_ms: s.duration_ms, duration_api_ms: s.duration_api_ms, usage: s.usage, text: s.text, killed_by_deadline: s.killed_by_deadline, partial_usage: s.partial_usage })),
+    seats: seatRecords.map((s) => ({ name: s.name, argv: s.argv, exit_code: s.exit_code, signal: s.signal, started_at: s.started_at, completed_at: s.completed_at, num_turns: s.num_turns, duration_ms: s.duration_ms, duration_api_ms: s.duration_api_ms, usage: s.usage, text: s.text, killed_by_deadline: s.killed_by_deadline, partial_usage: s.partial_usage, reported_models: s.reported_models, model_usage: s.model_usage })),
     usage,
     turns: { per_seat: seatRecords.map((s) => ({ name: s.name, num_turns: s.num_turns })), summed: turnsKnown.reduce((a, s) => a + (s.num_turns ?? 0), 0), seats: seatRecords.length, seats_with_turns: turnsKnown.length, coverage: turnsKnown.length === 0 ? "none" : turnsKnown.length === seatRecords.length ? "complete" : "partial" },
     wall_clock: { started_at: startedAt.toISOString(), completed_at: completedAt.toISOString(), duration_ms: completedAt.getTime() - startedAt.getTime() },
     budget: armArg === "A" ? { max_budget_usd: maxBudgetUsd ? Number(maxBudgetUsd) : null, deadline_ms: deadlineMs } : null,
-    build: { head_revision: revision(repoRoot), hub_entry: armArg === "C" ? hubEntry : null, hub_entry_sha256: hubEntrySha256, hub_revision: hubRevision },
+    build,
     frozen: { task_sha256: taskBefore, scorer_sha256: scorerBefore, fact_scorer_sha256: factScorerBefore, task_id: task.task_id, timeout_ms: timeoutMs, seats: armArg === "C" ? seats : 1 },
     error: failureMessage,
     checked_at: new Date().toISOString(),

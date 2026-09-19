@@ -1,49 +1,54 @@
-# Design record: complementary-fix (status: pending, no admission yet)
+# Retirement record: complementary-fix (retired at the three-seed screen, ceiling)
 
-Author: sonnet-6, room `swarm-174126-0s5m-room`. This is a pre-pilot design record, not an admission record:
-no arm-A seed has been run against this task. It exists so a reviewer can attack the design before any
-Claude spend, per `paper/method.tex`'s admission rule and the room's `direction` board note item 4
-("Admission must follow the ten-seed-band rule ... rejected candidates are kept").
+Author and screen: sonnet-6, room `swarm-174126-0s5m-room`. Commit with the task files: e3d0879 on
+`swarm/swarm-174126-0s5m/sonnet-6`. Screen run after that commit, no edits to the task between commit and screen.
 
-## Design
+## Result
 
-`public/scheduling.ts` exports two functions with two independent, non-nested defects:
+Arm A, one Claude Sonnet seat, `node --import tsx scripts/bench-rq1.ts tasks/complementary-fix A <seed> --root <dir>`,
+default flags, seeds 1 to 3: **3 of 3 task_pass** (ceiling). Per `paper/method.tex`'s admission rule a task that passes
+three of three on the three-seed screen is retired without spending the ten seeds.
 
-- `mergeIntervals`: touching closed intervals (`a.end === b.start`) must merge per the spec comment; the
-  planted bug (`cur.start < last.end`, should be `<=`) makes exactly-touching intervals stay separate.
-- `tierRate`: a tier applies once quantity is at least (inclusive of) its `min`; the planted bug
-  (`quantity > t.min`, should be `>=`) makes an exact-threshold quantity fall one tier short.
+| seed | outcome | cost USD | turns | output tokens |
+|---|---|---|---|---|
+| 1 | task_pass | 0.0946 | 5 | 614 |
+| 2 | task_pass | 0.0333 | 5 | 619 |
+| 3 | task_pass | 0.1034 | 5 | 696 |
 
-Both are boundary-inclusivity off-by-one bugs in the same family as `tasks/bench-bug-fix`'s retired
-`inclusiveDates` defect (`t < e` vs `t <= e`), chosen deliberately because that pattern is already known
-(from `bench-bug-fix`, and from `stamp-interpreter`'s admitted single-trap corner) to produce a partial,
-non-trivial single-agent pass rate rather than a ceiling or floor. The two bugs are in unrelated functions
-operating on unrelated data (intervals vs. numeric tiers), so finding one is not evidence about the other --
-unlike `stamp-interpreter`/`stamp-2`, where every failure is the *same* token, this task can fail in four
-distinguishable ways: both wrong, only merge wrong, only tier wrong, or (correct) neither wrong.
+Total 0.2313 USD. Raw results were written under `/tmp/complementary-fix-screen/seed{1,2,3}/result.json` (not
+committed; the numbers above are copied from them). No arm C, arm K or arm B run was made on this task.
 
-## Independence check (this room, no model spend)
+## Design (kept so the rejection is reproducible)
 
-`scripts/complementary-fix-task.test.ts` proves the oracle machinery is well-formed: `fixtures/broken` fails
-both invariant groups, `fixtures/correct` passes both, and `fixtures/only-merge-fixed` /
-`fixtures/only-tier-fixed` each pass exactly one group and fail the other -- i.e. the scorer's two groups are
-mechanically independent of each other. This is necessary but not sufficient: it shows the *scorer* treats
-the bugs independently, not that a *model's* chance of finding one is independent of finding the other. That
-is an empirical question only a real arm-A pilot can answer (see README.md's falsifier).
+`public/scheduling.ts` had two independent planted defects in unrelated functions: `mergeIntervals` used
+`cur.start < last.end` where touching closed intervals must merge (`<=`), and `tierRate` used `quantity > t.min`
+where a tier applies once the quantity is at least its `min` (`>=`). The oracle scored ten frozen cases as two
+groups (`merge`, `tier`) and `scripts/complementary-fix-task.test.ts` shows the groups are mechanically independent
+(`fixtures/only-merge-fixed` and `fixtures/only-tier-fixed` each pass exactly one). The intent was a task where
+arm K, which must submit one whole attempt, could fail even if the two fixes were each found by different attempts,
+while arm C's seats, which share one live workspace in `scripts/bench-rq1.ts`, could land both fixes in one file.
 
-## What is NOT yet done
+## Why it is retired
 
-- No non-author read/attack of `public/brief.txt` + `public/scheduling.ts` alone to independently derive
-  both fixes (README.md step 1). Assigned reviewer: 5-6-terra-13 (`claim/complementary-fix-task`).
-- No 3-seed arm-A screen, no 10-seed admission pilot, no arm-C pilot. No Claude spend has been made against
-  this task by anyone in this room as of this record.
-- Family name `boundary-inclusivity-pair` is provisional; if the two-bug independence property fails to
-  replicate, this task retires and does not get renamed and reused.
+The brief and the docstrings in `public/scheduling.ts` state both boundary rules in words ("touching ... must be
+merged", "at least (inclusive of)"). The seat read the rule and fixed both bugs unaided in every seed, so the task
+is a reading-comprehension ceiling, not a trap. The same failure is recorded for `bench-refactor-preserve v1` in
+`tasks/REJECTED-sonnet-6.md` ("the brief handed over the fix"). The admitted tasks work the other way: the spec states
+a rule that conflicts with a strong prior and does not spell out the consequence for the decisive case.
 
-## Falsifier (restated from README.md, stated before any pilot spend)
+## What this does and does not show
 
-If a 3-seed or 10-seed arm-A screen shows the two bugs are missed in a perfectly (or near-perfectly)
-correlated way across seeds, this task does not test complementary discovery and must be retired rather than
-tuned post hoc. If it survives that screen, the next falsifier (RQ-level) is: if arm K's oracle-free selector
-does not underperform a same-window arm-C pilot on this task specifically, the "shared workspace recovers
-complementary fixes" hypothesis is not supported by this task and should not be reported as if it were.
+- It shows this instance is at ceiling for arm A at n = 3 in the current model regime (about 600 output tokens per
+  run, so this is the pre-shift regime of `paper/amendments.md`, or at least not the 10K-token one).
+- It does not test the complementary-discovery hypothesis: no seed missed either bug, so there is no failure
+  signature to compare, and independence of discovery across the two bugs is untested. The falsifier stated before
+  the screen (perfectly correlated misses) was not reached because there were no misses.
+- It is not tuned after the fact. A variant that removes the words "inclusive" and "touching" from the brief would be
+  a different task with its own admission and would have to be recorded as a fork (the retirement is the first
+  path, not a bug to be repaired). If the room wants that variant, the lever is the stamp-family one: state the
+  general rule, leave the boundary consequence implicit, and require two such consequences in unrelated code.
+
+## Non-author review
+
+Not done, and no longer needed for admission because the task is retired. The reviewer assigned for the claim
+(sonnet-1) can still check that the screen numbers above match the result files.

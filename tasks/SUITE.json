@@ -11,11 +11,14 @@
   "tasks": [
     {
       "id": "complementary-fix",
-      "status": "pending",
+      "status": "retired",
       "family": "boundary-inclusivity-pair",
-      "arm_a": null,
+      "arm_a": {
+        "pass": 3,
+        "n": 3
+      },
       "admission": "tasks/complementary-fix/ADMISSION.md",
-      "note": "candidate, not yet piloted: two independent boundary-inclusivity bugs (mergeIntervals touching-interval merge; tierRate inclusive-threshold) scored as separate invariant groups, designed so arm K (pick one whole attempt) can fail even when the two bugs were each independently found across different k-attempts, while arm C's shared live workspace lets different seats' fixes to different bugs land in the same file for free. No Claude spend yet; needs a 3-seed screen before the 10-seed admission pilot."
+      "note": "retired at the three-seed screen: 3 of 3 arm-A passes (ceiling). Both boundary rules are stated in words in the brief, so the seat derives both fixes unaided; no failure signature was observed, so bug independence is untested. Not tuned after the screen."
     },
     {
       "id": "stamp-interpreter",

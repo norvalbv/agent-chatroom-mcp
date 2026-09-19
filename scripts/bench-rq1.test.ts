@@ -277,7 +277,7 @@ test("item1: arm A and arm C carry identical built-in tools for the code task; m
  * GIT_AUTHOR_NAME, which seatChildEnv already sets per seat name (src/env.ts's seatGitIdentity), so the
  * three sequential invocations (builder-1, reviewer, optional builder-2) can each answer differently
  * without any new plumbing in bench-rq1.ts itself. `review` controls what the reviewer stub says. */
-function stubClaudeDirArmB(review: "approve" | "revise") {
+function stubClaudeDirArmB(review: "approve" | "revise" | "tamper") {
   const dir = mkdtempSync(join(tmpdir(), "bench-rq1-armb-stub-"));
   const bin = join(dir, "claude");
   writeFileSync(
@@ -291,7 +291,7 @@ function stubClaudeDirArmB(review: "approve" | "revise") {
       `const review=${JSON.stringify(review)};`,
       "let text;",
       "if(who==='builder-1'){fs.writeFileSync('answer.txt', review==='revise'?'wrong affiliation':" + JSON.stringify(EXPECTED) + ");text='builder-1 submission';}",
-      "else if(who==='reviewer'){text = review==='approve' ? 'APPROVE' : 'REVISE: the affiliation is wrong, fix answer.txt';}",
+      "else if(who==='reviewer'){if(review==='tamper'){fs.writeFileSync('answer.txt','tampered by reviewer');}text = review==='revise' ? 'REVISE: the affiliation is wrong, fix answer.txt' : 'APPROVE';}",
       `else if(who==='builder-2'){fs.writeFileSync('answer.txt', ${JSON.stringify(EXPECTED)});text='builder-2 revised submission';}`,
       "else{text='unexpected role: '+who;}",
       "process.stdout.write(JSON.stringify({type:'assistant',message:{usage:{input_tokens:80,output_tokens:15}}})+'\\n');",
@@ -339,6 +339,22 @@ test("arm B: reviewer requests one revision, builder revises once, then scores t
     assert.equal(readFileSync(join(root, "workspace", "answer.txt"), "utf8"), EXPECTED, "the revised answer, not the original wrong one, is what's on disk");
     assert.equal(result.outcome, "task_pass");
     assert.equal(result.passed, true);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+    rmSync(stubDir, { recursive: true, force: true });
+  }
+});
+
+test("arm B: a reviewer that overwrites answer.txt in its own cwd cannot change the scored builder artifact", () => {
+  const stubDir = stubClaudeDirArmB("tamper");
+  const root = join(tmpdir(), `bench-rq1-b-tamper-${process.pid}-${Date.now()}`);
+  try {
+    const r = invoke([task, "B", "3", "--root", root], { PATH: `${stubDir}${delimiter}${process.env.PATH}` });
+    assert.equal(r.status, 0, r.stderr + r.stdout);
+    const result = JSON.parse(readFileSync(join(root, "result.json"), "utf8"));
+    assert.equal(readFileSync(join(root, "workspace", "answer.txt"), "utf8"), EXPECTED, "reviewer writes must not reach the builder workspace");
+    assert.equal(result.outcome, "task_pass");
+    assert.deepEqual(result.seats.map((s: any) => s.name), ["builder-1", "reviewer"]);
   } finally {
     rmSync(root, { recursive: true, force: true });
     rmSync(stubDir, { recursive: true, force: true });

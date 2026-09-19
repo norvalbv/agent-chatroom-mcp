@@ -340,9 +340,12 @@ async function main() {
     const builder1 = await runClaudeSeat("builder-1", builder1Args, workspace, deadlineMs);
     records.push(builder1);
 
-    const reviewText = `${briefText}\n\nYou are reviewing another engineer's submission for this task. Their final message was:\n"""\n${builder1.text}\n"""\nTheir work is already in your current working directory (${isCodeTask ? "the edited source file(s)" : "answer.txt"}). Do not edit any files yourself — you may only read and inspect.\nIf their submission is correct and complete, respond with exactly: APPROVE\nOtherwise respond with a message starting with "REVISE:" followed by one sentence describing what to fix.`;
+    const reviewText = `${briefText}\n\nYou are reviewing another engineer's submission for this task. Their final message was:\n"""\n${builder1.text}\n"""\nA copy of their work is in your current working directory (${isCodeTask ? "the edited source file(s)" : "answer.txt"}). Your copy is discarded, so nothing you change there is submitted; only read and inspect.\nIf their submission is correct and complete, respond with exactly: APPROVE\nOtherwise respond with a message starting with "REVISE:" followed by one sentence describing what to fix.`;
     const reviewerArgs = claudeArgs({ text: reviewText, mcpJson, tools: reviewerTools, model, outputFormat: "stream-json" });
-    const reviewer = await runClaudeSeat("reviewer", reviewerArgs, workspace, deadlineMs);
+    // The reviewer works on a throwaway copy: Bash can write files, so only a copy keeps the scored artifact the builder's.
+    const reviewerWorkspace = join(root, "reviewer-workspace");
+    cpSync(workspace, reviewerWorkspace, { recursive: true });
+    const reviewer = await runClaudeSeat("reviewer", reviewerArgs, reviewerWorkspace, deadlineMs);
     records.push(reviewer);
 
     const decision = parseReviewDecision(reviewer.text);

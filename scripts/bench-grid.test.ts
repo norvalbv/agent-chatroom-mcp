@@ -6,7 +6,7 @@ import { test } from "node:test";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { parseArgs, buildPlan, sumExistingCost, readGridResult, runGrid, type ParsedGridArgs } from "./bench-grid.js";
+import { parseArgs, buildPlan, sumExistingCost, scanExistingCost, readGridResult, runGrid, type ParsedGridArgs } from "./bench-grid.js";
 
 function makeStubRunner(dir: string, invocationsLog: string) {
   const stub = join(dir, "stub-bench-rq1.mjs");
@@ -226,7 +226,7 @@ appendFileSync(${JSON.stringify(invocationsLog)}, JSON.stringify({ argv, root, a
 if (existsSync(root) && !argv.includes('--resume')) { console.error('root exists'); process.exit(1); }
 mkdirSync(root, { recursive: true });
 const raw = process.env.STUB_K_COST ?? '0.5';
-const result = { schemaVersion: 1, task_id: argv[0].split('/').pop(), arm: 'K', k: Number(argv[1]), seed: Number(argv[2]), outcome: 'task_pass', passed: true, cost_usd_total: raw === 'null' ? null : Number(raw), wall_clock_ms: 1000, attempts: [] };
+const result = { schemaVersion: 1, task_id: argv[0].split('/').pop(), arm: 'K', k: Number(argv[1]), seed: Number(argv[2]), outcome: 'task_pass', passed: true, usage: { cost_usd: raw === 'null' ? null : Number(raw), coverage: raw === 'null' ? 'partial' : 'complete' }, wall_clock: { duration_ms: 1000 }, attempts: [] };
 writeFileSync(join(root, 'result.json'), JSON.stringify(result));
 `,
   );
@@ -280,7 +280,7 @@ test("runGrid: arm K runs bench-ak with k, the paired C result, --resume and --c
     assert.equal(call.argv[call.argv.indexOf("--concurrency") + 1], "3");
     assert.ok(call.argv.includes("--resume"));
     assert.equal(call.root, join(f.resultsDir, "bench-fact-check-K-seed1"));
-    assert.ok(Math.abs(first.total_cost_usd - 0.5) < 1e-9, "arm K cost is cost_usd_total");
+    assert.ok(Math.abs(first.total_cost_usd - 0.5) < 1e-9, "arm K cost is usage.cost_usd");
     const second = await runGrid(args, { log: () => {} });
     assert.equal(second.ran, 0);
     assert.equal(second.skipped_done, 1);
@@ -322,6 +322,27 @@ test("runGrid: unknown arm K cost is never summed as zero; it is reported and ha
     assert.equal(again.ran, 0);
   } finally {
     delete process.env.STUB_K_COST;
+    rmSync(f.dir, { recursive: true, force: true });
+  }
+});
+
+test("readGridResult / scanExistingCost: cost_usd 0 with coverage partial or none, and malformed results, are unknown, not zero", () => {
+  const f = fixture();
+  try {
+    mkdirSync(f.resultsDir, { recursive: true });
+    const put = (name: string, body: string) => {
+      mkdirSync(join(f.resultsDir, name));
+      writeFileSync(join(f.resultsDir, name, "result.json"), body);
+    };
+    put("known", JSON.stringify({ outcome: "task_pass", usage: { cost_usd: 0.2, coverage: "complete" }, wall_clock: { duration_ms: 1 } }));
+    put("partial", JSON.stringify({ outcome: "task_pass", usage: { cost_usd: 0, coverage: "partial" }, wall_clock: { duration_ms: 1 } }));
+    put("none", JSON.stringify({ outcome: "task_pass", usage: { cost_usd: 0, coverage: "none" }, wall_clock: { duration_ms: 1 } }));
+    put("broken", "{");
+    assert.equal(readGridResult(join(f.resultsDir, "partial", "result.json")).cost_usd, null);
+    const scan = scanExistingCost(f.resultsDir);
+    assert.ok(Math.abs(scan.total - 0.2) < 1e-9);
+    assert.equal(scan.unknown, 3);
+  } finally {
     rmSync(f.dir, { recursive: true, force: true });
   }
 });

@@ -22,8 +22,8 @@
  * is refused for a group whose paired arm C result (`<c-results-dir>/<task>-C-seed<N>/result.json`,
  * default --results-dir) does not exist. A group is finished iff its result.json exists; an interrupted
  * group is resumed with --resume so finished attempts inside it are not rerun. --concurrency N bounds the
- * attempts running at once inside one group. Arm K's cost is its result's cost_usd_total, which is null
- * when any attempt's usage is unknown; unknown is never summed as zero, and once any finished group has
+ * attempts running at once inside one group. Arm K's cost is its result's usage.cost_usd, null
+ * when any attempt's usage is unknown (as is any result whose usage.coverage is not complete); unknown is never summed as zero, and once any finished group has
  * unknown cost --max-cost-usd cannot be trusted, so later runs are skipped as cost-cap.
  */
 import { spawn, type ChildProcess } from "node:child_process";
@@ -56,7 +56,7 @@ process.on("exit", () => killCurrentChild("SIGKILL"));
 
 export interface GridRunResult {
   outcome: string;
-  /** null only for arm K, when at least one attempt's cost is unknown. */
+  /** null when the cost is unknown (coverage none/partial, or arm K with an attempt of unknown cost); never 0. */
   cost_usd: number | null;
   wall_clock_ms: number;
 }
@@ -64,16 +64,13 @@ export interface GridRunResult {
 /** Reads just the fields the grid runner needs to orchestrate the next run; tolerant of extra fields. */
 export function readGridResult(resultPath: string): GridRunResult {
   const r = JSON.parse(readFileSync(resultPath, "utf8"));
-  if (r.arm === "K") {
-    if (typeof r.outcome !== "string" || !(r.cost_usd_total === null || typeof r.cost_usd_total === "number") || typeof r.wall_clock_ms !== "number") {
-      throw new Error(`Malformed arm K result.json (missing outcome/cost_usd_total/wall_clock_ms): ${resultPath}`);
-    }
-    return { outcome: r.outcome, cost_usd: r.cost_usd_total, wall_clock_ms: r.wall_clock_ms };
-  }
-  if (typeof r.outcome !== "string" || typeof r.usage?.cost_usd !== "number" || typeof r.wall_clock?.duration_ms !== "number") {
+  if (typeof r.outcome !== "string" || !(typeof r.usage?.cost_usd === "number" || (r.arm === "K" && r.usage?.cost_usd === null)) || typeof r.wall_clock?.duration_ms !== "number") {
     throw new Error(`Malformed result.json (missing outcome/usage.cost_usd/wall_clock.duration_ms): ${resultPath}`);
   }
-  return { outcome: r.outcome, cost_usd: r.usage.cost_usd, wall_clock_ms: r.wall_clock.duration_ms };
+  // src/result.ts stores an unknown cost as cost_usd 0 with coverage none/partial, and arm K may store null:
+  // neither is a known cost. A legacy result with no coverage field is read as complete.
+  const known = r.usage.cost_usd !== null && (r.usage.coverage === undefined || r.usage.coverage === "complete");
+  return { outcome: r.outcome, cost_usd: known ? r.usage.cost_usd : null, wall_clock_ms: r.wall_clock.duration_ms };
 }
 
 /** Sums usage.cost_usd across every result.json already under resultsDir, so a resumed grid respects prior spend. */
@@ -94,9 +91,8 @@ export function scanExistingCost(resultsDir: string): { total: number; unknown: 
         if (cost === null) unknown++;
         else total += cost;
       } catch {
-        // Malformed/partial result.json from an interrupted run: not counted, will be retried (its dir
-        // still "exists" though — see runDir's own existsSync guard below for why interrupted runs need
-        // manual cleanup, matching bench-rq1.ts's own root-reuse refusal).
+        // Malformed/partial result.json from an interrupted run: its cost is unknown, never zero.
+        unknown++;
       }
     }
   }

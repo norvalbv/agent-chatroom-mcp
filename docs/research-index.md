@@ -72,6 +72,7 @@
 | arXiv:2601.10102 | docs/self-improvement-swarm-planned hub-carries-what-it-knows  |
 | arXiv:2601.17152 | docs/self-improvement-swarm-planned hub-carries-what-it-knows  |
 | arXiv:2601.18285 | self-organising-teams-by-claims-and-recruitment  |
+| arXiv:2601.19934 | docs/open-round-window-control-audit  |
 | arXiv:2602.12285 | docs/self-improvement-swarm-planned hub-carries-what-it-knows  |
 | arXiv:2602.23193 | docs/fleet-181630-summary  |
 | arXiv:2603.10123 | hub-carries-what-it-knows  |

@@ -1,0 +1,7 @@
+task,arm,n,task_pass,task_fail,parse_failure,timeout,infrastructure_error,comparable_n,success_rate,cost_per_correct_usd,mean_input_tokens,mean_cache_read_tokens,mean_cache_creation_tokens,mean_output_tokens,mean_turns,turns_partial_coverage,mean_wall_ms,partial_coverage
+bench-printf-format,A,40,14,26,0,0,0,40,0.35,0.2733586571428571,7.6,38263.65,10563.15,4575.5,4.7,false,42664.925,false
+bench-printf-format,C,40,6,34,0,0,0,40,0.15,4.9657247,77.2,1098081.775,74502.55,22707.775,58.575,false,97454.875,false
+stamp-2,A,40,28,12,0,0,0,40,0.7,0.09651402857142856,6,26168.35,9838.725,2295.925,4,false,27413.45,false
+stamp-2,C,40,40,0,0,0,0,40,1,0.5945629699999999,75.3,974678.1,59402.625,16186.625,55.9,false,85089.75,false
+stamp-interpreter,A,40,33,7,0,0,0,40,0.825,0.0703086484848485,6,25807.675,8871.775,1734.4,4,false,20455.875,false
+stamp-interpreter,C,40,40,0,0,0,0,40,1,0.6017927550000001,83.35,1074277.525,61137.2,14222.175,60.925,false,65564.675,false

@@ -477,6 +477,25 @@ Who wrote `printfProbes()` and confirms they had not read `tasks/bench-printf-fo
 data before writing it (opus-reviewer's process-hazard flag, findings/opus-reviewer-stats): sonnet-1. Reproducing:
 `node --import tsx scripts/ak-select-calibration.ts --draws 20000 --k 7`.
 
+**Frozen probe set and its sensitivity (opus-reviewer, findings/opus-reviewer-printf-calibration, independently
+reproduced the same defect and result off the unfixed 8b8a75f and confirmed this fix and these numbers).**
+`printfProbes()` at the commit this file was written against produces exactly 9650 probes,
+sha256 `ad2529177ee71fc050fd1aefa254a1a3108aef0cdf1e164a75c06d9ffbf1f05a` (`JSON.stringify` of the array). The
+40-candidate pool partitions into exactly two signature classes (identical pairs = C(14,2)+C(26,2) = 91+325 = 416,
+i.e. every passer is byte-identical to every other passer and every failer to every other failer) that differ on
+only 24 of the 9650 probes, all `%.17g`/`%.17G` of `1e-7`. This makes the selector's outcome sensitive to the probe
+set in a specific, disclosed way: drop precision `.17` or the value `1e-7` and all 40 signatures collapse to
+identical, every MBR-exec score ties, `argmax` returns index 0, and the selector degenerates to "always submit
+attempt 1" (about 0.35, the single-attempt rate) — richer probes make arm K's printf number worse, not better,
+because they let the selector see the majority-wrong agreement it otherwise couldn't. The probe set is frozen at
+the hash above; a future change to `printfProbes()` must record the new hash and re-run this calibration before
+the next real printf spend.
+
+**Consequence for the printf arm-K run:** run it anyway (both k and the selector are pre-registered and this
+result was predicted), but the paper must present it as a confirmation of prediction 2's mechanism, not a
+discovery, and must not present "arm K roughly matches arm A on printf" as evidence the selector is neutral —
+it is measured to actively hurt (about 0.20 vs 0.35), for the reason given above.
+
 **Reported for arm K** (in `bench/results/rq1-arm-k`, never in `rq1-suite`): K vs C and K vs A by Fisher exact, Holm-Bonferroni across the
 arm-K comparisons; cost per correct answer; the vote distribution per group; the oracle ceiling (any of the k attempts passes), labelled as
 NOT an arm, a bound on what selection could reach.

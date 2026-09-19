@@ -49,6 +49,7 @@
 | arXiv:2412.10079 | docs/fleet-174517-summary docs/fleet-181630-summary done-means-independently-verified  |
 | arXiv:2501.16643 | humans-answered-once-by-hub-enforcement  |
 | arXiv:2502.08691 | README  |
+| arXiv:2502.08788 | docs/arm-b-next-step-research  |
 | arXiv:2503.13657 | board-delta-manifests-and-single-electorate  |
 | arXiv:2505.11556 | docs/self-improvement-swarm-planned hub-carries-what-it-knows  |
 | arXiv:2505.18845 | humans-answered-once-by-hub-enforcement  |
@@ -73,6 +74,7 @@
 | arXiv:2601.17152 | docs/self-improvement-swarm-planned hub-carries-what-it-knows  |
 | arXiv:2601.18285 | self-organising-teams-by-claims-and-recruitment  |
 | arXiv:2601.19934 | docs/open-round-window-control-audit  |
+| arXiv:2602.05289 | docs/arm-b-next-step-research  |
 | arXiv:2602.12285 | docs/self-improvement-swarm-planned hub-carries-what-it-knows  |
 | arXiv:2602.23193 | docs/fleet-181630-summary  |
 | arXiv:2603.10123 | hub-carries-what-it-knows  |

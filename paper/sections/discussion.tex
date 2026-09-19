@@ -23,8 +23,9 @@ group's \texttt{selection.votes} in \texttt{bench/results/rq1-arm-k}, filtered t
 \texttt{stamp-interpreter} failures). Both failure modes
 are consequences of the same underlying fact -- the correct answer was not always a comfortable majority
 of a given group's 10 attempts even though it is the population majority -- and both are properties of
-plain plurality voting, not of anything the chatroom's specific mechanics would avoid or reproduce
-differently. This is true whether the aggregation is
+plain plurality voting on arm~K's non-communicating attempts; whether the chatroom's mechanics would
+avoid either failure mode is untested, since arm~C's own process does not expose a per-run vote count
+to compare against. This is true whether the aggregation is
 an explicit vote count (arm~K's plurality selector) or an emergent chatroom consensus reached through
 blind openings, proposal and challenge (arm~C): both land at pass rates that are not statistically
 distinguishable from each other on either \texttt{stamp} task (Section~\ref{sec:results}), despite

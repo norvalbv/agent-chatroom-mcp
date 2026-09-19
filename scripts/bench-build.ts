@@ -119,7 +119,7 @@ async function main() {
   if (!Number.isInteger(seed)) fail(`invalid seed ${seedText}`);
   const rootArg = takeFlag(argv, "root");
   if (!rootArg) fail("--root is required");
-  const runner = resolve(takeFlag(argv, "runner") ?? resolve(here, "bench-rq1.ts"));
+  const runner = resolve(takeFlag(argv, "runner") ?? resolve(here, "bench-build-runner.ts"));
   if (!existsSync(runner)) fail(`runner not found: ${runner}`);
   const root = resolve(rootArg);
   // The build-suite preregistration fixes the room at four seats.  The older

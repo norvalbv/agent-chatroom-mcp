@@ -1,0 +1,197 @@
+{
+  "schemaVersion": 2,
+  "task_id": "bench-printf-format",
+  "arm": "K",
+  "k": 7,
+  "seed": 128,
+  "model": "sonnet",
+  "selector": "mbr-exec",
+  "selection": {
+    "rule": "MBR-exec execution agreement (arXiv:2204.11454) on README-grammar probes; ties to lowest attempt",
+    "winner_attempt": 1,
+    "scores": [
+      57876,
+      57876,
+      57876,
+      57876,
+      57756,
+      57876,
+      57876
+    ],
+    "loaded": [
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true
+    ],
+    "votes": {
+      "c1": 6,
+      "c5": 1
+    },
+    "n_probes": 9650,
+    "exploratory_secondary": {
+      "rule": "signature-plurality",
+      "winner_attempt": 1,
+      "scores": [
+        6,
+        6,
+        6,
+        6,
+        1,
+        6,
+        6
+      ]
+    }
+  },
+  "selected_attempt_result": {
+    "outcome": "task_fail",
+    "passed": false,
+    "reason": "task_fail",
+    "oracle": {
+      "kind": "printf-format",
+      "command": "node --import tsx oracle/score.ts <workspace>",
+      "exit_code": 1
+    }
+  },
+  "outcome": "task_fail",
+  "passed": false,
+  "reason": "task_fail",
+  "oracle_ceiling": {
+    "any_attempt_passed": true,
+    "n_passed": 1,
+    "note": "NOT an arm: an upper bound on what any selector could achieve, computed with the oracle after selection"
+  },
+  "matched_from": {
+    "arm_c_result": "/Users/benji/Desktop/Personal and learning/agent-chatroom-mcp/bench/results/rq1-suite/bench-printf-format-C-seed128/result.json",
+    "arm_c_cost_usd": 0.8054588
+  },
+  "budget": {
+    "attempt_cap_usd": 0.3,
+    "attempt_deadline_ms": 150000,
+    "concurrency": 5
+  },
+  "usage": {
+    "cost_usd": 0.6647844,
+    "cost_usd_known_sum": 0.6647844,
+    "cost_usd_unknown_attempts": 0,
+    "cost_usd_upper_bound": 0.6647844
+  },
+  "turns_total": 33,
+  "wall_clock": {
+    "duration_ms": 85034,
+    "note": "elapsed for this invocation (attempts ran --concurrency at a time)",
+    "sum_of_attempt_ms": 310876
+  },
+  "resumed_attempts": [],
+  "attempts": [
+    {
+      "index": 1,
+      "root": "/Users/benji/Desktop/Personal and learning/agent-chatroom-mcp/bench/results/rq1-arm-k/bench-printf-format-K-seed128/attempt-1",
+      "answer": null,
+      "outcome": "task_fail",
+      "passed": false,
+      "cost_usd": 0.0860656,
+      "turns": 4,
+      "wall_ms": 36512,
+      "exit_code": 0,
+      "signal": null,
+      "killed_by_deadline": false,
+      "runner_failure": null,
+      "null_vote": false
+    },
+    {
+      "index": 2,
+      "root": "/Users/benji/Desktop/Personal and learning/agent-chatroom-mcp/bench/results/rq1-arm-k/bench-printf-format-K-seed128/attempt-2",
+      "answer": null,
+      "outcome": "task_fail",
+      "passed": false,
+      "cost_usd": 0.09872,
+      "turns": 5,
+      "wall_ms": 50805,
+      "exit_code": 0,
+      "signal": null,
+      "killed_by_deadline": false,
+      "runner_failure": null,
+      "null_vote": false
+    },
+    {
+      "index": 3,
+      "root": "/Users/benji/Desktop/Personal and learning/agent-chatroom-mcp/bench/results/rq1-arm-k/bench-printf-format-K-seed128/attempt-3",
+      "answer": null,
+      "outcome": "task_fail",
+      "passed": false,
+      "cost_usd": 0.09698880000000001,
+      "turns": 5,
+      "wall_ms": 45839,
+      "exit_code": 0,
+      "signal": null,
+      "killed_by_deadline": false,
+      "runner_failure": null,
+      "null_vote": false
+    },
+    {
+      "index": 4,
+      "root": "/Users/benji/Desktop/Personal and learning/agent-chatroom-mcp/bench/results/rq1-arm-k/bench-printf-format-K-seed128/attempt-4",
+      "answer": null,
+      "outcome": "task_fail",
+      "passed": false,
+      "cost_usd": 0.09751180000000001,
+      "turns": 5,
+      "wall_ms": 46676,
+      "exit_code": 0,
+      "signal": null,
+      "killed_by_deadline": false,
+      "runner_failure": null,
+      "null_vote": false
+    },
+    {
+      "index": 5,
+      "root": "/Users/benji/Desktop/Personal and learning/agent-chatroom-mcp/bench/results/rq1-arm-k/bench-printf-format-K-seed128/attempt-5",
+      "answer": null,
+      "outcome": "task_pass",
+      "passed": true,
+      "cost_usd": 0.097558,
+      "turns": 5,
+      "wall_ms": 43865,
+      "exit_code": 0,
+      "signal": null,
+      "killed_by_deadline": false,
+      "runner_failure": null,
+      "null_vote": false
+    },
+    {
+      "index": 6,
+      "root": "/Users/benji/Desktop/Personal and learning/agent-chatroom-mcp/bench/results/rq1-arm-k/bench-printf-format-K-seed128/attempt-6",
+      "answer": null,
+      "outcome": "task_fail",
+      "passed": false,
+      "cost_usd": 0.09998059999999999,
+      "turns": 5,
+      "wall_ms": 47965,
+      "exit_code": 0,
+      "signal": null,
+      "killed_by_deadline": false,
+      "runner_failure": null,
+      "null_vote": false
+    },
+    {
+      "index": 7,
+      "root": "/Users/benji/Desktop/Personal and learning/agent-chatroom-mcp/bench/results/rq1-arm-k/bench-printf-format-K-seed128/attempt-7",
+      "answer": null,
+      "outcome": "task_fail",
+      "passed": false,
+      "cost_usd": 0.0879596,
+      "turns": 4,
+      "wall_ms": 39214,
+      "exit_code": 0,
+      "signal": null,
+      "killed_by_deadline": false,
+      "runner_failure": null,
+      "null_vote": false
+    }
+  ],
+  "checked_at": "2026-09-19T15:15:05.917Z"
+}

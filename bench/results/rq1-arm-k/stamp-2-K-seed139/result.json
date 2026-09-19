@@ -1,0 +1,190 @@
+{
+  "schemaVersion": 2,
+  "task_id": "stamp-2",
+  "arm": "K",
+  "k": 8,
+  "seed": 139,
+  "model": "sonnet",
+  "selector": "plurality",
+  "selection": {
+    "rule": "plurality of normalized answers (self-consistency, arXiv:2203.11171); ties and no signal break to lowest attempt",
+    "winner_attempt": 1,
+    "votes": {
+      "12 1 9 0 0 12 3 45 6 3007 3005 3008 41 40 104 99 104 24 9 11 11 10 479001600 45 8 19 7 0 77 0 0 15 15 16 15 255 1099511627776 3": 6,
+      "12 1 9 0 0 12 3 45 6 1027 1008 3008 41 40 104 99 104 24 9 11 11 10 479001600 45 8 19 7 0 77 0 0 15 15 16 15 255 1099511627776 3": 2
+    },
+    "normalized_answers": [
+      "12 1 9 0 0 12 3 45 6 3007 3005 3008 41 40 104 99 104 24 9 11 11 10 479001600 45 8 19 7 0 77 0 0 15 15 16 15 255 1099511627776 3",
+      "12 1 9 0 0 12 3 45 6 3007 3005 3008 41 40 104 99 104 24 9 11 11 10 479001600 45 8 19 7 0 77 0 0 15 15 16 15 255 1099511627776 3",
+      "12 1 9 0 0 12 3 45 6 3007 3005 3008 41 40 104 99 104 24 9 11 11 10 479001600 45 8 19 7 0 77 0 0 15 15 16 15 255 1099511627776 3",
+      "12 1 9 0 0 12 3 45 6 3007 3005 3008 41 40 104 99 104 24 9 11 11 10 479001600 45 8 19 7 0 77 0 0 15 15 16 15 255 1099511627776 3",
+      "12 1 9 0 0 12 3 45 6 3007 3005 3008 41 40 104 99 104 24 9 11 11 10 479001600 45 8 19 7 0 77 0 0 15 15 16 15 255 1099511627776 3",
+      "12 1 9 0 0 12 3 45 6 1027 1008 3008 41 40 104 99 104 24 9 11 11 10 479001600 45 8 19 7 0 77 0 0 15 15 16 15 255 1099511627776 3",
+      "12 1 9 0 0 12 3 45 6 3007 3005 3008 41 40 104 99 104 24 9 11 11 10 479001600 45 8 19 7 0 77 0 0 15 15 16 15 255 1099511627776 3",
+      "12 1 9 0 0 12 3 45 6 1027 1008 3008 41 40 104 99 104 24 9 11 11 10 479001600 45 8 19 7 0 77 0 0 15 15 16 15 255 1099511627776 3"
+    ]
+  },
+  "selected_attempt_result": {
+    "outcome": "task_pass",
+    "passed": true,
+    "reason": "task_pass",
+    "oracle": {
+      "kind": "exact-answer",
+      "command": "node --import tsx score-fact-check.ts <workspace>/answer.txt oracle/oracle.json",
+      "exit_code": 0
+    }
+  },
+  "outcome": "task_pass",
+  "passed": true,
+  "reason": "task_pass",
+  "oracle_ceiling": {
+    "any_attempt_passed": true,
+    "n_passed": 6,
+    "note": "NOT an arm: an upper bound on what any selector could achieve, computed with the oracle after selection"
+  },
+  "matched_from": {
+    "arm_c_result": "/Users/benji/Desktop/Personal and learning/agent-chatroom-mcp/bench/results/rq1-suite/stamp-2-C-seed139/result.json",
+    "arm_c_cost_usd": 0.5280308
+  },
+  "budget": {
+    "attempt_cap_usd": 0.3,
+    "attempt_deadline_ms": 150000,
+    "concurrency": 5
+  },
+  "usage": {
+    "cost_usd": 0.5326104,
+    "cost_usd_known_sum": 0.5326104,
+    "cost_usd_unknown_attempts": 0,
+    "cost_usd_upper_bound": 0.5326104
+  },
+  "turns_total": 32,
+  "wall_clock": {
+    "duration_ms": 58447,
+    "note": "elapsed for this invocation (attempts ran --concurrency at a time)",
+    "sum_of_attempt_ms": 229934
+  },
+  "resumed_attempts": [],
+  "attempts": [
+    {
+      "index": 1,
+      "root": "/Users/benji/Desktop/Personal and learning/agent-chatroom-mcp/bench/results/rq1-arm-k/stamp-2-K-seed139/attempt-1",
+      "answer": "12 1 9 0 0 12 3 45 6 3007 3005 3008 41 40 104 99 104 24 9 11 11 10 479001600 45 8 19 7 0 77 0 0 15 15 16 15 255 1099511627776 3\n",
+      "outcome": "task_pass",
+      "passed": true,
+      "cost_usd": 0.06698080000000001,
+      "turns": 4,
+      "wall_ms": 31196,
+      "exit_code": 0,
+      "signal": null,
+      "killed_by_deadline": false,
+      "runner_failure": null,
+      "null_vote": false
+    },
+    {
+      "index": 2,
+      "root": "/Users/benji/Desktop/Personal and learning/agent-chatroom-mcp/bench/results/rq1-arm-k/stamp-2-K-seed139/attempt-2",
+      "answer": "12 1 9 0 0 12 3 45 6 3007 3005 3008 41 40 104 99 104 24 9 11 11 10 479001600 45 8 19 7 0 77 0 0 15 15 16 15 255 1099511627776 3\n",
+      "outcome": "task_pass",
+      "passed": true,
+      "cost_usd": 0.06735680000000001,
+      "turns": 4,
+      "wall_ms": 29926,
+      "exit_code": 0,
+      "signal": null,
+      "killed_by_deadline": false,
+      "runner_failure": null,
+      "null_vote": false
+    },
+    {
+      "index": 3,
+      "root": "/Users/benji/Desktop/Personal and learning/agent-chatroom-mcp/bench/results/rq1-arm-k/stamp-2-K-seed139/attempt-3",
+      "answer": "12 1 9 0 0 12 3 45 6 3007 3005 3008 41 40 104 99 104 24 9 11 11 10 479001600 45 8 19 7 0 77 0 0 15 15 16 15 255 1099511627776 3\n",
+      "outcome": "task_pass",
+      "passed": true,
+      "cost_usd": 0.0667828,
+      "turns": 4,
+      "wall_ms": 29321,
+      "exit_code": 0,
+      "signal": null,
+      "killed_by_deadline": false,
+      "runner_failure": null,
+      "null_vote": false
+    },
+    {
+      "index": 4,
+      "root": "/Users/benji/Desktop/Personal and learning/agent-chatroom-mcp/bench/results/rq1-arm-k/stamp-2-K-seed139/attempt-4",
+      "answer": "12 1 9 0 0 12 3 45 6 3007 3005 3008 41 40 104 99 104 24 9 11 11 10 479001600 45 8 19 7 0 77 0 0 15 15 16 15 255 1099511627776 3\n",
+      "outcome": "task_pass",
+      "passed": true,
+      "cost_usd": 0.06813480000000001,
+      "turns": 4,
+      "wall_ms": 29831,
+      "exit_code": 0,
+      "signal": null,
+      "killed_by_deadline": false,
+      "runner_failure": null,
+      "null_vote": false
+    },
+    {
+      "index": 5,
+      "root": "/Users/benji/Desktop/Personal and learning/agent-chatroom-mcp/bench/results/rq1-arm-k/stamp-2-K-seed139/attempt-5",
+      "answer": "12 1 9 0 0 12 3 45 6 3007 3005 3008 41 40 104 99 104 24 9 11 11 10 479001600 45 8 19 7 0 77 0 0 15 15 16 15 255 1099511627776 3\n",
+      "outcome": "task_pass",
+      "passed": true,
+      "cost_usd": 0.0647448,
+      "turns": 4,
+      "wall_ms": 27953,
+      "exit_code": 0,
+      "signal": null,
+      "killed_by_deadline": false,
+      "runner_failure": null,
+      "null_vote": false
+    },
+    {
+      "index": 6,
+      "root": "/Users/benji/Desktop/Personal and learning/agent-chatroom-mcp/bench/results/rq1-arm-k/stamp-2-K-seed139/attempt-6",
+      "answer": "12 1 9 0 0 12 3 45 6 1027 1008 3008 41 40 104 99 104 24 9 11 11 10 479001600 45 8 19 7 0 77 0 0 15 15 16 15 255 1099511627776 3\n",
+      "outcome": "task_fail",
+      "passed": false,
+      "cost_usd": 0.0685048,
+      "turns": 4,
+      "wall_ms": 27539,
+      "exit_code": 0,
+      "signal": null,
+      "killed_by_deadline": false,
+      "runner_failure": null,
+      "null_vote": false
+    },
+    {
+      "index": 7,
+      "root": "/Users/benji/Desktop/Personal and learning/agent-chatroom-mcp/bench/results/rq1-arm-k/stamp-2-K-seed139/attempt-7",
+      "answer": "12 1 9 0 0 12 3 45 6 3007 3005 3008 41 40 104 99 104 24 9 11 11 10 479001600 45 8 19 7 0 77 0 0 15 15 16 15 255 1099511627776 3\n",
+      "outcome": "task_pass",
+      "passed": true,
+      "cost_usd": 0.0656508,
+      "turns": 4,
+      "wall_ms": 28521,
+      "exit_code": 0,
+      "signal": null,
+      "killed_by_deadline": false,
+      "runner_failure": null,
+      "null_vote": false
+    },
+    {
+      "index": 8,
+      "root": "/Users/benji/Desktop/Personal and learning/agent-chatroom-mcp/bench/results/rq1-arm-k/stamp-2-K-seed139/attempt-8",
+      "answer": "12 1 9 0 0 12 3 45 6 1027 1008 3008 41 40 104 99 104 24 9 11 11 10 479001600 45 8 19 7 0 77 0 0 15 15 16 15 255 1099511627776 3\n",
+      "outcome": "task_fail",
+      "passed": false,
+      "cost_usd": 0.0644548,
+      "turns": 4,
+      "wall_ms": 25647,
+      "exit_code": 0,
+      "signal": null,
+      "killed_by_deadline": false,
+      "runner_failure": null,
+      "null_vote": false
+    }
+  ],
+  "checked_at": "2026-09-19T14:31:07.596Z"
+}

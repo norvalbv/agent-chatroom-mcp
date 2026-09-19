@@ -1,0 +1,115 @@
+{
+  "schemaVersion": 1,
+  "task_id": "stamp-2",
+  "arm": "A",
+  "seed": 121005,
+  "model": "sonnet",
+  "outcome": "task_pass",
+  "passed": true,
+  "reason": "task_pass",
+  "oracle": {
+    "kind": "exact-answer",
+    "command": "node --import tsx score-fact-check.ts <workspace>/answer.txt oracle/oracle.json",
+    "exit_code": 0
+  },
+  "anti_tamper": {
+    "hash_before": "06ee8da7d99b3eba6a089f9abbba2d6daf0e362420c81f89a207a4774bbc0b3a",
+    "hash_after": "06ee8da7d99b3eba6a089f9abbba2d6daf0e362420c81f89a207a4774bbc0b3a",
+    "unchanged": true
+  },
+  "seats": [
+    {
+      "name": "single",
+      "argv": [
+        "claude",
+        "-p",
+        "Read spec.txt (the STAMP language) and program.stamp. Determine exactly what the program outputs\nwhen run under that specification.\n\nWrite your final answer, and only your final answer with no explanation, to a file named\nanswer.txt in your current working directory: the printed values in order, separated by single\nspaces, on one line.\n\nWrite your final answer, and only your final answer with no explanation, to a file named answer.txt in your current working directory.",
+        "--mcp-config",
+        "/Users/benji/Desktop/Personal and learning/agent-chatroom-mcp/bench/results/rq1-arm-k/stamp-2-K-seed121/attempt-5/mcp-empty.json",
+        "--strict-mcp-config",
+        "--allowedTools",
+        "Read,Write,Bash,Glob,Grep",
+        "--tools",
+        "Read,Write,Bash,Glob,Grep",
+        "--disable-slash-commands",
+        "--setting-sources",
+        "project",
+        "--exclude-dynamic-system-prompt-sections",
+        "--output-format",
+        "stream-json",
+        "--verbose",
+        "--model",
+        "sonnet",
+        "--max-budget-usd",
+        "0.3"
+      ],
+      "exit_code": 0,
+      "signal": null,
+      "started_at": "2026-09-19T14:12:37.890Z",
+      "completed_at": "2026-09-19T14:13:07.376Z",
+      "num_turns": 4,
+      "duration_ms": 27611,
+      "duration_api_ms": 27243,
+      "usage": {
+        "cost": 0.0656708,
+        "input_tokens": 6,
+        "cache_read_input_tokens": 26314,
+        "cache_creation_input_tokens": 9644,
+        "output_tokens": 2182
+      },
+      "text": "I traced the program by hand against the spec and wrote the result to `answer.txt`. I did not run it through an interpreter.",
+      "killed_by_deadline": false,
+      "partial_usage": null
+    }
+  ],
+  "usage": {
+    "steps": 0,
+    "prompt_tokens": 0,
+    "completion_tokens": 0,
+    "cost_usd": 0.0656708,
+    "seats": 1,
+    "seats_with_usage": 1,
+    "coverage": "complete",
+    "input_tokens": 6,
+    "cache_read_input_tokens": 26314,
+    "cache_creation_input_tokens": 9644,
+    "output_tokens": 2182
+  },
+  "turns": {
+    "per_seat": [
+      {
+        "name": "single",
+        "num_turns": 4
+      }
+    ],
+    "summed": 4,
+    "seats": 1,
+    "seats_with_turns": 1,
+    "coverage": "complete"
+  },
+  "wall_clock": {
+    "started_at": "2026-09-19T14:12:37.890Z",
+    "completed_at": "2026-09-19T14:13:07.377Z",
+    "duration_ms": 29487
+  },
+  "budget": {
+    "max_budget_usd": 0.3,
+    "deadline_ms": 150000
+  },
+  "build": {
+    "head_revision": "f9cb26ad19fba173731336acaf2e8b987399be1b",
+    "hub_entry": null,
+    "hub_entry_sha256": null,
+    "hub_revision": null
+  },
+  "frozen": {
+    "task_sha256": "06ee8da7d99b3eba6a089f9abbba2d6daf0e362420c81f89a207a4774bbc0b3a",
+    "scorer_sha256": "f4b645c670ae4655aec1189e4d7320294115f0e3c6da3b5ba41a7ee3b1cd00f8",
+    "fact_scorer_sha256": "6b8b3e98c8c408ecd6715a38db9263488644d27c01a11c5bab3172acd5539832",
+    "task_id": "stamp-2",
+    "timeout_ms": 900000,
+    "seats": 1
+  },
+  "error": null,
+  "checked_at": "2026-09-19T14:13:07.487Z"
+}

@@ -518,3 +518,36 @@ it is measured to actively hurt (about 0.20 vs 0.35), for the reason given above
 **Reported for arm K** (in `bench/results/rq1-arm-k`, never in `rq1-suite`): K vs C and K vs A by Fisher exact, Holm-Bonferroni across the
 arm-K comparisons; cost per correct answer; the vote distribution per group; the oracle ceiling (any of the k attempts passes), labelled as
 NOT an arm, a bound on what selection could reach.
+
+## 2026-09-19 — Arm K result (seeds 101 to 140), scored against `paper/prereg-arm-k.md` (maintainer session)
+
+Grid: 120 groups, 1000 fresh single-agent attempts, 71.28 USD, no infrastructure failure, no unknown cost, no
+null vote, realized mean spend per seed below the paired arm C on all three tasks. Table:
+`bench/results/rq1-arm-k/rq1-armk-table.md` (`scripts/paper-rq1-armk.ts`).
+
+| task | arm A (earlier grid) | arm K | arm C (earlier grid) | K vs C Fisher (Holm, m=6) | K vs A Fisher (Holm) |
+|---|---|---|---|---|---|
+| stamp-interpreter | 33/40 | 36/40 | 40/40 | 0.116 (0.578) | 0.518 (1.000) |
+| stamp-2 | 28/40 | 39/40 | 40/40 | 1.000 (1.000) | 0.0015 (0.0090, significant) |
+| bench-printf-format | 14/40 | 7/40 | 6/40 | 1.000 (1.000) | 0.126 (0.578) |
+
+**Predictions scored.** Prediction 1 (voting nearly closes the gap on the interpreter family; K vs C not
+significant): the not-significant clause held on both tasks, but the point forecast for stamp-interpreter
+(0.99) was wrong: arm K reached 0.90. The cause is that the forecast resampled 40 arm-A answers whose pass
+rate (0.825) overstated the single-agent rate; 400 fresh attempts pass at 0.675. "Not significant" is not
+"matches": pooled over the family (exploratory, outside the Holm family) arm K is 75/80 against arm C's
+80/80, Fisher p = 0.059, and arm K against arm A's 61/80 is p = 0.0033. The four stamp-interpreter vote
+failures are groups where the shared wrong answer was the plurality (4 to 5 of 10 correct). Prediction 2
+(agreement-based selection does not help on printf) held: 7/40 with an oracle ceiling of 37/40, close to the
+calibration's 0.18 to 0.20 and to arm C's 6/40; fresh attempts pass at 87/280 = 0.311.
+
+**Single-agent rates from 40 runs were noisy in both directions.** Fresh attempt-level rates: stamp-interpreter
+270/400 = 0.675 (earlier grid 0.825, admission pilot 0.50), stamp-2 261/320 = 0.816 (earlier grid 0.70),
+printf 0.311 (earlier 0.35). A 60-run control the same afternoon (`bench/results/rq1-drift-control`, arm A on
+stamp-interpreter, 30 runs at a 0.58 USD cap and 30 at 0.30 USD, 3.5 USD) passed 18/30 and 23/30, so the cap
+value is not the cause; launch arguments are otherwise identical to the earlier grid's arm A.
+
+**Threat to validity this creates.** Arm C (40/40 on both interpreter tasks) was measured in an earlier time
+window than arm K. If the single-agent rate moves between windows rather than merely being noisy at n=40, the
+K vs C comparison is confounded by time. A contemporaneous arm-C sample interleaved with arm-K groups is the
+control that would settle it; it has not been run.

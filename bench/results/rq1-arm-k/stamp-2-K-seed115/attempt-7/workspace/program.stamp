@@ -1,0 +1,144 @@
+SET rate 3
+SET n 7
+SET a 1000
+SET b 2000
+SET v 40
+SET cnt 10
+SET z 99
+DEF gcd x y
+WHILE y
+SETS x y y % x y
+END
+RET x
+END
+PRINT CALL gcd 84 36
+PRINT CALL gcd 17 5
+PRINT CALL gcd 0 9
+PRINT x
+DEF configure rate
+DEF price qty
+RET * qty rate
+END
+RET 0
+END
+PRINT CALL configure 10
+PRINT CALL price 4
+PRINT rate
+SET sum 0
+SET j 1
+WHILE < j 6
+SET sum + sum CALL price j
+SET j + j 1
+END
+PRINT sum
+PRINT j
+DEF outer a
+SET c * a 2
+DEF mid b
+DEF deep c
+RET + + a b c
+END
+RET CALL deep 5
+END
+RET + c CALL mid 20
+END
+PRINT CALL outer 1
+PRINT CALL mid 3
+PRINT CALL deep 8
+DEF show
+RET + v 1
+END
+DEF wrap v
+RET CALL show
+END
+PRINT CALL wrap 9
+PRINT v
+DEF peek
+RET z
+END
+DEF caller
+SET z 5
+RET + z CALL peek
+END
+PRINT CALL caller
+PRINT z
+DEF morph x
+DEF morph x y
+RET * x y
+END
+RET + x 100
+END
+PRINT CALL morph 4
+PRINT CALL morph 4 6
+PRINT CALL morph 3 3
+DEF tick
+RET NEXT cnt
+END
+PRINT CALL tick
+PRINT CALL tick
+PRINT cnt
+DEF fact k
+IF < k 2
+RET 1
+END
+RET * k CALL fact - k 1
+END
+PRINT CALL fact 12
+DEF digsum k
+SET t 0
+WHILE k
+SET t + t % k 10
+SET k / k 10
+END
+RET t
+END
+PRINT CALL digsum CALL fact 15
+SET p 2
+SET found 0
+WHILE < found 8
+SET d 2
+SET isp 1
+WHILE AND isp < * d d + p 1
+IF = % p d 0
+SET isp 0
+END
+SET d + d 1
+END
+IF isp
+PUSH primes p
+SET found + found 1
+END
+SET p + p 1
+END
+PRINT LEN primes
+PRINT AT primes -1
+PRINT AT primes 3
+PRINT AT primes 9
+DEF total
+SET s 0
+SET i 0
+WHILE < i LEN primes
+SET s + s AT primes i
+SET i + i 1
+END
+RET s
+END
+PRINT CALL total
+PRINT s
+PRINT i
+DEF lim m
+GLOBAL cnt
+SET cnt + cnt m
+RET cnt
+END
+PRINT CALL lim 5
+PRINT cnt
+PRINT CALL tick
+PRINT cnt
+SET r 0
+REPEAT 4
+SET r + r CALL price NEXT r
+END
+PRINT r
+PRINT POW 2 40
+PRINT MAX -5 MIN 3 ABS -9

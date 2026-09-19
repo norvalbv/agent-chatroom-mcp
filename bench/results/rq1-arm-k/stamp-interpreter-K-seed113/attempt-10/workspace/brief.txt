@@ -1,0 +1,6 @@
+Read spec.txt (the STAMP language) and program.stamp. Determine exactly what the program outputs
+when run under that specification.
+
+Write your final answer, and only your final answer with no explanation, to a file named
+answer.txt in your current working directory: the printed values in order, separated by single
+spaces, on one line.

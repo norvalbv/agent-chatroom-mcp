@@ -96,8 +96,9 @@ side in the same roll-up and are never summed together: Claude seats report
 this paper's runs is Claude-only, so only the first accounting appears in the tables that follow, but
 the distinction matters for the cost figures drawn from this project's own multi-provider build rooms
 (Section~\ref{sec:system-cost}), where the two accountings coexist in one room. A dollar cost field is
-populated by every provider and is the one number safely compared across arms without regard to
-accounting; it is Claude Code's own self-reported billed cost, not a repricing, wherever it is present.
+populated where the provider reports it (tracked by the same coverage flag) and is the one number
+safely compared across arms without regard to accounting when present; it is Claude Code's own
+self-reported billed cost, not a repricing, wherever it is present.
 Cache-read tokens are billed at roughly one-tenth the price of a fresh input token on the Claude API
 used throughout this paper's runs; a token count and a dollar figure computed from the same run can
 therefore differ by an order of magnitude in what they suggest about work done, and every place this

@@ -3,7 +3,7 @@
  * selector. The submitted attempt's score is the unchanged oracle's score for it; cost and turns are summed
  * over all k attempts.
  *
- * node --import tsx scripts/bench-ak.ts TASK_DIR K SEED --root DIR --arm-c-result PATH [--model sonnet]
+ * node --import tsx scripts/bench-ak.ts TASK_DIR K SEED --root DIR [--arm-c-result PATH] [--effort low|medium|high] [--model sonnet]
  *   [--runner scripts/bench-rq1.ts] [--concurrency 4] [--attempt-cap-usd N] [--attempt-deadline-ms N] [--resume]
  *
  * Selectors (scripts/ak-select.ts; chosen by the task's oracle kind, never by looking at an oracle result):
@@ -171,7 +171,7 @@ async function main() {
   const kArg = argv.shift();
   const seedArg = argv.shift();
   if (!taskArg || !kArg || seedArg === undefined) {
-    throw new Error("Usage: bench-ak.ts TASK_DIR K SEED --root DIR --arm-c-result PATH [--model sonnet] [--runner PATH] [--concurrency N] [--attempt-cap-usd N] [--attempt-deadline-ms N] [--resume]");
+    throw new Error("Usage: bench-ak.ts TASK_DIR K SEED --root DIR [--arm-c-result PATH] [--effort low|medium|high] [--model sonnet] [--runner PATH] [--concurrency N] [--attempt-cap-usd N] [--attempt-deadline-ms N] [--resume]");
   }
   const k = Number(kArg);
   if (!Number.isInteger(k) || k < 2) throw new Error(`Invalid K (must be an integer >= 2): ${kArg}`);
@@ -186,8 +186,11 @@ async function main() {
   const root = resolve(rootArg);
   const resume = argv.includes("--resume");
   if (existsSync(root) && !resume) throw new Error(`Refusing to reuse ${root} (pass --resume to continue a partial arm-K group)`);
+  // Optional: the fixed-k design (paper/prereg-confirmatory.md) matches nothing to arm C, and the rotated
+  // within-seed order can run K before C. When given, it is still validated and recorded as matched_from.
   const armCResultPath = flag("arm-c-result");
-  if (!armCResultPath) throw new Error("--arm-c-result is required (an existing arm C result.json for the same task+seed)");
+  const effortLevel = flag("effort") ?? null;
+  if (effortLevel !== null && !["low", "medium", "high"].includes(effortLevel)) throw new Error(`Invalid --effort: ${effortLevel} (low|medium|high)`);
   const model = flag("model", "sonnet")!;
   const runnerPath = resolve(flag("runner", join(here, "bench-rq1.ts"))!);
   const concurrency = Number(flag("concurrency", "4"));
@@ -205,9 +208,11 @@ async function main() {
     throw new Error(`bench-ak.ts has no oracle-free selector for task ${task.task_id} (oracle.kind=${kind}); refusing rather than picking arbitrarily or via the oracle`);
   }
 
-  const armC = JSON.parse(readFileSync(armCResultPath, "utf8"));
-  const costUsd = armC?.usage?.cost_usd;
-  if (!(costUsd > 0)) throw new Error("--arm-c-result has no positive cost_usd to match from");
+  let costUsd: number | null = null;
+  if (armCResultPath) {
+    costUsd = JSON.parse(readFileSync(armCResultPath, "utf8"))?.usage?.cost_usd;
+    if (!(costUsd! > 0)) throw new Error("--arm-c-result has no positive cost_usd to match from");
+  }
   const capUsd = Number(flag("attempt-cap-usd", String(DEFAULT_ATTEMPT_CAP_USD)));
   const deadlineMs = Number(flag("attempt-deadline-ms", String(DEFAULT_ATTEMPT_DEADLINE_MS)));
   if (!(capUsd > 0) || !(deadlineMs > 0)) throw new Error("attempt cap and deadline must be positive");
@@ -226,7 +231,7 @@ async function main() {
       }
       renameSync(attemptRoot, `${attemptRoot}.partial-${Date.now()}`);
     }
-    const run = await runAttempt(runnerPath, [taskDir, "A", String(seed * 1000 + i + 1), "--root", attemptRoot, "--model", model, "--max-budget-usd", String(capUsd), "--deadline-ms", String(deadlineMs)], deadlineMs + OUTER_TIMEOUT_SLACK_MS);
+    const run = await runAttempt(runnerPath, [taskDir, "A", String(seed * 1000 + i + 1), "--root", attemptRoot, "--model", model, "--max-budget-usd", String(capUsd), "--deadline-ms", String(deadlineMs), ...(effortLevel ? ["--effort", effortLevel] : [])], deadlineMs + OUTER_TIMEOUT_SLACK_MS);
     if (run.status !== 0 && !readResult(attemptRoot)) runnerFailures[i + 1] = run.stderr || `exit ${run.status}`;
   });
   const wallMs = Date.now() - startedAt;
@@ -281,6 +286,8 @@ async function main() {
       outcome: res?.outcome ?? "no_result",
       passed: res?.passed ?? false,
       cost_usd: knownCosts[i],
+      thinking_tokens: res?.thinking_tokens ?? null,
+      output_tokens: res?.output_tokens ?? null,
       turns: res?.turns?.summed ?? null,
       wall_ms: res?.wall_clock?.duration_ms ?? null,
       exit_code: seat?.exit_code ?? null,
@@ -304,7 +311,8 @@ async function main() {
     passed: selected?.passed ?? false,
     reason: selected?.reason ?? "infrastructure_error",
     oracle_ceiling: { any_attempt_passed: results.some((r) => r?.passed === true), n_passed: results.filter((r) => r?.passed === true).length, note: "NOT an arm: an upper bound on what any selector could achieve, computed with the oracle after selection" },
-    matched_from: { arm_c_result: resolve(armCResultPath), arm_c_cost_usd: costUsd },
+    matched_from: armCResultPath ? { arm_c_result: resolve(armCResultPath), arm_c_cost_usd: costUsd } : null,
+    effort_level: effortLevel,
     budget: { attempt_cap_usd: capUsd, attempt_deadline_ms: deadlineMs, concurrency },
     usage: { cost_usd: unknown === 0 ? knownSum : null, cost_usd_known_sum: knownSum, cost_usd_unknown_attempts: unknown, cost_usd_upper_bound: knownSum + unknown * capUsd },
     turns_total: results.reduce((s, r) => s + (r?.turns?.summed ?? 0), 0),

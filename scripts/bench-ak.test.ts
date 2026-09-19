@@ -31,6 +31,7 @@ function stubClaudeDir() {
       "#!/usr/bin/env node",
       "const fs=require('node:fs');",
       "const cwd=process.cwd();",
+      "if(process.env.STUB_SEEN_LOG){let st=null;try{st=fs.readFileSync('.claude/settings.json','utf8');}catch{}fs.appendFileSync(process.env.STUB_SEEN_LOG,JSON.stringify({cwd,settings:st})+'\\n');}",
       "const minority=process.env.STUB_MINORITY_ATTEMPT;",
       `const isMinority = minority && cwd.includes('attempt-'+minority+'/');`,
       `fs.writeFileSync('answer.txt', isMinority ? ${JSON.stringify(WRONG)} : ${JSON.stringify(EXPECTED)});`,
@@ -505,4 +506,49 @@ test("runAttempt: a runner running PAST the deadline but inside deadline + slack
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
+});
+
+test("--effort is passed to every attempt, which sees the pinned workspace setting; an absent flag pins nothing", () => {
+  const stubDir = stubClaudeDir();
+  const log = join(tmpdir(), `bench-ak-effort-log-${process.pid}-${Date.now()}`);
+  const root = join(tmpdir(), `bench-ak-effort-${process.pid}-${Date.now()}`);
+  const root2 = join(tmpdir(), `bench-ak-noeffort-${process.pid}-${Date.now()}`);
+  try {
+    const env = { PATH: `${stubDir}${delimiter}${process.env.PATH}`, STUB_SEEN_LOG: log };
+    const r = invoke([task, "3", "7", "--root", root, "--effort", "medium"], env);
+    assert.equal(r.status, 0, r.stderr + r.stdout);
+    const seen = readFileSync(log, "utf8").split("\n").filter(Boolean).map((l) => JSON.parse(l));
+    assert.equal(seen.length, 3);
+    for (const x of seen) assert.deepEqual(JSON.parse(x.settings), { effortLevel: "medium" });
+    assert.equal(JSON.parse(readFileSync(join(root, "result.json"), "utf8")).effort_level, "medium");
+    rmSync(log);
+    assert.equal(invoke([task, "2", "8", "--root", root2], env).status, 0);
+    for (const l of readFileSync(log, "utf8").split("\n").filter(Boolean)) assert.equal(JSON.parse(l).settings, null);
+  } finally {
+    for (const d of [root, root2, stubDir]) rmSync(d, { recursive: true, force: true });
+    rmSync(log, { force: true });
+  }
+});
+
+test("--arm-c-result is optional: without it the group runs and matched_from is null (confirmatory grid: K may precede C in the rotation)", () => {
+  const stubDir = stubClaudeDir();
+  const root = join(tmpdir(), `bench-ak-nomatch-${process.pid}-${Date.now()}`);
+  try {
+    const r = invoke([task, "3", "7", "--root", root], { PATH: `${stubDir}${delimiter}${process.env.PATH}` });
+    assert.equal(r.status, 0, r.stderr + r.stdout);
+    const result = JSON.parse(readFileSync(join(root, "result.json"), "utf8"));
+    assert.equal(result.matched_from, null);
+    assert.equal(result.outcome, "task_pass");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+    rmSync(stubDir, { recursive: true, force: true });
+  }
+});
+
+test("--effort with an unknown level is refused before any attempt runs", () => {
+  const root = join(tmpdir(), `bench-ak-bad-effort-${process.pid}-${Date.now()}`);
+  const r = invoke([task, "3", "7", "--root", root, "--effort", "extreme"]);
+  assert.notEqual(r.status, 0);
+  assert.match(r.stderr, /--effort/);
+  assert.ok(!existsSync(root));
 });

@@ -17,6 +17,16 @@
  *     [--runner scripts/bench-rq1.ts] [--tasks-dir tasks] [--seats N] [--timeout-ms N] [--deadline-ms N]
  *     [--hub-entry PATH] [--port-base 19850] [--include-retired]
  *
+ * Confirmatory mode (`--confirmatory`, paper/prereg-confirmatory.md): arms A, AH, B, K, C, all interleaved per
+ * seed in a fixed rotation (offset (seed - 501) mod 5 over [A, AH, B, K, C]), so no arm is always first and a
+ * thinking-budget regime flip mid-seed cannot separate the arms. Every arm is effort-pinned through
+ * bench-rq1.ts/bench-ak.ts --effort (medium for A, B, C, K; high for AH). A and AH carry the same flat runaway cap as
+ * each arm-K attempt (0.30 USD, 150 s) instead of a cost matched from arm C; K is fixed-k and needs no arm C
+ * result; B and C run to natural completion. A finished cell, including a timeout, is data and is never
+ * retried; a child that fails without a result makes spend unknown and halts the grid. Arm-A tokens are
+ * recorded per seed in `<results-dir>/sentinel.json` (see classifyRegime). Without the flag every legacy
+ * behaviour above is unchanged.
+ *
  * Arm K (paper/prereg-arm-k.md): `--arms K --k stamp-interpreter=10,stamp-2=8,bench-printf-format=7` runs
  * scripts/bench-ak.ts (--ak-runner) once per (task, seed) group, root `<results-dir>/<task>-K-seed<N>`. It
  * is refused for a group whose paired arm C result (`<c-results-dir>/<task>-C-seed<N>/result.json`,
@@ -28,7 +38,7 @@
  */
 import { spawn, type ChildProcess } from "node:child_process";
 import { createServer } from "node:net";
-import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { basename, join, resolve } from "node:path";
 import { matchArmABudget } from "./rq1-usage-budget.js";
 
@@ -102,7 +112,8 @@ export function scanExistingCost(resultsDir: string): { total: number; unknown: 
 export interface ParsedGridArgs {
   taskDirs: string[];
   seeds: number[];
-  arms: ("A" | "C" | "K")[];
+  arms: ("A" | "AH" | "B" | "C" | "K")[];
+  confirmatory: boolean;
   kByTask: Record<string, number>;
   akRunner: string;
   cResultsDir: string | null;
@@ -154,8 +165,12 @@ export function parseArgs(argv: string[], tasksDirDefault = "tasks"): ParsedGrid
     }
   }
   const armsArg = flag("arms", "A,C")!;
-  const arms = armsArg.split(",").map((a) => a.trim()) as ("A" | "C" | "K")[];
-  for (const a of arms) if (a !== "A" && a !== "C" && a !== "K") throw new Error(`Invalid arm: ${a}`);
+  const arms = armsArg.split(",").map((a) => a.trim()) as ("A" | "AH" | "B" | "C" | "K")[];
+  const confirmatory = argv.includes("--confirmatory");
+  for (const a of arms) {
+    if (a !== "A" && a !== "C" && a !== "K" && a !== "AH" && a !== "B") throw new Error(`Invalid arm: ${a}`);
+    if ((a === "AH" || a === "B") && !confirmatory) throw new Error(`Invalid arm: ${a} (arm ${a} is only available with --confirmatory (its pinned effort and flat cap are part of that pre-registered design)`);
+  }
   const kByTask: Record<string, number> = {};
   for (const part of (flag("k") ?? "").split(",").filter(Boolean)) {
     const m = part.trim().match(/^([^=]+)=(\d+)$/);
@@ -175,6 +190,7 @@ export function parseArgs(argv: string[], tasksDirDefault = "tasks"): ParsedGrid
     taskDirs,
     seeds,
     arms,
+    confirmatory,
     model: flag("model", "sonnet")!,
     maxCostUsd,
     kByTask,
@@ -204,12 +220,23 @@ async function freePort(startAt: number): Promise<number> {
   throw new Error(`No free port found from ${startAt}`);
 }
 
+/** Flat runaway caps for the single-agent arms; the same values bench-ak.ts gives each arm-K attempt. */
+export const CONFIRMATORY_CAP_USD = 0.3;
+export const CONFIRMATORY_CAP_DEADLINE_MS = 150000;
+
 export interface RunPlanItem {
   taskDir: string;
   taskLabel: string;
-  arm: "A" | "C" | "K";
+  arm: "A" | "AH" | "B" | "C" | "K";
   seed: number;
   runDir: string;
+}
+
+/** Confirmatory within-seed order: left-rotate [A, AH, B, K, C] by (seed - 501) mod 5, so 501 starts A, 502 AH, ..., 505 C. */
+export const CONFIRMATORY_BASE_ORDER = ["A", "AH", "B", "K", "C"] as const;
+export function confirmatoryOrder(seed: number): ("A" | "AH" | "B" | "K" | "C")[] {
+  const offset = (((seed - 501) % 5) + 5) % 5;
+  return [...CONFIRMATORY_BASE_ORDER.slice(offset), ...CONFIRMATORY_BASE_ORDER.slice(0, offset)];
 }
 
 /** Deterministic run order: task, then seed, then C before A before K within a seed (both need arm C's result). */
@@ -218,13 +245,76 @@ export function buildPlan(args: ParsedGridArgs): RunPlanItem[] {
   for (const taskDir of args.taskDirs) {
     const taskLabel = taskDir.split("/").pop()!;
     for (const seed of args.seeds) {
-      for (const arm of ["C", "A", "K"] as const) {
+      for (const arm of args.confirmatory ? confirmatoryOrder(seed) : (["C", "A", "K"] as const)) {
         if (!args.arms.includes(arm)) continue;
         plan.push({ taskDir, taskLabel, arm, seed, runDir: join(args.resultsDir, `${taskLabel}-${arm}-seed${seed}`) });
       }
     }
   }
   return plan;
+}
+
+/** Frozen regime rule (paper/prereg-confirmatory.md): arm A output tokens under 4000 with a directly reported
+ * thinking-token count is the calibrated (short-thinking) regime, 4000 or more is long-thinking, and a missing
+ * or invalid value for either is unknown. Never learned from the confirmatory results themselves. */
+export const REGIME_OUTPUT_THRESHOLD = 4000;
+export type Regime = "calibrated" | "long-thinking" | "unknown";
+export function classifyRegime(output: number | null, thinking: number | null): Regime {
+  const ok = (v: number | null): v is number => typeof v === "number" && Number.isFinite(v) && v >= 0;
+  if (!ok(output) || !ok(thinking)) return "unknown";
+  return output < REGIME_OUTPUT_THRESHOLD ? "calibrated" : "long-thinking";
+}
+
+/** Sums a modelUsage field over every model the seat reported; null (never zero) when none reported it. */
+function sumModelUsage(modelUsage: unknown, key: "thinkingTokens" | "outputTokens"): number | null {
+  if (!modelUsage || typeof modelUsage !== "object") return null;
+  const vals = Object.values(modelUsage as Record<string, any>).map((m) => m?.[key]).filter((v): v is number => typeof v === "number" && Number.isFinite(v) && v >= 0);
+  return vals.length ? vals.reduce((a, b) => a + b, 0) : null;
+}
+
+interface SentinelSeed { seed: number; output_tokens: number | null; thinking_tokens: number | null; regime: Regime }
+interface SentinelTask {
+  n: number;
+  min_thinking: number | null; max_thinking: number | null; min_output: number | null; max_output: number | null;
+  /** one class when every seed agrees, "mixed" otherwise; the per-seed records below are what analysis uses */
+  regime: Regime | "mixed";
+  seeds: SentinelSeed[];
+}
+
+/** Rebuilds `<resultsDir>/sentinel.json` from every arm-A result.json on disk (idempotent, so a resumed grid never double counts). */
+export function writeSentinel(resultsDir: string): void {
+  const out: Record<string, SentinelTask> = {};
+  for (const name of readdirSync(resultsDir).sort()) {
+    const m = name.match(/^(.+)-A-seed(-?\d+)$/);
+    const resultPath = join(resultsDir, name, "result.json");
+    if (!m || !existsSync(resultPath)) continue;
+    let rec: SentinelSeed;
+    try {
+      const r = JSON.parse(readFileSync(resultPath, "utf8"));
+      const md = r.seats?.[0]?.model_usage;
+      const output = sumModelUsage(md, "outputTokens") ?? (typeof r.seats?.[0]?.usage?.output_tokens === "number" ? r.seats[0].usage.output_tokens : null);
+      const thinking = sumModelUsage(md, "thinkingTokens");
+      rec = { seed: Number(m[2]), output_tokens: output, thinking_tokens: thinking, regime: classifyRegime(output, thinking) };
+    } catch {
+      rec = { seed: Number(m[2]), output_tokens: null, thinking_tokens: null, regime: "unknown" };
+    }
+    (out[m[1]] ??= { n: 0, min_thinking: null, max_thinking: null, min_output: null, max_output: null, regime: "unknown", seeds: [] }).seeds.push(rec);
+  }
+  const extent = (vals: (number | null)[], f: (...n: number[]) => number) => {
+    const k = vals.filter((v): v is number => v !== null);
+    return k.length ? f(...k) : null;
+  };
+  for (const t of Object.values(out)) {
+    t.seeds.sort((a, b) => a.seed - b.seed);
+    t.n = t.seeds.length;
+    t.min_thinking = extent(t.seeds.map((x) => x.thinking_tokens), Math.min);
+    t.max_thinking = extent(t.seeds.map((x) => x.thinking_tokens), Math.max);
+    t.min_output = extent(t.seeds.map((x) => x.output_tokens), Math.min);
+    t.max_output = extent(t.seeds.map((x) => x.output_tokens), Math.max);
+    const classes = new Set(t.seeds.map((x) => x.regime));
+    t.regime = classes.size === 1 ? [...classes][0]! : "mixed";
+  }
+  writeFileSync(join(resultsDir, "sentinel.json"), JSON.stringify(out, null, 2) + "\n");
 }
 
 export interface GridSummary {
@@ -260,7 +350,7 @@ export async function runGrid(args: ParsedGridArgs, opts: { log?: (s: string) =>
         outcome = readGridResult(resultPath).outcome;
       } catch {}
       // Arm K keeps a killed attempt as a null vote inside the group, so its result is never retried.
-      if (outcome === "timeout" && item.arm !== "K") {
+      if (outcome === "timeout" && item.arm !== "K" && !args.confirmatory) {
         log(`[retry:timeout] ${item.taskLabel} ${item.arm} seed${item.seed}: prior run was killed at the deadline, re-running`);
         rmSync(item.runDir, { recursive: true, force: true });
       } else {
@@ -295,11 +385,21 @@ export async function runGrid(args: ParsedGridArgs, opts: { log?: (s: string) =>
       summary.infra_failed++;
       continue;
     }
+    if (args.confirmatory && item.arm !== "K") runnerArgs.push("--effort", item.arm === "AH" ? "high" : "medium");
     if (args.seats) runnerArgs.push("--seats", args.seats);
     if (args.timeoutMs) runnerArgs.push("--timeout-ms", args.timeoutMs);
     if (args.hubEntry) runnerArgs.push("--hub-entry", args.hubEntry);
 
-    if (item.arm === "K") {
+    if (item.arm === "K" && args.confirmatory) {
+      // Fixed-k, flat per-attempt cap inside bench-ak.ts: nothing is matched to arm C, which may not have run yet.
+      runnerArgs.length = 0;
+      runnerArgs.push(item.taskDir, String(args.kByTask[item.taskLabel]), String(item.seed), "--root", item.runDir, "--model", args.model, "--effort", "medium", "--resume");
+      if (args.concurrency) runnerArgs.push("--concurrency", args.concurrency);
+    } else if ((item.arm === "A" || item.arm === "AH") && args.confirmatory) {
+      runnerArgs.push("--max-budget-usd", String(CONFIRMATORY_CAP_USD), "--deadline-ms", String(CONFIRMATORY_CAP_DEADLINE_MS));
+    } else if (item.arm === "B") {
+      if (args.deadlineMs) runnerArgs.push("--deadline-ms", args.deadlineMs);
+    } else if (item.arm === "K") {
       const armCResultPath = join(args.cResultsDir ?? args.resultsDir, `${item.taskLabel}-C-seed${item.seed + args.cSeedOffset}`, "result.json");
       if (!existsSync(armCResultPath)) {
         log(`[infra-fail] ${item.taskLabel} K seed${item.seed}: no paired arm C result at ${armCResultPath} (arm K is refused without it)`);
@@ -357,11 +457,11 @@ export async function runGrid(args: ParsedGridArgs, opts: { log?: (s: string) =>
     if (status !== 0 || !existsSync(resultPath)) {
       log(`[infra-fail] ${item.taskLabel} ${item.arm} seed${item.seed}: exit ${status}, stderr: ${stderr.slice(-2000)}`);
       summary.infra_failed++;
-      if (item.arm === "K") {
+      if (item.arm === "K" || args.confirmatory) {
         // A failed group may already hold paid attempts whose cost was never recorded: unknown, not zero, and a
         // systematic failure must not walk on through the remaining groups.
         summary.unknown_cost_groups++;
-        log(`[halt] arm K group ${item.taskLabel} seed${item.seed} failed after launch; its spend is unknown, stopping the grid`);
+        log(`[halt] ${item.arm} cell ${item.taskLabel} seed${item.seed} failed after launch; its spend is unknown, stopping the grid`);
         break;
       }
       continue;
@@ -379,9 +479,11 @@ export async function runGrid(args: ParsedGridArgs, opts: { log?: (s: string) =>
     else runningTotal += written.cost_usd;
     summary.total_cost_usd = runningTotal;
     summary.ran++;
+    if (args.confirmatory && item.arm === "A") writeSentinel(args.resultsDir);
     log(`[done] ${item.taskLabel} ${item.arm} seed${item.seed}: outcome=${written.outcome} cost=${written.cost_usd === null ? "UNKNOWN" : "$" + written.cost_usd.toFixed(4)} running_total=$${runningTotal.toFixed(4)}`);
   }
   summary.total_cost_usd = runningTotal;
+  if (args.confirmatory) writeSentinel(args.resultsDir);
   return summary;
 }
 

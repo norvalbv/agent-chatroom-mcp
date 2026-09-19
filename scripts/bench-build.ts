@@ -11,9 +11,10 @@
  *   [--runner PATH] [all bench-rq1 flags]
  */
 import { spawnSync } from "node:child_process";
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
-import { dirname, resolve } from "node:path";
+import { existsSync, lstatSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
+import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { createHash } from "node:crypto";
 
 type Check = { name: string; exit_code: number };
 type RawResult = {
@@ -21,7 +22,6 @@ type RawResult = {
   arm: "A" | "B" | "C";
   seed: number;
   anti_tamper?: { unchanged?: boolean };
-  oracle_results?: Check[];
   usage?: { cost_usd?: number };
   turns?: { summed?: number };
   wall_clock?: { duration_ms?: number };
@@ -30,6 +30,18 @@ type RawResult = {
 
 const here = dirname(fileURLToPath(import.meta.url));
 const fail = (message: string): never => { throw new Error(`bench-build: ${message}`); };
+
+function hashTree(path: string): string {
+  const hash = createHash("sha256");
+  const visit = (entry: string) => {
+    const stat = lstatSync(entry);
+    if (stat.isSymbolicLink()) fail(`symlink in scored task: ${relative(path, entry)}`);
+    if (stat.isDirectory()) for (const child of readdirSync(entry).sort()) visit(join(entry, child));
+    else if (stat.isFile()) { hash.update(relative(path, entry)); hash.update("\0"); hash.update(readFileSync(entry)); hash.update("\0"); }
+  };
+  visit(path);
+  return hash.digest("hex");
+}
 
 function takeFlag(argv: string[], name: string): string | undefined {
   const index = argv.indexOf(`--${name}`);
@@ -61,7 +73,7 @@ function classify(checks: unknown): { defects: Check[]; regressions: Check[] } {
   return { defects, regressions };
 }
 
-function main() {
+async function main() {
   const argv = process.argv.slice(2);
   const [taskDir, arm, seedText] = argv.splice(0, 3);
   if (!taskDir || !["A", "B", "C"].includes(arm ?? "") || !seedText) {
@@ -88,7 +100,16 @@ function main() {
   if (raw.arm !== arm || raw.seed !== seed) fail("underlying result does not match requested arm/seed");
   if (raw.anti_tamper?.unchanged !== true) fail("anti-tamper provenance is absent or reports a changed fixture");
 
-  const { defects, regressions } = classify(raw.oracle_results);
+  // bench-rq1 deliberately stores only its aggregate pass/fail. Re-score the
+  // workspace from the private task oracle here; never let a runner-provided
+  // summary impersonate per-defect evidence.
+  const resolvedTask = resolve(taskDir);
+  const taskHashBeforeScore = hashTree(resolvedTask);
+  const scorer = await import(new URL("./bench-oracle.ts", import.meta.url).href);
+  const scored = await scorer.scoreTask(resolvedTask, resolve(root, "workspace"));
+  const taskHashAfterScore = hashTree(resolvedTask);
+  if (taskHashAfterScore !== taskHashBeforeScore) fail("private scorer changed its task fixture while scoring");
+  const { defects, regressions } = classify(scored.oracle_results);
   const caught = defects.filter((check) => check.exit_code === 0).length;
   const regressionFailures = regressions.filter((check) => check.exit_code === 1).length;
   // A remaining plant is a shipped defect; a broken baseline-preserving case is
@@ -110,10 +131,10 @@ function main() {
     turns: raw.turns?.summed ?? null,
     wall_clock_ms: raw.wall_clock?.duration_ms ?? null,
     seats: Array.isArray(raw.seats) ? raw.seats.length : null,
-    provenance: { raw_result: "result.json", anti_tamper_unchanged: true, runner },
+    provenance: { raw_result: "result.json", anti_tamper_unchanged: true, task_sha256_before_score: taskHashBeforeScore, task_sha256_after_score: taskHashAfterScore, runner },
   };
   writeFileSync(resolve(root, "build-result.json"), JSON.stringify(output, null, 2) + "\n");
   process.stdout.write(`${resolve(root, "build-result.json")}\n`);
 }
 
-main();
+main().catch((error) => { process.stderr.write(`${error}\n`); process.exitCode = 1; });

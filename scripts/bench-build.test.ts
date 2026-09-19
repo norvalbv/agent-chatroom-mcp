@@ -18,10 +18,11 @@ function fakeBench(result: unknown) {
   return { dir, path };
 }
 
-function seededTask(checks: unknown, manifest = { defect_ids: ["rounding", "cancel"], regression_ids: ["tax-exempt", "empty-order"] }) {
+function seededTask(checks: unknown, manifest = { defect_ids: ["rounding", "cancel"], regression_ids: ["tax-exempt", "empty-order"] }, hostManifest = false) {
   const dir = mkdtempSync(join(tmpdir(), "bench-build-task-"));
   mkdirSync(join(dir, "oracle"));
-  writeFileSync(join(dir, "task.json"), JSON.stringify({ task_id: "seeded-orders-01", build_suite: manifest }));
+  writeFileSync(join(dir, "task.json"), JSON.stringify(hostManifest ? { task_id: "seeded-orders-01" } : { task_id: "seeded-orders-01", build_suite: manifest }));
+  if (hostManifest) writeFileSync(join(dir, "DEFECTS.json"), JSON.stringify({ defects: manifest.defect_ids.map((id) => ({ id })), regressions: manifest.regression_ids.map((id) => ({ id })) }));
   writeFileSync(join(dir, "oracle", "oracle.json"), JSON.stringify({ kind: "seeded-build" }));
   writeFileSync(join(dir, "oracle", "score.ts"), `console.log(${JSON.stringify(JSON.stringify({ score: 0, oracle_results: checks }))}); process.exit(1);`);
   return dir;
@@ -61,6 +62,16 @@ test("reduces named defect and regression checks to independent caught/shipped c
     assert.equal(out.provenance.anti_tamper_unchanged, true);
     assert.equal(out.usage.cost_usd, 0.4);
     assert.equal(out.turns, 17);
+  } finally { rmSync(task, { recursive: true, force: true }); rmSync(root, { recursive: true, force: true }); rmSync(fake.dir, { recursive: true, force: true }); }
+});
+
+test("accepts the generator's host-owned DEFECTS.json manifest with the same exact matrix rule", () => {
+  const task = seededTask(checks, undefined, true);
+  const root = join(tmpdir(), `bench-build-host-manifest-${process.pid}-${Date.now()}`);
+  const fake = fakeBench(valid);
+  try {
+    const run = invoke(task, root, fake.path);
+    assert.equal(run.status, 0, run.stderr);
   } finally { rmSync(task, { recursive: true, force: true }); rmSync(root, { recursive: true, force: true }); rmSync(fake.dir, { recursive: true, force: true }); }
 });
 

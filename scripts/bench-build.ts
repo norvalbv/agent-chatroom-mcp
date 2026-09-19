@@ -79,10 +79,17 @@ function expectedMatrix(taskDir: string): ExpectedMatrix {
   let parsed: { build_suite?: ExpectedMatrix };
   try { parsed = JSON.parse(readFileSync(join(taskDir, "task.json"), "utf8")) as { build_suite?: ExpectedMatrix }; }
   catch { fail("task.json is unreadable"); }
-  const matrix = parsed.build_suite;
-  if (!matrix || !Array.isArray(matrix.defect_ids) || !Array.isArray(matrix.regression_ids)) {
-    fail("task.json needs build_suite.defect_ids and build_suite.regression_ids");
+  let matrix = parsed.build_suite;
+  // Generated build tasks may keep the denominator in a separate host-owned
+  // manifest so public task.json does not reveal it to a candidate. Both forms
+  // have identical validation below; the scorer can never choose its own set.
+  if (!matrix && existsSync(join(taskDir, "DEFECTS.json"))) {
+    try {
+      const host = JSON.parse(readFileSync(join(taskDir, "DEFECTS.json"), "utf8")) as { defects?: { id?: string }[]; regressions?: { id?: string }[] };
+      matrix = { defect_ids: host.defects?.map((item) => item.id ?? "") ?? [], regression_ids: host.regressions?.map((item) => item.id ?? "") ?? [] };
+    } catch { fail("DEFECTS.json is unreadable"); }
   }
+  if (!matrix || !Array.isArray(matrix.defect_ids) || !Array.isArray(matrix.regression_ids)) fail("task needs build_suite ids or host-owned DEFECTS.json");
   for (const [kind, ids] of Object.entries(matrix)) {
     if (!ids.length || ids.some((id) => typeof id !== "string" || !id || id.includes("/")) || new Set(ids).size !== ids.length) {
       fail(`task.json has invalid ${kind}`);

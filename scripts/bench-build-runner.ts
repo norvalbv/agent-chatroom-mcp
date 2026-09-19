@@ -1,6 +1,6 @@
 /** Stage-aware build executor. bench-build computes scores using the frozen oracle. */
 import { spawn, execFileSync } from 'node:child_process';
-import { closeSync, cpSync, existsSync, mkdirSync, openSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
+import { closeSync, cpSync, existsSync, mkdirSync, openSync, readFileSync, readdirSync, realpathSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createServer } from 'node:net';
@@ -81,7 +81,9 @@ async function main() {
   let failure: string | null = null, errorText: string | null = null;
   let reviewIntegrity: any = null, roomValidation: any = null;
   let hub: ReturnType<typeof spawn> | null = null, hubFd: number | null = null;
-  const build: any = { head_revision: revision(repoRoot), runner_sha256: hashFile(fileURLToPath(import.meta.url)), runtime_sha256: hashFile(join(here, 'bench-build-runtime.ts')), helpers_sha256: hashTree(join(repoRoot, 'src')), hub_entry: null, hub_entry_sha256: null, hub_build_sha256: null, hub_revision: null, provenance_scope: null };
+  const generatorHashes = () => Object.fromEntries(readdirSync(here).filter(name => /^bench-build(?:-[a-z]+)?-gen\.ts$/.test(name)).sort().map(name => [name, hashFile(join(here,name))]));
+  const frozenGenerators = generatorHashes();
+  const build: any = { generator_hashes: frozenGenerators, head_revision: revision(repoRoot), runner_sha256: hashFile(fileURLToPath(import.meta.url)), runtime_sha256: hashFile(join(here, 'bench-build-runtime.ts')), helpers_sha256: hashTree(join(repoRoot, 'src')), hub_entry: null, hub_entry_sha256: null, hub_build_sha256: null, hub_revision: null, provenance_scope: null };
   const seat = async (name: string, prompt: string, cwd: string, budget: number, mcp = emptyMcp, tools = baseTools) => {
     if (Date.now() >= deadlineAt) throw new Error('timeout: total arm deadline exhausted');
     // The room shares one pinned workspace; only B's copy needs separate initialization.
@@ -103,10 +105,14 @@ async function main() {
       const builder = await seat('builder-1', workPrompt, workspace, cap * .5);
       const copy = join(root, 'review-workspace'); cpSync(workspace, copy, { recursive: true });
       const snapshotBefore = hashTree(workspace);
-      const review = await seat('reviewer', `${brief}\nYou are reviewing another engineer's submission. Their final message:\n${builder.text}\nThis directory is a snapshot; edits here are not submitted. Respond exactly APPROVE or REVISE: followed by actionable corrections.`, copy, cap * .25, emptyMcp, ['Read', 'Bash', 'Glob', 'Grep']);
-      const snapshotAfter = hashTree(workspace);
-      reviewIntegrity = { workspace_sha256_before: snapshotBefore, workspace_sha256_after: snapshotAfter, unchanged: snapshotBefore === snapshotAfter };
-      if (!reviewIntegrity.unchanged) throw new Error('tamper: reviewer changed scored workspace through snapshot boundary');
+      let review: RunSeat;
+      try {
+        review = await seat('reviewer', `${brief}\nYou are reviewing another engineer's submission. Their final message:\n${builder.text}\nThis directory is a snapshot; edits here are not submitted. Respond exactly APPROVE or REVISE: followed by actionable corrections.`, copy, cap * .25, emptyMcp, ['Read', 'Bash', 'Glob', 'Grep']);
+      } finally {
+        const snapshotAfter = hashTree(workspace);
+        reviewIntegrity = { workspace_sha256_before: snapshotBefore, workspace_sha256_after: snapshotAfter, unchanged: snapshotBefore === snapshotAfter };
+        if (!reviewIntegrity.unchanged) throw new Error('tamper: reviewer changed scored workspace through snapshot boundary');
+      }
       if (!/^APPROVE\s*$/i.test(review.text.trim())) await seat('builder-2', `${workPrompt}\nIndependent review feedback:\n${review.text}\nApply the necessary revision.`, workspace, cap * .25);
     }
     if (arm === 'C') {
@@ -146,7 +152,8 @@ async function main() {
   let after: string | null = null;
   try { after = hashTree(task); } catch (e) { failure = 'tamper'; errorText = String(e); }
   if (after !== before) failure = 'tamper';
-  if (hashFile(fileURLToPath(import.meta.url)) !== build.runner_sha256 ||
+  if (JSON.stringify(generatorHashes()) !== JSON.stringify(frozenGenerators) ||
+      hashFile(fileURLToPath(import.meta.url)) !== build.runner_sha256 ||
       hashFile(join(here, 'bench-build-runtime.ts')) !== build.runtime_sha256 ||
       hashTree(join(repoRoot, 'src')) !== build.helpers_sha256 ||
       (build.hub_entry && hashTree(dirname(build.hub_entry)) !== build.hub_build_sha256)) {
@@ -154,7 +161,7 @@ async function main() {
   }
   const usage = rollupUsage(records.map(r => ({ usage: r.usage })));
   const completeCost = records.length > 0 && records.every(r => r.usage && Number.isFinite(r.usage.cost));
-  const runConfig = { seed: Number(seedArg), task_sha256: before, generator_sha256: hashFile(join(here, 'bench-build-gen.ts')),
+  const runConfig = { seed: Number(seedArg), task_sha256: before, generator_hashes: frozenGenerators,
     runner_sha256: build.runner_sha256, runtime_sha256: build.runtime_sha256, helpers_sha256: build.helpers_sha256,
     hub_build_sha256: build.hub_build_sha256, model, arm, effort_level: effortLevel,
     effort_settings_sha256: effort.settings_sha256, cap_usd: cap, deadline_ms: deadlineMs, seats: arm === 'C' ? count : null,

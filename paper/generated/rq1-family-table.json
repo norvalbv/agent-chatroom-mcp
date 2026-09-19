@@ -146,24 +146,32 @@
         "seed": 113,
         "correct_votes": 4,
         "wrong_votes": 6,
+        "top_wrong_votes": 6,
+        "tie_broken_to_wrong": false,
         "k": 10
       },
       {
         "seed": 116,
         "correct_votes": 4,
         "wrong_votes": 6,
+        "top_wrong_votes": 4,
+        "tie_broken_to_wrong": true,
         "k": 10
       },
       {
         "seed": 120,
         "correct_votes": 4,
         "wrong_votes": 6,
+        "top_wrong_votes": 4,
+        "tie_broken_to_wrong": true,
         "k": 10
       },
       {
         "seed": 122,
         "correct_votes": 4,
         "wrong_votes": 6,
+        "top_wrong_votes": 6,
+        "tie_broken_to_wrong": false,
         "k": 10
       }
     ],
@@ -172,6 +180,8 @@
         "seed": 104,
         "correct_votes": 3,
         "wrong_votes": 5,
+        "top_wrong_votes": 5,
+        "tie_broken_to_wrong": false,
         "k": 8
       }
     ],
@@ -180,198 +190,264 @@
         "seed": 101,
         "correct_votes": 0,
         "wrong_votes": 7,
+        "top_wrong_votes": 4,
+        "tie_broken_to_wrong": false,
         "k": 7
       },
       {
         "seed": 102,
         "correct_votes": 0,
         "wrong_votes": 7,
+        "top_wrong_votes": 5,
+        "tie_broken_to_wrong": false,
         "k": 7
       },
       {
         "seed": 103,
         "correct_votes": 0,
         "wrong_votes": 7,
+        "top_wrong_votes": 4,
+        "tie_broken_to_wrong": false,
         "k": 7
       },
       {
         "seed": 105,
         "correct_votes": 0,
         "wrong_votes": 7,
+        "top_wrong_votes": 4,
+        "tie_broken_to_wrong": false,
         "k": 7
       },
       {
         "seed": 106,
         "correct_votes": 0,
         "wrong_votes": 7,
+        "top_wrong_votes": 5,
+        "tie_broken_to_wrong": false,
         "k": 7
       },
       {
         "seed": 108,
         "correct_votes": 0,
         "wrong_votes": 7,
+        "top_wrong_votes": 6,
+        "tie_broken_to_wrong": false,
         "k": 7
       },
       {
         "seed": 110,
         "correct_votes": 0,
         "wrong_votes": 7,
+        "top_wrong_votes": 4,
+        "tie_broken_to_wrong": false,
         "k": 7
       },
       {
         "seed": 111,
         "correct_votes": 0,
         "wrong_votes": 7,
+        "top_wrong_votes": 5,
+        "tie_broken_to_wrong": false,
         "k": 7
       },
       {
         "seed": 114,
         "correct_votes": 0,
         "wrong_votes": 7,
+        "top_wrong_votes": 7,
+        "tie_broken_to_wrong": false,
         "k": 7
       },
       {
         "seed": 115,
         "correct_votes": 0,
         "wrong_votes": 7,
+        "top_wrong_votes": 6,
+        "tie_broken_to_wrong": false,
         "k": 7
       },
       {
         "seed": 116,
         "correct_votes": 0,
         "wrong_votes": 7,
+        "top_wrong_votes": 6,
+        "tie_broken_to_wrong": false,
         "k": 7
       },
       {
         "seed": 117,
         "correct_votes": 0,
         "wrong_votes": 7,
+        "top_wrong_votes": 7,
+        "tie_broken_to_wrong": false,
         "k": 7
       },
       {
         "seed": 118,
         "correct_votes": 0,
         "wrong_votes": 7,
+        "top_wrong_votes": 4,
+        "tie_broken_to_wrong": false,
         "k": 7
       },
       {
         "seed": 119,
         "correct_votes": 0,
         "wrong_votes": 7,
+        "top_wrong_votes": 6,
+        "tie_broken_to_wrong": false,
         "k": 7
       },
       {
         "seed": 120,
         "correct_votes": 0,
         "wrong_votes": 7,
+        "top_wrong_votes": 4,
+        "tie_broken_to_wrong": false,
         "k": 7
       },
       {
         "seed": 121,
         "correct_votes": 0,
         "wrong_votes": 7,
+        "top_wrong_votes": 6,
+        "tie_broken_to_wrong": false,
         "k": 7
       },
       {
         "seed": 122,
         "correct_votes": 0,
         "wrong_votes": 7,
+        "top_wrong_votes": 5,
+        "tie_broken_to_wrong": false,
         "k": 7
       },
       {
         "seed": 124,
         "correct_votes": 0,
         "wrong_votes": 7,
+        "top_wrong_votes": 4,
+        "tie_broken_to_wrong": false,
         "k": 7
       },
       {
         "seed": 125,
         "correct_votes": 0,
         "wrong_votes": 7,
+        "top_wrong_votes": 6,
+        "tie_broken_to_wrong": false,
         "k": 7
       },
       {
         "seed": 126,
         "correct_votes": 0,
         "wrong_votes": 7,
+        "top_wrong_votes": 5,
+        "tie_broken_to_wrong": false,
         "k": 7
       },
       {
         "seed": 127,
         "correct_votes": 0,
         "wrong_votes": 7,
+        "top_wrong_votes": 4,
+        "tie_broken_to_wrong": false,
         "k": 7
       },
       {
         "seed": 128,
         "correct_votes": 0,
         "wrong_votes": 7,
+        "top_wrong_votes": 6,
+        "tie_broken_to_wrong": false,
         "k": 7
       },
       {
         "seed": 130,
         "correct_votes": 0,
         "wrong_votes": 7,
+        "top_wrong_votes": 5,
+        "tie_broken_to_wrong": false,
         "k": 7
       },
       {
         "seed": 131,
         "correct_votes": 0,
         "wrong_votes": 7,
+        "top_wrong_votes": 5,
+        "tie_broken_to_wrong": false,
         "k": 7
       },
       {
         "seed": 132,
         "correct_votes": 0,
         "wrong_votes": 7,
+        "top_wrong_votes": 7,
+        "tie_broken_to_wrong": false,
         "k": 7
       },
       {
         "seed": 133,
         "correct_votes": 0,
         "wrong_votes": 7,
+        "top_wrong_votes": 6,
+        "tie_broken_to_wrong": false,
         "k": 7
       },
       {
         "seed": 134,
         "correct_votes": 0,
         "wrong_votes": 7,
+        "top_wrong_votes": 6,
+        "tie_broken_to_wrong": false,
         "k": 7
       },
       {
         "seed": 135,
         "correct_votes": 0,
         "wrong_votes": 7,
+        "top_wrong_votes": 5,
+        "tie_broken_to_wrong": false,
         "k": 7
       },
       {
         "seed": 136,
         "correct_votes": 0,
         "wrong_votes": 7,
+        "top_wrong_votes": 5,
+        "tie_broken_to_wrong": false,
         "k": 7
       },
       {
         "seed": 137,
         "correct_votes": 0,
         "wrong_votes": 7,
+        "top_wrong_votes": 5,
+        "tie_broken_to_wrong": false,
         "k": 7
       },
       {
         "seed": 138,
         "correct_votes": 0,
         "wrong_votes": 7,
+        "top_wrong_votes": 5,
+        "tie_broken_to_wrong": false,
         "k": 7
       },
       {
         "seed": 139,
         "correct_votes": 0,
         "wrong_votes": 7,
+        "top_wrong_votes": 6,
+        "tie_broken_to_wrong": false,
         "k": 7
       },
       {
         "seed": 140,
         "correct_votes": 0,
         "wrong_votes": 7,
+        "top_wrong_votes": 6,
+        "tie_broken_to_wrong": false,
         "k": 7
       }
     ]

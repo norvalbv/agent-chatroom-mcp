@@ -152,7 +152,14 @@ export function buildCacheShares(runs: RunResult[], tasks: string[], arms: strin
 export interface FailingGroupVote {
   seed: number;
   correct_votes: number;
+  /** Total votes for any wrong answer (may span several distinct wrong-answer strings). */
   wrong_votes: number;
+  /** The single largest wrong-answer string's own vote count -- the number that actually competes with
+   * correct_votes for the plurality. wrong_votes can exceed this when several distinct wrong answers exist. */
+  top_wrong_votes: number;
+  /** True iff the group's loss was a tie between the correct answer and the largest single wrong answer,
+   * broken by the pre-registered lowest-sub-seed rule, rather than the wrong answer outright winning. */
+  tie_broken_to_wrong: boolean;
   k: number;
 }
 
@@ -168,11 +175,12 @@ export function buildFailingGroupVotes(task: string, kGroups: ReturnType<typeof 
     .filter((g) => g.task_id === task && !g.passed && g.seed >= 101 && g.seed <= 140)
     .map((g) => {
       const correctAnswers = new Set(g.attempts.filter((a) => a.passed && a.answer !== null).map((a) => normAnswer(a.answer)));
-      let correct = 0, wrong = 0;
+      let correct = 0, wrong = 0, topWrong = 0;
       for (const [answer, count] of Object.entries(g.selection.votes)) {
-        if (correctAnswers.has(normAnswer(answer))) correct += count; else wrong += count;
+        if (correctAnswers.has(normAnswer(answer))) correct += count;
+        else { wrong += count; topWrong = Math.max(topWrong, count); }
       }
-      return { seed: g.seed, correct_votes: correct, wrong_votes: wrong, k: g.k };
+      return { seed: g.seed, correct_votes: correct, wrong_votes: wrong, top_wrong_votes: topWrong, tie_broken_to_wrong: topWrong === correct, k: g.k };
     })
     .sort((a, b) => a.seed - b.seed);
 }

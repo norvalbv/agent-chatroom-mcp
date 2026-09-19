@@ -47,6 +47,7 @@ export class Warehouse {
     if (order.status === 'reserved') {
       for (const allocs of order.remaining.values()) this.inv.unhold(allocs);
       
+      order.remaining = new Map();
     }
     order.status = 'cancelled';
     this.backorders.remove(id);

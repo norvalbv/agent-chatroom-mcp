@@ -131,9 +131,7 @@
         {
           "id": "o1",
           "status": "cancelled",
-          "remaining": {
-            "A": 8
-          },
+          "remaining": {},
           "shipped": {
             "A": 4
           }
@@ -256,9 +254,7 @@
       {
         "id": "o1",
         "status": "cancelled",
-        "remaining": {
-          "A": 6
-        },
+        "remaining": {},
         "shipped": {}
       },
       {
@@ -468,9 +464,7 @@
         {
           "id": "o1",
           "status": "cancelled",
-          "remaining": {
-            "A": 8
-          },
+          "remaining": {},
           "shipped": {}
         }
       ],

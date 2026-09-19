@@ -206,6 +206,7 @@ export class Warehouse {
     if (order.status === 'reserved') {
       for (const allocs of order.remaining.values()) this.inv.unhold(allocs);
       ${bad('S05') ? 'for (const allocs of order.shipped.values()) this.inv.unhold(allocs);' : ''}
+      order.remaining = new Map();
     }
     order.status = 'cancelled';
     ${bad('S12') ? '' : 'this.backorders.remove(id);'}

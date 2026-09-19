@@ -14,14 +14,19 @@ plurality, both structured deliberation and unstructured sampling-and-selection 
 answer at a rate not statistically distinguishable from each other on either program (Fisher's exact
 test, Holm-Bonferroni across a pre-registered family of six comparisons; a family-pooled, exploratory
 comparison gives K~75/80 vs.\ C~80/80, $p=0.059$). The chatroom beats the single agent significantly on
-both programs of that family (family-pooled Fisher's exact test, $p<0.001$); the sampling baseline beats
-the single agent significantly on one of the two programs (Holm $p=0.009$) but not the other (Holm
-$p=1.000$). We report that asymmetry as a fact and do not treat it as evidence that the chatroom and the
-sampling baseline differ from each other: the direct test of that question, K vs.\ C, is not significant
-on either program, and inferring a K-vs-C difference from a difference in each arm's own significance
-against A would be a fallacy. On the numeric-formatting task, where the wrong behaviour is itself the
-population's modal answer, both aggregation methods do worse than the single agent (K~7/40, C~6/40,
-A~14/40), against an oracle ceiling of 37/40. We report cost per correct answer for every arm, including
+each program individually (Fisher's exact test, $p=0.0117$ and $p=0.0002$) and on that family pooled
+($p<0.001$); the sampling baseline beats the single agent significantly on one of the two programs (Holm
+$p=0.009$) but not the other (Holm $p=1.000$). We report that asymmetry as a fact and do not treat it as
+evidence that the chatroom and the sampling baseline differ from each other: the direct test of that
+question, K vs.\ C, is not significant on either program, and inferring a K-vs-C difference from a
+difference in each arm's own significance against A would be a fallacy. On the numeric-formatting task,
+where the wrong behaviour is itself the population's modal answer, both aggregation methods do worse
+than the single agent (K~7/40, C~6/40, A~14/40), against an oracle ceiling of 37/40; here the single
+agent's numerical edge over the chatroom is not significant by Fisher's exact test ($p=0.069$), though
+the pre-registered per-task rule in \texttt{paper/protocol.md}\,\S5 (a two-proportion $z$-test, since no
+cell count is below five) gives $p=0.039$ for the identical counts -- a reader who holds strictly to that
+literal rule would call it significant, and we report both rather than choose silently
+(Section~\ref{sec:results}). We report cost per correct answer for every arm, including
 the effect of large prompt-cache-read shares on billed cost, and two system-level cost measurements made
 on this codebase's own build process (a token-consumption round and a peer-review round). The evidence
 does not let us conclude that this hub's specific consensus mechanics are interchangeable with

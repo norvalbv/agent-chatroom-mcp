@@ -248,13 +248,17 @@ export async function runBuildGrid(args: BuildGridArgs, options: { log?: (messag
   const log = options.log ?? console.log;
   mkdirSync(args.resultsDir, { recursive: true });
   const summary: BuildGridSummary = { ran: 0, skipped: 0, invalid: 0, unknownCost: 0, infraFailed: 0, halted: false, knownCostUsd: 0 };
+  // Freeze every task before the first child starts. A per-cell re-hash would let
+  // an earlier seat (or any concurrent writer) silently define a new version for
+  // later cells in the same invocation.
+  const taskHashes = new Map(args.taskDirs.map((taskDir) => [taskDir, hashPath(taskDir)]));
   let portCursor = args.basePort;
   for (const cell of buildBuildPlan(args)) {
     if (args.maxTotalCostUsd !== null && summary.knownCostUsd >= args.maxTotalCostUsd) {
       summary.halted = true;
       break;
     }
-    const taskSha256 = hashPath(cell.taskDir);
+    const taskSha256 = taskHashes.get(cell.taskDir)!;
     const fingerprint = requestedFingerprint(args, cell, taskSha256);
     const resultPath = join(cell.runDir, "build-result.json");
     if (existsSync(resultPath)) {

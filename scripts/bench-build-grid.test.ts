@@ -23,6 +23,7 @@ const a=process.argv.slice(2), flag=n=>a[a.indexOf('--'+n)+1];
 const [task,arm,seed]=a, root=flag('root'), fp=flag('run-fingerprint');
 appendFileSync(${JSON.stringify(log)}, JSON.stringify({a})+'\\n');
 mkdirSync(root,{recursive:true});
+if(process.env.STUB_MUTATE_TASK==='1')writeFileSync(join(task,'public','SPEC.md'),'mutated after grid freeze\\n');
 const unknown=process.env.STUB_UNKNOWN==='1';
 writeFileSync(join(root,'build-result.json'), JSON.stringify({
  schemaVersion:1, task_id:task.split('/').pop(), arm, seed:Number(seed), outcome:'completed',
@@ -96,6 +97,22 @@ test("resume refuses a stale result after task bytes change", async () => {
     writeFileSync(join(f.tasksDir, "build-billing-s1", "public", "SPEC.md"), "changed\n");
     await assert.rejects(() => runBuildGrid(parsed, { log: () => {} }), /stale result.*fingerprint/i);
   } finally { rmSync(f.dir, { recursive: true, force: true }); }
+});
+
+test("grid freezes task hashes once before any cell can mutate a later launch", async () => {
+  const f = fixture();
+  try {
+    process.env.STUB_MUTATE_TASK = "1";
+    const parsed = parseBuildGridArgs([
+      "--tasks", "build-billing-s1", "--arms", "A,B", "--seeds", "501", "--tasks-dir", f.tasksDir,
+      "--results", f.results, "--runner", f.runner, "--effort", "medium", "--max-budget-usd", "2",
+    ]);
+    await runBuildGrid(parsed, { log: () => {} });
+    const calls = readFileSync(f.log, "utf8").trim().split("\n").map((line) => JSON.parse(line).a as string[]);
+    const expected = calls.map((call) => call[call.indexOf("--expected-task-sha256") + 1]);
+    assert.equal(expected.length, 2);
+    assert.equal(expected[0], expected[1]);
+  } finally { delete process.env.STUB_MUTATE_TASK; rmSync(f.dir, { recursive: true, force: true }); }
 });
 
 test("unknown terminal cost stops later cells and is never summed as zero", async () => {

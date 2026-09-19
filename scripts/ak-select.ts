@@ -7,7 +7,7 @@
 import { spawnSync } from "node:child_process";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 
 // Same guard oracle/score.ts applies to a candidate before importing it (tasks/bench-printf-format/oracle/score.ts):
 // a candidate is untrusted, model-written code and the selector runs it, so it gets the identical treatment the
@@ -15,7 +15,9 @@ import { join } from "node:path";
 // against) so a candidate cannot shell out, dynamically require/import, or reach node:vm / node:worker_threads.
 const FORBIDDEN_SOURCE = /child_process|execSync|spawnSync|\bspawn\(|node:(util|vm|worker_threads)|require\(|\bimport\s*\(/;
 
-export type Probe = { fmt: string; args: (number | string | { n: string })[] };
+// A bare `n` (bigint magnitude) or `special` (a float JSON.stringify cannot round-trip: NaN/+-Infinity/-0)
+// tag, so every arg survives the JSON.stringify the probe file goes through unchanged.
+export type Probe = { fmt: string; args: (number | string | { n: string } | { special: "nan" | "inf" | "-inf" | "-0" })[] };
 /** One string per probe, or null when the candidate could not be loaded/run at all (no vote). */
 export type Signature = string[] | null;
 
@@ -27,7 +29,10 @@ export function printfProbes(): Probe[] {
   const out: Probe[] = [];
   const ints = [0, 1, -1, 7, 42, -42, 255, 9007199254740991, -9007199254740991, { n: "12345678901234567890" }];
   const nonneg = [0, 1, 8, 255, 4096, 9007199254740991, { n: "18446744073709551615" }];
-  const floats = [0, -0, 0.5, 1.5, 2.5, 0.125, 2.675, 0.1, 1e-7, 1e-5, 123456789.123, 1e21, 1e100, 5e-324, Infinity, -Infinity, NaN];
+  const floats: unknown[] = [
+    0, 0.5, 1.5, 2.5, 0.125, 2.675, 0.1, 1e-7, 1e-5, 123456789.123, 1e21, 1e100, 5e-324,
+    { special: "-0" }, { special: "inf" }, { special: "-inf" }, { special: "nan" },
+  ];
   const widths = ["", "1", "8", "20"];
   const precs = ["", ".", ".0", ".3", ".17"];
   const add = (conv: string, values: unknown[], flagSets: string[], ws: string[], ps: string[]) => {
@@ -57,7 +62,8 @@ const probes = JSON.parse(readFileSync(probeFile, "utf8"));
 const mod = await import(pathToFileURL(entry).href);
 const fn = mod.format;
 if (typeof fn !== "function") { console.log(JSON.stringify(null)); process.exit(0); }
-const conv = (a) => (a && typeof a === "object" ? BigInt(a.n) : a);
+const SPECIAL = { nan: NaN, inf: Infinity, "-inf": -Infinity, "-0": -0 };
+const conv = (a) => (a && typeof a === "object" ? ("n" in a ? BigInt(a.n) : SPECIAL[a.special]) : a);
 const res = probes.map((p) => { try { return "ok:" + String(fn(p.fmt, ...p.args.map(conv))); } catch (e) { return "throw"; } });
 console.log(JSON.stringify(res));
 `;
@@ -70,7 +76,11 @@ export function runCandidate(workspace: string, probes: Probe[], timeoutMs = 300
     const probeFile = join(tmp, "probes.json");
     writeFileSync(driver, DRIVER);
     writeFileSync(probeFile, JSON.stringify(probes));
-    const run = spawnSync(process.execPath, ["--import", tsxUrl, driver, join(workspace, "format.ts"), probeFile], { encoding: "utf8", timeout: timeoutMs, cwd: workspace, killSignal: "SIGKILL", maxBuffer: 1 << 26 });
+    // entry must be absolute: the child's cwd is set to `workspace` below, so a relative path built from
+    // `workspace` would be resolved a second time against that same cwd and miss (the bug this comment
+    // replaces: ENOENT on workspace/workspace/format.ts).
+    const entry = resolve(workspace, "format.ts");
+    const run = spawnSync(process.execPath, ["--import", tsxUrl, driver, entry, probeFile], { encoding: "utf8", timeout: timeoutMs, cwd: workspace, killSignal: "SIGKILL", maxBuffer: 1 << 26 });
     if (run.error || run.status !== 0) return null;
     const parsed = JSON.parse(run.stdout.trim().split("\n").pop() ?? "null");
     return Array.isArray(parsed) && parsed.length === probes.length ? (parsed as string[]) : null;

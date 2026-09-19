@@ -29,18 +29,20 @@ Of roughly forty-five candidate designs, three tasks in two families survived: \
 and \texttt{stamp-2} (family \emph{scope-capture}: an invented, nested-scope interpreter language whose
 specification does not give a procedure defined inside another call access to that call's own local
 variables, against the natural implementation choice of a lexical environment chain (a closure) that
-grants it access anyway --- every observed failure on both programs is the identical output produced by
-that closure reading), and
-\texttt{bench-printf-format} (family \emph{libc-exact-number}: reproducing a host's floating-point
-formatting exactly, including one case, \texttt{\%.17g} of $10^{-7}$, where the natural implementation
-choice --- the language runtime's own shortest round-trip representation --- disagrees with the
-specification's stated exact-binary-value rule). Every failure on every admitted task was traced to a
-single shared item: all five \texttt{stamp-interpreter} failures are the identical wrong output; all
-\texttt{bench-printf-format} failures are the identical failing case. This makes each admitted task a
-\emph{single-trap} task in the sense that its measured rate reflects the chance of one specific slip,
-not a smooth difficulty gradient, and it is why the paper treats the two \texttt{stamp} programs as one
-family rather than as two independent draws: they share the same specification and the same shared-error
-mechanism, so a team advantage on one is not independent evidence of a team advantage on the other. A
+grants it access anyway), and \texttt{bench-printf-format} (family \emph{libc-exact-number}: reproducing
+a host's floating-point formatting exactly, including one case, \texttt{\%.17g} of $10^{-7}$, where the
+natural implementation choice --- the language runtime's own shortest round-trip representation ---
+disagrees with the specification's stated exact-binary-value rule). On the ten-seed admission pilot that
+set each task's status, every failure on every admitted task traced to a single shared item: all five
+\texttt{stamp-interpreter} failures and all five \texttt{stamp-2} failures were each their own program's
+identical wrong output, and every \texttt{bench-printf-format} failure was the identical failing case
+(the confirmatory grid's own failure counts and their exact composition, which is not identical across
+every failing seed on \texttt{stamp-2}, are reported in Section~\ref{sec:results}, not repeated here).
+This makes each admitted task a \emph{single-trap} task in the sense that its admission-pilot rate
+reflects the chance of one specific slip, not a smooth difficulty gradient, and it is why the paper
+treats the two \texttt{stamp} programs as one family rather than as two independent draws: they share
+the same specification and the same shared-error mechanism, so a team advantage on one is not
+independent evidence of a team advantage on the other. A
 fourth task originally proposed for the suite, a long, resource-constrained instruction-following brief
 scored by survival rather than exact answer, was retired rather than built: its scoring mechanism is
 inherently unavailable to a single, non-chatroom agent (there is no room, no board, and no
@@ -56,10 +58,13 @@ not an artifact of an inert or ambiguous clause silently doing no work.
 \subsection{Experimental conditions: arms A, C, and K}
 \label{sec:method:arms}
 
-All three arms run on the same pinned model (Claude Sonnet), the same verbatim task brief, and the same
-hidden-fixture, machine-checked oracle; no arm sees another arm's transcript, and every run's hub-entry
-hash, task-fixture hash, and scorer hash are pinned and recorded so that a later mismatch is flagged
-rather than silently scored.
+All three arms run on the same \texttt{sonnet} model alias (recorded model id \texttt{claude-sonnet-5}),
+the same verbatim task brief, and the same hidden-fixture, machine-checked oracle; no arm sees another
+arm's transcript, and every run's hub-entry hash, task-fixture hash, and scorer hash are pinned and
+recorded so that a later mismatch is flagged rather than silently scored. The alias is not a dated model
+snapshot: Section~\ref{sec:method:window} reports a mid-study change in the model actually served under
+it, discovered after these runs, which is why every cost and token figure in this paper is reported
+alongside the date and regime it was measured in rather than treated as a stable per-model constant.
 
 \paragraph{Arm A --- single agent, budget-matched.} One Claude Code seat, given the task brief and
 ordinary file/shell tools, with no access to any chatroom tool. Because the \texttt{claude} CLI exposes
@@ -121,25 +126,24 @@ selection cannot work in general.
 \subsection{Statistical procedure}
 \label{sec:method:stats}
 
-Every arm-pair comparison in this paper uses a two-sided Fisher exact test on the resulting $2\times2$
-table of pass/fail counts, computed directly (never via a normal approximation), because the
-comparisons of interest here span cell counts as small as six and as large as forty and a single
-consistent test is preferable to switching test families across otherwise-identical comparisons. Where
-a generated table in this project's own artifacts instead reports a two-proportion $z$-test result
-because that is what an earlier version of the pre-registration's own decision rule (Fisher only when a
-cell count is below five) selected for a table with no cell below five, the paper treats the Fisher
-figure as authoritative and reports the $z$-test figure alongside it, labeled as such, rather than
-silently substituting one for the other: this matters concretely for \texttt{bench-printf-format} arm~A
-vs.\ arm~C, where the $z$-test gives $p=0.039$ (nominally significant at $\alpha=0.05$) and the Fisher
-test on the identical $14/40$ vs.\ $6/40$ table gives $p=0.069$ (not significant).
-
-The unit of analysis for any claim about ``the interpreter family'' or ``the printf family'' is the
-family, not the individual task: \texttt{stamp-interpreter} and \texttt{stamp-2} share one specification
-and one failure mechanism (Section~\ref{sec:method:admission}), so their seeds are not treated as
-independent draws of task difficulty, and no interval or test in this paper pools them as if they were.
-Where a family-pooled figure is reported (for instance, arm~K's combined interpreter-family record
-against arm~C's), it is reported as exploratory, outside the pre-registered comparison family, and
-never substituted for the per-task result.
+\texttt{paper/protocol.md} \S5, as written and pre-registered before any RQ1 run existed, selects the
+arm~A vs.\ arm~C significance test per task: a two-proportion $z$-test, or Fisher's exact test only when
+a cell of the $2\times2$ table is below five. This remains the currently pre-registered rule; it has not
+been superseded. The primary arm~A vs.\ arm~C comparison this paper actually reports
+(Section~\ref{sec:results}) deviates from it in two respects, and the deviation is disclosed rather than
+silently substituted: it applies a two-sided Fisher exact test uniformly, computed directly rather than
+via the $z$ approximation, regardless of cell count; and, for the two \texttt{stamp} tasks, it pools
+\texttt{stamp-interpreter} and \texttt{stamp-2} into one interpreter-family $2\times2$ table before
+testing, extending to the significance test a family-as-unit-of-analysis rule that this project's
+amendment record establishes for task \emph{selection} (Section~\ref{sec:method:admission}), not
+originally for hypothesis testing. Both figures are reported side by side in
+Section~\ref{sec:results}, by test name, and neither is presented as superseding the other: a reader who
+holds this paper to its written pre-registration should treat the per-task $z$-test as the pre-registered
+result and the family-pooled Fisher result as an exploratory revision made after the data existed. The
+practical stakes of this choice are concrete on \texttt{bench-printf-format} (a single-task family, so
+family pooling does not apply to it and only the test-choice deviation is at work): the pre-registered
+per-task $z$-test on the $14/40$ vs.\ $6/40$ table gives $p=0.039$ (nominally significant at
+$\alpha=0.05$), while the Fisher exact test on the identical table gives $p=0.069$ (not significant).
 
 For the arm-K comparisons specifically, the pre-registered family is fixed at six two-sided tests (three
 tasks $\times$ \{K vs.\ C, K vs.\ A\}), corrected by Holm-Bonferroni; both the raw and the
@@ -171,7 +175,7 @@ sits entirely inside one time window and is not an artifact of the two measureme
 conditions; it remains unexplained by anything identified in this project to date, and is reported as
 such rather than attributed to a cause. A distinct, later regime change is relevant to this paper's
 \emph{other} within-day comparisons: between approximately 15:30 and 16:45, with no change to the
-harness, its flags, the Claude Code version, or the recorded model id, the model served under the pinned
+harness, its flags, the Claude Code version, or the recorded model id, the model served under the
 \texttt{sonnet} alias began producing substantially longer internal reasoning per turn --- a single-agent
 \texttt{stamp-interpreter} attempt's output tokens rose roughly six-fold (about 1.6K to about 10K) and
 its cost rose from about \$0.058 to \$0.18--\$0.26; arm~C seats showed the same shift (a three-seat room's

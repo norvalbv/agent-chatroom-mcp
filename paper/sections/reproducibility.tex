@@ -6,11 +6,13 @@
 
 Commit \texttt{41ff777} on branch \texttt{main} of \texttt{agent-chatroom-mcp}.
 
+\begin{footnotesize}
 \begin{verbatim}
 npm install
 npm run build
 npm test
 \end{verbatim}
+\end{footnotesize}
 
 \texttt{npm test} runs \texttt{scripts/offline-runner.mjs}; its printed command count drifts over time
 and must be re-read at the commit actually used, not cited from this text
@@ -18,6 +20,7 @@ and must be re-read at the commit actually used, not cited from this text
 
 \subsection{RQ1 grid: arms A and C, seeds 101--140}
 
+\begin{footnotesize}
 \begin{verbatim}
 node --import tsx scripts/bench-grid.ts \
   --tasks stamp-interpreter,stamp-2,bench-printf-format \
@@ -26,6 +29,7 @@ node --import tsx scripts/bench-grid.ts \
   --arms A,C --model sonnet --max-cost-usd 95 \
   --results-dir bench/results/rq1-suite --port-base 19850
 \end{verbatim}
+\end{footnotesize}
 
 (\texttt{paper/amendments.md}, "Grid command and cost estimate for the primary suite"; the seed list is
 written out in full because macOS's \texttt{seq -s, 1 40} appends a trailing comma that
@@ -35,6 +39,7 @@ from arm~C's realized spend.)
 
 \subsection{Arm K grid, seeds 101--140}
 
+\begin{footnotesize}
 \begin{verbatim}
 node --import tsx scripts/bench-grid.ts \
   --tasks stamp-interpreter,stamp-2,bench-printf-format \
@@ -42,6 +47,7 @@ node --import tsx scripts/bench-grid.ts \
   --k stamp-interpreter=10,stamp-2=8,bench-printf-format=7 \
   --model sonnet --results-dir bench/results/rq1-arm-k --port-base 19850
 \end{verbatim}
+\end{footnotesize}
 
 paired against the arm-C results already written to \texttt{bench/results/rq1-suite}
 (\texttt{scripts/bench-grid.ts} refuses an arm-K group whose paired arm-C result does not exist under
@@ -70,10 +76,12 @@ as complete or pending as of that section's writing, never read from partial out
 
 \subsection{Tables, statistics, and figures}
 
+\begin{footnotesize}
 \begin{verbatim}
 node --import tsx scripts/paper-rq1-table.ts bench/results/rq1-suite
 node --import tsx scripts/paper-rq1-armk.ts bench/results/rq1-suite bench/results/rq1-arm-k
 \end{verbatim}
+\end{footnotesize}
 
 plus the figure-generating scripts under \texttt{scripts/paper-fig*.ts} (Section~\ref{sec:results}).
 Every table and figure script reads only committed \texttt{result.json} files under
@@ -83,10 +91,12 @@ statistics dependency.
 
 \subsection{Citation check and PDF build}
 
+\begin{footnotesize}
 \begin{verbatim}
 paper/check-citations.sh
 tectonic paper/main.tex
 \end{verbatim}
+\end{footnotesize}
 
 Build tooling installed for this room, user-locally only (recorded with these exact commands in
 \texttt{paper/README.md}): \texttt{brew install tectonic}; \texttt{pip3 install --user

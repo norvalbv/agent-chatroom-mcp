@@ -222,3 +222,8 @@ the count of cells at the cap.
 `node --import tsx scripts/bench-grid.ts --confirmatory --tasks bench-printf-format --seeds 501-520 --arms A,AH,B,K,C --k bench-printf-format=7 --model sonnet --concurrency 5 --results-dir bench/results/rq1-confirmatory --cap-usd 1.5 --cap-deadline-ms 900000 --max-cost-usd 240 --port-base 19850`
 Projection in the long regime: about 5 USD per printf seed (A 0.6, AH 0.9, B 1.2, K 7 x 0.6, C 3), so about
 100 USD for 20 seeds, on top of the 66 USD already spent.
+
+**Addendum 2026-09-20 01:00 UTC.** The capped grid refuses to run while any cell in the results directory has
+unknown spend, so the pre-amendment cell `bench-printf-format-A-seed501` (timeout, usage lost) was moved
+unchanged to `bench/results/rq1-confirmatory-pre-amendment/`. Seed 501's arm A is therefore re-run under
+the new caps like the other seed-501 printf arms; all seed-501 printf cells stay outside printf inference.

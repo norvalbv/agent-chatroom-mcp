@@ -64,10 +64,10 @@ function tableFamily(tests: ReturnType<typeof buildFamilyTests>): string {
 }
 
 function tableArmK(kTable: ReturnType<typeof buildArmKTable>): string {
-  let tex = "\\begin{tabular}{llrrrl}\n\\toprule\nTask & vs & K pass/$n$ & other pass/$n$ & Holm $p$ ($m=6$) & Sig. \\\\\n\\midrule\n";
+  let tex = "\\begin{tabular}{llrrrrl}\n\\toprule\nTask & vs & K pass/$n$ & other pass/$n$ & Fisher $p$ (raw) & Holm $p$ ($m=6$) & Sig. \\\\\n\\midrule\n";
   for (const row of kTable.tasks) {
     for (const c of row.comparisons) {
-      tex += `${esc(TASK_LABEL[row.task] ?? row.task)} & ${c.vs} & ${c.k_pass}/${c.k_n} & ${c.other_pass}/${c.other_n} & ${pnum(c.p_holm, 6)} & ${c.significant_holm_0_05 ? "yes" : "no"} \\\\\n`;
+      tex += `${esc(TASK_LABEL[row.task] ?? row.task)} & ${c.vs} & ${c.k_pass}/${c.k_n} & ${c.other_pass}/${c.other_n} & ${pnum(c.p_value, 6)} & ${pnum(c.p_holm, 6)} & ${c.significant_holm_0_05 ? "yes" : "no"} \\\\\n`;
     }
   }
   tex += "\\bottomrule\n\\end{tabular}\n";

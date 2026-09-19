@@ -23,7 +23,9 @@ transitions rather than treating consensus itself as evidence that deliberation 
 The 120 files under `bench/results/rq1-suite/*-C-seed*/result.json` do not retain the raw hub
 JSONL or room transcript. They retain one final free-text summary per seat. Searching those
 summaries for explicit first-answer/opening corrections, followed by manual checks of the
-matched examples, gives conservative lower bounds:
+matched examples, gives conservative lower bounds. The reported 26 and 14 are manual tallies,
+not the output of a single regex: the summaries use non-standard prose, so search terms were
+used to find candidates and each candidate was then read against the narrow criteria below.
 
 - `stamp-interpreter`: at least 26 of 40 runs explicitly report that an opening or first trace
   contained the known `101`-versus-`100` scope error and that another seat corrected it.

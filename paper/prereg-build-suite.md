@@ -384,12 +384,16 @@ therefore no confirmatory run is authorized.
 - **Billing-v1 rejected:** five exploratory default-effort A runs each caught 9/9.
   Raw results, workspaces, launch snapshot, hashes and an independent replay are
   archived at commit `6669a46` (`bench/build-suite-evidence/billing-v1`); total
-  recorded cost is $0.4097492. The public task also contained local giveaway
-  residue. This evidence is immutable and is not called pinned-effort admission.
+  recorded cost is $0.4097492. The raw result files are also indexed by SHA-256 in
+  `docs/build-suite-artifacts/MANIFEST.json` at evidence commit `e1cb5d2`. The
+  public task also contained local giveaway residue. This evidence is immutable
+  and is not called pinned-effort admission.
 - **Ledger-v2 rejected:** pinned-medium A caught 44/45 plants over five cells
   (task-level 97.8%, outside [0.30,0.70]). The committed detailed run and per-defect
   tables are `docs/build-suite-admission.md` and
   `docs/build-suite-admission-runs.json` on generator evidence commit `e8dbd0c`.
+  Their raw runner outputs are indexed in
+  `docs/build-suite-artifacts/MANIFEST.json` at `e1cb5d2`.
   Non-author attack additionally reproduced scorer spoofing, reference/spec bugs,
   whole-snapshot coupling and giveaway residue in the reviewed version. A post-hoc
   unplanted duplicate-SKU input was fixed by 6/15 exploratory seats, identifying a
@@ -401,9 +405,11 @@ therefore no confirmatory run is authorized.
   missing infrastructure. Replacement C102--104 used a $1.60 cap on different
   seeds, so those rows are unequal-cap and unpaired. The oracle was also corrected
   after inspecting apparent misses. All re-scored A, B, C workspaces caught 9/9.
-  The committed raw/as-run rows are `docs/build-suite-pilot.json` at `e8dbd0c`;
-  C101's independently audited raw evidence remained under `/tmp/sb10` rather than
-  the committed archive. Board summary means for the unequal-cap rows were A:
+  The committed derived rows are `docs/build-suite-pilot.json` at `e8dbd0c`.
+  The 57 raw admission/pilot `result.json` and `build-result.json` files, including
+  C101, are preserved with source paths and SHA-256 digests in
+  `docs/build-suite-artifacts/MANIFEST.json` at `e1cb5d2`. Board summary means for
+  the unequal-cap rows were A:
   $0.056 and 21 s; B: $0.135 and 62 s; C: $0.83 and 78 s. These rows test the
   harness and demonstrate ceiling, but cannot satisfy the requested pilot on an
   admitted task.

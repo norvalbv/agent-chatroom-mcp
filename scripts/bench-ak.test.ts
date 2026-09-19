@@ -479,15 +479,16 @@ test("an attempt that finishes just under its deadline is a normal vote with kno
   }
 });
 
-test("runAttempt: a runner finishing well under the total rail resolves at once with its own exit status, not killed", async () => {
+test("runAttempt: a runner finishing well under the total rail resolves at once with its own exit status, not killed", async (context) => {
   const dir = mkdtempSync(join(tmpdir(), "run-attempt-fast-"));
   const fast = join(dir, "fast-runner.mjs");
   writeFileSync(fast, "await new Promise((r) => setTimeout(r, 200));\nprocess.exit(0);\n");
   try {
-    const start = Date.now();
+    // Freeze the parent watchdog: only the real child's close event can resolve this call.
+    // The child's own timer is in another process and is unaffected by this mock.
+    context.mock.timers.enable({ apis: ["setTimeout"] });
     const r = await runAttempt(fast, [], 3000 + OUTER_TIMEOUT_SLACK_MS);
     assert.equal(r.status, 0);
-    assert.ok(Date.now() - start < 2000, "resolves when the runner exits, not when the rail expires");
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

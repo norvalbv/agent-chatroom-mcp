@@ -1,0 +1,146 @@
+{
+  "schemaVersion": 1,
+  "task_id": "build-ledger-s1",
+  "arm": "A",
+  "seed": 12,
+  "model": "sonnet",
+  "outcome": "task_pass",
+  "passed": true,
+  "reason": "task_pass",
+  "oracle": {
+    "kind": "planted-defects",
+    "command": "node --import tsx oracle/score.ts <workspace>",
+    "exit_code": 0
+  },
+  "anti_tamper": {
+    "hash_before": "f92126ad6bd0976a9269a66d2265fcc2d04e09f46f023ccf669e2a16a59ad5d5",
+    "hash_after": "f92126ad6bd0976a9269a66d2265fcc2d04e09f46f023ccf669e2a16a59ad5d5",
+    "unchanged": true
+  },
+  "seats": [
+    {
+      "name": "single",
+      "argv": [
+        "claude",
+        "-p",
+        "The warehouse library in src/ must meet the specification in SPEC.md. The public tests in test/ pass today, but passing them does not prove the code meets the specification. Make the codebase conform to SPEC.md, keeping everything that already conforms working. Run the tests with: node --test test/*.test.ts. Do not create files outside this directory.\n\nModify the relevant source file(s) in your current working directory directly to implement the fix described above. Your edit to the existing file(s) is the submission; do not create any other output file.",
+        "--mcp-config",
+        "/tmp/sb7/led1-A-12/mcp-empty.json",
+        "--strict-mcp-config",
+        "--allowedTools",
+        "Read,Edit,Write,MultiEdit,Bash,Glob,Grep",
+        "--tools",
+        "Read,Edit,Write,MultiEdit,Bash,Glob,Grep",
+        "--disable-slash-commands",
+        "--setting-sources",
+        "project",
+        "--exclude-dynamic-system-prompt-sections",
+        "--output-format",
+        "stream-json",
+        "--verbose",
+        "--model",
+        "sonnet",
+        "--max-budget-usd",
+        "3"
+      ],
+      "exit_code": 0,
+      "signal": null,
+      "started_at": "2026-09-19T19:42:33.996Z",
+      "completed_at": "2026-09-19T19:43:01.813Z",
+      "num_turns": 4,
+      "duration_ms": 24617,
+      "duration_api_ms": 23119,
+      "usage": {
+        "cost": 0.0570228,
+        "input_tokens": 8,
+        "cache_read_input_tokens": 30994,
+        "cache_creation_input_tokens": 7392,
+        "output_tokens": 2124
+      },
+      "text": "I fixed the code in `src/` to match `SPEC.md`, and the public tests still pass (5 passed, 0 failed). I didn't write new tests for the fixes, so nothing beyond the existing public tests exercises them.\n\nWhat was wrong and is now fixed:\n- **Receiving** into an existing lot id now adds to its quantity instead of replacing it (`src/inventory.ts`).\n- **Available stock** now counts only lots usable on the given day, so expired lots contribute nothing (`src/inventory.ts`).\n- **Lot ordering:** lots with the same expiry are now used in ascending id order. It was descending (`src/inventory.ts`).\n- **Repeated skus:** order lines with the same sku are now added together before reserving (`src/orders.ts`).\n- **All-or-nothing reserving:** when any line fails, everything the order held is released. Before, only the first line's sku was released (`src/orders.ts`).\n- **Cancelled orders** are no longer reserved when the backorder queue is retried. They are dropped from the queue instead (`src/backorder.ts`).\n- **Shipping** is now capped by what is still reserved for that sku. It was capped by the original line quantity, so shipping in several steps could exceed what was reserved (`src/warehouse.ts`).\n- **Cancelling** releases only the units still reserved. Before, it also released already-shipped units (`src/warehouse.ts`).\n- **Returns:** a lot is restocked only if it is still usable that day, meaning its expiry is on or after the return day. It was accepting lots that expired the day before (`src/warehouse.ts`).\n\nI left the snapshot shape untouched.",
+      "killed_by_deadline": false,
+      "partial_usage": null,
+      "reported_models": {
+        "system_init": [
+          "claude-sonnet-5"
+        ],
+        "assistant": [
+          "claude-sonnet-5"
+        ],
+        "result_model_usage": [
+          "claude-sonnet-5"
+        ]
+      },
+      "model_usage": {
+        "claude-sonnet-5": {
+          "inputTokens": 8,
+          "outputTokens": 2124,
+          "cacheReadInputTokens": 30994,
+          "cacheCreationInputTokens": 7392,
+          "webSearchRequests": 0,
+          "costUSD": 0.0570228,
+          "contextWindow": 1000000,
+          "maxOutputTokens": 64000,
+          "thinkingTokens": 720,
+          "canonicalModel": "claude-sonnet-5",
+          "provider": "firstParty",
+          "costBasis": "list"
+        }
+      }
+    }
+  ],
+  "usage": {
+    "steps": 0,
+    "prompt_tokens": 0,
+    "completion_tokens": 0,
+    "cost_usd": 0.0570228,
+    "seats": 1,
+    "seats_with_usage": 1,
+    "coverage": "complete",
+    "input_tokens": 8,
+    "cache_read_input_tokens": 30994,
+    "cache_creation_input_tokens": 7392,
+    "output_tokens": 2124
+  },
+  "turns": {
+    "per_seat": [
+      {
+        "name": "single",
+        "num_turns": 4
+      }
+    ],
+    "summed": 4,
+    "seats": 1,
+    "seats_with_turns": 1,
+    "coverage": "complete"
+  },
+  "wall_clock": {
+    "started_at": "2026-09-19T19:42:33.996Z",
+    "completed_at": "2026-09-19T19:43:01.813Z",
+    "duration_ms": 27817
+  },
+  "budget": {
+    "max_budget_usd": 3,
+    "deadline_ms": 900000
+  },
+  "build": {
+    "captured_at": "2026-09-19T19:42:33.971Z",
+    "head_revision": "55781dc394165f61e83b952301001fb3ffd22bd8",
+    "runner_sha256": "5c5efb306636ceae6b520f0361e17de9b2c31c587a1da0a92bdea4c41b554ae8",
+    "hub_entry": null,
+    "hub_entry_sha256": null,
+    "hub_revision": null,
+    "hub_build_sha256": null,
+    "provenance_scope": null
+  },
+  "frozen": {
+    "task_sha256": "f92126ad6bd0976a9269a66d2265fcc2d04e09f46f023ccf669e2a16a59ad5d5",
+    "scorer_sha256": "f4b645c670ae4655aec1189e4d7320294115f0e3c6da3b5ba41a7ee3b1cd00f8",
+    "fact_scorer_sha256": "6b8b3e98c8c408ecd6715a38db9263488644d27c01a11c5bab3172acd5539832",
+    "task_id": "build-ledger-s1",
+    "timeout_ms": 900000,
+    "seats": 1
+  },
+  "error": null,
+  "checked_at": "2026-09-19T19:43:02.371Z"
+}

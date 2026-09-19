@@ -605,3 +605,17 @@ for, because the regime changed under it twice. (3) The task's admission band (s
 holds only in the short regime; task difficulty is a property of (task, model, thinking budget), and the
 suite must be re-admitted per regime. A project-level `effortLevel` setting moves output tokens (measured
 during the long regime: low about 5K, medium about 7K, high about 11K) and is the only local handle found.
+
+## 2026-09-19 — Before the confirmatory run: thinking budget is not locally controllable in the short regime (maintainer session)
+
+Recorded before any cell of `bench/results/rq1-confirmatory` exists; it changes nothing in
+`paper/prereg-confirmatory.md`. The build room's calibration found that the project-level `effortLevel`
+setting reaches every seat but barely moves thinking tokens in the current regime (none 1076, low 893,
+medium 1006, high 1164 mean thinking tokens, n=3 each), where the same setting moved output tokens from about
+5K to 11K during the afternoon's long-thinking regime. The maintainer then probed the `MAX_THINKING_TOKENS`
+environment variable on one `stamp-interpreter` attempt each (own git root, identical flags): default 1023
+thinking tokens, 16000 gives 1138, 32000 gives 1117. Neither handle raises the thinking budget now. Arm AH
+therefore tests the high-effort LABEL in whatever regime the provider serves, as the pre-registration says,
+and the afternoon's 78/80 long-thinking result cannot be reproduced on demand. If the long-thinking regime
+returns during the run the per-seed sentinel splits the data and AH-vs-A becomes informative in that
+stratum only.

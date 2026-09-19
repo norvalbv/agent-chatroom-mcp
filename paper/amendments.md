@@ -430,11 +430,16 @@ runs are never reused.
 **All-null groups.** A group in which every attempt is a null vote (killed, no answer, no loadable candidate) submits nothing; it is scored
 as a fail (denominator stays 40), and its null-vote count is reported per task so the reader can see how much of arm K's result is starvation.
 
+A group whose selector has nothing to submit (all null votes) or whose selected attempt has no answer is an arm-K FAIL in the Fisher
+table, never excluded from the denominator; this is a restatement of the rule above so the written rule and the stats code cannot drift.
+
 **Holm family (fixed before any run).** The arm-K comparisons are 3 tasks x {K vs C, K vs A} = 6 two-sided Fisher exact tests (`fisherExactTest`
 directly, never the z-approximation switch), Holm-Bonferroni with m = 6 fixed even if some cells are missing or the grid is partial. Raw
 and adjusted p are both reported. Consequence stated up front: at m = 6 the best possible stamp-interpreter K vs A (40/40 vs 33/40, raw
-p = 0.0117) adjusts to about 0.070, so prediction 1's K-vs-A clause ("is significant") cannot be met on that task at alpha 0.05 after
-adjustment; the paper reports the raw and adjusted values and does not shrink the family afterwards to rescue it. The oracle ceiling is not
+p = 0.0117) adjusts to about 0.070 at rank 1 and about 0.059 at rank 2 (Holm is step-down); it can be significant only at rank 3 or later
+(about 0.047), i.e. only if at least two other arm-K comparisons have smaller raw p-values and are themselves rejected first
+(e.g. stamp-2 K vs A at 40/40 vs 28/40, raw p = 0.000185, would rank ahead of it). The paper reports the raw and adjusted values for
+all six comparisons and does not shrink the family afterwards to rescue any one clause. The oracle ceiling is not
 a test and is outside the family.
 
 **Reported for arm K** (in `bench/results/rq1-arm-k`, never in `rq1-suite`): K vs C and K vs A by Fisher exact, Holm-Bonferroni across the

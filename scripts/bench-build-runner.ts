@@ -33,6 +33,7 @@ export function classifyBuildFailure(error: unknown): string {
   if (message.startsWith('tamper:')) return 'tamper';
   if (message.startsWith('invalid_room:')) return 'invalid_room';
   if (message.startsWith('timeout:')) return 'timeout';
+  if (message.startsWith('budget_exhausted:')) return 'budget_exhausted';
   return 'infrastructure_error';
 }
 export function validateBuildRoom(dataDir: string, count: number, workspace: string) {
@@ -95,6 +96,7 @@ async function main() {
     records.push(full); json(join(root, name + '.json'), full);
     if (hashFile(join(cwd, settings.settings_path)) !== settings.settings_sha256) throw new Error('tamper: seat changed pinned effort');
     if (record.killed_by_deadline) throw new Error('timeout: seat deadline');
+    if (record.result_subtype === 'error_max_budget_usd' || record.terminal_reason === 'budget_exhausted') throw new Error('budget_exhausted: seat reached its allocated cap');
     if (record.exit_code !== 0 || !record.usage) throw new Error('infrastructure_error: seat failed or spend unknown');
     return full;
   };
@@ -138,7 +140,9 @@ async function main() {
       if (!created.ok) throw new Error('room create HTTP ' + created.status);
       const mcp = join(root, 'mcp.json'); json(mcp, { mcpServers: { chatroom: { type: 'http', url: url + '/mcp' } } });
       const attempts = await Promise.allSettled(Array.from({ length: count }, (_, i) => seat('seat-' + (i + 1), `${workPrompt}\nJoin room build as seat-${i + 1}. Claim work on the board; the hub assigns reviewers. Have a non-author read and verify the final diff. Write verify/* with JSON first line {proposal,command,cwd,exit_code,output_tail} and actual exit_code 0. After tests and all edits, run node .bench-hash.mjs and add workspace_sha256 to that same JSON first line with its exact output. The final submitted workspace must match that independently verified hash; no edits afterward. Claims/evidence/proposals/votes are public; named working exchanges quiet. Use wait_for_messages hold_until_actionable=true. Leave after conclusion.`, workspace, cap / count, mcp, [...baseTools, 'mcp__chatroom__*'])));
-      const rejected = attempts.find(a => a.status === 'rejected'); if (rejected?.status === 'rejected') throw rejected.reason;
+      const rejected = attempts.filter(a => a.status === 'rejected');
+      const failure = rejected.find(a => classifyBuildFailure(a.reason) === 'tamper') ?? rejected.find(a => classifyBuildFailure(a.reason) === 'infrastructure_error') ?? rejected[0];
+      if (failure) throw failure.reason;
       await stop(hub); hub = null;
       // Reuse the hub's verification parser and session rule, never seat prose.
       roomValidation = validateBuildRoom(dataDir, count, workspace);

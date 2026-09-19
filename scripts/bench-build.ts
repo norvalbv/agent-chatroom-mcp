@@ -29,7 +29,7 @@ type RawResult = {
   room_validation?: { state?: string; proposal_id?: string; verified?: boolean; verifier_session_distinct?: boolean; distinct_sessions?: number };
   anti_tamper?: { unchanged?: boolean };
   effort?: { level?: string; settings_path?: string; settings_sha256?: string; own_git_root?: boolean };
-  usage?: { cost_usd?: number | null };
+  usage?: { cost_usd?: number | null; coverage?: string };
   turns?: { summed?: number };
   wall_clock?: { duration_ms?: number };
   seats?: unknown[];
@@ -126,6 +126,8 @@ async function main() {
   const rootArg = takeFlag(argv, "root");
   if (!rootArg) fail("--root is required");
   const runner = resolve(takeFlag(argv, "runner") ?? resolve(here, "bench-build-runner.ts"));
+  const gridFingerprint = takeFlag(argv, 'run-fingerprint') ?? null;
+  if (gridFingerprint !== null && !/^[a-f0-9]{64}$/.test(gridFingerprint)) fail('invalid grid run fingerprint');
   if (!existsSync(runner)) fail(`runner not found: ${runner}`);
   const root = resolve(rootArg);
   // The build-suite preregistration fixes the room at four seats.  The older
@@ -136,6 +138,10 @@ async function main() {
 
   const resolvedTask = resolve(taskDir);
   const matrix = expectedMatrix(resolvedTask);
+  const taskMeta = JSON.parse(readFileSync(join(resolvedTask,'task.json'),'utf8'));
+  const manifestPath = join(resolvedTask,taskMeta.build_suite ? 'task.json' : 'DEFECTS.json');
+  const manifestHash = createHash('sha256').update(readFileSync(manifestPath)).digest('hex');
+  const wrapperHash = hashTree(fileURLToPath(import.meta.url));
   const launchTaskHash = hashTree(resolvedTask);
   const adapterPath = resolve(here, 'bench-oracle.ts');
   const hashAdapter = () => createHash('sha256').update(readFileSync(adapterPath)).digest('hex');
@@ -153,7 +159,7 @@ async function main() {
   catch { fail("underlying result.json is not JSON"); }
   if (raw.arm !== arm || raw.seed !== seed) fail("underlying result does not match requested arm/seed");
   if (raw.anti_tamper?.unchanged !== true) fail("anti-tamper provenance is absent or reports a changed fixture");
-  if (!['completed','timeout','invalid_room'].includes(raw.outcome ?? '')) fail(`underlying run ${raw.outcome ?? 'missing outcome'}: ${raw.error ?? 'not eligible for scoring'}`);
+  if (!['completed','timeout','invalid_room','budget_exhausted'].includes(raw.outcome ?? '')) fail(`underlying run ${raw.outcome ?? 'missing outcome'}: ${raw.error ?? 'not eligible for scoring'}`);
   if (raw.task_id !== launchTaskId || hashTree(resolvedTask) !== launchTaskHash) fail('tamper: task changed during execution');
   if (raw.usage?.cost_usd !== null && (typeof raw.usage?.cost_usd !== 'number' || !Number.isFinite(raw.usage.cost_usd) || raw.usage.cost_usd < 0)) fail('actual model cost is absent or invalid');
   if (arm === 'B' && raw.outcome === 'completed') {
@@ -185,11 +191,18 @@ async function main() {
   assertExactMatrix(matrix, { defects, regressions });
   const caught = defects.filter((check) => check.exit_code === 0).length;
   const regressionFailures = regressions.filter((check) => check.exit_code === 1).length;
+  const seatRecords = Array.isArray(raw.seats) ? raw.seats : [];
+  const sumTelemetry = (read: (seat: any) => unknown): number | null => {
+    const values = seatRecords.map(read);
+    return values.length && values.every(v => typeof v === 'number' && Number.isFinite(v) && v >= 0)
+      ? (values as number[]).reduce((a,b) => a+b,0) : null;
+  };
   // A remaining plant is a shipped defect; a broken baseline-preserving case is
   // another shipped regression. They are deliberately additive, not a boolean.
   const output = {
     schemaVersion: 1,
-    outcome: scored.reason,
+    outcome: raw.outcome,
+    scored_outcome: scored.reason,
     execution_outcome: raw.outcome,
     protocol_failure: raw.outcome !== 'completed',
     run_config: raw.run_config ?? null,
@@ -205,13 +218,18 @@ async function main() {
       regressions_total: regressions.length,
     },
     checks: { defects, regressions },
-    usage: { cost_usd: raw.usage?.cost_usd ?? null },
+    usage: { cost_usd: raw.usage?.cost_usd ?? null,
+      coverage: raw.usage?.coverage ?? (raw.usage?.cost_usd === null ? 'none' : 'complete'),
+      thinking_tokens: sumTelemetry(s => s?.thinking_tokens),
+      output_tokens: sumTelemetry(s => s?.usage?.output_tokens) },
     turns: raw.turns?.summed ?? null,
     wall_clock_ms: raw.wall_clock?.duration_ms ?? null,
     seats: Array.isArray(raw.seats) ? raw.seats.length : null,
     seat_records: raw.seats ?? null,
     effort,
-    provenance: { oracle_adapter_sha256_before: adapterHashBefore, oracle_adapter_sha256_after: adapterHashAfter, raw_result: "result.json", anti_tamper_unchanged: true, task_sha256_before_score: taskHashBeforeScore, task_sha256_after_score: taskHashAfterScore, runner },
+    provenance: { run_fingerprint: gridFingerprint, native_run_fingerprint: raw.run_fingerprint ?? null,
+      manifest_sha256: manifestHash, runner_sha256: wrapperHash, expected_task_sha256: launchTaskHash,
+      oracle_adapter_sha256_before: adapterHashBefore, oracle_adapter_sha256_after: adapterHashAfter, raw_result: "result.json", anti_tamper_unchanged: true, task_sha256_before_score: taskHashBeforeScore, task_sha256_after_score: taskHashAfterScore, runner },
   };
   writeFileSync(resolve(root, "build-result.json"), JSON.stringify(output, null, 2) + "\n");
   process.stdout.write(`${resolve(root, "build-result.json")}\n`);

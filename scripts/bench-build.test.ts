@@ -29,7 +29,7 @@ function seededTask(checks: unknown, manifest = { defect_ids: ["rounding", "canc
 }
 
 function invoke(task: string, root: string, fake: string, arm = "A") {
-  return spawnSync(process.execPath, ["--import", "tsx", runner, task, arm, "7", "--root", root, "--runner", fake], { encoding: "utf8", timeout: 20_000 });
+  return spawnSync(process.execPath, ["--import", "tsx", runner, task, arm, "7", "--root", root, "--runner", fake, "--run-fingerprint", "b".repeat(64)], { encoding: "utf8", timeout: 20_000 });
 }
 
 const valid = {
@@ -37,7 +37,7 @@ const valid = {
   anti_tamper: { unchanged: true }, usage: { cost_usd: 0.4 },
   effort: { level: "medium", settings_path: ".claude/settings.json", settings_sha256: "a".repeat(64), own_git_root: true },
   turns: { summed: 17 }, wall_clock: { duration_ms: 1234 },
-  seats: [{ name: "single" }],
+  seats: [{ name: "single", usage:{output_tokens:7}, thinking_tokens:3 }],
 };
 
 const checks = [
@@ -62,6 +62,12 @@ test("reduces named defect and regression checks to independent caught/shipped c
     assert.equal(out.provenance.anti_tamper_unchanged, true);
     assert.equal(out.usage.cost_usd, 0.4);
     assert.equal(out.turns, 17);
+    assert.equal(out.outcome,'completed');
+    assert.equal(out.provenance.run_fingerprint,'b'.repeat(64));
+    assert.match(out.provenance.manifest_sha256,/^[a-f0-9]{64}$/);
+    assert.match(out.provenance.runner_sha256,/^[a-f0-9]{64}$/);
+    assert.equal(out.usage.output_tokens,7);
+    assert.equal(out.usage.thinking_tokens,3);
   } finally { rmSync(task, { recursive: true, force: true }); rmSync(root, { recursive: true, force: true }); rmSync(fake.dir, { recursive: true, force: true }); }
 });
 
@@ -125,6 +131,7 @@ test("uses four seats for a room unless the pre-registered invocation overrides 
 
 for (const [name, extra] of Object.entries({
   timeout: {outcome:'timeout'},
+  budget: {outcome:'budget_exhausted'},
   invalidRoom: {outcome:'invalid_room'},
   unknownCost: {usage:{cost_usd:null}},
 })) test(`retains measured caught/shipped for ${name} without inventing cost or protocol success`, () => {

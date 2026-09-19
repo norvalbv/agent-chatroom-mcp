@@ -22,7 +22,7 @@ The recommended order is therefore:
 3. compare A, unchanged-candidate K, noninteractive refinement R, and interactive C contemporaneously; and
 4. attribute value to live interaction only if C beats R, not merely K.
 
-Falsifier: if R matches or beats C at matched spend, the paper must attribute any gain over K to representation and reuse, not chatroom mechanics.
+Falsifier: if R matches or beats C at matched spend, the experiment detects no incremental value from live chatroom interaction over summary-mediated refinement; it cannot attribute a gain over K specifically to chatroom mechanics.
 
 ## If a new task family is still required
 

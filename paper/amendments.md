@@ -577,3 +577,31 @@ per-run cost made the planned 80 runs exceed their cap; it is being rerun at red
 inside the new regime, and its result is reported separately from the morning grids. (4) Future protocol
 rule: record output tokens per run as a regime indicator, pin a dated model snapshot where the provider
 allows it, and never pool runs across a detected regime boundary.
+
+## 2026-09-19 — Same-window control result, split by thinking regime; the regime flipped back (maintainer session)
+
+`bench/results/rq1-window-control`: `stamp-interpreter`, seeds 201 to 212, arm C then arm K (k=10) per seed,
+24 runs, 35.27 USD, no infrastructure failure. The long-thinking regime ended at about 18:03:30 UTC (it
+began between 14:30 and 15:45 UTC): arm C seed 209 finished 18:03:10 to 18:03:22 UTC at 13K to 21K output
+tokens per seat, and the paired arm K attempts finished 18:03:58 to 18:04:33 UTC at 1.5K to 1.9K each. The
+control therefore straddles the boundary and is reported by regime, classified by output tokens per
+arm-K attempt (above or below 4K), never pooled.
+
+| regime | seeds | single attempts correct | arm C | arm K | arm C cost/run | arm K cost/group |
+|---|---|---|---|---|---|---|
+| long thinking (about 10K output tokens per attempt) | 201 to 208 | 78/80 = 0.975 | 8/8 | 8/8 | 1.40 to 2.21 USD | 1.72 to 2.29 USD |
+| short thinking (about 1.7K) | 209 to 212 | 19/40 = 0.475 | 3/4 | 3/4 | 0.47 to 0.66 USD (seed 209: 2.05, long) | 0.58 USD |
+
+What it shows. (1) With the long thinking budget a single attempt is at ceiling on this task (0.975), so
+neither aggregation method has anything to add, and one long-thinking attempt (about 0.20 USD, 0.975)
+dominates both the short-regime chatroom (about 0.60 USD, 43/44 across all short-regime runs) and
+short-regime voting (about 0.57 USD) on cost per correct answer. Thinking budget is a larger lever on this
+family than either deliberation or sampling. (2) In the short regime the chatroom failed for the first time
+on this family (seed 212): all three seats converged on the known shared wrong answer (one token, 101 for
+100), which is the printf failure mode appearing on the interpreter family. With arm C at 43/44 and arm K
+at 39/44 over all short-regime interpreter-1 runs the two remain statistically indistinguishable; the
+control's n=4 per arm in the short regime cannot and does not test the time-window question it was designed
+for, because the regime changed under it twice. (3) The task's admission band (single-agent 0.3 to 0.7)
+holds only in the short regime; task difficulty is a property of (task, model, thinking budget), and the
+suite must be re-admitted per regime. A project-level `effortLevel` setting moves output tokens (measured
+during the long regime: low about 5K, medium about 7K, high about 11K) and is the only local handle found.

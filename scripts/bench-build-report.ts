@@ -145,6 +145,19 @@ export function buildBuildReport(resultsDir: string, tasks: string[], arms: Arm[
       byCell.set(key, raw);
     }
   }
+  const runnerVersions = new Set<string>();
+  for (const raw of byCell.values()) if (typeof raw.provenance?.runner_sha256 === "string") runnerVersions.add(raw.provenance.runner_sha256);
+  if (runnerVersions.size > 1) throw new Error("Mixed runner versions in one build report");
+  for (const task of tasks) {
+    const versions = new Set<string>();
+    for (const arm of arms) for (const seed of seeds) {
+      const raw = byCell.get(`${task}\0${arm}\0${seed}`);
+      const manifest = raw?.provenance?.manifest_sha256;
+      const taskHash = raw?.provenance?.task_sha256_before_score;
+      if (typeof manifest === "string" && typeof taskHash === "string") versions.add(`${manifest}\0${taskHash}`);
+    }
+    if (versions.size > 1) throw new Error(`Mixed task/manifest versions for ${task}`);
+  }
   const rows: BuildReportRow[] = [];
   for (const task of tasks) for (const arm of arms) for (const seed of seeds) {
     const raw = byCell.get(`${task}\0${arm}\0${seed}`);

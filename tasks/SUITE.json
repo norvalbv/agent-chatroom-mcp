@@ -352,7 +352,7 @@
       "family": "planted-defect-ledger",
       "arm_a": null,
       "admission": "docs/build-suite-admission.md",
-      "note": "v2 arm-A screen: 44 of 45 planted defects caught in 5 runs (4 of 5 task_pass); at ceiling, see docs/build-suite-admission.md"
+      "note": "v2 arm-A screen: 45 of 45 planted defects caught in 5 runs once the S12 oracle fault is corrected (as run 44 of 45); three-arm pilot also 9 of 9 in every arm; at ceiling, see docs/build-suite-admission.md"
     },
     {
       "id": "build-ledger-s2",

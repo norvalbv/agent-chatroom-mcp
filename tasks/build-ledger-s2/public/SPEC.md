@@ -12,7 +12,7 @@ The `Warehouse` class in `src/warehouse.ts` tracks stock in lots. All quantities
 - Placing an order reserves every line from lots that can be used that day, earliest expiry first; lots with the same expiry are used in
   order of their id. A line may be filled from several lots.
 - Reserving is all or nothing per order. If any line cannot be filled in full, the order becomes backordered and holds no stock at all.
-- A cancelled order is never reserved again, even though nothing removes it from the backorder queue.
+- A cancelled order is never reserved again.
 - Backordered orders are retried whenever stock becomes available again: on a receipt, on a cancellation and on a return.
   They are retried in the order they were placed.
 

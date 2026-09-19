@@ -1,0 +1,326 @@
+{
+ "task": "build-ledger-s1",
+ "runner": "6-astra-4 9c37a6b bench-build.ts (native runner), effort medium, cap 0.60 (A,B) / 1.60 (C), 4 seats",
+ "rows": [
+  {
+   "run": "A101",
+   "arm": "A",
+   "seed": 101,
+   "outcome": "task_pass",
+   "caught": 9,
+   "total": 9,
+   "shipped": 0,
+   "reg_fail": 0,
+   "missed": [],
+   "regf": [],
+   "cost": 0.0546,
+   "thinking": [
+    452
+   ],
+   "wall_s": 21,
+   "seats": 1,
+   "turns": 5,
+   "cap": 0.6,
+   "effort": "medium",
+   "as_run": {
+    "caught": 9,
+    "missed": [],
+    "outcome": "task_pass"
+   },
+   "rescored_after_S12_oracle_fix": {
+    "caught": 9,
+    "missed": [],
+    "regression_failed": [],
+    "shipped": 0
+   }
+  },
+  {
+   "run": "A102",
+   "arm": "A",
+   "seed": 102,
+   "outcome": "task_pass",
+   "caught": 9,
+   "total": 9,
+   "shipped": 0,
+   "reg_fail": 0,
+   "missed": [],
+   "regf": [],
+   "cost": 0.0574,
+   "thinking": [
+    347
+   ],
+   "wall_s": 21,
+   "seats": 1,
+   "turns": 5,
+   "cap": 0.6,
+   "effort": "medium",
+   "as_run": {
+    "caught": 9,
+    "missed": [],
+    "outcome": "task_pass"
+   },
+   "rescored_after_S12_oracle_fix": {
+    "caught": 9,
+    "missed": [],
+    "regression_failed": [],
+    "shipped": 0
+   }
+  },
+  {
+   "run": "A103",
+   "arm": "A",
+   "seed": 103,
+   "outcome": "task_pass",
+   "caught": 9,
+   "total": 9,
+   "shipped": 0,
+   "reg_fail": 0,
+   "missed": [],
+   "regf": [],
+   "cost": 0.0564,
+   "thinking": [
+    420
+   ],
+   "wall_s": 22,
+   "seats": 1,
+   "turns": 5,
+   "cap": 0.6,
+   "effort": "medium",
+   "as_run": {
+    "caught": 9,
+    "missed": [],
+    "outcome": "task_pass"
+   },
+   "rescored_after_S12_oracle_fix": {
+    "caught": 9,
+    "missed": [],
+    "regression_failed": [],
+    "shipped": 0
+   }
+  },
+  {
+   "run": "B101",
+   "arm": "B",
+   "seed": 101,
+   "outcome": "task_fail",
+   "caught": 8,
+   "total": 9,
+   "shipped": 1,
+   "reg_fail": 0,
+   "missed": [
+    "defect/S12"
+   ],
+   "regf": [],
+   "cost": 0.133,
+   "thinking": [
+    529,
+    916,
+    73
+   ],
+   "wall_s": 65,
+   "seats": 3,
+   "turns": 12,
+   "cap": 0.6,
+   "effort": "medium",
+   "as_run": {
+    "caught": 8,
+    "missed": [
+     "defect/S12"
+    ],
+    "outcome": "task_fail"
+   },
+   "rescored_after_S12_oracle_fix": {
+    "caught": 9,
+    "missed": [],
+    "regression_failed": [],
+    "shipped": 0
+   }
+  },
+  {
+   "run": "B102",
+   "arm": "B",
+   "seed": 102,
+   "outcome": "task_pass",
+   "caught": 9,
+   "total": 9,
+   "shipped": 0,
+   "reg_fail": 0,
+   "missed": [],
+   "regf": [],
+   "cost": 0.115,
+   "thinking": [
+    424,
+    867,
+    53
+   ],
+   "wall_s": 51,
+   "seats": 3,
+   "turns": 10,
+   "cap": 0.6,
+   "effort": "medium",
+   "as_run": {
+    "caught": 9,
+    "missed": [],
+    "outcome": "task_pass"
+   },
+   "rescored_after_S12_oracle_fix": {
+    "caught": 9,
+    "missed": [],
+    "regression_failed": [],
+    "shipped": 0
+   }
+  },
+  {
+   "run": "B103",
+   "arm": "B",
+   "seed": 103,
+   "outcome": "task_pass",
+   "caught": 9,
+   "total": 9,
+   "shipped": 0,
+   "reg_fail": 0,
+   "missed": [],
+   "regf": [],
+   "cost": 0.1582,
+   "thinking": [
+    433,
+    856,
+    635
+   ],
+   "wall_s": 71,
+   "seats": 3,
+   "turns": 12,
+   "cap": 0.6,
+   "effort": "medium",
+   "as_run": {
+    "caught": 9,
+    "missed": [],
+    "outcome": "task_pass"
+   },
+   "rescored_after_S12_oracle_fix": {
+    "caught": 9,
+    "missed": [],
+    "regression_failed": [],
+    "shipped": 0
+   }
+  },
+  {
+   "run": "C102",
+   "arm": "C",
+   "seed": 102,
+   "outcome": "task_fail",
+   "caught": 8,
+   "total": 9,
+   "shipped": 1,
+   "reg_fail": 0,
+   "missed": [
+    "defect/S12"
+   ],
+   "regf": [],
+   "cost": 0.7159,
+   "thinking": [
+    1154,
+    573,
+    881,
+    949
+   ],
+   "wall_s": 76,
+   "seats": 4,
+   "turns": 74,
+   "cap": 1.6,
+   "effort": "medium",
+   "as_run": {
+    "caught": 8,
+    "missed": [
+     "defect/S12"
+    ],
+    "outcome": "task_fail"
+   },
+   "rescored_after_S12_oracle_fix": {
+    "caught": 9,
+    "missed": [],
+    "regression_failed": [],
+    "shipped": 0
+   }
+  },
+  {
+   "run": "C103",
+   "arm": "C",
+   "seed": 103,
+   "outcome": "task_fail",
+   "caught": 8,
+   "total": 9,
+   "shipped": 1,
+   "reg_fail": 0,
+   "missed": [
+    "defect/S12"
+   ],
+   "regf": [],
+   "cost": 0.95,
+   "thinking": [
+    946,
+    1132,
+    1180,
+    597
+   ],
+   "wall_s": 85,
+   "seats": 4,
+   "turns": 94,
+   "cap": 1.6,
+   "effort": "medium",
+   "as_run": {
+    "caught": 8,
+    "missed": [
+     "defect/S12"
+    ],
+    "outcome": "task_fail"
+   },
+   "rescored_after_S12_oracle_fix": {
+    "caught": 9,
+    "missed": [],
+    "regression_failed": [],
+    "shipped": 0
+   }
+  },
+  {
+   "run": "C104",
+   "arm": "C",
+   "seed": 104,
+   "outcome": "task_pass",
+   "caught": 9,
+   "total": 9,
+   "shipped": 0,
+   "reg_fail": 0,
+   "missed": [],
+   "regf": [],
+   "cost": 0.8355,
+   "thinking": [
+    549,
+    847,
+    973,
+    1000
+   ],
+   "wall_s": 74,
+   "seats": 4,
+   "turns": 78,
+   "cap": 1.6,
+   "effort": "medium",
+   "as_run": {
+    "caught": 9,
+    "missed": [],
+    "outcome": "task_pass"
+   },
+   "rescored_after_S12_oracle_fix": {
+    "caught": 9,
+    "missed": [],
+    "regression_failed": [],
+    "shipped": 0
+   }
+  }
+ ],
+ "infra_failure": {
+  "run": "C101",
+  "cap": 0.6,
+  "note": "four seats hit their 0.15 USD per-seat share while still reading; outcome infrastructure_error, spend about 0.6 USD, no score"
+ }
+}

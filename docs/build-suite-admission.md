@@ -5,6 +5,14 @@ Room `swarm-191133-4hqx-room`, author sonnet-1. Generators: `scripts/bench-build
 (broken passes its public tests and catches 0; correct scores 1; fixing exactly one planted defect flips exactly its own check and no
 regression; no comment in `src/`).
 
+## Status of these screens
+
+Every row except the three-arm pilot (effort pinned to medium by the native runner) ran at the default effort with `bench-rq1.ts`, so
+they are **exploratory ceiling rejections**, not admission runs at a pinned effort; the 'low' row and the medium pilot both show the
+same ceiling on the ledger task. Task directories were regenerated in place while designing (build-rules-s1 changed draw, ledger v0 to
+v2); the runs recorded above name the commit they ran on, and older versions are recoverable from git history only. Labels 1 to 5, 11 to
+15 are consumed development labels; the pilot used 101 to 104.
+
 ## Method
 
 Arm A, one Claude Sonnet seat, `node --import tsx scripts/bench-rq1.ts <task> A <n> --root <dir> --max-budget-usd 2..3`, five runs launched
@@ -17,7 +25,7 @@ Raw per-run records (rescored with the committed oracle, cost, tokens, turns, wa
 billing, rules and ledger-v2 runs: `docs/build-suite-admission-runs.json`. The build-rules-s1 row was rerun on the committed instance
 (55781dc) because a later generator edit changed which rules are drawn; the earlier 10 of 10 x5 on the previous draw is kept as
 history. The first ledger runs (v0, v1) and the low-effort run were scored with the oracle of their day and are recorded only here.
-Total real-model spend for admission: about 4.0 USD.
+Total real-model spend for admission: about 4.0 USD; with the three-arm pilot below about 7.7 USD.
 
 ## Results (all at ceiling; none admitted)
 
@@ -27,7 +35,7 @@ Total real-model spend for admission: about 4.0 USD.
 | build-rules-s1 | 24 rules over 8 modules, ~120 lines, one SPEC row per rule, 2 public tests encode the bug | 10 | 5 | 10 x5 | 5 of 5 | 0.057 to 0.072 | 28 to 33 |
 | build-rules-l3 | 120 rules over 20 modules, ~570 lines, 12 KB SPEC | 36 | 3 | 36, 35, 36 | 2 of 3 | 0.136 to 0.156 | 39 to 53 |
 | build-ledger-s1 | stateful warehouse, 6 modules, prose-only SPEC, missing rollback, leaked counter, wrong retry trigger, zombie backorder | 9 | 5 | 9 x5 | 5 of 5 | 0.053 to 0.072 | 28 to 35 |
-| build-ledger-s1 v2 (same-shape defects, S13 multi-lot return and S14 duplicate-sku lines planted, child-process oracle; seeds 11 to 15) | as above, 9 of 14 catalogued plants | 9 | 5 | 9,9,8,9,9 (S12 missed once) | 4 of 5 | 0.056 to 0.060 | 25 to 28 |
+| build-ledger-s1 v2 (same-shape defects, S13 multi-lot return and S14 duplicate-sku lines planted, child-process oracle; seeds 11 to 15) | as above, 9 of 14 catalogued plants | 9 | 5 | 9,9,8,9,9 as run (the 8 is the S12 oracle fault below; 45 of 45 after the fix) | 4 of 5 as run | 0.056 to 0.060 | 25 to 28 |
 | build-ledger-s1 at `effortLevel: low` (settings file in the workspace) | same | 9 | 5 | 9 x5 | 5 of 5 | 0.050 to 0.059 | 27 to 28 |
 
 Per-defect catch tables: every planted defect was caught n of n on billing, rules-s1 and ledger-s1. On rules-l3 one defect
@@ -62,3 +70,42 @@ shape as correct code.
 4. Public tests hidden from the arm so it has no green run to lean on.
 
 Nothing here is tuned on confirmatory seeds; no confirmatory run was made.
+
+## Three-arm pilot on build-ledger-s1 (seeds 101 to 104, effort medium, 6-astra-4's runner at 9c37a6b)
+
+Command shape: `node --import tsx scripts/bench-build.ts tasks/build-ledger-s1 <A|B|C> <seed> --root <dir> --max-budget-usd <M> --expected-task-sha256 <hash of the task tree>`
+(arm C also `--port <free>`). Raw rows: `docs/build-suite-pilot.json`. Caps: M = 0.60 for A and B, M = 1.60 for C (a room of four
+seats at M/4 each).
+
+| arm | seed | caught / 9 (as run) | caught / 9 (S12 oracle fixed) | shipped | regressions failed | cost USD | thinking tokens per seat | wall s | turns |
+|---|---|---|---|---|---|---|---|---|---|
+| A | 101 | 9 | 9 | 0 | 0 | 0.055 | 452 | 21 | 5 |
+| A | 102 | 9 | 9 | 0 | 0 | 0.057 | 347 | 21 | 5 |
+| A | 103 | 9 | 9 | 0 | 0 | 0.056 | 420 | 22 | 5 |
+| B | 101 | 8 (S12) | 9 | 0 | 0 | 0.133 | 529, 916, 73 | 65 | 12 |
+| B | 102 | 9 | 9 | 0 | 0 | 0.115 | 424, 867, 53 | 51 | 10 |
+| B | 103 | 9 | 9 | 0 | 0 | 0.158 | 433, 856, 635 | 71 | 12 |
+| C (4 seats) | 102 | 8 (S12) | 9 | 0 | 0 | 0.716 | 1154, 573, 881, 949 | 76 | 74 |
+| C (4 seats) | 103 | 8 (S12) | 9 | 0 | 0 | 0.950 | 946, 1132, 1180, 597 | 85 | 94 |
+| C (4 seats) | 104 | 9 | 9 | 0 | 0 | 0.836 | 549, 847, 973, 1000 | 74 | 78 |
+| C (4 seats) | 101 at M = 0.60 | infrastructure_error, no score | | | | about 0.60 | | | |
+
+Findings.
+
+1. **All three arms are at ceiling.** With the oracle as it should be (below) every scored run caught 9 of 9 with no regression. The
+   suite does not separate A, B and C on defects caught or shipped on this task; the only separation is cost: A 0.056, B 0.135,
+   C 0.83 USD per run (about 2.4 times and 15 times A), and wall time 21, 62 and 78 s.
+2. **A second oracle fault, found by this pilot.** The S12 check compared the backorder queue, and the SPEC sentence (then "nothing removes
+   it from the queue") contradicted the reference, which drops a cancelled order from the queue during a retry. Three runs
+   fixed S12 correctly by skipping a cancelled order and were marked as misses (B101, C102, C103); arm A run 13 in the ledger v2 screen
+   was the same fault, so ledger v2 arm A is really 45 of 45. The scenario now projects only orders, lots and availability, and the
+   sentence is "a cancelled order is never reserved again". All rows above were rescored with the fixed oracle; the as-run column keeps
+   the original numbers. Lesson for the confirmatory run: every scenario must project only the fields its defect touches, and each
+   arm-reported "miss" gets its diff read before it is counted (docs above, evidence/fable-review F5).
+3. **A cap of 0.60 starves a four-seat room.** At M/4 = 0.15 USD each, all four seats stopped on their own budget while still reading
+   the workspace (C101, infrastructure_error). A room needs about M = 1.6 for the same task a single agent finishes for 0.056, so an
+   "equal cap" that lets the room finish is 25 to 30 times what one agent needs. This is the non-binding-cap problem of
+   evidence/fable-review P3 made concrete; a binding equal-cap comparison needs either a harder task or a spend-matched single-agent
+   baseline (one agent re-invoked until it has spent what the paired room spent).
+4. Thinking tokens are reported per seat (about 350 to 450 for A, up to 1200 in a room seat), always under 1.2K: the short-regime
+   caveat of paper/amendments.md applies, effort medium does not make these tasks think long.

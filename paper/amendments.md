@@ -427,6 +427,13 @@ runs are never reused.
   the agreement signal, not the self-report, carries the information. Prereg prediction 2 says agreement selection will not help on printf; that
   is a prediction to be tested, not a design goal, and the selector was not tuned on any printf result.
 
+**Holm family (fixed before any run).** The arm-K comparisons are 3 tasks x {K vs C, K vs A} = 6 two-sided Fisher exact tests (`fisherExactTest`
+directly, never the z-approximation switch), Holm-Bonferroni with m = 6 fixed even if some cells are missing or the grid is partial. Raw
+and adjusted p are both reported. Consequence stated up front: at m = 6 the best possible stamp-interpreter K vs A (40/40 vs 33/40, raw
+p = 0.0117) adjusts to about 0.070, so prediction 1's K-vs-A clause ("is significant") cannot be met on that task at alpha 0.05 after
+adjustment; the paper reports the raw and adjusted values and does not shrink the family afterwards to rescue it. The oracle ceiling is not
+a test and is outside the family.
+
 **Reported for arm K** (in `bench/results/rq1-arm-k`, never in `rq1-suite`): K vs C and K vs A by Fisher exact, Holm-Bonferroni across the
 arm-K comparisons; cost per correct answer; the vote distribution per group; the oracle ceiling (any of the k attempts passes), labelled as
 NOT an arm, a bound on what selection could reach.

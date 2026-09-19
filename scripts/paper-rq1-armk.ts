@@ -72,7 +72,10 @@ export interface KTaskRow {
   cost_per_correct: number | "unknown" | "undefined";
   mean_cost_known: number | null;
   cost_unknown_groups: number;
+  /** Mean arm-C cost over the same seeds that have a known-cost K group (paired by seed). */
   mean_cost_c: number | null;
+  /** Mean of (K cost - C cost) over those paired seeds. */
+  paired_cost_diff: number | null;
   mean_cost_a: number | null;
   /** Attempts with no answer (killed by cap/deadline or unparsable): null votes, still in the group and its cost. */
   null_attempts: number;
@@ -112,7 +115,7 @@ export function buildArmKTable(suiteRuns: RunResult[], allGroups: KGroup[], opts
     const kPass = gs.filter((g) => g.passed).length;
     const row: KTaskRow = {
       task, k_groups: gs.length, k_pass: kPass, k_fail: gs.length - kPass, comparisons: [],
-      cost_per_correct: "undefined", mean_cost_known: null, cost_unknown_groups: 0, mean_cost_c: null, mean_cost_a: null,
+      cost_per_correct: "undefined", mean_cost_known: null, cost_unknown_groups: 0, mean_cost_c: null, paired_cost_diff: null, mean_cost_a: null,
       null_attempts: 0, matched_cost_ok: null, vote_distribution: {}, ceiling: { any_pass: 0, groups: gs.length, rate: null },
     };
     // src/result.ts stores lost usage as cost_usd 0 with coverage none/partial, so a number alone is not "known".
@@ -129,15 +132,20 @@ export function buildArmKTable(suiteRuns: RunResult[], allGroups: KGroup[], opts
     row.ceiling.rate = gs.length ? row.ceiling.any_pass / gs.length : null;
     for (const vs of ["C", "A"] as const) {
       const cell = computeCell(task, vs, suiteRuns.filter((r) => r.task_id === task && r.arm === vs));
-      if (vs === "C") row.mean_cost_c = cell.n ? mean(suiteRuns.filter((r) => r.task_id === task && r.arm === "C").map((r) => r.usage.cost_usd)) : null;
-      else row.mean_cost_a = cell.n ? mean(suiteRuns.filter((r) => r.task_id === task && r.arm === "A").map((r) => r.usage.cost_usd)) : null;
+      if (vs === "C") {
+        const cBySeed = new Map(suiteRuns.filter((r) => r.task_id === task && r.arm === "C" && r.usage.coverage === "complete").map((r) => [r.seed, r.usage.cost_usd]));
+        const paired = known.filter((g) => cBySeed.has(g.seed));
+        row.mean_cost_c = mean(paired.map((g) => cBySeed.get(g.seed) as number));
+        row.paired_cost_diff = mean(paired.map((g) => (g.usage.cost_usd as number) - (cBySeed.get(g.seed) as number)));
+      } else row.mean_cost_a = cell.n ? mean(suiteRuns.filter((r) => r.task_id === task && r.arm === "A").map((r) => r.usage.cost_usd)) : null;
       if (!cell.n) continue;
       const f = fisherExactTest(kPass, gs.length - kPass, cell.task_pass, cell.task_fail);
       const cmp: KComparison = { vs, k_pass: kPass, k_n: gs.length, other_pass: cell.task_pass, other_n: cell.task_pass + cell.task_fail, test: "fisher", p_value: f.p_value, p_holm: null, significant_holm_0_05: null };
       row.comparisons.push(cmp);
       pending.push({ row, cmp });
     }
-    if (row.cost_unknown_groups === 0 && row.mean_cost_known !== null && row.mean_cost_c !== null) row.matched_cost_ok = row.mean_cost_known <= row.mean_cost_c;
+    // Prereg: judged on realized mean spend per seed, so compare over paired seeds only; any unknown group makes it unknown.
+    if (row.cost_unknown_groups === 0 && row.paired_cost_diff !== null) row.matched_cost_ok = row.paired_cost_diff <= 0;
     rows.push(row);
   }
   const withP = pending.filter((x) => x.cmp.p_value !== null);
@@ -152,15 +160,15 @@ const fmt = (n: number | null, d = 4) => (n === null ? "n/a" : n.toFixed(d));
 
 export function renderArmKMarkdown(t: KTable): string {
   let md = "## Arm K (k independent single-agent attempts, oracle-free selection)\n\n";
-  md += `Holm-Bonferroni over a fixed family of 6 (3 tasks x {K vs C, K vs A}), two-sided Fisher, raw and adjusted p side by side; ceiling rows are outside the family.\n\n`;
+  md += `Holm-Bonferroni over a fixed family of 6 (3 tasks x {K vs C, K vs A}), two-sided unpaired Fisher on K groups vs all arm A/C runs of the task, raw and adjusted p side by side; ceiling rows are outside the family.\n\n`;
   md += "| task | groups | K pass | K vs | other pass/n | Fisher p | Holm p | significant (Holm, 0.05) |\n|---|---|---|---|---|---|---|---|\n";
   for (const r of t.tasks) for (const c of r.comparisons)
     md += `| ${r.task} | ${r.k_groups} | ${r.k_pass}/${r.k_groups} | ${c.vs} | ${c.other_pass}/${c.other_n} | ${fmt(c.p_value, 6)} | ${fmt(c.p_holm, 6)} | ${c.significant_holm_0_05 ?? "n/a"} |\n`;
   md += "\n### Cost (arm K cost is the sum over all k attempts, killed attempts included)\n\n";
-  md += "| task | mean K cost/seed (known) | groups with unknown cost | null votes | mean C cost | mean A cost | K <= C | K cost per correct |\n|---|---|---|---|---|---|---|---|\n";
+  md += "| task | mean K cost/seed (known) | groups with unknown cost | null votes | paired mean C cost | K-C paired diff | mean A cost (all seeds) | K <= C | K cost per correct |\n|---|---|---|---|---|---|---|---|---|\n";
   for (const r of t.tasks) {
     const cpc = typeof r.cost_per_correct === "number" ? `$${r.cost_per_correct.toFixed(4)}` : r.cost_per_correct;
-    md += `| ${r.task} | ${fmt(r.mean_cost_known)} | ${r.cost_unknown_groups} | ${r.null_attempts} | ${fmt(r.mean_cost_c)} | ${fmt(r.mean_cost_a)} | ${r.matched_cost_ok ?? "unknown"} | ${cpc} |\n`;
+    md += `| ${r.task} | ${fmt(r.mean_cost_known)} | ${r.cost_unknown_groups} | ${r.null_attempts} | ${fmt(r.mean_cost_c)} | ${fmt(r.paired_cost_diff)} | ${fmt(r.mean_cost_a)} | ${r.matched_cost_ok ?? "unknown"} | ${cpc} |\n`;
   }
   md += "\n### Vote distribution per group (sorted answer counts, e.g. 7-2-1 = seven attempts agree, two agree, one alone; none = no attempt answered)\n\n";
   for (const r of t.tasks) md += `- ${r.task}: ${Object.entries(r.vote_distribution).sort(([, a], [, b]) => b - a).map(([s, n]) => `${s} x${n}`).join(", ") || "n/a"}\n`;

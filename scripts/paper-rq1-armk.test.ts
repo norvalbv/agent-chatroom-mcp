@@ -88,3 +88,14 @@ test("Holm family stays fixed at 6 on partial data; pilot seeds excluded; lost a
   lost.attempts[1].cost_usd = null;
   assert.equal(buildArmKTable(runs, [lost], ALL).tasks[0].cost_unknown_groups, 1);
 });
+
+test("spend match is judged per seed over paired seeds, not against the whole-grid C mean", () => {
+  const runs: RunResult[] = [];
+  const groups: KGroup[] = [];
+  for (let s = 101; s <= 104; s++) { runs.push(base("t", "A", s, true, 0.05), base("t", "C", s, true, s === 101 ? 0.2 : 2)); }
+  groups.push(kGroup("t", 101, [true], true, 0.5, { good: 1 })); // only seed 101 run so far: K 0.5 > C 0.2 at that seed
+  const row = buildArmKTable(runs, groups).tasks[0];
+  assert.equal(row.mean_cost_c, 0.2);
+  assert.equal(row.paired_cost_diff, 0.3);
+  assert.equal(row.matched_cost_ok, false);
+});

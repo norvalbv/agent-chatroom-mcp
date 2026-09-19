@@ -34,6 +34,22 @@ function kGroup(task: string, seed: number, k: number, passed: boolean, votes: R
   };
 }
 
+/** Like kGroup, but with an explicit per-attempt (answer, passed) list, to exercise correct_votes/
+ * top_wrong_votes/tie against a real 4-4 tie or a 6-4 majority the way the real arm-K harness would
+ * write it, rather than the uniform-answer shortcut kGroup() uses. */
+function kGroupDetailed(task: string, seed: number, attemptSpecs: { answer: string; passed: boolean }[], winnerAttempt: number, cost = 0.5) {
+  const k = attemptSpecs.length;
+  const votes: Record<string, number> = {};
+  for (const a of attemptSpecs) votes[a.answer] = (votes[a.answer] ?? 0) + 1;
+  const passed = attemptSpecs[winnerAttempt - 1].passed;
+  return {
+    schemaVersion: 2 as const, task_id: task, arm: "K", seed, model: "claude-sonnet-5", outcome: passed ? "task_pass" : "task_fail",
+    passed, reason: passed ? "task_pass" : "task_fail", k, usage: { cost_usd: cost, coverage: "complete" as const },
+    selection: { rule: "plurality", winner_attempt: winnerAttempt, votes },
+    attempts: attemptSpecs.map((a, i) => ({ index: i + 1, answer: a.answer, passed: a.passed, outcome: a.passed ? "task_pass" : "task_fail", cost_usd: cost / k })),
+  };
+}
+
 function fixtureDirs() {
   const suite = mkdtempSync(join(tmpdir(), "fig-data-suite-"));
   const armK = mkdtempSync(join(tmpdir(), "fig-data-armk-"));
@@ -112,6 +128,43 @@ test("buildFigData: pass_rates includes arm K from the arm-K table, cost_vs_accu
   }
 });
 
+test("buildFigData: armk_group_votes reports correct_votes/top_wrong_votes/tie/winner_attempt (verifier/k-failures shapes)", () => {
+  const { suite, armK } = fixtureDirs();
+  try {
+    // 6-4 wrong-plurality group (mirrors real seed 113/122): the selector's winner is the wrong,
+    // 6-vote cluster; not a tie.
+    writeArmK(armK, [
+      kGroupDetailed("stamp-interpreter", 113, [
+        ...Array.from({ length: 6 }, () => ({ answer: "wrong", passed: false })),
+        ...Array.from({ length: 4 }, () => ({ answer: "right", passed: true })),
+      ], 1),
+      // 4-4 tie group (mirrors real seed 116/120): two 4-vote clusters plus two singleton wrong
+      // variants; the tie-break sends the winner to attempt 1, which is wrong.
+      kGroupDetailed("stamp-interpreter", 116, [
+        { answer: "wrong-a", passed: false }, { answer: "wrong-a", passed: false }, { answer: "wrong-a", passed: false }, { answer: "wrong-a", passed: false },
+        { answer: "right", passed: true }, { answer: "right", passed: true }, { answer: "right", passed: true }, { answer: "right", passed: true },
+        { answer: "wrong-b", passed: false }, { answer: "wrong-c", passed: false },
+      ], 1),
+    ]);
+    const data = buildFigData(suite, armK);
+    const g113 = data.armk_group_votes.find((g) => g.seed === 113)!;
+    assert.equal(g113.passed, false);
+    assert.equal(g113.correct_votes, 4);
+    assert.equal(g113.top_wrong_votes, 6);
+    assert.equal(g113.tie, false);
+    assert.equal(g113.winner_attempt, 1);
+
+    const g116 = data.armk_group_votes.find((g) => g.seed === 116)!;
+    assert.equal(g116.passed, false);
+    assert.equal(g116.correct_votes, 4);
+    assert.equal(g116.top_wrong_votes, 4); // largest wrong cluster, not total wrong count (which is 6)
+    assert.equal(g116.tie, true); // two clusters (wrong-a, right) both at the max count of 4
+  } finally {
+    rmSync(suite, { recursive: true, force: true });
+    rmSync(armK, { recursive: true, force: true });
+  }
+});
+
 test("buildFigData: cost_per_correct carries mean_output_tokens and date_range for A/C and for K (regime-shift indicator, paper/amendments.md 2026-09-19)", () => {
   const { suite, armK } = fixtureDirs();
   try {
@@ -173,6 +226,22 @@ test("end-to-end CLI: writes fig-data.json matching the real committed rq1-suite
     assert.equal(find("bench-printf-format", "C").pass, 6);
     assert.equal(find("bench-printf-format", "K").pass, 7);
     assert.equal(data.warnings.length, 0);
+    // verifier/k-failures: exactly 4 stamp-interpreter groups fail, 2 as a 6-4 wrong-plurality (113, 122),
+    // 2 as a 4-4 tie broken toward the wrong cluster (116, 120) — verified independently against the
+    // real bench/results/rq1-arm-k/stamp-interpreter-K-seed{113,116,120,122}/result.json selection.votes.
+    const failing = data.armk_group_votes.filter((g: any) => g.task === "stamp-interpreter" && !g.passed);
+    assert.equal(failing.length, 4);
+    const bySeed = Object.fromEntries(failing.map((g: any) => [g.seed, g]));
+    for (const seed of [113, 122]) {
+      assert.equal(bySeed[seed].correct_votes, 4, `seed ${seed} correct_votes`);
+      assert.equal(bySeed[seed].top_wrong_votes, 6, `seed ${seed} top_wrong_votes`);
+      assert.equal(bySeed[seed].tie, false, `seed ${seed} tie`);
+    }
+    for (const seed of [116, 120]) {
+      assert.equal(bySeed[seed].correct_votes, 4, `seed ${seed} correct_votes`);
+      assert.equal(bySeed[seed].top_wrong_votes, 4, `seed ${seed} top_wrong_votes`);
+      assert.equal(bySeed[seed].tie, true, `seed ${seed} tie`);
+    }
   } finally {
     rmSync(outDir, { recursive: true, force: true });
   }

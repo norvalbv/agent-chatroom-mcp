@@ -247,840 +247,1320 @@
       "seed": 101,
       "k": 7,
       "winner_share": 0.5714285714285714,
-      "passed": false
+      "passed": false,
+      "correct_votes": 3,
+      "top_wrong_votes": null,
+      "tie": false,
+      "winner_attempt": 1
     },
     {
       "task": "bench-printf-format",
       "seed": 102,
       "k": 7,
       "winner_share": 0.7142857142857143,
-      "passed": false
+      "passed": false,
+      "correct_votes": 2,
+      "top_wrong_votes": null,
+      "tie": false,
+      "winner_attempt": 1
     },
     {
       "task": "bench-printf-format",
       "seed": 103,
       "k": 7,
       "winner_share": 0.5714285714285714,
-      "passed": false
+      "passed": false,
+      "correct_votes": 3,
+      "top_wrong_votes": null,
+      "tie": false,
+      "winner_attempt": 1
     },
     {
       "task": "bench-printf-format",
       "seed": 104,
       "k": 7,
       "winner_share": 0.7142857142857143,
-      "passed": true
+      "passed": true,
+      "correct_votes": 5,
+      "top_wrong_votes": null,
+      "tie": false,
+      "winner_attempt": 1
     },
     {
       "task": "bench-printf-format",
       "seed": 105,
       "k": 7,
       "winner_share": 0.5714285714285714,
-      "passed": false
+      "passed": false,
+      "correct_votes": 3,
+      "top_wrong_votes": null,
+      "tie": false,
+      "winner_attempt": 1
     },
     {
       "task": "bench-printf-format",
       "seed": 106,
       "k": 7,
       "winner_share": 0.7142857142857143,
-      "passed": false
+      "passed": false,
+      "correct_votes": 2,
+      "top_wrong_votes": null,
+      "tie": false,
+      "winner_attempt": 1
     },
     {
       "task": "bench-printf-format",
       "seed": 107,
       "k": 7,
       "winner_share": 0.5714285714285714,
-      "passed": true
+      "passed": true,
+      "correct_votes": 4,
+      "top_wrong_votes": null,
+      "tie": false,
+      "winner_attempt": 1
     },
     {
       "task": "bench-printf-format",
       "seed": 108,
       "k": 7,
       "winner_share": 0.8571428571428571,
-      "passed": false
+      "passed": false,
+      "correct_votes": 1,
+      "top_wrong_votes": null,
+      "tie": false,
+      "winner_attempt": 1
     },
     {
       "task": "bench-printf-format",
       "seed": 109,
       "k": 7,
       "winner_share": 0.5714285714285714,
-      "passed": true
+      "passed": true,
+      "correct_votes": 4,
+      "top_wrong_votes": null,
+      "tie": false,
+      "winner_attempt": 2
     },
     {
       "task": "bench-printf-format",
       "seed": 110,
       "k": 7,
       "winner_share": 0.5714285714285714,
-      "passed": false
+      "passed": false,
+      "correct_votes": 3,
+      "top_wrong_votes": null,
+      "tie": false,
+      "winner_attempt": 1
     },
     {
       "task": "bench-printf-format",
       "seed": 111,
       "k": 7,
       "winner_share": 0.7142857142857143,
-      "passed": false
+      "passed": false,
+      "correct_votes": 2,
+      "top_wrong_votes": null,
+      "tie": false,
+      "winner_attempt": 1
     },
     {
       "task": "bench-printf-format",
       "seed": 112,
       "k": 7,
       "winner_share": 0.5714285714285714,
-      "passed": true
+      "passed": true,
+      "correct_votes": 4,
+      "top_wrong_votes": null,
+      "tie": false,
+      "winner_attempt": 1
     },
     {
       "task": "bench-printf-format",
       "seed": 113,
       "k": 7,
       "winner_share": 0.5714285714285714,
-      "passed": true
+      "passed": true,
+      "correct_votes": 4,
+      "top_wrong_votes": null,
+      "tie": false,
+      "winner_attempt": 2
     },
     {
       "task": "bench-printf-format",
       "seed": 114,
       "k": 7,
       "winner_share": 1,
-      "passed": false
+      "passed": false,
+      "correct_votes": 0,
+      "top_wrong_votes": null,
+      "tie": false,
+      "winner_attempt": 1
     },
     {
       "task": "bench-printf-format",
       "seed": 115,
       "k": 7,
       "winner_share": 0.8571428571428571,
-      "passed": false
+      "passed": false,
+      "correct_votes": 1,
+      "top_wrong_votes": null,
+      "tie": false,
+      "winner_attempt": 1
     },
     {
       "task": "bench-printf-format",
       "seed": 116,
       "k": 7,
       "winner_share": 0.8571428571428571,
-      "passed": false
+      "passed": false,
+      "correct_votes": 1,
+      "top_wrong_votes": null,
+      "tie": false,
+      "winner_attempt": 1
     },
     {
       "task": "bench-printf-format",
       "seed": 117,
       "k": 7,
       "winner_share": 1,
-      "passed": false
+      "passed": false,
+      "correct_votes": 0,
+      "top_wrong_votes": null,
+      "tie": false,
+      "winner_attempt": 1
     },
     {
       "task": "bench-printf-format",
       "seed": 118,
       "k": 7,
       "winner_share": 0.5714285714285714,
-      "passed": false
+      "passed": false,
+      "correct_votes": 3,
+      "top_wrong_votes": null,
+      "tie": false,
+      "winner_attempt": 1
     },
     {
       "task": "bench-printf-format",
       "seed": 119,
       "k": 7,
       "winner_share": 0.8571428571428571,
-      "passed": false
+      "passed": false,
+      "correct_votes": 1,
+      "top_wrong_votes": null,
+      "tie": false,
+      "winner_attempt": 2
     },
     {
       "task": "bench-printf-format",
       "seed": 120,
       "k": 7,
       "winner_share": 0.5714285714285714,
-      "passed": false
+      "passed": false,
+      "correct_votes": 3,
+      "top_wrong_votes": null,
+      "tie": false,
+      "winner_attempt": 3
     },
     {
       "task": "bench-printf-format",
       "seed": 121,
       "k": 7,
       "winner_share": 0.8571428571428571,
-      "passed": false
+      "passed": false,
+      "correct_votes": 1,
+      "top_wrong_votes": null,
+      "tie": false,
+      "winner_attempt": 1
     },
     {
       "task": "bench-printf-format",
       "seed": 122,
       "k": 7,
       "winner_share": 0.7142857142857143,
-      "passed": false
+      "passed": false,
+      "correct_votes": 2,
+      "top_wrong_votes": null,
+      "tie": false,
+      "winner_attempt": 2
     },
     {
       "task": "bench-printf-format",
       "seed": 123,
       "k": 7,
       "winner_share": 0.7142857142857143,
-      "passed": true
+      "passed": true,
+      "correct_votes": 5,
+      "top_wrong_votes": null,
+      "tie": false,
+      "winner_attempt": 1
     },
     {
       "task": "bench-printf-format",
       "seed": 124,
       "k": 7,
       "winner_share": 0.5714285714285714,
-      "passed": false
+      "passed": false,
+      "correct_votes": 3,
+      "top_wrong_votes": null,
+      "tie": false,
+      "winner_attempt": 1
     },
     {
       "task": "bench-printf-format",
       "seed": 125,
       "k": 7,
       "winner_share": 0.8571428571428571,
-      "passed": false
+      "passed": false,
+      "correct_votes": 1,
+      "top_wrong_votes": null,
+      "tie": false,
+      "winner_attempt": 1
     },
     {
       "task": "bench-printf-format",
       "seed": 126,
       "k": 7,
       "winner_share": 0.7142857142857143,
-      "passed": false
+      "passed": false,
+      "correct_votes": 2,
+      "top_wrong_votes": null,
+      "tie": false,
+      "winner_attempt": 1
     },
     {
       "task": "bench-printf-format",
       "seed": 127,
       "k": 7,
       "winner_share": 0.5714285714285714,
-      "passed": false
+      "passed": false,
+      "correct_votes": 3,
+      "top_wrong_votes": null,
+      "tie": false,
+      "winner_attempt": 1
     },
     {
       "task": "bench-printf-format",
       "seed": 128,
       "k": 7,
       "winner_share": 0.8571428571428571,
-      "passed": false
+      "passed": false,
+      "correct_votes": 1,
+      "top_wrong_votes": null,
+      "tie": false,
+      "winner_attempt": 1
     },
     {
       "task": "bench-printf-format",
       "seed": 129,
       "k": 7,
       "winner_share": 0.5714285714285714,
-      "passed": true
+      "passed": true,
+      "correct_votes": 4,
+      "top_wrong_votes": null,
+      "tie": false,
+      "winner_attempt": 1
     },
     {
       "task": "bench-printf-format",
       "seed": 130,
       "k": 7,
       "winner_share": 0.7142857142857143,
-      "passed": false
+      "passed": false,
+      "correct_votes": 2,
+      "top_wrong_votes": null,
+      "tie": false,
+      "winner_attempt": 1
     },
     {
       "task": "bench-printf-format",
       "seed": 131,
       "k": 7,
       "winner_share": 0.7142857142857143,
-      "passed": false
+      "passed": false,
+      "correct_votes": 2,
+      "top_wrong_votes": null,
+      "tie": false,
+      "winner_attempt": 1
     },
     {
       "task": "bench-printf-format",
       "seed": 132,
       "k": 7,
       "winner_share": 1,
-      "passed": false
+      "passed": false,
+      "correct_votes": 0,
+      "top_wrong_votes": null,
+      "tie": false,
+      "winner_attempt": 1
     },
     {
       "task": "bench-printf-format",
       "seed": 133,
       "k": 7,
       "winner_share": 0.8571428571428571,
-      "passed": false
+      "passed": false,
+      "correct_votes": 1,
+      "top_wrong_votes": null,
+      "tie": false,
+      "winner_attempt": 2
     },
     {
       "task": "bench-printf-format",
       "seed": 134,
       "k": 7,
       "winner_share": 0.8571428571428571,
-      "passed": false
+      "passed": false,
+      "correct_votes": 1,
+      "top_wrong_votes": null,
+      "tie": false,
+      "winner_attempt": 2
     },
     {
       "task": "bench-printf-format",
       "seed": 135,
       "k": 7,
       "winner_share": 0.7142857142857143,
-      "passed": false
+      "passed": false,
+      "correct_votes": 2,
+      "top_wrong_votes": null,
+      "tie": false,
+      "winner_attempt": 1
     },
     {
       "task": "bench-printf-format",
       "seed": 136,
       "k": 7,
       "winner_share": 0.7142857142857143,
-      "passed": false
+      "passed": false,
+      "correct_votes": 2,
+      "top_wrong_votes": null,
+      "tie": false,
+      "winner_attempt": 1
     },
     {
       "task": "bench-printf-format",
       "seed": 137,
       "k": 7,
       "winner_share": 0.7142857142857143,
-      "passed": false
+      "passed": false,
+      "correct_votes": 2,
+      "top_wrong_votes": null,
+      "tie": false,
+      "winner_attempt": 2
     },
     {
       "task": "bench-printf-format",
       "seed": 138,
       "k": 7,
       "winner_share": 0.7142857142857143,
-      "passed": false
+      "passed": false,
+      "correct_votes": 2,
+      "top_wrong_votes": null,
+      "tie": false,
+      "winner_attempt": 1
     },
     {
       "task": "bench-printf-format",
       "seed": 139,
       "k": 7,
       "winner_share": 0.8571428571428571,
-      "passed": false
+      "passed": false,
+      "correct_votes": 1,
+      "top_wrong_votes": null,
+      "tie": false,
+      "winner_attempt": 1
     },
     {
       "task": "bench-printf-format",
       "seed": 140,
       "k": 7,
       "winner_share": 0.8571428571428571,
-      "passed": false
+      "passed": false,
+      "correct_votes": 1,
+      "top_wrong_votes": null,
+      "tie": false,
+      "winner_attempt": 1
     },
     {
       "task": "stamp-2",
       "seed": 101,
       "k": 8,
       "winner_share": 1,
-      "passed": true
+      "passed": true,
+      "correct_votes": 8,
+      "top_wrong_votes": 0,
+      "tie": false,
+      "winner_attempt": 1
     },
     {
       "task": "stamp-2",
       "seed": 102,
       "k": 8,
       "winner_share": 0.875,
-      "passed": true
+      "passed": true,
+      "correct_votes": 7,
+      "top_wrong_votes": 1,
+      "tie": false,
+      "winner_attempt": 1
     },
     {
       "task": "stamp-2",
       "seed": 103,
       "k": 8,
       "winner_share": 1,
-      "passed": true
+      "passed": true,
+      "correct_votes": 8,
+      "top_wrong_votes": 0,
+      "tie": false,
+      "winner_attempt": 1
     },
     {
       "task": "stamp-2",
       "seed": 104,
       "k": 8,
       "winner_share": 0.625,
-      "passed": false
+      "passed": false,
+      "correct_votes": 3,
+      "top_wrong_votes": 5,
+      "tie": false,
+      "winner_attempt": 1
     },
     {
       "task": "stamp-2",
       "seed": 105,
       "k": 8,
       "winner_share": 0.75,
-      "passed": true
+      "passed": true,
+      "correct_votes": 6,
+      "top_wrong_votes": 2,
+      "tie": false,
+      "winner_attempt": 2
     },
     {
       "task": "stamp-2",
       "seed": 106,
       "k": 8,
       "winner_share": 0.75,
-      "passed": true
+      "passed": true,
+      "correct_votes": 6,
+      "top_wrong_votes": 2,
+      "tie": false,
+      "winner_attempt": 2
     },
     {
       "task": "stamp-2",
       "seed": 107,
       "k": 8,
       "winner_share": 0.875,
-      "passed": true
+      "passed": true,
+      "correct_votes": 7,
+      "top_wrong_votes": 1,
+      "tie": false,
+      "winner_attempt": 1
     },
     {
       "task": "stamp-2",
       "seed": 108,
       "k": 8,
       "winner_share": 0.875,
-      "passed": true
+      "passed": true,
+      "correct_votes": 7,
+      "top_wrong_votes": 1,
+      "tie": false,
+      "winner_attempt": 1
     },
     {
       "task": "stamp-2",
       "seed": 109,
       "k": 8,
       "winner_share": 0.625,
-      "passed": true
+      "passed": true,
+      "correct_votes": 5,
+      "top_wrong_votes": 3,
+      "tie": false,
+      "winner_attempt": 1
     },
     {
       "task": "stamp-2",
       "seed": 110,
       "k": 8,
       "winner_share": 0.5,
-      "passed": true
+      "passed": true,
+      "correct_votes": 4,
+      "top_wrong_votes": 4,
+      "tie": true,
+      "winner_attempt": 1
     },
     {
       "task": "stamp-2",
       "seed": 111,
       "k": 8,
       "winner_share": 0.75,
-      "passed": true
+      "passed": true,
+      "correct_votes": 6,
+      "top_wrong_votes": 2,
+      "tie": false,
+      "winner_attempt": 1
     },
     {
       "task": "stamp-2",
       "seed": 112,
       "k": 8,
       "winner_share": 1,
-      "passed": true
+      "passed": true,
+      "correct_votes": 8,
+      "top_wrong_votes": 0,
+      "tie": false,
+      "winner_attempt": 1
     },
     {
       "task": "stamp-2",
       "seed": 113,
       "k": 8,
       "winner_share": 0.625,
-      "passed": true
+      "passed": true,
+      "correct_votes": 5,
+      "top_wrong_votes": 3,
+      "tie": false,
+      "winner_attempt": 1
     },
     {
       "task": "stamp-2",
       "seed": 114,
       "k": 8,
       "winner_share": 0.75,
-      "passed": true
+      "passed": true,
+      "correct_votes": 6,
+      "top_wrong_votes": 1,
+      "tie": false,
+      "winner_attempt": 1
     },
     {
       "task": "stamp-2",
       "seed": 115,
       "k": 8,
       "winner_share": 0.875,
-      "passed": true
+      "passed": true,
+      "correct_votes": 7,
+      "top_wrong_votes": 1,
+      "tie": false,
+      "winner_attempt": 1
     },
     {
       "task": "stamp-2",
       "seed": 116,
       "k": 8,
       "winner_share": 0.75,
-      "passed": true
+      "passed": true,
+      "correct_votes": 6,
+      "top_wrong_votes": 1,
+      "tie": false,
+      "winner_attempt": 1
     },
     {
       "task": "stamp-2",
       "seed": 117,
       "k": 8,
       "winner_share": 1,
-      "passed": true
+      "passed": true,
+      "correct_votes": 8,
+      "top_wrong_votes": 0,
+      "tie": false,
+      "winner_attempt": 1
     },
     {
       "task": "stamp-2",
       "seed": 118,
       "k": 8,
       "winner_share": 0.875,
-      "passed": true
+      "passed": true,
+      "correct_votes": 7,
+      "top_wrong_votes": 1,
+      "tie": false,
+      "winner_attempt": 1
     },
     {
       "task": "stamp-2",
       "seed": 119,
       "k": 8,
       "winner_share": 0.75,
-      "passed": true
+      "passed": true,
+      "correct_votes": 6,
+      "top_wrong_votes": 2,
+      "tie": false,
+      "winner_attempt": 1
     },
     {
       "task": "stamp-2",
       "seed": 120,
       "k": 8,
       "winner_share": 0.875,
-      "passed": true
+      "passed": true,
+      "correct_votes": 7,
+      "top_wrong_votes": 1,
+      "tie": false,
+      "winner_attempt": 2
     },
     {
       "task": "stamp-2",
       "seed": 121,
       "k": 8,
       "winner_share": 0.75,
-      "passed": true
+      "passed": true,
+      "correct_votes": 6,
+      "top_wrong_votes": 2,
+      "tie": false,
+      "winner_attempt": 2
     },
     {
       "task": "stamp-2",
       "seed": 122,
       "k": 8,
       "winner_share": 0.75,
-      "passed": true
+      "passed": true,
+      "correct_votes": 6,
+      "top_wrong_votes": 2,
+      "tie": false,
+      "winner_attempt": 1
     },
     {
       "task": "stamp-2",
       "seed": 123,
       "k": 8,
       "winner_share": 0.875,
-      "passed": true
+      "passed": true,
+      "correct_votes": 7,
+      "top_wrong_votes": 1,
+      "tie": false,
+      "winner_attempt": 2
     },
     {
       "task": "stamp-2",
       "seed": 124,
       "k": 8,
       "winner_share": 0.625,
-      "passed": true
+      "passed": true,
+      "correct_votes": 5,
+      "top_wrong_votes": 2,
+      "tie": false,
+      "winner_attempt": 1
     },
     {
       "task": "stamp-2",
       "seed": 125,
       "k": 8,
       "winner_share": 1,
-      "passed": true
+      "passed": true,
+      "correct_votes": 8,
+      "top_wrong_votes": 0,
+      "tie": false,
+      "winner_attempt": 1
     },
     {
       "task": "stamp-2",
       "seed": 126,
       "k": 8,
       "winner_share": 1,
-      "passed": true
+      "passed": true,
+      "correct_votes": 8,
+      "top_wrong_votes": 0,
+      "tie": false,
+      "winner_attempt": 1
     },
     {
       "task": "stamp-2",
       "seed": 127,
       "k": 8,
       "winner_share": 0.625,
-      "passed": true
+      "passed": true,
+      "correct_votes": 5,
+      "top_wrong_votes": 2,
+      "tie": false,
+      "winner_attempt": 1
     },
     {
       "task": "stamp-2",
       "seed": 128,
       "k": 8,
       "winner_share": 0.75,
-      "passed": true
+      "passed": true,
+      "correct_votes": 6,
+      "top_wrong_votes": 2,
+      "tie": false,
+      "winner_attempt": 1
     },
     {
       "task": "stamp-2",
       "seed": 129,
       "k": 8,
       "winner_share": 0.875,
-      "passed": true
+      "passed": true,
+      "correct_votes": 7,
+      "top_wrong_votes": 1,
+      "tie": false,
+      "winner_attempt": 1
     },
     {
       "task": "stamp-2",
       "seed": 130,
       "k": 8,
       "winner_share": 1,
-      "passed": true
+      "passed": true,
+      "correct_votes": 8,
+      "top_wrong_votes": 0,
+      "tie": false,
+      "winner_attempt": 1
     },
     {
       "task": "stamp-2",
       "seed": 131,
       "k": 8,
       "winner_share": 0.875,
-      "passed": true
+      "passed": true,
+      "correct_votes": 7,
+      "top_wrong_votes": 1,
+      "tie": false,
+      "winner_attempt": 2
     },
     {
       "task": "stamp-2",
       "seed": 132,
       "k": 8,
       "winner_share": 1,
-      "passed": true
+      "passed": true,
+      "correct_votes": 8,
+      "top_wrong_votes": 0,
+      "tie": false,
+      "winner_attempt": 1
     },
     {
       "task": "stamp-2",
       "seed": 133,
       "k": 8,
       "winner_share": 1,
-      "passed": true
+      "passed": true,
+      "correct_votes": 8,
+      "top_wrong_votes": 0,
+      "tie": false,
+      "winner_attempt": 1
     },
     {
       "task": "stamp-2",
       "seed": 134,
       "k": 8,
       "winner_share": 0.875,
-      "passed": true
+      "passed": true,
+      "correct_votes": 7,
+      "top_wrong_votes": 1,
+      "tie": false,
+      "winner_attempt": 1
     },
     {
       "task": "stamp-2",
       "seed": 135,
       "k": 8,
       "winner_share": 0.875,
-      "passed": true
+      "passed": true,
+      "correct_votes": 7,
+      "top_wrong_votes": 1,
+      "tie": false,
+      "winner_attempt": 1
     },
     {
       "task": "stamp-2",
       "seed": 136,
       "k": 8,
       "winner_share": 1,
-      "passed": true
+      "passed": true,
+      "correct_votes": 8,
+      "top_wrong_votes": 0,
+      "tie": false,
+      "winner_attempt": 1
     },
     {
       "task": "stamp-2",
       "seed": 137,
       "k": 8,
       "winner_share": 0.75,
-      "passed": true
+      "passed": true,
+      "correct_votes": 6,
+      "top_wrong_votes": 2,
+      "tie": false,
+      "winner_attempt": 1
     },
     {
       "task": "stamp-2",
       "seed": 138,
       "k": 8,
       "winner_share": 0.75,
-      "passed": true
+      "passed": true,
+      "correct_votes": 6,
+      "top_wrong_votes": 2,
+      "tie": false,
+      "winner_attempt": 1
     },
     {
       "task": "stamp-2",
       "seed": 139,
       "k": 8,
       "winner_share": 0.75,
-      "passed": true
+      "passed": true,
+      "correct_votes": 6,
+      "top_wrong_votes": 2,
+      "tie": false,
+      "winner_attempt": 1
     },
     {
       "task": "stamp-2",
       "seed": 140,
       "k": 8,
       "winner_share": 0.625,
-      "passed": true
+      "passed": true,
+      "correct_votes": 5,
+      "top_wrong_votes": 2,
+      "tie": false,
+      "winner_attempt": 1
     },
     {
       "task": "stamp-interpreter",
       "seed": 101,
       "k": 10,
       "winner_share": 0.7,
-      "passed": true
+      "passed": true,
+      "correct_votes": 7,
+      "top_wrong_votes": 3,
+      "tie": false,
+      "winner_attempt": 1
     },
     {
       "task": "stamp-interpreter",
       "seed": 102,
       "k": 10,
       "winner_share": 0.6,
-      "passed": true
+      "passed": true,
+      "correct_votes": 6,
+      "top_wrong_votes": 4,
+      "tie": false,
+      "winner_attempt": 2
     },
     {
       "task": "stamp-interpreter",
       "seed": 103,
       "k": 10,
       "winner_share": 0.6,
-      "passed": true
+      "passed": true,
+      "correct_votes": 6,
+      "top_wrong_votes": 3,
+      "tie": false,
+      "winner_attempt": 1
     },
     {
       "task": "stamp-interpreter",
       "seed": 104,
       "k": 10,
       "winner_share": 0.5,
-      "passed": true
+      "passed": true,
+      "correct_votes": 5,
+      "top_wrong_votes": 4,
+      "tie": false,
+      "winner_attempt": 1
     },
     {
       "task": "stamp-interpreter",
       "seed": 105,
       "k": 10,
       "winner_share": 0.6,
-      "passed": true
+      "passed": true,
+      "correct_votes": 6,
+      "top_wrong_votes": 4,
+      "tie": false,
+      "winner_attempt": 2
     },
     {
       "task": "stamp-interpreter",
       "seed": 106,
       "k": 10,
       "winner_share": 0.5,
-      "passed": true
+      "passed": true,
+      "correct_votes": 5,
+      "top_wrong_votes": 3,
+      "tie": false,
+      "winner_attempt": 2
     },
     {
       "task": "stamp-interpreter",
       "seed": 107,
       "k": 10,
       "winner_share": 0.7,
-      "passed": true
+      "passed": true,
+      "correct_votes": 7,
+      "top_wrong_votes": 2,
+      "tie": false,
+      "winner_attempt": 1
     },
     {
       "task": "stamp-interpreter",
       "seed": 108,
       "k": 10,
       "winner_share": 0.7,
-      "passed": true
+      "passed": true,
+      "correct_votes": 7,
+      "top_wrong_votes": 2,
+      "tie": false,
+      "winner_attempt": 2
     },
     {
       "task": "stamp-interpreter",
       "seed": 109,
       "k": 10,
       "winner_share": 0.4,
-      "passed": true
+      "passed": true,
+      "correct_votes": 4,
+      "top_wrong_votes": 4,
+      "tie": true,
+      "winner_attempt": 1
     },
     {
       "task": "stamp-interpreter",
       "seed": 110,
       "k": 10,
       "winner_share": 0.5,
-      "passed": true
+      "passed": true,
+      "correct_votes": 5,
+      "top_wrong_votes": 3,
+      "tie": false,
+      "winner_attempt": 6
     },
     {
       "task": "stamp-interpreter",
       "seed": 111,
       "k": 10,
       "winner_share": 0.8,
-      "passed": true
+      "passed": true,
+      "correct_votes": 8,
+      "top_wrong_votes": 2,
+      "tie": false,
+      "winner_attempt": 1
     },
     {
       "task": "stamp-interpreter",
       "seed": 112,
       "k": 10,
       "winner_share": 0.9,
-      "passed": true
+      "passed": true,
+      "correct_votes": 9,
+      "top_wrong_votes": 1,
+      "tie": false,
+      "winner_attempt": 1
     },
     {
       "task": "stamp-interpreter",
       "seed": 113,
       "k": 10,
       "winner_share": 0.6,
-      "passed": false
+      "passed": false,
+      "correct_votes": 4,
+      "top_wrong_votes": 6,
+      "tie": false,
+      "winner_attempt": 1
     },
     {
       "task": "stamp-interpreter",
       "seed": 114,
       "k": 10,
       "winner_share": 0.7,
-      "passed": true
+      "passed": true,
+      "correct_votes": 7,
+      "top_wrong_votes": 3,
+      "tie": false,
+      "winner_attempt": 1
     },
     {
       "task": "stamp-interpreter",
       "seed": 115,
       "k": 10,
       "winner_share": 0.6,
-      "passed": true
+      "passed": true,
+      "correct_votes": 6,
+      "top_wrong_votes": 2,
+      "tie": false,
+      "winner_attempt": 2
     },
     {
       "task": "stamp-interpreter",
       "seed": 116,
       "k": 10,
       "winner_share": 0.4,
-      "passed": false
+      "passed": false,
+      "correct_votes": 4,
+      "top_wrong_votes": 4,
+      "tie": true,
+      "winner_attempt": 1
     },
     {
       "task": "stamp-interpreter",
       "seed": 117,
       "k": 10,
       "winner_share": 0.6,
-      "passed": true
+      "passed": true,
+      "correct_votes": 6,
+      "top_wrong_votes": 2,
+      "tie": false,
+      "winner_attempt": 1
     },
     {
       "task": "stamp-interpreter",
       "seed": 118,
       "k": 10,
       "winner_share": 0.5,
-      "passed": true
+      "passed": true,
+      "correct_votes": 5,
+      "top_wrong_votes": 3,
+      "tie": false,
+      "winner_attempt": 3
     },
     {
       "task": "stamp-interpreter",
       "seed": 119,
       "k": 10,
       "winner_share": 0.6,
-      "passed": true
+      "passed": true,
+      "correct_votes": 6,
+      "top_wrong_votes": 3,
+      "tie": false,
+      "winner_attempt": 1
     },
     {
       "task": "stamp-interpreter",
       "seed": 120,
       "k": 10,
       "winner_share": 0.4,
-      "passed": false
+      "passed": false,
+      "correct_votes": 4,
+      "top_wrong_votes": 4,
+      "tie": true,
+      "winner_attempt": 1
     },
     {
       "task": "stamp-interpreter",
       "seed": 121,
       "k": 10,
       "winner_share": 0.8,
-      "passed": true
+      "passed": true,
+      "correct_votes": 8,
+      "top_wrong_votes": 1,
+      "tie": false,
+      "winner_attempt": 1
     },
     {
       "task": "stamp-interpreter",
       "seed": 122,
       "k": 10,
       "winner_share": 0.6,
-      "passed": false
+      "passed": false,
+      "correct_votes": 4,
+      "top_wrong_votes": 6,
+      "tie": false,
+      "winner_attempt": 1
     },
     {
       "task": "stamp-interpreter",
       "seed": 123,
       "k": 10,
       "winner_share": 0.9,
-      "passed": true
+      "passed": true,
+      "correct_votes": 9,
+      "top_wrong_votes": 1,
+      "tie": false,
+      "winner_attempt": 1
     },
     {
       "task": "stamp-interpreter",
       "seed": 124,
       "k": 10,
       "winner_share": 0.9,
-      "passed": true
+      "passed": true,
+      "correct_votes": 9,
+      "top_wrong_votes": 1,
+      "tie": false,
+      "winner_attempt": 2
     },
     {
       "task": "stamp-interpreter",
       "seed": 125,
       "k": 10,
       "winner_share": 1,
-      "passed": true
+      "passed": true,
+      "correct_votes": 10,
+      "top_wrong_votes": 0,
+      "tie": false,
+      "winner_attempt": 1
     },
     {
       "task": "stamp-interpreter",
       "seed": 126,
       "k": 10,
       "winner_share": 0.6,
-      "passed": true
+      "passed": true,
+      "correct_votes": 6,
+      "top_wrong_votes": 4,
+      "tie": false,
+      "winner_attempt": 2
     },
     {
       "task": "stamp-interpreter",
       "seed": 127,
       "k": 10,
       "winner_share": 0.5,
-      "passed": true
+      "passed": true,
+      "correct_votes": 5,
+      "top_wrong_votes": 5,
+      "tie": true,
+      "winner_attempt": 1
     },
     {
       "task": "stamp-interpreter",
       "seed": 128,
       "k": 10,
       "winner_share": 0.5,
-      "passed": true
+      "passed": true,
+      "correct_votes": 5,
+      "top_wrong_votes": 2,
+      "tie": false,
+      "winner_attempt": 2
     },
     {
       "task": "stamp-interpreter",
       "seed": 129,
       "k": 10,
       "winner_share": 0.7,
-      "passed": true
+      "passed": true,
+      "correct_votes": 7,
+      "top_wrong_votes": 3,
+      "tie": false,
+      "winner_attempt": 1
     },
     {
       "task": "stamp-interpreter",
       "seed": 130,
       "k": 10,
       "winner_share": 1,
-      "passed": true
+      "passed": true,
+      "correct_votes": 10,
+      "top_wrong_votes": 0,
+      "tie": false,
+      "winner_attempt": 1
     },
     {
       "task": "stamp-interpreter",
       "seed": 131,
       "k": 10,
       "winner_share": 0.7,
-      "passed": true
+      "passed": true,
+      "correct_votes": 7,
+      "top_wrong_votes": 2,
+      "tie": false,
+      "winner_attempt": 2
     },
     {
       "task": "stamp-interpreter",
       "seed": 132,
       "k": 10,
       "winner_share": 0.5,
-      "passed": true
+      "passed": true,
+      "correct_votes": 5,
+      "top_wrong_votes": 4,
+      "tie": false,
+      "winner_attempt": 1
     },
     {
       "task": "stamp-interpreter",
       "seed": 133,
       "k": 10,
       "winner_share": 1,
-      "passed": true
+      "passed": true,
+      "correct_votes": 10,
+      "top_wrong_votes": 0,
+      "tie": false,
+      "winner_attempt": 1
     },
     {
       "task": "stamp-interpreter",
       "seed": 134,
       "k": 10,
       "winner_share": 0.6,
-      "passed": true
+      "passed": true,
+      "correct_votes": 6,
+      "top_wrong_votes": 4,
+      "tie": false,
+      "winner_attempt": 2
     },
     {
       "task": "stamp-interpreter",
       "seed": 135,
       "k": 10,
       "winner_share": 1,
-      "passed": true
+      "passed": true,
+      "correct_votes": 10,
+      "top_wrong_votes": 0,
+      "tie": false,
+      "winner_attempt": 1
     },
     {
       "task": "stamp-interpreter",
       "seed": 136,
       "k": 10,
       "winner_share": 0.9,
-      "passed": true
+      "passed": true,
+      "correct_votes": 9,
+      "top_wrong_votes": 1,
+      "tie": false,
+      "winner_attempt": 1
     },
     {
       "task": "stamp-interpreter",
       "seed": 137,
       "k": 10,
       "winner_share": 0.9,
-      "passed": true
+      "passed": true,
+      "correct_votes": 9,
+      "top_wrong_votes": 1,
+      "tie": false,
+      "winner_attempt": 1
     },
     {
       "task": "stamp-interpreter",
       "seed": 138,
       "k": 10,
       "winner_share": 0.9,
-      "passed": true
+      "passed": true,
+      "correct_votes": 9,
+      "top_wrong_votes": 1,
+      "tie": false,
+      "winner_attempt": 1
     },
     {
       "task": "stamp-interpreter",
       "seed": 139,
       "k": 10,
       "winner_share": 0.7,
-      "passed": true
+      "passed": true,
+      "correct_votes": 7,
+      "top_wrong_votes": 3,
+      "tie": false,
+      "winner_attempt": 3
     },
     {
       "task": "stamp-interpreter",
       "seed": 140,
       "k": 10,
       "winner_share": 0.8,
-      "passed": true
+      "passed": true,
+      "correct_votes": 8,
+      "top_wrong_votes": 2,
+      "tie": false,
+      "winner_attempt": 1
     }
   ],
   "cost_vs_accuracy": [

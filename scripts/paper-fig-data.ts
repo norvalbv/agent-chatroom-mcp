@@ -60,6 +60,17 @@ export interface GroupVotePoint {
   winner_share: number;
   /** Whether the group's selected (plurality/MBR-exec) attempt passed the oracle. */
   passed: boolean;
+  /** Attempts individually passing the oracle (regardless of which cluster the selector picked). */
+  correct_votes: number;
+  /** Size of the largest WRONG answer cluster, grouped by attempts[].answer text; null when attempts
+   * carry no answer text (code tasks with no answer.txt, e.g. bench-printf-format) — there is no
+   * text-clusterable "wrong answer" to report, only individual pass/fail. */
+  top_wrong_votes: number | null;
+  /** Whether the selector's winning cluster tied with another cluster of the same size (selection.votes
+   * has 2+ entries at the max count) — the tie-break (lowest sub-seed) then decides, not agreement size. */
+  tie: boolean;
+  /** 1-indexed attempt the selector actually submitted (selection.winner_attempt, passed through). */
+  winner_attempt: number | null;
 }
 
 export interface FigData {
@@ -178,7 +189,22 @@ export function buildFigData(suiteDir: string, armKDir: string): FigData {
     .map((g) => {
       const counts = Object.values(g.selection.votes);
       const winner = counts.length ? Math.max(...counts) : 0;
-      return { task: g.task_id, seed: g.seed, k: g.k, winner_share: g.k > 0 ? winner / g.k : 0, passed: g.passed };
+      const tie = counts.filter((c) => c === winner).length > 1;
+      const correct_votes = g.attempts.filter((a) => a.passed).length;
+      // Wrong-answer clusters, grouped by exact answer text (exact-answer tasks only; code-task attempts
+      // carry answer:null, so there is nothing text-clusterable to report — reported as null, not 0).
+      const wrongTexts = g.attempts.filter((a) => !a.passed && a.answer != null).map((a) => a.answer as string);
+      const anyAnswerText = g.attempts.some((a) => a.answer != null);
+      let top_wrong_votes: number | null = null;
+      if (anyAnswerText) {
+        const wrongCounts = new Map<string, number>();
+        for (const t of wrongTexts) wrongCounts.set(t, (wrongCounts.get(t) ?? 0) + 1);
+        top_wrong_votes = wrongCounts.size ? Math.max(...wrongCounts.values()) : 0;
+      }
+      return {
+        task: g.task_id, seed: g.seed, k: g.k, winner_share: g.k > 0 ? winner / g.k : 0, passed: g.passed,
+        correct_votes, top_wrong_votes, tie, winner_attempt: g.selection.winner_attempt,
+      };
     });
 
   const byTaskArmRate = new Map(pass_rates.map((p) => [`${p.task}|${p.arm}`, p.rate]));

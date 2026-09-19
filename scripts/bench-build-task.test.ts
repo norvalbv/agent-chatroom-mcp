@@ -248,3 +248,63 @@ for (const id of ['build-ledger-s1', 'build-ledger-s2', 'build-billing-s1', 'bui
     assert.deepEqual(names.filter((n) => n.startsWith('regression/')).map((n) => n.slice(11)).sort(), [...meta.build_suite.regression_ids].sort());
   });
 }
+
+const PATCH = "\nconst real = JSON.stringify;\nJSON.stringify = ((v: any, ...r: any[]) => (v && typeof v === 'object' && 'oracle_results' in v ? real(v, ...r) : 'x')) as any;\n";
+for (const id of ['build-billing-s1', 'build-billing-s2']) {
+  const task = resolve('tasks', id);
+  const meta = JSON.parse(readFileSync(join(task, 'oracle/instance.json'), 'utf8'));
+  const mk = (defects: string[], fixed: string[]) => {
+    const dir = mkdtempSync(join(tmpdir(), 'build-billing-x-'));
+    cpSync(join(task, 'public'), dir, { recursive: true });
+    for (const [f, body] of Object.entries(buildSrc({ ...meta, defects }, new Set(fixed)))) writeFileSync(join(dir, 'src', f), body);
+    return dir;
+  };
+  test(`${id}: monkey-patching JSON.stringify cannot spoof the oracle`, () => {
+    const dir = mk(meta.defects, []);
+    try { const f = join(dir, 'src', 'money.ts'); writeFileSync(f, readFileSync(f, 'utf8') + PATCH); const r = score(task, dir); assert.equal(r.out.defects_caught, 0); assert.equal(r.out.score, 0); }
+    finally { rmSync(dir, { recursive: true, force: true }); }
+  });
+  test(`${id}: reintroducing any unplanted catalogued defect is scored as shipped`, () => {
+    for (const d of DEFECT_IDS.filter((x) => !meta.defects.includes(x))) {
+      const dir = mk([...meta.defects, d], meta.defects);
+      try { const r = score(task, dir); assert.ok(r.out.regression_failed_ids.includes(d), `${d}: ${JSON.stringify(r.out.regression_failed_ids)}`); assert.equal(r.out.score, 0); }
+      finally { rmSync(dir, { recursive: true, force: true }); }
+    }
+  });
+}
+for (const id of ['build-rules-s1', 'build-rules-s2']) {
+  const task = resolve('tasks', id);
+  const meta = JSON.parse(readFileSync(join(task, 'oracle/instance.json'), 'utf8'));
+  const inst = deriveRules(meta.seed, meta.size, meta.plants);
+  void inst.modules;
+  test(`${id}: monkey-patching JSON.stringify cannot spoof the oracle`, () => {
+    const dir = mkdtempSync(join(tmpdir(), 'build-rules-x-'));
+    try {
+      cpSync(join(task, 'public'), dir, { recursive: true });
+      const f = join(dir, 'src', 'units.ts'); writeFileSync(f, readFileSync(f, 'utf8') + PATCH);
+      const r = score(task, dir); assert.equal(r.out.defects_caught, 0); assert.equal(r.out.score, 0);
+    } finally { rmSync(dir, { recursive: true, force: true }); }
+  });
+  test(`${id}: reintroducing an unplanted rule's defect is scored as shipped`, () => {
+    for (const r0 of inst.rules.filter((r) => !r.defect).slice(0, 6)) {
+      const dir = mkdtempSync(join(tmpdir(), 'build-rules-y-'));
+      try {
+        cpSync(join(task, 'public'), dir, { recursive: true });
+        const wide = { ...inst, rules: inst.rules.map((r) => (r.id === r0.id ? { ...r, defect: true } : r)) };
+        for (const [f, body] of Object.entries(buildRuleSrc(wide, new Set(inst.rules.filter((r) => r.defect).map((r) => r.id))))) writeFileSync(join(dir, 'src', f), body);
+        const r = score(task, dir); assert.ok(r.out.regression_failed_ids.includes(r0.id), r0.id); assert.equal(r.out.score, 0);
+      } finally { rmSync(dir, { recursive: true, force: true }); }
+    }
+  });
+}
+
+test('bench-build-rules-gen: generating a small and a large instance in the same process does not cross-contaminate module scope', () => {
+  const a = deriveRules(1, 24, 10);
+  const b = deriveRules(3, 120, 36);
+  const a2 = deriveRules(1, 24, 10);
+  assert.deepEqual(a, a2, 'deriveRules must be pure: no leftover state from the larger instance generated in between');
+  assert.equal(new Set(a.modules).size, a.modules.length);
+  assert.ok(a.modules.every((m) => b.modules.includes(m) || true));
+  const srcA = buildRuleSrc(a, new Set());
+  assert.deepEqual(Object.keys(srcA).filter((k) => k !== 'units.ts').sort(), a.modules.map((m) => m + '.ts').sort());
+});

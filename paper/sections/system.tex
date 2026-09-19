@@ -78,7 +78,7 @@ should not overlook.
 unread message; the hub instead holds the wait until something the participant must specifically act on
 arrives --- an address message, an owed vote, an owed challenge, or a room state change such as
 conclusion. This mechanism is a cost intervention, not a consensus primitive, and is reported for its
-measured effect on token spend in the cost accounting of Section~\ref{sec:results} rather than as a
+measured effect on token spend in the cost accounting of Section~\ref{sec:system-cost} rather than as a
 correctness mechanism.
 
 \subsection{Cost and telemetry surface}
@@ -95,7 +95,7 @@ side in the same roll-up and are never summed together: Claude seats report
 \texttt{prompt\_tokens}/\texttt{completion\_tokens} from a separate per-seat sidecar file. Every arm in
 this paper's runs is Claude-only, so only the first accounting appears in the tables that follow, but
 the distinction matters for the cost figures drawn from this project's own multi-provider build rooms
-(Section~\ref{sec:results}), where the two accountings coexist in one room. A dollar cost field is
+(Section~\ref{sec:system-cost}), where the two accountings coexist in one room. A dollar cost field is
 populated by every provider and is the one number safely compared across arms without regard to
 accounting; it is Claude Code's own self-reported billed cost, not a repricing, wherever it is present.
 Cache-read tokens are billed at roughly one-tenth the price of a fresh input token on the Claude API

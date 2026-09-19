@@ -58,6 +58,7 @@ export const offlineScripts = [
   'paper-fig-data.test.ts',
   'paper-fig-tables.test.ts',
   'paper-rq1-armk.test.ts',
+  'paper-rq1-confirmatory.test.ts',
   'paper-rq1-family.test.ts',
   'paper-rq1-table.test.ts',
   'paper-rq1-tex.test.ts',

@@ -87,6 +87,14 @@ only calibrated cells supply the primary tests.  Out-of-band and unknown cells
 are never silently dropped or pooled.  This pilot-informed amendment is made
 before any 501–520 cell.
 
+The A sentinel is measured after A runs; it is not an independently randomized
+or pre-run provider-state measurement.  Thus the calibrated-stratum comparisons
+condition on A's own realized thinking and are **descriptive conditional
+associations**, not causal arm effects or a clean provider-regime control.  A
+future causal conditional-effect design would need an independent pre-run
+sentinel.  The all-cell and every-stratum tables remain necessary context for
+these conditional tests.
+
 ## Pilot (not confirmatory)
 
 Seed 901, outside the confirmatory range, ran every arm on each task.  All costs
@@ -170,6 +178,8 @@ cannot establish or falsify equality; an adjusted significant K/C difference is
 reported as contrary directional evidence, while a non-significant result stays
 inconclusive.  The printf no-aggregation prediction is contradicted when any of
 B, K, or C has a higher pass rate than A with adjusted `p < .05`.
+All such calibrated-stratum prediction scores are conditional associations under
+the A sentinel, not causal falsifications of an arm mechanism.
 
 The maintainer's predictions, recorded verbatim, are:
 

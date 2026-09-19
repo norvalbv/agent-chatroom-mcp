@@ -516,11 +516,7 @@ async function main() {
     wall_clock: { started_at: startedAt.toISOString(), completed_at: completedAt.toISOString(), duration_ms: completedAt.getTime() - startedAt.getTime() },
     budget: armArg === "A" ? { max_budget_usd: maxBudgetUsd ? Number(maxBudgetUsd) : null, deadline_ms: deadlineMs } : null,
     build,
-<<<<<<< HEAD
     frozen: { task_sha256: taskBefore, scorer_sha256: scorerBefore, fact_scorer_sha256: factScorerBefore, task_id: task.task_id, timeout_ms: timeoutMs, seats: seatRecords.length },
-=======
-    frozen: { task_sha256: taskBefore, scorer_sha256: scorerBefore, fact_scorer_sha256: factScorerBefore, task_id: task.task_id, timeout_ms: timeoutMs, seats: armArg === "C" ? seats : 1 },
->>>>>>> a0db86a
     error: failureMessage,
     checked_at: new Date().toISOString(),
   };

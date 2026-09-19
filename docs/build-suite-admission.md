@@ -5,6 +5,14 @@ Room `swarm-191133-4hqx-room`, author sonnet-1. Generators: `scripts/bench-build
 (broken passes its public tests and catches 0; correct scores 1; fixing exactly one planted defect flips exactly its own check and no
 regression; no comment in `src/`).
 
+## Status of these screens
+
+Every row except the three-arm pilot (effort pinned to medium by the native runner) ran at the default effort with `bench-rq1.ts`, so
+they are **exploratory ceiling rejections**, not admission runs at a pinned effort; the 'low' row and the medium pilot both show the
+same ceiling on the ledger task. Task directories were regenerated in place while designing (build-rules-s1 changed draw, ledger v0 to
+v2); the runs recorded above name the commit they ran on, and older versions are recoverable from git history only. Labels 1 to 5, 11 to
+15 are consumed development labels; the pilot used 101 to 104.
+
 ## Method
 
 Arm A, one Claude Sonnet seat, `node --import tsx scripts/bench-rq1.ts <task> A <n> --root <dir> --max-budget-usd 2..3`, five runs launched

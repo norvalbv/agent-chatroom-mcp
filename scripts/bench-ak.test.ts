@@ -7,7 +7,7 @@ import { spawnSync } from "node:child_process";
 import { chmodSync, existsSync, mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { delimiter, resolve, join } from "node:path";
-import { selectByMajorityVote, runAttempt } from "./bench-ak.ts";
+import { selectByMajorityVote, runAttempt, OUTER_TIMEOUT_SLACK_MS } from "./bench-ak.ts";
 
 const runner = resolve("scripts/bench-ak.ts");
 const task = resolve("tasks/bench-fact-check");
@@ -460,5 +460,32 @@ test("an attempt that finishes just under its deadline is a normal vote with kno
   } finally {
     rmSync(work, { recursive: true, force: true });
     rmSync(stubDir, { recursive: true, force: true });
+  }
+});
+
+test("runAttempt: a runner finishing well under the total rail resolves at once with its own exit status, not killed", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "run-attempt-fast-"));
+  const fast = join(dir, "fast-runner.mjs");
+  writeFileSync(fast, "await new Promise((r) => setTimeout(r, 200));\nprocess.exit(0);\n");
+  try {
+    const start = Date.now();
+    const r = await runAttempt(fast, [], 3000 + OUTER_TIMEOUT_SLACK_MS);
+    assert.equal(r.status, 0);
+    assert.ok(Date.now() - start < 2000, "resolves when the runner exits, not when the rail expires");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("runAttempt: a runner running PAST the deadline but inside deadline + slack is not killed (a rail at exactly the deadline would race bench-rq1's own deadline handling and lose its salvaged usage)", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "run-attempt-slack-"));
+  const slow = join(dir, "slow-runner.mjs");
+  writeFileSync(slow, "await new Promise((r) => setTimeout(r, 1500));\nprocess.exit(0);\n");
+  try {
+    const deadlineMs = 1000; // the runner exits at ~1500ms: past the deadline, well inside the slack
+    const r = await runAttempt(slow, [], deadlineMs + OUTER_TIMEOUT_SLACK_MS);
+    assert.equal(r.status, 0, "must not be SIGKILLed at the deadline");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
   }
 });

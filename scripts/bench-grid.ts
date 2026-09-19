@@ -135,6 +135,9 @@ export interface ParsedGridArgs {
   seats: string | null;
   timeoutMs: string | null;
   deadlineMs: string | null;
+  /** Confirmatory runaway caps for A/AH cells and every K attempt (--cap-usd, --cap-deadline-ms); defaults are the pre-registered 0.30 USD / 150 s. */
+  capUsd: number;
+  capDeadlineMs: number;
   hubEntry: string | null;
   portBase: number;
 }
@@ -186,6 +189,7 @@ export function parseArgs(argv: string[], tasksDirDefault = "tasks"): ParsedGrid
     if (!m) throw new Error(`Invalid --k entry (want task=N): ${part}`);
     kByTask[m[1]] = Number(m[2]);
   }
+  if (!(Number(flag("cap-usd", "1")) > 0) || !(Number(flag("cap-deadline-ms", "1")) > 0)) throw new Error("--cap-usd and --cap-deadline-ms must be positive numbers");
   if (arms.includes("K")) {
     for (const d of taskDirs) {
       const k = kByTask[basename(d)];
@@ -212,6 +216,8 @@ export function parseArgs(argv: string[], tasksDirDefault = "tasks"): ParsedGrid
     seats: flag("seats") ?? null,
     timeoutMs: flag("timeout-ms") ?? null,
     deadlineMs: flag("deadline-ms") ?? null,
+    capUsd: Number(flag("cap-usd", String(CONFIRMATORY_CAP_USD))),
+    capDeadlineMs: Number(flag("cap-deadline-ms", String(CONFIRMATORY_CAP_DEADLINE_MS))),
     hubEntry: flag("hub-entry") ?? null,
     portBase: Number(flag("port-base", "19850")),
   };
@@ -386,9 +392,10 @@ export async function runGrid(args: ParsedGridArgs, opts: { log?: (s: string) =>
       // Fixed-k, flat per-attempt cap inside bench-ak.ts: nothing is matched to arm C, which may not have run yet.
       runnerArgs.length = 0;
       runnerArgs.push(item.taskDir, String(args.kByTask[item.taskLabel]), String(item.seed), "--root", item.runDir, "--model", args.model, "--effort", "medium", "--resume");
+      runnerArgs.push("--attempt-cap-usd", String(args.capUsd), "--attempt-deadline-ms", String(args.capDeadlineMs));
       if (args.concurrency) runnerArgs.push("--concurrency", args.concurrency);
     } else if ((item.arm === "A" || item.arm === "AH") && args.confirmatory) {
-      runnerArgs.push("--max-budget-usd", String(CONFIRMATORY_CAP_USD), "--deadline-ms", String(CONFIRMATORY_CAP_DEADLINE_MS));
+      runnerArgs.push("--max-budget-usd", String(args.capUsd), "--deadline-ms", String(args.capDeadlineMs));
     } else if (item.arm === "B") {
       if (args.deadlineMs) runnerArgs.push("--deadline-ms", args.deadlineMs);
     } else if (item.arm === "K") {

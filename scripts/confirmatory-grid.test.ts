@@ -254,3 +254,45 @@ test("a launched cell with no result.json on disk is unknown spend on resume: a 
 });
 
 console.log("CONFIRMATORY GRID OK");
+
+test("--cap-usd and --cap-deadline-ms override the pre-registered runaway caps for A/AH cells and every K attempt (printf-block amendment 2026-09-20)", async () => {
+  const f = fixture();
+  try {
+    const args = parseArgs([
+      "--tasks", "stamp-interpreter",
+      "--seeds", "502",
+      "--arms", ARMS.join(","),
+      "--k", "stamp-interpreter=10",
+      "--confirmatory",
+      "--tasks-dir", f.tasksDir,
+      "--results-dir", f.resultsDir,
+      "--runner", f.runner,
+      "--ak-runner", f.runner,
+      "--cap-usd", "1",
+      "--cap-deadline-ms", "600000",
+    ]);
+    assert.equal(args.capUsd, 1);
+    assert.equal(args.capDeadlineMs, 600000);
+    const summary = await runGrid(args, { log: () => {}, portStart: 24700 });
+    assert.equal(summary.ran, 5);
+    const ran = calls(f.callsPath);
+    for (const arm of ["A", "AH"] as const) {
+      const call = ran.find((c) => c.arm === arm);
+      assert.ok(call, `${arm} must run`);
+      assert.equal(call.argv[call.argv.indexOf("--max-budget-usd") + 1], "1");
+      assert.equal(call.argv[call.argv.indexOf("--deadline-ms") + 1], "600000");
+    }
+    const k = ran.find((c) => c.arm === "K");
+    assert.ok(k);
+    assert.equal(k.argv[k.argv.indexOf("--attempt-cap-usd") + 1], "1", "every K attempt gets the same raised cap");
+    assert.equal(k.argv[k.argv.indexOf("--attempt-deadline-ms") + 1], "600000");
+    for (const arm of ["B", "C"] as const) {
+      const call = ran.find((c) => c.arm === arm);
+      assert.ok(call);
+      assert.equal(call.argv.includes("--max-budget-usd"), false, `${arm} still runs to natural completion`);
+    }
+    assert.throws(() => parseArgs(["--tasks", "stamp-interpreter", "--seeds", "502", "--arms", "A", "--confirmatory", "--tasks-dir", f.tasksDir, "--results-dir", f.resultsDir, "--cap-usd", "0"]), /positive/);
+  } finally {
+    rmSync(f.dir, { recursive: true, force: true });
+  }
+});

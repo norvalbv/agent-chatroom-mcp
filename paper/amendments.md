@@ -645,3 +645,36 @@ therefore has no admissible task and was not run; the one diagnostic run on a ce
 9/9, unequal caps) is not evidence about arms. Future generators need shard-specific specification
 parameters or genuine cross-shard coupling to defeat the copy shortcut, and defects whose detection needs a
 multi-step scenario rather than a local read.
+
+
+## 2026-09-20 00:50 UTC — Deviation for the printf block: runaway caps raised before any further printf cell (maintainer session; also appended to paper/prereg-confirmatory.md)
+
+**State when written.** The interpreter block is complete (100 cells, seeds 501 to 520, 19 seeds long-thinking
+by the sentinel). The first printf cell, arm A seed 501, hit the 150 s runaway deadline at 150573 ms with
+usage lost (partial signal: 4 assistant events, 16 output tokens, 18215 cache-creation tokens) and the grid
+halted on unknown spend as designed. No other printf cell exists.
+
+**Why the caps are wrong for printf in this regime.** The 0.30 USD / 150 s caps were derived from short-regime
+evidence (largest arm-A attempt 0.104 USD, 48 s). In the long-thinking regime the interpreter block's
+single-agent cells reached 8.5K output tokens, 0.170 USD and 79 s (arm A) and 16.1K tokens, 0.301 USD and
+141 s (arm AH); 1 of 20 AH interpreter cells and 0 of 20 A cells finished within 5 per cent of the
+0.30 USD cap, so the cap may already have bound AH there (all 20 AH cells passed regardless). printf output
+was about 2.7 times the interpreter's in the short regime (4.6K vs 1.7K tokens per attempt), so a long-regime
+printf single attempt is expected to need roughly 0.5 to 0.9 USD and several minutes; the old caps would
+turn the block into timeouts.
+
+**Deviation.** For the printf block only: single-attempt caps 1.50 USD and 900 s (about five times the
+interpreter AH maxima; 900 s equals the harness's overall per-cell timeout), applied identically to arms A,
+AH and every K attempt through the new `--cap-usd` and `--cap-deadline-ms` flags (`scripts/bench-grid.ts`,
+tested in `scripts/confirmatory-grid.test.ts`). Arms B and C run to natural completion as before. The
+interpreter block is untouched and keeps its 0.30 USD / 150 s caps.
+
+**Inference.** printf inference uses seeds 502 to 520 (19 seeds). Seed 501's arm-A timeout under the old cap
+stays on disk and is reported separately as a pre-amendment cell; seed 501's other printf arms are run for
+completeness but excluded from the printf comparisons. The interpreter block's AH cells are reported with
+the count of cells at the cap.
+
+**Resumable command (printf block):**
+`node --import tsx scripts/bench-grid.ts --confirmatory --tasks bench-printf-format --seeds 501-520 --arms A,AH,B,K,C --k bench-printf-format=7 --model sonnet --concurrency 5 --results-dir bench/results/rq1-confirmatory --cap-usd 1.5 --cap-deadline-ms 900000 --max-cost-usd 240 --port-base 19850`
+Projection in the long regime: about 5 USD per printf seed (A 0.6, AH 0.9, B 1.2, K 7 x 0.6, C 3), so about
+100 USD for 20 seeds, on top of the 66 USD already spent.

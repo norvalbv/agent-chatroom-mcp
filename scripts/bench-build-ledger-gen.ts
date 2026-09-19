@@ -422,24 +422,26 @@ const inst = JSON.parse(readFileSync(join(here, 'instance.json'), 'utf8'));
 const expected = JSON.parse(readFileSync(join(here, 'expected.json'), 'utf8'));
 // The worker may read its own code and the scenarios, never the expected-answer file.
 // Native TypeScript removes resolution of a cwd-relative tsx loader from the child.
+if (lstatSync(workspace).isSymbolicLink()) { console.error('oracle tamper: workspace root link'); process.exit(3); }
 const candidate = realpathSync(workspace), runner = realpathSync(join(here, 'run.ts'));
 const scenarios = realpathSync(join(here, 'scenarios.ts'));
 function rejectLinks(path: string): void {
   const stat = lstatSync(path);
-  if (stat.isSymbolicLink()) throw new Error('oracle infrastructure: workspace symlink is forbidden');
+  if (stat.isSymbolicLink()) throw new Error('oracle tamper: workspace symlink is forbidden');
   if (stat.isDirectory()) for (const name of readdirSync(path)) rejectLinks(join(path, name));
 }
-try { rejectLinks(candidate); } catch (error) { console.error(String(error)); process.exit(2); }
+try { rejectLinks(candidate); } catch (error) { console.error(String(error)); process.exit(3); }
 const child = spawnSync(process.execPath, ['--permission', '--allow-fs-read=' + candidate,
   '--allow-fs-read=' + runner, '--allow-fs-read=' + scenarios, runner, candidate, String(inst.m)],
   { encoding: 'utf8', timeout: 60000, maxBuffer: 64 * 1024 * 1024, env: {} });
 if (child.error || child.status !== 0) {
-  console.error('oracle infrastructure: worker failed: ' + (child.error?.message ?? child.stderr)); process.exit(2);
+  const tamper = /ERR_ACCESS_DENIED/.test(child.stderr ?? '');
+  console.error('oracle ' + (tamper ? 'tamper' : 'infrastructure') + ': worker failed: ' + (child.error?.message ?? child.stderr)); process.exit(tamper ? 3 : 2);
 }
 const frames = child.stdout.split('@@RESULT@@');
-if (frames.length !== 2) { console.error('oracle infrastructure: ambiguous worker result frame'); process.exit(2); }
+if (frames.length !== 2) { console.error('oracle tamper: ambiguous worker result frame'); process.exit(3); }
 let got: Record<string, { ok: boolean; value?: unknown }> = {};
-try { got = JSON.parse(frames[1]); } catch { console.error('oracle infrastructure: malformed worker result'); process.exit(2); }
+try { got = JSON.parse(frames[1]); } catch { console.error('oracle tamper: malformed worker result'); process.exit(3); }
 function subset(exp: unknown, act: unknown): boolean {
   if (Array.isArray(exp)) return Array.isArray(act) && act.length === exp.length && exp.every((e, i) => subset(e, act[i]));
   if (exp && typeof exp === 'object') return !!act && typeof act === 'object' && !Array.isArray(act) && Object.entries(exp).every(([k, v]) => subset(v, (act as any)[k]));

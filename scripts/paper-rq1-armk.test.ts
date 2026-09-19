@@ -118,7 +118,7 @@ test("a group shaped like scripts/bench-ak.ts output (schemaVersion 2, code task
     const attempt = (i: number, over: object) => ({ index: i, root: "r", answer: null, outcome: "task_pass", passed: true, cost_usd: 0.08, turns: 5, wall_ms: 30000, exit_code: 0, signal: null, killed_by_deadline: false, runner_failure: null, ...over });
     const group = {
       schemaVersion: 2, task_id: "bench-printf-format", arm: "K", k: 4, seed: 101, model: "sonnet", selector: "mbr-exec",
-      selection: { rule: "mbr", winner_attempt: 1, votes: { "sig-a": 2, "sig-b": 1 } },
+      selection: { rule: "mbr", winner_attempt: 1, votes: { "sig-a": 2, "sig-b": 1 }, loaded: [true, true, false, false] },
       outcome: "task_pass", passed: true,
       usage: { cost_usd: 0.32, cost_usd_known_sum: 0.32, cost_usd_unknown_attempts: 0 },
       turns_total: 20, wall_clock: { duration_ms: 90000 },
@@ -134,6 +134,12 @@ test("a group shaped like scripts/bench-ak.ts output (schemaVersion 2, code task
     assert.equal(row.cost_unknown_groups, 0, "a null-free cost with no coverage field is known");
     assert.equal(row.null_attempts, 2, "code-task answers are null for every attempt; only the killed and the no-result attempt are null votes");
     assert.equal(row.ceiling.any_pass, 1);
+    assert.equal(row.unloadable_candidates, 0, "attempts 3 and 4 have loaded=false but are harness-side null votes, so they are not double-counted as unloadable candidates");
+    group.selection.loaded = [true, false, true, true];
+    writeFileSync(join(dir, "bench-printf-format-K-seed101", "result.json"), JSON.stringify(group));
+    const row2 = buildArmKTable(runs, loadKGroups(dir).groups).tasks[0]!;
+    assert.equal(row2.unloadable_candidates, 1, "attempt 2 completed and was paid for but has no signature: selector-side, counted here");
+    assert.equal(row2.null_attempts, 2, "null_attempts is unchanged by unloadable candidates (the starvation detector stays harness-side)");
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

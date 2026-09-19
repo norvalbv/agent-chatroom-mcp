@@ -86,6 +86,10 @@ async function main() {
   const runner = resolve(takeFlag(argv, "runner") ?? resolve(here, "bench-rq1.ts"));
   if (!existsSync(runner)) fail(`runner not found: ${runner}`);
   const root = resolve(rootArg);
+  // The build-suite preregistration fixes the room at four seats.  The older
+  // RQ1 runner defaults to three, so make the new suite's default explicit;
+  // a recorded `--seats` permits the pre-registered 4--5-seat alternative.
+  if (arm === "C" && !argv.includes("--seats")) argv.push("--seats", "4");
 
   const launched = spawnSync(process.execPath, ["--import", "tsx", runner, taskDir, arm!, String(seed), "--root", root, ...argv], { encoding: "utf8" });
   if (launched.status !== 0 || launched.error || launched.signal) {

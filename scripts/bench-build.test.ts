@@ -13,7 +13,7 @@ const runner = resolve("scripts/bench-build.ts");
 function fakeBench(result: unknown) {
   const dir = mkdtempSync(join(tmpdir(), "bench-build-fake-"));
   const path = join(dir, "runner.mjs");
-  writeFileSync(path, `import fs from 'node:fs'; const root=process.argv[process.argv.indexOf('--root')+1]; fs.mkdirSync(root,{recursive:true}); fs.writeFileSync(root+'/result.json',${JSON.stringify(JSON.stringify(result))});`);
+  writeFileSync(path, `import fs from 'node:fs'; const root=process.argv[process.argv.indexOf('--root')+1]; fs.mkdirSync(root,{recursive:true}); fs.writeFileSync(root+'/runner-argv.json',JSON.stringify(process.argv.slice(2))); fs.writeFileSync(root+'/result.json',${JSON.stringify(JSON.stringify(result))});`);
   chmodSync(path, 0o755);
   return { dir, path };
 }
@@ -27,8 +27,8 @@ function seededTask(checks: unknown) {
   return dir;
 }
 
-function invoke(task: string, root: string, fake: string) {
-  return spawnSync(process.execPath, ["--import", "tsx", runner, task, "A", "7", "--root", root, "--runner", fake], { encoding: "utf8", timeout: 20_000 });
+function invoke(task: string, root: string, fake: string, arm = "A") {
+  return spawnSync(process.execPath, ["--import", "tsx", runner, task, arm, "7", "--root", root, "--runner", fake], { encoding: "utf8", timeout: 20_000 });
 }
 
 const valid = {
@@ -72,5 +72,17 @@ test("refuses to make a score from an altered fixture or an unnamed hidden check
     assert.notEqual(run.status, 0);
     assert.equal(existsSync(join(root, "build-result.json")), false);
     assert.match(run.stderr, /anti-tamper|named defect|regression/i);
+  } finally { rmSync(task, { recursive: true, force: true }); rmSync(root, { recursive: true, force: true }); rmSync(fake.dir, { recursive: true, force: true }); }
+});
+
+test("uses four seats for a room unless the pre-registered invocation overrides it", () => {
+  const task = seededTask(checks);
+  const root = join(tmpdir(), `bench-build-room-${process.pid}-${Date.now()}`);
+  const fake = fakeBench({ ...valid, arm: "C" });
+  try {
+    const run = invoke(task, root, fake.path, "C");
+    assert.equal(run.status, 0, run.stderr);
+    const argv: string[] = JSON.parse(readFileSync(join(root, "runner-argv.json"), "utf8"));
+    assert.equal(argv[argv.indexOf("--seats") + 1], "4");
   } finally { rmSync(task, { recursive: true, force: true }); rmSync(root, { recursive: true, force: true }); rmSync(fake.dir, { recursive: true, force: true }); }
 });

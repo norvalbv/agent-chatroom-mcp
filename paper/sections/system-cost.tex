@@ -10,7 +10,17 @@ number in this subsection is copied from those two committed documents or from
 telemetry, not re-derived from the underlying \texttt{swarms/*/result.json} files
 directly, since those run directories are not committed to this repository (they are
 local, machine-side artifacts; see the reproducibility note at the end of this
-subsection).
+subsection). Every dollar and token figure below is therefore also regime-scoped to
+2026-09-18: \texttt{paper/amendments.md} (2026-09-19 entry) records that the model
+served under the \texttt{claude-sonnet-5} alias changed its thinking-token budget
+mid-study on 2026-09-19, with no code, flag, or reported-model-id change, moving a
+single \texttt{stamp-interpreter} attempt from about 1.6K output tokens/\$0.058 to about
+10K output tokens/\$0.18--0.26, and shifting arm-C per-seat output tokens from a 4K--9K
+range to 18K--25K. That shift postdates both rounds reported here and does not alter the
+numbers below, but it is the reason this paper states a specific date next to every cost
+figure and warns against reading any \$/token ratio in this subsection as a
+provider-stable constant: the same room re-run today would very likely cost more, for a
+reason that has nothing to do with the hub mechanics under study.
 
 \paragraph{The token round.} On 2026-09-17 the maintainer's OpenRouter account was
 exhausted after what \texttt{docs/token-round-0918.md} records as ``roughly 2 billion

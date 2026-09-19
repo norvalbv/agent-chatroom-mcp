@@ -17,10 +17,10 @@ extended. It must not be pooled with the pre-declared phase 1 cells in
 |---|---|---|---|
 | A | 10 | 4 | 0.621 |
 | B | 10 | 8 | 1.137 |
-| C | 9 | 9 | 4.873 |
+| C | 10 | 10 | 5.448 |
 
-Total 6.63 USD, inside the 16 USD cap this phase declared on the room's ledger. Arm C has 9 seeds,
-not 10, because the runner was stopped mid-seed; no partial cell is included here.
+Total 7.21 USD, inside the 16 USD cap this phase declared on the room's ledger. All three arms have
+ten completed seeds; the runner was stopped after seed 415 and no partial cell is included here.
 
 All of these runs are in the short-thinking regime (see `paper/amendments.md` and the maintainer's
 same-window control at main c82124d), so they cannot be pooled across the regime boundary either.

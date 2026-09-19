@@ -38,7 +38,8 @@ equivalence:
 
 1. At the common nominal cap, either simultaneous comparison C-A or C-B has a
    non-positive mean or a one-sided multiplicity-adjusted lower confidence bound
-   at or below zero.
+   at or below zero, or its worst-case partially identified mean-difference lower
+   endpoint over all 20 planned blocks is at or below zero.
 2. C catches more plants but has a higher introduced-regression rate. That is a
    trade-off, not dominance.
 3. B matches C on catch and shipped scores while using less realized spend. The
@@ -47,9 +48,11 @@ equivalence:
    paper's prior cost finding then extends to this build family.
 5. No generated instance clears admission, or task review finds ambiguity,
    leakage, coupled defect tests, a contaminated manifest, or artificial padding.
-6. More than 10% of planned confirmatory cells are invalid because of timeout,
-   tamper, stale provenance, unknown cost, or incomplete oracle execution. No
-   missing cell is replaced after outcomes are known.
+6. More than 10% of planned confirmatory cells are externally invalid because of
+   infrastructure failure, stale provenance, unknown cost, or incomplete oracle
+   execution. No missing cell is replaced after outcomes are known. An arm-caused
+   timeout, invalid room, or model-originated tamper is an observed protocol
+   failure, not externally missing data.
 
 These are tests of one generated task family, not a general claim about all software
 engineering. Two sibling instances and their individual defects are correlated
@@ -111,9 +114,17 @@ The task, scorer, runner, effort settings, hub entry, whole hub build, launch HE
 and served model observations are hashed or recorded before any seat starts and
 checked again before scoring. A model never receives the hidden tree. Timeout,
 infrastructure error, parse failure, tamper, and incomplete usage are retained as
-distinct outcomes. In particular, a seat killed before its terminal result has
-unknown authoritative cost even if partial token usage exists; it is not a zero-cost
-cell and is ineligible for an equal-budget claim.
+distinct outcomes. An arm-caused timeout, failure to establish the required room,
+unverified room conclusion, or model-originated workspace/oracle tamper is scored
+in the primary intention-to-treat catch analysis as zero caught and `N` residual
+plants; `defects_shipped` is at least `N`, and safety dominance cannot be claimed
+when introduced regressions cannot be measured. A benchmark-infrastructure failure,
+scorer failure, stale provenance, or missing authoritative cost is externally
+invalid and remains a planned missing cell. In particular, a seat killed before its
+terminal result has unknown authoritative cost if the runner cannot attribute the
+timeout to the arm, even if partial token usage exists; it is not a zero-cost cell
+and is ineligible for an equal-budget claim. Every raw outcome and any observed
+partial cost remains in the ledger.
 
 ## Arms and equal-cap contract
 
@@ -171,14 +182,19 @@ both bounds above zero. Ordinary two-sided 95% intervals are also shown
 descriptively and never interpreted as equivalence.
 
 Missing blocks are not replaced. For each comparison, the partially identified
-mean-difference range over all 20 planned blocks assigns every missing block -1 for
-the lower bound and +1 for the upper bound; the complete-block estimate and count
-are printed beside it. If more than 10% of planned cells are invalid, no confirmatory
-claim is made regardless of the complete cases. The actual-at-or-below-M sensitivity
-is reported separately and cannot replace the intention-to-treat result. Because
-there is one generator family, every interval describes run-to-run variation for
-this family and does not create a multi-family population claim. Regressions and
-invalid outcomes are reported as counts and rates without severity weighting.
+mean-difference range over all 20 planned blocks assigns every externally missing
+block -1 for the lower endpoint and +1 for the upper endpoint; the complete-block
+estimate and count are printed beside it. A room-advantage claim requires both the
+complete-case multiplicity-adjusted lower confidence bound and this worst-case
+lower endpoint to exceed zero for both C-A and C-B. Arm-caused protocol failures
+are already observed zero-catch outcomes and are not missing blocks. If more than
+10% of planned cells are externally invalid, no confirmatory claim is made
+regardless of the complete cases. The actual-at-or-below-M sensitivity is reported
+separately and cannot replace the intention-to-treat result. Because there is one
+generator family, every interval describes run-to-run variation for this family
+and does not create a multi-family population claim. Regressions, protocol failures,
+and externally invalid outcomes are reported as counts and rates without severity
+weighting.
 
 ## Artifact pipeline and resumability
 
@@ -236,6 +252,17 @@ in the primary analysis, moves actual-at-or-below-M blocks to sensitivity analys
 and removes the false 240 USD hard-upper-bound wording. The same review required
 simultaneous C-A/C-B inference and explicit missing-block bounds; both are fixed
 above before those outcomes exist.
+
+### 2026-09-19 -- coordination-failure intention-to-treat amendment
+
+Before any pinned-effort admission or three-arm pilot, independent review of
+`b8f74ca` showed that treating `invalid_room` as missing could selectively remove
+arm-C blocks while leaving a positive complete-case result. The protocol now scores
+arm-caused timeout, invalid-room, unverified-conclusion and model tamper as zero-
+catch protocol failures. Only failures outside the arm remain externally missing,
+and a room-advantage claim additionally requires the worst-case partially identified
+lower endpoint over all 20 planned blocks to exceed zero for both comparisons. This
+amendment precedes those outcomes.
 
 ## Development and pilot evidence (not yet observed at freeze)
 

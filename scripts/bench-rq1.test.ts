@@ -653,3 +653,27 @@ test("effort: arm C seats all see the pinned setting", async () => {
     rmSync(log, { force: true });
   }
 });
+
+test("sentinel fields: arm A/AH result carries thinking_tokens and output_tokens read from the CLI's camelCase modelUsage, null (not zero) when unreported", () => {
+  const stubDir = stubClaudeDir();
+  const run = (arm: string, env: Record<string, string>) => {
+    const root = join(tmpdir(), `bench-rq1-sent-${arm}-${process.pid}-${Date.now()}`);
+    try {
+      const r = invoke([task, arm, "1", "--root", root], { PATH: `${stubDir}${delimiter}${process.env.PATH}`, ...env });
+      assert.equal(r.status, 0, r.stderr + r.stdout);
+      return JSON.parse(readFileSync(join(root, "result.json"), "utf8"));
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  };
+  try {
+    const withModels = run("AH", { STUB_MODELS: "1" });
+    assert.equal(withModels.thinking_tokens, 17);
+    assert.equal(withModels.output_tokens, 3);
+    const without = run("A", {});
+    assert.equal(without.thinking_tokens, null);
+    assert.equal(without.output_tokens, 30, "falls back to the rolled-up usage.output_tokens");
+  } finally {
+    rmSync(stubDir, { recursive: true, force: true });
+  }
+});

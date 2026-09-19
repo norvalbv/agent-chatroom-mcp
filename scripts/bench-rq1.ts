@@ -256,8 +256,8 @@ async function main() {
   const taskArg = argv.shift();
   const armArg = argv.shift();
   const seedArg = argv.shift();
-  if (!taskArg || (armArg !== "A" && armArg !== "B" && armArg !== "C") || seedArg === undefined) {
-    throw new Error("Usage: bench-rq1.ts TASK_DIR ARM(A|B|C) SEED --root DIR [--model sonnet] [--port N] [--seats N] [--timeout-ms N] [--max-budget-usd N] [--deadline-ms N] [--hub-entry PATH]");
+  if (!taskArg || (armArg !== "A" && armArg !== "AH" && armArg !== "B" && armArg !== "C") || seedArg === undefined) {
+    throw new Error("Usage: bench-rq1.ts TASK_DIR ARM(A|AH|B|C) SEED --root DIR [--model sonnet] [--port N] [--seats N] [--timeout-ms N] [--max-budget-usd N] [--deadline-ms N] [--hub-entry PATH]");
   }
   const seed = Number(seedArg);
   if (!Number.isInteger(seed)) throw new Error(`Invalid seed: ${seedArg}`);
@@ -365,7 +365,7 @@ async function main() {
     build.provenance_scope = isDist ? "dist-tree; external dependencies not covered" : "entry-only; imported modules not covered";
     if (existsSync(hubEntry)) build.hub_build_sha256 = isDist ? hashTree(dirname(hubEntry)) : build.hub_entry_sha256;
   }
-  if (armArg === "A") {
+  if (armArg === "A" || armArg === "AH") {
     startedAt = new Date();
     const mcpJson = join(root, "mcp-empty.json");
     json(mcpJson, { mcpServers: {} });
@@ -511,6 +511,19 @@ async function main() {
 
   const usage = rollupUsage(seatRecords.map((s) => ({ usage: s.usage })));
   const turnsKnown = seatRecords.filter((s) => typeof s.num_turns === "number");
+  // Regime indicators for arm A/AH (the sentinel): the CLI reports camelCase thinkingTokens/outputTokens per
+  // model in modelUsage (verified on real runs); null, never zero, when it did not report them.
+  let thinking_tokens: number | null = null;
+  let output_tokens: number | null = null;
+  if ((armArg === "A" || armArg === "AH") && seatRecords.length > 0) {
+    const perModel = Object.values(seatRecords[0].model_usage ?? {}) as Array<Record<string, unknown>>;
+    const sum = (key: string) => {
+      const vals = perModel.map((m) => m?.[key]).filter((v): v is number => typeof v === "number");
+      return vals.length ? vals.reduce((a, b) => a + b, 0) : null;
+    };
+    thinking_tokens = sum("thinkingTokens");
+    output_tokens = sum("outputTokens") ?? seatRecords[0].usage?.output_tokens ?? null;
+  }
   const result = {
     schemaVersion: 1,
     task_id: task.task_id,
@@ -529,9 +542,11 @@ async function main() {
     seats: seatRecords.map((s) => ({ name: s.name, argv: s.argv, exit_code: s.exit_code, signal: s.signal, started_at: s.started_at, completed_at: s.completed_at, num_turns: s.num_turns, duration_ms: s.duration_ms, duration_api_ms: s.duration_api_ms, usage: s.usage, text: s.text, killed_by_deadline: s.killed_by_deadline, partial_usage: s.partial_usage, reported_models: s.reported_models, model_usage: s.model_usage })),
     usage,
     turns: { per_seat: seatRecords.map((s) => ({ name: s.name, num_turns: s.num_turns })), summed: turnsKnown.reduce((a, s) => a + (s.num_turns ?? 0), 0), seats: seatRecords.length, seats_with_turns: turnsKnown.length, coverage: turnsKnown.length === 0 ? "none" : turnsKnown.length === seatRecords.length ? "complete" : "partial" },
+    thinking_tokens,
+    output_tokens,
     wall_clock: { started_at: startedAt.toISOString(), completed_at: completedAt.toISOString(), duration_ms: completedAt.getTime() - startedAt.getTime() },
     effort,
-    budget: armArg === "A" ? { max_budget_usd: maxBudgetUsd ? Number(maxBudgetUsd) : null, deadline_ms: deadlineMs } : null,
+    budget: (armArg === "A" || armArg === "AH") ? { max_budget_usd: maxBudgetUsd ? Number(maxBudgetUsd) : null, deadline_ms: deadlineMs } : null,
     build,
     frozen: { task_sha256: taskBefore, scorer_sha256: scorerBefore, fact_scorer_sha256: factScorerBefore, task_id: task.task_id, timeout_ms: timeoutMs, seats: seatRecords.length },
     error: failureMessage,

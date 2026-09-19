@@ -52,15 +52,21 @@ kind (plurality of normalized answers for the two \texttt{stamp} tasks; MBR-exec
 primary, plus signature plurality, exploratory, for \texttt{bench-printf-format}; see
 Section~\ref{sec:method}).
 
-\subsection{Window control, seeds 201--220, interpreter family}
+\subsection{Window control}
 
-Arm C and arm K interleaved per seed on \texttt{stamp-interpreter} and \texttt{stamp-2}, writing to
-\texttt{bench/results/rq1-window-control} (progress log: \texttt{logs/rq1-window-control.log}, not
-committed -- \texttt{logs/} is gitignored). The observed invocation sequence in that log matches
-\texttt{scripts/bench-grid.ts} run the same way as the two grids above, with
-\texttt{--seeds 201,...,220} and \texttt{--results-dir bench/results/rq1-window-control}; no committed
-wrapper script names this exact invocation, so a reader reproducing it should confirm the flags against
-\texttt{scripts/bench-grid.ts}'s own argument parser at the commit named in \S\ref{sec:reproducibility}.
+Originally designed as arm~C and arm~K interleaved per seed on \texttt{stamp-interpreter} and
+\texttt{stamp-2}, 20 seeds (201--220), writing to \texttt{bench/results/rq1-window-control} (progress
+log: \texttt{logs/rq1-window-control.log}, not committed -- \texttt{logs/} is gitignored). This run was
+stopped after 3 runs (\$5.76) when the post-shift cost increase described in
+Section~\ref{sec:threats} made the planned 80 runs exceed the control's budget, and was redesigned,
+entirely inside the post-shift regime, at reduced scope: \texttt{stamp-interpreter} only, 12 seeds
+(201--212), log \texttt{logs/rq1-window-control-2.log} (\texttt{paper/amendments.md}, 2026-09-19
+thinking-budget entry). Both the original and redesigned runs match \texttt{scripts/bench-grid.ts} run
+the same way as the two grids above, with the corresponding \texttt{--tasks}, \texttt{--seeds}, and
+\texttt{--results-dir} flags; no committed wrapper script names either exact invocation, so a reader
+reproducing them should confirm the flags against \texttt{scripts/bench-grid.ts}'s own argument parser
+at the commit named in \S\ref{sec:reproducibility}. Its result is reported in Section~\ref{sec:results}
+as complete or pending as of that section's writing, never read from partial output.
 
 \subsection{Tables, statistics, and figures}
 

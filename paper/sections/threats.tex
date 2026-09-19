@@ -30,25 +30,42 @@ running it.
 
 \item \textbf{Arm K's timing window differs from arm C's.} The 40 arm-C runs analyzed here
   (\texttt{bench/results/rq1-suite}) were produced in an earlier grid than the 120 arm-K groups
-  (\texttt{bench/results/rq1-arm-k}). Single-agent pass-rate estimates from independently drawn samples
-  of the identical harness and prompt differed substantially across those samples
-  (Section~\ref{sec:results}); whether that difference reflects real drift in the underlying rate over
-  time, or is simply sampling noise at these sample sizes, is not resolved by any analysis in this paper
-  -- no within-run drift analysis was performed. Either way, if the single-agent rate is not stable
-  across the time windows the two grids were run in, the K-vs-C comparison is confounded by time, not
-  only by sampling noise. A contemporaneous, interleaved arm-C/arm-K sample
-  (\texttt{bench/results/rq1-window-control}, 20 seeds on both \texttt{stamp} tasks) was designed
-  specifically to test this; its status as of this section is reported in
-  Section~\ref{sec:results} rather than assumed complete.
+  (\texttt{bench/results/rq1-arm-k}); arms A and C, and the 40 arm-A budget-matched runs, were
+  interleaved per seed within the original grid, but arm~K was not interleaved with either
+  (\texttt{paper/amendments.md}, 2026-09-19 thinking-budget entry). If the single-agent rate is not
+  stable across the time windows the two grids were run in, the K-vs-C comparison is confounded by time,
+  not only by sampling noise. A contemporaneous, interleaved arm-C/arm-K sample
+  (\texttt{bench/results/rq1-window-control}) was designed specifically to test this; its status as of
+  this section is reported in Section~\ref{sec:results} rather than assumed complete.
 
-\item \textbf{Provider and estimate nondeterminism.} Single-agent pass-rate estimates were noisy in both
-  directions across independently drawn samples of the identical harness and prompt: for
+\item \textbf{A confirmed, undocumented regime shift in the model behind the \texttt{sonnet} alias
+  during this study.} Between approximately 15:30 and 16:45 local time on 2026-09-19, with no change to
+  the harness, CLI version, project settings, or recorded model id, single-agent output-token counts on
+  \texttt{stamp-interpreter} rose roughly sixfold (about 1.6K to about 10K output tokens per attempt,
+  cost about \$0.058 to \$0.18--0.26) and the model's own thinking-block length grew from about 1.3K to
+  about 10.5K tokens; the same shift appears in arm-C seats' per-seat output tokens and per-run cost
+  (\texttt{paper/amendments.md}, 2026-09-19 thinking-budget entry). The original 40-run RQ1 grid and the
+  400-attempt arm-K measurement discussed above were both run, and confirmed stable, before this shift;
+  the pass-rate numbers reported in this paper are therefore not put in question by it. What the shift
+  does affect: (i) every cost and token figure in this paper is regime-specific and must be read together
+  with its date and its observed output tokens per run, not extrapolated to a different time; (ii) the
+  window-control design (above) was originally interrupted mid-run by the cost increase this shift caused
+  and was redesigned at reduced scope, entirely inside the post-shift regime, once discovered
+  (Section~\ref{sec:reproducibility}); and (iii) no comparison in this paper should be read as valid
+  outside the specific time window its own runs were collected in. We report this as a confirmed
+  mechanism, not a hypothesis: it is the maintainer's own direct observation of the shift, not an
+  inference from the pass-rate numbers.
+
+\item \textbf{Provider and estimate nondeterminism, independent of the regime shift above.}
+  Single-agent pass-rate estimates were noisy in both directions across independently drawn samples of
+  the identical harness and prompt, all collected before the regime shift just described: for
   \texttt{stamp-interpreter}, 0.50 at $n=10$ in the admission pilot, 0.825 at $n=40$ in the RQ1 grid, and
-  0.675 at $n=400$ in a fresh attempt-level measurement. A 60-run budget-cap control
+  0.675 at $n=400$ in the arm-K attempt-level measurement. A 60-run budget-cap control
   (\texttt{bench/results/rq1-drift-control}: 23/30 at a \$0.30 per-attempt cap, 18/30 at a \$0.58
-  per-attempt cap) rules out the attempt-level spending cap as the cause of this discrepancy between
-  samples, but the underlying source of the discrepancy -- real drift over time versus sampling noise at
-  these sample sizes -- is not identified and is not claimed to be.
+  per-attempt cap, also pre-shift) rules out the attempt-level spending cap as the cause of this
+  discrepancy between samples, but the underlying source of it -- ordinary sampling noise at these
+  sample sizes, or some other pre-shift source of variation -- is not identified and is not claimed to
+  be; it is a separate, unresolved question from the confirmed post-shift regime change above.
 
 \item \textbf{Selector sensitivity on the printf task.} Arm~K's printf selector (execution agreement
   over 9650 probes) is demonstrably sensitive to the probe set: the two candidate clusters in the

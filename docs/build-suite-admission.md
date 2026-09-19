@@ -17,7 +17,7 @@ Raw per-run records (rescored with the committed oracle, cost, tokens, turns, wa
 billing, rules and ledger-v2 runs: `docs/build-suite-admission-runs.json`. The build-rules-s1 row was rerun on the committed instance
 (55781dc) because a later generator edit changed which rules are drawn; the earlier 10 of 10 x5 on the previous draw is kept as
 history. The first ledger runs (v0, v1) and the low-effort run were scored with the oracle of their day and are recorded only here.
-Total real-model spend for admission: about 4.0 USD.
+Total real-model spend for admission: about 4.0 USD; with the three-arm pilot below about 7.7 USD.
 
 ## Results (all at ceiling; none admitted)
 
@@ -27,7 +27,7 @@ Total real-model spend for admission: about 4.0 USD.
 | build-rules-s1 | 24 rules over 8 modules, ~120 lines, one SPEC row per rule, 2 public tests encode the bug | 10 | 5 | 10 x5 | 5 of 5 | 0.057 to 0.072 | 28 to 33 |
 | build-rules-l3 | 120 rules over 20 modules, ~570 lines, 12 KB SPEC | 36 | 3 | 36, 35, 36 | 2 of 3 | 0.136 to 0.156 | 39 to 53 |
 | build-ledger-s1 | stateful warehouse, 6 modules, prose-only SPEC, missing rollback, leaked counter, wrong retry trigger, zombie backorder | 9 | 5 | 9 x5 | 5 of 5 | 0.053 to 0.072 | 28 to 35 |
-| build-ledger-s1 v2 (same-shape defects, S13 multi-lot return and S14 duplicate-sku lines planted, child-process oracle; seeds 11 to 15) | as above, 9 of 14 catalogued plants | 9 | 5 | 9,9,8,9,9 (S12 missed once) | 4 of 5 | 0.056 to 0.060 | 25 to 28 |
+| build-ledger-s1 v2 (same-shape defects, S13 multi-lot return and S14 duplicate-sku lines planted, child-process oracle; seeds 11 to 15) | as above, 9 of 14 catalogued plants | 9 | 5 | 9,9,8,9,9 as run (the 8 is the S12 oracle fault below; 45 of 45 after the fix) | 4 of 5 as run | 0.056 to 0.060 | 25 to 28 |
 | build-ledger-s1 at `effortLevel: low` (settings file in the workspace) | same | 9 | 5 | 9 x5 | 5 of 5 | 0.050 to 0.059 | 27 to 28 |
 
 Per-defect catch tables: every planted defect was caught n of n on billing, rules-s1 and ledger-s1. On rules-l3 one defect

@@ -5,16 +5,16 @@ Only sources not already in docs/research-index.md. Read on 2026-09-19 at abstra
 ## 1. How defect-seeded and mutation-based evaluations are built and validated
 
 - arXiv:2406.09843 (LLMs for mutation testing, 851 real Java bugs from Defects4J 2.0 and ConDefects). LLM-written mutants are more diverse and behave closer to real bugs than rule-based operators, and detect more real bugs, but have higher rates of non-compiling, duplicate and equivalent mutants (the percentages differ between versions of the abstract; only the direction is used). Design consequence: validate each planted defect three ways before admission (it compiles, the public suite still passes, a hidden test fails on the defect and passes on the fix). The last check removes equivalent defects.
-- arXiv:2308.16557 (test generation with LLMs plus mutation testing) and arXiv:2506.02954 (mutation-guided unit test generation): mutation score is the target signal for test quality, so one hidden test per defect that kills that defect is the accepted unit of measurement.
+- arXiv:2308.16557 (test generation with LLMs plus mutation testing) and arXiv:2506.02954 (mutation-guided unit test generation): both use mutants as a feedback signal for generating tests. They motivate mutant-based checks but do not establish our unit of measurement; one hidden test per planted defect, passing only if that defect is fixed, is this suite's own operational choice.
 - arXiv:2607.22880 (replicability study: do coverage and mutation scores of LLM-generated suites correlate with effectiveness?): proxy metrics can decouple from real fault detection. Design consequence: score on each defect's own hidden test, not on coverage or overall pass rate.
-- arXiv:2607.02606 (ChainSWE, 304 bug-fix chains over 54 Python projects): performance falls by up to 70% as chain length grows in one evolving codebase. Many defects in one codebase are harder than the sum of single ones, which supports 6 to 12 defects as a route off ceiling.
-- arXiv:2603.23448 (c-CRAB code review benchmark built from human reviews with generated tests): existing review agents solve about 40% of tasks, and agent reviews often flag different things from human reviews. Review is scored by tests, not a judge, as here.
+- arXiv:2607.02606 (ChainSWE, chains of 304 issues over 54 Python projects): performance falls by up to 70% as chain length grows in one evolving codebase. These are sequential, dependent fixes, so this does not show that simultaneous independent defects are harder; treating it as support for 6 to 12 defects is an extrapolation, and the pilot has to show it.
+- arXiv:2603.23448 (c-CRAB code review benchmark built from human reviews with generated tests): existing review agents taken together solve about 40% of tasks (not a per-agent rate), and agent reviews often flag different things from human reviews. Review is scored by tests, not a judge, as here.
 
 ## 2. Multi-agent versus single-agent on software tasks and review
 
 - arXiv:2604.02460 (single agents match or beat multi-agent systems on multi-hop reasoning at equal thinking-token budgets): reported multi-agent gains are largely unaccounted compute and context effects; multi-agent becomes competitive when a single agent's context use is degraded or extra compute is spent. Prediction: if the room wins at equal dollars it should be on defects that sit far apart.
 - arXiv:2601.12307 (a single agent replicates homogeneous multi-agent workflows on seven benchmarks including coding): compare arms at an equal dollar cap and record thinking tokens, or the comparison measures spend.
-- arXiv:2511.00872 (agent frameworks on code-centric tasks) and arXiv:2604.16321 (literature review of multi-agent code generation): multi-agent frameworks are reported to help on long-horizon work; cost-matched evidence is thin, and this suite supplies the matched arm.
+- arXiv:2511.00872 (agent frameworks on code-centric tasks) and arXiv:2604.16321 (literature review of multi-agent code generation): per their abstracts, 2511.00872 reports coordination overhead and the longest trajectories for multi-agent frameworks rather than demonstrated gains, and 2604.16321 is a taxonomy of 114 studies. Neither gives cost-matched evidence for or against multi-agent code work; that gap is why this suite has a matched arm.
 - arXiv:2603.20432 (coding agents as long-context processors): an agent that navigates files with native tools can handle far more text than fits in context, so file count alone does not make a task exceed one agent. The task has to need information from many places at once.
 
 ## 3. What makes a task exceed one context usefully
@@ -23,10 +23,10 @@ Not size for its own sake. Useful excess means: (a) each defect is only recognis
 
 ## Falsifiers, stated before building
 
-1. F-ceiling: a single agent at the pinned effort catches at least 70% of planted defects (mean over at least five pilot seeds). The task is at ceiling; reject or enlarge it, report no arm comparison for it.
-2. F-floor: a defect that no arm in any pilot seed catches is replaced (unfindable or ambiguous); a task whose single-agent mean is under 30% is rejected.
+1. F-ceiling: a single agent at the pinned effort catches more than 70% of planted defects (mean over at least five pilot seeds; the admitted band is 30% to 70% inclusive, so exactly 70% is admitted and only above 70% is ceiling). Above 70%, the task is at ceiling; reject or enlarge it, report no arm comparison for it.
+2. F-floor: a defect that no arm in any pilot seed catches is inspected against the specification first; if the spec determines the fix it is kept and reported as a hard defect, otherwise it is replaced. Either way the rejected variant and its catch table are kept as evidence. A task whose single-agent mean is under 30% is rejected, with evidence kept.
 3. F-breadth: at equal dollar cap on the 20-seed run, the room's caught share exceeds the pair's by no more than seed noise (paired bootstrap 95% interval contains zero). Then a breadth and division-of-labour advantage is not supported for these tasks.
 4. F-shipped: an arm that catches more also ships more regressions, so the gain is not net. Caught and shipped are always reported together.
-5. F-cost: at equal cap the single agent at higher effort matches or beats both other arms. Then the paper's cost finding extends to build tasks.
+5. F-cost: at equal cap the single agent (arm A) matches or beats both other arms on caught share without more shipped. Then the paper's cost finding extends to build tasks. Any higher-effort single-agent arm is a separate comparison and only exists if the prereg adds it.
 
 Admission and defect replacement use pilot seeds only; confirmatory seeds are disjoint and listed in the prereg before running.

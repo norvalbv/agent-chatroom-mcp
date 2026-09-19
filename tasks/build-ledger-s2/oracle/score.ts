@@ -9,15 +9,29 @@ import { spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+function readSingleResult(stdout: string): unknown {
+  // fable-review G1: a workspace module could register a process 'exit' hook (or forge output at
+  // import time) that prints a second, fabricated '@@RESULT@@' marker. Taking the last (or first)
+  // occurrence lets an attacker pick which one wins. Instead: a legitimate run.ts prints the marker
+  // exactly once; two or more occurrences is unambiguous evidence of tampering and is refused outright
+  // (scored as no result, never as a pass), so forging a marker can only cost the attacker, never help.
+  const marker = '@@RESULT@@';
+  let count = 0, at = -1;
+  for (let i = stdout.indexOf(marker); i !== -1; i = stdout.indexOf(marker, i + 1)) { count++; at = i; }
+  if (count !== 1) return null;
+  try { return JSON.parse(stdout.slice(at + marker.length)); } catch { return null; }
+}
+
 
 const workspace = process.argv[2];
 if (!workspace) { console.error('usage: score.ts WORKSPACE'); process.exit(2); }
 const here = dirname(fileURLToPath(import.meta.url));
+const REPO_ROOT = "/Users/benji/Desktop/Personal and learning/agent-chatroom-mcp/.swarm-worktrees/swarm-191133-4hqx/sonnet-1";
 const inst = JSON.parse(readFileSync(join(here, 'instance.json'), 'utf8'));
 const expected = JSON.parse(readFileSync(join(here, 'expected.json'), 'utf8'));
-const child = spawnSync(process.execPath, ['--import', 'tsx', join(here, 'run.ts'), resolve(workspace), String(inst.m)], { encoding: 'utf8', timeout: 60000, maxBuffer: 64 * 1024 * 1024 });
+const child = spawnSync(process.execPath, ['--import', 'tsx', join(here, 'run.ts'), resolve(workspace), String(inst.m)], { encoding: 'utf8', timeout: 60000, maxBuffer: 64 * 1024 * 1024, cwd: REPO_ROOT });
 let got: Record<string, { ok: boolean; value?: unknown }> = {};
-try { got = JSON.parse(child.stdout.slice(child.stdout.lastIndexOf('@@RESULT@@') + 10)); } catch { got = {}; }
+got = (readSingleResult(child.stdout) as typeof got) ?? {};
 function subset(exp: unknown, act: unknown): boolean {
   if (Array.isArray(exp)) return Array.isArray(act) && act.length === exp.length && exp.every((e, i) => subset(e, act[i]));
   if (exp && typeof exp === 'object') return !!act && typeof act === 'object' && !Array.isArray(act) && Object.entries(exp).every(([k, v]) => subset(v, (act as any)[k]));

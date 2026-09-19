@@ -11,6 +11,11 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
+// Repo root of THIS generator, baked as a literal into every generated oracle/score.ts so the private-scorer child
+// process resolves tsx (and everything else) the same way regardless of the caller's cwd or where a task instance
+// is generated to (fable-review G2: a scorer that inherits the caller's cwd is cwd-dependent and can silently fail).
+const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+
 function rng(seed: number) {
   let a = (seed * 2654435761 >>> 0) || 1;
   return () => { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
@@ -207,15 +212,29 @@ import { spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+function readSingleResult(stdout: string): unknown {
+  // fable-review G1: a workspace module could register a process 'exit' hook (or forge output at
+  // import time) that prints a second, fabricated '@@RESULT@@' marker. Taking the last (or first)
+  // occurrence lets an attacker pick which one wins. Instead: a legitimate run.ts prints the marker
+  // exactly once; two or more occurrences is unambiguous evidence of tampering and is refused outright
+  // (scored as no result, never as a pass), so forging a marker can only cost the attacker, never help.
+  const marker = '@@RESULT@@';
+  let count = 0, at = -1;
+  for (let i = stdout.indexOf(marker); i !== -1; i = stdout.indexOf(marker, i + 1)) { count++; at = i; }
+  if (count !== 1) return null;
+  try { return JSON.parse(stdout.slice(at + marker.length)); } catch { return null; }
+}
+
 
 const workspace = process.argv[2];
 if (!workspace) { console.error('usage: score.ts WORKSPACE'); process.exit(2); }
 const here = dirname(fileURLToPath(import.meta.url));
+const REPO_ROOT = ${JSON.stringify(repoRoot)};
 const inst = JSON.parse(readFileSync(join(here, 'instance.json'), 'utf8'));
 const expected = JSON.parse(readFileSync(join(here, 'expected.json'), 'utf8'));
-const child = spawnSync(process.execPath, ['--import', 'tsx', join(here, 'run.ts'), resolve(workspace)], { encoding: 'utf8', timeout: 60000, maxBuffer: 64 * 1024 * 1024 });
+const child = spawnSync(process.execPath, ['--import', 'tsx', join(here, 'run.ts'), resolve(workspace)], { encoding: 'utf8', timeout: 60000, maxBuffer: 64 * 1024 * 1024, cwd: REPO_ROOT });
 let got: Record<string, { defect: any[]; reg: any[] }> = {};
-try { got = JSON.parse(child.stdout.slice(child.stdout.lastIndexOf('@@RESULT@@') + 10)); } catch { got = {}; }
+got = (readSingleResult(child.stdout) as typeof got) ?? {};
 function run(id: string, which: 'defect' | 'reg'): boolean {
   const exp = expected[id][which], act = got[id]?.[which];
   if (!act || act.length !== exp.length) return false;

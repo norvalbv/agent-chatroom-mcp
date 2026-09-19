@@ -9,6 +9,11 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
+// Repo root of THIS generator, baked as a literal into every generated oracle/score.ts so the private-scorer child
+// process resolves tsx (and everything else) the same way regardless of the caller's cwd or where a task instance
+// is generated to (fable-review G2: a scorer that inherits the caller's cwd is cwd-dependent and can silently fail).
+const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+
 export const LEDGER_DEFECTS = ['S01', 'S02', 'S03', 'S04', 'S05', 'S06', 'S07', 'S08', 'S09', 'S10', 'S11', 'S12', 'S13', 'S14'] as const;
 export const LEDGER_KIND: Record<string, string> = { S01: 'cross-module-contract', S02: 'spec-vs-code', S03: 'boundary', S04: 'cross-module-contract', S05: 'cross-module-contract', S06: 'boundary', S07: 'spec-vs-code', S08: 'spec-vs-code', S09: 'cross-module-contract', S10: 'spec-vs-code', S11: 'cross-module-contract', S12: 'cross-module-contract', S13: 'cross-module-contract', S14: 'cross-module-contract' };
 export type LedgerInstance = { seed: number; m: number; defects: string[] };
@@ -414,15 +419,29 @@ import { spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+function readSingleResult(stdout: string): unknown {
+  // fable-review G1: a workspace module could register a process 'exit' hook (or forge output at
+  // import time) that prints a second, fabricated '@@RESULT@@' marker. Taking the last (or first)
+  // occurrence lets an attacker pick which one wins. Instead: a legitimate run.ts prints the marker
+  // exactly once; two or more occurrences is unambiguous evidence of tampering and is refused outright
+  // (scored as no result, never as a pass), so forging a marker can only cost the attacker, never help.
+  const marker = '@@RESULT@@';
+  let count = 0, at = -1;
+  for (let i = stdout.indexOf(marker); i !== -1; i = stdout.indexOf(marker, i + 1)) { count++; at = i; }
+  if (count !== 1) return null;
+  try { return JSON.parse(stdout.slice(at + marker.length)); } catch { return null; }
+}
+
 
 const workspace = process.argv[2];
 if (!workspace) { console.error('usage: score.ts WORKSPACE'); process.exit(2); }
 const here = dirname(fileURLToPath(import.meta.url));
+const REPO_ROOT = ${JSON.stringify(repoRoot)};
 const inst = JSON.parse(readFileSync(join(here, 'instance.json'), 'utf8'));
 const expected = JSON.parse(readFileSync(join(here, 'expected.json'), 'utf8'));
-const child = spawnSync(process.execPath, ['--import', 'tsx', join(here, 'run.ts'), resolve(workspace), String(inst.m)], { encoding: 'utf8', timeout: 60000, maxBuffer: 64 * 1024 * 1024 });
+const child = spawnSync(process.execPath, ['--import', 'tsx', join(here, 'run.ts'), resolve(workspace), String(inst.m)], { encoding: 'utf8', timeout: 60000, maxBuffer: 64 * 1024 * 1024, cwd: REPO_ROOT });
 let got: Record<string, { ok: boolean; value?: unknown }> = {};
-try { got = JSON.parse(child.stdout.slice(child.stdout.lastIndexOf('@@RESULT@@') + 10)); } catch { got = {}; }
+got = (readSingleResult(child.stdout) as typeof got) ?? {};
 function subset(exp: unknown, act: unknown): boolean {
   if (Array.isArray(exp)) return Array.isArray(act) && act.length === exp.length && exp.every((e, i) => subset(e, act[i]));
   if (exp && typeof exp === 'object') return !!act && typeof act === 'object' && !Array.isArray(act) && Object.entries(exp).every(([k, v]) => subset(v, (act as any)[k]));

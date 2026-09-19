@@ -148,6 +148,19 @@ particular, a seat killed before its terminal result may have unknown authoritat
 cost even when partial token usage exists; it is never recorded as zero cost. Every
 raw outcome and any observed partial cost remains in the ledger.
 
+Outcome classification is mechanical and recorded before scoring. A
+`protocol_failure` is (a) the shared deadline firing after at least one seat was
+successfully spawned while the runner and, for C, hub remain alive, or (b) a
+healthy C hub reaching terminal seat completion without satisfying its frozen room
+policy, historical claim/reviewer evidence, artifact-bound verification and
+conclusion checks. A process spawn/exec error, provider/API failure, hub startup
+failure or crash, HTTP 5xx, scorer exception, or unavailable frozen input is
+`infrastructure_error`. A pre/post mismatch in the task, private fixtures, scorer,
+executor, hub build, effort settings, or verification-bound workspace is `tamper`
+and non-scoreable. The raw result records the failure stage, whether the deadline
+fired, seat exit/signal state, hub health, scorer exit, and every integrity hash;
+the reducer never reclassifies from prose after seeing the catch score.
+
 ## Arms and equal-cap contract
 
 The model alias is Claude Sonnet. Normal effort is `medium`, pinned by making each
@@ -325,7 +338,9 @@ rejected at 5/5 ceiling (all five exploratory runs caught 9/9; archive commit
 closed on placeholder task IDs until two new versioned siblings pass admission.
 The same review confirmed that misleading public tests must be editable task output:
 their remaining failures count through the public-suite regression check rather than
-turning the cell into an anti-tamper exclusion.
+turning the cell into an anti-tamper exclusion. It also froze the stage/process/
+health/hash classifier inputs above so arm versus infrastructure failure is not
+chosen after the catch outcome is visible.
 
 ## Development and pilot evidence (not yet observed at freeze)
 

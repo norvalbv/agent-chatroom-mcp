@@ -345,6 +345,58 @@ test("arm B: reviewer requests one revision, builder revises once, then scores t
   }
 });
 
+/** builder-1 sleeps before answering (simulating a slow real call); reviewer hangs forever (like the
+ * existing "kill" stub) so it can only end via the deadline timer. Used to prove arm B's deadline is one
+ * shared wall-clock budget for the whole pipeline (protocol.md 2: "the same wall-clock timeout per task"),
+ * not a fresh grant re-issued to every stage. */
+function stubClaudeDirArmBSlowThenHang(builderSleepMs: number) {
+  const dir = mkdtempSync(join(tmpdir(), "bench-rq1-armb-slow-stub-"));
+  const bin = join(dir, "claude");
+  writeFileSync(
+    bin,
+    [
+      "#!/usr/bin/env node",
+      "const fs=require('node:fs');",
+      "const args=process.argv.slice(2);",
+      "if(!args.includes('--output-format')||args[args.indexOf('--output-format')+1]!=='stream-json'||!args.includes('--verbose')){process.stderr.write('expected --output-format stream-json --verbose\\n');process.exit(1);}",
+      "const who=process.env.GIT_AUTHOR_NAME||'';",
+      "if(who==='builder-1'){",
+      `  setTimeout(()=>{`,
+      `    fs.writeFileSync('answer.txt', ${JSON.stringify(EXPECTED)});`,
+      "    process.stdout.write(JSON.stringify({type:'assistant',message:{usage:{input_tokens:80,output_tokens:15}}})+'\\n');",
+      "    process.stdout.write(JSON.stringify({type:'result',subtype:'success',is_error:false,result:'builder-1 submission',num_turns:2,duration_ms:500,duration_api_ms:520,total_cost_usd:0.002,usage:{input_tokens:100,output_tokens:20}})+'\\n');",
+      `  }, ${builderSleepMs});`,
+      "}else{",
+      "  process.stdout.write(JSON.stringify({type:'assistant',message:{usage:{input_tokens:80,output_tokens:15}}})+'\\n');",
+      "  setInterval(()=>{},1000);",
+      "}",
+      "",
+    ].join("\n"),
+  );
+  chmodSync(bin, 0o755);
+  return dir;
+}
+
+test("arm B: the deadline is one shared wall-clock budget for the whole pipeline, not a fresh grant per stage", () => {
+  const stubDir = stubClaudeDirArmBSlowThenHang(1000);
+  const root = join(tmpdir(), `bench-rq1-b-deadline-${process.pid}-${Date.now()}`);
+  try {
+    const r = invoke([task, "B", "3", "--root", root, "--deadline-ms", "1300"], { PATH: `${stubDir}${delimiter}${process.env.PATH}` });
+    assert.equal(r.status, 0, r.stderr + r.stdout);
+    const result = JSON.parse(readFileSync(join(root, "result.json"), "utf8"));
+    assert.equal(result.outcome, "timeout");
+    assert.deepEqual(result.seats.map((s: any) => s.name), ["builder-1", "reviewer"], "the reviewer runs out of shared budget; a third (revision) stage never starts");
+    assert.equal(result.seats[1].killed_by_deadline, true);
+    assert.ok(
+      result.wall_clock.duration_ms < 2000,
+      `reviewer must be killed on the ~300ms REMAINING after builder-1's 1000ms sleep, not a fresh 1300ms (which would put total near 2300ms); got ${result.wall_clock.duration_ms}ms`,
+    );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+    rmSync(stubDir, { recursive: true, force: true });
+  }
+});
+
 test("arm C: hidden fixtures never copied into the seat-visible workspace", async () => {
   const stubDir = stubClaudeDir();
   const hubEntry = stubHubDir(EXPECTED);

@@ -331,26 +331,37 @@ async function main() {
     // Protocol.md 2.1, arm B: "Two model instances in a fixed pipeline ... at most one revision round."
     // Both stages share the builder's own workspace (the reviewer's "sees the builder's output" is the
     // literal files on disk plus the builder's final message, not a copy) and neither carries MCP tools.
+    // Protocol.md 2 requires "the same wall-clock timeout per task" across arms: deadlineMs is therefore
+    // one total budget for the whole 2-3-stage pipeline, not a fresh deadlineMs re-granted to every
+    // stage (a naive per-stage timer could let a 3-stage run take up to 3x arm A/C's wall-clock cap).
     startedAt = new Date();
+    const pipelineDeadlineAt = Date.now() + deadlineMs;
+    const remainingDeadline = () => Math.max(0, pipelineDeadlineAt - Date.now());
     const mcpJson = join(root, "mcp-empty.json");
     json(mcpJson, { mcpServers: {} });
     const records: SeatRecord[] = [];
     const builder1Text = `${briefText}\n${scaffoldSingle}`;
     const builder1Args = claudeArgs({ text: builder1Text, mcpJson, tools: baseTools, model, outputFormat: "stream-json" });
-    const builder1 = await runClaudeSeat("builder-1", builder1Args, workspace, deadlineMs);
+    const builder1 = await runClaudeSeat("builder-1", builder1Args, workspace, remainingDeadline());
     records.push(builder1);
 
-    const reviewText = `${briefText}\n\nYou are reviewing another engineer's submission for this task. Their final message was:\n"""\n${builder1.text}\n"""\nTheir work is already in your current working directory (${isCodeTask ? "the edited source file(s)" : "answer.txt"}). Do not edit any files yourself — you may only read and inspect.\nIf their submission is correct and complete, respond with exactly: APPROVE\nOtherwise respond with a message starting with "REVISE:" followed by one sentence describing what to fix.`;
-    const reviewerArgs = claudeArgs({ text: reviewText, mcpJson, tools: reviewerTools, model, outputFormat: "stream-json" });
-    const reviewer = await runClaudeSeat("reviewer", reviewerArgs, workspace, deadlineMs);
-    records.push(reviewer);
+    // A stage that already ran out of pipeline budget skips the rest rather than spawning a claude
+    // process with ~0ms left to live: it cannot produce a real signal, only spend money to be killed
+    // immediately, and the outer killed_by_deadline check below already forces outcome "timeout"
+    // regardless of what (if anything) later stages did.
+    if (!builder1.killed_by_deadline && remainingDeadline() > 0) {
+      const reviewText = `${briefText}\n\nYou are reviewing another engineer's submission for this task. Their final message was:\n"""\n${builder1.text}\n"""\nTheir work is already in your current working directory (${isCodeTask ? "the edited source file(s)" : "answer.txt"}). Do not edit any files yourself — you may only read and inspect.\nIf their submission is correct and complete, respond with exactly: APPROVE\nOtherwise respond with a message starting with "REVISE:" followed by one sentence describing what to fix.`;
+      const reviewerArgs = claudeArgs({ text: reviewText, mcpJson, tools: reviewerTools, model, outputFormat: "stream-json" });
+      const reviewer = await runClaudeSeat("reviewer", reviewerArgs, workspace, remainingDeadline());
+      records.push(reviewer);
 
-    const decision = parseReviewDecision(reviewer.text);
-    if (!decision.approved && !reviewer.killed_by_deadline) {
-      const revisionText = `${briefText}\n${scaffoldSingle}\n\nA reviewer looked at your previous submission (still in this directory) and said:\n"""\n${decision.feedback}\n"""\nMake only the necessary changes to address the reviewer's feedback. This is your final revision; there is no further review round.`;
-      const builder2Args = claudeArgs({ text: revisionText, mcpJson, tools: baseTools, model, outputFormat: "stream-json" });
-      const builder2 = await runClaudeSeat("builder-2", builder2Args, workspace, deadlineMs);
-      records.push(builder2);
+      const decision = parseReviewDecision(reviewer.text);
+      if (!decision.approved && !reviewer.killed_by_deadline && remainingDeadline() > 0) {
+        const revisionText = `${briefText}\n${scaffoldSingle}\n\nA reviewer looked at your previous submission (still in this directory) and said:\n"""\n${decision.feedback}\n"""\nMake only the necessary changes to address the reviewer's feedback. This is your final revision; there is no further review round.`;
+        const builder2Args = claudeArgs({ text: revisionText, mcpJson, tools: baseTools, model, outputFormat: "stream-json" });
+        const builder2 = await runClaudeSeat("builder-2", builder2Args, workspace, remainingDeadline());
+        records.push(builder2);
+      }
     }
     seatRecords = records;
     completedAt = new Date();

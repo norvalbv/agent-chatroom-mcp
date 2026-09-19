@@ -20,7 +20,9 @@
   \caption{Cost per correct answer (API list price) by arm and task, log scale. Arm A is
   cheapest per correct answer on every task; arms C and K cost roughly the same as each other on the
   interpreter family and on \texttt{printf-format}, where both cost more per correct answer than arm A
-  despite passing less often (Table~\ref{tab:cost-per-correct}).}
+  despite passing less often (Table~\ref{tab:cost-per-correct}). All runs are from before the thinking-budget
+  regime shift documented in Section~\ref{sec:threats} (2026-09-19, 07:44--11:30 UTC); not comparable to any
+  run from after the shift.}
   \label{fig:cost-per-correct}
 \end{figure}
 
@@ -29,7 +31,8 @@
   \includegraphics[width=\linewidth]{figures/fig-cost-vs-accuracy.png}
   \caption{Cost per correct answer (log scale) against task success rate, one point per (task, arm).
   Arm A is always cheapest per correct answer; arm C and arm K are budget-matched per prereg but neither
-  buys accuracy on \texttt{printf-format}.}
+  buys accuracy on \texttt{printf-format}. All runs are from before the thinking-budget regime shift
+  documented in Section~\ref{sec:threats} (2026-09-19, 07:44--11:30 UTC).}
   \label{fig:cost-vs-accuracy}
 \end{figure}
 

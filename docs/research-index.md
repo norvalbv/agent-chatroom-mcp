@@ -7,25 +7,25 @@
 | arXiv:2105.03546 | board-delta-manifests-and-single-electorate  |
 | arXiv:2109.10761 | board-delta-manifests-and-single-electorate  |
 | arXiv:2211.17169 | docs/swarm-protocol-spec done-means-independently-verified  |
-| arXiv:2303.17760 | docs/swarm-protocol-spec README self-organising-teams-by-claims-and-recruitment  |
+| arXiv:2303.17760 | README docs/swarm-protocol-spec self-organising-teams-by-claims-and-recruitment  |
 | arXiv:2304.13835 | humans-answered-once-by-hub-enforcement  |
 | arXiv:2305.05176 | docs/token-round-0918 token-cost-is-resent-context  |
-| arXiv:2305.14325 | consensus-requires-scrutiny README  |
-| arXiv:2305.19118 | consensus-requires-scrutiny README  |
+| arXiv:2305.14325 | README consensus-requires-scrutiny  |
+| arXiv:2305.19118 | README consensus-requires-scrutiny  |
 | arXiv:2306.05685 | measure-task-success-on-a-machine-oracle  |
 | arXiv:2307.03172 | docs/fleet-174517-summary hub-carries-what-it-knows  |
-| arXiv:2308.00352 | board-delta-manifests-and-single-electorate docs/board-electorate-swarm-200859 docs/quiet-delivery-decision docs/self-improvement-lobby-swarm-190103 docs/swarm-protocol-spec done-means-independently-verified humans-answered-once-by-hub-enforcement proposal-is-a-document quiet-delivery-not-privacy README  |
-| arXiv:2308.07201 | minimal-prompt-hub-carries-coordination README  |
-| arXiv:2308.08155 | docs/swarm-protocol-spec humans-answered-once-by-hub-enforcement README self-organising-teams-by-claims-and-recruitment  |
+| arXiv:2308.00352 | README board-delta-manifests-and-single-electorate docs/board-electorate-swarm-200859 docs/quiet-delivery-decision docs/self-improvement-lobby-swarm-190103 docs/swarm-protocol-spec done-means-independently-verified humans-answered-once-by-hub-enforcement proposal-is-a-document quiet-delivery-not-privacy  |
+| arXiv:2308.07201 | README minimal-prompt-hub-carries-coordination  |
+| arXiv:2308.08155 | README docs/swarm-protocol-spec humans-answered-once-by-hub-enforcement self-organising-teams-by-claims-and-recruitment  |
 | arXiv:2308.10848 | docs/swarm-protocol-spec self-organising-teams-by-claims-and-recruitment  |
-| arXiv:2309.13007 | consensus-requires-scrutiny README  |
+| arXiv:2309.13007 | README consensus-requires-scrutiny  |
 | arXiv:2310.01798 | consensus-requires-scrutiny docs/swarm-protocol-spec done-means-independently-verified self-organising-teams-by-claims-and-recruitment  |
 | arXiv:2310.02170 | consensus-requires-scrutiny docs/swarm-protocol-spec self-organising-teams-by-claims-and-recruitment  |
 | arXiv:2310.03716 | humans-answered-once-by-hub-enforcement  |
 | arXiv:2310.05036 | docs/quiet-delivery-decision quiet-delivery-not-privacy  |
 | arXiv:2310.06770 | docs/swarm-protocol-spec done-means-independently-verified  |
 | arXiv:2310.14985 | docs/quiet-delivery-decision quiet-delivery-not-privacy  |
-| arXiv:2311.17371 | consensus-requires-scrutiny README  |
+| arXiv:2311.17371 | README consensus-requires-scrutiny  |
 | arXiv:2312.09119 | docs/swarm-protocol-spec done-means-independently-verified  |
 | arXiv:2401.04883 | humans-answered-once-by-hub-enforcement  |
 | arXiv:2402.02330 | docs/quiet-delivery-decision quiet-delivery-not-privacy  |
@@ -36,7 +36,7 @@
 | arXiv:2404.02183 | docs/swarm-protocol-spec self-organising-teams-by-claims-and-recruitment  |
 | arXiv:2404.06654 | docs/fleet-174517-summary docs/fleet-181630-summary done-means-independently-verified  |
 | arXiv:2405.03862 | docs/self-improvement-swarm-planned hub-carries-what-it-knows  |
-| arXiv:2406.07155 | docs/swarm-protocol-spec done-means-independently-verified README self-organising-teams-by-claims-and-recruitment  |
+| arXiv:2406.07155 | README docs/swarm-protocol-spec done-means-independently-verified self-organising-teams-by-claims-and-recruitment  |
 | arXiv:2406.16008 | hub-carries-what-it-knows  |
 | arXiv:2406.17744 | humans-answered-once-by-hub-enforcement  |
 | arXiv:2410.08115 | docs/swarm-protocol-spec self-organising-teams-by-claims-and-recruitment  |
@@ -56,13 +56,13 @@
 | arXiv:2508.11027 | docs/self-improvement-swarm-planned hub-carries-what-it-knows  |
 | arXiv:2508.12683 | hub-carries-what-it-knows  |
 | arXiv:2508.15815 | humans-answered-once-by-hub-enforcement  |
-| arXiv:2509.05396 | consensus-requires-scrutiny README  |
-| arXiv:2509.23055 | consensus-requires-scrutiny README  |
+| arXiv:2509.05396 | README consensus-requires-scrutiny  |
+| arXiv:2509.23055 | README consensus-requires-scrutiny  |
 | arXiv:2509.25271 | docs/self-improvement-swarm-planned hub-carries-what-it-knows  |
 | arXiv:2509.25370 | docs/self-improvement-swarm-planned hub-carries-what-it-knows  |
-| arXiv:2510.07517 | consensus-requires-scrutiny README  |
+| arXiv:2510.07517 | README consensus-requires-scrutiny  |
 | arXiv:2510.11967 | self-organising-teams-by-claims-and-recruitment  |
-| arXiv:2510.12697 | consensus-requires-scrutiny README  |
+| arXiv:2510.12697 | README consensus-requires-scrutiny  |
 | arXiv:2511.03718 | hub-carries-what-it-knows  |
 | arXiv:2511.17315 | humans-answered-once-by-hub-enforcement  |
 | arXiv:2512.09187 | docs/quiet-delivery-decision quiet-delivery-not-privacy  |
@@ -70,6 +70,7 @@
 | arXiv:2601.10102 | docs/self-improvement-swarm-planned hub-carries-what-it-knows  |
 | arXiv:2601.17152 | docs/self-improvement-swarm-planned hub-carries-what-it-knows  |
 | arXiv:2601.18285 | self-organising-teams-by-claims-and-recruitment  |
+| arXiv:2601.19934 | docs/open-round-window-control-audit  |
 | arXiv:2602.12285 | docs/self-improvement-swarm-planned hub-carries-what-it-knows  |
 | arXiv:2602.23193 | docs/fleet-181630-summary  |
 | arXiv:2603.10123 | hub-carries-what-it-knows  |

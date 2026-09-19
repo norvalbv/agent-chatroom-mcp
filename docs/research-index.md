@@ -67,6 +67,7 @@
 | arXiv:2511.03718 | hub-carries-what-it-knows  |
 | arXiv:2511.17315 | humans-answered-once-by-hub-enforcement  |
 | arXiv:2512.09187 | docs/quiet-delivery-decision quiet-delivery-not-privacy  |
+| arXiv:2512.24601 | docs/context-offload-experiment-174126  |
 | arXiv:2601.08815 | hub-carries-what-it-knows  |
 | arXiv:2601.10102 | docs/self-improvement-swarm-planned hub-carries-what-it-knows  |
 | arXiv:2601.17152 | docs/self-improvement-swarm-planned hub-carries-what-it-knows  |

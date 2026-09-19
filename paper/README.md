@@ -1,8 +1,9 @@
 # Building the paper
 
-Integration branch: `integration/swarm-164742-5jvl-verifier`. The paper, its generators and the built
-`main.pdf` are at commit `1f221d9`; the only later change on the branch is this line (a commit cannot
-name itself).
+Original paper integration: `integration/swarm-164742-5jvl-verifier` at `1f221d9`.
+The current `main.pdf` includes the window-control refresh from source commit `e0e8912`, using
+the completed control artifacts committed in `c82124d`. The refresh separates the long-output,
+crossover, and short-output cohorts; it does not pool them or add the exploratory Arm B pilot.
 
 ## What was installed (user-local, per the room brief; nothing system-wide)
 

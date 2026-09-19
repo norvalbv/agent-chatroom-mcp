@@ -244,6 +244,19 @@ function runCell(argv: string[]): Promise<number> {
   });
 }
 
+function observedCost(runDir: string): number | null {
+  for (const name of ["build-result.json", "result.json"]) {
+    const path = join(runDir, name);
+    if (!existsSync(path)) continue;
+    try {
+      const parsed = JSON.parse(readFileSync(path, "utf8")) as { usage?: { cost_usd?: unknown } };
+      const cost = parsed.usage?.cost_usd;
+      if (typeof cost === "number" && Number.isFinite(cost) && cost >= 0) return cost;
+    } catch {}
+  }
+  return null;
+}
+
 export async function runBuildGrid(args: BuildGridArgs, options: { log?: (message: string) => void } = {}): Promise<BuildGridSummary> {
   const log = options.log ?? console.log;
   mkdirSync(args.resultsDir, { recursive: true });
@@ -291,12 +304,18 @@ export async function runBuildGrid(args: BuildGridArgs, options: { log?: (messag
     summary.ran += 1;
     if (code !== 0 || !existsSync(resultPath)) {
       summary.infraFailed += 1;
+      const cost = observedCost(cell.runDir);
+      if (cost === null) summary.unknownCost += 1;
+      else summary.knownCostUsd += cost;
       summary.halted = true;
       break;
     }
     const checked = validateResult(JSON.parse(readFileSync(resultPath, "utf8")) as BuildResult, cell, fingerprint, args.effort);
     if (!checked.valid) {
       summary.invalid += 1;
+      const cost = observedCost(cell.runDir);
+      if (cost === null) summary.unknownCost += 1;
+      else summary.knownCostUsd += cost;
       summary.halted = true;
       break;
     }

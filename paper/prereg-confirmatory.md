@@ -22,6 +22,11 @@ five arms are run back-to-back before the next seed starts:
   in `paper/prereg-arm-k.md`.
 - **C:** the three-seat chatroom, all seats at medium effort.
 
+The grid iterates all 20 stamp-interpreter seeds before all 20
+bench-printf-format seeds.  It never separates the five arms within a seed, but
+a provider-regime boundary between task families remains possible and is handled
+by the per-task sentinel strata rather than pooling them.
+
 Every workspace is initialized as its own git root and the harness writes its
 workspace-root `.claude/settings.json`; every Claude invocation uses project
 settings.  The harness records the settings path/hash and direct terminal
@@ -137,7 +142,8 @@ correct answer (unknown if any relevant cost is unknown), and thinking tokens pe
 run.  It directly calls two-sided `fisherExactTest` for the fixed 14-test family:
 for each of two tasks, B/C, AH/C, K/C, AH/A, B/A, K/A, and C/A.  It reports raw
 and Holm-adjusted p-values side by side; absent comparisons are padded with
-`p=1`, preserving conservative `m=14` on partial data.
+`p=1`, preserving conservative `m=14` on partial data rather than shrinking the
+family after observing which comparisons are available.
 
 The n=20 power calculations are unadjusted / conservative first-rank
 `0.05/14` threshold respectively: (.9,1) 0.0431745 / 0.0004156; (.8,1)
@@ -150,6 +156,17 @@ stratum splits reporting; unknown cost halts further capped launch; a cap/deadli
 that binds remains outcome data; invalid provenance remains unknown; and a
 pre-registered comparison whose adjusted p is not below .05 has not established
 a difference.  No equivalence margin or equality conclusion is authorized.
+
+The predictions below are directional/cost predictions, not equivalence tests:
+the stamp AH prediction is contradicted if AH has a lower pass rate than C with
+Holm-adjusted two-sided Fisher `p < .05`; its “matches” wording cannot be
+confirmed or falsified as equality without a predeclared equivalence margin.
+The B cost prediction is contradicted if complete-cost B mean cost/run is at
+least one third of C mean cost/run.  K “not significantly different” likewise
+cannot establish or falsify equality; an adjusted significant K/C difference is
+reported as contrary directional evidence, while a non-significant result stays
+inconclusive.  The printf no-aggregation prediction is contradicted when any of
+B, K, or C has a higher pass rate than A with adjusted `p < .05`.
 
 The maintainer's predictions, recorded verbatim, are:
 

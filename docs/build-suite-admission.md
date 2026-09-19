@@ -69,6 +69,13 @@ shape as correct code.
 3. A spec that is silent on the consequence and only a worked example implies it (the stamp-family lever in paper/amendments.md).
 4. Public tests hidden from the arm so it has no green run to lean on.
 
+sonnet-3 (room review) proposed concrete instances of lever 1 that a diff-a-spec-row reader cannot see: a conservation invariant
+across a multi-step flow where each stage is locally correct but roundings disagree (a sum of prorated parts does not equal the
+prorated whole); a helper that mutates an input a later stage reads (order-dependent result, invisible to a test that calls each
+stage alone); state kept across calls (a cache keyed on a subset of the inputs, or idempotency broken on a second call); a worked
+example in the spec whose numbers only match a derived constant or order, not a stated rule. Each would need a scenario hidden
+check, not a per-function call.
+
 Nothing here is tuned on confirmatory seeds; no confirmatory run was made.
 
 ## Three-arm pilot on build-ledger-s1 (seeds 101 to 104, effort medium, 6-astra-4's runner at 9c37a6b)

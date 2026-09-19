@@ -4,7 +4,9 @@
 
 \subsection{Build}
 
-Commit \texttt{41ff777} on branch \texttt{main} of \texttt{agent-chatroom-mcp}.
+Repository \texttt{agent-chatroom-mcp}, the commit named in \texttt{paper/README.md} (the integration
+branch this paper was built from; \texttt{npm install} is required before any generator script below,
+since they run under \texttt{tsx} against this repository's own dependencies).
 
 \begin{footnotesize}
 \begin{verbatim}
@@ -43,8 +45,9 @@ from arm~C's realized spend.)
 \begin{verbatim}
 node --import tsx scripts/bench-grid.ts \
   --tasks stamp-interpreter,stamp-2,bench-printf-format \
-  --seeds 101,...,140 --arms K \
-  --k stamp-interpreter=10,stamp-2=8,bench-printf-format=7 \
+  --seeds 101,102,103,104,105,106,107,108,109,110,111,112,113,114,115,116,117,118,119,120, \
+          121,122,123,124,125,126,127,128,129,130,131,132,133,134,135,136,137,138,139,140 \
+  --arms K --k stamp-interpreter=10,stamp-2=8,bench-printf-format=7 \
   --model sonnet --results-dir bench/results/rq1-arm-k --port-base 19850
 \end{verbatim}
 \end{footnotesize}
@@ -74,20 +77,31 @@ reproducing them should confirm the flags against \texttt{scripts/bench-grid.ts}
 at the commit named in \S\ref{sec:reproducibility}. Its result is reported in Section~\ref{sec:results}
 as complete or pending as of that section's writing, never read from partial output.
 
-\subsection{Tables, statistics, and figures}
+\subsection{Tables, statistics, figures, and the prose-number audit}
 
 \begin{footnotesize}
 \begin{verbatim}
-node --import tsx scripts/paper-rq1-table.ts bench/results/rq1-suite
-node --import tsx scripts/paper-rq1-armk.ts bench/results/rq1-suite bench/results/rq1-arm-k
+bash paper/regen.sh
 \end{verbatim}
 \end{footnotesize}
 
-plus the figure-generating scripts under \texttt{scripts/paper-fig*.ts} (Section~\ref{sec:results}).
-Every table and figure script reads only committed \texttt{result.json} files under
-\texttt{bench/results/}; none accepts a hand-typed number, and \texttt{scripts/rq1-stats.ts} implements
-the two-proportion $z$-test, Fisher's exact test, and Holm-Bonferroni correction with no external
-statistics dependency.
+\texttt{paper/regen.sh} runs every generator listed in \texttt{paper/regen-manifest.sh} --
+\texttt{scripts/paper-rq1-table.ts}, \texttt{scripts/paper-rq1-armk.ts}, \texttt{scripts/paper-rq1-family.ts}
+and \texttt{scripts/paper-rq1-tex.ts} (results tables and statistics), and
+\texttt{scripts/paper-fig-data.ts}, \texttt{scripts/paper-fig-tables.ts} and \texttt{scripts/paper-fig.py}
+(figures) -- diffs everything under \texttt{bench/results/}, \texttt{paper/tables/},
+\texttt{paper/figures/} and \texttt{paper/generated/} against the working tree, and fails if
+regenerating changes anything main.tex already includes. It then runs
+\texttt{scripts/paper-number-audit.ts}, which extracts every decimal, fraction, and $p$-value written
+into \texttt{paper/sections/*.tex} prose and fails on any that does not appear in a generated table, a
+committed \texttt{bench/results} table, or one of the pre-registration/decision documents
+(\texttt{paper/prereg-arm-k.md}, \texttt{paper/amendments.md}, \texttt{paper/protocol.md},
+\texttt{paper/budget.md}, \texttt{paper/figures.md}, \texttt{docs/token-round-0918.md},
+\texttt{docs/review-round-0918.md}, \texttt{tasks/SUITE.json}) -- so no number in the prose can drift
+from what a generator or a pre-registered constant actually says. Every generator reads only committed
+\texttt{result.json} files under \texttt{bench/results/}; none accepts a hand-typed number, and
+\texttt{scripts/rq1-stats.ts} implements the two-proportion $z$-test, Fisher's exact test, and
+Holm-Bonferroni correction with no external statistics dependency.
 
 \subsection{Citation check and PDF build}
 
@@ -98,7 +112,10 @@ tectonic paper/main.tex
 \end{verbatim}
 \end{footnotesize}
 
-Build tooling installed for this room, user-locally only (recorded with these exact commands in
+\texttt{paper/check-citations.sh} resolves every arXiv id cited in \texttt{paper/*.md} and
+\texttt{paper/refs.bib} against \texttt{export.arxiv.org} and checks the cited title matches; it does
+not check numbers, only citations (Section~\ref{sec:reproducibility}'s number audit is a separate step,
+above). Build tooling installed for this room, user-locally only (recorded with these exact commands in
 \texttt{paper/README.md}): \texttt{brew install tectonic}; \texttt{pip3 install --user
 --break-system-packages matplotlib} (the \texttt{--break-system-packages} flag was required on the
 build machine used, whose system Python refuses an unqualified \texttt{--user} install under

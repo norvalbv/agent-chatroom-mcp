@@ -55,15 +55,36 @@ export function proseNumbers(prose: string): string[] {
   for (const m of prose.matchAll(/(?<![\w.])(\d+\/\d+)(?![\w/])/g)) found.add(m[1]);
   // "19 of 40" is the same claim as 19/40 and gets the same check.
   for (const m of prose.matchAll(/(?<![\w.])(\d+)\s+(?:of|out of)\s+(\d+)(?![\w.])/g)) found.add(`${m[1]}/${m[2]}`);
-  for (const m of prose.matchAll(/(?<![\w./])(\d*\.\d+)(?![\w.])/g)) found.add(m[1]);
+  for (const m of prose.matchAll(/(?<![\w./])(\d*\.\d+)(?![\w.]|\s*\\?%)/g)) found.add(m[1]);
   for (const m of prose.matchAll(/(?<![\w.])(\d+(?:\.\d+)?)\s*\\?%/g)) found.add(`${m[1]}%`);
   return [...found];
 }
 
-export function sourceHas(num: string, sourceText: string, sourceDecimals: number[]): boolean {
+/** Numeric values that sit together in one JSON object: {exceed_count: 19, paired_n: 40} supports "19 of 40". */
+export function jsonNumberSets(texts: string[]): Set<number>[] {
+  const sets: Set<number>[] = [];
+  const walk = (v: unknown): void => {
+    if (Array.isArray(v)) return v.forEach(walk);
+    if (v && typeof v === "object") {
+      const vals = Object.values(v);
+      sets.push(new Set(vals.filter((x): x is number => typeof x === "number")));
+      vals.forEach(walk);
+    }
+  };
+  for (const t of texts) {
+    try {
+      walk(JSON.parse(t));
+    } catch {
+      // not JSON
+    }
+  }
+  return sets;
+}
+
+export function sourceHas(num: string, sourceText: string, sourceDecimals: number[], pairs: Set<number>[] = []): boolean {
   if (num.endsWith("%")) {
     const v = Number(num.slice(0, -1)) / 100;
-    const places = (num.split(".")[1]?.length ?? 0) + 2;
+    const places = (num.slice(0, -1).split(".")[1]?.length ?? 0) + 2;
     return sourceText.includes(num.replace("\\", "")) || sourceDecimals.some((d) => Math.abs(d - v) < 0.5 * 10 ** -places + 1e-12);
   }
   if (num.includes("/")) {
@@ -71,7 +92,8 @@ export function sourceHas(num: string, sourceText: string, sourceDecimals: numbe
     // "33/40", "33 / 40", "33 of 40" and "33 of the 40" are the same count in a source, and a failure count is
     // the complement of a pass count (34 of 40 failing is 6/40 passing).
     const has = (x: number) => new RegExp(`(?<![\\w.])${x}\\s*(/|of(\\s+the)?)\\s*${b}(?![\\w])`).test(sourceText);
-    return has(Number(a)) || has(Number(b) - Number(a));
+    const inObject = (x: number) => pairs.some((set) => set.has(x) && set.has(Number(b)));
+    return has(Number(a)) || has(Number(b) - Number(a)) || inObject(Number(a)) || inObject(Number(b) - Number(a));
   }
   const places = num.split(".")[1].length;
   const v = Number(num);
@@ -79,7 +101,9 @@ export function sourceHas(num: string, sourceText: string, sourceDecimals: numbe
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
-  const sourceText = SOURCES.flatMap(readTree).join("\n");
+  const sourceTexts = SOURCES.flatMap(readTree);
+  const sourceText = sourceTexts.join("\n");
+  const pairs = jsonNumberSets(sourceTexts);
   const sourceDecimals = [...sourceText.matchAll(/-?\d*\.\d+(?:e-?\d+)?/g)].map((m) => Number(m[0]));
   // Fractions in sources also stand for their decimal value (a table's 36/40 supports prose 0.90).
   for (const m of sourceText.matchAll(/(?<![\w.])(\d+)\s*\/\s*(\d+)(?![\w])/g)) {
@@ -89,7 +113,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   let residue = 0;
   for (const f of readdirSync(dir).filter((f) => f.endsWith(".tex")).sort()) {
     const nums = proseNumbers(proseOf(readFileSync(join(dir, f), "utf8")));
-    const missing = nums.filter((n) => !sourceHas(n, sourceText, sourceDecimals));
+    const missing = nums.filter((n) => !sourceHas(n, sourceText, sourceDecimals, pairs));
     for (const n of missing) console.log(`${f}: ${n}`);
     residue += missing.length;
   }

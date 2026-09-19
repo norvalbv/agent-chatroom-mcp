@@ -53,6 +53,8 @@ export function proseOf(tex: string): string {
 export function proseNumbers(prose: string): string[] {
   const found = new Set<string>();
   for (const m of prose.matchAll(/(?<![\w.])(\d+\/\d+)(?![\w/])/g)) found.add(m[1]);
+  // "19 of 40" is the same claim as 19/40 and gets the same check.
+  for (const m of prose.matchAll(/(?<![\w.])(\d+)\s+(?:of|out of)\s+(\d+)(?![\w.])/g)) found.add(`${m[1]}/${m[2]}`);
   for (const m of prose.matchAll(/(?<![\w./])(\d*\.\d+)(?![\w.])/g)) found.add(m[1]);
   for (const m of prose.matchAll(/(?<![\w.])(\d+(?:\.\d+)?)\s*\\?%/g)) found.add(`${m[1]}%`);
   return [...found];
@@ -66,8 +68,10 @@ export function sourceHas(num: string, sourceText: string, sourceDecimals: numbe
   }
   if (num.includes("/")) {
     const [a, b] = num.split("/");
-    // "33/40", "33 / 40" and "33 of 40" are the same count in a source.
-    return new RegExp(`(?<![\\w.])${a}\\s*(/|of)\\s*${b}(?![\\w])`).test(sourceText);
+    // "33/40", "33 / 40", "33 of 40" and "33 of the 40" are the same count in a source, and a failure count is
+    // the complement of a pass count (34 of 40 failing is 6/40 passing).
+    const has = (x: number) => new RegExp(`(?<![\\w.])${x}\\s*(/|of(\\s+the)?)\\s*${b}(?![\\w])`).test(sourceText);
+    return has(Number(a)) || has(Number(b) - Number(a));
   }
   const places = num.split(".")[1].length;
   const v = Number(num);

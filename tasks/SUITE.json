@@ -10,6 +10,14 @@
   "note": "Machine-readable suite status. bench-grid refuses any task that is not primary, weak or low unless --include-retired. Families are counted by mechanism (paper/amendments.md); the statistical unit is the family. low = 0 < rate < 0.3 on ten seeds, weak = 0.7 < rate <= 0.9; both are kept and excluded from the primary comparison.",
   "tasks": [
     {
+      "id": "complementary-fix",
+      "status": "pending",
+      "family": "boundary-inclusivity-pair",
+      "arm_a": null,
+      "admission": "tasks/complementary-fix/ADMISSION.md",
+      "note": "candidate, not yet piloted: two independent boundary-inclusivity bugs (mergeIntervals touching-interval merge; tierRate inclusive-threshold) scored as separate invariant groups, designed so arm K (pick one whole attempt) can fail even when the two bugs were each independently found across different k-attempts, while arm C's shared live workspace lets different seats' fixes to different bugs land in the same file for free. No Claude spend yet; needs a 3-seed screen before the 10-seed admission pilot."
+    },
+    {
       "id": "stamp-interpreter",
       "status": "primary",
       "family": "scope-capture",

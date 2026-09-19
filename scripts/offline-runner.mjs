@@ -32,6 +32,7 @@ export const offlineScripts = [
   'challenge-session-regression.ts',
   'claude-lean-flags-regression.ts',
   'claude-usage-regression.ts',
+  'complementary-fix-task.test.ts',
   'consolidator-spawn-regression.ts',
   'conv-forensics.test.ts',
   'departed-mentions.test.ts',

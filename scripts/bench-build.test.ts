@@ -160,3 +160,17 @@ for (const extra of [{usage:{cost_usd:-1}},{outcome:'infrastructure_error'},{out
     assert.equal(existsSync(join(root,'build-result.json')),false);
   } finally {rmSync(task,{recursive:true,force:true});rmSync(root,{recursive:true,force:true});rmSync(fake.dir,{recursive:true,force:true});}
 });
+
+test('oracle tamper exit stays distinct from external infrastructure and preserves spend', () => {
+  const task=seededTask(checks),root=join(tmpdir(),`build-oracle-tamper-${process.pid}-${Date.now()}`),fake=fakeBench(valid);
+  writeFileSync(join(task,'oracle','score.ts'),"console.error('oracle tamper: forbidden private read');process.exit(3);");
+  try {
+    const run=invoke(task,root,fake.path);
+    assert.notEqual(run.status,0);
+    const r=JSON.parse(readFileSync(join(root,'build-result.json'),'utf8'));
+    assert.equal(r.execution_outcome,'tamper');
+    assert.equal(r.native_outcome,'completed');
+    assert.equal(r.scores,null);
+    assert.equal(r.usage.cost_usd,.4);
+  } finally {rmSync(task,{recursive:true,force:true});rmSync(root,{recursive:true,force:true});rmSync(fake.dir,{recursive:true,force:true});}
+});

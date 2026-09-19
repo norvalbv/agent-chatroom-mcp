@@ -188,6 +188,13 @@ async function main() {
   const adapterHashAfter = hashAdapter();
   if (adapterHashAfter !== adapterHashBefore) fail('tamper: oracle adapter changed during scoring');
   if (taskHashAfterScore !== taskHashBeforeScore) fail("tamper: private scorer changed fixture while scoring");
+  if (scored.oracle.exit_code === 3) {
+    writeFileSync(resolve(root,'build-result.json'), JSON.stringify({ ...raw, native_outcome: raw.outcome,
+      execution_outcome: 'tamper', outcome: 'tamper', oracle_outcome: 'tamper', protocol_success: false,
+      scores: null, usage: raw.usage, seat_records: raw.seats,
+      outcome_evidence: { ...raw.outcome_evidence, failure_stage: 'oracle', scorer_exit_code: 3 } },null,2)+'\n');
+    fail('tamper: hidden oracle rejected the candidate worker');
+  }
   const { defects, regressions } = classify(scored.oracle_results);
   assertExactMatrix(matrix, { defects, regressions });
   const caught = defects.filter((check) => check.exit_code === 0).length;

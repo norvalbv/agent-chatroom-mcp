@@ -414,3 +414,42 @@ process.exit(r.status ?? 1);
     rmSync(stubDir, { recursive: true, force: true });
   }
 });
+
+test("an attempt that finishes just UNDER the deadline is a normal vote with known cost: the outer rail is deadline + slack, not the deadline itself (opus-reviewer #118)", () => {
+  // Distinguishes the two meanings of runAttempt's timeoutMs. Both existing timeout tests use runners that
+  // hang forever, so a rail that fires at exactly the deadline (zero slack) would pass them and still kill
+  // every attempt that legitimately runs long, turning a known, bounded cost into an unknown one.
+  const stubDir = stubCodeClaudeDir();
+  const work = mkdtempSync(join(tmpdir(), "bench-ak-underdeadline-"));
+  const armCPath = writeArmCResult(work, 0.6, 100000);
+  const realRunner = resolve("scripts/bench-rq1.ts");
+  // Delays the real runner by 1000 ms, then hands over. With a 1500 ms deadline the whole attempt (1000 ms
+  // + tsx startup + the stub claude) exceeds 1500 ms of wall time but is far inside deadline + 30 s slack.
+  const slowRunner = join(stubDir, "slow-runner.mjs");
+  writeFileSync(
+    slowRunner,
+    `import { spawnSync } from "node:child_process";
+await new Promise((r) => setTimeout(r, 1000));
+const r = spawnSync(process.execPath, ["--import", "tsx", ${JSON.stringify(realRunner)}, ...process.argv.slice(2)], { stdio: "inherit" });
+process.exit(r.status ?? 1);
+`,
+  );
+  try {
+    const r = invoke(
+      [printfTask, "2", "11", "--root", join(work, "run"), "--arm-c-result", armCPath, "--runner", slowRunner, "--attempt-deadline-ms", "1500", "--concurrency", "2"],
+      { PATH: `${stubDir}${delimiter}${process.env.PATH}`, STUB_IMPLS: JSON.stringify({ 1: correctImpl, 2: correctImpl }) },
+    );
+    assert.equal(r.status, 0, r.stderr + r.stdout);
+    const res = JSON.parse(readFileSync(join(work, "run", "result.json"), "utf8"));
+    assert.equal(res.attempts.length, 2);
+    for (const a of res.attempts) {
+      assert.equal(a.runner_failure ?? null, null, `no attempt may be killed by the outer rail: ${JSON.stringify(a)}`);
+      assert.notEqual(a.outcome, "no_result", "each attempt produced a real result");
+      assert.equal(typeof a.cost_usd, "number", "cost of an attempt that ran to completion is known, not null");
+    }
+    assert.equal(typeof res.usage.cost_usd, "number", "group cost is known when no attempt was killed");
+  } finally {
+    rmSync(work, { recursive: true, force: true });
+    rmSync(stubDir, { recursive: true, force: true });
+  }
+});

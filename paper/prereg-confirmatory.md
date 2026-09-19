@@ -120,12 +120,13 @@ At the current pilot regime, simple 20-fold extrapolation is **$58.816520** and
 reserve.  This is only a planning estimate: the cap is enforced on realized
 known cost and unknown spend halts the grid.
 
-For a long-thinking contingency estimate, the dated window evidence gives
-short-to-long multipliers of 3.79 for single-seat work (midpoint $0.22/$0.058)
-and 3.283 for C ($1.855/$0.565).  Applying them to the corresponding pilot
-components gives **about $209.4** and **11.05 h** before reserve, or **about
-$261.7 and 13.81 h** with the same 25% reserve.  These are contingency forecasts,
-not a license to pool regimes or to extend the $74 current-regime run.
+For a long-thinking contingency estimate, the dated window evidence uses stamp
+A about $0.20, C $1.4–2.2, K $1.7–2.3, assumes B about $0.50 and AH about
+$0.26, and conservatively puts printf at about 1.5 times stamp: about $5 for
+stamp plus $7 for printf per seed.  The resulting unmeasured forecast is
+**about $235 and 7–8 h** for 20 seeds (about 2.5 times pilot wall time), before
+any reserve.  This is a contingency forecast, not a license to pool regimes or
+to extend the $74 current-regime run.
 
 ## Analysis, falsifiers, and interpretation limits
 

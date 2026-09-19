@@ -83,6 +83,23 @@ that criterion. No equivalence margin is adopted here. Per-mechanic changes rema
 the no-chat builder/reviewer baseline is RQ2. Neither should compare newly sampled arms to
 historical C without a contemporary C control.
 
+## Regime indicators must respect the treatment
+
+Output tokens can reveal an abrupt shift across otherwise comparable launches of the
+same task and role. They cannot, by themselves, classify different experimental arms
+as different provider regimes. B and C intentionally change roles, communication and
+turn counts; a larger C token total may be an effect of the intervention being measured.
+Excluding runs because of that difference risks conditioning the comparison on a
+treatment-induced variable.
+
+Record per-seat token traces, role, timestamps, requested and reported model identifiers,
+and explicit reasoning metadata when available. Use known boundary evidence and
+within-role comparisons; label ambiguous regime membership unknown. A pre-registered,
+interleaved identical-task A sentinel could provide a more comparable signal if budget
+allows. Matching identifiers, close timestamps, or stable aggregate output alone do not
+prove invariant provider behavior. No sentinel or automatic regime classifier was built
+or measured in this room.
+
 ## Reproduce the prospective calculation
 
 Run from the repository root. The snippet reads only the existing pure statistics module,

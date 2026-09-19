@@ -6,9 +6,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { buildBuildReport, renderBuildReportMarkdown } from "./bench-build-report.js";
 
-function result(task: string, arm: "A" | "B" | "C", seed: number, caught: number, cost: number | null, fingerprint = "fp") {
+function result(task: string, arm: "A" | "B" | "C", seed: number, caught: number, cost: number | null, fingerprint = "f".repeat(64)) {
   return {
-    schemaVersion: 1, task_id: task, arm, seed, outcome: "completed",
+    schemaVersion: 1, task_id: task, arm, seed, execution_outcome: "completed", oracle_outcome: "task_pass",
     scores: { defects_caught: caught, defects_total: 9, defects_shipped: 9 - caught, regression_failures: 0, regressions_total: 14 },
     checks: {
       defects: Array.from({ length: 9 }, (_, i) => ({ name: `defect/D${String(i + 1).padStart(2, "0")}`, exit_code: i < caught ? 0 : 1 })),
@@ -16,8 +16,8 @@ function result(task: string, arm: "A" | "B" | "C", seed: number, caught: number
     },
     usage: { cost_usd: cost, coverage: cost === null ? "partial" : "complete", thinking_tokens: 100 + seed, output_tokens: 200 },
     wall_clock_ms: 1000, seats: arm === "C" ? 4 : arm === "B" ? 2 : 1,
-    effort: { level: "medium", settings_sha256: "settings", own_git_root: true },
-    provenance: { run_fingerprint: fingerprint, manifest_sha256: "manifest", runner_sha256: "runner", task_sha256_before_score: "task", task_sha256_after_score: "task" },
+    effort: { level: "medium", settings_sha256: "e".repeat(64), own_git_root: true },
+    provenance: { grid_fingerprint: fingerprint, native_run_fingerprint: "d".repeat(64), manifest_sha256: "a".repeat(64), runner_sha256: "b".repeat(64), task_sha256_before_score: "c".repeat(64), task_sha256_after_score: "c".repeat(64) },
   };
 }
 
@@ -62,15 +62,17 @@ test("report scores arm protocol failures as-is but rejects integrity failures",
   const dir = mkdtempSync(join(tmpdir(), "bench-build-report-"));
   try {
     const noConclusion = result("build-ledger-v2-s1", "C", 101, 3, 0.4);
-    noConclusion.outcome = "invalid_room";
+    noConclusion.execution_outcome = "invalid_room";
     put(dir, noConclusion);
     const tamper = result("build-ledger-v2-s1", "B", 101, 8, 0.2);
-    tamper.outcome = "tamper";
+    tamper.execution_outcome = "tamper";
     put(dir, tamper);
     const report = buildBuildReport(dir, ["build-ledger-v2-s1"], ["B", "C"], [101], 2);
     const c = report.rows.find((row) => row.arm === "C")!;
     assert.equal(c.status, "valid");
     assert.equal(c.protocol_failure, true);
+    assert.equal(c.protocol_success, false);
+    assert.equal(c.protocol_adjusted_catch_fraction, 0);
     assert.equal(c.defects_caught, 3);
     assert.equal(report.rows.find((row) => row.arm === "B")?.status, "invalid");
     assert.equal(report.summary.protocol_failures, 1);

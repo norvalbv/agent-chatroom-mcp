@@ -9,13 +9,13 @@ import { runBuildGrid, type BuildGridArgs } from './bench-build-grid.js';
 
 function measured(seed: number, taskHash: string) {
   return {
-    task_id: 'same-task', arm: 'A', seed, outcome: 'completed',
+    task_id: 'same-task', arm: 'A', seed, execution_outcome: 'completed', oracle_outcome: 'task_pass',
     scores: { defects_caught: 1, defects_total: 1, defects_shipped: 0, regression_failures: 0, regressions_total: 1 },
     checks: { defects: [{ name: 'defect/D1', exit_code: 0 }], regressions: [{ name: 'regression/R1', exit_code: 0 }] },
     usage: { cost_usd: 0.1, coverage: 'complete', thinking_tokens: 1, output_tokens: 2 },
     wall_clock_ms: 100,
     effort: { level: 'medium', settings_sha256: 'c'.repeat(64), own_git_root: true },
-    provenance: { run_fingerprint: String(seed).repeat(64), manifest_sha256: taskHash, runner_sha256: 'd'.repeat(64), task_sha256_before_score: taskHash, task_sha256_after_score: taskHash },
+    provenance: { grid_fingerprint: String(seed).repeat(64), native_run_fingerprint: 'e'.repeat(64), manifest_sha256: taskHash, runner_sha256: 'd'.repeat(64), task_sha256_before_score: taskHash, task_sha256_after_score: taskHash },
   };
 }
 

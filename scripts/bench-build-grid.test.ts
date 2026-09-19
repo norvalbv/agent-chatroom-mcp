@@ -20,19 +20,19 @@ function fixture() {
   writeFileSync(runner, `import { appendFileSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 const a=process.argv.slice(2), flag=n=>a[a.indexOf('--'+n)+1];
-const [task,arm,seed]=a, root=flag('root'), fp=flag('run-fingerprint');
+const [task,arm,seed]=a, root=flag('root'), fp=flag('grid-fingerprint'), manifest=flag('manifest-sha256'), taskHash=flag('expected-task-sha256');
 appendFileSync(${JSON.stringify(log)}, JSON.stringify({a})+'\\n');
 mkdirSync(root,{recursive:true});
 if(process.env.STUB_MUTATE_TASK==='1')writeFileSync(join(task,'public','SPEC.md'),'mutated after grid freeze\\n');
 const unknown=process.env.STUB_UNKNOWN==='1';
 writeFileSync(join(root,'build-result.json'), JSON.stringify({
- schemaVersion:1, task_id:task.split('/').pop(), arm, seed:Number(seed), outcome:'completed',
+ schemaVersion:1, task_id:task.split('/').pop(), arm, seed:Number(seed), execution_outcome:'completed',
  scores:{defects_caught:4,defects_total:9,defects_shipped:5,regression_failures:0,regressions_total:14},
  checks:{defects:[{name:'defect/D01',exit_code:0}],regressions:[{name:'regression/R01',exit_code:0}]},
  usage:{cost_usd:unknown?null:0.25,coverage:unknown?'partial':'complete',thinking_tokens:123,output_tokens:456},
  wall_clock_ms:1000,seats:arm==='C'?4:arm==='B'?2:1,
- effort:{level:flag('effort'),settings_sha256:'abc',own_git_root:true},
- provenance:{run_fingerprint:fp,manifest_sha256:'manifest',runner_sha256:'runner',task_sha256_before_score:'task',task_sha256_after_score:'task'}
+ effort:{level:flag('effort'),settings_sha256:'e'.repeat(64),own_git_root:true},
+ provenance:{grid_fingerprint:fp,native_run_fingerprint:'d'.repeat(64),manifest_sha256:manifest,runner_sha256:'b'.repeat(64),task_sha256_before_score:taskHash,task_sha256_after_score:taskHash}
 }));
 `);
   return { dir, tasksDir, results: join(dir, "results"), runner, log };
@@ -74,11 +74,16 @@ test("grid passes the frozen execution contract and resumes only matching finger
     const calls = readFileSync(f.log, "utf8").trim().split("\n").map((line) => JSON.parse(line).a as string[]);
     assert.equal(calls.length, 12);
     for (const call of calls) {
-      assert.ok(call.includes("--run-fingerprint"));
+      assert.ok(call.includes("--grid-fingerprint"));
+      assert.match(call[call.indexOf("--manifest-sha256") + 1], /^[a-f0-9]{64}$/);
       assert.match(call[call.indexOf("--expected-task-sha256") + 1], /^[a-f0-9]{64}$/);
       assert.equal(call[call.indexOf("--effort") + 1], "medium");
       assert.equal(call[call.indexOf("--max-budget-usd") + 1], "2");
       assert.equal(call[call.indexOf("--seats") + 1], "4");
+    }
+    for (const task of ["build-billing-s1", "build-billing-s2"]) {
+      const manifests = new Set(calls.filter((call) => call[0].endsWith(task)).map((call) => call[call.indexOf("--manifest-sha256") + 1]));
+      assert.equal(manifests.size, 1, `one frozen manifest per task version: ${task}`);
     }
     const second = await runBuildGrid(parsed, { log: () => {} });
     assert.equal(second.ran, 0);

@@ -27,10 +27,13 @@ matching (arXiv:2603.21489) motivate this comparison but do not answer it.
 
 ## Claims and falsifiers fixed before development results
 
-The primary estimand is the within-seed difference between arm C and arm A in the
-fraction of planted defects caught. The secondary estimand is C minus B; B minus A
-is descriptive. Safety is reported beside every catch result as introduced hidden
-regression failures and total defects shipped.
+The primary measurement estimand is the within-seed difference between arm C and
+arm A in the observed fraction of planted defects caught. The secondary measurement
+estimand is C minus B; B minus A is descriptive. A co-reported delivery estimand
+sets the catch fraction to zero when the arm did not complete its frozen protocol
+(`protocol_success=false`) while leaving the observed machine score unchanged.
+Safety is reported beside every catch result as introduced hidden regression
+failures and total observed defects shipped.
 
 The claimed room advantage is unsupported for this family if any of these occurs.
 An interval containing zero is absence of evidence for superiority, not evidence of
@@ -39,7 +42,8 @@ equivalence:
 1. At the common nominal cap, either simultaneous comparison C-A or C-B has a
    non-positive mean or a one-sided multiplicity-adjusted lower confidence bound
    at or below zero, or its worst-case partially identified mean-difference lower
-   endpoint over all 20 planned blocks is at or below zero.
+   endpoint over all 20 planned blocks is at or below zero. A room-advantage claim
+   must clear those same gates for both observed catch and protocol-adjusted catch.
 2. C catches more plants but has a higher introduced-regression rate. That is a
    trade-off, not dominance.
 3. B matches C on catch and shipped scores while using less realized spend. The
@@ -115,9 +119,13 @@ caught_fraction       = N_fixed / N
 residual_plants       = N - N_fixed
 introduced_regressions = R
 defects_shipped       = residual_plants + R
+protocol_success      = frozen arm protocol completed
+protocol_adjusted_catch = caught_fraction if protocol_success else 0
 ```
 
-The report always shows all four values. A deleted, disabled, duplicate, unnamed,
+The report always shows the four machine values plus the two protocol fields.
+`protocol_adjusted_catch` is a delivery-policy score, never relabelled as defects
+caught; no adjusted shipped count is invented. A deleted, disabled, duplicate, unnamed,
 malformed, or non-binary hidden check makes the cell invalid; it never counts as a
 fix. Each defect check must be isolated by a one-fix matrix: it fails on the planted
 tree, passes on its isolated fix, and unrelated defect checks retain their expected
@@ -149,9 +157,10 @@ cost even when partial token usage exists; it is never recorded as zero cost. Ev
 raw outcome and any observed partial cost remains in the ledger.
 
 Outcome classification is mechanical and recorded before scoring. A
-`protocol_failure` is (a) the shared deadline firing after at least one seat was
-successfully spawned while the runner and, for C, hub remain alive, or (b) a
-healthy C hub reaching terminal seat completion without satisfying its frozen room
+`protocol_failure` is (a) the shared deadline or a seat's frozen dollar share being
+exhausted after at least one seat was successfully spawned while the runner and,
+for C, hub remain alive, or (b) a healthy C hub reaching terminal seat completion
+without satisfying its frozen room
 policy, historical claim/reviewer evidence, artifact-bound verification and
 conclusion checks. A process spawn/exec error, provider/API failure, hub startup
 failure or crash, HTTP 5xx, scorer exception, or unavailable frozen input is
@@ -232,6 +241,11 @@ family-wise alpha 0.05 across the two comparisons); a room-advantage claim requi
 both bounds above zero. Ordinary two-sided 95% intervals are also shown
 descriptively and never interpreted as equivalence.
 
+The identical block, bootstrap, multiplicity and partial-identification procedure
+is run separately for observed catch and protocol-adjusted catch. This creates two
+required gates, not extra opportunities to claim success: room advantage requires
+both C-A and C-B to clear under both estimands.
+
 Missing blocks are not replaced. For each comparison, the partially identified
 mean-difference range over all 20 planned blocks assigns every externally missing
 block -1 for the lower endpoint and +1 for the upper endpoint; the complete-block
@@ -274,7 +288,8 @@ node --import tsx scripts/bench-build-grid.ts \
   --arms A,B,C --seeds 501-520 \
   --results bench/results/build-suite-confirmatory \
   --model sonnet --effort medium --max-budget-usd 2.00 \
-  --seats 4 --deadline-ms 900000 --base-port 23000 --resume
+  --seats 4 --deadline-ms 900000 --base-port 23000 \
+  --hub-entry dist/index.js --resume
 ```
 
 This room does not run that command. The nominal allocated total is
@@ -342,12 +357,53 @@ turning the cell into an anti-tamper exclusion. It also froze the stage/process/
 health/hash classifier inputs above so arm versus infrastructure failure is not
 chosen after the catch outcome is visible.
 
+### 2026-09-19 -- observed versus protocol-adjusted score naming
+
+Before any pinned-effort admission or three-arm pilot, executor review exposed an
+ambiguity between measuring the workspace and enforcing the delivery protocol. The
+oracle's `defects_caught` and `defects_shipped` now always mean observed workspace
+outcomes. `protocol_success` is separate, and `protocol_adjusted_catch` assigns zero
+only for that delivery estimand. A room-advantage claim must clear both observed and
+protocol-adjusted catch gates; the latter is never described as a measured defect
+count. Scoreable timeout/non-conclusion workspaces therefore still run the oracle.
+
 ## Development and pilot evidence (not yet observed at freeze)
 
-This section is intentionally empty in the development-freeze commit. It will name
-the integration branch and commit, admitted task versions and per-defect 5-seed
-tables, the non-author ambiguity/giveaway reviews, every rejected variant and why,
-the seed 101--103 A/B/C table (caught, shipped components, actual cost, thinking
-tokens, wall time, provenance coverage), the room spend ledger, and the generated
-20-seed projection. No value is filled from memory or chat prose when a committed
-machine-readable artifact exists.
+The development freeze above preceded these observations. No task is admitted and
+therefore no confirmatory run is authorized.
+
+- **Billing-v1 rejected:** five exploratory default-effort A runs each caught 9/9.
+  Raw results, workspaces, launch snapshot, hashes and an independent replay are
+  archived at commit `6669a46` (`bench/build-suite-evidence/billing-v1`); total
+  recorded cost is $0.4097492. The public task also contained local giveaway
+  residue. This evidence is immutable and is not called pinned-effort admission.
+- **Ledger-v2 rejected:** pinned-medium A caught 44/45 plants over five cells
+  (task-level 97.8%, outside [0.30,0.70]). The committed detailed run and per-defect
+  tables are `docs/build-suite-admission.md` and
+  `docs/build-suite-admission-runs.json` on generator evidence commit `e8dbd0c`.
+  Non-author attack additionally reproduced scorer spoofing, reference/spec bugs,
+  whole-snapshot coupling and giveaway residue in the reviewed version. A post-hoc
+  unplanted duplicate-SKU input was fixed by 6/15 exploratory seats, identifying a
+  promising future defect class but not admitting this version.
+- **Mixed diagnostic, not the required pilot:** ledger-s1 A/B seeds 101--103 used a
+  $0.60 cap. C101 used the same nominal cap and, when its intact workspace was
+  scored, caught 9/9 with zero regressions at $0.6225; its seats exhausted their
+  shares during the conclusion ritual, an arm-caused protocol failure rather than
+  missing infrastructure. Replacement C102--104 used a $1.60 cap on different
+  seeds, so those rows are unequal-cap and unpaired. The oracle was also corrected
+  after inspecting apparent misses. All re-scored A, B, C workspaces caught 9/9.
+  The committed raw/as-run rows are `docs/build-suite-pilot.json` at `e8dbd0c`;
+  C101's independently audited raw evidence remained under `/tmp/sb10` rather than
+  the committed archive. Board summary means for the unequal-cap rows were A:
+  $0.056 and 21 s; B: $0.135 and 62 s; C: $0.83 and 78 s. These rows test the
+  harness and demonstrate ceiling, but cannot satisfy the requested pilot on an
+  admitted task.
+
+The admission falsifier therefore fired. There are no admitted sibling IDs to
+substitute for the fail-closed placeholders in the confirmatory command. A purely
+illustrative extrapolation of the unequal-cap one-instance means to the planned two
+instances is `40 * (0.056 + 0.135 + 0.83) = $40.84`; it is not the projected cost of
+a valid confirmatory design. The fixed nominal allocation remains $240 plus possible
+last-turn overshoot. A valid realized-cost projection requires a new sibling pair to
+pass admission and a common-cap diagnostic pilot. This room does not run seeds
+501--520.

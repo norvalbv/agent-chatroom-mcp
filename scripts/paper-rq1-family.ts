@@ -99,6 +99,73 @@ function fmtP(n: number | null): string {
   return n === null ? "n/a" : n.toFixed(6);
 }
 
+/** Cost per correct answer (Table~\ref{tab:per-task}'s formula), and the C/A ratio of that figure,
+ * per task, for the interpreter family (paper/sections/results.tex \S results-cost). */
+export interface CostRatio {
+  task: string;
+  a_cost_per_correct: number | null;
+  c_cost_per_correct: number | null;
+  c_over_a: number | null;
+}
+
+export function buildCostRatios(runs: RunResult[], tasks: string[]): CostRatio[] {
+  return tasks.map((task) => {
+    const a = computeCell(task, "A", runs.filter((r) => r.task_id === task && r.arm === "A"));
+    const c = computeCell(task, "C", runs.filter((r) => r.task_id === task && r.arm === "C"));
+    const aCost = typeof a.cost_per_correct === "number" ? a.cost_per_correct : null;
+    const cCost = typeof c.cost_per_correct === "number" ? c.cost_per_correct : null;
+    return { task, a_cost_per_correct: aCost, c_cost_per_correct: cCost, c_over_a: aCost && cCost ? cCost / aCost : null };
+  });
+}
+
+/** Cache-read share (Claude token accounting, paper/figures.md's formula) per (task, arm): cache-read
+ * tokens / (input + cache-read + cache-creation tokens), summed over all runs in the cell. */
+export interface CacheShare {
+  task: string;
+  arm: string;
+  cache_read_share: number | null;
+}
+
+export function buildCacheShares(runs: RunResult[], tasks: string[], arms: string[] = ["A", "C"]): CacheShare[] {
+  const out: CacheShare[] = [];
+  for (const task of tasks) {
+    for (const arm of arms) {
+      const cellRuns = runs.filter((r) => r.task_id === task && r.arm === arm);
+      let read = 0, input = 0, create = 0;
+      for (const r of cellRuns) {
+        read += r.usage.cache_read_input_tokens ?? 0;
+        input += r.usage.input_tokens ?? 0;
+        create += r.usage.cache_creation_input_tokens ?? 0;
+      }
+      const denom = read + input + create;
+      out.push({ task, arm, cache_read_share: denom > 0 ? read / denom : null });
+    }
+  }
+  return out;
+}
+
+/** Per-seed count of arm-K groups whose realized cost exceeds their paired arm-C run's cost (prereg
+ * matching is judged on the mean; this is the per-seed exception count, paper/sections/results.tex
+ * \S results-cost). */
+export interface KExceedsC {
+  task: string;
+  exceed_count: number;
+  paired_n: number;
+}
+
+export function buildKExceedsC(suiteRuns: RunResult[], kGroups: ReturnType<typeof loadKGroups>["groups"]): KExceedsC[] {
+  const tasks = [...new Set(kGroups.map((g) => g.task_id))].sort();
+  return tasks.map((task) => {
+    const cBySeed = new Map(suiteRuns.filter((r) => r.task_id === task && r.arm === "C" && r.usage.coverage === "complete").map((r) => [r.seed, r.usage.cost_usd]));
+    let exceed = 0, paired = 0;
+    for (const g of kGroups.filter((g) => g.task_id === task && typeof g.usage.cost_usd === "number" && cBySeed.has(g.seed))) {
+      paired++;
+      if ((g.usage.cost_usd as number) > (cBySeed.get(g.seed) as number)) exceed++;
+    }
+    return { task, exceed_count: exceed, paired_n: paired };
+  });
+}
+
 export function renderMarkdown(tests: FamilyTest[], exploratory: ExploratoryK[], warnings: string[]): string {
   let md = "# RQ1 family-pooled statistics (generated, do not hand-edit)\n\n";
   md += "Statistical unit is the family, not the task (paper/amendments.md, 2026-09-18). Fisher exact, two-sided, ";
@@ -117,6 +184,8 @@ export function renderMarkdown(tests: FamilyTest[], exploratory: ExploratoryK[],
   return md;
 }
 
+const ALL_TASKS = ["stamp-interpreter", "stamp-2", "bench-printf-format"];
+
 async function main() {
   const argv = process.argv.slice(2);
   const suite = argv.shift(), armK = argv.shift();
@@ -131,11 +200,14 @@ async function main() {
   const { groups, warnings: w2 } = loadKGroups(resolve(armK));
   const tests = buildFamilyTests(runs);
   const exploratory = buildExploratoryK(runs, groups);
+  const costRatios = buildCostRatios(runs, ALL_TASKS);
+  const cacheShares = buildCacheShares(runs, ALL_TASKS);
+  const kExceedsC = buildKExceedsC(runs, groups);
   const md = renderMarkdown(tests, exploratory, [...w1, ...w2]);
   const prefix = resolve(out ?? join(resolve(suite), "rq1-family-table"));
   mkdirSync(dirname(prefix), { recursive: true });
   writeFileSync(`${prefix}.md`, md);
-  writeFileSync(`${prefix}.json`, JSON.stringify({ tests, exploratory }, null, 2));
+  writeFileSync(`${prefix}.json`, JSON.stringify({ tests, exploratory, costRatios, cacheShares, kExceedsC }, null, 2));
   console.log(md);
   console.error(`Wrote ${prefix}.md and ${prefix}.json`);
 }

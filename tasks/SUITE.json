@@ -299,6 +299,71 @@
       },
       "admission": "tasks/bench-printf-format-2/ADMISSION.md",
       "note": "sonnet-7's printf dial (length modifiers, %u, negative x/X/o, star width/precision; 3012 cases), fresh seeds; all 8 fails are the two %.17g of 1e-07 cases; same family and same single trap as bench-printf-format"
+    },
+    {
+      "id": "build-billing-s1",
+      "status": "retired",
+      "family": "planted-defect-billing",
+      "arm_a": {
+        "pass": 5,
+        "n": 5
+      },
+      "admission": "docs/build-suite-admission.md",
+      "note": "ceiling: 9 of 9 planted defects caught in 5 of 5 arm-A runs (docs/build-suite-admission.md)"
+    },
+    {
+      "id": "build-billing-s2",
+      "status": "pending",
+      "family": "planted-defect-billing",
+      "arm_a": null,
+      "admission": "docs/build-suite-admission.md",
+      "note": "same generator, seed 2; not screened"
+    },
+    {
+      "id": "build-rules-s1",
+      "status": "retired",
+      "family": "planted-defect-rules",
+      "arm_a": {
+        "pass": 5,
+        "n": 5
+      },
+      "admission": "docs/build-suite-admission.md",
+      "note": "ceiling: 10 of 10 planted defects caught in 5 of 5 arm-A runs"
+    },
+    {
+      "id": "build-rules-s2",
+      "status": "pending",
+      "family": "planted-defect-rules",
+      "arm_a": null,
+      "admission": "docs/build-suite-admission.md",
+      "note": "same generator, seed 2; not screened"
+    },
+    {
+      "id": "build-rules-l3",
+      "status": "pending",
+      "family": "planted-defect-rules",
+      "arm_a": null,
+      "admission": "docs/build-suite-admission.md",
+      "note": "120 rules, 36 plants; 3 arm-A runs caught 36, 35, 36 of 36 (2 of 3 task_pass); n below the five-run gate"
+    },
+    {
+      "id": "build-ledger-s1",
+      "status": "retired",
+      "family": "planted-defect-ledger",
+      "arm_a": {
+        "pass": 5,
+        "n": 5
+      },
+      "admission": "docs/build-suite-admission.md",
+      "note": "ceiling: 9 of 9 planted defects caught in 5 of 5 arm-A runs, also at effortLevel low"
+    },
+    {
+      "id": "build-ledger-s2",
+      "status": "pending",
+      "family": "planted-defect-ledger",
+      "arm_a": null,
+      "admission": "docs/build-suite-admission.md",
+      "note": "same generator, seed 2; not screened"
     }
   ]
 }

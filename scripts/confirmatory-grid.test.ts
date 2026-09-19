@@ -140,10 +140,9 @@ test("confirmatory execution uses flat A/AH caps, natural B/C completion, fixed 
 
     const sentinel = JSON.parse(readFileSync(join(f.resultsDir, "sentinel.json"), "utf8"));
     const taskSentinel = sentinel[basename(f.taskDir)];
-    assert.ok(taskSentinel, "arm-A tokens must be recorded as a per-task regime sentinel");
-    assert.equal(taskSentinel.n, 1, "AH is a treatment arm, not a regime sentinel; only arm A contributes one observation per seed");
-    assert.equal(taskSentinel.min_thinking, 7000);
-    assert.equal(taskSentinel.max_thinking, 7000);
+    assert.ok(Array.isArray(taskSentinel), "arm-A tokens must be recorded as per-seed regime-sentinel records");
+    assert.equal(taskSentinel.length, 1, "AH is a treatment arm, not a regime sentinel; only arm A contributes one observation per seed");
+    assert.deepEqual(taskSentinel[0], { seed: 501, outputTokens: 7200, thinkingTokens: 7000, regime: "long-thinking" });
   } finally {
     rmSync(f.dir, { recursive: true, force: true });
   }
@@ -200,9 +199,7 @@ test("missing arm-A thinking provenance is recorded as unknown, never calibrated
     const summary = await runGrid(args, { log: () => {} });
     assert.equal(summary.ran, 1);
     const sentinel = JSON.parse(readFileSync(join(f.resultsDir, "sentinel.json"), "utf8"))["stamp-interpreter"];
-    assert.equal(sentinel.regime, "unknown");
-    assert.equal(sentinel.min_thinking, null);
-    assert.equal(sentinel.max_thinking, null);
+    assert.deepEqual(sentinel, [{ seed: 501, outputTokens: 7200, thinkingTokens: null, regime: "unknown" }]);
   } finally {
     delete process.env.STUB_MISSING_THINKING;
     rmSync(f.dir, { recursive: true, force: true });

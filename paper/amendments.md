@@ -442,6 +442,41 @@ p = 0.0117) adjusts to about 0.070 at rank 1 and about 0.059 at rank 2 (Holm is 
 all six comparisons and does not shrink the family afterwards to rescue any one clause. The oracle ceiling is not
 a test and is outside the family.
 
+**printf selector calibration (pre-registered go/no-go, zero spend, run and thresholded before any real arm-K spend).**
+Using the 40 already-finished `bench-printf-format-A-seed10{1..40}` candidates in `bench/results/rq1-suite` (the same
+pool the prereg's own printf prediction was computed from — a forking-path risk noted and accepted, not re-tuned
+against this output) as a fixed resampling pool: 20000 draws of 7 without replacement, MBR-exec run on each draw's
+real `format.ts` files (never the `passed` field), scored against the real oracle result of the selected candidate.
+Degeneracy threshold, fixed before running: MBR-exec counts as degenerate if its selected-pass rate falls within
++/-0.05 of the single-attempt rate (0.350, i.e. in [0.300, 0.400]) — indistinguishable from a disguised random pick.
+
+Result: MBR-exec selects a passing candidate at about 0.197 (signature-plurality: about 0.200), OUTSIDE the band —
+not degenerate, but on the harmful side, well below the single-attempt rate. This is not noise: all 14 passing
+candidates agree with each other on every one of 9650 README-derived probes, all 26 failing candidates agree with
+each other on every probe too (the sole point of disagreement between the two clusters is the known `%.17g` of
+`1e-07` trap), so a sampled group of k=7 ties within each cluster and MBR-exec's winner is whichever cluster is
+the local majority in that draw. Correct is the population minority (14/40 = 0.35 < 0.5), so the analytical
+expectation (binomial, with replacement) is P(Binomial(7, 0.35) >= 4) = 0.1998, matching the resampled 0.197.
+**This is exactly prediction 2** ("any selector that rewards agreement... is predicted to land at or below 0.35"),
+sharpened: MBR-exec does not merely fail to help, it actively selects the modal wrong cluster in about 4 of 5 draws
+because that cluster is usually the local majority at k=7. The selector is kept as specified (the topic requires
+settling on ONE primary selector before the run, and this outcome is a predicted, not a disqualifying, result) but
+the paper must report this mechanism, not just the number, so a reader does not mistake selection collapse for
+"the model can't do agreement" when the real cause is a minority-correct base rate at odd k.
+
+A distinct bug this calibration caught and fixed before it could reach a real run: the probe driver originally
+passed `NaN`/`Infinity`/`-Infinity` as bare JS numbers through `JSON.stringify` to the child process, which
+silently turns all three into `null` (`-0` also loses its sign) — every such probe silently became
+`format(fmt, null)`. Fixed by tagging these four values (`{special: "nan"|"inf"|"-inf"|"-0"}`, alongside the
+existing bigint `{n: "..."}` tag) and decoding them in the driver; `scripts/ak-select.test.ts` now has a direct
+regression test for the round-trip and a value-level test that the driver produces the right formatted output for
+all four. Written up because a probe generator this silently wrong would have inflated disagreement between
+implementations that actually agree, and nobody would have known without this calibration.
+
+Who wrote `printfProbes()` and confirms they had not read `tasks/bench-printf-format/oracle/score.ts`'s test case
+data before writing it (opus-reviewer's process-hazard flag, findings/opus-reviewer-stats): sonnet-1. Reproducing:
+`node --import tsx scripts/ak-select-calibration.ts --draws 20000 --k 7`.
+
 **Reported for arm K** (in `bench/results/rq1-arm-k`, never in `rq1-suite`): K vs C and K vs A by Fisher exact, Holm-Bonferroni across the
 arm-K comparisons; cost per correct answer; the vote distribution per group; the oracle ceiling (any of the k attempts passes), labelled as
 NOT an arm, a bound on what selection could reach.

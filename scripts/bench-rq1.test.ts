@@ -279,6 +279,162 @@ test("item1: arm A and arm C carry identical built-in tools for the code task; m
   }
 });
 
+/** A stub `claude` for arm B's builder+reviewer pipeline (protocol.md 2.1): behavior is keyed off
+ * GIT_AUTHOR_NAME, which seatChildEnv already sets per seat name (src/env.ts's seatGitIdentity), so the
+ * three sequential invocations (builder-1, reviewer, optional builder-2) can each answer differently
+ * without any new plumbing in bench-rq1.ts itself. `review` controls what the reviewer stub says. */
+function stubClaudeDirArmB(review: "approve" | "revise") {
+  const dir = mkdtempSync(join(tmpdir(), "bench-rq1-armb-stub-"));
+  const bin = join(dir, "claude");
+  writeFileSync(
+    bin,
+    [
+      "#!/usr/bin/env node",
+      "const fs=require('node:fs');",
+      "const args=process.argv.slice(2);",
+      "if(!args.includes('--output-format')||args[args.indexOf('--output-format')+1]!=='stream-json'||!args.includes('--verbose')){process.stderr.write('expected --output-format stream-json --verbose\\n');process.exit(1);}",
+      "const who=process.env.GIT_AUTHOR_NAME||'';",
+      `const review=${JSON.stringify(review)};`,
+      "let text;",
+      "if(who==='builder-1'){fs.writeFileSync('answer.txt', review==='revise'?'wrong affiliation':" + JSON.stringify(EXPECTED) + ");text='builder-1 submission';}",
+      "else if(who==='reviewer'){text = review==='approve' ? 'APPROVE' : 'REVISE: the affiliation is wrong, fix answer.txt';}",
+      `else if(who==='builder-2'){fs.writeFileSync('answer.txt', ${JSON.stringify(EXPECTED)});text='builder-2 revised submission';}`,
+      "else{text='unexpected role: '+who;}",
+      "process.stdout.write(JSON.stringify({type:'assistant',message:{usage:{input_tokens:80,output_tokens:15}}})+'\\n');",
+      "process.stdout.write(JSON.stringify({type:'result',subtype:'success',is_error:false,result:text,num_turns:2,duration_ms:500,duration_api_ms:520,total_cost_usd:0.002,usage:{input_tokens:100,output_tokens:20}})+'\\n');",
+      "",
+    ].join("\n"),
+  );
+  chmodSync(bin, 0o755);
+  return dir;
+}
+
+test("arm B: builder submits, reviewer approves, no revision round, no mcp tools either side, budget null", () => {
+  const stubDir = stubClaudeDirArmB("approve");
+  const root = join(tmpdir(), `bench-rq1-b-approve-${process.pid}-${Date.now()}`);
+  try {
+    const r = invoke([task, "B", "1", "--root", root], { PATH: `${stubDir}${delimiter}${process.env.PATH}` });
+    assert.equal(r.status, 0, r.stderr + r.stdout);
+    const result = JSON.parse(readFileSync(join(root, "result.json"), "utf8"));
+    assert.equal(result.arm, "B");
+    assert.equal(result.outcome, "task_pass");
+    assert.equal(result.passed, true);
+    assert.equal(result.seats.length, 2, "builder-1 and reviewer only, no revision round on approve");
+    assert.deepEqual(result.seats.map((s: any) => s.name), ["builder-1", "reviewer"]);
+    assert.equal(result.budget, null, "arm B runs to natural completion like arm C, not budget-matched like arm A");
+    for (const seat of result.seats) assert.ok(!seat.argv.some((a: string) => a.includes("mcp__chatroom")), "arm B must not carry chatroom mcp tools on either side");
+    const reviewerArgv: string[] = result.seats[1].argv;
+    const reviewerTools = reviewerArgv[reviewerArgv.indexOf("--tools") + 1].split(",");
+    assert.ok(!reviewerTools.includes("Write"), "the reviewer must not be able to edit the submission itself");
+    assert.ok(Math.abs(result.usage.cost_usd - 0.004) < 1e-9, "cost sums across both stages");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+    rmSync(stubDir, { recursive: true, force: true });
+  }
+});
+
+test("arm B: reviewer requests one revision, builder revises once, then scores the revised answer (no second review)", () => {
+  const stubDir = stubClaudeDirArmB("revise");
+  const root = join(tmpdir(), `bench-rq1-b-revise-${process.pid}-${Date.now()}`);
+  try {
+    const r = invoke([task, "B", "2", "--root", root], { PATH: `${stubDir}${delimiter}${process.env.PATH}` });
+    assert.equal(r.status, 0, r.stderr + r.stdout);
+    const result = JSON.parse(readFileSync(join(root, "result.json"), "utf8"));
+    assert.equal(result.seats.length, 3, "builder-1, reviewer, builder-2 — at most one revision round");
+    assert.deepEqual(result.seats.map((s: any) => s.name), ["builder-1", "reviewer", "builder-2"]);
+    assert.equal(readFileSync(join(root, "workspace", "answer.txt"), "utf8"), EXPECTED, "the revised answer, not the original wrong one, is what's on disk");
+    assert.equal(result.outcome, "task_pass");
+    assert.equal(result.passed, true);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+    rmSync(stubDir, { recursive: true, force: true });
+  }
+});
+
+/** builder-1 sleeps before answering (simulating a slow real call); reviewer hangs forever (like the
+ * existing "kill" stub) so it can only end via the deadline timer. Used to prove arm B's deadline is one
+ * shared wall-clock budget for the whole pipeline (protocol.md 2: "the same wall-clock timeout per task"),
+ * not a fresh grant re-issued to every stage. */
+function stubClaudeDirArmBSlowThenHang(builderSleepMs: number) {
+  const dir = mkdtempSync(join(tmpdir(), "bench-rq1-armb-slow-stub-"));
+  const bin = join(dir, "claude");
+  writeFileSync(
+    bin,
+    [
+      "#!/usr/bin/env node",
+      "const fs=require('node:fs');",
+      "const args=process.argv.slice(2);",
+      "if(!args.includes('--output-format')||args[args.indexOf('--output-format')+1]!=='stream-json'||!args.includes('--verbose')){process.stderr.write('expected --output-format stream-json --verbose\\n');process.exit(1);}",
+      "const who=process.env.GIT_AUTHOR_NAME||'';",
+      "if(who==='builder-1'){",
+      `  setTimeout(()=>{`,
+      `    fs.writeFileSync('answer.txt', ${JSON.stringify(EXPECTED)});`,
+      "    process.stdout.write(JSON.stringify({type:'assistant',message:{usage:{input_tokens:80,output_tokens:15}}})+'\\n');",
+      "    process.stdout.write(JSON.stringify({type:'result',subtype:'success',is_error:false,result:'builder-1 submission',num_turns:2,duration_ms:500,duration_api_ms:520,total_cost_usd:0.002,usage:{input_tokens:100,output_tokens:20}})+'\\n');",
+      `  }, ${builderSleepMs});`,
+      "}else{",
+      "  process.stdout.write(JSON.stringify({type:'assistant',message:{usage:{input_tokens:80,output_tokens:15}}})+'\\n');",
+      "  setInterval(()=>{},1000);",
+      "}",
+      "",
+    ].join("\n"),
+  );
+  chmodSync(bin, 0o755);
+  return dir;
+}
+
+test("arm B: the reviewer runs on a snapshot copy, so a reviewer that writes or deletes files cannot alter the scored workspace", () => {
+  const dir = mkdtempSync(join(tmpdir(), "bench-rq1-armb-tamper-stub-"));
+  writeFileSync(
+    join(dir, "claude"),
+    [
+      "#!/usr/bin/env node",
+      "const fs=require('node:fs');",
+      "const who=process.env.GIT_AUTHOR_NAME||'';",
+      "let text='ok';",
+      `if(who==='builder-1'){fs.writeFileSync('answer.txt',${JSON.stringify(EXPECTED)});text='builder-1 submission';}`,
+      "else if(who==='reviewer'){fs.writeFileSync('answer.txt','TAMPERED BY REVIEWER');fs.writeFileSync('reviewer-marker.txt',process.cwd());text='APPROVE';}",
+      "process.stdout.write(JSON.stringify({type:'assistant',message:{usage:{input_tokens:1,output_tokens:1}}})+'\\n');",
+      "process.stdout.write(JSON.stringify({type:'result',subtype:'success',is_error:false,result:text,num_turns:1,duration_ms:1,duration_api_ms:1,total_cost_usd:0.001,usage:{input_tokens:1,output_tokens:1}})+'\\n');",
+      "",
+    ].join("\n"),
+  );
+  chmodSync(join(dir, "claude"), 0o755);
+  const root = join(tmpdir(), `bench-rq1-b-tamper-${process.pid}-${Date.now()}`);
+  try {
+    const r = invoke([task, "B", "4", "--root", root], { PATH: `${dir}${delimiter}${process.env.PATH}` });
+    assert.equal(r.status, 0, r.stderr + r.stdout);
+    const result = JSON.parse(readFileSync(join(root, "result.json"), "utf8"));
+    assert.equal(readFileSync(join(root, "workspace", "answer.txt"), "utf8"), EXPECTED, "reviewer writes must not reach the scored workspace");
+    assert.equal(existsSync(join(root, "workspace", "reviewer-marker.txt")), false);
+    assert.equal(result.outcome, "task_pass");
+    assert.notEqual(readFileSync(join(root, "review-workspace", "reviewer-marker.txt"), "utf8"), join(root, "workspace"), "reviewer cwd is not the scored workspace");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("arm B: the deadline is one shared wall-clock budget for the whole pipeline, not a fresh grant per stage", () => {
+  const stubDir = stubClaudeDirArmBSlowThenHang(1000);
+  const root = join(tmpdir(), `bench-rq1-b-deadline-${process.pid}-${Date.now()}`);
+  try {
+    const r = invoke([task, "B", "3", "--root", root, "--deadline-ms", "1800"], { PATH: `${stubDir}${delimiter}${process.env.PATH}` });
+    assert.equal(r.status, 0, r.stderr + r.stdout);
+    const result = JSON.parse(readFileSync(join(root, "result.json"), "utf8"));
+    assert.equal(result.outcome, "timeout");
+    assert.deepEqual(result.seats.map((s: any) => s.name), ["builder-1", "reviewer"], "the reviewer runs out of shared budget; a third (revision) stage never starts");
+    assert.equal(result.seats[1].killed_by_deadline, true);
+    assert.ok(
+      result.wall_clock.duration_ms < 2600,
+      `reviewer must be killed on the budget REMAINING after builder-1's 1000ms sleep plus process startup, not a fresh 1800ms (which would put the total above ~2800ms); got ${result.wall_clock.duration_ms}ms`,
+    );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+    rmSync(stubDir, { recursive: true, force: true });
+  }
+});
+
 test("arm C: hidden fixtures never copied into the seat-visible workspace", async () => {
   const stubDir = stubClaudeDir();
   const hubEntry = stubHubDir(EXPECTED);

@@ -7,6 +7,7 @@
 % that duplicates what the section files already declare.
 \usepackage[margin=1in]{geometry}
 \usepackage{amsmath,amssymb}
+\usepackage{microtype}
 \usepackage{graphicx}
 \usepackage{booktabs}
 \usepackage{array}
@@ -14,6 +15,11 @@
 \usepackage[colorlinks=true,linkcolor=blue,citecolor=blue,urlcolor=blue]{hyperref}
 \usepackage{natbib}
 \setcitestyle{numbers,square}
+% Most overfull lines in this paper come from long \texttt{file/path} and \texttt{command --flag}
+% tokens that cannot hyphenate; \sloppy trades a few loose (underfull) lines for far fewer lines
+% running into the margin, which matters more for a PDF that will be read on screen.
+\emergencystretch=3em
+\sloppy
 
 \title{Does a Chatroom Beat One Agent? Deliberation, Voting, and Cost at Matched Spend}
 \author{[Maintainer name and affiliation --- to be filled before submission]\\
@@ -29,6 +35,7 @@
 \input{sections/system.tex}
 \input{sections/method.tex}
 \input{sections/results.tex}
+\input{sections/figures.tex}
 \input{sections/threats.tex}
 \input{sections/discussion.tex}
 \input{sections/limitations.tex}

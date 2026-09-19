@@ -103,10 +103,11 @@ Nothing here is tuned on confirmatory seeds; no confirmatory run was made.
 
 ## Three-arm pilot on build-ledger-s1 (seeds 101 to 104, effort medium, 6-astra-4's runner at 9c37a6b)
 
-**This is an unequal-cap diagnostic, not the pre-registered equal-cap comparison.** M = 0.60 for A and B, M = 1.60 for C (a room
-of four seats at M/4 each): C's cap is 2.7x A/B's because a first attempt at M = 0.60 for C starved every seat (see finding 3
-below) before it could do any work. A true equal-cap run (all three arms at the same M) is left to the confirmatory run in
-paper/prereg-build-suite.md, once a task exists whose difficulty makes some fixed M actually bind for a single agent.
+**This is an unequal-cap diagnostic, not the pre-registered equal-cap comparison**, and it is a mixed one: most C rows (102-104)
+ran at M = 1.60 (four seats at M/4 each) because the wrapper misreported the first same-cap attempt (C101, M = 0.60) as a
+failure when the room had actually finished — see finding 3, corrected after a non-author caught it. So one same-cap (M = 0.60)
+C data point does exist (C101) alongside three higher-cap ones (C102-104); none of this is the paired, equal-cap-for-every-cell
+confirmatory design, which is left to paper/prereg-build-suite.md.
 
 Command shape: `node --import tsx scripts/bench-build.ts tasks/build-ledger-s1 <A|B|C> <seed> --root <dir> --max-budget-usd <M> --expected-task-sha256 <hash of the task tree>`
 (arm C also `--port <free>`). Raw rows: `docs/build-suite-pilot.json`.
@@ -122,13 +123,17 @@ Command shape: `node --import tsx scripts/bench-build.ts tasks/build-ledger-s1 <
 | C (4 seats) | 102 | 8 (S12) | 9 | 0 | 0 | 0.716 | 1154, 573, 881, 949 | 76 | 74 |
 | C (4 seats) | 103 | 8 (S12) | 9 | 0 | 0 | 0.950 | 946, 1132, 1180, 597 | 85 | 94 |
 | C (4 seats) | 104 | 9 | 9 | 0 | 0 | 0.836 | 549, 847, 973, 1000 | 74 | 78 |
-| C (4 seats) | 101 at M = 0.60 | infrastructure_error, no score | | | | about 0.60 | | | |
+| C (4 seats) | 101 at M = 0.60 | wrapper: infrastructure_error; workspace rescored directly: 9 | 9 | 0 | 0 | 0.622 (complete) | 818, 710, 515, 815 | 139 | 62 |
 
 Findings.
 
-1. **All three arms are at ceiling.** With the oracle as it should be (below) every scored run caught 9 of 9 with no regression. The
-   suite does not separate A, B and C on defects caught or shipped on this task; the only separation is cost: A 0.056, B 0.135,
-   C 0.83 USD per run (about 2.4 times and 15 times A), and wall time 21, 62 and 78 s.
+1. **All three arms are at ceiling.** With the oracle as it should be (below) every scored run caught 9 of 9 with no regression,
+   once C101 is corrected (finding 3). The suite does not separate A, B and C on defects caught or shipped on this task. The
+   cost picture is mixed rather than monotone: the M = 1.6 room runs (C102-104) cost 0.72-0.95 (about 13-17x A's 0.056), but
+   C101 at the SAME M = 0.60 cap as A and B finished for 0.622 (about 11x A, comparable to or cheaper than the M=1.6 rooms) —
+   so cost is not simply "room costs N times more" at a fixed sample; it varies with what a room's own coordination overhead
+   happens to cost on a given seed, and the single M=0.60 same-cap room data point does not by itself rule out equal-cap
+   parity on this ceiling task. Wall time: A ~21s, B ~62s, C 74-139s.
 2. **A second oracle fault, found by this pilot.** The S12 check compared the backorder queue, and the SPEC sentence (then "nothing removes
    it from the queue") contradicted the reference, which drops a cancelled order from the queue during a retry. Three runs
    fixed S12 correctly by skipping a cancelled order and were marked as misses (B101, C102, C103); arm A run 13 in the ledger v2 screen
@@ -136,10 +141,17 @@ Findings.
    sentence is "a cancelled order is never reserved again". All rows above were rescored with the fixed oracle; the as-run column keeps
    the original numbers. Lesson for the confirmatory run: every scenario must project only the fields its defect touches, and each
    arm-reported "miss" gets its diff read before it is counted (docs above, evidence/fable-review F5).
-3. **A cap of 0.60 starves a four-seat room.** At M/4 = 0.15 USD each, all four seats stopped on their own budget while still reading
-   the workspace (C101, infrastructure_error). A room needs about M = 1.6 for the same task a single agent finishes for 0.056, so an
-   "equal cap" that lets the room finish is 25 to 30 times what one agent needs. This is the non-binding-cap problem of
-   evidence/fable-review P3 made concrete; a binding equal-cap comparison needs either a harder task or a spend-matched single-agent
-   baseline (one agent re-invoked until it has spent what the paired room spent).
+3. **CORRECTED (was wrong in an earlier version of this doc): a cap of 0.60 does not necessarily starve a four-seat room.**
+   fable-reviewer (evidence/fable-review-pilot, non-author) scored C101's actual workspace directly with the committed oracle
+   and got 9 of 9, 0 regressions, at a real cost of 0.622 USD (4/4 seats, complete coverage) — the room finished the work and
+   even reached a verified conclusion (a proposal, three challenges, three agree votes, per fable's read of `build.jsonl`)
+   before its seats individually exited 1 on their own remaining per-seat share. `scripts/bench-build.ts` labels any nonzero
+   seat exit as `infrastructure_error` regardless of when it happens, so a room that finishes and then runs out of budget
+   during its own wrap-up is misclassified as producing no result at all, rather than being scored on the (correct) work it
+   already did. This is a real defect in the wrapper (owned by 5-6-terra-6/6-astra-4, not this room's task generators): a
+   confirmatory run must score the workspace as it stands and record cost/outcome separately, or a starved room's genuinely
+   good work silently leaves the primary analysis (reopening prereg point P1). The earlier claim "C needs M >= 1.6" is
+   retracted; C101 at M = 0.60 is direct evidence C can finish at the same cap as A and B on this task. The corrected row is
+   in the table above; the wrapper defect itself needs a fix and a regression test, which is 6-astra-4/terra-6's to add.
 4. Thinking tokens are reported per seat (about 350 to 450 for A, up to 1200 in a room seat), always under 1.2K: the short-regime
    caveat of paper/amendments.md applies, effort medium does not make these tasks think long.

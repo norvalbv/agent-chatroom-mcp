@@ -13,7 +13,9 @@ seed ranges and inference scopes distinct when rebuilding the manuscript.
 
 ## Reproduce the five-arm snapshot without running agents
 
-From the repository root, after installing the project's Node dependencies:
+Run from a clean checkout of the published commit, after installing the project's Node
+dependencies. The commands scan the current working tree; they do not isolate a revision.
+Do not use a checkout with uncommitted or untracked result cells. From that repository root:
 
 ```sh
 evidence_dir="$(mktemp -d)"
@@ -25,7 +27,7 @@ node --import tsx scripts/paper-rq1-confirmatory.ts bench/results/rq1-confirmato
 printf 'Report and structured data: %s\n' "$evidence_dir"
 ```
 
-These commands use committed results and the sanitized switch log; they launch no model
+These commands read results and the sanitized switch log from that checkout; they launch no model
 calls and write only to a temporary directory. Account slot `4` is the observed long-thinking
 account in this dataset, not a general account identifier. Recompute mixed seeds whenever
 results change: an incomplete seed may become mixed when its remaining cells arrive.

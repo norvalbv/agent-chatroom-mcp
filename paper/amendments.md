@@ -683,3 +683,15 @@ Projection in the long regime: about 5 USD per printf seed (A 0.6, AH 0.9, B 1.2
 unknown spend, so the pre-amendment cell `bench-printf-format-A-seed501` (timeout, usage lost) was moved
 unchanged to `bench/results/rq1-confirmatory-pre-amendment/`. Seed 501's arm A is therefore re-run under
 the new caps like the other seed-501 printf arms; all seed-501 printf cells stay outside printf inference.
+unchanged to `bench/results/rq1-confirmatory-pre-amendment/`. Seed 501's arm A is therefore re-run under
+the new caps like the other seed-501 printf arms; all seed-501 printf cells stay outside printf inference.
+
+**Addendum 2026-09-20 01:30 UTC (killed-cell cost accounting).** `bench-printf-format-C-seed503` ran to the
+900 s per-cell timeout: its three seats made about 100 hub calls each with under 1.1K output tokens in
+total, one proposal, one challenge and two votes, i.e. the room stalled rather than worked. That is a
+recorded chatroom failure (outcome `timeout`), kept as data. Its seats kept stream-json partial usage, so the
+grid now counts a killed cell whose every seat has partial usage at Sonnet list prices (2.00 / 0.20 / 2.50 /
+10.00 USD per million input, cache-read, cache-write and output tokens) times a 1.5 safety factor toward the
+cost cap, logged as `[est-cost]`, instead of treating it as unknown and halting. A killed cell with no
+partial signal stays unknown and still halts a capped grid. This changes cost accounting only; outcomes,
+caps and inference are unchanged. Estimated costs are reported as upper bounds in the cost tables.

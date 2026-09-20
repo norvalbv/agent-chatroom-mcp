@@ -69,7 +69,29 @@ export interface GridRunResult {
   outcome: string;
   /** null when the cost is unknown (coverage none/partial, or arm K with an attempt of unknown cost); never 0. */
   cost_usd: number | null;
+  /** Conservative upper-bound estimate for a killed cell whose seats all kept stream-json partial usage
+   *  (Sonnet list prices x ESTIMATE_SAFETY_FACTOR); null when no such bound exists. */
+  estimated_cost_usd: number | null;
   wall_clock_ms: number;
+}
+
+/** Sonnet 5 list prices, USD per million tokens (2026-09-19 accounting in paper/figures.md). */
+export const SONNET_PRICE_PER_MTOK = { input: 2.0, cache_read: 0.2, cache_write: 2.5, output: 10.0 } as const;
+/** Partial stream-json usage may under-count thinking tokens on a killed seat; the bound is inflated by this factor. */
+export const ESTIMATE_SAFETY_FACTOR = 1.5;
+
+/** Upper-bound cost of a killed cell from every seat's partial_usage; null unless every seat kept a partial signal. */
+export function estimateKilledCellCost(r: { seats?: { usage?: unknown; partial_usage?: Record<string, number> | null }[] }): number | null {
+  const seats = Array.isArray(r.seats) ? r.seats : [];
+  if (seats.length === 0) return null;
+  let usd = 0;
+  for (const seat of seats) {
+    const pu = seat.partial_usage;
+    if (!pu || typeof pu !== "object" || !(pu.assistant_messages_observed > 0)) return null;
+    usd += ((pu.input_tokens ?? 0) * SONNET_PRICE_PER_MTOK.input + (pu.cache_read_input_tokens ?? 0) * SONNET_PRICE_PER_MTOK.cache_read
+      + (pu.cache_creation_input_tokens ?? 0) * SONNET_PRICE_PER_MTOK.cache_write + (pu.output_tokens ?? 0) * SONNET_PRICE_PER_MTOK.output) / 1e6;
+  }
+  return usd * ESTIMATE_SAFETY_FACTOR;
 }
 
 /** Reads just the fields the grid runner needs to orchestrate the next run; tolerant of extra fields. */
@@ -81,7 +103,8 @@ export function readGridResult(resultPath: string): GridRunResult {
   // src/result.ts stores an unknown cost as cost_usd 0 with coverage none/partial, and arm K may store null:
   // neither is a known cost. A legacy result with no coverage field is read as complete.
   const known = r.usage.cost_usd !== null && (r.usage.coverage === undefined || r.usage.coverage === "complete");
-  return { outcome: r.outcome, cost_usd: known ? r.usage.cost_usd : null, wall_clock_ms: r.wall_clock.duration_ms };
+  const estimated = known || r.arm === "K" ? null : estimateKilledCellCost(r);
+  return { outcome: r.outcome, cost_usd: known ? r.usage.cost_usd : null, estimated_cost_usd: estimated, wall_clock_ms: r.wall_clock.duration_ms };
 }
 
 /** Sums usage.cost_usd across every result.json already under resultsDir, so a resumed grid respects prior spend. */
@@ -106,9 +129,10 @@ export function scanExistingCost(resultsDir: string): { total: number; unknown: 
     }
     {
       try {
-        const cost = readGridResult(resultPath).cost_usd;
-        if (cost === null) unknown++;
-        else total += cost;
+        const res = readGridResult(resultPath);
+        if (res.cost_usd !== null) total += res.cost_usd;
+        else if (res.estimated_cost_usd !== null) total += res.estimated_cost_usd;
+        else unknown++;
       } catch {
         // Malformed/partial result.json from an interrupted run: its cost is unknown, never zero.
         unknown++;
@@ -474,8 +498,11 @@ export async function runGrid(args: ParsedGridArgs, opts: { log?: (s: string) =>
       summary.unknown_cost_groups++;
       break;
     }
-    if (written.cost_usd === null) summary.unknown_cost_groups++;
-    else runningTotal += written.cost_usd;
+    if (written.cost_usd !== null) runningTotal += written.cost_usd;
+    else if (written.estimated_cost_usd !== null) {
+      runningTotal += written.estimated_cost_usd;
+      log(`[est-cost] ${item.taskLabel} ${item.arm} seed${item.seed}: killed cell, upper-bound cost $${written.estimated_cost_usd.toFixed(4)} from partial usage counted toward the cap`);
+    } else summary.unknown_cost_groups++;
     summary.total_cost_usd = runningTotal;
     summary.ran++;
     if (args.confirmatory && item.arm === "A") writeSentinel(args.resultsDir);

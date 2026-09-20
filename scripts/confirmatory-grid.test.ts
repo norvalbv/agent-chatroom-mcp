@@ -11,7 +11,7 @@ import { test } from "node:test";
 import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
-import { buildPlan, classifyRegime, confirmatoryOrder, parseArgs, runGrid } from "./bench-grid.js";
+import { buildPlan, classifyRegime, confirmatoryOrder, parseArgs, readGridResult, runGrid, scanExistingCost } from "./bench-grid.js";
 
 const ARMS = ["A", "AH", "B", "K", "C"] as const;
 
@@ -292,6 +292,31 @@ test("--cap-usd and --cap-deadline-ms override the pre-registered runaway caps f
       assert.equal(call.argv.includes("--max-budget-usd"), false, `${arm} still runs to natural completion`);
     }
     assert.throws(() => parseArgs(["--tasks", "stamp-interpreter", "--seeds", "502", "--arms", "A", "--confirmatory", "--tasks-dir", f.tasksDir, "--results-dir", f.resultsDir, "--cap-usd", "0"]), /positive/);
+  } finally {
+    rmSync(f.dir, { recursive: true, force: true });
+  }
+});
+
+test("a killed cell whose seats all kept partial usage gets a list-price upper bound counted toward the cap instead of halting the grid; no partial signal stays unknown", () => {
+  const f = fixture();
+  try {
+    const cell = join(f.resultsDir, "stamp-interpreter-C-seed503");
+    mkdirSync(cell, { recursive: true });
+    const seat = (n: number) => ({ name: `seat-${n}`, usage: null, partial_usage: { output_tokens: 1000, input_tokens: 2, cache_read_input_tokens: 100000, cache_creation_input_tokens: 2000, assistant_messages_observed: 100 } });
+    writeFileSync(join(cell, "result.json"), JSON.stringify({ arm: "C", outcome: "timeout", usage: { cost_usd: 0, coverage: "none" }, wall_clock: { duration_ms: 900000 }, seats: [seat(1), seat(2), seat(3)] }));
+    const read = readGridResult(join(cell, "result.json"));
+    assert.equal(read.cost_usd, null);
+    const perSeat = (2 * 2 + 100000 * 0.2 + 2000 * 2.5 + 1000 * 10) / 1e6;
+    assert.ok(Math.abs((read.estimated_cost_usd ?? 0) - perSeat * 3 * 1.5) < 1e-9, "three seats at list price times the safety factor");
+    const scan = scanExistingCost(f.resultsDir);
+    assert.equal(scan.unknown, 0, "an estimable cell is not unknown");
+    assert.ok(Math.abs(scan.total - perSeat * 3 * 1.5) < 1e-9);
+
+    const bare = join(f.resultsDir, "stamp-interpreter-C-seed504");
+    mkdirSync(bare, { recursive: true });
+    writeFileSync(join(bare, "result.json"), JSON.stringify({ arm: "C", outcome: "timeout", usage: { cost_usd: 0, coverage: "none" }, wall_clock: { duration_ms: 900000 }, seats: [{ name: "seat-1", usage: null, partial_usage: null }] }));
+    assert.equal(readGridResult(join(bare, "result.json")).estimated_cost_usd, null);
+    assert.equal(scanExistingCost(f.resultsDir).unknown, 1, "a killed cell with no partial signal is still unknown, never zero");
   } finally {
     rmSync(f.dir, { recursive: true, force: true });
   }

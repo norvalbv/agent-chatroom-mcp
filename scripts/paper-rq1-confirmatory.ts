@@ -168,13 +168,15 @@ export function renderConfirmatoryMarkdown(t:ConfirmatoryTable):string {
 export function renderConfirmatoryTex(t:ConfirmatoryTable):string {
   const esc=(x:string)=>x.replace(/_/g,'\\_');
   const label:Record<string,string>={'calibrated':'short thinking','long-thinking':'long thinking','mixed-account':'mixed accounts','unknown':'unknown'};
-  const L:string[]=['Descriptive rows retain printf seed 501 and its costs; printf seed 501 is excluded from both primary and exploratory comparisons (2026-09-20 cap amendment).', '', '\\medskip', '', '\\begin{tabular}{lllrrrr}','\\toprule','Family & Stratum & Arm & Pass/$n$ & Wilson 95\\% & USD per correct & Thinking tokens per run \\\\','\\midrule'];
-  for(const c of t.cells){ if(!c.n)continue;
-    const usd=typeof c.cost_per_correct==='number'?c.cost_per_correct.toFixed(2):c.cost_per_correct==='unknown'?'unknown':'n/a';
-    L.push(`\\texttt{${esc(c.task)}} & ${label[c.regime]} & ${c.arm} & ${c.passes}/${c.denominator} & ${c.wilson?`${c.wilson[0].toFixed(2)}--${c.wilson[1].toFixed(2)}`:'n/a'} & ${usd} & ${c.thinking_tokens_mean===null?'unknown':Math.round(c.thinking_tokens_mean)} \\\\`);
+  const L:string[]=['\\begin{tabular}{llccccc}','\\toprule',
+    '\\multicolumn{7}{l}{\\footnotesize Descriptive rows retain printf seed 501 and its costs; it is excluded from both primary and exploratory comparisons.} \\\\',
+    '\\midrule','Family & Stratum & A & AH & B & K & C \\\\','\\midrule'];
+  for(const task of TASKS)for(const stratum of ['calibrated','long-thinking','mixed-account','unknown'] as const){
+    const cells=ARMS.map(arm=>t.cells.find(c=>c.task===task&&c.regime===stratum&&c.arm===arm));
+    if(!cells.some(c=>c?.n))continue;
+    const values=cells.map(c=>c?.n?`${c.passes}/${c.denominator}`:'--');
+    L.push(`\\texttt{${esc(task)}} & ${label[stratum]} & ${values.join(' & ')} \\\\`);
   }
-  L.push('\\bottomrule','\\end{tabular}','','\\medskip','','\\begin{tabular}{llrrrr}','\\toprule','Family & Comparison (long thinking, exploratory) & Left & Right & Fisher $p$ & Holm $p$ \\\\','\\midrule');
-  for(const c of t.exploratory_long_comparisons)L.push(`\\texttt{${esc(c.task)}} & ${c.left} vs ${c.right} & ${c.left_pass}/${c.left_n} & ${c.right_pass}/${c.right_n} & ${c.p_raw===null?'n/a':c.p_raw.toFixed(3)} & ${c.p_holm===null?'n/a':c.p_holm.toFixed(3)} \\\\`);
   L.push('\\bottomrule','\\end{tabular}','');
   return L.join('\n');
 }

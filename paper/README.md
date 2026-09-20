@@ -74,8 +74,9 @@ The manuscript includes generated tables and figures from `paper/tables/*.tex` a
 `paper/figures/*.png`, produced by scripts under `scripts/paper-*.ts` (Node, run with
 `node --import tsx`) or `scripts/paper-fig.py` (matplotlib) reading committed results.
 [regen-manifest.sh](regen-manifest.sh) lists the actual generators and inputs, including
-the original suite, arm-K results and account-regime analysis. The five-arm command above
-can also be run separately to inspect a snapshot without modifying generated paper files. `scripts/paper-number-audit.ts` additionally
+the original suite, arm-K results, account-regime analysis and the incomplete five-arm
+snapshot. The temporary-directory command above remains the safest way to inspect that
+snapshot without modifying generated paper files. `scripts/paper-number-audit.ts` additionally
 scans the rendered sections for numbers that don't trace back to a generated table/figure. To
 regenerate everything and diff against what's committed:
 

@@ -167,3 +167,20 @@ test('printf501 is descriptive only in both inference strata; interpreter501 sta
     assert.equal(excludedComparisons.filter(c => c.task === 'bench-printf-format').every(c => c.left_n === 0 && c.right_n === 0 && c.p_raw === null && c.p_holm === null), true);
   }
 });
+
+test('TeX snapshot is one compact row per observed family/stratum with all five arms', () => {
+  const runs: ConfirmatoryRun[] = [];
+  for (const task of ['stamp-interpreter', 'bench-printf-format']) {
+    for (const arm of ['A', 'AH', 'B', 'K', 'C']) {
+      const r = run(arm, 501, arm !== 'B', task);
+      r.thinking_tokens = task === 'stamp-interpreter' ? 1200 : 9000;
+      runs.push(r);
+    }
+  }
+  const tex = renderConfirmatoryTex(buildConfirmatoryTable(runs));
+  assert.match(tex, /Family & Stratum & A & AH & B & K & C/);
+  assert.match(tex, /stamp-interpreter.*short thinking.*1\/1.*1\/1.*0\/1.*1\/1.*1\/1/);
+  assert.match(tex, /bench-printf-format.*long thinking.*1\/1.*1\/1.*0\/1.*1\/1.*1\/1/);
+  assert.equal((tex.match(/\\texttt\{/g) ?? []).length, 2);
+  assert.doesNotMatch(tex, /Comparison \(long thinking/);
+});

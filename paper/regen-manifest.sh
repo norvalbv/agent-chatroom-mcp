@@ -18,3 +18,7 @@ node --import tsx scripts/paper-fig-data.ts bench/results/rq1-suite bench/result
 node --import tsx scripts/paper-fig-tables.ts paper/generated/fig-data.json paper/tables
 python3 scripts/paper-fig.py paper/generated/fig-data.json paper/figures
 node --import tsx scripts/paper-account-regime.ts bench/results/account-switch-log/switches.json bench/results --out paper/generated/account-regime --tex paper/tables/account-regime.tex > /dev/null
+
+# --- claim/confirmatory-results-integration-takeover (5-6-sol-1) ---
+node --import tsx scripts/paper-account-regime.ts --mixed-seeds bench/results/account-switch-log/switches.json bench/results/rq1-confirmatory 4 > bench/results/rq1-confirmatory/mixed-seeds.json
+node --import tsx scripts/paper-rq1-confirmatory.ts bench/results/rq1-confirmatory --mixed-seeds bench/results/rq1-confirmatory/mixed-seeds.json --out paper/generated/rq1-confirmatory --tex paper/tables/rq1-confirmatory.tex > /dev/null

@@ -5,6 +5,27 @@
   ],
   "seeds": [
     {
+      "task": "bench-printf-format",
+      "seed": 517,
+      "arms": {
+        "A": [
+          "long"
+        ],
+        "AH": [
+          "short"
+        ],
+        "B": [
+          "long"
+        ],
+        "C": [
+          "long"
+        ],
+        "K": [
+          "long"
+        ]
+      }
+    },
+    {
       "task": "stamp-interpreter",
       "seed": 501,
       "arms": {

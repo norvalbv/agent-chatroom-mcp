@@ -1,7 +1,7 @@
 {
   "threshold": 4000,
-  "switches_in_log": 23,
-  "runs_in_log_window": 1919,
+  "switches_in_log": 24,
+  "runs_in_log_window": 1947,
   "runs_straddling_a_switch": 5,
   "thinking": [
     {
@@ -22,9 +22,9 @@
     },
     {
       "account": 4,
-      "n": 357,
-      "long": 356,
-      "median": 7322,
+      "n": 385,
+      "long": 384,
+      "median": 7709,
       "min": 3742,
       "max": 31604
     }
@@ -49,8 +49,8 @@
     {
       "account": 4,
       "task": "bench-printf-format",
-      "n": 124,
-      "median": 24976,
+      "n": 152,
+      "median": 25144,
       "min": 16212,
       "max": 43700
     },
@@ -155,9 +155,9 @@
     {
       "experiment": "rq1-confirmatory",
       "first_start": "2026-09-19T20:03Z",
-      "last_end": "2026-09-20T07:50Z",
+      "last_end": "2026-09-20T11:45Z",
       "seats": {
-        "account 4": 550,
+        "account 4": 600,
         "account 3": 11,
         "account 1": 6,
         "straddles a switch": 8

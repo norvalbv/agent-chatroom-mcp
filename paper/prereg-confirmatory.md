@@ -316,3 +316,14 @@ comparisons are essentially unobserved, the report script now also prints the sa
 comparisons inside the long-thinking stratum, Holm-adjusted at m=14 and labelled exploratory in every
 output. This was added after 13 long-thinking format seeds and all interpreter seeds had been seen, so it
 carries no confirmatory weight; it exists so that a reader sees a test and not only rates.
+
+**Addendum 2026-09-20 12:48 UTC (block stopped; final snapshot).** The maintainer stopped the printf block
+after seed 518 on the grounds that further cells at this size could only confirm "no difference", which
+the pre-registration already calls inconclusive. Seeds 519 and 520 were not run; the committed snapshot
+holds 190 of 200 cells. The sanitized switch-log extract was refreshed to include the 09:49 UTC switch
+back to account 4 (the earlier extract predated the resume and had mislabelled the re-run cells). By
+the mixed-seed rule the mixed seeds are interpreter 501 and printf 517; printf 514 is long throughout.
+Long-thinking printf inference has 15 seeds per arm (seed 501 descriptive only): A 11/15, AH 11/15,
+B 10/15, K 12/15, C 10/15; no exploratory comparison approaches its threshold. A room of Codex and
+DeepSeek seats (swarm-120937-t1gx) integrated the snapshot into the paper and concluded "consolidate
+before extending": no more paid cells without prospective control of the serving condition.

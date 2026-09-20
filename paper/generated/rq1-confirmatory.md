@@ -33,21 +33,21 @@ Descriptive rows retain printf seed 501 and its costs; printf seed 501 is exclud
 | bench-printf-format | calibrated | B | 1 | 1/1 | 1.0000 | 0.2065–1.0000 | 0.1271 | 0.1271 | 1159.0 | 1/1 | 4924.0 | {"task_pass":1} |
 | bench-printf-format | calibrated | K | 1 | 0/1 | 0.0000 | 0.0000–0.7935 | 0.5886 | undefined | 5030.0 | 1/1 | 29547.0 | {"task_fail":1} |
 | bench-printf-format | calibrated | C | 1 | 0/1 | 0.0000 | 0.0000–0.7935 | 1.0047 | undefined | 2175.0 | 1/1 | 21762.0 | {"task_fail":1} |
-| bench-printf-format | long-thinking | A | 13 | 10/13 | 0.7692 | 0.4974–0.9182 | 5.4008 | 0.5401 | 14442.7 | 13/13 | 22453.5 | {"task_pass":10,"task_fail":3} |
-| bench-printf-format | long-thinking | AH | 13 | 10/13 | 0.7692 | 0.4974–0.9182 | 9.2873 | 0.9287 | 24348.7 | 13/13 | 35490.8 | {"task_pass":10,"task_fail":3} |
-| bench-printf-format | long-thinking | B | 13 | 9/13 | 0.6923 | 0.4237–0.8732 | 10.2798 | 1.1422 | 20745.4 | 13/13 | 34944.5 | {"task_pass":9,"task_fail":4} |
-| bench-printf-format | long-thinking | K | 13 | 11/13 | 0.8462 | 0.5777–0.9567 | 42.6762 | 3.8797 | 113865.5 | 13/13 | 173716.9 | {"task_pass":11,"task_fail":2} |
-| bench-printf-format | long-thinking | C | 13 | 7/13 | 0.5385 | 0.2914–0.7679 | unknown | unknown | unknown | 12/13 | unknown | {"task_fail":5,"timeout":1,"task_pass":7} |
+| bench-printf-format | long-thinking | A | 16 | 12/16 | 0.7500 | 0.5050–0.8982 | 6.7065 | 0.5589 | 14542.7 | 16/16 | 22568.4 | {"task_pass":12,"task_fail":4} |
+| bench-printf-format | long-thinking | AH | 16 | 12/16 | 0.7500 | 0.5050–0.8982 | 11.5317 | 0.9610 | 24490.7 | 16/16 | 35700.9 | {"task_pass":12,"task_fail":4} |
+| bench-printf-format | long-thinking | B | 16 | 11/16 | 0.6875 | 0.4440–0.8584 | 12.3043 | 1.1186 | 20776.0 | 16/16 | 34291.1 | {"task_pass":11,"task_fail":5} |
+| bench-printf-format | long-thinking | K | 16 | 13/16 | 0.8125 | 0.5699–0.9341 | 54.6695 | 4.2053 | 117885.8 | 16/16 | 179560.8 | {"task_pass":13,"task_fail":3} |
+| bench-printf-format | long-thinking | C | 16 | 10/16 | 0.6250 | 0.3864–0.8152 | unknown | unknown | unknown | 15/16 | unknown | {"task_fail":5,"timeout":1,"task_pass":10} |
 | bench-printf-format | unknown | A | 0 | 0/0 | unknown | undefined | unknown | undefined | unknown | 0/0 | unknown | {} |
-| bench-printf-format | unknown | AH | 1 | 0/1 | 0.0000 | 0.0000–0.7935 | 0.0961 | undefined | 760.0 | 1/1 | 4763.0 | {"task_fail":1} |
+| bench-printf-format | unknown | AH | 0 | 0/0 | unknown | undefined | unknown | undefined | unknown | 0/0 | unknown | {} |
 | bench-printf-format | unknown | B | 0 | 0/0 | unknown | undefined | unknown | undefined | unknown | 0/0 | unknown | {} |
-| bench-printf-format | unknown | K | 1 | 1/1 | 1.0000 | 0.2065–1.0000 | 3.8992 | 3.8992 | 135101.0 | 1/1 | 202578.0 | {"task_pass":1} |
+| bench-printf-format | unknown | K | 0 | 0/0 | unknown | undefined | unknown | undefined | unknown | 0/0 | unknown | {} |
 | bench-printf-format | unknown | C | 0 | 0/0 | unknown | undefined | unknown | undefined | unknown | 0/0 | unknown | {} |
-| bench-printf-format | mixed-account | A | 0 | 0/0 | unknown | undefined | unknown | undefined | unknown | 0/0 | unknown | {} |
-| bench-printf-format | mixed-account | AH | 0 | 0/0 | unknown | undefined | unknown | undefined | unknown | 0/0 | unknown | {} |
-| bench-printf-format | mixed-account | B | 0 | 0/0 | unknown | undefined | unknown | undefined | unknown | 0/0 | unknown | {} |
-| bench-printf-format | mixed-account | K | 0 | 0/0 | unknown | undefined | unknown | undefined | unknown | 0/0 | unknown | {} |
-| bench-printf-format | mixed-account | C | 0 | 0/0 | unknown | undefined | unknown | undefined | unknown | 0/0 | unknown | {} |
+| bench-printf-format | mixed-account | A | 1 | 0/1 | 0.0000 | 0.0000–0.7935 | 0.4640 | undefined | 15216.0 | 1/1 | 23309.0 | {"task_fail":1} |
+| bench-printf-format | mixed-account | AH | 1 | 0/1 | 0.0000 | 0.0000–0.7935 | 0.0961 | undefined | 760.0 | 1/1 | 4763.0 | {"task_fail":1} |
+| bench-printf-format | mixed-account | B | 1 | 1/1 | 1.0000 | 0.2065–1.0000 | 0.6050 | 0.6050 | 13141.0 | 1/1 | 26139.0 | {"task_pass":1} |
+| bench-printf-format | mixed-account | K | 1 | 1/1 | 1.0000 | 0.2065–1.0000 | 2.9285 | 2.9285 | 109907.0 | 1/1 | 162641.0 | {"task_pass":1} |
+| bench-printf-format | mixed-account | C | 1 | 0/1 | 0.0000 | 0.0000–0.7935 | 2.7248 | undefined | 57253.0 | 1/1 | 94166.0 | {"task_fail":1} |
 
 Every launched cell directory enters its descriptive denominator; absent or invalid results are explicit infrastructure_error observations with unknown spend; all non-task_pass outcomes count as failures and remain listed (confirmatory prereg overrides protocol §4). Every finished K group, including no-submission groups, stays in the descriptive denominator. Comparison denominators additionally exclude printf seed 501. Unknown cost or thinking usage is never zero-filled; cost/correct includes all observed runs of the cell.
 
@@ -88,13 +88,13 @@ EXPLORATORY (not pre-registered): the same comparisons inside the long-thinking 
 | stamp-interpreter | B vs A | 19/19 | 18/19 | 1.000000 | 1.000000 |
 | stamp-interpreter | K vs A | 19/19 | 18/19 | 1.000000 | 1.000000 |
 | stamp-interpreter | C vs A | 19/19 | 18/19 | 1.000000 | 1.000000 |
-| bench-printf-format | B vs C | 8/12 | 7/12 | 1.000000 | 1.000000 |
-| bench-printf-format | AH vs C | 9/12 | 7/12 | 0.666846 | 1.000000 |
-| bench-printf-format | K vs C | 10/12 | 7/12 | 0.370709 | 1.000000 |
-| bench-printf-format | AH vs A | 9/12 | 9/12 | 1.000000 | 1.000000 |
-| bench-printf-format | B vs A | 8/12 | 9/12 | 1.000000 | 1.000000 |
-| bench-printf-format | K vs A | 10/12 | 9/12 | 1.000000 | 1.000000 |
-| bench-printf-format | C vs A | 7/12 | 9/12 | 0.666846 | 1.000000 |
+| bench-printf-format | B vs C | 10/15 | 10/15 | 1.000000 | 1.000000 |
+| bench-printf-format | AH vs C | 11/15 | 10/15 | 1.000000 | 1.000000 |
+| bench-printf-format | K vs C | 12/15 | 10/15 | 0.681659 | 1.000000 |
+| bench-printf-format | AH vs A | 11/15 | 11/15 | 1.000000 | 1.000000 |
+| bench-printf-format | B vs A | 10/15 | 11/15 | 1.000000 | 1.000000 |
+| bench-printf-format | K vs A | 12/15 | 11/15 | 1.000000 | 1.000000 |
+| bench-printf-format | C vs A | 10/15 | 11/15 | 1.000000 | 1.000000 |
 
 | family | seed | regime | A thinking | A output |
 |---|---|---|---|---|
@@ -131,11 +131,11 @@ EXPLORATORY (not pre-registered): the same comparisons inside the long-thinking 
 | bench-printf-format | 511 | long-thinking | 12198 | 19943 |
 | bench-printf-format | 512 | long-thinking | 21122 | 28942 |
 | bench-printf-format | 513 | long-thinking | 14331 | 23395 |
-| bench-printf-format | 514 | unknown | unknown | unknown |
-| bench-printf-format | 515 | unknown | unknown | unknown |
+| bench-printf-format | 514 | long-thinking | 17907 | 25395 |
+| bench-printf-format | 515 | long-thinking | 11330 | 20597 |
 | bench-printf-format | 516 | calibrated | 1316 | 4642 |
-| bench-printf-format | 517 | unknown | unknown | unknown |
-| bench-printf-format | 518 | unknown | unknown | unknown |
+| bench-printf-format | 517 | mixed-account | 15216 | 23309 |
+| bench-printf-format | 518 | long-thinking | 15691 | 23207 |
 | bench-printf-format | 519 | unknown | unknown | unknown |
 | bench-printf-format | 520 | unknown | unknown | unknown |
 
@@ -154,7 +154,11 @@ EXPLORATORY (not pre-registered): the same comparisons inside the long-thinking 
 | bench-printf-format | 511 | A | task_pass | 0.3833 | 12198 | 19943 | 206788 | [0] |
 | bench-printf-format | 512 | A | task_pass | 0.4919 | 21122 | 28942 | 278065 | [0] |
 | bench-printf-format | 513 | A | task_pass | 0.4932 | 14331 | 23395 | 247903 | [0] |
+| bench-printf-format | 514 | A | task_pass | 0.5101 | 17907 | 25395 | 236402 | [0] |
+| bench-printf-format | 515 | A | task_fail | 0.4081 | 11330 | 20597 | 223333 | [0] |
 | bench-printf-format | 516 | A | task_fail | 0.0913 | 1316 | 4642 | 47393 | [0] |
+| bench-printf-format | 517 | A | task_fail | 0.4640 | 15216 | 23309 | 246907 | [0] |
+| bench-printf-format | 518 | A | task_pass | 0.3874 | 15691 | 23207 | 220465 | [0] |
 | bench-printf-format | 501 | AH | task_pass | 0.7856 | 24879 | 37489 | 331534 | [0] |
 | bench-printf-format | 502 | AH | task_pass | 0.9550 | 27438 | 41730 | 439324 | [0] |
 | bench-printf-format | 503 | AH | task_pass | 0.8698 | 24533 | 36788 | 388801 | [0] |
@@ -168,8 +172,11 @@ EXPLORATORY (not pre-registered): the same comparisons inside the long-thinking 
 | bench-printf-format | 511 | AH | task_pass | 0.6237 | 23322 | 34040 | 312911 | [0] |
 | bench-printf-format | 512 | AH | task_fail | 0.5893 | 24575 | 33504 | 348575 | [0] |
 | bench-printf-format | 513 | AH | task_pass | 0.7179 | 26466 | 37811 | 379158 | [0] |
+| bench-printf-format | 514 | AH | task_fail | 0.7797 | 27856 | 38104 | 376893 | [0] |
+| bench-printf-format | 515 | AH | task_pass | 0.7176 | 24916 | 35907 | 385799 | [0] |
 | bench-printf-format | 516 | AH | task_fail | 0.0825 | 769 | 4181 | 37963 | [0] |
 | bench-printf-format | 517 | AH | task_fail | 0.0961 | 760 | 4763 | 46415 | [0] |
+| bench-printf-format | 518 | AH | task_pass | 0.7472 | 22546 | 35824 | 404530 | [0] |
 | bench-printf-format | 501 | B | task_pass | 0.8566 | 21980 | 37037 | 542864 | [0,0] |
 | bench-printf-format | 502 | B | task_fail | 1.0382 | 24421 | 42003 | 458947 | [0,0,0] |
 | bench-printf-format | 503 | B | task_pass | 0.5780 | 18819 | 27795 | 294368 | [0,0,0] |
@@ -183,7 +190,11 @@ EXPLORATORY (not pre-registered): the same comparisons inside the long-thinking 
 | bench-printf-format | 511 | B | task_pass | 0.9233 | 30166 | 44579 | 522066 | [0,0,0] |
 | bench-printf-format | 512 | B | task_pass | 0.5969 | 15321 | 27008 | 294235 | [0,0,0] |
 | bench-printf-format | 513 | B | task_pass | 1.2743 | 19710 | 44788 | 650169 | [0,0,0] |
+| bench-printf-format | 514 | B | task_fail | 0.6513 | 16586 | 27855 | 324093 | [0,0,0] |
+| bench-printf-format | 515 | B | task_pass | 0.8317 | 27500 | 39772 | 385628 | [0,0] |
 | bench-printf-format | 516 | B | task_pass | 0.1271 | 1159 | 4924 | 48776 | [0,0] |
+| bench-printf-format | 517 | B | task_pass | 0.6050 | 13141 | 26139 | 375725 | [0,0] |
+| bench-printf-format | 518 | B | task_pass | 0.5415 | 18640 | 26751 | 276245 | [0,0,0] |
 | bench-printf-format | 501 | C | task_fail | 2.3093 | 53212 | 83817 | 394469 | [0,0,0] |
 | bench-printf-format | 502 | C | task_fail | 2.5699 | 50336 | 84827 | 367467 | [0,0,0] |
 | bench-printf-format | 503 | C | timeout | unknown | unknown | unknown | 901273 | [143,143,143] |
@@ -197,7 +208,11 @@ EXPLORATORY (not pre-registered): the same comparisons inside the long-thinking 
 | bench-printf-format | 511 | C | task_fail | 2.3172 | 49536 | 85100 | 411273 | [0,0,0] |
 | bench-printf-format | 512 | C | task_fail | 2.0964 | 52519 | 83215 | 401893 | [0,0,0] |
 | bench-printf-format | 513 | C | task_fail | 2.4914 | 45677 | 83966 | 400637 | [0,0,0] |
+| bench-printf-format | 514 | C | task_pass | 2.7388 | 51572 | 83885 | 372026 | [0,0,0] |
+| bench-printf-format | 515 | C | task_pass | 2.3048 | 65339 | 98282 | 400156 | [0,0,0] |
 | bench-printf-format | 516 | C | task_fail | 1.0047 | 2175 | 21762 | 86000 | [0,0,0] |
+| bench-printf-format | 517 | C | task_fail | 2.7248 | 57253 | 94166 | 391651 | [0,0,0] |
+| bench-printf-format | 518 | C | task_pass | 2.5826 | 64458 | 97873 | 460870 | [0,0,0] |
 | bench-printf-format | 501 | K | task_pass | 3.0511 | 111420 | 166129 | 457824 | [0,0,0,0,0,0,0] |
 | bench-printf-format | 502 | K | task_pass | 3.0047 | 104820 | 161505 | 397992 | [0,0,0,0,0,0,0] |
 | bench-printf-format | 503 | K | task_pass | 3.1535 | 119432 | 172932 | 460161 | [0,0,0,0,0,0,0] |
@@ -212,7 +227,10 @@ EXPLORATORY (not pre-registered): the same comparisons inside the long-thinking 
 | bench-printf-format | 512 | K | task_fail | 3.0694 | 112044 | 168395 | 502805 | [0,0,0,0,0,0,0] |
 | bench-printf-format | 513 | K | task_pass | 3.0393 | 109194 | 166738 | 453863 | [0,0,0,0,0,0,0] |
 | bench-printf-format | 514 | K | task_pass | 3.8992 | 135101 | 202578 | 550188 | [0,0,0,0,0,0,0] |
+| bench-printf-format | 515 | K | task_pass | 3.9765 | 126247 | 198689 | 522485 | [0,0,0,0,0,0,0] |
 | bench-printf-format | 516 | K | task_fail | 0.5886 | 5030 | 29547 | 76964 | [0,0,0,0,0,0,0] |
+| bench-printf-format | 517 | K | task_pass | 2.9285 | 109907 | 162641 | 479417 | [0,0,0,0,0,0,0] |
+| bench-printf-format | 518 | K | task_fail | 4.1176 | 144574 | 213385 | 766184 | [0,0,0,0,0,0,0] |
 | stamp-interpreter | 501 | A | task_pass | 0.0669 | 950 | 1539 | 19112 | [0] |
 | stamp-interpreter | 502 | A | task_pass | 0.1180 | 5164 | 5811 | 56242 | [0] |
 | stamp-interpreter | 503 | A | task_pass | 0.1063 | 4879 | 5349 | 49744 | [0] |
@@ -314,4 +332,4 @@ EXPLORATORY (not pre-registered): the same comparisons inside the long-thinking 
 | stamp-interpreter | 519 | K | task_pass | 1.2807 | 60784 | 66660 | 164599 | [0,0,0,0,0,0,0,0,0,0] |
 | stamp-interpreter | 520 | K | task_pass | 1.2817 | 60301 | 66387 | 156758 | [0,0,0,0,0,0,0,0,0,0] |
 
-Missing cells (28): bench-printf-format-A-seed514, bench-printf-format-AH-seed514, bench-printf-format-B-seed514, bench-printf-format-C-seed514, bench-printf-format-A-seed515, bench-printf-format-AH-seed515, bench-printf-format-B-seed515, bench-printf-format-K-seed515, bench-printf-format-C-seed515, bench-printf-format-A-seed517, bench-printf-format-B-seed517, bench-printf-format-K-seed517, bench-printf-format-C-seed517, bench-printf-format-A-seed518, bench-printf-format-AH-seed518, bench-printf-format-B-seed518, bench-printf-format-K-seed518, bench-printf-format-C-seed518, bench-printf-format-A-seed519, bench-printf-format-AH-seed519, bench-printf-format-B-seed519, bench-printf-format-K-seed519, bench-printf-format-C-seed519, bench-printf-format-A-seed520, bench-printf-format-AH-seed520, bench-printf-format-B-seed520, bench-printf-format-K-seed520, bench-printf-format-C-seed520.
+Missing cells (10): bench-printf-format-A-seed519, bench-printf-format-AH-seed519, bench-printf-format-B-seed519, bench-printf-format-K-seed519, bench-printf-format-C-seed519, bench-printf-format-A-seed520, bench-printf-format-AH-seed520, bench-printf-format-B-seed520, bench-printf-format-K-seed520, bench-printf-format-C-seed520.

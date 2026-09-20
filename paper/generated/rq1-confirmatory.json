@@ -505,116 +505,116 @@
       "task": "bench-printf-format",
       "arm": "A",
       "regime": "long-thinking",
-      "n": 13,
-      "denominator": 13,
-      "passes": 10,
-      "pass_rate": 0.7692307692307693,
+      "n": 16,
+      "denominator": 16,
+      "passes": 12,
+      "pass_rate": 0.75,
       "wilson": [
-        0.49743624053272495,
-        0.9182047128150143
+        0.5050168346449122,
+        0.8981793250878696
       ],
       "outcome_counts": {
-        "task_pass": 10,
-        "task_fail": 3
+        "task_pass": 12,
+        "task_fail": 4
       },
-      "total_cost_usd": 5.400796799999998,
-      "cost_per_correct": 0.5400796799999998,
+      "total_cost_usd": 6.706493999999998,
+      "cost_per_correct": 0.5588744999999998,
       "unknown_cost_runs": 0,
-      "thinking_tokens_mean": 14442.692307692309,
-      "thinking_known_runs": 13,
-      "output_tokens_mean": 22453.53846153846
+      "thinking_tokens_mean": 14542.6875,
+      "thinking_known_runs": 16,
+      "output_tokens_mean": 22568.4375
     },
     {
       "task": "bench-printf-format",
       "arm": "AH",
       "regime": "long-thinking",
-      "n": 13,
-      "denominator": 13,
-      "passes": 10,
-      "pass_rate": 0.7692307692307693,
+      "n": 16,
+      "denominator": 16,
+      "passes": 12,
+      "pass_rate": 0.75,
       "wilson": [
-        0.49743624053272495,
-        0.9182047128150143
+        0.5050168346449122,
+        0.8981793250878696
       ],
       "outcome_counts": {
-        "task_pass": 10,
-        "task_fail": 3
+        "task_pass": 12,
+        "task_fail": 4
       },
-      "total_cost_usd": 9.2872658,
-      "cost_per_correct": 0.92872658,
+      "total_cost_usd": 11.53174,
+      "cost_per_correct": 0.9609783333333333,
       "unknown_cost_runs": 0,
-      "thinking_tokens_mean": 24348.69230769231,
-      "thinking_known_runs": 13,
-      "output_tokens_mean": 35490.769230769234
+      "thinking_tokens_mean": 24490.6875,
+      "thinking_known_runs": 16,
+      "output_tokens_mean": 35700.9375
     },
     {
       "task": "bench-printf-format",
       "arm": "B",
       "regime": "long-thinking",
-      "n": 13,
-      "denominator": 13,
-      "passes": 9,
-      "pass_rate": 0.6923076923076923,
+      "n": 16,
+      "denominator": 16,
+      "passes": 11,
+      "pass_rate": 0.6875,
       "wilson": [
-        0.42369343180549035,
-        0.8731929634428948
+        0.44404355834740666,
+        0.8583535614521796
       ],
       "outcome_counts": {
-        "task_pass": 9,
-        "task_fail": 4
+        "task_pass": 11,
+        "task_fail": 5
       },
-      "total_cost_usd": 10.279770800000001,
-      "cost_per_correct": 1.1421967555555557,
+      "total_cost_usd": 12.304315800000001,
+      "cost_per_correct": 1.1185741636363637,
       "unknown_cost_runs": 0,
-      "thinking_tokens_mean": 20745.384615384617,
-      "thinking_known_runs": 13,
-      "output_tokens_mean": 34944.53846153846
+      "thinking_tokens_mean": 20776,
+      "thinking_known_runs": 16,
+      "output_tokens_mean": 34291.0625
     },
     {
       "task": "bench-printf-format",
       "arm": "K",
       "regime": "long-thinking",
-      "n": 13,
-      "denominator": 13,
-      "passes": 11,
-      "pass_rate": 0.8461538461538461,
+      "n": 16,
+      "denominator": 16,
+      "passes": 13,
+      "pass_rate": 0.8125,
       "wilson": [
-        0.5776536898051745,
-        0.9567418216419186
+        0.5699111903802586,
+        0.9340840092857187
       ],
       "outcome_counts": {
-        "task_pass": 11,
-        "task_fail": 2
+        "task_pass": 13,
+        "task_fail": 3
       },
-      "total_cost_usd": 42.6762278,
-      "cost_per_correct": 3.8796570727272726,
+      "total_cost_usd": 54.669542400000005,
+      "cost_per_correct": 4.205349415384616,
       "unknown_cost_runs": 0,
-      "thinking_tokens_mean": 113865.46153846153,
-      "thinking_known_runs": 13,
-      "output_tokens_mean": 173716.92307692306
+      "thinking_tokens_mean": 117885.8125,
+      "thinking_known_runs": 16,
+      "output_tokens_mean": 179560.75
     },
     {
       "task": "bench-printf-format",
       "arm": "C",
       "regime": "long-thinking",
-      "n": 13,
-      "denominator": 13,
-      "passes": 7,
-      "pass_rate": 0.5384615384615384,
+      "n": 16,
+      "denominator": 16,
+      "passes": 10,
+      "pass_rate": 0.625,
       "wilson": [
-        0.29143795714506004,
-        0.7679393219046169
+        0.38641040545502714,
+        0.8151876744113636
       ],
       "outcome_counts": {
         "task_fail": 5,
         "timeout": 1,
-        "task_pass": 7
+        "task_pass": 10
       },
       "total_cost_usd": null,
       "cost_per_correct": "unknown",
       "unknown_cost_runs": 1,
       "thinking_tokens_mean": null,
-      "thinking_known_runs": 12,
+      "thinking_known_runs": 15,
       "output_tokens_mean": null
     },
     {
@@ -638,6 +638,96 @@
       "task": "bench-printf-format",
       "arm": "AH",
       "regime": "unknown",
+      "n": 0,
+      "denominator": 0,
+      "passes": 0,
+      "pass_rate": null,
+      "wilson": null,
+      "outcome_counts": {},
+      "total_cost_usd": null,
+      "cost_per_correct": "undefined",
+      "unknown_cost_runs": 0,
+      "thinking_tokens_mean": null,
+      "thinking_known_runs": 0,
+      "output_tokens_mean": null
+    },
+    {
+      "task": "bench-printf-format",
+      "arm": "B",
+      "regime": "unknown",
+      "n": 0,
+      "denominator": 0,
+      "passes": 0,
+      "pass_rate": null,
+      "wilson": null,
+      "outcome_counts": {},
+      "total_cost_usd": null,
+      "cost_per_correct": "undefined",
+      "unknown_cost_runs": 0,
+      "thinking_tokens_mean": null,
+      "thinking_known_runs": 0,
+      "output_tokens_mean": null
+    },
+    {
+      "task": "bench-printf-format",
+      "arm": "K",
+      "regime": "unknown",
+      "n": 0,
+      "denominator": 0,
+      "passes": 0,
+      "pass_rate": null,
+      "wilson": null,
+      "outcome_counts": {},
+      "total_cost_usd": null,
+      "cost_per_correct": "undefined",
+      "unknown_cost_runs": 0,
+      "thinking_tokens_mean": null,
+      "thinking_known_runs": 0,
+      "output_tokens_mean": null
+    },
+    {
+      "task": "bench-printf-format",
+      "arm": "C",
+      "regime": "unknown",
+      "n": 0,
+      "denominator": 0,
+      "passes": 0,
+      "pass_rate": null,
+      "wilson": null,
+      "outcome_counts": {},
+      "total_cost_usd": null,
+      "cost_per_correct": "undefined",
+      "unknown_cost_runs": 0,
+      "thinking_tokens_mean": null,
+      "thinking_known_runs": 0,
+      "output_tokens_mean": null
+    },
+    {
+      "task": "bench-printf-format",
+      "arm": "A",
+      "regime": "mixed-account",
+      "n": 1,
+      "denominator": 1,
+      "passes": 0,
+      "pass_rate": 0,
+      "wilson": [
+        0,
+        0.7934506856227626
+      ],
+      "outcome_counts": {
+        "task_fail": 1
+      },
+      "total_cost_usd": 0.46402640000000006,
+      "cost_per_correct": "undefined",
+      "unknown_cost_runs": 0,
+      "thinking_tokens_mean": 15216,
+      "thinking_known_runs": 1,
+      "output_tokens_mean": 23309
+    },
+    {
+      "task": "bench-printf-format",
+      "arm": "AH",
+      "regime": "mixed-account",
       "n": 1,
       "denominator": 1,
       "passes": 0,
@@ -659,24 +749,7 @@
     {
       "task": "bench-printf-format",
       "arm": "B",
-      "regime": "unknown",
-      "n": 0,
-      "denominator": 0,
-      "passes": 0,
-      "pass_rate": null,
-      "wilson": null,
-      "outcome_counts": {},
-      "total_cost_usd": null,
-      "cost_per_correct": "undefined",
-      "unknown_cost_runs": 0,
-      "thinking_tokens_mean": null,
-      "thinking_known_runs": 0,
-      "output_tokens_mean": null
-    },
-    {
-      "task": "bench-printf-format",
-      "arm": "K",
-      "regime": "unknown",
+      "regime": "mixed-account",
       "n": 1,
       "denominator": 1,
       "passes": 1,
@@ -688,114 +761,56 @@
       "outcome_counts": {
         "task_pass": 1
       },
-      "total_cost_usd": 3.8991838000000003,
-      "cost_per_correct": 3.8991838000000003,
+      "total_cost_usd": 0.604997,
+      "cost_per_correct": 0.604997,
       "unknown_cost_runs": 0,
-      "thinking_tokens_mean": 135101,
+      "thinking_tokens_mean": 13141,
       "thinking_known_runs": 1,
-      "output_tokens_mean": 202578
-    },
-    {
-      "task": "bench-printf-format",
-      "arm": "C",
-      "regime": "unknown",
-      "n": 0,
-      "denominator": 0,
-      "passes": 0,
-      "pass_rate": null,
-      "wilson": null,
-      "outcome_counts": {},
-      "total_cost_usd": null,
-      "cost_per_correct": "undefined",
-      "unknown_cost_runs": 0,
-      "thinking_tokens_mean": null,
-      "thinking_known_runs": 0,
-      "output_tokens_mean": null
-    },
-    {
-      "task": "bench-printf-format",
-      "arm": "A",
-      "regime": "mixed-account",
-      "n": 0,
-      "denominator": 0,
-      "passes": 0,
-      "pass_rate": null,
-      "wilson": null,
-      "outcome_counts": {},
-      "total_cost_usd": null,
-      "cost_per_correct": "undefined",
-      "unknown_cost_runs": 0,
-      "thinking_tokens_mean": null,
-      "thinking_known_runs": 0,
-      "output_tokens_mean": null
-    },
-    {
-      "task": "bench-printf-format",
-      "arm": "AH",
-      "regime": "mixed-account",
-      "n": 0,
-      "denominator": 0,
-      "passes": 0,
-      "pass_rate": null,
-      "wilson": null,
-      "outcome_counts": {},
-      "total_cost_usd": null,
-      "cost_per_correct": "undefined",
-      "unknown_cost_runs": 0,
-      "thinking_tokens_mean": null,
-      "thinking_known_runs": 0,
-      "output_tokens_mean": null
-    },
-    {
-      "task": "bench-printf-format",
-      "arm": "B",
-      "regime": "mixed-account",
-      "n": 0,
-      "denominator": 0,
-      "passes": 0,
-      "pass_rate": null,
-      "wilson": null,
-      "outcome_counts": {},
-      "total_cost_usd": null,
-      "cost_per_correct": "undefined",
-      "unknown_cost_runs": 0,
-      "thinking_tokens_mean": null,
-      "thinking_known_runs": 0,
-      "output_tokens_mean": null
+      "output_tokens_mean": 26139
     },
     {
       "task": "bench-printf-format",
       "arm": "K",
       "regime": "mixed-account",
-      "n": 0,
-      "denominator": 0,
-      "passes": 0,
-      "pass_rate": null,
-      "wilson": null,
-      "outcome_counts": {},
-      "total_cost_usd": null,
-      "cost_per_correct": "undefined",
+      "n": 1,
+      "denominator": 1,
+      "passes": 1,
+      "pass_rate": 1,
+      "wilson": [
+        0.20654931437723745,
+        1
+      ],
+      "outcome_counts": {
+        "task_pass": 1
+      },
+      "total_cost_usd": 2.9285471999999997,
+      "cost_per_correct": 2.9285471999999997,
       "unknown_cost_runs": 0,
-      "thinking_tokens_mean": null,
-      "thinking_known_runs": 0,
-      "output_tokens_mean": null
+      "thinking_tokens_mean": 109907,
+      "thinking_known_runs": 1,
+      "output_tokens_mean": 162641
     },
     {
       "task": "bench-printf-format",
       "arm": "C",
       "regime": "mixed-account",
-      "n": 0,
-      "denominator": 0,
+      "n": 1,
+      "denominator": 1,
       "passes": 0,
-      "pass_rate": null,
-      "wilson": null,
-      "outcome_counts": {},
-      "total_cost_usd": null,
+      "pass_rate": 0,
+      "wilson": [
+        0,
+        0.7934506856227626
+      ],
+      "outcome_counts": {
+        "task_fail": 1
+      },
+      "total_cost_usd": 2.7247908,
       "cost_per_correct": "undefined",
       "unknown_cost_runs": 0,
-      "thinking_tokens_mean": null,
-      "thinking_known_runs": 0,
-      "output_tokens_mean": null
+      "thinking_tokens_mean": 57253,
+      "thinking_known_runs": 1,
+      "output_tokens_mean": 94166
     }
   ],
   "comparisons": [
@@ -1057,70 +1072,70 @@
       "task": "bench-printf-format",
       "left": "B",
       "right": "C",
-      "left_pass": 8,
-      "left_n": 12,
-      "right_pass": 7,
-      "right_n": 12,
+      "left_pass": 10,
+      "left_n": 15,
+      "right_pass": 10,
+      "right_n": 15,
       "test": "fisher",
-      "p_raw": 1,
+      "p_raw": 0.9999999999999994,
       "p_holm": 1
     },
     {
       "task": "bench-printf-format",
       "left": "AH",
       "right": "C",
-      "left_pass": 9,
-      "left_n": 12,
-      "right_pass": 7,
-      "right_n": 12,
+      "left_pass": 11,
+      "left_n": 15,
+      "right_pass": 10,
+      "right_n": 15,
       "test": "fisher",
-      "p_raw": 0.6668461434917239,
+      "p_raw": 0.9999999999999964,
       "p_holm": 1
     },
     {
       "task": "bench-printf-format",
       "left": "K",
       "right": "C",
-      "left_pass": 10,
-      "left_n": 12,
-      "right_pass": 7,
-      "right_n": 12,
+      "left_pass": 12,
+      "left_n": 15,
+      "right_pass": 10,
+      "right_n": 15,
       "test": "fisher",
-      "p_raw": 0.3707093821510353,
+      "p_raw": 0.6816591704147908,
       "p_holm": 1
     },
     {
       "task": "bench-printf-format",
       "left": "AH",
       "right": "A",
-      "left_pass": 9,
-      "left_n": 12,
-      "right_pass": 9,
-      "right_n": 12,
+      "left_pass": 11,
+      "left_n": 15,
+      "right_pass": 11,
+      "right_n": 15,
       "test": "fisher",
-      "p_raw": 1,
+      "p_raw": 0.9999999999999999,
       "p_holm": 1
     },
     {
       "task": "bench-printf-format",
       "left": "B",
       "right": "A",
-      "left_pass": 8,
-      "left_n": 12,
-      "right_pass": 9,
-      "right_n": 12,
+      "left_pass": 10,
+      "left_n": 15,
+      "right_pass": 11,
+      "right_n": 15,
       "test": "fisher",
-      "p_raw": 1,
+      "p_raw": 0.9999999999999964,
       "p_holm": 1
     },
     {
       "task": "bench-printf-format",
       "left": "K",
       "right": "A",
-      "left_pass": 10,
-      "left_n": 12,
-      "right_pass": 9,
-      "right_n": 12,
+      "left_pass": 12,
+      "left_n": 15,
+      "right_pass": 11,
+      "right_n": 15,
       "test": "fisher",
       "p_raw": 1,
       "p_holm": 1
@@ -1129,12 +1144,12 @@
       "task": "bench-printf-format",
       "left": "C",
       "right": "A",
-      "left_pass": 7,
-      "left_n": 12,
-      "right_pass": 9,
-      "right_n": 12,
+      "left_pass": 10,
+      "left_n": 15,
+      "right_pass": 11,
+      "right_n": 15,
       "test": "fisher",
-      "p_raw": 0.6668461434917239,
+      "p_raw": 0.9999999999999964,
       "p_holm": 1
     }
   ],
@@ -1373,16 +1388,16 @@
     {
       "task": "bench-printf-format",
       "seed": 514,
-      "regime": "unknown",
-      "thinking_tokens": null,
-      "output_tokens": null
+      "regime": "long-thinking",
+      "thinking_tokens": 17907,
+      "output_tokens": 25395
     },
     {
       "task": "bench-printf-format",
       "seed": 515,
-      "regime": "unknown",
-      "thinking_tokens": null,
-      "output_tokens": null
+      "regime": "long-thinking",
+      "thinking_tokens": 11330,
+      "output_tokens": 20597
     },
     {
       "task": "bench-printf-format",
@@ -1394,16 +1409,16 @@
     {
       "task": "bench-printf-format",
       "seed": 517,
-      "regime": "unknown",
-      "thinking_tokens": null,
-      "output_tokens": null
+      "regime": "mixed-account",
+      "thinking_tokens": 15216,
+      "output_tokens": 23309
     },
     {
       "task": "bench-printf-format",
       "seed": 518,
-      "regime": "unknown",
-      "thinking_tokens": null,
-      "output_tokens": null
+      "regime": "long-thinking",
+      "thinking_tokens": 15691,
+      "output_tokens": 23207
     },
     {
       "task": "bench-printf-format",
@@ -1421,24 +1436,6 @@
     }
   ],
   "missing": [
-    "bench-printf-format-A-seed514",
-    "bench-printf-format-AH-seed514",
-    "bench-printf-format-B-seed514",
-    "bench-printf-format-C-seed514",
-    "bench-printf-format-A-seed515",
-    "bench-printf-format-AH-seed515",
-    "bench-printf-format-B-seed515",
-    "bench-printf-format-K-seed515",
-    "bench-printf-format-C-seed515",
-    "bench-printf-format-A-seed517",
-    "bench-printf-format-B-seed517",
-    "bench-printf-format-K-seed517",
-    "bench-printf-format-C-seed517",
-    "bench-printf-format-A-seed518",
-    "bench-printf-format-AH-seed518",
-    "bench-printf-format-B-seed518",
-    "bench-printf-format-K-seed518",
-    "bench-printf-format-C-seed518",
     "bench-printf-format-A-seed519",
     "bench-printf-format-AH-seed519",
     "bench-printf-format-B-seed519",
@@ -1623,12 +1620,64 @@
     {
       "task_id": "bench-printf-format",
       "arm": "A",
+      "seed": 514,
+      "outcome": "task_pass",
+      "cost_usd": 0.5101336,
+      "thinking_tokens": 17907,
+      "output_tokens": 25395,
+      "wall_ms": 236402,
+      "exit_codes": [
+        0
+      ]
+    },
+    {
+      "task_id": "bench-printf-format",
+      "arm": "A",
+      "seed": 515,
+      "outcome": "task_fail",
+      "cost_usd": 0.40814660000000014,
+      "thinking_tokens": 11330,
+      "output_tokens": 20597,
+      "wall_ms": 223333,
+      "exit_codes": [
+        0
+      ]
+    },
+    {
+      "task_id": "bench-printf-format",
+      "arm": "A",
       "seed": 516,
       "outcome": "task_fail",
       "cost_usd": 0.09126820000000001,
       "thinking_tokens": 1316,
       "output_tokens": 4642,
       "wall_ms": 47393,
+      "exit_codes": [
+        0
+      ]
+    },
+    {
+      "task_id": "bench-printf-format",
+      "arm": "A",
+      "seed": 517,
+      "outcome": "task_fail",
+      "cost_usd": 0.46402640000000006,
+      "thinking_tokens": 15216,
+      "output_tokens": 23309,
+      "wall_ms": 246907,
+      "exit_codes": [
+        0
+      ]
+    },
+    {
+      "task_id": "bench-printf-format",
+      "arm": "A",
+      "seed": 518,
+      "outcome": "task_pass",
+      "cost_usd": 0.387417,
+      "thinking_tokens": 15691,
+      "output_tokens": 23207,
+      "wall_ms": 220465,
       "exit_codes": [
         0
       ]
@@ -1805,6 +1854,32 @@
     {
       "task_id": "bench-printf-format",
       "arm": "AH",
+      "seed": 514,
+      "outcome": "task_fail",
+      "cost_usd": 0.7796706,
+      "thinking_tokens": 27856,
+      "output_tokens": 38104,
+      "wall_ms": 376893,
+      "exit_codes": [
+        0
+      ]
+    },
+    {
+      "task_id": "bench-printf-format",
+      "arm": "AH",
+      "seed": 515,
+      "outcome": "task_pass",
+      "cost_usd": 0.7175736000000001,
+      "thinking_tokens": 24916,
+      "output_tokens": 35907,
+      "wall_ms": 385799,
+      "exit_codes": [
+        0
+      ]
+    },
+    {
+      "task_id": "bench-printf-format",
+      "arm": "AH",
       "seed": 516,
       "outcome": "task_fail",
       "cost_usd": 0.0825128,
@@ -1824,6 +1899,19 @@
       "thinking_tokens": 760,
       "output_tokens": 4763,
       "wall_ms": 46415,
+      "exit_codes": [
+        0
+      ]
+    },
+    {
+      "task_id": "bench-printf-format",
+      "arm": "AH",
+      "seed": 518,
+      "outcome": "task_pass",
+      "cost_usd": 0.7472299999999998,
+      "thinking_tokens": 22546,
+      "output_tokens": 35824,
+      "wall_ms": 404530,
       "exit_codes": [
         0
       ]
@@ -2024,6 +2112,35 @@
     {
       "task_id": "bench-printf-format",
       "arm": "B",
+      "seed": 514,
+      "outcome": "task_fail",
+      "cost_usd": 0.6513086,
+      "thinking_tokens": 16586,
+      "output_tokens": 27855,
+      "wall_ms": 324093,
+      "exit_codes": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "task_id": "bench-printf-format",
+      "arm": "B",
+      "seed": 515,
+      "outcome": "task_pass",
+      "cost_usd": 0.8316956,
+      "thinking_tokens": 27500,
+      "output_tokens": 39772,
+      "wall_ms": 385628,
+      "exit_codes": [
+        0,
+        0
+      ]
+    },
+    {
+      "task_id": "bench-printf-format",
+      "arm": "B",
       "seed": 516,
       "outcome": "task_pass",
       "cost_usd": 0.12706859999999998,
@@ -2031,6 +2148,35 @@
       "output_tokens": 4924,
       "wall_ms": 48776,
       "exit_codes": [
+        0,
+        0
+      ]
+    },
+    {
+      "task_id": "bench-printf-format",
+      "arm": "B",
+      "seed": 517,
+      "outcome": "task_pass",
+      "cost_usd": 0.604997,
+      "thinking_tokens": 13141,
+      "output_tokens": 26139,
+      "wall_ms": 375725,
+      "exit_codes": [
+        0,
+        0
+      ]
+    },
+    {
+      "task_id": "bench-printf-format",
+      "arm": "B",
+      "seed": 518,
+      "outcome": "task_pass",
+      "cost_usd": 0.5415407999999999,
+      "thinking_tokens": 18640,
+      "output_tokens": 26751,
+      "wall_ms": 276245,
+      "exit_codes": [
+        0,
         0,
         0
       ]
@@ -2233,12 +2379,72 @@
     {
       "task_id": "bench-printf-format",
       "arm": "C",
+      "seed": 514,
+      "outcome": "task_pass",
+      "cost_usd": 2.7388218,
+      "thinking_tokens": 51572,
+      "output_tokens": 83885,
+      "wall_ms": 372026,
+      "exit_codes": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "task_id": "bench-printf-format",
+      "arm": "C",
+      "seed": 515,
+      "outcome": "task_pass",
+      "cost_usd": 2.3047734,
+      "thinking_tokens": 65339,
+      "output_tokens": 98282,
+      "wall_ms": 400156,
+      "exit_codes": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "task_id": "bench-printf-format",
+      "arm": "C",
       "seed": 516,
       "outcome": "task_fail",
       "cost_usd": 1.004653,
       "thinking_tokens": 2175,
       "output_tokens": 21762,
       "wall_ms": 86000,
+      "exit_codes": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "task_id": "bench-printf-format",
+      "arm": "C",
+      "seed": 517,
+      "outcome": "task_fail",
+      "cost_usd": 2.7247908,
+      "thinking_tokens": 57253,
+      "output_tokens": 94166,
+      "wall_ms": 391651,
+      "exit_codes": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "task_id": "bench-printf-format",
+      "arm": "C",
+      "seed": 518,
+      "outcome": "task_pass",
+      "cost_usd": 2.5826148,
+      "thinking_tokens": 64458,
+      "output_tokens": 97873,
+      "wall_ms": 460870,
       "exit_codes": [
         0,
         0,
@@ -2514,12 +2720,69 @@
     {
       "task_id": "bench-printf-format",
       "arm": "K",
+      "seed": 515,
+      "outcome": "task_pass",
+      "cost_usd": 3.9765113999999997,
+      "thinking_tokens": 126247,
+      "output_tokens": 198689,
+      "wall_ms": 522485,
+      "exit_codes": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "task_id": "bench-printf-format",
+      "arm": "K",
       "seed": 516,
       "outcome": "task_fail",
       "cost_usd": 0.5886235999999999,
       "thinking_tokens": 5030,
       "output_tokens": 29547,
       "wall_ms": 76964,
+      "exit_codes": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "task_id": "bench-printf-format",
+      "arm": "K",
+      "seed": 517,
+      "outcome": "task_pass",
+      "cost_usd": 2.9285471999999997,
+      "thinking_tokens": 109907,
+      "output_tokens": 162641,
+      "wall_ms": 479417,
+      "exit_codes": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "task_id": "bench-printf-format",
+      "arm": "K",
+      "seed": 518,
+      "outcome": "task_fail",
+      "cost_usd": 4.117619400000001,
+      "thinking_tokens": 144574,
+      "output_tokens": 213385,
+      "wall_ms": 766184,
       "exit_codes": [
         0,
         0,

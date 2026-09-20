@@ -62,8 +62,7 @@ All three arms run on the same \texttt{sonnet} model alias (recorded model id \t
 the same verbatim task brief, and the same hidden-fixture, machine-checked oracle; no arm sees another
 arm's transcript, and every run's hub-entry hash, task-fixture hash, and scorer hash are pinned and
 recorded so that a later mismatch is flagged rather than silently scored. The alias is not a dated model
-snapshot: Section~\ref{sec:method:window} reports a mid-study change in the model actually served under
-it, discovered after these runs, which is why every cost and token figure in this paper is reported
+snapshot, and what is served under it also depends on the subscription account: Section~\ref{sec:method:window} reports a mid-study change in thinking budget, discovered after these runs and later traced to an account switch, which is why every cost and token figure in this paper is reported
 alongside the date and regime it was measured in rather than treated as a stable per-model constant.
 
 \paragraph{Arm A --- single agent, budget-matched.} One Claude Code seat, given the task brief and
@@ -173,18 +172,24 @@ groups, all completed before the regime change described next, so this specific 
 of the two measurements straddling different regimes; it remains unexplained by anything identified in
 this project to date, and is reported as such rather than attributed to a cause. A distinct regime
 change is relevant to this paper's \emph{other} within-day comparisons: on the day of these runs, with no
-change to the harness, its flags, the Claude Code version, or the recorded model id, the model served
-under the \texttt{sonnet} alias began, at some point, producing substantially longer internal reasoning
+change to the harness, its flags, the Claude Code version, or the recorded model id, runs under the
+\texttt{sonnet} alias began producing substantially longer internal reasoning
 per turn --- a single-agent \texttt{stamp-interpreter} attempt's output tokens rose roughly six-fold
 (about 1.6K to about 10K) and its cost rose from about \$0.058 to \$0.18--\$0.26; arm~C seats showed the
-same shift (a three-seat room's cost rising from about \$0.60 to \$1.50--\$2.21). This paper identifies
-which runs fall on which side of that boundary by the observed output-token scale of the run itself, not
-by wall-clock time alone: arm~K's later, clock-overlapping \texttt{bench-printf-format} attempts show
-output tokens matching the pre-shift \texttt{bench-printf-format} grid (about 4.6K on both), so they are
-treated as pre-shift despite running later in the day than \texttt{stamp-interpreter}'s clearly pre-shift
-attempts. Because a provider-side change of this kind cannot be ruled out as a general risk to any
-comparison that spans time, no number in this paper pools runs from before and after a detected regime
-boundary, and every reported cost figure states the date and the observed output-token scale it was
+same shift (a three-seat room's cost rising from about \$0.60 to \$1.50--\$2.21). The cause was found
+only during the confirmatory run (Section~\ref{sec:results-account}): the maintainer's machine runs an
+automatic switcher between several Claude subscription accounts, which the harness did not know about,
+and the amount of thinking served under the same alias, CLI and settings differs by account. Every
+``regime boundary'' in this paper is an account switch, and the switcher's log places each one.
+This paper identified
+which runs fall on which side of a boundary by the observed output-token scale of the run itself, not
+by wall-clock time alone, before the cause was known, and the switch log agrees with that
+classification: the RQ1 grid and all of arm~K's attempts ran under one short-thinking account, which is
+why arm~K's later \texttt{bench-printf-format} attempts show
+output tokens matching the \texttt{bench-printf-format} grid (about 4.6K on both). Because the account
+is a serving condition the first experiments neither controlled nor recorded, no number in this paper
+pools runs from the two sides of a boundary,
+and every reported cost figure states the date and the observed output-token scale it was
 measured at. The window-control experiment is the direct test of within-window validity for arm~C
 against arm~K specifically: seeds of both arms run interleaved, seed by seed, on the same task, so that
 whatever the underlying single-agent rate or cost regime is doing on a given day affects both arms'

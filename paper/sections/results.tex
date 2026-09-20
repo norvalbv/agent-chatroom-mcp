@@ -78,6 +78,37 @@ Because arm K spends $k$ fresh, non-communicating arm-A attempts per (task, seed
 
 Arm C's 40/40 on both interpreter tasks (\S\ref{sec:results-per-task}) was measured in an earlier time window than arm K's confirmatory grid (\texttt{paper/amendments.md}, ``Threat to validity this creates''). This threat sharpened while this paper was being written: a separate 2026-09-19 amendment (\texttt{paper/amendments.md}, ``The model behind the \texttt{sonnet} alias changed its thinking budget mid-study'') reports that, with no harness, flag, project-setting or Claude Code version change, a single-agent \texttt{stamp-interpreter} attempt's output-token count rose about sixfold and its cost about three to four and a half times between about 15:30 and 16:45 local time on 2026-09-19 (about 1.6K output tokens / \$0.058, stable before that window across the arm-A/C grid, the arm-K attempts and the cap control alike, vs.\ about 10K output tokens / \$0.18--\$0.26 afterward; arm C seats show the same shift, 0.60 USD before vs.\ 1.50--2.21 USD after). This is a pre/post-shift distinction by output-token count, not a ``morning vs.\ afternoon'' one: \S\ref{sec:results-cost} gives the exact run windows, since the arm-K grid itself ran in the afternoon and partly overlaps the shift window on the clock without showing the shift in its own output tokens. \textbf{Every comparison in this paper is therefore valid only within its own measurement window}, and the original window-control design (20 fresh seeds 201--220, arm C and arm K interleaved per seed on both interpreter tasks, \texttt{bench/results/rq1-window-control}) was stopped after 3 runs (\$5.76) when the new per-run cost made the planned 80 runs exceed the control's own cost cap -- itself now evidence for the regime shift, not a result on the original question. The redesigned control completed at reduced scope: \texttt{stamp-interpreter} only, seeds 201--212, in the same directory (log \texttt{logs/rq1-window-control-2.log}; committed in \texttt{c82124d}). It did not remain within one regime: the output-token scale changed back during the control. The generated table above separates the long-output cohort, the crossover seed, and the short-output cohort. In the crossover, arm~C completed before the boundary while the corresponding arm~K attempts completed after it; assigning both arms to the latter regime would hide this mismatch. The single-attempt column counts constituent arm~K attempts and is not an independently randomized arm-A condition. Long-output attempts were near ceiling on this task, while the short-output cohort remained fallible; these are descriptive observations across time, not a randomized estimate of the effect of thinking budget. The small within-cohort samples do not resolve the original arm-C-vs-arm-K time-window comparison or establish equivalence. The earlier perfect arm-C record should be read alongside this completed control's observed failure, and task admission must be checked for the model and observed regime in which a comparison is run.
 
+\subsection{The thinking regime is the subscription account}
+\label{sec:results-account}
+
+\begin{table}[ht]
+\centering\small
+\input{tables/account-regime}
+\caption{Thinking and output tokens of single-seat runs, by the subscription account that was active when the run started.}
+\label{tab:account-regime}
+\end{table}
+
+During the confirmatory run the active account reached its five-hour usage limit, the command-line client
+began returning a quota message instead of model output, and the maintainer found that an automatic
+account switcher had been rotating the client between subscription accounts for the whole study. Its log
+gives every switch time. Table~\ref{tab:account-regime} joins those times to every single-seat run on
+record. The split is nearly total: under one account all but one run used long thinking, and under the
+other two none did; for the two confirmatory task families the output-token ranges of the long-thinking
+account and the short-thinking accounts do not overlap. Harness, prompt, CLI version, settings file, model
+alias and recorded model id were the same throughout. The window control's long and short cohorts
+(Table in \S\ref{sec:results-window-control}) are the two sides of one switch, and its crossover seed is
+the seed whose runs straddle it.
+
+Three consequences follow. First, the largest accuracy difference measured in this project, the
+single-agent gap between the short and long cohorts of the window control, is a difference between two
+accounts' serving conditions, not between two dates or two model versions. Second, the original RQ1 grid
+and arm~K ran entirely under one short-thinking account, so their comparisons are internally consistent.
+Third, what differs between the accounts is not observable from the client, so this paper reports the
+effect and not its cause. The quota incident itself contaminated nine cells, which were excluded by a
+rule that does not look at outcomes (any seat answered by the client's synthetic quota message) and
+re-run; the rule, the excluded cells and the harness fix are in \texttt{paper/amendments.md}
+(2026-09-20 08:00 UTC entry).
+
 \subsection{Cost per correct answer}
 \label{sec:results-cost}
 

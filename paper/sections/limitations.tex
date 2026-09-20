@@ -49,10 +49,12 @@ mechanism \citep{He2026} could recover further value specifically on tasks like
 \texttt{bench-printf-format}, where the correct answer is not the population's plurality and no amount
 of aggregation-by-agreement can find it.
 
-The mid-study regime shift documented in Section~\ref{sec:threats} motivates three concrete protocol
+The mid-study thinking-budget shift documented in Section~\ref{sec:threats}, which turned out to be a
+switch between subscription accounts, motivates four concrete protocol
 changes for any future run on this harness, stated in \texttt{paper/amendments.md} and repeated here
-because they bear directly on reproducibility: record output tokens per run as a regime indicator so a
-shift is visible immediately rather than discovered after the fact; pin a dated model snapshot where the
-provider allows it, rather than relying on a model alias whose behavior can change mid-session with no
-corresponding version bump; and never pool runs collected across a detected regime boundary into one
+because they bear directly on reproducibility: record thinking and output tokens per run as a regime
+indicator so a shift is visible immediately rather than discovered after the fact; record, and where
+possible pin, the account or API key that serves each run, because the same alias, CLI and settings did
+not give the same thinking budget on every account; pin a dated model snapshot where the
+provider allows it; and never pool runs collected across a detected boundary into one
 estimate, even when, as here, the headline pass-rate numbers turn out not to have been affected.

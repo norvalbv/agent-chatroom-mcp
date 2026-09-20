@@ -102,5 +102,142 @@
       "min": 4494,
       "max": 16896
     }
+  ],
+  "experiments": [
+    {
+      "experiment": "rq1",
+      "first_start": "2026-09-18T12:25Z",
+      "last_end": "2026-09-18T12:27Z",
+      "seats": {
+        "account 1": 4
+      }
+    },
+    {
+      "experiment": "rq1-arm-b-exploratory-stop-174126",
+      "first_start": "2026-09-19T18:18Z",
+      "last_end": "2026-09-19T18:39Z",
+      "seats": {
+        "account 1": 65
+      }
+    },
+    {
+      "experiment": "rq1-arm-b-pilot",
+      "first_start": "2026-09-19T18:01Z",
+      "last_end": "2026-09-19T18:18Z",
+      "seats": {
+        "account 1": 30
+      }
+    },
+    {
+      "experiment": "rq1-arm-b-pilot-sentinel",
+      "first_start": "2026-09-19T18:08Z",
+      "last_end": "2026-09-19T18:11Z",
+      "seats": {
+        "account 1": 5
+      }
+    },
+    {
+      "experiment": "rq1-arm-k",
+      "first_start": "2026-09-19T13:22Z",
+      "last_end": "2026-09-19T15:33Z",
+      "seats": {
+        "account 1": 1000
+      }
+    },
+    {
+      "experiment": "rq1-arm-k-pilot",
+      "first_start": "2026-09-19T13:08Z",
+      "last_end": "2026-09-19T13:12Z",
+      "seats": {
+        "account 1": 25
+      }
+    },
+    {
+      "experiment": "rq1-confirmatory",
+      "first_start": "2026-09-19T20:03Z",
+      "last_end": "2026-09-20T07:50Z",
+      "seats": {
+        "account 4": 550,
+        "account 3": 11,
+        "account 1": 6,
+        "straddles a switch": 8
+      }
+    },
+    {
+      "experiment": "rq1-confirmatory-pilot",
+      "first_start": "2026-09-19T19:27Z",
+      "last_end": "2026-09-19T19:36Z",
+      "seats": {
+        "account 1": 31
+      }
+    },
+    {
+      "experiment": "rq1-confirmatory-pre-amendment",
+      "first_start": "2026-09-19T23:27Z",
+      "last_end": "2026-09-19T23:30Z",
+      "seats": {
+        "account 4": 1
+      }
+    },
+    {
+      "experiment": "rq1-confirmatory-quota-invalidated",
+      "first_start": "2026-09-20T07:37Z",
+      "last_end": "2026-09-20T07:45Z",
+      "seats": {
+        "account 4": 3,
+        "account 3": 2
+      }
+    },
+    {
+      "experiment": "rq1-drift-control",
+      "first_start": "2026-09-19T13:38Z",
+      "last_end": "2026-09-19T13:49Z",
+      "seats": {
+        "account 1": 60
+      }
+    },
+    {
+      "experiment": "rq1-grid1",
+      "first_start": "2026-09-18T12:44Z",
+      "last_end": "2026-09-18T12:52Z",
+      "seats": {
+        "account 1": 7
+      }
+    },
+    {
+      "experiment": "rq1-grid2",
+      "first_start": "2026-09-18T13:25Z",
+      "last_end": "2026-09-18T13:42Z",
+      "seats": {
+        "account 1": 40
+      }
+    },
+    {
+      "experiment": "rq1-suite",
+      "first_start": "2026-09-19T07:43Z",
+      "last_end": "2026-09-19T11:30Z",
+      "seats": {
+        "account 1": 480
+      }
+    },
+    {
+      "experiment": "rq1-window-control",
+      "first_start": "2026-09-19T16:45Z",
+      "last_end": "2026-09-19T18:11Z",
+      "seats": {
+        "account 4": 104,
+        "straddles a switch": 3,
+        "account 1": 49
+      }
+    },
+    {
+      "experiment": "suite-3vny",
+      "first_start": "2026-09-18T14:25Z",
+      "last_end": "2026-09-18T16:01Z",
+      "seats": {
+        "account 3": 141,
+        "account 1": 44
+      }
+    }
   ]
 }

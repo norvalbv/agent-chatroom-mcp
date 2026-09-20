@@ -4,7 +4,7 @@
  * bench/results and reports, per active account, how many runs used long thinking.
  *
  * Usage:
- *   node --import tsx scripts/paper-account-regime.ts SWITCH_LOG_JSON RESULTS_ROOT [--out PREFIX]
+ *   node --import tsx scripts/paper-account-regime.ts SWITCH_LOG_JSON RESULTS_ROOT [--out PREFIX] [--tex FILE]
  *   node --import tsx scripts/paper-account-regime.ts --extract SWITCHER_LOG [--since ISO] > SWITCH_LOG_JSON
  *
  * --extract reads the switcher's own log ("YYYY-MM-DD HH:MM:SS,mmm - INFO - Switched from account X to Y",
@@ -74,9 +74,44 @@ export function loadSeatRows(root: string): SeatRow[] {
   return rows;
 }
 
+/** Every seat of every arm, grouped by the top-level experiment directory under RESULTS_ROOT: which account served it. */
+export function experimentAccounts(switches: Switch[], root: string) {
+  const out: { experiment: string; first_start: string; last_end: string; seats: Record<string, number> }[] = [];
+  if (switches.length === 0) return out;
+  const first = Date.parse(switches[0].at);
+  for (const e of readdirSync(root, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
+    if (!e.isDirectory()) continue;
+    let min = Infinity, max = -Infinity; const seats: Record<string, number> = {};
+    const walk = (dir: string, depth: number) => {
+      if (depth > 5) return;
+      for (const d of readdirSync(dir, { withFileTypes: true })) {
+        if (!d.isDirectory() || SKIP.has(d.name)) continue;
+        const p = join(dir, d.name), rp = join(p, "result.json");
+        if (existsSync(rp)) {
+          try {
+            for (const seat of (JSON.parse(readFileSync(rp, "utf8")).seats ?? [])) {
+              const t0 = Date.parse(seat.started_at), t1 = Date.parse(seat.completed_at);
+              if (!Number.isFinite(t0) || !Number.isFinite(t1) || t0 < first) continue;
+              if ((seat.reported_models?.assistant ?? []).length === 1 && seat.reported_models.assistant[0] === "<synthetic>") continue;
+              min = Math.min(min, t0); max = Math.max(max, t1);
+              const a0 = accountAt(switches, t0), a1 = accountAt(switches, t1);
+              const key = a0 === a1 ? `account ${a0}` : "straddles a switch";
+              seats[key] = (seats[key] ?? 0) + 1;
+            }
+          } catch { /* unreadable result */ }
+        }
+        walk(p, depth + 1);
+      }
+    };
+    walk(join(root, e.name), 0);
+    if (Object.keys(seats).length) out.push({ experiment: e.name, first_start: new Date(min).toISOString().slice(0, 16) + "Z", last_end: new Date(max).toISOString().slice(0, 16) + "Z", seats });
+  }
+  return out;
+}
+
 const median = (a: number[]) => { const s = [...a].sort((x, y) => x - y); return s.length ? s[Math.floor(s.length / 2)] : null; };
 
-export function buildTable(switches: Switch[], rows: SeatRow[]) {
+export function buildTable(switches: Switch[], rows: SeatRow[], experiments: ReturnType<typeof experimentAccounts> = []) {
   const first = switches.length ? Date.parse(switches[0].at) : Infinity;
   const inLog = rows.filter((r) => r.started >= first);
   const withAccount = inLog.map((r) => ({ ...r, a0: accountAt(switches, r.started), a1: accountAt(switches, r.completed) }));
@@ -94,7 +129,7 @@ export function buildTable(switches: Switch[], rows: SeatRow[]) {
   // Only tasks run under more than one account say anything about the account; the rest are listed nowhere.
   const shared = new Set([...new Set(output.map((o) => o.task))].filter((task) => output.filter((o) => o.task === task && o.n > 0).length > 1));
   const comparable = output.filter((o) => shared.has(o.task)).sort((a, b) => a.task.localeCompare(b.task) || a.account - b.account);
-  return { threshold: LONG_THINKING_THRESHOLD, switches_in_log: switches.length, runs_in_log_window: inLog.length, runs_straddling_a_switch: straddling.length, thinking, output: comparable };
+  return { threshold: LONG_THINKING_THRESHOLD, switches_in_log: switches.length, runs_in_log_window: inLog.length, runs_straddling_a_switch: straddling.length, thinking, output: comparable, experiments };
 }
 
 export function renderMarkdown(t: ReturnType<typeof buildTable>): string {
@@ -106,6 +141,28 @@ export function renderMarkdown(t: ReturnType<typeof buildTable>): string {
     "Output tokens, for tasks run under more than one account (recorded for every run, including runs from before thinking tokens were recorded):", "",
     "| task | account | runs | median output tokens | min | max |", "|---|---|---|---|---|---|",
     ...t.output.map((r) => `| ${r.task} | ${r.account} | ${r.n} | ${r.median ?? "n/a"} | ${r.min ?? "n/a"} | ${r.max ?? "n/a"} |`), "",
+  ];
+  if (t.experiments.length) {
+    L.push("Seats of every arm, by experiment directory and the account active when the seat ran:", "", "| experiment | first seat start (UTC) | last seat end (UTC) | seats by account |", "|---|---|---|---|");
+    for (const e of t.experiments) L.push(`| ${e.experiment} | ${e.first_start} | ${e.last_end} | ${Object.entries(e.seats).sort().map(([k, v]) => `${k}: ${v}`).join("; ")} |`);
+    L.push("");
+  }
+  return L.join("\n");
+}
+
+export function renderTex(t: ReturnType<typeof buildTable>): string {
+  const esc = (x: string) => x.replace(/_/g, "\\_");
+  const families = new Set(["stamp-interpreter", "bench-printf-format"]);
+  const L = [
+    "\\begin{tabular}{lrrrrr}", "\\toprule",
+    "Active account & Runs & Long-thinking runs & Median thinking tokens & Min & Max \\\\", "\\midrule",
+    ...t.thinking.map((r) => `Account ${r.account} & ${r.n} & ${r.long}/${r.n} & ${r.median ?? "n/a"} & ${r.min ?? "n/a"} & ${r.max ?? "n/a"} \\\\`),
+    "\\bottomrule", "\\end{tabular}", "", "\\medskip", "",
+    "\\begin{tabular}{llrrrr}", "\\toprule",
+    "Task family & Active account & Runs & Median output tokens & Min & Max \\\\", "\\midrule",
+    ...t.output.filter((r) => families.has(r.task)).map((r) => `\\texttt{${esc(r.task)}} & Account ${r.account} & ${r.n} & ${r.median ?? "n/a"} & ${r.min ?? "n/a"} & ${r.max ?? "n/a"} \\\\`),
+    "\\bottomrule", "\\end{tabular}", "",
+    `\\emph{Single-seat runs (arm A, arm AH, and the constituent attempts of arm K) recorded in \\texttt{bench/results}, joined by start time to a sanitized extract of the maintainer's account-switcher log (\\texttt{bench/results/account-switch-log/switches.json}: switch times and account slot numbers only). ${t.runs_straddling_a_switch} of ${t.runs_in_log_window} runs straddle a switch and are left out. Top: runs that recorded thinking tokens; long thinking means at least ${t.threshold} thinking tokens, the threshold frozen in \\texttt{paper/prereg-confirmatory.md}. Bottom: output tokens, which every run recorded, for the two confirmatory task families. Account numbers are slots in the switcher, not identifiers.}`, "",
   ];
   return L.join("\n");
 }
@@ -120,13 +177,14 @@ function main() {
     console.log(JSON.stringify(log, null, 2));
     return;
   }
-  const [logPath, root] = args.splice(0, 2); let out: string | undefined;
-  while (args.length) { const f = args.shift(); if (f === "--out") out = args.shift(); else throw Error(`Unknown option ${f}`); }
+  const [logPath, root] = args.splice(0, 2); let out: string | undefined; let tex: string | undefined;
+  while (args.length) { const f = args.shift(); if (f === "--out") out = args.shift(); else if (f === "--tex") tex = args.shift(); else throw Error(`Unknown option ${f}`); }
   if (!logPath || !root) throw Error("Usage: paper-account-regime.ts SWITCH_LOG_JSON RESULTS_ROOT [--out PREFIX]");
   const log = JSON.parse(readFileSync(logPath, "utf8")) as SwitchLog;
-  const table = buildTable(log.switches, loadSeatRows(resolve(root)));
+  const table = buildTable(log.switches, loadSeatRows(resolve(root)), experimentAccounts(log.switches, resolve(root)));
   const md = renderMarkdown(table);
   if (out) { const prefix = resolve(out); mkdirSync(dirname(prefix), { recursive: true }); writeFileSync(`${prefix}.md`, md); writeFileSync(`${prefix}.json`, JSON.stringify(table, null, 2) + "\n"); }
+  if (tex) writeFileSync(resolve(tex), renderTex(table));
   console.log(md);
 }
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) main();

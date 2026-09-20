@@ -1,0 +1,25 @@
+\begin{tabular}{lrrrrr}
+\toprule
+Active account & Runs & Long-thinking runs & Median thinking tokens & Min & Max \\
+\midrule
+Account 1 & 40 & 0/40 & 968 & 463 & 1295 \\
+Account 3 & 11 & 0/11 & 716 & 595 & 1316 \\
+Account 4 & 357 & 356/357 & 7322 & 3742 & 31604 \\
+\bottomrule
+\end{tabular}
+
+\medskip
+
+\begin{tabular}{llrrrr}
+\toprule
+Task family & Active account & Runs & Median output tokens & Min & Max \\
+\midrule
+\texttt{bench-printf-format} & Account 1 & 337 & 4645 & 3789 & 6595 \\
+\texttt{bench-printf-format} & Account 3 & 26 & 4225 & 3726 & 5181 \\
+\texttt{bench-printf-format} & Account 4 & 124 & 24976 & 16212 & 43700 \\
+\texttt{stamp-interpreter} & Account 1 & 590 & 1716 & 1357 & 2232 \\
+\texttt{stamp-interpreter} & Account 4 & 313 & 7310 & 4494 & 16896 \\
+\bottomrule
+\end{tabular}
+
+\emph{Single-seat runs (arm A, arm AH, and the constituent attempts of arm K) recorded in \texttt{bench/results}, joined by start time to a sanitized extract of the maintainer's account-switcher log (\texttt{bench/results/account-switch-log/switches.json}: switch times and account slot numbers only). 5 of 1919 runs straddle a switch and are left out. Top: runs that recorded thinking tokens; long thinking means at least 4000 thinking tokens, the threshold frozen in \texttt{paper/prereg-confirmatory.md}. Bottom: output tokens, which every run recorded, for the two confirmatory task families. Account numbers are slots in the switcher, not identifiers.}

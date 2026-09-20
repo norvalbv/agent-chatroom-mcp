@@ -38,30 +38,32 @@ running it.
   (\texttt{bench/results/rq1-window-control}) was designed specifically to test this; its completed, regime-separated result is reported in Section~\ref{sec:results}. The crossover
   seed is separated because its arm~C and arm~K runs straddle the boundary.
 
-\item \textbf{A confirmed, undocumented regime shift in the model behind the \texttt{sonnet} alias
-  during this study.} Between approximately 15:30 and 16:45 local time on 2026-09-19, with no change to
+\item \textbf{The thinking budget depended on the subscription account, and the account changed
+  during this study without the harness knowing.} On 2026-09-19 at about 16:38 UTC, with no change to
   the harness, CLI version, project settings, or recorded model id, single-agent output-token counts on
   \texttt{stamp-interpreter} rose roughly sixfold (about 1.6K to about 10K output tokens per attempt,
   cost about \$0.058 to \$0.18--0.26) and the model's own thinking-block length grew from about 1.3K to
   about 10.5K tokens; the same shift appears in arm-C seats' per-seat output tokens and per-run cost
-  (\texttt{paper/amendments.md}, 2026-09-19 thinking-budget entry). The RQ1 grid (arms A and C) ran
-  entirely before 15:30 local time and shows no elevated output tokens. The 1000-attempt arm-K
-  measurement ran later, 14:22--16:33 local, so its later (\texttt{bench-printf-format}) attempts
-  overlap the 15:30--16:45 shift window \emph{by clock time}; nonetheless their output tokens (about
-  4.6K, matching the RQ1 grid's own \texttt{bench-printf-format} arm-A mean) show no elevation, so
-  arm~K's attempts are pre-shift by the output-token indicator, not by the clock -- the two do not agree,
-  and we report the indicator that is actually diagnostic of the mechanism rather than the wall-clock
-  window we originally assumed tracked it. The pass-rate numbers reported in this paper are therefore not
-  put in question by the shift. What the shift does affect: (i) every cost and token figure in this
-  paper is regime-specific and must be read together with its date and its observed output tokens per
-  run, not extrapolated to a different time; (ii) the window-control design (above) was originally
-  interrupted mid-run by the cost increase this shift caused and was redesigned at reduced scope,
-  with the intent of staying in the post-shift regime, but crossed a second observed boundary
-  before completion (Section~\ref{sec:reproducibility}); and (iii)
-  no comparison in this paper should be read as valid outside the specific output-token regime its own
-  runs were collected in, which is not always the same thing as its wall-clock window. We report the
-  shift itself as a confirmed mechanism, not a hypothesis: it is the maintainer's own direct observation,
-  not an inference from the pass-rate numbers.
+  (\texttt{paper/amendments.md}, 2026-09-19 thinking-budget entry). We first recorded this as a
+  provider-side change with no local cause. That was wrong in one respect. The maintainer's machine runs
+  an automatic switcher across several Claude subscription accounts, and its log shows a switch at each
+  boundary we had observed (Section~\ref{sec:results-account}, \texttt{paper/amendments.md}, 2026-09-20
+  08:00 UTC entry). One account served long thinking in all but one of its single-agent runs; two others
+  never did. The RQ1 grid (arms A and C) and the whole 1000-attempt arm-K measurement ran under one
+  short-thinking account, so the pass-rate comparisons of the original study are not put in question;
+  the earlier apparent disagreement between the clock and the output-token indicator came from reading
+  the boundary time imprecisely, and the indicator was right. What the account effect does touch:
+  (i) every cost and token figure in this paper is specific to the account it was measured under and
+  must be read together with its observed output tokens per run; (ii) the window-control design (above)
+  was interrupted by the cost increase and its redesigned run crossed a switch back, which is what
+  separates its long and short cohorts (Section~\ref{sec:reproducibility}); (iii) the confirmatory run
+  was served almost entirely by the long-thinking account, a switch forced by a quota limit moved a few
+  of its cells to short-thinking accounts, and the remaining cells were then launched only while the
+  long-thinking account was active; and (iv) we cannot observe \emph{why} the accounts differ (plan
+  tier, a server-side experiment, or an account-level default are all possible), so the finding is that
+  an unrecorded serving condition moved single-agent accuracy more than any aggregation arm did, not a
+  claim about any particular account setting. Anyone reproducing these numbers needs to record which
+  account served each run.
 
 \item \textbf{Provider and estimate nondeterminism, independent of the regime shift above.}
   Single-agent pass-rate estimates were noisy in both directions across independently drawn samples of

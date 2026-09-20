@@ -756,7 +756,7 @@ account than on two others, stable over two days, and accuracy moved with it.
 4. Decided before the remaining cells exist, and open to the maintainer's overrule: no cell with a valid
    outcome is re-run for being on the "wrong" account.
 
-**Addendum 2026-09-20 08:50 UTC (mixed seeds by rule, before the remaining cells ran).** The mixed-seed rule
+**Addendum 2026-09-20 08:37 UTC (mixed seeds by rule, before the remaining cells ran).** The mixed-seed rule
 of point 3 is now computed, not listed by hand: `scripts/paper-account-regime.ts --mixed-seeds` writes
 `bench/results/rq1-confirmatory/mixed-seeds.json` from the switch log, and `scripts/paper-rq1-confirmatory.ts
 --mixed-seeds` puts those seeds in their own `mixed-account` stratum. A seat spanning two accounts of the

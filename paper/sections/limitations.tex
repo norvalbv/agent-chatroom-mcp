@@ -1,14 +1,13 @@
 \section{Limitations and Future Work}
 \label{sec:limitations}
 
-\subsection{Research questions not run}
+\subsection{Research questions not resolved}
 
-This study executed RQ1 (and its arm-K extension) only. RQ2 -- the chatroom against a no-chat
-builder-plus-reviewer pair (protocol \S2.1, arm~B) -- and RQ3 -- per-mechanic ablation across the seven
-hub mechanics listed in protocol \S2.3 -- are both pre-registered but have no execution behind them in
-this codebase: arm~B has never been run on any task here (\texttt{paper/budget.md}\,\S5: "the two
-cheapest-looking conditions are also the two with no cost evidence at all"), and none of the seven
-ablations has a real-model run. Both are listed as future work, not reported as negative results.
+The historical three-arm study executed RQ1 and its arm-K extension. Arm~B, a no-chat
+builder-plus-reviewer pair, has since run in the later five-arm study, whose inference limits are
+stated in Section~\ref{sec:study-status}. The earlier statement that this arm had never run is no
+longer current. RQ3, per-mechanic ablation across the seven hub mechanics listed in protocol \S2.3,
+has no real-model run and remains future work, not a negative result.
 
 \subsection{Task-suite retirements}
 
@@ -40,9 +39,9 @@ cost-per-correct-answer numbers.
 
 \subsection{Future work}
 
-Completing RQ2 and RQ3; extending the window-control design (Section~\ref{sec:results}) to
-\texttt{stamp-2} and \texttt{bench-printf-format}, which the redesigned, reduced-scope control
-(Section~\ref{sec:reproducibility}) does not cover; a task suite broad enough to support family-level
+Adequately observing the registered primary comparison and running RQ3; distinguishing the later
+five-arm study from the reduced-scope window control (Section~\ref{sec:study-status});
+a task suite broad enough to support family-level
 generalization across more than two failure mechanisms; and, if the chatroom's mechanics are ever shown
 to add value beyond sampling on a broader suite, testing whether a learned or structural minority-override
 mechanism \citep{He2026} could recover further value specifically on tasks like

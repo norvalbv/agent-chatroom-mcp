@@ -10,6 +10,21 @@ sampling baselines \citep{Smit2023} (see Section~\ref{sec:related-work}). Separa
 explanations requires a budget-matched, oracle-scored comparison in which the sampling baseline is
 built deliberately, not assumed away; that comparison is this paper's subject.
 
+\paragraph{Current evidence and scope.}
+\label{sec:study-status}
+The historical three-arm study and its window control are distinct from the later five-arm run.
+That later, separately registered run (\texttt{paper/prereg-confirmatory.md}) includes arms A, AH
+(one agent at high effort), B (builder plus reviewer), K and C. The committed snapshot is incomplete and has executed cells, including
+arm~B, but its pre-registered primary comparisons use the short-thinking regime and are essentially
+unobserved. Most collected cells were served by the long-thinking subscription account; comparisons
+added for that stratum after results were seen are explicitly exploratory. Mixed-account seeds are
+reported separately and excluded from within-regime paired inference. These are the conclusions of
+the dated \texttt{paper/amendments.md} entries and addenda for 2026-09-20, not a promotion of the
+secondary stratum to primary. The later run's cell coverage, exclusions and comparisons can be
+reconstructed using \texttt{paper/README.md}; its report must accompany any claim about that run.
+The account association does not identify which unobserved serving condition caused the difference
+(Section~\ref{sec:results-account}).
+
 We report a controlled study on this project's own multi-agent coordination hub
 (\texttt{agent-chatroom-mcp}), comparing three arms at matched spend on the same task briefs, scored by
 the same hidden-fixture, machine-checked oracle in every case (no arm's own consensus process, and no
@@ -42,8 +57,8 @@ algorithm gets wrong at one specific input. Because the two \texttt{stamp} progr
 failure mechanism, the family, not the individual task, is this paper's unit of statistical analysis
 throughout.
 
-Our headline finding is not that the chatroom wins on the family where it does win -- it does, and by a
-large margin over a single agent on both programs of that family -- but that, on the same family, an
+In the historical three-arm study, the chatroom wins by a large margin over a single agent on both
+programs of one family. On the same family, an
 oracle-free sampling baseline built at the same cost is not statistically distinguishable from the
 chatroom on either program, and itself beats the single agent significantly on one of the two programs
 but not the other. On the one task in the suite where the single-agent's own wrong answer happens to be
@@ -65,7 +80,7 @@ than a single agent working alone. We report:
   way, reported rather than smoothed over (Section~\ref{sec:results}, Section~\ref{sec:threats}).
 \end{enumerate}
 
-This paper reports only RQ1 (and the arm-K extension to it) as run. RQ2 (the chatroom against a
-no-chat builder-plus-reviewer pair) and RQ3 (per-mechanic ablation across the seven hub mechanics listed
-in \texttt{paper/protocol.md}\,\S2.3) are both pre-registered but have no execution behind them in this
-codebase, and are listed as future work rather than as negative results (Section~\ref{sec:limitations}).
+The historical results address RQ1 and its arm-K extension. The later pair-arm cells are distinct
+from those results (Section~\ref{sec:study-status}); they must not be described as unrun or treated as
+an adequately observed primary comparison. RQ3, per-mechanic ablation across the seven hub mechanics
+in \texttt{paper/protocol.md}\,\S2.3, remains future work (Section~\ref{sec:limitations}).

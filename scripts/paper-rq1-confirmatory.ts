@@ -92,6 +92,11 @@ export function buildConfirmatoryTable(input:ConfirmatoryRun[],mixed:MixedSeeds=
   const runs=input.filter(r=>TASKS.includes(r.task_id as any)&&ARMS.includes(r.arm as any)&&SEEDS.includes(r.seed));
   const by=new Map<string,ConfirmatoryRun>();
   for(const r of runs) {const k=`${r.task_id}-${r.arm}-seed${r.seed}`;if(by.has(k))throw Error(`Duplicate observation ${k}`);by.set(k,r);}
+  // The 2026-09-20 cap amendment retains printf501 for description, never inference.
+  const inferenceCounts=(task:string,arm:string,stratum:Regime)=>{
+    const eligible=runs.filter(r=>r.task_id===task&&r.arm===arm&&!(task==='bench-printf-format'&&r.seed===501)&&regimeOf(task,r.seed,by.get(`${task}-A-seed${r.seed}`))===stratum);
+    return {passes:eligible.filter(r=>r.outcome==='task_pass').length,denominator:eligible.length};
+  };
   const sentinels:Sentinel[]=[],missing:string[]=[],cells:Cell[]=[],comparisons:Comparison[]=[];
   for(const task of TASKS) {
     for(const seed of SEEDS) {
@@ -112,8 +117,8 @@ export function buildConfirmatoryTable(input:ConfirmatoryRun[],mixed:MixedSeeds=
         thinking_tokens_mean:meanKnown(rs.map(r=>r.thinking_tokens)),thinking_known_runs:rs.filter(r=>r.thinking_tokens!==null).length,output_tokens_mean:meanKnown(rs.map(r=>r.output_tokens))});
     }
     for(const [left,right] of PAIRS) {
-      const a=cells.find(c=>c.task===task&&c.regime==='calibrated'&&c.arm===left)!;
-      const b=cells.find(c=>c.task===task&&c.regime==='calibrated'&&c.arm===right)!;
+      const a=inferenceCounts(task,left,'calibrated');
+      const b=inferenceCounts(task,right,'calibrated');
       comparisons.push({task,left,right,left_pass:a.passes,left_n:a.denominator,right_pass:b.passes,right_n:b.denominator,test:'fisher',p_raw:a.denominator&&b.denominator?fisherExactTest(a.passes,a.denominator-a.passes,b.passes,b.denominator-b.passes).p_value:null,p_holm:null});
     }
   }
@@ -123,7 +128,7 @@ export function buildConfirmatoryTable(input:ConfirmatoryRun[],mixed:MixedSeeds=
   // what the run turned out to measure once the account effect was known (amendments, 2026-09-20 08:37 UTC).
   const exploratory_long_comparisons:Comparison[]=[];
   for(const task of TASKS)for(const [left,right] of PAIRS){
-    const a=cells.find(c=>c.task===task&&c.regime==='long-thinking'&&c.arm===left)!,b=cells.find(c=>c.task===task&&c.regime==='long-thinking'&&c.arm===right)!;
+    const a=inferenceCounts(task,left,'long-thinking'),b=inferenceCounts(task,right,'long-thinking');
     exploratory_long_comparisons.push({task,left,right,left_pass:a.passes,left_n:a.denominator,right_pass:b.passes,right_n:b.denominator,test:'fisher',p_raw:a.denominator&&b.denominator?fisherExactTest(a.passes,a.denominator-a.passes,b.passes,b.denominator-b.passes).p_value:null,p_holm:null});
   }
   const adjLong=holmBonferroni(exploratory_long_comparisons.map(c=>c.p_raw??1));
@@ -143,10 +148,11 @@ export function renderConfirmatoryMarkdown(t:ConfirmatoryTable):string {
   const lines=['# Confirmatory five-arm report','',
     'Seeds 501–520 only. Two task families are analyzed separately. Primary comparisons use calibrated A-sentinel seeds only; long-thinking and unknown seeds are retained below, never pooled. Regime uses direct A thinking tokens (<4000 calibrated, >=4000 long-thinking, missing/invalid unknown); output tokens are descriptive only. An A sentinel cannot rule out a regime change later within its seed.',
     '', 'Two-sided Fisher exact, Holm family m=14 (two families × seven fixed comparisons), including unobserved comparisons as p=1 for adjustment. Equal seed labels do not make observations statistically paired. Missing cells and operational outcomes remain explicit. Calibrated-stratum tests condition on arm A\'s own post-run thinking: p-values describe that selected sample and do not establish unconditional or causal arm effects.',
+    '', 'Descriptive rows retain printf seed 501 and its costs; printf seed 501 is excluded from both primary and exploratory comparisons under the 2026-09-20 cap amendment.',
     '', '| family | regime | arm | observed | pass/denominator | pass rate | Wilson 95% | total USD | USD/correct | thinking/run | thinking known | output/run | outcomes |',
     '|---|---|---|---|---|---|---|---|---|---|---|---|---|'];
   for(const c of t.cells)lines.push(`| ${c.task} | ${c.regime} | ${c.arm} | ${c.n} | ${c.passes}/${c.denominator} | ${fmt(c.pass_rate)} | ${c.wilson?c.wilson.map(x=>x.toFixed(4)).join('–'):'undefined'} | ${fmt(c.total_cost_usd)} | ${typeof c.cost_per_correct==='number'?fmt(c.cost_per_correct):c.cost_per_correct} | ${fmt(c.thinking_tokens_mean,1)} | ${c.thinking_known_runs}/${c.n} | ${fmt(c.output_tokens_mean,1)} | ${JSON.stringify(c.outcome_counts)} |`);
-  lines.push('', 'Every launched cell directory enters the denominator; absent or invalid results are explicit infrastructure_error observations with unknown spend; all non-task_pass outcomes count as failures and remain listed (confirmatory prereg overrides protocol §4). Every finished K group, including no-submission groups, stays in the denominator. Unknown cost or thinking usage is never zero-filled; cost/correct includes all observed runs of the cell.', '', '| family | comparison | left pass/n | right pass/n | Fisher raw p | Holm p |', '|---|---|---|---|---|---|');
+  lines.push('', 'Every launched cell directory enters its descriptive denominator; absent or invalid results are explicit infrastructure_error observations with unknown spend; all non-task_pass outcomes count as failures and remain listed (confirmatory prereg overrides protocol §4). Every finished K group, including no-submission groups, stays in the descriptive denominator. Comparison denominators additionally exclude printf seed 501. Unknown cost or thinking usage is never zero-filled; cost/correct includes all observed runs of the cell.', '', '| family | comparison | left pass/n | right pass/n | Fisher raw p | Holm p |', '|---|---|---|---|---|---|');
   for(const c of t.comparisons)lines.push(`| ${c.task} | ${c.left} vs ${c.right} | ${c.left_pass}/${c.left_n} | ${c.right_pass}/${c.right_n} | ${fmt(c.p_raw,6)} | ${fmt(c.p_holm,6)} |`);
   lines.push('', 'At n=20 per arm, nonsignificance is inconclusive and never evidence of equality. These independent-Bernoulli prospective powers assume constant success probabilities; regime splitting reduces n further. The .05/14 column is a conservative rank-one threshold, not joint Holm power.', '', '| p | q | n/arm | Fisher power .05 | Fisher power .05/14 |','|---|---|---|---|---|');
   for(const [p,q] of [[.9,1],[.8,1],[.7,.9],[.5,.8]])lines.push(`| ${p} | ${q} | 20 | ${exactPower(20,p,q,.05).toFixed(4)} | ${exactPower(20,p,q,.05/14).toFixed(4)} |`);
@@ -162,7 +168,7 @@ export function renderConfirmatoryMarkdown(t:ConfirmatoryTable):string {
 export function renderConfirmatoryTex(t:ConfirmatoryTable):string {
   const esc=(x:string)=>x.replace(/_/g,'\\_');
   const label:Record<string,string>={'calibrated':'short thinking','long-thinking':'long thinking','mixed-account':'mixed accounts','unknown':'unknown'};
-  const L:string[]=['\\begin{tabular}{lllrrrr}','\\toprule','Family & Stratum & Arm & Pass/$n$ & Wilson 95\\% & USD per correct & Thinking tokens per run \\\\','\\midrule'];
+  const L:string[]=['Descriptive rows retain printf seed 501 and its costs; printf seed 501 is excluded from both primary and exploratory comparisons (2026-09-20 cap amendment).', '', '\\medskip', '', '\\begin{tabular}{lllrrrr}','\\toprule','Family & Stratum & Arm & Pass/$n$ & Wilson 95\\% & USD per correct & Thinking tokens per run \\\\','\\midrule'];
   for(const c of t.cells){ if(!c.n)continue;
     const usd=typeof c.cost_per_correct==='number'?c.cost_per_correct.toFixed(2):c.cost_per_correct==='unknown'?'unknown':'n/a';
     L.push(`\\texttt{${esc(c.task)}} & ${label[c.regime]} & ${c.arm} & ${c.passes}/${c.denominator} & ${c.wilson?`${c.wilson[0].toFixed(2)}--${c.wilson[1].toFixed(2)}`:'n/a'} & ${usd} & ${c.thinking_tokens_mean===null?'unknown':Math.round(c.thinking_tokens_mean)} \\\\`);

@@ -5,7 +5,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { buildConfirmatoryTable, loadConfirmatoryRuns, renderConfirmatoryMarkdown, exactPower, type ConfirmatoryRun } from './paper-rq1-confirmatory.js';
+import { buildConfirmatoryTable, loadConfirmatoryRuns, renderConfirmatoryMarkdown, renderConfirmatoryTex, exactPower, type ConfirmatoryRun } from './paper-rq1-confirmatory.js';
 import { fisherExactTest, holmBonferroni } from './rq1-stats.js';
 import { modelThinkingTokens, classifyThinkingRegime } from './confirmatory-regime.js';
 
@@ -124,4 +124,46 @@ test('a mixed-account seed gets its own stratum and leaves the calibrated and lo
   assert.equal(t.cells.find(c => c.task === 'bench-printf-format' && c.arm === 'AH' && c.regime === 'mixed-account')!.n, 1);
   assert.equal(t.sentinels.find(s => s.task === 'bench-printf-format' && s.seed === 517)!.regime, 'mixed-account');
   assert.equal(t.comparisons.length, 14, 'the comparison family is unchanged');
+});
+
+
+test('printf501 is descriptive only in both inference strata; interpreter501 stays eligible', () => {
+  for (const thinking of [1200, 9000]) {
+    const runs: ConfirmatoryRun[] = [];
+    for (const task of ['stamp-interpreter', 'bench-printf-format']) {
+      for (const seed of [501, 502]) for (const arm of ['A', 'AH', 'B', 'K', 'C']) {
+        const r = run(arm, seed, arm === 'A' ? seed === 501 : seed === 502, task);
+        r.thinking_tokens = thinking; runs.push(r);
+      }
+    }
+    const t = buildConfirmatoryTable(runs);
+    const stratum = thinking < 4000 ? 'calibrated' : 'long-thinking';
+    const comparisons = thinking < 4000 ? t.comparisons : t.exploratory_long_comparisons;
+    const ca = comparisons.find(c => c.task === 'bench-printf-format' && c.left === 'C' && c.right === 'A')!;
+    assert.deepEqual([ca.left_pass, ca.left_n, ca.right_pass, ca.right_n], [1, 1, 0, 1]);
+    assert.equal(ca.p_raw, fisherExactTest(1, 0, 0, 1).p_value);
+    assert.equal(comparisons.filter(c => c.task === 'bench-printf-format').every(c => c.left_n === 1 && c.right_n === 1), true);
+    assert.equal(comparisons.filter(c => c.task === 'stamp-interpreter').every(c => c.left_n === 2 && c.right_n === 2), true);
+    assert.equal(comparisons.length, 14);
+    const a = t.cells.find(c => c.task === 'bench-printf-format' && c.arm === 'A' && c.regime === stratum)!;
+    assert.deepEqual([a.n, a.passes, a.total_cost_usd], [2, 1, 0.2]);
+    assert.equal(t.runs.filter(r => r.task_id === 'bench-printf-format' && r.seed === 501).length, 5);
+    assert.match(renderConfirmatoryMarkdown(t), /printf seed 501.*excluded.*comparisons/i);
+    assert.match(renderConfirmatoryTex(t), /printf seed 501.*excluded.*comparisons/i);
+    const asymmetric: ConfirmatoryRun[] = [];
+    for (let seed = 501; seed <= 506; seed++) for (const arm of ['A', 'C']) {
+      const r = run(arm, seed, arm === 'A' || seed === 501, 'bench-printf-format');
+      r.thinking_tokens = thinking; asymmetric.push(r);
+    }
+    const asym = buildConfirmatoryTable(asymmetric);
+    const asymComparisons = thinking < 4000 ? asym.comparisons : asym.exploratory_long_comparisons;
+    const asymCA = asymComparisons.find(c => c.task === 'bench-printf-format' && c.left === 'C' && c.right === 'A')!;
+    assert.equal(asymCA.p_raw, fisherExactTest(0, 5, 5, 0).p_value);
+    assert.notEqual(asymCA.p_raw, fisherExactTest(1, 5, 6, 0).p_value);
+    const adjusted = holmBonferroni(asymComparisons.map(c => c.p_raw ?? 1));
+    assert.equal(asymCA.p_holm, adjusted[asymComparisons.indexOf(asymCA)]);
+    const onlyExcluded = buildConfirmatoryTable(runs.filter(r => r.task_id === 'bench-printf-format' && r.seed === 501));
+    const excludedComparisons = thinking < 4000 ? onlyExcluded.comparisons : onlyExcluded.exploratory_long_comparisons;
+    assert.equal(excludedComparisons.filter(c => c.task === 'bench-printf-format').every(c => c.left_n === 0 && c.right_n === 0 && c.p_raw === null && c.p_holm === null), true);
+  }
 });

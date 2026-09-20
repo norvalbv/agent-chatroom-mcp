@@ -1,0 +1,154 @@
+{
+  "schemaVersion": 1,
+  "task_id": "stamp-interpreter",
+  "arm": "A",
+  "seed": 510002,
+  "model": "sonnet",
+  "outcome": "task_pass",
+  "passed": true,
+  "reason": "task_pass",
+  "oracle": {
+    "kind": "exact-answer",
+    "command": "node --import tsx score-fact-check.ts <workspace>/answer.txt oracle/oracle.json",
+    "exit_code": 0
+  },
+  "anti_tamper": {
+    "hash_before": "55791fac68957c64fb844619353df346ed3663a1c80dc2e987586528bd465017",
+    "hash_after": "55791fac68957c64fb844619353df346ed3663a1c80dc2e987586528bd465017",
+    "unchanged": true
+  },
+  "seats": [
+    {
+      "name": "single",
+      "argv": [
+        "claude",
+        "-p",
+        "Read spec.txt (the STAMP language) and program.stamp. Determine exactly what the program outputs\nwhen run under that specification.\n\nWrite your final answer, and only your final answer with no explanation, to a file named\nanswer.txt in your current working directory: the printed values in order, separated by single\nspaces, on one line.\n\nWrite your final answer, and only your final answer with no explanation, to a file named answer.txt in your current working directory.",
+        "--mcp-config",
+        "/Users/benji/Desktop/Personal and learning/agent-chatroom-mcp/bench/results/rq1-confirmatory/stamp-interpreter-K-seed510/attempt-2/mcp-empty.json",
+        "--strict-mcp-config",
+        "--allowedTools",
+        "Read,Write,Bash,Glob,Grep",
+        "--tools",
+        "Read,Write,Bash,Glob,Grep",
+        "--disable-slash-commands",
+        "--setting-sources",
+        "project",
+        "--exclude-dynamic-system-prompt-sections",
+        "--output-format",
+        "stream-json",
+        "--verbose",
+        "--model",
+        "sonnet",
+        "--max-budget-usd",
+        "0.3"
+      ],
+      "exit_code": 0,
+      "signal": null,
+      "started_at": "2026-09-19T21:41:10.115Z",
+      "completed_at": "2026-09-19T21:42:19.175Z",
+      "num_turns": 4,
+      "duration_ms": 67804,
+      "duration_api_ms": 67720,
+      "usage": {
+        "cost": 0.12497260000000002,
+        "input_tokens": 6,
+        "cache_read_input_tokens": 54063,
+        "cache_creation_input_tokens": 11852,
+        "output_tokens": 6674
+      },
+      "text": "Answer written to answer.txt.",
+      "killed_by_deadline": false,
+      "partial_usage": null,
+      "reported_models": {
+        "system_init": [
+          "claude-sonnet-5"
+        ],
+        "assistant": [
+          "claude-sonnet-5"
+        ],
+        "result_model_usage": [
+          "claude-sonnet-5"
+        ]
+      },
+      "model_usage": {
+        "claude-sonnet-5": {
+          "inputTokens": 6,
+          "outputTokens": 6674,
+          "cacheReadInputTokens": 54063,
+          "cacheCreationInputTokens": 11852,
+          "webSearchRequests": 0,
+          "costUSD": 0.12497260000000002,
+          "contextWindow": 1000000,
+          "maxOutputTokens": 64000,
+          "thinkingTokens": 6188,
+          "canonicalModel": "claude-sonnet-5",
+          "provider": "firstParty",
+          "costBasis": "list"
+        }
+      }
+    }
+  ],
+  "usage": {
+    "steps": 0,
+    "prompt_tokens": 0,
+    "completion_tokens": 0,
+    "cost_usd": 0.12497260000000002,
+    "seats": 1,
+    "seats_with_usage": 1,
+    "coverage": "complete",
+    "input_tokens": 6,
+    "cache_read_input_tokens": 54063,
+    "cache_creation_input_tokens": 11852,
+    "output_tokens": 6674
+  },
+  "turns": {
+    "per_seat": [
+      {
+        "name": "single",
+        "num_turns": 4
+      }
+    ],
+    "summed": 4,
+    "seats": 1,
+    "seats_with_turns": 1,
+    "coverage": "complete"
+  },
+  "thinking_tokens": 6188,
+  "output_tokens": 6674,
+  "wall_clock": {
+    "started_at": "2026-09-19T21:41:10.115Z",
+    "completed_at": "2026-09-19T21:42:19.176Z",
+    "duration_ms": 69061
+  },
+  "effort": {
+    "level": "medium",
+    "settings_path": ".claude/settings.json",
+    "settings_sha256": "af1ef779182cc6e6bc8b2985a37b27915b5742ecb1a89015aeb1c721d732bc1d",
+    "own_git_root": true
+  },
+  "budget": {
+    "max_budget_usd": 0.3,
+    "deadline_ms": 150000
+  },
+  "build": {
+    "captured_at": "2026-09-19T21:41:10.101Z",
+    "head_revision": "a60ea7800a1eba62b6f648a3e48a23b82c6d02bf",
+    "runner_sha256": "bcca098aa373dd9a68fada48a809687b0418baff5649a9c6e57be4f3cb8a898d",
+    "hub_entry": null,
+    "hub_entry_sha256": null,
+    "hub_revision": null,
+    "hub_build_sha256": null,
+    "provenance_scope": null
+  },
+  "frozen": {
+    "task_sha256": "55791fac68957c64fb844619353df346ed3663a1c80dc2e987586528bd465017",
+    "scorer_sha256": "f4b645c670ae4655aec1189e4d7320294115f0e3c6da3b5ba41a7ee3b1cd00f8",
+    "fact_scorer_sha256": "6b8b3e98c8c408ecd6715a38db9263488644d27c01a11c5bab3172acd5539832",
+    "task_id": "stamp-interpreter",
+    "timeout_ms": 900000,
+    "seats": 1
+  },
+  "error": null,
+  "checked_at": "2026-09-19T21:42:19.270Z"
+}

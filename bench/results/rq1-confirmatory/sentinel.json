@@ -1,0 +1,222 @@
+{
+  "bench-printf-format": [
+    {
+      "seed": 501,
+      "outputTokens": 21570,
+      "thinkingTokens": 14475,
+      "regime": "long-thinking"
+    },
+    {
+      "seed": 502,
+      "outputTokens": 25030,
+      "thinkingTokens": 17045,
+      "regime": "long-thinking"
+    },
+    {
+      "seed": 503,
+      "outputTokens": 17043,
+      "thinkingTokens": 10187,
+      "regime": "long-thinking"
+    },
+    {
+      "seed": 504,
+      "outputTokens": 24041,
+      "thinkingTokens": 15301,
+      "regime": "long-thinking"
+    },
+    {
+      "seed": 505,
+      "outputTokens": 19415,
+      "thinkingTokens": 13072,
+      "regime": "long-thinking"
+    },
+    {
+      "seed": 506,
+      "outputTokens": 17240,
+      "thinkingTokens": 9653,
+      "regime": "long-thinking"
+    },
+    {
+      "seed": 507,
+      "outputTokens": 25415,
+      "thinkingTokens": 16297,
+      "regime": "long-thinking"
+    },
+    {
+      "seed": 508,
+      "outputTokens": 16212,
+      "thinkingTokens": 9623,
+      "regime": "long-thinking"
+    },
+    {
+      "seed": 509,
+      "outputTokens": 31388,
+      "thinkingTokens": 19659,
+      "regime": "long-thinking"
+    },
+    {
+      "seed": 510,
+      "outputTokens": 22262,
+      "thinkingTokens": 14792,
+      "regime": "long-thinking"
+    },
+    {
+      "seed": 511,
+      "outputTokens": 19943,
+      "thinkingTokens": 12198,
+      "regime": "long-thinking"
+    },
+    {
+      "seed": 512,
+      "outputTokens": 28942,
+      "thinkingTokens": 21122,
+      "regime": "long-thinking"
+    },
+    {
+      "seed": 513,
+      "outputTokens": 23395,
+      "thinkingTokens": 14331,
+      "regime": "long-thinking"
+    },
+    {
+      "seed": 514,
+      "outputTokens": 0,
+      "thinkingTokens": null,
+      "regime": "unknown"
+    },
+    {
+      "seed": 515,
+      "outputTokens": 0,
+      "thinkingTokens": null,
+      "regime": "unknown"
+    },
+    {
+      "seed": 516,
+      "outputTokens": 4642,
+      "thinkingTokens": 1316,
+      "regime": "calibrated"
+    }
+  ],
+  "stamp-interpreter": [
+    {
+      "seed": 501,
+      "outputTokens": 1539,
+      "thinkingTokens": 950,
+      "regime": "calibrated"
+    },
+    {
+      "seed": 502,
+      "outputTokens": 5811,
+      "thinkingTokens": 5164,
+      "regime": "long-thinking"
+    },
+    {
+      "seed": 503,
+      "outputTokens": 5349,
+      "thinkingTokens": 4879,
+      "regime": "long-thinking"
+    },
+    {
+      "seed": 504,
+      "outputTokens": 6937,
+      "thinkingTokens": 6471,
+      "regime": "long-thinking"
+    },
+    {
+      "seed": 505,
+      "outputTokens": 6743,
+      "thinkingTokens": 6186,
+      "regime": "long-thinking"
+    },
+    {
+      "seed": 506,
+      "outputTokens": 6220,
+      "thinkingTokens": 5385,
+      "regime": "long-thinking"
+    },
+    {
+      "seed": 507,
+      "outputTokens": 5800,
+      "thinkingTokens": 5196,
+      "regime": "long-thinking"
+    },
+    {
+      "seed": 508,
+      "outputTokens": 7003,
+      "thinkingTokens": 6537,
+      "regime": "long-thinking"
+    },
+    {
+      "seed": 509,
+      "outputTokens": 8399,
+      "thinkingTokens": 7933,
+      "regime": "long-thinking"
+    },
+    {
+      "seed": 510,
+      "outputTokens": 6918,
+      "thinkingTokens": 6450,
+      "regime": "long-thinking"
+    },
+    {
+      "seed": 511,
+      "outputTokens": 6505,
+      "thinkingTokens": 5952,
+      "regime": "long-thinking"
+    },
+    {
+      "seed": 512,
+      "outputTokens": 7054,
+      "thinkingTokens": 6568,
+      "regime": "long-thinking"
+    },
+    {
+      "seed": 513,
+      "outputTokens": 6366,
+      "thinkingTokens": 5756,
+      "regime": "long-thinking"
+    },
+    {
+      "seed": 514,
+      "outputTokens": 6705,
+      "thinkingTokens": 5908,
+      "regime": "long-thinking"
+    },
+    {
+      "seed": 515,
+      "outputTokens": 5941,
+      "thinkingTokens": 5473,
+      "regime": "long-thinking"
+    },
+    {
+      "seed": 516,
+      "outputTokens": 8524,
+      "thinkingTokens": 7498,
+      "regime": "long-thinking"
+    },
+    {
+      "seed": 517,
+      "outputTokens": 6388,
+      "thinkingTokens": 5831,
+      "regime": "long-thinking"
+    },
+    {
+      "seed": 518,
+      "outputTokens": 6511,
+      "thinkingTokens": 5914,
+      "regime": "long-thinking"
+    },
+    {
+      "seed": 519,
+      "outputTokens": 5812,
+      "thinkingTokens": 5133,
+      "regime": "long-thinking"
+    },
+    {
+      "seed": 520,
+      "outputTokens": 7905,
+      "thinkingTokens": 7322,
+      "regime": "long-thinking"
+    }
+  ]
+}

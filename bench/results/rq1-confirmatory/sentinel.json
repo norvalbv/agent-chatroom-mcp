@@ -80,21 +80,33 @@
     },
     {
       "seed": 514,
-      "outputTokens": 0,
-      "thinkingTokens": null,
-      "regime": "unknown"
+      "outputTokens": 25395,
+      "thinkingTokens": 17907,
+      "regime": "long-thinking"
     },
     {
       "seed": 515,
-      "outputTokens": 0,
-      "thinkingTokens": null,
-      "regime": "unknown"
+      "outputTokens": 20597,
+      "thinkingTokens": 11330,
+      "regime": "long-thinking"
     },
     {
       "seed": 516,
       "outputTokens": 4642,
       "thinkingTokens": 1316,
       "regime": "calibrated"
+    },
+    {
+      "seed": 517,
+      "outputTokens": 23309,
+      "thinkingTokens": 15216,
+      "regime": "long-thinking"
+    },
+    {
+      "seed": 518,
+      "outputTokens": 23207,
+      "thinkingTokens": 15691,
+      "regime": "long-thinking"
     }
   ],
   "stamp-interpreter": [

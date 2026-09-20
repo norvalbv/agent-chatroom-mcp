@@ -129,6 +129,15 @@ export interface SeatRecord {
   model_usage: Record<string, unknown> | null;
 }
 
+/** A seat the provider refused for quota, not one the model failed: the CLI emits a synthetic assistant
+ * message ("You've hit your session limit · resets ...") and exits non-zero. Scoring the untouched (or
+ * half-written) workspace would record a provider outage as a task failure (paper/amendments.md,
+ * 2026-09-20 quota addendum). Both conditions are required so a model merely writing about limits never matches. */
+export const PROVIDER_QUOTA_PATTERN = /hit your \w+ limit|usage limit reached/i;
+export function isProviderQuotaSeat(seat: Pick<SeatRecord, "text" | "reported_models">): boolean {
+  return (seat.reported_models?.assistant ?? []).includes("<synthetic>") && PROVIDER_QUOTA_PATTERN.test(seat.text ?? "");
+}
+
 /** Spawn one `claude` seat (bare command name, resolved off PATH so tests can stub it); enforce a wall-clock cap since the CLI has no such flag itself.
  * Seats run with `--output-format stream-json` (see src/claude-args.ts): stdout is NDJSON, one event per
  * line, so a kill mid-run still leaves every event flushed before the kill on disk/in the buffer — a
@@ -486,6 +495,12 @@ async function main() {
 
     if (hashTree(taskDir) !== taskBefore || hashFile(scorerPath) !== scorerBefore || hashFile(factScorerPath) !== factScorerBefore) {
       failureReason = "tamper";
+    } else {
+      const quotaSeat = seatRecords.find(isProviderQuotaSeat);
+      if (quotaSeat) {
+        failureReason = "infrastructure_error";
+        failureMessage = `provider quota on seat ${quotaSeat.name}: ${quotaSeat.text.slice(0, 200)}`;
+      }
     }
   } catch (error) {
     completedAt = new Date();

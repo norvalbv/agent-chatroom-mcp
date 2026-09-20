@@ -35,6 +35,8 @@ function stubClaudeDir() {
       "const minority=process.env.STUB_MINORITY_ATTEMPT;",
       `const isMinority = minority && cwd.includes('attempt-'+minority+'/');`,
       `fs.writeFileSync('answer.txt', isMinority ? ${JSON.stringify(WRONG)} : ${JSON.stringify(EXPECTED)});`,
+      // STUB_QUOTA_ATTEMPT=<N>: that attempt is refused by the provider the way the real CLI reports it.
+      `if(process.env.STUB_QUOTA_ATTEMPT && cwd.includes('attempt-'+process.env.STUB_QUOTA_ATTEMPT+'/')){process.stdout.write(JSON.stringify({type:'assistant',message:{model:'<synthetic>',usage:{input_tokens:0,output_tokens:0}}})+'\\n');process.stdout.write(JSON.stringify({type:'result',subtype:'success',is_error:true,result:"You've hit your session limit · resets 9:30am (Europe/London)",num_turns:1,duration_ms:500,duration_api_ms:0,total_cost_usd:0,usage:{input_tokens:0,output_tokens:0}})+'\\n');process.exit(1);}`,
       "process.stdout.write(JSON.stringify({type:'assistant',message:{usage:{input_tokens:80,output_tokens:15}}})+'\\n');",
       "process.stdout.write(JSON.stringify({type:'result',subtype:'success',is_error:false,result:'seat done',num_turns:2,duration_ms:500,duration_api_ms:400,total_cost_usd:0.002,usage:{input_tokens:100,output_tokens:20}})+'\\n');",
       "",
@@ -551,4 +553,21 @@ test("--effort with an unknown level is refused before any attempt runs", () => 
   assert.notEqual(r.status, 0);
   assert.match(r.stderr, /--effort/);
   assert.ok(!existsSync(root));
+});
+
+test("a group with any provider-refused attempt is an infrastructure_error, not a k-attempt vote — even though the other attempts would win the vote and pass (quota addendum 2026-09-20)", () => {
+  const stubDir = stubClaudeDir();
+  const root = join(tmpdir(), `bench-ak-quota-${process.pid}-${Date.now()}`);
+  const armCPath = writeArmCResult(tmpdir(), 0.3, 200000);
+  try {
+    const r = invoke([task, "3", "13", "--root", root, "--arm-c-result", armCPath], { PATH: `${stubDir}${delimiter}${process.env.PATH}`, STUB_QUOTA_ATTEMPT: "2" });
+    assert.equal(r.status, 0, r.stderr + r.stdout);
+    const result = JSON.parse(readFileSync(join(root, "result.json"), "utf8"));
+    assert.equal(result.attempts[1].outcome, "infrastructure_error");
+    assert.equal(result.outcome, "infrastructure_error", "two correct attempts out of three still is not the registered k=3 measurement");
+    assert.equal(result.passed, false);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+    rmSync(stubDir, { recursive: true, force: true });
+  }
 });

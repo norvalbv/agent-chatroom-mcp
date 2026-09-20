@@ -507,6 +507,13 @@ export async function runGrid(args: ParsedGridArgs, opts: { log?: (s: string) =>
     summary.ran++;
     if (args.confirmatory && item.arm === "A") writeSentinel(args.resultsDir);
     log(`[done] ${item.taskLabel} ${item.arm} seed${item.seed}: outcome=${written.outcome} cost=${written.cost_usd === null ? "UNKNOWN" : "$" + written.cost_usd.toFixed(4)} running_total=$${runningTotal.toFixed(4)}`);
+    if (written.outcome === "infrastructure_error") {
+      // A provider/harness outage (quota, hub boot) is systematic: every following cell would fail the same
+      // way and be recorded against its arm. Stop; the operator moves the cell aside and resumes.
+      summary.infra_failed++;
+      log(`[halt] ${item.arm} cell ${item.taskLabel} seed${item.seed} ended in infrastructure_error; stopping the grid — move ${item.runDir} aside and resume once the cause is cleared`);
+      break;
+    }
   }
   summary.total_cost_usd = runningTotal;
   if (args.confirmatory) writeSentinel(args.resultsDir);

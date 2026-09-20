@@ -321,3 +321,23 @@ test("a killed cell whose seats all kept partial usage gets a list-price upper b
     rmSync(f.dir, { recursive: true, force: true });
   }
 });
+
+test("a cell that ends in infrastructure_error (e.g. provider quota) halts the grid: the outage must not be recorded against the following arms (quota addendum 2026-09-20)", async () => {
+  const f = fixture();
+  try {
+    process.env.STUB_OUTCOME = "infrastructure_error";
+    const args = parseArgs([
+      "--tasks", "stamp-interpreter", "--seeds", "501", "--arms", "A,AH,B", "--confirmatory",
+      "--tasks-dir", f.tasksDir, "--results-dir", f.resultsDir, "--runner", f.runner,
+    ]);
+    const logs: string[] = [];
+    const summary = await runGrid(args, { log: (line: string) => logs.push(line) });
+    assert.equal(summary.ran, 1, "the first cell ran and was recorded");
+    assert.equal(summary.infra_failed, 1);
+    assert.equal(calls(f.callsPath).length, 1, "no later arm starts during an outage");
+    assert.ok(logs.some((l) => l.startsWith("[halt]") && l.includes("infrastructure_error")));
+  } finally {
+    delete process.env.STUB_OUTCOME;
+    rmSync(f.dir, { recursive: true, force: true });
+  }
+});

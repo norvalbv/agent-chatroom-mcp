@@ -260,6 +260,10 @@ async function main() {
     };
   }
   const selected = results[winnerIndex];
+  // A group in which any attempt was refused by the provider (bench-rq1 records infrastructure_error, e.g.
+  // a quota message) never got its k attempts, so it is not a k-attempt measurement: the whole group is an
+  // infrastructure_error, decided without looking at whether the selected attempt passed.
+  const attemptInfraError = results.some((r) => r?.outcome === "infrastructure_error");
 
   // Cost: never zero for an unknown. Known sum + per-attempt cap for each unknown = upper bound; total is null when any is unknown.
   // usage.cost_usd is 0 (not absent) on a killed seat's rollup (src/result.ts rollupUsage), so "known"
@@ -307,9 +311,9 @@ async function main() {
     selector: selectorName,
     selection,
     selected_attempt_result: selected ? { outcome: selected.outcome, passed: selected.passed, reason: selected.reason, oracle: selected.oracle } : null,
-    outcome: selected?.outcome ?? "infrastructure_error",
-    passed: selected?.passed ?? false,
-    reason: selected?.reason ?? "infrastructure_error",
+    outcome: attemptInfraError ? "infrastructure_error" : (selected?.outcome ?? "infrastructure_error"),
+    passed: attemptInfraError ? false : (selected?.passed ?? false),
+    reason: attemptInfraError ? "infrastructure_error" : (selected?.reason ?? "infrastructure_error"),
     oracle_ceiling: { any_attempt_passed: results.some((r) => r?.passed === true), n_passed: results.filter((r) => r?.passed === true).length, note: "NOT an arm: an upper bound on what any selector could achieve, computed with the oracle after selection" },
     matched_from: armCResultPath ? { arm_c_result: resolve(armCResultPath), arm_c_cost_usd: costUsd } : null,
     effort_level: effortLevel,

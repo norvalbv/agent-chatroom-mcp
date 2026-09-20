@@ -695,3 +695,63 @@ grid now counts a killed cell whose every seat has partial usage at Sonnet list 
 cost cap, logged as `[est-cost]`, instead of treating it as unknown and halting. A killed cell with no
 partial signal stays unknown and still halts a capped grid. This changes cost accounting only; outcomes,
 caps and inference are unchanged. Estimated costs are reported as upper bounds in the cost tables.
+
+## 2026-09-20 08:00 UTC — Provider quota hit mid-block; the "thinking regime" is the subscription account (maintainer)
+
+Written after the printf grid was stopped at 81 printf cells and before any further cell is run.
+
+**What happened.** At 07:43 UTC the Claude subscription account the CLI was logged into reached its
+five-hour session limit. The CLI then answers every call with a synthetic assistant message ("You've hit
+your session limit · resets 9:30am"), zero tokens, exit 1. The harness scored the untouched workspaces, so
+the grid logged provider refusals as `task_fail` for whichever arm came next. The maintainer stopped the
+grid (SIGTERM) when the pattern was noticed; the in-flight `B seed517` cell was killed by that signal.
+
+**Invalidation rule (outcome-blind, applied to every confirmatory cell of both blocks).** A cell is invalid
+if any of its seats (or, for arm K, any attempt's seat) carries the CLI's synthetic model id `<synthetic>`
+together with a limit message, or if the operator killed it. The scan matched nine printf cells and no
+interpreter cell: seed 514 A, AH, B, C and seed 515 A, AH, B, C, K. With the operator-killed `B seed517`
+they were moved, unchanged, to `bench/results/rq1-confirmatory-quota-invalidated/` (known spend in them:
+2.75 USD, which still counts toward the reported total). They are re-run under the registered command.
+`K seed514` finished before the limit and stays. No valid cell is re-run.
+
+**Harness fix (same commit as this note).** `bench-rq1.ts` records a quota-refused seat as
+`infrastructure_error` even if the workspace would pass; `bench-ak.ts` makes a group with any such attempt
+an `infrastructure_error` group (it never got its k attempts); `bench-grid.ts` halts on the first
+`infrastructure_error` cell instead of walking the outage through the remaining arms. Tests cover all three,
+including a control where a real model merely writes the same words and is still scored.
+
+**The regime is the account.** This machine runs an automatic account switcher for Claude Code
+(`claude-swap`, menu-bar mode, strategy consume-first) across several subscription accounts. Nothing in the
+harness knew. Its log gives every switch time. Joining those times to the `started_at` of every recorded
+seat with thinking-token provenance in `bench/results/` (700 seats, 692 not straddling a switch):
+
+| account active | single-agent runs (arms A, AH, K attempts) | thinking tokens >= 4000 | median | range |
+|---|---|---|---|---|
+| account 4 | 357 | 356 | 7322 | 3742 to 31604 |
+| account 1 | 40 | 0 | 968 | 463 to 1295 |
+| account 3 | 11 | 0 | 716 | 595 to 1316 |
+
+The switch log also accounts for the earlier "regime flips" (account 1 to 4 at 16:38 UTC, back at 18:01 UTC,
+and 1 to 4 again at 20:05 UTC on 2026-09-19). Runs from before the thinking-token fields existed show the
+same split in output tokens. Interpreter arm-A runs on 2026-09-19, by hour (UTC) and active account, median
+output tokens: 07h to 13h account 1, 510 runs, about 1.7K (max 2232); 16h to 17h account 4, 80 runs, about
+9.9K (min 5763); 18h to 20h account 1, 68 runs, about 1.7K (max 1994); 20h to 23h account 4, 214 runs,
+about 6.6K (min 4494). No hour block mixes the two levels. So the 2026-09-19 entries that say "no local cause" are wrong in one respect: the cause was
+local, an account switch. What differs between the accounts (plan tier, a server-side experiment, an
+account-level default) is not observable from here; the settings file, CLI version and model alias were
+identical. The claim the paper can make is: the same alias served about seven times more thinking on one
+account than on two others, stable over two days, and accuracy moved with it.
+
+**Consequences for this run.**
+1. Every confirmatory cell up to and including `K seed514` ran on account 4 (long). After the limit the
+   switcher moved to account 3 and then account 1, so all five `seed516` cells and `AH seed517` ran short.
+   They are valid short-regime cells and stay, reported as their own stratum, never pooled.
+2. The remaining cells (seed 514 A, AH, B, C; seed 515 all; seed 517 A, B, K, C; seeds 518 to 520) are
+   launched one seed at a time, and only while the switcher shows account 4 active. This pins the factor
+   that was drifting; it does not touch the switcher or any credential.
+3. Regime is assigned per cell from the switch log (account 4 = long; accounts 1 and 3 = short). A cell
+   whose seat interval contains a switch is flagged mixed. A seed enters a regime stratum for paired
+   inference only if all five of its cells are in that regime; seed 517 is therefore mixed by construction
+   and is reported but excluded from paired tests. The thinking-token sentinel stays as a cross-check.
+4. Decided before the remaining cells exist, and open to the maintainer's overrule: no cell with a valid
+   outcome is re-run for being on the "wrong" account.

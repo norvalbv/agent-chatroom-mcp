@@ -24,7 +24,7 @@ function invoke(args: string[], env: Record<string, string> = {}) {
  * `type:"assistant"` usage event, then a canned `type:"result"` line with usage/num_turns/duration_ms.
  * "kill" behavior instead sleeps after the assistant event so the harness's own deadline timer has to
  * SIGTERM it, with no `result` line ever emitted — proving usage/outcome recording survives a kill. */
-function stubClaudeDir(behavior: "answer" | "no-answer" | "edit-file" | "kill" = "answer") {
+function stubClaudeDir(behavior: "answer" | "no-answer" | "edit-file" | "kill" | "quota" = "answer") {
   const dir = mkdtempSync(join(tmpdir(), "bench-rq1-stub-"));
   const bin = join(dir, "claude");
   writeFileSync(
@@ -37,6 +37,10 @@ function stubClaudeDir(behavior: "answer" | "no-answer" | "edit-file" | "kill" =
       "if(!args.includes('--output-format')||args[args.indexOf('--output-format')+1]!=='stream-json'||!args.includes('--verbose')){process.stderr.write('expected --output-format stream-json --verbose\\n');process.exit(1);}",
       "if(process.env.STUB_SEEN_LOG){let st=null;try{st=fs.readFileSync('.claude/settings.json','utf8');}catch{}fs.appendFileSync(process.env.STUB_SEEN_LOG,JSON.stringify({cwd:process.cwd(),settings:st})+'\\n');}",
       `const behavior=process.env.STUB_BEHAVIOR||'answer';`,
+      // "quota": what the real CLI does when the provider refuses the session (observed 2026-09-20): a synthetic
+      // assistant message, a zero-usage result carrying the limit text, exit 1. STUB_QUOTA_MODEL overrides the
+      // model id so a test can show that the same words from a real model are still scored.
+      `if(behavior==='quota'){fs.writeFileSync('answer.txt',${JSON.stringify(EXPECTED)});const m=process.env.STUB_QUOTA_MODEL||'<synthetic>';process.stdout.write(JSON.stringify({type:'system',subtype:'init',model:'served-init'})+'\\n');process.stdout.write(JSON.stringify({type:'assistant',message:{model:m,usage:{input_tokens:0,output_tokens:0}}})+'\\n');process.stdout.write(JSON.stringify({type:'result',subtype:'success',is_error:true,result:"You've hit your session limit · resets 9:30am (Europe/London)",num_turns:1,duration_ms:586,duration_api_ms:0,total_cost_usd:0,usage:{input_tokens:0,cache_read_input_tokens:0,cache_creation_input_tokens:0,output_tokens:0}})+'\\n');process.exit(m==='<synthetic>'?1:0);}`,
       `if(behavior==='answer')fs.writeFileSync('answer.txt',process.env.STUB_ANSWER||${JSON.stringify(EXPECTED)});`,
       "process.stdout.write(JSON.stringify({type:'assistant',message:{usage:{input_tokens:80,output_tokens:15,cache_read_input_tokens:10,cache_creation_input_tokens:5}}})+'\\n');",
       "if(behavior==='kill'){setInterval(()=>{},1000);}else{",
@@ -674,6 +678,30 @@ test("sentinel fields: arm A/AH result carries thinking_tokens and output_tokens
     assert.equal(without.thinking_tokens, null);
     assert.equal(without.output_tokens, 30, "falls back to the rolled-up usage.output_tokens");
   } finally {
+    rmSync(stubDir, { recursive: true, force: true });
+  }
+});
+
+test("a seat the provider refused for quota is an infrastructure_error, never a scored task outcome — even when the workspace would pass (quota addendum 2026-09-20)", () => {
+  const stubDir = stubClaudeDir("quota");
+  const root = join(tmpdir(), `bench-rq1-quota-${process.pid}-${Date.now()}`);
+  const control = join(tmpdir(), `bench-rq1-quota-control-${process.pid}-${Date.now()}`);
+  try {
+    const env = { PATH: `${stubDir}${delimiter}${process.env.PATH}`, STUB_BEHAVIOR: "quota" };
+    const r = invoke([task, "A", "7", "--root", root], env);
+    assert.equal(r.status, 0, r.stderr + r.stdout);
+    const result = JSON.parse(readFileSync(join(root, "result.json"), "utf8"));
+    assert.deepEqual(result.seats[0].reported_models.assistant, ["<synthetic>"]);
+    assert.equal(result.outcome, "infrastructure_error", "the correct answer.txt on disk must not turn a provider outage into a pass");
+    assert.equal(result.passed, false);
+    assert.match(String(result.error), /provider quota/);
+    // Control: the same words from a real (non-synthetic) model are the model's own text and stay scored.
+    const c = invoke([task, "A", "8", "--root", control], { ...env, STUB_QUOTA_MODEL: "served-real" });
+    assert.equal(c.status, 0, c.stderr + c.stdout);
+    assert.equal(JSON.parse(readFileSync(join(control, "result.json"), "utf8")).outcome, "task_pass");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+    rmSync(control, { recursive: true, force: true });
     rmSync(stubDir, { recursive: true, force: true });
   }
 });

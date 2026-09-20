@@ -32,7 +32,7 @@ interface Comparison {
   test:'fisher'; p_raw:number|null; p_holm:number|null;
 }
 interface Sentinel {task:string;seed:number;thinking_tokens:number|null;output_tokens:number|null;regime:Regime}
-export interface ConfirmatoryTable {cells:Cell[];comparisons:Comparison[];sentinels:Sentinel[];missing:string[];runs:ConfirmatoryRun[]}
+export interface ConfirmatoryTable {cells:Cell[];comparisons:Comparison[];exploratory_long_comparisons:Comparison[];sentinels:Sentinel[];missing:string[];runs:ConfirmatoryRun[]}
 const numeric = (v:unknown): v is number => typeof v === 'number' && Number.isFinite(v) && v >= 0;
 const sumKnown = (vs:(number|null)[]):number|null => vs.length && vs.every(numeric) ? (vs as number[]).reduce((a,b)=>a+b,0) : null;
 const meanKnown = (vs:(number|null)[]):number|null => {const s=sumKnown(vs);return s === null ? null : s/vs.length;};
@@ -119,7 +119,16 @@ export function buildConfirmatoryTable(input:ConfirmatoryRun[],mixed:MixedSeeds=
   }
   const adjusted=holmBonferroni(comparisons.map(c=>c.p_raw??1));
   comparisons.forEach((c,i)=>{if(c.p_raw!==null)c.p_holm=adjusted[i];});
-  return {cells,comparisons,sentinels,missing,runs};
+  // EXPLORATORY, not pre-registered: the same fourteen comparisons inside the long-thinking stratum, which is
+  // what the run turned out to measure once the account effect was known (amendments, 2026-09-20 08:37 UTC).
+  const exploratory_long_comparisons:Comparison[]=[];
+  for(const task of TASKS)for(const [left,right] of PAIRS){
+    const a=cells.find(c=>c.task===task&&c.regime==='long-thinking'&&c.arm===left)!,b=cells.find(c=>c.task===task&&c.regime==='long-thinking'&&c.arm===right)!;
+    exploratory_long_comparisons.push({task,left,right,left_pass:a.passes,left_n:a.denominator,right_pass:b.passes,right_n:b.denominator,test:'fisher',p_raw:a.denominator&&b.denominator?fisherExactTest(a.passes,a.denominator-a.passes,b.passes,b.denominator-b.passes).p_value:null,p_holm:null});
+  }
+  const adjLong=holmBonferroni(exploratory_long_comparisons.map(c=>c.p_raw??1));
+  exploratory_long_comparisons.forEach((c,i)=>{if(c.p_raw!==null)c.p_holm=adjLong[i];});
+  return {cells,comparisons,exploratory_long_comparisons,sentinels,missing,runs};
 }
 
 /** Independent Bernoulli enumeration, not simulation; alpha=.05/14 is a conservative Holm rank-one bound. */
@@ -141,6 +150,8 @@ export function renderConfirmatoryMarkdown(t:ConfirmatoryTable):string {
   for(const c of t.comparisons)lines.push(`| ${c.task} | ${c.left} vs ${c.right} | ${c.left_pass}/${c.left_n} | ${c.right_pass}/${c.right_n} | ${fmt(c.p_raw,6)} | ${fmt(c.p_holm,6)} |`);
   lines.push('', 'At n=20 per arm, nonsignificance is inconclusive and never evidence of equality. These independent-Bernoulli prospective powers assume constant success probabilities; regime splitting reduces n further. The .05/14 column is a conservative rank-one threshold, not joint Holm power.', '', '| p | q | n/arm | Fisher power .05 | Fisher power .05/14 |','|---|---|---|---|---|');
   for(const [p,q] of [[.9,1],[.8,1],[.7,.9],[.5,.8]])lines.push(`| ${p} | ${q} | 20 | ${exactPower(20,p,q,.05).toFixed(4)} | ${exactPower(20,p,q,.05/14).toFixed(4)} |`);
+  lines.push('', 'EXPLORATORY (not pre-registered): the same comparisons inside the long-thinking stratum, Holm family m=14.', '', '| family | comparison | left pass/n | right pass/n | Fisher raw p | Holm p |','|---|---|---|---|---|---|');
+  for(const c of t.exploratory_long_comparisons)lines.push(`| ${c.task} | ${c.left} vs ${c.right} | ${c.left_pass}/${c.left_n} | ${c.right_pass}/${c.right_n} | ${c.p_raw===null?'unobserved':c.p_raw.toFixed(6)} | ${c.p_holm===null?'unobserved':c.p_holm.toFixed(6)} |`);
   lines.push('', '| family | seed | regime | A thinking | A output |', '|---|---|---|---|---|');
   for(const s of t.sentinels)lines.push(`| ${s.task} | ${s.seed} | ${s.regime} | ${s.thinking_tokens??'unknown'} | ${s.output_tokens??'unknown'} |`);
   lines.push('', '| family | seed | arm | outcome | USD | thinking | output | wall ms | exit codes |','|---|---|---|---|---|---|---|---|---|');
@@ -148,16 +159,31 @@ export function renderConfirmatoryMarkdown(t:ConfirmatoryTable):string {
   lines.push('',`Missing cells (${t.missing.length}): ${t.missing.join(', ')||'none'}.`,'');
   return lines.join('\n');
 }
+export function renderConfirmatoryTex(t:ConfirmatoryTable):string {
+  const esc=(x:string)=>x.replace(/_/g,'\\_');
+  const label:Record<string,string>={'calibrated':'short thinking','long-thinking':'long thinking','mixed-account':'mixed accounts','unknown':'unknown'};
+  const L:string[]=['\\begin{tabular}{lllrrrr}','\\toprule','Family & Stratum & Arm & Pass/$n$ & Wilson 95\\% & USD per correct & Thinking tokens per run \\\\','\\midrule'];
+  for(const c of t.cells){ if(!c.n)continue;
+    const usd=typeof c.cost_per_correct==='number'?c.cost_per_correct.toFixed(2):c.cost_per_correct==='unknown'?'unknown':'n/a';
+    L.push(`\\texttt{${esc(c.task)}} & ${label[c.regime]} & ${c.arm} & ${c.passes}/${c.denominator} & ${c.wilson?`${c.wilson[0].toFixed(2)}--${c.wilson[1].toFixed(2)}`:'n/a'} & ${usd} & ${c.thinking_tokens_mean===null?'unknown':Math.round(c.thinking_tokens_mean)} \\\\`);
+  }
+  L.push('\\bottomrule','\\end{tabular}','','\\medskip','','\\begin{tabular}{llrrrr}','\\toprule','Family & Comparison (long thinking, exploratory) & Left & Right & Fisher $p$ & Holm $p$ \\\\','\\midrule');
+  for(const c of t.exploratory_long_comparisons)L.push(`\\texttt{${esc(c.task)}} & ${c.left} vs ${c.right} & ${c.left_pass}/${c.left_n} & ${c.right_pass}/${c.right_n} & ${c.p_raw===null?'n/a':c.p_raw.toFixed(3)} & ${c.p_holm===null?'n/a':c.p_holm.toFixed(3)} \\\\`);
+  L.push('\\bottomrule','\\end{tabular}','');
+  return L.join('\n');
+}
+
 function main() {
   const args=process.argv.slice(2),dir=args.shift();let out:string|undefined;
-  let mixedPath:string|undefined;
-  while(args.length){const flag=args.shift();if(flag==='--out')out=args.shift();else if(flag==='--mixed-seeds')mixedPath=args.shift();else throw Error(`Unknown option ${flag}`);}
+  let mixedPath:string|undefined,texPath:string|undefined;
+  while(args.length){const flag=args.shift();if(flag==='--out')out=args.shift();else if(flag==='--mixed-seeds')mixedPath=args.shift();else if(flag==='--tex')texPath=args.shift();else throw Error(`Unknown option ${flag}`);}
   if(!dir)throw Error('Usage: paper-rq1-confirmatory.ts RESULTS_DIR [--out PREFIX] [--mixed-seeds FILE]');
   const mixed=new Set<string>(mixedPath?(JSON.parse(readFileSync(resolve(mixedPath),'utf8')).seeds as {task:string;seed:number}[]).map(x=>`${x.task}-seed${x.seed}`):[]);
   const {runs,warnings}=loadConfirmatoryRuns(resolve(dir));
   const table=buildConfirmatoryTable(runs,mixed);
   const md=renderConfirmatoryMarkdown(table)+warnings.map(w=>`\nWarning: ${w}`).join('');
   if(out){const prefix=resolve(out);mkdirSync(dirname(prefix),{recursive:true});writeFileSync(`${prefix}.md`,md);writeFileSync(`${prefix}.json`,JSON.stringify({...table,warnings},null,2)+'\n');}
+  if(texPath)writeFileSync(resolve(texPath),renderConfirmatoryTex(table));
   console.log(md);
 }
 if(process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url))main();

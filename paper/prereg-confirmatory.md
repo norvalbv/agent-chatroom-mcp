@@ -310,3 +310,9 @@ clean short-regime seed at all. Consequence, stated plainly: the pre-registered 
 calibrated (short-regime) seeds only, the run was served by the long-thinking account, and those primary
 comparisons are therefore essentially unobserved. The long-thinking stratum is what this run measured, and
 it is reported as the pre-registration's secondary stratum, not promoted to primary.
+
+**Addendum 2026-09-20 08:45 UTC (exploratory long-stratum comparisons).** Because the pre-registered primary
+comparisons are essentially unobserved, the report script now also prints the same fourteen Fisher
+comparisons inside the long-thinking stratum, Holm-adjusted at m=14 and labelled exploratory in every
+output. This was added after 13 long-thinking format seeds and all interpreter seeds had been seen, so it
+carries no confirmatory weight; it exists so that a reader sees a test and not only rates.

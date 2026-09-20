@@ -204,3 +204,40 @@ The redesigned experiment completed but crossed another observed regime boundary
 Section~\ref{sec:results} separates the long, crossover, and short cohorts; the crossover
 seed is not treated as a same-regime paired comparison. No partial set of result files is read
 as a result at any point in this paper.
+
+\subsection{The confirmatory five-arm run}
+\label{sec:method:confirmatory}
+
+The exploratory results above raised three questions the first study could not answer: whether a single
+agent told to think harder does as well as any aggregation arm, whether a cheap pair does as well as a
+room, and whether the earlier comparisons survive fresh seeds. A second run was therefore pre-registered
+before any of its cells existed (\texttt{paper/prereg-confirmatory.md}). It uses the two task families
+\texttt{stamp-interpreter} and \texttt{bench-printf-format}, twenty fresh seeds each (501--520), and
+five arms: \textbf{A}, one Sonnet seat at medium effort; \textbf{AH}, one Sonnet seat at high effort;
+\textbf{B}, a builder followed by an independent reviewer who may approve or send back one revision
+request, with no chat and with the reviewer working on a snapshot it cannot write the submission into;
+\textbf{K}, the oracle-free vote of \S\ref{sec:method:arms} with its frozen selectors ($k=10$ on the
+interpreter family, $k=7$ on the format family); and \textbf{C}, the three-seat chatroom. Effort is
+pinned by a settings file the harness writes into each workspace, which is its own repository root so
+that no outer setting leaks in. Each run records the served model id and the thinking tokens the client
+reports. The five arms of a seed run back to back, in an order rotated by seed so that every arm takes
+every position once per five seeds; a change in serving conditions then hits all arms of a seed rather
+than one arm's seeds.
+
+Every launched cell stays in its arm's denominator and any outcome other than a pass counts as a
+failure; a finished cell, including one that timed out, is never re-run. The analysis is fourteen
+two-sided Fisher exact tests, seven fixed comparisons per family, Holm-adjusted with the family size
+held at fourteen even when comparisons are unobserved. Regime is read from arm~A's own thinking tokens
+per seed (below 4000 is the calibrated, short-thinking stratum the pre-registration's primary
+comparisons use; at or above it is the long-thinking stratum), and strata are never pooled. The
+pre-registration states its own limit: with twenty seeds per arm a non-significant test is
+inconclusive, not evidence of equality.
+
+Three deviations are recorded in the pre-registration file itself, each written before the cells it
+affects were run. The nonbinding runaway limits of the single-seat arms (0.30~USD and 150~s) bound at
+once on the format family under long thinking, so they were raised to 1.50~USD and 900~s for that
+family before any further format cell ran. A provider quota limit was hit partway through the format
+family; cells answered by the client's quota message were excluded by a rule that does not look at
+outcomes, and re-run (\S\ref{sec:results-account}). And after the account effect was found, the
+remaining cells were launched only while the long-thinking account was active, with seeds whose cells
+span both regimes reported in a stratum of their own.

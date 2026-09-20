@@ -109,6 +109,25 @@ rule that does not look at outcomes (any seat answered by the client's synthetic
 re-run; the rule, the excluded cells and the harness fix are in \texttt{paper/amendments.md}
 (2026-09-20 08:00 UTC entry).
 
+\subsection{A planted-defect build suite admitted no task}
+\label{sec:results-build-suite}
+
+The consensus benchmark does not measure the thing the hub was most visibly useful for during this
+project, which was non-author review of real work. We therefore tried to build a second suite:
+multi-module codebases with planted defects, scored on defects caught and defects shipped, comparing
+one agent, a pair, and a room at equal cost (\texttt{paper/prereg-build-suite.md}). No task passed
+admission. Across three generators and seven task instances, one Sonnet agent at medium effort caught
+9/9, 10/10, 36/36 and 45/45 planted defects. Scaling one generator gave 27/27 at 15 modules on each of
+three seeds, 347/360 at 40 modules over five seeds, the only signal below the ceiling and still far
+above the 0.30 to 0.70 admission band, and 180/180 at 100 modules on each of two seeds. The
+100-module result is an artifact worth stating: replicating one generator into shards made every
+shard's correct source byte-identical, and the agents found the copy shortcut unprompted. With no
+admissible task the three-arm comparison was not run. The negative result is itself informative: small
+and medium planted-defect codebases with a specification and public tests are at ceiling for a single
+current agent, so a suite that separates one agent from a team needs defects that only a multi-step
+scenario exposes, and shards that differ in specification rather than in name
+(\texttt{paper/amendments.md}, 2026-09-19 build-suite entry).
+
 \subsection{Cost per correct answer}
 \label{sec:results-cost}
 

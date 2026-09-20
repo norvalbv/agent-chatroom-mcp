@@ -20,6 +20,8 @@ export const SOURCES = [
   "bench/results/rq1-suite/rq1-table.md",
   "bench/results/rq1-arm-k/rq1-armk-table.md",
   "paper/prereg-arm-k.md",
+  "paper/prereg-confirmatory.md",
+  "paper/prereg-build-suite.md",
   "paper/amendments.md",
   "paper/protocol.md",
   "paper/budget.md",

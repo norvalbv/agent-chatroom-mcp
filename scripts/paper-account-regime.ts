@@ -6,6 +6,7 @@
  * Usage:
  *   node --import tsx scripts/paper-account-regime.ts SWITCH_LOG_JSON RESULTS_ROOT [--out PREFIX] [--tex FILE]
  *   node --import tsx scripts/paper-account-regime.ts --extract SWITCHER_LOG [--since ISO] > SWITCH_LOG_JSON
+ *   node --import tsx scripts/paper-account-regime.ts --mixed-seeds SWITCH_LOG_JSON CONFIRMATORY_DIR 4 > MIXED_SEEDS_JSON
  *
  * --extract reads the switcher's own log ("YYYY-MM-DD HH:MM:SS,mmm - INFO - Switched from account X to Y",
  * local time) and prints the sanitized JSON. It is run by the maintainer; the committed JSON is the source.
@@ -109,6 +110,39 @@ export function experimentAccounts(switches: Switch[], root: string) {
   return out;
 }
 
+/** Confirmatory seeds whose cells did not all run under one thinking regime. A seat's regime is the regime of the
+ * account(s) active over its interval (`longAccounts` = accounts observed to serve long thinking); a seat whose
+ * interval spans accounts of both regimes counts as both. Missing cells are ignored: the list is recomputed when they exist. */
+export function mixedSeeds(switches: Switch[], confirmatoryDir: string, longAccounts: number[]) {
+  const regimeOf = (a: number | null) => (a !== null && longAccounts.includes(a) ? "long" : "short");
+  const seeds = new Map<string, { task: string; seed: number; arms: Record<string, string[]> }>();
+  for (const cell of readdirSync(confirmatoryDir).sort()) {
+    const m = cell.match(/^(.*)-(A|AH|B|K|C)-seed(\d+)$/);
+    if (!m) continue;
+    const regimes = new Set<string>();
+    const walk = (dir: string, depth: number) => {
+      if (depth > 3) return;
+      const rp = join(dir, "result.json");
+      if (existsSync(rp)) {
+        try {
+          for (const seat of (JSON.parse(readFileSync(rp, "utf8")).seats ?? [])) {
+            const t0 = Date.parse(seat.started_at), t1 = Date.parse(seat.completed_at);
+            if (!Number.isFinite(t0) || !Number.isFinite(t1)) continue;
+            regimes.add(regimeOf(accountAt(switches, t0))); regimes.add(regimeOf(accountAt(switches, t1)));
+          }
+        } catch { /* unreadable result */ }
+      }
+      for (const e of readdirSync(dir, { withFileTypes: true })) if (e.isDirectory() && !SKIP.has(e.name)) walk(join(dir, e.name), depth + 1);
+    };
+    walk(join(confirmatoryDir, cell), 0);
+    const key = `${m[1]}-seed${m[3]}`;
+    const entry = seeds.get(key) ?? { task: m[1], seed: Number(m[3]), arms: {} };
+    entry.arms[m[2]] = [...regimes].sort();
+    seeds.set(key, entry);
+  }
+  return [...seeds.values()].filter((s) => new Set(Object.values(s.arms).flat()).size > 1).sort((a, b) => a.task.localeCompare(b.task) || a.seed - b.seed);
+}
+
 const median = (a: number[]) => { const s = [...a].sort((x, y) => x - y); return s.length ? s[Math.floor(s.length / 2)] : null; };
 
 export function buildTable(switches: Switch[], rows: SeatRow[], experiments: ReturnType<typeof experimentAccounts> = []) {
@@ -175,6 +209,14 @@ function main() {
     if (!src) throw Error("Usage: --extract SWITCHER_LOG [--since ISO]");
     const log: SwitchLog = { note: "Sanitized extract of the maintainer's Claude Code account-switcher log: UTC switch times and account slot numbers only.", switches: extractSwitches(readFileSync(src, "utf8"), since) };
     console.log(JSON.stringify(log, null, 2));
+    return;
+  }
+  if (args[0] === "--mixed-seeds") {
+    const [, logFile, dir, accounts] = args;
+    if (!logFile || !dir || !accounts) throw Error("Usage: --mixed-seeds SWITCH_LOG_JSON CONFIRMATORY_DIR LONG_ACCOUNTS(comma-separated)");
+    const longAccounts = accounts.split(",").map(Number);
+    const sw = (JSON.parse(readFileSync(logFile, "utf8")) as SwitchLog).switches;
+    console.log(JSON.stringify({ rule: "A seed is mixed when its cells did not all run under accounts of one thinking regime, judged from the account-switch log and each seat's start and end time (paper/amendments.md, 2026-09-20 08:00 UTC).", long_accounts: longAccounts, seeds: mixedSeeds(sw, resolve(dir), longAccounts) }, null, 2));
     return;
   }
   const [logPath, root] = args.splice(0, 2); let out: string | undefined; let tex: string | undefined;

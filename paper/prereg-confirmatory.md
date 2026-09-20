@@ -297,3 +297,16 @@ account than on two others, stable over two days, and accuracy moved with it.
    and is reported but excluded from paired tests. The thinking-token sentinel stays as a cross-check.
 4. Decided before the remaining cells exist, and open to the maintainer's overrule: no cell with a valid
    outcome is re-run for being on the "wrong" account.
+
+**Addendum 2026-09-20 08:50 UTC (mixed seeds by rule, before the remaining cells ran).** The mixed-seed rule
+of point 3 is now computed, not listed by hand: `scripts/paper-account-regime.ts --mixed-seeds` writes
+`bench/results/rq1-confirmatory/mixed-seeds.json` from the switch log, and `scripts/paper-rq1-confirmatory.ts
+--mixed-seeds` puts those seeds in their own `mixed-account` stratum. A seat spanning two accounts of the
+same regime (the 07:49 UTC switch from account 3 to account 1, both short) is not mixed. Applied to the
+cells that exist, the rule also catches interpreter seed 501: its A, AH and B cells ran short just before
+the 20:05 UTC switch on 2026-09-19 and its K and C cells ran long after it. That seed was the only
+interpreter seed the thinking-token sentinel had classed as calibrated, so the interpreter block has no
+clean short-regime seed at all. Consequence, stated plainly: the pre-registered primary comparisons use
+calibrated (short-regime) seeds only, the run was served by the long-thinking account, and those primary
+comparisons are therefore essentially unobserved. The long-thinking stratum is what this run measured, and
+it is reported as the pre-registration's secondary stratum, not promoted to primary.

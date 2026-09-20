@@ -1,5 +1,5 @@
 /** Five-arm confirmatory report. Only 501–520; pilot and historical rows never enter inference.
- * node --import tsx scripts/paper-rq1-confirmatory.ts RESULTS_DIR [--out PREFIX]
+ * node --import tsx scripts/paper-rq1-confirmatory.ts RESULTS_DIR [--out PREFIX] [--mixed-seeds FILE]
  * Fixed regime: direct A thinking <4000 = calibrated; >=4000 = long-thinking; output is descriptive.
  */
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
@@ -12,7 +12,10 @@ export const TASKS = ['stamp-interpreter', 'bench-printf-format'] as const;
 export const ARMS = ['A', 'AH', 'B', 'K', 'C'] as const;
 export const PAIRS = [['B','C'],['AH','C'],['K','C'],['AH','A'],['B','A'],['K','A'],['C','A']] as const;
 const SEEDS = Array.from({length:20},(_,i)=>501+i);
-type Regime = ThinkingRegime;
+type Regime = ThinkingRegime | 'mixed-account';
+/** Seeds whose five cells did not all run under one account regime (paper/amendments.md, 2026-09-20 08:00 UTC):
+ * reported in their own stratum, never entering the calibrated or long-thinking strata. Key: `${task}-seed${seed}`. */
+export type MixedSeeds = ReadonlySet<string>;
 export interface ConfirmatoryRun {
   task_id: string; arm: string; seed: number; outcome: string;
   cost_usd: number|null; thinking_tokens: number|null; output_tokens: number|null;
@@ -84,7 +87,8 @@ function wilson(passes:number,n:number):[number,number]|null {
   return [Math.max(0,center-half),Math.min(1,center+half)];
 }
 
-export function buildConfirmatoryTable(input:ConfirmatoryRun[]):ConfirmatoryTable {
+export function buildConfirmatoryTable(input:ConfirmatoryRun[],mixed:MixedSeeds=new Set()):ConfirmatoryTable {
+  const regimeOf=(task:string,seed:number,a:ConfirmatoryRun|undefined):Regime=>mixed.has(`${task}-seed${seed}`)?'mixed-account':regime(a);
   const runs=input.filter(r=>TASKS.includes(r.task_id as any)&&ARMS.includes(r.arm as any)&&SEEDS.includes(r.seed));
   const by=new Map<string,ConfirmatoryRun>();
   for(const r of runs) {const k=`${r.task_id}-${r.arm}-seed${r.seed}`;if(by.has(k))throw Error(`Duplicate observation ${k}`);by.set(k,r);}
@@ -92,11 +96,11 @@ export function buildConfirmatoryTable(input:ConfirmatoryRun[]):ConfirmatoryTabl
   for(const task of TASKS) {
     for(const seed of SEEDS) {
       const a=by.get(`${task}-A-seed${seed}`);
-      sentinels.push({task,seed,regime:regime(a),thinking_tokens:a?.thinking_tokens??null,output_tokens:a?.output_tokens??null});
+      sentinels.push({task,seed,regime:regimeOf(task,seed,a),thinking_tokens:a?.thinking_tokens??null,output_tokens:a?.output_tokens??null});
       for(const arm of ARMS) if(!by.has(`${task}-${arm}-seed${seed}`))missing.push(`${task}-${arm}-seed${seed}`);
     }
-    for(const stratum of ['calibrated','long-thinking','unknown'] as const) for(const arm of ARMS) {
-      const rs=runs.filter(r=>r.task_id===task&&r.arm===arm&&regime(by.get(`${task}-A-seed${r.seed}`))===stratum);
+    for(const stratum of ['calibrated','long-thinking','unknown',...(mixed.size?['mixed-account'] as const:[])] as const) for(const arm of ARMS) {
+      const rs=runs.filter(r=>r.task_id===task&&r.arm===arm&&regimeOf(task,r.seed,by.get(`${task}-A-seed${r.seed}`))===stratum);
       const outcome_counts:Record<string,number>={};for(const r of rs)outcome_counts[r.outcome]=(outcome_counts[r.outcome]??0)+1;
       const passes=outcome_counts.task_pass??0;
       // Confirmatory prereg overrides protocol §4: every recorded launched cell stays in the denominator.
@@ -146,10 +150,12 @@ export function renderConfirmatoryMarkdown(t:ConfirmatoryTable):string {
 }
 function main() {
   const args=process.argv.slice(2),dir=args.shift();let out:string|undefined;
-  while(args.length){const flag=args.shift();if(flag==='--out')out=args.shift();else throw Error(`Unknown option ${flag}`);}
-  if(!dir)throw Error('Usage: paper-rq1-confirmatory.ts RESULTS_DIR [--out PREFIX]');
+  let mixedPath:string|undefined;
+  while(args.length){const flag=args.shift();if(flag==='--out')out=args.shift();else if(flag==='--mixed-seeds')mixedPath=args.shift();else throw Error(`Unknown option ${flag}`);}
+  if(!dir)throw Error('Usage: paper-rq1-confirmatory.ts RESULTS_DIR [--out PREFIX] [--mixed-seeds FILE]');
+  const mixed=new Set<string>(mixedPath?(JSON.parse(readFileSync(resolve(mixedPath),'utf8')).seeds as {task:string;seed:number}[]).map(x=>`${x.task}-seed${x.seed}`):[]);
   const {runs,warnings}=loadConfirmatoryRuns(resolve(dir));
-  const table=buildConfirmatoryTable(runs);
+  const table=buildConfirmatoryTable(runs,mixed);
   const md=renderConfirmatoryMarkdown(table)+warnings.map(w=>`\nWarning: ${w}`).join('');
   if(out){const prefix=resolve(out);mkdirSync(dirname(prefix),{recursive:true});writeFileSync(`${prefix}.md`,md);writeFileSync(`${prefix}.json`,JSON.stringify({...table,warnings},null,2)+'\n');}
   console.log(md);

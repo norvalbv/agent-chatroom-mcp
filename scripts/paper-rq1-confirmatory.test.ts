@@ -112,3 +112,16 @@ test('launch-journal directories with absent or malformed results remain failed 
   assert.equal(classifyThinkingRegime(3999),'calibrated');
   assert.equal(classifyThinkingRegime(4000),'long-thinking');
 });
+
+test('a mixed-account seed gets its own stratum and leaves the calibrated and long-thinking strata (amendment 2026-09-20 08:00 UTC)', () => {
+  const runs: ConfirmatoryRun[] = [];
+  for (const seed of [516, 517]) for (const arm of ['A', 'AH', 'B', 'K', 'C']) runs.push(run(arm, seed, true, 'bench-printf-format'));
+  const plain = buildConfirmatoryTable(runs);
+  assert.equal(plain.cells.find(c => c.task === 'bench-printf-format' && c.arm === 'A' && c.regime === 'calibrated')!.n, 2);
+  assert.ok(!plain.cells.some(c => c.regime === 'mixed-account'), 'no mixed stratum unless seeds are declared mixed');
+  const t = buildConfirmatoryTable(runs, new Set(['bench-printf-format-seed517']));
+  assert.equal(t.cells.find(c => c.task === 'bench-printf-format' && c.arm === 'A' && c.regime === 'calibrated')!.n, 1);
+  assert.equal(t.cells.find(c => c.task === 'bench-printf-format' && c.arm === 'AH' && c.regime === 'mixed-account')!.n, 1);
+  assert.equal(t.sentinels.find(s => s.task === 'bench-printf-format' && s.seed === 517)!.regime, 'mixed-account');
+  assert.equal(t.comparisons.length, 14, 'the comparison family is unchanged');
+});

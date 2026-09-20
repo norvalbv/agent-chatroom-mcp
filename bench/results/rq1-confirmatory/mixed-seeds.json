@@ -1,0 +1,30 @@
+{
+  "rule": "A seed is mixed when its cells did not all run under accounts of one thinking regime, judged from the account-switch log and each seat's start and end time (paper/amendments.md, 2026-09-20 08:00 UTC).",
+  "long_accounts": [
+    4
+  ],
+  "seeds": [
+    {
+      "task": "stamp-interpreter",
+      "seed": 501,
+      "arms": {
+        "A": [
+          "short"
+        ],
+        "AH": [
+          "short"
+        ],
+        "B": [
+          "short"
+        ],
+        "C": [
+          "long"
+        ],
+        "K": [
+          "long",
+          "short"
+        ]
+      }
+    }
+  ]
+}

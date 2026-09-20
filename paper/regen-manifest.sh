@@ -17,3 +17,4 @@ node --import tsx scripts/paper-rq1-tex.ts bench/results/rq1-suite bench/results
 node --import tsx scripts/paper-fig-data.ts bench/results/rq1-suite bench/results/rq1-arm-k --out paper/generated/fig-data.json
 node --import tsx scripts/paper-fig-tables.ts paper/generated/fig-data.json paper/tables
 python3 scripts/paper-fig.py paper/generated/fig-data.json paper/figures
+node --import tsx scripts/paper-account-regime.ts bench/results/account-switch-log/switches.json bench/results --out paper/generated/account-regime > /dev/null

@@ -1,0 +1,106 @@
+{
+  "threshold": 4000,
+  "switches_in_log": 23,
+  "runs_in_log_window": 1919,
+  "runs_straddling_a_switch": 5,
+  "thinking": [
+    {
+      "account": 1,
+      "n": 40,
+      "long": 0,
+      "median": 968,
+      "min": 463,
+      "max": 1295
+    },
+    {
+      "account": 3,
+      "n": 11,
+      "long": 0,
+      "median": 716,
+      "min": 595,
+      "max": 1316
+    },
+    {
+      "account": 4,
+      "n": 357,
+      "long": 356,
+      "median": 7322,
+      "min": 3742,
+      "max": 31604
+    }
+  ],
+  "output": [
+    {
+      "account": 1,
+      "task": "bench-printf-format",
+      "n": 337,
+      "median": 4645,
+      "min": 3789,
+      "max": 6595
+    },
+    {
+      "account": 3,
+      "task": "bench-printf-format",
+      "n": 26,
+      "median": 4225,
+      "min": 3726,
+      "max": 5181
+    },
+    {
+      "account": 4,
+      "task": "bench-printf-format",
+      "n": 124,
+      "median": 24976,
+      "min": 16212,
+      "max": 43700
+    },
+    {
+      "account": 1,
+      "task": "sched-trace",
+      "n": 5,
+      "median": 2493,
+      "min": 1962,
+      "max": 3359
+    },
+    {
+      "account": 3,
+      "task": "sched-trace",
+      "n": 5,
+      "median": 2934,
+      "min": 1546,
+      "max": 4022
+    },
+    {
+      "account": 1,
+      "task": "stamp-2",
+      "n": 368,
+      "median": 2228,
+      "min": 1796,
+      "max": 4773
+    },
+    {
+      "account": 3,
+      "task": "stamp-2",
+      "n": 10,
+      "median": 1892,
+      "min": 1737,
+      "max": 2077
+    },
+    {
+      "account": 1,
+      "task": "stamp-interpreter",
+      "n": 590,
+      "median": 1716,
+      "min": 1357,
+      "max": 2232
+    },
+    {
+      "account": 4,
+      "task": "stamp-interpreter",
+      "n": 313,
+      "median": 7310,
+      "min": 4494,
+      "max": 16896
+    }
+  ]
+}

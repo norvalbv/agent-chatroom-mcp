@@ -169,7 +169,7 @@ export function renderConfirmatoryTex(t:ConfirmatoryTable):string {
   const esc=(x:string)=>x.replace(/_/g,'\\_');
   const label:Record<string,string>={'calibrated':'short thinking','long-thinking':'long thinking','mixed-account':'mixed accounts','unknown':'unknown'};
   const L:string[]=['\\begin{tabular}{llccccc}','\\toprule',
-    '\\multicolumn{7}{l}{\\footnotesize Descriptive rows retain printf seed 501 and its costs; it is excluded from both primary and exploratory comparisons.} \\\\',
+    '\\multicolumn{7}{l}{\\footnotesize Descriptive rows retain printf seed 501; it is excluded from both primary and exploratory comparisons.} \\\\',
     '\\midrule','Family & Stratum & A & AH & B & K & C \\\\','\\midrule'];
   for(const task of TASKS)for(const stratum of ['calibrated','long-thinking','mixed-account','unknown'] as const){
     const cells=ARMS.map(arm=>t.cells.find(c=>c.task===task&&c.regime===stratum&&c.arm===arm));

@@ -73,7 +73,11 @@ test("the pool is electorate() minus the target's whole connection: a sibling id
   hub.kickVote(ROOM, c.id, "D", "kick");
   assert.equal(kv.status, "kicked");
   assert.equal(room.participants.get(d.id)!.active, false);
-  // the sibling is refused too: it is the same connection (join() blocks it; requireParticipant refuses the kicked seat)
+  // the sibling goes with the target (same connection): marked left and kicked, so it cannot sit in the electorate
+  assert.equal(room.participants.get(d2.id)!.active, false, "alias on the kicked connection is removed too");
+  assert.ok(room.participants.get(d2.id)!.kicked);
+  assert.throws(() => hub.send(ROOM, d2.id, "alias still here"), /KICKED/);
+  assert.ok(room.messages.some((m) => m.kind === "system" && /D2 \(same connection\) removed with them/.test(m.content)));
   assert.throws(() => hub.join(ROOM, "D3", "test", {}, undefined, "s4"), /KICKED/);
   // the removed seat is refused even on a read-only path the guard resolves it for
   assert.throws(() => hub.refuseKicked(ROOM, d.id), /KICKED/);

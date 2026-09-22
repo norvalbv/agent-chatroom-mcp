@@ -106,8 +106,10 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
       let participant = telemetryActor(room, a?.participant_id);
       let outcome: CallOutcome = "error";
       try {
-        // a seat removed by kick vote is told so on its very next call for that room, reads included
-        if (room && participant) hub.refuseKicked(room, participant);
+        // a seat removed by kick vote is told so on its very next call for that room, reads included. Every id this
+        // connection holds there is checked, not only the resolved actor: a connection owning target+alias resolves
+        // no actor for tools without participant_id (room_status, board_get), and the kick bans the connection.
+        if (room) for (const id of me.get(room) ?? []) hub.refuseKicked(room, id);
         const data = await fn(args);
         const result = ok(data);
         // join_room can create a second identity: use its issued id, not an ambiguous

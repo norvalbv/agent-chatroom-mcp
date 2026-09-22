@@ -2649,24 +2649,34 @@ export class Hub {
     const room = this.getRoom(roomName);
     const p = this.kickTarget(room, target);
     const why = reason.trim().slice(0, 600) || "removed";
-    p.active = false;
-    p.lastActiveAt = now();
-    p.kicked = { by, reason: why, at: p.lastActiveAt };
-    p.leaveReason = `kicked (${by}): ${why}`;
-    this.persist({ type: "leave", room: roomName, p });
-    const claims = [...room.board.entries()].filter(([k, e]) => k.startsWith("claim/") && e.by === p.name && e.text.trim());
-    for (const [k, e] of claims) {
-      let released: Record<string, unknown> = {};
-      try { released = JSON.parse(e.text) as Record<string, unknown>; } catch { released = { note: e.text }; }
-      released = { ...released, status: "released", released_from: p.name, released_by: by, released_at: p.lastActiveAt };
-      const entry: BoardEntry = { ...e, text: JSON.stringify(released), by: "system", updatedAt: p.lastActiveAt };
-      this.applyBoard(room, k, entry);
-      this.persist({ type: "board", room: roomName, key: k, entry });
+    // identity is the connection: every other active name on the target's connection goes with it, or an alias
+    // that can never call again would sit in the electorate and block quorum
+    const seats = [p, ...(p.session ? this.activeParticipants(room).filter((x) => x.id !== p.id && x.session === p.session && x.agent !== "human") : [])];
+    const at = now();
+    const claims: string[] = [];
+    for (const s of seats) {
+      s.active = false;
+      s.lastActiveAt = at;
+      s.kicked = { by, reason: why, at };
+      s.leaveReason = `kicked (${by}): ${why}`;
+      this.persist({ type: "leave", room: roomName, p: s });
+      for (const [k, e] of room.board.entries()) {
+        if (!k.startsWith("claim/") || e.by !== s.name || !e.text.trim()) continue;
+        let released: Record<string, unknown> = {};
+        try { released = JSON.parse(e.text) as Record<string, unknown>; } catch { released = { note: e.text }; }
+        released = { ...released, status: "released", released_from: s.name, released_by: by, released_at: at };
+        const entry: BoardEntry = { ...e, text: JSON.stringify(released), by: "system", updatedAt: at };
+        this.applyBoard(room, k, entry);
+        this.persist({ type: "board", room: roomName, key: k, entry });
+        claims.push(k);
+      }
+      for (const kv of room.kickVotes.values()) if (kv.status === "open" && kv.target !== s.id && kv.by.id === s.id && Object.keys(kv.ballots).length <= 1) this.settleKick(room, kv, "dropped", `${s.name}, who started it, was removed`);
     }
-    for (const kv of room.kickVotes.values()) if (kv.status === "open" && kv.target !== p.id && kv.by.id === p.id && Object.keys(kv.ballots).length <= 1) this.settleKick(room, kv, "dropped", `${p.name}, who started it, was removed`);
+    const aliases = seats.slice(1).map((s) => this.shown(room, s));
     this.post(room, "system", undefined,
       `${this.shown(room, p)} was removed from the room by ${by}: ${why}.` +
-      (claims.length ? ` Released ${claims.length} claim/* entr${claims.length === 1 ? "y" : "ies"} (${claims.map(([k]) => k).join(", ")}): status is now "released", content kept, anyone may claim the area.` : "") +
+      (aliases.length ? ` ${aliases.join(", ")} (same connection) removed with them.` : "") +
+      (claims.length ? ` Released ${claims.length} claim/* entr${claims.length === 1 ? "y" : "ies"} (${claims.join(", ")}): status is now "released", content kept, anyone may claim the area.` : "") +
       ` Their next hub call is refused with KICKED; they cannot rejoin.`);
     for (const pr of room.proposals.values()) if (pr.status === "open") this.evaluate(room, pr);
     return p;

@@ -849,7 +849,7 @@ assert.deepEqual(tools, ["amend", "board_get", "board_set", "challenge", "join_r
   const room = "kick";
   await a.call("join_room", { room, name: "claude-1", agent: "claude", expected_participants: 3 });
   await b.call("join_room", { room, name: "codex-1", agent: "codex" });
-  await c.call("join_room", { room, name: "third-1", agent: "claude" });
+  const jc = await c.call("join_room", { room, name: "third-1", agent: "claude" });
   await c.call("board_set", { room, key: "claim/orphan", text: JSON.stringify({ area: "orphan", owner: "third-1", status: "building" }) });
   await assert.rejects(a.call("kick_vote", { room, target: "third-1", vote: "keep" }), /no open vote/);
   await assert.rejects(a.call("kick_vote", { room, target: "claude-1", reason: "self-kick must be refused" }), /cannot vote to kick yourself/);
@@ -865,10 +865,16 @@ assert.deepEqual(tools, ["amend", "board_get", "board_set", "challenge", "join_r
   assert.equal((await human.json()).status, "dropped", "a human keep vetoes the vote");
   const again = await a.call("kick_vote", { room, target: "third-1", reason: "smoke: still no heartbeat, restarting the vote" });
   assert.equal(again.status, "open", "a settled vote can be restarted");
+  // a second name on the target's connection: it cannot ballot, does not raise the threshold, and goes with the target
+  const alias = await c.call("join_room", { room, name: "third-1b", agent: "claude" });
+  assert.equal((await a.call("room_status", { room })).kick_votes.at(-1).needed, 2, "the alias does not enlarge the threshold");
+  await assert.rejects(c.call("kick_vote", { room, target: "third-1", vote: "keep", participant_id: alias.participant_id }), /shares your connection/);
   const done = await b.call("kick_vote", { room, target: "third-1", vote: "kick" });
   assert.equal(done.status, "kicked");
-  await assert.rejects(c.call("send_message", { room, content: "still here?" }), /KICKED: you \(third-1\) were removed from "kick"/);
-  await assert.rejects(c.call("wait_for_messages", { room, timeout_ms: 0 }), /KICKED/);
+  await assert.rejects(c.call("send_message", { room, content: "still here?", participant_id: jc.participant_id }), /KICKED: you \(third-1\) were removed from "kick"/);
+  await assert.rejects(c.call("send_message", { room, content: "alias still here?", participant_id: alias.participant_id }), /KICKED/, "the alias was removed with the target");
+  await assert.rejects(c.call("wait_for_messages", { room, timeout_ms: 0, participant_id: jc.participant_id }), /KICKED/);
+  // identity-less reads from a connection holding two names resolve no actor; the guard still refuses on any kicked id it owns
   await assert.rejects(c.call("room_status", { room }), /KICKED/, "reads on the kicked connection are refused too, so the seat learns on its very next call");
   await assert.rejects(c.call("board_get", { room, key: "claim/orphan" }), /KICKED/);
   await assert.rejects(c.call("list_agents", { room }), /KICKED/);

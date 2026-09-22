@@ -8,9 +8,9 @@
  *
  * Usage: node --import tsx scripts/paper-number-audit.ts   (exit 1 and a list of residue on failure)
  */
-import { readdirSync, readFileSync, existsSync } from "node:fs";
+import { readdirSync, readFileSync, existsSync, statSync } from "node:fs";
 import { join, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 const ROOT = resolve(fileURLToPath(import.meta.url), "../..");
 
@@ -28,13 +28,14 @@ export const SOURCES = [
   "paper/figures.md",
   "docs/token-round-0918.md",
   "docs/review-round-0918.md",
+  "docs/arm-c-process-trace.md",
   "tasks/SUITE.json",
 ];
 
 function readTree(path: string): string[] {
   const abs = join(ROOT, path);
   if (!existsSync(abs)) return [];
-  if (!abs.endsWith(".md") && !abs.endsWith(".json") && !abs.endsWith(".tex") && !abs.includes(".")) {
+  if (statSync(abs).isDirectory()) {
     return readdirSync(abs).filter((f) => /\.(md|json|tex)$/.test(f)).map((f) => readFileSync(join(abs, f), "utf8"));
   }
   return [readFileSync(abs, "utf8")];
@@ -102,7 +103,7 @@ export function sourceHas(num: string, sourceText: string, sourceDecimals: numbe
   return sourceDecimals.some((d) => Math.abs(d - v) < 0.5 * 10 ** -places + 1e-12);
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
   const sourceTexts = SOURCES.flatMap(readTree);
   const sourceText = sourceTexts.join("\n");
   const pairs = jsonNumberSets(sourceTexts);

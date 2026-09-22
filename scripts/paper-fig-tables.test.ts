@@ -59,7 +59,8 @@ test("renderCostTable: caption's window sentence is derived from the rows' own d
   const tex = renderCostTable(data);
   // Must take the EARLIEST across A and C (07:43, not a hand-typed 07:44) and the LATEST (11:30).
   assert.match(tex, /Arms A and C ran together on 2026-09-19, 07:43--11:30 UTC/);
-  assert.match(tex, /arm K ran later the same day, 13:22--15:33 UTC/);
+  assert.match(tex, /arm K ran 13:22--15:33 UTC, before the account switch logged at 16:38 UTC/);
+  assert.doesNotMatch(tex, /overlaps|shift window|judged pre-shift/);
 });
 
 test("end-to-end CLI: regenerates both .tex files from the real committed fig-data.json", () => {

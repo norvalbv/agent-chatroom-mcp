@@ -1,58 +1,15 @@
-\section{Limitations and Future Work}
-\label{sec:limitations}
+\section{What this does not show}
+\label{sec:limits}
 
-\subsection{Research questions not resolved}
+The three fixed tasks were chosen for known, single-trap failure modes after pilot screening. Repeated seeds measure variation on those task instances; the two \texttt{stamp} programs are one family. Their observed minority-versus-majority answer pattern is a specific diagnostic for the vote selector, not a rule for multi-agent systems. Study 1's direct C--K tests lack the precision to establish equal accuracy. The planned vote-versus-chatroom comparison under one stable serving condition was never run at adequate power.
 
-The historical three-arm study executed RQ1 and its arm-K extension. Arm~B, a no-chat
-builder-plus-reviewer pair, has since run in the later five-arm study, whose inference limits are
-stated in Section~\ref{sec:study-status}. The earlier statement that this arm had never run is no
-longer current. RQ3, per-mechanic ablation across the seven hub mechanics listed in protocol \S2.3,
-has no real-model run and remains future work, not a negative result.
 
-\subsection{Task-suite retirements}
+The different Study 1 collection windows are relevant even though the logged account switch came after K: clock time alone does not guarantee every unrecorded serving detail was fixed. The evidence warrants a direct comparison of the observed pass counts, with uncertainty, rather than a claim that the two protocols were exposed to identical hidden conditions. Conversely, the superseded early shift estimate is not evidence that K crossed the logged account boundary.
 
-\texttt{bench-long-brief} was retired from this suite (\texttt{paper/amendments.md}, 2026-09-18): its
-handoff/survival scoring is structurally unmeasurable on a single-seat arm~A, so it cannot support an
-accuracy comparison across arms under this study's method. About 45 candidate task designs were piloted
-in all, including the three admitted (\texttt{paper/amendments.md}: "About 45 candidate designs in all;
-three are in band"); the roughly 42 that were not admitted span cross-document retrieval, data cleaning,
-layered rule precedence, tick-scheduler simulation, and several invented-machine languages, and were
-rejected either at ceiling (3 of 3, or above 0.9 on ten seeds) or as ambiguous. None of that
-negative-result space is represented in the primary comparison; it is summarized, not reproduced, in
-\texttt{paper/amendments.md}.
+The maintainer's working pipeline---prompt, prior-art agent, plan, build, and devkit review---has never been compared with one agent, a builder--reviewer pair, or a room. The marginal value of review by a non-author was not identified either. B ran in Study 2 and in a small pilot, but the Study 2 primary was essentially absent. A separate build-suite diagnostic reached a 9/9 ceiling in every cell. The Study 1 seat-summary tallies report corrections after disagreement; they are self-reports and cannot separate review from other room activity.
 
-\subsection{Two families is not a benchmark}
+The bundled chatroom build was compared with other arms, but its individual mechanics were not ablated. Regression tests show that gates and assignments operate as coded; one bundled-build trial is not a causal estimate for a gate. The retained room artifacts also lack the event sequence needed to reconstruct which action corrected an answer. No effect size is assigned here to blind openings, challenge, amended proposals, quote-checked votes, reviewer assignment, or verification.
 
-The admitted suite spans two failure-mechanism families (scope-capture; exact numeric formatting), not
-a broad benchmark. A mechanic, or an aggregation strategy, that helps on one family and hurts on the
-other is exactly the kind of result this suite exists to surface, but three tasks in two families cannot
-support a general claim about "code tasks" or "aggregation" beyond these two specific mechanisms
-(Section~\ref{sec:threats}).
+Other engineering observations are outside the task-success comparison. Held waits were measured at 115.6 million versus 53.6 million tokens in one room each on different tasks, so that contrast is observational. OpenRouter sticky-session caching was mock-tested only. Checkpoint trimming has no answer-quality test. None of these results supports a claim about the measured A, B, C, or K accuracy differences.
 
-\subsection{System-level cost and process findings are separate contributions}
-
-The token-consumption round (\texttt{docs/token-round-0918.md}) and the peer-review round
-(\texttt{docs/review-round-0918.md}) measure this project's own build process, not the arms compared in
-Section~\ref{sec:results}; they are reported as system contributions in their own right
-(Section~\ref{sec:system}) with their own methodology, and are not folded into RQ1's task-success or
-cost-per-correct-answer numbers.
-
-\subsection{Future work}
-
-Adequately observing the registered primary comparison and running RQ3;
-a task suite broad enough to support family-level
-generalization across more than two failure mechanisms; and, if the chatroom's mechanics are ever shown
-to add value beyond sampling on a broader suite, testing whether a learned or structural minority-override
-mechanism \citep{He2026} could recover further value specifically on tasks like
-\texttt{bench-printf-format}, where the correct answer is not the population's plurality and no amount
-of aggregation-by-agreement can find it.
-
-The mid-study thinking-budget shift documented in Section~\ref{sec:threats}, which turned out to be a
-switch between subscription accounts, motivates four concrete protocol
-changes for any future run on this harness, stated in \texttt{paper/amendments.md} and repeated here
-because they bear directly on reproducibility: record thinking and output tokens per run as a regime
-indicator so a shift is visible immediately rather than discovered after the fact; record, and where
-possible pin, the account or API key that serves each run, because the same alias, CLI and settings did
-not give the same thinking budget on every account; pin a dated model snapshot where the
-provider allows it; and never pool runs collected across a detected boundary into one
-estimate, even when, as here, the headline pass-rate numbers turn out not to have been affected.
+The active account and effort settings were not randomized. The account association does not reveal whether a plan tier, provider-side experiment, or another serving condition produced the different thinking-token distributions. The measured pass rates, costs, and ceiling on \texttt{stamp-interpreter} do not transfer to newer models. What can transfer is the comparison method and the practice of recording model, account, time, and per-run telemetry together. The observed answer-cluster pattern remains a hypothesis for a new prospective test.

@@ -1,123 +1,12 @@
-% Expects \appendix to have been issued once by main.tex before this file is \input.
-\section{Reproducibility Appendix}
+% main.tex issues \appendix before this file.
+\section{Reproducibility}
 \label{sec:reproducibility}
 
-\subsection{Build}
+The repository's \texttt{paper/README.md} gives the commands for inspecting the five-arm snapshot, regenerating tables and figures, auditing prose numbers, and building the manuscript. The two study specifications are \texttt{paper/protocol.md}, \texttt{paper/prereg-arm-k.md}, and \texttt{paper/prereg-confirmatory.md}; dated deviations and exclusions are in \texttt{paper/amendments.md}. Those records distinguish a planned comparison from a later analysis.
 
-Repository \texttt{agent-chatroom-mcp}, the commit named in \texttt{paper/README.md} (the integration
-branch this paper was built from; \texttt{npm install} is required before any generator script below,
-since they run under \texttt{tsx} against this repository's own dependencies).
 
-\begin{footnotesize}
-\begin{verbatim}
-npm install
-npm run build
-npm test
-\end{verbatim}
-\end{footnotesize}
+For Study 1, the generated A--C family table is a post-data family analysis, while the original per-task tests remain in the suite report. The arm-K report keeps its pre-registered six-test Holm family; the additional pooled interpreter numbers are explicitly exploratory. For Study 2, the generated report prints descriptive cells and the inferential samples separately. The latter remove the mixed-account seeds and printf seed 501, and distinguish the registered short-thinking primary from the later long-thinking tests. Reading one descriptive denominator as an inferential denominator changes the question.
 
-\texttt{npm test} runs \texttt{scripts/offline-runner.mjs}; its printed command count drifts over time
-and must be re-read at the commit actually used, not cited from this text
-(\texttt{paper/system.md}\,\S5).
+The outcome artifacts are under \texttt{bench/results/rq1-suite}, \texttt{bench/results/rq1-arm-k}, and \texttt{bench/results/rq1-confirmatory}. The sanitized account switch times are in \texttt{bench/results/account-switch-log/switches.json}. Generated reports in \texttt{paper/generated} retain the per-arm denominators, prices, strata, and warnings used here. Study 1's account-window qualification follows the logged switch time; the earlier local-time estimate in the amendments was superseded. For the room-correction tallies, \texttt{docs/arm-c-process-trace.md} states the manual criteria and names representative artifacts.
 
-\subsection{RQ1 grid: arms A and C, seeds 101--140}
-
-\begin{footnotesize}
-\begin{verbatim}
-node --import tsx scripts/bench-grid.ts \
-  --tasks stamp-interpreter,stamp-2,bench-printf-format \
-  --seeds 101,102,103,104,105,106,107,108,109,110,111,112,113,114,115,116,117,118,119,120, \
-          121,122,123,124,125,126,127,128,129,130,131,132,133,134,135,136,137,138,139,140 \
-  --arms A,C --model sonnet --max-cost-usd 95 \
-  --results-dir bench/results/rq1-suite --port-base 19850
-\end{verbatim}
-\end{footnotesize}
-
-(\texttt{paper/amendments.md}, "Grid command and cost estimate for the primary suite"; the seed list is
-written out in full because macOS's \texttt{seq -s, 1 40} appends a trailing comma that
-\texttt{scripts/bench-grid.ts}'s argument parser would otherwise read as a 41st, empty seed. The grid
-always runs arm~C before its paired arm~A for a given (task, seed), because arm~A's budget is derived
-from arm~C's realized spend.)
-
-\subsection{Arm K grid, seeds 101--140}
-
-\begin{footnotesize}
-\begin{verbatim}
-node --import tsx scripts/bench-grid.ts \
-  --tasks stamp-interpreter,stamp-2,bench-printf-format \
-  --seeds 101,102,103,104,105,106,107,108,109,110,111,112,113,114,115,116,117,118,119,120, \
-          121,122,123,124,125,126,127,128,129,130,131,132,133,134,135,136,137,138,139,140 \
-  --arms K --k stamp-interpreter=10,stamp-2=8,bench-printf-format=7 \
-  --model sonnet --results-dir bench/results/rq1-arm-k --port-base 19850
-\end{verbatim}
-\end{footnotesize}
-
-paired against the arm-C results already written to \texttt{bench/results/rq1-suite}
-(\texttt{scripts/bench-grid.ts} refuses an arm-K group whose paired arm-C result does not exist under
-\texttt{--results-dir}). Each group internally invokes
-\texttt{scripts/bench-ak.ts TASK\_DIR K SEED --root ... --arm-c-result ...}, running $k$ unmodified
-arm-A attempts sub-seeded \texttt{seed*1000+i} and selecting one by the oracle-free rule for that task's
-kind (plurality of normalized answers for the two \texttt{stamp} tasks; MBR-exec execution agreement,
-primary, plus signature plurality, exploratory, for \texttt{bench-printf-format}; see
-Section~\ref{sec:method}).
-
-\subsection{Window control}
-
-Originally designed as arm~C and arm~K interleaved per seed on \texttt{stamp-interpreter} and
-\texttt{stamp-2}, 20 seeds (201--220), writing to \texttt{bench/results/rq1-window-control} (progress
-log: \texttt{logs/rq1-window-control.log}, not committed -- \texttt{logs/} is gitignored). This run was
-stopped after 3 runs (\$5.76) when the post-shift cost increase described in
-Section~\ref{sec:threats} made the planned 80 runs exceed the control's budget, and was redesigned,
-with the intent of staying inside the post-shift regime, at reduced scope: \texttt{stamp-interpreter} only, 12 seeds
-(201--212), log \texttt{logs/rq1-window-control-2.log} (\texttt{paper/amendments.md}, 2026-09-19
-thinking-budget entry). Both the original and redesigned runs match \texttt{scripts/bench-grid.ts} run
-the same way as the two grids above, with the corresponding \texttt{--tasks}, \texttt{--seeds}, and
-\texttt{--results-dir} flags; no committed wrapper script names either exact invocation, so a reader
-reproducing them should confirm the flags against \texttt{scripts/bench-grid.ts}'s own argument parser
-at the commit named in \S\ref{sec:reproducibility}. The completed result is committed in \texttt{c82124d}. Its output-token scale changed back during
-the control; Section~\ref{sec:results} reports separate long, crossover, and short cohorts generated
-from the committed results, never a pooled result across that boundary.
-
-\subsection{Tables, statistics, figures, and the prose-number audit}
-
-\begin{footnotesize}
-\begin{verbatim}
-bash paper/regen.sh
-\end{verbatim}
-\end{footnotesize}
-
-\texttt{paper/regen.sh} runs every generator listed in \texttt{paper/regen-manifest.sh} --
-\texttt{scripts/paper-rq1-table.ts}, \texttt{scripts/paper-rq1-armk.ts}, \texttt{scripts/paper-rq1-family.ts}
-and \texttt{scripts/paper-rq1-tex.ts} (results tables and statistics), and
-\texttt{scripts/paper-fig-data.ts}, \texttt{scripts/paper-fig-tables.ts} and \texttt{scripts/paper-fig.py}
-(figures) -- diffs everything under \texttt{bench/results/}, \texttt{paper/tables/},
-\texttt{paper/figures/} and \texttt{paper/generated/} against the working tree, and fails if
-regenerating changes anything main.tex already includes. It then runs
-\texttt{scripts/paper-number-audit.ts}, which extracts every decimal, fraction, and $p$-value written
-into \texttt{paper/sections/*.tex} prose and fails on any that does not appear in a generated table, a
-committed \texttt{bench/results} table, or one of the pre-registration/decision documents
-(\texttt{paper/prereg-arm-k.md}, \texttt{paper/amendments.md}, \texttt{paper/protocol.md},
-\texttt{paper/budget.md}, \texttt{paper/figures.md}, \texttt{docs/token-round-0918.md},
-\texttt{docs/review-round-0918.md}, \texttt{tasks/SUITE.json}) -- so no number in the prose can drift
-from what a generator or a pre-registered constant actually says. Every generator reads only committed
-\texttt{result.json} files under \texttt{bench/results/}; none accepts a hand-typed number, and
-\texttt{scripts/rq1-stats.ts} implements the two-proportion $z$-test, Fisher's exact test, and
-Holm-Bonferroni correction with no external statistics dependency.
-
-\subsection{Citation check and PDF build}
-
-\begin{footnotesize}
-\begin{verbatim}
-paper/check-citations.sh
-tectonic paper/main.tex
-\end{verbatim}
-\end{footnotesize}
-
-\texttt{paper/check-citations.sh} resolves every arXiv id cited in \texttt{paper/*.md} and
-\texttt{paper/refs.bib} against \texttt{export.arxiv.org} and checks the cited title matches; it does
-not check numbers, only citations (Section~\ref{sec:reproducibility}'s number audit is a separate step,
-above). Build tooling installed for this room, user-locally only (recorded with these exact commands in
-\texttt{paper/README.md}): \texttt{brew install tectonic}; \texttt{pip3 install --user
---break-system-packages matplotlib} (the \texttt{--break-system-packages} flag was required on the
-build machine used, whose system Python refuses an unqualified \texttt{--user} install under
-PEP~668).
+The manuscript inputs generated tables without editing them. \texttt{paper/regen-manifest.sh} names the generators and their committed inputs; \texttt{scripts/paper-number-audit.ts} checks every typed decimal, fraction, and percentage in the section sources against those inputs and records. The audit confirms provenance of a printed number, not its interpretation. Its source list includes the manual process-trace note only for the reported lower-bound room tallies. The cost-table generator also places the K collection window before the switch time from the logged record; regenerated table rows were not edited to make that correction. Re-running the five-arm report should preserve its missing, mixed-account, and excluded rows rather than silently filling or pooling them.

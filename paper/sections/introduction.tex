@@ -1,86 +1,12 @@
 \section{Introduction}
 \label{sec:introduction}
 
-Multi-agent large-language-model systems are routinely proposed as a way to improve on single-agent
-accuracy, through debate, deliberation, or role-structured coordination. Whether the resulting gain,
-where one is observed, is due to some property of the coordination protocol itself or is only the
-familiar gain from sampling several independent attempts and aggregating them is disputed in the
-literature, and at least one study finds that plain multi-agent debate does not reliably beat simpler
-sampling baselines \citep{Smit2023} (see Section~\ref{sec:related-work}). Separating these two
-explanations requires a budget-matched, oracle-scored comparison in which the sampling baseline is
-built deliberately, not assumed away; that comparison is this paper's subject.
+A chatroom can give several language-model agents a chance to challenge and revise one another's work. It also buys more attempts at the task. To assess what the conversation contributes, the relevant comparison is with independent attempts chosen without seeing the answer, at a similar cost. This paper makes that comparison on a small, deliberately difficult task suite, then shows how a change in the serving account limited a later, broader study.
 
-\paragraph{Current evidence and scope.}
-\label{sec:study-status}
-The historical three-arm study and its window control are distinct from the later five-arm run.
-That later, separately registered run (\texttt{paper/prereg-confirmatory.md}) includes arms A, AH
-(one agent at high effort), B (builder plus reviewer), K and C. The committed snapshot is incomplete and has executed cells, including
-arm~B, but its pre-registered primary comparisons use the short-thinking regime and are essentially
-unobserved. Most collected cells were served by the long-thinking subscription account; comparisons
-added for that stratum after results were seen are explicitly exploratory. Mixed-account seeds are
-reported separately and excluded from within-regime paired inference. These are the conclusions of
-the dated \texttt{paper/amendments.md} entries and addenda for 2026-09-20, not a promotion of the
-secondary stratum to primary. The later run's cell coverage, exclusions and comparisons can be
-reconstructed using \texttt{paper/README.md}; its report must accompany any claim about that run.
-The account association does not identify which unobserved serving condition caused the difference
-(Section~\ref{sec:results-account}).
+The measured system is \texttt{agent-chatroom-mcp}. Every run reported here used \texttt{claude-sonnet-5} under the \texttt{sonnet} alias between 18 and 20 September 2026. The subscription account active at run time is reconstructed from a sanitized switch log. Pass rates, costs, and which task was near ceiling belong to those dates, model and accounts. They are not predictions for newer models. The study method and the need to retain serving provenance do carry forward; the observed minority-versus-majority pattern is a hypothesis to test elsewhere.
 
-We report a controlled study on this project's own multi-agent coordination hub
-(\texttt{agent-chatroom-mcp}), comparing three arms at matched spend on the same task briefs, scored by
-the same hidden-fixture, machine-checked oracle in every case (no arm's own consensus process, and no
-language model, is ever used to judge correctness -- Section~\ref{sec:method}):
+\textbf{Study 1} used seeds 101--140 on three fixed tasks, comparing one agent (A), a three-seat chatroom (C), and independent attempts with oracle-free selection (K). The two interpreter programs share one scoping trap and count as a single task family. The third task asks for exact numeric formatting. Arms A and C were interleaved by seed; K ran later that day, before the account switch logged at 16:38 UTC. Mean spend was matched between C and K, but individual paired seeds were not cost matched. All outcomes came from a machine oracle, not from the agents' own verdicts.
 
-\begin{itemize}
-\item \textbf{Arm A.} One agent, working alone, with a budget ceiling matched after the fact to arm~C's
-  realized spend on the same task and seed.
-\item \textbf{Arm C.} The hub's full mechanics -- blind independent opening answers, a challenge-gated
-  propose/amend/vote cycle requiring supermajority quorum, and an independently assigned, machine-verified
-  conclusion -- run by three agents.
-\item \textbf{Arm K.} $k$ independent, non-communicating single-agent attempts on the same task and
-  seed, one submitted by an oracle-free selector (plurality of normalized answers for exact-answer
-  tasks; execution agreement across candidate programs for the code task), with $k$ chosen so arm~K's
-  expected spend matches arm~C's.
-\end{itemize}
+\textbf{Study 2} used seeds 501--520 and added a higher-effort single agent (AH) and a builder--reviewer pair (B). Its pre-registered primary comparison targeted short thinking. The run stopped with missing cells after most work was served by the long-thinking account. The resulting long-thinking comparisons were specified after data had been seen and remain exploratory.
 
-Arms A and C are the pre-registered RQ1 comparison in \texttt{paper/protocol.md}; arm~K was added by a
-later, independent pre-registration (\texttt{paper/prereg-arm-k.md}) specifically to test whether any
-RQ1 advantage the chatroom shows survives being compared against a cheaper, non-deliberative baseline
-built to cost the same.
-
-We evaluate on three tasks admitted, by a pre-registered discrimination rule (single-agent pass rate
-0.3--0.7 over ten pilot seeds), from a pool of about 45 candidate task designs
-(Section~\ref{sec:method}): two programs (\texttt{stamp-interpreter}, \texttt{stamp-2}) sharing one
-invented-language specification whose one natural implementation strategy -- an environment chain --
-contradicts a single stated scoping rule, and one program (\texttt{bench-printf-format}) requiring
-exact numeric formatting against a specification that a host language's built-in shortest-representation
-algorithm gets wrong at one specific input. Because the two \texttt{stamp} programs share this one
-failure mechanism, the family, not the individual task, is this paper's unit of statistical analysis
-throughout.
-
-In the historical three-arm study, the chatroom wins by a large margin over a single agent on both
-programs of one family. On the same family, an
-oracle-free sampling baseline built at the same cost is not statistically distinguishable from the
-chatroom on either program, and itself beats the single agent significantly on one of the two programs
-but not the other. On the one task in the suite where the single-agent's own wrong answer happens to be
-the population's modal answer rather than a minority misreading, both aggregation strategies do worse
-than a single agent working alone. We report:
-
-\begin{enumerate}
-\item the head-to-head RQ1 result on all three tasks, with Fisher's exact test and Holm-Bonferroni
-  correction, effect sizes, and raw and adjusted $p$-values reported side by side (Section~\ref{sec:results});
-\item the mechanism behind the two opposite outcomes on these tasks -- when the population's shared
-  wrong answer is the plurality, aggregation of either kind hurts; when it is not, aggregation of either
-  kind helps (Section~\ref{sec:discussion});
-\item cost per correct answer for every arm, with the prompt-cache-read accounting that dominates
-  billed cost on Claude seats made explicit (Section~\ref{sec:results});
-\item two system-level cost and process measurements made on this codebase's own build history -- a
-  token-consumption round and a peer-review round -- reported as system contributions in their own
-  right, not folded into the RQ1 numbers (Section~\ref{sec:system});
-\item every retraction, forking path, and deviation from the pre-registration encountered along the
-  way, reported rather than smoothed over (Section~\ref{sec:results}, Section~\ref{sec:threats}).
-\end{enumerate}
-
-The historical results address RQ1 and its arm-K extension. The later pair-arm cells are distinct
-from those results (Section~\ref{sec:study-status}); they must not be described as unrun or treated as
-an adequately observed primary comparison. RQ3, per-mechanic ablation across the seven hub mechanics
-in \texttt{paper/protocol.md}\,\S2.3, remains future work (Section~\ref{sec:limitations}).
+The paper makes three narrow points. In Study 1, direct tests did not distinguish the chatroom from independent selection, even though both could outperform one agent on the interpreter family and both had lower observed success on printf. Across recorded accounts, thinking tokens differed under the same alias and settings, with one long-thinking single agent near ceiling on the measured interpreter task. Study 2 cannot answer its primary question: the intended short-thinking stratum was almost absent. These points are reported with the failed pre-registered vote clause, the test revision, costs, and the missing data, rather than folded into a claim that chatrooms or voting generally help or hurt.

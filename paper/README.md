@@ -8,8 +8,10 @@ the underlying serving mechanism. This is not evidence that the arms are equival
 
 The checkout may contain an incomplete experiment snapshot. Use the report's missing-cell,
 warning and stratum fields below, rather than importing counts from a later room transcript.
-The manuscript's older A/C/K results and the five-arm run are separate analyses. Keep their
-seed ranges and inference scopes distinct when rebuilding the manuscript.
+The short manuscript calls these Study 1 (seeds 101--140, arms A/C/K) and Study 2
+(seeds 501--520, five arms). Its sections cover the evaluated system, method, the two
+studies and account association, what was not measured, related work, and reproducibility.
+Keep the studies' seed ranges and inference scopes distinct when rebuilding it.
 
 ## Reproduce the five-arm snapshot without running agents
 

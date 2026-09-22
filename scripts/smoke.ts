@@ -899,26 +899,34 @@ assert.deepEqual(tools, ["amend", "board_get", "board_set", "challenge", "join_r
 
 {
   // replace: one action kicks a seat (same primitive as the kick vote, no ballot) and recruits its
-  // successor, over both MCP and the dashboard's HTTP route.
+  // successor, over both MCP and the dashboard's HTTP route. An agent may not use it on a live, recently
+  // seen colleague (kick_vote is for that); the token-gated dashboard route may, unconditionally.
   const room = "replace";
   await a.call("join_room", { room, name: "claude-1", agent: "claude", expected_participants: 3 });
   await b.call("join_room", { room, name: "codex-1", agent: "codex" });
   await c.call("join_room", { room, name: "third-1", agent: "claude" });
   await c.call("board_set", { room, key: "claim/thing", text: JSON.stringify({ area: "thing", owner: "third-1", status: "building" }) });
   await assert.rejects(a.call("replace_participant", { room, target: "claude-1", reason: "self" }), /cannot replace yourself/);
-  const rep = await a.call("replace_participant", { room, target: "third-1", reason: "smoke: no heartbeat for 20 min per room_status" });
-  assert.equal(rep.spawned.length, 1, "one successor recruited");
+  await assert.rejects(a.call("replace_participant", { room, target: "third-1", reason: "smoke: disagreement, not a dead session" }), /use kick_vote/i, "an agent cannot unilaterally replace a live, recently-seen colleague");
+  // the dashboard route is trusted unconditionally, same as a human's kick ballot
+  const human = await fetch(`${HTTP}/rooms/${room}/replace`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ name: "benji", target: "third-1", reason: "smoke: dead session per dashboard" }) });
+  assert.equal(human.status, 200, "the dashboard casts the same removal + recruit, even on a live seat");
+  const humanBody = await human.json();
+  assert.equal(humanBody.spawned.length, 1, "one successor recruited");
   await assert.rejects(c.call("send_message", { room, content: "still here?" }), /KICKED: you \(third-1\) were removed from "replace"/);
   await assert.rejects(c.call("room_status", { room }), /KICKED/, "reads are refused too, not just writes");
   const claim = await a.call("board_get", { room, key: "claim/thing" });
   assert.equal(JSON.parse(claim.text).status, "released", "replace releases claim/* exactly like a kick vote");
-  const promptLog = readFileSync(rep.logs[0], "utf8");
+  const promptLog = readFileSync(humanBody.logs[0], "utf8");
   assert.match(promptLog, /What third-1 was doing:/);
   assert.match(promptLog, /claim\/thing/);
-  // the dashboard route: same removal, same recruit path, for codex-1
-  const human = await fetch(`${HTTP}/rooms/${room}/replace`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ name: "benji", target: "codex-1", reason: "smoke: dead session per dashboard" }) });
-  assert.equal(human.status, 200, "the dashboard casts the same removal + recruit");
-  assert.equal((await human.json()).spawned.length, 1);
+  // codex-1 leaves on its own first (a plain departure, not kicked): replace must not throw on an
+  // already-departed target, and an agent may replace it since nothing live is being touched
+  await b.call("wait_for_messages", { room, timeout_ms: 0 }); // deliver any reviewer-assignment ask to codex-1...
+  await b.call("pass", { room }); // ...and decline it, so leave_room is not refused for an unanswered ask
+  await b.call("leave_room", { room, reason: "smoke: simulating a departed (not kicked) seat" });
+  const rep2 = await a.call("replace_participant", { room, target: "codex-1", reason: "smoke: already gone, recruiting a successor" });
+  assert.equal(rep2.spawned.length, 1, "recruited without error even though there was nothing left to remove");
   await a.call("wait_for_messages", { room, timeout_ms: 0 });
   await a.call("pass", { room });
   await a.call("leave_room", { room, reason: "smoke: section finished, nothing owed" });

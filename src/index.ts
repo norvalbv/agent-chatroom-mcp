@@ -117,10 +117,18 @@ spawner.attach({
   removeParticipant: (room, target, by, reason) => {
     hub.removeParticipant(room, target, by, reason);
   },
+  // Item 2 guardrail: an agent may only replace a target that is already gone or has been quiet a
+  // while; a human (dashboard) is trusted unconditionally. lastSeen/staleMs, not just active/kicked,
+  // is what lets Spawner.replace tell "dead enough" from "live colleague, use kick_vote".
+  targetStatus: (room, target) => {
+    const p = [...hub.getRoom(room).participants.values()].find((x) => x.name === target);
+    if (!p) return undefined;
+    return { active: p.active, kicked: !!p.kicked, staleMs: Date.now() - Date.parse(hub.lastSeen(p)) };
+  },
   // Item 2: what the predecessor was doing, for the successor's brief -- their own claim/* and handoff/*
-  // entries plus the keys of any open inbox/* notices, so nothing is silently dropped. A kick already
-  // rewrote claim/* as {..., status:"released", released_from: name} (by becomes "system"); either
-  // shape is theirs.
+  // entries plus the keys of any open inbox/* notices in the room, so nothing is silently dropped. A kick
+  // already rewrote claim/* as {..., status:"released", released_from: name} (by becomes "system");
+  // either shape is theirs.
   predecessorContext: (room, name) => {
     const board = hub.getRoom(room).board;
     const isTheirs = (e: { by: string; text: string }) => {
@@ -130,7 +138,7 @@ spawner.attach({
     const own = [...board.entries()].filter(([k, e]) => (k.startsWith("claim/") || k.startsWith("handoff/")) && isTheirs(e));
     const inboxKeys = [...board.keys()].filter((k) => k.startsWith("inbox/"));
     const parts = own.map(([k, e]) => `${k}: ${e.text}`);
-    if (inboxKeys.length) parts.push(`Open inbox/* keys (board_get to read): ${inboxKeys.join(", ")}`);
+    if (inboxKeys.length) parts.push(`Open room inbox/* keys (board_get to read): ${inboxKeys.join(", ")}`);
     return parts.join("\n\n").slice(0, 4000);
   },
 });
@@ -344,8 +352,8 @@ app.post("/rooms/:room/replace", (req, res) => {
     if (!reason) return res.status(400).type("text/plain").send("reason required");
     const { participant } = hub.join(req.params.room, (name || "human").trim(), "human", {}, undefined, `http:${name || "human"}`);
     const r = hub.getRoom(req.params.room);
-    const recs = spawner.replace({ room: req.params.room, requestedBy: participant.name, requestedByShown: hub.shown(r, participant), parentTopic: r.topic, replacing: String(target), reason: String(reason), brief, canEdit: true });
-    res.json({ spawned: recs.map((x) => x.name) });
+    const recs = spawner.replace({ room: req.params.room, requestedBy: participant.name, requestedByShown: hub.shown(r, participant), parentTopic: r.topic, replacing: String(target), reason: String(reason), brief, canEdit: true, requesterIsHuman: true });
+    res.json({ spawned: recs.map((x) => x.name), logs: recs.map((x) => x.log) });
   } catch (e) {
     res.status(400).type("text/plain").send(e instanceof HubError ? e.message : "error");
   }

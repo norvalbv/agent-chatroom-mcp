@@ -92,6 +92,8 @@ export interface SpawnerHooks {
   removeParticipant?(room: string, target: string, by: string, reason: string): void;
   /** what `name` was doing: its claim/*, handoff/* and open inbox/* keys, formatted for a successor's brief. "" if nothing to report. */
   predecessorContext?(room: string, name: string): string;
+  /** whether `target` exists, and if so, whether it is still active/kicked and how long since it was last seen (ms). Undefined: no such participant. */
+  targetStatus?(room: string, target: string): { active: boolean; kicked: boolean; staleMs: number } | undefined;
 }
 
 export interface SpawnerOptions {
@@ -368,20 +370,41 @@ export class Spawner {
    * (removeParticipant) rather than duplicating its removal/claim-release logic. `req.replacing` is the
    * exact name to remove; the caller's own brief is optional (defaults to "take over" plus whatever
    * predecessorContext finds), and the successor gets that context appended to the standard replace note.
+   *
+   * Guardrails (review, swarm-140818-f1qy): an agent caller may only remove a target that is already
+   * departed, already kicked, or has been quiet for at least `staleMs` -- a live colleague needs
+   * kick_vote, not one seat's unilateral say-so. A human caller (the token-gated dashboard route) is
+   * trusted unconditionally, same as a human's kick ballot. An already-departed or already-kicked target
+   * skips removeParticipant entirely (it would only throw "already left"/"already removed") and goes
+   * straight to recruiting. If recruiting then fails, the predecessor is already gone: say so plainly
+   * rather than leaving a silent hole.
    */
-  replace(req: Omit<SpawnRequest, "brief" | "newRoom" | "count"> & { reason: string; brief?: string }): SpawnedAgent[] {
+  replace(req: Omit<SpawnRequest, "brief" | "newRoom" | "count"> & { reason: string; brief?: string; requesterIsHuman?: boolean; staleMs?: number }): SpawnedAgent[] {
     if (!req.replacing?.trim()) throw new HubError("replace requires the exact name of the participant to remove.");
     if (req.replacing === req.requestedBy) throw new HubError("You cannot replace yourself: leave_room instead.");
-    if (!this.hooks?.removeParticipant) throw new HubError("Replace is unavailable; no recruit launched.");
+    if (!this.hooks?.removeParticipant || !this.hooks?.targetStatus) throw new HubError("Replace is unavailable; no recruit launched.");
     if (!req.reason.trim()) throw new HubError("A reason is required: why this seat is being replaced.");
     // request() enforces this too, but only after the recruit's other checks: validate here, before removal,
     // so a structurally-invalid replace (a group, a new room) never kicks the predecessor for nothing.
     if ((req as { newRoom?: string }).newRoom || ((req as { count?: number }).count ?? 1) !== 1) {
       throw new HubError("Replacement requires one recruit in the same room and an exact predecessor name.");
     }
-    this.hooks.removeParticipant(req.room, req.replacing, req.requestedBy, req.reason);
+    const status = this.hooks.targetStatus(req.room, req.replacing);
+    if (!status) throw new HubError(`No participant named "${req.replacing}" in "${req.room}".`);
+    const staleMs = req.staleMs ?? 10 * 60_000;
+    if (status.active && !status.kicked) {
+      if (!req.requesterIsHuman && status.staleMs < staleMs) {
+        throw new HubError(`${req.replacing} was active ${Math.round(status.staleMs / 1000)}s ago; replace is for dead sessions. Use kick_vote instead (a human on the dashboard may replace directly).`, undefined, "auth");
+      }
+      this.hooks.removeParticipant(req.room, req.replacing, req.requestedBy, req.reason);
+    } // else: already departed or already kicked, nothing to remove -- go straight to recruiting
     const brief = req.brief?.trim() || `Take over for ${req.replacing}, who was removed from this room (${req.reason}). Read what they were doing (appended below) and continue their unfinished work.`;
-    return this.request({ ...req, brief });
+    try {
+      return this.request({ ...req, brief });
+    } catch (e) {
+      const msg = e instanceof HubError ? e.message : String(e);
+      throw new HubError(`${req.replacing} was removed, but recruiting a successor failed: ${msg} Nobody was launched; call request_agent(replacing=${JSON.stringify(req.replacing)}) once that clears.`);
+    }
   }
 
   /** The consolidator seat's only job: assemble the ranked list from the children's conclusions and inbox entries. */

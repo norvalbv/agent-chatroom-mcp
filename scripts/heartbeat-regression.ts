@@ -90,6 +90,8 @@ await b("board_get", { room: "hb" });
 assert.equal((await person("hb", "peer")).working?.tool, "board_get");
 await b("room_status", { room: "hb" });
 assert.equal((await person("hb", "peer")).working?.tool, "room_status");
+await b("wait_for_messages", { room: "hb", timeout_ms: 0 });
+assert.equal((await person("hb", "peer")).working?.tool, "room_status", "an idle wait is not logged as work (it still moves last_seen_at)");
 
 // 6. A departed seat's key stops marking it (and the old room keeps its last step).
 await a("leave_room", { room: "hb-sub", reason: "finished the sub-room test, nothing left" });

@@ -406,6 +406,15 @@ const verifierText = SETTLED + "\n" + prompt("verifier.md", {
             (FULL && isGitRepo ? ` Workers may have committed on branches named swarm/${SWARM_ID}/<name>; inspect and merge or cherry-pick from them as needed.` : "")
           : "Do NOT modify any files; verify by reading and running read-only commands only.",
     });
+// the launcher fixes the room's policy before any seat joins (join_room settings only apply at creation)
+if (REQUIRE_VERIFICATION || QUORUM) {
+  try {
+    const r = await fetch(`${URL_}/rooms/${encodeURIComponent(leadsRoom)}/create`, { method: "POST", headers: { "content-type": "application/json", ...(process.env.CHATROOM_HUMAN_TOKEN ? { "x-chatroom-token": process.env.CHATROOM_HUMAN_TOKEN } : {}) }, body: JSON.stringify({ topic: task, expected_participants: FLAT ? TOTAL : plan.groups.length + 1, require_verification: REQUIRE_VERIFICATION, quorum: QUORUM ?? "unanimous" }) });
+    log(`${leadsRoom} created with quorum=${QUORUM ?? "unanimous"}${REQUIRE_VERIFICATION ? ", require_verification" : ""} (${r.status})`);
+  } catch (e) {
+    log(`could not pre-create ${leadsRoom}: ${e instanceof Error ? e.message : String(e)}${e instanceof Error && e.cause ? ` (cause: ${(e.cause as NodeJS.ErrnoException).code ?? (e.cause as Error).message})` : ""}`);
+  }
+}
 runs.push(
   withRespawn("verifier", leadsRoom, (nm, note) => (VERIFIER_OPENROUTER ? runOpenRouter(nm, verifierText.split("verifier\"").join(`${nm}\"`) + note, CWD, VERIFIER_OPENROUTER, APPLY || FULL) : runClaude(nm, verifierText + note, verifierTools, CWD, VERIFIER_MODEL))).then((o) => ({ name: "verifier", text: o.text, usage: o.usage })),
 );
@@ -463,15 +472,6 @@ for (const g of plan.groups) {
 
 // stopping the launcher stops its seats: an orphaned seat keeps polling the provider with nobody to collect its result
 for (const sig of ["SIGTERM", "SIGINT"] as const) process.on(sig, () => { STOPPING = true; log(`${sig}: stopping ${children.length} agent(s)`); for (const c of children) c.kill(); setTimeout(() => process.exit(130), 3000).unref(); });
-// the launcher fixes the room's policy before any seat joins (join_room settings only apply at creation)
-if (REQUIRE_VERIFICATION || QUORUM) {
-  try {
-    const r = await fetch(`${URL_}/rooms/${encodeURIComponent(leadsRoom)}/create`, { method: "POST", headers: { "content-type": "application/json", ...(process.env.CHATROOM_HUMAN_TOKEN ? { "x-chatroom-token": process.env.CHATROOM_HUMAN_TOKEN } : {}) }, body: JSON.stringify({ topic: task, expected_participants: FLAT ? TOTAL : plan.groups.length + 1, require_verification: REQUIRE_VERIFICATION, quorum: QUORUM ?? "unanimous" }) });
-    log(`${leadsRoom} created with quorum=${QUORUM ?? "unanimous"}${REQUIRE_VERIFICATION ? ", require_verification" : ""} (${r.status})`);
-  } catch (e) {
-    log(`could not pre-create ${leadsRoom}: ${e instanceof Error ? e.message : String(e)}`);
-  }
-}
 const tail = setInterval(() => tailRooms([...groupRooms, leadsRoom]), 2000);
 const timeout = setTimeout(() => {
   log(`timeout after ${TIMEOUT_MIN} min; stopping agents`);

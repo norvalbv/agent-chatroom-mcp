@@ -22,12 +22,14 @@ export interface ClaudeArgsOptions {
    * kill (bench-rq1.ts item 3 — usage must survive a kill, not just clean exits). Requires --verbose,
    * per the CLI's own refusal ("--output-format=stream-json requires --verbose", confirmed live). */
   outputFormat?: "json" | "stream-json";
+  /** --settings JSON (src/env.ts heartbeatHookSettings): the seat's tool-call heartbeat hook. Kept under --claude-full too. */
+  settings?: string;
 }
 
 /** --tools governs only the built-in tool set; it does not take MCP tool names (those are already scoped by --mcp-config --strict-mcp-config). */
 const builtinOnly = (tools: string[]) => tools.filter((t) => !t.startsWith("mcp__"));
 
-export function claudeArgs({ text, mcpJson, tools, model, full, outputFormat }: ClaudeArgsOptions): string[] {
+export function claudeArgs({ text, mcpJson, tools, model, full, outputFormat, settings }: ClaudeArgsOptions): string[] {
   const args = ["-p", text, "--mcp-config", mcpJson, "--strict-mcp-config", "--allowedTools", tools.join(",")];
   if (!full) {
     args.push("--tools", builtinOnly(tools).join(","), "--disable-slash-commands", "--setting-sources", "project", "--exclude-dynamic-system-prompt-sections");
@@ -35,5 +37,6 @@ export function claudeArgs({ text, mcpJson, tools, model, full, outputFormat }: 
   if (outputFormat === "stream-json") args.push("--output-format", "stream-json", "--verbose");
   else args.push("--output-format", "json");
   if (model) args.push("--model", model);
+  if (settings) args.push("--settings", settings);
   return args;
 }

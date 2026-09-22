@@ -8,12 +8,13 @@
  * live overall, cumulative per room and per run, and a wall-clock limit.
  */
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync, createWriteStream, symlinkSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { HubError } from "./hub.js";
 import { settledAxes } from "./settled.js";
-import { seatChildEnv } from "./env.js";
+import { heartbeatHookSettings, outputHeartbeat, seatBeat, seatChildEnv } from "./env.js";
 import { claudeArgs } from "./claude-args.js";
 import { parseClaudeCliOutput, type SeatUsageRollup } from "./result.js";
 
@@ -88,6 +89,8 @@ export interface SpawnerHooks {
   roomState?(room: string): string | undefined;
   /** whether a room currently has an open proposal. Consolidator spawn skips the lobby while one is open. */
   openProposal?(room: string): boolean;
+  /** heartbeat the seat launched with this key (codex exec has no tool hooks: its output is the heartbeat) */
+  heartbeatSeat?(seatKey: string, info: { tool: string; detail?: string }): void;
 }
 
 export interface SpawnerOptions {
@@ -288,30 +291,32 @@ export class Spawner {
         out.push(rec);
         continue;
       }
-      const mcpJson = resolve(o.logDir, "mcp.json");
-      writeFileSync(mcpJson, JSON.stringify({ mcpServers: { chatroom: { type: "http", url: o.mcpUrl } } }));
+      // per seat: the MCP URL carries this seat's heartbeat key, so the file cannot be shared between recruits
+      const beat = seatBeat(o.mcpUrl, randomUUID());
+      const mcpJson = resolve(o.logDir, `${name}.mcp.json`);
+      writeFileSync(mcpJson, JSON.stringify({ mcpServers: { chatroom: { type: "http", url: beat.mcpUrl } } }));
       let cmd: string;
       let args: string[];
       if (agent === "openrouter") {
         // dist/ is gitignored, so a hub run from source has no build for the seat to load
         cmd = existsSync(seatBuild) ? process.execPath : "npx";
-        args = [...(existsSync(seatBuild) ? [seatBuild] : ["tsx", resolve(repoRoot, "src", "openrouter.ts")]), "-p", prompt, "--mcp-url", o.mcpUrl, "--cwd", cwd];
+        args = [...(existsSync(seatBuild) ? [seatBuild] : ["tsx", resolve(repoRoot, "src", "openrouter.ts")]), "-p", prompt, "--mcp-url", beat.mcpUrl, "--cwd", cwd];
         if (req.model) args.push("--model", req.model);
         if (req.canEdit) args.push("--write");
       } else if (agent === "codex") {
         cmd = "codex";
-        args = ["exec", "--skip-git-repo-check", "-C", cwd, "-c", `mcp_servers.chatroom.url="${o.mcpUrl}"`, "-c", "mcp_servers.chatroom.tool_timeout_sec=120"];
+        args = ["exec", "--skip-git-repo-check", "-C", cwd, "-c", `mcp_servers.chatroom.url="${beat.mcpUrl}"`, "-c", "mcp_servers.chatroom.tool_timeout_sec=120"];
         if (req.model) args.push("-m", req.model);
         args.push(prompt);
       } else {
         cmd = "claude";
-        args = claudeArgs({ text: prompt, mcpJson, tools: req.canEdit ? WRITE_TOOLS : READ_TOOLS, model: req.model, full: CLAUDE_FULL });
+        args = claudeArgs({ text: prompt, mcpJson, tools: req.canEdit ? WRITE_TOOLS : READ_TOOLS, model: req.model, full: CLAUDE_FULL, settings: heartbeatHookSettings() });
       }
       // a write-enabled recruit works in its own worktree and branch, never in the shared checkout
       const seatCwd = req.canEdit && !o.dryRun ? (this.worktreeFor(cwd, target, name) ?? cwd) : cwd;
       if (agent === "openrouter") args[args.indexOf("--cwd") + 1] = seatCwd;
       else if (agent === "codex") args[args.indexOf("-C") + 1] = seatCwd;
-      const child = spawn(cmd, args, { cwd: seatCwd, env: seatChildEnv(process.env, req.canEdit ? name : undefined), stdio: ["ignore", "pipe", "pipe"] });
+      const child = spawn(cmd, args, { cwd: seatCwd, env: { ...seatChildEnv(process.env, req.canEdit ? name : undefined), ...beat.env }, stdio: ["ignore", "pipe", "pipe"] });
       // claude always runs --output-format json now (telemetry), so its raw stdout is a JSON blob, not the
       // plain final-answer text every other seat's log holds. Buffer stdout+stderr instead of piping them
       // live, and on close write only the unwrapped text (matches runClaude's outFile in swarm.ts) so a
@@ -327,6 +332,11 @@ export class Spawner {
         const outStream = createWriteStream(log);
         child.stdout?.pipe(outStream);
         child.stderr?.pipe(outStream);
+        if (agent === "codex") {
+          const beatOut = outputHeartbeat((detail) => this.hooks?.heartbeatSeat?.(beat.key, { tool: "codex", detail }));
+          child.stdout?.on("data", beatOut);
+          child.stderr?.on("data", beatOut);
+        }
       }
       rec.pid = child.pid;
       this.children.set(name, child);

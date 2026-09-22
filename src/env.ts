@@ -67,3 +67,36 @@ export function loadDotEnv(dir = repoRoot, options: DotEnvOptions = {}): string[
   }
   return loaded;
 }
+
+/**
+ * Seat heartbeat wiring (every seat type heartbeats without a room turn). The launcher gives each seat process a random
+ * key: in its MCP URL (?seat=<key>, so the hub binds the key to that connection) and in its env, where the claude -p
+ * tool hook (scripts/heartbeat-hook.mjs) reads it to POST <hub>/heartbeat on every local tool call.
+ */
+export const HEARTBEAT_HOOK = resolve(repoRoot, "scripts", "heartbeat-hook.mjs");
+
+export interface SeatBeat { key: string; mcpUrl: string; env: NodeJS.ProcessEnv }
+
+export function seatBeat(mcpUrl: string, key: string): SeatBeat {
+  const u = new URL(mcpUrl);
+  u.searchParams.set("seat", key);
+  return { key, mcpUrl: u.toString(), env: { CHATROOM_SEAT_KEY: key, CHATROOM_HEARTBEAT_URL: new URL("/heartbeat", u).toString() } };
+}
+
+/** --settings JSON for a claude -p seat: a PreToolUse hook, so a long Bash shows as the seat's current step while it runs. */
+export function heartbeatHookSettings(hook = HEARTBEAT_HOOK): string {
+  return JSON.stringify({ hooks: { PreToolUse: [{ matcher: "*", hooks: [{ type: "command", command: `node ${JSON.stringify(hook)}`, timeout: 5 }] }] } });
+}
+
+/** A launcher's heartbeat from a seat's output (codex exec has no tool hooks): at most one per `everyMs`, with the last line as detail. */
+export function outputHeartbeat(send: (detail: string) => void, everyMs = 10_000): (chunk: unknown) => void {
+  let last = 0;
+  return (chunk) => {
+    const t = Date.now();
+    if (t - last < everyMs) return;
+    const line = String(chunk).split("\n").map((l) => l.trim()).filter(Boolean).at(-1);
+    if (!line) return;
+    last = t;
+    send(line);
+  };
+}

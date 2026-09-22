@@ -710,7 +710,7 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
       guard("replace_participant", ({ room, target, reason, brief, name, agent, model, cwd, can_edit, area, participant_id }) => {
         const r = hub.getRoom(room);
         const me_ = hub.requireParticipant(r, pid(room, participant_id));
-        const recs = spawner.replace({ room, requestedBy: me_.name, requestedByShown: hub.shown(r, me_), parentTopic: r.topic, replacing: target, reason, brief, name, agent, model, cwd, area, canEdit: can_edit ?? true, requesterIsHuman: me_.agent === "human" });
+        const recs = spawner.replace({ room, requestedBy: me_.name, requestedByShown: hub.shown(r, me_), parentTopic: r.topic, replacing: target, reason, brief, name, agent, model, cwd, area, canEdit: can_edit ?? true, requesterIsHuman: Hub.dashboardHuman(me_) });
         return { spawned: recs.map((x) => x.name), room: recs[0].room, agent: recs[0].agent, model: recs[0].model ?? null, logs: recs.map((x) => x.log), hint: "The room already saw the removal notice; the successor will join within a minute or two." };
       }),
     );

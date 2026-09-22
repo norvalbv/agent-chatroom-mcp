@@ -908,6 +908,10 @@ assert.deepEqual(tools, ["amend", "board_get", "board_set", "challenge", "join_r
   await c.call("board_set", { room, key: "claim/thing", text: JSON.stringify({ area: "thing", owner: "third-1", status: "building" }) });
   await assert.rejects(a.call("replace_participant", { room, target: "claude-1", reason: "self" }), /cannot replace yourself/);
   await assert.rejects(a.call("replace_participant", { room, target: "third-1", reason: "smoke: disagreement, not a dead session" }), /use kick_vote/i, "an agent cannot unilaterally replace a live, recently-seen colleague");
+  // nor by joining a second name as agent="human" over MCP: only the token-gated dashboard session is a human here
+  const fake = await a.call("join_room", { room, name: "not-a-human", agent: "human" });
+  await assert.rejects(a.call("replace_participant", { room, target: "third-1", reason: "smoke: self-declared human", participant_id: fake.participant_id }), /use kick_vote/i, "a self-declared MCP human is not trusted");
+  await a.call("leave_room", { room, participant_id: fake.participant_id, reason: "smoke: fake human seat done" });
   // the dashboard route is trusted unconditionally, same as a human's kick ballot
   const human = await fetch(`${HTTP}/rooms/${room}/replace`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ name: "benji", target: "third-1", reason: "smoke: dead session per dashboard" }) });
   assert.equal(human.status, 200, "the dashboard casts the same removal + recruit, even on a live seat");

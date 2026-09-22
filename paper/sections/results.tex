@@ -7,11 +7,10 @@
 Table~\ref{tab:study1} gives the A--C family comparison. Across the two interpreter programs, A passed 61/80 and C passed 80/80. The family-pooled Fisher test, adopted after the runs, gives $p=0.000001$ before Holm adjustment. The original pre-registered per-task tests also rejected A--C on each interpreter program; the pooled result is a revised analysis, not the pre-registered test. K passed 36/40 on \texttt{stamp-interpreter} and 39/40 on \texttt{stamp-2}, or 75/80 pooled. Its pooled comparison with A ($p=0.0033$) is exploratory. The registered K tests show a narrower result: K beat A on \texttt{stamp-2} (Holm $p=0.009$), but was not distinguished from A on \texttt{stamp-interpreter} (Holm $p=1.000$). The pre-registered prediction said K would beat A on both. That clause failed.
 
 
-This is not repaired by pooling the two programs after the result: the K prediction explicitly made a claim about each program. The observed K rate on \texttt{stamp-interpreter} was higher than A's, but the registered comparison could not distinguish them. By contrast, the direct K--C test asks whether the two aggregation arms differ. Keeping those tests separate avoids treating a missed threshold against A as proof of a chatroom-specific advantage.
 
 \begin{table}[t]
 \centering
-\caption{Study 1, A versus C by task family. The family pooling and Fisher test were post-data revisions; the pre-registered per-task tests are described in the text.}
+\caption{Study 1, A versus C by task family.}
 \label{tab:study1}
 \resizebox{\linewidth}{!}{\input{tables/results-family.tex}}
 \end{table}
@@ -25,14 +24,13 @@ The independent-attempt evidence explains K's printf outcome more specifically. 
 The interpreter answers show the opposite population pattern in Study 1. For \texttt{stamp-interpreter}, the seven A failures among 40 were identical; for \texttt{stamp-2}, 11 of the 12 failures were identical and one differed. Here the correct answer was the majority of A answers in the observed pool. The room summaries add diagnostic context: at least 26 of 40 \texttt{stamp-interpreter} rooms and 14 of 40 \texttt{stamp-2} rooms reported an erroneous opening followed by another seat's correction. These are manual lower bounds from final seat summaries, without retained raw room events. They do not identify a causal chatroom mechanic.
 
 
-The K failures also show why a favorable population distribution is not a guarantee for one vote group. A correct answer can be common over all A attempts yet lose within a particular set of fresh attempts. On \texttt{stamp-interpreter}, some failed K groups had a wrong-answer plurality and others were ties resolved against the correct answer. The fixed tie rule made those losses reproducible; it did not consult the oracle. The retained C summaries cannot be placed on the same group-vote scale.
 
-The extra computation had a substantial price in these runs. C's cost per correct answer relative to A was 8.56 times on \texttt{stamp-interpreter}, 6.16 times on \texttt{stamp-2}, and 18.17 times on printf. K and C cost respectively \$0.637 and \$0.602 per correct answer on \texttt{stamp-interpreter}, \$0.545 and \$0.595 on \texttt{stamp-2}, and \$3.87 and \$4.97 on printf. These are list-price calculations under the recorded accounts and include all K attempts, including those not selected. Mean budget matching did not remove per-seed spend differences, and K's later collection window remains a design limitation even though the logged account switch followed it.
+The extra computation had a substantial price in these runs. C's cost per correct answer relative to A was 8.56 times on \texttt{stamp-interpreter}, 6.16 times on \texttt{stamp-2}, and 18.17 times on printf. K and C cost respectively \$0.637 and \$0.602 per correct answer on \texttt{stamp-interpreter}, \$0.545 and \$0.595 on \texttt{stamp-2}, and \$3.87 and \$4.97 on printf. These are list-price calculations under the recorded accounts and include all K attempts, including those not selected.
 
 \subsection{Account-associated thinking}
 \label{sec:results-account}
 
-Table~\ref{tab:account} joins single-seat run times to the sanitized switch log. Among runs with thinking telemetry, account 4 had 384/385 at or above 4,000 thinking tokens. Accounts 1 and 3 had none among 51 combined runs. Median thinking was 7,709 tokens on account 4, against 968 and 716 on accounts 1 and 3. Within each measured task family, the output-token ranges also separated by account. These are strong associations under the same alias and settings, not evidence that the client can identify what the provider changed.
+Table~\ref{tab:account} joins single-seat run times to the sanitized switch log. Among runs with thinking telemetry, account 4 had 384/385 at or above 4,000 thinking tokens. Accounts 1 and 3 had none among 51 combined runs. Median thinking was 7,709 tokens on account 4, against 968 and 716 on accounts 1 and 3. Within each of the two task families shown, account 4's output-token range lay entirely above those of the other measured accounts. These are strong associations under the same alias and settings, not evidence that the client can identify what the provider changed.
 
 \begin{table}[t]
 \centering
@@ -42,7 +40,7 @@ Table~\ref{tab:account} joins single-seat run times to the sanitized switch log.
 \input{tables/account-regime.tex}
 \end{table}
 
-The association matters for interpreting accuracy. Short-thinking single-agent measurements on \texttt{stamp-interpreter} came from several cohorts: the admission pilot, the Study 1 A grid, constituent K attempts, a cap control, and the window control. Their estimates ranged from $0.475$ to $0.825$. The Study 1 grid's 33/40 was therefore one estimate within an observed span, not a stable model parameter. The separate long-thinking window-control cohort had 78/80 successful constituent single attempts. Study 2's long-thinking A arm passed 18/19 on that task and cost \$0.136 per correct answer. These are different cohorts, not a randomized account comparison; their gap does not show that either account or effort caused an accuracy change. The source of the variation among short-thinking estimates is also unidentified. This matters when reading a point forecast for independent voting based on an earlier A grid: a forecast that treats that grid's rate as fixed inherits its sampling variation. \texttt{stamp-2} was not measured under long thinking, so the long-thinking interpreter result is confined to \texttt{stamp-interpreter}.
+The association matters for interpreting accuracy. Short-thinking single-agent measurements on \texttt{stamp-interpreter} came from several cohorts: the admission pilot, the Study 1 A grid, constituent K attempts, a cap control, and the window control. Their estimates ranged from $0.475$ to $0.825$. The Study 1 grid's 33/40 was therefore one estimate within an observed span, not a stable model parameter. The separate long-thinking window-control cohort had 78/80 successful constituent single attempts. Study 2's long-thinking A arm passed 18/19 on that task and cost \$0.136 per correct answer. These are different cohorts, not a randomized account comparison; their gap does not show that either account or effort caused an accuracy change. The source of the variation among short-thinking estimates is also unidentified. \texttt{stamp-2} was not measured under long thinking, so the long-thinking interpreter result is confined to \texttt{stamp-interpreter}.
 
 \subsection{Study 2: the primary stratum was nearly absent}
 \label{sec:results-study2}
@@ -50,7 +48,7 @@ The association matters for interpreting accuracy. Short-thinking single-agent m
 Study 2's pre-registered primary used short-thinking seeds. It obtained no eligible short-thinking \texttt{stamp-interpreter} seed and only one printf seed. The interpreter's apparent short-thinking seed crossed accounts between arms and was excluded from within-regime inference. One printf seed also crossed accounts. Table~\ref{tab:study2} retains those rows descriptively; the printf seed with a cap deviation is likewise descriptive only. The missing ten cells and excluded seeds leave the registered primary comparisons essentially unobserved.
 
 
-The descriptive table deliberately keeps the mixed and excluded outcomes visible. It is not an inferential sample: a row can contain a run that the registered comparison must omit. In particular, the long-thinking printf descriptive rows retain seed 501, while the long-thinking tests use one fewer seed after that cap deviation. A missing result is not a failed task attempt, and a run with unknown cost cannot be priced as though it cost zero.
+Unlaunched cells are absent from the denominators; launched cells with non-pass outcomes count as failures. Unknown cost is not treated as zero.
 
 \begin{table}[t]
 \centering
@@ -60,5 +58,3 @@ The descriptive table deliberately keeps the mixed and excluded outcomes visible
 \end{table}
 
 Within the exploratory long-thinking stratum, the interpreter comparisons use 19 seeds per arm. A passed 18/19; AH, B, K and C each passed 19/19. On printf, the inferential sample has 15 seeds per arm: A and AH passed 11/15, B and C 10/15, and K 12/15. Every Holm-adjusted comparison against A had $p=1.000$. That test result means no arm was distinguished in these small samples, not that their effects are equal or that the primary prediction was confirmed. On the interpreter, B cost \$0.269 per correct answer and C \$1.407, with both passing 19/19. The pair's observed cost was about a fifth of the chatroom's. The pre-registered cost prediction concerned short thinking; this exploratory long-thinking inequality does not confirm it.
-
-The five-arm run therefore measures a different serving condition from its intended primary stratum. Its result is a bounded description of those recorded long-thinking cells. Recording the active serving account at each run, rather than inferring a uniform condition from the model alias, is necessary to know which comparison was actually made.

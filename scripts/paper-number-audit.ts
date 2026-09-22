@@ -8,11 +8,11 @@
  *
  * Usage: node --import tsx scripts/paper-number-audit.ts   (exit 1 and a list of residue on failure)
  */
-import { readdirSync, readFileSync, existsSync, statSync } from "node:fs";
+import { readdirSync, readFileSync, existsSync, statSync, realpathSync } from "node:fs";
 import { join, resolve } from "node:path";
-import { fileURLToPath, pathToFileURL } from "node:url";
+import { fileURLToPath } from "node:url";
 
-const ROOT = resolve(fileURLToPath(import.meta.url), "../..");
+const ROOT = resolve(realpathSync(fileURLToPath(import.meta.url)), "../..");
 
 export const SOURCES = [
   "paper/generated",
@@ -103,7 +103,11 @@ export function sourceHas(num: string, sourceText: string, sourceDecimals: numbe
   return sourceDecimals.some((d) => Math.abs(d - v) < 0.5 * 10 ** -places + 1e-12);
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
+if (
+  process.argv[1] &&
+  existsSync(resolve(process.argv[1])) &&
+  realpathSync(resolve(process.argv[1])) === realpathSync(fileURLToPath(import.meta.url))
+) {
   const sourceTexts = SOURCES.flatMap(readTree);
   const sourceText = sourceTexts.join("\n");
   const pairs = jsonNumberSets(sourceTexts);

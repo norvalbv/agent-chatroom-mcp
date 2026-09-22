@@ -6,7 +6,7 @@
  * CHATROOM_SEAT_KEY in its env); the claude -p PreToolUse hook (scripts/heartbeat-hook.mjs) POSTs /heartbeat with it
  * on every local tool call; codex output is a heartbeat from its launcher; every MCP tool call records a step hub-side.
  * Throwaway hub on its own port (never 7717), stopped by pid.
- * Run: npm run build && PORT=7741 npx tsx scripts/heartbeat-regression.ts
+ * Run: npx tsx scripts/heartbeat-regression.ts (PORT= to pin the throwaway hub's port)
  */
 import assert from "node:assert/strict";
 import { spawn, spawnSync } from "node:child_process";
@@ -15,14 +15,14 @@ import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/
 import { claudeArgs } from "../src/claude-args.js";
 import { HEARTBEAT_HOOK, heartbeatHookSettings, outputHeartbeat, seatBeat } from "../src/env.js";
 
-const PORT = Number(process.env.PORT ?? 7741);
+const PORT = Number(process.env.PORT ?? 20_000 + Math.floor(Math.random() * 20_000)); // own port: suites run side by side
 assert.notEqual(PORT, 7717, "never the live hub");
 const HTTP = `http://127.0.0.1:${PORT}`;
-const server = spawn(process.execPath, ["dist/index.js"], { env: { ...process.env, PORT: String(PORT), CHATROOM_SPAWN_DRY: "1", CHATROOM_LOG_DIR: "/tmp/chatroom-heartbeat-spawn", CHATROOM_INSECURE_LOCAL: "1", CHATROOM_DATA_DIR: "" }, stdio: ["ignore", "ignore", "inherit"] });
+const server = spawn("npx", ["tsx", "src/index.ts"], { env: { ...process.env, PORT: String(PORT), CHATROOM_SPAWN_DRY: "1", CHATROOM_LOG_DIR: "/tmp/chatroom-heartbeat-spawn", CHATROOM_INSECURE_LOCAL: "1", CHATROOM_DATA_DIR: "" }, stdio: ["ignore", "ignore", "inherit"] });
 process.on("exit", () => server.kill());
 
 for (let i = 0; ; i++) {
-  try { await fetch(`${HTTP}/`); break; } catch { if (i > 50) throw new Error("hub did not start"); await new Promise((r) => setTimeout(r, 200)); }
+  try { await fetch(`${HTTP}/`); break; } catch { if (i > 100) throw new Error("hub did not start"); await new Promise((r) => setTimeout(r, 200)); }
 }
 
 async function connect(url: string) {

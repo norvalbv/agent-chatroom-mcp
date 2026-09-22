@@ -52,6 +52,7 @@ export const offlineScripts = [
   'departed-mentions.test.ts',
   'electorate-regression.ts',
   'handoff-regression.ts',
+  'heartbeat-regression.ts',
   'handoff-task-fixture.test.ts',
   'hold-until-actionable-regression.ts',
   'human-answering.test.ts',

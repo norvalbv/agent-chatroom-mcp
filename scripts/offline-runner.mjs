@@ -81,6 +81,7 @@ export const offlineScripts = [
   'paper-rq1-tex.test.ts',
   'regression-replay.ts',
   'recruit-prefix-regression.ts',
+  'replace-regression.ts',
   'route-auth-regression.ts',
   'refusal-telemetry.ts',
   'shelf-lang-tasks.test.ts',

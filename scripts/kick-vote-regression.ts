@@ -189,6 +189,27 @@ test("never one ballot alone: a two-seat room cannot kick without a human; with 
   assert.equal(hub2.kickView(hub2.getRoom(ROOM), kv2).needed, 4);
 });
 
+test("a self-declared MCP \"human\" is not a dashboard human: it cannot veto its own kick or anyone else's", () => {
+  const { hub, room, a, b, c, d } = fourSeats();
+  const kv = hub.kickVote(ROOM, a.id, "D", "kick", "dead: no heartbeat for 20 min");
+  // the target joins a second name as agent="human" on its own connection: same connection, refused
+  const fakeOwn = hub.join(ROOM, "benji", "human", {}, undefined, "s4").participant;
+  assert.throws(() => hub.kickVote(ROOM, fakeOwn.id, "D", "keep"), /shares your connection/);
+  // another seat joins a second name as agent="human" over MCP (no http: session): not eligible either way
+  const fakeOther = hub.join(ROOM, "owner", "human", {}, undefined, "s2").participant;
+  assert.throws(() => hub.kickVote(ROOM, fakeOther.id, "D", "keep"), /not a dashboard human/);
+  assert.throws(() => hub.kickVote(ROOM, fakeOther.id, "D", "kick"), /not a dashboard human/);
+  assert.equal(kv.status, "open");
+  assert.equal(hub.kickView(room, kv).kick, 1);
+  assert.equal(hub.kickView(room, kv).needed, 3, "fake humans neither vote nor change the threshold");
+  // a real dashboard human (HTTP session) still vetoes
+  const real = hub.join(ROOM, "human", "human", {}, undefined, "http:human").participant;
+  hub.kickVote(ROOM, real.id, "D", "keep");
+  assert.equal(kv.status, "dropped");
+  assert.match(kv.outcome!, /human voted keep/);
+  void b; void c; void d;
+});
+
 test("kick votes and the kicked record survive replay; the kicked seat is still refused after a restart", () => {
   const dir = mkdtempSync(join(tmpdir(), "kick-"));
   try {

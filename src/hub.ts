@@ -2549,10 +2549,18 @@ export class Hub {
     return Math.max(room.quorum === "unanimous" ? sessions : Hub.quorumNeeded(room.quorum, sessions), 2);
   }
 
-  /** Ballots that could still arrive: pool connections plus active humans, minus those already voting keep. */
+  /** Ballots that could still arrive: pool connections plus dashboard humans, minus those already voting keep. */
   private kickPossible(room: Room, target: Participant, keep = 0): number {
-    const humans = this.activeParticipants(room).filter((p) => p.agent === "human").length;
+    const humans = this.activeParticipants(room).filter((p) => Hub.dashboardHuman(p)).length;
     return Hub.sessionsOf(this.kickPool(room, target)) + humans - keep;
+  }
+
+  /**
+   * A human whose ballot the hub trusts: one that arrived through the token-gated HTTP routes (session "http:<name>",
+   * set by src/index.ts), never a name that merely declared agent="human" on an MCP connection (any seat can do that).
+   */
+  static dashboardHuman(p: Participant): boolean {
+    return p.agent === "human" && !!p.session?.startsWith("http:");
   }
 
   /**
@@ -2566,7 +2574,13 @@ export class Hub {
     if (room.state === "concluded" || room.state === "closed") throw new HubError(`Room "${roomName}" is ${room.state}; nobody can be removed from it.`, undefined, "state");
     const t = this.kickTarget(room, target);
     if (t.id === by.id) throw new HubError("You cannot vote to kick yourself: leave_room instead.");
-    if (by.agent !== "human" && by.session && t.session && by.session === t.session) throw new HubError("That participant shares your connection; identity is the connection, so this would be a vote on yourself.", undefined, "auth");
+    // everyone, self-declared humans included: a seat that joins a second name as agent="human" on its own
+    // connection is still that connection (identity-is-the-connection), so it may not veto its own kick
+    if (by.session && t.session && by.session === t.session) throw new HubError("That participant shares your connection; identity is the connection, so this would be a vote on yourself.", undefined, "auth");
+    const human = Hub.dashboardHuman(by);
+    if (!human && !this.kickPool(room, t).some((p) => p.id === by.id)) {
+      throw new HubError(`Only voters on other connections, or a human on the dashboard, may vote on removing ${this.shown(room, t)}; a name joined as agent="human" over MCP is not a dashboard human.`, undefined, "auth");
+    }
     let kv = room.kickVotes.get(t.id);
     if (!kv || kv.status !== "open") {
       const why = reason?.trim() ?? "";
@@ -2582,7 +2596,7 @@ export class Hub {
         `${this.shown(room, by)} started a vote to kick ${this.shown(room, t)}: ${kv.reason} — needs ${needed} kick ballot(s) from distinct connections (quorum=${room.quorum} over the other voters). ` +
         `Vote with kick_vote(target=${JSON.stringify(this.shown(room, t))}, vote="kick"|"keep"); the target may not vote. On the threshold the hub removes them, releases their claim/* entries and their next call tells them they were kicked.`);
     }
-    kv.ballots[by.id] = { name: by.name, vote, ts: now(), session: by.session, ...(by.agent === "human" ? { human: true } : {}) };
+    kv.ballots[by.id] = { name: by.name, vote, ts: now(), session: by.session, ...(human ? { human: true } : {}) };
     this.persist({ type: "kick_vote", room: roomName, vote: kv });
     this.post(room, "system", undefined, `${this.shown(room, by)} votes ${vote.toUpperCase()} on removing ${this.shown(room, t)} (${this.kickTally(room, kv).summary}).`);
     this.evaluateKick(room, kv);

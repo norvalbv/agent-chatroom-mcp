@@ -4,7 +4,7 @@
 \subsection{Study 1: conversation and independent selection}
 \label{sec:results-study1}
 
-Table~\ref{tab:study1} gives the A--C family comparison. Across the two interpreter programs, A passed 61/80 and C passed 80/80. The family-pooled Fisher test, adopted after the runs, gives $p=0.000001$ before Holm adjustment. The original pre-registered per-task tests also rejected A--C on each interpreter program; the pooled result is a revised analysis, not the pre-registered test. K passed 36/40 on \texttt{stamp-interpreter} and 39/40 on \texttt{stamp-2}, or 75/80 pooled. Its pooled comparison with A ($p=0.0033$) is exploratory. The registered K tests show a narrower result: K beat A on \texttt{stamp-2} (Holm $p=0.009$), but was not distinguished from A on \texttt{stamp-interpreter} (Holm $p=1.000$). The pre-registered prediction said K would beat A on both. That clause failed.
+Table~\ref{tab:study1} gives the A--C family comparison; Figures~\ref{fig:pass-rate} to~\ref{fig:vote-mechanism} show the same Study 1 results as charts. Across the two interpreter programs, A passed 61/80 and C passed 80/80. The family-pooled Fisher test, adopted after the runs, gives $p=0.000001$ before Holm adjustment. The original pre-registered per-task tests also rejected A--C on each interpreter program; the pooled result is a revised analysis, not the pre-registered test. K passed 36/40 on \texttt{stamp-interpreter} and 39/40 on \texttt{stamp-2}, or 75/80 pooled. Its pooled comparison with A ($p=0.0033$) is exploratory. The registered K tests show a narrower result: K beat A on \texttt{stamp-2} (Holm $p=0.009$), but was not distinguished from A on \texttt{stamp-interpreter} (Holm $p=1.000$). The pre-registered prediction said K would beat A on both. That clause failed.
 
 
 
@@ -14,6 +14,27 @@ Table~\ref{tab:study1} gives the A--C family comparison. Across the two interpre
 \label{tab:study1}
 \resizebox{\linewidth}{!}{\input{tables/results-family.tex}}
 \end{table}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\linewidth]{figures/fig-pass-rate.png}
+\caption{Study 1 task success by arm and task, with Wilson intervals at the 95 per cent level; 40 seeds per cell, short-thinking account, 19 September 2026. The chatroom (C) passed 40/40 on both interpreter tasks; on printf both aggregation arms fell below one agent (A).}
+\label{fig:pass-rate}
+\end{figure}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\linewidth]{figures/fig-cost-vs-accuracy.png}
+\caption{Study 1 cost per correct answer (log scale, API list price) against success rate, one point per task and arm. One agent was the cheapest per correct answer on every task; the chatroom and the vote cost about the same as each other on the interpreter tasks, and the vote cost less on printf (\$3.87 against \$4.97).}
+\label{fig:cost-vs-accuracy}
+\end{figure}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\linewidth]{figures/fig-vote-mechanism.png}
+\caption{Study 1 vote arm: in each group, the winning answer's share of the votes, split by whether the selected attempt passed. On printf, strong agreement goes with failure, because the failing implementation was the larger cluster of independent attempts.}
+\label{fig:vote-mechanism}
+\end{figure}
 
 Direct K--C tests did not distinguish the arms on any Study 1 task: every Holm-adjusted $p$ was at least $0.578$. Pooling the interpreter tasks gives 75/80 for K and 80/80 for C, with an exploratory Fisher $p=0.059$. Neither result establishes equality. In particular, a significant C--A result and a nonsignificant K--A result on \texttt{stamp-interpreter} are not themselves a test of C against K. The direct comparison is the relevant test, and the available sample leaves a small difference unresolved.
 

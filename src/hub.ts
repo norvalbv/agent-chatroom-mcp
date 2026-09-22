@@ -901,7 +901,7 @@ export class Hub {
    * ties). This is pure, including for hypothetical departures, and is reproducible after replay.
    * Missing/empty snapshots are legacy rooms and retain their all-voter compatibility.
    */
-  electorate(room: Room, pr: Proposal, leavingId?: string) {
+  electorate(room: Room, pr: Pick<Proposal, "snapshot">, leavingId?: string) {
     const all = this.voters(room).filter((p) => p.id !== leavingId);
     const snapshot = pr.snapshot?.length ? new Set(pr.snapshot) : undefined;
     const members = snapshot ? all.filter((p) => snapshot.has(p.id)) : [...all];
@@ -2522,9 +2522,20 @@ export class Hub {
     return p;
   }
 
-  /** Voters who decide a kick: the single electorate rule (voters()) minus the target. */
+  /**
+   * Who decides a kick: the single electorate() (no proposal snapshot: every present voter) with the target as the
+   * hypothetical leaver, minus any other identity on the target's connection (identity-is-the-connection: a sibling
+   * name may not ballot on its own seat, so it must not enlarge the threshold either).
+   */
   private kickPool(room: Room, target: Participant): Participant[] {
-    return this.voters(room).filter((p) => p.id !== target.id);
+    return this.electorate(room, {}, target.id).members.filter((p) => !(target.session && p.session === target.session));
+  }
+
+  /** A removed seat learns it on its very next call for that room, reads included (server guard). */
+  refuseKicked(roomName: string, pid: string): void {
+    const room = this.rooms.get(roomName);
+    const p = room?.participants.get(pid);
+    if (room && p?.kicked) throw new HubError(Hub.kickedMessage(room, p), undefined, "auth");
   }
 
   /**

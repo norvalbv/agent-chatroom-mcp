@@ -869,6 +869,9 @@ assert.deepEqual(tools, ["amend", "board_get", "board_set", "challenge", "join_r
   assert.equal(done.status, "kicked");
   await assert.rejects(c.call("send_message", { room, content: "still here?" }), /KICKED: you \(third-1\) were removed from "kick"/);
   await assert.rejects(c.call("wait_for_messages", { room, timeout_ms: 0 }), /KICKED/);
+  await assert.rejects(c.call("room_status", { room }), /KICKED/, "reads on the kicked connection are refused too, so the seat learns on its very next call");
+  await assert.rejects(c.call("board_get", { room, key: "claim/orphan" }), /KICKED/);
+  await assert.rejects(c.call("list_agents", { room }), /KICKED/);
   await assert.rejects(c.call("join_room", { room, name: "third-1", agent: "claude" }), /KICKED/);
   await assert.rejects(c.call("join_room", { room, name: "third-2", agent: "claude" }), /KICKED/, "same connection, new name: still out");
   // the hub made claude-1 the reviewer of claim/orphan, so its read_messages is focused on that ask: read the raw log over HTTP

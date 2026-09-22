@@ -62,6 +62,24 @@ test("ballots count per connection: two names on one session are one ballot", ()
   assert.equal(hub.kickView(room, kv).needed, 3);
 });
 
+test("the pool is electorate() minus the target's whole connection: a sibling identity of the target neither votes nor raises the threshold", () => {
+  const { hub, room, a, b, c, d } = fourSeats();
+  const d2 = hub.join(ROOM, "D2", "test", {}, undefined, "s4").participant; // same connection as D
+  const kv = hub.kickVote(ROOM, a.id, "D", "kick", "D's connection is dead: no heartbeat");
+  assert.equal(hub.kickView(room, kv).needed, 3, "pool is A,B,C (3 connections): D2 shares D's connection and is not counted");
+  assert.equal(hub.kickView(room, kv).eligible_connections, 3);
+  assert.throws(() => hub.kickVote(ROOM, d2.id, "D", "keep"), /shares your connection/);
+  hub.kickVote(ROOM, b.id, "D", "kick");
+  hub.kickVote(ROOM, c.id, "D", "kick");
+  assert.equal(kv.status, "kicked");
+  assert.equal(room.participants.get(d.id)!.active, false);
+  // the sibling is refused too: it is the same connection (join() blocks it; requireParticipant refuses the kicked seat)
+  assert.throws(() => hub.join(ROOM, "D3", "test", {}, undefined, "s4"), /KICKED/);
+  // the removed seat is refused even on a read-only path the guard resolves it for
+  assert.throws(() => hub.refuseKicked(ROOM, d.id), /KICKED/);
+  hub.refuseKicked(ROOM, a.id); // a live seat passes through
+});
+
 test("removal: claims released to anyone, further calls refused with KICKED, no rejoin by name or connection, electorate unstuck", () => {
   const { hub, room, a, b, c, d } = fourSeats();
   hub.setBoard(ROOM, d.id, "claim/thing", JSON.stringify({ area: "thing", owner: "D", status: "building" }));

@@ -106,6 +106,8 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
       let participant = telemetryActor(room, a?.participant_id);
       let outcome: CallOutcome = "error";
       try {
+        // a seat removed by kick vote is told so on its very next call for that room, reads included
+        if (room && participant) hub.refuseKicked(room, participant);
         const data = await fn(args);
         const result = ok(data);
         // join_room can create a second identity: use its issued id, not an ambiguous

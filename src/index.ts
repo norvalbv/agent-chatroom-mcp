@@ -314,6 +314,19 @@ app.post("/rooms/:room/vote", (req, res) => {
     res.status(400).type("text/plain").send(e instanceof HubError ? e.message : "error");
   }
 });
+// A human starting or joining a kick vote from the dashboard: same ballot as an agent's; a human keep vetoes.
+app.post("/rooms/:room/kick", (req, res) => {
+  if (!requireToken(req, res)) return;
+  try {
+    const { name, target, vote, reason } = (req.body ?? {}) as { name?: string; target?: string; vote?: "kick" | "keep"; reason?: string };
+    if (!target) return res.status(400).type("text/plain").send("target required");
+    const { participant } = hub.join(req.params.room, (name || "human").trim(), "human", {}, undefined, `http:${name || "human"}`);
+    const kv = hub.kickVote(req.params.room, participant.id, String(target), vote === "keep" ? "keep" : "kick", reason);
+    res.json(hub.kickView(hub.getRoom(req.params.room), kv, true));
+  } catch (e) {
+    res.status(400).type("text/plain").send(e instanceof HubError ? e.message : "error");
+  }
+});
 // A launcher creates a room with its policy (quorum, verification, expected seats) before any seat joins;
 // join_room settings only apply at creation, so without this the first seat to arrive decides the policy.
 app.post("/rooms/:room/create", (req, res) => {

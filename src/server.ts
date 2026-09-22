@@ -109,6 +109,10 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
       // already refreshes last_seen_at when it returns, and logging idle waits would push real work out of the feed
       if (room && participant && tool !== "wait_for_messages") try { hub.heartbeat(room, participant, { tool }); } catch { /* departed or unknown: the call itself reports it */ }
       try {
+        // a seat removed by kick vote is told so on its very next call for that room, reads included. Every id this
+        // connection holds there is checked, not only the resolved actor: a connection owning target+alias resolves
+        // no actor for tools without participant_id (room_status, board_get), and the kick bans the connection.
+        if (room) for (const id of me.get(room) ?? []) hub.refuseKicked(room, id);
         const data = await fn(args);
         const result = ok(data);
         // join_room can create a second identity: use its issued id, not an ambiguous
@@ -238,6 +242,31 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
       hub.leave(room, id, reason);
       me.get(room)?.delete(id);
       return `Left ${room}.`;
+    }),
+  );
+
+  server.registerTool(
+    "kick_vote",
+    {
+      title: "Vote to remove a participant",
+      description:
+        "Start or join a vote to remove another participant from the room (reasons: persistent disagreement blocking progress, or a dead/unresponsive session; " +
+        "check room_status last_seen_at/working first and cite it). Your first call with vote=\"kick\" and a reason opens the vote and counts as your ballot; others call " +
+        "kick_vote(target, vote=\"kick\"|\"keep\"). Ballots count per connection; the target cannot vote; the threshold is the room's quorum over the other voters (never a single ballot when a second connection exists); " +
+        "a human keep vetoes. On the threshold the hub marks the target left, releases their claim/* entries into a system line, refuses their further calls with KICKED, and quorum no longer waits on them. " +
+        "Nobody who is dead or merely quiet needs kicking to conclude: leavers are already excluded from the electorate. Use this for a seat that is blocking, or before request_agent(replacing=) for a dead one.",
+      inputSchema: {
+        room: roomArg,
+        target: z.string().describe("Display name of the participant to remove."),
+        vote: z.enum(["kick", "keep"]).default("kick").describe("kick: remove them; keep: object (enough keeps drop the vote)."),
+        reason: z.string().max(600).optional().describe("Required to start a vote: why, with evidence (e.g. 'no heartbeat for 14 min per room_status')."),
+        participant_id: asArg,
+      },
+    },
+    guard("kick_vote", ({ room, target, vote, reason, participant_id }) => {
+      const r = hub.getRoom(room);
+      const kv = hub.kickVote(room, pid(room, participant_id), target, vote, reason);
+      return hub.kickView(r, kv);
     }),
   );
 

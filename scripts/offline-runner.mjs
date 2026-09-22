@@ -55,6 +55,7 @@ export const offlineScripts = [
   'heartbeat-regression.ts',
   'handoff-task-fixture.test.ts',
   'hold-until-actionable-regression.ts',
+  'kick-vote-regression.ts',
   'human-answering.test.ts',
   'layer-rules-400-task.test.ts',
   'layer-views-task.test.ts',

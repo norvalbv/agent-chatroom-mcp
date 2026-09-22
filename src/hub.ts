@@ -506,6 +506,7 @@ export class Hub {
    * agents get pseudonyms.
    */
   summary(room: Room, reveal = false) {
+    const observedAt = Date.now();
     const active = this.activeParticipants(room);
     const nm = (p: Participant) => (reveal ? p.name : this.shown(room, p));
     const speaker = this.currentSpeaker(room);
@@ -543,6 +544,12 @@ export class Hub {
         last_active_at: p.lastActiveAt,
         last_seen_at: this.lastSeen(p),
         working: p.working ?? null,
+        liveness: (() => {
+          const age = (at: string) => Math.max(0, Math.floor((observedAt - Date.parse(at)) / 1000));
+          const age_seconds = age(this.lastSeen(p));
+          return { status: !p.active ? "left" : age_seconds < 60 ? "active" : age_seconds < 600 ? "idle" : "suspected_dead",
+            age_seconds, heartbeat_age_seconds: p.working ? age(p.working.at) : null };
+        })(),
         left_reason: p.active ? null : p.leaveReason ?? null,
       })),
       active_count: active.length,

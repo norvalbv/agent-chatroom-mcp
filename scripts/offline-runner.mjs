@@ -58,6 +58,7 @@ export const offlineScripts = [
   'layer-rules-400-task.test.ts',
   'layer-views-task.test.ts',
   'leave-post-conclusion-regression.ts',
+  'liveness-regression.ts',
   'idlewaits-actionable-regression.ts',
   'lease-lock-tasks.test.ts',
   'shelf-quiet-task.test.ts',

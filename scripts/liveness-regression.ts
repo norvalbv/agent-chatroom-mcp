@@ -48,4 +48,39 @@ assert.equal(hub.summary(room, true).participants.find((p) => p.name === "bench-
 hub.heartbeat(room.name, c.id, { tool: "read_file", step: 71, detail: "x".repeat(1000) });
 assert.ok(hub.activity(room.name, "bench-5").at(-1)!.detail.length <= 300, "detail is capped");
 assert.throws(() => hub.activity(room.name, "nobody"), /No participant/);
+// Colleagues see advisory ages and statuses through the same summary used by room_status.
+const realNow = Date.now;
+const observedAt = realNow();
+Date.now = () => observedAt;
+try {
+  const statusRoom = hub.createRoom("colleague-status", { expectedParticipants: 2, anonymous: true });
+  const colleague = hub.join(statusRoom.name, "colleague", "claude", {}, undefined, "private-session").participant;
+  const readStatus = () => hub.summary(statusRoom).participants[0];
+  const atAge = (seconds: number) => new Date(observedAt - seconds * 1000).toISOString();
+  const messageCount = statusRoom.messages.length;
+  for (const [age, expected] of [[0, "active"], [59, "active"], [60, "idle"], [599, "idle"], [600, "suspected_dead"]] as const) {
+    colleague.lastActiveAt = atAge(age);
+    assert.deepEqual(readStatus().liveness, { status: expected, age_seconds: age, heartbeat_age_seconds: null });
+  }
+  assert.equal(colleague.active, true, "suspected dead is evidence, not removal");
+  assert.equal(statusRoom.expectedParticipants, 2, "observing liveness does not change quorum policy");
+  colleague.working = { tool: "Bash", step: 12, at: atAge(5) };
+  assert.deepEqual(readStatus().liveness, { status: "active", age_seconds: 5, heartbeat_age_seconds: 5 });
+  assert.equal(readStatus().working?.tool, "Bash");
+  assert.equal(readStatus().working?.step, 12);
+  assert.equal(readStatus().last_seen_at, atAge(5));
+  colleague.working.at = atAge(700);
+  colleague.lastActiveAt = atAge(2);
+  assert.deepEqual(readStatus().liveness, { status: "active", age_seconds: 2, heartbeat_age_seconds: 700 });
+  colleague.lastActiveAt = atAge(-10);
+  assert.equal(readStatus().liveness.age_seconds, 0, "clock skew cannot produce negative ages");
+  colleague.active = false;
+  assert.equal(readStatus().liveness.status, "left", "departure wins over fresh activity");
+  assert.equal(statusRoom.messages.length, messageCount, "reading liveness produces no room turns");
+  const publicStatus = readStatus();
+  assert.notEqual(publicStatus.name, colleague.name, "anonymous display remains redacted");
+  assert.ok(!("id" in publicStatus) && !("session" in publicStatus), "liveness leaks no connection credentials");
+} finally {
+  Date.now = realNow;
+}
 console.log("LIVENESS OK");

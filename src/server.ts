@@ -105,7 +105,14 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
       const room = typeof a?.room === "string" ? a.room : typeof a?.from_room === "string" ? a.from_room : undefined;
       let participant = telemetryActor(room, a?.participant_id);
       let outcome: CallOutcome = "error";
+      // every hub call is a step too (board_get, vote): the People tab shows it without a room turn. Not a wait: it
+      // already refreshes last_seen_at when it returns, and logging idle waits would push real work out of the feed
+      if (room && participant && tool !== "wait_for_messages") try { hub.heartbeat(room, participant, { tool }); } catch { /* departed or unknown: the call itself reports it */ }
       try {
+        // a seat removed by kick vote is told so on its very next call for that room, reads included. Every id this
+        // connection holds there is checked, not only the resolved actor: a connection owning target+alias resolves
+        // no actor for tools without participant_id (room_status, board_get), and the kick bans the connection.
+        if (room) for (const id of me.get(room) ?? []) hub.refuseKicked(room, id);
         const data = await fn(args);
         const result = ok(data);
         // join_room can create a second identity: use its issued id, not an ambiguous
@@ -235,6 +242,31 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
       hub.leave(room, id, reason);
       me.get(room)?.delete(id);
       return `Left ${room}.`;
+    }),
+  );
+
+  server.registerTool(
+    "kick_vote",
+    {
+      title: "Vote to remove a participant",
+      description:
+        "Start or join a vote to remove another participant from the room (reasons: persistent disagreement blocking progress, or a dead/unresponsive session; " +
+        "check room_status last_seen_at/working first and cite it). Your first call with vote=\"kick\" and a reason opens the vote and counts as your ballot; others call " +
+        "kick_vote(target, vote=\"kick\"|\"keep\"). Ballots count per connection; the target cannot vote; the threshold is the room's quorum over the other voters (never a single ballot when a second connection exists); " +
+        "a human keep vetoes. On the threshold the hub marks the target left, releases their claim/* entries into a system line, refuses their further calls with KICKED, and quorum no longer waits on them. " +
+        "Nobody who is dead or merely quiet needs kicking to conclude: leavers are already excluded from the electorate. Use this for a seat that is blocking, or before request_agent(replacing=) for a dead one.",
+      inputSchema: {
+        room: roomArg,
+        target: z.string().describe("Display name of the participant to remove."),
+        vote: z.enum(["kick", "keep"]).default("kick").describe("kick: remove them; keep: object (enough keeps drop the vote)."),
+        reason: z.string().max(600).optional().describe("Required to start a vote: why, with evidence (e.g. 'no heartbeat for 14 min per room_status')."),
+        participant_id: asArg,
+      },
+    },
+    guard("kick_vote", ({ room, target, vote, reason, participant_id }) => {
+      const r = hub.getRoom(room);
+      const kv = hub.kickVote(room, pid(room, participant_id), target, vote, reason);
+      return hub.kickView(r, kv);
     }),
   );
 
@@ -458,7 +490,7 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
 
   server.registerTool(
     "room_status",
-    { title: "Room status", description: "Participants, mode, round/turn, open proposals with challenges and vote tallies, and the conclusion if any.", inputSchema: { room: roomArg } },
+    { title: "Room status", description: "Participants with last_seen_at, working tool/step/time and liveness ages in seconds (active <60s, idle <600s, suspected_dead otherwise; advisory only, left if departed), mode, round/turn, proposals and conclusion.", inputSchema: { room: roomArg } },
     guard("room_status", ({ room }) => hub.summary(hub.getRoom(room))),
   );
 
@@ -650,6 +682,36 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
         const who = recs.map((x) => x.name).join(", ");
         hub.announce(room, `${hub.shown(r, me_)} recruited ${who} (${recs[0].agent}${recs[0].model ? `/${recs[0].model}` : ""}${new_room ? `, into ${new_room}` : ""}${area ? `, area ${area}` : ""}): ${brief.slice(0, 200)}${brief.length > 200 ? "…" : ""}`);
         return { spawned: recs.map((x) => x.name), room: recs[0].room, depth: recs[0].depth, agent: recs[0].agent, model: recs[0].model ?? null, cwd: recs[0].cwd, logs: recs.map((x) => x.log), hint: "They will join within a minute or two. Carry on; you will see them arrive." };
+      }),
+    );
+
+    server.registerTool(
+      "replace_participant",
+      {
+        title: "Kick a dead seat and recruit its replacement",
+        description:
+          "One action for a dead/unresponsive session: removes `target` the same way a kick vote would (marked left, claim/* released, its next call refused) and recruits a successor via request_agent, " +
+          "telling it what the predecessor was doing (their claim/*, handoff/* and open inbox/* board entries). Intended for dead sessions, not disagreement — for a live but unresponsive-in-spirit seat, use kick_vote instead so others get a say. " +
+          "brief is optional: default is 'take over for them', with their context appended.",
+        inputSchema: {
+          room: roomArg,
+          target: z.string().describe("Exact display name of the participant to remove and replace."),
+          reason: z.string().describe("Why: e.g. 'no heartbeat for 14 min per room_status'."),
+          brief: z.string().optional().describe("What the successor should do; defaults to taking over the predecessor's claim(s)."),
+          name: z.string().optional().describe("Display name for the successor (default: <agent>-recruit-N)."),
+          agent: z.enum(["claude", "codex", "openrouter"]).optional(),
+          model: z.string().optional(),
+          cwd: z.string().optional(),
+          can_edit: z.boolean().optional().describe("Allow the successor to modify files (default true: replace is for taking over a build)."),
+          area: z.string().optional().describe("Claim this area for the successor first; defaults to none (the predecessor's claim/* is already released for anyone)."),
+          participant_id: asArg,
+        },
+      },
+      guard("replace_participant", ({ room, target, reason, brief, name, agent, model, cwd, can_edit, area, participant_id }) => {
+        const r = hub.getRoom(room);
+        const me_ = hub.requireParticipant(r, pid(room, participant_id));
+        const recs = spawner.replace({ room, requestedBy: me_.name, requestedByShown: hub.shown(r, me_), parentTopic: r.topic, replacing: target, reason, brief, name, agent, model, cwd, area, canEdit: can_edit ?? true, requesterIsHuman: Hub.dashboardHuman(me_) });
+        return { spawned: recs.map((x) => x.name), room: recs[0].room, agent: recs[0].agent, model: recs[0].model ?? null, logs: recs.map((x) => x.log), hint: "The room already saw the removal notice; the successor will join within a minute or two." };
       }),
     );
 

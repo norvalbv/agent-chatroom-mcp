@@ -178,5 +178,32 @@ await test('spawner recruit: codex and openrouter agents are untouched by the cl
   for (const call of nonClaude) assert.ok(!call.args.includes('--disable-slash-commands'), 'lean flags are claude-only');
 });
 
+// ---- heartbeat wiring (swarm-140818-f1qy item 3): every claude seat gets the tool hook and a seat key; codex a keyed URL ----
+function assertBeat(call: Capture, msg: string) {
+  const key = call.options.env.CHATROOM_SEAT_KEY;
+  assert.ok(key, `${msg}: CHATROOM_SEAT_KEY in the seat env`);
+  assert.match(call.options.env.CHATROOM_HEARTBEAT_URL ?? '', /\/heartbeat$/, `${msg}: CHATROOM_HEARTBEAT_URL`);
+  if (call.cmd === 'claude') {
+    const s = JSON.parse(call.args[call.args.indexOf('--settings') + 1] ?? '{}');
+    assert.match(s.hooks?.PreToolUse?.[0]?.hooks?.[0]?.command ?? '', /heartbeat-hook\.mjs"$/, `${msg}: --settings PreToolUse heartbeat hook`);
+  } else if (call.cmd === 'codex') {
+    assert.ok(call.args.some(a => a.includes(`seat=${key}`)), `${msg}: codex MCP URL carries ?seat=`);
+  }
+}
+await test('heartbeat: swarm claude and codex seats carry the seat key and hook', async () => {
+  const h = await harness('swarm', syntheticEnv(), ['synthetic task', '--agents', '4', '--codex', '1', '--full-access']);
+  const seats = h.calls.filter(c => c.cmd === 'claude' || c.cmd === 'codex');
+  assert.ok(seats.some(c => c.cmd === 'codex') && seats.some(c => c.cmd === 'claude'));
+  for (const seat of seats) assertBeat(seat, `swarm ${seat.cmd} seat`);
+});
+await test('heartbeat: spawner claude and codex recruits carry the seat key and hook', async () => {
+  const h = await harness('spawner', syntheticEnv({ CHATROOM_RECRUIT_AGENT: 'any' }));
+  const spawner = new h.exports.Spawner({ mcpUrl: 'http://synthetic.invalid/mcp', defaultCwd: '/fixture', logDir: '/fixture/logs' });
+  spawner.request({ room: 'synthetic-room', requestedBy: 'synthetic-parent', brief: 'heartbeat wiring regression recruit', agent: 'claude', name: 'fixture-claude' });
+  spawner.request({ room: 'synthetic-room', requestedBy: 'synthetic-parent', brief: 'heartbeat wiring regression recruit', agent: 'codex', name: 'fixture-codex' });
+  assert.equal(h.calls.length, 2);
+  for (const seat of h.calls) assertBeat(seat, `recruit ${seat.cmd}`);
+});
+
 console.log(`CLAUDE LEAN FLAGS: ${failures ? `${failures} failed` : 'OK'}`);
 process.exitCode = failures ? 1 : 0;

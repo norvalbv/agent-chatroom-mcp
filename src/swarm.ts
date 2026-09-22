@@ -12,7 +12,8 @@ import { collectRoomSnapshot, renderRunReport, writeRunResult, rollupUsage, pars
 import { settledAxes } from "./settled.js";
 import { registerRespawn } from "./respawn.js";
 import { fileURLToPath } from "node:url";
-import { loadDotEnv, seatChildEnv } from "./env.js";
+import { heartbeatHookSettings, loadDotEnv, outputHeartbeat, seatBeat, seatChildEnv, type SeatBeat } from "./env.js";
+import { randomUUID } from "node:crypto";
 import { respawnDecision, type RespawnRoom } from "./respawn.js";
 import { claudeArgs } from "./claude-args.js";
 loadDotEnv();
@@ -126,8 +127,6 @@ async function ensureHub() {
 
 // ---------- agents ----------
 const children: ChildProcess[] = [];
-const mcpJson = resolve(OUT, "mcp.json");
-writeFileSync(mcpJson, JSON.stringify({ mcpServers: { chatroom: { type: "http", url: `${URL_}/mcp` } } }));
 
 /**
  * R4 usage telemetry for claude seats: `--output-format json` turns stdout into one JSON blob carrying
@@ -138,8 +137,12 @@ writeFileSync(mcpJson, JSON.stringify({ mcpServers: { chatroom: { type: "http", 
  */
 function runClaude(name: string, text: string, tools: string[], cwd: string, model?: string): Promise<SeatOutcome> {
   const outFile = resolve(OUT, `${name}.out`);
-  const args = claudeArgs({ text, mcpJson, tools, model, full: CLAUDE_FULL });
-  return runProc(name, "claude", args, cwd, outFile).then((raw) => {
+  // per seat: the MCP URL carries this seat's heartbeat key, which its tool hook sends on every local tool call
+  const beat = seatBeat(`${URL_}/mcp`, randomUUID());
+  const seatMcp = resolve(OUT, `${name}.mcp.json`);
+  writeFileSync(seatMcp, JSON.stringify({ mcpServers: { chatroom: { type: "http", url: beat.mcpUrl } } }));
+  const args = claudeArgs({ text, mcpJson: seatMcp, tools, model, full: CLAUDE_FULL, settings: heartbeatHookSettings() });
+  return runProc(name, "claude", args, cwd, outFile, false, beat).then((raw) => {
     const { text: final, usage } = parseClaudeCliOutput(raw);
     writeFileSync(outFile, final);
     return { text: final, usage };
@@ -173,10 +176,11 @@ function runOpenRouter(name: string, text: string, cwd: string, model: string | 
 
 function runCodex(name: string, text: string, cwd: string, model?: string): Promise<SeatOutcome> {
   const outFile = resolve(OUT, `${name}.out`);
-  const args = ["exec", "--skip-git-repo-check", "-C", cwd, "-c", `mcp_servers.chatroom.url="${URL_}/mcp"`, "-c", "mcp_servers.chatroom.tool_timeout_sec=120", "-o", outFile];
+  const beat = seatBeat(`${URL_}/mcp`, randomUUID());
+  const args = ["exec", "--skip-git-repo-check", "-C", cwd, "-c", `mcp_servers.chatroom.url="${beat.mcpUrl}"`, "-c", "mcp_servers.chatroom.tool_timeout_sec=120", "-o", outFile];
   if (model) args.push("-m", model);
   args.push(text);
-  return runProc(name, "codex", args, cwd, outFile, true).then((t) => ({ text: t, usage: readSeatUsage(resolve(OUT, `${name}.usage.json`)) }));
+  return runProc(name, "codex", args, cwd, outFile, true, beat, true).then((t) => ({ text: t, usage: readSeatUsage(resolve(OUT, `${name}.usage.json`)) }));
 }
 
 /**
@@ -219,9 +223,17 @@ const exitCodes = new Map<string, number | null>();
 /** Only successfully isolated workers receive seat commit attribution (never planner/verifier). */
 const writeWorkers = new Set<string>();
 
-function runProc(name: string, cmd: string, args: string[], cwd: string, outFile: string, outViaFile = false): Promise<string> {
+/** `beat`: the seat's heartbeat key and env; `beatOnOutput`: its output is its heartbeat (codex exec has no tool hooks). */
+function runProc(name: string, cmd: string, args: string[], cwd: string, outFile: string, outViaFile = false, beat?: SeatBeat, beatOnOutput = false): Promise<string> {
   return new Promise((res) => {
-    const child = spawn(cmd, args, { cwd, env: seatChildEnv(process.env, writeWorkers.has(name) ? name : undefined), stdio: ["ignore", "pipe", "pipe"] });
+    const child = spawn(cmd, args, { cwd, env: { ...seatChildEnv(process.env, writeWorkers.has(name) ? name : undefined), ...beat?.env }, stdio: ["ignore", "pipe", "pipe"] });
+    if (beat && beatOnOutput) {
+      const send = outputHeartbeat((detail) => {
+        fetch(`${URL_}/heartbeat`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ seat_key: beat.key, tool: cmd, detail }), signal: AbortSignal.timeout(5_000) }).catch(() => {});
+      });
+      child.stdout?.on("data", send);
+      child.stderr?.on("data", send);
+    }
     children.push(child);
     let out = "";
     let err = "";

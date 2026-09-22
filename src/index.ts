@@ -108,11 +108,42 @@ spawner.attach({
       return false;
     }
   },
+  heartbeatSeat: (seatKey, info) => { hub.heartbeatSeat(seatKey, info); },
   registerReplacement: (room, predecessor, successorName) => {
     const old = [...hub.getRoom(room).participants.values()].find(p => p.name === predecessor);
     // A recruit may replace a departed agent, never declare another live seat or human departed.
     if (!old || old.active || old.agent === "human" || old.role === "chair") throw new HubError("Recruit replacement requires a departed nonhuman, non-chair participant.");
     return hub.registerReplacement(room, predecessor, successorName).replacementToken;
+  },
+  removeParticipant: (room, target, by, reason) => {
+    hub.removeParticipant(room, target, by, reason);
+  },
+  // Item 2 guardrail: an agent may only replace a target that is already gone or has been quiet a
+  // while; a human (dashboard) is trusted unconditionally. lastSeen/staleMs, not just active/kicked,
+  // is what lets Spawner.replace tell "dead enough" from "live colleague, use kick_vote".
+  targetStatus: (room, target) => {
+    const p = [...hub.getRoom(room).participants.values()].find((x) => x.name === target);
+    if (!p) return undefined;
+    // identity is the connection: a seat whose MCP session is still open is alive however long its current
+    // command runs (heartbeats fire at call start only), so an agent may not replace it on staleness alone
+    const connected = !!p.session && [...transports.values()].some((e) => e.session === p.session);
+    return { active: p.active, kicked: !!p.kicked, staleMs: Date.now() - Date.parse(hub.lastSeen(p)), connected };
+  },
+  // Item 2: what the predecessor was doing, for the successor's brief -- their own claim/* and handoff/*
+  // entries plus the keys of any open inbox/* notices in the room, so nothing is silently dropped. A kick
+  // already rewrote claim/* as {..., status:"released", released_from: name} (by becomes "system");
+  // either shape is theirs.
+  predecessorContext: (room, name) => {
+    const board = hub.getRoom(room).board;
+    const isTheirs = (e: { by: string; text: string }) => {
+      if (e.by === name) return true;
+      try { return (JSON.parse(e.text) as { released_from?: string }).released_from === name; } catch { return false; }
+    };
+    const own = [...board.entries()].filter(([k, e]) => (k.startsWith("claim/") || k.startsWith("handoff/")) && isTheirs(e));
+    const inboxKeys = [...board.keys()].filter((k) => k.startsWith("inbox/"));
+    const parts = own.map(([k, e]) => `${k}: ${e.text}`);
+    if (inboxKeys.length) parts.push(`Open room inbox/* keys (board_get to read): ${inboxKeys.join(", ")}`);
+    return parts.join("\n\n").slice(0, 4000);
   },
 });
 process.on("exit", () => spawner.stopAll());
@@ -139,10 +170,13 @@ app.post("/mcp", async (req, res) => {
     return;
   }
   const session = createSessionServer(hub, spawner);
+  // a launched seat's MCP URL carries ?seat=<key>; its tool hook heartbeats with the same key (POST /heartbeat)
+  const seatKey = typeof req.query.seat === "string" ? req.query.seat.slice(0, 100) : "";
   const transport = new StreamableHTTPServerTransport({
     sessionIdGenerator: () => randomUUID(),
     onsessioninitialized: (id) => {
       transports.set(id, { t: transport, leaveAll: session.leaveAll, session: session.sessionKey, lastSeen: Date.now() });
+      if (seatKey) hub.bindSeat(seatKey, session.sessionKey);
     },
   });
   transport.onclose = () => {
@@ -229,11 +263,18 @@ app.post("/rooms/:room/heartbeat", (req, res) => {
     const { participant_id, tool, step } = (req.body ?? {}) as { participant_id?: string; tool?: string; step?: number };
     if (!participant_id) return res.status(400).type("text/plain").send("participant_id required");
     const { detail } = (req.body ?? {}) as { detail?: string };
-    hub.heartbeat(req.params.room, participant_id, { tool: tool ?? "?", step: step ?? 0, detail });
+    hub.heartbeat(req.params.room, participant_id, { tool: tool ?? "?", step, detail });
     res.json({ ok: true });
   } catch (e) {
     res.status(400).type("text/plain").send(e instanceof HubError ? e.message : "error");
   }
+});
+// Seat liveness without a participant id: a claude -p tool hook or a launcher watching codex output knows only the seat
+// key its process was launched with; the hub heartbeats every room that key's MCP connection is in.
+app.post("/heartbeat", (req, res) => {
+  const { seat_key, tool, step, detail } = (req.body ?? {}) as { seat_key?: string; tool?: string; step?: number; detail?: string };
+  if (!seat_key) return res.status(400).type("text/plain").send("seat_key required");
+  res.json({ ok: true, marked: hub.heartbeatSeat(seat_key, { tool: tool ?? "?", step, detail }) });
 });
 app.get("/rooms/:room/participants/:name/activity", (req, res) => {
   try {
@@ -299,6 +340,34 @@ app.post("/rooms/:room/vote", (req, res) => {
     const { participant } = hub.join(req.params.room, (name || "human").trim(), "human", {}, undefined, `http:${name || "human"}`);
     const pr = hub.vote(req.params.room, participant.id, String(proposal_id), vote ?? "abstain", reason);
     res.json(hub.proposalView(hub.getRoom(req.params.room), pr, true));
+  } catch (e) {
+    res.status(400).type("text/plain").send(e instanceof HubError ? e.message : "error");
+  }
+});
+// A human starting or joining a kick vote from the dashboard: same ballot as an agent's; a human keep vetoes.
+app.post("/rooms/:room/kick", (req, res) => {
+  if (!requireToken(req, res)) return;
+  try {
+    const { name, target, vote, reason } = (req.body ?? {}) as { name?: string; target?: string; vote?: "kick" | "keep"; reason?: string };
+    if (!target) return res.status(400).type("text/plain").send("target required");
+    const { participant } = hub.join(req.params.room, (name || "human").trim(), "human", {}, undefined, `http:${name || "human"}`);
+    const kv = hub.kickVote(req.params.room, participant.id, String(target), vote === "keep" ? "keep" : "kick", reason);
+    res.json(hub.kickView(hub.getRoom(req.params.room), kv, true));
+  } catch (e) {
+    res.status(400).type("text/plain").send(e instanceof HubError ? e.message : "error");
+  }
+});
+// A human replacing a dead seat from the dashboard: same removal as kick, plus a recruit, in one call.
+app.post("/rooms/:room/replace", (req, res) => {
+  if (!requireToken(req, res)) return;
+  try {
+    const { name, target, reason, brief } = (req.body ?? {}) as { name?: string; target?: string; reason?: string; brief?: string };
+    if (!target) return res.status(400).type("text/plain").send("target required");
+    if (!reason) return res.status(400).type("text/plain").send("reason required");
+    const { participant } = hub.join(req.params.room, (name || "human").trim(), "human", {}, undefined, `http:${name || "human"}`);
+    const r = hub.getRoom(req.params.room);
+    const recs = spawner.replace({ room: req.params.room, requestedBy: participant.name, requestedByShown: hub.shown(r, participant), parentTopic: r.topic, replacing: String(target), reason: String(reason), brief, canEdit: true, requesterIsHuman: true });
+    res.json({ spawned: recs.map((x) => x.name), logs: recs.map((x) => x.log) });
   } catch (e) {
     res.status(400).type("text/plain").send(e instanceof HubError ? e.message : "error");
   }

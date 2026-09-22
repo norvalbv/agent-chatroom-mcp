@@ -4,6 +4,7 @@
  * Run: npm run smoke
  */
 import { spawn } from "node:child_process";
+import { readFileSync } from "node:fs";
 import assert from "node:assert/strict";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
@@ -51,7 +52,7 @@ const c = await connect("third");
 
 const tools = (await a.client.listTools()).tools.map((t) => t.name).sort();
 console.log("tools:", tools.join(", "));
-assert.deepEqual(tools, ["amend", "board_get", "board_set", "challenge", "join_room", "leave_room", "list_agents", "list_rooms", "pass", "post_to_room", "propose", "read_messages", "request_agent", "room_status", "send_message", "submit_opening", "vote", "wait_for_messages"]);
+assert.deepEqual(tools, ["amend", "board_get", "board_set", "challenge", "join_room", "kick_vote", "leave_room", "list_agents", "list_rooms", "pass", "post_to_room", "propose", "read_messages", "replace_participant", "request_agent", "room_status", "send_message", "submit_opening", "vote", "wait_for_messages"]);
 
 // ---------------- two-party room: blind openings, long-poll, propose, vote ----------------
 {
@@ -839,6 +840,99 @@ assert.deepEqual(tools, ["amend", "board_get", "board_set", "challenge", "join_r
   const asked2 = await a.call("request_agent", { room, name: "helper2", agent: "codex", brief: "A brief that is comfortably longer than twenty characters for the policy test." });
   assert.equal(asked2.agent, "codex", "unpinned: launched as requested");
   await fetch(`${HTTP}/policy`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ agent: "openrouter", model: "deepseek/deepseek-v4-flash-0731" }) });
+  await a.call("leave_room", { room, reason: "smoke: section finished, nothing owed" });
+}
+
+{
+  // vote to kick, end to end over MCP and HTTP: two ballots from distinct connections remove the third seat; its
+  // claim/* is released into one system line; its next tool call is refused with KICKED; it cannot rejoin; the
+  // dashboard route casts the same ballot and the room summary shows the vote.
+  const room = "kick";
+  await a.call("join_room", { room, name: "claude-1", agent: "claude", expected_participants: 3 });
+  await b.call("join_room", { room, name: "codex-1", agent: "codex" });
+  const jc = await c.call("join_room", { room, name: "third-1", agent: "claude" });
+  await c.call("board_set", { room, key: "claim/orphan", text: JSON.stringify({ area: "orphan", owner: "third-1", status: "building" }) });
+  await assert.rejects(a.call("kick_vote", { room, target: "third-1", vote: "keep" }), /no open vote/);
+  await assert.rejects(a.call("kick_vote", { room, target: "claude-1", reason: "self-kick must be refused" }), /cannot vote to kick yourself/);
+  const started = await a.call("kick_vote", { room, target: "third-1", reason: "smoke: no heartbeat for 20 min per room_status" });
+  assert.equal(started.status, "open");
+  assert.equal(started.needed, 2, "pool is two connections (a, b): supermajority of 2, floor 2");
+  assert.equal(started.kick, 1, "starting counts as a ballot");
+  await assert.rejects(c.call("kick_vote", { room, target: "third-1", vote: "keep" }), /cannot vote to kick yourself/);
+  const st1 = await c.call("room_status", { room });
+  assert.equal(st1.kick_votes.length, 1, "room_status lists the open vote");
+  const human = await fetch(`${HTTP}/rooms/${room}/kick`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ name: "benji", target: "third-1", vote: "keep" }) });
+  assert.equal(human.status, 200, "the dashboard casts the same ballot");
+  assert.equal((await human.json()).status, "dropped", "a human keep vetoes the vote");
+  const again = await a.call("kick_vote", { room, target: "third-1", reason: "smoke: still no heartbeat, restarting the vote" });
+  assert.equal(again.status, "open", "a settled vote can be restarted");
+  // a second name on the target's connection: it cannot ballot, does not raise the threshold, and goes with the target
+  const alias = await c.call("join_room", { room, name: "third-1b", agent: "claude" });
+  assert.equal((await a.call("room_status", { room })).kick_votes.at(-1).needed, 2, "the alias does not enlarge the threshold");
+  await assert.rejects(c.call("kick_vote", { room, target: "third-1", vote: "keep", participant_id: alias.participant_id }), /shares your connection/);
+  const done = await b.call("kick_vote", { room, target: "third-1", vote: "kick" });
+  assert.equal(done.status, "kicked");
+  await assert.rejects(c.call("send_message", { room, content: "still here?", participant_id: jc.participant_id }), /KICKED: you \(third-1\) were removed from "kick"/);
+  await assert.rejects(c.call("send_message", { room, content: "alias still here?", participant_id: alias.participant_id }), /KICKED/, "the alias was removed with the target");
+  await assert.rejects(c.call("wait_for_messages", { room, timeout_ms: 0, participant_id: jc.participant_id }), /KICKED/);
+  // identity-less reads from a connection holding two names resolve no actor; the guard still refuses on any kicked id it owns
+  await assert.rejects(c.call("room_status", { room }), /KICKED/, "reads on the kicked connection are refused too, so the seat learns on its very next call");
+  await assert.rejects(c.call("board_get", { room, key: "claim/orphan" }), /KICKED/);
+  await assert.rejects(c.call("list_agents", { room }), /KICKED/);
+  await assert.rejects(c.call("join_room", { room, name: "third-1", agent: "claude" }), /KICKED/);
+  await assert.rejects(c.call("join_room", { room, name: "third-2", agent: "claude" }), /KICKED/, "same connection, new name: still out");
+  // the hub made claude-1 the reviewer of claim/orphan, so its read_messages is focused on that ask: read the raw log over HTTP
+  const log = (await (await fetch(`${HTTP}/rooms/${room}/messages?since=0`)).json()) as { content: string }[];
+  assert.ok(log.some((m) => /third-1 was removed from the room by a kick vote started by claude-1/.test(m.content) && /Released 1 claim\/\* entry \(claim\/orphan\)/.test(m.content)), "one system line: removal + released claims");
+  const claim = await a.call("board_get", { room, key: "claim/orphan" });
+  assert.equal(JSON.parse(claim.text).status, "released");
+  await b.call("board_set", { room, key: "claim/orphan", text: JSON.stringify({ area: "orphan", owner: "codex-1", status: "building" }) }); // released areas are claimable by anyone
+  const st2 = (await (await fetch(`${HTTP}/rooms/${room}`)).json()) as { participants: { name: string; active: boolean; kicked?: { reason: string } }[]; kick_votes: { status: string }[] };
+  assert.equal(st2.participants.find((p) => p.name === "third-1")!.active, false);
+  assert.ok(st2.participants.find((p) => p.name === "third-1")!.kicked, "the summary carries the kicked record for the dashboard");
+  await b.call("board_set", { room, key: "handoff/orphan", text: "smoke: nothing built, released area handed back" });
+  await a.call("wait_for_messages", { room, timeout_ms: 0 }); // deliver the hub's reviewer-assignment ask to claude-1...
+  await a.call("pass", { room }); // ...and decline it, so leave_room is not refused for an unanswered ask
+  await a.call("leave_room", { room, reason: "smoke: section finished, nothing owed" });
+  await b.call("leave_room", { room, reason: "smoke: section finished, nothing owed" });
+}
+
+{
+  // replace: one action kicks a seat (same primitive as the kick vote, no ballot) and recruits its
+  // successor, over both MCP and the dashboard's HTTP route. An agent may not use it on a live, recently
+  // seen colleague (kick_vote is for that); the token-gated dashboard route may, unconditionally.
+  const room = "replace";
+  await a.call("join_room", { room, name: "claude-1", agent: "claude", expected_participants: 3 });
+  await b.call("join_room", { room, name: "codex-1", agent: "codex" });
+  await c.call("join_room", { room, name: "third-1", agent: "claude" });
+  await c.call("board_set", { room, key: "claim/thing", text: JSON.stringify({ area: "thing", owner: "third-1", status: "building" }) });
+  await assert.rejects(a.call("replace_participant", { room, target: "claude-1", reason: "self" }), /cannot replace yourself/);
+  await assert.rejects(a.call("replace_participant", { room, target: "third-1", reason: "smoke: disagreement, not a dead session" }), /use kick_vote/i, "an agent cannot unilaterally replace a live, recently-seen colleague");
+  // nor by joining a second name as agent="human" over MCP: only the token-gated dashboard session is a human here
+  const fake = await a.call("join_room", { room, name: "not-a-human", agent: "human" });
+  await assert.rejects(a.call("replace_participant", { room, target: "third-1", reason: "smoke: self-declared human", participant_id: fake.participant_id }), /use kick_vote/i, "a self-declared MCP human is not trusted");
+  await a.call("leave_room", { room, participant_id: fake.participant_id, reason: "smoke: fake human seat done" });
+  // the dashboard route is trusted unconditionally, same as a human's kick ballot
+  const human = await fetch(`${HTTP}/rooms/${room}/replace`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ name: "benji", target: "third-1", reason: "smoke: dead session per dashboard" }) });
+  assert.equal(human.status, 200, "the dashboard casts the same removal + recruit, even on a live seat");
+  const humanBody = await human.json();
+  assert.equal(humanBody.spawned.length, 1, "one successor recruited");
+  await assert.rejects(c.call("send_message", { room, content: "still here?" }), /KICKED: you \(third-1\) were removed from "replace"/);
+  await assert.rejects(c.call("room_status", { room }), /KICKED/, "reads are refused too, not just writes");
+  const claim = await a.call("board_get", { room, key: "claim/thing" });
+  assert.equal(JSON.parse(claim.text).status, "released", "replace releases claim/* exactly like a kick vote");
+  const promptLog = readFileSync(humanBody.logs[0], "utf8");
+  assert.match(promptLog, /What third-1 was doing:/);
+  assert.match(promptLog, /claim\/thing/);
+  // codex-1 leaves on its own first (a plain departure, not kicked): replace must not throw on an
+  // already-departed target, and an agent may replace it since nothing live is being touched
+  await b.call("wait_for_messages", { room, timeout_ms: 0 }); // deliver any reviewer-assignment ask to codex-1...
+  await b.call("pass", { room }); // ...and decline it, so leave_room is not refused for an unanswered ask
+  await b.call("leave_room", { room, reason: "smoke: simulating a departed (not kicked) seat" });
+  const rep2 = await a.call("replace_participant", { room, target: "codex-1", reason: "smoke: already gone, recruiting a successor" });
+  assert.equal(rep2.spawned.length, 1, "recruited without error even though there was nothing left to remove");
+  await a.call("wait_for_messages", { room, timeout_ms: 0 });
+  await a.call("pass", { room });
   await a.call("leave_room", { room, reason: "smoke: section finished, nothing owed" });
 }
 

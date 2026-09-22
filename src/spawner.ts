@@ -8,12 +8,13 @@
  * live overall, cumulative per room and per run, and a wall-clock limit.
  */
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync, createWriteStream, symlinkSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { HubError } from "./hub.js";
 import { settledAxes } from "./settled.js";
-import { seatChildEnv } from "./env.js";
+import { heartbeatHookSettings, outputHeartbeat, seatBeat, seatChildEnv } from "./env.js";
 import { claudeArgs } from "./claude-args.js";
 import { parseClaudeCliOutput, type SeatUsageRollup } from "./result.js";
 
@@ -88,6 +89,14 @@ export interface SpawnerHooks {
   roomState?(room: string): string | undefined;
   /** whether a room currently has an open proposal. Consolidator spawn skips the lobby while one is open. */
   openProposal?(room: string): boolean;
+  /** heartbeat the seat launched with this key (codex exec has no tool hooks: its output is the heartbeat) */
+  heartbeatSeat?(seatKey: string, info: { tool: string; detail?: string }): void;
+  /** the single removal primitive (kick's own path): mark `target` left, release its claim/*, refuse its next call. Must throw on failure. */
+  removeParticipant?(room: string, target: string, by: string, reason: string): void;
+  /** what `name` was doing: its claim/*, handoff/* and open inbox/* keys, formatted for a successor's brief. "" if nothing to report. */
+  predecessorContext?(room: string, name: string): string;
+  /** whether `target` exists, and if so, whether it is still active/kicked and how long since it was last seen (ms). Undefined: no such participant. */
+  targetStatus?(room: string, target: string): { active: boolean; kicked: boolean; staleMs: number; connected?: boolean } | undefined;
 }
 
 export interface SpawnerOptions {
@@ -259,7 +268,9 @@ export class Spawner {
         // the launcher registers the explicit successor; the recruit gets a one-use proof, never a control credential
         const replacementToken = this.hooks!.registerReplacement!(target, req.replacing, name);
         if (!replacementToken) throw new HubError("Replacement registration returned no join proof.");
-        replaceNote = `\n\nYou replace ${req.replacing}, who dropped out of this room. The launcher has registered you as their replacement with the hub. On your first join_room call use name=${JSON.stringify(name)} and replacement_token=${JSON.stringify(replacementToken)}. This one-use join proof is only for this reserved seat: do not post it to chat or board.`;
+        const context = this.hooks?.predecessorContext?.(target, req.replacing) ?? "";
+        replaceNote = `\n\nYou replace ${req.replacing}, who dropped out of this room. The launcher has registered you as their replacement with the hub. On your first join_room call use name=${JSON.stringify(name)} and replacement_token=${JSON.stringify(replacementToken)}. This one-use join proof is only for this reserved seat: do not post it to chat or board.` +
+          (context ? `\n\nWhat ${req.replacing} was doing:\n${context}` : "");
       }
       this.agents.push(rec);
       const teammates = names.filter((x) => x !== name);
@@ -288,30 +299,32 @@ export class Spawner {
         out.push(rec);
         continue;
       }
-      const mcpJson = resolve(o.logDir, "mcp.json");
-      writeFileSync(mcpJson, JSON.stringify({ mcpServers: { chatroom: { type: "http", url: o.mcpUrl } } }));
+      // per seat: the MCP URL carries this seat's heartbeat key, so the file cannot be shared between recruits
+      const beat = seatBeat(o.mcpUrl, randomUUID());
+      const mcpJson = resolve(o.logDir, `${name}.mcp.json`);
+      writeFileSync(mcpJson, JSON.stringify({ mcpServers: { chatroom: { type: "http", url: beat.mcpUrl } } }));
       let cmd: string;
       let args: string[];
       if (agent === "openrouter") {
         // dist/ is gitignored, so a hub run from source has no build for the seat to load
         cmd = existsSync(seatBuild) ? process.execPath : "npx";
-        args = [...(existsSync(seatBuild) ? [seatBuild] : ["tsx", resolve(repoRoot, "src", "openrouter.ts")]), "-p", prompt, "--mcp-url", o.mcpUrl, "--cwd", cwd];
+        args = [...(existsSync(seatBuild) ? [seatBuild] : ["tsx", resolve(repoRoot, "src", "openrouter.ts")]), "-p", prompt, "--mcp-url", beat.mcpUrl, "--cwd", cwd];
         if (req.model) args.push("--model", req.model);
         if (req.canEdit) args.push("--write");
       } else if (agent === "codex") {
         cmd = "codex";
-        args = ["exec", "--skip-git-repo-check", "-C", cwd, "-c", `mcp_servers.chatroom.url="${o.mcpUrl}"`, "-c", "mcp_servers.chatroom.tool_timeout_sec=120"];
+        args = ["exec", "--skip-git-repo-check", "-C", cwd, "-c", `mcp_servers.chatroom.url="${beat.mcpUrl}"`, "-c", "mcp_servers.chatroom.tool_timeout_sec=120"];
         if (req.model) args.push("-m", req.model);
         args.push(prompt);
       } else {
         cmd = "claude";
-        args = claudeArgs({ text: prompt, mcpJson, tools: req.canEdit ? WRITE_TOOLS : READ_TOOLS, model: req.model, full: CLAUDE_FULL });
+        args = claudeArgs({ text: prompt, mcpJson, tools: req.canEdit ? WRITE_TOOLS : READ_TOOLS, model: req.model, full: CLAUDE_FULL, settings: heartbeatHookSettings() });
       }
       // a write-enabled recruit works in its own worktree and branch, never in the shared checkout
       const seatCwd = req.canEdit && !o.dryRun ? (this.worktreeFor(cwd, target, name) ?? cwd) : cwd;
       if (agent === "openrouter") args[args.indexOf("--cwd") + 1] = seatCwd;
       else if (agent === "codex") args[args.indexOf("-C") + 1] = seatCwd;
-      const child = spawn(cmd, args, { cwd: seatCwd, env: seatChildEnv(process.env, req.canEdit ? name : undefined), stdio: ["ignore", "pipe", "pipe"] });
+      const child = spawn(cmd, args, { cwd: seatCwd, env: { ...seatChildEnv(process.env, req.canEdit ? name : undefined), ...beat.env }, stdio: ["ignore", "pipe", "pipe"] });
       // claude always runs --output-format json now (telemetry), so its raw stdout is a JSON blob, not the
       // plain final-answer text every other seat's log holds. Buffer stdout+stderr instead of piping them
       // live, and on close write only the unwrapped text (matches runClaude's outFile in swarm.ts) so a
@@ -327,6 +340,11 @@ export class Spawner {
         const outStream = createWriteStream(log);
         child.stdout?.pipe(outStream);
         child.stderr?.pipe(outStream);
+        if (agent === "codex") {
+          const beatOut = outputHeartbeat((detail) => this.hooks?.heartbeatSeat?.(beat.key, { tool: "codex", detail }));
+          child.stdout?.on("data", beatOut);
+          child.stderr?.on("data", beatOut);
+        }
       }
       rec.pid = child.pid;
       this.children.set(name, child);
@@ -355,6 +373,53 @@ export class Spawner {
       out.push(rec);
     }
     return out;
+  }
+
+  /**
+   * Item 2: kick a dead/departed seat and recruit its replacement in one call, reusing the kick path
+   * (removeParticipant) rather than duplicating its removal/claim-release logic. `req.replacing` is the
+   * exact name to remove; the caller's own brief is optional (defaults to "take over" plus whatever
+   * predecessorContext finds), and the successor gets that context appended to the standard replace note.
+   *
+   * Guardrails (review, swarm-140818-f1qy): an agent caller may only remove a target that is already
+   * departed, already kicked, or has been quiet for at least `staleMs` AND whose MCP session is no longer
+   * connected (targetStatus.connected) -- a live colleague needs kick_vote, not one seat's unilateral say-so. A human caller (the token-gated dashboard route) is
+   * trusted unconditionally, same as a human's kick ballot. An already-departed or already-kicked target
+   * skips removeParticipant entirely (it would only throw "already left"/"already removed") and goes
+   * straight to recruiting. If recruiting then fails, the predecessor is already gone: say so plainly
+   * rather than leaving a silent hole.
+   */
+  replace(req: Omit<SpawnRequest, "brief" | "newRoom" | "count"> & { reason: string; brief?: string; requesterIsHuman?: boolean; staleMs?: number }): SpawnedAgent[] {
+    if (!req.replacing?.trim()) throw new HubError("replace requires the exact name of the participant to remove.");
+    if (req.replacing === req.requestedBy) throw new HubError("You cannot replace yourself: leave_room instead.");
+    if (!this.hooks?.removeParticipant || !this.hooks?.targetStatus) throw new HubError("Replace is unavailable; no recruit launched.");
+    if (!req.reason.trim()) throw new HubError("A reason is required: why this seat is being replaced.");
+    // request() enforces this too, but only after the recruit's other checks: validate here, before removal,
+    // so a structurally-invalid replace (a group, a new room) never kicks the predecessor for nothing.
+    if ((req as { newRoom?: string }).newRoom || ((req as { count?: number }).count ?? 1) !== 1) {
+      throw new HubError("Replacement requires one recruit in the same room and an exact predecessor name.");
+    }
+    const status = this.hooks.targetStatus(req.room, req.replacing);
+    if (!status) throw new HubError(`No participant named "${req.replacing}" in "${req.room}".`);
+    const staleMs = req.staleMs ?? 10 * 60_000;
+    if (status.active && !status.kicked) {
+      if (!req.requesterIsHuman && status.staleMs < staleMs) {
+        throw new HubError(`${req.replacing} was active ${Math.round(status.staleMs / 1000)}s ago; replace is for dead sessions. Use kick_vote instead (a human on the dashboard may replace directly).`, undefined, "auth");
+      }
+      // stale is not dead while the MCP session is open: heartbeats fire at the start of a tool call, so a seat
+      // inside one long command (a full npm test) sends nothing for minutes yet is alive. Same rule as sweepIdle.
+      if (!req.requesterIsHuman && status.connected) {
+        throw new HubError(`${req.replacing} has been quiet for ${Math.round(status.staleMs / 1000)}s but its MCP session is still connected: a seat inside a long command is alive, not dead. Use kick_vote instead (a human on the dashboard may replace directly).`, undefined, "auth");
+      }
+      this.hooks.removeParticipant(req.room, req.replacing, req.requestedBy, req.reason);
+    } // else: already departed or already kicked, nothing to remove -- go straight to recruiting
+    const brief = req.brief?.trim() || `Take over for ${req.replacing}, who was removed from this room (${req.reason}). Read what they were doing (appended below) and continue their unfinished work.`;
+    try {
+      return this.request({ ...req, brief });
+    } catch (e) {
+      const msg = e instanceof HubError ? e.message : String(e);
+      throw new HubError(`${req.replacing} was removed, but recruiting a successor failed: ${msg} Nobody was launched; call request_agent(replacing=${JSON.stringify(req.replacing)}) once that clears.`);
+    }
   }
 
   /** The consolidator seat's only job: assemble the ranked list from the children's conclusions and inbox entries. */

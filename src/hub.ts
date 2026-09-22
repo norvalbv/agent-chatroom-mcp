@@ -119,6 +119,27 @@ export interface Participant {
   pendingReplacementName?: string;
   /** sha256 of the one-use token handed to the launcher for that successor name. */
   pendingReplacementTokenHash?: string;
+  /** Removed by the room (kick vote or replace): the seat may not rejoin, and its next hub call says so. Persisted with the leave event. */
+  kicked?: { by: string; reason: string; at: string };
+}
+
+/**
+ * A vote to remove one participant. Keyed by target pid on the room; one open vote per target. Ballots are
+ * counted per connection (identity-is-the-connection), the target never votes on its own removal, and the
+ * threshold is the room's quorum rule over the voters minus the target (never fewer than 2 distinct
+ * connections when 2 are available, so no seat is removed on a single ballot in a room that has others).
+ * A human ballot counts like an agent's toward the threshold; a human "keep" vetoes (mirrors proposal votes).
+ */
+export interface KickVote {
+  target: string;
+  targetName: string;
+  by: { id: string; name: string };
+  reason: string;
+  startedAt: string;
+  ballots: Record<string, { name: string; vote: "kick" | "keep"; ts: string; session?: string; human?: boolean }>;
+  status: "open" | "kicked" | "dropped";
+  endedAt?: string;
+  outcome?: string;
 }
 
 export interface Message {
@@ -301,6 +322,8 @@ export interface Room {
   humanWarned: Set<string>;
   /** who has been asked to answer each human message, so three agents do not all say hello */
   responders: Map<string, { pid: string; at: number }>;
+  /** open and settled votes to remove a participant, keyed by target pid */
+  kickVotes: Map<string, KickVote>;
 }
 
 type Opts = Required<Omit<RoomOptions, "chair">> & { chair?: string };
@@ -324,7 +347,8 @@ type Event =
   | { type: "board"; room: string; key: string; entry: BoardEntry | null }
   | { type: "amend"; room: string; proposalId: string; text: string; version: number; updatedAt?: string; votes: Proposal["votes"]; challenges?: Challenge[] }
   | { type: "refusal"; room: string; tool: string; reason: string; ts?: string; participant?: string | null }
-  | { type: "call_completion"; room: string; tool: string; outcome: CallOutcome; ts: string; participant: string | null };
+  | { type: "call_completion"; room: string; tool: string; outcome: CallOutcome; ts: string; participant: string | null }
+  | { type: "kick_vote"; room: string; vote: KickVote };
 
 const now = () => new Date().toISOString();
 const shortId = (prefix: string) => `${prefix}_${randomBytes(4).toString("hex")}`;
@@ -489,6 +513,7 @@ export class Hub {
       boardVersions: new Map(),
       humanWarned: new Set(),
       responders: new Map(),
+      kickVotes: new Map(),
     };
     this.rooms.set(name, room);
     this.armOpeningsDeadline(room, room.nudgeAfterMs * 2); // the zero-openings case; the first opening tightens it to one period
@@ -506,6 +531,7 @@ export class Hub {
    * agents get pseudonyms.
    */
   summary(room: Room, reveal = false) {
+    const observedAt = Date.now();
     const active = this.activeParticipants(room);
     const nm = (p: Participant) => (reveal ? p.name : this.shown(room, p));
     const speaker = this.currentSpeaker(room);
@@ -543,8 +569,16 @@ export class Hub {
         last_active_at: p.lastActiveAt,
         last_seen_at: this.lastSeen(p),
         working: p.working ?? null,
+        liveness: (() => {
+          const age = (at: string) => Math.max(0, Math.floor((observedAt - Date.parse(at)) / 1000));
+          const age_seconds = age(this.lastSeen(p));
+          return { status: !p.active ? "left" : age_seconds < 60 ? "active" : age_seconds < 600 ? "idle" : "suspected_dead",
+            age_seconds, heartbeat_age_seconds: p.working ? age(p.working.at) : null };
+        })(),
         left_reason: p.active ? null : p.leaveReason ?? null,
+        ...(p.kicked ? { kicked: p.kicked } : {}),
       })),
+      kick_votes: [...room.kickVotes.values()].map((kv) => this.kickView(room, kv, reveal)),
       active_count: active.length,
       message_count: room.messages.length,
       latest_seq: room.messages.at(-1)?.seq ?? 0,
@@ -705,6 +739,10 @@ export class Hub {
     let participant = mine ?? (reclaimId ? room.participants.get(reclaimId) : undefined);
     if (participant && participant.name !== name) throw new HubError("participant_id does not belong to that name.");
     if (!participant) participant = [...room.participants.values()].find((p) => p.name === name && !p.active);
+    // A removed seat stays removed: not under its old name, its old id, or a new name on the same connection.
+    const kickedSeat = participant?.kicked ? participant
+      : session ? [...room.participants.values()].find((p) => p.kicked && p.session === session) : undefined;
+    if (kickedSeat) throw new HubError(Hub.kickedMessage(room, kickedSeat), undefined, "auth");
     // Humans are identified by name alone (they come in over plain HTTP with no session), so they always reclaim.
     if (!participant && agent === "human") participant = [...room.participants.values()].find((p) => p.name === name && p.agent === "human");
     if (participant && opts.replacementToken !== undefined) throw new HubError("Replacement token has already been consumed or is not reserved for this join.");
@@ -830,8 +868,15 @@ export class Hub {
   requireParticipant(room: Room, pid: string): Participant {
     const p = room.participants.get(pid);
     if (!p) throw new HubError(`You are not a participant of "${room.name}". Call join_room first.`, undefined, "auth");
+    if (p.kicked) throw new HubError(Hub.kickedMessage(room, p), undefined, "auth");
     if (!p.active) throw new HubError(`You have left "${room.name}". Call join_room again to rejoin.`, undefined, "auth");
     return p;
+  }
+
+  /** What a removed seat is told on its next call: unambiguous, and it says not to rejoin. */
+  static kickedMessage(room: Room, p: Participant): string {
+    const k = p.kicked!;
+    return `KICKED: you (${p.name}) were removed from "${room.name}" by ${k.by} at ${k.at}: ${k.reason}. This seat is closed; you cannot rejoin, send, vote or write to the board here. Stop working on this room.`;
   }
 
   activeParticipants(room: Room): Participant[] {
@@ -863,7 +908,7 @@ export class Hub {
    * ties). This is pure, including for hypothetical departures, and is reproducible after replay.
    * Missing/empty snapshots are legacy rooms and retain their all-voter compatibility.
    */
-  electorate(room: Room, pr: Proposal, leavingId?: string) {
+  electorate(room: Room, pr: Pick<Proposal, "snapshot">, leavingId?: string) {
     const all = this.voters(room).filter((p) => p.id !== leavingId);
     const snapshot = pr.snapshot?.length ? new Set(pr.snapshot) : undefined;
     const members = snapshot ? all.filter((p) => snapshot.has(p.id)) : [...all];
@@ -1767,7 +1812,8 @@ export class Hub {
     // Assigned once, at creation only: later edits (status updates, notes) keep the same reviewer.
     let reviewer: Participant | undefined;
     if (key.startsWith("claim/")) {
-      if (previous && previous.by !== p.name) throw new HubError(`claim "${key}" is owned by ${previous.by} (since ${previous.updatedAt}). Join their team via help/ or join-request/, or pick another area.`, undefined, "ownership");
+      // a claim released by removeParticipant (status "released", rewritten by the hub) is open to anyone
+      if (previous && previous.by !== p.name && !Hub.claimReleased(previous)) throw new HubError(`claim "${key}" is owned by ${previous.by} (since ${previous.updatedAt}). Join their team via help/ or join-request/, or pick another area.`, undefined, "ownership");
       if (text.trim()) {
         let parsed: { status?: string; team?: unknown } | undefined;
         try {
@@ -1787,7 +1833,7 @@ export class Hub {
     }
     if (opts.ifAbsent && previous) throw new HubError(`"${key}" already exists (by ${previous.by}, ${previous.updatedAt}).`, { existing: previous }, "state");
     if (opts.ifByMe && previous && previous.by !== p.name) throw new HubError(`"${key}" was written by ${previous.by}, not you. Use post_to_room or a different key.`, undefined, "ownership");
-    if (previous && previous.by !== p.name && !opts.overwrite && text.trim()) {
+    if (previous && previous.by !== p.name && !opts.overwrite && text.trim() && !(key.startsWith("claim/") && Hub.claimReleased(previous))) {
       throw new HubError(
         `"${key}" was written by ${previous.by} at ${previous.updatedAt}; replacing it would discard their text. Merge with the current content below and resend with overwrite=true, or use your own key.`,
         { current: previous },
@@ -2454,13 +2500,48 @@ export class Hub {
    * when. Local tools never reach the hub, so without this a builder on step 71 of a build looked like "1 msg, 12m ago"
    * and nobody could tell it from a dead seat. Not persisted: it is about the process, not the room's history.
    */
-  heartbeat(roomName: string, pid: string, info: { tool: string; step: number; detail?: string }): void {
+  heartbeat(roomName: string, pid: string, info: { tool: string; step?: number; detail?: string }): void {
     const room = this.getRoom(roomName);
     const p = this.requireParticipant(room, pid);
+    this.recordWork(p, info);
+  }
+
+  /** A step with no count of its own (a hook, an MCP call) is the seat's next step. */
+  private recordWork(p: Participant, info: { tool: string; step?: number; detail?: string }): void {
     const detail = String(info.detail ?? "").replace(/\s+/g, " ").trim().slice(0, 300);
-    p.working = { tool: String(info.tool).slice(0, 40), step: Number(info.step) || 0, at: now(), ...(detail ? { detail } : {}) };
+    const step = Number(info.step) || (p.working?.step ?? 0) + 1;
+    p.working = { tool: String(info.tool).slice(0, 40), step, at: now(), ...(detail ? { detail } : {}) };
     (p.activity ??= []).push({ tool: p.working.tool, step: p.working.step, at: p.working.at, detail });
     if (p.activity.length > 60) p.activity.splice(0, p.activity.length - 60);
+  }
+
+  /**
+   * Seat keys: a launcher gives each seat process a random key, puts it in the seat's MCP URL (?seat=) and in its env
+   * (CHATROOM_SEAT_KEY). The hub binds the key to the MCP connection it arrives on, so a process that cannot know its
+   * participant ids (a claude -p tool hook, a launcher watching codex output) can still heartbeat as that connection,
+   * and only as that connection (identity-is-the-connection). Ephemeral, like the heartbeats themselves.
+   */
+  private seatSessions = new Map<string, string>();
+
+  bindSeat(seatKey: string, session: string): void {
+    if (seatKey && session) this.seatSessions.set(seatKey, session);
+  }
+
+  /** Heartbeat every active participant the seat's connection holds, in rooms still open. Returns how many were marked. */
+  heartbeatSeat(seatKey: string, info: { tool: string; step?: number; detail?: string }): number {
+    const session = this.seatSessions.get(seatKey);
+    if (!session) return 0;
+    let n = 0;
+    for (const room of this.rooms.values()) {
+      if (room.state === "concluded" || room.state === "closed") continue;
+      for (const p of room.participants.values()) {
+        if (p.active && p.session === session) {
+          this.recordWork(p, info);
+          n++;
+        }
+      }
+    }
+    return n;
   }
 
   /** A participant's recent steps, oldest first (GET /rooms/:room/participants/:name/activity). */
@@ -2469,6 +2550,215 @@ export class Hub {
     const p = [...room.participants.values()].filter((x) => x.name === name).sort((a, b) => (b.active ? 1 : 0) - (a.active ? 1 : 0))[0];
     if (!p) throw new HubError(`No participant named "${name}" in "${roomName}".`);
     return p.activity ?? [];
+  }
+
+  // ---------- kick vote / removal ----------
+
+  /** Who may be a kick target: an active non-human, non-chair participant of this room, by name (or id). */
+  private kickTarget(room: Room, target: string): Participant {
+    const p = room.participants.get(target) ?? [...room.participants.values()].filter((x) => x.name === target).sort((a, b) => (b.active ? 1 : 0) - (a.active ? 1 : 0))[0];
+    if (!p) throw new HubError(`No participant named "${target}" in "${room.name}".`);
+    if (p.kicked) throw new HubError(`${this.shown(room, p)} was already removed from "${room.name}" (${p.kicked.reason}).`, undefined, "state");
+    if (!p.active) throw new HubError(`${this.shown(room, p)} has already left "${room.name}"; there is nothing to remove. To bring in a successor, request_agent(replacing=${JSON.stringify(p.name)}).`, undefined, "state");
+    if (p.agent === "human" || p.role === "chair") throw new HubError("Humans and the chair are the room's controllers; they cannot be voted out.", undefined, "auth");
+    return p;
+  }
+
+  /**
+   * Who decides a kick: the single electorate() (no proposal snapshot: every present voter) with the target as the
+   * hypothetical leaver, minus any other identity on the target's connection (identity-is-the-connection: a sibling
+   * name may not ballot on its own seat, so it must not enlarge the threshold either).
+   */
+  private kickPool(room: Room, target: Participant): Participant[] {
+    return this.electorate(room, {}, target.id).members.filter((p) => !(target.session && p.session === target.session));
+  }
+
+  /** A removed seat learns it on its very next call for that room, reads included (server guard). */
+  refuseKicked(roomName: string, pid: string): void {
+    const room = this.rooms.get(roomName);
+    const p = room?.participants.get(pid);
+    if (room && p?.kicked) throw new HubError(Hub.kickedMessage(room, p), undefined, "auth");
+  }
+
+  /**
+   * Ballots needed: the room's quorum rule over the distinct connections in the pool (unanimous = all of them),
+   * and never fewer than 2, so no seat is ever removed on one ballot. In a room of two the second ballot can only
+   * come from a human; without one the vote is refused at the start (the idle sweep already marks a dead seat
+   * left after 10 min, after which request_agent(replacing=) needs no vote).
+   */
+  kickNeeded(room: Room, target: Participant): number {
+    const sessions = Hub.sessionsOf(this.kickPool(room, target));
+    return Math.max(room.quorum === "unanimous" ? sessions : Hub.quorumNeeded(room.quorum, sessions), 2);
+  }
+
+  /** Ballots that could still arrive: pool connections plus dashboard humans, minus those already voting keep. */
+  private kickPossible(room: Room, target: Participant, keep = 0): number {
+    const humans = this.activeParticipants(room).filter((p) => Hub.dashboardHuman(p)).length;
+    return Hub.sessionsOf(this.kickPool(room, target)) + humans - keep;
+  }
+
+  /**
+   * A human whose ballot the hub trusts: one that arrived through the token-gated HTTP routes (session "http:<name>",
+   * set by src/index.ts), never a name that merely declared agent="human" on an MCP connection (any seat can do that).
+   */
+  static dashboardHuman(p: Participant): boolean {
+    return p.agent === "human" && !!p.session?.startsWith("http:");
+  }
+
+  /**
+   * Start a vote to remove `target`, or add a ballot to the open one. The caller's ballot is recorded either way
+   * (starting counts as a kick ballot). One open vote per target; a settled vote for the same target can be
+   * restarted. Humans (dashboard) use the same entry point; the target cannot vote on its own removal.
+   */
+  kickVote(roomName: string, pid: string, target: string, vote: "kick" | "keep" = "kick", reason?: string): KickVote {
+    const room = this.getRoom(roomName);
+    const by = this.requireParticipant(room, pid);
+    if (room.state === "concluded" || room.state === "closed") throw new HubError(`Room "${roomName}" is ${room.state}; nobody can be removed from it.`, undefined, "state");
+    const t = this.kickTarget(room, target);
+    if (t.id === by.id) throw new HubError("You cannot vote to kick yourself: leave_room instead.");
+    // everyone, self-declared humans included: a seat that joins a second name as agent="human" on its own
+    // connection is still that connection (identity-is-the-connection), so it may not veto its own kick
+    if (by.session && t.session && by.session === t.session) throw new HubError("That participant shares your connection; identity is the connection, so this would be a vote on yourself.", undefined, "auth");
+    const human = Hub.dashboardHuman(by);
+    if (!human && !this.kickPool(room, t).some((p) => p.id === by.id)) {
+      throw new HubError(`Only voters on other connections, or a human on the dashboard, may vote on removing ${this.shown(room, t)}; a name joined as agent="human" over MCP is not a dashboard human.`, undefined, "auth");
+    }
+    let kv = room.kickVotes.get(t.id);
+    if (!kv || kv.status !== "open") {
+      const why = reason?.trim() ?? "";
+      if (vote !== "kick") throw new HubError(`There is no open vote to kick ${this.shown(room, t)}; only a "kick" ballot with a reason starts one.`);
+      if (why.length < 8) throw new HubError("A kick vote needs a reason (one line): persistent disagreement blocking progress, or evidence the session is dead (liveness/last_seen_at).");
+      const needed = this.kickNeeded(room, t);
+      if (this.kickPossible(room, t) < needed) {
+        throw new HubError(`A kick needs ${needed} ballots from distinct connections (never one seat alone) and only ${this.kickPossible(room, t)} could vote here besides ${this.shown(room, t)}. A human on the dashboard can supply one; otherwise the idle sweep marks a dead seat left after 10 min, and request_agent(replacing=${JSON.stringify(t.name)}) then needs no vote.`, undefined, "state");
+      }
+      kv = { target: t.id, targetName: t.name, by: { id: by.id, name: by.name }, reason: why.slice(0, 600), startedAt: now(), ballots: {}, status: "open" };
+      room.kickVotes.set(t.id, kv);
+      this.post(room, "system", undefined,
+        `${this.shown(room, by)} started a vote to kick ${this.shown(room, t)}: ${kv.reason} — needs ${needed} kick ballot(s) from distinct connections (quorum=${room.quorum} over the other voters). ` +
+        `Vote with kick_vote(target=${JSON.stringify(this.shown(room, t))}, vote="kick"|"keep"); the target may not vote. On the threshold the hub removes them, releases their claim/* entries and their next call tells them they were kicked.`);
+    }
+    kv.ballots[by.id] = { name: by.name, vote, ts: now(), session: by.session, ...(human ? { human: true } : {}) };
+    this.persist({ type: "kick_vote", room: roomName, vote: kv });
+    this.post(room, "system", undefined, `${this.shown(room, by)} votes ${vote.toUpperCase()} on removing ${this.shown(room, t)} (${this.kickTally(room, kv).summary}).`);
+    this.evaluateKick(room, kv);
+    return kv;
+  }
+
+  /** Ballots counted per connection over the current pool (a ballot from a seat that has since left no longer counts). */
+  private kickTally(room: Room, kv: KickVote) {
+    const t = room.participants.get(kv.target)!;
+    const pool = this.kickPool(room, t);
+    const eligible = new Set(pool.map((p) => p.id));
+    const kickSessions = new Set<string>();
+    const keepSessions = new Set<string>();
+    let humanKeep = false;
+    for (const [id, b] of Object.entries(kv.ballots)) {
+      const voter = room.participants.get(id);
+      if (!voter?.active) continue;
+      const identity = voter.session ?? voter.id;
+      if (b.human) {
+        if (b.vote === "keep") humanKeep = true;
+        else kickSessions.add(identity);
+        continue;
+      }
+      if (!eligible.has(id)) continue;
+      (b.vote === "kick" ? kickSessions : keepSessions).add(identity);
+    }
+    const needed = this.kickNeeded(room, t);
+    const poolSessions = Hub.sessionsOf(pool);
+    const possible = this.kickPossible(room, t, keepSessions.size);
+    return { kick: kickSessions.size, keep: keepSessions.size, needed, pool: poolSessions, possible, humanKeep, summary: `${kickSessions.size}/${needed} kick, ${keepSessions.size} keep, ${poolSessions} eligible connection(s)` };
+  }
+
+  private evaluateKick(room: Room, kv: KickVote): void {
+    if (kv.status !== "open") return;
+    const t = room.participants.get(kv.target);
+    if (!t || !t.active) { this.settleKick(room, kv, "dropped", `${kv.targetName} is no longer in the room`); return; }
+    const tally = this.kickTally(room, kv);
+    if (tally.humanKeep) { this.settleKick(room, kv, "dropped", "a human voted keep (veto)"); return; }
+    if (tally.kick >= tally.needed) {
+      this.settleKick(room, kv, "kicked", `${tally.kick} of ${tally.needed} needed kick ballots`);
+      this.removeParticipant(room.name, t.id, `a kick vote started by ${kv.by.name}`, kv.reason);
+      return;
+    }
+    // keep ballots that make the threshold unreachable end the vote early
+    if (tally.possible < tally.needed) this.settleKick(room, kv, "dropped", `${tally.keep} keep ballot(s) leave fewer than ${tally.needed} possible kick ballots`);
+  }
+
+  private settleKick(room: Room, kv: KickVote, status: "kicked" | "dropped", outcome: string): void {
+    kv.status = status;
+    kv.endedAt = now();
+    kv.outcome = outcome;
+    this.persist({ type: "kick_vote", room: room.name, vote: kv });
+    if (status === "dropped") this.post(room, "system", undefined, `The vote to kick ${kv.targetName} was dropped: ${outcome}.`);
+  }
+
+  /**
+   * The single removal primitive (kick vote, replace): mark the target left with a kicked record so its next call
+   * is refused with a clear error and it cannot rejoin, release every claim/* it owns into one system line (the
+   * entries are rewritten as released so a successor can claim the area), close any kick vote it started, and
+   * re-evaluate open proposals. The electorate needs no separate adjustment: electorate() already excludes
+   * inactive seats and unarrived() counts arrivals, so quorum is no longer waited on the removed seat.
+   */
+  removeParticipant(roomName: string, target: string, by: string, reason: string): Participant {
+    const room = this.getRoom(roomName);
+    const p = this.kickTarget(room, target);
+    const why = reason.trim().slice(0, 600) || "removed";
+    // identity is the connection: every other active name on the target's connection goes with it, or an alias
+    // that can never call again would sit in the electorate and block quorum
+    const seats = [p, ...(p.session ? this.activeParticipants(room).filter((x) => x.id !== p.id && x.session === p.session && x.agent !== "human") : [])];
+    const at = now();
+    const claims: string[] = [];
+    for (const s of seats) {
+      s.active = false;
+      s.lastActiveAt = at;
+      s.kicked = { by, reason: why, at };
+      s.leaveReason = `kicked (${by}): ${why}`;
+      this.persist({ type: "leave", room: roomName, p: s });
+      for (const [k, e] of room.board.entries()) {
+        if (!k.startsWith("claim/") || e.by !== s.name || !e.text.trim()) continue;
+        let released: Record<string, unknown> = {};
+        try { released = JSON.parse(e.text) as Record<string, unknown>; } catch { released = { note: e.text }; }
+        released = { ...released, status: "released", released_from: s.name, released_by: by, released_at: at };
+        const entry: BoardEntry = { ...e, text: JSON.stringify(released), by: "system", updatedAt: at };
+        this.applyBoard(room, k, entry);
+        this.persist({ type: "board", room: roomName, key: k, entry });
+        claims.push(k);
+      }
+      for (const kv of room.kickVotes.values()) if (kv.status === "open" && kv.target !== s.id && kv.by.id === s.id && Object.keys(kv.ballots).length <= 1) this.settleKick(room, kv, "dropped", `${s.name}, who started it, was removed`);
+    }
+    const aliases = seats.slice(1).map((s) => this.shown(room, s));
+    this.post(room, "system", undefined,
+      `${this.shown(room, p)} was removed from the room by ${by}: ${why}.` +
+      (aliases.length ? ` ${aliases.join(", ")} (same connection) removed with them.` : "") +
+      (claims.length ? ` Released ${claims.length} claim/* entr${claims.length === 1 ? "y" : "ies"} (${claims.join(", ")}): status is now "released", content kept, anyone may claim the area.` : "") +
+      ` Their next hub call is refused with KICKED; they cannot rejoin.`);
+    for (const pr of room.proposals.values()) if (pr.status === "open") this.evaluate(room, pr);
+    return p;
+  }
+
+  /** A claim/* rewritten by removeParticipant: owner gone, area open to anyone. */
+  static claimReleased(e: BoardEntry): boolean {
+    if (e.by !== "system") return false;
+    try { return (JSON.parse(e.text) as { status?: string }).status === "released"; } catch { return false; }
+  }
+
+  /** Kick votes as room_status / the dashboard show them. */
+  kickView(room: Room, kv: KickVote, reveal = false) {
+    const t = room.participants.get(kv.target);
+    const nm = (p: { id: string; name: string }) => (reveal ? p.name : this.shown(room, room.participants.get(p.id) ?? p));
+    const tally = t && kv.status === "open" ? this.kickTally(room, kv) : undefined;
+    return {
+      target: t ? nm(t) : kv.targetName,
+      by: nm(kv.by),
+      reason: kv.reason,
+      started_at: kv.startedAt,
+      status: kv.status,
+      ...(kv.outcome ? { outcome: kv.outcome } : {}),
+      ...(tally ? { kick: tally.kick, keep: tally.keep, needed: tally.needed, eligible_connections: tally.pool } : {}),
+      ballots: Object.entries(kv.ballots).map(([id, b]) => ({ name: nm({ id, name: b.name }), vote: b.vote, ts: b.ts, ...(b.human ? { human: true } : {}) })),
+    };
   }
 
   /** Latest of the last hub call and the last heartbeat. */
@@ -2639,6 +2929,11 @@ export class Hub {
           case "openings_revealed": {
             const room = this.rooms.get(ev.room);
             if (room) room.openingsRevealed = true;
+            break;
+          }
+          case "kick_vote": {
+            const room = this.rooms.get(ev.room);
+            if (room) room.kickVotes.set(ev.vote.target, ev.vote);
             break;
           }
           case "archive": {

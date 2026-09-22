@@ -909,6 +909,7 @@ assert.deepEqual(tools, ["amend", "board_get", "board_set", "challenge", "join_r
   const rep = await a.call("replace_participant", { room, target: "third-1", reason: "smoke: no heartbeat for 20 min per room_status" });
   assert.equal(rep.spawned.length, 1, "one successor recruited");
   await assert.rejects(c.call("send_message", { room, content: "still here?" }), /KICKED: you \(third-1\) were removed from "replace"/);
+  await assert.rejects(c.call("room_status", { room }), /KICKED/, "reads are refused too, not just writes");
   const claim = await a.call("board_get", { room, key: "claim/thing" });
   assert.equal(JSON.parse(claim.text).status, "released", "replace releases claim/* exactly like a kick vote");
   const promptLog = readFileSync(rep.logs[0], "utf8");

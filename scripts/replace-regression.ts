@@ -36,7 +36,8 @@ function fixture(fn: (s: Spawner, hub: Hub, dir: string) => void, hookOverrides:
       targetStatus: (r, target) => {
         const p = [...hub.getRoom(r).participants.values()].find((x) => x.name === target);
         if (!p) return undefined;
-        return { active: p.active, kicked: !!p.kicked, staleMs: Date.now() - Date.parse(hub.lastSeen(p)) };
+        // `connected` mirrors what index.ts reads from its transports map: is the target's MCP session still open?
+        return { active: p.active, kicked: !!p.kicked, staleMs: Date.now() - Date.parse(hub.lastSeen(p)), connected: sessionConnected };
       },
       predecessorContext: (r, name) => {
         const board = hub.getRoom(r).board;
@@ -55,6 +56,8 @@ function fixture(fn: (s: Spawner, hub: Hub, dir: string) => void, hookOverrides:
   }
 }
 const ROOM = "replace-room";
+/** what the fixture's targetStatus reports for the target's MCP session (index.ts reads its transports map for this) */
+let sessionConnected = false;
 const req = { room: ROOM, requestedBy: "colleague", replacing: "predecessor", reason: "no heartbeat for 15 min per room_status", requesterIsHuman: true };
 
 test("replace kicks via the real removal primitive: predecessor marked left, kicked record set, claim released", () => {
@@ -133,6 +136,35 @@ test("B2: an agent MAY remove a live colleague once it has been quiet longer tha
     const p = [...hub.getRoom(ROOM).participants.values()].find((x) => x.name === "predecessor")!;
     p.lastActiveAt = new Date(Date.now() - 11 * 60_000).toISOString(); // 11 min of silence
     const [rec] = s.replace({ ...req, requesterIsHuman: false });
+    assert.ok(rec.name);
+    assert.equal(p.active, false);
+  });
+});
+
+test("B2: a stale target whose MCP session is still connected is alive, not dead -- an agent is refused even after the stale threshold", () => {
+  sessionConnected = true;
+  try {
+    fixture((s, hub) => {
+      const p = [...hub.getRoom(ROOM).participants.values()].find((x) => x.name === "predecessor")!;
+      p.lastActiveAt = new Date(Date.now() - 11 * 60_000).toISOString(); // 11 min inside one long command
+      assert.throws(() => s.replace({ ...req, requesterIsHuman: false }), /still connected/);
+      assert.equal(p.active, true, "refused before removal: the busy colleague is untouched");
+      assert.equal(s.agents.length, 0);
+      // a dashboard human is trusted even while the target's session is connected
+      const [rec] = s.replace({ ...req, requesterIsHuman: true });
+      assert.ok(rec.name);
+      assert.equal(p.active, false);
+    });
+  } finally {
+    sessionConnected = false;
+  }
+});
+
+test("B2: a stale target whose MCP session is gone may be replaced by an agent", () => {
+  fixture((s, hub) => {
+    const p = [...hub.getRoom(ROOM).participants.values()].find((x) => x.name === "predecessor")!;
+    p.lastActiveAt = new Date(Date.now() - 11 * 60_000).toISOString();
+    const [rec] = s.replace({ ...req, requesterIsHuman: false }); // sessionConnected is false: the process is gone
     assert.ok(rec.name);
     assert.equal(p.active, false);
   });

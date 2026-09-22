@@ -96,7 +96,7 @@ export interface SpawnerHooks {
   /** what `name` was doing: its claim/*, handoff/* and open inbox/* keys, formatted for a successor's brief. "" if nothing to report. */
   predecessorContext?(room: string, name: string): string;
   /** whether `target` exists, and if so, whether it is still active/kicked and how long since it was last seen (ms). Undefined: no such participant. */
-  targetStatus?(room: string, target: string): { active: boolean; kicked: boolean; staleMs: number } | undefined;
+  targetStatus?(room: string, target: string): { active: boolean; kicked: boolean; staleMs: number; connected?: boolean } | undefined;
 }
 
 export interface SpawnerOptions {
@@ -382,8 +382,8 @@ export class Spawner {
    * predecessorContext finds), and the successor gets that context appended to the standard replace note.
    *
    * Guardrails (review, swarm-140818-f1qy): an agent caller may only remove a target that is already
-   * departed, already kicked, or has been quiet for at least `staleMs` -- a live colleague needs
-   * kick_vote, not one seat's unilateral say-so. A human caller (the token-gated dashboard route) is
+   * departed, already kicked, or has been quiet for at least `staleMs` AND whose MCP session is no longer
+   * connected (targetStatus.connected) -- a live colleague needs kick_vote, not one seat's unilateral say-so. A human caller (the token-gated dashboard route) is
    * trusted unconditionally, same as a human's kick ballot. An already-departed or already-kicked target
    * skips removeParticipant entirely (it would only throw "already left"/"already removed") and goes
    * straight to recruiting. If recruiting then fails, the predecessor is already gone: say so plainly
@@ -405,6 +405,11 @@ export class Spawner {
     if (status.active && !status.kicked) {
       if (!req.requesterIsHuman && status.staleMs < staleMs) {
         throw new HubError(`${req.replacing} was active ${Math.round(status.staleMs / 1000)}s ago; replace is for dead sessions. Use kick_vote instead (a human on the dashboard may replace directly).`, undefined, "auth");
+      }
+      // stale is not dead while the MCP session is open: heartbeats fire at the start of a tool call, so a seat
+      // inside one long command (a full npm test) sends nothing for minutes yet is alive. Same rule as sweepIdle.
+      if (!req.requesterIsHuman && status.connected) {
+        throw new HubError(`${req.replacing} has been quiet for ${Math.round(status.staleMs / 1000)}s but its MCP session is still connected: a seat inside a long command is alive, not dead. Use kick_vote instead (a human on the dashboard may replace directly).`, undefined, "auth");
       }
       this.hooks.removeParticipant(req.room, req.replacing, req.requestedBy, req.reason);
     } // else: already departed or already kicked, nothing to remove -- go straight to recruiting

@@ -124,7 +124,10 @@ spawner.attach({
   targetStatus: (room, target) => {
     const p = [...hub.getRoom(room).participants.values()].find((x) => x.name === target);
     if (!p) return undefined;
-    return { active: p.active, kicked: !!p.kicked, staleMs: Date.now() - Date.parse(hub.lastSeen(p)) };
+    // identity is the connection: a seat whose MCP session is still open is alive however long its current
+    // command runs (heartbeats fire at call start only), so an agent may not replace it on staleness alone
+    const connected = !!p.session && [...transports.values()].some((e) => e.session === p.session);
+    return { active: p.active, kicked: !!p.kicked, staleMs: Date.now() - Date.parse(hub.lastSeen(p)), connected };
   },
   // Item 2: what the predecessor was doing, for the successor's brief -- their own claim/* and handoff/*
   // entries plus the keys of any open inbox/* notices in the room, so nothing is silently dropped. A kick

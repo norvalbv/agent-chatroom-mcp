@@ -105,6 +105,8 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
       const room = typeof a?.room === "string" ? a.room : typeof a?.from_room === "string" ? a.from_room : undefined;
       let participant = telemetryActor(room, a?.participant_id);
       let outcome: CallOutcome = "error";
+      // every hub call is a step too (board_get, vote, a held wait): the People tab shows it without a room turn
+      if (room && participant) try { hub.heartbeat(room, participant, { tool }); } catch { /* departed or unknown: the call itself reports it */ }
       try {
         const data = await fn(args);
         const result = ok(data);

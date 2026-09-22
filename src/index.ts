@@ -108,6 +108,7 @@ spawner.attach({
       return false;
     }
   },
+  heartbeatSeat: (seatKey, info) => { hub.heartbeatSeat(seatKey, info); },
   registerReplacement: (room, predecessor, successorName) => {
     const old = [...hub.getRoom(room).participants.values()].find(p => p.name === predecessor);
     // A recruit may replace a departed agent, never declare another live seat or human departed.
@@ -139,10 +140,13 @@ app.post("/mcp", async (req, res) => {
     return;
   }
   const session = createSessionServer(hub, spawner);
+  // a launched seat's MCP URL carries ?seat=<key>; its tool hook heartbeats with the same key (POST /heartbeat)
+  const seatKey = typeof req.query.seat === "string" ? req.query.seat.slice(0, 100) : "";
   const transport = new StreamableHTTPServerTransport({
     sessionIdGenerator: () => randomUUID(),
     onsessioninitialized: (id) => {
       transports.set(id, { t: transport, leaveAll: session.leaveAll, session: session.sessionKey, lastSeen: Date.now() });
+      if (seatKey) hub.bindSeat(seatKey, session.sessionKey);
     },
   });
   transport.onclose = () => {
@@ -229,11 +233,18 @@ app.post("/rooms/:room/heartbeat", (req, res) => {
     const { participant_id, tool, step } = (req.body ?? {}) as { participant_id?: string; tool?: string; step?: number };
     if (!participant_id) return res.status(400).type("text/plain").send("participant_id required");
     const { detail } = (req.body ?? {}) as { detail?: string };
-    hub.heartbeat(req.params.room, participant_id, { tool: tool ?? "?", step: step ?? 0, detail });
+    hub.heartbeat(req.params.room, participant_id, { tool: tool ?? "?", step, detail });
     res.json({ ok: true });
   } catch (e) {
     res.status(400).type("text/plain").send(e instanceof HubError ? e.message : "error");
   }
+});
+// Seat liveness without a participant id: a claude -p tool hook or a launcher watching codex output knows only the seat
+// key its process was launched with; the hub heartbeats every room that key's MCP connection is in.
+app.post("/heartbeat", (req, res) => {
+  const { seat_key, tool, step, detail } = (req.body ?? {}) as { seat_key?: string; tool?: string; step?: number; detail?: string };
+  if (!seat_key) return res.status(400).type("text/plain").send("seat_key required");
+  res.json({ ok: true, marked: hub.heartbeatSeat(seat_key, { tool: tool ?? "?", step, detail }) });
 });
 app.get("/rooms/:room/participants/:name/activity", (req, res) => {
   try {

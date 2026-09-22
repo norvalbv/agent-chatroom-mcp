@@ -2454,13 +2454,48 @@ export class Hub {
    * when. Local tools never reach the hub, so without this a builder on step 71 of a build looked like "1 msg, 12m ago"
    * and nobody could tell it from a dead seat. Not persisted: it is about the process, not the room's history.
    */
-  heartbeat(roomName: string, pid: string, info: { tool: string; step: number; detail?: string }): void {
+  heartbeat(roomName: string, pid: string, info: { tool: string; step?: number; detail?: string }): void {
     const room = this.getRoom(roomName);
     const p = this.requireParticipant(room, pid);
+    this.recordWork(p, info);
+  }
+
+  /** A step with no count of its own (a hook, an MCP call) is the seat's next step. */
+  private recordWork(p: Participant, info: { tool: string; step?: number; detail?: string }): void {
     const detail = String(info.detail ?? "").replace(/\s+/g, " ").trim().slice(0, 300);
-    p.working = { tool: String(info.tool).slice(0, 40), step: Number(info.step) || 0, at: now(), ...(detail ? { detail } : {}) };
+    const step = Number(info.step) || (p.working?.step ?? 0) + 1;
+    p.working = { tool: String(info.tool).slice(0, 40), step, at: now(), ...(detail ? { detail } : {}) };
     (p.activity ??= []).push({ tool: p.working.tool, step: p.working.step, at: p.working.at, detail });
     if (p.activity.length > 60) p.activity.splice(0, p.activity.length - 60);
+  }
+
+  /**
+   * Seat keys: a launcher gives each seat process a random key, puts it in the seat's MCP URL (?seat=) and in its env
+   * (CHATROOM_SEAT_KEY). The hub binds the key to the MCP connection it arrives on, so a process that cannot know its
+   * participant ids (a claude -p tool hook, a launcher watching codex output) can still heartbeat as that connection,
+   * and only as that connection (identity-is-the-connection). Ephemeral, like the heartbeats themselves.
+   */
+  private seatSessions = new Map<string, string>();
+
+  bindSeat(seatKey: string, session: string): void {
+    if (seatKey && session) this.seatSessions.set(seatKey, session);
+  }
+
+  /** Heartbeat every active participant the seat's connection holds, in rooms still open. Returns how many were marked. */
+  heartbeatSeat(seatKey: string, info: { tool: string; step?: number; detail?: string }): number {
+    const session = this.seatSessions.get(seatKey);
+    if (!session) return 0;
+    let n = 0;
+    for (const room of this.rooms.values()) {
+      if (room.state === "concluded" || room.state === "closed") continue;
+      for (const p of room.participants.values()) {
+        if (p.active && p.session === session) {
+          this.recordWork(p, info);
+          n++;
+        }
+      }
+    }
+    return n;
   }
 
   /** A participant's recent steps, oldest first (GET /rooms/:room/participants/:name/activity). */

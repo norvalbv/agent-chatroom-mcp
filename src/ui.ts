@@ -610,9 +610,9 @@ export const UI_HTML = `<!doctype html>
       else line += '<br><span style="color:var(--dim)">' + esc(v.status) + (v.outcome ? ': ' + esc(v.outcome) : '') + '</span>';
       return '<div style="padding:6px 0;border-bottom:1px solid var(--line)">' + line + '</div>';
     }).join('') + '</div>';
-    var kickBtns = active.filter(function (p) { return p.agent !== 'human' && p.role !== 'chair' && !openKv[p.name]; }).map(function (p) { return '<button class="mini" data-kick="' + esc(p.name) + '" data-kv="start">kick ' + esc(p.name) + '</button> '; }).join('');
+    var kickBtns = active.filter(function (p) { return p.agent !== 'human' && p.role !== 'chair' && !openKv[p.name]; }).map(function (p) { return '<button class="mini" data-kick="' + esc(p.name) + '" data-kv="start">kick ' + esc(p.name) + '</button> <button class="mini" data-replace="' + esc(p.name) + '">replace ' + esc(p.name) + '</button> '; }).join('');
     return '<div class="sec"><h3>In the room <span class="sp"></span><span class="c">' + active.length + '</span></h3>' + (rows(active) || '<div class="empty" style="padding:16px">Nobody here.</div>') + '</div>'
-      + kickSec + (kickBtns ? '<div class="sec" style="font-size:12px"><span style="color:var(--dim2)">Start a vote to remove a seat (needs the room\\'s quorum of the other voters; your keep vetoes): </span>' + kickBtns + '</div>' : '')
+      + kickSec + (kickBtns ? '<div class="sec" style="font-size:12px"><span style="color:var(--dim2)">Kick starts a vote; replace removes them immediately and recruits a successor (for a dead seat): </span>' + kickBtns + '</div>' : '')
       + (gone.length ? '<div class="sec"><h3>Left <span class="sp"></span><span class="c">' + gone.length + '</span></h3>' + rows(gone) + '</div>' : '')
       + '<div class="sec" style="font-size:12px;color:var(--dim2)">Areas come from claim/* board entries; reviewing is the hub-assigned reviewer for that claim; the role tag is what the agent joined with.</div>';
   }
@@ -717,6 +717,13 @@ export const UI_HTML = `<!doctype html>
       if (kb.dataset.kv === 'start') { kreason = window.prompt('Why remove ' + kb.dataset.kick + '? (blocking progress, or dead: cite last seen)') || ''; if (!kreason) return; }
       var kres = await fetch('/rooms/' + encodeURIComponent(sel) + '/kick', { method: 'POST', headers: hdrs(), body: JSON.stringify({ name: myName(), target: kb.dataset.kick, vote: kb.dataset.kv === 'keep' ? 'keep' : 'kick', reason: kreason }) });
       if (!kres.ok) window.alert(await kres.text());
+      refreshRooms(); poll(); return;
+    }
+    var rp = e.target.closest('[data-replace]'); if (rp && sel) {
+      var rreason = window.prompt('Why replace ' + rp.dataset.replace + '? This removes them immediately (no vote) and recruits a successor.') || '';
+      if (!rreason) return;
+      var rres = await fetch('/rooms/' + encodeURIComponent(sel) + '/replace', { method: 'POST', headers: hdrs(), body: JSON.stringify({ name: myName(), target: rp.dataset.replace, reason: rreason }) });
+      if (!rres.ok) window.alert(await rres.text());
       refreshRooms(); poll(); return;
     }
     var at = e.target.closest('#quick button'); if (at) { var ta = $('#text'); ta.value = '@' + at.dataset.at + ' ' + ta.value.replace(/^@[\\w-]+\\s*/, ''); ta.focus(); return; }

@@ -683,6 +683,36 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
     );
 
     server.registerTool(
+      "replace_participant",
+      {
+        title: "Kick a dead seat and recruit its replacement",
+        description:
+          "One action for a dead/unresponsive session: removes `target` the same way a kick vote would (marked left, claim/* released, its next call refused) and recruits a successor via request_agent, " +
+          "telling it what the predecessor was doing (their claim/*, handoff/* and open inbox/* board entries). Intended for dead sessions, not disagreement — for a live but unresponsive-in-spirit seat, use kick_vote instead so others get a say. " +
+          "brief is optional: default is 'take over for them', with their context appended.",
+        inputSchema: {
+          room: roomArg,
+          target: z.string().describe("Exact display name of the participant to remove and replace."),
+          reason: z.string().describe("Why: e.g. 'no heartbeat for 14 min per room_status'."),
+          brief: z.string().optional().describe("What the successor should do; defaults to taking over the predecessor's claim(s)."),
+          name: z.string().optional().describe("Display name for the successor (default: <agent>-recruit-N)."),
+          agent: z.enum(["claude", "codex", "openrouter"]).optional(),
+          model: z.string().optional(),
+          cwd: z.string().optional(),
+          can_edit: z.boolean().optional().describe("Allow the successor to modify files (default true: replace is for taking over a build)."),
+          area: z.string().optional().describe("Claim this area for the successor first; defaults to none (the predecessor's claim/* is already released for anyone)."),
+          participant_id: asArg,
+        },
+      },
+      guard("replace_participant", ({ room, target, reason, brief, name, agent, model, cwd, can_edit, area, participant_id }) => {
+        const r = hub.getRoom(room);
+        const me_ = hub.requireParticipant(r, pid(room, participant_id));
+        const recs = spawner.replace({ room, requestedBy: me_.name, requestedByShown: hub.shown(r, me_), parentTopic: r.topic, replacing: target, reason, brief, name, agent, model, cwd, area, canEdit: can_edit ?? true });
+        return { spawned: recs.map((x) => x.name), room: recs[0].room, agent: recs[0].agent, model: recs[0].model ?? null, logs: recs.map((x) => x.log), hint: "The room already saw the removal notice; the successor will join within a minute or two." };
+      }),
+    );
+
+    server.registerTool(
       "list_agents",
       { title: "List recruited agents", description: "Recruited agents in this room (or all rooms): who asked for them, their brief, and whether they are still running.", inputSchema: { room: z.string().optional() } },
       guard("list_agents", ({ room }) =>

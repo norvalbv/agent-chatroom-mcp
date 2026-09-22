@@ -4,6 +4,7 @@
  * Run: npm run smoke
  */
 import { spawn } from "node:child_process";
+import { readFileSync } from "node:fs";
 import assert from "node:assert/strict";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
@@ -51,7 +52,7 @@ const c = await connect("third");
 
 const tools = (await a.client.listTools()).tools.map((t) => t.name).sort();
 console.log("tools:", tools.join(", "));
-assert.deepEqual(tools, ["amend", "board_get", "board_set", "challenge", "join_room", "kick_vote", "leave_room", "list_agents", "list_rooms", "pass", "post_to_room", "propose", "read_messages", "request_agent", "room_status", "send_message", "submit_opening", "vote", "wait_for_messages"]);
+assert.deepEqual(tools, ["amend", "board_get", "board_set", "challenge", "join_room", "kick_vote", "leave_room", "list_agents", "list_rooms", "pass", "post_to_room", "propose", "read_messages", "replace_participant", "request_agent", "room_status", "send_message", "submit_opening", "vote", "wait_for_messages"]);
 
 // ---------------- two-party room: blind openings, long-poll, propose, vote ----------------
 {
@@ -894,6 +895,32 @@ assert.deepEqual(tools, ["amend", "board_get", "board_set", "challenge", "join_r
   await a.call("pass", { room }); // ...and decline it, so leave_room is not refused for an unanswered ask
   await a.call("leave_room", { room, reason: "smoke: section finished, nothing owed" });
   await b.call("leave_room", { room, reason: "smoke: section finished, nothing owed" });
+}
+
+{
+  // replace: one action kicks a seat (same primitive as the kick vote, no ballot) and recruits its
+  // successor, over both MCP and the dashboard's HTTP route.
+  const room = "replace";
+  await a.call("join_room", { room, name: "claude-1", agent: "claude", expected_participants: 3 });
+  await b.call("join_room", { room, name: "codex-1", agent: "codex" });
+  await c.call("join_room", { room, name: "third-1", agent: "claude" });
+  await c.call("board_set", { room, key: "claim/thing", text: JSON.stringify({ area: "thing", owner: "third-1", status: "building" }) });
+  await assert.rejects(a.call("replace_participant", { room, target: "claude-1", reason: "self" }), /cannot replace yourself/);
+  const rep = await a.call("replace_participant", { room, target: "third-1", reason: "smoke: no heartbeat for 20 min per room_status" });
+  assert.equal(rep.spawned.length, 1, "one successor recruited");
+  await assert.rejects(c.call("send_message", { room, content: "still here?" }), /KICKED: you \(third-1\) were removed from "replace"/);
+  const claim = await a.call("board_get", { room, key: "claim/thing" });
+  assert.equal(JSON.parse(claim.text).status, "released", "replace releases claim/* exactly like a kick vote");
+  const promptLog = readFileSync(rep.logs[0], "utf8");
+  assert.match(promptLog, /What third-1 was doing:/);
+  assert.match(promptLog, /claim\/thing/);
+  // the dashboard route: same removal, same recruit path, for codex-1
+  const human = await fetch(`${HTTP}/rooms/${room}/replace`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ name: "benji", target: "codex-1", reason: "smoke: dead session per dashboard" }) });
+  assert.equal(human.status, 200, "the dashboard casts the same removal + recruit");
+  assert.equal((await human.json()).spawned.length, 1);
+  await a.call("wait_for_messages", { room, timeout_ms: 0 });
+  await a.call("pass", { room });
+  await a.call("leave_room", { room, reason: "smoke: section finished, nothing owed" });
 }
 
 const ui = await (await fetch(`${HTTP}/ui`)).text();

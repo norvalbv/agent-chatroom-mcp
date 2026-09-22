@@ -114,6 +114,25 @@ spawner.attach({
     if (!old || old.active || old.agent === "human" || old.role === "chair") throw new HubError("Recruit replacement requires a departed nonhuman, non-chair participant.");
     return hub.registerReplacement(room, predecessor, successorName).replacementToken;
   },
+  removeParticipant: (room, target, by, reason) => {
+    hub.removeParticipant(room, target, by, reason);
+  },
+  // Item 2: what the predecessor was doing, for the successor's brief -- their own claim/* and handoff/*
+  // entries plus the keys of any open inbox/* notices, so nothing is silently dropped. A kick already
+  // rewrote claim/* as {..., status:"released", released_from: name} (by becomes "system"); either
+  // shape is theirs.
+  predecessorContext: (room, name) => {
+    const board = hub.getRoom(room).board;
+    const isTheirs = (e: { by: string; text: string }) => {
+      if (e.by === name) return true;
+      try { return (JSON.parse(e.text) as { released_from?: string }).released_from === name; } catch { return false; }
+    };
+    const own = [...board.entries()].filter(([k, e]) => (k.startsWith("claim/") || k.startsWith("handoff/")) && isTheirs(e));
+    const inboxKeys = [...board.keys()].filter((k) => k.startsWith("inbox/"));
+    const parts = own.map(([k, e]) => `${k}: ${e.text}`);
+    if (inboxKeys.length) parts.push(`Open inbox/* keys (board_get to read): ${inboxKeys.join(", ")}`);
+    return parts.join("\n\n").slice(0, 4000);
+  },
 });
 process.on("exit", () => spawner.stopAll());
 process.on("SIGINT", () => process.exit(0));
@@ -312,6 +331,21 @@ app.post("/rooms/:room/kick", (req, res) => {
     const { participant } = hub.join(req.params.room, (name || "human").trim(), "human", {}, undefined, `http:${name || "human"}`);
     const kv = hub.kickVote(req.params.room, participant.id, String(target), vote === "keep" ? "keep" : "kick", reason);
     res.json(hub.kickView(hub.getRoom(req.params.room), kv, true));
+  } catch (e) {
+    res.status(400).type("text/plain").send(e instanceof HubError ? e.message : "error");
+  }
+});
+// A human replacing a dead seat from the dashboard: same removal as kick, plus a recruit, in one call.
+app.post("/rooms/:room/replace", (req, res) => {
+  if (!requireToken(req, res)) return;
+  try {
+    const { name, target, reason, brief } = (req.body ?? {}) as { name?: string; target?: string; reason?: string; brief?: string };
+    if (!target) return res.status(400).type("text/plain").send("target required");
+    if (!reason) return res.status(400).type("text/plain").send("reason required");
+    const { participant } = hub.join(req.params.room, (name || "human").trim(), "human", {}, undefined, `http:${name || "human"}`);
+    const r = hub.getRoom(req.params.room);
+    const recs = spawner.replace({ room: req.params.room, requestedBy: participant.name, requestedByShown: hub.shown(r, participant), parentTopic: r.topic, replacing: String(target), reason: String(reason), brief, canEdit: true });
+    res.json({ spawned: recs.map((x) => x.name) });
   } catch (e) {
     res.status(400).type("text/plain").send(e instanceof HubError ? e.message : "error");
   }

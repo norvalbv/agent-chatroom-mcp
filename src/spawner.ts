@@ -88,6 +88,10 @@ export interface SpawnerHooks {
   roomState?(room: string): string | undefined;
   /** whether a room currently has an open proposal. Consolidator spawn skips the lobby while one is open. */
   openProposal?(room: string): boolean;
+  /** the single removal primitive (kick's own path): mark `target` left, release its claim/*, refuse its next call. Must throw on failure. */
+  removeParticipant?(room: string, target: string, by: string, reason: string): void;
+  /** what `name` was doing: its claim/*, handoff/* and open inbox/* keys, formatted for a successor's brief. "" if nothing to report. */
+  predecessorContext?(room: string, name: string): string;
 }
 
 export interface SpawnerOptions {
@@ -259,7 +263,9 @@ export class Spawner {
         // the launcher registers the explicit successor; the recruit gets a one-use proof, never a control credential
         const replacementToken = this.hooks!.registerReplacement!(target, req.replacing, name);
         if (!replacementToken) throw new HubError("Replacement registration returned no join proof.");
-        replaceNote = `\n\nYou replace ${req.replacing}, who dropped out of this room. The launcher has registered you as their replacement with the hub. On your first join_room call use name=${JSON.stringify(name)} and replacement_token=${JSON.stringify(replacementToken)}. This one-use join proof is only for this reserved seat: do not post it to chat or board.`;
+        const context = this.hooks?.predecessorContext?.(target, req.replacing) ?? "";
+        replaceNote = `\n\nYou replace ${req.replacing}, who dropped out of this room. The launcher has registered you as their replacement with the hub. On your first join_room call use name=${JSON.stringify(name)} and replacement_token=${JSON.stringify(replacementToken)}. This one-use join proof is only for this reserved seat: do not post it to chat or board.` +
+          (context ? `\n\nWhat ${req.replacing} was doing:\n${context}` : "");
       }
       this.agents.push(rec);
       const teammates = names.filter((x) => x !== name);
@@ -355,6 +361,27 @@ export class Spawner {
       out.push(rec);
     }
     return out;
+  }
+
+  /**
+   * Item 2: kick a dead/departed seat and recruit its replacement in one call, reusing the kick path
+   * (removeParticipant) rather than duplicating its removal/claim-release logic. `req.replacing` is the
+   * exact name to remove; the caller's own brief is optional (defaults to "take over" plus whatever
+   * predecessorContext finds), and the successor gets that context appended to the standard replace note.
+   */
+  replace(req: Omit<SpawnRequest, "brief" | "newRoom" | "count"> & { reason: string; brief?: string }): SpawnedAgent[] {
+    if (!req.replacing?.trim()) throw new HubError("replace requires the exact name of the participant to remove.");
+    if (req.replacing === req.requestedBy) throw new HubError("You cannot replace yourself: leave_room instead.");
+    if (!this.hooks?.removeParticipant) throw new HubError("Replace is unavailable; no recruit launched.");
+    if (!req.reason.trim()) throw new HubError("A reason is required: why this seat is being replaced.");
+    // request() enforces this too, but only after the recruit's other checks: validate here, before removal,
+    // so a structurally-invalid replace (a group, a new room) never kicks the predecessor for nothing.
+    if ((req as { newRoom?: string }).newRoom || ((req as { count?: number }).count ?? 1) !== 1) {
+      throw new HubError("Replacement requires one recruit in the same room and an exact predecessor name.");
+    }
+    this.hooks.removeParticipant(req.room, req.replacing, req.requestedBy, req.reason);
+    const brief = req.brief?.trim() || `Take over for ${req.replacing}, who was removed from this room (${req.reason}). Read what they were doing (appended below) and continue their unfinished work.`;
+    return this.request({ ...req, brief });
   }
 
   /** The consolidator seat's only job: assemble the ranked list from the children's conclusions and inbox entries. */

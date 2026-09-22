@@ -600,7 +600,19 @@ export const UI_HTML = `<!doctype html>
       return '<div class="person' + (p.active ? '' : ' off') + (personOpen === p.name ? ' sel' : '') + '" data-person="' + esc(p.name) + '">' + av(p.name, p.agent) + '<div><div class="n">' + esc(p.name) + roleTag(p) + '<span class="agent">' + esc(p.agent) + '</span></div><div class="a">' + aline + '</div></div><div class="s">' + p.messages + ' msg' + (p.messages === 1 ? '' : 's') + '<br>' + (p.active ? (p.working && p.working.at > (p.last_active_at || '') ? 'working: ' + esc(p.working.tool) + ' · ' + rel(p.working.at) : rel(p.last_seen_at || p.last_active_at)) : 'left') + '</div>' + (personOpen === p.name ? '<div class="act" id="act">' + (activity[p.name] ? (activity[p.name].length ? activity[p.name].map(function (a) { return '<div><span class="st">#' + a.step + ' ' + rel(a.at) + '</span> <span class="tl">' + esc(a.tool) + '</span> ' + esc(a.detail || '') + '</div>'; }).join('') : 'No heartbeats yet (only seats started after 2026-09-18 send them).') : 'Loading…') + '</div>' : '') + '</div>';
     }).join(''); };
     var active = r.participants.filter(function (p) { return p.active; }), gone = r.participants.filter(function (p) { return !p.active; });
+    // kick votes: open ones with a kick/keep button pair, settled ones as one line; a kick button per active agent starts one
+    var kv = (r.kick_votes || []), openKv = {};
+    kv.forEach(function (v) { if (v.status === 'open') openKv[v.target] = v; });
+    var kickSec = '';
+    if (kv.length) kickSec = '<div class="sec"><h3>Kick votes <span class="sp"></span><span class="c">' + kv.length + '</span></h3>' + kv.slice().reverse().map(function (v) {
+      var line = '<b>' + esc(v.target) + '</b> · by ' + esc(v.by) + ' · ' + rel(v.started_at) + ' · ' + esc(v.reason);
+      if (v.status === 'open') line += '<br><span class="mono">' + v.kick + '/' + v.needed + ' kick, ' + v.keep + ' keep</span> ' + (v.ballots || []).map(function (b) { return esc(b.name) + ':' + b.vote; }).join(' ') + ' <button class="mini" data-kick="' + esc(v.target) + '" data-kv="kick">kick</button> <button class="mini" data-kick="' + esc(v.target) + '" data-kv="keep">keep</button>';
+      else line += '<br><span style="color:var(--dim)">' + esc(v.status) + (v.outcome ? ': ' + esc(v.outcome) : '') + '</span>';
+      return '<div style="padding:6px 0;border-bottom:1px solid var(--line)">' + line + '</div>';
+    }).join('') + '</div>';
+    var kickBtns = active.filter(function (p) { return p.agent !== 'human' && p.role !== 'chair' && !openKv[p.name]; }).map(function (p) { return '<button class="mini" data-kick="' + esc(p.name) + '" data-kv="start">kick ' + esc(p.name) + '</button> '; }).join('');
     return '<div class="sec"><h3>In the room <span class="sp"></span><span class="c">' + active.length + '</span></h3>' + (rows(active) || '<div class="empty" style="padding:16px">Nobody here.</div>') + '</div>'
+      + kickSec + (kickBtns ? '<div class="sec" style="font-size:12px"><span style="color:var(--dim2)">Start a vote to remove a seat (needs the room\\'s quorum of the other voters; your keep vetoes): </span>' + kickBtns + '</div>' : '')
       + (gone.length ? '<div class="sec"><h3>Left <span class="sp"></span><span class="c">' + gone.length + '</span></h3>' + rows(gone) + '</div>' : '')
       + '<div class="sec" style="font-size:12px;color:var(--dim2)">Areas come from claim/* board entries; reviewing is the hub-assigned reviewer for that claim; the role tag is what the agent joined with.</div>';
   }
@@ -700,6 +712,13 @@ export const UI_HTML = `<!doctype html>
     var more = e.target.closest('.more'); if (more) { var k = more.dataset.x; expanded[k] = !expanded[k]; if (/^m\\d+$/.test(k)) { var l = $('#log'), keep = l.scrollTop; rerender(); l.scrollTop = keep; } else if (k === 'topic') renderHead(cur); else renderPane(); return; }
     var re = e.target.closest('.re'); if (re) { var t = $('#log [data-seq="' + re.dataset.seq + '"]'); if (t) { t.scrollIntoView({ block: 'center' }); t.classList.remove('hl'); void t.offsetWidth; t.classList.add('hl'); } return; }
     var bh = e.target.closest('.bh'); if (bh) { expanded['b:' + bh.dataset.b] = !expanded['b:' + bh.dataset.b]; renderPane(); return; }
+    var kb = e.target.closest('[data-kick]'); if (kb && sel) {
+      var kreason = '';
+      if (kb.dataset.kv === 'start') { kreason = window.prompt('Why remove ' + kb.dataset.kick + '? (blocking progress, or dead: cite last seen)') || ''; if (!kreason) return; }
+      var kres = await fetch('/rooms/' + encodeURIComponent(sel) + '/kick', { method: 'POST', headers: hdrs(), body: JSON.stringify({ name: myName(), target: kb.dataset.kick, vote: kb.dataset.kv === 'keep' ? 'keep' : 'kick', reason: kreason }) });
+      if (!kres.ok) window.alert(await kres.text());
+      refreshRooms(); poll(); return;
+    }
     var at = e.target.closest('#quick button'); if (at) { var ta = $('#text'); ta.value = '@' + at.dataset.at + ' ' + ta.value.replace(/^@[\\w-]+\\s*/, ''); ta.focus(); return; }
     var v = e.target.closest('[data-v]'); if (v && sel) {
       var reason = v.dataset.v === 'disagree' ? (window.prompt('Why? A veto keeps the proposal open for amendment; say what must change.') || '') : '';

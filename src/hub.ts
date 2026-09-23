@@ -2242,8 +2242,11 @@ export class Hub {
 
   // ---------- consensus ----------
 
+  // Under "auto" a machine check replaces the rhetorical one: with require_verification on, the verify/*
+  // gate already demands a non-author run, and in 38 arm-C rooms the required challenge never moved the
+  // pass rate (docs/decisions/consensus-requires-scrutiny.md, 2026-09-23 re-target). An explicit true still wins.
   challengeRequired(room: Room): boolean {
-    if (room.requireChallenge === "auto") return this.voters(room).length >= 2;
+    if (room.requireChallenge === "auto") return this.voters(room).length >= 2 && !room.requireVerification;
     return room.requireChallenge;
   }
 

@@ -155,7 +155,7 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
         expected_participants: z.number().int().min(0).optional().describe("Blind openings are revealed, and proposals accepted, only once this many have joined."),
         anonymous: z.boolean().optional().describe("Show participants to each other as 'Participant A/B/C' to reduce identity bias."),
         max_messages_per_participant: z.number().int().min(0).optional().describe("Chat message budget per participant (votes/proposals/challenges are free)."),
-        require_challenge: z.boolean().optional().describe("Require a challenge before any proposal can pass. Default: automatic when 3+ participants."),
+        require_challenge: z.boolean().optional().describe("Require a challenge before any proposal can pass. Default: automatic from 2 voters, except when require_verification is on (the verify/* run replaces it)."),
         require_verification: z.boolean().optional().describe("Swarm mode: a proposal needs a verify/* board entry by someone else before it can pass, whose first line is JSON {proposal, command, cwd, exit_code, output_tail} naming this proposal's id with exit_code 0; an entry without that parseable head does not count."),
         max_message_chars: z.number().int().min(200).max(20000).optional().describe("Cap on chat length (proposals, challenges are not capped; board entries 8000; openings are always capped at 400)."),
         replacement_token: z.string().optional().describe("One-use proof supplied for this reserved replacement seat."),
@@ -505,7 +505,7 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
       title: "Propose a conclusion",
       description:
         "Put a concrete statement to the room as the proposed conclusion. You automatically vote agree on your own proposal. " +
-        "It is adopted when the room's quorum (default: every active participant) votes agree AND, in rooms of 2+, someone has challenged it. " +
+        "It is adopted when the room's quorum (default: every active participant) votes agree AND, in rooms of 2+ without require_verification, someone has challenged it. " +
         "Only one proposal can be open at a time and it is a document: to change wording, use amend (posts only the diff) instead of proposing again. " +
         "A proposal that fails a vote stays open for amendment; it is never closed by a tally.",
       inputSchema: { room: roomArg, text: z.string().describe("The exact conclusion you propose the group adopt."), participant_id: asArg },
@@ -623,7 +623,7 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
       title: "Challenge a proposal",
       description:
         "Name the single weakest claim in an open proposal, in one or two plain sentences. Required from someone other than the proposer " +
-        "before a proposal can pass in rooms of 2+. Quote the clause you object to in double quotes: the hub then knows which text answers it, and an amend that removes that text answers the challenge automatically (it reopens if the text comes back). " +
+        "before a proposal can pass in rooms of 2+ unless the room requires verification (the verify/* run is the scrutiny there). Quote the clause you object to in double quotes: the hub then knows which text answers it, and an amend that removes that text answers the challenge automatically (it reopens if the text comes back). " +
         "If the objection is a runnable counterexample (a probe or test the proposal fails), pass it as `command`: then rewording cannot answer it, only a verify/* entry from someone other than the proposer rerunning that exact command with exit_code 0 after the current text (or a verifier/chair ruling the command invalid, with a reason); citing becomes optional. Whoever reruns it: read the command first and never run one that deletes, writes outside a scratch dir, or fetches and executes. " +
         "Your vote resets; re-vote once it is answered. If you are about to concede in the same breath, do not challenge: vote, or file it with blocking=false. Unanswered challenges are carried into the conclusion as unresolved objections.",
       inputSchema: {

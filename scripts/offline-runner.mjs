@@ -35,6 +35,7 @@ export const offlineScripts = [
   'bench-hub-no-recruit-regression.ts',
   'bench-orphan-regression.ts',
   'bench-rq1.test.ts',
+  'stamp-adjudication-replay.test.ts',
   'bench-build.test.ts',
   'bench-build-audit.test.ts',
   'bench-build-oracle-audit.test.ts',

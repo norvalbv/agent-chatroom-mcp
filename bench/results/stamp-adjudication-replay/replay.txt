@@ -1,0 +1,8 @@
+pools=80 multi-answer pools=66 distinct answer sets=15 cached=15
+stamp-interpreter: plurality 36/40  adjudication 40/40  oracle ceiling 40/40  (fell back to plurality in 0)
+stamp-2: plurality 39/40  adjudication 40/40  oracle ceiling 40/40  (fell back to plurality in 0)
+  stamp-interpreter seed113: plurality fail -> adjudication pass
+  stamp-interpreter seed116: plurality fail -> adjudication pass
+  stamp-interpreter seed120: plurality fail -> adjudication pass
+  stamp-interpreter seed122: plurality fail -> adjudication pass
+  stamp-2 seed104: plurality fail -> adjudication pass

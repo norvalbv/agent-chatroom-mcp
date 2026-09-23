@@ -22,7 +22,7 @@ try {
   dup = e as HubError;
 }
 assert.ok(dup instanceof HubError, "a same-clause challenge is refused without confirm");
-assert.match(dup.message, new RegExp(first.id), "the refusal names the open challenge's id");
+assert.match(dup.message, new RegExp(first.id!), "the refusal names the open challenge's id");
 assert.equal((dup.data as { duplicate_of?: string })?.duplicate_of, first.id);
 assert.equal(pr.challenges.length, 1, "nothing was filed");
 assert.equal(room.messages.length, messages, "nothing was posted");

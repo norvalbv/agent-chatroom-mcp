@@ -47,6 +47,7 @@ export const offlineScripts = [
   'challenge-session-regression.ts',
   'claude-lean-flags-regression.ts',
   'claude-usage-regression.ts',
+  'claim-overlap-regression.ts',
   'complementary-fix-task.test.ts',
   'concluded-room-hint-regression.ts',
   'confirmatory-grid.test.ts',

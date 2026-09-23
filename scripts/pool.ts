@@ -30,7 +30,7 @@ async function main(argv: string[]) {
     case 'validate': {
       const report = validatePool(need('pool'), { hiddenParent: flag('hidden'), scratch: flag('scratch') });
       console.log(JSON.stringify(report, null, 2));
-      for (const r of report.items) console.error(`${r.ok ? 'ok  ' : 'FAIL'} ${r.id}: fails at base=${r.fails_at_base} passes with reference=${r.passes_with_reference}${r.error ? ' (' + r.error + ')' : ''}`);
+      for (const r of report.items) console.error(`${r.ok ? 'ok  ' : 'FAIL'} ${r.id}: fails at base=${r.fails_at_base} passes with reference=${r.passes_with_reference}${r.names_in_repo.length || r.names_in_briefs.length ? ` hidden names already visible: ${[...r.names_in_repo, ...r.names_in_briefs].join(', ')}` : ''}${r.error ? ' (' + r.error + ')' : ''}`);
       return report.ok ? 0 : 1;
     }
     case 'run': {

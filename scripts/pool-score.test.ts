@@ -70,7 +70,8 @@ test('split: branches merge in fixed order; a conflict keeps the earlier branch 
     const s2 = seat(fx, R, 'split-2', p + 'split-2', [['greet: fix', { ...fix(fx, 'greet'), 'NOTES.md': 'from two\n' }]]);
     const s1 = seat(fx, R, 'split-1', p + 'split-1', [['double: fix', { ...fix(fx, 'double'), 'NOTES.md': 'from one\n' }]]);
     const s3 = seat(fx, R, 'split-3', p + 'split-3', []);
-    runJson(fx, R, 'split', [s2, s1, s3]);
+    const s10 = { ...seat(fx, R, 'split-10', p + 'split-10', []), branch: null }; // numeric order; a seat with no branch is skipped
+    runJson(fx, R, 'split', [s2, s10, s1, s3]);
     const final = finalizeRun(R);
     assert.equal(final.source, 'merge');
     assert.deepEqual(final.order, [p + 'split-1', p + 'split-2', p + 'split-3']);
@@ -97,10 +98,11 @@ test('rooms: the declared integration branch wins; without one the worker branch
     const R2 = join(base, 'r2'); mkdirSync(R2);
     const a = seat(fx, R2, 'a', 'swarm/x2/claude-b', [['greet: fix', fix(fx, 'greet')]]);
     const b = seat(fx, R2, 'b', 'swarm/x2/claude-a', [['double: fix', fix(fx, 'double')]]);
-    runJson(fx, R2, 'room3', [], { integration_branch: 'pool/dry-run/room3-rep2/integration', worker_branches: [a.branch, b.branch], data_dir: join(R2, 'room', 'data') });
+    const c = seat(fx, R2, 'c', 'swarm/x2/claude-a10', []);
+    runJson(fx, R2, 'room3', [], { integration_branch: 'pool/dry-run/room3-rep2/integration', declared_branch: null, worker_branches: [c.branch, a.branch, b.branch], data_dir: join(R2, 'room', 'data') });
     const f2 = finalizeRun(R2);
     assert.equal(f2.source, 'merge');
-    assert.deepEqual(f2.order, ['swarm/x2/claude-a', 'swarm/x2/claude-b']);
+    assert.deepEqual(f2.order, ['swarm/x2/claude-a', 'swarm/x2/claude-a10', 'swarm/x2/claude-b']);
     assert.equal(scoreRun(R2, { hiddenParent: fx.hiddenParent }).passed, 2);
   } finally { rmSync(base, { recursive: true, force: true }); }
 });
@@ -167,5 +169,32 @@ test('CLI: pool.ts finalize, score and audit write their json and print it', () 
     const s = cli('score', '--run', R, '--hidden', fx.hiddenParent); assert.equal(s.status, 0, s.stderr);
     assert.equal(JSON.parse(s.stdout).passed, 2);
     assert.ok(existsSync(join(R, 'score.json')));
+  } finally { rmSync(base, { recursive: true, force: true }); }
+});
+
+test('score is not fooled by an outer node --test context: unfixed items still fail', () => {
+  const base = fresh(), prev = process.env.NODE_TEST_CONTEXT;
+  process.env.NODE_TEST_CONTEXT = 'child-v8'; // what a node --test parent hands its children; a child `node --test` then exits 0 on failure
+  try {
+    const fx = makeDryRunPool(base), R = join(base, 'run'); mkdirSync(R);
+    runJson(fx, R, 'solo', [seat(fx, R, 'solo', 'pool/dry-run/solo-rep1/solo', [])]);
+    finalizeRun(R);
+    assert.equal(scoreRun(R, { hiddenParent: fx.hiddenParent }).passed, 0);
+  } finally {
+    if (prev === undefined) delete process.env.NODE_TEST_CONTEXT; else process.env.NODE_TEST_CONTEXT = prev;
+    rmSync(base, { recursive: true, force: true });
+  }
+});
+
+test('audit scans the briefs builders saw: a brief naming the hidden root voids the run', () => {
+  const base = fresh();
+  try {
+    const fx = makeDryRunPool(base), R = join(base, 'run'); mkdirSync(R);
+    mkdirSync(join(R, 'briefs'));
+    writeFileSync(join(R, 'briefs', 'solo.txt'), `Build the items. Tests are in ${hiddenRoot('dry-run', fx.hiddenParent)}.\n`);
+    runJson(fx, R, 'solo', [seat(fx, R, 'solo', 'pool/dry-run/solo-rep1/solo', [])]);
+    const audit = auditRun(R, { hiddenParent: fx.hiddenParent });
+    assert.equal(audit.void, true);
+    assert.ok(audit.hits.some((h: any) => h.file.includes('/briefs/')));
   } finally { rmSync(base, { recursive: true, force: true }); }
 });

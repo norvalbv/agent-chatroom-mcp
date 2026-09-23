@@ -37,6 +37,7 @@ export const offlineScripts = [
   'pool-format.test.ts',
   'pool-score.test.ts',
   'pool-run.test.ts',
+  'pool-e2e.test.ts',
   'attempts.test.ts',
   'dev-hub-rule.test.ts',
   'paper-account-regime.test.ts',

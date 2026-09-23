@@ -1,5 +1,5 @@
 /** finalize, score and the leakage audit for the pool-throughput study (docs/experiments/2026-09-23-pool-throughput.md).
- * Reads a run dir laid out by pool-run.ts: run.json, seats/<seat>/*, room/*. Writes final.json, score.json, audit.json.
+ * Reads a run dir laid out by pool-run.ts: run.json, briefs/*, seats/<seat>/*, room/*. Writes final.json, score.json, audit.json.
  * The hidden root is never read from the run dir: score and audit take it as an argument, so nothing a builder
  * could see names it. Score worktrees holding hidden tests are removed before score returns. */
 import { execFileSync, spawnSync } from 'node:child_process';
@@ -20,16 +20,17 @@ const ahead = (repo: string, base: string, ref: string) => exists(repo, ref) && 
 export interface Conflict { branch: string; files: string[] }
 export interface Final { head: string; source: 'branch' | 'integration' | 'merge'; branch: string; order: string[]; missing: string[]; conflicts: Conflict[] }
 
-const workerBranches = (run: any): string[] => run.room?.worker_branches ?? run.room?.branches ?? [];
+const byName = (a: string, b: string) => a.localeCompare(b, 'en', { numeric: true });
+const workerBranches = (run: any): string[] => (run.room?.worker_branches ?? run.room?.branches ?? []).filter(Boolean);
 
 /** Branches the setup is scored on, and how: solo its branch; split its seats in split-N order; rooms the
  * declared integration branch if it moved past base, else the worker branches in name order. */
 function plan(run: any): { source: Final['source']; order: string[] } {
   if (run.arm === 'solo') return { source: 'branch', order: [run.seats[0].branch] };
-  if (run.arm === 'split') return { source: 'merge', order: [...run.seats].sort((a, b) => a.name.localeCompare(b.name, 'en', { numeric: true })).map(s => s.branch) };
-  const integration = run.room?.integration_branch;
+  if (run.arm === 'split') return { source: 'merge', order: [...run.seats].sort((a, b) => byName(a.name, b.name)).map(s => s.branch).filter(Boolean) };
+  const integration = run.room?.declared_branch ?? run.room?.integration_branch;
   if (integration && ahead(run.repo, run.base_commit, integration)) return { source: 'integration', order: [integration] };
-  return { source: 'merge', order: [...workerBranches(run)].sort() };
+  return { source: 'merge', order: [...workerBranches(run)].sort(byName) };
 }
 
 /** Merge `order` onto base_commit in a scratch worktree. A conflicting file keeps the version already merged (the
@@ -100,9 +101,9 @@ export function auditRun(runDir: string, opts: { hiddenParent?: string } = {}) {
   const run = readJson(join(runDir, 'run.json'));
   const { pool } = loadPool(run.pool_dir);
   const needleList = needles(pool, opts.hiddenParent);
-  const scanned = new Set<string>([...files(join(runDir, 'seats')), ...files(join(runDir, 'room'))]);
-  for (const s of run.seats ?? []) if (s.transcript) files(s.transcript, []).forEach(f => scanned.add(f));
-  for (const d of [run.room?.data_dir, run.room?.log_dir]) if (d) files(d).forEach(f => scanned.add(f));
+  const scanned = new Set<string>([...files(join(runDir, 'briefs')), ...files(join(runDir, 'seats')), ...files(join(runDir, 'room'))]);
+  for (const s of run.seats ?? []) for (const t of [s.brief_path, s.transcript, ...(s.sessions ?? [])]) if (t) files(t).forEach(f => scanned.add(f));
+  for (const d of [run.room?.data_dir, run.room?.log_dir, run.room?.swarm_dir, run.room?.hub_log]) if (d) files(d).forEach(f => scanned.add(f));
   const hits: { file: string; needle: string }[] = [];
   for (const file of [...scanned].sort()) {
     const text = readFileSync(file, 'utf8');

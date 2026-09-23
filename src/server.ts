@@ -193,7 +193,9 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
       me.get(room)!.add(participant.id);
       const shared = me.get(room)!.size > 1;
       const focus = hub.attentionFocus(r, participant);
-      const recent = focus ? [focus] : hub.deliverable(r, participant, participant.lastSeenSeq).slice(-30);
+      const queue = hub.deliverable(r, participant, participant.lastSeenSeq);
+      // a focused peer ask leads the queue; keep it even when the tail is trimmed
+      const recent = focus && hub.focusExclusive(focus) ? [focus] : focus ? [focus, ...queue.slice(1).slice(-29)] : queue.slice(-30);
       hub.settleRead(r, participant, participant.lastSeenSeq, recent); // what join hands you counts as delivered; withheld human messages are kept
       const human = hub.unansweredHuman(r);
       return {
@@ -382,7 +384,8 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
       const human = hub.unansweredHuman(r);
       const resp = human ? hub.responderFor(r, human, id) : null;
       const focus = hub.attentionFocus(r, p);
-      if (focus) return {
+      // only a human's message strips the envelope; a peer ask rides the full one (proposal, board, queue)
+      if (focus && hub.focusExclusive(focus)) return {
         hint: toolsRegainedNote ? toolsRegainedNote + (hub.attentionHint(r, p) ?? "") : hub.attentionHint(r, p), messages: msgs.map((m) => hub.fmt(r, m)),
         next_seq: p.lastSeenSeq, room_state: r.state, your_turn: r.mode === "free" || hub.currentSpeaker(r)?.id === id,
         your_role: p.role ?? "worker", humans_present: hub.activeParticipants(r).filter((x) => x.agent === "human").map((x) => x.name),
@@ -485,7 +488,8 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
       const p = viewer ? r.participants.get(viewer) : undefined;
       const msgs = p ? hub.readAs(r, p, since_seq, limit) : hub.read(room, since_seq ?? 0, limit, viewer);
       const hint = p ? hub.attentionHint(r, p) : undefined;
-      return msgs.map((m) => hub.fmt(r, m) + (hint ? `\n[HINT] ${hint}` : ""));
+      // the focused ask leads the batch; the hint rides on it once, not on every queued message behind it
+      return msgs.map((m, i) => hub.fmt(r, m) + (hint && i === 0 ? `\n[HINT] ${hint}` : ""));
     }),
   );
 

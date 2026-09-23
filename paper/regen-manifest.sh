@@ -22,3 +22,7 @@ node --import tsx scripts/paper-account-regime.ts bench/results/account-switch-l
 # --- claim/confirmatory-results-integration-takeover (5-6-sol-1) ---
 node --import tsx scripts/paper-account-regime.ts --mixed-seeds bench/results/account-switch-log/switches.json bench/results/rq1-confirmatory 4 > bench/results/rq1-confirmatory/mixed-seeds.json
 node --import tsx scripts/paper-rq1-confirmatory.ts bench/results/rq1-confirmatory --mixed-seeds bench/results/rq1-confirmatory/mixed-seeds.json --out paper/generated/rq1-confirmatory --tex paper/tables/rq1-confirmatory.tex > /dev/null
+
+node --import tsx scripts/paper-verify-practice.ts bench/results/verify-practice/heads.jsonl bench/results/verify-practice/rooms.json bench/results/verify-practice/codes.json --out paper/generated/verify-practice --tex paper/tables/verify-practice.tex
+node --import tsx scripts/paper-review-audit.ts bench/results/review-audit/audit-2026-09-23.json --out paper/generated/review-audit --tex paper/tables/review-audit.tex
+python3 scripts/paper-fig-review.py paper/generated paper/figures

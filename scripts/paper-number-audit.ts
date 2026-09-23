@@ -30,6 +30,7 @@ export const SOURCES = [
   "docs/review-round-0918.md",
   "docs/arm-c-process-trace.md",
   "tasks/SUITE.json",
+  "bench/results/review-audit",
 ];
 
 function readTree(path: string): string[] {

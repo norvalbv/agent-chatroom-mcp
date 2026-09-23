@@ -79,3 +79,41 @@ Unlaunched cells are absent from the denominators; launched cells with non-pass 
 \end{table}
 
 Within the exploratory long-thinking stratum, the interpreter comparisons use 19 seeds per arm. A passed 18/19; AH, B, K and C each passed 19/19. On printf, the inferential sample has 15 seeds per arm: A and AH passed 11/15, B and C 10/15, and K 12/15. Every Holm-adjusted comparison against A had $p=1.000$. That test result means no arm was distinguished in these small samples, not that their effects are equal or that the primary prediction was confirmed. On the interpreter, B cost \$0.269 per correct answer and C \$1.407, with both passing 19/19. The pair's observed cost was about a fifth of the chatroom's. The pre-registered cost prediction concerned short thinking; this exploratory long-thinking inequality does not confirm it.
+
+\subsection{How seats check each other}
+\label{sec:results-review}
+
+This subsection is an exploratory audit added after both studies; it was not pre-registered. It asks what one seat's check of another seat's work consisted of. It covers every verification write whose first line is a JSON object in the hub's logs of rooms and sub-rooms created before 10:00 UTC on 23 September 2026: 260 writes from 36 rooms created between 17 and 23 September, of which 24 worked on this system's code, research or documentation, 10 on browser games and 2 on another codebase. These rooms used a mix of Claude, Codex and DeepSeek models; they are not the benchmark runs of Studies 1 and 2.
+
+\paragraph{What the gate asks for.} In a room that requires verification, a proposal can pass only once a qualifying verification entry exists. The entry must use a verification key not marked partial and begin with a parseable head: string fields for the proposal, the command, its working directory and the tail of its output, a numeric exit code of 0, and a commit if one is given. It must come from a seat other than the proposer, on a different connection, and be no older than the proposal's current text; while a reviewer assigned by the hub remains in the room, only that reviewer's entry counts. The gate does not ask what the command exercised or whether it differs from the author's own check, and it cannot establish that the command ran: the head is a structured report. An entry reporting a failure cannot satisfy the gate; only a separate path for executable challenges lets a verifier rule a challenger's command invalid at a nonzero exit code, with a stated reason. When verification is required and the board holds no verification entry at all, the hub refuses a proposal and asks the author to post the command they ran, adding that ``someone else must then run it''. When an open proposal still needs a blocking challenge and a seat has not yet voted, that seat may receive a hint calling the proposal ``open and untested'' and asking for its weakest claim in one sentence. A passing report of the author's own command therefore satisfies the gate. The gate supplies nothing like the held-out tests applied during SWE-bench evaluation~\cite{Jimenez2023}.
+
+\paragraph{What verification entries report.} Table~\ref{tab:verify-practice} and Figure~\ref{fig:review-practice}a classify each entry by the strongest check its text reports. Two same-model AI coders labelled all 260 entries independently from their full text and agreed on 256 (Cohen's $\kappa=0.98$); an adjudicator resolved the other four. Agreement does not establish correctness: an independent review of 48 entries found three labels that both coders had got wrong, and they are corrected here. Of the 260 entries, 241 parse under the hub's own head parser, 238 report exit code 0 and 128 name the commit they checked; 110 were written by a seat other than the proposal's known author, 11 by the author, and for 139 the author could not be resolved. Most entries report re-running existing checks: 126 only builds, type checks or existing tests, and 43 the scripted smoke client, which drives a local hub with model spawning disabled; 10 report only reading code or history. A substantial minority report more. Fifty-five report an added check, either a probe the verifier wrote or a before/after run such as a regression test run against the unfixed code, which may reuse existing tests; 26, all in game rooms, report driving the built application in a real browser. No entry reports its writer running model-driven agents on a changed build, though that does not establish that none ran. Among the 110 entries by a seat other than the known proposal author, 34/110 report an added check and 11/110 a browser run.
+
+\begin{table}[t]
+\centering
+\scriptsize
+\caption{The strongest check each structured verification entry reports, by the kind of project its room worked on.}
+\label{tab:verify-practice}
+\input{tables/verify-practice.tex}
+\end{table}
+
+\paragraph{What review acts found.} In four of these rooms, two on this system and two game rooms, one AI auditor catalogued review acts from the room log and each seat's own transcript and classified each by method. A second auditor re-counted each room: it found acts the first had missed, disputed some classifications, and flagged repeated reports and self-checks (Table~\ref{tab:review-audit}, Figure~\ref{fig:review-practice}b). In the first auditor's coding, re-running the author's test, suite or build was the largest category, 154 of 331 acts, and had the lowest defect-flagged share among categories with a stated method: 39/154, against 42/73 for reading the diff and 25/38 for a check the author had not supplied. These are associations. They do not show why a reviewer chose a method or which method produced a finding, and a reviewer may write its own check because it already suspects a problem.
+
+In the first room on this system, the author of a benchmark pilot ran model agents on an integration build containing other seats' changes; the auditors concluded that the pilot did not meaningfully test draft sealing and found no reviewer inspecting its logs. In the second, neither auditor found a reviewer running model agents on a changed build. Across both, the acts the first auditor counted as using the system ``as its users would'' were scripted smoke checks, observations of the unchanged live hub, and one changed-build launcher check that stopped at a refusal. The second auditor estimated about 35 requests about test evidence in the first room, mostly for re-runnable commands or scope caveats; requests led to the pilot on the integration build, and a later discussion ended in a decision not to re-run it on the final head. In the game rooms, non-author seats did open the game, at least 8 and 15 times by the auditors' counts. The first auditor listed 12 and 10 items that lacked relevant non-author exercise in the game, some grouping several changes; the re-counts corrected several items, including a pre-merge browser check of one game's residents change. That check covered night scenes only, and the owner reported the change failing in daylight about six minutes after its merge was announced.
+
+\begin{table}[t]
+\centering
+\scriptsize
+\caption{Review acts by method in the four audited rooms, as classified by the first auditor, and the acts it marked as finding a defect.}
+\label{tab:review-audit}
+\input{tables/review-audit.tex}
+\end{table}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\linewidth]{figures/fig-review-practice.png}
+\caption{(a) The strongest check reported by each of the 260 structured verification entries. (b) The first auditor's classification of review acts in the four audited rooms; the orange share is the acts it marked as finding a defect.}
+\label{fig:review-practice}
+\end{figure}
+
+\paragraph{Reading.} Most structured verification entries reported builds, existing tests or the smoke client, and in the separate review-act audit re-runs were the largest category, 154 of 331 acts; a substantial minority of checks added a probe, a before/after run or a browser session. No verification entry reported running agents on a changed build of a system whose claims are about how agents behave. A passing report of the author's own command satisfies the gate. The audit includes no controlled comparison of verification rules, so it cannot say what a different rule would have caught.

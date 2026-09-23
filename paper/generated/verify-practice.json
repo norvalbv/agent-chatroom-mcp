@@ -1,0 +1,77 @@
+{
+  "heads": 260,
+  "rooms": 36,
+  "created_from": "2026-09-17",
+  "created_to": "2026-09-23",
+  "rooms_by_kind": {
+    "hub": 24,
+    "web": 10,
+    "other": 2
+  },
+  "exit_code": {
+    "zero": 238,
+    "nonzero": 4,
+    "missing": 18
+  },
+  "commit_named": 128,
+  "schema_valid": 241,
+  "classes": {
+    "existing_tests": 126,
+    "scripted_smoke": 43,
+    "inspection_only": 10,
+    "own_check": 55,
+    "app_in_browser": 26,
+    "agents_on_changed_build": 0,
+    "unclear": 0
+  },
+  "by_kind": {
+    "hub": {
+      "existing_tests": 31,
+      "scripted_smoke": 43,
+      "inspection_only": 6,
+      "own_check": 42,
+      "app_in_browser": 0,
+      "agents_on_changed_build": 0,
+      "unclear": 0
+    },
+    "web": {
+      "existing_tests": 95,
+      "scripted_smoke": 0,
+      "inspection_only": 1,
+      "own_check": 13,
+      "app_in_browser": 26,
+      "agents_on_changed_build": 0,
+      "unclear": 0
+    },
+    "other": {
+      "existing_tests": 0,
+      "scripted_smoke": 0,
+      "inspection_only": 3,
+      "own_check": 0,
+      "app_in_browser": 0,
+      "agents_on_changed_build": 0,
+      "unclear": 0
+    }
+  },
+  "non_author": {
+    "heads": 110,
+    "classes": {
+      "existing_tests": 31,
+      "scripted_smoke": 31,
+      "inspection_only": 3,
+      "own_check": 34,
+      "app_in_browser": 11,
+      "agents_on_changed_build": 0,
+      "unclear": 0
+    }
+  },
+  "same_author": 11,
+  "author_unresolved": 139,
+  "coding": {
+    "coded_by_both": 260,
+    "agreed": 256,
+    "kappa": 0.98,
+    "adjudicated": 4,
+    "review_corrected": 3
+  }
+}

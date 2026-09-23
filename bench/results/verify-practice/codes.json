@@ -1,0 +1,3389 @@
+{
+ "note": "Classes for every entry in heads.jsonl. Two AI coders (Claude Opus 5.5, independent, one reading its chunk in reverse order) classified each entry from its full text under the definitions in scripts/paper-verify-practice.ts; an adjudicator (same model) read every entry on which they disagreed and ruled without deferring to either. Classes record what an entry says was run. Three labels were corrected after an independent read-only review (gpt-6-astra) found them misclassified in a 48-entry adversarial sample; those carry basis review-corrected.",
+ "coder_a": {
+  "swarm-010513-crup-chair-replay#0": {
+   "class": "own_check",
+   "reason": "Ran /tmp dist-check script and a /tmp hub restart smoke script, beyond existing regressions and build"
+  },
+  "swarm-010513-crup-controller-build#3": {
+   "class": "own_check",
+   "reason": "Ran its own live probes (A/B/C token scenarios) against a throwaway hub; also ran smoke and existing tests"
+  },
+  "swarm-010513-crup-r1-build#0": {
+   "class": "own_check",
+   "reason": "Ran regression RED at main c0cf5a3 in /tmp worktree then GREEN at branch: before/after experiment"
+  },
+  "swarm-010513-crup-r1-build#1": {
+   "class": "own_check",
+   "reason": "Before/after experiment: regression copied onto base c0cf5a3 went RED, then GREEN at tip."
+  },
+  "swarm-010513-crup-r1-build#2": {
+   "class": "own_check",
+   "reason": "Verifier ran its own before/after: regression RED on main c0cf5a3, GREEN at tip; also smoke"
+  },
+  "swarm-010513-crup-recruit-prefix#0": {
+   "class": "scripted_smoke",
+   "reason": "Proposer self-check: its own regression test, build, npm test, plus smoke.ts reporting SMOKE OK"
+  },
+  "swarm-010513-crup-recruit-prefix#1": {
+   "class": "own_check",
+   "reason": "Notes the test was observed RED pre-fix on c0cf5a3 (exit 1), then green: before/after"
+  },
+  "swarm-010513-crup-recruit-prefix#3": {
+   "class": "own_check",
+   "reason": "Inline replica of the assertions run against unfixed spawner.ts (RED), plus a live dry-spawn hub probe."
+  },
+  "swarm-010513-crup-recruit-prefix#4": {
+   "class": "own_check",
+   "reason": "Inline replica of assertions against unfixed spawner (red), plus live throwaway hub MCP probe with dry spawn"
+  },
+  "swarm-010513-crup#1": {
+   "class": "own_check",
+   "reason": "Ran an inline in-memory Hub red/green probe at main via node --import tsx, alongside the existing regression"
+  },
+  "swarm-010513-crup#7": {
+   "class": "own_check",
+   "reason": "Throwaway hub from fix dist, hand-driven auth probes A/B/C (403/201/401) plus red-on-main check"
+  },
+  "swarm-010513-crup#10": {
+   "class": "existing_tests",
+   "reason": "git rev-parse SHA checks plus rerun of existing consolidator regression at tip."
+  },
+  "swarm-010513-crup#11": {
+   "class": "inspection_only",
+   "reason": "Only git log and git show to compare branch tips against proposal rows"
+  },
+  "swarm-010513-gitconfig-build#1": {
+   "class": "own_check",
+   "reason": "Red/green run at the pre-fix commit, plus its own live probes of refusals on a throwaway hub"
+  },
+  "swarm-010513-telemetry-build#0": {
+   "class": "own_check",
+   "reason": "Red run at c0cf5a3 vs green, plus throwaway hub /policy probe; smoke also run"
+  },
+  "swarm-011152-pen5#0": {
+   "class": "existing_tests",
+   "reason": "tsc, existing vitest suites and vite build only."
+  },
+  "swarm-011152-pen5#1": {
+   "class": "existing_tests",
+   "reason": "tsc, vitest on existing functional tests, vite build only"
+  },
+  "swarm-011152-pen5#2": {
+   "class": "app_in_browser",
+   "reason": "Browser crash repro (/tmp/verifier-crash2.mjs) against a vite preview prod build; 4/4 snags before, 0/4 after"
+  },
+  "swarm-011152-pen5#3": {
+   "class": "existing_tests",
+   "reason": "tsc, targeted vitest, vite build plus code review only"
+  },
+  "swarm-011152-pen5#4": {
+   "class": "existing_tests",
+   "reason": "Ran tsc, reviewed code; compared screenshots another seat had taken."
+  },
+  "swarm-011152-pen5#5": {
+   "class": "existing_tests",
+   "reason": "tsc --noEmit plus code review only"
+  },
+  "swarm-011152-pen5#6": {
+   "class": "existing_tests",
+   "reason": "Merged the commit, then ran tsc, vitest simulation.test.ts and vite build only"
+  },
+  "swarm-011152-pen5#7": {
+   "class": "existing_tests",
+   "reason": "tsc only plus code review; looked at author's pre/post screenshots"
+  },
+  "swarm-011152-pen5#8": {
+   "class": "app_in_browser",
+   "reason": "Browser A/B on two dev servers with screenshots, draw calls, fps and page errors."
+  },
+  "swarm-011152-pen5#9": {
+   "class": "existing_tests",
+   "reason": "tsc and plan.test.ts; compared existing pre/post shots, no statement it drove a browser"
+  },
+  "swarm-011152-pen5#10": {
+   "class": "existing_tests",
+   "reason": "Read the git diff, then ran tsc and vitest on existing test dirs"
+  },
+  "swarm-011152-pen5#11": {
+   "class": "own_check",
+   "reason": "Verifier ran new regression on 91a1cb2 without fix (1 failed) and with fix: before/after"
+  },
+  "swarm-011152-pen5#12": {
+   "class": "app_in_browser",
+   "reason": "Ran /tmp crash scripts against the vite preview prod build: page reloads, snag screens, page errors."
+  },
+  "swarm-011152-pen5#13": {
+   "class": "app_in_browser",
+   "reason": "Cites its own browser reviews and camera shots in /tmp/opus1-s10, plus tsc/vitest/build"
+  },
+  "swarm-011152-pen5#14": {
+   "class": "app_in_browser",
+   "reason": "Prod crash repro in a browser plus aerial screenshots and draw-call counts of the running app"
+  },
+  "swarm-011152-pen5#15": {
+   "class": "app_in_browser",
+   "reason": "Ran /tmp/verifier-crash2.mjs against prod preview and verifier-grow aerial screenshots 16/16"
+  },
+  "swarm-011152-pen5#16": {
+   "class": "app_in_browser",
+   "reason": "Besides tsc/vitest/build, reports a zoom-out screenshot check of the terrain edge."
+  },
+  "swarm-042511-ov9e#0": {
+   "class": "existing_tests",
+   "reason": "Ran listed existing vitest files and tsc on its own branch"
+  },
+  "swarm-042511-ov9e#1": {
+   "class": "app_in_browser",
+   "reason": "tsc/vitest plus its own browser F8 bench on a production build, with screenshots in /tmp/opus4"
+  },
+  "swarm-042511-ov9e#2": {
+   "class": "existing_tests",
+   "reason": "vitest two files and tsc, plus code reading"
+  },
+  "swarm-042511-ov9e#3": {
+   "class": "existing_tests",
+   "reason": "tsc and existing vitest files; browser evidence only referenced on another board key."
+  },
+  "swarm-042511-ov9e#4": {
+   "class": "own_check",
+   "reason": "Ran own quota.test-style QuotaStorage repro of saveVillage besides existing vitest files"
+  },
+  "swarm-042511-ov9e#5": {
+   "class": "existing_tests",
+   "reason": "vitest runs plus the lead's existing repros; nothing written by this verifier"
+  },
+  "swarm-042511-ov9e#6": {
+   "class": "existing_tests",
+   "reason": "Full village+jev vitest suite and tsc; rest is code confirmation"
+  },
+  "swarm-042511-ov9e#7": {
+   "class": "existing_tests",
+   "reason": "Existing vitest suites and tsc plus code reading."
+  },
+  "swarm-042511-ov9e#8": {
+   "class": "existing_tests",
+   "reason": "vitest suite and tsc on reverted head only"
+  },
+  "swarm-042511-ov9e#9": {
+   "class": "existing_tests",
+   "reason": "Ran vitest src/village src/jev and tsc on the reverted head"
+  },
+  "swarm-083203-kooz#0": {
+   "class": "existing_tests",
+   "reason": "tsc plus repo regression scripts and replay of recorded adjudication data"
+  },
+  "swarm-083203-kooz#1": {
+   "class": "own_check",
+   "reason": "Existing regressions, plus a revert experiment: with af45763's hub.ts, 1 of 9 fails."
+  },
+  "swarm-083203-kooz#2": {
+   "class": "own_check",
+   "reason": "Before/after of its own challenge command: exits 1 at 4755f75, passes at 858dbfa"
+  },
+  "swarm-083203-kooz#3": {
+   "class": "own_check",
+   "reason": "Beyond the existing regressions, swapped in af45763's hub.ts and confirmed 1 of 9 fails"
+  },
+  "swarm-083203-kooz#4": {
+   "class": "existing_tests",
+   "reason": "npm test offline runner and individual existing scripts rerun"
+  },
+  "swarm-083203-kooz#5": {
+   "class": "own_check",
+   "reason": "Own /tmp/vk-rest.mjs runner and before/after runs on main src (0/4, 10/19)."
+  },
+  "swarm-083203-kooz#6": {
+   "class": "existing_tests",
+   "reason": "tsc, build, existing regression scripts and npm test; no smoke, no live pilot"
+  },
+  "swarm-092653-202z#0": {
+   "class": "scripted_smoke",
+   "reason": "tsc, existing regressions and smoke.ts SMOKE OK; proposer's own run"
+  },
+  "swarm-092653-202z#1": {
+   "class": "scripted_smoke",
+   "reason": "tsc, repo regression scripts and scripts/smoke.ts; nothing stronger"
+  },
+  "swarm-092653-202z#2": {
+   "class": "scripted_smoke",
+   "reason": "tsc, smoke.ts against a hub, and existing regression scripts."
+  },
+  "swarm-092653-202z#3": {
+   "class": "scripted_smoke",
+   "reason": "Ran scripts/smoke.ts plus existing regressions and tsc"
+  },
+  "swarm-092653-202z#4": {
+   "class": "existing_tests",
+   "reason": "tsc plus existing seat-cap, seat-env, lean-flags and challenge regressions"
+  },
+  "swarm-092653-202z#5": {
+   "class": "own_check",
+   "reason": "Wrote /tmp/vfy-each.mjs runner, ran smoke red on main vs tip, probed seat-cap refusal"
+  },
+  "swarm-102347-phin#0": {
+   "class": "scripted_smoke",
+   "reason": "build, smoke.ts, openrouter smoke (stub model), existing regression, npm test."
+  },
+  "swarm-102347-phin#2": {
+   "class": "scripted_smoke",
+   "reason": "build, existing regression, smoke.ts, npm test plus diff read"
+  },
+  "swarm-113947-ne8o#0": {
+   "class": "own_check",
+   "reason": "Inline python reading result.json and rerunning the reprice formula itself; also a live pricing-page fetch"
+  },
+  "swarm-113947-ne8o#1": {
+   "class": "existing_tests",
+   "reason": "Ran repo check-citations.sh in scratch dir plus full read of script"
+  },
+  "swarm-113947-ne8o#2": {
+   "class": "inspection_only",
+   "reason": "Read the paper and spot-checked file:line claims and JSON keys against the repo."
+  },
+  "swarm-113947-ne8o#3": {
+   "class": "existing_tests",
+   "reason": "Ran repo script paper/check-citations.sh only"
+  },
+  "swarm-113947-ne8o#4": {
+   "class": "existing_tests",
+   "reason": "Only reran the repository's paper/check-citations.sh"
+  },
+  "swarm-113947-ne8o#5": {
+   "class": "existing_tests",
+   "reason": "Reran paper/check-citations.sh and git diff --stat checks"
+  },
+  "swarm-113947-ne8o#6": {
+   "class": "existing_tests",
+   "reason": "Ran the repo's paper/check-citations.sh script."
+  },
+  "swarm-113947-ne8o#7": {
+   "class": "existing_tests",
+   "reason": "check-citations.sh plus git diff --stat reads"
+  },
+  "swarm-120129-s12h#0": {
+   "class": "existing_tests",
+   "reason": "Ran existing rq1 regressions with a copied-in bench-rq1.ts, plus tsc"
+  },
+  "swarm-120129-s12h#1": {
+   "class": "scripted_smoke",
+   "reason": "build, smoke.ts, existing bench tests and offline-runner; diff reading"
+  },
+  "swarm-120129-s12h#2": {
+   "class": "existing_tests",
+   "reason": "Existing regression script, tsc and grep."
+  },
+  "swarm-120129-s12h#3": {
+   "class": "scripted_smoke",
+   "reason": "offline-runner, tsc and smoke.ts; tests read"
+  },
+  "swarm-120129-s12h#4": {
+   "class": "scripted_smoke",
+   "reason": "tsc, offline suite, build, smoke.ts SMOKE OK and repo paper-rq1-table.ts; read result.json"
+  },
+  "swarm-120129-s12h#5": {
+   "class": "scripted_smoke",
+   "reason": "build, smoke.ts, npm test; cross-checked recorded pilot result.json"
+  },
+  "swarm-120129-s12h#6": {
+   "class": "scripted_smoke",
+   "reason": "tsc, offline-runner, build and smoke.ts, plus re-reading result.json data."
+  },
+  "swarm-120129-s12h#7": {
+   "class": "scripted_smoke",
+   "reason": "tsc, offline runner, build, smoke; reran existing table script and read result.json"
+  },
+  "swarm-120129-s12h#8": {
+   "class": "scripted_smoke",
+   "reason": "Build, smoke.ts SMOKE OK, npm test and a grep in a fresh worktree"
+  },
+  "swarm-120937-t1gx#0": {
+   "class": "inspection_only",
+   "reason": "Only rg and sed over scripts; read-only audit"
+  },
+  "swarm-120937-t1gx#1": {
+   "class": "own_check",
+   "reason": "Regression failed on the parent reporter and passed on the fix (before/after)."
+  },
+  "swarm-120937-t1gx#2": {
+   "class": "own_check",
+   "reason": "Inline python heredoc with assertions running README block and byte-comparing artifacts"
+  },
+  "swarm-120937-t1gx#3": {
+   "class": "own_check",
+   "reason": "Regenerated the artifacts and compared them byte-for-byte, plus its own independent Python assertions of counts"
+  },
+  "swarm-120937-t1gx#4": {
+   "class": "own_check",
+   "reason": "Regenerated artifacts to /tmp with byte comparison and Python assertions of independent raw counts"
+  },
+  "swarm-120937-t1gx#5": {
+   "class": "own_check",
+   "reason": "Inline Python heredoc with its own assertions, byte-comparing regenerated artifacts."
+  },
+  "swarm-120937-t1gx#6": {
+   "class": "existing_tests",
+   "reason": "Existing paper-number-audit, tectonic build, pdftotext grep, visual PDF read"
+  },
+  "swarm-122749-7x9q#0": {
+   "class": "existing_tests",
+   "reason": "Ran existing repo test files and the calibration script as proposer"
+  },
+  "swarm-122749-7x9q#1": {
+   "class": "existing_tests",
+   "reason": "Ran existing repo test files and calibration script; proposer's own run"
+  },
+  "swarm-122749-7x9q#2": {
+   "class": "scripted_smoke",
+   "reason": "build, npm test, smoke.ts, recomputed costs from JSON, grid dry-run with a stub."
+  },
+  "swarm-122749-7x9q#3": {
+   "class": "own_check",
+   "reason": "Own loadKGroups+buildArmKTable check over real pilot files, which no test covered; plus smoke"
+  },
+  "swarm-125438-jp20#0": {
+   "class": "existing_tests",
+   "reason": "Build, existing orphan/grid/rq1 tests and npm test; red state not re-verified"
+  },
+  "swarm-130155-ppol#1": {
+   "class": "inspection_only",
+   "reason": "wc, cat, sed, ls to check measured claims"
+  },
+  "swarm-130155-ppol#3": {
+   "class": "inspection_only",
+   "reason": "Only sed and wc checks of file:line claims."
+  },
+  "swarm-140213-25wq#1": {
+   "class": "scripted_smoke",
+   "reason": "Ran smoke.ts (failed line 101) and a regression script not stated as its own"
+  },
+  "swarm-140213-25wq#2": {
+   "class": "own_check",
+   "reason": "Ran the regression against unmodified main (fails) and the fix branch (passes); smoke too"
+  },
+  "swarm-140213-25wq#3": {
+   "class": "own_check",
+   "reason": "Ran regression against unmodified main (fails) then branch (passes): before/after"
+  },
+  "swarm-140213-25wq#4": {
+   "class": "own_check",
+   "reason": "Reports the regression failing on main and green on the fix, plus smoke and suite."
+  },
+  "swarm-140213-25wq#5": {
+   "class": "own_check",
+   "reason": "Copied regression onto main to show RED, GREEN on branch: before/after experiment; plus smoke"
+  },
+  "swarm-140213-25wq#6": {
+   "class": "own_check",
+   "reason": "Reverted-the-fix experiment: checked out main's hub.ts for RED, then HEAD for GREEN; smoke too"
+  },
+  "swarm-140213-25wq#7": {
+   "class": "own_check",
+   "reason": "Checked out old server.ts to get RED, restored for GREEN: revert-the-fix experiment"
+  },
+  "swarm-140213-25wq#8": {
+   "class": "own_check",
+   "reason": "Regression red against main's hub.ts and green on the branch; smoke and npm test too."
+  },
+  "swarm-140213-25wq#9": {
+   "class": "own_check",
+   "reason": "Before/after: hint regression RED on main server.ts, GREEN on cc0c1ff; plus smoke"
+  },
+  "swarm-140818-f1qy#0": {
+   "class": "scripted_smoke",
+   "reason": "tsc, build, existing regressions and smoke.ts SMOKE OK"
+  },
+  "swarm-140818-f1qy#1": {
+   "class": "scripted_smoke",
+   "reason": "tsc, build, existing regression scripts and smoke.ts"
+  },
+  "swarm-140818-f1qy#2": {
+   "class": "scripted_smoke",
+   "reason": "Existing replace regression, build, smoke.ts, npm test."
+  },
+  "swarm-140818-f1qy#3": {
+   "class": "scripted_smoke",
+   "reason": "build, existing liveness/kick/replace/heartbeat regressions and smoke.ts"
+  },
+  "swarm-140818-f1qy#4": {
+   "class": "scripted_smoke",
+   "reason": "Build, kick-vote-regression and smoke.ts SMOKE OK"
+  },
+  "swarm-140818-f1qy#5": {
+   "class": "scripted_smoke",
+   "reason": "build, kick-vote-regression and smoke.ts in clean worktree"
+  },
+  "swarm-140818-f1qy#6": {
+   "class": "scripted_smoke",
+   "reason": "Existing regressions plus smoke.ts on the integration tip."
+  },
+  "swarm-140818-f1qy#7": {
+   "class": "scripted_smoke",
+   "reason": "replace-regression, build and smoke.ts"
+  },
+  "swarm-140818-f1qy#8": {
+   "class": "scripted_smoke",
+   "reason": "Rerun of build, kick-vote-regression and smoke.ts SMOKE OK"
+  },
+  "swarm-144829-7euc#3": {
+   "class": "inspection_only",
+   "reason": "sed and grep of source and docs only"
+  },
+  "swarm-150725-3vny#0": {
+   "class": "scripted_smoke",
+   "reason": "build, npm test, smoke.ts, existing registry test."
+  },
+  "swarm-150725-3vny#1": {
+   "class": "scripted_smoke",
+   "reason": "build, npm test and smoke.ts by assembling verifier"
+  },
+  "swarm-150725-3vny#2": {
+   "class": "scripted_smoke",
+   "reason": "Build, smoke, npm test; recomputed rates from recorded result.json without naming any code it wrote"
+  },
+  "swarm-150725-3vny#3": {
+   "class": "scripted_smoke",
+   "reason": "build, npm test, smoke.ts, suite-registry test; stub runner authorship unstated"
+  },
+  "swarm-150725-3vny#4": {
+   "class": "scripted_smoke",
+   "reason": "build, npm test and smoke.ts in a scratch worktree, plus reading SUITE.json."
+  },
+  "swarm-150725-3vny#5": {
+   "class": "scripted_smoke",
+   "reason": "build, npm test, smoke.ts; python check only reads SUITE.json counts"
+  },
+  "swarm-150725-3vny#6": {
+   "class": "scripted_smoke",
+   "reason": "Build, smoke.ts SMOKE OK and npm test; the rest checked by hand"
+  },
+  "swarm-163456-rvg8#0": {
+   "class": "app_in_browser",
+   "reason": "Reports own earlier WebKit 430x932 journeys on same shell besides npm test/build"
+  },
+  "swarm-163456-rvg8#1": {
+   "class": "app_in_browser",
+   "reason": "Beyond tests/build, a local WebKit 430x932 inspection of welcome, map and conversation."
+  },
+  "swarm-163456-rvg8#2": {
+   "class": "existing_tests",
+   "reason": "npm ci, npm test, tsc, build on clean export"
+  },
+  "swarm-163456-rvg8#3": {
+   "class": "existing_tests",
+   "reason": "npm test, tsc and build on a clean export"
+  },
+  "swarm-164742-5jvl#0": {
+   "class": "existing_tests",
+   "reason": "Ran repo check-citations.sh on the commit plus review"
+  },
+  "swarm-164742-5jvl#1": {
+   "class": "own_check",
+   "reason": "Compiled the section standalone with a minimal wrapper .tex it wrote in /tmp."
+  },
+  "swarm-164742-5jvl#2": {
+   "class": "existing_tests",
+   "reason": "npm test, regen.sh, check-citations, tectonic; paid grid commands not run"
+  },
+  "swarm-164742-5jvl#3": {
+   "class": "existing_tests",
+   "reason": "Ran existing paper/regen.sh and check-citations.sh"
+  },
+  "swarm-164742-5jvl#4": {
+   "class": "existing_tests",
+   "reason": "check-citations, regen.sh, build, tectonic: repo scripts only"
+  },
+  "swarm-164742-5jvl#5": {
+   "class": "existing_tests",
+   "reason": "Ran repo regen.sh and check-citations.sh, and hand-checked result.json files."
+  },
+  "swarm-164742-5jvl#6": {
+   "class": "own_check",
+   "reason": "Compared committed vs fresh PDF extracted text itself (PDFKit), beyond regen/test/build"
+  },
+  "swarm-164742-5jvl#7": {
+   "class": "existing_tests",
+   "reason": "Build, npm test, regen.sh, check-citations.sh and tectonic in a fresh worktree"
+  },
+  "swarm-164742-5jvl#8": {
+   "class": "existing_tests",
+   "reason": "regen, check-citations, tectonic, build, npm test; flake rerun on main"
+  },
+  "swarm-171735-2lp8#0": {
+   "class": "existing_tests",
+   "reason": "npm test, tsc, build; WebKit attempt timed out, mobile QA done by chair."
+  },
+  "swarm-171735-2lp8#1": {
+   "class": "existing_tests",
+   "reason": "npm test, tsc, build; WebKit attempt timed out, Chrome QA done by chair"
+  },
+  "swarm-171735-2lp8#2": {
+   "class": "app_in_browser",
+   "reason": "Playwright Chrome drove the app at two phone sizes, with screenshots"
+  },
+  "swarm-171735-2lp8#3": {
+   "class": "app_in_browser",
+   "reason": "Playwright WebKit mobile checks against vite preview, 54/54 checks, screenshots"
+  },
+  "swarm-174126-0s5m-context-cost-audit#0": {
+   "class": "inspection_only",
+   "reason": "shasum and sed/rg reads only; explicitly read-only source identification."
+  },
+  "swarm-174126-0s5m-context-cost-audit#1": {
+   "class": "inspection_only",
+   "reason": "rg over src/seat.ts; explicitly read-only review"
+  },
+  "swarm-174126-0s5m-context-cost-audit#2": {
+   "class": "inspection_only",
+   "reason": "Only rg and sed over seat.ts plus reading decisions"
+  },
+  "swarm-174126-0s5m#0": {
+   "class": "existing_tests",
+   "reason": "build and existing bench-rq1.test.ts; diff review"
+  },
+  "swarm-174126-0s5m#1": {
+   "class": "scripted_smoke",
+   "reason": "Existing bench-rq1 test, build, and smoke.ts."
+  },
+  "swarm-174126-0s5m#2": {
+   "class": "existing_tests",
+   "reason": "build and existing bench-rq1.test.ts in detached worktree"
+  },
+  "swarm-174126-0s5m#3": {
+   "class": "scripted_smoke",
+   "reason": "Build, existing bench-rq1.test.ts and smoke.ts SMOKE OK"
+  },
+  "swarm-174126-0s5m#4": {
+   "class": "scripted_smoke",
+   "reason": "build, bench-rq1.test.ts twice and smoke.ts"
+  },
+  "swarm-174126-0s5m#5": {
+   "class": "own_check",
+   "reason": "Deleted the child-close finish call; the focused test then failed (revert experiment)."
+  },
+  "swarm-174126-0s5m#6": {
+   "class": "scripted_smoke",
+   "reason": "build, bench-rq1 test, npm test and smoke.ts three times"
+  },
+  "swarm-174126-0s5m#7": {
+   "class": "own_check",
+   "reason": "Ran its own /tmp/astra20-audit-pilot.py audit script and regenerated the table"
+  },
+  "swarm-174126-0s5m#8": {
+   "class": "scripted_smoke",
+   "reason": "build, tex test, regen.sh, npm test, smoke.ts; viewed PDF pages"
+  },
+  "swarm-174126-0s5m#9": {
+   "class": "scripted_smoke",
+   "reason": "build, existing test, regen.sh, npm test and smoke.ts; viewed rendered PDF pages."
+  },
+  "swarm-174126-0s5m#10": {
+   "class": "scripted_smoke",
+   "reason": "build, npm test, smoke.ts, regen.sh; reran existing table generator"
+  },
+  "swarm-174126-0s5m#11": {
+   "class": "scripted_smoke",
+   "reason": "Build, npm test, smoke.ts SMOKE OK and regen.sh; recounted recorded results"
+  },
+  "swarm-174126-0s5m#12": {
+   "class": "own_check",
+   "reason": "Ran own audit script /tmp/astra20-audit-phase2.py, rescored answers, ps check"
+  },
+  "swarm-181719-w1s1#0": {
+   "class": "existing_tests",
+   "reason": "npm test, tsc, check:server, build; says no browser claims."
+  },
+  "swarm-181719-w1s1#1": {
+   "class": "existing_tests",
+   "reason": "npm test, tsc, check:server, build"
+  },
+  "swarm-181719-w1s1#2": {
+   "class": "existing_tests",
+   "reason": "npm test, tsc, check:server and build; explicitly unit/mock only"
+  },
+  "swarm-181719-w1s1#3": {
+   "class": "app_in_browser",
+   "reason": "city-release-smoke.cjs with CITY_BROWSER=webkit against production preview, screenshot"
+  },
+  "swarm-181719-w1s1#4": {
+   "class": "app_in_browser",
+   "reason": "Scripted journey in WebKit/Chrome against the prod preview and dev server, with screenshots."
+  },
+  "swarm-184101-lda7#0": {
+   "class": "inspection_only",
+   "reason": "git rev-parse and grep; says inspection only, no playtest"
+  },
+  "swarm-184101-lda7#1": {
+   "class": "own_check",
+   "reason": "Ran its own 'node land-count' probe, plus git show piped to rg for facts"
+  },
+  "swarm-184101-lda7#2": {
+   "class": "own_check",
+   "reason": "Scratch probes in /tmp/vprobe, own override measurement and createInitialCityState counts"
+  },
+  "swarm-184101-lda7#3": {
+   "class": "own_check",
+   "reason": "Ran its own node land-count computation plus git show/rg fact checks; no paid probe."
+  },
+  "swarm-184305-9m82#0": {
+   "class": "existing_tests",
+   "reason": "tsc and vitest; explicitly did not browser-check"
+  },
+  "swarm-184305-9m82#1": {
+   "class": "existing_tests",
+   "reason": "tsc and vitest claimTown; explicitly did not browser-check"
+  },
+  "swarm-184305-9m82#2": {
+   "class": "existing_tests",
+   "reason": "tsc and targeted vitest plus code read"
+  },
+  "swarm-184305-9m82#3": {
+   "class": "existing_tests",
+   "reason": "tsc and vitest, including a trial merge; did not browser-check."
+  },
+  "swarm-184305-9m82#4": {
+   "class": "existing_tests",
+   "reason": "tsc and claimTown vitest only"
+  },
+  "swarm-184305-9m82#5": {
+   "class": "existing_tests",
+   "reason": "Merge, tsc, vitest features and build"
+  },
+  "swarm-184305-9m82#6": {
+   "class": "existing_tests",
+   "reason": "Trial merge, tsc and vitest features"
+  },
+  "swarm-184305-9m82#7": {
+   "class": "own_check",
+   "reason": "Found a donate/withdraw exploit with a probe test it wrote."
+  },
+  "swarm-184305-9m82#8": {
+   "class": "existing_tests",
+   "reason": "tsc and vitest on jev/registry plus code read"
+  },
+  "swarm-184305-9m82#9": {
+   "class": "existing_tests",
+   "reason": "tsc and vitest on existing test files, plus a code read"
+  },
+  "swarm-184305-9m82#10": {
+   "class": "existing_tests",
+   "reason": "tsc and vitest features plus diff review"
+  },
+  "swarm-184305-9m82#11": {
+   "class": "existing_tests",
+   "reason": "tsc and existing vitest features suite plus code review."
+  },
+  "swarm-185545-kghy#0": {
+   "class": "existing_tests",
+   "reason": "tsc, npm test, check:server, build"
+  },
+  "swarm-185545-kghy#1": {
+   "class": "existing_tests",
+   "reason": "tsc, npm test, check:server and build by the proposer"
+  },
+  "swarm-185545-kghy#2": {
+   "class": "existing_tests",
+   "reason": "tsc, npm test, repo check:server script, build"
+  },
+  "swarm-185545-kghy#3": {
+   "class": "app_in_browser",
+   "reason": "Root (writer) captured Chrome and WebKit reports after typed controls, then replayed them."
+  },
+  "swarm-190103-npm-gate#0": {
+   "class": "existing_tests",
+   "reason": "Ran npm test on main (placeholder exit 1) plus source reads"
+  },
+  "swarm-190103-npm-gate#1": {
+   "class": "existing_tests",
+   "reason": "Ran npm test on main to reproduce BEFORE; the rest was reading code; runtime run pending"
+  },
+  "swarm-190103-npm-gate#3": {
+   "class": "inspection_only",
+   "reason": "Only ran placeholder npm test on main; read diffs; could not run on branch"
+  },
+  "swarm-191130-twok#0": {
+   "class": "own_check",
+   "reason": "build, smoke, npm test, regen, plus an independent Fisher/Holm/Wilson re-derivation."
+  },
+  "swarm-191130-twok#1": {
+   "class": "existing_tests",
+   "reason": "Ran five existing test files via node --import tsx"
+  },
+  "swarm-191133-4hqx#0": {
+   "class": "own_check",
+   "reason": "Ran its own /tmp/verify-ledger-archive-0de918b.py hash and byte check"
+  },
+  "swarm-191133-4hqx#1": {
+   "class": "scripted_smoke",
+   "reason": "build, smoke.ts, npm test; file existence checks"
+  },
+  "swarm-191133-4hqx#2": {
+   "class": "scripted_smoke",
+   "reason": "build, smoke.ts, npm test on the merged integration worktree."
+  },
+  "swarm-191133-4hqx#3": {
+   "class": "scripted_smoke",
+   "reason": "build, smoke.ts, npm test after editing generator; tests by others"
+  },
+  "swarm-191133-4hqx#4": {
+   "class": "scripted_smoke",
+   "reason": "Build, smoke.ts SMOKE OK and npm test in a worktree"
+  },
+  "swarm-191133-4hqx#5": {
+   "class": "own_check",
+   "reason": "Verifier added a new malformed fd3 tamper test and ran it 11/11"
+  },
+  "swarm-191133-4hqx#6": {
+   "class": "existing_tests",
+   "reason": "Ran the existing oracle-audit test file and read the diffs."
+  },
+  "swarm-191133-4hqx#7": {
+   "class": "scripted_smoke",
+   "reason": "build, smoke.ts, npm test incl cherry-picked tests"
+  },
+  "swarm-193626-mwbk#0": {
+   "class": "existing_tests",
+   "reason": "tsc and vitest building/threats, plus a diff read"
+  },
+  "swarm-193626-mwbk#1": {
+   "class": "existing_tests",
+   "reason": "tsc and vitest claimTown plus diff read"
+  },
+  "swarm-193626-mwbk#2": {
+   "class": "existing_tests",
+   "reason": "tsc and existing claimTown vitest plus diff reading."
+  },
+  "swarm-193626-mwbk#3": {
+   "class": "existing_tests",
+   "reason": "tsc and vitest claimTown/building plus diff read"
+  },
+  "swarm-193626-mwbk#4": {
+   "class": "existing_tests",
+   "reason": "tsc and vitest claimTown/building, plus a diff read"
+  },
+  "swarm-193626-mwbk#5": {
+   "class": "existing_tests",
+   "reason": "tsc and vitest claimTown/building plus diff read"
+  },
+  "swarm-193626-mwbk#6": {
+   "class": "existing_tests",
+   "reason": "tsc and existing vitest suites plus diff reading."
+  },
+  "swarm-193626-mwbk#7": {
+   "class": "existing_tests",
+   "reason": "tsc and vitest council/features/dialogue plus code read"
+  },
+  "swarm-193626-mwbk#8": {
+   "class": "existing_tests",
+   "reason": "Baseline vitest run (1 failure), plus code diagnosis"
+  },
+  "swarm-193626-mwbk#9": {
+   "class": "existing_tests",
+   "reason": "tsc and vitest threats/wander/building plus diff read"
+  },
+  "swarm-193626-mwbk#10": {
+   "class": "existing_tests",
+   "reason": "tsc, existing vitest files, build."
+  },
+  "swarm-193626-mwbk#11": {
+   "class": "existing_tests",
+   "reason": "tsc and vitest threats/caravans plus diff read"
+  },
+  "swarm-193626-mwbk#12": {
+   "class": "own_check",
+   "reason": "Its own temporary probe file showed 0 farm loops; also a buy/spend probe"
+  },
+  "swarm-193626-mwbk#13": {
+   "class": "existing_tests",
+   "reason": "tsc, filtered vitest, build plus diff review"
+  },
+  "swarm-193626-mwbk#14": {
+   "class": "existing_tests",
+   "reason": "tsc and existing council vitest plus code reading."
+  },
+  "swarm-193626-mwbk#15": {
+   "class": "own_check",
+   "reason": "Verifier's own economy probe (0 paying loops), later added as regression test"
+  },
+  "swarm-193626-mwbk#16": {
+   "class": "existing_tests",
+   "reason": "tsc and vitest economy only"
+  },
+  "swarm-193626-mwbk#17": {
+   "class": "existing_tests",
+   "reason": "tsc and vitest features/jev"
+  },
+  "swarm-193626-mwbk#18": {
+   "class": "existing_tests",
+   "reason": "tsc and existing vitest files plus close diff reading."
+  },
+  "swarm-193626-mwbk#19": {
+   "class": "existing_tests",
+   "reason": "tsc and four existing vitest files plus diff read"
+  },
+  "swarm-193626-mwbk#20": {
+   "class": "existing_tests",
+   "reason": "tsc and vitest director/registry only"
+  },
+  "swarm-193626-mwbk#21": {
+   "class": "existing_tests",
+   "reason": "tsc and navigation/simBudget vitest"
+  },
+  "swarm-193626-mwbk#22": {
+   "class": "existing_tests",
+   "reason": "tsc and existing vitest suites; fresh-save flow was checked elsewhere."
+  },
+  "swarm-193626-mwbk#23": {
+   "class": "existing_tests",
+   "reason": "tsc and vitest; viewed author's /tmp/opus-O-shots, did not drive browser"
+  },
+  "swarm-193626-mwbk#24": {
+   "class": "existing_tests",
+   "reason": "tsc, vitest and build; only viewed another seat's screenshot"
+  },
+  "swarm-193626-mwbk#25": {
+   "class": "existing_tests",
+   "reason": "tsc, vitest, merge-tree diff; viewed existing before/after screenshots"
+  },
+  "swarm-193626-mwbk#26": {
+   "class": "existing_tests",
+   "reason": "tsc, vitest, build; viewed a screenshot from opus-1's directory."
+  },
+  "swarm-193626-mwbk#27": {
+   "class": "existing_tests",
+   "reason": "tsc, vitest, build and --cc hunk read"
+  },
+  "swarm-193626-mwbk#28": {
+   "class": "own_check",
+   "reason": "Trial-merged trunk and compared council.test before (9/9 failing) and after the fix"
+  },
+  "swarm-193626-mwbk#29": {
+   "class": "existing_tests",
+   "reason": "tsc and vitest council/history/registry"
+  },
+  "swarm-193626-mwbk#30": {
+   "class": "own_check",
+   "reason": "Own temporary zz-probe.test.ts door-starer probe run before/after the fix."
+  },
+  "swarm-193626-mwbk#31": {
+   "class": "existing_tests",
+   "reason": "Full vitest suite run only"
+  },
+  "swarm-193626-mwbk#32": {
+   "class": "existing_tests",
+   "reason": "tsc and vitest council/dialogue, plus a diff read"
+  },
+  "swarm-193626-mwbk#33": {
+   "class": "existing_tests",
+   "reason": "Full vitest suite, tsc, build"
+  },
+  "swarm-193626-mwbk#34": {
+   "class": "app_in_browser",
+   "reason": "Playwright chromium fresh-save playtest with real controls and screenshots."
+  },
+  "swarm-193626-mwbk#35": {
+   "class": "existing_tests",
+   "reason": "tsc, targeted vitest, build, git log"
+  },
+  "swarm-193626-mwbk#36": {
+   "class": "existing_tests",
+   "reason": "tsc, a targeted vitest subset and build"
+  },
+  "swarm-193626-mwbk#37": {
+   "class": "existing_tests",
+   "reason": "tsc and targeted vitest at cbdcdc5"
+  },
+  "swarm-193626-mwbk#38": {
+   "class": "existing_tests",
+   "reason": "tsc and existing vitest files on the main checkout."
+  },
+  "swarm-193626-mwbk#39": {
+   "class": "existing_tests",
+   "reason": "tsc, targeted vitest and build"
+  },
+  "swarm-193626-mwbk#40": {
+   "class": "existing_tests",
+   "reason": "tsc and a vitest subset, plus git ancestry checks"
+  },
+  "swarm-193626-mwbk#41": {
+   "class": "existing_tests",
+   "reason": "tsc, targeted vitest, build"
+  },
+  "swarm-193626-mwbk#42": {
+   "class": "app_in_browser",
+   "reason": "Playwright chromium fresh-save playtest f1-f12 with screenshots."
+  },
+  "swarm-193626-mwbk#43": {
+   "class": "app_in_browser",
+   "reason": "Re-shot O's daylight Watch at cbdcdc5 in running app, plus full suite"
+  },
+  "swarm-193626-mwbk#44": {
+   "class": "existing_tests",
+   "reason": "tsc, targeted vitest and build, plus git log"
+  },
+  "swarm-193626-mwbk#45": {
+   "class": "existing_tests",
+   "reason": "tsc and vitest subset; git ancestry checks"
+  },
+  "swarm-193626-mwbk#46": {
+   "class": "existing_tests",
+   "reason": "tsc, existing vitest suites, build."
+  },
+  "swarm-221023-k6l4#0": {
+   "class": "existing_tests",
+   "reason": "tsc, vitest, build; gallery shots are opus1's, not verifier's"
+  },
+  "swarm-221023-k6l4#1": {
+   "class": "existing_tests",
+   "reason": "tsc and vitest camera tests; viewed an existing evidence png"
+  },
+  "swarm-221023-k6l4#2": {
+   "class": "existing_tests",
+   "reason": "tsc, two vitest files, build plus review"
+  },
+  "swarm-221023-k6l4#3": {
+   "class": "existing_tests",
+   "reason": "tsc and existing streetLife vitest plus code explanation."
+  },
+  "swarm-221023-k6l4#4": {
+   "class": "existing_tests",
+   "reason": "tsc, two vitest files, build plus code read"
+  },
+  "swarm-221023-k6l4#5": {
+   "class": "existing_tests",
+   "reason": "tsc, vitest SettlementBuildings/architecture and build"
+  },
+  "swarm-221023-k6l4#6": {
+   "class": "existing_tests",
+   "reason": "tsc and two vitest files; follow-up checked by code read"
+  },
+  "swarm-221023-k6l4#7": {
+   "class": "own_check",
+   "reason": "Before/after: failing tests rerun on S1 base 0af9bbc to show the failures are new."
+  },
+  "swarm-221023-k6l4#8": {
+   "class": "existing_tests",
+   "reason": "tsc, vitest, build; gallery evidence from opus-2's directory"
+  },
+  "swarm-221023-k6l4#9": {
+   "class": "own_check",
+   "reason": "Beyond the failing vitest, it probed discoverRealm vs restoreRealms to find the age mismatch"
+  },
+  "swarm-221023-k6l4#10": {
+   "class": "existing_tests",
+   "reason": "tsc, vitest files, build on scratch merge"
+  },
+  "swarm-221023-k6l4#11": {
+   "class": "existing_tests",
+   "reason": "Merge, tsc, existing vitest files, build."
+  },
+  "swarm-221023-k6l4#12": {
+   "class": "app_in_browser",
+   "reason": "In-browser LOD vs ?nolod check with draw counts and screenshots, no page errors"
+  },
+  "swarm-221023-k6l4#13": {
+   "class": "app_in_browser",
+   "reason": "Browser HUD overlap check via /tmp/verifier-hud.mjs at two viewports, with screenshots"
+  },
+  "swarm-221023-k6l4#14": {
+   "class": "existing_tests",
+   "reason": "tsc and vitest streetLife"
+  },
+  "swarm-221023-k6l4#15": {
+   "class": "existing_tests",
+   "reason": "tsc, vitest, build; referenced another seat's screenshot."
+  },
+  "swarm-221023-k6l4#16": {
+   "class": "app_in_browser",
+   "reason": "Took own gallery shots /tmp/opus1-w1/w2.png and measured wonder heights"
+  },
+  "swarm-221023-k6l4#17": {
+   "class": "app_in_browser",
+   "reason": "In-browser walk view at Fernstead market, measuring draw calls with and without S9"
+  },
+  "swarm-221023-k6l4#18": {
+   "class": "app_in_browser",
+   "reason": "Browser script ran Watch mode, measured renderer draw calls, screenshots, no page errors"
+  },
+  "swarm-221023-k6l4#19": {
+   "class": "existing_tests",
+   "reason": "tsc, existing vitest files, build."
+  },
+  "swarm-221023-k6l4#20": {
+   "class": "existing_tests",
+   "reason": "tsc, ten vitest files, build in author worktree"
+  },
+  "swarm-221023-k6l4#21": {
+   "class": "existing_tests",
+   "reason": "tsc, vitest streetLife and build"
+  },
+  "swarm-221023-k6l4#22": {
+   "class": "app_in_browser",
+   "reason": "Measured walk-view draw counts at Fernstead pose incl. ?nolod in running app"
+  },
+  "swarm-221023-k6l4#23": {
+   "class": "existing_tests",
+   "reason": "tsc, build, full village/jev vitest suite, audited assertion changes."
+  },
+  "swarm-221023-k6l4#24": {
+   "class": "existing_tests",
+   "reason": "tsc, five vitest files, build plus grep"
+  },
+  "swarm-221023-k6l4#25": {
+   "class": "existing_tests",
+   "reason": "Merge, then tsc, vitest and build"
+  },
+  "swarm-221023-k6l4#26": {
+   "class": "existing_tests",
+   "reason": "tsc, vitest program/realms, build; guard confirmed by code read"
+  },
+  "swarm-221023-k6l4#27": {
+   "class": "app_in_browser",
+   "reason": "Browser LOD vs nolod and WebGL draw-hook measurements, with screenshots."
+  }
+ },
+ "coder_b": {
+  "swarm-010513-crup-chair-replay#0": {
+   "class": "own_check",
+   "reason": "Ran its own /tmp dist-check.mjs and a smoke.sh with hub restarts and MCP calls"
+  },
+  "swarm-010513-crup-controller-build#3": {
+   "class": "own_check",
+   "reason": "Live probes against a throwaway hub (403/401/201 by token configuration), plus tests and smoke."
+  },
+  "swarm-010513-crup-r1-build#0": {
+   "class": "own_check",
+   "reason": "Before/after experiment: regression RED at main c0cf5a3 in throwaway worktree, GREEN at branch tip; plus smoke."
+  },
+  "swarm-010513-crup-r1-build#1": {
+   "class": "own_check",
+   "reason": "Ran handoff regression RED on main c0cf5a3 and GREEN at tip in throwaway worktrees: before/after experiment."
+  },
+  "swarm-010513-crup-r1-build#2": {
+   "class": "own_check",
+   "reason": "Red/green experiment: regression copied onto main c0cf5a3 fails and passes at tip; plus smoke"
+  },
+  "swarm-010513-crup-recruit-prefix#0": {
+   "class": "own_check",
+   "reason": "Pre-fix red and post-fix green experiment, plus smoke and npm test."
+  },
+  "swarm-010513-crup-recruit-prefix#1": {
+   "class": "own_check",
+   "reason": "Test observed RED pre-fix on c0cf5a3 (ensured='brk-foo') and GREEN on branch; before/after plus smoke."
+  },
+  "swarm-010513-crup-recruit-prefix#3": {
+   "class": "own_check",
+   "reason": "Inline replica of assertions run against unfixed spawner.ts (red), plus dry-spawn throwaway hub probe."
+  },
+  "swarm-010513-crup-recruit-prefix#4": {
+   "class": "own_check",
+   "reason": "Inline replica of the assertions, red on the unfixed base, plus a live throwaway-hub probe with spawn dry-run"
+  },
+  "swarm-010513-crup#1": {
+   "class": "own_check",
+   "reason": "Inline node in-memory Hub red/green at main c0cf5a3, plus the existing regression."
+  },
+  "swarm-010513-crup#7": {
+   "class": "own_check",
+   "reason": "Probed a throwaway hub from fix dist across token/opt-in cases A/B/C; regression red on main."
+  },
+  "swarm-010513-crup#10": {
+   "class": "existing_tests",
+   "reason": "git rev-parse SHA checks plus rerun of existing consolidator regression; diff inspected."
+  },
+  "swarm-010513-crup#11": {
+   "class": "inspection_only",
+   "reason": "Only git log and git show over branch tips"
+  },
+  "swarm-010513-gitconfig-build#1": {
+   "class": "own_check",
+   "reason": "RED/GREEN on the pre-fix and fixed commits, plus live probes against a throwaway hub for git config refusal."
+  },
+  "swarm-010513-telemetry-build#0": {
+   "class": "own_check",
+   "reason": "Red run on c0cf5a3 vs green on branch, plus throwaway dry-spawn hub /policy probe and smoke."
+  },
+  "swarm-011152-pen5#0": {
+   "class": "existing_tests",
+   "reason": "tsc, existing vitest architecture/program suites and vite build; diff read."
+  },
+  "swarm-011152-pen5#1": {
+   "class": "existing_tests",
+   "reason": "tsc, functional vitest and vite build at 9eba547"
+  },
+  "swarm-011152-pen5#2": {
+   "class": "app_in_browser",
+   "reason": "Vite preview prod build driven by the browser script /tmp/verifier-crash2.mjs, pre-fix and post-fix."
+  },
+  "swarm-011152-pen5#3": {
+   "class": "existing_tests",
+   "reason": "tsc, existing vitest files and vite build plus code review; nothing stronger."
+  },
+  "swarm-011152-pen5#4": {
+   "class": "existing_tests",
+   "reason": "Only tsc run; compared opus-1's pre-existing screenshots, did not drive browser itself."
+  },
+  "swarm-011152-pen5#5": {
+   "class": "existing_tests",
+   "reason": "Only tsc --noEmit, plus a code review"
+  },
+  "swarm-011152-pen5#6": {
+   "class": "existing_tests",
+   "reason": "Merge, tsc, existing simulation.test and vite build."
+  },
+  "swarm-011152-pen5#7": {
+   "class": "existing_tests",
+   "reason": "Only tsc run; compared author's pre/post screenshots and read code."
+  },
+  "swarm-011152-pen5#8": {
+   "class": "app_in_browser",
+   "reason": "Browser A/B of two dev servers with ?debug&grow, draw calls, fps, screenshots compared."
+  },
+  "swarm-011152-pen5#9": {
+   "class": "existing_tests",
+   "reason": "tsc and plan.test; it compared pre/post screenshots but doesn't say it took them"
+  },
+  "swarm-011152-pen5#10": {
+   "class": "existing_tests",
+   "reason": "Diff review, merge, tsc and existing vitest suites."
+  },
+  "swarm-011152-pen5#11": {
+   "class": "own_check",
+   "reason": "Showed new regression test fails on 91a1cb2 without fix and passes with it (before/after)."
+  },
+  "swarm-011152-pen5#12": {
+   "class": "app_in_browser",
+   "reason": "vite preview prod build driven by /tmp crash scripts; snag screens and page errors checked."
+  },
+  "swarm-011152-pen5#13": {
+   "class": "app_in_browser",
+   "reason": "Tests and build, plus cites browser evidence and camera shots from its own s10 reviews"
+  },
+  "swarm-011152-pen5#14": {
+   "class": "app_in_browser",
+   "reason": "Prod crash repro /tmp/verifier-crash2.mjs and aerial screenshots via /tmp/verifier-grow.mjs."
+  },
+  "swarm-011152-pen5#15": {
+   "class": "app_in_browser",
+   "reason": "Ran /tmp/verifier-crash2.mjs on prod preview and verifier-grow.mjs aerial screenshots in landscape/portrait."
+  },
+  "swarm-011152-pen5#16": {
+   "class": "app_in_browser",
+   "reason": "Beyond suites, reports zoom-out visual check with screenshots in own /tmp/opus1-s10/zoomout."
+  },
+  "swarm-042511-ov9e#0": {
+   "class": "existing_tests",
+   "reason": "Existing vitest files and tsc on its own branch"
+  },
+  "swarm-042511-ov9e#1": {
+   "class": "app_in_browser",
+   "reason": "Prose cites a browser F8 bench.mjs run on a production build, with /tmp/opus4 screenshots."
+  },
+  "swarm-042511-ov9e#2": {
+   "class": "existing_tests",
+   "reason": "Existing vitest files and tsc, plus reading three.js code."
+  },
+  "swarm-042511-ov9e#3": {
+   "class": "existing_tests",
+   "reason": "tsc plus existing vitest files; browser F8 evidence only referenced on board, not described."
+  },
+  "swarm-042511-ov9e#4": {
+   "class": "own_check",
+   "reason": "Its own quota.test-style QuotaStorage repro checked saveVillage and restore behaviour, plus existing tests"
+  },
+  "swarm-042511-ov9e#5": {
+   "class": "existing_tests",
+   "reason": "Existing vitest suites; the lead's repros are only referenced."
+  },
+  "swarm-042511-ov9e#6": {
+   "class": "existing_tests",
+   "reason": "Full existing village+jev vitest suite and tsc at 6352fe3."
+  },
+  "swarm-042511-ov9e#7": {
+   "class": "existing_tests",
+   "reason": "Existing vitest village/jev suites and tsc on reverted head; code read."
+  },
+  "swarm-042511-ov9e#8": {
+   "class": "existing_tests",
+   "reason": "Existing vitest suite for src/village and src/jev, plus tsc"
+  },
+  "swarm-042511-ov9e#9": {
+   "class": "existing_tests",
+   "reason": "Full existing vitest src/village and src/jev suites, plus tsc."
+  },
+  "swarm-083203-kooz#0": {
+   "class": "existing_tests",
+   "reason": "tsc plus existing regression/test scripts and recorded adjudication replay; no live agents."
+  },
+  "swarm-083203-kooz#1": {
+   "class": "own_check",
+   "reason": "Existing regressions plus confirmed released-claim case fails 1 of 9 with older hub.ts (revert experiment)."
+  },
+  "swarm-083203-kooz#2": {
+   "class": "own_check",
+   "reason": "Re-ran its own challenge command: exits 1 at 4755f75 and passes at 858dbfa (before/after)"
+  },
+  "swarm-083203-kooz#3": {
+   "class": "own_check",
+   "reason": "Checked that the regression fails with af45763's hub.ts (1 of 9 fails); a revert-style experiment."
+  },
+  "swarm-083203-kooz#4": {
+   "class": "existing_tests",
+   "reason": "npm test offline runner and existing offlineScripts entries rerun with longer cap."
+  },
+  "swarm-083203-kooz#5": {
+   "class": "own_check",
+   "reason": "Before/after runs: 0/4 on main src, 10/19 on older src; own /tmp/vk-rest.mjs runner."
+  },
+  "swarm-083203-kooz#6": {
+   "class": "existing_tests",
+   "reason": "tsc, build, existing regression and test files and npm test; no smoke"
+  },
+  "swarm-092653-202z#0": {
+   "class": "scripted_smoke",
+   "reason": "tsc, existing regressions and smoke.ts (SMOKE OK)."
+  },
+  "swarm-092653-202z#1": {
+   "class": "scripted_smoke",
+   "reason": "tsc, existing regression scripts and scripts/smoke.ts SMOKE OK."
+  },
+  "swarm-092653-202z#2": {
+   "class": "scripted_smoke",
+   "reason": "tsc, smoke.ts and existing regression scripts on detached checkout; nothing stronger."
+  },
+  "swarm-092653-202z#3": {
+   "class": "scripted_smoke",
+   "reason": "tsc, smoke.ts and existing regression scripts at b22fb1f"
+  },
+  "swarm-092653-202z#4": {
+   "class": "existing_tests",
+   "reason": "tsc and existing regression scripts; not the full suite."
+  },
+  "swarm-092653-202z#5": {
+   "class": "own_check",
+   "reason": "Own /tmp/vfy-each.mjs runner, smoke red-on-main before/after, seat-cap refusal probe, /tmp leak probe."
+  },
+  "swarm-102347-phin#0": {
+   "class": "scripted_smoke",
+   "reason": "build, smoke.ts, smoke:openrouter (stub model), existing regression and npm test; diff read."
+  },
+  "swarm-102347-phin#2": {
+   "class": "scripted_smoke",
+   "reason": "Build, existing reviewer-assignment regression, smoke.ts and npm test in a fresh worktree"
+  },
+  "swarm-113947-ne8o#0": {
+   "class": "own_check",
+   "reason": "Inline python -c plus its own Python reprice-formula recomputation, checked against budget.md."
+  },
+  "swarm-113947-ne8o#1": {
+   "class": "existing_tests",
+   "reason": "Ran the repo's check-citations.sh under review on scratch copies; read script in full."
+  },
+  "swarm-113947-ne8o#2": {
+   "class": "inspection_only",
+   "reason": "Read figures.md and spot-checked file:line claims and JSON via json.load; no tests."
+  },
+  "swarm-113947-ne8o#3": {
+   "class": "existing_tests",
+   "reason": "Ran the repo's check-citations.sh on the assembled branch"
+  },
+  "swarm-113947-ne8o#4": {
+   "class": "existing_tests",
+   "reason": "Re-ran the existing paper/check-citations.sh script."
+  },
+  "swarm-113947-ne8o#5": {
+   "class": "existing_tests",
+   "reason": "Reran existing check-citations.sh on integration branch plus git diff --stat."
+  },
+  "swarm-113947-ne8o#6": {
+   "class": "existing_tests",
+   "reason": "Only ran existing paper/check-citations.sh script."
+  },
+  "swarm-113947-ne8o#7": {
+   "class": "existing_tests",
+   "reason": "Ran the repo's check-citations.sh, plus git diff --stat"
+  },
+  "swarm-120129-s12h#0": {
+   "class": "existing_tests",
+   "reason": "Ran the author's existing regression scripts, with the committed bench-rq1.ts copied in, plus tsc."
+  },
+  "swarm-120129-s12h#1": {
+   "class": "scripted_smoke",
+   "reason": "Build, smoke.ts, existing bench tests and offline-runner; diff read."
+  },
+  "swarm-120129-s12h#2": {
+   "class": "existing_tests",
+   "reason": "Existing rq1-usage-budget regression, tsc, grep and git log."
+  },
+  "swarm-120129-s12h#3": {
+   "class": "scripted_smoke",
+   "reason": "offline-runner, tsc and smoke.ts, plus reading the diff and tests"
+  },
+  "swarm-120129-s12h#4": {
+   "class": "scripted_smoke",
+   "reason": "tsc, offline-runner, build, smoke.ts (SMOKE OK) and the existing paper-rq1-table script."
+  },
+  "swarm-120129-s12h#5": {
+   "class": "scripted_smoke",
+   "reason": "Build, smoke.ts and npm test; cross-read pilot result.json files."
+  },
+  "swarm-120129-s12h#6": {
+   "class": "scripted_smoke",
+   "reason": "tsc, offline-runner, build, smoke.ts; read result.json and ran existing table script."
+  },
+  "swarm-120129-s12h#7": {
+   "class": "scripted_smoke",
+   "reason": "tsc, offline-runner, build and smoke; the result.json and argv checks were reading data"
+  },
+  "swarm-120129-s12h#8": {
+   "class": "scripted_smoke",
+   "reason": "Build, smoke.ts (SMOKE OK), npm test and a grep."
+  },
+  "swarm-120937-t1gx#0": {
+   "class": "inspection_only",
+   "reason": "Only rg and sed over bench-rq1.ts and paper-account-regime.ts."
+  },
+  "swarm-120937-t1gx#1": {
+   "class": "own_check",
+   "reason": "New regression independently failed on parent reporter and passed on fix: revert experiment."
+  },
+  "swarm-120937-t1gx#2": {
+   "class": "own_check",
+   "reason": "Inline python heredoc runs the README block and asserts byte-identical outputs and counts"
+  },
+  "swarm-120937-t1gx#3": {
+   "class": "own_check",
+   "reason": "Independent Python assertions of counts and a byte-for-byte regeneration comparison."
+  },
+  "swarm-120937-t1gx#4": {
+   "class": "own_check",
+   "reason": "Own Python assertions of raw counts and independent byte-for-byte artifact regeneration in /tmp."
+  },
+  "swarm-120937-t1gx#5": {
+   "class": "own_check",
+   "reason": "Inline Python heredoc with its own assertions: byte-identical artifacts, run counts, Holm checks."
+  },
+  "swarm-120937-t1gx#6": {
+   "class": "existing_tests",
+   "reason": "Existing paper-number-audit, tectonic build, pdftotext and grep, and a visual PDF read"
+  },
+  "swarm-122749-7x9q#0": {
+   "class": "existing_tests",
+   "reason": "Ran existing repo test files and the ak-select-calibration script."
+  },
+  "swarm-122749-7x9q#1": {
+   "class": "existing_tests",
+   "reason": "Proposer ran existing repo test files and existing calibration script."
+  },
+  "swarm-122749-7x9q#2": {
+   "class": "own_check",
+   "reason": "Beyond build/test/smoke, recomputed pilot costs and dry-ran grid command with stub runner."
+  },
+  "swarm-122749-7x9q#3": {
+   "class": "own_check",
+   "reason": "Ran loadKGroups and buildArmKTable itself over the real pilot result.json, which no test covers, plus smoke"
+  },
+  "swarm-125438-jp20#0": {
+   "class": "existing_tests",
+   "reason": "Build, existing bench regression tests and npm test; says it did not re-verify red."
+  },
+  "swarm-130155-ppol#1": {
+   "class": "inspection_only",
+   "reason": "wc, sed, ls on files to check line counts and claims."
+  },
+  "swarm-130155-ppol#3": {
+   "class": "inspection_only",
+   "reason": "sed/wc on cited file:line locations only."
+  },
+  "swarm-140213-25wq#1": {
+   "class": "scripted_smoke",
+   "reason": "Build, smoke.ts and the branch regression script; not stated that the verifier wrote it"
+  },
+  "swarm-140213-25wq#2": {
+   "class": "own_check",
+   "reason": "Ran the regression against unmodified main (fails) and the fix branch (passes); smoke also ran."
+  },
+  "swarm-140213-25wq#3": {
+   "class": "own_check",
+   "reason": "Ran regression against unmodified main (fails) then branch (passes): before/after; plus smoke."
+  },
+  "swarm-140213-25wq#4": {
+   "class": "scripted_smoke",
+   "reason": "Author regression, smoke.ts and tests on branch; red-on-main claim not shown in its command."
+  },
+  "swarm-140213-25wq#5": {
+   "class": "own_check",
+   "reason": "Copied the regression script onto main to show red there and green on the branch; plus smoke"
+  },
+  "swarm-140213-25wq#6": {
+   "class": "own_check",
+   "reason": "Revert experiment: checked out the old hub.ts to get RED, then HEAD for GREEN; smoke also ran."
+  },
+  "swarm-140213-25wq#7": {
+   "class": "own_check",
+   "reason": "Reverted server.ts to 0f84d03 for RED, restored for GREEN; revert-the-fix experiment plus smoke."
+  },
+  "swarm-140213-25wq#8": {
+   "class": "own_check",
+   "reason": "Regression run red against main's hub.ts, green on branch: before/after, plus smoke and tests."
+  },
+  "swarm-140213-25wq#9": {
+   "class": "own_check",
+   "reason": "Before/after experiment: the regression is RED on main server.ts and GREEN on cc0c1ff, plus smoke"
+  },
+  "swarm-140818-f1qy#0": {
+   "class": "scripted_smoke",
+   "reason": "tsc, build, existing regression scripts and smoke.ts (SMOKE OK)."
+  },
+  "swarm-140818-f1qy#1": {
+   "class": "scripted_smoke",
+   "reason": "tsc, build, existing regression scripts and smoke.ts SMOKE OK."
+  },
+  "swarm-140818-f1qy#2": {
+   "class": "scripted_smoke",
+   "reason": "Existing replace-regression, build, smoke.ts, npm test; diff read."
+  },
+  "swarm-140818-f1qy#3": {
+   "class": "scripted_smoke",
+   "reason": "Build, existing regression scripts and smoke.ts on port 7746"
+  },
+  "swarm-140818-f1qy#4": {
+   "class": "scripted_smoke",
+   "reason": "Build, the existing kick-vote regression and smoke.ts (SMOKE OK)."
+  },
+  "swarm-140818-f1qy#5": {
+   "class": "scripted_smoke",
+   "reason": "Build, existing kick-vote-regression and smoke.ts SMOKE OK."
+  },
+  "swarm-140818-f1qy#6": {
+   "class": "scripted_smoke",
+   "reason": "Build, existing regression scripts and smoke.ts after fast-forward; diff read."
+  },
+  "swarm-140818-f1qy#7": {
+   "class": "scripted_smoke",
+   "reason": "Existing replace-regression, build and smoke.ts"
+  },
+  "swarm-140818-f1qy#8": {
+   "class": "scripted_smoke",
+   "reason": "Build, the existing kick-vote regression and smoke.ts (SMOKE OK)."
+  },
+  "swarm-144829-7euc#3": {
+   "class": "inspection_only",
+   "reason": "Only sed and grep over source and docs lines."
+  },
+  "swarm-150725-3vny#0": {
+   "class": "scripted_smoke",
+   "reason": "build, npm test, smoke.ts, existing registry test."
+  },
+  "swarm-150725-3vny#1": {
+   "class": "scripted_smoke",
+   "reason": "Build, npm test and smoke.ts at 13d46f3"
+  },
+  "swarm-150725-3vny#2": {
+   "class": "scripted_smoke",
+   "reason": "Build, smoke.ts and npm test; rates were recomputed from recorded result.json."
+  },
+  "swarm-150725-3vny#3": {
+   "class": "scripted_smoke",
+   "reason": "Build, npm test, smoke.ts and existing suite-registry test; stub runner authorship unclear."
+  },
+  "swarm-150725-3vny#4": {
+   "class": "scripted_smoke",
+   "reason": "build, npm test, smoke.ts in scratch worktree; read SUITE.json and admission files."
+  },
+  "swarm-150725-3vny#5": {
+   "class": "scripted_smoke",
+   "reason": "Build, npm test and smoke.ts, plus a python read of SUITE.json data"
+  },
+  "swarm-150725-3vny#6": {
+   "class": "scripted_smoke",
+   "reason": "Build, smoke.ts (SMOKE OK) and npm test, plus checks by hand."
+  },
+  "swarm-163456-rvg8#0": {
+   "class": "app_in_browser",
+   "reason": "Reports own earlier WebKit 430x932 journeys on the same shell, plus npm test/tsc/build."
+  },
+  "swarm-163456-rvg8#1": {
+   "class": "app_in_browser",
+   "reason": "Beyond tests/build/tsc, local WebKit 430x932 welcome/map/conversation inspection passed."
+  },
+  "swarm-163456-rvg8#2": {
+   "class": "existing_tests",
+   "reason": "npm ci, npm test, tsc and build on a clean export"
+  },
+  "swarm-163456-rvg8#3": {
+   "class": "existing_tests",
+   "reason": "npm ci, npm test, tsc and build on a clean export."
+  },
+  "swarm-164742-5jvl#0": {
+   "class": "existing_tests",
+   "reason": "Ran existing paper/check-citations.sh on commit and reviewed diff."
+  },
+  "swarm-164742-5jvl#1": {
+   "class": "own_check",
+   "reason": "Wrote minimal wrapper tex in /tmp and compiled section standalone with tectonic."
+  },
+  "swarm-164742-5jvl#2": {
+   "class": "existing_tests",
+   "reason": "Build, npm test, regen.sh, check-citations and tectonic; paid grid commands not run"
+  },
+  "swarm-164742-5jvl#3": {
+   "class": "existing_tests",
+   "reason": "Ran the existing paper/regen.sh and check-citations.sh, plus document cross-checks."
+  },
+  "swarm-164742-5jvl#4": {
+   "class": "existing_tests",
+   "reason": "check-citations.sh, regen.sh, build and tectonic, all repository checks."
+  },
+  "swarm-164742-5jvl#5": {
+   "class": "existing_tests",
+   "reason": "Existing regen.sh and check-citations.sh, plus hand spot-checks of result.json files."
+  },
+  "swarm-164742-5jvl#6": {
+   "class": "own_check",
+   "reason": "Existing gates plus its own PDFKit text comparison of the committed and freshly built main.pdf"
+  },
+  "swarm-164742-5jvl#7": {
+   "class": "existing_tests",
+   "reason": "Build, npm test, the existing regen/check-citations scripts and a tectonic build."
+  },
+  "swarm-164742-5jvl#8": {
+   "class": "existing_tests",
+   "reason": "regen, check-citations, tectonic, build, npm test; flake isolated by rerunning existing test on main."
+  },
+  "swarm-171735-2lp8#0": {
+   "class": "existing_tests",
+   "reason": "npm test, tsc, build; WebKit goto timed out, mobile QA done by chair not this seat."
+  },
+  "swarm-171735-2lp8#1": {
+   "class": "existing_tests",
+   "reason": "npm test, tsc and build; its WebKit attempt timed out and the chair did the Chrome QA"
+  },
+  "swarm-171735-2lp8#2": {
+   "class": "app_in_browser",
+   "reason": "Playwright Chrome drove the game at two viewports, submitted a message and took screenshots."
+  },
+  "swarm-171735-2lp8#3": {
+   "class": "app_in_browser",
+   "reason": "Playwright WebKit mobile checks of vite preview via /tmp/tw-verify/check.mjs with screenshots."
+  },
+  "swarm-174126-0s5m-context-cost-audit#0": {
+   "class": "inspection_only",
+   "reason": "shasum and sed/rg path reads; explicitly read-only source identification."
+  },
+  "swarm-174126-0s5m-context-cost-audit#1": {
+   "class": "inspection_only",
+   "reason": "rg over src/seat.ts only; explicitly a read-only review"
+  },
+  "swarm-174126-0s5m-context-cost-audit#2": {
+   "class": "inspection_only",
+   "reason": "Only rg and sed over src/seat.ts, plus reading decisions."
+  },
+  "swarm-174126-0s5m#0": {
+   "class": "existing_tests",
+   "reason": "Build and existing bench-rq1.test.ts only, plus diff review."
+  },
+  "swarm-174126-0s5m#1": {
+   "class": "scripted_smoke",
+   "reason": "Existing bench-rq1 test, build and smoke.ts; diff reviewed."
+  },
+  "swarm-174126-0s5m#2": {
+   "class": "existing_tests",
+   "reason": "Build and the existing bench-rq1.test.ts in a detached worktree, plus a diff read"
+  },
+  "swarm-174126-0s5m#3": {
+   "class": "scripted_smoke",
+   "reason": "Build, existing bench-rq1.test.ts and smoke.ts against a hub (SMOKE OK)."
+  },
+  "swarm-174126-0s5m#4": {
+   "class": "scripted_smoke",
+   "reason": "Build, existing bench-rq1.test.ts twice and smoke.ts SMOKE OK."
+  },
+  "swarm-174126-0s5m#5": {
+   "class": "own_check",
+   "reason": "Deleted child-close finish call in disposable worktree; focused test then failed: mutation experiment."
+  },
+  "swarm-174126-0s5m#6": {
+   "class": "scripted_smoke",
+   "reason": "Build, bench-rq1.test, npm test and smoke.ts run three times"
+  },
+  "swarm-174126-0s5m#7": {
+   "class": "own_check",
+   "reason": "Ran python3 /tmp/astra20-audit-pilot.py, its own audit script, and re-scored and compared results."
+  },
+  "swarm-174126-0s5m#8": {
+   "class": "scripted_smoke",
+   "reason": "Build, paper test, regen.sh, npm test and smoke.ts; visual PDF check."
+  },
+  "swarm-174126-0s5m#9": {
+   "class": "scripted_smoke",
+   "reason": "build, existing tex test, regen.sh, npm test, smoke.ts; PDF pages visually checked."
+  },
+  "swarm-174126-0s5m#10": {
+   "class": "scripted_smoke",
+   "reason": "Build, npm test, smoke.ts on port 19987 and regen.sh"
+  },
+  "swarm-174126-0s5m#11": {
+   "class": "scripted_smoke",
+   "reason": "Build, npm test, smoke.ts (SMOKE OK) and the existing regen.sh; counts were recomputed from JSON."
+  },
+  "swarm-174126-0s5m#12": {
+   "class": "own_check",
+   "reason": "Ran own /tmp/astra20-audit-phase2.py audit script, rescored answers, ps process check."
+  },
+  "swarm-181719-w1s1#0": {
+   "class": "existing_tests",
+   "reason": "npm test, tsc, check:server, build; explicitly no browser or live API claims."
+  },
+  "swarm-181719-w1s1#1": {
+   "class": "existing_tests",
+   "reason": "npm test, tsc, check:server and build"
+  },
+  "swarm-181719-w1s1#2": {
+   "class": "existing_tests",
+   "reason": "npm test, tsc, check:server and build; says 'Unit/mock only'."
+  },
+  "swarm-181719-w1s1#3": {
+   "class": "app_in_browser",
+   "reason": "Ran city-release-smoke.cjs with CITY_BROWSER=webkit against production preview, inspected screenshot."
+  },
+  "swarm-181719-w1s1#4": {
+   "class": "app_in_browser",
+   "reason": "Playwright journey script in WebKit/Chrome against dev and prod preview with screenshots."
+  },
+  "swarm-184101-lda7#0": {
+   "class": "inspection_only",
+   "reason": "git rev-parse and grep only; states 'code/doc inspection only'"
+  },
+  "swarm-184101-lda7#1": {
+   "class": "own_check",
+   "reason": "Ran an inline 'node land-count' probe (land=140), plus git show and rg inspection."
+  },
+  "swarm-184101-lda7#2": {
+   "class": "own_check",
+   "reason": "Scratch probes in /tmp/vprobe and own autopilot-override measurement beyond npm test."
+  },
+  "swarm-184101-lda7#3": {
+   "class": "own_check",
+   "reason": "Ran own node land-count measurement plus git show/rg fact reads; no tests."
+  },
+  "swarm-184305-9m82#0": {
+   "class": "existing_tests",
+   "reason": "tsc and existing tests; entry says 'I did not browser-check it'"
+  },
+  "swarm-184305-9m82#1": {
+   "class": "existing_tests",
+   "reason": "tsc and existing claimTown tests; says it did not browser-check."
+  },
+  "swarm-184305-9m82#2": {
+   "class": "existing_tests",
+   "reason": "tsc and existing vitest suites plus code read."
+  },
+  "swarm-184305-9m82#3": {
+   "class": "existing_tests",
+   "reason": "tsc, existing building tests, trial merge with tests; explicitly did not browser-check."
+  },
+  "swarm-184305-9m82#4": {
+   "class": "existing_tests",
+   "reason": "tsc and claimTown tests, including the author's regression test"
+  },
+  "swarm-184305-9m82#5": {
+   "class": "existing_tests",
+   "reason": "Merge, tsc, existing features vitest suites and build, plus a code read."
+  },
+  "swarm-184305-9m82#6": {
+   "class": "existing_tests",
+   "reason": "Trial merge, tsc and existing features vitest suite."
+  },
+  "swarm-184305-9m82#7": {
+   "class": "own_check",
+   "reason": "Found donate/withdraw reputation exploit with its own probe test."
+  },
+  "swarm-184305-9m82#8": {
+   "class": "existing_tests",
+   "reason": "tsc and existing jev and registry tests, plus an extensive code read"
+  },
+  "swarm-184305-9m82#9": {
+   "class": "existing_tests",
+   "reason": "tsc and existing features/map/audio vitest suites, plus a code read."
+  },
+  "swarm-184305-9m82#10": {
+   "class": "existing_tests",
+   "reason": "tsc and existing features vitest suite plus diff review."
+  },
+  "swarm-184305-9m82#11": {
+   "class": "existing_tests",
+   "reason": "tsc and existing features vitest suite; code reviewed."
+  },
+  "swarm-185545-kghy#0": {
+   "class": "existing_tests",
+   "reason": "tsc, npm test, check:server and build, all existing scripts"
+  },
+  "swarm-185545-kghy#1": {
+   "class": "existing_tests",
+   "reason": "tsc, npm test, check:server and build by the proposer."
+  },
+  "swarm-185545-kghy#2": {
+   "class": "existing_tests",
+   "reason": "tsc, npm test, check:server and build; existing repo checks."
+  },
+  "swarm-185545-kghy#3": {
+   "class": "app_in_browser",
+   "reason": "Root captured Chrome and WebKit reports after typed controls, then replayed report."
+  },
+  "swarm-190103-npm-gate#0": {
+   "class": "existing_tests",
+   "reason": "Ran the repo's placeholder npm test on main and read source files"
+  },
+  "swarm-190103-npm-gate#1": {
+   "class": "existing_tests",
+   "reason": "Ran npm test on main to confirm BEFORE; otherwise read source and diffs, with the runtime run pending."
+  },
+  "swarm-190103-npm-gate#3": {
+   "class": "inspection_only",
+   "reason": "Only placeholder npm test on main; git log/show and read scripts; could not run branch."
+  },
+  "swarm-191130-twok#0": {
+   "class": "own_check",
+   "reason": "Beyond build/smoke/tests/regen, did independent Fisher/Holm/Wilson re-derivation."
+  },
+  "swarm-191130-twok#1": {
+   "class": "existing_tests",
+   "reason": "Ran five existing node test files under scripts/, 84 tests"
+  },
+  "swarm-191133-4hqx#0": {
+   "class": "own_check",
+   "reason": "Ran python3 /tmp/verify-ledger-archive-0de918b.py, the reviewer's own script outside the repo."
+  },
+  "swarm-191133-4hqx#1": {
+   "class": "scripted_smoke",
+   "reason": "Build, smoke.ts SMOKE OK and npm test; file existence checks."
+  },
+  "swarm-191133-4hqx#2": {
+   "class": "scripted_smoke",
+   "reason": "build, smoke.ts, npm test including existing audit tests after merge."
+  },
+  "swarm-191133-4hqx#3": {
+   "class": "scripted_smoke",
+   "reason": "Build, smoke.ts and npm test; the tests it added were written by 6-astra-4"
+  },
+  "swarm-191133-4hqx#4": {
+   "class": "scripted_smoke",
+   "reason": "npm run build, scripts/smoke.ts against a hub (SMOKE OK), and npm test."
+  },
+  "swarm-191133-4hqx#5": {
+   "class": "own_check",
+   "reason": "Verifier added its own malformed fd3 tamper test and ran it, plus build/smoke/npm test."
+  },
+  "swarm-191133-4hqx#6": {
+   "class": "existing_tests",
+   "reason": "Ran existing bench-build-oracle-audit test file; diffs read."
+  },
+  "swarm-191133-4hqx#7": {
+   "class": "scripted_smoke",
+   "reason": "Build, smoke.ts and npm test; the cherry-picked tests are 6-astra-4's, not the verifier's"
+  },
+  "swarm-193626-mwbk#0": {
+   "class": "existing_tests",
+   "reason": "tsc and existing building/threats tests, plus a full diff read."
+  },
+  "swarm-193626-mwbk#1": {
+   "class": "existing_tests",
+   "reason": "tsc and existing claimTown vitest plus diff read."
+  },
+  "swarm-193626-mwbk#2": {
+   "class": "existing_tests",
+   "reason": "tsc and existing claimTown tests; full diff read."
+  },
+  "swarm-193626-mwbk#3": {
+   "class": "existing_tests",
+   "reason": "tsc, claimTown and building existing tests, and a full diff read"
+  },
+  "swarm-193626-mwbk#4": {
+   "class": "existing_tests",
+   "reason": "tsc and existing claimTown/building tests, plus a diff read."
+  },
+  "swarm-193626-mwbk#5": {
+   "class": "existing_tests",
+   "reason": "tsc and existing claimTown/building vitest plus diff read."
+  },
+  "swarm-193626-mwbk#6": {
+   "class": "existing_tests",
+   "reason": "tsc and existing claimTown/building tests; deltas read."
+  },
+  "swarm-193626-mwbk#7": {
+   "class": "existing_tests",
+   "reason": "tsc, council, features and dialogue existing tests, then a code read"
+  },
+  "swarm-193626-mwbk#8": {
+   "class": "existing_tests",
+   "reason": "Baseline vitest run of src/village and src/jev, with diagnosis by code reading."
+  },
+  "swarm-193626-mwbk#9": {
+   "class": "existing_tests",
+   "reason": "tsc and existing threats/wander/building vitest plus diff read."
+  },
+  "swarm-193626-mwbk#10": {
+   "class": "existing_tests",
+   "reason": "tsc, existing simulation/dialogue/interactions tests and build."
+  },
+  "swarm-193626-mwbk#11": {
+   "class": "existing_tests",
+   "reason": "tsc plus the threats and caravans tests, including the author's new regression tests"
+  },
+  "swarm-193626-mwbk#12": {
+   "class": "own_check",
+   "reason": "Mentions 'my temporary probe file'; the probe measured farm loops and the sourced-clamp refusal."
+  },
+  "swarm-193626-mwbk#13": {
+   "class": "existing_tests",
+   "reason": "tsc, filtered existing vitest files and build; diff read."
+  },
+  "swarm-193626-mwbk#14": {
+   "class": "existing_tests",
+   "reason": "tsc and existing council tests; full source read."
+  },
+  "swarm-193626-mwbk#15": {
+   "class": "own_check",
+   "reason": "Ran its own exploit probe ('my probe gets 0 loops'), which was later added as a regression test"
+  },
+  "swarm-193626-mwbk#16": {
+   "class": "existing_tests",
+   "reason": "tsc and existing economy tests, including the author's regression test."
+  },
+  "swarm-193626-mwbk#17": {
+   "class": "existing_tests",
+   "reason": "tsc and existing features/jev vitest; delta read."
+  },
+  "swarm-193626-mwbk#18": {
+   "class": "existing_tests",
+   "reason": "tsc and existing navigation/simBudget/terrain tests; diff reasoning."
+  },
+  "swarm-193626-mwbk#19": {
+   "class": "existing_tests",
+   "reason": "tsc and four existing test files, plus a full diff read"
+  },
+  "swarm-193626-mwbk#20": {
+   "class": "existing_tests",
+   "reason": "tsc and existing director/registry tests, plus a diff read."
+  },
+  "swarm-193626-mwbk#21": {
+   "class": "existing_tests",
+   "reason": "tsc and existing navigation/simBudget tests; diffs read."
+  },
+  "swarm-193626-mwbk#22": {
+   "class": "existing_tests",
+   "reason": "tsc and existing reputation/dialogue/claimTown/engine/realms tests; delta read."
+  },
+  "swarm-193626-mwbk#23": {
+   "class": "existing_tests",
+   "reason": "tsc, existing tests and a merge-tree read; the screenshots cited are the author's (opus-O)"
+  },
+  "swarm-193626-mwbk#24": {
+   "class": "existing_tests",
+   "reason": "tsc, existing vitest suites and build; it viewed an existing screenshot."
+  },
+  "swarm-193626-mwbk#25": {
+   "class": "existing_tests",
+   "reason": "tsc, existing vitest files, merge-tree diff; screenshots appear author-supplied (opus-O-shots)."
+  },
+  "swarm-193626-mwbk#26": {
+   "class": "existing_tests",
+   "reason": "tsc, existing tests, build; referenced author's screenshot, did not drive browser."
+  },
+  "swarm-193626-mwbk#27": {
+   "class": "existing_tests",
+   "reason": "tsc, existing vitest files and build, plus reading the merge hunks"
+  },
+  "swarm-193626-mwbk#28": {
+   "class": "existing_tests",
+   "reason": "tsc and existing vitest suites, including on a trial merge; the diffs were read."
+  },
+  "swarm-193626-mwbk#29": {
+   "class": "existing_tests",
+   "reason": "tsc and existing council/history/registry tests."
+  },
+  "swarm-193626-mwbk#30": {
+   "class": "own_check",
+   "reason": "Wrote temporary zz-probe door-starer test, ran before/after: 241 vs 7 facing samples."
+  },
+  "swarm-193626-mwbk#31": {
+   "class": "existing_tests",
+   "reason": "Ran the existing full vitest suite of src/village and src/jev"
+  },
+  "swarm-193626-mwbk#32": {
+   "class": "existing_tests",
+   "reason": "tsc and existing council/dialogue tests, plus a diff read."
+  },
+  "swarm-193626-mwbk#33": {
+   "class": "existing_tests",
+   "reason": "Full existing vitest suite, tsc and build at cbdcdc5."
+  },
+  "swarm-193626-mwbk#34": {
+   "class": "app_in_browser",
+   "reason": "Playwright chromium fresh-save playtest with real controls and screenshots."
+  },
+  "swarm-193626-mwbk#35": {
+   "class": "existing_tests",
+   "reason": "tsc, targeted existing vitest and build, plus git log reading"
+  },
+  "swarm-193626-mwbk#36": {
+   "class": "existing_tests",
+   "reason": "tsc, targeted existing vitest suites and build at cbdcdc5."
+  },
+  "swarm-193626-mwbk#37": {
+   "class": "existing_tests",
+   "reason": "tsc and targeted existing vitest files in detached worktree."
+  },
+  "swarm-193626-mwbk#38": {
+   "class": "existing_tests",
+   "reason": "tsc and existing director/residentsIndoors/history tests on main checkout."
+  },
+  "swarm-193626-mwbk#39": {
+   "class": "existing_tests",
+   "reason": "tsc, targeted existing vitest files and build at cbdcdc5"
+  },
+  "swarm-193626-mwbk#40": {
+   "class": "existing_tests",
+   "reason": "tsc and targeted existing vitest suites, plus git ancestry checks."
+  },
+  "swarm-193626-mwbk#41": {
+   "class": "existing_tests",
+   "reason": "tsc, existing vitest files and build at cbdcdc5."
+  },
+  "swarm-193626-mwbk#42": {
+   "class": "app_in_browser",
+   "reason": "Playwright chromium fresh-save playtest f1-f12 with screenshots."
+  },
+  "swarm-193626-mwbk#43": {
+   "class": "app_in_browser",
+   "reason": "Full suite, then re-shot O's daylight Watch view in the app at cbdcdc5"
+  },
+  "swarm-193626-mwbk#44": {
+   "class": "existing_tests",
+   "reason": "tsc, targeted existing vitest suites and build, plus a git log check."
+  },
+  "swarm-193626-mwbk#45": {
+   "class": "existing_tests",
+   "reason": "tsc and existing vitest subset; git ancestry checks."
+  },
+  "swarm-193626-mwbk#46": {
+   "class": "existing_tests",
+   "reason": "tsc, existing feature suites and build at proposed tip."
+  },
+  "swarm-221023-k6l4#0": {
+   "class": "existing_tests",
+   "reason": "tsc, existing vitest and build; only viewed opus-1's gallery shots"
+  },
+  "swarm-221023-k6l4#1": {
+   "class": "existing_tests",
+   "reason": "tsc and existing watchCamera/RealmRenderer tests; the code was read and an existing screenshot viewed."
+  },
+  "swarm-221023-k6l4#2": {
+   "class": "existing_tests",
+   "reason": "tsc, existing SettlementBuildings/history tests and build; code review notes."
+  },
+  "swarm-221023-k6l4#3": {
+   "class": "existing_tests",
+   "reason": "tsc and existing streetLife tests; code read to explain screenshot."
+  },
+  "swarm-221023-k6l4#4": {
+   "class": "existing_tests",
+   "reason": "tsc, two existing test files and build, then a code review of the fixes"
+  },
+  "swarm-221023-k6l4#5": {
+   "class": "existing_tests",
+   "reason": "tsc, existing SettlementBuildings/architecture tests and build, plus a code read."
+  },
+  "swarm-221023-k6l4#6": {
+   "class": "existing_tests",
+   "reason": "tsc and existing watchCamera/RealmRenderer tests; 202/202 figure is author's report."
+  },
+  "swarm-221023-k6l4#7": {
+   "class": "own_check",
+   "reason": "Reran same failing tests at S1 base (pass) vs S2 (fail): before/after experiment."
+  },
+  "swarm-221023-k6l4#8": {
+   "class": "existing_tests",
+   "reason": "tsc, existing vitest and build; the gallery image it looked at is the author's evidence"
+  },
+  "swarm-221023-k6l4#9": {
+   "class": "own_check",
+   "reason": "ROOT CAUSE (probed): probed discoverRealm against restoreRealms ages, beyond the existing tests."
+  },
+  "swarm-221023-k6l4#10": {
+   "class": "existing_tests",
+   "reason": "tsc, existing vitest files and build on scratch merge; diffs read."
+  },
+  "swarm-221023-k6l4#11": {
+   "class": "existing_tests",
+   "reason": "Merge plus tsc, existing history/architecture tests and build."
+  },
+  "swarm-221023-k6l4#12": {
+   "class": "app_in_browser",
+   "reason": "In-browser check comparing LOD with ?nolod: draw counts, pixel-identical screenshots, no page errors"
+  },
+  "swarm-221023-k6l4#13": {
+   "class": "app_in_browser",
+   "reason": "Ran /tmp/verifier-hud.mjs as a browser HUD overlap check at two viewports, with screenshots."
+  },
+  "swarm-221023-k6l4#14": {
+   "class": "existing_tests",
+   "reason": "tsc and existing streetLife vitest; diff read."
+  },
+  "swarm-221023-k6l4#15": {
+   "class": "existing_tests",
+   "reason": "tsc, existing suites, build; screenshot cited is opus-4's, not verifier's."
+  },
+  "swarm-221023-k6l4#16": {
+   "class": "app_in_browser",
+   "reason": "Took its own gallery screenshots (/tmp/opus1-w1.png, w2) and measured wonder bounding-box heights, plus tests"
+  },
+  "swarm-221023-k6l4#17": {
+   "class": "app_in_browser",
+   "reason": "Prose reports in-browser walk-view draw-call counts at Fernstead, with and without S9 and ?nolod."
+  },
+  "swarm-221023-k6l4#18": {
+   "class": "app_in_browser",
+   "reason": "Browser script in Watch at 20x measuring render calls, landscape/portrait screenshots, integration vs branch."
+  },
+  "swarm-221023-k6l4#19": {
+   "class": "existing_tests",
+   "reason": "tsc, existing streetLife/RealmRenderer tests and build."
+  },
+  "swarm-221023-k6l4#20": {
+   "class": "existing_tests",
+   "reason": "tsc, 10 existing test files and build in the author's worktree; assertion changes only cross-checked"
+  },
+  "swarm-221023-k6l4#21": {
+   "class": "existing_tests",
+   "reason": "tsc, existing streetLife vitest suite and build, plus a diff read."
+  },
+  "swarm-221023-k6l4#22": {
+   "class": "app_in_browser",
+   "reason": "Measured walk-view draw counts at Fernstead pose B, with and without S9 and ?nolod."
+  },
+  "swarm-221023-k6l4#23": {
+   "class": "existing_tests",
+   "reason": "tsc, build, full existing village/jev suites; wrote fix, no separate own probe."
+  },
+  "swarm-221023-k6l4#24": {
+   "class": "existing_tests",
+   "reason": "tsc, existing vitest files and build, plus code read and grep; no new check"
+  },
+  "swarm-221023-k6l4#25": {
+   "class": "existing_tests",
+   "reason": "Clean merge, then tsc, existing vitest suites and build."
+  },
+  "swarm-221023-k6l4#26": {
+   "class": "existing_tests",
+   "reason": "tsc, existing plan/realms tests and build; code read of guard."
+  },
+  "swarm-221023-k6l4#27": {
+   "class": "app_in_browser",
+   "reason": "Browser watch/walk runs with WebGL draw-call hook, LOD vs nolod, screenshots."
+  }
+ },
+ "final": {
+  "swarm-010513-crup-chair-replay#0": {
+   "class": "own_check",
+   "reason": "Ran /tmp dist-check script and a /tmp hub restart smoke script, beyond existing regressions and build",
+   "basis": "agreed"
+  },
+  "swarm-010513-crup-controller-build#3": {
+   "class": "own_check",
+   "reason": "Ran its own live probes (A/B/C token scenarios) against a throwaway hub; also ran smoke and existing tests",
+   "basis": "agreed"
+  },
+  "swarm-010513-crup-r1-build#0": {
+   "class": "own_check",
+   "reason": "Ran regression RED at main c0cf5a3 in /tmp worktree then GREEN at branch: before/after experiment",
+   "basis": "agreed"
+  },
+  "swarm-010513-crup-r1-build#1": {
+   "class": "own_check",
+   "reason": "Before/after experiment: regression copied onto base c0cf5a3 went RED, then GREEN at tip.",
+   "basis": "agreed"
+  },
+  "swarm-010513-crup-r1-build#2": {
+   "class": "own_check",
+   "reason": "Verifier ran its own before/after: regression RED on main c0cf5a3, GREEN at tip; also smoke",
+   "basis": "agreed"
+  },
+  "swarm-010513-crup-recruit-prefix#0": {
+   "class": "own_check",
+   "reason": "The proposer wrote the regression test and ran it before and after the fix (red, then 3 pass). That experiment outranks the smoke run, build and npm test.",
+   "basis": "adjudicated"
+  },
+  "swarm-010513-crup-recruit-prefix#1": {
+   "class": "own_check",
+   "reason": "Notes the test was observed RED pre-fix on c0cf5a3 (exit 1), then green: before/after",
+   "basis": "agreed"
+  },
+  "swarm-010513-crup-recruit-prefix#3": {
+   "class": "own_check",
+   "reason": "Inline replica of the assertions run against unfixed spawner.ts (RED), plus a live dry-spawn hub probe.",
+   "basis": "agreed"
+  },
+  "swarm-010513-crup-recruit-prefix#4": {
+   "class": "own_check",
+   "reason": "Inline replica of assertions against unfixed spawner (red), plus live throwaway hub MCP probe with dry spawn",
+   "basis": "agreed"
+  },
+  "swarm-010513-crup#1": {
+   "class": "own_check",
+   "reason": "Ran an inline in-memory Hub red/green probe at main via node --import tsx, alongside the existing regression",
+   "basis": "agreed"
+  },
+  "swarm-010513-crup#7": {
+   "class": "own_check",
+   "reason": "Throwaway hub from fix dist, hand-driven auth probes A/B/C (403/201/401) plus red-on-main check",
+   "basis": "agreed"
+  },
+  "swarm-010513-crup#10": {
+   "class": "existing_tests",
+   "reason": "git rev-parse SHA checks plus rerun of existing consolidator regression at tip.",
+   "basis": "agreed"
+  },
+  "swarm-010513-crup#11": {
+   "class": "inspection_only",
+   "reason": "Only git log and git show to compare branch tips against proposal rows",
+   "basis": "agreed"
+  },
+  "swarm-010513-gitconfig-build#1": {
+   "class": "own_check",
+   "reason": "Red/green run at the pre-fix commit, plus its own live probes of refusals on a throwaway hub",
+   "basis": "agreed"
+  },
+  "swarm-010513-telemetry-build#0": {
+   "class": "own_check",
+   "reason": "Red run at c0cf5a3 vs green, plus throwaway hub /policy probe; smoke also run",
+   "basis": "agreed"
+  },
+  "swarm-011152-pen5#0": {
+   "class": "existing_tests",
+   "reason": "tsc, existing vitest suites and vite build only.",
+   "basis": "agreed"
+  },
+  "swarm-011152-pen5#1": {
+   "class": "existing_tests",
+   "reason": "tsc, vitest on existing functional tests, vite build only",
+   "basis": "agreed"
+  },
+  "swarm-011152-pen5#2": {
+   "class": "app_in_browser",
+   "reason": "Browser crash repro (/tmp/verifier-crash2.mjs) against a vite preview prod build; 4/4 snags before, 0/4 after",
+   "basis": "agreed"
+  },
+  "swarm-011152-pen5#3": {
+   "class": "existing_tests",
+   "reason": "tsc, targeted vitest, vite build plus code review only",
+   "basis": "agreed"
+  },
+  "swarm-011152-pen5#4": {
+   "class": "existing_tests",
+   "reason": "Ran tsc, reviewed code; compared screenshots another seat had taken.",
+   "basis": "agreed"
+  },
+  "swarm-011152-pen5#5": {
+   "class": "existing_tests",
+   "reason": "tsc --noEmit plus code review only",
+   "basis": "agreed"
+  },
+  "swarm-011152-pen5#6": {
+   "class": "existing_tests",
+   "reason": "Merged the commit, then ran tsc, vitest simulation.test.ts and vite build only",
+   "basis": "agreed"
+  },
+  "swarm-011152-pen5#7": {
+   "class": "existing_tests",
+   "reason": "tsc only plus code review; looked at author's pre/post screenshots",
+   "basis": "agreed"
+  },
+  "swarm-011152-pen5#8": {
+   "class": "app_in_browser",
+   "reason": "Browser A/B on two dev servers with screenshots, draw calls, fps and page errors.",
+   "basis": "agreed"
+  },
+  "swarm-011152-pen5#9": {
+   "class": "existing_tests",
+   "reason": "tsc and plan.test.ts; compared existing pre/post shots, no statement it drove a browser",
+   "basis": "agreed"
+  },
+  "swarm-011152-pen5#10": {
+   "class": "existing_tests",
+   "reason": "Read the git diff, then ran tsc and vitest on existing test dirs",
+   "basis": "agreed"
+  },
+  "swarm-011152-pen5#11": {
+   "class": "own_check",
+   "reason": "Verifier ran new regression on 91a1cb2 without fix (1 failed) and with fix: before/after",
+   "basis": "agreed"
+  },
+  "swarm-011152-pen5#12": {
+   "class": "app_in_browser",
+   "reason": "Ran /tmp crash scripts against the vite preview prod build: page reloads, snag screens, page errors.",
+   "basis": "agreed"
+  },
+  "swarm-011152-pen5#13": {
+   "class": "app_in_browser",
+   "reason": "Cites its own browser reviews and camera shots in /tmp/opus1-s10, plus tsc/vitest/build",
+   "basis": "agreed"
+  },
+  "swarm-011152-pen5#14": {
+   "class": "app_in_browser",
+   "reason": "Prod crash repro in a browser plus aerial screenshots and draw-call counts of the running app",
+   "basis": "agreed"
+  },
+  "swarm-011152-pen5#15": {
+   "class": "app_in_browser",
+   "reason": "Ran /tmp/verifier-crash2.mjs against prod preview and verifier-grow aerial screenshots 16/16",
+   "basis": "agreed"
+  },
+  "swarm-011152-pen5#16": {
+   "class": "app_in_browser",
+   "reason": "Besides tsc/vitest/build, reports a zoom-out screenshot check of the terrain edge.",
+   "basis": "agreed"
+  },
+  "swarm-042511-ov9e#0": {
+   "class": "existing_tests",
+   "reason": "Ran listed existing vitest files and tsc on its own branch",
+   "basis": "agreed"
+  },
+  "swarm-042511-ov9e#1": {
+   "class": "app_in_browser",
+   "reason": "tsc/vitest plus its own browser F8 bench on a production build, with screenshots in /tmp/opus4",
+   "basis": "agreed"
+  },
+  "swarm-042511-ov9e#2": {
+   "class": "existing_tests",
+   "reason": "vitest two files and tsc, plus code reading",
+   "basis": "agreed"
+  },
+  "swarm-042511-ov9e#3": {
+   "class": "app_in_browser",
+   "reason": "Review correction: the entry cites the poster's own browser evidence; the same seat ran a production build in headless Chromium with measurements and screenshots in the room log.",
+   "basis": "review-corrected"
+  },
+  "swarm-042511-ov9e#4": {
+   "class": "own_check",
+   "reason": "Ran own quota.test-style QuotaStorage repro of saveVillage besides existing vitest files",
+   "basis": "agreed"
+  },
+  "swarm-042511-ov9e#5": {
+   "class": "own_check",
+   "reason": "Review correction: the entry reports a new crossTownTrips test and its outcome (a before/after check; the test is the author's, so this is not a verifier-written probe).",
+   "basis": "review-corrected"
+  },
+  "swarm-042511-ov9e#6": {
+   "class": "existing_tests",
+   "reason": "Full village+jev vitest suite and tsc; rest is code confirmation",
+   "basis": "agreed"
+  },
+  "swarm-042511-ov9e#7": {
+   "class": "existing_tests",
+   "reason": "Existing vitest suites and tsc plus code reading.",
+   "basis": "agreed"
+  },
+  "swarm-042511-ov9e#8": {
+   "class": "existing_tests",
+   "reason": "vitest suite and tsc on reverted head only",
+   "basis": "agreed"
+  },
+  "swarm-042511-ov9e#9": {
+   "class": "existing_tests",
+   "reason": "Ran vitest src/village src/jev and tsc on the reverted head",
+   "basis": "agreed"
+  },
+  "swarm-083203-kooz#0": {
+   "class": "existing_tests",
+   "reason": "tsc plus repo regression scripts and replay of recorded adjudication data",
+   "basis": "agreed"
+  },
+  "swarm-083203-kooz#1": {
+   "class": "own_check",
+   "reason": "Existing regressions, plus a revert experiment: with af45763's hub.ts, 1 of 9 fails.",
+   "basis": "agreed"
+  },
+  "swarm-083203-kooz#2": {
+   "class": "own_check",
+   "reason": "Before/after of its own challenge command: exits 1 at 4755f75, passes at 858dbfa",
+   "basis": "agreed"
+  },
+  "swarm-083203-kooz#3": {
+   "class": "own_check",
+   "reason": "Beyond the existing regressions, swapped in af45763's hub.ts and confirmed 1 of 9 fails",
+   "basis": "agreed"
+  },
+  "swarm-083203-kooz#4": {
+   "class": "existing_tests",
+   "reason": "npm test offline runner and individual existing scripts rerun",
+   "basis": "agreed"
+  },
+  "swarm-083203-kooz#5": {
+   "class": "own_check",
+   "reason": "Own /tmp/vk-rest.mjs runner and before/after runs on main src (0/4, 10/19).",
+   "basis": "agreed"
+  },
+  "swarm-083203-kooz#6": {
+   "class": "existing_tests",
+   "reason": "tsc, build, existing regression scripts and npm test; no smoke, no live pilot",
+   "basis": "agreed"
+  },
+  "swarm-092653-202z#0": {
+   "class": "scripted_smoke",
+   "reason": "tsc, existing regressions and smoke.ts SMOKE OK; proposer's own run",
+   "basis": "agreed"
+  },
+  "swarm-092653-202z#1": {
+   "class": "scripted_smoke",
+   "reason": "tsc, repo regression scripts and scripts/smoke.ts; nothing stronger",
+   "basis": "agreed"
+  },
+  "swarm-092653-202z#2": {
+   "class": "scripted_smoke",
+   "reason": "tsc, smoke.ts against a hub, and existing regression scripts.",
+   "basis": "agreed"
+  },
+  "swarm-092653-202z#3": {
+   "class": "scripted_smoke",
+   "reason": "Ran scripts/smoke.ts plus existing regressions and tsc",
+   "basis": "agreed"
+  },
+  "swarm-092653-202z#4": {
+   "class": "existing_tests",
+   "reason": "tsc plus existing seat-cap, seat-env, lean-flags and challenge regressions",
+   "basis": "agreed"
+  },
+  "swarm-092653-202z#5": {
+   "class": "own_check",
+   "reason": "Wrote /tmp/vfy-each.mjs runner, ran smoke red on main vs tip, probed seat-cap refusal",
+   "basis": "agreed"
+  },
+  "swarm-102347-phin#0": {
+   "class": "scripted_smoke",
+   "reason": "build, smoke.ts, openrouter smoke (stub model), existing regression, npm test.",
+   "basis": "agreed"
+  },
+  "swarm-102347-phin#2": {
+   "class": "scripted_smoke",
+   "reason": "build, existing regression, smoke.ts, npm test plus diff read",
+   "basis": "agreed"
+  },
+  "swarm-113947-ne8o#0": {
+   "class": "own_check",
+   "reason": "Inline python reading result.json and rerunning the reprice formula itself; also a live pricing-page fetch",
+   "basis": "agreed"
+  },
+  "swarm-113947-ne8o#1": {
+   "class": "existing_tests",
+   "reason": "Ran repo check-citations.sh in scratch dir plus full read of script",
+   "basis": "agreed"
+  },
+  "swarm-113947-ne8o#2": {
+   "class": "inspection_only",
+   "reason": "Read the paper and spot-checked file:line claims and JSON keys against the repo.",
+   "basis": "agreed"
+  },
+  "swarm-113947-ne8o#3": {
+   "class": "existing_tests",
+   "reason": "Ran repo script paper/check-citations.sh only",
+   "basis": "agreed"
+  },
+  "swarm-113947-ne8o#4": {
+   "class": "existing_tests",
+   "reason": "Only reran the repository's paper/check-citations.sh",
+   "basis": "agreed"
+  },
+  "swarm-113947-ne8o#5": {
+   "class": "existing_tests",
+   "reason": "Reran paper/check-citations.sh and git diff --stat checks",
+   "basis": "agreed"
+  },
+  "swarm-113947-ne8o#6": {
+   "class": "existing_tests",
+   "reason": "Ran the repo's paper/check-citations.sh script.",
+   "basis": "agreed"
+  },
+  "swarm-113947-ne8o#7": {
+   "class": "existing_tests",
+   "reason": "check-citations.sh plus git diff --stat reads",
+   "basis": "agreed"
+  },
+  "swarm-120129-s12h#0": {
+   "class": "existing_tests",
+   "reason": "Ran existing rq1 regressions with a copied-in bench-rq1.ts, plus tsc",
+   "basis": "agreed"
+  },
+  "swarm-120129-s12h#1": {
+   "class": "scripted_smoke",
+   "reason": "build, smoke.ts, existing bench tests and offline-runner; diff reading",
+   "basis": "agreed"
+  },
+  "swarm-120129-s12h#2": {
+   "class": "existing_tests",
+   "reason": "Existing regression script, tsc and grep.",
+   "basis": "agreed"
+  },
+  "swarm-120129-s12h#3": {
+   "class": "scripted_smoke",
+   "reason": "offline-runner, tsc and smoke.ts; tests read",
+   "basis": "agreed"
+  },
+  "swarm-120129-s12h#4": {
+   "class": "scripted_smoke",
+   "reason": "tsc, offline suite, build, smoke.ts SMOKE OK and repo paper-rq1-table.ts; read result.json",
+   "basis": "agreed"
+  },
+  "swarm-120129-s12h#5": {
+   "class": "scripted_smoke",
+   "reason": "build, smoke.ts, npm test; cross-checked recorded pilot result.json",
+   "basis": "agreed"
+  },
+  "swarm-120129-s12h#6": {
+   "class": "scripted_smoke",
+   "reason": "tsc, offline-runner, build and smoke.ts, plus re-reading result.json data.",
+   "basis": "agreed"
+  },
+  "swarm-120129-s12h#7": {
+   "class": "scripted_smoke",
+   "reason": "tsc, offline runner, build, smoke; reran existing table script and read result.json",
+   "basis": "agreed"
+  },
+  "swarm-120129-s12h#8": {
+   "class": "scripted_smoke",
+   "reason": "Build, smoke.ts SMOKE OK, npm test and a grep in a fresh worktree",
+   "basis": "agreed"
+  },
+  "swarm-120937-t1gx#0": {
+   "class": "inspection_only",
+   "reason": "Only rg and sed over scripts; read-only audit",
+   "basis": "agreed"
+  },
+  "swarm-120937-t1gx#1": {
+   "class": "own_check",
+   "reason": "Regression failed on the parent reporter and passed on the fix (before/after).",
+   "basis": "agreed"
+  },
+  "swarm-120937-t1gx#2": {
+   "class": "own_check",
+   "reason": "Inline python heredoc with assertions running README block and byte-comparing artifacts",
+   "basis": "agreed"
+  },
+  "swarm-120937-t1gx#3": {
+   "class": "own_check",
+   "reason": "Regenerated the artifacts and compared them byte-for-byte, plus its own independent Python assertions of counts",
+   "basis": "agreed"
+  },
+  "swarm-120937-t1gx#4": {
+   "class": "own_check",
+   "reason": "Regenerated artifacts to /tmp with byte comparison and Python assertions of independent raw counts",
+   "basis": "agreed"
+  },
+  "swarm-120937-t1gx#5": {
+   "class": "own_check",
+   "reason": "Inline Python heredoc with its own assertions, byte-comparing regenerated artifacts.",
+   "basis": "agreed"
+  },
+  "swarm-120937-t1gx#6": {
+   "class": "existing_tests",
+   "reason": "Existing paper-number-audit, tectonic build, pdftotext grep, visual PDF read",
+   "basis": "agreed"
+  },
+  "swarm-122749-7x9q#0": {
+   "class": "existing_tests",
+   "reason": "Ran existing repo test files and the calibration script as proposer",
+   "basis": "agreed"
+  },
+  "swarm-122749-7x9q#1": {
+   "class": "existing_tests",
+   "reason": "Ran existing repo test files and calibration script; proposer's own run",
+   "basis": "agreed"
+  },
+  "swarm-122749-7x9q#2": {
+   "class": "own_check",
+   "reason": "Besides build, npm test and smoke, the verifier recomputed pilot costs from result.json and dry-ran the grid command with a stub runner, which is its own probe.",
+   "basis": "adjudicated"
+  },
+  "swarm-122749-7x9q#3": {
+   "class": "own_check",
+   "reason": "Own loadKGroups+buildArmKTable check over real pilot files, which no test covered; plus smoke",
+   "basis": "agreed"
+  },
+  "swarm-125438-jp20#0": {
+   "class": "existing_tests",
+   "reason": "Build, existing orphan/grid/rq1 tests and npm test; red state not re-verified",
+   "basis": "agreed"
+  },
+  "swarm-130155-ppol#1": {
+   "class": "inspection_only",
+   "reason": "wc, cat, sed, ls to check measured claims",
+   "basis": "agreed"
+  },
+  "swarm-130155-ppol#3": {
+   "class": "inspection_only",
+   "reason": "Only sed and wc checks of file:line claims.",
+   "basis": "agreed"
+  },
+  "swarm-140213-25wq#1": {
+   "class": "scripted_smoke",
+   "reason": "Ran smoke.ts (failed line 101) and a regression script not stated as its own",
+   "basis": "agreed"
+  },
+  "swarm-140213-25wq#2": {
+   "class": "own_check",
+   "reason": "Ran the regression against unmodified main (fails) and the fix branch (passes); smoke too",
+   "basis": "agreed"
+  },
+  "swarm-140213-25wq#3": {
+   "class": "own_check",
+   "reason": "Ran regression against unmodified main (fails) then branch (passes): before/after",
+   "basis": "agreed"
+  },
+  "swarm-140213-25wq#4": {
+   "class": "own_check",
+   "reason": "The prose says the regression fails on main and passes on the fix. That is a before/after experiment, which outranks the smoke run and the full suite.",
+   "basis": "adjudicated"
+  },
+  "swarm-140213-25wq#5": {
+   "class": "own_check",
+   "reason": "Copied regression onto main to show RED, GREEN on branch: before/after experiment; plus smoke",
+   "basis": "agreed"
+  },
+  "swarm-140213-25wq#6": {
+   "class": "own_check",
+   "reason": "Reverted-the-fix experiment: checked out main's hub.ts for RED, then HEAD for GREEN; smoke too",
+   "basis": "agreed"
+  },
+  "swarm-140213-25wq#7": {
+   "class": "own_check",
+   "reason": "Checked out old server.ts to get RED, restored for GREEN: revert-the-fix experiment",
+   "basis": "agreed"
+  },
+  "swarm-140213-25wq#8": {
+   "class": "own_check",
+   "reason": "Regression red against main's hub.ts and green on the branch; smoke and npm test too.",
+   "basis": "agreed"
+  },
+  "swarm-140213-25wq#9": {
+   "class": "own_check",
+   "reason": "Before/after: hint regression RED on main server.ts, GREEN on cc0c1ff; plus smoke",
+   "basis": "agreed"
+  },
+  "swarm-140818-f1qy#0": {
+   "class": "scripted_smoke",
+   "reason": "tsc, build, existing regressions and smoke.ts SMOKE OK",
+   "basis": "agreed"
+  },
+  "swarm-140818-f1qy#1": {
+   "class": "scripted_smoke",
+   "reason": "tsc, build, existing regression scripts and smoke.ts",
+   "basis": "agreed"
+  },
+  "swarm-140818-f1qy#2": {
+   "class": "scripted_smoke",
+   "reason": "Existing replace regression, build, smoke.ts, npm test.",
+   "basis": "agreed"
+  },
+  "swarm-140818-f1qy#3": {
+   "class": "scripted_smoke",
+   "reason": "build, existing liveness/kick/replace/heartbeat regressions and smoke.ts",
+   "basis": "agreed"
+  },
+  "swarm-140818-f1qy#4": {
+   "class": "scripted_smoke",
+   "reason": "Build, kick-vote-regression and smoke.ts SMOKE OK",
+   "basis": "agreed"
+  },
+  "swarm-140818-f1qy#5": {
+   "class": "scripted_smoke",
+   "reason": "build, kick-vote-regression and smoke.ts in clean worktree",
+   "basis": "agreed"
+  },
+  "swarm-140818-f1qy#6": {
+   "class": "scripted_smoke",
+   "reason": "Existing regressions plus smoke.ts on the integration tip.",
+   "basis": "agreed"
+  },
+  "swarm-140818-f1qy#7": {
+   "class": "scripted_smoke",
+   "reason": "replace-regression, build and smoke.ts",
+   "basis": "agreed"
+  },
+  "swarm-140818-f1qy#8": {
+   "class": "scripted_smoke",
+   "reason": "Rerun of build, kick-vote-regression and smoke.ts SMOKE OK",
+   "basis": "agreed"
+  },
+  "swarm-144829-7euc#3": {
+   "class": "inspection_only",
+   "reason": "sed and grep of source and docs only",
+   "basis": "agreed"
+  },
+  "swarm-150725-3vny#0": {
+   "class": "scripted_smoke",
+   "reason": "build, npm test, smoke.ts, existing registry test.",
+   "basis": "agreed"
+  },
+  "swarm-150725-3vny#1": {
+   "class": "scripted_smoke",
+   "reason": "build, npm test and smoke.ts by assembling verifier",
+   "basis": "agreed"
+  },
+  "swarm-150725-3vny#2": {
+   "class": "scripted_smoke",
+   "reason": "Build, smoke, npm test; recomputed rates from recorded result.json without naming any code it wrote",
+   "basis": "agreed"
+  },
+  "swarm-150725-3vny#3": {
+   "class": "scripted_smoke",
+   "reason": "build, npm test, smoke.ts, suite-registry test; stub runner authorship unstated",
+   "basis": "agreed"
+  },
+  "swarm-150725-3vny#4": {
+   "class": "scripted_smoke",
+   "reason": "build, npm test and smoke.ts in a scratch worktree, plus reading SUITE.json.",
+   "basis": "agreed"
+  },
+  "swarm-150725-3vny#5": {
+   "class": "scripted_smoke",
+   "reason": "build, npm test, smoke.ts; python check only reads SUITE.json counts",
+   "basis": "agreed"
+  },
+  "swarm-150725-3vny#6": {
+   "class": "scripted_smoke",
+   "reason": "Build, smoke.ts SMOKE OK and npm test; the rest checked by hand",
+   "basis": "agreed"
+  },
+  "swarm-163456-rvg8#0": {
+   "class": "app_in_browser",
+   "reason": "Reports own earlier WebKit 430x932 journeys on same shell besides npm test/build",
+   "basis": "agreed"
+  },
+  "swarm-163456-rvg8#1": {
+   "class": "app_in_browser",
+   "reason": "Beyond tests/build, a local WebKit 430x932 inspection of welcome, map and conversation.",
+   "basis": "agreed"
+  },
+  "swarm-163456-rvg8#2": {
+   "class": "existing_tests",
+   "reason": "npm ci, npm test, tsc, build on clean export",
+   "basis": "agreed"
+  },
+  "swarm-163456-rvg8#3": {
+   "class": "existing_tests",
+   "reason": "npm test, tsc and build on a clean export",
+   "basis": "agreed"
+  },
+  "swarm-164742-5jvl#0": {
+   "class": "existing_tests",
+   "reason": "Ran repo check-citations.sh on the commit plus review",
+   "basis": "agreed"
+  },
+  "swarm-164742-5jvl#1": {
+   "class": "own_check",
+   "reason": "Compiled the section standalone with a minimal wrapper .tex it wrote in /tmp.",
+   "basis": "agreed"
+  },
+  "swarm-164742-5jvl#2": {
+   "class": "existing_tests",
+   "reason": "npm test, regen.sh, check-citations, tectonic; paid grid commands not run",
+   "basis": "agreed"
+  },
+  "swarm-164742-5jvl#3": {
+   "class": "existing_tests",
+   "reason": "Ran existing paper/regen.sh and check-citations.sh",
+   "basis": "agreed"
+  },
+  "swarm-164742-5jvl#4": {
+   "class": "existing_tests",
+   "reason": "check-citations, regen.sh, build, tectonic: repo scripts only",
+   "basis": "agreed"
+  },
+  "swarm-164742-5jvl#5": {
+   "class": "existing_tests",
+   "reason": "Ran repo regen.sh and check-citations.sh, and hand-checked result.json files.",
+   "basis": "agreed"
+  },
+  "swarm-164742-5jvl#6": {
+   "class": "own_check",
+   "reason": "Compared committed vs fresh PDF extracted text itself (PDFKit), beyond regen/test/build",
+   "basis": "agreed"
+  },
+  "swarm-164742-5jvl#7": {
+   "class": "existing_tests",
+   "reason": "Build, npm test, regen.sh, check-citations.sh and tectonic in a fresh worktree",
+   "basis": "agreed"
+  },
+  "swarm-164742-5jvl#8": {
+   "class": "existing_tests",
+   "reason": "regen, check-citations, tectonic, build, npm test; flake rerun on main",
+   "basis": "agreed"
+  },
+  "swarm-171735-2lp8#0": {
+   "class": "existing_tests",
+   "reason": "npm test, tsc, build; WebKit attempt timed out, mobile QA done by chair.",
+   "basis": "agreed"
+  },
+  "swarm-171735-2lp8#1": {
+   "class": "existing_tests",
+   "reason": "npm test, tsc, build; WebKit attempt timed out, Chrome QA done by chair",
+   "basis": "agreed"
+  },
+  "swarm-171735-2lp8#2": {
+   "class": "app_in_browser",
+   "reason": "Playwright Chrome drove the app at two phone sizes, with screenshots",
+   "basis": "agreed"
+  },
+  "swarm-171735-2lp8#3": {
+   "class": "app_in_browser",
+   "reason": "Playwright WebKit mobile checks against vite preview, 54/54 checks, screenshots",
+   "basis": "agreed"
+  },
+  "swarm-174126-0s5m-context-cost-audit#0": {
+   "class": "inspection_only",
+   "reason": "shasum and sed/rg reads only; explicitly read-only source identification.",
+   "basis": "agreed"
+  },
+  "swarm-174126-0s5m-context-cost-audit#1": {
+   "class": "inspection_only",
+   "reason": "rg over src/seat.ts; explicitly read-only review",
+   "basis": "agreed"
+  },
+  "swarm-174126-0s5m-context-cost-audit#2": {
+   "class": "inspection_only",
+   "reason": "Only rg and sed over seat.ts plus reading decisions",
+   "basis": "agreed"
+  },
+  "swarm-174126-0s5m#0": {
+   "class": "existing_tests",
+   "reason": "build and existing bench-rq1.test.ts; diff review",
+   "basis": "agreed"
+  },
+  "swarm-174126-0s5m#1": {
+   "class": "scripted_smoke",
+   "reason": "Existing bench-rq1 test, build, and smoke.ts.",
+   "basis": "agreed"
+  },
+  "swarm-174126-0s5m#2": {
+   "class": "existing_tests",
+   "reason": "build and existing bench-rq1.test.ts in detached worktree",
+   "basis": "agreed"
+  },
+  "swarm-174126-0s5m#3": {
+   "class": "scripted_smoke",
+   "reason": "Build, existing bench-rq1.test.ts and smoke.ts SMOKE OK",
+   "basis": "agreed"
+  },
+  "swarm-174126-0s5m#4": {
+   "class": "scripted_smoke",
+   "reason": "build, bench-rq1.test.ts twice and smoke.ts",
+   "basis": "agreed"
+  },
+  "swarm-174126-0s5m#5": {
+   "class": "own_check",
+   "reason": "Deleted the child-close finish call; the focused test then failed (revert experiment).",
+   "basis": "agreed"
+  },
+  "swarm-174126-0s5m#6": {
+   "class": "scripted_smoke",
+   "reason": "build, bench-rq1 test, npm test and smoke.ts three times",
+   "basis": "agreed"
+  },
+  "swarm-174126-0s5m#7": {
+   "class": "own_check",
+   "reason": "Ran its own /tmp/astra20-audit-pilot.py audit script and regenerated the table",
+   "basis": "agreed"
+  },
+  "swarm-174126-0s5m#8": {
+   "class": "scripted_smoke",
+   "reason": "build, tex test, regen.sh, npm test, smoke.ts; viewed PDF pages",
+   "basis": "agreed"
+  },
+  "swarm-174126-0s5m#9": {
+   "class": "scripted_smoke",
+   "reason": "build, existing test, regen.sh, npm test and smoke.ts; viewed rendered PDF pages.",
+   "basis": "agreed"
+  },
+  "swarm-174126-0s5m#10": {
+   "class": "scripted_smoke",
+   "reason": "build, npm test, smoke.ts, regen.sh; reran existing table generator",
+   "basis": "agreed"
+  },
+  "swarm-174126-0s5m#11": {
+   "class": "scripted_smoke",
+   "reason": "Build, npm test, smoke.ts SMOKE OK and regen.sh; recounted recorded results",
+   "basis": "agreed"
+  },
+  "swarm-174126-0s5m#12": {
+   "class": "own_check",
+   "reason": "Ran own audit script /tmp/astra20-audit-phase2.py, rescored answers, ps check",
+   "basis": "agreed"
+  },
+  "swarm-181719-w1s1#0": {
+   "class": "existing_tests",
+   "reason": "npm test, tsc, check:server, build; says no browser claims.",
+   "basis": "agreed"
+  },
+  "swarm-181719-w1s1#1": {
+   "class": "existing_tests",
+   "reason": "npm test, tsc, check:server, build",
+   "basis": "agreed"
+  },
+  "swarm-181719-w1s1#2": {
+   "class": "existing_tests",
+   "reason": "npm test, tsc, check:server and build; explicitly unit/mock only",
+   "basis": "agreed"
+  },
+  "swarm-181719-w1s1#3": {
+   "class": "app_in_browser",
+   "reason": "city-release-smoke.cjs with CITY_BROWSER=webkit against production preview, screenshot",
+   "basis": "agreed"
+  },
+  "swarm-181719-w1s1#4": {
+   "class": "app_in_browser",
+   "reason": "Scripted journey in WebKit/Chrome against the prod preview and dev server, with screenshots.",
+   "basis": "agreed"
+  },
+  "swarm-184101-lda7#0": {
+   "class": "inspection_only",
+   "reason": "git rev-parse and grep; says inspection only, no playtest",
+   "basis": "agreed"
+  },
+  "swarm-184101-lda7#1": {
+   "class": "own_check",
+   "reason": "Ran its own 'node land-count' probe, plus git show piped to rg for facts",
+   "basis": "agreed"
+  },
+  "swarm-184101-lda7#2": {
+   "class": "own_check",
+   "reason": "Scratch probes in /tmp/vprobe, own override measurement and createInitialCityState counts",
+   "basis": "agreed"
+  },
+  "swarm-184101-lda7#3": {
+   "class": "own_check",
+   "reason": "Ran its own node land-count computation plus git show/rg fact checks; no paid probe.",
+   "basis": "agreed"
+  },
+  "swarm-184305-9m82#0": {
+   "class": "existing_tests",
+   "reason": "tsc and vitest; explicitly did not browser-check",
+   "basis": "agreed"
+  },
+  "swarm-184305-9m82#1": {
+   "class": "existing_tests",
+   "reason": "tsc and vitest claimTown; explicitly did not browser-check",
+   "basis": "agreed"
+  },
+  "swarm-184305-9m82#2": {
+   "class": "existing_tests",
+   "reason": "tsc and targeted vitest plus code read",
+   "basis": "agreed"
+  },
+  "swarm-184305-9m82#3": {
+   "class": "existing_tests",
+   "reason": "tsc and vitest, including a trial merge; did not browser-check.",
+   "basis": "agreed"
+  },
+  "swarm-184305-9m82#4": {
+   "class": "existing_tests",
+   "reason": "tsc and claimTown vitest only",
+   "basis": "agreed"
+  },
+  "swarm-184305-9m82#5": {
+   "class": "existing_tests",
+   "reason": "Merge, tsc, vitest features and build",
+   "basis": "agreed"
+  },
+  "swarm-184305-9m82#6": {
+   "class": "existing_tests",
+   "reason": "Trial merge, tsc and vitest features",
+   "basis": "agreed"
+  },
+  "swarm-184305-9m82#7": {
+   "class": "own_check",
+   "reason": "Found a donate/withdraw exploit with a probe test it wrote.",
+   "basis": "agreed"
+  },
+  "swarm-184305-9m82#8": {
+   "class": "existing_tests",
+   "reason": "tsc and vitest on jev/registry plus code read",
+   "basis": "agreed"
+  },
+  "swarm-184305-9m82#9": {
+   "class": "existing_tests",
+   "reason": "tsc and vitest on existing test files, plus a code read",
+   "basis": "agreed"
+  },
+  "swarm-184305-9m82#10": {
+   "class": "existing_tests",
+   "reason": "tsc and vitest features plus diff review",
+   "basis": "agreed"
+  },
+  "swarm-184305-9m82#11": {
+   "class": "existing_tests",
+   "reason": "tsc and existing vitest features suite plus code review.",
+   "basis": "agreed"
+  },
+  "swarm-185545-kghy#0": {
+   "class": "existing_tests",
+   "reason": "tsc, npm test, check:server, build",
+   "basis": "agreed"
+  },
+  "swarm-185545-kghy#1": {
+   "class": "existing_tests",
+   "reason": "tsc, npm test, check:server and build by the proposer",
+   "basis": "agreed"
+  },
+  "swarm-185545-kghy#2": {
+   "class": "existing_tests",
+   "reason": "tsc, npm test, repo check:server script, build",
+   "basis": "agreed"
+  },
+  "swarm-185545-kghy#3": {
+   "class": "app_in_browser",
+   "reason": "Root (writer) captured Chrome and WebKit reports after typed controls, then replayed them.",
+   "basis": "agreed"
+  },
+  "swarm-190103-npm-gate#0": {
+   "class": "existing_tests",
+   "reason": "Ran npm test on main (placeholder exit 1) plus source reads",
+   "basis": "agreed"
+  },
+  "swarm-190103-npm-gate#1": {
+   "class": "existing_tests",
+   "reason": "Ran npm test on main to reproduce BEFORE; the rest was reading code; runtime run pending",
+   "basis": "agreed"
+  },
+  "swarm-190103-npm-gate#3": {
+   "class": "existing_tests",
+   "reason": "Review correction: the entry reports running npm test (placeholder failure), coded existing_tests as in #0 and #1 of the same room.",
+   "basis": "review-corrected"
+  },
+  "swarm-191130-twok#0": {
+   "class": "own_check",
+   "reason": "build, smoke, npm test, regen, plus an independent Fisher/Holm/Wilson re-derivation.",
+   "basis": "agreed"
+  },
+  "swarm-191130-twok#1": {
+   "class": "existing_tests",
+   "reason": "Ran five existing test files via node --import tsx",
+   "basis": "agreed"
+  },
+  "swarm-191133-4hqx#0": {
+   "class": "own_check",
+   "reason": "Ran its own /tmp/verify-ledger-archive-0de918b.py hash and byte check",
+   "basis": "agreed"
+  },
+  "swarm-191133-4hqx#1": {
+   "class": "scripted_smoke",
+   "reason": "build, smoke.ts, npm test; file existence checks",
+   "basis": "agreed"
+  },
+  "swarm-191133-4hqx#2": {
+   "class": "scripted_smoke",
+   "reason": "build, smoke.ts, npm test on the merged integration worktree.",
+   "basis": "agreed"
+  },
+  "swarm-191133-4hqx#3": {
+   "class": "scripted_smoke",
+   "reason": "build, smoke.ts, npm test after editing generator; tests by others",
+   "basis": "agreed"
+  },
+  "swarm-191133-4hqx#4": {
+   "class": "scripted_smoke",
+   "reason": "Build, smoke.ts SMOKE OK and npm test in a worktree",
+   "basis": "agreed"
+  },
+  "swarm-191133-4hqx#5": {
+   "class": "own_check",
+   "reason": "Verifier added a new malformed fd3 tamper test and ran it 11/11",
+   "basis": "agreed"
+  },
+  "swarm-191133-4hqx#6": {
+   "class": "existing_tests",
+   "reason": "Ran the existing oracle-audit test file and read the diffs.",
+   "basis": "agreed"
+  },
+  "swarm-191133-4hqx#7": {
+   "class": "scripted_smoke",
+   "reason": "build, smoke.ts, npm test incl cherry-picked tests",
+   "basis": "agreed"
+  },
+  "swarm-193626-mwbk#0": {
+   "class": "existing_tests",
+   "reason": "tsc and vitest building/threats, plus a diff read",
+   "basis": "agreed"
+  },
+  "swarm-193626-mwbk#1": {
+   "class": "existing_tests",
+   "reason": "tsc and vitest claimTown plus diff read",
+   "basis": "agreed"
+  },
+  "swarm-193626-mwbk#2": {
+   "class": "existing_tests",
+   "reason": "tsc and existing claimTown vitest plus diff reading.",
+   "basis": "agreed"
+  },
+  "swarm-193626-mwbk#3": {
+   "class": "existing_tests",
+   "reason": "tsc and vitest claimTown/building plus diff read",
+   "basis": "agreed"
+  },
+  "swarm-193626-mwbk#4": {
+   "class": "existing_tests",
+   "reason": "tsc and vitest claimTown/building, plus a diff read",
+   "basis": "agreed"
+  },
+  "swarm-193626-mwbk#5": {
+   "class": "existing_tests",
+   "reason": "tsc and vitest claimTown/building plus diff read",
+   "basis": "agreed"
+  },
+  "swarm-193626-mwbk#6": {
+   "class": "existing_tests",
+   "reason": "tsc and existing vitest suites plus diff reading.",
+   "basis": "agreed"
+  },
+  "swarm-193626-mwbk#7": {
+   "class": "existing_tests",
+   "reason": "tsc and vitest council/features/dialogue plus code read",
+   "basis": "agreed"
+  },
+  "swarm-193626-mwbk#8": {
+   "class": "existing_tests",
+   "reason": "Baseline vitest run (1 failure), plus code diagnosis",
+   "basis": "agreed"
+  },
+  "swarm-193626-mwbk#9": {
+   "class": "existing_tests",
+   "reason": "tsc and vitest threats/wander/building plus diff read",
+   "basis": "agreed"
+  },
+  "swarm-193626-mwbk#10": {
+   "class": "existing_tests",
+   "reason": "tsc, existing vitest files, build.",
+   "basis": "agreed"
+  },
+  "swarm-193626-mwbk#11": {
+   "class": "existing_tests",
+   "reason": "tsc and vitest threats/caravans plus diff read",
+   "basis": "agreed"
+  },
+  "swarm-193626-mwbk#12": {
+   "class": "own_check",
+   "reason": "Its own temporary probe file showed 0 farm loops; also a buy/spend probe",
+   "basis": "agreed"
+  },
+  "swarm-193626-mwbk#13": {
+   "class": "existing_tests",
+   "reason": "tsc, filtered vitest, build plus diff review",
+   "basis": "agreed"
+  },
+  "swarm-193626-mwbk#14": {
+   "class": "existing_tests",
+   "reason": "tsc and existing council vitest plus code reading.",
+   "basis": "agreed"
+  },
+  "swarm-193626-mwbk#15": {
+   "class": "own_check",
+   "reason": "Verifier's own economy probe (0 paying loops), later added as regression test",
+   "basis": "agreed"
+  },
+  "swarm-193626-mwbk#16": {
+   "class": "existing_tests",
+   "reason": "tsc and vitest economy only",
+   "basis": "agreed"
+  },
+  "swarm-193626-mwbk#17": {
+   "class": "existing_tests",
+   "reason": "tsc and vitest features/jev",
+   "basis": "agreed"
+  },
+  "swarm-193626-mwbk#18": {
+   "class": "existing_tests",
+   "reason": "tsc and existing vitest files plus close diff reading.",
+   "basis": "agreed"
+  },
+  "swarm-193626-mwbk#19": {
+   "class": "existing_tests",
+   "reason": "tsc and four existing vitest files plus diff read",
+   "basis": "agreed"
+  },
+  "swarm-193626-mwbk#20": {
+   "class": "existing_tests",
+   "reason": "tsc and vitest director/registry only",
+   "basis": "agreed"
+  },
+  "swarm-193626-mwbk#21": {
+   "class": "existing_tests",
+   "reason": "tsc and navigation/simBudget vitest",
+   "basis": "agreed"
+  },
+  "swarm-193626-mwbk#22": {
+   "class": "existing_tests",
+   "reason": "tsc and existing vitest suites; fresh-save flow was checked elsewhere.",
+   "basis": "agreed"
+  },
+  "swarm-193626-mwbk#23": {
+   "class": "existing_tests",
+   "reason": "tsc and vitest; viewed author's /tmp/opus-O-shots, did not drive browser",
+   "basis": "agreed"
+  },
+  "swarm-193626-mwbk#24": {
+   "class": "existing_tests",
+   "reason": "tsc, vitest and build; only viewed another seat's screenshot",
+   "basis": "agreed"
+  },
+  "swarm-193626-mwbk#25": {
+   "class": "existing_tests",
+   "reason": "tsc, vitest, merge-tree diff; viewed existing before/after screenshots",
+   "basis": "agreed"
+  },
+  "swarm-193626-mwbk#26": {
+   "class": "existing_tests",
+   "reason": "tsc, vitest, build; viewed a screenshot from opus-1's directory.",
+   "basis": "agreed"
+  },
+  "swarm-193626-mwbk#27": {
+   "class": "existing_tests",
+   "reason": "tsc, vitest, build and --cc hunk read",
+   "basis": "agreed"
+  },
+  "swarm-193626-mwbk#28": {
+   "class": "own_check",
+   "reason": "The verifier merged trunk 7aa6632 into the fix itself and compared results before and after the fix. council.test went from 9/9 failing to passing, which goes beyond tsc and vitest.",
+   "basis": "adjudicated"
+  },
+  "swarm-193626-mwbk#29": {
+   "class": "existing_tests",
+   "reason": "tsc and vitest council/history/registry",
+   "basis": "agreed"
+  },
+  "swarm-193626-mwbk#30": {
+   "class": "own_check",
+   "reason": "Own temporary zz-probe.test.ts door-starer probe run before/after the fix.",
+   "basis": "agreed"
+  },
+  "swarm-193626-mwbk#31": {
+   "class": "existing_tests",
+   "reason": "Full vitest suite run only",
+   "basis": "agreed"
+  },
+  "swarm-193626-mwbk#32": {
+   "class": "existing_tests",
+   "reason": "tsc and vitest council/dialogue, plus a diff read",
+   "basis": "agreed"
+  },
+  "swarm-193626-mwbk#33": {
+   "class": "existing_tests",
+   "reason": "Full vitest suite, tsc, build",
+   "basis": "agreed"
+  },
+  "swarm-193626-mwbk#34": {
+   "class": "app_in_browser",
+   "reason": "Playwright chromium fresh-save playtest with real controls and screenshots.",
+   "basis": "agreed"
+  },
+  "swarm-193626-mwbk#35": {
+   "class": "existing_tests",
+   "reason": "tsc, targeted vitest, build, git log",
+   "basis": "agreed"
+  },
+  "swarm-193626-mwbk#36": {
+   "class": "existing_tests",
+   "reason": "tsc, a targeted vitest subset and build",
+   "basis": "agreed"
+  },
+  "swarm-193626-mwbk#37": {
+   "class": "existing_tests",
+   "reason": "tsc and targeted vitest at cbdcdc5",
+   "basis": "agreed"
+  },
+  "swarm-193626-mwbk#38": {
+   "class": "existing_tests",
+   "reason": "tsc and existing vitest files on the main checkout.",
+   "basis": "agreed"
+  },
+  "swarm-193626-mwbk#39": {
+   "class": "existing_tests",
+   "reason": "tsc, targeted vitest and build",
+   "basis": "agreed"
+  },
+  "swarm-193626-mwbk#40": {
+   "class": "existing_tests",
+   "reason": "tsc and a vitest subset, plus git ancestry checks",
+   "basis": "agreed"
+  },
+  "swarm-193626-mwbk#41": {
+   "class": "existing_tests",
+   "reason": "tsc, targeted vitest, build",
+   "basis": "agreed"
+  },
+  "swarm-193626-mwbk#42": {
+   "class": "app_in_browser",
+   "reason": "Playwright chromium fresh-save playtest f1-f12 with screenshots.",
+   "basis": "agreed"
+  },
+  "swarm-193626-mwbk#43": {
+   "class": "app_in_browser",
+   "reason": "Re-shot O's daylight Watch at cbdcdc5 in running app, plus full suite",
+   "basis": "agreed"
+  },
+  "swarm-193626-mwbk#44": {
+   "class": "existing_tests",
+   "reason": "tsc, targeted vitest and build, plus git log",
+   "basis": "agreed"
+  },
+  "swarm-193626-mwbk#45": {
+   "class": "existing_tests",
+   "reason": "tsc and vitest subset; git ancestry checks",
+   "basis": "agreed"
+  },
+  "swarm-193626-mwbk#46": {
+   "class": "existing_tests",
+   "reason": "tsc, existing vitest suites, build.",
+   "basis": "agreed"
+  },
+  "swarm-221023-k6l4#0": {
+   "class": "existing_tests",
+   "reason": "tsc, vitest, build; gallery shots are opus1's, not verifier's",
+   "basis": "agreed"
+  },
+  "swarm-221023-k6l4#1": {
+   "class": "existing_tests",
+   "reason": "tsc and vitest camera tests; viewed an existing evidence png",
+   "basis": "agreed"
+  },
+  "swarm-221023-k6l4#2": {
+   "class": "existing_tests",
+   "reason": "tsc, two vitest files, build plus review",
+   "basis": "agreed"
+  },
+  "swarm-221023-k6l4#3": {
+   "class": "existing_tests",
+   "reason": "tsc and existing streetLife vitest plus code explanation.",
+   "basis": "agreed"
+  },
+  "swarm-221023-k6l4#4": {
+   "class": "existing_tests",
+   "reason": "tsc, two vitest files, build plus code read",
+   "basis": "agreed"
+  },
+  "swarm-221023-k6l4#5": {
+   "class": "existing_tests",
+   "reason": "tsc, vitest SettlementBuildings/architecture and build",
+   "basis": "agreed"
+  },
+  "swarm-221023-k6l4#6": {
+   "class": "existing_tests",
+   "reason": "tsc and two vitest files; follow-up checked by code read",
+   "basis": "agreed"
+  },
+  "swarm-221023-k6l4#7": {
+   "class": "own_check",
+   "reason": "Before/after: failing tests rerun on S1 base 0af9bbc to show the failures are new.",
+   "basis": "agreed"
+  },
+  "swarm-221023-k6l4#8": {
+   "class": "existing_tests",
+   "reason": "tsc, vitest, build; gallery evidence from opus-2's directory",
+   "basis": "agreed"
+  },
+  "swarm-221023-k6l4#9": {
+   "class": "own_check",
+   "reason": "Beyond the failing vitest, it probed discoverRealm vs restoreRealms to find the age mismatch",
+   "basis": "agreed"
+  },
+  "swarm-221023-k6l4#10": {
+   "class": "existing_tests",
+   "reason": "tsc, vitest files, build on scratch merge",
+   "basis": "agreed"
+  },
+  "swarm-221023-k6l4#11": {
+   "class": "existing_tests",
+   "reason": "Merge, tsc, existing vitest files, build.",
+   "basis": "agreed"
+  },
+  "swarm-221023-k6l4#12": {
+   "class": "app_in_browser",
+   "reason": "In-browser LOD vs ?nolod check with draw counts and screenshots, no page errors",
+   "basis": "agreed"
+  },
+  "swarm-221023-k6l4#13": {
+   "class": "app_in_browser",
+   "reason": "Browser HUD overlap check via /tmp/verifier-hud.mjs at two viewports, with screenshots",
+   "basis": "agreed"
+  },
+  "swarm-221023-k6l4#14": {
+   "class": "existing_tests",
+   "reason": "tsc and vitest streetLife",
+   "basis": "agreed"
+  },
+  "swarm-221023-k6l4#15": {
+   "class": "existing_tests",
+   "reason": "tsc, vitest, build; referenced another seat's screenshot.",
+   "basis": "agreed"
+  },
+  "swarm-221023-k6l4#16": {
+   "class": "app_in_browser",
+   "reason": "Took own gallery shots /tmp/opus1-w1/w2.png and measured wonder heights",
+   "basis": "agreed"
+  },
+  "swarm-221023-k6l4#17": {
+   "class": "app_in_browser",
+   "reason": "In-browser walk view at Fernstead market, measuring draw calls with and without S9",
+   "basis": "agreed"
+  },
+  "swarm-221023-k6l4#18": {
+   "class": "app_in_browser",
+   "reason": "Browser script ran Watch mode, measured renderer draw calls, screenshots, no page errors",
+   "basis": "agreed"
+  },
+  "swarm-221023-k6l4#19": {
+   "class": "existing_tests",
+   "reason": "tsc, existing vitest files, build.",
+   "basis": "agreed"
+  },
+  "swarm-221023-k6l4#20": {
+   "class": "existing_tests",
+   "reason": "tsc, ten vitest files, build in author worktree",
+   "basis": "agreed"
+  },
+  "swarm-221023-k6l4#21": {
+   "class": "existing_tests",
+   "reason": "tsc, vitest streetLife and build",
+   "basis": "agreed"
+  },
+  "swarm-221023-k6l4#22": {
+   "class": "app_in_browser",
+   "reason": "Measured walk-view draw counts at Fernstead pose incl. ?nolod in running app",
+   "basis": "agreed"
+  },
+  "swarm-221023-k6l4#23": {
+   "class": "existing_tests",
+   "reason": "tsc, build, full village/jev vitest suite, audited assertion changes.",
+   "basis": "agreed"
+  },
+  "swarm-221023-k6l4#24": {
+   "class": "existing_tests",
+   "reason": "tsc, five vitest files, build plus grep",
+   "basis": "agreed"
+  },
+  "swarm-221023-k6l4#25": {
+   "class": "existing_tests",
+   "reason": "Merge, then tsc, vitest and build",
+   "basis": "agreed"
+  },
+  "swarm-221023-k6l4#26": {
+   "class": "existing_tests",
+   "reason": "tsc, vitest program/realms, build; guard confirmed by code read",
+   "basis": "agreed"
+  },
+  "swarm-221023-k6l4#27": {
+   "class": "app_in_browser",
+   "reason": "Browser LOD vs nolod and WebGL draw-hook measurements, with screenshots.",
+   "basis": "agreed"
+  }
+ }
+}

@@ -26,6 +26,7 @@ export const offlineScripts = [
   'no-carry.test.ts',
   'paper-account-regime.test.ts',
   'paper-number-audit.test.ts',
+  'paper-review-practice.test.ts',
   'bench-ak.test.ts',
   'bench-build-oracle-audit.test.ts',
   'bench-build-task.test.ts',

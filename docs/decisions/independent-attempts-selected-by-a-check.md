@@ -15,8 +15,8 @@ created: 2026-09-23
 **Vision-fit:** n/a — internal tooling
 **Researched:** No new literature. Own data: swarm-232020-hdju evidence/oracle-at-k and verify-notes/evidence-recompute; paper Study 1 arms A/C/K.
 **Rejected:** (a) showing the check to attempts, as in 0079450. That lets an attempt fit the judge. (b) selection by agreement (arm K) or by a room vote (arm C), which measured 7/40 and 6/40 on printf.
-**Open:** attempts are not sandboxed from the filesystem. Read-proofing against the history probe holds only once that probe has been rerun and failed against the integrated tip.
+**Open:** attempts are not sandboxed from the filesystem.
 **Revisit-when:** a live run of attempts.ts on the machine-oracle tasks (measure-task-success-on-a-machine-oracle) against arm A lands outside the stored-attempt pass@3 estimate by more than its sampling band
 **Scope:** src/attempts.ts,scripts/attempts.test.ts,scripts/oracle-at-k.py,scripts/offline-runner.mjs
 **Source:** manual
-**Evidence-change:** Live plumbing smoke (swarm-092653-202z evidence/attempts-hidden-check-smoke): haiku, n=2, $0.036, a toy add.js task with --protect tests/. Both attempts passed, the attempt tree never contained tests/, and the check text was not in the prompt. This shows the plumbing works, not an accuracy gain.
+**Evidence-change:** Live plumbing smoke (swarm-092653-202z evidence/attempts-hidden-check-smoke): haiku, n=2, $0.036, a toy add.js task with --protect tests/. Both attempts passed, the attempt tree never contained tests/, and the check text was not in the prompt. This shows the plumbing works, not an accuracy gain. Read-proofing: -1's history probe exited 1 on 6d92de3. Against 58de722, a new probe (exportAttemptTree on a repo with a secret test) finds nothing in `git log --all -p`, `git show <base>:tests/...` fails, a grep of the tree finds nothing, and the directory is not under the repo, so it exits 0.

@@ -16,7 +16,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { hiddenRoot, loadHiddenItem, loadPool, lockPool, validatePool, type ValidateItem } from './pool-format.ts';
-import { MUTATION_NOTE, mutationCheckItem, type MutationResult } from './pool-mutation.ts';
+import { MUTATION_NOTE, mutationCheckItem, MutationInterrupted, type MutationResult } from './pool-mutation.ts';
 import { recordSuiteBase, SECONDARY_NOTE, SUITE_BASE_FILE } from './pool-suite-view.ts';
 import { auditRun, finalizeRun, scoreRun } from './pool-score.ts';
 import { ARMS, runArm, type Arm } from './pool-run.ts';
@@ -47,7 +47,10 @@ export function validateAll(poolDir: string, o: ValidateOptions = {}) {
   const mutationFor = (r: ValidateItem, opts: NonNullable<ValidateOptions['mutation']>): ItemMutation => {
     if (r.passes_with_reference !== true) return { flag_only: true, flagged: false, skipped: 'not run: the reference fix does not pass the hidden test' };
     try { return mutationCheckItem({ repo: pool.repo, baseCommit: pool.base_commit, item: loadHiddenItem(hidden, r.id), scratch, ...opts }); }
-    catch (e) { return { flag_only: true, flagged: false, error: message(e) }; }
+    catch (e) {
+      if (e instanceof MutationInterrupted) throw e; // validate is being stopped: do not start StrykerJS on the next item
+      return { flag_only: true, flagged: false, error: message(e) };
+    }
   };
   const items: (ValidateItem & { mutation?: ItemMutation })[] = o.mutation ? report.items.map(r => ({ ...r, mutation: mutationFor(r, o.mutation!) })) : report.items;
   const mutation = o.mutation && { note: MUTATION_NOTE, flagged: items.filter(r => r.mutation?.flagged).map(r => r.id) };

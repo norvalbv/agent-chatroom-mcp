@@ -4,7 +4,7 @@ import { spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, join, resolve } from 'node:path';
-import { copyHiddenTests, type HiddenItem, removeWorktree, worktreeAt } from './pool-format.ts';
+import { copyHiddenTests, type HiddenItem, isolatedRepo, linkNodeModules } from './pool-format.ts';
 
 export type PatchRange = { file: string; start: number; end: number };
 export type Survivor = { file: string; line: number; column: number; mutator: string; original: string; replacement: string };
@@ -70,13 +70,34 @@ export function nodeSatisfies(range: string, version: string): boolean {
   return true;
 }
 
-/** Runs argv in its own process group and kills the whole group at the deadline and on exit, so no mutant run outlives the check. */
-const GROUP_RUNNER = "const{spawn}=require('node:child_process');const[ms,bin,...args]=process.argv.slice(1);let code=null;" +
-  "const c=spawn(bin,args,{stdio:'inherit',detached:true});const t=setTimeout(()=>{code=124;try{process.kill(-c.pid,'SIGKILL')}catch{}},Number(ms));" +
-  "c.on('exit',s=>{clearTimeout(t);try{process.kill(-c.pid,'SIGKILL')}catch{};process.exit(code??s??1)});";
+/** Leads the new process group and runs argv in it. Its stdin is a lifeline pipe from the runner below: when the runner dies by
+ * any means, SIGKILL included, the pipe closes and the keeper kills its own group, so StrykerJS and every mutant run go too. */
+const KEEPER = "const{spawn}=require('node:child_process');const die=()=>{try{process.kill(0,'SIGKILL')}catch{}};" +
+  "process.stdin.on('end',die);process.stdin.on('close',die);process.stdin.on('error',die);process.stdin.resume();" +
+  "const[bin,...args]=process.argv.slice(1);const k=spawn(bin,args,{stdio:['ignore','inherit','inherit']});" +
+  "k.on('error',()=>process.exit(127));k.on('exit',s=>process.exit(s??1));";
+/** Runs in the caller's process group and puts argv in a group of its own (under KEEPER), which it kills at the deadline, when
+ * argv exits (background children included), on SIGINT, SIGTERM or SIGHUP (then dies of the same signal, so the caller sees
+ * it), and when its parent goes away (the ppid changes). A caller killed outright takes the runner down in its group, and the
+ * keeper's lifeline then ends the rest. So no mutant run outlives the check, however validate is stopped. */
+const GROUP_RUNNER = "const{spawn}=require('node:child_process');const[ms,...argv]=process.argv.slice(1);const ppid=process.ppid;let code=null;" +
+  `const c=spawn(process.execPath,['-e',${JSON.stringify(KEEPER)},...argv],{stdio:['pipe','inherit','inherit'],detached:true});` +
+  "const kill=()=>{try{process.kill(-c.pid,'SIGKILL')}catch{}};const t=setTimeout(()=>{code=124;kill()},Number(ms));" +
+  "for(const s of['SIGINT','SIGTERM','SIGHUP'])process.on(s,()=>{kill();process.removeAllListeners(s);process.kill(process.pid,s)});" +
+  "setInterval(()=>{if(process.ppid!==ppid){kill();process.exit(1)}},250).unref();" +
+  "c.on('error',()=>{kill();process.exit(127)});c.on('exit',s=>{clearTimeout(t);kill();process.exit(code??s??1)});";
+const STOP_SIGNALS: readonly string[] = ['SIGINT', 'SIGTERM', 'SIGHUP'];
+/** `interrupted`: the runner was stopped by SIGINT, SIGTERM or SIGHUP (after killing the group). validate's own handlers
+ * (bench-build-runtime.ts) only run once its synchronous work ends, so the check must stop by itself (MutationInterrupted). */
 export function runGrouped(argv: string[], cwd: string, timeoutMs: number, env: NodeJS.ProcessEnv) {
   const r = spawnSync(process.execPath, ['-e', GROUP_RUNNER, String(timeoutMs), ...argv], { cwd, env, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, timeout: timeoutMs + 60_000, killSignal: 'SIGKILL' });
-  return { exit_code: r.status, timed_out: r.status === 124, output_tail: ((r.stdout ?? '') + (r.stderr ?? '')).slice(-2000) };
+  return { exit_code: r.status, timed_out: r.status === 124, signal: r.signal, interrupted: r.signal !== null && STOP_SIGNALS.includes(r.signal),
+    output_tail: ((r.stdout ?? '') + (r.stderr ?? '')).slice(-2000) };
+}
+
+/** Thrown when validate is being stopped, after the item's scratch copy is removed; validateAll lets it end validate. */
+export class MutationInterrupted extends Error {
+  constructor(readonly signal: string) { super(`mutation check stopped by ${signal}`); }
 }
 
 const snippet = (source: string, loc: any): string => {
@@ -85,8 +106,9 @@ const snippet = (source: string, loc: any): string => {
   return text.length > 120 ? text.slice(0, 117) + '...' : text;
 };
 
-/** One item: a scratch worktree at base with reference.patch applied and the hidden tests copied in, mutated in place (the copy is
- * thrown away) with the hidden command as Stryker's command runner. Config and report stay outside the worktree. */
+/** One item: a scratch copy at base (its own repository, as a pool run's, so nothing is registered in the pool's repo and a killed
+ * validate leaves no worktree behind) with reference.patch applied and the hidden tests copied in, mutated in place (the copy is
+ * thrown away) with the hidden command as Stryker's command runner. Config and report stay outside the copy. */
 export function mutationCheckItem(o: { repo: string; baseCommit: string; item: HiddenItem; scratch: string; concurrency?: number; timeoutMs?: number; nodeVersion?: string }): MutationResult {
   const concurrency = Math.max(1, o.concurrency ?? 1), timeoutMs = o.timeoutMs ?? 30 * 60_000, t0 = Date.now();
   const result: MutationResult = { flag_only: true, flagged: false, ranges: [], skipped_files: [], mutants: 0, killed: 0, timed_out: 0, survived: 0, errors: 0, survivors: [], concurrency, duration_s: 0 };
@@ -102,7 +124,8 @@ export function mutationCheckItem(o: { repo: string; baseCommit: string; item: H
   const dir = mkdtempSync(join(resolve(o.scratch), `mutation-${o.item.id}-`)), wt = join(dir, 'wt');
   const config = join(dir, 'stryker.config.json'), reportPath = join(dir, 'mutation.json');
   try {
-    worktreeAt(o.repo, o.baseCommit, wt, undefined, { linkNodeModules: true });
+    isolatedRepo(o.repo, o.baseCommit, wt);
+    linkNodeModules(o.repo, wt);
     const applied = spawnSync('git', ['apply', '--whitespace=nowarn', o.item.patchPath], { cwd: wt, encoding: 'utf8', maxBuffer: 256 * 1024 * 1024 });
     if (applied.status !== 0) return done({ error: ('reference.patch did not apply: ' + applied.stderr).slice(-500) });
     copyHiddenTests(o.item, wt);
@@ -113,7 +136,9 @@ export function mutationCheckItem(o: { repo: string; baseCommit: string; item: H
     }, null, 2));
     const env = { ...process.env };
     delete env.NODE_TEST_CONTEXT; // inherited from an outer node --test, it makes the hidden node --test exit 0 and every mutant survive
-    const r = runGrouped([stryker.bin, 'run', config], wt, timeoutMs, env);
+    // StrykerJS runs on this Node (the one the engines check above passed), not on whichever node its shebang finds first on PATH.
+    const r = runGrouped([process.execPath, stryker.bin, 'run', config], wt, timeoutMs, env);
+    if (r.interrupted) throw new MutationInterrupted(r.signal!);
     if (r.timed_out) return done({ error: `StrykerJS did not finish within ${Math.round(timeoutMs / 60_000)} min` });
     if (r.exit_code !== 0 || !existsSync(reportPath)) return done({ error: `StrykerJS exited ${r.exit_code}: ${r.output_tail.slice(-500)}` });
     const report = JSON.parse(readFileSync(reportPath, 'utf8'));
@@ -126,7 +151,6 @@ export function mutationCheckItem(o: { repo: string; baseCommit: string; item: H
     return done({ mutants: mutants.length, killed: count('Killed'), timed_out: count('Timeout'), survived: survivors.length, errors: count('CompileError', 'RuntimeError'),
       survivors, flagged: survivors.length > 0, ...(mutants.length ? {} : { note: 'StrykerJS placed no mutants in the changed lines' }) });
   } finally {
-    if (existsSync(wt)) removeWorktree(o.repo, wt);
     rmSync(dir, { recursive: true, force: true });
   }
 }

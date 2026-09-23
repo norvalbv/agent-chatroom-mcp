@@ -83,7 +83,7 @@ export interface RunOptions {
   /** Overrides pool.deadline_min (dry runs only; recorded as deadline_override_ms). */
   deadlineMs?: number;
   switchLog?: string;
-  fake?: { solutions: string; mode?: 'commit' | 'hang'; session?: boolean; integrate?: boolean };
+  fake?: { solutions: string; mode?: 'commit' | 'hang'; session?: boolean; integrate?: boolean; orphan?: boolean };
   /** Where Claude Code keeps projects/ (default $CLAUDE_CONFIG_DIR or ~/.claude); fake seats write there. */
   claudeConfigDir?: string;
   port?: number;
@@ -115,7 +115,7 @@ export async function runArm(o: RunOptions): Promise<string> {
     const bin = join(runDir, 'fake-bin'); mkdirSync(bin);
     writeFileSync(join(bin, 'claude'), FAKE_CLAUDE); chmodSync(join(bin, 'claude'), 0o755);
     env = { ...env, PATH: bin + ':' + (env.PATH ?? ''), POOL_FAKE_SOLUTIONS: resolve(o.fake.solutions), POOL_FAKE_MODE: o.fake.mode ?? 'commit',
-      POOL_FAKE_SESSION: o.fake.session ? '1' : '', POOL_FAKE_INTEGRATE: o.fake.integrate ? '1' : '', CLAUDE_CONFIG_DIR: configDir };
+      POOL_FAKE_SESSION: o.fake.session ? '1' : '', POOL_FAKE_INTEGRATE: o.fake.integrate ? '1' : '', POOL_FAKE_ORPHAN: o.fake.orphan ? '1' : '', CLAUDE_CONFIG_DIR: configDir };
   }
   const integrationBranch = seatBranch(pool.name, o.arm, o.rep, 'integration');
   const started = Date.now(), deadlineAt = started + deadlineMs;
@@ -341,6 +341,8 @@ if (process.env.POOL_FAKE_SESSION) {
   fs.mkdirSync(dir, { recursive: true });
   fs.writeFileSync(path.join(dir, crypto.randomUUID() + '.jsonl'), JSON.stringify({ type: 'user', cwd, message: { role: 'user', content: prompt } }) + '\\n' + JSON.stringify({ type: 'assistant', cwd, message: { id: msgId, model, usage } }) + '\\n');
 }
+// orphan: a background job in its own process group (as a seat's detached dev hub would be) that writes late
+if (process.env.POOL_FAKE_ORPHAN) cp.spawn(process.execPath, ['-e', "setTimeout(()=>require('fs').writeFileSync('orphan-was-here','late'),3000)"], { cwd, detached: true, stdio: 'ignore' }).unref();
 if (process.env.POOL_FAKE_MODE === 'hang') { setInterval(() => {}, 1000); return; }
 const inRoom = /Organise yourselves/.test(prompt);
 const git = (...a) => cp.spawnSync('git', a, { cwd, encoding: 'utf8' });

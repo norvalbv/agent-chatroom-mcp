@@ -205,3 +205,14 @@ test('seat worktrees get the repo node_modules through worktreeAt(linkNodeModule
     assert.ok(existsSync(join(run.seats[0].worktree, 'node_modules', 'dry-dep')));
   } finally { rmSync(base, { recursive: true, force: true }); }
 });
+
+test('a process a seat started in its own process group is stopped too: nothing whose cwd is under the run dir survives run', async () => {
+  const { base, fx, solutions, scratch, claudeHome } = setup();
+  try {
+    const runDir = await runArm({ poolDir: fx.poolDir, arm: 'solo', rep: 5, scratch, fake: { solutions, orphan: true }, claudeConfigDir: claudeHome });
+    const run = JSON.parse(readFileSync(join(runDir, 'run.json'), 'utf8'));
+    assert.ok(run.stray_processes_stopped >= 1, `stray_processes_stopped: ${run.stray_processes_stopped}`);
+    await new Promise(ok => setTimeout(ok, 3500));
+    assert.ok(!existsSync(join(run.seats[0].worktree, 'orphan-was-here')), 'the detached child outlived the run');
+  } finally { rmSync(base, { recursive: true, force: true }); }
+});

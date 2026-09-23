@@ -992,9 +992,24 @@ export class Hub {
   /** Messages this participant has not seen: new pushable ones plus previously withheld ones that are now visible. */
   deliverable(room: Room, p: Participant, since: number): Message[] {
     const focus = this.attentionFocus(room, p);
-    if (focus) return [focus];
+    if (focus && this.focusExclusive(focus)) return [focus];
     const held = new Set(p.withheld ?? []);
-    return room.messages.filter((m) => m.from.id !== p.id && ((m.seq > since && this.pushableTo(room, m, p.id)) || (held.has(m.seq) && this.visibleTo(room, m, p.id))));
+    const queue = room.messages.filter((m) => m.from.id !== p.id && ((m.seq > since && this.pushableTo(room, m, p.id)) || (held.has(m.seq) && this.visibleTo(room, m, p.id))));
+    return this.focusFirst(focus, queue);
+  }
+
+  /**
+   * Only a human's message holds a seat's whole inbox until it is answered (humans-answered-once). A peer's
+   * @-ask is delivered first with the queue behind it: pinned alone, it hid everything else until the seat
+   * replied, and in swarm-083203-kooz that starvation produced duplicate builds and stale merges.
+   */
+  focusExclusive(focus: Message): boolean {
+    return focus.from.agent === "human";
+  }
+
+  /** The focused ask leads; the rest keep log order. */
+  private focusFirst(focus: Message | undefined, queue: Message[]): Message[] {
+    return focus ? [focus, ...queue.filter((m) => m.id !== focus.id)] : queue;
   }
 
   /** Root of a quiet thread: follow reply_to up to the first quiet message. */
@@ -1097,10 +1112,11 @@ export class Hub {
     const since = sinceSeq ?? p.lastSeenSeq;
     const focus = this.attentionFocus(room, p);
     const held = new Set(p.withheld ?? []);
-    const msgs = focus ? [focus] : room.messages.filter((m) =>
-      (m.seq > since || held.has(m.seq)) && this.visibleTo(room, m, p.id)).slice(0, limit);
+    const exclusive = focus && this.focusExclusive(focus) ? focus : undefined;
+    const queue = room.messages.filter((m) => (m.seq > since || held.has(m.seq)) && this.visibleTo(room, m, p.id) && m.id !== focus?.id).slice(0, limit);
+    const msgs = exclusive ? [exclusive] : this.focusFirst(focus, queue);
     if (msgs.length) this.settleRead(room, p, Math.min(since, p.lastSeenSeq), msgs,
-      focus ? undefined : Math.max(p.lastSeenSeq, msgs.at(-1)!.seq));
+      exclusive ? undefined : Math.max(p.lastSeenSeq, ...queue.map((m) => m.seq), focus?.seq ?? 0));
     return msgs;
   }
 
@@ -1603,7 +1619,7 @@ export class Hub {
   attentionHint(room: Room, p: Participant): string | undefined {
     const ask = this.attentionFocus(room, p);
     if (!ask) return;
-    return `${ask.from.agent === "human" ? "You are the one answering this human. " : ""}${this.shown(room, ask.from)} addressed you directly in #${ask.seq}. Reply with send_message reply_to="${ask.id}" or call pass to decline only this focused ask. Other messages remain queued.`;
+    return `${ask.from.agent === "human" ? "You are the one answering this human. " : ""}${this.shown(room, ask.from)} addressed you directly in #${ask.seq}. Reply with send_message reply_to="${ask.id}" or call pass to decline only this focused ask. ${this.focusExclusive(ask) ? "Other messages remain queued." : "The rest of your queue is delivered with it, after it."}`;
   }
 
   /**

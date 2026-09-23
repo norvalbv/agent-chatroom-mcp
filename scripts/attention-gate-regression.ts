@@ -1,4 +1,6 @@
-/** RE-TARGET hub-carries-what-it-knows. Run: npx tsx scripts/attention-gate-regression.ts */
+/** RE-TARGET hub-carries-what-it-knows. Run: npx tsx scripts/attention-gate-regression.ts
+ * A peer's @-ask leads delivery with the queue behind it (swarm-083203-kooz: ask-only delivery hid dozens of
+ * messages per seat and caused duplicate builds); only a human's message still holds the inbox exclusively. */
 import assert from 'node:assert/strict';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -36,8 +38,11 @@ test('@-back discharges oldest outstanding ask per named sender', () => {
   f.send(f.b, '@alice @carol answers');
   assert.deepEqual(ids(f.h.addressedBy(f.room, f.b)), [q2.id]);
 });
-test('wait repeats only ask despite before/after noise; no recurring exception', async () => {
-  const f = fixture(); f.send(f.c, 'before'); const q = f.ask(); f.send(f.c, 'after');
+test('peer ask leads the first wait with the queue behind it; later waits repeat only the ask', async () => {
+  const f = fixture(); const before = f.send(f.c, 'before'); const q = f.ask(); const after = f.send(f.c, 'after');
+  const first = ids(await f.wait());
+  assert.equal(first[0], q.id);
+  assert.ok(first.includes(before.id) && first.includes(after.id), 'queue is not withheld behind a peer ask');
   for (let i = 0; i < 3; i++) {
     f.h.answerBeforeWaiting(f.room, f.b, f.b.lastSeenSeq);
     assert.deepEqual(ids(await f.wait()), [q.id]);
@@ -49,7 +54,7 @@ test('bare pass before focus delivery never declines unseen asks', () => {
 });
 test('bare pass declines delivered focus only, not next unseen ask', async () => {
   const f = fixture(); const q1 = f.ask(); const q2 = f.ask();
-  assert.deepEqual(ids(await f.wait()), [q1.id]); f.h.pass(f.name, f.b.id);
+  const first = ids(await f.wait()); assert.equal(first[0], q1.id); assert.ok(first.includes(q2.id)); f.h.pass(f.name, f.b.id);
   assert.deepEqual(ids(f.h.addressedBy(f.room, f.b)), [q2.id]);
   f.h.pass(f.name, f.b.id); // no second focus delivery yet
   assert.deepEqual(ids(f.h.addressedBy(f.room, f.b)), [q2.id]);
@@ -60,15 +65,15 @@ test('more than ten asks remain debt', () => {
   const f = fixture(); const asks = Array.from({length: 14}, () => f.ask());
   assert.deepEqual(ids(f.h.addressedBy(f.room, f.b)), ids(asks));
 });
-test('reply releases >200 before/after messages exactly once', async () => {
+test('>200 before/after messages arrive exactly once, behind the ask', async () => {
   const f = fixture(); const noise: Message[] = [];
   for (let i = 0; i < 120; i++) noise.push(f.send(f.c, `before-${i}`));
   const q = f.ask();
   for (let i = 0; i < 230; i++) noise.push(f.send(f.c, `after-${i}`));
-  assert.deepEqual(ids(await f.wait()), [q.id]);
-  f.send(f.b, 'answer', q.id);
   const got = await f.wait();
+  assert.equal(got[0].id, q.id);
   assert.deepEqual(ids(got.filter(m => m.from.id === f.c.id)), ids(noise));
+  f.send(f.b, 'answer', q.id);
   assert.equal((await f.wait()).length, 0);
 });
 test('targeted non-force reply bypasses stale gate and preserves arriving noise', async () => {
@@ -76,25 +81,30 @@ test('targeted non-force reply bypasses stale gate and preserves arriving noise'
   f.h.send(f.name, f.b.id, 'answer', q.id);
   assert.ok(ids(await f.wait()).includes(noise.id));
 });
-test('unrelated stale refusal returns only focused ask and keeps debt', () => {
-  const f = fixture(); const q = f.ask(); f.send(f.c, 'not-for-focused-delivery');
+test('unrelated stale refusal leads with the focused ask, carries the queue, keeps debt', () => {
+  const f = fixture(); const q = f.ask(); f.send(f.c, 'queued-behind-the-ask');
   let error: any;
   try { f.h.send(f.name, f.b.id, 'unrelated update'); } catch (e) { error = e; }
   assert.ok(error, 'stale unrelated post should be refused');
   assert.ok(JSON.stringify(error).includes(q.content));
-  assert.ok(!JSON.stringify(error).includes('not-for-focused-delivery'));
+  assert.ok(JSON.stringify(error).includes('queued-behind-the-ask'));
+  assert.ok(JSON.stringify(error).indexOf(q.content) < JSON.stringify(error).indexOf('queued-behind-the-ask'), 'the ask comes first');
   assert.deepEqual(ids(f.h.addressedBy(f.room, f.b)), [q.id]);
 });
-test('readAs repeats focus and subsequently pages held backlog without loss', async () => {
+test('readAs leads every page with the ask and pages the backlog without loss', async () => {
   const f = fixture(); const noise: Message[] = [];
   for (let i = 0; i < 220; i++) noise.push(f.send(f.c, `noise-${i}`));
   const q = f.ask();
-  assert.deepEqual(ids(f.h.readAs(f.room, f.b, 0, 500)), [q.id]);
-  assert.deepEqual(ids(f.h.readAs(f.room, f.b, undefined, 1)), [q.id]);
-  f.send(f.b, 'answer', q.id);
   const got: Message[] = [];
-  for (let i = 0; i < 20; i++) { const batch = f.h.readAs(f.room, f.b, undefined, 31); if (!batch.length) break; got.push(...batch); }
+  for (let i = 0; i < 20; i++) {
+    const batch = f.h.readAs(f.room, f.b, undefined, 31);
+    assert.equal(batch[0].id, q.id, 'the outstanding ask leads every page');
+    got.push(...batch.slice(1));
+    if (batch.length === 1) break;
+  }
   assert.deepEqual(ids(got.filter(m => m.from.id === f.c.id)), ids(noise));
+  f.send(f.b, 'answer', q.id);
+  assert.equal(f.h.readAs(f.room, f.b, undefined, 31).filter(m => m.from.id === f.c.id).length, 0, 'no backlog re-delivered');
 });
 test('nominated human preempts agent ask without clearing it or leaking to peer', async () => {
   const f = fixture(); const q = f.ask(); await f.wait();
@@ -103,19 +113,19 @@ test('nominated human preempts agent ask without clearing it or leaking to peer'
   assert.deepEqual(ids(await f.wait()), [humanAsk.id]);
   assert.ok(!ids(await f.h.wait(f.name, f.c.id, f.c.lastSeenSeq, 0)).includes(humanAsk.id));
   f.send(f.b, 'Yes.', humanAsk.id);
-  assert.deepEqual(ids(await f.wait()), [q.id]);
+  assert.equal(ids(await f.wait())[0], q.id);
 });
 test('passing newer human focus retains older agent ask', async () => {
   const f = fixture(); const q = f.ask(); await f.wait();
   const {participant: human} = f.h.join(f.name, 'human', 'human');
   const humanAsk = f.send(human, '@bob another human question');
   assert.deepEqual(ids(await f.wait()), [humanAsk.id]); f.h.pass(f.name, f.b.id);
-  assert.deepEqual(ids(await f.wait()), [q.id]);
+  assert.equal(ids(await f.wait())[0], q.id);
 });
 test('quiet bystander body not parked by gate; explicit pull then surface is once', async () => {
   const f = fixture(); const q = f.ask();
   const quiet = f.send(f.a, '@carol quiet-only-body', undefined, true);
-  assert.deepEqual(ids(await f.wait()), [q.id]);
+  const first = ids(await f.wait()); assert.equal(first[0], q.id); assert.ok(!first.includes(quiet.id));
   f.send(f.b, 'answer', q.id);
   assert.ok(!ids(await f.wait()).includes(quiet.id));
   assert.ok(ids(f.h.readAs(f.room, f.b, 0, 500)).includes(quiet.id), 'quiet remains explicitly readable');
@@ -132,23 +142,26 @@ test('unread quiet body surfaces after gate without being lost', async () => {
 test('reclaim and disk replay preserve focus, decline and backlog', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'attention-gate-test-'));
   try {
-    const f = fixture(dir); const noise = f.send(f.c, 'held through replay'); const q1 = f.ask(); const q2 = f.ask();
-    await f.wait(); f.h.pass(f.name, f.b.id); await f.wait();
+    const f = fixture(dir); const noise = f.send(f.c, 'delivered before replay'); const q1 = f.ask(); const q2 = f.ask();
+    assert.ok(ids(await f.wait()).includes(noise.id)); f.h.pass(f.name, f.b.id); await f.wait();
     const h = new Hub({dataDir: dir});
     const {room, participant: b} = h.join(f.name, 'bob', 'test', {}, f.b.id, 'reclaimed-session');
     assert.deepEqual(ids(h.addressedBy(room, b)), [q2.id]);
-    assert.deepEqual(ids(await h.wait(f.name, b.id, b.lastSeenSeq, 0)), [q2.id]);
+    assert.equal(ids(await h.wait(f.name, b.id, b.lastSeenSeq, 0))[0], q2.id);
     h.pass(f.name, b.id);
-    assert.ok(ids(await h.wait(f.name, b.id, b.lastSeenSeq, 0)).includes(noise.id));
+    assert.ok(!ids(await h.wait(f.name, b.id, b.lastSeenSeq, 0)).includes(noise.id), 'replay does not re-deliver the backlog');
     assert.ok(!ids(h.addressedBy(room, b)).includes(q1.id));
   } finally { rmSync(dir, {recursive: true, force: true}); }
 });
-for (const state of ['closed', 'concluded'] as const) test(`${state} bypass releases backlog instead of focus`, async () => {
-  const f = fixture(); const q = f.ask(); const noise = f.send(f.c, 'closure noise'); await f.wait(); f.room.state = state;
-  const got = await f.wait(); assert.ok(ids(got).includes(noise.id)); assert.notDeepEqual(ids(got), [q.id]);
+for (const state of ['closed', 'concluded'] as const) test(`${state} drops focus; backlog was delivered once`, async () => {
+  const f = fixture(); const q = f.ask(); const noise = f.send(f.c, 'closure noise');
+  const first = ids(await f.wait()); assert.equal(first[0], q.id); assert.ok(first.includes(noise.id));
+  f.room.state = state; const late = f.send(f.c, 'after close');
+  assert.equal(f.h.attentionFocus(f.room, f.b), undefined);
+  assert.deepEqual(ids(await f.wait()), [late.id]);
 });
 
-test('MCP focused reads include actionable hint and do not consume proposal receipt', async () => {
+test('MCP: a peer ask leads reads with the hint once and does not hide the open proposal', async () => {
   const h = new Hub();
   const a = createSessionServer(h), b = createSessionServer(h);
   const call = async (session: any, tool: string, args: any) => {
@@ -163,17 +176,18 @@ test('MCP focused reads include actionable hint and do not consume proposal rece
   const text = 'Retain full proposal text after resolving the focused ask.';
   await call(a, 'propose', {room, text});
   const focus = await call(b, 'wait_for_messages', {room, timeout_ms: 0});
-  assert.equal(focus.open_proposal, null);
+  assert.equal(focus.open_proposal?.text, text, 'a peer ask no longer hides the open proposal');
+  assert.match(focus.hint, /reply_to=.*pass/i);
+  assert.equal(focus.addressed_to_you[0].text, '@bob inspect this');
   for (const args of [{room}, {room, since_seq: 0}]) {
     const read = await call(b, 'read_messages', args);
     assert.ok(Array.isArray(read), 'legacy string[] response preserved');
-    assert.equal(read.length, 1);
     assert.match(read[0], /@bob inspect this/);
     assert.match(read[0], /reply_to=.*pass/i, 'focused read body carries actionable hint');
+    assert.ok(read.slice(1).every((line: string) => !line.includes('[HINT]')), 'hint rides on the ask only');
   }
+  assert.ok((await call(b, 'read_messages', {room, since_seq: 0})).length > 1, 'since_seq=0 returns the log behind the ask');
   await call(b, 'pass', {room});
-  const after = await call(b, 'wait_for_messages', {room, timeout_ms: 0});
-  assert.equal(after.open_proposal.text, text, 'suppressed proposal not marked seen');
 });
 
 let failed = 0;

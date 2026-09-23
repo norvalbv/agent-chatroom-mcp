@@ -6,7 +6,7 @@
  * own throwaway worktrees. */
 import { execFileSync, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { cpSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import { basename, isAbsolute, join, relative, resolve } from 'node:path';
 import { hashTree } from './bench-build-runtime.ts';
@@ -125,6 +125,13 @@ export function worktreeAt(repo: string, commit: string, dir: string, branch?: s
   mkdirSync(join(dir, '..'), { recursive: true });
   const args = branch ? ['worktree', 'add', '--quiet', '-b', branch, dir, commit] : ['worktree', 'add', '--quiet', '--detach', dir, commit];
   execFileSync('git', ['-C', repo, ...args], { stdio: 'pipe' });
+}
+
+/** A worktree has no node_modules: link the repo checkout's (as swarm.ts workerCwd does) so builds, suites and tests
+ * that need dependencies run. No-op when the repo has none or the worktree already has one. */
+export function linkNodeModules(repo: string, worktree: string) {
+  const mods = join(repo, 'node_modules'), dest = join(worktree, 'node_modules');
+  if (existsSync(mods) && !existsSync(dest)) symlinkSync(mods, dest, 'dir');
 }
 
 export function removeWorktree(repo: string, dir: string) {

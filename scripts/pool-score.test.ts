@@ -220,7 +220,7 @@ test('score links the pool repo\'s node_modules into its checkouts, so a hidden 
     finalizeRun(R);
     const score = scoreRun(R, { hiddenParent: fx.hiddenParent });
     assert.equal(score.suite.pass, true, score.suite.output_tail);
-    assert.equal(score.items.find((i: any) => i.id === 'greet').pass, true);
+    assert.equal(score.items.find((i: any) => i.id === 'greet')?.pass, true);
   } finally { rmSync(base, { recursive: true, force: true }); }
 });
 
@@ -228,10 +228,10 @@ test('score runs each item alone: an item whose cmd is broad never runs another 
   const base = fresh();
   try {
     const fx = makeDryRunPool(base), R = join(base, 'run'); mkdirSync(R);
-    writeFileSync(join(hiddenRoot('dry-run', fx.hiddenParent), 'double', 'cmd'), 'node --test test/\n');
+    writeFileSync(join(hiddenRoot('dry-run', fx.hiddenParent), 'double', 'cmd'), 'node --test test/*.test.mjs\n');
     runJson(fx, R, 'solo', [seat(fx, R, 'solo', 'pool/dry-run/solo-rep1/solo', [['double: fix', fix(fx, 'double')]])]);
     finalizeRun(R);
-    const byId = Object.fromEntries(scoreRun(R, { hiddenParent: fx.hiddenParent }).items.map((i: any) => [i.id, i.pass]));
-    assert.deepEqual(byId, { double: true, greet: false });
+    const items = scoreRun(R, { hiddenParent: fx.hiddenParent }).items, byId = Object.fromEntries(items.map((i: any) => [i.id, i.pass]));
+    assert.deepEqual(byId, { double: true, greet: false }, JSON.stringify(items));
   } finally { rmSync(base, { recursive: true, force: true }); }
 });

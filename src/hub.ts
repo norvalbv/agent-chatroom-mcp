@@ -1482,8 +1482,14 @@ export class Hub {
     const room = this.getRoom(roomName);
     const p = this.requireParticipant(room, pid);
     p.passes = (p.passes ?? 0) + 1;
-    // No delivered focus means no decline. Never acknowledge unseen asks.
-    if (p.focusedAsk && (this.addressedBy(room, p).some((m) => m.id === p.focusedAsk) || room.messages.some((m) => m.id === p.focusedAsk && m.from.agent === "human" && !this.isAnswered(room, m)))) {
+    // No delivered focus means no decline. Never acknowledge unseen asks. With no focus set, the next open peer ask
+    // counts as focused once it has been delivered (seq <= lastSeenSeq), so N passes retire N delivered asks instead
+    // of costing a wait per ask (swarm-092653-202z: an integrator's 5 answered READYs each ended a held wait at once).
+    if (!p.focusedAsk) {
+      const next = this.attentionFocus(room, p);
+      if (next && next.from.agent !== "human" && next.seq <= p.lastSeenSeq) p.focusedAsk = next.id;
+    }
+    if (p.focusedAsk &&(this.addressedBy(room, p).some((m) => m.id === p.focusedAsk) || room.messages.some((m) => m.id === p.focusedAsk && m.from.agent === "human" && !this.isAnswered(room, m)))) {
       p.declinedAsks = [...new Set([...(p.declinedAsks ?? []), p.focusedAsk])];
       p.declinedAt = { ...(p.declinedAt ?? {}), [p.focusedAsk]: room.messages.at(-1)?.seq ?? 0 };
       p.focusedAsk = undefined;

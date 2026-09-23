@@ -52,13 +52,16 @@ test('bare pass before focus delivery never declines unseen asks', () => {
   const f = fixture(); const q1 = f.ask(); const q2 = f.ask(); f.h.pass(f.name, f.b.id);
   assert.deepEqual(ids(f.h.addressedBy(f.room, f.b)), [q1.id, q2.id]);
 });
-test('bare pass declines delivered focus only, not next unseen ask', async () => {
+test('bare pass declines the delivered focus, then the next delivered ask, never an unseen one', async () => {
   const f = fixture(); const q1 = f.ask(); const q2 = f.ask();
   const first = ids(await f.wait()); assert.equal(first[0], q1.id); assert.ok(first.includes(q2.id)); f.h.pass(f.name, f.b.id);
   assert.deepEqual(ids(f.h.addressedBy(f.room, f.b)), [q2.id]);
-  f.h.pass(f.name, f.b.id); // no second focus delivery yet
-  assert.deepEqual(ids(f.h.addressedBy(f.room, f.b)), [q2.id]);
-  assert.deepEqual(ids(await f.wait()), [q2.id]); f.h.pass(f.name, f.b.id);
+  const q3 = f.ask(); // not delivered yet
+  f.h.pass(f.name, f.b.id); // q2 arrived in the first wait: it is settled without another wait
+  assert.deepEqual(ids(f.h.addressedBy(f.room, f.b)), [q3.id]);
+  f.h.pass(f.name, f.b.id); // q3 is unseen: no decline
+  assert.deepEqual(ids(f.h.addressedBy(f.room, f.b)), [q3.id]);
+  assert.deepEqual(ids(await f.wait()), [q3.id]); f.h.pass(f.name, f.b.id);
   assert.equal(f.h.addressedBy(f.room, f.b).length, 0);
 });
 test('more than ten asks remain debt', () => {

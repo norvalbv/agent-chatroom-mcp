@@ -1601,14 +1601,11 @@ export class Hub {
       for (let i = pending.length - 1; i >= 0; i--) if ((p.declinedAt?.[pending[i].id] ?? Infinity) < m.seq) pending.splice(i, 1);
       if (m.kind !== "chat" || m.tag === "opening") continue;
       if (m.from.id === p.id) {
-        if (m.replyTo) {
-          const i = pending.findIndex((ask) => ask.id === m.replyTo);
-          if (i >= 0) pending.splice(i, 1);
-        } else {
-          for (const sender of m.mentions ?? []) {
-            const i = pending.findIndex((ask) => ask.from.id === sender);
-            if (i >= 0) pending.splice(i, 1);
-          }
+        // A reply settles its target, and @-naming someone settles everything they asked before it:
+        // clearing only their oldest ask re-delivered the rest as focused asks on every later wait.
+        const senders = new Set(m.mentions ?? []);
+        for (let i = pending.length - 1; i >= 0; i--) {
+          if (pending[i].id === m.replyTo || senders.has(pending[i].from.id)) pending.splice(i, 1);
         }
       } else if (m.from.agent !== "human" &&
         ((m.mentions?.includes(p.id) && this.pushableTo(room, m, p.id)) || inherited.has(m.id))) pending.push(m);

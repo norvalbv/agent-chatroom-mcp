@@ -93,7 +93,7 @@ export interface RunOptions {
 interface SeatRow {
   name: string; branch: string | null; worktree: string; brief_path: string; transcript: string | null; sessions: string[];
   exit_code: number | null; killed_by_deadline: boolean; usage: unknown; partial_usage: unknown;
-  cost_usd: number | null; cost_estimated: boolean; cost_estimate_basis?: string; cost_estimate_reason?: string;
+  cost_usd: number | null; cost_estimated: boolean; cost_estimate_basis?: string; cost_estimate_reason?: string; skipped?: string;
 }
 
 export async function runArm(o: RunOptions): Promise<string> {
@@ -143,6 +143,9 @@ export async function runArm(o: RunOptions): Promise<string> {
     const mcp = join(runDir, 'mcp-empty.json'); json(mcp, { mcpServers: {} });
     const rows = await Promise.all(names.map(async (name, k) => {
       const { wt, branch, briefPath } = prepare(name, briefFor(pool, o.arm, { seatIndex: k, integrationBranch }));
+      // A third with no items (the two-item dry-run pool) gets its branch but no seat: there is nothing to brief.
+      if (!pool.split[k]?.length && o.arm === 'split') return { name, branch, worktree: wt, brief_path: briefPath, transcript: null, sessions: [], exit_code: null, killed_by_deadline: false,
+        usage: null, partial_usage: null, cost_usd: 0, cost_estimated: false, skipped: 'no items in this third' } as SeatRow;
       const argv = claudeArgs({ text: readFileSync(briefPath, 'utf8'), mcpJson: mcp, tools: SEAT_TOOLS, model: MODEL, outputFormat: 'stream-json', settings: carrySettings(true, '') });
       const transcript = join(runDir, 'seats', name, 'transcript.jsonl');
       const record = await runClaudeSeat(name, argv, wt, Math.max(1, deadlineAt - Date.now()), { env, transcript });
@@ -265,12 +268,16 @@ async function runRoom(o: RunOptions, pool: Pool, runDir: string, env: NodeJS.Pr
     const logFd = openSync(join(roomDir, 'swarm.log'), 'w');
     swarm = track(spawn(process.execPath, argv, { cwd: wt, env: { ...env, CHATROOM_INSECURE_LOCAL: '1' }, detached: true, stdio: ['ignore', logFd, logFd] }), true);
     const done = exited(swarm);
-    const atDeadline = await Promise.race([done.then(() => false), delay(Math.max(0, deadlineAt - Date.now())).then(() => true)]);
+    let timer: NodeJS.Timeout | undefined;
+    const atDeadline = await Promise.race([done.then(() => false), new Promise<boolean>(ok => { timer = setTimeout(() => ok(true), Math.max(0, deadlineAt - Date.now())); })]);
+    clearTimeout(timer);
     if (atDeadline) {
       // Stop every seat now (swarm's own --timeout does the same for its children); recruits belong to the hub's group.
       run.room.stopped_at_deadline = true;
       killGroupMembers(swarm); killGroupMembers(hub);
-      await Promise.race([done, delay(REPORT_GRACE_MS)]);
+      let grace: NodeJS.Timeout | undefined;
+      await Promise.race([done, new Promise<void>(ok => { grace = setTimeout(ok, REPORT_GRACE_MS); })]);
+      clearTimeout(grace);
     }
     closeSync(logFd);
   } finally {

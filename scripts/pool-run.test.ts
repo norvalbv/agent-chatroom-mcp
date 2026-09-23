@@ -159,3 +159,17 @@ test('room3, fake seats through dist/swarm.js on a private hub: worker branches 
     assert.equal(spawnSync('lsof', ['-ti', `:${port}`, '-sTCP:LISTEN'], { encoding: 'utf8' }).stdout.trim(), '');
   } finally { rmSync(base, { recursive: true, force: true }); }
 });
+
+test('room3, fake seats that never finish: every seat process is gone once run returns at the deadline', { skip: !existsSync(dist) && 'dist/swarm.js not built' }, async () => {
+  const { base, fx, solutions, scratch, claudeHome } = setup();
+  try {
+    const t0 = Date.now();
+    const runDir = await runArm({ poolDir: fx.poolDir, arm: 'room3', rep: 2, scratch, fake: { solutions, mode: 'hang' }, deadlineMs: 5000, claudeConfigDir: claudeHome });
+    assert.ok(Date.now() - t0 < 90_000);
+    const left = spawnSync('ps', ['-axo', 'pid=,command='], { encoding: 'utf8' }).stdout.split('\n').filter(l => l.includes(join(runDir, 'fake-bin')) || l.includes(runDir + '/'));
+    assert.deepEqual(left, []);
+    const run = JSON.parse(readFileSync(join(runDir, 'run.json'), 'utf8'));
+    assert.equal(run.room.declared_branch, null);
+    assert.equal(spawnSync('lsof', ['-ti', `:${run.room.port}`, '-sTCP:LISTEN'], { encoding: 'utf8' }).stdout.trim(), '');
+  } finally { rmSync(base, { recursive: true, force: true }); }
+});

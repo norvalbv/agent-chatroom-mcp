@@ -34,6 +34,7 @@ export const offlineScripts = [
   'ak-select.test.ts',
   'adjudicator-trial.test.ts',
   'no-carry.test.ts',
+  'pool-format.test.ts',
   'attempts.test.ts',
   'dev-hub-rule.test.ts',
   'paper-account-regime.test.ts',

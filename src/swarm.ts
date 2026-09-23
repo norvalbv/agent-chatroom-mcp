@@ -17,6 +17,7 @@ import { randomUUID } from "node:crypto";
 import { respawnDecision, type RespawnRoom } from "./respawn.js";
 import { claudeArgs } from "./claude-args.js";
 import { codexArgs, codexUsageTracker } from "./codex-seat.js";
+import { stopStrays } from "./strays.js";
 loadDotEnv();
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -499,12 +500,38 @@ for (const g of plan.groups) {
   }
 }
 
+/**
+ * c.kill() reaches the seats themselves only. What a seat started in its own process group (a dev hub it detached, as
+ * devHubRule tells write seats to start) survives that and outlives the run, so the launcher also stops whatever still
+ * runs inside this run's own worktrees, with the lsof-cwd sweep pool-run uses (src/strays.ts; docs/reuse-survey-
+ * 2026-09-23.md, "Process containment and the stray sweep"). Only .swarm-worktrees/<run>/ is swept, never the project
+ * checkout: that also holds the user's shells and editors and anything else started there. Sweeps run one at a time.
+ */
+let sweeping: Promise<void> = Promise.resolve();
+function sweepStrays(why: string): Promise<void> {
+  const root = resolve(CWD, ".swarm-worktrees", SWARM_ID);
+  if (!existsSync(root)) return sweeping;
+  sweeping = sweeping
+    .then(async () => {
+      const n = await stopStrays(realpathSync(root)); // lsof reports real paths (/private/tmp, not /tmp)
+      if (n) log(`${why}: stopped ${n} process(es) still running in this run's worktrees`);
+    })
+    .catch((e) => log(`${why}: stray sweep failed: ${e instanceof Error ? e.message : String(e)}`));
+  return sweeping;
+}
 // stopping the launcher stops its seats: an orphaned seat keeps polling the provider with nobody to collect its result
-for (const sig of ["SIGTERM", "SIGINT"] as const) process.on(sig, () => { STOPPING = true; log(`${sig}: stopping ${children.length} agent(s)`); for (const c of children) c.kill(); setTimeout(() => process.exit(130), 3000).unref(); });
+for (const sig of ["SIGTERM", "SIGINT"] as const) process.on(sig, () => {
+  STOPPING = true;
+  log(`${sig}: stopping ${children.length} agent(s)`);
+  for (const c of children) c.kill();
+  const swept = sweepStrays(sig);
+  setTimeout(() => void swept.finally(() => process.exit(130)), 3000).unref();
+});
 const tail = setInterval(() => tailRooms([...groupRooms, leadsRoom]), 2000);
 const timeout = setTimeout(() => {
   log(`timeout after ${TIMEOUT_MIN} min; stopping agents`);
   for (const c of children) c.kill();
+  void sweepStrays("timeout");
 }, TIMEOUT_MIN * 60_000);
 
 // R4: persist incrementally — a crash keeps the usage of every run that had already finished (partials, never zero-filled).
@@ -525,6 +552,8 @@ const persistIncremental = (done: SeatRun[]) => {
 const completedRuns: SeatRun[] = [];
 const results = await Promise.all(runs.map(async (p) => { const r = await p; completedRuns.push(r); persistIncremental(completedRuns); return r; }));
 clearTimeout(timeout);
+// every seat has exited; a dev hub one of them left behind has not
+await sweepStrays("end of run");
 clearInterval(tail);
 await tailRooms([...groupRooms, leadsRoom]);
 

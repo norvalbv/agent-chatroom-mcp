@@ -76,7 +76,7 @@ async function harness(entry: string, env: Record<string, string>, argv: string[
   });
   const cache = new Map<string, any>();
   const mocks: Record<string, any> = {
-    'node:fs': fs, 'node:path': path, 'node:url': url, 'node:child_process': cp, 'node:crypto': { randomUUID: () => 'synthetic-session-id' }, 'node:string_decoder': { StringDecoder },
+    'node:fs': fs, 'node:path': path, 'node:url': url, 'node:child_process': cp, 'node:crypto': { randomUUID: () => 'synthetic-session-id' }, 'node:string_decoder': { StringDecoder }, './strays.js': { stopStrays: async () => 0 },
     './hub.js': { HubError: Error }, './settled.js': { settledAxes: () => '' }, './seat.js': { runSeat: async () => ({ final: 'fixture', ok: true }) },
     './seat-handoff-report.js': { handoffMarkerLine: () => '' },
     './result.js': { collectRoomSnapshot: async (_base: string, name: string) => ({ name, payload: { state: 'concluded', conclusion: { text: 'fixture' } }, transcript: { text: '' } }), readRunResult: () => ({}), writeRunResult: () => undefined, renderRunReport: () => '', rollupUsage: () => undefined, parseClaudeCliOutput: (raw: string) => ({ text: raw, usage: null }) },

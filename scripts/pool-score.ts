@@ -7,7 +7,7 @@ import { existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, realpathSy
 import { homedir } from 'node:os';
 import { basename, join, resolve } from 'node:path';
 import { json } from './bench-build-runtime.ts';
-import { copyHiddenTests, hiddenRoot, loadHiddenItem, loadPool, removeWorktree, runCmd, worktreeAt } from './pool-format.ts';
+import { copyHiddenTests, hiddenRoot, linkNodeModules, loadHiddenItem, loadPool, removeWorktree, runCmd, worktreeAt } from './pool-format.ts';
 
 const ITEM_TIMEOUT_MS = 10 * 60_000;
 const GIT_ID = ['-c', 'user.name=pool-harness', '-c', 'user.email=pool-harness@localhost', '-c', 'commit.gpgsign=false'];
@@ -133,6 +133,7 @@ export function scoreRun(runDir: string, opts: { hiddenParent?: string } = {}) {
   const suiteCmd = pool.suite_cmd ?? 'npm test';
   let suite, items;
   worktreeAt(run.repo, final.head, suiteWt);
+  linkNodeModules(run.repo, suiteWt);
   try {
     const r = runCmd(suiteCmd, suiteWt, ITEM_TIMEOUT_MS);
     suite = { cmd: suiteCmd, exit_code: r.exit_code, pass: r.exit_code === 0, output_tail: r.output_tail };
@@ -140,22 +141,29 @@ export function scoreRun(runDir: string, opts: { hiddenParent?: string } = {}) {
   worktreeAt(run.repo, final.head, testWt);
   try {
     const hiddenItems = pool.items.map((i: any) => loadHiddenItem(hidden, i.id));
-    for (const h of hiddenItems) copyHiddenTests(h, testWt); // tests only; reference.patch is never copied
+    // One item at a time: only its own hidden tests are present when its cmd runs; then back to the clean head
+    // (clean -fd keeps ignored files such as the node_modules link, which is relinked if a non-ignoring repo lost it).
     items = pool.items.map((i: any, n: number) => {
+      linkNodeModules(run.repo, testWt);
+      copyHiddenTests(hiddenItems[n], testWt); // tests only; reference.patch is never copied
       const r = runCmd(hiddenItems[n].cmd, testWt, ITEM_TIMEOUT_MS);
+      gitOut(testWt, 'reset', '-q', '--hard'); gitOut(testWt, 'clean', '-fdq');
       return { id: i.id, pass: r.exit_code === 0, exit_code: r.exit_code, attempted: attempted(run, final, i.id), output_tail: r.output_tail };
     });
   } finally { removeWorktree(run.repo, testWt); }
   const audit = auditRun(runDir, opts);
   const seats = run.seats ?? [];
   const costs = seats.map((s: any) => s.cost_usd).filter((c: any) => Number.isFinite(c));
-  const cost = costs.length === seats.length && seats.length ? costs.reduce((a: number, b: number) => a + b, 0) : (run.cost_usd ?? null);
+  // Solo and split seats carry their own cost; a room's seats are the swarm's, rolled up in room.swarm_usage.
+  const swarm = run.room?.swarm_usage;
+  const cost = seats.length ? (costs.length === seats.length ? costs.reduce((a: number, b: number) => a + b, 0) : null)
+    : Number.isFinite(swarm?.cost_usd) ? swarm.cost_usd : null;
   const passed = items.filter((i: any) => i.pass).length;
   const score = {
     pool: pool.name, pool_sha256: sha256, arm: run.arm, rep: run.rep, head: final.head, final_source: final.source,
     passed, of: items.length, attempted: items.filter((i: any) => i.attempted).length, items,
     suite, conflicts: final.conflicts.length, missing_branches: final.missing,
-    cost_usd: cost, cost_estimated: seats.some((s: any) => s.cost_estimated) || !!run.cost_estimated,
+    cost_usd: cost, cost_estimated: seats.some((s: any) => s.cost_estimated) || (!seats.length && !!swarm && swarm.coverage !== 'complete'),
     cost_per_passing_item: cost !== null && passed > 0 ? cost / passed : null,
     account: run.account ?? null, void: audit.void, audit_hits: audit.hits.length,
   };

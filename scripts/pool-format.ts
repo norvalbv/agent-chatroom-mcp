@@ -135,6 +135,13 @@ export function worktreeAt(repo: string, commit: string, dir: string, branch?: s
   return spawnSync('git', ['-C', dir, 'check-ignore', '-q', 'node_modules']).status === 0 ? 'linked' : 'linked-unignored';
 }
 
+/** A worktree has no node_modules: link the repo checkout's (as swarm.ts workerCwd does) so builds, suites and tests
+ * that need dependencies run. No-op when the repo has none or the worktree already has one. */
+export function linkNodeModules(repo: string, worktree: string) {
+  const mods = join(repo, 'node_modules'), dest = join(worktree, 'node_modules');
+  if (existsSync(mods) && !existsSync(dest)) symlinkSync(mods, dest, 'dir');
+}
+
 export function removeWorktree(repo: string, dir: string) {
   try { execFileSync('git', ['-C', repo, 'worktree', 'remove', '--force', dir], { stdio: 'pipe' }); } catch {}
   rmSync(dir, { recursive: true, force: true });

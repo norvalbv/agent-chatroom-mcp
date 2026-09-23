@@ -106,11 +106,13 @@ export function copyHiddenTests(item: HiddenItem, worktree: string) {
 
 /** Runs a hidden or suite command. NODE_TEST_CONTEXT is dropped: inherited from an outer `node --test`, it makes a
  * nested `node --test` report to the parent and exit 0 even when its tests fail. */
-export function runCmd(cmd: string, cwd: string, timeoutMs = 300_000): { exit_code: number | null; timed_out: boolean; output_tail: string } {
-  const env = { ...process.env };
+export function runCmd(cmd: string, cwd: string, timeoutMs = 300_000, opts: { env?: Record<string, string>; full?: boolean } = {}): { exit_code: number | null; timed_out: boolean; output_tail: string; stdout?: string; stderr?: string } {
+  const env = { ...process.env, ...opts.env };
   delete env.NODE_TEST_CONTEXT;
   const r = spawnSync('sh', ['-c', cmd], { cwd, env, encoding: 'utf8', timeout: timeoutMs, killSignal: 'SIGKILL', maxBuffer: 64 * 1024 * 1024 });
-  return { exit_code: r.status, timed_out: r.error?.message.includes('ETIMEDOUT') ?? false, output_tail: ((r.stdout ?? '') + (r.stderr ?? '')).slice(-2000) };
+  const out = { exit_code: r.status, timed_out: r.error?.message.includes('ETIMEDOUT') ?? false, output_tail: ((r.stdout ?? '') + (r.stderr ?? '')).slice(-2000) };
+  // full keeps both streams whole, for the per-command suite view (pool-suite-view.ts)
+  return opts.full ? { ...out, stdout: r.stdout ?? '', stderr: r.stderr ?? '' } : out;
 }
 
 const inside = (child: string, parent: string) => {

@@ -39,6 +39,7 @@ export const offlineScripts = [
   'pool-score.test.ts',
   'pool-run.test.ts',
   'pool-e2e.test.ts',
+  'pool-suite-view.test.ts',
   'attempts.test.ts',
   'dev-hub-rule.test.ts',
   'ui-button-styles.test.ts',

@@ -313,6 +313,8 @@ export interface Room {
   openingsWarned?: boolean;
   /** shared blackboard: named entries agents update in place instead of re-posting */
   board: Map<string, BoardEntry>;
+  /** draft/* entries are sealed (author-only) until every drafter has one; latched once true and persisted */
+  draftsRevealed?: boolean;
   /** Reconstructed from every board event, including deletes and system writes. */
   boardVersion: number;
   boardVersions: Map<string, number>;
@@ -342,6 +344,7 @@ type Event =
   | { type: "state"; room: string; state: RoomState; conclusion?: Room["conclusion"] }
   | { type: "opening"; room: string; pid: string; content: string }
   | { type: "openings_revealed"; room: string }
+  | { type: "drafts_revealed"; room: string }
   | { type: "archive"; room: string; archived: boolean; by: string; ts: string }
   | { type: "board_manifest"; room: string; bytes: number; kind: "full" | "delta" | "empty" }
   | { type: "board"; room: string; key: string; entry: BoardEntry | null }
@@ -584,7 +587,7 @@ export class Hub {
       latest_seq: room.messages.at(-1)?.seq ?? 0,
       proposals: [...room.proposals.values()].map((pr) => this.proposalView(room, pr, reveal, pr.status === "open" || pr.status === "accepted")),
       // agents get a manifest (board_get <key> fetches text); the human dashboard (reveal) gets the text
-      board: Object.fromEntries([...room.board].filter(([k, e]) => reveal || !this.boardEntryExpired(room, k, e)).map(([k, e]) => [k, { ...(reveal ? { text: e.text } : {}), by: e.by, chars: e.text.length, updated_at: e.updatedAt, ...(e.reviewer ? { reviewer: e.reviewer } : {}) }])),
+      board: Object.fromEntries([...room.board].filter(([k, e]) => reveal || (!this.boardEntryExpired(room, k, e) && !this.draftSealed(room, k, e))).map(([k, e]) => [k, { ...(reveal ? { text: e.text } : {}), by: e.by, chars: e.text.length, updated_at: e.updatedAt, ...(e.reviewer ? { reviewer: e.reviewer } : {}) }])),
       quiet: (() => {
         const qs = room.messages.filter((m) => m.quiet);
         return { messages: qs.length, unsurfaced_threads: new Set(qs.map((m) => this.threadRoot(room, m).id)).size };
@@ -1693,6 +1696,36 @@ export class Hub {
 
   static readonly BOARD_KEY = /^[\w .:/-]{1,80}$/;
 
+  /**
+   * Seats expected to draft: voters other than the verifier. Independent attempts only help if they
+   * stay independent, and a room whose seats share one draft never produces the disagreement that
+   * would expose a common slip (tasks/bench-printf-format/ADMISSION.md: one writer, two spot-checkers).
+   */
+  drafters(room: Room): Participant[] {
+    return this.voters(room).filter((p) => p.role !== "verifier");
+  }
+
+  /** Pure: every current drafter has a draft/* entry of their own (a drafter who left no longer counts). */
+  private draftsComplete(room: Room): boolean {
+    const authors = new Set([...room.board].filter(([k]) => k.startsWith("draft/")).map(([, e]) => e.by));
+    const drafters = this.drafters(room);
+    return drafters.length > 0 && drafters.every((d) => authors.has(d.name));
+  }
+
+  /** Latch the reveal on a draft write, persist it (replayed seats are inactive, so it cannot be re-derived), and announce it. */
+  private latchDrafts(room: Room): void {
+    if (room.draftsRevealed || !this.draftsComplete(room)) return;
+    room.draftsRevealed = true;
+    this.persist({ type: "drafts_revealed", room: room.name });
+    const keys = [...room.board.keys()].filter((k) => k.startsWith("draft/"));
+    this.post(room, "system", undefined, `[SYSTEM] Every drafter (${this.drafters(room).map((d) => d.name).join(", ")}) has a draft, so draft/* is now readable by all: ${keys.join(", ")}. Compare them and settle each disagreement from the brief, not by counting who agrees.`);
+  }
+
+  /** A draft/* entry is readable only by its author until every drafter has posted one (the human dashboard always sees it). */
+  draftSealed(room: Room, key: string, entry: BoardEntry, viewer?: string): boolean {
+    return key.startsWith("draft/") && entry.by !== viewer && !room.draftsRevealed && !this.draftsComplete(room);
+  }
+
   hold(room: Room): BoardEntry | undefined {
     return room.board.get(`hold/${room.name}`);
   }
@@ -1758,7 +1791,7 @@ export class Hub {
     const prefixes = forceFull ? undefined : p.boardFollow;
     const pending = new Set(this.unacknowledged(room));
     const visible = [...room.board].filter(([key, entry]) => {
-      if (this.boardEntryExpired(room, key, entry)) return false;
+      if (this.boardEntryExpired(room, key, entry) || this.draftSealed(room, key, entry, p.name)) return false;
       return prefixes === undefined || prefixes.some((prefix) => key.startsWith(prefix)) ||
         key.startsWith("verify/") || key.startsWith("claim/") || pending.has(key) || key === `hold/${room.name}`;
     }).map(([key]) => key);
@@ -1809,6 +1842,8 @@ export class Hub {
       if (key !== `hold/${room.name}`) throw new HubError(`A hold for this room is the key "hold/${room.name}".`, undefined, "key-format");
       if (previous && previous.by !== p.name) throw new HubError(`The hold was placed by ${previous.by}; only they (or a human) can clear or change it.`, undefined, "ownership");
     }
+    // author-only, and refused without echoing the text: an ownership error that returned the entry would unseal it
+    if (key.startsWith("draft/") && previous && previous.by !== p.name) throw new HubError(`"${key}" is ${previous.by}'s draft; draft/* entries are author-only. Write your own, e.g. draft/${p.name}.`, undefined, "ownership");
     // Assigned once, at creation only: later edits (status updates, notes) keep the same reviewer.
     let reviewer: Participant | undefined;
     if (key.startsWith("claim/")) {
@@ -1875,6 +1910,7 @@ export class Hub {
         `write it as {"proposal":"<id>","command":"...","cwd":"...","exit_code":0,"output_tail":"..."} naming the proposal, per docs/swarm-protocol-spec.md.`);
     }
     if (key.endsWith(".ack") || key.startsWith("verify/")) for (const pr of room.proposals.values()) if (pr.status === "open") this.evaluate(room, pr);
+    if (key.startsWith("draft/")) this.latchDrafts(room);
     return entry;
   }
 
@@ -2926,6 +2962,11 @@ export class Hub {
           case "opening":
             this.rooms.get(ev.room)?.openings.set(ev.pid, ev.content);
             break;
+          case "drafts_revealed": {
+            const room = this.rooms.get(ev.room);
+            if (room) room.draftsRevealed = true;
+            break;
+          }
           case "openings_revealed": {
             const room = this.rooms.get(ev.room);
             if (room) room.openingsRevealed = true;

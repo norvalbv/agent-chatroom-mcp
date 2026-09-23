@@ -84,3 +84,19 @@ created: 2026-09-17
 **Scope:** src/index.ts,src/spawner.ts,src/hub.ts,src/seat.ts,scripts/consolidator-spawn-regression.ts,scripts/recruit-prefix-regression.ts,scripts/spawner-run-prefix.test.ts,scripts/seat-git-config-regression.ts
 **Source:** manual
 **Evidence-change:** swarm-010513 (24 deepseek-v4-flash-0731 seats + verifier, 13 break-outs; ended early by credit exhaustion): lobby prop_a83bcd3c v3 3/3 at 01:59Z; rooms gitconfig-build (v3 2/2), crup-recruit-prefix (v3 2/2), crup-consolidator-build (verify/consolidator-spawn-lobby re-pinned at c5417e8, tip 6a119cf machine-checked); merged on main at b4cd67c with npm test [offline] OK (32 commands), 50 regression scripts, smoke and openrouter-smoke green; report docs/lobby-swarm-010513.md.
+
+## Target · 2026-09-23 — Overlapping claims get an advisory notice instead of a prompt-only rule
+
+**Context:** Near-duplicate claim names were prompt-only. Replaying 136 persisted room logs found 93 cross-seat claim pairs sharing at least 40 percent of their terms, plus 183 slug-rule firings, in 64 of the 136 logs, despite the prompt rule. In swarm-083203-kooz two seats built the same overlap notice under two claim names.
+**Ruling:** The first write of a claim/* sends one advisory @-notice naming the claimant and the owner of any live claim by another active seat whose terms overlap (at least 4 shared stems and either 40 percent Jaccard, or 20 percent when the slugs share half their stems); board_set returns overlaps[]. The notice never refuses a claim.
+**Consequences:**
+- Positive: Duplicate work is visible at the moment a claim is taken, so a seat can merge efforts before building twice.
+- Negative: Precision is unmeasured: the replay counts firings, not confirmed duplicates. Deliberate splits (for example kick-ui and kick-endpoint) also get a notice. One extra notice per overlapping claim.
+**Vision-fit:** n/a - internal tooling
+**Researched:** scripts/claim-overlap-calibration.ts replay over data/*.jsonl; claim-overlap-regression 9/9; arXiv:2606.15376 CoAgent (advisory notify-and-repair, argued rather than measured to beat locking); arXiv:2606.00953 Co-Coder (related only).
+**Rejected:** A hard lock on overlapping claims: some overlaps are deliberate splits, and CoAgent argues for notify-and-repair. Keeping the rule prompt-only: the replay shows it failed in 64 of 136 logs.
+**Anchored-bet:** [BET]
+**Revisit-when:** A labelled sample shows the notice's precision below 50 percent, or a run where a seat abandons correct work because of an overlap notice.
+**Scope:** src/hub.ts,src/server.ts
+**Source:** brainstorm · swarm-083203-kooz, main 858dbfa (af45763, 0fca7aa)
+**Evidence-change:** Replaying 136 persisted room logs showed 93 overlapping cross-seat claim pairs and 183 slug-rule firings in 64 logs despite the prompt-only rule; swarm-083203-kooz itself built the same notice twice under two claim names.

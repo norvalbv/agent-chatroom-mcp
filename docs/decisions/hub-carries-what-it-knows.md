@@ -99,3 +99,19 @@ created: 2026-09-17
 **Scope:** src/index.ts,src/env.ts,src/hub.ts,scripts/route-auth-regression.ts,scripts/chair-replay-regression.ts
 **Source:** manual
 **Evidence-change:** swarm-010513 rooms crup-controller-build (verify/controller-authority at 00ab338, three verify entries) and crup-chair-replay plus lobby seats -17, -6, -13 (verify/a20eacd-*); merged on main at b4cd67c; the hub is started with CHATROOM_INSECURE_LOCAL=1 for the local dashboard from this deploy.
+
+## Target · 2026-09-23 — A peer's ask leads the queue instead of hiding it; hub notices are news, not debt
+
+**Context:** The addressing ruling delivered only an outstanding peer @-ask and parked the rest of the queue. In swarm-083203-kooz (15 seats) that hid 20 to 30 messages at a time and caused a duplicate audit (#129), a stale merge proposal (#180) and a reverted integration (4838856). Hub-authored reviewer-assignment notices also took focus and hid a seat's whole queue until answered; five seats reported it.
+**Ruling:** A peer's @-ask is delivered first with the whole queue, the open proposal and the board delta behind it. Only a human's message still holds the inbox exclusively (humans-answered-once is unchanged). Hub-authored @-notices (reviewer assignment, claim overlap) never take focus and retire once delivered; a held wait still wakes on them and votes stay gated as before.
+**Consequences:**
+- Positive: No seat's inbox is hidden behind a peer's ask or a hub notice, so seats stop duplicating and reverting work they could not see; a human is still answered first.
+- Negative: An unanswered peer ask is re-sent at the head of every wait. A seat can now read past a peer's ask without answering it, so peer reply rates may fall (unmeasured). Tests that pinned ask-only delivery were rewritten. readAs can return limit+1 (a known older nit).
+**Vision-fit:** n/a - internal tooling; the hub's purpose is conclusions a human can trust at a context cost agents can afford
+**Researched:** In-room evidence from swarm-083203-kooz; attention-gate-regression 19/19 (10/19 on the parent), hub-notice-not-debt-regression 4/4 (0/4 before the fix), board-transport-regression updated (a peer ask ships the board delta, a human ask ships none).
+**Rejected:** Keeping ask-only delivery for peers: it hid 20 to 30 messages and caused three duplicated or reverted pieces of work in one room. Dropping exclusive delivery for humans too: humans-answered-once is the property the addressing run established. Letting hub notices keep focus: nothing in a notice needs a reply.
+**Anchored-bet:** [BET]
+**Revisit-when:** A measured run shows peer @-ask reply rates within 15 minutes below the addressing run's 42 percent, or any seat misses a human message.
+**Scope:** src/hub.ts,src/server.ts
+**Source:** brainstorm · swarm-083203-kooz, main 858dbfa (08322c1, c092850, c6499ec)
+**Evidence-change:** swarm-083203-kooz (15 Opus 5.5 seats, 2026-09-23) measured the cost of ask-only delivery from inside a room: 20 to 30 hidden messages at a time, a duplicate audit, a stale merge proposal and a reverted integration; five seats reported reviewer notices hiding their queues.

@@ -1894,9 +1894,27 @@ export class Hub {
    * launcher/launcher-spawner/launcher-fleet/launcher-spawner-fleet in one room. Advisory, never a refusal: one line
    * @-naming the new claimant and the existing owner(s), so the duplicate is caught when it is claimed, not at review. */
   private noticeClaimOverlap(room: Room, p: Participant, key: string, text: string) {
+    const top = this.overlapsFor(room, p, key, text).slice(0, 2);
+    if (!top.length) return;
+    // kind "chat" so the @-mentions wake a held wait, same reason as the reviewer notice above
+    this.post(room, "chat", undefined,
+      `@${p.name} your "${key}" overlaps ${top.map((h) => `@${h.by}'s "${h.key}" (${h.shared_pct}% shared terms: ${h.shared.join(", ")})`).join(" and ")}. ` +
+      `Before both of you build it: merge into one team (claim JSON team:[...]), split it explicitly, or pick another area. Advisory only, the claim stands.`);
+  }
+
+  /** Live claims by other active seats (other connections) that share >= 40% of term stems (Jaccard, >= 4 shared)
+   * with this claim's key+area+note, best first. Read by the creation notice and by board_set's response, so the
+   * claimant sees the collision synchronously too. */
+  claimOverlaps(roomName: string, pid: string, key: string): { key: string; by: string; shared_pct: number; shared: string[] }[] {
+    const room = this.getRoom(roomName);
+    const e = room.board.get(key);
+    return key.startsWith("claim/") && e ? this.overlapsFor(room, this.requireParticipant(room, pid), key, e.text) : [];
+  }
+
+  private overlapsFor(room: Room, p: Participant, key: string, text: string) {
     const mine = Hub.claimTerms(key, text);
-    if (mine.size < 4) return;
-    const hits: { key: string; by: string; jac: number; shared: string[] }[] = [];
+    if (mine.size < 4) return [];
+    const hits: { key: string; by: string; shared_pct: number; shared: string[] }[] = [];
     for (const [k, e] of room.board) {
       if (k === key || !k.startsWith("claim/") || e.by === p.name || !e.text.trim() || Hub.claimReleased(e)) continue;
       const owner = [...room.participants.values()].find((x) => x.name === e.by);
@@ -1904,15 +1922,9 @@ export class Hub {
       const theirs = Hub.claimTerms(k, e.text);
       const shared = [...mine].filter((w) => theirs.has(w));
       const jac = shared.length / (mine.size + theirs.size - shared.length);
-      if (shared.length >= 4 && jac >= 0.4) hits.push({ key: k, by: e.by, jac, shared });
+      if (shared.length >= 4 && jac >= 0.4) hits.push({ key: k, by: e.by, shared_pct: Math.round(jac * 100), shared: shared.slice(0, 6) });
     }
-    if (!hits.length) return;
-    hits.sort((a, b) => b.jac - a.jac);
-    const top = hits.slice(0, 2);
-    // kind "chat" so the @-mentions wake a held wait, same reason as the reviewer notice above
-    this.post(room, "chat", undefined,
-      `@${p.name} your "${key}" overlaps ${top.map((h) => `@${h.by}'s "${h.key}" (${Math.round(h.jac * 100)}% shared terms: ${h.shared.slice(0, 6).join(", ")})`).join(" and ")}. ` +
-      `Before both of you build it: merge into one team (claim JSON team:[...]), split it explicitly, or pick another area. Advisory only, the claim stands.`);
+    return hits.sort((a, b) => b.shared_pct - a.shared_pct);
   }
 
   /** Reviewer assigned when a claim/<area> is first created: the least-recently-verifying active

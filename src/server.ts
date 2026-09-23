@@ -556,8 +556,11 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
       },
     },
     guard("board_set", ({ room, key, text, if_absent, if_by_me, overwrite, ttl_seconds, expires_at, participant_id }) => {
-      const e = hub.setBoard(room, pid(room, participant_id), key, text, { ifAbsent: if_absent, ifByMe: if_by_me, overwrite, ttlSeconds: ttl_seconds, expiresAt: expires_at });
-      return e ? { key, chars: e.text.length, by: e.by } : { key, deleted: true };
+      const id = pid(room, participant_id);
+      const e = hub.setBoard(room, id, key, text, { ifAbsent: if_absent, ifByMe: if_by_me, overwrite, ttlSeconds: ttl_seconds, expiresAt: expires_at });
+      if (!e) return { key, deleted: true };
+      const overlaps = hub.claimOverlaps(room, id, key);
+      return { key, chars: e.text.length, by: e.by, ...(overlaps.length ? { overlaps } : {}) };
     }),
   );
 

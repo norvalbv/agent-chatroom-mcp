@@ -5,10 +5,13 @@
  * Run: npx tsx scripts/claim-overlap-regression.ts
  */
 import assert from "node:assert/strict";
+import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { Hub } from "../src/hub.js";
+import { createSessionServer } from "../src/server.js";
 
-const cases: [string, () => void][] = [];
-const test = (name: string, run: () => void) => cases.push([name, run]);
+const cases: [string, () => Promise<void> | void][] = [];
+const test = (name: string, run: () => Promise<void> | void) => cases.push([name, run]);
 
 let serial = 0;
 function room() {
@@ -63,9 +66,39 @@ test("claimTerms stems key and note, drops stopwords and JSON field names", () =
   assert.deepEqual([...t].sort(), ["fleet", "launch", "spawne"]);
 });
 
+test("board_set's MCP response carries overlaps for the claimant (the synchronous half), none for a distinct claim", async () => {
+  const hub = new Hub();
+  const call = async (who: string) => {
+    const session = createSessionServer(hub);
+    const client = new Client({ name: who, version: "1" });
+    const [ct, st] = InMemoryTransport.createLinkedPair();
+    await session.server.connect(st);
+    await client.connect(ct);
+    return async (name: string, args: Record<string, unknown>) => {
+      const r = await client.callTool({ name, arguments: args });
+      assert.ok(!r.isError, JSON.stringify(r));
+      return JSON.parse((r.content as { text: string }[])[0].text);
+    };
+  };
+  const [asA, asB] = [await call("alice"), await call("bob")];
+  const room = "claim-overlap-live";
+  await asA("join_room", { room, name: "alice", agent: "test" });
+  await asB("join_room", { room, name: "bob", agent: "test" });
+  const first = await asA("board_set", { room, key: "claim/adjudication-replay", text: claim("adjudication-replay", "alice", REPLAY) });
+  assert.equal(first.overlaps, undefined, "nothing to overlap with yet");
+  const second = await asB("board_set", { room, key: "claim/selector-replay", text: claim("selector-replay", "bob", REPLAY2) });
+  assert.equal(second.overlaps?.[0]?.key, "claim/adjudication-replay");
+  assert.equal(second.overlaps[0].by, "alice");
+  assert.ok(second.overlaps[0].shared_pct >= 40);
+  const other = await asB("board_set", { room, key: "claim/executable-challenge", text: claim("executable-challenge", "bob", "A challenge carrying a runnable command is answered only by a verify entry rerunning it with exit 0.") });
+  assert.equal(other.overlaps, undefined);
+  const plain = await asB("board_set", { room, key: "evidence/x", text: REPLAY });
+  assert.equal(plain.overlaps, undefined, "only claim/* keys are scored");
+});
+
 let failed = 0;
 for (const [name, run] of cases) {
-  try { run(); console.log(`ok - ${name}`); } catch (e) { failed++; console.error(`FAIL - ${name}\n${(e as Error).stack}`); }
+  try { await run(); console.log(`ok - ${name}`); } catch (e) { failed++; console.error(`FAIL - ${name}\n${(e as Error).stack}`); }
 }
 if (failed) { console.error(`${failed} of ${cases.length} failed`); process.exit(1); }
 console.log(`claim-overlap-regression: ${cases.length} passed`);

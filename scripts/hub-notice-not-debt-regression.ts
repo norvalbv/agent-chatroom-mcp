@@ -54,7 +54,7 @@ test("an agent's @-ask is still owed: it stays focused and blocks an unrelated s
   const ask = h.send(room.name, carol.id, "@bob which commit should I test?", undefined, true);
   await h.wait(room.name, bob.id, bob.lastSeenSeq, 0);
   assert.equal(h.attentionFocus(room, bob)?.id, ask.id);
-  assert.throws(() => h.send(room.name, bob.id, "something unrelated"), /arrived while you were composing/);
+  assert.throws(() => h.send(room.name, bob.id, "something unrelated"), new RegExp(`still owe a reply to #${ask.seq}\\b`));
   assert.doesNotThrow(() => h.send(room.name, bob.id, "abc1234", ask.id));
 });
 

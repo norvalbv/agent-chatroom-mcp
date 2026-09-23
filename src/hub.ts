@@ -100,6 +100,8 @@ export interface Participant {
   activity?: { tool: string; step: number; at: string; detail: string }[];
   /** id of the addressed message this participant was last shown by wait_for_messages (the next wait without an answer is refused once) */
   addressWarned?: string;
+  /** messages the last capped wait/read left undelivered (0 = it carried everything). Ephemeral. */
+  deliveryRemaining?: number;
   /** id of the addressed message a wait_for_messages was already refused for (the call after that proceeds) */
   addressRefused?: string;
   /** mentions at or below this seq are answered (a pass covers everything before it) */
@@ -185,6 +187,8 @@ export interface BoardEntry {
   /** claim/* entries only: the reviewer the hub assigned at creation (name/id), never client-supplied. */
   reviewer?: string;
   reviewerId?: string;
+  /** claim/* entries only: the claimant's branch and worktree, read by the hub from the seat at each write, never client-supplied. */
+  workspace?: { branch?: string; worktree: string };
   /** draft/* only: written or edited once peers' drafts were readable, so it is not an independent attempt (sticky). */
   postReveal?: boolean;
 }
@@ -453,6 +457,8 @@ export class Hub {
   }
 
   static readonly MAX_ROOMS = 500;
+  /** Rendered chars one wait/read may carry: a 66 KB backlog once overflowed a client's tool-result limit. */
+  static DELIVERY_MAX_CHARS = 24_000;
   static MAX_ROOMS_PER_RUN = Number(process.env.CHATROOM_MAX_ROOMS_PER_RUN ?? 12);
   static MAX_LIVE_PER_ROOM = Number(process.env.CHATROOM_MAX_LIVE_PER_ROOM ?? 12);
   /** silence before the hub nudges a room (and reveals stale openings); CHATROOM_NUDGE_AFTER_MS lets tests shorten it */
@@ -1007,6 +1013,27 @@ export class Hub {
     return focus.from.agent === "human";
   }
 
+  /**
+   * Cut one delivery to DELIVERY_MAX_CHARS of rendered text (never below one message) and record how many
+   * were left for the next call. The rest keep their place: the caller settles only up to the last one sent.
+   */
+  capDelivery(room: Room, p: Participant, msgs: Message[]): Message[] {
+    let used = 0;
+    let n = 0;
+    for (const m of msgs) {
+      used += this.fmt(room, m).length;
+      if (n > 0 && used > Hub.DELIVERY_MAX_CHARS) break;
+      n++;
+    }
+    p.deliveryRemaining = msgs.length - n;
+    return n < msgs.length ? msgs.slice(0, n) : msgs;
+  }
+
+  /** How many messages the seat's last wait/read left for the next call. */
+  deliveryRemaining(p: Participant): number {
+    return p.deliveryRemaining ?? 0;
+  }
+
   /** The focused ask leads; the rest keep log order. */
   private focusFirst(focus: Message | undefined, queue: Message[]): Message[] {
     return focus ? [focus, ...queue.filter((m) => m.id !== focus.id)] : queue;
@@ -1113,10 +1140,14 @@ export class Hub {
     const focus = this.attentionFocus(room, p);
     const held = new Set(p.withheld ?? []);
     const exclusive = focus && this.focusExclusive(focus) ? focus : undefined;
-    const queue = room.messages.filter((m) => (m.seq > since || held.has(m.seq)) && this.visibleTo(room, m, p.id) && m.id !== focus?.id).slice(0, limit);
-    const msgs = exclusive ? [exclusive] : this.focusFirst(focus, queue);
+    const all = room.messages.filter((m) => (m.seq > since || held.has(m.seq)) && this.visibleTo(room, m, p.id) && m.id !== focus?.id);
+    // the focused ask counts toward the limit: it used to ride on top of `limit` queued messages
+    const msgs = exclusive ? [exclusive] : this.capDelivery(room, p, this.focusFirst(focus, all.slice(0, focus ? limit - 1 : limit)));
+    p.deliveryRemaining = exclusive ? 0 : all.length + (focus ? 1 : 0) - msgs.length;
+    const queue = msgs.filter((m) => m.id !== focus?.id);
+    // settle only up to the last message sent, so a capped page leaves the rest unread rather than parked
     if (msgs.length) this.settleRead(room, p, Math.min(since, p.lastSeenSeq), msgs,
-      exclusive ? undefined : Math.max(p.lastSeenSeq, ...queue.map((m) => m.seq), focus?.seq ?? 0));
+      exclusive ? undefined : Math.max(queue.length ? 0 : p.lastSeenSeq, ...queue.map((m) => m.seq), focus?.seq ?? 0));
     return msgs;
   }
 
@@ -1198,8 +1229,20 @@ export class Hub {
       // Stale-send guard: never talk past messages you have not read.
       const unread = this.unread(room, p);
       if (unread.length) {
+        // An ask the seat was already shown did not "arrive while composing": it is a reply still owed.
+        const focus = this.attentionFocus(room, p);
+        const owed = focus && unread[0].id === focus.id && p.focusedAsk === focus.id ? focus : undefined;
         // the refusal IS the delivery: settle the cursor so the same batch is not shipped again by the next wait
         this.settleRead(room, p, p.lastSeenSeq, unread);
+        if (owed) {
+          const queued = unread.length - 1;
+          const latest = [...room.messages].reverse().find((m) => this.pushableTo(room, m, p.id))!.seq;
+          throw new HubError(
+            `You still owe a reply to #${owed.seq} from ${this.shown(room, owed.from)}. Reply with send_message reply_to="${owed.id}", or call pass to decline it. ` +
+              `${queued} other message(s) queued behind it (below); the latest seq is #${latest}.`,
+            { hint: this.attentionHint(room, p), owed_seq: owed.seq, queued, latest_seq: latest, unread: unread.map((m) => this.fmt(room, m)), next_seq: latest },
+          );
+        }
         throw new HubError(
           `${unread.length} message(s) arrived while you were composing. Read them (below); then retry send_message with force=true if your point is still new, or call wait_for_messages.`,
           { hint: this.attentionHint(room, p), unread: unread.map((m) => this.fmt(room, m)), next_seq: room.messages.at(-1)!.seq },
@@ -1224,8 +1267,13 @@ export class Hub {
       const mentions = this.mentionsIn(room, content).filter((id) => id !== p.id);
       const parent = replyTo ? room.messages.find((m) => m.id === replyTo) : undefined;
       const inherited = parent?.quiet ? (parent.audience ?? []) : [];
-      const targets = [...new Set([...mentions, ...inherited])].filter((id) => room.participants.get(id)?.agent !== "human");
-      if (targets.length === 0) throw new HubError("A quiet message must @-name at least one agent (not a human). Quiet is not privacy: everyone can still read it.");
+      // A reply already names its audience: the parent's author, when that is another live agent.
+      const author = parent && parent.from.id !== p.id && room.participants.get(parent.from.id)?.active ? [parent.from.id] : [];
+      const targets = [...new Set([...mentions, ...inherited, ...author])].filter((id) => {
+        const agent = room.participants.get(id)?.agent;
+        return agent !== undefined && agent !== "human";
+      });
+      if (targets.length === 0) throw new HubError("A quiet message must @-name at least one agent (not a human), or reply_to another agent's message. Quiet is not privacy: everyone can still read it.");
       audience = [...new Set([p.id, ...targets])];
     }
     if (this.attentionFocus(room, p) || p.withheld?.length) this.settleRead(room, p, p.lastSeenSeq, []);
@@ -1292,8 +1340,11 @@ export class Hub {
       });
       msgs = pending();
     }
-    if (p) this.settleRead(room, p, sinceSeq, msgs);
-    return msgs;
+    if (!p) return msgs;
+    const page = this.capDelivery(room, p, msgs);
+    // a capped page settles only up to its last message; the rest stay unread for the next call
+    this.settleRead(room, p, sinceSeq, page, page.length < msgs.length ? Math.max(...page.map((m) => m.seq)) : undefined);
+    return page;
   }
 
   /** Plain-text rendering of a message as agents see it (pseudonyms in anonymous rooms). */
@@ -1602,8 +1653,22 @@ export class Hub {
             if (i >= 0) pending.splice(i, 1);
           }
         }
-      } else if (m.from.agent !== "human" &&
-        ((m.mentions?.includes(p.id) && this.pushableTo(room, m, p.id)) || inherited.has(m.id))) pending.push(m);
+      } else {
+        // A "one of you" ask: once any other seat it named replies, nobody it named still owes it.
+        // Same rule as a seat's own reply: reply_to retires that ask, an @-back the oldest from each sender.
+        const namedReplier = (ask: Message) => ask.mentions?.includes(m.from.id) ?? false;
+        if (m.replyTo) {
+          const i = pending.findIndex((ask) => ask.id === m.replyTo && namedReplier(ask));
+          if (i >= 0) pending.splice(i, 1);
+        } else {
+          for (const sender of m.mentions ?? []) {
+            const i = pending.findIndex((ask) => ask.from.id === sender && namedReplier(ask));
+            if (i >= 0) pending.splice(i, 1);
+          }
+        }
+        if (m.from.agent !== "human" &&
+          ((m.mentions?.includes(p.id) && this.pushableTo(room, m, p.id)) || inherited.has(m.id))) pending.push(m);
+      }
     }
     return pending.filter((m) => !declined.has(m.id));
   }
@@ -1983,6 +2048,7 @@ export class Hub {
     if (key.startsWith("verify/")) p.lastVerifiedAt = now();
     // a draft written or edited after peers' drafts became readable may have copied them: say so wherever it is listed
     const postReveal = key.startsWith("draft/") && (!!previous?.postReveal || !!room.draftsRevealed || this.draftsDue(room));
+    const workspace = key.startsWith("claim/") ? this.workspaceOf(p) : undefined;
     const entry: BoardEntry = {
       text, by: p.name, updatedAt: now(),
       ...(expiresAt ? { expiresAt } : {}),
@@ -1991,6 +2057,7 @@ export class Hub {
       ...(reviewer ? { reviewer: reviewer.name, reviewerId: reviewer.id }
         : previous?.reviewer ? { reviewer: previous.reviewer, reviewerId: previous.reviewerId } : {}),
       ...(postReveal ? { postReveal: true } : {}),
+      ...(workspace ? { workspace } : {}),
     };
     this.applyBoard(room, key, entry);
     this.persist({ type: "board", room: roomName, key, entry });
@@ -2000,6 +2067,7 @@ export class Hub {
     this.post(room, "board", p, sealedDraft ? `${previous ? "updated" : "wrote"} a sealed draft (${this.draftProgress(room)})`
       : `${previous ? "updated" : "added"} board entry "${key}" (${text.length} chars; read it with board_get)`
       + (postReveal ? " — post-reveal: written after peers' drafts were readable, so not an independent attempt" : "")
+      + (workspace ? ` — ${workspace.branch ? `branch ${workspace.branch} in ` : ""}${workspace.worktree}` : "")
       + (reviewer ? ` — reviewer: ${reviewer.name}` : ""));
     if (reviewer) {
       // kind "chat", not "system": addressedBy()/actionableNow() resolve an owed @-mention from
@@ -2382,7 +2450,7 @@ export class Hub {
     }
   }
 
-  challenge(roomName: string, pid: string, proposalId: string, objection: string, blocking = true, command?: string): Proposal {
+  challenge(roomName: string, pid: string, proposalId: string, objection: string, blocking = true, command?: string, confirm = false): Proposal {
     const room = this.getRoom(roomName);
     const p = this.requireParticipant(room, pid);
     const pr = room.proposals.get(proposalId);
@@ -2405,6 +2473,20 @@ export class Hub {
         `A blocking challenge must quote a matching proposal span (12+ characters) in double quotes. ` +
           `Copy the text from ${proposalId} v${pr.version}; the closest passage is: "${this.closest(pr.text, objection)}". ` +
           `Use blocking=false to record uncited dissent without holding the proposal.`,
+      );
+    }
+    // Six seats filing the same objection within two minutes is one objection: point at the open one first.
+    // Only blocking challenges hold the gate, so only they are deduplicated: non-blocking dissent is recorded as
+    // written, a blocking challenge is never a duplicate of it, and a command is its own evidence.
+    const same = blocking && cites && !cmd && !confirm
+      ? this.openChallenges(pr).find((c) => c.cites &&
+          (norm(c.cites).includes(norm(cites)) || norm(cites).includes(norm(c.cites))))
+      : undefined;
+    if (same) {
+      throw new HubError(
+        `${this.shown(room, same.by)} already challenged that clause ("${same.cites!.slice(0, 80)}${same.cites!.length > 80 ? "…" : ""}") in ${same.id}, which is still open. ` +
+          `If your objection is the same, say so in chat or vote; if it adds something that challenge does not, file it again with confirm=true.`,
+        { duplicate_of: same.id },
       );
     }
     this.surfaceCited(room, objection, "cited in a challenge");
@@ -2790,9 +2872,21 @@ export class Hub {
    * and only as that connection (identity-is-the-connection). Ephemeral, like the heartbeats themselves.
    */
   private seatSessions = new Map<string, string>();
+  /** session -> the worktree its launcher started the seat in (from the MCP URL, never from the seat's own words) */
+  private sessionWorktrees = new Map<string, string>();
 
-  bindSeat(seatKey: string, session: string): void {
+  bindSeat(seatKey: string, session: string, worktree?: string): void {
     if (seatKey && session) this.seatSessions.set(seatKey, session);
+    if (session && worktree) this.sessionWorktrees.set(session, worktree);
+  }
+
+  /** Where a seat's work in progress lives: its bound worktree and the branch checked out there now. */
+  workspaceOf(p: Participant): { branch?: string; worktree: string } | undefined {
+    const worktree = p.session ? this.sessionWorktrees.get(p.session) : undefined;
+    if (!worktree) return undefined;
+    const r = spawnSync("git", ["-C", worktree, "branch", "--show-current"], { encoding: "utf8", timeout: 5_000 });
+    const branch = r.status === 0 ? r.stdout.trim() : "";
+    return branch ? { branch, worktree } : { worktree };
   }
 
   /** Heartbeat every active participant the seat's connection holds, in rooms still open. Returns how many were marked. */

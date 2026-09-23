@@ -8,8 +8,8 @@ import { seatGitIdentity, seatChildEnv, SEAT_ENV_EXCLUSIONS } from '../src/env.j
 
 const expected = { GIT_AUTHOR_NAME: 'seat-abc', GIT_AUTHOR_EMAIL: 'seat-abc@swarm.local', GIT_COMMITTER_NAME: 'seat-abc', GIT_COMMITTER_EMAIL: 'seat-abc@swarm.local' };
 assert.deepEqual(seatGitIdentity('seat-abc'), expected);
-const inherited = Object.fromEntries(Object.keys(expected).map(k => [k, 'inherited-human']));
-const source = Object.freeze({ ...inherited, CHATROOM_HUMAN_TOKEN: 'synthetic', KEEP_ME: 'yes' });
+const inherited: Record<string, string> = Object.fromEntries(Object.keys(expected).map(k => [k, 'inherited-human']));
+const source: Readonly<Record<string, string>> = Object.freeze({ ...inherited, CHATROOM_HUMAN_TOKEN: 'synthetic', KEEP_ME: 'yes' });
 const named = seatChildEnv(source, 'seat-abc');
 for (const [key, value] of Object.entries(expected)) assert.equal(named[key], value);
 for (const key of SEAT_ENV_EXCLUSIONS) assert.equal(Object.hasOwn(named, key), false);

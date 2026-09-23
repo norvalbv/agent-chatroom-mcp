@@ -55,7 +55,8 @@ try {
   assert.equal(du.seats_with_usage, 1, "(b2) seats_with_usage reflects the reporting seat only");
   assert.equal(du.prompt_tokens, 10, "(b2) missing seat is NOT zero-filled: prompt_tokens stays 10, not 20");
   assert.equal(du.steps, 1, "(b2) unknown stays unknown, never zero");
-  assert.equal(rollupUsage([{ name: "seat-1", text: "x", usage: null }, { name: "seat-2", text: "y", usage: null }])?.coverage, "none", "no seat reports usage => coverage none");
+  const noneReported = [{ name: "seat-1", text: "x", usage: null }, { name: "seat-2", text: "y", usage: null }];
+  assert.equal(rollupUsage(noneReported)?.coverage, "none", "no seat reports usage => coverage none");
 
   // (c) writeRunResult/readRunResult round-trips usage; old (usage-less) artifacts stay valid at
   // schemaVersion 1; renderRunReport gains a Usage line.

@@ -50,6 +50,8 @@ interface AttemptResult {
   turns: { summed: number };
   wall_clock: { duration_ms: number };
   seats?: { exit_code: number | null; signal: string | null; killed_by_deadline: boolean }[];
+  thinking_tokens?: number | null;
+  output_tokens?: number | null;
 }
 
 // Children die with the parent: each runner leads its own process group (so the claude under it dies too).
@@ -256,7 +258,8 @@ async function main() {
       loaded: m.loaded,
       votes: m.votes,
       n_probes: m.n_probes,
-      exploratory_secondary: { rule: "plurality of whole execution signatures (self-consistency, arXiv:2203.11171, applied to CodeT-style agreement classes, arXiv:2207.10397); NOT the primary selector", ...m.secondary },
+      // m.secondary carries its own rule text (selectBySignaturePlurality); a literal here was always overwritten.
+      exploratory_secondary: m.secondary,
     };
   }
   const selected = results[winnerIndex];

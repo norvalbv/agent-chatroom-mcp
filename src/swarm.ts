@@ -140,7 +140,7 @@ const children: ChildProcess[] = [];
 function runClaude(name: string, text: string, tools: string[], cwd: string, model?: string): Promise<SeatOutcome> {
   const outFile = resolve(OUT, `${name}.out`);
   // per seat: the MCP URL carries this seat's heartbeat key, which its tool hook sends on every local tool call
-  const beat = seatBeat(`${URL_}/mcp`, randomUUID());
+  const beat = seatBeat(`${URL_}/mcp`, randomUUID(), cwd);
   const seatMcp = resolve(OUT, `${name}.mcp.json`);
   writeFileSync(seatMcp, JSON.stringify({ mcpServers: { chatroom: { type: "http", url: beat.mcpUrl } } }));
   const args = claudeArgs({ text, mcpJson: seatMcp, tools, model, full: CLAUDE_FULL, settings: carrySettings(NO_CARRY, heartbeatHookSettings()) });
@@ -178,7 +178,7 @@ function runOpenRouter(name: string, text: string, cwd: string, model: string | 
 
 function runCodex(name: string, text: string, cwd: string, model?: string): Promise<SeatOutcome> {
   const outFile = resolve(OUT, `${name}.out`);
-  const beat = seatBeat(`${URL_}/mcp`, randomUUID());
+  const beat = seatBeat(`${URL_}/mcp`, randomUUID(), cwd);
   const args = ["exec", "--skip-git-repo-check", "-C", cwd, "-c", `mcp_servers.chatroom.url="${beat.mcpUrl}"`, "-c", "mcp_servers.chatroom.tool_timeout_sec=120", "-o", outFile];
   if (model) args.push("-m", model);
   args.push(text);

@@ -279,7 +279,7 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
       description:
         "Post a message to the room. One claim, one reason, one ask. Address someone with @name (or @B in anonymous rooms) to give them the floor; " +
         "they are told to reply or pass. If messages arrived while you were composing, the send is refused and you get them instead: " +
-        "read them, then resend only if your point is still new (or pass force=true). quiet=true pushes an @-message only to the agents named, " +
+        "read them, then resend only if your point is still new (or pass force=true). quiet=true pushes an @-message only to the agents named (with reply_to, the replied-to author is implied), " +
         "to save everyone else's context; it is NOT privacy: the message stays in the log, anyone can read_messages it, the human always sees it, and it " +
         "becomes public the moment anyone cites it. Use quiet for working exchanges only, never for a directive or anything someone is asked to act on.",
       inputSchema: {
@@ -287,7 +287,7 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
         content: z.string().describe("The message text."),
         reply_to: z.string().optional().describe("The message you are replying to: its id (m_...) or its seq as printed (\"#12\")."),
         force: z.boolean().optional().describe("Send even if there are unread messages."),
-        quiet: z.boolean().optional().describe("Push only to the @-named agents (still logged and readable by all)."),
+        quiet: z.boolean().optional().describe("Push only to the @-named agents, plus the reply_to author (still logged and readable by all)."),
         surface: z.boolean().optional().describe("With reply_to into a quiet thread: make the whole thread public."),
         participant_id: asArg,
       },
@@ -352,13 +352,16 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
       // a full-context turn on every wait_for_messages return) gets the saving too.
       if (hold_until_actionable) {
         // a delivered message that @-names this seat is actionable even once settled (a hub notice retires on delivery)
-        while (!hub.actionableNow(r, p) && !msgs.some((m) => m.mentions?.includes(id!))) {
+        // a capped page means more is already waiting: return it rather than piling the backlog into one result
+        while (!hub.deliveryRemaining(p) && !hub.actionableNow(r, p) && !msgs.some((m) => m.mentions?.includes(id!))) {
           const remaining = waitDeadline - Date.now();
           if (remaining <= 0) break;
           const more = await hub.wait(room, id, p.lastSeenSeq, remaining);
           if (more.length) msgs = msgs.concat(more);
         }
       }
+      const remaining = hub.deliveryRemaining(p);
+      const moreNote = remaining ? `${remaining} more message(s) remain queued (this delivery was capped); call wait_for_messages again with timeout_ms=0 to receive them. ` : "";
       const open = [...r.proposals.values()].find((pr) => pr.status === "open");
       const needsMyVote = open && !open.votes[id] && p.agent !== "human" && p.role !== "chair";
       const needsChallenge = open && hub.challengeRequired(r) && !open.challenges.some((c) => c.blocking !== false) && open.by.id !== id;
@@ -386,7 +389,7 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
       const focus = hub.attentionFocus(r, p);
       // only a human's message strips the envelope; a peer ask rides the full one (proposal, board, queue)
       if (focus && hub.focusExclusive(focus)) return {
-        hint: toolsRegainedNote ? toolsRegainedNote + (hub.attentionHint(r, p) ?? "") : hub.attentionHint(r, p), messages: msgs.map((m) => hub.fmt(r, m)),
+        hint: toolsRegainedNote || moreNote ? toolsRegainedNote + (hub.attentionHint(r, p) ?? "") + (moreNote ? ` ${moreNote}` : "") : hub.attentionHint(r, p), messages: msgs.map((m) => hub.fmt(r, m)), remaining,
         next_seq: p.lastSeenSeq, room_state: r.state, your_turn: r.mode === "free" || hub.currentSpeaker(r)?.id === id,
         your_role: p.role ?? "worker", humans_present: hub.activeParticipants(r).filter((x) => x.agent === "human").map((x) => x.name),
         unanswered_human: human ? (resp!.mine ? { id: human.id, name: hub.shown(r, human.from), text: human.content, you_answer: true } : { name: hub.shown(r, human.from), responder: resp!.who, you_answer: false }) : null,
@@ -432,9 +435,11 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
       hub.observeBoardManifest(r, board); // compact since-process-start observer; legacy recording is in assembly
       // the hint goes first: it is the one line a weaker model must not lose to a clamp
       return {
-        hint: toolsRegainedNote ? toolsRegainedNote + (hint ?? "") : hint,
+        hint: toolsRegainedNote || moreNote ? toolsRegainedNote + (hint ? `${hint} ` : "") + moreNote : hint,
         messages: msgs.map((m) => hub.fmt(r, m)),
-        next_seq: r.messages.at(-1)?.seq ?? since,
+        remaining,
+        // a capped page has not reached the end of the log: next_seq is the cursor, not the latest seq
+        next_seq: remaining ? p.lastSeenSeq : (r.messages.at(-1)?.seq ?? since),
         room_state: r.state,
         your_turn: r.mode === "round_robin" ? hub.currentSpeaker(r)?.id === id : true,
         your_role: p.role ?? "worker",
@@ -489,7 +494,13 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
       const msgs = p ? hub.readAs(r, p, since_seq, limit) : hub.read(room, since_seq ?? 0, limit, viewer);
       const hint = p ? hub.attentionHint(r, p) : undefined;
       // the focused ask leads the batch; the hint rides on it once, not on every queued message behind it
-      return msgs.map((m, i) => hub.fmt(r, m) + (hint && i === 0 ? `\n[HINT] ${hint}` : ""));
+      const lines = msgs.map((m, i) => hub.fmt(r, m) + (hint && i === 0 ? `\n[HINT] ${hint}` : ""));
+      const remaining = p ? hub.deliveryRemaining(p) : 0;
+      if (remaining) {
+        const last = Math.max(0, ...msgs.filter((m) => m.id !== hub.attentionFocus(r, p!)?.id).map((m) => m.seq));
+        lines.push(`[MORE] ${remaining} more message(s) remain (this page was capped); call read_messages again with since_seq=${last}.`);
+      }
+      return lines;
     }),
   );
 
@@ -613,7 +624,7 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
         if (!e || sealed(key, e)) throw new HubError(`No board entry "${key}". Keys: ${[...r.board].filter(([k, x]) => !sealed(k, x)).map(([k]) => k).join(", ") || "(none)"}`);
         return { key, ...e, ...(hub.boardEntryExpired(r, key, e) ? { expired: true, tombstone: "Archived by expiry; excluded from manifests, retained for explicit retrieval." } : {}) };
       }
-      return Object.fromEntries([...r.board].filter(([k, e]) => !hub.boardEntryExpired(r, k, e) && !sealed(k, e)).map(([k, e]) => [k, { by: e.by, chars: e.text.length, updated_at: e.updatedAt, ...(e.ackRequired ? { ack_required: true } : {}), ...(e.postReveal ? { post_reveal: true } : {}), ...(e.reviewer ? { reviewer: e.reviewer } : {}) }]));
+      return Object.fromEntries([...r.board].filter(([k, e]) => !hub.boardEntryExpired(r, k, e) && !sealed(k, e)).map(([k, e]) => [k, { by: e.by, chars: e.text.length, updated_at: e.updatedAt, ...(e.ackRequired ? { ack_required: true } : {}), ...(e.postReveal ? { post_reveal: true } : {}), ...(e.reviewer ? { reviewer: e.reviewer } : {}), ...(e.workspace?.branch ? { branch: e.workspace.branch } : {}) }]));
     }),
   );
 
@@ -625,19 +636,20 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
         "Name the single weakest claim in an open proposal, in one or two plain sentences. Required from someone other than the proposer " +
         "before a proposal can pass in rooms of 2+. Quote the clause you object to in double quotes: the hub then knows which text answers it, and an amend that removes that text answers the challenge automatically (it reopens if the text comes back). " +
         "If the objection is a runnable counterexample (a probe or test the proposal fails), pass it as `command`: then rewording cannot answer it, only a verify/* entry from someone other than the proposer rerunning that exact command with exit_code 0 after the current text (or a verifier/chair ruling the command invalid, with a reason); citing becomes optional. Whoever reruns it: read the command first and never run one that deletes, writes outside a scratch dir, or fetches and executes. " +
-        "Your vote resets; re-vote once it is answered. If you are about to concede in the same breath, do not challenge: vote, or file it with blocking=false. Unanswered challenges are carried into the conclusion as unresolved objections.",
+        "If an open challenge already quotes the same clause you get its id back instead; add confirm=true only if yours says something it does not. Your vote resets; re-vote once it is answered. If you are about to concede in the same breath, do not challenge: vote, or file it with blocking=false. Unanswered challenges are carried into the conclusion as unresolved objections.",
       inputSchema: {
         room: roomArg,
         proposal_id: z.string().describe("Proposal id (prop_...)."),
         objection: z.string().describe("The specific objection, with evidence if you have it, quoting the clause it targets."),
         blocking: z.boolean().optional().describe("Default true. false records dissent without holding the proposal or satisfying the challenge gate; it is still carried into the conclusion if unanswered."),
         command: z.string().optional().describe("Optional executable counterexample: a command line that fails against the proposal now. Answered only by a verify/* entry rerunning it with exit_code 0."),
+        confirm: z.boolean().optional().describe("File it even though an open challenge already quotes the same clause (the refusal names that challenge's id)."),
         participant_id: asArg,
       },
     },
-    guard("challenge", ({ room, proposal_id, objection, blocking, command, participant_id }) => {
+    guard("challenge", ({ room, proposal_id, objection, blocking, command, confirm, participant_id }) => {
       const r = hub.getRoom(room);
-      const pr = hub.challenge(room, pid(room, participant_id), proposal_id, objection, blocking ?? true, command);
+      const pr = hub.challenge(room, pid(room, participant_id), proposal_id, objection, blocking ?? true, command, confirm ?? false);
       return hub.proposalView(r, pr, false, false);
     }),
   ));

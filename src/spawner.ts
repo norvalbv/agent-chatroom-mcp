@@ -299,8 +299,11 @@ export class Spawner {
         out.push(rec);
         continue;
       }
-      // per seat: the MCP URL carries this seat's heartbeat key, so the file cannot be shared between recruits
-      const beat = seatBeat(o.mcpUrl, randomUUID());
+      // a write-enabled recruit works in its own worktree and branch, never in the shared checkout
+      const seatCwd = req.canEdit && !o.dryRun ? (this.worktreeFor(cwd, target, name) ?? cwd) : cwd;
+      // per seat: the MCP URL carries this seat's heartbeat key (so the file cannot be shared between recruits) and its
+      // worktree, which the hub stamps on the seat's claim/* entries
+      const beat = seatBeat(o.mcpUrl, randomUUID(), seatCwd);
       const mcpJson = resolve(o.logDir, `${name}.mcp.json`);
       writeFileSync(mcpJson, JSON.stringify({ mcpServers: { chatroom: { type: "http", url: beat.mcpUrl } } }));
       let cmd: string;
@@ -308,22 +311,18 @@ export class Spawner {
       if (agent === "openrouter") {
         // dist/ is gitignored, so a hub run from source has no build for the seat to load
         cmd = existsSync(seatBuild) ? process.execPath : "npx";
-        args = [...(existsSync(seatBuild) ? [seatBuild] : ["tsx", resolve(repoRoot, "src", "openrouter.ts")]), "-p", prompt, "--mcp-url", beat.mcpUrl, "--cwd", cwd];
+        args = [...(existsSync(seatBuild) ? [seatBuild] : ["tsx", resolve(repoRoot, "src", "openrouter.ts")]), "-p", prompt, "--mcp-url", beat.mcpUrl, "--cwd", seatCwd];
         if (req.model) args.push("--model", req.model);
         if (req.canEdit) args.push("--write");
       } else if (agent === "codex") {
         cmd = "codex";
-        args = ["exec", "--skip-git-repo-check", "-C", cwd, "-c", `mcp_servers.chatroom.url="${beat.mcpUrl}"`, "-c", "mcp_servers.chatroom.tool_timeout_sec=120"];
+        args = ["exec", "--skip-git-repo-check", "-C", seatCwd, "-c", `mcp_servers.chatroom.url="${beat.mcpUrl}"`, "-c", "mcp_servers.chatroom.tool_timeout_sec=120"];
         if (req.model) args.push("-m", req.model);
         args.push(prompt);
       } else {
         cmd = "claude";
         args = claudeArgs({ text: prompt, mcpJson, tools: req.canEdit ? WRITE_TOOLS : READ_TOOLS, model: req.model, full: CLAUDE_FULL, settings: heartbeatHookSettings() });
       }
-      // a write-enabled recruit works in its own worktree and branch, never in the shared checkout
-      const seatCwd = req.canEdit && !o.dryRun ? (this.worktreeFor(cwd, target, name) ?? cwd) : cwd;
-      if (agent === "openrouter") args[args.indexOf("--cwd") + 1] = seatCwd;
-      else if (agent === "codex") args[args.indexOf("-C") + 1] = seatCwd;
       const child = spawn(cmd, args, { cwd: seatCwd, env: { ...seatChildEnv(process.env, req.canEdit ? name : undefined), ...beat.env }, stdio: ["ignore", "pipe", "pipe"] });
       // claude always runs --output-format json now (telemetry), so its raw stdout is a JSON blob, not the
       // plain final-answer text every other seat's log holds. Buffer stdout+stderr instead of piping them

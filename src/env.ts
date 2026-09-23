@@ -87,9 +87,11 @@ export const HEARTBEAT_HOOK = resolve(repoRoot, "scripts", "heartbeat-hook.mjs")
 
 export interface SeatBeat { key: string; mcpUrl: string; env: NodeJS.ProcessEnv }
 
-export function seatBeat(mcpUrl: string, key: string): SeatBeat {
+/** `worktree`: the directory the seat works in, so the hub can stamp its claim/* entries with branch and path. */
+export function seatBeat(mcpUrl: string, key: string, worktree?: string): SeatBeat {
   const u = new URL(mcpUrl);
   u.searchParams.set("seat", key);
+  if (worktree) u.searchParams.set("worktree", worktree);
   return { key, mcpUrl: u.toString(), env: { CHATROOM_SEAT_KEY: key, CHATROOM_HEARTBEAT_URL: new URL("/heartbeat", u).toString() } };
 }
 

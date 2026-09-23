@@ -32,6 +32,7 @@ import { pathToFileURL, fileURLToPath } from "node:url";
 import { claudeArgs } from "../src/claude-args.js";
 import { parseClaudeCliOutput, rollupUsage, type SeatUsageRollup } from "../src/result.js";
 import { seatChildEnv } from "../src/env.js";
+import { estimateSeatCost, type MessageUsage, type SeatCostEstimate } from "./seat-cost-estimate.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(here, "..");
@@ -127,6 +128,9 @@ export interface SeatRecord {
   /** Non-null only when the seat was killed before a `result` event arrived but at least one
    * `assistant` event was observed first; null (not zero-filled) otherwise. */
   partial_usage: PartialUsage | null;
+  /** Killed before a `result` event: cost priced from the observed per-message usage at list price
+   * (scripts/seat-cost-estimate.ts), always marked estimate:true; null when unknown, never 0. */
+  estimated_cost: SeatCostEstimate | null;
   /** CLI-reported identifiers, not an attestation of provider weights or reasoning settings. */
   reported_models: { system_init: string[]; assistant: string[]; result_model_usage: string[] } | null;
   /** Unmodified terminal CLI usage by model, including reasoning fields when reported. */
@@ -156,6 +160,7 @@ function runClaudeSeat(name: string, args: string[], cwd: string, deadlineMs: nu
     let resultLine: string | null = null;
     let err = "";
     const partial: PartialUsage = { output_tokens: 0, assistant_messages_observed: 0 };
+    const observedUsage: { id?: string; usage: MessageUsage }[] = [];
     const models = { system_init: new Set<string>(), assistant: new Set<string>(), result_model_usage: new Set<string>() };
     const observeModel = (source: keyof typeof models, value: unknown) => {
       if (typeof value === "string" && value.trim()) models[source].add(value);
@@ -187,6 +192,7 @@ function runClaudeSeat(name: string, args: string[], cwd: string, deadlineMs: nu
       if (evt?.type === "assistant" && evt.message?.usage) {
         const u = evt.message.usage;
         partial.assistant_messages_observed += 1;
+        observedUsage.push({ id: typeof evt.message.id === "string" ? evt.message.id : undefined, usage: u });
         if (typeof u.output_tokens === "number") partial.output_tokens += u.output_tokens;
         if (typeof u.input_tokens === "number") partial.input_tokens = u.input_tokens;
         if (typeof u.cache_read_input_tokens === "number") partial.cache_read_input_tokens = u.cache_read_input_tokens;
@@ -234,6 +240,7 @@ function runClaudeSeat(name: string, args: string[], cwd: string, deadlineMs: nu
         stderr_tail: err.slice(-4000),
         killed_by_deadline: killedByDeadline,
         partial_usage: !resultLine && partial.assistant_messages_observed > 0 ? partial : null,
+        estimated_cost: resultLine ? null : estimateSeatCost(observedUsage, [...models.assistant], args.includes("--model") ? args[args.indexOf("--model") + 1] : ""),
         reported_models: Object.values(models).some((ids) => ids.size)
           ? { system_init: [...models.system_init], assistant: [...models.assistant], result_model_usage: [...models.result_model_usage] }
           : null,
@@ -617,6 +624,12 @@ async function main() {
   const passed = unchanged && !failureReason && !killedByDeadline && scored.passed;
 
   const usage = rollupUsage(seatRecords.map((s) => ({ usage: s.usage })));
+  // usage.cost_usd reads 0 when a seat was killed (no total_cost_usd); this is the priced figure, marked as an
+  // estimate, and null unless every seat has a real cost or an estimate.
+  const seatsEstimated = seatRecords.filter((s) => s.usage == null && s.estimated_cost).length;
+  const estimated_cost = seatsEstimated > 0 && seatRecords.every((s) => typeof s.usage?.cost === "number" || s.estimated_cost)
+    ? { usd: seatRecords.reduce((a, s) => a + (typeof s.usage?.cost === "number" ? s.usage.cost : s.estimated_cost!.usd), 0), estimate: true as const, seats_estimated: seatsEstimated, seats: seatRecords.length }
+    : null;
   const turnsKnown = seatRecords.filter((s) => typeof s.num_turns === "number");
   // Regime indicators for arm A/AH (the sentinel): the CLI reports camelCase thinkingTokens/outputTokens per
   // model in modelUsage (verified on real runs); null, never zero, when it did not report them.
@@ -646,8 +659,9 @@ async function main() {
     // kept alongside the scored outcome so a parse_failure/task_fail can be told apart after the fact:
     // did the seat compute the right answer and simply not write it where the scorer looked
     // (instruction-following/format failure) or never solve the task at all (reasoning failure)?
-    seats: seatRecords.map((s) => ({ name: s.name, argv: s.argv, exit_code: s.exit_code, signal: s.signal, started_at: s.started_at, completed_at: s.completed_at, num_turns: s.num_turns, duration_ms: s.duration_ms, duration_api_ms: s.duration_api_ms, usage: s.usage, text: s.text, killed_by_deadline: s.killed_by_deadline, partial_usage: s.partial_usage, reported_models: s.reported_models, model_usage: s.model_usage })),
+    seats: seatRecords.map((s) => ({ name: s.name, argv: s.argv, exit_code: s.exit_code, signal: s.signal, started_at: s.started_at, completed_at: s.completed_at, num_turns: s.num_turns, duration_ms: s.duration_ms, duration_api_ms: s.duration_api_ms, usage: s.usage, text: s.text, killed_by_deadline: s.killed_by_deadline, partial_usage: s.partial_usage, estimated_cost: s.estimated_cost, reported_models: s.reported_models, model_usage: s.model_usage })),
     usage,
+    estimated_cost,
     turns: { per_seat: seatRecords.map((s) => ({ name: s.name, num_turns: s.num_turns })), summed: turnsKnown.reduce((a, s) => a + (s.num_turns ?? 0), 0), seats: seatRecords.length, seats_with_turns: turnsKnown.length, coverage: turnsKnown.length === 0 ? "none" : turnsKnown.length === seatRecords.length ? "complete" : "partial" },
     thinking_tokens,
     output_tokens,

@@ -89,7 +89,7 @@ So the survey's first list of what only we have should read: the decision layer,
 ### Human overseer
 
 - **This hub.** Humans post, vote, kick, replace and close from the dashboard (`src/index.ts:326-416`). A human is never waited on for quorum, but may veto (`src/hub.ts:914-916`). The hub names one responder for each human message and holds it back from the others until someone answers (`src/hub.ts:1594`, `src/hub.ts:1730`).
-- **Concord.** A task carries a human `owner`. A registered agent working for the same owner can reopen or force-reassign that owner's tasks (`src/tools/task-lifecycle.ts:57-59`, `src/tools/task-lifecycle.ts:249-257`). Humans use the CLI; there is no human message routing.
+- **Concord.** A task carries a human `owner`. A registered agent working for the same owner can force-reassign or reopen that owner's tasks (`src/tools/task-lifecycle.ts:57-59`, `src/tools/task-lifecycle.ts:203-230`, `src/tools/task-lifecycle.ts:249-257`). Humans use the CLI; there is no human message routing.
 - **OpenAgents.** Humans are first-class in the browser workspace. A human message goes to the channel master, or to the agent named by a leading @mention. After an agent speaks, an LLM router ("Haiku", per the docstring) picks the next speaker or stops (`workspace/backend/app/mods/workspace_mod.py:1-13`, `workspace/backend/app/mods/workspace_mod.py:1465-1474`, `workspace/backend/app/mods/workspace_mod.py:1640-1670`). A "master" mode is a deterministic star topology (`workspace/backend/app/mods/workspace_mod.py:812-830`).
 - **MassGen.** Steering is human input typed mid-run. It is delivered on the target agent's next tool result, or through a file inbox (`massgen/steering.py:1-26`).
 - **council-hub.** Its dashboard shows activity (`README.md:58-74`). Whether a human can post from it was not checked.
@@ -128,7 +128,7 @@ One more caution before running Concord next to our seats: it sends telemetry to
 1. The decision layer: a proposal amended in place, quote-anchored and executable challenges, quote-checked agree votes, one electorate with supermajority and a chair veto, and the verify gate with a hub-assigned reviewer. MassGen's plurality vote and council-hub's revisions and `contradicts` links are the nearest pieces, and neither gates anything.
 2. Hub-enforced answer duty for humans, and reply debt for @-asks.
 3. Blind openings and sealed drafts inside a shared room. MassGen's parallel first round is the closest analogue, but it is run by the orchestrator, not by a room.
-4. The launcher and recruitment: planner, sub-rooms, verifier, `request_agent`, caps and replacements. Concord deliberately launches nothing. OpenAgents' launcher keeps agents running but does not decide who joins a task.
+4. The launcher and recruitment: planner, sub-rooms, verifier, `request_agent`, caps and replacements. Concord deliberately launches nothing. OpenAgents' launcher runs the agents a person has created and connected (`README.md:41-50`).
 5. OpenRouter models as participants of an MCP room, with local tools.
 
 ## 4. The stale-claim gap in this hub
@@ -164,10 +164,10 @@ Concord's answer: a claim whose owner is away or unregistered is listed as stale
    Our leave refusal already asks for a handoff first (`src/hub.ts:869-894`), so releasing on leave loses nothing that the handoff did not already capture. Write it from Concord's design; the logic is short enough that copying code is unnecessary. It needs a regression test in the style of `scripts/claim-workspace-regression.ts`. This note does not change the hub; it is a follow-up for the todo list.
 2. **Take the field names, not a gate: a suggested JSON head for `handoff/*`.** Use Concord's `what_changed`, `changed_files`, `tests_run`, `known_risks` and `next_steps` (`src/domain/schemas.ts:63-72`), as a prompt-level format. These fields are self-reported, so they cannot replace `verify/*`. The paper's review audit already shows that recorded checks are mostly re-runs of existing builds and tests.
 3. **Keep WATCH, but switch the reference: file-level leases.** The survey's trigger still stands: act only if pool runs record merge conflicts. If they do, Concord (MIT) is the reference instead of MCP Agent Mail, because it has no rider. Its pieces are declared `expected_files`, a same-file check and a `PreToolUse` block (`src/cli/commands/hook.ts:33-80`, `src/cli/commands/check.ts:14-45`). Its Codex install has no `PreToolUse` gate (`src/install/codex-config.ts:76-99`), so a Codex seat would still need a pre-commit check.
-4. **Keep WATCH: push delivery.** Concord's Codex bridge, which uses `turn/steer` with `expectedTurnId` and `turn/start` when idle (`docs/codex.md:46-56`), is a working MIT reference next to hcom. It has not been run here.
+4. **Keep WATCH: push delivery.** Concord's Codex bridge, which uses `turn/steer` with `expectedTurnId` and `turn/start` when idle (`docs/codex.md:46-56`), is a documented MIT reference next to hcom. It has not been run here.
 5. **Do not take:**
    - OpenAgents' LLM router or master routing. A router picking the next speaker conflicts with free and round-robin rooms and with the hub's own answer-duty rules.
-   - MassGen's plurality vote. Our Study 1 already recorded a vote selecting the common wrong implementation while correct attempts were available.
+   - MassGen's plurality vote. In our Study 1 the vote arm, which selected among independent attempts, already picked the common wrong implementation while correct attempts were available.
    - council-hub's knowledge graph and clustering. They are out of scope.
 
 ## 6. Corrections made on this branch

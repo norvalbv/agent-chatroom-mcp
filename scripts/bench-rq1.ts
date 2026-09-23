@@ -13,7 +13,11 @@
  * node --import tsx scripts/bench-rq1.ts TASK_DIR ARM SEED --root DIR [--model sonnet] [--port N]
  *   [--seats N] [--timeout-ms N, default 900000] [--max-budget-usd N] [--effort low|medium|high] [--deadline-ms N] [--hub-entry PATH]
  *
- * ARM is A, B or C. Fixtures stay hidden exactly as scripts/bench-bench.ts already does (public/ copied
+ * Arm D: arm C's hub and seats, but each seat drafts in a private copy of the workspace, posts a draft/*
+ * pointer, and the room settles disputed inputs against the spec; the conclusion's first line
+ * "WINNER: seat-N" picks the draft that is copied into the scored workspace (result.selection).
+ *
+ * ARM is A, AH, B, C or D. Fixtures stay hidden exactly as scripts/bench-bench.ts already does (public/ copied
  * into workspace/, oracle/ and fixtures/ never copied); scoring is the *unmodified*
  * scripts/bench-oracle.ts scoreTask(), so a change here cannot silently change what counts as a pass.
  * Arms B and C run to their own natural completion (§2.1: "not budget-matched like arm A"), so
@@ -21,7 +25,7 @@
  */
 import { spawn, execFileSync, type ChildProcess } from "node:child_process";
 import { createHash } from "node:crypto";
-import { closeSync, existsSync, mkdirSync, openSync, readFileSync, readdirSync, lstatSync, cpSync, realpathSync, writeFileSync } from "node:fs";
+import { closeSync, existsSync, mkdirSync, openSync, readFileSync, readdirSync, lstatSync, cpSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve, relative } from "node:path";
 import { createServer } from "node:net";
 import { pathToFileURL, fileURLToPath } from "node:url";
@@ -260,13 +264,36 @@ function roomConclusion(logPath: string): { text: string } | null {
   return found ? { text: found.conclusion.text } : null;
 }
 
+/** Arm D's conclusion names the winning draft on its first line, "WINNER: seat-N"; anything else selects
+ * nothing, so the scored workspace stays the untouched public copy and fails on its own. */
+export function parseWinner(text: string): string | null {
+  const m = /^\s*WINNER:\s*(seat-\d+)\s*$/i.exec(text.split("\n")[0] ?? "");
+  return m ? m[1].toLowerCase() : null;
+}
+
+/** Arm D's per-seat instructions: draft blind in a private copy, then settle every place the drafts
+ * disagree against the spec by running them, never by how many drafts agree (paper: agreement picked the
+ * larger wrong cluster on printf, 7/40, though a correct draft existed in 37/40 pools). */
+function draftScaffold(o: { name: string; seats: number; isCodeTask: boolean; draftDirs: Map<string, string> }): string {
+  const others = [...o.draftDirs].filter(([n]) => n !== o.name).map(([n, d]) => `${n}: ${d}`).join("\n");
+  const submit = o.isCodeTask ? "Modify the relevant source file(s) in your current working directory, which is your private draft." : "Write your final answer, and only the answer, to answer.txt in your current working directory, which is your private draft.";
+  return [
+    `You are ${o.name}, one of ${o.seats} seats. ${submit}`,
+    "Step 1, draft blind: finish your own draft before looking at anyone else's. Do not read other seats' directories until every seat has posted a draft.",
+    `Step 2, post it: board_set key "draft/${o.name}" with a short summary of your approach and the path of your draft.`,
+    `Step 3, compare: once every seat's draft/* entry is on the board, read and run the other drafts:\n${others || "(no other seats)"}\nFind the concrete inputs on which the drafts give different results.`,
+    "Step 4, adjudicate: settle each differing input by the spec text (quote the line) or by executing a check against it. How many drafts agree is not evidence; a lone draft can be right.",
+    "Step 5, decide: the room's proposal must start with a first line of exactly \"WINNER: seat-N\" naming the draft that is correct on every disputed input, followed by the evidence. That seat's directory, unchanged, is the submission; you may fix your own draft before the vote, but never edit another seat's.",
+  ].join("\n");
+}
+
 async function main() {
   const argv = process.argv.slice(2);
   const taskArg = argv.shift();
   const armArg = argv.shift();
   const seedArg = argv.shift();
-  if (!taskArg || (armArg !== "A" && armArg !== "AH" && armArg !== "B" && armArg !== "C") || seedArg === undefined) {
-    throw new Error("Usage: bench-rq1.ts TASK_DIR ARM(A|AH|B|C) SEED --root DIR [--model sonnet] [--port N] [--seats N] [--timeout-ms N] [--max-budget-usd N] [--deadline-ms N] [--hub-entry PATH]");
+  if (!taskArg || (armArg !== "A" && armArg !== "AH" && armArg !== "B" && armArg !== "C" && armArg !== "D") || seedArg === undefined) {
+    throw new Error("Usage: bench-rq1.ts TASK_DIR ARM(A|AH|B|C|D) SEED --root DIR [--model sonnet] [--port N] [--seats N] [--timeout-ms N] [--max-budget-usd N] [--deadline-ms N] [--hub-entry PATH]");
   }
   const seed = Number(seedArg);
   if (!Number.isInteger(seed)) throw new Error(`Invalid seed: ${seedArg}`);
@@ -304,7 +331,8 @@ async function main() {
   const isCodeTask = task.oracle.kind !== "exact-answer";
   const briefText = readFileSync(join(taskDir, "public", "brief.txt"), "utf8");
 
-  if (armArg === "C") {
+  const onHub = armArg === "C" || armArg === "D";
+  if (onHub) {
     for (const p of [port]) {
       const probe = createServer();
       await new Promise<void>((ok, no) => {
@@ -345,7 +373,7 @@ async function main() {
   let completedAt = new Date();
   const build = {
     captured_at: new Date().toISOString(), head_revision: revision(repoRoot), runner_sha256: null as string | null,
-    hub_entry: armArg === "C" ? hubEntry : null, hub_entry_sha256: null as string | null,
+    hub_entry: onHub ? hubEntry : null, hub_entry_sha256: null as string | null,
     hub_revision: null as string | null, hub_build_sha256: null as string | null, provenance_scope: null as string | null,
   };
   // Any thrown error below (hub boot failure, room-create failure, mid-run tamper) still produces a
@@ -353,6 +381,8 @@ async function main() {
   // is indistinguishable from a run that was never attempted, which is worse for the grid runner (item
   // 5) than a recorded infrastructure_error/tamper outcome.
   let failureReason: "infrastructure_error" | "tamper" | null = null;
+  // Arm D only: which seat's private draft the room's conclusion named, and whether it could be applied.
+  let selection: { winner: string | null; applied: boolean; drafts: string[] } | null = null;
   let failureMessage: string | null = null;
   // Item 1 (swarm-125438-jp20): both arms must see the same built-in tools; the chatroom mcp tools are
   // arm C's only addition on top of this shared list (claudeArgs()'s --tools strips mcp__* entries, so
@@ -367,7 +397,7 @@ async function main() {
   // Snapshot before launching any child. Scope excludes dependencies and later file mutations;
   // this records launch provenance, not an immutable execution environment.
   build.runner_sha256 = hashFile(fileURLToPath(import.meta.url));
-  if (armArg === "C") {
+  if (onHub) {
     build.hub_revision = revision(dirname(hubEntry));
     build.hub_entry_sha256 = hashFile(hubEntry);
     const isDist = dirname(hubEntry).endsWith("/dist");
@@ -479,18 +509,40 @@ async function main() {
     json(mcpJson, { mcpServers: { chatroom: { type: "http", url: `${url}/mcp` } } });
     const tools = ["mcp__chatroom__*", ...baseTools];
     const seatPromises: Promise<SeatRecord>[] = [];
+    // Arm D: every seat drafts in its own private copy of the workspace (taken after the effort pin, so
+    // each copy carries it), so the room holds rival drafts to compare instead of one shared tree.
+    const draftDirs = new Map<string, string>();
+    if (armArg === "D") {
+      for (let i = 1; i <= seats; i++) {
+        const dir = join(root, "drafts", `seat-${i}`);
+        cpSync(workspace, dir, { recursive: true });
+        draftDirs.set(`seat-${i}`, dir);
+      }
+    }
     for (let i = 1; i <= seats; i++) {
       const name = `seat-${i}`;
-      const text = `${briefText}\n${scaffoldRoom}\n\nJoin room ${room} as ${name} (agent claude, expected_participants ${seats}). Leave the room once it has concluded.`;
+      const text = armArg === "D"
+        ? `${briefText}\n${draftScaffold({ name, seats, isCodeTask, draftDirs })}\n\nJoin room ${room} as ${name} (agent claude, expected_participants ${seats}). Leave the room once it has concluded.`
+        : `${briefText}\n${scaffoldRoom}\n\nJoin room ${room} as ${name} (agent claude, expected_participants ${seats}). Leave the room once it has concluded.`;
       const args = claudeArgs({ text, mcpJson, tools, model, outputFormat: "stream-json" });
-      seatPromises.push(runClaudeSeat(name, args, workspace, deadlineMs));
+      seatPromises.push(runClaudeSeat(name, args, draftDirs.get(name) ?? workspace, deadlineMs));
     }
     seatRecords = await Promise.all(seatPromises);
     completedAt = new Date();
     const conclusion = roomConclusion(join(dataDir, `${room}.jsonl`));
     await stop(hubChild);
     closeSync(fd);
-    if (conclusion && !isCodeTask) writeFileSync(join(workspace, "answer.txt"), conclusion.text);
+    if (armArg === "D") {
+      const winner = conclusion ? parseWinner(conclusion.text) : null;
+      const dir = winner ? draftDirs.get(winner) : undefined;
+      // The winning draft replaces the scored workspace wholesale, so deletions and new files in the
+      // draft count exactly as they would have for a seat working in the scored workspace itself.
+      if (dir) {
+        rmSync(workspace, { recursive: true, force: true });
+        cpSync(dir, workspace, { recursive: true });
+      }
+      selection = { winner, applied: Boolean(dir), drafts: [...draftDirs.keys()] };
+    } else if (conclusion && !isCodeTask) writeFileSync(join(workspace, "answer.txt"), conclusion.text);
   }
 
     if (hashTree(taskDir) !== taskBefore || hashFile(scorerPath) !== scorerBefore || hashFile(factScorerPath) !== factScorerBefore) {
@@ -561,6 +613,7 @@ async function main() {
     output_tokens,
     wall_clock: { started_at: startedAt.toISOString(), completed_at: completedAt.toISOString(), duration_ms: completedAt.getTime() - startedAt.getTime() },
     effort,
+    selection,
     budget: (armArg === "A" || armArg === "AH") ? { max_budget_usd: maxBudgetUsd ? Number(maxBudgetUsd) : null, deadline_ms: deadlineMs } : null,
     build,
     frozen: { task_sha256: taskBefore, scorer_sha256: scorerBefore, fact_scorer_sha256: factScorerBefore, task_id: task.task_id, timeout_ms: timeoutMs, seats: seatRecords.length },

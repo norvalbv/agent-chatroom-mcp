@@ -12,7 +12,7 @@ import { collectRoomSnapshot, renderRunReport, writeRunResult, rollupUsage, pars
 import { settledAxes } from "./settled.js";
 import { registerRespawn } from "./respawn.js";
 import { fileURLToPath } from "node:url";
-import { heartbeatHookSettings, loadDotEnv, outputHeartbeat, seatBeat, seatChildEnv, type SeatBeat } from "./env.js";
+import { carrySettings, heartbeatHookSettings, loadDotEnv, outputHeartbeat, seatBeat, seatChildEnv, type SeatBeat } from "./env.js";
 import { randomUUID } from "node:crypto";
 import { respawnDecision, type RespawnRoom } from "./respawn.js";
 import { claudeArgs } from "./claude-args.js";
@@ -28,10 +28,10 @@ const flag = (name: string, def?: string) => {
   return i >= 0 ? argv[i + 1] : def;
 };
 const has = (name: string) => argv.includes(`--${name}`);
-const BOOL_FLAGS = new Set(["--apply", "--full-access", "--named", "--flat", "--require-verification", "--respawn", "--claude-full"]);
+const BOOL_FLAGS = new Set(["--apply", "--full-access", "--named", "--flat", "--require-verification", "--respawn", "--claude-full", "--no-carry"]);
 const task = argv.find((a, i) => !a.startsWith("--") && (i === 0 || !argv[i - 1].startsWith("--") || BOOL_FLAGS.has(argv[i - 1])));
 if (!task) {
-  console.error('usage: swarm "<task>" [--flat] [--done-when text] [--verify text] [--agents 6] [--cwd dir] [--models sonnet,haiku] [--lead-model opus] [--verifier-model opus] [--planner-model opus] [--codex k] [--codex-models gpt-6-astra,gpt-5.6-sol,gpt-5.6-terra] [--openrouter k] [--openrouter-models deepseek/deepseek-v4.1-flash,...] [--verifier-openrouter slug] [--openrouter-reasoning low|medium|high] [--require-verification] [--quorum unanimous|majority|supermajority] [--prompt loop.md] [--respawn] [--apply] [--full-access] [--named] [--claude-full] [--timeout 30] [--port 7717] [--result-path path]');
+  console.error('usage: swarm "<task>" [--flat] [--done-when text] [--verify text] [--agents 6] [--cwd dir] [--models sonnet,haiku] [--lead-model opus] [--verifier-model opus] [--planner-model opus] [--codex k] [--codex-models gpt-6-astra,gpt-5.6-sol,gpt-5.6-terra] [--openrouter k] [--openrouter-models deepseek/deepseek-v4.1-flash,...] [--verifier-openrouter slug] [--openrouter-reasoning low|medium|high] [--require-verification] [--quorum unanimous|majority|supermajority] [--prompt loop.md] [--respawn] [--apply] [--full-access] [--named] [--claude-full] [--no-carry] [--timeout 30] [--port 7717] [--result-path path]');
   process.exit(2);
 }
 const TOTAL = Math.max(2, Number(flag("agents", "4")));
@@ -68,6 +68,8 @@ let STOPPING = false;
  * in the same room. Use it when the shape of the work is itself unknown (brainstorms, open questions).
  */
 const FLAT = has("flat");
+/** --no-carry: seats start from the brief alone (no settled axes, no PRIOR RUNS, auto-memory off); see carrySettings in env.ts */
+const NO_CARRY = has("no-carry");
 // model mix: --models sonnet,sonnet,haiku (rotated over workers), --lead-model, --verifier-model, --planner-model
 const MODELS = (flag("models", process.env.CLAUDE_MODEL ?? "") || "").split(",").map((m) => m.trim()).filter(Boolean);
 const LEAD_MODEL = flag("lead-model", MODELS[0]);
@@ -141,7 +143,7 @@ function runClaude(name: string, text: string, tools: string[], cwd: string, mod
   const beat = seatBeat(`${URL_}/mcp`, randomUUID());
   const seatMcp = resolve(OUT, `${name}.mcp.json`);
   writeFileSync(seatMcp, JSON.stringify({ mcpServers: { chatroom: { type: "http", url: beat.mcpUrl } } }));
-  const args = claudeArgs({ text, mcpJson: seatMcp, tools, model, full: CLAUDE_FULL, settings: heartbeatHookSettings() });
+  const args = claudeArgs({ text, mcpJson: seatMcp, tools, model, full: CLAUDE_FULL, settings: carrySettings(NO_CARRY, heartbeatHookSettings()) });
   return runProc(name, "claude", args, cwd, outFile, false, beat).then((raw) => {
     const { text: final, usage } = parseClaudeCliOutput(raw);
     writeFileSync(outFile, final);
@@ -340,7 +342,8 @@ function priorRuns(): string {
     });
   return rows.length ? `PRIOR RUNS in this checkout (read the report before re-deriving; ratify or refute by reference):\n${rows.join("\n")}\n` : "";
 }
-const SETTLED = settledAxes(CWD) + priorRuns();
+const SETTLED = NO_CARRY ? "" : settledAxes(CWD) + priorRuns();
+if (NO_CARRY) log("--no-carry: no settled axes or prior runs injected; seat auto-memory off");
 if (SETTLED) log(`decision log found: ${SETTLED.split("\n").length - 4} settled axes injected into every prompt`);
 let plan: Plan;
 if (FLAT) {

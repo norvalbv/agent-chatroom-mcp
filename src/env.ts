@@ -38,6 +38,16 @@ export function seatChildEnv(env: NodeJS.ProcessEnv = process.env, name?: string
   return childEnv;
 }
 
+/**
+ * --no-carry: a seat starts from the brief alone. The launcher drops the settled decision axes and the PRIOR RUNS
+ * list it normally puts in front of every prompt, and this turns off Claude Code's auto-memory, which otherwise
+ * loads the operator's per-project MEMORY.md into every seat (swarm-092653-202z: 12886 vs 7378 first-turn prompt
+ * tokens). Used to test whether shared carried-forward context is what makes same-model seats open alike.
+ */
+export function carrySettings(noCarry: boolean, base: string): string {
+  return noCarry ? JSON.stringify({ ...(base ? JSON.parse(base) : {}), autoMemoryEnabled: false }) : base;
+}
+
 export interface DotEnvOptions {
   /** Keys that must not be reintroduced from .env (e.g. human-control credentials in seats). */
   exclude?: readonly string[];

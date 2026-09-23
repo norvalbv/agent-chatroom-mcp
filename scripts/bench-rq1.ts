@@ -113,6 +113,8 @@ export interface PartialUsage {
 export interface SeatRecord {
   name: string;
   argv: string[];
+  /** the prompt, which went to claude on stdin rather than argv (claude-args.ts) */
+  prompt?: string | null;
   exit_code: number | null;
   signal: string | null;
   started_at: string;
@@ -229,6 +231,7 @@ function runClaudeSeat(name: string, args: string[], cwd: string, deadlineMs: nu
       res({
         name,
         argv: ["claude", ...args],
+        prompt: stdin ?? null,
         exit_code: code,
         signal,
         started_at: startedAt.toISOString(),
@@ -660,7 +663,7 @@ async function main() {
     // kept alongside the scored outcome so a parse_failure/task_fail can be told apart after the fact:
     // did the seat compute the right answer and simply not write it where the scorer looked
     // (instruction-following/format failure) or never solve the task at all (reasoning failure)?
-    seats: seatRecords.map((s) => ({ name: s.name, argv: s.argv, exit_code: s.exit_code, signal: s.signal, started_at: s.started_at, completed_at: s.completed_at, num_turns: s.num_turns, duration_ms: s.duration_ms, duration_api_ms: s.duration_api_ms, usage: s.usage, text: s.text, killed_by_deadline: s.killed_by_deadline, partial_usage: s.partial_usage, estimated_cost: s.estimated_cost, reported_models: s.reported_models, model_usage: s.model_usage })),
+    seats: seatRecords.map((s) => ({ name: s.name, argv: s.argv, prompt: s.prompt ?? null, exit_code: s.exit_code, signal: s.signal, started_at: s.started_at, completed_at: s.completed_at, num_turns: s.num_turns, duration_ms: s.duration_ms, duration_api_ms: s.duration_api_ms, usage: s.usage, text: s.text, killed_by_deadline: s.killed_by_deadline, partial_usage: s.partial_usage, estimated_cost: s.estimated_cost, reported_models: s.reported_models, model_usage: s.model_usage })),
     usage,
     estimated_cost,
     turns: { per_seat: seatRecords.map((s) => ({ name: s.name, num_turns: s.num_turns })), summed: turnsKnown.reduce((a, s) => a + (s.num_turns ?? 0), 0), seats: seatRecords.length, seats_with_turns: turnsKnown.length, coverage: turnsKnown.length === 0 ? "none" : turnsKnown.length === seatRecords.length ? "complete" : "partial" },

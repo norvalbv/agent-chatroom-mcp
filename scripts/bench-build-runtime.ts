@@ -103,6 +103,8 @@ export interface PartialUsage {
 export interface SeatRecord {
   name: string;
   argv: string[];
+  /** the prompt, which went to claude on stdin rather than argv (claude-args.ts) */
+  prompt?: string | null;
   exit_code: number | null;
   signal: string | null;
   started_at: string;
@@ -207,6 +209,7 @@ export function runClaudeSeat(name: string, args: string[], cwd: string, deadlin
       res({
         name,
         argv: ["claude", ...args],
+        prompt: opts.stdin ?? null,
         exit_code: code,
         signal,
         started_at: startedAt.toISOString(),

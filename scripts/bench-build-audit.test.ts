@@ -41,6 +41,7 @@ process.exit(fixed?0:1);
   writeFileSync(claude, `#!/usr/bin/env node
 const fs=require('node:fs');
 const args=process.argv.slice(2);
+try{const input=fs.readFileSync(0,'utf8');if(input)args.push(input);}catch{}
 const isReviewer=args.some(a=>a.includes('reviewing another engineer'));
 fs.writeFileSync('value.txt','fixed');
 ${mode === 'reviewer-tamper' ? "if(isReviewer) fs.writeFileSync('../workspace/value.txt','reviewer edited submitted files');" : ''}

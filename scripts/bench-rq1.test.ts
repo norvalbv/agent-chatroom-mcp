@@ -33,6 +33,7 @@ function stubClaudeDir(behavior: "answer" | "no-answer" | "edit-file" | "kill" |
       "#!/usr/bin/env node",
       "const fs=require('node:fs');",
       "const args=process.argv.slice(2);",
+      "try{const input=fs.readFileSync(0,'utf8');if(input)args.push(input);}catch{}", // the prompt arrives on stdin (claude-args.ts)
       "if(process.env.STUB_MODELS){process.stdout.write(JSON.stringify({type:'system',subtype:'init',model:'served-init'})+'\\n');process.stdout.write(JSON.stringify({type:'assistant',message:{model:'served-fallback'}})+'\\n');}",
       "if(!args.includes('--output-format')||args[args.indexOf('--output-format')+1]!=='stream-json'||!args.includes('--verbose')){process.stderr.write('expected --output-format stream-json --verbose\\n');process.exit(1);}",
       "if(process.env.STUB_SEEN_LOG){let st=null;try{st=fs.readFileSync('.claude/settings.json','utf8');}catch{}fs.appendFileSync(process.env.STUB_SEEN_LOG,JSON.stringify({cwd:process.cwd(),settings:st})+'\\n');}",
@@ -294,7 +295,7 @@ test("arm D: each seat drafts in its own private copy; the conclusion's WINNER l
     assert.equal(readFileSync(join(root, "drafts", "seat-1", "answer.txt"), "utf8"), "wrong majority", "drafts stay separate");
     const cwds = readFileSync(log, "utf8").trim().split("\n").map((l) => JSON.parse(l).cwd).sort();
     assert.deepEqual(cwds, [1, 2, 3].map((i) => realpathSync(join(root, "drafts", `seat-${i}`))), "every seat runs in its own draft directory, none in the scored workspace");
-    const seat1Prompt = result.seats.find((s: { name: string }) => s.name === "seat-1").argv.join(" ");
+    const seat1Prompt = result.seats.find((s: { name: string }) => s.name === "seat-1").prompt as string; // on stdin, not argv (claude-args.ts)
     assert.match(seat1Prompt, /draft\/seat-1/);
     assert.match(seat1Prompt, /WINNER: seat-N/);
     assert.ok(seat1Prompt.includes(join(root, "drafts", "seat-2")), "a seat is told where the rival drafts live");
@@ -370,6 +371,7 @@ function stubClaudeDirArmB(review: "approve" | "revise") {
       "#!/usr/bin/env node",
       "const fs=require('node:fs');",
       "const args=process.argv.slice(2);",
+      "try{const input=fs.readFileSync(0,'utf8');if(input)args.push(input);}catch{}", // the prompt arrives on stdin (claude-args.ts)
       "if(!args.includes('--output-format')||args[args.indexOf('--output-format')+1]!=='stream-json'||!args.includes('--verbose')){process.stderr.write('expected --output-format stream-json --verbose\\n');process.exit(1);}",
       "if(process.env.STUB_SEEN_LOG){let st=null;try{st=fs.readFileSync('.claude/settings.json','utf8');}catch{}fs.appendFileSync(process.env.STUB_SEEN_LOG,JSON.stringify({cwd:process.cwd(),settings:st})+'\\n');}",
       "const who=process.env.GIT_AUTHOR_NAME||'';",
@@ -443,6 +445,7 @@ function stubClaudeDirArmBSlowThenHang(builderSleepMs: number) {
       "#!/usr/bin/env node",
       "const fs=require('node:fs');",
       "const args=process.argv.slice(2);",
+      "try{const input=fs.readFileSync(0,'utf8');if(input)args.push(input);}catch{}", // the prompt arrives on stdin (claude-args.ts)
       "if(!args.includes('--output-format')||args[args.indexOf('--output-format')+1]!=='stream-json'||!args.includes('--verbose')){process.stderr.write('expected --output-format stream-json --verbose\\n');process.exit(1);}",
       "const who=process.env.GIT_AUTHOR_NAME||'';",
       "if(who==='builder-1'){",

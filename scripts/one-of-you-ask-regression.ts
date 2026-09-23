@@ -40,6 +40,13 @@ const cases: [string, () => Promise<void>][] = [
     h.send(room.name, carol.id, "@asker it is d03d251", undefined, true);
     assert.equal(h.attentionFocus(room, bob), undefined);
   }],
+  ["an @-reply retires only the oldest open ask from that asker, as a seat's own @-reply does", async () => {
+    const { h, room, asker, bob, carol } = room3();
+    h.send(room.name, asker.id, "@bob @carol which of you has the commit?", undefined, true);
+    const second = h.send(room.name, asker.id, "@bob @carol and who runs the suite?", undefined, true);
+    h.send(room.name, carol.id, "@asker it is d03d251", undefined, true);
+    assert.deepEqual(h.addressedBy(room, bob).map((m) => m.id), [second.id], "the second ask is still owed");
+  }],
   ["a reply from a seat the ask did not name retires nothing", async () => {
     const { h, room, asker, bob, carol, dave } = room3();
     const ask = h.send(room.name, asker.id, "@bob @carol one of you please verify", undefined, true);

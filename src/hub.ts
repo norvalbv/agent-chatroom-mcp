@@ -1139,7 +1139,8 @@ export class Hub {
     const held = new Set(p.withheld ?? []);
     const exclusive = focus && this.focusExclusive(focus) ? focus : undefined;
     const all = room.messages.filter((m) => (m.seq > since || held.has(m.seq)) && this.visibleTo(room, m, p.id) && m.id !== focus?.id);
-    const msgs = exclusive ? [exclusive] : this.capDelivery(room, p, this.focusFirst(focus, all.slice(0, limit)));
+    // the focused ask counts toward the limit: it used to ride on top of `limit` queued messages
+    const msgs = exclusive ? [exclusive] : this.capDelivery(room, p, this.focusFirst(focus, all.slice(0, focus ? limit - 1 : limit)));
     p.deliveryRemaining = exclusive ? 0 : all.length + (focus ? 1 : 0) - msgs.length;
     const queue = msgs.filter((m) => m.id !== focus?.id);
     // settle only up to the last message sent, so a capped page leaves the rest unread rather than parked

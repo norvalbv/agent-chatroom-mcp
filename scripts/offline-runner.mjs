@@ -20,6 +20,7 @@ export const offlineScripts = [
   'archive-regression.ts',
   'attention-gate-regression.ts',
   'delivery-cap-regression.ts',
+  'readas-limit-regression.ts',
   'baseline-freeze-guard-regression.ts',
   'blind-drafts-regression.ts',
   'ak-select.test.ts',

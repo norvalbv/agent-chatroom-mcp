@@ -125,7 +125,7 @@ created: 2026-09-17
 - Negative: A pass can now retire a delivered ask the seat never read carefully. The guard is delivery, not attention.
 **Vision-fit:** n/a — internal tooling
 **Researched:** No new literature. Own friction logs: swarm-092653-202z evidence/friction-integrator.
-**Rejected:** A parallel ask-debt rework (swarm-092653-202z claim/ask-debt-clear) that would break the pinned per-sender @-back discharge contract.
+**Rejected:** Any ask-debt rework that drops the pinned per-sender @-back discharge contract. The integrator raised this against the parallel claim/ask-debt-clear.
 **Revisit-when:** a seat misses a peer ask that it settled by pass without replying
 **Scope:** src/hub.ts,scripts/ask-settle-regression.ts,scripts/attention-gate-regression.ts,scripts/offline-runner.mjs
 **Source:** manual

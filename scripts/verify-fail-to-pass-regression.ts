@@ -67,14 +67,37 @@ test("parseVerifyHead type-checks the new optional fields and the kind enum", ()
   for (const kind of VERIFY_KINDS) assert.equal(parseVerifyHead(f2p("p1", { kind }))?.kind, kind);
 });
 
-test("the census still parses exactly as recorded: 241 of 260 heads, row by row, and none carries fail-to-pass evidence", () => {
+// Passing census heads whose prose (never the head) describes the check failing without the change (at the base,
+// on main, or with the fix reverted or deleted) and passing with it, per the census coders' final reasons in
+// bench/results/verify-practice/codes.json. README.md and the decision record cite this count (16).
+const PROSE_ONLY_FAIL_BEFORE = [
+  "swarm-011152-pen5#2", "swarm-011152-pen5#11", "swarm-083203-kooz#1", "swarm-083203-kooz#2", "swarm-083203-kooz#5",
+  "swarm-092653-202z#5", "swarm-120937-t1gx#1", "swarm-140213-25wq#3", "swarm-140213-25wq#4", "swarm-140213-25wq#5",
+  "swarm-140213-25wq#6", "swarm-140213-25wq#7", "swarm-140213-25wq#8", "swarm-140213-25wq#9", "swarm-174126-0s5m#5",
+  "swarm-193626-mwbk#28",
+];
+
+test("the census still parses exactly as recorded: 241 of 260 heads, row by row, and no head carries fail-to-pass fields", () => {
   const rows = readFileSync("bench/results/verify-practice/heads.jsonl", "utf8").split("\n").filter(Boolean).map((l) => JSON.parse(l) as { id: string; text: string; schema_valid: boolean });
   const drift = rows.filter((r) => (parseVerifyHead(r.text) !== undefined) !== r.schema_valid).map((r) => r.id);
   assert.deepEqual(drift, [], "parseVerifyHead must keep the paper's schema_valid count (paper/sections/results.tex, How seats check each other)");
   assert.equal(rows.filter((r) => r.schema_valid).length, 241);
-  const passing = rows.map((r) => parseVerifyHead(r.text)).filter((h): h is VerifyHead => !!h && h.exit_code === 0);
+  const passing = rows.map((r) => ({ id: r.id, text: r.text, head: parseVerifyHead(r.text) })).filter((r): r is { id: string; text: string; head: VerifyHead } => !!r.head && r.head.exit_code === 0);
   assert.equal(passing.length, 237);
-  assert.equal(passing.filter((h) => !failToPassShortfall(h)).length, 0, "no census head recorded a failing-before run in its head");
+  const shortfalls = passing.map((r) => failToPassShortfall(r.head));
+  assert.equal(shortfalls.filter((s) => !s).length, 0, "no census head carries base_commit/base_exit_code fields");
+  assert.equal(shortfalls.filter((s) => s?.startsWith('it names no "commit"')).length, 123, "123 passing heads name no commit");
+  assert.equal(shortfalls.filter((s) => s?.startsWith('it names no "base_commit"')).length, 114, "114 name a commit but no base commit");
+
+  // A failing-before run that lives only in the prose is still refused: the gate reads the head, not the prose.
+  const codes = JSON.parse(readFileSync("bench/results/verify-practice/codes.json", "utf8")) as { final: Record<string, { reason: string }> };
+  assert.equal(PROSE_ONLY_FAIL_BEFORE.length, 16);
+  for (const id of PROSE_ONLY_FAIL_BEFORE) {
+    const row = passing.find((r) => r.id === id);
+    assert.ok(row, `${id} is a passing census head`);
+    assert.ok(failToPassShortfall(row.head), `${id}'s head carries no fail-to-pass fields`);
+    assert.match(codes.final[id]?.reason ?? "", /before|red|revert|fail|delet/i, `the census coders record a failing-before run for ${id}`);
+  }
 });
 
 test("kind matches the census classes in scripts/paper-verify-practice.ts", () => {
@@ -239,6 +262,11 @@ test("prompts and the repo SKILL.md that teach the head quote the canonical one;
   const skill = readFileSync("skills/swarm/SKILL.md", "utf8");
   assert.ok(skill.includes(HEAD_FOR_SEATS), "the repo SKILL.md teaches the same head");
   assert.ok(!skill.includes(LEGACY_HEAD));
+  // verifyHeadRefusal names at most two misses (see "the refusal names at most the two latest misses"); the docs say so.
+  for (const [file, text] of [["skills/swarm/SKILL.md", skill], ["README.md", readFileSync("README.md", "utf8")]]) {
+    assert.match(text, /`blocked_by` names up to the two latest entries about the proposal that do not count/, `${file} states the two-entry limit`);
+    assert.doesNotMatch(text, /`blocked_by` names each entry/, `${file} does not claim every miss is named`);
+  }
 });
 
 test("reviewer prompts carry the two qa-changes rules: exercise the change like a user, say what could not be verified", () => {

@@ -593,7 +593,8 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
     {
       title: "Read the shared board",
       description: "Read one board entry's text (key), or without a key the manifest of all entries (key, author, size, updated) so you fetch only what you need. " +
-        "draft/* entries stay readable only by their author until every drafter (non-verifier seat) has written one or 10 min after the first draft, so first attempts stay independent.",
+        `draft/* entries stay readable only by their author until every drafter (non-verifier seat) has written one${Hub.DRAFT_REVEAL_MS > 0 ? ` or ${Math.round(Hub.DRAFT_REVEAL_MS / 60000)} min after the first draft` : ""}, so first attempts stay independent; ` +
+        "a draft written or edited after that is listed post_reveal: true (not an independent attempt).",
       inputSchema: { room: roomArg, key: z.string().optional().describe("Entry to read in full; omit for the manifest."), participant_id: asArg },
     },
     guard("board_get", ({ room, key, participant_id }) => {
@@ -607,7 +608,7 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
         if (!e || sealed(key, e)) throw new HubError(`No board entry "${key}". Keys: ${[...r.board].filter(([k, x]) => !sealed(k, x)).map(([k]) => k).join(", ") || "(none)"}`);
         return { key, ...e, ...(hub.boardEntryExpired(r, key, e) ? { expired: true, tombstone: "Archived by expiry; excluded from manifests, retained for explicit retrieval." } : {}) };
       }
-      return Object.fromEntries([...r.board].filter(([k, e]) => !hub.boardEntryExpired(r, k, e) && !sealed(k, e)).map(([k, e]) => [k, { by: e.by, chars: e.text.length, updated_at: e.updatedAt, ...(e.ackRequired ? { ack_required: true } : {}), ...(e.reviewer ? { reviewer: e.reviewer } : {}) }]));
+      return Object.fromEntries([...r.board].filter(([k, e]) => !hub.boardEntryExpired(r, k, e) && !sealed(k, e)).map(([k, e]) => [k, { by: e.by, chars: e.text.length, updated_at: e.updatedAt, ...(e.ackRequired ? { ack_required: true } : {}), ...(e.postReveal ? { post_reveal: true } : {}), ...(e.reviewer ? { reviewer: e.reviewer } : {}) }]));
     }),
   );
 

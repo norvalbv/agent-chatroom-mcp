@@ -185,6 +185,8 @@ export interface BoardEntry {
   /** claim/* entries only: the reviewer the hub assigned at creation (name/id), never client-supplied. */
   reviewer?: string;
   reviewerId?: string;
+  /** draft/* only: written or edited once peers' drafts were readable, so it is not an independent attempt (sticky). */
+  postReveal?: boolean;
 }
 
 export interface Challenge {
@@ -600,7 +602,7 @@ export class Hub {
       latest_seq: room.messages.at(-1)?.seq ?? 0,
       proposals: [...room.proposals.values()].map((pr) => this.proposalView(room, pr, reveal, pr.status === "open" || pr.status === "accepted")),
       // agents get a manifest (board_get <key> fetches text); the human dashboard (reveal) gets the text
-      board: Object.fromEntries([...room.board].filter(([k, e]) => reveal || (!this.boardEntryExpired(room, k, e) && !this.draftSealed(room, k, e))).map(([k, e]) => [k, { ...(reveal ? { text: e.text } : {}), by: e.by, chars: e.text.length, updated_at: e.updatedAt, ...(e.reviewer ? { reviewer: e.reviewer } : {}) }])),
+      board: Object.fromEntries([...room.board].filter(([k, e]) => reveal || (!this.boardEntryExpired(room, k, e) && !this.draftSealed(room, k, e))).map(([k, e]) => [k, { ...(reveal ? { text: e.text } : {}), by: e.by, chars: e.text.length, updated_at: e.updatedAt, ...(e.postReveal ? { post_reveal: true } : {}), ...(e.reviewer ? { reviewer: e.reviewer } : {}) }])),
       quiet: (() => {
         const qs = room.messages.filter((m) => m.quiet);
         return { messages: qs.length, unsurfaced_threads: new Set(qs.map((m) => this.threadRoot(room, m).id)).size };
@@ -1954,6 +1956,8 @@ export class Hub {
     this.surfaceCited(room, text, `cited on the board under ${key}`);
     const note = key.startsWith("inbox/") && key.endsWith(".ack") ? room.board.get(key.slice(0, -4)) : undefined;
     if (key.startsWith("verify/")) p.lastVerifiedAt = now();
+    // a draft written or edited after peers' drafts became readable may have copied them: say so wherever it is listed
+    const postReveal = key.startsWith("draft/") && (!!previous?.postReveal || !!room.draftsRevealed || this.draftsDue(room));
     const entry: BoardEntry = {
       text, by: p.name, updatedAt: now(),
       ...(expiresAt ? { expiresAt } : {}),
@@ -1961,6 +1965,7 @@ export class Hub {
       ...(note ? { acknowledgedTextHash: Hub.noteHash(note.text) } : {}),
       ...(reviewer ? { reviewer: reviewer.name, reviewerId: reviewer.id }
         : previous?.reviewer ? { reviewer: previous.reviewer, reviewerId: previous.reviewerId } : {}),
+      ...(postReveal ? { postReveal: true } : {}),
     };
     this.applyBoard(room, key, entry);
     this.persist({ type: "board", room: roomName, key, entry });
@@ -1969,6 +1974,7 @@ export class Hub {
     const sealedDraft = key.startsWith("draft/") && !room.draftsRevealed && !this.draftsComplete(room) && !this.draftsDue(room);
     this.post(room, "board", p, sealedDraft ? `${previous ? "updated" : "wrote"} a sealed draft (${this.draftProgress(room)})`
       : `${previous ? "updated" : "added"} board entry "${key}" (${text.length} chars; read it with board_get)`
+      + (postReveal ? " — post-reveal: written after peers' drafts were readable, so not an independent attempt" : "")
       + (reviewer ? ` — reviewer: ${reviewer.name}` : ""));
     if (reviewer) {
       // kind "chat", not "system": addressedBy()/actionableNow() resolve an owed @-mention from

@@ -82,6 +82,18 @@ assert.ok(/draft\/\* is now readable by all/.test(r.text), "reveal announced");
 const log = hub.getRoom(room).messages.filter((m) => /is now readable by all/.test(m.content));
 assert.equal(log.length, 1, "announced exactly once");
 
+// a draft written or edited after the reveal is flagged post_reveal (sticky); drafts written blind are not
+r = await b.call("board_get", { room });
+assert.ok(!r.text.includes("post_reveal"), "blind drafts are not flagged: " + r.text);
+r = await a.call("board_set", { room, key: "draft/A", text: SECRET + " (revised after reading B)" });
+assert.ok(!r.error, "A edits after the reveal: " + r.text);
+const manifest = JSON.parse((await b.call("board_get", { room })).text) as Record<string, { post_reveal?: boolean }>;
+assert.equal(manifest["draft/A"].post_reveal, true, "edited-after-reveal draft is flagged");
+assert.equal(manifest["draft/B"].post_reveal, undefined, "the blind draft is not");
+assert.ok(/post-reveal: .*not an independent attempt/.test(hub.getRoom(room).messages.filter((m) => m.kind === "board").at(-1)!.content), "the notice says so");
+r = await a.call("board_set", { room, key: "draft/A", text: SECRET });
+assert.equal(JSON.parse((await b.call("board_get", { room, key: "draft/A" })).text).postReveal, true, "reverting the text does not clear the flag");
+
 // the reveal survives a restart (replay latches it)
 const replayed = new Hub({ dataDir });
 const rr = replayed.getRoom(room);

@@ -2140,11 +2140,16 @@ export class Hub {
   }
 
   /** The verify/* entry that answers an executable challenge: names the proposal, reruns the challenge's exact
-   *  command with exit 0, is dated after the challenge and the current text, and is not by the proposer's connection. */
-  executionAnswer(room: Room, pr: Proposal, c: Challenge): BoardEntry | undefined {
+   *  command, is dated after the challenge and the current text, and is not by the proposer's connection. It needs
+   *  exit 0, unless it is a ruling: an active verifier/chair seat outside both the proposer's and the challenger's
+   *  connections may rule the command itself invalid (e.g. `false`, or a probe the spec does not require) at any
+   *  exit code, stating why in 20+ characters of prose below the head. Without that, a challenger's command would
+   *  be a one-seat veto nobody but them could lift. */
+  executionAnswer(room: Room, pr: Proposal, c: Challenge): { entry: BoardEntry; ruling: boolean } | undefined {
     if (!c.command) return undefined;
     const want = Hub.normCommand(c.command);
     const proposer = room.participants.get(pr.by.id);
+    const challenger = room.participants.get(c.by.id);
     for (const [k, e] of room.board) {
       if (!k.startsWith("verify/") || k.endsWith(".partial")) continue;
       if (e.by === pr.by.name) continue;
@@ -2152,8 +2157,13 @@ export class Hub {
       if (author && proposer && author.session && author.session === proposer.session) continue;
       if (e.updatedAt < c.ts || (pr.updatedAt && e.updatedAt < pr.updatedAt)) continue;
       const head = parseVerifyHead(e.text);
-      if (!head || head.exit_code !== 0 || head.proposal !== pr.id || Hub.normCommand(head.command) !== want) continue;
-      return e;
+      if (!head || head.proposal !== pr.id || Hub.normCommand(head.command) !== want) continue;
+      if (head.exit_code === 0) return { entry: e, ruling: false };
+      const adjudicator = !!author?.active && (author.role === "verifier" || author.role === "chair" || author.agent === "human")
+        && author.id !== c.by.id && !(author.session && challenger?.session && author.session === challenger.session);
+      const nl = e.text.indexOf("\n");
+      const reason = nl === -1 ? "" : e.text.slice(nl + 1).trim();
+      if (adjudicator && reason.length >= 20) return { entry: e, ruling: true };
     }
     return undefined;
   }
@@ -2162,11 +2172,14 @@ export class Hub {
   private settleExecutableChallenges(room: Room, pr: Proposal) {
     for (const c of pr.challenges) {
       if (!c.command || (c.status ?? "open") !== "open" || c.blocking === false) continue;
-      const e = this.executionAnswer(room, pr, c);
-      if (!e) continue;
+      const ans = this.executionAnswer(room, pr, c);
+      if (!ans) continue;
       c.status = "answered";
       this.persist({ type: "challenge_status", room: room.name, proposalId: pr.id, challengeId: c.id, status: "answered" });
-      this.post(room, "system", undefined, `Executable challenge by ${this.shown(room, c.by)} on ${pr.id} answered: ${e.by}'s verify/* entry reran \`${Hub.normCommand(c.command).slice(0, 120)}\` with exit 0 against v${pr.version}.`);
+      const cmd = Hub.normCommand(c.command).slice(0, 120);
+      this.post(room, "system", undefined, ans.ruling
+        ? `Executable challenge by ${this.shown(room, c.by)} on ${pr.id} answered by ruling: ${ans.entry.by} (adjudicator) ruled \`${cmd}\` not a valid counterexample for v${pr.version}; the reason is in their verify/* entry.`
+        : `Executable challenge by ${this.shown(room, c.by)} on ${pr.id} answered: ${ans.entry.by}'s verify/* entry reran \`${cmd}\` with exit 0 against v${pr.version}.`);
     }
   }
 
@@ -2207,7 +2220,7 @@ export class Hub {
       "challenge",
       p,
       `${objection}\n(${blocking ? "challenge" : "non-blocking objection"} to ${proposalId} v${pr.version}${cites ? `, citing "${cites.slice(0, 80)}${cites.length > 80 ? "…" : ""}"` : ""}; ` +
-        (cmd ? `executable counterexample \`${cmd.slice(0, 160)}\`: rewording does not answer it; a verify/* entry from someone other than ${this.shown(room, pr.by)} rerunning exactly this command with exit_code 0 does; ` : "") +
+        (cmd ? `executable counterexample \`${cmd.slice(0, 160)}\`: rewording does not answer it; a verify/* entry from someone other than ${this.shown(room, pr.by)} rerunning exactly this command with exit_code 0 does, or a verifier/chair ruling it invalid with a reason; read the command before running it; ` : "") +
         (blocking ? `${this.shown(room, p)} re-votes once it is answered` : "recorded, carried into the conclusion if still open") +
         ")",
       { proposalId },

@@ -105,3 +105,19 @@ test("the challenger conceding still clears it", (t) => {
   assert.equal(pr.challenges[0].status, "conceded");
   assert.equal(room.state, "concluded");
 });
+
+test("a verifier may rule a bogus command invalid at any exit code with a reason; the challenger, a worker, or a bare head cannot", async (t) => {
+  const { hub, room, pr, a, b, c } = fixture(t);
+  const v = hub.join(ROOM, "V", "test", {}, undefined, "s4", "verifier").participant;
+  hub.challenge(ROOM, b.id, pr.id, OBJECTION, true, "false");
+  await tick();
+  hub.setBoard(ROOM, b.id, "verify/self", `${head(pr.id, "false", 1)}\nI rule my own counterexample stands forever.`);
+  hub.setBoard(ROOM, c.id, "verify/worker", `${head(pr.id, "false", 1)}\n\`false\` always exits 1 and tests nothing.`);
+  hub.setBoard(ROOM, v.id, "verify/bare", head(pr.id, "false", 1));
+  assert.equal(pr.challenges[0].status, "open", "only an adjudicator with a stated reason may rule");
+  hub.setBoard(ROOM, v.id, "verify/ruling", `${head(pr.id, "false", 1)}\n\`false\` always exits 1 and probes nothing in the spec.`);
+  assert.equal(pr.challenges[0].status, "answered");
+  assert.ok(room.messages.some((m) => m.kind === "system" && /answered by ruling: V/.test(m.content)));
+  for (const p of [a, c]) hub.vote(ROOM, p.id, pr.id, "agree", REASON, undefined, QUOTE);
+  assert.equal(room.state, "concluded");
+});

@@ -198,23 +198,35 @@ function collectSessions(configDir: string, runDir: string, run: any) {
   const projects = join(configDir, 'projects');
   if (!existsSync(projects)) return;
   const prefix = projectSlug(runDir);
-  for (const dir of readdirSync(projects).filter(d => d.startsWith(prefix)).sort()) {
+  const found: { dir: string; file: string; src: string; text: string; at: string }[] = [];
+  for (const dir of readdirSync(projects).filter(d => d.startsWith(prefix)).sort())
     for (const file of readdirSync(join(projects, dir)).filter(f => f.endsWith('.jsonl')).sort()) {
       const src = join(projects, dir, file), text = readFileSync(src, 'utf8');
-      let seat = run.seats.find((s: SeatRow) => projectSlug(s.worktree) === dir && !run.room);
-      if (!seat) {
-        const label = roomSeatLabel(dir, prefix);
-        let name = label, n = 1;
-        while (run.seats.some((s: SeatRow) => s.name === name)) name = `${label}-${++n}`;
-        seat = { name, branch: null, worktree: dir, brief_path: null, transcript: null, sessions: [], exit_code: null, killed_by_deadline: null, usage: null, partial_usage: null,
-          ...estimateFrom(text, []) };
-        run.seats.push(seat);
-      }
-      const out = join(runDir, 'seats', seat.name, 'sessions'); mkdirSync(out, { recursive: true });
-      cpSync(src, join(out, file));
-      seat.sessions.push(join(out, file));
-      seat.transcript ??= join(out, file);
+      found.push({ dir, file, src, text, at: /"timestamp":"([^"]+)"/.exec(text)?.[1] ?? '' });
     }
+  // Earliest first: in a room the verifier starts with the run and recruits come later, so the first session in the
+  // room worktree is the verifier's and the rest get rows of their own.
+  found.sort((a, b) => a.at.localeCompare(b.at) || a.src.localeCompare(b.src));
+  for (const { dir, file, src, text } of found) {
+    let seat: any;
+    if (!run.room) seat = run.seats.find((s: SeatRow) => projectSlug(s.worktree) === dir);
+    else {
+      const label = roomSeatLabel(dir, prefix), target = label === 'room' ? 'verifier' : label;
+      seat = run.seats.find((s: SeatRow) => s.name === target && !s.sessions.length);
+      if (seat && seat.cost_usd === null && !seat.usage) Object.assign(seat, estimateFrom(text, []));
+    }
+    if (!seat) {
+      const label = roomSeatLabel(dir, prefix);
+      let name = label, n = 1;
+      while (run.seats.some((s: SeatRow) => s.name === name)) name = `${label}-${++n}`;
+      seat = { name, branch: null, worktree: dir, brief_path: null, transcript: null, sessions: [], exit_code: null, killed_by_deadline: null, usage: null, partial_usage: null,
+        ...estimateFrom(text, []) };
+      run.seats.push(seat);
+    }
+    const out = join(runDir, 'seats', seat.name, 'sessions'); mkdirSync(out, { recursive: true });
+    cpSync(src, join(out, file));
+    seat.sessions.push(join(out, file));
+    seat.transcript ??= join(out, file);
   }
 }
 const roomSeatLabel = (dir: string, prefix: string) => {
@@ -222,6 +234,19 @@ const roomSeatLabel = (dir: string, prefix: string) => {
   const m = /--swarm-worktrees-swarm-[0-9]+-[a-z0-9]+-(.+)$/.exec(rest);
   return m ? m[1] : 'room';
 };
+
+/** One row per seat swarm launched (its <name>.out), with the actual cost from swarm's <name>.usage.json when the seat
+ * exited cleanly; a seat stopped at the deadline has no sidecar and is estimated from its session in collectSessions. */
+function roomSeatRows(swarmDir: string): SeatRow[] {
+  if (!existsSync(swarmDir)) return [];
+  return readdirSync(swarmDir).filter(f => f.endsWith('.out')).map(f => f.slice(0, -4)).sort((a, b) => a.localeCompare(b, 'en', { numeric: true })).map(name => {
+    let usage: any = null;
+    try { usage = JSON.parse(readFileSync(join(swarmDir, name + '.usage.json'), 'utf8')); } catch {}
+    const actual = usage && Number.isFinite(usage.cost);
+    return { name, branch: null, worktree: '', brief_path: '', transcript: null, sessions: [], exit_code: null, killed_by_deadline: false, usage, partial_usage: null,
+      cost_usd: actual ? usage.cost : null, cost_estimated: !actual, ...(actual ? {} : { cost_estimate_reason: 'no usage sidecar: seat did not exit cleanly' }) };
+  });
+}
 
 async function freePort(): Promise<number> {
   const s = createServer(); await new Promise<void>(ok => s.listen(0, '127.0.0.1', ok));
@@ -292,6 +317,7 @@ async function runRoom(o: RunOptions, pool: Pool, runDir: string, env: NodeJS.Pr
     const src = join(repoRoot, 'swarms', id), dest = join(roomDir, 'swarm');
     if (existsSync(src)) { try { renameSync(src, dest); } catch { cpSync(src, dest, { recursive: true }); rmSync(src, { recursive: true, force: true }); } run.room.swarm_dir = dest; }
     try { run.room.swarm_usage = JSON.parse(readFileSync(join(dest, 'result.json'), 'utf8')).usage ?? null; } catch {}
+    run.seats = roomSeatRows(dest);
     const listed = git(wt, 'branch', '--list', `swarm/${id}/*`, '--format=%(refname:short)').stdout.split('\n').filter(Boolean);
     run.room.worker_branches = listed.sort((a, b) => a.localeCompare(b, 'en', { numeric: true }));
   }

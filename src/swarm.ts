@@ -147,6 +147,8 @@ function runClaude(name: string, text: string, tools: string[], cwd: string, mod
   return runProc(name, "claude", args, cwd, outFile, false, beat).then((raw) => {
     const { text: final, usage } = parseClaudeCliOutput(raw);
     writeFileSync(outFile, final);
+    // per-seat usage next to the .out, the same sidecar shape an OpenRouter seat writes (scripts/pool-run.ts reads it per seat)
+    if (usage) writeFileSync(resolve(OUT, `${name}.usage.json`), JSON.stringify(usage));
     return { text: final, usage };
   });
 }

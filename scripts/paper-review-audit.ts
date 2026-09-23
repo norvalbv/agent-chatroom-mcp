@@ -80,7 +80,7 @@ export function renderTex(t: ReturnType<typeof tally>): string {
     "\\midrule",
     `All review acts & ${t.rooms.map((r) => r.n).join(" & ")} & ${t.total.n} & ${t.total.found} \\\\`,
     "\\bottomrule", "\\end{tabular}", "",
-    `\\emph{Review acts (one seat checking another's work) in two rooms that changed this system and two that built a browser game, classified by an AI auditor from the room logs and the seats' own transcripts. A second auditor re-counted each room; it moved individual acts between methods but confirmed the main pattern (Section~\\ref{sec:results-review}).}`, "",
+    `\\emph{The first AI auditor's classification of review acts (one seat checking another's work) in two rooms on this system and two browser-game rooms, from the room logs and the seats' own transcripts, and the acts it marked as finding a defect. Labels include mixed methods and disputed findings; a second auditor found omitted acts, disputed classifications, repeated reports and self-checks counted as peer review (Section~\\ref{sec:results-review}).}`, "",
   ].join("\n");
 }
 

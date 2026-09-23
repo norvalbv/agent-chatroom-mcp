@@ -1,56 +1,74 @@
 {
-  "heads": 243,
-  "rooms": 28,
+  "heads": 260,
+  "rooms": 36,
+  "created_from": "2026-09-17",
+  "created_to": "2026-09-23",
   "rooms_by_kind": {
-    "hub": 16,
+    "hub": 24,
     "web": 10,
     "other": 2
   },
   "exit_code": {
-    "zero": 235,
+    "zero": 238,
     "nonzero": 4,
-    "missing": 4
+    "missing": 18
   },
-  "commit_named": 117,
+  "commit_named": 128,
+  "schema_valid": 241,
   "classes": {
-    "existing_tests": 169,
-    "scripted_smoke": 56,
-    "own_probe": 6,
-    "browser": 12,
-    "real_agents": 0
+    "existing_tests": 127,
+    "scripted_smoke": 43,
+    "inspection_only": 11,
+    "own_check": 54,
+    "app_in_browser": 25,
+    "agents_on_changed_build": 0,
+    "unclear": 0
   },
   "by_kind": {
     "hub": {
-      "existing_tests": 45,
-      "scripted_smoke": 56,
-      "own_probe": 4,
-      "browser": 0,
-      "real_agents": 0
+      "existing_tests": 30,
+      "scripted_smoke": 43,
+      "inspection_only": 7,
+      "own_check": 42,
+      "app_in_browser": 0,
+      "agents_on_changed_build": 0,
+      "unclear": 0
     },
     "web": {
-      "existing_tests": 121,
+      "existing_tests": 97,
       "scripted_smoke": 0,
-      "own_probe": 2,
-      "browser": 12,
-      "real_agents": 0
+      "inspection_only": 1,
+      "own_check": 12,
+      "app_in_browser": 25,
+      "agents_on_changed_build": 0,
+      "unclear": 0
     },
     "other": {
-      "existing_tests": 3,
+      "existing_tests": 0,
       "scripted_smoke": 0,
-      "own_probe": 0,
-      "browser": 0,
-      "real_agents": 0
+      "inspection_only": 3,
+      "own_check": 0,
+      "app_in_browser": 0,
+      "agents_on_changed_build": 0,
+      "unclear": 0
     }
   },
   "non_author": {
-    "heads": 103,
+    "heads": 110,
     "classes": {
-      "existing_tests": 51,
-      "scripted_smoke": 41,
-      "own_probe": 5,
-      "browser": 6,
-      "real_agents": 0
+      "existing_tests": 33,
+      "scripted_smoke": 31,
+      "inspection_only": 3,
+      "own_check": 33,
+      "app_in_browser": 10,
+      "agents_on_changed_build": 0,
+      "unclear": 0
     }
   },
-  "labelled": 28
+  "coding": {
+    "coded_by_both": 260,
+    "agreed": 256,
+    "kappa": 0.98,
+    "adjudicated": 4
+  }
 }

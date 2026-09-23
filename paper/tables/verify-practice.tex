@@ -1,15 +1,17 @@
 \begin{tabular}{lrrrr}
 \toprule
-What the verifying command ran & Hub & Web app & Other & All \\
+Strongest check the entry reports & Hub & Game & Other & All \\
 \midrule
-Build, type-check or the project's existing tests & 45 & 121 & 3 & 169 \\
-Scripted smoke client against a built hub (no model seats) & 56 & 0 & 0 & 56 \\
-A check the verifying seat wrote itself & 4 & 2 & 0 & 6 \\
-The built application driven in a real browser & 0 & 12 & 0 & 12 \\
-Model-driven agents run on the changed build & 0 & 0 & 0 & 0 \\
+Build, type-check or existing tests only & 30 & 97 & 0 & 127 \\
+Scripted smoke client, model spawning off & 43 & 0 & 0 & 43 \\
+Read code, docs or history; ran nothing & 7 & 1 & 3 & 11 \\
+A check the verifying seat wrote itself & 42 & 12 & 0 & 54 \\
+The built application in a real browser & 0 & 25 & 0 & 25 \\
+Model-driven agents on the changed build & 0 & 0 & 0 & 0 \\
+Not enough detail to tell & 0 & 0 & 0 & 0 \\
 \midrule
-Rooms & 16 & 10 & 2 & 28 \\
+Rooms and sub-rooms & 24 & 10 & 2 & 36 \\
 \bottomrule
 \end{tabular}
 
-\emph{Every structured verify entry recorded by the hub (243 entries), classified by what its command ran. Hub rooms changed this system; web-app rooms built a browser game. Commands matching a browser, probe or agent pattern (28) were classified by hand; the rest by whether they ran the smoke script. 235 of 243 entries report exit code 0 and 117 of 243 name the commit they checked.}
+\emph{All 260 verification entries with a structured head, classified by the strongest check the entry's text reports. Two AI coders classified every entry independently from its full text (agreement 256/260, Cohen's \(\kappa\)=0.98); an adjudicator settled the 4 disagreements. Classes describe what the entry says was run, not verified execution. Hub: rooms on this system's code, research or documentation; Game: rooms building a browser game.}

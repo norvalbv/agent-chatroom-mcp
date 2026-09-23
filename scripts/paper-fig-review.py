@@ -15,13 +15,15 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
-VERIFY_ORDER = ["existing_tests", "scripted_smoke", "own_probe", "browser", "real_agents"]
+VERIFY_ORDER = ["existing_tests", "scripted_smoke", "inspection_only", "own_check", "app_in_browser", "agents_on_changed_build", "unclear"]
 VERIFY_LABEL = {
     "existing_tests": "Build / existing tests",
     "scripted_smoke": "Scripted smoke client",
-    "own_probe": "Verifier's own check",
-    "browser": "App in a real browser",
-    "real_agents": "Agents on changed build",
+    "inspection_only": "Read code or docs only",
+    "own_check": "Verifier's own check",
+    "app_in_browser": "App in a real browser",
+    "agents_on_changed_build": "Agents on changed build",
+    "unclear": "Not enough detail",
 }
 AUDIT_ORDER = ["reran_author_command", "read_diff_only", "own_independent_test", "exercised_real_behaviour", "provenance_check", "asserted_without_evidence"]
 AUDIT_LABEL = {
@@ -50,7 +52,7 @@ def main():
     ax1.set_yticklabels([VERIFY_LABEL[k] for k in VERIFY_ORDER], fontsize=8)
     ax1.invert_yaxis()
     ax1.set_xlabel("verify entries")
-    ax1.set_title(f"(a) What {v['heads']} verify entries ran ({v['rooms']} rooms)", fontsize=9)
+    ax1.set_title(f"(a) Strongest check in {v['heads']} verify entries", fontsize=9)
     ax1.set_xlim(0, max(counts) * 1.2)
 
     acts = [a["total"]["acts"][m] for m in AUDIT_ORDER]
@@ -64,7 +66,7 @@ def main():
     ax2.set_yticklabels([AUDIT_LABEL[m] for m in AUDIT_ORDER], fontsize=8)
     ax2.invert_yaxis()
     ax2.set_xlabel("review acts (four audited rooms)")
-    ax2.set_title(f"(b) {a['total']['n']} review acts by method", fontsize=9)
+    ax2.set_title(f"(b) {a['total']['n']} review acts (first auditor)", fontsize=9)
     ax2.set_xlim(0, max(acts) * 1.25)
     ax2.legend(fontsize=7, loc="lower right")
 

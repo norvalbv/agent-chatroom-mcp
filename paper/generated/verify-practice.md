@@ -1,15 +1,16 @@
-# What peer verification exercised
+# What peer verification did
 
-243 verify heads in 28 rooms (16 hub, 10 web application, 2 other).
-Exit code 0: 235/243; nonzero: 4/243; missing: 4/243. Commit named: 117/243.
-Heads by a seat other than the proposal's author, where the author is known: 103.
+260 verify/* writes whose first line is a JSON object, in 36 rooms and sub-rooms (24 hub project, 10 browser game, 2 other), created 2026-09-17 to 2026-09-23, before 2026-09-23T10:00:00Z.
+Valid under the hub's own head parser: 241/260. Reported exit code 0: 238/260; nonzero: 4/260; missing: 18/260. Commit named: 128/260.
+Coding: two independent coders agreed on 256/260 entries (Cohen's kappa 0.98); 4 were settled by an adjudicator.
+Entries by a seat other than the proposal's author, where the author is known: 110.
 
-| What the command ran | Hub rooms | Web rooms | Other | All | Not by the author |
+| Strongest check the entry reports | Hub | Game | Other | All | Not by the author |
 |---|---|---|---|---|---|
-| Build, type-check or the project's existing tests | 45 | 121 | 3 | 169/243 | 51/103 |
-| Scripted smoke client against a built hub (no model seats) | 56 | 0 | 0 | 56/243 | 41/103 |
-| A check the verifying seat wrote itself | 4 | 2 | 0 | 6/243 | 5/103 |
-| The built application driven in a real browser | 0 | 12 | 0 | 12/243 | 6/103 |
-| Model-driven agents run on the changed build | 0 | 0 | 0 | 0/243 | 0/103 |
-
-Hand-labelled candidates: 28.
+| Build, type-check or existing tests only | 30 | 97 | 0 | 127/260 | 33/110 |
+| Scripted smoke client, model spawning off | 43 | 0 | 0 | 43/260 | 31/110 |
+| Read code, docs or history; ran nothing | 7 | 1 | 3 | 11/260 | 3/110 |
+| A check the verifying seat wrote itself | 42 | 12 | 0 | 54/260 | 33/110 |
+| The built application in a real browser | 0 | 25 | 0 | 25/260 | 10/110 |
+| Model-driven agents on the changed build | 0 | 0 | 0 | 0/260 | 0/110 |
+| Not enough detail to tell | 0 | 0 | 0 | 0/260 | 0/110 |

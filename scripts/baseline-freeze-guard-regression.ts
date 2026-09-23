@@ -22,7 +22,7 @@ import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/
 import { evaluate, HUB_URL_ENV, OVERRIDE_ENV } from "./guard-baseline-freeze.mjs";
 import { SEAT_ENV_EXCLUSIONS, seatChildEnv } from "../src/env.js";
 
-const PORT = Number(process.env.BASELINE_GUARD_PORT ?? 8853);
+const PORT = Number(process.env.BASELINE_GUARD_PORT ?? 20_000 + Math.floor(Math.random() * 20_000)); // own port: seats run npm test side by side
 const HTTP = `http://127.0.0.1:${PORT}`;
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 

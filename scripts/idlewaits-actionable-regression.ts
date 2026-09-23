@@ -23,7 +23,7 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { runSeat, type ChatProvider, type Msg, type Reply } from "../src/seat.js";
 
-const PORT = Number(process.env.IDLEWAITS_PORT ?? 8842);
+const PORT = Number(process.env.IDLEWAITS_PORT ?? 20_000 + Math.floor(Math.random() * 20_000)); // own port: seats run npm test side by side
 const HTTP = `http://127.0.0.1:${PORT}`;
 const ROOM = "idlewaits-test";
 const SEAT_NAME = "seat-under-test";

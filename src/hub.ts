@@ -1730,14 +1730,6 @@ export class Hub {
     return !!room.draftsOpenedAt && Hub.DRAFT_REVEAL_MS > 0 && now >= Date.parse(room.draftsOpenedAt) + Hub.DRAFT_REVEAL_MS;
   }
 
-  /** "k of n drafters; waiting on X, Y": who still owes a draft, without naming any sealed key. */
-  private draftProgress(room: Room): string {
-    const authors = new Set([...room.board].filter(([k]) => k.startsWith("draft/")).map(([, e]) => e.by));
-    const drafters = this.drafters(room);
-    const owed = drafters.filter((d) => !authors.has(d.name)).map((d) => d.name);
-    return `${drafters.length - owed.length} of ${drafters.length} drafters; draft/* stays sealed until ${owed.join(", ") || "everyone"} ${owed.length === 1 ? "has" : "have"} one${Hub.DRAFT_REVEAL_MS > 0 ? ` or the ${Math.round(Hub.DRAFT_REVEAL_MS / 60000)} min deadline passes` : ""}`;
-  }
-
   /** The first draft starts the deadline clock; later drafts and edits do not push it back. */
   private openDrafts(room: Room): void {
     if (room.draftsOpenedAt || room.draftsRevealed) return;
@@ -1776,6 +1768,21 @@ export class Hub {
       ? `Every drafter (${this.drafters(room).map((d) => d.name).join(", ")}) has a draft`
       : `The ${Math.round(Hub.DRAFT_REVEAL_MS / 60000)} min draft deadline passed (no draft from ${missing.join(", ")})`;
     this.post(room, "system", undefined, `[SYSTEM] ${why}, so draft/* is now readable by all: ${keys.join(", ")}. Compare them and settle each disagreement from the brief, not by counting who agrees.`);
+  }
+
+  /** "k of n drafters; waiting on X, Y": who still owes a draft, without naming any sealed key. */
+  private draftProgress(room: Room): string {
+    const authors = new Set([...room.board].filter(([k]) => k.startsWith("draft/")).map(([, e]) => e.by));
+    const drafters = this.drafters(room);
+    const owed = drafters.filter((d) => !authors.has(d.name)).map((d) => d.name);
+    return `${drafters.length - owed.length} of ${drafters.length} drafters; draft/* stays sealed until ${owed.join(", ") || "everyone"} ${owed.length === 1 ? "has" : "have"} one${this.draftsDeadlineNote(room)}`;
+  }
+
+
+  /** ", or until HH:MM:SS UTC (the draft deadline)" while a deadline is running. */
+  private draftsDeadlineNote(room: Room): string {
+    if (!room.draftsOpenedAt || Hub.DRAFT_REVEAL_MS <= 0) return "";
+    return `, or until ${new Date(Date.parse(room.draftsOpenedAt) + Hub.DRAFT_REVEAL_MS).toISOString().slice(11, 19)} UTC (the draft deadline)`;
   }
 
   /** A draft/* entry is readable only by its author until every drafter has posted one or the deadline passes (the human dashboard always sees it). */
@@ -1953,7 +1960,8 @@ export class Hub {
     this.applyBoard(room, key, entry);
     this.persist({ type: "board", room: roomName, key, entry });
     // a sealed draft's notice names neither key nor size (either can carry content); it says who is still owed a draft
-    const sealedDraft = key.startsWith("draft/") && !room.draftsRevealed && !this.draftsComplete(room);
+    if (key.startsWith("draft/")) this.openDrafts(room); // before the notice, so the first one already names the deadline
+    const sealedDraft = key.startsWith("draft/") && !room.draftsRevealed && !this.draftsComplete(room) && !this.draftsDue(room);
     this.post(room, "board", p, sealedDraft ? `${previous ? "updated" : "wrote"} a sealed draft (${this.draftProgress(room)})`
       : `${previous ? "updated" : "added"} board entry "${key}" (${text.length} chars; read it with board_get)`
       + (reviewer ? ` — reviewer: ${reviewer.name}` : ""));
@@ -1971,10 +1979,7 @@ export class Hub {
     }
     if (key.startsWith("claim/") && !previous) this.noticeClaimOverlap(room, p, key, text);
     if (key.endsWith(".ack") || key.startsWith("verify/")) for (const pr of room.proposals.values()) if (pr.status === "open") this.evaluate(room, pr);
-    if (key.startsWith("draft/")) {
-      this.openDrafts(room);
-      this.latchDrafts(room);
-    }
+    if (key.startsWith("draft/")) this.latchDrafts(room);
     return entry;
   }
 

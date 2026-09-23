@@ -116,16 +116,17 @@ created: 2026-09-17
 **Source:** brainstorm · swarm-083203-kooz, main 858dbfa (08322c1, c092850, c6499ec)
 **Evidence-change:** swarm-083203-kooz (15 Opus 5.5 seats, 2026-09-23) measured the cost of ask-only delivery from inside a room: 20 to 30 hidden messages at a time, a duplicate audit, a stale merge proposal and a reverted integration; five seats reported reviewer notices hiding their queues.
 
-## Target · 2026-09-23 — A pass settles an already-delivered peer ask even without a fresh wait
+## Target · 2026-09-23 — Answered asks stop coming back: a reply settles a sender's earlier asks, and a pass settles a delivered one
 
 **Context:** In swarm-092653-202z the integrator answered several READY asks in one message, yet each of those asks still ended the next held wait at once. A pass with no focus set was a no-op, so every answered-but-unreplied ask cost a wait plus a pass. Per swarm-092653-202z evidence/kooz-wake-cost, each wake is a full ~130k-token re-read. Other seats hit the same thing (a READY answered under another reply_to was re-delivered as a focused ask).
-**Ruling:** When pass is called with no focus set, the hub takes the next open peer ask as focused if it has already been delivered (seq ≤ the seat's lastSeenSeq) and declines it, so N passes retire N delivered asks. Unseen asks are never declined, and a human's message is never settled this way (humans-answered-once-by-hub-enforcement is unchanged). "@-back discharges the oldest ask per named sender" is unchanged (8865439, scripts/ask-settle-regression.ts, scripts/attention-gate-regression.ts).
+**Ruling:** When pass is called with no focus set, the hub takes the next open peer ask as focused if it has already been delivered (seq ≤ the seat's lastSeenSeq) and declines it, so N passes retire N delivered asks. Unseen asks are never declined, and a human's message is never settled this way (humans-answered-once-by-hub-enforcement is unchanged). (8865439, scripts/ask-settle-regression.ts). RE-TARGET of the "oldest per sender" rule pinned in 6487af0 (proposed/focused-attention-gate), which had no recorded rationale: a message by the seat that @-names a sender, or replies to one of their asks, now settles every earlier ask from that sender. reply_to no longer disables @-name settling. Asks posted after the reply stay owed (ce5a66a, scripts/attention-gate-regression.ts 20/20, 18/20 on the parent).
 **Consequences:**
 - Positive: An integrator or reviewer who answers in bulk stops being woken once per stale ask.
-- Negative: A pass can now retire a delivered ask the seat never read carefully. The guard is delivery, not attention.
+- Negative: A pass can now retire a delivered ask the seat never read carefully. The guard is delivery, not attention. A passing cc-mention of a sender settles all of their earlier asks, not just the oldest.
 **Vision-fit:** n/a — internal tooling
 **Researched:** No new literature. Own friction logs: swarm-092653-202z evidence/friction-integrator.
-**Rejected:** Any ask-debt rework that drops the pinned per-sender @-back discharge contract. The integrator raised this against the parallel claim/ask-debt-clear.
+**Rejected:** Shipping only one of the two fixes. They cover different paths, the reply/@-back path and the no-reply pass path. A trial merge of both on 621e158 passed tsc, attention-gate 20/20 and ask-settle 2/2.
 **Revisit-when:** a seat misses a peer ask that it settled by pass without replying
 **Scope:** src/hub.ts,scripts/ask-settle-regression.ts,scripts/attention-gate-regression.ts,scripts/offline-runner.mjs
 **Source:** manual
+**Evidence-change:** Before this, an integrator answering five READYs in one message had each of them end a held wait, and -4's own #98 ask looped as a focused ask (swarm-092653-202z evidence/friction-integrator).

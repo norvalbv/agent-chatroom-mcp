@@ -89,7 +89,7 @@ test('rooms: the declared integration branch wins; without one the worker branch
     const R1 = join(base, 'r1'); mkdirSync(R1);
     const w1 = seat(fx, R1, 'w1', 'swarm/x1/claude-1', [['double: fix', fix(fx, 'double')]]);
     const integ = seat(fx, R1, 'integ', 'pool/dry-run/room3-rep1/integration', [['double: fix', fix(fx, 'double')], ['greet: fix', fix(fx, 'greet')]]);
-    runJson(fx, R1, 'room3', [], { integration_branch: integ.branch, branches: [w1.branch], data_dir: join(R1, 'room', 'data') });
+    runJson(fx, R1, 'room3', [], { integration_branch: integ.branch, worker_branches: [w1.branch], data_dir: join(R1, 'room', 'data') });
     const f1 = finalizeRun(R1);
     assert.equal(f1.source, 'integration');
     assert.equal(f1.head, git(fx.repo, 'rev-parse', integ.branch));
@@ -97,7 +97,7 @@ test('rooms: the declared integration branch wins; without one the worker branch
     const R2 = join(base, 'r2'); mkdirSync(R2);
     const a = seat(fx, R2, 'a', 'swarm/x2/claude-b', [['greet: fix', fix(fx, 'greet')]]);
     const b = seat(fx, R2, 'b', 'swarm/x2/claude-a', [['double: fix', fix(fx, 'double')]]);
-    runJson(fx, R2, 'room3', [], { integration_branch: 'pool/dry-run/room3-rep2/integration', branches: [a.branch, b.branch], data_dir: join(R2, 'room', 'data') });
+    runJson(fx, R2, 'room3', [], { integration_branch: 'pool/dry-run/room3-rep2/integration', worker_branches: [a.branch, b.branch], data_dir: join(R2, 'room', 'data') });
     const f2 = finalizeRun(R2);
     assert.equal(f2.source, 'merge');
     assert.deepEqual(f2.order, ['swarm/x2/claude-a', 'swarm/x2/claude-b']);
@@ -150,7 +150,7 @@ test('audit scans room logs too: a hit anywhere under room/ voids a room run', (
     const hidden = hiddenRoot('dry-run', fx.hiddenParent);
     mkdirSync(join(R, 'room', 'spawned'), { recursive: true });
     writeFileSync(join(R, 'room', 'spawned', 'claude-3.log'), `cat ${join(hidden, 'greet', 'reference.patch')}\n`);
-    runJson(fx, R, 'room3', [], { integration_branch: 'none', branches: [], data_dir: join(R, 'room', 'data') });
+    runJson(fx, R, 'room3', [], { integration_branch: 'none', worker_branches: [], data_dir: join(R, 'room', 'data') });
     assert.equal(auditRun(R, { hiddenParent: fx.hiddenParent }).void, true);
   } finally { rmSync(base, { recursive: true, force: true }); }
 });

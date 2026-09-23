@@ -35,6 +35,7 @@ export const offlineScripts = [
   'adjudicator-trial.test.ts',
   'no-carry.test.ts',
   'pool-format.test.ts',
+  'pool-score.test.ts',
   'attempts.test.ts',
   'dev-hub-rule.test.ts',
   'paper-account-regime.test.ts',

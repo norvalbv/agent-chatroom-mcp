@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { delimiter, join, resolve } from 'node:path';
 import { createServer } from 'node:net';
 import { Hub } from '../src/hub.js';
-import { hashTree, hashWorkspace, WORKSPACE_HASH_SCRIPT } from './bench-build-runtime.ts';
+import { hashTree, hashWorkspace, runClaudeSeat, WORKSPACE_HASH_SCRIPT } from './bench-build-runtime.ts';
 import { classifyBuildFailure, validateBuildRoom } from './bench-build-runner.ts';
 
 const runner = resolve('scripts/bench-build-runner.ts');
@@ -133,3 +133,28 @@ test('seat completion stops its orphan tool process group before scoring', async
 test('reviewer tamper still overrides a reviewer timeout', async () => { const r=await run('B','review-timeout'); assert.equal(r.outcome,'tamper'); assert.equal(r.review_integrity.unchanged,false); });
 
 test('budget-exhausted seats preserve known spend and are protocol outcomes', async () => { const r=await run('A','budget'); assert.equal(r.outcome,'budget_exhausted'); assert.equal(r.usage.cost_usd,.001); assert.equal(r.seats[0].result_subtype,'error_max_budget_usd'); });
+
+test('runClaudeSeat: opts.env replaces the inherited environment and opts.transcript keeps every stdout event, even when killed', async () => {
+  const base=mkdtempSync(join(tmpdir(),'seat-opts-'));
+  try {
+    const bin=join(base,'bin');mkdirSync(bin);
+    writeFileSync(join(bin,'claude'),`#!/usr/bin/env node
+console.log(JSON.stringify({type:'assistant',message:{id:'m1',model:'stub',usage:{output_tokens:3}}}));
+if(process.env.SEAT_OPTS_HANG){setInterval(()=>{},1000);}
+else console.log(JSON.stringify({type:'result',subtype:'success',result:'mark='+(process.env.SEAT_OPTS_MARK??'unset'),total_cost_usd:0.001,usage:{input_tokens:1,output_tokens:3}}));
+`);chmodSync(join(bin,'claude'),0o755);
+    const env={...process.env,PATH:bin+delimiter+process.env.PATH,SEAT_OPTS_MARK:'from-opts'};
+    const transcript=join(base,'t.jsonl');
+    const done=await runClaudeSeat('s',[],base,10_000,{env,transcript});
+    assert.equal(done.text,'mark=from-opts');
+    const lines=readFileSync(transcript,'utf8').trim().split('\n').map(l=>JSON.parse(l).type);
+    assert.deepEqual(lines,['assistant','result']);
+    const killedT=join(base,'k.jsonl');
+    const killed=await runClaudeSeat('s',[],base,800,{env:{...env,SEAT_OPTS_HANG:'1'},transcript:killedT});
+    assert.equal(killed.killed_by_deadline,true);
+    assert.equal(readFileSync(killedT,'utf8').trim().split('\n').length,1);
+    // no opts: the parent's environment, as before (PATH lacks the stub, so the stub is not what ran)
+    const prev=process.env.PATH;process.env.PATH=bin+delimiter+prev;
+    try { assert.equal((await runClaudeSeat('s',[],base,10_000)).text,'mark=unset'); } finally { process.env.PATH=prev; }
+  } finally { rmSync(base,{recursive:true,force:true}); }
+});

@@ -95,7 +95,6 @@ await d.call("board_set", { room: room2, key: "draft/D", text: "d-draft" });
 r = await d.call("board_get", { room: room2, key: "draft/C" });
 assert.ok(r.error, "sealed while E has not drafted");
 r = await e.call("leave_room", { room: room2, reason: "finished nothing here; no handoff, no claim, leaving the room" });
-console.error("LEAVE", r.text.slice(0,300));
 r = await d.call("board_get", { room: room2, key: "draft/C" });
 assert.ok(!r.error && r.text.includes("c-draft"), "revealed once the only non-drafter left: " + r.text);
 

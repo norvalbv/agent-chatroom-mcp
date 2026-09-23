@@ -1874,8 +1874,45 @@ export class Hub {
         `Once ${p.name} proposes work from it, require_verification prefers a verify/* entry from you over anyone else's while you're still active; ` +
         `write it as {"proposal":"<id>","command":"...","cwd":"...","exit_code":0,"output_tail":"..."} naming the proposal, per docs/swarm-protocol-spec.md.`);
     }
+    if (key.startsWith("claim/") && !previous) this.noticeClaimOverlap(room, p, key, text);
     if (key.endsWith(".ack") || key.startsWith("verify/")) for (const pr of room.proposals.values()) if (pr.status === "open") this.evaluate(room, pr);
     return entry;
+  }
+
+  private static readonly CLAIM_STOP = new Set(("the a an and or of to in on for by with from is are be it this that as at not no into via per its all any " +
+    "one each my i we our me you your will then than so if when only but also can new use using take own owns claim area note status open team owner").split(" "));
+  /** Content-word stems (first 6 chars) of a claim's key and its JSON area+note, for overlap scoring. */
+  static claimTerms(key: string, text: string): Set<string> {
+    let body = text;
+    try { const j = JSON.parse(text) as { area?: unknown; note?: unknown }; body = [j.area, j.note].filter((x) => typeof x === "string").join(" "); } catch { /* plain text */ }
+    const words = `${key.slice("claim/".length).replace(/[-_/]/g, " ")} ${body}`.toLowerCase().match(/[a-z][a-z0-9]{2,}/g) ?? [];
+    return new Set(words.filter((w) => !Hub.CLAIM_STOP.has(w)).map((w) => w.slice(0, 6)));
+  }
+
+  /** Room-level herding: 15 blind openings in swarm-083203-kooz produced two ideas, and 89 claim pairs in 30 of 136
+   * persisted rooms (data/*.jsonl) share >= 40% of their terms (Jaccard, >= 4 shared stems), e.g. four seats claiming
+   * launcher/launcher-spawner/launcher-fleet/launcher-spawner-fleet in one room. Advisory, never a refusal: one line
+   * @-naming the new claimant and the existing owner(s), so the duplicate is caught when it is claimed, not at review. */
+  private noticeClaimOverlap(room: Room, p: Participant, key: string, text: string) {
+    const mine = Hub.claimTerms(key, text);
+    if (mine.size < 4) return;
+    const hits: { key: string; by: string; jac: number; shared: string[] }[] = [];
+    for (const [k, e] of room.board) {
+      if (k === key || !k.startsWith("claim/") || e.by === p.name || !e.text.trim() || Hub.claimReleased(e)) continue;
+      const owner = [...room.participants.values()].find((x) => x.name === e.by);
+      if (!owner?.active || (owner.session && p.session && owner.session === p.session)) continue;
+      const theirs = Hub.claimTerms(k, e.text);
+      const shared = [...mine].filter((w) => theirs.has(w));
+      const jac = shared.length / (mine.size + theirs.size - shared.length);
+      if (shared.length >= 4 && jac >= 0.4) hits.push({ key: k, by: e.by, jac, shared });
+    }
+    if (!hits.length) return;
+    hits.sort((a, b) => b.jac - a.jac);
+    const top = hits.slice(0, 2);
+    // kind "chat" so the @-mentions wake a held wait, same reason as the reviewer notice above
+    this.post(room, "chat", undefined,
+      `@${p.name} your "${key}" overlaps ${top.map((h) => `@${h.by}'s "${h.key}" (${Math.round(h.jac * 100)}% shared terms: ${h.shared.slice(0, 6).join(", ")})`).join(" and ")}. ` +
+      `Before both of you build it: merge into one team (claim JSON team:[...]), split it explicitly, or pick another area. Advisory only, the claim stands.`);
   }
 
   /** Reviewer assigned when a claim/<area> is first created: the least-recently-verifying active

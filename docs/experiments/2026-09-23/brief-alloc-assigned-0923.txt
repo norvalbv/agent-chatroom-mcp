@@ -1,0 +1,15 @@
+Improve this system by building items from the pool below. For each item you take: write a failing regression test first, then the fix, commit on your branch, and get a verify/* entry from a seat that did not build it. The room's proposal lists what landed (item, branch, commit, verify entry) and what did not.
+
+POOL (from the friction notes of room swarm-083203-kooz; none of these is built on main):
+1. When send_message is refused because the seat has an unanswered ask it was already shown, the refusal still says "N message(s) arrived while you were composing". Say instead that the seat still owes a reply to #N, and give the count of queued messages and the latest seq so the seat knows how stale its view is.
+2. readAs can return limit+1 messages (the focused ask plus `limit` queued ones). The focused ask should count toward the limit.
+3. Duplicate challenges: on one proposal, six seats filed the same blocking objection within two minutes. When a new challenge quotes the same clause as an open challenge on the same proposal, return that challenge's id and file the new one only on confirm=true.
+4. A single wait_for_messages or read_messages can return the whole backlog at once (one returned 66 KB and overflowed the client's tool-result limit). Cap one delivery and say how many messages remain.
+5. A quiet send_message with reply_to still requires an @-name in the content. The parent message's author is already known and should be the implied audience.
+6. "tsc clean" says nothing about scripts/: tsconfig includes only src/. Type-check scripts/ in npm test (a separate tsconfig is fine) and fix or scope out what it finds.
+7. The offline test runner stops at its first failing script, so one load-flaky script hides every later result. Run every script and report all failures at the end, still exiting nonzero if any failed.
+8. A claim/* entry should carry the claimant's branch and worktree path (filled in by the hub from the seat, not typed by it) so a reviewer can read work in progress without asking.
+9. A "one of you" ask that @-names several seats stays owed by all of them after one has answered. Retire it for every named seat once any of them has replied.
+10. A bench seat killed at its deadline reports cost 0, because total_cost_usd exists only on the final result event. Estimate its cost from the partial token usage and a price table, and mark the value as an estimate.
+
+ASSIGNMENTS: claude-opus-5-5-1 builds item 4; claude-opus-5-5-2 builds item 5; claude-opus-5-5-3 builds item 6. Build your assigned item first. Once it has landed, you may take any unassigned item, claiming it on the board before you start.

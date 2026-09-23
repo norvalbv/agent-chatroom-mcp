@@ -83,3 +83,10 @@ Recorded before pool 2 was validated or run.
 - **Fix, from pool 2 on.** Each run now gets its own repository holding only the base tree as one commit (`git archive`), so no other run's refs or objects exist in it. Pool 1's 40 branches were moved out of the real repository into a bundle, and its worktree registrations removed.
 - **Validation.** Each item's hidden test now runs three times at base and three times with the reference fix; an item whose outcome changes is flaky and invalid.
 - **Correction.** Room3 repeat 2's final head passes the blind-drafts regression 3 of 3 when run alone; its failure at scoring was a timing flake under machine load, not a shipped regression. Split repeat 2's suite failure stands: it is a deterministic crash (`hub.askMentions is not a function`) from the merge.
+
+## Build pin and pool 2 source (2026-09-23, 22:30 BST)
+
+Recorded before pool 2 was locked, validated or run.
+
+- **Build pin.** Pools 2 and 3 run from branch `study/pool-throughput`, branched from main at the commit that records this note. Its src/, prompts/ and skills/ are identical to ffe5a7cd, the build nine of pool 1's ten valid runs used (Room15 repeat 1 ran on c016d79a, before seat prompts moved to stdin). The harness serves the dist/ of the checkout it runs from, so development on main cannot change the setups mid-study. Only harness measurement fixes are cherry-picked onto the pin, each noted here.
+- **Pool 2 source under review.** The curated game pool validated (20 of 20 red at base and green with the reference, 3 of 3 each), but its reviewer flagged 11 of 20 items as too easy (median reference fix 8 minutes), and pool 1 already hit the ceiling for three of four setups. Before locking, an open-source benchmark is being compared against hardening these briefs; the choice and its reasons will be recorded here before any pool 2 run.

@@ -2,7 +2,6 @@
 status: open
 added: 2026-09-23
 from: docs/reuse-survey-2026-09-23.md (OS isolation for claude seats; for OpenRouter seats)
-after: pool-throughput-report
 ---
 # OS sandbox for seats, so a seat's pkill cannot reach the hub or other seats
 

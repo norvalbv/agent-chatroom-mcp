@@ -2,7 +2,6 @@
 status: open
 added: 2026-09-23
 from: docs/reuse-survey-2026-09-23.md (Verify gate); SWE-bench FAIL_TO_PASS / PASS_TO_PASS (Jimenez et al. 2023)
-after: pool-throughput-report
 ---
 # Verify gate stage 1: a check must fail before the change and pass after
 

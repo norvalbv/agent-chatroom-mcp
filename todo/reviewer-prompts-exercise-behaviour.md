@@ -2,7 +2,6 @@
 status: open
 added: 2026-09-23
 from: docs/reuse-survey-2026-09-23.md (Reviewer and verifier prompts); the peer-review audit in the paper
-after: pool-throughput-report
 ---
 # Reviewers exercise the change, not rerun the author's tests
 

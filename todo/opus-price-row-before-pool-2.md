@@ -18,6 +18,7 @@ Done when:
 - An Opus 5.5 row taken from a pinned snapshot of LiteLLM's model_prices_and_context_window.json
   (MIT), with cache writes priced by TTL (usage.cache_creation.ephemeral_1h_input_tokens).
 - A test reproduces known costUSD values from bench/results for both models.
-- The pre-registration records it as a measurement fix made before pool 2's first run.
+- Cherry-picked onto `study/pool-throughput`, and the pre-registration records it as a measurement
+  fix made before pool 2's first run.
 
 The full table replacement (codex models, the regex matching) is in price-table-from-litellm.

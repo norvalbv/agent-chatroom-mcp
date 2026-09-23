@@ -18,8 +18,5 @@ Codex also needs:
 - `-s read-only` for read-only seats. ~/.codex/config.toml sets danger-full-access and neither
   launcher passes -s, so codex seats run unsandboxed today.
 
-Pools 2 and 3 seat only Opus, so this does not touch the study; if it lands mid-study, land it
-between pools and note the dist change.
-
 Done when scripts/seat-prompt-argv.test.ts covers codex and OpenRouter seats, and a recorded
 `--json` fixture test shows codex usage landing in the usage file.

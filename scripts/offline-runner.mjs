@@ -35,6 +35,7 @@ export const offlineScripts = [
   'adjudicator-trial.test.ts',
   'no-carry.test.ts',
   'seat-prompt-argv.test.ts',
+  'codex-seat.test.ts',
   'pool-format.test.ts',
   'pool-score.test.ts',
   'pool-run.test.ts',

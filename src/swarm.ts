@@ -6,7 +6,7 @@
  *   npx tsx src/swarm.ts "<task>" --agents 6 --cwd /path/to/project [--codex 2] [--openrouter 2] [--apply] [--timeout 30]
  */
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, realpathSync, symlinkSync, writeFileSync } from "node:fs";
+import { createWriteStream, existsSync, mkdirSync, readFileSync, readdirSync, statSync, realpathSync, symlinkSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { collectRoomSnapshot, renderRunReport, writeRunResult, rollupUsage, parseClaudeCliOutput, type RunResult, type RoomSnapshot, type SeatUsageRollup } from "./result.js";
 import { settledAxes } from "./settled.js";
@@ -16,6 +16,7 @@ import { carrySettings, devHubRule, heartbeatHookSettings, loadDotEnv, outputHea
 import { randomUUID } from "node:crypto";
 import { respawnDecision, type RespawnRoom } from "./respawn.js";
 import { claudeArgs } from "./claude-args.js";
+import { codexArgs, codexUsageTracker } from "./codex-seat.js";
 loadDotEnv();
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -179,13 +180,21 @@ function runOpenRouter(name: string, text: string, cwd: string, model: string | 
   return runProc(name, seatScript.cmd, args, cwd, outFile, false, undefined, false, text).then((t) => ({ text: t, usage: readSeatUsage(sidecar) }));
 }
 
-function runCodex(name: string, text: string, cwd: string, model?: string): Promise<SeatOutcome> {
+/**
+ * `codex exec` with the prompt on stdin, -s read-only unless the seat may write, and --json so its usage reaches
+ * <name>.usage.json (src/codex-seat.ts). -o still writes the final message to <name>.out. --json moves codex's
+ * per-item trace from stderr to stdout, so the events are kept in <name>.events.jsonl next to the .log.
+ */
+function runCodex(name: string, text: string, cwd: string, model: string | undefined, write: boolean): Promise<SeatOutcome> {
   const outFile = resolve(OUT, `${name}.out`);
+  const sidecar = resolve(OUT, `${name}.usage.json`);
   const beat = seatBeat(`${URL_}/mcp`, randomUUID(), cwd);
-  const args = ["exec", "--skip-git-repo-check", "-C", cwd, "-c", `mcp_servers.chatroom.url="${beat.mcpUrl}"`, "-c", "mcp_servers.chatroom.tool_timeout_sec=120", "-o", outFile];
-  if (model) args.push("-m", model);
-  args.push(text);
-  return runProc(name, "codex", args, cwd, outFile, true, beat, true).then((t) => ({ text: t, usage: readSeatUsage(resolve(OUT, `${name}.usage.json`)) }));
+  const args = codexArgs({ cwd, mcpUrl: beat.mcpUrl, model, readOnly: !write, outFile, json: true });
+  const events = createWriteStream(resolve(OUT, `${name}.events.jsonl`)).on("error", (e) => log(`${name}: event log: ${e.message}`));
+  // written on every turn.completed, so a seat stopped after one keeps what it had reported; a write error must not kill the launcher
+  const track = codexUsageTracker((usage) => { try { writeFileSync(sidecar, JSON.stringify(usage, null, 2)); } catch (e) { log(`${name}: usage sidecar: ${e instanceof Error ? e.message : String(e)}`); } });
+  const onStdout = (d: Buffer) => { events.write(d); track(d); };
+  return runProc(name, "codex", args, cwd, outFile, true, beat, true, text, onStdout).then((t) => { events.end(); return { text: t, usage: readSeatUsage(sidecar) }; });
 }
 
 /**
@@ -228,8 +237,8 @@ const exitCodes = new Map<string, number | null>();
 /** Only successfully isolated workers receive seat commit attribution (never planner/verifier). */
 const writeWorkers = new Set<string>();
 
-/** `beat`: the seat's heartbeat key and env; `beatOnOutput`: its output is its heartbeat (codex exec has no tool hooks). */
-function runProc(name: string, cmd: string, args: string[], cwd: string, outFile: string, outViaFile = false, beat?: SeatBeat, beatOnOutput = false, stdin?: string): Promise<string> {
+/** `beat`: the seat's heartbeat key and env; `beatOnOutput`: its output is its heartbeat (codex exec has no tool hooks); `stdin`: the prompt; `onStdout`: sees stdout as it arrives. */
+function runProc(name: string, cmd: string, args: string[], cwd: string, outFile: string, outViaFile = false, beat?: SeatBeat, beatOnOutput = false, stdin?: string, onStdout?: (d: Buffer) => void): Promise<string> {
   return new Promise((res) => {
     const child = spawn(cmd, args, { cwd, env: { ...seatChildEnv(process.env, writeWorkers.has(name) ? name : undefined), ...beat?.env }, stdio: [stdin === undefined ? "ignore" : "pipe", "pipe", "pipe"] });
     if (stdin !== undefined) { child.stdin?.on("error", () => {}); child.stdin?.end(stdin); } // the prompt, never argv (claude-args.ts)
@@ -243,7 +252,8 @@ function runProc(name: string, cmd: string, args: string[], cwd: string, outFile
     children.push(child);
     let out = "";
     let err = "";
-    child.stdout?.on("data", (d) => (out += d));
+    // a seat whose final text comes from a file (codex -o) needs no copy of stdout held in memory
+    child.stdout?.on("data", (d: Buffer) => { if (!outViaFile) out += d; onStdout?.(d); });
     child.stderr?.on("data", (d) => {
       err += d;
       // a seat's rate-limit retries, provider errors and budget exits are worth seeing live, not only in its log at exit
@@ -480,7 +490,7 @@ for (const g of plan.groups) {
       // Replacements reuse the original successful worktree but commit under their new seat name.
       if (writeWorkers.has(name)) writeWorkers.add(nm);
       return agent === "codex"
-        ? runCodex(nm, buildText(nm) + note, wcwd, model)
+        ? runCodex(nm, buildText(nm) + note, wcwd, model, mayWrite)
         : agent === "openrouter"
           ? runOpenRouter(nm, buildText(nm) + note, wcwd, model, mayWrite)
           : runClaude(nm, buildText(nm) + note, mayWrite ? WRITE_TOOLS : READ_TOOLS, wcwd, model);

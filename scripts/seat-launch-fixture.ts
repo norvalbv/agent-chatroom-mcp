@@ -1,21 +1,49 @@
-/** Fixtures for the seat-launch tests (seat-prompt-argv.test.ts): a stub `claude` binary, a private hub and a stub
- * OpenRouter endpoint. Nothing here reaches a real model: the OpenRouter seat talks to the local stub, claude is a fake. */
+/** Fixtures for the seat-launch tests (seat-prompt-argv.test.ts, codex-seat.test.ts, strays.test.ts): a recorded
+ * `codex exec --json` stream, stub `codex` and `claude` binaries, a private hub and a stub OpenRouter endpoint.
+ * Nothing here reaches a real model: the OpenRouter seat talks to the local stub, codex and claude are fakes. */
 import { spawn, type ChildProcess } from 'node:child_process';
 import { chmodSync, writeFileSync } from 'node:fs';
 import { createServer as createHttpServer } from 'node:http';
 import { createServer } from 'node:net';
 import { join } from 'node:path';
 
-/** Stub claude: records its argv, stdin and cwd in $FAKE_RECORD_DIR and prints a result envelope. */
+/** A real `codex exec --json` stream from codex-cli 0.155.0-alpha.16.3 on gpt-6-astra, recorded 2026-09-23: one thread,
+ * two turns (`codex exec` answering ALPHA, then `codex exec resume` answering BETA), joined into one stream. The
+ * second turn.completed is the thread's running total, not the turn's own: output_tokens 6, then 12. */
+export const CODEX_TWO_TURN_JSONL = [
+  '{"type":"thread.started","thread_id":"01a0d01e-2f3c-7a52-8a54-533f86a60e28"}',
+  '{"type":"turn.started"}',
+  '{"type":"item.completed","item":{"id":"item_0","type":"agent_message","text":"ALPHA"}}',
+  '{"type":"turn.completed","usage":{"input_tokens":19390,"cached_input_tokens":12160,"cache_write_input_tokens":0,"output_tokens":6,"reasoning_output_tokens":0}}',
+  '{"type":"turn.started"}',
+  '{"type":"item.completed","item":{"id":"item_0","type":"agent_message","text":"BETA"}}',
+  '{"type":"turn.completed","usage":{"input_tokens":44084,"cached_input_tokens":31360,"cache_write_input_tokens":0,"output_tokens":12,"reasoning_output_tokens":0}}',
+].join('\n') + '\n';
+/** What runCodex must write to <name>.usage.json for that stream: the last total, never the sum of the two. */
+export const CODEX_TWO_TURN_SIDECAR = {
+  steps: 2, prompt_tokens: 44084, completion_tokens: 12, cost: null,
+  codex_usage: { input_tokens: 44084, cached_input_tokens: 31360, cache_write_input_tokens: 0, output_tokens: 12, reasoning_output_tokens: 0 },
+};
+
+/** Stub `codex`: records its argv, stdin and cwd in $FAKE_RECORD_DIR, writes the -o file, prints the recorded stream under --json. */
+const FAKE_CODEX = `#!/usr/bin/env node
+const fs = require('node:fs'), path = require('node:path'), crypto = require('node:crypto');
+const argv = process.argv.slice(2), stdin = fs.readFileSync(0, 'utf8');
+fs.writeFileSync(path.join(process.env.FAKE_RECORD_DIR, 'codex-' + crypto.randomUUID() + '.json'), JSON.stringify({ argv, stdin, cwd: process.cwd() }));
+const o = argv.indexOf('-o');
+if (o >= 0) fs.writeFileSync(argv[o + 1], 'codex final text\\n');
+process.stdout.write(argv.includes('--json') ? ${JSON.stringify(CODEX_TWO_TURN_JSONL)} : 'codex final text\\n');
+`;
+/** Stub claude: records like the codex stub and prints a result envelope. */
 const FAKE_CLAUDE = `#!/usr/bin/env node
 const fs = require('node:fs'), path = require('node:path'), crypto = require('node:crypto');
 const argv = process.argv.slice(2), stdin = fs.readFileSync(0, 'utf8');
 fs.writeFileSync(path.join(process.env.FAKE_RECORD_DIR, 'claude-' + crypto.randomUUID() + '.json'), JSON.stringify({ argv, stdin, cwd: process.cwd() }));
 process.stdout.write(JSON.stringify({ type: 'result', subtype: 'success', is_error: false, result: 'ok', total_cost_usd: 0, usage: {} }) + '\\n');
 `;
-/** Writes the stub claude into dir; put dir first on PATH. */
+/** Writes the stub codex and claude into dir; put dir first on PATH. */
 export function writeFakeBins(dir: string) {
-  for (const [name, body] of [['claude', FAKE_CLAUDE]] as const) {
+  for (const [name, body] of [['codex', FAKE_CODEX], ['claude', FAKE_CLAUDE]] as const) {
     writeFileSync(join(dir, name), body);
     chmodSync(join(dir, name), 0o755);
   }

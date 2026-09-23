@@ -67,15 +67,56 @@ test("parseVerifyHead type-checks the new optional fields and the kind enum", ()
   for (const kind of VERIFY_KINDS) assert.equal(parseVerifyHead(f2p("p1", { kind }))?.kind, kind);
 });
 
-// Passing census heads whose prose (never the head) describes the check failing without the change (at the base,
-// on main, or with the fix reverted or deleted) and passing with it, per the census coders' final reasons in
-// bench/results/verify-practice/codes.json. README.md and the decision record cite this count (16).
-const PROSE_ONLY_FAIL_BEFORE = [
-  "swarm-011152-pen5#2", "swarm-011152-pen5#11", "swarm-083203-kooz#1", "swarm-083203-kooz#2", "swarm-083203-kooz#5",
-  "swarm-092653-202z#5", "swarm-120937-t1gx#1", "swarm-140213-25wq#3", "swarm-140213-25wq#4", "swarm-140213-25wq#5",
-  "swarm-140213-25wq#6", "swarm-140213-25wq#7", "swarm-140213-25wq#8", "swarm-140213-25wq#9", "swarm-174126-0s5m#5",
-  "swarm-193626-mwbk#28",
-];
+// Passing census heads that report a check run without the change (at the parent or base, on main, or with the fix
+// reverted, swapped out or deleted) where it failed, and with the change where it passed, but only as free text the
+// gate does not interpret: the prose under the head, or the head's own command and output_tail strings (25wq#5, #6,
+// #7 and #9). Each id maps to the words that say so. Versions of one board entry are separate census heads, so a
+// later version that repeats the run counts again (kooz#3 after kooz#1, 25wq#9 after 25wq#7), as does a later entry
+// in which the same seat reports its earlier run (pen5#14, citing pen5#2's verify/branch1-crashfix).
+// README.md and the decision record cite this count as "at least 19"; NOT_FAIL_BEFORE says why it is "at least".
+const FREE_TEXT_FAIL_BEFORE: Record<string, string> = {
+  "swarm-011152-pen5#2": "pre-fix 9eba547 gave 4/4 snag screens",
+  "swarm-011152-pen5#11": "The new regression test FAILS on 91a1cb2 (without the fix",
+  "swarm-011152-pen5#14": "prod repro 4/4 snag screens before, 0/4 after",
+  "swarm-083203-kooz#1": "with af45763's hub.ts, 1 of 9 fails",
+  "swarm-083203-kooz#2": "which exits 1 at 4755f75",
+  "swarm-083203-kooz#3": "with af45763's hub.ts, 1 of 9 fails",
+  "swarm-083203-kooz#5": "hub-notice-not-debt 4/4 (0/4 on main src)",
+  "swarm-092653-202z#5": "Smoke was red on main 1a7c0f0",
+  "swarm-120937-t1gx#1": "New regression independently failed on parent reporter (10 pass/1 fail) and passed on fix",
+  "swarm-140213-25wq#2": "Tested against unmodified main: regression fails",
+  "swarm-140213-25wq#3": "Ran the regression against unmodified main first (fails",
+  "swarm-140213-25wq#4": "Regression fails on main",
+  "swarm-140213-25wq#5": "main: ERR_ASSERTION actual:false expected:true (red)",
+  "swarm-140213-25wq#6": "RED on main hub.ts",
+  "swarm-140213-25wq#7": "RED on main server.ts",
+  "swarm-140213-25wq#8": "Regression red against main's hub.ts",
+  "swarm-140213-25wq#9": "RED on main server.ts",
+  "swarm-174126-0s5m#5": "the focused regression then exited 1",
+  "swarm-193626-mwbk#28": "before the fix council.test was 9/9 failing",
+};
+// The search: words for a run without the change, looked for in each passing head's text and in all three census
+// coders' reasons (coder_a, coder_b, final in bench/results/verify-practice/codes.json). Every head it finds is in
+// FREE_TEXT_FAIL_BEFORE or here, with why it is left out. The borderline ones (0s5m#3 and #4, mwbk#30) are why the
+// docs say "at least".
+const FAIL_BEFORE_WORDS =
+  /\bred\b|revert|swapped in|unmodified|\bpre-fix\b|without (the )?fix|before the fix|before\/after|before and after|\d+\/\d+ [a-z ]{0,20}before|fail(s|ed)? (on|at|against|without) (main|base|the parent|parent|unmodified|[0-9a-f]{7})|exits? 1 at/i;
+const NOT_FAIL_BEFORE: Record<string, string> = {
+  "swarm-011152-pen5#8": "draw calls before and after a storeys change; nothing failed before it",
+  "swarm-042511-ov9e#5": "no run without the change: the lead's old repro now fails its settled:false assertion because the bug is gone",
+  "swarm-042511-ov9e#7": "the reverted head d410ff3 is the proposal's own commit, and only it was tested",
+  "swarm-042511-ov9e#8": "the reverted head d410ff3 is the proposal's own commit, and only it was tested",
+  "swarm-042511-ov9e#9": "the reverted head d410ff3 is the proposal's own commit, and only it was tested",
+  "swarm-120129-s12h#1": "describes a hash checked before and after a benchmark run, not a check run without the change",
+  "swarm-125438-jp20#0": "says it did not re-verify the red state",
+  "swarm-164742-5jvl#8": "a flaky test rerun on unmodified main, where it passed",
+  "swarm-171735-2lp8#3": "the checks also passed before the fix; the pixel step before and after measures the reviewer's own CSS fix",
+  "swarm-174126-0s5m#3": "borderline: 'red before / green after' is in its summary of the diff (the author's tamper test); it does not say the writer ran it",
+  "swarm-174126-0s5m#4": "borderline: 'red before / green after' is in its summary of the diff (the author's tamper test); it does not say the writer ran it",
+  "swarm-193626-mwbk#24": "before and after screenshots and draw calls from an earlier visual review; nothing failed",
+  "swarm-193626-mwbk#25": "the author's before and after screenshots; the reviewer ran no check without the change",
+  "swarm-193626-mwbk#30": "borderline: the reviewer's probe counts 241 facing samples before and 7 after, with no failing exit or assertion",
+};
 
 test("the census still parses exactly as recorded: 241 of 260 heads, row by row, and no head carries fail-to-pass fields", () => {
   const rows = readFileSync("bench/results/verify-practice/heads.jsonl", "utf8").split("\n").filter(Boolean).map((l) => JSON.parse(l) as { id: string; text: string; schema_valid: boolean });
@@ -89,15 +130,19 @@ test("the census still parses exactly as recorded: 241 of 260 heads, row by row,
   assert.equal(shortfalls.filter((s) => s?.startsWith('it names no "commit"')).length, 123, "123 passing heads name no commit");
   assert.equal(shortfalls.filter((s) => s?.startsWith('it names no "base_commit"')).length, 114, "114 name a commit but no base commit");
 
-  // A failing-before run that lives only in the prose is still refused: the gate reads the head, not the prose.
-  const codes = JSON.parse(readFileSync("bench/results/verify-practice/codes.json", "utf8")) as { final: Record<string, { reason: string }> };
-  assert.equal(PROSE_ONLY_FAIL_BEFORE.length, 16);
-  for (const id of PROSE_ONLY_FAIL_BEFORE) {
+  // A failing-before run that lives only in free text is still refused: the gate reads the head's fields.
+  assert.equal(Object.keys(FREE_TEXT_FAIL_BEFORE).length, 19);
+  for (const [id, words] of Object.entries(FREE_TEXT_FAIL_BEFORE)) {
     const row = passing.find((r) => r.id === id);
     assert.ok(row, `${id} is a passing census head`);
+    assert.ok(row.text.includes(words), `${id} says: ${words}`);
     assert.ok(failToPassShortfall(row.head), `${id}'s head carries no fail-to-pass fields`);
-    assert.match(codes.final[id]?.reason ?? "", /before|red|revert|fail|delet/i, `the census coders record a failing-before run for ${id}`);
   }
+  const codes = JSON.parse(readFileSync("bench/results/verify-practice/codes.json", "utf8")) as Record<"coder_a" | "coder_b" | "final", Record<string, { reason: string }>>;
+  const reasons = (id: string) => (["coder_a", "coder_b", "final"] as const).map((k) => codes[k][id]?.reason ?? "");
+  const found = passing.filter((r) => [r.text, ...reasons(r.id)].some((t) => FAIL_BEFORE_WORDS.test(t))).map((r) => r.id);
+  assert.deepEqual(found.sort(), [...Object.keys(FREE_TEXT_FAIL_BEFORE), ...Object.keys(NOT_FAIL_BEFORE)].sort(), "every head the search finds is counted or left out with a reason");
+  assert.match(readFileSync("README.md", "utf8"), new RegExp(`At least ${Object.keys(FREE_TEXT_FAIL_BEFORE).length} of them describe a failing-before`), "README.md cites this count");
 });
 
 test("kind matches the census classes in scripts/paper-verify-practice.ts", () => {

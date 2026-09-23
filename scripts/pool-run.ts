@@ -11,7 +11,7 @@
  * brief from the fixture's solutions (never reference.patch) and emits stream-json usage, so the whole path runs
  * offline with no model call. */
 import { spawn, spawnSync, type ChildProcess } from 'node:child_process';
-import { chmodSync, closeSync, cpSync, existsSync, mkdirSync, openSync, readFileSync, readdirSync, realpathSync, renameSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { chmodSync, closeSync, cpSync, existsSync, mkdirSync, openSync, readFileSync, readdirSync, realpathSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:net';
 import { homedir } from 'node:os';
 import { dirname, join, relative, resolve, sep } from 'node:path';
@@ -93,7 +93,7 @@ export interface RunOptions {
 interface SeatRow {
   name: string; branch: string | null; worktree: string; brief_path: string; transcript: string | null; sessions: string[];
   exit_code: number | null; killed_by_deadline: boolean; usage: unknown; partial_usage: unknown;
-  cost_usd: number | null; cost_estimated: boolean; cost_estimate_basis?: string; cost_estimate_reason?: string; skipped?: string;
+  cost_usd: number | null; cost_estimated: boolean; cost_estimate_basis?: string; cost_estimate_reason?: string; skipped?: string; node_modules?: string;
 }
 
 export async function runArm(o: RunOptions): Promise<string> {
@@ -130,28 +130,27 @@ export async function runArm(o: RunOptions): Promise<string> {
   const prepare = (seat: string, brief: string) => {
     assertBriefClean(brief, hidden);
     const wt = join(runDir, 'wt', seat), branch = seatBranch(pool.name, o.arm, o.rep, seat);
-    worktreeAt(repo, pool.base_commit, wt, branch);
-    // Same as swarm.ts workerCwd: a worktree has no node_modules, so link the checkout's for builds and tests.
-    if (existsSync(join(repo, 'node_modules')) && !existsSync(join(wt, 'node_modules'))) symlinkSync(join(repo, 'node_modules'), join(wt, 'node_modules'), 'dir');
+    // A worktree has no node_modules; link the checkout's for builds and tests ('linked-unignored': a seat's git add -A could commit it).
+    const nodeModules = worktreeAt(repo, pool.base_commit, wt, branch, { linkNodeModules: true });
     const briefPath = join(runDir, 'briefs', seat + '.txt'); writeFileSync(briefPath, brief);
     mkdirSync(join(runDir, 'seats', seat), { recursive: true });
-    return { wt, branch, briefPath };
+    return { wt, branch, briefPath, nodeModules };
   };
 
   if (o.arm === 'solo' || o.arm === 'split') {
     const names = o.arm === 'solo' ? ['solo'] : ['split-1', 'split-2', 'split-3'];
     const mcp = join(runDir, 'mcp-empty.json'); json(mcp, { mcpServers: {} });
     const rows = await Promise.all(names.map(async (name, k) => {
-      const { wt, branch, briefPath } = prepare(name, briefFor(pool, o.arm, { seatIndex: k, integrationBranch }));
+      const { wt, branch, briefPath, nodeModules } = prepare(name, briefFor(pool, o.arm, { seatIndex: k, integrationBranch }));
       // A third with no items (the two-item dry-run pool) gets its branch but no seat: there is nothing to brief.
       if (!pool.split[k]?.length && o.arm === 'split') return { name, branch, worktree: wt, brief_path: briefPath, transcript: null, sessions: [], exit_code: null, killed_by_deadline: false,
-        usage: null, partial_usage: null, cost_usd: 0, cost_estimated: false, skipped: 'no items in this third' } as SeatRow;
+        usage: null, partial_usage: null, cost_usd: 0, cost_estimated: false, node_modules: nodeModules, skipped: 'no items in this third' } as SeatRow;
       const argv = claudeArgs({ text: readFileSync(briefPath, 'utf8'), mcpJson: mcp, tools: SEAT_TOOLS, model: MODEL, outputFormat: 'stream-json', settings: carrySettings(true, '') });
       const transcript = join(runDir, 'seats', name, 'transcript.jsonl');
       const record = await runClaudeSeat(name, argv, wt, Math.max(1, deadlineAt - Date.now()), { env, transcript });
       writeFileSync(join(runDir, 'seats', name, 'stderr.log'), record.stderr_tail);
       json(join(runDir, 'seats', name, 'record.json'), record);
-      return seatRow(name, branch, wt, briefPath, transcript, record);
+      return { ...seatRow(name, branch, wt, briefPath, transcript, record), node_modules: nodeModules };
     }));
     run.seats = rows;
   } else {
@@ -263,9 +262,9 @@ function killGroupMembers(leader: ChildProcess | null) {
 const exited = (c: ChildProcess) => new Promise<void>(ok => { if (c.exitCode !== null || c.signalCode !== null) ok(); else c.once('exit', () => ok()); });
 
 async function runRoom(o: RunOptions, pool: Pool, runDir: string, env: NodeJS.ProcessEnv, deadlineAt: number, integrationBranch: string,
-  prepare: (seat: string, brief: string) => { wt: string; branch: string; briefPath: string }, run: any, writeRun: () => void) {
+  prepare: (seat: string, brief: string) => { wt: string; branch: string; briefPath: string; nodeModules: string }, run: any, writeRun: () => void) {
   const agents = ROOM_AGENTS[o.arm];
-  const { wt, branch, briefPath } = prepare('room', briefFor(pool, o.arm, { integrationBranch }));
+  const { wt, branch, briefPath, nodeModules } = prepare('room', briefFor(pool, o.arm, { integrationBranch }));
   const roomDir = join(runDir, 'room'); for (const d of ['data', 'spawned']) mkdirSync(join(roomDir, d), { recursive: true });
   const port = o.port ?? await freePort();
   const hubEntry = o.hubEntry ?? join(repoRoot, 'dist', 'index.js'), swarmEntry = o.swarmEntry ?? join(repoRoot, 'dist', 'swarm.js');
@@ -283,7 +282,7 @@ async function runRoom(o: RunOptions, pool: Pool, runDir: string, env: NodeJS.Pr
   const minutes = (deadlineAt - Date.now()) / 60_000;
   const argv = [swarmEntry, readFileSync(briefPath, 'utf8'), '--flat', '--agents', String(agents), '--models', MODEL, '--verifier-model', MODEL,
     '--full-access', '--require-verification', '--no-carry', '--cwd', wt, '--port', String(port), '--timeout', String(Math.max(0.05, minutes))];
-  run.room = { port, worktree: wt, branch, data_dir: join(roomDir, 'data'), log_dir: join(roomDir, 'spawned'), hub_log: join(roomDir, 'hub.log'), argv: argv.slice(1).map((a, i) => i === 0 ? '<brief>' : a),
+  run.room = { port, worktree: wt, branch, node_modules: nodeModules, data_dir: join(roomDir, 'data'), log_dir: join(roomDir, 'spawned'), hub_log: join(roomDir, 'hub.log'), argv: argv.slice(1).map((a, i) => i === 0 ? '<brief>' : a),
     swarm_id: null as string | null, swarm_dir: null as string | null, integration_branch: integrationBranch, declared_branch: null as string | null, worker_branches: [] as string[],
     swarm_usage: null as unknown, stopped_at_deadline: false };
   writeRun();

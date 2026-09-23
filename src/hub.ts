@@ -80,6 +80,8 @@ export interface Participant {
   role?: Role;
   /** proposal id -> version of its text this participant was last sent (wait_for_messages ships text only when it changes) */
   seenProposal?: Record<string, number>;
+  /** challenge id -> status its objection text was last sent at (wait_for_messages ships objections only when new or changed) */
+  seenChallenges?: Record<string, string>;
   /** Ephemeral delivery receipts. A reconnect/rejoin starts with a full board manifest. */
   lastBoardSeen?: number;
   boardFollow?: string[];
@@ -1531,8 +1533,14 @@ export class Hub {
     const room = this.getRoom(roomName);
     const p = this.requireParticipant(room, pid);
     p.passes = (p.passes ?? 0) + 1;
-    // No delivered focus means no decline. Never acknowledge unseen asks.
-    if (p.focusedAsk && (this.addressedBy(room, p).some((m) => m.id === p.focusedAsk) || room.messages.some((m) => m.id === p.focusedAsk && m.from.agent === "human" && !this.isAnswered(room, m)))) {
+    // No delivered focus means no decline. Never acknowledge unseen asks. With no focus set, the next open peer ask
+    // counts as focused once it has been delivered (seq <= lastSeenSeq), so N passes retire N delivered asks instead
+    // of costing a wait per ask (swarm-092653-202z: an integrator's 5 answered READYs each ended a held wait at once).
+    if (!p.focusedAsk) {
+      const next = this.attentionFocus(room, p);
+      if (next && next.from.agent !== "human" && next.seq <= p.lastSeenSeq) p.focusedAsk = next.id;
+    }
+    if (p.focusedAsk &&(this.addressedBy(room, p).some((m) => m.id === p.focusedAsk) || room.messages.some((m) => m.id === p.focusedAsk && m.from.agent === "human" && !this.isAnswered(room, m)))) {
       p.declinedAsks = [...new Set([...(p.declinedAsks ?? []), p.focusedAsk])];
       p.declinedAt = { ...(p.declinedAt ?? {}), [p.focusedAsk]: room.messages.at(-1)?.seq ?? 0 };
       p.focusedAsk = undefined;
@@ -1644,14 +1652,11 @@ export class Hub {
       for (let i = pending.length - 1; i >= 0; i--) if ((p.declinedAt?.[pending[i].id] ?? Infinity) < m.seq) pending.splice(i, 1);
       if (m.kind !== "chat" || m.tag === "opening") continue;
       if (m.from.id === p.id) {
-        if (m.replyTo) {
-          const i = pending.findIndex((ask) => ask.id === m.replyTo);
-          if (i >= 0) pending.splice(i, 1);
-        } else {
-          for (const sender of m.mentions ?? []) {
-            const i = pending.findIndex((ask) => ask.from.id === sender);
-            if (i >= 0) pending.splice(i, 1);
-          }
+        // A reply settles its target, and @-naming someone settles everything they asked before it:
+        // clearing only their oldest ask re-delivered the rest as focused asks on every later wait.
+        const senders = new Set(m.mentions ?? []);
+        for (let i = pending.length - 1; i >= 0; i--) {
+          if (pending[i].id === m.replyTo || senders.has(pending[i].from.id)) pending.splice(i, 1);
         }
       } else {
         // A "one of you" ask: once any other seat it named replies, nobody it named still owes it.
@@ -2310,8 +2315,13 @@ export class Hub {
 
   // ---------- consensus ----------
 
+  // Under "auto" a machine check replaces the rhetorical one: with require_verification on, the verify/*
+  // gate already demands a non-author run. The challenge was mandatory in every arm-C room, so it was never
+  // measured off; what was measured is >=23/66 challenges conceding in their own text and amend vs no-amend
+  // printf rooms passing alike (5/9 vs 5/9) (docs/decisions, 2026-09-23 re-target of consensus-requires-scrutiny).
+  // An explicit true still wins.
   challengeRequired(room: Room): boolean {
-    if (room.requireChallenge === "auto") return this.voters(room).length >= 2;
+    if (room.requireChallenge === "auto") return this.voters(room).length >= 2 && !room.requireVerification;
     return room.requireChallenge;
   }
 
@@ -2622,6 +2632,24 @@ export class Hub {
       challenges: pr.challenges.map((c) => ({ id: c.id, by: nm(c.by), objection: c.objection, status: c.status ?? "open", blocking: c.blocking !== false, version: c.version, ...(c.command ? { command: c.command } : {}) })),
       votes: Object.entries(pr.votes).map(([id, v]) => ({ name: nm({ id, name: v.name }), vote: v.vote, confidence: v.confidence, reason: v.reason, version: v.version, ...(v.version !== undefined && v.version !== pr.version ? { stale: `cast at v${v.version}` } : {}) })),
     };
+  }
+
+  /**
+   * Per-participant delta of a proposal's challenges for wait_for_messages: a challenge's objection (and command)
+   * is sent the first time this participant sees it and again whenever its status changes; otherwise only
+   * {id, by, status, blocking, version, command?} plus objection_omitted (a command stays: it is what a verifier
+   * must rerun verbatim). room_status still carries every objection in full.
+   */
+  challengesDelta<C extends { id?: string; status: string; objection?: string }>(p: Participant, challenges: C[]) {
+    const seen = p.seenChallenges ?? {};
+    const out = challenges.map((c) => {
+      if (!c.id || seen[c.id] !== c.status) return c; // a legacy challenge without an id always ships in full
+      const { objection: _o, ...rest } = c;
+      return { ...rest, objection_omitted: "already sent to you at this status; room_status carries it" };
+    });
+    const ids = challenges.filter((c) => c.id).map((c) => [c.id!, c.status] as const);
+    if (ids.length) p.seenChallenges = { ...seen, ...Object.fromEntries(ids) };
+    return out;
   }
 
   /** Re-check whether a proposal has reached the room's quorum. */

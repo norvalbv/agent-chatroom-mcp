@@ -16,6 +16,7 @@ import { carrySettings, heartbeatHookSettings, loadDotEnv, outputHeartbeat, seat
 import { randomUUID } from "node:crypto";
 import { respawnDecision, type RespawnRoom } from "./respawn.js";
 import { claudeArgs } from "./claude-args.js";
+import { DEFAULT_MAX_SAME_SEATS, seatCapRefusal } from "./seat-cap.js";
 loadDotEnv();
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -86,6 +87,19 @@ const OPENROUTER_REASONING = flag("openrouter-reasoning", process.env.OPENROUTER
 if ((OPENROUTER > 0 || VERIFIER_OPENROUTER) && !process.env.OPENROUTER_API_KEY) {
   console.error("--openrouter needs OPENROUTER_API_KEY (https://openrouter.ai/keys); a dead seat still counts toward the room's expected participants, so refusing to launch.");
   process.exit(2);
+}
+/** --max-same-seats N: flat rooms refuse more than N workers on one model (default 4, src/seat-cap.ts) */
+const MAX_SAME_SEATS = Number(flag("max-same-seats", String(DEFAULT_MAX_SAME_SEATS)));
+if (!Number.isInteger(MAX_SAME_SEATS) || MAX_SAME_SEATS < 1) {
+  console.error(`--max-same-seats needs a whole number of seats (got ${flag("max-same-seats")}).`);
+  process.exit(2);
+}
+if (FLAT) {
+  const refusal = seatCapRefusal({ workers: WORKERS, models: MODELS, codex: CODEX, codexModels: CODEX_MODELS, openrouter: OPENROUTER, openrouterModels: OPENROUTER_MODELS }, MAX_SAME_SEATS);
+  if (refusal) {
+    console.error(refusal);
+    process.exit(2);
+  }
 }
 // workers may edit files and run anything; each gets its own git worktree
 const READ_TOOLS = ["mcp__chatroom__*", "Read", "Grep", "Glob", "Bash", "WebSearch", "WebFetch"];

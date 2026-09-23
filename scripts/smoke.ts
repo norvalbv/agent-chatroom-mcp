@@ -119,6 +119,9 @@ assert.deepEqual(tools, ["amend", "board_get", "board_set", "challenge", "join_r
   assert.match(wa.open_proposal.text, /prettier/, "a new version is shipped in full");
   const wa2 = await a.call("wait_for_messages", { room, timeout_ms: 0 });
   assert.ok(!("text" in wa2.open_proposal) && /unchanged since v2/.test(wa2.open_proposal.text_omitted), "an unchanged version is not re-shipped");
+  assert.match(wa.open_proposal.challenges[0].objection, /names no formatter/, "a challenge's objection ships the first time a seat sees it at its status");
+  assert.ok(!("objection" in wa2.open_proposal.challenges[0]) && wa2.open_proposal.challenges[0].objection_omitted, "an unchanged challenge's objection is not re-shipped on every wait");
+  assert.equal(wa2.open_proposal.challenges[0].status, wa.open_proposal.challenges[0].status, "id/status still travel");
   const va = await a.call("vote", { room, proposal_id: pr.id, vote: "agree", quote: "editorconfig and prettier" });
   assert.equal(va.room_state, "open");
   const v = await b.call("vote", { room, proposal_id: pr.id, vote: "agree", quote: ".editorconfig and prettier" });
@@ -452,7 +455,7 @@ assert.deepEqual(tools, ["amend", "board_get", "board_set", "challenge", "join_r
   assert.equal(st.room, "recruit-auth");
   const sub = await a.call("room_status", { room: "recruit-auth" });
   assert.equal(sub.require_verification, true);
-  assert.equal(sub.require_challenge, true);
+  assert.equal(sub.require_challenge, false); // the verify/* run replaces the ritual challenge under auto
   const claim = await a.call("board_get", { room: "recruit-auth", key: "claim/auth" });
   assert.match(claim.text, /"owner":"claude-1"/);
   const r2 = (await import("node:fs")).readFileSync(st.logs[1], "utf8");
@@ -538,11 +541,12 @@ assert.deepEqual(tools, ["amend", "board_get", "board_set", "challenge", "join_r
   const rc = await c.call("read_messages", { room, since_seq: 0 });
   assert.ok(rc.some((m: string) => m.includes("[quiet → codex-1] @codex-1 which worktree")), "quiet is not privacy: read_messages shows it");
   await c.call("send_message", { room, content: "Carrying on with the public discussion." });
-  // Addressed focus repeats without mixing public noise or throwing.
+  // An unanswered peer ask repeats and leads the queue; the public message is delivered behind it, not hidden
+  // (hub-carries-what-it-knows: only a human's message holds the inbox exclusively).
   const qAgain = await b.call("wait_for_messages", { room, timeout_ms: 0 });
-  assert.equal(qAgain.messages.length, 1);
+  assert.equal(qAgain.messages.length, 2);
   assert.ok(qAgain.messages[0].includes("which worktree"));
-  assert.ok(!qAgain.messages.some((m: string) => m.includes("Carrying on with the public")));
+  assert.ok(qAgain.messages[1].includes("Carrying on with the public"));
   await b.call("send_message", { room, content: "fix/auth-2", quiet: true, reply_to: q.id });
   await a.call("wait_for_messages", { room, timeout_ms: 0 });
   await a.call("send_message", { room, content: "Thanks, making this public for the record.", reply_to: q.id, quiet: true, surface: true });
@@ -709,8 +713,9 @@ assert.deepEqual(tools, ["amend", "board_get", "board_set", "challenge", "join_r
   await a.call("send_message", { room, content: "@deepseek-1 anything to add?", force: true });
   await a.call("send_message", { room, content: "@deepseek-1 and did you check the tests?", force: true });
   const w2 = await b.call("wait_for_messages", { room, timeout_ms: 0 });
-  assert.equal(w2.messages.length, 1);
+  assert.equal(w2.messages.length, 2, "the first ask leads; the second is queued behind it, not hidden");
   assert.ok(w2.messages[0].includes("anything to add"));
+  assert.ok(w2.messages[1].includes("check the tests"));
   await b.call("pass", { room });
   const w3 = await b.call("wait_for_messages", { room, timeout_ms: 0 });
   assert.equal(w3.messages.length, 1);

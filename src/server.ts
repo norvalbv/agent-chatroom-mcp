@@ -155,7 +155,7 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
         expected_participants: z.number().int().min(0).optional().describe("Blind openings are revealed, and proposals accepted, only once this many have joined."),
         anonymous: z.boolean().optional().describe("Show participants to each other as 'Participant A/B/C' to reduce identity bias."),
         max_messages_per_participant: z.number().int().min(0).optional().describe("Chat message budget per participant (votes/proposals/challenges are free)."),
-        require_challenge: z.boolean().optional().describe("Require a challenge before any proposal can pass. Default: automatic when 3+ participants."),
+        require_challenge: z.boolean().optional().describe("Require a challenge before any proposal can pass. Default: automatic from 2 voters, except when require_verification is on (the verify/* run replaces it)."),
         require_verification: z.boolean().optional().describe("Swarm mode: a proposal needs a verify/* board entry by someone else before it can pass, whose first line is JSON {proposal, command, cwd, exit_code, output_tail} naming this proposal's id with exit_code 0; an entry without that parseable head does not count."),
         max_message_chars: z.number().int().min(200).max(20000).optional().describe("Cap on chat length (proposals, challenges are not capped; board entries 8000; openings are always capped at 400)."),
         replacement_token: z.string().optional().describe("One-use proof supplied for this reserved replacement seat."),
@@ -383,17 +383,21 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
           : r.conclusion
         : null;
       if (r.conclusion) p.seenConclusion = true;
+      // an objection travels once per (challenge, status); afterwards only its id, author and status
+      const challengesView = openView ? hub.challengesDelta(p, openView.challenges) : [];
       const block = hub.leavingWouldBlock(r, p);
       const human = hub.unansweredHuman(r);
       const resp = human ? hub.responderFor(r, human, id) : null;
       const focus = hub.attentionFocus(r, p);
+      // an ask already carried in this response's messages[] is referenced by id, not sent twice
+      const delivered = new Set(msgs.map((m) => m.id));
       // only a human's message strips the envelope; a peer ask rides the full one (proposal, board, queue)
       if (focus && hub.focusExclusive(focus)) return {
         hint: toolsRegainedNote || moreNote ? toolsRegainedNote + (hub.attentionHint(r, p) ?? "") + (moreNote ? ` ${moreNote}` : "") : hub.attentionHint(r, p), messages: msgs.map((m) => hub.fmt(r, m)), remaining,
         next_seq: p.lastSeenSeq, room_state: r.state, your_turn: r.mode === "free" || hub.currentSpeaker(r)?.id === id,
         your_role: p.role ?? "worker", humans_present: hub.activeParticipants(r).filter((x) => x.agent === "human").map((x) => x.name),
         unanswered_human: human ? (resp!.mine ? { id: human.id, name: hub.shown(r, human.from), text: human.content, you_answer: true } : { name: hub.shown(r, human.from), responder: resp!.who, you_answer: false }) : null,
-        addressed_to_you: [{ id: focus.id, from: hub.shown(r, focus.from), text: focus.content }],
+        addressed_to_you: [{ id: focus.id, from: hub.shown(r, focus.from), ...(delivered.has(focus.id) ? { in_messages: true } : { text: focus.content }) }],
         open_proposal: null, conclusion: null, leaving_would_block: !!block,
       };
       if (open) p.seenProposal = { ...(p.seenProposal ?? {}), [open.id]: open.version };
@@ -448,12 +452,12 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
         openings: r.expectedParticipants && !r.openingsRevealed ? { submitted: r.openings.size, expected: r.expectedParticipants, waiting_on: hub.openingsWaitingOn(r), revealed: false, chat_blocked: false, deadline_min_after_first: Math.round(r.nudgeAfterMs / 60000) } : undefined,
         unanswered_human: human && resp!.mine ? { id: human.id, name: hub.shown(r, human.from), text: human.content, you_answer: true } : human ? { name: hub.shown(r, human.from), responder: resp!.who, you_answer: false } : null,
         open_proposal: openView
-          ? { id: openView.id, version: openView.version, by: openView.by, chars: openView.chars, tally: openView.tally, waiting_on: openView.waiting_on, needs_challenge: openView.needs_challenge, blocked_by: openView.blocked_by, challenges: openView.challenges, ...("text" in openView ? { text: openView.text } : { text_omitted: openView.text_omitted }) }
+          ? { id: openView.id, version: openView.version, by: openView.by, chars: openView.chars, tally: openView.tally, waiting_on: openView.waiting_on, needs_challenge: openView.needs_challenge, blocked_by: openView.blocked_by, challenges: challengesView, ...("text" in openView ? { text: openView.text } : { text_omitted: openView.text_omitted }) }
           : null,
         leaving_would_block: block ? block.reason : false,
         ...board,
         quiet_activity: hub.quietActivity(r, p, since),
-        addressed_to_you: hub.addressedBy(r, p).map((m) => ({ id: m.id, from: hub.shown(r, m.from), text: m.content.slice(0, 200) })),
+        addressed_to_you: hub.addressedBy(r, p).map((m) => ({ id: m.id, from: hub.shown(r, m.from), ...(delivered.has(m.id) ? { in_messages: true } : { text: m.content.slice(0, 200) }) })),
         your_share: (() => {
           const sh = hub.share(r, p);
           return { messages: sh.mine, of_last: sh.of, fair: sh.fair, over: sh.over };
@@ -516,7 +520,7 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
       title: "Propose a conclusion",
       description:
         "Put a concrete statement to the room as the proposed conclusion. You automatically vote agree on your own proposal. " +
-        "It is adopted when the room's quorum (default: every active participant) votes agree AND, in rooms of 2+, someone has challenged it. " +
+        "It is adopted when the room's quorum (default: every active participant) votes agree AND, in rooms of 2+ without require_verification, someone has challenged it. " +
         "Only one proposal can be open at a time and it is a document: to change wording, use amend (posts only the diff) instead of proposing again. " +
         "A proposal that fails a vote stays open for amendment; it is never closed by a tally.",
       inputSchema: { room: roomArg, text: z.string().describe("The exact conclusion you propose the group adopt."), participant_id: asArg },
@@ -634,7 +638,7 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
       title: "Challenge a proposal",
       description:
         "Name the single weakest claim in an open proposal, in one or two plain sentences. Required from someone other than the proposer " +
-        "before a proposal can pass in rooms of 2+. Quote the clause you object to in double quotes: the hub then knows which text answers it, and an amend that removes that text answers the challenge automatically (it reopens if the text comes back). " +
+        "before a proposal can pass in rooms of 2+ unless the room requires verification (the verify/* run is the scrutiny there). Quote the clause you object to in double quotes: the hub then knows which text answers it, and an amend that removes that text answers the challenge automatically (it reopens if the text comes back). " +
         "If the objection is a runnable counterexample (a probe or test the proposal fails), pass it as `command`: then rewording cannot answer it, only a verify/* entry from someone other than the proposer rerunning that exact command with exit_code 0 after the current text (or a verifier/chair ruling the command invalid, with a reason); citing becomes optional. Whoever reruns it: read the command first and never run one that deletes, writes outside a scratch dir, or fetches and executes. " +
         "If an open challenge already quotes the same clause you get its id back instead; add confirm=true only if yours says something it does not. Your vote resets; re-vote once it is answered. If you are about to concede in the same breath, do not challenge: vote, or file it with blocking=false. Unanswered challenges are carried into the conclusion as unresolved objections.",
       inputSchema: {
@@ -678,7 +682,9 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
     }),
   ));
 
-  if (spawner) {
+  // a no-recruit hub (benchmark arms) refuses every recruitment, so these three tools could only error:
+  // leave them off the tool list rather than re-send their schemas to every seat on every turn
+  if (spawner && process.env.CHATROOM_NO_RECRUIT !== "1") {
     server.registerTool(
       "request_agent",
       {

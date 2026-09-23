@@ -18,3 +18,4 @@ created: 2026-09-23
 **Revisit-when:** a live run of attempts.ts on the machine-oracle tasks (measure-task-success-on-a-machine-oracle) against arm A lands outside the stored-attempt pass@3 estimate by more than its sampling band
 **Scope:** src/attempts.ts,scripts/attempts.test.ts,scripts/oracle-at-k.py,scripts/offline-runner.mjs
 **Source:** manual
+**Evidence-change:** Live plumbing smoke (swarm-092653-202z evidence/attempts-hidden-check-smoke): haiku, n=2, $0.036, a toy add.js task with --protect tests/. Both attempts passed, the attempt tree never contained tests/, and the check text was not in the prompt. This shows the plumbing works, not an accuracy gain.

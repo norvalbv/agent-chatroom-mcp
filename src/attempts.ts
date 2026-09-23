@@ -4,8 +4,10 @@
  *
  *   npx tsx src/attempts.ts "<task>" --check "<shell command, exit 0 = pass>" --protect <paths the check reads,...> [--n 3] [--cwd dir] [--model sonnet] [--timeout 20]
  *
- * The check is hidden from the attempts and --protect paths are restored from base before it runs, so an
- * attempt can neither iterate against the judge nor edit it (hdju verifier's objection to 0079450).
+ * The check is hidden from the attempts: each attempt works in a fresh, history-less export of base outside the
+ * repo with the --protect paths left out, and its diff (minus anything under --protect) is replayed onto a branch
+ * from base before the check runs. So an attempt can neither iterate against the judge nor edit it (hdju
+ * verifier's objection to 0079450). It is not a sandbox: an attempt with Bash can still search the disk.
  *
  * Why (evidence/oracle-at-k, swarm-232020-hdju; paper/sections/results.tex): on bench-printf-format a
  * 3-seat chatroom passed 6/40 and agreement-selection over 7 attempts 7/40, while three unseen attempts
@@ -15,8 +17,9 @@
  * agent. There is no room, no hub and no chat here.
  */
 import { spawn, spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, symlinkSync, writeFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { existsSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { claudeArgs } from "./claude-args.js";
 import { parseClaudeCliOutput } from "./result.js";
@@ -49,68 +52,95 @@ export function planAttempts(opts: { n: number; check?: string }): { ok: true; n
 
 /**
  * The attempt never sees the check: the command is not in its prompt and the --protect paths (the tests the
- * check reads) are removed from its tree. A seat that can run the judge iterates to it or edits it, and the
+ * check reads) are absent from its tree and history. A seat that can run the judge iterates to it or edits it, and the
  * check stops discriminating; the oracle-at-k evidence came from a hidden oracle (hdju verifier on 0079450).
  */
 export function attemptPrompt(task: string): string {
   return `${task}\n\nWork alone in this directory. When you are done, stop. Your work is judged afterwards by a hidden check.`;
 }
 
-const git = (dir: string, ...a: string[]) => spawnSync("git", ["-C", dir, ...a], { encoding: "utf8" });
+const git = (dir: string, ...a: string[]) =>
+  spawnSync("git", ["-C", dir, "-c", "user.name=attempts", "-c", "user.email=attempts@local", ...a], { encoding: "utf8", maxBuffer: 256 << 20 });
+const excludes = (paths: readonly string[]) => paths.map((p) => `:(exclude)${p}`);
 
-/** Remove the protected paths from the attempt's tree and commit; returns the sha the attempt starts from. */
-export function hideProtected(dir: string, paths: readonly string[]): string {
-  if (paths.length) {
-    git(dir, "rm", "-r", "-q", "--ignore-unmatch", "--", ...paths);
-    git(dir, "commit", "-q", "--no-verify", "-m", "attempts: hide protected paths");
-  }
+/**
+ * A fresh repo at `dir` holding base's tree minus the protected paths, with one commit and no link to the source
+ * repo: the tests are not in the tree, in its history or in a shared object store. Returns the start sha.
+ */
+export function exportAttemptTree(repo: string, base: string, dir: string, protect: readonly string[]): string {
+  mkdirSync(dir, { recursive: true });
+  const tar = spawnSync("git", ["-C", repo, "archive", base, "--", ".", ...excludes(protect)], { maxBuffer: 1 << 30 });
+  if (tar.status !== 0) throw new Error(`git archive failed: ${tar.stderr}`);
+  const x = spawnSync("tar", ["-x", "-C", dir], { input: tar.stdout });
+  if (x.status !== 0) throw new Error(`tar failed: ${x.stderr}`);
+  git(dir, "init", "-q");
+  git(dir, "add", "-A");
+  git(dir, "commit", "-q", "--no-verify", "--allow-empty", "-m", "attempt start");
   return git(dir, "rev-parse", "HEAD").stdout.trim();
 }
 
 /**
- * Put every protected path back to its state at `base` (anything the attempt wrote there removed) and commit,
- * so the check, and a later merge of the winner, see pristine tests. Returns what the attempt had written under
- * protected paths since `hidden`.
+ * Replay what the attempt changed since `start`, minus anything under the protected paths, onto `checkDir` (a
+ * worktree of the source repo at base) and commit it there. Returns the protected-path files the attempt wrote,
+ * which were dropped, and whether the replay applied.
  */
-export function restoreProtected(dir: string, base: string, hidden: string, paths: readonly string[]): string[] {
-  if (!paths.length) return [];
-  const tampered = git(dir, "diff", "--name-only", hidden, "HEAD", "--", ...paths).stdout.split("\n").filter(Boolean);
-  git(dir, "rm", "-r", "-q", "--ignore-unmatch", "--", ...paths);
-  const present = paths.filter((p) => git(dir, "cat-file", "-e", `${base}:${p.replace(/\/$/, "")}`).status === 0);
-  if (present.length) git(dir, "checkout", base, "--", ...present);
-  git(dir, "commit", "-q", "--no-verify", "-m", "attempts: restore protected paths");
-  return tampered;
+export function landAttempt(attemptDir: string, start: string, checkDir: string, protect: readonly string[], message: string): { tampered: string[]; applied: boolean } {
+  git(attemptDir, "add", "-A");
+  git(attemptDir, "commit", "-q", "--no-verify", "-m", "attempt end");
+  const tampered = protect.length ? git(attemptDir, "diff", "--name-only", start, "HEAD", "--", ...protect).stdout.split("\n").filter(Boolean) : [];
+  const patch = git(attemptDir, "diff", "--binary", start, "HEAD", "--", ".", ...excludes(protect)).stdout;
+  if (!patch.trim()) return { tampered, applied: true };
+  const ap = spawnSync("git", ["-C", checkDir, "apply", "--index", "--whitespace=nowarn", "-"], { input: patch, encoding: "utf8" });
+  if (ap.status !== 0) return { tampered, applied: false };
+  git(checkDir, "commit", "-q", "--no-verify", "-m", message);
+  return { tampered, applied: true };
 }
 
 const EDIT_TOOLS = ["Read", "Grep", "Glob", "Bash", "Edit", "Write", "MultiEdit"];
 
 function runAttempt(task: string, check: string, protect: readonly string[], cwd: string, id: string, index: number, model: string | undefined, timeoutMs: number): Promise<AttemptResult> {
+  // the attempt works outside the repo; the branch the check runs on is a worktree made only after it finishes
+  const work = resolve(mkdtempSync(join(tmpdir(), `${id}-${index}-`)), "work");
   const dir = resolve(cwd, ".swarm-worktrees", id, `attempt-${index}`);
   const branch = `attempts/${id}/${index}`;
-  const base: AttemptResult = { index, branch, dir, ran: false, passed: false, check_exit: null, cost_usd: null, tampered: [] };
-  const baseSha = spawnSync("git", ["-C", cwd, "rev-parse", "HEAD"], { encoding: "utf8" }).stdout.trim();
-  const wt = spawnSync("git", ["-C", cwd, "worktree", "add", "-b", branch, dir], { encoding: "utf8" });
-  if (wt.status !== 0) {
-    console.error(`attempt ${index}: worktree failed: ${wt.stderr.trim()}`);
-    return Promise.resolve(base);
+  const result: AttemptResult = { index, branch, dir, ran: false, passed: false, check_exit: null, cost_usd: null, tampered: [] };
+  const baseSha = git(cwd, "rev-parse", "HEAD").stdout.trim();
+  let start: string;
+  try {
+    start = exportAttemptTree(cwd, baseSha, work, protect);
+  } catch (e) {
+    console.error(`attempt ${index}: ${(e as Error).message}`);
+    return Promise.resolve(result);
   }
   const mods = resolve(cwd, "node_modules");
-  if (existsSync(mods) && !existsSync(resolve(dir, "node_modules"))) symlinkSync(mods, resolve(dir, "node_modules"), "dir");
-  const hidden = hideProtected(dir, protect);
+  if (existsSync(mods) && !existsSync(resolve(work, "node_modules"))) {
+    symlinkSync(mods, resolve(work, "node_modules"), "dir");
+    writeFileSync(resolve(work, ".git", "info", "exclude"), "/node_modules\n");
+  }
   const args = claudeArgs({ text: attemptPrompt(task), mcpJson: JSON.stringify({ mcpServers: {} }), tools: EDIT_TOOLS, model });
   return new Promise((done) => {
-    const child = spawn("claude", args, { cwd: dir, stdio: ["ignore", "pipe", "inherit"] });
+    const child = spawn("claude", args, { cwd: work, stdio: ["ignore", "pipe", "inherit"] });
     let out = "";
     child.stdout.on("data", (d) => (out += d));
     const timer = setTimeout(() => child.kill("SIGTERM"), timeoutMs);
     child.on("close", (code) => {
       clearTimeout(timer);
       const usage = parseClaudeCliOutput(out).usage;
-      spawnSync("git", ["-C", dir, "add", "-A"]);
-      spawnSync("git", ["-C", dir, "commit", "-q", "--no-verify", "-m", `attempt ${index}`], { encoding: "utf8" });
-      const tampered = restoreProtected(dir, baseSha, hidden, protect);
+      const ran = { ...result, ran: code === 0, cost_usd: usage?.cost ?? null };
+      const wt = git(cwd, "worktree", "add", "-q", "-b", branch, dir, baseSha);
+      if (wt.status !== 0) {
+        console.error(`attempt ${index}: worktree failed: ${wt.stderr.trim()}`);
+        return done(ran);
+      }
+      const landed = landAttempt(work, start, dir, protect, `attempt ${index}`);
+      if (!landed.applied) {
+        console.error(`attempt ${index}: its diff did not apply to base (left in ${work})`);
+        return done({ ...ran, ran: false, tampered: landed.tampered });
+      }
+      rmSync(resolve(work, ".."), { recursive: true, force: true });
+      if (existsSync(mods) && !existsSync(resolve(dir, "node_modules"))) symlinkSync(mods, resolve(dir, "node_modules"), "dir");
       const c = spawnSync("sh", ["-c", check], { cwd: dir, encoding: "utf8", timeout: 600_000 });
-      done({ ...base, ran: code === 0, passed: c.status === 0, check_exit: c.status, cost_usd: usage?.cost ?? null, tampered });
+      done({ ...ran, passed: c.status === 0, check_exit: c.status, tampered: landed.tampered });
     });
   });
 }

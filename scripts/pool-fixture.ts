@@ -31,19 +31,28 @@ const ITEMS = [
 
 export type DryRunPool = { base: string; poolDir: string; repo: string; hiddenParent: string; pool: Pool; solutions: Record<string, { path: string; content: string }>; hiddenTestNames: string[] };
 
-export function makeDryRunPool(baseDir: string, opts: { deadlineMin?: number } = {}): DryRunPool {
+/** dependency: the repo gets a gitignored node_modules/dry-dep (never committed, like a real install) and double's
+ * hidden test imports it, so a worktree that does not link node_modules fails that test even with the fix. */
+export function makeDryRunPool(baseDir: string, opts: { deadlineMin?: number; dependency?: boolean } = {}): DryRunPool {
   const base = resolve(baseDir);
   const repo = join(base, 'repo'), poolDir = join(base, 'pools', DRY_RUN_POOL), hiddenParent = join(base, 'hidden');
   mkdirSync(repo, { recursive: true });
   git(repo, 'init', '--quiet', '-b', 'main');
   for (const [rel, text] of Object.entries(BASE_FILES)) put(join(repo, rel), text);
+  if (opts.dependency) put(join(repo, '.gitignore'), 'node_modules\n');
   git(repo, 'add', '-A');
   git(repo, 'commit', '--quiet', '-m', 'dry-run pool base');
+  if (opts.dependency) {
+    put(join(repo, 'node_modules', 'dry-dep', 'package.json'), JSON.stringify({ name: 'dry-dep', type: 'module', exports: './index.js' }) + '\n');
+    put(join(repo, 'node_modules', 'dry-dep', 'index.js'), 'export const factor = 2;\n');
+  }
   const baseCommit = git(repo, 'rev-parse', 'HEAD').trim();
   for (const item of ITEMS) {
     const dir = join(hiddenParent, DRY_RUN_POOL, item.id);
     put(join(dir, 'cmd'), `node --test ${item.test.path}\n`);
-    put(join(dir, 'tests', item.test.path), item.test.content);
+    put(join(dir, 'tests', item.test.path), opts.dependency && item.id === 'double'
+      ? item.test.content.replace("import * as m from '../src/math.mjs';", "import * as m from '../src/math.mjs';\nimport { factor } from 'dry-dep';").replace('m.double(21), 42', 'm.double(21), 21 * factor')
+      : item.test.content);
     // The reference patch is a real `git diff` of the solution against base, then the repo is restored.
     put(join(repo, item.solution.path), item.solution.content);
     put(join(dir, 'reference.patch'), git(repo, 'diff', '--', item.solution.path));

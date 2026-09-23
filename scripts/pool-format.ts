@@ -6,7 +6,7 @@
  * own throwaway worktrees. */
 import { execFileSync, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { cpSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import { basename, isAbsolute, join, relative, resolve } from 'node:path';
 import { hashTree } from './bench-build-runtime.ts';
@@ -119,12 +119,20 @@ const inside = (child: string, parent: string) => {
 };
 const real = (p: string) => { let q = resolve(p); while (!existsSync(q)) q = resolve(q, '..'); return join(realpathSync(q), relative(q, resolve(p))); };
 
-/** A fresh worktree of repo at commit: on a new branch when one is named, else detached. The main checkout is untouched. */
-export function worktreeAt(repo: string, commit: string, dir: string, branch?: string) {
+/** A fresh worktree of repo at commit: on a new branch when one is named, else detached. The main checkout is untouched.
+ * linkNodeModules symlinks the repo's (untracked) node_modules in, as swarm.ts does for workers, so tests that need
+ * dependencies run; the result says whether the repo's ignore rules cover the link ('linked-unignored' means a
+ * builder's `git add -A` could commit it). */
+export function worktreeAt(repo: string, commit: string, dir: string, branch?: string, opts: { linkNodeModules?: boolean } = {}): 'linked' | 'linked-unignored' | 'absent' | 'not-requested' {
   if (inside(real(dir), real(repo))) throw new Error(`worktree ${dir} must be outside the repository ${repo}`);
   mkdirSync(join(dir, '..'), { recursive: true });
   const args = branch ? ['worktree', 'add', '--quiet', '-b', branch, dir, commit] : ['worktree', 'add', '--quiet', '--detach', dir, commit];
   execFileSync('git', ['-C', repo, ...args], { stdio: 'pipe' });
+  if (!opts.linkNodeModules) return 'not-requested';
+  const mods = join(repo, 'node_modules');
+  if (!existsSync(mods) || existsSync(join(dir, 'node_modules'))) return 'absent';
+  symlinkSync(mods, join(dir, 'node_modules'), 'dir');
+  return spawnSync('git', ['-C', dir, 'check-ignore', '-q', 'node_modules']).status === 0 ? 'linked' : 'linked-unignored';
 }
 
 export function removeWorktree(repo: string, dir: string) {
@@ -152,7 +160,7 @@ export function validatePool(poolDir: string, opts: { hiddenParent?: string; scr
     try {
       const item = loadHiddenItem(hidden, id);
       r.hidden_sha256 = hashTree(item.dir);
-      worktreeAt(pool.repo, pool.base_commit, wt);
+      worktreeAt(pool.repo, pool.base_commit, wt, undefined, { linkNodeModules: true });
       const names = [...new Set(item.tests.map(t => basename(t)))].sort();
       const repoNames = new Set(execFileSync('git', ['-C', wt, 'ls-files', '-z'], { encoding: 'utf8' }).split('\0').filter(Boolean).map(f => basename(f)));
       r.names_in_repo = names.filter(n => repoNames.has(n));

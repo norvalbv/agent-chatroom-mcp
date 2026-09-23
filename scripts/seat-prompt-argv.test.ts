@@ -70,6 +70,8 @@ test("codexArgs: the prompt is read from stdin (-); read-only seats get -s read-
   const ro = codexArgs({ cwd: "/w", mcpUrl: "http://127.0.0.1:1/mcp", model: "gpt-6-astra", readOnly: true, outFile: "/o/seat.out", json: true });
   assert.equal(ro.at(-1), "-", "codex exec reads instructions from stdin when the prompt argument is -");
   assert.deepEqual(ro.slice(ro.indexOf("-s"), ro.indexOf("-s") + 2), ["-s", "read-only"]);
+  // without it -s read-only makes codex refuse every chatroom tool call (approval_policy never): the seat cannot join
+  assert.ok(ro.includes('mcp_servers.chatroom.default_tools_approval_mode="approve"'), "the chatroom server's tools are approved up front");
   assert.ok(ro.includes("--json"));
   assert.equal(ro[ro.indexOf("-o") + 1], "/o/seat.out", "-o still writes the final message alongside --json");
   const rw = codexArgs({ cwd: "/w", mcpUrl: "http://127.0.0.1:1/mcp", readOnly: false });
@@ -90,6 +92,7 @@ test("spawner: codex recruits read the brief from stdin; read-only recruits run 
     assert.ok(seen.stdin.includes(MARKER), "the codex recruit got its brief on stdin");
     assert.equal(seen.argv.at(-1), "-");
     assert.equal(seen.argv.includes("read-only"), !canEdit, canEdit ? "a write recruit keeps its sandbox" : "a read-only recruit runs -s read-only");
+    assert.ok(seen.argv.includes('mcp_servers.chatroom.default_tools_approval_mode="approve"'), "the recruit may call the chatroom tools under its sandbox");
   }
 });
 
@@ -127,6 +130,7 @@ test("swarm.ts: codex and OpenRouter seats get the prompt on stdin, never argv; 
     assert.equal(codex.argv.at(-1), "-");
     assert.ok(codex.argv.includes("--json") && codex.argv.includes("-o"), "--json for usage, -o for the final text");
     assert.ok(codex.argv.includes("read-only"), "a seat without --full-access is read-only: -s read-only");
+    assert.ok(codex.argv.includes('mcp_servers.chatroom.default_tools_approval_mode="approve"'), "and may still call the chatroom tools");
     // the launcher's own argv still carries the task (it is how swarm.js takes it); every seat it launched must not
     const seats = processes.filter((p) => p.ppid === swarm.pid);
     assert.ok(seats.some((p) => p.args.includes("openrouter.js")), "the OpenRouter seat was alive while it called the model");

@@ -32,9 +32,16 @@ export interface CodexArgsOptions {
  * read-only (codex-rs protocol/src/permissions.rs, default_read_only_subpaths_for_writable_root, per the survey's
  * skeptic check), so a write seat could not commit on its swarm/<run>/<seat> branch, which the verifier, --apply and
  * pool-run all read. The survey's alternative for write seats, wrapping the whole seat process in srt, is not done here.
+ *
+ * Under -s read-only codex asks for approval before every MCP tool call, and with approval_policy = "never" it
+ * refuses them: a live gpt-6-astra seat's join_room failed with "MCP tool call requires approval, but approval policy
+ * is never" and never reached the room, while the same list_rooms call without -s succeeded. So every seat approves
+ * the chatroom server's tools up front (mcp_servers.<name>.default_tools_approval_mode, one of auto | prompt | writes |
+ * approve in codex 0.155; probed live: with it, list_rooms succeeds and `touch` in the seat's cwd is still refused).
+ * Only the chatroom server is approved; other MCP servers in the user's config stay behind the sandbox's approval.
  */
 export function codexArgs({ cwd, mcpUrl, model, readOnly, outFile, json }: CodexArgsOptions): string[] {
-  const args = ["exec", "--skip-git-repo-check", "-C", cwd, "-c", `mcp_servers.chatroom.url="${mcpUrl}"`, "-c", "mcp_servers.chatroom.tool_timeout_sec=120"];
+  const args = ["exec", "--skip-git-repo-check", "-C", cwd, "-c", `mcp_servers.chatroom.url="${mcpUrl}"`, "-c", "mcp_servers.chatroom.tool_timeout_sec=120", "-c", 'mcp_servers.chatroom.default_tools_approval_mode="approve"'];
   if (readOnly) args.push("-s", "read-only");
   if (json) args.push("--json");
   if (outFile) args.push("-o", outFile);

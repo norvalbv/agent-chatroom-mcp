@@ -118,6 +118,7 @@ await test('swarm all provider seats, hub env and controller header', async () =
 await test('swarm --flat refuses 11 same-model workers before the hub starts; --max-same-seats opts in', async () => {
   // 12 agents: the fixture hub caps a room at 12 live agents, a separate exit 2
   await assert.rejects(harness('swarm', syntheticEnv(), ['synthetic task', '--flat', '--agents', '12']), /unexpected exit 2/);
+  await assert.rejects(harness('swarm', syntheticEnv(), ['synthetic task', '--flat', '--agents', '12', '--max-same-seats', 'x']), /unexpected exit 2/, 'NaN must not disable the cap');
   const h = await harness('swarm', syntheticEnv(), ['synthetic task', '--flat', '--agents', '12', '--max-same-seats', '11']);
   assert.equal(h.calls.filter(c => c.cmd === 'claude').length, 12, '11 workers + verifier launched when asked for');
 });

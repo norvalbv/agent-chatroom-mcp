@@ -44,5 +44,15 @@ test("launcher checks the cap before starting the hub", () => {
   assert.ok(cap > 0, "swarm.ts calls seatCapRefusal");
   assert.ok(cap < src.indexOf("await ensureHub();"), "refusal happens before ensureHub");
 });
+test("fleet asks for its same-model rooms on purpose in both launches (area and consolidation)", () => {
+  const src = readFileSync(new URL("../src/fleet.ts", import.meta.url), "utf8");
+  const launches = src.match(/"--flat", "--agents", String\(AGENTS\)[^\]]*\]/g) ?? [];
+  assert.equal(launches.length, 2, "fleet launches swarm.js twice");
+  for (const l of launches) assert.match(l, /"--max-same-seats", String\(AGENTS - 1\)/);
+});
+test("a non-numeric --max-same-seats is refused, not silently NaN", () => {
+  const src = readFileSync(new URL("../src/swarm.ts", import.meta.url), "utf8");
+  assert.match(src, /!Number\.isInteger\(MAX_SAME_SEATS\) \|\| MAX_SAME_SEATS < 1/);
+});
 console.log(`SEAT CAP: ${failures ? `${failures} failed` : "OK"}`);
 process.exitCode = failures ? 1 : 0;

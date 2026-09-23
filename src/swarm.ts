@@ -88,6 +88,10 @@ if ((OPENROUTER > 0 || VERIFIER_OPENROUTER) && !process.env.OPENROUTER_API_KEY) 
 }
 /** --max-same-seats N: flat rooms refuse more than N workers on one model (default 4, src/seat-cap.ts) */
 const MAX_SAME_SEATS = Number(flag("max-same-seats", String(DEFAULT_MAX_SAME_SEATS)));
+if (!Number.isInteger(MAX_SAME_SEATS) || MAX_SAME_SEATS < 1) {
+  console.error(`--max-same-seats needs a whole number of seats (got ${flag("max-same-seats")}).`);
+  process.exit(2);
+}
 if (FLAT) {
   const refusal = seatCapRefusal({ workers: WORKERS, models: MODELS, codex: CODEX, codexModels: CODEX_MODELS, openrouter: OPENROUTER, openrouterModels: OPENROUTER_MODELS }, MAX_SAME_SEATS);
   if (refusal) {

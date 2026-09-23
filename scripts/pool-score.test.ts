@@ -171,3 +171,17 @@ test('CLI: pool.ts finalize, score and audit write their json and print it', () 
     assert.ok(existsSync(join(R, 'score.json')));
   } finally { rmSync(base, { recursive: true, force: true }); }
 });
+
+test('score is not fooled by an outer node --test context: unfixed items still fail', () => {
+  const base = fresh(), prev = process.env.NODE_TEST_CONTEXT;
+  process.env.NODE_TEST_CONTEXT = 'child-v8'; // what a node --test parent hands its children; a child `node --test` then exits 0 on failure
+  try {
+    const fx = makeDryRunPool(base), R = join(base, 'run'); mkdirSync(R);
+    runJson(fx, R, 'solo', [seat(fx, R, 'solo', 'pool/dry-run/solo-rep1/solo', [])]);
+    finalizeRun(R);
+    assert.equal(scoreRun(R, { hiddenParent: fx.hiddenParent }).passed, 0);
+  } finally {
+    if (prev === undefined) delete process.env.NODE_TEST_CONTEXT; else process.env.NODE_TEST_CONTEXT = prev;
+    rmSync(base, { recursive: true, force: true });
+  }
+});

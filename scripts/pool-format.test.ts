@@ -126,6 +126,27 @@ test('validate reports per item: a test that already passes at base, or a patch 
   } finally { rmSync(base, { recursive: true, force: true }); }
 });
 
+test('validate refuses a hidden test file name that already occurs in the repo: the leakage audit would void every run on it', () => {
+  const base = fresh();
+  try {
+    const fx = makeDryRunPool(base);
+    const hidden = hiddenRoot('dry-run', fx.hiddenParent);
+    // Rename double's hidden test to a name the repo already has at base.
+    rmSync(join(hidden, 'double', 'tests'), { recursive: true });
+    const dest = join(hidden, 'double', 'tests', 'test', 'hidden', 'base.test.mjs');
+    spawnSync('mkdir', ['-p', join(dest, '..')]);
+    writeFileSync(dest, "import assert from 'node:assert/strict';\nimport * as m from '../../src/math.mjs';\nassert.equal(m.double?.(2), 4);\n");
+    writeFileSync(join(hidden, 'double', 'cmd'), 'node test/hidden/base.test.mjs\n');
+    const report = validatePool(fx.poolDir, { hiddenParent: fx.hiddenParent, scratch: join(base, 'scratch') });
+    const double = report.items.find(r => r.id === 'double')!;
+    assert.equal(double.fails_at_base, true);
+    assert.equal(double.passes_with_reference, true);
+    assert.deepEqual(double.names_in_repo, ['base.test.mjs']);
+    assert.equal(double.ok, false);
+    assert.equal(report.items.find(r => r.id === 'greet')!.ok, true);
+  } finally { rmSync(base, { recursive: true, force: true }); }
+});
+
 test('validate refuses a pool item with no hidden side', () => {
   const base = fresh();
   try {

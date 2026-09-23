@@ -8,6 +8,11 @@
  * An optional kind (existing_tests | own_check | exercised) matches the census classes in
  * scripts/paper-verify-practice.ts. Every earlier rule of the gate still holds.
  *
+ * The reviewer prompts port two rules from the OpenHands extensions qa-changes plugin (MIT,
+ * github.com/OpenHands/extensions, skills/qa-changes/SKILL.md and plugins/qa-changes/scripts/prompt.py at
+ * 76bbae25): exercise the changed behaviour the way a user would instead of re-running the suite, and say what
+ * you were unable to verify (switch approach after three attempts, give up after two approaches).
+ *
  * RED at d755a873: a passing head with no base_commit/base_exit_code satisfied verifiedBy(), failToPassShortfall
  * and VERIFY_KINDS did not exist, and the prompts taught the head without fail-to-pass fields.
  * Run: npx tsx --test scripts/verify-fail-to-pass-regression.ts
@@ -234,6 +239,19 @@ test("prompts and the repo SKILL.md that teach the head quote the canonical one;
   const skill = readFileSync("skills/swarm/SKILL.md", "utf8");
   assert.ok(skill.includes(HEAD_FOR_SEATS), "the repo SKILL.md teaches the same head");
   assert.ok(!skill.includes(LEGACY_HEAD));
+});
+
+test("reviewer prompts carry the two qa-changes rules: exercise the change like a user, say what could not be verified", () => {
+  for (const file of ["loop.md", "recruit.md", "verifier.md"]) {
+    const text = readFileSync(join("prompts", file), "utf8");
+    assert.match(text, /users would/, `${file}: exercise the changed behaviour the way its users would`);
+    assert.match(text, /only rerunning|only rerun/, `${file}: not only rerunning the author's tests`);
+    assert.match(text, /`--help` is not a check/, `${file}: --help is not verification`);
+    assert.match(text, /could not verify|unable to verify/, `${file}: the Unable to Verify rule`);
+    assert.match(text, /three failed attempts/, `${file}: when to give up on an approach`);
+  }
+  for (const file of ["loop.md", "recruit.md"]) assert.match(readFileSync(join("prompts", file), "utf8"), /verify\/<area>\.partial/, `${file}: nothing verified goes to .partial`);
+  assert.match(readFileSync("skills/swarm/SKILL.md", "utf8"), /exercise the change the way its users would/);
 });
 
 test("tool descriptions carry the fail-to-pass head", async () => {

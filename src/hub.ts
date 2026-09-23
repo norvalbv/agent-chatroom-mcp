@@ -2147,10 +2147,12 @@ export class Hub {
       // in the same call that delivers it (settleRead runs before the caller's actionableNow
       // check). A "system"-kind post with an explicit mentions field looked right in isolation but
       // is provably too late by the time hold_until_actionable's loop re-checks it.
+      // "Exercise ... not only rerun" is the OpenHands extensions qa-changes rule (MIT; skills/qa-changes/SKILL.md,
+      // "Run the code, not the tests"), also in prompts/loop.md, recruit.md and verifier.md.
       this.post(room, "chat", undefined,
         `@${reviewer.name} you are the reviewer for ${p.name}'s "${key}" (fewest reviews assigned, then least-recently-verifying; picked by the hub). ` +
         `Once ${p.name} proposes work from it, require_verification prefers a verify/* entry from you over anyone else's while you're still active; ` +
-        `its JSON head (in the proposal's blocked_by) records one check of yours failing at the parent commit and passing at ${p.name}'s.`);
+        `its JSON head (in the proposal's blocked_by) records one check of yours failing at the parent commit and passing at ${p.name}'s. Exercise the change the way its users would; do not only rerun ${p.name}'s tests.`);
     }
     if (key.startsWith("claim/") && (!previous || Hub.claimReleased(previous))) this.noticeClaimOverlap(room, p, key, text);
     if (key.endsWith(".ack") || key.startsWith("verify/")) for (const pr of room.proposals.values()) if (pr.status === "open") this.evaluate(room, pr);

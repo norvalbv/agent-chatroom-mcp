@@ -15,11 +15,11 @@
 import assert from "node:assert/strict";
 import { execFileSync, spawn, spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { after, test } from "node:test";
 import { claudeArgs } from "../src/claude-args.ts";
-import { claudeSandbox, hubPortOf, nodeModulesCaches, srtSeatConfig } from "../src/sandbox.ts";
+import { claudeSandbox, hubPortOf, nodeModulesCaches, SRT_OWN_WRITES, srtSeatConfig, srtWriteScope } from "../src/sandbox.ts";
 import { localTools, seatSandbox } from "../src/seat.ts";
 
 const repoRoot = resolve(import.meta.dirname, "..");
@@ -126,6 +126,28 @@ test("srtSeatConfig: a worktree seat may write its worktree and the shared .git,
   assert.deepEqual(rw.filesystem.denyWrite, [join(f.commonDir, "config"), join(f.commonDir, "hooks")]);
   assert.equal(rw.network.allowLocalBinding, true);
   assert.deepEqual(srtSeatConfig({ cwd: f.wt, write: false }).filesystem.allowWrite, []);
+});
+
+test("run_command names every path a sandboxed seat can write, sandbox-runtime's own defaults included", async () => {
+  // srt writes these whatever the config says (review of reuse/sandbox, round 1: /tmp/claude and ~/.claude/debug were
+  // writable while run_command said "writes fail"); compared as a seat is told them: no /dev nodes, no /private spelling
+  const { getDefaultWritePaths } = await import("@anthropic-ai/sandbox-runtime");
+  const home = homedir();
+  const defaults = getDefaultWritePaths()
+    .filter((p) => !p.startsWith("/dev/") && p !== "/private/tmp/claude")
+    .map((p) => (p.startsWith(`${home}/`) ? `~/${p.slice(home.length + 1)}` : p));
+  assert.deepEqual(defaults, [...SRT_OWN_WRITES], "SRT_OWN_WRITES must match the pinned sandbox-runtime's getDefaultWritePaths");
+  const f = fixture();
+  const describe = (write: boolean) => {
+    const sandbox = { wrap: (c: string) => Promise.resolve(c), reset: () => Promise.resolve(), scope: srtWriteScope(srtSeatConfig({ cwd: f.wt, write })) };
+    return localTools(f.wt, write, true, (s) => s, sandbox).find((x) => x.def.function.name === "run_command")?.def.function.description ?? "";
+  };
+  const rw = describe(true);
+  for (const p of [f.wt, f.commonDir, join(f.mods, ".cache"), ...SRT_OWN_WRITES]) assert.ok(rw.includes(p), `a write seat is told about ${p}: ${rw}`);
+  assert.ok(rw.includes(`not ${join(f.commonDir, "config")}, ${join(f.commonDir, "hooks")}`), `and about the denied config and hooks: ${rw}`);
+  const ro = describe(false);
+  for (const p of SRT_OWN_WRITES) assert.ok(ro.includes(p), `a read-only seat is told about ${p}: ${ro}`);
+  assert.ok(!ro.includes(f.commonDir), `a read-only seat is not told it may write the shared .git: ${ro}`);
 });
 
 test("claudeArgs: no sandbox unless asked; merged into --settings when asked, lean or --claude-full", () => {

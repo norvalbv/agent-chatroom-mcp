@@ -15,7 +15,7 @@ import { readdirSync, readFileSync, realpathSync, statSync, writeFileSync } from
 import { relative, resolve } from "node:path";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
-import { hubPortOf, srtSeatConfig } from "./sandbox.js";
+import { hubPortOf, srtSeatConfig, srtWriteScope } from "./sandbox.js";
 
 // ---------- wire types (OpenAI chat-completions shape, snake_case as providers send it) ----------
 export interface ToolCall {
@@ -158,6 +158,8 @@ const shq = (s: string) => `'${s.replace(/'/g, "'\\''")}'`;
 export interface ShellSandbox {
   wrap(command: string): Promise<string>;
   reset(): Promise<void>;
+  /** where commands can write, srtWriteScope's words: the seat's allowWrite plus sandbox-runtime's own paths */
+  scope: string;
 }
 export async function seatSandbox(cwd: string, write: boolean, hubPort?: number): Promise<ShellSandbox> {
   const { SandboxManager } = await import("@anthropic-ai/sandbox-runtime");
@@ -166,7 +168,8 @@ export async function seatSandbox(cwd: string, write: boolean, hubPort?: number)
   if (deps.errors.length) throw new Error(`--sandbox: sandbox-runtime is unavailable (${deps.errors.join("; ")}); refusing to run unsandboxed`);
   // srt derives its always-denied paths (.git/hooks, .git/config, shell rc files) from process.cwd(), not the command's cwd
   if (realpathSync(process.cwd()) !== realpathSync(cwd)) process.chdir(cwd);
-  await SandboxManager.initialize(srtSeatConfig({ cwd, write, hubPort }));
+  const config = srtSeatConfig({ cwd, write, hubPort });
+  await SandboxManager.initialize(config);
   const wrap = (command: string) => SandboxManager.wrapWithSandbox(`bash -lc ${shq(command)}`);
   // fail closed, like Claude Code's failIfUnavailable: a seat inside another Seatbelt sandbox cannot apply its own (macOS does not nest them)
   const probe = spawnSync("bash", ["-c", await wrap("true")], { cwd, encoding: "utf8", timeout: 30_000 });
@@ -174,7 +177,7 @@ export async function seatSandbox(cwd: string, write: boolean, hubPort?: number)
     await SandboxManager.reset().catch(() => {});
     throw new Error(`--sandbox: a sandboxed test command failed (exit ${probe.status}: ${(probe.stderr || "").trim().slice(0, 200)}); refusing to run unsandboxed`);
   }
-  return { wrap, reset: () => SandboxManager.reset() };
+  return { wrap, reset: () => SandboxManager.reset(), scope: srtWriteScope(config) };
 }
 
 type LocalTool = { def: ToolDef; run: (a: Record<string, string>) => string | Promise<string> };
@@ -295,7 +298,7 @@ export function localTools(cwd: string, write: boolean, shell: boolean, clamp: (
   ];
   if (shell)
     tools.push({
-      def: fn("run_command", `Run a bash command in ${cwd} (120s limit). ${write ? "You may modify files and commit." : "Read-only: mutating commands are refused."} Never run git config: every worktree shares the repository config. Never pkill/killall: other agents and the hub are node processes here; stop a process you started by its pid (kill $(lsof -ti:PORT)).${sandbox ? ` Each command runs in its own OS sandbox: ${write ? `writes outside ${cwd} fail` : "writes fail"}, and a process started by one command cannot be signalled by a later one, so start and stop a private hub in the same command.` : ""}`, { command: { type: "string" } }, ["command"]),
+      def: fn("run_command", `Run a bash command in ${cwd} (120s limit). ${write ? "You may modify files and commit." : "Read-only: mutating commands are refused."} Never run git config: every worktree shares the repository config. Never pkill/killall: other agents and the hub are node processes here; stop a process you started by its pid (kill $(lsof -ti:PORT)).${sandbox ? ` Each command runs in its own OS sandbox: ${sandbox.scope}; a process started by one command cannot be signalled by a later one, so start and stop a private hub in the same command.` : ""}`, { command: { type: "string" } }, ["command"]),
       run: (a) =>
         LETHAL.test(unquoted(a.command))
           ? `Refused: "${a.command.slice(0, 120)}" was not run. pkill, killall and kill -1/0 would take down the hub, the other seats and the launcher, which are node processes on this machine too. Stop only what you started, by pid: kill $(lsof -ti:PORT) for a hub you started on PORT.`
@@ -369,7 +372,7 @@ export async function runSeat(provider: ChatProvider, opts: SeatOptions): Promis
 
   // --sandbox: before anything else, so a seat that cannot be sandboxed fails before it joins a room
   const sandbox = opts.sandbox && shell ? await seatSandbox(cwd, write, opts.mcpUrl ? hubPortOf(opts.mcpUrl) : undefined) : undefined;
-  if (sandbox) log(`[${provider.label}] run_command runs in sandbox-runtime (${write ? `writes limited to ${cwd}` : "no writes"})`);
+  if (sandbox) log(`[${provider.label}] run_command runs in sandbox-runtime: ${sandbox.scope}`);
   const local = localTools(cwd, write, shell, clampLocal, sandbox);
   const tools: ToolDef[] = local.map((t) => t.def);
   const hubTools = new Set<string>();

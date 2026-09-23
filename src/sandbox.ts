@@ -117,6 +117,15 @@ export function claudeSandbox({ cwd, write, hubPort }: SeatSandboxInput): Claude
   };
 }
 
+/**
+ * Paths sandbox-runtime lets every sandboxed command write whatever the seat's config says (/dev nodes aside): /tmp/claude,
+ * which srt also makes the command's TMPDIR, and two convenience directories under the home directory. From srt 0.0.77
+ * dist/sandbox/sandbox-utils.js, getDefaultWritePaths (SANDBOX_OWN_WRITE_PATHS and HOME_CONVENIENCE_WRITE_DIRS). They are
+ * named wherever a seat's write scope is stated (srtWriteScope, the README), and scripts/sandbox-seats.test.ts fails if an
+ * srt upgrade changes the list.
+ */
+export const SRT_OWN_WRITES: readonly string[] = Object.freeze(["/tmp/claude", "~/.npm/_logs", "~/.claude/debug"]);
+
 /** The srt config for one OpenRouter seat (src/seat.ts wraps every run_command with it). Shape: SandboxRuntimeConfig. */
 export function srtSeatConfig({ cwd, write, hubPort }: SeatSandboxInput) {
   const git = write ? sharedGitWrites(cwd) : { allowWrite: [], denyWrite: [] };
@@ -124,11 +133,24 @@ export function srtSeatConfig({ cwd, write, hubPort }: SeatSandboxInput) {
     network: { allowedDomains: [...SANDBOX_DOMAINS, ...hubEntries(hubPort)], deniedDomains: [] as string[], allowLocalBinding: true },
     filesystem: {
       denyRead: [] as string[],
-      // srt denies every write not listed (its /tmp/claude TMPDIR aside); a read-only seat gets none of its own
+      // srt denies every write not listed here except its own SRT_OWN_WRITES; a read-only seat gets none of its own
       allowWrite: write ? [real(cwd), ...git.allowWrite, ...nodeModulesCaches(cwd)] : [],
       denyWrite: git.denyWrite,
     },
   };
+}
+export type SrtSeatConfig = ReturnType<typeof srtSeatConfig>;
+
+/**
+ * Where an srt seat's commands can write, in the words the seat and its operator see (run_command's description, the
+ * seat's startup log): the config's own allowWrite, its denyWrite as exceptions, then srt's SRT_OWN_WRITES. It is an
+ * upper bound: srt also denies some files inside the allowed paths (.git/hooks, shell rc files).
+ */
+export function srtWriteScope({ filesystem }: SrtSeatConfig): string {
+  const own = `sandbox-runtime's own ${SRT_OWN_WRITES.join(", ")} (/tmp/claude is the command's TMPDIR)`;
+  if (!filesystem.allowWrite.length) return `writes succeed only under ${own}`;
+  const except = filesystem.denyWrite.length ? ` (not ${filesystem.denyWrite.join(", ")})` : "";
+  return `writes succeed only under ${filesystem.allowWrite.join(", ")}${except}, and ${own}`;
 }
 
 /** Whether the launcher/hub asked for sandboxed seats. */

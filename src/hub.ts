@@ -1205,7 +1205,7 @@ export class Hub {
         this.settleRead(room, p, p.lastSeenSeq, unread);
         if (owed) {
           const queued = unread.length - 1;
-          const latest = room.messages.at(-1)!.seq;
+          const latest = [...room.messages].reverse().find((m) => this.pushableTo(room, m, p.id))!.seq;
           throw new HubError(
             `You still owe a reply to #${owed.seq} from ${this.shown(room, owed.from)}. Reply with send_message reply_to="${owed.id}", or call pass to decline it. ` +
               `${queued} other message(s) queued behind it (below); the latest seq is #${latest}.`,

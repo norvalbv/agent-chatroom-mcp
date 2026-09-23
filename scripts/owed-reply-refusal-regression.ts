@@ -47,6 +47,11 @@ assert.match(stale.message, new RegExp(`latest seq is #${last.seq}\\b`));
 assert.equal(stale.data?.queued, 2);
 assert.equal(stale.data?.latest_seq, last.seq);
 
+// A quiet exchange the seat is not part of does not move the latest seq it is told about.
+hub.send(name, other.id, "@asker quiet aside", undefined, true, true);
+const aside = refusal(() => hub.send(name, seat.id, "still unrelated"));
+assert.match(aside.message, new RegExp(`latest seq is #${last.seq}\\b`), "a quiet message the seat is not in is not its latest seq");
+
 // Replying settles it.
 hub.send(name, seat.id, "src/hub.ts", ask.id);
 console.log("OWED REPLY REFUSAL OK");

@@ -70,7 +70,8 @@ test('split: branches merge in fixed order; a conflict keeps the earlier branch 
     const s2 = seat(fx, R, 'split-2', p + 'split-2', [['greet: fix', { ...fix(fx, 'greet'), 'NOTES.md': 'from two\n' }]]);
     const s1 = seat(fx, R, 'split-1', p + 'split-1', [['double: fix', { ...fix(fx, 'double'), 'NOTES.md': 'from one\n' }]]);
     const s3 = seat(fx, R, 'split-3', p + 'split-3', []);
-    runJson(fx, R, 'split', [s2, s1, s3]);
+    const s10 = { ...seat(fx, R, 'split-10', p + 'split-10', []), branch: null }; // numeric order; a seat with no branch is skipped
+    runJson(fx, R, 'split', [s2, s10, s1, s3]);
     const final = finalizeRun(R);
     assert.equal(final.source, 'merge');
     assert.deepEqual(final.order, [p + 'split-1', p + 'split-2', p + 'split-3']);
@@ -97,10 +98,11 @@ test('rooms: the declared integration branch wins; without one the worker branch
     const R2 = join(base, 'r2'); mkdirSync(R2);
     const a = seat(fx, R2, 'a', 'swarm/x2/claude-b', [['greet: fix', fix(fx, 'greet')]]);
     const b = seat(fx, R2, 'b', 'swarm/x2/claude-a', [['double: fix', fix(fx, 'double')]]);
-    runJson(fx, R2, 'room3', [], { integration_branch: 'pool/dry-run/room3-rep2/integration', worker_branches: [a.branch, b.branch], data_dir: join(R2, 'room', 'data') });
+    const c = seat(fx, R2, 'c', 'swarm/x2/claude-a10', []);
+    runJson(fx, R2, 'room3', [], { integration_branch: 'pool/dry-run/room3-rep2/integration', declared_branch: null, worker_branches: [c.branch, a.branch, b.branch], data_dir: join(R2, 'room', 'data') });
     const f2 = finalizeRun(R2);
     assert.equal(f2.source, 'merge');
-    assert.deepEqual(f2.order, ['swarm/x2/claude-a', 'swarm/x2/claude-b']);
+    assert.deepEqual(f2.order, ['swarm/x2/claude-a', 'swarm/x2/claude-a10', 'swarm/x2/claude-b']);
     assert.equal(scoreRun(R2, { hiddenParent: fx.hiddenParent }).passed, 2);
   } finally { rmSync(base, { recursive: true, force: true }); }
 });

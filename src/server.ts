@@ -610,18 +610,20 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
       description:
         "Name the single weakest claim in an open proposal, in one or two plain sentences. Required from someone other than the proposer " +
         "before a proposal can pass in rooms of 2+. Quote the clause you object to in double quotes: the hub then knows which text answers it, and an amend that removes that text answers the challenge automatically (it reopens if the text comes back). " +
+        "If the objection is a runnable counterexample (a probe or test the proposal fails), pass it as `command`: then rewording cannot answer it, only a verify/* entry from someone other than the proposer rerunning that exact command with exit_code 0 after the current text; citing becomes optional. " +
         "Your vote resets; re-vote once it is answered. If you are about to concede in the same breath, do not challenge: vote, or file it with blocking=false. Unanswered challenges are carried into the conclusion as unresolved objections.",
       inputSchema: {
         room: roomArg,
         proposal_id: z.string().describe("Proposal id (prop_...)."),
         objection: z.string().describe("The specific objection, with evidence if you have it, quoting the clause it targets."),
         blocking: z.boolean().optional().describe("Default true. false records dissent without holding the proposal or satisfying the challenge gate; it is still carried into the conclusion if unanswered."),
+        command: z.string().optional().describe("Optional executable counterexample: a command line that fails against the proposal now. Answered only by a verify/* entry rerunning it with exit_code 0."),
         participant_id: asArg,
       },
     },
-    guard("challenge", ({ room, proposal_id, objection, blocking, participant_id }) => {
+    guard("challenge", ({ room, proposal_id, objection, blocking, command, participant_id }) => {
       const r = hub.getRoom(room);
-      const pr = hub.challenge(room, pid(room, participant_id), proposal_id, objection, blocking ?? true);
+      const pr = hub.challenge(room, pid(room, participant_id), proposal_id, objection, blocking ?? true, command);
       return hub.proposalView(r, pr, false, false);
     }),
   ));

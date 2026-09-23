@@ -3,14 +3,21 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { resolve, dirname } from 'node:path';
 
-export function runCommands(commands, { cwd, timeout = 120_000 } = {}) {
+/** Runs every command even after a failure, so one flaky script cannot hide later results; returns the first failure's exit code. */
+export function runCommands(commands, { cwd, timeout = 120_000, log = line => console.error(line) } = {}) {
+  const failures = [];
   for (const { name, command, args } of commands) {
     console.log(`\n[offline] ${name}`);
     const result = spawnSync(command, args, { cwd, stdio: 'inherit', timeout, killSignal: 'SIGKILL' });
     if (result.error || result.signal || result.status !== 0) {
-      console.error(`[offline] FAILED ${name}: ${result.error?.message ?? result.signal ?? `exit ${result.status}`}`);
-      return result.status || 1;
+      const reason = result.error?.message ?? result.signal ?? `exit ${result.status}`;
+      log(`[offline] FAILED ${name}: ${reason}`);
+      failures.push({ name, reason, code: result.status || 1 });
     }
+  }
+  if (failures.length) {
+    log(`[offline] FAILED ${failures.length} of ${commands.length} commands:\n${failures.map(f => `  - ${f.name}: ${f.reason}`).join('\n')}`);
+    return failures[0].code;
   }
   console.log(`[offline] OK (${commands.length} commands)`);
   return 0;

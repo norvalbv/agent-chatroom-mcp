@@ -349,7 +349,8 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
       // loop), but done server-side so a client with no such loop (e.g. a Claude Code seat, which pays
       // a full-context turn on every wait_for_messages return) gets the saving too.
       if (hold_until_actionable) {
-        while (!hub.actionableNow(r, p)) {
+        // a delivered message that @-names this seat is actionable even once settled (a hub notice retires on delivery)
+        while (!hub.actionableNow(r, p) && !msgs.some((m) => m.mentions?.includes(id!))) {
           const remaining = waitDeadline - Date.now();
           if (remaining <= 0) break;
           const more = await hub.wait(room, id, p.lastSeenSeq, remaining);

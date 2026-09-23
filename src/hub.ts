@@ -1052,6 +1052,14 @@ export class Hub {
       if (this.pushableTo(room, m, p.id) || !this.visibleTo(room, m, p.id)) still.add(m.seq);
     }
     p.withheld = [...still];
+    // A hub notice that @-names a seat (the reviewer assignment) is news, not a question: it has no author to
+    // reply_to, so once delivered it retires instead of staying the focused ask. Left as debt, it pinned every
+    // later wait/read to that one message and refused send_message as "arrived while composing" until pass.
+    for (const m of delivered) {
+      if (m.from.id !== "system" || m.kind !== "chat" || !m.mentions?.includes(p.id) || p.declinedAsks?.includes(m.id)) continue;
+      p.declinedAsks = [...(p.declinedAsks ?? []), m.id];
+      p.declinedAt = { ...(p.declinedAt ?? {}), [m.id]: m.seq };
+    }
     const focus = this.attentionFocus(room, p);
     if (focus && deliveredSeqs.has(focus.seq)) p.focusedAsk = focus.id;
     this.markRead(room, p, ceiling);
@@ -1568,7 +1576,8 @@ export class Hub {
     if (p.agent === "human" || p.role === "chair" || room.state === "closed" || room.state === "concluded") return;
     const human = [...room.messages].reverse().find((m) => m.kind === "chat" && m.tag !== "opening" &&
       m.from.agent === "human" && !this.isAnswered(room, m) && !p.declinedAsks?.includes(m.id) && this.responderFor(room, m, p.id).mine);
-    return human ?? this.addressedBy(room, p)[0];
+    // hub notices ride the normal stream (settleRead retires them on delivery); only an author can be answered
+    return human ?? this.addressedBy(room, p).find((m) => m.from.id !== "system");
   }
 
   attentionHint(room: Room, p: Participant): string | undefined {

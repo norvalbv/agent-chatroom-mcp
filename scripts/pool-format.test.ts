@@ -202,3 +202,21 @@ test('a hidden test that needs the repo\'s untracked node_modules passes validat
     assert.equal(spawnSync('git', ['-C', linked, 'status', '--porcelain'], { encoding: 'utf8' }).stdout, '', 'the link is ignored, not a change');
   } finally { rmSync(base, { recursive: true, force: true }); }
 });
+
+test('validate reruns each hidden test and rejects an item whose outcome flips between runs (flaky)', () => {
+  const base = mkdtempSync(join(tmpdir(), 'pool-flaky-'));
+  try {
+    const fx = makeDryRunPool(base);
+    const id = fx.pool.items[0].id;
+    const cmdPath = join(fx.hiddenParent, 'dry-run', id, 'cmd');
+    const original = readFileSync(cmdPath, 'utf8').trim();
+    // every second run exits 1 regardless: always red at base, but green then red with the reference fix
+    writeFileSync(cmdPath, `if [ -f .flip ]; then rm .flip; exit 1; fi; touch .flip; ${original}\n`);
+    const report = validatePool(fx.poolDir, { hiddenParent: fx.hiddenParent, scratch: join(base, 'v'), repeats: 3 });
+    const r = report.items.find((x: { id: string }) => x.id === id)!;
+    assert.equal(r.flaky, true);
+    assert.equal(r.ok, false, 'a flaky item is not valid');
+    const other = report.items.find((x: { id: string }) => x.id !== id)!;
+    assert.equal(other.ok, true, 'a stable item stays valid');
+  } finally { rmSync(base, { recursive: true, force: true }); }
+});

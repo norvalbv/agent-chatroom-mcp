@@ -70,7 +70,9 @@ test('solo, fake seat: fresh worktree at base, one commit per item, run.json wit
     assert.equal(runDir, join(scratch, 'dry-run', 'solo-rep1'));
     const run = JSON.parse(readFileSync(join(runDir, 'run.json'), 'utf8'));
     assert.equal(run.arm, 'solo'); assert.equal(run.rep, 1); assert.equal(run.fake, true);
-    assert.equal(run.base_commit, pool.base_commit);
+    assert.equal(run.source_base_commit, pool.base_commit);
+    assert.equal(run.repo, join(runDir, 'repo'), 'the run works in its own repository');
+    assert.equal(git(run.repo, 'rev-parse', 'HEAD'), run.base_commit, 'the run repo starts at its single base commit');
     assert.match(run.pool_sha256, /^[a-f0-9]{64}$/);
     assert.equal(run.account.account, 3);
     assert.equal(run.seats.length, 1);
@@ -84,7 +86,7 @@ test('solo, fake seat: fresh worktree at base, one commit per item, run.json wit
     assert.ok(existsSync(seat.transcript));
     assert.ok(readFileSync(join(runDir, 'briefs', 'solo.txt'), 'utf8').includes('[double]'));
     // one commit per item on the seat branch, above base, with the item id in the message
-    const log = git(fx.repo, 'log', '--format=%s', `${pool.base_commit}..${seat.branch}`).split('\n');
+    const log = git(run.repo, 'log', '--format=%s', `${run.base_commit}..${seat.branch}`).split('\n');
     assert.deepEqual(log.map(s => s.split(':')[0]).sort(), ['double', 'greet']);
     // the seat never saw the hidden root: not in its brief, not in its environment
     assert.ok(!readFileSync(seat.transcript, 'utf8').includes(fx.hiddenParent));
@@ -105,7 +107,7 @@ test('split, fake seats: three worktrees, each seat commits only its third', asy
     assert.equal(run.account.account, null);
     assert.match(run.account.reason, /switch log/);
     run.seats.forEach((s: any, k: number) => {
-      const subjects = git(fx.repo, 'log', '--format=%s', `${pool.base_commit}..${s.branch}`);
+      const subjects = git(run.repo, 'log', '--format=%s', `${run.base_commit}..${s.branch}`);
       const got = subjects ? subjects.split('\n').map(x => x.split(':')[0]).sort() : [];
       assert.deepEqual(got, [...pool.split[k]].sort(), s.name);
     });
@@ -216,6 +218,23 @@ test('a process a seat started in its own process group is stopped too: nothing 
     assert.ok(run.stray_processes_stopped >= 1, `stray_processes_stopped: ${run.stray_processes_stopped}`);
     await new Promise(ok => setTimeout(ok, 3500));
     assert.ok(!existsSync(join(run.seats[0].worktree, 'orphan-was-here')), 'the detached child outlived the run');
+  } finally { rmSync(base, { recursive: true, force: true }); }
+});
+
+test('each run gets its own repository: a second run cannot see the first run\'s branches or commits', async () => {
+  const base = mkdtempSync(join(tmpdir(), 'pool-iso-'));
+  try {
+    const fx = makeDryRunPool(base);
+    const solutions = join(base, 'solutions.json'); writeFileSync(solutions, JSON.stringify(fx.solutions));
+    const scratch = join(base, 'runs');
+    const r1 = await runArm({ poolDir: fx.poolDir, arm: 'solo', rep: 1, scratch, fake: { solutions } });
+    const r2 = await runArm({ poolDir: fx.poolDir, arm: 'solo', rep: 2, scratch, fake: { solutions } });
+    const run1 = JSON.parse(readFileSync(join(r1, 'run.json'), 'utf8')), run2 = JSON.parse(readFileSync(join(r2, 'run.json'), 'utf8'));
+    const head1 = git(run1.repo, 'rev-parse', run1.seats[0].branch);
+    assert.notEqual(run1.repo, run2.repo);
+    assert.ok(!git(run2.repo, 'branch', '-a').includes('solo-rep1'), 'run 2 lists no run-1 branch');
+    assert.equal(spawnSync('git', ['-C', run2.repo, 'cat-file', '-e', head1 + '^{commit}']).status !== 0, true, "run 1's commit is not in run 2's repository");
+    assert.ok(!git(fx.repo, 'branch', '-a').includes('pool/'), 'the source repository gets no pool branches');
   } finally { rmSync(base, { recursive: true, force: true }); }
 });
 

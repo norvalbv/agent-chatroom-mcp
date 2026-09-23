@@ -133,7 +133,7 @@ export function scoreRun(runDir: string, opts: { hiddenParent?: string } = {}) {
   const suiteCmd = pool.suite_cmd ?? 'npm test';
   let suite, items;
   worktreeAt(run.repo, final.head, suiteWt);
-  linkNodeModules(run.repo, suiteWt);
+  linkNodeModules(run.source_repo ?? run.repo, suiteWt); // the isolated run repo has no node_modules
   try {
     const r = runCmd(suiteCmd, suiteWt, ITEM_TIMEOUT_MS);
     suite = { cmd: suiteCmd, exit_code: r.exit_code, pass: r.exit_code === 0, output_tail: r.output_tail };
@@ -144,7 +144,7 @@ export function scoreRun(runDir: string, opts: { hiddenParent?: string } = {}) {
     // One item at a time: only its own hidden tests are present when its cmd runs; then back to the clean head
     // (clean -fd keeps ignored files such as the node_modules link, which is relinked if a non-ignoring repo lost it).
     items = pool.items.map((i: any, n: number) => {
-      linkNodeModules(run.repo, testWt);
+      linkNodeModules(run.source_repo ?? run.repo, testWt);
       copyHiddenTests(hiddenItems[n], testWt); // tests only; reference.patch is never copied
       const r = runCmd(hiddenItems[n].cmd, testWt, ITEM_TIMEOUT_MS);
       gitOut(testWt, 'reset', '-q', '--hard'); gitOut(testWt, 'clean', '-fdq');

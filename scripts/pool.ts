@@ -1,6 +1,6 @@
 /** Pool-throughput harness CLI (docs/experiments/2026-09-23-pool-throughput.md).
  *   node --import tsx scripts/pool.ts lock --pool DIR
- *   node --import tsx scripts/pool.ts validate --pool DIR [--hidden PARENT] [--scratch DIR]
+ *   node --import tsx scripts/pool.ts validate --pool DIR [--hidden PARENT] [--scratch DIR] [--repeats N (default 3)] [--suite]
  *   node --import tsx scripts/pool.ts run --pool DIR --arm solo|split|room3|room15 --rep N [--scratch DIR] [--switch-log FILE] [--port N]
  *        [--fake-solutions FILE] [--deadline-ms N]   (fake seats and a shortened deadline are for dry runs only; prints the run dir)
  *   node --import tsx scripts/pool.ts finalize --run R
@@ -28,7 +28,7 @@ async function main(argv: string[]) {
       console.log(lockPool(need('pool')));
       return 0;
     case 'validate': {
-      const report = validatePool(need('pool'), { hiddenParent: flag('hidden'), scratch: flag('scratch') });
+      const report = validatePool(need('pool'), { hiddenParent: flag('hidden'), scratch: flag('scratch'), repeats: flag('repeats') ? Number(flag('repeats')) : undefined, suite: process.argv.includes('--suite') });
       console.log(JSON.stringify(report, null, 2));
       for (const r of report.items) console.error(`${r.ok ? 'ok  ' : 'FAIL'} ${r.id}: fails at base=${r.fails_at_base} passes with reference=${r.passes_with_reference}${r.names_in_repo.length || r.names_in_briefs.length ? ` hidden names already visible: ${[...r.names_in_repo, ...r.names_in_briefs].join(', ')}` : ''}${r.error ? ' (' + r.error + ')' : ''}`);
       return report.ok ? 0 : 1;

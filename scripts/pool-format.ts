@@ -131,6 +131,24 @@ export function worktreeAt(repo: string, commit: string, dir: string, branch?: s
   return opts.linkNodeModules ? linkNodeModules(repo, dir) : 'not-requested';
 }
 
+/** Each run works in its own repository holding only the pool's base tree as one commit, so no other run's branches,
+ * worktrees or objects exist in it. In pool 1 every run shared the real repository, and seats could list earlier runs'
+ * pool/* branches with `git branch -a`; deleting branches is not enough, because their objects stay reachable. The tree
+ * comes from `git archive` (tracked files only); author, committer and dates are fixed so the commit is reproducible. */
+export function isolatedRepo(sourceRepo: string, baseCommit: string, dir: string): string {
+  if (existsSync(dir)) throw new Error(`isolated repo ${dir} already exists`);
+  mkdirSync(dir, { recursive: true });
+  execFileSync('git', ['init', '--quiet', '-b', 'main', dir], { stdio: 'pipe' });
+  const tar = join(dir, '..', `.${basename(dir)}-base.tar`);
+  execFileSync('git', ['-C', sourceRepo, 'archive', '--format=tar', '-o', tar, baseCommit], { stdio: 'pipe' });
+  execFileSync('tar', ['-xf', tar, '-C', dir], { stdio: 'pipe' });
+  rmSync(tar, { force: true });
+  execFileSync('git', ['-C', dir, 'add', '-A'], { stdio: 'pipe', maxBuffer: 256 * 1024 * 1024 });
+  const when = '2026-01-01T00:00:00Z', id = { GIT_AUTHOR_NAME: 'pool-harness', GIT_AUTHOR_EMAIL: 'pool-harness@local', GIT_COMMITTER_NAME: 'pool-harness', GIT_COMMITTER_EMAIL: 'pool-harness@local', GIT_AUTHOR_DATE: when, GIT_COMMITTER_DATE: when };
+  execFileSync('git', ['-C', dir, 'commit', '--quiet', '--no-verify', '-m', `pool base ${baseCommit}`], { stdio: 'pipe', env: { ...process.env, ...id } });
+  return execFileSync('git', ['-C', dir, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
+}
+
 /** A worktree has no node_modules: link the repo checkout's (as swarm.ts workerCwd does) so builds, suites and tests
  * that need dependencies run. 'absent' when the repo has none or the worktree already has one. */
 export function linkNodeModules(repo: string, worktree: string): 'linked' | 'linked-unignored' | 'absent' {
@@ -150,10 +168,14 @@ export type ValidateItem = { id: string; ok: boolean; fails_at_base: boolean | n
   /** Hidden test file names that already occur in the repo at base or in any brief: the leakage audit searches
    * transcripts for these names, so an item may only enter the pool when both lists are empty. */
   names_in_repo: string[]; names_in_briefs: string[];
-  base_exit: number | null; reference_exit: number | null; base_tail: string; reference_tail: string; error?: string };
+  base_exit: number | null; reference_exit: number | null; base_tail: string; reference_tail: string; error?: string ; flaky?: boolean; base_exits?: (number | null)[]; reference_exits?: (number | null)[]; suite_with_reference?: boolean; suite_tail?: string };
 
 /** Each item in its own fresh worktree at base_commit: its hidden test must fail, then pass once reference.patch is applied. */
-export function validatePool(poolDir: string, opts: { hiddenParent?: string; scratch?: string; timeoutMs?: number } = {}) {
+/** `repeats` (default 3) reruns the hidden command at base and with the reference fix; an item whose outcome changes
+ * between runs is flaky and invalid (SWE-bench-Live's repeated validation). `suite` also runs the pool's suite_cmd with
+ * the reference fix applied and rejects an item whose fix breaks it (slow on large suites, so opt-in). */
+export function validatePool(poolDir: string, opts: { hiddenParent?: string; scratch?: string; timeoutMs?: number; repeats?: number; suite?: boolean } = {}) {
+  const repeats = Math.max(1, opts.repeats ?? 3);
   const { pool, sha256: poolSha } = loadPool(poolDir);
   const hidden = hiddenRoot(pool.name, opts.hiddenParent);
   const scratch = opts.scratch ? resolve(opts.scratch) : mkdtempSync(join(tmpdir(), 'pool-validate-'));
@@ -171,18 +193,30 @@ export function validatePool(poolDir: string, opts: { hiddenParent?: string; scr
       r.names_in_repo = names.filter(n => repoNames.has(n));
       r.names_in_briefs = names.filter(n => pool.items.some(i => i.brief.includes(n) || i.title.includes(n)));
       copyHiddenTests(item, wt);
-      const atBase = runCmd(item.cmd, wt, opts.timeoutMs);
-      r.base_exit = atBase.exit_code; r.base_tail = atBase.output_tail; r.fails_at_base = atBase.exit_code !== 0;
+      const baseRuns = Array.from({ length: repeats }, () => runCmd(item.cmd, wt, opts.timeoutMs));
+      const atBase = baseRuns[0];
+      r.base_exit = atBase.exit_code; r.base_tail = atBase.output_tail;
+      r.base_exits = baseRuns.map(x => x.exit_code);
+      r.fails_at_base = baseRuns.every(x => x.exit_code !== 0);
+      r.flaky = baseRuns.some(x => x.exit_code === 0) && baseRuns.some(x => x.exit_code !== 0);
       const applied = spawnSync('git', ['apply', '--whitespace=nowarn', item.patchPath], { cwd: wt, encoding: 'utf8', maxBuffer: 256 * 1024 * 1024 });
       if (applied.status !== 0) {
         r.passes_with_reference = false;
         r.reference_tail = ('reference.patch did not apply: ' + applied.stderr).slice(-2000);
       } else {
         copyHiddenTests(item, wt); // the hidden tests are authoritative even if the patch touched them
-        const withRef = runCmd(item.cmd, wt, opts.timeoutMs);
-        r.reference_exit = withRef.exit_code; r.reference_tail = withRef.output_tail; r.passes_with_reference = withRef.exit_code === 0;
+        const refRuns = Array.from({ length: repeats }, () => runCmd(item.cmd, wt, opts.timeoutMs));
+        const withRef = refRuns[0];
+        r.reference_exit = withRef.exit_code; r.reference_tail = withRef.output_tail;
+        r.reference_exits = refRuns.map(x => x.exit_code);
+        r.passes_with_reference = refRuns.every(x => x.exit_code === 0);
+        r.flaky = r.flaky || (refRuns.some(x => x.exit_code === 0) && refRuns.some(x => x.exit_code !== 0));
+        if (opts.suite && pool.suite_cmd) {
+          const suite = runCmd(pool.suite_cmd, wt, opts.timeoutMs);
+          r.suite_with_reference = suite.exit_code === 0; r.suite_tail = suite.output_tail;
+        }
       }
-      r.ok = r.fails_at_base === true && r.passes_with_reference === true && !r.names_in_repo.length && !r.names_in_briefs.length;
+      r.ok = r.fails_at_base === true && r.passes_with_reference === true && !r.flaky && r.suite_with_reference !== false && !r.names_in_repo.length && !r.names_in_briefs.length;
     } catch (e) {
       r.error = e instanceof Error ? e.message : String(e);
     } finally {

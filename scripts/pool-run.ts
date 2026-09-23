@@ -21,7 +21,7 @@ import { carrySettings } from '../src/env.js';
 import { delay, json, runClaudeSeat, stop, track, type SeatRecord } from './bench-build-runtime.ts';
 import { estimateSeatCost, type MessageUsage } from './seat-cost-estimate.ts';
 import { accountAt, extractSwitches } from './paper-account-regime.ts';
-import { hiddenRoot, loadPool, worktreeAt, type Pool } from './pool-format.ts';
+import { hiddenRoot, loadPool, worktreeAt, type Pool, isolatedRepo, linkNodeModules } from './pool-format.ts';
 
 const here = dirname(fileURLToPath(import.meta.url)), repoRoot = resolve(here, '..');
 export const MODEL = 'claude-opus-5-5';
@@ -106,6 +106,8 @@ export async function runArm(o: RunOptions): Promise<string> {
   const runDir = join(scratch, pool.name, runName(o.arm, o.rep));
   if (existsSync(runDir)) throw new Error(`refusing to reuse run dir ${runDir}`);
   for (const d of ['briefs', 'seats', 'wt']) mkdirSync(join(runDir, d), { recursive: true });
+  // this run's own repository: only the pool's base tree, no other run's refs or objects (isolatedRepo)
+  const runRepo = join(runDir, 'repo'), runBase = isolatedRepo(repo, pool.base_commit, runRepo);
 
   const hidden = [hiddenRoot(pool.name), process.env.POOL_HIDDEN_ROOT ?? '', join(homedir(), '.agent-chatroom-hidden')].filter(Boolean);
   const deadlineMs = o.deadlineMs ?? pool.deadline_min * 60_000;
@@ -120,7 +122,7 @@ export async function runArm(o: RunOptions): Promise<string> {
   const integrationBranch = seatBranch(pool.name, o.arm, o.rep, 'integration');
   const started = Date.now(), deadlineAt = started + deadlineMs;
   const run: any = {
-    pool: pool.name, pool_dir: realpathSync(o.poolDir), pool_sha256: sha256, arm: o.arm, rep: o.rep, repo, base_commit: pool.base_commit, deadline_min: pool.deadline_min,
+    pool: pool.name, pool_dir: realpathSync(o.poolDir), pool_sha256: sha256, arm: o.arm, rep: o.rep, repo: runRepo, base_commit: runBase, source_repo: repo, source_base_commit: pool.base_commit, deadline_min: pool.deadline_min,
     deadline_override_ms: o.deadlineMs ?? null, model: MODEL, started_at: new Date(started).toISOString(), deadline_at: new Date(deadlineAt).toISOString(),
     ended_at: null, account: accountRecord(o.switchLog ?? process.env.POOL_SWITCH_LOG, started), fake: !!o.fake, seats: [] as SeatRow[], room: null,
   };
@@ -131,7 +133,8 @@ export async function runArm(o: RunOptions): Promise<string> {
     assertBriefClean(brief, hidden);
     const wt = join(runDir, 'wt', seat), branch = seatBranch(pool.name, o.arm, o.rep, seat);
     // A worktree has no node_modules; link the checkout's for builds and tests ('linked-unignored': a seat's git add -A could commit it).
-    const nodeModules = worktreeAt(repo, pool.base_commit, wt, branch, { linkNodeModules: true });
+    worktreeAt(runRepo, runBase, wt, branch);
+    const nodeModules = linkNodeModules(repo, wt); // dependencies from the real checkout; the run repo has none
     const briefPath = join(runDir, 'briefs', seat + '.txt'); writeFileSync(briefPath, brief);
     mkdirSync(join(runDir, 'seats', seat), { recursive: true });
     return { wt, branch, briefPath, nodeModules };

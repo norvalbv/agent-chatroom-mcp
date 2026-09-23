@@ -1,0 +1,56 @@
+{
+  "heads": 243,
+  "rooms": 28,
+  "rooms_by_kind": {
+    "hub": 16,
+    "web": 10,
+    "other": 2
+  },
+  "exit_code": {
+    "zero": 235,
+    "nonzero": 4,
+    "missing": 4
+  },
+  "commit_named": 117,
+  "classes": {
+    "existing_tests": 169,
+    "scripted_smoke": 56,
+    "own_probe": 6,
+    "browser": 12,
+    "real_agents": 0
+  },
+  "by_kind": {
+    "hub": {
+      "existing_tests": 45,
+      "scripted_smoke": 56,
+      "own_probe": 4,
+      "browser": 0,
+      "real_agents": 0
+    },
+    "web": {
+      "existing_tests": 121,
+      "scripted_smoke": 0,
+      "own_probe": 2,
+      "browser": 12,
+      "real_agents": 0
+    },
+    "other": {
+      "existing_tests": 3,
+      "scripted_smoke": 0,
+      "own_probe": 0,
+      "browser": 0,
+      "real_agents": 0
+    }
+  },
+  "non_author": {
+    "heads": 103,
+    "classes": {
+      "existing_tests": 51,
+      "scripted_smoke": 41,
+      "own_probe": 5,
+      "browser": 6,
+      "real_agents": 0
+    }
+  },
+  "labelled": 28
+}

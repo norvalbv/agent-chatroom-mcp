@@ -1,0 +1,116 @@
+{
+  "rooms": [
+    {
+      "room": "swarm-083203-kooz",
+      "label": "Hub room A",
+      "n": 89,
+      "acts": {
+        "reran_author_command": 44,
+        "read_diff_only": 20,
+        "own_independent_test": 13,
+        "exercised_real_behaviour": 3,
+        "provenance_check": 6,
+        "asserted_without_evidence": 3
+      },
+      "defects": {
+        "reran_author_command": 16,
+        "read_diff_only": 16,
+        "own_independent_test": 6,
+        "exercised_real_behaviour": 3,
+        "provenance_check": 3,
+        "asserted_without_evidence": 0
+      }
+    },
+    {
+      "room": "swarm-092653-202z",
+      "label": "Hub room B",
+      "n": 52,
+      "acts": {
+        "reran_author_command": 12,
+        "read_diff_only": 18,
+        "own_independent_test": 7,
+        "exercised_real_behaviour": 12,
+        "provenance_check": 1,
+        "asserted_without_evidence": 2
+      },
+      "defects": {
+        "reran_author_command": 1,
+        "read_diff_only": 8,
+        "own_independent_test": 3,
+        "exercised_real_behaviour": 2,
+        "provenance_check": 0,
+        "asserted_without_evidence": 0
+      }
+    },
+    {
+      "room": "swarm-193626-mwbk",
+      "label": "Game room 1",
+      "n": 103,
+      "acts": {
+        "reran_author_command": 59,
+        "read_diff_only": 21,
+        "own_independent_test": 9,
+        "exercised_real_behaviour": 8,
+        "provenance_check": 3,
+        "asserted_without_evidence": 3
+      },
+      "defects": {
+        "reran_author_command": 8,
+        "read_diff_only": 9,
+        "own_independent_test": 7,
+        "exercised_real_behaviour": 3,
+        "provenance_check": 0,
+        "asserted_without_evidence": 0
+      }
+    },
+    {
+      "room": "swarm-221023-k6l4",
+      "label": "Game room 2",
+      "n": 87,
+      "acts": {
+        "reran_author_command": 39,
+        "read_diff_only": 14,
+        "own_independent_test": 9,
+        "exercised_real_behaviour": 14,
+        "provenance_check": 11,
+        "asserted_without_evidence": 0
+      },
+      "defects": {
+        "reran_author_command": 14,
+        "read_diff_only": 9,
+        "own_independent_test": 9,
+        "exercised_real_behaviour": 6,
+        "provenance_check": 8,
+        "asserted_without_evidence": 0
+      }
+    }
+  ],
+  "total": {
+    "acts": {
+      "reran_author_command": 154,
+      "read_diff_only": 73,
+      "own_independent_test": 38,
+      "exercised_real_behaviour": 37,
+      "provenance_check": 21,
+      "asserted_without_evidence": 8
+    },
+    "defects": {
+      "reran_author_command": 39,
+      "read_diff_only": 42,
+      "own_independent_test": 25,
+      "exercised_real_behaviour": 14,
+      "provenance_check": 11,
+      "asserted_without_evidence": 0
+    },
+    "n": 331,
+    "found": 131
+  },
+  "yield": {
+    "reran_author_command": 0.25,
+    "read_diff_only": 0.58,
+    "own_independent_test": 0.66,
+    "exercised_real_behaviour": 0.38,
+    "provenance_check": 0.52,
+    "asserted_without_evidence": 0
+  }
+}

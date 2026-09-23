@@ -79,3 +79,41 @@ Unlaunched cells are absent from the denominators; launched cells with non-pass 
 \end{table}
 
 Within the exploratory long-thinking stratum, the interpreter comparisons use 19 seeds per arm. A passed 18/19; AH, B, K and C each passed 19/19. On printf, the inferential sample has 15 seeds per arm: A and AH passed 11/15, B and C 10/15, and K 12/15. Every Holm-adjusted comparison against A had $p=1.000$. That test result means no arm was distinguished in these small samples, not that their effects are equal or that the primary prediction was confirmed. On the interpreter, B cost \$0.269 per correct answer and C \$1.407, with both passing 19/19. The pair's observed cost was about a fifth of the chatroom's. The pre-registered cost prediction concerned short thinking; this exploratory long-thinking inequality does not confirm it.
+
+\subsection{How seats check each other}
+\label{sec:results-review}
+
+This subsection is an exploratory audit added after both studies and was not pre-registered. It asks what one seat's check of another seat's work consisted of. It covers every room the hub recorded between 18 and 23 September 2026 in which seats posted structured verification entries: 28 rooms, of which 16 changed this system, 10 built a browser game and 2 worked on another codebase. These rooms used a mix of Claude, Codex and DeepSeek models; they are not the benchmark runs of Studies 1 and 2.
+
+\paragraph{What the rule asks for.} A verification entry satisfies the gate when it names the proposal, comes from a connection other than the proposer's, and reports exit code 0. The rule does not ask what the command exercised or whether it differs from the author's own check, and an entry that reports a failure is not a verdict: only a passing entry counts. When an author proposes without verification, the hub's refusal tells them to post the command they ran and adds that ``someone else must then run it''. While a proposal is open, the hub's prompt calls it ``open and untested'' until some seat names its weakest claim in one sentence. By construction, then, verification certifies that an author's evidence reproduces. Nothing plays the part of the held-out acceptance tests that a solver never sees in SWE-bench~\cite{Jimenez2023}.
+
+\paragraph{What verification entries ran.} Table~\ref{tab:verify-practice} and Figure~\ref{fig:review-practice}a classify all 243 structured entries by what their command ran. Of these, 235 reported exit code 0 and 117 named the commit they checked. None started model-driven agents on a changed build, including every entry from the 16 rooms that changed this system. Twelve drove a built web application in a real browser, all in game rooms, and six ran a check the verifying seat had written. The other 225 ran a build, a type check, the project's existing tests, or a scripted smoke client that drives a built hub without model seats. The 103 entries whose proposal author is known and differs from the verifier show the same pattern: 51/103 ran existing tests and 41/103 the smoke client.
+
+\begin{table}[t]
+\centering
+\scriptsize
+\caption{What each structured verification entry ran, by the kind of project its room worked on.}
+\label{tab:verify-practice}
+\input{tables/verify-practice.tex}
+\end{table}
+
+\paragraph{What review acts found.} In four of these rooms, two that changed this system and two game rooms, an AI auditor catalogued every review act from the room log and each seat's own transcript. A second auditor re-counted each room and tried to refute the first (Table~\ref{tab:review-audit}, Figure~\ref{fig:review-practice}b). Re-running the author's test, suite or build was the most common method, 154 of 331 acts, and the least likely to find a defect: 39/154, against 42/73 for reading the diff and 25/38 for a check the author had not supplied. These shares are associations, not effects of method; a reviewer may write its own check because it already suspects a problem.
+
+In both rooms that changed this system, neither auditor found a seat other than a change's author running agents on a changed build. The acts that the first auditor counted as using the system ``as its users would'' ran the scripted smoke client or observed the unchanged live hub. In the first of these rooms, seats asked about 35 times whether work had been tested; nearly every request asked for a commit and a command to re-run, not for evidence that the change worked for agents. In the game rooms, non-authors did open the game, at least 8 and 15 times by the auditors' counts. Even so, the first auditor listed 12 and 10 merged changes that no non-author had exercised in the game; the re-counts disputed individual items but not the pattern. In the first game room, reviewers had seen one change only in night scenes, and it failed for the owner in daylight six minutes after it merged.
+
+\begin{table}[t]
+\centering
+\scriptsize
+\caption{Review acts by method in the four audited rooms, and how many found a defect.}
+\label{tab:review-audit}
+\input{tables/review-audit.tex}
+\end{table}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\linewidth]{figures/fig-review-practice.png}
+\caption{(a) What all 243 structured verification entries ran. (b) Review acts in the four audited rooms by method; the orange share found a defect.}
+\label{fig:review-practice}
+\end{figure}
+
+\paragraph{Reading.} Across both kinds of project and both measures, seats checked each other often, but a check usually meant reproducing the author's evidence, which is what the verification rule asks for. Defects came disproportionately from reading the diff and from checks a reviewer built. The audit identifies a property of the design, not a causal effect: no room ran under a different verification rule.

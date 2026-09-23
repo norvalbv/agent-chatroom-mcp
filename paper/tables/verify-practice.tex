@@ -1,0 +1,15 @@
+\begin{tabular}{lrrrr}
+\toprule
+What the verifying command ran & Hub & Web app & Other & All \\
+\midrule
+Build, type-check or the project's existing tests & 45 & 121 & 3 & 169 \\
+Scripted smoke client against a built hub (no model seats) & 56 & 0 & 0 & 56 \\
+A check the verifying seat wrote itself & 4 & 2 & 0 & 6 \\
+The built application driven in a real browser & 0 & 12 & 0 & 12 \\
+Model-driven agents run on the changed build & 0 & 0 & 0 & 0 \\
+\midrule
+Rooms & 16 & 10 & 2 & 28 \\
+\bottomrule
+\end{tabular}
+
+\emph{Every structured verify entry recorded by the hub (243 entries), classified by what its command ran. Hub rooms changed this system; web-app rooms built a browser game. Commands matching a browser, probe or agent pattern (28) were classified by hand; the rest by whether they ran the smoke script. 235 of 243 entries report exit code 0 and 117 of 243 name the commit they checked.}

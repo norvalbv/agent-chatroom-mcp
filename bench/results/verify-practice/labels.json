@@ -1,0 +1,117 @@
+{
+  "note": "Hand classification of every verify head whose command matched a browser, probe or live-agent pattern (scripts/paper-verify-practice.ts). One annotator (the maintainer's assistant), labels read from the command text and, where the text was ambiguous, the seat's own transcript.",
+  "labels": {
+    "swarm-011152-pen5#0": {
+      "class": "existing_tests",
+      "note": "vite build, type-check and existing vitest suites; no browser was opened"
+    },
+    "swarm-011152-pen5#1": {
+      "class": "existing_tests",
+      "note": "vite build, type-check and existing vitest suites; no browser was opened"
+    },
+    "swarm-011152-pen5#12": {
+      "class": "browser",
+      "note": "reviewer's crash-reproduction script run against the production preview in a browser"
+    },
+    "swarm-011152-pen5#13": {
+      "class": "existing_tests",
+      "note": "vite build, type-check and existing vitest suites; no browser was opened"
+    },
+    "swarm-011152-pen5#14": {
+      "class": "browser",
+      "note": "crash reproduction plus aerial screenshots of grown settlements in a browser"
+    },
+    "swarm-011152-pen5#15": {
+      "class": "browser",
+      "note": "crash reproduction plus aerial screenshots of grown settlements in a browser"
+    },
+    "swarm-011152-pen5#16": {
+      "class": "existing_tests",
+      "note": "vite build, type-check and existing vitest suites; no browser was opened"
+    },
+    "swarm-011152-pen5#2": {
+      "class": "browser",
+      "note": "reviewer's crash-reproduction script run against the production preview in a browser"
+    },
+    "swarm-011152-pen5#3": {
+      "class": "existing_tests",
+      "note": "vite build, type-check and existing vitest suites; no browser was opened"
+    },
+    "swarm-011152-pen5#6": {
+      "class": "existing_tests",
+      "note": "vite build, type-check and existing vitest suites; no browser was opened"
+    },
+    "swarm-011152-pen5#8": {
+      "class": "browser",
+      "note": "browser A/B of two builds with the grow debug hook"
+    },
+    "swarm-083203-kooz#5": {
+      "class": "existing_tests",
+      "note": "the offline suite, with the remainder run through a helper that reuses the suite's own arguments"
+    },
+    "swarm-092653-202z#5": {
+      "class": "scripted_smoke",
+      "note": "smoke script plus every offline-suite script run one at a time through a helper"
+    },
+    "swarm-113947-ne8o#0": {
+      "class": "own_probe",
+      "note": "reads the recorded usage of three runs to check a budget claim"
+    },
+    "swarm-120937-t1gx#2": {
+      "class": "existing_tests",
+      "note": "reruns the documented reproduction commands and byte-compares their outputs with the committed files"
+    },
+    "swarm-120937-t1gx#5": {
+      "class": "existing_tests",
+      "note": "reruns the documented reproduction commands and byte-compares their outputs with the committed files"
+    },
+    "swarm-171735-2lp8#2": {
+      "class": "browser",
+      "note": "Playwright Chrome at two phone sizes: enter world, inspect map, open a character, send a message, screenshots"
+    },
+    "swarm-171735-2lp8#3": {
+      "class": "browser",
+      "note": "reviewer's WebKit script against the preview server, 54 checks at two phone sizes"
+    },
+    "swarm-174126-0s5m#12": {
+      "class": "own_probe",
+      "note": "reviewer-written audit script over the pilot's recorded artifacts"
+    },
+    "swarm-174126-0s5m#7": {
+      "class": "own_probe",
+      "note": "reviewer-written audit script over the pilot's recorded artifacts"
+    },
+    "swarm-181719-w1s1#3": {
+      "class": "browser",
+      "note": "release smoke driven in WebKit against the built app"
+    },
+    "swarm-181719-w1s1#4": {
+      "class": "browser",
+      "note": "reviewer-written WebKit player journey at a phone size"
+    },
+    "swarm-184101-lda7#1": {
+      "class": "own_probe",
+      "note": "reads the committed source at the reviewed sha to check stated facts"
+    },
+    "swarm-184101-lda7#3": {
+      "class": "own_probe",
+      "note": "reads the committed source at the reviewed sha to check stated facts"
+    },
+    "swarm-191133-4hqx#0": {
+      "class": "own_probe",
+      "note": "reviewer-written check of the raw ledger archive"
+    },
+    "swarm-193626-mwbk#34": {
+      "class": "browser",
+      "note": "scripted Playwright playtest of the built game"
+    },
+    "swarm-193626-mwbk#42": {
+      "class": "browser",
+      "note": "scripted Playwright playtest of the built game"
+    },
+    "swarm-221023-k6l4#13": {
+      "class": "browser",
+      "note": "existing suites plus reviewer's HUD screenshots of the built game in a browser"
+    }
+  }
+}

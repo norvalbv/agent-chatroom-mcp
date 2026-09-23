@@ -1924,18 +1924,22 @@ export class Hub {
       if (k === key || !k.startsWith("claim/") || e.by === p.name || !e.text.trim() || Hub.claimReleased(e)) continue;
       const owner = [...room.participants.values()].find((x) => x.name === e.by);
       if (!owner?.active || (owner.session && p.session && owner.session === p.session)) continue;
-      const theirs = Hub.claimTerms(k, e.text);
-      const shared = [...mine].filter((w) => theirs.has(w));
-      const jac = shared.length / (mine.size + theirs.size - shared.length);
-      // Long notes dilute Jaccard (claim-overlap-notice vs claim-overlap-echo scored 0.23), so a second rule: the key
-      // slugs share half the shorter slug's stems and the bodies still share >= 20% (adjudicator / adjudication-replay,
-      // bench-per-seat-workspaces / bench-arm-d in swarm-083203-kooz).
-      const theirKey = Hub.claimTerms(k, "");
-      const keyShared = [...myKey].filter((w) => theirKey.has(w)).length;
-      const slugsMatch = Math.min(myKey.size, theirKey.size) > 0 && keyShared / Math.min(myKey.size, theirKey.size) >= 0.5;
-      if (shared.length >= 4 && (jac >= 0.4 || (slugsMatch && jac >= 0.2))) hits.push({ key: k, by: e.by, shared_pct: Math.round(jac * 100), shared: shared.slice(0, 6) });
+      const s = Hub.claimOverlapScore(mine, myKey, Hub.claimTerms(k, e.text), Hub.claimTerms(k, ""));
+      if (s.fires) hits.push({ key: k, by: e.by, shared_pct: Math.round(s.jac * 100), shared: s.shared.slice(0, 6) });
     }
     return hits.sort((a, b) => b.shared_pct - a.shared_pct);
+  }
+
+  /** The one overlap rule, also read by scripts/claim-overlap-calibration.ts: >= 4 shared stems and Jaccard >= 0.4, or
+   * >= 0.2 when the key slugs share half the shorter slug's stems. Long notes dilute Jaccard (claim-overlap-notice vs
+   * claim-overlap-echo scored 0.23), hence the slug rule (it also catches adjudicator / adjudication-replay and
+   * bench-per-seat-workspaces / bench-arm-d in swarm-083203-kooz). */
+  static claimOverlapScore(a: Set<string>, aKey: Set<string>, b: Set<string>, bKey: Set<string>) {
+    const shared = [...a].filter((w) => b.has(w));
+    const jac = shared.length / (a.size + b.size - shared.length || 1);
+    const shorter = Math.min(aKey.size, bKey.size);
+    const slugsMatch = shorter > 0 && [...aKey].filter((w) => bKey.has(w)).length / shorter >= 0.5;
+    return { shared, jac, slugsMatch, fires: a.size >= 4 && shared.length >= 4 && (jac >= 0.4 || (slugsMatch && jac >= 0.2)) };
   }
 
   /** Reviewer assigned when a claim/<area> is first created: the least-recently-verifying active

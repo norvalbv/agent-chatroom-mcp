@@ -6,7 +6,7 @@ import { spawnSync } from 'node:child_process';
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
-import { hiddenRoot, loadHiddenItem, loadPool, lockPool, validatePool, worktreeAt, removeWorktree } from './pool-format.ts';
+import { hiddenRoot, loadHiddenItem, loadPool, lockPool, runCmd, validatePool, worktreeAt, removeWorktree } from './pool-format.ts';
 import { makeDryRunPool } from './pool-fixture.ts';
 
 const fresh = () => mkdtempSync(join(tmpdir(), 'pool-format-'));
@@ -171,4 +171,17 @@ test('CLI: pool.ts validate prints the per-item report and exits nonzero when an
     const bad = cli('validate', '--pool', fx.poolDir, '--hidden', fx.hiddenParent, '--scratch', join(base, 's2'));
     assert.equal(bad.status, 1);
   } finally { rmSync(base, { recursive: true, force: true }); }
+});
+
+test('runCmd does not inherit an outer node --test context: a failing hidden test still exits nonzero', () => {
+  const base = fresh();
+  const prev = process.env.NODE_TEST_CONTEXT;
+  process.env.NODE_TEST_CONTEXT = 'child-v8';
+  try {
+    writeFileSync(join(base, 'fail.test.mjs'), "import { test } from 'node:test';\ntest('x', () => { throw new Error('boom'); });\n");
+    assert.notEqual(runCmd('node --test fail.test.mjs', base).exit_code, 0);
+  } finally {
+    if (prev === undefined) delete process.env.NODE_TEST_CONTEXT; else process.env.NODE_TEST_CONTEXT = prev;
+    rmSync(base, { recursive: true, force: true });
+  }
 });

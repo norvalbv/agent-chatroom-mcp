@@ -119,6 +119,44 @@ export function pricePerMTok(modelId: string): PricePerMTok | null {
   return Object.hasOwn(PRICE_ROWS, modelId) ? PRICE_ROWS[modelId]!.per_mtok : null;
 }
 
+/** Per-message usage read from a claude stream-json stream. An assistant event's output_tokens is only the count at
+ * message_start (Claude Code cost-tracking docs), repeated per content block. Under --include-partial-messages each
+ * message's stream_event message_delta carries its final output count, which replaces that placeholder; a message
+ * killed before its message_delta keeps the placeholder. Probe 2026-09-23 (claude-opus-5-5 killed at 60 s): assistant
+ * events summed to 68 output tokens, the four message_deltas to 4,175, which the CLI's session log matched exactly. */
+export class StreamUsage {
+  private readonly usage = new Map<string, MessageUsage>();
+  private readonly finalOutput = new Map<string, number>();
+  /** message_start id per stream: a subagent's events carry its parent_tool_use_id. */
+  private readonly open = new Map<string, string>();
+  private anonymous = 0;
+
+  consume(evt: any): void {
+    if (evt?.type === "assistant" && evt.message?.usage) {
+      this.usage.set(typeof evt.message.id === "string" ? evt.message.id : `#${this.anonymous++}`, evt.message.usage);
+    } else if (evt?.type === "stream_event") {
+      const stream = String(evt.parent_tool_use_id ?? ""), e = evt.event;
+      if (e?.type === "message_start" && typeof e.message?.id === "string") this.open.set(stream, e.message.id);
+      const id = this.open.get(stream);
+      if (e?.type === "message_delta" && id && typeof e.usage?.output_tokens === "number") this.finalOutput.set(id, e.usage.output_tokens);
+    }
+  }
+
+  /** One entry per API message that had an assistant event, output_tokens from its message_delta when one arrived. */
+  messages(): { id?: string; usage: MessageUsage }[] {
+    return [...this.usage].map(([id, u]) => ({ id: id.startsWith("#") ? undefined : id, usage: this.finalOutput.has(id) ? { ...u, output_tokens: this.finalOutput.get(id) } : u }));
+  }
+
+  outputTokens(): number {
+    return this.messages().reduce((sum, m) => sum + (m.usage.output_tokens ?? 0), 0);
+  }
+
+  /** How many messages' output counts are final (from a message_delta) rather than placeholders. */
+  finalOutputMessages(): number {
+    return [...this.usage.keys()].filter((id) => this.finalOutput.has(id)).length;
+  }
+}
+
 export interface SeatCostEstimate {
   usd: number;
   estimate: true;

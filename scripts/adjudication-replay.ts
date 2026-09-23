@@ -33,6 +33,8 @@ const opt = (name: string) => {
 };
 const judgeModel = opt("judge");
 const repeats = Number(opt("repeats") ?? "1");
+// Sensitivity: score using only each dispute's first N cached votes (e.g. --use-votes 1 for a single-shot judge).
+const useVotes = Number(opt("use-votes") ?? "Infinity");
 
 mkdirSync(OUT, { recursive: true });
 const probes = printfProbes();
@@ -150,7 +152,7 @@ for (const g of data) {
     let n = 0;
     for (const p of d) {
       const v = verdicts[verdictKey(p, outsAt(p))];
-      const pick = v ? pickOf(v.votes) : null;
+      const pick = v ? pickOf(v.votes.slice(0, useVotes)) : null;
       if (!v) missing++;
       else if (pick !== null && s[p] === pick) n++;
     }
@@ -165,6 +167,8 @@ for (const g of data) {
 }
 console.log(`MBR-exec ${mbrPass}/${data.length}  adjudication ${adjPass}/${data.length}  oracle ceiling ${ceiling}/${data.length}${missing ? `  (missing verdicts: ${missing} probe-instances scored as no-match)` : ""}`);
 const judged = [...truth].filter(([k]) => k in verdicts);
-const votes = judged.flatMap(([k, t]) => verdicts[k].votes.map((v) => v === t));
-const picks = judged.map(([k, t]) => pickOf(verdicts[k].votes) === t);
-console.log(`judge: single votes correct ${votes.filter(Boolean).length}/${votes.length}, verdicts correct ${picks.filter(Boolean).length}/${picks.length}`);
+const votes = judged.flatMap(([k, t]) => verdicts[k].votes.slice(0, useVotes).map((v) => v === t));
+const picks = judged.map(([k, t]) => pickOf(verdicts[k].votes.slice(0, useVotes)));
+const right = picks.filter((p, i) => p === judged[i][1]).length;
+const none = picks.filter((p) => p === null).length;
+console.log(`judge: single votes correct ${votes.filter(Boolean).length}/${votes.length}; verdicts ${right} correct, ${none} no verdict (tie/NONE), ${picks.length - right - none} wrong, of ${picks.length}`);

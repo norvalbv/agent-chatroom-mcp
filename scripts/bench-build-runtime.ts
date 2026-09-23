@@ -3,7 +3,7 @@
  * Shared argument, environment and usage parsing still use src helpers. */
 import { spawn, execFileSync, type ChildProcess } from "node:child_process";
 import { createHash } from "node:crypto";
-import { closeSync, existsSync, mkdirSync, openSync, readFileSync, readdirSync, lstatSync, cpSync, realpathSync, writeFileSync } from "node:fs";
+import { closeSync, existsSync, mkdirSync, openSync, writeSync, readFileSync, readdirSync, lstatSync, cpSync, realpathSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve, relative } from "node:path";
 import { createServer } from "node:net";
 import { pathToFileURL, fileURLToPath } from "node:url";
@@ -130,10 +130,13 @@ export interface SeatRecord {
  * Seats run with `--output-format stream-json` (see src/claude-args.ts): stdout is NDJSON, one event per
  * line, so a kill mid-run still leaves every event flushed before the kill on disk/in the buffer — a
  * clean-exit-only `--output-format json` blob loses everything to a SIGTERM (item 3). */
-export function runClaudeSeat(name: string, args: string[], cwd: string, deadlineMs: number): Promise<SeatRecord> {
+/** `opts.env` replaces the inherited environment (still passed through seatChildEnv); `opts.transcript` receives every
+ * stdout byte as it arrives, so a seat killed at the deadline leaves its full event stream on disk (pool-run's audit). */
+export function runClaudeSeat(name: string, args: string[], cwd: string, deadlineMs: number, opts: { env?: NodeJS.ProcessEnv; transcript?: string } = {}): Promise<SeatRecord> {
   return new Promise((res) => {
     const startedAt = new Date();
-    const child = track(spawn("claude", args, { cwd, detached: true, env: seatChildEnv(process.env, name), stdio: ["ignore", "pipe", "pipe"] }), true);
+    const child = track(spawn("claude", args, { cwd, detached: true, env: seatChildEnv(opts.env ?? process.env, name), stdio: ["ignore", "pipe", "pipe"] }), true);
+    const transcriptFd = opts.transcript ? openSync(opts.transcript, "a") : null;
     let buffered = "";
     let resultLine: string | null = null;
     let err = "";
@@ -172,6 +175,7 @@ export function runClaudeSeat(name: string, args: string[], cwd: string, deadlin
       }
     };
     child.stdout?.on("data", (d) => {
+      if (transcriptFd !== null) writeSync(transcriptFd, d);
       buffered += d;
       let idx: number;
       while ((idx = buffered.indexOf("\n")) >= 0) {
@@ -190,6 +194,7 @@ export function runClaudeSeat(name: string, args: string[], cwd: string, deadlin
     }, deadlineMs);
     child.on("close", (code, signal) => {
       clearTimeout(killer);
+      if (transcriptFd !== null) closeSync(transcriptFd);
       if (buffered.trim()) consumeLine(buffered);
       const completedAt = new Date();
       const raw = (resultLine ?? "").trim();

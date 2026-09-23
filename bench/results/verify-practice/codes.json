@@ -1,5 +1,5 @@
 {
- "note": "Classes for every entry in heads.jsonl. Two AI coders (Claude Opus 5.5, independent, one reading its chunk in reverse order) classified each entry from its full text under the definitions in scripts/paper-verify-practice.ts; an adjudicator (same model) read every entry on which they disagreed and ruled without deferring to either. Classes record what an entry says was run.",
+ "note": "Classes for every entry in heads.jsonl. Two AI coders (Claude Opus 5.5, independent, one reading its chunk in reverse order) classified each entry from its full text under the definitions in scripts/paper-verify-practice.ts; an adjudicator (same model) read every entry on which they disagreed and ruled without deferring to either. Classes record what an entry says was run. Three labels were corrected after an independent read-only review (gpt-6-astra) found them misclassified in a 48-entry adversarial sample; those carry basis review-corrected.",
  "coder_a": {
   "swarm-010513-crup-chair-replay#0": {
    "class": "own_check",
@@ -2261,9 +2261,9 @@
    "basis": "agreed"
   },
   "swarm-042511-ov9e#3": {
-   "class": "existing_tests",
-   "reason": "tsc and existing vitest files; browser evidence only referenced on another board key.",
-   "basis": "agreed"
+   "class": "app_in_browser",
+   "reason": "Review correction: the entry cites the poster's own browser evidence; the same seat ran a production build in headless Chromium with measurements and screenshots in the room log.",
+   "basis": "review-corrected"
   },
   "swarm-042511-ov9e#4": {
    "class": "own_check",
@@ -2271,9 +2271,9 @@
    "basis": "agreed"
   },
   "swarm-042511-ov9e#5": {
-   "class": "existing_tests",
-   "reason": "vitest runs plus the lead's existing repros; nothing written by this verifier",
-   "basis": "agreed"
+   "class": "own_check",
+   "reason": "Review correction: the entry reports a new crossTownTrips test and its outcome (a before/after check; the test is the author's, so this is not a verifier-written probe).",
+   "basis": "review-corrected"
   },
   "swarm-042511-ov9e#6": {
    "class": "existing_tests",
@@ -2956,9 +2956,9 @@
    "basis": "agreed"
   },
   "swarm-190103-npm-gate#3": {
-   "class": "inspection_only",
-   "reason": "Only ran placeholder npm test on main; read diffs; could not run on branch",
-   "basis": "agreed"
+   "class": "existing_tests",
+   "reason": "Review correction: the entry reports running npm test (placeholder failure), coded existing_tests as in #0 and #1 of the same room.",
+   "basis": "review-corrected"
   },
   "swarm-191130-twok#0": {
    "class": "own_check",

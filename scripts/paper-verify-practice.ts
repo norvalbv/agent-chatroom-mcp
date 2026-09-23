@@ -27,14 +27,14 @@ export const CLASS_LABEL: Record<Klass, string> = {
   existing_tests: "Build, type-check or existing tests only",
   scripted_smoke: "Scripted smoke client, model spawning off",
   inspection_only: "Read code, docs or history; ran nothing",
-  own_check: "A check the verifying seat wrote itself",
+  own_check: "Added check: own probe or before/after run",
   app_in_browser: "The built application in a real browser",
   agents_on_changed_build: "Model-driven agents on the changed build",
   unclear: "Not enough detail to tell",
 };
 export interface HeadRow { id: string; room: string; key: string; by: string | null; proposal: string | null; proposer: string | null; exit_code: number | null; commit_named: boolean; schema_valid: boolean; command: string; text: string; room_created?: string }
 export interface Code { class: Klass; reason: string }
-export interface Codes { coder_a: Record<string, Code>; coder_b: Record<string, Code>; final: Record<string, Code & { basis: "agreed" | "adjudicated" }> }
+export interface Codes { coder_a: Record<string, Code>; coder_b: Record<string, Code>; final: Record<string, Code & { basis: "agreed" | "adjudicated" | "review-corrected" }> }
 
 export function classify(row: HeadRow, codes: Codes): Klass {
   const c = codes.final[row.id];
@@ -82,8 +82,8 @@ export function extractHeads(roomLog: string, room: string, home = process.env.H
       id, room, key: e.key, by: e.entry.by ?? null, proposal, proposer: proposal ? proposer.get(proposal) ?? null : null,
       exit_code: typeof h.exit_code === "number" ? h.exit_code : null, commit_named: Boolean(h.commit),
       schema_valid: parseVerifyHead(String(e.entry.text ?? "")) !== undefined,
-      command: shorten(typeof h.command === "string" ? h.command : Array.isArray(h.commands) ? h.commands.join(" && ") : ""),
-      text: shorten(String(e.entry.text ?? "")).slice(0, 4000),
+      command: shorten(typeof h.command === "string" ? h.command : Array.isArray(h.commands) ? h.commands.map((c: unknown) => (typeof c === "string" ? c : JSON.stringify(c))).join(" && ") : h.commands && typeof h.commands === "object" ? JSON.stringify(h.commands) : ""),
+      text: shorten(String(e.entry.text ?? "")),
       room_created: created,
     });
   }
@@ -98,7 +98,7 @@ export function buildReport(rows: HeadRow[], rooms: Record<string, Kind>, codes:
   const all = zero();
   const nonAuthor = zero();
   const roomsByKind: Record<Kind, Set<string>> = { hub: new Set(), web: new Set(), other: new Set() };
-  let zeroExit = 0, nonzeroExit = 0, missingExit = 0, commitNamed = 0, nonAuthorN = 0, schemaValid = 0;
+  let zeroExit = 0, nonzeroExit = 0, missingExit = 0, commitNamed = 0, nonAuthorN = 0, schemaValid = 0, sameAuthor = 0, unresolved = 0;
   for (const r of rows) {
     const kind = rooms[r.room];
     if (!kind) throw Error(`room ${r.room} has no kind in the rooms file`);
@@ -108,6 +108,8 @@ export function buildReport(rows: HeadRow[], rooms: Record<string, Kind>, codes:
     if (r.commit_named) commitNamed++;
     if (r.schema_valid) schemaValid++;
     if (r.proposer && r.by && r.by !== r.proposer) { nonAuthorN++; nonAuthor[k]++; }
+    else if (r.proposer && r.by === r.proposer) sameAuthor++;
+    else unresolved++;
   }
   return {
     heads: rows.length, rooms: new Set(rows.map((r) => r.room)).size,
@@ -117,7 +119,8 @@ export function buildReport(rows: HeadRow[], rooms: Record<string, Kind>, codes:
     exit_code: { zero: zeroExit, nonzero: nonzeroExit, missing: missingExit },
     commit_named: commitNamed, schema_valid: schemaValid, classes: all, by_kind: byKind,
     non_author: { heads: nonAuthorN, classes: nonAuthor },
-    coding: { ...agreement(rows, codes), adjudicated: rows.filter((r) => codes.final[r.id]?.basis === "adjudicated").length },
+    same_author: sameAuthor, author_unresolved: unresolved,
+    coding: { ...agreement(rows, codes), adjudicated: rows.filter((r) => codes.final[r.id]?.basis === "adjudicated").length, review_corrected: rows.filter((r) => codes.final[r.id]?.basis === "review-corrected").length },
   };
 }
 
@@ -127,7 +130,8 @@ export function renderMarkdown(t: ReturnType<typeof buildReport>): string {
     `${t.heads} verify/* writes whose first line is a JSON object, in ${t.rooms} rooms and sub-rooms (${t.rooms_by_kind.hub} hub project, ${t.rooms_by_kind.web} browser game, ${t.rooms_by_kind.other} other), created ${t.created_from} to ${t.created_to}, before ${CENSUS_CUTOFF}.`,
     `Valid under the hub's own head parser: ${t.schema_valid}/${t.heads}. Reported exit code 0: ${t.exit_code.zero}/${t.heads}; nonzero: ${t.exit_code.nonzero}/${t.heads}; missing: ${t.exit_code.missing}/${t.heads}. Commit named: ${t.commit_named}/${t.heads}.`,
     `Coding: two independent coders agreed on ${t.coding.agreed}/${t.coding.coded_by_both} entries (Cohen's kappa ${t.coding.kappa}); ${t.coding.adjudicated} were settled by an adjudicator.`,
-    `Entries by a seat other than the proposal's author, where the author is known: ${t.non_author.heads}.`, "",
+    `Corrected after an independent review: ${t.coding.review_corrected}.`,
+    `Writer vs proposal author: ${t.non_author.heads} by a different seat, ${t.same_author} by the author, ${t.author_unresolved} with the author unresolved.`, "",
     "| Strongest check the entry reports | Hub | Game | Other | All | Not by the author |", "|---|---|---|---|---|---|",
     ...CLASSES.map((k) => `| ${CLASS_LABEL[k]} | ${t.by_kind.hub[k]} | ${t.by_kind.web[k]} | ${t.by_kind.other[k]} | ${t.classes[k]}/${t.heads} | ${t.non_author.classes[k]}/${t.non_author.heads} |`),
     "",
@@ -143,7 +147,7 @@ export function renderTex(t: ReturnType<typeof buildReport>): string {
     "\\midrule",
     `Rooms and sub-rooms & ${t.rooms_by_kind.hub} & ${t.rooms_by_kind.web} & ${t.rooms_by_kind.other} & ${t.rooms} \\\\`,
     "\\bottomrule", "\\end{tabular}", "",
-    `\\emph{All ${t.heads} verification entries with a structured head, classified by the strongest check the entry's text reports. Two AI coders classified every entry independently from its full text (agreement ${t.coding.agreed}/${t.coding.coded_by_both}, Cohen's \\(\\kappa\\)=${t.coding.kappa}); an adjudicator settled the ${t.coding.adjudicated} disagreements. Classes describe what the entry says was run, not verified execution. Hub: rooms on this system's code, research or documentation; Game: rooms building a browser game.}`, "",
+    `\\emph{All ${t.heads} verification entries with a structured head, classified by the strongest check the entry's text reports. Two AI coders classified every entry independently from its full text (agreement ${t.coding.agreed}/${t.coding.coded_by_both}, Cohen's \\(\\kappa\\)=${t.coding.kappa}); an adjudicator settled the ${t.coding.adjudicated} disagreements, and ${t.coding.review_corrected} labels were corrected after an independent review. Classes describe what the entry says was run, not observed execution; an added check is either a probe the verifier wrote or a before/after run that may reuse existing tests. Hub: rooms on this system's code, research or documentation; Game: rooms building a browser game.}`, "",
   ];
   return L.join("\n");
 }

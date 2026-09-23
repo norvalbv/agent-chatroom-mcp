@@ -20,7 +20,7 @@ VERIFY_LABEL = {
     "existing_tests": "Build / existing tests",
     "scripted_smoke": "Scripted smoke client",
     "inspection_only": "Read code or docs only",
-    "own_check": "Verifier's own check",
+    "own_check": "Own probe or before/after",
     "app_in_browser": "App in a real browser",
     "agents_on_changed_build": "Agents on changed build",
     "unclear": "Not enough detail",

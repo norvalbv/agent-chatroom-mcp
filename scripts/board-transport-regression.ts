@@ -43,13 +43,22 @@ try {
  await call('wait_for_messages',{room,timeout_ms:0}); // establishes address warning
  hub.setBoardAs(room,'system','evidence/refusal','not consumed');
  const beforeCursor = [...hub.getRoom(room).participants.values()].find(p=>p.name==='A')!.lastBoardSeen;
- // Attention gate (swarm-200839, 2f2cacb): the wait after an unanswered mention is not refused; it delivers only the
- // outstanding ask and ships no board fields, so the board cursor must still be untouched.
+ // A peer's ask leads the wait but no longer strips the envelope (swarm-083203-kooz, 08322c1): the board delta ships
+ // with it and the cursor advances, so nothing is re-shipped after the ask is passed.
  const focused = await call('wait_for_messages',{room,timeout_ms:0});
  assert.equal(focused.addressed_to_you?.length,1,JSON.stringify(focused).slice(0,300));
- assert.ok(!('board_delta' in focused) && !('board_keys' in focused),'focused envelope ships no board fields');
- assert.equal([...hub.getRoom(room).participants.values()].find(p=>p.name==='A')!.lastBoardSeen,beforeCursor);
+ assert.deepEqual(focused.board_delta?.keys,['evidence/refusal'],'peer-focused envelope ships the board delta');
+ assert.notEqual([...hub.getRoom(room).participants.values()].find(p=>p.name==='A')!.lastBoardSeen,beforeCursor);
  await call('pass',{room});
- assert.deepEqual((await call('wait_for_messages',{room,timeout_ms:0})).board_delta.keys,['evidence/refusal']);
+ assert.ok(!('board_delta' in (await call('wait_for_messages',{room,timeout_ms:0}))),'delta shipped once');
+ // A human's message still holds the inbox exclusively (humans-answered-once): no board fields, cursor untouched.
+ const h = hub.join(room,'human','human',{},undefined,'h').participant;
+ hub.send(room,h.id,'@A what is the status of the fix?',undefined,true);
+ hub.setBoardAs(room,'system','evidence/held','held behind the human');
+ const humanCursor = [...hub.getRoom(room).participants.values()].find(p=>p.name==='A')!.lastBoardSeen;
+ const humanFocused = await call('wait_for_messages',{room,timeout_ms:0});
+ assert.equal(humanFocused.unanswered_human?.you_answer,true,JSON.stringify(humanFocused).slice(0,300));
+ assert.ok(!('board_delta' in humanFocused) && !('board_keys' in humanFocused),'human-focused envelope ships no board fields');
+ assert.equal([...hub.getRoom(room).participants.values()].find(p=>p.name==='A')!.lastBoardSeen,humanCursor);
  console.log('BOARD TRANSPORT OK');
 } finally {await client.close();await session.server.close();}

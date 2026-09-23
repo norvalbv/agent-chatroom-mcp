@@ -97,7 +97,7 @@ function runArea(area: Area): Promise<Result> {
   return new Promise((res) => {
     const task = `${spec.preamble}\n\nYOUR AREA: ${area.title}\n${area.brief}`;
     const resultPath = resolve(OUT, `result-${area.id}.json`);
-    const args = [resolve(repoRoot, "dist/swarm.js"), task, "--result-path", resultPath, "--flat", "--agents", String(AGENTS), "--openrouter", String(AGENTS - 1), "--max-same-seats", String(AGENTS - 1), "--openrouter-models", MODEL, "--verifier-openrouter", MODEL, "--timeout", String(TIMEOUT), "--cwd", CWD, "--port", PORT];
+    const args = [resolve(repoRoot, "dist/swarm.js"), task, "--result-path", resultPath, "--flat", "--agents", String(AGENTS), "--openrouter", String(AGENTS - 1), "--max-same-seats", String(Math.max(1, AGENTS - 1)), "--openrouter-models", MODEL, "--verifier-openrouter", MODEL, "--timeout", String(TIMEOUT), "--cwd", CWD, "--port", PORT];
     if (FULL) args.push("--full-access");
     if (REQUIRE_VERIFICATION) args.push("--require-verification");
     const child = spawn(process.execPath, args, { cwd: repoRoot, env: process.env, stdio: ["ignore", "pipe", "pipe"] });
@@ -177,7 +177,7 @@ if (CONSOLIDATE) {
   log(`consolidating ${inputs.length} summary file(s) (${digest.length} chars) in one more run`);
   const r = await new Promise<Result>((res) => {
     const resultPath = resolve(OUT, "result-consolidation.json");
-    const args = [resolve(repoRoot, "dist/swarm.js"), task, "--result-path", resultPath, "--flat", "--agents", String(AGENTS), "--openrouter", String(AGENTS - 1), "--max-same-seats", String(AGENTS - 1), "--openrouter-models", MODEL, "--verifier-openrouter", MODEL, "--timeout", String(TIMEOUT), "--cwd", CWD, "--port", PORT];
+    const args = [resolve(repoRoot, "dist/swarm.js"), task, "--result-path", resultPath, "--flat", "--agents", String(AGENTS), "--openrouter", String(AGENTS - 1), "--max-same-seats", String(Math.max(1, AGENTS - 1)), "--openrouter-models", MODEL, "--verifier-openrouter", MODEL, "--timeout", String(TIMEOUT), "--cwd", CWD, "--port", PORT];
     const child = spawn(process.execPath, args, { cwd: repoRoot, env: process.env, stdio: ["ignore", "pipe", "pipe"] });
     children.push(child);
     let buf = "";

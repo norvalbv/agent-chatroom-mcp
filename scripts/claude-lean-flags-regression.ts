@@ -33,8 +33,9 @@ type Capture = { cmd: string; args: string[]; options: any; stdin?: { text: stri
  * env/spawner/swarm/respawn/claude-args (all pure or already covered by that file's minimization
  * regression), everything else mocked. Kept as its own copy rather than a shared import so this file's
  * only job — the lean-flags argv contract — cannot be perturbed by unrelated edits to that file. */
-async function harness(entry: string, env: Record<string, string>, argv: string[] = []) {
+async function harness(entry: string, env: Record<string, string>, argv: string[] = [], opts: { hubAbsent?: boolean } = {}) {
   const calls: Capture[] = [];
+  let hubAbsent = !!opts.hubAbsent; // the first fetch fails once, so swarm.ts's ensureHub spawns the hub and its env is captured
   const proc = { env, argv: ['node', entry, ...argv], execPath: '/synthetic/node', cwd: () => '/fixture', on() {}, stdout: { write() {} }, stderr: { write() {} }, exit(code: number) { if (code) throw new Error(`unexpected exit ${code}`); } };
   const fs = {
     realpathSync: (x: string) => x,
@@ -46,6 +47,8 @@ async function harness(entry: string, env: Record<string, string>, argv: string[
       throw new Error(`unexpected fixture read: ${f}`);
     },
     mkdirSync() {}, writeFileSync() {}, createWriteStream() { return {}; }, symlinkSync() {}, readdirSync() { return []; }, statSync() { return { mtimeMs: 0 }; },
+    // src/sandbox.ts (--sandbox only): no node_modules link in the synthetic fixture
+    lstatSync() { throw Object.assign(new Error('synthetic: no such path'), { code: 'ENOENT' }); },
   };
   const cp = {
     spawn(cmd: string, args: string[], options: any) {
@@ -70,6 +73,7 @@ async function harness(entry: string, env: Record<string, string>, argv: string[
   const context = vm.createContext({
     process: proc, console: { log() {}, error() {} }, setTimeout, clearTimeout, setInterval, clearInterval, Date, URL, AbortSignal,
     async fetch(target: string) {
+      if (hubAbsent) { hubAbsent = false; throw new Error('synthetic hub absent'); }
       return { status: 200, async json() { return target.endsWith('/rooms') || target.includes('/messages?') ? [] : { caps: { max_live_per_room: 12 }, state: 'concluded', conclusion: { text: 'fixture' } }; }, async text() { return ''; } };
     },
   });
@@ -88,8 +92,8 @@ async function harness(entry: string, env: Record<string, string>, argv: string[
       cache.set(name, mod); return mod;
     }
     const base = name.replace(/^\.\//, '').replace(/\.js$/, '');
-    // Real source for these only: swarm/spawner (under test), env/respawn (their real deps), claude-args (the shared lean-args builder, pure).
-    assert.ok(['env', 'spawner', 'swarm', 'respawn', 'claude-args'].includes(base), `unmocked import ${name}`);
+    // Real source for these only: swarm/spawner (under test), env/respawn (their real deps), claude-args (the shared lean-args builder, pure), sandbox (its --sandbox block, pure over the mocked fs).
+    assert.ok(['env', 'spawner', 'swarm', 'respawn', 'claude-args', 'sandbox'].includes(base), `unmocked import ${name}`);
     const source = readFileSync(path.join(root, 'src', `${base}.ts`), 'utf8');
     const code = transformSync(source, { loader: 'ts', format: 'esm', target: 'es2022' }).code;
     const mod = new vm.SourceTextModule(code, { context, initializeImportMeta(meta) { meta.url = `file:///fixture/src/${base}.js`; } });
@@ -213,6 +217,75 @@ await test('heartbeat: spawner claude and codex recruits carry the seat key and 
   spawner.request({ room: 'synthetic-room', requestedBy: 'synthetic-parent', brief: 'heartbeat wiring regression recruit', agent: 'codex', name: 'fixture-codex' });
   assert.equal(h.calls.length, 2);
   for (const seat of h.calls) assertBeat(seat, `recruit ${seat.cmd}`);
+});
+
+// ---- --sandbox / CHATROOM_SANDBOX=1 (src/sandbox.ts; docs/reuse-survey-2026-09-23.md "OS isolation for claude seats") ----
+// Default off: no claude seat carries a sandbox block and no OpenRouter seat gets --sandbox. With it on, every claude seat's
+// --settings carries Claude Code's sandbox (strict, fail-closed, npm/GitHub/hub allowlist, local binding), a read-only
+// seat's cwd is denied, OpenRouter seats get --sandbox, and a hub the launcher starts gets CHATROOM_SANDBOX=1 for recruits.
+const sandboxOf = (call: Capture) => { const at = call.args.indexOf('--settings'); return at < 0 ? undefined : JSON.parse(call.args[at + 1]).sandbox; };
+function assertSandboxed(call: Capture, write: boolean, msg: string) {
+  const sb = sandboxOf(call);
+  assert.ok(sb, `${msg}: --settings carries a sandbox block`);
+  assert.equal(sb.enabled, true, `${msg}: enabled`);
+  assert.equal(sb.allowUnsandboxedCommands, false, `${msg}: no unsandboxed retry`);
+  assert.equal(sb.failIfUnavailable, true, `${msg}: fails closed`);
+  assert.equal(sb.network.allowLocalBinding, true, `${msg}: loopback for the hub and dev hubs`);
+  for (const d of ['registry.npmjs.org', 'github.com', '127.0.0.1:7717']) assert.ok(sb.network.allowedDomains.includes(d), `${msg}: allowlist has ${d}`);
+  if (write) assert.ok(!sb.filesystem.denyWrite, `${msg}: a write seat keeps its cwd writable`);
+  else assert.deepEqual(sb.filesystem.denyWrite, [call.options.cwd], `${msg}: a read-only seat's cwd is denied (its Bash is not prompt-only any more)`);
+}
+await test('--sandbox is off by default: no sandbox block, no --sandbox for OpenRouter seats, no CHATROOM_SANDBOX for the hub', async () => {
+  const h = await harness('swarm', syntheticEnv({ OPENROUTER_API_KEY: 'synthetic-provider' }), ['synthetic task', '--agents', '4', '--full-access', '--openrouter', '1'], { hubAbsent: true });
+  const claude = h.calls.filter(c => c.cmd === 'claude');
+  assert.ok(claude.length >= 3);
+  for (const c of claude) assert.equal(sandboxOf(c), undefined, 'no sandbox block by default');
+  const or = h.calls.filter(c => c.args.some(a => a.endsWith('openrouter.ts') || a.endsWith('openrouter.js')));
+  assert.equal(or.length, 1, 'one OpenRouter seat');
+  assert.ok(!or[0].args.includes('--sandbox'));
+  const hub = h.calls.find(c => c.args.some(a => a.endsWith('dist/index.js')));
+  assert.ok(hub, 'the launcher started the hub');
+  assert.equal(hub?.options.env.CHATROOM_SANDBOX, undefined);
+});
+await test('swarm --sandbox: every claude seat is sandboxed (read-only planner denied its cwd), OpenRouter seats and the hub follow', async () => {
+  const h = await harness('swarm', syntheticEnv({ OPENROUTER_API_KEY: 'synthetic-provider' }), ['synthetic task', '--agents', '4', '--full-access', '--openrouter', '1', '--sandbox'], { hubAbsent: true });
+  const claude = h.calls.filter(c => c.cmd === 'claude');
+  assert.ok(claude.length >= 3, `planner+verifier+worker, got ${claude.length}`);
+  for (const c of claude) {
+    const toolsAt = c.args.indexOf('--allowedTools');
+    assertSandboxed(c, c.args[toolsAt + 1].split(',').includes('Edit'), `swarm seat ${c.args[toolsAt + 1]}`);
+    assertLean(c, 'lean flags unchanged under --sandbox');
+  }
+  const planner = claude.find(c => !c.args[c.args.indexOf('--allowedTools') + 1].includes('mcp__'));
+  assert.ok(planner && sandboxOf(planner).filesystem.denyWrite, 'the planner (read-only) is denied its cwd');
+  const or = h.calls.filter(c => c.args.some(a => a.endsWith('openrouter.ts') || a.endsWith('openrouter.js')));
+  assert.equal(or.length, 1);
+  assert.ok(or[0].args.includes('--sandbox'), 'the OpenRouter seat wraps run_command in sandbox-runtime');
+  const hub = h.calls.find(c => c.args.some(a => a.endsWith('dist/index.js')));
+  assert.equal(hub?.options.env.CHATROOM_SANDBOX, '1', 'a hub the launcher starts sandboxes its recruits too');
+});
+await test('swarm --sandbox --claude-full: the sandbox is kept (a boundary, not a token saving)', async () => {
+  const h = await harness('swarm', syntheticEnv(), ['synthetic task', '--agents', '4', '--full-access', '--claude-full', '--sandbox']);
+  const claude = h.calls.filter(c => c.cmd === 'claude');
+  for (const c of claude) { assertFull(c, 'full flags'); assert.ok(sandboxOf(c)?.enabled, 'sandbox kept under --claude-full'); }
+});
+for (const canEdit of [false, true]) await test(`spawner CHATROOM_SANDBOX=1 sandboxes claude and OpenRouter recruits (canEdit=${canEdit})`, async () => {
+  const h = await harness('spawner', syntheticEnv({ CHATROOM_RECRUIT_AGENT: 'any', CHATROOM_SANDBOX: '1', OPENROUTER_API_KEY: 'synthetic-provider' }));
+  const spawner = new h.exports.Spawner({ mcpUrl: 'http://127.0.0.1:7717/mcp', defaultCwd: '/fixture', logDir: '/fixture/logs' });
+  spawner.request({ room: 'synthetic-room', requestedBy: 'synthetic-parent', brief: 'sandbox wiring regression recruit', agent: 'claude', name: 'fixture-claude', canEdit });
+  spawner.request({ room: 'synthetic-room', requestedBy: 'synthetic-parent', brief: 'sandbox wiring regression recruit', agent: 'openrouter', name: 'fixture-or', canEdit });
+  const claude = h.calls.filter(c => c.cmd === 'claude');
+  assert.equal(claude.length, 1);
+  assertSandboxed(claude[0], canEdit, `recruit canEdit=${canEdit}`);
+  const or = h.calls.filter(c => c.cmd !== 'claude');
+  assert.equal(or.length, 1);
+  assert.ok(or[0].args.includes('--sandbox'));
+});
+await test('spawner without CHATROOM_SANDBOX: recruits are not sandboxed', async () => {
+  const h = await harness('spawner', syntheticEnv({ CHATROOM_RECRUIT_AGENT: 'claude' }));
+  const spawner = new h.exports.Spawner({ mcpUrl: 'http://127.0.0.1:7717/mcp', defaultCwd: '/fixture', logDir: '/fixture/logs' });
+  spawner.request({ room: 'synthetic-room', requestedBy: 'synthetic-parent', brief: 'sandbox wiring regression recruit', agent: 'claude', name: 'fixture-claude', canEdit: true });
+  assert.equal(sandboxOf(h.calls[0]), undefined);
 });
 
 console.log(`CLAUDE LEAN FLAGS: ${failures ? `${failures} failed` : 'OK'}`);

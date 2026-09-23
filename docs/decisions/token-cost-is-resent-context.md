@@ -44,7 +44,7 @@ created: 2026-09-18
 - Negative: A held wait still costs a full-context turn roughly every minute while a seat stays resident. Nothing here changes that.
 **Vision-fit:** n/a — internal tooling
 **Researched:** No new literature. Own data: kooz seat session logs via scripts/seat-cost/{by-tool,wait-fields,wake-causes,challenge-delta-replay}.py.
-**Rejected:** More per-field trims as the main cost work. By the replay they are worth about 0.4% each.
+**Rejected:** More per-field trims as the main cost work. The only one replayed, 1494d1c, is worth about 0.4% of kooz input. 5047dea was not replayed: its recruit-tool cut saves nothing on a hub that allows recruiting, and its addressed_to_you dedup is unmeasured.
 **Revisit-when:** a change to wake policy (e.g. a held wait that returns only a one-line 'nothing for you' on a chatter-only timeout) is replayed and moves input tokens by more than 5%
 **Scope:** src/hub.ts,src/server.ts,scripts/challenge-delta-regression.ts,scripts/per-turn-payload-regression.ts,scripts/attention-gate-regression.ts,scripts/seat-cost/*.py,scripts/smoke.ts
 **Source:** manual

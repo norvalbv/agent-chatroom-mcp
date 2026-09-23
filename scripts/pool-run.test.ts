@@ -193,3 +193,15 @@ test('dry run end to end through the CLI: run (fake solo) → finalize → score
     assert.equal(JSON.parse(readFileSync(join(runDir, 'audit.json'), 'utf8')).void, false);
   } finally { rmSync(base, { recursive: true, force: true }); }
 });
+
+test('seat worktrees get the repo node_modules through worktreeAt(linkNodeModules) and run.json records the link status', async () => {
+  const base = fresh();
+  try {
+    const fx = makeDryRunPool(base, { dependency: true });
+    const solutions = join(base, 'solutions.json'); writeFileSync(solutions, JSON.stringify(fx.solutions));
+    const runDir = await runArm({ poolDir: fx.poolDir, arm: 'solo', rep: 1, scratch: join(base, 'scratch'), fake: { solutions }, claudeConfigDir: join(base, 'ch') });
+    const run = JSON.parse(readFileSync(join(runDir, 'run.json'), 'utf8'));
+    assert.equal(run.seats[0].node_modules, 'linked');
+    assert.ok(existsSync(join(run.seats[0].worktree, 'node_modules', 'dry-dep')));
+  } finally { rmSync(base, { recursive: true, force: true }); }
+});

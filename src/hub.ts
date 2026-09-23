@@ -80,6 +80,8 @@ export interface Participant {
   role?: Role;
   /** proposal id -> version of its text this participant was last sent (wait_for_messages ships text only when it changes) */
   seenProposal?: Record<string, number>;
+  /** challenge id -> status its objection text was last sent at (wait_for_messages ships objections only when new or changed) */
+  seenChallenges?: Record<string, string>;
   /** Ephemeral delivery receipts. A reconnect/rejoin starts with a full board manifest. */
   lastBoardSeen?: number;
   boardFollow?: string[];
@@ -2540,6 +2542,24 @@ export class Hub {
       challenges: pr.challenges.map((c) => ({ id: c.id, by: nm(c.by), objection: c.objection, status: c.status ?? "open", blocking: c.blocking !== false, version: c.version, ...(c.command ? { command: c.command } : {}) })),
       votes: Object.entries(pr.votes).map(([id, v]) => ({ name: nm({ id, name: v.name }), vote: v.vote, confidence: v.confidence, reason: v.reason, version: v.version, ...(v.version !== undefined && v.version !== pr.version ? { stale: `cast at v${v.version}` } : {}) })),
     };
+  }
+
+  /**
+   * Per-participant delta of a proposal's challenges for wait_for_messages: a challenge's objection (and command)
+   * is sent the first time this participant sees it and again whenever its status changes; otherwise only
+   * {id, by, status, blocking, version, command?} plus objection_omitted (a command stays: it is what a verifier
+   * must rerun verbatim). room_status still carries every objection in full.
+   */
+  challengesDelta<C extends { id?: string; status: string; objection?: string }>(p: Participant, challenges: C[]) {
+    const seen = p.seenChallenges ?? {};
+    const out = challenges.map((c) => {
+      if (!c.id || seen[c.id] !== c.status) return c; // a legacy challenge without an id always ships in full
+      const { objection: _o, ...rest } = c;
+      return { ...rest, objection_omitted: "already sent to you at this status; room_status carries it" };
+    });
+    const ids = challenges.filter((c) => c.id).map((c) => [c.id!, c.status] as const);
+    if (ids.length) p.seenChallenges = { ...seen, ...Object.fromEntries(ids) };
+    return out;
   }
 
   /** Re-check whether a proposal has reached the room's quorum. */

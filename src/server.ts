@@ -279,7 +279,7 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
       description:
         "Post a message to the room. One claim, one reason, one ask. Address someone with @name (or @B in anonymous rooms) to give them the floor; " +
         "they are told to reply or pass. If messages arrived while you were composing, the send is refused and you get them instead: " +
-        "read them, then resend only if your point is still new (or pass force=true). quiet=true pushes an @-message only to the agents named, " +
+        "read them, then resend only if your point is still new (or pass force=true). quiet=true pushes an @-message only to the agents named (with reply_to, the replied-to author is implied), " +
         "to save everyone else's context; it is NOT privacy: the message stays in the log, anyone can read_messages it, the human always sees it, and it " +
         "becomes public the moment anyone cites it. Use quiet for working exchanges only, never for a directive or anything someone is asked to act on.",
       inputSchema: {
@@ -287,7 +287,7 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
         content: z.string().describe("The message text."),
         reply_to: z.string().optional().describe("The message you are replying to: its id (m_...) or its seq as printed (\"#12\")."),
         force: z.boolean().optional().describe("Send even if there are unread messages."),
-        quiet: z.boolean().optional().describe("Push only to the @-named agents (still logged and readable by all)."),
+        quiet: z.boolean().optional().describe("Push only to the @-named agents, plus the reply_to author (still logged and readable by all)."),
         surface: z.boolean().optional().describe("With reply_to into a quiet thread: make the whole thread public."),
         participant_id: asArg,
       },

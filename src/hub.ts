@@ -1224,8 +1224,13 @@ export class Hub {
       const mentions = this.mentionsIn(room, content).filter((id) => id !== p.id);
       const parent = replyTo ? room.messages.find((m) => m.id === replyTo) : undefined;
       const inherited = parent?.quiet ? (parent.audience ?? []) : [];
-      const targets = [...new Set([...mentions, ...inherited])].filter((id) => room.participants.get(id)?.agent !== "human");
-      if (targets.length === 0) throw new HubError("A quiet message must @-name at least one agent (not a human). Quiet is not privacy: everyone can still read it.");
+      // A reply already names its audience: the parent's author, when that is another live agent.
+      const author = parent && parent.from.id !== p.id && room.participants.get(parent.from.id)?.active ? [parent.from.id] : [];
+      const targets = [...new Set([...mentions, ...inherited, ...author])].filter((id) => {
+        const agent = room.participants.get(id)?.agent;
+        return agent !== undefined && agent !== "human";
+      });
+      if (targets.length === 0) throw new HubError("A quiet message must @-name at least one agent (not a human), or reply_to another agent's message. Quiet is not privacy: everyone can still read it.");
       audience = [...new Set([p.id, ...targets])];
     }
     if (this.attentionFocus(room, p) || p.withheld?.length) this.settleRead(room, p, p.lastSeenSeq, []);

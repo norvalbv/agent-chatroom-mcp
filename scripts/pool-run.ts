@@ -195,7 +195,8 @@ function accountRecord(path: string | undefined, at: number) {
   if (!existsSync(path)) return { account: null, source: path, reason: 'switch log not found' };
   const switches = extractSwitches(readFileSync(path, 'utf8'));
   const account = accountAt(switches, at);
-  return { account, source: path, reason: account === null ? 'no switch recorded in the log' : null, switches_seen: switches.length };
+  const reason = account !== null ? null : switches.length ? 'unknown: the first logged switch left no account' : 'no switch recorded in the log';
+  return { account, source: path, reason, switches_seen: switches.length };
 }
 
 /** Copies every Claude Code session whose cwd lies under the run dir into seats/<seat>/sessions/, and for rooms

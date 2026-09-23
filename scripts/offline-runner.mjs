@@ -21,6 +21,7 @@ export const offlineScripts = [
   'attention-gate-regression.ts',
   'baseline-freeze-guard-regression.ts',
   'ak-select.test.ts',
+  'adjudicator-trial.test.ts',
   'paper-account-regime.test.ts',
   'paper-number-audit.test.ts',
   'bench-ak.test.ts',

@@ -1,0 +1,51 @@
+## Reasoning
+
+**Step 1: Find the exact double value of `1e-7`.**
+
+`1e-7` normalizes as `1.f × 2⁻²⁴` (since `2⁻²⁴ ≤ 1e-7 < 2⁻²³`). The 53-bit significand `N` satisfies `N = round(2⁷⁶ / 10⁷)`.
+
+Exact division: `2⁷⁶ = 75557863725914323419136`, and
+
+```
+75557863725914323419136 / 10000000 = 7555786372591432.3419136
+```
+
+Since the fractional part `0.3419136 < 0.5`, `N = 7555786372591432` (rounds **down**). This can be confirmed as the correctly-rounded nearest double via exact integer comparison of `2·2⁷⁶/10⁷` against `2N+1` (15111572745182864.68… < 15111572745182865), so `N` is indeed nearest.
+
+Thus the stored double is **strictly less** than the mathematical `1e-7`:
+
+```
+V = N/2⁷⁶ ≈ 9.9999999999999995474814 × 10⁻⁸
+```
+
+(sixteen significant digits: fifteen 9's, then a 5, then nonzero digits `474814…`).
+
+**Step 2: Apply the `%g` algorithm with P = 16.**
+
+Per spec, X is the exponent after rounding to P−1 = 15 fractional digits in e-style (i.e., 16 significant digits). The 17th significant digit of V is `5`, followed by nonzero digits (`474814…`), so the value at that position is strictly greater than exactly half — not a tie, so the "round half to even" clause never triggers. This forces a round-**up**.
+
+Rounding the sixteen 9's up cascades a carry through all of them:
+
+```
+9.999999999999999... → 10.00000000000000  →  1.000000000000000 × 10⁻⁷
+```
+
+So **X = −7**, and the rounded significand is `1.000000000000000`.
+
+**Step 3: Choose style and format.**
+
+`X = -7` fails `X ≥ -4`, so `%g` uses **e-style** with precision `P−1 = 15`:
+
+```
+1.000000000000000e-07
+```
+
+**Step 4: Strip trailing zeros** (no `#` flag): all 15 fractional digits are zero, so they and the `.` are removed, leaving:
+
+```
+1e-07
+```
+
+This exact-arithmetic result (rounding the true double value, including the carry cascade, to 16 significant digits) matches Implementation A. Implementation B's `9.999999999999999e-08` would only arise from truncating/rounding the value's digit string *without* correctly propagating the carry — a real but non-conforming implementation choice, since the spec mandates correctly-rounded results based on the exact binary value.
+
+FINAL: A

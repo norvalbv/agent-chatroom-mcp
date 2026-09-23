@@ -1,0 +1,35 @@
+## Reasoning
+
+**Step 1 — find the exact binary value of the double nearest to 1e-7.**
+
+The nearest double to 10⁻⁷ has 53-bit significand N = 7555786372591432 with value N·2⁻⁷⁶ (since 2⁻²⁴ ≤ 10⁻⁷ < 2⁻²³, the biased binary exponent is −24, i.e. −24−52 = −76 relative to the integer significand).
+
+Computing N·2⁻⁷⁶ exactly as a fraction of 10⁻⁸:
+
+N·10⁸ = 755578637259143200000000
+D = 2⁷⁶ = 75557863725914323419136
+D·10 = 755578637259143234191360
+
+So N·10⁸/D = 10 − r, where r = 34191360/D = 16695/2⁶⁵ (after cancelling 2¹¹).
+
+Evaluating r to high precision: r ≈ 4.5251888174×10⁻¹⁶.
+
+So the exact stored double value, scaled by 10⁸, is:
+
+10 − 0.00000000000000045251888174… = 9.99999999999999954748111826…
+
+**Step 2 — apply the `%g` algorithm with P = 17.**
+
+X is the exponent from e-style with P−1 = 16 fractional digits, after correct rounding of the exact value above. Rounding 9.99999999999999954748…×10⁻⁸ to 16 digits after the point: digits 1–15 are `9`, digit 16 is `5`, and the next digit is `4` (from `…9995|474…`), which is `< 5`, so no carry propagates. This gives mantissa `9.9999999999999995`, so X = −8.
+
+Since X = −8 is **not** ≥ −4, the "P > X and X ≥ −4" f-style condition fails, so `%g` uses **e-style** with precision P−1 = 16: exactly the digits just derived, with no rounding carry all the way up to `1.0…0e-07`.
+
+**Step 3 — trailing-zero stripping.**
+
+No `#` flag, but the last significant digit is `5`, not `0`, so nothing is stripped.
+
+Result: `9.9999999999999995e-08` — the value never rounds up to `1e-07` because the digit immediately after the 16th place (a `4`) is below the halfway point, and no round-to-even tie exists here (it's not an exact tie — the true value is `…9995474811…`, unambiguously closer to `…9995` than to `…9996` or a carry to `10.000...`).
+
+This matches Implementation A. Implementation B's `1e-07` would only be correct if the double's exact value were ≥ the halfway point toward 10⁻⁷ at the 17-significant-digit boundary, which it is not — the double is provably *less* than 10⁻⁷ by about 4.53×10⁻²⁴ in absolute terms, and that shortfall survives 17-digit rounding.
+
+FINAL: A

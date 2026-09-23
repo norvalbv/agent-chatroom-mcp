@@ -1,0 +1,53 @@
+## Reasoning
+
+**Step 1: The exact double value of `1e-7`.**
+
+`1e-7` cannot be represented exactly in binary64. The nearest double is `m · 2⁻⁷⁶` where `m = round(2⁷⁶/10⁷)`.
+
+Computing exactly: `2⁷⁶ = 75557863725914323419136`, so
+`2⁷⁶/10⁷ = 7555786372591432.3419136`.
+
+Since the fractional part `.3419136 < 0.5`, `m = 7555786372591432` (rounded **down**), so the stored double is **strictly less than** the true decimal `10⁻⁷`:
+
+```
+value = 10⁻⁷ − 0.3419136 × 2⁻⁷⁶ ≈ 10⁻⁷ − 4.5252×10⁻²⁴
+```
+
+**Step 2: Normalize and find X per the spec's rounding rule.**
+
+Writing `value = mantissa × 10⁻⁸`:
+
+```
+mantissa = 10 − 4.5252×10⁻¹⁶ = 9.999999999999999547481120...
+```
+
+That's exactly **15 nines** after the decimal point, then digit `5`, then `47481120...`.
+
+The spec says: *"Let X be the decimal exponent the value would have in e style with P−1 digits after the point, after rounding."* With P=16, we round the mantissa to 15 fractional digits. The 16th digit onward is `547481120...`, which is **greater than half** (`0.547... > 0.5`), so this rounds **up**, unambiguously (not a tie, so even/odd tie-breaking never enters).
+
+Rounding `9.999999999999999` up at the last place carries through all fifteen 9s:
+
+```
+9.999999999999999 + 0.000000000000001 = 10.000000000000000
+```
+
+This carry pushes the normalized mantissa to `1.000000000000000 × 10¹` relative to the `10⁻⁸` scale — i.e. the exponent increments. So **X = −7**, not −8.
+
+**Step 3: Apply the f-vs-e selection rule using the corrected X.**
+
+Spec: *"If P > X and X ≥ −4 the value is written in f style ... otherwise in e style."*
+P=16 > X=−7 ✓, but X ≥ −4 **fails** (−7 < −4). So e-style is required, with precision P−1 = 15:
+
+```
+1.000000000000000e-07
+```
+
+**Step 4: Strip trailing zeros** (no `#` flag): all 15 fractional digits are zero, so they're removed along with the `.`:
+
+```
+1e-07
+```
+
+Implementation A's output (`9.999999999999999e-08`) corresponds to computing X from the *unrounded* value (exponent −8) without letting the round-up carry bump the exponent — a classic printf implementation bug where the digit-rounding and exponent-selection steps aren't kept consistent. The spec's rule explicitly defines X as the exponent *after rounding*, which mandates the carry be accounted for.
+
+FINAL: B

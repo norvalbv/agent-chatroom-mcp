@@ -1,0 +1,48 @@
+## Reasoning
+
+**Step 1: Find the exact double value of `1e-7`.**
+
+The nearest double to 10⁻⁷ is `M · 2⁻⁷⁶` where `M = round(2⁷⁶ / 10⁷)`.
+
+Exactly, `2⁷⁶ = 75557863725914323419136`. Dividing by 10⁷:
+
+```
+2⁷⁶ / 10⁷ = 7555786372591432.3419136
+```
+
+So `M = 7555786372591432`, and exactly:
+
+```
+2⁷⁶ = M·10⁷ + 3419136
+```
+
+Since `3419136 > 0`, we get `M/2⁷⁶ < 1/10⁷` **exactly** — the double stored for `1e-7` is strictly *less* than the true value 10⁻⁷ (this is exact integer arithmetic, not an approximation).
+
+**Step 2: How far below?**
+
+```
+double_value = 1e-7 · (1 − δ),  δ = 3419136 / (M·10⁷) ≈ 4.5252×10⁻¹⁷
+```
+
+So `double_value ≈ 9.99999999999999954748...×10⁻⁸` — i.e. fifteen 9's, then a 5, then a 4 (well clear of any halfway/round-to-even ambiguity, since the deciding digit is 4, not 5).
+
+**Step 3: Apply the `%g` algorithm from the spec (P = 17).**
+
+X = exponent after rounding the value to P−1 = 16 fractional digits in `e` style. Rounding `9.99999999999999954748...e-08` to 16 digits after the point: the 17th digit is `4`, so we round **down**, giving:
+
+```
+9.9999999999999995e-08   → X = -8
+```
+
+Check the style condition: *"If P > X and X ≥ −4, use f style, otherwise e style."*
+Here P=17 > X=−8 is true, but **X ≥ −4 is false** (−8 is not ≥ −4). So the spec mandates **e style** with precision P−1=16, not f style.
+
+**Step 4: Trailing-zero stripping.**
+
+No `#` flag, but the fractional digits `9999999999999995` have no trailing zeros to strip.
+
+**Result:** `9.9999999999999995e-08`.
+
+This is Implementation B's output. Implementation A's `1e-07` would only be correct if the double were exactly (or rounded to) 1.0×10⁻⁷ at 17 significant digits, but the exact binary value is measurably below that threshold, and the spec's rounding rule (based on the *exact* binary value) pushes the exponent down to −8 before the style choice is even made — which is itself disqualified from `f`-style since −8 < −4.
+
+FINAL: B

@@ -1,0 +1,35 @@
+## Working through the exact arithmetic
+
+**Step 1 — the exact double value of 1e-7.**
+`1e-7` in double precision is `m × 2⁻⁷⁶` where `m` is the 53-bit significand. Using exact integer arithmetic:
+
+- `1e-7 × 2²⁴ = 1.6777216` exactly, so the fractional part `f = 0.6777216 = 52947/78125` exactly (no rounding yet).
+- `f × 2⁵² = 3052186745220936 + 26712/78125`, and `26712/78125 = 3419136/10⁷ = 0.3419136` **exactly** (terminates, since `78125 = 5⁷`).
+- Since `0.3419136 < 0.5`, the significand rounds **down** to `m = 7555786372591432`.
+
+This means the stored double is *slightly less* than the decimal value `1e-7` (confirmed independently: `1e-7 × 2⁷⁶ = 7555786372591432.3419136…`, which rounds down to `m`).
+
+**Step 2 — express the deficit exactly.**
+Using `2⁷⁶ = m·10⁷ + 3419136` (verified by exact integer subtraction), the double equals:
+
+`D = 1e-7 − 3419136/(2⁷⁶·10⁷)`, and `3419136/2⁷⁶ = 3339/2⁶⁶ ≈ 4.525×10⁻¹⁷` (after factoring out `2¹⁰` from `3419136`).
+
+So `D ≈ 1e-7 × (1 − 4.525×10⁻¹⁷) ≈ 9.999999999999999547…×10⁻⁸`.
+
+**Step 3 — apply the spec's rounding rule.**
+The spec requires rounding "using the exact binary value." Writing `D` to 16 significant digits: the kept digits are the leading `9` plus fifteen more `9`s (`9.999999999999999`), and the **first discarded digit is ≥ 5** (with nonzero digits after it — not a tie). Round-to-nearest therefore rounds **up**, and since every kept digit is `9`, the carry propagates all the way through:
+
+`9.999999999999999… → 10.000000000000000 → 1.000000000000000 × 10⁻⁷`
+
+**Step 4 — determine style and exponent per spec.**
+The spec explicitly defines `X` as "the decimal exponent... **after rounding**." Because of the carry, `X = −7` (not −8). Checking the style condition: `P > X` (16 > −7, true) but `X ≥ −4` is **false** (−7 < −4). So **e-style** is used, with precision `P−1 = 15`: `"1.000000000000000e-07"`.
+
+**Step 5 — strip trailing zeros** (no `#` flag): all 15 fractional digits are zero, so both the zeros and the `.` are removed, leaving:
+
+```
+1e-07
+```
+
+This is exactly Implementation B's output. Implementation A's `9.999999999999999e-08` reflects a bug that rounds the digit string without detecting the carry-out that changes the exponent — it never applies the spec's "after rounding" reassessment of `X`, so it wrongly stays in the `X=-8` regime instead of re-deriving `X=-7` and switching representations.
+
+FINAL: B

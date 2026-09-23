@@ -1,0 +1,31 @@
+## Reasoning
+
+The double literal `1e-7` is not exactly 10⁻⁷. Computing its exact binary64 value:
+
+- `1e-7` normalizes to `1.6777216 × 2⁻²⁴` (exact, since `16777216 × 10⁻⁷ = 1.6777216` terminates).
+- Rounding the fractional part `0.6777216 = 52947/78125` to 52 bits: `0.6777216 × 2⁵² = 3052186745220936.3419...`, which rounds **down** to `3052186745220936` (fraction 0.34 < 0.5).
+- So the stored double is `7555786372591432 × 2⁻⁷⁶`, which equals exactly:
+
+  **9.99999999999999954744... × 10⁻⁸**
+
+(i.e. strictly less than 10⁻⁷, by about 4.5×10⁻²⁴ in absolute terms — well within one ULP).
+
+Now apply the `%g` rule for `P = 16`: *"Let X be the decimal exponent the value would have in e style with P−1 digits after the point, **after rounding**."*
+
+Rounding `9.99999999999999954744...` to 16 significant digits (15 digits after the point): the first 16 significant digits are all `9` (sixteen 9's), and the next digit is `5` followed by nonzero digits (`547...`), which is strictly more than halfway — so it rounds up. Sixteen 9's rounding up carries all the way: `9999999999999999 → 10000000000000000`, i.e. the e-style mantissa becomes `1.000000000000000`, and the exponent increases from −8 to **X = −7**.
+
+Then: is `P > X and X ≥ −4`? `X = −7`, which fails `X ≥ −4`, so `%g` uses **e style** with precision `P−1 = 15`:
+
+```
+1.000000000000000e-07
+```
+
+Trailing zeros are then stripped (no `#` flag):
+
+```
+1e-07
+```
+
+This matches Implementation A. Implementation B's `9.999999999999999e-08` reflects rounding the sixteen 9's *without* propagating the carry into the exponent — it ignores the spec's explicit "after rounding" instruction for determining X, which is exactly the edge case the spec text calls out.
+
+FINAL: A

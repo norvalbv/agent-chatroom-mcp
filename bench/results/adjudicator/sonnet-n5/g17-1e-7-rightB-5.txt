@@ -1,0 +1,39 @@
+## Reasoning
+
+**Step 1 — find the exact double nearest to 1e-7.**
+
+Since 2⁻²⁴ ≤ 1e-7 < 2⁻²³, the double is `(1+j/2⁵²)·2⁻²⁴` for the integer j closest to `(1e-7·2²⁴ − 1)·2⁵²`.
+
+`1e-7·2²⁴ = 16777216/10⁷ = 131072/78125 = 1.6777216` exactly, so the fractional part to represent is `52947/78125`.
+
+`j = round(52947·2⁵²/78125)`. Computing exactly:
+`52947·2⁵² = 238452089470385651712`
+`238452089470385651712 = 78125·3052186745220936 + 26712`
+
+Since remainder `26712 < 78125/2 = 39062.5`, we round **down**: `j = 3052186745220936`.
+
+Because j is rounded *down* from the exact fraction, the stored double is **strictly less than** the true 1e-7:
+
+`D = 1e-7 − 26712/(78125·2⁷⁶)`
+
+Evaluating that correction term (`26712/(78125·2⁷⁶) ≈ 4.5251888×10⁻²⁴`):
+
+`D = 9.99999999999999954748112...×10⁻⁸`
+
+(Verified two independent ways via exact integer arithmetic — `78125·3052186745220936 + 26712` reproduces `52947·2⁵²` digit‑for‑digit.)
+
+**Step 2 — apply the `%g` algorithm to this exact value.**
+
+P = 17. Round D to P significant digits: digits 1–16 are all `9`, digit 17 is `5`, digit 18 is `4` (< 5), so rounding leaves the 17-digit mantissa `9.9999999999999995` with X = −8.
+
+**Step 3 — style selection.**
+
+Rule: "If P > X and X ≥ −4, use f style, otherwise e style." Here X = −8, which fails `X ≥ −4`, so **e-style** is required regardless of P vs X, with precision P−1 = 16.
+
+**Step 4 — assemble and trim.**
+
+e-style gives `9.9999999999999995e-08`. The fractional part `9999999999999995` has no trailing zero to strip (it ends in 5), so nothing is trimmed.
+
+Result: **`9.9999999999999995e-08`**, matching Implementation B, not the naive `1e-07` (which would only be correct if the double's exact value were ≥ the halfway point toward 1.0000000000000001×10⁻⁷, or if the converter used the value's *shortest round-tripping* decimal rather than its full-precision exact binary expansion — the spec's rounding rule explicitly calls for the latter).
+
+FINAL: B

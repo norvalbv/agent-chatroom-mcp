@@ -1,0 +1,34 @@
+## Reasoning
+
+**Step 1 — identify the exact double stored for `1e-7`.**
+
+`1e-7 = 1/10^7`. Writing it as `2^-24 · m` with `m ∈ [1,2)`:
+
+`m = 10^-7 · 2^24 = 2^24/10^7 = 2^17/5^7 = 131072/78125 = 1.6777216` exactly (a finite decimal).
+
+So the fractional part to be stored in the 52-bit mantissa is `f = 0.6777216 = 52947/78125` exactly (in lowest terms, since `78125 = 5^7` shares no factor with `52947`).
+
+**Step 2 — round that fraction to 52 bits (round-to-nearest-even, exact arithmetic).**
+
+We need `52947·2^52 mod 78125`. Using modular exponentiation:
+`2^52 mod 78125 = 26746`, so `52947·2^52 mod 78125 = 52947·26746 mod 78125 = 26712`.
+
+Since `26712 < 78125/2 = 39062.5`, the true value's fractional remainder is **less than half a ULP**, so IEEE rounding truncates (rounds down). The stored mantissa is strictly *less* than the exact mathematical fraction — i.e. the double `D` satisfies `D < 10^-7`.
+
+**Step 3 — size of the error.**
+
+Exact algebra gives
+`D − 10^-7 = −26712 / (78125·2^76) = −3339/2^66`.
+
+Numerically, `3339/2^66 ≈ 4.52505×10^-17` (relative), so
+`D ≈ 10^-7·(1 − 4.52505×10^-17) ≈ 9.999999999999999547×10^-8`.
+
+**Step 4 — apply `%.17g` formatting rules.**
+
+`P = 17`. In `e`-style with `P−1 = 16` fractional digits, `D`'s decimal exponent is `X = -8`. Since `X = -8` is not `≥ -4`, the spec selects `e`-style output with 16 digits after the point (17 significant digits total), no trailing-zero stripping needed (none present):
+
+`9.9999999999999995e-08`
+
+This is precisely Implementation A's output. Implementation B's `1e-07` is the *shortest round-tripping* decimal for the double (what a "shortest repr" algorithm like Grisu/Ryu produces), not the exact-rounding 17-significant-digit expansion the spec mandates (which explicitly requires rounding "using the exact binary value of the number").
+
+FINAL: A

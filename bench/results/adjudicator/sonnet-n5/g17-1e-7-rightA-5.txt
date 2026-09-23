@@ -1,0 +1,36 @@
+## Reasoning
+
+**Step 1: Find the exact double value of `1e-7`.**
+
+`1e-7 = 1.6777216 × 2⁻²⁴` exactly (since `1e-7 × 2²⁴ = 16777216 × 10⁻⁷ = 1.6777216` exactly).
+
+Computing the binary expansion of the fractional part `0.6777216 = 52947/78125` to 52 bits (round-to-nearest-even), bit 53 comes out as `0`, so the stored mantissa is the **truncation** — the double is strictly *less than* `1e-7`.
+
+Working this out exactly (numerator/denominator arithmetic with the reconstructed 53-bit significand `7555786372591432 / 2⁷⁶`):
+
+```
+double(1e-7) = 7555786372591432 / 75557863725914323419136
+             ≈ 9.99999999999999954748...  × 10⁻⁸
+```
+
+So the true stored value is just under `1×10⁻⁷`, not just over — it belongs to the decade `[10⁻⁸, 10⁻⁷)`, not `[10⁻⁷, 10⁻⁶)`.
+
+**Step 2: Apply the `%g` algorithm from the spec.**
+
+- P = precision = 17
+- X = decimal exponent in e-style with P−1=16 digits after the point, after rounding = **−8** (since the value rounds to `9.999999999999999x × 10⁻⁸`, not `1.0…0 × 10⁻⁷`)
+- Test: `P > X and X >= -4` → X = −8 fails `X >= -4` → **use e-style** with precision `P−1 = 16`.
+
+**Step 3: Round the exact value to 17 significant digits.**
+
+Exact value ≈ `9.99999999999999954748...×10⁻⁸`. The digits after the leading `9.` are 15 nines then `5`, and the next (18th) digit is `4` (< 5), so no round-up occurs:
+
+```
+9.9999999999999995e-08
+```
+
+No trailing zeros to strip (last digit is 5), so this is the final answer — an e-style number with X=−8, matching Implementation A.
+
+Implementation B's `1e-07` would only be correct if the double were ≥ `1×10⁻⁷` (giving X=−7 and triggering the trimmed-f-style/round-to-"1" branch), but the exact binary value is provably below `1×10⁻⁷`.
+
+FINAL: A

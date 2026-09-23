@@ -1,0 +1,38 @@
+## Reasoning
+
+For `format("%.16g", 1e-7)`: P = 16.
+
+**Step 1 — find the double's exact value.** The literal `1e-7` is not exactly representable. Written as `(2^52+j)·2^-76` with j chosen by round-to-nearest-even, the exact stored value works out to
+
+```
+N/D = 7555786372591432 / 2^76 = 7555786372591432 / 75557863725914323419136
+```
+
+Computing `D − N·10^7 = 3419136` exactly shows
+
+```
+double(1e-7) × 10^7 = 1 − 3419136/D ≈ 1 − 4.52519×10^-17
+                     = 0.99999999999999995474809...
+```
+
+so the true stored value is
+
+```
+9.99999999999999954748...×10^-8
+```
+
+i.e. **sixteen 9's**, then digits `547480...`.
+
+**Step 2 — compute X per the spec.** X is defined as the exponent the value gets *after rounding* to P−1 = 15 fractional digits (16 significant digits) in `e` style. Rounding `9.999999999999999|5474809...×10^-8` to 16 significant digits: the 17th digit onward is `5474809...`, which is greater than `5000...`, so it rounds *up*. All sixteen 9's carry: `9999999999999999 + 1 → 1000000000000000` with the exponent bumped by one. So the rounded value is `1.000000000000000×10^-7`, giving **X = −7**.
+
+**Step 3 — pick style.** Check "`P > X` and `X >= -4`": `16 > -7` is true, but `-7 >= -4` is false → the compound condition is false → use **e style** with precision P−1 = 15.
+
+**Step 4 — format in e style with precision 15** using that same rounding: `1.000000000000000e-07`.
+
+**Step 5 — strip trailing zeros** (no `#` flag): `1.000000000000000` → `1`, and drop the now-empty `.`.
+
+Result: **`1e-07`**.
+
+Implementation A's `9.999999999999999e-08` corresponds to computing the decimal exponent from the *unrounded* magnitude (e.g. via something like `floor(log10(x))`, which is −8 for this particular double) rather than re-deriving X from a correctly-rounded conversion — it never lets the round-up carry propagate into the exponent, which the spec's "X is defined via rounding first" language requires.
+
+FINAL: B

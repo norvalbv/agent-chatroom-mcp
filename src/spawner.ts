@@ -311,7 +311,7 @@ export class Spawner {
       if (agent === "openrouter") {
         // dist/ is gitignored, so a hub run from source has no build for the seat to load
         cmd = existsSync(seatBuild) ? process.execPath : "npx";
-        args = [...(existsSync(seatBuild) ? [seatBuild] : ["tsx", resolve(repoRoot, "src", "openrouter.ts")]), "-p", prompt, "--mcp-url", beat.mcpUrl, "--cwd", seatCwd];
+        args = [...(existsSync(seatBuild) ? [seatBuild] : ["tsx", resolve(repoRoot, "src", "openrouter.ts")]), "--mcp-url", beat.mcpUrl, "--cwd", seatCwd];
         if (req.model) args.push("--model", req.model);
         if (req.canEdit) args.push("--write");
       } else if (agent === "codex") {
@@ -323,7 +323,7 @@ export class Spawner {
         cmd = "claude";
         args = claudeArgs({ mcpJson, tools: req.canEdit ? WRITE_TOOLS : READ_TOOLS, model: req.model, full: CLAUDE_FULL, settings: heartbeatHookSettings() });
       }
-      const viaStdin = cmd === "claude"; // the prompt, never argv (claude-args.ts)
+      const viaStdin = cmd === "claude" || agent === "openrouter"; // the prompt, never argv: claude -p and src/openrouter.ts read it from stdin (claude-args.ts)
       const child = spawn(cmd, args, { cwd: seatCwd, env: { ...seatChildEnv(process.env, req.canEdit ? name : undefined), ...beat.env }, stdio: [viaStdin ? "pipe" : "ignore", "pipe", "pipe"] });
       if (viaStdin) { child.stdin?.on("error", () => {}); child.stdin?.end(prompt); }
       // claude always runs --output-format json now (telemetry), so its raw stdout is a JSON blob, not the

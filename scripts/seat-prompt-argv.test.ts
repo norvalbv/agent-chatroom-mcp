@@ -1,13 +1,18 @@
-/** A seat's prompt never appears in its argv: node --import tsx scripts/seat-prompt-argv.test.ts
+/** A seat's prompt never appears in its argv: node --import tsx scripts/seat-prompt-argv.test.ts (needs npm run build)
  * In pool run room15-rep2 (2026-09-23) one seat's `pkill -f "offline-runner"` matched the brief that the launcher had put
- * in every seat's argv and killed 14 of 15 seats. argv is visible host-wide; the prompt now goes to claude on stdin. */
+ * in every seat's argv and killed 14 of 15 seats. argv is visible host-wide; the prompt now goes to claude and
+ * OpenRouter seats on stdin, from both launchers (src/swarm.ts and src/spawner.ts). */
 import assert from "node:assert/strict";
-import { test } from "node:test";
-import { chmodSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { after, test } from "node:test";
+import { spawn, spawnSync } from "node:child_process";
+import { randomBytes } from "node:crypto";
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { claudeArgs } from "../src/claude-args.ts";
+import { Spawner } from "../src/spawner.ts";
 import { runClaudeSeat } from "./bench-build-runtime.ts";
+import { startHub, startStub, writeFakeBins } from "./seat-launch-fixture.ts";
 
 const BRIEF = "Implement h14: make scripts/offline-runner.mjs time out each command.";
 
@@ -34,4 +39,71 @@ process.stdout.write(JSON.stringify({ type: 'result', subtype: 'success', is_err
   const seen = JSON.parse(readFileSync(record, "utf8")) as { argv: string[]; stdin: string };
   assert.equal(seen.stdin, BRIEF);
   assert.ok(!seen.argv.some((a) => a.includes("offline-runner")), "a pkill -f pattern from the brief cannot match the seat's argv");
+});
+
+// ---- OpenRouter seats (docs/reuse-survey-2026-09-23.md, "Seat launch for claude and OpenRouter seats"): same rule, both launchers ----
+// Real processes: a stub claude on PATH records what it was given; the OpenRouter seat is the real
+// dist/openrouter.js talking to a local stub model, and argv is read with ps while that seat waits on the stub.
+
+const MARKER = `argv-marker-${randomBytes(4).toString("hex")}`;
+const SEAT_BRIEF = `Investigate why ${MARKER} fails and report the cause in the room.`;
+const base = realpathSync(mkdtempSync(join(tmpdir(), "seat-argv-")));
+const [bin, records, work, logs] = ["bin", "records", "work", "logs"].map((d) => join(base, d));
+for (const d of [bin, records, work, logs]) mkdirSync(d);
+writeFakeBins(bin);
+interface Row { pid: number; ppid: number; args: string }
+let processes: Row[] = [];
+// taken while an OpenRouter seat is inside its model call, so the seat is certainly alive
+const stub = await startStub(() => {
+  processes = spawnSync("ps", ["-axww", "-o", "pid=,ppid=,args="], { encoding: "utf8" }).stdout.split("\n").map((l) => /^\s*(\d+)\s+(\d+)\s+(.*)$/.exec(l)).filter((m) => m !== null).map((m) => ({ pid: Number(m![1]), ppid: Number(m![2]), args: m![3] }));
+});
+const { hub, url: hubUrl, port: hubPort } = await startHub(logs, base);
+after(async () => { hub.kill(); await stub.close(); rmSync(base, { recursive: true, force: true }); });
+const seatEnv = { PATH: `${bin}:${process.env.PATH}`, FAKE_RECORD_DIR: records, OPENROUTER_API_KEY: "stub-key", OPENROUTER_BASE_URL: stub.url };
+const takeRecords = (kind: "claude") => readdirSync(records).filter((f) => f.startsWith(kind)).map((f) => { const r = JSON.parse(readFileSync(join(records, f), "utf8")); rmSync(join(records, f)); return r as { argv: string[]; stdin: string; cwd: string }; });
+const waitFor = async (ok: () => unknown, what: string, ms = 30_000) => { for (const until = Date.now() + ms; !ok(); ) { if (Date.now() > until) throw new Error(`timed out waiting for ${what}`); await new Promise((r) => setTimeout(r, 50)); } };
+
+test("spawner: an OpenRouter recruit reads the brief from stdin and its argv never carries it", async () => {
+  Object.assign(process.env, seatEnv);
+  const spawner = new Spawner({ mcpUrl: `${hubUrl}/mcp`, defaultCwd: work, logDir: logs });
+  spawner.policy = {};
+  processes = []; stub.bodies.length = 0;
+  const [rec] = spawner.request({ room: "argv-room", requestedBy: "tester", brief: SEAT_BRIEF, agent: "openrouter", model: "stub/model", name: "or-recruit" });
+  await waitFor(() => rec.endedAt, "the OpenRouter recruit to exit");
+  assert.equal(rec.exitCode, 0, readFileSync(rec.log, "utf8").slice(-800));
+  const seat = processes.find((p) => p.pid === rec.pid);
+  assert.ok(seat && seat.args.includes("openrouter.js"), "the recruit was alive in the process table while it called the model");
+  assert.ok(!seat.args.includes(MARKER), `the brief is not in the recruit's argv: ${seat.args.slice(0, 300)}`);
+  assert.ok(stub.bodies.some((b) => b.messages.some((m) => (m.content ?? "").includes(MARKER))), "the brief reached the model, so stdin delivered it");
+});
+
+test("swarm.ts: an OpenRouter seat gets the prompt on stdin, never argv", async () => {
+  processes = []; stub.bodies.length = 0;
+  const swarm = spawn(process.execPath, [resolve("dist", "swarm.js"), SEAT_BRIEF, "--flat", "--agents", "3", "--openrouter", "1",
+    "--openrouter-models", "stub/model", "--models", "claude-opus-5-5", "--verifier-model", "claude-opus-5-5", "--port", String(hubPort), "--timeout", "1", "--cwd", work],
+    { env: { ...process.env, ...seatEnv }, stdio: ["ignore", "pipe", "pipe"] });
+  let out = "";
+  swarm.stdout.on("data", (d) => (out += d));
+  swarm.stderr.on("data", (d) => (out += d));
+  await new Promise((ok) => swarm.on("close", ok));
+  const id = /swarm (swarm-[0-9]+-[a-z0-9]+):/.exec(out)?.[1];
+  assert.ok(id, out.slice(-1500));
+  try {
+    // the launcher's own argv still carries the task (it is how swarm.js takes it); every seat it launched must not
+    const seats = processes.filter((p) => p.ppid === swarm.pid);
+    assert.ok(seats.some((p) => p.args.includes("openrouter.js")), "the OpenRouter seat was alive while it called the model");
+    for (const p of seats) assert.ok(!p.args.includes(MARKER), `a seat's argv carries the brief: ${p.args.slice(0, 300)}`);
+    assert.ok(stub.bodies.some((b) => b.messages.some((m) => (m.content ?? "").includes(MARKER))), "the OpenRouter seat's prompt reached the model");
+  } finally { rmSync(resolve("swarms", id), { recursive: true, force: true }); }
+});
+
+test("openrouter.ts still takes -p for manual runs and the scripts that call it directly", async () => {
+  stub.bodies.length = 0;
+  const manual = `manual-${MARKER}`;
+  const seat = spawn(process.execPath, [resolve("dist", "openrouter.js"), "-p", `Say hello. ${manual}`, "--mcp-url", `${hubUrl}/mcp`, "--model", "stub/model", "--max-minutes", "0.5"],
+    { env: { ...process.env, ...seatEnv }, stdio: ["ignore", "ignore", "pipe"] });
+  let err = "";
+  seat.stderr.on("data", (d) => (err += d));
+  assert.equal(await new Promise((ok) => seat.on("close", ok)), 0, err.slice(-800));
+  assert.ok(stub.bodies.some((b) => b.messages.some((m) => (m.content ?? "").includes(manual))));
 });

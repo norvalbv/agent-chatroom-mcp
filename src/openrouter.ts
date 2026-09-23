@@ -6,6 +6,7 @@
  *
  *   openrouter -p "<brief>" --mcp-url http://127.0.0.1:7717/mcp [--model slug] [--cwd dir] [--write]
  *              [--no-shell] [--max-minutes 45] [--reasoning low|medium|high] [--checkpoint-trim]
+ *   echo "<brief>" | openrouter --mcp-url ...     (no -p: the prompt is read from stdin)
  */
 import { randomUUID } from "node:crypto";
 import { resolve } from "node:path";
@@ -21,8 +22,21 @@ const flag = (name: string, def?: string) => {
   return i >= 0 ? argv[i + 1] : def;
 };
 const has = (name: string) => argv.includes(`--${name}`);
+/**
+ * The launchers (src/swarm.ts runOpenRouter, src/spawner.ts, src/revive.ts) write the prompt to stdin and pass no -p,
+ * so it never appears in argv, where any process on the host can read it and `pkill -f <word from the brief>` matches
+ * it (pool run room15-rep2 lost 14 of 15 seats that way; src/claude-args.ts). -p/--prompt stays for manual runs and the
+ * scripts that call the seat directly (README, scripts/seat-trial.ts, scripts/openrouter-smoke.ts).
+ */
+async function readStdin(): Promise<string> {
+  if (process.stdin.isTTY) return "";
+  let text = "";
+  process.stdin.setEncoding("utf8");
+  for await (const chunk of process.stdin) text += chunk;
+  return text;
+}
 const pIdx = argv.indexOf("-p");
-const PROMPT = (pIdx >= 0 ? argv[pIdx + 1] : flag("prompt")) ?? "";
+const PROMPT = (pIdx >= 0 ? argv[pIdx + 1] : flag("prompt")) ?? (await readStdin());
 const MODEL = flag("model", process.env.OPENROUTER_MODEL ?? "deepseek/deepseek-v4-flash-0731")!;
 const BASE = (process.env.OPENROUTER_BASE_URL ?? "https://openrouter.ai/api/v1").replace(/\/+$/, "");
 const KEY = process.env.OPENROUTER_API_KEY ?? "";
@@ -38,7 +52,7 @@ const RATE_LIMIT_PATIENCE_MS = Number(flag("rate-limit-patience-min", "20")) * 6
 const say = (s: string) => process.stderr.write(`${s}\n`);
 
 if (!PROMPT.trim()) {
-  say('usage: openrouter -p "<prompt>" --mcp-url <url> [--model slug] [--cwd dir] [--write] [--no-shell] [--max-minutes 45] [--reasoning low|medium|high] [--usage-sidecar path] [--checkpoint-trim]');
+  say('usage: openrouter [-p "<prompt>" | prompt on stdin] --mcp-url <url> [--model slug] [--cwd dir] [--write] [--no-shell] [--max-minutes 45] [--reasoning low|medium|high] [--usage-sidecar path] [--checkpoint-trim]');
   process.exit(2);
 }
 if (!KEY && BASE.startsWith("https://openrouter.ai")) {

@@ -48,12 +48,15 @@ const promptFor = (name: string, note: string) => {
 const children: ReturnType<typeof spawn>[] = [];
 function runSeat(name: string, note: string): Promise<number | null> {
   const cwd = cwdFor[name] ?? cwdFor[name.replace(/-r\d+$/, "")] ?? repoRoot; // a replacement continues in its predecessor's worktree
-  const seatArgs = ["dist/openrouter.js", "-p", promptFor(name, note), "--model", MODEL, "--mcp-url", `${URL_}/mcp`, "--cwd", cwd, "--max-minutes", String(MAX_MIN), "--usage-sidecar", resolve(OUT, `${name}.usage.json`)];
+  // the prompt goes on stdin, never argv, where a seat's `pkill -f <word from the brief>` would match it (src/openrouter.ts)
+  const seatArgs = ["dist/openrouter.js", "--model", MODEL, "--mcp-url", `${URL_}/mcp`, "--cwd", cwd, "--max-minutes", String(MAX_MIN), "--usage-sidecar", resolve(OUT, `${name}.usage.json`)];
   if (WRITE && !name.startsWith("verifier")) seatArgs.push("--write");
   const fd = openSync(resolve(OUT, `${name}.log`), "a");
   log(`launching ${name} [${MODEL}] cwd=${cwd}${seatArgs.includes("--write") ? " (write)" : ""}`);
   return new Promise((res) => {
-    const child = spawn(process.execPath, seatArgs, { cwd: repoRoot, env: seatChildEnv(), stdio: ["ignore", fd, fd] });
+    const child = spawn(process.execPath, seatArgs, { cwd: repoRoot, env: seatChildEnv(), stdio: ["pipe", fd, fd] });
+    child.stdin?.on("error", () => {});
+    child.stdin?.end(promptFor(name, note));
     children.push(child);
     child.on("close", (code) => { log(`${name} exited (${code})`); res(code); });
   });

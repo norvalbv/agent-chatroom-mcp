@@ -170,12 +170,13 @@ const seatScript = existsSync(resolve(repoRoot, "dist/openrouter.js")) ? { cmd: 
 function runOpenRouter(name: string, text: string, cwd: string, model: string | undefined, write: boolean): Promise<SeatOutcome> {
   const outFile = resolve(OUT, `${name}.out`);
   const sidecar = resolve(OUT, `${name}.usage.json`);
-  // the seat's own budget matches the launcher's timeout so it leaves the room rather than being killed in it
-  const args = [...seatScript.pre, "-p", text, "--mcp-url", `${URL_}/mcp`, "--cwd", cwd, "--max-minutes", String(TIMEOUT_MIN), "--usage-sidecar", sidecar];
+  // the seat's own budget matches the launcher's timeout so it leaves the room rather than being killed in it;
+  // the prompt goes on stdin (src/openrouter.ts reads it there when no -p is given), never argv (src/claude-args.ts)
+  const args = [...seatScript.pre, "--mcp-url", `${URL_}/mcp`, "--cwd", cwd, "--max-minutes", String(TIMEOUT_MIN), "--usage-sidecar", sidecar];
   if (model) args.push("--model", model);
   if (write) args.push("--write");
   if (OPENROUTER_REASONING) args.push("--reasoning", OPENROUTER_REASONING);
-  return runProc(name, seatScript.cmd, args, cwd, outFile).then((t) => ({ text: t, usage: readSeatUsage(sidecar) }));
+  return runProc(name, seatScript.cmd, args, cwd, outFile, false, undefined, false, text).then((t) => ({ text: t, usage: readSeatUsage(sidecar) }));
 }
 
 function runCodex(name: string, text: string, cwd: string, model?: string): Promise<SeatOutcome> {

@@ -386,13 +386,15 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
       const human = hub.unansweredHuman(r);
       const resp = human ? hub.responderFor(r, human, id) : null;
       const focus = hub.attentionFocus(r, p);
+      // an ask already carried in this response's messages[] is referenced by id, not sent twice
+      const delivered = new Set(msgs.map((m) => m.id));
       // only a human's message strips the envelope; a peer ask rides the full one (proposal, board, queue)
       if (focus && hub.focusExclusive(focus)) return {
         hint: toolsRegainedNote ? toolsRegainedNote + (hub.attentionHint(r, p) ?? "") : hub.attentionHint(r, p), messages: msgs.map((m) => hub.fmt(r, m)),
         next_seq: p.lastSeenSeq, room_state: r.state, your_turn: r.mode === "free" || hub.currentSpeaker(r)?.id === id,
         your_role: p.role ?? "worker", humans_present: hub.activeParticipants(r).filter((x) => x.agent === "human").map((x) => x.name),
         unanswered_human: human ? (resp!.mine ? { id: human.id, name: hub.shown(r, human.from), text: human.content, you_answer: true } : { name: hub.shown(r, human.from), responder: resp!.who, you_answer: false }) : null,
-        addressed_to_you: [{ id: focus.id, from: hub.shown(r, focus.from), text: focus.content }],
+        addressed_to_you: [{ id: focus.id, from: hub.shown(r, focus.from), ...(delivered.has(focus.id) ? { in_messages: true } : { text: focus.content }) }],
         open_proposal: null, conclusion: null, leaving_would_block: !!block,
       };
       if (open) p.seenProposal = { ...(p.seenProposal ?? {}), [open.id]: open.version };
@@ -450,7 +452,7 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
         leaving_would_block: block ? block.reason : false,
         ...board,
         quiet_activity: hub.quietActivity(r, p, since),
-        addressed_to_you: hub.addressedBy(r, p).map((m) => ({ id: m.id, from: hub.shown(r, m.from), text: m.content.slice(0, 200) })),
+        addressed_to_you: hub.addressedBy(r, p).map((m) => ({ id: m.id, from: hub.shown(r, m.from), ...(delivered.has(m.id) ? { in_messages: true } : { text: m.content.slice(0, 200) }) })),
         your_share: (() => {
           const sh = hub.share(r, p);
           return { messages: sh.mine, of_last: sh.of, fair: sh.fair, over: sh.over };
@@ -668,7 +670,9 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
     }),
   ));
 
-  if (spawner) {
+  // a no-recruit hub (benchmark arms) refuses every recruitment, so these three tools could only error:
+  // leave them off the tool list rather than re-send their schemas to every seat on every turn
+  if (spawner && process.env.CHATROOM_NO_RECRUIT !== "1") {
     server.registerTool(
       "request_agent",
       {

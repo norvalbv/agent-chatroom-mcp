@@ -181,7 +181,9 @@ test('MCP: a peer ask leads reads with the hint once and does not hide the open 
   const focus = await call(b, 'wait_for_messages', {room, timeout_ms: 0});
   assert.equal(focus.open_proposal?.text, text, 'a peer ask no longer hides the open proposal');
   assert.match(focus.hint, /reply_to=.*pass/i);
-  assert.equal(focus.addressed_to_you[0].text, '@bob inspect this');
+  // per-turn-payload (swarm-092653-202z): the ask rides in messages[] once; addressed_to_you references it by id
+  assert.equal(focus.addressed_to_you[0].in_messages, true);
+  assert.ok(focus.messages.some((m: string) => m.includes('@bob inspect this')), 'the ask text is in messages[]');
   for (const args of [{room}, {room, since_seq: 0}]) {
     const read = await call(b, 'read_messages', args);
     assert.ok(Array.isArray(read), 'legacy string[] response preserved');

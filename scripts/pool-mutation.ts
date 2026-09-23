@@ -87,11 +87,11 @@ const GROUP_RUNNER = "const{spawn}=require('node:child_process');const[ms,...arg
   "setInterval(()=>{if(process.ppid!==ppid){kill();process.exit(1)}},250).unref();" +
   "c.on('error',()=>{kill();process.exit(127)});c.on('exit',s=>{clearTimeout(t);kill();process.exit(code??s??1)});";
 const STOP_SIGNALS: readonly string[] = ['SIGINT', 'SIGTERM', 'SIGHUP'];
-/** `interrupted`: the runner was stopped by SIGINT, SIGTERM or SIGHUP (after killing the group). validate's own handlers
- * (bench-build-runtime.ts) only run once its synchronous work ends, so the check must stop by itself (MutationInterrupted). */
+/** `interrupted`: SIGINT, SIGTERM or SIGHUP when that stopped the runner (after it killed the group), else null. validate's own
+ * handlers (bench-build-runtime.ts) only run once its synchronous work ends, so the check must stop by itself (MutationInterrupted). */
 export function runGrouped(argv: string[], cwd: string, timeoutMs: number, env: NodeJS.ProcessEnv) {
   const r = spawnSync(process.execPath, ['-e', GROUP_RUNNER, String(timeoutMs), ...argv], { cwd, env, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, timeout: timeoutMs + 60_000, killSignal: 'SIGKILL' });
-  return { exit_code: r.status, timed_out: r.status === 124, signal: r.signal, interrupted: r.signal !== null && STOP_SIGNALS.includes(r.signal),
+  return { exit_code: r.status, timed_out: r.status === 124, signal: r.signal, interrupted: r.signal !== null && STOP_SIGNALS.includes(r.signal) ? r.signal : null,
     output_tail: ((r.stdout ?? '') + (r.stderr ?? '')).slice(-2000) };
 }
 
@@ -138,7 +138,7 @@ export function mutationCheckItem(o: { repo: string; baseCommit: string; item: H
     delete env.NODE_TEST_CONTEXT; // inherited from an outer node --test, it makes the hidden node --test exit 0 and every mutant survive
     // StrykerJS runs on this Node (the one the engines check above passed), not on whichever node its shebang finds first on PATH.
     const r = runGrouped([process.execPath, stryker.bin, 'run', config], wt, timeoutMs, env);
-    if (r.interrupted) throw new MutationInterrupted(r.signal!);
+    if (r.interrupted) throw new MutationInterrupted(r.interrupted);
     if (r.timed_out) return done({ error: `StrykerJS did not finish within ${Math.round(timeoutMs / 60_000)} min` });
     if (r.exit_code !== 0 || !existsSync(reportPath)) return done({ error: `StrykerJS exited ${r.exit_code}: ${r.output_tail.slice(-500)}` });
     const report = JSON.parse(readFileSync(reportPath, 'utf8'));

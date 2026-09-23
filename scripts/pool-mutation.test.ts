@@ -16,6 +16,7 @@ import { validateAll } from './pool.ts';
 const fresh = () => realpathSync(mkdtempSync(join(tmpdir(), 'pool-mutation-')));
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 const PS_LINE = /^\s*(\d+)\s+(\d+)\s+(.*)$/;
+const STOPPED_BY_SIGINT = /mutation check stopped by SIGINT/;
 /** Live processes whose command line carries `marker` (a random string only this test's own processes carry). */
 const withMarker = (marker: string) => spawnSync('ps', ['-Ao', 'pid=,pgid=,command='], { encoding: 'utf8' }).stdout.split('\n')
   .map(l => PS_LINE.exec(l)).filter((m): m is RegExpExecArray => !!m && m[3].includes(marker) && !m[3].startsWith('ps '))
@@ -125,7 +126,8 @@ function groupedCaller(marker: string, cwd: string, hold: boolean) {
   let out = '';
   c.stdout.on('data', d => { out += d; });
   const exited = new Promise<string>(r => c.on('exit', () => r(out)));
-  return { pid: c.pid!, exited };
+  assert.ok(c.pid, 'the caller started');
+  return { pid: c.pid, exited };
 }
 async function groupedRunning(marker: string, callerPgid: number) {
   const until = Date.now() + 60_000;
@@ -143,7 +145,7 @@ test('a stopped caller stops the grouped run: group SIGINT, SIGTERM or SIGHUP, a
   ];
   try {
     for (const { signal, group } of cases) {
-      const marker = 'pool-mutation-stop-' + randomBytes(6).toString('hex');
+      const marker = `pool-mutation-stop-${randomBytes(6).toString('hex')}`;
       try {
         const caller = groupedCaller(marker, cwd, false);
         await groupedRunning(marker, caller.pid);
@@ -156,13 +158,13 @@ test('a stopped caller stops the grouped run: group SIGINT, SIGTERM or SIGHUP, a
 });
 
 test('a caller that survives the signal gets it reported, so validate stops instead of starting the next item', async () => {
-  const cwd = fresh(), marker = 'pool-mutation-hold-' + randomBytes(6).toString('hex');
+  const cwd = fresh(), marker = `pool-mutation-hold-${randomBytes(6).toString('hex')}`;
   try {
     const caller = groupedCaller(marker, cwd, true);
     await groupedRunning(marker, caller.pid);
     process.kill(-caller.pid, 'SIGINT');
     const r = JSON.parse(await caller.exited);
-    assert.deepEqual([r.signal, r.interrupted, r.timed_out], ['SIGINT', true, false]);
+    assert.deepEqual([r.signal, r.interrupted, r.timed_out], ['SIGINT', 'SIGINT', false]);
     assert.deepEqual(await settled(marker, 8000), []);
   } finally { stopEscaped(marker); rmSync(cwd, { recursive: true, force: true }); }
 });
@@ -179,7 +181,9 @@ async function validateInMutantRun(base: string, marker: string) {
   let stdout = '', stderr = '';
   v.stdout.on('data', d => { stdout += d; });
   v.stderr.on('data', d => { stderr += d; });
-  const exited = new Promise<{ code: number | null; stdout: string; stderr: string }>(r => v.on('close', code => r({ code, stdout, stderr }))), pgid = v.pid!;
+  const exited = new Promise<{ code: number | null; stdout: string; stderr: string }>(r => v.on('close', code => r({ code, stdout, stderr })));
+  const pgid = v.pid;
+  assert.ok(pgid, 'validate started');
   const until = Date.now() + 100_000;
   while (!withMarker(marker).some(p => p.pgid !== pgid && p.command.includes('setTimeout(() => {}, 120000)'))) {
     assert.ok(Date.now() < until, 'no mutant run started');
@@ -193,7 +197,7 @@ const removeBase = (base: string) => { try { rmSync(base, { recursive: true, for
 const worktrees = (repo: string) => spawnSync('git', ['-C', repo, 'worktree', 'list', '--porcelain'], { encoding: 'utf8' }).stdout.split('worktree ').length - 1;
 
 test('SIGKILL to the validate --mutation process group stops StrykerJS and its mutant runs and leaves no worktree registered', async () => {
-  const base = fresh(), marker = 'pool-mutation-contain-' + randomBytes(6).toString('hex');
+  const base = fresh(), marker = `pool-mutation-contain-${randomBytes(6).toString('hex')}`;
   try {
     const v = await validateInMutantRun(base, marker);
     process.kill(-v.pgid, 'SIGKILL');
@@ -206,7 +210,7 @@ test('SIGKILL to the validate --mutation process group stops StrykerJS and its m
 });
 
 test('Ctrl-C (SIGINT to the group) stops validate --mutation: StrykerJS is killed, its scratch copy removed, the next item not started', async () => {
-  const base = fresh(), marker = 'pool-mutation-ctrlc-' + randomBytes(6).toString('hex');
+  const base = fresh(), marker = `pool-mutation-ctrlc-${randomBytes(6).toString('hex')}`;
   try {
     const v = await validateInMutantRun(base, marker);
     process.kill(-v.pgid, 'SIGINT');
@@ -215,7 +219,7 @@ test('Ctrl-C (SIGINT to the group) stops validate --mutation: StrykerJS is kille
     assert.deepEqual(await settled(marker, 8000), [], 'validate or a StrykerJS process kept running after Ctrl-C');
     const r = await v.exited;
     assert.notEqual(r.code, 0);
-    assert.match(r.stderr, /mutation check stopped by SIGINT/, 'validate stopped instead of going on to the next item');
+    assert.match(r.stderr, STOPPED_BY_SIGINT, 'validate stopped instead of going on to the next item');
     assert.equal(r.stdout, '', 'no report for a stopped validate');
     assert.deepEqual(readdirSync(v.scratch).filter(n => n.startsWith('mutation-')), [], 'the scratch copy was removed');
     assert.equal(worktrees(v.fx.repo), 1);

@@ -39,6 +39,10 @@ const SECRET = "use toExponential(16) for %.17g";
 let r = await a.call("board_set", { room, key: "draft/A", text: SECRET });
 assert.ok(!r.error, "A drafted: " + r.text);
 
+// the chat notice for a sealed draft names neither key nor size, only who still owes one
+const notice = hub.getRoom(room).messages.filter((m) => m.kind === "board").at(-1)!;
+assert.ok(!notice.content.includes("draft/A") && !notice.content.includes(String(SECRET.length)) && /sealed draft \(0 of 2|1 of 2 drafters.*B has one/.test(notice.content), "sealed notice: " + notice.content);
+
 // A sees its own draft; B, the verifier and a non-member do not, by any read path
 r = await a.call("board_get", { room, key: "draft/A" });
 assert.ok(!r.error && r.text.includes(SECRET), "author reads own draft: " + r.text);
@@ -95,9 +99,10 @@ await d.call("board_set", { room: room2, key: "draft/D", text: "d-draft" });
 r = await d.call("board_get", { room: room2, key: "draft/C" });
 assert.ok(r.error, "sealed while E has not drafted");
 r = await e.call("leave_room", { room: room2, reason: "finished nothing here; no handoff, no claim, leaving the room" });
-console.error("LEAVE", r.text.slice(0,300));
 r = await d.call("board_get", { room: room2, key: "draft/C" });
 assert.ok(!r.error && r.text.includes("c-draft"), "revealed once the only non-drafter left: " + r.text);
+
+assert.equal(hub.getRoom(room2).messages.filter((m) => /is now readable by all/.test(m.content)).length, 1, "a leaver-triggered reveal is announced once");
 
 console.log("blind-drafts regression: ok");
 process.exit(0);

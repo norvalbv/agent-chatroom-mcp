@@ -706,6 +706,7 @@ export class Hub {
     this.persist({ type: "leave", room: roomName, p: old });
     this.post(room, "system", undefined, `${this.shown(room, old)} left the room; the launcher registered a replacement seat.`);
     for (const pr of room.proposals.values()) if (pr.status === "open") this.evaluate(room, pr);
+    this.latchDrafts(room);
     return { replacementToken };
   }
 
@@ -839,6 +840,7 @@ export class Hub {
     this.persist({ type: "leave", room: roomName, p });
     this.post(room, "system", undefined, `${this.shown(room, p)} left the room${why ? `: ${why}` : "."}`);
     for (const pr of room.proposals.values()) if (pr.status === "open") this.evaluate(room, pr);
+    this.latchDrafts(room); // the last non-drafter leaving completes the set: reveal and announce it
   }
 
   /**
@@ -1721,6 +1723,14 @@ export class Hub {
     this.post(room, "system", undefined, `[SYSTEM] Every drafter (${this.drafters(room).map((d) => d.name).join(", ")}) has a draft, so draft/* is now readable by all: ${keys.join(", ")}. Compare them and settle each disagreement from the brief, not by counting who agrees.`);
   }
 
+  /** "k of n drafters; waiting on X, Y": who still owes a draft, without naming any sealed key. */
+  private draftProgress(room: Room): string {
+    const authors = new Set([...room.board].filter(([k]) => k.startsWith("draft/")).map(([, e]) => e.by));
+    const drafters = this.drafters(room);
+    const owed = drafters.filter((d) => !authors.has(d.name)).map((d) => d.name);
+    return `${drafters.length - owed.length} of ${drafters.length} drafters; draft/* stays sealed until ${owed.join(", ") || "everyone"} ${owed.length === 1 ? "has" : "have"} one`;
+  }
+
   /** A draft/* entry is readable only by its author until every drafter has posted one (the human dashboard always sees it). */
   draftSealed(room: Room, key: string, entry: BoardEntry, viewer?: string): boolean {
     return key.startsWith("draft/") && entry.by !== viewer && !room.draftsRevealed && !this.draftsComplete(room);
@@ -1895,7 +1905,10 @@ export class Hub {
     };
     this.applyBoard(room, key, entry);
     this.persist({ type: "board", room: roomName, key, entry });
-    this.post(room, "board", p, `${previous ? "updated" : "added"} board entry "${key}" (${text.length} chars; read it with board_get)`
+    // a sealed draft's notice names neither key nor size (either can carry content); it says who is still owed a draft
+    const sealedDraft = key.startsWith("draft/") && !room.draftsRevealed && !this.draftsComplete(room);
+    this.post(room, "board", p, sealedDraft ? `${previous ? "updated" : "wrote"} a sealed draft (${this.draftProgress(room)})`
+      : `${previous ? "updated" : "added"} board entry "${key}" (${text.length} chars; read it with board_get)`
       + (reviewer ? ` — reviewer: ${reviewer.name}` : ""));
     if (reviewer) {
       // kind "chat", not "system": addressedBy()/actionableNow() resolve an owed @-mention from
@@ -2771,6 +2784,7 @@ export class Hub {
       (claims.length ? ` Released ${claims.length} claim/* entr${claims.length === 1 ? "y" : "ies"} (${claims.join(", ")}): status is now "released", content kept, anyone may claim the area.` : "") +
       ` Their next hub call is refused with KICKED; they cannot rejoin.`);
     for (const pr of room.proposals.values()) if (pr.status === "open") this.evaluate(room, pr);
+    this.latchDrafts(room);
     return p;
   }
 
@@ -2815,6 +2829,7 @@ export class Hub {
           this.post(room, "system", undefined, `${this.shown(room, p)} went quiet for ${Math.round(idleMs / 60000)} min and was marked as left.`);
           for (const pr of room.proposals.values()) if (pr.status === "open") this.evaluate(room, pr);
           swept.push(p.name);
+          this.latchDrafts(room);
         }
       }
     }

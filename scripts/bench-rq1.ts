@@ -32,7 +32,7 @@ import { pathToFileURL, fileURLToPath } from "node:url";
 import { claudeArgs } from "../src/claude-args.js";
 import { parseClaudeCliOutput, rollupUsage, type SeatUsageRollup } from "../src/result.js";
 import { seatChildEnv } from "../src/env.js";
-import { estimateSeatCost, type MessageUsage, type SeatCostEstimate } from "./seat-cost-estimate.js";
+import { estimateSeatCost, StreamUsage, type SeatCostEstimate } from "./seat-cost-estimate.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(here, "..");
@@ -103,7 +103,11 @@ process.on("SIGTERM", () => process.exit(143));
  * already reads), but the per-turn token counts on `type:"assistant"` events do survive a kill and are
  * worth keeping as forensic signal distinct from the authoritative `usage` field. */
 export interface PartialUsage {
+  /** Summed per API message: its final message_delta count under --include-partial-messages, else the
+   * assistant event's placeholder (scripts/seat-cost-estimate.ts StreamUsage). */
   output_tokens: number;
+  /** Messages whose output_tokens is final; the rest are placeholders (absent in records made before this field). */
+  output_tokens_final_messages?: number;
   input_tokens?: number;
   cache_read_input_tokens?: number;
   cache_creation_input_tokens?: number;
@@ -163,7 +167,7 @@ function runClaudeSeat(name: string, args: string[], cwd: string, deadlineMs: nu
     let resultLine: string | null = null;
     let err = "";
     const partial: PartialUsage = { output_tokens: 0, assistant_messages_observed: 0 };
-    const observedUsage: { id?: string; usage: MessageUsage }[] = [];
+    const streamUsage = new StreamUsage();
     const models = { system_init: new Set<string>(), assistant: new Set<string>(), result_model_usage: new Set<string>() };
     const observeModel = (source: keyof typeof models, value: unknown) => {
       if (typeof value === "string" && value.trim()) models[source].add(value);
@@ -182,6 +186,7 @@ function runClaudeSeat(name: string, args: string[], cwd: string, deadlineMs: nu
       // Identity observations must survive usage-free events and a missing terminal result.
       if (evt?.type === "system" && evt.subtype === "init") observeModel("system_init", evt.model);
       if (evt?.type === "assistant") observeModel("assistant", evt.message?.model);
+      streamUsage.consume(evt);
       if (evt?.type === "assistant" && Array.isArray(evt.message?.content)) {
         for (const c of evt.message.content) if (c?.type === "tool_use" && typeof c.name === "string") toolUses.push({ name: c.name, input: c.input });
       }
@@ -195,8 +200,6 @@ function runClaudeSeat(name: string, args: string[], cwd: string, deadlineMs: nu
       if (evt?.type === "assistant" && evt.message?.usage) {
         const u = evt.message.usage;
         partial.assistant_messages_observed += 1;
-        observedUsage.push({ id: typeof evt.message.id === "string" ? evt.message.id : undefined, usage: u });
-        if (typeof u.output_tokens === "number") partial.output_tokens += u.output_tokens;
         if (typeof u.input_tokens === "number") partial.input_tokens = u.input_tokens;
         if (typeof u.cache_read_input_tokens === "number") partial.cache_read_input_tokens = u.cache_read_input_tokens;
         if (typeof u.cache_creation_input_tokens === "number") partial.cache_creation_input_tokens = u.cache_creation_input_tokens;
@@ -243,8 +246,10 @@ function runClaudeSeat(name: string, args: string[], cwd: string, deadlineMs: nu
         duration_api_ms: typeof parsed?.duration_api_ms === "number" ? parsed.duration_api_ms : null,
         stderr_tail: err.slice(-4000),
         killed_by_deadline: killedByDeadline,
-        partial_usage: !resultLine && partial.assistant_messages_observed > 0 ? partial : null,
-        estimated_cost: resultLine ? null : estimateSeatCost(observedUsage, [...models.assistant], args.includes("--model") ? args[args.indexOf("--model") + 1] : ""),
+        partial_usage: !resultLine && partial.assistant_messages_observed > 0
+          ? { ...partial, output_tokens: streamUsage.outputTokens(), output_tokens_final_messages: streamUsage.finalOutputMessages() }
+          : null,
+        estimated_cost: resultLine ? null : estimateSeatCost(streamUsage.messages(), [...models.assistant], args.includes("--model") ? args[args.indexOf("--model") + 1] : ""),
         reported_models: Object.values(models).some((ids) => ids.size)
           ? { system_init: [...models.system_init], assistant: [...models.assistant], result_model_usage: [...models.result_model_usage] }
           : null,

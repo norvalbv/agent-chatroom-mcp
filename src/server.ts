@@ -380,6 +380,8 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
           : r.conclusion
         : null;
       if (r.conclusion) p.seenConclusion = true;
+      // an objection travels once per (challenge, status); afterwards only its id, author and status
+      const challengesView = openView ? hub.challengesDelta(p, openView.challenges) : [];
       const block = hub.leavingWouldBlock(r, p);
       const human = hub.unansweredHuman(r);
       const resp = human ? hub.responderFor(r, human, id) : null;
@@ -443,7 +445,7 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
         openings: r.expectedParticipants && !r.openingsRevealed ? { submitted: r.openings.size, expected: r.expectedParticipants, waiting_on: hub.openingsWaitingOn(r), revealed: false, chat_blocked: false, deadline_min_after_first: Math.round(r.nudgeAfterMs / 60000) } : undefined,
         unanswered_human: human && resp!.mine ? { id: human.id, name: hub.shown(r, human.from), text: human.content, you_answer: true } : human ? { name: hub.shown(r, human.from), responder: resp!.who, you_answer: false } : null,
         open_proposal: openView
-          ? { id: openView.id, version: openView.version, by: openView.by, chars: openView.chars, tally: openView.tally, waiting_on: openView.waiting_on, needs_challenge: openView.needs_challenge, blocked_by: openView.blocked_by, challenges: openView.challenges, ...("text" in openView ? { text: openView.text } : { text_omitted: openView.text_omitted }) }
+          ? { id: openView.id, version: openView.version, by: openView.by, chars: openView.chars, tally: openView.tally, waiting_on: openView.waiting_on, needs_challenge: openView.needs_challenge, blocked_by: openView.blocked_by, challenges: challengesView, ...("text" in openView ? { text: openView.text } : { text_omitted: openView.text_omitted }) }
           : null,
         leaving_would_block: block ? block.reason : false,
         ...board,

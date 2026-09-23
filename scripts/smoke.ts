@@ -119,6 +119,9 @@ assert.deepEqual(tools, ["amend", "board_get", "board_set", "challenge", "join_r
   assert.match(wa.open_proposal.text, /prettier/, "a new version is shipped in full");
   const wa2 = await a.call("wait_for_messages", { room, timeout_ms: 0 });
   assert.ok(!("text" in wa2.open_proposal) && /unchanged since v2/.test(wa2.open_proposal.text_omitted), "an unchanged version is not re-shipped");
+  assert.match(wa.open_proposal.challenges[0].objection, /names no formatter/, "a challenge's objection ships the first time a seat sees it at its status");
+  assert.ok(!("objection" in wa2.open_proposal.challenges[0]) && wa2.open_proposal.challenges[0].objection_omitted, "an unchanged challenge's objection is not re-shipped on every wait");
+  assert.equal(wa2.open_proposal.challenges[0].status, wa.open_proposal.challenges[0].status, "id/status still travel");
   const va = await a.call("vote", { room, proposal_id: pr.id, vote: "agree", quote: "editorconfig and prettier" });
   assert.equal(va.room_state, "open");
   const v = await b.call("vote", { room, proposal_id: pr.id, vote: "agree", quote: ".editorconfig and prettier" });

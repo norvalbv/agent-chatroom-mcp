@@ -1,6 +1,7 @@
 /** Regression: npx tsx --test scripts/challenge-verification-regression.ts
- * Under requireChallenge "auto", a room that requires verification needs no challenge: the non-author
- * verify/* run is the scrutiny. Without verification, or with an explicit true, the challenge gate stays. */
+ * Under requireChallenge "auto", a room that requires verification still needs a challenge. Room
+ * swarm-092653-202z proposed letting the verify/* run replace it; the owner held that change on 2026-09-23
+ * because verify entries mostly report re-running the author's own checks (consensus-requires-scrutiny). */
 import assert from "node:assert/strict";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -8,7 +9,7 @@ import { join } from "node:path";
 import test from "node:test";
 import { Hub, type RoomOptions } from "../src/hub.js";
 
-const text = "Cut the mandatory challenge when a verify run already gates the proposal.";
+const text = "Keep the mandatory challenge even when a verify run gates the proposal.";
 function fixture(t: { after: (fn: () => void) => void }, opts: RoomOptions) {
   const dir = mkdtempSync(join(tmpdir(), "challenge-verification-"));
   const hub = new Hub({ dataDir: dir });
@@ -32,13 +33,13 @@ function fixture(t: { after: (fn: () => void) => void }, opts: RoomOptions) {
   return { hub, room, pr, a, b, c, verify, agreeAll };
 }
 
-test("auto + verification: concludes on votes and a verify run, no challenge", (t) => {
+test("auto + verification: votes and a verify run are not enough without a challenge", (t) => {
   const { hub, room, pr, verify, agreeAll } = fixture(t, { requireVerification: true });
-  assert.equal(hub.challengeRequired(room), false);
+  assert.equal(hub.challengeRequired(room), true);
   verify();
   agreeAll();
   assert.equal(pr.challenges.length, 0);
-  assert.equal(room.state, "concluded");
+  assert.equal(room.state, "open");
 });
 
 test("auto + verification: the verify gate still holds without a run", (t) => {

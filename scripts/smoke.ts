@@ -455,7 +455,7 @@ assert.deepEqual(tools, ["amend", "board_get", "board_set", "challenge", "join_r
   assert.equal(st.room, "recruit-auth");
   const sub = await a.call("room_status", { room: "recruit-auth" });
   assert.equal(sub.require_verification, true);
-  assert.equal(sub.require_challenge, false); // the verify/* run replaces the ritual challenge under auto
+  assert.equal(sub.require_challenge, true);
   const claim = await a.call("board_get", { room: "recruit-auth", key: "claim/auth" });
   assert.match(claim.text, /"owner":"claude-1"/);
   const r2 = (await import("node:fs")).readFileSync(st.logs[1], "utf8");

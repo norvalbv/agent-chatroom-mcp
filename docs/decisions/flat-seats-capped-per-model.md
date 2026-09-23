@@ -18,3 +18,18 @@ created: 2026-09-23
 **Revisit-when:** the machine-oracle bench (measure-task-success-on-a-machine-oracle) shows a same-model room of more than 4 beating one of 4 on the same brief; or distinct per-seat lenses remove the t≈0 collisions
 **Scope:** src/seat-cap.ts,src/swarm.ts,src/fleet.ts,scripts/seat-cap-regression.ts,scripts/seat-env-regression.ts,skills/swarm/SKILL.md,README.md
 **Source:** manual
+
+
+## Target · 2026-09-23 — OWNER DECISION: rejected; no per-model seat cap
+
+**Context:** Room swarm-092653-202z built the cap above. The owner rejected it before merge. Its effect is to push large rooms onto cheaper or weaker models to get seats, while Opus 5.5 per task costs about the same as Sonnet with more capability, so padding a room with a weaker model is waste. The room's own evidence also names a different cause for the duplication: every seat got the same brief, prior-run notes and memory ("measures shared anchoring more than the model's own correlation"). Two pre-registered pilots on 2026-09-23 (docs/experiments/2026-09-23-anchoring-and-allocation*.md) bear on this: removing the carried-forward context changed what seats anchored on but not whether they anchored (the repository itself is the shared context), and two 3-worker rooms given a curated pool of 10 distinct items partitioned it through claims with zero collisions and landed 10/10 each.
+**Ruling:** No seat cap. src/seat-cap.ts, scripts/seat-cap-regression.ts, the --max-same-seats flag and fleet.ts's pass-through are removed at merge. Duplication is addressed at its cause: distinct targets per seat or room (a curated pool), not fewer seats of the strongest model.
+**Consequences:**
+- Positive: Launch commands are unchanged; the operator chooses the room's size and model.
+- Negative: Nothing stops a large same-model room on one byte-identical brief from duplicating work; that is left to briefs and pools.
+**Vision-fit:** n/a — internal tooling
+**Researched:** No new literature. Own data: the 2026-09-23 anchoring and allocation pilots.
+**Rejected:** the per-model cap of 4 above (loses: pushes rooms toward weaker models; treats a symptom of identical input).
+**Revisit-when:** a measured comparison shows same-model rooms above some size doing worse per dollar than smaller ones on the same curated pool
+**Scope:** src/swarm.ts,src/fleet.ts,skills/swarm/SKILL.md
+**Source:** manual

@@ -85,7 +85,7 @@ spawner.attach({
     hub.setBoardAs(room, requester, `claim/${area}`, JSON.stringify({ area, owner: requester, team: [requester, ...team], status: "open", note: "claimed at recruitment" }));
   },
   ensureRoom: (room, topic) => {
-    hub.createRoom(room, { topic, requireVerification: true, expectedParticipants: 0 });
+    hub.createRoom(room, { topic, requireChallenge: true, requireVerification: true, expectedParticipants: 0 });
   },
   announce: (room, text) => {
     try {

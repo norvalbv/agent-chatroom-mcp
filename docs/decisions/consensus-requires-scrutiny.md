@@ -62,3 +62,18 @@ created: 2026-09-17
 **Scope:** src/hub.ts,src/index.ts,src/server.ts,src/spawner.ts,prompts/*.md,scripts/challenge-verification-regression.ts,scripts/smoke.ts
 **Source:** manual
 **Evidence-change:** The 2026-09-17 ruling assumed the challenge was where scrutiny happened. The 38-room audit shows challenges mostly conceding caveats with no association to pass rate, while the verify step caught the real defects.
+
+
+## Target · 2026-09-23 — OWNER DECISION: held; the mandatory challenge stays in verified rooms
+
+**Context:** Room swarm-092653-202z's re-target above would make a verified room pass with no challenge, leaving the verify/* gate as the only scrutiny. The owner held that change at merge. The gate accepts a passing structured report of any command from a non-author, including the author's own; an audit of all 260 structured verify entries recorded to 23 September (paper, "How seats check each other") found that most reported only builds, existing tests or a scripted smoke client, about a fifth an added probe or before/after check, and none a run of agents on a changed build. The re-target's own Negative says the gate is "mostly a stamp".
+**Ruling:** challengeRequired() under "auto" stays true from two voters whether or not the room requires verification. The prompts, tool descriptions, spawner default and smoke expectation stay as they were before the re-target; scripts/challenge-verification-regression.ts now pins this.
+**Consequences:**
+- Positive: A verified room keeps a second, independent form of scrutiny until verification itself stops being satisfiable by the author's own evidence.
+- Negative: The ritual cost the re-target measured stays: at least 23 of 66 challenges conceded in their own text.
+**Vision-fit:** n/a — internal tooling
+**Researched:** No new literature. Own data: the verify-practice census and review-act audit (bench/results/verify-practice, bench/results/review-audit).
+**Rejected:** the re-target above, for now (loses: removes the only scrutiny other than a verify gate a re-run satisfies).
+**Revisit-when:** verification uses checks the author cannot satisfy with their own evidence (for example acceptance tests held out from the builders), or a measured comparison shows the challenge adding nothing in verified rooms
+**Scope:** src/hub.ts,src/server.ts,src/index.ts,src/spawner.ts,prompts/*.md,scripts/challenge-verification-regression.ts,scripts/smoke.ts
+**Source:** manual

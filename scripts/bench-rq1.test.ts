@@ -269,7 +269,7 @@ test("arm D: each seat drafts in its own private copy; the conclusion's WINNER l
     const result = JSON.parse(readFileSync(join(root, "result.json"), "utf8"));
     assert.equal(result.arm, "D");
     assert.equal(result.outcome, "task_pass", "the named minority draft, not the majority, is what gets scored");
-    assert.deepEqual(result.selection, { winner: "seat-3", applied: true, drafts: ["seat-1", "seat-2", "seat-3"] });
+    assert.deepEqual({ ...result.selection, blind_audit: undefined }, { winner: "seat-3", applied: true, drafts: ["seat-1", "seat-2", "seat-3"], blind_audit: undefined });
     assert.equal(readFileSync(join(root, "workspace", "answer.txt"), "utf8"), EXPECTED);
     assert.equal(readFileSync(join(root, "drafts", "seat-1", "answer.txt"), "utf8"), "wrong majority", "drafts stay separate");
     const cwds = readFileSync(log, "utf8").trim().split("\n").map((l) => JSON.parse(l).cwd).sort();
@@ -297,7 +297,7 @@ test("arm D: a conclusion without a WINNER line applies no draft, so the untouch
     });
     assert.equal(r.status, 0, r.stderr + r.stdout);
     const result = JSON.parse(readFileSync(join(root, "result.json"), "utf8"));
-    assert.deepEqual(result.selection, { winner: null, applied: false, drafts: ["seat-1", "seat-2"] });
+    assert.deepEqual({ ...result.selection, blind_audit: undefined }, { winner: null, applied: false, drafts: ["seat-1", "seat-2"], blind_audit: undefined });
     assert.equal(result.passed, false);
     assert.equal(existsSync(join(root, "workspace", "answer.txt")), false, "the conclusion text is not the answer in arm D");
   } finally {
@@ -799,5 +799,48 @@ test("arm D on a code task: the hidden-test oracle scores the WINNER's draft, an
       rmSync(root, { recursive: true, force: true });
       rmSync(stubDir, { recursive: true, force: true });
     }
+  }
+});
+
+test("arm D blind audit: counts tool calls on a peer's draft before the seat posts its own draft/<seat>, from the stream-json tool_use events", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "bench-rq1-d-blind-stub-"));
+  writeFileSync(
+    join(dir, "claude"),
+    [
+      "#!/usr/bin/env node",
+      "const fs=require('node:fs');",
+      "const who=process.env.GIT_AUTHOR_NAME||'';",
+      "const tu=(name,input)=>({type:'tool_use',id:'t',name,input});",
+      "const post=tu('mcp__chatroom__board_set',{room:'rq1',key:'draft/'+who,text:'mine'});",
+      "const plan={",
+      "  'seat-1':[tu('Read',{file_path:'../seat-2/answer.txt'}),post,tu('Bash',{command:'cat ../seat-3/answer.txt'})],",
+      "  'seat-2':[post,tu('Bash',{command:'diff answer.txt /x/drafts/seat-1/answer.txt'})],",
+      "  'seat-3':[tu('Read',{file_path:'/x/drafts/seat-10/answer.txt'})],",
+      "}[who]||[];",
+      `fs.writeFileSync('answer.txt',${JSON.stringify(EXPECTED)});`,
+      "process.stdout.write(JSON.stringify({type:'assistant',message:{content:plan,usage:{input_tokens:1,output_tokens:1}}})+'\\n');",
+      "process.stdout.write(JSON.stringify({type:'result',subtype:'success',is_error:false,result:'ok',num_turns:1,duration_ms:1,duration_api_ms:1,total_cost_usd:0.001,usage:{input_tokens:1,output_tokens:1}})+'\\n');",
+      "",
+    ].join("\n"),
+  );
+  chmodSync(join(dir, "claude"), 0o755);
+  const hubEntry = stubHubDir("WINNER: seat-2\nspec quote.");
+  const port = await freePort();
+  const root = join(tmpdir(), `bench-rq1-d-blind-${process.pid}-${Date.now()}`);
+  try {
+    const r = invoke([task, "D", "1", "--root", root, "--port", String(port), "--seats", "3", "--hub-entry", hubEntry, "--timeout-ms", "10000"], {
+      PATH: `${dir}${delimiter}${process.env.PATH}`,
+    });
+    assert.equal(r.status, 0, r.stderr + r.stdout);
+    const result = JSON.parse(readFileSync(join(root, "result.json"), "utf8"));
+    assert.deepEqual(result.selection.blind_audit, {
+      "seat-1": { posted_draft: true, peer_reads_before_draft: 1 },
+      "seat-2": { posted_draft: true, peer_reads_before_draft: 0 },
+      "seat-3": { posted_draft: false, peer_reads_before_draft: 0 },
+    }, "reads after the post don't count, and seat-10 is not seat-1");
+    assert.equal(result.seats[0].tool_uses, undefined, "tool calls feed the audit but are not dumped into result.json");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+    rmSync(dir, { recursive: true, force: true });
   }
 });

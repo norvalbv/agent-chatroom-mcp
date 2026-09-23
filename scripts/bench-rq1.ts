@@ -131,6 +131,8 @@ export interface SeatRecord {
   reported_models: { system_init: string[]; assistant: string[]; result_model_usage: string[] } | null;
   /** Unmodified terminal CLI usage by model, including reasoning fields when reported. */
   model_usage: Record<string, unknown> | null;
+  /** Every tool call the seat made, in order; read by arm D's blind audit, not written to result.json. */
+  tool_uses: Array<{ name: string; input: unknown }>;
 }
 
 /** A seat the provider refused for quota, not one the model failed: the CLI emits a synthetic assistant
@@ -159,6 +161,7 @@ function runClaudeSeat(name: string, args: string[], cwd: string, deadlineMs: nu
       if (typeof value === "string" && value.trim()) models[source].add(value);
     };
     let killedByDeadline = false;
+    const toolUses: SeatRecord["tool_uses"] = [];
     const consumeLine = (line: string) => {
       const trimmed = line.trim();
       if (!trimmed) return;
@@ -171,6 +174,9 @@ function runClaudeSeat(name: string, args: string[], cwd: string, deadlineMs: nu
       // Identity observations must survive usage-free events and a missing terminal result.
       if (evt?.type === "system" && evt.subtype === "init") observeModel("system_init", evt.model);
       if (evt?.type === "assistant") observeModel("assistant", evt.message?.model);
+      if (evt?.type === "assistant" && Array.isArray(evt.message?.content)) {
+        for (const c of evt.message.content) if (c?.type === "tool_use" && typeof c.name === "string") toolUses.push({ name: c.name, input: c.input });
+      }
       if (evt?.type === "result") {
         if (evt.modelUsage && typeof evt.modelUsage === "object" && !Array.isArray(evt.modelUsage)) {
           for (const id of Object.keys(evt.modelUsage)) observeModel("result_model_usage", id);
@@ -232,6 +238,7 @@ function runClaudeSeat(name: string, args: string[], cwd: string, deadlineMs: nu
           ? { system_init: [...models.system_init], assistant: [...models.assistant], result_model_usage: [...models.result_model_usage] }
           : null,
         model_usage: parsed?.modelUsage && typeof parsed.modelUsage === "object" && !Array.isArray(parsed.modelUsage) ? parsed.modelUsage : null,
+        tool_uses: toolUses,
       });
     });
   });
@@ -269,6 +276,20 @@ function roomConclusion(logPath: string): { text: string } | null {
 export function parseWinner(text: string): string | null {
   const m = /^\s*WINNER:\s*(seat-\d+)\s*$/i.exec(text.split("\n")[0] ?? "");
   return m ? m[1].toLowerCase() : null;
+}
+
+/** Arm D's blindness is only asked for in the prompt, so check it after the fact: did the seat post its own
+ * draft/<seat> entry, and how many tool calls named a peer's draft directory before that post (or at all,
+ * if it never posted)? A peer is matched by "drafts/<peer>" or "../<peer>" anywhere in the call's input. */
+export function blindAudit(seat: string, peers: string[], toolUses: Array<{ name: string; input: unknown }>): { posted_draft: boolean; peer_reads_before_draft: number } {
+  const touchesPeer = new RegExp(`(drafts/|\\.\\./)(${peers.map((p) => p.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|")})(?![\\w-])`);
+  let peerReads = 0;
+  for (const use of toolUses) {
+    const input = (use.input ?? {}) as Record<string, unknown>;
+    if (/board_set$/.test(use.name) && input.key === `draft/${seat}`) return { posted_draft: true, peer_reads_before_draft: peerReads };
+    if (peers.length && touchesPeer.test(JSON.stringify(use.input ?? ""))) peerReads += 1;
+  }
+  return { posted_draft: false, peer_reads_before_draft: peerReads };
 }
 
 /** Arm D's per-seat instructions: draft blind in a private copy, then settle every place the drafts
@@ -382,7 +403,7 @@ async function main() {
   // 5) than a recorded infrastructure_error/tamper outcome.
   let failureReason: "infrastructure_error" | "tamper" | null = null;
   // Arm D only: which seat's private draft the room's conclusion named, and whether it could be applied.
-  let selection: { winner: string | null; applied: boolean; drafts: string[] } | null = null;
+  let selection: { winner: string | null; applied: boolean; drafts: string[]; blind_audit: Record<string, ReturnType<typeof blindAudit>> } | null = null;
   let failureMessage: string | null = null;
   // Item 1 (swarm-125438-jp20): both arms must see the same built-in tools; the chatroom mcp tools are
   // arm C's only addition on top of this shared list (claudeArgs()'s --tools strips mcp__* entries, so
@@ -541,7 +562,9 @@ async function main() {
         rmSync(workspace, { recursive: true, force: true });
         cpSync(dir, workspace, { recursive: true });
       }
-      selection = { winner, applied: Boolean(dir), drafts: [...draftDirs.keys()] };
+      const names = [...draftDirs.keys()];
+      const blind_audit = Object.fromEntries(seatRecords.map((s) => [s.name, blindAudit(s.name, names.filter((n) => n !== s.name), s.tool_uses)]));
+      selection = { winner, applied: Boolean(dir), drafts: names, blind_audit };
     } else if (conclusion && !isCodeTask) writeFileSync(join(workspace, "answer.txt"), conclusion.text);
   }
 

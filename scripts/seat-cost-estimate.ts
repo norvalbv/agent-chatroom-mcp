@@ -6,15 +6,21 @@
 export interface PricePerMTok {
   input: number;
   cache_read: number;
+  /** 5-minute-TTL cache write (LiteLLM cache_creation_input_token_cost) */
   cache_write: number;
+  /** 1-hour-TTL cache write (LiteLLM cache_creation_input_token_cost_above_1hr) */
+  cache_write_1h: number;
   output: number;
 }
 
-/** USD per million tokens. Sonnet 5 from the 2026-09-19 accounting in paper/figures.md; Haiku 4.5 list price.
+/** USD per million tokens, copied from LiteLLM's model_prices_and_context_window.json (MIT), commit
+ * ccee9e77cee4f52343fc5b049e34cbbd59682cc3 (2026-09-23), https://github.com/BerriAI/litellm; the tag
+ * v1.102.1 has no claude-opus-5-5 row. Each row reproduces the CLI's costUSD (scripts/seat-cost-estimate.test.ts).
  * `match` tests a reported model id or a --model alias. Add a row before pricing any other model. */
 export const CLAUDE_LIST_PRICE_PER_MTOK: Record<string, { match: RegExp; per_mtok: PricePerMTok }> = {
-  "claude-sonnet-5": { match: /^(sonnet|claude-sonnet-5(-\d{8})?)$/, per_mtok: { input: 2.0, cache_read: 0.2, cache_write: 2.5, output: 10.0 } },
-  "claude-haiku-4-5": { match: /^(haiku|claude-haiku-4-5(-\d{8})?)$/, per_mtok: { input: 1.0, cache_read: 0.1, cache_write: 1.25, output: 5.0 } },
+  "claude-opus-5-5": { match: /^claude-opus-5-5(-\d{8})?$/, per_mtok: { input: 4.0, cache_read: 0.2, cache_write: 5.0, cache_write_1h: 8.0, output: 20.0 } },
+  "claude-sonnet-5": { match: /^(sonnet|claude-sonnet-5(-\d{8})?)$/, per_mtok: { input: 2.0, cache_read: 0.2, cache_write: 2.5, cache_write_1h: 4.0, output: 10.0 } },
+  "claude-haiku-4-5": { match: /^(haiku|claude-haiku-4-5(-\d{8})?)$/, per_mtok: { input: 1.0, cache_read: 0.1, cache_write: 1.25, cache_write_1h: 2.0, output: 5.0 } },
 };
 
 /** The price row for this seat: from the model ids it reported, else the --model alias it was launched with. */
@@ -33,6 +39,18 @@ export interface MessageUsage {
   output_tokens?: number;
   cache_read_input_tokens?: number;
   cache_creation_input_tokens?: number;
+  /** The TTL split of cache_creation_input_tokens, as the Messages API reports it. */
+  cache_creation?: { ephemeral_5m_input_tokens?: number; ephemeral_1h_input_tokens?: number };
+}
+
+/** One message's list price. Cache writes are priced by TTL: ephemeral_1h_input_tokens at the 1-hour rate,
+ * the rest of cache_creation_input_tokens at the 5-minute rate (Claude Code cost-tracking docs: a
+ * subscription writes 1-hour entries on the seat's own turns; the survey's 753 Sonnet 5 entries all match that). */
+export function listPriceUsd(u: MessageUsage, p: PricePerMTok): number {
+  const writes = u.cache_creation_input_tokens ?? 0;
+  const writes1h = Math.min(writes, u.cache_creation?.ephemeral_1h_input_tokens ?? 0);
+  return ((u.input_tokens ?? 0) * p.input + (u.cache_read_input_tokens ?? 0) * p.cache_read
+    + (writes - writes1h) * p.cache_write + writes1h * p.cache_write_1h + (u.output_tokens ?? 0) * p.output) / 1e6;
 }
 
 export interface SeatCostEstimate {
@@ -51,11 +69,7 @@ export function estimateSeatCost(observed: readonly { id?: string; usage: Messag
   if (!price) return null;
   const byMessage = new Map<string, MessageUsage>();
   observed.forEach((o, i) => byMessage.set(o.id ?? `#${i}`, o.usage));
-  const p = price.per_mtok;
   let usd = 0;
-  for (const u of byMessage.values()) {
-    usd += ((u.input_tokens ?? 0) * p.input + (u.cache_read_input_tokens ?? 0) * p.cache_read
-      + (u.cache_creation_input_tokens ?? 0) * p.cache_write + (u.output_tokens ?? 0) * p.output) / 1e6;
-  }
+  for (const u of byMessage.values()) usd += listPriceUsd(u, price.per_mtok);
   return { usd, estimate: true, basis: "partial stream-json usage x list price (no result event)", price_model: price.id, messages_priced: byMessage.size };
 }

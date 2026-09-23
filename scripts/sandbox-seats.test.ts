@@ -31,7 +31,25 @@ const SAME_OK = /same-exit=0/;
 const COMMITTED = /committed/;
 const CACHED = /cached/;
 const REFUSED_UNSANDBOXED = /REFUSED --sandbox: .*refusing to run unsandboxed/;
-const macOnly = process.platform === "darwin" ? {} : { skip: "sandbox-runtime's Seatbelt path is macOS-only" };
+const NESTING_REFUSED = /sandbox_apply/;
+/**
+ * macOS cannot nest Seatbelt sandboxes, so the cases that apply one cannot run inside a sandboxed seat: there seatSandbox
+ * refuses (as it should) and sandbox-exec itself fails. They skip there instead of turning that seat's `npm test` red,
+ * which would block a --sandbox room's verify gate. Claude Code's sandbox and sandbox-runtime both set SANDBOX_RUNTIME=1
+ * in the commands they run (srt 0.0.77 sandbox-utils.js); the sandbox-exec probe also catches a Seatbelt sandbox that does
+ * not set it. The probe's profile must restrict something: macOS lets a plain (allow default) profile nest, but refuses
+ * any narrower one with "sandbox_apply: Operation not permitted" (probed). Only that error counts, so a host that could
+ * sandbox never skips silently.
+ */
+const nestedSeatbelt = () =>
+  process.env.SANDBOX_RUNTIME === "1" ||
+  NESTING_REFUSED.test(spawnSync("sandbox-exec", ["-p", "(version 1)(allow default)(deny network*)", "/usr/bin/true"], { encoding: "utf8" }).stderr ?? "");
+const macOnly =
+  process.platform !== "darwin"
+    ? { skip: "sandbox-runtime's Seatbelt path is macOS-only" }
+    : nestedSeatbelt()
+      ? { skip: "already inside a Seatbelt sandbox; macOS cannot nest them" }
+      : {};
 /** Every temp directory this file creates, removed when it ends. */
 const made: string[] = [];
 const tempDir = (prefix: string) => {

@@ -94,6 +94,7 @@ export const UI_HTML = `<!doctype html>
   #main > * { min-width:0 } .lf > * { min-width:0 } .lf select { max-width:45% }
   #head { background:var(--panel); border-bottom:1px solid var(--line); padding:10px 16px; display:grid; grid-template-columns:minmax(0,1fr) auto; row-gap:4px; align-items:center }
   #head .t1 { display:flex; align-items:center; gap:8px; min-width:0; flex-wrap:wrap }
+  #head .t1 .chip { display:inline-block; max-width:100%; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap } /* a long openings chip stays in its column, not under the buttons */
   #head h2 { margin:0; font-size:15px; font-weight:700; letter-spacing:-.01em; white-space:nowrap }
   #head .acts { display:flex; gap:6px; align-items:center }
   #head .topic { grid-column:1 / -1; color:var(--dim); font-size:13px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; cursor:pointer }
@@ -161,6 +162,9 @@ export const UI_HTML = `<!doctype html>
   .vote-row .btn { flex:1; justify-content:center }
   .person { display:grid; grid-template-columns:28px minmax(0,1fr) auto; gap:9px; align-items:center; padding:6px 0; border-bottom:1px solid var(--line2) }
   .person:last-child { border:0 } .person.off { opacity:.5 }
+  .person.hasacts { grid-template-columns:28px minmax(0,1fr) auto auto } .pacts { display:flex; gap:4px; align-items:center }
+  .mini { border:1px solid var(--line); background:var(--panel2); color:var(--dim); border-radius:6px; padding:2px 8px; font-size:11.5px; line-height:1.4; font-weight:500; white-space:nowrap }
+  .mini:hover { color:var(--fg); border-color:var(--dim2) } .mini.warn:hover { color:var(--bad); border-color:var(--bad) }
   .person .n { font-weight:600; font-size:13px; display:flex; gap:6px; align-items:center; flex-wrap:wrap } .person .n .agent { font-weight:400; color:var(--dim2); font-size:11px }
   .person .a { color:var(--acc-fg); font-size:11.5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap } .person .a:empty::before { content:"no claimed area"; color:var(--dim2) }
   .person .s { text-align:right; font-size:11px; color:var(--dim2); font-variant-numeric:tabular-nums; line-height:1.3 }
@@ -265,7 +269,7 @@ export const UI_HTML = `<!doctype html>
   // People tab: click a person to see their recent steps (heartbeats with the command, path or pattern)
   var personOpen = null, activity = {};
   async function fetchActivity(name) { try { var res = await fetch('/rooms/' + encodeURIComponent(sel) + '/participants/' + encodeURIComponent(name) + '/activity'); if (res.ok) { activity[name] = await res.json(); if (tab === 'people') renderPane(); } } catch (e) {} }
-  document.addEventListener('click', function (e) { var row = e.target.closest && e.target.closest('.person'); if (!row || e.target.closest('.act')) return; var n = row.dataset.person; personOpen = personOpen === n ? null : n; if (personOpen) fetchActivity(personOpen); renderPane(); });
+  document.addEventListener('click', function (e) { var row = e.target.closest && e.target.closest('.person'); if (!row || e.target.closest('.act, .pacts')) return; var n = row.dataset.person; personOpen = personOpen === n ? null : n; if (personOpen) fetchActivity(personOpen); renderPane(); });
   setInterval(function () { if (personOpen && tab === 'people' && !document.hidden) fetchActivity(personOpen); }, 3000);
   // rooms rail: sort, state filter, archived toggle
   var sortBy = store.get('sort', 'newest'), stOff = store.get('stOff', {}), showArch = /[?&]archived=1/.test(location.search) || store.get('showArch', false);
@@ -415,7 +419,7 @@ export const UI_HTML = `<!doctype html>
     if (r.conclusion) chips += '<span class="chip ok">concluded ' + rel(r.conclusion.decidedAt) + '</span>';
     if (r.hold) chips += '<span class="chip bad">on hold by ' + esc(r.hold.by) + '</span>';
     if (r.unanswered_human) chips += '<span class="chip hum">waiting on a reply to ' + esc(r.unanswered_human.name) + '</span>';
-    if (r.openings && r.openings !== 'revealed' && (r.state === 'open')) chips += '<span class="chip">openings: ' + esc(r.openings.replace(/, waiting for nobody$/, '')) + '</span>';
+    if (r.openings && r.openings !== 'revealed' && (r.state === 'open')) chips += '<span class="chip" title="openings: ' + esc(r.openings) + '">openings: ' + esc(r.openings.replace(/, waiting for nobody$/, '')) + '</span>';
     var act = '<a class="btn hidephone" href="/rooms/' + encodeURIComponent(r.name) + '/transcript" target="_blank" title="Plain-text transcript">Transcript</a>'
       + ((r.state === 'open' || r.state === 'stalled') ? '<button class="btn danger" id="closeroom" title="Close this room without a conclusion">Close room</button>' : '')
       + '<button class="btn" id="archroom" title="' + (r.archived ? 'Show this room in listings again' : 'Hide this room from listings; the transcript is kept') + '">' + (r.archived ? 'Unarchive' : 'Archive') + '</button>'
@@ -594,15 +598,16 @@ export const UI_HTML = `<!doctype html>
     return h;
   }
   function panePeople(r) {
+    var kv = (r.kick_votes || []), openKv = {};
+    kv.forEach(function (v) { if (v.status === 'open') openKv[v.target] = v; });
+    var canAct = function (p) { return p.active && p.agent !== 'human' && p.role !== 'chair' && !openKv[p.name]; };
     var rows = function (list) { return list.map(function (p) {
       var areas = areasOf(r, p.name), reviewing = reviewingOf(r, p.name);
       var aline = esc(areas.join(', ')) + (reviewing.length ? (areas.length ? ' · ' : '') + 'reviewing: ' + esc(reviewing.join(', ')) : '') + (p.left_reason ? (areas.length || reviewing.length ? ' · ' : '') + 'left: ' + esc(p.left_reason) : '');
-      return '<div class="person' + (p.active ? '' : ' off') + (personOpen === p.name ? ' sel' : '') + '" data-person="' + esc(p.name) + '">' + av(p.name, p.agent) + '<div><div class="n">' + esc(p.name) + roleTag(p) + '<span class="agent">' + esc(p.agent) + '</span></div><div class="a">' + aline + '</div></div><div class="s">' + p.messages + ' msg' + (p.messages === 1 ? '' : 's') + '<br>' + (p.active ? (p.working && p.working.at > (p.last_active_at || '') ? 'working: ' + esc(p.working.tool) + ' · ' + rel(p.working.at) : rel(p.last_seen_at || p.last_active_at)) : 'left') + '</div>' + (personOpen === p.name ? '<div class="act" id="act">' + (activity[p.name] ? (activity[p.name].length ? activity[p.name].map(function (a) { return '<div><span class="st">#' + a.step + ' ' + rel(a.at) + '</span> <span class="tl">' + esc(a.tool) + '</span> ' + esc(a.detail || '') + '</div>'; }).join('') : 'No heartbeats yet (only seats started after 2026-09-18 send them).') : 'Loading…') + '</div>' : '') + '</div>';
+      return '<div class="person' + (p.active ? '' : ' off') + (canAct(p) ? ' hasacts' : '') + (personOpen === p.name ? ' sel' : '') + '" data-person="' + esc(p.name) + '">' + av(p.name, p.agent) + '<div><div class="n">' + esc(p.name) + roleTag(p) + '<span class="agent">' + esc(p.agent) + '</span></div><div class="a">' + aline + '</div></div><div class="s">' + p.messages + ' msg' + (p.messages === 1 ? '' : 's') + '<br>' + (p.active ? (p.working && p.working.at > (p.last_active_at || '') ? 'working: ' + esc(p.working.tool) + ' · ' + rel(p.working.at) : rel(p.last_seen_at || p.last_active_at)) : 'left') + '</div>' + (canAct(p) ? '<div class="pacts"><button class="mini warn" data-kick="' + esc(p.name) + '" data-kv="start" title="Start a vote to remove ' + esc(p.name) + '">Kick</button><button class="mini" data-replace="' + esc(p.name) + '" title="Remove ' + esc(p.name) + ' now and recruit a successor">Replace</button></div>' : '') + (personOpen === p.name ? '<div class="act" id="act">' + (activity[p.name] ? (activity[p.name].length ? activity[p.name].map(function (a) { return '<div><span class="st">#' + a.step + ' ' + rel(a.at) + '</span> <span class="tl">' + esc(a.tool) + '</span> ' + esc(a.detail || '') + '</div>'; }).join('') : 'No heartbeats yet (only seats started after 2026-09-18 send them).') : 'Loading…') + '</div>' : '') + '</div>';
     }).join(''); };
     var active = r.participants.filter(function (p) { return p.active; }), gone = r.participants.filter(function (p) { return !p.active; });
     // kick votes: open ones with a kick/keep button pair, settled ones as one line; a kick button per active agent starts one
-    var kv = (r.kick_votes || []), openKv = {};
-    kv.forEach(function (v) { if (v.status === 'open') openKv[v.target] = v; });
     var kickSec = '';
     if (kv.length) kickSec = '<div class="sec"><h3>Kick votes <span class="sp"></span><span class="c">' + kv.length + '</span></h3>' + kv.slice().reverse().map(function (v) {
       var line = '<b>' + esc(v.target) + '</b> · by ' + esc(v.by) + ' · ' + rel(v.started_at) + ' · ' + esc(v.reason);
@@ -610,9 +615,9 @@ export const UI_HTML = `<!doctype html>
       else line += '<br><span style="color:var(--dim)">' + esc(v.status) + (v.outcome ? ': ' + esc(v.outcome) : '') + '</span>';
       return '<div style="padding:6px 0;border-bottom:1px solid var(--line)">' + line + '</div>';
     }).join('') + '</div>';
-    var kickBtns = active.filter(function (p) { return p.agent !== 'human' && p.role !== 'chair' && !openKv[p.name]; }).map(function (p) { return '<button class="mini" data-kick="' + esc(p.name) + '" data-kv="start">kick ' + esc(p.name) + '</button> <button class="mini" data-replace="' + esc(p.name) + '">replace ' + esc(p.name) + '</button> '; }).join('');
+    var anyActs = active.some(canAct);
     return '<div class="sec"><h3>In the room <span class="sp"></span><span class="c">' + active.length + '</span></h3>' + (rows(active) || '<div class="empty" style="padding:16px">Nobody here.</div>') + '</div>'
-      + kickSec + (kickBtns ? '<div class="sec" style="font-size:12px"><span style="color:var(--dim2)">Kick starts a vote; replace removes them immediately and recruits a successor (for a dead seat): </span>' + kickBtns + '</div>' : '')
+      + (anyActs ? '<div class="sec" style="font-size:11.5px;color:var(--dim2);padding-top:0">Kick starts a vote to remove a seat. Replace removes it at once and recruits a successor, for a dead seat.</div>' : '') + kickSec
       + (gone.length ? '<div class="sec"><h3>Left <span class="sp"></span><span class="c">' + gone.length + '</span></h3>' + rows(gone) + '</div>' : '')
       + '<div class="sec" style="font-size:12px;color:var(--dim2)">Areas come from claim/* board entries; reviewing is the hub-assigned reviewer for that claim; the role tag is what the agent joined with.</div>';
   }

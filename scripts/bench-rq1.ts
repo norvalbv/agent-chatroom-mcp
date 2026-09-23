@@ -281,15 +281,32 @@ export function parseWinner(text: string): string | null {
 /** Arm D's blindness is only asked for in the prompt, so check it after the fact: did the seat post its own
  * draft/<seat> entry, and how many tool calls named a peer's draft directory before that post (or at all,
  * if it never posted)? A peer is matched by "drafts/<peer>" or "../<peer>" anywhere in the call's input. */
-export function blindAudit(seat: string, peers: string[], toolUses: Array<{ name: string; input: unknown }>): { posted_draft: boolean; peer_reads_before_draft: number } {
-  const touchesPeer = new RegExp(`(drafts/|\\.\\./)(${peers.map((p) => p.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|")})(?![\\w-])`);
+export function blindAudit(seat: string, peers: string[], toolUses: Array<{ name: string; input: unknown }>): { posted_draft: boolean; peer_reads_before_draft: number; peer_writes: number } {
+  // A peer path is any path segment naming a peer's draft dir ("../seat-2/x", "/r/drafts/seat-2", "cd seat-2"),
+  // never a longer name (seat-10 is not seat-1). Chatroom tools are skipped: naming a peer in chat is not a read.
+  const alt = peers.map((p) => p.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|");
+  const peer = `(?:^|[^\\w-])(?:${alt})(?=/|$|[\\s"'\`;)|&])`;
+  const touchesPeer = new RegExp(peer);
+  // Shell writes: a redirect/tee/sed -i/rm target, or the destination (last argument) of cp/mv/rsync.
+  const writesPeerInShell = new RegExp(`(?:(?:>>?|\\btee\\s+(?:-a\\s+)?|\\bsed\\s+-i\\S*\\s.*|\\brm\\s.*)\\s*\\S*${peer}|\\b(?:cp|mv|rsync)\\s[^;&|]*\\s\\S*${peer}\\S*\\s*(?:$|[;&|]))`);
   let peerReads = 0;
+  let peerWrites = 0;
+  let posted = false;
   for (const use of toolUses) {
     const input = (use.input ?? {}) as Record<string, unknown>;
-    if (/board_set$/.test(use.name) && input.key === `draft/${seat}`) return { posted_draft: true, peer_reads_before_draft: peerReads };
-    if (peers.length && touchesPeer.test(JSON.stringify(use.input ?? ""))) peerReads += 1;
+    if (!posted && /board_set$/.test(use.name) && input.key === `draft/${seat}`) {
+      posted = true;
+      continue;
+    }
+    if (!peers.length || use.name.startsWith("mcp__")) continue;
+    const text = JSON.stringify(use.input ?? "");
+    if (!touchesPeer.test(text)) continue;
+    // The scaffold forbids editing another seat's draft at any time, so writes are counted over the whole run.
+    const isWrite = /^(Edit|Write|MultiEdit|NotebookEdit)$/.test(use.name) || (use.name === "Bash" && writesPeerInShell.test(String(input.command ?? "")));
+    if (isWrite) peerWrites += 1;
+    else if (!posted) peerReads += 1;
   }
-  return { posted_draft: false, peer_reads_before_draft: peerReads };
+  return { posted_draft: posted, peer_reads_before_draft: peerReads, peer_writes: peerWrites };
 }
 
 /** Arm D's per-seat instructions: draft blind in a private copy, then settle every place the drafts

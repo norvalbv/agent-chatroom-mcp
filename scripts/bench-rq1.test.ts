@@ -813,9 +813,9 @@ test("arm D blind audit: counts tool calls on a peer's draft before the seat pos
       "const tu=(name,input)=>({type:'tool_use',id:'t',name,input});",
       "const post=tu('mcp__chatroom__board_set',{room:'rq1',key:'draft/'+who,text:'mine'});",
       "const plan={",
-      "  'seat-1':[tu('Read',{file_path:'../seat-2/answer.txt'}),post,tu('Bash',{command:'cat ../seat-3/answer.txt'})],",
-      "  'seat-2':[post,tu('Bash',{command:'diff answer.txt /x/drafts/seat-1/answer.txt'})],",
-      "  'seat-3':[tu('Read',{file_path:'/x/drafts/seat-10/answer.txt'})],",
+      "  'seat-1':[tu('Read',{file_path:'../seat-2/answer.txt'}),tu('Bash',{command:'cd .. && cat seat-3/answer.txt'}),tu('mcp__chatroom__send_message',{content:'seat-2/answer.txt looks off'}),post,tu('Bash',{command:'cat ../seat-3/answer.txt'})],",
+      "  'seat-2':[post,tu('Bash',{command:'diff answer.txt /x/drafts/seat-1/answer.txt'}),tu('Edit',{file_path:'/x/drafts/seat-3/answer.txt',old_string:'a',new_string:'b'}),tu('Bash',{command:'echo fixed > ../seat-1/answer.txt'})],",
+      "  'seat-3':[tu('Read',{file_path:'/x/drafts/seat-10/answer.txt'}),tu('Bash',{command:'cp ../seat-1/answer.txt ./mine.txt'}),tu('Bash',{command:'cp -r ../seat-2 /tmp/peek && ls'})],",
       "}[who]||[];",
       `fs.writeFileSync('answer.txt',${JSON.stringify(EXPECTED)});`,
       "process.stdout.write(JSON.stringify({type:'assistant',message:{content:plan,usage:{input_tokens:1,output_tokens:1}}})+'\\n');",
@@ -834,10 +834,10 @@ test("arm D blind audit: counts tool calls on a peer's draft before the seat pos
     assert.equal(r.status, 0, r.stderr + r.stdout);
     const result = JSON.parse(readFileSync(join(root, "result.json"), "utf8"));
     assert.deepEqual(result.selection.blind_audit, {
-      "seat-1": { posted_draft: true, peer_reads_before_draft: 1 },
-      "seat-2": { posted_draft: true, peer_reads_before_draft: 0 },
-      "seat-3": { posted_draft: false, peer_reads_before_draft: 0 },
-    }, "reads after the post don't count, and seat-10 is not seat-1");
+      "seat-1": { posted_draft: true, peer_reads_before_draft: 2, peer_writes: 0 },
+      "seat-2": { posted_draft: true, peer_reads_before_draft: 0, peer_writes: 2 },
+      "seat-3": { posted_draft: false, peer_reads_before_draft: 2, peer_writes: 0 },
+    }, "reads after the post don't count, a bare seat-N/ path after cd counts, chat mentions don't, seat-10 is not seat-1, and Edit or a shell redirect into a peer's draft is a write while cp out of one is a read");
     assert.equal(result.seats[0].tool_uses, undefined, "tool calls feed the audit but are not dumped into result.json");
   } finally {
     rmSync(root, { recursive: true, force: true });

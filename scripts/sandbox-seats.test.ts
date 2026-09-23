@@ -173,11 +173,12 @@ const runCommand = (tools: ReturnType<typeof localTools>) => {
 test("a sandboxed seat's pkill cannot kill a process outside it; the same command unsandboxed does", macOnly, async () => {
   const f = fixture();
   const here = process.cwd();
+  const sandbox = await seatSandbox(f.wt, true, 7717);
+  // the dummies start only once the sandbox is up: a seatSandbox that throws would skip the finally below and leave them running
   const inside = marker();
   const outside = dummy(inside);
   const control = marker();
   const controlPid = dummy(control);
-  const sandbox = await seatSandbox(f.wt, true, 7717);
   try {
     const run = runCommand(localTools(f.wt, true, true, (s) => s, sandbox));
     const out = await run(`/usr/bin/pkill -f ${inside}; echo pkill-exit=$?`);

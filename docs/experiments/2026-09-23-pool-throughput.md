@@ -58,3 +58,11 @@ Recorded before any real run; no result had been seen.
 - **Fixed room sizes.** Room3 and Room15 run on a benchmark hub with `CHATROOM_NO_RECRUIT=1`: no seat can recruit, and seats get no instruction to start private dev rooms. Every setup therefore has exactly its stated seats. Solo and Split seats never had either.
 - **Harness.** Built by room swarm-125917-q12c (28101a2), merged with one fix found on the real repository before any run: git calls now have a 256 MB output buffer (the hub's `git ls-files` listing is 1.36 MB, which overflowed the default and failed every validation).
 - **Pool 1 (hub).** Base commit 59e0299, 20 items (h01 to h20), manifest `pools/hub/pool.json` with its sha256 lock. Split by `random.Random(20260924)` into thirds of 7, 7 and 6. Each item's hidden acceptance test failed at the base and passed with its reference fix under the harness's own `validate`. The hidden side lives in a directory outside every repository whose path is not written in any committed file. The suite command for scoring is `npm test`.
+
+## Deviation during pool 1 (2026-09-23, 17:10 BST)
+
+Recorded after pool 1's second run, before any further run.
+
+- **What happened.** In run 2 (Room15, repeat 2), about 90 seconds in, one seat ran `pkill -f "offline-runner"` to stop a test runner. The launcher then passed each seat's whole brief in its command line (`claude -p "<brief>"`), and the brief mentions `offline-runner`, so the pattern matched and 14 of the 15 seats were killed within a second. One seat carried on alone and the final head passed 20/20, but the run was not a fifteen-seat room.
+- **Ruling.** Run 2 is void as a harness defect, not a property of the setup, and is reported as such. It is rerun as Room15 repeat 2 in the same position in the order. Split repeat 1 had just started when pool 1 was stopped; it is discarded unscored and rerun. Run 1 (Room15, repeat 1) stands: all 15 seats exited normally and no seat ran `pkill` or `killall`.
+- **Fix.** From here on every seat gets its prompt on standard input, never in its command line (commits ffe5a7c and 9e3fe25), so no process-matching command can hit a brief's text. A dry run on three items under the fix landed 3/3 for Solo and for a three-seat room, with all seats exiting normally and complete costs.

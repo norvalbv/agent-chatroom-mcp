@@ -284,7 +284,7 @@ async function freePort(): Promise<number> {
   const s = createServer(); await new Promise<void>(ok => s.listen(0, '127.0.0.1', ok));
   const port = (s.address() as { port: number }).port; await new Promise<void>(ok => s.close(() => ok())); return port;
 }
-const git = (cwd: string, ...args: string[]) => spawnSync('git', ['-C', cwd, ...args], { encoding: 'utf8' });
+const git = (cwd: string, ...args: string[]) => spawnSync('git', ['-C', cwd, ...args], { encoding: 'utf8', maxBuffer: 256 * 1024 * 1024 });
 /** Every live process in a group except its leader: the seats a launcher or hub started. */
 function killGroupMembers(leader: ChildProcess | null) {
   if (!leader?.pid) return;
@@ -302,7 +302,9 @@ async function runRoom(o: RunOptions, pool: Pool, runDir: string, env: NodeJS.Pr
   const port = o.port ?? await freePort();
   const hubEntry = o.hubEntry ?? join(repoRoot, 'dist', 'index.js'), swarmEntry = o.swarmEntry ?? join(repoRoot, 'dist', 'swarm.js');
   const hubEnv = { ...env, PORT: String(port), HOST: '127.0.0.1', CHATROOM_INSECURE_LOCAL: '1', CHATROOM_DATA_DIR: join(roomDir, 'data'), CHATROOM_DEFAULT_CWD: wt,
-    CHATROOM_LOG_DIR: join(roomDir, 'spawned'), CHATROOM_MAX_LIVE_PER_ROOM: String(Math.max(12, agents)) };
+    CHATROOM_LOG_DIR: join(roomDir, 'spawned'), CHATROOM_MAX_LIVE_PER_ROOM: String(Math.max(12, agents)),
+    // fixed-size setups: no recruits and no private dev rooms, so a room has exactly its stated seats (pre-registration clarification)
+    CHATROOM_NO_RECRUIT: '1' };
   const hubFd = openSync(join(roomDir, 'hub.log'), 'w');
   // detached: the hub leads its own process group, so recruits it spawns can be stopped at the deadline
   const hub = track(spawn(process.execPath, [hubEntry], { cwd: wt, env: hubEnv, detached: true, stdio: ['ignore', hubFd, hubFd] }), true);
@@ -325,7 +327,7 @@ async function runRoom(o: RunOptions, pool: Pool, runDir: string, env: NodeJS.Pr
   try {
     if (!ready) throw new Error('hub did not start');
     const logFd = openSync(join(roomDir, 'swarm.log'), 'w');
-    swarm = track(spawn(process.execPath, argv, { cwd: wt, env: { ...env, CHATROOM_INSECURE_LOCAL: '1' }, detached: true, stdio: ['ignore', logFd, logFd] }), true);
+    swarm = track(spawn(process.execPath, argv, { cwd: wt, env: { ...env, CHATROOM_INSECURE_LOCAL: '1', CHATROOM_NO_RECRUIT: '1' }, detached: true, stdio: ['ignore', logFd, logFd] }), true);
     const done = exited(swarm);
     let timer: NodeJS.Timeout | undefined;
     const atDeadline = await Promise.race([done.then(() => false), new Promise<boolean>(ok => { timer = setTimeout(() => ok(true), Math.max(0, deadlineAt - Date.now())); })]);

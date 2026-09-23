@@ -11,8 +11,8 @@ import { copyHiddenTests, hiddenRoot, linkNodeModules, loadHiddenItem, loadPool,
 
 const ITEM_TIMEOUT_MS = 10 * 60_000;
 const GIT_ID = ['-c', 'user.name=pool-harness', '-c', 'user.email=pool-harness@localhost', '-c', 'commit.gpgsign=false'];
-const git = (cwd: string, ...args: string[]) => spawnSync('git', ['-C', cwd, ...GIT_ID, ...args], { encoding: 'utf8' });
-const gitOut = (cwd: string, ...args: string[]) => execFileSync('git', ['-C', cwd, ...GIT_ID, ...args], { encoding: 'utf8' }).trim();
+const git = (cwd: string, ...args: string[]) => spawnSync('git', ['-C', cwd, ...GIT_ID, ...args], { encoding: 'utf8', maxBuffer: 256 * 1024 * 1024 }); // a real repo's listings pass 1 MB (ENOBUFS)
+const gitOut = (cwd: string, ...args: string[]) => execFileSync('git', ['-C', cwd, ...GIT_ID, ...args], { encoding: 'utf8', maxBuffer: 256 * 1024 * 1024 }).trim();
 const readJson = (path: string) => JSON.parse(readFileSync(path, 'utf8'));
 const exists = (repo: string, ref: string) => git(repo, 'rev-parse', '--verify', '--quiet', ref + '^{commit}').status === 0;
 const ahead = (repo: string, base: string, ref: string) => exists(repo, ref) && Number(gitOut(repo, 'rev-list', '--count', `${base}..${ref}`)) > 0;

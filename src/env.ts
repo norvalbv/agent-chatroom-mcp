@@ -57,6 +57,8 @@ export function carrySettings(noCarry: boolean, base: string): string {
  * without it that private hub refuses the launcher's room create (403) and the room runs on default policy.
  */
 export function devHubRule(cwd: string): string {
+  // A protocol-fixed run (a benchmark hub, CHATROOM_NO_RECRUIT=1) has exactly its stated seats: no private dev rooms either.
+  if (process.env.CHATROOM_NO_RECRUIT === "1") return "";
   try {
     if (JSON.parse(readFileSync(resolve(cwd, "package.json"), "utf8")).name !== "agent-chatroom-mcp") return "";
   } catch {

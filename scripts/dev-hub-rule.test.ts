@@ -22,6 +22,17 @@ test("seats editing any other project get no dev-hub rule", () => {
   assert.equal(devHubRule(other), "");
 });
 
+test("a protocol-fixed run (CHATROOM_NO_RECRUIT=1) gets no dev-hub rule, so it launches no extra agents", () => {
+  const before = process.env.CHATROOM_NO_RECRUIT;
+  process.env.CHATROOM_NO_RECRUIT = "1";
+  try {
+    assert.equal(devHubRule(repoRoot), "");
+  } finally {
+    if (before === undefined) delete process.env.CHATROOM_NO_RECRUIT;
+    else process.env.CHATROOM_NO_RECRUIT = before;
+  }
+});
+
 /** The flag the rule adds is what lets the launcher create its room on a hub a seat started (seats have it stripped). */
 async function createStatus(insecure: boolean): Promise<number> {
   const port = 20_000 + Math.floor(Math.random() * 20_000);

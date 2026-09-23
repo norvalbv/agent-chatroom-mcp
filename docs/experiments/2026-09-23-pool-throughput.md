@@ -50,3 +50,11 @@ Per pool, the primary measure for every run and the mean per setup; across pools
 3. Pool 1 curation, then its 8 runs, then scoring; then pools 2 and 3 in turn.
 
 Estimated cost at list price: about $230 per pool in runs (Room15 about $65 a run), plus curation, roughly $800 in all.
+
+## Clarifications before the first run (2026-09-23, 15:20 BST)
+
+Recorded before any real run; no result had been seen.
+
+- **Fixed room sizes.** Room3 and Room15 run on a benchmark hub with `CHATROOM_NO_RECRUIT=1`: no seat can recruit, and seats get no instruction to start private dev rooms. Every setup therefore has exactly its stated seats. Solo and Split seats never had either.
+- **Harness.** Built by room swarm-125917-q12c (28101a2), merged with one fix found on the real repository before any run: git calls now have a 256 MB output buffer (the hub's `git ls-files` listing is 1.36 MB, which overflowed the default and failed every validation).
+- **Pool 1 (hub).** Base commit 59e0299, 20 items (h01 to h20), manifest `pools/hub/pool.json` with its sha256 lock. Split by `random.Random(20260924)` into thirds of 7, 7 and 6. Each item's hidden acceptance test failed at the base and passed with its reference fix under the harness's own `validate`. The hidden side lives in a directory outside every repository whose path is not written in any committed file. The suite command for scoring is `npm test`.

@@ -167,13 +167,13 @@ export function validatePool(poolDir: string, opts: { hiddenParent?: string; scr
       r.hidden_sha256 = hashTree(item.dir);
       worktreeAt(pool.repo, pool.base_commit, wt, undefined, { linkNodeModules: true });
       const names = [...new Set(item.tests.map(t => basename(t)))].sort();
-      const repoNames = new Set(execFileSync('git', ['-C', wt, 'ls-files', '-z'], { encoding: 'utf8' }).split('\0').filter(Boolean).map(f => basename(f)));
+      const repoNames = new Set(execFileSync('git', ['-C', wt, 'ls-files', '-z'], { encoding: 'utf8', maxBuffer: 256 * 1024 * 1024 }).split('\0').filter(Boolean).map(f => basename(f)));
       r.names_in_repo = names.filter(n => repoNames.has(n));
       r.names_in_briefs = names.filter(n => pool.items.some(i => i.brief.includes(n) || i.title.includes(n)));
       copyHiddenTests(item, wt);
       const atBase = runCmd(item.cmd, wt, opts.timeoutMs);
       r.base_exit = atBase.exit_code; r.base_tail = atBase.output_tail; r.fails_at_base = atBase.exit_code !== 0;
-      const applied = spawnSync('git', ['apply', '--whitespace=nowarn', item.patchPath], { cwd: wt, encoding: 'utf8' });
+      const applied = spawnSync('git', ['apply', '--whitespace=nowarn', item.patchPath], { cwd: wt, encoding: 'utf8', maxBuffer: 256 * 1024 * 1024 });
       if (applied.status !== 0) {
         r.passes_with_reference = false;
         r.reference_tail = ('reference.patch did not apply: ' + applied.stderr).slice(-2000);

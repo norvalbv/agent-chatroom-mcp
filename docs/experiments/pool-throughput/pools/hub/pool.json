@@ -1,0 +1,137 @@
+{
+  "name": "hub",
+  "repo": "/Users/benji/Desktop/Personal and learning/agent-chatroom-mcp",
+  "base_commit": "59e0299",
+  "deadline_min": 30,
+  "items": [
+    {
+      "id": "h01-reply-marker",
+      "title": "Rendered messages show which message they reply to",
+      "brief": "A message sent with reply_to is stored with its parent, but the line agents read looks exactly like a new message. That covers read_messages lines, wait_for_messages `messages`, join_room `recent_messages` and send_message's `sent`, all rendered by Hub.fmt, so nobody can see what a reply is linked to. Change it so every rendered line for a message whose reply_to names an existing message in the room includes the fragment `[re #N]`, where N is the parent message's seq. Put it after the `#<seq> <author>: ` prefix and before the message content. Its order relative to a `[quiet \u2192 ...]` tag is up to you. A reply_to given as an id (m_...) and one given as a printed seq (\"#12\") render the same. A message without reply_to, or whose parent is unknown, shows no `[re #` fragment."
+    },
+    {
+      "id": "h02-owed-ask-long-poll",
+      "title": "A wait with an already-delivered owed ask long-polls instead of returning at once",
+      "brief": "When a seat owes a reply to a peer's @-ask it has already been sent, every wait_for_messages returns immediately with that same ask, even when nothing new has arrived. An ignored ask therefore makes the seat's waits spin, and each return resends the seat's context. Change Hub.wait, and through it wait_for_messages, so that with a timeout above 0 an owed peer ask the seat has already been sent (by an earlier wait, read_messages or join_room) does not end the wait on its own. The call long-polls as if the queue were empty. It returns an empty messages list at the timeout, and returns early with the new message when a new message for the seat arrives (the owed ask may lead it). The ask stays owed: Hub.addressedBy and Hub.attentionFocus still return it, and wait_for_messages still lists it in `addressed_to_you` and names it in `hint`. A poll with timeout 0 behaves as it does today and returns the owed ask. A human's ask is unchanged."
+    },
+    {
+      "id": "h03-share-ignores-hub-notices",
+      "title": "your_share counts only agent-written chat, not hub notices",
+      "brief": "your_share is meant to measure a seat's share of agent-to-agent chat. It appears in wait_for_messages as `your_share` {messages, of_last, fair, over}, and also drives Hub.share and the 'You have sent N of the last M messages' send refusal. It currently counts the hub's own chat-kind notices as chat: messages authored by the system/hub, such as the reviewer-assignment and claim-overlap notices. That inflates of_last and can flip `over`. Change Hub.share to count only chat written by participants, never messages from the system/hub, and keep the existing exclusions (openings, human messages, quiet messages)."
+    },
+    {
+      "id": "h04-failing-verify-blocks",
+      "title": "A fresh failing verify/* report blocks the proposal",
+      "brief": "In a require_verification room, a verify/* entry that reports a failure has no force. Hub.verifiedBy skips it, and the proposal passes on any other passing entry, so a seat that reran the check and saw it fail cannot stop the room. Make a failing report block. The blocking entry is a verify/* board entry (not *.partial) whose first line parses as a verify head, names the open proposal's id, carries a nonzero exit_code, and is no older than the proposal's current text. Any seat's entry counts. Such an entry keeps the proposal from passing, even when every voter agrees and another seat's passing verify/* exists. While it stands, the proposal's blocked_by (Hub.blockedBy, proposal views and room_status) includes a line containing `failing <its board key>`, e.g. `failing verify/c` for the entry verify/c. It stops blocking when the entry is rewritten with exit_code 0, cleared (empty text), or left older than the text because the proposal was amended. Rewriting or clearing a verify/* entry re-checks the open proposal, so when the failing entry was the last thing holding it, the proposal passes at once (today clearing a verify/* entry triggers no re-check). Passing entries and the rest of the gate are unchanged."
+    },
+    {
+      "id": "h05-verify-same-command-flag",
+      "title": "Flag verify/* entries that only rerun the author's own command",
+      "brief": "Flag verify/* entries that only rerun the author's own command\n\nThe verification gate accepts a non-author's passing report of the author's own command, and nothing shows when that is all a verification did. Add a flag without changing the gate. Hub.proposalView, and therefore room_status `proposals[]` and the propose/vote/amend/challenge responses, carries `verify_same_as_author`. It is an array of the keys of verify/* entries written by seats other than the proposer that name this proposal and whose command matches the command in any verify/* entry written by the proposer. The match ignores leading and trailing whitespace and treats runs of whitespace as one space. The array is [] when there are none. This is a flag only: such an entry still satisfies the verification gate exactly as today."
+    },
+    {
+      "id": "h06-verify-commit-resolves",
+      "title": "A verify/* head naming a commit that does not exist does not count",
+      "brief": "A verify/* head naming a commit that does not exist does not count\n\nA verify/* head may name the commit it checked, but the hub never checks that the commit exists, so a pass can be bound to a sha nobody can find. When the Hub was constructed with a cwd inside a git repository, a verify/* head whose commit field names no commit in that repository (full or abbreviated sha) must not satisfy the verification gate: the verify/* write itself still succeeds, but Hub.verifiedBy ignores it and the proposal cannot pass on it. A head whose commit exists in that repository counts as today. A head without a commit field counts as today. A Hub with no cwd, or whose cwd is not a git repository, does not check commits."
+    },
+    {
+      "id": "h07-verified-hint-not-untested",
+      "title": "The challenge hint stops calling a verified proposal 'untested'",
+      "brief": "The challenge hint stops calling a verified proposal 'untested'\n\nWhen an open proposal still needs a challenge and a seat has not voted, wait_for_messages' `hint` says 'A proposal is open and untested. ...', even when a verify/* entry that satisfies the verification gate already exists for it. In that case the hint must not call the proposal untested. It must name the author of the passing verify/* entry (the entry Hub.verifiedBy finds), and still ask the seat to name the proposal's weakest claim (challenge) and to vote. Without a qualifying verify/* entry, the hint is unchanged."
+    },
+    {
+      "id": "h08-vote-amend-challenge-delta",
+      "title": "vote and amend responses stop re-sending objections the seat already has",
+      "brief": "vote and amend responses stop re-sending objections the seat already has\n\nwait_for_messages sends each challenge's objection text to a seat once per status, and later waits get objection_omitted. The vote and amend tool responses still re-send every challenge's full objection in `proposal.challenges` on every call. Apply the same per-seat delta to the vote and amend responses. A challenge whose objection this seat has already been sent at its current status appears without `objection` and with `objection_omitted`. A challenge this seat has not yet been sent at that status carries `objection` in full, and then counts as sent, for later waits too. room_status keeps every objection in full."
+    },
+    {
+      "id": "h09-claim-update-overlap-notice",
+      "title": "Claim-overlap notice also fires when an owner widens an existing claim",
+      "brief": "The claim-overlap notice fires only when a claim/* entry is created. If an owner later edits their claim to add scope that now duplicates someone else's live claim, nobody is told. Change this so that when the owner updates an existing claim/* entry (Hub.setBoard or board_set on a key they already own, with non-empty text), and the new text overlaps a live claim of another active seat that the previous text did not overlap, the hub posts the same overlap notice as at creation. Overlap uses the same rule and thresholds as at creation (the pairs Hub.claimOverlaps reports). The notice is a system-authored message that @-names the updater and the other claim's owner, names the other claim's key, and contains the word 'overlaps'. An update that adds no new overlapping claim posts no notice. Behaviour at creation is unchanged."
+    },
+    {
+      "id": "h10-openings-overlap-notice",
+      "title": "Name overlapping blind openings when they are revealed",
+      "brief": "Blind openings are revealed together, but when several seats open with the same plan nothing says so, and they race to build the same thing before any claim exists. When openings are revealed, whether because Hub.submitOpening completed the set or the reveal deadline passed, compare every pair of revealed openings using the same term-overlap rule claim/* entries use: shared content-word stems, at least 40% Jaccard and at least 4 shared stems. If any pair overlaps, post one message after the openings whose content starts with 'Overlapping openings:' and names both authors of each overlapping pair as they are shown in the room. If no pair overlaps, post nothing extra."
+    },
+    {
+      "id": "h11-cc-mention-is-fyi",
+      "title": "A 'cc @name' mention is FYI, not an owed ask",
+      "brief": "A 'cc @name' mention is treated as a direct ask. The cc'd seat is woken, told to reply or pass, and refused a send until it does. And a seat's own 'cc @asker' silently settles every earlier ask from that asker. Treat an @-mention that comes after a standalone word 'cc' in the same message as FYI. The word may be in any case and may be followed by ':'. (1) Such a mention does not make the message an ask owed by that seat. It is not in Hub.addressedBy or Hub.attentionFocus, not in wait_for_messages `addressed_to_you`, gets no 'addressed you' hint and no 'still owe a reply' refusal of that seat's sends, and a hold_until_actionable wait does not return early for it. It is still delivered as a normal message, and quiet audience rules are unchanged. (2) When a seat's own message cc's someone, that does not settle asks that person made to it. @-mentions before the 'cc' keep today's meaning."
+    },
+    {
+      "id": "h12-respawn-reads-claim-status",
+      "title": "respawnDecision treats a claim marked done as handed over",
+      "brief": "The launcher's respawnDecision (src/respawn.ts) treats every claim/* by an exited seat that has no handoff/* as unfinished work, reading only each board entry's key and author. The hub's leave guard (Hub.leaveRefusal) already treats a claim whose JSON status says it is done as handed over. So a seat that marked its claim done and exited cleanly is replaced anyway. The room summary the launcher passes to respawnDecision already carries each board entry's text. Make respawnDecision read it: RespawnRoom.board values may include `text`. A claim/* whose text parses as JSON with a status the leave guard accepts (done, fixed, handed, handed-over, closed, complete, completed, in any case) is not unfinished work. Claims without text, with text that does not parse, or with any other status behave as today."
+    },
+    {
+      "id": "h13-consolidator-retry",
+      "title": "A failed consolidator request does not stop the lobby's later retries",
+      "brief": "A failed consolidator request does not stop the lobby's later retries\n\nSpawner.checkConsolidators marks a lobby as having had its consolidator before it asks for the seat. If that request throws (a cap, a hold, a depth limit), the lobby never gets a consolidator on any later check. Mark the lobby only once the consolidator request has succeeded, so a later checkConsolidators() call tries again. The error may still propagate from the failing call, since callers already catch it. Once a request succeeds, the lobby still gets exactly one consolidator. Keep asking for the seat through Spawner.request with name \"consolidator\", as today."
+    },
+    {
+      "id": "h14-runner-per-command-timeout",
+      "title": "The offline runner accepts a per-command timeout",
+      "brief": "The offline runner accepts a per-command timeout\n\nThe offline runner (scripts/offline-runner.mjs) applies one timeout, 120 s, to every command. bench-build-task.test.ts takes roughly 75-112 s on its own, so under load it times out and is reported as a failure. Let a command object passed to runCommands carry its own `timeout` in ms, which overrides the runner-wide timeout option for that command only. Have offlineCommands() give the 'bench-build-task.test.ts' command a timeout of at least 300000 ms. Commands without their own timeout keep using the runner-wide one."
+    },
+    {
+      "id": "h15-floor-from-frozen-electorate",
+      "title": "floorFor uses the open proposal's frozen electorate when it is known",
+      "brief": "floorFor uses the open proposal's frozen electorate when it is known\n\nWhile a proposal is open, floorFor (src/respawn.ts) sets the seat floor the launcher refills to from expected_participants and the quorum rule. The room summary the launcher reads already carries each open proposal's frozen electorate size in proposals[].electorate.electorate. When the open proposal carries a numeric electorate.electorate n, compute the floor from n instead of expected_participants: unanimous gives n, supermajority gives ceil(0.75 n), and majority (or anything else) gives ceil(n / 2), never below MIN_FLOOR. With no open proposal, or no numeric electorate, behave as today."
+    },
+    {
+      "id": "h16-send-refusal-codes",
+      "title": "send_message refusals get their own refusal codes",
+      "brief": "send_message refusals get their own refusal codes\n\nRefused send_message calls are all recorded under the catch-all refusal code hub_guard. In swarm-083203-kooz, send_message: hub_guard was 55 of 78 refusals, so refusal telemetry cannot tell why sends fail. Give the three stale-send refusals their own codes. Add them to RefusalCode and REFUSAL_CODES, and throw them from Hub.send: 'unread' when messages arrived while the seat was composing, 'owed-reply' when the seat still owes a reply to an ask it was already shown, and 'departed' when the message @-names a seat that has left. Hub.stats(room).refusals then counts them under 'send_message: unread', 'send_message: owed-reply' and 'send_message: departed'. Other refusals keep their codes."
+    },
+    {
+      "id": "h17-verify-head-feedback",
+      "title": "board_set tells the writer whether a verify/* head parsed",
+      "brief": "A verify/* entry whose first line does not parse as a verify head is stored silently and then never counts; the paper's audit found 19 of 260 such entries. The writer learns it only from blocked_by later, if at all. The board_set tool response for a verify/* key must say how the hub read the head. When the first line parses as a verify head, it returns `verify_head: {parsed: true, proposal, exit_code}`. When it does not, it returns `verify_head: {parsed: false, reason}`, where reason contains the words 'first line' and gives the expected JSON head (the JSON itself, so it includes the exit_code field). Responses for other keys, and for deleting an entry, have no verify_head field."
+    },
+    {
+      "id": "h18-heartbeat-reply",
+      "title": "Heartbeats reply with what the hub is waiting on from the seat",
+      "brief": "A seat doing local work only learns what the hub is waiting on from it (an owed ask, a vote) on its next chatroom call. Its heartbeats get back only {ok:true}. The self-organising decision queues 'heartbeat replies that carry what the hub waits on'. Make Hub.heartbeat(room, participant_id, info) return exactly {waiting_on_you: {asks, vote}}, with no other fields at either level (no ok on the Hub method's return). `asks` is the ids of the messages Hub.addressedBy lists as owed by that participant, oldest first ([] when none). `vote` is the id of the open proposal when that participant (not a human, not the chair) has not voted on it, and null otherwise (a proposer's own vote is recorded when it proposes, so the proposer gets null). POST /rooms/:room/heartbeat includes the same waiting_on_you, with exactly the fields asks and vote, in its JSON alongside ok:true."
+    },
+    {
+      "id": "h19-pass-names-declined",
+      "title": "pass reports which ask it declined",
+      "brief": "A pass can retire a delivered ask the seat never read carefully; hub-carries-what-it-knows notes 'the guard is delivery, not attention'. The pass result does not say which ask it retired. Make Hub.pass, and so the pass tool, return `declined`: {id, seq} of the ask this pass retired, or null when it retired nothing. Which ask a pass retires is unchanged: an unseen ask is never declined."
+    },
+    {
+      "id": "h20-verify-entry-proposal-stamp",
+      "title": "verify/* entries record whose proposal and which version they checked",
+      "brief": "For 139 of 260 verify/* entries, the paper's review audit could not tell whose proposal an entry verified, because entries carry no record of it. When a verify/* entry is written and its first line parses as a verify head naming a proposal that exists in the room, the stored board entry must carry `proposal_by` (the proposer's display name) and `proposal_version` (that proposal's version when the entry was written). board_get with that key returns both. Entries whose head does not parse, or that name an unknown proposal, carry neither field."
+    }
+  ],
+  "split": [
+    [
+      "h03-share-ignores-hub-notices",
+      "h04-failing-verify-blocks",
+      "h07-verified-hint-not-untested",
+      "h12-respawn-reads-claim-status",
+      "h15-floor-from-frozen-electorate",
+      "h17-verify-head-feedback",
+      "h20-verify-entry-proposal-stamp"
+    ],
+    [
+      "h06-verify-commit-resolves",
+      "h08-vote-amend-challenge-delta",
+      "h09-claim-update-overlap-notice",
+      "h10-openings-overlap-notice",
+      "h11-cc-mention-is-fyi",
+      "h13-consolidator-retry",
+      "h16-send-refusal-codes"
+    ],
+    [
+      "h01-reply-marker",
+      "h02-owed-ask-long-poll",
+      "h05-verify-same-command-flag",
+      "h14-runner-per-command-timeout",
+      "h18-heartbeat-reply",
+      "h19-pass-names-declined"
+    ]
+  ],
+  "suite_cmd": "npm test"
+}

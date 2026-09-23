@@ -28,14 +28,18 @@ test('unrelated chat preserves directed debt', () => {
   const f = fixture(); const q = f.ask(); f.send(f.b, 'unrelated update');
   assert.deepEqual(ids(f.h.addressedBy(f.room, f.b)), [q.id]);
 });
-test('reply_to discharges only targeted ask; @-back does not double-discharge', () => {
-  const f = fixture(); const q1 = f.ask(); const q2 = f.ask(); const q3 = f.ask(f.c);
-  f.send(f.b, '@carol answer', q2.id);
-  assert.deepEqual(ids(f.h.addressedBy(f.room, f.b)), [q1.id, q3.id]);
+test('reply_to discharges its target and every earlier ask from anyone it @-names', () => {
+  const f = fixture(); const q1 = f.ask(); f.ask(); f.ask(f.c);
+  f.send(f.b, '@carol answer', f.h.addressedBy(f.room, f.b)[1].id);
+  assert.deepEqual(ids(f.h.addressedBy(f.room, f.b)), [q1.id]);
 });
-test('@-back discharges oldest outstanding ask per named sender', () => {
-  const f = fixture(); f.ask(); const q2 = f.ask(); f.ask(f.c);
+test('@-back discharges every earlier ask from each named sender, not only the oldest', () => {
+  const f = fixture(); f.ask(); f.ask(); f.ask(f.c);
   f.send(f.b, '@alice @carol answers');
+  assert.deepEqual(ids(f.h.addressedBy(f.room, f.b)), []);
+});
+test('an ask posted after the @-back stays owed', () => {
+  const f = fixture(); f.ask(); f.send(f.b, '@alice answer'); const q2 = f.ask();
   assert.deepEqual(ids(f.h.addressedBy(f.room, f.b)), [q2.id]);
 });
 test('peer ask leads the first wait with the queue behind it; later waits repeat only the ask', async () => {

@@ -23,6 +23,7 @@
   "license": "MIT",
   "type": "module",
   "dependencies": {
+    "@anthropic-ai/sandbox-runtime": "0.0.77",
     "@modelcontextprotocol/sdk": "^1.30.0",
     "express": "^5.2.1",
     "zod": "^3.25.76"

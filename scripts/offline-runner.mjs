@@ -63,6 +63,7 @@ export const offlineScripts = [
   'handoff-task-fixture.test.ts',
   'hold-until-actionable-regression.ts',
   'hub-notice-not-debt-regression.ts',
+  'per-turn-payload-regression.ts',
   'kick-vote-regression.ts',
   'human-answering.test.ts',
   'layer-rules-400-task.test.ts',

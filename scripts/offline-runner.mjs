@@ -49,6 +49,7 @@ export const offlineScripts = [
   'board-transport-regression.ts',
   'challenge-session-regression.ts',
   'claude-lean-flags-regression.ts',
+  'seat-cap-regression.ts',
   'claude-usage-regression.ts',
   'claim-overlap-regression.ts',
   'complementary-fix-task.test.ts',

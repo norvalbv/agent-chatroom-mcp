@@ -16,6 +16,7 @@ import { heartbeatHookSettings, loadDotEnv, outputHeartbeat, seatBeat, seatChild
 import { randomUUID } from "node:crypto";
 import { respawnDecision, type RespawnRoom } from "./respawn.js";
 import { claudeArgs } from "./claude-args.js";
+import { DEFAULT_MAX_SAME_SEATS, seatCapRefusal } from "./seat-cap.js";
 loadDotEnv();
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -31,7 +32,7 @@ const has = (name: string) => argv.includes(`--${name}`);
 const BOOL_FLAGS = new Set(["--apply", "--full-access", "--named", "--flat", "--require-verification", "--respawn", "--claude-full"]);
 const task = argv.find((a, i) => !a.startsWith("--") && (i === 0 || !argv[i - 1].startsWith("--") || BOOL_FLAGS.has(argv[i - 1])));
 if (!task) {
-  console.error('usage: swarm "<task>" [--flat] [--done-when text] [--verify text] [--agents 6] [--cwd dir] [--models sonnet,haiku] [--lead-model opus] [--verifier-model opus] [--planner-model opus] [--codex k] [--codex-models gpt-6-astra,gpt-5.6-sol,gpt-5.6-terra] [--openrouter k] [--openrouter-models deepseek/deepseek-v4.1-flash,...] [--verifier-openrouter slug] [--openrouter-reasoning low|medium|high] [--require-verification] [--quorum unanimous|majority|supermajority] [--prompt loop.md] [--respawn] [--apply] [--full-access] [--named] [--claude-full] [--timeout 30] [--port 7717] [--result-path path]');
+  console.error('usage: swarm "<task>" [--flat] [--max-same-seats 4] [--done-when text] [--verify text] [--agents 6] [--cwd dir] [--models sonnet,haiku] [--lead-model opus] [--verifier-model opus] [--planner-model opus] [--codex k] [--codex-models gpt-6-astra,gpt-5.6-sol,gpt-5.6-terra] [--openrouter k] [--openrouter-models deepseek/deepseek-v4.1-flash,...] [--verifier-openrouter slug] [--openrouter-reasoning low|medium|high] [--require-verification] [--quorum unanimous|majority|supermajority] [--prompt loop.md] [--respawn] [--apply] [--full-access] [--named] [--claude-full] [--timeout 30] [--port 7717] [--result-path path]');
   process.exit(2);
 }
 const TOTAL = Math.max(2, Number(flag("agents", "4")));
@@ -84,6 +85,15 @@ const OPENROUTER_REASONING = flag("openrouter-reasoning", process.env.OPENROUTER
 if ((OPENROUTER > 0 || VERIFIER_OPENROUTER) && !process.env.OPENROUTER_API_KEY) {
   console.error("--openrouter needs OPENROUTER_API_KEY (https://openrouter.ai/keys); a dead seat still counts toward the room's expected participants, so refusing to launch.");
   process.exit(2);
+}
+/** --max-same-seats N: flat rooms refuse more than N workers on one model (default 4, src/seat-cap.ts) */
+const MAX_SAME_SEATS = Number(flag("max-same-seats", String(DEFAULT_MAX_SAME_SEATS)));
+if (FLAT) {
+  const refusal = seatCapRefusal({ workers: WORKERS, models: MODELS, codex: CODEX, codexModels: CODEX_MODELS, openrouter: OPENROUTER, openrouterModels: OPENROUTER_MODELS }, MAX_SAME_SEATS);
+  if (refusal) {
+    console.error(refusal);
+    process.exit(2);
+  }
 }
 // workers may edit files and run anything; each gets its own git worktree
 const READ_TOOLS = ["mcp__chatroom__*", "Read", "Grep", "Glob", "Bash", "WebSearch", "WebFetch"];

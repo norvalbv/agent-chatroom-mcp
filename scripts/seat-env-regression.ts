@@ -70,7 +70,7 @@ async function harness(entry: string, env: Record<string, string>, argv: string[
       cache.set(name, mod); return mod;
     }
     const base = name.replace(/^\.\//, '').replace(/\.js$/, '');
-    assert.ok(['env', 'spawner', 'swarm', 'openrouter', 'respawn', 'claude-args'].includes(base), `unmocked import ${name}`); // respawn.ts and claude-args.ts are pure: real import
+    assert.ok(['env', 'spawner', 'swarm', 'openrouter', 'respawn', 'claude-args', 'seat-cap'].includes(base), `unmocked import ${name}`); // respawn.ts and claude-args.ts are pure: real import
     // Only these explicitly allowlisted source files are read from disk.
     const source = readFileSync(path.join(root, 'src', `${base}.ts`), 'utf8');
     const code = transformSync(source, { loader: 'ts', format: 'esm', target: 'es2022' }).code;
@@ -114,6 +114,12 @@ await test('swarm all provider seats, hub env and controller header', async () =
   assert.equal(create?.options.headers['x-chatroom-token'], HUMAN, 'launcher control auth retained');
   assert.equal(h.env.CHATROOM_HUMAN_TOKEN, HUMAN, 'launcher env unchanged');
   for (const seat of seats) checkSeat(seat);
+});
+await test('swarm --flat refuses 11 same-model workers before the hub starts; --max-same-seats opts in', async () => {
+  // 12 agents: the fixture hub caps a room at 12 live agents, a separate exit 2
+  await assert.rejects(harness('swarm', syntheticEnv(), ['synthetic task', '--flat', '--agents', '12']), /unexpected exit 2/);
+  const h = await harness('swarm', syntheticEnv(), ['synthetic task', '--flat', '--agents', '12', '--max-same-seats', '11']);
+  assert.equal(h.calls.filter(c => c.cmd === 'claude').length, 12, '11 workers + verifier launched when asked for');
 });
 await test('OpenRouter startup excludes token from synthetic dotenv', async () => {
   const h = await harness('openrouter', {}, ['-p', 'synthetic prompt']);

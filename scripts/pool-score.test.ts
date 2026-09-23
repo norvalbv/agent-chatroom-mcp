@@ -7,7 +7,7 @@ import { execFileSync, spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
-import { hiddenRoot, loadPool, worktreeAt } from './pool-format.ts';
+import { hiddenRoot, loadPool, lockPool, worktreeAt } from './pool-format.ts';
 import { makeDryRunPool } from './pool-fixture.ts';
 import { auditRun, finalizeRun, scoreRun } from './pool-score.ts';
 
@@ -201,5 +201,37 @@ test('audit scans the briefs builders saw: a brief naming the hidden root voids 
     const audit = auditRun(R, { hiddenParent: fx.hiddenParent });
     assert.equal(audit.void, true);
     assert.ok(audit.hits.some((h: any) => h.file.includes('/briefs/')));
+  } finally { rmSync(base, { recursive: true, force: true }); }
+});
+
+test('score links the pool repo\'s node_modules into its checkouts, so a hidden test or the suite can load dependencies', () => {
+  const base = fresh();
+  try {
+    const fx = makeDryRunPool(base), R = join(base, 'run'); mkdirSync(R);
+    // an installed, gitignored dependency in the pool's main checkout, as for this hub's tsx/typescript
+    writeFileSync(join(fx.repo, '.git', 'info', 'exclude'), 'node_modules\n');
+    mkdirSync(join(fx.repo, 'node_modules', 'fakedep'), { recursive: true });
+    writeFileSync(join(fx.repo, 'node_modules', 'fakedep', 'index.js'), 'module.exports = 1;\n');
+    const need = `node -e "require('fakedep')"`;
+    writeFileSync(join(hiddenRoot('dry-run', fx.hiddenParent), 'greet', 'cmd'), `${need} && node --test test/greet.hidden.test.mjs\n`);
+    const poolPath = join(fx.poolDir, 'pool.json'), p = read(poolPath);
+    p.suite_cmd = `${need} && npm test`; writeFileSync(poolPath, JSON.stringify(p, null, 2) + '\n'); lockPool(fx.poolDir);
+    runJson(fx, R, 'solo', [seat(fx, R, 'solo', 'pool/dry-run/solo-rep1/solo', [['greet: fix', fix(fx, 'greet')]])]);
+    finalizeRun(R);
+    const score = scoreRun(R, { hiddenParent: fx.hiddenParent });
+    assert.equal(score.suite.pass, true, score.suite.output_tail);
+    assert.equal(score.items.find((i: any) => i.id === 'greet').pass, true);
+  } finally { rmSync(base, { recursive: true, force: true }); }
+});
+
+test('score runs each item alone: an item whose cmd is broad never runs another item\'s hidden test', () => {
+  const base = fresh();
+  try {
+    const fx = makeDryRunPool(base), R = join(base, 'run'); mkdirSync(R);
+    writeFileSync(join(hiddenRoot('dry-run', fx.hiddenParent), 'double', 'cmd'), 'node --test test/\n');
+    runJson(fx, R, 'solo', [seat(fx, R, 'solo', 'pool/dry-run/solo-rep1/solo', [['double: fix', fix(fx, 'double')]])]);
+    finalizeRun(R);
+    const byId = Object.fromEntries(scoreRun(R, { hiddenParent: fx.hiddenParent }).items.map((i: any) => [i.id, i.pass]));
+    assert.deepEqual(byId, { double: true, greet: false });
   } finally { rmSync(base, { recursive: true, force: true }); }
 });

@@ -152,6 +152,9 @@ test('room3, fake seats through dist/swarm.js on a private hub: worker branches 
     assert.equal(run.room.argv[run.room.argv.indexOf('--agents') + 1], '4');
     assert.ok(existsSync(join(runDir, 'room', 'data')));
     assert.ok(existsSync(join(runDir, 'room', 'swarm', 'report.md')));
+    // every seat swarm launched gets a row; a seat that exited cleanly carries its actual cost from swarm's usage sidecar
+    assert.deepEqual(run.seats.map((s: any) => s.name).sort(), ['claude-opus-5-5-1', 'claude-opus-5-5-2', 'claude-opus-5-5-3', 'verifier']);
+    for (const s of run.seats) { assert.equal(s.cost_estimated, false, s.name); assert.equal(s.cost_usd, 0.001, s.name); }
     // the swarm report is moved out of this checkout's swarms/
     assert.equal(existsSync(resolve('swarms')) ? readdirSync(resolve('swarms')).length : 0, before);
     // the hub is gone

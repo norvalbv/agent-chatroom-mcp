@@ -1198,8 +1198,20 @@ export class Hub {
       // Stale-send guard: never talk past messages you have not read.
       const unread = this.unread(room, p);
       if (unread.length) {
+        // An ask the seat was already shown did not "arrive while composing": it is a reply still owed.
+        const focus = this.attentionFocus(room, p);
+        const owed = focus && unread[0].id === focus.id && p.focusedAsk === focus.id ? focus : undefined;
         // the refusal IS the delivery: settle the cursor so the same batch is not shipped again by the next wait
         this.settleRead(room, p, p.lastSeenSeq, unread);
+        if (owed) {
+          const queued = unread.length - 1;
+          const latest = room.messages.at(-1)!.seq;
+          throw new HubError(
+            `You still owe a reply to #${owed.seq} from ${this.shown(room, owed.from)}. Reply with send_message reply_to="${owed.id}", or call pass to decline it. ` +
+              `${queued} other message(s) queued behind it (below); the latest seq is #${latest}.`,
+            { hint: this.attentionHint(room, p), owed_seq: owed.seq, queued, latest_seq: latest, unread: unread.map((m) => this.fmt(room, m)), next_seq: latest },
+          );
+        }
         throw new HubError(
           `${unread.length} message(s) arrived while you were composing. Read them (below); then retry send_message with force=true if your point is still new, or call wait_for_messages.`,
           { hint: this.attentionHint(room, p), unread: unread.map((m) => this.fmt(room, m)), next_seq: room.messages.at(-1)!.seq },

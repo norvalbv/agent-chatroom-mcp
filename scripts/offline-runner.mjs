@@ -99,6 +99,7 @@ export const offlineScripts = [
   'quiet-receipts.ts',
   'quiet-reply-audience-regression.ts',
   'owed-reply-refusal-regression.ts',
+  'duplicate-challenge-regression.ts',
   'quill-task.test.ts',
   'quorum-supermajority-regression.ts',
   'read-digest-regression.ts',

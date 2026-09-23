@@ -51,6 +51,8 @@ const pr2 = hub.propose(pr2Room, a2.id, "Adopt the new retry policy for every ou
 hub.challenge(pr2Room, b2.id, pr2.id, 'Minor: "the new retry policy for every outbound call" could be scoped.', false);
 hub.challenge(pr2Room, c2.id, pr2.id, 'Blocking: "the new retry policy for every outbound call" has no backoff cap.');
 assert.equal(pr2.challenges.length, 2, "a blocking challenge is not a duplicate of a non-blocking one");
+hub.challenge(pr2Room, b2.id, pr2.id, 'Also minor: "the new retry policy for every outbound call" wants a flag.', false);
+assert.equal(pr2.challenges.length, 3, "non-blocking dissent is recorded as written, never deduplicated");
 
 // Once the open challenge is no longer open, the clause is free again.
 const pr3Room = "duplicate-challenge-3";

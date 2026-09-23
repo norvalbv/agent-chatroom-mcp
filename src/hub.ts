@@ -2399,7 +2399,7 @@ export class Hub {
     }
   }
 
-  challenge(roomName: string, pid: string, proposalId: string, objection: string, blocking = true, command?: string): Proposal {
+  challenge(roomName: string, pid: string, proposalId: string, objection: string, blocking = true, command?: string, confirm = false): Proposal {
     const room = this.getRoom(roomName);
     const p = this.requireParticipant(room, pid);
     const pr = room.proposals.get(proposalId);
@@ -2422,6 +2422,20 @@ export class Hub {
         `A blocking challenge must quote a matching proposal span (12+ characters) in double quotes. ` +
           `Copy the text from ${proposalId} v${pr.version}; the closest passage is: "${this.closest(pr.text, objection)}". ` +
           `Use blocking=false to record uncited dissent without holding the proposal.`,
+      );
+    }
+    // Six seats filing the same objection within two minutes is one objection: point at the open one first.
+    // Only blocking challenges hold the gate, so only they are deduplicated: non-blocking dissent is recorded as
+    // written, a blocking challenge is never a duplicate of it, and a command is its own evidence.
+    const same = blocking && cites && !cmd && !confirm
+      ? this.openChallenges(pr).find((c) => c.cites &&
+          (norm(c.cites).includes(norm(cites)) || norm(cites).includes(norm(c.cites))))
+      : undefined;
+    if (same) {
+      throw new HubError(
+        `${this.shown(room, same.by)} already challenged that clause ("${same.cites!.slice(0, 80)}${same.cites!.length > 80 ? "…" : ""}") in ${same.id}, which is still open. ` +
+          `If your objection is the same, say so in chat or vote; if it adds something that challenge does not, file it again with confirm=true.`,
+        { duplicate_of: same.id },
       );
     }
     this.surfaceCited(room, objection, "cited in a challenge");

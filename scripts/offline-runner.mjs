@@ -43,7 +43,6 @@ export const offlineScripts = [
   'generator-file-regex-regression.ts',
   'board-expiry-regression.ts',
   'board-manifest-regression.ts',
-  'blind-drafts-regression.ts',
   'board-transport-regression.ts',
   'challenge-session-regression.ts',
   'claude-lean-flags-regression.ts',

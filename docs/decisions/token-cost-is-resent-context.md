@@ -48,3 +48,14 @@ created: 2026-09-18
 **Revisit-when:** a change to wake policy (e.g. a held wait that returns only a one-line 'nothing for you' on a chatter-only timeout) is replayed and moves input tokens by more than 5%
 **Scope:** src/hub.ts,src/server.ts,scripts/challenge-delta-regression.ts,scripts/per-turn-payload-regression.ts,scripts/attention-gate-regression.ts,scripts/seat-cost/*.py,scripts/smoke.ts
 **Source:** manual
+
+## Target · 2026-09-23 — Lean seats do not load the operator's auto-memory
+
+**Context:** --setting-sources project does not govern Claude Code's auto-memory, so lean seats, bench arms included (bench-rq1 goes through claudeArgs), still loaded the operator's MEMORY.md index. A haiku first-turn probe measured 12,886 prompt tokens with it and 7,378 without, and the seat could see 9 lines about swarm-083203-kooz. Every seat therefore started anchored on the same prior-room conclusions, which undercuts the independence of first attempts (settle-disputes-by-spec-not-count) and the attempts path (independent-attempts-selected-by-a-check). Each seat also wrote its own memory at exit, which produced the duplicate writeups kooz left behind.
+**Ruling:** claudeArgs adds autoMemoryEnabled:false to the lean --settings. The heartbeat hook stays, and --claude-full / CHATROOM_CLAUDE_FULL=1 is unchanged (972df02, scripts/claude-lean-flags-regression.ts, scripts/heartbeat-regression.ts).
+**Consequences:**
+- Positive: About 5.5k fewer tokens on each seat's first turn. That is roughly 4% of a ~130k resident re-read, and it is carried on every later turn. Seats no longer start from the operator's summary of earlier rooms.
+- Negative: Seats lose memory the operator may have wanted them to have. The launcher's PRIOR RUNS brief remains the deliberate channel for prior context, and it is itself a cause of t≈0 salvage collisions (flat-seats-capped-per-model).
+**Revisit-when:** a seat fails a task because it lacked a fact that lived only in auto-memory
+**Scope:** src/claude-args.ts,scripts/claude-lean-flags-regression.ts,scripts/heartbeat-regression.ts
+**Source:** manual

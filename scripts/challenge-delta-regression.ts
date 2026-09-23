@@ -27,12 +27,15 @@ function fixture(t: { after: (fn: () => void) => void }) {
   return { hub, room, pr, a, b };
 }
 
+/** A delta entry either carries its objection or omits it; read it without assuming which. */
+const obj = (c: object) => (c as { objection?: string }).objection;
+
 test("an objection ships on first sight, then only id/status until its status changes", (t) => {
   const { hub, room, pr, a, b } = fixture(t);
   hub.challenge(ROOM, b.id, pr.id, OBJECTION, true, "printf-check 1e-07");
   const view = () => hub.challengesDelta(a, hub.proposalView(room, pr).challenges);
   const first = view();
-  assert.equal(first[0].objection, OBJECTION, "first sight carries the objection");
+  assert.equal(obj(first[0]), OBJECTION, "first sight carries the objection");
   const second = view();
   assert.ok(!("objection" in second[0]), "an unchanged challenge is not re-shipped");
   assert.match((second[0] as { objection_omitted?: string }).objection_omitted ?? "", /room_status/);
@@ -40,7 +43,7 @@ test("an objection ships on first sight, then only id/status until its status ch
   assert.equal((second[0] as { command?: string }).command, "printf-check 1e-07", "an executable command still travels: it must be rerun verbatim");
   assert.equal(hub.proposalView(room, pr).challenges[0].objection, OBJECTION, "proposalView (room_status) keeps the full text");
   pr.challenges[0].status = "answered";
-  assert.equal(view()[0].objection, OBJECTION, "a status change re-ships the objection once");
+  assert.equal(obj(view()[0]), OBJECTION, "a status change re-ships the objection once");
   assert.ok(!("objection" in view()[0]));
 });
 
@@ -48,10 +51,10 @@ test("delivery is per participant, and a second challenge ships on its own first
   const { hub, room, pr, a, b } = fixture(t);
   hub.challenge(ROOM, b.id, pr.id, OBJECTION, true, "printf-check 1e-07");
   hub.challengesDelta(a, hub.proposalView(room, pr).challenges);
-  assert.equal(hub.challengesDelta(b, hub.proposalView(room, pr).challenges)[0].objection, OBJECTION, "B has not been sent it yet");
+  assert.equal(obj(hub.challengesDelta(b, hub.proposalView(room, pr).challenges)[0]), OBJECTION, "B has not been sent it yet");
   hub.challenge(ROOM, b.id, pr.id, `${OBJECTION} Also 5e-324.`, false);
   const both = hub.challengesDelta(a, hub.proposalView(room, pr).challenges);
-  assert.ok(!("objection" in both[0]) && both[1].objection?.includes("5e-324"));
+  assert.ok(!("objection" in both[0]) && obj(both[1])?.includes("5e-324"));
 });
 
 test("a legacy challenge without an id always ships in full", () => {
@@ -59,5 +62,5 @@ test("a legacy challenge without an id always ships in full", () => {
   const hub = Object.create(Hub.prototype) as Hub;
   const legacy = [{ status: "open", objection: "old" }];
   hub.challengesDelta(p, legacy);
-  assert.equal(hub.challengesDelta(p, legacy)[0].objection, "old");
+  assert.equal(obj(hub.challengesDelta(p, legacy)[0]), "old");
 });

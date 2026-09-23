@@ -167,12 +167,14 @@ test('room3, fake seats that never finish: every seat process is gone once run r
   const { base, fx, solutions, scratch, claudeHome } = setup();
   try {
     const t0 = Date.now();
-    const runDir = await runArm({ poolDir: fx.poolDir, arm: 'room3', rep: 2, scratch, fake: { solutions, mode: 'hang', session: true }, deadlineMs: 5000, claudeConfigDir: claudeHome });
+    const runDir = await runArm({ poolDir: fx.poolDir, arm: 'room3', rep: 2, scratch, fake: { solutions, mode: 'hang', session: true, orphan: true }, deadlineMs: 5000, claudeConfigDir: claudeHome });
     assert.ok(Date.now() - t0 < 90_000);
     const left = spawnSync('ps', ['-axo', 'pid=,command='], { encoding: 'utf8' }).stdout.split('\n').filter(l => l.includes(join(runDir, 'fake-bin')) || l.includes(runDir + '/'));
     assert.deepEqual(left, []);
     const run = JSON.parse(readFileSync(join(runDir, 'run.json'), 'utf8'));
     assert.equal(run.room.declared_branch, null);
+    // each worker left a detached child behind; the deadline sweep stops them while sparing the launcher and hub
+    assert.ok(run.room.strays_stopped_at_deadline >= 3, `strays_stopped_at_deadline: ${run.room.strays_stopped_at_deadline}`);
     // killed seats: no sidecar, so each is estimated from its own session (the verifier's is the one in the room worktree)
     assert.deepEqual(run.seats.map((s: any) => s.name).sort(), ['claude-opus-5-5-1', 'claude-opus-5-5-2', 'claude-opus-5-5-3', 'verifier']);
     for (const s of run.seats) { assert.equal(s.cost_estimated, true, s.name); assert.equal(s.sessions.length, 1, s.name); }

@@ -8,7 +8,7 @@ import { execFileSync, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { cpSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
-import { isAbsolute, join, relative, resolve } from 'node:path';
+import { basename, isAbsolute, join, relative, resolve } from 'node:path';
 import { hashTree } from './bench-build-runtime.ts';
 
 export type PoolItem = { id: string; title: string; brief: string };
@@ -130,6 +130,9 @@ export function removeWorktree(repo: string, dir: string) {
 }
 
 export type ValidateItem = { id: string; ok: boolean; fails_at_base: boolean | null; passes_with_reference: boolean | null; hidden_sha256: string | null;
+  /** Hidden test file names that already occur in the repo at base or in any brief: the leakage audit searches
+   * transcripts for these names, so an item may only enter the pool when both lists are empty. */
+  names_in_repo: string[]; names_in_briefs: string[];
   base_exit: number | null; reference_exit: number | null; base_tail: string; reference_tail: string; error?: string };
 
 /** Each item in its own fresh worktree at base_commit: its hidden test must fail, then pass once reference.patch is applied. */
@@ -140,12 +143,16 @@ export function validatePool(poolDir: string, opts: { hiddenParent?: string; scr
   mkdirSync(scratch, { recursive: true });
   const items: ValidateItem[] = [];
   for (const { id } of pool.items) {
-    const r: ValidateItem = { id, ok: false, fails_at_base: null, passes_with_reference: null, hidden_sha256: null, base_exit: null, reference_exit: null, base_tail: '', reference_tail: '' };
+    const r: ValidateItem = { id, ok: false, fails_at_base: null, passes_with_reference: null, hidden_sha256: null, names_in_repo: [], names_in_briefs: [], base_exit: null, reference_exit: null, base_tail: '', reference_tail: '' };
     const wt = join(scratch, `validate-${id}`);
     try {
       const item = loadHiddenItem(hidden, id);
       r.hidden_sha256 = hashTree(item.dir);
       worktreeAt(pool.repo, pool.base_commit, wt);
+      const names = [...new Set(item.tests.map(t => basename(t)))].sort();
+      const repoNames = new Set(execFileSync('git', ['-C', wt, 'ls-files', '-z'], { encoding: 'utf8' }).split('\0').filter(Boolean).map(f => basename(f)));
+      r.names_in_repo = names.filter(n => repoNames.has(n));
+      r.names_in_briefs = names.filter(n => pool.items.some(i => i.brief.includes(n) || i.title.includes(n)));
       copyHiddenTests(item, wt);
       const atBase = runCmd(item.cmd, wt, opts.timeoutMs);
       r.base_exit = atBase.exit_code; r.base_tail = atBase.output_tail; r.fails_at_base = atBase.exit_code !== 0;
@@ -158,7 +165,7 @@ export function validatePool(poolDir: string, opts: { hiddenParent?: string; scr
         const withRef = runCmd(item.cmd, wt, opts.timeoutMs);
         r.reference_exit = withRef.exit_code; r.reference_tail = withRef.output_tail; r.passes_with_reference = withRef.exit_code === 0;
       }
-      r.ok = r.fails_at_base === true && r.passes_with_reference === true;
+      r.ok = r.fails_at_base === true && r.passes_with_reference === true && !r.names_in_repo.length && !r.names_in_briefs.length;
     } catch (e) {
       r.error = e instanceof Error ? e.message : String(e);
     } finally {

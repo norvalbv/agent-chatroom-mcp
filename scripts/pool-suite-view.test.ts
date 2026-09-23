@@ -10,7 +10,7 @@ import { fileURLToPath } from 'node:url';
 import { hiddenRoot, loadPool, lockPool, worktreeAt } from './pool-format.ts';
 import { makeDryRunPool } from './pool-fixture.ts';
 import { finalizeRun, scoreRun } from './pool-score.ts';
-import { compareSuiteViews, parseOfflineRunner, parseSuiteOutput, parseVitestJson, recordSuiteBase, SUITE_BASE_FILE, type SuiteView } from './pool-suite-view.ts';
+import { compareSuiteViews, parseOfflineRunner, parseSuiteOutput, parseVitestJson, readSuiteBase, recordSuiteBase, SUITE_BASE_FILE, type SuiteView } from './pool-suite-view.ts';
 import { validateAll } from './pool.ts';
 
 const RUNNER = fileURLToPath(new URL('./offline-runner.mjs', import.meta.url));
@@ -162,6 +162,67 @@ test('score without a base record says why the secondary view is missing and sco
     rmSync(join(base, 'run', 'score.json'));
     const stale = scoreRun(join(base, 'run'), { hiddenParent: fx.hiddenParent }).secondary_not_preregistered.suite_pass_to_pass;
     assert.match(!stale.available ? stale.reason : '', /recorded at base 0000000/);
+  } finally { rmSync(base, { recursive: true, force: true }); }
+});
+
+test('readSuiteBase never throws: unreadable, non-object or malformed records come back as a reason', () => {
+  const dir = fresh();
+  try {
+    const pool = { base_commit: 'abc123', suite_cmd: 'node suite.mjs' } as Parameters<typeof readSuiteBase>[1];
+    const good = { note: 'n', pool: 'p', base_commit: 'abc123', suite_cmd: 'node suite.mjs', view_cmd: 'node suite.mjs', recorded_at: 't',
+      view: { format: 'offline-runner', exit_code: 1, timed_out: false, complete: true, commands: { 'a.test.ts': 'passed', 'b.test.ts': 'failed' } } };
+    const reasonFor = (text: string) => {
+      writeFileSync(join(dir, SUITE_BASE_FILE), text);
+      const r = readSuiteBase(dir, pool);
+      return 'reason' in r ? r.reason : null;
+    };
+    const withView = (view: unknown) => JSON.stringify({ ...good, view });
+    assert.equal(reasonFor(JSON.stringify(good)), null);
+    assert.equal(reasonFor(withView({ ...good.view, commands: null, format: 'exit-code' })), null, 'the exit-code fallback has no commands');
+    const cases: [string, RegExp][] = [
+      [JSON.stringify(good).slice(0, 200), /unreadable: .*JSON/],
+      ['<<<<<<< HEAD\n' + JSON.stringify(good), /unreadable/],
+      ['[]', /not a JSON object/], ['null', /not a JSON object/],
+      [JSON.stringify({ ...good, view: undefined }), /malformed: no view$/],
+      [JSON.stringify({ ...good, view_cmd: undefined }), /malformed: no view_cmd/],
+      [withView({ ...good.view, format: 'junit' }), /malformed: view\.format "junit"/],
+      [withView({ ...good.view, commands: ['a.test.ts'] }), /malformed: view\.commands is neither/],
+      [withView({ ...good.view, commands: { 'a.test.ts': 'ok' } }), /malformed: view\.commands\["a\.test\.ts"\]/],
+      [withView({ ...good.view, complete: 'yes' }), /malformed: view\.complete/],
+      [withView({ ...good.view, exit_code: '1' }), /malformed: view\.exit_code/],
+    ];
+    for (const [text, reason] of cases) assert.match(reasonFor(text) ?? 'accepted', reason, text.slice(0, 80));
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('a truncated or partial suite-base.json never stops score: score.json is written and the pre-registered suite is unchanged', () => {
+  const base = fresh();
+  try {
+    const fx = suitePool(base);
+    const R = breakingSoloRun(fx, base);
+    const plain = scoreRun(R, { hiddenParent: fx.hiddenParent }); // no base record at all
+    const record = recordSuiteBase(fx.poolDir, { scratch: join(base, 'scratch') });
+    const full = JSON.stringify(record, null, 2);
+    for (const [text, reason] of [[full.slice(0, 200), /unreadable/], [JSON.stringify({ ...record, view: undefined }), /malformed: no view/]] as const) {
+      writeFileSync(join(fx.poolDir, SUITE_BASE_FILE), text);
+      rmSync(join(R, 'score.json'), { force: true });
+      const score = scoreRun(R, { hiddenParent: fx.hiddenParent });
+      const written = read(join(R, 'score.json'));
+      assert.deepEqual([written.suite.pass, written.suite.exit_code, written.suite.cmd], [plain.suite.pass, plain.suite.exit_code, plain.suite.cmd]);
+      assert.deepEqual([score.passed, score.of, score.items.map(i => [i.id, i.pass])], [plain.passed, plain.of, plain.items.map(i => [i.id, i.pass])]);
+      const p2p = written.secondary_not_preregistered.suite_pass_to_pass;
+      assert.equal(p2p.available, false);
+      assert.match(p2p.reason, reason);
+    }
+    // a valid record whose separate head view run fails (its checkout path is taken) is reported the same way
+    writeFileSync(join(fx.poolDir, SUITE_BASE_FILE), JSON.stringify({ ...record, view_cmd: 'node report.mjs' }));
+    put(join(R, 'score-wt', 'suite-view'), 'in the way\n');
+    rmSync(join(R, 'score.json'), { force: true });
+    const blocked = scoreRun(R, { hiddenParent: fx.hiddenParent });
+    assert.deepEqual([blocked.suite.pass, blocked.passed], [plain.suite.pass, plain.passed]);
+    const p2p = read(join(R, 'score.json')).secondary_not_preregistered.suite_pass_to_pass;
+    assert.equal(p2p.available, false);
+    assert.match(p2p.reason, /running the view command at head/);
   } finally { rmSync(base, { recursive: true, force: true }); }
 });
 

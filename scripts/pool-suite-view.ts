@@ -131,14 +131,40 @@ export function recordSuiteBase(poolDir: string, opts: { scratch?: string; viewC
   }
 }
 
-/** The pool's base record, or why there is none usable (missing, or recorded for another base commit or suite command). */
+const FORMATS: readonly string[] = ['offline-runner', 'vitest-json', 'exit-code'];
+const STATUSES: readonly string[] = ['passed', 'failed', 'skipped', 'unknown'];
+const isObject = (x: unknown): x is Record<string, unknown> => typeof x === 'object' && x !== null && !Array.isArray(x);
+
+/** What is wrong with a parsed record's view_cmd and view, or null when compareSuiteViews can use them. */
+export function suiteBaseProblem(record: Record<string, unknown>): string | null {
+  if (typeof record.view_cmd !== 'string' || !record.view_cmd) return 'no view_cmd';
+  const view = record.view;
+  if (!isObject(view)) return 'no view';
+  if (typeof view.format !== 'string' || !FORMATS.includes(view.format)) return `view.format ${JSON.stringify(view.format)} is not one of ${FORMATS.join(', ')}`;
+  if (view.commands !== null && !isObject(view.commands)) return 'view.commands is neither an object nor null';
+  if (isObject(view.commands)) {
+    const bad = Object.keys(view.commands).find(n => !STATUSES.includes(String((view.commands as Record<string, unknown>)[n])));
+    if (bad !== undefined) return `view.commands[${JSON.stringify(bad)}] is not one of ${STATUSES.join(', ')}`;
+  }
+  if (typeof view.complete !== 'boolean') return 'view.complete is not a boolean';
+  if (view.exit_code !== null && typeof view.exit_code !== 'number') return 'view.exit_code is neither a number nor null';
+  return null;
+}
+
+/** The pool's base record, or why there is none usable: missing, unreadable, not JSON, recorded for another base commit or suite
+ * command, or not the shape recordSuiteBase writes (the file sits in the pool dir outside the lock, so a merge conflict or a hand
+ * edit can break it). Never throws: the view is secondary and must not stop the pre-registered score. */
 export function readSuiteBase(poolDir: string, pool: Pool): { record: SuiteBase } | { reason: string } {
   const path = join(poolDir, SUITE_BASE_FILE);
   if (!existsSync(path)) return { reason: `no ${SUITE_BASE_FILE} next to pool.json: run pool.ts validate --suite-view to record the suite at base` };
-  const record: SuiteBase = JSON.parse(readFileSync(path, 'utf8'));
-  if (record.base_commit !== pool.base_commit) return { reason: `${SUITE_BASE_FILE} was recorded at base ${record.base_commit}, not the pool's ${pool.base_commit}` };
+  let record: unknown;
+  try { record = JSON.parse(readFileSync(path, 'utf8')); } catch (e) { return { reason: `${SUITE_BASE_FILE} is unreadable: ${e instanceof Error ? e.message : String(e)}` }; }
+  if (!isObject(record)) return { reason: `${SUITE_BASE_FILE} is not a JSON object` };
+  if (record.base_commit !== pool.base_commit) return { reason: `${SUITE_BASE_FILE} was recorded at base ${String(record.base_commit)}, not the pool's ${pool.base_commit}` };
   if (record.suite_cmd !== (pool.suite_cmd ?? 'npm test')) return { reason: `${SUITE_BASE_FILE} was recorded for suite_cmd ${JSON.stringify(record.suite_cmd)}, not the pool's` };
-  return { record };
+  const problem = suiteBaseProblem(record);
+  if (problem) return { reason: `${SUITE_BASE_FILE} is malformed: ${problem}` };
+  return { record: record as SuiteBase };
 }
 
 export type SuitePassToPass = { available: false; reason: string } | {

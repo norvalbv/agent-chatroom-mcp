@@ -14,7 +14,12 @@
  * told to write to it. Every seat then starts anchored on the same prior-room conclusions, which undercuts
  * independent attempts, and each seat writes its own memory at exit (swarm-083203-kooz left 13 of the
  * index's 33 lines). Lean seats get autoMemoryEnabled:false in --settings; --claude-full keeps memory.
+ *
+ * --sandbox / CHATROOM_SANDBOX=1 (src/sandbox.ts) adds Claude Code's own `sandbox` block to the same --settings JSON,
+ * under --claude-full too: it is a containment boundary, not a token saving.
  */
+import type { ClaudeSandboxSettings } from "./sandbox.js";
+
 export interface ClaudeArgsOptions {
   mcpJson: string;
   /** the --allowedTools list (may include mcp__* entries) */
@@ -29,6 +34,8 @@ export interface ClaudeArgsOptions {
   outputFormat?: "json" | "stream-json";
   /** --settings JSON (src/env.ts heartbeatHookSettings): the seat's tool-call heartbeat hook. Kept under --claude-full too. */
   settings?: string;
+  /** Claude Code's OS sandbox for this seat (src/sandbox.ts claudeSandbox); undefined = unsandboxed, today's default. */
+  sandbox?: ClaudeSandboxSettings;
 }
 
 /** --tools governs only the built-in tool set; it does not take MCP tool names (those are already scoped by --mcp-config --strict-mcp-config). */
@@ -39,7 +46,7 @@ const builtinOnly = (tools: string[]) => tools.filter((t) => !t.startsWith("mcp_
  * stdin when none is given). argv is visible to every process on the host, and `pkill -f <word>` matches it: in pool run
  * room15-rep2 (2026-09-23) one seat's `pkill -f "offline-runner"` matched the brief in 14 of 15 seats' argv and killed them.
  */
-export function claudeArgs({ mcpJson, tools, model, full, outputFormat, settings }: ClaudeArgsOptions): string[] {
+export function claudeArgs({ mcpJson, tools, model, full, outputFormat, settings, sandbox }: ClaudeArgsOptions): string[] {
   const args = ["-p", "--mcp-config", mcpJson, "--strict-mcp-config", "--allowedTools", tools.join(",")];
   if (!full) {
     args.push("--tools", builtinOnly(tools).join(","), "--disable-slash-commands", "--setting-sources", "project", "--exclude-dynamic-system-prompt-sections");
@@ -47,7 +54,8 @@ export function claudeArgs({ mcpJson, tools, model, full, outputFormat, settings
   if (outputFormat === "stream-json") args.push("--output-format", "stream-json", "--verbose");
   else args.push("--output-format", "json");
   if (model) args.push("--model", model);
-  const merged = full ? settings : JSON.stringify({ ...(settings ? JSON.parse(settings) : {}), autoMemoryEnabled: false });
+  const extra = { ...(full ? {} : { autoMemoryEnabled: false }), ...(sandbox ? { sandbox } : {}) };
+  const merged = Object.keys(extra).length ? JSON.stringify({ ...(settings ? JSON.parse(settings) : {}), ...extra }) : settings;
   if (merged) args.push("--settings", merged);
   return args;
 }

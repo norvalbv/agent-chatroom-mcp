@@ -5,7 +5,7 @@
  * reasoning blocks passed back) and the CLI the launcher and the spawner call.
  *
  *   openrouter -p "<brief>" --mcp-url http://127.0.0.1:7717/mcp [--model slug] [--cwd dir] [--write]
- *              [--no-shell] [--max-minutes 45] [--reasoning low|medium|high] [--checkpoint-trim]
+ *              [--no-shell] [--max-minutes 45] [--reasoning low|medium|high] [--checkpoint-trim] [--sandbox]
  */
 import { randomUUID } from "node:crypto";
 import { resolve } from "node:path";
@@ -38,7 +38,7 @@ const RATE_LIMIT_PATIENCE_MS = Number(flag("rate-limit-patience-min", "20")) * 6
 const say = (s: string) => process.stderr.write(`${s}\n`);
 
 if (!PROMPT.trim()) {
-  say('usage: openrouter -p "<prompt>" --mcp-url <url> [--model slug] [--cwd dir] [--write] [--no-shell] [--max-minutes 45] [--reasoning low|medium|high] [--usage-sidecar path] [--checkpoint-trim]');
+  say('usage: openrouter -p "<prompt>" --mcp-url <url> [--model slug] [--cwd dir] [--write] [--no-shell] [--max-minutes 45] [--reasoning low|medium|high] [--usage-sidecar path] [--checkpoint-trim] [--sandbox]');
   process.exit(2);
 }
 if (!KEY && BASE.startsWith("https://openrouter.ai")) {
@@ -155,6 +155,8 @@ const result = await runSeat(openRouterProvider(MODEL, REASONING), {
   cwd: resolve(flag("cwd", process.cwd())!),
   write: has("write"),
   shell: !has("no-shell"),
+  // --sandbox (src/sandbox.ts): run_command inside sandbox-runtime; the launcher and the hub pass it when asked
+  sandbox: has("sandbox"),
   maxMinutes: Number(flag("max-minutes", "45")),
   maxSteps: Number(flag("max-steps", "600")),
   maxToolChars: Number(flag("max-tool-chars", "6000")),

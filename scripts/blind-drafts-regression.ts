@@ -95,9 +95,53 @@ await d.call("board_set", { room: room2, key: "draft/D", text: "d-draft" });
 r = await d.call("board_get", { room: room2, key: "draft/C" });
 assert.ok(r.error, "sealed while E has not drafted");
 r = await e.call("leave_room", { room: room2, reason: "finished nothing here; no handoff, no claim, leaving the room" });
-console.error("LEAVE", r.text.slice(0,300));
 r = await d.call("board_get", { room: room2, key: "draft/C" });
 assert.ok(!r.error && r.text.includes("c-draft"), "revealed once the only non-drafter left: " + r.text);
+
+// the deadline: a drafter who stays but never drafts does not keep everyone else's drafts sealed forever
+Hub.DRAFT_REVEAL_MS = 300;
+const room3 = "blind-drafts-deadline";
+const f = await seat("f"); const g = await seat("g"); const h = await seat("h");
+await f.call("join_room", { room: room3, name: "F", agent: "test" });
+await g.call("join_room", { room: room3, name: "G", agent: "test" });
+await h.call("join_room", { room: room3, name: "H", agent: "test" });
+await f.call("board_set", { room: room3, key: "draft/F", text: "f-draft" });
+await new Promise((res) => setTimeout(res, 150));
+await g.call("board_set", { room: room3, key: "draft/G", text: "g-draft" }); // a later draft does not push the clock back
+r = await g.call("board_get", { room: room3, key: "draft/F" });
+assert.ok(r.error, "sealed before the deadline while H has not drafted");
+await new Promise((res) => setTimeout(res, 250));
+r = await g.call("board_get", { room: room3, key: "draft/F" });
+assert.ok(!r.error && r.text.includes("f-draft"), "revealed on the deadline measured from the first draft: " + r.text);
+r = await h.call("board_get", { room: room3 });
+assert.ok(r.text.includes("draft/F") && r.text.includes("draft/G"), "the non-drafter sees them too");
+const note = hub.getRoom(room3).messages.filter((m) => /draft deadline passed \(no draft from H\)/.test(m.content));
+assert.equal(note.length, 1, "deadline reveal announced once, naming who did not draft");
+assert.equal(new Hub({ dataDir }).getRoom(room3).draftsRevealed, true, "deadline reveal persisted");
+
+// a restart mid-window keeps the original clock and still announces the reveal
+Hub.DRAFT_REVEAL_MS = 400;
+const room4 = "blind-drafts-restart";
+const i = await seat("i"); const j = await seat("j");
+await i.call("join_room", { room: room4, name: "I", agent: "test" });
+await j.call("join_room", { room: room4, name: "J", agent: "test" });
+await i.call("board_set", { room: room4, key: "draft/I", text: "i-draft" });
+const restarted = new Hub({ dataDir });
+const r4 = restarted.getRoom(room4);
+assert.ok(r4.draftsOpenedAt && !r4.draftsRevealed, "replay restores the clock, still sealed");
+assert.equal(restarted.draftSealed(r4, "draft/I", r4.board.get("draft/I")!, "J"), true, "sealed for J after restart");
+await new Promise((res) => setTimeout(res, 500));
+assert.equal(r4.draftsRevealed, true, "restarted hub reveals on the original deadline");
+assert.ok(r4.messages.some((m) => /draft deadline passed/.test(m.content)), "and announces it");
+Hub.DRAFT_REVEAL_MS = 0;
+const room5 = "blind-drafts-no-deadline";
+const k = await seat("k"); const l = await seat("l");
+await k.call("join_room", { room: room5, name: "K", agent: "test" });
+await l.call("join_room", { room: room5, name: "L", agent: "test" });
+await k.call("board_set", { room: room5, key: "draft/K", text: "k-draft" });
+await new Promise((res) => setTimeout(res, 50));
+r = await l.call("board_get", { room: room5, key: "draft/K" });
+assert.ok(r.error, "DRAFT_REVEAL_MS=0 waits for every drafter");
 
 console.log("blind-drafts regression: ok");
 process.exit(0);

@@ -115,6 +115,7 @@ export const offlineScripts = [
   'reviewer-assignment-regression.ts',
   'rq1-stats.test.ts',
   'rq1-usage-budget-regression.ts',
+  'seat-cost-estimate.test.ts',
   'seat-env-regression.ts',
   'seat-git-config-regression.ts',
   'gleam-task.test.ts',

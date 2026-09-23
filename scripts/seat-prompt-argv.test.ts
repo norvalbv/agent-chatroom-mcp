@@ -17,6 +17,29 @@ import { CODEX_TWO_TURN_JSONL, CODEX_TWO_TURN_SIDECAR, startHub, startStub, writ
 
 const BRIEF = "Implement h14: make scripts/offline-runner.mjs time out each command.";
 
+// ---- codex and OpenRouter seats (docs/reuse-survey-2026-09-23.md, "Codex seats" and "Seat launch"): same rule, both launchers ----
+// Real processes: stub codex and claude on PATH record what they were given; the OpenRouter seat is the real
+// dist/openrouter.js talking to a local stub model, and argv is read with ps while that seat waits on the stub.
+// All async setup finishes before the first test() is registered: node:test runs a top-level after() hook as soon as
+// the tests queued so far have finished, so a test registered after a top-level await could find this setup torn down.
+const MARKER = `argv-marker-${randomBytes(4).toString("hex")}`;
+const SEAT_BRIEF = `Investigate why ${MARKER} fails and report the cause in the room.`;
+const base = realpathSync(mkdtempSync(join(tmpdir(), "seat-argv-")));
+const [bin, records, work, logs] = ["bin", "records", "work", "logs"].map((d) => join(base, d));
+for (const d of [bin, records, work, logs]) mkdirSync(d);
+writeFakeBins(bin);
+interface Row { pid: number; ppid: number; args: string }
+let processes: Row[] = [];
+// taken while an OpenRouter seat is inside its model call, so the seat is certainly alive
+const stub = await startStub(() => {
+  processes = spawnSync("ps", ["-axww", "-o", "pid=,ppid=,args="], { encoding: "utf8" }).stdout.split("\n").map((l) => /^\s*(\d+)\s+(\d+)\s+(.*)$/.exec(l)).filter((m) => m !== null).map((m) => ({ pid: Number(m![1]), ppid: Number(m![2]), args: m![3] }));
+});
+const { hub, url: hubUrl, port: hubPort } = await startHub(logs, base);
+after(async () => { hub.kill(); await stub.close(); rmSync(base, { recursive: true, force: true }); });
+const seatEnv = { PATH: `${bin}:${process.env.PATH}`, FAKE_RECORD_DIR: records, OPENROUTER_API_KEY: "stub-key", OPENROUTER_BASE_URL: stub.url };
+const takeRecords = (kind: "codex" | "claude") => readdirSync(records).filter((f) => f.startsWith(kind)).map((f) => { const r = JSON.parse(readFileSync(join(records, f), "utf8")); rmSync(join(records, f)); return r as { argv: string[]; stdin: string; cwd: string }; });
+const waitFor = async (ok: () => unknown, what: string, ms = 30_000) => { for (const until = Date.now() + ms; !ok(); ) { if (Date.now() > until) throw new Error(`timed out waiting for ${what}`); await new Promise((r) => setTimeout(r, 50)); } };
+
 test("claudeArgs puts no prompt in argv: -p is followed by a flag", () => {
   const args = claudeArgs({ mcpJson: "/m.json", tools: ["Bash"], model: "claude-opus-5-5", outputFormat: "stream-json" });
   const i = args.indexOf("-p");
@@ -42,9 +65,6 @@ process.stdout.write(JSON.stringify({ type: 'result', subtype: 'success', is_err
   assert.ok(!seen.argv.some((a) => a.includes("offline-runner")), "a pkill -f pattern from the brief cannot match the seat's argv");
 });
 
-// ---- codex and OpenRouter seats (docs/reuse-survey-2026-09-23.md, "Codex seats" and "Seat launch"): same rule, both launchers ----
-// Real processes: stub codex and claude on PATH record what they were given; the OpenRouter seat is the real
-// dist/openrouter.js talking to a local stub model, and argv is read with ps while that seat waits on the stub.
 
 test("codexArgs: the prompt is read from stdin (-); read-only seats get -s read-only, write seats keep their configured sandbox", () => {
   const ro = codexArgs({ cwd: "/w", mcpUrl: "http://127.0.0.1:1/mcp", model: "gpt-6-astra", readOnly: true, outFile: "/o/seat.out", json: true });
@@ -57,23 +77,6 @@ test("codexArgs: the prompt is read from stdin (-); read-only seats get -s read-
   assert.equal(rw.at(-1), "-");
 });
 
-const MARKER = `argv-marker-${randomBytes(4).toString("hex")}`;
-const SEAT_BRIEF = `Investigate why ${MARKER} fails and report the cause in the room.`;
-const base = realpathSync(mkdtempSync(join(tmpdir(), "seat-argv-")));
-const [bin, records, work, logs] = ["bin", "records", "work", "logs"].map((d) => join(base, d));
-for (const d of [bin, records, work, logs]) mkdirSync(d);
-writeFakeBins(bin);
-interface Row { pid: number; ppid: number; args: string }
-let processes: Row[] = [];
-// taken while an OpenRouter seat is inside its model call, so the seat is certainly alive
-const stub = await startStub(() => {
-  processes = spawnSync("ps", ["-axww", "-o", "pid=,ppid=,args="], { encoding: "utf8" }).stdout.split("\n").map((l) => /^\s*(\d+)\s+(\d+)\s+(.*)$/.exec(l)).filter((m) => m !== null).map((m) => ({ pid: Number(m![1]), ppid: Number(m![2]), args: m![3] }));
-});
-const { hub, url: hubUrl, port: hubPort } = await startHub(logs, base);
-after(async () => { hub.kill(); await stub.close(); rmSync(base, { recursive: true, force: true }); });
-const seatEnv = { PATH: `${bin}:${process.env.PATH}`, FAKE_RECORD_DIR: records, OPENROUTER_API_KEY: "stub-key", OPENROUTER_BASE_URL: stub.url };
-const takeRecords = (kind: "codex" | "claude") => readdirSync(records).filter((f) => f.startsWith(kind)).map((f) => { const r = JSON.parse(readFileSync(join(records, f), "utf8")); rmSync(join(records, f)); return r as { argv: string[]; stdin: string; cwd: string }; });
-const waitFor = async (ok: () => unknown, what: string, ms = 30_000) => { for (const until = Date.now() + ms; !ok(); ) { if (Date.now() > until) throw new Error(`timed out waiting for ${what}`); await new Promise((r) => setTimeout(r, 50)); } };
 
 test("spawner: codex recruits read the brief from stdin; read-only recruits run -s read-only, write recruits do not", async () => {
   Object.assign(process.env, seatEnv);

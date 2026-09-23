@@ -1602,8 +1602,16 @@ export class Hub {
             if (i >= 0) pending.splice(i, 1);
           }
         }
-      } else if (m.from.agent !== "human" &&
-        ((m.mentions?.includes(p.id) && this.pushableTo(room, m, p.id)) || inherited.has(m.id))) pending.push(m);
+      } else {
+        // A "one of you" ask: once any other seat it named replies, nobody it named still owes it.
+        for (let i = pending.length - 1; i >= 0; i--) {
+          const ask = pending[i];
+          if (!ask.mentions?.includes(m.from.id)) continue;
+          if (m.replyTo ? m.replyTo === ask.id : m.mentions?.includes(ask.from.id)) pending.splice(i, 1);
+        }
+        if (m.from.agent !== "human" &&
+          ((m.mentions?.includes(p.id) && this.pushableTo(room, m, p.id)) || inherited.has(m.id))) pending.push(m);
+      }
     }
     return pending.filter((m) => !declined.has(m.id));
   }

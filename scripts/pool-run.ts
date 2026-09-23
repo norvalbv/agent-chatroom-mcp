@@ -185,7 +185,7 @@ export function estimateFrom(ndjson: string, reported: string[]): Pick<SeatRow, 
   }
   const est = estimateSeatCost(observed, [...models].filter(m => m !== '<synthetic>'), MODEL);
   if (est) return { cost_usd: est.usd, cost_estimated: true, cost_estimate_basis: est.basis };
-  return { cost_usd: null, cost_estimated: true, cost_estimate_reason: observed.length ? `no list-price row for ${[...models].join(',') || MODEL} in scripts/seat-cost-estimate.ts` : 'no usage observed before the seat stopped' };
+  return { cost_usd: null, cost_estimated: true, cost_estimate_reason: observed.length ? `no list price for ${[...models].join(',') || MODEL} in scripts/litellm-model-prices.json (or a service tier it does not price)` : 'no usage observed before the seat stopped' };
 }
 
 function accountRecord(path: string | undefined, at: number) {

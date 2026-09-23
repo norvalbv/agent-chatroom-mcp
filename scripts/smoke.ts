@@ -502,8 +502,9 @@ assert.deepEqual(tools, ["amend", "board_get", "board_set", "challenge", "join_r
 }
 {
   // verification gate: needs a verify/* entry by another agent on another connection whose first line is JSON
-  // {proposal, command, cwd, exit_code, output_tail} naming this proposal's id with exit_code 0. A self-authored,
-  // unparseable, mismatched-proposal or non-zero-exit_code entry does not count (rank1-verify-verdicts).
+  // {proposal, command, cwd, base_commit, base_exit_code, commit, exit_code, output_tail} naming this proposal's id,
+  // failing at base_commit and passing (exit_code 0) at commit. A self-authored, unparseable, mismatched-proposal,
+  // non-zero-exit_code or no-fail-to-pass entry does not count (rank1-verify-verdicts, verify-head-fail-to-pass).
   const room = "verify";
   await a.call("join_room", { room, name: "claude-1", agent: "claude", require_verification: true, require_challenge: false });
   await b.call("join_room", { room, name: "codex-1", agent: "codex" });
@@ -516,9 +517,16 @@ assert.deepEqual(tools, ["amend", "board_get", "board_set", "challenge", "join_r
   await b.call("board_set", { room, key: "verify/auth-failed", text: `{"proposal":"${pr.id}","command":"npm test","cwd":"/tmp/x","exit_code":1,"output_tail":"1 failed"}` });
   const stFailed = await a.call("room_status", { room });
   assert.equal(stFailed.state, "open", "a verify entry with a non-zero exit_code does not satisfy the gate");
-  await b.call("board_set", { room, key: "verify/auth-recheck", text: `{"proposal":"${pr.id}","command":"npm test","cwd":"/tmp/x","exit_code":0,"output_tail":"9 passed — verifies ${pr.id}"}` });
+  // a pass with no fail-to-pass evidence (the author's suite rerun) does not count, and the refusal says what is missing
+  await b.call("board_set", { room, key: "verify/auth-rerun", text: `{"proposal":"${pr.id}","command":"npm test","cwd":"/tmp/x","exit_code":0,"output_tail":"9 passed"}` });
+  const stRerun = await a.call("room_status", { room });
+  assert.equal(stRerun.state, "open", "a passing rerun with no base_commit/base_exit_code does not satisfy the gate");
+  assert.ok(stRerun.proposals[0].blocked_by.some((m: string) => m.includes("verify/auth-rerun does not count") && m.includes("base_commit")), JSON.stringify(stRerun.proposals[0].blocked_by));
+  await b.call("board_set", { room, key: "verify/auth-recheck", text: `{"proposal":"${pr.id}","kind":"own_check","command":"npx tsx probe.ts","cwd":"/tmp/x","base_commit":"1111111","base_exit_code":1,"commit":"2222222","exit_code":0,"output_tail":"probe ok — verifies ${pr.id}"}` });
   const st = await a.call("room_status", { room });
-  assert.equal(st.state, "concluded", "an independent verify entry with a parseable head naming the proposal and exit_code 0 passes it");
+  assert.equal(st.state, "concluded", "an independent head naming the proposal, failing at base_commit and passing at commit, passes it");
+  const concl = (await a.call("read_messages", { room, since_seq: 0 })).find((m: string) => m.includes("CONSENSUS REACHED")) as string;
+  assert.match(concl, /Verified by codex-1 \(verify\/auth-recheck\), kind own_check: the check failed at 1111111 and passes at 2222222/);
 }
 
 // ---------------- quiet (addressed) delivery and the board overwrite guard ----------------

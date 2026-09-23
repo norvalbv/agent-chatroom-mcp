@@ -45,7 +45,7 @@ const LENSES = ["reproduce and measure before theorising", "the simplest fix tha
 const FULL = has("full-access");
 /** --claude-full: opt out of the lean claude flag set (src/claude-args.ts) and restore today's args exactly (--tools, --disable-slash-commands, --setting-sources project, --exclude-dynamic-system-prompt-sections all dropped). CHATROOM_CLAUDE_FULL=1 does the same for recruits (src/spawner.ts). */
 const CLAUDE_FULL = has("claude-full");
-/** --require-verification: the room is created by the launcher with require_verification, so no proposal passes without a verify/* board entry by someone other than its author (or the assigned reviewer, once one is active) whose first line parses as JSON {proposal,command,cwd,exit_code,output_tail} naming it with exit_code 0 (hub-enforced "done") */
+/** --require-verification: the room is created by the launcher with require_verification, so no proposal passes without a verify/* board entry by someone other than its author (or the assigned reviewer, once one is active) whose first line parses as JSON {proposal,command,cwd,base_commit,base_exit_code,commit,exit_code,output_tail} naming it: the same check failed at the parent commit and passes at the proposal's (or passes at both with refactor:true); hub-enforced "done" (VERIFY_HEAD_EXAMPLE in src/hub.ts) */
 const REQUIRE_VERIFICATION = has("require-verification");
 /** --quorum unanimous|majority|supermajority: the room's quorum, fixed by the launcher at creation (a forty-seat lobby cannot run on unanimity); supermajority = ceil(0.75 x electorate), the recommended default for flat runs that used to ask for plain majority */
 const QUORUM = flag("quorum") as "unanimous" | "majority" | "supermajority" | undefined;

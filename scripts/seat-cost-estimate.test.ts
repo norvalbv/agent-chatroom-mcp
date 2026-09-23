@@ -3,8 +3,8 @@
  * Run: node --import tsx scripts/seat-cost-estimate.test.ts */
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { CLAUDE_LIST_PRICE_PER_MTOK, estimateSeatCost, priceEntryFor } from "./seat-cost-estimate.ts";
-import { SONNET_PRICE_PER_MTOK } from "./bench-grid.ts";
+import { CLAUDE_LIST_PRICE_PER_MTOK, estimateSeatCost, priceEntryFor } from "./seat-cost-estimate.js";
+import { SONNET_PRICE_PER_MTOK } from "./bench-grid.js";
 
 const usage = { input_tokens: 80, output_tokens: 15, cache_read_input_tokens: 10, cache_creation_input_tokens: 5 };
 const sonnetUsd = (80 * 2.0 + 10 * 0.2 + 5 * 2.5 + 15 * 10.0) / 1e6;

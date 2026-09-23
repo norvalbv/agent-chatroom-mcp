@@ -175,8 +175,11 @@ async function validateInMutantRun(base: string, marker: string) {
   writeFileSync(join(hiddenRoot('dry-run', fx.hiddenParent), 'double', 'cmd'),
     `if [ -n "$__STRYKER_ACTIVE_MUTANT__" ]; then node -e 'setTimeout(() => {}, 120000)' ${marker}; fi; node --test test/double.hidden.test.mjs\n`);
   const v = spawn(process.execPath, ['--import', 'tsx', 'scripts/pool.ts', 'validate', '--pool', fx.poolDir, '--hidden', fx.hiddenParent,
-    '--scratch', scratch, '--repeats', '1', '--mutation'], { detached: true, stdio: 'ignore' });
-  const exited = new Promise<number | null>(r => v.on('exit', code => r(code))), pgid = v.pid!;
+    '--scratch', scratch, '--repeats', '1', '--mutation'], { detached: true, stdio: ['ignore', 'pipe', 'pipe'] });
+  let stdout = '', stderr = '';
+  v.stdout.on('data', d => { stdout += d; });
+  v.stderr.on('data', d => { stderr += d; });
+  const exited = new Promise<{ code: number | null; stdout: string; stderr: string }>(r => v.on('close', code => r({ code, stdout, stderr }))), pgid = v.pid!;
   const until = Date.now() + 100_000;
   while (!withMarker(marker).some(p => p.pgid !== pgid && p.command.includes('setTimeout(() => {}, 120000)'))) {
     assert.ok(Date.now() < until, 'no mutant run started');
@@ -184,6 +187,9 @@ async function validateInMutantRun(base: string, marker: string) {
   }
   return { fx, scratch, pgid, exited };
 }
+/** Removes a test base. It can fail only when containment already failed and an escaped StrykerJS was still writing into it as it
+ * was stopped; that must not hide the assertion that reported the escape. */
+const removeBase = (base: string) => { try { rmSync(base, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 }); } catch {} };
 const worktrees = (repo: string) => spawnSync('git', ['-C', repo, 'worktree', 'list', '--porcelain'], { encoding: 'utf8' }).stdout.split('worktree ').length - 1;
 
 test('SIGKILL to the validate --mutation process group stops StrykerJS and its mutant runs and leaves no worktree registered', async () => {
@@ -196,7 +202,7 @@ test('SIGKILL to the validate --mutation process group stops StrykerJS and its m
     await sleep(1500); // and none starts later
     assert.deepEqual(withMarker(marker).map(p => p.command), []);
     assert.equal(worktrees(v.fx.repo), 1, 'no worktree registered in the pool repo');
-  } finally { stopEscaped(marker); rmSync(base, { recursive: true, force: true }); }
+  } finally { stopEscaped(marker); removeBase(base); }
 });
 
 test('Ctrl-C (SIGINT to the group) stops validate --mutation: StrykerJS is killed, its scratch copy removed, the next item not started', async () => {
@@ -204,15 +210,16 @@ test('Ctrl-C (SIGINT to the group) stops validate --mutation: StrykerJS is kille
   try {
     const v = await validateInMutantRun(base, marker);
     process.kill(-v.pgid, 'SIGINT');
-    let timer: NodeJS.Timeout | undefined;
-    const code = await Promise.race([v.exited, new Promise<string>(r => { timer = setTimeout(() => r('still running'), 30_000); })]);
-    clearTimeout(timer);
-    assert.notEqual(code, 'still running', 'validate went on after Ctrl-C');
-    assert.notEqual(code, 0);
-    assert.deepEqual(await settled(marker, 8000), [], 'a StrykerJS process outlived validate');
+    // validate itself carries the marker (its --scratch), so this waits for validate as well as StrykerJS and its mutant runs;
+    // the blocked mutant run alone would outlast it (StrykerJS gives each mutant run seconds before its own timeout).
+    assert.deepEqual(await settled(marker, 8000), [], 'validate or a StrykerJS process kept running after Ctrl-C');
+    const r = await v.exited;
+    assert.notEqual(r.code, 0);
+    assert.match(r.stderr, /mutation check stopped by SIGINT/, 'validate stopped instead of going on to the next item');
+    assert.equal(r.stdout, '', 'no report for a stopped validate');
     assert.deepEqual(readdirSync(v.scratch).filter(n => n.startsWith('mutation-')), [], 'the scratch copy was removed');
     assert.equal(worktrees(v.fx.repo), 1);
-  } finally { stopEscaped(marker); rmSync(base, { recursive: true, force: true }); }
+  } finally { stopEscaped(marker); removeBase(base); }
 });
 
 test('CLI: pool.ts validate --mutation prints a FLAG line for the weak item and exits 0', () => {

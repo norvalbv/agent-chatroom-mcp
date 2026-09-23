@@ -19,6 +19,7 @@ export function runCommands(commands, { cwd, timeout = 120_000 } = {}) {
 export const offlineScripts = [
   'archive-regression.ts',
   'attention-gate-regression.ts',
+  'delivery-cap-regression.ts',
   'baseline-freeze-guard-regression.ts',
   'blind-drafts-regression.ts',
   'ak-select.test.ts',

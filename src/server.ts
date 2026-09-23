@@ -352,13 +352,16 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
       // a full-context turn on every wait_for_messages return) gets the saving too.
       if (hold_until_actionable) {
         // a delivered message that @-names this seat is actionable even once settled (a hub notice retires on delivery)
-        while (!hub.actionableNow(r, p) && !msgs.some((m) => m.mentions?.includes(id!))) {
+        // a capped page means more is already waiting: return it rather than piling the backlog into one result
+        while (!hub.deliveryRemaining(p) && !hub.actionableNow(r, p) && !msgs.some((m) => m.mentions?.includes(id!))) {
           const remaining = waitDeadline - Date.now();
           if (remaining <= 0) break;
           const more = await hub.wait(room, id, p.lastSeenSeq, remaining);
           if (more.length) msgs = msgs.concat(more);
         }
       }
+      const remaining = hub.deliveryRemaining(p);
+      const moreNote = remaining ? `${remaining} more message(s) remain queued (this delivery was capped); call wait_for_messages again with timeout_ms=0 to receive them. ` : "";
       const open = [...r.proposals.values()].find((pr) => pr.status === "open");
       const needsMyVote = open && !open.votes[id] && p.agent !== "human" && p.role !== "chair";
       const needsChallenge = open && hub.challengeRequired(r) && !open.challenges.some((c) => c.blocking !== false) && open.by.id !== id;
@@ -386,7 +389,7 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
       const focus = hub.attentionFocus(r, p);
       // only a human's message strips the envelope; a peer ask rides the full one (proposal, board, queue)
       if (focus && hub.focusExclusive(focus)) return {
-        hint: toolsRegainedNote ? toolsRegainedNote + (hub.attentionHint(r, p) ?? "") : hub.attentionHint(r, p), messages: msgs.map((m) => hub.fmt(r, m)),
+        hint: toolsRegainedNote || moreNote ? toolsRegainedNote + (hub.attentionHint(r, p) ?? "") + (moreNote ? ` ${moreNote}` : "") : hub.attentionHint(r, p), messages: msgs.map((m) => hub.fmt(r, m)), remaining,
         next_seq: p.lastSeenSeq, room_state: r.state, your_turn: r.mode === "free" || hub.currentSpeaker(r)?.id === id,
         your_role: p.role ?? "worker", humans_present: hub.activeParticipants(r).filter((x) => x.agent === "human").map((x) => x.name),
         unanswered_human: human ? (resp!.mine ? { id: human.id, name: hub.shown(r, human.from), text: human.content, you_answer: true } : { name: hub.shown(r, human.from), responder: resp!.who, you_answer: false }) : null,
@@ -432,9 +435,11 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
       hub.observeBoardManifest(r, board); // compact since-process-start observer; legacy recording is in assembly
       // the hint goes first: it is the one line a weaker model must not lose to a clamp
       return {
-        hint: toolsRegainedNote ? toolsRegainedNote + (hint ?? "") : hint,
+        hint: toolsRegainedNote || moreNote ? toolsRegainedNote + (hint ? `${hint} ` : "") + moreNote : hint,
         messages: msgs.map((m) => hub.fmt(r, m)),
-        next_seq: r.messages.at(-1)?.seq ?? since,
+        remaining,
+        // a capped page has not reached the end of the log: next_seq is the cursor, not the latest seq
+        next_seq: remaining ? p.lastSeenSeq : (r.messages.at(-1)?.seq ?? since),
         room_state: r.state,
         your_turn: r.mode === "round_robin" ? hub.currentSpeaker(r)?.id === id : true,
         your_role: p.role ?? "worker",
@@ -489,7 +494,13 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
       const msgs = p ? hub.readAs(r, p, since_seq, limit) : hub.read(room, since_seq ?? 0, limit, viewer);
       const hint = p ? hub.attentionHint(r, p) : undefined;
       // the focused ask leads the batch; the hint rides on it once, not on every queued message behind it
-      return msgs.map((m, i) => hub.fmt(r, m) + (hint && i === 0 ? `\n[HINT] ${hint}` : ""));
+      const lines = msgs.map((m, i) => hub.fmt(r, m) + (hint && i === 0 ? `\n[HINT] ${hint}` : ""));
+      const remaining = p ? hub.deliveryRemaining(p) : 0;
+      if (remaining) {
+        const last = Math.max(0, ...msgs.filter((m) => m.id !== hub.attentionFocus(r, p!)?.id).map((m) => m.seq));
+        lines.push(`[MORE] ${remaining} more message(s) remain (this page was capped); call read_messages again with since_seq=${last}.`);
+      }
+      return lines;
     }),
   );
 

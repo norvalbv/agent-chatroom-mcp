@@ -100,6 +100,8 @@ export interface Participant {
   activity?: { tool: string; step: number; at: string; detail: string }[];
   /** id of the addressed message this participant was last shown by wait_for_messages (the next wait without an answer is refused once) */
   addressWarned?: string;
+  /** messages the last capped wait/read left undelivered (0 = it carried everything). Ephemeral. */
+  deliveryRemaining?: number;
   /** id of the addressed message a wait_for_messages was already refused for (the call after that proceeds) */
   addressRefused?: string;
   /** mentions at or below this seq are answered (a pass covers everything before it) */
@@ -453,6 +455,8 @@ export class Hub {
   }
 
   static readonly MAX_ROOMS = 500;
+  /** Rendered chars one wait/read may carry: a 66 KB backlog once overflowed a client's tool-result limit. */
+  static DELIVERY_MAX_CHARS = 24_000;
   static MAX_ROOMS_PER_RUN = Number(process.env.CHATROOM_MAX_ROOMS_PER_RUN ?? 12);
   static MAX_LIVE_PER_ROOM = Number(process.env.CHATROOM_MAX_LIVE_PER_ROOM ?? 12);
   /** silence before the hub nudges a room (and reveals stale openings); CHATROOM_NUDGE_AFTER_MS lets tests shorten it */
@@ -1007,6 +1011,27 @@ export class Hub {
     return focus.from.agent === "human";
   }
 
+  /**
+   * Cut one delivery to DELIVERY_MAX_CHARS of rendered text (never below one message) and record how many
+   * were left for the next call. The rest keep their place: the caller settles only up to the last one sent.
+   */
+  capDelivery(room: Room, p: Participant, msgs: Message[]): Message[] {
+    let used = 0;
+    let n = 0;
+    for (const m of msgs) {
+      used += this.fmt(room, m).length;
+      if (n > 0 && used > Hub.DELIVERY_MAX_CHARS) break;
+      n++;
+    }
+    p.deliveryRemaining = msgs.length - n;
+    return n < msgs.length ? msgs.slice(0, n) : msgs;
+  }
+
+  /** How many messages the seat's last wait/read left for the next call. */
+  deliveryRemaining(p: Participant): number {
+    return p.deliveryRemaining ?? 0;
+  }
+
   /** The focused ask leads; the rest keep log order. */
   private focusFirst(focus: Message | undefined, queue: Message[]): Message[] {
     return focus ? [focus, ...queue.filter((m) => m.id !== focus.id)] : queue;
@@ -1113,10 +1138,13 @@ export class Hub {
     const focus = this.attentionFocus(room, p);
     const held = new Set(p.withheld ?? []);
     const exclusive = focus && this.focusExclusive(focus) ? focus : undefined;
-    const queue = room.messages.filter((m) => (m.seq > since || held.has(m.seq)) && this.visibleTo(room, m, p.id) && m.id !== focus?.id).slice(0, limit);
-    const msgs = exclusive ? [exclusive] : this.focusFirst(focus, queue);
+    const all = room.messages.filter((m) => (m.seq > since || held.has(m.seq)) && this.visibleTo(room, m, p.id) && m.id !== focus?.id);
+    const msgs = exclusive ? [exclusive] : this.capDelivery(room, p, this.focusFirst(focus, all.slice(0, limit)));
+    p.deliveryRemaining = exclusive ? 0 : all.length + (focus ? 1 : 0) - msgs.length;
+    const queue = msgs.filter((m) => m.id !== focus?.id);
+    // settle only up to the last message sent, so a capped page leaves the rest unread rather than parked
     if (msgs.length) this.settleRead(room, p, Math.min(since, p.lastSeenSeq), msgs,
-      exclusive ? undefined : Math.max(p.lastSeenSeq, ...queue.map((m) => m.seq), focus?.seq ?? 0));
+      exclusive ? undefined : Math.max(queue.length ? 0 : p.lastSeenSeq, ...queue.map((m) => m.seq), focus?.seq ?? 0));
     return msgs;
   }
 
@@ -1292,8 +1320,11 @@ export class Hub {
       });
       msgs = pending();
     }
-    if (p) this.settleRead(room, p, sinceSeq, msgs);
-    return msgs;
+    if (!p) return msgs;
+    const page = this.capDelivery(room, p, msgs);
+    // a capped page settles only up to its last message; the rest stay unread for the next call
+    this.settleRead(room, p, sinceSeq, page, page.length < msgs.length ? Math.max(...page.map((m) => m.seq)) : undefined);
+    return page;
   }
 
   /** Plain-text rendering of a message as agents see it (pseudonyms in anonymous rooms). */

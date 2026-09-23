@@ -258,7 +258,7 @@ async function runRoom(o: RunOptions, pool: Pool, runDir: string, env: NodeJS.Pr
   const minutes = (deadlineAt - Date.now()) / 60_000;
   const argv = [swarmEntry, readFileSync(briefPath, 'utf8'), '--flat', '--agents', String(agents), '--models', MODEL, '--verifier-model', MODEL,
     '--full-access', '--require-verification', '--no-carry', '--cwd', wt, '--port', String(port), '--timeout', String(Math.max(0.05, minutes))];
-  run.room = { port, worktree: wt, branch, data_dir: join(roomDir, 'data'), hub_log: join(roomDir, 'hub.log'), argv: argv.slice(1).map((a, i) => i === 0 ? '<brief>' : a),
+  run.room = { port, worktree: wt, branch, data_dir: join(roomDir, 'data'), log_dir: join(roomDir, 'spawned'), hub_log: join(roomDir, 'hub.log'), argv: argv.slice(1).map((a, i) => i === 0 ? '<brief>' : a),
     swarm_id: null as string | null, swarm_dir: null as string | null, integration_branch: integrationBranch, declared_branch: null as string | null, worker_branches: [] as string[],
     swarm_usage: null as unknown, stopped_at_deadline: false };
   writeRun();

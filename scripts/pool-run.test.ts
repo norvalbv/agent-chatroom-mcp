@@ -9,7 +9,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { loadPool } from './pool-format.ts';
 import { makeDryRunPool } from './pool-fixture.ts';
-import { ROOM_BRIEF_LINE, briefFor, projectSlug, runArm } from './pool-run.ts';
+import { ROOM_BRIEF_LINE, briefFor, projectSlug, runArm, collectSessions, roomSeatFromCwd } from './pool-run.ts';
 
 const fresh = () => realpathSync(mkdtempSync(join(tmpdir(), 'pool-run-')));
 const git = (cwd: string, ...args: string[]) => spawnSync('git', ['-C', cwd, ...args], { encoding: 'utf8' }).stdout.trim();
@@ -217,4 +217,26 @@ test('a process a seat started in its own process group is stopped too: nothing 
     await new Promise(ok => setTimeout(ok, 3500));
     assert.ok(!existsSync(join(run.seats[0].worktree, 'orphan-was-here')), 'the detached child outlived the run');
   } finally { rmSync(base, { recursive: true, force: true }); }
+});
+
+test('a room session in a hash-shortened project folder is matched to its seat by recorded cwd, not counted twice', () => {
+  const base = mkdtempSync(join(tmpdir(), 'pool-sessions-'));
+  const runDir = join(base, 'run'), roomWt = join(runDir, 'wt', 'room');
+  const workerCwd = join(roomWt, '.swarm-worktrees', 'swarm-142259-7pfa', 'claude-opus-5-5-1');
+  mkdirSync(workerCwd, { recursive: true });
+  const projects = join(base, 'config', 'projects');
+  // Claude Code shortened this folder's name: its tail is a hash, not the seat's name
+  const shortened = join(projects, projectSlug(runDir) + '-wt-room--swarm-worktrees-swarm-142259-7pfa-claude-opus-3uz5uj');
+  mkdirSync(shortened, { recursive: true });
+  writeFileSync(join(shortened, 's1.jsonl'), JSON.stringify({ type: 'user', cwd: workerCwd, timestamp: '2026-09-23T14:23:00Z' }) + '\n');
+  const run = { room: { worktree: roomWt }, seats: [
+    { name: 'claude-opus-5-5-1', sessions: [], transcript: null, cost_usd: 0.36, usage: { cost_usd: 0.36 } },
+    { name: 'verifier', sessions: [], transcript: null, cost_usd: 0.52, usage: { cost_usd: 0.52 } },
+  ] };
+  collectSessions(join(base, 'config'), runDir, run);
+  assert.equal(run.seats.length, 2, 'no phantom seat for the shortened folder');
+  assert.equal(run.seats[0].sessions.length, 1);
+  assert.equal(run.seats[0].cost_usd, 0.36);
+  assert.equal(roomSeatFromCwd(roomWt, roomWt), 'room');
+  assert.equal(roomSeatFromCwd(join(base, 'elsewhere'), roomWt), null);
 });

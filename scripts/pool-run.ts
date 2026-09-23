@@ -195,7 +195,21 @@ function accountRecord(path: string | undefined, at: number) {
 
 /** Copies every Claude Code session whose cwd lies under the run dir into seats/<seat>/sessions/, and for rooms
  * adds one seat row per session (name from its worktree), since swarm seats report no per-seat usage of their own. */
-function collectSessions(configDir: string, runDir: string, run: any) {
+/** The cwd a Claude Code session recorded, or null. Claude Code shortens long project-folder names with a hash suffix,
+ * so a folder name cannot be trusted to name its seat (swarm-142259-7pfa: claude-opus-5-5-1 became claude-opus-3uz5uj). */
+export const sessionCwd = (text: string): string | null => /"cwd":"([^"]+)"/.exec(text)?.[1] ?? null;
+const canon = (p: string) => { try { return realpathSync(p); } catch { return resolve(p); } };
+
+/** The room seat a session cwd belongs to: a worker's name from <room worktree>/.swarm-worktrees/<run>/<name>, or
+ * 'room' (the verifier) for the room worktree itself; null when the cwd is elsewhere. */
+export function roomSeatFromCwd(cwd: string, roomWorktree: string): string | null {
+  const rel = relative(canon(roomWorktree), canon(cwd));
+  if (rel === '') return 'room';
+  const parts = rel.split(/[\\/]/);
+  return parts[0] === '.swarm-worktrees' && parts.length >= 3 && !parts.includes('..') ? parts[2] : null;
+}
+
+export function collectSessions(configDir: string, runDir: string, run: any) {
   const projects = join(configDir, 'projects');
   if (!existsSync(projects)) return;
   const prefix = projectSlug(runDir);
@@ -210,14 +224,20 @@ function collectSessions(configDir: string, runDir: string, run: any) {
   found.sort((a, b) => a.at.localeCompare(b.at) || a.src.localeCompare(b.src));
   for (const { dir, file, src, text } of found) {
     let seat: any;
-    if (!run.room) seat = run.seats.find((s: SeatRow) => projectSlug(s.worktree) === dir);
+    const cwd = sessionCwd(text);
+    if (!run.room) seat = run.seats.find((s: SeatRow) => (cwd && s.worktree && canon(s.worktree) === canon(cwd)) || projectSlug(s.worktree) === dir);
     else {
-      const label = roomSeatLabel(dir, prefix), target = label === 'room' ? 'verifier' : label;
+      const label = (cwd && run.room.worktree ? roomSeatFromCwd(cwd, run.room.worktree) : null) ?? roomSeatLabel(dir, prefix), target = label === 'room' ? 'verifier' : label;
       seat = run.seats.find((s: SeatRow) => s.name === target && !s.sessions.length);
       if (seat && seat.cost_usd === null && !seat.usage) Object.assign(seat, estimateFrom(text, []));
     }
+    if (!seat && run.room) {
+      // a session of a seat that already has one (a resumed or second session) joins it rather than becoming a new seat
+      const label = (cwd && run.room.worktree ? roomSeatFromCwd(cwd, run.room.worktree) : null) ?? roomSeatLabel(dir, prefix);
+      seat = run.seats.find((s: SeatRow) => s.name === (label === 'room' ? 'verifier' : label));
+    }
     if (!seat) {
-      const label = roomSeatLabel(dir, prefix);
+      const label = (cwd && run.room?.worktree ? roomSeatFromCwd(cwd, run.room.worktree) : null) ?? roomSeatLabel(dir, prefix);
       let name = label, n = 1;
       while (run.seats.some((s: SeatRow) => s.name === name)) name = `${label}-${++n}`;
       seat = { name, branch: null, worktree: dir, brief_path: null, transcript: null, sessions: [], exit_code: null, killed_by_deadline: null, usage: null, partial_usage: null,

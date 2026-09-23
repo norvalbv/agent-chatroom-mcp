@@ -104,7 +104,7 @@ try {
     verifier: { name: "verifier" as const, output: "ok" },
     reportPath: resolve(dir, "report.md"),
     artifactPath: resolve(dir, "result.json"),
-    usage: rollupUsage([{ name: "claude-verifier", text: "y", usage: seatOutcome.usage }]),
+    usage: rollupUsage([seatOutcome]),
   };
   const claudeOnlyReport = renderRunReport(claudeOnlyArtifact);
   assert.ok(claudeOnlyReport.includes("0 steps, 0 prompt + 0 completion tokens"), "(e) claude seats genuinely have no steps/prompt/completion counts");

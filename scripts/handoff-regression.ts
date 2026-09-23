@@ -18,7 +18,6 @@ import { mkdtempSync, readFileSync, rmSync, existsSync, openSync } from "node:fs
 import { tmpdir } from "node:os";
 import { join, resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-// @ts-expect-error tsx resolves the .js specifier to src/seat.ts
 import { runSeat, type ChatProvider, type Reply, type ToolCall } from "../src/seat.js";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -193,18 +192,6 @@ async function runIdleCase(name: string, area: string, handoffIdleTurns: number)
 try {
   startHub();
   await waitReady();
-
-  const result = await runSeat(fakeProvider(), {
-    prompt: `You are ${SEAT} in room ${ROOM}. Join the room and claim ${CLAIM}. The brief is very long and cannot be finished; stay and keep waiting.`,
-    mcpUrl: `${HUB}/mcp`,
-    cwd: dataDir,
-    maxMinutes: 2,
-    maxSteps: MAX_STEPS,
-    maxToolChars: 4000,
-    maxContextChars: 40000,
-    idleWaits: 1,
-    log: () => {},
-  });
 
   // --- assertions (two scenarios, one hub) ---
   // A) default fraction path: ceil(0.75 * 12) = 9 -> hand off at step 9, before the cap

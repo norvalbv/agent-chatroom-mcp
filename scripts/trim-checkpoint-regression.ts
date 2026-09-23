@@ -15,7 +15,6 @@
  * Run: npx tsx scripts/trim-checkpoint-regression.ts
  */
 import assert from "node:assert/strict";
-// @ts-expect-error tsx resolves the .js specifier to src/seat.ts
 import { runSeat, type ChatProvider, type Msg, type Reply, type ToolCall, type ToolDef } from "../src/seat.js";
 
 const MAX_CONTEXT_CHARS = 6_000; // small ceiling: forces several trims quickly, keeping the test fast

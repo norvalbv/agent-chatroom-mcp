@@ -3,12 +3,12 @@
  * steps / 240k context, constants bench-bench freezes), and the seat-side handoff marker
  * line (src/seat-handoff-report.ts) that the harness reads from the seat's log stream.
  * Fails on main: neither the fixture directory nor the sidecar module exists there.
- * Run: npm run build && node --import tsx scripts/handoff-task-fixture.test.ts */
+ * Run: node --import tsx scripts/handoff-task-fixture.test.ts */
 import assert from "node:assert/strict";
 import { readFileSync, readdirSync } from "node:fs";
 import { join, dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { handoffMarkerLine } from "../dist/seat-handoff-report.js";
+import { handoffMarkerLine } from "../src/seat-handoff-report.js";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const taskDir = join(root, "tasks", "bench-long-brief");

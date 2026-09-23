@@ -207,6 +207,26 @@ test("arm A: a seat killed at the deadline is recorded outcome timeout, not scor
   }
 });
 
+test("arm A: a killed seat's cost is estimated from its partial usage at list price and marked as an estimate (pool item 10)", () => {
+  const stubDir = stubClaudeDir("kill");
+  const root = join(tmpdir(), `bench-rq1-killcost-${process.pid}-${Date.now()}`);
+  try {
+    const r = invoke([task, "A", "4", "--root", root, "--deadline-ms", "500"], { PATH: `${stubDir}${delimiter}${process.env.PATH}`, STUB_BEHAVIOR: "kill" });
+    assert.equal(r.status, 0, r.stderr + r.stdout);
+    const result = JSON.parse(readFileSync(join(root, "result.json"), "utf8"));
+    assert.equal(result.seats[0].usage, null, "the authoritative usage stays unknown");
+    const est = result.seats[0].estimated_cost;
+    assert.ok(est, "a killed seat with partial usage gets an estimate");
+    assert.equal(est.estimate, true);
+    assert.equal(est.price_model, "claude-sonnet-5", "--model defaults to the sonnet alias");
+    assert.ok(Math.abs(est.usd - (80 * 2.0 + 10 * 0.2 + 5 * 2.5 + 15 * 10.0) / 1e6) < 1e-12, `got ${est.usd}`);
+    assert.deepEqual(result.estimated_cost, { usd: est.usd, estimate: true, seats_estimated: 1, seats: 1 }, "the run-level figure is an estimate, not cost 0");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+    rmSync(stubDir, { recursive: true, force: true });
+  }
+});
+
 test("arm C: hub boot failure still writes a result.json (infrastructure_error), never crashes with no artifact", async () => {
   const stubDir = stubClaudeDir();
   const missingHub = join(tmpdir(), `bench-rq1-missing-hub-${process.pid}.mjs`);

@@ -1,6 +1,6 @@
-/** Offline human-answer predicate regressions. Run: npm run build && npx tsx scripts/human-answering.test.ts */
+/** Offline human-answer predicate regressions. Run: npx tsx scripts/human-answering.test.ts */
 import assert from "node:assert/strict";
-import { Hub } from "../dist/hub.js";
+import { Hub } from "../src/hub.js";
 
 let passed = 0;
 let failed = 0;

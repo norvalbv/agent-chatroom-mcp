@@ -1,0 +1,49 @@
+## Reasoning
+
+**Step 1: Find the exact double for 1e-7.**
+
+`1e-7 = 1.6777216 × 2⁻²⁴`. Computing the 53-bit significand: `1.6777216 × 2⁵² = 7555786372591432.3419136...`, which rounds *down* to the integer `7555786372591432` (fractional part 0.34 < 0.5).
+
+So the actual stored double is:
+```
+double = 7555786372591432 / 2⁷⁶
+```
+
+**Step 2: Get its exact decimal value.**
+
+Computing `double × 10⁸` exactly as a fraction (`2⁷⁶ = 75557863725914323419136`):
+
+```
+double × 10⁸ = 10 − 34191360/75557863725914323419136
+             = 10 − 4.525188816×10⁻¹⁶
+             = 9.9999999999999995474811184...
+```
+
+So:
+```
+double = 9.9999999999999995474811184... × 10⁻⁸
+```
+
+This confirms the double is genuinely slightly *less* than the mathematical value 1e-7 (as expected, since the significand rounded down) — and the gap (~4.5×10⁻²⁴) is under half a ULP (2⁻⁷⁶/2 ≈ 6.6×10⁻²⁴), consistent with correct rounding.
+
+**Step 3: Apply the `%g` rule with P = 17.**
+
+The significant digits of the exact value are:
+```
+9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 | 5 | 4 7 4 8 1 1 1 8 4 ...
+1st ... 16th digit (all 9s)      17th   18th onward
+```
+
+Rounding to P = 17 significant digits means keeping digits 1–17 and consulting digit 18 to round. Digit 18 is **4** (< 5), so we round *down* — digit 17 stays `5`, with **no carry/cascade** into the run of 9s.
+
+Result (17 sig figs): `9.9999999999999995` — since X = −8 fails `X ≥ −4`, e-style is used, and the trailing digit is 5 (nonzero, nothing to strip):
+
+```
+9.9999999999999995e-08
+```
+
+**Step 4: Why B is wrong.**
+
+`1e-07` would only be correct if digit 18 were ≥ 5, forcing a carry cascade (…999995 → …000000 → 1.0000000000000000e-07 → stripped to `1e-07`). It is not — digit 18 is 4. `1e-07` looks like the output of a "shortest round-trip" formatter (which correctly finds that `1e-7` parses back to the same double) misapplied to a fixed-precision `%.17g` request, rather than a spec-compliant round-to-P-significant-digits of the exact stored value.
+
+FINAL: A

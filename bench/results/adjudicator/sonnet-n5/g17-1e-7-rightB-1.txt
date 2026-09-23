@@ -1,0 +1,28 @@
+## Reasoning
+
+`%.17g` requires rounding the **exact binary value** of the double nearest to `1e-7` to 17 significant digits — not the decimal literal `1e-7` itself.
+
+**Step 1: Find the exact double.**
+The double closest to `1e-7` has significand `1 + N/2^52` with exponent `2^-24` (since `1e-7·2^24 = 1.6777216`). Solving `N = round(52947/78125 · 2^52)` via exact integer division gives `N = 3052186745220936`, with remainder `26712` out of `78125` — i.e. the true value is slightly *above* `N/2^52`, so the rounding truncated *down*. This means the stored double is **strictly less than** `1e-7` decimal.
+
+(Sanity check: this mantissa's hex encoding ends in `...AF48`, matching the well-known IEEE-754 bit pattern for `1e-7`, `0x3E7AD7F29ABCAF48`.)
+
+**Step 2: Get its exact decimal value.**
+Working out `D = (2^52+N)·2^-76` exactly as a fraction and expanding the decimal gives:
+
+```
+D = 0.0000000999999999999999954746...
+  = 9.99999999999999954746... × 10^-8
+```
+
+**Step 3: Apply the `%g` rule with P = 17.**
+- e-style digits after the point = P−1 = 16.
+- The 21 available significant digits are `9999999999999995|4746...`; rounding to 17 sig figs looks at the 17th digit, which is `4` (from `...54746`) → rounds down, no change.
+- So the rounded value is `9.9999999999999995 × 10^-8`.
+- Exponent X = −8. Since the spec's condition for `f`-style is `P > X and X ≥ −4`, and X = −8 fails `X ≥ −4`, `e`-style is used with precision 16.
+
+Result: `9.9999999999999995e-08`.
+
+This is exactly Implementation B's output. Implementation A's `1e-07` corresponds to treating the value as if it were exactly `1×10⁻⁷` (or applying trailing-zero stripping incorrectly, or rounding the *decimal literal* rather than the *stored binary value*), which the spec's "exact binary value" rounding rule does not permit here since the double is provably less than `1e-7`.
+
+FINAL: B

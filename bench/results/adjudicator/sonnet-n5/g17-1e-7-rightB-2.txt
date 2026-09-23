@@ -1,0 +1,46 @@
+## Reasoning
+
+**Step 1 — Get the exact binary value of the double nearest 1e-7.**
+
+log2(1e-7) ≈ -23.2535, so the binding exponent is -24: 2^-24 ≤ 1e-7 < 2^-23.
+
+The exact mantissa is m = 1e-7 × 2^24 = 16777216/10000000 = **131072/78125** exactly (reduces cleanly since 10^7 = 2^7·5^7).
+
+The 52-bit fraction is round(f × 2^52) where f = m - 1 = 52947/78125:
+
+f × 2^52 = 52947 × 4503599627370496 / 78125 = 238452089470385651712 / 78125
+= 3052186745220936, remainder 26712.
+
+Since 26712/78125 ≈ 0.342 < 0.5, this rounds **down** — no carry. So the stored double is exactly:
+
+x = (2^52 + 3052186745220936) / 2^76 = 7555786372591432 / 2^76
+
+**Step 2 — Compare x to 10^-7 exactly.**
+
+x × 10^7 = 7555786372591432 × 10^7 / 2^76 = 75557863725914320000000 / 75557863725914323419136
+
+The denominator exceeds the numerator by exactly 3,419,136. So:
+
+x × 10^7 = 1 - 3419136/75557863725914323419136 ≈ 1 - 4.52519×10^-17
+= 0.999999999999999954748111828...
+
+Thus **x is strictly less than 10^-7**, and:
+
+x = 9.99999999999999954748111828... × 10^-8
+
+**Step 3 — Apply the %g rule using this exact value.**
+
+For `%.17g`, P = 17, so we round to 17 significant digits (16 digits after the leading one). The digit string is:
+
+9.9999999999999995 | 4748111828...
+(17 sig figs) | (rest)
+
+The 18th digit is **4** (< 5), so the 17th digit ("5") does **not** round up. Rounded to 17 significant digits:
+
+**9.9999999999999995 × 10^-8**, i.e. X = -8.
+
+Since X = -8 is **not** ≥ -4, the spec's condition "P > X and X ≥ -4" for f-style fails, so e-style is used regardless of P. No trailing zeros exist to strip (last digit is 5). Result: `9.9999999999999995e-08`.
+
+This is exactly Implementation B's output. Implementation A's `1e-07` would require the exact value to round *up* through the boundary to exactly 1.0×10^-7 at 17 digits, which the exact binary value (ending in ...54748...) does not do — it rounds down, staying in the 10^-8 decade.
+
+FINAL: B

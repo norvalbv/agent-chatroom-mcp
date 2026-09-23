@@ -1,0 +1,47 @@
+## Working the exact arithmetic
+
+**Step 1 — the exact double value of `1e-7`.**
+`1e-7` is not exactly representable in binary64. Computing its exact stored value:
+
+double = 7555786372591432 × 2⁻⁷⁶ = 7555786372591432 / 75557863725914323419136
+
+Dividing out, this equals exactly
+
+9.99999999999999954748112...×10⁻⁸
+
+i.e. the stored double is *slightly less* than the mathematical value 1×10⁻⁷ (by about 4.525×10⁻²⁴ in absolute terms). Its significant-digit string is sixteen 9's followed by `5474...`:
+
+```
+9. 999999999999999 9 5474...
+   └──15 nines────┘ ^16th digit = 9
+```
+
+**Step 2 — apply the `%g` algorithm exactly as specified.**
+
+`P = 16`. First compute *X*: "the decimal exponent the value would have in `e` style with P−1 (=15) digits after the point, **after rounding**."
+
+Rounding the value to 15 digits after the point means looking at digit 16 to round digit 15. Digits 1–16 are *all nines*, so digit 16 = 9 forces a round-up that cascades through all fifteen 9's:
+
+9.999999999999999(9...) → rounds to → 10.000000000000000 ×10⁻⁸ = 1.000000000000000×10⁻⁷
+
+So **X = −7** (this is the exponent *after* rounding, as the spec explicitly requires — not the exponent of the unrounded value, which would suggest −8).
+
+**Step 3 — choose f-style or e-style using this X.**
+
+Condition for f-style: `P > X and X >= -4`. Here X = −7, so `X >= -4` is false. Condition fails → **e-style**, with precision P−1 = 15, using the value already rounded above:
+
+```
+1.000000000000000e-07
+```
+
+**Step 4 — strip trailing zeros** (no `#` flag): trailing zeros of the fraction are removed, then the `.` since nothing remains:
+
+```
+1e-07
+```
+
+## Why B is wrong
+
+`9.999999999999999e-08` would result from rounding the raw value to 16 significant digits *without* recomputing the exponent from the rounded/carried result — i.e., failing to apply the spec's explicit instruction that X is the exponent "after rounding." The unrounded digit string does start `9.999999999999999(5...)`, which looks like it should round to `...999e-08`, but because every one of the first 16 digits is a 9, the round-up carries all the way through and changes the exponent. The spec's phrasing anticipates exactly this carry case by defining X post-rounding, so a correct implementation must produce `1e-07`.
+
+FINAL: A

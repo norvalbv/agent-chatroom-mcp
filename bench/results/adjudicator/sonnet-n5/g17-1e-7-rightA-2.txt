@@ -1,0 +1,26 @@
+Working through this requires finding the exact value of the double nearest to 1e-7, then correctly rounding it to 17 significant decimal digits.
+
+**Step 1: The exact double value.**
+1e-7 normalizes as m × 2⁻²⁴ where m = 2²⁴ × 10⁻⁷ = 16777216/10000000 = 2¹⁷/5⁷ = 1.6777216 exactly (a terminating decimal, but not exactly representable in binary since 5⁷ isn't a power of 2).
+
+The 52-bit fraction needed is round((m−1)·2⁵²) = round(52947/78125 · 2⁵²). Computing exactly: 52947·2⁵² = 238,452,089,470,385,651,712, and dividing by 78125 (via ×128/10⁷, since 78125×128=10⁷) gives **3,052,186,745,220,936.3419136**. Since the fractional part (.3419136) is below .5, this rounds **down** — so the stored double is strictly less than 1e-7.
+
+The exact stored value is N/2⁷⁶ where N = 2⁵² + 3,052,186,745,220,936 = 7,555,786,372,591,432, and 2⁷⁶ = 75,557,863,725,914,323,419,136.
+
+**Step 2: Get enough decimal digits.**
+Writing D = N·10⁷ + R exactly gives R = 3,419,136 (exact integer, since D − N·10⁷ = 3,419,136 precisely). So:
+
+value = 10⁻⁷ · (1 − R/D)
+
+Computing R/D via long division: R×10¹⁸/D = 45.25188... , so R/D ≈ 4.525188×10⁻¹⁷.
+
+Thus value×10²⁴ ≈ 10¹⁷ − 4.525188 = **99999999999999995.474812**, i.e. value ≈ 9.9999999999999995474812×10⁻⁸.
+
+**Step 3: Apply the %g rounding rule.**
+P = 17, so we need 16 digits after the leading "9." — that's exactly the 17-digit integer part "99999999999999995" (16 nines + a final 5) shifted to "9.9999999999999995". To finalize this rounding we consult the next digit, which is the first digit of the fractional remainder .474812 → **4**. Since 4 < 5, we round **down**, leaving the trailing 5 unchanged — no carry propagates, so no overflow to 1.0×10⁻⁷ occurs.
+
+With the mantissa fixed at 9.9999999999999995, X = −8, which fails X ≥ −4, so e-style with precision 16 applies, giving `9.9999999999999995e-08`. The final digit is 5 (nonzero), so no trailing-zero stripping applies.
+
+This is exactly Implementation A's output. Implementation B's `1e-07` would only be correct if the value rounded *up* through the carry chain (which requires the discarded remainder to exceed .5, and it doesn't — it's ≈.4748, safely below).
+
+FINAL: A

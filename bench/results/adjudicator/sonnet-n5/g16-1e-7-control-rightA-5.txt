@@ -1,0 +1,47 @@
+## Reasoning
+
+The spec requires rounding to use "the exact binary value of the number," so I need the true double stored for the literal `1e-7`, not the decimal string.
+
+**Exact double value.** `1e-7` falls between `2^-24` and `2^-23`, so it's stored as `M × 2^-76` where `M` is the rounded 53-bit significand:
+
+```
+M = round(2^76 / 10^7) = round(75557863725914323419136 / 10000000)
+  = round(7555786372591432.3419136) = 7555786372591432
+```
+
+Comparing `M×10^7` to `2^76` exactly (both are integers):
+
+```
+M×10^7 = 75557863725914320000000
+2^76   = 75557863725914323419136   →  M×10^7 < 2^76
+```
+
+So the stored double is **slightly less than** `1e-7`. Carrying the division out further:
+
+```
+value = 9.999999999999999547481118259... × 10^-8
+```
+
+i.e. the first **16 significant digits are all 9**, and the 17th digit is `5` (followed by nonzero digits `47481...`, so it's unambiguously more than a tie).
+
+**Applying the `%g` algorithm.** For `%.16g`, P = 16. X is the exponent after rounding to `P-1 = 15` fractional digits in e-style. Rounding `9.999999999999999(9)…` at the 16th significant digit: digit 16 is `9`, and the next digit is `5.47…` (> half), so it rounds up — the sixteen 9's cascade into `10.000000000000000`, which renormalizes to:
+
+```
+1.000000000000000 × 10^-7   →   X = -7
+```
+
+Checking the branch condition: `P > X and X >= -4` → `-7 >= -4` is **false**, so e-style is used with precision `P-1 = 15`:
+
+```
+"1.000000000000000e-07"
+```
+
+Stripping trailing fractional zeros (no `#` flag) removes all 15 zeros and the `.`, leaving:
+
+```
+"1e-07"
+```
+
+This is exactly Implementation A's output. Implementation B's `9.999999999999999e-08` corresponds to truncating at 16 digits without letting the carry propagate — i.e. not rounding the true binary value correctly.
+
+FINAL: A

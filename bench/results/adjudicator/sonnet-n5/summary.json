@@ -1,0 +1,178 @@
+{
+  "model": "sonnet",
+  "n": 5,
+  "summary": {
+    "g17-1e-7": {
+      "correct": 10,
+      "of": 10,
+      "noVerdict": 0
+    },
+    "g16-1e-7-control": {
+      "correct": 10,
+      "of": 10,
+      "noVerdict": 0
+    }
+  },
+  "rows": [
+    {
+      "case": "g17-1e-7",
+      "rightIsA": true,
+      "trial": 1,
+      "verdict": "A",
+      "correct": true,
+      "file": "g17-1e-7-rightA-1.txt"
+    },
+    {
+      "case": "g17-1e-7",
+      "rightIsA": true,
+      "trial": 2,
+      "verdict": "A",
+      "correct": true,
+      "file": "g17-1e-7-rightA-2.txt"
+    },
+    {
+      "case": "g17-1e-7",
+      "rightIsA": true,
+      "trial": 3,
+      "verdict": "A",
+      "correct": true,
+      "file": "g17-1e-7-rightA-3.txt"
+    },
+    {
+      "case": "g17-1e-7",
+      "rightIsA": true,
+      "trial": 4,
+      "verdict": "A",
+      "correct": true,
+      "file": "g17-1e-7-rightA-4.txt"
+    },
+    {
+      "case": "g17-1e-7",
+      "rightIsA": true,
+      "trial": 5,
+      "verdict": "A",
+      "correct": true,
+      "file": "g17-1e-7-rightA-5.txt"
+    },
+    {
+      "case": "g17-1e-7",
+      "rightIsA": false,
+      "trial": 1,
+      "verdict": "B",
+      "correct": true,
+      "file": "g17-1e-7-rightB-1.txt"
+    },
+    {
+      "case": "g17-1e-7",
+      "rightIsA": false,
+      "trial": 2,
+      "verdict": "B",
+      "correct": true,
+      "file": "g17-1e-7-rightB-2.txt"
+    },
+    {
+      "case": "g17-1e-7",
+      "rightIsA": false,
+      "trial": 3,
+      "verdict": "B",
+      "correct": true,
+      "file": "g17-1e-7-rightB-3.txt"
+    },
+    {
+      "case": "g17-1e-7",
+      "rightIsA": false,
+      "trial": 4,
+      "verdict": "B",
+      "correct": true,
+      "file": "g17-1e-7-rightB-4.txt"
+    },
+    {
+      "case": "g17-1e-7",
+      "rightIsA": false,
+      "trial": 5,
+      "verdict": "B",
+      "correct": true,
+      "file": "g17-1e-7-rightB-5.txt"
+    },
+    {
+      "case": "g16-1e-7-control",
+      "rightIsA": true,
+      "trial": 1,
+      "verdict": "A",
+      "correct": true,
+      "file": "g16-1e-7-control-rightA-1.txt"
+    },
+    {
+      "case": "g16-1e-7-control",
+      "rightIsA": true,
+      "trial": 2,
+      "verdict": "A",
+      "correct": true,
+      "file": "g16-1e-7-control-rightA-2.txt"
+    },
+    {
+      "case": "g16-1e-7-control",
+      "rightIsA": true,
+      "trial": 3,
+      "verdict": "A",
+      "correct": true,
+      "file": "g16-1e-7-control-rightA-3.txt"
+    },
+    {
+      "case": "g16-1e-7-control",
+      "rightIsA": true,
+      "trial": 4,
+      "verdict": "A",
+      "correct": true,
+      "file": "g16-1e-7-control-rightA-4.txt"
+    },
+    {
+      "case": "g16-1e-7-control",
+      "rightIsA": true,
+      "trial": 5,
+      "verdict": "A",
+      "correct": true,
+      "file": "g16-1e-7-control-rightA-5.txt"
+    },
+    {
+      "case": "g16-1e-7-control",
+      "rightIsA": false,
+      "trial": 1,
+      "verdict": "B",
+      "correct": true,
+      "file": "g16-1e-7-control-rightB-1.txt"
+    },
+    {
+      "case": "g16-1e-7-control",
+      "rightIsA": false,
+      "trial": 2,
+      "verdict": "B",
+      "correct": true,
+      "file": "g16-1e-7-control-rightB-2.txt"
+    },
+    {
+      "case": "g16-1e-7-control",
+      "rightIsA": false,
+      "trial": 3,
+      "verdict": "B",
+      "correct": true,
+      "file": "g16-1e-7-control-rightB-3.txt"
+    },
+    {
+      "case": "g16-1e-7-control",
+      "rightIsA": false,
+      "trial": 4,
+      "verdict": "B",
+      "correct": true,
+      "file": "g16-1e-7-control-rightB-4.txt"
+    },
+    {
+      "case": "g16-1e-7-control",
+      "rightIsA": false,
+      "trial": 5,
+      "verdict": "B",
+      "correct": true,
+      "file": "g16-1e-7-control-rightB-5.txt"
+    }
+  ]
+}

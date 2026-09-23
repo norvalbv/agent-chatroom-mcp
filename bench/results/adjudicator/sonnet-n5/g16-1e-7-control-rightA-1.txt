@@ -1,0 +1,46 @@
+## Reasoning
+
+**Step 1 — Find the exact double value of `1e-7`.**
+
+`1e-7` cannot be represented exactly in binary64. Its nearest double is M·2⁻⁷⁶ where M = round(10⁻⁷·2⁷⁶). Since 2⁷⁶ = 75557863725914323419136, and 75557863725914323419136 / 10⁷ = 7555786372591432.3419136, we get M = 7555786372591432.
+
+So the stored double equals 7555786372591432 / 75557863725914323419136, which computed to ~23 significant digits is:
+
+```
+9.99999999999999954748... × 10⁻⁸
+```
+
+i.e. it is *slightly less* than the true 1e‑7, with 16 leading 9's (as significant digits d1..d16), followed by d17=5, d18=4, d19=7, d20=4, d21=8, d22=1, d23=1... (nonzero digits continue).
+
+**Step 2 — Apply the `%g` algorithm from the spec.**
+
+For `%.16g`, P = 16. X is the decimal exponent obtained by rounding to P−1 = 15 digits after the point in `e` style, i.e. rounding to 16 significant digits.
+
+Rounding `9.999999999999999...` (16 nines, d1–d16) using digits d17 onward ("5474811...") — since this tail is strictly greater than "5000000..." (round-half-to-even doesn't even apply; it's unambiguously above the midpoint) — rounds **up**. All 16 nines carry, giving:
+
+```
+1.000000000000000 × 10⁻⁷
+```
+
+So X = −7.
+
+**Step 3 — Choose f-style vs e-style.**
+
+Rule: "If P > X and X ≥ −4, use f-style; otherwise e-style with precision P−1."
+P=16, X=−7: X ≥ −4 is false, so **e-style** is required, with precision P−1=15:
+
+```
+1.000000000000000e-07
+```
+
+**Step 4 — Strip trailing zeros (no `#` flag).**
+
+All 15 fractional digits are zero, so they're stripped, and the `.` is removed too:
+
+```
+1e-07
+```
+
+This is exactly Implementation A's output. Implementation B's `9.999999999999999e-08` corresponds to truncating/rounding the digit string without correctly propagating the carry through the 16 nines — that's the bug.
+
+FINAL: A

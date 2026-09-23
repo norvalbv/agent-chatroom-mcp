@@ -1,0 +1,49 @@
+## Reasoning
+
+**Step 1 — Find the exact double value of `1e-7`.**
+
+Since 2⁻²⁴ = 5.9604644775390625e-8 < 1e-7 < 2⁻²³ = 1.1920928955078125e-7, the binade exponent is E = −24, so the double equals M·2⁻⁷⁶ for a 53-bit integer M.
+
+M_exact = 10⁻⁷·2⁷⁶ = 2⁷⁶/10⁷ = 75557863725914323419136 / 10000000 = 7555786372591432.3419136
+
+Rounding to the nearest integer (fractional part 0.34… < 0.5) gives **M = 7555786372591432**, so:
+
+double(1e-7) = 7555786372591432 / 2⁷⁶
+
+**Step 2 — Compare to the exact decimal 10⁻⁷.**
+
+The rounding above discarded 0.3419136 out of 2⁷⁶, so:
+
+double(1e-7) = 10⁻⁷ − (0.3419136 · 2⁻⁷⁶) = 10⁻⁷ · (1 − 4.52518…×10⁻¹⁷)
+
+Working this out digit by digit:
+
+double(1e-7) = 9.999999999999999547481…×10⁻⁸
+
+That is: **sixteen consecutive 9's** (one leading digit + fifteen after the point), then digit 17 is `5`, followed by nonzero digits (`47481…`).
+
+**Step 3 — Apply the `%g` algorithm exactly as specified.**
+
+For `%.16g`, P = 16. The spec says: *"Let X be the decimal exponent the value would have in e style with P−1 digits after the point, **after rounding**."*
+
+Rounding the value to 16 significant digits means rounding off everything from the 17th digit onward. That discarded portion is `5.47481…` (in units of the last kept place) — strictly greater than half, not a tie — so it rounds **up**. But the 16th digit is a `9`, and in fact *all 16* significant digits are `9`. Rounding up cascades through every digit:
+
+999999999999999**9** → 1000000000000000 (17 digits) → normalizes to 1.000000000000000 × 10¹ relative to before.
+
+This carry increases the exponent by one: the pre-rounding exponent was −8, so **X = −7 after rounding**, exactly as the spec's phrasing "after rounding" requires.
+
+**Step 4 — Choose style.**
+
+Condition for `f` style: `P > X and X >= -4`. Here X = −7, so `X >= -4` is false → use **e style** with precision P−1 = 15:
+
+`1.000000000000000e-07`
+
+**Step 5 — Strip trailing zeros** (no `#` flag): the fractional part is all zeros, so it — and the `.` — are removed:
+
+`1e-07`
+
+## Conclusion
+
+Implementation A's output (`9.999999999999999e-08`) computed X from the *pre-rounding* exponent, ignoring the carry that rounding produces — a violation of the spec's explicit "after rounding" wording. Implementation B correctly accounts for the carry, shifting the exponent to −7 and yielding `1e-07`.
+
+FINAL: B

@@ -185,3 +185,20 @@ test('runCmd does not inherit an outer node --test context: a failing hidden tes
     rmSync(base, { recursive: true, force: true });
   }
 });
+
+test('a hidden test that needs the repo\'s untracked node_modules passes validate: its worktrees link them', () => {
+  const base = fresh();
+  try {
+    const fx = makeDryRunPool(base, { dependency: true });
+    assert.ok(existsSync(join(fx.repo, 'node_modules', 'dry-dep')));
+    const report = validatePool(fx.poolDir, { hiddenParent: fx.hiddenParent, scratch: join(base, 'scratch') });
+    assert.deepEqual(report.items.map(r => [r.id, r.ok]), [['double', true], ['greet', true]], JSON.stringify(report.items.map(r => r.reference_tail)));
+    const { pool } = loadPool(fx.poolDir);
+    const plain = join(base, 'plain'), linked = join(base, 'linked');
+    worktreeAt(pool.repo, pool.base_commit, plain);
+    worktreeAt(pool.repo, pool.base_commit, linked, undefined, { linkNodeModules: true });
+    assert.ok(!existsSync(join(plain, 'node_modules')));
+    assert.ok(existsSync(join(linked, 'node_modules', 'dry-dep', 'index.js')));
+    assert.equal(spawnSync('git', ['-C', linked, 'status', '--porcelain'], { encoding: 'utf8' }).stdout, '', 'the link is ignored, not a change');
+  } finally { rmSync(base, { recursive: true, force: true }); }
+});

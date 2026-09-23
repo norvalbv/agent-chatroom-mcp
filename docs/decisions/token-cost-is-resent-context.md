@@ -34,3 +34,28 @@ created: 2026-09-18
 **Scope:** src/claude-args.ts,src/swarm.ts,src/spawner.ts,scripts/claude-lean-flags-regression.ts,scripts/claude-room-usage.py
 **Source:** manual
 **Evidence-change:** Maintainer ran one real lean Haiku seat against the live hub through claudeArgs(): it called mcp__chatroom__room_status and answered correctly. Merged on main at a54794e.
+
+## Target · 2026-09-23 — Cost is resident seats × wakes × context; per-field payload trims are second order
+
+**Context:** Seat session logs for swarm-083203-kooz: 14 seats, 215M input tokens, deduped per API call (scripts/seat-cost/*.py at 1494d1c; swarm-092653-202z evidence/kooz-token-attribution, evidence/kooz-wake-cost). Every call re-reads the whole context, which averages 116-156k tokens. The calls that read a wait result cost 75M. 204 wakes on peer chat addressed to someone else cost 32.0M (15% of the run), even though hold_until_actionable was set on 413 of 543 waits, because a held wait still returns at the 55 s client cap carrying whatever chatter piled up. Only 15 of about 476 waits came back empty. Seats stay resident because a supermajority of 15 must vote at the end. The largest re-shipped field, challenges[] with full objections on every wait, is 787k chars. Deltaing it saves about 0.8M of 215M (0.4%), because the challenges arrive late in each session.
+**Ruling:** Two per-turn trims land because they are cheap and correct. Neither is claimed as the cost fix. (1) open_proposal ships each challenge's objection once per status change per seat (1494d1c, scripts/challenge-delta-regression.ts). (2) addressed_to_you references an ask already in messages[] by id instead of repeating it, and a CHATROOM_NO_RECRUIT=1 hub (every bench arm) stops listing request_agent, replace_participant and list_agents, which could only error: the tool list goes from 27,862 to 23,355 chars per seat per turn (5047dea, scripts/per-turn-payload-regression.ts). The lever the measurement points at is resident seats and wakes per seat. It is taken up by flat-seats-capped-per-model and by seats leaving once their work is verified, since leavers are already outside the electorate (board-delta-manifests-and-single-electorate).
+**Consequences:**
+- Positive: The next cost change can be judged against a replay script instead of a guess. Bench arms stop paying for tools they cannot use.
+- Negative: A held wait still costs a full-context turn roughly every minute while a seat stays resident. Nothing here changes that.
+**Vision-fit:** n/a — internal tooling
+**Researched:** No new literature. Own data: kooz seat session logs via scripts/seat-cost/{by-tool,wait-fields,wake-causes,challenge-delta-replay}.py.
+**Rejected:** More per-field trims as the main cost work. The only one replayed, 1494d1c, is worth about 0.4% of kooz input. 5047dea was not replayed: its recruit-tool cut saves nothing on a hub that allows recruiting, and its addressed_to_you dedup is unmeasured.
+**Revisit-when:** a change to wake policy (e.g. a held wait that returns only a one-line 'nothing for you' on a chatter-only timeout) is replayed and moves input tokens by more than 5%
+**Scope:** src/hub.ts,src/server.ts,scripts/challenge-delta-regression.ts,scripts/per-turn-payload-regression.ts,scripts/attention-gate-regression.ts,scripts/seat-cost/*.py,scripts/smoke.ts
+**Source:** manual
+
+## Target · 2026-09-23 — Lean seats do not load the operator's auto-memory
+
+**Context:** --setting-sources project does not govern Claude Code's auto-memory, so lean seats, bench arms included (bench-rq1 goes through claudeArgs), still loaded the operator's MEMORY.md index. A haiku first-turn probe measured 12,886 prompt tokens with it and 7,378 without, and the seat could see 9 lines about swarm-083203-kooz. Every seat therefore started anchored on the same prior-room conclusions, which undercuts the independence of first attempts (settle-disputes-by-spec-not-count) and the attempts path (independent-attempts-selected-by-a-check). Each seat also wrote its own memory at exit, which produced the duplicate writeups kooz left behind.
+**Ruling:** claudeArgs adds autoMemoryEnabled:false to the lean --settings. The heartbeat hook stays, and --claude-full / CHATROOM_CLAUDE_FULL=1 is unchanged (972df02, scripts/claude-lean-flags-regression.ts, scripts/heartbeat-regression.ts).
+**Consequences:**
+- Positive: About 5.5k fewer tokens on each seat's first turn. That is roughly 4% of a ~130k resident re-read, and it is carried on every later turn. Seats no longer start from the operator's summary of earlier rooms.
+- Negative: Seats lose memory the operator may have wanted them to have. The launcher's PRIOR RUNS brief remains the deliberate channel for prior context, and it is itself a cause of t≈0 salvage collisions (flat-seats-capped-per-model).
+**Revisit-when:** a seat fails a task because it lacked a fact that lived only in auto-memory
+**Scope:** src/claude-args.ts,scripts/claude-lean-flags-regression.ts,scripts/heartbeat-regression.ts
+**Source:** manual

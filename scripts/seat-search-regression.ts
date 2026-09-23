@@ -32,10 +32,10 @@ const realSetTimeout = globalThis.setTimeout;
 const realClearTimeout = globalThis.clearTimeout;
 async function fakeChild(run: (child: any, result: Promise<string>, fireTimeout: () => void) => Promise<void>) {
   const child = Object.assign(new EventEmitter(), { stdout: new PassThrough(), stderr: new PassThrough(), kills: [] as unknown[], kill(signal?: unknown) { this.kills.push(signal); return true; } });
-  let fireTimeout = () => { throw new Error("timeout not installed"); };
+  let fireTimeout: () => void = () => { throw new Error("timeout not installed"); };
   let cleared = false;
   const token = {};
-  childProcess.spawn = (() => child) as typeof realSpawn;
+  childProcess.spawn = (() => child) as unknown as typeof realSpawn;
   syncBuiltinESMExports();
   globalThis.setTimeout = ((fn: () => void, ms: number) => {
     assert.equal(ms, 60_000);

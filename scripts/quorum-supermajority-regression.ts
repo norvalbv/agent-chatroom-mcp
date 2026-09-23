@@ -33,7 +33,7 @@ test("5-voter supermajority needs 4 agrees (ceil(0.75*5)); 3 is not enough, unli
   agree(others[2].id); // 4 agree: ceil(0.75*5) reached, before the 5th voter ever votes
   assert.equal(room.state, "concluded");
   assert.deepEqual(room.conclusion?.tally, { agree: 4, disagree: 0, abstain: 0 });
-  assert.equal(room.conclusion?.electorate.electorate, 5, "denominator is the electorate() helper, all 5 voters");
+  assert.equal(room.conclusion?.electorate?.electorate, 5, "denominator is the electorate() helper, all 5 voters");
   assert.match(room.messages.find((m) => m.kind === "conclusion")!.content, /quorum=supermajority/);
 });
 

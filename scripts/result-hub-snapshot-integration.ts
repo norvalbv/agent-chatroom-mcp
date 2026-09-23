@@ -41,6 +41,7 @@ try {
 
   const snapshot = await collectRoomSnapshot(HTTP, "snap");
   assert.equal(snapshot.error, null);
+  assert.ok(snapshot.payload, "snapshot carries a payload");
   assert.equal(snapshot.payload.board["evidence/large"].text, body, "board body must survive the real hub GET");
   assert.match(String(snapshot.payload.proposals[0].text), /## embedded heading/);
   assert.equal(snapshot.payload.proposals[0].challenges[0].objection, 'The clause "Adopt exact transport with" is untested: challenge text retained verbatim');
@@ -50,6 +51,6 @@ try {
   server.kill();
   await new Promise<void>((done) => server.on("close", () => done()));
   const offline = readRunResult(artifact.artifactPath); // hub is down here
-  assert.equal(offline.rooms[0].payload.board["evidence/large"].text, body);
+  assert.equal(offline.rooms[0].payload!.board["evidence/large"].text, body);
   console.log("REAL HUB SNAPSHOT INTEGRATION OK");
 } finally { server.kill(); rmSync(dataDir, { recursive: true, force: true }); }

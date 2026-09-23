@@ -131,13 +131,19 @@ export const offlineScripts = [
   'verify-verdict-regression.ts',
 ];
 
-if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  const cwd = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-  const commands = [
+export function offlineCommands() {
+  return [
     { name: 'runner self-tests', command: process.execPath, args: ['scripts/offline-runner.test.mjs'] },
+    { name: 'scripts type-check test', command: process.execPath, args: ['scripts/scripts-typecheck.test.mjs'] },
     // Fleet CLI fixtures consume dist: compile every run rather than testing stale output.
     { name: 'build', command: process.execPath, args: ['node_modules/typescript/bin/tsc'] },
+    // tsconfig.json covers src/ only; scripts/ gets its own no-emit check so "tsc clean" includes them.
+    { name: 'type-check scripts', command: process.execPath, args: ['node_modules/typescript/bin/tsc', '-p', 'tsconfig.scripts.json'] },
     ...offlineScripts.map(file => ({ name: file, command: process.execPath, args: [...(file === 'seat-env-regression.ts' || file === 'claude-lean-flags-regression.ts' ? ['--experimental-vm-modules'] : []), '--import', 'tsx', `scripts/${file}`] })),
   ];
-  process.exitCode = runCommands(commands, { cwd });
+}
+
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  const cwd = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+  process.exitCode = runCommands(offlineCommands(), { cwd });
 }

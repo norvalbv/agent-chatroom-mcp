@@ -9,7 +9,6 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { loadTask, scoreTask } from './bench-oracle.ts';
-// @ts-expect-error plain .mjs reference without types
 import { parseLog, simulate } from '../tasks/bench-lease-lock/fixtures/reference/lease.mjs';
 
 const dir = resolve('tasks/bench-lease-lock');

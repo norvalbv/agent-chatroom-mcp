@@ -26,7 +26,7 @@ try {
   writeFileSync(join(dir, 'planted.ts'), "const n: number = 'not a number';\nprocess.exit(n);\n");
   writeFileSync(join(dir, 'tsconfig.json'), JSON.stringify({
     extends: join(root, 'tsconfig.scripts.json'),
-    compilerOptions: { typeRoots: [join(root, 'node_modules/@types')] },
+    compilerOptions: { rootDir: dir, typeRoots: [join(root, 'node_modules/@types')] },
     include: [join(dir, 'planted.ts')],
   }));
   const planted = spawnSync(process.execPath, [tsc, '-p', join(dir, 'tsconfig.json')], { encoding: 'utf8' });

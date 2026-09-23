@@ -109,7 +109,12 @@ for (const full of [false, true]) {
   assert.equal(cmd, `node ${JSON.stringify(HEARTBEAT_HOOK)}`);
   assert.equal(s.hooks.PreToolUse[0].matcher, "*");
 }
-assert.ok(!claudeArgs({ text: "t", mcpJson: "/m.json", tools: [] }).includes("--settings"), "no settings unless asked");
+{
+  // No hook unless asked: lean seats carry only the auto-memory switch (src/claude-args.ts), --claude-full carries nothing.
+  const lean = claudeArgs({ text: "t", mcpJson: "/m.json", tools: [] });
+  assert.deepEqual(JSON.parse(lean[lean.indexOf("--settings") + 1]), { autoMemoryEnabled: false }, "no hook unless asked");
+  assert.ok(!claudeArgs({ text: "t", mcpJson: "/m.json", tools: [], full: true }).includes("--settings"), "no settings under --claude-full unless asked");
+}
 
 // 8. outputHeartbeat (codex): throttled, last non-empty line as the detail.
 const sent: string[] = [];

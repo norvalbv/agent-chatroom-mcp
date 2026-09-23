@@ -75,7 +75,7 @@ export interface SpawnerHooks {
   isHeld(room: string): boolean;
   /** create/claim an area on behalf of the requester; throw HubError if taken */
   claimArea(room: string, requesterName: string, area: string, teamNames: string[]): void;
-  /** create a room with swarm defaults (require_challenge, verification) */
+  /** create a room with swarm defaults (verification; the challenge gate follows "auto") */
   ensureRoom(room: string, topic: string): void;
   /** post a system line into a room */
   announce(room: string, text: string): void;

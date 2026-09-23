@@ -15,8 +15,13 @@ fixes, base 4193133.
       builders marked 5 below the 10-minute floor; median reference fix 8 min. Two pairs conflict
       textually (g05+g06, g18+g19). The exact vitest cmd needs `--minWorkers=1` on this machine
       (vitest-queue preload; autonomous issue b80c05f7).
-- [ ] Decide the pool 2 source: an open benchmark (owner's suggestion, 2026-09-23; research
-      workflow comparing candidates) or these items with hardened briefs
+- [x] Decide the pool 2 source: no open benchmark fits (docs/experiments/pool-throughput/
+      pool2-source-research-2026-09-23.md); owner chose harden + replacement curation in parallel,
+      gate "solo pilot lands 16 or fewer" (amendment recorded in the pre-registration)
+- [ ] Harden all 20 briefs (symptom, behaviour, interface only); leak script; blind fairness review
+- [ ] Curate 15 replacement candidates (>= 2 non-test source files, >= 50 added lines), 3x validated
+- [ ] Check the game's full suite at base in an isolated repo; record the green suite command
+- [ ] Solo pilot (practice, excluded); apply the gate; swap items only as the amendment says
 - [ ] Write docs/experiments/pool-throughput/pools/game/pool.json with the seeded split
 - [ ] Lock, then `validate --repeats 3` (and `--suite` if the suite is fast enough); drop flaky items
 - [ ] Commit the locked pool

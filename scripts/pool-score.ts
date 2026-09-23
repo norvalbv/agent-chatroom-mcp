@@ -149,13 +149,16 @@ export function scoreRun(runDir: string, opts: { hiddenParent?: string } = {}) {
   const audit = auditRun(runDir, opts);
   const seats = run.seats ?? [];
   const costs = seats.map((s: any) => s.cost_usd).filter((c: any) => Number.isFinite(c));
-  const cost = costs.length === seats.length && seats.length ? costs.reduce((a: number, b: number) => a + b, 0) : (run.cost_usd ?? null);
+  // Solo and split seats carry their own cost; a room's seats are the swarm's, rolled up in room.swarm_usage.
+  const swarm = run.room?.swarm_usage;
+  const cost = seats.length ? (costs.length === seats.length ? costs.reduce((a: number, b: number) => a + b, 0) : null)
+    : Number.isFinite(swarm?.cost_usd) ? swarm.cost_usd : null;
   const passed = items.filter((i: any) => i.pass).length;
   const score = {
     pool: pool.name, pool_sha256: sha256, arm: run.arm, rep: run.rep, head: final.head, final_source: final.source,
     passed, of: items.length, attempted: items.filter((i: any) => i.attempted).length, items,
     suite, conflicts: final.conflicts.length, missing_branches: final.missing,
-    cost_usd: cost, cost_estimated: seats.some((s: any) => s.cost_estimated) || !!run.cost_estimated,
+    cost_usd: cost, cost_estimated: seats.some((s: any) => s.cost_estimated) || (!seats.length && !!swarm && swarm.coverage !== 'complete'),
     cost_per_passing_item: cost !== null && passed > 0 ? cost / passed : null,
     account: run.account ?? null, void: audit.void, audit_hits: audit.hits.length,
   };

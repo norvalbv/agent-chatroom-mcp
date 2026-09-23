@@ -1884,7 +1884,11 @@ export class Hub {
   /** Content-word stems (first 6 chars) of a claim's key and its JSON area+note, for overlap scoring. */
   static claimTerms(key: string, text: string): Set<string> {
     let body = text;
-    try { const j = JSON.parse(text) as { area?: unknown; note?: unknown }; body = [j.area, j.note].filter((x) => typeof x === "string").join(" "); } catch { /* plain text */ }
+    // every free-text field, not just area/note: seats write what/plan/scope too (swarm-083203-kooz claim-overlap-echo used "what")
+    try {
+      const j = JSON.parse(text) as Record<string, unknown>;
+      body = Object.entries(j).filter(([k, v]) => typeof v === "string" && !["owner", "status", "worktree"].includes(k)).map(([, v]) => v).join(" ");
+    } catch { /* plain text */ }
     const words = `${key.slice("claim/".length).replace(/[-_/]/g, " ")} ${body}`.toLowerCase().match(/[a-z][a-z0-9]{2,}/g) ?? [];
     return new Set(words.filter((w) => !Hub.CLAIM_STOP.has(w)).map((w) => w.slice(0, 6)));
   }
@@ -1914,6 +1918,7 @@ export class Hub {
   private overlapsFor(room: Room, p: Participant, key: string, text: string) {
     const mine = Hub.claimTerms(key, text);
     if (mine.size < 4) return [];
+    const myKey = Hub.claimTerms(key, "");
     const hits: { key: string; by: string; shared_pct: number; shared: string[] }[] = [];
     for (const [k, e] of room.board) {
       if (k === key || !k.startsWith("claim/") || e.by === p.name || !e.text.trim() || Hub.claimReleased(e)) continue;
@@ -1922,7 +1927,13 @@ export class Hub {
       const theirs = Hub.claimTerms(k, e.text);
       const shared = [...mine].filter((w) => theirs.has(w));
       const jac = shared.length / (mine.size + theirs.size - shared.length);
-      if (shared.length >= 4 && jac >= 0.4) hits.push({ key: k, by: e.by, shared_pct: Math.round(jac * 100), shared: shared.slice(0, 6) });
+      // Long notes dilute Jaccard (claim-overlap-notice vs claim-overlap-echo scored 0.23), so a second rule: the key
+      // slugs share half the shorter slug's stems and the bodies still share >= 20% (adjudicator / adjudication-replay,
+      // bench-per-seat-workspaces / bench-arm-d in swarm-083203-kooz).
+      const theirKey = Hub.claimTerms(k, "");
+      const keyShared = [...myKey].filter((w) => theirKey.has(w)).length;
+      const slugsMatch = Math.min(myKey.size, theirKey.size) > 0 && keyShared / Math.min(myKey.size, theirKey.size) >= 0.5;
+      if (shared.length >= 4 && (jac >= 0.4 || (slugsMatch && jac >= 0.2))) hits.push({ key: k, by: e.by, shared_pct: Math.round(jac * 100), shared: shared.slice(0, 6) });
     }
     return hits.sort((a, b) => b.shared_pct - a.shared_pct);
   }

@@ -61,6 +61,27 @@ test("a departed owner's claim does not trigger a notice (nobody left to coordin
   assert.equal(notices(h, name).length, 0);
 });
 
+// Verbatim from swarm-083203-kooz: two seats claimed the same idea, the second writing "what" instead of "note".
+// Jaccard is only 0.23 (long bodies), so this is the slug rule: keys share "overlap", bodies share >= 20%.
+const NOTICE = claim("claim-overlap-notice", "alice", "Room-level herding seen live here: 15 blind openings -> 2 ideas; 4 seats on the same selector, several on draft/* salvage. Hub change in setBoard: when a claim/* is first created, score its key+note against other live claims (content-word overlap) and post one advisory @author+@owner line naming the overlapping claim and shared terms. Not a refusal. Threshold calibrated on the 136 persisted room logs in data/*.jsonl; regression script + offline-runner entry.");
+const ECHO = JSON.stringify({ owner: "bob", area: "claim-overlap-echo", what: "Evidence: in this room 7/14 worker openings chose the same draft/* salvage, and bench arm D got 3 near-simultaneous claims (5-5-13, 5-5-9, me) because board_set on claim/* returns only {key,chars,by}. Fix: a claim/* write returns (and the chat notice carries) the other open claims' owner+area+first ~100 chars of what, plus a line telling the seat to merge into an existing claim if it overlaps. Regression script + offline-runner entry. Released claim/bench-arm-d to 5-5-13/5-5-9." });
+
+test("long-bodied duplicates with matching slugs are caught, reading free-text fields other than note (live pair)", () => {
+  const { h, name, a, b } = room();
+  h.setBoard(name, a.id, "claim/claim-overlap-notice", NOTICE);
+  h.setBoard(name, b.id, "claim/claim-overlap-echo", ECHO);
+  const n = notices(h, name);
+  assert.equal(n.length, 1);
+  assert.match(n[0].content, /@bob your "claim\/claim-overlap-echo" overlaps @alice's "claim\/claim-overlap-notice"/);
+});
+
+test("matching slugs alone are not enough: different bodies under a shared slug stem post nothing", () => {
+  const { h, name, a, b } = room();
+  h.setBoard(name, a.id, "claim/tests-harness", claim("tests-harness", "alice", "Port the bench harness fixtures to a hermetic temp dir so parallel runs stop colliding on port 8853."));
+  h.setBoard(name, b.id, "claim/tests-dashboard", claim("tests-dashboard", "bob", "Playwright coverage for the dashboard's human composer: send, close room, and the veto button."));
+  assert.equal(notices(h, name).length, 0);
+});
+
 test("claimTerms stems key and note, drops stopwords and JSON field names", () => {
   const t = Hub.claimTerms("claim/launcher-spawner", claim("launcher", "x", "the spawner and the fleet"));
   assert.deepEqual([...t].sort(), ["fleet", "launch", "spawne"]);

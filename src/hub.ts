@@ -185,6 +185,8 @@ export interface BoardEntry {
   /** claim/* entries only: the reviewer the hub assigned at creation (name/id), never client-supplied. */
   reviewer?: string;
   reviewerId?: string;
+  /** claim/* entries only: the claimant's branch and worktree, read by the hub from the seat at each write, never client-supplied. */
+  workspace?: { branch?: string; worktree: string };
   /** draft/* only: written or edited once peers' drafts were readable, so it is not an independent attempt (sticky). */
   postReveal?: boolean;
 }
@@ -2000,6 +2002,7 @@ export class Hub {
     if (key.startsWith("verify/")) p.lastVerifiedAt = now();
     // a draft written or edited after peers' drafts became readable may have copied them: say so wherever it is listed
     const postReveal = key.startsWith("draft/") && (!!previous?.postReveal || !!room.draftsRevealed || this.draftsDue(room));
+    const workspace = key.startsWith("claim/") ? this.workspaceOf(p) : undefined;
     const entry: BoardEntry = {
       text, by: p.name, updatedAt: now(),
       ...(expiresAt ? { expiresAt } : {}),
@@ -2008,6 +2011,7 @@ export class Hub {
       ...(reviewer ? { reviewer: reviewer.name, reviewerId: reviewer.id }
         : previous?.reviewer ? { reviewer: previous.reviewer, reviewerId: previous.reviewerId } : {}),
       ...(postReveal ? { postReveal: true } : {}),
+      ...(workspace ? { workspace } : {}),
     };
     this.applyBoard(room, key, entry);
     this.persist({ type: "board", room: roomName, key, entry });
@@ -2017,6 +2021,7 @@ export class Hub {
     this.post(room, "board", p, sealedDraft ? `${previous ? "updated" : "wrote"} a sealed draft (${this.draftProgress(room)})`
       : `${previous ? "updated" : "added"} board entry "${key}" (${text.length} chars; read it with board_get)`
       + (postReveal ? " — post-reveal: written after peers' drafts were readable, so not an independent attempt" : "")
+      + (workspace ? ` — ${workspace.branch ? `branch ${workspace.branch} in ` : ""}${workspace.worktree}` : "")
       + (reviewer ? ` — reviewer: ${reviewer.name}` : ""));
     if (reviewer) {
       // kind "chat", not "system": addressedBy()/actionableNow() resolve an owed @-mention from
@@ -2821,9 +2826,21 @@ export class Hub {
    * and only as that connection (identity-is-the-connection). Ephemeral, like the heartbeats themselves.
    */
   private seatSessions = new Map<string, string>();
+  /** session -> the worktree its launcher started the seat in (from the MCP URL, never from the seat's own words) */
+  private sessionWorktrees = new Map<string, string>();
 
-  bindSeat(seatKey: string, session: string): void {
+  bindSeat(seatKey: string, session: string, worktree?: string): void {
     if (seatKey && session) this.seatSessions.set(seatKey, session);
+    if (session && worktree) this.sessionWorktrees.set(session, worktree);
+  }
+
+  /** Where a seat's work in progress lives: its bound worktree and the branch checked out there now. */
+  workspaceOf(p: Participant): { branch?: string; worktree: string } | undefined {
+    const worktree = p.session ? this.sessionWorktrees.get(p.session) : undefined;
+    if (!worktree) return undefined;
+    const r = spawnSync("git", ["-C", worktree, "branch", "--show-current"], { encoding: "utf8", timeout: 5_000 });
+    const branch = r.status === 0 ? r.stdout.trim() : "";
+    return branch ? { branch, worktree } : { worktree };
   }
 
   /** Heartbeat every active participant the seat's connection holds, in rooms still open. Returns how many were marked. */

@@ -172,11 +172,13 @@ app.post("/mcp", async (req, res) => {
   const session = createSessionServer(hub, spawner);
   // a launched seat's MCP URL carries ?seat=<key>; its tool hook heartbeats with the same key (POST /heartbeat)
   const seatKey = typeof req.query.seat === "string" ? req.query.seat.slice(0, 100) : "";
+  // ...and ?worktree=<dir> when its launcher gave it one, so claim/* entries carry its branch and path
+  const worktree = typeof req.query.worktree === "string" ? req.query.worktree.slice(0, 1000) : undefined;
   const transport = new StreamableHTTPServerTransport({
     sessionIdGenerator: () => randomUUID(),
     onsessioninitialized: (id) => {
       transports.set(id, { t: transport, leaveAll: session.leaveAll, session: session.sessionKey, lastSeen: Date.now() });
-      if (seatKey) hub.bindSeat(seatKey, session.sessionKey);
+      if (seatKey) hub.bindSeat(seatKey, session.sessionKey, worktree);
     },
   });
   transport.onclose = () => {

@@ -1997,7 +1997,7 @@ export class Hub {
         `Once ${p.name} proposes work from it, require_verification prefers a verify/* entry from you over anyone else's while you're still active; ` +
         `write it as {"proposal":"<id>","command":"...","cwd":"...","exit_code":0,"output_tail":"..."} naming the proposal, per docs/swarm-protocol-spec.md.`);
     }
-    if (key.startsWith("claim/") && !previous) this.noticeClaimOverlap(room, p, key, text);
+    if (key.startsWith("claim/") && (!previous || Hub.claimReleased(previous))) this.noticeClaimOverlap(room, p, key, text);
     if (key.endsWith(".ack") || key.startsWith("verify/")) for (const pr of room.proposals.values()) if (pr.status === "open") this.evaluate(room, pr);
     if (key.startsWith("draft/")) this.latchDrafts(room);
     return entry;

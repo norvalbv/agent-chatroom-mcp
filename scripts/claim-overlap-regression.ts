@@ -82,6 +82,16 @@ test("matching slugs alone are not enough: different bodies under a shared slug 
   assert.equal(notices(h, name).length, 0);
 });
 
+test("taking over a hub-released claim is a creation too: it gets the notice (claude-opus-5-5-4's review)", () => {
+  const { h, name, a, b, c } = room();
+  h.setBoard(name, a.id, "claim/adjudication-replay", claim("adjudication-replay", "alice", REPLAY));
+  h.setBoard(name, c.id, "claim/selector-replay", claim("selector-replay", "carol", "Placeholder while carol reads the logs."));
+  h.removeParticipant(name, "carol", "alice", "dead session");
+  assert.equal(notices(h, name).length, 0);
+  h.setBoard(name, b.id, "claim/selector-replay", claim("selector-replay", "bob", REPLAY2));
+  assert.match(notices(h, name)[0]?.content ?? "", /@bob your "claim\/selector-replay" overlaps @alice's/);
+});
+
 test("claimTerms stems key and note, drops stopwords and JSON field names", () => {
   const t = Hub.claimTerms("claim/launcher-spawner", claim("launcher", "x", "the spawner and the fleet"));
   assert.deepEqual([...t].sort(), ["fleet", "launch", "spawne"]);

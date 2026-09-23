@@ -185,3 +185,16 @@ test('score is not fooled by an outer node --test context: unfixed items still f
     rmSync(base, { recursive: true, force: true });
   }
 });
+
+test('audit scans the briefs builders saw: a brief naming the hidden root voids the run', () => {
+  const base = fresh();
+  try {
+    const fx = makeDryRunPool(base), R = join(base, 'run'); mkdirSync(R);
+    mkdirSync(join(R, 'briefs'));
+    writeFileSync(join(R, 'briefs', 'solo.txt'), `Build the items. Tests are in ${hiddenRoot('dry-run', fx.hiddenParent)}.\n`);
+    runJson(fx, R, 'solo', [seat(fx, R, 'solo', 'pool/dry-run/solo-rep1/solo', [])]);
+    const audit = auditRun(R, { hiddenParent: fx.hiddenParent });
+    assert.equal(audit.void, true);
+    assert.ok(audit.hits.some((h: any) => h.file.includes('/briefs/')));
+  } finally { rmSync(base, { recursive: true, force: true }); }
+});

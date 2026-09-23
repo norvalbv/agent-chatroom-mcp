@@ -315,6 +315,9 @@ export interface Room {
   board: Map<string, BoardEntry>;
   /** draft/* entries are sealed (author-only) until every drafter has one; latched once true and persisted */
   draftsRevealed?: boolean;
+  /** when the first draft/* was written: starts the reveal deadline (persisted, so the deadline survives a restart) */
+  draftsOpenedAt?: string;
+  draftsTimer?: NodeJS.Timeout;
   /** Reconstructed from every board event, including deletes and system writes. */
   boardVersion: number;
   boardVersions: Map<string, number>;
@@ -345,6 +348,7 @@ type Event =
   | { type: "opening"; room: string; pid: string; content: string }
   | { type: "openings_revealed"; room: string }
   | { type: "drafts_revealed"; room: string }
+  | { type: "drafts_opened"; room: string; at: string }
   | { type: "archive"; room: string; archived: boolean; by: string; ts: string }
   | { type: "board_manifest"; room: string; bytes: number; kind: "full" | "delta" | "empty" }
   | { type: "board"; room: string; key: string; entry: BoardEntry | null }
@@ -424,6 +428,8 @@ export class Hub {
     if (this.dataDir) {
       mkdirSync(this.dataDir, { recursive: true });
       this.replay();
+      // a sealed draft round interrupted by a restart still reveals on its original deadline, announced
+      for (const room of this.rooms.values()) if (room.state !== "concluded" && room.state !== "closed") this.armDraftsDeadline(room);
     }
   }
 
@@ -444,6 +450,8 @@ export class Hub {
   static MAX_LIVE_PER_ROOM = Number(process.env.CHATROOM_MAX_LIVE_PER_ROOM ?? 12);
   /** silence before the hub nudges a room (and reveals stale openings); CHATROOM_NUDGE_AFTER_MS lets tests shorten it */
   static DEFAULT_NUDGE_MS = Number(process.env.CHATROOM_NUDGE_AFTER_MS ?? 180_000);
+  /** draft/* is revealed this long after the first draft even if some drafter never wrote one (0 = wait for all) */
+  static DRAFT_REVEAL_MS = Number(process.env.CHATROOM_DRAFT_REVEAL_MS ?? 600_000);
   static readonly ROOM_NAME = /^[a-zA-Z0-9_-]{1,64}$/;
 
   /** git HEAD and whether the working tree is dirty, so a citation or a verification names the tree it was read against. */
@@ -1714,13 +1722,12 @@ export class Hub {
     return drafters.length > 0 && drafters.every((d) => authors.has(d.name));
   }
 
-  /** Latch the reveal on a draft write, persist it (replayed seats are inactive, so it cannot be re-derived), and announce it. */
-  private latchDrafts(room: Room): void {
-    if (room.draftsRevealed || !this.draftsComplete(room)) return;
-    room.draftsRevealed = true;
-    this.persist({ type: "drafts_revealed", room: room.name });
-    const keys = [...room.board.keys()].filter((k) => k.startsWith("draft/"));
-    this.post(room, "system", undefined, `[SYSTEM] Every drafter (${this.drafters(room).map((d) => d.name).join(", ")}) has a draft, so draft/* is now readable by all: ${keys.join(", ")}. Compare them and settle each disagreement from the brief, not by counting who agrees.`);
+  /**
+   * Pure: the reveal deadline has passed. Like openings, one seat that never drafts (a reviewer, a researcher,
+   * a dead session) must not keep every other draft sealed; in a 14-drafter room "all" is rarely reached.
+   */
+  private draftsDue(room: Room, now = Date.now()): boolean {
+    return !!room.draftsOpenedAt && Hub.DRAFT_REVEAL_MS > 0 && now >= Date.parse(room.draftsOpenedAt) + Hub.DRAFT_REVEAL_MS;
   }
 
   /** "k of n drafters; waiting on X, Y": who still owes a draft, without naming any sealed key. */
@@ -1728,12 +1735,52 @@ export class Hub {
     const authors = new Set([...room.board].filter(([k]) => k.startsWith("draft/")).map(([, e]) => e.by));
     const drafters = this.drafters(room);
     const owed = drafters.filter((d) => !authors.has(d.name)).map((d) => d.name);
-    return `${drafters.length - owed.length} of ${drafters.length} drafters; draft/* stays sealed until ${owed.join(", ") || "everyone"} ${owed.length === 1 ? "has" : "have"} one`;
+    return `${drafters.length - owed.length} of ${drafters.length} drafters; draft/* stays sealed until ${owed.join(", ") || "everyone"} ${owed.length === 1 ? "has" : "have"} one${Hub.DRAFT_REVEAL_MS > 0 ? ` or the ${Math.round(Hub.DRAFT_REVEAL_MS / 60000)} min deadline passes` : ""}`;
   }
 
-  /** A draft/* entry is readable only by its author until every drafter has posted one (the human dashboard always sees it). */
+  /** The first draft starts the deadline clock; later drafts and edits do not push it back. */
+  private openDrafts(room: Room): void {
+    if (room.draftsOpenedAt || room.draftsRevealed) return;
+    room.draftsOpenedAt = new Date().toISOString();
+    this.persist({ type: "drafts_opened", room: room.name, at: room.draftsOpenedAt });
+    this.armDraftsDeadline(room);
+  }
+
+  private armDraftsDeadline(room: Room): void {
+    if (room.draftsTimer) clearTimeout(room.draftsTimer);
+    room.draftsTimer = undefined;
+    if (!room.draftsOpenedAt || room.draftsRevealed || Hub.DRAFT_REVEAL_MS <= 0) return;
+    const ms = Math.max(0, Date.parse(room.draftsOpenedAt) + Hub.DRAFT_REVEAL_MS - Date.now());
+    room.draftsTimer = setTimeout(() => {
+      room.draftsTimer = undefined;
+      if (room.state === "concluded" || room.state === "closed") return;
+      this.latchDrafts(room);
+    }, ms);
+    room.draftsTimer.unref();
+  }
+
+  /** Latch the reveal (all drafters in, or the deadline passed), persist it (replayed seats are inactive, so it cannot be re-derived), and announce it. */
+  private latchDrafts(room: Room): void {
+    if (room.draftsRevealed) return;
+    const complete = this.draftsComplete(room);
+    if (!complete && !this.draftsDue(room)) return;
+    room.draftsRevealed = true;
+    if (room.draftsTimer) clearTimeout(room.draftsTimer);
+    room.draftsTimer = undefined;
+    this.persist({ type: "drafts_revealed", room: room.name });
+    const drafts = [...room.board].filter(([k]) => k.startsWith("draft/"));
+    const keys = drafts.map(([k]) => k);
+    const authors = new Set(drafts.map(([, e]) => e.by));
+    const missing = this.drafters(room).filter((d) => !authors.has(d.name)).map((d) => d.name);
+    const why = complete
+      ? `Every drafter (${this.drafters(room).map((d) => d.name).join(", ")}) has a draft`
+      : `The ${Math.round(Hub.DRAFT_REVEAL_MS / 60000)} min draft deadline passed (no draft from ${missing.join(", ")})`;
+    this.post(room, "system", undefined, `[SYSTEM] ${why}, so draft/* is now readable by all: ${keys.join(", ")}. Compare them and settle each disagreement from the brief, not by counting who agrees.`);
+  }
+
+  /** A draft/* entry is readable only by its author until every drafter has posted one or the deadline passes (the human dashboard always sees it). */
   draftSealed(room: Room, key: string, entry: BoardEntry, viewer?: string): boolean {
-    return key.startsWith("draft/") && entry.by !== viewer && !room.draftsRevealed && !this.draftsComplete(room);
+    return key.startsWith("draft/") && entry.by !== viewer && !room.draftsRevealed && !this.draftsComplete(room) && !this.draftsDue(room);
   }
 
   hold(room: Room): BoardEntry | undefined {
@@ -1923,7 +1970,10 @@ export class Hub {
         `write it as {"proposal":"<id>","command":"...","cwd":"...","exit_code":0,"output_tail":"..."} naming the proposal, per docs/swarm-protocol-spec.md.`);
     }
     if (key.endsWith(".ack") || key.startsWith("verify/")) for (const pr of room.proposals.values()) if (pr.status === "open") this.evaluate(room, pr);
-    if (key.startsWith("draft/")) this.latchDrafts(room);
+    if (key.startsWith("draft/")) {
+      this.openDrafts(room);
+      this.latchDrafts(room);
+    }
     return entry;
   }
 
@@ -2980,6 +3030,11 @@ export class Hub {
           case "drafts_revealed": {
             const room = this.rooms.get(ev.room);
             if (room) room.draftsRevealed = true;
+            break;
+          }
+          case "drafts_opened": {
+            const room = this.rooms.get(ev.room);
+            if (room) room.draftsOpenedAt = ev.at;
             break;
           }
           case "openings_revealed": {

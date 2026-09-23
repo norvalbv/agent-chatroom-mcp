@@ -6,7 +6,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { spawnSync, execFileSync } from "node:child_process";
-import { chmodSync, existsSync, mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, symlinkSync } from "node:fs";
+import { chmodSync, existsSync, mkdtempSync, mkdirSync, writeFileSync, readFileSync, realpathSync, rmSync, symlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { delimiter, resolve, join, dirname } from "node:path";
 import { createServer } from "node:net";
@@ -41,7 +41,7 @@ function stubClaudeDir(behavior: "answer" | "no-answer" | "edit-file" | "kill" |
       // assistant message, a zero-usage result carrying the limit text, exit 1. STUB_QUOTA_MODEL overrides the
       // model id so a test can show that the same words from a real model are still scored.
       `if(behavior==='quota'){fs.writeFileSync('answer.txt',${JSON.stringify(EXPECTED)});const m=process.env.STUB_QUOTA_MODEL||'<synthetic>';process.stdout.write(JSON.stringify({type:'system',subtype:'init',model:'served-init'})+'\\n');process.stdout.write(JSON.stringify({type:'assistant',message:{model:m,usage:{input_tokens:0,output_tokens:0}}})+'\\n');process.stdout.write(JSON.stringify({type:'result',subtype:'success',is_error:true,result:"You've hit your session limit · resets 9:30am (Europe/London)",num_turns:1,duration_ms:586,duration_api_ms:0,total_cost_usd:0,usage:{input_tokens:0,cache_read_input_tokens:0,cache_creation_input_tokens:0,output_tokens:0}})+'\\n');process.exit(m==='<synthetic>'?1:0);}`,
-      `if(behavior==='answer')fs.writeFileSync('answer.txt',process.env.STUB_ANSWER||${JSON.stringify(EXPECTED)});`,
+      `if(behavior==='answer'){const bySeat=process.env.STUB_ANSWER_BY_SEAT?JSON.parse(process.env.STUB_ANSWER_BY_SEAT):{};fs.writeFileSync('answer.txt',bySeat[process.env.GIT_AUTHOR_NAME]??process.env.STUB_ANSWER??${JSON.stringify(EXPECTED)});}`,
       "process.stdout.write(JSON.stringify({type:'assistant',message:{usage:{input_tokens:80,output_tokens:15,cache_read_input_tokens:10,cache_creation_input_tokens:5}}})+'\\n');",
       "if(behavior==='kill'){setInterval(()=>{},1000);}else{",
       "process.stdout.write(JSON.stringify({type:'result',subtype:'success',is_error:false,result:'seat done',num_turns:3,duration_ms:842,duration_api_ms:910,total_cost_usd:0.0041,...(process.env.STUB_MODELS?{modelUsage:{'served-init':{thinkingTokens:17,canonicalModel:'snapshot-1'},'served-fallback':{outputTokens:3}}}:{}),usage:{input_tokens:120,cache_read_input_tokens:40,cache_creation_input_tokens:12,output_tokens:30}})+'\\n');",
@@ -247,6 +247,59 @@ test("arm C: N stub seats join a stub hub that concludes immediately; conclusion
     assert.equal(readFileSync(join(root, "workspace", "answer.txt"), "utf8"), EXPECTED);
     for (const seat of result.seats) assert.ok(seat.argv.some((a: string) => a.includes("mcp__chatroom")), "arm C seats must carry chatroom mcp tools");
     assert.equal(result.budget, null);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+    rmSync(stubDir, { recursive: true, force: true });
+  }
+});
+
+test("arm D: each seat drafts in its own private copy; the conclusion's WINNER line picks which draft is scored, even when it is the minority", async () => {
+  const stubDir = stubClaudeDir();
+  const hubEntry = stubHubDir("WINNER: seat-3\nseat-3 matches the spec on the disputed record; seats 1 and 2 agree with each other but not the spec.");
+  const port = await freePort();
+  const root = join(tmpdir(), `bench-rq1-d-${process.pid}-${Date.now()}`);
+  const log = join(tmpdir(), `bench-rq1-d-seen-${process.pid}-${Date.now()}.log`);
+  try {
+    const r = invoke([task, "D", "1", "--root", root, "--port", String(port), "--seats", "3", "--hub-entry", hubEntry, "--timeout-ms", "10000"], {
+      PATH: `${stubDir}${delimiter}${process.env.PATH}`,
+      STUB_SEEN_LOG: log,
+      STUB_ANSWER_BY_SEAT: JSON.stringify({ "seat-1": "wrong majority", "seat-2": "wrong majority", "seat-3": EXPECTED }),
+    });
+    assert.equal(r.status, 0, r.stderr + r.stdout);
+    const result = JSON.parse(readFileSync(join(root, "result.json"), "utf8"));
+    assert.equal(result.arm, "D");
+    assert.equal(result.outcome, "task_pass", "the named minority draft, not the majority, is what gets scored");
+    assert.deepEqual(result.selection, { winner: "seat-3", applied: true, drafts: ["seat-1", "seat-2", "seat-3"] });
+    assert.equal(readFileSync(join(root, "workspace", "answer.txt"), "utf8"), EXPECTED);
+    assert.equal(readFileSync(join(root, "drafts", "seat-1", "answer.txt"), "utf8"), "wrong majority", "drafts stay separate");
+    const cwds = readFileSync(log, "utf8").trim().split("\n").map((l) => JSON.parse(l).cwd).sort();
+    assert.deepEqual(cwds, [1, 2, 3].map((i) => realpathSync(join(root, "drafts", `seat-${i}`))), "every seat runs in its own draft directory, none in the scored workspace");
+    const seat1Prompt = result.seats.find((s: { name: string }) => s.name === "seat-1").argv.join(" ");
+    assert.match(seat1Prompt, /draft\/seat-1/);
+    assert.match(seat1Prompt, /WINNER: seat-N/);
+    assert.ok(seat1Prompt.includes(join(root, "drafts", "seat-2")), "a seat is told where the rival drafts live");
+    for (const seat of result.seats) assert.ok(seat.argv.some((a: string) => a.includes("mcp__chatroom")), "arm D seats carry chatroom mcp tools");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+    rmSync(log, { force: true });
+    rmSync(stubDir, { recursive: true, force: true });
+  }
+});
+
+test("arm D: a conclusion without a WINNER line applies no draft, so the untouched public workspace is scored (no silent fallback to a seat)", async () => {
+  const stubDir = stubClaudeDir();
+  const hubEntry = stubHubDir(EXPECTED);
+  const port = await freePort();
+  const root = join(tmpdir(), `bench-rq1-d0-${process.pid}-${Date.now()}`);
+  try {
+    const r = invoke([task, "D", "1", "--root", root, "--port", String(port), "--seats", "2", "--hub-entry", hubEntry, "--timeout-ms", "10000"], {
+      PATH: `${stubDir}${delimiter}${process.env.PATH}`,
+    });
+    assert.equal(r.status, 0, r.stderr + r.stdout);
+    const result = JSON.parse(readFileSync(join(root, "result.json"), "utf8"));
+    assert.deepEqual(result.selection, { winner: null, applied: false, drafts: ["seat-1", "seat-2"] });
+    assert.equal(result.passed, false);
+    assert.equal(existsSync(join(root, "workspace", "answer.txt")), false, "the conclusion text is not the answer in arm D");
   } finally {
     rmSync(root, { recursive: true, force: true });
     rmSync(stubDir, { recursive: true, force: true });

@@ -145,9 +145,9 @@ export async function runArm(o: RunOptions): Promise<string> {
       // A third with no items (the two-item dry-run pool) gets its branch but no seat: there is nothing to brief.
       if (!pool.split[k]?.length && o.arm === 'split') return { name, branch, worktree: wt, brief_path: briefPath, transcript: null, sessions: [], exit_code: null, killed_by_deadline: false,
         usage: null, partial_usage: null, cost_usd: 0, cost_estimated: false, node_modules: nodeModules, skipped: 'no items in this third' } as SeatRow;
-      const argv = claudeArgs({ text: readFileSync(briefPath, 'utf8'), mcpJson: mcp, tools: SEAT_TOOLS, model: MODEL, outputFormat: 'stream-json', settings: carrySettings(true, '') });
+      const argv = claudeArgs({ mcpJson: mcp, tools: SEAT_TOOLS, model: MODEL, outputFormat: 'stream-json', settings: carrySettings(true, '') });
       const transcript = join(runDir, 'seats', name, 'transcript.jsonl');
-      const record = await runClaudeSeat(name, argv, wt, Math.max(1, deadlineAt - Date.now()), { env, transcript });
+      const record = await runClaudeSeat(name, argv, wt, Math.max(1, deadlineAt - Date.now()), { env, transcript, stdin: readFileSync(briefPath, 'utf8') });
       writeFileSync(join(runDir, 'seats', name, 'stderr.log'), record.stderr_tail);
       json(join(runDir, 'seats', name, 'record.json'), record);
       return { ...seatRow(name, branch, wt, briefPath, transcript, record), node_modules: nodeModules };
@@ -387,7 +387,8 @@ async function runRoom(o: RunOptions, pool: Pool, runDir: string, env: NodeJS.Pr
  * integration branch named in the brief. */
 export const FAKE_CLAUDE = `#!/usr/bin/env node
 const fs = require('node:fs'), path = require('node:path'), cp = require('node:child_process'), crypto = require('node:crypto');
-const argv = process.argv.slice(2), prompt = argv[argv.indexOf('-p') + 1] || '';
+const argv = process.argv.slice(2), pArg = argv[argv.indexOf('-p') + 1];
+const prompt = pArg && !pArg.startsWith('--') ? pArg : (() => { try { return fs.readFileSync(0, 'utf8'); } catch { return ''; } })();
 const stream = argv.includes('stream-json'), model = argv[argv.indexOf('--model') + 1] || 'claude-opus-5-5';
 const out = (e) => { if (stream) process.stdout.write(JSON.stringify(e) + '\\n'); };
 const cwd = process.cwd(), msgId = 'msg_' + crypto.randomBytes(4).toString('hex');

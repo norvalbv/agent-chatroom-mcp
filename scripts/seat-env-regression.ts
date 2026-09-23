@@ -16,7 +16,7 @@ const HUMAN = 'synthetic-human';
 const PROVIDER = 'synthetic-provider';
 const fixture = '# synthetic fixture ONLY\nCHATROOM_HUMAN_TOKEN=synthetic-human\nOPENROUTER_API_KEY=synthetic-provider\nOTHER_CONFIG="fixture-value"\n';
 const syntheticEnv = () => ({ CHATROOM_HUMAN_TOKEN: HUMAN, OPENROUTER_API_KEY: PROVIDER, ANTHROPIC_API_KEY: 'synthetic-anthropic', OPENAI_API_KEY: 'synthetic-openai', PATH: '/synthetic/bin', HOME: '/synthetic/home', MCP_TOOL_TIMEOUT: '1' });
-type Capture = { cmd: string; args: string[]; options: any };
+type Capture = { cmd: string; args: string[]; options: any; stdin?: { text: string } };
 async function harness(entry: string, env: Record<string, string>, argv: string[] = [], worktrees: "none" | "success" | "fail" = "none") {
   const calls: Capture[] = [];
   const requests: { target: string; options: any }[] = [];
@@ -40,8 +40,10 @@ async function harness(entry: string, env: Record<string, string>, argv: string[
       child.stdout = new EventEmitter(); child.stdout.pipe = () => {};
       child.stderr = new EventEmitter(); child.stderr.pipe = () => {};
       child.pid = 42; child.kill = () => {}; child.unref = () => {};
+      child.stdin = { text: '', on() { return this; }, write(d: string) { this.text += d; return true; }, end(d?: string) { if (d) this.text += d; } };
+      calls[calls.length - 1].stdin = child.stdin;
       setImmediate(() => {
-        if (args.some(a => a.includes('Synthetic fixture prompt planner'))) child.stdout.emit('data', JSON.stringify({ summary: 'fixture', done_when: 'done', groups: [{ id: 'room', title: 'room', workers: 3, directive: 'fixture' }], verifier_directive: 'fixture' }));
+        if (args.some(a => a.includes('Synthetic fixture prompt planner')) || child.stdin.text.includes('Synthetic fixture prompt planner')) child.stdout.emit('data', JSON.stringify({ summary: 'fixture', done_when: 'done', groups: [{ id: 'room', title: 'room', workers: 3, directive: 'fixture' }], verifier_directive: 'fixture' }));
         child.emit('close', 0);
       });
       return child;
@@ -114,6 +116,16 @@ await test('swarm all provider seats, hub env and controller header', async () =
   assert.equal(create?.options.headers['x-chatroom-token'], HUMAN, 'launcher control auth retained');
   assert.equal(h.env.CHATROOM_HUMAN_TOKEN, HUMAN, 'launcher env unchanged');
   for (const seat of seats) checkSeat(seat);
+});
+await test('swarm seats get their prompt on stdin, never in argv (a pkill -f on a brief word killed 14 seats)', async () => {
+  const h = await harness('swarm', syntheticEnv(), ['synthetic task about offline-runner', '--flat', '--agents', '3']);
+  const seats = h.calls.filter(c => c.cmd === 'claude');
+  assert.ok(seats.length >= 3, 'seats launched');
+  for (const c of seats) {
+    assert.ok(!c.args.some(a => a.includes('offline-runner')), 'brief not in argv');
+    assert.ok((c.stdin?.text ?? '').length > 0, 'every seat gets its prompt on stdin');
+  }
+  assert.ok(seats.filter(c => /offline-runner/.test(c.stdin?.text ?? '')).length >= 2, 'the workers\' brief arrives on stdin');
 });
 await test('OpenRouter startup excludes token from synthetic dotenv', async () => {
   const h = await harness('openrouter', {}, ['-p', 'synthetic prompt']);

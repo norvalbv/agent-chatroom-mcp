@@ -40,7 +40,7 @@ async function run(arm: string, mode = 'normal') {
   const stub = join(bin, 'claude');
   writeFileSync(stub, `#!/usr/bin/env node
 const fs=require('node:fs');
-const a=process.argv.slice(2); const reviewer=a.some(x=>x.includes('reviewing another engineer'));
+const a=process.argv.slice(2); let input=''; try{input=fs.readFileSync(0,'utf8')}catch{} const reviewer=a.some(x=>x.includes('reviewing another engineer'))||input.includes('reviewing another engineer');
 if(${JSON.stringify(mode)}==='orphan-writer'){require('node:child_process').spawn(process.execPath,['-e',\"setTimeout(()=>require('node:fs').writeFileSync('value.txt','late orphan write'),1200)\"],{stdio:'ignore'}).unref();}
 if(${JSON.stringify(mode)}==='review-timeout'&&reviewer){fs.writeFileSync('../workspace/value.txt','reviewer changed before timeout');setInterval(()=>{},1000);}
 if(${JSON.stringify(mode)}==='review-tamper'&&reviewer)fs.writeFileSync('../workspace/value.txt','tampered');

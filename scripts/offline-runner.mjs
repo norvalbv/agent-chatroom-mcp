@@ -34,6 +34,7 @@ export const offlineScripts = [
   'ak-select.test.ts',
   'adjudicator-trial.test.ts',
   'no-carry.test.ts',
+  'seat-prompt-argv.test.ts',
   'pool-format.test.ts',
   'pool-score.test.ts',
   'pool-run.test.ts',

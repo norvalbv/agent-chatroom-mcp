@@ -101,9 +101,9 @@ async function main() {
     if (Date.now() >= deadlineAt) throw new Error('timeout: total arm deadline exhausted');
     // The room shares one pinned workspace; only B's copy needs separate initialization.
     const settings = cwd === workspace ? effort : pinEffort(cwd, effortLevel);
-    const argv = claudeArgs({ text: prompt, mcpJson: mcp, tools, model, outputFormat: 'stream-json' });
+    const argv = claudeArgs({ mcpJson: mcp, tools, model, outputFormat: 'stream-json' });
     argv.push('--max-budget-usd', String(budget));
-    const record = await runClaudeSeat(name, argv, cwd, deadlineAt - Date.now());
+    const record = await runClaudeSeat(name, argv, cwd, deadlineAt - Date.now(), { stdin: prompt });
     const full = { ...record, budget_usd: budget, effort: settings, thinking_tokens: thinking(record) };
     records.push(full); json(join(root, name + '.json'), full);
     if (hashFile(join(cwd, settings.settings_path)) !== settings.settings_sha256) throw new Error('tamper: seat changed pinned effort');

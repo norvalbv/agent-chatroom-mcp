@@ -117,9 +117,11 @@ function runAttempt(task: string, check: string, protect: readonly string[], cwd
     symlinkSync(mods, resolve(work, "node_modules"), "dir");
     writeFileSync(resolve(work, ".git", "info", "exclude"), "/node_modules\n");
   }
-  const args = claudeArgs({ text: attemptPrompt(task), mcpJson: JSON.stringify({ mcpServers: {} }), tools: EDIT_TOOLS, model });
+  const args = claudeArgs({ mcpJson: JSON.stringify({ mcpServers: {} }), tools: EDIT_TOOLS, model });
   return new Promise((done) => {
-    const child = spawn("claude", args, { cwd: work, stdio: ["ignore", "pipe", "inherit"] });
+    const child = spawn("claude", args, { cwd: work, stdio: ["pipe", "pipe", "inherit"] });
+    child.stdin.on("error", () => {});
+    child.stdin.end(attemptPrompt(task)); // the prompt, never argv (claude-args.ts)
     let out = "";
     child.stdout.on("data", (d) => (out += d));
     const timer = setTimeout(() => child.kill("SIGTERM"), timeoutMs);

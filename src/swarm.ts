@@ -143,8 +143,8 @@ function runClaude(name: string, text: string, tools: string[], cwd: string, mod
   const beat = seatBeat(`${URL_}/mcp`, randomUUID(), cwd);
   const seatMcp = resolve(OUT, `${name}.mcp.json`);
   writeFileSync(seatMcp, JSON.stringify({ mcpServers: { chatroom: { type: "http", url: beat.mcpUrl } } }));
-  const args = claudeArgs({ text, mcpJson: seatMcp, tools, model, full: CLAUDE_FULL, settings: carrySettings(NO_CARRY, heartbeatHookSettings()) });
-  return runProc(name, "claude", args, cwd, outFile, false, beat).then((raw) => {
+  const args = claudeArgs({ mcpJson: seatMcp, tools, model, full: CLAUDE_FULL, settings: carrySettings(NO_CARRY, heartbeatHookSettings()) });
+  return runProc(name, "claude", args, cwd, outFile, false, beat, false, text).then((raw) => {
     const { text: final, usage } = parseClaudeCliOutput(raw);
     writeFileSync(outFile, final);
     // per-seat usage next to the .out, the same sidecar shape an OpenRouter seat writes (scripts/pool-run.ts reads it per seat)
@@ -228,9 +228,10 @@ const exitCodes = new Map<string, number | null>();
 const writeWorkers = new Set<string>();
 
 /** `beat`: the seat's heartbeat key and env; `beatOnOutput`: its output is its heartbeat (codex exec has no tool hooks). */
-function runProc(name: string, cmd: string, args: string[], cwd: string, outFile: string, outViaFile = false, beat?: SeatBeat, beatOnOutput = false): Promise<string> {
+function runProc(name: string, cmd: string, args: string[], cwd: string, outFile: string, outViaFile = false, beat?: SeatBeat, beatOnOutput = false, stdin?: string): Promise<string> {
   return new Promise((res) => {
-    const child = spawn(cmd, args, { cwd, env: { ...seatChildEnv(process.env, writeWorkers.has(name) ? name : undefined), ...beat?.env }, stdio: ["ignore", "pipe", "pipe"] });
+    const child = spawn(cmd, args, { cwd, env: { ...seatChildEnv(process.env, writeWorkers.has(name) ? name : undefined), ...beat?.env }, stdio: [stdin === undefined ? "ignore" : "pipe", "pipe", "pipe"] });
+    if (stdin !== undefined) { child.stdin?.on("error", () => {}); child.stdin?.end(stdin); } // the prompt, never argv (claude-args.ts)
     if (beat && beatOnOutput) {
       const send = outputHeartbeat((detail) => {
         fetch(`${URL_}/heartbeat`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ seat_key: beat.key, tool: cmd, detail }), signal: AbortSignal.timeout(5_000) }).catch(() => {});

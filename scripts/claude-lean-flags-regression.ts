@@ -27,7 +27,7 @@ const root = path.resolve(path.dirname(url.fileURLToPath(import.meta.url)), '..'
 const HUMAN = 'synthetic-human';
 const fixture = '# synthetic fixture ONLY\nCHATROOM_HUMAN_TOKEN=synthetic-human\n';
 const syntheticEnv = (extra: Record<string, string> = {}) => ({ CHATROOM_HUMAN_TOKEN: HUMAN, PATH: '/synthetic/bin', HOME: '/synthetic/home', MCP_TOOL_TIMEOUT: '1', ...extra });
-type Capture = { cmd: string; args: string[]; options: any };
+type Capture = { cmd: string; args: string[]; options: any; stdin?: { text: string } };
 
 /** Same VM-with-synthetic-OS-boundaries technique as scripts/seat-env-regression.ts: real TS source for
  * env/spawner/swarm/respawn/claude-args (all pure or already covered by that file's minimization
@@ -54,8 +54,10 @@ async function harness(entry: string, env: Record<string, string>, argv: string[
       child.stdout = new EventEmitter(); child.stdout.pipe = () => {};
       child.stderr = new EventEmitter(); child.stderr.pipe = () => {};
       child.pid = 42; child.kill = () => {}; child.unref = () => {};
+      child.stdin = { text: '', on() { return this; }, write(d: string) { this.text += d; return true; }, end(d?: string) { if (d) this.text += d; } };
+      calls[calls.length - 1].stdin = child.stdin;
       setImmediate(() => {
-        if (args.some(a => a.includes('Synthetic fixture prompt planner'))) child.stdout.emit('data', JSON.stringify({ summary: 'fixture', done_when: 'done', groups: [{ id: 'room', title: 'room', workers: 3, directive: 'fixture' }], verifier_directive: 'fixture' }));
+        if (args.some(a => a.includes('Synthetic fixture prompt planner')) || child.stdin.text.includes('Synthetic fixture prompt planner')) child.stdout.emit('data', JSON.stringify({ summary: 'fixture', done_when: 'done', groups: [{ id: 'room', title: 'room', workers: 3, directive: 'fixture' }], verifier_directive: 'fixture' }));
         child.emit('close', 0);
       });
       return child;

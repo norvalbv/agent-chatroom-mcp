@@ -132,10 +132,11 @@ export interface SeatRecord {
  * clean-exit-only `--output-format json` blob loses everything to a SIGTERM (item 3). */
 /** `opts.env` replaces the inherited environment (still passed through seatChildEnv); `opts.transcript` receives every
  * stdout byte as it arrives, so a seat killed at the deadline leaves its full event stream on disk (pool-run's audit). */
-export function runClaudeSeat(name: string, args: string[], cwd: string, deadlineMs: number, opts: { env?: NodeJS.ProcessEnv; transcript?: string } = {}): Promise<SeatRecord> {
+export function runClaudeSeat(name: string, args: string[], cwd: string, deadlineMs: number, opts: { env?: NodeJS.ProcessEnv; transcript?: string; stdin?: string } = {}): Promise<SeatRecord> {
   return new Promise((res) => {
     const startedAt = new Date();
-    const child = track(spawn("claude", args, { cwd, detached: true, env: seatChildEnv(opts.env ?? process.env, name), stdio: ["ignore", "pipe", "pipe"] }), true);
+    const child = track(spawn("claude", args, { cwd, detached: true, env: seatChildEnv(opts.env ?? process.env, name), stdio: [opts.stdin === undefined ? "ignore" : "pipe", "pipe", "pipe"] }), true);
+    if (opts.stdin !== undefined) { child.stdin?.on("error", () => {}); child.stdin?.end(opts.stdin); } // the prompt, never argv (claude-args.ts)
     const transcriptFd = opts.transcript ? openSync(opts.transcript, "a") : null;
     let buffered = "";
     let resultLine: string | null = null;

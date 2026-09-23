@@ -321,9 +321,11 @@ export class Spawner {
         args.push(prompt);
       } else {
         cmd = "claude";
-        args = claudeArgs({ text: prompt, mcpJson, tools: req.canEdit ? WRITE_TOOLS : READ_TOOLS, model: req.model, full: CLAUDE_FULL, settings: heartbeatHookSettings() });
+        args = claudeArgs({ mcpJson, tools: req.canEdit ? WRITE_TOOLS : READ_TOOLS, model: req.model, full: CLAUDE_FULL, settings: heartbeatHookSettings() });
       }
-      const child = spawn(cmd, args, { cwd: seatCwd, env: { ...seatChildEnv(process.env, req.canEdit ? name : undefined), ...beat.env }, stdio: ["ignore", "pipe", "pipe"] });
+      const viaStdin = cmd === "claude"; // the prompt, never argv (claude-args.ts)
+      const child = spawn(cmd, args, { cwd: seatCwd, env: { ...seatChildEnv(process.env, req.canEdit ? name : undefined), ...beat.env }, stdio: [viaStdin ? "pipe" : "ignore", "pipe", "pipe"] });
+      if (viaStdin) { child.stdin?.on("error", () => {}); child.stdin?.end(prompt); }
       // claude always runs --output-format json now (telemetry), so its raw stdout is a JSON blob, not the
       // plain final-answer text every other seat's log holds. Buffer stdout+stderr instead of piping them
       // live, and on close write only the unwrapped text (matches runClaude's outFile in swarm.ts) so a

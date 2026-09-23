@@ -103,7 +103,7 @@ assert.deepEqual((await person("hb-sub", "builder")).working, subLast);
 // 7. claude -p argv: --settings carries a PreToolUse hook that runs this script (path quoted: the repo path may have spaces),
 //    under the lean flags and under --claude-full alike.
 for (const full of [false, true]) {
-  const args = claudeArgs({ text: "t", mcpJson: "/m.json", tools: ["Bash"], full, settings: heartbeatHookSettings() });
+  const args = claudeArgs({ mcpJson: "/m.json", tools: ["Bash"], full, settings: heartbeatHookSettings() });
   const s = JSON.parse(args[args.indexOf("--settings") + 1]);
   const cmd: string = s.hooks.PreToolUse[0].hooks[0].command;
   assert.equal(cmd, `node ${JSON.stringify(HEARTBEAT_HOOK)}`);
@@ -111,9 +111,9 @@ for (const full of [false, true]) {
 }
 {
   // No hook unless asked: lean seats carry only the auto-memory switch (src/claude-args.ts), --claude-full carries nothing.
-  const lean = claudeArgs({ text: "t", mcpJson: "/m.json", tools: [] });
+  const lean = claudeArgs({ mcpJson: "/m.json", tools: [] });
   assert.deepEqual(JSON.parse(lean[lean.indexOf("--settings") + 1]), { autoMemoryEnabled: false }, "no hook unless asked");
-  assert.ok(!claudeArgs({ text: "t", mcpJson: "/m.json", tools: [], full: true }).includes("--settings"), "no settings under --claude-full unless asked");
+  assert.ok(!claudeArgs({ mcpJson: "/m.json", tools: [], full: true }).includes("--settings"), "no settings under --claude-full unless asked");
 }
 
 // 8. outputHeartbeat (codex): throttled, last non-empty line as the detail.

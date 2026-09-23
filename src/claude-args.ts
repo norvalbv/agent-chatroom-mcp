@@ -16,7 +16,6 @@
  * index's 33 lines). Lean seats get autoMemoryEnabled:false in --settings; --claude-full keeps memory.
  */
 export interface ClaudeArgsOptions {
-  text: string;
   mcpJson: string;
   /** the --allowedTools list (may include mcp__* entries) */
   tools: string[];
@@ -35,8 +34,13 @@ export interface ClaudeArgsOptions {
 /** --tools governs only the built-in tool set; it does not take MCP tool names (those are already scoped by --mcp-config --strict-mcp-config). */
 const builtinOnly = (tools: string[]) => tools.filter((t) => !t.startsWith("mcp__"));
 
-export function claudeArgs({ text, mcpJson, tools, model, full, outputFormat, settings }: ClaudeArgsOptions): string[] {
-  const args = ["-p", text, "--mcp-config", mcpJson, "--strict-mcp-config", "--allowedTools", tools.join(",")];
+/**
+ * The prompt is NOT in the returned argv: the caller writes it to the child's stdin (`claude -p` reads its prompt from
+ * stdin when none is given). argv is visible to every process on the host, and `pkill -f <word>` matches it: in pool run
+ * room15-rep2 (2026-09-23) one seat's `pkill -f "offline-runner"` matched the brief in 14 of 15 seats' argv and killed them.
+ */
+export function claudeArgs({ mcpJson, tools, model, full, outputFormat, settings }: ClaudeArgsOptions): string[] {
+  const args = ["-p", "--mcp-config", mcpJson, "--strict-mcp-config", "--allowedTools", tools.join(",")];
   if (!full) {
     args.push("--tools", builtinOnly(tools).join(","), "--disable-slash-commands", "--setting-sources", "project", "--exclude-dynamic-system-prompt-sections");
   }

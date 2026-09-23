@@ -152,10 +152,11 @@ export function isProviderQuotaSeat(seat: Pick<SeatRecord, "text" | "reported_mo
  * Seats run with `--output-format stream-json` (see src/claude-args.ts): stdout is NDJSON, one event per
  * line, so a kill mid-run still leaves every event flushed before the kill on disk/in the buffer — a
  * clean-exit-only `--output-format json` blob loses everything to a SIGTERM (item 3). */
-function runClaudeSeat(name: string, args: string[], cwd: string, deadlineMs: number): Promise<SeatRecord> {
+function runClaudeSeat(name: string, args: string[], cwd: string, deadlineMs: number, stdin?: string): Promise<SeatRecord> {
   return new Promise((res) => {
     const startedAt = new Date();
-    const child = track(spawn("claude", args, { cwd, env: seatChildEnv(process.env, name), stdio: ["ignore", "pipe", "pipe"] }));
+    const child = track(spawn("claude", args, { cwd, env: seatChildEnv(process.env, name), stdio: [stdin === undefined ? "ignore" : "pipe", "pipe", "pipe"] }));
+    if (stdin !== undefined) { child.stdin?.on("error", () => {}); child.stdin?.end(stdin); } // the prompt, never argv (claude-args.ts)
     let buffered = "";
     let resultLine: string | null = null;
     let err = "";
@@ -454,7 +455,7 @@ async function main() {
     const mcpJson = join(root, "mcp-empty.json");
     json(mcpJson, { mcpServers: {} });
     const text = `${briefText}\n${scaffoldSingle}`;
-    const args = claudeArgs({ text, mcpJson, tools: baseTools, model, outputFormat: "stream-json" });
+    const args = claudeArgs({ mcpJson, tools: baseTools, model, outputFormat: "stream-json" });
     if (maxBudgetUsd) args.push("--max-budget-usd", maxBudgetUsd);
     seatRecords = [await runClaudeSeat("single", args, workspace, deadlineMs)];
     completedAt = new Date();
@@ -472,8 +473,8 @@ async function main() {
     json(mcpJson, { mcpServers: {} });
     const records: SeatRecord[] = [];
     const builder1Text = `${briefText}\n${scaffoldSingle}`;
-    const builder1Args = claudeArgs({ text: builder1Text, mcpJson, tools: baseTools, model, outputFormat: "stream-json" });
-    const builder1 = await runClaudeSeat("builder-1", builder1Args, workspace, remainingDeadline());
+    const builder1Args = claudeArgs({ mcpJson, tools: baseTools, model, outputFormat: "stream-json" });
+    const builder1 = await runClaudeSeat("builder-1", builder1Args, workspace, remainingDeadline(), builder1Text);
     records.push(builder1);
 
     // A stage that already ran out of pipeline budget skips the rest rather than spawning a claude
@@ -482,19 +483,19 @@ async function main() {
     // regardless of what (if anything) later stages did.
     if (!builder1.killed_by_deadline && remainingDeadline() > 0) {
       const reviewText = `${briefText}\n\nYou are reviewing another engineer's submission for this task. Their final message was:\n"""\n${builder1.text}\n"""\nA snapshot of their work is in your current working directory (${isCodeTask ? "the edited source file(s)" : "answer.txt"}); it is a read-only copy for inspection, and nothing you change there is submitted.\nIf their submission is correct and complete, respond with exactly: APPROVE\nOtherwise respond with a message starting with "REVISE:" followed by one sentence describing what to fix.`;
-      const reviewerArgs = claudeArgs({ text: reviewText, mcpJson, tools: reviewerTools, model, outputFormat: "stream-json" });
+      const reviewerArgs = claudeArgs({ mcpJson, tools: reviewerTools, model, outputFormat: "stream-json" });
       // Bash can write anywhere, so "reviewer cannot edit" is only enforced by giving it a snapshot copy:
       // whatever it does there never reaches the workspace that gets scored or revised.
       const reviewWorkspace = join(root, "review-workspace");
       cpSync(workspace, reviewWorkspace, { recursive: true });
-      const reviewer = await runClaudeSeat("reviewer", reviewerArgs, reviewWorkspace, remainingDeadline());
+      const reviewer = await runClaudeSeat("reviewer", reviewerArgs, reviewWorkspace, remainingDeadline(), reviewText);
       records.push(reviewer);
 
       const decision = parseReviewDecision(reviewer.text);
       if (!decision.approved && !reviewer.killed_by_deadline && remainingDeadline() > 0) {
         const revisionText = `${briefText}\n${scaffoldSingle}\n\nA reviewer looked at your previous submission (still in this directory) and said:\n"""\n${decision.feedback}\n"""\nMake only the necessary changes to address the reviewer's feedback. This is your final revision; there is no further review round.`;
-        const builder2Args = claudeArgs({ text: revisionText, mcpJson, tools: baseTools, model, outputFormat: "stream-json" });
-        const builder2 = await runClaudeSeat("builder-2", builder2Args, workspace, remainingDeadline());
+        const builder2Args = claudeArgs({ mcpJson, tools: baseTools, model, outputFormat: "stream-json" });
+        const builder2 = await runClaudeSeat("builder-2", builder2Args, workspace, remainingDeadline(), revisionText);
         records.push(builder2);
       }
     }
@@ -569,8 +570,8 @@ async function main() {
       const text = armArg === "D"
         ? `${briefText}\n${draftScaffold({ name, seats, isCodeTask, draftDirs })}\n\nJoin room ${room} as ${name} (agent claude, expected_participants ${seats}). Leave the room once it has concluded.`
         : `${briefText}\n${scaffoldRoom}\n\nJoin room ${room} as ${name} (agent claude, expected_participants ${seats}). Leave the room once it has concluded.`;
-      const args = claudeArgs({ text, mcpJson, tools, model, outputFormat: "stream-json" });
-      seatPromises.push(runClaudeSeat(name, args, draftDirs.get(name) ?? workspace, deadlineMs));
+      const args = claudeArgs({ mcpJson, tools, model, outputFormat: "stream-json" });
+      seatPromises.push(runClaudeSeat(name, args, draftDirs.get(name) ?? workspace, deadlineMs, text));
     }
     seatRecords = await Promise.all(seatPromises);
     completedAt = new Date();

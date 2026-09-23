@@ -23,7 +23,8 @@ function walk(dir: string, out: string[] = []): string[] {
 
 function setup(solutionsOverride?: (s: any) => any) {
   const base = fresh();
-  const fx = makeDryRunPool(base);
+  // dependency: double's hidden test imports an untracked node_modules package, so every checkout must link it.
+  const fx = makeDryRunPool(base, { dependency: true });
   const solutions = join(base, 'solutions.json');
   writeFileSync(solutions, JSON.stringify(solutionsOverride ? solutionsOverride(structuredClone(fx.solutions)) : fx.solutions));
   const switchLog = join(base, 'switcher.log');

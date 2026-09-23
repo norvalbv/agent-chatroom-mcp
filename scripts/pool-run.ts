@@ -11,7 +11,7 @@
  * brief from the fixture's solutions (never reference.patch) and emits stream-json usage, so the whole path runs
  * offline with no model call. */
 import { spawn, spawnSync, type ChildProcess } from 'node:child_process';
-import { chmodSync, closeSync, cpSync, existsSync, mkdirSync, openSync, readFileSync, readdirSync, realpathSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, closeSync, cpSync, existsSync, mkdirSync, openSync, readFileSync, readdirSync, readlinkSync, realpathSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:net';
 import { homedir } from 'node:os';
 import { dirname, join, relative, resolve, sep } from 'node:path';
@@ -83,7 +83,7 @@ export interface RunOptions {
   /** Overrides pool.deadline_min (dry runs only; recorded as deadline_override_ms). */
   deadlineMs?: number;
   switchLog?: string;
-  fake?: { solutions: string; mode?: 'commit' | 'hang'; session?: boolean; integrate?: boolean };
+  fake?: { solutions: string; mode?: 'commit' | 'hang'; session?: boolean; integrate?: boolean; orphan?: boolean };
   /** Where Claude Code keeps projects/ (default $CLAUDE_CONFIG_DIR or ~/.claude); fake seats write there. */
   claudeConfigDir?: string;
   port?: number;
@@ -115,7 +115,7 @@ export async function runArm(o: RunOptions): Promise<string> {
     const bin = join(runDir, 'fake-bin'); mkdirSync(bin);
     writeFileSync(join(bin, 'claude'), FAKE_CLAUDE); chmodSync(join(bin, 'claude'), 0o755);
     env = { ...env, PATH: bin + ':' + (env.PATH ?? ''), POOL_FAKE_SOLUTIONS: resolve(o.fake.solutions), POOL_FAKE_MODE: o.fake.mode ?? 'commit',
-      POOL_FAKE_SESSION: o.fake.session ? '1' : '', POOL_FAKE_INTEGRATE: o.fake.integrate ? '1' : '', CLAUDE_CONFIG_DIR: configDir };
+      POOL_FAKE_SESSION: o.fake.session ? '1' : '', POOL_FAKE_INTEGRATE: o.fake.integrate ? '1' : '', POOL_FAKE_ORPHAN: o.fake.orphan ? '1' : '', CLAUDE_CONFIG_DIR: configDir };
   }
   const integrationBranch = seatBranch(pool.name, o.arm, o.rep, 'integration');
   const started = Date.now(), deadlineAt = started + deadlineMs;
@@ -156,6 +156,8 @@ export async function runArm(o: RunOptions): Promise<string> {
   } else {
     await runRoom(o, pool, runDir, env, deadlineAt, integrationBranch, prepare, run, writeRun);
   }
+  // Whatever a seat left running (its own process group, e.g. a dev hub) is stopped with the setup.
+  run.stray_processes_stopped = await stopStrays(runDir);
   // Session transcripts carry every tool call; the audit reads them from inside the run dir.
   collectSessions(configDir, runDir, run);
   run.ended_at = new Date().toISOString();
@@ -247,6 +249,37 @@ function roomSeatRows(swarmDir: string): SeatRow[] {
   });
 }
 
+/** Pids whose working directory lies under dir: seats' background jobs and any dev hub a seat launched, which run in
+ * their own process groups and so escape the group kills (devHubRule tells workers on this hub to start one). */
+export function pidsUnder(dir: string): number[] {
+  const pids = new Set<number>();
+  if (existsSync('/proc/self/cwd')) {
+    for (const p of readdirSync('/proc').filter(n => /^\d+$/.test(n))) {
+      try { const cwd = readlinkSync(`/proc/${p}/cwd`); if (inside(cwd, dir)) pids.add(Number(p)); } catch {}
+    }
+  } else {
+    let pid = 0;
+    for (const line of (spawnSync('lsof', ['-w', '-d', 'cwd', '-Fpn'], { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 }).stdout ?? '').split('\n')) {
+      if (line.startsWith('p')) pid = Number(line.slice(1));
+      else if (line.startsWith('n') && inside(line.slice(1), dir)) pids.add(pid);
+    }
+  }
+  pids.delete(process.pid);
+  return [...pids];
+}
+/** SIGTERM, then SIGKILL, every process under dir except `spare`; returns how many distinct processes it stopped. */
+export async function stopStrays(dir: string, spare: (number | undefined)[] = []): Promise<number> {
+  const stopped = new Set<number>();
+  for (let pass = 0; pass < 3; pass++) {
+    const found = pidsUnder(dir).filter(p => !spare.includes(p));
+    if (!found.length) break;
+    for (const p of found) { stopped.add(p); try { process.kill(p, 'SIGTERM'); } catch {} }
+    await delay(1000);
+    for (const p of pidsUnder(dir).filter(p => found.includes(p))) { try { process.kill(p, 'SIGKILL'); } catch {} }
+  }
+  return stopped.size;
+}
+
 async function freePort(): Promise<number> {
   const s = createServer(); await new Promise<void>(ok => s.listen(0, '127.0.0.1', ok));
   const port = (s.address() as { port: number }).port; await new Promise<void>(ok => s.close(() => ok())); return port;
@@ -279,9 +312,11 @@ async function runRoom(o: RunOptions, pool: Pool, runDir: string, env: NodeJS.Pr
     try { if ((await fetch(url + '/rooms', { signal: AbortSignal.timeout(1000) })).ok) { ready = true; break; } } catch {}
     await delay(100);
   }
+  // The harness owns the deadline: swarm's own --timeout is a backstop a minute later, so the stop below always runs
+  // (seats, recruits and strays at once) and swarm only has to notice its seats are gone and write its report.
   const minutes = (deadlineAt - Date.now()) / 60_000;
   const argv = [swarmEntry, readFileSync(briefPath, 'utf8'), '--flat', '--agents', String(agents), '--models', MODEL, '--verifier-model', MODEL,
-    '--full-access', '--require-verification', '--no-carry', '--cwd', wt, '--port', String(port), '--timeout', String(Math.max(0.05, minutes))];
+    '--full-access', '--require-verification', '--no-carry', '--cwd', wt, '--port', String(port), '--timeout', String(minutes + 1)];
   run.room = { port, worktree: wt, branch, node_modules: nodeModules, data_dir: join(roomDir, 'data'), log_dir: join(roomDir, 'spawned'), hub_log: join(roomDir, 'hub.log'), argv: argv.slice(1).map((a, i) => i === 0 ? '<brief>' : a),
     swarm_id: null as string | null, swarm_dir: null as string | null, integration_branch: integrationBranch, declared_branch: null as string | null, worker_branches: [] as string[],
     swarm_usage: null as unknown, stopped_at_deadline: false };
@@ -299,6 +334,7 @@ async function runRoom(o: RunOptions, pool: Pool, runDir: string, env: NodeJS.Pr
       // Stop every seat now (swarm's own --timeout does the same for its children); recruits belong to the hub's group.
       run.room.stopped_at_deadline = true;
       killGroupMembers(swarm); killGroupMembers(hub);
+      run.room.strays_stopped_at_deadline = await stopStrays(runDir, [swarm.pid, hub.pid]);
       let grace: NodeJS.Timeout | undefined;
       await Promise.race([done, new Promise<void>(ok => { grace = setTimeout(ok, REPORT_GRACE_MS); })]);
       clearTimeout(grace);
@@ -341,6 +377,8 @@ if (process.env.POOL_FAKE_SESSION) {
   fs.mkdirSync(dir, { recursive: true });
   fs.writeFileSync(path.join(dir, crypto.randomUUID() + '.jsonl'), JSON.stringify({ type: 'user', cwd, message: { role: 'user', content: prompt } }) + '\\n' + JSON.stringify({ type: 'assistant', cwd, message: { id: msgId, model, usage } }) + '\\n');
 }
+// orphan: a background job in its own process group (as a seat's detached dev hub would be) that writes late
+if (process.env.POOL_FAKE_ORPHAN) cp.spawn(process.execPath, ['-e', "setTimeout(()=>require('fs').writeFileSync('orphan-was-here','late'),3000);setInterval(()=>{},1000)"], { cwd, detached: true, stdio: 'ignore' }).unref();
 if (process.env.POOL_FAKE_MODE === 'hang') { setInterval(() => {}, 1000); return; }
 const inRoom = /Organise yourselves/.test(prompt);
 const git = (...a) => cp.spawnSync('git', a, { cwd, encoding: 'utf8' });

@@ -758,3 +758,46 @@ test("a seat the provider refused for quota is an infrastructure_error, never a 
     rmSync(stubDir, { recursive: true, force: true });
   }
 });
+
+/** Arm D on a code task: seat-2 repairs dates.ts in its own draft, seat-1 leaves its draft broken. The
+ * scored outcome must follow the WINNER-named draft through the hidden-test oracle, not a shared tree. */
+function stubClaudeDirCodeDrafts() {
+  const dir = mkdtempSync(join(tmpdir(), "bench-rq1-d-code-stub-"));
+  writeFileSync(
+    join(dir, "claude"),
+    [
+      "#!/usr/bin/env node",
+      "const fs=require('node:fs');",
+      "if(process.env.GIT_AUTHOR_NAME==='seat-2'){fs.writeFileSync('dates.ts',fs.readFileSync('dates.ts','utf8').replace('t < e','t <= e'));}",
+      "process.stdout.write(JSON.stringify({type:'assistant',message:{usage:{input_tokens:1,output_tokens:1}}})+'\\n');",
+      "process.stdout.write(JSON.stringify({type:'result',subtype:'success',is_error:false,result:'ok',num_turns:1,duration_ms:1,duration_api_ms:1,total_cost_usd:0.001,usage:{input_tokens:1,output_tokens:1}})+'\\n');",
+      "",
+    ].join("\n"),
+  );
+  chmodSync(join(dir, "claude"), 0o755);
+  return dir;
+}
+
+test("arm D on a code task: the hidden-test oracle scores the WINNER's draft, and the losing draft stays unrepaired", async () => {
+  const codeTask = resolve("tasks/bench-bug-fix");
+  for (const [winner, outcome] of [["seat-2", "task_pass"], ["seat-1", "task_fail"]] as const) {
+    const stubDir = stubClaudeDirCodeDrafts();
+    const hubEntry = stubHubDir(`WINNER: ${winner}\nthe end date is inclusive per the brief.`);
+    const port = await freePort();
+    const root = join(tmpdir(), `bench-rq1-d-code-${process.pid}-${Date.now()}`);
+    try {
+      const r = invoke([codeTask, "D", "1", "--root", root, "--port", String(port), "--seats", "2", "--hub-entry", hubEntry, "--timeout-ms", "10000"], {
+        PATH: `${stubDir}${delimiter}${process.env.PATH}`,
+      });
+      assert.equal(r.status, 0, r.stderr + r.stdout);
+      const result = JSON.parse(readFileSync(join(root, "result.json"), "utf8"));
+      assert.equal(result.outcome, outcome, `WINNER ${winner}`);
+      assert.equal(result.selection.winner, winner);
+      assert.match(readFileSync(join(root, "drafts", "seat-1", "dates.ts"), "utf8"), /t < e/, "seat-2's repair never reached seat-1's draft");
+      assert.match(readFileSync(join(root, "drafts", "seat-2", "dates.ts"), "utf8"), /t <= e/);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+      rmSync(stubDir, { recursive: true, force: true });
+    }
+  }
+});

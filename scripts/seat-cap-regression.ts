@@ -48,7 +48,7 @@ test("fleet asks for its same-model rooms on purpose in both launches (area and 
   const src = readFileSync(new URL("../src/fleet.ts", import.meta.url), "utf8");
   const launches = src.match(/"--flat", "--agents", String\(AGENTS\)[^\]]*\]/g) ?? [];
   assert.equal(launches.length, 2, "fleet launches swarm.js twice");
-  for (const l of launches) assert.match(l, /"--max-same-seats", String\(AGENTS - 1\)/);
+  for (const l of launches) assert.match(l, /"--max-same-seats", String\(Math\.max\(1, AGENTS - 1\)\)/);
 });
 test("a non-numeric --max-same-seats is refused, not silently NaN", () => {
   const src = readFileSync(new URL("../src/swarm.ts", import.meta.url), "utf8");

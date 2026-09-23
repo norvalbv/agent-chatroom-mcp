@@ -104,8 +104,12 @@ export function copyHiddenTests(item: HiddenItem, worktree: string) {
   }
 }
 
+/** Runs a hidden or suite command. NODE_TEST_CONTEXT is dropped: inherited from an outer `node --test`, it makes a
+ * nested `node --test` report to the parent and exit 0 even when its tests fail. */
 export function runCmd(cmd: string, cwd: string, timeoutMs = 300_000): { exit_code: number | null; timed_out: boolean; output_tail: string } {
-  const r = spawnSync('sh', ['-c', cmd], { cwd, encoding: 'utf8', timeout: timeoutMs, killSignal: 'SIGKILL', maxBuffer: 64 * 1024 * 1024 });
+  const env = { ...process.env };
+  delete env.NODE_TEST_CONTEXT;
+  const r = spawnSync('sh', ['-c', cmd], { cwd, env, encoding: 'utf8', timeout: timeoutMs, killSignal: 'SIGKILL', maxBuffer: 64 * 1024 * 1024 });
   return { exit_code: r.status, timed_out: r.error?.message.includes('ETIMEDOUT') ?? false, output_tail: ((r.stdout ?? '') + (r.stderr ?? '')).slice(-2000) };
 }
 

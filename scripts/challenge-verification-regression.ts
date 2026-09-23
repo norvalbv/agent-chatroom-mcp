@@ -61,3 +61,12 @@ test("explicit requireChallenge true wins over verification", (t) => {
   agreeAll();
   assert.equal(room.state, "open");
 });
+
+test("auto + verification: a challenge someone does file still blocks until answered", (t) => {
+  const { hub, room, pr, b, c, verify } = fixture(t, { requireVerification: true, quorum: "majority" });
+  hub.challenge(room.name, c.id, pr.id, `"${text.slice(0, 40)}" is not backed by a run.`);
+  verify();
+  hub.vote(room.name, b.id, pr.id, "agree", "The verify run covers this; the objection is about wording only.", undefined, text);
+  assert.equal(room.state, "open");
+  assert.equal(pr.challenges[0].status ?? "open", "open");
+});

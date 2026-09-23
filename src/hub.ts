@@ -200,6 +200,10 @@ export interface Challenge {
   cites?: string;
   /** false: recorded dissent that does not hold the proposal or satisfy the challenge gate */
   blocking?: boolean;
+  /** An executable counterexample: a command that fails against the proposal. Rewording cannot answer it; only a
+   *  verify/* entry for the proposal, from someone other than the proposer, rerunning this exact command with exit 0
+   *  after both the challenge and the current text, does (or the challenger concedes). */
+  command?: string;
 }
 
 export interface ElectorateSummary {
@@ -344,6 +348,7 @@ type Event =
   | { type: "proposal"; proposal: Proposal }
   | { type: "vote"; room: string; proposalId: string; pid: string; entry: Proposal["votes"][string] }
   | { type: "challenge"; room: string; proposalId: string; challenge: Challenge; votes?: Proposal["votes"] }
+  | { type: "challenge_status"; room: string; proposalId: string; challengeId?: string; status: NonNullable<Challenge["status"]> }
   | { type: "state"; room: string; state: RoomState; conclusion?: Room["conclusion"] }
   | { type: "opening"; room: string; pid: string; content: string }
   | { type: "openings_revealed"; room: string }
@@ -2153,6 +2158,14 @@ export class Hub {
     const answered: string[] = [];
     const reopened: string[] = [];
     for (const c of pr.challenges) {
+      if (c.command) {
+        // A new text needs the counterexample rerun: an earlier passing run answered the old text only.
+        if (c.status === "answered" && c.blocking !== false) {
+          c.status = "open";
+          reopened.push(this.shown(room, c.by));
+        }
+        continue;
+      }
       if (!c.cites) continue;
       const present = norm(next).includes(norm(c.cites));
       if ((c.status ?? "open") === "open" && c.blocking !== false && !present) {
@@ -2274,7 +2287,56 @@ export class Hub {
     return pr.challenges.some((c) => c.blocking !== false && this.independentChallenger(room, c, pr.by.id));
   }
 
-  challenge(roomName: string, pid: string, proposalId: string, objection: string, blocking = true): Proposal {
+  /** Collapse whitespace so a rerun command matches however it was spaced. */
+  static normCommand(c: string): string {
+    return c.trim().replace(/\s+/g, " ");
+  }
+
+  /** The verify/* entry that answers an executable challenge: names the proposal, reruns the challenge's exact
+   *  command, is dated after the challenge and the current text, and is not by the proposer's connection. It needs
+   *  exit 0, unless it is a ruling: an active verifier/chair seat outside both the proposer's and the challenger's
+   *  connections may rule the command itself invalid (e.g. `false`, or a probe the spec does not require) at any
+   *  exit code, stating why in 20+ characters of prose below the head. Without that, a challenger's command would
+   *  be a one-seat veto nobody but them could lift. */
+  executionAnswer(room: Room, pr: Proposal, c: Challenge): { entry: BoardEntry; ruling: boolean } | undefined {
+    if (!c.command) return undefined;
+    const want = Hub.normCommand(c.command);
+    const proposer = room.participants.get(pr.by.id);
+    const challenger = room.participants.get(c.by.id);
+    for (const [k, e] of room.board) {
+      if (!k.startsWith("verify/") || k.endsWith(".partial")) continue;
+      if (e.by === pr.by.name) continue;
+      const author = [...room.participants.values()].find((x) => x.name === e.by);
+      if (author && proposer && author.session && author.session === proposer.session) continue;
+      if (e.updatedAt < c.ts || (pr.updatedAt && e.updatedAt < pr.updatedAt)) continue;
+      const head = parseVerifyHead(e.text);
+      if (!head || head.proposal !== pr.id || Hub.normCommand(head.command) !== want) continue;
+      if (head.exit_code === 0) return { entry: e, ruling: false };
+      const adjudicator = !!author?.active && (author.role === "verifier" || author.role === "chair" || author.agent === "human")
+        && author.id !== c.by.id && !(author.session && challenger?.session && author.session === challenger.session);
+      const nl = e.text.indexOf("\n");
+      const reason = nl === -1 ? "" : e.text.slice(nl + 1).trim();
+      if (adjudicator && reason.length >= 20) return { entry: e, ruling: true };
+    }
+    return undefined;
+  }
+
+  /** Answer open executable challenges whose counterexample now passes; announce each once. */
+  private settleExecutableChallenges(room: Room, pr: Proposal) {
+    for (const c of pr.challenges) {
+      if (!c.command || (c.status ?? "open") !== "open" || c.blocking === false) continue;
+      const ans = this.executionAnswer(room, pr, c);
+      if (!ans) continue;
+      c.status = "answered";
+      this.persist({ type: "challenge_status", room: room.name, proposalId: pr.id, challengeId: c.id, status: "answered" });
+      const cmd = Hub.normCommand(c.command).slice(0, 120);
+      this.post(room, "system", undefined, ans.ruling
+        ? `Executable challenge by ${this.shown(room, c.by)} on ${pr.id} answered by ruling: ${ans.entry.by} (adjudicator) ruled \`${cmd}\` not a valid counterexample for v${pr.version}; the reason is in their verify/* entry.`
+        : `Executable challenge by ${this.shown(room, c.by)} on ${pr.id} answered: ${ans.entry.by}'s verify/* entry reran \`${cmd}\` with exit 0 against v${pr.version}.`);
+    }
+  }
+
+  challenge(roomName: string, pid: string, proposalId: string, objection: string, blocking = true, command?: string): Proposal {
     const room = this.getRoom(roomName);
     const p = this.requireParticipant(room, pid);
     const pr = room.proposals.get(proposalId);
@@ -2288,8 +2350,11 @@ export class Hub {
       );
     }
     if (objection.trim().length < 20) throw new HubError("A challenge must state a specific objection (at least 20 characters).");
+    const cmd = command?.trim() ? Hub.normCommand(command) : undefined;
+    if (cmd !== undefined && (cmd.length < 3 || cmd.length > 1000)) throw new HubError("An executable challenge's `command` must be a runnable command line (3-1000 characters).");
     const cites = this.citedSpan(pr.text, objection);
-    if (blocking && !cites) {
+    // An executable challenge is anchored to its command, not to a span of text: citing is optional.
+    if (blocking && !cites && !cmd) {
       throw new HubError(
         `A blocking challenge must quote a matching proposal span (12+ characters) in double quotes. ` +
           `Copy the text from ${proposalId} v${pr.version}; the closest passage is: "${this.closest(pr.text, objection)}". ` +
@@ -2297,7 +2362,7 @@ export class Hub {
       );
     }
     this.surfaceCited(room, objection, "cited in a challenge");
-    const challenge: Challenge = { id: shortId("ch"), by: { id: p.id, name: p.name }, objection, ts: now(), version: pr.version, status: "open", blocking, ...(cites ? { cites } : {}) };
+    const challenge: Challenge = { id: shortId("ch"), by: { id: p.id, name: p.name }, objection, ts: now(), version: pr.version, status: "open", blocking, ...(cites ? { cites } : {}), ...(cmd ? { command: cmd } : {}) };
     pr.challenges.push(challenge);
     // A blocking challenge must be answered: the challenger's own vote (if any) is reset and must be re-cast
     // after the room has responded, so the proposal cannot pass in the same breath.
@@ -2308,6 +2373,7 @@ export class Hub {
       "challenge",
       p,
       `${objection}\n(${blocking ? "challenge" : "non-blocking objection"} to ${proposalId} v${pr.version}${cites ? `, citing "${cites.slice(0, 80)}${cites.length > 80 ? "…" : ""}"` : ""}; ` +
+        (cmd ? `executable counterexample \`${cmd.slice(0, 160)}\`: rewording does not answer it; a verify/* entry from someone other than ${this.shown(room, pr.by)} rerunning exactly this command with exit_code 0 does, or a verifier/chair ruling it invalid with a reason; read the command before running it; ` : "") +
         (blocking ? `${this.shown(room, p)} re-votes once it is answered` : "recorded, carried into the conclusion if still open") +
         ")",
       { proposalId },
@@ -2366,9 +2432,11 @@ export class Hub {
 
   /** Legacy uncited blockers cannot be answered by amending an imaginary target. */
   private challengeAdvice(room: Room, challenges: Challenge[]): string {
-    const anchored = challenges.filter((c) => c.cites);
-    const legacy = challenges.filter((c) => !c.cites);
+    const anchored = challenges.filter((c) => c.cites && !c.command);
+    const legacy = challenges.filter((c) => !c.cites && !c.command);
     const advice: string[] = [];
+    const executable = challenges.filter((c) => c.command);
+    if (executable.length) advice.push(`executable challenge(s) from ${executable.map((c) => this.shown(room, c.by)).join(", ")}: a verify/* entry from someone other than the proposer must rerun \`${Hub.normCommand(executable[0].command!).slice(0, 120)}\` with exit_code 0 after the current text, or they re-vote`);
     if (anchored.length) advice.push(`open challenge(s) from ${anchored.map((c) => this.shown(room, c.by)).join(", ")}: amend the cited text or they re-vote`);
     for (const c of legacy) {
       const author = this.shown(room, c.by);
@@ -2423,7 +2491,7 @@ export class Hub {
       waiting_on: pr.status === "open" ? active.filter((p) => !pr.votes[p.id]).map((p) => nm(p)) : [],
       needs_challenge: needsChallenge,
       blocked_by: this.blockedBy(room, pr),
-      challenges: pr.challenges.map((c) => ({ id: c.id, by: nm(c.by), objection: c.objection, status: c.status ?? "open", blocking: c.blocking !== false, version: c.version })),
+      challenges: pr.challenges.map((c) => ({ id: c.id, by: nm(c.by), objection: c.objection, status: c.status ?? "open", blocking: c.blocking !== false, version: c.version, ...(c.command ? { command: c.command } : {}) })),
       votes: Object.entries(pr.votes).map(([id, v]) => ({ name: nm({ id, name: v.name }), vote: v.vote, confidence: v.confidence, reason: v.reason, version: v.version, ...(v.version !== undefined && v.version !== pr.version ? { stale: `cast at v${v.version}` } : {}) })),
     };
   }
@@ -2466,6 +2534,7 @@ export class Hub {
 
   private evaluate(room: Room, pr: Proposal) {
     if (pr.status !== "open" || room.state === "concluded" || room.state === "closed") return;
+    this.settleExecutableChallenges(room, pr);
     const all = this.voters(room);
     const electorate = this.electorate(room, pr);
     const active = electorate.members;
@@ -3049,6 +3118,11 @@ export class Hub {
               pr.challenges.push(ev.challenge);
               if (ev.votes) pr.votes = ev.votes;
             }
+            break;
+          }
+          case "challenge_status": {
+            const c = this.rooms.get(ev.room)?.proposals.get(ev.proposalId)?.challenges.find((x) => x.id === ev.challengeId);
+            if (c) c.status = ev.status;
             break;
           }
           case "board_manifest": {

@@ -40,6 +40,7 @@ export const offlineScripts = [
   'bench-build-audit.test.ts',
   'bench-build-oracle-audit.test.ts',
   'bench-build-runner.test.ts',
+  'executable-challenge-regression.ts',
   'generator-file-regex-regression.ts',
   'board-expiry-regression.ts',
   'board-manifest-regression.ts',

@@ -173,3 +173,17 @@ test('room3, fake seats that never finish: every seat process is gone once run r
     assert.equal(spawnSync('lsof', ['-ti', `:${run.room.port}`, '-sTCP:LISTEN'], { encoding: 'utf8' }).stdout.trim(), '');
   } finally { rmSync(base, { recursive: true, force: true }); }
 });
+
+test('dry run end to end through the CLI: run (fake solo) → finalize → score → audit, both items pass and the run is clean', async () => {
+  const { base, fx, solutions, scratch } = setup();
+  try {
+    const cli = (...a: string[]) => spawnSync(process.execPath, ['--import', 'tsx', resolve('scripts', 'pool.ts'), ...a], { encoding: 'utf8', env: { ...process.env, CLAUDE_CONFIG_DIR: join(base, 'claude-home') } });
+    const r = cli('run', '--pool', fx.poolDir, '--arm', 'solo', '--rep', '1', '--scratch', scratch, '--fake-solutions', solutions);
+    assert.equal(r.status, 0, r.stderr);
+    const runDir = r.stdout.trim().split('\n').pop()!;
+    for (const step of ['finalize', 'score', 'audit']) { const s = cli(step, '--run', runDir, '--hidden', fx.hiddenParent); assert.equal(s.status, 0, step + ': ' + s.stderr + s.stdout); }
+    const score = JSON.parse(readFileSync(join(runDir, 'score.json'), 'utf8'));
+    assert.deepEqual(Object.fromEntries(score.items.map((i: any) => [i.id, i.pass])), { double: true, greet: true });
+    assert.equal(JSON.parse(readFileSync(join(runDir, 'audit.json'), 'utf8')).void, false);
+  } finally { rmSync(base, { recursive: true, force: true }); }
+});

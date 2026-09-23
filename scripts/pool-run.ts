@@ -7,14 +7,14 @@
  * The run never reads the hidden side of the pool: briefs come from pool.json alone, and every variable whose value
  * names the hidden root is dropped from the environment of seats, the hub and the launcher.
  *
- * Fake-seat mode (--fake-solutions FILE) puts a stub `claude` first on PATH: it commits each item named in its
+ * CLI: scripts/pool.ts run. Fake-seat mode (--fake-solutions FILE) puts a stub `claude` first on PATH: it commits each item named in its
  * brief from the fixture's solutions (never reference.patch) and emits stream-json usage, so the whole path runs
  * offline with no model call. */
 import { spawn, spawnSync, type ChildProcess } from 'node:child_process';
-import { chmodSync, closeSync, cpSync, existsSync, mkdirSync, openSync, readFileSync, readdirSync, realpathSync, renameSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
+import { chmodSync, closeSync, cpSync, existsSync, mkdirSync, openSync, readFileSync, readdirSync, realpathSync, renameSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:net';
 import { homedir } from 'node:os';
-import { basename, dirname, join, relative, resolve, sep } from 'node:path';
+import { dirname, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { claudeArgs } from '../src/claude-args.js';
 import { carrySettings } from '../src/env.js';
@@ -120,7 +120,7 @@ export async function runArm(o: RunOptions): Promise<string> {
   const integrationBranch = seatBranch(pool.name, o.arm, o.rep, 'integration');
   const started = Date.now(), deadlineAt = started + deadlineMs;
   const run: any = {
-    pool: pool.name, pool_sha256: sha256, arm: o.arm, rep: o.rep, repo, base_commit: pool.base_commit, deadline_min: pool.deadline_min,
+    pool: pool.name, pool_dir: realpathSync(o.poolDir), pool_sha256: sha256, arm: o.arm, rep: o.rep, repo, base_commit: pool.base_commit, deadline_min: pool.deadline_min,
     deadline_override_ms: o.deadlineMs ?? null, model: MODEL, started_at: new Date(started).toISOString(), deadline_at: new Date(deadlineAt).toISOString(),
     ended_at: null, account: accountRecord(o.switchLog ?? process.env.POOL_SWITCH_LOG, started), fake: !!o.fake, seats: [] as SeatRow[], room: null,
   };
@@ -333,17 +333,3 @@ if (!inRoom || cwd.includes(path.sep + '.swarm-worktrees' + path.sep)) {
 const result = { type: 'result', subtype: 'success', is_error: false, result: 'done', num_turns: 1, total_cost_usd: 0.001, modelUsage: { [model]: {} }, usage };
 process.stdout.write(JSON.stringify(result) + '\\n');
 `;
-
-async function main() {
-  const args = process.argv.slice(2);
-  const flag = (k: string) => { const i = args.indexOf('--' + k); return i < 0 ? undefined : args[i + 1]; };
-  const pool = flag('pool'), arm = flag('arm') as Arm, rep = Number(flag('rep'));
-  if (!pool || !arm || !rep) throw new Error('usage: pool-run --pool DIR --arm solo|split|room3|room15 --rep N [--scratch DIR] [--switch-log FILE] [--fake-solutions FILE] [--deadline-ms N]');
-  const scratch = flag('scratch') ?? join(realpathSync(process.env.TMPDIR ?? '/tmp'), 'pool-runs');
-  const fakeSolutions = flag('fake-solutions');
-  const runDir = await runArm({ poolDir: resolve(pool), arm, rep, scratch, switchLog: flag('switch-log'), deadlineMs: flag('deadline-ms') ? Number(flag('deadline-ms')) : undefined,
-    fake: fakeSolutions ? { solutions: fakeSolutions } : undefined, port: flag('port') ? Number(flag('port')) : undefined });
-  console.log(runDir);
-}
-export { main as runMain };
-if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) main().catch(e => { console.error(String(e)); process.exitCode = 1; });

@@ -23,6 +23,7 @@ export const offlineScripts = [
   'blind-drafts-regression.ts',
   'ak-select.test.ts',
   'adjudicator-trial.test.ts',
+  'dev-hub-rule.test.ts',
   'paper-account-regime.test.ts',
   'paper-number-audit.test.ts',
   'bench-ak.test.ts',

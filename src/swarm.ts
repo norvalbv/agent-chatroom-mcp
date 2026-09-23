@@ -12,7 +12,7 @@ import { collectRoomSnapshot, renderRunReport, writeRunResult, rollupUsage, pars
 import { settledAxes } from "./settled.js";
 import { registerRespawn } from "./respawn.js";
 import { fileURLToPath } from "node:url";
-import { heartbeatHookSettings, loadDotEnv, outputHeartbeat, seatBeat, seatChildEnv, type SeatBeat } from "./env.js";
+import { devHubRule, heartbeatHookSettings, loadDotEnv, outputHeartbeat, seatBeat, seatChildEnv, type SeatBeat } from "./env.js";
 import { randomUUID } from "node:crypto";
 import { respawnDecision, type RespawnRoom } from "./respawn.js";
 import { claudeArgs } from "./claude-args.js";
@@ -460,7 +460,7 @@ for (const g of plan.groups) {
     const wcwd = workerCwd(name);
     const writeRule =
       FULL && !readOnlyWorkers.has(name)
-        ? `You MAY modify files and run anything; you are on your own git branch in ${wcwd}. Commit what you want the verifier to test and say so in the room.`
+        ? `You MAY modify files and run anything; you are on your own git branch in ${wcwd}. Commit what you want the verifier to test and say so in the room.${devHubRule(CWD)}`
         : "Do NOT modify any files.";
     const buildText = (nm: string) => FLAT
       ? SETTLED +

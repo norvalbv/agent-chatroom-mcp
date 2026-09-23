@@ -99,11 +99,16 @@ test('rooms: the declared integration branch wins; without one the worker branch
     const a = seat(fx, R2, 'a', 'swarm/x2/claude-b', [['greet: fix', fix(fx, 'greet')]]);
     const b = seat(fx, R2, 'b', 'swarm/x2/claude-a', [['double: fix', fix(fx, 'double')]]);
     const c = seat(fx, R2, 'c', 'swarm/x2/claude-a10', []);
-    runJson(fx, R2, 'room3', [], { integration_branch: 'pool/dry-run/room3-rep2/integration', declared_branch: null, worker_branches: [c.branch, a.branch, b.branch], data_dir: join(R2, 'room', 'data') });
+    runJson(fx, R2, 'room3', [], { integration_branch: 'pool/dry-run/room3-rep2/integration', declared_branch: null, worker_branches: [c.branch, a.branch, b.branch], data_dir: join(R2, 'room', 'data'),
+      swarm_usage: { cost_usd: 1.25, coverage: 'partial' } });
     const f2 = finalizeRun(R2);
     assert.equal(f2.source, 'merge');
     assert.deepEqual(f2.order, ['swarm/x2/claude-a', 'swarm/x2/claude-a10', 'swarm/x2/claude-b']);
-    assert.equal(scoreRun(R2, { hiddenParent: fx.hiddenParent }).passed, 2);
+    const s2 = scoreRun(R2, { hiddenParent: fx.hiddenParent });
+    assert.equal(s2.passed, 2);
+    // a room's seats are the swarm's: its cost comes from the swarm's usage rollup, estimated unless coverage is complete
+    assert.equal(s2.cost_usd, 1.25);
+    assert.equal(s2.cost_estimated, true);
   } finally { rmSync(base, { recursive: true, force: true }); }
 });
 

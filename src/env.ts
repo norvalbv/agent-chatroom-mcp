@@ -48,6 +48,30 @@ export function carrySettings(noCarry: boolean, base: string): string {
   return noCarry ? JSON.stringify({ ...(base ? JSON.parse(base) : {}), autoMemoryEnabled: false }) : base;
 }
 
+/**
+ * When the project a seat may edit is this hub, the seat can run its build as a private hub and put agents on
+ * it. In swarm-083203-kooz every hub change was verified by a command exiting 0, so mechanics shipped that no
+ * agent had used (a seat's friction note: executable challenges were "shipped but unexercised live"), and only
+ * one of 15 seats ever started its own hub. The launcher's --port already starts a hub from the calling
+ * checkout's dist and data dir; CHATROOM_INSECURE_LOCAL is stripped from seats (SEAT_ENV_EXCLUSIONS), and
+ * without it that private hub refuses the launcher's room create (403) and the room runs on default policy.
+ */
+export function devHubRule(cwd: string): string {
+  try {
+    if (JSON.parse(readFileSync(resolve(cwd, "package.json"), "utf8")).name !== "agent-chatroom-mcp") return "";
+  } catch {
+    return "";
+  }
+  return (
+    " This project is the hub you are talking through, so run your change, not only its tests: in your worktree run `npm run build`, then in the background " +
+    '`CHATROOM_INSECURE_LOCAL=1 node dist/swarm.js "<what the agents should do>" --flat --agents 3 --models claude-opus-5-5 --verifier-model claude-opus-5-5 --timeout 10 --port <free port>`. ' +
+    "That starts a private hub from your build and puts agents in a room on it; the room log lands in your worktree's data/ and the report in swarms/. " +
+    "Stop that hub by PID when you are done (`lsof -ti :<port> -sTCP:LISTEN`), never by name. " +
+    "Tests show the code does what you expected; a change to how agents work together is verified once you have watched agents use it on a hub like that, so name the dev room you watched when you ask for review. " +
+    "Keep a dev room to 3 agents on claude-opus-5-5: this machine and its usage are shared."
+  );
+}
+
 export interface DotEnvOptions {
   /** Keys that must not be reintroduced from .env (e.g. human-control credentials in seats). */
   exclude?: readonly string[];

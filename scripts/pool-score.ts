@@ -1,5 +1,5 @@
 /** finalize, score and the leakage audit for the pool-throughput study (docs/experiments/2026-09-23-pool-throughput.md).
- * Reads a run dir laid out by pool-run.ts: run.json, seats/<seat>/*, room/*. Writes final.json, score.json, audit.json.
+ * Reads a run dir laid out by pool-run.ts: run.json, briefs/*, seats/<seat>/*, room/*. Writes final.json, score.json, audit.json.
  * The hidden root is never read from the run dir: score and audit take it as an argument, so nothing a builder
  * could see names it. Score worktrees holding hidden tests are removed before score returns. */
 import { execFileSync, spawnSync } from 'node:child_process';
@@ -101,8 +101,8 @@ export function auditRun(runDir: string, opts: { hiddenParent?: string } = {}) {
   const run = readJson(join(runDir, 'run.json'));
   const { pool } = loadPool(run.pool_dir);
   const needleList = needles(pool, opts.hiddenParent);
-  const scanned = new Set<string>([...files(join(runDir, 'seats')), ...files(join(runDir, 'room'))]);
-  for (const s of run.seats ?? []) for (const t of [s.transcript, ...(s.sessions ?? [])]) if (t) files(t).forEach(f => scanned.add(f));
+  const scanned = new Set<string>([...files(join(runDir, 'briefs')), ...files(join(runDir, 'seats')), ...files(join(runDir, 'room'))]);
+  for (const s of run.seats ?? []) for (const t of [s.brief_path, s.transcript, ...(s.sessions ?? [])]) if (t) files(t).forEach(f => scanned.add(f));
   for (const d of [run.room?.data_dir, run.room?.log_dir, run.room?.swarm_dir, run.room?.hub_log]) if (d) files(d).forEach(f => scanned.add(f));
   const hits: { file: string; needle: string }[] = [];
   for (const file of [...scanned].sort()) {

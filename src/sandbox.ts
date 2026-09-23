@@ -111,7 +111,9 @@ export function claudeSandbox({ cwd, write, hubPort }: SeatSandboxInput): Claude
   return {
     enabled: true,
     allowUnsandboxedCommands: false, // no dangerouslyDisableSandbox retry
-    failIfUnavailable: true, // refuse to start rather than run unsandboxed
+    // fail closed: a Bash call the sandbox cannot wrap fails rather than running unsandboxed. The seat still starts: nested
+    // in another Seatbelt sandbox, a claude seat joins and then every Bash call exits 71 (sandbox_apply) (review, round 1)
+    failIfUnavailable: true,
     network: { allowedDomains: [...SANDBOX_DOMAINS, ...hubEntries(hubPort)], allowLocalBinding: true },
     filesystem: write ? (caches.length ? { allowWrite: caches } : {}) : { denyWrite: [real(cwd)] },
   };

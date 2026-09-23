@@ -8,6 +8,12 @@
  * skills, plugins and memory — none of which a chatroom seat uses. --setting-sources stays at
  * "project" rather than dropping settings entirely: a target repo's own .claude/ (hooks, project
  * skills) can be load-bearing for the task itself (e.g. this repo's decision-edit-guard hook).
+ *
+ * Auto-memory is not governed by --setting-sources: a lean seat still loaded the operator's per-project
+ * MEMORY.md (swarm-092653-202z probe, haiku first turn: 12886 prompt tokens with it, 7378 without) and was
+ * told to write to it. Every seat then starts anchored on the same prior-room conclusions, which undercuts
+ * independent attempts, and each seat writes its own memory at exit (swarm-083203-kooz left 13 of the
+ * index's 33 lines). Lean seats get autoMemoryEnabled:false in --settings; --claude-full keeps memory.
  */
 export interface ClaudeArgsOptions {
   text: string;
@@ -37,6 +43,7 @@ export function claudeArgs({ text, mcpJson, tools, model, full, outputFormat, se
   if (outputFormat === "stream-json") args.push("--output-format", "stream-json", "--verbose");
   else args.push("--output-format", "json");
   if (model) args.push("--model", model);
-  if (settings) args.push("--settings", settings);
+  const merged = full ? settings : JSON.stringify({ ...(settings ? JSON.parse(settings) : {}), autoMemoryEnabled: false });
+  if (merged) args.push("--settings", merged);
   return args;
 }

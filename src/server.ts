@@ -589,17 +589,22 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
     "board_get",
     {
       title: "Read the shared board",
-      description: "Read one board entry's text (key), or without a key the manifest of all entries (key, author, size, updated) so you fetch only what you need.",
-      inputSchema: { room: roomArg, key: z.string().optional().describe("Entry to read in full; omit for the manifest.") },
+      description: "Read one board entry's text (key), or without a key the manifest of all entries (key, author, size, updated) so you fetch only what you need. " +
+        "draft/* entries stay readable only by their author until every drafter (non-verifier seat) has written one, so first attempts stay independent.",
+      inputSchema: { room: roomArg, key: z.string().optional().describe("Entry to read in full; omit for the manifest."), participant_id: asArg },
     },
-    guard("board_get", ({ room, key }) => {
+    guard("board_get", ({ room, key, participant_id }) => {
       const r = hub.getRoom(room);
+      // a caller that has not joined (or is ambiguous) reads as an outsider: every sealed draft stays hidden
+      let viewer: string | undefined;
+      try { viewer = r.participants.get(pid(room, participant_id))?.name; } catch {}
+      const sealed = (k: string, e: { by: string; text: string; updatedAt: string }) => hub.draftSealed(r, k, e as never, viewer);
       if (key) {
         const e = r.board.get(key);
-        if (!e) throw new HubError(`No board entry "${key}". Keys: ${[...r.board.keys()].join(", ") || "(none)"}`);
+        if (!e || sealed(key, e)) throw new HubError(`No board entry "${key}". Keys: ${[...r.board].filter(([k, x]) => !sealed(k, x)).map(([k]) => k).join(", ") || "(none)"}`);
         return { key, ...e, ...(hub.boardEntryExpired(r, key, e) ? { expired: true, tombstone: "Archived by expiry; excluded from manifests, retained for explicit retrieval." } : {}) };
       }
-      return Object.fromEntries([...r.board].filter(([k, e]) => !hub.boardEntryExpired(r, k, e)).map(([k, e]) => [k, { by: e.by, chars: e.text.length, updated_at: e.updatedAt, ...(e.ackRequired ? { ack_required: true } : {}), ...(e.reviewer ? { reviewer: e.reviewer } : {}) }]));
+      return Object.fromEntries([...r.board].filter(([k, e]) => !hub.boardEntryExpired(r, k, e) && !sealed(k, e)).map(([k, e]) => [k, { by: e.by, chars: e.text.length, updated_at: e.updatedAt, ...(e.ackRequired ? { ack_required: true } : {}), ...(e.reviewer ? { reviewer: e.reviewer } : {}) }]));
     }),
   );
 

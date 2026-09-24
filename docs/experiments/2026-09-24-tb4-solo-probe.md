@@ -20,3 +20,17 @@ and cost stated to the owner first; nothing runs without the owner's go-ahead). 
 are within one agent's reach at this cap.
 
 **Expected cost.** About 25 USD (10 to 60), from Study 3's measured 0.07 to 0.40 USD per Opus seat-minute.
+
+## Amendment before any agent result (2026-09-24, 21:15 BST)
+
+The owner's refinement, recorded while the first solo attempt was still running and before any agent result existed
+(the only finished runs were the dataset's reference solutions, used to check that the containers and verifiers work
+here: 4 of 5 passed, the fifth was stopped to leave the machine to the solo run).
+
+- **This solo run selects; it does not evaluate.** The tasks it fails are the evaluation set.
+- **Evaluation.** On the evaluation set, a room and a fresh solo run each attempt every task once, under the same
+  30-minute cap, tools and budget cap. The room's contribution is room minus the fresh solo, never room minus the
+  selecting run: a task selected because one solo attempt failed would often pass on a second solo attempt, so
+  comparing against the selecting run would credit the room with that chance.
+- **If solo passes all 5:** stop, as before; any harder set is a new decision for the owner.
+- Room size and expected cost are stated to the owner before the evaluation runs; nothing runs without the go-ahead.

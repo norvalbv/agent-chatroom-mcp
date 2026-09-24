@@ -123,11 +123,11 @@ function breakingSoloRun(fx: ReturnType<typeof makeDryRunPool>, base: string) {
   return R;
 }
 
-test('validate --suite-view records per-command results at base; score reports what broke as secondary and leaves suite.pass alone', () => {
+test('validate --suite-view records per-command results at base; score reports what broke as secondary and leaves suite.pass alone', async () => {
   const base = fresh();
   try {
     const fx = suitePool(base);
-    const report = validateAll(fx.poolDir, { hiddenParent: fx.hiddenParent, scratch: join(base, 'scratch'), repeats: 1, suiteView: true });
+    const report = await validateAll(fx.poolDir, { hiddenParent: fx.hiddenParent, scratch: join(base, 'scratch'), repeats: 1, suiteView: true });
     assert.equal(report.ok, true);
     assert.deepEqual(report.suite_base && [report.suite_base.format, report.suite_base.commands, report.suite_base.not_passing], ['offline-runner', 3, []]);
     const text = readFileSync(join(fx.poolDir, SUITE_BASE_FILE), 'utf8'), record = JSON.parse(text);

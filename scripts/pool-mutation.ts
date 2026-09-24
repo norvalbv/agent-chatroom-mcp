@@ -1,10 +1,10 @@
 /** Flag-only mutation check of hidden tests: StrykerJS 10 (Apache-2.0, command runner) mutates only the lines reference.patch
  * changes. docs/reuse-survey-2026-09-23.md, "Strength of the hidden tests"; CoHarden's lax-test failure. */
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, join, resolve } from 'node:path';
-import { copyHiddenTests, type HiddenItem, isolatedRepo, linkNodeModules } from './pool-format.ts';
+import { copyHiddenTests, type HiddenItem, Interrupted, isolatedRepo, letSignalsIn, linkNodeModules, stoppedBy } from './pool-format.ts';
 
 export type PatchRange = { file: string; start: number; end: number };
 export type Survivor = { file: string; line: number; column: number; mutator: string; original: string; replacement: string };
@@ -70,34 +70,49 @@ export function nodeSatisfies(range: string, version: string): boolean {
   return true;
 }
 
-/** Leads the new process group and runs argv in it. Its stdin is a lifeline pipe from the runner below: when the runner dies by
- * any means, SIGKILL included, the pipe closes and the keeper kills its own group, so StrykerJS and every mutant run go too. */
+/** Leads the new process group and runs argv in it. Its stdin is a lifeline pipe from validate: when validate dies by any
+ * means, SIGKILL included, the pipe closes and the keeper kills its own group, so StrykerJS and every mutant run go too. */
 const KEEPER = "const{spawn}=require('node:child_process');const die=()=>{try{process.kill(0,'SIGKILL')}catch{}};" +
   "process.stdin.on('end',die);process.stdin.on('close',die);process.stdin.on('error',die);process.stdin.resume();" +
   "const[bin,...args]=process.argv.slice(1);const k=spawn(bin,args,{stdio:['ignore','inherit','inherit']});" +
   "k.on('error',()=>process.exit(127));k.on('exit',s=>process.exit(s??1));";
-/** Runs in the caller's process group and puts argv in a group of its own (under KEEPER), which it kills at the deadline, when
- * argv exits (background children included), on SIGINT, SIGTERM or SIGHUP (then dies of the same signal, so the caller sees
- * it), and when its parent goes away (the ppid changes). A caller killed outright takes the runner down in its group, and the
- * keeper's lifeline then ends the rest. So no mutant run outlives the check, however validate is stopped. */
-const GROUP_RUNNER = "const{spawn}=require('node:child_process');const[ms,...argv]=process.argv.slice(1);const ppid=process.ppid;let code=null;" +
-  `const c=spawn(process.execPath,['-e',${JSON.stringify(KEEPER)},...argv],{stdio:['pipe','inherit','inherit'],detached:true});` +
-  "const kill=()=>{try{process.kill(-c.pid,'SIGKILL')}catch{}};const t=setTimeout(()=>{code=124;kill()},Number(ms));" +
-  "for(const s of['SIGINT','SIGTERM','SIGHUP'])process.on(s,()=>{kill();process.removeAllListeners(s);process.kill(process.pid,s)});" +
-  "setInterval(()=>{if(process.ppid!==ppid){kill();process.exit(1)}},250).unref();" +
-  "c.on('error',()=>{kill();process.exit(127)});c.on('exit',s=>{clearTimeout(t);kill();process.exit(code??s??1)});";
-const STOP_SIGNALS: readonly string[] = ['SIGINT', 'SIGTERM', 'SIGHUP'];
-/** `interrupted`: SIGINT, SIGTERM or SIGHUP when that stopped the runner (after it killed the group), else null. validate's own
- * handlers (bench-build-runtime.ts) only run once its synchronous work ends, so the check must stop by itself (MutationInterrupted). */
-export function runGrouped(argv: string[], cwd: string, timeoutMs: number, env: NodeJS.ProcessEnv) {
-  const r = spawnSync(process.execPath, ['-e', GROUP_RUNNER, String(timeoutMs), ...argv], { cwd, env, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, timeout: timeoutMs + 60_000, killSignal: 'SIGKILL' });
-  return { exit_code: r.status, timed_out: r.status === 124, signal: r.signal, interrupted: r.signal !== null && STOP_SIGNALS.includes(r.signal) ? r.signal : null,
-    output_tail: ((r.stdout ?? '') + (r.stderr ?? '')).slice(-2000) };
-}
+const OUTPUT_TAIL = 2000;
+/** How long to wait for the output pipes to close once the group is killed, in case a process left the group and holds them. */
+const CLOSE_GRACE_MS = 2000;
+export type GroupedResult = { exit_code: number | null; timed_out: boolean; signal: NodeJS.Signals | null; output_tail: string };
 
-/** Thrown when validate is being stopped, after the item's scratch copy is removed; validateAll lets it end validate. */
-export class MutationInterrupted extends Error {
-  constructor(readonly signal: string) { super(`mutation check stopped by ${signal}`); }
+/** Runs argv under KEEPER in a process group of its own and awaits it, so validate's event loop keeps running: a SIGINT or
+ * SIGTERM reaches validate's stop handlers at once, and their process.exit runs the 'exit' hook below, which kills the group
+ * (a Ctrl-C does not reach the group itself, since it is not the terminal's foreground group). The group is also killed at
+ * the deadline and when argv exits (background children included). `signal` is what killed the keeper, if anything did. */
+export function runGrouped(argv: string[], cwd: string, timeoutMs: number, env: NodeJS.ProcessEnv): Promise<GroupedResult> {
+  return new Promise(resolve => {
+    const c = spawn(process.execPath, ['-e', KEEPER, ...argv], { cwd, env, stdio: ['pipe', 'pipe', 'pipe'], detached: true });
+    let tail = '', timedOut = false, finished = false, graceTimer: NodeJS.Timeout | undefined;
+    const keep = (d: Buffer) => { tail = (tail + d.toString('utf8')).slice(-OUTPUT_TAIL); };
+    c.stdout.on('data', keep);
+    c.stderr.on('data', keep);
+    const kill = () => { if (c.pid) try { process.kill(-c.pid, 'SIGKILL'); } catch {} };
+    // Prepended, so the group is dead before an earlier 'exit' hook (mutationCheckItem's removal of its copy) runs.
+    process.prependListener('exit', kill);
+    const deadline = setTimeout(() => { timedOut = true; kill(); }, timeoutMs);
+    const finish = (code: number | null, signal: NodeJS.Signals | null, note = '') => {
+      if (finished) return;
+      finished = true;
+      clearTimeout(deadline); clearTimeout(graceTimer);
+      kill();
+      process.removeListener('exit', kill);
+      c.stdin.destroy(); c.stdout.destroy(); c.stderr.destroy();
+      resolve({ exit_code: code, timed_out: timedOut, signal, output_tail: (tail + note).slice(-OUTPUT_TAIL) });
+    };
+    c.stdin.on('error', () => {}); // the keeper gone before its lifeline is closed: nothing to report
+    c.on('error', e => finish(null, null, `\n${e.message}`));
+    c.on('exit', (code, signal) => {
+      kill(); // argv has exited: its background children go with the group, which lets the output pipes close
+      graceTimer = setTimeout(() => finish(code, signal), CLOSE_GRACE_MS);
+    });
+    c.on('close', (code, signal) => finish(code, signal));
+  });
 }
 
 const snippet = (source: string, loc: any): string => {
@@ -108,8 +123,9 @@ const snippet = (source: string, loc: any): string => {
 
 /** One item: a scratch copy at base (its own repository, as a pool run's, so nothing is registered in the pool's repo and a killed
  * validate leaves no worktree behind) with reference.patch applied and the hidden tests copied in, mutated in place (the copy is
- * thrown away) with the hidden command as Stryker's command runner. Config and report stay outside the copy. */
-export function mutationCheckItem(o: { repo: string; baseCommit: string; item: HiddenItem; scratch: string; concurrency?: number; timeoutMs?: number; nodeVersion?: string }): MutationResult {
+ * thrown away) with the hidden command as Stryker's command runner. Config and report stay outside the copy. A git, tar or
+ * StrykerJS child killed by SIGINT, SIGTERM or SIGHUP means validate is being stopped: that is an Interrupted, not an item error. */
+export async function mutationCheckItem(o: { repo: string; baseCommit: string; item: HiddenItem; scratch: string; concurrency?: number; timeoutMs?: number; nodeVersion?: string }): Promise<MutationResult> {
   const concurrency = Math.max(1, o.concurrency ?? 1), timeoutMs = o.timeoutMs ?? 30 * 60_000, t0 = Date.now();
   const result: MutationResult = { flag_only: true, flagged: false, ranges: [], skipped_files: [], mutants: 0, killed: 0, timed_out: 0, survived: 0, errors: 0, survivors: [], concurrency, duration_s: 0 };
   const done = (extra: Partial<MutationResult>): MutationResult => ({ ...result, ...extra, duration_s: Math.round((Date.now() - t0) / 1000) });
@@ -123,10 +139,26 @@ export function mutationCheckItem(o: { repo: string; baseCommit: string; item: H
   mkdirSync(resolve(o.scratch), { recursive: true });
   const dir = mkdtempSync(join(resolve(o.scratch), `mutation-${o.item.id}-`)), wt = join(dir, 'wt');
   const config = join(dir, 'stryker.config.json'), reportPath = join(dir, 'mutation.json');
+  const what = `mutation check of ${o.item.id}`;
+  // Retried: a process that was just killed can still be letting go of the copy (ENOTEMPTY). A copy that cannot be removed is
+  // left in the scratch dir rather than replacing the item's result.
+  const removeCopy = () => { try { rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }); } catch {} };
+  // validate's stop handlers end it with process.exit, which skips `finally`: this hook removes the copy then, after
+  // runGrouped's own hook has killed StrykerJS's group.
+  process.on('exit', removeCopy);
+  const stopped = async (signal: string | null | undefined) => {
+    const s = stoppedBy(signal);
+    if (!s) return;
+    await letSignalsIn(); // a stop signal validate got too ends it here, through its own handlers
+    throw new Interrupted(s, what);
+  };
   try {
-    isolatedRepo(o.repo, o.baseCommit, wt);
-    linkNodeModules(o.repo, wt);
+    try {
+      isolatedRepo(o.repo, o.baseCommit, wt);
+      linkNodeModules(o.repo, wt);
+    } catch (e) { await stopped((e as { signal?: string } | null)?.signal); throw e; }
     const applied = spawnSync('git', ['apply', '--whitespace=nowarn', o.item.patchPath], { cwd: wt, encoding: 'utf8', maxBuffer: 256 * 1024 * 1024 });
+    await stopped(applied.signal);
     if (applied.status !== 0) return done({ error: ('reference.patch did not apply: ' + applied.stderr).slice(-500) });
     copyHiddenTests(o.item, wt);
     writeFileSync(config, JSON.stringify({
@@ -136,9 +168,10 @@ export function mutationCheckItem(o: { repo: string; baseCommit: string; item: H
     }, null, 2));
     const env = { ...process.env };
     delete env.NODE_TEST_CONTEXT; // inherited from an outer node --test, it makes the hidden node --test exit 0 and every mutant survive
+    await letSignalsIn(); // a stop that came while the copy was made ends validate here, before StrykerJS starts
     // StrykerJS runs on this Node (the one the engines check above passed), not on whichever node its shebang finds first on PATH.
-    const r = runGrouped([process.execPath, stryker.bin, 'run', config], wt, timeoutMs, env);
-    if (r.interrupted) throw new MutationInterrupted(r.interrupted);
+    const r = await runGrouped([process.execPath, stryker.bin, 'run', config], wt, timeoutMs, env);
+    await stopped(r.signal);
     if (r.timed_out) return done({ error: `StrykerJS did not finish within ${Math.round(timeoutMs / 60_000)} min` });
     if (r.exit_code !== 0 || !existsSync(reportPath)) return done({ error: `StrykerJS exited ${r.exit_code}: ${r.output_tail.slice(-500)}` });
     const report = JSON.parse(readFileSync(reportPath, 'utf8'));
@@ -151,6 +184,7 @@ export function mutationCheckItem(o: { repo: string; baseCommit: string; item: H
     return done({ mutants: mutants.length, killed: count('Killed'), timed_out: count('Timeout'), survived: survivors.length, errors: count('CompileError', 'RuntimeError'),
       survivors, flagged: survivors.length > 0, ...(mutants.length ? {} : { note: 'StrykerJS placed no mutants in the changed lines' }) });
   } finally {
-    rmSync(dir, { recursive: true, force: true });
+    process.removeListener('exit', removeCopy);
+    removeCopy();
   }
 }

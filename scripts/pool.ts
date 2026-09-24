@@ -11,12 +11,12 @@
  *   node --import tsx scripts/pool.ts score --run R [--hidden PARENT]   (also runs the audit)
  *   node --import tsx scripts/pool.ts audit --run R [--hidden PARENT]   (exit 1 when the run is void)
  * --hidden is the parent of <pool>/<item-id>/ (default $POOL_HIDDEN_ROOT, else ~/.agent-chatroom-hidden). */
-import { mkdtempSync, realpathSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { mkdtempSync, realpathSync, writeSync } from 'node:fs';
+import { constants, tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { hiddenRoot, loadHiddenItem, loadPool, lockPool, validatePool, type ValidateItem } from './pool-format.ts';
-import { MUTATION_NOTE, mutationCheckItem, MutationInterrupted, type MutationResult } from './pool-mutation.ts';
+import { hiddenRoot, Interrupted, letSignalsIn, loadHiddenItem, loadPool, lockPool, validatePool, type ValidateItem } from './pool-format.ts';
+import { MUTATION_NOTE, mutationCheckItem, type MutationResult } from './pool-mutation.ts';
 import { recordSuiteBase, SECONDARY_NOTE, SUITE_BASE_FILE } from './pool-suite-view.ts';
 import { auditRun, finalizeRun, scoreRun } from './pool-score.ts';
 import { ARMS, runArm, type Arm } from './pool-run.ts';
@@ -31,10 +31,14 @@ type ItemMutation = MutationResult | { flag_only: true; flagged: false; skipped?
 const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
 /** validatePool, then the optional extras. Neither extra changes an item's ok or the report's ok: the suite view is a secondary,
- * not pre-registered record, and mutation survivors are flags for a human (todo/pass-to-pass-score-view.md, todo/mutation-check-hidden-tests.md). */
-export function validateAll(poolDir: string, o: ValidateOptions = {}) {
+ * not pre-registered record, and mutation survivors are flags for a human (todo/pass-to-pass-score-view.md, todo/mutation-check-hidden-tests.md).
+ * Between its synchronous steps it lets pending signals in (letSignalsIn), so a Ctrl-C or SIGTERM that came during one ends
+ * validate before the next starts; StrykerJS runs are awaited, so one ends validate at once. An Interrupted (a step's child
+ * killed by a stop signal) ends it too. */
+export async function validateAll(poolDir: string, o: ValidateOptions = {}) {
   const scratch = o.scratch ? resolve(o.scratch) : mkdtempSync(join(realpathSync(tmpdir()), 'pool-validate-'));
   const report = validatePool(poolDir, { hiddenParent: o.hiddenParent, scratch, repeats: o.repeats, suite: o.suite });
+  await letSignalsIn();
   let suite_base;
   if (o.suite || o.suiteView || o.suiteViewCmd) {
     try {
@@ -44,17 +48,34 @@ export function validateAll(poolDir: string, o: ValidateOptions = {}) {
     } catch (e) { suite_base = { note: SECONDARY_NOTE, file: SUITE_BASE_FILE, error: message(e) }; }
   }
   const { pool } = loadPool(poolDir), hidden = hiddenRoot(pool.name, o.hiddenParent);
-  const mutationFor = (r: ValidateItem, opts: NonNullable<ValidateOptions['mutation']>): ItemMutation => {
+  const mutationFor = async (r: ValidateItem, opts: NonNullable<ValidateOptions['mutation']>): Promise<ItemMutation> => {
     if (r.passes_with_reference !== true) return { flag_only: true, flagged: false, skipped: 'not run: the reference fix does not pass the hidden test' };
-    try { return mutationCheckItem({ repo: pool.repo, baseCommit: pool.base_commit, item: loadHiddenItem(hidden, r.id), scratch, ...opts }); }
+    try { return await mutationCheckItem({ repo: pool.repo, baseCommit: pool.base_commit, item: loadHiddenItem(hidden, r.id), scratch, ...opts }); }
     catch (e) {
-      if (e instanceof MutationInterrupted) throw e; // validate is being stopped: do not start StrykerJS on the next item
+      if (e instanceof Interrupted) throw e; // validate is being stopped: do not start StrykerJS on the next item
       return { flag_only: true, flagged: false, error: message(e) };
     }
   };
-  const items: (ValidateItem & { mutation?: ItemMutation })[] = o.mutation ? report.items.map(r => ({ ...r, mutation: mutationFor(r, o.mutation!) })) : report.items;
+  let items: (ValidateItem & { mutation?: ItemMutation })[] = report.items;
+  if (o.mutation) {
+    items = [];
+    for (const r of report.items) {
+      await letSignalsIn();
+      items.push({ ...r, mutation: await mutationFor(r, o.mutation) });
+    }
+  }
   const mutation = o.mutation && { note: MUTATION_NOTE, flagged: items.filter(r => r.mutation?.flagged).map(r => r.id) };
+  await letSignalsIn();
   return { ...report, items, ...(suite_base ? { suite_base } : {}), ...(mutation ? { mutation } : {}) };
+}
+
+/** validate's stop: SIGINT or SIGTERM ends it with 128 + the signal number as soon as its event loop runs, and process.exit
+ * runs the 'exit' hooks that kill a StrykerJS group and remove its copy. Prepended, so it runs before bench-build-runtime.ts's
+ * listeners for the same signals (which pool-format.ts imports). */
+function exitOnStopSignals() {
+  for (const s of ['SIGINT', 'SIGTERM'] as const) {
+    process.prependListener(s, () => { try { writeSync(2, `validate stopped by ${s}\n`); } catch {} process.exit(128 + constants.signals[s]); });
+  }
 }
 
 async function main(argv: string[]) {
@@ -66,7 +87,8 @@ async function main(argv: string[]) {
       console.log(lockPool(need('pool')));
       return 0;
     case 'validate': {
-      const report = validateAll(need('pool'), { hiddenParent: flag('hidden'), scratch: flag('scratch'), repeats: flag('repeats') ? Number(flag('repeats')) : undefined,
+      exitOnStopSignals();
+      const report = await validateAll(need('pool'), { hiddenParent: flag('hidden'), scratch: flag('scratch'), repeats: flag('repeats') ? Number(flag('repeats')) : undefined,
         suite: args.includes('--suite'), suiteView: args.includes('--suite-view'), suiteViewCmd: flag('suite-view-cmd'),
         mutation: args.includes('--mutation') ? { concurrency: flag('mutation-concurrency') ? Number(flag('mutation-concurrency')) : undefined,
           timeoutMs: flag('mutation-timeout-min') ? Number(flag('mutation-timeout-min')) * 60_000 : undefined } : undefined });
@@ -109,5 +131,8 @@ async function main(argv: string[]) {
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  main(process.argv.slice(2)).then(code => { process.exitCode = code; }, e => { console.error(String(e instanceof Error ? e.message : e)); process.exitCode = 2; });
+  main(process.argv.slice(2)).then(code => { process.exitCode = code; }, e => {
+    console.error(String(e instanceof Error ? e.message : e));
+    process.exitCode = e instanceof Interrupted ? 128 + (constants.signals[e.signal as NodeJS.Signals] ?? 0) : 2;
+  });
 }

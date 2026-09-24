@@ -105,15 +105,28 @@ export function copyHiddenTests(item: HiddenItem, worktree: string) {
 }
 
 /** Runs a hidden or suite command. NODE_TEST_CONTEXT is dropped: inherited from an outer `node --test`, it makes a
- * nested `node --test` report to the parent and exit 0 even when its tests fail. */
-export function runCmd(cmd: string, cwd: string, timeoutMs = 300_000, opts: { env?: Record<string, string>; full?: boolean } = {}): { exit_code: number | null; timed_out: boolean; output_tail: string; stdout?: string; stderr?: string } {
+ * nested `node --test` report to the parent and exit 0 even when its tests fail. `signal` is the one that killed the
+ * command, if any (SIGKILL at the deadline, or a stop signal such as a Ctrl-C that reached the whole process group). */
+export function runCmd(cmd: string, cwd: string, timeoutMs = 300_000, opts: { env?: Record<string, string>; full?: boolean } = {}): { exit_code: number | null; timed_out: boolean; signal: NodeJS.Signals | null; output_tail: string; stdout?: string; stderr?: string } {
   const env = { ...process.env, ...opts.env };
   delete env.NODE_TEST_CONTEXT;
   const r = spawnSync('sh', ['-c', cmd], { cwd, env, encoding: 'utf8', timeout: timeoutMs, killSignal: 'SIGKILL', maxBuffer: 64 * 1024 * 1024 });
-  const out = { exit_code: r.status, timed_out: r.error?.message.includes('ETIMEDOUT') ?? false, output_tail: ((r.stdout ?? '') + (r.stderr ?? '')).slice(-2000) };
+  const out = { exit_code: r.status, timed_out: r.error?.message.includes('ETIMEDOUT') ?? false, signal: r.signal, output_tail: ((r.stdout ?? '') + (r.stderr ?? '')).slice(-2000) };
   // full keeps both streams whole, for the per-command suite view (pool-suite-view.ts)
   return opts.full ? { ...out, stdout: r.stdout ?? '', stderr: r.stderr ?? '' } : out;
 }
+
+/** The signals that stop validate: Ctrl-C (SIGINT) reaches every process in the foreground group, SIGTERM is `kill <pid>`. */
+export const STOP_SIGNALS: readonly string[] = ['SIGINT', 'SIGTERM', 'SIGHUP'];
+export const stoppedBy = (signal: string | null | undefined): string | null => (signal && STOP_SIGNALS.includes(signal) ? signal : null);
+/** A step of validate whose child was killed by a stop signal: validate is being stopped, so nothing it half did is kept. */
+export class Interrupted extends Error {
+  constructor(readonly signal: string, what: string) { super(`${what} stopped by ${signal}`); }
+}
+/** Node runs a SIGINT or SIGTERM listener only when the event loop polls, and a spawnSync or execFileSync never lets it: a
+ * signal that arrives during one waits, and is lost if the process then ends without polling. validate awaits this between
+ * its synchronous steps, so its stop handlers (pool.ts) run there and end it before the next step starts. */
+export const letSignalsIn = () => new Promise<void>(resolve => setImmediate(resolve));
 
 const inside = (child: string, parent: string) => {
   const rel = relative(parent, child);

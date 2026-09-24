@@ -3,7 +3,7 @@
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, isAbsolute, join, relative, resolve } from 'node:path';
-import { Interrupted, isolatedRepo, letSignalsIn, linkNodeModules, loadPool, type Pool, removeWorktree, runCmd, stoppedBy, worktreeAt } from './pool-format.ts';
+import { cmdTimeoutMs, Interrupted, isolatedRepo, letSignalsIn, linkNodeModules, loadPool, type Pool, removeWorktree, runCmd, stoppedBy, worktreeAt } from './pool-format.ts';
 
 export type CommandStatus = 'passed' | 'failed' | 'skipped' | 'unknown';
 export type SuiteFormat = 'offline-runner' | 'vitest-json' | 'exit-code';
@@ -133,7 +133,7 @@ export async function recordSuiteBase(poolDir: string, opts: { scratch?: string;
     worktreeAt(repo, isolatedRepo(pool.repo, pool.base_commit, repo), wt);
     linkNodeModules(pool.repo, wt);
     await letSignalsIn(); // a stop signal validate got while the copy was made ends it here, before the suite runs
-    const run = runSuiteView(viewCmd, wt, opts.timeoutMs), stop = stoppedBy(run.signal);
+    const run = runSuiteView(viewCmd, wt, opts.timeoutMs ?? cmdTimeoutMs(pool, SUITE_TIMEOUT_MS)), stop = stoppedBy(run.signal);
     outcome = stop ? { stop } : { view: run.view };
   } catch (e) {
     const stop = stoppedBy((e as { signal?: string } | null)?.signal); // git or tar making the base copy

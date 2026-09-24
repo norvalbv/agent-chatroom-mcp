@@ -12,8 +12,11 @@ import { basename, isAbsolute, join, relative, resolve } from 'node:path';
 import { hashTree } from './bench-build-runtime.ts';
 
 export type PoolItem = { id: string; title: string; brief: string };
-/** suite_cmd (optional, default "npm test") is the project's existing test suite, run by score from the repo root. */
-export type Pool = { name: string; repo: string; base_commit: string; deadline_min: number; items: PoolItem[]; split: string[][]; suite_cmd?: string };
+/** suite_cmd (optional, default "npm test") is the project's existing test suite, run by score from the repo root.
+ * cmd_timeout_min (optional) is how long validate and score let one hidden or suite command run, queue wait included;
+ * without it validate allows 5 minutes and score 10. A large repo on a machine whose shared test queue can hold a run
+ * for minutes needs more, or a suite that would pass is killed and recorded as failing. */
+export type Pool = { name: string; repo: string; base_commit: string; deadline_min: number; items: PoolItem[]; split: string[][]; suite_cmd?: string; cmd_timeout_min?: number };
 export type HiddenItem = { id: string; dir: string; cmd: string; patchPath: string; testsDir: string; tests: string[] };
 
 export const LOCK_FILE = 'pool.sha256';
@@ -28,6 +31,7 @@ export function checkPool(p: any): Pool {
   need(typeof p.base_commit === 'string' && /^[0-9a-f]{7,64}$/.test(p.base_commit), 'base_commit must be a commit sha');
   need(typeof p.deadline_min === 'number' && p.deadline_min > 0 && Number.isFinite(p.deadline_min), 'deadline_min must be a positive number');
   need(p.suite_cmd === undefined || (typeof p.suite_cmd === 'string' && p.suite_cmd.trim() !== ''), 'suite_cmd must be a non-empty string');
+  need(p.cmd_timeout_min === undefined || (typeof p.cmd_timeout_min === 'number' && p.cmd_timeout_min > 0 && Number.isFinite(p.cmd_timeout_min)), 'cmd_timeout_min must be a positive number');
   need(Array.isArray(p.items) && p.items.length > 0, 'items must be a non-empty array');
   const ids = new Set<string>();
   for (const item of p.items) {
@@ -103,6 +107,9 @@ export function copyHiddenTests(item: HiddenItem, worktree: string) {
     cpSync(join(item.testsDir, rel), dest);
   }
 }
+
+/** The pool's per-command time limit in ms, or `fallbackMs` when the pool sets none. */
+export const cmdTimeoutMs = (pool: Pool, fallbackMs: number) => (pool.cmd_timeout_min ? Math.round(pool.cmd_timeout_min * 60_000) : fallbackMs);
 
 /** Runs a hidden or suite command. NODE_TEST_CONTEXT is dropped: inherited from an outer `node --test`, it makes a
  * nested `node --test` report to the parent and exit 0 even when its tests fail. `signal` is the one that killed the
@@ -204,6 +211,7 @@ export type ValidateItem = { id: string; ok: boolean; fails_at_base: boolean | n
 export function validatePool(poolDir: string, opts: { hiddenParent?: string; scratch?: string; timeoutMs?: number; repeats?: number; suite?: boolean } = {}) {
   const repeats = Math.max(1, opts.repeats ?? 3);
   const { pool, sha256: poolSha } = loadPool(poolDir);
+  const timeoutMs = opts.timeoutMs ?? cmdTimeoutMs(pool, 300_000);
   const hidden = hiddenRoot(pool.name, opts.hiddenParent);
   const scratch = opts.scratch ? resolve(opts.scratch) : mkdtempSync(join(tmpdir(), 'pool-validate-'));
   mkdirSync(scratch, { recursive: true });
@@ -220,7 +228,7 @@ export function validatePool(poolDir: string, opts: { hiddenParent?: string; scr
       r.names_in_repo = names.filter(n => repoNames.has(n));
       r.names_in_briefs = names.filter(n => pool.items.some(i => i.brief.includes(n) || i.title.includes(n)));
       copyHiddenTests(item, wt);
-      const baseRuns = Array.from({ length: repeats }, () => runCmd(item.cmd, wt, opts.timeoutMs));
+      const baseRuns = Array.from({ length: repeats }, () => runCmd(item.cmd, wt, timeoutMs));
       const atBase = baseRuns[0];
       r.base_exit = atBase.exit_code; r.base_tail = atBase.output_tail;
       r.base_exits = baseRuns.map(x => x.exit_code);
@@ -232,14 +240,14 @@ export function validatePool(poolDir: string, opts: { hiddenParent?: string; scr
         r.reference_tail = ('reference.patch did not apply: ' + applied.stderr).slice(-2000);
       } else {
         copyHiddenTests(item, wt); // the hidden tests are authoritative even if the patch touched them
-        const refRuns = Array.from({ length: repeats }, () => runCmd(item.cmd, wt, opts.timeoutMs));
+        const refRuns = Array.from({ length: repeats }, () => runCmd(item.cmd, wt, timeoutMs));
         const withRef = refRuns[0];
         r.reference_exit = withRef.exit_code; r.reference_tail = withRef.output_tail;
         r.reference_exits = refRuns.map(x => x.exit_code);
         r.passes_with_reference = refRuns.every(x => x.exit_code === 0);
         r.flaky = r.flaky || (refRuns.some(x => x.exit_code === 0) && refRuns.some(x => x.exit_code !== 0));
         if (opts.suite && pool.suite_cmd) {
-          const suite = runCmd(pool.suite_cmd, wt, opts.timeoutMs);
+          const suite = runCmd(pool.suite_cmd, wt, timeoutMs);
           r.suite_with_reference = suite.exit_code === 0; r.suite_tail = suite.output_tail;
         }
       }

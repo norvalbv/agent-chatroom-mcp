@@ -7,7 +7,7 @@ import { existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, realpathSy
 import { homedir } from 'node:os';
 import { basename, join, resolve } from 'node:path';
 import { json } from './bench-build-runtime.ts';
-import { copyHiddenTests, hiddenRoot, linkNodeModules, loadHiddenItem, loadPool, removeWorktree, runCmd, worktreeAt } from './pool-format.ts';
+import { cmdTimeoutMs, copyHiddenTests, hiddenRoot, linkNodeModules, loadHiddenItem, loadPool, removeWorktree, runCmd, worktreeAt } from './pool-format.ts';
 import { compareSuiteViews, parseSuiteOutput, readSuiteBase, runSuiteView, SECONDARY_NOTE, SUITE_BASE_FILE, type SuitePassToPass, type SuiteView } from './pool-suite-view.ts';
 
 const ITEM_TIMEOUT_MS = 10 * 60_000;
@@ -141,7 +141,7 @@ export function scoreRun(runDir: string, opts: { hiddenParent?: string } = {}) {
   worktreeAt(run.repo, final.head, suiteWt);
   linkNodeModules(run.source_repo ?? run.repo, suiteWt); // the isolated run repo has no node_modules
   try {
-    const r = runCmd(suiteCmd, suiteWt, ITEM_TIMEOUT_MS, { full: true });
+    const r = runCmd(suiteCmd, suiteWt, cmdTimeoutMs(pool, ITEM_TIMEOUT_MS), { full: true });
     suite = { cmd: suiteCmd, exit_code: r.exit_code, pass: r.exit_code === 0, output_tail: r.output_tail };
     if ('record' in base && base.record.view_cmd === suiteCmd) {
       try { headView = parseSuiteOutput({ ...r, cwd: suiteWt }); } catch (e) { viewError = `reading the head suite run: ${errorText(e)}`; }
@@ -154,7 +154,7 @@ export function scoreRun(runDir: string, opts: { hiddenParent?: string } = {}) {
       try {
         worktreeAt(run.repo, final.head, viewWt);
         linkNodeModules(run.source_repo ?? run.repo, viewWt);
-        headView = runSuiteView(base.record.view_cmd, viewWt, ITEM_TIMEOUT_MS).view;
+        headView = runSuiteView(base.record.view_cmd, viewWt, cmdTimeoutMs(pool, ITEM_TIMEOUT_MS)).view;
       } finally { removeWorktree(run.repo, viewWt); }
     } catch (e) { viewError = `running the view command at head: ${errorText(e)}`; }
   }
@@ -171,7 +171,7 @@ export function scoreRun(runDir: string, opts: { hiddenParent?: string } = {}) {
     items = pool.items.map((i: any, n: number) => {
       linkNodeModules(run.source_repo ?? run.repo, testWt);
       copyHiddenTests(hiddenItems[n], testWt); // tests only; reference.patch is never copied
-      const r = runCmd(hiddenItems[n].cmd, testWt, ITEM_TIMEOUT_MS);
+      const r = runCmd(hiddenItems[n].cmd, testWt, cmdTimeoutMs(pool, ITEM_TIMEOUT_MS));
       gitOut(testWt, 'reset', '-q', '--hard'); gitOut(testWt, 'clean', '-fdq');
       return { id: i.id, pass: r.exit_code === 0, exit_code: r.exit_code, attempted: attempted(run, final, i.id), output_tail: r.output_tail };
     });

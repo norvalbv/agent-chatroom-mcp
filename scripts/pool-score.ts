@@ -8,8 +8,10 @@ import { homedir } from 'node:os';
 import { basename, join, resolve } from 'node:path';
 import { json } from './bench-build-runtime.ts';
 import { copyHiddenTests, hiddenRoot, linkNodeModules, loadHiddenItem, loadPool, removeWorktree, runCmd, worktreeAt } from './pool-format.ts';
+import { compareSuiteViews, parseSuiteOutput, readSuiteBase, runSuiteView, SECONDARY_NOTE, SUITE_BASE_FILE, type SuitePassToPass, type SuiteView } from './pool-suite-view.ts';
 
 const ITEM_TIMEOUT_MS = 10 * 60_000;
+const errorText = (e: unknown) => (e instanceof Error ? e.message : String(e));
 const GIT_ID = ['-c', 'user.name=pool-harness', '-c', 'user.email=pool-harness@localhost', '-c', 'commit.gpgsign=false'];
 const git = (cwd: string, ...args: string[]) => spawnSync('git', ['-C', cwd, ...GIT_ID, ...args], { encoding: 'utf8', maxBuffer: 256 * 1024 * 1024 }); // a real repo's listings pass 1 MB (ENOBUFS)
 const gitOut = (cwd: string, ...args: string[]) => execFileSync('git', ['-C', cwd, ...GIT_ID, ...args], { encoding: 'utf8', maxBuffer: 256 * 1024 * 1024 }).trim();
@@ -131,13 +133,36 @@ export function scoreRun(runDir: string, opts: { hiddenParent?: string } = {}) {
   // The project's own suite runs in a clean checkout with no hidden test present, so they cannot change its verdict.
   const suiteWt = join(scratch, 'suite'), testWt = join(scratch, 'hidden');
   const suiteCmd = pool.suite_cmd ?? 'npm test';
-  let suite, items;
+  // The secondary suite view (not pre-registered) must never stop or change the pre-registered score: every step of it below is
+  // caught, and any failure only makes it { available: false, reason }.
+  let base: ReturnType<typeof readSuiteBase>;
+  try { base = readSuiteBase(run.pool_dir, pool); } catch (e) { base = { reason: `${SUITE_BASE_FILE}: ${errorText(e)}` }; }
+  let suite, items, headView: SuiteView | undefined, viewError: string | undefined;
   worktreeAt(run.repo, final.head, suiteWt);
   linkNodeModules(run.source_repo ?? run.repo, suiteWt); // the isolated run repo has no node_modules
   try {
-    const r = runCmd(suiteCmd, suiteWt, ITEM_TIMEOUT_MS);
+    const r = runCmd(suiteCmd, suiteWt, ITEM_TIMEOUT_MS, { full: true });
     suite = { cmd: suiteCmd, exit_code: r.exit_code, pass: r.exit_code === 0, output_tail: r.output_tail };
+    if ('record' in base && base.record.view_cmd === suiteCmd) {
+      try { headView = parseSuiteOutput({ ...r, cwd: suiteWt }); } catch (e) { viewError = `reading the head suite run: ${errorText(e)}`; }
+    }
   } finally { removeWorktree(run.repo, suiteWt); }
+  // Secondary view only: a view command other than suite_cmd (e.g. vitest's JSON reporter) runs once more in its own clean checkout.
+  if ('record' in base && !headView && !viewError) {
+    const viewWt = join(scratch, 'suite-view');
+    try {
+      try {
+        worktreeAt(run.repo, final.head, viewWt);
+        linkNodeModules(run.source_repo ?? run.repo, viewWt);
+        headView = runSuiteView(base.record.view_cmd, viewWt, ITEM_TIMEOUT_MS).view;
+      } finally { removeWorktree(run.repo, viewWt); }
+    } catch (e) { viewError = `running the view command at head: ${errorText(e)}`; }
+  }
+  let passToPass: SuitePassToPass = { available: false, reason: 'reason' in base ? base.reason : viewError ?? 'no head view' };
+  if ('record' in base && headView) {
+    try { passToPass = compareSuiteViews(base.record.view, headView, base.record.view_cmd); }
+    catch (e) { passToPass = { available: false, reason: `comparing base and head: ${errorText(e)}` }; }
+  }
   worktreeAt(run.repo, final.head, testWt);
   try {
     const hiddenItems = pool.items.map((i: any) => loadHiddenItem(hidden, i.id));
@@ -163,6 +188,8 @@ export function scoreRun(runDir: string, opts: { hiddenParent?: string } = {}) {
     pool: pool.name, pool_sha256: sha256, arm: run.arm, rep: run.rep, head: final.head, final_source: final.source,
     passed, of: items.length, attempted: items.filter((i: any) => i.attempted).length, items,
     suite, conflicts: final.conflicts.length, missing_branches: final.missing,
+    // Not a pre-registered measure: labelled so no report can mistake it for one (todo/pass-to-pass-score-view.md).
+    secondary_not_preregistered: { note: SECONDARY_NOTE, suite_pass_to_pass: passToPass },
     cost_usd: cost, cost_estimated: seats.some((s: any) => s.cost_estimated) || (!seats.length && !!swarm && swarm.coverage !== 'complete'),
     cost_per_passing_item: cost !== null && passed > 0 ? cost / passed : null,
     account: run.account ?? null, void: audit.void, audit_hits: audit.hits.length,

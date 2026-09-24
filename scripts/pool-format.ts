@@ -105,13 +105,33 @@ export function copyHiddenTests(item: HiddenItem, worktree: string) {
 }
 
 /** Runs a hidden or suite command. NODE_TEST_CONTEXT is dropped: inherited from an outer `node --test`, it makes a
- * nested `node --test` report to the parent and exit 0 even when its tests fail. */
-export function runCmd(cmd: string, cwd: string, timeoutMs = 300_000): { exit_code: number | null; timed_out: boolean; output_tail: string } {
-  const env = { ...process.env };
+ * nested `node --test` report to the parent and exit 0 even when its tests fail. `signal` is the one that killed the
+ * command, if any (SIGKILL at the deadline, or a stop signal such as a Ctrl-C that reached the whole process group). */
+export function runCmd(cmd: string, cwd: string, timeoutMs = 300_000, opts: { env?: Record<string, string>; full?: boolean } = {}): { exit_code: number | null; timed_out: boolean; signal: NodeJS.Signals | null; output_tail: string; stdout?: string; stderr?: string } {
+  const env = { ...process.env, ...opts.env };
   delete env.NODE_TEST_CONTEXT;
   const r = spawnSync('sh', ['-c', cmd], { cwd, env, encoding: 'utf8', timeout: timeoutMs, killSignal: 'SIGKILL', maxBuffer: 64 * 1024 * 1024 });
-  return { exit_code: r.status, timed_out: r.error?.message.includes('ETIMEDOUT') ?? false, output_tail: ((r.stdout ?? '') + (r.stderr ?? '')).slice(-2000) };
+  const out = { exit_code: r.status, timed_out: r.error?.message.includes('ETIMEDOUT') ?? false, signal: r.signal, output_tail: ((r.stdout ?? '') + (r.stderr ?? '')).slice(-2000) };
+  // full keeps both streams whole, for the per-command suite view (pool-suite-view.ts)
+  return opts.full ? { ...out, stdout: r.stdout ?? '', stderr: r.stderr ?? '' } : out;
 }
+
+/** The signals that stop validate: Ctrl-C (SIGINT) reaches every process in the foreground group, SIGTERM is `kill <pid>`. */
+export const STOP_SIGNALS: readonly string[] = ['SIGINT', 'SIGTERM', 'SIGHUP'];
+export const stoppedBy = (signal: string | null | undefined): string | null => (signal && STOP_SIGNALS.includes(signal) ? signal : null);
+/** A step of validate whose child was killed by a stop signal: validate is being stopped, so nothing it half did is kept. */
+export class Interrupted extends Error {
+  constructor(readonly signal: string, what: string) { super(`${what} stopped by ${signal}`); }
+}
+/** Node runs a SIGINT or SIGTERM listener only in the event loop's poll phase (libuv reads the signal off a pipe there), and a
+ * spawnSync or execFileSync never lets the loop poll: a signal that arrives during one waits, and is lost if the process then
+ * ends without polling. One setImmediate is not enough. Queued from the poll phase (an I/O callback or code it resumed, as
+ * validate's first yield is under tsx), it runs in the check phase of the same loop turn, before the next poll. The inner one
+ * is queued from inside a check-phase callback, so Node runs it in the next turn only (nodejs.org/api/timers.html,
+ * setImmediate), after that turn's poll phase has run the listener. Awaited from any phase, this resolves only after at least
+ * one poll phase has run. validate awaits it between its synchronous steps, so its stop handlers (pool.ts) end it there,
+ * before the next step starts. */
+export const letSignalsIn = () => new Promise<void>(resolve => setImmediate(() => setImmediate(resolve)));
 
 const inside = (child: string, parent: string) => {
   const rel = relative(parent, child);
@@ -131,10 +151,17 @@ export function worktreeAt(repo: string, commit: string, dir: string, branch?: s
   return opts.linkNodeModules ? linkNodeModules(repo, dir) : 'not-requested';
 }
 
+/** git commit runs `git maintenance run --auto` afterwards, which starts `git gc --auto` in the background once a repository
+ * holds more than gc.auto (default 6700) loose objects, as a copy of a large base tree does. That gc goes on writing packs in
+ * the copy after commit returns, so a caller removing the copy (validate's mutation and suite view copies) can fail or leave
+ * files behind. These settings turn both off for isolatedRepo's own commands only (git-config: gc.auto, maintenance.auto). */
+const NO_AUTO_GC = ['-c', 'gc.auto=0', '-c', 'maintenance.auto=false'];
+
 /** Each run works in its own repository holding only the pool's base tree as one commit, so no other run's branches,
  * worktrees or objects exist in it. In pool 1 every run shared the real repository, and seats could list earlier runs'
  * pool/* branches with `git branch -a`; deleting branches is not enough, because their objects stay reachable. The tree
- * comes from `git archive` (tracked files only); author, committer and dates are fixed so the commit is reproducible. */
+ * comes from `git archive` (tracked files only); author, committer and dates are fixed so the commit is reproducible. Its add
+ * and commit start no background gc (NO_AUTO_GC), so no git process is left writing in the copy when this returns. */
 export function isolatedRepo(sourceRepo: string, baseCommit: string, dir: string): string {
   if (existsSync(dir)) throw new Error(`isolated repo ${dir} already exists`);
   mkdirSync(dir, { recursive: true });
@@ -143,9 +170,9 @@ export function isolatedRepo(sourceRepo: string, baseCommit: string, dir: string
   execFileSync('git', ['-C', sourceRepo, 'archive', '--format=tar', '-o', tar, baseCommit], { stdio: 'pipe' });
   execFileSync('tar', ['-xf', tar, '-C', dir], { stdio: 'pipe' });
   rmSync(tar, { force: true });
-  execFileSync('git', ['-C', dir, 'add', '-A'], { stdio: 'pipe', maxBuffer: 256 * 1024 * 1024 });
+  execFileSync('git', [...NO_AUTO_GC, '-C', dir, 'add', '-A'], { stdio: 'pipe', maxBuffer: 256 * 1024 * 1024 });
   const when = '2026-01-01T00:00:00Z', id = { GIT_AUTHOR_NAME: 'pool-harness', GIT_AUTHOR_EMAIL: 'pool-harness@local', GIT_COMMITTER_NAME: 'pool-harness', GIT_COMMITTER_EMAIL: 'pool-harness@local', GIT_AUTHOR_DATE: when, GIT_COMMITTER_DATE: when };
-  execFileSync('git', ['-C', dir, 'commit', '--quiet', '--no-verify', '-m', `pool base ${baseCommit}`], { stdio: 'pipe', env: { ...process.env, ...id } });
+  execFileSync('git', [...NO_AUTO_GC, '-C', dir, 'commit', '--quiet', '--no-verify', '-m', `pool base ${baseCommit}`], { stdio: 'pipe', env: { ...process.env, ...id } });
   return execFileSync('git', ['-C', dir, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
 }
 

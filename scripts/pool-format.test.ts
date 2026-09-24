@@ -2,14 +2,17 @@
  * node --import tsx scripts/pool-format.test.ts */
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { spawnSync } from 'node:child_process';
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { spawn, spawnSync } from 'node:child_process';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
-import { hiddenRoot, loadHiddenItem, loadPool, lockPool, runCmd, validatePool, worktreeAt, removeWorktree } from './pool-format.ts';
+import { fileURLToPath } from 'node:url';
+import { hiddenRoot, isolatedRepo, loadHiddenItem, loadPool, lockPool, runCmd, validatePool, worktreeAt, removeWorktree } from './pool-format.ts';
 import { makeDryRunPool } from './pool-fixture.ts';
 
 const fresh = () => mkdtempSync(join(tmpdir(), 'pool-format-'));
+const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
+const STOPPED_AT_THE_AWAIT = /step 1\nstopped\n$/;
 
 test('the dry-run pool has two items, a three-way split and a lock that loadPool accepts', () => {
   const base = fresh();
@@ -219,4 +222,75 @@ test('validate reruns each hidden test and rejects an item whose outcome flips b
     const other = report.items.find((x: { id: string }) => x.id !== id)!;
     assert.equal(other.ok, true, 'a stable item stays valid');
   } finally { rmSync(base, { recursive: true, force: true }); }
+});
+
+/** A process that, resumed from `phase` of the event loop, runs a synchronous step (a spawnSync that lasts until `flag` exists),
+ * awaits letSignalsIn, then prints "step 2". Its SIGINT listener prints "stopped" and exits 130, as validate's does. */
+function stepper(phase: 'poll' | 'check' | 'timers', flag: string) {
+  const lib = JSON.stringify(fileURLToPath(new URL('./pool-format.ts', import.meta.url)));
+  const wait = "const f=process.argv[1],t0=Date.now();const t=setInterval(()=>{if(require('fs').existsSync(f)||Date.now()-t0>30000)clearInterval(t)},10)";
+  const code = `import { spawnSync } from 'node:child_process'; import { readFile, writeSync } from 'node:fs'; import { letSignalsIn } from ${lib};
+process.prependListener('SIGINT', () => { writeSync(1, 'stopped\\n'); process.exit(130); });
+const phase = ${JSON.stringify(phase)};
+if (phase === 'poll') await new Promise(r => readFile(${lib}, r)); // resumed from an fs callback, in the poll phase
+else if (phase === 'check') await new Promise(r => setImmediate(r));
+else await new Promise(r => setTimeout(r, 5));
+writeSync(1, 'step 1\\n');
+spawnSync(process.execPath, ['-e', ${JSON.stringify(wait)}, ${JSON.stringify(flag)}]);
+await letSignalsIn();
+writeSync(1, 'step 2\\n');`;
+  // started from this checkout (as the CLI tests are), so --import tsx resolves
+  const c = spawn(process.execPath, ['--import', 'tsx', '--input-type=module', '-e', code], { stdio: ['ignore', 'pipe', 'pipe'] });
+  let out = '', err = '';
+  c.stderr.on('data', d => { err += d; });
+  const guard = setTimeout(() => c.kill('SIGKILL'), 60_000); // this test's own child only
+  const exited = new Promise<{ code: number | null; out: string; err: string }>(r => c.on('close', code => { clearTimeout(guard); r({ code, out, err }); }));
+  const inStep = new Promise<void>(r => c.stdout.on('data', d => { out += d; if (out.includes('step 1')) r(); }));
+  return { child: c, exited, inStep };
+}
+
+test('letSignalsIn: a SIGINT that came during a synchronous step ends the process before the next step, whichever loop phase awaited it', async () => {
+  const base = fresh();
+  try {
+    // poll is the phase a single setImmediate fails from: it runs in the check phase of the same loop turn, before the next poll
+    for (const phase of ['poll', 'check', 'timers'] as const) {
+      const flag = join(base, `flag-${phase}`), s = stepper(phase, flag);
+      await Promise.race([s.inStep, s.exited]);
+      assert.ok(s.child.pid);
+      process.kill(s.child.pid, 'SIGINT'); // this process alone: the synchronous step's own child goes on until the flag
+      await sleep(300);
+      writeFileSync(flag, '');
+      const r = await s.exited;
+      assert.equal(r.code, 130, `${phase}: ${r.out} ${r.err}`);
+      assert.match(r.out, STOPPED_AT_THE_AWAIT, `${phase}: the listener ran at the await, and the next step never started`);
+    }
+  } finally { rmSync(base, { recursive: true, force: true }); }
+});
+
+test('isolatedRepo starts no background git gc in the copy, so the copy can be removed as soon as it is made', async () => {
+  const base = fresh();
+  try {
+    // more loose objects than gc.auto (default 6700): a plain git commit starts `git gc --auto` in the background (gc samples
+    // objects/17, and these 7000 blobs put 35 there, past its 27)
+    const src = join(base, 'src');
+    mkdirSync(join(src, 'f'), { recursive: true });
+    for (let i = 0; i < 7000; i++) writeFileSync(join(src, 'f', `${i}.txt`), `file ${i}\n`);
+    const git = (...args: string[]) => spawnSync('git', ['-C', src, '-c', 'user.name=t', '-c', 'user.email=t@t', '-c', 'gc.auto=0', '-c', 'maintenance.auto=false', ...args], { encoding: 'utf8' });
+    git('init', '--quiet', '-b', 'main');
+    git('add', '-A');
+    assert.equal(git('commit', '--quiet', '--no-verify', '-m', 'base').status, 0);
+    const copy = join(base, 'copy'), gitDir = join(copy, '.git');
+    isolatedRepo(src, git('rev-parse', 'HEAD').stdout.trim(), copy);
+    // a running gc holds gc.pid and writes packs; watch for either for 2 s
+    const until = Date.now() + 2000;
+    let gc = '';
+    while (!gc && Date.now() < until) {
+      if (existsSync(join(gitDir, 'gc.pid'))) gc = 'gc.pid';
+      else if (readdirSync(join(gitDir, 'objects', 'pack')).length) gc = 'a pack';
+      else await sleep(50);
+    }
+    assert.equal(gc, '', 'git gc ran in the copy');
+    rmSync(copy, { recursive: true });
+    assert.equal(existsSync(copy), false);
+  } finally { rmSync(base, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 }); }
 });

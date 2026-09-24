@@ -130,3 +130,23 @@ Recorded before pool 2 was locked, validated or piloted.
 **Observation, not a change.** Neither pilot seat was stopped by the deadline. Each ended its own turn: pilot 1 at 23 minutes believing it had finished, pilot 2 at 12 minutes writing that it had got through 13 items "before the deadline", with 18 minutes left. Neither checked the time. The brief gives the deadline only as "you have 30 minutes from now" and no clock, as in pool 1, and every setup gets the same brief, so this stays as it is: a seat's own time-keeping is part of each setup. Results will report, per run, whether seats stopped themselves or were stopped at the deadline, and how many minutes were left.
 
 **Pool 2 run order.** `random.Random(20260926)` shuffling the sorted (setup, repeat) pairs: room3:2 solo:2 room3:1 split:2 solo:1 split:1 room15:1 room15:2.
+
+## Pool 2 result (2026-09-24, 06:41 BST)
+
+**Pool 2 (game, stage-2 pool 7ee7b8ac…, 20 items, 30 minutes, eight valid runs, no audit hits, suite green at every final head, every cost from the CLI's own figures).** Items passing, repeat 1 / repeat 2 (minutes; cost):
+
+| Setup | Rep 1 | Rep 2 | Mean | Cost per passing item |
+|---|---|---|---|---|
+| Solo | 20 (25.5 min; $6.15) | 8 (12.6 min; $1.97) | 14.0 | $0.29 |
+| Split | 14 (9.8 min; $5.11) | 14 (9.4 min; $6.30) | 14.0 | $0.41 |
+| Room3 | 19 (14.1 min; $13.61) | 19 (13.9 min; $13.24) | 19.0 | $0.71 |
+| Room15 | 20 (15.1 min; $34.84) | 19 (22.3 min; $33.65) | 19.5 | $1.76 |
+
+Against the predictions, in this pool: (1) Split vs Solo: no difference (14.0 vs 14.0). (2) Room3 exceeded Split by 5.0. (3) Room15 vs Room3: no difference (19.5 vs 19.0), at about 2.5 times the cost per passing item.
+
+**Where the predictions stand after two pools.** (1) Split more than Solo: opposite in pool 1, no difference in pool 2, so it cannot reach two pools and is not supported whatever pool 3 shows. (2) Room3 and Split not differing: Room3 landed 5 more in both pools, the same direction in two pools, so the prediction is contradicted. (3) Room15 more than Room3: no difference in either pool, so it cannot reach two pools and is not supported; Room15 cost 3.5 and 2.5 times as much per passing item.
+
+**Observations, reported separately from the measures.**
+- Every seat in every run stopped itself; none was stopped at the deadline. Solo repeat 2 ended its turn at 12.6 minutes after attempting 9 items, with 17 minutes left, as pilot 2's seat did; Solo repeat 1 used 25.5 minutes and landed all 20. Solo's mean therefore averages two different behaviours of the same setup.
+- Split lost items to merges both times (2 conflicts per run, under the pre-registered keep-earlier rule): seats 2 and 3 conflicted with seat 1 on threats.ts and simulation.ts (repeat 1) and on claimTown/module.ts, threats.ts, building/module.ts and building/pieces.ts (repeat 2). The harder items share files, which the rooms resolve by integrating onto one branch.
+- The rooms were faster than the solo run that finished everything: 14 to 22 minutes against 25.5.

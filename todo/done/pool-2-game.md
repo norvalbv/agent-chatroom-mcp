@@ -1,8 +1,9 @@
 ---
-status: doing
+status: done
 added: 2026-09-23
 from: owner approval 2026-09-23 ("do three pool ... one pool at a time"); docs/experiments/2026-09-23-pool-throughput.md
 after: opus-price-row-before-pool-2
+done: 2026-09-24 eight runs scored; results in docs/experiments/2026-09-23-pool-throughput.md "Pool 2 result"
 ---
 # Pool 2 (game): lock, validate, run, score
 

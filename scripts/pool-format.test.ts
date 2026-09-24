@@ -6,7 +6,7 @@ import { spawnSync } from 'node:child_process';
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
-import { hiddenRoot, loadHiddenItem, loadPool, lockPool, runCmd, validatePool, worktreeAt, removeWorktree } from './pool-format.ts';
+import { cmdTimeoutMs, hiddenRoot, loadHiddenItem, loadPool, lockPool, runCmd, validatePool, worktreeAt, removeWorktree } from './pool-format.ts';
 import { makeDryRunPool } from './pool-fixture.ts';
 
 const fresh = () => mkdtempSync(join(tmpdir(), 'pool-format-'));
@@ -218,5 +218,36 @@ test('validate reruns each hidden test and rejects an item whose outcome flips b
     assert.equal(r.ok, false, 'a flaky item is not valid');
     const other = report.items.find((x: { id: string }) => x.id !== id)!;
     assert.equal(other.ok, true, 'a stable item stays valid');
+  } finally { rmSync(base, { recursive: true, force: true }); }
+});
+
+test('cmd_timeout_min: the pool sets how long validate lets a command run, queue wait included', () => {
+  const base = mkdtempSync(join(tmpdir(), 'pool-timeout-'));
+  try {
+    const fx = makeDryRunPool(base);
+    const path = join(fx.poolDir, 'pool.json');
+    const setTimeout = (min: number | undefined) => {
+      const p = JSON.parse(readFileSync(path, 'utf8'));
+      if (min === undefined) delete p.cmd_timeout_min; else p.cmd_timeout_min = min;
+      writeFileSync(path, JSON.stringify(p, null, 2) + '\n'); lockPool(fx.poolDir);
+    };
+    assert.equal(cmdTimeoutMs(loadPool(fx.poolDir).pool, 300_000), 300_000, 'no field: the caller\'s default');
+    // a hidden command that first waits 3 s, as a run held in a shared test queue does
+    const id = fx.pool.items[0].id;
+    const cmdPath = join(fx.hiddenParent, 'dry-run', id, 'cmd');
+    writeFileSync(cmdPath, `sleep 3; ${readFileSync(cmdPath, 'utf8').trim()}\n`);
+    setTimeout(0.02); // 1.2 s: the wait alone exceeds it, so every run is killed
+    assert.equal(cmdTimeoutMs(loadPool(fx.poolDir).pool, 300_000), 1200);
+    const killed = validatePool(fx.poolDir, { hiddenParent: fx.hiddenParent, scratch: join(base, 'a'), repeats: 1 }).items.find((x) => x.id === id)!;
+    assert.equal(killed.reference_exit, null, 'killed at the pool\'s limit, not the 5-minute default');
+    assert.equal(killed.ok, false);
+    setTimeout(1);
+    const waited = validatePool(fx.poolDir, { hiddenParent: fx.hiddenParent, scratch: join(base, 'b'), repeats: 1 }).items.find((x) => x.id === id)!;
+    assert.equal(waited.ok, true, 'with room for the wait, the same item validates');
+    for (const bad of [0, -1, 'x']) {
+      const p = JSON.parse(readFileSync(path, 'utf8')); p.cmd_timeout_min = bad;
+      writeFileSync(path, JSON.stringify(p)); lockPool(fx.poolDir);
+      assert.throws(() => loadPool(fx.poolDir), /cmd_timeout_min/);
+    }
   } finally { rmSync(base, { recursive: true, force: true }); }
 });

@@ -7,7 +7,7 @@ import { existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, realpathSy
 import { homedir } from 'node:os';
 import { basename, join, resolve } from 'node:path';
 import { json } from './bench-build-runtime.ts';
-import { copyHiddenTests, hiddenRoot, linkNodeModules, loadHiddenItem, loadPool, removeWorktree, runCmd, worktreeAt } from './pool-format.ts';
+import { cmdTimeoutMs, copyHiddenTests, hiddenRoot, linkNodeModules, loadHiddenItem, loadPool, removeWorktree, runCmd, worktreeAt } from './pool-format.ts';
 
 const ITEM_TIMEOUT_MS = 10 * 60_000;
 const GIT_ID = ['-c', 'user.name=pool-harness', '-c', 'user.email=pool-harness@localhost', '-c', 'commit.gpgsign=false'];
@@ -135,7 +135,7 @@ export function scoreRun(runDir: string, opts: { hiddenParent?: string } = {}) {
   worktreeAt(run.repo, final.head, suiteWt);
   linkNodeModules(run.source_repo ?? run.repo, suiteWt); // the isolated run repo has no node_modules
   try {
-    const r = runCmd(suiteCmd, suiteWt, ITEM_TIMEOUT_MS);
+    const r = runCmd(suiteCmd, suiteWt, cmdTimeoutMs(pool, ITEM_TIMEOUT_MS));
     suite = { cmd: suiteCmd, exit_code: r.exit_code, pass: r.exit_code === 0, output_tail: r.output_tail };
   } finally { removeWorktree(run.repo, suiteWt); }
   worktreeAt(run.repo, final.head, testWt);
@@ -146,7 +146,7 @@ export function scoreRun(runDir: string, opts: { hiddenParent?: string } = {}) {
     items = pool.items.map((i: any, n: number) => {
       linkNodeModules(run.source_repo ?? run.repo, testWt);
       copyHiddenTests(hiddenItems[n], testWt); // tests only; reference.patch is never copied
-      const r = runCmd(hiddenItems[n].cmd, testWt, ITEM_TIMEOUT_MS);
+      const r = runCmd(hiddenItems[n].cmd, testWt, cmdTimeoutMs(pool, ITEM_TIMEOUT_MS));
       gitOut(testWt, 'reset', '-q', '--hard'); gitOut(testWt, 'clean', '-fdq');
       return { id: i.id, pass: r.exit_code === 0, exit_code: r.exit_code, attempted: attempted(run, final, i.id), output_tail: r.output_tail };
     });

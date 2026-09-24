@@ -6,7 +6,7 @@
  *   npx tsx src/swarm.ts "<task>" --agents 6 --cwd /path/to/project [--codex 2] [--openrouter 2] [--apply] [--timeout 30]
  */
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, realpathSync, symlinkSync, writeFileSync } from "node:fs";
+import { createWriteStream, existsSync, mkdirSync, readFileSync, readdirSync, statSync, realpathSync, symlinkSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { collectRoomSnapshot, renderRunReport, writeRunResult, rollupUsage, parseClaudeCliOutput, type RunResult, type RoomSnapshot, type SeatUsageRollup } from "./result.js";
 import { settledAxes } from "./settled.js";
@@ -16,6 +16,8 @@ import { carrySettings, devHubRule, heartbeatHookSettings, loadDotEnv, outputHea
 import { randomUUID } from "node:crypto";
 import { respawnDecision, type RespawnRoom } from "./respawn.js";
 import { claudeArgs } from "./claude-args.js";
+import { codexArgs, codexUsageTracker } from "./codex-seat.js";
+import { stopStrays } from "./strays.js";
 loadDotEnv();
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -170,21 +172,30 @@ const seatScript = existsSync(resolve(repoRoot, "dist/openrouter.js")) ? { cmd: 
 function runOpenRouter(name: string, text: string, cwd: string, model: string | undefined, write: boolean): Promise<SeatOutcome> {
   const outFile = resolve(OUT, `${name}.out`);
   const sidecar = resolve(OUT, `${name}.usage.json`);
-  // the seat's own budget matches the launcher's timeout so it leaves the room rather than being killed in it
-  const args = [...seatScript.pre, "-p", text, "--mcp-url", `${URL_}/mcp`, "--cwd", cwd, "--max-minutes", String(TIMEOUT_MIN), "--usage-sidecar", sidecar];
+  // the seat's own budget matches the launcher's timeout so it leaves the room rather than being killed in it;
+  // the prompt goes on stdin (src/openrouter.ts reads it there when no -p is given), never argv (src/claude-args.ts)
+  const args = [...seatScript.pre, "--mcp-url", `${URL_}/mcp`, "--cwd", cwd, "--max-minutes", String(TIMEOUT_MIN), "--usage-sidecar", sidecar];
   if (model) args.push("--model", model);
   if (write) args.push("--write");
   if (OPENROUTER_REASONING) args.push("--reasoning", OPENROUTER_REASONING);
-  return runProc(name, seatScript.cmd, args, cwd, outFile).then((t) => ({ text: t, usage: readSeatUsage(sidecar) }));
+  return runProc(name, seatScript.cmd, args, cwd, outFile, false, undefined, false, text).then((t) => ({ text: t, usage: readSeatUsage(sidecar) }));
 }
 
-function runCodex(name: string, text: string, cwd: string, model?: string): Promise<SeatOutcome> {
+/**
+ * `codex exec` with the prompt on stdin, -s read-only unless the seat may write, and --json so its usage reaches
+ * <name>.usage.json (src/codex-seat.ts). -o still writes the final message to <name>.out. --json moves codex's
+ * per-item trace from stderr to stdout, so the events are kept in <name>.events.jsonl next to the .log.
+ */
+function runCodex(name: string, text: string, cwd: string, model: string | undefined, write: boolean): Promise<SeatOutcome> {
   const outFile = resolve(OUT, `${name}.out`);
+  const sidecar = resolve(OUT, `${name}.usage.json`);
   const beat = seatBeat(`${URL_}/mcp`, randomUUID(), cwd);
-  const args = ["exec", "--skip-git-repo-check", "-C", cwd, "-c", `mcp_servers.chatroom.url="${beat.mcpUrl}"`, "-c", "mcp_servers.chatroom.tool_timeout_sec=120", "-o", outFile];
-  if (model) args.push("-m", model);
-  args.push(text);
-  return runProc(name, "codex", args, cwd, outFile, true, beat, true).then((t) => ({ text: t, usage: readSeatUsage(resolve(OUT, `${name}.usage.json`)) }));
+  const args = codexArgs({ cwd, mcpUrl: beat.mcpUrl, model, readOnly: !write, outFile, json: true });
+  const events = createWriteStream(resolve(OUT, `${name}.events.jsonl`)).on("error", (e) => log(`${name}: event log: ${e.message}`));
+  // written on every turn.completed, so a seat stopped after one keeps what it had reported; a write error must not kill the launcher
+  const track = codexUsageTracker((usage) => { try { writeFileSync(sidecar, JSON.stringify(usage, null, 2)); } catch (e) { log(`${name}: usage sidecar: ${e instanceof Error ? e.message : String(e)}`); } });
+  const onStdout = (d: Buffer) => { events.write(d); track(d); };
+  return runProc(name, "codex", args, cwd, outFile, true, beat, true, text, onStdout).then((t) => { events.end(); return { text: t, usage: readSeatUsage(sidecar) }; });
 }
 
 /**
@@ -227,8 +238,8 @@ const exitCodes = new Map<string, number | null>();
 /** Only successfully isolated workers receive seat commit attribution (never planner/verifier). */
 const writeWorkers = new Set<string>();
 
-/** `beat`: the seat's heartbeat key and env; `beatOnOutput`: its output is its heartbeat (codex exec has no tool hooks). */
-function runProc(name: string, cmd: string, args: string[], cwd: string, outFile: string, outViaFile = false, beat?: SeatBeat, beatOnOutput = false, stdin?: string): Promise<string> {
+/** `beat`: the seat's heartbeat key and env; `beatOnOutput`: its output is its heartbeat (codex exec has no tool hooks); `stdin`: the prompt; `onStdout`: sees stdout as it arrives. */
+function runProc(name: string, cmd: string, args: string[], cwd: string, outFile: string, outViaFile = false, beat?: SeatBeat, beatOnOutput = false, stdin?: string, onStdout?: (d: Buffer) => void): Promise<string> {
   return new Promise((res) => {
     const child = spawn(cmd, args, { cwd, env: { ...seatChildEnv(process.env, writeWorkers.has(name) ? name : undefined), ...beat?.env }, stdio: [stdin === undefined ? "ignore" : "pipe", "pipe", "pipe"] });
     if (stdin !== undefined) { child.stdin?.on("error", () => {}); child.stdin?.end(stdin); } // the prompt, never argv (claude-args.ts)
@@ -242,7 +253,8 @@ function runProc(name: string, cmd: string, args: string[], cwd: string, outFile
     children.push(child);
     let out = "";
     let err = "";
-    child.stdout?.on("data", (d) => (out += d));
+    // a seat whose final text comes from a file (codex -o) needs no copy of stdout held in memory
+    child.stdout?.on("data", (d: Buffer) => { if (!outViaFile) out += d; onStdout?.(d); });
     child.stderr?.on("data", (d) => {
       err += d;
       // a seat's rate-limit retries, provider errors and budget exits are worth seeing live, not only in its log at exit
@@ -479,7 +491,7 @@ for (const g of plan.groups) {
       // Replacements reuse the original successful worktree but commit under their new seat name.
       if (writeWorkers.has(name)) writeWorkers.add(nm);
       return agent === "codex"
-        ? runCodex(nm, buildText(nm) + note, wcwd, model)
+        ? runCodex(nm, buildText(nm) + note, wcwd, model, mayWrite)
         : agent === "openrouter"
           ? runOpenRouter(nm, buildText(nm) + note, wcwd, model, mayWrite)
           : runClaude(nm, buildText(nm) + note, mayWrite ? WRITE_TOOLS : READ_TOOLS, wcwd, model);
@@ -488,12 +500,38 @@ for (const g of plan.groups) {
   }
 }
 
+/**
+ * c.kill() reaches the seats themselves only. What a seat started in its own process group (a dev hub it detached, as
+ * devHubRule tells write seats to start) survives that and outlives the run, so the launcher also stops whatever still
+ * runs inside this run's own worktrees, with the lsof-cwd sweep pool-run uses (src/strays.ts; docs/reuse-survey-
+ * 2026-09-23.md, "Process containment and the stray sweep"). Only .swarm-worktrees/<run>/ is swept, never the project
+ * checkout: that also holds the user's shells and editors and anything else started there. Sweeps run one at a time.
+ */
+let sweeping: Promise<void> = Promise.resolve();
+function sweepStrays(why: string): Promise<void> {
+  const root = resolve(CWD, ".swarm-worktrees", SWARM_ID);
+  if (!existsSync(root)) return sweeping;
+  sweeping = sweeping
+    .then(async () => {
+      const n = await stopStrays(realpathSync(root)); // lsof reports real paths (/private/tmp, not /tmp)
+      if (n) log(`${why}: stopped ${n} process(es) still running in this run's worktrees`);
+    })
+    .catch((e) => log(`${why}: stray sweep failed: ${e instanceof Error ? e.message : String(e)}`));
+  return sweeping;
+}
 // stopping the launcher stops its seats: an orphaned seat keeps polling the provider with nobody to collect its result
-for (const sig of ["SIGTERM", "SIGINT"] as const) process.on(sig, () => { STOPPING = true; log(`${sig}: stopping ${children.length} agent(s)`); for (const c of children) c.kill(); setTimeout(() => process.exit(130), 3000).unref(); });
+for (const sig of ["SIGTERM", "SIGINT"] as const) process.on(sig, () => {
+  STOPPING = true;
+  log(`${sig}: stopping ${children.length} agent(s)`);
+  for (const c of children) c.kill();
+  const swept = sweepStrays(sig);
+  setTimeout(() => void swept.finally(() => process.exit(130)), 3000).unref();
+});
 const tail = setInterval(() => tailRooms([...groupRooms, leadsRoom]), 2000);
 const timeout = setTimeout(() => {
   log(`timeout after ${TIMEOUT_MIN} min; stopping agents`);
   for (const c of children) c.kill();
+  void sweepStrays("timeout");
 }, TIMEOUT_MIN * 60_000);
 
 // R4: persist incrementally — a crash keeps the usage of every run that had already finished (partials, never zero-filled).
@@ -514,6 +552,8 @@ const persistIncremental = (done: SeatRun[]) => {
 const completedRuns: SeatRun[] = [];
 const results = await Promise.all(runs.map(async (p) => { const r = await p; completedRuns.push(r); persistIncremental(completedRuns); return r; }));
 clearTimeout(timeout);
+// every seat has exited; a dev hub one of them left behind has not
+await sweepStrays("end of run");
 clearInterval(tail);
 await tailRooms([...groupRooms, leadsRoom]);
 

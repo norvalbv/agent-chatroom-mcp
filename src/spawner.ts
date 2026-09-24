@@ -16,6 +16,7 @@ import { HubError } from "./hub.js";
 import { settledAxes } from "./settled.js";
 import { devHubRule, heartbeatHookSettings, outputHeartbeat, seatBeat, seatChildEnv } from "./env.js";
 import { claudeArgs } from "./claude-args.js";
+import { codexArgs } from "./codex-seat.js";
 import { parseClaudeCliOutput, type SeatUsageRollup } from "./result.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -311,21 +312,20 @@ export class Spawner {
       if (agent === "openrouter") {
         // dist/ is gitignored, so a hub run from source has no build for the seat to load
         cmd = existsSync(seatBuild) ? process.execPath : "npx";
-        args = [...(existsSync(seatBuild) ? [seatBuild] : ["tsx", resolve(repoRoot, "src", "openrouter.ts")]), "-p", prompt, "--mcp-url", beat.mcpUrl, "--cwd", seatCwd];
+        args = [...(existsSync(seatBuild) ? [seatBuild] : ["tsx", resolve(repoRoot, "src", "openrouter.ts")]), "--mcp-url", beat.mcpUrl, "--cwd", seatCwd];
         if (req.model) args.push("--model", req.model);
         if (req.canEdit) args.push("--write");
       } else if (agent === "codex") {
         cmd = "codex";
-        args = ["exec", "--skip-git-repo-check", "-C", seatCwd, "-c", `mcp_servers.chatroom.url="${beat.mcpUrl}"`, "-c", "mcp_servers.chatroom.tool_timeout_sec=120"];
-        if (req.model) args.push("-m", req.model);
-        args.push(prompt);
+        args = codexArgs({ cwd: seatCwd, mcpUrl: beat.mcpUrl, model: req.model, readOnly: !req.canEdit });
       } else {
         cmd = "claude";
         args = claudeArgs({ mcpJson, tools: req.canEdit ? WRITE_TOOLS : READ_TOOLS, model: req.model, full: CLAUDE_FULL, settings: heartbeatHookSettings() });
       }
-      const viaStdin = cmd === "claude"; // the prompt, never argv (claude-args.ts)
-      const child = spawn(cmd, args, { cwd: seatCwd, env: { ...seatChildEnv(process.env, req.canEdit ? name : undefined), ...beat.env }, stdio: [viaStdin ? "pipe" : "ignore", "pipe", "pipe"] });
-      if (viaStdin) { child.stdin?.on("error", () => {}); child.stdin?.end(prompt); }
+      // every seat kind reads its prompt from stdin, never argv: claude -p, codex exec - and src/openrouter.ts (claude-args.ts)
+      const child = spawn(cmd, args, { cwd: seatCwd, env: { ...seatChildEnv(process.env, req.canEdit ? name : undefined), ...beat.env }, stdio: ["pipe", "pipe", "pipe"] });
+      child.stdin?.on("error", () => {});
+      child.stdin?.end(prompt);
       // claude always runs --output-format json now (telemetry), so its raw stdout is a JSON blob, not the
       // plain final-answer text every other seat's log holds. Buffer stdout+stderr instead of piping them
       // live, and on close write only the unwrapped text (matches runClaude's outFile in swarm.ts) so a

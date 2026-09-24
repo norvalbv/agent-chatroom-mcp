@@ -48,6 +48,7 @@ export const offlineScripts = [
   'dev-hub-rule.test.ts',
   'ui-button-styles.test.ts',
   'ui-activity-panel.test.ts',
+  'ui-served-script.test.ts',
   'paper-pool-throughput.test.ts',
   'launch-cost-guide.test.ts',
   'stale-claims-regression.ts',

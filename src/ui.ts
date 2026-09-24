@@ -737,9 +737,15 @@ export const UI_HTML = `<!doctype html>
   $('#policy').onclick = async function () {
     var v = window.prompt('Pin every recruit to a provider and model (e.g. "openrouter deepseek/deepseek-v4-flash-0731"), or "any" to let agents choose:', 'openrouter deepseek/deepseek-v4-flash-0731');
     if (v === null) return;
-    var parts = v.trim().split(/\s+/);
+    var parts = v.trim().split(/\\s+/);
     var body = parts[0] === 'any' ? { agent: 'any', model: 'any' } : { agent: parts[0], model: parts[1] || 'any' };
-    var res = await fetch('/policy', { method: 'POST', headers: hdrs(), body: JSON.stringify(body) });
+    var send = function () { return fetch('/policy', { method: 'POST', headers: hdrs(), body: JSON.stringify(body) }); };
+    var res = await send();
+    // agent controls need the human token even on loopback (hub requireAgentControl); ask once on 401 and retry
+    if (res.status === 401) {
+      var t = window.prompt('Changing the recruit policy needs the human token set on this hub (CHATROOM_HUMAN_TOKEN):');
+      if (t) { TOKEN = t; store.set('token', t); res = await send(); }
+    }
     if (!res.ok) window.alert(await res.text());
     loadPolicy();
   };

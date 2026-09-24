@@ -79,3 +79,28 @@ test('token set: exact header required; right header passes; /config reports req
   const hb = await post(base, '/rooms/auth-tok/heartbeat', undefined, { participant_id: 'p_1' });
   assert.ok(![401, 403].includes(hb.status), `heartbeat must not demand the human token (got ${hb.status})`);
 }));
+
+// Agent controls (stopping an agent, the recruit policy) act on other agents, and any seat can reach loopback: they need
+// the token even under CHATROOM_INSECURE_LOCAL=1, which keeps only the other human routes open on loopback.
+// (todo/insecure-local-controller-routes.md; owner's choice 2026-09-24: agent routes only.)
+test('insecure local, no token: agent controls refused, other human routes still open on loopback', () => withHub({ CHATROOM_INSECURE_LOCAL: '1' }, async base => {
+  const stop = await post(base, '/agents/someone/stop');
+  assert.equal(stop.status, 403, `stopping an agent needs the token even on loopback, got ${stop.status}`);
+  assert.match(await stop.text(), /CHATROOM_HUMAN_TOKEN/);
+  assert.equal((await post(base, '/policy', undefined, { agent: 'any', model: 'any' })).status, 403, 'recruit policy too');
+  const created = await post(base, '/rooms/agent-ctl/create', undefined, { topic: 'still open' });
+  assert.ok([200, 201].includes(created.status), `other human routes stay open, got ${created.status}`);
+  const cfg = (await (await fetch(`${base}/config`)).json()) as { human_token_required: boolean; agent_control_token_required: boolean };
+  assert.equal(cfg.human_token_required, false);
+  assert.equal(cfg.agent_control_token_required, true);
+}));
+
+test('insecure local + token: human routes open on loopback without a header, agent controls need the right header', () => withHub({ CHATROOM_INSECURE_LOCAL: '1', CHATROOM_HUMAN_TOKEN: 'agent-ctl-secret' }, async base => {
+  const created = await post(base, '/rooms/agent-ctl2/create', undefined, { topic: 'loopback human route' });
+  assert.ok([200, 201].includes(created.status), `a human route needs no header on loopback, got ${created.status}`);
+  assert.equal((await post(base, '/agents/someone/stop')).status, 401, 'absent header refused');
+  assert.equal((await post(base, '/agents/someone/stop', 'wrong')).status, 401, 'wrong header refused');
+  assert.equal((await post(base, '/agents/someone/stop', 'agent-ctl-secret')).status, 200, 'right header passes');
+  const policy = await post(base, '/policy', 'agent-ctl-secret', { agent: 'any', model: 'any' });
+  assert.equal(policy.status, 200);
+}));

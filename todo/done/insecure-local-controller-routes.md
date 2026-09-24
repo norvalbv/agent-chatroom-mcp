@@ -1,7 +1,8 @@
 ---
-status: open
+status: done
 added: 2026-09-23
 from: reuse/sandbox build report (risks)
+done: 2026-09-24 agent routes only (owner's choice): POST /agents/:name/stop and /policy need CHATROOM_HUMAN_TOKEN even under insecure-local; other human routes stay open on loopback; route-auth-regression 6/6
 ---
 # Seats can stop other agents through the hub's token-free controller routes
 

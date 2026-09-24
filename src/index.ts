@@ -216,14 +216,24 @@ setInterval(() => {
 }, 60_000).unref();
 
 const requireToken = (req: express.Request, res: express.Response): boolean => {
+  if (HUMAN_TOKEN && req.header("x-chatroom-token") === HUMAN_TOKEN) return true;
+  // The explicit loopback opt-in keeps the local dashboard usable without a token, with or without one configured.
+  if (INSECURE_LOCAL && LOOPBACK_HOST) return true;
   if (HUMAN_TOKEN) {
-    if (req.header("x-chatroom-token") === HUMAN_TOKEN) return true;
     res.status(401).type("text/plain").send("x-chatroom-token required");
     return false;
   }
-  // No token configured: refuse by default; only the explicit loopback opt-in restores local dashboard use.
-  if (INSECURE_LOCAL && LOOPBACK_HOST) return true;
   res.status(403).type("text/plain").send("controller authority closed: set CHATROOM_HUMAN_TOKEN, or CHATROOM_INSECURE_LOCAL=1 with HOST on loopback");
+  return false;
+};
+/** Agent controls (stop an agent, pin the recruit policy) act on other agents, and every seat can reach loopback, so
+ * they need the human token even under CHATROOM_INSECURE_LOCAL=1; seats never get it (SEAT_ENV_EXCLUSIONS). A process
+ * running as the same OS user can still read it from this hub's environment, so this stops careless or casual calls,
+ * not a determined one. */
+const requireAgentControl = (req: express.Request, res: express.Response): boolean => {
+  if (HUMAN_TOKEN && req.header("x-chatroom-token") === HUMAN_TOKEN) return true;
+  if (HUMAN_TOKEN) res.status(401).type("text/plain").send("x-chatroom-token required: agent controls need the human token, even on loopback");
+  else res.status(403).type("text/plain").send("agent controls (stopping agents, the recruit policy) need CHATROOM_HUMAN_TOKEN set on the hub and sent as x-chatroom-token, even on loopback");
   return false;
 };
 app.get("/mcp", sessionRoute);
@@ -233,11 +243,11 @@ app.delete("/mcp", sessionRoute);
 const notFound = (res: express.Response, e: unknown) => res.status(404).type("text/plain").send(e instanceof HubError ? e.message : "error");
 app.get("/", (_req, res) => res.json({ name: "agent-chatroom-mcp", mcp: "/mcp", ui: "/ui", rooms: "/rooms", sessions: transports.size, caps: { max_live_per_room: Hub.MAX_LIVE_PER_ROOM, max_rooms_per_run: Hub.MAX_ROOMS_PER_RUN }, code_state: Hub.codeState(resolve(process.env.CHATROOM_DEFAULT_CWD ?? process.cwd())) ?? null }));
 app.get("/ui", (_req, res) => res.type("html").send(UI_HTML));
-app.get("/config", (_req, res) => res.json({ human_token_required: Boolean(HUMAN_TOKEN) || !(INSECURE_LOCAL && LOOPBACK_HOST) }));
+app.get("/config", (_req, res) => res.json({ human_token_required: !(INSECURE_LOCAL && LOOPBACK_HOST), agent_control_token_required: true }));
 // Recruit policy: which provider/model every request_agent launches as. Readable by anyone, settable by the human (token if configured).
 app.get("/policy", (_req, res) => res.json({ recruits: spawner.policy }));
 app.post("/policy", (req, res) => {
-  if (!requireToken(req, res)) return;
+  if (!requireAgentControl(req, res)) return;
   const b = (req.body ?? {}) as { agent?: string | null; model?: string | null };
   const agent = b.agent === null || b.agent === "any" || b.agent === "" ? undefined : b.agent;
   if (agent && !["claude", "codex", "openrouter"].includes(agent)) {
@@ -249,7 +259,7 @@ app.post("/policy", (req, res) => {
 });
 app.get("/agents", (_req, res) => res.json(spawner.agents.map((a) => ({ ...a, brief: a.brief.slice(0, 300) }))));
 app.post("/agents/:name/stop", (req, res) => {
-  if (!requireToken(req, res)) return;
+  if (!requireAgentControl(req, res)) return;
   res.json({ stopped: spawner.stop(req.params.name) });
 });
 app.get("/rooms", (req, res) => res.json(hub.listRooms(true, req.query.archived === "1" || req.query.archived === "all")));

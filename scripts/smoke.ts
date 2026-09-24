@@ -12,7 +12,7 @@ import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/
 const PORT = Number(process.env.PORT ?? 7733);
 const HTTP = `http://127.0.0.1:${PORT}`;
 
-const server = spawn("npx", ["tsx", "src/index.ts"], { env: { ...process.env, PORT: String(PORT), CHATROOM_SPAWN_DRY: "1", CHATROOM_LOG_DIR: "/tmp/chatroom-smoke-spawn", CHATROOM_MAX_LIVE_PER_ROOM: "12", CHATROOM_INSECURE_LOCAL: "1" }, stdio: ["ignore", "inherit", "inherit"] });
+const server = spawn("npx", ["tsx", "src/index.ts"], { env: { ...process.env, PORT: String(PORT), CHATROOM_SPAWN_DRY: "1", CHATROOM_LOG_DIR: "/tmp/chatroom-smoke-spawn", CHATROOM_MAX_LIVE_PER_ROOM: "12", CHATROOM_INSECURE_LOCAL: "1", CHATROOM_HUMAN_TOKEN: "smoke-agent-control" }, stdio: ["ignore", "inherit", "inherit"] });
 const stop = () => server.kill();
 process.on("exit", stop);
 
@@ -434,7 +434,7 @@ assert.deepEqual(tools, ["amend", "board_get", "board_set", "challenge", "join_r
 {
   const room = "recruit";
   await a.call("join_room", { room, name: "claude-1", agent: "claude" });
-  await fetch(`${HTTP}/policy`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ agent: "any", model: "any" }) }); // this section recruits claude/haiku by name
+  await fetch(`${HTTP}/policy`, { method: "POST", headers: { "content-type": "application/json", "x-chatroom-token": "smoke-agent-control" }, body: JSON.stringify({ agent: "any", model: "any" }) }); // this section recruits claude/haiku by name
   const sp = await a.call("request_agent", { room, brief: "Check whether the failing test is flaky by running it 5 times; report the pass count.", model: "haiku" });
   assert.match(sp.spawned[0], /claude-recruit-1/);
   assert.equal(sp.depth, 1);
@@ -840,7 +840,7 @@ assert.deepEqual(tools, ["amend", "board_get", "board_set", "challenge", "join_r
 
 {
   // the hub's recruit policy wins over what a request asks for, and is settable live
-  await fetch(`${HTTP}/policy`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ agent: "openrouter", model: "deepseek/deepseek-v4-flash-0731" }) });
+  await fetch(`${HTTP}/policy`, { method: "POST", headers: { "content-type": "application/json", "x-chatroom-token": "smoke-agent-control" }, body: JSON.stringify({ agent: "openrouter", model: "deepseek/deepseek-v4-flash-0731" }) });
   const room = "policy";
   await a.call("join_room", { room, name: "claude-1", agent: "claude", expected_participants: 2 });
   const asked = await a.call("request_agent", { room, name: "helper", agent: "codex", model: "gpt-6-astra", brief: "A brief that is comfortably longer than twenty characters for the policy test." });
@@ -848,11 +848,11 @@ assert.deepEqual(tools, ["amend", "board_get", "board_set", "challenge", "join_r
   assert.equal(asked.model, "deepseek/deepseek-v4-flash-0731", "and the pinned model");
   const log = (await a.call("read_messages", { room, since_seq: 0 })) as string[];
   assert.ok(log.some((m) => /pinned to openrouter\/deepseek\/deepseek-v4-flash-0731/.test(m)), "the override is announced in the room");
-  const set = await fetch(`${HTTP}/policy`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ agent: "any", model: "any" }) });
+  const set = await fetch(`${HTTP}/policy`, { method: "POST", headers: { "content-type": "application/json", "x-chatroom-token": "smoke-agent-control" }, body: JSON.stringify({ agent: "any", model: "any" }) });
   assert.equal((await set.json()).recruits.agent, undefined, "any unpins");
   const asked2 = await a.call("request_agent", { room, name: "helper2", agent: "codex", brief: "A brief that is comfortably longer than twenty characters for the policy test." });
   assert.equal(asked2.agent, "codex", "unpinned: launched as requested");
-  await fetch(`${HTTP}/policy`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ agent: "openrouter", model: "deepseek/deepseek-v4-flash-0731" }) });
+  await fetch(`${HTTP}/policy`, { method: "POST", headers: { "content-type": "application/json", "x-chatroom-token": "smoke-agent-control" }, body: JSON.stringify({ agent: "openrouter", model: "deepseek/deepseek-v4-flash-0731" }) });
   await a.call("leave_room", { room, reason: "smoke: section finished, nothing owed" });
 }
 

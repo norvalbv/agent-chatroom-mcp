@@ -123,10 +123,15 @@ export const stoppedBy = (signal: string | null | undefined): string | null => (
 export class Interrupted extends Error {
   constructor(readonly signal: string, what: string) { super(`${what} stopped by ${signal}`); }
 }
-/** Node runs a SIGINT or SIGTERM listener only when the event loop polls, and a spawnSync or execFileSync never lets it: a
- * signal that arrives during one waits, and is lost if the process then ends without polling. validate awaits this between
- * its synchronous steps, so its stop handlers (pool.ts) run there and end it before the next step starts. */
-export const letSignalsIn = () => new Promise<void>(resolve => setImmediate(resolve));
+/** Node runs a SIGINT or SIGTERM listener only in the event loop's poll phase (libuv reads the signal off a pipe there), and a
+ * spawnSync or execFileSync never lets the loop poll: a signal that arrives during one waits, and is lost if the process then
+ * ends without polling. One setImmediate is not enough. Queued from the poll phase (an I/O callback or code it resumed, as
+ * validate's first yield is under tsx), it runs in the check phase of the same loop turn, before the next poll. The inner one
+ * is queued from inside a check-phase callback, so Node runs it in the next turn only (nodejs.org/api/timers.html,
+ * setImmediate), after that turn's poll phase has run the listener. Awaited from any phase, this resolves only after at least
+ * one poll phase has run. validate awaits it between its synchronous steps, so its stop handlers (pool.ts) end it there,
+ * before the next step starts. */
+export const letSignalsIn = () => new Promise<void>(resolve => setImmediate(() => setImmediate(resolve)));
 
 const inside = (child: string, parent: string) => {
   const rel = relative(parent, child);

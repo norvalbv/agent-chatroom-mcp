@@ -114,19 +114,25 @@ export function runSuiteView(cmd: string, cwd: string, timeoutMs = SUITE_TIMEOUT
 
 /** Validate step: suite at base_commit, once per pool, in a run-style isolated repo (as score's head run), written next to pool.json.
  * A run stopped by SIGINT, SIGTERM or SIGHUP (a Ctrl-C reaches the suite too) is not a result: it throws Interrupted and leaves
- * the existing record alone, as does a stop signal validate itself got while the suite ran. A run cut off at the time limit is
- * a result, recorded with complete: false, as score's head run is cut off at the same limit. The file is replaced by a rename,
- * so it is never left half written. */
+ * the existing record alone. A stop signal validate itself got ends it through its own handlers: one that came while the copy
+ * was made, before the suite runs; one that came while the suite ran, before anything is written. A run cut off at the time
+ * limit is a result, recorded with complete: false, as score's head run is cut off at the same limit. The file is replaced by
+ * a rename, so it is never left half written. */
 export async function recordSuiteBase(poolDir: string, opts: { scratch?: string; viewCmd?: string; timeoutMs?: number } = {}): Promise<SuiteBase> {
   const { pool } = loadPool(poolDir);
   const suiteCmd = pool.suite_cmd ?? 'npm test', viewCmd = opts.viewCmd ?? suiteCmd;
   const parent = resolve(opts.scratch ?? tmpdir());
   mkdirSync(parent, { recursive: true });
   const scratch = mkdtempSync(join(parent, 'suite-base-')), repo = join(scratch, 'repo'), wt = join(scratch, 'wt');
+  // validate's stop handlers end it with process.exit, which skips `finally`: this hook removes the copy then. The copy is its
+  // own repository (isolatedRepo), so nothing is registered in the pool's repo.
+  const removeCopy = () => { try { rmSync(scratch, { recursive: true, force: true }); } catch {} };
+  process.on('exit', removeCopy);
   let outcome: { view: SuiteView } | { stop: string };
   try {
     worktreeAt(repo, isolatedRepo(pool.repo, pool.base_commit, repo), wt);
     linkNodeModules(pool.repo, wt);
+    await letSignalsIn(); // a stop signal validate got while the copy was made ends it here, before the suite runs
     const run = runSuiteView(viewCmd, wt, opts.timeoutMs), stop = stoppedBy(run.signal);
     outcome = stop ? { stop } : { view: run.view };
   } catch (e) {
@@ -134,6 +140,7 @@ export async function recordSuiteBase(poolDir: string, opts: { scratch?: string;
     if (!stop) throw e;
     outcome = { stop };
   } finally {
+    process.removeListener('exit', removeCopy);
     if (existsSync(wt)) removeWorktree(repo, wt);
     rmSync(scratch, { recursive: true, force: true });
   }

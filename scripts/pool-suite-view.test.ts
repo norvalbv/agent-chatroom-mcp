@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { randomBytes } from 'node:crypto';
 import { execFileSync, spawn, spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -325,5 +325,79 @@ test('Ctrl-C during the base suite run ends validate with 130 and leaves the exi
       assert.deepEqual(poolDirFiles(fx.poolDir), files);
       assert.equal(git(fx.repo, 'worktree', 'list', '--porcelain').split('worktree ').length - 1, 1);
     } finally { if (!closed) try { process.kill(-v.pid, 'SIGKILL'); } catch {} } // only if validate (this test's own child) is still running
+  } finally { rmSync(base, { recursive: true, force: true }); }
+});
+
+/** `pool.ts validate --suite-view-cmd` on the suite pool, in a process group of its own. The view command first appends to
+ * suite.log, so a test can tell whether the suite run at base ever started. */
+function startSuiteView(fx: ReturnType<typeof suitePool>, base: string, env: NodeJS.ProcessEnv = process.env) {
+  const log = join(base, 'suite.log'), scratch = join(base, 's');
+  const v = spawn(process.execPath, ['--import', 'tsx', 'scripts/pool.ts', 'validate', '--pool', fx.poolDir, '--hidden', fx.hiddenParent,
+    '--scratch', scratch, '--repeats', '1', '--suite-view-cmd', `echo started >> '${log}'; node suite.mjs`], { detached: true, env, stdio: ['ignore', 'pipe', 'pipe'] });
+  let stdout = '', stderr = '', closed = false;
+  v.stdout.on('data', d => { stdout += d; });
+  v.stderr.on('data', d => { stderr += d; });
+  const exited = new Promise<{ code: number | null; stdout: string; stderr: string }>(r => v.on('close', code => { closed = true; r({ code, stdout, stderr }); }));
+  const pid = v.pid;
+  assert.ok(pid, 'validate started');
+  // only if validate (this test's own child) is still running
+  const stop = () => { if (!closed) try { process.kill(-pid, 'SIGKILL'); } catch {} };
+  return { pid, exited, stop, log, scratch };
+}
+/** A stopped validate --suite-view: the given exit code, no report, the suite at base never started, no record written, no copy
+ * left in the scratch dir, and no worktree left registered in the pool repo. */
+async function assertStoppedBeforeSuite(v: ReturnType<typeof startSuiteView>, fx: ReturnType<typeof suitePool>, signal: string, code: number) {
+  const r = await v.exited;
+  assert.equal(r.code, code, r.stderr);
+  assert.match(r.stderr, new RegExp(`validate stopped by ${signal}`));
+  assert.equal(r.stdout, '', 'no report for a stopped validate');
+  assert.equal(existsSync(v.log), false, `the suite at base ran after the ${signal}`);
+  assert.equal(existsSync(join(fx.poolDir, SUITE_BASE_FILE)), false);
+  assert.deepEqual(readdirSync(v.scratch).filter(n => n.startsWith('suite-base-')), [], 'the copy was removed');
+  assert.equal(git(fx.repo, 'worktree', 'list', '--porcelain').split('worktree ').length - 1, 1);
+}
+
+test('a Ctrl-C or a SIGTERM during the hidden-test runs ends validate --suite-view before the suite run at base starts', async () => {
+  for (const { signal, group, code } of [{ signal: 'SIGINT', group: true, code: 130 }, { signal: 'SIGTERM', group: false, code: 143 }] as const) {
+    const base = fresh(), marker = `pool-suite-view-early-${randomBytes(6).toString('hex')}`;
+    try {
+      const fx = suitePool(base), once = join(base, 'slept');
+      // double's first hidden run takes 3 s, so the signal lands inside validatePool; its other runs are quick
+      writeFileSync(join(hiddenRoot('dry-run', fx.hiddenParent), 'double', 'cmd'),
+        `if [ ! -e '${once}' ]; then : > '${once}'; node -e 'setTimeout(() => {}, 3000)' ${marker}; fi; node --test test/double.hidden.test.mjs\n`);
+      const v = startSuiteView(fx, base);
+      try {
+        const until = Date.now() + 100_000;
+        // only the hidden command's sh and node carry the marker
+        const hiddenRunning = () => spawnSync('ps', ['-Ao', 'command='], { encoding: 'utf8' }).stdout.split('\n').some(l => l.includes(marker));
+        while (!hiddenRunning()) {
+          assert.ok(Date.now() < until, "double's hidden run never started");
+          await new Promise(r => setTimeout(r, 100));
+        }
+        process.kill(group ? -v.pid : v.pid, signal); // SIGTERM to validate's PID alone: the hidden run goes on to its end
+        await assertStoppedBeforeSuite(v, fx, signal, code);
+      } finally { v.stop(); }
+    } finally { rmSync(base, { recursive: true, force: true }); }
+  }
+});
+
+test('a SIGTERM to validate while the suite view copy is made ends validate before the suite runs, and removes the copy', async () => {
+  const base = fresh();
+  try {
+    const fx = suitePool(base), bin = join(base, 'bin'), copying = join(base, 'copying');
+    // a git that takes 2 s over the copy's `git add -A`, so the SIGTERM lands while the copy is made
+    const realGit = spawnSync('sh', ['-c', 'command -v git'], { encoding: 'utf8' }).stdout.trim();
+    put(join(bin, 'git'), `#!/bin/sh\ncase "$*" in *suite-base-*" add -A") : > '${copying}'; sleep 2;; esac\nexec '${realGit}' "$@"\n`);
+    chmodSync(join(bin, 'git'), 0o755);
+    const v = startSuiteView(fx, base, { ...process.env, PATH: `${bin}:${process.env.PATH}` });
+    try {
+      const until = Date.now() + 100_000;
+      while (!existsSync(copying)) {
+        assert.ok(Date.now() < until, 'the suite view copy was never made');
+        await new Promise(r => setTimeout(r, 50));
+      }
+      process.kill(v.pid, 'SIGTERM'); // validate's PID alone: git goes on and the copy is finished
+      await assertStoppedBeforeSuite(v, fx, 'SIGTERM', 143);
+    } finally { v.stop(); }
   } finally { rmSync(base, { recursive: true, force: true }); }
 });

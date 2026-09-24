@@ -32,9 +32,11 @@ const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
 /** validatePool, then the optional extras. Neither extra changes an item's ok or the report's ok: the suite view is a secondary,
  * not pre-registered record, and mutation survivors are flags for a human (todo/pass-to-pass-score-view.md, todo/mutation-check-hidden-tests.md).
- * Between its synchronous steps it lets pending signals in (letSignalsIn), so a Ctrl-C or SIGTERM that came during one ends
- * validate before the next starts; StrykerJS runs are awaited, so one ends validate at once. An Interrupted (a step's child
- * killed by a stop signal) ends it too. */
+ * Its synchronous steps are validatePool (every hidden run, and the suite with --suite), the copy the suite view runs in, the
+ * suite run at base, and each item's mutation copy. After each it awaits letSignalsIn, so a Ctrl-C or SIGTERM that came during
+ * one ends validate before the next starts: a stop during any hidden run ends it once validatePool returns, before the suite
+ * run at base. StrykerJS runs are awaited, so a stop during one ends validate at once. An Interrupted (a step's child killed by
+ * a stop signal) ends it too. */
 export async function validateAll(poolDir: string, o: ValidateOptions = {}) {
   const scratch = o.scratch ? resolve(o.scratch) : mkdtempSync(join(realpathSync(tmpdir()), 'pool-validate-'));
   const report = validatePool(poolDir, { hiddenParent: o.hiddenParent, scratch, repeats: o.repeats, suite: o.suite });
@@ -80,9 +82,10 @@ export function suiteBaseLine(sb: SuiteBaseSummary): string {
     `not passing: ${sb.not_passing?.join(', ') || 'none'}; written to ${sb.file}`;
 }
 
-/** validate's stop: SIGINT or SIGTERM ends it with 128 + the signal number as soon as its event loop runs, and process.exit
- * runs the 'exit' hooks that kill a StrykerJS group and remove its copy. Prepended, so it runs before bench-build-runtime.ts's
- * listeners for the same signals (which pool-format.ts imports). */
+/** validate's stop: SIGINT or SIGTERM ends it with 128 + the signal number as soon as its event loop next polls (validateAll
+ * lets it poll after each synchronous step), and process.exit runs the 'exit' hooks that kill a StrykerJS group and remove the
+ * mutation or suite view copy. Prepended, so it runs before bench-build-runtime.ts's listeners for the same signals (which
+ * pool-format.ts imports). */
 function exitOnStopSignals() {
   for (const s of ['SIGINT', 'SIGTERM'] as const) {
     process.prependListener(s, () => { try { writeSync(2, `validate stopped by ${s}\n`); } catch {} process.exit(128 + constants.signals[s]); });

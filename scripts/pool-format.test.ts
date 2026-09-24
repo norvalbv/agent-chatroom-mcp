@@ -2,14 +2,17 @@
  * node --import tsx scripts/pool-format.test.ts */
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { hiddenRoot, loadHiddenItem, loadPool, lockPool, runCmd, validatePool, worktreeAt, removeWorktree } from './pool-format.ts';
 import { makeDryRunPool } from './pool-fixture.ts';
 
 const fresh = () => mkdtempSync(join(tmpdir(), 'pool-format-'));
+const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
+const STOPPED_AT_THE_AWAIT = /step 1\nstopped\n$/;
 
 test('the dry-run pool has two items, a three-way split and a lock that loadPool accepts', () => {
   const base = fresh();
@@ -218,5 +221,48 @@ test('validate reruns each hidden test and rejects an item whose outcome flips b
     assert.equal(r.ok, false, 'a flaky item is not valid');
     const other = report.items.find((x: { id: string }) => x.id !== id)!;
     assert.equal(other.ok, true, 'a stable item stays valid');
+  } finally { rmSync(base, { recursive: true, force: true }); }
+});
+
+/** A process that, resumed from `phase` of the event loop, runs a synchronous step (a spawnSync that lasts until `flag` exists),
+ * awaits letSignalsIn, then prints "step 2". Its SIGINT listener prints "stopped" and exits 130, as validate's does. */
+function stepper(phase: 'poll' | 'check' | 'timers', flag: string) {
+  const lib = JSON.stringify(fileURLToPath(new URL('./pool-format.ts', import.meta.url)));
+  const wait = "const f=process.argv[1],t0=Date.now();const t=setInterval(()=>{if(require('fs').existsSync(f)||Date.now()-t0>30000)clearInterval(t)},10)";
+  const code = `import { spawnSync } from 'node:child_process'; import { readFile, writeSync } from 'node:fs'; import { letSignalsIn } from ${lib};
+process.prependListener('SIGINT', () => { writeSync(1, 'stopped\\n'); process.exit(130); });
+const phase = ${JSON.stringify(phase)};
+if (phase === 'poll') await new Promise(r => readFile(${lib}, r)); // resumed from an fs callback, in the poll phase
+else if (phase === 'check') await new Promise(r => setImmediate(r));
+else await new Promise(r => setTimeout(r, 5));
+writeSync(1, 'step 1\\n');
+spawnSync(process.execPath, ['-e', ${JSON.stringify(wait)}, ${JSON.stringify(flag)}]);
+await letSignalsIn();
+writeSync(1, 'step 2\\n');`;
+  // started from this checkout (as the CLI tests are), so --import tsx resolves
+  const c = spawn(process.execPath, ['--import', 'tsx', '--input-type=module', '-e', code], { stdio: ['ignore', 'pipe', 'pipe'] });
+  let out = '', err = '';
+  c.stderr.on('data', d => { err += d; });
+  const guard = setTimeout(() => c.kill('SIGKILL'), 60_000); // this test's own child only
+  const exited = new Promise<{ code: number | null; out: string; err: string }>(r => c.on('close', code => { clearTimeout(guard); r({ code, out, err }); }));
+  const inStep = new Promise<void>(r => c.stdout.on('data', d => { out += d; if (out.includes('step 1')) r(); }));
+  return { child: c, exited, inStep };
+}
+
+test('letSignalsIn: a SIGINT that came during a synchronous step ends the process before the next step, whichever loop phase awaited it', async () => {
+  const base = fresh();
+  try {
+    // poll is the phase a single setImmediate fails from: it runs in the check phase of the same loop turn, before the next poll
+    for (const phase of ['poll', 'check', 'timers'] as const) {
+      const flag = join(base, `flag-${phase}`), s = stepper(phase, flag);
+      await Promise.race([s.inStep, s.exited]);
+      assert.ok(s.child.pid);
+      process.kill(s.child.pid, 'SIGINT'); // this process alone: the synchronous step's own child goes on until the flag
+      await sleep(300);
+      writeFileSync(flag, '');
+      const r = await s.exited;
+      assert.equal(r.code, 130, `${phase}: ${r.out} ${r.err}`);
+      assert.match(r.out, STOPPED_AT_THE_AWAIT, `${phase}: the listener ran at the await, and the next step never started`);
+    }
   } finally { rmSync(base, { recursive: true, force: true }); }
 });

@@ -1,8 +1,9 @@
 ---
-status: open
+status: done
 added: 2026-09-23
 from: reuse/concord build report
 owner: benji
+done: 2026-09-24 MIT, Copyright (c) 2026 Benji Norval (owner's choice); LICENSE added
 ---
 # Add a LICENSE file
 

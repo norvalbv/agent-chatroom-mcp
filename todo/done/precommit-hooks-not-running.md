@@ -1,8 +1,9 @@
 ---
-status: open
+status: done
 added: 2026-09-23
 from: reuse/sandbox build report; checked in the main checkout
 owner: benji
+done: 2026-09-24 guard-only by owner's choice: scripts/install-guard-hook.sh writes .husky/_/pre-commit running only the baseline-freeze guard (devkit block stays off); rerun it after any npm run prepare
 ---
 # The repo's pre-commit hooks are not running
 

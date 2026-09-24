@@ -19,6 +19,15 @@ export type Quorum = "unanimous" | "majority" | "supermajority";
 export type RoomMode = "free" | "round_robin";
 export type RoomState = "open" | "concluded" | "stalled" | "closed";
 
+/**
+ * What a reviewer's check was, self-declared (optional). The same classes scripts/paper-verify-practice.ts counts
+ * in the census of 260 verify heads: existing_tests = its "existing_tests" (and the repo's own smoke script);
+ * own_check = its "own_check" (a probe the reviewer wrote); exercised = its "app_in_browser" and
+ * "agents_on_changed_build" (the changed build driven the way its users drive it, the OpenHands qa-changes rule).
+ */
+export type VerifyKind = "existing_tests" | "own_check" | "exercised";
+export const VERIFY_KINDS: readonly VerifyKind[] = ["existing_tests", "own_check", "exercised"];
+
 /** The machine-readable head a verify/* entry must lead with (docs/swarm-protocol-spec.md:26, section C.3). */
 export interface VerifyHead {
   proposal: string;
@@ -26,33 +35,80 @@ export interface VerifyHead {
   cwd: string;
   exit_code: number;
   output_tail: string;
+  /** the proposal's commit, where `command` exited `exit_code` */
   commit?: string;
+  /** the parent commit, before the change, where the same `command` ran */
+  base_commit?: string;
+  /** that run's exit code: nonzero is fail-to-pass; 0 counts only on the refactor path */
+  base_exit_code?: number;
+  /** the refactor path: the proposal claims no behaviour change, so the check passes at both commits */
+  refactor?: boolean;
+  kind?: VerifyKind;
 }
 
 /** Canonical wording for what a verify/* entry must contain, quoted verbatim by refusals and prompts. */
-export const VERIFY_HEAD_EXAMPLE = '{"proposal":"<PROPOSAL_ID>","command":"<what you ran>","cwd":"<working dir>","exit_code":0,"output_tail":"<last lines of real output>"}';
+export const VERIFY_HEAD_EXAMPLE = '{"proposal":"<PROPOSAL_ID>","command":"<the check you ran>","cwd":"<working dir>","base_commit":"<parent commit, before the change>","base_exit_code":1,"commit":"<the proposal\'s commit>","exit_code":0,"output_tail":"<last lines of real output at commit>"}';
+/** The rest of the rule, said once after VERIFY_HEAD_EXAMPLE wherever it is quoted. */
+export const VERIFY_HEAD_RULE = 'base_exit_code is the same check at base_commit and must be nonzero (it failed before the change); a refactor with no behaviour change instead passes at both and adds "refactor":true; optional "kind": existing_tests, own_check or exercised; exit_code must be 0 for the entry to count';
 
 /**
  * A verify/* entry must lead with one line of JSON matching VerifyHead; free prose may follow. This is
  * shape-checking, not prose-parsing: it cannot prove the command was really run, only that a second agent
  * committed to a specific, attributable, re-runnable claim instead of typing "looks fine" or "BLOCKED".
+ * Optional fields are type-checked when present. The census rows in bench/results/verify-practice/heads.jsonl
+ * parse exactly as before (scripts/verify-fail-to-pass-regression.ts), so its schema_valid count still holds.
  */
 export function parseVerifyHead(text: string): VerifyHead | undefined {
+  const r = readVerifyHead(text);
+  return "head" in r ? r.head : undefined;
+}
+
+/** parseVerifyHead with the reason it failed, in words a refusal can quote. */
+export function readVerifyHead(text: string): { head: VerifyHead } | { error: string } {
   const nl = text.indexOf("\n");
-  const head = (nl === -1 ? text : text.slice(0, nl)).trim();
-  if (!head.startsWith("{")) return undefined;
+  const line = (nl === -1 ? text : text.slice(0, nl)).trim();
+  if (!line.startsWith("{")) return { error: "its first line is not a JSON verify head" };
   let obj: unknown;
   try {
-    obj = JSON.parse(head);
+    obj = JSON.parse(line);
   } catch {
-    return undefined;
+    return { error: "its first line is not valid JSON (one line, no line breaks inside it)" };
   }
-  if (typeof obj !== "object" || obj === null) return undefined;
+  if (typeof obj !== "object" || obj === null) return { error: "its first line is not a JSON object" };
   const o = obj as Record<string, unknown>;
-  if (typeof o.proposal !== "string" || typeof o.command !== "string" || typeof o.cwd !== "string") return undefined;
-  if (typeof o.exit_code !== "number" || typeof o.output_tail !== "string") return undefined;
-  if (o.commit !== undefined && typeof o.commit !== "string") return undefined;
-  return o as unknown as VerifyHead;
+  for (const k of ["proposal", "command", "cwd"] as const) if (typeof o[k] !== "string") return { error: `"${k}" must be a string` };
+  if (typeof o.exit_code !== "number") return { error: '"exit_code" must be a number' };
+  if (typeof o.output_tail !== "string") return { error: '"output_tail" must be a string' };
+  for (const k of ["commit", "base_commit"] as const) if (o[k] !== undefined && typeof o[k] !== "string") return { error: `"${k}" must be a string` };
+  if (o.base_exit_code !== undefined && typeof o.base_exit_code !== "number") return { error: '"base_exit_code" must be a number' };
+  if (o.refactor !== undefined && typeof o.refactor !== "boolean") return { error: '"refactor" must be true or false' };
+  if (o.kind !== undefined && !VERIFY_KINDS.includes(o.kind as VerifyKind)) return { error: `"kind" must be one of ${VERIFY_KINDS.join(", ")}` };
+  return { head: o as unknown as VerifyHead };
+}
+
+/** Abbreviated and full hex SHAs of one commit compare equal; anything else (a branch, a tag) compares exactly. */
+function sameCommit(a: string, b: string): boolean {
+  const x = a.trim().toLowerCase(), y = b.trim().toLowerCase();
+  if (/^[0-9a-f]{4,64}$/.test(x) && /^[0-9a-f]{4,64}$/.test(y)) return x.startsWith(y) || y.startsWith(x);
+  return x === y;
+}
+
+/**
+ * Stage 1 of fail-to-pass evidence, in SWE-bench's sense (Jimenez et al. 2023, arXiv:2310.06770: a FAIL_TO_PASS
+ * test fails before the change and passes after it; PASS_TO_PASS tests pass at both). The head must name the
+ * proposal's commit and the parent commit before the change, and report the same check failing at the parent.
+ * The refactor path is PASS_TO_PASS: a proposal that changes no behaviour has nothing that can fail before it,
+ * so `"refactor":true` with base_exit_code 0 counts instead. Self-reported: the hub resolves neither commit and
+ * runs nothing (docs/decisions/proposed/verify-head-fail-to-pass.md). Returns what to fix, or undefined.
+ */
+export function failToPassShortfall(h: VerifyHead): string | undefined {
+  if (!h.commit?.trim()) return 'it names no "commit", the proposal\'s commit where the check passed';
+  if (!h.base_commit?.trim()) return 'it names no "base_commit", the parent commit before the change where you ran the same check';
+  if (sameCommit(h.base_commit, h.commit)) return '"base_commit" and "commit" are the same commit: run the check at the parent commit and again at the proposal\'s';
+  if (h.base_exit_code === undefined) return 'it has no "base_exit_code", the exit code of the same check at base_commit';
+  if (h.refactor === true) return h.base_exit_code === 0 ? undefined : '"refactor":true says no behaviour changed, but the check failed at base_commit: drop "refactor"';
+  if (h.base_exit_code === 0) return '"base_exit_code" is 0, so the check passed before the change too and shows nothing the change did: use a check that fails at base_commit, or add "refactor":true if the proposal changes no behaviour';
+  return undefined;
 }
 /** Role is a display tag plus one quorum rule (chair is never waited on but may veto). It is never a persona. */
 export type Role = "worker" | "chair" | "lead" | "verifier" | "recruit";
@@ -224,6 +280,16 @@ export interface ElectorateSummary {
   denominator: "electorate";
 }
 
+/** Which verify/* entry passed a require_verification conclusion, and on which path, so a refactor-path pass is visible. */
+export interface ConclusionVerification {
+  key: string;
+  by: string;
+  path: "fail_to_pass" | "refactor";
+  base_commit: string;
+  commit: string;
+  kind?: VerifyKind;
+}
+
 export interface Proposal {
   id: string;
   room: string;
@@ -294,7 +360,7 @@ export interface Room {
   state: RoomState;
   /** Hidden from listings (dashboard, list_rooms) but fully kept on disk; set by a human or the archive-dead sweep. */
   archived?: boolean;
-  conclusion?: { text: string; proposalId: string; decidedAt: string; version?: number; tally?: { agree: number; disagree: number; abstain: number }; electorate?: ElectorateSummary; unresolved_objections?: { by: string; objection: string }[] };
+  conclusion?: { text: string; proposalId: string; decidedAt: string; version?: number; tally?: { agree: number; disagree: number; abstain: number }; electorate?: ElectorateSummary; unresolved_objections?: { by: string; objection: string }[]; verification?: ConclusionVerification };
   /** identical silence nudges are posted at most twice */
   lastNudge?: { text: string; count: number };
   /** Lifetime refusal counts keyed by tool and bounded reason class (no bodies, no ids). */
@@ -2081,10 +2147,12 @@ export class Hub {
       // in the same call that delivers it (settleRead runs before the caller's actionableNow
       // check). A "system"-kind post with an explicit mentions field looked right in isolation but
       // is provably too late by the time hold_until_actionable's loop re-checks it.
+      // "Exercise ... not only rerun" is the OpenHands extensions qa-changes rule (MIT; skills/qa-changes/SKILL.md,
+      // "Run the code, not the tests"), also in prompts/loop.md, recruit.md and verifier.md.
       this.post(room, "chat", undefined,
         `@${reviewer.name} you are the reviewer for ${p.name}'s "${key}" (fewest reviews assigned, then least-recently-verifying; picked by the hub). ` +
         `Once ${p.name} proposes work from it, require_verification prefers a verify/* entry from you over anyone else's while you're still active; ` +
-        `write it as {"proposal":"<id>","command":"...","cwd":"...","exit_code":0,"output_tail":"..."} naming the proposal, per docs/swarm-protocol-spec.md.`);
+        `its JSON head (in the proposal's blocked_by) records one check of yours failing at the parent commit and passing at ${p.name}'s. Exercise the change the way its users would; do not only rerun ${p.name}'s tests.`);
     }
     if (key.startsWith("claim/") && (!previous || Hub.claimReleased(previous))) this.noticeClaimOverlap(room, p, key, text);
     if (key.endsWith(".ack") || key.startsWith("verify/")) for (const pr of room.proposals.values()) if (pr.status === "open") this.evaluate(room, pr);
@@ -2337,7 +2405,7 @@ export class Hub {
       throw new HubError("A room of one cannot conclude: at least two agents on different connections must be present. Recruit (request_agent) or ask someone to join.");
     }
     if (room.requireVerification && ![...room.board.keys()].some((k) => k.startsWith("verify/"))) {
-      throw new HubError("This room requires verification: before proposing, put the command you actually ran, its cwd/commit and its exit code on the board under verify/<area>. Someone else must then run it and write their own verify/* entry naming the proposal id.");
+      throw new HubError("This room requires verification: before proposing, put the command you actually ran, its cwd/commit and its exit code on the board under verify/<area>. Someone else must then check it themselves (the same check failing at the parent commit and passing at yours) and write their own verify/* entry naming the proposal id.");
     }
     const unacked = this.unacknowledged(room);
     if (unacked.length) throw new HubError(`Acknowledge the notes from other rooms first (write "<key>.ack"): ${unacked.join(", ")}`);
@@ -2409,6 +2477,14 @@ export class Hub {
   /** Collapse whitespace so a rerun command matches however it was spaced. */
   static normCommand(c: string): string {
     return c.trim().replace(/\s+/g, " ");
+  }
+
+  /** One line for the conclusion notice: who verified, and whether it was fail-to-pass or the refactor exemption. */
+  static verificationLine(v: ConclusionVerification): string {
+    const kind = v.kind ? `, kind ${v.kind}` : "";
+    return v.path === "refactor"
+      ? `Verified by ${v.by} (${v.key}) on the refactor path${kind}: the check passed at ${v.base_commit} and at ${v.commit}; no check failed before the change.`
+      : `Verified by ${v.by} (${v.key})${kind}: the check failed at ${v.base_commit} and passes at ${v.commit}.`;
   }
 
   /** The verify/* entry that answers an executable challenge: names the proposal, reruns the challenge's exact
@@ -2650,28 +2726,50 @@ export class Hub {
   /** Re-check whether a proposal has reached the room's quorum. */
   /**
    * A verify/* entry by a different agent (different connection), newer than the proposal text, whose first
-   * line is a parseable VerifyHead naming this proposal with exit_code 0. Content-blind free text (a "BLOCKED"
-   * or "PARTIAL" entry that never ran a passing command) never counts, however it names the proposal.
+   * line is a parseable VerifyHead naming this proposal with exit_code 0 and fail-to-pass evidence (or the
+   * refactor path; failToPassShortfall). Content-blind free text (a "BLOCKED" or "PARTIAL" entry that never ran
+   * a passing command) never counts, however it names the proposal.
    */
   verifiedBy(room: Room, pr: Proposal): BoardEntry | undefined {
+    return this.verification(room, pr)?.entry;
+  }
+
+  /** The entry verifiedBy() finds, with its key and parsed head. */
+  verification(room: Room, pr: Proposal): { key: string; entry: BoardEntry; head: VerifyHead } | undefined {
     if (!pr.updatedAt) return undefined; // Legacy text timestamps are unknown, not fresh.
-    const proposer = room.participants.get(pr.by.id);
-    // An active assigned reviewer (Hub.assignReviewer, set at claim/<area> creation) is preferred:
-    // only their entry counts while they are still in the room. Once they leave, any qualifying
-    // non-author entry counts again, so an absent reviewer never deadlocks the room.
     const reviewer = this.activeReviewerFor(room, pr.by.name);
-    for (const [k, e] of room.board) {
-      if (!k.startsWith("verify/") || k.endsWith(".partial")) continue;
-      if (e.by === pr.by.name) continue;
-      const author = [...room.participants.values()].find((x) => x.name === e.by);
-      if (author && proposer && author.session && author.session === proposer.session) continue; // same process, two names
-      if (reviewer && e.by !== reviewer.name) continue;
-      if (e.updatedAt < pr.updatedAt) continue;
-      const head = parseVerifyHead(e.text);
-      if (!head || head.exit_code !== 0 || head.proposal !== pr.id) continue;
-      return e;
+    for (const [key, entry] of room.board) {
+      const r = this.verifyEntryVerdict(room, pr, key, entry, reviewer);
+      if (r.head && !r.why) return { key, entry, head: r.head };
     }
     return undefined;
+  }
+
+  /**
+   * The gate's rule for one board entry, in one place so the refusal can never drift from the check: `why` is
+   * what stops it counting, in words that say what to write instead; `named` is whether the entry is about this
+   * proposal at all (only those are worth naming back in a refusal).
+   */
+  private verifyEntryVerdict(room: Room, pr: Proposal, key: string, e: BoardEntry, reviewer: Participant | undefined): { head?: VerifyHead; why?: string; named: boolean } {
+    if (!key.startsWith("verify/") || key.endsWith(".partial")) return { why: "not a verify/* entry", named: false };
+    const read = readVerifyHead(e.text);
+    const head = "head" in read ? read.head : undefined;
+    const named = head ? head.proposal === pr.id : e.text.includes(pr.id);
+    const no = (why: string) => ({ head, why, named });
+    if (e.by === pr.by.name) return { ...no("written by the proposer"), named: false }; // the author's own run, required before propose
+    const proposer = room.participants.get(pr.by.id);
+    const author = [...room.participants.values()].find((x) => x.name === e.by);
+    if (author && proposer && author.session && author.session === proposer.session) return no(`it shares ${this.shown(room, pr.by)}'s connection, so it is the proposer's own check`); // same process, two names
+    // An active assigned reviewer (Hub.assignReviewer, set at claim/<area> creation; the caller passes
+    // activeReviewerFor) is preferred: only their entry counts while they are still in the room. Once they
+    // leave, any qualifying non-author entry counts again, so an absent reviewer never deadlocks the room.
+    if (reviewer && e.by !== reviewer.name) return no(`the assigned reviewer, ${this.shown(room, reviewer)}, is still in the room and only their entry counts`);
+    if (!pr.updatedAt || e.updatedAt < pr.updatedAt) return no(`it was written before v${pr.version}'s text: check v${pr.version} and write it again`);
+    if (!head) return no("error" in read ? read.error : "its first line is not a JSON verify head");
+    if (head.proposal !== pr.id) return { head, why: `it names ${head.proposal}`, named: false };
+    if (head.exit_code !== 0) return no(`it reports exit_code ${head.exit_code} at the proposal's commit, and counts only once the check passes there`);
+    const short = failToPassShortfall(head);
+    return short ? no(short) : { head, named };
   }
 
   /** What exactly to write, named precisely enough that "an entry exists but doesn't count" is never a mystery. */
@@ -2680,7 +2778,14 @@ export class Hub {
     const who = reviewer
       ? `your assigned reviewer, ${this.shown(room, reviewer)} (falls back to anyone else once they leave the room),`
       : `someone other than ${this.shown(room, pr.by)} (on a different connection)`;
-    return `a verify/* board entry from ${who} whose first line is JSON ${VERIFY_HEAD_EXAMPLE.replace("<PROPOSAL_ID>", pr.id)} — commit is optional; exit_code must be 0 for the entry to count`;
+    // Name back the latest entries that are about this proposal but do not count, and why (at most two: blocked_by is re-sent every wait).
+    const misses = [...room.board.entries()]
+      .map(([key, e]) => ({ key, e, v: this.verifyEntryVerdict(room, pr, key, e, reviewer) }))
+      .filter((x) => x.v.named && x.v.why)
+      .sort((a, b) => b.e.updatedAt.localeCompare(a.e.updatedAt))
+      .slice(0, 2)
+      .map((x) => `; ${x.e.by}'s ${x.key} does not count: ${x.v.why}`);
+    return `a verify/* board entry from ${who} whose first line is JSON ${VERIFY_HEAD_EXAMPLE.replace("<PROPOSAL_ID>", pr.id)} — ${VERIFY_HEAD_RULE}${misses.join("")}`;
   }
 
   private evaluate(room: Room, pr: Proposal) {
@@ -2786,7 +2891,12 @@ export class Hub {
     for (const c of pr.challenges) if ((c.status ?? "open") === "open") c.status = "overruled";
     const electorate = this.electorateSummary(room, pr);
     const tally = { agree: electorate.agree, disagree: electorate.disagree, abstain: electorate.abstain };
-    room.conclusion = { text: pr.text, proposalId: pr.id, decidedAt: now(), version: pr.version, tally, electorate, unresolved_objections: unresolved };
+    const v = room.requireVerification ? this.verification(room, pr) : undefined;
+    const verification: ConclusionVerification | undefined = v && {
+      key: v.key, by: v.entry.by, path: v.head.refactor === true ? "refactor" : "fail_to_pass",
+      base_commit: v.head.base_commit!, commit: v.head.commit!, ...(v.head.kind ? { kind: v.head.kind } : {}),
+    };
+    room.conclusion = { text: pr.text, proposalId: pr.id, decidedAt: now(), version: pr.version, tally, electorate, unresolved_objections: unresolved, ...(verification ? { verification } : {}) };
     this.persist({ type: "proposal", proposal: pr });
     this.setState(room, "concluded");
     if (room.nudgeTimer) clearTimeout(room.nudgeTimer);
@@ -2795,7 +2905,8 @@ export class Hub {
       "conclusion",
       undefined,
       `CONSENSUS REACHED on ${pr.id} v${pr.version} (${electorate.agree}/${electorate.electorate} agree; ${electorate.excluded_leavers} leavers-before-close excluded; quorum=${room.quorum}; ${pr.text.length} chars, text in room_status/conclusion)` +
-        (unresolved.length ? `\nUnresolved objections, overruled: ${unresolved.map((u) => `${u.by}: "${u.objection.slice(0, 300)}${u.objection.length > 300 ? "…" : ""}"`).join(" | ")}` : ""),
+        (unresolved.length ? `\nUnresolved objections, overruled: ${unresolved.map((u) => `${u.by}: "${u.objection.slice(0, 300)}${u.objection.length > 300 ? "…" : ""}"`).join(" | ")}` : "") +
+        (verification ? `\n${Hub.verificationLine(verification)}` : ""),
       { proposalId: pr.id },
     );
     this.releaseClaims(room, "Room concluded");

@@ -11,7 +11,7 @@
 import { McpServer, ResourceTemplate, type RegisteredTool } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
-import { Hub, HubError, ROLES, type CallOutcome } from "./hub.js";
+import { Hub, HubError, ROLES, VERIFY_HEAD_EXAMPLE, VERIFY_HEAD_RULE, type CallOutcome } from "./hub.js";
 import type { Spawner } from "./spawner.js";
 
 export const DEFAULT_WAIT_MS = 55_000; // gaps over 55s were 62-77% of sub-room wall time; wait() wakes on events so latency is unchanged
@@ -156,7 +156,7 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
         anonymous: z.boolean().optional().describe("Show participants to each other as 'Participant A/B/C' to reduce identity bias."),
         max_messages_per_participant: z.number().int().min(0).optional().describe("Chat message budget per participant (votes/proposals/challenges are free)."),
         require_challenge: z.boolean().optional().describe("Require a challenge before any proposal can pass. Default: automatic when 3+ participants."),
-        require_verification: z.boolean().optional().describe("Swarm mode: a proposal needs a verify/* board entry by someone else before it can pass, whose first line is JSON {proposal, command, cwd, exit_code, output_tail} naming this proposal's id with exit_code 0; an entry without that parseable head does not count."),
+        require_verification: z.boolean().optional().describe("Swarm mode: a proposal needs a verify/* board entry by someone else before it can pass, whose first line is JSON {proposal, command, cwd, base_commit, base_exit_code, commit, exit_code, output_tail} naming this proposal's id: the same check failed at the parent commit (base_exit_code nonzero) and passes at the proposal's (exit_code 0), or passes at both with refactor:true; an entry without that head does not count."),
         max_message_chars: z.number().int().min(200).max(20000).optional().describe("Cap on chat length (proposals, challenges are not capped; board entries 8000; openings are always capped at 400)."),
         replacement_token: z.string().optional().describe("One-use proof supplied for this reserved replacement seat."),
         participant_id: z.string().optional().describe("Reclaim an earlier identity after a reconnect."),
@@ -565,7 +565,7 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
         "replaced in place and only a one-line notice goes to chat, so use this instead of re-posting long content. Empty text deletes the entry.",
       inputSchema: {
         room: roomArg,
-        key: z.string().describe("Short name, e.g. 'evidence', 'open questions', 'draft'. Reserved: claim/<area> (JSON, create-then-owner-only), verify/<area> (first line must be JSON {\"proposal\":\"<id>\",\"command\":\"<what you ran>\",\"cwd\":\"<working dir>\",\"exit_code\":0,\"output_tail\":\"<last lines of real output>\"}, commit optional; free prose may follow; an entry whose first line does not parse, or whose exit_code is not 0, or whose proposal does not match, does not satisfy require_verification), hold/<room> (pause; author-only), inbox/* (written by post_to_room; acknowledge with '<key>.ack')."),
+        key: z.string().describe("Short name, e.g. 'evidence', 'open questions', 'draft'. Reserved: claim/<area> (JSON, create-then-owner-only), verify/<area> (first line must be JSON " + VERIFY_HEAD_EXAMPLE.replace("<PROPOSAL_ID>", "<id>") + ": " + VERIFY_HEAD_RULE + "; free prose may follow, e.g. what you could not verify; otherwise it does not satisfy require_verification), hold/<room> (pause; author-only), inbox/* (written by post_to_room; acknowledge with '<key>.ack')."),
         text: z.string(),
         ttl_seconds: z.number().positive().finite().optional().describe("Expiry for handoff/inbox only; body remains retrievable by key."),
         expires_at: z.string().optional().describe("Absolute expiry timestamp; use instead of ttl_seconds."),

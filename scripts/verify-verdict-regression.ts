@@ -5,6 +5,8 @@
  * verify entries in the measured runs self-reported PARTIAL/BLOCKED/NOT GREEN and still passed the gate).
  * Fix: verify/* must lead with one line of JSON {proposal,command,cwd,exit_code,output_tail,commit?}
  * (docs/swarm-protocol-spec.md:26, section C.3) and only exit_code===0 naming the right proposal counts.
+ * Since stage 1 of verify-head-fail-to-pass (docs/decisions/proposed/verify-head-fail-to-pass.md) a counting head
+ * also records the same check failing at base_commit; scripts/verify-fail-to-pass-regression.ts covers that rule.
  * Run: npx tsx --test scripts/verify-verdict-regression.ts
  */
 import assert from "node:assert/strict";
@@ -20,6 +22,8 @@ function fixture(t: { after: (fn: () => void) => void }) {
   const name = "verify-verdict-test";
   const a = hub.join(name, "Alice", "test", { requireVerification: true, requireChallenge: false, expectedParticipants: 2 }, undefined, "session-a").participant;
   const b = hub.join(name, "Bob", "test", {}, undefined, "session-b").participant;
+  // fail-to-pass evidence: the same check failed at the parent commit and passes at the proposal's
+  const f2p = { base_commit: "a1b2c3d", base_exit_code: 1, commit: "e4f5a6b" };
   const room = hub.getRoom(name);
   // propose()'s own precondition just checks presence of any verify/ key (untyped); the content-blind gate
   // this regression targets is the accept-time verifiedBy() check, exercised separately below.
@@ -30,7 +34,7 @@ function fixture(t: { after: (fn: () => void) => void }) {
     clearTimeout(room.openingsTimer);
     rmSync(dir, { recursive: true, force: true });
   });
-  return { hub, room, pr, a, b };
+  return { hub, room, pr, a, b, f2p };
 }
 
 test("parseVerifyHead: rejects free text, requires the typed shape", () => {
@@ -51,21 +55,21 @@ test("a self-declared BLOCKED/PARTIAL verdict does not satisfy verifiedBy() (the
 });
 
 test("a parseable head with exit_code !== 0 does not satisfy verifiedBy()", (t) => {
-  const { hub, room, pr, b } = fixture(t);
-  hub.setBoard(room.name, b.id, "verify/area", JSON.stringify({ proposal: pr.id, command: "npm test", cwd: "/repo", exit_code: 1, output_tail: "2 failed" }));
+  const { hub, room, pr, b, f2p } = fixture(t);
+  hub.setBoard(room.name, b.id, "verify/area", JSON.stringify({ proposal: pr.id, command: "npm test", cwd: "/repo", ...f2p, exit_code: 1, output_tail: "2 failed" }));
   assert.equal(hub.verifiedBy(room, pr), undefined, "a real but failing run must not satisfy the gate");
 });
 
 test("a head naming a different proposal id does not satisfy verifiedBy()", (t) => {
-  const { hub, room, pr, b } = fixture(t);
-  hub.setBoard(room.name, b.id, "verify/area", JSON.stringify({ proposal: "prop_other", command: "npm test", cwd: "/repo", exit_code: 0, output_tail: "ok" }));
+  const { hub, room, pr, b, f2p } = fixture(t);
+  hub.setBoard(room.name, b.id, "verify/area", JSON.stringify({ proposal: "prop_other", command: "npm test", cwd: "/repo", ...f2p, exit_code: 0, output_tail: "ok" }));
   assert.equal(hub.verifiedBy(room, pr), undefined);
 });
 
 test("a valid pass head by a different connection satisfies verifiedBy() and clears the gate", (t) => {
-  const { hub, room, pr, a, b } = fixture(t);
+  const { hub, room, pr, a, b, f2p } = fixture(t);
   assert.ok(hub.blockedBy(room, pr).some((m) => m.startsWith("a verify/* board entry")), "blocked before any verify entry exists");
-  hub.setBoard(room.name, b.id, "verify/area", JSON.stringify({ proposal: pr.id, command: "npm test", cwd: "/repo", exit_code: 0, output_tail: "9 passed, 0 failed" }));
+  hub.setBoard(room.name, b.id, "verify/area", JSON.stringify({ proposal: pr.id, command: "npm test", cwd: "/repo", ...f2p, exit_code: 0, output_tail: "9 passed, 0 failed" }));
   const entry = hub.verifiedBy(room, pr);
   assert.ok(entry, "a real pass naming this proposal counts");
   assert.equal(hub.blockedBy(room, pr).some((m) => m.startsWith("a verify/* board entry")), false);
@@ -75,7 +79,14 @@ test("a valid pass head by a different connection satisfies verifiedBy() and cle
 });
 
 test("the proposer's own valid head still does not count (author check is unchanged)", (t) => {
-  const { hub, room, pr, a } = fixture(t);
-  hub.setBoard(room.name, a.id, "verify/area", JSON.stringify({ proposal: pr.id, command: "npm test", cwd: "/repo", exit_code: 0, output_tail: "9 passed" }));
+  const { hub, room, pr, a, f2p } = fixture(t);
+  hub.setBoard(room.name, a.id, "verify/area", JSON.stringify({ proposal: pr.id, command: "npm test", cwd: "/repo", ...f2p, exit_code: 0, output_tail: "9 passed" }));
   assert.equal(hub.verifiedBy(room, pr), undefined, "self-verification must not satisfy the gate");
+});
+
+test("a valid pass head with no fail-to-pass evidence (a rerun of the suite) no longer satisfies verifiedBy()", (t) => {
+  const { hub, room, pr, b } = fixture(t);
+  hub.setBoard(room.name, b.id, "verify/area", JSON.stringify({ proposal: pr.id, command: "npm test", cwd: "/repo", exit_code: 0, output_tail: "9 passed" }));
+  assert.equal(hub.verifiedBy(room, pr), undefined, "the pre-stage-1 head: nothing shows the check failed before the change");
+  assert.ok(hub.blockedBy(room, pr).some((m) => m.includes("Bob's verify/area does not count") && m.includes("base_commit")), "the refusal names the entry and what it lacks");
 });

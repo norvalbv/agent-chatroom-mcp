@@ -10,9 +10,9 @@ const text = "Keep the established safe wording for this proposal.";
 const quote = "established safe wording";
 const reason = "New evidence answers this objection adequately.";
 const delay = () => new Promise((resolve) => setTimeout(resolve, 15));
-/** A parseable verify/* head: first line JSON {proposal, command, cwd, exit_code, output_tail}, exit_code 0. */
+/** A counting verify/* head: first line JSON naming the proposal, failing at base_commit and passing (exit_code 0) at commit. */
 const verifyHead = (proposalId: string) =>
-  JSON.stringify({ proposal: proposalId, command: "npm test", cwd: "/tmp/x", exit_code: 0, output_tail: `ran checks for ${proposalId}` });
+  JSON.stringify({ proposal: proposalId, command: "npm test", cwd: "/tmp/x", base_commit: "a1b2c3d", base_exit_code: 1, commit: "e4f5a6b", exit_code: 0, output_tail: `ran checks for ${proposalId}` });
 
 function fixture(requireVerification = false) {
   const dir = mkdtempSync(join(tmpdir(), "chatroom-replay-"));

@@ -86,7 +86,7 @@ test('a real four-session verified conclusion survives replay validation', () =>
     h.setBoard('build',seats[0].id,'verify/placeholder','pending');
     const proposal=h.propose('build',seats[0].id,'Ship verified fixes.');
     h.challenge('build',seats[2].id,proposal.id,'"Ship verified fixes" needs test coverage of all branches.',true);
-    h.setBoard('build',seats[1].id,'verify/fix',JSON.stringify({proposal:proposal.id,command:'node --test',cwd:workspace,exit_code:0,output_tail:'pass',workspace_sha256:hashWorkspace(workspace)}));
+    h.setBoard('build',seats[1].id,'verify/fix',JSON.stringify({proposal:proposal.id,command:'node --test',cwd:workspace,base_commit:'a1b2c3d',base_exit_code:1,commit:'e4f5a6b',exit_code:0,output_tail:'pass',workspace_sha256:hashWorkspace(workspace)}));
     for(const p of seats) {
       if(room.state==='concluded') break;
       h.vote('build',p.id,proposal.id,'agree','Reviewed the artifact and independently checked coverage.',undefined,'Ship verified fixes');

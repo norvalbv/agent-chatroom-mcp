@@ -26,7 +26,7 @@ function fixture(t: { after: (fn: () => void) => void }, opts: RoomOptions) {
   if (opts.requireVerification) hub.setBoard(room.name, a.id, "verify/author", JSON.stringify({ proposal: "pending", command: "npm test", cwd: ".", exit_code: 0, output_tail: "ok" }));
   const pr = hub.propose(room.name, a.id, text);
   const verify = () =>
-    hub.setBoard(room.name, b.id, "verify/cut", JSON.stringify({ proposal: pr.id, command: "npm test", cwd: ".", exit_code: 0, output_tail: "ok" }));
+    hub.setBoard(room.name, b.id, "verify/cut", JSON.stringify({ proposal: pr.id, command: "npm test", cwd: ".", base_commit: "a1b2c3d", base_exit_code: 1, commit: "e4f5a6b", exit_code: 0, output_tail: "ok" }));
   const agreeAll = () => {
     for (const p of [b, c]) hub.vote(room.name, p.id, pr.id, "agree", undefined, undefined, text);
   };
@@ -37,6 +37,7 @@ test("auto + verification: votes and a verify run are not enough without a chall
   const { hub, room, pr, verify, agreeAll } = fixture(t, { requireVerification: true });
   assert.equal(hub.challengeRequired(room), true);
   verify();
+  assert.ok(hub.verifiedBy(room, pr), "the verify run counts (fail-to-pass), so only the missing challenge holds the room");
   agreeAll();
   assert.equal(pr.challenges.length, 0);
   assert.equal(room.state, "open");

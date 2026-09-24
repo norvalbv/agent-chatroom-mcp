@@ -19,10 +19,10 @@ function test(name: string, run: () => Promise<void> | void) {
 }
 
 let serial = 0;
-function room3() {
+function room3(opts: { requireVerification?: boolean } = {}) {
   const h = new Hub();
   const name = `reviewer-assign-${++serial}`;
-  const { room, participant: owner } = h.join(name, "owner", "test");
+  const { room, participant: owner } = h.join(name, "owner", "test", opts);
   const { participant: bob } = h.join(name, "bob", "test");
   const { participant: carol } = h.join(name, "carol", "test");
   return { h, room, owner, bob, carol };
@@ -161,12 +161,16 @@ test("a held wait_for_messages wakes PROMPTLY (not just eventually) for the revi
 });
 
 // ---------- require_verification: prefers the reviewer, falls back once they leave ----------
+// Every head below carries fail-to-pass evidence (docs/decisions/proposed/verify-head-fail-to-pass.md) so each case
+// still tests the reviewer rule it names, not the missing base_commit/base_exit_code.
+const head = (proposal: string, extra: Record<string, unknown> = {}) =>
+  JSON.stringify({ proposal, command: "npm test", cwd: ".", base_commit: "a1b2c3d", base_exit_code: 1, commit: "e4f5a6b", exit_code: 0, output_tail: "ok", ...extra });
 
 test("require_verification is satisfied by the assigned reviewer's entry naming the proposal", () => {
   const { h, room, owner, bob } = room3();
   h.setBoard(room.name, owner.id, "claim/gate", JSON.stringify({ area: "gate", owner: "owner", status: "open" })); // bob assigned
   const pr = h.propose(room.name, owner.id, "Ship the gate change exactly as described here.");
-  h.setBoard(room.name, bob.id, "verify/gate", JSON.stringify({ proposal: pr.id, command: "npm test", cwd: ".", exit_code: 0, output_tail: "ok" }));
+  h.setBoard(room.name, bob.id, "verify/gate", head(pr.id));
   assert.ok(h.verifiedBy(room, pr), "bob is the assigned reviewer and wrote a qualifying entry");
 });
 
@@ -175,7 +179,7 @@ test("require_verification does NOT accept a non-reviewer's entry while the assi
   void bob;
   h.setBoard(room.name, owner.id, "claim/gate2", JSON.stringify({ area: "gate2", owner: "owner", status: "open" })); // bob assigned, not carol
   const pr = h.propose(room.name, owner.id, "Ship the second gate change exactly as described here.");
-  h.setBoard(room.name, carol.id, "verify/gate2", JSON.stringify({ proposal: pr.id, command: "npm test", cwd: ".", exit_code: 0, output_tail: "ok" }));
+  h.setBoard(room.name, carol.id, "verify/gate2", head(pr.id));
   assert.equal(h.verifiedBy(room, pr), undefined, "carol is not the assigned reviewer and bob (the reviewer) is still active: her entry must not satisfy the gate");
 });
 
@@ -184,8 +188,43 @@ test("require_verification falls back to any non-author entry once the assigned 
   h.setBoard(room.name, owner.id, "claim/gate3", JSON.stringify({ area: "gate3", owner: "owner", status: "open" })); // bob assigned
   h.leave(room.name, bob.id, "done for now");
   const pr = h.propose(room.name, owner.id, "Ship the third gate change exactly as described here.");
-  h.setBoard(room.name, carol.id, "verify/gate3", JSON.stringify({ proposal: pr.id, command: "npm test", cwd: ".", exit_code: 0, output_tail: "ok" }));
+  h.setBoard(room.name, carol.id, "verify/gate3", head(pr.id));
   assert.ok(h.verifiedBy(room, pr), "the assigned reviewer left, so any qualifying non-author entry counts again");
+});
+
+test("the assigned reviewer's rerun with no fail-to-pass evidence does not count; the refusal names the reviewer and what is missing", () => {
+  const { h, room, owner, bob } = room3({ requireVerification: true });
+  h.setBoard(room.name, owner.id, "claim/gate4", JSON.stringify({ area: "gate4", owner: "owner", status: "open" })); // bob assigned
+  h.setBoard(room.name, owner.id, "verify/gate4-author", "npm test, exit 0 in my worktree"); // propose needs any verify/* first
+  const pr = h.propose(room.name, owner.id, "Ship the fourth gate change exactly as described here.");
+  h.setBoard(room.name, bob.id, "verify/gate4", JSON.stringify({ proposal: pr.id, command: "npm test", cwd: ".", exit_code: 0, output_tail: "ok" }));
+  assert.equal(h.verifiedBy(room, pr), undefined, "the reviewer is right, the evidence is not: a rerun that passes shows nothing failed before");
+  const refusal = h.blockedBy(room, pr).find((m) => m.startsWith("a verify/* board entry"))!;
+  assert.match(refusal, /your assigned reviewer, bob/);
+  assert.match(refusal, /bob's verify\/gate4 does not count: it names no "commit"/);
+  h.setBoard(room.name, bob.id, "verify/gate4", head(pr.id, { kind: "exercised" }));
+  assert.ok(h.verifiedBy(room, pr), "the same reviewer's fail-to-pass head counts");
+});
+
+test("a non-reviewer's fail-to-pass head is named back as not counting while the reviewer is present", () => {
+  const { h, room, owner, carol } = room3({ requireVerification: true });
+  h.setBoard(room.name, owner.id, "claim/gate5", JSON.stringify({ area: "gate5", owner: "owner", status: "open" })); // bob assigned
+  h.setBoard(room.name, owner.id, "verify/gate5-author", "npm test, exit 0 in my worktree"); // propose needs any verify/* first
+  const pr = h.propose(room.name, owner.id, "Ship the fifth gate change exactly as described here.");
+  h.setBoard(room.name, carol.id, "verify/gate5", head(pr.id));
+  assert.equal(h.verifiedBy(room, pr), undefined);
+  assert.ok(h.blockedBy(room, pr).some((m) => /carol's verify\/gate5 does not count: the assigned reviewer, bob, is still in the room/.test(m)));
+});
+
+test("after the reviewer leaves, the fallback entry still needs fail-to-pass evidence (or the refactor path)", () => {
+  const { h, room, owner, bob, carol } = room3();
+  h.setBoard(room.name, owner.id, "claim/gate6", JSON.stringify({ area: "gate6", owner: "owner", status: "open" })); // bob assigned
+  h.leave(room.name, bob.id, "done for now");
+  const pr = h.propose(room.name, owner.id, "Ship the sixth gate change exactly as described here.");
+  h.setBoard(room.name, carol.id, "verify/gate6", head(pr.id, { base_exit_code: 0 }));
+  assert.equal(h.verifiedBy(room, pr), undefined, "passes at both commits, no refactor declared");
+  h.setBoard(room.name, carol.id, "verify/gate6", head(pr.id, { base_exit_code: 0, refactor: true }));
+  assert.ok(h.verifiedBy(room, pr), "the refactor path counts for the fallback reviewer too");
 });
 
 // ---------- visibility ----------

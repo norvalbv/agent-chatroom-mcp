@@ -14,6 +14,16 @@ test("seats editing this hub are told how to run their build as a private hub", 
   }
 });
 
+test("under --sandbox the rule starts and stops the private hub in one command and launches no agents", () => {
+  // src/sandbox.ts: each command is its own sandbox (a later command cannot stop the hub: EPERM), and a nested claude -p
+  // cannot reach the API, so the dev-room recipe above cannot work from a sandboxed seat
+  const rule = devHubRule(repoRoot, true);
+  for (const part of ["npm run build", "CHATROOM_INSECURE_LOCAL=1 CHATROOM_NO_RECRUIT=1", "node dist/index.js", "& H=$!", "kill $H", "same command"]) {
+    assert.ok(rule.includes(part), `sandboxed rule names ${part}`);
+  }
+  assert.ok(!rule.includes("dist/swarm.js"), "no agents launched from inside the sandbox");
+});
+
 test("seats editing any other project get no dev-hub rule", () => {
   const none = mkdtempSync(join(tmpdir(), "devhub-none-"));
   assert.equal(devHubRule(none), "");

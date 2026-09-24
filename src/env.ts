@@ -56,7 +56,7 @@ export function carrySettings(noCarry: boolean, base: string): string {
  * checkout's dist and data dir; CHATROOM_INSECURE_LOCAL is stripped from seats (SEAT_ENV_EXCLUSIONS), and
  * without it that private hub refuses the launcher's room create (403) and the room runs on default policy.
  */
-export function devHubRule(cwd: string): string {
+export function devHubRule(cwd: string, sandboxed = false): string {
   // A protocol-fixed run (a benchmark hub, CHATROOM_NO_RECRUIT=1) has exactly its stated seats: no private dev rooms either.
   if (process.env.CHATROOM_NO_RECRUIT === "1") return "";
   try {
@@ -64,6 +64,15 @@ export function devHubRule(cwd: string): string {
   } catch {
     return "";
   }
+  // --sandbox (src/sandbox.ts): each Bash command is its own sandbox, so a hub started in one command cannot be stopped
+  // from a later one (probed: EPERM), and agents cannot be launched from inside it (a nested claude -p is denied
+  // api.anthropic.com, and macOS sandboxes do not nest). The same-command form below is the one that works.
+  if (sandboxed)
+    return (
+      " This project is the hub you are talking through, so run your change, not only its tests. Your commands run in an OS sandbox: each command is its own sandbox, so a process you start in one command cannot be stopped from a later one, and agents cannot be launched from inside it. " +
+      "Start a private hub from your build and stop it in the same command: `npm run build && (CHATROOM_INSECURE_LOCAL=1 CHATROOM_NO_RECRUIT=1 PORT=<free port> CHATROOM_DATA_DIR=./data node dist/index.js > hub.log 2>&1 & H=$!; sleep 2; <exercise it with curl>; kill $H)`. " +
+      "If the change needs agents on a hub to be verified, say so in the room with the exact command; the launcher's operator runs that room outside the sandbox."
+    );
   return (
     " This project is the hub you are talking through, so run your change, not only its tests: in your worktree run `npm run build`, then in the background " +
     '`CHATROOM_INSECURE_LOCAL=1 node dist/swarm.js "<what the agents should do>" --flat --agents 3 --models claude-opus-5-5 --verifier-model claude-opus-5-5 --timeout 10 --port <free port>`. ' +

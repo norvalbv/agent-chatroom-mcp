@@ -10,11 +10,12 @@
  * turn when it is about this seat, reasoning blocks are passed back so tool use stays coherent, and
  * the seat leaves the room (instead of vanishing) when its budget or a provider error ends it.
  */
-import { spawn } from "node:child_process";
-import { readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { spawn, spawnSync } from "node:child_process";
+import { readdirSync, readFileSync, realpathSync, statSync, writeFileSync } from "node:fs";
 import { relative, resolve } from "node:path";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
+import { hubPortOf, srtSeatConfig, srtWriteScope } from "./sandbox.js";
 
 // ---------- wire types (OpenAI chat-completions shape, snake_case as providers send it) ----------
 export interface ToolCall {
@@ -60,6 +61,8 @@ export interface SeatOptions {
   write?: boolean;
   /** offer run_command (default true) */
   shell?: boolean;
+  /** --sandbox: run every run_command inside sandbox-runtime (src/sandbox.ts srtSeatConfig); fails closed when unavailable */
+  sandbox?: boolean;
   /** wall-clock budget; the seat leaves its rooms and stops when it runs out (default 45) */
   maxMinutes?: number;
   /** safety cap on model turns, not a pacing device (default 600) */
@@ -143,10 +146,43 @@ const LETHAL = /(^|[;&|]\s*)(pkill|killall)\b|kill\s+(-\w+\s+)*(-1|0)\b|kill\s+-
 const GITCONFIG = /(^|[;&|]\s*)git(\s+-[^\s]+(\s+[^\s]+)?)*\s+config\b/;
 /** A `>` inside quotes writes nothing, so the guard above is tested against the unquoted text. */
 const unquoted = (command: string) => command.replace(/'[^']*'|"[^"]*"/g, '""');
+const shq = (s: string) => `'${s.replace(/'/g, "'\\''")}'`;
+
+/**
+ * --sandbox for this seat's shell: each run_command runs inside @anthropic-ai/sandbox-runtime (srt, Apache-2.0,
+ * https://github.com/anthropics/sandbox-runtime; docs/reuse-survey-2026-09-23.md "OS isolation for OpenRouter seats").
+ * The regexes above stay as friendly refusals; this is the boundary. srt's profile allows signals only within the same
+ * sandbox, so `/usr/bin/pkill -f <word>` (which the LETHAL regex does not catch) cannot reach the hub or another seat.
+ * Each command is its own sandbox, so a process started by one run_command cannot be signalled by a later one.
+ */
+export interface ShellSandbox {
+  wrap(command: string): Promise<string>;
+  reset(): Promise<void>;
+  /** where commands can write, srtWriteScope's words: the seat's allowWrite plus sandbox-runtime's own paths */
+  scope: string;
+}
+export async function seatSandbox(cwd: string, write: boolean, hubPort?: number): Promise<ShellSandbox> {
+  const { SandboxManager } = await import("@anthropic-ai/sandbox-runtime");
+  if (!SandboxManager.isSupportedPlatform()) throw new Error("--sandbox: sandbox-runtime does not support this platform; refusing to run unsandboxed");
+  const deps = SandboxManager.checkDependencies();
+  if (deps.errors.length) throw new Error(`--sandbox: sandbox-runtime is unavailable (${deps.errors.join("; ")}); refusing to run unsandboxed`);
+  // srt derives its always-denied paths (.git/hooks, .git/config, shell rc files) from process.cwd(), not the command's cwd
+  if (realpathSync(process.cwd()) !== realpathSync(cwd)) process.chdir(cwd);
+  const config = srtSeatConfig({ cwd, write, hubPort });
+  await SandboxManager.initialize(config);
+  const wrap = (command: string) => SandboxManager.wrapWithSandbox(`bash -lc ${shq(command)}`);
+  // fail closed, like Claude Code's failIfUnavailable: a seat inside another Seatbelt sandbox cannot apply its own (macOS does not nest them)
+  const probe = spawnSync("bash", ["-c", await wrap("true")], { cwd, encoding: "utf8", timeout: 30_000 });
+  if (probe.status !== 0) {
+    await SandboxManager.reset().catch(() => {});
+    throw new Error(`--sandbox: a sandboxed test command failed (exit ${probe.status}: ${(probe.stderr || "").trim().slice(0, 200)}); refusing to run unsandboxed`);
+  }
+  return { wrap, reset: () => SandboxManager.reset(), scope: srtWriteScope(config) };
+}
 
 type LocalTool = { def: ToolDef; run: (a: Record<string, string>) => string | Promise<string> };
 
-export function localTools(cwd: string, write: boolean, shell: boolean, clamp: (s: string) => string): LocalTool[] {
+export function localTools(cwd: string, write: boolean, shell: boolean, clamp: (s: string) => string, sandbox?: ShellSandbox): LocalTool[] {
   const inside = (p: string) => {
     const abs = resolve(cwd, p);
     if (abs !== cwd && !abs.startsWith(`${cwd}/`)) throw new Error(`${p} is outside the working directory ${cwd}`);
@@ -154,15 +190,22 @@ export function localTools(cwd: string, write: boolean, shell: boolean, clamp: (
   };
   const sh = (command: string) =>
     new Promise<string>((res) => {
-      const child = spawn("bash", ["-lc", command], { cwd, stdio: ["ignore", "pipe", "pipe"] });
-      let out = "";
-      const timer = setTimeout(() => child.kill(), 120_000);
-      child.stdout.on("data", (d) => (out += d));
-      child.stderr.on("data", (d) => (out += d));
-      child.on("close", (code) => {
-        clearTimeout(timer);
-        res(clamp(`exit ${code}\n${out.trim() || "(no output)"}`));
-      });
+      const start = (argv: string[]) => {
+        const child = spawn("bash", argv, { cwd, stdio: ["ignore", "pipe", "pipe"] });
+        let out = "";
+        const timer = setTimeout(() => child.kill(), 120_000);
+        child.stdout.on("data", (d) => (out += d));
+        child.stderr.on("data", (d) => (out += d));
+        child.on("close", (code) => {
+          clearTimeout(timer);
+          res(clamp(`exit ${code}\n${out.trim() || "(no output)"}`));
+        });
+      };
+      if (!sandbox) return start(["-lc", command]);
+      sandbox.wrap(command).then(
+        (wrapped) => start(["-c", wrapped]),
+        (e) => res(clamp(`exit 1\nNot run: the sandbox could not wrap this command (${e instanceof Error ? e.message : String(e)}).`)),
+      );
     });
   const fn = (name: string, description: string, properties: Record<string, unknown>, required: string[] = []): ToolDef => ({
     type: "function",
@@ -255,7 +298,7 @@ export function localTools(cwd: string, write: boolean, shell: boolean, clamp: (
   ];
   if (shell)
     tools.push({
-      def: fn("run_command", `Run a bash command in ${cwd} (120s limit). ${write ? "You may modify files and commit." : "Read-only: mutating commands are refused."} Never run git config: every worktree shares the repository config. Never pkill/killall: other agents and the hub are node processes here; stop a process you started by its pid (kill $(lsof -ti:PORT)).`, { command: { type: "string" } }, ["command"]),
+      def: fn("run_command", `Run a bash command in ${cwd} (120s limit). ${write ? "You may modify files and commit." : "Read-only: mutating commands are refused."} Never run git config: every worktree shares the repository config. Never pkill/killall: other agents and the hub are node processes here; stop a process you started by its pid (kill $(lsof -ti:PORT)).${sandbox ? ` Each command runs in its own OS sandbox: ${sandbox.scope}; a process started by one command cannot be signalled by a later one, so start and stop a private hub in the same command.` : ""}`, { command: { type: "string" } }, ["command"]),
       run: (a) =>
         LETHAL.test(unquoted(a.command))
           ? `Refused: "${a.command.slice(0, 120)}" was not run. pkill, killall and kill -1/0 would take down the hub, the other seats and the launcher, which are node processes on this machine too. Stop only what you started, by pid: kill $(lsof -ti:PORT) for a hub you started on PORT.`
@@ -327,7 +370,10 @@ export async function runSeat(provider: ChatProvider, opts: SeatOptions): Promis
   // hub results carry the proposal text and end with the hint; a clamp that eats the hint is worse than a long result
   const clampHub = clampTo(maxToolChars * 5);
 
-  const local = localTools(cwd, write, shell, clampLocal);
+  // --sandbox: before anything else, so a seat that cannot be sandboxed fails before it joins a room
+  const sandbox = opts.sandbox && shell ? await seatSandbox(cwd, write, opts.mcpUrl ? hubPortOf(opts.mcpUrl) : undefined) : undefined;
+  if (sandbox) log(`[${provider.label}] run_command runs in sandbox-runtime: ${sandbox.scope}`);
+  const local = localTools(cwd, write, shell, clampLocal, sandbox);
   const tools: ToolDef[] = local.map((t) => t.def);
   const hubTools = new Set<string>();
   const client = new Client({ name: "seat", version: "0.2.0" });
@@ -674,5 +720,6 @@ export async function runSeat(provider: ChatProvider, opts: SeatOptions): Promis
       log(`[${provider.label}] could not write usage sidecar ${opts.usageSidecar}: ${e instanceof Error ? e.message : String(e)}`);
     }
   }
+  await sandbox?.reset().catch(() => {});
   return { final: final || "(no final message)", usage, steps, ok, handoffs, handedOff };
 }

@@ -17,6 +17,7 @@ import { randomUUID } from "node:crypto";
 import { respawnDecision, type RespawnRoom } from "./respawn.js";
 import { claudeArgs } from "./claude-args.js";
 import { codexArgs, codexUsageTracker } from "./codex-seat.js";
+import { claudeSandbox } from "./sandbox.js";
 import { stopStrays } from "./strays.js";
 loadDotEnv();
 
@@ -30,10 +31,10 @@ const flag = (name: string, def?: string) => {
   return i >= 0 ? argv[i + 1] : def;
 };
 const has = (name: string) => argv.includes(`--${name}`);
-const BOOL_FLAGS = new Set(["--apply", "--full-access", "--named", "--flat", "--require-verification", "--respawn", "--claude-full", "--no-carry"]);
+const BOOL_FLAGS = new Set(["--apply", "--full-access", "--named", "--flat", "--require-verification", "--respawn", "--claude-full", "--no-carry", "--sandbox"]);
 const task = argv.find((a, i) => !a.startsWith("--") && (i === 0 || !argv[i - 1].startsWith("--") || BOOL_FLAGS.has(argv[i - 1])));
 if (!task) {
-  console.error('usage: swarm "<task>" [--flat] [--done-when text] [--verify text] [--agents 6] [--cwd dir] [--models sonnet,haiku] [--lead-model opus] [--verifier-model opus] [--planner-model opus] [--codex k] [--codex-models gpt-6-astra,gpt-5.6-sol,gpt-5.6-terra] [--openrouter k] [--openrouter-models deepseek/deepseek-v4.1-flash,...] [--verifier-openrouter slug] [--openrouter-reasoning low|medium|high] [--require-verification] [--quorum unanimous|majority|supermajority] [--prompt loop.md] [--respawn] [--apply] [--full-access] [--named] [--claude-full] [--no-carry] [--timeout 30] [--port 7717] [--result-path path]');
+  console.error('usage: swarm "<task>" [--flat] [--done-when text] [--verify text] [--agents 6] [--cwd dir] [--models sonnet,haiku] [--lead-model opus] [--verifier-model opus] [--planner-model opus] [--codex k] [--codex-models gpt-6-astra,gpt-5.6-sol,gpt-5.6-terra] [--openrouter k] [--openrouter-models deepseek/deepseek-v4.1-flash,...] [--verifier-openrouter slug] [--openrouter-reasoning low|medium|high] [--require-verification] [--quorum unanimous|majority|supermajority] [--prompt loop.md] [--respawn] [--apply] [--full-access] [--named] [--claude-full] [--no-carry] [--sandbox] [--timeout 30] [--port 7717] [--result-path path]');
   process.exit(2);
 }
 const TOTAL = Math.max(2, Number(flag("agents", "4")));
@@ -72,6 +73,14 @@ let STOPPING = false;
 const FLAT = has("flat");
 /** --no-carry: seats start from the brief alone (no settled axes, no PRIOR RUNS, auto-memory off); see carrySettings in env.ts */
 const NO_CARRY = has("no-carry");
+/**
+ * --sandbox: every seat's shell runs in an OS sandbox (src/sandbox.ts), so a seat's pkill/killall cannot reach the hub,
+ * the launcher or another seat (the room15-rep2 kill, docs/reuse-survey-2026-09-23.md). Claude seats get Claude Code's
+ * own sandbox in --settings; OpenRouter seats wrap run_command in sandbox-runtime; a hub this launcher starts gets
+ * CHATROOM_SANDBOX=1 so its recruits match. Codex seats are not covered (todo/non-claude-seats-stdin-usage-sandbox.md).
+ * Default off: flipping it is the owner's call.
+ */
+const SANDBOX = has("sandbox");
 // model mix: --models sonnet,sonnet,haiku (rotated over workers), --lead-model, --verifier-model, --planner-model
 const MODELS = (flag("models", process.env.CLAUDE_MODEL ?? "") || "").split(",").map((m) => m.trim()).filter(Boolean);
 const LEAD_MODEL = flag("lead-model", MODELS[0]);
@@ -113,7 +122,7 @@ async function ensureHub() {
   } catch {}
   log(`starting hub on :${PORT}`);
   const child = spawn("node", [resolve(repoRoot, "dist/index.js")], {
-    env: { ...process.env, PORT: String(PORT), CHATROOM_DATA_DIR: resolve(repoRoot, "data") },
+    env: { ...process.env, PORT: String(PORT), CHATROOM_DATA_DIR: resolve(repoRoot, "data"), ...(SANDBOX ? { CHATROOM_SANDBOX: "1" } : {}) },
     detached: true,
     stdio: "ignore",
   });
@@ -145,7 +154,9 @@ function runClaude(name: string, text: string, tools: string[], cwd: string, mod
   const beat = seatBeat(`${URL_}/mcp`, randomUUID(), cwd);
   const seatMcp = resolve(OUT, `${name}.mcp.json`);
   writeFileSync(seatMcp, JSON.stringify({ mcpServers: { chatroom: { type: "http", url: beat.mcpUrl } } }));
-  const args = claudeArgs({ mcpJson: seatMcp, tools, model, full: CLAUDE_FULL, settings: carrySettings(NO_CARRY, heartbeatHookSettings()) });
+  // a seat may write when its tool list lets it edit (WRITE_TOOLS); a read-only seat's Bash gets its cwd denied
+  const sandbox = SANDBOX ? claudeSandbox({ cwd, write: tools.includes("Edit"), hubPort: PORT }) : undefined;
+  const args = claudeArgs({ mcpJson: seatMcp, tools, model, full: CLAUDE_FULL, settings: carrySettings(NO_CARRY, heartbeatHookSettings()), sandbox });
   return runProc(name, "claude", args, cwd, outFile, false, beat, false, text).then((raw) => {
     const { text: final, usage } = parseClaudeCliOutput(raw);
     writeFileSync(outFile, final);
@@ -178,6 +189,7 @@ function runOpenRouter(name: string, text: string, cwd: string, model: string | 
   if (model) args.push("--model", model);
   if (write) args.push("--write");
   if (OPENROUTER_REASONING) args.push("--reasoning", OPENROUTER_REASONING);
+  if (SANDBOX) args.push("--sandbox");
   return runProc(name, seatScript.cmd, args, cwd, outFile, false, undefined, false, text).then((t) => ({ text: t, usage: readSeatUsage(sidecar) }));
 }
 
@@ -339,6 +351,7 @@ if (FLAT) {
   }
 }
 log(`swarm ${SWARM_ID}: ${TOTAL} agents (${WORKERS} workers + verifier), project ${CWD}`);
+if (SANDBOX) log(`--sandbox: claude seats run Bash in Claude Code's sandbox, OpenRouter seats wrap run_command in sandbox-runtime${CODEX ? `; the ${CODEX} codex seat(s) are NOT sandboxed by this flag` : ""}`);
 /** Earlier runs in this checkout: a room should ratify or refute them by reference, not re-derive them. */
 function priorRuns(): string {
   const dir = resolve(repoRoot, "swarms");
@@ -478,7 +491,7 @@ for (const g of plan.groups) {
     const wcwd = workerCwd(name);
     const writeRule =
       FULL && !readOnlyWorkers.has(name)
-        ? `You MAY modify files and run anything; you are on your own git branch in ${wcwd}. Commit what you want the verifier to test and say so in the room.${devHubRule(CWD)}`
+        ? `You MAY modify files and run anything; you are on your own git branch in ${wcwd}. Commit what you want the verifier to test and say so in the room.${devHubRule(CWD, SANDBOX)}`
         : "Do NOT modify any files.";
     const buildText = (nm: string) => FLAT
       ? SETTLED +

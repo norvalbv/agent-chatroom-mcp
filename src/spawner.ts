@@ -17,6 +17,7 @@ import { settledAxes } from "./settled.js";
 import { devHubRule, heartbeatHookSettings, outputHeartbeat, seatBeat, seatChildEnv } from "./env.js";
 import { claudeArgs } from "./claude-args.js";
 import { codexArgs } from "./codex-seat.js";
+import { claudeSandbox, hubPortOf, sandboxFromEnv } from "./sandbox.js";
 import { parseClaudeCliOutput, type SeatUsageRollup } from "./result.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -137,6 +138,8 @@ export function policyFromEnv(env: NodeJS.ProcessEnv = process.env): RecruitPoli
 
 /** CHATROOM_CLAUDE_FULL=1: claude recruits get today's full (non-lean) flags too, matching the launcher's --claude-full opt-out (propagated to the hub's env when swarm.ts spawns it). */
 const CLAUDE_FULL = process.env.CHATROOM_CLAUDE_FULL === "1";
+/** CHATROOM_SANDBOX=1: recruits run their shell in an OS sandbox, matching the launcher's --sandbox (set in the hub's env when swarm.ts starts it). See src/sandbox.ts. */
+const SANDBOX = sandboxFromEnv();
 
 export class Spawner {
   policy: RecruitPolicy = policyFromEnv();
@@ -291,7 +294,7 @@ export class Spawner {
             : "You are the only recruit on this brief.",
         )
         .split("{{REPORT_TO}}").join(req.newRoom ? `This is a sub-room; when it concludes, post the conclusion to the parent room with post_to_room(from_room="${target}", to_room="${req.room}", key="result").` : "")
-        .split("{{WRITE_RULE}}").join(req.canEdit ? "You MAY edit files and run anything here. You are in your own git worktree on your own branch (git branch --show-current); commit there and name the branch in the room. Never touch the main checkout." + devHubRule(cwd) : "Do NOT modify files; investigate and report.");
+        .split("{{WRITE_RULE}}").join(req.canEdit ? "You MAY edit files and run anything here. You are in your own git worktree on your own branch (git branch --show-current); commit there and name the branch in the room. Never touch the main checkout." + devHubRule(cwd, SANDBOX) : "Do NOT modify files; investigate and report.");
 
       if (o.dryRun) {
         writeFileSync(log, `[dry-run] would launch ${agent} in ${cwd}\n\n${prompt}`);
@@ -315,12 +318,14 @@ export class Spawner {
         args = [...(existsSync(seatBuild) ? [seatBuild] : ["tsx", resolve(repoRoot, "src", "openrouter.ts")]), "--mcp-url", beat.mcpUrl, "--cwd", seatCwd];
         if (req.model) args.push("--model", req.model);
         if (req.canEdit) args.push("--write");
+        if (SANDBOX) args.push("--sandbox");
       } else if (agent === "codex") {
         cmd = "codex";
         args = codexArgs({ cwd: seatCwd, mcpUrl: beat.mcpUrl, model: req.model, readOnly: !req.canEdit });
       } else {
         cmd = "claude";
-        args = claudeArgs({ mcpJson, tools: req.canEdit ? WRITE_TOOLS : READ_TOOLS, model: req.model, full: CLAUDE_FULL, settings: heartbeatHookSettings() });
+        const sandbox = SANDBOX ? claudeSandbox({ cwd: seatCwd, write: !!req.canEdit, hubPort: hubPortOf(o.mcpUrl) }) : undefined;
+        args = claudeArgs({ mcpJson, tools: req.canEdit ? WRITE_TOOLS : READ_TOOLS, model: req.model, full: CLAUDE_FULL, settings: heartbeatHookSettings(), sandbox });
       }
       // every seat kind reads its prompt from stdin, never argv: claude -p, codex exec - and src/openrouter.ts (claude-args.ts)
       const child = spawn(cmd, args, { cwd: seatCwd, env: { ...seatChildEnv(process.env, req.canEdit ? name : undefined), ...beat.env }, stdio: ["pipe", "pipe", "pipe"] });

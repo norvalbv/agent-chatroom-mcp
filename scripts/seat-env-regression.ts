@@ -33,6 +33,8 @@ async function harness(entry: string, env: Record<string, string>, argv: string[
       throw new Error(`unexpected fixture read: ${f}`);
     },
     mkdirSync() {}, writeFileSync() {}, createWriteStream() { return { write() { return true; }, end() {}, on() { return this; } }; }, symlinkSync() {}, readdirSync() { return []; }, statSync() { return { mtimeMs: 0 }; },
+    // src/sandbox.ts (--sandbox only): no node_modules link in the synthetic fixture
+    lstatSync() { throw Object.assign(new Error('synthetic: no such path'), { code: 'ENOENT' }); },
   };
   const cp = {
     spawn(cmd: string, args: string[], options: any) {
@@ -73,7 +75,7 @@ async function harness(entry: string, env: Record<string, string>, argv: string[
       cache.set(name, mod); return mod;
     }
     const base = name.replace(/^\.\//, '').replace(/\.js$/, '');
-    assert.ok(['env', 'spawner', 'swarm', 'openrouter', 'respawn', 'claude-args', 'codex-seat'].includes(base), `unmocked import ${name}`); // respawn.ts, claude-args.ts and codex-seat.ts are pure: real import
+    assert.ok(['env', 'spawner', 'swarm', 'openrouter', 'respawn', 'claude-args', 'codex-seat', 'sandbox'].includes(base), `unmocked import ${name}`); // respawn.ts, claude-args.ts, codex-seat.ts and sandbox.ts are pure (sandbox over the mocked fs): real import
     // Only these explicitly allowlisted source files are read from disk.
     const source = readFileSync(path.join(root, 'src', `${base}.ts`), 'utf8');
     const code = transformSync(source, { loader: 'ts', format: 'esm', target: 'es2022' }).code;

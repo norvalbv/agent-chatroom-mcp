@@ -140,8 +140,8 @@ export async function mutationCheckItem(o: { repo: string; baseCommit: string; i
   const dir = mkdtempSync(join(resolve(o.scratch), `mutation-${o.item.id}-`)), wt = join(dir, 'wt');
   const config = join(dir, 'stryker.config.json'), reportPath = join(dir, 'mutation.json');
   const what = `mutation check of ${o.item.id}`;
-  // Retried: a process that was just killed can still be letting go of the copy (ENOTEMPTY). A copy that cannot be removed is
-  // left in the scratch dir rather than replacing the item's result.
+  // Retried: a StrykerJS process that was just killed can still be letting go of the copy (ENOTEMPTY). No git gc writes in it:
+  // isolatedRepo starts none. A copy that cannot be removed is left in the scratch dir rather than replacing the item's result.
   const removeCopy = () => { try { rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }); } catch {} };
   // validate's stop handlers end it with process.exit, which skips `finally`: this hook removes the copy then, after
   // runGrouped's own hook has killed StrykerJS's group.

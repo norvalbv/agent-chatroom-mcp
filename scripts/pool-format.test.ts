@@ -3,11 +3,11 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { spawn, spawnSync } from 'node:child_process';
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { hiddenRoot, loadHiddenItem, loadPool, lockPool, runCmd, validatePool, worktreeAt, removeWorktree } from './pool-format.ts';
+import { hiddenRoot, isolatedRepo, loadHiddenItem, loadPool, lockPool, runCmd, validatePool, worktreeAt, removeWorktree } from './pool-format.ts';
 import { makeDryRunPool } from './pool-fixture.ts';
 
 const fresh = () => mkdtempSync(join(tmpdir(), 'pool-format-'));
@@ -265,4 +265,32 @@ test('letSignalsIn: a SIGINT that came during a synchronous step ends the proces
       assert.match(r.out, STOPPED_AT_THE_AWAIT, `${phase}: the listener ran at the await, and the next step never started`);
     }
   } finally { rmSync(base, { recursive: true, force: true }); }
+});
+
+test('isolatedRepo starts no background git gc in the copy, so the copy can be removed as soon as it is made', async () => {
+  const base = fresh();
+  try {
+    // more loose objects than gc.auto (default 6700): a plain git commit starts `git gc --auto` in the background (gc samples
+    // objects/17, and these 7000 blobs put 35 there, past its 27)
+    const src = join(base, 'src');
+    mkdirSync(join(src, 'f'), { recursive: true });
+    for (let i = 0; i < 7000; i++) writeFileSync(join(src, 'f', `${i}.txt`), `file ${i}\n`);
+    const git = (...args: string[]) => spawnSync('git', ['-C', src, '-c', 'user.name=t', '-c', 'user.email=t@t', '-c', 'gc.auto=0', '-c', 'maintenance.auto=false', ...args], { encoding: 'utf8' });
+    git('init', '--quiet', '-b', 'main');
+    git('add', '-A');
+    assert.equal(git('commit', '--quiet', '--no-verify', '-m', 'base').status, 0);
+    const copy = join(base, 'copy'), gitDir = join(copy, '.git');
+    isolatedRepo(src, git('rev-parse', 'HEAD').stdout.trim(), copy);
+    // a running gc holds gc.pid and writes packs; watch for either for 2 s
+    const until = Date.now() + 2000;
+    let gc = '';
+    while (!gc && Date.now() < until) {
+      if (existsSync(join(gitDir, 'gc.pid'))) gc = 'gc.pid';
+      else if (readdirSync(join(gitDir, 'objects', 'pack')).length) gc = 'a pack';
+      else await sleep(50);
+    }
+    assert.equal(gc, '', 'git gc ran in the copy');
+    rmSync(copy, { recursive: true });
+    assert.equal(existsSync(copy), false);
+  } finally { rmSync(base, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 }); }
 });

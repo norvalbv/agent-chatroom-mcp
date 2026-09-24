@@ -151,10 +151,17 @@ export function worktreeAt(repo: string, commit: string, dir: string, branch?: s
   return opts.linkNodeModules ? linkNodeModules(repo, dir) : 'not-requested';
 }
 
+/** git commit runs `git maintenance run --auto` afterwards, which starts `git gc --auto` in the background once a repository
+ * holds more than gc.auto (default 6700) loose objects, as a copy of a large base tree does. That gc goes on writing packs in
+ * the copy after commit returns, so a caller removing the copy (validate's mutation and suite view copies) can fail or leave
+ * files behind. These settings turn both off for isolatedRepo's own commands only (git-config: gc.auto, maintenance.auto). */
+const NO_AUTO_GC = ['-c', 'gc.auto=0', '-c', 'maintenance.auto=false'];
+
 /** Each run works in its own repository holding only the pool's base tree as one commit, so no other run's branches,
  * worktrees or objects exist in it. In pool 1 every run shared the real repository, and seats could list earlier runs'
  * pool/* branches with `git branch -a`; deleting branches is not enough, because their objects stay reachable. The tree
- * comes from `git archive` (tracked files only); author, committer and dates are fixed so the commit is reproducible. */
+ * comes from `git archive` (tracked files only); author, committer and dates are fixed so the commit is reproducible. Its add
+ * and commit start no background gc (NO_AUTO_GC), so no git process is left writing in the copy when this returns. */
 export function isolatedRepo(sourceRepo: string, baseCommit: string, dir: string): string {
   if (existsSync(dir)) throw new Error(`isolated repo ${dir} already exists`);
   mkdirSync(dir, { recursive: true });
@@ -163,9 +170,9 @@ export function isolatedRepo(sourceRepo: string, baseCommit: string, dir: string
   execFileSync('git', ['-C', sourceRepo, 'archive', '--format=tar', '-o', tar, baseCommit], { stdio: 'pipe' });
   execFileSync('tar', ['-xf', tar, '-C', dir], { stdio: 'pipe' });
   rmSync(tar, { force: true });
-  execFileSync('git', ['-C', dir, 'add', '-A'], { stdio: 'pipe', maxBuffer: 256 * 1024 * 1024 });
+  execFileSync('git', [...NO_AUTO_GC, '-C', dir, 'add', '-A'], { stdio: 'pipe', maxBuffer: 256 * 1024 * 1024 });
   const when = '2026-01-01T00:00:00Z', id = { GIT_AUTHOR_NAME: 'pool-harness', GIT_AUTHOR_EMAIL: 'pool-harness@local', GIT_COMMITTER_NAME: 'pool-harness', GIT_COMMITTER_EMAIL: 'pool-harness@local', GIT_AUTHOR_DATE: when, GIT_COMMITTER_DATE: when };
-  execFileSync('git', ['-C', dir, 'commit', '--quiet', '--no-verify', '-m', `pool base ${baseCommit}`], { stdio: 'pipe', env: { ...process.env, ...id } });
+  execFileSync('git', [...NO_AUTO_GC, '-C', dir, 'commit', '--quiet', '--no-verify', '-m', `pool base ${baseCommit}`], { stdio: 'pipe', env: { ...process.env, ...id } });
   return execFileSync('git', ['-C', dir, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
 }
 

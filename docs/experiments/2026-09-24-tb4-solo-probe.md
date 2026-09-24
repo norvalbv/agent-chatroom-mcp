@@ -34,3 +34,16 @@ here: 4 of 5 passed, the fifth was stopped to leave the machine to the solo run)
   comparing against the selecting run would credit the room with that chance.
 - **If solo passes all 5:** stop, as before; any harder set is a new decision for the owner.
 - Room size and expected cost are stated to the owner before the evaluation runs; nothing runs without the go-ahead.
+
+## Cap raised to 60 minutes (2026-09-24, 21:55 BST, before any agent score)
+
+- **Run history so far.** Two launches failed at authentication (pasted setup-tokens rejected, 401, $0, no agent work);
+  they count for nothing. A third launch (21:31) runs with the Mac's own Claude login passed into the containers.
+- **Change.** The owner raised the per-task cap from 30 to 60 minutes (the dataset's 8-hour cap x 0.125) and the
+  per-task spend cap from 12 to 24 USD, after seeing the first 30-minute attempt spend about 15 of its minutes in one
+  thinking turn. No task had been scored when this was decided.
+- **How it applies.** The running launch finishes its first task (photonic-waveguide-routing) at the 30-minute cap and
+  is stopped before its second task starts; that attempt is reported separately and is not part of the selection. A
+  60-minute solo run on all five tasks is the selecting run; the evaluation (room and fresh solo) uses the same
+  60-minute cap. Expected cost: solo about 50 USD (20 to 120); the room follow-up about 205 USD, stated to the owner
+  before it runs.

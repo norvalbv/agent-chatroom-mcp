@@ -1,8 +1,9 @@
 ---
-status: blocked
+status: done
 added: 2026-09-24
 from: merge of the six reuse branches into main (aa2f912d)
 after: pool-2-game
+done: 2026-09-24 hub restarted on e303d5d5 (gated: 0 launchers, 0 sessions); npm ci --ignore-scripts; skill copies synced; decision promoted in 32eb4c8c
 ---
 # Deploy the merged reuse fixes to the shared hub
 

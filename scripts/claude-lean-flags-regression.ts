@@ -93,8 +93,8 @@ async function harness(entry: string, env: Record<string, string>, argv: string[
       cache.set(name, mod); return mod;
     }
     const base = name.replace(/^\.\//, '').replace(/\.js$/, '');
-    // Real source for these only: swarm/spawner (under test), env/respawn (their real deps), claude-args (the shared lean-args builder, pure), sandbox (its --sandbox block, pure over the mocked fs).
-    assert.ok(['env', 'spawner', 'swarm', 'respawn', 'claude-args', 'codex-seat', 'sandbox'].includes(base), `unmocked import ${name}`);
+    // Real source for these only: swarm/spawner (under test), env/respawn (their real deps), claude-args (the shared lean-args builder, pure), sandbox (its --sandbox block, pure over the mocked fs), cost-estimate (the launch cost guide, pure).
+    assert.ok(['env', 'spawner', 'swarm', 'respawn', 'claude-args', 'codex-seat', 'sandbox', 'cost-estimate'].includes(base), `unmocked import ${name}`);
     const source = readFileSync(path.join(root, 'src', `${base}.ts`), 'utf8');
     const code = transformSync(source, { loader: 'ts', format: 'esm', target: 'es2022' }).code;
     const mod = new vm.SourceTextModule(code, { context, initializeImportMeta(meta) { meta.url = `file:///fixture/src/${base}.js`; } });

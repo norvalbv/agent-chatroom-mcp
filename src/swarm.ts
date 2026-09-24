@@ -19,6 +19,7 @@ import { claudeArgs } from "./claude-args.js";
 import { codexArgs, codexUsageTracker } from "./codex-seat.js";
 import { claudeSandbox } from "./sandbox.js";
 import { stopStrays } from "./strays.js";
+import { launchCostGuide } from "./cost-estimate.js";
 loadDotEnv();
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -351,6 +352,7 @@ if (FLAT) {
   }
 }
 log(`swarm ${SWARM_ID}: ${TOTAL} agents (${WORKERS} workers + verifier), project ${CWD}`);
+log(launchCostGuide(TOTAL, TIMEOUT_MIN));
 if (SANDBOX) log(`--sandbox: claude seats run Bash in Claude Code's sandbox, OpenRouter seats wrap run_command in sandbox-runtime${CODEX ? `; the ${CODEX} codex seat(s) are NOT sandboxed by this flag` : ""}`);
 /** Earlier runs in this checkout: a room should ratify or refute them by reference, not re-derive them. */
 function priorRuns(): string {

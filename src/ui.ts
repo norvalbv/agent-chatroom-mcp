@@ -72,7 +72,10 @@ export const UI_HTML = `<!doctype html>
   .brand h1 { font-size:14px; font-weight:700; margin:0; letter-spacing:-.01em; line-height:1.2 }
   .brand .sub { color:var(--dim); font-size:12px } .brand .sub.bad { color:var(--bad) }
   .brand .sp { flex:1 }
-  .person { cursor:pointer } .person.sel { background:var(--panel2) } .act { grid-column:1 / -1; font-size:11.5px; font-family:ui-monospace,Menlo,monospace; padding:6px 10px 10px 46px; color:var(--dim); max-height:260px; overflow:auto; white-space:pre-wrap; word-break:break-word } .act .st { color:var(--dim2) } .act .tl { color:var(--fg); font-weight:600 }
+  .person { cursor:pointer } .person.sel { background:var(--panel2) } .act { position:relative; grid-column:1 / -1; font-size:11.5px; font-family:ui-monospace,Menlo,monospace; padding:6px 10px 10px 46px; color:var(--dim); max-height:260px; overflow:auto; white-space:pre-wrap; word-break:break-word } .act .st { color:var(--dim2) } .act .tl { color:var(--fg); font-weight:600 }
+  .act .now { color:var(--fg); margin:0 0 6px; padding:5px 8px; border-radius:6px; background:var(--panel2); border-left:3px solid var(--line) } .act .now.live { border-left-color:var(--ok); background:var(--ok-bg) } .act .now.off { opacity:.7 }
+  .act .dot { display:inline-block; width:7px; height:7px; border-radius:50%; background:var(--ok); margin-right:6px; vertical-align:1px; animation:actpulse 1.4s ease-in-out infinite } @keyframes actpulse { 50% { opacity:.25 } } @media (prefers-reduced-motion: reduce) { .act .dot { animation:none } }
+  .act .hdr { color:var(--dim2); margin:2px 0 3px; font-family:inherit } .act .latest { color:var(--fg) }
   .rctl { display:flex; flex-wrap:wrap; gap:4px 5px; padding:0 12px 10px; align-items:center } .rctl select, .lf select, .lf input { font-size:12px; padding:4px 6px; background:var(--panel2); color:inherit; border:1px solid var(--panel2); border-radius:6px } .lf { display:flex; flex-wrap:wrap; gap:6px; padding:6px 16px; align-items:center; background:var(--panel); border-bottom:1px solid var(--line) } .lf input { flex:1 1 140px } .chip.tog { cursor:pointer; opacity:.45; border:0 } .chip.tog.on { opacity:1 } .rctl .btn { margin-left:auto }
   .filter { padding:0 12px 10px } .filter input { width:100%; font-size:13px; padding:7px 10px; background:var(--panel2) }
   .policy { margin:0 12px 6px; font-size:11.5px; color:var(--dim); background:var(--acc-bg); border-radius:8px; padding:4px 9px; cursor:pointer; overflow:hidden; text-overflow:ellipsis; white-space:nowrap } .policy b { color:var(--acc-fg); font-weight:600 }
@@ -267,10 +270,37 @@ export const UI_HTML = `<!doctype html>
   var tab = store.get('tab', 'decision');
   var showNotices = store.get('notices', false);
   // People tab: click a person to see their recent steps (heartbeats with the command, path or pattern)
-  var personOpen = null, activity = {};
+  var personOpen = null, activity = {}, actFor = null;
   async function fetchActivity(name) { try { var res = await fetch('/rooms/' + encodeURIComponent(sel) + '/participants/' + encodeURIComponent(name) + '/activity'); if (res.ok) { activity[name] = await res.json(); if (tab === 'people') renderPane(); } } catch (e) {} }
   document.addEventListener('click', function (e) { var row = e.target.closest && e.target.closest('.person'); if (!row || e.target.closest('.act, .pacts')) return; var n = row.dataset.person; personOpen = personOpen === n ? null : n; if (personOpen) fetchActivity(personOpen); renderPane(); });
   setInterval(function () { if (personOpen && tab === 'people' && !document.hidden) fetchActivity(personOpen); }, 3000);
+  /*act:start*/
+  // The open person's steps, newest first, under one line saying what the seat is doing right now.
+  function actPanel(p, list, esc, rel) {
+    if (!list) return 'Loading…';
+    var busy = p.active && p.working && (!p.last_active_at || p.working.at > p.last_active_at);
+    var now = !p.active ? '<div class="now off">Left the room' + (p.left_reason ? ': ' + esc(p.left_reason) : '') + '</div>'
+      : busy ? '<div class="now live"><span class="dot"></span>Now: <span class="tl">' + esc(p.working.tool) + '</span> ' + esc(p.working.detail || '') + ' <span class="st">· started ' + rel(p.working.at) + '</span></div>'
+      : '<div class="now">Not running a tool · last active in the room ' + rel(p.last_active_at || p.last_seen_at) + '</div>';
+    if (!list.length) return now + '<div class="st">No heartbeats yet (only seats started after 2026-09-18 send them).</div>';
+    return now + '<div class="hdr">Recent steps, newest first</div>' + list.slice().reverse().map(function (a, i) {
+      return '<div data-k="' + esc(a.step + '@' + a.at) + '"' + (i === 0 ? ' class="latest"' : '') + '><span class="st">#' + a.step + ' ' + rel(a.at) + '</span> <span class="tl">' + esc(a.tool) + '</span> ' + esc(a.detail || '') + '</div>';
+    }).join('');
+  }
+  // Re-rendering replaces the panel, so keep the reader's place: at the top they follow the newest step; scrolled down,
+  // the first row they could see stays where it was (new steps arrive above it and the oldest drop off below).
+  function actAnchor(scrollTop, rows) {
+    if (scrollTop <= 2) return { top: true };
+    for (var i = 0; i < rows.length; i++) if (rows[i].top + rows[i].height > scrollTop) return { k: rows[i].k, off: rows[i].top - scrollTop, scrollTop: scrollTop };
+    return { scrollTop: scrollTop };
+  }
+  function actRestore(anchor, rows) {
+    if (!anchor || anchor.top) return 0;
+    for (var i = 0; i < rows.length; i++) if (rows[i].k === anchor.k) return Math.max(0, rows[i].top - anchor.off);
+    return anchor.scrollTop || 0;
+  }
+  /*act:end*/
+  var actRows = function (el) { return Array.prototype.filter.call(el.children, function (c) { return c.dataset && c.dataset.k; }).map(function (c) { return { k: c.dataset.k, top: c.offsetTop, height: c.offsetHeight }; }); };
   // rooms rail: sort, state filter, archived toggle
   var sortBy = store.get('sort', 'newest'), stOff = store.get('stOff', {}), showArch = /[?&]archived=1/.test(location.search) || store.get('showArch', false);
   var stKey = function (r) { return (r.state === 'open' || r.state === 'stalled') ? 'live' : r.state; };
@@ -552,7 +582,11 @@ export const UI_HTML = `<!doctype html>
     else if (tab === 'people') h = panePeople(r);
     else if (tab === 'board') h = paneBoard(r);
     else h = paneStats(r);
-    $('#pane').innerHTML = h;
+    var pane = $('#pane'), paneTop = pane.scrollTop, oldAct = $('#act'), anchor = oldAct && actFor === personOpen ? actAnchor(oldAct.scrollTop, actRows(oldAct)) : null;
+    pane.innerHTML = h;
+    pane.scrollTop = paneTop;
+    var newAct = $('#act'); if (newAct && anchor) newAct.scrollTop = actRestore(anchor, actRows(newAct));
+    actFor = newAct ? personOpen : null;
     var bs = $('#bsearch'); if (bs) { bs.value = boardQuery; bs.oninput = function () { boardQuery = bs.value; renderPane(); var e = $('#bsearch'); e.focus(); e.setSelectionRange(e.value.length, e.value.length); }; }
     var sn = $('#shownotices'); if (sn) sn.onchange = function () { showNotices = sn.checked; store.set('notices', showNotices); rerender(); toBottom(); };
   }
@@ -604,7 +638,7 @@ export const UI_HTML = `<!doctype html>
     var rows = function (list) { return list.map(function (p) {
       var areas = areasOf(r, p.name), reviewing = reviewingOf(r, p.name);
       var aline = esc(areas.join(', ')) + (reviewing.length ? (areas.length ? ' · ' : '') + 'reviewing: ' + esc(reviewing.join(', ')) : '') + (p.left_reason ? (areas.length || reviewing.length ? ' · ' : '') + 'left: ' + esc(p.left_reason) : '');
-      return '<div class="person' + (p.active ? '' : ' off') + (canAct(p) ? ' hasacts' : '') + (personOpen === p.name ? ' sel' : '') + '" data-person="' + esc(p.name) + '">' + av(p.name, p.agent) + '<div><div class="n">' + esc(p.name) + roleTag(p) + '<span class="agent">' + esc(p.agent) + '</span></div><div class="a">' + aline + '</div></div><div class="s">' + p.messages + ' msg' + (p.messages === 1 ? '' : 's') + '<br>' + (p.active ? (p.working && p.working.at > (p.last_active_at || '') ? 'working: ' + esc(p.working.tool) + ' · ' + rel(p.working.at) : rel(p.last_seen_at || p.last_active_at)) : 'left') + '</div>' + (canAct(p) ? '<div class="pacts"><button class="mini warn" data-kick="' + esc(p.name) + '" data-kv="start" title="Start a vote to remove ' + esc(p.name) + '">Kick</button><button class="mini" data-replace="' + esc(p.name) + '" title="Remove ' + esc(p.name) + ' now and recruit a successor">Replace</button></div>' : '') + (personOpen === p.name ? '<div class="act" id="act">' + (activity[p.name] ? (activity[p.name].length ? activity[p.name].map(function (a) { return '<div><span class="st">#' + a.step + ' ' + rel(a.at) + '</span> <span class="tl">' + esc(a.tool) + '</span> ' + esc(a.detail || '') + '</div>'; }).join('') : 'No heartbeats yet (only seats started after 2026-09-18 send them).') : 'Loading…') + '</div>' : '') + '</div>';
+      return '<div class="person' + (p.active ? '' : ' off') + (canAct(p) ? ' hasacts' : '') + (personOpen === p.name ? ' sel' : '') + '" data-person="' + esc(p.name) + '">' + av(p.name, p.agent) + '<div><div class="n">' + esc(p.name) + roleTag(p) + '<span class="agent">' + esc(p.agent) + '</span></div><div class="a">' + aline + '</div></div><div class="s">' + p.messages + ' msg' + (p.messages === 1 ? '' : 's') + '<br>' + (p.active ? (p.working && p.working.at > (p.last_active_at || '') ? 'working: ' + esc(p.working.tool) + ' · ' + rel(p.working.at) : rel(p.last_seen_at || p.last_active_at)) : 'left') + '</div>' + (canAct(p) ? '<div class="pacts"><button class="mini warn" data-kick="' + esc(p.name) + '" data-kv="start" title="Start a vote to remove ' + esc(p.name) + '">Kick</button><button class="mini" data-replace="' + esc(p.name) + '" title="Remove ' + esc(p.name) + ' now and recruit a successor">Replace</button></div>' : '') + (personOpen === p.name ? '<div class="act" id="act">' + actPanel(p, activity[p.name], esc, rel) + '</div>' : '') + '</div>';
     }).join(''); };
     var active = r.participants.filter(function (p) { return p.active; }), gone = r.participants.filter(function (p) { return !p.active; });
     // kick votes: open ones with a kick/keep button pair, settled ones as one line; a kick button per active agent starts one

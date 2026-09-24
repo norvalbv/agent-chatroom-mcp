@@ -47,6 +47,7 @@ export const offlineScripts = [
   'attempts.test.ts',
   'dev-hub-rule.test.ts',
   'ui-button-styles.test.ts',
+  'ui-activity-panel.test.ts',
   'paper-account-regime.test.ts',
   'paper-number-audit.test.ts',
   'paper-review-practice.test.ts',

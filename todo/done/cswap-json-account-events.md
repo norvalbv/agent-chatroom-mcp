@@ -1,7 +1,8 @@
 ---
-status: open
+status: done
 added: 2026-09-23
 from: docs/reuse-survey-2026-09-23.md (Which subscription account served a run)
+done: 2026-09-24 73d4be95 via reuse/cost-usage
 ---
 # Read account switches from claude-swap's JSON events
 

@@ -1,7 +1,8 @@
 ---
-status: open
+status: done
 added: 2026-09-23
 from: docs/reuse-survey-2026-09-23.md (Codex seats; Seat launch); the pool 1 run 2 pkill incident
+done: 2026-09-24 reuse/seat-launch (0db9ebd1, d70d41b7, ac55b4f9); codex USD cost left in seat-launch-follow-ups
 ---
 # Codex and OpenRouter seats: prompt on stdin, usage, and sandbox
 

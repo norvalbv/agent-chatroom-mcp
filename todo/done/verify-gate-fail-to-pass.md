@@ -1,7 +1,8 @@
 ---
-status: open
+status: done
 added: 2026-09-23
 from: docs/reuse-survey-2026-09-23.md (Verify gate); SWE-bench FAIL_TO_PASS / PASS_TO_PASS (Jimenez et al. 2023)
+done: 2026-09-24 1ebc3423 via reuse/review-quality; decision record awaits promotion (deploy-merged-reuse-fixes)
 ---
 # Verify gate stage 1: a check must fail before the change and pass after
 

@@ -1,7 +1,8 @@
 ---
-status: open
+status: done
 added: 2026-09-23
 from: docs/reuse-survey-2026-09-23.md (Output tokens of a seat killed mid-run); Claude Code cost-tracking docs
+done: 2026-09-24 430bf8a3 via reuse/cost-usage
 ---
 # Count a killed seat's output tokens from the final usage, not placeholders
 

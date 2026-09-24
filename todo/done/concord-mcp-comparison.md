@@ -1,7 +1,8 @@
 ---
-status: open
+status: done
 added: 2026-09-23
 from: docs/reuse-survey-2026-09-23.md (skeptic check: missed projects)
+done: 2026-09-24 reuse/concord (9a38153a..b5584c89)
 ---
 # Compare against Concord MCP and correct any "only we do this" claims
 

@@ -1,7 +1,8 @@
 ---
-status: open
+status: done
 added: 2026-09-23
 from: docs/reuse-survey-2026-09-23.md (Process containment and the stray sweep)
+done: 2026-09-24 d0ac6a61 via reuse/seat-launch
 ---
 # Sweep stray processes when a plain swarm run ends
 

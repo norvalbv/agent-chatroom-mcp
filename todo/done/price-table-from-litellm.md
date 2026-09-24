@@ -1,8 +1,9 @@
 ---
-status: open
+status: done
 added: 2026-09-23
 from: docs/reuse-survey-2026-09-23.md (List prices for estimated seat costs)
 after: opus-price-row-before-pool-2
+done: 2026-09-24 4eedb336 via reuse/cost-usage (codex per-request pricing left in seat-launch-follow-ups)
 ---
 # Replace the hand-kept price table with a pinned LiteLLM snapshot
 

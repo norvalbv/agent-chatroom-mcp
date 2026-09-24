@@ -1,7 +1,8 @@
 ---
-status: open
+status: done
 added: 2026-09-23
 from: docs/reuse-survey-2026-09-23.md (Scoring); SWE-bench PASS_TO_PASS
+done: 2026-09-24 54c533fb via reuse/pool-harness
 ---
 # Report which existing tests broke, next to the pre-registered suite check
 

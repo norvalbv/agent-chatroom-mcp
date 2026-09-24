@@ -1,7 +1,8 @@
 ---
-status: open
+status: done
 added: 2026-09-23
 from: docs/reuse-survey-2026-09-23.md (Reviewer and verifier prompts); the peer-review audit in the paper
+done: 2026-09-24 aa2c54e2 via reuse/review-quality
 ---
 # Reviewers exercise the change, not rerun the author's tests
 

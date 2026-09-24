@@ -1,7 +1,8 @@
 ---
-status: open
+status: done
 added: 2026-09-23
 from: docs/reuse-survey-2026-09-23.md (List prices for estimated seat costs)
+done: 2026-09-24 1ae12524 on main via reuse/cost-usage; cherry-picked onto study/pool-throughput as b72f8d4a (+2a99f4e5, e7f11c48)
 ---
 # Price Opus 5.5 seats before pool 2 runs
 

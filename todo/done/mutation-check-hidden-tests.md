@@ -1,8 +1,9 @@
 ---
-status: idea
+status: done
 added: 2026-09-23
 from: docs/reuse-survey-2026-09-23.md (Strength of the hidden tests); CoHarden's "lax test" failure
 owner: benji
+done: 2026-09-24 3511754d via reuse/pool-harness (flag-only)
 ---
 # Mutation-check each hidden test with StrykerJS
 

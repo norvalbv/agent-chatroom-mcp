@@ -50,6 +50,7 @@ export const offlineScripts = [
   'ui-activity-panel.test.ts',
   'paper-pool-throughput.test.ts',
   'launch-cost-guide.test.ts',
+  'stale-claims-regression.ts',
   'paper-account-regime.test.ts',
   'paper-number-audit.test.ts',
   'paper-review-practice.test.ts',

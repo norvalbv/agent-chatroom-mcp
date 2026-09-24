@@ -1,7 +1,8 @@
 ---
-status: open
+status: done
 added: 2026-09-23
 from: reuse/concord build (docs/related-work-concord-2026-09-23.md on that branch); Concord MCP's stale-claim list and versioned ownership transfer (MIT)
+done: 2026-09-24 successor takes a departed seat's claim at once, anyone after Hub.STALE_CLAIM_MS (10 min); takeovers posted; room_status.stale_claims; stale-claims-regression 4/4
 ---
 # A departed seat's claims stay locked to it
 

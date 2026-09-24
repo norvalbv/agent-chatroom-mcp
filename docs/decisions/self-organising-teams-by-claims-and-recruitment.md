@@ -100,3 +100,19 @@ created: 2026-09-17
 **Scope:** src/hub.ts,src/server.ts
 **Source:** brainstorm · swarm-083203-kooz, main 858dbfa (af45763, 0fca7aa)
 **Evidence-change:** Replaying 136 persisted room logs showed 93 overlapping cross-seat claim pairs and 183 slug-rule firings in 64 logs despite the prompt-only rule; swarm-083203-kooz itself built the same notice twice under two claim names.
+
+## Target · 2026-09-24 — A departed seat's claims pass to its successor at once and to anyone after a stale window
+
+**Context:** A claim/* stayed owned by a seat after it left or was swept: a peer's write was refused with and without overwrite, and so was the successor the launcher registered with registerReplacement, reproduced by the reuse builders' probe (2026-09-23). Respawn recruits a successor for exactly such an orphaned claim, which that successor then could not write, so claimed work was stranded until the room ended.
+**Ruling:** A departed owner's claim/* stays owned (respawn still counts it as orphaned), but its registered successor may take it over at once, and anyone may once the owner has been gone for Hub.STALE_CLAIM_MS (10 minutes, CHATROOM_STALE_CLAIM_MS). Each takeover posts one system line naming who took which claim from whom and why; room_status lists stale_claims with who may take each one now. A live owner's refusal is unchanged.
+**Consequences:**
+- Positive: Work a seat claimed before it died or handed off late can be picked up by its replacement immediately, or by a peer after ten minutes, instead of blocking the area until the room ends; every transfer is visible in the room.
+- Negative: A seat that is merely slow to rejoin after leaving can lose its claim after ten minutes; the successor chain is trusted as the launcher registered it; one extra system line per takeover.
+**Vision-fit:** n/a - internal tooling
+**Researched:** stale-claims-regression 4/4 (successor at once, peer only after the window, live owner refusal unchanged, hub-released claims not reported as takeovers); Concord MCP's stale-claim list and audited ownership transfer (MIT) as the reference design; the reuse builders' reproduction in todo/stale-claims-after-seat-leaves.md
+**Rejected:** Releasing claims when a seat leaves, as removeParticipant does: it rewrites the claim as by system, and respawnDecision counts only claims the departed seat still owns, so a release would switch off the orphaned-claim respawn rule.
+**Anchored-bet:** [BET]
+**Revisit-when:** A run where a slow but live seat loses a claim to the stale window, or where a successor chain takes over the wrong claim.
+**Scope:** src/hub.ts
+**Source:** manual
+**Evidence-change:** The reuse builders reproduced that a registered successor could not write its predecessor's claim/*, the case respawn exists to handle.

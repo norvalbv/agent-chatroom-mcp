@@ -671,6 +671,8 @@ export class Hub {
         ...(p.kicked ? { kicked: p.kicked } : {}),
       })),
       kick_votes: [...room.kickVotes.values()].map((kv) => this.kickView(room, kv, reveal)),
+      // claim/* entries whose owner left: its registered successor may take one at once, anyone after Hub.STALE_CLAIM_MS
+      stale_claims: this.staleClaims(room, reveal),
       active_count: active.length,
       message_count: room.messages.length,
       latest_seq: room.messages.at(-1)?.seq ?? 0,
@@ -2078,9 +2080,11 @@ export class Hub {
     if (key.startsWith("draft/") && previous && previous.by !== p.name) throw new HubError(`"${key}" is ${previous.by}'s draft; draft/* entries are author-only. Write your own, e.g. draft/${p.name}.`, undefined, "ownership");
     // Assigned once, at creation only: later edits (status updates, notes) keep the same reviewer.
     let reviewer: Participant | undefined;
+    const takeover = key.startsWith("claim/") && previous && previous.by !== p.name && !Hub.claimReleased(previous) ? this.claimTakeover(room, previous, p) : null;
     if (key.startsWith("claim/")) {
-      // a claim released by removeParticipant (status "released", rewritten by the hub) is open to anyone
-      if (previous && previous.by !== p.name && !Hub.claimReleased(previous)) throw new HubError(`claim "${key}" is owned by ${previous.by} (since ${previous.updatedAt}). Join their team via help/ or join-request/, or pick another area.`, undefined, "ownership");
+      // a claim released by removeParticipant (status "released", rewritten by the hub) is open to anyone; a departed
+      // owner's claim is open to its registered successor, and to anyone after Hub.STALE_CLAIM_MS (claimTakeover)
+      if (previous && previous.by !== p.name && !Hub.claimReleased(previous) && !takeover) throw new HubError(`claim "${key}" is owned by ${previous.by} (since ${previous.updatedAt}). Join their team via help/ or join-request/, or pick another area.`, undefined, "ownership");
       if (text.trim()) {
         let parsed: { status?: string; team?: unknown } | undefined;
         try {
@@ -2100,7 +2104,7 @@ export class Hub {
     }
     if (opts.ifAbsent && previous) throw new HubError(`"${key}" already exists (by ${previous.by}, ${previous.updatedAt}).`, { existing: previous }, "state");
     if (opts.ifByMe && previous && previous.by !== p.name) throw new HubError(`"${key}" was written by ${previous.by}, not you. Use post_to_room or a different key.`, undefined, "ownership");
-    if (previous && previous.by !== p.name && !opts.overwrite && text.trim() && !(key.startsWith("claim/") && Hub.claimReleased(previous))) {
+    if (previous && previous.by !== p.name && !opts.overwrite && text.trim() && !(key.startsWith("claim/") && (Hub.claimReleased(previous) || takeover))) {
       throw new HubError(
         `"${key}" was written by ${previous.by} at ${previous.updatedAt}; replacing it would discard their text. Merge with the current content below and resend with overwrite=true, or use your own key.`,
         { current: previous },
@@ -2153,6 +2157,9 @@ export class Hub {
         `@${reviewer.name} you are the reviewer for ${p.name}'s "${key}" (fewest reviews assigned, then least-recently-verifying; picked by the hub). ` +
         `Once ${p.name} proposes work from it, require_verification prefers a verify/* entry from you over anyone else's while you're still active; ` +
         `its JSON head (in the proposal's blocked_by) records one check of yours failing at the parent commit and passing at ${p.name}'s. Exercise the change the way its users would; do not only rerun ${p.name}'s tests.`);
+    }
+    if (takeover) {
+      this.post(room, "system", undefined, `${this.shown(room, p)} took over "${key}" from ${this.shown(room, takeover.owner)} (${takeover.reason === "successor" ? "registered successor" : `owner gone since ${this.lastSeen(takeover.owner)}`}).`);
     }
     if (key.startsWith("claim/") && (!previous || Hub.claimReleased(previous))) this.noticeClaimOverlap(room, p, key, text);
     if (key.endsWith(".ack") || key.startsWith("verify/")) for (const pr of room.proposals.values()) if (pr.status === "open") this.evaluate(room, pr);
@@ -3233,6 +3240,40 @@ export class Hub {
     for (const pr of room.proposals.values()) if (pr.status === "open") this.evaluate(room, pr);
     this.latchDrafts(room);
     return p;
+  }
+
+  /** How long a departed owner's claim/* stays reserved for its registered successor before anyone may take it over. */
+  static STALE_CLAIM_MS = Number(process.env.CHATROOM_STALE_CLAIM_MS ?? 10 * 60_000);
+
+  /** The departed owner of a claim/* entry, if it has one: the most recent participant under that name, when inactive. */
+  private departedClaimOwner(room: Room, e: BoardEntry): Participant | undefined {
+    if (e.by === "system" || !e.text.trim()) return undefined;
+    const named = [...room.participants.values()].filter((x) => x.name === e.by);
+    if (!named.length || named.some((x) => x.active)) return undefined;
+    return named.reduce((a, b) => (Date.parse(this.lastSeen(b)) > Date.parse(this.lastSeen(a)) ? b : a));
+  }
+
+  /** Why `writer` may take over a departed owner's claim/*: its registered successor (at once), or anyone once the owner
+   * has been gone Hub.STALE_CLAIM_MS. Null while the owner is live or the stale window has not passed. The claim stays
+   * owned until then, so respawn still sees it as orphaned (src/respawn.ts). */
+  private claimTakeover(room: Room, e: BoardEntry, writer: Participant): { reason: "successor" | "stale"; owner: Participant } | null {
+    const owner = this.departedClaimOwner(room, e);
+    if (!owner) return null;
+    for (let next = owner.replacedBy; next; next = room.participants.get(next)?.replacedBy) if (next === writer.id) return { reason: "successor", owner };
+    return Date.now() - Date.parse(this.lastSeen(owner)) >= Hub.STALE_CLAIM_MS ? { reason: "stale", owner } : null;
+  }
+
+  /** claim/* entries whose owner has left, for room_status: who may take each one over now. */
+  staleClaims(room: Room, reveal = false) {
+    const out: { key: string; owner: string; gone_since: string; open_to: "successor" | "anyone" }[] = [];
+    for (const [k, e] of room.board) {
+      if (!k.startsWith("claim/") || Hub.claimReleased(e)) continue;
+      const owner = this.departedClaimOwner(room, e);
+      if (!owner) continue;
+      const since = this.lastSeen(owner);
+      out.push({ key: k, owner: reveal || !room.anonymous ? e.by : this.shown(room, owner), gone_since: since, open_to: Date.now() - Date.parse(since) >= Hub.STALE_CLAIM_MS ? "anyone" : "successor" });
+    }
+    return out;
   }
 
   /** A claim/* rewritten by removeParticipant: owner gone, area open to anyone. */

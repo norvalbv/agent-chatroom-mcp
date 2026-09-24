@@ -1,0 +1,126 @@
+{
+  "pool": "game",
+  "pool_sha256": "91c2bb418646f64896c53f18d96d50e47c951ada397594dfddaf3c650395aa21",
+  "arm": "solo",
+  "rep": 90,
+  "status": "pilot",
+  "void_reason": null,
+  "model": "claude-opus-5-5",
+  "deadline_min": 30,
+  "started_at": "2026-09-24T01:49:21.163Z",
+  "ended_at": "2026-09-24T02:12:35.106Z",
+  "minutes": 23.2,
+  "stopped_at_deadline": false,
+  "passed": 18,
+  "of": 20,
+  "attempted": 20,
+  "items": [
+    {
+      "id": "g01-city-house-variety",
+      "pass": true,
+      "attempted": true
+    },
+    {
+      "id": "g02-wonder-inside-walls",
+      "pass": false,
+      "attempted": true
+    },
+    {
+      "id": "g03-threat-reach",
+      "pass": true,
+      "attempted": true
+    },
+    {
+      "id": "g04-grown-towns-house-everyone",
+      "pass": true,
+      "attempted": true
+    },
+    {
+      "id": "g05-axe-favour-flow",
+      "pass": true,
+      "attempted": true
+    },
+    {
+      "id": "g06-aim-priority-blocked-targets",
+      "pass": true,
+      "attempted": true
+    },
+    {
+      "id": "g07-save-hardening",
+      "pass": true,
+      "attempted": true
+    },
+    {
+      "id": "g08-food-surplus-speeds-growth",
+      "pass": true,
+      "attempted": true
+    },
+    {
+      "id": "g09-typed-orders-build-verbs",
+      "pass": true,
+      "attempted": true
+    },
+    {
+      "id": "g10-morning-letters-news-only",
+      "pass": true,
+      "attempted": true
+    },
+    {
+      "id": "g11-bucket-at-wells",
+      "pass": true,
+      "attempted": true
+    },
+    {
+      "id": "g12-gossip-hears-caravan-work",
+      "pass": false,
+      "attempted": true
+    },
+    {
+      "id": "g13-settler-style-homes",
+      "pass": true,
+      "attempted": true
+    },
+    {
+      "id": "g14-repairs-and-defence-are-deeds",
+      "pass": true,
+      "attempted": true
+    },
+    {
+      "id": "g15-escorts-earn-standing",
+      "pass": true,
+      "attempted": true
+    },
+    {
+      "id": "g16-comfort-buff-shortens-cooldowns",
+      "pass": true,
+      "attempted": true
+    },
+    {
+      "id": "g17-map-trade-routes",
+      "pass": true,
+      "attempted": true
+    },
+    {
+      "id": "g18-signature-trade-counts",
+      "pass": true,
+      "attempted": true
+    },
+    {
+      "id": "g19-reachable-tier3-gates",
+      "pass": true,
+      "attempted": true
+    },
+    {
+      "id": "g20-singular-resource-amounts",
+      "pass": true,
+      "attempted": true
+    }
+  ],
+  "suite_pass": true,
+  "conflicts": 0,
+  "missing_branches": 0,
+  "cost_usd": 4.6895,
+  "cost_estimated": false,
+  "account": 3,
+  "audit_hits": 0
+}

@@ -26,3 +26,4 @@ node --import tsx scripts/paper-rq1-confirmatory.ts bench/results/rq1-confirmato
 node --import tsx scripts/paper-verify-practice.ts bench/results/verify-practice/heads.jsonl bench/results/verify-practice/rooms.json bench/results/verify-practice/codes.json --out paper/generated/verify-practice --tex paper/tables/verify-practice.tex
 node --import tsx scripts/paper-review-audit.ts bench/results/review-audit/audit-2026-09-23.json --out paper/generated/review-audit --tex paper/tables/review-audit.tex
 python3 scripts/paper-fig-review.py paper/generated paper/figures
+node --import tsx scripts/paper-pool-throughput.ts bench/results/pool-throughput --out paper/generated/pool-throughput --tex paper/tables/pool-throughput.tex

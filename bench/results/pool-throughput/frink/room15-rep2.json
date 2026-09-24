@@ -1,0 +1,126 @@
+{
+  "pool": "frink",
+  "pool_sha256": "e1e0ea85c52a283d6b5eccd87294fc6bd8879f38f8540422a111b0def506a4f3",
+  "arm": "room15",
+  "rep": 2,
+  "status": "counted",
+  "void_reason": null,
+  "model": "claude-opus-5-5",
+  "deadline_min": 30,
+  "started_at": "2026-09-24T16:22:55.489Z",
+  "ended_at": "2026-09-24T16:49:42.135Z",
+  "minutes": 26.8,
+  "stopped_at_deadline": false,
+  "passed": 20,
+  "of": 20,
+  "attempted": 20,
+  "items": [
+    {
+      "id": "f01",
+      "pass": true,
+      "attempted": true
+    },
+    {
+      "id": "f02",
+      "pass": true,
+      "attempted": true
+    },
+    {
+      "id": "f03",
+      "pass": true,
+      "attempted": true
+    },
+    {
+      "id": "f04",
+      "pass": true,
+      "attempted": true
+    },
+    {
+      "id": "f05",
+      "pass": true,
+      "attempted": true
+    },
+    {
+      "id": "f07",
+      "pass": true,
+      "attempted": true
+    },
+    {
+      "id": "f08",
+      "pass": true,
+      "attempted": true
+    },
+    {
+      "id": "f11",
+      "pass": true,
+      "attempted": true
+    },
+    {
+      "id": "f12",
+      "pass": true,
+      "attempted": true
+    },
+    {
+      "id": "f13",
+      "pass": true,
+      "attempted": true
+    },
+    {
+      "id": "f14",
+      "pass": true,
+      "attempted": true
+    },
+    {
+      "id": "f16",
+      "pass": true,
+      "attempted": true
+    },
+    {
+      "id": "f17",
+      "pass": true,
+      "attempted": true
+    },
+    {
+      "id": "f18",
+      "pass": true,
+      "attempted": true
+    },
+    {
+      "id": "f20",
+      "pass": true,
+      "attempted": true
+    },
+    {
+      "id": "f21",
+      "pass": true,
+      "attempted": true
+    },
+    {
+      "id": "f24",
+      "pass": true,
+      "attempted": true
+    },
+    {
+      "id": "f25",
+      "pass": true,
+      "attempted": true
+    },
+    {
+      "id": "f26",
+      "pass": true,
+      "attempted": true
+    },
+    {
+      "id": "f27",
+      "pass": true,
+      "attempted": true
+    }
+  ],
+  "suite_pass": true,
+  "conflicts": 0,
+  "missing_branches": 0,
+  "cost_usd": 68.1428,
+  "cost_estimated": false,
+  "account": 3,
+  "audit_hits": 0
+}

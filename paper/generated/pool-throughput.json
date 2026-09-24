@@ -1,0 +1,329 @@
+{
+  "cells": {
+    "hub": {
+      "solo": {
+        "runs": [
+          {
+            "rep": 1,
+            "passed": 20,
+            "minutes": 4.8,
+            "cost_usd": 1.9152
+          },
+          {
+            "rep": 2,
+            "passed": 20,
+            "minutes": 7.8,
+            "cost_usd": 2.5628
+          }
+        ],
+        "mean": 20,
+        "cost_per_passing_item": 0.11
+      },
+      "split": {
+        "runs": [
+          {
+            "rep": 1,
+            "passed": 15,
+            "minutes": 7.2,
+            "cost_usd": 2.4804
+          },
+          {
+            "rep": 2,
+            "passed": 15,
+            "minutes": 11.9,
+            "cost_usd": 2.4334
+          }
+        ],
+        "mean": 15,
+        "cost_per_passing_item": 0.16
+      },
+      "room3": {
+        "runs": [
+          {
+            "rep": 1,
+            "passed": 20,
+            "minutes": 9.1,
+            "cost_usd": 7.0602
+          },
+          {
+            "rep": 2,
+            "passed": 20,
+            "minutes": 9,
+            "cost_usd": 6.1869
+          }
+        ],
+        "mean": 20,
+        "cost_per_passing_item": 0.33
+      },
+      "room15": {
+        "runs": [
+          {
+            "rep": 1,
+            "passed": 20,
+            "minutes": 8.8,
+            "cost_usd": 22.3081
+          },
+          {
+            "rep": 2,
+            "passed": 20,
+            "minutes": 9.6,
+            "cost_usd": 23.2974
+          }
+        ],
+        "mean": 20,
+        "cost_per_passing_item": 1.14
+      }
+    },
+    "game": {
+      "solo": {
+        "runs": [
+          {
+            "rep": 1,
+            "passed": 20,
+            "minutes": 25.5,
+            "cost_usd": 6.1484
+          },
+          {
+            "rep": 2,
+            "passed": 8,
+            "minutes": 12.6,
+            "cost_usd": 1.9664
+          }
+        ],
+        "mean": 14,
+        "cost_per_passing_item": 0.29
+      },
+      "split": {
+        "runs": [
+          {
+            "rep": 1,
+            "passed": 14,
+            "minutes": 9.8,
+            "cost_usd": 5.1051
+          },
+          {
+            "rep": 2,
+            "passed": 14,
+            "minutes": 9.4,
+            "cost_usd": 6.2975
+          }
+        ],
+        "mean": 14,
+        "cost_per_passing_item": 0.41
+      },
+      "room3": {
+        "runs": [
+          {
+            "rep": 1,
+            "passed": 19,
+            "minutes": 14.1,
+            "cost_usd": 13.6101
+          },
+          {
+            "rep": 2,
+            "passed": 19,
+            "minutes": 13.9,
+            "cost_usd": 13.2376
+          }
+        ],
+        "mean": 19,
+        "cost_per_passing_item": 0.71
+      },
+      "room15": {
+        "runs": [
+          {
+            "rep": 1,
+            "passed": 20,
+            "minutes": 15.1,
+            "cost_usd": 34.8431
+          },
+          {
+            "rep": 2,
+            "passed": 19,
+            "minutes": 22.3,
+            "cost_usd": 33.6498
+          }
+        ],
+        "mean": 19.5,
+        "cost_per_passing_item": 1.76
+      }
+    },
+    "frink": {
+      "solo": {
+        "runs": [],
+        "mean": null,
+        "cost_per_passing_item": null
+      },
+      "split": {
+        "runs": [
+          {
+            "rep": 2,
+            "passed": 20,
+            "minutes": 11.1,
+            "cost_usd": 8.7135
+          }
+        ],
+        "mean": null,
+        "cost_per_passing_item": 0.44
+      },
+      "room3": {
+        "runs": [],
+        "mean": null,
+        "cost_per_passing_item": null
+      },
+      "room15": {
+        "runs": [
+          {
+            "rep": 2,
+            "passed": 20,
+            "minutes": 26.8,
+            "cost_usd": 68.1428
+          }
+        ],
+        "mean": null,
+        "cost_per_passing_item": 3.41
+      }
+    }
+  },
+  "directions": [
+    {
+      "n": 1,
+      "a": "split",
+      "b": "solo",
+      "expect": "more",
+      "text": "Split lands more items than Solo",
+      "per_pool": [
+        {
+          "pool": "hub",
+          "diff": -5,
+          "direction": "fewer"
+        },
+        {
+          "pool": "game",
+          "diff": 0,
+          "direction": "no difference"
+        },
+        {
+          "pool": "frink",
+          "diff": null,
+          "direction": "incomplete"
+        }
+      ],
+      "pools_matching": 0,
+      "verdict": "not supported"
+    },
+    {
+      "n": 2,
+      "a": "room3",
+      "b": "split",
+      "expect": "no difference",
+      "text": "Room3 and Split do not differ",
+      "per_pool": [
+        {
+          "pool": "hub",
+          "diff": 5,
+          "direction": "more"
+        },
+        {
+          "pool": "game",
+          "diff": 5,
+          "direction": "more"
+        },
+        {
+          "pool": "frink",
+          "diff": null,
+          "direction": "incomplete"
+        }
+      ],
+      "pools_matching": 0,
+      "verdict": "contradicted"
+    },
+    {
+      "n": 3,
+      "a": "room15",
+      "b": "room3",
+      "expect": "more",
+      "text": "Room15 lands more items than Room3",
+      "per_pool": [
+        {
+          "pool": "hub",
+          "diff": 0,
+          "direction": "no difference"
+        },
+        {
+          "pool": "game",
+          "diff": 0.5,
+          "direction": "no difference"
+        },
+        {
+          "pool": "frink",
+          "diff": null,
+          "direction": "incomplete"
+        }
+      ],
+      "pools_matching": 0,
+      "verdict": "not supported"
+    }
+  ],
+  "pilots_and_voided": [
+    {
+      "pool": "frink",
+      "arm": "solo",
+      "rep": 90,
+      "status": "pilot",
+      "void_reason": null,
+      "passed": 18,
+      "attempted": 18,
+      "minutes": 24.6,
+      "cost_usd": 8.6963
+    },
+    {
+      "pool": "frink",
+      "arm": "solo",
+      "rep": 91,
+      "status": "pilot",
+      "void_reason": null,
+      "passed": 13,
+      "attempted": 13,
+      "minutes": 16.5,
+      "cost_usd": 5.0351
+    },
+    {
+      "pool": "game",
+      "arm": "solo",
+      "rep": 90,
+      "status": "pilot",
+      "void_reason": null,
+      "passed": 18,
+      "attempted": 20,
+      "minutes": 23.2,
+      "cost_usd": 4.6895
+    },
+    {
+      "pool": "game",
+      "arm": "solo",
+      "rep": 91,
+      "status": "pilot",
+      "void_reason": null,
+      "passed": 13,
+      "attempted": 14,
+      "minutes": 12.4,
+      "cost_usd": 3.2338
+    },
+    {
+      "pool": "hub",
+      "arm": "room15",
+      "rep": 2,
+      "status": "void",
+      "void_reason": "argv-pkill",
+      "passed": 20,
+      "attempted": 20,
+      "minutes": 17.1,
+      "cost_usd": null
+    }
+  ],
+  "incomplete_pools": [
+    "frink"
+  ],
+  "threshold": 3
+}

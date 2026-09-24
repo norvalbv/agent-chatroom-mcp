@@ -1,0 +1,126 @@
+{
+  "pool": "hub",
+  "pool_sha256": "6d9e71a9f9e440bf6d802da38539ba169b6e86eeaad47301f2733b4554c4299e",
+  "arm": "solo",
+  "rep": 1,
+  "status": "counted",
+  "void_reason": null,
+  "model": "claude-opus-5-5",
+  "deadline_min": 30,
+  "started_at": "2026-09-23T16:44:09.295Z",
+  "ended_at": "2026-09-23T16:48:54.444Z",
+  "minutes": 4.8,
+  "stopped_at_deadline": false,
+  "passed": 20,
+  "of": 20,
+  "attempted": 20,
+  "items": [
+    {
+      "id": "h01-reply-marker",
+      "pass": true,
+      "attempted": true
+    },
+    {
+      "id": "h02-owed-ask-long-poll",
+      "pass": true,
+      "attempted": true
+    },
+    {
+      "id": "h03-share-ignores-hub-notices",
+      "pass": true,
+      "attempted": true
+    },
+    {
+      "id": "h04-failing-verify-blocks",
+      "pass": true,
+      "attempted": true
+    },
+    {
+      "id": "h05-verify-same-command-flag",
+      "pass": true,
+      "attempted": true
+    },
+    {
+      "id": "h06-verify-commit-resolves",
+      "pass": true,
+      "attempted": true
+    },
+    {
+      "id": "h07-verified-hint-not-untested",
+      "pass": true,
+      "attempted": true
+    },
+    {
+      "id": "h08-vote-amend-challenge-delta",
+      "pass": true,
+      "attempted": true
+    },
+    {
+      "id": "h09-claim-update-overlap-notice",
+      "pass": true,
+      "attempted": true
+    },
+    {
+      "id": "h10-openings-overlap-notice",
+      "pass": true,
+      "attempted": true
+    },
+    {
+      "id": "h11-cc-mention-is-fyi",
+      "pass": true,
+      "attempted": true
+    },
+    {
+      "id": "h12-respawn-reads-claim-status",
+      "pass": true,
+      "attempted": true
+    },
+    {
+      "id": "h13-consolidator-retry",
+      "pass": true,
+      "attempted": true
+    },
+    {
+      "id": "h14-runner-per-command-timeout",
+      "pass": true,
+      "attempted": true
+    },
+    {
+      "id": "h15-floor-from-frozen-electorate",
+      "pass": true,
+      "attempted": true
+    },
+    {
+      "id": "h16-send-refusal-codes",
+      "pass": true,
+      "attempted": true
+    },
+    {
+      "id": "h17-verify-head-feedback",
+      "pass": true,
+      "attempted": true
+    },
+    {
+      "id": "h18-heartbeat-reply",
+      "pass": true,
+      "attempted": true
+    },
+    {
+      "id": "h19-pass-names-declined",
+      "pass": true,
+      "attempted": true
+    },
+    {
+      "id": "h20-verify-entry-proposal-stamp",
+      "pass": true,
+      "attempted": true
+    }
+  ],
+  "suite_pass": true,
+  "conflicts": 0,
+  "missing_branches": 0,
+  "cost_usd": 1.9152,
+  "cost_estimated": false,
+  "account": 4,
+  "audit_hits": 0
+}

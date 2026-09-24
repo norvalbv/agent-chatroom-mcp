@@ -42,10 +42,13 @@ export async function validateAll(poolDir: string, o: ValidateOptions = {}) {
   let suite_base;
   if (o.suite || o.suiteView || o.suiteViewCmd) {
     try {
-      const rec = recordSuiteBase(poolDir, { scratch, viewCmd: o.suiteViewCmd }), c = rec.view.commands;
+      const rec = await recordSuiteBase(poolDir, { scratch, viewCmd: o.suiteViewCmd }), c = rec.view.commands;
       suite_base = { note: SECONDARY_NOTE, file: SUITE_BASE_FILE, view_cmd: rec.view_cmd, format: rec.view.format, complete: rec.view.complete, exit_code: rec.view.exit_code,
         commands: c ? Object.keys(c).length : null, not_passing: c ? Object.keys(c).filter(n => c[n] !== 'passed').sort() : null };
-    } catch (e) { suite_base = { note: SECONDARY_NOTE, file: SUITE_BASE_FILE, error: message(e) }; }
+    } catch (e) {
+      if (e instanceof Interrupted) throw e; // suite-base.json was left as it was
+      suite_base = { note: SECONDARY_NOTE, file: SUITE_BASE_FILE, error: message(e) };
+    }
   }
   const { pool } = loadPool(poolDir), hidden = hiddenRoot(pool.name, o.hiddenParent);
   const mutationFor = async (r: ValidateItem, opts: NonNullable<ValidateOptions['mutation']>): Promise<ItemMutation> => {
@@ -67,6 +70,14 @@ export async function validateAll(poolDir: string, o: ValidateOptions = {}) {
   const mutation = o.mutation && { note: MUTATION_NOTE, flagged: items.filter(r => r.mutation?.flagged).map(r => r.id) };
   await letSignalsIn();
   return { ...report, items, ...(suite_base ? { suite_base } : {}), ...(mutation ? { mutation } : {}) };
+}
+
+type SuiteBaseSummary = NonNullable<Awaited<ReturnType<typeof validateAll>>['suite_base']>;
+/** validate's one-line summary of the base record; a run cut short (the suite hit its time limit) is marked incomplete. */
+export function suiteBaseLine(sb: SuiteBaseSummary): string {
+  if ('error' in sb) return `suite at base (secondary, not pre-registered): not recorded: ${sb.error}`;
+  return `suite at base (secondary, not pre-registered): ${sb.format}, ${sb.commands ?? 'no per-command'} results${sb.complete ? '' : ' (incomplete: the run was cut short)'}, ` +
+    `not passing: ${sb.not_passing?.join(', ') || 'none'}; written to ${sb.file}`;
 }
 
 /** validate's stop: SIGINT or SIGTERM ends it with 128 + the signal number as soon as its event loop runs, and process.exit
@@ -99,9 +110,7 @@ async function main(argv: string[]) {
           : m.mutants ? ` mutation: ${m.mutants} mutants, none survived` : ` mutation: ${m.note}`;
         console.error(`${r.ok ? 'ok  ' : 'FAIL'} ${r.id}: fails at base=${r.fails_at_base} passes with reference=${r.passes_with_reference}${r.names_in_repo.length || r.names_in_briefs.length ? ` hidden names already visible: ${[...r.names_in_repo, ...r.names_in_briefs].join(', ')}` : ''}${r.error ? ' (' + r.error + ')' : ''}${flagNote}`);
       }
-      const sb = report.suite_base;
-      if (sb) console.error('error' in sb ? `suite at base (secondary, not pre-registered): not recorded: ${sb.error}`
-        : `suite at base (secondary, not pre-registered): ${sb.format}, ${sb.commands ?? 'no per-command'} results, not passing: ${sb.not_passing?.join(', ') || 'none'}; written to ${sb.file}`);
+      if (report.suite_base) console.error(suiteBaseLine(report.suite_base));
       return report.ok ? 0 : 1;
     }
     case 'run': {

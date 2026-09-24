@@ -154,7 +154,7 @@ export function scoreRun(runDir: string, opts: { hiddenParent?: string } = {}) {
       try {
         worktreeAt(run.repo, final.head, viewWt);
         linkNodeModules(run.source_repo ?? run.repo, viewWt);
-        headView = runSuiteView(base.record.view_cmd, viewWt, ITEM_TIMEOUT_MS);
+        headView = runSuiteView(base.record.view_cmd, viewWt, ITEM_TIMEOUT_MS).view;
       } finally { removeWorktree(run.repo, viewWt); }
     } catch (e) { viewError = `running the view command at head: ${errorText(e)}`; }
   }

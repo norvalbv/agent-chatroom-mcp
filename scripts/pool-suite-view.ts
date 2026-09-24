@@ -1,9 +1,9 @@
 /** Secondary suite view, NOT pre-registered: per-command suite results at base_commit against the final head.
  * PASS_TO_PASS semantics from the SWE-bench harness; docs/reuse-survey-2026-09-23.md, "Scoring: the existing-suite check". */
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, isAbsolute, join, relative, resolve } from 'node:path';
-import { isolatedRepo, linkNodeModules, loadPool, type Pool, removeWorktree, runCmd, worktreeAt } from './pool-format.ts';
+import { Interrupted, isolatedRepo, letSignalsIn, linkNodeModules, loadPool, type Pool, removeWorktree, runCmd, stoppedBy, worktreeAt } from './pool-format.ts';
 
 export type CommandStatus = 'passed' | 'failed' | 'skipped' | 'unknown';
 export type SuiteFormat = 'offline-runner' | 'vitest-json' | 'exit-code';
@@ -102,33 +102,50 @@ export function parseSuiteOutput(r: { stdout?: string; stderr?: string; exit_cod
   return { format: 'exit-code', ...base, complete: !r.timed_out, commands: null };
 }
 
-/** Runs the view command with $SUITE_REPORT naming a scratch file outside the checkout, for a JSON reporter's --outputFile. */
-export function runSuiteView(cmd: string, cwd: string, timeoutMs = SUITE_TIMEOUT_MS): SuiteView {
+/** Runs the view command with $SUITE_REPORT naming a scratch file outside the checkout, for a JSON reporter's --outputFile.
+ * `signal` is what killed the command, if anything did (SIGKILL at the time limit, or a stop signal). */
+export function runSuiteView(cmd: string, cwd: string, timeoutMs = SUITE_TIMEOUT_MS): { view: SuiteView; signal: NodeJS.Signals | null } {
   const dir = mkdtempSync(join(tmpdir(), 'suite-view-')), report = join(dir, 'report.json');
   try {
     const r = runCmd(cmd, cwd, timeoutMs, { env: { SUITE_REPORT: report }, full: true });
-    return parseSuiteOutput({ ...r, report: existsSync(report) ? readFileSync(report, 'utf8') : undefined, cwd });
+    return { view: parseSuiteOutput({ ...r, report: existsSync(report) ? readFileSync(report, 'utf8') : undefined, cwd }), signal: r.signal };
   } finally { rmSync(dir, { recursive: true, force: true }); }
 }
 
-/** Validate step: suite at base_commit, once per pool, in a run-style isolated repo (as score's head run), written next to pool.json. */
-export function recordSuiteBase(poolDir: string, opts: { scratch?: string; viewCmd?: string; timeoutMs?: number } = {}): SuiteBase {
+/** Validate step: suite at base_commit, once per pool, in a run-style isolated repo (as score's head run), written next to pool.json.
+ * A run stopped by SIGINT, SIGTERM or SIGHUP (a Ctrl-C reaches the suite too) is not a result: it throws Interrupted and leaves
+ * the existing record alone, as does a stop signal validate itself got while the suite ran. A run cut off at the time limit is
+ * a result, recorded with complete: false, as score's head run is cut off at the same limit. The file is replaced by a rename,
+ * so it is never left half written. */
+export async function recordSuiteBase(poolDir: string, opts: { scratch?: string; viewCmd?: string; timeoutMs?: number } = {}): Promise<SuiteBase> {
   const { pool } = loadPool(poolDir);
   const suiteCmd = pool.suite_cmd ?? 'npm test', viewCmd = opts.viewCmd ?? suiteCmd;
   const parent = resolve(opts.scratch ?? tmpdir());
   mkdirSync(parent, { recursive: true });
   const scratch = mkdtempSync(join(parent, 'suite-base-')), repo = join(scratch, 'repo'), wt = join(scratch, 'wt');
+  let outcome: { view: SuiteView } | { stop: string };
   try {
     worktreeAt(repo, isolatedRepo(pool.repo, pool.base_commit, repo), wt);
     linkNodeModules(pool.repo, wt);
-    const view = runSuiteView(viewCmd, wt, opts.timeoutMs);
-    const record: SuiteBase = { note: SECONDARY_NOTE, pool: pool.name, base_commit: pool.base_commit, suite_cmd: suiteCmd, view_cmd: viewCmd, recorded_at: new Date().toISOString(), view };
-    writeFileSync(join(resolve(poolDir), SUITE_BASE_FILE), JSON.stringify(record, null, 2) + '\n');
-    return record;
+    const run = runSuiteView(viewCmd, wt, opts.timeoutMs), stop = stoppedBy(run.signal);
+    outcome = stop ? { stop } : { view: run.view };
+  } catch (e) {
+    const stop = stoppedBy((e as { signal?: string } | null)?.signal); // git or tar making the base copy
+    if (!stop) throw e;
+    outcome = { stop };
   } finally {
     if (existsSync(wt)) removeWorktree(repo, wt);
     rmSync(scratch, { recursive: true, force: true });
   }
+  await letSignalsIn(); // a stop signal validate got while the suite ran ends it here, before anything is written
+  if ('stop' in outcome) throw new Interrupted(outcome.stop, `the suite run at base (${SUITE_BASE_FILE} left as it was)`);
+  const record: SuiteBase = { note: SECONDARY_NOTE, pool: pool.name, base_commit: pool.base_commit, suite_cmd: suiteCmd, view_cmd: viewCmd, recorded_at: new Date().toISOString(), view: outcome.view };
+  const path = join(resolve(poolDir), SUITE_BASE_FILE), tmp = `${path}.${process.pid}.tmp`;
+  try {
+    writeFileSync(tmp, JSON.stringify(record, null, 2) + '\n');
+    renameSync(tmp, path);
+  } finally { rmSync(tmp, { force: true }); }
+  return record;
 }
 
 const FORMATS: readonly string[] = ['offline-runner', 'vitest-json', 'exit-code'];
@@ -172,9 +189,12 @@ export type SuitePassToPass = { available: false; reason: string } | {
   base_exit_code: number | null; head_exit_code: number | null; commands_at_base: number; passed_at_base: number;
   passed_at_base_now_failing: string[]; passed_at_base_now_skipped: string[]; passed_at_base_disappeared: string[];
   passed_at_base_not_seen_head_incomplete: string[]; failed_at_base: string[]; new_at_head_failing: string[];
+  failing_at_head_no_base_result: string[];
 };
 
-/** Commands that passed at base and now fail, are skipped, or are gone. When the head run was cut short, unseen ones are listed apart. */
+/** Commands that passed at base and now fail, are skipped, or are gone. When the head run was cut short, unseen ones are listed
+ * apart. A command failing at head is new only when the base run was complete and never ran it; one with no result at base (the
+ * base run was cut short before it, or it was the one running then) is listed apart too, never as new or as a regression. */
 export function compareSuiteViews(base: SuiteView, head: SuiteView, viewCmd: string): SuitePassToPass {
   if (base.format !== head.format) return { available: false, reason: `suite output format differs: ${base.format} at base, ${head.format} at head` };
   const b = base.commands ?? {}, h = head.commands ?? {};
@@ -189,6 +209,7 @@ export function compareSuiteViews(base: SuiteView, head: SuiteView, viewCmd: str
     passed_at_base_disappeared: head.complete ? gone : [],
     passed_at_base_not_seen_head_incomplete: head.complete ? [] : gone,
     failed_at_base: Object.keys(b).filter(n => b[n] === 'failed').sort(),
-    new_at_head_failing: Object.keys(h).filter(n => !(n in b) && h[n] === 'failed').sort(),
+    new_at_head_failing: Object.keys(h).filter(n => !(n in b) && base.complete && h[n] === 'failed').sort(),
+    failing_at_head_no_base_result: Object.keys(h).filter(n => h[n] === 'failed' && (n in b ? b[n] === 'unknown' : !base.complete)).sort(),
   };
 }

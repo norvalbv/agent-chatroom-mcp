@@ -2,16 +2,17 @@
  * node --import tsx scripts/pool-suite-view.test.ts. Fixture pools are temporary; nothing is written into this repo. */
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { execFileSync, spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { randomBytes } from 'node:crypto';
+import { execFileSync, spawn, spawnSync } from 'node:child_process';
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { hiddenRoot, loadPool, lockPool, worktreeAt } from './pool-format.ts';
+import { hiddenRoot, Interrupted, loadPool, lockPool, worktreeAt } from './pool-format.ts';
 import { makeDryRunPool } from './pool-fixture.ts';
 import { finalizeRun, scoreRun } from './pool-score.ts';
 import { compareSuiteViews, parseOfflineRunner, parseSuiteOutput, parseVitestJson, readSuiteBase, recordSuiteBase, SUITE_BASE_FILE, type SuiteView } from './pool-suite-view.ts';
-import { validateAll } from './pool.ts';
+import { suiteBaseLine, validateAll } from './pool.ts';
 
 const RUNNER = fileURLToPath(new URL('./offline-runner.mjs', import.meta.url));
 const fresh = () => realpathSync(mkdtempSync(join(tmpdir(), 'pool-suite-view-')));
@@ -87,6 +88,21 @@ test('compare: passed at base and now failing, skipped or gone; red at base and 
   assert.equal(compareSuiteViews(base, { ...head, format: 'exit-code', commands: null }, 'npm test').available, false);
   const exitOnly = compareSuiteViews({ ...base, format: 'exit-code', commands: null, exit_code: 0 }, { ...head, format: 'exit-code', commands: null }, 'x');
   assert.ok(exitOnly.available && !exitOnly.per_command && exitOnly.base_exit_code === 0 && exitOnly.head_exit_code === 1);
+  assert.deepEqual(c.failing_at_head_no_base_result, []);
+  // a base run cut short: a command it never reached, or was running, has no base result, so failing at head is neither new
+  // nor a regression; it is listed apart
+  const cutBase = compareSuiteViews(view({ a: 'passed', b: 'failed', c: 'unknown' }, false), view({ a: 'passed', b: 'failed', c: 'failed', d: 'failed' }), 'npm test');
+  assert.ok(cutBase.available);
+  assert.deepEqual([cutBase.new_at_head_failing, cutBase.failing_at_head_no_base_result, cutBase.failed_at_base, cutBase.passed_at_base_now_failing], [[], ['c', 'd'], ['b'], []]);
+});
+
+const INCOMPLETE_LINE = /offline-runner, 2 results \(incomplete: the run was cut short\), not passing: b/, INCOMPLETE = /incomplete/;
+const SUITE_STOPPED = /suite run at base .*stopped by SIGINT/, VALIDATE_STOPPED = /validate stopped by SIGINT/;
+
+test('the validate summary line marks a base run cut short as incomplete', () => {
+  const sb = { note: 'n', file: SUITE_BASE_FILE, view_cmd: 'npm test', format: 'offline-runner' as const, exit_code: null, commands: 2, not_passing: ['b'] };
+  assert.match(suiteBaseLine({ ...sb, complete: false }), INCOMPLETE_LINE);
+  assert.doesNotMatch(suiteBaseLine({ ...sb, complete: true }), INCOMPLETE);
 });
 
 /** The dry-run pool with a per-command suite: a copy of this repo's offline runner over the files in suite.txt, recommitted and relocked. */
@@ -198,13 +214,13 @@ test('readSuiteBase never throws: unreadable, non-object or malformed records co
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
-test('a truncated or partial suite-base.json never stops score: score.json is written and the pre-registered suite is unchanged', () => {
+test('a truncated or partial suite-base.json never stops score: score.json is written and the pre-registered suite is unchanged', async () => {
   const base = fresh();
   try {
     const fx = suitePool(base);
     const R = breakingSoloRun(fx, base);
     const plain = scoreRun(R, { hiddenParent: fx.hiddenParent }); // no base record at all
-    const record = recordSuiteBase(fx.poolDir, { scratch: join(base, 'scratch') });
+    const record = await recordSuiteBase(fx.poolDir, { scratch: join(base, 'scratch') });
     const full = JSON.stringify(record, null, 2);
     for (const [text, reason] of [[full.slice(0, 200), UNREADABLE], [JSON.stringify({ ...record, view: undefined }), NO_VIEW]] as const) {
       writeFileSync(join(fx.poolDir, SUITE_BASE_FILE), text);
@@ -229,11 +245,11 @@ test('a truncated or partial suite-base.json never stops score: score.json is wr
   } finally { rmSync(base, { recursive: true, force: true }); }
 });
 
-test('a vitest-style view command writes JSON to $SUITE_REPORT; score runs it apart from suite_cmd and compares per file', () => {
+test('a vitest-style view command writes JSON to $SUITE_REPORT; score runs it apart from suite_cmd and compares per file', async () => {
   const base = fresh();
   try {
     const fx = suitePool(base);
-    const record = recordSuiteBase(fx.poolDir, { scratch: join(base, 'scratch'), viewCmd: 'node report.mjs' });
+    const record = await recordSuiteBase(fx.poolDir, { scratch: join(base, 'scratch'), viewCmd: 'node report.mjs' });
     assert.equal(record.view.format, 'vitest-json');
     assert.deepEqual(record.view.commands, { 'test/math.test.mjs': 'passed', 'test/text.test.mjs': 'passed', 'test/extra.test.mjs': 'passed' });
     const score = scoreRun(breakingSoloRun(fx, base), { hiddenParent: fx.hiddenParent });
@@ -253,5 +269,61 @@ test('CLI: pool.ts validate --suite-view prints the base record summary and stil
     assert.equal(r.status, 0, r.stderr);
     assert.equal(JSON.parse(r.stdout).suite_base.format, 'offline-runner');
     assert.match(r.stderr, /suite at base \(secondary, not pre-registered\): offline-runner, 3 results/);
+  } finally { rmSync(base, { recursive: true, force: true }); }
+});
+
+/** Only suite-base.json itself is left in the pool dir: no temporary file from an interrupted write. */
+const poolDirFiles = (poolDir: string) => readdirSync(poolDir).sort();
+
+test('a base suite run killed by a stop signal is not recorded: the existing suite-base.json is left as it was', async () => {
+  const base = fresh();
+  try {
+    const fx = suitePool(base);
+    await recordSuiteBase(fx.poolDir, { scratch: join(base, 'scratch') });
+    const good = readFileSync(join(fx.poolDir, SUITE_BASE_FILE), 'utf8'), files = poolDirFiles(fx.poolDir);
+    // the suite dies of SIGINT after one command started, as under a Ctrl-C; this process is not signalled
+    const killed = `exec node -e "console.log('[offline] math.test.mjs'); process.kill(process.pid, 'SIGINT')"`;
+    await assert.rejects(recordSuiteBase(fx.poolDir, { scratch: join(base, 'scratch'), viewCmd: killed }),
+      (e: unknown) => e instanceof Interrupted && e.signal === 'SIGINT' && SUITE_STOPPED.test(e.message));
+    assert.equal(readFileSync(join(fx.poolDir, SUITE_BASE_FILE), 'utf8'), good);
+    assert.deepEqual(poolDirFiles(fx.poolDir), files);
+  } finally { rmSync(base, { recursive: true, force: true }); }
+});
+
+test('Ctrl-C during the base suite run ends validate with 130 and leaves the existing suite-base.json unchanged', async () => {
+  const base = fresh(), marker = `pool-suite-view-ctrlc-${randomBytes(6).toString('hex')}`;
+  try {
+    const fx = suitePool(base);
+    await recordSuiteBase(fx.poolDir, { scratch: join(base, 'scratch') });
+    const good = readFileSync(join(fx.poolDir, SUITE_BASE_FILE), 'utf8'), files = poolDirFiles(fx.poolDir);
+    // a view command that reports its first command started and then takes a minute: the Ctrl-C lands inside it
+    const slow = join(base, 'slow-suite.mjs');
+    writeFileSync(slow, "console.log('[offline] math.test.mjs');\nsetTimeout(() => {}, 60000);\n");
+    const v = spawn(process.execPath, ['--import', 'tsx', 'scripts/pool.ts', 'validate', '--pool', fx.poolDir, '--hidden', fx.hiddenParent,
+      '--scratch', join(base, 's'), '--repeats', '1', '--suite-view-cmd', `node ${JSON.stringify(slow)} ${marker}`], { detached: true, stdio: ['ignore', 'pipe', 'pipe'] });
+    let stdout = '', stderr = '';
+    v.stdout.on('data', d => { stdout += d; });
+    v.stderr.on('data', d => { stderr += d; });
+    let closed = false;
+    const exited = new Promise<number | null>(r => v.on('close', code => { closed = true; r(code); }));
+    assert.ok(v.pid);
+    try {
+      const until = Date.now() + 100_000;
+      // validate's own argv names the view command too, so only another process counts
+      const suiteRunning = () => spawnSync('ps', ['-Ao', 'pid=,command='], { encoding: 'utf8' }).stdout.split('\n')
+        .some(l => l.includes(marker) && l.includes('slow-suite') && Number(l.trim().split(' ')[0]) !== v.pid);
+      while (!suiteRunning()) {
+        assert.ok(Date.now() < until, 'the base suite run never started');
+        await new Promise(r => setTimeout(r, 200));
+      }
+      process.kill(-v.pid, 'SIGINT');
+      const code = await exited;
+      assert.equal(code, 130, stderr);
+      assert.match(stderr, VALIDATE_STOPPED);
+      assert.equal(stdout, '', 'no report for a stopped validate');
+      assert.equal(readFileSync(join(fx.poolDir, SUITE_BASE_FILE), 'utf8'), good, 'the good record is untouched');
+      assert.deepEqual(poolDirFiles(fx.poolDir), files);
+      assert.equal(git(fx.repo, 'worktree', 'list', '--porcelain').split('worktree ').length - 1, 1);
+    } finally { if (!closed) try { process.kill(-v.pid, 'SIGKILL'); } catch {} } // only if validate (this test's own child) is still running
   } finally { rmSync(base, { recursive: true, force: true }); }
 });

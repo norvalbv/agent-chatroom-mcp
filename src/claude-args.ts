@@ -25,7 +25,9 @@ export interface ClaudeArgsOptions {
   /** "json" (default): a single blob printed only on clean exit. "stream-json": NDJSON emitted as the
    * seat works, so a caller that kills the process mid-run still has whatever was flushed before the
    * kill (bench-rq1.ts item 3 — usage must survive a kill, not just clean exits). Requires --verbose,
-   * per the CLI's own refusal ("--output-format=stream-json requires --verbose", confirmed live). */
+   * per the CLI's own refusal ("--output-format=stream-json requires --verbose", confirmed live). Adds
+   * --include-partial-messages: an assistant event's output_tokens is a placeholder (Claude Code cost-tracking
+   * docs), and only a message's stream_event message_delta has its final count (scripts/seat-cost-estimate.ts StreamUsage). */
   outputFormat?: "json" | "stream-json";
   /** --settings JSON (src/env.ts heartbeatHookSettings): the seat's tool-call heartbeat hook. Kept under --claude-full too. */
   settings?: string;
@@ -44,7 +46,7 @@ export function claudeArgs({ mcpJson, tools, model, full, outputFormat, settings
   if (!full) {
     args.push("--tools", builtinOnly(tools).join(","), "--disable-slash-commands", "--setting-sources", "project", "--exclude-dynamic-system-prompt-sections");
   }
-  if (outputFormat === "stream-json") args.push("--output-format", "stream-json", "--verbose");
+  if (outputFormat === "stream-json") args.push("--output-format", "stream-json", "--verbose", "--include-partial-messages");
   else args.push("--output-format", "json");
   if (model) args.push("--model", model);
   const merged = full ? settings : JSON.stringify({ ...(settings ? JSON.parse(settings) : {}), autoMemoryEnabled: false });

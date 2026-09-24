@@ -42,7 +42,7 @@ import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, wri
 import { basename, join, resolve } from "node:path";
 import { matchArmABudget } from "./rq1-usage-budget.js";
 import { classifyThinkingRegime, modelThinkingTokens, THINKING_REGIME_THRESHOLD } from "./confirmatory-regime.js";
-import { CLAUDE_LIST_PRICE_PER_MTOK } from "./seat-cost-estimate.js";
+import { pricePerMTok } from "./seat-cost-estimate.js";
 
 // Item 5 (orphans): spawnSync would block this process's event loop, so a SIGINT/SIGTERM sent to this
 // script while a run is in flight could not be handled until that run finished on its own — the signal
@@ -76,8 +76,8 @@ export interface GridRunResult {
   wall_clock_ms: number;
 }
 
-/** Sonnet 5 list prices, USD per million tokens (2026-09-19 accounting in paper/figures.md). */
-export const SONNET_PRICE_PER_MTOK = CLAUDE_LIST_PRICE_PER_MTOK["claude-sonnet-5"].per_mtok;
+/** Sonnet 5 list prices, USD per million tokens (the pinned LiteLLM snapshot in scripts/seat-cost-estimate.ts). */
+export const SONNET_PRICE_PER_MTOK = pricePerMTok("claude-sonnet-5")!;
 /** Partial stream-json usage may under-count thinking tokens on a killed seat; the bound is inflated by this factor. */
 export const ESTIMATE_SAFETY_FACTOR = 1.5;
 

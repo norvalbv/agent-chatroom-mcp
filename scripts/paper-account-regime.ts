@@ -5,37 +5,68 @@
  *
  * Usage:
  *   node --import tsx scripts/paper-account-regime.ts SWITCH_LOG_JSON RESULTS_ROOT [--out PREFIX] [--tex FILE]
- *   node --import tsx scripts/paper-account-regime.ts --extract SWITCHER_LOG [--since ISO] > SWITCH_LOG_JSON
+ *   node --import tsx scripts/paper-account-regime.ts --extract SWITCHER_LOG... [--since ISO] > SWITCH_LOG_JSON
  *   node --import tsx scripts/paper-account-regime.ts --mixed-seeds SWITCH_LOG_JSON CONFIRMATORY_DIR 4 > MIXED_SEEDS_JSON
  *
- * --extract reads the switcher's own log ("YYYY-MM-DD HH:MM:SS,mmm - INFO - Switched from account X to Y",
- * local time) and prints the sanitized JSON. It is run by the maintainer; the committed JSON is the source.
+ * --extract reads claude-swap's `cswap auto --json` event lines (UTC `ts`) and the switcher's own log lines
+ * ("YYYY-MM-DD HH:MM:SS,mmm - INFO - Switched from account X to Y", machine-local time), from any number of files,
+ * and prints the sanitized JSON. A manual `cswap switch` reaches only the log, so pass both. It is run by the
+ * maintainer; the committed JSON is the source.
  */
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 export const LONG_THINKING_THRESHOLD = 4000; // frozen in paper/prereg-confirmatory.md
-export interface Switch { at: string; from: number; to: number }
+/** `from` is null when claude-swap switched with no account active. `source` is absent in extracts made before it existed. */
+export interface Switch { at: string; from: number | null; to: number; source?: "cswap-event" | "log" }
 export interface SwitchLog { note: string; switches: Switch[] }
 export interface SeatRow { path: string; task: string; arm: string; started: number; completed: number; thinking: number | null; output: number | null }
 
+/** Slot number of a claude-swap account reference ({number, email}); the email is never read. */
+const slotOf = (ref: unknown): number | null => {
+  const n = (ref as { number?: unknown } | null)?.number;
+  return typeof n === "number" && Number.isInteger(n) ? n : null;
+};
+
+/** A `cswap auto --json` switch event: claude-swap (MIT) src/claude_swap/autoswitch.py SwitchEvent.to_json, schema 1,
+ * {"schemaVersion":1,"event":"switch","ts":"<UTC>Z","trigger":…,"from":{"number","email"}|null,"to":{…},"dryRun":…}.
+ * undefined: not a switch event line (other kinds, and non-JSON lines such as stderr, are ignored). */
+function switchFromEvent(line: string): Switch | null | undefined {
+  let e: any;
+  try { e = JSON.parse(line); } catch { return undefined; }
+  if (e?.event !== "switch") return undefined;
+  if (e.schemaVersion !== 1) throw Error(`claude-swap event schemaVersion ${e.schemaVersion} is not supported (known: 1)`);
+  const at = Date.parse(e.ts), to = slotOf(e.to), from = e.from === null ? null : slotOf(e.from);
+  if (e.dryRun === true || to === null || !Number.isFinite(at) || (e.from !== null && from === null)) return null;
+  return { at: new Date(at).toISOString(), from, to, source: "cswap-event" };
+}
+
+/** An auto switch appears both as an event and as a log line; the event (UTC) is kept. */
+const SAME_SWITCH_MS = 120_000;
+
 export function extractSwitches(logText: string, sinceIso?: string): Switch[] {
   const since = sinceIso ? Date.parse(sinceIso) : -Infinity;
-  const out: Switch[] = [];
+  const events: Switch[] = [], logged: Switch[] = [];
   for (const line of logText.split("\n")) {
+    if (line.trimStart().startsWith("{")) {
+      const e = switchFromEvent(line.trim());
+      if (e) events.push(e);
+      continue;
+    }
     const m = line.match(/^(\d{4}-\d\d-\d\d) (\d\d:\d\d:\d\d),\d+ - INFO - Switched from account (\d+) to (\d+)\s*$/);
     if (!m) continue;
     const at = new Date(`${m[1]}T${m[2]}`); // local wall-clock time of the machine that wrote the log
-    if (at.getTime() >= since) out.push({ at: at.toISOString(), from: Number(m[3]), to: Number(m[4]) });
+    logged.push({ at: at.toISOString(), from: Number(m[3]), to: Number(m[4]), source: "log" });
   }
-  return out.sort((a, b) => a.at.localeCompare(b.at));
+  const duplicate = (l: Switch) => events.some((e) => e.to === l.to && (e.from === null || e.from === l.from) && Math.abs(Date.parse(e.at) - Date.parse(l.at)) <= SAME_SWITCH_MS);
+  return [...events, ...logged.filter((l) => !duplicate(l))].filter((s) => Date.parse(s.at) >= since).sort((a, b) => a.at.localeCompare(b.at));
 }
 
 /** Account active at time t, or null before the first logged switch's `from` can be trusted (it can: `from` is the account left). */
 export function accountAt(switches: Switch[], t: number): number | null {
   if (switches.length === 0) return null;
-  let account: number = switches[0].from;
+  let account: number | null = switches[0].from;
   for (const s of switches) { if (Date.parse(s.at) <= t) account = s.to; else break; }
   return account;
 }
@@ -204,10 +235,11 @@ export function renderTex(t: ReturnType<typeof buildTable>): string {
 function main() {
   const args = process.argv.slice(2);
   if (args[0] === "--extract") {
-    const src = args[1]; let since: string | undefined;
-    if (args[2] === "--since") since = args[3];
-    if (!src) throw Error("Usage: --extract SWITCHER_LOG [--since ISO]");
-    const log: SwitchLog = { note: "Sanitized extract of the maintainer's Claude Code account-switcher log: UTC switch times and account slot numbers only.", switches: extractSwitches(readFileSync(src, "utf8"), since) };
+    const at = args.indexOf("--since"), since = at >= 0 ? args[at + 1] : undefined;
+    const sources = args.slice(1, at >= 0 ? at : undefined);
+    if (!sources.length) throw Error("Usage: --extract SWITCHER_LOG... [--since ISO]");
+    const text = sources.map((f) => readFileSync(f, "utf8")).join("\n");
+    const log: SwitchLog = { note: "Sanitized extract of the maintainer's Claude Code account-switcher log: UTC switch times and account slot numbers only.", switches: extractSwitches(text, since) };
     console.log(JSON.stringify(log, null, 2));
     return;
   }

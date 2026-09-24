@@ -19,7 +19,7 @@ import { fileURLToPath } from 'node:url';
 import { claudeArgs } from '../src/claude-args.js';
 import { carrySettings } from '../src/env.js';
 import { delay, json, runClaudeSeat, stop, track, type SeatRecord } from './bench-build-runtime.ts';
-import { estimateSeatCost, type MessageUsage } from './seat-cost-estimate.ts';
+import { estimateSeatCost, StreamUsage } from './seat-cost-estimate.ts';
 import { accountAt, extractSwitches } from './paper-account-regime.ts';
 import { hiddenRoot, loadPool, worktreeAt, type Pool, isolatedRepo, linkNodeModules } from './pool-format.ts';
 
@@ -177,15 +177,17 @@ function seatRow(name: string, branch: string | null, wt: string, briefPath: str
 
 /** Cost of a seat without a terminal `result` event: its observed per-message usage at list price, always marked an estimate. */
 export function estimateFrom(ndjson: string, reported: string[]): Pick<SeatRow, 'cost_usd' | 'cost_estimated' | 'cost_estimate_basis' | 'cost_estimate_reason'> & { partial_usage?: unknown } {
-  const observed: { id?: string; usage: MessageUsage }[] = [];
+  const stream = new StreamUsage();
   const models = new Set(reported);
   for (const line of ndjson.split('\n')) {
     let e: any; try { e = JSON.parse(line); } catch { continue; }
-    if (e?.type === 'assistant' && e.message?.usage) { observed.push({ id: e.message.id, usage: e.message.usage }); if (e.message.model) models.add(e.message.model); }
+    stream.consume(e);
+    if (e?.type === 'assistant' && e.message?.usage && e.message.model) models.add(e.message.model);
   }
+  const observed = stream.messages();
   const est = estimateSeatCost(observed, [...models].filter(m => m !== '<synthetic>'), MODEL);
   if (est) return { cost_usd: est.usd, cost_estimated: true, cost_estimate_basis: est.basis };
-  return { cost_usd: null, cost_estimated: true, cost_estimate_reason: observed.length ? `no list-price row for ${[...models].join(',') || MODEL} in scripts/seat-cost-estimate.ts` : 'no usage observed before the seat stopped' };
+  return { cost_usd: null, cost_estimated: true, cost_estimate_reason: observed.length ? `no list price for ${[...models].join(',') || MODEL} in scripts/litellm-model-prices.json (or a service tier it does not price)` : 'no usage observed before the seat stopped' };
 }
 
 function accountRecord(path: string | undefined, at: number) {
@@ -193,7 +195,8 @@ function accountRecord(path: string | undefined, at: number) {
   if (!existsSync(path)) return { account: null, source: path, reason: 'switch log not found' };
   const switches = extractSwitches(readFileSync(path, 'utf8'));
   const account = accountAt(switches, at);
-  return { account, source: path, reason: account === null ? 'no switch recorded in the log' : null, switches_seen: switches.length };
+  const reason = account !== null ? null : switches.length ? 'unknown: the first logged switch left no account' : 'no switch recorded in the log';
+  return { account, source: path, reason, switches_seen: switches.length };
 }
 
 /** Copies every Claude Code session whose cwd lies under the run dir into seats/<seat>/sessions/, and for rooms

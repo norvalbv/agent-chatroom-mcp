@@ -43,7 +43,10 @@ function stubClaudeDir(behavior: "answer" | "no-answer" | "edit-file" | "kill" |
       // model id so a test can show that the same words from a real model are still scored.
       `if(behavior==='quota'){fs.writeFileSync('answer.txt',${JSON.stringify(EXPECTED)});const m=process.env.STUB_QUOTA_MODEL||'<synthetic>';process.stdout.write(JSON.stringify({type:'system',subtype:'init',model:'served-init'})+'\\n');process.stdout.write(JSON.stringify({type:'assistant',message:{model:m,usage:{input_tokens:0,output_tokens:0}}})+'\\n');process.stdout.write(JSON.stringify({type:'result',subtype:'success',is_error:true,result:"You've hit your session limit · resets 9:30am (Europe/London)",num_turns:1,duration_ms:586,duration_api_ms:0,total_cost_usd:0,usage:{input_tokens:0,cache_read_input_tokens:0,cache_creation_input_tokens:0,output_tokens:0}})+'\\n');process.exit(m==='<synthetic>'?1:0);}`,
       `if(behavior==='answer'){const bySeat=process.env.STUB_ANSWER_BY_SEAT?JSON.parse(process.env.STUB_ANSWER_BY_SEAT):{};fs.writeFileSync('answer.txt',bySeat[process.env.GIT_AUTHOR_NAME]??process.env.STUB_ANSWER??${JSON.stringify(EXPECTED)});}`,
-      "process.stdout.write(JSON.stringify({type:'assistant',message:{usage:{input_tokens:80,output_tokens:15,cache_read_input_tokens:10,cache_creation_input_tokens:5}}})+'\\n');",
+      // STUB_DELTA: the --include-partial-messages shape, where message_delta carries the message's final output count.
+      "if(process.env.STUB_DELTA)process.stdout.write(JSON.stringify({type:'stream_event',event:{type:'message_start',message:{id:'msg_stub',usage:{output_tokens:15}}}})+'\\n');",
+      "process.stdout.write(JSON.stringify({type:'assistant',message:{...(process.env.STUB_DELTA?{id:'msg_stub'}:{}),usage:{input_tokens:80,output_tokens:15,cache_read_input_tokens:10,cache_creation_input_tokens:5}}})+'\\n');",
+      "if(process.env.STUB_DELTA)process.stdout.write(JSON.stringify({type:'stream_event',event:{type:'message_delta',usage:{output_tokens:900}}})+'\\n');",
       "if(behavior==='kill'){setInterval(()=>{},1000);}else{",
       "process.stdout.write(JSON.stringify({type:'result',subtype:'success',is_error:false,result:'seat done',num_turns:3,duration_ms:842,duration_api_ms:910,total_cost_usd:0.0041,...(process.env.STUB_MODELS?{modelUsage:{'served-init':{thinkingTokens:17,canonicalModel:'snapshot-1'},'served-fallback':{outputTokens:3}}}:{}),usage:{input_tokens:120,cache_read_input_tokens:40,cache_creation_input_tokens:12,output_tokens:30}})+'\\n');",
       "}",
@@ -222,6 +225,23 @@ test("arm A: a killed seat's cost is estimated from its partial usage at list pr
     assert.equal(est.price_model, "claude-sonnet-5", "--model defaults to the sonnet alias");
     assert.ok(Math.abs(est.usd - (80 * 2.0 + 10 * 0.2 + 5 * 2.5 + 15 * 10.0) / 1e6) < 1e-12, `got ${est.usd}`);
     assert.deepEqual(result.estimated_cost, { usd: est.usd, estimate: true, seats_estimated: 1, seats: 1 }, "the run-level figure is an estimate, not cost 0");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+    rmSync(stubDir, { recursive: true, force: true });
+  }
+});
+
+test("arm A: a killed seat's output tokens and cost use each message's final message_delta count, not the assistant-event placeholder", () => {
+  const stubDir = stubClaudeDir("kill");
+  const root = join(tmpdir(), `bench-rq1-killdelta-${process.pid}-${Date.now()}`);
+  try {
+    const r = invoke([task, "A", "5", "--root", root, "--deadline-ms", "1500"], { PATH: `${stubDir}${delimiter}${process.env.PATH}`, STUB_BEHAVIOR: "kill", STUB_DELTA: "1" });
+    assert.equal(r.status, 0, r.stderr + r.stdout);
+    const result = JSON.parse(readFileSync(join(root, "result.json"), "utf8"));
+    assert.ok(result.seats[0].argv.includes("--include-partial-messages"), "stream-json seats ask for message_delta events");
+    assert.equal(result.seats[0].partial_usage.output_tokens, 900, "the placeholder was 15");
+    assert.equal(result.seats[0].partial_usage.output_tokens_final_messages, 1);
+    assert.ok(Math.abs(result.seats[0].estimated_cost.usd - (80 * 2.0 + 10 * 0.2 + 5 * 2.5 + 900 * 10.0) / 1e6) < 1e-12, `got ${result.seats[0].estimated_cost.usd}`);
   } finally {
     rmSync(root, { recursive: true, force: true });
     rmSync(stubDir, { recursive: true, force: true });

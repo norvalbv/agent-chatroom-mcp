@@ -99,3 +99,12 @@ checker passed and the grader found one unresolved leading tone (tenor, bar 1, b
 Two earlier music-harmony attempts produced no answer and are not counted: one timed out installing Claude Code while
 the Mac was heavily loaded (setup allowance then raised from 6 to 18 minutes, which is outside the agent's time), and
 one stopped when the account hit its 5-hour limit (1.22 USD spent).
+
+**Room on bun-sourcemap-leak (2026-09-25): not a room run, not counted.** The bun task's image is Debian 12, whose
+Node is 18. The MCP SDK the hub uses (1.30.0) calls the global `crypto.randomUUID()`, which Node 18 exposes only
+behind `--experimental-global-webcrypto`, so the hub answered every seat's connection with HTTP 400 ("crypto is not
+defined"). The launcher still created the room and started the seats, which then worked alone in the shared /app,
+overwrote each other's edits and stopped within three minutes with no proposal or vote (32 of 36, 1.77 USD). The
+foodstuff and music-harmony images are Debian 13 (Node 20), which is why those rooms connected. The harness adapter
+now sets that flag when Node is older than 19; a check in the bun image with no model calls then showed Claude Code
+connecting. The hub itself still fails on Node 18 and has no engines field; that is filed as a separate issue.

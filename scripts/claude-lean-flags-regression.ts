@@ -156,6 +156,16 @@ await test('swarm --claude-full restores today\'s exact args for every claude se
   assert.ok(seats.length >= 3, `expected planner+verifier+>=1 worker, got ${seats.length}`);
   for (const seat of seats) assertFull(seat, `swarm --claude-full seat (argv: ${JSON.stringify(seat.args)})`);
 });
+await test('swarm --no-web: no claude seat is allowed WebSearch or WebFetch; without it they are', async () => {
+  const toolsOf = (c: { args: string[] }) => c.args[c.args.indexOf('--allowedTools') + 1].split(',');
+  const off = await harness('swarm', syntheticEnv(), ['synthetic task', '--flat', '--agents', '3', '--full-access', '--no-web']);
+  const offSeats = off.calls.filter(c => c.cmd === 'claude');
+  assert.ok(offSeats.length >= 2, 'verifier and workers spawned');
+  for (const seat of offSeats) for (const t of ['WebSearch', 'WebFetch']) assert.ok(!toolsOf(seat).includes(t), `--no-web seat must not get ${t}: ${toolsOf(seat)}`);
+  assert.ok(offSeats.every(s => toolsOf(s).includes('Edit')), 'full-access seats keep their write tools');
+  const on = await harness('swarm', syntheticEnv(), ['synthetic task', '--flat', '--agents', '3', '--full-access']);
+  assert.ok(on.calls.filter(c => c.cmd === 'claude').every(s => toolsOf(s).includes('WebSearch')), 'default seats keep web tools');
+});
 await test('swarm lean flags survive --flat (worker-only) runs too', async () => {
   const h = await harness('swarm', syntheticEnv(), ['synthetic task', '--flat', '--agents', '2']);
   const seats = h.calls.filter(c => c.cmd === 'claude');

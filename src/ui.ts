@@ -455,12 +455,12 @@ ${UI_CSS}
       return '<div class="person' + (p.active ? '' : ' off') + (canAct(p) ? ' hasacts' : '') + (personOpen === p.name ? ' sel' : '') + '" data-person="' + esc(p.name) + '">' + av(p.name, p.agent) + '<div><div class="n">' + esc(p.name) + roleTag(p) + '<span class="agent">' + esc(p.agent) + '</span></div><div class="a">' + aline + '</div></div><div class="s">' + p.messages + ' msg' + (p.messages === 1 ? '' : 's') + '<br>' + (p.active ? (p.working && p.working.at > (p.last_active_at || '') ? 'working: ' + esc(p.working.tool) + ' · ' + rel(p.working.at) : rel(p.last_seen_at || p.last_active_at)) : 'left') + '</div>' + (canAct(p) ? '<div class="pacts"><button class="mini warn" data-kick="' + esc(p.name) + '" data-kv="start" title="Start a vote to remove ' + esc(p.name) + '">Kick</button><button class="mini" data-replace="' + esc(p.name) + '" title="Remove ' + esc(p.name) + ' now and recruit a successor">Replace</button></div>' : '') + (personOpen === p.name ? '<div class="act" id="act">' + actPanel(p, activity[p.name], esc, rel) + '</div>' : '') + '</div>';
     }).join(''); };
     var active = r.participants.filter(function (p) { return p.active; }), gone = r.participants.filter(function (p) { return !p.active; });
-    // kick votes: open ones with a kick/keep button pair, settled ones as one line; a kick button per active agent starts one
+    // open kick votes with a kick/keep button pair; settled ones are already in the chat log, so they leave the panel
+    kv = kv.filter(function (v) { return v.status === 'open'; });
     var kickSec = '';
     if (kv.length) kickSec = '<div class="sec"><h3>Kick votes <span class="sp"></span><span class="c">' + kv.length + '</span></h3>' + kv.slice().reverse().map(function (v) {
       var line = '<b>' + esc(v.target) + '</b> · by ' + esc(v.by) + ' · ' + rel(v.started_at) + ' · ' + esc(v.reason);
-      if (v.status === 'open') line += '<br><span class="mono">' + v.kick + '/' + v.needed + ' kick, ' + v.keep + ' keep</span> ' + (v.ballots || []).map(function (b) { return esc(b.name) + ':' + b.vote; }).join(' ') + ' <button class="mini" data-kick="' + esc(v.target) + '" data-kv="kick">kick</button> <button class="mini" data-kick="' + esc(v.target) + '" data-kv="keep">keep</button>';
-      else line += '<br><span style="color:var(--dim)">' + esc(v.status) + (v.outcome ? ': ' + esc(v.outcome) : '') + '</span>';
+      line += '<br><span class="mono">' + v.kick + '/' + v.needed + ' kick, ' + v.keep + ' keep</span> ' + (v.ballots || []).map(function (b) { return esc(b.name) + ':' + b.vote; }).join(' ') + ' <button class="mini" data-kick="' + esc(v.target) + '" data-kv="kick">kick</button> <button class="mini" data-kick="' + esc(v.target) + '" data-kv="keep">keep</button>';
       return '<div style="padding:6px 0;border-bottom:1px solid var(--line)">' + line + '</div>';
     }).join('') + '</div>';
     var anyActs = active.some(canAct);

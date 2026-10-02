@@ -12,6 +12,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import { Hub } from "../src/hub.js";
+import { SUSPECTED_DEAD_MS } from "../src/hub/kick.js";
 
 const ROOM = "kick-regression";
 const TEXT = "Adopt the kick primitive as the single removal path.";
@@ -238,4 +239,33 @@ test("existing gates untouched: leave_room refusal for an orphaned claim, room-o
   hub.vote(ROOM, d.id, pr.id, "agree", undefined, undefined, QUOTE);
   assert.equal(room.state, "concluded");
   assert.throws(() => hub.kickVote(ROOM, a.id, "B", "kick", "too late to kick anyone"), /concluded/);
+});
+
+test("suspected-dead seats are not kick voters: three live seats can remove three dead ones", () => {
+  const hub = new Hub({});
+  const opts = { requireChallenge: false, nudgeAfterMs: 0, quorum: "supermajority" as const, expectedParticipants: 6 };
+  const live = ["A", "B", "C"].map((n, i) => hub.join(ROOM, n, "test", i ? {} : opts, undefined, `live${i}`).participant);
+  const dead = ["X", "Y", "Z"].map((n, i) => hub.join(ROOM, n, "test", {}, undefined, `dead${i}`).participant);
+  const room = hub.getRoom(ROOM);
+  const stale = new Date(Date.now() - SUSPECTED_DEAD_MS - 60_000).toISOString();
+  for (const p of dead) p.lastActiveAt = stale;
+  for (const target of ["X", "Y", "Z"]) {
+    const kv = hub.kickVote(ROOM, live[0].id, target, "kick", "launcher timeout killed the seat; no heartbeat");
+    // pool = the three live seats only: supermajority of 3 = 3 ballots (counting the two dead seats it was 4 of 5,
+    // which three live voters could never reach)
+    assert.equal(hub.kickView(room, kv).needed, 3);
+    hub.kickVote(ROOM, live[1].id, target, "kick");
+    hub.kickVote(ROOM, live[2].id, target, "kick");
+    assert.equal(kv.status, "kicked");
+  }
+  assert.deepEqual(hub.activeParticipants(room).map((p) => p.name).sort(), ["A", "B", "C"]);
+});
+
+test("the idle sweep drops an open kick vote whose target it marks left", () => {
+  const { hub, room, a, d } = fourSeats();
+  const kv = hub.kickVote(ROOM, a.id, "D", "kick", "no heartbeat for 15 min per room_status");
+  d.lastActiveAt = new Date(Date.now() - 60 * 60_000).toISOString();
+  hub.sweepIdle(30 * 60_000);
+  assert.equal(kv.status, "dropped");
+  assert.equal(room.participants.get(d.id)!.active, false);
 });

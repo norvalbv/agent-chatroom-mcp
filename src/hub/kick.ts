@@ -18,7 +18,17 @@ function kickTarget(hub: Hub, room: Room, target: string): Participant {
 /** Who decides a kick: the electorate() of every present voter with the target as the hypothetical leaver, minus other
  * identities on the target's connection (identity is the connection, so a sibling name neither ballots nor enlarges the threshold). */
 function kickPool(hub: Hub, room: Room, target: Participant): Participant[] {
-  return hub.electorate(room, {}, target.id).members.filter((p) => !(target.session && p.session === target.session));
+  const deadBefore = Date.now() - SUSPECTED_DEAD_MS;
+  return hub.electorate(room, {}, target.id).members.filter((p) =>
+    !(target.session && p.session === target.session) && Date.parse(hub.lastSeen(p)) >= deadBefore);
+}
+
+/** No hub call or heartbeat for this long reads as suspected_dead; such a seat can never ballot, so it is no kick voter. */
+export const SUSPECTED_DEAD_MS = 10 * 60_000;
+
+/** Re-judge every open kick vote: the idle sweep calls this, so a swept target drops its vote and a shrinking pool can pass one. */
+export function reevaluateOpenKicks(hub: Hub, room: Room): void {
+  for (const kv of room.kickVotes.values()) if (kv.status === "open") evaluateKick(hub, room, kv);
 }
 
 /** Ballots needed: the quorum rule over the pool's distinct connections (unanimous = all), never fewer than 2, so no seat is removed on one ballot.

@@ -189,7 +189,7 @@ export class Hub {
         liveness: (() => {
           const age = (at: string) => Math.max(0, Math.floor((observedAt - Date.parse(at)) / 1000));
           const age_seconds = age(this.lastSeen(p));
-          return { status: !p.active ? "left" : age_seconds < 60 ? "active" : age_seconds < 600 ? "idle" : "suspected_dead",
+          return { status: !p.active ? "left" : age_seconds < 60 ? "active" : age_seconds * 1000 < kick.SUSPECTED_DEAD_MS ? "idle" : "suspected_dead",
             age_seconds, heartbeat_age_seconds: p.working ? age(p.working.at) : null };
         })(),
         left_reason: p.active ? null : p.leaveReason ?? null,
@@ -2306,10 +2306,10 @@ export class Hub {
           this.latchDrafts(room);
         }
       }
+      kick.reevaluateOpenKicks(this, room);
     }
     return swept;
   }
-
   // ---------- persistence (append-only JSONL per room) ----------
 
   private replyMetricObservationEnd(roomName: string): string | undefined { return persistence.replyMetricObservationEnd(this, roomName); }

@@ -9,485 +9,17 @@
  */
 import { createHash, randomBytes } from "node:crypto";
 import { spawnSync } from "node:child_process";
-import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import { mkdirSync } from "node:fs";
 import { analyzeReplyMetrics, type ReplyMetricEvent } from "./reply-metrics.js";
 
-export type MessageKind = "chat" | "system" | "proposal" | "amend" | "challenge" | "vote" | "conclusion" | "board";
-export type Vote = "agree" | "disagree" | "abstain";
-export type Quorum = "unanimous" | "majority" | "supermajority";
-export type RoomMode = "free" | "round_robin";
-export type RoomState = "open" | "concluded" | "stalled" | "closed";
-
-/**
- * What a reviewer's check was, self-declared (optional). The same classes scripts/paper-verify-practice.ts counts
- * in the census of 260 verify heads: existing_tests = its "existing_tests" (and the repo's own smoke script);
- * own_check = its "own_check" (a probe the reviewer wrote); exercised = its "app_in_browser" and
- * "agents_on_changed_build" (the changed build driven the way its users drive it, the OpenHands qa-changes rule).
- */
-export type VerifyKind = "existing_tests" | "own_check" | "exercised";
-export const VERIFY_KINDS: readonly VerifyKind[] = ["existing_tests", "own_check", "exercised"];
-
-/** The machine-readable head a verify/* entry must lead with (docs/swarm-protocol-spec.md:26, section C.3). */
-export interface VerifyHead {
-  proposal: string;
-  command: string;
-  cwd: string;
-  exit_code: number;
-  output_tail: string;
-  /** the proposal's commit, where `command` exited `exit_code` */
-  commit?: string;
-  /** the parent commit, before the change, where the same `command` ran */
-  base_commit?: string;
-  /** that run's exit code: nonzero is fail-to-pass; 0 counts only on the refactor path */
-  base_exit_code?: number;
-  /** the refactor path: the proposal claims no behaviour change, so the check passes at both commits */
-  refactor?: boolean;
-  kind?: VerifyKind;
-}
-
-/** Canonical wording for what a verify/* entry must contain, quoted verbatim by refusals and prompts. */
-export const VERIFY_HEAD_EXAMPLE = '{"proposal":"<PROPOSAL_ID>","command":"<the check you ran>","cwd":"<working dir>","base_commit":"<parent commit, before the change>","base_exit_code":1,"commit":"<the proposal\'s commit>","exit_code":0,"output_tail":"<last lines of real output at commit>"}';
-/** The rest of the rule, said once after VERIFY_HEAD_EXAMPLE wherever it is quoted. */
-export const VERIFY_HEAD_RULE = 'base_exit_code is the same check at base_commit and must be nonzero (it failed before the change); a refactor with no behaviour change instead passes at both and adds "refactor":true; optional "kind": existing_tests, own_check or exercised; exit_code must be 0 for the entry to count';
-
-/**
- * A verify/* entry must lead with one line of JSON matching VerifyHead; free prose may follow. This is
- * shape-checking, not prose-parsing: it cannot prove the command was really run, only that a second agent
- * committed to a specific, attributable, re-runnable claim instead of typing "looks fine" or "BLOCKED".
- * Optional fields are type-checked when present. The census rows in bench/results/verify-practice/heads.jsonl
- * parse exactly as before (scripts/verify-fail-to-pass-regression.ts), so its schema_valid count still holds.
- */
-export function parseVerifyHead(text: string): VerifyHead | undefined {
-  const r = readVerifyHead(text);
-  return "head" in r ? r.head : undefined;
-}
-
-/** parseVerifyHead with the reason it failed, in words a refusal can quote. */
-export function readVerifyHead(text: string): { head: VerifyHead } | { error: string } {
-  const nl = text.indexOf("\n");
-  const line = (nl === -1 ? text : text.slice(0, nl)).trim();
-  if (!line.startsWith("{")) return { error: "its first line is not a JSON verify head" };
-  let obj: unknown;
-  try {
-    obj = JSON.parse(line);
-  } catch {
-    return { error: "its first line is not valid JSON (one line, no line breaks inside it)" };
-  }
-  if (typeof obj !== "object" || obj === null) return { error: "its first line is not a JSON object" };
-  const o = obj as Record<string, unknown>;
-  for (const k of ["proposal", "command", "cwd"] as const) if (typeof o[k] !== "string") return { error: `"${k}" must be a string` };
-  if (typeof o.exit_code !== "number") return { error: '"exit_code" must be a number' };
-  if (typeof o.output_tail !== "string") return { error: '"output_tail" must be a string' };
-  for (const k of ["commit", "base_commit"] as const) if (o[k] !== undefined && typeof o[k] !== "string") return { error: `"${k}" must be a string` };
-  if (o.base_exit_code !== undefined && typeof o.base_exit_code !== "number") return { error: '"base_exit_code" must be a number' };
-  if (o.refactor !== undefined && typeof o.refactor !== "boolean") return { error: '"refactor" must be true or false' };
-  if (o.kind !== undefined && !VERIFY_KINDS.includes(o.kind as VerifyKind)) return { error: `"kind" must be one of ${VERIFY_KINDS.join(", ")}` };
-  return { head: o as unknown as VerifyHead };
-}
-
-/** Abbreviated and full hex SHAs of one commit compare equal; anything else (a branch, a tag) compares exactly. */
-function sameCommit(a: string, b: string): boolean {
-  const x = a.trim().toLowerCase(), y = b.trim().toLowerCase();
-  if (/^[0-9a-f]{4,64}$/.test(x) && /^[0-9a-f]{4,64}$/.test(y)) return x.startsWith(y) || y.startsWith(x);
-  return x === y;
-}
-
-/**
- * Stage 1 of fail-to-pass evidence, in SWE-bench's sense (Jimenez et al. 2023, arXiv:2310.06770: a FAIL_TO_PASS
- * test fails before the change and passes after it; PASS_TO_PASS tests pass at both). The head must name the
- * proposal's commit and the parent commit before the change, and report the same check failing at the parent.
- * The refactor path is PASS_TO_PASS: a proposal that changes no behaviour has nothing that can fail before it,
- * so `"refactor":true` with base_exit_code 0 counts instead. Self-reported: the hub resolves neither commit and
- * runs nothing (docs/decisions/proposed/verify-head-fail-to-pass.md). Returns what to fix, or undefined.
- */
-export function failToPassShortfall(h: VerifyHead): string | undefined {
-  if (!h.commit?.trim()) return 'it names no "commit", the proposal\'s commit where the check passed';
-  if (!h.base_commit?.trim()) return 'it names no "base_commit", the parent commit before the change where you ran the same check';
-  if (sameCommit(h.base_commit, h.commit)) return '"base_commit" and "commit" are the same commit: run the check at the parent commit and again at the proposal\'s';
-  if (h.base_exit_code === undefined) return 'it has no "base_exit_code", the exit code of the same check at base_commit';
-  if (h.refactor === true) return h.base_exit_code === 0 ? undefined : '"refactor":true says no behaviour changed, but the check failed at base_commit: drop "refactor"';
-  if (h.base_exit_code === 0) return '"base_exit_code" is 0, so the check passed before the change too and shows nothing the change did: use a check that fails at base_commit, or add "refactor":true if the proposal changes no behaviour';
-  return undefined;
-}
-/** Role is a display tag plus one quorum rule (chair is never waited on but may veto). It is never a persona. */
-export type Role = "worker" | "chair" | "lead" | "verifier" | "recruit";
-export const ROLES: Role[] = ["worker", "chair", "lead", "verifier", "recruit"];
-
-export interface Participant {
-  id: string;
-  name: string;
-  /** Stable pseudonym ("Participant B") used for display in anonymous rooms. */
-  label: string;
-  agent: string; // e.g. "claude", "codex", "human"
-  joinedAt: string;
-  lastActiveAt: string;
-  lastSeenSeq: number;
-  active: boolean;
-  messageCount: number;
-  /** identity of the connection/process that joined; distinct sessions are what the team floor and verify gate count */
-  session?: string;
-  /** seqs of messages withheld from this participant (human messages awaiting their nominated reply) */
-  withheld?: number[];
-  /** Sparse receipts for delivered quiet bodies, retained only until their thread is surfaced. */
-  quietReceipts?: number[];
-  /** explicit "nothing to add" turns */
-  passes?: number;
-  role?: Role;
-  /** proposal id -> version of its text this participant was last sent (wait_for_messages ships text only when it changes) */
-  seenProposal?: Record<string, number>;
-  /** challenge id -> status its objection text was last sent at (wait_for_messages ships objections only when new or changed) */
-  seenChallenges?: Record<string, string>;
-  /** Ephemeral delivery receipts. A reconnect/rejoin starts with a full board manifest. */
-  lastBoardSeen?: number;
-  boardFollow?: string[];
-  seenBoardKeys?: string[];
-  /** the conclusion text has been sent to this participant once */
-  seenConclusion?: boolean;
-  /** proposal id a blocking leave_room was already refused for (the second call proceeds) */
-  leaveWarned?: string;
-  /** a leave that abandons a claim or an unanswered ask was already refused once (the next call proceeds) */
-  leaveWarnedExit?: boolean;
-  /** why this participant left, as given to leave_room; shown in the room notice and the dashboard */
-  leaveReason?: string;
-  /** Timestamp of this participant's most recent non-empty verify/* board write, room-scoped. Best-effort like working/activity below: read live, not replayed across a process restart. Used to pick the least-recently-verifying reviewer at claim time. */
-  lastVerifiedAt?: string;
-  /** last heartbeat from the seat process: local work makes no hub calls, so this is how the room knows it is alive. Ephemeral. */
-  working?: { tool: string; step: number; at: string; detail?: string };
-  /** the last 60 heartbeats: what the seat ran, step by step (dashboard: click a person). Ephemeral. */
-  activity?: { tool: string; step: number; at: string; detail: string }[];
-  /** id of the addressed message this participant was last shown by wait_for_messages (the next wait without an answer is refused once) */
-  addressWarned?: string;
-  /** messages the last capped wait/read left undelivered (0 = it carried everything). Ephemeral. */
-  deliveryRemaining?: number;
-  /** id of the addressed message a wait_for_messages was already refused for (the call after that proceeds) */
-  addressRefused?: string;
-  /** mentions at or below this seq are answered (a pass covers everything before it) */
-  answeredSeq?: number;
-  /** Last ask actually delivered; bare pass declines only this id. */
-  focusedAsk?: string;
-  declinedAsks?: string[];
-  declinedAt?: Record<string, number>;
-  /** Explicit registration: the departed seat this successor took over (trusted launcher/recruit control, never name inference). */
-  replacementOf?: string;
-  /** Outstanding nonhuman directed asks offered at explicit registration. */
-  inheritedAskIds?: string[];
-  pendingReplacementAskIds?: string[];
-  /** Explicit registration: pid of the registered successor of this departed seat. */
-  replacedBy?: string;
-  /** One-use join proof: reserved successor name awaiting a join with the matching token. */
-  pendingReplacementName?: string;
-  /** sha256 of the one-use token handed to the launcher for that successor name. */
-  pendingReplacementTokenHash?: string;
-  /** Removed by the room (kick vote or replace): the seat may not rejoin, and its next hub call says so. Persisted with the leave event. */
-  kicked?: { by: string; reason: string; at: string };
-}
-
-/**
- * A vote to remove one participant. Keyed by target pid on the room; one open vote per target. Ballots are
- * counted per connection (identity-is-the-connection), the target never votes on its own removal, and the
- * threshold is the room's quorum rule over the voters minus the target (never fewer than 2 distinct
- * connections when 2 are available, so no seat is removed on a single ballot in a room that has others).
- * A human ballot counts like an agent's toward the threshold; a human "keep" vetoes (mirrors proposal votes).
- */
-export interface KickVote {
-  target: string;
-  targetName: string;
-  by: { id: string; name: string };
-  reason: string;
-  startedAt: string;
-  ballots: Record<string, { name: string; vote: "kick" | "keep"; ts: string; session?: string; human?: boolean }>;
-  status: "open" | "kicked" | "dropped";
-  endedAt?: string;
-  outcome?: string;
-}
-
-export interface Message {
-  seq: number;
-  id: string;
-  room: string;
-  kind: MessageKind;
-  from: { id: string; name: string; agent: string };
-  content: string;
-  ts: string;
-  replyTo?: string;
-  proposalId?: string;
-  /** "opening" marks a blind opening revealed in a batch */
-  tag?: "opening";
-  /** participant ids named with @ in the content */
-  mentions?: string[];
-  /** quiet: pushed only to `audience` (sender + mentions); still in the log for everyone */
-  quiet?: boolean;
-  audience?: string[];
-}
-
-export interface CodeState {
-  head: string;
-  dirty: boolean;
-  at: string;
-}
-
-export interface BoardExpiryOptions { ttlSeconds?: number; expiresAt?: string }
-export interface BoardManifestStats { version: 1; waits: number; bytes: number; full: number; delta: number; empty: number }
-
-export interface BoardEntry {
-  /** Logical archive time: body remains explicitly retrievable. */
-  expiresAt?: string;
-  text: string;
-  by: string;
-  updatedAt: string;
-  /** verify/* entries: the tree the verification ran against */
-  codeState?: CodeState;
-  /** set on inbox/* entries posted with ack_required */
-  ackRequired?: boolean;
-  /** inbox/*.ack entries cover only the note text hashed when acknowledged. */
-  acknowledgedTextHash?: string;
-  /** claim/* entries only: the reviewer the hub assigned at creation (name/id), never client-supplied. */
-  reviewer?: string;
-  reviewerId?: string;
-  /** claim/* entries only: the claimant's branch and worktree, read by the hub from the seat at each write, never client-supplied. */
-  workspace?: { branch?: string; worktree: string };
-  /** draft/* only: written or edited once peers' drafts were readable, so it is not an independent attempt (sticky). */
-  postReveal?: boolean;
-}
-
-export interface Challenge {
-  id?: string;
-  by: { id: string; name: string };
-  objection: string;
-  ts: string;
-  /** proposal version the objection was written against */
-  version?: number;
-  /** open: unanswered. answered: the cited text was amended away. conceded: the challenger re-voted agree. overruled: the room concluded over it. */
-  status?: "open" | "answered" | "conceded" | "overruled";
-  /** the span of the proposal the objection quotes, if it quotes one (used to decide when an amend answers it) */
-  cites?: string;
-  /** false: recorded dissent that does not hold the proposal or satisfy the challenge gate */
-  blocking?: boolean;
-  /** An executable counterexample: a command that fails against the proposal. Rewording cannot answer it; only a
-   *  verify/* entry for the proposal, from someone other than the proposer, rerunning this exact command with exit 0
-   *  after both the challenge and the current text, does (or the challenger concedes). */
-  command?: string;
-}
-
-export interface ElectorateSummary {
-  electorate: number;
-  agree: number;
-  disagree: number;
-  abstain: number;
-  excluded_leavers: number;
-  distinct_sessions: number;
-  denominator: "electorate";
-}
-
-/** Which verify/* entry passed a require_verification conclusion, and on which path, so a refactor-path pass is visible. */
-export interface ConclusionVerification {
-  key: string;
-  by: string;
-  path: "fail_to_pass" | "refactor";
-  base_commit: string;
-  commit: string;
-  kind?: VerifyKind;
-}
-
-export interface Proposal {
-  id: string;
-  room: string;
-  by: { id: string; name: string };
-  text: string;
-  createdAt: string;
-  votes: Record<string, { vote: Vote; reason?: string; quote?: string; confidence?: number; name: string; ts: string; version?: number }>;
-  challenges: Challenge[];
-  status: "open" | "accepted" | "rejected" | "superseded";
-  /** bumped by every amend; the text in `text` is always the current version */
-  version: number;
-  /** when the current text was written; absent means legacy freshness is unknown */
-  updatedAt?: string;
-  /** voters present when the proposal was made; unanimity is taken over these (late joiners are not waited on) */
-  snapshot?: string[];
-  /** set once the "needs a challenge" nudge has been posted */
-  nudged?: boolean;
-  /** version for which the "did not pass, amend it" notice was posted */
-  notPassedVersion?: number;
-  /** last "stuck because" notice, so it is posted once per state change */
-  stuckNotice?: string;
-}
-
-export interface RoomOptions {
-  topic?: string;
-  mode?: RoomMode;
-  quorum?: Quorum;
-  maxRounds?: number;
-  /** Blind openings are revealed, and proposals can be accepted, only once this many participants have joined. */
-  expectedParticipants?: number;
-  /** Show participants to each other as "Participant A/B/C" instead of their names. */
-  anonymous?: boolean;
-  /** Max chat messages each participant may send (0 = unlimited). Votes/proposals/challenges do not count. */
-  maxMessagesPerParticipant?: number;
-  /** Max characters per message. */
-  maxMessageChars?: number;
-  /** Require at least one challenge from a non-proposer before a proposal can pass. "auto" = when 3+ active. */
-  requireChallenge?: boolean | "auto";
-  /** Post a nudge after this much silence in an open room (0 = never). */
-  nudgeAfterMs?: number;
-  /** Swarm mode: a proposal needs a verify/* board entry by someone else (bound to the proposal) before it can pass. */
-  requireVerification?: boolean;
-  /** Name of the participant honoured as chair (exempt from quorum, may veto). Set at creation, or by the first joiner to claim role=chair. */
-  chair?: string;
-}
-
-/** Join-time options: room policy plus the one-use launcher replacement proof (never a room-level option). */
-export interface JoinOptions extends RoomOptions {
-  /** One-use token issued by registerReplacement; required to join under a reserved successor name. */
-  replacementToken?: string;
-}
-
-export interface Room {
-  name: string;
-  topic: string;
-  mode: RoomMode;
-  quorum: Quorum;
-  maxRounds: number; // 0 = unlimited
-  expectedParticipants: number;
-  anonymous: boolean;
-  maxMessagesPerParticipant: number;
-  maxMessageChars: number;
-  requireChallenge: boolean | "auto";
-  nudgeAfterMs: number;
-  requireVerification: boolean;
-  chair?: string;
-  createdAt: string;
-  state: RoomState;
-  /** Hidden from listings (dashboard, list_rooms) but fully kept on disk; set by a human or the archive-dead sweep. */
-  archived?: boolean;
-  conclusion?: { text: string; proposalId: string; decidedAt: string; version?: number; tally?: { agree: number; disagree: number; abstain: number }; electorate?: ElectorateSummary; unresolved_objections?: { by: string; objection: string }[]; verification?: ConclusionVerification };
-  /** identical silence nudges are posted at most twice */
-  lastNudge?: { text: string; count: number };
-  /** Lifetime refusal counts keyed by tool and bounded reason class (no bodies, no ids). */
-  refusals?: Record<string, number>;
-  /** Only versioned rooms have a complete guarded-call observation epoch. */
-  telemetryVersion?: 1;
-  /** board wait receipts: count + serialized manifest bytes (telemetryVersion rooms only) */
-
-  callOutcomes?: Record<string, CallOutcomes>;
-  boardManifests?: BoardManifestStats;
-  /** git HEAD and dirty state of the project when the room was created */
-  codeState?: CodeState;
-  participants: Map<string, Participant>;
-  messages: Message[];
-  proposals: Map<string, Proposal>;
-  /** round_robin bookkeeping */
-  turnIndex: number;
-  turnPid?: string;
-  round: number;
-  /** long-poll waiters */
-  waiters: Set<() => void>;
-  /** blind opening statements held back until everyone has submitted */
-  openings: Map<string, string>;
-  openingsRevealed: boolean;
-  nudgeTimer?: NodeJS.Timeout;
-  /** absolute deadline for the opening reveal, armed at creation and re-armed by the first opening; not reset by chat */
-  openingsTimer?: NodeJS.Timeout;
-  openingsWarned?: boolean;
-  /** shared blackboard: named entries agents update in place instead of re-posting */
-  board: Map<string, BoardEntry>;
-  /** draft/* entries are sealed (author-only) until every drafter has one; latched once true and persisted */
-  draftsRevealed?: boolean;
-  /** when the first draft/* was written: starts the reveal deadline (persisted, so the deadline survives a restart) */
-  draftsOpenedAt?: string;
-  draftsTimer?: NodeJS.Timeout;
-  /** Reconstructed from every board event, including deletes and system writes. */
-  boardVersion: number;
-  boardVersions: Map<string, number>;
-  /** Version at the latest board event, so gaps without events still count as waits. */
-  lastBoardEventVersion?: number;
-  /** human message ids the propose-gate has already warned about (once each) */
-  humanWarned: Set<string>;
-  /** who has been asked to answer each human message, so three agents do not all say hello */
-  responders: Map<string, { pid: string; at: number }>;
-  /** open and settled votes to remove a participant, keyed by target pid */
-  kickVotes: Map<string, KickVote>;
-}
-
-type Opts = Required<Omit<RoomOptions, "chair">> & { chair?: string };
-
-export type CallOutcome = "success" | "hub_refusal" | "error";
-export type CallOutcomes = Record<CallOutcome, number>;
-
-type Event =
-  | { type: "room"; room: string; opts: Opts; createdAt: string; telemetryVersion?: 1 }
-  | { type: "message"; msg: Message }
-  | { type: "attention"; room: string; pid: string; lastSeenSeq: number; withheld: number[]; quietReceipts: number[]; focusedAsk?: string; declinedAsks: string[]; declinedAt?: Record<string, number> }
-  | { type: "join" | "leave"; room: string; p: Participant }
-  | { type: "proposal"; proposal: Proposal }
-  | { type: "vote"; room: string; proposalId: string; pid: string; entry: Proposal["votes"][string] }
-  | { type: "challenge"; room: string; proposalId: string; challenge: Challenge; votes?: Proposal["votes"] }
-  | { type: "challenge_status"; room: string; proposalId: string; challengeId?: string; status: NonNullable<Challenge["status"]> }
-  | { type: "state"; room: string; state: RoomState; conclusion?: Room["conclusion"] }
-  | { type: "opening"; room: string; pid: string; content: string }
-  | { type: "openings_revealed"; room: string }
-  | { type: "drafts_revealed"; room: string }
-  | { type: "drafts_opened"; room: string; at: string }
-  | { type: "archive"; room: string; archived: boolean; by: string; ts: string }
-  | { type: "board_manifest"; room: string; bytes: number; kind: "full" | "delta" | "empty" }
-  | { type: "board"; room: string; key: string; entry: BoardEntry | null }
-  | { type: "amend"; room: string; proposalId: string; text: string; version: number; updatedAt?: string; votes: Proposal["votes"]; challenges?: Challenge[] }
-  | { type: "refusal"; room: string; tool: string; reason: string; ts?: string; participant?: string | null }
-  | { type: "call_completion"; room: string; tool: string; outcome: CallOutcome; ts: string; participant: string | null }
-  | { type: "kick_vote"; room: string; vote: KickVote };
-
-const now = () => new Date().toISOString();
-const shortId = (prefix: string) => `${prefix}_${randomBytes(4).toString("hex")}`;
-const norm = (s: string) => s.toLowerCase().replace(/\s+/g, " ").replace(/[“”]/g, '"').replace(/[‘’]/g, "'").trim();
-
-/**
- * Closed set of privacy-safe refusal reason codes persisted in trial artifacts:
- * the persisted reason is exactly one of these tokens, never raw error text,
- * argument values or secrets. hub_guard is retained for legacy events and as the
- * conservative fallback for errors that cannot be classified safely; extend only
- * with evidence of a distinct, benign, reproducible failure class.
- */
-export type RefusalCode =
-  | "expiry-prefix"  // expiry options given for a key whose prefix cannot expire
-  | "ownership"      // overwriting another author's board entry, claim or hold
-  | "auth"           // unknown, inactive or unauthenticated actor
-  | "key-format"     // malformed board or inbox key
-  | "size"           // content above the size cap
-  | "state"          // valid actor and args, refused by room or entry state
-  | "hub_guard";     // unknown or unclassifiable (legacy catch-all)
-
-export const REFUSAL_CODES: readonly RefusalCode[] =
-  ["expiry-prefix", "ownership", "auth", "key-format", "size", "state", "hub_guard"];
-
-export class HubError extends Error {
-  constructor(
-    message: string,
-    public data?: unknown,
-    public code?: RefusalCode,
-  ) {
-    super(message);
-  }
-}
-
-/** Exact manifest-only envelope shipped by a wait. Delta implementations may call
- * observeBoardManifest after cursor advancement; this observer never reads cursors. */
-export interface BoardManifestObservation {
-  board_keys?: string[];
-  board_delta?: { keys: string[]; tombstones: string[] };
-}
-
-interface BoardManifestCounters {
-  waits_observed: number;
-  full_baseline_manifest_bytes: number;
-  shipped_manifest_bytes: number;
-  keys_shipped: number;
-  deleted_tombstones_shipped: number;
-}
-const emptyBoardManifestCounters = (): BoardManifestCounters => ({
-  waits_observed: 0, full_baseline_manifest_bytes: 0, shipped_manifest_bytes: 0,
-  keys_shipped: 0, deleted_tombstones_shipped: 0,
-});
-const manifestBytes = (payload: unknown) => Buffer.byteLength(JSON.stringify(payload), "utf8");
+export * from "./hub/types.js";
+import { VERIFY_HEAD_EXAMPLE, VERIFY_HEAD_RULE, parseVerifyHead, readVerifyHead, failToPassShortfall, ROLES, REFUSAL_CODES, HubError } from "./hub/types.js";
+import type { MessageKind, Vote, Quorum, RoomState, VerifyHead, Role, Participant, KickVote, Message, CodeState, BoardExpiryOptions, BoardEntry, Challenge, ElectorateSummary, ConclusionVerification, Proposal, RoomOptions, JoinOptions, Room, CallOutcome, RefusalCode, BoardManifestObservation } from "./hub/types.js";
+import { now, shortId, norm, emptyBoardManifestCounters, manifestBytes, codeState } from "./hub/internal.js";
+import type { Opts, Event, BoardManifestCounters } from "./hub/internal.js";
+import * as board from "./hub/board.js";
+import * as kick from "./hub/kick.js";
+import * as persistence from "./hub/persistence.js";
 
 export class Hub {
   readonly rooms = new Map<string, Room>();
@@ -495,11 +27,11 @@ export class Hub {
   onRoomState?: (room: string, state: RoomState) => void;
   /** Observed waits only: deliberately not restored from historical room logs. */
   private readonly boardManifestObserved = new WeakMap<Room, BoardManifestCounters>();
-  private readonly dataDir?: string;
+  /** @internal */ readonly dataDir?: string;
   /** project directory whose git state is stamped on rooms and verify entries */
-  private readonly cwd?: string;
+  /** @internal */ readonly cwd?: string;
   /** Ordered metric inputs retain historical membership, including in-memory rooms. */
-  private readonly replyMetricEvents = new Map<string, ReplyMetricEvent[]>();
+  /** @internal */ readonly replyMetricEvents = new Map<string, ReplyMetricEvent[]>();
 
   constructor(opts: { dataDir?: string; cwd?: string } = {}) {
     this.dataDir = opts.dataDir;
@@ -535,14 +67,7 @@ export class Hub {
   static DRAFT_REVEAL_MS = Number(process.env.CHATROOM_DRAFT_REVEAL_MS ?? 600_000);
   static readonly ROOM_NAME = /^[a-zA-Z0-9_-]{1,64}$/;
 
-  /** git HEAD and whether the working tree is dirty, so a citation or a verification names the tree it was read against. */
-  static codeState(cwd?: string): CodeState | undefined {
-    if (!cwd) return undefined;
-    const head = spawnSync("git", ["-C", cwd, "rev-parse", "--short", "HEAD"], { encoding: "utf8" });
-    if (head.status !== 0) return undefined;
-    const st = spawnSync("git", ["-C", cwd, "status", "--porcelain"], { encoding: "utf8" });
-    return { head: head.stdout.trim(), dirty: st.stdout.trim().length > 0, at: now() };
-  }
+  static codeState(cwd?: string): CodeState | undefined { return codeState(cwd); }
   /** "swarm-093235-fsxs-leads" -> "swarm-093235-fsxs" */
   static runPrefix(name: string): string | undefined {
     const m = /^(swarm-[0-9]{6}(?:-[a-z0-9]{4})?)-/.exec(name);
@@ -586,7 +111,7 @@ export class Hub {
     return room;
   }
 
-  private materialiseRoom(name: string, opts: Opts, createdAt: string): Room {
+  /** @internal */ materialiseRoom(name: string, opts: Opts, createdAt: string): Room {
     const room: Room = {
       name,
       ...opts,
@@ -1425,7 +950,7 @@ export class Hub {
     return `#${m.seq} ${who}: ${q}${tag}${m.content}`;
   }
 
-  private post(room: Room, kind: MessageKind, from: Participant | undefined, content: string, extra: Partial<Message> = {}): Message {
+  /** @internal */ post(room: Room, kind: MessageKind, from: Participant | undefined, content: string, extra: Partial<Message> = {}): Message {
     const msg: Message = {
       seq: (room.messages.at(-1)?.seq ?? 0) + 1,
       id: shortId("m"),
@@ -1479,7 +1004,7 @@ export class Hub {
     this.persist({ type: "call_completion", room: room.name, tool, outcome, ts: now(), participant });
   }
 
-  private applyCallCompletion(room: Room, tool: string, outcome: CallOutcome) {
+  /** @internal */ applyCallCompletion(room: Room, tool: string, outcome: CallOutcome) {
     room.callOutcomes ??= {};
     const counts = room.callOutcomes[tool] ??= { success: 0, hub_refusal: 0, error: 0 };
     counts[outcome]++;
@@ -1843,38 +1368,9 @@ export class Hub {
 
   // ---------- shared board ----------
 
-  private boardExpiry(key: string, opts: BoardExpiryOptions): string | undefined {
-    if (opts.ttlSeconds === undefined && opts.expiresAt === undefined) return undefined;
-    if (!key.startsWith("handoff/") && !key.startsWith("inbox/")) throw new HubError("Expiry is supported only for handoff/ and inbox/ entries.", undefined, "expiry-prefix");
-    if (opts.ttlSeconds !== undefined && opts.expiresAt !== undefined) throw new HubError("Use ttl_seconds or expires_at, not both.", undefined, "expiry-prefix");
-    if (opts.ttlSeconds !== undefined && (!Number.isFinite(opts.ttlSeconds) || opts.ttlSeconds <= 0)) throw new HubError("ttl_seconds must be finite and positive.", undefined, "expiry-prefix");
-    const at = opts.ttlSeconds !== undefined ? Date.now() + opts.ttlSeconds * 1000 : Date.parse(opts.expiresAt!);
-    if (!Number.isFinite(at) || Math.abs(at) > 8.64e15) throw new HubError("Invalid expires_at or ttl_seconds.", undefined, "expiry-prefix");
-    return new Date(at).toISOString();
-  }
-
-  /** Expiry archives visibility only. Required inbox notes remain visible until current-text ack. */
-  boardEntryExpired(room: Room, key: string, entry: BoardEntry, at = Date.now()): boolean {
-    if (!entry.expiresAt || at < Date.parse(entry.expiresAt)) return false;
-    if (entry.ackRequired && this.inboxOpen(room, key, entry)) return false;
-    return true;
-  }
-
-  recordBoardManifest(roomName: string, envelope: { board_keys?: string[]; board_delta?: { keys: string[]; tombstones: string[] } }): void {
-    const room = this.getRoom(roomName);
-    const kind = envelope.board_keys !== undefined ? "full" : envelope.board_delta !== undefined ? "delta" : "empty";
-    // Standalone manifest envelope in MCP text encoding; no embedded fields means zero bytes.
-    const bytes = Hub.manifestBytes(envelope);
-    this.applyBoardManifest(room, bytes, kind);
-    this.persist({ type: "board_manifest", room: roomName, bytes, kind });
-  }
-
-  private applyBoardManifest(room: Room, bytes: number, kind: "full" | "delta" | "empty"): void {
-    const stats = room.boardManifests ??= { version: 1, waits: 0, bytes: 0, full: 0, delta: 0, empty: 0 };
-    stats.waits++; stats.bytes += bytes; stats[kind]++;
-  }
-
-  static readonly BOARD_KEY = /^[\w .:/-]{1,80}$/;
+  boardEntryExpired(room: Room, key: string, entry: BoardEntry, at = Date.now()): boolean { return board.boardEntryExpired(room, key, entry, at); }
+  recordBoardManifest(roomName: string, envelope: { board_keys?: string[]; board_delta?: { keys: string[]; tombstones: string[] } }): void { board.recordBoardManifest(this, roomName, envelope); }
+  static readonly BOARD_KEY = board.BOARD_KEY;
 
   /**
    * Seats expected to draft: voters other than the verifier. Independent attempts only help if they
@@ -1886,7 +1382,7 @@ export class Hub {
   }
 
   /** Pure: every current drafter has a draft/* entry of their own (a drafter who left no longer counts). */
-  private draftsComplete(room: Room): boolean {
+  /** @internal */ draftsComplete(room: Room): boolean {
     const authors = new Set([...room.board].filter(([k]) => k.startsWith("draft/")).map(([, e]) => e.by));
     const drafters = this.drafters(room);
     return drafters.length > 0 && drafters.every((d) => authors.has(d.name));
@@ -1896,12 +1392,12 @@ export class Hub {
    * Pure: the reveal deadline has passed. Like openings, one seat that never drafts (a reviewer, a researcher,
    * a dead session) must not keep every other draft sealed; in a 14-drafter room "all" is rarely reached.
    */
-  private draftsDue(room: Room, now = Date.now()): boolean {
+  /** @internal */ draftsDue(room: Room, now = Date.now()): boolean {
     return !!room.draftsOpenedAt && Hub.DRAFT_REVEAL_MS > 0 && now >= Date.parse(room.draftsOpenedAt) + Hub.DRAFT_REVEAL_MS;
   }
 
   /** The first draft starts the deadline clock; later drafts and edits do not push it back. */
-  private openDrafts(room: Room): void {
+  /** @internal */ openDrafts(room: Room): void {
     if (room.draftsOpenedAt || room.draftsRevealed) return;
     room.draftsOpenedAt = new Date().toISOString();
     this.persist({ type: "drafts_opened", room: room.name, at: room.draftsOpenedAt });
@@ -1922,7 +1418,7 @@ export class Hub {
   }
 
   /** Latch the reveal (all drafters in, or the deadline passed), persist it (replayed seats are inactive, so it cannot be re-derived), and announce it. */
-  private latchDrafts(room: Room): void {
+  /** @internal */ latchDrafts(room: Room): void {
     if (room.draftsRevealed) return;
     const complete = this.draftsComplete(room);
     if (!complete && !this.draftsDue(room)) return;
@@ -1941,7 +1437,7 @@ export class Hub {
   }
 
   /** "k of n drafters; waiting on X, Y": who still owes a draft, without naming any sealed key. */
-  private draftProgress(room: Room): string {
+  /** @internal */ draftProgress(room: Room): string {
     const authors = new Set([...room.board].filter(([k]) => k.startsWith("draft/")).map(([, e]) => e.by));
     const drafters = this.drafters(room);
     const owed = drafters.filter((d) => !authors.has(d.name)).map((d) => d.name);
@@ -1960,341 +1456,24 @@ export class Hub {
     return key.startsWith("draft/") && entry.by !== viewer && !room.draftsRevealed && !this.draftsComplete(room) && !this.draftsDue(room);
   }
 
-  hold(room: Room): BoardEntry | undefined {
-    return room.board.get(`hold/${room.name}`);
-  }
+  hold(room: Room): BoardEntry | undefined { return board.hold(room); }
+  unacknowledged(room: Room): string[] { return board.unacknowledged(room); }
+  static sessionsOf(ps: Participant[]): number { return board.sessionsOf(ps); }
+  static quorumNeeded(quorum: Quorum, electorateSize: number): number { return board.quorumNeeded(quorum, electorateSize); }
+  static manifestBytes(envelope: Record<string, unknown>): number { return board.manifestBytes(envelope); }
+  boardManifestTelemetry(room: Room): { waits: number; board_bytes_total: number; board_bytes_mean: number } { return board.boardManifestTelemetry(room); }
 
-  private static noteHash(text: string): string {
-    return createHash("sha256").update(text).digest("hex");
-  }
-
-  /** Shared coverage check; legacy acks without coverage are conservative. */
-  private inboxOpen(room: Room, key: string, entry: BoardEntry): boolean {
-    return key.startsWith("inbox/") && !key.endsWith(".ack") &&
-      room.board.get(`${key}.ack`)?.acknowledgedTextHash !== Hub.noteHash(entry.text);
-  }
-
-  /** inbox/* entries still requiring acknowledgement of their current text. */
-  unacknowledged(room: Room): string[] {
-    return [...room.board.entries()].filter(([k, e]) => e.ackRequired && this.inboxOpen(room, k, e)).map(([k]) => k);
-  }
-
-  /** Distinct connections among a set of participants (two names on one connection are one agent). */
-  static sessionsOf(ps: Participant[]): number {
-    return new Set(ps.map((p) => p.session ?? `nosession:${p.id}`)).size;
-  }
-
-  /** Agrees needed to pass a non-unanimous quorum: bare majority, or a 75% supermajority (ceil, never below a bare majority). */
-  static quorumNeeded(quorum: Quorum, electorateSize: number): number {
-    if (quorum === "supermajority") return Math.max(Math.ceil(electorateSize * 0.75), Math.floor(electorateSize / 2) + 1);
-    return Math.floor(electorateSize / 2) + 1;
-  }
-
-  /** UTF-8 bytes of standalone pretty-JSON board fields, not HTTP/MCP framing. */
-  static manifestBytes(envelope: Record<string, unknown>): number {
-    return Object.keys(envelope).length ? Buffer.byteLength(JSON.stringify(envelope, null, 2)) : 0;
-  }
-
-  boardManifestTelemetry(room: Room): { waits: number; board_bytes_total: number; board_bytes_mean: number } {
-    const t = room.boardManifests;
-    const waits = t?.waits ?? 0;
-    return { waits, board_bytes_total: t?.bytes ?? 0, board_bytes_mean: waits ? Math.round((t!.bytes / waits) * 10) / 10 : 0 };
-  }
-
-  /**
-   * Board discovery for one seat, assembled synchronously AFTER the poll wake
-   * (concurrent waits for a seat serialize here). This is an at-most-once response
-   * receipt, NOT a network ack: a lost response is recovered by rejoin/reclaim or
-   * a restart, each of which resets to a full manifest. Omitted follow keeps the
-   * current subscription; [] follows only mandatory coordination keys; [""] all.
-   * Any subscription change (narrowing included) resets so stale out-of-scope keys
-   * are dropped and new-scope keys are backfilled. Discovery filtering is not
-   * authorization: verify/, claim/, required pending inbox and hold keys are never
-   * hidden, and explicit board_get remains unrestricted.
-   */
   boardManifest(roomName: string, pid: string, follow?: string[], forceFull = false): {
     board_keys?: string[]; board_delta?: { keys: string[]; tombstones: string[] }; board_reset?: boolean;
-  } {
-    const room = this.getRoom(roomName);
-    const p = this.requireParticipant(room, pid);
-    const nextFollow = follow === undefined ? undefined : [...new Set(follow)];
-    const changed = nextFollow !== undefined && !forceFull &&
-      (p.boardFollow === undefined || p.boardFollow.length !== nextFollow.length ||
-        p.boardFollow.some((x, i) => x !== nextFollow[i]));
-    if (nextFollow !== undefined) p.boardFollow = nextFollow;
-    const prefixes = forceFull ? undefined : p.boardFollow;
-    const pending = new Set(this.unacknowledged(room));
-    const visible = [...room.board].filter(([key, entry]) => {
-      if (this.boardEntryExpired(room, key, entry) || this.draftSealed(room, key, entry, p.name)) return false;
-      return prefixes === undefined || prefixes.some((prefix) => key.startsWith(prefix)) ||
-        key.startsWith("verify/") || key.startsWith("claim/") || pending.has(key) || key === `hold/${room.name}`;
-    }).map(([key]) => key);
-    const previous = new Set(p.seenBoardKeys ?? []);
-    const current = new Set(visible);
-    const first = p.lastBoardSeen === undefined || forceFull;
-    const prevSeen = p.lastBoardSeen;
-    p.lastBoardSeen = room.boardVersion;
-    p.seenBoardKeys = visible;
-    if (first || changed) {
-      const envelope = { board_keys: visible, board_reset: true };
-      this.recordBoardManifest(roomName, envelope);
-      return envelope;
-    }
-    const keys = visible.filter((key) => !previous.has(key) || (room.boardVersions.get(key) ?? 0) > (prevSeen ?? 0));
-    // Also covers subscription contraction and clock-driven expiry with no new board event.
-    const tombstones = [...previous].filter((key) => !current.has(key));
-    if (keys.length || tombstones.length) {
-      const envelope = { board_delta: { keys, tombstones } };
-      this.recordBoardManifest(roomName, envelope);
-      return envelope;
-    }
-    this.recordBoardManifest(roomName, {});
-    return {};
-  }
-
-  /** Single reducer for live and replay board mutations; deletes retain a version tombstone. */
-  private applyBoard(room: Room, key: string, entry: BoardEntry | null) {
-    room.boardVersion++;
-    room.boardVersions.set(key, room.boardVersion);
-    if (entry) room.board.set(key, entry);
-    else room.board.delete(key);
-  }
-
-  setBoard(roomName: string, pid: string, key: string, text: string, opts: BoardExpiryOptions & { ifAbsent?: boolean; ifByMe?: boolean; overwrite?: boolean } = {}): BoardEntry | null {
-    const room = this.getRoom(roomName);
-    const p = this.requireParticipant(room, pid);
-    if (room.state === "concluded" || room.state === "closed") {
-      throw new HubError(`Room "${roomName}" is ${room.state}: board writes are refused, there is nothing left to coordinate. Earlier entries, including verify/* and handoff/*, are still readable with board_get.`, undefined, "state");
-    }
-    if (!Hub.BOARD_KEY.test(key)) throw new HubError("Board keys are short names like 'evidence', 'open questions', 'claim/auth', 'verify/auth'.", undefined, "key-format");
-    if (text.length > 8000) throw new HubError("Board entries are capped at 8000 characters.", undefined, "size");
-    const expiresAt = this.boardExpiry(key, opts);
-    const previous = room.board.get(key);
-    // reserved prefixes (enforced here, the single write site)
-    if (key.startsWith("inbox/") && !key.endsWith(".ack")) throw new HubError("inbox/* entries are written by post_to_room from another room. To acknowledge one, write '<key>.ack'.");
-    if (key.startsWith("hold/")) {
-      if (key !== `hold/${room.name}`) throw new HubError(`A hold for this room is the key "hold/${room.name}".`, undefined, "key-format");
-      if (previous && previous.by !== p.name) throw new HubError(`The hold was placed by ${previous.by}; only they (or a human) can clear or change it.`, undefined, "ownership");
-    }
-    // author-only, and refused without echoing the text: an ownership error that returned the entry would unseal it
-    if (key.startsWith("draft/") && previous && previous.by !== p.name) throw new HubError(`"${key}" is ${previous.by}'s draft; draft/* entries are author-only. Write your own, e.g. draft/${p.name}.`, undefined, "ownership");
-    // Assigned once, at creation only: later edits (status updates, notes) keep the same reviewer.
-    let reviewer: Participant | undefined;
-    const takeover = key.startsWith("claim/") && previous && previous.by !== p.name && !Hub.claimReleased(previous) ? this.claimTakeover(room, previous, p) : null;
-    if (key.startsWith("claim/")) {
-      // a claim released by removeParticipant (status "released", rewritten by the hub) is open to anyone; a departed
-      // owner's claim is open to its registered successor, and to anyone after Hub.STALE_CLAIM_MS (claimTakeover)
-      if (previous && previous.by !== p.name && !Hub.claimReleased(previous) && !takeover) throw new HubError(`claim "${key}" is owned by ${previous.by} (since ${previous.updatedAt}). Join their team via help/ or join-request/, or pick another area.`, undefined, "ownership");
-      if (text.trim()) {
-        let parsed: { status?: string; team?: unknown } | undefined;
-        try {
-          parsed = JSON.parse(text);
-        } catch {
-          throw new HubError('claim/* entries are JSON: {"area":..., "owner":..., "team":[names], "status":"open|fixed|verified", "note":...}');
-        }
-        if (parsed && (parsed.status === "fixed" || parsed.status === "verified")) {
-          const team = Array.isArray(parsed.team) ? (parsed.team as unknown[]).map(String) : [];
-          const members = this.activeParticipants(room).filter((x) => team.includes(x.name) && x.agent !== "human");
-          if (members.length < 2 || Hub.sessionsOf(members) < 2) {
-            throw new HubError(`A claim can only be marked ${parsed.status} by a team of 2+ distinct active agents; team=${JSON.stringify(team)} has ${members.length} active on ${Hub.sessionsOf(members)} connection(s).`);
-          }
-        }
-      }
-      reviewer = previous ? undefined : this.assignReviewer(room, p);
-    }
-    if (opts.ifAbsent && previous) throw new HubError(`"${key}" already exists (by ${previous.by}, ${previous.updatedAt}).`, { existing: previous }, "state");
-    if (opts.ifByMe && previous && previous.by !== p.name) throw new HubError(`"${key}" was written by ${previous.by}, not you. Use post_to_room or a different key.`, undefined, "ownership");
-    if (previous && previous.by !== p.name && !opts.overwrite && text.trim() && !(key.startsWith("claim/") && (Hub.claimReleased(previous) || takeover))) {
-      throw new HubError(
-        `"${key}" was written by ${previous.by} at ${previous.updatedAt}; replacing it would discard their text. Merge with the current content below and resend with overwrite=true, or use your own key.`,
-        { current: previous },
-        "ownership",
-      );
-    }
-    if (!text.trim()) {
-      this.applyBoard(room, key, null);
-      this.persist({ type: "board", room: roomName, key, entry: null });
-      this.post(room, "board", p, `cleared board entry "${key}"`);
-      if (key === `hold/${room.name}`) for (const pr of room.proposals.values()) if (pr.status === "open") this.evaluate(room, pr);
-      return null;
-    }
-    this.surfaceCited(room, text, `cited on the board under ${key}`);
-    const note = key.startsWith("inbox/") && key.endsWith(".ack") ? room.board.get(key.slice(0, -4)) : undefined;
-    if (key.startsWith("verify/")) p.lastVerifiedAt = now();
-    // a draft written or edited after peers' drafts became readable may have copied them: say so wherever it is listed
-    const postReveal = key.startsWith("draft/") && (!!previous?.postReveal || !!room.draftsRevealed || this.draftsDue(room));
-    const workspace = key.startsWith("claim/") ? this.workspaceOf(p) : undefined;
-    const entry: BoardEntry = {
-      text, by: p.name, updatedAt: now(),
-      ...(expiresAt ? { expiresAt } : {}),
-      ...(key.startsWith("verify/") ? { codeState: Hub.codeState(this.cwd) } : {}),
-      ...(note ? { acknowledgedTextHash: Hub.noteHash(note.text) } : {}),
-      ...(reviewer ? { reviewer: reviewer.name, reviewerId: reviewer.id }
-        : previous?.reviewer ? { reviewer: previous.reviewer, reviewerId: previous.reviewerId } : {}),
-      ...(postReveal ? { postReveal: true } : {}),
-      ...(workspace ? { workspace } : {}),
-    };
-    this.applyBoard(room, key, entry);
-    this.persist({ type: "board", room: roomName, key, entry });
-    // a sealed draft's notice names neither key nor size (either can carry content); it says who is still owed a draft
-    if (key.startsWith("draft/")) this.openDrafts(room); // before the notice, so the first one already names the deadline
-    const sealedDraft = key.startsWith("draft/") && !room.draftsRevealed && !this.draftsComplete(room) && !this.draftsDue(room);
-    this.post(room, "board", p, sealedDraft ? `${previous ? "updated" : "wrote"} a sealed draft (${this.draftProgress(room)})`
-      : `${previous ? "updated" : "added"} board entry "${key}" (${text.length} chars; read it with board_get)`
-      + (postReveal ? " — post-reveal: written after peers' drafts were readable, so not an independent attempt" : "")
-      + (workspace ? ` — ${workspace.branch ? `branch ${workspace.branch} in ` : ""}${workspace.worktree}` : "")
-      + (reviewer ? ` — reviewer: ${reviewer.name}` : ""));
-    if (reviewer) {
-      // kind "chat", not "system": addressedBy()/actionableNow() resolve an owed @-mention from
-      // *content*, independent of lastSeenSeq, so it reliably wakes a held wait_for_messages even
-      // though hub.wait() already advances this participant's lastSeenSeq past this very message
-      // in the same call that delivers it (settleRead runs before the caller's actionableNow
-      // check). A "system"-kind post with an explicit mentions field looked right in isolation but
-      // is provably too late by the time hold_until_actionable's loop re-checks it.
-      // "Exercise ... not only rerun" is the OpenHands extensions qa-changes rule (MIT; skills/qa-changes/SKILL.md,
-      // "Run the code, not the tests"), also in prompts/loop.md, recruit.md and verifier.md.
-      this.post(room, "chat", undefined,
-        `@${reviewer.name} you are the reviewer for ${p.name}'s "${key}" (fewest reviews assigned, then least-recently-verifying; picked by the hub). ` +
-        `Once ${p.name} proposes work from it, require_verification prefers a verify/* entry from you over anyone else's while you're still active; ` +
-        `its JSON head (in the proposal's blocked_by) records one check of yours failing at the parent commit and passing at ${p.name}'s. Exercise the change the way its users would; do not only rerun ${p.name}'s tests.`);
-    }
-    if (takeover) {
-      this.post(room, "system", undefined, `${this.shown(room, p)} took over "${key}" from ${this.shown(room, takeover.owner)} (${takeover.reason === "successor" ? "registered successor" : `owner gone since ${this.lastSeen(takeover.owner)}`}).`);
-    }
-    if (key.startsWith("claim/") && (!previous || Hub.claimReleased(previous))) this.noticeClaimOverlap(room, p, key, text);
-    if (key.endsWith(".ack") || key.startsWith("verify/")) for (const pr of room.proposals.values()) if (pr.status === "open") this.evaluate(room, pr);
-    if (key.startsWith("draft/")) this.latchDrafts(room);
-    return entry;
-  }
-
-  private static readonly CLAIM_STOP = new Set(("the a an and or of to in on for by with from is are be it this that as at not no into via per its all any " +
-    "one each my i we our me you your will then than so if when only but also can new use using take own owns claim area note status open team owner").split(" "));
-  /** Content-word stems (first 6 chars) of a claim's key and its JSON area+note, for overlap scoring. */
-  static claimTerms(key: string, text: string): Set<string> {
-    let body = text;
-    // every free-text field, not just area/note: seats write what/plan/scope too (swarm-083203-kooz claim-overlap-echo used "what")
-    try {
-      const j = JSON.parse(text) as Record<string, unknown>;
-      body = Object.entries(j).filter(([k, v]) => typeof v === "string" && !["owner", "status", "worktree"].includes(k)).map(([, v]) => v).join(" ");
-    } catch { /* plain text */ }
-    const words = `${key.slice("claim/".length).replace(/[-_/]/g, " ")} ${body}`.toLowerCase().match(/[a-z][a-z0-9]{2,}/g) ?? [];
-    return new Set(words.filter((w) => !Hub.CLAIM_STOP.has(w)).map((w) => w.slice(0, 6)));
-  }
-
-  /** Room-level herding: 15 blind openings in swarm-083203-kooz produced two ideas, and 89 claim pairs in 30 of 136
-   * persisted rooms (data/*.jsonl) share >= 40% of their terms (Jaccard, >= 4 shared stems), e.g. four seats claiming
-   * launcher/launcher-spawner/launcher-fleet/launcher-spawner-fleet in one room. Advisory, never a refusal: one line
-   * @-naming the new claimant and the existing owner(s), so the duplicate is caught when it is claimed, not at review. */
-  private noticeClaimOverlap(room: Room, p: Participant, key: string, text: string) {
-    const top = this.overlapsFor(room, p, key, text).slice(0, 2);
-    if (!top.length) return;
-    // kind "chat" so the @-mentions wake a held wait, same reason as the reviewer notice above
-    this.post(room, "chat", undefined,
-      `@${p.name} your "${key}" overlaps ${top.map((h) => `@${h.by}'s "${h.key}" (${h.shared_pct}% shared terms: ${h.shared.join(", ")})`).join(" and ")}. ` +
-      `Before both of you build it: merge into one team (claim JSON team:[...]), split it explicitly, or pick another area. Advisory only, the claim stands.`);
-  }
-
-  /** Live claims by other active seats (other connections) that share >= 40% of term stems (Jaccard, >= 4 shared)
-   * with this claim's key+area+note, best first. Read by the creation notice and by board_set's response, so the
-   * claimant sees the collision synchronously too. */
-  claimOverlaps(roomName: string, pid: string, key: string): { key: string; by: string; shared_pct: number; shared: string[] }[] {
-    const room = this.getRoom(roomName);
-    const e = room.board.get(key);
-    return key.startsWith("claim/") && e ? this.overlapsFor(room, this.requireParticipant(room, pid), key, e.text) : [];
-  }
-
-  private overlapsFor(room: Room, p: Participant, key: string, text: string) {
-    const mine = Hub.claimTerms(key, text);
-    if (mine.size < 4) return [];
-    const myKey = Hub.claimTerms(key, "");
-    const hits: { key: string; by: string; shared_pct: number; shared: string[] }[] = [];
-    for (const [k, e] of room.board) {
-      if (k === key || !k.startsWith("claim/") || e.by === p.name || !e.text.trim() || Hub.claimReleased(e)) continue;
-      const owner = [...room.participants.values()].find((x) => x.name === e.by);
-      if (!owner?.active || (owner.session && p.session && owner.session === p.session)) continue;
-      const s = Hub.claimOverlapScore(mine, myKey, Hub.claimTerms(k, e.text), Hub.claimTerms(k, ""));
-      if (s.fires) hits.push({ key: k, by: e.by, shared_pct: Math.round(s.jac * 100), shared: s.shared.slice(0, 6) });
-    }
-    return hits.sort((a, b) => b.shared_pct - a.shared_pct);
-  }
-
-  /** The one overlap rule, also read by scripts/claim-overlap-calibration.ts: >= 4 shared stems and Jaccard >= 0.4, or
-   * >= 0.2 when the key slugs share half the shorter slug's stems. Long notes dilute Jaccard (claim-overlap-notice vs
-   * claim-overlap-echo scored 0.23), hence the slug rule (it also catches adjudicator / adjudication-replay and
-   * bench-per-seat-workspaces / bench-arm-d in swarm-083203-kooz). */
-  static claimOverlapScore(a: Set<string>, aKey: Set<string>, b: Set<string>, bKey: Set<string>) {
-    const shared = [...a].filter((w) => b.has(w));
-    const jac = shared.length / (a.size + b.size - shared.length || 1);
-    const shorter = Math.min(aKey.size, bKey.size);
-    const slugsMatch = shorter > 0 && [...aKey].filter((w) => bKey.has(w)).length / shorter >= 0.5;
-    return { shared, jac, slugsMatch, fires: a.size >= 4 && shared.length >= 4 && (jac >= 0.4 || (slugsMatch && jac >= 0.2)) };
-  }
-
-  /** Reviewer assigned when a claim/<area> is first created: the least-recently-verifying active
-   * voter who is not the owner, fewest reviews already assigned first, then never-verified, then earliest join. Hub-chosen,
-   * never client-supplied, so a claimant cannot pick their own reviewer by writing it into the JSON. */
-  private assignReviewer(room: Room, owner: Participant): Participant | undefined {
-    // identity-is-the-connection: a second name on the owner's own MCP session is not "someone
-    // else" (the same sock-puppet case verifiedBy() already excludes for authorship, hub.ts ~2190).
-    const candidates = this.voters(room).filter((x) => x.id !== owner.id && !(x.session && owner.session && x.session === owner.session));
-    if (!candidates.length) return undefined;
-    // Reviews already assigned count as load, before verify history: claims arrive in a burst at the start of a
-    // room, when nobody has verified anything and every candidate ties, so without this the earliest joiner was
-    // assigned 6 of 7 claims (swarm-113146-9k8v) and, as the only accepted verifier for each, became the bottleneck.
-    const assigned = new Map<string, number>();
-    for (const [k, e] of room.board) if (k.startsWith("claim/") && e.reviewerId) assigned.set(e.reviewerId, (assigned.get(e.reviewerId) ?? 0) + 1);
-    return candidates.slice().sort((a, b) =>
-      (assigned.get(a.id) ?? 0) - (assigned.get(b.id) ?? 0) ||
-      (a.lastVerifiedAt ?? "").localeCompare(b.lastVerifiedAt ?? "") || a.joinedAt.localeCompare(b.joinedAt))[0];
-  }
-
-  /** The active reviewer assigned to the claim(s) `authorName` owns, if any: the most recently
-   * created claim/* entry they authored that still has an active reviewer. Falls back across
-   * claims so a stale/handed-off claim does not shadow a live one. */
-  private activeReviewerFor(room: Room, authorName: string): Participant | undefined {
-    const claims = [...room.board.entries()]
-      .filter(([k, e]) => k.startsWith("claim/") && e.by === authorName && e.reviewerId)
-      .sort(([, a], [, b]) => b.updatedAt.localeCompare(a.updatedAt));
-    for (const [, e] of claims) {
-      const rev = room.participants.get(e.reviewerId!);
-      if (rev?.active) return rev;
-    }
-    return undefined;
-  }
-
-  /** System-initiated board write on someone's behalf (e.g. a claim made at recruitment); no membership needed. */
-  setBoardAs(roomName: string, byName: string, key: string, text: string): BoardEntry {
-    const room = this.getRoom(roomName);
-    if (!Hub.BOARD_KEY.test(key)) throw new HubError("Invalid board key.", undefined, "key-format");
-    const entry: BoardEntry = { text, by: byName, updatedAt: now() };
-    this.applyBoard(room, key, entry);
-    this.persist({ type: "board", room: roomName, key, entry });
-    this.post(room, "board", undefined, `${byName} added board entry "${key}" (${text.length} chars; read it with board_get)`);
-    return entry;
-  }
-
-  /** Cross-room note: written into the target room's board under inbox/<from>/<key> without joining it. */
-  postToRoom(fromRoom: string, pid: string, toRoom: string, key: string, text: string, ackRequired = false, opts: BoardExpiryOptions = {}): { key: string; entry: BoardEntry } {
-    const from = this.getRoom(fromRoom);
-    const p = this.requireParticipant(from, pid);
-    if (toRoom === fromRoom) throw new HubError("That is your own room; use board_set.");
-    const to = this.getRoom(toRoom);
-    if (to.state === "concluded" || to.state === "closed") {
-      throw new HubError(`Room "${toRoom}" is ${to.state}: board writes are refused, there is nothing left to coordinate there.`, undefined, "state");
-    }
-    if (!/^[\w .:-]{1,40}$/.test(key)) throw new HubError("Inbox keys are short names without slashes.", undefined, "key-format");
-    if (text.length > 8000) throw new HubError("Notes are capped at 8000 characters.", undefined, "size");
-    const full = `inbox/${fromRoom}/${key}`;
-    const expiresAt = this.boardExpiry(full, opts);
-    const entry: BoardEntry = { text, by: p.name, updatedAt: now(), ...(expiresAt ? { expiresAt } : {}), ...(ackRequired ? { ackRequired: true } : {}) };
-    // Replacing an open note consumes no extra slot. A changed text hash invalidates its old ack.
-    const otherOpen = [...to.board.entries()].filter(([k, e]) => k !== full && this.inboxOpen(to, k, e)).length;
-    if (this.inboxOpen(to, full, entry) && otherOpen >= 10) throw new HubError(`${toRoom} already has 10 inbox notes awaiting acknowledgement; wait for them to be acknowledged or cleared.`);
-    this.applyBoard(to, full, entry);
-    this.persist({ type: "board", room: toRoom, key: full, entry });
-    this.post(to, "system", undefined, `Note from ${p.name} in ${fromRoom} on the board as "${full}"${ackRequired ? ` (acknowledge by writing "${full}.ack")` : ""}: ${text.slice(0, 160)}${text.length > 160 ? "…" : ""}`);
-    return { key: full, entry };
-  }
+  } { return board.boardManifest(this, roomName, pid, follow, forceFull); }
+  private applyBoard(room: Room, key: string, entry: BoardEntry | null) { return board.applyBoard(room, key, entry); }
+  setBoard(roomName: string, pid: string, key: string, text: string, opts: BoardExpiryOptions & { ifAbsent?: boolean; ifByMe?: boolean; overwrite?: boolean } = {}): BoardEntry | null { return board.setBoard(this, roomName, pid, key, text, opts); }
+  static claimTerms(key: string, text: string): Set<string> { return board.claimTerms(key, text); }
+  claimOverlaps(roomName: string, pid: string, key: string): { key: string; by: string; shared_pct: number; shared: string[] }[] { return board.claimOverlaps(this, roomName, pid, key); }
+  static claimOverlapScore(a: Set<string>, aKey: Set<string>, b: Set<string>, bKey: Set<string>) { return board.claimOverlapScore(a, aKey, b, bKey); }
+  private activeReviewerFor(room: Room, authorName: string): Participant | undefined { return board.activeReviewerFor(room, authorName); }
+  setBoardAs(roomName: string, byName: string, key: string, text: string): BoardEntry { return board.setBoardAs(this, roomName, byName, key, text); }
+  postToRoom(fromRoom: string, pid: string, toRoom: string, key: string, text: string, ackRequired = false, opts: BoardExpiryOptions = {}): { key: string; entry: BoardEntry } { return board.postToRoom(this, fromRoom, pid, toRoom, key, text, ackRequired, opts); }
 
   // ---------- proposals as documents ----------
 
@@ -2632,7 +1811,7 @@ export class Hub {
   }
 
   /** Apply the same concession transition live and on replay, including legacy vote events. */
-  private applyVote(pr: Proposal, pid: string, entry: Proposal["votes"][string]) {
+  /** @internal */ applyVote(pr: Proposal, pid: string, entry: Proposal["votes"][string]) {
     pr.votes[pid] = entry;
     if (entry.vote !== "agree" || (entry.version ?? pr.version) !== pr.version) return;
     // An earlier-version challenge can remain open through amendments; a current agree concedes it too.
@@ -2795,7 +1974,7 @@ export class Hub {
     return `a verify/* board entry from ${who} whose first line is JSON ${VERIFY_HEAD_EXAMPLE.replace("<PROPOSAL_ID>", pr.id)} — ${VERIFY_HEAD_RULE}${misses.join("")}`;
   }
 
-  private evaluate(room: Room, pr: Proposal) {
+  /** @internal */ evaluate(room: Room, pr: Proposal) {
     if (pr.status !== "open" || room.state === "concluded" || room.state === "closed") return;
     this.settleExecutableChallenges(room, pr);
     const all = this.voters(room);
@@ -3057,25 +2236,6 @@ export class Hub {
 
   // ---------- kick vote / removal ----------
 
-  /** Who may be a kick target: an active non-human, non-chair participant of this room, by name (or id). */
-  private kickTarget(room: Room, target: string): Participant {
-    const p = room.participants.get(target) ?? [...room.participants.values()].filter((x) => x.name === target).sort((a, b) => (b.active ? 1 : 0) - (a.active ? 1 : 0))[0];
-    if (!p) throw new HubError(`No participant named "${target}" in "${room.name}".`);
-    if (p.kicked) throw new HubError(`${this.shown(room, p)} was already removed from "${room.name}" (${p.kicked.reason}).`, undefined, "state");
-    if (!p.active) throw new HubError(`${this.shown(room, p)} has already left "${room.name}"; there is nothing to remove. To bring in a successor, request_agent(replacing=${JSON.stringify(p.name)}).`, undefined, "state");
-    if (p.agent === "human" || p.role === "chair") throw new HubError("Humans and the chair are the room's controllers; they cannot be voted out.", undefined, "auth");
-    return p;
-  }
-
-  /**
-   * Who decides a kick: the single electorate() (no proposal snapshot: every present voter) with the target as the
-   * hypothetical leaver, minus any other identity on the target's connection (identity-is-the-connection: a sibling
-   * name may not ballot on its own seat, so it must not enlarge the threshold either).
-   */
-  private kickPool(room: Room, target: Participant): Participant[] {
-    return this.electorate(room, {}, target.id).members.filter((p) => !(target.session && p.session === target.session));
-  }
-
   /** A removed seat learns it on its very next call for that room, reads included (server guard). */
   refuseKicked(roomName: string, pid: string): void {
     const room = this.rooms.get(roomName);
@@ -3083,164 +2243,10 @@ export class Hub {
     if (room && p?.kicked) throw new HubError(Hub.kickedMessage(room, p), undefined, "auth");
   }
 
-  /**
-   * Ballots needed: the room's quorum rule over the distinct connections in the pool (unanimous = all of them),
-   * and never fewer than 2, so no seat is ever removed on one ballot. In a room of two the second ballot can only
-   * come from a human; without one the vote is refused at the start (the idle sweep already marks a dead seat
-   * left after 10 min, after which request_agent(replacing=) needs no vote).
-   */
-  kickNeeded(room: Room, target: Participant): number {
-    const sessions = Hub.sessionsOf(this.kickPool(room, target));
-    return Math.max(room.quorum === "unanimous" ? sessions : Hub.quorumNeeded(room.quorum, sessions), 2);
-  }
-
-  /** Ballots that could still arrive: pool connections plus dashboard humans, minus those already voting keep. */
-  private kickPossible(room: Room, target: Participant, keep = 0): number {
-    const humans = this.activeParticipants(room).filter((p) => Hub.dashboardHuman(p)).length;
-    return Hub.sessionsOf(this.kickPool(room, target)) + humans - keep;
-  }
-
-  /**
-   * A human whose ballot the hub trusts: one that arrived through the token-gated HTTP routes (session "http:<name>",
-   * set by src/index.ts), never a name that merely declared agent="human" on an MCP connection (any seat can do that).
-   */
-  static dashboardHuman(p: Participant): boolean {
-    return p.agent === "human" && !!p.session?.startsWith("http:");
-  }
-
-  /**
-   * Start a vote to remove `target`, or add a ballot to the open one. The caller's ballot is recorded either way
-   * (starting counts as a kick ballot). One open vote per target; a settled vote for the same target can be
-   * restarted. Humans (dashboard) use the same entry point; the target cannot vote on its own removal.
-   */
-  kickVote(roomName: string, pid: string, target: string, vote: "kick" | "keep" = "kick", reason?: string): KickVote {
-    const room = this.getRoom(roomName);
-    const by = this.requireParticipant(room, pid);
-    if (room.state === "concluded" || room.state === "closed") throw new HubError(`Room "${roomName}" is ${room.state}; nobody can be removed from it.`, undefined, "state");
-    const t = this.kickTarget(room, target);
-    if (t.id === by.id) throw new HubError("You cannot vote to kick yourself: leave_room instead.");
-    // everyone, self-declared humans included: a seat that joins a second name as agent="human" on its own
-    // connection is still that connection (identity-is-the-connection), so it may not veto its own kick
-    if (by.session && t.session && by.session === t.session) throw new HubError("That participant shares your connection; identity is the connection, so this would be a vote on yourself.", undefined, "auth");
-    const human = Hub.dashboardHuman(by);
-    if (!human && !this.kickPool(room, t).some((p) => p.id === by.id)) {
-      throw new HubError(`Only voters on other connections, or a human on the dashboard, may vote on removing ${this.shown(room, t)}; a name joined as agent="human" over MCP is not a dashboard human.`, undefined, "auth");
-    }
-    let kv = room.kickVotes.get(t.id);
-    if (!kv || kv.status !== "open") {
-      const why = reason?.trim() ?? "";
-      if (vote !== "kick") throw new HubError(`There is no open vote to kick ${this.shown(room, t)}; only a "kick" ballot with a reason starts one.`);
-      if (why.length < 8) throw new HubError("A kick vote needs a reason (one line): persistent disagreement blocking progress, or evidence the session is dead (liveness/last_seen_at).");
-      const needed = this.kickNeeded(room, t);
-      if (this.kickPossible(room, t) < needed) {
-        throw new HubError(`A kick needs ${needed} ballots from distinct connections (never one seat alone) and only ${this.kickPossible(room, t)} could vote here besides ${this.shown(room, t)}. A human on the dashboard can supply one; otherwise the idle sweep marks a dead seat left after 10 min, and request_agent(replacing=${JSON.stringify(t.name)}) then needs no vote.`, undefined, "state");
-      }
-      kv = { target: t.id, targetName: t.name, by: { id: by.id, name: by.name }, reason: why.slice(0, 600), startedAt: now(), ballots: {}, status: "open" };
-      room.kickVotes.set(t.id, kv);
-      this.post(room, "system", undefined,
-        `${this.shown(room, by)} started a vote to kick ${this.shown(room, t)}: ${kv.reason} — needs ${needed} kick ballot(s) from distinct connections (quorum=${room.quorum} over the other voters). ` +
-        `Vote with kick_vote(target=${JSON.stringify(this.shown(room, t))}, vote="kick"|"keep"); the target may not vote. On the threshold the hub removes them, releases their claim/* entries and their next call tells them they were kicked.`);
-    }
-    kv.ballots[by.id] = { name: by.name, vote, ts: now(), session: by.session, ...(human ? { human: true } : {}) };
-    this.persist({ type: "kick_vote", room: roomName, vote: kv });
-    this.post(room, "system", undefined, `${this.shown(room, by)} votes ${vote.toUpperCase()} on removing ${this.shown(room, t)} (${this.kickTally(room, kv).summary}).`);
-    this.evaluateKick(room, kv);
-    return kv;
-  }
-
-  /** Ballots counted per connection over the current pool (a ballot from a seat that has since left no longer counts). */
-  private kickTally(room: Room, kv: KickVote) {
-    const t = room.participants.get(kv.target)!;
-    const pool = this.kickPool(room, t);
-    const eligible = new Set(pool.map((p) => p.id));
-    const kickSessions = new Set<string>();
-    const keepSessions = new Set<string>();
-    let humanKeep = false;
-    for (const [id, b] of Object.entries(kv.ballots)) {
-      const voter = room.participants.get(id);
-      if (!voter?.active) continue;
-      const identity = voter.session ?? voter.id;
-      if (b.human) {
-        if (b.vote === "keep") humanKeep = true;
-        else kickSessions.add(identity);
-        continue;
-      }
-      if (!eligible.has(id)) continue;
-      (b.vote === "kick" ? kickSessions : keepSessions).add(identity);
-    }
-    const needed = this.kickNeeded(room, t);
-    const poolSessions = Hub.sessionsOf(pool);
-    const possible = this.kickPossible(room, t, keepSessions.size);
-    return { kick: kickSessions.size, keep: keepSessions.size, needed, pool: poolSessions, possible, humanKeep, summary: `${kickSessions.size}/${needed} kick, ${keepSessions.size} keep, ${poolSessions} eligible connection(s)` };
-  }
-
-  private evaluateKick(room: Room, kv: KickVote): void {
-    if (kv.status !== "open") return;
-    const t = room.participants.get(kv.target);
-    if (!t || !t.active) { this.settleKick(room, kv, "dropped", `${kv.targetName} is no longer in the room`); return; }
-    const tally = this.kickTally(room, kv);
-    if (tally.humanKeep) { this.settleKick(room, kv, "dropped", "a human voted keep (veto)"); return; }
-    if (tally.kick >= tally.needed) {
-      this.settleKick(room, kv, "kicked", `${tally.kick} of ${tally.needed} needed kick ballots`);
-      this.removeParticipant(room.name, t.id, `a kick vote started by ${kv.by.name}`, kv.reason);
-      return;
-    }
-    // keep ballots that make the threshold unreachable end the vote early
-    if (tally.possible < tally.needed) this.settleKick(room, kv, "dropped", `${tally.keep} keep ballot(s) leave fewer than ${tally.needed} possible kick ballots`);
-  }
-
-  private settleKick(room: Room, kv: KickVote, status: "kicked" | "dropped", outcome: string): void {
-    kv.status = status;
-    kv.endedAt = now();
-    kv.outcome = outcome;
-    this.persist({ type: "kick_vote", room: room.name, vote: kv });
-    if (status === "dropped") this.post(room, "system", undefined, `The vote to kick ${kv.targetName} was dropped: ${outcome}.`);
-  }
-
-  /**
-   * The single removal primitive (kick vote, replace): mark the target left with a kicked record so its next call
-   * is refused with a clear error and it cannot rejoin, release every claim/* it owns into one system line (the
-   * entries are rewritten as released so a successor can claim the area), close any kick vote it started, and
-   * re-evaluate open proposals. The electorate needs no separate adjustment: electorate() already excludes
-   * inactive seats and unarrived() counts arrivals, so quorum is no longer waited on the removed seat.
-   */
-  removeParticipant(roomName: string, target: string, by: string, reason: string): Participant {
-    const room = this.getRoom(roomName);
-    const p = this.kickTarget(room, target);
-    const why = reason.trim().slice(0, 600) || "removed";
-    // identity is the connection: every other active name on the target's connection goes with it, or an alias
-    // that can never call again would sit in the electorate and block quorum
-    const seats = [p, ...(p.session ? this.activeParticipants(room).filter((x) => x.id !== p.id && x.session === p.session && x.agent !== "human") : [])];
-    const at = now();
-    const claims: string[] = [];
-    for (const s of seats) {
-      s.active = false;
-      s.lastActiveAt = at;
-      s.kicked = { by, reason: why, at };
-      s.leaveReason = `kicked (${by}): ${why}`;
-      this.persist({ type: "leave", room: roomName, p: s });
-      for (const [k, e] of room.board.entries()) {
-        if (!k.startsWith("claim/") || e.by !== s.name || !e.text.trim()) continue;
-        let released: Record<string, unknown> = {};
-        try { released = JSON.parse(e.text) as Record<string, unknown>; } catch { released = { note: e.text }; }
-        released = { ...released, status: "released", released_from: s.name, released_by: by, released_at: at };
-        const entry: BoardEntry = { ...e, text: JSON.stringify(released), by: "system", updatedAt: at };
-        this.applyBoard(room, k, entry);
-        this.persist({ type: "board", room: roomName, key: k, entry });
-        claims.push(k);
-      }
-      for (const kv of room.kickVotes.values()) if (kv.status === "open" && kv.target !== s.id && kv.by.id === s.id && Object.keys(kv.ballots).length <= 1) this.settleKick(room, kv, "dropped", `${s.name}, who started it, was removed`);
-    }
-    const aliases = seats.slice(1).map((s) => this.shown(room, s));
-    this.post(room, "system", undefined,
-      `${this.shown(room, p)} was removed from the room by ${by}: ${why}.` +
-      (aliases.length ? ` ${aliases.join(", ")} (same connection) removed with them.` : "") +
-      (claims.length ? ` Released ${claims.length} claim/* entr${claims.length === 1 ? "y" : "ies"} (${claims.join(", ")}): status is now "released", content kept, anyone may claim the area.` : "") +
-      ` Their next hub call is refused with KICKED; they cannot rejoin.`);
-    for (const pr of room.proposals.values()) if (pr.status === "open") this.evaluate(room, pr);
-    this.latchDrafts(room);
-    return p;
-  }
+  kickNeeded(room: Room, target: Participant): number { return kick.kickNeeded(this, room, target); }
+  static dashboardHuman(p: Participant): boolean { return kick.dashboardHuman(p); }
+  kickVote(roomName: string, pid: string, target: string, vote: "kick" | "keep" = "kick", reason?: string): KickVote { return kick.kickVote(this, roomName, pid, target, vote, reason); }
+  removeParticipant(roomName: string, target: string, by: string, reason: string): Participant { return kick.removeParticipant(this, roomName, target, by, reason); }
 
   /** How long a departed owner's claim/* stays reserved for its registered successor before anyone may take it over. */
   static STALE_CLAIM_MS = Number(process.env.CHATROOM_STALE_CLAIM_MS ?? 10 * 60_000);
@@ -3256,7 +2262,7 @@ export class Hub {
   /** Why `writer` may take over a departed owner's claim/*: its registered successor (at once), or anyone once the owner
    * has been gone Hub.STALE_CLAIM_MS. Null while the owner is live or the stale window has not passed. The claim stays
    * owned until then, so respawn still sees it as orphaned (src/respawn.ts). */
-  private claimTakeover(room: Room, e: BoardEntry, writer: Participant): { reason: "successor" | "stale"; owner: Participant } | null {
+  /** @internal */ claimTakeover(room: Room, e: BoardEntry, writer: Participant): { reason: "successor" | "stale"; owner: Participant } | null {
     const owner = this.departedClaimOwner(room, e);
     if (!owner) return null;
     for (let next = owner.replacedBy; next; next = room.participants.get(next)?.replacedBy) if (next === writer.id) return { reason: "successor", owner };
@@ -3276,28 +2282,8 @@ export class Hub {
     return out;
   }
 
-  /** A claim/* rewritten by removeParticipant: owner gone, area open to anyone. */
-  static claimReleased(e: BoardEntry): boolean {
-    if (e.by !== "system") return false;
-    try { return (JSON.parse(e.text) as { status?: string }).status === "released"; } catch { return false; }
-  }
-
-  /** Kick votes as room_status / the dashboard show them. */
-  kickView(room: Room, kv: KickVote, reveal = false) {
-    const t = room.participants.get(kv.target);
-    const nm = (p: { id: string; name: string }) => (reveal ? p.name : this.shown(room, room.participants.get(p.id) ?? p));
-    const tally = t && kv.status === "open" ? this.kickTally(room, kv) : undefined;
-    return {
-      target: t ? nm(t) : kv.targetName,
-      by: nm(kv.by),
-      reason: kv.reason,
-      started_at: kv.startedAt,
-      status: kv.status,
-      ...(kv.outcome ? { outcome: kv.outcome } : {}),
-      ...(tally ? { kick: tally.kick, keep: tally.keep, needed: tally.needed, eligible_connections: tally.pool } : {}),
-      ballots: Object.entries(kv.ballots).map(([id, b]) => ({ name: nm({ id, name: b.name }), vote: b.vote, ts: b.ts, ...(b.human ? { human: true } : {}) })),
-    };
-  }
+  static claimReleased(e: BoardEntry): boolean { return board.claimReleased(e); }
+  kickView(room: Room, kv: KickVote, reveal = false) { return kick.kickView(this, room, kv, reveal); }
 
   /** Latest of the last hub call and the last heartbeat. */
   lastSeen(p: Participant): string {
@@ -3326,195 +2312,7 @@ export class Hub {
 
   // ---------- persistence (append-only JSONL per room) ----------
 
-  private recordReplyMetricEvent(ev: Event) {
-    const roomName = "room" in ev ? ev.room : ev.type === "message" ? ev.msg.room : ev.proposal.room;
-    const events = this.replyMetricEvents.get(roomName) ?? [];
-    // Keep only analyzer inputs: no chat bodies, names, sessions or mutable participant references.
-    const metric: ReplyMetricEvent = { type: ev.type };
-    if (ev.type === "message") {
-      const m = ev.msg;
-      metric.msg = { id: m.id, seq: m.seq, ts: m.ts, kind: m.kind, tag: m.tag,
-        from: { id: m.from.id, agent: m.from.agent }, mentions: m.mentions?.slice(), replyTo: m.replyTo };
-    } else if (ev.type === "join" || ev.type === "leave") {
-      metric.p = { id: ev.p.id, agent: ev.p.agent };
-    } else if (ev.type === "room") metric.createdAt = ev.createdAt;
-    else if (ev.type === "refusal" || ev.type === "call_completion") metric.ts = ev.ts;
-    else if (ev.type === "state" && ev.conclusion) metric.conclusion = { decidedAt: ev.conclusion.decidedAt };
-    else if (ev.type === "proposal") metric.proposal = { createdAt: ev.proposal.createdAt, updatedAt: ev.proposal.updatedAt };
-    else if (ev.type === "vote") metric.entry = { ts: ev.entry.ts };
-    else if (ev.type === "challenge") metric.challenge = { ts: ev.challenge.ts };
-    else if (ev.type === "board") metric.entry = ev.entry ? { updatedAt: ev.entry.updatedAt } : null;
-    else if (ev.type === "amend") metric.updatedAt = ev.updatedAt;
-    events.push(metric);
-    this.replyMetricEvents.set(roomName, events);
-  }
-
-  private replyMetricObservationEnd(roomName: string): string | undefined {
-    return analyzeReplyMetrics(this.replyMetricEvents.get(roomName) ?? []).observation_end ?? undefined;
-  }
-
-  private persist(ev: Event) {
-    this.recordReplyMetricEvent(ev);
-    if (!this.dataDir) return;
-    const roomName = "room" in ev ? ev.room : ev.type === "message" ? ev.msg.room : ev.proposal.room;
-    appendFileSync(join(this.dataDir, `${roomName}.jsonl`), JSON.stringify(ev) + "\n");
-  }
-
-  private replay() {
-    if (!this.dataDir || !existsSync(this.dataDir)) return;
-    for (const file of readdirSync(this.dataDir).filter((f) => f.endsWith(".jsonl"))) {
-      const lines = readFileSync(join(this.dataDir, file), "utf8").split("\n").filter(Boolean);
-      for (const line of lines) {
-        let ev: Event;
-        try {
-          ev = JSON.parse(line) as Event;
-        } catch {
-          console.error(`[hub] skipping unreadable line in ${file} (truncated write?)`);
-          continue;
-        }
-        this.recordReplyMetricEvent(ev);
-        switch (ev.type) {
-          case "attention": {
-            const p = this.rooms.get(ev.room)?.participants.get(ev.pid);
-            if (p) Object.assign(p, { lastSeenSeq: ev.lastSeenSeq, withheld: ev.withheld,
-              quietReceipts: ev.quietReceipts, focusedAsk: ev.focusedAsk, declinedAsks: ev.declinedAsks, declinedAt: ev.declinedAt });
-            break;
-          }
-          case "room": {
-            // older logs may lack newer options; fill defaults
-            const legacy = ev.opts as Partial<Opts>;
-            const opts: Opts = {
-              topic: legacy.topic ?? "",
-              mode: legacy.mode ?? "free",
-              quorum: legacy.quorum ?? "unanimous",
-              maxRounds: legacy.maxRounds ?? 0,
-              expectedParticipants: legacy.expectedParticipants ?? 0,
-              anonymous: legacy.anonymous ?? false,
-              maxMessagesPerParticipant: legacy.maxMessagesPerParticipant ?? 0,
-              maxMessageChars: legacy.maxMessageChars ?? 4000,
-              requireChallenge: legacy.requireChallenge ?? "auto",
-              nudgeAfterMs: legacy.nudgeAfterMs ?? 180_000,
-              requireVerification: legacy.requireVerification ?? false,
-            };
-            const room = this.materialiseRoom(ev.room, opts, ev.createdAt);
-            room.telemetryVersion = ev.telemetryVersion;
-            break;
-          }
-          case "message":
-            this.rooms.get(ev.msg.room)?.messages.push(ev.msg);
-            break;
-          case "join":
-          case "leave": {
-            const room = this.rooms.get(ev.room);
-            // Chair binding is room state, not participant state: replay it (rejection-safe, see join()).
-            if (ev.p.role === "chair" && room && !room.chair) room.chair = ev.p.name;
-            // Delivery cursors are deliberately process-local: replay/rejoin must backfill.
-            delete ev.p.lastBoardSeen;
-            delete ev.p.seenBoardKeys;
-            // Participants from a previous process are restored as inactive; they must rejoin.
-            const legacyP = ev.p as Partial<Participant> & Pick<Participant, "id" | "name" | "agent" | "joinedAt" | "lastActiveAt" | "lastSeenSeq">;
-            room?.participants.set(ev.p.id, { ...legacyP, label: legacyP.label ?? legacyP.name, messageCount: legacyP.messageCount ?? 0, active: false });
-            break;
-          }
-          case "proposal": {
-            const room = this.rooms.get(ev.proposal.room);
-            const legacyPr = ev.proposal as Partial<Proposal> & Omit<Proposal, "challenges" | "version">;
-            room?.proposals.set(ev.proposal.id, { ...legacyPr, challenges: legacyPr.challenges ?? [], version: legacyPr.version ?? 1 });
-            break;
-          }
-          case "vote": {
-            const pr = this.rooms.get(ev.room)?.proposals.get(ev.proposalId);
-            if (pr) this.applyVote(pr, ev.pid, ev.entry);
-            break;
-          }
-          case "challenge": {
-            const pr = this.rooms.get(ev.room)?.proposals.get(ev.proposalId);
-            if (pr) {
-              pr.challenges.push(ev.challenge);
-              if (ev.votes) pr.votes = ev.votes;
-            }
-            break;
-          }
-          case "challenge_status": {
-            const c = this.rooms.get(ev.room)?.proposals.get(ev.proposalId)?.challenges.find((x) => x.id === ev.challengeId);
-            if (c) c.status = ev.status;
-            break;
-          }
-          case "board_manifest": {
-            const room = this.rooms.get(ev.room);
-            if (room) this.applyBoardManifest(room, ev.bytes, ev.kind);
-            break;
-          }
-          case "call_completion": {
-            const room = this.rooms.get(ev.room);
-            if (room) this.applyCallCompletion(room, ev.tool, ev.outcome);
-            break;
-          }
-          case "refusal": {
-            const room = this.rooms.get(ev.room);
-            if (room) {
-              const key = `${ev.tool}: ${ev.reason}`;
-              room.refusals = room.refusals ?? {};
-              room.refusals[key] = (room.refusals[key] ?? 0) + 1;
-            }
-            break;
-          }
-          case "state": {
-            const room = this.rooms.get(ev.room);
-            if (room) {
-              room.state = ev.state;
-              room.conclusion = ev.conclusion;
-            }
-            break;
-          }
-          case "opening":
-            this.rooms.get(ev.room)?.openings.set(ev.pid, ev.content);
-            break;
-          case "drafts_revealed": {
-            const room = this.rooms.get(ev.room);
-            if (room) room.draftsRevealed = true;
-            break;
-          }
-          case "drafts_opened": {
-            const room = this.rooms.get(ev.room);
-            if (room) room.draftsOpenedAt = ev.at;
-            break;
-          }
-          case "openings_revealed": {
-            const room = this.rooms.get(ev.room);
-            if (room) room.openingsRevealed = true;
-            break;
-          }
-          case "kick_vote": {
-            const room = this.rooms.get(ev.room);
-            if (room) room.kickVotes.set(ev.vote.target, ev.vote);
-            break;
-          }
-          case "archive": {
-            const room = this.rooms.get(ev.room);
-            if (room) room.archived = ev.archived;
-            break;
-          }
-          case "board": {
-            const room = this.rooms.get(ev.room);
-            if (!room) break;
-            this.applyBoard(room, ev.key, ev.entry);
-            break;
-          }
-          case "amend": {
-            const pr = this.rooms.get(ev.room)?.proposals.get(ev.proposalId);
-            if (pr) {
-              pr.text = ev.text;
-              pr.version = ev.version;
-              // Missing legacy timestamps must clear the previous text's freshness.
-              pr.updatedAt = ev.updatedAt;
-              pr.votes = ev.votes;
-              if (ev.challenges) pr.challenges = ev.challenges;
-            }
-            break;
-          }
-        }
-      }
-    }
-  }
+  private replyMetricObservationEnd(roomName: string): string | undefined { return persistence.replyMetricObservationEnd(this, roomName); }
+  /** @internal */ persist(ev: Event) { return persistence.persist(this, ev); }
+  private replay() { return persistence.replay(this); }
 }

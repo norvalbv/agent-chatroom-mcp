@@ -156,6 +156,7 @@ export const offlineScripts = [
   'sched-trace-plus-task.test.ts',
   'sched-trace-task.test.ts',
   'seat-search-regression.ts',
+  'seat-steering-regression.ts',
   'spawner-run-prefix.test.ts',
   'stamp-task.test.ts',
   'suite-registry.test.ts',

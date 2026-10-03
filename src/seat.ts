@@ -16,6 +16,7 @@ import { relative, resolve } from "node:path";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { hubPortOf, srtSeatConfig, srtWriteScope } from "./sandbox.js";
+import { SeatSteering } from "./seat/steering.js";
 
 // ---------- wire types (OpenAI chat-completions shape, snake_case as providers send it) ----------
 export interface ToolCall {
@@ -397,25 +398,9 @@ export async function runSeat(provider: ChatProvider, opts: SeatOptions): Promis
   const joined = new Set<string>();
   /** participant id per room, from join_room's result, so the seat can heartbeat over HTTP without a room turn */
   const pids = new Map<string, string>();
-  const hubBase = opts.mcpUrl?.replace(/\/mcp\/?$/, "");
   let stepNo = 0;
-  /** Fire-and-forget: local work makes no hub calls, so this is how the room can tell a busy seat from a dead one. */
-  /** What to show a human watching: the command, the path, the pattern, the URL, or the room call's gist. */
-  const detailOf = (tool: string, args: Record<string, string>): string => {
-    for (const k of ["command", "path", "pattern", "url", "key"]) if (args[k]) return String(args[k]);
-    if (tool === "send_message") return String(args.content ?? "").slice(0, 120);
-    if (tool === "wait_for_messages") return `timeout ${args.timeout_ms ?? "?"}ms`;
-    return "";
-  };
-  function heartbeat(tool: string, args: Record<string, string> = {}) {
-    if (!hubBase) return;
-    const detail = String(detailOf(tool, args)).slice(0, 300);
-    for (const room of joined) {
-      const pid = pids.get(room);
-      if (!pid) continue;
-      fetch(`${hubBase}/rooms/${encodeURIComponent(room)}/heartbeat`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ participant_id: pid, tool, step: stepNo, detail }), signal: AbortSignal.timeout(5_000) }).catch(() => {});
-    }
-  }
+  const steering = new SeatSteering(opts.mcpUrl, () => [...joined].flatMap(room => pids.has(room) ? [{ room, participant_id: pids.get(room)! }] : []));
+  const heartbeat = (tool: string, args: Record<string, string> = {}) => { void steering.heartbeat(tool, args, stepNo); };
   /** What the model must not forget when older turns are dropped: its rooms, names and participant ids. */
   const identityCard = () => (joined.size ? `\n\nYOU ARE ALREADY IN: ${[...joined].map((r) => `room "${r}" as ${joinedAs.get(r) ?? "?"}${pids.get(r) ? ` (participant_id ${pids.get(r)})` : ""}`).join("; ")}. Do not call join_room for these rooms again and never join under another name; continue with wait_for_messages, read_messages, send_message, board_get.` : "");
   const joinedAs = new Map<string, string>();
@@ -493,7 +478,8 @@ export async function runSeat(provider: ChatProvider, opts: SeatOptions): Promis
     const suffix = handed.length ? `; handed off: ${handed.join(", ")}` : "";
     for (const room of [...joined]) {
       try {
-        await client.callTool({ name: "leave_room", arguments: { room, reason: `seat exiting: ${reason}${suffix}`.slice(0, 600) } }, undefined, { timeout: 30_000 });
+        const left = await client.callTool({ name: "leave_room", arguments: { room, reason: `seat exiting: ${reason}${suffix}`.slice(0, 600) } }, undefined, { timeout: 30_000 });
+        if (!left.isError) joined.delete(room);
         log(`[${provider.label}] left ${room}: ${reason}${suffix}`);
       } catch (e) {
         log(`[${provider.label}] could not leave ${room}: ${e instanceof Error ? e.message : String(e)}`);
@@ -586,6 +572,8 @@ export async function runSeat(provider: ChatProvider, opts: SeatOptions): Promis
       await bow(`${maxMinutes} min budget spent`);
       break;
     }
+    const delivery = await steering.prepare(steps);
+    if (delivery.content) idleRunStreak = 0;
     // PROACTIVE HANDOFF: at pressure, write handoff/* for our claims, leave with a reason naming them,
     // and terminate as a clean ok run BEFORE the cap, the budget or trim() can kill the work silently.
     const cause = noHandoff || !joined.size ? undefined : pressureCause();
@@ -607,9 +595,11 @@ export async function runSeat(provider: ChatProvider, opts: SeatOptions): Promis
       break;
     }
     trim();
+    if (delivery.content) messages.push({ role: "user", content: delivery.content });
     let reply: Reply;
     try {
       reply = await provider.complete(messages, tools);
+      await delivery.delivered();
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       log(`[${provider.label}] provider error: ${msg}`);
@@ -646,6 +636,7 @@ export async function runSeat(provider: ChatProvider, opts: SeatOptions): Promis
     // outbound room work (send_message/board_set) nor received an actionable hub hint.
     let stepHadOutboundWrite = false;
     let stepHadActionableHint = false;
+    const hints: string[] = [];
     for (const call of calls) {
       let args: Record<string, string> = {};
       try {
@@ -689,7 +680,7 @@ export async function runSeat(provider: ChatProvider, opts: SeatOptions): Promis
             stepHadActionableHint = true;
             if (view.hint !== lastHint) {
               lastHint = view.hint!;
-              messages.push({ role: "user", content: `Hub: ${view.hint}` });
+              hints.push(`Hub: ${view.hint}`);
             }
           }
         } catch {
@@ -697,6 +688,7 @@ export async function runSeat(provider: ChatProvider, opts: SeatOptions): Promis
         }
       }
     }
+    for (const content of hints) messages.push({ role: "user", content });
     idleRunStreak = stepHadOutboundWrite || stepHadActionableHint ? 0 : idleRunStreak + 1;
     if (steps === maxSteps) {
       log(`[${provider.label}] step cap ${maxSteps} reached`);
@@ -705,6 +697,7 @@ export async function runSeat(provider: ChatProvider, opts: SeatOptions): Promis
   }
 
   log(`[${provider.label}] ${steps} step(s), ${usage.prompt_tokens} prompt + ${usage.completion_tokens} completion tokens${usage.cost ? `, $${usage.cost.toFixed(4)}` : ""}${usage.cached_tokens ? `, ${usage.cached_tokens} cached tok` : ""}${usage.cache_discount ? `, $${usage.cache_discount.toFixed(4)} cache discount` : ""}${handedOff ? `, handed off before the cap: ${handoffs.join(", ") || "no claims"}` : ""}`);
+  await steering.flush();
   if (opts.mcpUrl) {
     // a finish that skipped leave_room would leave an active voter behind until the idle sweep
     if (joined.size) await bow("finished without leaving");

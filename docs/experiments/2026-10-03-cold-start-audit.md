@@ -15,7 +15,9 @@ request even when its usage is absent, and accepts cold only with an explicit
 integer zero in `cache_read_input_tokens` and a preceding CLI initialization or
 root user event. Missing fields, truncated starts, unsupported provider traces,
 and seats with only aggregate sidecars are unknown. A later warm request does
-not invalidate a cold start. Source artifacts must cover the actual room roster;
+not invalidate a cold start. This check currently supports Claude traces only;
+an arm containing any Codex or OpenRouter seat cannot pass it. Source artifacts
+must cover the actual room roster;
 `--expected-seats` catches a mismatched artifact count but cannot authenticate
 which seats belong to the room.
 

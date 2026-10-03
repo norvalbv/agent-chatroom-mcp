@@ -127,7 +127,7 @@ test("a fold gives back a row that became a pending ask, on the next fold pass",
     appendChild(n: El) { n.remove(); n.parentElement = this; this.children.push(n); }
     insertBefore(n: El, ref: El) { n.remove(); n.parentElement = this; const i = this.children.indexOf(ref); this.children.splice(i < 0 ? this.children.length : i, 0, n); }
     remove() { const p = this.parentElement; if (p) { p.children.splice(p.children.indexOf(this), 1); this.parentElement = null; } }
-    querySelectorAll(q: string): El[] { return this.children.flatMap((n) => [...(q === "[data-seq]" && n.dataset.seq ? [n] : []), ...n.querySelectorAll(q)]); }
+    querySelectorAll(q: string): El[] { return this.children.flatMap((n) => [...((q === "[data-seq]" && n.dataset.seq) || (q === ".fold" && n.classList.contains("fold")) ? [n] : []), ...n.querySelectorAll(q)]); }
   }
   const log = new El("log");
   const rows = [1, 2, 3, 4].map((n) => new El("msg", n));

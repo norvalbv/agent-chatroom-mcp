@@ -6,11 +6,16 @@
  */
 export const PALETTE_CSS = `
   /* ---------- palette + pins (claim/palette-filter) ---------- */
-  #pal { position:fixed; inset:0; z-index:60; display:none; align-items:flex-start; justify-content:center; padding:12vh 16px 16px; background:color-mix(in srgb, var(--bg) 45%, transparent); -webkit-backdrop-filter:blur(6px); backdrop-filter:blur(6px) }
+  #pal { position:fixed; inset:0; z-index:60; display:none; align-items:flex-start; justify-content:center; padding:12vh 16px 16px; background:rgba(0,0,0,.35) }
   #pal.on { display:flex }
-  #pal .box { width:min(620px, 100%); max-height:70vh; display:flex; flex-direction:column; background:color-mix(in srgb, var(--panel) 82%, transparent); -webkit-backdrop-filter:blur(24px) saturate(1.4); backdrop-filter:blur(24px) saturate(1.4); border:1px solid color-mix(in srgb, var(--line) 80%, transparent); border-radius:16px; box-shadow:0 24px 60px rgba(0,0,0,.28), inset 0 1px 0 rgba(255,255,255,.12); overflow:hidden }
-  #pal input { border:0; border-bottom:1px solid var(--line); border-radius:0; background:transparent; font-size:15px; padding:14px 16px; outline:none }
-  #pal input:focus { outline:none; border-color:var(--line) }
+  #pal .box { width:min(620px, 100%); max-height:70vh; display:flex; flex-direction:column; background:var(--panel); border:1px solid color-mix(in srgb, var(--line) 80%, transparent); border-radius:16px; box-shadow:0 24px 60px rgba(0,0,0,.28), inset 0 1px 0 rgba(255,255,255,.12); overflow:hidden }
+  /* glass only where backdrop-filter works; otherwise the opaque surfaces above stand */
+  @supports ((-webkit-backdrop-filter:blur(1px)) or (backdrop-filter:blur(1px))) {
+    #pal { background:color-mix(in srgb, var(--bg) 45%, transparent); -webkit-backdrop-filter:blur(6px); backdrop-filter:blur(6px) }
+    #pal .box { background:color-mix(in srgb, var(--panel) 86%, transparent); -webkit-backdrop-filter:blur(24px) saturate(1.4); backdrop-filter:blur(24px) saturate(1.4) }
+  }
+  #pal input { border:0; border-bottom:1px solid var(--line); border-radius:0; background:transparent; font-size:15px; padding:14px 16px }
+  #pal input:focus, #pal input:focus-visible { outline:none; border-color:var(--line); box-shadow:inset 0 -2px 0 var(--acc) } /* the only control in the dialog: a bottom accent bar marks its focus */
   #pal ul { list-style:none; margin:0; padding:6px; overflow:auto }
   #pal li { display:flex; align-items:center; gap:10px; padding:8px 10px; border-radius:10px; cursor:pointer; font-size:13.5px }
   #pal li .g { font-size:10px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--dim); min-width:58px }
@@ -31,7 +36,7 @@ export const PALETTE_CSS = `
   @media (hover: none) { .pinb { opacity:.6 } }
 `;
 
-export const PALETTE_HTML = `<div id="pal" role="dialog" aria-modal="true" aria-label="Command palette"><div class="box"><input id="palq" placeholder="Jump to a room, tab, pinned message, #seq or command…" autocomplete="off" spellcheck="false" aria-controls="pall" /><ul id="pall" role="listbox"></ul><div class="foot"><span><kbd>↑</kbd> <kbd>↓</kbd> move</span><span><kbd>↵</kbd> run</span><span><kbd>esc</kbd> close</span><span><kbd>⌘K</kbd> / <kbd>Ctrl K</kbd> open</span></div></div></div>`;
+export const PALETTE_HTML = `<div id="pal" role="dialog" aria-modal="true" aria-label="Command palette"><div class="box"><input id="palq" aria-label="Command palette: search rooms, tabs, pins and commands" role="combobox" aria-expanded="true" aria-autocomplete="list" placeholder="Jump to a room, tab, pinned message, #seq or command…" autocomplete="off" spellcheck="false" aria-controls="pall" /><ul id="pall" role="listbox"></ul><div class="foot"><span><kbd>↑</kbd> <kbd>↓</kbd> move</span><span><kbd>↵</kbd> run</span><span><kbd>esc</kbd> close</span><span><kbd>⌘K</kbd> / <kbd>Ctrl K</kbd> open</span></div></div></div>`;
 
 export const PALETTE_JS = `
   /*palette:start*/

@@ -38,4 +38,4 @@ The summaries are `docs/measurements/consensus-action-{base,head}-valid.json`; c
 
 Each valid summary binds the source commit, served `dist/hub.js` SHA-256, and whole-dist SHA-256. The latter hashes sorted relative file paths followed by NUL, file bytes, and NUL, recursively over `dist/`. The baseline came from a git archive, so its empty original `git` field is supplemented by the explicit `sourceCommit`.
 
-Build, scripts typecheck and private-port SMOKE passed on the source candidate. The initial full suite passed 158 of 159 commands, failing the inherited pool-run same-timestamp object-identity fixture; that defect is being corrected and reviewed separately. Landing still requires the complete suite on the merged tree.
+Build, scripts typecheck and private-port SMOKE passed on the source candidate. The initial full suite passed 158 of 159 commands, failing the inherited pool-run same-timestamp object-identity fixture; that defect is being corrected and reviewed separately. The unchanged candidate's full rerun passed all 159 commands. Landing still requires the complete suite on the merged tree.

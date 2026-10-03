@@ -1,0 +1,258 @@
+{
+  "run": "swarm-130854-nmek",
+  "method": {
+    "bytes": "UTF-8 bytes of returned text blocks joined by newline; excludes JSON transport envelope and non-text blocks",
+    "tokens": "Provider-reported usage, separate from text bytes; missing fields are unknown, not zero",
+    "candidates": "Observed patterns, not a finding that every matched call was unnecessary",
+    "coverage": "Denominator is seats found in supplied artifacts, not a room roster. Sidecars supply usage without traces and supersede transcript usage."
+  },
+  "seats": {
+    "6-astra-4": {
+      "provider": "codex",
+      "trace_sources": [
+        "6-astra-4.events.jsonl"
+      ],
+      "usage": null,
+      "trace_sha256": {
+        "6-astra-4.events.jsonl": "d44ef1afe9fffd99d500cc6e9c05f55a068327c079eff940e3976196dfc129e8"
+      },
+      "trace_observed": true,
+      "tool_calls": 168,
+      "hub_tool_calls": 102,
+      "tools": {
+        "command_execution": {
+          "calls": 66,
+          "results": 65,
+          "text_bytes": 306990,
+          "max_text_bytes": 35144,
+          "hub": false
+        },
+        "join_room": {
+          "calls": 1,
+          "results": 1,
+          "text_bytes": 12053,
+          "max_text_bytes": 12053,
+          "hub": true
+        },
+        "submit_opening": {
+          "calls": 1,
+          "results": 1,
+          "text_bytes": 379,
+          "max_text_bytes": 379,
+          "hub": true
+        },
+        "wait_for_messages": {
+          "calls": 21,
+          "results": 21,
+          "text_bytes": 35521,
+          "max_text_bytes": 4310,
+          "hub": true
+        },
+        "board_get": {
+          "calls": 14,
+          "results": 14,
+          "text_bytes": 27582,
+          "max_text_bytes": 3018,
+          "hub": true
+        },
+        "board_set": {
+          "calls": 11,
+          "results": 11,
+          "text_bytes": 890,
+          "max_text_bytes": 93,
+          "hub": true
+        },
+        "send_message": {
+          "calls": 49,
+          "results": 49,
+          "text_bytes": 39936,
+          "max_text_bytes": 4970,
+          "hub": true
+        },
+        "read_messages": {
+          "calls": 5,
+          "results": 5,
+          "text_bytes": 13038,
+          "max_text_bytes": 3861,
+          "hub": true
+        }
+      },
+      "redundancy_candidates": {
+        "board_manifest_reads": 2,
+        "unread_send_refusals": 20,
+        "unread_send_refusal_text_bytes": 27298,
+        "same_content_send_retries": 6,
+        "read_messages_after_wait": 2,
+        "overlapping_message_seqs_after_wait": 0,
+        "repeated_message_deliveries": 3,
+        "repeated_message_text_bytes": 1676
+      }
+    },
+    "6-astra-5": {
+      "provider": "codex",
+      "trace_sources": [
+        "6-astra-5.events.jsonl"
+      ],
+      "usage": null,
+      "trace_sha256": {
+        "6-astra-5.events.jsonl": "5a8025b90c363c606794f20a6984a685378d7226d58f1111d0d630b929dba93e"
+      },
+      "trace_observed": true,
+      "tool_calls": 184,
+      "hub_tool_calls": 104,
+      "tools": {
+        "command_execution": {
+          "calls": 80,
+          "results": 80,
+          "text_bytes": 308315,
+          "max_text_bytes": 37658,
+          "hub": false
+        },
+        "join_room": {
+          "calls": 1,
+          "results": 1,
+          "text_bytes": 11576,
+          "max_text_bytes": 11576,
+          "hub": true
+        },
+        "submit_opening": {
+          "calls": 1,
+          "results": 1,
+          "text_bytes": 362,
+          "max_text_bytes": 362,
+          "hub": true
+        },
+        "wait_for_messages": {
+          "calls": 33,
+          "results": 33,
+          "text_bytes": 58283,
+          "max_text_bytes": 3774,
+          "hub": true
+        },
+        "board_get": {
+          "calls": 18,
+          "results": 18,
+          "text_bytes": 32745,
+          "max_text_bytes": 3927,
+          "hub": true
+        },
+        "send_message": {
+          "calls": 42,
+          "results": 42,
+          "text_bytes": 34758,
+          "max_text_bytes": 3311,
+          "hub": true
+        },
+        "board_set": {
+          "calls": 8,
+          "results": 8,
+          "text_bytes": 651,
+          "max_text_bytes": 89,
+          "hub": true
+        },
+        "pass": {
+          "calls": 1,
+          "results": 1,
+          "text_bytes": 46,
+          "max_text_bytes": 46,
+          "hub": true
+        }
+      },
+      "redundancy_candidates": {
+        "board_manifest_reads": 3,
+        "unread_send_refusals": 14,
+        "unread_send_refusal_text_bytes": 22092,
+        "same_content_send_retries": 6,
+        "repeated_message_deliveries": 4,
+        "repeated_message_text_bytes": 1040,
+        "exact_repeated_hub_results": 1
+      }
+    }
+  },
+  "observed_totals": {
+    "hub_tool_calls": 206,
+    "hub_results": 206,
+    "hub_text_bytes": 267820
+  },
+  "tools": {
+    "command_execution": {
+      "calls": 146,
+      "results": 145,
+      "text_bytes": 615305,
+      "max_text_bytes": 37658,
+      "hub": false
+    },
+    "join_room": {
+      "calls": 2,
+      "results": 2,
+      "text_bytes": 23629,
+      "max_text_bytes": 12053,
+      "hub": true
+    },
+    "submit_opening": {
+      "calls": 2,
+      "results": 2,
+      "text_bytes": 741,
+      "max_text_bytes": 379,
+      "hub": true
+    },
+    "wait_for_messages": {
+      "calls": 54,
+      "results": 54,
+      "text_bytes": 93804,
+      "max_text_bytes": 4310,
+      "hub": true
+    },
+    "board_get": {
+      "calls": 32,
+      "results": 32,
+      "text_bytes": 60327,
+      "max_text_bytes": 3927,
+      "hub": true
+    },
+    "board_set": {
+      "calls": 19,
+      "results": 19,
+      "text_bytes": 1541,
+      "max_text_bytes": 93,
+      "hub": true
+    },
+    "send_message": {
+      "calls": 91,
+      "results": 91,
+      "text_bytes": 74694,
+      "max_text_bytes": 4970,
+      "hub": true
+    },
+    "read_messages": {
+      "calls": 5,
+      "results": 5,
+      "text_bytes": 13038,
+      "max_text_bytes": 3861,
+      "hub": true
+    },
+    "pass": {
+      "calls": 1,
+      "results": 1,
+      "text_bytes": 46,
+      "max_text_bytes": 46,
+      "hub": true
+    }
+  },
+  "redundancy_candidates": {
+    "board_manifest_reads": 5,
+    "unread_send_refusals": 34,
+    "unread_send_refusal_text_bytes": 49390,
+    "same_content_send_retries": 12,
+    "read_messages_after_wait": 2,
+    "overlapping_message_seqs_after_wait": 0,
+    "repeated_message_deliveries": 7,
+    "repeated_message_text_bytes": 2716,
+    "exact_repeated_hub_results": 1
+  },
+  "coverage": {
+    "seats": 2,
+    "seats_with_trace": 2,
+    "seats_with_usage": 0
+  }
+}

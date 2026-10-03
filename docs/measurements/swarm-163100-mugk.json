@@ -1,0 +1,115 @@
+{
+  "run": "swarm-163100-mugk",
+  "method": {
+    "bytes": "UTF-8 bytes of returned text blocks joined by newline; excludes JSON transport envelope and non-text blocks",
+    "tokens": "Provider-reported usage, separate from text bytes; missing fields are unknown, not zero",
+    "candidates": "Observed patterns, not a finding that every matched call was unnecessary",
+    "coverage": "Denominator is seats found in supplied artifacts, not a room roster. Sidecars supply usage without traces and supersede transcript usage."
+  },
+  "seats": {
+    "claude-opus-5-5-1": {
+      "trace_sources": [],
+      "provider": "claude",
+      "usage": {
+        "input_tokens": 202,
+        "cache_read_input_tokens": 11144189,
+        "cache_creation_input_tokens": 203169,
+        "output_tokens": 57855
+      },
+      "usage_source": "claude-opus-5-5-1.usage.json",
+      "trace_observed": false,
+      "tool_calls": null,
+      "hub_tool_calls": null,
+      "tools": {},
+      "redundancy_candidates": {}
+    },
+    "claude-opus-5-5-2": {
+      "trace_sources": [],
+      "provider": "claude",
+      "usage": {
+        "input_tokens": 124,
+        "cache_read_input_tokens": 4870543,
+        "cache_creation_input_tokens": 112296,
+        "output_tokens": 34054
+      },
+      "usage_source": "claude-opus-5-5-2.usage.json",
+      "trace_observed": false,
+      "tool_calls": null,
+      "hub_tool_calls": null,
+      "tools": {},
+      "redundancy_candidates": {}
+    },
+    "claude-opus-5-5-3": {
+      "trace_sources": [],
+      "provider": "claude",
+      "usage": {
+        "input_tokens": 176,
+        "cache_read_input_tokens": 9066682,
+        "cache_creation_input_tokens": 191546,
+        "output_tokens": 54413
+      },
+      "usage_source": "claude-opus-5-5-3.usage.json",
+      "trace_observed": false,
+      "tool_calls": null,
+      "hub_tool_calls": null,
+      "tools": {},
+      "redundancy_candidates": {}
+    },
+    "claude-opus-5-5-4": {
+      "trace_sources": [],
+      "provider": "claude",
+      "usage": {
+        "input_tokens": 176,
+        "cache_read_input_tokens": 8029493,
+        "cache_creation_input_tokens": 178839,
+        "output_tokens": 38035
+      },
+      "usage_source": "claude-opus-5-5-4.usage.json",
+      "trace_observed": false,
+      "tool_calls": null,
+      "hub_tool_calls": null,
+      "tools": {},
+      "redundancy_candidates": {}
+    },
+    "claude-opus-5-5-5": {
+      "trace_sources": [],
+      "provider": "claude",
+      "usage": {
+        "input_tokens": 206,
+        "cache_read_input_tokens": 10947189,
+        "cache_creation_input_tokens": 186292,
+        "output_tokens": 45386
+      },
+      "usage_source": "claude-opus-5-5-5.usage.json",
+      "trace_observed": false,
+      "tool_calls": null,
+      "hub_tool_calls": null,
+      "tools": {},
+      "redundancy_candidates": {}
+    },
+    "verifier": {
+      "trace_sources": [],
+      "provider": "claude",
+      "usage": {
+        "input_tokens": 162,
+        "cache_read_input_tokens": 7140738,
+        "cache_creation_input_tokens": 167122,
+        "output_tokens": 38901
+      },
+      "usage_source": "verifier.usage.json",
+      "trace_observed": false,
+      "tool_calls": null,
+      "hub_tool_calls": null,
+      "tools": {},
+      "redundancy_candidates": {}
+    }
+  },
+  "observed_totals": {},
+  "tools": {},
+  "redundancy_candidates": {},
+  "coverage": {
+    "seats": 6,
+    "seats_with_trace": 0,
+    "seats_with_usage": 6
+  }
+}

@@ -4,7 +4,6 @@ import { applyBoard, sessionsOf, quorumNeeded } from "./board.js";
 import { HubError } from "./types.js";
 import type { Participant, KickVote, BoardEntry, Room } from "./types.js";
 import { now } from "./internal.js";
-import { createHash } from "node:crypto";
 
 /** Who may be a kick target: an active non-human, non-chair participant of this room, by name (or id). */
 function kickTarget(hub: Hub, room: Room, target: string): Participant {
@@ -26,42 +25,6 @@ function kickPool(hub: Hub, room: Room, target: Participant): Participant[] {
 
 /** No hub call or heartbeat for this long reads as suspected_dead; such a seat can never ballot, so it is no kick voter. */
 export const SUSPECTED_DEAD_MS = 10 * 60_000;
-
-/** sha256 of a launcher seat key, persisted on the participant (seatKeyHash) so a beat after a hub restart still finds its seat. */
-export function seatHash(seatKey: string): string { return createHash("sha256").update(seatKey).digest("hex"); }
-
-/** A beat no live connection claims (the hub restarted, or the MCP session dropped): the process is still running, so record
- * it on the inactive seats that key joined as. They stay inactive; room_status shows them as "away", not dead. */
-export function beatAwaySeats(hub: Hub, seatKey: string, record: (p: Participant) => void): void {
-  const hash = seatHash(seatKey);
-  for (const room of hub.rooms.values()) {
-    if (room.state === "concluded" || room.state === "closed") continue;
-    for (const p of room.participants.values()) if (!p.active && p.seatKeyHash === hash) record(p);
-  }
-}
-
-/**
- * A seat that is out of the room but not a vacancy: it rejoins on its next hub call. Either its launcher's heartbeat
- * (by seat key) arrived after it went inactive, or a hub restart restored it inactive while it was in the room and it
- * has been silent for less than SUSPECTED_DEAD_MS since (a seat inside one long command sends nothing until the
- * command ends; the old process's beats were not kept). The same 10 minutes the idle sweep gives a live seat.
- * A seat that called leave_room itself, was kicked or already has a successor is never away. request_agent(replacing=)
- * refuses an away seat (src/index.ts), so a quiet live seat is not duplicated (swarm-181144-uxtr, 6-astra-3).
- */
-export function away(p: Participant): { age_seconds: number; evidence: string } | undefined {
-  if (p.active || p.kicked || p.replacedBy || p.pendingReplacementName) return undefined;
-  if (p.leaveReason && !p.leaveReason.startsWith("MCP session closed")) return undefined;
-  const ageOf = (at: string) => Math.max(0, Math.floor((Date.now() - Date.parse(at)) / 1000));
-  if (p.working && Date.parse(p.working.at) > Date.parse(p.lastActiveAt) && Date.now() - Date.parse(p.working.at) < SUSPECTED_DEAD_MS) {
-    const age = ageOf(p.working.at);
-    return { age_seconds: age, evidence: `its process is still running: it heartbeated ${age}s ago (step ${p.working.step}, ${p.working.tool})` };
-  }
-  if (p.restoredAt && Date.now() - Date.parse(p.restoredAt) < SUSPECTED_DEAD_MS) {
-    const age = ageOf(p.restoredAt);
-    return { age_seconds: age, evidence: `it was in the room when the hub restarted ${age}s ago and has not been silent long enough to read as dead (a seat inside a long command rejoins when the command ends)` };
-  }
-  return undefined;
-}
 
 /** Re-judge every open kick vote: the idle sweep calls this, so a swept target drops its vote and a shrinking pool can pass one. */
 export function reevaluateOpenKicks(hub: Hub, room: Room): void {

@@ -8,7 +8,6 @@
  * by the plain HTTP endpoints (humans), or by tests.
  */
 import { createHash, randomBytes } from "node:crypto";
-import { spawnSync } from "node:child_process";
 import { mkdirSync } from "node:fs";
 import { analyzeReplyMetrics, type ReplyMetricEvent } from "./reply-metrics.js";
 
@@ -19,6 +18,7 @@ import { now, shortId, norm, emptyBoardManifestCounters, manifestBytes, codeStat
 import type { Opts, Event, BoardManifestCounters } from "./hub/internal.js";
 import * as board from "./hub/board.js";
 import * as kick from "./hub/kick.js";
+import * as liveness from "./hub/liveness.js";
 import * as persistence from "./hub/persistence.js";
 
 export class Hub {
@@ -394,7 +394,7 @@ export class Hub {
         active: true,
         messageCount: 0,
         session,
-        seatKeyHash: session ? this.sessionSeatHashes.get(session) : undefined,
+        seatKeyHash: this.seats.hashOf(session),
         ...(role && role !== "worker" ? { role } : {}),
       };
       const predecessor = [...room.participants.values()].find((p) => p.pendingReplacementName === name);
@@ -414,7 +414,7 @@ export class Hub {
       participant.active = true;
       participant.lastActiveAt = now();
       if (session) participant.session = session;
-      participant.seatKeyHash = this.sessionSeatHashes.get(session ?? "") ?? participant.seatKeyHash;
+      participant.seatKeyHash = this.seats.hashOf(session) ?? participant.seatKeyHash;
       delete participant.restoredAt;
       if (role && role !== "worker") participant.role = role;
       this.persist({ type: "join", room: roomName, p: participant });
@@ -2178,84 +2178,17 @@ export class Hub {
     return done;
   }
 
-  // ---------- liveness ----------
+  // ---------- liveness (src/hub/liveness.ts) ----------
 
-  /** Mark participants inactive after `idleMs` without any activity in a room that has not concluded. */
-  /** Mark silent participants as left, except those whose MCP session is in `connected`: a seat building in its worktree for 20 minutes is working, not gone. */
-  /**
-   * A seat's own liveness signal (POST /rooms/:room/heartbeat from src/seat.ts on every step): what it is doing and
-   * when. Local tools never reach the hub, so without this a builder on step 71 of a build looked like "1 msg, 12m ago"
-   * and nobody could tell it from a dead seat. Not persisted: it is about the process, not the room's history.
-   */
-  heartbeat(roomName: string, pid: string, info: { tool: string; step?: number; detail?: string }): void {
-    const room = this.getRoom(roomName);
-    const p = this.requireParticipant(room, pid);
-    this.recordWork(p, info);
-  }
-
-  /** A step with no count of its own (a hook, an MCP call) is the seat's next step. */
-  private recordWork(p: Participant, info: { tool: string; step?: number; detail?: string }): void {
-    const detail = String(info.detail ?? "").replace(/\s+/g, " ").trim().slice(0, 300);
-    const step = Number(info.step) || (p.working?.step ?? 0) + 1;
-    p.working = { tool: String(info.tool).slice(0, 40), step, at: now(), ...(detail ? { detail } : {}) };
-    (p.activity ??= []).push({ tool: p.working.tool, step: p.working.step, at: p.working.at, detail });
-    if (p.activity.length > 60) p.activity.splice(0, p.activity.length - 60);
-  }
-
-  /**
-   * Seat keys: a launcher gives each seat process a random key, puts it in the seat's MCP URL (?seat=) and in its env
-   * (CHATROOM_SEAT_KEY). The hub binds the key to the MCP connection it arrives on, so a process that cannot know its
-   * participant ids (a claude -p tool hook, a launcher watching codex output) can still heartbeat as that connection,
-   * and only as that connection (identity-is-the-connection). Ephemeral, like the heartbeats themselves.
-   */
-  private seatSessions = new Map<string, string>();
-  /** session -> the worktree its launcher started the seat in (from the MCP URL, never from the seat's own words) */
-  private sessionWorktrees = new Map<string, string>();
-
-  /** session -> sha256 of its seat key, stamped on the participants it joins (seatKeyHash) */
-  private sessionSeatHashes = new Map<string, string>();
-
-  bindSeat(seatKey: string, session: string, worktree?: string): void {
-    if (seatKey && session) this.seatSessions.set(seatKey, session);
-    if (seatKey && session) this.sessionSeatHashes.set(session, kick.seatHash(seatKey));
-    if (session && worktree) this.sessionWorktrees.set(session, worktree);
-  }
-
-  /** Out of the room but not a vacancy: it rejoins on its next hub call (kick.away). */
-  away(p: Participant) { return kick.away(p); }
-
-  /** Where a seat's work in progress lives: its bound worktree and the branch checked out there now. */
-  workspaceOf(p: Participant): { branch?: string; worktree: string } | undefined {
-    const worktree = p.session ? this.sessionWorktrees.get(p.session) : undefined;
-    if (!worktree) return undefined;
-    const r = spawnSync("git", ["-C", worktree, "branch", "--show-current"], { encoding: "utf8", timeout: 5_000 });
-    const branch = r.status === 0 ? r.stdout.trim() : "";
-    return branch ? { branch, worktree } : { worktree };
-  }
-
-  /** Heartbeat every active participant the seat's connection holds, in rooms still open. Returns how many were marked. */
-  heartbeatSeat(seatKey: string, info: { tool: string; step?: number; detail?: string }): number {
-    const seats = this.seatParticipants(seatKey);
-    for (const { p } of seats) this.recordWork(p, info);
-    if (!seats.length) kick.beatAwaySeats(this, seatKey, (p) => this.recordWork(p, info));
-    return seats.length;
-  }
-
-  /** The active participants a launched seat's connection holds (by seat key), in rooms still open. */
-  seatParticipants(seatKey: string): { room: Room; p: Participant }[] {
-    const session = this.seatSessions.get(seatKey);
-    if (!session) return [];
-    return [...this.rooms.values()].filter((room) => room.state !== "concluded" && room.state !== "closed")
-      .flatMap((room) => [...room.participants.values()].filter((p) => p.active && p.session === session).map((p) => ({ room, p })));
-  }
-
-  /** A participant's recent steps, oldest first (GET /rooms/:room/participants/:name/activity). */
-  activity(roomName: string, name: string): { tool: string; step: number; at: string; detail: string }[] {
-    const room = this.getRoom(roomName);
-    const p = [...room.participants.values()].filter((x) => x.name === name).sort((a, b) => (b.active ? 1 : 0) - (a.active ? 1 : 0))[0];
-    if (!p) throw new HubError(`No participant named "${name}" in "${roomName}".`);
-    return p.activity ?? [];
-  }
+  /** @internal */ readonly seats = new liveness.Seats(this);
+  heartbeat(roomName: string, pid: string, info: liveness.Beat): void { this.seats.heartbeat(roomName, pid, info); }
+  bindSeat(seatKey: string, session: string, worktree?: string): void { this.seats.bind(seatKey, session, worktree); }
+  /** Out of the room but not a vacancy: it rejoins on its next hub call (liveness.away). */
+  away(p: Participant) { return liveness.away(p); }
+  workspaceOf(p: Participant): { branch?: string; worktree: string } | undefined { return this.seats.workspaceOf(p); }
+  heartbeatSeat(seatKey: string, info: liveness.Beat): number { return this.seats.heartbeatSeat(seatKey, info); }
+  seatParticipants(seatKey: string): { room: Room; p: Participant }[] { return this.seats.participants(seatKey); }
+  activity(roomName: string, name: string) { return this.seats.activity(roomName, name); }
 
   // ---------- kick vote / removal ----------
 

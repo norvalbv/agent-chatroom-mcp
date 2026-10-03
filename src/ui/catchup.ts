@@ -164,20 +164,28 @@ export const CATCHUP_JS = `/*catchup:start*/
     flush();
   }
   // The digest: what changed since the reader last looked, each line jumping to the message.
+  // With the inbox (src/ui/inbox.ts) present, its pending asks (minus Dismissed) are the "For you" line, so both agree.
+  var pendingIds = function () {
+    if (typeof qAsks === 'function') return qAsks().filter(function (q) { return q.room === sel; }).map(function (q) { return q.id; });
+    var p = typeof window.crPendingAsks === 'function' ? window.crPendingAsks(sel) : null;
+    return Array.isArray(p) ? p : null;
+  };
   function catchupDigest() {
-    var old = $('#catchup'); if (old) old.remove();
-    if (!sel || !msgs.length) return;
+    var old = $('#catchup');
     var live = !!cur && (cur.state === 'open' || cur.state === 'stalled');
-    var pending = typeof window.crPendingAsks === 'function' ? window.crPendingAsks(sel) : null; // ids, from the inbox
-    var g = cuDigest(msgs, catchSince, live, cuHelpers(msgs, humanNames()), esc, Array.isArray(pending) ? pending : null);
-    if (!g) return;
-    var d = document.createElement('div'); d.id = 'catchup'; d.className = catchOpen ? 'open' : '';
-    d.setAttribute('role', 'region'); d.setAttribute('aria-label', 'Catch-up digest');
-    d.innerHTML = '<div class="cu-h"><button type="button" class="cu-tog" aria-expanded="' + catchOpen + '"><span class="car">' + (catchOpen ? '▾' : '▸') + '</span>' + (catchSince ? 'Since you last looked' : 'Room so far') + ' <span class="cu-s">' + g.summary + '</span></button>'
+    var g = sel && msgs.length ? cuDigest(msgs, catchSince, live, cuHelpers(msgs, humanNames()), esc, pendingIds()) : null;
+    if (!g) { if (old) old.remove(); return; }
+    var html = '<div class="cu-h"><button type="button" class="cu-tog" aria-expanded="' + catchOpen + '"><span class="car">' + (catchOpen ? '▾' : '▸') + '</span>' + (catchSince ? 'Since you last looked' : 'Room so far') + ' <span class="cu-s">' + g.summary + '</span></button>'
       + '<button type="button" class="cu-done" title="Mark everything up to now as read (key: .)">Caught up</button></div>'
       + (catchOpen ? '<div class="cu-b">' + g.lines.join('') + '</div>' : '');
+    if (old && old.parentNode === $('#log') && old === $('#log').firstChild) { if (old.innerHTML !== html) old.innerHTML = html; return; }
+    if (old) old.remove();
+    var d = document.createElement('div'); d.id = 'catchup';
+    d.setAttribute('role', 'region'); d.setAttribute('aria-label', 'Catch-up digest');
+    d.innerHTML = html;
     $('#log').insertBefore(d, $('#log').firstChild);
   }
+  setInterval(function () { if (!document.hidden) catchupDigest(); }, 4000); // the inbox's list and room state change without new messages
   function catchupAfter() { catchupFold(); catchupDigest(); }
   function setSignal(on) {
     signalOnly = on; store.set('signalOnly', on); foldOpen = {};
@@ -201,6 +209,11 @@ export const CATCHUP_JS = `/*catchup:start*/
     var re = e.target.closest && e.target.closest('.re');
     if (re) { var t = $('#log [data-seq="' + re.dataset.seq + '"]'), f2 = t && t.closest('.fold'); if (f2 && !f2.classList.contains('open')) { f2.classList.add('open'); foldOpen[f2.dataset.k] = true; foldLabel(f2); } }
   }, true);
+  setTimeout(function () { // after every section has run, whichever order they were spliced in
+    if (!window.crPalette) return;
+    window.crPalette.add({ group: 'View', label: 'Signal only (fold chatter)', hint: 's', run: function () { setSignal(!signalOnly); } });
+    window.crPalette.add({ group: 'View', label: 'Mark room caught up', hint: '.', run: function () { var b = $('#catchup .cu-done'); if (b) b.click(); } });
+  }, 0);
   document.addEventListener('keydown', function (e) {
     if (e.target.matches('input,textarea,select') || e.metaKey || e.ctrlKey || e.altKey) return;
     if (e.key === 's') { e.preventDefault(); setSignal(!signalOnly); }

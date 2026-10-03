@@ -1,0 +1,349 @@
+{
+  "run": "swarm-181801-ohs2",
+  "method": {
+    "bytes": "UTF-8 bytes of returned text blocks joined by newline; excludes JSON transport envelope and non-text blocks",
+    "tokens": "Provider-reported usage, separate from text bytes; missing fields are unknown, not zero",
+    "candidates": "Observed patterns, not a finding that every matched call was unnecessary",
+    "coverage": "Denominator is seats found in supplied artifacts, not a room roster. Sidecars supply usage without traces and supersede transcript usage."
+  },
+  "seats": {
+    "claude-opus-5-5-1": {
+      "provider": "claude",
+      "trace_sources": [
+        "420ab7a6-0b08-4352-9680-c4efe690e894.jsonl"
+      ],
+      "usage": {
+        "input_tokens": 14,
+        "cache_read_input_tokens": 150246,
+        "cache_creation_input_tokens": 8911,
+        "output_tokens": 1625
+      },
+      "trace_sha256": {
+        "420ab7a6-0b08-4352-9680-c4efe690e894.jsonl": "556f90a6bc2a8481e1f2137ed045e00d6fecf783890ce29e8f34a40f83aa8116"
+      },
+      "usage_source": "claude-opus-5-5-1.usage.json",
+      "trace_observed": true,
+      "tool_calls": 8,
+      "hub_tool_calls": 8,
+      "tools": {
+        "join_room": {
+          "calls": 1,
+          "results": 1,
+          "text_bytes": 2576,
+          "max_text_bytes": 2576,
+          "hub": true
+        },
+        "board_set": {
+          "calls": 1,
+          "results": 1,
+          "text_bytes": 73,
+          "max_text_bytes": 73,
+          "hub": true
+        },
+        "submit_opening": {
+          "calls": 1,
+          "results": 1,
+          "text_bytes": 307,
+          "max_text_bytes": 307,
+          "hub": true
+        },
+        "wait_for_messages": {
+          "calls": 2,
+          "results": 2,
+          "text_bytes": 4217,
+          "max_text_bytes": 3192,
+          "hub": true
+        },
+        "board_get": {
+          "calls": 1,
+          "results": 1,
+          "text_bytes": 304,
+          "max_text_bytes": 304,
+          "hub": true
+        },
+        "propose": {
+          "calls": 1,
+          "results": 1,
+          "text_bytes": 723,
+          "max_text_bytes": 723,
+          "hub": true
+        },
+        "leave_room": {
+          "calls": 1,
+          "results": 1,
+          "text_bytes": 28,
+          "max_text_bytes": 28,
+          "hub": true
+        }
+      },
+      "redundancy_candidates": {}
+    },
+    "claude-opus-5-5-2": {
+      "provider": "claude",
+      "trace_sources": [
+        "543db936-5d5e-4c92-9ecf-c48432183747.jsonl"
+      ],
+      "usage": {
+        "input_tokens": 18,
+        "cache_read_input_tokens": 206492,
+        "cache_creation_input_tokens": 12218,
+        "output_tokens": 2684
+      },
+      "trace_sha256": {
+        "543db936-5d5e-4c92-9ecf-c48432183747.jsonl": "d0e543ecaee35619fb804bd4033cb9a8f7bce1b0471fa7b9d104988e18c5ef62"
+      },
+      "usage_source": "claude-opus-5-5-2.usage.json",
+      "trace_observed": true,
+      "tool_calls": 12,
+      "hub_tool_calls": 11,
+      "tools": {
+        "join_room": {
+          "calls": 1,
+          "results": 1,
+          "text_bytes": 2915,
+          "max_text_bytes": 2915,
+          "hub": true
+        },
+        "board_set": {
+          "calls": 1,
+          "results": 1,
+          "text_bytes": 73,
+          "max_text_bytes": 73,
+          "hub": true
+        },
+        "submit_opening": {
+          "calls": 1,
+          "results": 1,
+          "text_bytes": 327,
+          "max_text_bytes": 327,
+          "hub": true
+        },
+        "wait_for_messages": {
+          "calls": 3,
+          "results": 3,
+          "text_bytes": 4358,
+          "max_text_bytes": 1767,
+          "hub": true
+        },
+        "board_get": {
+          "calls": 1,
+          "results": 1,
+          "text_bytes": 328,
+          "max_text_bytes": 328,
+          "hub": true
+        },
+        "propose": {
+          "calls": 1,
+          "results": 1,
+          "text_bytes": 265,
+          "max_text_bytes": 265,
+          "hub": true
+        },
+        "challenge": {
+          "calls": 1,
+          "results": 1,
+          "text_bytes": 2028,
+          "max_text_bytes": 2028,
+          "hub": true
+        },
+        "other:Bash": {
+          "calls": 1,
+          "results": 1,
+          "text_bytes": 10,
+          "max_text_bytes": 10,
+          "hub": false
+        },
+        "vote": {
+          "calls": 1,
+          "results": 1,
+          "text_bytes": 2124,
+          "max_text_bytes": 2124,
+          "hub": true
+        },
+        "leave_room": {
+          "calls": 1,
+          "results": 1,
+          "text_bytes": 28,
+          "max_text_bytes": 28,
+          "hub": true
+        }
+      },
+      "redundancy_candidates": {}
+    },
+    "verifier": {
+      "provider": "claude",
+      "trace_sources": [
+        "cad882ac-27f1-4ae8-9752-3852f7ad6275.jsonl"
+      ],
+      "usage": {
+        "input_tokens": 14,
+        "cache_read_input_tokens": 163701,
+        "cache_creation_input_tokens": 12910,
+        "output_tokens": 4102
+      },
+      "trace_sha256": {
+        "cad882ac-27f1-4ae8-9752-3852f7ad6275.jsonl": "f7ed89fd270ae4bf29c6b4a5bf88827297e16fe83e452618b77b0c1c3dc0cb0b"
+      },
+      "usage_source": "verifier.usage.json",
+      "trace_observed": true,
+      "tool_calls": 12,
+      "hub_tool_calls": 10,
+      "tools": {
+        "join_room": {
+          "calls": 1,
+          "results": 1,
+          "text_bytes": 2200,
+          "max_text_bytes": 2200,
+          "hub": true
+        },
+        "other:Bash": {
+          "calls": 2,
+          "results": 2,
+          "text_bytes": 74,
+          "max_text_bytes": 51,
+          "hub": false
+        },
+        "submit_opening": {
+          "calls": 1,
+          "results": 1,
+          "text_bytes": 33,
+          "max_text_bytes": 33,
+          "hub": true
+        },
+        "board_set": {
+          "calls": 2,
+          "results": 2,
+          "text_bytes": 247,
+          "max_text_bytes": 192,
+          "hub": true
+        },
+        "wait_for_messages": {
+          "calls": 2,
+          "results": 2,
+          "text_bytes": 4349,
+          "max_text_bytes": 2288,
+          "hub": true
+        },
+        "challenge": {
+          "calls": 1,
+          "results": 1,
+          "text_bytes": 1169,
+          "max_text_bytes": 1169,
+          "hub": true
+        },
+        "vote": {
+          "calls": 1,
+          "results": 1,
+          "text_bytes": 2235,
+          "max_text_bytes": 2235,
+          "hub": true
+        },
+        "send_message": {
+          "calls": 1,
+          "results": 1,
+          "text_bytes": 143,
+          "max_text_bytes": 143,
+          "hub": true
+        },
+        "leave_room": {
+          "calls": 1,
+          "results": 1,
+          "text_bytes": 28,
+          "max_text_bytes": 28,
+          "hub": true
+        }
+      },
+      "redundancy_candidates": {}
+    }
+  },
+  "observed_totals": {
+    "hub_tool_calls": 29,
+    "hub_results": 29,
+    "hub_text_bytes": 31078
+  },
+  "tools": {
+    "join_room": {
+      "calls": 3,
+      "results": 3,
+      "text_bytes": 7691,
+      "max_text_bytes": 2915,
+      "hub": true
+    },
+    "board_set": {
+      "calls": 4,
+      "results": 4,
+      "text_bytes": 393,
+      "max_text_bytes": 192,
+      "hub": true
+    },
+    "submit_opening": {
+      "calls": 3,
+      "results": 3,
+      "text_bytes": 667,
+      "max_text_bytes": 327,
+      "hub": true
+    },
+    "wait_for_messages": {
+      "calls": 7,
+      "results": 7,
+      "text_bytes": 12924,
+      "max_text_bytes": 3192,
+      "hub": true
+    },
+    "board_get": {
+      "calls": 2,
+      "results": 2,
+      "text_bytes": 632,
+      "max_text_bytes": 328,
+      "hub": true
+    },
+    "propose": {
+      "calls": 2,
+      "results": 2,
+      "text_bytes": 988,
+      "max_text_bytes": 723,
+      "hub": true
+    },
+    "leave_room": {
+      "calls": 3,
+      "results": 3,
+      "text_bytes": 84,
+      "max_text_bytes": 28,
+      "hub": true
+    },
+    "challenge": {
+      "calls": 2,
+      "results": 2,
+      "text_bytes": 3197,
+      "max_text_bytes": 2028,
+      "hub": true
+    },
+    "other:Bash": {
+      "calls": 3,
+      "results": 3,
+      "text_bytes": 84,
+      "max_text_bytes": 51,
+      "hub": false
+    },
+    "vote": {
+      "calls": 2,
+      "results": 2,
+      "text_bytes": 4359,
+      "max_text_bytes": 2235,
+      "hub": true
+    },
+    "send_message": {
+      "calls": 1,
+      "results": 1,
+      "text_bytes": 143,
+      "max_text_bytes": 143,
+      "hub": true
+    }
+  },
+  "redundancy_candidates": {},
+  "coverage": {
+    "seats": 3,
+    "seats_with_trace": 3,
+    "seats_with_usage": 3
+  }
+}

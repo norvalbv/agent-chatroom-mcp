@@ -27,7 +27,7 @@
       "tool_calls": 74,
       "hub_tool_calls": 46,
       "tools": {
-        "command_execution": {
+        "other:command_execution": {
           "calls": 28,
           "results": 28,
           "text_bytes": 630484,
@@ -100,7 +100,8 @@
       },
       "redundancy_candidates": {
         "unread_send_refusals": 6,
-        "unread_send_refusal_text_bytes": 22499
+        "unread_send_refusal_text_bytes": 22499,
+        "no_message_wait_returns": 1
       }
     },
     "6-astra-4": {
@@ -123,7 +124,7 @@
       "tool_calls": 79,
       "hub_tool_calls": 49,
       "tools": {
-        "command_execution": {
+        "other:command_execution": {
           "calls": 30,
           "results": 30,
           "text_bytes": 623322,
@@ -244,7 +245,7 @@
       "tool_calls": 67,
       "hub_tool_calls": 47,
       "tools": {
-        "command_execution": {
+        "other:command_execution": {
           "calls": 20,
           "results": 20,
           "text_bytes": 527156,
@@ -391,7 +392,7 @@
     "hub_text_bytes": 553641
   },
   "tools": {
-    "command_execution": {
+    "other:command_execution": {
       "calls": 78,
       "results": 78,
       "text_bytes": 1780962,
@@ -486,6 +487,7 @@
   "redundancy_candidates": {
     "unread_send_refusals": 22,
     "unread_send_refusal_text_bytes": 89430,
+    "no_message_wait_returns": 1,
     "board_manifest_reads": 1,
     "exact_repeated_hub_results": 1,
     "repeated_message_deliveries": 4,

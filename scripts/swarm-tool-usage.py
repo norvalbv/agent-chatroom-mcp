@@ -6,6 +6,7 @@ Missing traces/usage remain explicit. Text bytes are not wire bytes or token cou
 """
 import argparse
 import collections
+from datetime import datetime
 import hashlib
 import json
 import os
@@ -66,6 +67,7 @@ def normalized_tool(name):
 
 def parse_trace(path):
     calls, results, usage = {}, {}, {}
+    result_times = {}
     seat, provider, previous_turn = None, None, 0
     for row in rows(path):
         kind = row.get("type")
@@ -107,14 +109,19 @@ def parse_trace(path):
                 args = block.get("input") or {}
                 hub = name.startswith("mcp__chatroom__")
                 name = normalized_tool(name)
-                calls.setdefault(key, {"tool": name, "args": args, "hub": hub})
+                calls.setdefault(key, {"tool": name, "args": args, "hub": hub, "started_at": row.get("timestamp")})
                 if hub and name == "join_room":
                     seat = args.get("name", seat)
             elif block.get("type") == "tool_result":
                 results[block["tool_use_id"]] = text_content(block.get("content"))
+                result_times[block["tool_use_id"]] = row.get("timestamp")
     observations = []
     for key, call in calls.items():
-        observations.append({**call, "text": results.get(key)})
+        duration_ms = None
+        if call.get("started_at") and result_times.get(key):
+            duration_ms = (datetime.fromisoformat(result_times[key].replace("Z", "+00:00")) -
+                           datetime.fromisoformat(call["started_at"].replace("Z", "+00:00"))).total_seconds() * 1000
+        observations.append({**call, "text": results.get(key), "duration_ms": duration_ms})
     token_usage = None
     if usage:
         fields = ("input_tokens", "cache_read_input_tokens", "cache_creation_input_tokens", "output_tokens")
@@ -134,7 +141,8 @@ def summarize_calls(calls):
     refused_sends = {}
     for call in calls:
         name, content = call["tool"], call["text"]
-        stats = tools.setdefault(name, {"calls": 0, "results": 0, "text_bytes": 0, "max_text_bytes": 0, "hub": call["hub"]})
+        bucket = name if call["hub"] else "other:" + name
+        stats = tools.setdefault(bucket, {"calls": 0, "results": 0, "text_bytes": 0, "max_text_bytes": 0, "hub": call["hub"]})
         stats["calls"] += 1
         if content is not None:
             size = len(content.encode("utf-8"))
@@ -144,6 +152,14 @@ def summarize_calls(calls):
         if not call["hub"]:
             continue
         room = call["args"].get("room")
+        if name == "wait_for_messages":
+            payload = decode_payload(content)
+            if payload and not payload.get("messages") and not payload.get("addressed_to_you") and payload.get("room_state") == "open":
+                candidates["no_message_wait_returns"] += 1
+                timeout = call["args"].get("timeout_ms", 55000)
+                if timeout > 0 and (call.get("duration_ms") or 0) >= timeout:
+                    candidates["no_message_wait_timeout_returns"] += 1
+                    candidates["no_message_wait_timeout_text_bytes"] += len(content.encode("utf-8"))
         for line in delivered_messages(content):
             key = (room, line)
             if key in seen_messages:

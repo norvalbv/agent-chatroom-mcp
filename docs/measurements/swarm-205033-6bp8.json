@@ -20,7 +20,7 @@
       "tool_calls": 369,
       "hub_tool_calls": 201,
       "tools": {
-        "command_execution": {
+        "other:command_execution": {
           "calls": 161,
           "results": 161,
           "text_bytes": 605217,
@@ -62,7 +62,7 @@
           "max_text_bytes": 2043,
           "hub": true
         },
-        "impact": {
+        "other:impact": {
           "calls": 2,
           "results": 2,
           "text_bytes": 2093,
@@ -76,21 +76,21 @@
           "max_text_bytes": 6213,
           "hub": true
         },
-        "search_autonomous_issues": {
+        "other:search_autonomous_issues": {
           "calls": 2,
           "results": 2,
           "text_bytes": 5432,
           "max_text_bytes": 3928,
           "hub": false
         },
-        "report_autonomous_bug": {
+        "other:report_autonomous_bug": {
           "calls": 2,
           "results": 2,
           "text_bytes": 312,
           "max_text_bytes": 156,
           "hub": false
         },
-        "detect_changes": {
+        "other:detect_changes": {
           "calls": 1,
           "results": 1,
           "text_bytes": 1577,
@@ -132,6 +132,7 @@
         "same_content_send_retries": 5,
         "repeated_message_deliveries": 3,
         "repeated_message_text_bytes": 681,
+        "no_message_wait_returns": 24,
         "read_messages_after_wait": 4,
         "overlapping_message_seqs_after_wait": 3,
         "exact_repeated_hub_results": 5
@@ -150,7 +151,7 @@
       "tool_calls": 480,
       "hub_tool_calls": 180,
       "tools": {
-        "command_execution": {
+        "other:command_execution": {
           "calls": 286,
           "results": 286,
           "text_bytes": 697750,
@@ -192,7 +193,7 @@
           "max_text_bytes": 87,
           "hub": true
         },
-        "impact": {
+        "other:impact": {
           "calls": 8,
           "results": 8,
           "text_bytes": 5189,
@@ -206,14 +207,14 @@
           "max_text_bytes": 3604,
           "hub": true
         },
-        "search_autonomous_issues": {
+        "other:search_autonomous_issues": {
           "calls": 3,
           "results": 3,
           "text_bytes": 16299,
           "max_text_bytes": 7806,
           "hub": false
         },
-        "detect_changes": {
+        "other:detect_changes": {
           "calls": 3,
           "results": 3,
           "text_bytes": 3488,
@@ -249,6 +250,7 @@
         "board_manifest_reads": 1,
         "repeated_message_deliveries": 5,
         "repeated_message_text_bytes": 1585,
+        "no_message_wait_returns": 15,
         "board_key_reads_with_unchanged_text": 1,
         "exact_repeated_hub_results": 1
       }
@@ -260,7 +262,7 @@
     "hub_text_bytes": 930648
   },
   "tools": {
-    "command_execution": {
+    "other:command_execution": {
       "calls": 447,
       "results": 447,
       "text_bytes": 1302967,
@@ -302,7 +304,7 @@
       "max_text_bytes": 2234,
       "hub": true
     },
-    "impact": {
+    "other:impact": {
       "calls": 10,
       "results": 10,
       "text_bytes": 7282,
@@ -316,21 +318,21 @@
       "max_text_bytes": 6213,
       "hub": true
     },
-    "search_autonomous_issues": {
+    "other:search_autonomous_issues": {
       "calls": 5,
       "results": 5,
       "text_bytes": 21731,
       "max_text_bytes": 7806,
       "hub": false
     },
-    "report_autonomous_bug": {
+    "other:report_autonomous_bug": {
       "calls": 2,
       "results": 2,
       "text_bytes": 312,
       "max_text_bytes": 156,
       "hub": false
     },
-    "detect_changes": {
+    "other:detect_changes": {
       "calls": 4,
       "results": 4,
       "text_bytes": 5065,
@@ -379,6 +381,7 @@
     "same_content_send_retries": 8,
     "repeated_message_deliveries": 8,
     "repeated_message_text_bytes": 2266,
+    "no_message_wait_returns": 39,
     "read_messages_after_wait": 4,
     "overlapping_message_seqs_after_wait": 3,
     "exact_repeated_hub_results": 6,

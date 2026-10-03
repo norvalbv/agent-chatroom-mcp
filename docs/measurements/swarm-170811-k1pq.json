@@ -27,7 +27,7 @@
       "tool_calls": 171,
       "hub_tool_calls": 92,
       "tools": {
-        "command_execution": {
+        "other:command_execution": {
           "calls": 66,
           "results": 66,
           "text_bytes": 646894,
@@ -83,7 +83,7 @@
           "max_text_bytes": 74,
           "hub": true
         },
-        "js": {
+        "other:js": {
           "calls": 13,
           "results": 13,
           "text_bytes": 76532,
@@ -112,6 +112,7 @@
         "board_manifest_reads": 1,
         "repeated_message_deliveries": 5,
         "repeated_message_text_bytes": 2647,
+        "no_message_wait_returns": 2,
         "exact_repeated_hub_results": 1
       }
     },
@@ -135,7 +136,7 @@
       "tool_calls": 164,
       "hub_tool_calls": 76,
       "tools": {
-        "command_execution": {
+        "other:command_execution": {
           "calls": 59,
           "results": 59,
           "text_bytes": 551063,
@@ -184,7 +185,7 @@
           "max_text_bytes": 76,
           "hub": true
         },
-        "js": {
+        "other:js": {
           "calls": 29,
           "results": 29,
           "text_bytes": 221769,
@@ -234,7 +235,7 @@
       "tool_calls": 170,
       "hub_tool_calls": 71,
       "tools": {
-        "command_execution": {
+        "other:command_execution": {
           "calls": 72,
           "results": 72,
           "text_bytes": 304818,
@@ -290,7 +291,7 @@
           "max_text_bytes": 754,
           "hub": true
         },
-        "js": {
+        "other:js": {
           "calls": 27,
           "results": 27,
           "text_bytes": 112693,
@@ -338,7 +339,7 @@
       "tool_calls": 170,
       "hub_tool_calls": 67,
       "tools": {
-        "command_execution": {
+        "other:command_execution": {
           "calls": 72,
           "results": 72,
           "text_bytes": 698402,
@@ -387,7 +388,7 @@
           "max_text_bytes": 2054,
           "hub": true
         },
-        "js": {
+        "other:js": {
           "calls": 31,
           "results": 31,
           "text_bytes": 156337,
@@ -416,62 +417,432 @@
         "repeated_message_text_bytes": 2139
       }
     },
-    "opus-1": {
-      "trace_sources": [],
-      "provider": "claude",
-      "usage": {
-        "input_tokens": 234,
-        "cache_read_input_tokens": 16079857,
-        "cache_creation_input_tokens": 227816,
-        "output_tokens": 52578
-      },
-      "usage_source": "opus-1.usage.json",
-      "trace_observed": false,
-      "tool_calls": null,
-      "hub_tool_calls": null,
-      "tools": {},
-      "redundancy_candidates": {}
-    },
-    "opus-2": {
-      "trace_sources": [],
-      "provider": "claude",
-      "usage": {
-        "input_tokens": 324,
-        "cache_read_input_tokens": 28785802,
-        "cache_creation_input_tokens": 276081,
-        "output_tokens": 97186
-      },
-      "usage_source": "opus-2.usage.json",
-      "trace_observed": false,
-      "tool_calls": null,
-      "hub_tool_calls": null,
-      "tools": {},
-      "redundancy_candidates": {}
-    },
     "verifier": {
-      "trace_sources": [],
       "provider": "claude",
+      "trace_sources": [
+        "6bf5d8f2-1723-4876-9567-83e758dc79fe.jsonl"
+      ],
       "usage": {
         "input_tokens": 386,
         "cache_read_input_tokens": 26825569,
         "cache_creation_input_tokens": 250469,
         "output_tokens": 71793
       },
+      "trace_sha256": {
+        "6bf5d8f2-1723-4876-9567-83e758dc79fe.jsonl": "d873a0f302dabbaf86cade15170ec6994eefb5e9495e1f9811857971bd2ebbc2"
+      },
       "usage_source": "verifier.usage.json",
-      "trace_observed": false,
-      "tool_calls": null,
-      "hub_tool_calls": null,
-      "tools": {},
-      "redundancy_candidates": {}
+      "trace_observed": true,
+      "tool_calls": 228,
+      "hub_tool_calls": 103,
+      "tools": {
+        "join_room": {
+          "calls": 1,
+          "results": 1,
+          "text_bytes": 4545,
+          "max_text_bytes": 4545,
+          "hub": true
+        },
+        "submit_opening": {
+          "calls": 1,
+          "results": 1,
+          "text_bytes": 377,
+          "max_text_bytes": 377,
+          "hub": true
+        },
+        "other:Bash": {
+          "calls": 111,
+          "results": 111,
+          "text_bytes": 120288,
+          "max_text_bytes": 13024,
+          "hub": false
+        },
+        "wait_for_messages": {
+          "calls": 41,
+          "results": 41,
+          "text_bytes": 113584,
+          "max_text_bytes": 9666,
+          "hub": true
+        },
+        "send_message": {
+          "calls": 24,
+          "results": 24,
+          "text_bytes": 24105,
+          "max_text_bytes": 4946,
+          "hub": true
+        },
+        "board_get": {
+          "calls": 7,
+          "results": 7,
+          "text_bytes": 10170,
+          "max_text_bytes": 2259,
+          "hub": true
+        },
+        "pass": {
+          "calls": 12,
+          "results": 12,
+          "text_bytes": 550,
+          "max_text_bytes": 46,
+          "hub": true
+        },
+        "other:WebSearch": {
+          "calls": 4,
+          "results": 4,
+          "text_bytes": 12034,
+          "max_text_bytes": 3442,
+          "hub": false
+        },
+        "other:WebFetch": {
+          "calls": 5,
+          "results": 5,
+          "text_bytes": 3103,
+          "max_text_bytes": 1422,
+          "hub": false
+        },
+        "board_set": {
+          "calls": 10,
+          "results": 10,
+          "text_bytes": 734,
+          "max_text_bytes": 80,
+          "hub": true
+        },
+        "other:Read": {
+          "calls": 4,
+          "results": 4,
+          "text_bytes": 0,
+          "max_text_bytes": 0,
+          "hub": false
+        },
+        "amend": {
+          "calls": 1,
+          "results": 1,
+          "text_bytes": 47,
+          "max_text_bytes": 47,
+          "hub": true
+        },
+        "read_messages": {
+          "calls": 2,
+          "results": 2,
+          "text_bytes": 16446,
+          "max_text_bytes": 8280,
+          "hub": true
+        },
+        "challenge": {
+          "calls": 2,
+          "results": 2,
+          "text_bytes": 3073,
+          "max_text_bytes": 2760,
+          "hub": true
+        },
+        "other:board_get": {
+          "calls": 1,
+          "results": 1,
+          "text_bytes": 73,
+          "max_text_bytes": 73,
+          "hub": false
+        },
+        "vote": {
+          "calls": 1,
+          "results": 1,
+          "text_bytes": 3257,
+          "max_text_bytes": 3257,
+          "hub": true
+        },
+        "leave_room": {
+          "calls": 1,
+          "results": 1,
+          "text_bytes": 28,
+          "max_text_bytes": 28,
+          "hub": true
+        }
+      },
+      "redundancy_candidates": {
+        "unread_send_refusals": 3,
+        "unread_send_refusal_text_bytes": 11691,
+        "repeated_message_deliveries": 18,
+        "repeated_message_text_bytes": 5916,
+        "exact_repeated_hub_results": 5,
+        "no_message_wait_returns": 6,
+        "no_message_wait_timeout_returns": 6,
+        "no_message_wait_timeout_text_bytes": 12528
+      }
+    },
+    "opus-2": {
+      "provider": "claude",
+      "trace_sources": [
+        "2bba89d4-af70-4f3c-9575-4bff6309f1b1.jsonl"
+      ],
+      "usage": {
+        "input_tokens": 324,
+        "cache_read_input_tokens": 28785802,
+        "cache_creation_input_tokens": 276081,
+        "output_tokens": 97186
+      },
+      "trace_sha256": {
+        "2bba89d4-af70-4f3c-9575-4bff6309f1b1.jsonl": "4abb0549d326162082ca841fe7344d973d33a29875bc06e10c4dde5b2bc13d63"
+      },
+      "usage_source": "opus-2.usage.json",
+      "trace_observed": true,
+      "tool_calls": 173,
+      "hub_tool_calls": 70,
+      "tools": {
+        "join_room": {
+          "calls": 1,
+          "results": 1,
+          "text_bytes": 5041,
+          "max_text_bytes": 5041,
+          "hub": true
+        },
+        "other:Bash": {
+          "calls": 91,
+          "results": 91,
+          "text_bytes": 98805,
+          "max_text_bytes": 9969,
+          "hub": false
+        },
+        "submit_opening": {
+          "calls": 1,
+          "results": 1,
+          "text_bytes": 368,
+          "max_text_bytes": 368,
+          "hub": true
+        },
+        "other:Read": {
+          "calls": 8,
+          "results": 8,
+          "text_bytes": 82442,
+          "max_text_bytes": 56744,
+          "hub": false
+        },
+        "wait_for_messages": {
+          "calls": 29,
+          "results": 29,
+          "text_bytes": 106156,
+          "max_text_bytes": 18782,
+          "hub": true
+        },
+        "board_set": {
+          "calls": 7,
+          "results": 7,
+          "text_bytes": 485,
+          "max_text_bytes": 73,
+          "hub": true
+        },
+        "send_message": {
+          "calls": 16,
+          "results": 16,
+          "text_bytes": 16188,
+          "max_text_bytes": 3826,
+          "hub": true
+        },
+        "other:Write": {
+          "calls": 4,
+          "results": 4,
+          "text_bytes": 904,
+          "max_text_bytes": 233,
+          "hub": false
+        },
+        "read_messages": {
+          "calls": 3,
+          "results": 3,
+          "text_bytes": 27360,
+          "max_text_bytes": 16664,
+          "hub": true
+        },
+        "board_get": {
+          "calls": 6,
+          "results": 6,
+          "text_bytes": 13027,
+          "max_text_bytes": 6914,
+          "hub": true
+        },
+        "pass": {
+          "calls": 1,
+          "results": 1,
+          "text_bytes": 46,
+          "max_text_bytes": 46,
+          "hub": true
+        },
+        "propose": {
+          "calls": 2,
+          "results": 2,
+          "text_bytes": 1910,
+          "max_text_bytes": 1590,
+          "hub": true
+        },
+        "amend": {
+          "calls": 2,
+          "results": 2,
+          "text_bytes": 6655,
+          "max_text_bytes": 3402,
+          "hub": true
+        },
+        "vote": {
+          "calls": 1,
+          "results": 1,
+          "text_bytes": 3081,
+          "max_text_bytes": 3081,
+          "hub": true
+        },
+        "leave_room": {
+          "calls": 1,
+          "results": 1,
+          "text_bytes": 28,
+          "max_text_bytes": 28,
+          "hub": true
+        }
+      },
+      "redundancy_candidates": {
+        "unread_send_refusals": 3,
+        "unread_send_refusal_text_bytes": 7488,
+        "repeated_message_deliveries": 7,
+        "repeated_message_text_bytes": 2502,
+        "board_manifest_reads": 1,
+        "no_message_wait_returns": 6,
+        "no_message_wait_timeout_returns": 6,
+        "no_message_wait_timeout_text_bytes": 11859,
+        "exact_repeated_hub_results": 4
+      }
+    },
+    "opus-1": {
+      "provider": "claude",
+      "trace_sources": [
+        "212564ab-4b44-40f0-83ed-0c41d003fa39.jsonl"
+      ],
+      "usage": {
+        "input_tokens": 234,
+        "cache_read_input_tokens": 16079857,
+        "cache_creation_input_tokens": 227816,
+        "output_tokens": 52578
+      },
+      "trace_sha256": {
+        "212564ab-4b44-40f0-83ed-0c41d003fa39.jsonl": "f983a41c4b8a7dc39f4d81d0db8d6e24bfe1b1936af84f34ee625d8b2a41b7b3"
+      },
+      "usage_source": "opus-1.usage.json",
+      "trace_observed": true,
+      "tool_calls": 139,
+      "hub_tool_calls": 88,
+      "tools": {
+        "join_room": {
+          "calls": 1,
+          "results": 1,
+          "text_bytes": 5542,
+          "max_text_bytes": 5542,
+          "hub": true
+        },
+        "other:Bash": {
+          "calls": 44,
+          "results": 44,
+          "text_bytes": 43849,
+          "max_text_bytes": 11469,
+          "hub": false
+        },
+        "submit_opening": {
+          "calls": 1,
+          "results": 1,
+          "text_bytes": 363,
+          "max_text_bytes": 363,
+          "hub": true
+        },
+        "wait_for_messages": {
+          "calls": 46,
+          "results": 46,
+          "text_bytes": 138232,
+          "max_text_bytes": 18616,
+          "hub": true
+        },
+        "board_set": {
+          "calls": 9,
+          "results": 9,
+          "text_bytes": 853,
+          "max_text_bytes": 306,
+          "hub": true
+        },
+        "board_get": {
+          "calls": 7,
+          "results": 7,
+          "text_bytes": 7739,
+          "max_text_bytes": 1970,
+          "hub": true
+        },
+        "read_messages": {
+          "calls": 5,
+          "results": 5,
+          "text_bytes": 23841,
+          "max_text_bytes": 12103,
+          "hub": true
+        },
+        "send_message": {
+          "calls": 10,
+          "results": 10,
+          "text_bytes": 10697,
+          "max_text_bytes": 3556,
+          "hub": true
+        },
+        "other:Read": {
+          "calls": 4,
+          "results": 4,
+          "text_bytes": 82442,
+          "max_text_bytes": 50090,
+          "hub": false
+        },
+        "other:Edit": {
+          "calls": 3,
+          "results": 3,
+          "text_bytes": 459,
+          "max_text_bytes": 153,
+          "hub": false
+        },
+        "pass": {
+          "calls": 6,
+          "results": 6,
+          "text_bytes": 275,
+          "max_text_bytes": 46,
+          "hub": true
+        },
+        "challenge": {
+          "calls": 1,
+          "results": 1,
+          "text_bytes": 2099,
+          "max_text_bytes": 2099,
+          "hub": true
+        },
+        "vote": {
+          "calls": 1,
+          "results": 1,
+          "text_bytes": 3498,
+          "max_text_bytes": 3498,
+          "hub": true
+        },
+        "leave_room": {
+          "calls": 1,
+          "results": 1,
+          "text_bytes": 28,
+          "max_text_bytes": 28,
+          "hub": true
+        }
+      },
+      "redundancy_candidates": {
+        "board_manifest_reads": 2,
+        "unread_send_refusals": 3,
+        "unread_send_refusal_text_bytes": 6208,
+        "same_content_send_retries": 1,
+        "repeated_message_deliveries": 2,
+        "repeated_message_text_bytes": 721,
+        "no_message_wait_returns": 7,
+        "no_message_wait_timeout_returns": 7,
+        "no_message_wait_timeout_text_bytes": 15529,
+        "exact_repeated_hub_results": 3
+      }
     }
   },
   "observed_totals": {
-    "hub_tool_calls": 306,
-    "hub_results": 306,
-    "hub_text_bytes": 410972
+    "hub_tool_calls": 567,
+    "hub_results": 567,
+    "hub_text_bytes": 961400
   },
   "tools": {
-    "command_execution": {
+    "other:command_execution": {
       "calls": 269,
       "results": 269,
       "text_bytes": 2201177,
@@ -479,55 +850,55 @@
       "hub": false
     },
     "join_room": {
-      "calls": 4,
-      "results": 4,
-      "text_bytes": 38866,
+      "calls": 7,
+      "results": 7,
+      "text_bytes": 53994,
       "max_text_bytes": 11394,
       "hub": true
     },
     "submit_opening": {
-      "calls": 4,
-      "results": 4,
-      "text_bytes": 1085,
-      "max_text_bytes": 368,
+      "calls": 7,
+      "results": 7,
+      "text_bytes": 2193,
+      "max_text_bytes": 377,
       "hub": true
     },
     "wait_for_messages": {
-      "calls": 55,
-      "results": 55,
-      "text_bytes": 165446,
-      "max_text_bytes": 12024,
+      "calls": 171,
+      "results": 171,
+      "text_bytes": 523418,
+      "max_text_bytes": 18782,
       "hub": true
     },
     "board_get": {
-      "calls": 20,
-      "results": 20,
-      "text_bytes": 29614,
-      "max_text_bytes": 4247,
+      "calls": 40,
+      "results": 40,
+      "text_bytes": 60550,
+      "max_text_bytes": 6914,
       "hub": true
     },
     "read_messages": {
-      "calls": 20,
-      "results": 20,
-      "text_bytes": 40997,
-      "max_text_bytes": 6978,
+      "calls": 30,
+      "results": 30,
+      "text_bytes": 108644,
+      "max_text_bytes": 16664,
       "hub": true
     },
     "send_message": {
-      "calls": 143,
-      "results": 143,
-      "text_bytes": 130162,
+      "calls": 193,
+      "results": 193,
+      "text_bytes": 181152,
       "max_text_bytes": 8273,
       "hub": true
     },
     "board_set": {
-      "calls": 49,
-      "results": 49,
-      "text_bytes": 4232,
+      "calls": 75,
+      "results": 75,
+      "text_bytes": 6304,
       "max_text_bytes": 754,
       "hub": true
     },
-    "js": {
+    "other:js": {
       "calls": 100,
       "results": 100,
       "text_bytes": 567331,
@@ -535,32 +906,112 @@
       "hub": false
     },
     "pass": {
-      "calls": 6,
-      "results": 6,
-      "text_bytes": 276,
+      "calls": 25,
+      "results": 25,
+      "text_bytes": 1147,
       "max_text_bytes": 46,
       "hub": true
     },
     "leave_room": {
-      "calls": 5,
-      "results": 5,
-      "text_bytes": 294,
+      "calls": 8,
+      "results": 8,
+      "text_bytes": 378,
       "max_text_bytes": 182,
       "hub": true
+    },
+    "other:Bash": {
+      "calls": 246,
+      "results": 246,
+      "text_bytes": 262942,
+      "max_text_bytes": 13024,
+      "hub": false
+    },
+    "other:WebSearch": {
+      "calls": 4,
+      "results": 4,
+      "text_bytes": 12034,
+      "max_text_bytes": 3442,
+      "hub": false
+    },
+    "other:WebFetch": {
+      "calls": 5,
+      "results": 5,
+      "text_bytes": 3103,
+      "max_text_bytes": 1422,
+      "hub": false
+    },
+    "other:Read": {
+      "calls": 16,
+      "results": 16,
+      "text_bytes": 164884,
+      "max_text_bytes": 56744,
+      "hub": false
+    },
+    "amend": {
+      "calls": 3,
+      "results": 3,
+      "text_bytes": 6702,
+      "max_text_bytes": 3402,
+      "hub": true
+    },
+    "challenge": {
+      "calls": 3,
+      "results": 3,
+      "text_bytes": 5172,
+      "max_text_bytes": 2760,
+      "hub": true
+    },
+    "other:board_get": {
+      "calls": 1,
+      "results": 1,
+      "text_bytes": 73,
+      "max_text_bytes": 73,
+      "hub": false
+    },
+    "vote": {
+      "calls": 3,
+      "results": 3,
+      "text_bytes": 9836,
+      "max_text_bytes": 3498,
+      "hub": true
+    },
+    "other:Write": {
+      "calls": 4,
+      "results": 4,
+      "text_bytes": 904,
+      "max_text_bytes": 233,
+      "hub": false
+    },
+    "propose": {
+      "calls": 2,
+      "results": 2,
+      "text_bytes": 1910,
+      "max_text_bytes": 1590,
+      "hub": true
+    },
+    "other:Edit": {
+      "calls": 3,
+      "results": 3,
+      "text_bytes": 459,
+      "max_text_bytes": 153,
+      "hub": false
     }
   },
   "redundancy_candidates": {
-    "unread_send_refusals": 34,
-    "unread_send_refusal_text_bytes": 76130,
-    "same_content_send_retries": 2,
-    "board_manifest_reads": 4,
-    "repeated_message_deliveries": 16,
-    "repeated_message_text_bytes": 6335,
-    "exact_repeated_hub_results": 1
+    "unread_send_refusals": 43,
+    "unread_send_refusal_text_bytes": 101517,
+    "same_content_send_retries": 3,
+    "board_manifest_reads": 7,
+    "repeated_message_deliveries": 43,
+    "repeated_message_text_bytes": 15474,
+    "no_message_wait_returns": 21,
+    "exact_repeated_hub_results": 13,
+    "no_message_wait_timeout_returns": 19,
+    "no_message_wait_timeout_text_bytes": 39916
   },
   "coverage": {
     "seats": 7,
-    "seats_with_trace": 4,
+    "seats_with_trace": 7,
     "seats_with_usage": 7
   }
 }

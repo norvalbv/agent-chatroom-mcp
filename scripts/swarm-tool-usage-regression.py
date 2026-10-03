@@ -14,6 +14,24 @@ spec.loader.exec_module(usage)
 
 
 class UsageTests(unittest.TestCase):
+    def test_wait_timeouts_exclude_pending_asks_and_explicit_polls(self):
+        quiet = json.dumps({"room_state": "open", "messages": [], "addressed_to_you": []})
+        wait = {"tool": "wait_for_messages", "hub": True, "text": quiet, "args": {}, "duration_ms": 55001}
+        focused = {**wait, "text": json.dumps({"room_state": "open", "messages": [], "addressed_to_you": [{"id": "ask"}]})}
+        poll = {**wait, "args": {"timeout_ms": 0}, "duration_ms": 1}
+        _, result = usage.summarize_calls([wait, focused, poll])
+        self.assertEqual(result["no_message_wait_returns"], 2)
+        self.assertEqual(result["no_message_wait_timeout_returns"], 1)
+        self.assertEqual(result["no_message_wait_timeout_text_bytes"], len(quiet))
+
+    def test_same_tool_name_outside_chatroom_is_not_a_hub_call(self):
+        tools, _ = usage.summarize_calls([
+            {"tool": "board_get", "hub": True, "text": "yes", "args": {}},
+            {"tool": "board_get", "hub": False, "text": "unknown tool", "args": {}},
+        ])
+        self.assertEqual(tools["board_get"]["calls"], 1)
+        self.assertEqual(tools["other:board_get"]["calls"], 1)
+
     def test_discovery_reads_initial_worker_or_verifier_prompt_only(self):
         with tempfile.TemporaryDirectory() as directory:
             project = Path(directory) / "project"

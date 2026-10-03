@@ -27,7 +27,7 @@
       "tool_calls": 60,
       "hub_tool_calls": 50,
       "tools": {
-        "command_execution": {
+        "other:command_execution": {
           "calls": 10,
           "results": 10,
           "text_bytes": 175846,
@@ -126,7 +126,7 @@
       "tool_calls": 66,
       "hub_tool_calls": 53,
       "tools": {
-        "command_execution": {
+        "other:command_execution": {
           "calls": 13,
           "results": 13,
           "text_bytes": 123378,
@@ -232,7 +232,7 @@
       "tool_calls": 67,
       "hub_tool_calls": 49,
       "tools": {
-        "command_execution": {
+        "other:command_execution": {
           "calls": 18,
           "results": 18,
           "text_bytes": 178553,
@@ -373,7 +373,7 @@
     "hub_text_bytes": 521099
   },
   "tools": {
-    "command_execution": {
+    "other:command_execution": {
       "calls": 41,
       "results": 41,
       "text_bytes": 477777,

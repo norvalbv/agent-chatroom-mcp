@@ -20,7 +20,7 @@
       "tool_calls": 168,
       "hub_tool_calls": 102,
       "tools": {
-        "command_execution": {
+        "other:command_execution": {
           "calls": 66,
           "results": 65,
           "text_bytes": 306990,
@@ -82,6 +82,7 @@
         "unread_send_refusals": 20,
         "unread_send_refusal_text_bytes": 27298,
         "same_content_send_retries": 6,
+        "no_message_wait_returns": 5,
         "read_messages_after_wait": 2,
         "overlapping_message_seqs_after_wait": 0,
         "repeated_message_deliveries": 3,
@@ -101,7 +102,7 @@
       "tool_calls": 184,
       "hub_tool_calls": 104,
       "tools": {
-        "command_execution": {
+        "other:command_execution": {
           "calls": 80,
           "results": 80,
           "text_bytes": 308315,
@@ -162,6 +163,7 @@
         "board_manifest_reads": 3,
         "unread_send_refusals": 14,
         "unread_send_refusal_text_bytes": 22092,
+        "no_message_wait_returns": 6,
         "same_content_send_retries": 6,
         "repeated_message_deliveries": 4,
         "repeated_message_text_bytes": 1040,
@@ -175,7 +177,7 @@
     "hub_text_bytes": 267820
   },
   "tools": {
-    "command_execution": {
+    "other:command_execution": {
       "calls": 146,
       "results": 145,
       "text_bytes": 615305,
@@ -244,6 +246,7 @@
     "unread_send_refusals": 34,
     "unread_send_refusal_text_bytes": 49390,
     "same_content_send_retries": 12,
+    "no_message_wait_returns": 11,
     "read_messages_after_wait": 2,
     "overlapping_message_seqs_after_wait": 0,
     "repeated_message_deliveries": 7,

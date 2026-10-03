@@ -82,6 +82,31 @@ new Script(UI_HTML.split("<script>")[1].split("</script>")[0]);
   assert.deepEqual(choices({ text: "@human can I delete the old fixtures in data/, or keep them for the report?" }).slice(0, 2), ["Yes", "No"]);
   assert.deepEqual(choices({ text: "@benji is the build OK?" }).slice(0, 2), ["Yes", "No"]);
 }
+// every inbox button carries the ask's id (a stray quote once left "Open in room" with data-qopen="")
+{
+  const src = UI_HTML.split("<script>")[1].split("</script>")[0];
+  const fn = (name: string) => {
+    const i = src.indexOf(`function ${name}(`);
+    for (let k = src.indexOf("{", i), d = 0; k < src.length; k++) {
+      if (src[k] === "{") d++;
+      if (src[k] === "}" && --d === 0) return src.slice(i, k + 1);
+    }
+    throw new Error(name);
+  };
+  const v = (name: string) => {
+    const i = src.indexOf(`var ${name} = function`);
+    for (let k = src.indexOf("{", i), d = 0; k < src.length; k++) {
+      if (src[k] === "{") d++;
+      if (src[k] === "}" && --d === 0) return src.slice(i, k + 1) + ";";
+    }
+    throw new Error(name);
+  };
+  const stubs = "var esc = function (s) { return String(s).replace(/[&<>\"]/g, ''); }; var av = function () { return ''; }; var rel = function () { return ''; }; var withMentions = function (h) { return h; }; var expanded = {}, qDrafts = {}, qSelId = null; var runOf = function () { return null; };";
+  const qItem = new Function(`${stubs}\n${v("qShort")}\n${v("qAskLine")}\n${v("qChoices")}\n${fn("qItem")}\nreturn qItem;`)() as (q: object) => string;
+  const html = qItem({ id: "m_x1", room: "r", seq: 3, ts: "", from: "a", agent: "claude", kind: "question", text: "@benji ok?", reply_to: null, room_state: "open" });
+  for (const attr of ["data-qopen", "data-qdis", "data-qsend", "data-qta", "data-qchip"]) assert.ok(html.includes(`${attr}="m_x1"`), `${attr} carries the ask id`);
+  assert.ok(!/data-[\w-]+=""/.test(html), "no empty data attribute");
+}
 
 // ---- HTTP: the dashboard's calls against the built hub ----
 const PORT = Number(process.env.PORT ?? 7861);

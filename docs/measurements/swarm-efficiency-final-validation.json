@@ -1,0 +1,37 @@
+{
+  "commit": "6cc2e228bde4881bd3c3b6815ca8c303df0f698a",
+  "cwd": "/private/tmp/swarm-final-validation-6cc2e228",
+  "full_suite": {
+    "command": "npm test",
+    "exit_code": 1,
+    "passed_commands": 154,
+    "total_commands": 155,
+    "failed_commands": [
+      "pool-run.test.ts"
+    ],
+    "failed_case": "each run gets its own repository: a second run cannot see the first run's branches or commits"
+  },
+  "pool_rerun": {
+    "command": "node --import tsx scripts/pool-run.test.ts",
+    "exit_code": 1,
+    "passed_cases": 13,
+    "total_cases": 14,
+    "failed_case": 13
+  },
+  "existing_issue": {
+    "report_id": "a1991ba8-6829-43b9-b0b5-bee1346fefed",
+    "shortcut_story": 3756,
+    "url": "https://app.shortcut.com/benordlabs/story/3756"
+  },
+  "logs": {
+    "full_suite": {
+      "path": "/tmp/swarm-final-validation-6cc2e228.log",
+      "sha256": "e18245b648cad6bd0b364693191eff1c839bd9ae595aade2b7435abf327f93e0"
+    },
+    "pool_rerun": {
+      "path": "/tmp/swarm-final-pool-rerun.log",
+      "sha256": "a94cf801b7592b4ce62f1d8adfd07f9fe0f5be45b24dc39d2286b34bb61c4439"
+    }
+  },
+  "recorded_at": "2026-10-03T19:16:48.005452+00:00"
+}

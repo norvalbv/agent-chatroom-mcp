@@ -9,6 +9,7 @@
  * decision as the hub sees it: version, tally, who it waits on, what blocks it.
  */
 import { PALETTE_CSS, PALETTE_HTML, PALETTE_JS } from "./ui/palette.js";
+import { INBOX_CSS, INBOX_JS } from "./ui/inbox.js";
 
 export const UI_HTML = `<!doctype html>
 <html lang="en">
@@ -209,11 +210,12 @@ export const UI_HTML = `<!doctype html>
     #head .acts .hidephone { display:none }
   }
 ${PALETTE_CSS}
-</style>
+${INBOX_CSS}</style>
 </head>
 <body data-view="chat">
 <aside id="rail">
   <div class="brand"><div class="mark">✻</div><div><h1>Agent Chatroom</h1><div class="sub" id="sub">connecting…</div></div><div class="sp"></div><button class="btn icon" id="palbtn" title="Command palette (⌘K / Ctrl K)" aria-label="Open command palette">⌘</button><button class="btn icon" id="theme" title="Toggle theme">◐</button></div>
+  <button class="qbar" id="qbar" title="Questions agents asked you that nobody has answered (i)"><span class="ql">For you</span><span class="qs" id="qbars">checking…</span><span class="qc" id="qbarn"></span></button>
   <div class="filter"><input id="filter" placeholder="Filter rooms" /></div>
   <div class="rctl" id="rctl"><select id="sort" title="Sort rooms"><option value="newest">Newest</option><option value="active">Most active</option><option value="msgs">Most messages</option><option value="name">Name</option></select><button class="chip tog on" data-st="live" title="Show open and stalled rooms">live</button><button class="chip tog on" data-st="concluded">concluded</button><button class="chip tog on" data-st="closed">closed</button><button class="chip tog" id="showarch" title="Include archived rooms">archived</button><button class="btn" id="archdead" title="Hide every room nobody is in. Transcripts are kept; they reappear under 'archived'.">Archive dead</button></div>
   <div class="policy" id="policy" title="Which provider and model every request_agent launches as. Click to change.">recruits: …</div>
@@ -249,6 +251,8 @@ ${PALETTE_HTML}
   <button data-view="chat" class="on">Chat <span class="n" id="n-unread" style="display:none"></span></button>
   <button data-view="inspect">Inspect</button>
 </nav>
+<div id="qpanel" hidden><div class="qsheet" role="dialog" aria-modal="true" aria-labelledby="qtitle" tabindex="-1"></div></div>
+<div id="qtoast" role="status" aria-live="polite"></div>
 <script>
 (function () {
   var $ = function (s, el) { return (el || document).querySelector(s); };
@@ -436,6 +440,7 @@ ${PALETTE_HTML}
         var meta = (r.state === 'open' || r.state === 'stalled') ? r.active_count + ' active · ' + r.message_count + ' msgs' : r.state + ' · ' + r.message_count + ' msgs';
         return '<button class="room' + (r.name === sel ? ' sel' : '') + '" data-r="' + esc(r.name) + '" title="' + esc(r.topic || r.name) + '">'
           + '<span class="dot ' + r.state + '"></span><span class="n">' + esc(short) + '</span>'
+          + qBadge(r.name)
           + (unread && r.name !== sel ? '<span class="u' + (r.state === 'open' ? '' : ' q') + '">' + (unread > 99 ? '99+' : unread) + '</span>' : '')
           + '<span class="m">' + esc(meta) + '</span></button>';
       }).join('');
@@ -806,6 +811,7 @@ ${PALETTE_HTML}
   });
 
 ${PALETTE_JS}
+${INBOX_JS}
 
   // ---------- polling ----------
   async function refreshRooms() {

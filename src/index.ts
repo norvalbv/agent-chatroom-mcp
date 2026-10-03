@@ -10,7 +10,8 @@
  *   GET  /rooms/:room/messages?since=0
  *   GET  /rooms/:room/transcript      -> plain text
  *   GET  /rooms/:room/stats
- *   POST /rooms/:room/messages {name, content} -> speak as a human participant
+ *   POST /rooms/:room/messages {name, content, reply_to?} -> speak as a human participant
+ *   GET  /questions?names=benji       -> agents' unanswered asks to the human, across rooms
  *   POST /rooms/:room/vote {name, proposal_id, vote, reason} -> human vote (disagree = veto)
  */
 import { randomUUID } from "node:crypto";
@@ -23,6 +24,7 @@ import { parseReplyWindowMinutes } from "./reply-metrics.js";
 import { createSessionServer } from "./server.js";
 import { Spawner, type RecruitPolicy } from "./spawner.js";
 import { UI_HTML } from "./ui.js";
+import { humanQuestions } from "./questions.js";
 import { loadDotEnv } from "./env.js";
 // Item 2 (swarm-125438-jp20): CHATROOM_NO_RECRUIT=1 marks a hub that must never hold a provider key
 // (a benchmark hub, whose caller already stripped API_KEY/TOKEN/SECRET-shaped vars from this process's
@@ -262,6 +264,11 @@ app.post("/agents/:name/stop", (req, res) => {
   if (!requireAgentControl(req, res)) return;
   res.json({ stopped: spawner.stop(req.params.name) });
 });
+// Asks addressed to the human that no human has answered, newest first (src/questions.ts). names= adds the dashboard's name.
+app.get("/questions", (req, res) => {
+  const names = String(req.query.names ?? "").split(",").map((n) => n.trim()).filter(Boolean).slice(0, 20);
+  res.json(humanQuestions(hub, { names, includeArchived: req.query.archived === "1" }));
+});
 app.get("/rooms", (req, res) => res.json(hub.listRooms(true, req.query.archived === "1" || req.query.archived === "all")));
 // Archive: hide from listings, keep everything. Body {name, archived:false} un-archives. POST /rooms/archive-dead sweeps every room nobody is in.
 app.post("/rooms/archive-dead", (req, res) => {
@@ -336,9 +343,9 @@ app.get("/rooms/:room/messages", (req, res) => {
 app.post("/rooms/:room/messages", (req, res) => {
   if (!requireToken(req, res)) return;
   try {
-    const { name, content } = (req.body ?? {}) as { name?: string; content?: string };
+    const { name, content, reply_to } = (req.body ?? {}) as { name?: string; content?: string; reply_to?: string };
     const { participant } = hub.join(req.params.room, (name || "human").trim(), "human", {}, undefined, `http:${name || "human"}`);
-    const m = hub.send(req.params.room, participant.id, String(content ?? ""), undefined, true);
+    const m = hub.send(req.params.room, participant.id, String(content ?? ""), typeof reply_to === "string" && reply_to ? reply_to : undefined, true);
     res.json(m);
   } catch (e) {
     res.status(400).type("text/plain").send(e instanceof HubError ? e.message : "error");

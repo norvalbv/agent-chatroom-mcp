@@ -1,0 +1,67 @@
+{
+  "build": "/var/folders/9r/rmy4kywx6pl2hfzbw934txt40000gn/T/consensus-base-t3zwmy22",
+  "git": "",
+  "codeHash": "c68498b2fc0d4f62dcdcecfe4f8d32a0d0835b2408e180501994b2e6940fa64f",
+  "room": "swarm-204844-q2ao-room",
+  "brief": "Review the factual release note that the release-operator will place in this room. It has exactly two required facts: identifier v1 and checksum 51 from 17 times 3. Decide whether those facts are correct. The operator holds publication until a later archival annotation is attached; that annotation adds no requirement to the factual review. Reach a sound conclusion once publication is released. No project edits are needed. Use wait_for_messages with hold_until_actionable=true when waiting.",
+  "cacheRegime": "DISABLE_PROMPT_CACHING=1 (uncached throughout; verify first-request receipts separately)",
+  "initialVersion": 1,
+  "amendedAt": 1791060552967,
+  "amendToVoteMs": 61034,
+  "wallMs": 102423,
+  "state": "concluded",
+  "outcome": true,
+  "toolCalls": 36,
+  "usage": [
+    {
+      "name": "claude-opus-5-5-1",
+      "cost": 0.929253,
+      "input_tokens": 216740,
+      "cache_read_input_tokens": 0,
+      "cache_creation_input_tokens": 0,
+      "output_tokens": 3036
+    },
+    {
+      "name": "claude-opus-5-5-2",
+      "cost": 1.1480169999999998,
+      "input_tokens": 269121,
+      "cache_read_input_tokens": 0,
+      "cache_creation_input_tokens": 0,
+      "output_tokens": 3497
+    },
+    {
+      "name": "verifier",
+      "cost": 0.9948080000000001,
+      "input_tokens": 229891,
+      "cache_read_input_tokens": 0,
+      "cache_creation_input_tokens": 0,
+      "output_tokens": 3657
+    }
+  ],
+  "error": null,
+  "sourceCommit": "31daae67",
+  "distTreeSha256": "1d9dd8a0211c40447b810625dc36c3fa39a27832eadd79c4c363ceb4001da7fe",
+  "briefSha256": "7f8a573798fc9ae687226404fd3af4cf39ff720f2e7fac989db864cb7610c050",
+  "coldAudit": {
+    "status": "cold",
+    "seats": {
+      "verifier": "cold",
+      "claude-opus-5-5-2": "cold",
+      "claude-opus-5-5-1": "cold"
+    },
+    "expected_seats": 3,
+    "coverage_complete": true
+  },
+  "providerRequests": 30,
+  "agentToolCalls": 36,
+  "agentHubCalls": 31,
+  "costUSD": 3.072078,
+  "causalLatencySupported": false,
+  "costPerProviderRequestUSD": 0.1024026,
+  "limitation": "One run per arm; head current-version vote was generated in a provider request based on v1, so latency contrast is not an effect estimate.",
+  "roomStartedAt": "2026-10-03T20:48:49.090Z",
+  "concludedAt": "2026-10-03T20:50:14.001Z",
+  "timeToConclusionMs": 84911,
+  "amendToConclusionMs": 61034,
+  "finalText": "Release identifier is v1. The checksum is 51, calculated as 17 times 3.\nArchival annotation: copy retained under release-v1."
+}

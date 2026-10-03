@@ -1,0 +1,67 @@
+{
+  "build": "/Users/benji/Desktop/Personal and learning/agent-chatroom-mcp/.swarm-worktrees/swarm-202803-dpij/6-astra-4",
+  "git": "1342a684c6e41972686e065b0278dd0b8e152a85",
+  "codeHash": "61e52dc0cbe8bc3f17140e5f0afaf0832fbf0716ee715ee4d2cc8d570e556c20",
+  "room": "swarm-205054-n7ej-room",
+  "brief": "Review the factual release note that the release-operator will place in this room. It has exactly two required facts: identifier v1 and checksum 51 from 17 times 3. Decide whether those facts are correct. The operator holds publication until a later archival annotation is attached; that annotation adds no requirement to the factual review. Reach a sound conclusion once publication is released. No project edits are needed. Use wait_for_messages with hold_until_actionable=true when waiting.",
+  "cacheRegime": "DISABLE_PROMPT_CACHING=1 (uncached throughout; verify first-request receipts separately)",
+  "initialVersion": 1,
+  "amendedAt": 1791060678875,
+  "amendToVoteMs": 114,
+  "wallMs": 38267,
+  "state": "concluded",
+  "outcome": true,
+  "toolCalls": 31,
+  "usage": [
+    {
+      "name": "claude-opus-5-5-1",
+      "cost": 0.819592,
+      "input_tokens": 190229,
+      "cache_read_input_tokens": 0,
+      "cache_creation_input_tokens": 0,
+      "output_tokens": 2855
+    },
+    {
+      "name": "claude-opus-5-5-2",
+      "cost": 0.874348,
+      "input_tokens": 207518,
+      "cache_read_input_tokens": 0,
+      "cache_creation_input_tokens": 0,
+      "output_tokens": 2135
+    },
+    {
+      "name": "verifier",
+      "cost": 0.7309979999999999,
+      "input_tokens": 167549,
+      "cache_read_input_tokens": 0,
+      "cache_creation_input_tokens": 0,
+      "output_tokens": 2933
+    }
+  ],
+  "error": null,
+  "sourceCommit": "1342a684c6e41972686e065b0278dd0b8e152a85",
+  "distTreeSha256": "fc12b4061854e19c169dc80467a9c82a1ef739a52ef8a57f03c47c344b20623a",
+  "briefSha256": "7f8a573798fc9ae687226404fd3af4cf39ff720f2e7fac989db864cb7610c050",
+  "coldAudit": {
+    "status": "cold",
+    "seats": {
+      "claude-opus-5-5-2": "cold",
+      "claude-opus-5-5-1": "cold",
+      "verifier": "cold"
+    },
+    "expected_seats": 3,
+    "coverage_complete": true
+  },
+  "providerRequests": 24,
+  "agentToolCalls": 27,
+  "agentHubCalls": 26,
+  "costUSD": 2.424938,
+  "causalLatencySupported": false,
+  "costPerProviderRequestUSD": 0.10103908333333333,
+  "limitation": "One run per arm; head current-version vote was generated in a provider request based on v1, so latency contrast is not an effect estimate.",
+  "roomStartedAt": "2026-10-03T20:51:01.519Z",
+  "concludedAt": "2026-10-03T20:51:18.990Z",
+  "timeToConclusionMs": 17471,
+  "amendToConclusionMs": 115,
+  "finalText": "Release identifier is v1. The checksum is 51, calculated as 17 times 3.\nArchival annotation: copy retained under release-v1."
+}

@@ -1,0 +1,17 @@
+{
+  "build": "/var/folders/9r/rmy4kywx6pl2hfzbw934txt40000gn/T/consensus-base-t3zwmy22",
+  "git": "",
+  "codeHash": "c68498b2fc0d4f62dcdcecfe4f8d32a0d0835b2408e180501994b2e6940fa64f",
+  "room": "swarm-204633-av1l-room",
+  "brief": "Review the factual release note that the release-operator will place in this room. It has exactly two required facts: identifier v1 and checksum 51 from 17 times 3. Decide whether those facts are correct. The operator holds publication until a later archival annotation is attached; that annotation adds no requirement to the factual review. Reach a sound conclusion once publication is released. No project edits are needed. Use wait_for_messages with hold_until_actionable=true when waiting.",
+  "cacheRegime": "DISABLE_PROMPT_CACHING=1 (uncached throughout; verify first-request receipts separately)",
+  "initialVersion": null,
+  "amendedAt": null,
+  "amendToVoteMs": null,
+  "wallMs": 108107,
+  "outcome": false,
+  "toolCalls": 0,
+  "usage": [],
+  "error": "TypeError: fetch failed",
+  "validity": "invalid runner setup: room topic gained Final answer prefix before discovery; no proposal placed"
+}

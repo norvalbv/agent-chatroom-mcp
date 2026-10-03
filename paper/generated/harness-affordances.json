@@ -1,0 +1,913 @@
+{
+  "generator": "python3 scripts/paper-harness-results.py",
+  "scope": "Descriptive historical census and separate exploratory task trials; not pooled across tasks.",
+  "source_commits": {
+    "docs/measurements/harness-tool-usage-2026-10-03.json": "6bfd02cfebc9f0bf629144ad45f6dc4dd1d5d691",
+    "docs/measurements/harness-tool-traces-2026-10-03.json": "13df60fdc465d08ae63d1ccb4f6cd848509ddd5f",
+    "docs/measurements/consensus-action-base-valid.json": "b2c9a110259329d25492fc82c4cc415cc44fa4be",
+    "docs/measurements/consensus-action-head-valid.json": "b2c9a110259329d25492fc82c4cc415cc44fa4be",
+    "docs/measurements/room-directory-2026-10-03.json": "bd7e4a1decf4852ec233cb4aec594d0f53d941d4",
+    "docs/measurements/recruit-policy-base2.json": "f2a3a716b6eccfe7d8114133d92318844fb521ee",
+    "docs/measurements/recruit-policy-base3.json": "f2a3a716b6eccfe7d8114133d92318844fb521ee",
+    "docs/measurements/recruit-policy-base4.json": "f2a3a716b6eccfe7d8114133d92318844fb521ee",
+    "docs/measurements/recruit-policy-head1.json": "f2a3a716b6eccfe7d8114133d92318844fb521ee",
+    "docs/measurements/recruit-policy-head2.json": "f2a3a716b6eccfe7d8114133d92318844fb521ee",
+    "docs/measurements/recruit-policy-head3.json": "f2a3a716b6eccfe7d8114133d92318844fb521ee",
+    "docs/measurements/breakouts-2026-10-03/summary.json": "4060a4fcfdca2d6f0ee278da514c3d57dcbe55b3",
+    "docs/measurements/breakouts-2026-10-03/cost-state-extracts.json": "51e957bbe6ebe75576d55cafac7384ddd7cf02dd",
+    "docs/measurements/away-seat-liveness-2026-10-03.json": "abb6b16918b1295fa74ccbb1207f7d9f526e3a87"
+  },
+  "source_sha256": {
+    "docs/measurements/harness-tool-usage-2026-10-03.json": "4c8c23aa712155169506aa45fca9ec3ccad9d9c40a3ea08bff0ae764aa313eb0",
+    "docs/measurements/harness-tool-traces-2026-10-03.json": "f14ed7c7d43186d0596f0f2ec5bb4029896c29b288477e5945bacac88068281b",
+    "docs/measurements/consensus-action-base-valid.json": "d4ee90c4e88486c45f5d972395d434ef7ba09dd0c5957ea50f676530ffafff9f",
+    "docs/measurements/consensus-action-head-valid.json": "e17461784c81e0f270f13071487bbcaa4f90355cceff4dcc674157c4c0b7b685",
+    "docs/measurements/room-directory-2026-10-03.json": "efbee97fa1dae357a680a7515d3238f5e03459a1cbdf1754dfb2b29be190bb42",
+    "docs/measurements/recruit-policy-base2.json": "a75c9e6ca5f764f54ca3410bbff0e5097da686e37ed4da3f76ead82004a90fb0",
+    "docs/measurements/recruit-policy-base3.json": "da38fa078f3180d172fbbc8a7a5af9accd458c798be3a25fd4dcd4f18e208c3c",
+    "docs/measurements/recruit-policy-base4.json": "2e2e0509862294f1e102a5742d5e96400c6ce5df476b8edf385a7c99ef500b0c",
+    "docs/measurements/recruit-policy-head1.json": "b52ead0e8be487085b0d921a6b40718b768e3a678017a0466fbe3c8651fd3139",
+    "docs/measurements/recruit-policy-head2.json": "e5ebfe1541e303d57f29bfabf3c97ff400a65a88430053c1c05352d6b192ba93",
+    "docs/measurements/recruit-policy-head3.json": "e0676d9e223292a6a38570066c21880b4c2bf93ac8a78ff1d1a44c850312fe25",
+    "docs/measurements/breakouts-2026-10-03/summary.json": "0fb6364d65032def924f3dac378700bc7826b6b4e2ff4b7f102303739ea312c6",
+    "docs/measurements/breakouts-2026-10-03/cost-state-extracts.json": "f7dba9b987c31e8dc1af00d46c4845761f7ef3926da73a5f303b46c4d9264125",
+    "docs/measurements/away-seat-liveness-2026-10-03.json": "10456348448d694aa446667658d3ee0863e67cff2cbd97b71b37675f1646b558"
+  },
+  "coverage": {
+    "observed_main_rooms": 78,
+    "excluded_without_telemetry": 24
+  },
+  "completed_room_bound_calls": 50562,
+  "selected_tools": {
+    "request_agent": {
+      "calls": 111,
+      "success": 97,
+      "hub_refusal": 14,
+      "error": 0,
+      "rooms_used": 17,
+      "rooms_with_success": 17
+    },
+    "kick_vote": {
+      "calls": 30,
+      "success": 24,
+      "hub_refusal": 6,
+      "error": 0,
+      "rooms_used": 1,
+      "rooms_with_success": 1
+    },
+    "replace_participant": {
+      "calls": 6,
+      "success": 0,
+      "hub_refusal": 6,
+      "error": 0,
+      "rooms_used": 1,
+      "rooms_with_success": 0
+    },
+    "post_to_room": {
+      "calls": 244,
+      "success": 136,
+      "hub_refusal": 108,
+      "error": 0,
+      "rooms_used": 6,
+      "rooms_with_success": 6
+    },
+    "board_get": {
+      "calls": 5481,
+      "success": 5400,
+      "hub_refusal": 81,
+      "error": 0,
+      "rooms_used": 72,
+      "rooms_with_success": 72
+    },
+    "board_set": {
+      "calls": 4292,
+      "success": 3280,
+      "hub_refusal": 1012,
+      "error": 0,
+      "rooms_used": 74,
+      "rooms_with_success": 74
+    },
+    "wait_for_messages": {
+      "calls": 19863,
+      "success": 19792,
+      "hub_refusal": 71,
+      "error": 0,
+      "rooms_used": 76,
+      "rooms_with_success": 75
+    }
+  },
+  "historical_trace_slice": {
+    "files": 40,
+    "hub_calls": 4280,
+    "list_rooms_calls": 0
+  },
+  "consensus_action": {
+    "interpretation": "Single pair, both task oracles pass; candidate vote already in flight, so no causal latency/cost/autonomy claim.",
+    "base": {
+      "sourceCommit": "31daae67",
+      "room": "swarm-204844-q2ao-room",
+      "providerRequests": 30,
+      "agentToolCalls": 36,
+      "agentHubCalls": 31,
+      "costUSD": 3.072078,
+      "costPerProviderRequestUSD": 0.1024026,
+      "timeToConclusionMs": 84911,
+      "amendToVoteMs": 61034,
+      "outcome": true,
+      "coldAudit": {
+        "status": "cold",
+        "seats": {
+          "verifier": "cold",
+          "claude-opus-5-5-2": "cold",
+          "claude-opus-5-5-1": "cold"
+        },
+        "expected_seats": 3,
+        "coverage_complete": true
+      },
+      "causalLatencySupported": false,
+      "time_to_conclusion_seconds": 84.911,
+      "amend_to_vote_seconds": 61.034
+    },
+    "head": {
+      "sourceCommit": "1342a684c6e41972686e065b0278dd0b8e152a85",
+      "room": "swarm-205054-n7ej-room",
+      "providerRequests": 24,
+      "agentToolCalls": 27,
+      "agentHubCalls": 26,
+      "costUSD": 2.424938,
+      "costPerProviderRequestUSD": 0.10103908333333333,
+      "timeToConclusionMs": 17471,
+      "amendToVoteMs": 114,
+      "outcome": true,
+      "coldAudit": {
+        "status": "cold",
+        "seats": {
+          "claude-opus-5-5-2": "cold",
+          "claude-opus-5-5-1": "cold",
+          "verifier": "cold"
+        },
+        "expected_seats": 3,
+        "coverage_complete": true
+      },
+      "causalLatencySupported": false,
+      "time_to_conclusion_seconds": 17.471,
+      "amend_to_vote_seconds": 0.114
+    }
+  },
+  "room_directory": {
+    "decision": "Reject compact list_rooms default candidate 809a208c; no production source in evidence commit",
+    "summary": {
+      "base": {
+        "cost_usd": 3.395953,
+        "model_turns": 29.0,
+        "tool_calls": 36.666666666666664,
+        "hub_tool_calls": 36.666666666666664,
+        "hub_text_bytes": 93575.0,
+        "time_to_conclusion_seconds": 31.700666666666667,
+        "wall_seconds": 48.56866666666667,
+        "aggregate_cost_per_model_turn_usd": 0.1171018275862069,
+        "oracle_passes": 3,
+        "runs": 3
+      },
+      "head": {
+        "cost_usd": 3.9845736666666665,
+        "model_turns": 33.0,
+        "tool_calls": 47.0,
+        "hub_tool_calls": 46.0,
+        "hub_text_bytes": 109351.0,
+        "time_to_conclusion_seconds": 37.20766666666666,
+        "wall_seconds": 54.026,
+        "aggregate_cost_per_model_turn_usd": 0.12074465656565657,
+        "oracle_passes": 3,
+        "runs": 3
+      }
+    },
+    "rows": [
+      {
+        "arm": "base",
+        "rep": 1,
+        "room": "swarm-205216-vnlr-room",
+        "oracle": true,
+        "cost_usd": 3.4182429999999995,
+        "model_turns": 29,
+        "cost_per_model_turn_usd": 0.11787044827586204,
+        "tool_calls": 40,
+        "hub_tool_calls": 40,
+        "hub_text_bytes": 94419,
+        "time_to_conclusion_seconds": 36.781,
+        "wall_seconds": 55.729,
+        "list_rooms_calls": 3,
+        "list_rooms_text_bytes": 50903
+      },
+      {
+        "arm": "base",
+        "rep": 2,
+        "room": "swarm-205312-mjjb-room",
+        "oracle": true,
+        "cost_usd": 3.278596,
+        "model_turns": 28,
+        "cost_per_model_turn_usd": 0.11709271428571429,
+        "tool_calls": 34,
+        "hub_tool_calls": 34,
+        "hub_text_bytes": 95209,
+        "time_to_conclusion_seconds": 25.16,
+        "wall_seconds": 41.03,
+        "list_rooms_calls": 3,
+        "list_rooms_text_bytes": 50584
+      },
+      {
+        "arm": "base",
+        "rep": 3,
+        "room": "swarm-205354-tt84-room",
+        "oracle": true,
+        "cost_usd": 3.4910200000000002,
+        "model_turns": 30,
+        "cost_per_model_turn_usd": 0.11636733333333334,
+        "tool_calls": 36,
+        "hub_tool_calls": 36,
+        "hub_text_bytes": 91097,
+        "time_to_conclusion_seconds": 33.161,
+        "wall_seconds": 48.947,
+        "list_rooms_calls": 3,
+        "list_rooms_text_bytes": 50845
+      },
+      {
+        "arm": "head",
+        "rep": 1,
+        "room": "swarm-205513-sbfj-room",
+        "oracle": true,
+        "cost_usd": 3.766344,
+        "model_turns": 31,
+        "cost_per_model_turn_usd": 0.1214949677419355,
+        "tool_calls": 38,
+        "hub_tool_calls": 36,
+        "hub_text_bytes": 113321,
+        "time_to_conclusion_seconds": 36.907,
+        "wall_seconds": 54.242,
+        "list_rooms_calls": 7,
+        "list_rooms_text_bytes": 71406
+      },
+      {
+        "arm": "head",
+        "rep": 2,
+        "room": "swarm-205611-g7u7-room",
+        "oracle": true,
+        "cost_usd": 4.471101,
+        "model_turns": 36,
+        "cost_per_model_turn_usd": 0.12419725,
+        "tool_calls": 52,
+        "hub_tool_calls": 52,
+        "hub_text_bytes": 117311,
+        "time_to_conclusion_seconds": 42.49,
+        "wall_seconds": 59.627,
+        "list_rooms_calls": 7,
+        "list_rooms_text_bytes": 58262
+      },
+      {
+        "arm": "head",
+        "rep": 3,
+        "room": "swarm-205717-9owv-room",
+        "oracle": true,
+        "cost_usd": 3.716276,
+        "model_turns": 32,
+        "cost_per_model_turn_usd": 0.116133625,
+        "tool_calls": 51,
+        "hub_tool_calls": 50,
+        "hub_text_bytes": 97421,
+        "time_to_conclusion_seconds": 32.226,
+        "wall_seconds": 48.209,
+        "list_rooms_calls": 9,
+        "list_rooms_text_bytes": 45912
+      }
+    ],
+    "limitations": [
+      "Three runs per arm on one read-only directory task; does not measure breakout formation or recruit decisions.",
+      "Uncached-throughout cost does not estimate ordinary long-lived caching cost.",
+      "Other private rooms could run concurrently after owner relaxed initial queue; time is descriptive.",
+      "Oracle matches exact room/key and unchanged fixture topics/message counts; it does not parse arbitrary prose for negation.",
+      "Both builds allow shell/HTTP discovery fallback.",
+      "First candidate verifier joined first, adding Final answer prefix to persisted topic; all launched task/plan briefs identical. Driver wall time retained as recorded, not independently re-derived."
+    ],
+    "cache_regime": "DISABLE_PROMPT_CACHING=1; all requests uncached; each of 18 initial requests separately audited as zero cache reads",
+    "order": "All three baseline repetitions followed by all three candidate repetitions; no randomized arm order.",
+    "relative_mean_cost_change": 0.17333003921628665
+  },
+  "recruitment_policy": {
+    "rows": [
+      {
+        "arm": "base",
+        "room": "swarm-210042-8ziy-room",
+        "cost_usd": 8.074795,
+        "model_turns": 59,
+        "cost_per_model_turn_usd": 0.13686093220338982,
+        "tool_calls": 71,
+        "hub_tool_calls": 44,
+        "time_to_conclusion_seconds": 78.429,
+        "cold_start": {
+          "status": "cold",
+          "seats": {
+            "claude-opus-5-5-2": "cold",
+            "claude-opus-5-5-1": "cold",
+            "verifier": "cold"
+          },
+          "expected_seats": 3,
+          "coverage_complete": true
+        },
+        "strict_oracle": false,
+        "post_hoc_facts_correct": true,
+        "recruit_attempts": 0
+      },
+      {
+        "arm": "base",
+        "room": "swarm-210430-hu4f-room",
+        "cost_usd": 9.43547,
+        "model_turns": 64,
+        "cost_per_model_turn_usd": 0.14742921875,
+        "tool_calls": 78,
+        "hub_tool_calls": 48,
+        "time_to_conclusion_seconds": 81.354,
+        "cold_start": {
+          "status": "cold",
+          "seats": {
+            "claude-opus-5-5-2": "cold",
+            "verifier": "cold",
+            "claude-opus-5-5-1": "cold"
+          },
+          "expected_seats": 3,
+          "coverage_complete": true
+        },
+        "strict_oracle": true,
+        "post_hoc_facts_correct": true,
+        "recruit_attempts": 0
+      },
+      {
+        "arm": "base",
+        "room": "swarm-210734-hh96-room",
+        "cost_usd": 7.254356,
+        "model_turns": 53,
+        "cost_per_model_turn_usd": 0.13687464150943396,
+        "tool_calls": 60,
+        "hub_tool_calls": 39,
+        "time_to_conclusion_seconds": 110.921,
+        "cold_start": {
+          "status": "cold",
+          "seats": {
+            "verifier": "cold",
+            "claude-opus-5-5-2": "cold",
+            "claude-opus-5-5-1": "cold"
+          },
+          "expected_seats": 3,
+          "coverage_complete": true
+        },
+        "strict_oracle": false,
+        "post_hoc_facts_correct": true,
+        "recruit_attempts": 0
+      },
+      {
+        "arm": "head",
+        "room": "swarm-210257-56an-room",
+        "cost_usd": 3.319626,
+        "model_turns": 32,
+        "cost_per_model_turn_usd": 0.1037383125,
+        "tool_calls": 44,
+        "hub_tool_calls": 42,
+        "time_to_conclusion_seconds": 39.282,
+        "cold_start": {
+          "status": "cold",
+          "seats": {
+            "claude-opus-5-5-1": "cold",
+            "claude-opus-5-5-2": "cold",
+            "verifier": "cold"
+          },
+          "expected_seats": 3,
+          "coverage_complete": true
+        },
+        "strict_oracle": true,
+        "post_hoc_facts_correct": true,
+        "recruit_attempts": 0
+      },
+      {
+        "arm": "head",
+        "room": "swarm-210614-ipmo-room",
+        "cost_usd": 3.3536859999999997,
+        "model_turns": 33,
+        "cost_per_model_turn_usd": 0.10162684848484847,
+        "tool_calls": 43,
+        "hub_tool_calls": 42,
+        "time_to_conclusion_seconds": 59.17,
+        "cold_start": {
+          "status": "cold",
+          "seats": {
+            "verifier": "cold",
+            "claude-opus-5-5-1": "cold",
+            "claude-opus-5-5-2": "cold"
+          },
+          "expected_seats": 3,
+          "coverage_complete": true
+        },
+        "strict_oracle": true,
+        "post_hoc_facts_correct": true,
+        "recruit_attempts": 0
+      },
+      {
+        "arm": "head",
+        "room": "swarm-210950-rd9p-room",
+        "cost_usd": 3.5777080000000003,
+        "model_turns": 34,
+        "cost_per_model_turn_usd": 0.10522670588235294,
+        "tool_calls": 45,
+        "hub_tool_calls": 43,
+        "time_to_conclusion_seconds": 43.343,
+        "cold_start": {
+          "status": "cold",
+          "seats": {
+            "claude-opus-5-5-1": "cold",
+            "claude-opus-5-5-2": "cold",
+            "verifier": "cold"
+          },
+          "expected_seats": 3,
+          "coverage_complete": true
+        },
+        "strict_oracle": false,
+        "post_hoc_facts_correct": true,
+        "recruit_attempts": 0
+      }
+    ],
+    "summary": {
+      "base": {
+        "cost_usd": 8.254873666666667,
+        "model_turns": 58.666666666666664,
+        "tool_calls": 69.66666666666667,
+        "hub_tool_calls": 43.666666666666664,
+        "time_to_conclusion_seconds": 90.23466666666667,
+        "aggregate_cost_per_model_turn_usd": 0.14070807386363635,
+        "runs": 3,
+        "strict_oracle_passes": 1,
+        "post_hoc_factual_passes": 3,
+        "recruit_attempts": 0
+      },
+      "head": {
+        "cost_usd": 3.4170066666666665,
+        "model_turns": 33,
+        "tool_calls": 44,
+        "hub_tool_calls": 42.333333333333336,
+        "time_to_conclusion_seconds": 47.265,
+        "aggregate_cost_per_model_turn_usd": 0.10354565656565658,
+        "runs": 3,
+        "strict_oracle_passes": 2,
+        "post_hoc_factual_passes": 3,
+        "recruit_attempts": 0
+      }
+    },
+    "scope": "Pre-action factual lookup under dry spawning and caching disabled; supplemental fact check is post-hoc and does not replace strict oracle."
+  },
+  "breakouts": {
+    "summary": {
+      "base": {
+        "cost_usd": 9.168378333333333,
+        "model_turns": 56,
+        "hub_tool_calls": 57.333333333333336,
+        "all_tool_calls": 80.33333333333333,
+        "minutes": 1.9,
+        "runs": 3,
+        "main_oracle_passes": 0,
+        "anywhere_oracle_passes": 3,
+        "aggregate_cost_per_model_turn_usd": 0.16372104166666665
+      },
+      "head": {
+        "cost_usd": 9.645756333333333,
+        "model_turns": 52.666666666666664,
+        "hub_tool_calls": 55.666666666666664,
+        "all_tool_calls": 77.33333333333333,
+        "minutes": 2.3000000000000003,
+        "runs": 3,
+        "main_oracle_passes": 2,
+        "anywhere_oracle_passes": 3,
+        "aggregate_cost_per_model_turn_usd": 0.18314727215189874
+      },
+      "relative_mean_cost_change": 0.05206787750723629
+    },
+    "runs": [
+      {
+        "pair": 1,
+        "arm": "base",
+        "run": "swarm-205402-rv9u",
+        "rooms": 3,
+        "breakouts": 2,
+        "linked": 0,
+        "carried": 0,
+        "final_both": false,
+        "d1_evidence": true,
+        "d2_evidence": false,
+        "d2_live_named": [],
+        "ok": false,
+        "anywhere_ok": true,
+        "minutes": 2.5,
+        "cost_usd": 9.467541,
+        "input_tokens": 2254443,
+        "output_tokens": 22049,
+        "cache_read": 0,
+        "model_turns": 50,
+        "cost_per_turn": 0.18935082,
+        "hub_tool_calls": 57,
+        "by_tool": {
+          "wait_for_messages": 20,
+          "join_room": 6,
+          "submit_opening": 6,
+          "vote": 6,
+          "leave_room": 6,
+          "propose": 4,
+          "send_message": 3,
+          "challenge": 3,
+          "amend": 3
+        },
+        "traces": [
+          {
+            "seat": "claude-opus-5-5-1",
+            "trace": "bbbd1369-6294-49f8-82b4-1b8590956797.jsonl",
+            "sha256": "1f5be68ad25e9b13b0efd04c33218160b76a0c8b750fd819b3ef4096dd7caaf2",
+            "model_turns": 25,
+            "first_request_cache_read": 0
+          },
+          {
+            "seat": "verifier",
+            "trace": "d543d90c-6c21-4d52-b06a-06b75b2ef0ed.jsonl",
+            "sha256": "911e4a0c3a3d2b7faebe0474979c94f0a2d0c6d94351c44b01131c060e787cd0",
+            "model_turns": 25,
+            "first_request_cache_read": 0
+          }
+        ],
+        "all_tool_calls": 73,
+        "seats_observed": [
+          "claude-opus-5-5-1",
+          "verifier"
+        ],
+        "source_summary_cost_usd": 9.468
+      },
+      {
+        "pair": 1,
+        "arm": "head",
+        "run": "swarm-205402-fs7w",
+        "rooms": 3,
+        "breakouts": 2,
+        "linked": 2,
+        "carried": 2,
+        "final_both": true,
+        "d1_evidence": true,
+        "d2_evidence": true,
+        "d2_live_named": [
+          "adjudication-replay.ts",
+          "bench-build-runtime.ts",
+          "bench-rq1.ts",
+          "bench-steer-claude.ts",
+          "openrouter-smoke.ts",
+          "sandbox-claude-live.ts"
+        ],
+        "ok": true,
+        "anywhere_ok": true,
+        "minutes": 2.1,
+        "cost_usd": 8.244582999999999,
+        "input_tokens": 1951986,
+        "output_tokens": 21389,
+        "cache_read": 0,
+        "model_turns": 43,
+        "cost_per_turn": 0.191734488372093,
+        "hub_tool_calls": 57,
+        "by_tool": {
+          "wait_for_messages": 19,
+          "join_room": 6,
+          "submit_opening": 6,
+          "leave_room": 6,
+          "propose": 5,
+          "send_message": 5,
+          "vote": 4,
+          "challenge": 3,
+          "room_status": 1,
+          "board_set": 1,
+          "amend": 1
+        },
+        "traces": [
+          {
+            "seat": "claude-opus-5-5-1",
+            "trace": "13124ef4-4c3b-4a5d-95b1-39d60854e673.jsonl",
+            "sha256": "b8c29e1cd71ed0c9a74cbb665f317d8c84789be953a1a684428e5651ef3e2d67",
+            "model_turns": 17,
+            "first_request_cache_read": 0
+          },
+          {
+            "seat": "verifier",
+            "trace": "37c17ee9-c792-4e84-8941-7729ef3f18d4.jsonl",
+            "sha256": "4e33222abf99e0b1648dab84f179fbf17d8c15709e3e85a1aa90401e97635a39",
+            "model_turns": 26,
+            "first_request_cache_read": 0
+          }
+        ],
+        "all_tool_calls": 74,
+        "seats_observed": [
+          "claude-opus-5-5-1",
+          "verifier"
+        ],
+        "source_summary_cost_usd": 8.245
+      },
+      {
+        "pair": 2,
+        "arm": "base",
+        "run": "swarm-210816-5jt9",
+        "rooms": 2,
+        "breakouts": 1,
+        "linked": 0,
+        "carried": 0,
+        "final_both": false,
+        "d1_evidence": true,
+        "d2_evidence": false,
+        "d2_live_named": [],
+        "ok": false,
+        "anywhere_ok": true,
+        "minutes": 1.7,
+        "cost_usd": 11.972012999999999,
+        "input_tokens": 2829449,
+        "output_tokens": 31777,
+        "cache_read": 0,
+        "model_turns": 78,
+        "cost_per_turn": 0.15348734615384613,
+        "hub_tool_calls": 74,
+        "by_tool": {
+          "wait_for_messages": 23,
+          "board_set": 10,
+          "send_message": 8,
+          "join_room": 5,
+          "propose": 5,
+          "vote": 5,
+          "leave_room": 5,
+          "submit_opening": 3,
+          "challenge": 3,
+          "amend": 2,
+          "board_get": 2,
+          "post_to_room": 2,
+          "request_agent": 1
+        },
+        "traces": [
+          {
+            "seat": "claude-opus-5-5-1",
+            "trace": "07fe9aa6-14b2-43ef-bc73-ba3716c045c8.jsonl",
+            "sha256": "0915dda39b7600ade09e37bbaaace8bcd83fc304fae4e1648128979a3202367c",
+            "model_turns": 23,
+            "first_request_cache_read": 0
+          },
+          {
+            "seat": "verifier",
+            "trace": "aa63eb95-baf6-43a6-887a-463d850c01c3.jsonl",
+            "sha256": "4658290be94bb6da00da46c4e20702baca020e25f4aadface35dfe7deabd4268",
+            "model_turns": 21,
+            "first_request_cache_read": 0
+          },
+          {
+            "seat": "recruit",
+            "trace": "371f0673-0f6e-4326-ba8b-21c0b87f0f4f.jsonl",
+            "sha256": "d26e2d0c98691b2c3fd4c01921182ac0e4d158e40d46a8c4bdee238aa076e7f9",
+            "model_turns": 17,
+            "first_request_cache_read": 0,
+            "input_tokens": 551590,
+            "output_tokens": 6877,
+            "billed_cost": 2.348645,
+            "cost_source": "trace cost-state totalCostUSD"
+          },
+          {
+            "seat": "recruit",
+            "trace": "170b5d06-aa49-42b6-979a-b5390080723c.jsonl",
+            "sha256": "b35dce0559c58523bc734b2c2964fafb65d77c9875e0117fe273052a924b535b",
+            "model_turns": 17,
+            "first_request_cache_read": 0,
+            "input_tokens": 538823,
+            "output_tokens": 7040,
+            "billed_cost": 2.3008419999999994,
+            "cost_source": "trace cost-state totalCostUSD"
+          }
+        ],
+        "all_tool_calls": 111,
+        "seats_observed": [
+          "claude-opus-5-5-1",
+          "claude-recruit-1",
+          "claude-recruit-2",
+          "verifier"
+        ],
+        "cost_launched_seats_usd": 7.322526,
+        "source_summary_cost_usd": 11.972013
+      },
+      {
+        "pair": 2,
+        "arm": "head",
+        "run": "swarm-211304-tb6n",
+        "rooms": 3,
+        "breakouts": 2,
+        "linked": 2,
+        "carried": 2,
+        "final_both": true,
+        "d1_evidence": true,
+        "d2_evidence": true,
+        "d2_live_named": [
+          "bench-harness.test.ts",
+          "bench-seat.test.ts",
+          "bench-steer-claude.ts",
+          "openrouter-smoke.ts",
+          "sandbox-claude-live.ts"
+        ],
+        "ok": true,
+        "anywhere_ok": true,
+        "minutes": 3.7,
+        "cost_usd": 13.039890000000002,
+        "input_tokens": 3140870,
+        "output_tokens": 23363,
+        "cache_read": 0,
+        "model_turns": 65,
+        "cost_per_turn": 0.20061369230769233,
+        "hub_tool_calls": 69,
+        "by_tool": {
+          "wait_for_messages": 27,
+          "vote": 8,
+          "join_room": 6,
+          "submit_opening": 6,
+          "propose": 4,
+          "leave_room": 4,
+          "challenge": 3,
+          "amend": 3,
+          "send_message": 3,
+          "room_status": 2,
+          "board_set": 1,
+          "board_get": 1,
+          "read_messages": 1
+        },
+        "traces": [
+          {
+            "seat": "verifier",
+            "trace": "52616e23-ac0c-4ceb-b682-aaec48a9ab89.jsonl",
+            "sha256": "3efc861173c532db966472e5e5cfbb09371e123bd93b5a897d85fb2de214a850",
+            "model_turns": 42,
+            "first_request_cache_read": 0
+          },
+          {
+            "seat": "claude-opus-5-5-1",
+            "trace": "76b12e63-e69a-44c5-a03a-070aa7c7bc0a.jsonl",
+            "sha256": "c517ab0bbfabc31c6be63417bcd28264baa7a18831d5a653d29c2742bed2375f",
+            "model_turns": 23,
+            "first_request_cache_read": 0
+          }
+        ],
+        "all_tool_calls": 92,
+        "seats_observed": [
+          "claude-opus-5-5-1",
+          "verifier"
+        ],
+        "source_summary_cost_usd": 13.04
+      },
+      {
+        "pair": 3,
+        "arm": "base",
+        "run": "swarm-212000-2bku",
+        "rooms": 2,
+        "breakouts": 1,
+        "linked": 0,
+        "carried": 0,
+        "final_both": false,
+        "d1_evidence": true,
+        "d2_evidence": false,
+        "d2_live_named": [],
+        "ok": false,
+        "anywhere_ok": true,
+        "minutes": 1.5,
+        "cost_usd": 6.065581,
+        "input_tokens": 1437298,
+        "output_tokens": 15349,
+        "cache_read": 0,
+        "model_turns": 40,
+        "cost_per_turn": 0.151639525,
+        "hub_tool_calls": 41,
+        "by_tool": {
+          "wait_for_messages": 14,
+          "join_room": 4,
+          "submit_opening": 4,
+          "vote": 4,
+          "leave_room": 4,
+          "propose": 3,
+          "send_message": 3,
+          "challenge": 2,
+          "amend": 2,
+          "board_set": 1
+        },
+        "traces": [
+          {
+            "seat": "claude-opus-5-5-1",
+            "trace": "35939afb-b3cf-4040-9936-dd0e6f5fba11.jsonl",
+            "sha256": "45ae0610af43bdbcc5dff5b612ed1b55ef834c4c0ed053af57e1530c332102ef",
+            "model_turns": 21,
+            "first_request_cache_read": 0
+          },
+          {
+            "seat": "verifier",
+            "trace": "7d371471-74c9-42a8-88ae-a80789265f10.jsonl",
+            "sha256": "e2898f48cbaa45487f00aefd0ae6f3a7323e4587ee0eeeead26db4a0c0cb710a",
+            "model_turns": 19,
+            "first_request_cache_read": 0
+          }
+        ],
+        "all_tool_calls": 57,
+        "seats_observed": [
+          "claude-opus-5-5-1",
+          "verifier"
+        ],
+        "source_summary_cost_usd": 6.066
+      },
+      {
+        "pair": 3,
+        "arm": "head",
+        "run": "swarm-211717-w498",
+        "rooms": 2,
+        "breakouts": 1,
+        "linked": 0,
+        "carried": 0,
+        "final_both": false,
+        "d1_evidence": true,
+        "d2_evidence": false,
+        "d2_live_named": [],
+        "ok": false,
+        "anywhere_ok": true,
+        "minutes": 1.1,
+        "cost_usd": 7.6527959999999995,
+        "input_tokens": 1819130,
+        "output_tokens": 18350,
+        "cache_read": 0,
+        "model_turns": 50,
+        "cost_per_turn": 0.15305591999999998,
+        "hub_tool_calls": 41,
+        "by_tool": {
+          "wait_for_messages": 12,
+          "send_message": 6,
+          "join_room": 4,
+          "submit_opening": 4,
+          "vote": 4,
+          "leave_room": 4,
+          "challenge": 3,
+          "propose": 2,
+          "amend": 2
+        },
+        "traces": [
+          {
+            "seat": "verifier",
+            "trace": "9023a596-5c37-498b-afff-66ee24084049.jsonl",
+            "sha256": "0a1a9cb6351bbd261ab48472eded78ef26d6377d620fdfc91e68ae9ab7474a80",
+            "model_turns": 25,
+            "first_request_cache_read": 0
+          },
+          {
+            "seat": "claude-opus-5-5-1",
+            "trace": "e8344313-1e9c-4024-a2df-be3e21c514a8.jsonl",
+            "sha256": "35532b236710da217a463bb71eb83894bdc3c5cae55be716abe9ab8f9deb5a66",
+            "model_turns": 25,
+            "first_request_cache_read": 0
+          }
+        ],
+        "all_tool_calls": 66,
+        "seats_observed": [
+          "claude-opus-5-5-1",
+          "verifier"
+        ],
+        "source_summary_cost_usd": 7.653
+      }
+    ],
+    "scope": "Forced split with two initial seats per arm; additional baseline recruits are included. Main-room placement oracle differs from finding answers somewhere. Per-run conclusion minutes are rounded in the source."
+  },
+  "away_seat_liveness": {
+    "summary": {
+      "base": {
+        "n": 3,
+        "oracle_ok": 0,
+        "replacements_registered": 3,
+        "replacement_refusals": 0,
+        "mean_cost_usd": 6.585,
+        "mean_model_turns": 56.0,
+        "mean_cost_per_model_turn_usd": 0.1176,
+        "mean_tool_calls": 66.67,
+        "mean_seconds_to_conclusion": 128.6,
+        "cold_start": [
+          "cold"
+        ]
+      },
+      "head": {
+        "n": 3,
+        "oracle_ok": 3,
+        "replacements_registered": 0,
+        "replacement_refusals": 4,
+        "mean_cost_usd": 7.049,
+        "mean_model_turns": 57.0,
+        "mean_cost_per_model_turn_usd": 0.1237,
+        "mean_tool_calls": 65.33,
+        "mean_seconds_to_conclusion": 279.2,
+        "cold_start": [
+          "cold"
+        ]
+      }
+    },
+    "cost_source": "provider receipts: last type=cost-state row per raw Claude trace (<arm>/cost-state.json)",
+    "scope": "Reported provider cost-state receipts cover all recorded seats. Baseline originals were stopped after conclusion; their unfinished rejoin work is omitted. Head still attempted replacement four times; refusal prevented duplicates."
+  }
+}

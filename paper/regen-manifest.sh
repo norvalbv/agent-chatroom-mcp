@@ -28,3 +28,4 @@ node --import tsx scripts/paper-review-audit.ts bench/results/review-audit/audit
 python3 scripts/paper-fig-review.py paper/generated paper/figures
 node --import tsx scripts/paper-pool-throughput.ts bench/results/pool-throughput --out paper/generated/pool-throughput --tex paper/tables/pool-throughput.tex
 python3 scripts/paper-operational-results.py
+python3 scripts/paper-harness-results.py

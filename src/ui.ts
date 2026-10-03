@@ -8,6 +8,8 @@
  * message kind the hub produces has its own rendering, and the inspector shows the
  * decision as the hub sees it: version, tally, who it waits on, what blocks it.
  */
+import { PALETTE_CSS, PALETTE_HTML, PALETTE_JS } from "./ui/palette.js";
+
 export const UI_HTML = `<!doctype html>
 <html lang="en">
 <head>
@@ -206,11 +208,12 @@ export const UI_HTML = `<!doctype html>
     #newpill { bottom:130px }
     #head .acts .hidephone { display:none }
   }
+${PALETTE_CSS}
 </style>
 </head>
 <body data-view="chat">
 <aside id="rail">
-  <div class="brand"><div class="mark">✻</div><div><h1>Agent Chatroom</h1><div class="sub" id="sub">connecting…</div></div><div class="sp"></div><button class="btn icon" id="theme" title="Toggle theme">◐</button></div>
+  <div class="brand"><div class="mark">✻</div><div><h1>Agent Chatroom</h1><div class="sub" id="sub">connecting…</div></div><div class="sp"></div><button class="btn icon" id="palbtn" title="Command palette (⌘K / Ctrl K)" aria-label="Open command palette">⌘</button><button class="btn icon" id="theme" title="Toggle theme">◐</button></div>
   <div class="filter"><input id="filter" placeholder="Filter rooms" /></div>
   <div class="rctl" id="rctl"><select id="sort" title="Sort rooms"><option value="newest">Newest</option><option value="active">Most active</option><option value="msgs">Most messages</option><option value="name">Name</option></select><button class="chip tog on" data-st="live" title="Show open and stalled rooms">live</button><button class="chip tog on" data-st="concluded">concluded</button><button class="chip tog on" data-st="closed">closed</button><button class="chip tog" id="showarch" title="Include archived rooms">archived</button><button class="btn" id="archdead" title="Hide every room nobody is in. Transcripts are kept; they reappear under 'archived'.">Archive dead</button></div>
   <div class="policy" id="policy" title="Which provider and model every request_agent launches as. Click to change.">recruits: …</div>
@@ -240,6 +243,7 @@ export const UI_HTML = `<!doctype html>
   </div>
   <div id="pane"><div class="empty">Nothing selected.</div></div>
 </section>
+${PALETTE_HTML}
 <nav id="tabbar">
   <button data-view="rooms">Rooms</button>
   <button data-view="chat" class="on">Chat <span class="n" id="n-unread" style="display:none"></span></button>
@@ -456,7 +460,8 @@ export const UI_HTML = `<!doctype html>
       + '<button class="btn icon" id="toginspect" title="Inspector">☰</button>';
     var topicOpen = !!expanded['topic'];
     $('#head').innerHTML = '<div class="t1"><h2>' + esc(r.name) + '</h2>' + chips + '</div><div class="acts">' + act + '</div>'
-      + '<div class="topic' + (topicOpen ? ' open' : '') + '" id="topic" title="Click to expand">' + esc(r.topic || '(no topic)') + '</div>';
+      + '<div class="topic' + (topicOpen ? ' open' : '') + '" id="topic" title="Click to expand">' + esc(r.topic || '(no topic)') + '</div><div id="pinstrip"></div>';
+    renderPins();
     $('#topic').onclick = function () { expanded['topic'] = !expanded['topic']; renderHead(r); };
     var cb = $('#closeroom'); if (cb) cb.onclick = function () { closeRoom(r); };
     var ab = $('#archroom'); if (ab) ab.onclick = function () { archiveRoom(r); };
@@ -489,7 +494,7 @@ export const UI_HTML = `<!doctype html>
   }
   function who(m, extra) {
     var p = pmap()[m.from.name] || {};
-    return '<div class="who"><b>' + esc(m.from.name) + '</b>' + roleTag({ agent: m.from.agent, role: p.role }) + (m.from.agent && m.from.agent !== 'human' ? '<span class="agent">' + esc(m.from.agent) + '</span>' : '') + (extra || '') + quietBadge(m) + '<span class="seq">#' + m.seq + '</span><span class="t" title="' + esc(m.ts) + '">' + fmtTs(m.ts) + '</span></div>';
+    return '<div class="who"><b>' + esc(m.from.name) + '</b>' + roleTag({ agent: m.from.agent, role: p.role }) + (m.from.agent && m.from.agent !== 'human' ? '<span class="agent">' + esc(m.from.agent) + '</span>' : '') + (extra || '') + quietBadge(m) + pinBtn(m) + '<span class="seq">#' + m.seq + '</span><span class="t" title="' + esc(m.ts) + '">' + fmtTs(m.ts) + '</span></div>';
   }
   function renderMsg(m) {
     if (!visible(m)) return;
@@ -565,6 +570,7 @@ export const UI_HTML = `<!doctype html>
         if (day !== prev) { lastSender = null; var dd = document.createElement('div'); dd.className = 'day'; dd.textContent = new Date(m.ts).toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' }); $('#log').appendChild(dd); }
         seen = m.seq; msgs.push(m); renderMsg(m);
       });
+      if (first) renderPins();
       if (stick) { toBottom(); }
       else { unreadPill += fresh.length; $('#newpill').textContent = '↓ ' + unreadPill + ' new'; $('#newpill').style.display = 'block'; if (document.body.dataset.view !== 'chat') { $('#n-unread').textContent = unreadPill; $('#n-unread').style.display = ''; } }
       if (cur && tab === 'people') renderPane(); // last-active columns
@@ -798,6 +804,8 @@ export const UI_HTML = `<!doctype html>
     if (e.key === '/') { e.preventDefault(); $('#filter').focus(); }
     if (e.key === 'Escape') { document.body.classList.remove('inspect-open'); }
   });
+
+${PALETTE_JS}
 
   // ---------- polling ----------
   async function refreshRooms() {

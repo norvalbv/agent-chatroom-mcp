@@ -60,7 +60,7 @@ for (const event of ["PreToolUse", "PostToolUse"]) {
   assert.equal(out.hookEventName, event);
   assert.match(out.additionalContext, /\[r1\] #7 opus-1: @opus-2 can you review claim\/x\? \(reply: send_message room="r1" reply_to="m_1"\)/);
   assert.match(out.additionalContext, /\[r2\] #9 verifier: @opus-2 which dev room/);
-  const acks = seen.filter((s) => s.path === "/steer/ack").map((s) => s.body);
+  const acks: unknown[] = seen.filter((x) => x.path === "/steer/ack").map((x) => x.body);
   assert.deepEqual(acks, [{ seat_key: "seat-A", ids: [`m_1_${event}_${process.pid}`, `m_2_${event}_${process.pid}`] }]);
 }
 

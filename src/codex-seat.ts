@@ -13,9 +13,9 @@ export function codexConfigArgs(mcpUrl: string): string[] {
   return ["-c", `mcp_servers.chatroom.url=${JSON.stringify(mcpUrl)}`, "-c", "mcp_servers.chatroom.tool_timeout_sec=120", "-c", 'mcp_servers.chatroom.default_tools_approval_mode="approve"'];
 }
 
-export function codexSeatCommand(options: CodexArgsOptions): { cmd: string; args: string[] } {
+export function codexSeatCommand(options: CodexArgsOptions & { usageSidecar?: string }): { cmd: string; args: string[] } {
   const built = resolve(repoRoot, "dist/codex/cli.js");
-  return { cmd: process.execPath, args: [...(existsSync(built) ? [built] : ["--import", import.meta.resolve("tsx"), resolve(repoRoot, "src/codex/cli.ts")]), ...codexArgs(options)] };
+  return { cmd: process.execPath, args: [...(existsSync(built) ? [built] : ["--import", import.meta.resolve("tsx"), resolve(repoRoot, "src/codex/cli.ts")]), ...codexArgs(options), ...(options.usageSidecar ? ["--usage-sidecar", options.usageSidecar] : [])] };
 }
 
 export interface CodexArgsOptions {

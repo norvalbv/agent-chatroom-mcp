@@ -65,3 +65,18 @@ test('busy Codex gets one steer and accepted ACK survives completion/transport f
 test('wrong-turn rejection never acknowledges the pending mention',()=>exercise(true));
 
 test('failed terminal status fails the seat while retaining usage and ACKs',()=>exercise(false,true));
+
+test('initialization refusal reaps the app-server child before failing the seat', async () => {
+  const dir=mkdtempSync(join(tmpdir(),'codex-init-')), binary=join(dir,'codex'), pidFile=join(dir,'pid');
+  writeFileSync(binary,`#!/usr/bin/env node
+require('node:fs').writeFileSync(${JSON.stringify(pidFile)},String(process.pid));
+require('node:readline').createInterface({input:process.stdin}).on('line',line=>{
+ const x=JSON.parse(line);process.stdout.write(JSON.stringify({id:x.id,error:{code:-32600,message:'initialization refused'}})+'\\n');
+});`);
+  chmodSync(binary,0o755);
+  try {
+    await assert.rejects(runCodexLive({cwd:dir,mcpUrl:'http://example.test/mcp',readOnly:true,prompt:'work',binary,emit:()=>{}}),/initialization refused/);
+    const pid=Number(readFileSync(pidFile,'utf8'));
+    assert.throws(()=>process.kill(pid,0),{code:'ESRCH'});
+  } finally {rmSync(dir,{recursive:true,force:true});}
+});

@@ -88,6 +88,8 @@ test("spawner: codex recruits read the brief from stdin; read-only recruits run 
     const [rec] = spawner.request({ room: "argv-room", requestedBy: "tester", brief: SEAT_BRIEF, agent: "codex", model: "gpt-6-astra", name: `codex-${canEdit ? "rw" : "ro"}`, canEdit });
     await waitFor(() => rec.endedAt, "the codex recruit to exit");
     const [seen] = takeRecords("codex");
+    const recruitUsage = JSON.parse(readFileSync(join(logs, `${rec.name}.usage.json`), "utf8"));
+    assert.equal(recruitUsage.prompt_tokens, 44084); assert.equal(recruitUsage.cost, null);
     assert.ok(!seen.argv.some((a) => a.includes(MARKER)), "the brief is not in the codex recruit's argv");
     assert.ok(seen.stdin.includes(MARKER), "the codex recruit got its brief on stdin");
     assert.equal(seen.argv[0], "app-server");

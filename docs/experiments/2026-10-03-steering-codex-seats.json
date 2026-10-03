@@ -1072,5 +1072,57 @@
         }
       ]
     }
+  },
+  "launch_path_smokes": {
+    "swarm": {
+      "room": "swarm-185505-4ssn-room",
+      "seat": "6-astra-2",
+      "port": 18737,
+      "exit_code": 0,
+      "joined": true,
+      "left": true,
+      "local_command": "node -e 'console.log(125 + 205 + 100)'",
+      "output": "430",
+      "usage": {
+        "steps": 1,
+        "prompt_tokens": 120255,
+        "completion_tokens": 475,
+        "cost": null,
+        "codex_usage": {
+          "input_tokens": 120255,
+          "cached_input_tokens": 93440,
+          "cache_write_input_tokens": 0,
+          "output_tokens": 475,
+          "reasoning_output_tokens": 41
+        }
+      },
+      "events": "swarms/swarm-185505-4ssn/6-astra-2.events.jsonl",
+      "limitation": "Room concluded on the Codex join before its vote; this validates launch, local command, join, leave and usage, not three-seat agreement."
+    },
+    "request_agent": {
+      "room": "codex-recruit-proof",
+      "seat": "native-recruit-proof",
+      "port": 18737,
+      "exit_code": 0,
+      "joined": true,
+      "left": true,
+      "local_command": "printf native-recruit-work",
+      "reply": "125+205+100=430",
+      "usage": {
+        "steps": 1,
+        "prompt_tokens": 174540,
+        "completion_tokens": 413,
+        "cost": null,
+        "codex_usage": {
+          "input_tokens": 174540,
+          "cached_input_tokens": 148608,
+          "cache_write_input_tokens": 0,
+          "output_tokens": 413,
+          "reasoning_output_tokens": 0
+        }
+      },
+      "proof": "/tmp/astra3-live-recruits/proof.json",
+      "limitation": "All recruit assertions passed. Afterwards the scripted pinger cleanup leave hit the delivered-ask guard; probe cleanup now replies before leaving."
+    }
   }
 }

@@ -320,7 +320,7 @@ export class Spawner {
         if (req.canEdit) args.push("--write");
         if (SANDBOX) args.push("--sandbox");
       } else if (agent === "codex") {
-        ({ cmd, args } = codexSeatCommand({ cwd: seatCwd, mcpUrl: beat.mcpUrl, model: req.model, readOnly: !req.canEdit }));
+        ({ cmd, args } = codexSeatCommand({ cwd: seatCwd, mcpUrl: beat.mcpUrl, model: req.model, readOnly: !req.canEdit, usageSidecar: resolve(o.logDir, `${name}.usage.json`) }));
       } else {
         cmd = "claude";
         const sandbox = SANDBOX ? claudeSandbox({ cwd: seatCwd, write: !!req.canEdit, hubPort: hubPortOf(o.mcpUrl) }) : undefined;

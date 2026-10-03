@@ -37,3 +37,11 @@ Build each arm, then run `npx tsx scripts/bench-steer-codex.ts --build <arm-root
 Regression checks cover delayed steering without overlapping polls, expected-turn rejection without ACK, ACK transport failure racing completion, failed terminal status, cumulative usage, event normalization, source-only launch from an unrelated project, stdin prompt privacy, and read-only launch policy. Native protocol smoke with the real model returned `READY`; targeted tests, build and private SMOKE pass. Full suite result is recorded in the review handoff.
 
 A three-Opus dev swarm also exercised the rebased build: `swarm-184159-0hng-room`, port18736. All three independently accepted the430-cent answer after the required challenge and the room concluded. The private listener was stopped by PID70571. This is integration smoke, not a Codex latency arm.
+
+### Actual launcher and MCP recruit
+
+`swarm-185505-4ssn-room` ran on private18737 with one Codex, one Opus worker and an Opus verifier. Native `6-astra-2` ran a local Node arithmetic command (430), joined, left and exited0. Its usage sidecar records120,255 input,93,440 cached input,475 output and unknown cost (`null`). The room had already concluded when it joined, so this checks the launcher lifecycle rather than three-seat consensus. The event stream and report remain in `swarms/swarm-185505-4ssn/`.
+
+The actual MCP `request_agent` path separately launched `native-recruit-proof` in `codex-recruit-proof`. It ran `printf native-recruit-work`, joined, sent430 to the scripted peer, left and exited0; sidecar174,540 input,148,608 cached input,413 output, cost `null`. The probe saved `/tmp/astra3-live-recruits/proof.json` after all recruit assertions passed. Its subsequent scripted-peer cleanup hit the ask guard; the committed probe now replies before leaving. The listener was stopped by its PID50838.
+
+The full offline run passed152/153 commands; `pool-run.test.ts` hit the intermittent isolation assertion, then passed14/14 on an isolated rerun. Scripts typecheck passes. Source-only launch, real launcher and real recruit preserve prompt-on-stdin, read-only policy, usage accounting and normal exit. Initialization-refusal regression confirms the adapter reaps its child before rejecting.

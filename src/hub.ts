@@ -1231,10 +1231,9 @@ export class Hub {
   /** Compatibility hook: repeated waits now deliver focus instead of throwing. */
   answerBeforeWaiting(_room: Room, _p: Participant, _since: number): void {}
 
-  /** RE-TARGET hub-carries-what-it-knows: only linked chat resolves agent debt.
-   * reply_to resolves exactly its target. Without reply_to, @-back resolves the
-   * oldest outstanding ask from EACH named sender. Other post kinds never do.
-   */
+  /** Linked chat resolves agent debt: reply_to settles its target and @-back settles
+   * every earlier ask from each named sender, including when both appear together.
+   * Other post kinds never resolve debt (hub-carries-what-it-knows). */
   addressedBy(room: Room, p: Participant): Message[] {
     const declined = new Set(p.declinedAsks ?? []);
     // Snapshot only outstanding debt at registration; successors settle it under their own
@@ -1312,7 +1311,7 @@ export class Hub {
   private resolvesAddress(room: Room, p: Participant, content: string, replyTo?: string): boolean {
     const focus = this.attentionFocus(room, p);
     if (replyTo && (focus?.id === replyTo || this.addressedBy(room, p).some((m) => m.id === replyTo))) return true;
-    return !replyTo && this.addressedBy(room, p).some((m) => this.mentionsIn(room, content).includes(m.from.id));
+    return this.addressedBy(room, p).some((m) => this.mentionsIn(room, content).includes(m.from.id));
   }
 
   /**

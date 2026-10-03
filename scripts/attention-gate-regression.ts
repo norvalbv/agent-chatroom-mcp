@@ -88,6 +88,23 @@ test('targeted non-force reply bypasses stale gate and preserves arriving noise'
   f.h.send(f.name, f.b.id, 'answer', q.id);
   assert.ok(ids(await f.wait()).includes(noise.id));
 });
+test('reply to a settled thread can also answer another sender without a forced retry', async () => {
+  const f = fixture(); const old = f.ask(); await f.wait();
+  f.h.send(f.name, f.b.id, 'first answer', old.id);
+  const owed = f.ask(f.c, '@bob verify the result'); await f.wait();
+  const noise = f.send(f.a, 'new unrelated evidence');
+  f.h.send(f.name, f.b.id, '@carol verified', old.id);
+  assert.ok(!ids(f.h.addressedBy(f.room, f.b)).includes(owed.id), 'the named sender is answered');
+  assert.ok(ids(await f.wait()).includes(noise.id), 'unrelated arriving evidence is still delivered');
+  assert.ok(!ids(await f.wait()).includes(noise.id), 'evidence is delivered only once');
+});
+test('reply to a settled thread without answering a pending sender still cannot bypass delivery', async () => {
+  const f = fixture(); const old = f.ask(); await f.wait();
+  f.h.send(f.name, f.b.id, 'first answer', old.id);
+  const owed = f.ask(f.c, '@bob verify the result'); await f.wait();
+  assert.throws(() => f.h.send(f.name, f.b.id, 'unrelated follow-up', old.id), /still owe a reply/);
+  assert.deepEqual(ids(f.h.addressedBy(f.room, f.b)), [owed.id]);
+});
 test('unrelated stale refusal leads with the focused ask, carries the queue, keeps debt', () => {
   const f = fixture(); const q = f.ask(); f.send(f.c, 'queued-behind-the-ask');
   let error: any;

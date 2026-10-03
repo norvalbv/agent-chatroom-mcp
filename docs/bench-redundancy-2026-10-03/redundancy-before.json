@@ -1,0 +1,33 @@
+{
+  "brief": "Answer a pending peer on an already-settled thread; preserve concurrent evidence exactly once",
+  "hub_sha256": "8476282eaf93551204336044e2df82faa3e4e679a23c7ff179311f97609a237c",
+  "oracle": {
+    "pending_asks": 0,
+    "compound_answers": 1,
+    "evidence_deliveries": 1
+  },
+  "target_send": {
+    "calls": 2,
+    "response_bytes": 619,
+    "refusals": 1
+  },
+  "seats": {
+    "alice": {
+      "calls": 3,
+      "response_bytes": 1860,
+      "refusals": 0
+    },
+    "bob": {
+      "calls": 8,
+      "response_bytes": 5649,
+      "refusals": 1
+    },
+    "carol": {
+      "calls": 2,
+      "response_bytes": 2773,
+      "refusals": 0
+    }
+  },
+  "provider_tokens": null,
+  "token_note": "Scripted MCP replay has no model/token usage; live benchmark accounts for provider tokens separately."
+}

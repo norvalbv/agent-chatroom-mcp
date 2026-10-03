@@ -1,0 +1,131 @@
+{
+  "room": "swarm-182403-xp3u-room",
+  "state": "open",
+  "reply_metrics": {
+    "schema_version": 1,
+    "window_minutes": 15,
+    "as_of": "2026-10-03T18:27:07.109Z",
+    "observation_end": "2026-10-03T18:27:07.109Z",
+    "definition": "Deduplicated persisted non-opening agent chat/target pairs, public and quiet; membership at ask from ordered join/leave events. Strict reply is later target chat with exact replyTo or persisted @-back within <=window; one reply may credit multiple asks. Syntactic proxy, not task success. Activity counts any later non-opening target post. Unknown membership excluded from live denominator; pending includes early answered pairs.",
+    "mentions": 5,
+    "to_departed": 0,
+    "departure_unknown": 0,
+    "live_mentions": 5,
+    "answered_within_window": 4,
+    "reply_rate": 0.8,
+    "mature_live_mentions": 0,
+    "mature_answered_within_window": 0,
+    "mature_reply_rate": null,
+    "pending_live_mentions": 5,
+    "activity_within_window": 5,
+    "declined_within_window": null,
+    "decline_coverage": "unknown"
+  },
+  "duration_ms": 128290,
+  "time_to_conclusion_ms": null,
+  "messages_by_kind": {
+    "system": 7,
+    "chat": 11
+  },
+  "per_participant": [
+    {
+      "name": "claude-opus-5-5-2",
+      "agent": "claude",
+      "chat_messages": 3,
+      "passes": 0,
+      "chars": 164
+    },
+    {
+      "name": "claude-opus-5-5-1",
+      "agent": "claude",
+      "chat_messages": 3,
+      "passes": 0,
+      "chars": 209
+    },
+    {
+      "name": "verifier",
+      "agent": "claude",
+      "chat_messages": 2,
+      "passes": 1,
+      "chars": 199
+    }
+  ],
+  "proposals": 0,
+  "proposal_electorates": [],
+  "conclusion_electorate": null,
+  "amendments": 0,
+  "challenges": 0,
+  "board_entries": 0,
+  "board_manifests": {
+    "version": 1,
+    "waits": 9,
+    "bytes": 135,
+    "full": 3,
+    "delta": 0,
+    "empty": 6
+  },
+  "board_manifest": {
+    "coverage": "since-process-start",
+    "waits_observed": 9,
+    "full_baseline_manifest_bytes": 153,
+    "shipped_manifest_bytes": 120,
+    "keys_shipped": 0,
+    "deleted_tombstones_shipped": 0,
+    "current_full_manifest_bytes": 17,
+    "entries_by_prefix": {
+      "claim/": 0,
+      "evidence/": 0,
+      "sources/": 0,
+      "handoff/": 0,
+      "inbox/": 0,
+      "verify/": 0,
+      "other": 0
+    }
+  },
+  "refusals": {
+    "send_message: hub_guard": 3
+  },
+  "call_outcomes": {
+    "join_room": {
+      "success": 3,
+      "hub_refusal": 0,
+      "error": 0
+    },
+    "submit_opening": {
+      "success": 3,
+      "hub_refusal": 0,
+      "error": 0
+    },
+    "send_message": {
+      "success": 8,
+      "hub_refusal": 3,
+      "error": 0
+    },
+    "wait_for_messages": {
+      "success": 9,
+      "hub_refusal": 0,
+      "error": 0
+    },
+    "pass": {
+      "success": 1,
+      "hub_refusal": 0,
+      "error": 0
+    },
+    "leave_room": {
+      "success": 3,
+      "hub_refusal": 0,
+      "error": 0
+    }
+  },
+  "refusal_rates": {
+    "join_room": 0,
+    "submit_opening": 0,
+    "send_message": 0.2727272727272727,
+    "wait_for_messages": 0,
+    "pass": 0,
+    "leave_room": 0
+  },
+  "refusal_rate_coverage": "complete",
+  "near_simultaneous_replies": 3,
+  "unanswered_human_messages": 0
+}

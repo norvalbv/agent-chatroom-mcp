@@ -7,15 +7,19 @@
     "docs/measurements/consensus-action-base-valid.json": "b2c9a110259329d25492fc82c4cc415cc44fa4be",
     "docs/measurements/consensus-action-head-valid.json": "b2c9a110259329d25492fc82c4cc415cc44fa4be",
     "docs/measurements/room-directory-2026-10-03.json": "bd7e4a1decf4852ec233cb4aec594d0f53d941d4",
-    "docs/measurements/recruit-policy-base2.json": "f2a3a716b6eccfe7d8114133d92318844fb521ee",
-    "docs/measurements/recruit-policy-base3.json": "f2a3a716b6eccfe7d8114133d92318844fb521ee",
-    "docs/measurements/recruit-policy-base4.json": "f2a3a716b6eccfe7d8114133d92318844fb521ee",
-    "docs/measurements/recruit-policy-head1.json": "f2a3a716b6eccfe7d8114133d92318844fb521ee",
-    "docs/measurements/recruit-policy-head2.json": "f2a3a716b6eccfe7d8114133d92318844fb521ee",
-    "docs/measurements/recruit-policy-head3.json": "f2a3a716b6eccfe7d8114133d92318844fb521ee",
+    "docs/measurements/recruit-policy-base2.json": "e237c40bc4bc72b4a66f1211da7d0236d3ad9e30",
+    "docs/measurements/recruit-policy-base3.json": "e237c40bc4bc72b4a66f1211da7d0236d3ad9e30",
+    "docs/measurements/recruit-policy-base4.json": "e237c40bc4bc72b4a66f1211da7d0236d3ad9e30",
+    "docs/measurements/recruit-policy-head1.json": "e237c40bc4bc72b4a66f1211da7d0236d3ad9e30",
+    "docs/measurements/recruit-policy-head2.json": "e237c40bc4bc72b4a66f1211da7d0236d3ad9e30",
+    "docs/measurements/recruit-policy-head3.json": "e237c40bc4bc72b4a66f1211da7d0236d3ad9e30",
     "docs/measurements/breakouts-2026-10-03/summary.json": "4060a4fcfdca2d6f0ee278da514c3d57dcbe55b3",
     "docs/measurements/breakouts-2026-10-03/cost-state-extracts.json": "51e957bbe6ebe75576d55cafac7384ddd7cf02dd",
-    "docs/measurements/away-seat-liveness-2026-10-03.json": "abb6b16918b1295fa74ccbb1207f7d9f526e3a87"
+    "docs/measurements/away-seat-liveness-2026-10-03.json": "59fb226dfb6a33f2afba297a6d260b5f9e9096c3",
+    "docs/measurements/breakouts-unprompted-2026-10-03/summary.json": "c95b0d17ad4495ad2403186b8fc1bc968e98b512",
+    "docs/measurements/breakouts-unprompted-receipts-2026-10-03.json": "cd4dc870246fb5caac1c2cf7ddb77b196a8f37e1",
+    "docs/measurements/breakouts-unprompted-build-audit-2026-10-03.json": "cd4dc870246fb5caac1c2cf7ddb77b196a8f37e1",
+    "docs/measurements/breakouts-unprompted-delivery-2026-10-03.json": "27a16ae4866af2bc43f68b27546d9879fa30314d"
   },
   "source_sha256": {
     "docs/measurements/harness-tool-usage-2026-10-03.json": "4c8c23aa712155169506aa45fca9ec3ccad9d9c40a3ea08bff0ae764aa313eb0",
@@ -31,7 +35,11 @@
     "docs/measurements/recruit-policy-head3.json": "e0676d9e223292a6a38570066c21880b4c2bf93ac8a78ff1d1a44c850312fe25",
     "docs/measurements/breakouts-2026-10-03/summary.json": "0fb6364d65032def924f3dac378700bc7826b6b4e2ff4b7f102303739ea312c6",
     "docs/measurements/breakouts-2026-10-03/cost-state-extracts.json": "f7dba9b987c31e8dc1af00d46c4845761f7ef3926da73a5f303b46c4d9264125",
-    "docs/measurements/away-seat-liveness-2026-10-03.json": "10456348448d694aa446667658d3ee0863e67cff2cbd97b71b37675f1646b558"
+    "docs/measurements/away-seat-liveness-2026-10-03.json": "10456348448d694aa446667658d3ee0863e67cff2cbd97b71b37675f1646b558",
+    "docs/measurements/breakouts-unprompted-2026-10-03/summary.json": "373623a8a5fb0ca3d14c704b2c4410470ce548f46286a348f782ed39cc084368",
+    "docs/measurements/breakouts-unprompted-receipts-2026-10-03.json": "0dcc24ace8e7e733f170c0b187e68d4331be97de7796802f366e7d6a2da73bec",
+    "docs/measurements/breakouts-unprompted-build-audit-2026-10-03.json": "37069b184df626a00adfde4eb7d4ee80a0b4d815374cc4fa15e826ee1fac7e78",
+    "docs/measurements/breakouts-unprompted-delivery-2026-10-03.json": "63c7a8c61026dbd2606fc8a3353ba9bc744567279d0cca8749bae8fc865411e4"
   },
   "coverage": {
     "observed_main_rooms": 78,
@@ -909,5 +917,1107 @@
     },
     "cost_source": "provider receipts: last type=cost-state row per raw Claude trace (<arm>/cost-state.json)",
     "scope": "Reported provider cost-state receipts cover all recorded seats. Baseline originals were stopped after conclusion; their unfinished rejoin work is omitted. Head still attempted replacement four times; refusal prevented duplicates."
+  },
+  "unprompted_breakouts": {
+    "summary": {
+      "orig-31daae67": {
+        "cost_usd": 7.234388333333333,
+        "model_turns": 47.333333333333336,
+        "tool_calls": 62.333333333333336,
+        "hub_tool_calls": 37.666666666666664,
+        "minutes": 1.2666666666666666,
+        "runs": 3,
+        "breakouts_formed": 0,
+        "registered_oracle_passes": 1,
+        "corrected_factual_oracle_passes": 2,
+        "aggregate_cost_per_model_turn_usd": 0.15283919014084507,
+        "seats_with_unknown_cross_claim_reads": 9
+      },
+      "base-ed66a491": {
+        "cost_usd": 7.386777,
+        "model_turns": 50,
+        "tool_calls": 62.666666666666664,
+        "hub_tool_calls": 38.666666666666664,
+        "minutes": 0.8666666666666667,
+        "runs": 3,
+        "breakouts_formed": 0,
+        "registered_oracle_passes": 2,
+        "corrected_factual_oracle_passes": 1,
+        "aggregate_cost_per_model_turn_usd": 0.14773554,
+        "seats_with_unknown_cross_claim_reads": 9
+      },
+      "head-679ddc55": {
+        "cost_usd": 7.429436333333333,
+        "model_turns": 49.666666666666664,
+        "tool_calls": 63.666666666666664,
+        "hub_tool_calls": 38,
+        "minutes": 1.0666666666666667,
+        "runs": 3,
+        "breakouts_formed": 0,
+        "registered_oracle_passes": 2,
+        "corrected_factual_oracle_passes": 1,
+        "aggregate_cost_per_model_turn_usd": 0.149585966442953,
+        "seats_with_unknown_cross_claim_reads": 9
+      }
+    },
+    "runs": [
+      {
+        "arm": "base-ed66a491",
+        "run": "swarm-220459-z3jj",
+        "cost_usd": 7.509247,
+        "model_turns": 51,
+        "tool_calls": 61,
+        "hub_tool_calls": 37,
+        "minutes": 0.9,
+        "registered_oracle": true,
+        "corrected_factual_oracle": false,
+        "breakout_formed": false,
+        "rooms_opened": 0,
+        "seconds_to_two_session_split": null,
+        "registered_peer_worker_proxy": {
+          "verifier": {
+            "cross_claim_lines": 7,
+            "cross_claim_chars": 4276
+          },
+          "claude-opus-5-5-1": {
+            "cross_claim_lines": 4,
+            "cross_claim_chars": 1474
+          },
+          "claude-opus-5-5-2": {
+            "cross_claim_lines": 5,
+            "cross_claim_chars": 3127
+          }
+        },
+        "claim_aware_delivery": [
+          {
+            "seat": "claude-opus-5-5-2",
+            "role": "worker",
+            "aliases": [
+              "claude-opus-5-5-2"
+            ],
+            "traces": [
+              {
+                "source": "ca1d1b33-e383-444e-a4c8-01103c1695dc.jsonl",
+                "source_sha256": "cf95e2ab04727904882719d203fadda07b053419487b5ee0834d5c005e69daf3",
+                "stubs": 0
+              }
+            ],
+            "observed": {
+              "public_peer_delivery_occurrences": 3,
+              "public_peer_delivered_text_bytes": 1242,
+              "unique_public_peer_messages": 3,
+              "unique_public_background_messages": 3,
+              "cross_claim_lower_bound": 0,
+              "shared_claim_messages": 0,
+              "unknown_claim_attribution": 3,
+              "unmatched_sequence_occurrences": 0
+            },
+            "cross_claim_reads": null
+          },
+          {
+            "seat": "verifier",
+            "role": "verifier",
+            "aliases": [
+              "verifier"
+            ],
+            "traces": [
+              {
+                "source": "4e6ae314-48c5-4636-b566-f2a31b75885d.jsonl",
+                "source_sha256": "39d3860ab32336145c983bae1344fd31e95ce3d3dc3849666557b1e7a002ba2b",
+                "stubs": 0
+              }
+            ],
+            "observed": {
+              "public_peer_delivery_occurrences": 2,
+              "public_peer_delivered_text_bytes": 791,
+              "unique_public_peer_messages": 2,
+              "unique_public_background_messages": 2,
+              "cross_claim_lower_bound": 0,
+              "shared_claim_messages": 0,
+              "unknown_claim_attribution": 2,
+              "unmatched_sequence_occurrences": 0
+            },
+            "cross_claim_reads": null
+          },
+          {
+            "seat": "claude-opus-5-5-1",
+            "role": "worker",
+            "aliases": [
+              "claude-opus-5-5-1"
+            ],
+            "traces": [
+              {
+                "source": "b065d6e0-ab6b-4f48-a1a1-a998e5d6de28.jsonl",
+                "source_sha256": "3d8a742a6a62d1d3684f780caf56c422e5e42a12c449f3ebb371c6e5fdf2f37e",
+                "stubs": 0
+              }
+            ],
+            "observed": {
+              "public_peer_delivery_occurrences": 3,
+              "public_peer_delivered_text_bytes": 1257,
+              "unique_public_peer_messages": 3,
+              "unique_public_background_messages": 3,
+              "cross_claim_lower_bound": 0,
+              "shared_claim_messages": 0,
+              "unknown_claim_attribution": 3,
+              "unmatched_sequence_occurrences": 0
+            },
+            "cross_claim_reads": null
+          }
+        ],
+        "coverage": {
+          "roster_seats": 3,
+          "seats_with_traces": 3,
+          "unattributed_traces": [],
+          "limit": "Supplied traces only; stubs are not message bodies. Unrecognised push formats remain outside coverage; delivery is not demonstrated attention."
+        }
+      },
+      {
+        "arm": "base-ed66a491",
+        "run": "swarm-220702-enrg",
+        "cost_usd": 7.602864,
+        "model_turns": 50,
+        "tool_calls": 64,
+        "hub_tool_calls": 41,
+        "minutes": 0.8,
+        "registered_oracle": true,
+        "corrected_factual_oracle": false,
+        "breakout_formed": false,
+        "rooms_opened": 0,
+        "seconds_to_two_session_split": null,
+        "registered_peer_worker_proxy": {
+          "verifier": {
+            "cross_claim_lines": 10,
+            "cross_claim_chars": 3883
+          },
+          "claude-opus-5-5-1": {
+            "cross_claim_lines": 6,
+            "cross_claim_chars": 3018
+          },
+          "claude-opus-5-5-2": {
+            "cross_claim_lines": 2,
+            "cross_claim_chars": 618
+          }
+        },
+        "claim_aware_delivery": [
+          {
+            "seat": "claude-opus-5-5-1",
+            "role": "worker",
+            "aliases": [
+              "claude-opus-5-5-1"
+            ],
+            "traces": [
+              {
+                "source": "3ef59824-06d9-4a51-979d-a1854ecb88cf.jsonl",
+                "source_sha256": "f474aa827ad18b5979b925ded5353c4328f059454640c4ab76f8f525b19252f0",
+                "stubs": 0
+              }
+            ],
+            "observed": {
+              "public_peer_delivery_occurrences": 5,
+              "public_peer_delivered_text_bytes": 1600,
+              "unique_public_peer_messages": 5,
+              "unique_public_background_messages": 3,
+              "cross_claim_lower_bound": 0,
+              "shared_claim_messages": 0,
+              "unknown_claim_attribution": 5,
+              "unmatched_sequence_occurrences": 0
+            },
+            "cross_claim_reads": null
+          },
+          {
+            "seat": "claude-opus-5-5-2",
+            "role": "worker",
+            "aliases": [
+              "claude-opus-5-5-2"
+            ],
+            "traces": [
+              {
+                "source": "ab01e9bb-c9d5-459a-81e2-1c377d4ae29d.jsonl",
+                "source_sha256": "0b8df43bfb382a5377e200042f223342cfa3711b5cbefc11826f69067a55895e",
+                "stubs": 0
+              }
+            ],
+            "observed": {
+              "public_peer_delivery_occurrences": 4,
+              "public_peer_delivered_text_bytes": 1449,
+              "unique_public_peer_messages": 4,
+              "unique_public_background_messages": 3,
+              "cross_claim_lower_bound": 0,
+              "shared_claim_messages": 0,
+              "unknown_claim_attribution": 4,
+              "unmatched_sequence_occurrences": 0
+            },
+            "cross_claim_reads": null
+          },
+          {
+            "seat": "verifier",
+            "role": "verifier",
+            "aliases": [
+              "verifier"
+            ],
+            "traces": [
+              {
+                "source": "1dd1c8f3-b183-4f9e-b612-158fc7937a14.jsonl",
+                "source_sha256": "74ecf8a4945a291e848b71959ff1ffc415e7a21c2024eebfc8ea3f6dde773e70",
+                "stubs": 1
+              }
+            ],
+            "observed": {
+              "public_peer_delivery_occurrences": 3,
+              "public_peer_delivered_text_bytes": 974,
+              "unique_public_peer_messages": 3,
+              "unique_public_background_messages": 3,
+              "cross_claim_lower_bound": 0,
+              "shared_claim_messages": 0,
+              "unknown_claim_attribution": 3,
+              "unmatched_sequence_occurrences": 0
+            },
+            "cross_claim_reads": null
+          }
+        ],
+        "coverage": {
+          "roster_seats": 3,
+          "seats_with_traces": 3,
+          "unattributed_traces": [],
+          "limit": "Supplied traces only; stubs are not message bodies. Unrecognised push formats remain outside coverage; delivery is not demonstrated attention."
+        }
+      },
+      {
+        "arm": "base-ed66a491",
+        "run": "swarm-220832-awyc",
+        "cost_usd": 7.048220000000001,
+        "model_turns": 49,
+        "tool_calls": 63,
+        "hub_tool_calls": 38,
+        "minutes": 0.9,
+        "registered_oracle": false,
+        "corrected_factual_oracle": true,
+        "breakout_formed": false,
+        "rooms_opened": 0,
+        "seconds_to_two_session_split": null,
+        "registered_peer_worker_proxy": {
+          "claude-opus-5-5-1": {
+            "cross_claim_lines": 5,
+            "cross_claim_chars": 2811
+          },
+          "verifier": {
+            "cross_claim_lines": 8,
+            "cross_claim_chars": 3568
+          },
+          "claude-opus-5-5-2": {
+            "cross_claim_lines": 3,
+            "cross_claim_chars": 978
+          }
+        },
+        "claim_aware_delivery": [
+          {
+            "seat": "claude-opus-5-5-2",
+            "role": "worker",
+            "aliases": [
+              "claude-opus-5-5-2"
+            ],
+            "traces": [
+              {
+                "source": "70694dee-6005-4517-8171-2101bcfddf33.jsonl",
+                "source_sha256": "9c2f88d2575d09ad441597b4fe28e2f5034fa22883268f8185e3c9400bb6c2d4",
+                "stubs": 1
+              }
+            ],
+            "observed": {
+              "public_peer_delivery_occurrences": 2,
+              "public_peer_delivered_text_bytes": 715,
+              "unique_public_peer_messages": 2,
+              "unique_public_background_messages": 2,
+              "cross_claim_lower_bound": 0,
+              "shared_claim_messages": 0,
+              "unknown_claim_attribution": 2,
+              "unmatched_sequence_occurrences": 0
+            },
+            "cross_claim_reads": null
+          },
+          {
+            "seat": "verifier",
+            "role": "verifier",
+            "aliases": [
+              "verifier"
+            ],
+            "traces": [
+              {
+                "source": "635ca124-d406-4713-a23a-008ffa1f4474.jsonl",
+                "source_sha256": "99dbee0e8068b4f6f75813946444fd1c4085a76ff0edbf1063d028469c20b1f5",
+                "stubs": 0
+              }
+            ],
+            "observed": {
+              "public_peer_delivery_occurrences": 3,
+              "public_peer_delivered_text_bytes": 968,
+              "unique_public_peer_messages": 3,
+              "unique_public_background_messages": 3,
+              "cross_claim_lower_bound": 0,
+              "shared_claim_messages": 0,
+              "unknown_claim_attribution": 3,
+              "unmatched_sequence_occurrences": 0
+            },
+            "cross_claim_reads": null
+          },
+          {
+            "seat": "claude-opus-5-5-1",
+            "role": "worker",
+            "aliases": [
+              "claude-opus-5-5-1"
+            ],
+            "traces": [
+              {
+                "source": "4ce39eed-5214-4db7-910f-fde2ea9512c3.jsonl",
+                "source_sha256": "b504e16799f917d66a2dee8a0abb62751d0a9fe7a5133d2bc52e2061ce196f5c",
+                "stubs": 0
+              }
+            ],
+            "observed": {
+              "public_peer_delivery_occurrences": 3,
+              "public_peer_delivered_text_bytes": 1117,
+              "unique_public_peer_messages": 3,
+              "unique_public_background_messages": 3,
+              "cross_claim_lower_bound": 0,
+              "shared_claim_messages": 0,
+              "unknown_claim_attribution": 3,
+              "unmatched_sequence_occurrences": 0
+            },
+            "cross_claim_reads": null
+          }
+        ],
+        "coverage": {
+          "roster_seats": 3,
+          "seats_with_traces": 3,
+          "unattributed_traces": [],
+          "limit": "Supplied traces only; stubs are not message bodies. Unrecognised push formats remain outside coverage; delivery is not demonstrated attention."
+        }
+      },
+      {
+        "arm": "head-679ddc55",
+        "run": "swarm-220459-zos3",
+        "cost_usd": 6.668984,
+        "model_turns": 45,
+        "tool_calls": 60,
+        "hub_tool_calls": 32,
+        "minutes": 1.4,
+        "registered_oracle": true,
+        "corrected_factual_oracle": false,
+        "breakout_formed": false,
+        "rooms_opened": 0,
+        "seconds_to_two_session_split": null,
+        "registered_peer_worker_proxy": {
+          "claude-opus-5-5-1": {
+            "cross_claim_lines": 3,
+            "cross_claim_chars": 2237
+          },
+          "claude-opus-5-5-2": {
+            "cross_claim_lines": 3,
+            "cross_claim_chars": 1124
+          },
+          "verifier": {
+            "cross_claim_lines": 4,
+            "cross_claim_chars": 1044
+          }
+        },
+        "claim_aware_delivery": [
+          {
+            "seat": "claude-opus-5-5-2",
+            "role": "worker",
+            "aliases": [
+              "claude-opus-5-5-2"
+            ],
+            "traces": [
+              {
+                "source": "39a1a37b-c271-436b-8981-61969e3ef8e7.jsonl",
+                "source_sha256": "774ce5afddf31816696fbb6de63be63363a3662f7d1ce59c17824fa2cd6a26c0",
+                "stubs": 0
+              }
+            ],
+            "observed": {
+              "public_peer_delivery_occurrences": 2,
+              "public_peer_delivered_text_bytes": 737,
+              "unique_public_peer_messages": 2,
+              "unique_public_background_messages": 2,
+              "cross_claim_lower_bound": 0,
+              "shared_claim_messages": 0,
+              "unknown_claim_attribution": 2,
+              "unmatched_sequence_occurrences": 0
+            },
+            "cross_claim_reads": null
+          },
+          {
+            "seat": "verifier",
+            "role": "verifier",
+            "aliases": [
+              "verifier"
+            ],
+            "traces": [
+              {
+                "source": "e1f6193f-c173-48ff-abc2-491f4368b7b6.jsonl",
+                "source_sha256": "f2beca54e85eedf5a07c7063a7abf21164199677b00d3e61beab94cb98d7d352",
+                "stubs": 0
+              }
+            ],
+            "observed": {
+              "public_peer_delivery_occurrences": 2,
+              "public_peer_delivered_text_bytes": 792,
+              "unique_public_peer_messages": 2,
+              "unique_public_background_messages": 2,
+              "cross_claim_lower_bound": 0,
+              "shared_claim_messages": 0,
+              "unknown_claim_attribution": 2,
+              "unmatched_sequence_occurrences": 0
+            },
+            "cross_claim_reads": null
+          },
+          {
+            "seat": "claude-opus-5-5-1",
+            "role": "worker",
+            "aliases": [
+              "claude-opus-5-5-1"
+            ],
+            "traces": [
+              {
+                "source": "2d29ba38-1fc3-447d-9c77-8246b246965e.jsonl",
+                "source_sha256": "0fd0bd907b7a055408835199bf2d2f2fddc49a7717341a1eb588bc55df4753cd",
+                "stubs": 0
+              }
+            ],
+            "observed": {
+              "public_peer_delivery_occurrences": 2,
+              "public_peer_delivered_text_bytes": 735,
+              "unique_public_peer_messages": 2,
+              "unique_public_background_messages": 2,
+              "cross_claim_lower_bound": 0,
+              "shared_claim_messages": 0,
+              "unknown_claim_attribution": 2,
+              "unmatched_sequence_occurrences": 0
+            },
+            "cross_claim_reads": null
+          }
+        ],
+        "coverage": {
+          "roster_seats": 3,
+          "seats_with_traces": 3,
+          "unattributed_traces": [],
+          "limit": "Supplied traces only; stubs are not message bodies. Unrecognised push formats remain outside coverage; delivery is not demonstrated attention."
+        }
+      },
+      {
+        "arm": "head-679ddc55",
+        "run": "swarm-220702-dfx4",
+        "cost_usd": 7.4571629999999995,
+        "model_turns": 49,
+        "tool_calls": 64,
+        "hub_tool_calls": 40,
+        "minutes": 0.9,
+        "registered_oracle": false,
+        "corrected_factual_oracle": true,
+        "breakout_formed": false,
+        "rooms_opened": 0,
+        "seconds_to_two_session_split": null,
+        "registered_peer_worker_proxy": {
+          "verifier": {
+            "cross_claim_lines": 8,
+            "cross_claim_chars": 3862
+          },
+          "claude-opus-5-5-2": {
+            "cross_claim_lines": 3,
+            "cross_claim_chars": 1279
+          },
+          "claude-opus-5-5-1": {
+            "cross_claim_lines": 5,
+            "cross_claim_chars": 2710
+          }
+        },
+        "claim_aware_delivery": [
+          {
+            "seat": "claude-opus-5-5-2",
+            "role": "worker",
+            "aliases": [
+              "claude-opus-5-5-2"
+            ],
+            "traces": [
+              {
+                "source": "480951ba-aaab-4333-9ed3-bff244acf511.jsonl",
+                "source_sha256": "678717ccabe2b386c1fadb448decf2bb5dfef5cd20054d163c65026cb989c670",
+                "stubs": 0
+              }
+            ],
+            "observed": {
+              "public_peer_delivery_occurrences": 4,
+              "public_peer_delivered_text_bytes": 1516,
+              "unique_public_peer_messages": 4,
+              "unique_public_background_messages": 3,
+              "cross_claim_lower_bound": 0,
+              "shared_claim_messages": 0,
+              "unknown_claim_attribution": 4,
+              "unmatched_sequence_occurrences": 0
+            },
+            "cross_claim_reads": null
+          },
+          {
+            "seat": "claude-opus-5-5-1",
+            "role": "worker",
+            "aliases": [
+              "claude-opus-5-5-1"
+            ],
+            "traces": [
+              {
+                "source": "c36e123b-ad4d-4452-869d-39556a2bfe56.jsonl",
+                "source_sha256": "149fc216be0e713e0e82cedde0ac67f765725bd6812d282899563ca1b52b2db1",
+                "stubs": 0
+              }
+            ],
+            "observed": {
+              "public_peer_delivery_occurrences": 5,
+              "public_peer_delivered_text_bytes": 1996,
+              "unique_public_peer_messages": 4,
+              "unique_public_background_messages": 2,
+              "cross_claim_lower_bound": 0,
+              "shared_claim_messages": 0,
+              "unknown_claim_attribution": 4,
+              "unmatched_sequence_occurrences": 0
+            },
+            "cross_claim_reads": null
+          },
+          {
+            "seat": "verifier",
+            "role": "verifier",
+            "aliases": [
+              "verifier"
+            ],
+            "traces": [
+              {
+                "source": "3e8c93d4-44cd-410d-b046-14741cf5cde4.jsonl",
+                "source_sha256": "5601149bdcf8a7617d81ef1c3bb3f3694bb563db95b146e516ca113de3ffd198",
+                "stubs": 0
+              }
+            ],
+            "observed": {
+              "public_peer_delivery_occurrences": 4,
+              "public_peer_delivered_text_bytes": 1306,
+              "unique_public_peer_messages": 4,
+              "unique_public_background_messages": 3,
+              "cross_claim_lower_bound": 0,
+              "shared_claim_messages": 0,
+              "unknown_claim_attribution": 4,
+              "unmatched_sequence_occurrences": 0
+            },
+            "cross_claim_reads": null
+          }
+        ],
+        "coverage": {
+          "roster_seats": 3,
+          "seats_with_traces": 3,
+          "unattributed_traces": [],
+          "limit": "Supplied traces only; stubs are not message bodies. Unrecognised push formats remain outside coverage; delivery is not demonstrated attention."
+        }
+      },
+      {
+        "arm": "head-679ddc55",
+        "run": "swarm-220832-nozn",
+        "cost_usd": 8.162162,
+        "model_turns": 55,
+        "tool_calls": 67,
+        "hub_tool_calls": 42,
+        "minutes": 0.9,
+        "registered_oracle": true,
+        "corrected_factual_oracle": false,
+        "breakout_formed": false,
+        "rooms_opened": 0,
+        "seconds_to_two_session_split": null,
+        "registered_peer_worker_proxy": {
+          "verifier": {
+            "cross_claim_lines": 10,
+            "cross_claim_chars": 5222
+          },
+          "claude-opus-5-5-2": {
+            "cross_claim_lines": 4,
+            "cross_claim_chars": 3163
+          },
+          "claude-opus-5-5-1": {
+            "cross_claim_lines": 5,
+            "cross_claim_chars": 1644
+          }
+        },
+        "claim_aware_delivery": [
+          {
+            "seat": "claude-opus-5-5-2",
+            "role": "worker",
+            "aliases": [
+              "claude-opus-5-5-2"
+            ],
+            "traces": [
+              {
+                "source": "ecb5540f-937c-4a29-bc5c-63e923e2044c.jsonl",
+                "source_sha256": "51f5299465874bc9f9e06db83a780875c70a8743c21f1b7f933bafeec1147752",
+                "stubs": 1
+              }
+            ],
+            "observed": {
+              "public_peer_delivery_occurrences": 3,
+              "public_peer_delivered_text_bytes": 1532,
+              "unique_public_peer_messages": 3,
+              "unique_public_background_messages": 2,
+              "cross_claim_lower_bound": 0,
+              "shared_claim_messages": 0,
+              "unknown_claim_attribution": 3,
+              "unmatched_sequence_occurrences": 0
+            },
+            "cross_claim_reads": null
+          },
+          {
+            "seat": "claude-opus-5-5-1",
+            "role": "worker",
+            "aliases": [
+              "claude-opus-5-5-1"
+            ],
+            "traces": [
+              {
+                "source": "f0efaaf2-37ec-41d8-baba-374b20a693f9.jsonl",
+                "source_sha256": "728e1b9d8f7a1e6329f0b87585283cd2a16fde648de8db61cd441650d5eea92c",
+                "stubs": 0
+              }
+            ],
+            "observed": {
+              "public_peer_delivery_occurrences": 4,
+              "public_peer_delivered_text_bytes": 1600,
+              "unique_public_peer_messages": 4,
+              "unique_public_background_messages": 4,
+              "cross_claim_lower_bound": 0,
+              "shared_claim_messages": 0,
+              "unknown_claim_attribution": 4,
+              "unmatched_sequence_occurrences": 0
+            },
+            "cross_claim_reads": null
+          },
+          {
+            "seat": "verifier",
+            "role": "verifier",
+            "aliases": [
+              "verifier"
+            ],
+            "traces": [
+              {
+                "source": "0cfcccf1-f753-4558-b736-f26946df3985.jsonl",
+                "source_sha256": "df06e4ca5887fafa2f7b5e06c828e66c0c6032b567e13d4230aea71a95d473cb",
+                "stubs": 0
+              }
+            ],
+            "observed": {
+              "public_peer_delivery_occurrences": 3,
+              "public_peer_delivered_text_bytes": 1092,
+              "unique_public_peer_messages": 3,
+              "unique_public_background_messages": 3,
+              "cross_claim_lower_bound": 0,
+              "shared_claim_messages": 0,
+              "unknown_claim_attribution": 3,
+              "unmatched_sequence_occurrences": 0
+            },
+            "cross_claim_reads": null
+          }
+        ],
+        "coverage": {
+          "roster_seats": 3,
+          "seats_with_traces": 3,
+          "unattributed_traces": [],
+          "limit": "Supplied traces only; stubs are not message bodies. Unrecognised push formats remain outside coverage; delivery is not demonstrated attention."
+        }
+      },
+      {
+        "arm": "orig-31daae67",
+        "run": "swarm-221015-ssk0",
+        "cost_usd": 6.95264,
+        "model_turns": 46,
+        "tool_calls": 59,
+        "hub_tool_calls": 34,
+        "minutes": 1.1,
+        "registered_oracle": false,
+        "corrected_factual_oracle": true,
+        "breakout_formed": false,
+        "rooms_opened": 0,
+        "seconds_to_two_session_split": null,
+        "registered_peer_worker_proxy": {
+          "claude-opus-5-5-2": {
+            "cross_claim_lines": 3,
+            "cross_claim_chars": 1131
+          },
+          "verifier": {
+            "cross_claim_lines": 7,
+            "cross_claim_chars": 2258
+          },
+          "claude-opus-5-5-1": {
+            "cross_claim_lines": 5,
+            "cross_claim_chars": 3104
+          }
+        },
+        "claim_aware_delivery": [
+          {
+            "seat": "claude-opus-5-5-1",
+            "role": "worker",
+            "aliases": [
+              "claude-opus-5-5-1"
+            ],
+            "traces": [
+              {
+                "source": "e154078b-2e59-4bcf-a92c-9aa7d4011548.jsonl",
+                "source_sha256": "afb1d9f3e6097ae0e863484031a703d2051015c655d3f6386f4859104cdfa962",
+                "stubs": 0
+              }
+            ],
+            "observed": {
+              "public_peer_delivery_occurrences": 4,
+              "public_peer_delivered_text_bytes": 1477,
+              "unique_public_peer_messages": 4,
+              "unique_public_background_messages": 4,
+              "cross_claim_lower_bound": 0,
+              "shared_claim_messages": 0,
+              "unknown_claim_attribution": 4,
+              "unmatched_sequence_occurrences": 0
+            },
+            "cross_claim_reads": null
+          },
+          {
+            "seat": "claude-opus-5-5-2",
+            "role": "worker",
+            "aliases": [
+              "claude-opus-5-5-2"
+            ],
+            "traces": [
+              {
+                "source": "44adb1a9-a23f-4306-a509-70b8c73e77b5.jsonl",
+                "source_sha256": "5947fbd30867af216315520be62ecaaf9bf0a3b5c28c758fb7a63cdaaa1d90c6",
+                "stubs": 0
+              }
+            ],
+            "observed": {
+              "public_peer_delivery_occurrences": 4,
+              "public_peer_delivered_text_bytes": 1804,
+              "unique_public_peer_messages": 3,
+              "unique_public_background_messages": 2,
+              "cross_claim_lower_bound": 0,
+              "shared_claim_messages": 0,
+              "unknown_claim_attribution": 3,
+              "unmatched_sequence_occurrences": 0
+            },
+            "cross_claim_reads": null
+          },
+          {
+            "seat": "verifier",
+            "role": "verifier",
+            "aliases": [
+              "verifier"
+            ],
+            "traces": [
+              {
+                "source": "56f18e9b-2422-45f6-9741-dac75588c66b.jsonl",
+                "source_sha256": "038ae7c5592f88e0ce507dde8a29ba866c21516fc502034a81e08ddb987a0ec8",
+                "stubs": 0
+              }
+            ],
+            "observed": {
+              "public_peer_delivery_occurrences": 3,
+              "public_peer_delivered_text_bytes": 929,
+              "unique_public_peer_messages": 3,
+              "unique_public_background_messages": 3,
+              "cross_claim_lower_bound": 0,
+              "shared_claim_messages": 0,
+              "unknown_claim_attribution": 3,
+              "unmatched_sequence_occurrences": 0
+            },
+            "cross_claim_reads": null
+          }
+        ],
+        "coverage": {
+          "roster_seats": 3,
+          "seats_with_traces": 3,
+          "unattributed_traces": [],
+          "limit": "Supplied traces only; stubs are not message bodies. Unrecognised push formats remain outside coverage; delivery is not demonstrated attention."
+        }
+      },
+      {
+        "arm": "orig-31daae67",
+        "run": "swarm-221155-jk5f",
+        "cost_usd": 7.697169000000001,
+        "model_turns": 49,
+        "tool_calls": 67,
+        "hub_tool_calls": 44,
+        "minutes": 1.0,
+        "registered_oracle": true,
+        "corrected_factual_oracle": false,
+        "breakout_formed": false,
+        "rooms_opened": 0,
+        "seconds_to_two_session_split": null,
+        "registered_peer_worker_proxy": {
+          "claude-opus-5-5-2": {
+            "cross_claim_lines": 3,
+            "cross_claim_chars": 1265
+          },
+          "claude-opus-5-5-1": {
+            "cross_claim_lines": 8,
+            "cross_claim_chars": 3637
+          },
+          "verifier": {
+            "cross_claim_lines": 8,
+            "cross_claim_chars": 3489
+          }
+        },
+        "claim_aware_delivery": [
+          {
+            "seat": "claude-opus-5-5-2",
+            "role": "worker",
+            "aliases": [
+              "claude-opus-5-5-2"
+            ],
+            "traces": [
+              {
+                "source": "2044c7e7-8603-4559-826f-b03da26974ea.jsonl",
+                "source_sha256": "169b8b0232f19ad24cd343b9d0230d1c813460a7f46f2b83a7dbd052c8c544ea",
+                "stubs": 0
+              }
+            ],
+            "observed": {
+              "public_peer_delivery_occurrences": 2,
+              "public_peer_delivered_text_bytes": 782,
+              "unique_public_peer_messages": 2,
+              "unique_public_background_messages": 2,
+              "cross_claim_lower_bound": 0,
+              "shared_claim_messages": 0,
+              "unknown_claim_attribution": 2,
+              "unmatched_sequence_occurrences": 0
+            },
+            "cross_claim_reads": null
+          },
+          {
+            "seat": "verifier",
+            "role": "verifier",
+            "aliases": [
+              "verifier"
+            ],
+            "traces": [
+              {
+                "source": "f75c3682-3d7d-4b34-8d29-099e650c3439.jsonl",
+                "source_sha256": "86a79f868283efd08bb141a42887d359df17dd28f2795fa2ba0e0ee6ccf92fdd",
+                "stubs": 1
+              }
+            ],
+            "observed": {
+              "public_peer_delivery_occurrences": 2,
+              "public_peer_delivered_text_bytes": 815,
+              "unique_public_peer_messages": 2,
+              "unique_public_background_messages": 2,
+              "cross_claim_lower_bound": 0,
+              "shared_claim_messages": 0,
+              "unknown_claim_attribution": 2,
+              "unmatched_sequence_occurrences": 0
+            },
+            "cross_claim_reads": null
+          },
+          {
+            "seat": "claude-opus-5-5-1",
+            "role": "worker",
+            "aliases": [
+              "claude-opus-5-5-1"
+            ],
+            "traces": [
+              {
+                "source": "d9235794-d10e-482f-a5cd-df9ef6ad8a68.jsonl",
+                "source_sha256": "417a61e92885f3baccaac76a0d835142d8e3e9264147c5d5e7aedabbec5baec2",
+                "stubs": 0
+              }
+            ],
+            "observed": {
+              "public_peer_delivery_occurrences": 4,
+              "public_peer_delivered_text_bytes": 1520,
+              "unique_public_peer_messages": 4,
+              "unique_public_background_messages": 4,
+              "cross_claim_lower_bound": 0,
+              "shared_claim_messages": 0,
+              "unknown_claim_attribution": 4,
+              "unmatched_sequence_occurrences": 0
+            },
+            "cross_claim_reads": null
+          }
+        ],
+        "coverage": {
+          "roster_seats": 3,
+          "seats_with_traces": 3,
+          "unattributed_traces": [],
+          "limit": "Supplied traces only; stubs are not message bodies. Unrecognised push formats remain outside coverage; delivery is not demonstrated attention."
+        }
+      },
+      {
+        "arm": "orig-31daae67",
+        "run": "swarm-221428-hd3a",
+        "cost_usd": 7.053356000000001,
+        "model_turns": 47,
+        "tool_calls": 61,
+        "hub_tool_calls": 35,
+        "minutes": 1.7,
+        "registered_oracle": false,
+        "corrected_factual_oracle": true,
+        "breakout_formed": false,
+        "rooms_opened": 0,
+        "seconds_to_two_session_split": null,
+        "registered_peer_worker_proxy": {
+          "verifier": {
+            "cross_claim_lines": 9,
+            "cross_claim_chars": 4352
+          },
+          "claude-opus-5-5-1": {
+            "cross_claim_lines": 4,
+            "cross_claim_chars": 2770
+          },
+          "claude-opus-5-5-2": {
+            "cross_claim_lines": 5,
+            "cross_claim_chars": 1582
+          }
+        },
+        "claim_aware_delivery": [
+          {
+            "seat": "claude-opus-5-5-1",
+            "role": "worker",
+            "aliases": [
+              "claude-opus-5-5-1"
+            ],
+            "traces": [
+              {
+                "source": "c34fa41f-6ac3-4916-877e-cf22dbb4020e.jsonl",
+                "source_sha256": "7f3b9786593acde9a1adb1d044fd308423f4c2912cdbe02b1db248b56690908d",
+                "stubs": 0
+              }
+            ],
+            "observed": {
+              "public_peer_delivery_occurrences": 3,
+              "public_peer_delivered_text_bytes": 1384,
+              "unique_public_peer_messages": 3,
+              "unique_public_background_messages": 2,
+              "cross_claim_lower_bound": 0,
+              "shared_claim_messages": 0,
+              "unknown_claim_attribution": 3,
+              "unmatched_sequence_occurrences": 0
+            },
+            "cross_claim_reads": null
+          },
+          {
+            "seat": "claude-opus-5-5-2",
+            "role": "worker",
+            "aliases": [
+              "claude-opus-5-5-2"
+            ],
+            "traces": [
+              {
+                "source": "e7171929-1237-4066-8ad3-44ba3baf8c05.jsonl",
+                "source_sha256": "a2a676c2a63866974dcbfe8bd30ee46e1c4dcf7e1427e2f21edb1c8c3a59e4a2",
+                "stubs": 0
+              }
+            ],
+            "observed": {
+              "public_peer_delivery_occurrences": 4,
+              "public_peer_delivered_text_bytes": 1528,
+              "unique_public_peer_messages": 4,
+              "unique_public_background_messages": 4,
+              "cross_claim_lower_bound": 0,
+              "shared_claim_messages": 0,
+              "unknown_claim_attribution": 4,
+              "unmatched_sequence_occurrences": 0
+            },
+            "cross_claim_reads": null
+          },
+          {
+            "seat": "verifier",
+            "role": "verifier",
+            "aliases": [
+              "verifier"
+            ],
+            "traces": [
+              {
+                "source": "a9785847-2022-4551-a58a-4da465d7868c.jsonl",
+                "source_sha256": "41f8274e78b86ccdc9fb080c3b236ad992b8de333ba4934bed9997d16cd916ed",
+                "stubs": 0
+              }
+            ],
+            "observed": {
+              "public_peer_delivery_occurrences": 3,
+              "public_peer_delivered_text_bytes": 964,
+              "unique_public_peer_messages": 3,
+              "unique_public_background_messages": 3,
+              "cross_claim_lower_bound": 0,
+              "shared_claim_messages": 0,
+              "unknown_claim_attribution": 3,
+              "unmatched_sequence_occurrences": 0
+            },
+            "cross_claim_reads": null
+          }
+        ],
+        "coverage": {
+          "roster_seats": 3,
+          "seats_with_traces": 3,
+          "unattributed_traces": [],
+          "limit": "Supplied traces only; stubs are not message bodies. Unrecognised push formats remain outside coverage; delivery is not demonstrated attention."
+        }
+      }
+    ],
+    "build_provenance": [
+      {
+        "arm": "base",
+        "source_commit": "ed66a491",
+        "prelaunch_receipt": {
+          "entry_sha256_prefix": "fc3790921a21bc66",
+          "dist_sha256_prefix": "7a310b67d817d6b4",
+          "prefix_hex_chars": 16,
+          "author_trace": "faa6d717-d6ea-4a2c-9aea-5cd25b01f633.jsonl",
+          "tool_timestamp_utc": "2026-10-03T22:01:31.971Z"
+        },
+        "postrun_confirmation": {
+          "entry_sha256": "fc3790921a21bc6633ef2e7da25970e8506c5bfbd71eb8daa5bddd1ffe19e93e",
+          "dist_sha256": "7a310b67d817d6b407d37030dabe93eb5d85bad9097694cdac916741cc0aca44",
+          "observed_utc": "2026-10-03T22:18:50.762595+00:00"
+        },
+        "hash_recipe": "SHA256(sorted lines of shasum -a256 for every dist file, relative dist/path); original shell: find dist -type f | sort | xargs shasum -a 256 | shasum -a 256"
+      },
+      {
+        "arm": "head",
+        "source_commit": "679ddc55",
+        "prelaunch_receipt": {
+          "entry_sha256_prefix": "fc3790921a21bc66",
+          "dist_sha256_prefix": "822a08d047bedd57",
+          "prefix_hex_chars": 16,
+          "author_trace": "faa6d717-d6ea-4a2c-9aea-5cd25b01f633.jsonl",
+          "tool_timestamp_utc": "2026-10-03T22:01:31.971Z"
+        },
+        "postrun_confirmation": {
+          "entry_sha256": "fc3790921a21bc6633ef2e7da25970e8506c5bfbd71eb8daa5bddd1ffe19e93e",
+          "dist_sha256": "822a08d047bedd57e1f716b93a3c4e60df06919c9bf780a475ec7f672b02b63f",
+          "observed_utc": "2026-10-03T22:18:50.822879+00:00"
+        },
+        "hash_recipe": "SHA256(sorted lines of shasum -a256 for every dist file, relative dist/path); original shell: find dist -type f | sort | xargs shasum -a 256 | shasum -a 256"
+      },
+      {
+        "arm": "b31",
+        "source_commit": "31daae67",
+        "prelaunch_receipt": {
+          "entry_sha256_prefix": "89d8dd63a7e4fae0",
+          "dist_sha256_prefix": "6e61ad64a489e893",
+          "prefix_hex_chars": 16,
+          "author_trace": "faa6d717-d6ea-4a2c-9aea-5cd25b01f633.jsonl",
+          "tool_timestamp_utc": "2026-10-03T22:10:06.269Z"
+        },
+        "postrun_confirmation": {
+          "entry_sha256": "89d8dd63a7e4fae0aee3a49cb435f90edb7a8107b034424ed45b2f03b48dcb60",
+          "dist_sha256": "6e61ad64a489e89363210f2a45b12a17700042e601938d4129d09e87d06a9547",
+          "observed_utc": "2026-10-03T22:18:50.868938+00:00"
+        },
+        "hash_recipe": "SHA256(sorted lines of shasum -a256 for every dist file, relative dist/path); original shell: find dist -type f | sort | xargs shasum -a 256 | shasum -a 256"
+      }
+    ],
+    "comparisons": {
+      "delta": "base ed66a491 (main before breakouts) vs head 679ddc55 (main with breakouts): isolates the parent link; a protocol deviation from chair #640's 31daae67",
+      "requested": "orig 31daae67 (chair #640's baseline, before every change this run landed) vs head 679ddc55"
+    },
+    "scope": "No room opened in nine short three-seat runs. Frozen factual oracle contained a wrong q2 key; corrected scores are post-hoc, and neither scores judgment quality. Claim attribution is unknown for every seat; registered worker-line delivery is a different proxy. Prelaunch build hashes retain their recorded 16-hex precision."
   }
 }

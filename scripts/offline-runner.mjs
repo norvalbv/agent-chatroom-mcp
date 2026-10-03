@@ -28,6 +28,7 @@ export const offlineScripts = [
   'ask-settle-regression.ts',
   'attention-gate-regression.ts',
   'away-seat-regression.ts',
+  'seat-exit-regression.ts',
   'wait-view-regression.ts',
   'delivery-cap-regression.ts',
   'readas-limit-regression.ts',

@@ -94,6 +94,8 @@ export interface SpawnerHooks {
   openProposal?(room: string): boolean;
   /** heartbeat the seat launched with this key (codex exec has no tool hooks: its output is the heartbeat) */
   heartbeatSeat?(seatKey: string, info: { tool: string; detail?: string }): void;
+  /** the recruit's process exited: close the MCP sessions its seat key opened, so it is not mistaken for a live seat */
+  seatExited?(seatKey: string, detail: string): void;
   /** the single removal primitive (kick's own path): mark `target` left, release its claim/*, refuse its next call. Must throw on failure. */
   removeParticipant?(room: string, target: string, by: string, reason: string): void;
   /** what `name` was doing: its claim/*, handoff/* and open inbox/* keys, formatted for a successor's brief. "" if nothing to report. */
@@ -351,6 +353,7 @@ export class Spawner {
         clearTimeout(wall);
         rec.endedAt = new Date().toISOString();
         rec.exitCode = code;
+        this.hooks?.seatExited?.(beat.key, `exit ${code}`);
         if (agent === "claude") {
           const { text, usage } = parseClaudeCliOutput(claudeStdout.trim());
           writeFileSync(log, claudeStderr + text);

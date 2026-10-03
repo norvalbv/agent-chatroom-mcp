@@ -115,6 +115,7 @@ spawner.attach({
     }
   },
   heartbeatSeat: (seatKey, info) => { hub.heartbeatSeat(seatKey, info); },
+  seatExited: (seatKey, detail) => { seatExited(seatKey, detail); },
   registerReplacement: (room, predecessor, successorName) => {
     const old = [...hub.getRoom(room).participants.values()].find(p => p.name === predecessor);
     // A recruit may replace a departed agent, never declare another live seat or human departed.
@@ -165,7 +166,22 @@ process.on("SIGINT", () => process.exit(0));
 process.on("SIGTERM", () => process.exit(0));
 const app = createMcpExpressApp({ host: HOST }); // already parses JSON bodies (100kb)
 
-const transports = new Map<string, { t: StreamableHTTPServerTransport; leaveAll: () => void; session: string; lastSeen: number }>();
+const transports = new Map<string, { t: StreamableHTTPServerTransport; leaveAll: (reason?: string, final?: boolean) => void; session: string; lastSeen: number; seatKey?: string }>();
+/** The owning launcher's receipt that a seat's process exited: close every session that launch key opened. A killed CLI
+ * never sends DELETE, so without this its session reads as connected for SESSION_IDLE_MS and replace_participant refuses a
+ * dead seat as "alive inside a long command" (swarm-130854-nmek; chair #640 in swarm-202803-dpij). Knowing the key is the
+ * authority, as for its heartbeats: only that seat's launcher and the seat itself hold it. */
+function seatExited(seatKey: string, detail: string): number {
+  let closed = 0;
+  for (const [id, e] of transports) {
+    if (!seatKey || e.seatKey !== seatKey) continue;
+    e.leaveAll(`seat process exited (${detail.slice(0, 80)}, launcher receipt)`, true);
+    e.t.close().catch(() => {});
+    transports.delete(id);
+    closed++;
+  }
+  return closed;
+}
 
 app.post("/mcp", async (req, res) => {
   const sessionId = req.header("mcp-session-id");
@@ -191,7 +207,7 @@ app.post("/mcp", async (req, res) => {
   const transport = new StreamableHTTPServerTransport({
     sessionIdGenerator: () => randomUUID(),
     onsessioninitialized: (id) => {
-      transports.set(id, { t: transport, leaveAll: session.leaveAll, session: session.sessionKey, lastSeen: Date.now() });
+      transports.set(id, { t: transport, leaveAll: session.leaveAll, session: session.sessionKey, lastSeen: Date.now(), ...(seatKey ? { seatKey } : {}) });
       if (seatKey) hub.bindSeat(seatKey, session.sessionKey, worktree);
     },
   });
@@ -305,8 +321,9 @@ app.post("/rooms/:room/heartbeat", (req, res) => {
 // Seat liveness without a participant id: a claude -p tool hook or a launcher watching codex output knows only the seat
 // key its process was launched with; the hub heartbeats every room that key's MCP connection is in.
 app.post("/heartbeat", (req, res) => {
-  const { seat_key, tool, step, detail, peek } = (req.body ?? {}) as { seat_key?: string; tool?: string; step?: number; detail?: string; peek?: boolean };
+  const { seat_key, tool, step, detail, peek, exited } = (req.body ?? {}) as { seat_key?: string; tool?: string; step?: number; detail?: string; peek?: boolean; exited?: boolean };
   if (!seat_key) return res.status(400).type("text/plain").send("seat_key required");
+  if (exited === true) return res.json({ ok: true, closed: seatExited(seat_key, String(detail ?? "exit")) });
   // peek:true (a PostToolUse hook) only asks for pending asks: the PreToolUse beat already recorded this step
   const marked = peek ? 0 : hub.heartbeatSeat(seat_key, { tool: tool ?? "?", step, detail });
   res.json({ ok: true, marked, pending: steerPeekSeat(hub, seat_key) });

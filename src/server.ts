@@ -796,12 +796,16 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
     },
   );
 
-  const leaveAll = () => {
+  // `final`: the seat's process is known to have exited (launcher receipt), so a leave refused once as blocking is retried
+  const leaveAll = (reason = "MCP session closed without leave_room", final = false) => {
     for (const [room, ids] of me) {
       for (const id of ids) {
-        try {
-          hub.leave(room, id, "MCP session closed without leave_room");
-        } catch {}
+        for (let attempt = 0; attempt < (final ? 2 : 1); attempt++) {
+          try {
+            hub.leave(room, id, reason);
+            break;
+          } catch {}
+        }
       }
       ids.clear();
     }

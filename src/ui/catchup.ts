@@ -51,11 +51,9 @@ export const CATCHUP_JS = `/*catchup:start*/
     var isAsk = function (m) {
       return m.kind === 'chat' && m.from.agent !== 'human' && m.from.id !== 'system' && m.content.indexOf('?') >= 0 && mentionsHuman(m.content) && !answersHuman(m);
     };
-    // Answered once a human replies to it, or names the asker after it. Opening the room or an unrelated human post does not count.
-    var answered = function (m) {
-      var at = '@' + m.from.name.toLowerCase();
-      return all.some(function (x) { return x.seq > m.seq && x.from.agent === 'human' && (x.replyTo === m.id || (' ' + x.content.toLowerCase() + ' ').indexOf(at) >= 0); });
-    };
+    // Answered only by a human reply_to it (the inbox's rule): opening the room, an unrelated human post or a later
+    // "@asker" line do not settle it, since one @asker would otherwise clear every ask that agent made.
+    var answered = function (m) { return all.some(function (x) { return x.seq > m.seq && x.from.agent === 'human' && x.replyTo === m.id; }); };
     // Signal: what a returning reader must not miss. Everything else is chatter and may fold.
     var isSignal = function (m) {
       if (m.kind === 'proposal' || m.kind === 'amend' || m.kind === 'challenge' || m.kind === 'conclusion' || m.kind === 'vote') return true;
@@ -67,9 +65,10 @@ export const CATCHUP_JS = `/*catchup:start*/
     return { byId: byId, mentionsHuman: mentionsHuman, isAsk: isAsk, answered: answered, isSignal: isSignal };
   }
   // The digest for messages after seq \`since\`: a one-line summary and one line per category, each item a jump button.
-  function cuDigest(all, since, live, h, esc) {
+  // pending: the inbox's own list of pending asks for this room, when it provides one (so both count the same).
+  function cuDigest(all, since, live, h, esc, pending) {
     var fresh = all.filter(function (m) { return m.seq > since; });
-    var asks = live ? all.filter(function (m) { return h.isAsk(m) && !h.answered(m); }) : [];
+    var asks = !live ? [] : pending ? all.filter(function (m) { return pending.indexOf(m.id) >= 0; }) : all.filter(function (m) { return h.isAsk(m) && !h.answered(m); });
     if (!fresh.length && !asks.length) return null;
     var jump = function (m, label) { return '<button type="button" class="cu-j" data-jump="' + m.seq + '">' + label + '</button>'; };
     var snip = function (s, n) { s = s.replace(/\\s+/g, ' ').trim(); return esc(s.length > n ? s.slice(0, n - 1) + '…' : s); };
@@ -169,7 +168,8 @@ export const CATCHUP_JS = `/*catchup:start*/
     var old = $('#catchup'); if (old) old.remove();
     if (!sel || !msgs.length) return;
     var live = !!cur && (cur.state === 'open' || cur.state === 'stalled');
-    var g = cuDigest(msgs, catchSince, live, cuHelpers(msgs, humanNames()), esc);
+    var pending = typeof window.crPendingAsks === 'function' ? window.crPendingAsks(sel) : null; // ids, from the inbox
+    var g = cuDigest(msgs, catchSince, live, cuHelpers(msgs, humanNames()), esc, Array.isArray(pending) ? pending : null);
     if (!g) return;
     var d = document.createElement('div'); d.id = 'catchup'; d.className = catchOpen ? 'open' : '';
     d.setAttribute('role', 'region'); d.setAttribute('aria-label', 'Catch-up digest');

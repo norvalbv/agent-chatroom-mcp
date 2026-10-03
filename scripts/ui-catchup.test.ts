@@ -40,7 +40,7 @@ test("a question to the human is an ask; a plain reply to the human is not", () 
   assert.equal(h.isAsk(toOther), false, "addressed to another agent");
 });
 
-test("an ask stays pending until the human replies to it or names the asker", () => {
+test("an ask stays pending until the human replies to it", () => {
   seq = 0;
   const q1 = agent("opus-1", "@benji rail or inspector?");
   const q2 = agent("astra-5", "@benji may I add a hub endpoint?");
@@ -51,7 +51,7 @@ test("an ask stays pending until the human replies to it or names the asker", ()
   all = [...all, human("rail please", { replyTo: q1.id }), human("@astra-5 yes, go ahead")];
   h = cuHelpers(all, HUMANS);
   assert.equal(h.answered(q1), true, "reply_to settles it");
-  assert.equal(h.answered(q2), true, "naming the asker settles it");
+  assert.equal(h.answered(q2), false, "naming the asker does not: it would clear every ask that agent made");
 });
 
 test("signal keeps decisions and everything said to or by the human; chatter may fold", () => {
@@ -101,6 +101,7 @@ test("a closed room asks nothing, and nothing new means no digest", () => {
   const h = cuHelpers(all, HUMANS);
   assert.equal(cuDigest(all, 1, false, h, esc), null);
   assert.equal(cuDigest(all, 1, true, h, esc).asks.length, 1, "an open room still surfaces an old unanswered ask");
+  assert.equal(cuDigest(all, 1, true, h, esc, []), null, "the inbox's pending list wins (here: dismissed)");
 });
 
 test("message text is escaped in the digest", () => {

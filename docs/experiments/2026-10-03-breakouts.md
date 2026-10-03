@@ -60,3 +60,56 @@ Cost and time, stated plainly:
 - Spontaneous formation. The brief forces a split. (Spontaneous recruitment did happen once, in base pair 2, see above.) In our own 9-seat room (on the 7717 hub, without this change), nobody opened a breakout. Scope negotiation between four seats about overlapping claims ran in the main room and in quiet threads.
 - Larger rooms. Every arm launched two seats (below the three-seat dev-room size used in this run); one base arm grew to four through its own recruits.
 - The historical picture is descriptive only. In data/swarm-181144-uxtr-room.jsonl, each worker seat received 157 to 203 public chat messages (64 to 81 KB) that were neither from nor addressed to it. In that run's owner-prompted steer room, the same seats received 9 to 12 such messages. These are two different phases of one run, not a counterfactual saving.
+
+## Served-build provenance (forced-split bench)
+
+No build hashes were recorded at launch for the forced-split arms. Afterwards I rebuilt both commits from fresh `git archive` exports and hashed the results:
+
+- Fresh 31daae67: whole-dist sha256 starts `6e61ad64`.
+- Fresh 0de02faa: whole-dist sha256 starts `ecd29913`.
+- Both equal the build dirs that served the runs, `/tmp/bo-base` and `/tmp/bo-head`, at the time I checked.
+- `dist/index.js` starts `89d8dd63` in all four.
+
+This shows the retained dirs are consistent with their commits. It does not prove which bytes were served, because those dirs' files carry modification times after the runs (6-astra-8 #723).
+
+## Unprompted split (chair #640)
+
+Data: `docs/measurements/breakouts-unprompted-2026-10-03/`. Brief, oracle and reads measure: `bench/breakouts-unprompted/`, frozen at 379bad6e before any scored run.
+
+The brief poses three independent questions, two of them judgements (is the 3-minute nudge default right; is the 55 s long-poll cap justified). One room can legally answer all three in one conclusion, and the brief never mentions rooms, splitting or tools.
+
+Setup:
+
+- Each arm has 2 workers and 1 verifier on claude-opus-5-5, uncached throughout. Every seat's first request read 0 cached tokens.
+- Recruits were pinned; none were launched.
+- Every arm had a fresh hub and a fresh repo copy.
+- Build hashes (16-hex prefixes) were recorded before launch.
+- The delta comparison is main before breakouts (ed66a491) vs main with breakouts (679ddc55). The chair asked for a 31daae67 baseline, so I also ran three arms on 31daae67, which predates every change this run landed. Using ed66a491 as the main baseline deviates from the request, in order to isolate the parent link.
+- Excluded: two pilot pairs on a v1 brief that was replaced before scoring.
+
+| Arm | Runs | Breakout formed | Rooms opened | ok (frozen) | ok (corrected q2) | Mean cost USD | Mean model turns | USD/turn | Mean hub calls | Minutes to conclusion | Cross-claim lines delivered per worker (mean) |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- | ---: |
+| 31daae67 (requested baseline) | 3 | 0 | 0 | 1 | 2 | 7.234 | 47.3 | 0.1528 | 37.7 | 1.1, 1.0, 1.7 | 4.67 |
+| ed66a491 (main before breakouts) | 3 | 0 | 0 | 2 | 1 | 7.387 | 50.0 | 0.1477 | 38.7 | 0.9, 0.8, 0.9 | 4.17 |
+| 679ddc55 (main with breakouts) | 3 | 0 | 0 | 2 | 1 | 7.429 | 49.7 | 0.1496 | 38.0 | 1.4, 0.9, 0.9 | 3.83 |
+
+**Result: no breakout formed in any of the nine runs, with or without the parent link.** The affordance did not make seats split this workload. The three arms do not differ in cost, turns or time beyond run-to-run spread.
+
+Why this null says little about larger work:
+
+- Each room concluded in 0.8 to 1.7 minutes.
+- Each worker received only 2 to 8 lines from the other worker (`reads.py` counts what the hub actually delivered, from the seats' traces).
+- With two workers in one room, there was almost no cross-talk for a split to remove.
+
+What this run can and cannot show:
+
+- The harness change shows its value when a split happens (the forced-split bench above).
+- This run gives no evidence that seats now split unprompted.
+- Whether larger rooms with heavier cross-talk would split was not tested. In this run's own 9-seat room, on a hub without the change, no seat opened a breakout.
+
+Oracle correction, found after scoring:
+
+- The frozen q2 ground truth listed three names. Two of them recur only at `scripts/offline-runner.mjs:192`, which is code, not part of the suite list.
+- The list duplicates exactly one name, `bench-build-oracle-audit.test.ts` (lines 64 and 78). Seats that answered "exactly one" were right.
+- The table shows both scores, and `summary.json` carries `q2_corrected` and `ok_corrected` beside the frozen fields.
+- The formation result does not depend on q2.

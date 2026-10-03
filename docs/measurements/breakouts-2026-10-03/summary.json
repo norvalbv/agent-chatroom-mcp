@@ -145,12 +145,12 @@
    "ok": false,
    "anywhere_ok": true,
    "minutes": 1.7,
-   "cost_usd": null,
+   "cost_usd": 11.972013,
    "input_tokens": 2829449,
    "output_tokens": 31777,
    "cache_read": 0,
    "model_turns": 78,
-   "cost_per_turn": null,
+   "cost_per_turn": 0.1535,
    "hub_tool_calls": 74,
    "by_tool": {
     "wait_for_messages": 23,
@@ -190,7 +190,8 @@
      "first_request_cache_read": 0,
      "input_tokens": 551590,
      "output_tokens": 6877,
-     "billed_cost": null
+     "billed_cost": 2.348645,
+     "cost_source": "trace cost-state totalCostUSD"
     },
     {
      "seat": "recruit",
@@ -200,7 +201,8 @@
      "first_request_cache_read": 0,
      "input_tokens": 538823,
      "output_tokens": 7040,
-     "billed_cost": null
+     "billed_cost": 2.3008419999999994,
+     "cost_source": "trace cost-state totalCostUSD"
     }
    ],
    "all_tool_calls": 111,
@@ -210,7 +212,7 @@
     "claude-recruit-2",
     "verifier"
    ],
-   "cost_known_partial_usd": 7.323
+   "cost_launched_seats_usd": 7.322526
   },
   {
    "pair": 2,
@@ -389,5 +391,5 @@
    ]
   }
  ],
- "coverage": "every seat that ran is counted, including recruits launched by a seat (base pair 2: claude-recruit-1/2, found by 6-astra-6's audit review/breakout-metrics-astra6). Their provider traces have token usage but no billed-cost sidecar, so base pair 2's full cost is unknown: cost_usd and cost_per_turn are null there and cost_known_partial_usd is the billed cost of the two launched seats only. hub_tool_calls are the room ledger's completed calls and already include recruits; all_tool_calls are every tool call in the seats' traces (6-astra-6's recount)."
+ "coverage": "every seat that ran is counted, including recruits launched by a seat (base pair 2: claude-recruit-1/2, found by 6-astra-6's audit review/breakout-metrics-astra6). Recruits have no usage sidecar; their billed cost is the last type=cost-state row of their Claude trace (totalCostUSD, hasUnknownModelCost=false). For the launched seats that row equals the usage sidecar's cost exactly (checked on base pair 2). hub_tool_calls are the room ledger's completed calls and already include recruits; all_tool_calls are every tool call in the seats' traces (6-astra-6's recount)."
 }

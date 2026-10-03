@@ -32,13 +32,13 @@ The oracle passes (`ok`) when the main room concluded, its conclusion states bot
 | Arm | Pair | ok | anywhere_ok | Linked child rooms | Carried to parent | Seats that ran | Cost USD | Model turns | USD/turn | Hub calls (room ledger) | All tool calls | Minutes to main conclusion |
 | --- | ---: | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 | base | 1 | no | yes | 0 | 0 | 2 | 9.468 | 50 | 0.1894 | 57 | 73 | 2.5 |
-| base | 2 | no | yes | 0 | 0 | 4 | unknown (≥ 7.323) | 78 | unknown | 74 | 111 | 1.7 |
+| base | 2 | no | yes | 0 | 0 | 4 | 11.972 | 78 | 0.1535 | 74 | 111 | 1.7 |
 | base | 3 | no | yes | 0 | 0 | 2 | 6.066 | 40 | 0.1516 | 41 | 57 | 1.5 |
 | head | 1 | yes | yes | 2 | 2 | 2 | 8.245 | 43 | 0.1917 | 57 | 74 | 2.1 |
 | head | 2 | yes | yes | 2 | 2 | 2 | 13.040 | 65 | 0.2006 | 69 | 92 | 3.7 |
 | head | 3 | no | yes | 0 | 0 | 2 | 7.653 | 50 | 0.1531 | 41 | 66 | 1.1 |
 
-In base pair 2 the worker recruited two seats on its own (`request_agent`, into its D2 room) to challenge and verify its proposal there, since the verifier sat in the main room. Their traces (17 model turns each, uncached) are counted in turns and calls. They have no billed-cost record, so that arm's cost is unknown, and 7.323 USD is only the billed cost of the two launched seats. The omission was caught by 6-astra-6's audit (review/breakout-metrics-astra6).
+In base pair 2 the worker recruited two seats on its own (`request_agent`, into its D2 room) to challenge and verify its proposal there, since the verifier sat in the main room. Their traces (17 model turns each, uncached) are counted in turns, calls and cost. Recruits have no usage sidecar, so their billed cost is the last `cost-state` row of each Claude trace (2.349 + 2.301 USD). For the launched seats, that row equals the sidecar exactly. The recruits were first left out of the totals; 6-astra-6's audit caught it (review/breakout-metrics-astra6) and recovered the receipts.
 
 Outcome: the main room stated both decisions in 2 of 3 head runs and 0 of 3 base runs. Every run found both answers somewhere.
 
@@ -46,11 +46,13 @@ Outcome: the main room stated both decisions in 2 of 3 head runs and 0 of 3 base
 - In the head runs that used `parent`, both children's conclusions landed on the parent board, and the parent's final proposal stated both.
 - Head pair 3 opened its child room without `parent` and ended like base. The affordance was used in 2 of 3 runs, not always.
 
-Cost and time, stated plainly. There is no pooled cost ratio over all three pairs, because base pair 2's full cost is unknown.
+Cost and time, stated plainly:
 
-- Pairs 1 and 3 have complete costs: base 15.534 USD over 90 turns, head 15.898 USD over 93 turns (+2.3%). Cost per turn is 0.1726 vs 0.1709 USD.
-- Mean model turns over all three pairs were 56.0 for base and 52.7 for head.
-- Mean time to the main room's conclusion rose from 1.9 to 2.3 minutes, a regression. Head pair 2, the slowest and dearest run (3.7 min, 13.04 USD), did the brief's last step: a combined final proposal in the parent, which base runs skipped.
+- Mean cost rose from 9.169 to 9.646 USD (+5.2%).
+- Cost per model turn rose from 0.1637 to 0.1832 USD.
+- Mean model turns fell from 56.0 to 52.7. Mean tool calls in traces fell from 80.3 to 77.3, and hub calls from 57.3 to 55.7.
+- Mean time to the main room's conclusion rose from 1.9 to 2.3 minutes, a regression.
+- Head pair 2, the slowest and dearest run (3.7 min, 13.04 USD), did the brief's last step: a combined final proposal in the parent, which base runs skipped.
 - At n=3 per arm, the cost and time differences are within run-to-run spread.
 
 ## What this does not show

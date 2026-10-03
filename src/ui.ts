@@ -1,4 +1,5 @@
 import { UI_CSS } from "./ui/styles.js";
+import { BOARD_CSS, BOARD_JS } from "./ui/board.js";
 
 /**
  * Live dashboard served at /ui. No browser bundler: it polls the JSON endpoints
@@ -25,7 +26,8 @@ export const UI_HTML = `<!doctype html>
 <style>${UI_CSS}
 ${PALETTE_CSS}
 ${INBOX_CSS}
-${CATCHUP_CSS}</style>
+${CATCHUP_CSS}
+${BOARD_CSS}</style>
 </head>
 <body data-view="chat">
 <aside id="rail">
@@ -165,7 +167,6 @@ ${PALETTE_HTML}
   var lastSeen = store.get('lastSeen', {});   // room -> latest seq the human has looked at
   var openRuns = store.get('openRuns', {});
   var stats = null, statsAt = 0;
-  var boardQuery = '';
   var unreadPill = 0;
   var myName = function () { return ($('#name').value || 'benji').trim() || 'benji'; };
 
@@ -400,7 +401,8 @@ ${PALETTE_HTML}
   }
 
   // ---------- inspector ----------
-  function renderPane() {
+  function renderPane(forceBoard) {
+    if (tab === 'board' && !forceBoard && document.activeElement.id === 'bcategory') return;
     var r = cur; if (!r) { $('#pane').innerHTML = '<div class="empty">Nothing selected.</div>'; return; }
     $$('#tabs button[data-tab]').forEach(function (b) { b.classList.toggle('on', b.dataset.tab === tab); });
     $('#n-people').textContent = r.participants.filter(function (p) { return p.active; }).length;
@@ -411,11 +413,12 @@ ${PALETTE_HTML}
     else if (tab === 'board') h = paneBoard(r);
     else h = paneStats(r);
     var pane = $('#pane'), paneTop = pane.scrollTop, oldAct = $('#act'), anchor = oldAct && actFor === personOpen ? actAnchor(oldAct.scrollTop, actRows(oldAct)) : null;
+    var boardFocus = boardCaptureFocus(pane);
     pane.innerHTML = h;
     pane.scrollTop = paneTop;
     var newAct = $('#act'); if (newAct && anchor) newAct.scrollTop = actRestore(anchor, actRows(newAct));
     actFor = newAct ? personOpen : null;
-    var bs = $('#bsearch'); if (bs) { bs.value = boardQuery; bs.oninput = function () { boardQuery = bs.value; renderPane(); var e = $('#bsearch'); e.focus(); e.setSelectionRange(e.value.length, e.value.length); }; }
+    boardBindControls(boardFocus);
     var sn = $('#shownotices'); if (sn) sn.onchange = function () { showNotices = sn.checked; store.set('notices', showNotices); rerender(); toBottom(); };
   }
   function paneDecision(r) {
@@ -483,32 +486,7 @@ ${PALETTE_HTML}
       + (gone.length ? '<div class="sec"><h3>Left <span class="sp"></span><span class="c">' + gone.length + '</span></h3>' + rows(gone) + '</div>' : '')
       + '<div class="sec" style="font-size:12px;color:var(--dim2)">Areas come from claim/* board entries; reviewing is the hub-assigned reviewer for that claim; the role tag is what the agent joined with.</div>';
   }
-  function paneBoard(r) {
-    var keys = Object.keys(r.board || {}).filter(function (k) { return !boardQuery || k.toLowerCase().indexOf(boardQuery.toLowerCase()) >= 0 || (r.board[k].text || '').toLowerCase().indexOf(boardQuery.toLowerCase()) >= 0; });
-    var pre = function (k) { var m = /^(claim|verify|hold|inbox)\\//.exec(k); return m ? m[1] : 'note'; };
-    var groups = {}; keys.forEach(function (k) { var g = pre(k); (groups[g] = groups[g] || []).push(k); });
-    var order = ['hold', 'inbox', 'claim', 'verify', 'note'].filter(function (g) { return groups[g]; });
-    var h = '<input id="bsearch" class="bsearch" placeholder="Search the board" />';
-    if (!keys.length) h += '<div class="empty" style="padding:24px 8px">' + (boardQuery ? 'No entry matches.' : 'The board is empty.') + '</div>';
-    order.forEach(function (g) {
-      h += '<div class="bgroup">' + groups[g].sort(function (a, b) { return (r.board[b].updated_at || '').localeCompare(r.board[a].updated_at || ''); }).map(function (k) {
-        var e = r.board[k], open = !!expanded['b:' + k];
-        var summary = '';
-        if (g === 'claim') { try { var c = JSON.parse(e.text); summary = (c.owner ? 'owner ' + c.owner : '') + (c.status ? ' · ' + c.status : '') + (c.team && c.team.length ? ' · team ' + c.team.join(', ') : ''); } catch (x) {} summary += e.reviewer ? ' · reviewer ' + e.reviewer : ''; }
-        if (g === 'verify') {
-          try {
-            var head = JSON.parse((e.text || '').split('\\n')[0]);
-            summary = (head && typeof head.exit_code === 'number' && head.proposal)
-              ? (head.exit_code === 0 ? 'exit 0 (pass)' : 'exit ' + head.exit_code + ' (does not satisfy the gate)') + ' · verifies ' + head.proposal + (head.command ? ' · ' + head.command : '')
-              : 'no parseable JSON head — does not satisfy require_verification';
-          } catch (x) { summary = 'no parseable JSON head — does not satisfy require_verification'; }
-        }
-        return '<div class="bentry ' + g + (open ? ' open' : '') + '"><div class="bh" data-b="' + esc(k) + '"><span class="pre">' + g + '</span><span class="k" title="' + esc(k) + '">' + esc(k.replace(/^(claim|verify|hold|inbox)\\//, '')) + '</span><span class="m">' + esc(e.by) + ' · ' + rel(e.updated_at) + ' · ' + e.chars + 'c</span></div>'
-          + '<div class="bb">' + (summary ? '<div style="color:var(--dim);margin-bottom:6px">' + esc(summary) + '</div>' : '') + withMentions(esc(e.text || '')) + '</div></div>';
-      }).join('') + '</div>';
-    });
-    return h;
-  }
+  ${BOARD_JS}
   function paneStats(r) {
     var s = stats;
     if (!s || s.room !== r.name) { fetchStats(true); return '<div class="empty">Loading…</div>'; }

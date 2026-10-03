@@ -1,0 +1,90 @@
+{
+  "method": "Manually adjudicated case evidence; references identify original append-only room message sequences. No counterfactual benefit rate is inferred.",
+  "cases": [
+    {
+      "room": "swarm-181144-uxtr-room",
+      "label": "breakout opportunity recognised after owner intervention",
+      "sequences": [
+        66,
+        67,
+        68,
+        72,
+        74,
+        75,
+        500
+      ],
+      "observed": "Owner prompted formation, four agents subsequently exchanged 18 chat messages in child room. No evidence that the breakout was unused. Autonomous formation was not achieved.",
+      "child": {
+        "room": "swarm-181144-uxtr-steer",
+        "source_sha256": "addce66d8a32e0c3a15cf3f29be290326fc6eaa9499e8f0305af7b45319e00e4",
+        "source_bytes": 121704,
+        "messages": {
+          "total": 48,
+          "agent_chat": 18,
+          "board": 2,
+          "human_chat": 2,
+          "system": 26
+        },
+        "calls": {
+          "calls": 53,
+          "success": 50,
+          "hub_refusal": 3,
+          "error": 0
+        }
+      },
+      "source_sha256": "a7cb266c8504f53e0d1ec2f4ec5f3fbc3f9242b82f8fd309e5f7a7a604da1fce"
+    },
+    {
+      "room": "swarm-181144-uxtr-room",
+      "label": "replacement misuse",
+      "sequences": [
+        124,
+        125,
+        132,
+        134,
+        136,
+        137,
+        144,
+        148,
+        151,
+        152
+      ],
+      "observed": "After restart, an explicit warning said original processes were alive. One replacement marked the original seat left; two accepted recruits were stopped, while two other requests were refused. One displacement incident, not four successful replacements.",
+      "source_sha256": "a7cb266c8504f53e0d1ec2f4ec5f3fbc3f9242b82f8fd309e5f7a7a604da1fce"
+    },
+    {
+      "room": "swarm-130854-nmek-room",
+      "label": "historical liveness and policy friction already fixed",
+      "sequences": [
+        168,
+        171,
+        173,
+        184,
+        186,
+        188,
+        191,
+        193,
+        195,
+        322,
+        323,
+        324,
+        325,
+        326,
+        338,
+        342,
+        344
+      ],
+      "observed": "Chair launched six successors after launcher timeout; two explicit Codex requests were substituted with Claude under a hub pin. Six dead-seat kick votes needed nine ballots. Five later recruits hit the 45-minute limit. Chair reports both kick and timeout defects fixed before round three; round-three Codex requests launched as Codex. Do not present these as new unfixed defects.",
+      "source_sha256": "f3e6b92b0182951d531fd574b7d0545218a59e31c377861d5e9d3955276ffd05"
+    }
+  ],
+  "case_review_scope": [
+    "swarm-130854-nmek",
+    "swarm-214828-v2fj",
+    "swarm-205033-6bp8",
+    "swarm-092200-6aen",
+    "swarm-170811-k1pq",
+    "swarm-181144-uxtr"
+  ],
+  "case_review_limit": "Two rooms provide the specifically adjudicated coordination incidents above; the other four supplied reports and telemetry context, not an exhaustive opportunity audit."
+}

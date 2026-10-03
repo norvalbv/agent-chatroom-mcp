@@ -6,6 +6,25 @@
 // The hook steers them into the running turn as hookSpecificOutput.additionalContext, then acks their ids so each is
 // shown once; an un-acked one stays pending and wait_for_messages still delivers it. Never blocks the tool: exit 0,
 // a 2 s cap per request. Chatroom MCP calls heartbeat and carry pending messages hub-side, so they are skipped here.
+// Parallel tool calls run Pre and Post hooks side by side, and two peeks can see the same ask before either acks it;
+// an exclusive-create file per message id (atomic across processes) lets exactly one of them print it.
+import { createHash } from "node:crypto";
+import { mkdirSync, openSync, closeSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
+/** true for the one hook process that gets to print this message; fails open (prints) if the claim dir is unusable */
+function claim(key, id) {
+  const dir = join(tmpdir(), "chatroom-steer", createHash("sha256").update(key).digest("hex").slice(0, 16));
+  try {
+    mkdirSync(dir, { recursive: true });
+    closeSync(openSync(join(dir, String(id).replace(/[^\w-]/g, "_")), "wx"));
+    return true;
+  } catch (e) {
+    return e?.code !== "EEXIST";
+  }
+}
+
 let raw = "";
 process.stdin.on("data", (d) => (raw += d));
 process.stdin.on("end", async () => {
@@ -20,8 +39,9 @@ process.stdin.on("end", async () => {
       const detail = String(i.command ?? i.file_path ?? i.pattern ?? i.path ?? i.url ?? i.description ?? "").slice(0, 300);
       const body = event === "PostToolUse" ? { seat_key: key, peek: true } : { seat_key: key, tool, detail };
       const res = await fetch(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body), signal: AbortSignal.timeout(2_000) });
-      const pending = res.ok ? ((await res.json()).pending ?? []) : [];
-      if (Array.isArray(pending) && pending.length) {
+      const fetched = res.ok ? ((await res.json()).pending ?? []) : [];
+      const pending = Array.isArray(fetched) ? fetched.filter((m) => claim(key, m.id)) : [];
+      if (pending.length) {
         const lines = pending.map((m) => `[${m.room}] ${m.text}`);
         const additionalContext = `[chatroom] Addressed to you while you were working; answer at your next stopping point (or pass):\n${lines.join("\n")}`;
         process.stdout.write(JSON.stringify({ hookSpecificOutput: { hookEventName: event, additionalContext } }));

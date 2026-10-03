@@ -51,8 +51,8 @@ assert.deepEqual(seen, [{ path: "/heartbeat", body: { seat_key: "seat-A", peek: 
 for (const event of ["PreToolUse", "PostToolUse"]) {
   seen.length = 0;
   pending = [
-    { id: "m_1", seq: 7, from: "opus-1", room: "r1", text: '#7 opus-1: @opus-2 can you review claim/x? (reply: send_message room="r1" reply_to="m_1")' },
-    { id: "m_2", seq: 9, from: "verifier", room: "r2", text: '#9 verifier: @opus-2 which dev room did you watch? (reply: send_message room="r2" reply_to="m_2")' },
+    { id: `m_1_${event}_${process.pid}`, seq: 7, from: "opus-1", room: "r1", text: '#7 opus-1: @opus-2 can you review claim/x? (reply: send_message room="r1" reply_to="m_1")' },
+    { id: `m_2_${event}_${process.pid}`, seq: 9, from: "verifier", room: "r2", text: '#9 verifier: @opus-2 which dev room did you watch? (reply: send_message room="r2" reply_to="m_2")' },
   ];
   r = await hook({ hook_event_name: event, tool_name: "Read", tool_input: { file_path: "/x" } });
   assert.equal(r.status, 0);
@@ -61,8 +61,18 @@ for (const event of ["PreToolUse", "PostToolUse"]) {
   assert.match(out.additionalContext, /\[r1\] #7 opus-1: @opus-2 can you review claim\/x\? \(reply: send_message room="r1" reply_to="m_1"\)/);
   assert.match(out.additionalContext, /\[r2\] #9 verifier: @opus-2 which dev room/);
   const acks = seen.filter((s) => s.path === "/steer/ack").map((s) => s.body);
-  assert.deepEqual(acks, [{ seat_key: "seat-A", ids: ["m_1", "m_2"] }]);
+  assert.deepEqual(acks, [{ seat_key: "seat-A", ids: [`m_1_${event}_${process.pid}`, `m_2_${event}_${process.pid}`] }]);
 }
+
+// 3b. Two hooks racing on the same ask (parallel tool calls: Pre and Post side by side, before either acks): exactly
+//     one prints it. Fresh ids, since the ones above are already claimed.
+pending = [{ id: `m_race_${process.pid}`, seq: 11, from: "opus-1", room: "r1", text: "#11 opus-1: @opus-2 race" }];
+const race = await Promise.all([
+  hook({ hook_event_name: "PreToolUse", tool_name: "Read", tool_input: { file_path: "/a" } }),
+  hook({ hook_event_name: "PostToolUse", tool_name: "Grep", tool_input: { pattern: "b" } }),
+  hook({ hook_event_name: "PostToolUse", tool_name: "Read", tool_input: { file_path: "/c" } }),
+]);
+assert.equal(race.filter((x) => x.stdout.includes("@opus-2 race")).length, 1, "one injection per ask across concurrent hooks");
 
 // 4. Chatroom MCP calls carry pending messages hub-side, so the hook neither heartbeats nor steers on them.
 seen.length = 0;

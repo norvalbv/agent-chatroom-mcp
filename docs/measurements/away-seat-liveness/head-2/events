@@ -1,0 +1,7 @@
+start 21:26:48 swarm=78164
+room swarm-212648-heuz-room
+stopped 21:26:57 claude-opus-5-5-1 pid=78700
+restarted 21:27:05 oldhub=78492
+resumed 21:31:05
+end 21:31:36 state=concluded
+done 21:31:36

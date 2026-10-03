@@ -1,0 +1,7 @@
+start 21:26:52 swarm=79516
+room swarm-212653-fbws-room
+stopped 21:27:03 claude-opus-5-5-2 pid=81027
+restarted 21:27:11 oldhub=80332
+resumed 21:31:11
+end 21:31:35 state=concluded
+done 21:31:36

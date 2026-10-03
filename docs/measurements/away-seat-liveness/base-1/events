@@ -1,0 +1,7 @@
+start 21:12:07 swarm=96625
+room swarm-211207-b1vc-room
+stopped 21:12:15 claude-opus-5-5-1 pid=96851
+restarted 21:12:23 oldhub=96700
+resumed 21:16:23
+end 21:16:23 state=concluded
+done 21:16:23

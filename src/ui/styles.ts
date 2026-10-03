@@ -175,13 +175,13 @@ export const UI_CSS = `
   #tabbar { display:none }
   @media (max-width:1100px) {
     body,body.noinspect { grid-template-columns:260px minmax(0,1fr) }
-    #inspect { position:fixed; top:10px; right:10px; bottom:10px; width:min(420px, 92vw); z-index:20; box-shadow:-8px 0 30px rgba(0,0,0,.25); transform:translateX(calc(100% + 20px)); transition:transform .18s ease-out; display:flex !important }
-    body.inspect-open #inspect { transform:none }
+    #inspect { position:fixed; top:10px; right:10px; bottom:10px; width:min(420px, 92vw); z-index:20; box-shadow:-8px 0 30px rgba(0,0,0,.25); transform:translateX(calc(100% + 20px)); visibility:hidden; transition:transform .18s ease-out; display:flex !important }
+    body.inspect-open #inspect { transform:none; visibility:visible }
   }
   @media (max-width:720px) {
     body,body.noinspect { padding:0; gap:0; grid-template-columns:100%; grid-template-rows:minmax(0,1fr) auto } #rail,#main,#inspect { border:0; border-radius:0; box-shadow:none }
     #rail,#main { grid-row:1; grid-column:1; display:none } body[data-view="rooms"] #rail { display:flex } body[data-view="chat"] #main { display:grid }
-    #inspect { position:static; width:auto; transform:none; box-shadow:none; display:none !important; grid-row:1; grid-column:1 } body[data-view="inspect"] #inspect { display:flex !important }
+    #inspect { position:static; width:auto; transform:none; box-shadow:none; display:none !important; grid-row:1; grid-column:1 } body[data-view="inspect"] #inspect { display:flex !important; visibility:visible }
     #tabbar { display:grid; grid-template-columns:repeat(3,1fr); grid-row:2; border-top:1px solid var(--line); background:var(--panel); padding-bottom:env(safe-area-inset-bottom) }
     #tabbar button { border:0; background:transparent; padding:10px 0 9px; font-size:12px; font-weight:600; color:var(--dim); display:flex; flex-direction:column; align-items:center; gap:2px }
     #tabbar button.on { color:var(--acc-fg) } #tabbar button .n { font-size:10px; background:var(--acc); color:var(--on-acc); border-radius:999px; padding:0 6px }

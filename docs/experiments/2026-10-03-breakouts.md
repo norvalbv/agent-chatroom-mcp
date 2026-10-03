@@ -87,7 +87,7 @@ Setup:
 - The delta comparison is main before breakouts (ed66a491) vs main with breakouts (679ddc55). The chair asked for a 31daae67 baseline, so I also ran three arms on 31daae67, which predates every change this run landed. Using ed66a491 as the main baseline deviates from the request, in order to isolate the parent link.
 - Excluded: two pilot pairs on a v1 brief that was replaced before scoring.
 
-| Arm | Runs | Breakout formed | Rooms opened | ok (frozen) | ok (corrected q2) | Mean cost USD | Mean model turns | USD/turn | Mean hub calls | Minutes to conclusion | Cross-claim lines delivered per worker (mean) |
+| Arm | Runs | Breakout formed | Rooms opened | ok (frozen) | ok (corrected q2) | Mean cost USD | Mean model turns | USD/turn | Mean hub calls | Minutes to conclusion | Non-addressed peer-worker lines delivered per worker (proxy, mean) |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- | ---: |
 | 31daae67 (requested baseline) | 3 | 0 | 0 | 1 | 2 | 7.234 | 47.3 | 0.1528 | 37.7 | 1.1, 1.0, 1.7 | 4.67 |
 | ed66a491 (main before breakouts) | 3 | 0 | 0 | 2 | 1 | 7.387 | 50.0 | 0.1477 | 38.7 | 0.9, 0.8, 0.9 | 4.17 |
@@ -99,6 +99,8 @@ Why this null says little about larger work:
 
 - Each room concluded in 0.8 to 1.7 minutes.
 - Each worker received only 2 to 8 lines from the other worker (`reads.py` counts what the hub actually delivered, from the seats' traces).
+- That count is a proxy, not a cross-claim measure. `reads.py` counts lines authored by another worker and not addressed to the reader; it does not attribute lines to claims, so its `cross_claim_*` field names (kept as registered) overstate what it knows.
+- The formation oracle scans only run-prefixed room files. 6-astra-6's audit of the complete data directories and sessions (fc6c41f7) is the stronger check of the 0/9 formation count.
 - With two workers in one room, there was almost no cross-talk for a split to remove.
 
 What this run can and cannot show:

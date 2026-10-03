@@ -266,6 +266,7 @@ def analyze(run_dir, transcripts=()):
                 totals["hub_results"] += stats["results"]
                 totals["hub_text_bytes"] += stats["text_bytes"]
     return {"run": run_dir.name, "method": {
+        "calls": "Counts logged MCP, shell, search, file-change, collaboration and plan-update tool events; hub_tool_calls isolates chatroom MCP calls",
         "bytes": "UTF-8 bytes of returned text blocks joined by newline; excludes JSON transport envelope and non-text blocks",
         "tokens": "Provider-reported usage, separate from text bytes; missing fields are unknown, not zero",
         "candidates": "Observed patterns, not a finding that every matched call was unnecessary",

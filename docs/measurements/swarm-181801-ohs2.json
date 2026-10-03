@@ -4,7 +4,8 @@
     "bytes": "UTF-8 bytes of returned text blocks joined by newline; excludes JSON transport envelope and non-text blocks",
     "tokens": "Provider-reported usage, separate from text bytes; missing fields are unknown, not zero",
     "candidates": "Observed patterns, not a finding that every matched call was unnecessary",
-    "coverage": "Denominator is seats found in supplied artifacts, not a room roster. Sidecars supply usage without traces and supersede transcript usage."
+    "coverage": "Denominator is seats found in supplied artifacts, not a room roster. Sidecars supply usage without traces and supersede transcript usage.",
+    "calls": "Counts logged MCP, shell, search, file-change, collaboration and plan-update tool events; hub_tool_calls isolates chatroom MCP calls"
   },
   "seats": {
     "claude-opus-5-5-1": {

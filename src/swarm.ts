@@ -274,14 +274,15 @@ function runProc(name: string, cmd: string, args: string[], cwd: string, outFile
       // a seat's rate-limit retries, provider errors and budget exits are worth seeing live, not only in its log at exit
       for (const line of String(d).split("\n")) if (/retry|provider error|budget spent|step cap|could not leave|OpenRouter:/.test(line)) log(`${name}: ${line.replace(/^\[openrouter [^\]]*\] /, "").slice(0, 160)}`);
     });
-    child.on("close", (code) => {
-      // the exit receipt: the hub closes this seat's MCP sessions, so a dead seat is not read as alive in a long command
-      if (beat) fetch(`${URL_}/heartbeat`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ seat_key: beat.key, exited: true, detail: `exit ${code}` }), signal: AbortSignal.timeout(5_000) }).catch(() => {});
+    child.on("close", async (code) => {
       writeFileSync(resolve(OUT, `${name}.log`), err);
       if (!outViaFile) writeFileSync(outFile, out);
       const final = outViaFile ? safeRead(outFile) : out;
       exitCodes.set(name, code);
       log(`${name} exited (${code})`);
+      // the exit receipt: the hub closes this seat's MCP sessions, so a dead seat is not read as alive in a long command.
+      // Awaited (5 s at most): withRespawn reads the room's active seats next, and the launcher's own exit would cut it off.
+      if (beat) await fetch(`${URL_}/heartbeat`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ seat_key: beat.key, exited: true, detail: `exit ${code}` }), signal: AbortSignal.timeout(5_000) }).catch(() => {});
       res(final.trim());
     });
   });

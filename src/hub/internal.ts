@@ -3,7 +3,7 @@ import { randomBytes } from "node:crypto";
 import { spawnSync } from "node:child_process";
 import type { RoomState, Participant, KickVote, Message, CodeState, BoardEntry, Challenge, Proposal, RoomOptions, Room, CallOutcome } from "./types.js";
 
-export type Opts = Required<Omit<RoomOptions, "chair">> & { chair?: string };
+export type Opts = Required<Omit<RoomOptions, "chair" | "parent">> & { chair?: string; parent?: string };
 
 export type Event =
   | { type: "room"; room: string; opts: Opts; createdAt: string; telemetryVersion?: 1 }

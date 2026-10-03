@@ -19,6 +19,8 @@ import { createWaitView } from "./hub/wait-view.js";
 
 export const DEFAULT_WAIT_MS = 55_000; // gaps over 55s were 62-77% of sub-room wall time; wait() wakes on events so latency is unchanged
 export const MAX_WAIT_MS = 55_000; // stay under typical MCP client tool timeouts (Codex 60s)
+/** A connection seated in several rooms (a breakout and its parent) re-checks the others this often while it waits. */
+const ELSEWHERE_SLICE_MS = 5_000;
 
 const ok = (data: unknown) => ({
   content: [{ type: "text" as const, text: typeof data === "string" ? data : JSON.stringify(data) }],
@@ -173,10 +175,11 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
         participant_id: z.string().optional().describe("Reclaim an earlier identity after a reconnect."),
         role: z.enum(ROLES as [string, ...string[]]).optional().describe("Display tag, not a persona: worker (default) | chair (human-side: never waited on for quorum, may veto; bound to one name per room) | lead | verifier | recruit."),
         chair: z.string().optional().describe("When creating the room: the name that will be honoured as chair."),
+        parent: z.string().optional().describe("Open this new room as a breakout of a room you are in: you keep that seat (asks and votes owed there still wake your waits here), and this room's conclusion lands on the parent's board as inbox/<this room>/conclusion. Others join it with join_room(room=<this room>)."),
         tool_scope: z.enum(["full", "restricted"]).optional().describe("restricted drops propose/amend/challenge/vote from this connection's tool list (smaller schema tax every turn); they come back automatically the moment a proposal is open in a room you're in. Default full."),
       },
     },
-    guard("join_room", ({ room, name, agent, topic, mode, quorum, max_rounds, expected_participants, anonymous, max_messages_per_participant, require_challenge, require_verification, max_message_chars, replacement_token, participant_id, role, chair, tool_scope }) => {
+    guard("join_room", ({ room, name, agent, topic, mode, quorum, max_rounds, expected_participants, anonymous, max_messages_per_participant, require_challenge, require_verification, max_message_chars, replacement_token, participant_id, role, chair, tool_scope, parent }) => {
       if (tool_scope) setToolScope(tool_scope);
       const { room: r, participant } = hub.join(
         room,
@@ -194,6 +197,7 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
           requireVerification: require_verification,
           maxMessageChars: max_message_chars,
           chair,
+          parent,
           replacementToken: replacement_token,
         },
         participant_id,
@@ -358,17 +362,23 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
       hub.answerBeforeWaiting(r, p, since);
       const waitBudgetMs = Math.min(timeout_ms ?? DEFAULT_WAIT_MS, MAX_WAIT_MS);
       const waitDeadline = Date.now() + waitBudgetMs;
-      let msgs = await hub.wait(room, id, since, waitBudgetMs);
+      // a connection with seats in other rooms (a breakout and its parent) wakes for what it owes there too:
+      // the long-poll runs in slices and checks the other rooms between them
+      const multi = hub.sessionRoomCount(sessionKey) > 1;
+      const slice = (left: number) => (multi ? Math.min(left, ELSEWHERE_SLICE_MS) : left);
+      const owedElsewhere = () => multi && hub.elsewhere(sessionKey, room).length > 0;
+      let msgs = await hub.wait(room, id, since, slice(waitBudgetMs));
+      while (multi && !msgs.length && !owedElsewhere() && waitDeadline - Date.now() > 0) msgs = await hub.wait(room, id, since, slice(waitDeadline - Date.now()));
       // Same effect as a client re-polling locally on a non-actionable result (the seat.ts idleWaits
       // loop), but done server-side so a client with no such loop (e.g. a Claude Code seat, which pays
       // a full-context turn on every wait_for_messages return) gets the saving too.
       if (hold_until_actionable) {
         // a delivered message that @-names this seat is actionable even once settled (a hub notice retires on delivery)
         // a capped page means more is already waiting: return it rather than piling the backlog into one result
-        while (!hub.deliveryRemaining(p) && !hub.actionableNow(r, p) && !msgs.some((m) => m.mentions?.includes(id!))) {
+        while (!hub.deliveryRemaining(p) && !hub.actionableNow(r, p) && !msgs.some((m) => m.mentions?.includes(id!)) && !owedElsewhere()) {
           const remaining = waitDeadline - Date.now();
           if (remaining <= 0) break;
-          const more = await hub.wait(room, id, p.lastSeenSeq, remaining);
+          const more = await hub.wait(room, id, p.lastSeenSeq, slice(remaining));
           if (more.length) msgs = msgs.concat(more);
         }
       }
@@ -467,6 +477,7 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
           ? { id: openView.id, version: openView.version, by: openView.by, chars: openView.chars, tally: openView.tally, waiting_on: openView.waiting_on, needs_challenge: openView.needs_challenge, blocked_by: openView.blocked_by, challenges: challengesView, ...("text" in openView ? { text: openView.text } : { text_omitted: openView.text_omitted }) }
           : null,
         leaving_would_block: block ? block.reason : false,
+        ...(multi && hub.elsewhere(sessionKey, room).length ? { other_rooms: hub.elsewhere(sessionKey, room) } : {}),
         ...board,
         quiet_activity: hub.quietActivity(r, p, since),
         addressed_to_you: hub.addressedBy(r, p).map((m) => ({ id: m.id, from: hub.shown(r, m.from), ...(delivered.has(m.id) ? { in_messages: true } : { text: m.content.slice(0, 200) }) })),

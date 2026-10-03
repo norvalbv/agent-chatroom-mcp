@@ -77,6 +77,7 @@ export function replay(hub: Hub) {
             requireChallenge: legacy.requireChallenge ?? "auto",
             nudgeAfterMs: legacy.nudgeAfterMs ?? 180_000,
             requireVerification: legacy.requireVerification ?? false,
+            ...(legacy.parent ? { parent: legacy.parent } : {}),
           };
           const room = hub.materialiseRoom(ev.room, opts, ev.createdAt);
           room.telemetryVersion = ev.telemetryVersion;

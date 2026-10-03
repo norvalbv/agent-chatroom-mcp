@@ -94,6 +94,7 @@ export class Hub {
       nudgeAfterMs: opts.nudgeAfterMs ?? Hub.DEFAULT_NUDGE_MS,
       requireVerification: opts.requireVerification ?? false,
       ...(opts.chair ? { chair: opts.chair } : {}),
+      ...(opts.parent ? { parent: opts.parent } : {}),
     };
     // Per-run room cap: rooms sharing a swarm prefix (swarm-<id>-*) are counted together.
     const prefix = Hub.runPrefix(name);
@@ -155,6 +156,8 @@ export class Hub {
     return {
       name: room.name,
       topic: room.topic,
+      ...(room.parent ? { parent: room.parent } : {}),
+      ...(this.breakouts(room).length ? { breakouts: this.breakouts(room) } : {}),
       mode: room.mode,
       quorum: room.quorum,
       max_rounds: room.maxRounds || null,
@@ -344,7 +347,14 @@ export class Hub {
   }
 
   join(roomName: string, name: string, agent: string, opts: JoinOptions = {}, reclaimId?: string, session?: string, role?: Role): { room: Room; participant: Participant } {
-    const room = this.createRoom(roomName, opts);
+    const existing = this.rooms.get(roomName);
+    if (existing && opts.parent !== undefined && existing.parent !== opts.parent) {
+      throw new HubError(`"${roomName}" already exists${existing.parent ? ` as a breakout of "${existing.parent}"` : " and is not a breakout"}; a room is never re-parented. Join it without parent, or open a breakout under a new name.`);
+    }
+    const opening = opts.parent !== undefined && !existing;
+    if (opening) this.checkBreakout(roomName, opts.parent!, session);
+    const room = this.createRoom(roomName, opening ? opts : { ...opts, parent: undefined });
+    if (opening) this.announceBreakout(room, name);
     if (role && !ROLES.includes(role)) throw new HubError(`role must be one of ${ROLES.join(", ")}.`);
     if (role === "chair") {
       // the chair is bound to a name: the room option (set at creation) or, failing that, the first claimant
@@ -2084,6 +2094,73 @@ export class Hub {
     }
   }
 
+  /** A breakout is opened from a room the opener is an active member of, by the same connection, and never from a closed one. */
+  private checkBreakout(child: string, parent: string, session?: string): void {
+    const from = this.rooms.get(parent);
+    if (!from) throw new HubError(`parent room "${parent}" does not exist. Open a breakout from a room you are in.`);
+    if (from.state === "concluded" || from.state === "closed") throw new HubError(`parent room "${parent}" is ${from.state}; nothing to carry a breakout's conclusion back to.`);
+    if (child === parent) throw new HubError("A room cannot be its own breakout.");
+    if (!session || ![...from.participants.values()].some((p) => p.active && p.session === session)) {
+      throw new HubError(`Only an active member of "${parent}" can open a breakout from it: join_room it first.`, undefined, "auth");
+    }
+  }
+
+  /** One line in the parent: the breakout exists, how to work in it, and where its conclusion will land. */
+  private announceBreakout(child: Room, opener: string): void {
+    const parent = this.rooms.get(child.parent!);
+    if (!parent) return;
+    this.post(parent, "system", undefined,
+      `${opener} opened breakout room ${child.name}${child.topic ? `: ${child.topic.slice(0, 200)}${child.topic.length > 200 ? "…" : ""}` : ""}. ` +
+      `Work there with join_room(room="${child.name}"); you keep your seat here, and asks or votes owed here still wake your wait there. ` +
+      `When it concludes, its conclusion lands here as inbox/${child.name}/conclusion.`);
+  }
+
+  /** Breakouts of a room (rooms whose parent is it): name, state and active member names. */
+  breakouts(room: Room): { room: string; state: RoomState; members: string[] }[] {
+    return [...this.rooms.values()].filter((r) => r.parent === room.name && !r.archived)
+      .map((r) => ({ room: r.name, state: r.state, members: this.activeParticipants(r).map((p) => this.shown(r, p)) }));
+  }
+
+  /**
+   * What this connection owes in its OTHER rooms (a seat in a breakout keeps its parent seat, and the reverse): asks
+   * addressed to it, a vote or challenge owed, or a conclusion it has not been sent. Only rooms with something to act on.
+   */
+  elsewhere(session: string, except: string): { room: string; addressed?: number; vote_owed?: string; challenge_owed?: string; concluded?: true }[] {
+    const out: { room: string; addressed?: number; vote_owed?: string; challenge_owed?: string; concluded?: true }[] = [];
+    for (const room of this.rooms.values()) {
+      if (room.name === except || room.state === "closed") continue;
+      for (const p of room.participants.values()) {
+        if (!p.active || p.session !== session) continue;
+        if (room.state === "concluded") { if (!p.seenConclusion) out.push({ room: room.name, concluded: true }); continue; }
+        const addressed = this.addressedBy(room, p).length + (this.attentionFocus(room, p) && !this.addressedBy(room, p).length ? 1 : 0);
+        const open = [...room.proposals.values()].find((pr) => pr.status === "open");
+        const vote = open && !open.votes[p.id] && p.agent !== "human" && p.role !== "chair" ? open.id : undefined;
+        const challenge = open && open.by.id !== p.id && this.challengeRequired(room) && !open.challenges.some((c) => c.blocking !== false) ? open.id : undefined;
+        if (addressed || vote || challenge) out.push({ room: room.name, ...(addressed ? { addressed } : {}), ...(vote ? { vote_owed: vote } : {}), ...(challenge ? { challenge_owed: challenge } : {}) });
+      }
+    }
+    return out;
+  }
+
+  /** How many open rooms this connection holds an active seat in. */
+  sessionRoomCount(session: string): number {
+    return [...this.rooms.values()].filter((r) => r.state !== "closed" && [...r.participants.values()].some((p) => p.active && p.session === session)).length;
+  }
+
+  /** A concluded breakout's decision, written onto its parent's board (no seat has to post_to_room it by hand). */
+  private carryConclusion(room: Room): void {
+    const parent = room.parent ? this.rooms.get(room.parent) : undefined;
+    if (!parent || !room.conclusion || parent.state === "closed") return;
+    const c = room.conclusion;
+    const key = `inbox/${room.name}/conclusion`;
+    const text = `Breakout ${room.name} concluded on ${c.proposalId} v${c.version ?? 1} (${c.tally?.agree ?? "?"}/${c.electorate?.electorate ?? "?"} agree):\n${c.text}` +
+      (c.unresolved_objections?.length ? `\nUnresolved objections: ${c.unresolved_objections.map((u) => `${u.by}: ${u.objection}`).join(" | ")}` : "");
+    const entry: BoardEntry = { text: text.slice(0, 8000), by: "system", updatedAt: now() };
+    board.applyBoard(parent, key, entry);
+    this.persist({ type: "board", room: parent.name, key, entry });
+    this.post(parent, "system", undefined, `[BOARD] breakout ${room.name} concluded; its conclusion is on this board as ${key} (board_get).`);
+  }
+
   private conclude(room: Room, pr: Proposal) {
     for (const m of room.messages) if (m.quiet) this.surfaceThread(room, this.threadRoot(room, m).id, "room concluded");
     pr.status = "accepted";
@@ -2111,6 +2188,7 @@ export class Hub {
       { proposalId: pr.id },
     );
     this.releaseClaims(room, "Room concluded");
+    this.carryConclusion(room);
   }
 
   /**

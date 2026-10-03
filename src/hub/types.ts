@@ -306,6 +306,8 @@ export interface RoomOptions {
   requireVerification?: boolean;
   /** Name of the participant honoured as chair (exempt from quorum, may veto). Set at creation, or by the first joiner to claim role=chair. */
   chair?: string;
+  /** Breakout: the room this one was opened from. Set at creation by an active member of that room; its conclusion is carried back there. */
+  parent?: string;
 }
 
 /** Join-time options: room policy plus the one-use launcher replacement proof (never a room-level option). */
@@ -328,6 +330,8 @@ export interface Room {
   nudgeAfterMs: number;
   requireVerification: boolean;
   chair?: string;
+  /** Breakout link: the room this one was opened from (its conclusion lands on that room's board as inbox/<this>/conclusion). */
+  parent?: string;
   createdAt: string;
   state: RoomState;
   /** Hidden from listings (dashboard, list_rooms) but fully kept on disk; set by a human or the archive-dead sweep. */

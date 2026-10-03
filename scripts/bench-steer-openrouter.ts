@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import { spawn, execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
-import { resolve } from "node:path";
+import { relative, resolve } from "node:path";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 
@@ -41,6 +41,11 @@ let mention: { id: string; seq: number } | undefined, mentionAt = 0, completedWo
 const usage: any[] = [], toolCalls: any[] = [], requests: any[] = [];
 const results = new Map<string, { name: string; bytes: number }>();
 const names = new Map<string, string>();
+const distRoot = resolve(build, "dist");
+const distFiles = (dir: string): string[] => readdirSync(dir, { withFileTypes: true }).flatMap(entry => entry.isDirectory() ? distFiles(resolve(dir, entry.name)) : [resolve(dir, entry.name)]);
+const distHash = createHash("sha256");
+for (const file of distFiles(distRoot).sort()) distHash.update(relative(distRoot, file)).update("\0").update(readFileSync(file)).update("\0");
+const wholeDistSha256 = distHash.digest("hex");
 const proxy = createServer(async (req, res) => {
   try {
     const step = /^\/work\/(\d+)$/.exec(req.url ?? "");
@@ -101,10 +106,13 @@ try {
     hub_sha256: createHash("sha256").update(readFileSync(resolve(build, "dist/index.js"))).digest("hex"),
     seat_sha256: createHash("sha256").update(readFileSync(resolve(build, "dist/seat.js"))).digest("hex"),
     brief_sha256: createHash("sha256").update(prompt.replaceAll(proxyBase, "LOCAL_FIXTURE")).digest("hex"),
+    whole_dist_sha256: wholeDistSha256, provider_requests: requests.length,
     calls: toolCalls.length, calls_by_tool: Object.fromEntries([...new Set(toolCalls.map(t => t.function.name))].map(name => [name, toolCalls.filter(t => t.function.name === name).length])),
     tool_response_bytes: [...results.values()].reduce((sum, result) => sum + result.bytes, 0),
     prompt_tokens: usage.reduce((sum, u) => sum + (u.prompt_tokens ?? 0), 0),
     cache_read_tokens: usage.reduce((sum, u) => sum + (u.prompt_tokens_details?.cached_tokens ?? 0), 0),
+    cache_write_tokens: usage.reduce((sum, u) => sum + (u.prompt_tokens_details?.cache_write_tokens ?? 0), 0),
+    steering_context_bytes: [...new Set<string>(requests.flatMap(request => request.messages.filter((message: any) => message.role === "user" && message.content.startsWith("Hub addressed messages")).map((message: any) => message.content)))].reduce((sum, text) => sum + Buffer.byteLength(text), 0),
     output_tokens: usage.reduce((sum, u) => sum + (u.completion_tokens ?? 0), 0),
     mention_at: mentionAt, reply_at: reply?.ts, mention_to_reply_ms: reply ? Date.parse(reply.ts) - mentionAt : null,
     completed_work_at_reply: replyCall?.completedWork, reply_rate: reply ? 1 : 0,

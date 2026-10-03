@@ -1,0 +1,901 @@
+{
+  "baseline_commit": "af26d162",
+  "measured_commit": "da1d53e1",
+  "model": "anthropic/claude-opus-5.5",
+  "arms": {
+    "before": [
+      {
+        "build": "/tmp/seat-steering-baseline",
+        "gitHead": "archive",
+        "model": "anthropic/claude-opus-5.5",
+        "room": "openrouter-steering-bench",
+        "exit": 0,
+        "wall_ms": 44171,
+        "hub_sha256": "3d738c13d35c046e939f690435dc51045d37cb98268c24d82828a07763fbda0b",
+        "seat_sha256": "d8669a62a16b6ad98a465b667737bbe092c38484a6ecb1350a94cd746cc236d6",
+        "brief_sha256": "e6cd72afe8166f3a5d1ea388b74590b4ede548d28dc321cbd57c4eb44189b4ee",
+        "calls": 11,
+        "calls_by_tool": {
+          "join_room": 1,
+          "web_fetch": 6,
+          "wait_for_messages": 1,
+          "send_message": 2,
+          "leave_room": 1
+        },
+        "tool_response_bytes": 3461,
+        "prompt_tokens": 128645,
+        "cache_read_tokens": 88879,
+        "output_tokens": 997,
+        "mention_at": 1791051966756,
+        "reply_at": "2026-10-03T18:26:36.364Z",
+        "mention_to_reply_ms": 29608,
+        "completed_work_at_reply": 6,
+        "reply_rate": 1,
+        "oracle": true,
+        "stats": {
+          "room": "openrouter-steering-bench",
+          "state": "open",
+          "reply_metrics": {
+            "schema_version": 1,
+            "window_minutes": 15,
+            "as_of": "2026-10-03T18:26:39.309Z",
+            "observation_end": "2026-10-03T18:26:39.309Z",
+            "definition": "Deduplicated persisted non-opening agent chat/target pairs, public and quiet; membership at ask from ordered join/leave events. Strict reply is later target chat with exact replyTo or persisted @-back within <=window; one reply may credit multiple asks. Syntactic proxy, not task success. Activity counts any later non-opening target post. Unknown membership excluded from live denominator; pending includes early answered pairs.",
+            "mentions": 2,
+            "to_departed": 0,
+            "departure_unknown": 0,
+            "live_mentions": 2,
+            "answered_within_window": 1,
+            "reply_rate": 0.5,
+            "mature_live_mentions": 0,
+            "mature_answered_within_window": 0,
+            "mature_reply_rate": null,
+            "pending_live_mentions": 2,
+            "activity_within_window": 1,
+            "declined_within_window": null,
+            "decline_coverage": "unknown"
+          },
+          "duration_ms": 41224,
+          "time_to_conclusion_ms": null,
+          "messages_by_kind": {
+            "system": 3,
+            "chat": 3
+          },
+          "per_participant": [
+            {
+              "name": "peer",
+              "agent": "script",
+              "chat_messages": 1,
+              "passes": 0,
+              "chars": 89
+            },
+            {
+              "name": "worker",
+              "agent": "openrouter",
+              "chat_messages": 2,
+              "passes": 0,
+              "chars": 24
+            }
+          ],
+          "proposals": 0,
+          "proposal_electorates": [],
+          "conclusion_electorate": null,
+          "amendments": 0,
+          "challenges": 0,
+          "board_entries": 0,
+          "board_manifests": {
+            "version": 1,
+            "waits": 1,
+            "bytes": 45,
+            "full": 1,
+            "delta": 0,
+            "empty": 0
+          },
+          "board_manifest": {
+            "coverage": "since-process-start",
+            "waits_observed": 1,
+            "full_baseline_manifest_bytes": 17,
+            "shipped_manifest_bytes": 36,
+            "keys_shipped": 0,
+            "deleted_tombstones_shipped": 0,
+            "current_full_manifest_bytes": 17,
+            "entries_by_prefix": {
+              "claim/": 0,
+              "evidence/": 0,
+              "sources/": 0,
+              "handoff/": 0,
+              "inbox/": 0,
+              "verify/": 0,
+              "other": 0
+            }
+          },
+          "refusals": {},
+          "call_outcomes": {
+            "join_room": {
+              "success": 2,
+              "hub_refusal": 0,
+              "error": 0
+            },
+            "send_message": {
+              "success": 3,
+              "hub_refusal": 0,
+              "error": 0
+            },
+            "wait_for_messages": {
+              "success": 1,
+              "hub_refusal": 0,
+              "error": 0
+            },
+            "leave_room": {
+              "success": 1,
+              "hub_refusal": 0,
+              "error": 0
+            }
+          },
+          "refusal_rates": {
+            "join_room": 0,
+            "send_message": 0,
+            "wait_for_messages": 0,
+            "leave_room": 0
+          },
+          "refusal_rate_coverage": "complete",
+          "near_simultaneous_replies": 0,
+          "unanswered_human_messages": 0
+        },
+        "whole_dist_sha256": "82d78ce1d7776ea3cd85963cda0745433e2e95b960d0010a93352544f364ce62",
+        "provider_requests": 10,
+        "cache_write_tokens": 22153,
+        "steering_context_bytes": 0,
+        "artifact_directory": "/tmp/openrouter-steering-before"
+      },
+      {
+        "build": "/tmp/seat-steering-baseline",
+        "gitHead": "archive",
+        "model": "anthropic/claude-opus-5.5",
+        "room": "openrouter-steering-bench",
+        "exit": 0,
+        "wall_ms": 45711,
+        "hub_sha256": "3d738c13d35c046e939f690435dc51045d37cb98268c24d82828a07763fbda0b",
+        "seat_sha256": "d8669a62a16b6ad98a465b667737bbe092c38484a6ecb1350a94cd746cc236d6",
+        "brief_sha256": "e6cd72afe8166f3a5d1ea388b74590b4ede548d28dc321cbd57c4eb44189b4ee",
+        "calls": 11,
+        "calls_by_tool": {
+          "join_room": 1,
+          "web_fetch": 6,
+          "wait_for_messages": 1,
+          "send_message": 2,
+          "leave_room": 1
+        },
+        "tool_response_bytes": 3461,
+        "prompt_tokens": 128606,
+        "cache_read_tokens": 99897,
+        "output_tokens": 1009,
+        "mention_at": 1791052048473,
+        "reply_at": "2026-10-03T18:27:58.749Z",
+        "mention_to_reply_ms": 30276,
+        "completed_work_at_reply": 6,
+        "reply_rate": 1,
+        "oracle": true,
+        "stats": {
+          "room": "openrouter-steering-bench",
+          "state": "open",
+          "reply_metrics": {
+            "schema_version": 1,
+            "window_minutes": 15,
+            "as_of": "2026-10-03T18:28:01.913Z",
+            "observation_end": "2026-10-03T18:28:01.913Z",
+            "definition": "Deduplicated persisted non-opening agent chat/target pairs, public and quiet; membership at ask from ordered join/leave events. Strict reply is later target chat with exact replyTo or persisted @-back within <=window; one reply may credit multiple asks. Syntactic proxy, not task success. Activity counts any later non-opening target post. Unknown membership excluded from live denominator; pending includes early answered pairs.",
+            "mentions": 2,
+            "to_departed": 0,
+            "departure_unknown": 0,
+            "live_mentions": 2,
+            "answered_within_window": 1,
+            "reply_rate": 0.5,
+            "mature_live_mentions": 0,
+            "mature_answered_within_window": 0,
+            "mature_reply_rate": null,
+            "pending_live_mentions": 2,
+            "activity_within_window": 1,
+            "declined_within_window": null,
+            "decline_coverage": "unknown"
+          },
+          "duration_ms": 42536,
+          "time_to_conclusion_ms": null,
+          "messages_by_kind": {
+            "system": 3,
+            "chat": 3
+          },
+          "per_participant": [
+            {
+              "name": "peer",
+              "agent": "script",
+              "chat_messages": 1,
+              "passes": 0,
+              "chars": 89
+            },
+            {
+              "name": "worker",
+              "agent": "openrouter",
+              "chat_messages": 2,
+              "passes": 0,
+              "chars": 24
+            }
+          ],
+          "proposals": 0,
+          "proposal_electorates": [],
+          "conclusion_electorate": null,
+          "amendments": 0,
+          "challenges": 0,
+          "board_entries": 0,
+          "board_manifests": {
+            "version": 1,
+            "waits": 1,
+            "bytes": 45,
+            "full": 1,
+            "delta": 0,
+            "empty": 0
+          },
+          "board_manifest": {
+            "coverage": "since-process-start",
+            "waits_observed": 1,
+            "full_baseline_manifest_bytes": 17,
+            "shipped_manifest_bytes": 36,
+            "keys_shipped": 0,
+            "deleted_tombstones_shipped": 0,
+            "current_full_manifest_bytes": 17,
+            "entries_by_prefix": {
+              "claim/": 0,
+              "evidence/": 0,
+              "sources/": 0,
+              "handoff/": 0,
+              "inbox/": 0,
+              "verify/": 0,
+              "other": 0
+            }
+          },
+          "refusals": {},
+          "call_outcomes": {
+            "join_room": {
+              "success": 2,
+              "hub_refusal": 0,
+              "error": 0
+            },
+            "send_message": {
+              "success": 3,
+              "hub_refusal": 0,
+              "error": 0
+            },
+            "wait_for_messages": {
+              "success": 1,
+              "hub_refusal": 0,
+              "error": 0
+            },
+            "leave_room": {
+              "success": 1,
+              "hub_refusal": 0,
+              "error": 0
+            }
+          },
+          "refusal_rates": {
+            "join_room": 0,
+            "send_message": 0,
+            "wait_for_messages": 0,
+            "leave_room": 0
+          },
+          "refusal_rate_coverage": "complete",
+          "near_simultaneous_replies": 0,
+          "unanswered_human_messages": 0
+        },
+        "whole_dist_sha256": "82d78ce1d7776ea3cd85963cda0745433e2e95b960d0010a93352544f364ce62",
+        "provider_requests": 10,
+        "cache_write_tokens": 11119,
+        "steering_context_bytes": 0,
+        "artifact_directory": "/tmp/openrouter-steering-before-2"
+      },
+      {
+        "build": "/tmp/seat-steering-baseline",
+        "gitHead": "archive",
+        "model": "anthropic/claude-opus-5.5",
+        "room": "openrouter-steering-bench",
+        "exit": 0,
+        "wall_ms": 50077,
+        "hub_sha256": "3d738c13d35c046e939f690435dc51045d37cb98268c24d82828a07763fbda0b",
+        "seat_sha256": "d8669a62a16b6ad98a465b667737bbe092c38484a6ecb1350a94cd746cc236d6",
+        "brief_sha256": "e6cd72afe8166f3a5d1ea388b74590b4ede548d28dc321cbd57c4eb44189b4ee",
+        "calls": 11,
+        "calls_by_tool": {
+          "join_room": 1,
+          "web_fetch": 6,
+          "wait_for_messages": 1,
+          "send_message": 2,
+          "leave_room": 1
+        },
+        "tool_response_bytes": 3461,
+        "prompt_tokens": 128634,
+        "cache_read_tokens": 99904,
+        "output_tokens": 1037,
+        "mention_at": 1791052101920,
+        "reply_at": "2026-10-03T18:28:55.061Z",
+        "mention_to_reply_ms": 33141,
+        "completed_work_at_reply": 6,
+        "reply_rate": 1,
+        "oracle": true,
+        "stats": {
+          "room": "openrouter-steering-bench",
+          "state": "open",
+          "reply_metrics": {
+            "schema_version": 1,
+            "window_minutes": 15,
+            "as_of": "2026-10-03T18:28:59.403Z",
+            "observation_end": "2026-10-03T18:28:59.403Z",
+            "definition": "Deduplicated persisted non-opening agent chat/target pairs, public and quiet; membership at ask from ordered join/leave events. Strict reply is later target chat with exact replyTo or persisted @-back within <=window; one reply may credit multiple asks. Syntactic proxy, not task success. Activity counts any later non-opening target post. Unknown membership excluded from live denominator; pending includes early answered pairs.",
+            "mentions": 2,
+            "to_departed": 0,
+            "departure_unknown": 0,
+            "live_mentions": 2,
+            "answered_within_window": 1,
+            "reply_rate": 0.5,
+            "mature_live_mentions": 0,
+            "mature_answered_within_window": 0,
+            "mature_reply_rate": null,
+            "pending_live_mentions": 2,
+            "activity_within_window": 1,
+            "declined_within_window": null,
+            "decline_coverage": "unknown"
+          },
+          "duration_ms": 45741,
+          "time_to_conclusion_ms": null,
+          "messages_by_kind": {
+            "system": 3,
+            "chat": 3
+          },
+          "per_participant": [
+            {
+              "name": "peer",
+              "agent": "script",
+              "chat_messages": 1,
+              "passes": 0,
+              "chars": 89
+            },
+            {
+              "name": "worker",
+              "agent": "openrouter",
+              "chat_messages": 2,
+              "passes": 0,
+              "chars": 24
+            }
+          ],
+          "proposals": 0,
+          "proposal_electorates": [],
+          "conclusion_electorate": null,
+          "amendments": 0,
+          "challenges": 0,
+          "board_entries": 0,
+          "board_manifests": {
+            "version": 1,
+            "waits": 1,
+            "bytes": 45,
+            "full": 1,
+            "delta": 0,
+            "empty": 0
+          },
+          "board_manifest": {
+            "coverage": "since-process-start",
+            "waits_observed": 1,
+            "full_baseline_manifest_bytes": 17,
+            "shipped_manifest_bytes": 36,
+            "keys_shipped": 0,
+            "deleted_tombstones_shipped": 0,
+            "current_full_manifest_bytes": 17,
+            "entries_by_prefix": {
+              "claim/": 0,
+              "evidence/": 0,
+              "sources/": 0,
+              "handoff/": 0,
+              "inbox/": 0,
+              "verify/": 0,
+              "other": 0
+            }
+          },
+          "refusals": {},
+          "call_outcomes": {
+            "join_room": {
+              "success": 2,
+              "hub_refusal": 0,
+              "error": 0
+            },
+            "send_message": {
+              "success": 3,
+              "hub_refusal": 0,
+              "error": 0
+            },
+            "wait_for_messages": {
+              "success": 1,
+              "hub_refusal": 0,
+              "error": 0
+            },
+            "leave_room": {
+              "success": 1,
+              "hub_refusal": 0,
+              "error": 0
+            }
+          },
+          "refusal_rates": {
+            "join_room": 0,
+            "send_message": 0,
+            "wait_for_messages": 0,
+            "leave_room": 0
+          },
+          "refusal_rate_coverage": "complete",
+          "near_simultaneous_replies": 0,
+          "unanswered_human_messages": 0
+        },
+        "whole_dist_sha256": "82d78ce1d7776ea3cd85963cda0745433e2e95b960d0010a93352544f364ce62",
+        "provider_requests": 10,
+        "cache_write_tokens": 11120,
+        "steering_context_bytes": 0,
+        "artifact_directory": "/tmp/openrouter-steering-before-3"
+      }
+    ],
+    "after": [
+      {
+        "build": "/Users/benji/Desktop/Personal and learning/agent-chatroom-mcp/.swarm-worktrees/swarm-181144-uxtr/6-astra-6",
+        "gitHead": "da1d53e19539ab412bea9505c349d535ef823e36",
+        "model": "anthropic/claude-opus-5.5",
+        "room": "openrouter-steering-bench",
+        "exit": 0,
+        "wall_ms": 56524,
+        "hub_sha256": "694fbfb0a8de1c6c7eb6f815b2ff1d4ab3f88fec568c57004973c50dad71edf9",
+        "seat_sha256": "771b3a3a0700cef9176fe90b4cc8c0f1fe0bf0b7902757b7fe26b2dfab30625d",
+        "brief_sha256": "e6cd72afe8166f3a5d1ea388b74590b4ede548d28dc321cbd57c4eb44189b4ee",
+        "calls": 11,
+        "calls_by_tool": {
+          "join_room": 1,
+          "web_fetch": 6,
+          "send_message": 2,
+          "wait_for_messages": 1,
+          "leave_room": 1
+        },
+        "tool_response_bytes": 3176,
+        "prompt_tokens": 157899,
+        "cache_read_tokens": 111542,
+        "output_tokens": 1026,
+        "mention_at": 1791052146773,
+        "reply_at": "2026-10-03T18:29:12.842Z",
+        "mention_to_reply_ms": 6069,
+        "completed_work_at_reply": 2,
+        "reply_rate": 1,
+        "oracle": true,
+        "stats": {
+          "room": "openrouter-steering-bench",
+          "state": "open",
+          "reply_metrics": {
+            "schema_version": 1,
+            "window_minutes": 15,
+            "as_of": "2026-10-03T18:29:50.044Z",
+            "observation_end": "2026-10-03T18:29:50.044Z",
+            "definition": "Deduplicated persisted non-opening agent chat/target pairs, public and quiet; membership at ask from ordered join/leave events. Strict reply is later target chat with exact replyTo or persisted @-back within <=window; one reply may credit multiple asks. Syntactic proxy, not task success. Activity counts any later non-opening target post. Unknown membership excluded from live denominator; pending includes early answered pairs.",
+            "mentions": 2,
+            "to_departed": 0,
+            "departure_unknown": 0,
+            "live_mentions": 2,
+            "answered_within_window": 1,
+            "reply_rate": 0.5,
+            "mature_live_mentions": 0,
+            "mature_answered_within_window": 0,
+            "mature_reply_rate": null,
+            "pending_live_mentions": 2,
+            "activity_within_window": 1,
+            "declined_within_window": null,
+            "decline_coverage": "unknown"
+          },
+          "duration_ms": 51782,
+          "time_to_conclusion_ms": null,
+          "messages_by_kind": {
+            "system": 3,
+            "chat": 3
+          },
+          "per_participant": [
+            {
+              "name": "peer",
+              "agent": "script",
+              "chat_messages": 1,
+              "passes": 0,
+              "chars": 89
+            },
+            {
+              "name": "worker",
+              "agent": "openrouter",
+              "chat_messages": 2,
+              "passes": 0,
+              "chars": 24
+            }
+          ],
+          "proposals": 0,
+          "proposal_electorates": [],
+          "conclusion_electorate": null,
+          "amendments": 0,
+          "challenges": 0,
+          "board_entries": 0,
+          "board_manifests": {
+            "version": 1,
+            "waits": 3,
+            "bytes": 45,
+            "full": 1,
+            "delta": 0,
+            "empty": 2
+          },
+          "board_manifest": {
+            "coverage": "since-process-start",
+            "waits_observed": 3,
+            "full_baseline_manifest_bytes": 51,
+            "shipped_manifest_bytes": 40,
+            "keys_shipped": 0,
+            "deleted_tombstones_shipped": 0,
+            "current_full_manifest_bytes": 17,
+            "entries_by_prefix": {
+              "claim/": 0,
+              "evidence/": 0,
+              "sources/": 0,
+              "handoff/": 0,
+              "inbox/": 0,
+              "verify/": 0,
+              "other": 0
+            }
+          },
+          "refusals": {},
+          "call_outcomes": {
+            "join_room": {
+              "success": 2,
+              "hub_refusal": 0,
+              "error": 0
+            },
+            "send_message": {
+              "success": 3,
+              "hub_refusal": 0,
+              "error": 0
+            },
+            "wait_for_messages": {
+              "success": 3,
+              "hub_refusal": 0,
+              "error": 0
+            },
+            "leave_room": {
+              "success": 1,
+              "hub_refusal": 0,
+              "error": 0
+            }
+          },
+          "refusal_rates": {
+            "join_room": 0,
+            "send_message": 0,
+            "wait_for_messages": 0,
+            "leave_room": 0
+          },
+          "refusal_rate_coverage": "complete",
+          "near_simultaneous_replies": 0,
+          "unanswered_human_messages": 0
+        },
+        "whole_dist_sha256": "4569b834911316cf76b05a1b5c9f18e6331097aaa8b19ca48cf47a1dcb18522c",
+        "provider_requests": 12,
+        "cache_write_tokens": 22238,
+        "steering_context_bytes": 347,
+        "artifact_directory": "/tmp/openrouter-steering-after-1"
+      },
+      {
+        "build": "/Users/benji/Desktop/Personal and learning/agent-chatroom-mcp/.swarm-worktrees/swarm-181144-uxtr/6-astra-6",
+        "gitHead": "da1d53e19539ab412bea9505c349d535ef823e36",
+        "model": "anthropic/claude-opus-5.5",
+        "room": "openrouter-steering-bench",
+        "exit": 0,
+        "wall_ms": 48434,
+        "hub_sha256": "694fbfb0a8de1c6c7eb6f815b2ff1d4ab3f88fec568c57004973c50dad71edf9",
+        "seat_sha256": "771b3a3a0700cef9176fe90b4cc8c0f1fe0bf0b7902757b7fe26b2dfab30625d",
+        "brief_sha256": "e6cd72afe8166f3a5d1ea388b74590b4ede548d28dc321cbd57c4eb44189b4ee",
+        "calls": 11,
+        "calls_by_tool": {
+          "join_room": 1,
+          "web_fetch": 6,
+          "send_message": 2,
+          "wait_for_messages": 1,
+          "leave_room": 1
+        },
+        "tool_response_bytes": 3176,
+        "prompt_tokens": 131179,
+        "cache_read_tokens": 100284,
+        "output_tokens": 1005,
+        "mention_at": 1791052205273,
+        "reply_at": "2026-10-03T18:30:12.234Z",
+        "mention_to_reply_ms": 6961,
+        "completed_work_at_reply": 2,
+        "reply_rate": 1,
+        "oracle": true,
+        "stats": {
+          "room": "openrouter-steering-bench",
+          "state": "open",
+          "reply_metrics": {
+            "schema_version": 1,
+            "window_minutes": 15,
+            "as_of": "2026-10-03T18:30:40.232Z",
+            "observation_end": "2026-10-03T18:30:40.232Z",
+            "definition": "Deduplicated persisted non-opening agent chat/target pairs, public and quiet; membership at ask from ordered join/leave events. Strict reply is later target chat with exact replyTo or persisted @-back within <=window; one reply may credit multiple asks. Syntactic proxy, not task success. Activity counts any later non-opening target post. Unknown membership excluded from live denominator; pending includes early answered pairs.",
+            "mentions": 2,
+            "to_departed": 0,
+            "departure_unknown": 0,
+            "live_mentions": 2,
+            "answered_within_window": 1,
+            "reply_rate": 0.5,
+            "mature_live_mentions": 0,
+            "mature_answered_within_window": 0,
+            "mature_reply_rate": null,
+            "pending_live_mentions": 2,
+            "activity_within_window": 1,
+            "declined_within_window": null,
+            "decline_coverage": "unknown"
+          },
+          "duration_ms": 45411,
+          "time_to_conclusion_ms": null,
+          "messages_by_kind": {
+            "system": 3,
+            "chat": 3
+          },
+          "per_participant": [
+            {
+              "name": "peer",
+              "agent": "script",
+              "chat_messages": 1,
+              "passes": 0,
+              "chars": 89
+            },
+            {
+              "name": "worker",
+              "agent": "openrouter",
+              "chat_messages": 2,
+              "passes": 0,
+              "chars": 24
+            }
+          ],
+          "proposals": 0,
+          "proposal_electorates": [],
+          "conclusion_electorate": null,
+          "amendments": 0,
+          "challenges": 0,
+          "board_entries": 0,
+          "board_manifests": {
+            "version": 1,
+            "waits": 3,
+            "bytes": 45,
+            "full": 1,
+            "delta": 0,
+            "empty": 2
+          },
+          "board_manifest": {
+            "coverage": "since-process-start",
+            "waits_observed": 3,
+            "full_baseline_manifest_bytes": 51,
+            "shipped_manifest_bytes": 40,
+            "keys_shipped": 0,
+            "deleted_tombstones_shipped": 0,
+            "current_full_manifest_bytes": 17,
+            "entries_by_prefix": {
+              "claim/": 0,
+              "evidence/": 0,
+              "sources/": 0,
+              "handoff/": 0,
+              "inbox/": 0,
+              "verify/": 0,
+              "other": 0
+            }
+          },
+          "refusals": {},
+          "call_outcomes": {
+            "join_room": {
+              "success": 2,
+              "hub_refusal": 0,
+              "error": 0
+            },
+            "send_message": {
+              "success": 3,
+              "hub_refusal": 0,
+              "error": 0
+            },
+            "wait_for_messages": {
+              "success": 3,
+              "hub_refusal": 0,
+              "error": 0
+            },
+            "leave_room": {
+              "success": 1,
+              "hub_refusal": 0,
+              "error": 0
+            }
+          },
+          "refusal_rates": {
+            "join_room": 0,
+            "send_message": 0,
+            "wait_for_messages": 0,
+            "leave_room": 0
+          },
+          "refusal_rate_coverage": "complete",
+          "near_simultaneous_replies": 0,
+          "unanswered_human_messages": 0
+        },
+        "whole_dist_sha256": "4569b834911316cf76b05a1b5c9f18e6331097aaa8b19ca48cf47a1dcb18522c",
+        "provider_requests": 10,
+        "cache_write_tokens": 11162,
+        "steering_context_bytes": 347,
+        "artifact_directory": "/tmp/openrouter-steering-after-2"
+      },
+      {
+        "build": "/Users/benji/Desktop/Personal and learning/agent-chatroom-mcp/.swarm-worktrees/swarm-181144-uxtr/6-astra-6",
+        "gitHead": "da1d53e19539ab412bea9505c349d535ef823e36",
+        "model": "anthropic/claude-opus-5.5",
+        "room": "openrouter-steering-bench",
+        "exit": 0,
+        "wall_ms": 52404,
+        "hub_sha256": "694fbfb0a8de1c6c7eb6f815b2ff1d4ab3f88fec568c57004973c50dad71edf9",
+        "seat_sha256": "771b3a3a0700cef9176fe90b4cc8c0f1fe0bf0b7902757b7fe26b2dfab30625d",
+        "brief_sha256": "e6cd72afe8166f3a5d1ea388b74590b4ede548d28dc321cbd57c4eb44189b4ee",
+        "calls": 11,
+        "calls_by_tool": {
+          "join_room": 1,
+          "web_fetch": 6,
+          "send_message": 2,
+          "wait_for_messages": 1,
+          "leave_room": 1
+        },
+        "tool_response_bytes": 3176,
+        "prompt_tokens": 157979,
+        "cache_read_tokens": 122608,
+        "output_tokens": 1041,
+        "mention_at": 1791052253175,
+        "reply_at": "2026-10-03T18:30:59.933Z",
+        "mention_to_reply_ms": 6758,
+        "completed_work_at_reply": 2,
+        "reply_rate": 1,
+        "oracle": true,
+        "stats": {
+          "room": "openrouter-steering-bench",
+          "state": "open",
+          "reply_metrics": {
+            "schema_version": 1,
+            "window_minutes": 15,
+            "as_of": "2026-10-03T18:31:34.361Z",
+            "observation_end": "2026-10-03T18:31:34.361Z",
+            "definition": "Deduplicated persisted non-opening agent chat/target pairs, public and quiet; membership at ask from ordered join/leave events. Strict reply is later target chat with exact replyTo or persisted @-back within <=window; one reply may credit multiple asks. Syntactic proxy, not task success. Activity counts any later non-opening target post. Unknown membership excluded from live denominator; pending includes early answered pairs.",
+            "mentions": 2,
+            "to_departed": 0,
+            "departure_unknown": 0,
+            "live_mentions": 2,
+            "answered_within_window": 1,
+            "reply_rate": 0.5,
+            "mature_live_mentions": 0,
+            "mature_answered_within_window": 0,
+            "mature_reply_rate": null,
+            "pending_live_mentions": 2,
+            "activity_within_window": 1,
+            "declined_within_window": null,
+            "decline_coverage": "unknown"
+          },
+          "duration_ms": 49054,
+          "time_to_conclusion_ms": null,
+          "messages_by_kind": {
+            "system": 3,
+            "chat": 3
+          },
+          "per_participant": [
+            {
+              "name": "peer",
+              "agent": "script",
+              "chat_messages": 1,
+              "passes": 0,
+              "chars": 89
+            },
+            {
+              "name": "worker",
+              "agent": "openrouter",
+              "chat_messages": 2,
+              "passes": 0,
+              "chars": 24
+            }
+          ],
+          "proposals": 0,
+          "proposal_electorates": [],
+          "conclusion_electorate": null,
+          "amendments": 0,
+          "challenges": 0,
+          "board_entries": 0,
+          "board_manifests": {
+            "version": 1,
+            "waits": 3,
+            "bytes": 45,
+            "full": 1,
+            "delta": 0,
+            "empty": 2
+          },
+          "board_manifest": {
+            "coverage": "since-process-start",
+            "waits_observed": 3,
+            "full_baseline_manifest_bytes": 51,
+            "shipped_manifest_bytes": 40,
+            "keys_shipped": 0,
+            "deleted_tombstones_shipped": 0,
+            "current_full_manifest_bytes": 17,
+            "entries_by_prefix": {
+              "claim/": 0,
+              "evidence/": 0,
+              "sources/": 0,
+              "handoff/": 0,
+              "inbox/": 0,
+              "verify/": 0,
+              "other": 0
+            }
+          },
+          "refusals": {},
+          "call_outcomes": {
+            "join_room": {
+              "success": 2,
+              "hub_refusal": 0,
+              "error": 0
+            },
+            "send_message": {
+              "success": 3,
+              "hub_refusal": 0,
+              "error": 0
+            },
+            "wait_for_messages": {
+              "success": 3,
+              "hub_refusal": 0,
+              "error": 0
+            },
+            "leave_room": {
+              "success": 1,
+              "hub_refusal": 0,
+              "error": 0
+            }
+          },
+          "refusal_rates": {
+            "join_room": 0,
+            "send_message": 0,
+            "wait_for_messages": 0,
+            "leave_room": 0
+          },
+          "refusal_rate_coverage": "complete",
+          "near_simultaneous_replies": 0,
+          "unanswered_human_messages": 0
+        },
+        "whole_dist_sha256": "4569b834911316cf76b05a1b5c9f18e6331097aaa8b19ca48cf47a1dcb18522c",
+        "provider_requests": 12,
+        "cache_write_tokens": 11162,
+        "steering_context_bytes": 347,
+        "artifact_directory": "/tmp/openrouter-steering-after-3"
+      }
+    ]
+  },
+  "aggregate": {
+    "before": {
+      "calls": 33,
+      "tool_response_bytes": 10383,
+      "prompt_tokens": 385885,
+      "cache_read_tokens": 288680,
+      "cache_write_tokens": 44392,
+      "output_tokens": 3043,
+      "wall_ms": 139959,
+      "mention_to_reply_ms": 93025,
+      "provider_requests": 30,
+      "steering_context_bytes": 0
+    },
+    "after": {
+      "calls": 33,
+      "tool_response_bytes": 9528,
+      "prompt_tokens": 447057,
+      "cache_read_tokens": 334434,
+      "cache_write_tokens": 44562,
+      "output_tokens": 3072,
+      "wall_ms": 157362,
+      "mention_to_reply_ms": 19788,
+      "provider_requests": 34,
+      "steering_context_bytes": 1041
+    }
+  }
+}

@@ -37,6 +37,7 @@ try {
   assert.ok(defaults.reply_metrics, "GET stats must add reply_metrics");
   assert.equal(defaults.reply_metrics.window_minutes, 15);
   assert.equal(defaults.reply_metrics.reply_rate, null);
+  assert.deepEqual(defaults.reply_metrics.reply_latency_ms, { samples: 0, min: null, p50: null, p95: null, max: null });
   assert.ok("refusal_rates" in defaults, "preserve existing stats fields");
   for (const value of ["1", "0.5", "1440"]) {
     const response = await query(`?reply_window_minutes=${value}`);

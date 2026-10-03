@@ -101,6 +101,7 @@ export function analyzeReplyMetrics(input: readonly ReplyMetricEvent[], options:
     }
   }
   let departed = 0, unknown = 0, live = 0, answered = 0, mature = 0, matureAnswered = 0, activity = 0;
+  const replyLatencies: number[] = [];
   const byAuthor = new Map<string, ReplyMetricMessage[]>();
   for (const m of messages) {
     const list = byAuthor.get(m.from.id) ?? [];
@@ -114,16 +115,20 @@ export function analyzeReplyMetrics(input: readonly ReplyMetricEvent[], options:
     const askedAt = timestamp(ask.message.ts);
     const fullyObserved = askedAt !== undefined && end !== undefined && askedAt + windowMs <= end;
     if (fullyObserved) mature++;
-    let replied = false, active = false;
+    let replyLatency: number | undefined, active = false;
     for (const m of byAuthor.get(ask.target) ?? []) {
       const t = timestamp(m.ts);
       if (m.seq <= ask.message.seq || askedAt === undefined || t === undefined || t < askedAt || t - askedAt > windowMs || m.tag === 'opening') continue;
       active = true;
-      if (isChat(m) && (m.replyTo === ask.message.id || m.mentions?.includes(ask.message.from.id))) replied = true;
+      if (isChat(m) && (m.replyTo === ask.message.id || m.mentions?.includes(ask.message.from.id))) {
+        replyLatency = Math.min(replyLatency ?? Infinity, t - askedAt);
+      }
     }
     if (active) activity++;
-    if (replied) { answered++; if (fullyObserved) matureAnswered++; }
+    if (replyLatency !== undefined) { answered++; replyLatencies.push(replyLatency); if (fullyObserved) matureAnswered++; }
   }
+  replyLatencies.sort((a, b) => a - b);
+  const latencyQuantile = (fraction: number) => replyLatencies[Math.ceil(fraction * replyLatencies.length) - 1] ?? null;
   return {
     schema_version: 1,
     window_minutes: windowMinutes,
@@ -136,6 +141,14 @@ export function analyzeReplyMetrics(input: readonly ReplyMetricEvent[], options:
     live_mentions: live,
     answered_within_window: answered,
     reply_rate: live ? answered / live : null,
+    reply_latency_definition: 'Milliseconds to earliest timestamp among qualifying later-sequence strict replies per answered live pair; nearest-rank quantiles. Includes early-answered pending pairs; excludes unanswered pairs, so read with reply_rate. One reply may supply multiple pair samples.',
+    reply_latency_ms: {
+      samples: replyLatencies.length,
+      min: replyLatencies[0] ?? null,
+      p50: latencyQuantile(0.5),
+      p95: latencyQuantile(0.95),
+      max: replyLatencies.at(-1) ?? null,
+    },
     mature_live_mentions: mature,
     mature_answered_within_window: matureAnswered,
     mature_reply_rate: mature ? matureAnswered / mature : null,

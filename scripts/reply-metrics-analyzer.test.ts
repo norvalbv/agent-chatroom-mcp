@@ -107,6 +107,38 @@ test("configurable bounded finite window", () => {
   assert.equal(analyze([...base(), msg(1, "a", 0, ["b"]), msg(2, "b", 2, [], { replyTo: "m1" })], 30, { windowMinutes: 1 }).answered_within_window, 0);
 });
 
+test("latency has one minimum qualifying sample per answered live pair and nearest-rank quantiles", () => {
+  const events = [...base(), ...[1, 2, 3, 4].map(n => msg(n, "a", 0, ["b"]))];
+  for (const n of [4, 1, 3, 2]) events.push(msg(4 + n, "b", n * 10 / 60_000, [], { replyTo: `m${n}` }));
+  events.push(msg(9, "b", 5 / 60_000, [], { replyTo: "m1" }));
+  const result = analyze(events);
+  assert.deepEqual(result.reply_latency_ms, { samples: 4, min: 5, p50: 20, p95: 40, max: 40 });
+  assert.equal(result.reply_latency_ms.samples, result.answered_within_window);
+});
+
+test("latency excludes unknown/departed/unanswered pairs, non-replies, invalid clocks and late replies", () => {
+  const result = analyze([...base(), member("c", "leave"),
+    msg(1, "a", 0, ["b", "c", "missing"]), msg(2, "a", 0, ["b"]),
+    msg(3, "b", 1), msg(4, "b", 1, [], { kind: "vote", replyTo: "m1" }),
+    msg(5, "b", 1, [], { replyTo: "m1", tag: "opening" }),
+    msg(6, "b", -1, [], { replyTo: "m1" }), msg(7, "b", 1, [], { ts: "invalid", replyTo: "m1" }),
+    msg(8, "c", 1, [], { replyTo: "m1" }), msg(9, "missing", 1, [], { replyTo: "m1" }),
+    msg(10, "b", 15 + 1 / 60_000, [], { replyTo: "m1" }),
+  ]);
+  assert.deepEqual(result.reply_latency_ms, { samples: 0, min: null, p50: null, p95: null, max: null });
+  assert.equal(result.live_mentions, 2);
+});
+
+test("latency includes zero and window boundary, and respects frozen prefixes and observation horizon", () => {
+  const events = [...base(), msg(1, "a", 0, ["b"]), msg(2, "b", 0, [], { replyTo: "m1" }),
+    msg(3, "a", 0, ["b"]), msg(4, "b", 15, [], { replyTo: "m3" })];
+  assert.deepEqual(analyze(events).reply_latency_ms, { samples: 2, min: 0, p50: 0, p95: 900_000, max: 900_000 });
+  assert.deepEqual(analyzeReplyMetrics(events, { maxSeq: 1 }).reply_latency_ms,
+    { samples: 0, min: null, p50: null, p95: null, max: null });
+  assert.equal(analyze(events, 1).reply_latency_ms.samples, 1, "an early answer is included before its window matures");
+  assert.equal(analyze(events, 0).reply_latency_ms.max, 0);
+});
+
 test("live, persisted replay and reloaded hub share the same historical analyzer", () => {
   const dir = mkdtempSync(join(tmpdir(), "reply-metric-parity-"));
   try {

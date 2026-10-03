@@ -8,6 +8,7 @@
  * Loop as an agent sees it: join_room -> submit_opening -> send_message /
  * wait_for_messages -> propose -> challenge -> vote -> room concludes -> leave_room.
  */
+import { statusView } from "./hub/status-view.js";
 import { fmtWait, steerCarry } from "./hub/steer.js";
 import { McpServer, ResourceTemplate, type RegisteredTool } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { randomUUID } from "node:crypto";
@@ -522,7 +523,7 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
   server.registerTool(
     "room_status",
     { title: "Room status", description: "Participants with last_seen_at, working tool/step/time and liveness ages in seconds (active <60s, idle <600s, suspected_dead otherwise; advisory only, left if departed), mode, round/turn, proposals and conclusion.", inputSchema: { room: roomArg } },
-    guard("room_status", ({ room }) => hub.summary(hub.getRoom(room))),
+    guard("room_status", ({ room }) => statusView(hub.summary(hub.getRoom(room)))),
   );
 
   decisionTools.push(server.registerTool(

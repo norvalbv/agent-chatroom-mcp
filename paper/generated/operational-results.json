@@ -1,0 +1,115 @@
+{
+  "generator": "python3 scripts/paper-operational-results.py",
+  "source_sha256": {
+    "docs/output-size-2026-10-03.json": "39bb1564111453d290bbf48e71b5106f6f5f2462e78f289e6c0063ebc04d1f5d",
+    "docs/measurements/openrouter-steering-2026-10-03.json": "ae02fe90634c23a5bda80d54b92adc854751cd55e0a3919338d1f94c86044984",
+    "docs/experiments/2026-10-03-steering-contract.md": "2f944ee327a846ce05fd12a291bcf501ae0291606cc53ddf8ef971b2392876ad",
+    "docs/bench-wait-view-2026-10-03/historical-replay.json": "30bffad45ac10d0241c7f16a9dff9d047e1327df0a7ea57d9012dd864251faea",
+    "docs/measurements/swarm-efficiency-final-baseline.json": "cbf6fea48ffa1eea9361791643a61638a1e3d6867a4e4ace01b4c636e60bbc7d",
+    "docs/measurements/swarm-efficiency-final-head.json": "b938c600b45dd9c8401c3788f98e588ffe0551b04f5a78666a1ff67a00f81055",
+    "docs/measurements/swarm-efficiency-cross-run.json": "32b8b90b3246cc4afc11d1a1ffdaa0302ed49e0def15d5d9a469724963d5a9f8"
+  },
+  "output_size": {
+    "calls": 306,
+    "bytes_before": 410972,
+    "bytes_compact_only": 383563,
+    "bytes_final": 353079,
+    "proxy_tokens_before": 115780,
+    "proxy_tokens_compact_only": 104368,
+    "proxy_tokens_final": 97644,
+    "bytes_reduction": 0.14086847765784527,
+    "proxy_tokens_reduction": 0.1566419070651235
+  },
+  "openrouter": {
+    "before": {
+      "calls": 33,
+      "tool_response_bytes": 10383,
+      "prompt_tokens": 385885,
+      "cache_read_tokens": 288680,
+      "cache_write_tokens": 44392,
+      "output_tokens": 3043,
+      "wall_ms": 139959,
+      "mention_to_reply_ms": 93025,
+      "provider_requests": 30,
+      "steering_context_bytes": 0,
+      "median_reply_seconds": 30.276,
+      "combined_bytes": 10383
+    },
+    "after": {
+      "calls": 33,
+      "tool_response_bytes": 9528,
+      "prompt_tokens": 447057,
+      "cache_read_tokens": 334434,
+      "cache_write_tokens": 44562,
+      "output_tokens": 3072,
+      "wall_ms": 157362,
+      "mention_to_reply_ms": 19788,
+      "provider_requests": 34,
+      "steering_context_bytes": 1041,
+      "median_reply_seconds": 6.758,
+      "combined_bytes": 10569
+    },
+    "relative_change": {
+      "prompt_tokens": 0.15852391256462428,
+      "combined_bytes": 0.01791389771742269,
+      "wall_ms": 0.12434355775619998
+    }
+  },
+  "claude_three_seat": {
+    "precision": "Parsed from the published rounded component table; not raw billing precision.",
+    "base": {
+      "median_reply_seconds": 111.1,
+      "reported_cost_usd": 0.852,
+      "cache_read_tokens": 1259586,
+      "output_tokens": 10754
+    },
+    "head": {
+      "median_reply_seconds": 3.8,
+      "reported_cost_usd": 1.138,
+      "cache_read_tokens": 1722488,
+      "output_tokens": 14359
+    },
+    "relative_cost_change": 0.33568075117370877
+  },
+  "wait_replay": {
+    "waits": 116,
+    "compacted": 15,
+    "original_bytes": 357972,
+    "candidate_bytes": 333353,
+    "empty_original_bytes": 39916,
+    "empty_candidate_bytes": 15297,
+    "empty_waits": 19,
+    "note": "Same ordered historical observations through the actual formatter. Pretty JSON retained to isolate state compaction from serialization. Provider tokens/calls and task outcome unchanged by this replay.",
+    "bytes_reduction": 0.0687735353603075
+  },
+  "initial_combined": {
+    "baseline": {
+      "median_reply_seconds": 15.889,
+      "reported_cost_usd": 0.7409054,
+      "hub_calls": 35,
+      "hub_text_bytes": 36658
+    },
+    "head": {
+      "median_reply_seconds": 3.975,
+      "reported_cost_usd": 0.9610886000000001,
+      "hub_calls": 30,
+      "hub_text_bytes": 22978
+    },
+    "relative_cost_change": 0.2971812595778085
+  },
+  "cross_run": {
+    "swarm-205033-6bp8": {
+      "unread_refusals": 37,
+      "send_calls": 142,
+      "status_share_of_hub_text": 0.19108298733785492
+    },
+    "swarm-214828-v2fj": {
+      "unread_refusals": 26,
+      "send_calls": 58
+    },
+    "swarm-130854-nmek": {
+      "unread_refusals": 34,
+      "send_calls": 91
+    }
+  }
+}

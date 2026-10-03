@@ -578,10 +578,19 @@ export class Hub {
 
   // ---------- messages ----------
 
-  /** Substantive messages from others that this participant has not read yet (system notices do not count). */
+  /** Substantive messages from others that this participant has not read yet (hub notices do not count). */
   unread(room: Room, p: Participant): Message[] {
-    // system notices, and human messages someone else has already answered, never block a send
-    return this.deliverable(room, p, p.lastSeenSeq).filter((m) => m.kind !== "system" && !(m.from.agent === "human" && this.isAnswered(room, m)));
+    // Hub notices are news, not debt: system lines, [BOARD] lines and hub-authored @-notices (reviewer assignment)
+    // never block a send, and nor do human messages someone else has already answered. They stay unread, so the next
+    // wait still delivers them. Counting them cost a refused call plus a forced retry (13 of 140 arrived-refusals in
+    // four real runs, scripts/refused-send-split.py).
+    return this.deliverable(room, p, p.lastSeenSeq).filter((m) =>
+      m.kind !== "system" && !this.isHubNotice(m) && !(m.from.agent === "human" && this.isAnswered(room, m)));
+  }
+
+  /** A [BOARD] line or a hub-authored chat notice (reviewer assignment, claim overlap): news that nobody can reply to. */
+  isHubNotice(m: Message): boolean {
+    return m.kind === "board" || (m.from.id === "system" && m.kind === "chat");
   }
 
   /** Push predicate: quiet messages are pushed only to their audience. Everything else defers to visibleTo. Never used by read(). */
@@ -872,6 +881,10 @@ export class Hub {
       audience = [...new Set([p.id, ...targets])];
     }
     if (this.attentionFocus(room, p) || p.withheld?.length) this.settleRead(room, p, p.lastSeenSeq, []);
+    // Notices did not block this send (unread()), but sending moves the cursor past them: hold them so the next wait
+    // still delivers them.
+    const notices = room.messages.filter((m) => m.seq > p.lastSeenSeq && m.from.id !== p.id && this.isHubNotice(m) && this.pushableTo(room, m, p.id));
+    if (notices.length) p.withheld = [...new Set([...(p.withheld ?? []), ...notices.map((m) => m.seq)])];
     const msg = this.post(room, "chat", p, content, { replyTo, ...(quiet ? { quiet: true, audience } : {}) });
     p.messageCount += 1;
     p.lastSeenSeq = Math.max(p.lastSeenSeq, msg.seq);

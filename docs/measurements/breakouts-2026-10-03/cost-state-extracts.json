@@ -1,0 +1,170 @@
+[
+ {
+  "pair": 1,
+  "arm": "base",
+  "seat": "claude-opus-5-5-1",
+  "trace": "bbbd1369-6294-49f8-82b4-1b8590956797.jsonl",
+  "trace_sha256": "1f5be68ad25e9b13b0efd04c33218160b76a0c8b750fd819b3ef4096dd7caaf2",
+  "cost_state": {
+   "sessionId": "bbbd1369-6294-49f8-82b4-1b8590956797",
+   "totalCostUSD": 4.814232,
+   "hasUnknownModelCost": false
+  }
+ },
+ {
+  "pair": 1,
+  "arm": "base",
+  "seat": "verifier",
+  "trace": "d543d90c-6c21-4d52-b06a-06b75b2ef0ed.jsonl",
+  "trace_sha256": "911e4a0c3a3d2b7faebe0474979c94f0a2d0c6d94351c44b01131c060e787cd0",
+  "cost_state": {
+   "sessionId": "d543d90c-6c21-4d52-b06a-06b75b2ef0ed",
+   "totalCostUSD": 4.653309000000001,
+   "hasUnknownModelCost": false
+  }
+ },
+ {
+  "pair": 1,
+  "arm": "head",
+  "seat": "claude-opus-5-5-1",
+  "trace": "13124ef4-4c3b-4a5d-95b1-39d60854e673.jsonl",
+  "trace_sha256": "b8c29e1cd71ed0c9a74cbb665f317d8c84789be953a1a684428e5651ef3e2d67",
+  "cost_state": {
+   "sessionId": "13124ef4-4c3b-4a5d-95b1-39d60854e673",
+   "totalCostUSD": 2.9690129999999995,
+   "hasUnknownModelCost": false
+  }
+ },
+ {
+  "pair": 1,
+  "arm": "head",
+  "seat": "verifier",
+  "trace": "37c17ee9-c792-4e84-8941-7729ef3f18d4.jsonl",
+  "trace_sha256": "4e33222abf99e0b1648dab84f179fbf17d8c15709e3e85a1aa90401e97635a39",
+  "cost_state": {
+   "sessionId": "37c17ee9-c792-4e84-8941-7729ef3f18d4",
+   "totalCostUSD": 5.27557,
+   "hasUnknownModelCost": false
+  }
+ },
+ {
+  "pair": 2,
+  "arm": "base",
+  "seat": "claude-opus-5-5-1",
+  "trace": "07fe9aa6-14b2-43ef-bc73-ba3716c045c8.jsonl",
+  "trace_sha256": "0915dda39b7600ade09e37bbaaace8bcd83fc304fae4e1648128979a3202367c",
+  "cost_state": {
+   "sessionId": "07fe9aa6-14b2-43ef-bc73-ba3716c045c8",
+   "totalCostUSD": 3.9783119999999994,
+   "hasUnknownModelCost": false
+  }
+ },
+ {
+  "pair": 2,
+  "arm": "base",
+  "seat": "verifier",
+  "trace": "aa63eb95-baf6-43a6-887a-463d850c01c3.jsonl",
+  "trace_sha256": "4658290be94bb6da00da46c4e20702baca020e25f4aadface35dfe7deabd4268",
+  "cost_state": {
+   "sessionId": "aa63eb95-baf6-43a6-887a-463d850c01c3",
+   "totalCostUSD": 3.344214,
+   "hasUnknownModelCost": false
+  }
+ },
+ {
+  "pair": 2,
+  "arm": "base",
+  "seat": "recruit",
+  "trace": "371f0673-0f6e-4326-ba8b-21c0b87f0f4f.jsonl",
+  "trace_sha256": "d26e2d0c98691b2c3fd4c01921182ac0e4d158e40d46a8c4bdee238aa076e7f9",
+  "cost_state": {
+   "sessionId": "371f0673-0f6e-4326-ba8b-21c0b87f0f4f",
+   "totalCostUSD": 2.348645,
+   "hasUnknownModelCost": false
+  }
+ },
+ {
+  "pair": 2,
+  "arm": "base",
+  "seat": "recruit",
+  "trace": "170b5d06-aa49-42b6-979a-b5390080723c.jsonl",
+  "trace_sha256": "b35dce0559c58523bc734b2c2964fafb65d77c9875e0117fe273052a924b535b",
+  "cost_state": {
+   "sessionId": "170b5d06-aa49-42b6-979a-b5390080723c",
+   "totalCostUSD": 2.3008419999999994,
+   "hasUnknownModelCost": false
+  }
+ },
+ {
+  "pair": 2,
+  "arm": "head",
+  "seat": "verifier",
+  "trace": "52616e23-ac0c-4ceb-b682-aaec48a9ab89.jsonl",
+  "trace_sha256": "3efc861173c532db966472e5e5cfbb09371e123bd93b5a897d85fb2de214a850",
+  "cost_state": {
+   "sessionId": "52616e23-ac0c-4ceb-b682-aaec48a9ab89",
+   "totalCostUSD": 8.871096000000001,
+   "hasUnknownModelCost": false
+  }
+ },
+ {
+  "pair": 2,
+  "arm": "head",
+  "seat": "claude-opus-5-5-1",
+  "trace": "76b12e63-e69a-44c5-a03a-070aa7c7bc0a.jsonl",
+  "trace_sha256": "c517ab0bbfabc31c6be63417bcd28264baa7a18831d5a653d29c2742bed2375f",
+  "cost_state": {
+   "sessionId": "76b12e63-e69a-44c5-a03a-070aa7c7bc0a",
+   "totalCostUSD": 4.168794,
+   "hasUnknownModelCost": false
+  }
+ },
+ {
+  "pair": 3,
+  "arm": "base",
+  "seat": "claude-opus-5-5-1",
+  "trace": "35939afb-b3cf-4040-9936-dd0e6f5fba11.jsonl",
+  "trace_sha256": "45ae0610af43bdbcc5dff5b612ed1b55ef834c4c0ed053af57e1530c332102ef",
+  "cost_state": {
+   "sessionId": "35939afb-b3cf-4040-9936-dd0e6f5fba11",
+   "totalCostUSD": 3.0043369999999996,
+   "hasUnknownModelCost": false
+  }
+ },
+ {
+  "pair": 3,
+  "arm": "base",
+  "seat": "verifier",
+  "trace": "7d371471-74c9-42a8-88ae-a80789265f10.jsonl",
+  "trace_sha256": "e2898f48cbaa45487f00aefd0ae6f3a7323e4587ee0eeeead26db4a0c0cb710a",
+  "cost_state": {
+   "sessionId": "7d371471-74c9-42a8-88ae-a80789265f10",
+   "totalCostUSD": 3.0612440000000003,
+   "hasUnknownModelCost": false
+  }
+ },
+ {
+  "pair": 3,
+  "arm": "head",
+  "seat": "verifier",
+  "trace": "9023a596-5c37-498b-afff-66ee24084049.jsonl",
+  "trace_sha256": "0a1a9cb6351bbd261ab48472eded78ef26d6377d620fdfc91e68ae9ab7474a80",
+  "cost_state": {
+   "sessionId": "9023a596-5c37-498b-afff-66ee24084049",
+   "totalCostUSD": 4.089995999999999,
+   "hasUnknownModelCost": false
+  }
+ },
+ {
+  "pair": 3,
+  "arm": "head",
+  "seat": "claude-opus-5-5-1",
+  "trace": "e8344313-1e9c-4024-a2df-be3e21c514a8.jsonl",
+  "trace_sha256": "35532b236710da217a463bb71eb83894bdc3c5cae55be716abe9ab8f9deb5a66",
+  "cost_state": {
+   "sessionId": "e8344313-1e9c-4024-a2df-be3e21c514a8",
+   "totalCostUSD": 3.5628,
+   "hasUnknownModelCost": false
+  }
+ }
+]

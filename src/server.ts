@@ -65,11 +65,7 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
   const me = new Map<string, Set<string>>();
   const sessionKey = randomUUID(); // one connection = one agent, whatever names it uses
 
-  // Session-scoped tool surface (Rank 5): join_room(tool_scope="restricted") drops the
-  // proposal-lifecycle tools from this connection's tools/list until it actually has
-  // something to do with them, so a reading/measuring seat isn't paying their schema
-  // bytes on every turn. The McpServer already gates both tools/list and tools/call on
-  // RegisteredTool.enabled, so disabling here is enforced at the real MCP dispatch layer.
+  // Restricted sessions omit decision schemas until needed; the SDK also refuses disabled calls.
   let toolScope: "full" | "restricted" = "full";
   const decisionTools: RegisteredTool[] = [];
   const setToolScope = (scope: "full" | "restricted") => {
@@ -533,8 +529,12 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
 
   server.registerTool(
     "room_status",
-    { title: "Room status", description: "Participants with last_seen_at, working tool/step/time and liveness ages in seconds (active <60s, idle <600s, suspected_dead otherwise; advisory only; left if departed, away if departed but not gone: its process still heartbeats, or a hub restart found it in the room under 10 min ago), mode, round/turn, proposals and conclusion.", inputSchema: { room: roomArg, full_topic: z.boolean().optional().describe("Include the whole room topic (default: its opening).") } },
-    guard("room_status", ({ room, full_topic }) => statusView(hub.summary(hub.getRoom(room)), full_topic === true)),
+    { title: "Room status", description: "Participants with last_seen_at, working tool/step/time and liveness ages in seconds (active <60s, idle <600s, suspected_dead otherwise; advisory only; left if departed, away if departed but not gone: its process still heartbeats, or a hub restart found it in the room under 10 min ago), mode, round/turn, proposals, conclusion and recruitment policy (null pins mean as requested). recruitment_details=true adds current budgets.", inputSchema: { room: roomArg, full_topic: z.boolean().optional().describe("Include the whole room topic (default: its opening)."), recruitment_details: z.boolean().optional().describe("Include current recruitment budgets and your depth/live limits. Snapshot, not a reservation; request_agent checks admission. Null limits are unbounded. machine_live counts joined seats when available; other budgets count recorded recruits.") } },
+    guard("room_status", ({ room, full_topic, recruitment_details }) => {
+      const r = hub.getRoom(room);
+      const actor = telemetryActor(room, undefined);
+      return { ...statusView(hub.summary(r), full_topic === true), ...(spawner ? { recruitment: spawner.recruitmentStatus(room, actor ? r.participants.get(actor)?.name : undefined, recruitment_details === true) } : {}) };
+    }),
   );
 
   decisionTools.push(server.registerTool(
@@ -720,8 +720,8 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
           room: roomArg,
           brief: z.string().describe("What the new agent should do, with the context it needs and what 'done' looks like."),
           name: z.string().optional().describe("Display name for the newcomer (default: <agent>-recruit-N)."),
-          agent: z.enum(["claude", "codex", "openrouter"]).optional().describe("Which runner to spawn (default claude): 'claude' and 'codex' are the CLIs, 'openrouter' is any OpenRouter model (needs OPENROUTER_API_KEY)."),
-          model: z.string().optional().describe("Model override, e.g. 'sonnet', 'haiku', 'opus', a Codex model id, or an OpenRouter slug like 'deepseek/deepseek-v4.1-flash'."),
+          agent: z.enum(["claude", "codex", "openrouter"]).optional().describe("Requested runner; room_status.recruitment reports the hub's overriding policy and current budgets. Without a pin or request, defaults to claude."),
+          model: z.string().optional().describe("Requested model (Claude alias, Codex model id or OpenRouter slug); the hub's model pin, if set, takes precedence."),
           cwd: z.string().optional().describe("Directory the newcomer works in (default: the hub's default project dir)."),
           can_edit: z.boolean().optional().describe("Allow the newcomer to modify files (default false: investigate and report)."),
           new_room: z.string().optional().describe("Spawn a sub-team into this new room instead of yours; they report back with post_to_room."),

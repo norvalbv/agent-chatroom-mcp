@@ -19,6 +19,7 @@ import { claudeArgs } from "./claude-args.js";
 import { codexSeatCommand } from "./codex-seat.js";
 import { claudeSandbox, hubPortOf, sandboxFromEnv } from "./sandbox.js";
 import { parseClaudeCliOutput, type SeatUsageRollup } from "./result.js";
+import { recruitmentLimits, recruitmentStatus, RUN_PREFIX, runPrefix } from "./spawner/recruitment.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(here, "..");
@@ -118,9 +119,6 @@ export interface SpawnerOptions {
 
 const READ_TOOLS = ["mcp__chatroom__*", "Read", "Grep", "Glob", "Bash", "WebSearch", "WebFetch"];
 const WRITE_TOOLS = [...READ_TOOLS, "Edit", "Write", "MultiEdit", "NotebookEdit"];
-/** The run prefix a launcher run owns: swarm-<6 digits>[-<4 chars>]-… (same shape as Hub.runPrefix). */
-const RUN_PREFIX = /^(swarm-[0-9]{6}(?:-[a-z0-9]{4})?)-/;
-const runPrefix = (room: string) => RUN_PREFIX.exec(room)?.[1] ?? room;
 
 /** Which provider and model every recruit is launched as, whatever was asked for. Live, settable from the dashboard (POST /policy). */
 export interface RecruitPolicy {
@@ -166,6 +164,10 @@ export class Spawner {
     return this.agents.find((a) => a.name === name)?.depth ?? 0;
   }
 
+  recruitmentStatus(room: string, requester?: string, details = false) {
+    return recruitmentStatus(this, this.opts, this.hooks, room, requester, details);
+  }
+
   request(req: SpawnRequest): SpawnedAgent[] {
     // Item 2 (swarm-125438-jp20): a benchmark hub (CHATROOM_NO_RECRUIT=1) refuses every recruitment
     // outright, before any cap or policy check runs — a protocol-fixed seat count must stay fixed, and
@@ -177,14 +179,7 @@ export class Spawner {
       throw new HubError(msg);
     }
     const o = this.opts;
-    const maxDepth = o.maxDepth ?? Number(process.env.CHATROOM_MAX_RECRUIT_DEPTH ?? 2);
-    const maxPerRoom = o.maxPerRoom ?? 12;
-    const maxLive = o.maxLive ?? 24;
-    // per-requester: off by default. The ceilings that MacNet-style saturation argues for are the room, machine and run caps below;
-    // a per-agent quota only stopped a verifier recruiting the reviewers it needed (swarm-160711-etdp). CHATROOM_MAX_RECRUITS_PER_AGENT sets one.
-    const maxPerRequester = o.maxPerRequester ?? Number(process.env.CHATROOM_MAX_RECRUITS_PER_AGENT ?? Infinity);
-    const maxCumRoom = o.maxCumulativePerRoom ?? Number(process.env.CHATROOM_MAX_RECRUITS_PER_ROOM ?? 12);
-    const maxCumRun = o.maxCumulativePerRun ?? Number(process.env.CHATROOM_MAX_RECRUITS_PER_RUN ?? 40);
+    const { maxDepth, maxPerRoom, maxLive, maxPerRequester, maxCumRoom, maxCumRun } = recruitmentLimits(o);
     const refuse = (msg: string) => {
       this.hooks?.announce(req.room, `Cap hit: ${msg}`);
       throw new HubError(msg);

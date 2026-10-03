@@ -102,6 +102,7 @@ export const offlineScripts = [
   'steer-contract-regression.ts',
   'steer-hook-regression.ts',
   'room-status-size-regression.ts',
+  'recruitment-status.test.ts',
   'handoff-task-fixture.test.ts',
   'hold-until-actionable-regression.ts',
   'hub-notice-not-debt-regression.ts',

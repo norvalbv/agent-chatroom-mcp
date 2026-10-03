@@ -1,17 +1,14 @@
 {
-  "pricing": {
-    "input_per_token": 3.989e-06,
-    "output_per_token": 2.2404e-05
-  },
+  "cost_source": "provider receipts: last type=cost-state row per raw Claude trace (<arm>/cost-state.json)",
   "summary": {
     "base": {
       "n": 3,
       "oracle_ok": 0,
       "replacements_registered": 3,
       "replacement_refusals": 0,
-      "mean_cost_usd": 6.581,
+      "mean_cost_usd": 6.585,
       "mean_model_turns": 56.0,
-      "mean_cost_per_model_turn_usd": 0.1175,
+      "mean_cost_per_model_turn_usd": 0.1176,
       "mean_tool_calls": 66.67,
       "mean_seconds_to_conclusion": 128.6,
       "cold_start": [
@@ -55,7 +52,9 @@
       "oracle_ok": false,
       "seats": {
         "claude-opus-5-5-2": {
-          "cost_usd": 2.6511,
+          "cost_usd": 2.6511039999999997,
+          "input_tokens": 638321,
+          "output_tokens": 4681,
           "model_turns": 22,
           "tool_calls": 25,
           "hub_tool_calls": 24,
@@ -64,7 +63,9 @@
           ]
         },
         "claude-opus-5-5-1": {
-          "cost_usd": 0.3822,
+          "cost_usd": 0.38521999999999995,
+          "input_tokens": 90635,
+          "output_tokens": 924,
           "model_turns": 4,
           "tool_calls": 5,
           "hub_tool_calls": 4,
@@ -73,7 +74,9 @@
           ]
         },
         "claude-recruit-1": {
-          "cost_usd": 1.5146,
+          "cost_usd": 1.517606,
+          "input_tokens": 366300,
+          "output_tokens": 2385,
           "model_turns": 13,
           "tool_calls": 16,
           "hub_tool_calls": 16,
@@ -82,7 +85,9 @@
           ]
         },
         "verifier": {
-          "cost_usd": 3.014,
+          "cost_usd": 3.0131630000000005,
+          "input_tokens": 723998,
+          "output_tokens": 5621,
           "model_turns": 23,
           "tool_calls": 28,
           "hub_tool_calls": 28,
@@ -92,7 +97,7 @@
         }
       },
       "seat_count": 4,
-      "cost_usd": 7.562,
+      "cost_usd": 7.567,
       "model_turns": 62,
       "cost_per_model_turn_usd": 0.122,
       "tool_calls": 74,
@@ -120,7 +125,9 @@
       "oracle_ok": false,
       "seats": {
         "claude-opus-5-5-2": {
-          "cost_usd": 0.4837,
+          "cost_usd": 0.48655299999999996,
+          "input_tokens": 115050,
+          "output_tokens": 1104,
           "model_turns": 5,
           "tool_calls": 6,
           "hub_tool_calls": 4,
@@ -129,7 +136,9 @@
           ]
         },
         "verifier": {
-          "cost_usd": 2.2186,
+          "cost_usd": 2.216537,
+          "input_tokens": 526647,
+          "output_tokens": 5257,
           "model_turns": 18,
           "tool_calls": 23,
           "hub_tool_calls": 22,
@@ -138,7 +147,9 @@
           ]
         },
         "claude-opus-5-5-1": {
-          "cost_usd": 2.4692,
+          "cost_usd": 2.4692849999999997,
+          "input_tokens": 593883,
+          "output_tokens": 4474,
           "model_turns": 21,
           "tool_calls": 23,
           "hub_tool_calls": 22,
@@ -147,7 +158,9 @@
           ]
         },
         "claude-recruit-1": {
-          "cost_usd": 0.8785,
+          "cost_usd": 0.880529,
+          "input_tokens": 208739,
+          "output_tokens": 2047,
           "model_turns": 8,
           "tool_calls": 9,
           "hub_tool_calls": 9,
@@ -157,9 +170,9 @@
         }
       },
       "seat_count": 4,
-      "cost_usd": 6.05,
+      "cost_usd": 6.053,
       "model_turns": 52,
-      "cost_per_model_turn_usd": 0.1163,
+      "cost_per_model_turn_usd": 0.1164,
       "tool_calls": 61,
       "hub_tool_calls": 57,
       "cold_start": "cold"
@@ -185,7 +198,9 @@
       "oracle_ok": false,
       "seats": {
         "claude-opus-5-5-1": {
-          "cost_usd": 1.0377,
+          "cost_usd": 1.039628,
+          "input_tokens": 248883,
+          "output_tokens": 2004,
           "model_turns": 10,
           "tool_calls": 11,
           "hub_tool_calls": 6,
@@ -194,7 +209,9 @@
           ]
         },
         "claude-recruit-1": {
-          "cost_usd": 1.3736,
+          "cost_usd": 1.375767,
+          "input_tokens": 330175,
+          "output_tokens": 2522,
           "model_turns": 12,
           "tool_calls": 13,
           "hub_tool_calls": 13,
@@ -203,7 +220,9 @@
           ]
         },
         "verifier": {
-          "cost_usd": 1.6718,
+          "cost_usd": 1.669083,
+          "input_tokens": 392149,
+          "output_tokens": 4797,
           "model_turns": 14,
           "tool_calls": 20,
           "hub_tool_calls": 19,
@@ -212,7 +231,9 @@
           ]
         },
         "claude-opus-5-5-2": {
-          "cost_usd": 2.0492,
+          "cost_usd": 2.049844,
+          "input_tokens": 493122,
+          "output_tokens": 3666,
           "model_turns": 18,
           "tool_calls": 21,
           "hub_tool_calls": 20,
@@ -222,7 +243,7 @@
         }
       },
       "seat_count": 4,
-      "cost_usd": 6.132,
+      "cost_usd": 6.134,
       "model_turns": 54,
       "cost_per_model_turn_usd": 0.1136,
       "tool_calls": 65,
@@ -250,7 +271,9 @@
       "oracle_ok": true,
       "seats": {
         "claude-opus-5-5-2": {
-          "cost_usd": 3.8341,
+          "cost_usd": 3.8339920000000003,
+          "input_tokens": 927326,
+          "output_tokens": 6027,
           "model_turns": 29,
           "tool_calls": 30,
           "hub_tool_calls": 29,
@@ -259,7 +282,9 @@
           ]
         },
         "verifier": {
-          "cost_usd": 2.4609,
+          "cost_usd": 2.4602920000000004,
+          "input_tokens": 589507,
+          "output_tokens": 4879,
           "model_turns": 19,
           "tool_calls": 25,
           "hub_tool_calls": 24,
@@ -268,7 +293,9 @@
           ]
         },
         "claude-opus-5-5-1": {
-          "cost_usd": 1.1359,
+          "cost_usd": 1.1375809999999997,
+          "input_tokens": 271957,
+          "output_tokens": 2280,
           "model_turns": 11,
           "tool_calls": 11,
           "hub_tool_calls": 11,
@@ -278,9 +305,9 @@
         }
       },
       "seat_count": 3,
-      "cost_usd": 7.431,
+      "cost_usd": 7.432,
       "model_turns": 59,
-      "cost_per_model_turn_usd": 0.1259,
+      "cost_per_model_turn_usd": 0.126,
       "tool_calls": 66,
       "hub_tool_calls": 64,
       "cold_start": "cold"
@@ -306,7 +333,9 @@
       "oracle_ok": true,
       "seats": {
         "verifier": {
-          "cost_usd": 3.1095,
+          "cost_usd": 3.1085510000000003,
+          "input_tokens": 746951,
+          "output_tokens": 5799,
           "model_turns": 23,
           "tool_calls": 30,
           "hub_tool_calls": 29,
@@ -315,7 +344,9 @@
           ]
         },
         "claude-opus-5-5-2": {
-          "cost_usd": 3.3161,
+          "cost_usd": 3.3168650000000004,
+          "input_tokens": 802611,
+          "output_tokens": 5110,
           "model_turns": 26,
           "tool_calls": 27,
           "hub_tool_calls": 26,
@@ -324,7 +355,9 @@
           ]
         },
         "claude-opus-5-5-1": {
-          "cost_usd": 1.1223,
+          "cost_usd": 1.123821,
+          "input_tokens": 268180,
+          "output_tokens": 2344,
           "model_turns": 11,
           "tool_calls": 12,
           "hub_tool_calls": 12,
@@ -334,7 +367,7 @@
         }
       },
       "seat_count": 3,
-      "cost_usd": 7.548,
+      "cost_usd": 7.549,
       "model_turns": 60,
       "cost_per_model_turn_usd": 0.1258,
       "tool_calls": 69,
@@ -362,7 +395,9 @@
       "oracle_ok": true,
       "seats": {
         "claude-opus-5-5-1": {
-          "cost_usd": 3.0156,
+          "cost_usd": 3.0144340000000005,
+          "input_tokens": 725270,
+          "output_tokens": 5467,
           "model_turns": 25,
           "tool_calls": 27,
           "hub_tool_calls": 26,
@@ -371,7 +406,9 @@
           ]
         },
         "verifier": {
-          "cost_usd": 2.1946,
+          "cost_usd": 2.192246,
+          "input_tokens": 520694,
+          "output_tokens": 5246,
           "model_turns": 18,
           "tool_calls": 24,
           "hub_tool_calls": 23,
@@ -380,7 +417,9 @@
           ]
         },
         "claude-opus-5-5-2": {
-          "cost_usd": 0.9576,
+          "cost_usd": 0.95873,
+          "input_tokens": 227474,
+          "output_tokens": 2241,
           "model_turns": 9,
           "tool_calls": 10,
           "hub_tool_calls": 10,
@@ -390,7 +429,7 @@
         }
       },
       "seat_count": 3,
-      "cost_usd": 6.168,
+      "cost_usd": 6.165,
       "model_turns": 52,
       "cost_per_model_turn_usd": 0.1186,
       "tool_calls": 61,

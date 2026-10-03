@@ -55,22 +55,22 @@ The cold start was audited with `scripts/swarm-tool-usage.py --discover-claude`,
 
 Oracle: the suspended seat itself wrote `result/<its part>`, no successor was registered for it, and the room concluded.
 
-Scoring is `bench/liveness/collect.py docs/measurements/away-seat-liveness`, which writes `docs/measurements/away-seat-liveness-2026-10-03.json`. Cost is priced from provider token counts at $3.989/M input and $22.404/M output, a least-squares fit to the launchers' own cost sidecars (max residual $0.002). That way, seats without a sidecar (a recruit, a killed seat) are priced the same way.
+Scoring is `bench/liveness/collect.py docs/measurements/away-seat-liveness`, which writes `docs/measurements/away-seat-liveness-2026-10-03.json`. Cost is each seat's provider receipt: the last `type=cost-state` row of its raw Claude trace. `bench/liveness/extract-cost-state.py` copies it to `<arm>/cost-state.json` and checks it against the trace sha256 recorded in `usage.json`. Every seat has one, including the duplicate recruits and the stopped originals, and none reports `hasUnknownModelCost`.
 
 | arm | duplicate registered | refusals | result/part by | oracle | s to conclusion | cost $ | model turns | $/turn | tool calls | seats |
 |---|---|---|---|---|---|---|---|---|---|---|
-| base-1 | 1 | 0 | claude-recruit-1 | fail | 176.9 | 7.562 | 62 | 0.122 | 74 | 4 |
-| base-2 | 1 | 0 | claude-recruit-1 | fail | 79.0 | 6.050 | 52 | 0.116 | 61 | 4 |
-| base-3 | 1 | 0 | claude-recruit-1 | fail | 130.0 | 6.132 | 54 | 0.114 | 65 | 4 |
-| head-1 | 0 | 1 | suspended seat | pass | 280.6 | 7.431 | 59 | 0.126 | 66 | 3 |
-| head-2 | 0 | 2 | suspended seat | pass | 281.5 | 7.548 | 60 | 0.126 | 69 | 3 |
-| head-3 | 0 | 1 | suspended seat | pass | 275.4 | 6.168 | 52 | 0.119 | 61 | 3 |
+| base-1 | 1 | 0 | claude-recruit-1 | fail | 176.9 | 7.567 | 62 | 0.122 | 74 | 4 |
+| base-2 | 1 | 0 | claude-recruit-1 | fail | 79.0 | 6.053 | 52 | 0.116 | 61 | 4 |
+| base-3 | 1 | 0 | claude-recruit-1 | fail | 130.0 | 6.134 | 54 | 0.114 | 65 | 4 |
+| head-1 | 0 | 1 | suspended seat | pass | 280.6 | 7.432 | 59 | 0.126 | 66 | 3 |
+| head-2 | 0 | 2 | suspended seat | pass | 281.5 | 7.549 | 60 | 0.126 | 69 | 3 |
+| head-3 | 0 | 1 | suspended seat | pass | 275.4 | 6.165 | 52 | 0.119 | 61 | 3 |
 
 Means (n=3 per arm):
 
 | | oracle | duplicates | mean cost $ | mean model turns | $/turn | mean tool calls | mean s to conclusion |
 |---|---|---|---|---|---|---|---|
-| base | 0/3 | 3 | 6.581 | 56.0 | 0.1175 | 66.67 | 128.6 |
+| base | 0/3 | 3 | 6.585 | 56.0 | 0.1176 | 66.67 | 128.6 |
 | head | 3/3 | 0 | 7.049 | 57.0 | 0.1237 | 65.33 | 279.2 |
 
 What the seats did. The same model, the same brief and the same owner instruction produced opposite decisions, depending on what the harness showed:
@@ -81,7 +81,7 @@ What the seats did. The same model, the same brief and the same owner instructio
 ## Regressions and limits, plainly
 
 - **Slower and dearer on this task.**
-  - Head took 2.2× as long to conclude (279 s vs 129 s mean) and cost 7% more (+$0.47 mean).
+  - Head took 2.2× as long to conclude (279 s vs 129 s mean) and cost 7% more (+$0.46 mean).
   - It waits for the live seat; the suspension is 240 s by design. Base finishes sooner by duplicating, because the task is one board write.
   - The base figures undercount: each resumed original was stopped by PID after its room had concluded, and its unfinished rejoin turns are missing.
   - On real claimed work (a half-built branch, a running benchmark), a duplicate redoes or collides with that work. This bench does not measure that cost.

@@ -1,0 +1,20 @@
+{
+  "verifier": {
+    "source": "2fd8543c-34c9-4e4d-9f60-7604be5a1ecd.jsonl",
+    "trace_sha256": "d6ac0d4c12f53bc75d7c599b3c95e4e42f4fbb711a5b2f95078c23959874c9ea",
+    "totalCostUSD": 3.1085510000000003,
+    "hasUnknownModelCost": false
+  },
+  "claude-opus-5-5-2": {
+    "source": "3ef875df-3fd5-423e-b9eb-cec4f3eefd68.jsonl",
+    "trace_sha256": "5f156870fce8a49d38bf480c141f116a3485226dfcec8a7bf97ddb310766cb8e",
+    "totalCostUSD": 3.3168650000000004,
+    "hasUnknownModelCost": false
+  },
+  "claude-opus-5-5-1": {
+    "source": "e7bc6649-d838-4698-a943-cc97c68d927d.jsonl",
+    "trace_sha256": "1fe7e91c90d813f2289edabaa43f2c2aa062d5b02a53f583ff0d2ca428055a82",
+    "totalCostUSD": 1.123821,
+    "hasUnknownModelCost": false
+  }
+}

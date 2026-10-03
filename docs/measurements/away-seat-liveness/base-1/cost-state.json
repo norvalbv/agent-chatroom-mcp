@@ -1,0 +1,26 @@
+{
+  "claude-opus-5-5-2": {
+    "source": "4d6e4c90-8c68-413d-8601-f75eaa437fcd.jsonl",
+    "trace_sha256": "ab7376ff2c6a7253090dd010a1c5abbe62570e670bd38b818e75c28ff6e9e59a",
+    "totalCostUSD": 2.6511039999999997,
+    "hasUnknownModelCost": false
+  },
+  "claude-opus-5-5-1": {
+    "source": "a12248c3-e69a-46b7-af19-d6b45ed9959d.jsonl",
+    "trace_sha256": "5bdf67493fbb29f9b7386fcecd74652409c1921dbd0df77ad371053b4ec6d0dd",
+    "totalCostUSD": 0.38521999999999995,
+    "hasUnknownModelCost": false
+  },
+  "claude-recruit-1": {
+    "source": "ac22587c-1610-4985-b7f4-0109f59ff71d.jsonl",
+    "trace_sha256": "29224000f05dc52acacb800b0ecd9698f52658df5d870f54b79995a55fcf4b56",
+    "totalCostUSD": 1.517606,
+    "hasUnknownModelCost": false
+  },
+  "verifier": {
+    "source": "bf93657a-837e-4381-a542-1ae37e21f538.jsonl",
+    "trace_sha256": "82c503d2598e4254ca0b595f7b08eb6e9a9d66c8f6724ea10af4bf6aa42f4aba",
+    "totalCostUSD": 3.0131630000000005,
+    "hasUnknownModelCost": false
+  }
+}

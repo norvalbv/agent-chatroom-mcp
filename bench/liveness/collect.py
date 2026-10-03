@@ -6,9 +6,9 @@ The artifact dir holds one subdir per arm (base-N, head-N) with: events (arm.sh 
 room log), usage.json (scripts/swarm-tool-usage.py --discover-claude output for that run, duplicate seats included).
 
 Oracle per arm: the seat that was suspended across the restart is the one that wrote result/<its part>, no successor was
-registered for it, and the room concluded. Cost is priced from provider token counts at the per-token rates fitted to
-the launcher's own *.usage.json cost fields (printed in "pricing"), so seats without a sidecar (a killed seat, a recruit)
-are priced the same way.
+registered for it, and the room concluded. Cost is each seat's provider receipt, the last type=cost-state row of its raw
+trace (<arm>/cost-state.json, written by extract-cost-state.py and checked against the trace sha256), so recruits and
+stopped seats are billed the same way as launched ones.
 """
 import json
 import re
@@ -16,7 +16,6 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
-PRICE_IN, PRICE_OUT = 3.989e-6, 22.404e-6  # USD per input / output token, least-squares fit to 6 sidecars (max residual $0.002)
 
 
 def ts(s):
@@ -48,10 +47,11 @@ def arm(d: Path):
     concluded = next((m["ts"] for m in msgs if m["from"]["name"] == "system" and m["content"].startswith("CONSENSUS REACHED")), None)
     rejoined = next((m["ts"] for m in msgs if m["from"]["name"] == "system" and m["content"] == f"{stopped} rejoined the room."), None)
     usage = json.loads((d / "usage.json").read_text())
+    receipts = json.loads((d / "cost-state.json").read_text())
     seats = {}
     for name, s in usage["seats"].items():
         u = s.get("usage") or {}
-        seats[name] = {"cost_usd": round(u.get("input_tokens", 0) * PRICE_IN + u.get("output_tokens", 0) * PRICE_OUT, 4),
+        seats[name] = {"cost_usd": receipts[name]["totalCostUSD"], "input_tokens": u.get("input_tokens"), "output_tokens": u.get("output_tokens"),
                        "model_turns": sum(a["provider_requests"] for a in s.get("request_cache", [])),
                        "tool_calls": s.get("tool_calls", 0), "hub_tool_calls": s.get("hub_tool_calls", 0),
                        "first_request_cache_read": [a["first_request"]["cache_read_input_tokens"] for a in s.get("request_cache", [])]}
@@ -87,7 +87,7 @@ def main():
                          "mean_tool_calls": round(sum(a["tool_calls"] for a in rows) / n, 2),
                          "mean_seconds_to_conclusion": round(sum(a["seconds_to_conclusion"] or 0 for a in rows) / n, 1),
                          "cold_start": sorted({a["cold_start"] for a in rows})}
-    print(json.dumps({"pricing": {"input_per_token": PRICE_IN, "output_per_token": PRICE_OUT}, "summary": summary, "arms": arms}, indent=2))
+    print(json.dumps({"cost_source": "provider receipts: last type=cost-state row per raw Claude trace (<arm>/cost-state.json)", "summary": summary, "arms": arms}, indent=2))
 
 
 if __name__ == "__main__":

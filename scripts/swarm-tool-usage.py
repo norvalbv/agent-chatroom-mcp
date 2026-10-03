@@ -3,6 +3,8 @@
 
 Usage: scripts/swarm-tool-usage.py --run-dir swarms/<run> [--transcript seat.jsonl]
 Missing traces/usage remain explicit. Text bytes are not wire bytes or token counts.
+--require-cold-start fails unless every supplied seat has a complete Claude start
+with explicit zero cache reads on its first request. It does not disable caching.
 """
 import argparse
 import collections
@@ -65,12 +67,33 @@ def normalized_tool(name):
     return name.rsplit("__", 1)[-1] if name.startswith("mcp__chatroom__") else name
 
 
+def cache_audit(requests, initial_context):
+    fields = ("input_tokens", "cache_read_input_tokens", "cache_creation_input_tokens", "output_tokens")
+    first_id = next(iter(requests), None)
+    first = requests.get(first_id, {})
+    read = first.get("cache_read_input_tokens")
+    valid_read = first_id is not None and type(read) is int and read >= 0
+    status = "warm" if valid_read and read > 0 else "cold" if valid_read and initial_context else "unknown"
+    later = list(requests.values())[1:]
+    return {"status": status, "initial_context_observed": initial_context,
+            "provider_requests": len(requests), "first_request_id": first_id,
+            "first_request": {field: first.get(field) for field in fields},
+            "later_requests": {field: sum(u[field] for u in later)
+                               if all(type(u.get(field)) is int and u[field] >= 0 for u in later) else None
+                               for field in fields}}
+
+
 def parse_trace(path):
     calls, results, usage = {}, {}, {}
+    requests, initial_context = {}, False
     result_times = {}
     seat, provider, previous_turn = None, None, 0
     for row in rows(path):
         kind = row.get("type")
+        if not requests and ((kind == "system" and row.get("subtype") == "init") or
+                             (kind == "user" and "parentUuid" in row and row["parentUuid"] is None and
+                              isinstance((row.get("message") or {}).get("content"), str))):
+            initial_context = True
         if kind == "turn.started":
             previous_turn += 1
         item = row.get("item", {})
@@ -96,9 +119,11 @@ def parse_trace(path):
             if hub and name == "join_room":
                 seat = args.get("name", seat)
         message = row.get("message") or {}
-        if kind == "assistant" and message.get("id") and message.get("usage"):
+        if kind == "assistant":
             provider = "claude"
-            usage[message["id"]] = message["usage"]
+            requests.setdefault(message.get("id"), {}).update(message.get("usage") or {})
+            if message.get("id") and message.get("usage"):
+                usage[message["id"]] = message["usage"]
         content = message.get("content")
         if not isinstance(content, list):
             continue
@@ -131,7 +156,8 @@ def parse_trace(path):
         token_usage = {field: sum(u[field] for u in usage.values() if field in u)
                        for field in fields if any(field in u for u in usage.values())}
         token_usage["assistant_messages"] = len(usage)
-    return seat or path.name.replace(".events.jsonl", "").replace(".jsonl", ""), provider, observations, token_usage
+    return (seat or path.name.replace(".events.jsonl", "").replace(".jsonl", ""), provider,
+            observations, token_usage, cache_audit(requests, initial_context))
 
 
 def summarize_calls(calls):
@@ -226,13 +252,14 @@ def discover_claude(projects, room):
             break
 
 
-def analyze(run_dir, transcripts=()):
+def analyze(run_dir, transcripts=(), expected_seats=None):
     seats = {}
     paths = dict.fromkeys(path.resolve() for path in sorted(run_dir.glob("*.events.jsonl")) + list(transcripts))
     for path in paths:
-        seat, provider, calls, usage = parse_trace(path)
+        seat, provider, calls, usage, cache = parse_trace(path)
         entry = seats.setdefault(seat, {"provider": provider, "trace_sources": [], "_calls": [], "usage": None})
         entry["trace_sources"].append(path.name)
+        entry.setdefault("request_cache", []).append({"source": path.name, **cache})
         entry.setdefault("trace_sha256", {})[path.name] = hashlib.sha256(path.read_bytes()).hexdigest()
         entry["_calls"].extend(calls)
         if usage is not None:
@@ -265,12 +292,22 @@ def analyze(run_dir, transcripts=()):
                 totals["hub_tool_calls"] += stats["calls"]
                 totals["hub_results"] += stats["results"]
                 totals["hub_text_bytes"] += stats["text_bytes"]
-    return {"run": run_dir.name, "method": {
+    cold_seats = {}
+    for name, entry in seats.items():
+        statuses = [audit["status"] for audit in entry.get("request_cache", [])]
+        cold_seats[name] = "warm" if "warm" in statuses else "cold" if statuses and all(s == "cold" for s in statuses) else "unknown"
+    cold_status = "warm" if "warm" in cold_seats.values() else "cold" if cold_seats and all(s == "cold" for s in cold_seats.values()) else "unknown"
+    coverage_complete = len(seats) == expected_seats if expected_seats is not None else None
+    if coverage_complete is False and cold_status == "cold":
+        cold_status = "unknown"
+    return {"run": run_dir.name, "cold_start": {"status": cold_status, "seats": cold_seats,
+            "expected_seats": expected_seats, "coverage_complete": coverage_complete}, "method": {
         "calls": "Counts logged MCP, shell, search, file-change, collaboration and plan-update tool events; hub_tool_calls isolates chatroom MCP calls",
         "bytes": "UTF-8 bytes of returned text blocks joined by newline; excludes JSON transport envelope and non-text blocks",
         "tokens": "Provider-reported usage, separate from text bytes; missing fields are unknown, not zero",
         "candidates": "Observed patterns, not a finding that every matched call was unnecessary",
         "coverage": "Denominator is seats found in supplied artifacts, not a room roster. Sidecars supply usage without traces and supersede transcript usage.",
+        "cold_start": "Requires first Claude request cache_read_input_tokens=0 and preceding CLI init or root user event in each supplied trace. Missing/non-Claude traces are unknown. No flag or aggregate usage proves a cold start; later caching remains allowed. The artifact coverage denominator must match the benchmark roster separately.",
     }, "seats": seats, "observed_totals": dict(totals), "tools": aggregate_tools,
         "redundancy_candidates": dict(aggregate_candidates), "coverage": {
             "seats": len(seats), "seats_with_trace": sum(s["trace_observed"] for s in seats.values()),
@@ -282,15 +319,22 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--run-dir", type=Path, required=True)
     parser.add_argument("--transcript", type=Path, action="append", default=[])
+    parser.add_argument("--require-cold-start", "--require-cold", action="store_true", help="Exit 1 if any supplied seat's first request is warm or unknown")
+    parser.add_argument("--expected-seats", type=int, help="Require this artifact seat count for a cold-start verdict")
     parser.add_argument("--discover-claude", action="store_true", help="Find this run's initial Claude prompts in configured projects")
     parser.add_argument("--claude-projects", type=Path, default=Path(os.environ.get("CLAUDE_CONFIG_DIR", Path.home() / ".claude")) / "projects")
     args = parser.parse_args()
     if not args.run_dir.is_dir():
         parser.error("--run-dir must be an existing run directory")
+    if args.expected_seats is not None and args.expected_seats < 1:
+        parser.error("--expected-seats must be positive")
     transcripts = args.transcript
     if args.discover_claude:
         transcripts += list(discover_claude(args.claude_projects, args.run_dir.name + "-room"))
-    print(json.dumps(analyze(args.run_dir, transcripts), indent=2))
+    report = analyze(args.run_dir, transcripts, args.expected_seats)
+    print(json.dumps(report, indent=2))
+    if args.require_cold_start and report["cold_start"]["status"] != "cold":
+        raise SystemExit(1)
 
 
 if __name__ == "__main__":

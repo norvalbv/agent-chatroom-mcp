@@ -6,6 +6,7 @@ from pathlib import Path
 import tempfile
 import unittest
 import sys
+import subprocess
 
 sys.dont_write_bytecode = True
 spec = importlib.util.spec_from_file_location("usage", Path(__file__).with_name("swarm-tool-usage.py"))
@@ -14,6 +15,67 @@ spec.loader.exec_module(usage)
 
 
 class UsageTests(unittest.TestCase):
+    def test_cold_start_uses_first_request_not_aggregate_or_final_block(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            events = [{"type": "system", "subtype": "init"}]
+            for name, read in (("first", 0), ("later", 200), ("first", 0)):
+                events.append({"type": "assistant", "message": {"id": name, "usage": {
+                    "input_tokens": 10, "cache_read_input_tokens": read,
+                    "cache_creation_input_tokens": 50, "output_tokens": 7}, "content": []}})
+            (root / "seat.events.jsonl").write_text("\n".join(map(json.dumps, events)))
+            report = usage.analyze(root)
+            audit = report["seats"]["seat"]["request_cache"][0]
+            self.assertEqual(audit["status"], "cold")
+            self.assertEqual(audit["provider_requests"], 2)
+            self.assertEqual(audit["first_request"]["cache_read_input_tokens"], 0)
+            self.assertEqual(audit["later_requests"]["cache_read_input_tokens"], 200)
+            self.assertEqual(report["cold_start"]["status"], "cold")
+            result = subprocess.run([sys.executable, str(Path(usage.__file__)), "--run-dir", str(root),
+                                     "--require-cold", "--expected-seats", "1"], capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0)
+            self.assertTrue(json.loads(result.stdout)["cold_start"]["coverage_complete"])
+            self.assertEqual(usage.analyze(root, expected_seats=2)["cold_start"]["status"], "unknown")
+            (root / "missing.usage.json").write_text(json.dumps({"input_tokens": 20, "cache_read_input_tokens": 0}))
+            self.assertEqual(usage.analyze(root)["cold_start"]["status"], "unknown")
+
+    def test_cold_start_rejects_warm_missing_and_incomplete_evidence(self):
+        for read, initial, expected in ((1, True, "warm"), (None, True, "unknown"),
+                                        (0, False, "unknown"), (True, True, "unknown")):
+            with self.subTest(read=read, initial=initial), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                fields = {"input_tokens": 100}
+                if read is not None:
+                    fields["cache_read_input_tokens"] = read
+                events = [{"type": "system", "subtype": "init"}] if initial else []
+                events += [{"type": "assistant", "message": {"id": "first", "usage": fields}}]
+                (root / "seat.events.jsonl").write_text("\n".join(map(json.dumps, events)))
+                result = subprocess.run([sys.executable, str(Path(usage.__file__)), "--run-dir", str(root),
+                                         "--require-cold-start"], capture_output=True, text=True)
+                self.assertEqual(result.returncode, 1)
+                self.assertEqual(json.loads(result.stdout)["cold_start"]["status"], expected)
+
+    def test_sidecar_alone_and_empty_run_cannot_prove_cold_start(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.assertEqual(usage.analyze(root)["cold_start"]["status"], "unknown")
+            (root / "seat.usage.json").write_text(json.dumps({"input_tokens": 100, "cache_read_input_tokens": 0}))
+            self.assertEqual(usage.analyze(root)["cold_start"]["status"], "unknown")
+
+    def test_missing_first_usage_is_not_replaced_by_later_cold_request(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            events = [{"type": "user", "parentUuid": None, "message": {"content": "brief"}},
+                      {"type": "assistant", "message": {"id": "first", "content": []}},
+                      {"type": "assistant", "message": {"id": "later", "usage": {"cache_read_input_tokens": 0}}}]
+            (root / "seat.events.jsonl").write_text("\n".join(map(json.dumps, events)))
+            report = usage.analyze(root)
+            self.assertEqual(report["cold_start"]["status"], "unknown")
+            self.assertEqual(report["seats"]["seat"]["request_cache"][0]["first_request_id"], "first")
+            del events[1]["message"]["id"]
+            (root / "seat.events.jsonl").write_text("\n".join(map(json.dumps, events)))
+            self.assertEqual(usage.analyze(root)["cold_start"]["status"], "unknown")
+
     def test_codex_non_mcp_tools_count_even_when_result_text_is_not_logged(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "seat.events.jsonl"

@@ -1,0 +1,953 @@
+{
+  "method": {
+    "parser": "scripts/swarm-tool-usage.py",
+    "parser_sha256": "7da40245ddad9162a2afc2ef63af6da9bce848bd8e8cbde9efcace76a48e6451",
+    "coverage": "Available Codex event files and explicitly discovered Claude transcripts in six supplied runs. Trace calls may include subrooms; never add them to room ledger totals.",
+    "features": "Call argument presence only. Omitted follow retains earlier subscription, so explicit follow count is not number of followed waits. quiet and hold count explicit true only.",
+    "list_rooms": "Observed zero means no invocation in this trace slice; it is not global zero use. Byte size is null when no result exists.",
+    "privacy": "Names, source filenames/hashes and aggregate flags only; no tool inputs or result bodies retained."
+  },
+  "runs": [
+    {
+      "run": "swarm-130854-nmek",
+      "trace_count": 16,
+      "hub_calls": 1107,
+      "seats": [
+        {
+          "seat": "verifier-c",
+          "provider": "claude",
+          "source": "23c453e7-0567-4fb1-8836-b8da93e5167e.jsonl",
+          "source_sha256": "c65ca64b720e7c5b5abf5b13433ebc67eba5b860f8371ba7bc576480e1ced964",
+          "hub_calls": 112,
+          "tools": {
+            "board_get": 5,
+            "board_set": 4,
+            "challenge": 1,
+            "join_room": 1,
+            "leave_room": 1,
+            "pass": 11,
+            "read_messages": 10,
+            "room_status": 1,
+            "send_message": 15,
+            "vote": 1,
+            "wait_for_messages": 62
+          },
+          "explicit_hold_true": 62,
+          "explicit_follow": 0,
+          "explicit_quiet_true": 1,
+          "list_rooms_result_bytes": null
+        },
+        {
+          "seat": "verifier",
+          "provider": "claude",
+          "source": "704b9f2e-e55e-4e21-9e5b-f9d6fd5d2c37.jsonl",
+          "source_sha256": "bf9c410a538d235ac9affef418e8950aef2e7e92a3bdb18f7a3eb583838bae41",
+          "hub_calls": 79,
+          "tools": {
+            "board_get": 15,
+            "board_set": 1,
+            "join_room": 1,
+            "pass": 3,
+            "read_messages": 1,
+            "send_message": 18,
+            "submit_opening": 1,
+            "wait_for_messages": 39
+          },
+          "explicit_hold_true": 39,
+          "explicit_follow": 0,
+          "explicit_quiet_true": 0,
+          "list_rooms_result_bytes": null
+        },
+        {
+          "seat": "verifier-b",
+          "provider": "claude",
+          "source": "e7b9d205-3b89-42e1-90d5-2e93dd0b1171.jsonl",
+          "source_sha256": "9fe2e088af20063a7689b8e9c0adda3fe170950601d0e9322e631f66f2702fbd",
+          "hub_calls": 104,
+          "tools": {
+            "board_get": 16,
+            "board_set": 4,
+            "join_room": 1,
+            "kick_vote": 6,
+            "pass": 5,
+            "read_messages": 3,
+            "send_message": 28,
+            "wait_for_messages": 41
+          },
+          "explicit_hold_true": 41,
+          "explicit_follow": 0,
+          "explicit_quiet_true": 1,
+          "list_rooms_result_bytes": null
+        },
+        {
+          "seat": "astra-4b",
+          "provider": "claude",
+          "source": "c91b8536-e637-4822-ad3f-10599da1e644.jsonl",
+          "source_sha256": "37800b2266f4f51c66ad406f89b76ec67c458a3c2aea7b8dcf26dd8865a4f845",
+          "hub_calls": 88,
+          "tools": {
+            "board_get": 23,
+            "board_set": 4,
+            "join_room": 1,
+            "kick_vote": 6,
+            "pass": 8,
+            "read_messages": 4,
+            "send_message": 15,
+            "wait_for_messages": 27
+          },
+          "explicit_hold_true": 27,
+          "explicit_follow": 0,
+          "explicit_quiet_true": 1,
+          "list_rooms_result_bytes": null
+        },
+        {
+          "seat": "astra-5b",
+          "provider": "claude",
+          "source": "8534c45c-41de-456f-8429-26a37178d393.jsonl",
+          "source_sha256": "073994690612ef537105fb5a4dce68af162d0de059e24e4f9e800c539af88d31",
+          "hub_calls": 64,
+          "tools": {
+            "board_get": 9,
+            "board_set": 2,
+            "join_room": 1,
+            "pass": 3,
+            "send_message": 16,
+            "wait_for_messages": 33
+          },
+          "explicit_hold_true": 33,
+          "explicit_follow": 0,
+          "explicit_quiet_true": 0,
+          "list_rooms_result_bytes": null
+        },
+        {
+          "seat": "claude-opus-5-5-1",
+          "provider": "claude",
+          "source": "865637e6-3f70-409d-a47f-7f5970920274.jsonl",
+          "source_sha256": "4be2d08ba8415ce2e6bba8219cde8d3ac4b931f8ff861b3d8b63e2e48e944ec0",
+          "hub_calls": 95,
+          "tools": {
+            "board_get": 10,
+            "board_set": 4,
+            "join_room": 1,
+            "pass": 8,
+            "send_message": 29,
+            "submit_opening": 4,
+            "wait_for_messages": 39
+          },
+          "explicit_hold_true": 37,
+          "explicit_follow": 0,
+          "explicit_quiet_true": 1,
+          "list_rooms_result_bytes": null
+        },
+        {
+          "seat": "opus-1b",
+          "provider": "claude",
+          "source": "55c5f252-3461-4efe-a40d-fa27412cf978.jsonl",
+          "source_sha256": "8aaaec637b51d6993afa05dd038cd72f160efe92cf1764989b035061f8c0152f",
+          "hub_calls": 53,
+          "tools": {
+            "board_get": 6,
+            "board_set": 5,
+            "join_room": 1,
+            "kick_vote": 6,
+            "pass": 3,
+            "read_messages": 3,
+            "send_message": 14,
+            "wait_for_messages": 15
+          },
+          "explicit_hold_true": 14,
+          "explicit_follow": 0,
+          "explicit_quiet_true": 1,
+          "list_rooms_result_bytes": null
+        },
+        {
+          "seat": "opus-1c",
+          "provider": "claude",
+          "source": "d9545d54-b74a-47e4-b03b-9c831075dee2.jsonl",
+          "source_sha256": "c4a1a2a045baa9319c234b44683465c14496f1adc481a25caa56865efb2c7552",
+          "hub_calls": 34,
+          "tools": {
+            "board_get": 4,
+            "board_set": 3,
+            "join_room": 1,
+            "leave_room": 1,
+            "pass": 2,
+            "read_messages": 5,
+            "send_message": 10,
+            "wait_for_messages": 8
+          },
+          "explicit_hold_true": 8,
+          "explicit_follow": 0,
+          "explicit_quiet_true": 0,
+          "list_rooms_result_bytes": null
+        },
+        {
+          "seat": "claude-opus-5-5-2",
+          "provider": "claude",
+          "source": "7b2292e6-34e4-466c-a4b8-dfe3258e67e2.jsonl",
+          "source_sha256": "438211b7e675d8afa62c51aa5c7c138dea4d8b59b3d6a74d312941286a7b4e76",
+          "hub_calls": 23,
+          "tools": {
+            "board_get": 5,
+            "board_set": 3,
+            "join_room": 1,
+            "pass": 1,
+            "read_messages": 2,
+            "send_message": 3,
+            "submit_opening": 2,
+            "wait_for_messages": 6
+          },
+          "explicit_hold_true": 1,
+          "explicit_follow": 0,
+          "explicit_quiet_true": 0,
+          "list_rooms_result_bytes": null
+        },
+        {
+          "seat": "opus-2b",
+          "provider": "claude",
+          "source": "c088a5d0-1356-45d2-aba4-6cbfb3bc5ef9.jsonl",
+          "source_sha256": "0f0f3e6ff1ee8a8d48fa9bdbc5cb06a9056b1b1f0830830efb263cbe62f2fc1b",
+          "hub_calls": 48,
+          "tools": {
+            "board_get": 9,
+            "board_set": 3,
+            "join_room": 1,
+            "kick_vote": 6,
+            "leave_room": 1,
+            "pass": 1,
+            "read_messages": 3,
+            "send_message": 9,
+            "wait_for_messages": 15
+          },
+          "explicit_hold_true": 14,
+          "explicit_follow": 0,
+          "explicit_quiet_true": 0,
+          "list_rooms_result_bytes": null
+        },
+        {
+          "seat": "opus-2c",
+          "provider": "claude",
+          "source": "cb1697ef-1615-4c18-98e8-57cf5fabf764.jsonl",
+          "source_sha256": "ffc38a48d717e4791041200ad79fdc457139941f2ed01d64a091d17f090adb7a",
+          "hub_calls": 24,
+          "tools": {
+            "amend": 1,
+            "board_get": 2,
+            "board_set": 2,
+            "join_room": 1,
+            "leave_room": 2,
+            "pass": 1,
+            "read_messages": 9,
+            "send_message": 4,
+            "wait_for_messages": 2
+          },
+          "explicit_hold_true": 2,
+          "explicit_follow": 0,
+          "explicit_quiet_true": 0,
+          "list_rooms_result_bytes": null
+        },
+        {
+          "seat": "claude-opus-5-5-3",
+          "provider": "claude",
+          "source": "16a3b387-eda5-4839-b4e4-f683aa4e7782.jsonl",
+          "source_sha256": "cdaa04a6a6838967cc3b2f40532503a7e1028f76629b4005339fe1b7fcfec75f",
+          "hub_calls": 97,
+          "tools": {
+            "board_get": 11,
+            "board_set": 5,
+            "join_room": 1,
+            "pass": 11,
+            "read_messages": 3,
+            "send_message": 21,
+            "submit_opening": 2,
+            "wait_for_messages": 43
+          },
+          "explicit_hold_true": 43,
+          "explicit_follow": 0,
+          "explicit_quiet_true": 1,
+          "list_rooms_result_bytes": null
+        },
+        {
+          "seat": "opus-3b",
+          "provider": "claude",
+          "source": "aa94d1ac-3638-4dab-a98a-e9d34a04d1a8.jsonl",
+          "source_sha256": "fb4ab897c00171fb552297329adca2fcf4afabbf48946a9de0405ad0f954fc7f",
+          "hub_calls": 48,
+          "tools": {
+            "board_get": 10,
+            "board_set": 3,
+            "join_room": 1,
+            "pass": 2,
+            "send_message": 19,
+            "wait_for_messages": 13
+          },
+          "explicit_hold_true": 13,
+          "explicit_follow": 0,
+          "explicit_quiet_true": 0,
+          "list_rooms_result_bytes": null
+        },
+        {
+          "seat": "opus-3c",
+          "provider": "claude",
+          "source": "f6fe42c9-c3be-49bd-bc97-8f2d25fe77c2.jsonl",
+          "source_sha256": "6e983b7ae301ae19fc3bdd605a1b0a715c7d318617222e223776344128579b61",
+          "hub_calls": 32,
+          "tools": {
+            "amend": 1,
+            "board_get": 3,
+            "board_set": 2,
+            "join_room": 1,
+            "leave_room": 1,
+            "pass": 2,
+            "read_messages": 7,
+            "send_message": 9,
+            "wait_for_messages": 6
+          },
+          "explicit_hold_true": 6,
+          "explicit_follow": 0,
+          "explicit_quiet_true": 0,
+          "list_rooms_result_bytes": null
+        },
+        {
+          "seat": "6-astra-4",
+          "provider": "codex",
+          "source": "6-astra-4.events.jsonl",
+          "source_sha256": "d44ef1afe9fffd99d500cc6e9c05f55a068327c079eff940e3976196dfc129e8",
+          "hub_calls": 102,
+          "tools": {
+            "board_get": 14,
+            "board_set": 11,
+            "join_room": 1,
+            "read_messages": 5,
+            "send_message": 49,
+            "submit_opening": 1,
+            "wait_for_messages": 21
+          },
+          "explicit_hold_true": 21,
+          "explicit_follow": 0,
+          "explicit_quiet_true": 18,
+          "list_rooms_result_bytes": null
+        },
+        {
+          "seat": "6-astra-5",
+          "provider": "codex",
+          "source": "6-astra-5.events.jsonl",
+          "source_sha256": "5a8025b90c363c606794f20a6984a685378d7226d58f1111d0d630b929dba93e",
+          "hub_calls": 104,
+          "tools": {
+            "board_get": 18,
+            "board_set": 8,
+            "join_room": 1,
+            "pass": 1,
+            "send_message": 42,
+            "submit_opening": 1,
+            "wait_for_messages": 33
+          },
+          "explicit_hold_true": 33,
+          "explicit_follow": 0,
+          "explicit_quiet_true": 6,
+          "list_rooms_result_bytes": null
+        }
+      ]
+    },
+    {
+      "run": "swarm-214828-v2fj",
+      "trace_count": 3,
+      "hub_calls": 152,
+      "seats": [
+        {
+          "seat": "6-astra-3",
+          "provider": "codex",
+          "source": "6-astra-3.events.jsonl",
+          "source_sha256": "b4744634122e5f2d8bd9704f1006695716e5c2c1fc0a102e28d95ae39a6d6568",
+          "hub_calls": 50,
+          "tools": {
+            "amend": 2,
+            "board_get": 9,
+            "board_set": 4,
+            "join_room": 1,
+            "leave_room": 1,
+            "send_message": 17,
+            "submit_opening": 1,
+            "vote": 3,
+            "wait_for_messages": 12
+          },
+          "explicit_hold_true": 4,
+          "explicit_follow": 0,
+          "explicit_quiet_true": 5,
+          "list_rooms_result_bytes": null
+        },
+        {
+          "seat": "6-astra-4",
+          "provider": "codex",
+          "source": "6-astra-4.events.jsonl",
+          "source_sha256": "d38726a055408382971d553c06d51ed79c5b5c7396a5a89d82ebdb8d33233c6e",
+          "hub_calls": 53,
+          "tools": {
+            "board_get": 10,
+            "board_set": 5,
+            "join_room": 1,
+            "leave_room": 1,
+            "pass": 3,
+            "read_messages": 1,
+            "send_message": 22,
+            "submit_opening": 1,
+            "vote": 2,
+            "wait_for_messages": 7
+          },
+          "explicit_hold_true": 0,
+          "explicit_follow": 0,
+          "explicit_quiet_true": 2,
+          "list_rooms_result_bytes": null
+        },
+        {
+          "seat": "6-astra-5",
+          "provider": "codex",
+          "source": "6-astra-5.events.jsonl",
+          "source_sha256": "221bfde12472448597005a264f32330ce7effb421ffc851d592cdf28f37e9320",
+          "hub_calls": 49,
+          "tools": {
+            "board_get": 8,
+            "board_set": 6,
+            "challenge": 2,
+            "join_room": 1,
+            "leave_room": 1,
+            "read_messages": 1,
+            "send_message": 19,
+            "submit_opening": 1,
+            "vote": 2,
+            "wait_for_messages": 8
+          },
+          "explicit_hold_true": 6,
+          "explicit_follow": 1,
+          "explicit_quiet_true": 2,
+          "list_rooms_result_bytes": null
+        }
+      ]
+    },
+    {
+      "run": "swarm-205033-6bp8",
+      "trace_count": 2,
+      "hub_calls": 381,
+      "seats": [
+        {
+          "seat": "6-astra-3",
+          "provider": "codex",
+          "source": "6-astra-3.events.jsonl",
+          "source_sha256": "8322874e8737d6db4b615f992cafeb7b0ee3747ba4fcb34a44bfe069f18379b7",
+          "hub_calls": 201,
+          "tools": {
+            "board_get": 12,
+            "board_set": 17,
+            "join_room": 1,
+            "pass": 10,
+            "read_messages": 17,
+            "room_status": 4,
+            "send_message": 59,
+            "submit_opening": 1,
+            "vote": 1,
+            "wait_for_messages": 79
+          },
+          "explicit_hold_true": 9,
+          "explicit_follow": 0,
+          "explicit_quiet_true": 13,
+          "list_rooms_result_bytes": null
+        },
+        {
+          "seat": "6-astra-4",
+          "provider": "codex",
+          "source": "6-astra-4.events.jsonl",
+          "source_sha256": "1a6e978bdaf8acfc3a9126e64f20c350dc980f5ccb385d783ee7f88869273dcf",
+          "hub_calls": 180,
+          "tools": {
+            "board_get": 12,
+            "board_set": 13,
+            "challenge": 2,
+            "join_room": 1,
+            "room_status": 3,
+            "send_message": 83,
+            "submit_opening": 1,
+            "vote": 3,
+            "wait_for_messages": 62
+          },
+          "explicit_hold_true": 25,
+          "explicit_follow": 0,
+          "explicit_quiet_true": 32,
+          "list_rooms_result_bytes": null
+        }
+      ]
+    },
+    {
+      "run": "swarm-092200-6aen",
+      "trace_count": 3,
+      "hub_calls": 142,
+      "seats": [
+        {
+          "seat": "6-astra-3",
+          "provider": "codex",
+          "source": "6-astra-3.events.jsonl",
+          "source_sha256": "0e22d8891e69895398a98c5e0a080b5bdf7a1810fb5602a20f8999c14fa1012b",
+          "hub_calls": 46,
+          "tools": {
+            "amend": 1,
+            "board_get": 7,
+            "board_set": 6,
+            "join_room": 1,
+            "leave_room": 1,
+            "send_message": 16,
+            "submit_opening": 1,
+            "vote": 2,
+            "wait_for_messages": 11
+          },
+          "explicit_hold_true": 2,
+          "explicit_follow": 0,
+          "explicit_quiet_true": 0,
+          "list_rooms_result_bytes": null
+        },
+        {
+          "seat": "6-astra-4",
+          "provider": "codex",
+          "source": "6-astra-4.events.jsonl",
+          "source_sha256": "356d3128b21980b99510d61cf7c847ea584ff79f78e6a196ebbf2432665b5ce6",
+          "hub_calls": 49,
+          "tools": {
+            "amend": 1,
+            "board_get": 8,
+            "board_set": 5,
+            "challenge": 2,
+            "join_room": 1,
+            "leave_room": 1,
+            "read_messages": 8,
+            "room_status": 1,
+            "send_message": 15,
+            "submit_opening": 1,
+            "vote": 2,
+            "wait_for_messages": 4
+          },
+          "explicit_hold_true": 0,
+          "explicit_follow": 0,
+          "explicit_quiet_true": 0,
+          "list_rooms_result_bytes": null
+        },
+        {
+          "seat": "6-astra-5",
+          "provider": "codex",
+          "source": "6-astra-5.events.jsonl",
+          "source_sha256": "f174014a7408486acce7f04d728697a5415cfab49661cfda8981a9637d074a5c",
+          "hub_calls": 47,
+          "tools": {
+            "amend": 2,
+            "board_get": 6,
+            "board_set": 5,
+            "challenge": 1,
+            "join_room": 1,
+            "leave_room": 1,
+            "read_messages": 5,
+            "send_message": 19,
+            "submit_opening": 1,
+            "vote": 1,
+            "wait_for_messages": 5
+          },
+          "explicit_hold_true": 0,
+          "explicit_follow": 0,
+          "explicit_quiet_true": 0,
+          "list_rooms_result_bytes": null
+        }
+      ]
+    },
+    {
+      "run": "swarm-170811-k1pq",
+      "trace_count": 7,
+      "hub_calls": 567,
+      "seats": [
+        {
+          "seat": "6-astra-3",
+          "provider": "codex",
+          "source": "6-astra-3.events.jsonl",
+          "source_sha256": "c34b43db49df193851f2918bc01218d43490e3956bc8385e6625660df0e197bf",
+          "hub_calls": 92,
+          "tools": {
+            "board_get": 5,
+            "board_set": 15,
+            "join_room": 1,
+            "leave_room": 1,
+            "pass": 3,
+            "read_messages": 3,
+            "send_message": 49,
+            "submit_opening": 1,
+            "wait_for_messages": 14
+          },
+          "explicit_hold_true": 7,
+          "explicit_follow": 2,
+          "explicit_quiet_true": 19,
+          "list_rooms_result_bytes": null
+        },
+        {
+          "seat": "6-astra-4",
+          "provider": "codex",
+          "source": "6-astra-4.events.jsonl",
+          "source_sha256": "3b883ec049b2ad93f1b9ea7b914d2277026565642576238aab4f06e531dd1d76",
+          "hub_calls": 76,
+          "tools": {
+            "board_get": 8,
+            "board_set": 11,
+            "join_room": 1,
+            "leave_room": 1,
+            "read_messages": 1,
+            "send_message": 36,
+            "submit_opening": 1,
+            "wait_for_messages": 17
+          },
+          "explicit_hold_true": 5,
+          "explicit_follow": 1,
+          "explicit_quiet_true": 18,
+          "list_rooms_result_bytes": null
+        },
+        {
+          "seat": "6-astra-5",
+          "provider": "codex",
+          "source": "6-astra-5.events.jsonl",
+          "source_sha256": "48ae0d68d9a777cfcf12fd3cd639acb802d959bc2ca90249ea409512018ee796",
+          "hub_calls": 71,
+          "tools": {
+            "board_get": 4,
+            "board_set": 10,
+            "join_room": 1,
+            "leave_room": 2,
+            "pass": 2,
+            "read_messages": 16,
+            "send_message": 26,
+            "submit_opening": 1,
+            "wait_for_messages": 9
+          },
+          "explicit_hold_true": 7,
+          "explicit_follow": 9,
+          "explicit_quiet_true": 9,
+          "list_rooms_result_bytes": null
+        },
+        {
+          "seat": "6-astra-6",
+          "provider": "codex",
+          "source": "6-astra-6.events.jsonl",
+          "source_sha256": "4203d8882d375b6d09efa7110426586ad480e6ac30293dab3c998763c92510b3",
+          "hub_calls": 67,
+          "tools": {
+            "board_get": 3,
+            "board_set": 13,
+            "join_room": 1,
+            "leave_room": 1,
+            "pass": 1,
+            "send_message": 32,
+            "submit_opening": 1,
+            "wait_for_messages": 15
+          },
+          "explicit_hold_true": 2,
+          "explicit_follow": 1,
+          "explicit_quiet_true": 9,
+          "list_rooms_result_bytes": null
+        },
+        {
+          "seat": "verifier",
+          "provider": "claude",
+          "source": "6bf5d8f2-1723-4876-9567-83e758dc79fe.jsonl",
+          "source_sha256": "d873a0f302dabbaf86cade15170ec6994eefb5e9495e1f9811857971bd2ebbc2",
+          "hub_calls": 103,
+          "tools": {
+            "amend": 1,
+            "board_get": 7,
+            "board_set": 10,
+            "challenge": 2,
+            "join_room": 1,
+            "leave_room": 1,
+            "pass": 12,
+            "read_messages": 2,
+            "send_message": 24,
+            "submit_opening": 1,
+            "vote": 1,
+            "wait_for_messages": 41
+          },
+          "explicit_hold_true": 41,
+          "explicit_follow": 0,
+          "explicit_quiet_true": 0,
+          "list_rooms_result_bytes": null
+        },
+        {
+          "seat": "opus-1",
+          "provider": "claude",
+          "source": "212564ab-4b44-40f0-83ed-0c41d003fa39.jsonl",
+          "source_sha256": "f983a41c4b8a7dc39f4d81d0db8d6e24bfe1b1936af84f34ee625d8b2a41b7b3",
+          "hub_calls": 88,
+          "tools": {
+            "board_get": 7,
+            "board_set": 9,
+            "challenge": 1,
+            "join_room": 1,
+            "leave_room": 1,
+            "pass": 6,
+            "read_messages": 5,
+            "send_message": 10,
+            "submit_opening": 1,
+            "vote": 1,
+            "wait_for_messages": 46
+          },
+          "explicit_hold_true": 45,
+          "explicit_follow": 0,
+          "explicit_quiet_true": 2,
+          "list_rooms_result_bytes": null
+        },
+        {
+          "seat": "opus-2",
+          "provider": "claude",
+          "source": "2bba89d4-af70-4f3c-9575-4bff6309f1b1.jsonl",
+          "source_sha256": "4abb0549d326162082ca841fe7344d973d33a29875bc06e10c4dde5b2bc13d63",
+          "hub_calls": 70,
+          "tools": {
+            "amend": 2,
+            "board_get": 6,
+            "board_set": 7,
+            "join_room": 1,
+            "leave_room": 1,
+            "pass": 1,
+            "propose": 2,
+            "read_messages": 3,
+            "send_message": 16,
+            "submit_opening": 1,
+            "vote": 1,
+            "wait_for_messages": 29
+          },
+          "explicit_hold_true": 26,
+          "explicit_follow": 0,
+          "explicit_quiet_true": 0,
+          "list_rooms_result_bytes": null
+        }
+      ]
+    },
+    {
+      "run": "swarm-181144-uxtr",
+      "trace_count": 9,
+      "hub_calls": 1931,
+      "seats": [
+        {
+          "seat": "6-astra-3",
+          "provider": "codex",
+          "source": "6-astra-3.events.jsonl",
+          "source_sha256": "622dd1d049c6c6b78b76dd72a6c3a3106be555ccb9de99e37b4f4927664f3f2d",
+          "hub_calls": 148,
+          "tools": {
+            "board_get": 6,
+            "board_set": 11,
+            "join_room": 4,
+            "leave_room": 2,
+            "pass": 4,
+            "propose": 1,
+            "send_message": 51,
+            "submit_opening": 2,
+            "vote": 3,
+            "wait_for_messages": 64
+          },
+          "explicit_hold_true": 64,
+          "explicit_follow": 4,
+          "explicit_quiet_true": 36,
+          "list_rooms_result_bytes": null
+        },
+        {
+          "seat": "6-astra-4",
+          "provider": "codex",
+          "source": "6-astra-4.events.jsonl",
+          "source_sha256": "f7d94731e2d4ca6c7f5d8cf37c2f611e21555e521b0280056b42df14d50837b9",
+          "hub_calls": 189,
+          "tools": {
+            "board_get": 16,
+            "board_set": 23,
+            "challenge": 1,
+            "join_room": 2,
+            "leave_room": 1,
+            "pass": 1,
+            "post_to_room": 3,
+            "send_message": 71,
+            "submit_opening": 1,
+            "vote": 4,
+            "wait_for_messages": 66
+          },
+          "explicit_hold_true": 66,
+          "explicit_follow": 0,
+          "explicit_quiet_true": 41,
+          "list_rooms_result_bytes": null
+        },
+        {
+          "seat": "6-astra-5",
+          "provider": "codex",
+          "source": "6-astra-5.events.jsonl",
+          "source_sha256": "8de243f0092eaa52c69fb7334facbc4d6750d25f2e1a54bc1695cb504dc2655e",
+          "hub_calls": 244,
+          "tools": {
+            "board_get": 19,
+            "board_set": 29,
+            "challenge": 1,
+            "join_room": 2,
+            "leave_room": 1,
+            "pass": 18,
+            "send_message": 84,
+            "submit_opening": 1,
+            "vote": 2,
+            "wait_for_messages": 87
+          },
+          "explicit_hold_true": 87,
+          "explicit_follow": 2,
+          "explicit_quiet_true": 38,
+          "list_rooms_result_bytes": null
+        },
+        {
+          "seat": "6-astra-6",
+          "provider": "codex",
+          "source": "6-astra-6.events.jsonl",
+          "source_sha256": "6ea63688516b734b7e80f7828a8c9d0e638912ee7cd6e2ede192e523e74d0845",
+          "hub_calls": 189,
+          "tools": {
+            "board_get": 8,
+            "board_set": 24,
+            "challenge": 2,
+            "join_room": 4,
+            "leave_room": 2,
+            "pass": 6,
+            "read_messages": 1,
+            "send_message": 73,
+            "submit_opening": 2,
+            "vote": 1,
+            "wait_for_messages": 66
+          },
+          "explicit_hold_true": 66,
+          "explicit_follow": 15,
+          "explicit_quiet_true": 61,
+          "list_rooms_result_bytes": null
+        },
+        {
+          "seat": "6-astra-7",
+          "provider": "codex",
+          "source": "6-astra-7.events.jsonl",
+          "source_sha256": "a72958c684351c6f95d83f7f43e62c362e23870d930a6be3721dd62df9c189b6",
+          "hub_calls": 172,
+          "tools": {
+            "board_get": 8,
+            "board_set": 23,
+            "challenge": 1,
+            "join_room": 2,
+            "leave_room": 1,
+            "pass": 4,
+            "send_message": 53,
+            "submit_opening": 1,
+            "vote": 4,
+            "wait_for_messages": 75
+          },
+          "explicit_hold_true": 75,
+          "explicit_follow": 2,
+          "explicit_quiet_true": 28,
+          "list_rooms_result_bytes": null
+        },
+        {
+          "seat": "6-astra-8",
+          "provider": "codex",
+          "source": "6-astra-8.events.jsonl",
+          "source_sha256": "b20baac9749f4ed418b6407b78b64de89846ac49381ef22bdeb47c6bd7f2251b",
+          "hub_calls": 165,
+          "tools": {
+            "board_get": 10,
+            "board_set": 20,
+            "challenge": 1,
+            "join_room": 2,
+            "leave_room": 1,
+            "send_message": 63,
+            "submit_opening": 1,
+            "vote": 6,
+            "wait_for_messages": 61
+          },
+          "explicit_hold_true": 61,
+          "explicit_follow": 2,
+          "explicit_quiet_true": 39,
+          "list_rooms_result_bytes": null
+        },
+        {
+          "seat": "verifier",
+          "provider": "claude",
+          "source": "3bf8b255-de75-460f-b023-d588873d5e20.jsonl",
+          "source_sha256": "2c367c2b760b3561a9cdad320b900d1c9823e6afa2dae15a753f07756a022472",
+          "hub_calls": 311,
+          "tools": {
+            "board_get": 11,
+            "board_set": 13,
+            "challenge": 1,
+            "join_room": 2,
+            "leave_room": 1,
+            "list_agents": 1,
+            "pass": 44,
+            "request_agent": 4,
+            "room_status": 1,
+            "send_message": 56,
+            "submit_opening": 1,
+            "vote": 6,
+            "wait_for_messages": 170
+          },
+          "explicit_hold_true": 169,
+          "explicit_follow": 0,
+          "explicit_quiet_true": 0,
+          "list_rooms_result_bytes": null
+        },
+        {
+          "seat": "opus-1",
+          "provider": "claude",
+          "source": "e74418cc-f4ce-4277-a051-15307d5e46ff.jsonl",
+          "source_sha256": "89734705db099ff8bf3c6bf8f3f7859c2fea8110ba0b0423ce7ced194aa4879c",
+          "hub_calls": 231,
+          "tools": {
+            "board_get": 10,
+            "board_set": 24,
+            "challenge": 1,
+            "join_room": 4,
+            "leave_room": 3,
+            "pass": 10,
+            "read_messages": 1,
+            "send_message": 50,
+            "submit_opening": 2,
+            "vote": 5,
+            "wait_for_messages": 121
+          },
+          "explicit_hold_true": 120,
+          "explicit_follow": 0,
+          "explicit_quiet_true": 15,
+          "list_rooms_result_bytes": null
+        },
+        {
+          "seat": "opus-2",
+          "provider": "claude",
+          "source": "b82a7ecc-1515-4d77-995d-046099f2c5c3.jsonl",
+          "source_sha256": "5423a32ab30f5ab834204448c51da1c1787563890c288654d3d60904d8710624",
+          "hub_calls": 282,
+          "tools": {
+            "amend": 17,
+            "board_get": 14,
+            "board_set": 28,
+            "join_room": 4,
+            "leave_room": 2,
+            "pass": 33,
+            "propose": 1,
+            "read_messages": 1,
+            "send_message": 58,
+            "submit_opening": 2,
+            "vote": 4,
+            "wait_for_messages": 118
+          },
+          "explicit_hold_true": 115,
+          "explicit_follow": 0,
+          "explicit_quiet_true": 15,
+          "list_rooms_result_bytes": null
+        }
+      ]
+    }
+  ],
+  "totals": {
+    "trace_count": 40,
+    "hub_calls": 4280,
+    "list_rooms_calls": 0,
+    "list_rooms_result_bytes": null
+  }
+}

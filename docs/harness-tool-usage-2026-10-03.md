@@ -44,6 +44,8 @@ The exporter includes no chat bodies, tool arguments, session keys or participan
 
 No `error` outcome was recorded in this cohort. Refusals are separate from successful returns: the six replacement calls all refused, while the 24 successful kick calls are accepted ballots, not 24 removals. Board writes and cross-room posts have substantial refusal counts, but the ledger does not retain arguments or full refusal messages. Those counts alone cannot tell whether a gate was helpful or obstructive.
 
+[A separate trace cross-check](measurements/harness-tool-traces-2026-10-03.json) uses 40 available Codex event files and Claude transcripts from the six supplied runs: 4,280 hub calls and no observed `list_rooms` call. Therefore it provides no historical directory-result byte estimate. It preserves per-seat tool counts and explicit `quiet`, `hold_until_actionable` and `follow` argument counts, using the existing `swarm-tool-usage.py` parser named by hash. An omitted `follow` retains the previous subscription, so explicit-argument counts cannot measure how often waits actually follow a prefix. Trace calls can include child rooms and pending calls; they must not be added to, or substituted for, the ledger totals above. Several runs have only partial trace coverage.
+
 ## What the supplied prior runs support
 
 The six supplied reports were read before interpreting their ledgers. [Case evidence](measurements/harness-tool-usage-cases-2026-10-03.json) identifies the specific room message sequences and hashes. These are adjudicated incidents, not an exhaustive opportunity rate.

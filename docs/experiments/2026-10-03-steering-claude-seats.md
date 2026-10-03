@@ -36,7 +36,7 @@ prompt.
 
 On the final build, mention-to-reply latency fell from about 51 s to about 7 s (−86%). The remaining delay is the
 Bash step that was running when the mention arrived. Every arm replied 3/3. In the early head arm, cache reads rose
-about 8% because the next wait resent the acked ask's full body. On the final build that wait shows a one-line stub
+about 8%, most likely because the next wait resent the acked ask's full body. On the final build that wait shows a one-line stub
 instead (contract 66d86c7a/9ffb9d91). Cache reads there are back at the base level, turns drop from 15 to 14, and
 cost per seat is $0.107–0.108 against $0.115–0.116 for warm base runs. Raw JSON: `docs/measurements/steer-claude-*.json`.
 

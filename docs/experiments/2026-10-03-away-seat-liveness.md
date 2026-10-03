@@ -1,5 +1,9 @@
 # Away, not dead: replacement after a hub restart (2026-10-03, swarm-202803-dpij)
 
+**Replacements registered for a live seat: 3/3 → 0/3** (n=3 per arm, same brief, cold). The oracle mostly restates this
+count. Head is slower (279 s vs 129 s mean to conclusion) and 7% dearer on this one-write task, because it waits for
+the live seat.
+
 ## The failure
 
 In swarm-181144-uxtr the hub was restarted mid-run and the owner wrote "if you don't see all the agents rejoin, please

@@ -1,5 +1,7 @@
 # Claim map for the paper cut
 
+The operational follow-up added on 3 October 2026 is outside the historical Study 1/2 scope below. Its claim record is `docs/swarm-efficiency-2026-10-03.md`: fixed-response replay establishes a byte reduction; synthetic busy-seat pairs establish observed responsiveness changes; token/throughput effects and task-quality limitations are reported separately. The follow-up does not change the earlier studies' estimates or promote reply rate to task success.
+
 Version 2, 2026-09-22. Version 1 was written by Claude Opus 5.5 at commit `28961b2`: one read of all 13 sections (17,248 words, 37 pages), with numbers checked against `paper/generated/`, `paper/tables/` and `bench/results/`. Two Codex models then reviewed it independently and read-only, each trying to refute every row:
 
 - **gpt-6-astra:** 6 rows confirmed, 4 wrong, 5 overstated.

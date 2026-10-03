@@ -1,5 +1,10 @@
 # Amendments to paper/protocol.md
 
+Every place the RQ1 build (room `swarm-120129-s12h-room`) had to deviate from, or fill a gap in,
+`paper/protocol.md` as pre-registered. Each entry is dated, states the reason, and states exactly what
+was done instead. Written before any grid run, per the maintainer's instruction that a pre-registration
+silently changed is worthless.
+
 ## 2026-10-03 — Exploratory context-cost and steering follow-up
 
 The engineering run `swarm-181144-uxtr` adds process measurements and new related work; it does not revise the earlier studies' protocols or estimates. Exact UTF-8 tool-result bytes, provider input/cache-read/cache-creation/output tokens, tool-call counts and mention-to-reply latency are separate quantities. Only the machine oracle establishes task success. Fixed-transcript response replay can isolate an encoding change; single live pairs cannot isolate total-token or wall-time effects from different conversations.
@@ -7,11 +12,6 @@ The engineering run `swarm-181144-uxtr` adds process measurements and new relate
 The shared live brief combines the existing `bench-fact-check` answer with three controlled local-work phases and peer nonce requests. The first baseline room was invalidated before outcome analysis because its role labels did not match launcher-generated names; the corrected baseline is `swarm-182324-pjb8`. All arms and coverage limitations belong in `docs/swarm-efficiency-2026-10-03.md`, with raw normalized metrics in `docs/measurements/`. Source revisions and hashes record the served builds. A main-branch hub/UI split arrived during the run and is an additional confound for the combined-build comparison.
 
 Latency is conditional on answered live mention-target pairs within the existing reply window, with nearest-rank quantiles; unanswered pairs remain in the reply-rate denominator and supply no latency sample. This is a syntactic responsiveness proxy, not a task-outcome measure. New compression sources (arXiv:2407.02043, arXiv:2609.32961, arXiv:2608.16370) motivate preserving exact actionable state and measuring reacquisition and cache use; their external effect sizes are not attributed to this hub.
-
-Every place the RQ1 build (room `swarm-120129-s12h-room`) had to deviate from, or fill a gap in,
-`paper/protocol.md` as pre-registered. Each entry is dated, states the reason, and states exactly what
-was done instead. Written before any grid run, per the maintainer's instruction that a pre-registration
-silently changed is worthless.
 
 ## 2026-09-18 — No token/turn ceiling in the `claude` CLI; budget matching uses `--max-budget-usd` + a wall-clock cap
 

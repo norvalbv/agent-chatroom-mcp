@@ -74,7 +74,7 @@ for (const scenario of ["keyed", "participant", "provider-failure", "trim", "idl
       assert.ok(!userText.includes("MUST NOT INJECT"));
       if (!compact && (step === 3 || (step >= 3 && scenario !== "trim"))) assert.equal(userText.split("Please report the local result.").length - 1, 1, "mention arrives once without wait/read");
       if (compact && step === 3) {
-        const result = JSON.parse(messages.findLast(message => message.role === "tool")!.content!);
+        const result = JSON.parse([...messages].reverse().find(message => message.role === "tool")!.content!);
         assert.deepEqual(result.board_keys, ["claim/work"], "absorbed full board reaches the model");
         assert.deepEqual(result.active_participants, ["worker", "peer"]);
         assert.equal(result.open_proposal.text, "full proposal"); assert.deepEqual(result.open_proposal.blocked_by, ["peer vote"]);

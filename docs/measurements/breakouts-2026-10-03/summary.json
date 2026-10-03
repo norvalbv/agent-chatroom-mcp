@@ -1,0 +1,339 @@
+{
+ "brief_sha256": "c9becc3e992a019805b24a903742343cae899eddc17405266415b2592bc7d503",
+ "base_build": "31daae67",
+ "head_build": "0de02faa (breakouts 99bbfc72 + bench files; later commits change only the cap boundary of a carried conclusion over 8000 chars, which no run reached)",
+ "seats": "1 worker + verifier per arm (swarm.js --flat --agents 2), claude-opus-5-5, recruits pinned claude/claude-opus-5-5",
+ "cache_regime": "DISABLE_PROMPT_CACHING=1 both arms: uncached throughout; every recorded cache_read_input_tokens is 0",
+ "repo": "fresh git archive of 31daae67 per arm (pair 1 ran both arms in parallel from the same pristine copy; no seat read a decision record, checked by grep of the base traces)",
+ "discarded": [
+  "swarm-210108-v7vt (head) and swarm-210443-s8z1 (base): the launcher had written earlier runs' decision records into the shared --cwd copy",
+  "swarm-210718-m3l0 (base): stopped at launch when the contamination was found"
+ ],
+ "model_turn_definition": "distinct assistant message ids in each seat's Claude trace",
+ "runs": [
+  {
+   "pair": 1,
+   "arm": "base",
+   "run": "swarm-205402-rv9u",
+   "rooms": 3,
+   "breakouts": 2,
+   "linked": 0,
+   "carried": 0,
+   "final_both": false,
+   "d1_evidence": true,
+   "d2_evidence": false,
+   "d2_live_named": [],
+   "ok": false,
+   "anywhere_ok": true,
+   "minutes": 2.5,
+   "cost_usd": 9.468,
+   "input_tokens": 2254443,
+   "output_tokens": 22049,
+   "cache_read": 0,
+   "model_turns": 50,
+   "cost_per_turn": 0.1894,
+   "hub_tool_calls": 57,
+   "by_tool": {
+    "wait_for_messages": 20,
+    "join_room": 6,
+    "submit_opening": 6,
+    "vote": 6,
+    "leave_room": 6,
+    "propose": 4,
+    "send_message": 3,
+    "challenge": 3,
+    "amend": 3
+   },
+   "traces": [
+    {
+     "seat": "claude-opus-5-5-1",
+     "trace": "bbbd1369-6294-49f8-82b4-1b8590956797.jsonl",
+     "sha256": "1f5be68ad25e9b13b0efd04c33218160b76a0c8b750fd819b3ef4096dd7caaf2",
+     "model_turns": 25,
+     "first_request_cache_read": 0
+    },
+    {
+     "seat": "verifier",
+     "trace": "d543d90c-6c21-4d52-b06a-06b75b2ef0ed.jsonl",
+     "sha256": "911e4a0c3a3d2b7faebe0474979c94f0a2d0c6d94351c44b01131c060e787cd0",
+     "model_turns": 25,
+     "first_request_cache_read": 0
+    }
+   ]
+  },
+  {
+   "pair": 1,
+   "arm": "head",
+   "run": "swarm-205402-fs7w",
+   "rooms": 3,
+   "breakouts": 2,
+   "linked": 2,
+   "carried": 2,
+   "final_both": true,
+   "d1_evidence": true,
+   "d2_evidence": true,
+   "d2_live_named": [
+    "adjudication-replay.ts",
+    "bench-build-runtime.ts",
+    "bench-rq1.ts",
+    "bench-steer-claude.ts",
+    "openrouter-smoke.ts",
+    "sandbox-claude-live.ts"
+   ],
+   "ok": true,
+   "anywhere_ok": true,
+   "minutes": 2.1,
+   "cost_usd": 8.245,
+   "input_tokens": 1951986,
+   "output_tokens": 21389,
+   "cache_read": 0,
+   "model_turns": 43,
+   "cost_per_turn": 0.1917,
+   "hub_tool_calls": 57,
+   "by_tool": {
+    "wait_for_messages": 19,
+    "join_room": 6,
+    "submit_opening": 6,
+    "leave_room": 6,
+    "propose": 5,
+    "send_message": 5,
+    "vote": 4,
+    "challenge": 3,
+    "room_status": 1,
+    "board_set": 1,
+    "amend": 1
+   },
+   "traces": [
+    {
+     "seat": "claude-opus-5-5-1",
+     "trace": "13124ef4-4c3b-4a5d-95b1-39d60854e673.jsonl",
+     "sha256": "b8c29e1cd71ed0c9a74cbb665f317d8c84789be953a1a684428e5651ef3e2d67",
+     "model_turns": 17,
+     "first_request_cache_read": 0
+    },
+    {
+     "seat": "verifier",
+     "trace": "37c17ee9-c792-4e84-8941-7729ef3f18d4.jsonl",
+     "sha256": "4e33222abf99e0b1648dab84f179fbf17d8c15709e3e85a1aa90401e97635a39",
+     "model_turns": 26,
+     "first_request_cache_read": 0
+    }
+   ]
+  },
+  {
+   "pair": 2,
+   "arm": "base",
+   "run": "swarm-210816-5jt9",
+   "rooms": 2,
+   "breakouts": 1,
+   "linked": 0,
+   "carried": 0,
+   "final_both": false,
+   "d1_evidence": true,
+   "d2_evidence": false,
+   "d2_live_named": [],
+   "ok": false,
+   "anywhere_ok": true,
+   "minutes": 1.7,
+   "cost_usd": 7.323,
+   "input_tokens": 1739036,
+   "output_tokens": 17860,
+   "cache_read": 0,
+   "model_turns": 44,
+   "cost_per_turn": 0.1664,
+   "hub_tool_calls": 74,
+   "by_tool": {
+    "wait_for_messages": 23,
+    "board_set": 10,
+    "send_message": 8,
+    "join_room": 5,
+    "propose": 5,
+    "vote": 5,
+    "leave_room": 5,
+    "submit_opening": 3,
+    "challenge": 3,
+    "amend": 2,
+    "board_get": 2,
+    "post_to_room": 2,
+    "request_agent": 1
+   },
+   "traces": [
+    {
+     "seat": "claude-opus-5-5-1",
+     "trace": "07fe9aa6-14b2-43ef-bc73-ba3716c045c8.jsonl",
+     "sha256": "0915dda39b7600ade09e37bbaaace8bcd83fc304fae4e1648128979a3202367c",
+     "model_turns": 23,
+     "first_request_cache_read": 0
+    },
+    {
+     "seat": "verifier",
+     "trace": "aa63eb95-baf6-43a6-887a-463d850c01c3.jsonl",
+     "sha256": "4658290be94bb6da00da46c4e20702baca020e25f4aadface35dfe7deabd4268",
+     "model_turns": 21,
+     "first_request_cache_read": 0
+    }
+   ]
+  },
+  {
+   "pair": 2,
+   "arm": "head",
+   "run": "swarm-211304-tb6n",
+   "rooms": 3,
+   "breakouts": 2,
+   "linked": 2,
+   "carried": 2,
+   "final_both": true,
+   "d1_evidence": true,
+   "d2_evidence": true,
+   "d2_live_named": [
+    "bench-harness.test.ts",
+    "bench-seat.test.ts",
+    "bench-steer-claude.ts",
+    "openrouter-smoke.ts",
+    "sandbox-claude-live.ts"
+   ],
+   "ok": true,
+   "anywhere_ok": true,
+   "minutes": 3.7,
+   "cost_usd": 13.04,
+   "input_tokens": 3140870,
+   "output_tokens": 23363,
+   "cache_read": 0,
+   "model_turns": 65,
+   "cost_per_turn": 0.2006,
+   "hub_tool_calls": 69,
+   "by_tool": {
+    "wait_for_messages": 27,
+    "vote": 8,
+    "join_room": 6,
+    "submit_opening": 6,
+    "propose": 4,
+    "leave_room": 4,
+    "challenge": 3,
+    "amend": 3,
+    "send_message": 3,
+    "room_status": 2,
+    "board_set": 1,
+    "board_get": 1,
+    "read_messages": 1
+   },
+   "traces": [
+    {
+     "seat": "verifier",
+     "trace": "52616e23-ac0c-4ceb-b682-aaec48a9ab89.jsonl",
+     "sha256": "3efc861173c532db966472e5e5cfbb09371e123bd93b5a897d85fb2de214a850",
+     "model_turns": 42,
+     "first_request_cache_read": 0
+    },
+    {
+     "seat": "claude-opus-5-5-1",
+     "trace": "76b12e63-e69a-44c5-a03a-070aa7c7bc0a.jsonl",
+     "sha256": "c517ab0bbfabc31c6be63417bcd28264baa7a18831d5a653d29c2742bed2375f",
+     "model_turns": 23,
+     "first_request_cache_read": 0
+    }
+   ]
+  },
+  {
+   "pair": 3,
+   "arm": "base",
+   "run": "swarm-212000-2bku",
+   "rooms": 2,
+   "breakouts": 1,
+   "linked": 0,
+   "carried": 0,
+   "final_both": false,
+   "d1_evidence": true,
+   "d2_evidence": false,
+   "d2_live_named": [],
+   "ok": false,
+   "anywhere_ok": true,
+   "minutes": 1.5,
+   "cost_usd": 6.066,
+   "input_tokens": 1437298,
+   "output_tokens": 15349,
+   "cache_read": 0,
+   "model_turns": 40,
+   "cost_per_turn": 0.1516,
+   "hub_tool_calls": 41,
+   "by_tool": {
+    "wait_for_messages": 14,
+    "join_room": 4,
+    "submit_opening": 4,
+    "vote": 4,
+    "leave_room": 4,
+    "propose": 3,
+    "send_message": 3,
+    "challenge": 2,
+    "amend": 2,
+    "board_set": 1
+   },
+   "traces": [
+    {
+     "seat": "claude-opus-5-5-1",
+     "trace": "35939afb-b3cf-4040-9936-dd0e6f5fba11.jsonl",
+     "sha256": "45ae0610af43bdbcc5dff5b612ed1b55ef834c4c0ed053af57e1530c332102ef",
+     "model_turns": 21,
+     "first_request_cache_read": 0
+    },
+    {
+     "seat": "verifier",
+     "trace": "7d371471-74c9-42a8-88ae-a80789265f10.jsonl",
+     "sha256": "e2898f48cbaa45487f00aefd0ae6f3a7323e4587ee0eeeead26db4a0c0cb710a",
+     "model_turns": 19,
+     "first_request_cache_read": 0
+    }
+   ]
+  },
+  {
+   "pair": 3,
+   "arm": "head",
+   "run": "swarm-211717-w498",
+   "rooms": 2,
+   "breakouts": 1,
+   "linked": 0,
+   "carried": 0,
+   "final_both": false,
+   "d1_evidence": true,
+   "d2_evidence": false,
+   "d2_live_named": [],
+   "ok": false,
+   "anywhere_ok": true,
+   "minutes": 1.1,
+   "cost_usd": 7.653,
+   "input_tokens": 1819130,
+   "output_tokens": 18350,
+   "cache_read": 0,
+   "model_turns": 50,
+   "cost_per_turn": 0.1531,
+   "hub_tool_calls": 41,
+   "by_tool": {
+    "wait_for_messages": 12,
+    "send_message": 6,
+    "join_room": 4,
+    "submit_opening": 4,
+    "vote": 4,
+    "leave_room": 4,
+    "challenge": 3,
+    "propose": 2,
+    "amend": 2
+   },
+   "traces": [
+    {
+     "seat": "verifier",
+     "trace": "9023a596-5c37-498b-afff-66ee24084049.jsonl",
+     "sha256": "0a1a9cb6351bbd261ab48472eded78ef26d6377d620fdfc91e68ae9ab7474a80",
+     "model_turns": 25,
+     "first_request_cache_read": 0
+    },
+    {
+     "seat": "claude-opus-5-5-1",
+     "trace": "e8344313-1e9c-4024-a2df-be3e21c514a8.jsonl",
+     "sha256": "35532b236710da217a463bb71eb83894bdc3c5cae55be716abe9ab8f9deb5a66",
+     "model_turns": 25,
+     "first_request_cache_read": 0
+    }
+   ]
+  }
+ ]
+}

@@ -14,9 +14,9 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { HubError } from "./hub.js";
 import { settledAxes } from "./settled.js";
-import { devHubRule, heartbeatHookSettings, outputHeartbeat, seatBeat, seatChildEnv } from "./env.js";
+import { devHubRule, heartbeatHookSettings, seatBeat, seatChildEnv } from "./env.js";
 import { claudeArgs } from "./claude-args.js";
-import { codexArgs } from "./codex-seat.js";
+import { codexSeatCommand } from "./codex-seat.js";
 import { claudeSandbox, hubPortOf, sandboxFromEnv } from "./sandbox.js";
 import { parseClaudeCliOutput, type SeatUsageRollup } from "./result.js";
 
@@ -320,8 +320,7 @@ export class Spawner {
         if (req.canEdit) args.push("--write");
         if (SANDBOX) args.push("--sandbox");
       } else if (agent === "codex") {
-        cmd = "codex";
-        args = codexArgs({ cwd: seatCwd, mcpUrl: beat.mcpUrl, model: req.model, readOnly: !req.canEdit });
+        ({ cmd, args } = codexSeatCommand({ cwd: seatCwd, mcpUrl: beat.mcpUrl, model: req.model, readOnly: !req.canEdit }));
       } else {
         cmd = "claude";
         const sandbox = SANDBOX ? claudeSandbox({ cwd: seatCwd, write: !!req.canEdit, hubPort: hubPortOf(o.mcpUrl) }) : undefined;
@@ -346,11 +345,6 @@ export class Spawner {
         const outStream = createWriteStream(log);
         child.stdout?.pipe(outStream);
         child.stderr?.pipe(outStream);
-        if (agent === "codex") {
-          const beatOut = outputHeartbeat((detail) => this.hooks?.heartbeatSeat?.(beat.key, { tool: "codex", detail }));
-          child.stdout?.on("data", beatOut);
-          child.stderr?.on("data", beatOut);
-        }
       }
       rec.pid = child.pid;
       this.children.set(name, child);

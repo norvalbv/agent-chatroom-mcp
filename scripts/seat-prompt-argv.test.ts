@@ -6,7 +6,7 @@ import assert from "node:assert/strict";
 import { after, test } from "node:test";
 import { spawn, spawnSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, cpSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { claudeArgs } from "../src/claude-args.ts";
@@ -37,7 +37,7 @@ const stub = await startStub(() => {
 const { hub, url: hubUrl, port: hubPort } = await startHub(logs, base);
 after(async () => { hub.kill(); await stub.close(); rmSync(base, { recursive: true, force: true }); });
 const seatEnv = { PATH: `${bin}:${process.env.PATH}`, FAKE_RECORD_DIR: records, OPENROUTER_API_KEY: "stub-key", OPENROUTER_BASE_URL: stub.url };
-const takeRecords = (kind: "codex" | "claude") => readdirSync(records).filter((f) => f.startsWith(kind)).map((f) => { const r = JSON.parse(readFileSync(join(records, f), "utf8")); rmSync(join(records, f)); return r as { argv: string[]; stdin: string; cwd: string }; });
+const takeRecords = (kind: "codex" | "claude") => readdirSync(records).filter((f) => f.startsWith(kind)).map((f) => { const r = JSON.parse(readFileSync(join(records, f), "utf8")); rmSync(join(records, f)); return r as { argv: string[]; stdin: string; cwd: string; thread?: {sandbox?: string} }; });
 const waitFor = async (ok: () => unknown, what: string, ms = 30_000) => { for (const until = Date.now() + ms; !ok(); ) { if (Date.now() > until) throw new Error(`timed out waiting for ${what}`); await new Promise((r) => setTimeout(r, 50)); } };
 
 test("claudeArgs puts no prompt in argv: -p is followed by a flag", () => {
@@ -90,10 +90,27 @@ test("spawner: codex recruits read the brief from stdin; read-only recruits run 
     const [seen] = takeRecords("codex");
     assert.ok(!seen.argv.some((a) => a.includes(MARKER)), "the brief is not in the codex recruit's argv");
     assert.ok(seen.stdin.includes(MARKER), "the codex recruit got its brief on stdin");
-    assert.equal(seen.argv.at(-1), "-");
-    assert.equal(seen.argv.includes("read-only"), !canEdit, canEdit ? "a write recruit keeps its sandbox" : "a read-only recruit runs -s read-only");
+    assert.equal(seen.argv[0], "app-server");
+    assert.equal(seen.thread?.sandbox, canEdit ? undefined : "read-only", "read-only override is sent in thread/start; write seats retain configured sandbox");
     assert.ok(seen.argv.includes('mcp_servers.chatroom.default_tools_approval_mode="approve"'), "the recruit may call the chatroom tools under its sandbox");
   }
+});
+
+test("source-only Codex recruits resolve their loader from the adapter, outside the target project", async () => {
+  const sourceRoot = join(base, "source-adapter");
+  mkdirSync(join(sourceRoot, "src"), { recursive: true });
+  for (const file of ["codex-seat.ts", "env.ts", "codex"]) cpSync(resolve("src", file), join(sourceRoot, "src", file), { recursive: true });
+  writeFileSync(join(sourceRoot, "package.json"), '{"type":"module"}');
+  symlinkSync(resolve("node_modules"), join(sourceRoot, "node_modules"));
+  const { codexSeatCommand } = await import(join(sourceRoot, "src/codex-seat.ts"));
+  const command = codexSeatCommand({ cwd: work, mcpUrl: `${hubUrl}/mcp`, readOnly: true });
+  assert.equal(command.args[0], "--import");
+  assert.ok(command.args[1].startsWith("file:"), "loader location is independent of the seat cwd");
+  const child = spawn(command.cmd, command.args, { cwd: work, env: { ...process.env, ...seatEnv }, stdio: ["pipe", "pipe", "pipe"] });
+  child.stdin.end(SEAT_BRIEF);
+  let stderr = ""; child.stderr.on("data", d => stderr += d);
+  assert.equal(await new Promise(r => child.on("close", r)), 0, stderr);
+  assert.ok(takeRecords("codex")[0].stdin.includes(MARKER));
 });
 
 test("spawner: an OpenRouter recruit reads the brief from stdin and its argv never carries it", async () => {
@@ -127,9 +144,9 @@ test("swarm.ts: codex and OpenRouter seats get the prompt on stdin, never argv; 
     assert.ok(codex, "the codex seat ran");
     assert.ok(!codex.argv.some((a) => a.includes(MARKER)), "the brief is not in the codex seat's argv");
     assert.ok(codex.stdin.includes(MARKER), "the codex seat got its prompt on stdin");
-    assert.equal(codex.argv.at(-1), "-");
-    assert.ok(codex.argv.includes("--json") && codex.argv.includes("-o"), "--json for usage, -o for the final text");
-    assert.ok(codex.argv.includes("read-only"), "a seat without --full-access is read-only: -s read-only");
+    assert.equal(codex.argv[0], "app-server");
+    assert.ok(codex.stdin.includes('"method":"turn/start"'), "prompt arrives through the bidirectional protocol");
+    assert.equal(codex.thread?.sandbox, "read-only", "a seat without --full-access is read-only");
     assert.ok(codex.argv.includes('mcp_servers.chatroom.default_tools_approval_mode="approve"'), "and may still call the chatroom tools");
     // the launcher's own argv still carries the task (it is how swarm.js takes it); every seat it launched must not
     const seats = processes.filter((p) => p.ppid === swarm.pid);
@@ -140,10 +157,10 @@ test("swarm.ts: codex and OpenRouter seats get the prompt on stdin, never argv; 
     const sidecars = readdirSync(dir).filter((f) => f.endsWith(".usage.json")).map((f) => ({ f, u: JSON.parse(readFileSync(join(dir, f), "utf8")) }));
     const codexSidecar = sidecars.find((s) => s.u.codex_usage);
     assert.ok(codexSidecar, `no codex usage sidecar among ${sidecars.map((s) => s.f).join(", ")}`);
-    assert.deepEqual(codexSidecar.u, CODEX_TWO_TURN_SIDECAR);
+    assert.deepEqual(codexSidecar.u, { ...CODEX_TWO_TURN_SIDECAR, steps: 1 });
     const seatName = codexSidecar.f.replace(/\.usage\.json$/, "");
     assert.equal(readFileSync(join(dir, `${seatName}.out`), "utf8").trim(), "codex final text", "-o still gives the seat's final text");
-    assert.equal(readFileSync(join(dir, `${seatName}.events.jsonl`), "utf8"), CODEX_TWO_TURN_JSONL, "the event stream is kept");
+    assert.ok(readFileSync(join(dir, `${seatName}.events.jsonl`), "utf8").includes('"type":"turn.completed"'), "normalized protocol events are kept");
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 

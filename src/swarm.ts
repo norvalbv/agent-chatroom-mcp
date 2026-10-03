@@ -16,7 +16,7 @@ import { carrySettings, devHubRule, heartbeatHookSettings, loadDotEnv, outputHea
 import { randomUUID } from "node:crypto";
 import { respawnDecision, type RespawnRoom } from "./respawn.js";
 import { claudeArgs } from "./claude-args.js";
-import { codexArgs, codexUsageTracker } from "./codex-seat.js";
+import { codexSeatCommand, codexUsageTracker } from "./codex-seat.js";
 import { claudeSandbox } from "./sandbox.js";
 import { stopStrays } from "./strays.js";
 import { launchCostGuide } from "./cost-estimate.js";
@@ -197,20 +197,19 @@ function runOpenRouter(name: string, text: string, cwd: string, model: string | 
 }
 
 /**
- * `codex exec` with the prompt on stdin, -s read-only unless the seat may write, and --json so its usage reaches
- * <name>.usage.json (src/codex-seat.ts). -o still writes the final message to <name>.out. --json moves codex's
- * per-item trace from stderr to stdout, so the events are kept in <name>.events.jsonl next to the .log.
+ * Native Codex app-server adapter: prompt on stdin, read-only unless the seat may write, normalized JSONL
+ * events and cumulative usage beside the final output. The adapter owns activity heartbeats and turn/steer.
  */
 function runCodex(name: string, text: string, cwd: string, model: string | undefined, write: boolean): Promise<SeatOutcome> {
   const outFile = resolve(OUT, `${name}.out`);
   const sidecar = resolve(OUT, `${name}.usage.json`);
   const beat = seatBeat(`${URL_}/mcp`, randomUUID(), cwd);
-  const args = codexArgs({ cwd, mcpUrl: beat.mcpUrl, model, readOnly: !write, outFile, json: true });
+  const { cmd, args } = codexSeatCommand({ cwd, mcpUrl: beat.mcpUrl, model, readOnly: !write, outFile, json: true });
   const events = createWriteStream(resolve(OUT, `${name}.events.jsonl`)).on("error", (e) => log(`${name}: event log: ${e.message}`));
   // written on every turn.completed, so a seat stopped after one keeps what it had reported; a write error must not kill the launcher
   const track = codexUsageTracker((usage) => { try { writeFileSync(sidecar, JSON.stringify(usage, null, 2)); } catch (e) { log(`${name}: usage sidecar: ${e instanceof Error ? e.message : String(e)}`); } });
   const onStdout = (d: Buffer) => { events.write(d); track(d); };
-  return runProc(name, "codex", args, cwd, outFile, true, beat, true, text, onStdout).then((t) => { events.end(); return { text: t, usage: readSeatUsage(sidecar) }; });
+  return runProc(name, cmd, args, cwd, outFile, true, beat, false, text, onStdout).then((t) => { events.end(); return { text: t, usage: readSeatUsage(sidecar) }; });
 }
 
 /**

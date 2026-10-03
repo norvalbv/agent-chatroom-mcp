@@ -79,7 +79,7 @@ async function harness(entry: string, env: Record<string, string>, argv: string[
     // Only these explicitly allowlisted source files are read from disk.
     const source = readFileSync(path.join(root, 'src', `${base}.ts`), 'utf8');
     const code = transformSync(source, { loader: 'ts', format: 'esm', target: 'es2022' }).code;
-    const mod = new vm.SourceTextModule(code, { context, initializeImportMeta(meta) { meta.url = `file:///fixture/src/${base}.js`; } });
+    const mod = new vm.SourceTextModule(code, { context, initializeImportMeta(meta) { meta.url = `file:///fixture/src/${base}.js`; meta.resolve = () => "file:///synthetic/tsx.mjs"; } });
     cache.set(name, mod);
     await mod.link((specifier: string) => module(specifier));
     return mod;
@@ -110,7 +110,7 @@ await test('swarm all provider seats, hub env and controller header', async () =
   const hub = h.calls.filter(c => c.args.some(a => a.endsWith('/dist/index.js')));
   const seats = h.calls.filter(c => !hub.includes(c));
   assert.equal(hub.length, 1); assert.equal(hub[0].options.env.CHATROOM_HUMAN_TOKEN, HUMAN, 'hub controller credential retained');
-  assert.equal(seats.length, 4); assert.ok(seats.some(c => c.cmd === 'codex')); assert.ok(seats.some(c => c.args.includes('/fixture/src/openrouter.ts')));
+  assert.equal(seats.length, 4); assert.ok(seats.some(c => c.args.includes('/fixture/src/codex/cli.ts'))); assert.ok(seats.some(c => c.args.includes('/fixture/src/openrouter.ts')));
   const claudeSeat = seats.find(c => c.cmd === 'claude');
   assert.ok(claudeSeat, 'a claude seat was spawned');
   const outputFormatAt = claudeSeat!.args.indexOf('--output-format');

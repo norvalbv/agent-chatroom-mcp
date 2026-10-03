@@ -97,7 +97,7 @@ async function harness(entry: string, env: Record<string, string>, argv: string[
     assert.ok(['env', 'spawner', 'swarm', 'respawn', 'claude-args', 'codex-seat', 'sandbox', 'cost-estimate'].includes(base), `unmocked import ${name}`);
     const source = readFileSync(path.join(root, 'src', `${base}.ts`), 'utf8');
     const code = transformSync(source, { loader: 'ts', format: 'esm', target: 'es2022' }).code;
-    const mod = new vm.SourceTextModule(code, { context, initializeImportMeta(meta) { meta.url = `file:///fixture/src/${base}.js`; } });
+    const mod = new vm.SourceTextModule(code, { context, initializeImportMeta(meta) { meta.url = `file:///fixture/src/${base}.js`; meta.resolve = () => "file:///synthetic/tsx.mjs"; } });
     cache.set(name, mod);
     await mod.link((specifier: string) => module(specifier));
     return mod;
@@ -211,14 +211,14 @@ function assertBeat(call: Capture, msg: string) {
   if (call.cmd === 'claude') {
     const s = JSON.parse(call.args[call.args.indexOf('--settings') + 1] ?? '{}');
     assert.match(s.hooks?.PreToolUse?.[0]?.hooks?.[0]?.command ?? '', /heartbeat-hook\.mjs"$/, `${msg}: --settings PreToolUse heartbeat hook`);
-  } else if (call.cmd === 'codex') {
+  } else if (call.args.includes('/fixture/src/codex/cli.ts')) {
     assert.ok(call.args.some(a => a.includes(`seat=${key}`)), `${msg}: codex MCP URL carries ?seat=`);
   }
 }
 await test('heartbeat: swarm claude and codex seats carry the seat key and hook', async () => {
   const h = await harness('swarm', syntheticEnv(), ['synthetic task', '--agents', '4', '--codex', '1', '--full-access']);
-  const seats = h.calls.filter(c => c.cmd === 'claude' || c.cmd === 'codex');
-  assert.ok(seats.some(c => c.cmd === 'codex') && seats.some(c => c.cmd === 'claude'));
+  const seats = h.calls.filter(c => c.cmd === 'claude' || c.args.includes('/fixture/src/codex/cli.ts'));
+  assert.ok(seats.some(c => c.args.includes('/fixture/src/codex/cli.ts')) && seats.some(c => c.cmd === 'claude'));
   for (const seat of seats) assertBeat(seat, `swarm ${seat.cmd} seat`);
 });
 await test('heartbeat: spawner claude and codex recruits carry the seat key and hook', async () => {

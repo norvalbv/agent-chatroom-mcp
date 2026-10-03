@@ -36,6 +36,7 @@ export const offlineScripts = [
   'no-carry.test.ts',
   'seat-prompt-argv.test.ts',
   'codex-seat.test.ts',
+  'codex-steering.test.ts',
   'strays.test.ts',
   'sandbox-seats.test.ts',
   'pool-format.test.ts',

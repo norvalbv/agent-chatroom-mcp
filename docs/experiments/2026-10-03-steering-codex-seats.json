@@ -1,0 +1,1076 @@
+{
+  "before": {
+    "build": "/tmp/astra3-steer-base",
+    "build_label": "af26d162",
+    "entry_sha256": "3d738c13d35c046e939f690435dc51045d37cb98268c24d82828a07763fbda0b",
+    "dist_sha256": "b56aa836e5724d0dd3aad116b9f9093e4fe756cb28d9c2bde10dca289bb6cfff",
+    "results": [
+      {
+        "rep": 1,
+        "room": "codex-busy-1",
+        "exit": 0,
+        "oracle": true,
+        "step_at_mention": 2,
+        "step_at_reply": 8,
+        "mention_to_reply_ms": 60451,
+        "replied": true,
+        "tool_calls": 4,
+        "tool_response_bytes": 3180,
+        "usage": {
+          "input_tokens": 351578,
+          "cached_input_tokens": 323328,
+          "cache_write_input_tokens": 0,
+          "output_tokens": 648,
+          "reasoning_output_tokens": 88
+        },
+        "stats": {
+          "room": "codex-busy-1",
+          "state": "open",
+          "reply_metrics": {
+            "schema_version": 1,
+            "window_minutes": 15,
+            "as_of": "2026-10-03T18:28:38.835Z",
+            "observation_end": "2026-10-03T18:28:38.835Z",
+            "definition": "Deduplicated persisted non-opening agent chat/target pairs, public and quiet; membership at ask from ordered join/leave events. Strict reply is later target chat with exact replyTo or persisted @-back within <=window; one reply may credit multiple asks. Syntactic proxy, not task success. Activity counts any later non-opening target post. Unknown membership excluded from live denominator; pending includes early answered pairs.",
+            "mentions": 1,
+            "to_departed": 0,
+            "departure_unknown": 0,
+            "live_mentions": 1,
+            "answered_within_window": 1,
+            "reply_rate": 1,
+            "mature_live_mentions": 0,
+            "mature_answered_within_window": 0,
+            "mature_reply_rate": null,
+            "pending_live_mentions": 1,
+            "activity_within_window": 1,
+            "declined_within_window": null,
+            "decline_coverage": "unknown"
+          },
+          "duration_ms": 93021,
+          "time_to_conclusion_ms": null,
+          "messages_by_kind": {
+            "system": 3,
+            "chat": 2
+          },
+          "per_participant": [
+            {
+              "name": "pinger",
+              "agent": "script",
+              "chat_messages": 1,
+              "passes": 0,
+              "chars": 87
+            },
+            {
+              "name": "worker",
+              "agent": "codex",
+              "chat_messages": 1,
+              "passes": 0,
+              "chars": 2
+            }
+          ],
+          "proposals": 0,
+          "proposal_electorates": [],
+          "conclusion_electorate": null,
+          "amendments": 0,
+          "challenges": 0,
+          "board_entries": 0,
+          "board_manifests": {
+            "version": 1,
+            "waits": 1,
+            "bytes": 45,
+            "full": 1,
+            "delta": 0,
+            "empty": 0
+          },
+          "board_manifest": {
+            "coverage": "since-process-start",
+            "waits_observed": 1,
+            "full_baseline_manifest_bytes": 17,
+            "shipped_manifest_bytes": 36,
+            "keys_shipped": 0,
+            "deleted_tombstones_shipped": 0,
+            "current_full_manifest_bytes": 17,
+            "entries_by_prefix": {
+              "claim/": 0,
+              "evidence/": 0,
+              "sources/": 0,
+              "handoff/": 0,
+              "inbox/": 0,
+              "verify/": 0,
+              "other": 0
+            }
+          },
+          "refusals": {},
+          "call_outcomes": {
+            "join_room": {
+              "success": 2,
+              "hub_refusal": 0,
+              "error": 0
+            },
+            "send_message": {
+              "success": 2,
+              "hub_refusal": 0,
+              "error": 0
+            },
+            "wait_for_messages": {
+              "success": 1,
+              "hub_refusal": 0,
+              "error": 0
+            },
+            "leave_room": {
+              "success": 1,
+              "hub_refusal": 0,
+              "error": 0
+            }
+          },
+          "refusal_rates": {
+            "join_room": 0,
+            "send_message": 0,
+            "wait_for_messages": 0,
+            "leave_room": 0
+          },
+          "refusal_rate_coverage": "complete",
+          "near_simultaneous_replies": 0,
+          "unanswered_human_messages": 0
+        },
+        "steering_text_bytes": 0
+      },
+      {
+        "rep": 2,
+        "room": "codex-busy-2",
+        "exit": 0,
+        "oracle": true,
+        "step_at_mention": 2,
+        "step_at_reply": 8,
+        "mention_to_reply_ms": 52390,
+        "replied": true,
+        "tool_calls": 4,
+        "tool_response_bytes": 3180,
+        "usage": {
+          "input_tokens": 353492,
+          "cached_input_tokens": 337920,
+          "cache_write_input_tokens": 0,
+          "output_tokens": 664,
+          "reasoning_output_tokens": 130
+        },
+        "stats": {
+          "room": "codex-busy-2",
+          "state": "open",
+          "reply_metrics": {
+            "schema_version": 1,
+            "window_minutes": 15,
+            "as_of": "2026-10-03T18:30:11.513Z",
+            "observation_end": "2026-10-03T18:30:11.513Z",
+            "definition": "Deduplicated persisted non-opening agent chat/target pairs, public and quiet; membership at ask from ordered join/leave events. Strict reply is later target chat with exact replyTo or persisted @-back within <=window; one reply may credit multiple asks. Syntactic proxy, not task success. Activity counts any later non-opening target post. Unknown membership excluded from live denominator; pending includes early answered pairs.",
+            "mentions": 1,
+            "to_departed": 0,
+            "departure_unknown": 0,
+            "live_mentions": 1,
+            "answered_within_window": 1,
+            "reply_rate": 1,
+            "mature_live_mentions": 0,
+            "mature_answered_within_window": 0,
+            "mature_reply_rate": null,
+            "pending_live_mentions": 1,
+            "activity_within_window": 1,
+            "declined_within_window": null,
+            "decline_coverage": "unknown"
+          },
+          "duration_ms": 79686,
+          "time_to_conclusion_ms": null,
+          "messages_by_kind": {
+            "system": 3,
+            "chat": 2
+          },
+          "per_participant": [
+            {
+              "name": "pinger",
+              "agent": "script",
+              "chat_messages": 1,
+              "passes": 0,
+              "chars": 87
+            },
+            {
+              "name": "worker",
+              "agent": "codex",
+              "chat_messages": 1,
+              "passes": 0,
+              "chars": 2
+            }
+          ],
+          "proposals": 0,
+          "proposal_electorates": [],
+          "conclusion_electorate": null,
+          "amendments": 0,
+          "challenges": 0,
+          "board_entries": 0,
+          "board_manifests": {
+            "version": 1,
+            "waits": 1,
+            "bytes": 45,
+            "full": 1,
+            "delta": 0,
+            "empty": 0
+          },
+          "board_manifest": {
+            "coverage": "since-process-start",
+            "waits_observed": 1,
+            "full_baseline_manifest_bytes": 17,
+            "shipped_manifest_bytes": 36,
+            "keys_shipped": 0,
+            "deleted_tombstones_shipped": 0,
+            "current_full_manifest_bytes": 17,
+            "entries_by_prefix": {
+              "claim/": 0,
+              "evidence/": 0,
+              "sources/": 0,
+              "handoff/": 0,
+              "inbox/": 0,
+              "verify/": 0,
+              "other": 0
+            }
+          },
+          "refusals": {},
+          "call_outcomes": {
+            "join_room": {
+              "success": 2,
+              "hub_refusal": 0,
+              "error": 0
+            },
+            "send_message": {
+              "success": 2,
+              "hub_refusal": 0,
+              "error": 0
+            },
+            "wait_for_messages": {
+              "success": 1,
+              "hub_refusal": 0,
+              "error": 0
+            },
+            "leave_room": {
+              "success": 1,
+              "hub_refusal": 0,
+              "error": 0
+            }
+          },
+          "refusal_rates": {
+            "join_room": 0,
+            "send_message": 0,
+            "wait_for_messages": 0,
+            "leave_room": 0
+          },
+          "refusal_rate_coverage": "complete",
+          "near_simultaneous_replies": 0,
+          "unanswered_human_messages": 0
+        },
+        "steering_text_bytes": 0
+      },
+      {
+        "rep": 3,
+        "room": "codex-busy-3",
+        "exit": 0,
+        "oracle": true,
+        "step_at_mention": 2,
+        "step_at_reply": 8,
+        "mention_to_reply_ms": 45726,
+        "replied": true,
+        "tool_calls": 4,
+        "tool_response_bytes": 3180,
+        "usage": {
+          "input_tokens": 354243,
+          "cached_input_tokens": 338432,
+          "cache_write_input_tokens": 0,
+          "output_tokens": 597,
+          "reasoning_output_tokens": 62
+        },
+        "stats": {
+          "room": "codex-busy-3",
+          "state": "open",
+          "reply_metrics": {
+            "schema_version": 1,
+            "window_minutes": 15,
+            "as_of": "2026-10-03T18:31:26.551Z",
+            "observation_end": "2026-10-03T18:31:26.551Z",
+            "definition": "Deduplicated persisted non-opening agent chat/target pairs, public and quiet; membership at ask from ordered join/leave events. Strict reply is later target chat with exact replyTo or persisted @-back within <=window; one reply may credit multiple asks. Syntactic proxy, not task success. Activity counts any later non-opening target post. Unknown membership excluded from live denominator; pending includes early answered pairs.",
+            "mentions": 1,
+            "to_departed": 0,
+            "departure_unknown": 0,
+            "live_mentions": 1,
+            "answered_within_window": 1,
+            "reply_rate": 1,
+            "mature_live_mentions": 0,
+            "mature_answered_within_window": 0,
+            "mature_reply_rate": null,
+            "pending_live_mentions": 1,
+            "activity_within_window": 1,
+            "declined_within_window": null,
+            "decline_coverage": "unknown"
+          },
+          "duration_ms": 71012,
+          "time_to_conclusion_ms": null,
+          "messages_by_kind": {
+            "system": 3,
+            "chat": 2
+          },
+          "per_participant": [
+            {
+              "name": "pinger",
+              "agent": "script",
+              "chat_messages": 1,
+              "passes": 0,
+              "chars": 87
+            },
+            {
+              "name": "worker",
+              "agent": "codex",
+              "chat_messages": 1,
+              "passes": 0,
+              "chars": 2
+            }
+          ],
+          "proposals": 0,
+          "proposal_electorates": [],
+          "conclusion_electorate": null,
+          "amendments": 0,
+          "challenges": 0,
+          "board_entries": 0,
+          "board_manifests": {
+            "version": 1,
+            "waits": 1,
+            "bytes": 45,
+            "full": 1,
+            "delta": 0,
+            "empty": 0
+          },
+          "board_manifest": {
+            "coverage": "since-process-start",
+            "waits_observed": 1,
+            "full_baseline_manifest_bytes": 17,
+            "shipped_manifest_bytes": 36,
+            "keys_shipped": 0,
+            "deleted_tombstones_shipped": 0,
+            "current_full_manifest_bytes": 17,
+            "entries_by_prefix": {
+              "claim/": 0,
+              "evidence/": 0,
+              "sources/": 0,
+              "handoff/": 0,
+              "inbox/": 0,
+              "verify/": 0,
+              "other": 0
+            }
+          },
+          "refusals": {},
+          "call_outcomes": {
+            "join_room": {
+              "success": 2,
+              "hub_refusal": 0,
+              "error": 0
+            },
+            "send_message": {
+              "success": 2,
+              "hub_refusal": 0,
+              "error": 0
+            },
+            "wait_for_messages": {
+              "success": 1,
+              "hub_refusal": 0,
+              "error": 0
+            },
+            "leave_room": {
+              "success": 1,
+              "hub_refusal": 0,
+              "error": 0
+            }
+          },
+          "refusal_rates": {
+            "join_room": 0,
+            "send_message": 0,
+            "wait_for_messages": 0,
+            "leave_room": 0
+          },
+          "refusal_rate_coverage": "complete",
+          "near_simultaneous_replies": 0,
+          "unanswered_human_messages": 0
+        },
+        "steering_text_bytes": 0
+      }
+    ]
+  },
+  "after": {
+    "build": "/tmp/astra3-steer-head",
+    "build_label": "ef30879f+codex-working",
+    "entry_sha256": "694fbfb0a8de1c6c7eb6f815b2ff1d4ab3f88fec568c57004973c50dad71edf9",
+    "dist_sha256": "76e0542213534af26a91a743a4bc0502c86a30acd88d9b53f1a9167bedda5dfd",
+    "results": [
+      {
+        "rep": 1,
+        "room": "codex-busy-1",
+        "exit": 0,
+        "oracle": false,
+        "step_at_mention": 2,
+        "step_at_reply": 2,
+        "mention_to_reply_ms": 7884,
+        "replied": true,
+        "tool_calls": 4,
+        "tool_response_bytes": 2845,
+        "usage": {
+          "input_tokens": 352120,
+          "cached_input_tokens": 324736,
+          "cache_write_input_tokens": 0,
+          "output_tokens": 724,
+          "reasoning_output_tokens": 157
+        },
+        "stats": {
+          "room": "codex-busy-1",
+          "state": "open",
+          "reply_metrics": {
+            "schema_version": 1,
+            "window_minutes": 15,
+            "as_of": "2026-10-03T18:33:51.856Z",
+            "observation_end": "2026-10-03T18:33:51.856Z",
+            "definition": "Deduplicated persisted non-opening agent chat/target pairs, public and quiet; membership at ask from ordered join/leave events. Strict reply is later target chat with exact replyTo or persisted @-back within <=window; one reply may credit multiple asks. Syntactic proxy, not task success. Activity counts any later non-opening target post. Unknown membership excluded from live denominator; pending includes early answered pairs.",
+            "mentions": 1,
+            "to_departed": 0,
+            "departure_unknown": 0,
+            "live_mentions": 1,
+            "answered_within_window": 1,
+            "reply_rate": 1,
+            "mature_live_mentions": 0,
+            "mature_answered_within_window": 0,
+            "mature_reply_rate": null,
+            "pending_live_mentions": 1,
+            "activity_within_window": 1,
+            "declined_within_window": null,
+            "decline_coverage": "unknown"
+          },
+          "duration_ms": 85235,
+          "time_to_conclusion_ms": null,
+          "messages_by_kind": {
+            "system": 3,
+            "chat": 2
+          },
+          "per_participant": [
+            {
+              "name": "pinger",
+              "agent": "script",
+              "chat_messages": 1,
+              "passes": 0,
+              "chars": 87
+            },
+            {
+              "name": "worker",
+              "agent": "codex",
+              "chat_messages": 1,
+              "passes": 0,
+              "chars": 2
+            }
+          ],
+          "proposals": 0,
+          "proposal_electorates": [],
+          "conclusion_electorate": null,
+          "amendments": 0,
+          "challenges": 0,
+          "board_entries": 0,
+          "board_manifests": {
+            "version": 1,
+            "waits": 1,
+            "bytes": 45,
+            "full": 1,
+            "delta": 0,
+            "empty": 0
+          },
+          "board_manifest": {
+            "coverage": "since-process-start",
+            "waits_observed": 1,
+            "full_baseline_manifest_bytes": 17,
+            "shipped_manifest_bytes": 36,
+            "keys_shipped": 0,
+            "deleted_tombstones_shipped": 0,
+            "current_full_manifest_bytes": 17,
+            "entries_by_prefix": {
+              "claim/": 0,
+              "evidence/": 0,
+              "sources/": 0,
+              "handoff/": 0,
+              "inbox/": 0,
+              "verify/": 0,
+              "other": 0
+            }
+          },
+          "refusals": {},
+          "call_outcomes": {
+            "join_room": {
+              "success": 2,
+              "hub_refusal": 0,
+              "error": 0
+            },
+            "send_message": {
+              "success": 2,
+              "hub_refusal": 0,
+              "error": 0
+            },
+            "wait_for_messages": {
+              "success": 1,
+              "hub_refusal": 0,
+              "error": 0
+            },
+            "leave_room": {
+              "success": 1,
+              "hub_refusal": 0,
+              "error": 0
+            }
+          },
+          "refusal_rates": {
+            "join_room": 0,
+            "send_message": 0,
+            "wait_for_messages": 0,
+            "leave_room": 0
+          },
+          "refusal_rate_coverage": "complete",
+          "near_simultaneous_replies": 0,
+          "unanswered_human_messages": 0
+        },
+        "steering_text_bytes": 220
+      },
+      {
+        "rep": 2,
+        "room": "codex-busy-2",
+        "exit": 0,
+        "oracle": false,
+        "step_at_mention": 2,
+        "step_at_reply": 2,
+        "mention_to_reply_ms": 8776,
+        "replied": true,
+        "tool_calls": 4,
+        "tool_response_bytes": 2845,
+        "usage": {
+          "input_tokens": 354121,
+          "cached_input_tokens": 325888,
+          "cache_write_input_tokens": 0,
+          "output_tokens": 695,
+          "reasoning_output_tokens": 120
+        },
+        "stats": {
+          "room": "codex-busy-2",
+          "state": "open",
+          "reply_metrics": {
+            "schema_version": 1,
+            "window_minutes": 15,
+            "as_of": "2026-10-03T18:35:27.578Z",
+            "observation_end": "2026-10-03T18:35:27.578Z",
+            "definition": "Deduplicated persisted non-opening agent chat/target pairs, public and quiet; membership at ask from ordered join/leave events. Strict reply is later target chat with exact replyTo or persisted @-back within <=window; one reply may credit multiple asks. Syntactic proxy, not task success. Activity counts any later non-opening target post. Unknown membership excluded from live denominator; pending includes early answered pairs.",
+            "mentions": 1,
+            "to_departed": 0,
+            "departure_unknown": 0,
+            "live_mentions": 1,
+            "answered_within_window": 1,
+            "reply_rate": 1,
+            "mature_live_mentions": 0,
+            "mature_answered_within_window": 0,
+            "mature_reply_rate": null,
+            "pending_live_mentions": 1,
+            "activity_within_window": 1,
+            "declined_within_window": null,
+            "decline_coverage": "unknown"
+          },
+          "duration_ms": 87512,
+          "time_to_conclusion_ms": null,
+          "messages_by_kind": {
+            "system": 3,
+            "chat": 2
+          },
+          "per_participant": [
+            {
+              "name": "pinger",
+              "agent": "script",
+              "chat_messages": 1,
+              "passes": 0,
+              "chars": 87
+            },
+            {
+              "name": "worker",
+              "agent": "codex",
+              "chat_messages": 1,
+              "passes": 0,
+              "chars": 2
+            }
+          ],
+          "proposals": 0,
+          "proposal_electorates": [],
+          "conclusion_electorate": null,
+          "amendments": 0,
+          "challenges": 0,
+          "board_entries": 0,
+          "board_manifests": {
+            "version": 1,
+            "waits": 1,
+            "bytes": 45,
+            "full": 1,
+            "delta": 0,
+            "empty": 0
+          },
+          "board_manifest": {
+            "coverage": "since-process-start",
+            "waits_observed": 1,
+            "full_baseline_manifest_bytes": 17,
+            "shipped_manifest_bytes": 36,
+            "keys_shipped": 0,
+            "deleted_tombstones_shipped": 0,
+            "current_full_manifest_bytes": 17,
+            "entries_by_prefix": {
+              "claim/": 0,
+              "evidence/": 0,
+              "sources/": 0,
+              "handoff/": 0,
+              "inbox/": 0,
+              "verify/": 0,
+              "other": 0
+            }
+          },
+          "refusals": {},
+          "call_outcomes": {
+            "join_room": {
+              "success": 2,
+              "hub_refusal": 0,
+              "error": 0
+            },
+            "send_message": {
+              "success": 2,
+              "hub_refusal": 0,
+              "error": 0
+            },
+            "wait_for_messages": {
+              "success": 1,
+              "hub_refusal": 0,
+              "error": 0
+            },
+            "leave_room": {
+              "success": 1,
+              "hub_refusal": 0,
+              "error": 0
+            }
+          },
+          "refusal_rates": {
+            "join_room": 0,
+            "send_message": 0,
+            "wait_for_messages": 0,
+            "leave_room": 0
+          },
+          "refusal_rate_coverage": "complete",
+          "near_simultaneous_replies": 0,
+          "unanswered_human_messages": 0
+        },
+        "steering_text_bytes": 220
+      },
+      {
+        "rep": 3,
+        "room": "codex-busy-3",
+        "exit": 0,
+        "oracle": false,
+        "step_at_mention": 2,
+        "step_at_reply": 2,
+        "mention_to_reply_ms": 8924,
+        "replied": true,
+        "tool_calls": 4,
+        "tool_response_bytes": 2845,
+        "usage": {
+          "input_tokens": 352038,
+          "cached_input_tokens": 324608,
+          "cache_write_input_tokens": 0,
+          "output_tokens": 718,
+          "reasoning_output_tokens": 157
+        },
+        "stats": {
+          "room": "codex-busy-3",
+          "state": "open",
+          "reply_metrics": {
+            "schema_version": 1,
+            "window_minutes": 15,
+            "as_of": "2026-10-03T18:36:57.371Z",
+            "observation_end": "2026-10-03T18:36:57.371Z",
+            "definition": "Deduplicated persisted non-opening agent chat/target pairs, public and quiet; membership at ask from ordered join/leave events. Strict reply is later target chat with exact replyTo or persisted @-back within <=window; one reply may credit multiple asks. Syntactic proxy, not task success. Activity counts any later non-opening target post. Unknown membership excluded from live denominator; pending includes early answered pairs.",
+            "mentions": 1,
+            "to_departed": 0,
+            "departure_unknown": 0,
+            "live_mentions": 1,
+            "answered_within_window": 1,
+            "reply_rate": 1,
+            "mature_live_mentions": 0,
+            "mature_answered_within_window": 0,
+            "mature_reply_rate": null,
+            "pending_live_mentions": 1,
+            "activity_within_window": 1,
+            "declined_within_window": null,
+            "decline_coverage": "unknown"
+          },
+          "duration_ms": 80441,
+          "time_to_conclusion_ms": null,
+          "messages_by_kind": {
+            "system": 3,
+            "chat": 2
+          },
+          "per_participant": [
+            {
+              "name": "pinger",
+              "agent": "script",
+              "chat_messages": 1,
+              "passes": 0,
+              "chars": 87
+            },
+            {
+              "name": "worker",
+              "agent": "codex",
+              "chat_messages": 1,
+              "passes": 0,
+              "chars": 2
+            }
+          ],
+          "proposals": 0,
+          "proposal_electorates": [],
+          "conclusion_electorate": null,
+          "amendments": 0,
+          "challenges": 0,
+          "board_entries": 0,
+          "board_manifests": {
+            "version": 1,
+            "waits": 1,
+            "bytes": 45,
+            "full": 1,
+            "delta": 0,
+            "empty": 0
+          },
+          "board_manifest": {
+            "coverage": "since-process-start",
+            "waits_observed": 1,
+            "full_baseline_manifest_bytes": 17,
+            "shipped_manifest_bytes": 36,
+            "keys_shipped": 0,
+            "deleted_tombstones_shipped": 0,
+            "current_full_manifest_bytes": 17,
+            "entries_by_prefix": {
+              "claim/": 0,
+              "evidence/": 0,
+              "sources/": 0,
+              "handoff/": 0,
+              "inbox/": 0,
+              "verify/": 0,
+              "other": 0
+            }
+          },
+          "refusals": {},
+          "call_outcomes": {
+            "join_room": {
+              "success": 2,
+              "hub_refusal": 0,
+              "error": 0
+            },
+            "send_message": {
+              "success": 2,
+              "hub_refusal": 0,
+              "error": 0
+            },
+            "wait_for_messages": {
+              "success": 1,
+              "hub_refusal": 0,
+              "error": 0
+            },
+            "leave_room": {
+              "success": 1,
+              "hub_refusal": 0,
+              "error": 0
+            }
+          },
+          "refusal_rates": {
+            "join_room": 0,
+            "send_message": 0,
+            "wait_for_messages": 0,
+            "leave_room": 0
+          },
+          "refusal_rate_coverage": "complete",
+          "near_simultaneous_replies": 0,
+          "unanswered_human_messages": 0
+        },
+        "steering_text_bytes": 220
+      }
+    ]
+  },
+  "clarified_followup": {
+    "before": {
+      "build": "/tmp/astra3-steer-base",
+      "build_label": "af26d162",
+      "strict_format": true,
+      "entry_sha256": "3d738c13d35c046e939f690435dc51045d37cb98268c24d82828a07763fbda0b",
+      "dist_sha256": "b56aa836e5724d0dd3aad116b9f9093e4fe756cb28d9c2bde10dca289bb6cfff",
+      "results": [
+        {
+          "rep": 1,
+          "room": "codex-busy-1",
+          "exit": 0,
+          "oracle": true,
+          "step_at_mention": 2,
+          "step_at_reply": 8,
+          "mention_to_reply_ms": 52958,
+          "replied": true,
+          "tool_calls": 4,
+          "tool_response_bytes": 3180,
+          "usage": {
+            "input_tokens": 431202,
+            "cached_input_tokens": 409728,
+            "cache_write_input_tokens": 0,
+            "output_tokens": 537,
+            "reasoning_output_tokens": 0
+          },
+          "stats": {
+            "room": "codex-busy-1",
+            "state": "open",
+            "reply_metrics": {
+              "schema_version": 1,
+              "window_minutes": 15,
+              "as_of": "2026-10-03T18:40:46.211Z",
+              "observation_end": "2026-10-03T18:40:46.211Z",
+              "definition": "Deduplicated persisted non-opening agent chat/target pairs, public and quiet; membership at ask from ordered join/leave events. Strict reply is later target chat with exact replyTo or persisted @-back within <=window; one reply may credit multiple asks. Syntactic proxy, not task success. Activity counts any later non-opening target post. Unknown membership excluded from live denominator; pending includes early answered pairs.",
+              "mentions": 1,
+              "to_departed": 0,
+              "departure_unknown": 0,
+              "live_mentions": 1,
+              "answered_within_window": 1,
+              "reply_rate": 1,
+              "mature_live_mentions": 0,
+              "mature_answered_within_window": 0,
+              "mature_reply_rate": null,
+              "pending_live_mentions": 1,
+              "activity_within_window": 1,
+              "declined_within_window": null,
+              "decline_coverage": "unknown"
+            },
+            "duration_ms": 81646,
+            "time_to_conclusion_ms": null,
+            "messages_by_kind": {
+              "system": 3,
+              "chat": 2
+            },
+            "per_participant": [
+              {
+                "name": "pinger",
+                "agent": "script",
+                "chat_messages": 1,
+                "passes": 0,
+                "chars": 87
+              },
+              {
+                "name": "worker",
+                "agent": "codex",
+                "chat_messages": 1,
+                "passes": 0,
+                "chars": 2
+              }
+            ],
+            "proposals": 0,
+            "proposal_electorates": [],
+            "conclusion_electorate": null,
+            "amendments": 0,
+            "challenges": 0,
+            "board_entries": 0,
+            "board_manifests": {
+              "version": 1,
+              "waits": 1,
+              "bytes": 45,
+              "full": 1,
+              "delta": 0,
+              "empty": 0
+            },
+            "board_manifest": {
+              "coverage": "since-process-start",
+              "waits_observed": 1,
+              "full_baseline_manifest_bytes": 17,
+              "shipped_manifest_bytes": 36,
+              "keys_shipped": 0,
+              "deleted_tombstones_shipped": 0,
+              "current_full_manifest_bytes": 17,
+              "entries_by_prefix": {
+                "claim/": 0,
+                "evidence/": 0,
+                "sources/": 0,
+                "handoff/": 0,
+                "inbox/": 0,
+                "verify/": 0,
+                "other": 0
+              }
+            },
+            "refusals": {},
+            "call_outcomes": {
+              "join_room": {
+                "success": 2,
+                "hub_refusal": 0,
+                "error": 0
+              },
+              "send_message": {
+                "success": 2,
+                "hub_refusal": 0,
+                "error": 0
+              },
+              "wait_for_messages": {
+                "success": 1,
+                "hub_refusal": 0,
+                "error": 0
+              },
+              "leave_room": {
+                "success": 1,
+                "hub_refusal": 0,
+                "error": 0
+              }
+            },
+            "refusal_rates": {
+              "join_room": 0,
+              "send_message": 0,
+              "wait_for_messages": 0,
+              "leave_room": 0
+            },
+            "refusal_rate_coverage": "complete",
+            "near_simultaneous_replies": 0,
+            "unanswered_human_messages": 0
+          }
+        }
+      ]
+    },
+    "after": {
+      "build": "/tmp/astra3-steer-head",
+      "build_label": "ef30879f+codex-working",
+      "strict_format": true,
+      "entry_sha256": "694fbfb0a8de1c6c7eb6f815b2ff1d4ab3f88fec568c57004973c50dad71edf9",
+      "dist_sha256": "76e0542213534af26a91a743a4bc0502c86a30acd88d9b53f1a9167bedda5dfd",
+      "results": [
+        {
+          "rep": 1,
+          "room": "codex-busy-1",
+          "exit": 0,
+          "oracle": true,
+          "step_at_mention": 2,
+          "step_at_reply": 2,
+          "mention_to_reply_ms": 7418,
+          "replied": true,
+          "tool_calls": 4,
+          "tool_response_bytes": 2845,
+          "usage": {
+            "input_tokens": 344455,
+            "cached_input_tokens": 329088,
+            "cache_write_input_tokens": 0,
+            "output_tokens": 559,
+            "reasoning_output_tokens": 0
+          },
+          "stats": {
+            "room": "codex-busy-1",
+            "state": "open",
+            "reply_metrics": {
+              "schema_version": 1,
+              "window_minutes": 15,
+              "as_of": "2026-10-03T18:42:13.214Z",
+              "observation_end": "2026-10-03T18:42:13.214Z",
+              "definition": "Deduplicated persisted non-opening agent chat/target pairs, public and quiet; membership at ask from ordered join/leave events. Strict reply is later target chat with exact replyTo or persisted @-back within <=window; one reply may credit multiple asks. Syntactic proxy, not task success. Activity counts any later non-opening target post. Unknown membership excluded from live denominator; pending includes early answered pairs.",
+              "mentions": 1,
+              "to_departed": 0,
+              "departure_unknown": 0,
+              "live_mentions": 1,
+              "answered_within_window": 1,
+              "reply_rate": 1,
+              "mature_live_mentions": 0,
+              "mature_answered_within_window": 0,
+              "mature_reply_rate": null,
+              "pending_live_mentions": 1,
+              "activity_within_window": 1,
+              "declined_within_window": null,
+              "decline_coverage": "unknown"
+            },
+            "duration_ms": 82239,
+            "time_to_conclusion_ms": null,
+            "messages_by_kind": {
+              "system": 3,
+              "chat": 2
+            },
+            "per_participant": [
+              {
+                "name": "pinger",
+                "agent": "script",
+                "chat_messages": 1,
+                "passes": 0,
+                "chars": 87
+              },
+              {
+                "name": "worker",
+                "agent": "codex",
+                "chat_messages": 1,
+                "passes": 0,
+                "chars": 2
+              }
+            ],
+            "proposals": 0,
+            "proposal_electorates": [],
+            "conclusion_electorate": null,
+            "amendments": 0,
+            "challenges": 0,
+            "board_entries": 0,
+            "board_manifests": {
+              "version": 1,
+              "waits": 1,
+              "bytes": 45,
+              "full": 1,
+              "delta": 0,
+              "empty": 0
+            },
+            "board_manifest": {
+              "coverage": "since-process-start",
+              "waits_observed": 1,
+              "full_baseline_manifest_bytes": 17,
+              "shipped_manifest_bytes": 36,
+              "keys_shipped": 0,
+              "deleted_tombstones_shipped": 0,
+              "current_full_manifest_bytes": 17,
+              "entries_by_prefix": {
+                "claim/": 0,
+                "evidence/": 0,
+                "sources/": 0,
+                "handoff/": 0,
+                "inbox/": 0,
+                "verify/": 0,
+                "other": 0
+              }
+            },
+            "refusals": {},
+            "call_outcomes": {
+              "join_room": {
+                "success": 2,
+                "hub_refusal": 0,
+                "error": 0
+              },
+              "send_message": {
+                "success": 2,
+                "hub_refusal": 0,
+                "error": 0
+              },
+              "wait_for_messages": {
+                "success": 1,
+                "hub_refusal": 0,
+                "error": 0
+              },
+              "leave_room": {
+                "success": 1,
+                "hub_refusal": 0,
+                "error": 0
+              }
+            },
+            "refusal_rates": {
+              "join_room": 0,
+              "send_message": 0,
+              "wait_for_messages": 0,
+              "leave_room": 0
+            },
+            "refusal_rate_coverage": "complete",
+            "near_simultaneous_replies": 0,
+            "unanswered_human_messages": 0
+          }
+        }
+      ]
+    }
+  }
+}

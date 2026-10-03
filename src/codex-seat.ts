@@ -5,6 +5,18 @@
  * local `codex exec --help` (codex-cli 0.155.0-alpha.16.3).
  */
 import { StringDecoder } from "node:string_decoder";
+import { existsSync } from "node:fs";
+import { resolve } from "node:path";
+import { repoRoot } from "./env.js";
+
+export function codexConfigArgs(mcpUrl: string): string[] {
+  return ["-c", `mcp_servers.chatroom.url=${JSON.stringify(mcpUrl)}`, "-c", "mcp_servers.chatroom.tool_timeout_sec=120", "-c", 'mcp_servers.chatroom.default_tools_approval_mode="approve"'];
+}
+
+export function codexSeatCommand(options: CodexArgsOptions): { cmd: string; args: string[] } {
+  const built = resolve(repoRoot, "dist/codex/cli.js");
+  return { cmd: process.execPath, args: [...(existsSync(built) ? [built] : ["--import", import.meta.resolve("tsx"), resolve(repoRoot, "src/codex/cli.ts")]), ...codexArgs(options)] };
+}
 
 export interface CodexArgsOptions {
   /** the seat's working root (-C) */
@@ -41,7 +53,7 @@ export interface CodexArgsOptions {
  * Only the chatroom server is approved; other MCP servers in the user's config stay behind the sandbox's approval.
  */
 export function codexArgs({ cwd, mcpUrl, model, readOnly, outFile, json }: CodexArgsOptions): string[] {
-  const args = ["exec", "--skip-git-repo-check", "-C", cwd, "-c", `mcp_servers.chatroom.url="${mcpUrl}"`, "-c", "mcp_servers.chatroom.tool_timeout_sec=120", "-c", 'mcp_servers.chatroom.default_tools_approval_mode="approve"'];
+  const args = ["exec", "--skip-git-repo-check", "-C", cwd, ...codexConfigArgs(mcpUrl)];
   if (readOnly) args.push("-s", "read-only");
   if (json) args.push("--json");
   if (outFile) args.push("-o", outFile);

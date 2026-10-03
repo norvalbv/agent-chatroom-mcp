@@ -27,12 +27,30 @@ export const CODEX_TWO_TURN_SIDECAR = {
 
 /** Stub `codex`: records its argv, stdin and cwd in $FAKE_RECORD_DIR, writes the -o file, prints the recorded stream under --json. */
 const FAKE_CODEX = `#!/usr/bin/env node
-const fs = require('node:fs'), path = require('node:path'), crypto = require('node:crypto');
-const argv = process.argv.slice(2), stdin = fs.readFileSync(0, 'utf8');
-fs.writeFileSync(path.join(process.env.FAKE_RECORD_DIR, 'codex-' + crypto.randomUUID() + '.json'), JSON.stringify({ argv, stdin, cwd: process.cwd() }));
-const o = argv.indexOf('-o');
-if (o >= 0) fs.writeFileSync(argv[o + 1], 'codex final text\\n');
-process.stdout.write(argv.includes('--json') ? ${JSON.stringify(CODEX_TWO_TURN_JSONL)} : 'codex final text\\n');
+const fs = require('node:fs'), path = require('node:path'), crypto = require('node:crypto'), readline = require('node:readline');
+const argv = process.argv.slice(2);
+if (argv[0] === 'app-server') {
+ let stdin = '', thread;
+ const send = value => process.stdout.write(JSON.stringify(value) + '\\n');
+ readline.createInterface({input:process.stdin}).on('line', line => {
+  stdin += line + '\\n'; const request = JSON.parse(line);
+  if (request.method === 'initialize') send({id:request.id,result:{}});
+  if (request.method === 'thread/start') { thread=request.params; send({id:request.id,result:{thread:{id:'thread'}}}); }
+  if (request.method === 'turn/start') {
+   fs.writeFileSync(path.join(process.env.FAKE_RECORD_DIR, 'codex-' + crypto.randomUUID() + '.json'), JSON.stringify({argv,stdin,cwd:process.cwd(),thread}));
+   send({id:request.id,result:{turn:{id:'turn'}}});
+   send({method:'item/completed',params:{threadId:'thread',turnId:'turn',item:{id:'item_0',type:'agentMessage',text:'codex final text'}}});
+   send({method:'thread/tokenUsage/updated',params:{threadId:'thread',turnId:'turn',tokenUsage:{total:{inputTokens:44084,cachedInputTokens:31360,cacheWriteInputTokens:0,outputTokens:12,reasoningOutputTokens:0}}}});
+   send({method:'turn/completed',params:{threadId:'thread',turn:{id:'turn',status:'completed'}}});
+  }
+ });
+} else {
+ const stdin = fs.readFileSync(0, 'utf8');
+ fs.writeFileSync(path.join(process.env.FAKE_RECORD_DIR, 'codex-' + crypto.randomUUID() + '.json'), JSON.stringify({ argv, stdin, cwd: process.cwd() }));
+ const o = argv.indexOf('-o');
+ if (o >= 0) fs.writeFileSync(argv[o + 1], 'codex final text\\n');
+ process.stdout.write(argv.includes('--json') ? ${JSON.stringify(CODEX_TWO_TURN_JSONL)} : 'codex final text\\n');
+}
 `;
 /** Stub claude: records like the codex stub and prints a result envelope. */
 const FAKE_CLAUDE = `#!/usr/bin/env node

@@ -3,8 +3,10 @@
 
 Usage: scripts/refused-send-split.py --run-dir swarms/<run> [--transcript claude-session.jsonl ...]
 A refusal is any send_message result without a "sent" receipt. "Next" compares the refused content with the seat's
-next send_message (difflib ratio): same (>0.9) means the refusal only cost a retry; different (<0.5) means the seat
-said something else after reading what had arrived.
+next send_message (difflib ratio): same (>0.9) marks a near-identical next send, a candidate retry; it does not
+establish that the refusal had no value. Different (<0.5) means the seat said something else after reading what had
+arrived. Scope: completed calls in `codex exec --json` event traces (item.completed mcp_tool_call) and Claude Code
+session transcripts, i.e. historical runs; native app-server Codex events are not parsed here.
 """
 import argparse
 import collections

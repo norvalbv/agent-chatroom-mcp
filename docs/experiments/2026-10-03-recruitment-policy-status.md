@@ -48,8 +48,12 @@ the evidence is `verify/recruitment-state-astra5` in `swarm-202803-dpij-room`.
 Build, script typecheck and private-hub smoke passed. The existing status-size
 regression passes its unchanged bound: 4,439 bytes. Returning every budget by
 default initially failed that check at 4,932 bytes; the explicit detail option
-keeps repeated status reads compact. Full-suite and live benchmark results will
-be appended once complete.
+keeps repeated status reads compact. The full suite exposed two VM fixture loaders that did not yet load the new
+pure helper. Commit `4e4f2387` adds that real dependency without changing OS mocks
+or spawn assertions; an independent reviewer reproduced fail-before/pass-after
+for both suites. The subsequent full-suite run hit the separately reproduced
+`pool-run.test.ts` timestamp collision; merged-tree validation must include its
+reviewed fixture correction before landing.
 
 ## Behaviour trial contract
 
@@ -66,3 +70,75 @@ processes, while the hub still records the call. This evaluates pre-action choic
 correctness under dry spawning; it does **not** establish spontaneous recruitment
 adoption, successful specialist work or a general cost improvement. Both arms set
 `DISABLE_PROMPT_CACHING=1`; transcript evidence must still confirm cold starts.
+
+## Live results
+
+Three clean pairs ran sequentially on private ports 38730 and 38731. Every room
+used three Claude Opus 5.5 seats, including its verifier. All eighteen initial
+provider requests have explicit zero cache reads with their initial context
+present in the traces; all reported subsequent cache reads and writes were also
+zero. The prompt, oracle, pins and cap were identical across arms. The served
+entry and complete `dist/` hashes, room names, trace hashes, first-request usage,
+per-tool counts and full provider usage are committed in
+`docs/measurements/recruit-policy-{base2,base3,base4,head1,head2,head3}.json`.
+
+| Pair / arm | Model turns | All tools / hub tools | Cost USD | USD / model turn | Conclusion seconds | Strict oracle | Facts |
+| --- | ---: | ---: | ---: | ---: | ---: | --- | --- |
+| 1 / base | 59 | 71 / 44 | 8.074795 | 0.136861 | 78.429 | fail | correct |
+| 1 / head | 32 | 44 / 42 | 3.319626 | 0.103738 | 39.282 | pass | correct |
+| 2 / base | 64 | 78 / 48 | 9.435470 | 0.147429 | 81.354 | pass | correct |
+| 2 / head | 33 | 43 / 42 | 3.353686 | 0.101627 | 59.170 | pass | correct |
+| 3 / base | 53 | 60 / 39 | 7.254356 | 0.136875 | 110.921 | fail | correct |
+| 3 / head | 34 | 45 / 43 | 3.577708 | 0.105227 | 43.343 | fail | correct |
+
+Both arms made the correct staffing decision in every room, and neither arm
+attempted recruitment. The strict frozen oracle passes one baseline and two
+candidate runs. Its three failures are formatting failures: a correct JSON
+object followed by explanatory prose instead of a wholly JSON board value. The
+separate facts column is a **post-hoc diagnostic**, parsing the initial JSON
+object; it does not replace or loosen the frozen oracle. These formatting
+differences do not establish improved recruitment judgment.
+
+The supported effect is lower information-gathering effort on this brief. Mean
+room cost fell from $8.254874 to $3.417007; mean model turns from 58.667 to 33;
+mean tool calls from 69.667 to 44; and mean conclusion time from 90.235 to 47.265
+seconds. Cost per model turn, computed as total dollars divided by total turns
+within each arm, was $0.140708 versus $0.103546. Each candidate arm cost less than
+its paired baseline. Baseline seats inspected the HTTP policy, process environment
+and local source; candidate seats used `room_status`, sometimes checking the
+environment too. Non-hub tool calls totaled 78 versus 5, while hub calls were
+131 versus 127. Model turns and costs cover the complete seat sessions, including
+closing output; conclusion time measures room creation to its recorded decision.
+
+This is a small, synthetic staffing-decision trial, with all prompt caching
+disabled throughout. It does not estimate costs under normal warm caches, show
+that a needed specialist gets useful work done, or establish more spontaneous
+recruitment. Agents shared the host and could inspect local configuration; the
+baseline successfully used that fallback. There is no evidence here that the
+baseline lacked the judgment needed to make the correct choice.
+
+The earlier pilot `swarm-205502-srzq-room` is excluded and retained separately as
+`docs/measurements/recruit-policy-base1.json`. Its runner exposed the candidate
+checkout through `BENCH_SOURCE`, and a baseline seat read that source. The clean
+runner removes the variable from child environments and uses a fresh, neutrally
+named workspace for every arm. No clean baseline tool input referenced the
+candidate checkout path. The pilot's cost and outcome are excluded from all
+comparisons above.
+
+## Reproduction
+
+`scripts/recruitment-policy-bench.mjs` is the runner used for the clean arms; it
+starts the selected build's hub, runs the committed brief with the fixed pins,
+records build hashes and usage, invokes the frozen oracle, and stops only its
+own launcher and hub PIDs. For example, after building each checkout:
+
+```sh
+BENCH_SOURCE="$PWD" node scripts/recruitment-policy-bench.mjs /path/to/base base2 38730 31daae67
+BENCH_SOURCE="$PWD" node scripts/recruitment-policy-bench.mjs "$PWD" head1 38731 fa01036f
+```
+
+Audit each recorded run directory with `scripts/swarm-tool-usage.py --run-dir
+<run> --discover-claude --expected-seats 3 --require-cold-start`. The experiment
+used the analyzer at `70c08f97`; raw provider transcripts remain local, identified
+by SHA-256 in the committed measurements. Total model turns sum its per-seat
+`request_cache.provider_requests`; tool totals sum its per-seat call counts.

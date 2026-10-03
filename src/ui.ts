@@ -1,5 +1,6 @@
 import { UI_CSS } from "./ui/styles.js";
 import { BOARD_CSS, BOARD_JS } from "./ui/board.js";
+import { ROOMS_CSS, ROOMS_STATE, ROOMS_JS } from "./ui/rooms.js";
 
 /**
  * Live dashboard served at /ui. No browser bundler: it polls the JSON endpoints
@@ -27,7 +28,8 @@ export const UI_HTML = `<!doctype html>
 ${PALETTE_CSS}
 ${INBOX_CSS}
 ${CATCHUP_CSS}
-${BOARD_CSS}</style>
+${BOARD_CSS}
+${ROOMS_CSS}</style>
 </head>
 <body data-view="chat">
 <aside id="rail">
@@ -126,30 +128,7 @@ ${PALETTE_HTML}
   }
   /*act:end*/
   var actRows = function (el) { return Array.prototype.filter.call(el.children, function (c) { return c.dataset && c.dataset.k; }).map(function (c) { return { k: c.dataset.k, top: c.offsetTop, height: c.offsetHeight }; }); };
-  // rooms rail: sort, state filter, archived toggle
-  var sortBy = store.get('sort', 'newest'), stOff = store.get('stOff', {}), showArch = /[?&]archived=1/.test(location.search) || store.get('showArch', false);
-  var stKey = function (r) { return (r.state === 'open' || r.state === 'stalled') ? 'live' : r.state; };
-  var roomCmp = function (a, b) {
-    if (sortBy === 'name') return a.name.localeCompare(b.name);
-    if (sortBy === 'active') return (b.active_count || 0) - (a.active_count || 0) || b.created_at.localeCompare(a.created_at);
-    if (sortBy === 'msgs') return (b.message_count || 0) - (a.message_count || 0) || b.created_at.localeCompare(a.created_at);
-    return b.created_at.localeCompare(a.created_at);
-  };
-  $('#sort').value = sortBy;
-  $('#sort').onchange = function () { sortBy = $('#sort').value; store.set('sort', sortBy); renderRooms(); };
-  $$('#rctl .tog[data-st]').forEach(function (b) {
-    b.classList.toggle('on', !stOff[b.dataset.st]);
-    b.onclick = function () { stOff[b.dataset.st] = !stOff[b.dataset.st]; store.set('stOff', stOff); b.classList.toggle('on', !stOff[b.dataset.st]); renderRooms(); };
-  });
-  $('#showarch').classList.toggle('on', showArch);
-  $('#showarch').onclick = function () { showArch = !showArch; store.set('showArch', showArch); $('#showarch').classList.toggle('on', showArch); refreshRooms(); };
-  $('#archdead').onclick = async function () {
-    if (!window.confirm('Archive every room nobody is in? Nothing is deleted: transcripts stay on disk and the rooms reappear under "archived".')) return;
-    var res = await fetch('/rooms/archive-dead', { method: 'POST', headers: hdrs(), body: JSON.stringify({ name: myName() }) });
-    var out = res.ok ? await res.json() : { archived: [] };
-    $('#sub').textContent = 'archived ' + out.archived.length + ' rooms';
-    refreshRooms();
-  };
+${ROOMS_STATE}
   // transcript filter: kinds, one participant, text
   var kindOff = {}, msgQuery = '', whoF = '';
   var kindGroup = function (m) { return m.kind === 'chat' ? 'chat' : (m.kind === 'proposal' || m.kind === 'amend' || m.kind === 'challenge' || m.kind === 'conclusion') ? 'cards' : m.kind === 'vote' ? 'vote' : m.kind === 'board' ? 'board' : m.kind === 'system' ? 'system' : 'other'; };
@@ -223,52 +202,10 @@ ${PALETTE_HTML}
     return out;
   };
 
-  // ---------- rooms rail ----------
-  function renderRooms() {
-    var q = ($('#filter').value || '').toLowerCase();
-    var live = rooms.filter(function (r) { return r.state === 'open' || r.state === 'stalled'; }).length;
-    var shown = 0;
-    var groups = {}, order = [];
-    rooms.slice().sort(roomCmp).forEach(function (r) {
-      if (stOff[stKey(r)]) return;
-      if (q && r.name.toLowerCase().indexOf(q) < 0 && (r.topic || '').toLowerCase().indexOf(q) < 0) return;
-      shown++;
-      var g = runOf(r.name) || 'other';
-      if (!groups[g]) { groups[g] = []; order.push(g); }
-      groups[g].push(r);
-    });
-    // a run with a live room floats up; within a run the main/leads room first
-    order.sort(function (a, b) {
-      var la = groups[a].some(function (r) { return r.state === 'open' || r.state === 'stalled'; }), lb = groups[b].some(function (r) { return r.state === 'open' || r.state === 'stalled'; });
-      if (la !== lb) return la ? -1 : 1; return roomCmp(groups[a][0], groups[b][0]);
-    });
-    $('#sub').className = 'sub'; $('#sub').textContent = live + ' live · ' + shown + ' of ' + rooms.length + ' rooms' + (showArch ? ' incl. archived' : '');
-    var html = order.map(function (g) {
-      var rs = groups[g].slice().sort(function (a, b) {
-        var ra = /-(room|leads)$/.test(a.name) ? 0 : 1, rb = /-(room|leads)$/.test(b.name) ? 0 : 1;
-        return ra !== rb ? ra - rb : sortBy === 'newest' ? a.created_at.localeCompare(b.created_at) : roomCmp(a, b);
-      });
-      var liveN = rs.filter(function (r) { return r.state === 'open' || r.state === 'stalled'; }).length;
-      var closed = openRuns[g] === false && !rs.some(function (r) { return r.name === sel; });
-      var items = rs.map(function (r) {
-        var unread = Math.max(0, (r.latest_seq || 0) - (lastSeen[r.name] || 0));
-        var short = g === 'other' ? r.name : r.name.slice(g.length + 1);
-        var meta = (r.state === 'open' || r.state === 'stalled') ? r.active_count + ' active · ' + r.message_count + ' msgs' : r.state + ' · ' + r.message_count + ' msgs';
-        return '<button class="room' + (r.name === sel ? ' sel' : '') + '" data-r="' + esc(r.name) + '" title="' + esc(r.topic || r.name) + '">'
-          + '<span class="dot ' + r.state + '"></span><span class="n">' + esc(short) + '</span>'
-          + qBadge(r.name)
-          + (unread && r.name !== sel ? '<span class="u' + (r.state === 'open' ? '' : ' q') + '">' + (unread > 99 ? '99+' : unread) + '</span>' : '')
-          + '<span class="m">' + esc(meta) + '</span></button>';
-      }).join('');
-      var title = g === 'other' ? 'Other rooms' : g.replace(/^swarm-/, 'run ');
-      return '<div class="run' + (closed ? ' closed' : '') + '" data-g="' + esc(g) + '"><div class="rh"><span class="car">▼</span><span class="n">' + esc(title) + '</span><span class="c">' + (liveN ? liveN + ' live' : rs.length) + '</span></div><div class="rl">' + items + '</div></div>';
-    }).join('');
-    $('#rooms').innerHTML = html || '<div class="empty">No rooms yet.</div>';
-  }
-
+${ROOMS_JS}
   // ---------- header ----------
   function renderHead(r) {
-    var open = openProposal(r);
+    var open = openProposal(r), pinFocus = document.activeElement && document.activeElement.id === 'pinroom';
     var chips = '<span class="chip ' + r.state + '">' + r.state + '</span>';
     if (open) chips += '<span class="chip prop">' + esc(open.id) + ' v' + open.version + ' · ' + open.tally.agree + '/' + voters(r) + ' agree' + (open.needs_challenge ? ' · needs challenge' : '') + '</span>';
     if (r.conclusion) chips += '<span class="chip ok">concluded ' + rel(r.conclusion.decidedAt) + '</span>';
@@ -278,11 +215,12 @@ ${PALETTE_HTML}
     var act = '<a class="btn hidephone" href="/rooms/' + encodeURIComponent(r.name) + '/transcript" target="_blank" title="Plain-text transcript">Transcript</a>'
       + ((r.state === 'open' || r.state === 'stalled') ? '<button class="btn danger" id="closeroom" title="Close this room without a conclusion">Close room</button>' : '')
       + '<button class="btn" id="archroom" title="' + (r.archived ? 'Show this room in listings again' : 'Hide this room from listings; the transcript is kept') + '">' + (r.archived ? 'Unarchive' : 'Archive') + '</button>'
-      + '<button class="btn icon" id="toginspect" title="Inspector">☰</button>';
+      + roomPinButton(r) + '<button class="btn icon" id="toginspect" title="Inspector">☰</button>';
     var topicOpen = !!expanded['topic'];
     $('#head').innerHTML = '<div class="t1"><h2>' + esc(r.name) + '</h2>' + chips + '</div><div class="acts">' + act + '</div>'
       + '<div class="topic' + (topicOpen ? ' open' : '') + '" id="topic" title="Click to expand">' + esc(r.topic || '(no topic)') + '</div><div id="pinstrip"></div>';
     renderPins();
+    bindRoomPin(r, pinFocus);
     $('#topic').onclick = function () { expanded['topic'] = !expanded['topic']; renderHead(r); };
     var cb = $('#closeroom'); if (cb) cb.onclick = function () { closeRoom(r); };
     var ab = $('#archroom'); if (ab) ab.onclick = function () { archiveRoom(r); };
@@ -521,17 +459,6 @@ ${PALETTE_HTML}
     var res = await fetch('/rooms/' + encodeURIComponent(r.name) + '/archive', { method: 'POST', headers: hdrs(), body: JSON.stringify({ name: myName(), archived: !r.archived }) });
     if (!res.ok) { $('#sub').className = 'sub bad'; $('#sub').textContent = await res.text(); return; }
     refreshRooms();
-  }
-  function select(name) {
-    if (sel && seen) { lastSeen[sel] = seen; store.set('lastSeen', lastSeen); }
-    sel = name; seen = 0; msgs = []; lastSender = null; unreadPill = 0; stats = null; expanded = {};
-    catchupSelect(name);
-    $('#log').innerHTML = '<div class="empty">Loading…</div>'; $('#newpill').style.display = 'none';
-    history.replaceState(null, '', '?room=' + encodeURIComponent(name));
-    cur = rooms.filter(function (r) { return r.name === name; })[0] || null;
-    if (cur) { renderHead(cur); renderPane(); }
-    renderRooms(); poll();
-    if (innerWidth <= 720) setView('chat');
   }
   function setView(v) { document.body.dataset.view = v; $$('#tabbar button').forEach(function (b) { b.classList.toggle('on', b.dataset.view === v); }); if (v === 'chat') toBottom(); }
   $$('#tabbar button').forEach(function (b) { b.onclick = function () { setView(b.dataset.view); }; });

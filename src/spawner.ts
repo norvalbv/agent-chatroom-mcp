@@ -403,6 +403,7 @@ export class Spawner {
     const status = this.hooks.targetStatus(req.room, req.replacing);
     if (!status) throw new HubError(`No participant named "${req.replacing}" in "${req.room}".`);
     const staleMs = req.staleMs ?? 10 * 60_000;
+    let removed = false;
     if (status.active && !status.kicked) {
       if (!req.requesterIsHuman && status.staleMs < staleMs) {
         throw new HubError(`${req.replacing} was active ${Math.round(status.staleMs / 1000)}s ago; replace is for dead sessions. Use kick_vote instead (a human on the dashboard may replace directly).`, undefined, "auth");
@@ -413,12 +414,15 @@ export class Spawner {
         throw new HubError(`${req.replacing} has been quiet for ${Math.round(status.staleMs / 1000)}s but its MCP session is still connected: a seat inside a long command is alive, not dead. Use kick_vote instead (a human on the dashboard may replace directly).`, undefined, "auth");
       }
       this.hooks.removeParticipant(req.room, req.replacing, req.requestedBy, req.reason);
+      removed = true;
     } // else: already departed or already kicked, nothing to remove -- go straight to recruiting
     const brief = req.brief?.trim() || `Take over for ${req.replacing}, who was removed from this room (${req.reason}). Read what they were doing (appended below) and continue their unfinished work.`;
     try {
       return this.request({ ...req, brief });
     } catch (e) {
       const msg = e instanceof HubError ? e.message : String(e);
+      // say "removed" only when this call removed them: a departed seat refused as away was never touched
+      if (!removed) throw new HubError(`No successor for ${req.replacing}: ${msg}`, undefined, e instanceof HubError ? e.code : undefined);
       throw new HubError(`${req.replacing} was removed, but recruiting a successor failed: ${msg} Nobody was launched; call request_agent(replacing=${JSON.stringify(req.replacing)}) once that clears.`);
     }
   }

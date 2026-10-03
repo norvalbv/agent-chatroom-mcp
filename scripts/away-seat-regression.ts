@@ -87,6 +87,10 @@ try {
   const refusedQuiet = await lead2("request_agent", { room: ROOM, brief: "take over quiet's claim", replacing: "quiet" });
   assert.ok(refusedQuiet?.error, `replacing a seat silent only since the restart must be refused, got ${JSON.stringify(refusedQuiet)}`);
   assert.match(refusedQuiet.error, /hub restarted \d+s ago/);
+  const refusedReplace = await lead2("replace_participant", { room: ROOM, target: "busy", reason: "quiet since the restart" });
+  assert.ok(refusedReplace?.error, `replace_participant on an away seat must be refused, got ${JSON.stringify(refusedReplace)}`);
+  assert.doesNotMatch(refusedReplace.error, /was removed/, "nothing was removed, so the refusal must not say so");
+  assert.match(refusedReplace.error, /still running/);
   assert.equal(await liveness("busy"), "away", "the refused replacement did not mark the seat replaced");
 
   const ok = await lead2("request_agent", { room: ROOM, brief: "take over gone's claim", replacing: "gone" });

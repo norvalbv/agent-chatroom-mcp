@@ -142,7 +142,8 @@ export const CATCHUP_JS = `/*catchup:start*/
     var pend = pendingIds() || []; pendingKey = pend.join(',');
     var chatter = function (m) { return m && !h.isSignal(m) && pend.indexOf(m.id) < 0; };
     // a fold whose rows are no longer all chatter (an ask just became pending) is unwrapped, then re-folded below
-    Array.prototype.forEach.call(log.querySelectorAll('.fold'), function (f) {
+    Array.prototype.slice.call(log.children).forEach(function (f) { // folds are always direct children of #log
+      if (!f.classList.contains('fold')) return;
       var rows = Array.prototype.slice.call(f.lastChild.children);
       if (rows.every(function (n) { return chatter(msgBySeq(+n.dataset.seq)); })) return;
       rows.forEach(function (n) { log.insertBefore(n, f); }); f.remove();

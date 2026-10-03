@@ -110,3 +110,38 @@ test("message text is escaped in the digest", () => {
   const g = cuDigest(all, 0, true, cuHelpers(all, HUMANS), esc);
   assert.ok(!g.lines[0].includes("<img"), g.lines[0]);
 });
+
+// 6-astra-3's review repro: the inbox learns a row is a pending ask (an alias only the hub knows) after it was folded,
+// and fresh chat re-runs folding before the 4s refresh. The ask must come out of its fold on that pass.
+test("a fold gives back a row that became a pending ask, on the next fold pass", () => {
+  const a = UI_HTML.indexOf("  function foldLabel("), b = UI_HTML.indexOf("  // The digest: what changed", a);
+  assert.ok(a >= 0 && b > a, "fold code present");
+  class El {
+    className: string; children: El[] = []; parentElement: El | null = null; dataset: Record<string, string> = {}; attrs: Record<string, string> = {}; html = "";
+    constructor(cls = "", seq: number | null = null) { this.className = cls; if (seq !== null) this.dataset.seq = String(seq); }
+    get classList() { return { contains: (x: string) => this.className.split(" ").includes(x), add: (x: string) => { this.className += " " + x; } }; }
+    get firstChild() { return this.children[0]; }
+    get lastChild() { return this.children[this.children.length - 1]; }
+    set innerHTML(v: string) { this.html = v; if (v.includes('class="fold-h"')) { this.children = []; this.appendChild(new El("fold-h")); this.appendChild(new El("fold-b")); } }
+    setAttribute(k: string, v: string) { this.attrs[k] = v; }
+    appendChild(n: El) { n.remove(); n.parentElement = this; this.children.push(n); }
+    insertBefore(n: El, ref: El) { n.remove(); n.parentElement = this; const i = this.children.indexOf(ref); this.children.splice(i < 0 ? this.children.length : i, 0, n); }
+    remove() { const p = this.parentElement; if (p) { p.children.splice(p.children.indexOf(this), 1); this.parentElement = null; } }
+    querySelectorAll(q: string): El[] { return this.children.flatMap((n) => [...(q === "[data-seq]" && n.dataset.seq ? [n] : []), ...n.querySelectorAll(q)]); }
+  }
+  const log = new El("log");
+  const rows = [1, 2, 3, 4].map((n) => new El("msg", n));
+  rows.slice(0, 3).forEach((n) => log.appendChild(n));
+  const msgs = rows.map((_, i) => ({ id: `m${i + 1}`, seq: i + 1, kind: "chat", from: { id: "agent", agent: "codex", name: "agent" }, content: i === 0 ? "@configured-owner choose one?" : "ordinary chatter" }));
+  let pending: string[] = [];
+  const factory = new Function("$", "document", "msgs", "pendingIds",
+    `${src}\nvar signalOnly=true,pendingKey='',foldOpen={};var humanNames=function(){return ['benji'];};var msgBySeq=function(s){return msgs.find(function(m){return m.seq===s;});};var esc=function(s){return String(s);};${UI_HTML.slice(a, b)};return catchupFold;`);
+  const fold = factory(() => log, { createElement: () => new El() }, msgs, () => pending);
+  fold();
+  assert.equal(rows[0].parentElement?.className, "fold-b", "an alias only the hub knows folds until the inbox says otherwise");
+  pending = ["m1"];
+  log.appendChild(rows[3]);
+  fold();
+  assert.equal(rows[0].parentElement, log, "the pending ask is back in the transcript");
+  assert.equal(rows[3].parentElement?.className, "fold-b", "the chatter around it folds again");
+});

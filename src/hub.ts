@@ -1443,7 +1443,7 @@ export class Hub {
       if (room.state === "concluded" || room.state === "closed") return;
       this.latchDrafts(room);
       this.armDraftsDeadline(room);
-    }, ms);
+    }, Math.min(ms, 2_147_483_647));
     room.draftsTimer.unref();
   }
 

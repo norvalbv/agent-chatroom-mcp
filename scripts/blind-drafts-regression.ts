@@ -169,13 +169,13 @@ const earlyHub = new Hub({ dataDir: earlyDir });
 const earlyRoom = "blind-drafts-early";
 const ea = earlyHub.join(earlyRoom, "EA", "test", {}, undefined, "ea").participant;
 earlyHub.join(earlyRoom, "EB", "test", {}, undefined, "eb");
-const scheduled: { fire: () => void; timer: ReturnType<typeof setTimeout> }[] = [];
+const scheduled: { fire: () => void; delay: number; timer: ReturnType<typeof setTimeout> }[] = [];
 const realSetTimeout = globalThis.setTimeout;
 const realNow = Date.now;
-globalThis.setTimeout = ((fire: () => void) => {
+globalThis.setTimeout = ((fire: () => void, delay: number) => {
   const timer = realSetTimeout(() => {}, 2_147_483_647);
   timer.unref();
-  scheduled.push({ fire, timer });
+  scheduled.push({ fire, delay, timer });
   return timer;
 }) as typeof setTimeout;
 try {
@@ -204,6 +204,15 @@ try {
     assert.equal(earlyHub.getRoom(invalidRoom).draftsRevealed, undefined);
     assert.equal(scheduled.length, 2, "a non-finite deadline cannot start a retry loop");
   }
+  Hub.DRAFT_REVEAL_MS = 2 * 2_147_483_647;
+  Date.now = realNow;
+  earlyHub.join("long-draft-deadline", "LA", "test", {}, undefined, "la");
+  const longRoom = earlyHub.getRoom("long-draft-deadline");
+  earlyHub.openDrafts(longRoom);
+  assert.equal(scheduled[2].delay, 2_147_483_647, "long deadlines use safe timer slices, never Node's 1ms overflow clamp");
+  scheduled[2].fire();
+  assert.equal(scheduled[3].delay, 2_147_483_647);
+  assert.equal(longRoom.draftsRevealed, undefined, "a long deadline is not shortened by slicing");
 } finally {
   globalThis.setTimeout = realSetTimeout;
   Date.now = realNow;

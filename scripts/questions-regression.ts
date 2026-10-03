@@ -65,6 +65,23 @@ assert.equal(asksSomething("see ```\nwhy?\n``` and `a?b`"), false);
 // the dashboard carries the inbox and its inline script still parses with the inbox spliced in
 assert.ok(UI_HTML.includes('id="qpanel"') && UI_HTML.includes("fetchQuestions"), "inbox is in the dashboard");
 new Script(UI_HTML.split("<script>")[1].split("</script>")[0]);
+// quick-reply chips: "A or B?" offers A and B; anything else Yes/No; never a long clause
+{
+  const src = UI_HTML.split("<script>")[1].split("</script>")[0];
+  const grab = (name: string) => {
+    const i = src.indexOf(`var ${name} = function`);
+    for (let k = src.indexOf("{", i), d = 0; k < src.length; k++) {
+      if (src[k] === "{") d++;
+      if (src[k] === "}" && --d === 0) return src.slice(i, k + 2);
+    }
+    throw new Error(name);
+  };
+  const choices = new Function(`${grab("qAskLine")}\n${grab("qChoices")}\nreturn qChoices;`)() as (q: { text: string }) => string[];
+  assert.deepEqual(choices({ text: "@benji should the inbox be a modal or a rail section? I lean modal." }).slice(0, 2), ["modal", "rail section"]);
+  assert.deepEqual(choices({ text: "@benji Postgres or SQLite?" }).slice(0, 2), ["Postgres", "SQLite"]);
+  assert.deepEqual(choices({ text: "@human can I delete the old fixtures in data/, or keep them for the report?" }).slice(0, 2), ["Yes", "No"]);
+  assert.deepEqual(choices({ text: "@benji is the build OK?" }).slice(0, 2), ["Yes", "No"]);
+}
 
 // ---- HTTP: the dashboard's calls against the built hub ----
 const PORT = Number(process.env.PORT ?? 7861);

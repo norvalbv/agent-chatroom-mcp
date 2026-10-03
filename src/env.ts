@@ -130,9 +130,14 @@ export function seatBeat(mcpUrl: string, key: string, worktree?: string): SeatBe
   return { key, mcpUrl: u.toString(), env: { CHATROOM_SEAT_KEY: key, CHATROOM_HEARTBEAT_URL: new URL("/heartbeat", u).toString() } };
 }
 
-/** --settings JSON for a claude -p seat: a PreToolUse hook, so a long Bash shows as the seat's current step while it runs. */
+/**
+ * --settings JSON for a claude -p seat: a PreToolUse hook, so a long Bash shows as the seat's current step while it
+ * runs, and the same hook on PostToolUse, so an @-mention that lands during that Bash is steered into the turn when it
+ * ends (hook additionalContext reaches the model from both events; probed on claude 2.1.288).
+ */
 export function heartbeatHookSettings(hook = HEARTBEAT_HOOK): string {
-  return JSON.stringify({ hooks: { PreToolUse: [{ matcher: "*", hooks: [{ type: "command", command: `node ${JSON.stringify(hook)}`, timeout: 5 }] }] } });
+  const entry = [{ matcher: "*", hooks: [{ type: "command", command: `node ${JSON.stringify(hook)}`, timeout: 5 }] }];
+  return JSON.stringify({ hooks: { PreToolUse: entry, PostToolUse: entry } });
 }
 
 /** A launcher's heartbeat from a seat's output (codex exec has no tool hooks): at most one per `everyMs`, with the last line as detail. */

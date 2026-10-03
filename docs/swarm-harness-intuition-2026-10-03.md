@@ -1,0 +1,31 @@
+# Room harness intuition and tool affordances
+
+This engineering follow-up asks whether the hub lets its existing frontier-model seats act on their judgment. It examines available actions, returned state, hidden prerequisites and action costs. It does not test weaker models or add system-prompt reminders. Tool adoption, task correctness, cost and completion time are separate outcomes.
+
+## Prior evidence and governing decisions
+
+The report for `swarm-181144-uxtr` records an owner-triggered steering breakout that was subsequently used. Its final section explicitly leaves spontaneous breakout formation unresolved. The current brief's original statement that the breakout was never used is therefore refuted by that report and its transcript. Human correction in `swarm-202803-dpij-room` confirms the distinction. Counts and missed opportunities require the historical audit; a tool's presence in a schema does not establish that its action was useful or apparent in a particular situation.
+
+The constraints remain `minimal-prompt-hub-carries-coordination`, `quiet-delivery-not-privacy`, `identity-is-the-connection`, `board-delta-manifests-and-single-electorate`, `done-means-independently-verified`, `consensus-requires-scrutiny`, `self-organising-teams-by-claims-and-recruitment`, and `measure-task-success-on-a-machine-oracle`. No RE-TARGET is proposed. Facilitating a breakout must preserve parent-room obligations, independent verification and shared evidence, while allowing agents to choose whether a split helps.
+
+## New primary sources read
+
+- Yang et al., [SWE-agent: Agent-Computer Interfaces Enable Automated Software Engineering](https://arxiv.org/html/2405.15793v3), arXiv:2405.15793v3, sections 2–5.1. Their ablations vary action shape, observations and feedback with a fixed underlying model. Iterative search encourages exhaustive traversal and performs worse than their no-search condition. This supports testing the interface as a causal factor; it does not establish the effect of room topology or recruitment here.
+- Chen et al., [S-Agents: Self-organizing Agents in Open-ended Environments](https://arxiv.org/abs/2402.04578), arXiv:2402.04578v4, sections 1, 3 and 4.1–4.2.1. Delegation is an executable action; agents run asynchronously and share messages. Command authority remains hierarchical and evaluation concerns Minecraft. The transferable hypothesis is that available actions and timely state matter; the paper does not validate autonomous organization in this flat room.
+- Anthropic, [Writing effective tools for agents — with agents](https://www.anthropic.com/engineering/writing-tools-for-agents), 11 September 2025, evaluation and tool-design sections. The guidance links realistic outcome checks with tool-call/error metrics, meaningful returned context and clear parameter semantics. It explicitly allows successful strategies to use different tools. Thus an adoption measure needs an independent outcome check.
+- Anthropic, [Introducing advanced tool use on the Claude Developer Platform](https://www.anthropic.com/engineering/advanced-tool-use), 24 November 2025, tool search and programmatic calling sections. Deferred discovery trades schema context for an extra search step; schemas alone do not express useful parameter combinations. This motivates measuring discovery friction before introducing another discovery layer. It is not evidence that this hub needs deferred tools.
+- Anthropic, [How we built our multi-agent research system](https://www.anthropic.com/engineering/multi-agent-research-system), 13 June 2025, architecture and engineering discussion. The system adapts delegation to discoveries and relies on coordination and evaluation. Its orchestrator-led research workload differs from a peer room sharing implementation work. It is contextual evidence, not an estimate of recruitment value here.
+
+These sources were not in the supplied already-read list. MobileExperts (arXiv:2407.03913v1, section 3) was also inspected; its device-specific exploration and dual-layer planning were less directly applicable and are not used to justify a hub change. No external performance figure is transferred into this project's results.
+
+## Measurement interpretation
+
+The historical audit must separate attempted calls, successful calls, actual state changes and calls absent from room-scoped instrumentation. A roomless discovery call can be missing from a room log even when it occurred. A successful `request_agent` call is not proof that the recruit joined or contributed; a zero kick count is not proof that a kick was needed.
+
+For paired behavior trials, keep the brief and task oracle fixed. Confirm cache state from each seat's first provider request rather than from a fresh session or a nonce in the user message. Report costs per model turn, turns, tool calls, oracle result and conclusion time, retaining missing usage fields and failed runs. A deterministic regression proves a contract change; a live trace proves that agents exercised it; only repeated controlled trials can support a broader behavioral improvement claim.
+
+The cache protocol uses `DISABLE_PROMPT_CACHING=1` for the private Claude trials, as documented in [Claude Code prompt caching](https://code.claude.com/docs/en/prompt-caching#disable-prompt-caching). This is an uncached-throughout condition, which differs from a cold first request followed by normal reuse. Trace inspection must establish the actual cache reads; the environment variable alone is not evidence of compliance.
+
+At starting revision `31daae67`, `src/swarm.ts` writes a Claude MCP configuration containing only `chatroom`, and `src/claude-args.ts` always supplies `--strict-mcp-config`. The launcher allows WebSearch and WebFetch unless `--no-web` is set. Thus installed arXiv MCP tools are not available to these Claude seats through inherited configuration. This is an interface difference, not evidence that those seats cannot research through the available web or shell tools. The run does not change this external-tool configuration.
+
+Numeric synthesis is added only after its source artifacts are committed. This document's research findings are hypotheses and measurement constraints, not a claim that the implementation work has landed or improved task success.

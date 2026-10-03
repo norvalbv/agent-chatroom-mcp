@@ -5,6 +5,10 @@ Every place the RQ1 build (room `swarm-120129-s12h-room`) had to deviate from, o
 was done instead. Written before any grid run, per the maintainer's instruction that a pre-registration
 silently changed is worthless.
 
+## 2026-10-03 — Harness affordances and autonomous tool choice
+
+The engineering run `swarm-202803-dpij` studies whether existing frontier-model seats can act on their judgment through the hub's tool interface. This does not amend the earlier studies or establish a model-capability deficit. New related work is SWE-agent (arXiv:2405.15793) and S-Agents (arXiv:2402.04578); the source passages and limits are recorded in `docs/swarm-harness-intuition-2026-10-03.md`. Tool adoption is a process measure, separate from the task oracle. Roomless calls absent from room JSONL remain unknown, and fresh sessions do not establish cold prompt caches. This research addition contains no new performance estimate.
+
 ## 2026-10-03 — Exploratory context-cost and steering follow-up
 
 The engineering run `swarm-181144-uxtr` adds process measurements and new related work; it does not revise the earlier studies' protocols or estimates. Exact UTF-8 tool-result bytes, provider input/cache-read/cache-creation/output tokens, tool-call counts and mention-to-reply latency are separate quantities. Only the machine oracle establishes task success. Fixed-transcript response replay can isolate an encoding change; single live pairs cannot isolate total-token or wall-time effects from different conversations.

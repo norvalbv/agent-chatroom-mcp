@@ -142,3 +142,21 @@ Audit each recorded run directory with `scripts/swarm-tool-usage.py --run-dir
 used the analyzer at `70c08f97`; raw provider transcripts remain local, identified
 by SHA-256 in the committed measurements. Total model turns sum its per-seat
 `request_cache.provider_requests`; tool totals sum its per-seat call counts.
+
+## Refused requests must not announce a recruit
+
+During the separate liveness trial, `opus-2` observed a refused away-seat
+replacement still posting that the policy-pinned recruit had launched (room
+message #479). `Spawner.request` emitted that notice before replacement
+registration could reject the request. The correction moves it after the entire
+request succeeds and describes the resolved request as **accepted**, which also
+avoids claiming a process launched in dry-run mode. Replacements already reject
+multi-count requests before registration; no new gate was added.
+
+The focused replacement suite fails two of five cases before this correction
+(at `bd80c437`) and passes all five after it: refusal leaves both the recruit
+records and announcements empty; an accepted pinned request emits one accurate
+notice. The existing recruitment-status suite, build and script typecheck also
+pass. This is a deterministic correction to a live-observed false statement; no
+additional autonomous-behavior or cost improvement is claimed. The six policy
+trials above made zero requests and do not exercise this follow-up.

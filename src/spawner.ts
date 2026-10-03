@@ -223,9 +223,7 @@ export class Spawner {
     if (this.policy.model && req.model !== this.policy.model) req = { ...req, model: this.policy.model };
     if (!req.model && this.policy.agent === agent && this.policy.model) req = { ...req, model: this.policy.model };
     const launched = `${agent}${req.model ? `/${req.model}` : ""}`;
-    if ((req.agent && req.agent !== agent) || (this.policy.model && (req.agent ?? "") && wanted !== launched && wanted !== `(default)`)) {
-      this.hooks?.announce(req.room, `Recruits in this hub are pinned to ${launched}; ${req.requestedBy}'s ${wanted} request was launched as that instead.`);
-    }
+    const policyOverride = (req.agent && req.agent !== agent) || (this.policy.model && (req.agent ?? "") && wanted !== launched && wanted !== `(default)`);
     if (agent === "openrouter" && !process.env.OPENROUTER_API_KEY && !this.opts.dryRun) throw new HubError("An OpenRouter seat needs OPENROUTER_API_KEY in the hub's environment; recruit a claude or codex agent instead, or ask the human to set the key and restart the hub.");
     const base = (req.name?.trim() || `${agent}-recruit`).replace(/[^\w-]/g, "-").slice(0, 32);
     const names: string[] = [];
@@ -368,6 +366,7 @@ export class Spawner {
       });
       out.push(rec);
     }
+    if (policyOverride) this.hooks?.announce(req.room, `Recruits in this hub are pinned to ${launched}; ${req.requestedBy}'s ${wanted} request was accepted as ${launched}.`);
     return out;
   }
 

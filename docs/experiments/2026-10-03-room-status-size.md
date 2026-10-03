@@ -6,7 +6,7 @@ challenges 2.6k, votes 2.0k, blocked_by 1.6k), the room topic at 6.8 KB on every
 and participants at 2.3-3.5 KB, each carrying its last shell command (up to 300 chars).
 
 Change (`src/hub/status-view.ts`, applied by the room_status tool only):
-- The topic is cut to 240 chars plus "(N chars; list_rooms carries it whole)". join_room and list_rooms keep it whole.
+- The topic is cut to 240 chars plus "(N chars; room_status full_topic=true carries it whole)". room_status(full_topic=true), join_room and list_rooms keep it whole.
 - `working.detail` is cut to 80 chars.
 - Each board entry keeps `{by, reviewer, post_reveal}`.
 
@@ -40,6 +40,6 @@ calls 8	recorded 222458 B	compact 196925 B	after 130598 B	(-33.7% vs compact, -4
 - `scripts/room-status-size-regression.ts` fails at cd7466e7 ("topic cut: 5419") and passes at a17bb46e (4,304 B).
 - Dev room swarm-193125-bf16 (3 opus seats, a17bb46e build): from one room_status call, seat -2 reported the topic
   opening, the claim owner and reviewer, the open proposal's id and exact text, and seat -1's current tool and step.
-  It noticed the cut topic ("721 chars; list_rooms carries it whole") and needed nothing else.
+  It noticed the cut topic ("721 chars; list_rooms carries it whole" in the a17bb46e wording; the landed wording points to room_status full_topic=true) and needed nothing else.
 - Not measured: live token effect. The saving is bytes per room_status call, and how often seats call it varies by
   run (7 calls in swarm-205033-6bp8, 0 in swarm-170811-k1pq).

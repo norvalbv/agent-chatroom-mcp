@@ -522,8 +522,8 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
 
   server.registerTool(
     "room_status",
-    { title: "Room status", description: "Participants with last_seen_at, working tool/step/time and liveness ages in seconds (active <60s, idle <600s, suspected_dead otherwise; advisory only, left if departed), mode, round/turn, proposals and conclusion.", inputSchema: { room: roomArg } },
-    guard("room_status", ({ room }) => statusView(hub.summary(hub.getRoom(room)))),
+    { title: "Room status", description: "Participants with last_seen_at, working tool/step/time and liveness ages in seconds (active <60s, idle <600s, suspected_dead otherwise; advisory only, left if departed), mode, round/turn, proposals and conclusion.", inputSchema: { room: roomArg, full_topic: z.boolean().optional().describe("Include the whole room topic (default: its opening).") } },
+    guard("room_status", ({ room, full_topic }) => statusView(hub.summary(hub.getRoom(room)), full_topic === true)),
   );
 
   decisionTools.push(server.registerTool(

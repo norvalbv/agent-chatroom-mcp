@@ -4,8 +4,8 @@
  * bytes), every seat's last shell command, and four fields per board key. A seat already holds the topic from its brief
  * and join_room; it polls room_status for who is doing what, the proposal and the board keys. So: the topic is cut to
  * its opening, a working detail to one line, and a board key to its author (plus reviewer). Proposals, votes,
- * challenges, liveness, claims and everything else pass through unchanged. join_room, list_rooms and the dashboard keep
- * the full summary.
+ * challenges, liveness, claims and everything else pass through unchanged. room_status(full_topic=true), join_room,
+ * list_rooms and the dashboard keep the whole topic.
  */
 const TOPIC_HEAD = 240;
 const DETAIL_HEAD = 80;
@@ -18,11 +18,11 @@ type Summary = Record<string, unknown> & {
 
 const head = (s: string, n: number) => (s.length > n ? `${s.slice(0, n)}…` : s);
 
-export function statusView(summary: Summary): Summary {
+export function statusView(summary: Summary, fullTopic = false): Summary {
   const topic = summary.topic ?? "";
   return {
     ...summary,
-    topic: topic.length > TOPIC_HEAD ? `${topic.slice(0, TOPIC_HEAD)}… (${topic.length} chars; list_rooms carries it whole)` : topic,
+    topic: !fullTopic && topic.length > TOPIC_HEAD ? `${topic.slice(0, TOPIC_HEAD)}… (${topic.length} chars; room_status full_topic=true carries it whole)` : topic,
     participants: summary.participants?.map((p) =>
       p.working?.detail ? { ...p, working: { ...p.working, detail: head(p.working.detail, DETAIL_HEAD) } } : p),
     board: summary.board && Object.fromEntries(Object.entries(summary.board).map(([k, e]) =>

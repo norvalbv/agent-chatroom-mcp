@@ -2,7 +2,7 @@
  * room_status size (swarm-181144-uxtr, issue 2; src/hub/status-view.ts): a seat's room_status no longer repeats the
  * whole room topic, every seat's full last command or four fields per board key. What a seat acts on stays whole: the
  * open proposal's text, votes and challenges, liveness, the board keys with author and reviewer. join_room and
- * list_rooms still carry the full topic.
+ * list_rooms still carry the full topic, and room_status(full_topic=true) carries it for one room.
  * Throwaway hub on its own port (never 7717), stopped with the process.
  * Run: npx tsx scripts/room-status-size-regression.ts
  */
@@ -53,7 +53,11 @@ const s = st.data;
 // 1. the topic is cut to its opening, says how long it was and where it is whole
 assert.ok(s.topic.length < 400, `topic cut: ${s.topic.length}`);
 assert.ok(s.topic.startsWith("Brief: build the thing carefully."));
-assert.match(s.topic, new RegExp(`${TOPIC.length} chars; list_rooms carries it whole`));
+assert.match(s.topic, new RegExp(`${TOPIC.length} chars; room_status full_topic=true carries it whole`));
+// the whole topic, for this room only, on request (and still in list_rooms)
+const fullStatus = await b("room_status", { room: R, full_topic: true });
+assert.equal(fullStatus.data.topic, TOPIC);
+assert.equal(fullStatus.data.board["claim/x"].chars, undefined, "full_topic widens only the topic");
 const listed = JSON.parse((await b("list_rooms", {})).text) as { name: string; topic: string }[];
 assert.match(listed.find((r) => r.name === R)!.topic, /END-OF-TOPIC$/);
 // 2. a seat's working detail is one line; tool, step and liveness stay

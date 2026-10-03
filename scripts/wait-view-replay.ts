@@ -1,7 +1,28 @@
 /** Replay parsed historical wait observations through the actual formatter; bytes only, no provider requests. */
 import { readFileSync } from 'node:fs';
 import { createWaitView, type WaitView } from '../src/hub/wait-view.js';
-const rows = JSON.parse(readFileSync(process.argv[2], 'utf8')) as { seat: string; room: string; view: WaitView; original_bytes: number }[];
+type Row = { seat: string; room: string; view: WaitView; original_bytes: number };
+const input = JSON.parse(readFileSync(process.argv[2], 'utf8'));
+const rows: Row[] = Array.isArray(input) ? input : [];
+// A room -> Claude transcript paths manifest is also accepted; raw tool text is not rewritten before measuring.
+if (!Array.isArray(input)) for (const [room, paths] of Object.entries(input) as [string, string[]][]) {
+  for (const path of paths) {
+    const calls = new Map<string, Record<string, unknown>>(); const seen = new Set<string>();
+    for (const line of readFileSync(path, 'utf8').split('\n').filter(Boolean)) {
+      const entry = JSON.parse(line); const content = entry.message?.content;
+      if (!Array.isArray(content)) continue;
+      for (const block of content) {
+        if (block.type === 'tool_use' && block.name?.endsWith('wait_for_messages')) calls.set(block.id, block.input);
+        if (block.type !== 'tool_result' || seen.has(block.tool_use_id) || calls.get(block.tool_use_id)?.room !== room) continue;
+        seen.add(block.tool_use_id);
+        const text = typeof block.content === 'string' ? block.content : block.content?.filter((x: { type: string }) => x.type === 'text').map((x: { text: string }) => x.text).join('\n');
+        if (!text || block.is_error) continue;
+        const view = JSON.parse(text) as WaitView;
+        if (Array.isArray(view.messages)) rows.push({ seat: path, room, view, original_bytes: Buffer.byteLength(text) });
+      }
+    }
+  }
+}
 const seats = new Map<string, object>();
 const render = createWaitView();
 const result = { waits: 0, compacted: 0, original_bytes: 0, candidate_bytes: 0, empty_original_bytes: 0, empty_candidate_bytes: 0, empty_waits: 0,

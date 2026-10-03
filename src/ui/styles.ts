@@ -38,10 +38,19 @@ export const UI_CSS = `
   input,textarea,select { font:inherit; color:var(--fg); background:var(--panel); border:1px solid var(--control); border-radius:10px; padding:8px 11px }
   input:focus,textarea:focus,select:focus { outline:2px solid var(--acc); outline-offset:2px; border-color:var(--acc) } :focus-visible { outline:2px solid var(--acc); outline-offset:3px } input::placeholder,textarea::placeholder { color:var(--dim2); opacity:1 }
   ::-webkit-scrollbar { width:10px; height:10px } ::-webkit-scrollbar-thumb { background:var(--line); border-radius:8px; border:3px solid var(--panel) }
-  .btn { border:1px solid var(--control); background:var(--panel); border-radius:10px; padding:6px 11px; font-size:12.5px; font-weight:500; display:inline-flex; align-items:center; gap:6px; white-space:nowrap }
+  .btn { box-sizing:border-box; min-height:32px; border:1px solid var(--control); background:var(--panel); color:var(--fg); border-radius:10px; padding:0 12px; font-size:12.5px; font-weight:500; line-height:1; display:inline-flex; align-items:center; justify-content:center; gap:6px; white-space:nowrap; text-decoration:none }
+  a.btn, a.btn:hover { color:var(--fg); text-decoration:none } /* a link styled as a button reads as a button, not a link */
+  @media (pointer:coarse) { .btn { min-height:44px } .btn.icon { width:44px; height:44px } } /* one touch-target size for every button, not per feature */
+  /* one control height per row: toolbar rows (rail controls, transcript filters) are 28px; the composer row is 38px */
+  .rctl .chip.tog, .rctl select, .rctl .btn, .lf .chip.tog, .lf select, .lf input { box-sizing:border-box; height:28px; min-height:28px; padding-top:0; padding-bottom:0; line-height:1 }
+  .rctl .btn { padding:0 10px; font-size:12px }
+  .chip.tog { padding-left:10px; padding-right:10px }
+  #compose #name, #compose textarea, #compose #sendbtn { box-sizing:border-box; min-height:38px }
+  #compose #name { height:38px } #compose #sendbtn { height:38px; padding:0 16px }
+  @media (pointer:coarse) { .rctl .chip.tog, .rctl select, .rctl .btn, .lf .chip.tog, .lf select, .lf input, #compose #name, #compose textarea, #compose #sendbtn { min-height:44px; height:auto } #compose #name, #compose #sendbtn { height:44px } }
   .btn:hover { background:var(--panel2) } .btn.primary { background:var(--acc); border-color:var(--acc); color:var(--on-acc) } .btn.primary:hover { filter:brightness(1.08) }
   .btn.danger { color:var(--bad) } .btn:disabled { opacity:.45; cursor:default }
-  .icon { width:32px; height:32px; padding:0; justify-content:center; border-radius:9px }
+  .icon { width:32px; height:32px; min-height:0; padding:0; justify-content:center; border-radius:10px }
   .chip { display:inline-flex; align-items:center; gap:5px; font-size:11px; font-weight:600; padding:2px 8px; border-radius:999px; background:var(--panel2); color:var(--dim); white-space:nowrap; line-height:1.6 }
   .chip.open { background:var(--ok-bg); color:var(--ok) } .chip.concluded { background:var(--acc-bg); color:var(--acc-fg) } .chip.stalled { background:var(--warn-bg); color:var(--warn) } .chip.closed { background:var(--panel2); color:var(--dim2) }
   .chip.prop { background:var(--prop-bg); color:var(--prop) } .chip.chal { background:var(--chal-bg); color:var(--chal) } .chip.hum { background:var(--hum-bg); color:var(--hum) } .chip.bad { background:var(--bad-bg); color:var(--bad) } .chip.ok { background:var(--ok-bg); color:var(--ok) }

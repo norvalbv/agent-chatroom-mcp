@@ -1,6 +1,5 @@
 export const ROOMS_CSS = `
-  .run > .rh.pin-group { width:100%; min-height:44px; border:0; background:transparent; text-align:left; color:var(--dim) }
-  .room-pin { min-height:44px }
+  .run > .rh.pin-group { width:100%; border:0; background:transparent; text-align:left; color:var(--dim) }
   .room-pin[aria-pressed="true"] { background:var(--acc-bg); color:var(--acc-fg) }
   .room-pin:focus-visible, .pin-group:focus-visible { outline:2px solid var(--acc); outline-offset:2px }
 `;

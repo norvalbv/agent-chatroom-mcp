@@ -1,5 +1,5 @@
 export const BOARD_CSS = `
-  .btools { display:flex; gap:8px; align-items:center; margin-bottom:10px; flex-wrap:wrap } .btools label { color:var(--dim); font-size:12px } .btools select { flex:1; min-width:0; min-height:44px; border:1px solid var(--control,var(--line)); border-radius:8px; color:var(--fg); background:var(--panel2); padding:7px }
+  .btools { display:flex; gap:8px; align-items:center; margin-bottom:10px; flex-wrap:wrap } .btools label { color:var(--dim); font-size:12px } .btools select { flex:1; min-width:0; border:1px solid var(--control,var(--line)); border-radius:8px; color:var(--fg); background:var(--panel2); padding:7px }
   .bentry button.bh { width:100%; min-height:44px; border:0; border-radius:9px; background:transparent; text-align:left; flex-wrap:wrap } .bentry button.bh:focus-visible { outline:2px solid var(--acc); outline-offset:2px } .bentry .bh .m { flex-basis:100%; text-align:left }
 `;
 

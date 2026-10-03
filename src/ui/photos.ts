@@ -1,6 +1,6 @@
 export const PHOTOS_CSS = `
   .photo-tools { grid-column:1 / -1; display:flex; gap:8px; align-items:center; flex-wrap:wrap; min-width:0 }
-  .photo-tools .btn { min-height:36px } .photo-tools small { color:var(--dim); font-size:11px }
+  .photo-tools small { color:var(--dim); font-size:11px }
   #photo-status { font-size:12px; color:var(--bad); overflow-wrap:anywhere }
   #photo-preview { display:flex; flex-wrap:wrap; gap:8px; width:100% }
   #photo-preview:empty { display:none }
@@ -10,7 +10,6 @@ export const PHOTOS_CSS = `
   .photo-images { display:flex; gap:8px; flex-wrap:wrap; padding-top:6px }
   .photo-images a { max-width:100%; display:block; border:1px solid var(--line); border-radius:10px; padding:4px; background:var(--panel) }
   .photo-images img { display:block; max-width:100%; width:220px; max-height:180px; object-fit:contain; border-radius:6px }
-  @media (pointer:coarse) { .photo-tools .btn { min-height:44px } }
 `;
 
 export const PHOTOS_HTML = `<div class="photo-tools"><button class="btn" type="button" id="add-photo">Add photos</button><input type="file" id="photo-files" accept="image/png,image/jpeg,image/webp,image/gif" multiple hidden /><small>Up to 4 photos · 8 MB each · or paste an image</small><span id="photo-status" role="status" aria-live="polite"></span><div id="photo-preview"></div></div>`;

@@ -1,0 +1,147 @@
+{
+  "kind": "historical trace reanalysis; no new live effect estimate",
+  "analyzer_base_commit": "31daae67",
+  "source_artifacts": [
+    "docs/measurements/swarm-efficiency-final-baseline.json",
+    "docs/measurements/swarm-efficiency-final-release.json"
+  ],
+  "method": "Deduplicated Claude assistant message IDs; first request cache reads; root user or CLI init establishes observed session start; all numeric categories retained directly from each source trace.",
+  "arms": {
+    "baseline": {
+      "claude-opus-5-5-2": {
+        "source": "f72fd522-6634-4f37-a627-a6fb40d74f65.jsonl",
+        "sha256": "c64909559314061960a4d91b03ad5a502b72cb84f3382c54cdc130a6267e2f57",
+        "audit": {
+          "status": "warm",
+          "initial_context_observed": true,
+          "provider_requests": 20,
+          "first_request_id": "msg_011CffmeLK2wZAZbXahKvp68",
+          "first_request": {
+            "input_tokens": 2,
+            "cache_read_input_tokens": 13547,
+            "cache_creation_input_tokens": 2846,
+            "output_tokens": 345
+          },
+          "later_requests": {
+            "input_tokens": 38,
+            "cache_read_input_tokens": 406005,
+            "cache_creation_input_tokens": 11418,
+            "output_tokens": 3704
+          }
+        }
+      },
+      "verifier": {
+        "source": "f80eff28-8a39-4063-88d2-ff2d058fa062.jsonl",
+        "sha256": "f4e3d0aff948576d4dfac7e543b92a778b3d63b04cb8c9a4973fb4f7c5813172",
+        "audit": {
+          "status": "warm",
+          "initial_context_observed": true,
+          "provider_requests": 8,
+          "first_request_id": "msg_011CffmeLHHX6BaPq8ZwBf9N",
+          "first_request": {
+            "input_tokens": 2,
+            "cache_read_input_tokens": 13547,
+            "cache_creation_input_tokens": 3616,
+            "output_tokens": 1053
+          },
+          "later_requests": {
+            "input_tokens": 14,
+            "cache_read_input_tokens": 154025,
+            "cache_creation_input_tokens": 8858,
+            "output_tokens": 2728
+          }
+        }
+      },
+      "claude-opus-5-5-1": {
+        "source": "f83d4e5c-e5c9-421f-91cf-2ee52a91a88c.jsonl",
+        "sha256": "5de37cc93bf201220ebe49c3f4b98ac1c4f5104f808f1e635f7f060793df88a8",
+        "audit": {
+          "status": "warm",
+          "initial_context_observed": true,
+          "provider_requests": 21,
+          "first_request_id": "msg_011CffmeLVw7iuhoJDC5x7WD",
+          "first_request": {
+            "input_tokens": 2,
+            "cache_read_input_tokens": 13547,
+            "cache_creation_input_tokens": 2846,
+            "output_tokens": 252
+          },
+          "later_requests": {
+            "input_tokens": 40,
+            "cache_read_input_tokens": 413776,
+            "cache_creation_input_tokens": 8825,
+            "output_tokens": 3056
+          }
+        }
+      }
+    },
+    "release": {
+      "claude-opus-5-5-2": {
+        "source": "7ae0d32c-d666-4905-a4ea-f8576ec02769.jsonl",
+        "sha256": "ba8ae4d7b7e5840c6355c9594ca4200d3208340f8ccee801f4196095119db32e",
+        "audit": {
+          "status": "cold",
+          "initial_context_observed": true,
+          "provider_requests": 15,
+          "first_request_id": "msg_011CfftF1f2vbuqhGHEuS5eD",
+          "first_request": {
+            "input_tokens": 2,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 16473,
+            "output_tokens": 227
+          },
+          "later_requests": {
+            "input_tokens": 28,
+            "cache_read_input_tokens": 289656,
+            "cache_creation_input_tokens": 8964,
+            "output_tokens": 2616
+          }
+        }
+      },
+      "verifier": {
+        "source": "a8ee1165-c62b-4a51-b595-f22cadf86aee.jsonl",
+        "sha256": "96d9a869714ead35717a281266f829bfc7277800fef888d7a625d6006fc92e71",
+        "audit": {
+          "status": "cold",
+          "initial_context_observed": true,
+          "provider_requests": 10,
+          "first_request_id": "msg_011CfftEztehggq28X2rPNL1",
+          "first_request": {
+            "input_tokens": 2,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 17243,
+            "output_tokens": 994
+          },
+          "later_requests": {
+            "input_tokens": 18,
+            "cache_read_input_tokens": 195433,
+            "cache_creation_input_tokens": 8444,
+            "output_tokens": 2573
+          }
+        }
+      },
+      "claude-opus-5-5-1": {
+        "source": "94237cfd-5e90-4810-aeeb-55ca03c3ee80.jsonl",
+        "sha256": "5e5b02da6da0f135a1403208e155ee140436c1dca13a26bfe193bba954d4450a",
+        "audit": {
+          "status": "cold",
+          "initial_context_observed": true,
+          "provider_requests": 24,
+          "first_request_id": "msg_011CfftEzpgRio6eQLqPRJdZ",
+          "first_request": {
+            "input_tokens": 2,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 16473,
+            "output_tokens": 252
+          },
+          "later_requests": {
+            "input_tokens": 46,
+            "cache_read_input_tokens": 459924,
+            "cache_creation_input_tokens": 8930,
+            "output_tokens": 3132
+          }
+        }
+      }
+    }
+  }
+}

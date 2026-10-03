@@ -4,6 +4,7 @@
 // (Cmd-K, fuzzy room jump, pin, decisions-only preset, jump to a filtered-out pin, #seq, reload persistence) and
 // exits nonzero on any failed expectation or page error. Needs Google Chrome; set CHROME=<binary> elsewhere.
 import { spawn } from "node:child_process";
+import { createServer } from "node:net";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -12,6 +13,9 @@ const PORT = Number(process.env.PORT ?? 7861);
 const CDP = PORT + 1;
 const CHROME = process.env.CHROME ?? "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+// A busy port would silently attach this check to someone else's hub or browser: refuse instead.
+const free = (port) => new Promise((r) => { const s = createServer().once("error", () => r(false)).once("listening", () => s.close(() => r(true))).listen(port, "127.0.0.1"); });
+for (const p of [PORT, CDP]) if (!(await free(p))) { console.log(`port ${p} is in use; pick another PORT (this check uses PORT and PORT+1)`); process.exit(2); }
 const data = mkdtempSync(join(tmpdir(), "palette-hub-"));
 const prof = mkdtempSync(join(tmpdir(), "palette-chrome-"));
 const hub = spawn(process.execPath, ["dist/index.js"], { env: { ...process.env, PORT: String(PORT), CHATROOM_INSECURE_LOCAL: "1", CHATROOM_DATA_DIR: data }, stdio: "ignore" });

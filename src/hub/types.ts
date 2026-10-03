@@ -123,6 +123,9 @@ export interface Participant {
   leaveReason?: string;
   /** Timestamp of this participant's most recent non-empty verify/* board write, room-scoped. Best-effort like working/activity below: read live, not replayed across a process restart. Used to pick the least-recently-verifying reviewer at claim time. */
   lastVerifiedAt?: string;
+  /** sha256 of the launcher seat key its connection carried at join. Persisted, so after a hub restart (seats restored inactive,
+   * seat-key bindings lost) a heartbeat from the still-running process can be matched to this seat: it is away, not dead. */
+  seatKeyHash?: string;
   /** last heartbeat from the seat process: local work makes no hub calls, so this is how the room knows it is alive. Ephemeral. */
   working?: { tool: string; step: number; at: string; detail?: string };
   /** the last 60 heartbeats: what the seat ran, step by step (dashboard: click a person). Ephemeral. */

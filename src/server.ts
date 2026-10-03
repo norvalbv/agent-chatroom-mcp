@@ -522,7 +522,7 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
 
   server.registerTool(
     "room_status",
-    { title: "Room status", description: "Participants with last_seen_at, working tool/step/time and liveness ages in seconds (active <60s, idle <600s, suspected_dead otherwise; advisory only, left if departed), mode, round/turn, proposals and conclusion.", inputSchema: { room: roomArg, full_topic: z.boolean().optional().describe("Include the whole room topic (default: its opening).") } },
+    { title: "Room status", description: "Participants with last_seen_at, working tool/step/time and liveness ages in seconds (active <60s, idle <600s, suspected_dead otherwise; advisory only; left if departed, away if departed but its process still heartbeats, e.g. not yet rejoined after a hub restart), mode, round/turn, proposals and conclusion.", inputSchema: { room: roomArg, full_topic: z.boolean().optional().describe("Include the whole room topic (default: its opening).") } },
     guard("room_status", ({ room, full_topic }) => statusView(hub.summary(hub.getRoom(room)), full_topic === true)),
   );
 
@@ -716,7 +716,7 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
           new_room: z.string().optional().describe("Spawn a sub-team into this new room instead of yours; they report back with post_to_room."),
           room_topic: z.string().optional().describe("Topic for the new room."),
           count: z.number().int().min(1).max(3).optional().describe("How many to spawn (default 2 for a new room, 1 otherwise)."),
-          replacing: z.string().optional().describe("Exact departed nonhuman seat to replace; single recruit in this room only."),
+          replacing: z.string().optional().describe("Exact departed nonhuman seat to replace (room_status liveness \"left\"; an \"away\" seat is still running and is refused); single recruit in this room only."),
           area: z.string().optional().describe("Claim this area (claim/<area>) for the newcomers first; refused if someone else owns it."),
           participant_id: asArg,
         },

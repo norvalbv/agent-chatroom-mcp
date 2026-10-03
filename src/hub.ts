@@ -189,6 +189,8 @@ export class Hub {
         liveness: (() => {
           const age = (at: string) => Math.max(0, Math.floor((observedAt - Date.parse(at)) / 1000));
           const age_seconds = age(this.lastSeen(p));
+          const away = this.awayProcess(p);
+          if (away) return { status: "away", age_seconds, heartbeat_age_seconds: away.age_seconds };
           return { status: !p.active ? "left" : age_seconds < 60 ? "active" : age_seconds * 1000 < kick.SUSPECTED_DEAD_MS ? "idle" : "suspected_dead",
             age_seconds, heartbeat_age_seconds: p.working ? age(p.working.at) : null };
         })(),
@@ -392,6 +394,7 @@ export class Hub {
         active: true,
         messageCount: 0,
         session,
+        ...(session && this.sessionSeatHashes.has(session) ? { seatKeyHash: this.sessionSeatHashes.get(session) } : {}),
         ...(role && role !== "worker" ? { role } : {}),
       };
       const predecessor = [...room.participants.values()].find((p) => p.pendingReplacementName === name);
@@ -411,6 +414,7 @@ export class Hub {
       participant.active = true;
       participant.lastActiveAt = now();
       if (session) participant.session = session;
+      if (session && this.sessionSeatHashes.has(session)) participant.seatKeyHash = this.sessionSeatHashes.get(session);
       if (role && role !== "worker") participant.role = role;
       this.persist({ type: "join", room: roomName, p: participant });
       this.post(room, "system", undefined, `${this.shown(room, participant)} rejoined the room.`);
@@ -2207,9 +2211,31 @@ export class Hub {
   /** session -> the worktree its launcher started the seat in (from the MCP URL, never from the seat's own words) */
   private sessionWorktrees = new Map<string, string>();
 
+  /** session -> sha256 of its seat key, stamped on the participants it joins (seatKeyHash) */
+  private sessionSeatHashes = new Map<string, string>();
+
   bindSeat(seatKey: string, session: string, worktree?: string): void {
-    if (seatKey && session) this.seatSessions.set(seatKey, session);
+    if (seatKey && session) {
+      this.seatSessions.set(seatKey, session);
+      this.sessionSeatHashes.set(session, Hub.seatHash(seatKey));
+    }
     if (session && worktree) this.sessionWorktrees.set(session, worktree);
+  }
+
+  static seatHash(seatKey: string): string { return createHash("sha256").update(seatKey).digest("hex"); }
+
+  /**
+   * A seat that is out of the room but whose process is still running: it has not rejoined since a hub restart or a
+   * dropped MCP connection, and its launcher's heartbeat (by seat key) arrived after it went inactive, within
+   * kick.SUSPECTED_DEAD_MS. It rejoins on its next hub call, so it is not a vacancy to recruit into. A seat that
+   * called leave_room itself, was kicked or already has a successor is never away.
+   */
+  awayProcess(p: Participant): { age_seconds: number; tool: string; step: number } | undefined {
+    if (p.active || p.kicked || p.replacedBy || p.pendingReplacementName || !p.working) return undefined;
+    if (p.leaveReason && !p.leaveReason.startsWith("MCP session closed")) return undefined;
+    const at = Date.parse(p.working.at);
+    if (at <= Date.parse(p.lastActiveAt) || Date.now() - at >= kick.SUSPECTED_DEAD_MS) return undefined;
+    return { age_seconds: Math.max(0, Math.floor((Date.now() - at) / 1000)), tool: p.working.tool, step: p.working.step };
   }
 
   /** Where a seat's work in progress lives: its bound worktree and the branch checked out there now. */
@@ -2225,6 +2251,15 @@ export class Hub {
   heartbeatSeat(seatKey: string, info: { tool: string; step?: number; detail?: string }): number {
     const seats = this.seatParticipants(seatKey);
     for (const { p } of seats) this.recordWork(p, info);
+    // No live connection holds this key (the hub restarted, or the MCP session dropped): the process is still running,
+    // so record the beat on the seats it joined as. They stay inactive; room_status shows them as "away", not dead.
+    if (!seats.length) {
+      const hash = Hub.seatHash(seatKey);
+      for (const room of this.rooms.values()) {
+        if (room.state === "concluded" || room.state === "closed") continue;
+        for (const p of room.participants.values()) if (!p.active && p.seatKeyHash === hash) this.recordWork(p, info);
+      }
+    }
     return seats.length;
   }
 

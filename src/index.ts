@@ -15,6 +15,7 @@
  *   POST /rooms/:room/vote {name, proposal_id, vote, reason} -> human vote (disagree = veto)
  */
 import { steerAckAs, steerAckSeat, steerPeek, steerPeekSeat } from "./hub/steer.js";
+import { SUSPECTED_DEAD_MS } from "./hub/kick.js";
 import { randomUUID } from "node:crypto";
 import { resolve } from "node:path";
 import { createMcpExpressApp } from "@modelcontextprotocol/sdk/server/express.js";
@@ -118,6 +119,14 @@ spawner.attach({
     const old = [...hub.getRoom(room).participants.values()].find(p => p.name === predecessor);
     // A recruit may replace a departed agent, never declare another live seat or human departed.
     if (!old || old.active || old.agent === "human" || old.role === "chair") throw new HubError("Recruit replacement requires a departed nonhuman, non-chair participant.");
+    // Departed is not dead: after a hub restart every seat is restored inactive while its process keeps working, and a
+    // successor would duplicate its claimed work (swarm-181144-uxtr, 6-astra-3). Its launcher's heartbeat says which.
+    const away = hub.awayProcess(old);
+    if (away) {
+      throw new HubError(`${predecessor} is out of the room but its process is still running: it heartbeated ${away.age_seconds}s ago (step ${away.step}, ${away.tool}). ` +
+        `It rejoins on its next hub call (room_status liveness "away"), so a successor would duplicate its work; nobody was launched. ` +
+        `If it is still away after ${Math.round(SUSPECTED_DEAD_MS / 60_000)} min of silence it reads as dead and this call goes through; if it comes back stuck, kick_vote it.`, undefined, "state");
+    }
     return hub.registerReplacement(room, predecessor, successorName).replacementToken;
   },
   removeParticipant: (room, target, by, reason) => {

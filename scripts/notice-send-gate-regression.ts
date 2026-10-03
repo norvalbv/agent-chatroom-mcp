@@ -61,6 +61,25 @@ test("a notice plus a peer message: refused, and the refusal lists the peer mess
   assert.throws(() => h.send(room.name, bob.id, "bob: starting on w"), /1 message\(s\) arrived while you were composing/);
 });
 
+test("an unread human message still refuses a send", async () => {
+  const { h, room, bob } = setup();
+  const { participant: benji } = h.join(room.name, "benji", "human");
+  await h.wait(room.name, bob.id, bob.lastSeenSeq, 0);
+  h.send(room.name, benji.id, "what's the status of y?");
+  assert.throws(() => h.send(room.name, bob.id, "bob: starting on y"));
+});
+
+test("several skipped notices reach the next wait in seq order", async () => {
+  const { h, room, alice, bob } = setup();
+  await h.wait(room.name, bob.id, bob.lastSeenSeq, 0);
+  h.setBoard(room.name, alice.id, "evidence/a", "1");
+  h.setBoard(room.name, alice.id, "evidence/b", "2");
+  h.send(room.name, bob.id, "bob: starting");
+  const next = (await h.wait(room.name, bob.id, bob.lastSeenSeq, 0)).filter((m) => m.kind === "board");
+  assert.deepEqual(next.map((m) => /evidence\/(\w)/.exec(m.content)?.[1]), ["a", "b"]);
+  assert.ok(next[0].seq < next[1].seq);
+});
+
 let failed = 0;
 for (const [name, run] of cases) {
   try {

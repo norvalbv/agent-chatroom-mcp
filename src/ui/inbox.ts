@@ -10,9 +10,9 @@
 export const INBOX_CSS = String.raw`  /* ---------- questions for you (inbox) ---------- */
   .qbar { margin:0 12px 10px; display:flex; align-items:center; gap:8px; padding:7px 10px; border-radius:10px; border:1px solid var(--line); background:var(--panel2); text-align:left; font-size:12.5px }
   .qbar .ql { font-weight:600 } .qbar .qs { flex:1; color:var(--dim); font-size:11.5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
-  .qbar .qc:empty { display:none } .qbar .qc { background:var(--hum); color:#fff; font-size:11px; font-weight:700; border-radius:999px; padding:1px 8px }
+  .qbar .qc:empty { display:none } .qbar .qc { background:var(--hum); color:var(--hum-bg); font-size:11px; font-weight:700; border-radius:999px; padding:1px 8px }
   .qbar.has { background:var(--hum-bg); border-color:color-mix(in srgb, var(--hum) 35%, transparent) } .qbar.has .ql { color:var(--hum) }
-  .room .qr { grid-column:3; grid-row:1; justify-self:end; background:var(--hum); color:#fff; font-size:10.5px; font-weight:700; border-radius:999px; padding:1px 7px }
+  .room .qr { grid-column:3; grid-row:1; justify-self:end; background:var(--hum); color:var(--hum-bg); font-size:10.5px; font-weight:700; border-radius:999px; padding:1px 7px }
   .room .qr ~ .u { grid-row:2 }
   .room .m .qr { display:inline-block; margin-right:6px; padding:0 6px; font-size:10px; vertical-align:1px }
   #qpanel { position:fixed; inset:0; z-index:50; display:grid; place-items:start center; padding:6vh 16px 16px; background:rgba(10,12,16,.32) }

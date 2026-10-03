@@ -113,15 +113,15 @@ const w2 = await b("wait_for_messages", { room: R, timeout_ms: 0 });
 assert.equal(w2.addressed_to_you_meanwhile, undefined);
 void ask3; void joinedB;
 
-// 7. A long ask is cut at 600 chars and says the next wait carries it whole (it is not stubbed there).
-const long = await a("send_message", { room: R, content: `@builder ${"x".repeat(900)} END`, force: true });
+// 7. A long ask is injected whole, last word included (chat is capped at the source): a seat must not answer half an
+//    ask, and the next wait names it rather than sending it again.
+const long = await a("send_message", { room: R, content: `@builder ${"x".repeat(900)} nonce=END-7`, force: true });
 const lp = (await post("/heartbeat", { seat_key: "seat-busy", peek: true })).pending as Item[];
 assert.equal(lp.length, 1);
-assert.ok(lp[0].text.length < 800, `capped: ${lp[0].text.length}`);
-assert.match(lp[0].text, /next wait_for_messages carries it whole/);
+assert.match(lp[0].text, /x{900} nonce=END-7/);
 await post("/steer/ack", { seat_key: "seat-busy", ids: [long.id] });
-const full = await b("wait_for_messages", { room: R, timeout_ms: 0 });
-assert.match(JSON.stringify(full), /END/);
+const after = JSON.stringify(await b("wait_for_messages", { room: R, timeout_ms: 0 }));
+assert.doesNotMatch(after, /x{900}/, "acked long body is not re-sent");
 
 console.log("STEER CONTRACT OK");
 process.exit(0);

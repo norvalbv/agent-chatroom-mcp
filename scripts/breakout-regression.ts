@@ -128,6 +128,17 @@ test("a parent that already concluded is not written to; a long conclusion is cu
   const e3 = third.hub.getRoom(PARENT).board.get(`inbox/${CHILD}/conclusion`)!;
   assert.ok(e3.text.length <= 8000);
   assert.ok(e3.text.split("\n")[0].includes(`whole text: room_status room="${CHILD}"`));
+
+  // a 64-char child name (the room-name cap) still fits the cap, marker included
+  const longName = `swarm-202803-dpij-${"b".repeat(46)}`;
+  const fourth = room();
+  const l1 = fourth.hub.join(longName, "A", "test", { parent: PARENT, requireChallenge: false, quorum: "majority" }, undefined, "s1").participant;
+  const l2 = fourth.hub.join(longName, "B", "test", {}, undefined, "s2").participant;
+  const lp2 = fourth.hub.propose(longName, l1.id, long);
+  fourth.hub.vote(longName, l2.id, lp2.id, "agree", undefined, undefined, "Keep the opening clause here.");
+  const e4 = fourth.hub.getRoom(PARENT).board.get(`inbox/${longName}/conclusion`)!;
+  assert.ok(e4.text.length <= 8000, `${e4.text.length} chars`);
+  assert.ok(e4.text.endsWith(`room_status room="${longName}"]`));
 });
 
 test("server: a seat holding a wait in its breakout wakes when it is addressed in the parent, and is told where", async () => {

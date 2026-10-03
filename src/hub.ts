@@ -2164,7 +2164,8 @@ export class Hub {
     const head = `Breakout ${room.name} concluded on ${c.proposalId} v${c.version ?? 1} (${c.tally?.agree ?? "?"}/${c.electorate?.electorate ?? "?"} agree; whole text: room_status room="${room.name}").\n`;
     const body = (c.unresolved_objections?.length ? `Unresolved objections: ${c.unresolved_objections.map((u) => `${u.by}: ${u.objection}`).join(" | ")}\n` : "") + c.text;
     const full = head + body;
-    const text = full.length <= 8000 ? full : `${full.slice(0, 7900)}\n[cut at the board cap: ${full.length} chars in all; whole text: room_status room="${room.name}"]`;
+    const marker = `\n[cut at the board cap: ${full.length} chars in all; whole text: room_status room="${room.name}"]`;
+    const text = full.length <= 8000 ? full : full.slice(0, 8000 - marker.length) + marker;
     const entry: BoardEntry = { text, by: "system", updatedAt: now() };
     board.applyBoard(parent, key, entry);
     this.persist({ type: "board", room: parent.name, key, entry });

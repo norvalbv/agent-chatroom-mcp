@@ -1,0 +1,445 @@
+{
+  "method": "One usage entry per distinct provider assistant message id; sums checked against CLI usage sidecars. First request separated from subsequent requests; cache warmth is observed, cause of prior prefix population is not identified.",
+  "source": "swarm-efficiency-final-release.json",
+  "arms": {
+    "release": {
+      "claude-opus-5-5-2": {
+        "requests": 15,
+        "first": {
+          "timestamp": "2026-10-03T19:50:00.250Z",
+          "id": "msg_011CfftF1f2vbuqhGHEuS5eD",
+          "input_tokens": 2,
+          "cache_read_input_tokens": 0,
+          "cache_creation_input_tokens": 16473,
+          "output_tokens": 227
+        },
+        "later_cache_creation_input_tokens": 8964,
+        "later_positive_nondecreasing_cache_reads": true,
+        "rows": [
+          {
+            "timestamp": "2026-10-03T19:50:00.250Z",
+            "id": "msg_011CfftF1f2vbuqhGHEuS5eD",
+            "input_tokens": 2,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 16473,
+            "output_tokens": 227
+          },
+          {
+            "timestamp": "2026-10-03T19:50:04.101Z",
+            "id": "msg_011CfftFEzyMErt3vUb1ABSH",
+            "input_tokens": 2,
+            "cache_read_input_tokens": 16473,
+            "cache_creation_input_tokens": 1190,
+            "output_tokens": 311
+          },
+          {
+            "timestamp": "2026-10-03T19:50:07.914Z",
+            "id": "msg_011CfftFeDE4QXU2fmU9kpWj",
+            "input_tokens": 2,
+            "cache_read_input_tokens": 17663,
+            "cache_creation_input_tokens": 522,
+            "output_tokens": 78
+          },
+          {
+            "timestamp": "2026-10-03T19:50:10.182Z",
+            "id": "msg_011CfftFmwophAgWnCV3GAtd",
+            "input_tokens": 2,
+            "cache_read_input_tokens": 18185,
+            "cache_creation_input_tokens": 952,
+            "output_tokens": 133
+          },
+          {
+            "timestamp": "2026-10-03T19:50:12.906Z",
+            "id": "msg_011CfftFwEAkzy9HQ8VnTqyt",
+            "input_tokens": 2,
+            "cache_read_input_tokens": 19137,
+            "cache_creation_input_tokens": 377,
+            "output_tokens": 250
+          },
+          {
+            "timestamp": "2026-10-03T19:50:14.969Z",
+            "id": "msg_011CfftG95oDJGjKdBpLHosk",
+            "input_tokens": 2,
+            "cache_read_input_tokens": 19514,
+            "cache_creation_input_tokens": 684,
+            "output_tokens": 99
+          },
+          {
+            "timestamp": "2026-10-03T19:50:20.106Z",
+            "id": "msg_011CfftGWKz7vCdyBpU48mv7",
+            "input_tokens": 2,
+            "cache_read_input_tokens": 20198,
+            "cache_creation_input_tokens": 339,
+            "output_tokens": 149
+          },
+          {
+            "timestamp": "2026-10-03T19:50:28.923Z",
+            "id": "msg_011CfftH85Jo4Zzckt14RHez",
+            "input_tokens": 2,
+            "cache_read_input_tokens": 20537,
+            "cache_creation_input_tokens": 179,
+            "output_tokens": 250
+          },
+          {
+            "timestamp": "2026-10-03T19:50:36.775Z",
+            "id": "msg_011CfftHj4yd4aHNUFWqwq7m",
+            "input_tokens": 2,
+            "cache_read_input_tokens": 20716,
+            "cache_creation_input_tokens": 631,
+            "output_tokens": 175
+          },
+          {
+            "timestamp": "2026-10-03T19:50:49.766Z",
+            "id": "msg_011CfftJeTCPMZ39GNg2dPrw",
+            "input_tokens": 2,
+            "cache_read_input_tokens": 21347,
+            "cache_creation_input_tokens": 205,
+            "output_tokens": 250
+          },
+          {
+            "timestamp": "2026-10-03T19:50:57.142Z",
+            "id": "msg_011CfftKFmU8V2yX6BhUFbXZ",
+            "input_tokens": 2,
+            "cache_read_input_tokens": 21552,
+            "cache_creation_input_tokens": 601,
+            "output_tokens": 121
+          },
+          {
+            "timestamp": "2026-10-03T19:51:00.406Z",
+            "id": "msg_011CfftKQKv6yNgg5JRXAXuS",
+            "input_tokens": 2,
+            "cache_read_input_tokens": 22153,
+            "cache_creation_input_tokens": 487,
+            "output_tokens": 296
+          },
+          {
+            "timestamp": "2026-10-03T19:52:12.714Z",
+            "id": "msg_011CfftQpLBmZtap5GAVsmrv",
+            "input_tokens": 2,
+            "cache_read_input_tokens": 22640,
+            "cache_creation_input_tokens": 1638,
+            "output_tokens": 127
+          },
+          {
+            "timestamp": "2026-10-03T19:52:14.837Z",
+            "id": "msg_011CfftQyGx3sAkoqV8DY9dH",
+            "input_tokens": 2,
+            "cache_read_input_tokens": 24278,
+            "cache_creation_input_tokens": 985,
+            "output_tokens": 129
+          },
+          {
+            "timestamp": "2026-10-03T19:52:18.286Z",
+            "id": "msg_011CfftR8LeMdm54frk4Lau2",
+            "input_tokens": 2,
+            "cache_read_input_tokens": 25263,
+            "cache_creation_input_tokens": 174,
+            "output_tokens": 248
+          }
+        ]
+      },
+      "verifier": {
+        "requests": 10,
+        "first": {
+          "timestamp": "2026-10-03T19:50:05.074Z",
+          "id": "msg_011CfftEztehggq28X2rPNL1",
+          "input_tokens": 2,
+          "cache_read_input_tokens": 0,
+          "cache_creation_input_tokens": 17243,
+          "output_tokens": 994
+        },
+        "later_cache_creation_input_tokens": 8444,
+        "later_positive_nondecreasing_cache_reads": true,
+        "rows": [
+          {
+            "timestamp": "2026-10-03T19:50:05.074Z",
+            "id": "msg_011CfftEztehggq28X2rPNL1",
+            "input_tokens": 2,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 17243,
+            "output_tokens": 994
+          },
+          {
+            "timestamp": "2026-10-03T19:50:07.988Z",
+            "id": "msg_011CfftFc7y6YC27sy9Py2i8",
+            "input_tokens": 2,
+            "cache_read_input_tokens": 17243,
+            "cache_creation_input_tokens": 2512,
+            "output_tokens": 161
+          },
+          {
+            "timestamp": "2026-10-03T19:50:09.814Z",
+            "id": "msg_011CfftFmtqhieDVhnydb7VS",
+            "input_tokens": 2,
+            "cache_read_input_tokens": 19755,
+            "cache_creation_input_tokens": 208,
+            "output_tokens": 100
+          },
+          {
+            "timestamp": "2026-10-03T19:50:59.395Z",
+            "id": "msg_011CfftKQLeUWsbiGZUzxFZq",
+            "input_tokens": 2,
+            "cache_read_input_tokens": 19963,
+            "cache_creation_input_tokens": 1062,
+            "output_tokens": 106
+          },
+          {
+            "timestamp": "2026-10-03T19:51:03.897Z",
+            "id": "msg_011CfftKaBzkW8Ni6YD42rFQ",
+            "input_tokens": 2,
+            "cache_read_input_tokens": 21025,
+            "cache_creation_input_tokens": 196,
+            "output_tokens": 438
+          },
+          {
+            "timestamp": "2026-10-03T19:51:12.352Z",
+            "id": "msg_011CfftL4ULvVaovsuYAhDYf",
+            "input_tokens": 2,
+            "cache_read_input_tokens": 21221,
+            "cache_creation_input_tokens": 1214,
+            "output_tokens": 489
+          },
+          {
+            "timestamp": "2026-10-03T19:51:54.172Z",
+            "id": "msg_011CfftPPBZs8KEF7WtUASLg",
+            "input_tokens": 2,
+            "cache_read_input_tokens": 22435,
+            "cache_creation_input_tokens": 1257,
+            "output_tokens": 219
+          },
+          {
+            "timestamp": "2026-10-03T19:51:56.266Z",
+            "id": "msg_011CfftPcewR3MNfzT5pv8nG",
+            "input_tokens": 2,
+            "cache_read_input_tokens": 23692,
+            "cache_creation_input_tokens": 942,
+            "output_tokens": 100
+          },
+          {
+            "timestamp": "2026-10-03T19:52:00.514Z",
+            "id": "msg_011CfftPtd7szFoRiD3zz6dV",
+            "input_tokens": 2,
+            "cache_read_input_tokens": 24634,
+            "cache_creation_input_tokens": 831,
+            "output_tokens": 147
+          },
+          {
+            "timestamp": "2026-10-03T19:52:08.523Z",
+            "id": "msg_011CfftQ5Mnq3oNciSudV3FK",
+            "input_tokens": 2,
+            "cache_read_input_tokens": 25465,
+            "cache_creation_input_tokens": 222,
+            "output_tokens": 813
+          }
+        ]
+      },
+      "claude-opus-5-5-1": {
+        "requests": 24,
+        "first": {
+          "timestamp": "2026-10-03T19:50:00.355Z",
+          "id": "msg_011CfftEzpgRio6eQLqPRJdZ",
+          "input_tokens": 2,
+          "cache_read_input_tokens": 0,
+          "cache_creation_input_tokens": 16473,
+          "output_tokens": 252
+        },
+        "later_cache_creation_input_tokens": 8930,
+        "later_positive_nondecreasing_cache_reads": true,
+        "rows": [
+          {
+            "timestamp": "2026-10-03T19:50:00.355Z",
+            "id": "msg_011CfftEzpgRio6eQLqPRJdZ",
+            "input_tokens": 2,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 16473,
+            "output_tokens": 252
+          },
+          {
+            "timestamp": "2026-10-03T19:50:02.734Z",
+            "id": "msg_011CfftFDjpT4ULFAteyt3ex",
+            "input_tokens": 2,
+            "cache_read_input_tokens": 16473,
+            "cache_creation_input_tokens": 1457,
+            "output_tokens": 166
+          },
+          {
+            "timestamp": "2026-10-03T19:50:04.655Z",
+            "id": "msg_011CfftFPVgr8oZR9BHtnHFR",
+            "input_tokens": 2,
+            "cache_read_input_tokens": 17930,
+            "cache_creation_input_tokens": 326,
+            "output_tokens": 99
+          },
+          {
+            "timestamp": "2026-10-03T19:50:09.321Z",
+            "id": "msg_011CfftFjUESaPCHEySL7z7r",
+            "input_tokens": 2,
+            "cache_read_input_tokens": 18256,
+            "cache_creation_input_tokens": 138,
+            "output_tokens": 82
+          },
+          {
+            "timestamp": "2026-10-03T19:50:13.387Z",
+            "id": "msg_011CfftG2kJTcu8nkvwnLMQs",
+            "input_tokens": 2,
+            "cache_read_input_tokens": 18394,
+            "cache_creation_input_tokens": 115,
+            "output_tokens": 82
+          },
+          {
+            "timestamp": "2026-10-03T19:50:17.882Z",
+            "id": "msg_011CfftGL6qAHGwtuB2X8cDd",
+            "input_tokens": 2,
+            "cache_read_input_tokens": 18509,
+            "cache_creation_input_tokens": 276,
+            "output_tokens": 180
+          },
+          {
+            "timestamp": "2026-10-03T19:50:19.899Z",
+            "id": "msg_011CfftGWLEqEgikmBGy81XN",
+            "input_tokens": 2,
+            "cache_read_input_tokens": 18785,
+            "cache_creation_input_tokens": 247,
+            "output_tokens": 82
+          },
+          {
+            "timestamp": "2026-10-03T19:50:23.946Z",
+            "id": "msg_011CfftGosRwgfVeAX9cPdsk",
+            "input_tokens": 2,
+            "cache_read_input_tokens": 19032,
+            "cache_creation_input_tokens": 115,
+            "output_tokens": 88
+          },
+          {
+            "timestamp": "2026-10-03T19:50:25.990Z",
+            "id": "msg_011CfftGxVbKF7ZjakPVp1Ls",
+            "input_tokens": 2,
+            "cache_read_input_tokens": 19147,
+            "cache_creation_input_tokens": 157,
+            "output_tokens": 117
+          },
+          {
+            "timestamp": "2026-10-03T19:50:29.991Z",
+            "id": "msg_011CfftHFv6Fn462X883KaAR",
+            "input_tokens": 2,
+            "cache_read_input_tokens": 19304,
+            "cache_creation_input_tokens": 156,
+            "output_tokens": 82
+          },
+          {
+            "timestamp": "2026-10-03T19:50:34.443Z",
+            "id": "msg_011CfftHZ6DB1vzfSfMpamKr",
+            "input_tokens": 2,
+            "cache_read_input_tokens": 19460,
+            "cache_creation_input_tokens": 275,
+            "output_tokens": 179
+          },
+          {
+            "timestamp": "2026-10-03T19:50:36.410Z",
+            "id": "msg_011CfftHj3k2TuxH9Pu5So3t",
+            "input_tokens": 2,
+            "cache_read_input_tokens": 19735,
+            "cache_creation_input_tokens": 244,
+            "output_tokens": 82
+          },
+          {
+            "timestamp": "2026-10-03T19:50:40.625Z",
+            "id": "msg_011CfftJ2NnMskFYb3MCDYYh",
+            "input_tokens": 2,
+            "cache_read_input_tokens": 19979,
+            "cache_creation_input_tokens": 115,
+            "output_tokens": 82
+          },
+          {
+            "timestamp": "2026-10-03T19:50:44.648Z",
+            "id": "msg_011CfftJLKHhRTbkmdKV2V84",
+            "input_tokens": 2,
+            "cache_read_input_tokens": 20094,
+            "cache_creation_input_tokens": 115,
+            "output_tokens": 88
+          },
+          {
+            "timestamp": "2026-10-03T19:50:46.674Z",
+            "id": "msg_011CfftJV77mgexqc8qoTWuY",
+            "input_tokens": 2,
+            "cache_read_input_tokens": 20209,
+            "cache_creation_input_tokens": 157,
+            "output_tokens": 117
+          },
+          {
+            "timestamp": "2026-10-03T19:50:50.679Z",
+            "id": "msg_011CfftJnJEDso8UY4PVtnrY",
+            "input_tokens": 2,
+            "cache_read_input_tokens": 20366,
+            "cache_creation_input_tokens": 156,
+            "output_tokens": 82
+          },
+          {
+            "timestamp": "2026-10-03T19:50:55.125Z",
+            "id": "msg_011CfftK5Vq7jTyWcD94QcXa",
+            "input_tokens": 2,
+            "cache_read_input_tokens": 20522,
+            "cache_creation_input_tokens": 275,
+            "output_tokens": 179
+          },
+          {
+            "timestamp": "2026-10-03T19:50:57.116Z",
+            "id": "msg_011CfftKFh1LPhS1qTfZUXxw",
+            "input_tokens": 2,
+            "cache_read_input_tokens": 20797,
+            "cache_creation_input_tokens": 245,
+            "output_tokens": 82
+          },
+          {
+            "timestamp": "2026-10-03T19:51:01.210Z",
+            "id": "msg_011CfftKZAjJ2KatMZyEAgUD",
+            "input_tokens": 2,
+            "cache_read_input_tokens": 21042,
+            "cache_creation_input_tokens": 115,
+            "output_tokens": 82
+          },
+          {
+            "timestamp": "2026-10-03T19:51:05.515Z",
+            "id": "msg_011CfftKs7E3ZTiytHn57Aar",
+            "input_tokens": 2,
+            "cache_read_input_tokens": 21157,
+            "cache_creation_input_tokens": 115,
+            "output_tokens": 88
+          },
+          {
+            "timestamp": "2026-10-03T19:51:10.534Z",
+            "id": "msg_011CfftL2tbRLM6T6RS3DwzD",
+            "input_tokens": 2,
+            "cache_read_input_tokens": 21272,
+            "cache_creation_input_tokens": 157,
+            "output_tokens": 159
+          },
+          {
+            "timestamp": "2026-10-03T19:51:58.034Z",
+            "id": "msg_011CfftPVCxh6NzMA52V22rg",
+            "input_tokens": 2,
+            "cache_read_input_tokens": 21429,
+            "cache_creation_input_tokens": 1407,
+            "output_tokens": 532
+          },
+          {
+            "timestamp": "2026-10-03T19:52:00.459Z",
+            "id": "msg_011CfftPtbe1ukMp9zk79CoG",
+            "input_tokens": 2,
+            "cache_read_input_tokens": 22836,
+            "cache_creation_input_tokens": 2360,
+            "output_tokens": 162
+          },
+          {
+            "timestamp": "2026-10-03T19:52:03.941Z",
+            "id": "msg_011CfftQ5J53aJbNLRyoHGVh",
+            "input_tokens": 2,
+            "cache_read_input_tokens": 25196,
+            "cache_creation_input_tokens": 207,
+            "output_tokens": 240
+          }
+        ]
+      }
+    }
+  }
+}

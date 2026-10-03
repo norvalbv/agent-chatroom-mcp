@@ -1,0 +1,29 @@
+{
+  "commit": "06e5946708d8b033ce73137a08f9fece05ed50e2",
+  "reviewer": "verifier",
+  "cwd": "/tmp/vrf-final",
+  "board_evidence": "review/verifier-final-main",
+  "build": {
+    "command": "npm run build",
+    "exit_code": 0
+  },
+  "scripts_typecheck": {
+    "command": "npx tsc -p tsconfig.scripts.json --noEmit",
+    "exit_code": 0
+  },
+  "smoke": {
+    "command": "PORT=28521 npx tsx scripts/smoke.ts",
+    "exit_code": 0,
+    "output": "SMOKE OK"
+  },
+  "suite": {
+    "command": "npm test",
+    "exit_code": 0,
+    "commands": 159,
+    "passed": 159,
+    "output": "[offline] OK (159 commands)",
+    "log_path": "/tmp/vrf-06e-test.log",
+    "log_sha256": "9c72b6969a6167817587744a7493064bdce9cbd7bd0b3cc5743df416a0430557"
+  },
+  "history": "Initial6cc full suite154/155 pool-run flake; baselineaf26 reproduces1of2. Intermediatecd7466e7 introduced paper-number-audit2/4 failure, fixed at06e59467:4/4. No histories replaced."
+}

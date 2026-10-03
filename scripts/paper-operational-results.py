@@ -64,17 +64,28 @@ wait = load("docs/bench-wait-view-2026-10-03/historical-replay.json")
 wait["bytes_reduction"] = -change(wait["original_bytes"], wait["candidate_bytes"])
 
 combined = {}
-for arm in ("baseline", "head"):
+for arm in ("baseline", "head", "release"):
     data = load(f"docs/measurements/swarm-efficiency-final-{arm}.json")
     combined[arm] = {
         "median_reply_seconds": data["reply_replay"]["reply_metrics"]["reply_latency_ms"]["p50"] / 1000,
         "reported_cost_usd": sum(seat["cost"] for seat in data["provider_usage"].values()),
+        "time_to_conclusion_seconds": data["stats"]["time_to_conclusion_ms"] / 1000,
         "hub_calls": data["tool_usage"]["observed_totals"]["hub_tool_calls"],
         "hub_text_bytes": data["tool_usage"]["observed_totals"]["hub_text_bytes"],
     }
 combined["relative_cost_change"] = change(
     combined["baseline"]["reported_cost_usd"], combined["head"]["reported_cost_usd"]
 )
+
+combined["release_relative_change"] = {
+    key: change(combined["baseline"][key], combined["release"][key])
+    for key in ("reported_cost_usd", "time_to_conclusion_seconds")
+}
+release_cache = load("docs/measurements/swarm-efficiency-release-cache.json")["arms"]["release"]
+combined["release_first_cache_creation"] = sum(
+    seat["first"]["cache_creation_input_tokens"] for seat in release_cache.values()
+)
+combined["release_later_requests"] = sum(seat["requests"] - 1 for seat in release_cache.values())
 
 cross_run = load("docs/measurements/swarm-efficiency-cross-run.json")
 cross_result = {}
@@ -94,7 +105,7 @@ result = {
     "openrouter": router_result,
     "claude_three_seat": contract_result,
     "wait_replay": wait,
-    "initial_combined": combined,
+    "combined_snapshots": combined,
     "cross_run": cross_result,
 }
 destination = ROOT / "paper/generated/operational-results.json"

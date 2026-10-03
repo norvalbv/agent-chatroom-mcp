@@ -7,6 +7,8 @@
     "docs/bench-wait-view-2026-10-03/historical-replay.json": "30bffad45ac10d0241c7f16a9dff9d047e1327df0a7ea57d9012dd864251faea",
     "docs/measurements/swarm-efficiency-final-baseline.json": "cbf6fea48ffa1eea9361791643a61638a1e3d6867a4e4ace01b4c636e60bbc7d",
     "docs/measurements/swarm-efficiency-final-head.json": "b938c600b45dd9c8401c3788f98e588ffe0551b04f5a78666a1ff67a00f81055",
+    "docs/measurements/swarm-efficiency-final-release.json": "049c4c99b127012e9f8e17b171c6fa73c050406262b3546404f9d78610facd04",
+    "docs/measurements/swarm-efficiency-release-cache.json": "99130d96ffab2cd3d8b0d54fbe50954e731c8a74a59f2d14de6312fb60d9c629",
     "docs/measurements/swarm-efficiency-cross-run.json": "32b8b90b3246cc4afc11d1a1ffdaa0302ed49e0def15d5d9a469724963d5a9f8"
   },
   "output_size": {
@@ -82,20 +84,35 @@
     "note": "Same ordered historical observations through the actual formatter. Pretty JSON retained to isolate state compaction from serialization. Provider tokens/calls and task outcome unchanged by this replay.",
     "bytes_reduction": 0.0687735353603075
   },
-  "initial_combined": {
+  "combined_snapshots": {
     "baseline": {
       "median_reply_seconds": 15.889,
       "reported_cost_usd": 0.7409054,
+      "time_to_conclusion_seconds": 74.803,
       "hub_calls": 35,
       "hub_text_bytes": 36658
     },
     "head": {
       "median_reply_seconds": 3.975,
       "reported_cost_usd": 0.9610886000000001,
+      "time_to_conclusion_seconds": 67.272,
       "hub_calls": 30,
       "hub_text_bytes": 22978
     },
-    "relative_cost_change": 0.2971812595778085
+    "release": {
+      "median_reply_seconds": 5.876,
+      "reported_cost_usd": 1.0050866,
+      "time_to_conclusion_seconds": 117.824,
+      "hub_calls": 34,
+      "hub_text_bytes": 31752
+    },
+    "relative_cost_change": 0.2971812595778085,
+    "release_relative_change": {
+      "reported_cost_usd": 0.3565653590863287,
+      "time_to_conclusion_seconds": 0.5751239923532478
+    },
+    "release_first_cache_creation": 50189,
+    "release_later_requests": 46
   },
   "cross_run": {
     "swarm-205033-6bp8": {

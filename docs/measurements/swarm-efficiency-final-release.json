@@ -1,0 +1,757 @@
+{
+  "room": "swarm-194955-u2mp-room",
+  "oracle": {
+    "expected": "Society for Formal Methods, Vienna",
+    "observed": "Society for Formal Methods, Vienna",
+    "pass": true
+  },
+  "manifest": {
+    "command": [
+      "node",
+      "/var/folders/9r/rmy4kywx6pl2hfzbw934txt40000gn/T/astra5-final-bench-5_hhc756/release/dist/swarm.js",
+      "Read records.txt. One researcher affiliation is wrong. Reach a proposal containing ONLY the single corrected affiliation; that exact answer is the machine oracle. This is also a controlled responsiveness exercise. All seats use the same task and should complete it normally after the exercise.\nThe worker whose name ends in -1 is the BUSY WORKER; the worker whose name ends in -2 is the REQUESTER; verifier remains verifier. Use each other's actual joined names in mentions.\nAfter joining and submitting your opening, perform three sequential phases numbered 1, 2, 3:\n- BUSY WORKER: for each phase N, first run Bash `date +%s > busy.started.N; sleep 2` (substitute N with the phase number). Then run THREE separate sequential Bash calls `sleep 2; date +%s` (do not combine them). Finally run Bash `date +%s > busy.finished.N`. These are deliberate independent local-tool steps. During these steps do not proactively call hub wait/read/status or inspect the board; if a peer request reaches your context, respond immediately with send_message reply_to before continuing local work. After each phase, if you have not yet answered that phase's request, use wait_for_messages(hold_until_actionable=true) and answer it before starting the next phase. The requester will ask for ACK_COPPER_N; reply with that exact token via reply_to.\n- REQUESTER: for each phase N, wait for busy.started.N with one bounded Bash command (up to 60 seconds). Immediately @mention the BUSY WORKER publicly, asking it to reply exactly ACK_COPPER_N using reply_to. Then wait until it answers before proceeding to the next phase. Do not answer for it.\n- VERIFIER: independently check the record correction, but wait until all three phases finish and all three requests are answered before concluding. This bounded benchmark uses exactly three seats. Scratch marker files in this working directory are permitted. Do not change records.txt. Do not access other rooms or external sources. After the single-answer proposal is challenged and verified by the verifier, agree, conclude and leave.\n",
+      "--flat",
+      "--agents",
+      "3",
+      "--models",
+      "claude-opus-5-5",
+      "--verifier-model",
+      "claude-opus-5-5",
+      "--timeout",
+      "10",
+      "--port",
+      "18566",
+      "--cwd",
+      "/var/folders/9r/rmy4kywx6pl2hfzbw934txt40000gn/T/astra5-final-bench-5_hhc756/workspace",
+      "--no-carry",
+      "--no-web",
+      "--named"
+    ],
+    "port": 18566,
+    "commit": "06e5946708d8b033ce73137a08f9fece05ed50e2",
+    "entry_sha256": "89d8dd63a7e4fae0aee3a49cb435f90edb7a8107b034424ed45b2f03b48dcb60",
+    "files": {
+      "attempts.js": "4175e685ab7bf0780d606770239f983bbd26f0ee8ae71e6166ecefbcc6ff1286",
+      "attempts.js.map": "dfde2cfa931bc241135aa9664d1fc5a7a1ee972f7a937b574531c02cf3490504",
+      "claude-args.js": "d56dfaf6a00effce3bf96e02876bd67155cee1e904908a44dae94bf0d7f9da36",
+      "claude-args.js.map": "66ee5b994ade02ba049b983c64b1b733dcfed0b2c4e5a45f74f8eb602278ec6f",
+      "codex/cli.js": "bc1481aa8d881a85e9b9f68fbb5074959bbbebeb0fe425821c3582176af6eacf",
+      "codex/cli.js.map": "445a73ec567e1a591b0f58798c8a8b5129a998b004c060b78f224017f451b4ea",
+      "codex/live.js": "ceeaf02778fe349952036b30edd2b3b89f35c39c1db53f64d627c21686c5d9fd",
+      "codex/live.js.map": "79e62c34b561846299323f35d1ba4c5c39eec49072fb337bf3651a249e65328c",
+      "codex/rpc.js": "bbf3864ed19d3628d25e3f0f5b362a3624f5ac1eb533c4c7771f3d4606c8ec57",
+      "codex/rpc.js.map": "a9df9819bf9d11cb50ce5067a4132d7490450e6f020b712462067d8dd180d454",
+      "codex-seat.js": "990fc1a3ac5e52711c085a10e9a8e442642b9750d7bdec930fc7f125b55782ed",
+      "codex-seat.js.map": "59433c7c79f2cf9e87e85c66597d2f1ad733645aae6afb6e28505def5f18a275",
+      "cost-estimate.js": "a021df4d76d928bdafb82bd23e40e00a7b23db92b92462642cd056a4153b9d1a",
+      "cost-estimate.js.map": "c0abc4633463eeb1765fd8627a06eade2ccf5805f71566053336dd672af60745",
+      "env.js": "0a70ba40653e9dcb35b9a4c9c782e5dfdc2791bf4cc571db6ecc7542298f4e21",
+      "env.js.map": "e1cd3ff2cbe456d7657c6f9c7a0573c3ea40a306ef185aa4389bbec47c109ffa",
+      "fleet-result.js": "69a5923ca190eebde3e87b59ab9cac053f081e6313d579a8f9ce63f801871c82",
+      "fleet-result.js.map": "ae3423d156720be04181df1e9a3a385a10bf66f038ef44d82d0f0e1f2181898a",
+      "fleet.js": "a48a04ee46d7fcb35cdc88416bc9353f78fb9840160961849d5f26bd165a2438",
+      "fleet.js.map": "0800462cef409e456f4db347fd5872da09fcfa8e92db0779f8af2bc7775c4c21",
+      "hub/board.js": "3f2d613a3025838e014d0e73581a9ad456be46e2731570db55161b7242c5dfa8",
+      "hub/board.js.map": "d2760d9976b9011dc06bce0ebf335424022d5357060d7710f45534448f84518b",
+      "hub/internal.js": "7e0577a3183dfbda17fcd5988a15370c9e18c3db21e3ee4751e56ac97625186e",
+      "hub/internal.js.map": "116a4f931d8de6c08f84f26c8e3866db51c4410167fe1dd6125c64974a8ffac8",
+      "hub/kick.js": "1ff9b09883aa31825cb6eb941738095577581435f5d18ec8e5cf221518b708e5",
+      "hub/kick.js.map": "ee6a67429566de3e9cd370a374d58792dbf8ba0d848ca94d6505f4653d5f0a8f",
+      "hub/persistence.js": "bec2012c4f1d604709fd7ddf661d653ed6c9d4e58edfa62bbb80c481ed76f81f",
+      "hub/persistence.js.map": "25a2eeec4604fea27f483477103864be6b4a57ea5f0dc005a21ac5d328f1c01a",
+      "hub/status-view.js": "33b6f550d0d5f76776aa6629e29a5ce2b3e7ecf6a5b79f1911ddcf9dffdb4001",
+      "hub/status-view.js.map": "f677c4f51974ec2a28fe5cde75baa9c7cb921c1867e2571090aff14128bdc796",
+      "hub/steer.js": "b34a3a2436fa9672f0b28c635dcd93d7213e923a8a680237b1ddbba3836d2588",
+      "hub/steer.js.map": "7dd2941056ad74c75bb40d1c1a09d15c08496a3e593daaba9ae07dfc2aaa40b6",
+      "hub/types.js": "93c0a4caa08b0959ca3a31a5dd8c1ef2a1f9e0ff2c421f12ff737fec9cf7057b",
+      "hub/types.js.map": "0e15f6e46deb36c9cb90ecfb6bf3ff9ef0c141cb4c8fd7bedd69c64ef0d2e4c5",
+      "hub/wait-view.js": "2a51e97880c659f2f84f259a05f803e178545fe08bd5743971cd588617e0362f",
+      "hub/wait-view.js.map": "2ab322eee264fc8c39abead51524b5c55f9cc160112715e9e9d7e52da356e127",
+      "hub.js": "c68498b2fc0d4f62dcdcecfe4f8d32a0d0835b2408e180501994b2e6940fa64f",
+      "hub.js.map": "722a087d8819b655cbb5edd45f20eaf5e6c569d1c5c138058900aab4eac78d90",
+      "index.js": "89d8dd63a7e4fae0aee3a49cb435f90edb7a8107b034424ed45b2f03b48dcb60",
+      "index.js.map": "df2669b52c7a947d8d9e7788c2d05171e9014c947c74ff9d3e6b64968f49f961",
+      "openrouter.js": "e994ee310689388da63fe36e993e7ae7baa63686466e4bb099a630203a31970d",
+      "openrouter.js.map": "65163ceb1fa9aec29ed5d304934d8d373e2bc191d54827ff62506c3c78e34198",
+      "photos/routes.js": "e5167ef513efed58f294dd636a9c1f47a70c9dff36d31754b2b52cf13bbb5305",
+      "photos/routes.js.map": "e8f3dcdc7273fcde46225788387da0b1a0ef2c7f833a511e0b9bd8d103749983",
+      "questions.js": "56d391e239c5fc1a7b82888ff30bf6b601ca896b9b2a14bb8e8b6087b7912257",
+      "questions.js.map": "1d1e3843217a36ee79fba780a7c75a2ac49416ec4972a21dd27e5a54700efce2",
+      "reply-metrics.js": "07a0a054a9ac8822c9d3ff753ffd1595ada8569d9ad34becd8e66b2cff1fa858",
+      "reply-metrics.js.map": "7a3ec1654eb037de15231841e8c87e56553c1ac195fbd0d9c1d1b6f952e9d5cd",
+      "respawn.js": "7c998791bd2daad4055af1a95a5f660bb00633417079bf3e263137d7fdb8c7f5",
+      "respawn.js.map": "721a4651fc2f1f54c1b76ce1e99b8b510c59255db2e55769435f3ff4d3bc7945",
+      "result.js": "ad367270fafc8cbc3f77a4a5419acac1eb85bdc7942f265a9116de361233e7c9",
+      "result.js.map": "619a16e05a051e7624be03530daa5423f818a21d91b740d6472187e43921065a",
+      "revive.js": "c6edff55f273521d2ebd5cdea18e649c187219f355e3f0396502f3532c7f6c40",
+      "revive.js.map": "eadd9f6cd72480d6ac90cb6f567b68a25a02834cb200dbe61a744b55d0a39259",
+      "sandbox.js": "645ddfac5885f7ef882f23baed5923fed09f5f92d912d98b014deb742e7cd161",
+      "sandbox.js.map": "8f085549a9acd166bf357fec899d08aede0e1e76b890b2c919cb17d29afec8fa",
+      "seat/steering.js": "dd1dd2daf9409fdb9f2b6c437e6d11db344dfe99124dfc4fa9e7633207d9abd7",
+      "seat/steering.js.map": "89dc5a328a57ad3f888ba5874d66bf1178e4fb17338771a545bf2a56b40ead8b",
+      "seat/wait-view.js": "0182080d55c32556ff1445df460a9969599de7eb8fa08acb93a0818126479145",
+      "seat/wait-view.js.map": "2a961a4907a4c8b32b394a862b9dea7284f6ee8e1767a39e768b1bd67df4ecb1",
+      "seat-handoff-report.js": "3ae1e96d350deaea7c62badfac2ead38566eeb5ec8bcc1df9f7ce2a84258b090",
+      "seat-handoff-report.js.map": "482e64b881ff3a5d5c3035ee1a82ddb3b5f5f0540fc57b73504ff0f8f8de4200",
+      "seat.js": "751a4e4e4039ee1f785d6b06fb05ec65241175c82745003fabcde90e3db9a059",
+      "seat.js.map": "7c6a1016714cedb7de24465b90366c74f8359c5831e5b782c62d497be72c6423",
+      "server.js": "2dddb9d2cf79ee1d72cb7ec7edf30fa6fb7b02445a7c7d20554f79dce4324924",
+      "server.js.map": "451cba81ae5dc7d4937f727f0fdce4fb76aba8e5984f9d810168aada0cb2efc0",
+      "settled.js": "d637db23e80c4ec7e0489c0c2aa84fcada4a543a5319ac02194ec4006f60bcf3",
+      "settled.js.map": "831dec707b49b8a49cf47b4cda698808c970366efd9414f89cde4840c0e3be16",
+      "spawner.js": "d0a55311b69dc722da0c65463a384bc7ac4d3e616bfee70343616bb1f84d46f3",
+      "spawner.js.map": "b23006d2c6455057953a54cc2e26d5d12202ce7b5b8c58bc42bf6436c7f47fc4",
+      "strays.js": "27e5378a376a62cb7fb9dcfd287055082aa13b119c94cc39aabc586601ed9b12",
+      "strays.js.map": "a79ff8234a0829c8e5bef9c859ee2bc2746054708ae218616643cfdf88ea4cce",
+      "swarm.js": "f78cc14abb61aa0a54aa3a57e143bce5ffebe4b84eba2ca03997e5c6c12ae1af",
+      "swarm.js.map": "b3503838766486886e2489e7e9b7362e4ad283f4997ab8defd4d4e94bf046f1e",
+      "ui/board.js": "37b8b65c17e9ca024936e6bda24d1e729548a5a11e708e5c7dfb2fb558f1f748",
+      "ui/board.js.map": "6815cda641b0fa81f1346b1ab1280e10e00b03ea1c01a783dce4b0d8939840a1",
+      "ui/catchup.js": "58530e520925fa264860ad2671fa902d08f305bfbb67c051dda7d24fb7c9c936",
+      "ui/catchup.js.map": "9da3e1e52d4ac6a8e8b4ac8d7f204f7690e19a8c2d0c15d684a92f3ed422dc5e",
+      "ui/inbox.js": "8eb46895fab6ad3c989578a3a8d130240c5c6d4e9d1b01669b196789103b6454",
+      "ui/inbox.js.map": "8d81eb3bb88d69e791b728b4f48b19a3f005ca43cd7b3fbee479eef2838278f0",
+      "ui/palette.js": "86207435cfb8b04f84517fcff2cf778eeaa7b066c5f4321dbfd5da037e77448a",
+      "ui/palette.js.map": "57cd02b3175f844348b043e5eda500dee0a9c281d65d94e97410cd53b6489d04",
+      "ui/photos.js": "35b898ab87ec1c6bc6b19c00ec7ccdeb6d83f9f738b9321237e6ecb61edf7318",
+      "ui/photos.js.map": "cb1e4354b19c83e84cbb99d41413937e34d9d2840f04da416bb0df60fa37af15",
+      "ui/rooms.js": "ec744f73660afdf8d413131b3794a203f116d1f7db7d34ac587c0bfdb5d2b9d4",
+      "ui/rooms.js.map": "002d96298287b55cca4c065825cc7c964bb9728675415902587e8d8eaad69008",
+      "ui/styles.js": "0651c56f4675dbb58f2d19a3b7b3b8ce1a3defc265a567770d3c5e54e2d0cd02",
+      "ui/styles.js.map": "a215c8f685bb127292cfd2a6ee23133e76b071c2c9db8f6c7628b9adf64df145",
+      "ui.js": "e475713243bb47c04de371bf0fb3e44caff1b771347ecb70703e1949cb40780f",
+      "ui.js.map": "61d4c333dc0f63b4063678c33e04d05b92dec3744be64a65d16a2c4634959664"
+    },
+    "whole_dist_sha256": "bf2952b50540a47d7faafbbd71587020de87edf16a74c872108ab63150d8c027",
+    "launcher_pid": 74800,
+    "brief_sha256": "7db5038b38de54ad6253d2502468503ad5b972e08e367c89fca614105ae4435b"
+  },
+  "tool_usage": {
+    "run": "swarm-194955-u2mp",
+    "method": {
+      "calls": "Counts logged MCP, shell, search, file-change, collaboration and plan-update tool events; hub_tool_calls isolates chatroom MCP calls",
+      "bytes": "UTF-8 bytes of returned text blocks joined by newline; excludes JSON transport envelope and non-text blocks",
+      "tokens": "Provider-reported usage, separate from text bytes; missing fields are unknown, not zero",
+      "candidates": "Observed patterns, not a finding that every matched call was unnecessary",
+      "coverage": "Denominator is seats found in supplied artifacts, not a room roster. Sidecars supply usage without traces and supersede transcript usage."
+    },
+    "seats": {
+      "claude-opus-5-5-2": {
+        "provider": "claude",
+        "trace_sources": [
+          "7ae0d32c-d666-4905-a4ea-f8576ec02769.jsonl"
+        ],
+        "usage": {
+          "input_tokens": 30,
+          "cache_read_input_tokens": 289656,
+          "cache_creation_input_tokens": 25437,
+          "output_tokens": 2843
+        },
+        "trace_sha256": {
+          "7ae0d32c-d666-4905-a4ea-f8576ec02769.jsonl": "ba8ae4d7b7e5840c6355c9594ca4200d3208340f8ccee801f4196095119db32e"
+        },
+        "usage_source": "claude-opus-5-5-2.usage.json",
+        "trace_observed": true,
+        "tool_calls": 20,
+        "hub_tool_calls": 16,
+        "tools": {
+          "join_room": {
+            "calls": 1,
+            "results": 1,
+            "text_bytes": 1344,
+            "max_text_bytes": 1344,
+            "hub": true
+          },
+          "other:Bash": {
+            "calls": 4,
+            "results": 4,
+            "text_bytes": 771,
+            "max_text_bytes": 756,
+            "hub": false
+          },
+          "submit_opening": {
+            "calls": 1,
+            "results": 1,
+            "text_bytes": 328,
+            "max_text_bytes": 328,
+            "hub": true
+          },
+          "room_status": {
+            "calls": 1,
+            "results": 1,
+            "text_bytes": 1766,
+            "max_text_bytes": 1766,
+            "hub": true
+          },
+          "send_message": {
+            "calls": 5,
+            "results": 5,
+            "text_bytes": 789,
+            "max_text_bytes": 551,
+            "hub": true
+          },
+          "wait_for_messages": {
+            "calls": 6,
+            "results": 6,
+            "text_bytes": 6737,
+            "max_text_bytes": 2913,
+            "hub": true
+          },
+          "propose": {
+            "calls": 1,
+            "results": 1,
+            "text_bytes": 722,
+            "max_text_bytes": 722,
+            "hub": true
+          },
+          "leave_room": {
+            "calls": 1,
+            "results": 1,
+            "text_bytes": 28,
+            "max_text_bytes": 28,
+            "hub": true
+          }
+        },
+        "redundancy_candidates": {
+          "unread_send_refusals": 1,
+          "unread_send_refusal_text_bytes": 551,
+          "same_content_send_retries": 1
+        }
+      },
+      "verifier": {
+        "provider": "claude",
+        "trace_sources": [
+          "a8ee1165-c62b-4a51-b595-f22cadf86aee.jsonl"
+        ],
+        "usage": {
+          "input_tokens": 20,
+          "cache_read_input_tokens": 195433,
+          "cache_creation_input_tokens": 25687,
+          "output_tokens": 3567
+        },
+        "trace_sha256": {
+          "a8ee1165-c62b-4a51-b595-f22cadf86aee.jsonl": "96d9a869714ead35717a281266f829bfc7277800fef888d7a625d6006fc92e71"
+        },
+        "usage_source": "verifier.usage.json",
+        "trace_observed": true,
+        "tool_calls": 12,
+        "hub_tool_calls": 9,
+        "tools": {
+          "join_room": {
+            "calls": 1,
+            "results": 1,
+            "text_bytes": 2198,
+            "max_text_bytes": 2198,
+            "hub": true
+          },
+          "other:Bash": {
+            "calls": 3,
+            "results": 3,
+            "text_bytes": 1114,
+            "max_text_bytes": 973,
+            "hub": false
+          },
+          "submit_opening": {
+            "calls": 1,
+            "results": 1,
+            "text_bytes": 33,
+            "max_text_bytes": 33,
+            "hub": true
+          },
+          "wait_for_messages": {
+            "calls": 2,
+            "results": 2,
+            "text_bytes": 3512,
+            "max_text_bytes": 1970,
+            "hub": true
+          },
+          "challenge": {
+            "calls": 2,
+            "results": 2,
+            "text_bytes": 3075,
+            "max_text_bytes": 1576,
+            "hub": true
+          },
+          "send_message": {
+            "calls": 1,
+            "results": 1,
+            "text_bytes": 62,
+            "max_text_bytes": 62,
+            "hub": true
+          },
+          "vote": {
+            "calls": 1,
+            "results": 1,
+            "text_bytes": 1658,
+            "max_text_bytes": 1658,
+            "hub": true
+          },
+          "leave_room": {
+            "calls": 1,
+            "results": 1,
+            "text_bytes": 28,
+            "max_text_bytes": 28,
+            "hub": true
+          }
+        },
+        "redundancy_candidates": {}
+      },
+      "claude-opus-5-5-1": {
+        "provider": "claude",
+        "trace_sources": [
+          "94237cfd-5e90-4810-aeeb-55ca03c3ee80.jsonl"
+        ],
+        "usage": {
+          "input_tokens": 48,
+          "cache_read_input_tokens": 459924,
+          "cache_creation_input_tokens": 25403,
+          "output_tokens": 3384
+        },
+        "trace_sha256": {
+          "94237cfd-5e90-4810-aeeb-55ca03c3ee80.jsonl": "5e5b02da6da0f135a1403208e155ee140436c1dca13a26bfe193bba954d4450a"
+        },
+        "usage_source": "claude-opus-5-5-1.usage.json",
+        "trace_observed": true,
+        "tool_calls": 25,
+        "hub_tool_calls": 9,
+        "tools": {
+          "join_room": {
+            "calls": 1,
+            "results": 1,
+            "text_bytes": 1793,
+            "max_text_bytes": 1793,
+            "hub": true
+          },
+          "other:Read": {
+            "calls": 1,
+            "results": 1,
+            "text_bytes": 759,
+            "max_text_bytes": 759,
+            "hub": false
+          },
+          "submit_opening": {
+            "calls": 1,
+            "results": 1,
+            "text_bytes": 348,
+            "max_text_bytes": 348,
+            "hub": true
+          },
+          "other:Bash": {
+            "calls": 15,
+            "results": 15,
+            "text_bytes": 276,
+            "max_text_bytes": 31,
+            "hub": false
+          },
+          "send_message": {
+            "calls": 3,
+            "results": 3,
+            "text_bytes": 178,
+            "max_text_bytes": 60,
+            "hub": true
+          },
+          "wait_for_messages": {
+            "calls": 1,
+            "results": 1,
+            "text_bytes": 2922,
+            "max_text_bytes": 2922,
+            "hub": true
+          },
+          "challenge": {
+            "calls": 1,
+            "results": 1,
+            "text_bytes": 2014,
+            "max_text_bytes": 2014,
+            "hub": true
+          },
+          "vote": {
+            "calls": 1,
+            "results": 1,
+            "text_bytes": 2189,
+            "max_text_bytes": 2189,
+            "hub": true
+          },
+          "leave_room": {
+            "calls": 1,
+            "results": 1,
+            "text_bytes": 28,
+            "max_text_bytes": 28,
+            "hub": true
+          }
+        },
+        "redundancy_candidates": {}
+      }
+    },
+    "observed_totals": {
+      "hub_tool_calls": 34,
+      "hub_results": 34,
+      "hub_text_bytes": 31752
+    },
+    "tools": {
+      "join_room": {
+        "calls": 3,
+        "results": 3,
+        "text_bytes": 5335,
+        "max_text_bytes": 2198,
+        "hub": true
+      },
+      "other:Bash": {
+        "calls": 22,
+        "results": 22,
+        "text_bytes": 2161,
+        "max_text_bytes": 973,
+        "hub": false
+      },
+      "submit_opening": {
+        "calls": 3,
+        "results": 3,
+        "text_bytes": 709,
+        "max_text_bytes": 348,
+        "hub": true
+      },
+      "room_status": {
+        "calls": 1,
+        "results": 1,
+        "text_bytes": 1766,
+        "max_text_bytes": 1766,
+        "hub": true
+      },
+      "send_message": {
+        "calls": 9,
+        "results": 9,
+        "text_bytes": 1029,
+        "max_text_bytes": 551,
+        "hub": true
+      },
+      "wait_for_messages": {
+        "calls": 9,
+        "results": 9,
+        "text_bytes": 13171,
+        "max_text_bytes": 2922,
+        "hub": true
+      },
+      "propose": {
+        "calls": 1,
+        "results": 1,
+        "text_bytes": 722,
+        "max_text_bytes": 722,
+        "hub": true
+      },
+      "leave_room": {
+        "calls": 3,
+        "results": 3,
+        "text_bytes": 84,
+        "max_text_bytes": 28,
+        "hub": true
+      },
+      "challenge": {
+        "calls": 3,
+        "results": 3,
+        "text_bytes": 5089,
+        "max_text_bytes": 2014,
+        "hub": true
+      },
+      "vote": {
+        "calls": 2,
+        "results": 2,
+        "text_bytes": 3847,
+        "max_text_bytes": 2189,
+        "hub": true
+      },
+      "other:Read": {
+        "calls": 1,
+        "results": 1,
+        "text_bytes": 759,
+        "max_text_bytes": 759,
+        "hub": false
+      }
+    },
+    "redundancy_candidates": {
+      "unread_send_refusals": 1,
+      "unread_send_refusal_text_bytes": 551,
+      "same_content_send_retries": 1
+    },
+    "coverage": {
+      "seats": 3,
+      "seats_with_trace": 3,
+      "seats_with_usage": 3
+    }
+  },
+  "stats": {
+    "room": "swarm-194955-u2mp-room",
+    "state": "concluded",
+    "reply_metrics": {
+      "schema_version": 1,
+      "window_minutes": 15,
+      "as_of": "2026-10-03T19:53:05.010Z",
+      "observation_end": "2026-10-03T19:52:14.872Z",
+      "definition": "Deduplicated persisted non-opening agent chat/target pairs, public and quiet; membership at ask from ordered join/leave events. Strict reply is later target chat with exact replyTo or persisted @-back within <=window; one reply may credit multiple asks. Syntactic proxy, not task success. Activity counts any later non-opening target post. Unknown membership excluded from live denominator; pending includes early answered pairs.",
+      "mentions": 4,
+      "to_departed": 0,
+      "departure_unknown": 0,
+      "live_mentions": 4,
+      "answered_within_window": 4,
+      "reply_rate": 1,
+      "reply_latency_definition": "Milliseconds to earliest timestamp among qualifying later-sequence strict replies per answered live pair; nearest-rank quantiles. Includes early-answered pending pairs; excludes unanswered pairs, so read with reply_rate. One reply may supply multiple pair samples.",
+      "reply_latency_ms": {
+        "samples": 4,
+        "min": 5430,
+        "p50": 5876,
+        "p95": 12437,
+        "max": 12437
+      },
+      "mature_live_mentions": 0,
+      "mature_answered_within_window": 0,
+      "mature_reply_rate": null,
+      "pending_live_mentions": 4,
+      "activity_within_window": 4,
+      "declined_within_window": null,
+      "decline_coverage": "unknown"
+    },
+    "duration_ms": 134623,
+    "time_to_conclusion_ms": 117824,
+    "messages_by_kind": {
+      "system": 7,
+      "chat": 11,
+      "proposal": 1,
+      "challenge": 3,
+      "vote": 2,
+      "conclusion": 1
+    },
+    "per_participant": [
+      {
+        "name": "claude-opus-5-5-2",
+        "agent": "claude",
+        "chat_messages": 4,
+        "passes": 0,
+        "chars": 587
+      },
+      {
+        "name": "claude-opus-5-5-1",
+        "agent": "claude",
+        "chat_messages": 3,
+        "passes": 0,
+        "chars": 157
+      },
+      {
+        "name": "verifier",
+        "agent": "claude",
+        "chat_messages": 1,
+        "passes": 0,
+        "chars": 446
+      }
+    ],
+    "proposals": 1,
+    "proposal_electorates": [],
+    "conclusion_electorate": {
+      "electorate": 3,
+      "agree": 3,
+      "disagree": 0,
+      "abstain": 0,
+      "excluded_leavers": 0,
+      "distinct_sessions": 3,
+      "denominator": "electorate"
+    },
+    "amendments": 0,
+    "challenges": 3,
+    "board_entries": 0,
+    "board_manifests": {
+      "version": 1,
+      "waits": 9,
+      "bytes": 135,
+      "full": 3,
+      "delta": 0,
+      "empty": 6
+    },
+    "board_manifest": {
+      "coverage": "since-process-start",
+      "waits_observed": 9,
+      "full_baseline_manifest_bytes": 153,
+      "shipped_manifest_bytes": 120,
+      "keys_shipped": 0,
+      "deleted_tombstones_shipped": 0,
+      "current_full_manifest_bytes": 17,
+      "entries_by_prefix": {
+        "claim/": 0,
+        "evidence/": 0,
+        "sources/": 0,
+        "handoff/": 0,
+        "inbox/": 0,
+        "verify/": 0,
+        "other": 0
+      }
+    },
+    "refusals": {
+      "send_message: hub_guard": 1
+    },
+    "call_outcomes": {
+      "join_room": {
+        "success": 3,
+        "hub_refusal": 0,
+        "error": 0
+      },
+      "submit_opening": {
+        "success": 3,
+        "hub_refusal": 0,
+        "error": 0
+      },
+      "room_status": {
+        "success": 1,
+        "hub_refusal": 0,
+        "error": 0
+      },
+      "send_message": {
+        "success": 8,
+        "hub_refusal": 1,
+        "error": 0
+      },
+      "wait_for_messages": {
+        "success": 9,
+        "hub_refusal": 0,
+        "error": 0
+      },
+      "propose": {
+        "success": 1,
+        "hub_refusal": 0,
+        "error": 0
+      },
+      "challenge": {
+        "success": 3,
+        "hub_refusal": 0,
+        "error": 0
+      },
+      "vote": {
+        "success": 2,
+        "hub_refusal": 0,
+        "error": 0
+      },
+      "leave_room": {
+        "success": 3,
+        "hub_refusal": 0,
+        "error": 0
+      }
+    },
+    "refusal_rates": {
+      "join_room": 0,
+      "submit_opening": 0,
+      "room_status": 0,
+      "send_message": 0.1111111111111111,
+      "wait_for_messages": 0,
+      "propose": 0,
+      "challenge": 0,
+      "vote": 0,
+      "leave_room": 0
+    },
+    "refusal_rate_coverage": "complete",
+    "near_simultaneous_replies": 1,
+    "unanswered_human_messages": 0
+  },
+  "reply_replay": {
+    "parser": "persisted-routing-pairs-v1",
+    "source_path": "/var/folders/9r/rmy4kywx6pl2hfzbw934txt40000gn/T/astra5-final-bench-5_hhc756/release/data/swarm-194955-u2mp-room.jsonl",
+    "max_seq": null,
+    "observation_cutoff": "2026-10-03T19:52:14.872Z",
+    "reply_metrics": {
+      "schema_version": 1,
+      "window_minutes": 15,
+      "as_of": "2026-10-03T19:52:14.872Z",
+      "observation_end": "2026-10-03T19:52:14.872Z",
+      "definition": "Deduplicated persisted non-opening agent chat/target pairs, public and quiet; membership at ask from ordered join/leave events. Strict reply is later target chat with exact replyTo or persisted @-back within <=window; one reply may credit multiple asks. Syntactic proxy, not task success. Activity counts any later non-opening target post. Unknown membership excluded from live denominator; pending includes early answered pairs.",
+      "mentions": 4,
+      "to_departed": 0,
+      "departure_unknown": 0,
+      "live_mentions": 4,
+      "answered_within_window": 4,
+      "reply_rate": 1,
+      "reply_latency_definition": "Milliseconds to earliest timestamp among qualifying later-sequence strict replies per answered live pair; nearest-rank quantiles. Includes early-answered pending pairs; excludes unanswered pairs, so read with reply_rate. One reply may supply multiple pair samples.",
+      "reply_latency_ms": {
+        "samples": 4,
+        "min": 5430,
+        "p50": 5876,
+        "p95": 12437,
+        "max": 12437
+      },
+      "mature_live_mentions": 0,
+      "mature_answered_within_window": 0,
+      "mature_reply_rate": null,
+      "pending_live_mentions": 4,
+      "activity_within_window": 4,
+      "declined_within_window": null,
+      "decline_coverage": "unknown"
+    }
+  },
+  "markers": {
+    "busy.started.3": "1791057046",
+    "busy.started.2": "1791057026",
+    "busy.finished.1": "1791057024",
+    "busy.started.1": "1791057005",
+    "busy.finished.3": "1791057065",
+    "busy.finished.2": "1791057044"
+  },
+  "provider_usage": {
+    "claude-opus-5-5-1": {
+      "cost": 0.3654308,
+      "input_tokens": 48,
+      "cache_read_input_tokens": 459924,
+      "cache_creation_input_tokens": 25403,
+      "output_tokens": 3384
+    },
+    "claude-opus-5-5-2": {
+      "cost": 0.32075719999999996,
+      "input_tokens": 30,
+      "cache_read_input_tokens": 289656,
+      "cache_creation_input_tokens": 25437,
+      "output_tokens": 2843
+    },
+    "verifier": {
+      "cost": 0.31889860000000003,
+      "input_tokens": 20,
+      "cache_read_input_tokens": 195433,
+      "cache_creation_input_tokens": 25687,
+      "output_tokens": 3567
+    }
+  },
+  "phase_observations": [
+    {
+      "phase": 1,
+      "ask_id": "m_3b4d071d",
+      "ask_seq": 8,
+      "ask_ts": "2026-10-03T19:50:12.494Z",
+      "reply_id": "m_343b47ef",
+      "reply_seq": 9,
+      "reply_ts": "2026-10-03T19:50:17.924Z",
+      "latency_ms": 5430,
+      "busy_start_unix_s": 1791057005,
+      "busy_finish_unix_s": 1791057024,
+      "reply_before_finished_marker": true
+    },
+    {
+      "phase": 2,
+      "ask_id": "m_0242cf12",
+      "ask_seq": 10,
+      "ask_ts": "2026-10-03T19:50:28.579Z",
+      "reply_id": "m_68751650",
+      "reply_seq": 11,
+      "reply_ts": "2026-10-03T19:50:34.479Z",
+      "latency_ms": 5900,
+      "busy_start_unix_s": 1791057026,
+      "busy_finish_unix_s": 1791057044,
+      "reply_before_finished_marker": true
+    },
+    {
+      "phase": 3,
+      "ask_id": "m_47ba8978",
+      "ask_seq": 12,
+      "ask_ts": "2026-10-03T19:50:49.289Z",
+      "reply_id": "m_be05168e",
+      "reply_seq": 13,
+      "reply_ts": "2026-10-03T19:50:55.165Z",
+      "latency_ms": 5876,
+      "busy_start_unix_s": 1791057046,
+      "busy_finish_unix_s": 1791057065,
+      "reply_before_finished_marker": true
+    }
+  ],
+  "event_log_sha256": "75f9a395ca649ab91276345ddc7337a6b6ac26a18dc9c224f659930833025bff",
+  "records_sha256": "d308f193c5a6127599dc9932d18e82597378b5130829548c5847e023d5a55793"
+}

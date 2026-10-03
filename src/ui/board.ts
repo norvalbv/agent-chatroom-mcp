@@ -27,14 +27,14 @@ export const BOARD_JS = `
     }
   }
   function paneBoard(r) {
-    var labels = { hold: 'Holds', inbox: 'Inbox', claim: 'Claims', verify: 'Verification', evidence: 'Evidence', draft: 'Drafts', handoff: 'Handoffs', idea: 'Ideas', note: 'Notes' };
+    var labels = { hold: 'Holds', inbox: 'Inbox', claim: 'Claims', verify: 'Verification', review: 'Reviews', evidence: 'Evidence', draft: 'Drafts', handoff: 'Handoffs', idea: 'Ideas', note: 'Notes' };
     var pre = function (k) { var prefix = k.split('/')[0]; return k.indexOf('/') > 0 && Object.prototype.hasOwnProperty.call(labels, prefix) ? prefix : 'note'; };
     var all = Object.keys(r.board || {}), counts = {};
     all.forEach(function (k) { var g = pre(k); counts[g] = (counts[g] || 0) + 1; });
     var keys = all.filter(function (k) { return (!boardCategory || pre(k) === boardCategory) && (!boardQuery || (k + ' ' + (r.board[k].text || '')).toLowerCase().indexOf(boardQuery.toLowerCase()) >= 0); });
     var groups = {}; keys.forEach(function (k) { var g = pre(k); (groups[g] = groups[g] || []).push(k); });
     var order = Object.keys(labels).filter(function (g) { return groups[g]; });
-    var h = '<input id="bsearch" class="bsearch" aria-label="Search board entries" placeholder="Search the board" /><div class="btools"><label for="bcategory">Category</label><select id="bcategory"><option value="">All entries (' + all.length + ')</option>' + Object.keys(labels).map(function (g) { return '<option value="' + g + '"' + (boardCategory === g ? ' selected' : '') + '>' + labels[g] + ' (' + (counts[g] || 0) + ')</option>'; }).join('') + '</select></div>';
+    var h = '<input id="bsearch" class="bsearch" aria-label="Search board entries" placeholder="Search the board" /><div class="btools"><label for="bcategory">Category</label><select id="bcategory"><option value="">All entries (' + all.length + ')</option>' + Object.keys(labels).filter(function (g) { return counts[g] || g === boardCategory; }).map(function (g) { return '<option value="' + g + '"' + (boardCategory === g ? ' selected' : '') + '>' + labels[g] + ' (' + (counts[g] || 0) + ')</option>'; }).join('') + '</select></div>';
     if (!keys.length) h += '<div class="empty" style="padding:24px 8px">' + (boardQuery || boardCategory ? 'No entry matches.' : 'The board is empty.') + '</div>';
     order.forEach(function (g) {
       h += '<div class="bgroup">' + groups[g].sort(function (a, b) { return (r.board[b].updated_at || '').localeCompare(r.board[a].updated_at || ''); }).map(function (k) {

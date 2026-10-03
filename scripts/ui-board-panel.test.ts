@@ -9,6 +9,7 @@ const board = Object.fromEntries([
   ["idea/second", "glass"],
   ["evidence/test", "keyboard tested"],
   ["handoff/owner", "ready"],
+  ["review/board", "reviewed"],
   ["draft/plan", "candidate"],
   ["custom/note", "misc"],
   ['idea/\"><img src=x onerror=alert(1)>', "<script>bad()</script>"],
@@ -20,6 +21,9 @@ test("board categories have counts and preserve evidence, ideas, handoffs, and d
   assert.match(html, /Ideas \(3\)/);
   assert.match(html, /Evidence \(1\)/);
   assert.match(html, /Handoffs \(1\)/);
+  assert.match(html, /Reviews \(1\)/);
+  assert.doesNotMatch(html, /<option value="hold"/);
+  assert.match(render("", "hold"), /<option value="hold" selected>Holds \(0\)/);
   assert.match(html, /Drafts \(1\)/);
   assert.match(html, /Notes \(1\)/);
 });

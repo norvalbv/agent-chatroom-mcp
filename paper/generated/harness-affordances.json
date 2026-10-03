@@ -17,9 +17,9 @@
     "docs/measurements/breakouts-2026-10-03/cost-state-extracts.json": "51e957bbe6ebe75576d55cafac7384ddd7cf02dd",
     "docs/measurements/away-seat-liveness-2026-10-03.json": "59fb226dfb6a33f2afba297a6d260b5f9e9096c3",
     "docs/measurements/breakouts-unprompted-2026-10-03/summary.json": "c95b0d17ad4495ad2403186b8fc1bc968e98b512",
-    "docs/measurements/breakouts-unprompted-receipts-2026-10-03.json": "cd4dc870246fb5caac1c2cf7ddb77b196a8f37e1",
-    "docs/measurements/breakouts-unprompted-build-audit-2026-10-03.json": "cd4dc870246fb5caac1c2cf7ddb77b196a8f37e1",
-    "docs/measurements/breakouts-unprompted-delivery-2026-10-03.json": "27a16ae4866af2bc43f68b27546d9879fa30314d"
+    "docs/measurements/breakouts-unprompted-receipts-2026-10-03.json": "5bb871af90b6e151b9efa39e9224a306b42e9cdd",
+    "docs/measurements/breakouts-unprompted-build-audit-2026-10-03.json": "5bb871af90b6e151b9efa39e9224a306b42e9cdd",
+    "docs/measurements/breakouts-unprompted-delivery-2026-10-03.json": "8b094ae07bd3774594e0a68eb5de83bed9bb595e"
   },
   "source_sha256": {
     "docs/measurements/harness-tool-usage-2026-10-03.json": "4c8c23aa712155169506aa45fca9ec3ccad9d9c40a3ea08bff0ae764aa313eb0",

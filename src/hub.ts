@@ -2153,19 +2153,19 @@ export class Hub {
   /**
    * A concluded breakout's decision, written onto its parent's board (no seat has to post_to_room it by hand). A parent
    * that already concluded or closed is left alone: its board is final. Objections go before the text, and a text past
-   * the board cap is cut with a pointer to the whole of it (room_status on the child), never silently.
+   * the board cap is cut, never silently: where the whole of it lives (room_status on the child) leads the entry.
    */
   private carryConclusion(room: Room): void {
     const parent = room.parent ? this.rooms.get(room.parent) : undefined;
     if (!parent || !room.conclusion || parent.state === "concluded" || parent.state === "closed") return;
     const c = room.conclusion;
     const key = `inbox/${room.name}/conclusion`;
-    const head = `Breakout ${room.name} concluded on ${c.proposalId} v${c.version ?? 1} (${c.tally?.agree ?? "?"}/${c.electorate?.electorate ?? "?"} agree).` +
-      (c.unresolved_objections?.length ? `\nUnresolved objections: ${c.unresolved_objections.map((u) => `${u.by}: ${u.objection}`).join(" | ")}` : "") + "\n";
-    const cut = `\n[cut at the board cap: the whole conclusion (${c.text.length} chars) is in room_status room="${room.name}"]`;
-    const room_ = 8000 - head.length;
-    const text = head + (c.text.length <= room_ ? c.text : c.text.slice(0, Math.max(0, room_ - cut.length)) + cut);
-    const entry: BoardEntry = { text: text.slice(0, 8000), by: "system", updatedAt: now() };
+    // where the whole of it lives leads the entry, so no cut can drop it
+    const head = `Breakout ${room.name} concluded on ${c.proposalId} v${c.version ?? 1} (${c.tally?.agree ?? "?"}/${c.electorate?.electorate ?? "?"} agree; whole text: room_status room="${room.name}").\n`;
+    const body = (c.unresolved_objections?.length ? `Unresolved objections: ${c.unresolved_objections.map((u) => `${u.by}: ${u.objection}`).join(" | ")}\n` : "") + c.text;
+    const full = head + body;
+    const text = full.length <= 8000 ? full : `${full.slice(0, 7900)}\n[cut at the board cap: ${full.length} chars in all; whole text: room_status room="${room.name}"]`;
+    const entry: BoardEntry = { text, by: "system", updatedAt: now() };
     board.applyBoard(parent, key, entry);
     this.persist({ type: "board", room: parent.name, key, entry });
     this.post(parent, "system", undefined, `[BOARD] breakout ${room.name} concluded; its conclusion is on this board as ${key} (board_get).`);

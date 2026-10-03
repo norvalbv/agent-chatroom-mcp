@@ -114,8 +114,20 @@ test("a parent that already concluded is not written to; a long conclusion is cu
   second.hub.vote(CHILD, y.id, lp.id, "agree", undefined, undefined, "Keep the opening clause here.");
   const entry = second.hub.getRoom(PARENT).board.get(`inbox/${CHILD}/conclusion`)!;
   assert.ok(entry.text.length <= 8000);
-  assert.match(entry.text, new RegExp(`cut at the board cap: the whole conclusion \\(${long.length} chars\\) is in room_status room="${CHILD}"`));
+  assert.ok(entry.text.split("\n")[0].includes(`whole text: room_status room="${CHILD}"`), "the pointer leads the entry");
+  assert.match(entry.text, /\[cut at the board cap: \d+ chars in all/);
   assert.doesNotMatch(entry.text, /DECISIVE SUFFIX/);
+
+  // an objection longer than the cap cannot push the pointer out either
+  const third = room();
+  const p1 = third.hub.join(CHILD, "A", "test", { parent: PARENT, requireChallenge: false, quorum: "majority" }, undefined, "s1").participant;
+  const p2 = third.hub.join(CHILD, "B", "test", {}, undefined, "s2").participant;
+  const pz = third.hub.propose(CHILD, p1.id, "Short decision that carries a long objection with it.");
+  third.hub.challenge(CHILD, p2.id, pz.id, `"Short decision" ${"objection ".repeat(1000)}`, false);
+  third.hub.vote(CHILD, p2.id, pz.id, "agree", undefined, undefined, "Short decision that carries");
+  const e3 = third.hub.getRoom(PARENT).board.get(`inbox/${CHILD}/conclusion`)!;
+  assert.ok(e3.text.length <= 8000);
+  assert.ok(e3.text.split("\n")[0].includes(`whole text: room_status room="${CHILD}"`));
 });
 
 test("server: a seat holding a wait in its breakout wakes when it is addressed in the parent, and is told where", async () => {

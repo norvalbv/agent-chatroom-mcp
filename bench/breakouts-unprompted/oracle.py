@@ -2,15 +2,18 @@
 """Unprompted-breakout bench oracle (swarm-202803-dpij, chair #640). Usage: oracle.py <data dir> <run id>
 
 The brief (brief.txt) poses three independent questions that one room may legally answer in one conclusion and never
-mentions rooms, splitting or tools, so a breakout in either arm is the seats' own choice. Prints one JSON line:
+mentions rooms, splitting or tools, so a breakout in either arm is the seats' own choice. Two of the three questions
+need a judgement, so the work can be divided and argued separately. Prints one JSON line:
   breakout_formed   some room other than <run>-room was joined by 2+ distinct seats
   rooms_opened      rooms other than <run>-room (any membership)
   linked            of those, created with join_room(parent=) (head build only)
   minutes_to_split  main room creation -> first other room's creation (null if none)
-  cross_claim       per seat: public chat messages in the main room neither from it nor @-addressed to it
-  q1/q2/q3          the main room's conclusion has the answer (ground truth at 31daae67):
-                    q1 src/hub.ts:62, 12, CHATROOM_MAX_ROOMS_PER_RUN; q2 bench-build-oracle-audit.test.ts,
-                    seat-env-regression.ts, claude-lean-flags-regression.ts; q3 20
+  emitted_public    per seat: public chat lines in the main room neither from it nor @-addressed to it (what was
+                    posted; delivered reads are reads.py, the registered cross-claim measure)
+  q1/q2/q3          the main room's conclusion has the facts (ground truth at 31daae67; the verdicts are free):
+                    q1 hub.ts:65 and 180 000 ms / 180 s / 3 min; q2 exactly bench-build-oracle-audit.test.ts,
+                    seat-env-regression.ts, claude-lean-flags-regression.ts and no other suite-list script name;
+                    q3 server.ts:21 and 55 000 ms / 55 s
   ok                main room concluded and q1, q2, q3
   minutes           main room creation -> its conclusion
 """
@@ -37,14 +40,16 @@ others = {n: r for n, r in rooms.items() if n != f"{run}-room"}
 chat = [m for m in main["msgs"] if m.get("kind") == "chat" and m["from"].get("id") != "system"]
 pub = [m for m in chat if not m.get("quiet")]
 seats = {m["from"]["name"]: m["from"]["id"] for m in chat}
-cross = {s: sum(1 for m in pub if m["from"]["name"] != s and sid not in (m.get("mentions") or [])) for s, sid in seats.items()}
+emitted = {s: sum(1 for m in pub if m["from"]["name"] != s and sid not in (m.get("mentions") or [])) for s, sid in seats.items()}
 text = main["conclusion"] or ""
-q1 = "hub.ts:62" in text and re.search(r"\b12\b", text) is not None and "CHATROOM_MAX_ROOMS_PER_RUN" in text
-q2 = all(n in text for n in ("bench-build-oracle-audit.test.ts", "seat-env-regression.ts", "claude-lean-flags-regression.ts"))
-q3 = re.search(r"\b20\b", text) is not None
+suite = set(re.findall(r"'([\w.-]+\.(?:ts|mjs|js|py|sh))'", open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "suite-names.txt")).read()))
+q1 = "hub.ts:65" in text and re.search(r"180[_,\s]?000|180\s?s\b|180 seconds|3[- ]min", text) is not None
+named = {n for n in suite if n in text}
+q2 = named == {"bench-build-oracle-audit.test.ts", "seat-env-regression.ts", "claude-lean-flags-regression.ts"}
+q3 = "server.ts:21" in text and re.search(r"55[_,\s]?000|55\s?s\b|55 seconds", text) is not None
 first = min((r["created"] for r in others.values() if r["created"]), default=None)
 print(json.dumps({"run": run, "breakout_formed": any(len(r["seats"]) >= 2 for r in others.values()), "rooms_opened": len(others),
     "linked": sum(1 for r in others.values() if r["parent"]),
     "minutes_to_split": round((ts(first) - ts(main["created"])).total_seconds() / 60, 1) if first and main["created"] else None,
-    "cross_claim": cross, "q1": q1, "q2": q2, "q3": q3, "ok": bool(main["conclusion"]) and q1 and q2 and q3,
+    "emitted_public": emitted, "q2_named": sorted(named), "q1": q1, "q2": q2, "q3": q3, "ok": bool(main["conclusion"]) and q1 and q2 and q3,
     "minutes": round((ts(main["decided"]) - ts(main["created"])).total_seconds() / 60, 1) if main["decided"] else None}))

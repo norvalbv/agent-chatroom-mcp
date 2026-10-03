@@ -19,20 +19,20 @@ room_status for: wait omits an unchanged proposal text and points here. The huma
 cd7466e7, after):
 
 ```
-6-astra-3.events.jsonl	27015	23805	15398
-6-astra-3.events.jsonl	29573	26062	17380
-6-astra-3.events.jsonl	29449	25938	17381
-6-astra-3.events.jsonl	30935	27263	18237
-6-astra-4.events.jsonl	14230	12280	4305
-6-astra-4.events.jsonl	14999	12839	4596
-6-astra-4.events.jsonl	31630	27886	18706
-calls 7	recorded 177831 B	compact 156073 B	after 96003 B	(-38.5% vs compact, -46.0% vs recorded)
+6-astra-3.events.jsonl	27015	23805	15415
+6-astra-3.events.jsonl	29573	26062	17397
+6-astra-3.events.jsonl	29449	25938	17398
+6-astra-3.events.jsonl	30935	27263	18254
+6-astra-4.events.jsonl	14230	12280	4322
+6-astra-4.events.jsonl	14999	12839	4613
+6-astra-4.events.jsonl	31630	27886	18723
+calls 7	recorded 177831 B	compact 156073 B	after 96122 B	(-38.4% vs compact, -45.9% vs recorded)
 ```
 
 All room_status calls in this checkout's swarms/*:
 
 ```
-calls 8	recorded 222458 B	compact 196925 B	after 130598 B	(-33.7% vs compact, -41.3% vs recorded)
+calls 8	recorded 222458 B	compact 196925 B	after 130734 B	(-33.6% vs compact, -41.2% vs recorded)
 ```
 
 ## Checks

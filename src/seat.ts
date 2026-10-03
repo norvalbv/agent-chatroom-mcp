@@ -17,6 +17,7 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { hubPortOf, srtSeatConfig, srtWriteScope } from "./sandbox.js";
 import { SeatSteering } from "./seat/steering.js";
+import { retainWaitView } from "./seat/wait-view.js";
 
 // ---------- wire types (OpenAI chat-completions shape, snake_case as providers send it) ----------
 export interface ToolCall {
@@ -664,7 +665,7 @@ export async function runSeat(provider: ChatProvider, opts: SeatOptions): Promis
           if (!v || actionable(v)) break;
           log(`[${provider.label}] step ${steps}: non-actionable wait ${k}/${idleWaits - 1}; waiting again without a model turn`);
           try {
-            result = await callTool(call.function.name, args);
+            result = retainWaitView(result, await callTool(call.function.name, args));
           } catch (e) {
             result = `ERROR: ${e instanceof Error ? e.message : String(e)}`;
             break;

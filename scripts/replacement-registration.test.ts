@@ -273,7 +273,8 @@ test('quiet inherited ask delivery reply and pass settle debt across replacement
     const audience = [...ask.audience!];
     register(f.hub, f.room.name, 'old', 'next');
     const next = joinSuccessor(f.hub, f.room.name, 'next');
-    assert.deepEqual((await f.hub.wait(f.room.name, next.id, 0, 0)).map(m => m.id), [ask.id]);
+    // a wait from 0 also backfills the room's public system lines (joins, the replacement notice); the only chat it carries is the inherited quiet ask
+    assert.deepEqual((await f.hub.wait(f.room.name, next.id, 0, 0)).filter(m => m.kind === 'chat').map(m => m.id), [ask.id]);
     if (resolution === 'reply') f.hub.send(f.room.name, next.id, 'done', ask.id, true);
     else f.hub.pass(f.room.name, next.id);
     assert.equal(focusOf(f.hub, f.room.name, next.id), undefined);

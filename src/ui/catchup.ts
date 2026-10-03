@@ -178,12 +178,15 @@ export const CATCHUP_JS = `/*catchup:start*/
     var html = '<div class="cu-h"><button type="button" class="cu-tog" aria-expanded="' + catchOpen + '"><span class="car">' + (catchOpen ? '▾' : '▸') + '</span>' + (catchSince ? 'Since you last looked' : 'Room so far') + ' <span class="cu-s">' + g.summary + '</span></button>'
       + '<button type="button" class="cu-done" title="Mark everything up to now as read (key: .)">Caught up</button></div>'
       + (catchOpen ? '<div class="cu-b">' + g.lines.join('') + '</div>' : '');
-    if (old && old.parentNode === $('#log') && old === $('#log').firstChild) { if (old.innerHTML !== html) old.innerHTML = html; return; }
+    if (old && old === $('#log').firstChild && old.innerHTML === html) return;
+    // a keyboard reader on a digest button keeps their place across the re-render (new messages, rerender())
+    var a = document.activeElement, focus = a && a.closest && a.closest('#catchup') ? (a.dataset.jump ? '[data-jump="' + a.dataset.jump + '"]' : '.' + a.className.split(' ')[0]) : null;
     if (old) old.remove();
     var d = document.createElement('div'); d.id = 'catchup';
     d.setAttribute('role', 'region'); d.setAttribute('aria-label', 'Catch-up digest');
     d.innerHTML = html;
     $('#log').insertBefore(d, $('#log').firstChild);
+    var f = focus && d.querySelector(focus); if (f) f.focus({ preventScroll: true });
   }
   setInterval(function () { if (!document.hidden) catchupDigest(); }, 4000); // the inbox's list and room state change without new messages
   function catchupAfter() { catchupFold(); catchupDigest(); }

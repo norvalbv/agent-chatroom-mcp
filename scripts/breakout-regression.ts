@@ -11,7 +11,10 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
+import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { Hub } from "../src/hub.js";
+import { createSessionServer } from "../src/server.js";
 
 const PARENT = "swarm-000001-brko-room";
 const CHILD = "swarm-000001-brko-steer";
@@ -90,4 +93,57 @@ test("the parent link survives a hub restart (replay), and the carried conclusio
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
+});
+
+test("a parent that already concluded is not written to; a long conclusion is cut with a pointer, objections kept", () => {
+  const { hub, a, b } = room();
+  const ca = hub.join(CHILD, "A", "test", { parent: PARENT, requireChallenge: false, quorum: "majority" }, undefined, "s1").participant;
+  const cb = hub.join(CHILD, "B", "test", {}, undefined, "s2").participant;
+  const pp = hub.propose(PARENT, a.id, "The parent decides first, before the breakout.");
+  hub.vote(PARENT, b.id, pp.id, "agree", undefined, undefined, "The parent decides first");
+  assert.equal(hub.getRoom(PARENT).state, "concluded");
+  const pr = hub.propose(CHILD, ca.id, "The late breakout decision arrives after its parent.");
+  hub.vote(CHILD, cb.id, pr.id, "agree", undefined, undefined, "The late breakout decision");
+  assert.equal(hub.getRoom(PARENT).board.has(`inbox/${CHILD}/conclusion`), false, "a concluded parent's board is final");
+
+  const second = room();
+  const x = second.hub.join(CHILD, "A", "test", { parent: PARENT, requireChallenge: false, quorum: "majority" }, undefined, "s1").participant;
+  const y = second.hub.join(CHILD, "B", "test", {}, undefined, "s2").participant;
+  const long = `Keep the opening clause here. ${"filler ".repeat(1400)}DECISIVE SUFFIX`;
+  const lp = second.hub.propose(CHILD, x.id, long);
+  second.hub.vote(CHILD, y.id, lp.id, "agree", undefined, undefined, "Keep the opening clause here.");
+  const entry = second.hub.getRoom(PARENT).board.get(`inbox/${CHILD}/conclusion`)!;
+  assert.ok(entry.text.length <= 8000);
+  assert.match(entry.text, new RegExp(`cut at the board cap: the whole conclusion \\(${long.length} chars\\) is in room_status room="${CHILD}"`));
+  assert.doesNotMatch(entry.text, /DECISIVE SUFFIX/);
+});
+
+test("server: a seat holding a wait in its breakout wakes when it is addressed in the parent, and is told where", async () => {
+  const hub = new Hub();
+  const connect = async () => {
+    const session = createSessionServer(hub);
+    const client = new Client({ name: "t", version: "1" });
+    const [ct, st] = InMemoryTransport.createLinkedPair();
+    await session.server.connect(st);
+    await client.connect(ct);
+    return async (name: string, args: Record<string, unknown>) => {
+      const r = await client.callTool({ name, arguments: args });
+      assert.ok(!r.isError, JSON.stringify(r));
+      return JSON.parse((r.content as { text: string }[])[0].text);
+    };
+  };
+  const asA = await connect();
+  const asB = await connect();
+  await asA("join_room", { room: PARENT, name: "A", agent: "test" });
+  await asB("join_room", { room: PARENT, name: "B", agent: "test" });
+  const opened = await asA("join_room", { room: CHILD, name: "A", agent: "test", parent: PARENT, topic: "side question" });
+  assert.equal(opened.room.parent, PARENT);
+  await asA("wait_for_messages", { room: CHILD, timeout_ms: 0 });
+  const started = Date.now();
+  const waiting = asA("wait_for_messages", { room: CHILD, timeout_ms: 30_000, hold_until_actionable: true });
+  setTimeout(() => void asB("send_message", { room: PARENT, content: "@A quick question about the parent plan" }), 300);
+  const woke = await waiting;
+  const took = Date.now() - started;
+  assert.ok(took < 12_000, `woke after ${took} ms, not at the 30 s deadline`);
+  assert.deepEqual(woke.other_rooms, [{ room: PARENT, addressed: 1 }]);
 });

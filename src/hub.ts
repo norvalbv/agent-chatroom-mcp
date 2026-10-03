@@ -1329,9 +1329,12 @@ export class Hub {
     if (this.addressedBy(room, p).length) return true;
     const open = [...room.proposals.values()].find((pr) => pr.status === "open");
     if (!open) return false;
-    const needsVote = this.needsVote(room, p, open);
-    const needsChallenge = this.challengeRequired(room) && !open.challenges.some((c) => c.blocking !== false) && open.by.id !== p.id;
-    return needsVote || needsChallenge;
+    return this.needsVote(room, p, open) || this.owesChallenge(room, open, p);
+  }
+
+  /** The open proposal still needs a challenge and this seat could give it (this room's waits and other rooms' other_rooms). */
+  owesChallenge(room: Room, open: Proposal, p: Participant): boolean {
+    return this.challengeRequired(room) && !open.challenges.some((c) => c.blocking !== false) && open.by.id !== p.id;
   }
 
   private resolvesAddress(room: Room, p: Participant, content: string, replyTo?: string): boolean {
@@ -2134,8 +2137,8 @@ export class Hub {
         if (room.state === "concluded") { if (!p.seenConclusion) out.push({ room: room.name, concluded: true }); continue; }
         const addressed = this.addressedBy(room, p).length + (this.attentionFocus(room, p) && !this.addressedBy(room, p).length ? 1 : 0);
         const open = [...room.proposals.values()].find((pr) => pr.status === "open");
-        const vote = open && !open.votes[p.id] && p.agent !== "human" && p.role !== "chair" ? open.id : undefined;
-        const challenge = open && open.by.id !== p.id && this.challengeRequired(room) && !open.challenges.some((c) => c.blocking !== false) ? open.id : undefined;
+        const vote = open && this.needsVote(room, p, open) ? open.id : undefined;
+        const challenge = open && this.owesChallenge(room, open, p) ? open.id : undefined;
         if (addressed || vote || challenge) out.push({ room: room.name, ...(addressed ? { addressed } : {}), ...(vote ? { vote_owed: vote } : {}), ...(challenge ? { challenge_owed: challenge } : {}) });
       }
     }
@@ -2147,14 +2150,21 @@ export class Hub {
     return [...this.rooms.values()].filter((r) => r.state !== "closed" && [...r.participants.values()].some((p) => p.active && p.session === session)).length;
   }
 
-  /** A concluded breakout's decision, written onto its parent's board (no seat has to post_to_room it by hand). */
+  /**
+   * A concluded breakout's decision, written onto its parent's board (no seat has to post_to_room it by hand). A parent
+   * that already concluded or closed is left alone: its board is final. Objections go before the text, and a text past
+   * the board cap is cut with a pointer to the whole of it (room_status on the child), never silently.
+   */
   private carryConclusion(room: Room): void {
     const parent = room.parent ? this.rooms.get(room.parent) : undefined;
-    if (!parent || !room.conclusion || parent.state === "closed") return;
+    if (!parent || !room.conclusion || parent.state === "concluded" || parent.state === "closed") return;
     const c = room.conclusion;
     const key = `inbox/${room.name}/conclusion`;
-    const text = `Breakout ${room.name} concluded on ${c.proposalId} v${c.version ?? 1} (${c.tally?.agree ?? "?"}/${c.electorate?.electorate ?? "?"} agree):\n${c.text}` +
-      (c.unresolved_objections?.length ? `\nUnresolved objections: ${c.unresolved_objections.map((u) => `${u.by}: ${u.objection}`).join(" | ")}` : "");
+    const head = `Breakout ${room.name} concluded on ${c.proposalId} v${c.version ?? 1} (${c.tally?.agree ?? "?"}/${c.electorate?.electorate ?? "?"} agree).` +
+      (c.unresolved_objections?.length ? `\nUnresolved objections: ${c.unresolved_objections.map((u) => `${u.by}: ${u.objection}`).join(" | ")}` : "") + "\n";
+    const cut = `\n[cut at the board cap: the whole conclusion (${c.text.length} chars) is in room_status room="${room.name}"]`;
+    const room_ = 8000 - head.length;
+    const text = head + (c.text.length <= room_ ? c.text : c.text.slice(0, Math.max(0, room_ - cut.length)) + cut);
     const entry: BoardEntry = { text: text.slice(0, 8000), by: "system", updatedAt: now() };
     board.applyBoard(parent, key, entry);
     this.persist({ type: "board", room: parent.name, key, entry });

@@ -354,11 +354,12 @@ export class Spawner {
       }
       rec.pid = child.pid;
       this.children.set(name, child);
-      const wall = setTimeout(() => {
-        this.hooks?.announce(target, `${name} hit the ${Math.round((o.wallClockMs ?? 45 * 60_000) / 60000)} min recruit limit and was stopped.`);
+      // no limit unless configured: the idle sweep already stops a recruit whose session died
+      const wall = o.wallClockMs ? setTimeout(() => {
+        this.hooks?.announce(target, `${name} hit the ${Math.round(o.wallClockMs! / 60000)} min recruit limit and was stopped.`);
         child.kill();
-      }, o.wallClockMs ?? 45 * 60_000);
-      wall.unref();
+      }, o.wallClockMs) : undefined;
+      wall?.unref();
       child.on("close", (code) => {
         clearTimeout(wall);
         rec.endedAt = new Date().toISOString();

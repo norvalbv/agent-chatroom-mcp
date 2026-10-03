@@ -34,7 +34,7 @@
     "@types/node": "^22.20.3",
     "tsx": "^4.23.13",
     "typescript": "^7.0.2",
-    "@norvalbv/devkit": "git+https://github.com/norvalbv/devkit.git#v0.62.0",
+    "@norvalbv/devkit": "git+https://github.com/norvalbv/devkit.git#v0.65.0",
     "@biomejs/biome": "^2.5.0",
     "husky": "^9.1.7"
   },

@@ -59,6 +59,7 @@ const spawner = new Spawner({
   dryRun: process.env.CHATROOM_SPAWN_DRY === "1",
   // a fleet of a hundred read-only seats is a legitimate machine-wide count; the default 24 was sized for one run
   maxLive: process.env.CHATROOM_MAX_LIVE_AGENTS ? Number(process.env.CHATROOM_MAX_LIVE_AGENTS) : undefined,
+  wallClockMs: process.env.CHATROOM_RECRUIT_MAX_MIN ? Number(process.env.CHATROOM_RECRUIT_MAX_MIN) * 60_000 : undefined,
 });
 // a child break-out room concludes when its own hub state transitions, possibly before its seat
 // process exits (heartbeat-as-liveness keeps the seat alive); the concluded event, not process

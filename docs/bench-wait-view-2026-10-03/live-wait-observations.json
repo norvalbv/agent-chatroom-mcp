@@ -1,0 +1,48 @@
+{
+  "base": {
+    "claude-opus-5-5-2": {
+      "wait_calls": 14,
+      "zero_timeout_calls": 5,
+      "wait_bytes": 11585,
+      "compacted": 0,
+      "compacted_bytes": 0
+    },
+    "claude-opus-5-5-1": {
+      "wait_calls": 11,
+      "zero_timeout_calls": 5,
+      "wait_bytes": 10989,
+      "compacted": 0,
+      "compacted_bytes": 0
+    },
+    "verifier": {
+      "wait_calls": 15,
+      "zero_timeout_calls": 5,
+      "wait_bytes": 15321,
+      "compacted": 0,
+      "compacted_bytes": 0
+    }
+  },
+  "after": {
+    "claude-opus-5-5-1": {
+      "wait_calls": 12,
+      "zero_timeout_calls": 6,
+      "wait_bytes": 8304,
+      "compacted": 5,
+      "compacted_bytes": 1245
+    },
+    "claude-opus-5-5-2": {
+      "wait_calls": 14,
+      "zero_timeout_calls": 5,
+      "wait_bytes": 14314,
+      "compacted": 5,
+      "compacted_bytes": 1245
+    },
+    "verifier": {
+      "wait_calls": 13,
+      "zero_timeout_calls": 5,
+      "wait_bytes": 13913,
+      "compacted": 4,
+      "compacted_bytes": 1004
+    }
+  }
+}

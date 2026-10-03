@@ -1,0 +1,10 @@
+{
+  "waits": 116,
+  "compacted": 15,
+  "original_bytes": 357972,
+  "candidate_bytes": 333353,
+  "empty_original_bytes": 39916,
+  "empty_candidate_bytes": 15297,
+  "empty_waits": 19,
+  "note": "Same ordered historical observations through the actual formatter. Pretty JSON retained to isolate state compaction from serialization. Provider tokens/calls and task outcome unchanged by this replay."
+}

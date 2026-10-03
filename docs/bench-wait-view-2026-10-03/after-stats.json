@@ -1,0 +1,184 @@
+{
+  "room": "swarm-185834-f3pn-room",
+  "state": "concluded",
+  "reply_metrics": {
+    "schema_version": 1,
+    "window_minutes": 15,
+    "as_of": "2026-10-03T19:01:03.829Z",
+    "observation_end": "2026-10-03T19:00:22.431Z",
+    "definition": "Deduplicated persisted non-opening agent chat/target pairs, public and quiet; membership at ask from ordered join/leave events. Strict reply is later target chat with exact replyTo or persisted @-back within <=window; one reply may credit multiple asks. Syntactic proxy, not task success. Activity counts any later non-opening target post. Unknown membership excluded from live denominator; pending includes early answered pairs.",
+    "mentions": 4,
+    "to_departed": 0,
+    "departure_unknown": 0,
+    "live_mentions": 4,
+    "answered_within_window": 3,
+    "reply_rate": 0.75,
+    "reply_latency_definition": "Milliseconds to earliest timestamp among qualifying later-sequence strict replies per answered live pair; nearest-rank quantiles. Includes early-answered pending pairs; excludes unanswered pairs, so read with reply_rate. One reply may supply multiple pair samples.",
+    "reply_latency_ms": {
+      "samples": 3,
+      "min": 4708,
+      "p50": 5358,
+      "p95": 6545,
+      "max": 6545
+    },
+    "mature_live_mentions": 0,
+    "mature_answered_within_window": 0,
+    "mature_reply_rate": null,
+    "pending_live_mentions": 4,
+    "activity_within_window": 4,
+    "declined_within_window": null,
+    "decline_coverage": "unknown"
+  },
+  "duration_ms": 92835,
+  "time_to_conclusion_ms": 90632,
+  "messages_by_kind": {
+    "system": 11,
+    "chat": 15,
+    "proposal": 1,
+    "challenge": 2,
+    "board": 6,
+    "amend": 1,
+    "vote": 3,
+    "conclusion": 1
+  },
+  "per_participant": [
+    {
+      "name": "claude-opus-5-5-1",
+      "agent": "claude",
+      "chat_messages": 4,
+      "passes": 0,
+      "chars": 465
+    },
+    {
+      "name": "claude-opus-5-5-2",
+      "agent": "claude",
+      "chat_messages": 4,
+      "passes": 0,
+      "chars": 501
+    },
+    {
+      "name": "verifier",
+      "agent": "claude",
+      "chat_messages": 4,
+      "passes": 0,
+      "chars": 489
+    }
+  ],
+  "proposals": 1,
+  "proposal_electorates": [],
+  "conclusion_electorate": {
+    "electorate": 3,
+    "agree": 3,
+    "disagree": 0,
+    "abstain": 0,
+    "excluded_leavers": 0,
+    "distinct_sessions": 3,
+    "denominator": "electorate"
+  },
+  "amendments": 1,
+  "challenges": 2,
+  "board_entries": 3,
+  "board_manifests": {
+    "version": 1,
+    "waits": 39,
+    "bytes": 1066,
+    "full": 3,
+    "delta": 8,
+    "empty": 28
+  },
+  "board_manifest": {
+    "coverage": "since-process-start",
+    "waits_observed": 39,
+    "full_baseline_manifest_bytes": 1342,
+    "shipped_manifest_bytes": 790,
+    "keys_shipped": 15,
+    "deleted_tombstones_shipped": 0,
+    "current_full_manifest_bytes": 74,
+    "entries_by_prefix": {
+      "claim/": 0,
+      "evidence/": 0,
+      "sources/": 0,
+      "handoff/": 0,
+      "inbox/": 0,
+      "verify/": 3,
+      "other": 0
+    }
+  },
+  "refusals": {
+    "send_message: hub_guard": 6,
+    "vote: hub_guard": 3
+  },
+  "call_outcomes": {
+    "join_room": {
+      "success": 3,
+      "hub_refusal": 0,
+      "error": 0
+    },
+    "submit_opening": {
+      "success": 3,
+      "hub_refusal": 0,
+      "error": 0
+    },
+    "send_message": {
+      "success": 12,
+      "hub_refusal": 6,
+      "error": 0
+    },
+    "wait_for_messages": {
+      "success": 39,
+      "hub_refusal": 0,
+      "error": 0
+    },
+    "read_messages": {
+      "success": 1,
+      "hub_refusal": 0,
+      "error": 0
+    },
+    "propose": {
+      "success": 1,
+      "hub_refusal": 0,
+      "error": 0
+    },
+    "challenge": {
+      "success": 2,
+      "hub_refusal": 0,
+      "error": 0
+    },
+    "board_set": {
+      "success": 6,
+      "hub_refusal": 0,
+      "error": 0
+    },
+    "vote": {
+      "success": 3,
+      "hub_refusal": 3,
+      "error": 0
+    },
+    "amend": {
+      "success": 1,
+      "hub_refusal": 0,
+      "error": 0
+    },
+    "leave_room": {
+      "success": 3,
+      "hub_refusal": 0,
+      "error": 0
+    }
+  },
+  "refusal_rates": {
+    "join_room": 0,
+    "submit_opening": 0,
+    "send_message": 0.3333333333333333,
+    "wait_for_messages": 0,
+    "read_messages": 0,
+    "propose": 0,
+    "challenge": 0,
+    "board_set": 0,
+    "vote": 0.5,
+    "amend": 0,
+    "leave_room": 0
+  },
+  "refusal_rate_coverage": "complete",
+  "near_simultaneous_replies": 4,
+  "unanswered_human_messages": 0
+}

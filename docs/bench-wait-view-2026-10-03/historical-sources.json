@@ -1,0 +1,16 @@
+{
+  "swarm-170811-k1pq-room": [
+    {
+      "file": "6bf5d8f2-1723-4876-9567-83e758dc79fe.jsonl",
+      "sha256": "d873a0f302dabbaf86cade15170ec6994eefb5e9495e1f9811857971bd2ebbc2"
+    },
+    {
+      "file": "2bba89d4-af70-4f3c-9575-4bff6309f1b1.jsonl",
+      "sha256": "4abb0549d326162082ca841fe7344d973d33a29875bc06e10c4dde5b2bc13d63"
+    },
+    {
+      "file": "212564ab-4b44-40f0-83ed-0c41d003fa39.jsonl",
+      "sha256": "f983a41c4b8a7dc39f4d81d0db8d6e24bfe1b1936af84f34ee625d8b2a41b7b3"
+    }
+  ]
+}

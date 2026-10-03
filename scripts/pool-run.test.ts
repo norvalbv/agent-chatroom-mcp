@@ -228,8 +228,15 @@ test('each run gets its own repository: a second run cannot see the first run\'s
     const solutions = join(base, 'solutions.json'); writeFileSync(solutions, JSON.stringify(fx.solutions));
     const scratch = join(base, 'runs');
     const r1 = await runArm({ poolDir: fx.poolDir, arm: 'solo', rep: 1, scratch, fake: { solutions } });
+    const run1 = JSON.parse(readFileSync(join(r1, 'run.json'), 'utf8'));
+    // Identical fixes committed in the same second legitimately have identical hashes, even in
+    // isolated repositories. Add an object only run 1 creates before checking run 2's isolation.
+    const sentinel = spawnSync('git', ['-C', run1.seats[0].worktree, 'commit', '--quiet', '--allow-empty', '-m', 'run-1-only isolation sentinel'], {
+      encoding: 'utf8', env: { ...process.env, GIT_AUTHOR_NAME: 'pool-test', GIT_AUTHOR_EMAIL: 'pool-test@local', GIT_COMMITTER_NAME: 'pool-test', GIT_COMMITTER_EMAIL: 'pool-test@local' },
+    });
+    assert.equal(sentinel.status, 0, sentinel.stderr);
     const r2 = await runArm({ poolDir: fx.poolDir, arm: 'solo', rep: 2, scratch, fake: { solutions } });
-    const run1 = JSON.parse(readFileSync(join(r1, 'run.json'), 'utf8')), run2 = JSON.parse(readFileSync(join(r2, 'run.json'), 'utf8'));
+    const run2 = JSON.parse(readFileSync(join(r2, 'run.json'), 'utf8'));
     const head1 = git(run1.repo, 'rev-parse', run1.seats[0].branch);
     assert.notEqual(run1.repo, run2.repo);
     assert.ok(!git(run2.repo, 'branch', '-a').includes('solo-rep1'), 'run 2 lists no run-1 branch');

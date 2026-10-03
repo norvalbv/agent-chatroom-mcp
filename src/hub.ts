@@ -1437,10 +1437,12 @@ export class Hub {
     room.draftsTimer = undefined;
     if (!room.draftsOpenedAt || room.draftsRevealed || Hub.DRAFT_REVEAL_MS <= 0) return;
     const ms = Math.max(0, Date.parse(room.draftsOpenedAt) + Hub.DRAFT_REVEAL_MS - Date.now());
+    if (!Number.isFinite(ms)) return;
     room.draftsTimer = setTimeout(() => {
       room.draftsTimer = undefined;
       if (room.state === "concluded" || room.state === "closed") return;
       this.latchDrafts(room);
+      this.armDraftsDeadline(room);
     }, ms);
     room.draftsTimer.unref();
   }

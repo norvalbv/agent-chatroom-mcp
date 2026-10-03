@@ -162,5 +162,54 @@ await new Promise((res) => setTimeout(res, 50));
 r = await l.call("board_get", { room: room5, key: "draft/K" });
 assert.ok(r.error, "DRAFT_REVEAL_MS=0 waits for every drafter");
 
+// A timer may run before its wall-clock deadline; the reveal must still be announced and persisted.
+Hub.DRAFT_REVEAL_MS = 300;
+const earlyDir = mkdtempSync(join(tmpdir(), "blind-drafts-early-"));
+const earlyHub = new Hub({ dataDir: earlyDir });
+const earlyRoom = "blind-drafts-early";
+const ea = earlyHub.join(earlyRoom, "EA", "test", {}, undefined, "ea").participant;
+earlyHub.join(earlyRoom, "EB", "test", {}, undefined, "eb");
+const scheduled: { fire: () => void; timer: ReturnType<typeof setTimeout> }[] = [];
+const realSetTimeout = globalThis.setTimeout;
+const realNow = Date.now;
+globalThis.setTimeout = ((fire: () => void) => {
+  const timer = realSetTimeout(() => {}, 2_147_483_647);
+  timer.unref();
+  scheduled.push({ fire, timer });
+  return timer;
+}) as typeof setTimeout;
+try {
+  earlyHub.setBoard(earlyRoom, ea.id, "draft/EA", "early draft");
+  const er = earlyHub.getRoom(earlyRoom);
+  const deadline = Date.parse(er.draftsOpenedAt!) + Hub.DRAFT_REVEAL_MS;
+  Date.now = () => deadline - 1;
+  scheduled[0].fire();
+  assert.equal(er.draftsRevealed, undefined, "an early callback must not reveal early");
+  assert.equal(earlyHub.draftSealed(er, "draft/EA", er.board.get("draft/EA")!, "EB"), true);
+  assert.equal(scheduled.length, 2, "an early callback schedules another deadline check");
+  Date.now = () => deadline;
+  scheduled[1].fire();
+  scheduled[1].fire(); // a stale duplicate callback cannot re-announce or rearm
+  assert.equal(er.draftsRevealed, true);
+  assert.equal(earlyHub.draftSealed(er, "draft/EA", er.board.get("draft/EA")!, "EB"), false);
+  assert.equal(er.messages.filter((m) => /draft deadline passed/.test(m.content)).length, 1);
+  assert.equal(scheduled.length, 2, "revealed drafts need no further timer");
+  assert.equal(new Hub({ dataDir: earlyDir }).getRoom(earlyRoom).draftsRevealed, true);
+  for (const invalid of [NaN, Infinity]) {
+    Hub.DRAFT_REVEAL_MS = invalid;
+    const invalidRoom = `blind-drafts-${invalid}`;
+    earlyHub.join(invalidRoom, "IA", "test", {}, undefined, "ia");
+    earlyHub.join(invalidRoom, "IB", "test", {}, undefined, "ib");
+    earlyHub.openDrafts(earlyHub.getRoom(invalidRoom));
+    assert.equal(earlyHub.getRoom(invalidRoom).draftsRevealed, undefined);
+    assert.equal(scheduled.length, 2, "a non-finite deadline cannot start a retry loop");
+  }
+} finally {
+  globalThis.setTimeout = realSetTimeout;
+  Date.now = realNow;
+  Hub.DRAFT_REVEAL_MS = 0;
+  for (const { timer } of scheduled) clearTimeout(timer);
+}
+
 console.log("blind-drafts regression: ok");
 process.exit(0);

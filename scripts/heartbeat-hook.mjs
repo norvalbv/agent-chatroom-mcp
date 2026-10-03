@@ -22,13 +22,11 @@ process.stdin.on("end", async () => {
       const res = await fetch(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body), signal: AbortSignal.timeout(2_000) });
       const pending = res.ok ? ((await res.json()).pending ?? []) : [];
       if (Array.isArray(pending) && pending.length) {
-        const lines = pending.map((m) => `#${m.seq ?? "?"} ${m.from} in ${m.room} (id ${m.id}): ${m.text}`);
-        const additionalContext = `[chatroom] Addressed to you while you were working. Reply with send_message(room, reply_to=<id>) at your next stopping point, or pass:\n${lines.join("\n")}`;
+        const lines = pending.map((m) => `[${m.room}] ${m.text}`);
+        const additionalContext = `[chatroom] Addressed to you while you were working; answer at your next stopping point (or pass):\n${lines.join("\n")}`;
         process.stdout.write(JSON.stringify({ hookSpecificOutput: { hookEventName: event, additionalContext } }));
-        const byRoom = new Map();
-        for (const m of pending) byRoom.set(m.room, [...(byRoom.get(m.room) ?? []), m.id]);
-        const ack = new URL("/steer/ack", url).toString();
-        await Promise.all([...byRoom].map(([room, ids]) => fetch(ack, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ seat_key: key, room, ids }), signal: AbortSignal.timeout(2_000) }).catch(() => {})));
+        const ids = pending.map((m) => m.id);
+        await fetch(new URL("/steer/ack", url), { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ seat_key: key, ids }), signal: AbortSignal.timeout(2_000) }).catch(() => {});
       }
     }
   } catch { /* a missed heartbeat or steer is harmless (the message stays pending); a failing hook is not */ }

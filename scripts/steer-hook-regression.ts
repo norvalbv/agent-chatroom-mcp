@@ -47,22 +47,21 @@ r = await hook({ hook_event_name: "PostToolUse", tool_name: "Bash", tool_input: 
 assert.equal(r.stdout, "");
 assert.deepEqual(seen, [{ path: "/heartbeat", body: { seat_key: "seat-A", peek: true } }]);
 
-// 3. Pending mentions are steered into the turn for the event that fired, then acked per room, after printing.
+// 3. Pending mentions are steered into the turn for the event that fired, then acked in one call, after printing.
 for (const event of ["PreToolUse", "PostToolUse"]) {
   seen.length = 0;
   pending = [
-    { id: "m_1", seq: 7, from: "opus-1", room: "r1", text: "@opus-2 can you review claim/x?" },
-    { id: "m_2", seq: 9, from: "verifier", room: "r2", text: "@opus-2 which dev room did you watch?" },
+    { id: "m_1", seq: 7, from: "opus-1", room: "r1", text: '#7 opus-1: @opus-2 can you review claim/x? (reply: send_message room="r1" reply_to="m_1")' },
+    { id: "m_2", seq: 9, from: "verifier", room: "r2", text: '#9 verifier: @opus-2 which dev room did you watch? (reply: send_message room="r2" reply_to="m_2")' },
   ];
   r = await hook({ hook_event_name: event, tool_name: "Read", tool_input: { file_path: "/x" } });
   assert.equal(r.status, 0);
   const out = JSON.parse(r.stdout).hookSpecificOutput;
   assert.equal(out.hookEventName, event);
-  assert.match(out.additionalContext, /#7 opus-1 in r1 \(id m_1\): @opus-2 can you review claim\/x\?/);
-  assert.match(out.additionalContext, /#9 verifier in r2 \(id m_2\)/);
-  assert.match(out.additionalContext, /reply_to/);
-  const acks = seen.filter((s) => s.path === "/steer/ack").map((s) => s.body).sort((a, b) => a.room.localeCompare(b.room));
-  assert.deepEqual(acks, [{ seat_key: "seat-A", room: "r1", ids: ["m_1"] }, { seat_key: "seat-A", room: "r2", ids: ["m_2"] }]);
+  assert.match(out.additionalContext, /\[r1\] #7 opus-1: @opus-2 can you review claim\/x\? \(reply: send_message room="r1" reply_to="m_1"\)/);
+  assert.match(out.additionalContext, /\[r2\] #9 verifier: @opus-2 which dev room/);
+  const acks = seen.filter((s) => s.path === "/steer/ack").map((s) => s.body);
+  assert.deepEqual(acks, [{ seat_key: "seat-A", ids: ["m_1", "m_2"] }]);
 }
 
 // 4. Chatroom MCP calls carry pending messages hub-side, so the hook neither heartbeats nor steers on them.
@@ -88,4 +87,44 @@ const s = JSON.parse(heartbeatHookSettings());
 for (const ev of ["PreToolUse", "PostToolUse"]) assert.match(s.hooks[ev][0].hooks[0].command, /heartbeat-hook\.mjs"$/, ev);
 
 stub.close();
+
+// 7. End to end on a real throwaway hub (never 7717): a peer @-mentions a seat that is busy in local tools; the seat's
+//    next tool hook carries the mention into its turn, the ack counts as delivery, and its next wait does not resend the body.
+const PORT = Number(process.env.PORT ?? 20_000 + Math.floor(Math.random() * 20_000));
+assert.notEqual(PORT, 7717, "never the live hub");
+const HTTP = `http://127.0.0.1:${PORT}`;
+const server = spawn("npx", ["tsx", "src/index.ts"], { env: { ...process.env, PORT: String(PORT), CHATROOM_SPAWN_DRY: "1", CHATROOM_LOG_DIR: "/tmp/chatroom-steer-hook", CHATROOM_INSECURE_LOCAL: "1", CHATROOM_DATA_DIR: "" }, stdio: ["ignore", "ignore", "inherit"] });
+process.on("exit", () => server.kill());
+for (let i = 0; ; i++) {
+  try { await fetch(`${HTTP}/`); break; } catch { if (i > 100) throw new Error("hub did not start"); await new Promise((r) => setTimeout(r, 200)); }
+}
+const { Client } = await import("@modelcontextprotocol/sdk/client/index.js");
+const { StreamableHTTPClientTransport } = await import("@modelcontextprotocol/sdk/client/streamableHttp.js");
+const { seatBeat } = await import("../src/env.js");
+async function connect(u: string) {
+  const c = new Client({ name: "steer", version: "0.0.0" });
+  await c.connect(new StreamableHTTPClientTransport(new URL(u)));
+  return async (tool: string, args: Record<string, unknown> = {}) => {
+    const res = (await c.callTool({ name: tool, arguments: args })) as { isError?: boolean; content: { text: string }[] };
+    if (res.isError) throw new Error(`${tool}: ${res.content[0]?.text}`);
+    return JSON.parse(res.content[0]!.text);
+  };
+}
+const beat = seatBeat(`${HTTP}/mcp`, "seat-busy");
+const busy = await connect(beat.mcpUrl);
+const peerCall = await connect(`${HTTP}/mcp`);
+await busy("join_room", { room: "steer", name: "builder", agent: "claude", expected_participants: 0 });
+const peerJoin = await peerCall("join_room", { room: "steer", name: "peer", agent: "claude" });
+await busy("wait_for_messages", { room: "steer", timeout_ms: 0 });
+const ask = await peerCall("send_message", { room: "steer", participant_id: peerJoin.participant_id, content: "@builder is claim/x yours?" });
+const real = { ...env, CHATROOM_SEAT_KEY: beat.key, CHATROOM_HEARTBEAT_URL: `${HTTP}/heartbeat` };
+r = await hook({ hook_event_name: "PostToolUse", tool_name: "Bash", tool_input: { command: "npm run build" } }, real);
+const ctx = JSON.parse(r.stdout).hookSpecificOutput;
+assert.equal(ctx.hookEventName, "PostToolUse");
+assert.match(ctx.additionalContext, new RegExp(`#${ask.seq} peer: @builder is claim/x yours\\?`));
+assert.match(ctx.additionalContext, new RegExp(`reply_to="${ask.id}"`));
+r = await hook({ hook_event_name: "PreToolUse", tool_name: "Bash", tool_input: { command: "npm test" } }, real);
+assert.equal(r.stdout, "", "acked: not steered twice");
+const after = await busy("wait_for_messages", { room: "steer", timeout_ms: 0 });
+if (JSON.stringify(after.messages ?? []).includes("is claim/x yours?")) { console.error(JSON.stringify(after, null, 1).slice(0, 3000)); assert.fail("the next wait does not resend the steered body"); }
 console.log("STEER HOOK OK");

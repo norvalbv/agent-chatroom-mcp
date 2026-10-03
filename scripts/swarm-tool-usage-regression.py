@@ -14,6 +14,17 @@ spec.loader.exec_module(usage)
 
 
 class UsageTests(unittest.TestCase):
+    def test_codex_non_mcp_tools_count_even_when_result_text_is_not_logged(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "seat.events.jsonl"
+            kinds = ["web_search", "file_change", "collab_tool_call", "todo_list", "webSearch", "fileChange", "collabAgentToolCall"]
+            path.write_text("\n".join(json.dumps({"type": "item.completed", "item": {"id": str(i), "type": kind}})
+                                       for i, kind in enumerate(kinds)))
+            report = usage.analyze(Path(directory))
+            self.assertEqual(report["seats"]["seat"]["tool_calls"], 7)
+            self.assertEqual(report["seats"]["seat"]["hub_tool_calls"], 0)
+            self.assertEqual(report["tools"]["other:web_search"]["results"], 0)
+
     def test_wait_timeouts_exclude_pending_asks_and_explicit_polls(self):
         quiet = json.dumps({"room_state": "open", "messages": [], "addressed_to_you": []})
         wait = {"tool": "wait_for_messages", "hub": True, "text": quiet, "args": {}, "duration_ms": 55001}

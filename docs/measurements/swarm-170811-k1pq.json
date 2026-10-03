@@ -133,7 +133,7 @@
       },
       "usage_source": "6-astra-4.usage.json",
       "trace_observed": true,
-      "tool_calls": 164,
+      "tool_calls": 166,
       "hub_tool_calls": 76,
       "tools": {
         "other:command_execution": {
@@ -198,6 +198,13 @@
           "text_bytes": 613,
           "max_text_bytes": 613,
           "hub": true
+        },
+        "other:web_search": {
+          "calls": 2,
+          "results": 0,
+          "text_bytes": 0,
+          "max_text_bytes": 0,
+          "hub": false
         },
         "leave_room": {
           "calls": 1,
@@ -336,7 +343,7 @@
       },
       "usage_source": "6-astra-6.usage.json",
       "trace_observed": true,
-      "tool_calls": 170,
+      "tool_calls": 181,
       "hub_tool_calls": 67,
       "tools": {
         "other:command_execution": {
@@ -393,6 +400,27 @@
           "results": 31,
           "text_bytes": 156337,
           "max_text_bytes": 25515,
+          "hub": false
+        },
+        "other:web_search": {
+          "calls": 1,
+          "results": 0,
+          "text_bytes": 0,
+          "max_text_bytes": 0,
+          "hub": false
+        },
+        "other:file_change": {
+          "calls": 9,
+          "results": 0,
+          "text_bytes": 0,
+          "max_text_bytes": 0,
+          "hub": false
+        },
+        "other:collab_tool_call": {
+          "calls": 1,
+          "results": 0,
+          "text_bytes": 0,
+          "max_text_bytes": 0,
           "hub": false
         },
         "pass": {
@@ -918,6 +946,27 @@
       "text_bytes": 378,
       "max_text_bytes": 182,
       "hub": true
+    },
+    "other:web_search": {
+      "calls": 3,
+      "results": 0,
+      "text_bytes": 0,
+      "max_text_bytes": 0,
+      "hub": false
+    },
+    "other:file_change": {
+      "calls": 9,
+      "results": 0,
+      "text_bytes": 0,
+      "max_text_bytes": 0,
+      "hub": false
+    },
+    "other:collab_tool_call": {
+      "calls": 1,
+      "results": 0,
+      "text_bytes": 0,
+      "max_text_bytes": 0,
+      "hub": false
     },
     "other:Bash": {
       "calls": 246,

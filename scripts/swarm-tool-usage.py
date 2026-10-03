@@ -74,20 +74,23 @@ def parse_trace(path):
         if kind == "turn.started":
             previous_turn += 1
         item = row.get("item", {})
+        item_type = {"webSearch": "web_search", "fileChange": "file_change", "collabAgentToolCall": "collab_tool_call"}.get(item.get("type"), item.get("type"))
         if kind in ("item.started", "item.completed") and item.get("id"):
             provider = "codex"
             key = (previous_turn, item["id"])
-            if item.get("type") == "mcp_tool_call":
+            if item_type == "mcp_tool_call":
                 hub = item.get("server") == "chatroom"
                 name = item.get("tool", "unknown")
                 args = item.get("arguments") or {}
-            elif item.get("type") == "command_execution":
+            elif item_type == "command_execution":
                 hub, name, args = False, "command_execution", {}
+            elif item_type in ("web_search", "file_change", "collab_tool_call", "todo_list"):
+                hub, name, args = False, item_type, {}
             else:
                 continue
             calls.setdefault(key, {"tool": name, "args": args, "hub": hub})
             if kind == "item.completed":
-                result = item.get("result") if hub or item.get("type") == "mcp_tool_call" else item.get("aggregated_output")
+                result = item.get("result") if item_type == "mcp_tool_call" else item.get("aggregated_output")
                 if result is not None:
                     results[key] = text_content(result)
             if hub and name == "join_room":

@@ -17,7 +17,7 @@
         "6-astra-4.events.jsonl": "d44ef1afe9fffd99d500cc6e9c05f55a068327c079eff940e3976196dfc129e8"
       },
       "trace_observed": true,
-      "tool_calls": 168,
+      "tool_calls": 176,
       "hub_tool_calls": 102,
       "tools": {
         "other:command_execution": {
@@ -69,6 +69,20 @@
           "max_text_bytes": 4970,
           "hub": true
         },
+        "other:web_search": {
+          "calls": 4,
+          "results": 0,
+          "text_bytes": 0,
+          "max_text_bytes": 0,
+          "hub": false
+        },
+        "other:file_change": {
+          "calls": 4,
+          "results": 0,
+          "text_bytes": 0,
+          "max_text_bytes": 0,
+          "hub": false
+        },
         "read_messages": {
           "calls": 5,
           "results": 5,
@@ -99,7 +113,7 @@
         "6-astra-5.events.jsonl": "5a8025b90c363c606794f20a6984a685378d7226d58f1111d0d630b929dba93e"
       },
       "trace_observed": true,
-      "tool_calls": 184,
+      "tool_calls": 187,
       "hub_tool_calls": 104,
       "tools": {
         "other:command_execution": {
@@ -150,6 +164,13 @@
           "text_bytes": 651,
           "max_text_bytes": 89,
           "hub": true
+        },
+        "other:web_search": {
+          "calls": 3,
+          "results": 0,
+          "text_bytes": 0,
+          "max_text_bytes": 0,
+          "hub": false
         },
         "pass": {
           "calls": 1,
@@ -225,6 +246,20 @@
       "text_bytes": 74694,
       "max_text_bytes": 4970,
       "hub": true
+    },
+    "other:web_search": {
+      "calls": 7,
+      "results": 0,
+      "text_bytes": 0,
+      "max_text_bytes": 0,
+      "hub": false
+    },
+    "other:file_change": {
+      "calls": 4,
+      "results": 0,
+      "text_bytes": 0,
+      "max_text_bytes": 0,
+      "hub": false
     },
     "read_messages": {
       "calls": 5,

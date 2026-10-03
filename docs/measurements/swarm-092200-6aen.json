@@ -24,7 +24,7 @@
       },
       "usage_source": "6-astra-3.usage.json",
       "trace_observed": true,
-      "tool_calls": 74,
+      "tool_calls": 77,
       "hub_tool_calls": 46,
       "tools": {
         "other:command_execution": {
@@ -76,6 +76,13 @@
           "max_text_bytes": 5597,
           "hub": true
         },
+        "other:web_search": {
+          "calls": 3,
+          "results": 0,
+          "text_bytes": 0,
+          "max_text_bytes": 0,
+          "hub": false
+        },
         "vote": {
           "calls": 2,
           "results": 2,
@@ -121,7 +128,7 @@
       },
       "usage_source": "6-astra-4.usage.json",
       "trace_observed": true,
-      "tool_calls": 79,
+      "tool_calls": 81,
       "hub_tool_calls": 49,
       "tools": {
         "other:command_execution": {
@@ -179,6 +186,13 @@
           "text_bytes": 19411,
           "max_text_bytes": 5597,
           "hub": true
+        },
+        "other:web_search": {
+          "calls": 2,
+          "results": 0,
+          "text_bytes": 0,
+          "max_text_bytes": 0,
+          "hub": false
         },
         "challenge": {
           "calls": 2,
@@ -242,7 +256,7 @@
       },
       "usage_source": "6-astra-5.usage.json",
       "trace_observed": true,
-      "tool_calls": 67,
+      "tool_calls": 71,
       "hub_tool_calls": 47,
       "tools": {
         "other:command_execution": {
@@ -293,6 +307,13 @@
           "text_bytes": 36139,
           "max_text_bytes": 12014,
           "hub": true
+        },
+        "other:web_search": {
+          "calls": 4,
+          "results": 0,
+          "text_bytes": 0,
+          "max_text_bytes": 0,
+          "hub": false
         },
         "board_get": {
           "calls": 6,
@@ -440,6 +461,13 @@
       "text_bytes": 52409,
       "max_text_bytes": 5597,
       "hub": true
+    },
+    "other:web_search": {
+      "calls": 9,
+      "results": 0,
+      "text_bytes": 0,
+      "max_text_bytes": 0,
+      "hub": false
     },
     "vote": {
       "calls": 5,

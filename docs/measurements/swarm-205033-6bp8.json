@@ -17,7 +17,7 @@
         "6-astra-3.events.jsonl": "8322874e8737d6db4b615f992cafeb7b0ee3747ba4fcb34a44bfe069f18379b7"
       },
       "trace_observed": true,
-      "tool_calls": 369,
+      "tool_calls": 388,
       "hub_tool_calls": 201,
       "tools": {
         "other:command_execution": {
@@ -90,6 +90,20 @@
           "max_text_bytes": 156,
           "hub": false
         },
+        "other:web_search": {
+          "calls": 1,
+          "results": 0,
+          "text_bytes": 0,
+          "max_text_bytes": 0,
+          "hub": false
+        },
+        "other:file_change": {
+          "calls": 18,
+          "results": 0,
+          "text_bytes": 0,
+          "max_text_bytes": 0,
+          "hub": false
+        },
         "other:detect_changes": {
           "calls": 1,
           "results": 1,
@@ -148,7 +162,7 @@
         "6-astra-4.events.jsonl": "1a6e978bdaf8acfc3a9126e64f20c350dc980f5ccb385d783ee7f88869273dcf"
       },
       "trace_observed": true,
-      "tool_calls": 480,
+      "tool_calls": 489,
       "hub_tool_calls": 180,
       "tools": {
         "other:command_execution": {
@@ -212,6 +226,20 @@
           "results": 3,
           "text_bytes": 16299,
           "max_text_bytes": 7806,
+          "hub": false
+        },
+        "other:file_change": {
+          "calls": 6,
+          "results": 0,
+          "text_bytes": 0,
+          "max_text_bytes": 0,
+          "hub": false
+        },
+        "other:web_search": {
+          "calls": 3,
+          "results": 0,
+          "text_bytes": 0,
+          "max_text_bytes": 0,
           "hub": false
         },
         "other:detect_changes": {
@@ -330,6 +358,20 @@
       "results": 2,
       "text_bytes": 312,
       "max_text_bytes": 156,
+      "hub": false
+    },
+    "other:web_search": {
+      "calls": 4,
+      "results": 0,
+      "text_bytes": 0,
+      "max_text_bytes": 0,
+      "hub": false
+    },
+    "other:file_change": {
+      "calls": 24,
+      "results": 0,
+      "text_bytes": 0,
+      "max_text_bytes": 0,
       "hub": false
     },
     "other:detect_changes": {

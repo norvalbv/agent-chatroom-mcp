@@ -738,7 +738,8 @@ assert.deepEqual(tools, ["amend", "board_get", "board_set", "challenge", "join_r
   assert.ok(readFocus[0].includes("one more thing"));
   const seq = Number(/#(\d+)/.exec(w4.messages.at(-1))![1]);
   const rep = await b.call("send_message", { room, content: "No, that is all.", reply_to: `#${seq}` });
-  assert.ok(rep.sent.includes("No, that is all."));
+  const heardReply = await a.call("wait_for_messages", { room, timeout_ms: 0 });
+  assert.ok(heardReply.messages.some((m: string) => m.startsWith(`#${rep.seq} `) && m.includes("No, that is all.")));
   await a.call("leave_room", { room, reason: "smoke: section finished, nothing owed" });
   await b.call("leave_room", { room, reason: "smoke: section finished, nothing owed" });
 }

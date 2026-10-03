@@ -99,6 +99,58 @@ test("an owed ask re-sent on a later wait still appears exactly once in the resp
   assert.ok(w.addressed_to_you.length >= 1, "the outstanding ask is still listed as owed");
 });
 
+test("structured results omit formatting whitespace while preserving board text verbatim", async () => {
+  const { c, call } = await connect(new Hub());
+  const room = "ptp-compact";
+  const raw = await c.callTool({ name: "join_room", arguments: { room, name: "reader", agent: "test" } });
+  const text = (raw.content as { text: string }[])[0].text;
+  assert.equal(text, JSON.stringify(JSON.parse(text)), "MCP result JSON carries no indentation or separator padding");
+  const body = '  indented evidence\n\n{"nested": "keep  spaces"}\t\né ✓  ';
+  await call("board_set", { room, key: "evidence/exact", text: body });
+  const board = await call("board_get", { room, key: "evidence/exact" });
+  assert.equal(board.text, body, "compaction must preserve every byte inside text values");
+});
+
+test("refusal envelopes compact only their JSON data and preserve the readable error", async () => {
+  const hub = new Hub();
+  const a = await connect(hub);
+  const b = await connect(hub);
+  const room = "ptp-compact-refusal";
+  await a.call("join_room", { room, name: "alice", agent: "test" });
+  await b.call("join_room", { room, name: "bob", agent: "test" });
+  await a.call("wait_for_messages", { room, timeout_ms: 0 });
+  await b.call("send_message", { room, content: "A new fact with  spaces\nand another line" });
+  const raw = await a.c.callTool({ name: "send_message", arguments: { room, content: "stale draft" } });
+  assert.equal(raw.isError, true);
+  const text = (raw.content as { text: string }[])[0].text;
+  const newline = text.indexOf("\n");
+  assert.match(text.slice(0, newline), /arrived while you were composing/);
+  const payload = text.slice(newline + 1);
+  assert.equal(payload, JSON.stringify(JSON.parse(payload)), "refusal data uses the same compact encoding");
+  assert.ok(JSON.parse(payload).unread.some((line: string) => line.includes("with  spaces\nand another line")));
+});
+
+test("send receipts preserve routing without echoing the sender's body; recipients still get exact text", async () => {
+  const hub = new Hub();
+  const a = await connect(hub);
+  const b = await connect(hub);
+  const room = "ptp-send-receipt";
+  await a.call("join_room", { room, name: "alice", agent: "test", max_message_chars: 2000 });
+  await b.call("join_room", { room, name: "bob", agent: "test" });
+  const body = "Exact  whitespace\n" + "evidence ✓ ".repeat(100);
+  const receipt = await a.call("send_message", { room, content: body, force: true });
+  assert.equal(receipt.sent, `#${receipt.seq} alice:`);
+  assert.ok(receipt.id.startsWith("m_"));
+  const heard = await b.call("wait_for_messages", { room, timeout_ms: 0 });
+  assert.ok(heard.messages.includes(`#${receipt.seq} alice: ${body}`));
+  assert.equal(hub.getRoom(room).messages.find((m) => m.id === receipt.id)?.content, body);
+  const reply = "Private working reply  with spaces\nand a second line";
+  const quiet = await b.call("send_message", { room, content: reply, quiet: true, reply_to: `#${receipt.seq}`, force: true });
+  assert.equal(quiet.sent, `#${quiet.seq} bob: [quiet → alice]`);
+  const answer = await a.call("wait_for_messages", { room, timeout_ms: 0 });
+  assert.ok(answer.messages.includes(`#${quiet.seq} bob: [quiet → alice] ${reply}`));
+});
+
 let failed = 0;
 for (const [name, run] of cases) {
   try {

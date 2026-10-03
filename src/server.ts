@@ -18,7 +18,7 @@ export const DEFAULT_WAIT_MS = 55_000; // gaps over 55s were 62-77% of sub-room 
 export const MAX_WAIT_MS = 55_000; // stay under typical MCP client tool timeouts (Codex 60s)
 
 const ok = (data: unknown) => ({
-  content: [{ type: "text" as const, text: typeof data === "string" ? data : JSON.stringify(data, null, 2) }],
+  content: [{ type: "text" as const, text: typeof data === "string" ? data : JSON.stringify(data) }],
 });
 const fail = (err: unknown) => ({
   isError: true,
@@ -27,7 +27,7 @@ const fail = (err: unknown) => ({
       type: "text" as const,
       text:
         err instanceof HubError && err.data !== undefined
-          ? `${err.message}\n${JSON.stringify(err.data, null, 2)}`
+          ? `${err.message}\n${JSON.stringify(err.data)}`
           : err instanceof Error
             ? err.message
             : String(err),
@@ -295,7 +295,7 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
     guard("send_message", ({ room, content, reply_to, force, quiet, surface, participant_id }) => {
       const r = hub.getRoom(room);
       const m = hub.send(room, pid(room, participant_id), content, reply_to, force, quiet, surface);
-      return { sent: hub.fmt(r, m), id: m.id, seq: m.seq };
+      return { sent: hub.fmt(r, { ...m, content: "" }).trimEnd(), id: m.id, seq: m.seq };
     }),
   );
 

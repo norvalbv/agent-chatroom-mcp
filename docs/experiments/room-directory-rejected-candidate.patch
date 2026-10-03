@@ -1,0 +1,222 @@
+diff --git a/scripts/offline-runner.mjs b/scripts/offline-runner.mjs
+index b3cdf759..28637378 100644
+--- a/scripts/offline-runner.mjs
++++ b/scripts/offline-runner.mjs
+@@ -100,6 +100,7 @@ export const offlineScripts = [
+   'steer-contract-regression.ts',
+   'steer-hook-regression.ts',
+   'room-status-size-regression.ts',
++  'room-directory-regression.ts',
+   'handoff-task-fixture.test.ts',
+   'hold-until-actionable-regression.ts',
+   'hub-notice-not-debt-regression.ts',
+diff --git a/scripts/room-directory-regression.ts b/scripts/room-directory-regression.ts
+new file mode 100644
+index 00000000..0003db83
+--- /dev/null
++++ b/scripts/room-directory-regression.ts
+@@ -0,0 +1,84 @@
++/** MCP room discovery: a directory first, full room detail on demand. */
++import assert from "node:assert/strict";
++import { Client } from "@modelcontextprotocol/sdk/client/index.js";
++import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
++import { Hub } from "../src/hub.js";
++import { createSessionServer } from "../src/server.js";
++
++Hub.DEFAULT_NUDGE_MS = 0;
++const hub = new Hub();
++const session = createSessionServer(hub);
++const client = new Client({ name: "directory-check", version: "1" });
++const [ct, st] = InMemoryTransport.createLinkedPair();
++await session.server.connect(st);
++await client.connect(ct);
++const call = async (name: string, args: Record<string, unknown> = {}) => {
++  const out = await client.callTool({ name, arguments: args });
++  assert.ok(!out.isError, JSON.stringify(out));
++  return JSON.parse((out.content as { text: string }[])[0].text);
++};
++try {
++  const topic = "Compiler team: " + "implementation context ".repeat(200) + "TAIL-TOPIC";
++  const a = hub.join("run-a-build", "Alice", "codex", { topic }, undefined, "alice").participant;
++  hub.join("run-a-build", "Bob", "claude", {}, undefined, "bob");
++  hub.setBoard("run-a-build", a.id, "evidence/long", "evidence ".repeat(700));
++  hub.propose("run-a-build", a.id, "Adopt the implementation. " + "reason ".repeat(200));
++  hub.createRoom("run-a-closed", { topic: "Completed compiler team" });
++  hub.closeRoom("run-a-closed", "test", "done");
++  hub.createRoom("run-b-other", { topic: "Other unrelated task" });
++  hub.createRoom("run-a-archived", { topic: "Archived task" });
++  hub.archiveRoom("run-a-archived", "test");
++  const secret = hub.join("anonymous", "PrivateName", "codex", { anonymous: true }, undefined, "private-session").participant;
++  hub.setBoard("anonymous", secret.id, "draft/secret", "PRIVATE-DRAFT-TEXT");
++
++  const rows = await call("list_rooms", { prefix: "run-a-", state: "open" });
++  assert.deepEqual(rows.map((r: { name: string }) => r.name), ["run-a-build"], "filters reach the MCP dispatch");
++  assert.equal(rows[0].topic_chars, topic.length);
++  assert.ok(rows[0].topic.length <= 241);
++  assert.equal(rows[0].active_count, 2);
++  assert.deepEqual(rows[0].participants.map((p: { name: string }) => p.name), ["Alice", "Bob"]);
++  assert.equal(rows[0].board, undefined, "directory omits board contents and manifests");
++  assert.equal(rows[0].proposals, undefined, "directory omits proposal bodies");
++  const full = await call("list_rooms", { prefix: "run-a-", state: "open", full: true });
++  assert.equal(full[0].topic, topic, "full=true recovers the prior full summary");
++  assert.ok(full[0].board["evidence/long"]);
++  assert.ok(full[0].proposals[0].text.includes("reason"));
++  const status = await call("room_status", { room: "run-a-build", full_topic: true });
++  assert.equal(status.topic, topic, "one-room drilldown needs no membership");
++  assert.deepEqual(await call("list_rooms", { prefix: "missing-" }), []);
++  const all = await call("list_rooms");
++  assert.equal(all.length, 4, "default covers all nonarchived rooms");
++  assert.deepEqual((await call("list_rooms", { state: "closed" })).map((r: { name: string }) => r.name), ["run-a-closed"]);
++  const anon = all.find((r: { name: string }) => r.name === "anonymous");
++  assert.equal(anon.participants[0].name, "Participant A");
++  assert.equal(anon.participants[0].agent, "hidden");
++  assert.ok(!JSON.stringify(all).includes("PrivateName"));
++  assert.ok(!JSON.stringify(all).includes(secret.id));
++  assert.ok(!JSON.stringify(all).includes("private-session"));
++  assert.ok(!JSON.stringify(await call("list_rooms", { full: true })).includes("PRIVATE-DRAFT-TEXT"));
++  const before = Buffer.byteLength(JSON.stringify(hub.listRooms()));
++  const after = Buffer.byteLength(JSON.stringify(all));
++  assert.ok(after < before / 3, `${before} -> ${after} bytes`);
++  const completed = hub.join("done", "DoneA", "test", { requireChallenge: false }, undefined, "done-a").participant;
++  const reviewer = hub.join("done", "DoneB", "test", {}, undefined, "done-b").participant;
++  const text = "Accepted result. " + "verified details ".repeat(50);
++  const proposal = hub.propose("done", completed.id, text);
++  hub.vote("done", reviewer.id, proposal.id, "agree", undefined, undefined, "Accepted result.");
++  const concluded = await call("list_rooms", { state: "concluded" });
++  assert.equal(concluded.length, 1);
++  assert.equal(concluded[0].name, "done");
++  assert.equal(concluded[0].conclusion.chars, text.length);
++  assert.ok(concluded[0].conclusion.text.length <= 241);
++  assert.equal((await call("list_rooms", { prefix: "done", full: true }))[0].conclusion.text, text);
++  hub.archiveRoom("done", "test");
++  assert.deepEqual(await call("list_rooms", { state: "concluded" }), [], "fresh listing reflects archival");
++  console.log(`ROOM DIRECTORY OK; same fixture ${before} -> ${after} bytes`);
++} finally {
++  await client.close();
++  await session.server.close();
++  for (const room of hub.rooms.values()) {
++    clearTimeout(room.nudgeTimer);
++    clearTimeout(room.openingsTimer);
++    clearTimeout(room.draftsTimer);
++  }
++}
+diff --git a/scripts/room-status-size-regression.ts b/scripts/room-status-size-regression.ts
+index a46c279c..636da8ce 100644
+--- a/scripts/room-status-size-regression.ts
++++ b/scripts/room-status-size-regression.ts
+@@ -2,7 +2,7 @@
+  * room_status size (swarm-181144-uxtr, issue 2; src/hub/status-view.ts): a seat's room_status no longer repeats the
+  * whole room topic, every seat's full last command or four fields per board key. What a seat acts on stays whole: the
+  * open proposal's text, votes and challenges, liveness, the board keys with author and reviewer. join_room and
+- * list_rooms still carry the full topic, and room_status(full_topic=true) carries it for one room.
++ * list_rooms(full=true) still carry the full topic, and room_status(full_topic=true) carries it for one room.
+  * Throwaway hub on its own port (never 7717), stopped with the process.
+  * Run: npx tsx scripts/room-status-size-regression.ts
+  */
+@@ -39,7 +39,7 @@ const a = await connect(beat.mcpUrl);
+ const b = await connect(`${HTTP}/mcp`);
+ const joined = await a("join_room", { room: R, name: "builder", agent: "claude", topic: TOPIC, expected_participants: 0 });
+ await b("join_room", { room: R, name: "peer", agent: "codex" });
+-// join_room (and list_rooms) keep the whole topic: that is where a seat reads it
++// join_room keeps the whole topic: that is where a seat reads it
+ assert.match(joined.data.room.topic, /END-OF-TOPIC$/);
+ await a("board_set", { room: R, key: "claim/x", text: "{\"owner\":\"builder\",\"area\":\"x\"}" });
+ await b("board_set", { room: R, key: "evidence/y", text: "y".repeat(2000) });
+@@ -54,11 +54,11 @@ const s = st.data;
+ assert.ok(s.topic.length < 400, `topic cut: ${s.topic.length}`);
+ assert.ok(s.topic.startsWith("Brief: build the thing carefully."));
+ assert.match(s.topic, new RegExp(`${TOPIC.length} chars; room_status full_topic=true carries it whole`));
+-// the whole topic, for this room only, on request (and still in list_rooms)
++// the whole topic, for this room only, on request (and still in list_rooms(full=true))
+ const fullStatus = await b("room_status", { room: R, full_topic: true });
+ assert.equal(fullStatus.data.topic, TOPIC);
+ assert.equal(fullStatus.data.board["claim/x"].chars, undefined, "full_topic widens only the topic");
+-const listed = JSON.parse((await b("list_rooms", {})).text) as { name: string; topic: string }[];
++const listed = JSON.parse((await b("list_rooms", { full: true })).text) as { name: string; topic: string }[];
+ assert.match(listed.find((r) => r.name === R)!.topic, /END-OF-TOPIC$/);
+ // 2. a seat's working detail is one line; tool, step and liveness stay
+ const builder = s.participants.find((p: { name: string }) => p.name === "builder");
+diff --git a/skills/swarm/SKILL.md b/skills/swarm/SKILL.md
+index 62bb8cf7..d3c4fa31 100644
+--- a/skills/swarm/SKILL.md
++++ b/skills/swarm/SKILL.md
+@@ -54,6 +54,7 @@ Every prompt automatically carries the project's settled axes (`docs/decisions/`
+ - Dashboard: http://127.0.0.1:7717/ui shows every room, each person's role tag and claimed areas, the open proposal and the board; the human can interject there. Terminal: `watch-chat --latest`.
+ - To chair a run yourself, join the leads room (planned) or the single room (flat) with the chatroom MCP as `chair-claude` with `role="chair"`: you are never waited on for quorum, your disagree vetoes, and you need not leave to unblock amendments. Post the brief on the board, challenge the weakest claim, vote with a verbatim quote. Do not do the agents' work for them.
+ - An empty wait may return `unchanged:true`: retain omitted coordination fields from your last wait, including the referenced proposal version; current hints still apply. A full response replaces the snapshot, so omitted optional fields are cleared.
++- `list_rooms` is a compact directory: topic/conclusion previews, active participants and state. Use `prefix` (literal room-name prefix) and `state` to narrow discovery; `room_status(room, full_topic=true)` retrieves one room’s details without joining, and `list_rooms(full=true)` returns the former full summaries. Neither mode includes archived rooms.
+ - `room_status` gives a seat the room's opening 240 chars of topic, each seat's working detail cut to 80 chars, and board keys by author and reviewer; the open proposal, votes, challenges and liveness are whole. `room_status(full_topic=true)` returns this room's whole topic (src/hub/status-view.ts; 7 real calls in swarm-205033-6bp8 replay 156,073 → 96,122 B, docs/experiments/2026-10-03-room-status-size.md).
+ - Follow a room cheaply over HTTP (`/rooms/<room>/messages?since=N`) rather than polling `wait_for_messages`, which ships the open proposal whenever its version changes.
+ - A Claude Code seat (this one included) calls `wait_for_messages` directly and has no local re-poll loop like `--idle-waits` gives an OpenRouter seat, so it pays a full-context turn on every return, even on plain chatter. Pass `wait_for_messages(hold_until_actionable=true)` to hold the poll server-side through non-actionable chatter and only wake for something you must act on (addressed message, a vote/challenge you owe, a human message you are the nominated responder for, a conclusion) or the timeout, whichever first — no message is ever dropped. A human message addressed to someone else does not wake you: it stays invisible to bystanders (like today) until it is answered or ages out.
+diff --git a/src/hub/status-view.ts b/src/hub/status-view.ts
+index fa94fcb6..380376ea 100644
+--- a/src/hub/status-view.ts
++++ b/src/hub/status-view.ts
+@@ -5,7 +5,7 @@
+  * and join_room; it polls room_status for who is doing what, the proposal and the board keys. So: the topic is cut to
+  * its opening, a working detail to one line, and a board key to its author (plus reviewer). Proposals, votes,
+  * challenges, liveness, claims and everything else pass through unchanged. room_status(full_topic=true), join_room,
+- * list_rooms and the dashboard keep the whole topic.
++ * list_rooms(full=true) and the dashboard keep the whole topic.
+  */
+ const TOPIC_HEAD = 240;
+ const DETAIL_HEAD = 80;
+@@ -18,6 +18,24 @@ type Summary = Record<string, unknown> & {
+ 
+ const head = (s: string, n: number) => (s.length > n ? `${s.slice(0, n)}…` : s);
+ 
++/** Room discovery does not need each team's board, proposal bodies or working commands. */
++export function directoryView(summary: {
++  name: string; topic: string; state: string; active_count: number; parent?: string;
++  participants: { name: string; agent: string; role: string; active: boolean }[];
++  conclusion: { text: string } | null;
++}) {
++  return {
++    name: summary.name,
++    topic: head(summary.topic, TOPIC_HEAD),
++    topic_chars: summary.topic.length,
++    state: summary.state,
++    ...(summary.parent ? { parent: summary.parent } : {}),
++    active_count: summary.active_count,
++    participants: summary.participants.filter((p) => p.active).map(({ name, agent, role }) => ({ name, agent, role })),
++    conclusion: summary.conclusion ? { text: head(summary.conclusion.text, TOPIC_HEAD), chars: summary.conclusion.text.length } : null,
++  };
++}
++
+ export function statusView(summary: Summary, fullTopic = false): Summary {
+   const topic = summary.topic ?? "";
+   return {
+diff --git a/src/server.ts b/src/server.ts
+index 8d28a56c..e161c21a 100644
+--- a/src/server.ts
++++ b/src/server.ts
+@@ -8,7 +8,7 @@
+  * Loop as an agent sees it: join_room -> submit_opening -> send_message /
+  * wait_for_messages -> propose -> challenge -> vote -> room concludes -> leave_room.
+  */
+-import { statusView } from "./hub/status-view.js";
++import { directoryView, statusView } from "./hub/status-view.js";
+ import { fmtWait, steerCarry } from "./hub/steer.js";
+ import { McpServer, ResourceTemplate, type RegisteredTool } from "@modelcontextprotocol/sdk/server/mcp.js";
+ import { randomUUID } from "node:crypto";
+@@ -144,8 +144,18 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer
+ 
+   server.registerTool(
+     "list_rooms",
+-    { title: "List rooms", description: "List all chatrooms with participants, state and any conclusion.", inputSchema: {} },
+-    guard("list_rooms", () => hub.listRooms()),
++    {
++      title: "List rooms",
++      description: "Discover chatrooms: topic previews, active participants, state and conclusion previews. Filter by name prefix or state. Use room_status(full_topic=true) for one room's details, or full=true for whole summaries.",
++      inputSchema: {
++        prefix: z.string().optional().describe("Include only room names starting with this literal prefix, e.g. your swarm run prefix."),
++        state: z.enum(["open", "concluded", "stalled", "closed"]).optional().describe("Include only rooms in this state."),
++        full: z.boolean().optional().describe("Return whole room summaries instead of directory entries (default false)."),
++      },
++    },
++    guard("list_rooms", ({ prefix, state, full }) => [...hub.rooms.values()]
++      .filter((r) => !r.archived && (prefix === undefined || r.name.startsWith(prefix)) && (!state || r.state === state))
++      .map((r) => { const summary = hub.summary(r); return full ? summary : directoryView(summary); })),
+   );
+ 
+   server.registerTool(

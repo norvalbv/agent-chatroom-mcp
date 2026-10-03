@@ -1,0 +1,10 @@
+{
+  "kind": "deterministic MCP contract fixture",
+  "base_commit": "31daae67",
+  "command": "npx tsx scripts/room-directory-regression.ts",
+  "base_exit_code": 1,
+  "head_exit_code": 0,
+  "full_directory_bytes": 10378,
+  "compact_directory_bytes": 918,
+  "conditions": "One long-topic/proposal room, closed room, unrelated room, anonymous draft room; archived room excluded. Same in-memory fixture and UTF-8 JSON serialization; no model cost or behavior claim."
+}

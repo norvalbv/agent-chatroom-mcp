@@ -189,8 +189,8 @@ export class Hub {
         liveness: (() => {
           const age = (at: string) => Math.max(0, Math.floor((observedAt - Date.parse(at)) / 1000));
           const age_seconds = age(this.lastSeen(p));
-          const away = this.awayProcess(p);
-          if (away) return { status: "away", age_seconds, heartbeat_age_seconds: away.age_seconds };
+          const away = this.away(p);
+          if (away) return { status: "away", age_seconds, heartbeat_age_seconds: p.working ? age(p.working.at) : null, away: away.evidence };
           return { status: !p.active ? "left" : age_seconds < 60 ? "active" : age_seconds * 1000 < kick.SUSPECTED_DEAD_MS ? "idle" : "suspected_dead",
             age_seconds, heartbeat_age_seconds: p.working ? age(p.working.at) : null };
         })(),
@@ -415,6 +415,7 @@ export class Hub {
       participant.lastActiveAt = now();
       if (session) participant.session = session;
       if (session && this.sessionSeatHashes.has(session)) participant.seatKeyHash = this.sessionSeatHashes.get(session);
+      delete participant.restoredAt;
       if (role && role !== "worker") participant.role = role;
       this.persist({ type: "join", room: roomName, p: participant });
       this.post(room, "system", undefined, `${this.shown(room, participant)} rejoined the room.`);
@@ -2225,17 +2226,25 @@ export class Hub {
   static seatHash(seatKey: string): string { return createHash("sha256").update(seatKey).digest("hex"); }
 
   /**
-   * A seat that is out of the room but whose process is still running: it has not rejoined since a hub restart or a
-   * dropped MCP connection, and its launcher's heartbeat (by seat key) arrived after it went inactive, within
-   * kick.SUSPECTED_DEAD_MS. It rejoins on its next hub call, so it is not a vacancy to recruit into. A seat that
-   * called leave_room itself, was kicked or already has a successor is never away.
+   * A seat that is out of the room but not a vacancy: it rejoins on its next hub call. Either its launcher's heartbeat
+   * (by seat key) arrived after it went inactive, or a hub restart restored it inactive while it was in the room and it
+   * has been silent for less than kick.SUSPECTED_DEAD_MS since (a seat inside one long command sends nothing until the
+   * command ends; the old process's beats were not kept). The same 10 minutes the idle sweep gives a live seat.
+   * A seat that called leave_room itself, was kicked or already has a successor is never away.
    */
-  awayProcess(p: Participant): { age_seconds: number; tool: string; step: number } | undefined {
-    if (p.active || p.kicked || p.replacedBy || p.pendingReplacementName || !p.working) return undefined;
+  away(p: Participant): { age_seconds: number; evidence: string } | undefined {
+    if (p.active || p.kicked || p.replacedBy || p.pendingReplacementName) return undefined;
     if (p.leaveReason && !p.leaveReason.startsWith("MCP session closed")) return undefined;
-    const at = Date.parse(p.working.at);
-    if (at <= Date.parse(p.lastActiveAt) || Date.now() - at >= kick.SUSPECTED_DEAD_MS) return undefined;
-    return { age_seconds: Math.max(0, Math.floor((Date.now() - at) / 1000)), tool: p.working.tool, step: p.working.step };
+    const ageOf = (at: string) => Math.max(0, Math.floor((Date.now() - Date.parse(at)) / 1000));
+    if (p.working && Date.parse(p.working.at) > Date.parse(p.lastActiveAt) && Date.now() - Date.parse(p.working.at) < kick.SUSPECTED_DEAD_MS) {
+      const age = ageOf(p.working.at);
+      return { age_seconds: age, evidence: `its process is still running: it heartbeated ${age}s ago (step ${p.working.step}, ${p.working.tool})` };
+    }
+    if (p.restoredAt && Date.now() - Date.parse(p.restoredAt) < kick.SUSPECTED_DEAD_MS) {
+      const age = ageOf(p.restoredAt);
+      return { age_seconds: age, evidence: `it was in the room when the hub restarted ${age}s ago and has not been silent long enough to read as dead (a seat inside a long command rejoins when the command ends)` };
+    }
+    return undefined;
   }
 
   /** Where a seat's work in progress lives: its bound worktree and the branch checked out there now. */

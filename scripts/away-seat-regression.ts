@@ -5,8 +5,10 @@
  * seat-key heartbeats kept arriving but the key->session binding died with the old process, so they were dropped.
  *
  * Now a participant carries a persisted hash of its seat key; a heartbeat no live connection claims is recorded on the
- * seats that key joined as, room_status shows them liveness "away", and request_agent(replacing=) refuses an away seat
- * with that evidence. A departed seat with no heartbeat since is still replaceable (the control).
+ * seats that key joined as. A seat restored by the restart counts its silence from the restart (a claude seat inside one
+ * long Bash command sends no beat until it ends). room_status shows both liveness "away", and request_agent(replacing=)
+ * refuses an away seat with that evidence. A seat whose connection closed before the restart, with no heartbeat since,
+ * is still replaceable (the control).
  * Throwaway hub on its own port and data dir (never 7717), restarted by pid.
  * Run: npx tsx scripts/away-seat-regression.ts
  */
@@ -45,11 +47,12 @@ async function stopHub() {
 async function connect(seatKey?: string) {
   const client = new Client({ name: "away", version: "0.0.0" });
   await client.connect(new StreamableHTTPClientTransport(new URL(`${HTTP}/mcp${seatKey ? `?seat=${seatKey}` : ""}`)));
-  return async (tool: string, args: Record<string, unknown> = {}) => {
+  const call = async (tool: string, args: Record<string, unknown> = {}) => {
     const res = (await client.callTool({ name: tool, arguments: args })) as { isError?: boolean; content: { text: string }[] };
     if (res.isError) return { error: res.content[0]?.text ?? "" };
     try { return JSON.parse(res.content[0]?.text ?? ""); } catch { return res.content[0]?.text; }
   };
+  return Object.assign(call, { close: async () => { await (client.transport as StreamableHTTPClientTransport).terminateSession(); await client.close(); } });
 }
 const beat = (seat_key: string) => fetch(`${HTTP}/heartbeat`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ seat_key, tool: "Bash", detail: "npm test" }) });
 const liveness = async (name: string) =>
@@ -58,34 +61,44 @@ const liveness = async (name: string) =>
 
 try {
   await startHub();
-  const busy = await connect("seat-busy"), gone = await connect("seat-gone"), lead = await connect("seat-lead");
-  await lead("join_room", { room: ROOM, name: "lead", agent: "test", expected_participants: 3 });
+  const busy = await connect("seat-busy"), quiet = await connect("seat-quiet"), gone = await connect("seat-gone"), lead = await connect("seat-lead");
+  await lead("join_room", { room: ROOM, name: "lead", agent: "test", expected_participants: 4 });
   await busy("join_room", { room: ROOM, name: "busy", agent: "test" });
+  await quiet("join_room", { room: ROOM, name: "quiet", agent: "test" });
   await gone("join_room", { room: ROOM, name: "gone", agent: "test" });
+  // "gone" dies before the restart: its connection closes and nothing of it beats again
+  await gone.close();
+  for (let i = 0; i < 50 && (await liveness("gone")) !== "left"; i++) await new Promise((r) => setTimeout(r, 100));
+  assert.equal(await liveness("gone"), "left");
 
-  // the hub restarts; all three processes outlive it, but only "busy" keeps working (its launcher heartbeats)
+  // the hub restarts; "busy" keeps working (its launcher heartbeats), "quiet" is inside one long command (no beat yet)
   await stopHub();
   await startHub();
   await beat("seat-busy");
   assert.equal(await liveness("busy"), "away", "a restored seat whose process heartbeats is away, not left");
-  assert.equal(await liveness("gone"), "left", "a restored seat with no heartbeat since stays left");
+  assert.equal(await liveness("quiet"), "away", "a seat present at the restart is away until it has been silent 10 min since");
+  assert.equal(await liveness("gone"), "left", "a seat that left before the restart with no heartbeat since stays left");
 
   const lead2 = await connect("seat-lead");
   await lead2("join_room", { room: ROOM, name: "lead", agent: "test" });
   const refused = await lead2("request_agent", { room: ROOM, brief: "take over busy's claim", replacing: "busy" });
   assert.ok(refused?.error, `replacing an away seat must be refused, got ${JSON.stringify(refused)}`);
   assert.match(refused.error, /still running: it heartbeated \d+s ago/);
+  const refusedQuiet = await lead2("request_agent", { room: ROOM, brief: "take over quiet's claim", replacing: "quiet" });
+  assert.ok(refusedQuiet?.error, `replacing a seat silent only since the restart must be refused, got ${JSON.stringify(refusedQuiet)}`);
+  assert.match(refusedQuiet.error, /hub restarted \d+s ago/);
   assert.equal(await liveness("busy"), "away", "the refused replacement did not mark the seat replaced");
 
   const ok = await lead2("request_agent", { room: ROOM, brief: "take over gone's claim", replacing: "gone" });
   assert.ok(!ok?.error, `a departed seat with no heartbeat is still replaceable: ${JSON.stringify(ok)}`);
   assert.equal(ok.spawned.length, 1);
 
-  // the busy seat comes back on its next hub call, as itself
-  const busy2 = await connect("seat-busy");
-  const back = await busy2("join_room", { room: ROOM, name: "busy", agent: "test" });
-  assert.ok(!back?.error, JSON.stringify(back));
-  assert.equal(await liveness("busy"), "active");
+  // the away seats come back on their next hub call, as themselves
+  for (const [key, name] of [["seat-busy", "busy"], ["seat-quiet", "quiet"]]) {
+    const back = await (await connect(key))("join_room", { room: ROOM, name, agent: "test" });
+    assert.ok(!back?.error, JSON.stringify(back));
+    assert.equal(await liveness(name), "active");
+  }
   console.log("away-seat-regression: ok");
 } finally {
   if (server && server.exitCode === null) server.kill();

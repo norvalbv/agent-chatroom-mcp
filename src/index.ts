@@ -121,11 +121,11 @@ spawner.attach({
     if (!old || old.active || old.agent === "human" || old.role === "chair") throw new HubError("Recruit replacement requires a departed nonhuman, non-chair participant.");
     // Departed is not dead: after a hub restart every seat is restored inactive while its process keeps working, and a
     // successor would duplicate its claimed work (swarm-181144-uxtr, 6-astra-3). Its launcher's heartbeat says which.
-    const away = hub.awayProcess(old);
+    const away = hub.away(old);
     if (away) {
-      throw new HubError(`${predecessor} is out of the room but its process is still running: it heartbeated ${away.age_seconds}s ago (step ${away.step}, ${away.tool}). ` +
+      throw new HubError(`${predecessor} is out of the room but not gone: ${away.evidence}. ` +
         `It rejoins on its next hub call (room_status liveness "away"), so a successor would duplicate its work; nobody was launched. ` +
-        `If it is still away after ${Math.round(SUSPECTED_DEAD_MS / 60_000)} min of silence it reads as dead and this call goes through; if it comes back stuck, kick_vote it.`, undefined, "state");
+        `After ${Math.round(SUSPECTED_DEAD_MS / 60_000)} min of silence it reads as dead and this call goes through; if it comes back stuck, kick_vote it.`, undefined, "state");
     }
     return hub.registerReplacement(room, predecessor, successorName).replacementToken;
   },

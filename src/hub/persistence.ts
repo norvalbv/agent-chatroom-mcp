@@ -5,6 +5,7 @@ import { analyzeReplyMetrics, type ReplyMetricEvent } from "../reply-metrics.js"
 import type { Hub } from "../hub.js";
 import { applyBoard, applyBoardManifest } from "./board.js";
 import type { Participant, Proposal } from "./types.js";
+import { now } from "./internal.js";
 import type { Opts, Event } from "./internal.js";
 
 function recordReplyMetricEvent(hub: Hub, ev: Event) {
@@ -92,9 +93,12 @@ export function replay(hub: Hub) {
           // Delivery cursors are deliberately process-local: replay/rejoin must backfill.
           delete ev.p.lastBoardSeen;
           delete ev.p.seenBoardKeys;
-          // Participants from a previous process are restored as inactive; they must rejoin.
+          // Participants from a previous process are restored as inactive; they must rejoin. One that was still in the
+          // room when the old process stopped is marked restoredAt: its silence is counted from this restart (Hub.away).
           const legacyP = ev.p as Partial<Participant> & Pick<Participant, "id" | "name" | "agent" | "joinedAt" | "lastActiveAt" | "lastSeenSeq">;
-          room?.participants.set(ev.p.id, { ...legacyP, label: legacyP.label ?? legacyP.name, messageCount: legacyP.messageCount ?? 0, active: false });
+          const wasActive = legacyP.active === true;
+          delete legacyP.restoredAt;
+          room?.participants.set(ev.p.id, { ...legacyP, label: legacyP.label ?? legacyP.name, messageCount: legacyP.messageCount ?? 0, active: false, ...(wasActive ? { restoredAt: now() } : {}) });
           break;
         }
         case "proposal": {

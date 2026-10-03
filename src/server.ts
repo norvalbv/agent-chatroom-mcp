@@ -14,6 +14,7 @@ import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { Hub, HubError, ROLES, VERIFY_HEAD_EXAMPLE, VERIFY_HEAD_RULE, type CallOutcome } from "./hub.js";
 import type { Spawner } from "./spawner.js";
+import { createWaitView } from "./hub/wait-view.js";
 
 export const DEFAULT_WAIT_MS = 55_000; // gaps over 55s were 62-77% of sub-room wall time; wait() wakes on events so latency is unchanged
 export const MAX_WAIT_MS = 55_000; // stay under typical MCP client tool timeouts (Codex 60s)
@@ -57,6 +58,7 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
     },
   );
 
+  const compactWait = createWaitView();
   const me = new Map<string, Set<string>>();
   const sessionKey = randomUUID(); // one connection = one agent, whatever names it uses
 
@@ -335,6 +337,7 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
         "timeout_ms (default 55s, max 55s) for one to arrive. Call it again if it returns nothing; that is normal. " +
         "Also reports the open proposal (its text only when the version changed since you last saw it), what blocks it, whether your leaving would block it, " +
         "openings progress, humans present, your_turn (round_robin rooms), and whether the room has concluded. " +
+        "Only unchanged:true retains omitted fields from your last wait; otherwise the snapshot replaces them. Current hints still apply. " +
         "hold_until_actionable=true keeps holding through plain chatter (still returns by timeout_ms, nothing is dropped) so a client that cannot " +
         "locally re-poll without spending a model turn still only wakes for something it must act on.",
       inputSchema: {
@@ -400,14 +403,14 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
       // an ask already carried in this response's messages[] is referenced by id, not sent twice
       const delivered = new Set(msgs.map((m) => m.id));
       // only a human's message strips the envelope; a peer ask rides the full one (proposal, board, queue)
-      if (focus && hub.focusExclusive(focus)) return {
+      if (focus && hub.focusExclusive(focus)) return compactWait(p, {
         hint: toolsRegainedNote || moreNote ? toolsRegainedNote + (hub.attentionHint(r, p) ?? "") + (moreNote ? ` ${moreNote}` : "") : hub.attentionHint(r, p), messages: msgs.map((m) => fmtWait(hub, r, p, m)), remaining,
         next_seq: p.lastSeenSeq, room_state: r.state, your_turn: r.mode === "free" || hub.currentSpeaker(r)?.id === id,
         your_role: p.role ?? "worker", humans_present: hub.activeParticipants(r).filter((x) => x.agent === "human").map((x) => x.name),
         unanswered_human: human ? (resp!.mine ? { id: human.id, name: hub.shown(r, human.from), text: human.content, you_answer: true } : { name: hub.shown(r, human.from), responder: resp!.who, you_answer: false }) : null,
         addressed_to_you: [{ id: focus.id, from: hub.shown(r, focus.from), ...(delivered.has(focus.id) ? { in_messages: true } : { text: focus.content }) }],
         open_proposal: null, conclusion: null, leaving_would_block: !!block,
-      };
+      });
       if (open) p.seenProposal = { ...(p.seenProposal ?? {}), [open.id]: open.version };
       const owed = hub.addressedBy(r, p);
       if (owed[0]) p.addressWarned = owed[0].id;
@@ -446,7 +449,7 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
       const board = hub.boardManifest(room, id, follow);
       hub.observeBoardManifest(r, board); // compact since-process-start observer; legacy recording is in assembly
       // the hint goes first: it is the one line a weaker model must not lose to a clamp
-      return {
+      return compactWait(p, {
         hint: toolsRegainedNote || moreNote ? toolsRegainedNote + (hint ? `${hint} ` : "") + moreNote : hint,
         messages: msgs.map((m) => fmtWait(hub, r, p, m)),
         remaining,
@@ -471,7 +474,7 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
           return { messages: sh.mine, of_last: sh.of, fair: sh.fair, over: sh.over };
         })(),
         conclusion,
-      };
+      });
     }),
   );
 

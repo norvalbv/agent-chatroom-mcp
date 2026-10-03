@@ -117,6 +117,49 @@ breakout_summary["relative_mean_cost_change"] = (
     if all(breakout_summary[arm]["cost_usd"] is not None for arm in ("base", "head")) else None
 )
 liveness = source("docs/measurements/away-seat-liveness-2026-10-03.json")
+unprompted = source("docs/measurements/breakouts-unprompted-2026-10-03/summary.json")
+unprompted_receipts = source("docs/measurements/breakouts-unprompted-receipts-2026-10-03.json")
+unprompted_builds = source("docs/measurements/breakouts-unprompted-build-audit-2026-10-03.json")
+delivery = source("docs/measurements/breakouts-unprompted-delivery-2026-10-03.json")
+receipts_by_run = {row["run"]: row for row in unprompted_receipts}
+delivery_by_run = {row["run"]: row for row in delivery}
+run_ids = {row["run"] for row in unprompted["runs"]}
+if not (run_ids == set(receipts_by_run) == set(delivery_by_run)):
+    raise ValueError("Unprompted trial coverage differs across committed sources")
+unprompted_rows = []
+for row in unprompted["runs"]:
+    receipt, exposure = receipts_by_run[row["run"]], delivery_by_run[row["run"]]
+    expected = {(trace["trace"], trace["sha256"]) for trace in row["traces"]}
+    observed = {(Path(seat["trace"]).name, seat["sha256"]) for seat in receipt["seats"]}
+    if expected != observed or len(receipt["seats"]) != len(expected):
+        raise ValueError(f"Unprompted receipt roster mismatch: {row['run']}")
+    if receipt["provider_requests"] != row["model_turns"]:
+        raise ValueError(f"Unprompted turn mismatch: {row['run']}")
+    unprompted_rows.append({
+        "arm": row["arm"], "run": row["run"], "cost_usd": receipt["cost_usd"],
+        "model_turns": receipt["provider_requests"], "tool_calls": receipt["tool_calls"],
+        "hub_tool_calls": row["hub_tool_calls"], "minutes": row["minutes"],
+        "registered_oracle": row["ok"], "corrected_factual_oracle": row["ok_corrected"],
+        "breakout_formed": exposure["breakout_formed"], "rooms_opened": exposure["rooms_opened"],
+        "seconds_to_two_session_split": exposure["seconds_to_two_session_split"],
+        "registered_peer_worker_proxy": row["delivered_cross_claim"],
+        "claim_aware_delivery": exposure["seats"], "coverage": exposure["coverage"],
+    })
+unprompted_summary = {}
+for arm in ("orig-31daae67", "base-ed66a491", "head-679ddc55"):
+    rows = [row for row in unprompted_rows if row["arm"] == arm]
+    unprompted_summary[arm] = {
+        key: complete_mean(rows, key)
+        for key in ("cost_usd", "model_turns", "tool_calls", "hub_tool_calls", "minutes")
+    }
+    unprompted_summary[arm].update({
+        "runs": len(rows), "breakouts_formed": sum(row["breakout_formed"] is True for row in rows),
+        "registered_oracle_passes": sum(row["registered_oracle"] for row in rows),
+        "corrected_factual_oracle_passes": sum(row["corrected_factual_oracle"] for row in rows),
+        "aggregate_cost_per_model_turn_usd": sum(row["cost_usd"] for row in rows) / sum(row["model_turns"] for row in rows),
+        "seats_with_unknown_cross_claim_reads": sum(
+            seat["cross_claim_reads"] is None for row in rows for seat in row["claim_aware_delivery"]),
+    })
 
 result = {
     "generator": "python3 scripts/paper-harness-results.py",
@@ -143,6 +186,11 @@ result = {
     "away_seat_liveness": {
         "summary": liveness["summary"], "cost_source": liveness["cost_source"],
         "scope": "Reported provider cost-state receipts cover all recorded seats. Baseline originals were stopped after conclusion; their unfinished rejoin work is omitted. Head still attempted replacement four times; refusal prevented duplicates.",
+    },
+    "unprompted_breakouts": {
+        "summary": unprompted_summary, "runs": unprompted_rows,
+        "build_provenance": unprompted_builds, "comparisons": unprompted["comparisons"],
+        "scope": "No room opened in nine short three-seat runs. Frozen factual oracle contained a wrong q2 key; corrected scores are post-hoc, and neither scores judgment quality. Claim attribution is unknown for every seat; registered worker-line delivery is a different proxy. Prelaunch build hashes retain their recorded 16-hex precision.",
     },
 }
 destination = ROOT / "paper/generated/harness-affordances.json"

@@ -71,7 +71,7 @@ def room_record(path):
 
 
 def trace_record(path):
-    _, _, calls, _ = USAGE.parse_trace(path)
+    _, _, calls, _, _ = USAGE.parse_trace(path)
     joins = {(c["args"].get("room"), c["args"].get("name")) for c in calls
              if c["hub"] and c["tool"] == "join_room"}
     delivered, stubs = [], 0

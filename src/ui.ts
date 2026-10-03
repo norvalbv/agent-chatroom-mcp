@@ -9,6 +9,7 @@
  * decision as the hub sees it: version, tally, who it waits on, what blocks it.
  */
 import { PALETTE_CSS, PALETTE_HTML, PALETTE_JS } from "./ui/palette.js";
+import { CATCHUP_CSS, CATCHUP_JS } from "./ui/catchup.js";
 
 export const UI_HTML = `<!doctype html>
 <html lang="en">
@@ -209,6 +210,7 @@ export const UI_HTML = `<!doctype html>
     #head .acts .hidephone { display:none }
   }
 ${PALETTE_CSS}
+  ${CATCHUP_CSS}
 </style>
 </head>
 <body data-view="chat">
@@ -548,6 +550,7 @@ ${PALETTE_HTML}
       if (day !== lastDay) { lastDay = day; lastSender = null; var dd = document.createElement('div'); dd.className = 'day'; dd.textContent = new Date(m.ts).toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' }); log.appendChild(dd); }
       renderMsg(m);
     });
+    catchupAfter();
   }
   var atBottom = function () { var l = $('#log'); return l.scrollHeight - l.scrollTop - l.clientHeight < 60; };
   var toBottom = function () { var l = $('#log'); l.scrollTop = l.scrollHeight; unreadPill = 0; $('#newpill').style.display = 'none'; $('#n-unread').style.display = 'none'; if (sel) { lastSeen[sel] = seen; store.set('lastSeen', lastSeen); } };
@@ -571,6 +574,7 @@ ${PALETTE_HTML}
         seen = m.seq; msgs.push(m); renderMsg(m);
       });
       if (first) renderPins();
+      catchupAfter();
       if (stick) { toBottom(); }
       else { unreadPill += fresh.length; $('#newpill').textContent = '↓ ' + unreadPill + ' new'; $('#newpill').style.display = 'block'; if (document.body.dataset.view !== 'chat') { $('#n-unread').textContent = unreadPill; $('#n-unread').style.display = ''; } }
       if (cur && tab === 'people') renderPane(); // last-active columns
@@ -725,6 +729,7 @@ ${PALETTE_HTML}
   function select(name) {
     if (sel && seen) { lastSeen[sel] = seen; store.set('lastSeen', lastSeen); }
     sel = name; seen = 0; msgs = []; lastSender = null; unreadPill = 0; stats = null; expanded = {};
+    catchupSelect(name);
     $('#log').innerHTML = '<div class="empty">Loading…</div>'; $('#newpill').style.display = 'none';
     history.replaceState(null, '', '?room=' + encodeURIComponent(name));
     cur = rooms.filter(function (r) { return r.name === name; })[0] || null;
@@ -806,6 +811,7 @@ ${PALETTE_HTML}
   });
 
 ${PALETTE_JS}
+  ${CATCHUP_JS}
 
   // ---------- polling ----------
   async function refreshRooms() {

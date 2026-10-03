@@ -394,7 +394,7 @@ export class Hub {
         active: true,
         messageCount: 0,
         session,
-        ...(session && this.sessionSeatHashes.has(session) ? { seatKeyHash: this.sessionSeatHashes.get(session) } : {}),
+        seatKeyHash: session ? this.sessionSeatHashes.get(session) : undefined,
         ...(role && role !== "worker" ? { role } : {}),
       };
       const predecessor = [...room.participants.values()].find((p) => p.pendingReplacementName === name);
@@ -414,7 +414,7 @@ export class Hub {
       participant.active = true;
       participant.lastActiveAt = now();
       if (session) participant.session = session;
-      if (session && this.sessionSeatHashes.has(session)) participant.seatKeyHash = this.sessionSeatHashes.get(session);
+      participant.seatKeyHash = this.sessionSeatHashes.get(session ?? "") ?? participant.seatKeyHash;
       delete participant.restoredAt;
       if (role && role !== "worker") participant.role = role;
       this.persist({ type: "join", room: roomName, p: participant });
@@ -2216,36 +2216,13 @@ export class Hub {
   private sessionSeatHashes = new Map<string, string>();
 
   bindSeat(seatKey: string, session: string, worktree?: string): void {
-    if (seatKey && session) {
-      this.seatSessions.set(seatKey, session);
-      this.sessionSeatHashes.set(session, Hub.seatHash(seatKey));
-    }
+    if (seatKey && session) this.seatSessions.set(seatKey, session);
+    if (seatKey && session) this.sessionSeatHashes.set(session, kick.seatHash(seatKey));
     if (session && worktree) this.sessionWorktrees.set(session, worktree);
   }
 
-  static seatHash(seatKey: string): string { return createHash("sha256").update(seatKey).digest("hex"); }
-
-  /**
-   * A seat that is out of the room but not a vacancy: it rejoins on its next hub call. Either its launcher's heartbeat
-   * (by seat key) arrived after it went inactive, or a hub restart restored it inactive while it was in the room and it
-   * has been silent for less than kick.SUSPECTED_DEAD_MS since (a seat inside one long command sends nothing until the
-   * command ends; the old process's beats were not kept). The same 10 minutes the idle sweep gives a live seat.
-   * A seat that called leave_room itself, was kicked or already has a successor is never away.
-   */
-  away(p: Participant): { age_seconds: number; evidence: string } | undefined {
-    if (p.active || p.kicked || p.replacedBy || p.pendingReplacementName) return undefined;
-    if (p.leaveReason && !p.leaveReason.startsWith("MCP session closed")) return undefined;
-    const ageOf = (at: string) => Math.max(0, Math.floor((Date.now() - Date.parse(at)) / 1000));
-    if (p.working && Date.parse(p.working.at) > Date.parse(p.lastActiveAt) && Date.now() - Date.parse(p.working.at) < kick.SUSPECTED_DEAD_MS) {
-      const age = ageOf(p.working.at);
-      return { age_seconds: age, evidence: `its process is still running: it heartbeated ${age}s ago (step ${p.working.step}, ${p.working.tool})` };
-    }
-    if (p.restoredAt && Date.now() - Date.parse(p.restoredAt) < kick.SUSPECTED_DEAD_MS) {
-      const age = ageOf(p.restoredAt);
-      return { age_seconds: age, evidence: `it was in the room when the hub restarted ${age}s ago and has not been silent long enough to read as dead (a seat inside a long command rejoins when the command ends)` };
-    }
-    return undefined;
-  }
+  /** Out of the room but not a vacancy: it rejoins on its next hub call (kick.away). */
+  away(p: Participant) { return kick.away(p); }
 
   /** Where a seat's work in progress lives: its bound worktree and the branch checked out there now. */
   workspaceOf(p: Participant): { branch?: string; worktree: string } | undefined {
@@ -2260,15 +2237,7 @@ export class Hub {
   heartbeatSeat(seatKey: string, info: { tool: string; step?: number; detail?: string }): number {
     const seats = this.seatParticipants(seatKey);
     for (const { p } of seats) this.recordWork(p, info);
-    // No live connection holds this key (the hub restarted, or the MCP session dropped): the process is still running,
-    // so record the beat on the seats it joined as. They stay inactive; room_status shows them as "away", not dead.
-    if (!seats.length) {
-      const hash = Hub.seatHash(seatKey);
-      for (const room of this.rooms.values()) {
-        if (room.state === "concluded" || room.state === "closed") continue;
-        for (const p of room.participants.values()) if (!p.active && p.seatKeyHash === hash) this.recordWork(p, info);
-      }
-    }
+    if (!seats.length) kick.beatAwaySeats(this, seatKey, (p) => this.recordWork(p, info));
     return seats.length;
   }
 

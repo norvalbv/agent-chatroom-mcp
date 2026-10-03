@@ -25,7 +25,7 @@ const stub = createServer((req, res) => {
 });
 await new Promise<void>((r) => stub.listen(0, "127.0.0.1", r));
 const url = `http://127.0.0.1:${(stub.address() as AddressInfo).port}/heartbeat`;
-const env = { PATH: process.env.PATH ?? "", CHATROOM_SEAT_KEY: "seat-A", CHATROOM_HEARTBEAT_URL: url };
+const env = { PATH: process.env.PATH ?? "", TMPDIR: (await import("node:os")).tmpdir(), CHATROOM_SEAT_KEY: "seat-A", CHATROOM_HEARTBEAT_URL: url };
 
 // async spawn: the stub answers on this event loop, so spawnSync would deadlock
 const hook = (input: unknown, e: Record<string, string> = env) => new Promise<{ status: number | null; stdout: string }>((resolve) => {
@@ -73,6 +73,21 @@ const race = await Promise.all([
   hook({ hook_event_name: "PostToolUse", tool_name: "Read", tool_input: { file_path: "/c" } }),
 ]);
 assert.equal(race.filter((x) => x.stdout.includes("@opus-2 race")).length, 1, "one injection per ask across concurrent hooks");
+
+// 3c. A claim whose hook died before printing or acking (the hub still lists the ask) goes stale and is re-steered.
+{
+  const { createHash } = await import("node:crypto");
+  const { utimesSync } = await import("node:fs");
+  const { tmpdir } = await import("node:os");
+  const { join } = await import("node:path");
+  const file = join(tmpdir(), "chatroom-steer", createHash("sha256").update("seat-A").digest("hex").slice(0, 16), `m_race_${process.pid}`);
+  const old = new Date(Date.now() - 60_000);
+  utimesSync(file, old, old);
+  r = await hook({ hook_event_name: "PostToolUse", tool_name: "Read", tool_input: { file_path: "/d" } });
+  assert.match(r.stdout, /@opus-2 race/, "a stale claim on a still-pending ask is printed again");
+  r = await hook({ hook_event_name: "PostToolUse", tool_name: "Read", tool_input: { file_path: "/e" } });
+  assert.equal(r.stdout, "", "and re-claimed fresh, so not on every call");
+}
 
 // 4. Chatroom MCP calls carry pending messages hub-side, so the hook neither heartbeats nor steers on them.
 seen.length = 0;

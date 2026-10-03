@@ -7,21 +7,32 @@
 // shown once; an un-acked one stays pending and wait_for_messages still delivers it. Never blocks the tool: exit 0,
 // a 2 s cap per request. Chatroom MCP calls heartbeat and carry pending messages hub-side, so they are skipped here.
 // Parallel tool calls run Pre and Post hooks side by side, and two peeks can see the same ask before either acks it;
-// an exclusive-create file per message id (atomic across processes) lets exactly one of them print it.
+// an exclusive-create file per message id (atomic across processes) lets exactly one of them print it. The hub stops
+// listing an ask once it is acked, so a claim older than CLAIM_STALE_MS on an ask still pending means that hook died or
+// its ack was lost: it is re-claimed and printed again (a duplicate line at worst, never a silent drop).
 import { createHash } from "node:crypto";
-import { mkdirSync, openSync, closeSync } from "node:fs";
+import { mkdirSync, openSync, closeSync, statSync, utimesSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+
+const CLAIM_STALE_MS = 30_000;
 
 /** true for the one hook process that gets to print this message; fails open (prints) if the claim dir is unusable */
 function claim(key, id) {
   const dir = join(tmpdir(), "chatroom-steer", createHash("sha256").update(key).digest("hex").slice(0, 16));
+  const file = join(dir, String(id).replace(/[^\w-]/g, "_"));
   try {
     mkdirSync(dir, { recursive: true });
-    closeSync(openSync(join(dir, String(id).replace(/[^\w-]/g, "_")), "wx"));
+    closeSync(openSync(file, "wx"));
     return true;
   } catch (e) {
-    return e?.code !== "EEXIST";
+    if (e?.code !== "EEXIST") return true;
+    try {
+      if (Date.now() - statSync(file).mtimeMs < CLAIM_STALE_MS) return false;
+      const t = new Date();
+      utimesSync(file, t, t);
+      return true;
+    } catch { return true; }
   }
 }
 

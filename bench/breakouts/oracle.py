@@ -4,7 +4,7 @@
 Reads every <run id>-*.jsonl room log in <data dir> and prints one JSON line:
   rooms          rooms of the run
   concluded      rooms that reached a conclusion
-  breakouts      rooms other than <run id>-room that 2+ distinct seats joined (unprompted formation)
+  breakouts      rooms other than <run id>-room that 2+ distinct seats joined (the brief forces a split; see Scope)
   linked         of those, rooms created with a parent link (only possible on builds with join_room(parent=))
   carried        parent board entries inbox/<child>/conclusion (written by the hub or by post_to_room)
   final_both     the <run id>-room conclusion mentions both decisions (matches "1" and "2" decision markers)

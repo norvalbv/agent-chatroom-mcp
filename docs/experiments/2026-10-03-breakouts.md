@@ -4,7 +4,7 @@ swarm-202803-dpij, claim/breakouts (opus-1). Runtime change: `join_room(room=<ne
 
 ## What stood between a seat's judgement and a split
 
-Before this change, a breakout could only be made through `request_agent(new_room)`, which spawns new seats. A seat could `join_room` a second room itself, but then:
+Before this change, an existing seat could already open or join a second room with `join_room`, and `request_agent(new_room)` could spawn new seats into one. What was missing was any link between the rooms and any view of the room a seat had stepped out of:
 
 - its wait loop covered one room, so asks and votes owed in the other room went unseen until it polled there;
 - nothing linked the two rooms, so `room_status` showed no relation between them;
@@ -29,14 +29,16 @@ Setup: each arm has 1 worker and 1 verifier on claude-opus-5-5, with recruits pi
 
 The oracle passes (`ok`) when the main room concluded, its conclusion states both decisions, it cites `src/hub.ts:62`, and it names a script that really spawns a claude/codex seat or binds a port. `anywhere_ok` is the lenient version: both answers appear in some concluded room of the run.
 
-| Arm | Pair | ok | anywhere_ok | Linked child rooms | Carried to parent | Cost USD | Model turns | USD/turn | Hub calls | Minutes to main conclusion |
-| --- | ---: | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| base | 1 | no | yes | 0 | 0 | 9.468 | 50 | 0.1894 | 57 | 2.5 |
-| base | 2 | no | yes | 0 | 0 | 7.323 | 44 | 0.1664 | 74 | 1.7 |
-| base | 3 | no | yes | 0 | 0 | 6.066 | 40 | 0.1516 | 41 | 1.5 |
-| head | 1 | yes | yes | 2 | 2 | 8.245 | 43 | 0.1917 | 57 | 2.1 |
-| head | 2 | yes | yes | 2 | 2 | 13.040 | 65 | 0.2006 | 69 | 3.7 |
-| head | 3 | no | yes | 0 | 0 | 7.653 | 50 | 0.1531 | 41 | 1.1 |
+| Arm | Pair | ok | anywhere_ok | Linked child rooms | Carried to parent | Seats that ran | Cost USD | Model turns | USD/turn | Hub calls (room ledger) | All tool calls | Minutes to main conclusion |
+| --- | ---: | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| base | 1 | no | yes | 0 | 0 | 2 | 9.468 | 50 | 0.1894 | 57 | 73 | 2.5 |
+| base | 2 | no | yes | 0 | 0 | 4 | unknown (≥ 7.323) | 78 | unknown | 74 | 111 | 1.7 |
+| base | 3 | no | yes | 0 | 0 | 2 | 6.066 | 40 | 0.1516 | 41 | 57 | 1.5 |
+| head | 1 | yes | yes | 2 | 2 | 2 | 8.245 | 43 | 0.1917 | 57 | 74 | 2.1 |
+| head | 2 | yes | yes | 2 | 2 | 2 | 13.040 | 65 | 0.2006 | 69 | 92 | 3.7 |
+| head | 3 | no | yes | 0 | 0 | 2 | 7.653 | 50 | 0.1531 | 41 | 66 | 1.1 |
+
+In base pair 2 the worker recruited two seats on its own (`request_agent`, into its D2 room) to challenge and verify its proposal there, since the verifier sat in the main room. Their traces (17 model turns each, uncached) are counted in turns and calls. They have no billed-cost record, so that arm's cost is unknown, and 7.323 USD is only the billed cost of the two launched seats. The omission was caught by 6-astra-6's audit (review/breakout-metrics-astra6).
 
 Outcome: the main room stated both decisions in 2 of 3 head runs and 0 of 3 base runs. Every run found both answers somewhere.
 
@@ -44,17 +46,15 @@ Outcome: the main room stated both decisions in 2 of 3 head runs and 0 of 3 base
 - In the head runs that used `parent`, both children's conclusions landed on the parent board, and the parent's final proposal stated both.
 - Head pair 3 opened its child room without `parent` and ended like base. The affordance was used in 2 of 3 runs, not always.
 
-Regressions, stated plainly:
+Cost and time, stated plainly. There is no pooled cost ratio over all three pairs, because base pair 2's full cost is unknown.
 
-- Mean cost rose from 7.619 to 9.646 USD (+27%).
-- Mean model turns rose from 44.7 to 52.7.
-- Cost per model turn rose from 0.1706 to 0.1832 USD.
-- Mean time to the main room's conclusion rose from 1.9 to 2.3 minutes.
-
-Hub calls were flat (57.3 vs 55.7). The extra spend sits in the runs that did the brief's last step, a combined final proposal in the parent, which the base runs skipped. At n=3 per arm the cost difference is within run-to-run spread: head pair 2 alone cost 13.04 USD.
+- Pairs 1 and 3 have complete costs: base 15.534 USD over 90 turns, head 15.898 USD over 93 turns (+2.3%). Cost per turn is 0.1726 vs 0.1709 USD.
+- Mean model turns over all three pairs were 56.0 for base and 52.7 for head.
+- Mean time to the main room's conclusion rose from 1.9 to 2.3 minutes, a regression. Head pair 2, the slowest and dearest run (3.7 min, 13.04 USD), did the brief's last step: a combined final proposal in the parent, which base runs skipped.
+- At n=3 per arm, the cost and time differences are within run-to-run spread.
 
 ## What this does not show
 
-- Spontaneous formation. The brief forces a split. In our own 9-seat room (on the 7717 hub, without this change), nobody opened a breakout. Scope negotiation between four seats about overlapping claims ran in the main room and in quiet threads.
-- Larger rooms. Every arm had two seats, the cap agreed for dev rooms on this shared machine.
+- Spontaneous formation. The brief forces a split. (Spontaneous recruitment did happen once, in base pair 2, see above.) In our own 9-seat room (on the 7717 hub, without this change), nobody opened a breakout. Scope negotiation between four seats about overlapping claims ran in the main room and in quiet threads.
+- Larger rooms. Every arm launched two seats (below the three-seat dev-room size used in this run); one base arm grew to four through its own recruits.
 - The historical picture is descriptive only. In data/swarm-181144-uxtr-room.jsonl, each worker seat received 157 to 203 public chat messages (64 to 81 KB) that were neither from nor addressed to it. In that run's owner-prompted steer room, the same seats received 9 to 12 such messages. These are two different phases of one run, not a counterfactual saving.

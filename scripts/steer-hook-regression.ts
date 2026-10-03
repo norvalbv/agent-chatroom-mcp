@@ -128,3 +128,4 @@ assert.equal(r.stdout, "", "acked: not steered twice");
 const after = await busy("wait_for_messages", { room: "steer", timeout_ms: 0 });
 if (JSON.stringify(after.messages ?? []).includes("is claim/x yours?")) { console.error(JSON.stringify(after, null, 1).slice(0, 3000)); assert.fail("the next wait does not resend the steered body"); }
 console.log("STEER HOOK OK");
+process.exit(0); // open MCP sessions and the hub child would keep the loop alive

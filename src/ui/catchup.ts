@@ -139,6 +139,7 @@ export const CATCHUP_JS = `/*catchup:start*/
   function catchupFold() {
     if (!signalOnly) return;
     var log = $('#log'), kids = Array.prototype.slice.call(log.children), run = [], into = null, h = cuHelpers(msgs, humanNames());
+    var pend = pendingIds() || []; pendingKey = pend.join(',');
     var flush = function () {
       if (into) { run.forEach(function (n) { into.lastChild.appendChild(n); }); }
       else if (run.length >= 3) {
@@ -157,19 +158,20 @@ export const CATCHUP_JS = `/*catchup:start*/
     kids.forEach(function (n) {
       if (n.classList.contains('fold')) { flush(); into = n; return; }
       var m = n.dataset && n.dataset.seq ? msgBySeq(+n.dataset.seq) : null;
-      if (m && !h.isSignal(m)) { run.push(n); return; }
+      if (m && !h.isSignal(m) && pend.indexOf(m.id) < 0) { run.push(n); return; }
       if (n.id === 'catchup') return;
       flush();
     });
     flush();
   }
   // The digest: what changed since the reader last looked, each line jumping to the message.
-  // With the inbox (src/ui/inbox.ts) present, its pending asks (minus Dismissed) are the "For you" line, so both agree.
+  // With the inbox (src/ui/inbox.ts) present, the hub's pending asks for this room (window.crQuestions, minus Dismissed)
+  // are the "For you" line and never fold, so the hub's own aliases (CHATROOM_HUMAN_NAMES, a chair) count too.
   var pendingIds = function () {
-    if (typeof qAsks === 'function') return qAsks().filter(function (q) { return q.room === sel; }).map(function (q) { return q.id; });
-    var p = typeof window.crPendingAsks === 'function' ? window.crPendingAsks(sel) : null;
-    return Array.isArray(p) ? p : null;
+    var p = typeof window.crQuestions === 'function' ? window.crQuestions() : null;
+    return Array.isArray(p) ? p.filter(function (q) { return q.room === sel; }).map(function (q) { return q.id; }) : null;
   };
+  var pendingKey = '';
   function catchupDigest() {
     var old = $('#catchup');
     var live = !!cur && (cur.state === 'open' || cur.state === 'stalled');
@@ -188,7 +190,12 @@ export const CATCHUP_JS = `/*catchup:start*/
     $('#log').insertBefore(d, $('#log').firstChild);
     var f = focus && d.querySelector(focus); if (f) f.focus({ preventScroll: true });
   }
-  setInterval(function () { if (!document.hidden) catchupDigest(); }, 4000); // the inbox's list and room state change without new messages
+  // the inbox's list and the room state change without new messages: refresh the digest, and unfold a newly pending ask
+  setInterval(function () {
+    if (document.hidden) return;
+    if (signalOnly && (pendingIds() || []).join(',') !== pendingKey) { var l = $('#log'), keep = l.scrollTop; rerender(); l.scrollTop = keep; }
+    else catchupDigest();
+  }, 4000);
   function catchupAfter() { catchupFold(); catchupDigest(); }
   function setSignal(on) {
     signalOnly = on; store.set('signalOnly', on); foldOpen = {};

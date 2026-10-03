@@ -2211,19 +2211,17 @@ export class Hub {
 
   /** Heartbeat every active participant the seat's connection holds, in rooms still open. Returns how many were marked. */
   heartbeatSeat(seatKey: string, info: { tool: string; step?: number; detail?: string }): number {
+    const seats = this.seatParticipants(seatKey);
+    for (const { p } of seats) this.recordWork(p, info);
+    return seats.length;
+  }
+
+  /** The active participants a launched seat's connection holds (by seat key), in rooms still open. */
+  seatParticipants(seatKey: string): { room: Room; p: Participant }[] {
     const session = this.seatSessions.get(seatKey);
-    if (!session) return 0;
-    let n = 0;
-    for (const room of this.rooms.values()) {
-      if (room.state === "concluded" || room.state === "closed") continue;
-      for (const p of room.participants.values()) {
-        if (p.active && p.session === session) {
-          this.recordWork(p, info);
-          n++;
-        }
-      }
-    }
-    return n;
+    if (!session) return [];
+    return [...this.rooms.values()].filter((room) => room.state !== "concluded" && room.state !== "closed")
+      .flatMap((room) => [...room.participants.values()].filter((p) => p.active && p.session === session).map((p) => ({ room, p })));
   }
 
   /** A participant's recent steps, oldest first (GET /rooms/:room/participants/:name/activity). */

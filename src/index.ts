@@ -14,6 +14,7 @@
  *   GET  /questions?names=benji       -> agents' unanswered asks to the human, across rooms
  *   POST /rooms/:room/vote {name, proposal_id, vote, reason} -> human vote (disagree = veto)
  */
+import { steerAckAs, steerAckSeat, steerPeek, steerPeekSeat } from "./hub/steer.js";
 import { randomUUID } from "node:crypto";
 import { resolve } from "node:path";
 import { createMcpExpressApp } from "@modelcontextprotocol/sdk/server/express.js";
@@ -282,11 +283,12 @@ app.post("/rooms/archive-dead", (req, res) => {
 // Seat liveness: the seat process posts its step and current tool; needs only its own participant id.
 app.post("/rooms/:room/heartbeat", (req, res) => {
   try {
-    const { participant_id, tool, step } = (req.body ?? {}) as { participant_id?: string; tool?: string; step?: number };
+    const { participant_id, tool, step, peek } = (req.body ?? {}) as { participant_id?: string; tool?: string; step?: number; peek?: boolean };
     if (!participant_id) return res.status(400).type("text/plain").send("participant_id required");
     const { detail } = (req.body ?? {}) as { detail?: string };
-    hub.heartbeat(req.params.room, participant_id, { tool: tool ?? "?", step, detail });
-    res.json({ ok: true });
+    if (!peek) hub.heartbeat(req.params.room, participant_id, { tool: tool ?? "?", step, detail });
+    // steering peek: addressed asks not yet delivered; the seat acks the ones it injected (POST /rooms/:room/steer/ack)
+    res.json({ ok: true, pending: steerPeek(hub, req.params.room, participant_id) });
   } catch (e) {
     res.status(400).type("text/plain").send(e instanceof HubError ? e.message : "error");
   }
@@ -294,9 +296,27 @@ app.post("/rooms/:room/heartbeat", (req, res) => {
 // Seat liveness without a participant id: a claude -p tool hook or a launcher watching codex output knows only the seat
 // key its process was launched with; the hub heartbeats every room that key's MCP connection is in.
 app.post("/heartbeat", (req, res) => {
-  const { seat_key, tool, step, detail } = (req.body ?? {}) as { seat_key?: string; tool?: string; step?: number; detail?: string };
+  const { seat_key, tool, step, detail, peek } = (req.body ?? {}) as { seat_key?: string; tool?: string; step?: number; detail?: string; peek?: boolean };
   if (!seat_key) return res.status(400).type("text/plain").send("seat_key required");
-  res.json({ ok: true, marked: hub.heartbeatSeat(seat_key, { tool: tool ?? "?", step, detail }) });
+  // peek:true (a PostToolUse hook) only asks for pending asks: the PreToolUse beat already recorded this step
+  const marked = peek ? 0 : hub.heartbeatSeat(seat_key, { tool: tool ?? "?", step, detail });
+  res.json({ ok: true, marked, pending: steerPeekSeat(hub, seat_key) });
+});
+// Steering ack: the seat (hook, launcher or seat loop) put these pending asks into its model's context mid-turn, so
+// they count as delivered. Peek without ack leaves them for the next wait: a failed injection never loses an ask.
+app.post("/steer/ack", (req, res) => {
+  const { seat_key, ids } = (req.body ?? {}) as { seat_key?: string; ids?: string[] };
+  if (!seat_key || !Array.isArray(ids)) return res.status(400).type("text/plain").send("seat_key and ids required");
+  res.json({ ok: true, acked: steerAckSeat(hub, seat_key, ids.map(String)) });
+});
+app.post("/rooms/:room/steer/ack", (req, res) => {
+  try {
+    const { participant_id, ids } = (req.body ?? {}) as { participant_id?: string; ids?: string[] };
+    if (!participant_id || !Array.isArray(ids)) return res.status(400).type("text/plain").send("participant_id and ids required");
+    res.json({ ok: true, acked: steerAckAs(hub, req.params.room, participant_id, ids.map(String)) });
+  } catch (e) {
+    res.status(400).type("text/plain").send(e instanceof HubError ? e.message : "error");
+  }
 });
 app.get("/rooms/:room/participants/:name/activity", (req, res) => {
   try {

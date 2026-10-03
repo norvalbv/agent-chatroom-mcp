@@ -8,6 +8,7 @@
  * Loop as an agent sees it: join_room -> submit_opening -> send_message /
  * wait_for_messages -> propose -> challenge -> vote -> room concludes -> leave_room.
  */
+import { fmtWait, steerCarry } from "./hub/steer.js";
 import { McpServer, ResourceTemplate, type RegisteredTool } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
@@ -98,6 +99,8 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
     if (typeof override === "string") return ids?.has(override) ? override : null;
     return ids?.size === 1 ? [...ids][0] : null;
   };
+  /** Tools whose own result delivers addressed messages (or that leave): no steering piggyback on these. */
+  const SELF_DELIVERING = new Set(["wait_for_messages", "read_messages", "join_room", "leave_room"]);
   const guard =
     <A>(tool: string, fn: (args: A) => Promise<unknown> | unknown) =>
     async (args: A) => {
@@ -113,7 +116,12 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
         // connection holds there is checked, not only the resolved actor: a connection owning target+alias resolves
         // no actor for tools without participant_id (room_status, board_get), and the kick bans the connection.
         if (room) for (const id of me.get(room) ?? []) hub.refuseKicked(room, id);
-        const data = await fn(args);
+        let data = await fn(args);
+        // steering fallback: a hub tool result always reaches the model, so pending asks ride on it (and count as delivered)
+        if (room && participant && !SELF_DELIVERING.has(tool)) {
+          const steer = steerCarry(hub, room, participant);
+          if (steer.length) data = typeof data === "string" ? `${data}\n\naddressed_to_you_meanwhile:\n${steer.join("\n")}` : { ...(data as object), addressed_to_you_meanwhile: steer };
+        }
         const result = ok(data);
         // join_room can create a second identity: use its issued id, not an ambiguous
         // post-join default. leave_room retains the authenticated pre-call actor.
@@ -393,7 +401,7 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
       const delivered = new Set(msgs.map((m) => m.id));
       // only a human's message strips the envelope; a peer ask rides the full one (proposal, board, queue)
       if (focus && hub.focusExclusive(focus)) return {
-        hint: toolsRegainedNote || moreNote ? toolsRegainedNote + (hub.attentionHint(r, p) ?? "") + (moreNote ? ` ${moreNote}` : "") : hub.attentionHint(r, p), messages: msgs.map((m) => hub.fmt(r, m)), remaining,
+        hint: toolsRegainedNote || moreNote ? toolsRegainedNote + (hub.attentionHint(r, p) ?? "") + (moreNote ? ` ${moreNote}` : "") : hub.attentionHint(r, p), messages: msgs.map((m) => fmtWait(hub, r, p, m)), remaining,
         next_seq: p.lastSeenSeq, room_state: r.state, your_turn: r.mode === "free" || hub.currentSpeaker(r)?.id === id,
         your_role: p.role ?? "worker", humans_present: hub.activeParticipants(r).filter((x) => x.agent === "human").map((x) => x.name),
         unanswered_human: human ? (resp!.mine ? { id: human.id, name: hub.shown(r, human.from), text: human.content, you_answer: true } : { name: hub.shown(r, human.from), responder: resp!.who, you_answer: false }) : null,
@@ -440,7 +448,7 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
       // the hint goes first: it is the one line a weaker model must not lose to a clamp
       return {
         hint: toolsRegainedNote || moreNote ? toolsRegainedNote + (hint ? `${hint} ` : "") + moreNote : hint,
-        messages: msgs.map((m) => hub.fmt(r, m)),
+        messages: msgs.map((m) => fmtWait(hub, r, p, m)),
         remaining,
         // a capped page has not reached the end of the log: next_seq is the cursor, not the latest seq
         next_seq: remaining ? p.lastSeenSeq : (r.messages.at(-1)?.seq ?? since),

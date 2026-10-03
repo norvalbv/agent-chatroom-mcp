@@ -143,6 +143,8 @@ export interface Participant {
   replacementOf?: string;
   /** Outstanding nonhuman directed asks offered at explicit registration. */
   inheritedAskIds?: string[];
+  /** asks injected into this seat's context mid-turn (src/hub/steer.ts): never peeked again; wait stubs the ones shown whole. Ephemeral. */
+  steered?: string[];
   pendingReplacementAskIds?: string[];
   /** Explicit registration: pid of the registered successor of this departed seat. */
   replacedBy?: string;

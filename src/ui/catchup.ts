@@ -140,6 +140,15 @@ export const CATCHUP_JS = `/*catchup:start*/
     if (!signalOnly) return;
     var log = $('#log'), kids = Array.prototype.slice.call(log.children), run = [], into = null, h = cuHelpers(msgs, humanNames());
     var pend = pendingIds() || []; pendingKey = pend.join(',');
+    var chatter = function (m) { return m && !h.isSignal(m) && pend.indexOf(m.id) < 0; };
+    // a fold whose rows are no longer all chatter (an ask just became pending) is unwrapped, then re-folded below
+    Array.prototype.slice.call(log.children).forEach(function (f) { // folds are always direct children of #log
+      if (!f.classList.contains('fold')) return;
+      var rows = Array.prototype.slice.call(f.lastChild.children);
+      if (rows.every(function (n) { return chatter(msgBySeq(+n.dataset.seq)); })) return;
+      rows.forEach(function (n) { log.insertBefore(n, f); }); f.remove();
+    });
+    kids = Array.prototype.slice.call(log.children);
     var flush = function () {
       if (into) { run.forEach(function (n) { into.lastChild.appendChild(n); }); }
       else if (run.length >= 3) {
@@ -158,7 +167,7 @@ export const CATCHUP_JS = `/*catchup:start*/
     kids.forEach(function (n) {
       if (n.classList.contains('fold')) { flush(); into = n; return; }
       var m = n.dataset && n.dataset.seq ? msgBySeq(+n.dataset.seq) : null;
-      if (m && !h.isSignal(m) && pend.indexOf(m.id) < 0) { run.push(n); return; }
+      if (chatter(m)) { run.push(n); return; }
       if (n.id === 'catchup') return;
       flush();
     });

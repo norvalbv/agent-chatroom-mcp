@@ -14,6 +14,16 @@ spec.loader.exec_module(usage)
 
 
 class UsageTests(unittest.TestCase):
+    def test_discovery_reads_initial_worker_or_verifier_prompt_only(self):
+        with tempfile.TemporaryDirectory() as directory:
+            project = Path(directory) / "project"
+            project.mkdir()
+            for name, prompt in (("worker", 'You are worker in MCP room `target-room`'),
+                                 ("verifier", 'Protocol: `join_room` room="target-room", name="verifier"'),
+                                 ("other", 'You are worker in MCP room `other-room`; prior target-room')):
+                (project / (name + ".jsonl")).write_text(json.dumps({"type": "user", "message": {"content": prompt}}))
+            self.assertEqual({p.stem for p in usage.discover_claude(Path(directory), "target-room")}, {"worker", "verifier"})
+
     def test_codex_pairs_events_once_and_keeps_missing_usage_unknown(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

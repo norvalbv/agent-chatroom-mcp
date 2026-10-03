@@ -3,7 +3,8 @@
 Usage: scripts/claude-room-usage.py <room-substring> [...]   Dedupes by message.id (a multi-block turn logs several lines)."""
 import json, sys, glob, os, re
 rooms = sys.argv[1:]
-files = glob.glob(os.path.expanduser("~/.claude/projects/*agent-chatroom-mcp*/*.jsonl"))
+config_dir = os.environ.get("CLAUDE_CONFIG_DIR", os.path.expanduser("~/.claude"))
+files = glob.glob(os.path.join(config_dir, "projects", "*agent-chatroom-mcp*", "*.jsonl"))
 out = {r: dict(seats=0, turns=0, inp=0, cread=0, ccreate=0, outp=0) for r in rooms}
 for f in files:
     room = None; seen = {}; 

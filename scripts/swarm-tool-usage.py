@@ -8,6 +8,7 @@ import argparse
 import collections
 import hashlib
 import json
+import os
 from pathlib import Path
 import re
 
@@ -191,6 +192,21 @@ def sidecar_usage(path):
     return "openrouter", {k: raw[k] for k in ("prompt_tokens", "completion_tokens", "steps") if k in raw}
 
 
+def discover_claude(projects, room):
+    for path in sorted(projects.glob("*/*.jsonl")):
+        for index, row in enumerate(rows(path)):
+            if index >= 32:
+                break
+            message = row.get("message") or {}
+            content = message.get("content")
+            if row.get("type") != "user" or not isinstance(content, str):
+                continue
+            match = re.search(r"(?:MCP room\s+[`\"']*|`join_room`\s+room=[\"'])([\w-]+)", content)
+            if match and match[1] == room:
+                yield path
+            break
+
+
 def analyze(run_dir, transcripts=()):
     seats = {}
     paths = dict.fromkeys(path.resolve() for path in sorted(run_dir.glob("*.events.jsonl")) + list(transcripts))
@@ -246,10 +262,15 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--run-dir", type=Path, required=True)
     parser.add_argument("--transcript", type=Path, action="append", default=[])
+    parser.add_argument("--discover-claude", action="store_true", help="Find this run's initial Claude prompts in configured projects")
+    parser.add_argument("--claude-projects", type=Path, default=Path(os.environ.get("CLAUDE_CONFIG_DIR", Path.home() / ".claude")) / "projects")
     args = parser.parse_args()
     if not args.run_dir.is_dir():
         parser.error("--run-dir must be an existing run directory")
-    print(json.dumps(analyze(args.run_dir, args.transcript), indent=2))
+    transcripts = args.transcript
+    if args.discover_claude:
+        transcripts += list(discover_claude(args.claude_projects, args.run_dir.name + "-room"))
+    print(json.dumps(analyze(args.run_dir, transcripts), indent=2))
 
 
 if __name__ == "__main__":

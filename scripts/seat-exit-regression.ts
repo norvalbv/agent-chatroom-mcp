@@ -5,11 +5,17 @@
  * receipt on child close (POST /heartbeat {seat_key, exited:true}); the hub closes every session that seat key opened and
  * the seat leaves with "seat process exited", so a successor can be registered at once.
  * Checks: the receipt makes the dead seat replaceable; a wrong key evicts nobody; a repeat receipt is a no-op; a seat with
- * no receipt keeps the conservative refusal. Throwaway hub on its own port (never 7717), dry spawns.
+ * no receipt keeps the conservative refusal; the launcher's runProc does not resolve a seat's run until its receipt has
+ * been answered (withRespawn reads the room's active seats next, and the launcher's own exit would cut the request off:
+ * review/seat-exit-order-astra5). Throwaway hub on its own port (never 7717), dry spawns.
  * Run: npx tsx scripts/seat-exit-regression.ts
  */
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
+import { EventEmitter } from "node:events";
+import { readFileSync } from "node:fs";
+import { stripTypeScriptTypes } from "node:module";
+import vm from "node:vm";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 
@@ -63,5 +69,39 @@ assert.equal(ok.spawned.length, 1);
 const kept = await lead("replace_participant", { room: ROOM, target: "silent", reason: "quiet" });
 assert.ok(kept?.error, "a silent seat with no receipt is not replaceable by a peer");
 assert.equal((await seat("silent")).active, true);
+
+// launcher order: swarm.ts's own runProc, driven with a fake child and a receipt the hub has not answered yet
+{
+  const src = readFileSync(new URL("../src/swarm.ts", import.meta.url), "utf8");
+  const from = src.indexOf("function runProc("), to = src.indexOf("\nconst safeRead", from);
+  assert.ok(from >= 0 && to > from, "runProc located in src/swarm.ts");
+  const js = stripTypeScriptTypes(src.slice(from, to));
+  const child = Object.assign(new EventEmitter(), { stdout: new EventEmitter(), stderr: new EventEmitter() });
+  let answer!: (v: unknown) => void, posted: { seat_key?: string; exited?: boolean } | undefined;
+  const pending = new Promise((r) => (answer = r));
+  const runProc = vm.runInNewContext(`${js};runProc;`, {
+    spawn: () => child, seatChildEnv: () => ({}), writeWorkers: new Set(), process: { env: {} }, children: [], writeFileSync: () => {}, resolve: (...a: string[]) => a.join("/"),
+    OUT: "/tmp", exitCodes: new Map(), log: () => {}, URL_: "http://hub.invalid", AbortSignal, String, JSON,
+    fetch: (_url: string, init: { body: string }) => { posted = JSON.parse(init.body); return pending; },
+  }) as (...a: unknown[]) => Promise<string>;
+  let resolved = false;
+  const run = runProc("worker", "fake", [], "/tmp", "/tmp/out", false, { key: "key-launched", env: {} }).then(() => { resolved = true; });
+  child.emit("close", 143);
+  await new Promise((r) => setTimeout(r, 50));
+  assert.deepEqual({ seat_key: posted?.seat_key, exited: posted?.exited }, { seat_key: "key-launched", exited: true }, "child close posts the exit receipt");
+  assert.equal(resolved, false, "the seat's run does not resolve while its exit receipt is unanswered");
+  answer({ ok: true });
+  await run;
+  // a hub that is down or slow must not hang the launcher: a rejected receipt (the 5 s abort) still resolves the run
+  const child2 = Object.assign(new EventEmitter(), { stdout: new EventEmitter(), stderr: new EventEmitter() });
+  const runProc2 = vm.runInNewContext(`${js};runProc;`, {
+    spawn: () => child2, seatChildEnv: () => ({}), writeWorkers: new Set(), process: { env: {} }, children: [], writeFileSync: () => {}, resolve: (...a: string[]) => a.join("/"),
+    OUT: "/tmp", exitCodes: new Map(), log: () => {}, URL_: "http://hub.invalid", AbortSignal, String, JSON,
+    fetch: () => Promise.reject(new Error("hub down")),
+  }) as (...a: unknown[]) => Promise<string>;
+  const run2 = runProc2("worker", "fake", [], "/tmp", "/tmp/out", false, { key: "key-launched", env: {} });
+  child2.emit("close", 1);
+  await run2;
+}
 console.log("seat-exit-regression: ok");
 process.exit(0);

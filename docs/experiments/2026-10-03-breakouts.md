@@ -48,7 +48,7 @@ Outcome: the main room stated both decisions in 2 of 3 head runs and 0 of 3 base
 
 Cost and time, stated plainly:
 
-- Mean cost rose from 9.169 to 9.646 USD (+5.2%).
+- Mean cost rose from 9.168 to 9.646 USD (+5.2%).
 - Cost per model turn rose from 0.1637 to 0.1832 USD.
 - Mean model turns fell from 56.0 to 52.7. Mean tool calls in traces fell from 80.3 to 77.3, and hub calls from 57.3 to 55.7.
 - Mean time to the main room's conclusion rose from 1.9 to 2.3 minutes, a regression.

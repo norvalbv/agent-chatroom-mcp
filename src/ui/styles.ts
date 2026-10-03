@@ -1,26 +1,35 @@
 export const UI_CSS = `
+  /* Frink's stock palette and glass material (frink-oss globals.css, palette/glass.ts at the Standard step):
+     neutral greys, violet primary, one glass fill at 70% with an 8px blur, a lit 1px rim and a top-left sheen,
+     over the chat atmosphere (a violet glow and a green floor glow). */
   :root {
-    --bg:#eaf0f2; --panel:#ffffff; --panel2:#f1f5f6; --line:#d2dce0; --line2:#e4ebee; --fg:#19272f; --dim:#52616d; --dim2:#54616d; --control:#74838f; --glass:rgba(255,255,255,.82); --glow:#d6e8e5; --on-acc:#ffffff; --edge:rgba(255,255,255,.85); color-scheme:light;
-    --acc:#0c7168; --acc-bg:#e6f4f2; --acc-fg:#0b5d57;
-    --prop:#4f46e5; --prop-bg:#eeedfc; --chal:#b45309; --chal-bg:#fdf1e3; --ok:#147638; --ok-bg:#e7f5ea; --bad:#b91c1c; --bad-bg:#fbe9e9; --hum:#be185d; --hum-bg:#fce7f1; --warn:#a16207; --warn-bg:#fdf6dc;
-    --shadow:0 2px 5px rgba(24,46,59,.04), 0 0 0 1px rgba(24,46,59,.07); --shell-shadow:0 10px 28px rgba(24,46,59,.07), inset 0 1px 0 var(--edge);
-    --radius:14px;
+    --bg:#f4f4f5; --panel:#ffffff; --panel2:#f4f4f5; --line:#e4e4e7; --line2:#ededf0; --fg:#0a0a0a; --dim:#3f3f46; --dim2:#62626b; --control:#8e8e96; --on-acc:#ffffff; color-scheme:light;
+    --shell:250 250 250; --glass:rgb(var(--shell) / .70); --glass-filter:blur(8px) saturate(1.6); --glass-rim:.65; --glass-sheen:.24; --glass-tint:.08;
+    --atm-primary:.028; --atm-floor:101 217 146; --atm-depth:.012; --atm-wash:.035; --edge:rgb(255 255 255 / .65);
+    --acc:#7c3aed; --acc-rgb:124 58 237; --acc-bg:#f1ebfe; --acc-fg:#6d28d9;
+    --prop:#0e7490; --prop-bg:#e3f6fa; --chal:#b45309; --chal-bg:#fdf1e3; --ok:#15803d; --ok-bg:#e7f5ea; --bad:#c81e1e; --bad-bg:#fdecec; --hum:#be185d; --hum-bg:#fce7f1; --warn:#96520a; --warn-bg:#fdf6dc;
+    --shadow:0 1px 2px rgba(10,10,10,.04), 0 0 0 1px rgba(10,10,10,.06); --shell-shadow:0 10px 30px rgba(10,10,10,.06);
+    --radius:12px;
   }
   @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
-    --bg:#10191f; --panel:#1b262e; --panel2:#24323d; --line:#435460; --line2:#35444f; --fg:#f2f6f8; --dim:#bbc8d2; --dim2:#adbecb; --control:#8095a5; --glass:rgba(27,38,46,.88); --glow:#173831; --on-acc:#082e29; --edge:rgba(255,255,255,.1); color-scheme:dark;
-    --acc:#2dd4bf; --acc-bg:#0f2a27; --acc-fg:#7ee8dc;
-    --prop:#a5b4fc; --prop-bg:#1e1f3a; --chal:#fbbf24; --chal-bg:#2e2410; --ok:#4ade80; --ok-bg:#122a1a; --bad:#f87171; --bad-bg:#331a1a; --hum:#f472b6; --hum-bg:#33182a; --warn:#fcd34d; --warn-bg:#2e2710;
-    --shadow:0 2px 5px rgba(0,0,0,.18), 0 0 0 1px rgba(255,255,255,.08); --shell-shadow:0 12px 32px rgba(0,0,0,.22), inset 0 1px 0 var(--edge);
+    --bg:#050505; --panel:#141414; --panel2:#1f1f1f; --line:#2e2e2e; --line2:#232323; --fg:#e8e8e8; --dim:#b8b8b8; --dim2:#8c8c8c; --control:#616161; --on-acc:#0a0a0a; color-scheme:dark;
+    --shell:10 10 10; --glass:rgb(var(--shell) / .70); --glass-rim:.19; --glass-sheen:.05; --glass-tint:.13;
+    --atm-primary:.06; --atm-floor:125 240 168; --atm-depth:.03; --atm-wash:.04; --edge:rgb(255 255 255 / .19);
+    --acc:#a78bfa; --acc-rgb:167 139 250; --acc-bg:#1e1a2e; --acc-fg:#c4b5fd;
+    --prop:#67e8f9; --prop-bg:#0f2329; --chal:#f0b060; --chal-bg:#2a1f10; --ok:#86efac; --ok-bg:#122119; --bad:#fca5a5; --bad-bg:#2b1616; --hum:#f9a8d4; --hum-bg:#2b1622; --warn:#fde68a; --warn-bg:#29240f;
+    --shadow:0 1px 2px rgba(0,0,0,.4), 0 0 0 1px rgba(255,255,255,.06); --shell-shadow:0 12px 32px rgba(0,0,0,.35);
   } }
   :root[data-theme="dark"] {
-    --bg:#10191f; --panel:#1b262e; --panel2:#24323d; --line:#435460; --line2:#35444f; --fg:#f2f6f8; --dim:#bbc8d2; --dim2:#adbecb; --control:#8095a5; --glass:rgba(27,38,46,.88); --glow:#173831; --on-acc:#082e29; --edge:rgba(255,255,255,.1); color-scheme:dark;
-    --acc:#2dd4bf; --acc-bg:#0f2a27; --acc-fg:#7ee8dc;
-    --prop:#a5b4fc; --prop-bg:#1e1f3a; --chal:#fbbf24; --chal-bg:#2e2410; --ok:#4ade80; --ok-bg:#122a1a; --bad:#f87171; --bad-bg:#331a1a; --hum:#f472b6; --hum-bg:#33182a; --warn:#fcd34d; --warn-bg:#2e2710;
-    --shadow:0 2px 5px rgba(0,0,0,.18), 0 0 0 1px rgba(255,255,255,.08); --shell-shadow:0 12px 32px rgba(0,0,0,.22), inset 0 1px 0 var(--edge);
+    --bg:#050505; --panel:#141414; --panel2:#1f1f1f; --line:#2e2e2e; --line2:#232323; --fg:#e8e8e8; --dim:#b8b8b8; --dim2:#8c8c8c; --control:#616161; --on-acc:#0a0a0a; color-scheme:dark;
+    --shell:10 10 10; --glass:rgb(var(--shell) / .70); --glass-rim:.19; --glass-sheen:.05; --glass-tint:.13;
+    --atm-primary:.06; --atm-floor:125 240 168; --atm-depth:.03; --atm-wash:.04; --edge:rgb(255 255 255 / .19);
+    --acc:#a78bfa; --acc-rgb:167 139 250; --acc-bg:#1e1a2e; --acc-fg:#c4b5fd;
+    --prop:#67e8f9; --prop-bg:#0f2329; --chal:#f0b060; --chal-bg:#2a1f10; --ok:#86efac; --ok-bg:#122119; --bad:#fca5a5; --bad-bg:#2b1616; --hum:#f9a8d4; --hum-bg:#2b1622; --warn:#fde68a; --warn-bg:#29240f;
+    --shadow:0 1px 2px rgba(0,0,0,.4), 0 0 0 1px rgba(255,255,255,.06); --shell-shadow:0 12px 32px rgba(0,0,0,.35);
   }
   * { box-sizing:border-box }
   html,body { height:100%; margin:0; overflow:hidden }
-  body { background:linear-gradient(135deg,var(--glow),var(--bg) 55%); padding:10px; gap:10px; color:var(--fg); font:14px/1.5 -apple-system,BlinkMacSystemFont,Inter,ui-sans-serif,system-ui,sans-serif; display:grid; grid-template-columns:280px minmax(0,1fr) 360px; grid-template-rows:100%; overflow:hidden; -webkit-font-smoothing:antialiased }
+  body { background-color:var(--bg); background-image:radial-gradient(120% 95% at 92% 92%, rgb(var(--acc-rgb) / var(--atm-primary)) 0%, transparent 52%), radial-gradient(140% 60% at 50% 108%, rgb(var(--atm-floor) / var(--atm-depth)) 0%, transparent 45%), radial-gradient(90% 75% at 6% 10%, rgb(255 255 255 / .045) 0%, transparent 46%), radial-gradient(64% 52% at 80% 4%, rgb(255 255 255 / .035) 0%, transparent 50%), linear-gradient(180deg, rgb(255 255 255 / var(--atm-wash)) 0%, transparent 24%); background-attachment:fixed; padding:10px; gap:10px; color:var(--fg); font:14px/1.5 -apple-system,BlinkMacSystemFont,Inter,ui-sans-serif,system-ui,sans-serif; display:grid; grid-template-columns:280px minmax(0,1fr) 360px; grid-template-rows:100%; overflow:hidden; -webkit-font-smoothing:antialiased }
   body.noinspect { grid-template-columns:280px minmax(0,1fr) }
   body.noinspect #inspect { display:none }
   .mono { font-family:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,monospace; font-size:12px }
@@ -58,7 +67,7 @@ export const UI_CSS = `
   .act .now { color:var(--fg); margin:0 0 6px; padding:5px 8px; border-radius:6px; background:var(--panel2); border-left:3px solid var(--line) } .act .now.live { border-left-color:var(--ok); background:var(--ok-bg) } .act .now.off { font-style:italic }
   .act .dot { display:inline-block; width:7px; height:7px; border-radius:50%; background:var(--ok); margin-right:6px; vertical-align:1px; animation:actpulse 1.4s ease-in-out infinite } @keyframes actpulse { 50% { opacity:.25 } } @media (prefers-reduced-motion: reduce) { .act .dot { animation:none } }
   .act .hdr { color:var(--dim2); margin:2px 0 3px; font-family:inherit } .act .latest { color:var(--fg) }
-  .rctl { display:flex; flex-wrap:wrap; gap:4px 5px; padding:0 12px 10px; align-items:center } .rctl select, .lf select, .lf input { font-size:12px; padding:4px 6px; background:var(--panel2); color:inherit; border:1px solid var(--control); border-radius:8px } .lf { display:flex; flex-wrap:wrap; gap:6px; padding:6px 16px; align-items:center; background:var(--panel); border-bottom:1px solid var(--line) } .lf input { flex:1 1 140px } .chip.tog { cursor:pointer; opacity:1; border:1px solid var(--control); background:transparent; color:var(--dim) } .chip.tog.on { background:var(--acc-bg); color:var(--acc-fg); border-color:var(--acc) } .rctl .btn { margin-left:auto }
+  .rctl { display:flex; flex-wrap:wrap; gap:4px 5px; padding:0 12px 10px; align-items:center } .rctl select, .lf select, .lf input { font-size:12px; padding:4px 6px; background:var(--panel2); color:inherit; border:1px solid var(--control); border-radius:8px } .lf { display:flex; flex-wrap:wrap; gap:6px; padding:6px 16px; align-items:center; background:var(--panel); border-bottom:1px solid var(--line) } .lf input { flex:1 1 140px } .chip.tog { cursor:pointer; opacity:1; border:1px solid var(--line); background:transparent; color:var(--dim2) } .chip.tog.on { background:var(--panel2); color:var(--fg); border-color:var(--control) } .rctl .btn { margin-left:auto }
   .filter { padding:0 12px 10px } .filter input { width:100%; font-size:13px; padding:7px 10px; background:var(--panel2) }
   .policy { margin:0 12px 6px; font-size:11.5px; color:var(--dim); background:var(--acc-bg); border-radius:8px; padding:4px 9px; cursor:pointer; overflow:hidden; text-overflow:ellipsis; white-space:nowrap } .policy b { color:var(--acc-fg); font-weight:600 }
   #rooms { overflow:auto; flex:1; padding:0 8px 24px }
@@ -167,8 +176,15 @@ export const UI_CSS = `
   table.t { width:100%; border-collapse:collapse; font-size:12px } table.t td { padding:4px 0; border-bottom:1px solid var(--line2); vertical-align:top } table.t td:last-child { text-align:right; font-variant-numeric:tabular-nums; color:var(--dim); white-space:nowrap } table.t td.r { color:var(--dim); font-size:11.5px }
   .toolbar { display:flex; gap:10px; font-size:12px; color:var(--dim); margin-top:12px; flex-wrap:wrap } .toolbar label { display:flex; align-items:center; gap:5px; cursor:pointer }
 
-  @supports ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))) { #rail,#inspect,#head,#compose { background:var(--glass); -webkit-backdrop-filter:blur(16px); backdrop-filter:blur(16px) } }
-  @media (prefers-reduced-transparency:reduce), (prefers-contrast:more) { #rail,#inspect,#head,#compose { background:var(--panel); -webkit-backdrop-filter:none; backdrop-filter:none } body { background:var(--bg) } }
+  /* Frink Glass: one material on every shell surface. Panels sit on the static atmosphere, so they take no blur;
+     the header and composer have the transcript scrolling under them, so they blur. */
+  #rail,#main,#inspect { background-color:var(--glass); border:1px solid rgb(var(--shell) / .35); background-image:radial-gradient(130% 90% at 0% 0%, rgb(255 255 255 / var(--glass-sheen)), transparent 56%); box-shadow:inset 1px 1px 0 0 rgb(255 255 255 / var(--glass-rim)), inset -1px -1px 0 0 rgb(var(--acc-rgb) / var(--glass-tint)), var(--shell-shadow) }
+  #main { border-color:rgb(255 255 255 / .06) } #rail,#inspect { border-color:rgb(255 255 255 / .06) }
+  :root:not([data-theme="dark"]) #rail, :root:not([data-theme="dark"]) #main, :root:not([data-theme="dark"]) #inspect { border-color:var(--line) }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) #rail, :root:not([data-theme="light"]) #main, :root:not([data-theme="light"]) #inspect { border-color:rgb(255 255 255 / .06) } }
+  #head,#compose,.lf { background-color:transparent }
+  @supports ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))) { #head,#compose { background-color:var(--glass); -webkit-backdrop-filter:var(--glass-filter, blur(8px) saturate(1.6)); backdrop-filter:var(--glass-filter, blur(8px) saturate(1.6)) } }
+  @media (prefers-reduced-transparency:reduce), (prefers-contrast:more) { #rail,#main,#inspect,#head,#compose { background:rgb(var(--shell)); background-image:none; -webkit-backdrop-filter:none; backdrop-filter:none } body { background:var(--bg) } }
   @media (prefers-reduced-motion:reduce) { *,*::before,*::after { animation:none !important; transition:none !important; scroll-behavior:auto !important } }
   @media (forced-colors:active) { #rail,#main,#inspect,#head,#compose { background:Canvas; box-shadow:none; -webkit-backdrop-filter:none; backdrop-filter:none } .room.sel,.chip.tog.on { outline:2px solid Highlight; outline-offset:-2px } }
   /* ---------- phone ---------- */

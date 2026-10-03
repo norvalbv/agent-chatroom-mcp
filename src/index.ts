@@ -25,6 +25,7 @@ import { createSessionServer } from "./server.js";
 import { Spawner, type RecruitPolicy } from "./spawner.js";
 import { UI_HTML } from "./ui.js";
 import { humanQuestions } from "./questions.js";
+import { photoDirectory, registerPhotoRoutes } from "./photos/routes.js";
 import { loadDotEnv } from "./env.js";
 // Item 2 (swarm-125438-jp20): CHATROOM_NO_RECRUIT=1 marks a hub that must never hold a provider key
 // (a benchmark hub, whose caller already stripped API_KEY/TOKEN/SECRET-shaped vars from this process's
@@ -245,6 +246,7 @@ app.delete("/mcp", sessionRoute);
 const notFound = (res: express.Response, e: unknown) => res.status(404).type("text/plain").send(e instanceof HubError ? e.message : "error");
 app.get("/", (_req, res) => res.json({ name: "agent-chatroom-mcp", mcp: "/mcp", ui: "/ui", rooms: "/rooms", sessions: transports.size, caps: { max_live_per_room: Hub.MAX_LIVE_PER_ROOM, max_rooms_per_run: Hub.MAX_ROOMS_PER_RUN }, code_state: Hub.codeState(resolve(process.env.CHATROOM_DEFAULT_CWD ?? process.cwd())) ?? null }));
 app.get("/ui", (_req, res) => res.type("html").send(UI_HTML));
+registerPhotoRoutes(app, { directory: photoDirectory(`${DATA_DIR ?? process.cwd()}@${HOST}:${PORT}`), authorize: requireToken, roomExists: (room) => hub.rooms.has(room) });
 app.get("/config", (_req, res) => res.json({ human_token_required: !(INSECURE_LOCAL && LOOPBACK_HOST), agent_control_token_required: true }));
 // Recruit policy: which provider/model every request_agent launches as. Readable by anyone, settable by the human (token if configured).
 app.get("/policy", (_req, res) => res.json({ recruits: spawner.policy }));

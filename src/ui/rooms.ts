@@ -101,6 +101,7 @@ export const ROOMS_JS = `
     if (sel && seen) { lastSeen[sel] = seen; store.set('lastSeen', lastSeen); }
     sel = name; seen = 0; msgs = []; lastSender = null; unreadPill = 0; stats = null; expanded = {};
     catchupSelect(name);
+    photoRoomChanged();
     $('#log').innerHTML = '<div class="empty">Loading…</div>'; $('#newpill').style.display = 'none';
     history.replaceState(null, '', '?room=' + encodeURIComponent(name));
     cur = rooms.filter(function (r) { return r.name === name; })[0] || null;

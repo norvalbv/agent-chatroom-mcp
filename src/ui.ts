@@ -1,3 +1,4 @@
+import { PHOTOS_CSS, PHOTOS_HTML, PHOTOS_JS } from "./ui/photos.js";
 import { UI_CSS } from "./ui/styles.js";
 import { BOARD_CSS, BOARD_JS } from "./ui/board.js";
 import { ROOMS_CSS, ROOMS_STATE, ROOMS_JS } from "./ui/rooms.js";
@@ -29,7 +30,8 @@ ${PALETTE_CSS}
 ${INBOX_CSS}
 ${CATCHUP_CSS}
 ${BOARD_CSS}
-${ROOMS_CSS}</style>
+${ROOMS_CSS}
+${PHOTOS_CSS}</style>
 </head>
 <body data-view="chat">
 <aside id="rail">
@@ -46,6 +48,7 @@ ${ROOMS_CSS}</style>
   <div id="log"><div class="empty">Pick a room on the left.</div></div>
   <button id="newpill">↓ new messages</button>
   <form id="compose">
+    ${PHOTOS_HTML}
     <div class="quick" id="quick"></div>
     <input id="name" placeholder="your name" />
     <textarea id="text" rows="1" placeholder="Say something. Start with @name or @all to choose who answers."></textarea>
@@ -275,7 +278,8 @@ ${ROOMS_JS}
     var key = 'm' + m.seq;
     var inner;
     if (m.kind === 'chat') {
-      inner = seqLink(m) + clampable(key, m.content, 900, 'body' + (human ? ' human' : '') + (m.tag === 'opening' ? ' opening' : ''));
+      inner = seqLink(m) + clampable(key, photoText(m.content), 900, 'body' + (human ? ' human' : '') + (m.tag === 'opening' ? ' opening' : ''));
+      inner += photoThumbnails(m.content);
       d.className = 'msg' + (cont ? ' cont' : '');
       d.innerHTML = '<div>' + (cont ? '' : av(m.from.name, m.from.agent)) + '</div><div>' + (cont ? '' : who(m, m.tag === 'opening' ? '<span class="chip">opening</span>' : '')) + inner + '</div>';
     } else if (m.kind === 'proposal' || m.kind === 'amend' || m.kind === 'challenge' || m.kind === 'conclusion') {
@@ -514,17 +518,7 @@ ${ROOMS_JS}
       refreshRooms(); poll(); return;
     }
   });
-  $('#compose').addEventListener('submit', async function (e) {
-    e.preventDefault(); if (!sel) return;
-    var content = $('#text').value.trim(); if (!content) return;
-    $('#sendbtn').disabled = true;
-    try {
-      var res = await fetch('/rooms/' + encodeURIComponent(sel) + '/messages', { method: 'POST', headers: hdrs(), body: JSON.stringify({ name: myName(), content: content }) });
-      if (!res.ok) { $('#hint').className = 'hint bad'; $('#hint').textContent = await res.text(); }
-      else { $('#text').value = ''; $('#text').style.height = ''; }
-    } finally { $('#sendbtn').disabled = false; }
-    poll();
-  });
+  ${PHOTOS_JS}
   $('#text').addEventListener('keydown', function (e) { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); $('#compose').requestSubmit(); } });
   $('#text').addEventListener('input', function (e) { e.target.style.height = ''; e.target.style.height = Math.min(180, e.target.scrollHeight) + 'px'; });
   document.addEventListener('keydown', function (e) {

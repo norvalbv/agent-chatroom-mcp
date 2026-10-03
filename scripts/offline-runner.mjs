@@ -50,6 +50,8 @@ export const offlineScripts = [
   'ui-activity-panel.test.ts',
   'ui-board-panel.test.ts',
   'ui-served-script.test.ts',
+  'photos.test.ts',
+  'photo-composer.test.ts',
   'paper-pool-throughput.test.ts',
   'launch-cost-guide.test.ts',
   'stale-claims-regression.ts',

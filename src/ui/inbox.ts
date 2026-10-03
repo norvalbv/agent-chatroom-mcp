@@ -10,9 +10,9 @@
 export const INBOX_CSS = String.raw`  /* ---------- questions for you (inbox) ---------- */
   .qbar { margin:0 12px 10px; display:flex; align-items:center; gap:8px; padding:7px 10px; border-radius:10px; border:1px solid var(--line); background:var(--panel2); text-align:left; font-size:12.5px }
   .qbar .ql { font-weight:600 } .qbar .qs { flex:1; color:var(--dim); font-size:11.5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
-  .qbar .qc:empty { display:none } .qbar .qc { background:var(--hum); color:#fff; font-size:11px; font-weight:700; border-radius:999px; padding:1px 8px }
+  .qbar .qc:empty { display:none } .qbar .qc { background:var(--hum); color:var(--hum-bg); font-size:11px; font-weight:700; border-radius:999px; padding:1px 8px }
   .qbar.has { background:var(--hum-bg); border-color:color-mix(in srgb, var(--hum) 35%, transparent) } .qbar.has .ql { color:var(--hum) }
-  .room .qr { grid-column:3; grid-row:1; justify-self:end; background:var(--hum); color:#fff; font-size:10.5px; font-weight:700; border-radius:999px; padding:1px 7px }
+  .room .qr { grid-column:3; grid-row:1; justify-self:end; background:var(--hum); color:var(--hum-bg); font-size:10.5px; font-weight:700; border-radius:999px; padding:1px 7px }
   .room .qr ~ .u { grid-row:2 }
   .room .m .qr { display:inline-block; margin-right:6px; padding:0 6px; font-size:10px; vertical-align:1px }
   #qpanel { position:fixed; inset:0; z-index:50; display:grid; place-items:start center; padding:6vh 16px 16px; background:rgba(10,12,16,.32) }
@@ -36,7 +36,8 @@ export const INBOX_CSS = String.raw`  /* ---------- questions for you (inbox) --
   .qitem .qre { font-size:11.5px; color:var(--dim); margin-bottom:4px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
   .qitem .qrow { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:6px; margin-top:8px; align-items:end }
   .qitem textarea { resize:vertical; min-height:36px; max-height:200px; font-size:13px; line-height:1.4; background:var(--panel) }
-  .qitem .qacts { display:flex; gap:6px; flex-wrap:wrap; grid-column:1 / -1 } .qitem .qerr { color:var(--bad); font-size:12px; grid-column:1 / -1 } .qitem .qerr:empty { display:none }
+  .qitem .qacts { display:flex; gap:6px; flex-wrap:wrap; grid-column:1 / -1; align-items:center } .qitem .qacts .qsp { flex:1 }
+  .qitem .qchip { border-color:color-mix(in srgb, var(--hum) 30%, var(--line)); max-width:220px; overflow:hidden; text-overflow:ellipsis } .qitem .qerr { color:var(--bad); font-size:12px; grid-column:1 / -1 } .qitem .qerr:empty { display:none }
   .qempty { color:var(--dim); text-align:center; padding:36px 16px; font-size:13px }
   .msg.q4u .body { border:1px solid color-mix(in srgb, var(--hum) 45%, transparent) }
   .q4ub { display:block; width:fit-content; margin:4px 0 0; border:1px solid color-mix(in srgb, var(--hum) 40%, transparent); background:var(--hum-bg); color:var(--hum); border-radius:999px; padding:1px 10px; font-size:11.5px; font-weight:600 }
@@ -65,6 +66,21 @@ export const INBOX_JS = String.raw`
     var prose = text.replace(/\x60\x60\x60[\s\S]*?\x60\x60\x60/g, ' ').replace(/\x60[^\x60\n]*\x60/g, ' ').replace(/https?:\/\/\S+/g, ' ');
     var parts = prose.split(/(?<=[.!?])\s+|\n+/).map(function (x) { return x.trim(); }).filter(function (x) { return /\?/.test(x); });
     return parts.slice(-2).join(' ').slice(0, 400);
+  };
+  // One-click starts for a reply; they fill the box and never send by themselves. "A or B?" in the ask offers A and B.
+  var qChoices = function (q) {
+    var out = ['Yes', 'No', 'Your call: use your judgement'];
+    var ask = (qAskLine(q.text) || '').replace(/@[\w-]+/g, ' ');
+    var m = /^(.*?)[,]?\s+or\s+([^?]{1,60})\?/i.exec(ask);
+    if (!m) return out;
+    // "a modal or a rail section?": the option after "or" sets how many words to take before it
+    var stop = /^(?:be|the|a|an|to|it|we|i|should|would|could|do|does|is|are|keep|use|go|with|either|whether)$/i;
+    var trim = function (ws) { while (ws.length > 1 && stop.test(ws[0])) ws.shift(); return ws.join(' ').replace(/[,.;:]+$/, ''); };
+    var bw = m[2].trim().split(/\s+/).slice(0, 6), aw = m[1].trim().split(/\s+/).slice(-Math.max(1, bw.length));
+    var A = trim(aw), B = trim(bw);
+    // short noun-like options only; a long clause ("delete X, or keep them for Y?") reads better answered in words
+    var short = function (x) { return x && x.split(' ').length <= 3 && !/\b(?:them|it|this|that|those)\b/i.test(x); };
+    return short(A) && short(B) && A.toLowerCase() !== B.toLowerCase() ? [A, B, out[2]] : out;
   };
   function qBadge(room) {
     var n = qAsks().filter(function (q) { return q.room === room; }).length;
@@ -109,7 +125,7 @@ export const INBOX_JS = String.raw`
       + (q.kind === 'question' && q.text.length > 300 && qAskLine(q.text) ? '<div class="qask">' + withMentions(esc(qAskLine(q.text))) + '</div>' : '')
       + '<div class="qtx' + (long && !open ? ' clamp' : '') + '">' + withMentions(esc(q.text)) + '</div>' + (long ? '<button class="more" data-x="q:' + esc(q.id) + '">' + (open ? 'Show less' : 'Show all ' + q.text.length + ' chars') + '</button>' : '')
       + '<div class="qrow"><textarea rows="1" data-qta="' + esc(q.id) + '" aria-label="Reply to ' + esc(q.from) + '" placeholder="Reply to ' + esc(q.from) + ' (Enter sends, Shift+Enter for a new line)">' + esc(qDrafts[q.id] || '') + '</textarea><button class="btn primary" data-qsend="' + esc(q.id) + '">Reply</button>'
-      + '<div class="qacts"><button class="mini" data-qopen="' + esc(q.id) + '">Open in room</button><button class="mini" data-qdis="' + esc(q.id) + '" title="Hide it here without answering">Dismiss</button></div><div class="qerr"></div></div></div>';
+      + '<div class="qacts">' + (q.kind === 'question' ? qChoices(q).map(function (c) { return '<button class="mini qchip" data-qchip="' + esc(q.id) + '" data-c="' + esc(c) + '">' + esc(c) + '</button>'; }).join('') + '<span class="qsp"></span>' : '') + '<button class="mini" data-qopen=""' + esc(q.id) + '">Open in room</button><button class="mini" data-qdis="' + esc(q.id) + '" title="Hide it here without answering">Dismiss</button></div><div class="qerr"></div></div></div>';
   }
   function renderQPanel(force) {
     var list = qVisible();
@@ -203,13 +219,19 @@ export const INBOX_JS = String.raw`
   $('#qbar').onclick = function () { qOpen() ? qHide() : qShow(); };
   $('#qpanel').addEventListener('mousedown', function (e) { if (e.target.id === 'qpanel') qHide(); });
   document.addEventListener('click', function (e) {
-    var t = e.target.closest && e.target.closest('[data-qsend],[data-qopen],[data-qdis],[data-qans],[data-qtoast],[data-qtoastx],#qclose,#qnotify,.qitem,#qmen');
+    var t = e.target.closest && e.target.closest('[data-qsend],[data-qchip],[data-qopen],[data-qdis],[data-qans],[data-qtoast],[data-qtoastx],#qclose,#qnotify,.qitem,#qmen');
     if (!t) return;
     if (e.target.closest('#qpanel .more')) return renderQPanel(true); // the shared .more handler already toggled expanded
     if (t.id === 'qclose') return qHide();
     if (t.id === 'qmen') { qShowMen = t.checked; store.set('qMen', qShowMen); return renderQPanel(true); }
     if (t.id === 'qnotify') { Notification.requestPermission().then(function () { renderQPanel(true); }); return; }
     if (t.dataset.qsend) return qSend(t.dataset.qsend);
+    if (t.dataset.qchip) {
+      var cta = $('#qpanel [data-qta="' + t.dataset.qchip + '"]'); if (!cta) return;
+      cta.value = cta.value.trim() ? cta.value.replace(/\s*$/, '. ') + t.dataset.c : t.dataset.c;
+      qDrafts[t.dataset.qchip] = cta.value; store.set('qDrafts', qDrafts); qSelId = t.dataset.qchip;
+      cta.focus(); cta.setSelectionRange(cta.value.length, cta.value.length); return;
+    }
     if (t.dataset.qopen) return qJump(t.dataset.qopen);
     if (t.dataset.qdis) return qDismiss(t.dataset.qdis);
     if (t.dataset.qans) { qShow(t.dataset.qans); var a = $('#qpanel [data-qta="' + t.dataset.qans + '"]'); if (a) a.focus(); return; }

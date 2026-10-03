@@ -375,7 +375,7 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
       const remaining = hub.deliveryRemaining(p);
       const moreNote = remaining ? `${remaining} more message(s) remain queued (this delivery was capped); call wait_for_messages again with timeout_ms=0 to receive them. ` : "";
       const open = [...r.proposals.values()].find((pr) => pr.status === "open");
-      const needsMyVote = open && !open.votes[id] && p.agent !== "human" && p.role !== "chair";
+      const needsMyVote = open && hub.needsVote(r, p, open);
       const needsChallenge = open && hub.challengeRequired(r) && !open.challenges.some((c) => c.blocking !== false) && open.by.id !== id;
       // Rank 5 regain rule: a restricted session gets propose/amend/challenge/vote back the
       // instant there is an open proposal in this room, since that is exactly when this

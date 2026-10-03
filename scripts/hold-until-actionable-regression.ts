@@ -49,6 +49,32 @@ test("actionableNow: true when a vote is owed on the open proposal", () => {
   assert.equal(h.actionableNow(room, bob), true);
 });
 
+test("actionableNow: a preserved agree can supply the required current-version vote", () => {
+  const { h, room, alice, bob } = fixture();
+  room.requireChallenge = false;
+  h.setBoard(room.name, alice.id, `hold/${room.name}`, "Release preparation");
+  const text = "Ship the audited solution with independent evidence.";
+  const pr = h.propose(room.name, alice.id, text);
+  for (const p of [alice, bob]) h.vote(room.name, p.id, pr.id, "agree", undefined, undefined, text);
+  h.amend(room.name, alice.id, pr.id, "", "Add a dated release note.");
+  assert.equal(pr.votes[bob.id].version, 1, "the quoted agree survives");
+  assert.equal(h.actionableNow(room, bob), true, "the current-version blocker is actionable");
+  assert.deepEqual(h.proposalView(room, pr).waiting_on, [], "no individual vote is missing; freshness needs any one voter");
+  const late = h.join(room.name, "late", "test").participant;
+  assert.equal(h.actionableNow(room, late), false, "an excluded late joiner cannot supply the required vote");
+  h.vote(room.name, late.id, pr.id, "agree", undefined, undefined, text);
+  assert.equal(h.actionableNow(room, bob), true, "an outsider's vote cannot clear electorate freshness");
+  const human = h.join(room.name, "human", "human").participant;
+  assert.equal(h.needsVote(room, human, pr), false);
+  delete pr.votes[bob.id].version;
+  assert.equal(h.actionableNow(room, bob), true, "legacy votes count as version one");
+  h.vote(room.name, bob.id, pr.id, "agree", undefined, undefined, text);
+  assert.equal(h.actionableNow(room, alice), false, "one fresh electorate vote is enough");
+  assert.deepEqual(h.proposalView(room, pr).waiting_on, []);
+  h.setBoard(room.name, alice.id, `hold/${room.name}`, "");
+  assert.equal(room.state, "concluded");
+});
+
 test("actionableNow: true for the nominated responder to an unanswered human message, but NOT for a bystander", () => {
   const { h, room, alice, bob } = fixture();
   const { participant: carol } = h.join(room.name, "carol", "test");
@@ -72,6 +98,41 @@ test("actionableNow: true once the room concludes or closes", () => {
 // session), so alice and bob get separate client/session pairs wired with InMemoryTransport.
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+test("wait reports the carried-vote action and clears it after one electorate vote", async () => {
+  const hub = new Hub();
+  const session = createSessionServer(hub);
+  const client = new Client({ name: "carried-voter", version: "1" });
+  const [ct, st] = InMemoryTransport.createLinkedPair();
+  await session.server.connect(st);
+  await client.connect(ct);
+  try {
+    const { room, participant: alice } = hub.join("carried-vote-tool", "alice", "test", { requireChallenge: false });
+    const joined = await client.callTool({ name: "join_room", arguments: { room: room.name, name: "bob", agent: "test" } });
+    const bobId = JSON.parse((joined.content as { text: string }[])[0].text).participant_id;
+    hub.setBoard(room.name, alice.id, `hold/${room.name}`, "Release preparation");
+    const text = "Ship the audited solution with independent evidence.";
+    const pr = hub.propose(room.name, alice.id, text);
+    for (const id of [alice.id, bobId]) hub.vote(room.name, id, pr.id, "agree", undefined, undefined, text);
+    hub.amend(room.name, alice.id, pr.id, "", "Add a dated release note.");
+    const poll = async () => {
+      const r = await client.callTool({ name: "wait_for_messages", arguments: { room: room.name, timeout_ms: 0, hold_until_actionable: true } });
+      assert.ok(!r.isError, JSON.stringify(r));
+      return JSON.parse((r.content as { text: string }[])[0].text);
+    };
+    const pending = await poll();
+    assert.match(pending.hint, /Vote on the open proposal/);
+    assert.equal(pending.open_proposal.version, 2);
+    assert.match(pending.open_proposal.blocked_by.join(" "), /no vote cast on v2/);
+    hub.vote(room.name, alice.id, pr.id, "agree", undefined, undefined, text);
+    const cleared = await poll();
+    assert.doesNotMatch(cleared.hint ?? "", /Vote on the open proposal/);
+    assert.ok(!cleared.open_proposal.blocked_by.some((b: string) => b.includes("no vote cast")));
+  } finally {
+    await client.close();
+    await session.server.close();
+  }
+});
 
 test("hold_until_actionable: bob's wait survives chatter and wakes on @bob, all messages intact", async () => {
   const hub = new Hub();

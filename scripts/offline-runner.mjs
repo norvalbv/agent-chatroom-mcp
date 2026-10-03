@@ -189,6 +189,7 @@ export const offlineScripts = [
 export function offlineCommands() {
   return [
     { name: 'runner self-tests', command: process.execPath, args: ['scripts/offline-runner.test.mjs'] },
+    { name: 'historical tool census', command: 'python3', args: ['scripts/historical-tool-usage-regression.py'] },
     { name: 'scripts type-check test', command: process.execPath, args: ['scripts/scripts-typecheck.test.mjs'] },
     // Fleet CLI fixtures consume dist: compile every run rather than testing stale output.
     { name: 'build', command: process.execPath, args: ['node_modules/typescript/bin/tsc'] },

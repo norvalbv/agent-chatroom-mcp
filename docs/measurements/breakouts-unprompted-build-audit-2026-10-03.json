@@ -1,0 +1,53 @@
+[
+  {
+    "arm": "base",
+    "source_commit": "ed66a491",
+    "prelaunch_receipt": {
+      "entry_sha256_prefix": "fc3790921a21bc66",
+      "dist_sha256_prefix": "7a310b67d817d6b4",
+      "prefix_hex_chars": 16,
+      "author_trace": "faa6d717-d6ea-4a2c-9aea-5cd25b01f633.jsonl",
+      "tool_timestamp_utc": "2026-10-03T22:01:31.971Z"
+    },
+    "postrun_confirmation": {
+      "entry_sha256": "fc3790921a21bc6633ef2e7da25970e8506c5bfbd71eb8daa5bddd1ffe19e93e",
+      "dist_sha256": "7a310b67d817d6b407d37030dabe93eb5d85bad9097694cdac916741cc0aca44",
+      "observed_utc": "2026-10-03T22:18:50.762595+00:00"
+    },
+    "hash_recipe": "SHA256(sorted lines of shasum -a256 for every dist file, relative dist/path); original shell: find dist -type f | sort | xargs shasum -a 256 | shasum -a 256"
+  },
+  {
+    "arm": "head",
+    "source_commit": "679ddc55",
+    "prelaunch_receipt": {
+      "entry_sha256_prefix": "fc3790921a21bc66",
+      "dist_sha256_prefix": "822a08d047bedd57",
+      "prefix_hex_chars": 16,
+      "author_trace": "faa6d717-d6ea-4a2c-9aea-5cd25b01f633.jsonl",
+      "tool_timestamp_utc": "2026-10-03T22:01:31.971Z"
+    },
+    "postrun_confirmation": {
+      "entry_sha256": "fc3790921a21bc6633ef2e7da25970e8506c5bfbd71eb8daa5bddd1ffe19e93e",
+      "dist_sha256": "822a08d047bedd57e1f716b93a3c4e60df06919c9bf780a475ec7f672b02b63f",
+      "observed_utc": "2026-10-03T22:18:50.822879+00:00"
+    },
+    "hash_recipe": "SHA256(sorted lines of shasum -a256 for every dist file, relative dist/path); original shell: find dist -type f | sort | xargs shasum -a 256 | shasum -a 256"
+  },
+  {
+    "arm": "b31",
+    "source_commit": "31daae67",
+    "prelaunch_receipt": {
+      "entry_sha256_prefix": "89d8dd63a7e4fae0",
+      "dist_sha256_prefix": "6e61ad64a489e893",
+      "prefix_hex_chars": 16,
+      "author_trace": "faa6d717-d6ea-4a2c-9aea-5cd25b01f633.jsonl",
+      "tool_timestamp_utc": "2026-10-03T22:10:06.269Z"
+    },
+    "postrun_confirmation": {
+      "entry_sha256": "89d8dd63a7e4fae0aee3a49cb435f90edb7a8107b034424ed45b2f03b48dcb60",
+      "dist_sha256": "6e61ad64a489e89363210f2a45b12a17700042e601938d4129d09e87d06a9547",
+      "observed_utc": "2026-10-03T22:18:50.868938+00:00"
+    },
+    "hash_recipe": "SHA256(sorted lines of shasum -a256 for every dist file, relative dist/path); original shell: find dist -type f | sort | xargs shasum -a 256 | shasum -a 256"
+  }
+]

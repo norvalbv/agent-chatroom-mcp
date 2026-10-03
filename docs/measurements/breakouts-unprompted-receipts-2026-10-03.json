@@ -1,0 +1,1100 @@
+[
+  {
+    "arm": "base",
+    "run": "swarm-220459-z3jj",
+    "roster_complete": true,
+    "brief_sha256": "a0ce85cad6e5f68c575d8c6922e149900f74127b52eca33d885cf5eff02c0a7b",
+    "cost_usd": 7.509247,
+    "provider_requests": 51,
+    "tool_calls": 61,
+    "seats": [
+      {
+        "seat": "verifier",
+        "trace": "/Users/benji/Library/Application Support/Frink Dev/claude-sessions/muspjbyzch31w166/projects/-private-tmp-bu-repo-base/4e6ae314-48c5-4636-b566-f2a31b75885d.jsonl",
+        "sha256": "39d3860ab32336145c983bae1344fd31e95ce3d3dc3849666557b1e7a002ba2b",
+        "provider_requests": 20,
+        "models": [
+          "claude-opus-5-5"
+        ],
+        "cost_usd": 2.9797469999999997,
+        "cache": {
+          "source": "4e6ae314-48c5-4636-b566-f2a31b75885d.jsonl",
+          "status": "cold",
+          "initial_context_observed": true,
+          "provider_requests": 20,
+          "first_request_id": "msg_011Cfg4YYQbxhicFxz7AKTMX",
+          "first_request": {
+            "input_tokens": 21962,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0,
+            "output_tokens": 485
+          },
+          "later_requests": {
+            "input_tokens": 691070,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0,
+            "output_tokens": 5653
+          }
+        },
+        "token_usage": {
+          "input_tokens": 713032,
+          "cache_read_input_tokens": 0,
+          "cache_creation_input_tokens": 0,
+          "output_tokens": 6138
+        },
+        "tool_calls": 19,
+        "recruit_attempts": 0
+      },
+      {
+        "seat": "claude-opus-5-5-1",
+        "trace": "/Users/benji/Library/Application Support/Frink Dev/claude-sessions/muspjbyzch31w166/projects/-private-tmp-bu-repo-base/b065d6e0-ab6b-4f48-a1a1-a998e5d6de28.jsonl",
+        "sha256": "3d8a742a6a62d1d3684f780caf56c422e5e42a12c449f3ebb371c6e5fdf2f37e",
+        "provider_requests": 14,
+        "models": [
+          "claude-opus-5-5"
+        ],
+        "cost_usd": 2.087226,
+        "cache": {
+          "source": "b065d6e0-ab6b-4f48-a1a1-a998e5d6de28.jsonl",
+          "status": "cold",
+          "initial_context_observed": true,
+          "provider_requests": 14,
+          "first_request_id": "msg_011Cfg4YYan8t1Ufdxmpruur",
+          "first_request": {
+            "input_tokens": 21192,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0,
+            "output_tokens": 647
+          },
+          "later_requests": {
+            "input_tokens": 473120,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0,
+            "output_tokens": 4636
+          }
+        },
+        "token_usage": {
+          "input_tokens": 494312,
+          "cache_read_input_tokens": 0,
+          "cache_creation_input_tokens": 0,
+          "output_tokens": 5283
+        },
+        "tool_calls": 21,
+        "recruit_attempts": 0
+      },
+      {
+        "seat": "claude-opus-5-5-2",
+        "trace": "/Users/benji/Library/Application Support/Frink Dev/claude-sessions/muspjbyzch31w166/projects/-private-tmp-bu-repo-base/ca1d1b33-e383-444e-a4c8-01103c1695dc.jsonl",
+        "sha256": "cf95e2ab04727904882719d203fadda07b053419487b5ee0834d5c005e69daf3",
+        "provider_requests": 17,
+        "models": [
+          "claude-opus-5-5"
+        ],
+        "cost_usd": 2.4422740000000003,
+        "cache": {
+          "source": "ca1d1b33-e383-444e-a4c8-01103c1695dc.jsonl",
+          "status": "cold",
+          "initial_context_observed": true,
+          "provider_requests": 17,
+          "first_request_id": "msg_011Cfg4YXMN8FE7LRZSFrC2w",
+          "first_request": {
+            "input_tokens": 21192,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0,
+            "output_tokens": 591
+          },
+          "later_requests": {
+            "input_tokens": 555157,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0,
+            "output_tokens": 6037
+          }
+        },
+        "token_usage": {
+          "input_tokens": 576349,
+          "cache_read_input_tokens": 0,
+          "cache_creation_input_tokens": 0,
+          "output_tokens": 6628
+        },
+        "tool_calls": 21,
+        "recruit_attempts": 0
+      }
+    ]
+  },
+  {
+    "arm": "base",
+    "run": "swarm-220702-enrg",
+    "roster_complete": true,
+    "brief_sha256": "a0ce85cad6e5f68c575d8c6922e149900f74127b52eca33d885cf5eff02c0a7b",
+    "cost_usd": 7.602864,
+    "provider_requests": 50,
+    "tool_calls": 64,
+    "seats": [
+      {
+        "seat": "verifier",
+        "trace": "/Users/benji/Library/Application Support/Frink Dev/claude-sessions/muspjbyzch31w166/projects/-private-tmp-bu-repo-base/1dd1c8f3-b183-4f9e-b612-158fc7937a14.jsonl",
+        "sha256": "74ecf8a4945a291e848b71959ff1ffc415e7a21c2024eebfc8ea3f6dde773e70",
+        "provider_requests": 18,
+        "models": [
+          "claude-opus-5-5"
+        ],
+        "cost_usd": 2.8853120000000003,
+        "cache": {
+          "source": "1dd1c8f3-b183-4f9e-b612-158fc7937a14.jsonl",
+          "status": "cold",
+          "initial_context_observed": true,
+          "provider_requests": 18,
+          "first_request_id": "msg_011Cfg4hTfrmehtD4GWpMGZ4",
+          "first_request": {
+            "input_tokens": 22040,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0,
+            "output_tokens": 746
+          },
+          "later_requests": {
+            "input_tokens": 665994,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0,
+            "output_tokens": 5665
+          }
+        },
+        "token_usage": {
+          "input_tokens": 688034,
+          "cache_read_input_tokens": 0,
+          "cache_creation_input_tokens": 0,
+          "output_tokens": 6411
+        },
+        "tool_calls": 25,
+        "recruit_attempts": 0
+      },
+      {
+        "seat": "claude-opus-5-5-1",
+        "trace": "/Users/benji/Library/Application Support/Frink Dev/claude-sessions/muspjbyzch31w166/projects/-private-tmp-bu-repo-base/3ef59824-06d9-4a51-979d-a1854ecb88cf.jsonl",
+        "sha256": "f474aa827ad18b5979b925ded5353c4328f059454640c4ab76f8f525b19252f0",
+        "provider_requests": 17,
+        "models": [
+          "claude-opus-5-5"
+        ],
+        "cost_usd": 2.5365119999999997,
+        "cache": {
+          "source": "3ef59824-06d9-4a51-979d-a1854ecb88cf.jsonl",
+          "status": "cold",
+          "initial_context_observed": true,
+          "provider_requests": 17,
+          "first_request_id": "msg_011Cfg4hTLky3TZBukboF2KZ",
+          "first_request": {
+            "input_tokens": 21270,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0,
+            "output_tokens": 628
+          },
+          "later_requests": {
+            "input_tokens": 578498,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0,
+            "output_tokens": 6022
+          }
+        },
+        "token_usage": {
+          "input_tokens": 599768,
+          "cache_read_input_tokens": 0,
+          "cache_creation_input_tokens": 0,
+          "output_tokens": 6650
+        },
+        "tool_calls": 21,
+        "recruit_attempts": 0
+      },
+      {
+        "seat": "claude-opus-5-5-2",
+        "trace": "/Users/benji/Library/Application Support/Frink Dev/claude-sessions/muspjbyzch31w166/projects/-private-tmp-bu-repo-base/ab01e9bb-c9d5-459a-81e2-1c377d4ae29d.jsonl",
+        "sha256": "0b8df43bfb382a5377e200042f223342cfa3711b5cbefc11826f69067a55895e",
+        "provider_requests": 15,
+        "models": [
+          "claude-opus-5-5"
+        ],
+        "cost_usd": 2.18104,
+        "cache": {
+          "source": "ab01e9bb-c9d5-459a-81e2-1c377d4ae29d.jsonl",
+          "status": "cold",
+          "initial_context_observed": true,
+          "provider_requests": 15,
+          "first_request_id": "msg_011Cfg4hV3D5MhtnDShzU5jx",
+          "first_request": {
+            "input_tokens": 21270,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0,
+            "output_tokens": 608
+          },
+          "later_requests": {
+            "input_tokens": 493625,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0,
+            "output_tokens": 5245
+          }
+        },
+        "token_usage": {
+          "input_tokens": 514895,
+          "cache_read_input_tokens": 0,
+          "cache_creation_input_tokens": 0,
+          "output_tokens": 5853
+        },
+        "tool_calls": 18,
+        "recruit_attempts": 0
+      }
+    ]
+  },
+  {
+    "arm": "base",
+    "run": "swarm-220832-awyc",
+    "roster_complete": true,
+    "brief_sha256": "a0ce85cad6e5f68c575d8c6922e149900f74127b52eca33d885cf5eff02c0a7b",
+    "cost_usd": 7.048220000000001,
+    "provider_requests": 49,
+    "tool_calls": 63,
+    "seats": [
+      {
+        "seat": "claude-opus-5-5-1",
+        "trace": "/Users/benji/Library/Application Support/Frink Dev/claude-sessions/muspjbyzch31w166/projects/-private-tmp-bu-repo-base/4ce39eed-5214-4db7-910f-fde2ea9512c3.jsonl",
+        "sha256": "b504e16799f917d66a2dee8a0abb62751d0a9fe7a5133d2bc52e2061ce196f5c",
+        "provider_requests": 17,
+        "models": [
+          "claude-opus-5-5"
+        ],
+        "cost_usd": 2.4816580000000004,
+        "cache": {
+          "source": "4ce39eed-5214-4db7-910f-fde2ea9512c3.jsonl",
+          "status": "cold",
+          "initial_context_observed": true,
+          "provider_requests": 17,
+          "first_request_id": "msg_011Cfg4p4Lr8wQXtMCwbxFxg",
+          "first_request": {
+            "input_tokens": 21348,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0,
+            "output_tokens": 700
+          },
+          "later_requests": {
+            "input_tokens": 572081,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0,
+            "output_tokens": 4472
+          }
+        },
+        "token_usage": {
+          "input_tokens": 593429,
+          "cache_read_input_tokens": 0,
+          "cache_creation_input_tokens": 0,
+          "output_tokens": 5172
+        },
+        "tool_calls": 20,
+        "recruit_attempts": 0
+      },
+      {
+        "seat": "verifier",
+        "trace": "/Users/benji/Library/Application Support/Frink Dev/claude-sessions/muspjbyzch31w166/projects/-private-tmp-bu-repo-base/635ca124-d406-4713-a23a-008ffa1f4474.jsonl",
+        "sha256": "99dbee0e8068b4f6f75813946444fd1c4085a76ff0edbf1063d028469c20b1f5",
+        "provider_requests": 16,
+        "models": [
+          "claude-opus-5-5"
+        ],
+        "cost_usd": 2.342648,
+        "cache": {
+          "source": "635ca124-d406-4713-a23a-008ffa1f4474.jsonl",
+          "status": "cold",
+          "initial_context_observed": true,
+          "provider_requests": 16,
+          "first_request_id": "msg_011Cfg4p3sZkQVt7ffxzz2re",
+          "first_request": {
+            "input_tokens": 22118,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0,
+            "output_tokens": 741
+          },
+          "later_requests": {
+            "input_tokens": 529252,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0,
+            "output_tokens": 5868
+          }
+        },
+        "token_usage": {
+          "input_tokens": 551370,
+          "cache_read_input_tokens": 0,
+          "cache_creation_input_tokens": 0,
+          "output_tokens": 6609
+        },
+        "tool_calls": 22,
+        "recruit_attempts": 0
+      },
+      {
+        "seat": "claude-opus-5-5-2",
+        "trace": "/Users/benji/Library/Application Support/Frink Dev/claude-sessions/muspjbyzch31w166/projects/-private-tmp-bu-repo-base/70694dee-6005-4517-8171-2101bcfddf33.jsonl",
+        "sha256": "9c2f88d2575d09ad441597b4fe28e2f5034fa22883268f8185e3c9400bb6c2d4",
+        "provider_requests": 16,
+        "models": [
+          "claude-opus-5-5"
+        ],
+        "cost_usd": 2.223914,
+        "cache": {
+          "source": "70694dee-6005-4517-8171-2101bcfddf33.jsonl",
+          "status": "cold",
+          "initial_context_observed": true,
+          "provider_requests": 16,
+          "first_request_id": "msg_011Cfg4p4dTeaiitYpxHmu6J",
+          "first_request": {
+            "input_tokens": 21348,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0,
+            "output_tokens": 438
+          },
+          "later_requests": {
+            "input_tokens": 505135,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0,
+            "output_tokens": 5239
+          }
+        },
+        "token_usage": {
+          "input_tokens": 526483,
+          "cache_read_input_tokens": 0,
+          "cache_creation_input_tokens": 0,
+          "output_tokens": 5677
+        },
+        "tool_calls": 21,
+        "recruit_attempts": 0
+      }
+    ]
+  },
+  {
+    "arm": "head",
+    "run": "swarm-220459-zos3",
+    "roster_complete": true,
+    "brief_sha256": "a0ce85cad6e5f68c575d8c6922e149900f74127b52eca33d885cf5eff02c0a7b",
+    "cost_usd": 6.668984,
+    "provider_requests": 45,
+    "tool_calls": 60,
+    "seats": [
+      {
+        "seat": "claude-opus-5-5-1",
+        "trace": "/Users/benji/Library/Application Support/Frink Dev/claude-sessions/muspjbyzch31w166/projects/-private-tmp-bu-repo-head/2d29ba38-1fc3-447d-9c77-8246b246965e.jsonl",
+        "sha256": "0fd0bd907b7a055408835199bf2d2f2fddc49a7717341a1eb588bc55df4753cd",
+        "provider_requests": 15,
+        "models": [
+          "claude-opus-5-5"
+        ],
+        "cost_usd": 2.2331869999999996,
+        "cache": {
+          "source": "2d29ba38-1fc3-447d-9c77-8246b246965e.jsonl",
+          "status": "cold",
+          "initial_context_observed": true,
+          "provider_requests": 15,
+          "first_request_id": "msg_011Cfg4YW4E7uTbMLUotw27e",
+          "first_request": {
+            "input_tokens": 21297,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0,
+            "output_tokens": 700
+          },
+          "later_requests": {
+            "input_tokens": 508612,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0,
+            "output_tokens": 4759
+          }
+        },
+        "token_usage": {
+          "input_tokens": 529909,
+          "cache_read_input_tokens": 0,
+          "cache_creation_input_tokens": 0,
+          "output_tokens": 5459
+        },
+        "tool_calls": 18,
+        "recruit_attempts": 0
+      },
+      {
+        "seat": "claude-opus-5-5-2",
+        "trace": "/Users/benji/Library/Application Support/Frink Dev/claude-sessions/muspjbyzch31w166/projects/-private-tmp-bu-repo-head/39a1a37b-c271-436b-8981-61969e3ef8e7.jsonl",
+        "sha256": "774ce5afddf31816696fbb6de63be63363a3662f7d1ce59c17824fa2cd6a26c0",
+        "provider_requests": 15,
+        "models": [
+          "claude-opus-5-5"
+        ],
+        "cost_usd": 2.216292,
+        "cache": {
+          "source": "39a1a37b-c271-436b-8981-61969e3ef8e7.jsonl",
+          "status": "cold",
+          "initial_context_observed": true,
+          "provider_requests": 15,
+          "first_request_id": "msg_011Cfg4YVUFVzfpssTAt8C9R",
+          "first_request": {
+            "input_tokens": 21297,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0,
+            "output_tokens": 776
+          },
+          "later_requests": {
+            "input_tokens": 502322,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0,
+            "output_tokens": 5096
+          }
+        },
+        "token_usage": {
+          "input_tokens": 523619,
+          "cache_read_input_tokens": 0,
+          "cache_creation_input_tokens": 0,
+          "output_tokens": 5872
+        },
+        "tool_calls": 19,
+        "recruit_attempts": 0
+      },
+      {
+        "seat": "verifier",
+        "trace": "/Users/benji/Library/Application Support/Frink Dev/claude-sessions/muspjbyzch31w166/projects/-private-tmp-bu-repo-head/e1f6193f-c173-48ff-abc2-491f4368b7b6.jsonl",
+        "sha256": "f2beca54e85eedf5a07c7063a7abf21164199677b00d3e61beab94cb98d7d352",
+        "provider_requests": 15,
+        "models": [
+          "claude-opus-5-5"
+        ],
+        "cost_usd": 2.219505,
+        "cache": {
+          "source": "e1f6193f-c173-48ff-abc2-491f4368b7b6.jsonl",
+          "status": "cold",
+          "initial_context_observed": true,
+          "provider_requests": 15,
+          "first_request_id": "msg_011Cfg4YW2jD7QXaW3UaCv5f",
+          "first_request": {
+            "input_tokens": 22067,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0,
+            "output_tokens": 768
+          },
+          "later_requests": {
+            "input_tokens": 497215,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0,
+            "output_tokens": 6103
+          }
+        },
+        "token_usage": {
+          "input_tokens": 519282,
+          "cache_read_input_tokens": 0,
+          "cache_creation_input_tokens": 0,
+          "output_tokens": 6871
+        },
+        "tool_calls": 23,
+        "recruit_attempts": 0
+      }
+    ]
+  },
+  {
+    "arm": "head",
+    "run": "swarm-220702-dfx4",
+    "roster_complete": true,
+    "brief_sha256": "a0ce85cad6e5f68c575d8c6922e149900f74127b52eca33d885cf5eff02c0a7b",
+    "cost_usd": 7.4571629999999995,
+    "provider_requests": 49,
+    "tool_calls": 64,
+    "seats": [
+      {
+        "seat": "verifier",
+        "trace": "/Users/benji/Library/Application Support/Frink Dev/claude-sessions/muspjbyzch31w166/projects/-private-tmp-bu-repo-head/3e8c93d4-44cd-410d-b046-14741cf5cde4.jsonl",
+        "sha256": "5601149bdcf8a7617d81ef1c3bb3f3694bb563db95b146e516ca113de3ffd198",
+        "provider_requests": 15,
+        "models": [
+          "claude-opus-5-5"
+        ],
+        "cost_usd": 2.529264,
+        "cache": {
+          "source": "3e8c93d4-44cd-410d-b046-14741cf5cde4.jsonl",
+          "status": "cold",
+          "initial_context_observed": true,
+          "provider_requests": 15,
+          "first_request_id": "msg_011Cfg4hTn4KjvFU6XK2bUh7",
+          "first_request": {
+            "input_tokens": 22148,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0,
+            "output_tokens": 485
+          },
+          "later_requests": {
+            "input_tokens": 576398,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0,
+            "output_tokens": 6023
+          }
+        },
+        "token_usage": {
+          "input_tokens": 598546,
+          "cache_read_input_tokens": 0,
+          "cache_creation_input_tokens": 0,
+          "output_tokens": 6508
+        },
+        "tool_calls": 20,
+        "recruit_attempts": 0
+      },
+      {
+        "seat": "claude-opus-5-5-2",
+        "trace": "/Users/benji/Library/Application Support/Frink Dev/claude-sessions/muspjbyzch31w166/projects/-private-tmp-bu-repo-head/480951ba-aaab-4333-9ed3-bff244acf511.jsonl",
+        "sha256": "678717ccabe2b386c1fadb448decf2bb5dfef5cd20054d163c65026cb989c670",
+        "provider_requests": 18,
+        "models": [
+          "claude-opus-5-5"
+        ],
+        "cost_usd": 2.454592,
+        "cache": {
+          "source": "480951ba-aaab-4333-9ed3-bff244acf511.jsonl",
+          "status": "cold",
+          "initial_context_observed": true,
+          "provider_requests": 18,
+          "first_request_id": "msg_011Cfg4hTrmE7VviNyjoC2qQ",
+          "first_request": {
+            "input_tokens": 21378,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0,
+            "output_tokens": 439
+          },
+          "later_requests": {
+            "input_tokens": 563859,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0,
+            "output_tokens": 5024
+          }
+        },
+        "token_usage": {
+          "input_tokens": 585237,
+          "cache_read_input_tokens": 0,
+          "cache_creation_input_tokens": 0,
+          "output_tokens": 5463
+        },
+        "tool_calls": 22,
+        "recruit_attempts": 0
+      },
+      {
+        "seat": "claude-opus-5-5-1",
+        "trace": "/Users/benji/Library/Application Support/Frink Dev/claude-sessions/muspjbyzch31w166/projects/-private-tmp-bu-repo-head/c36e123b-ad4d-4452-869d-39556a2bfe56.jsonl",
+        "sha256": "149fc216be0e713e0e82cedde0ac67f765725bd6812d282899563ca1b52b2db1",
+        "provider_requests": 16,
+        "models": [
+          "claude-opus-5-5"
+        ],
+        "cost_usd": 2.4733069999999997,
+        "cache": {
+          "source": "c36e123b-ad4d-4452-869d-39556a2bfe56.jsonl",
+          "status": "cold",
+          "initial_context_observed": true,
+          "provider_requests": 16,
+          "first_request_id": "msg_011Cfg4hU4B7DzZjmVyzwoNV",
+          "first_request": {
+            "input_tokens": 21378,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0,
+            "output_tokens": 696
+          },
+          "later_requests": {
+            "input_tokens": 568189,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0,
+            "output_tokens": 4836
+          }
+        },
+        "token_usage": {
+          "input_tokens": 589567,
+          "cache_read_input_tokens": 0,
+          "cache_creation_input_tokens": 0,
+          "output_tokens": 5532
+        },
+        "tool_calls": 22,
+        "recruit_attempts": 0
+      }
+    ]
+  },
+  {
+    "arm": "head",
+    "run": "swarm-220832-nozn",
+    "roster_complete": true,
+    "brief_sha256": "a0ce85cad6e5f68c575d8c6922e149900f74127b52eca33d885cf5eff02c0a7b",
+    "cost_usd": 8.162162,
+    "provider_requests": 55,
+    "tool_calls": 67,
+    "seats": [
+      {
+        "seat": "verifier",
+        "trace": "/Users/benji/Library/Application Support/Frink Dev/claude-sessions/muspjbyzch31w166/projects/-private-tmp-bu-repo-head/0cfcccf1-f753-4558-b736-f26946df3985.jsonl",
+        "sha256": "df06e4ca5887fafa2f7b5e06c828e66c0c6032b567e13d4230aea71a95d473cb",
+        "provider_requests": 20,
+        "models": [
+          "claude-opus-5-5"
+        ],
+        "cost_usd": 3.0196680000000007,
+        "cache": {
+          "source": "0cfcccf1-f753-4558-b736-f26946df3985.jsonl",
+          "status": "cold",
+          "initial_context_observed": true,
+          "provider_requests": 20,
+          "first_request_id": "msg_011Cfg4p4aFE8WouvvqPcmmz",
+          "first_request": {
+            "input_tokens": 22227,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0,
+            "output_tokens": 484
+          },
+          "later_requests": {
+            "input_tokens": 700978,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0,
+            "output_tokens": 5608
+          }
+        },
+        "token_usage": {
+          "input_tokens": 723205,
+          "cache_read_input_tokens": 0,
+          "cache_creation_input_tokens": 0,
+          "output_tokens": 6092
+        },
+        "tool_calls": 22,
+        "recruit_attempts": 0
+      },
+      {
+        "seat": "claude-opus-5-5-2",
+        "trace": "/Users/benji/Library/Application Support/Frink Dev/claude-sessions/muspjbyzch31w166/projects/-private-tmp-bu-repo-head/ecb5540f-937c-4a29-bc5c-63e923e2044c.jsonl",
+        "sha256": "51f5299465874bc9f9e06db83a780875c70a8743c21f1b7f933bafeec1147752",
+        "provider_requests": 18,
+        "models": [
+          "claude-opus-5-5"
+        ],
+        "cost_usd": 2.504893,
+        "cache": {
+          "source": "ecb5540f-937c-4a29-bc5c-63e923e2044c.jsonl",
+          "status": "cold",
+          "initial_context_observed": true,
+          "provider_requests": 18,
+          "first_request_id": "msg_011Cfg4p4juMcMvmM1Zwsxc6",
+          "first_request": {
+            "input_tokens": 21457,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0,
+            "output_tokens": 438
+          },
+          "later_requests": {
+            "input_tokens": 570652,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0,
+            "output_tokens": 6160
+          }
+        },
+        "token_usage": {
+          "input_tokens": 592109,
+          "cache_read_input_tokens": 0,
+          "cache_creation_input_tokens": 0,
+          "output_tokens": 6598
+        },
+        "tool_calls": 21,
+        "recruit_attempts": 0
+      },
+      {
+        "seat": "claude-opus-5-5-1",
+        "trace": "/Users/benji/Library/Application Support/Frink Dev/claude-sessions/muspjbyzch31w166/projects/-private-tmp-bu-repo-head/f0efaaf2-37ec-41d8-baba-374b20a693f9.jsonl",
+        "sha256": "728e1b9d8f7a1e6329f0b87585283cd2a16fde648de8db61cd441650d5eea92c",
+        "provider_requests": 17,
+        "models": [
+          "claude-opus-5-5"
+        ],
+        "cost_usd": 2.637601,
+        "cache": {
+          "source": "f0efaaf2-37ec-41d8-baba-374b20a693f9.jsonl",
+          "status": "cold",
+          "initial_context_observed": true,
+          "provider_requests": 17,
+          "first_request_id": "msg_011Cfg4p4aEin6p1PCWMd3bx",
+          "first_request": {
+            "input_tokens": 21457,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0,
+            "output_tokens": 700
+          },
+          "later_requests": {
+            "input_tokens": 606579,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0,
+            "output_tokens": 5348
+          }
+        },
+        "token_usage": {
+          "input_tokens": 628036,
+          "cache_read_input_tokens": 0,
+          "cache_creation_input_tokens": 0,
+          "output_tokens": 6048
+        },
+        "tool_calls": 24,
+        "recruit_attempts": 0
+      }
+    ]
+  },
+  {
+    "arm": "b31",
+    "run": "swarm-221015-ssk0",
+    "roster_complete": true,
+    "brief_sha256": "a0ce85cad6e5f68c575d8c6922e149900f74127b52eca33d885cf5eff02c0a7b",
+    "cost_usd": 6.95264,
+    "provider_requests": 46,
+    "tool_calls": 59,
+    "seats": [
+      {
+        "seat": "claude-opus-5-5-2",
+        "trace": "/Users/benji/Library/Application Support/Frink Dev/claude-sessions/muspjbyzch31w166/projects/-private-tmp-bu-repo-b31/44adb1a9-a23f-4306-a509-70b8c73e77b5.jsonl",
+        "sha256": "5947fbd30867af216315520be62ecaaf9bf0a3b5c28c758fb7a63cdaaa1d90c6",
+        "provider_requests": 16,
+        "models": [
+          "claude-opus-5-5"
+        ],
+        "cost_usd": 2.520949,
+        "cache": {
+          "source": "44adb1a9-a23f-4306-a509-70b8c73e77b5.jsonl",
+          "status": "cold",
+          "initial_context_observed": true,
+          "provider_requests": 16,
+          "first_request_id": "msg_011Cfg4wbiwFWcDLeqhYeAFF",
+          "first_request": {
+            "input_tokens": 20934,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0,
+            "output_tokens": 698
+          },
+          "later_requests": {
+            "input_tokens": 578776,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0,
+            "output_tokens": 5199
+          }
+        },
+        "token_usage": {
+          "input_tokens": 599710,
+          "cache_read_input_tokens": 0,
+          "cache_creation_input_tokens": 0,
+          "output_tokens": 5897
+        },
+        "tool_calls": 20,
+        "recruit_attempts": 0
+      },
+      {
+        "seat": "verifier",
+        "trace": "/Users/benji/Library/Application Support/Frink Dev/claude-sessions/muspjbyzch31w166/projects/-private-tmp-bu-repo-b31/56f18e9b-2422-45f6-9741-dac75588c66b.jsonl",
+        "sha256": "038ae7c5592f88e0ce507dde8a29ba866c21516fc502034a81e08ddb987a0ec8",
+        "provider_requests": 14,
+        "models": [
+          "claude-opus-5-5"
+        ],
+        "cost_usd": 2.065898,
+        "cache": {
+          "source": "56f18e9b-2422-45f6-9741-dac75588c66b.jsonl",
+          "status": "cold",
+          "initial_context_observed": true,
+          "provider_requests": 14,
+          "first_request_id": "msg_011Cfg4wbtc47EX9pfadSCRH",
+          "first_request": {
+            "input_tokens": 21704,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0,
+            "output_tokens": 485
+          },
+          "later_requests": {
+            "input_tokens": 462408,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0,
+            "output_tokens": 5749
+          }
+        },
+        "token_usage": {
+          "input_tokens": 484112,
+          "cache_read_input_tokens": 0,
+          "cache_creation_input_tokens": 0,
+          "output_tokens": 6234
+        },
+        "tool_calls": 18,
+        "recruit_attempts": 0
+      },
+      {
+        "seat": "claude-opus-5-5-1",
+        "trace": "/Users/benji/Library/Application Support/Frink Dev/claude-sessions/muspjbyzch31w166/projects/-private-tmp-bu-repo-b31/e154078b-2e59-4bcf-a92c-9aa7d4011548.jsonl",
+        "sha256": "afb1d9f3e6097ae0e863484031a703d2051015c655d3f6386f4859104cdfa962",
+        "provider_requests": 16,
+        "models": [
+          "claude-opus-5-5"
+        ],
+        "cost_usd": 2.365793,
+        "cache": {
+          "source": "e154078b-2e59-4bcf-a92c-9aa7d4011548.jsonl",
+          "status": "cold",
+          "initial_context_observed": true,
+          "provider_requests": 16,
+          "first_request_id": "msg_011Cfg4wbhSrHbSqqQR6m2UX",
+          "first_request": {
+            "input_tokens": 20934,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0,
+            "output_tokens": 703
+          },
+          "later_requests": {
+            "input_tokens": 540707,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0,
+            "output_tokens": 5046
+          }
+        },
+        "token_usage": {
+          "input_tokens": 561641,
+          "cache_read_input_tokens": 0,
+          "cache_creation_input_tokens": 0,
+          "output_tokens": 5749
+        },
+        "tool_calls": 21,
+        "recruit_attempts": 0
+      }
+    ]
+  },
+  {
+    "arm": "b31",
+    "run": "swarm-221155-jk5f",
+    "roster_complete": true,
+    "brief_sha256": "a0ce85cad6e5f68c575d8c6922e149900f74127b52eca33d885cf5eff02c0a7b",
+    "cost_usd": 7.697169000000001,
+    "provider_requests": 49,
+    "tool_calls": 67,
+    "seats": [
+      {
+        "seat": "claude-opus-5-5-2",
+        "trace": "/Users/benji/Library/Application Support/Frink Dev/claude-sessions/muspjbyzch31w166/projects/-private-tmp-bu-repo-b31/2044c7e7-8603-4559-826f-b03da26974ea.jsonl",
+        "sha256": "169b8b0232f19ad24cd343b9d0230d1c813460a7f46f2b83a7dbd052c8c544ea",
+        "provider_requests": 15,
+        "models": [
+          "claude-opus-5-5"
+        ],
+        "cost_usd": 2.22899,
+        "cache": {
+          "source": "2044c7e7-8603-4559-826f-b03da26974ea.jsonl",
+          "status": "cold",
+          "initial_context_observed": true,
+          "provider_requests": 15,
+          "first_request_id": "msg_011Cfg5519HdkJ3u5t4CUcor",
+          "first_request": {
+            "input_tokens": 21051,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0,
+            "output_tokens": 569
+          },
+          "later_requests": {
+            "input_tokens": 501514,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0,
+            "output_tokens": 6155
+          }
+        },
+        "token_usage": {
+          "input_tokens": 522565,
+          "cache_read_input_tokens": 0,
+          "cache_creation_input_tokens": 0,
+          "output_tokens": 6724
+        },
+        "tool_calls": 23,
+        "recruit_attempts": 0
+      },
+      {
+        "seat": "claude-opus-5-5-1",
+        "trace": "/Users/benji/Library/Application Support/Frink Dev/claude-sessions/muspjbyzch31w166/projects/-private-tmp-bu-repo-b31/d9235794-d10e-482f-a5cd-df9ef6ad8a68.jsonl",
+        "sha256": "417a61e92885f3baccaac76a0d835142d8e3e9264147c5d5e7aedabbec5baec2",
+        "provider_requests": 20,
+        "models": [
+          "claude-opus-5-5"
+        ],
+        "cost_usd": 3.198245,
+        "cache": {
+          "source": "d9235794-d10e-482f-a5cd-df9ef6ad8a68.jsonl",
+          "status": "cold",
+          "initial_context_observed": true,
+          "provider_requests": 20,
+          "first_request_id": "msg_011Cfg559R7brCMkVsU6C1B3",
+          "first_request": {
+            "input_tokens": 21051,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0,
+            "output_tokens": 802
+          },
+          "later_requests": {
+            "input_tokens": 745324,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0,
+            "output_tokens": 5622
+          }
+        },
+        "token_usage": {
+          "input_tokens": 766375,
+          "cache_read_input_tokens": 0,
+          "cache_creation_input_tokens": 0,
+          "output_tokens": 6424
+        },
+        "tool_calls": 26,
+        "recruit_attempts": 0
+      },
+      {
+        "seat": "verifier",
+        "trace": "/Users/benji/Library/Application Support/Frink Dev/claude-sessions/muspjbyzch31w166/projects/-private-tmp-bu-repo-b31/f75c3682-3d7d-4b34-8d29-099e650c3439.jsonl",
+        "sha256": "86a79f868283efd08bb141a42887d359df17dd28f2795fa2ba0e0ee6ccf92fdd",
+        "provider_requests": 14,
+        "models": [
+          "claude-opus-5-5"
+        ],
+        "cost_usd": 2.269934,
+        "cache": {
+          "source": "f75c3682-3d7d-4b34-8d29-099e650c3439.jsonl",
+          "status": "cold",
+          "initial_context_observed": true,
+          "provider_requests": 14,
+          "first_request_id": "msg_011Cfg54zZoco8az4UHfo3M5",
+          "first_request": {
+            "input_tokens": 21821,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0,
+            "output_tokens": 485
+          },
+          "later_requests": {
+            "input_tokens": 514331,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0,
+            "output_tokens": 5539
+          }
+        },
+        "token_usage": {
+          "input_tokens": 536152,
+          "cache_read_input_tokens": 0,
+          "cache_creation_input_tokens": 0,
+          "output_tokens": 6024
+        },
+        "tool_calls": 18,
+        "recruit_attempts": 0
+      }
+    ]
+  },
+  {
+    "arm": "b31",
+    "run": "swarm-221428-hd3a",
+    "roster_complete": true,
+    "brief_sha256": "a0ce85cad6e5f68c575d8c6922e149900f74127b52eca33d885cf5eff02c0a7b",
+    "cost_usd": 7.053356000000001,
+    "provider_requests": 47,
+    "tool_calls": 61,
+    "seats": [
+      {
+        "seat": "verifier",
+        "trace": "/Users/benji/Library/Application Support/Frink Dev/claude-sessions/muspjbyzch31w166/projects/-private-tmp-bu-repo-b31/a9785847-2022-4551-a58a-4da465d7868c.jsonl",
+        "sha256": "41f8274e78b86ccdc9fb080c3b236ad992b8de333ba4934bed9997d16cd916ed",
+        "provider_requests": 18,
+        "models": [
+          "claude-opus-5-5"
+        ],
+        "cost_usd": 2.7852930000000002,
+        "cache": {
+          "source": "a9785847-2022-4551-a58a-4da465d7868c.jsonl",
+          "status": "cold",
+          "initial_context_observed": true,
+          "provider_requests": 18,
+          "first_request_id": "msg_011Cfg5GELLrpfWga68aS3sa",
+          "first_request": {
+            "input_tokens": 21901,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0,
+            "output_tokens": 766
+          },
+          "later_requests": {
+            "input_tokens": 641526,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0,
+            "output_tokens": 5570
+          }
+        },
+        "token_usage": {
+          "input_tokens": 663427,
+          "cache_read_input_tokens": 0,
+          "cache_creation_input_tokens": 0,
+          "output_tokens": 6336
+        },
+        "tool_calls": 22,
+        "recruit_attempts": 0
+      },
+      {
+        "seat": "claude-opus-5-5-1",
+        "trace": "/Users/benji/Library/Application Support/Frink Dev/claude-sessions/muspjbyzch31w166/projects/-private-tmp-bu-repo-b31/c34fa41f-6ac3-4916-877e-cf22dbb4020e.jsonl",
+        "sha256": "7f3b9786593acde9a1adb1d044fd308423f4c2912cdbe02b1db248b56690908d",
+        "provider_requests": 15,
+        "models": [
+          "claude-opus-5-5"
+        ],
+        "cost_usd": 2.2241020000000002,
+        "cache": {
+          "source": "c34fa41f-6ac3-4916-877e-cf22dbb4020e.jsonl",
+          "status": "cold",
+          "initial_context_observed": true,
+          "provider_requests": 15,
+          "first_request_id": "msg_011Cfg5GETmmsu1dNCjK5z44",
+          "first_request": {
+            "input_tokens": 21131,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0,
+            "output_tokens": 780
+          },
+          "later_requests": {
+            "input_tokens": 502906,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0,
+            "output_tokens": 5401
+          }
+        },
+        "token_usage": {
+          "input_tokens": 524037,
+          "cache_read_input_tokens": 0,
+          "cache_creation_input_tokens": 0,
+          "output_tokens": 6181
+        },
+        "tool_calls": 21,
+        "recruit_attempts": 0
+      },
+      {
+        "seat": "claude-opus-5-5-2",
+        "trace": "/Users/benji/Library/Application Support/Frink Dev/claude-sessions/muspjbyzch31w166/projects/-private-tmp-bu-repo-b31/e7171929-1237-4066-8ad3-44ba3baf8c05.jsonl",
+        "sha256": "a2a676c2a63866974dcbfe8bd30ee46e1c4dcf7e1427e2f21edb1c8c3a59e4a2",
+        "provider_requests": 14,
+        "models": [
+          "claude-opus-5-5"
+        ],
+        "cost_usd": 2.0439610000000004,
+        "cache": {
+          "source": "e7171929-1237-4066-8ad3-44ba3baf8c05.jsonl",
+          "status": "cold",
+          "initial_context_observed": true,
+          "provider_requests": 14,
+          "first_request_id": "msg_011Cfg5GEZUyS9Dtr6D9voXC",
+          "first_request": {
+            "input_tokens": 21131,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0,
+            "output_tokens": 703
+          },
+          "later_requests": {
+            "input_tokens": 459812,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0,
+            "output_tokens": 5090
+          }
+        },
+        "token_usage": {
+          "input_tokens": 480943,
+          "cache_read_input_tokens": 0,
+          "cache_creation_input_tokens": 0,
+          "output_tokens": 5793
+        },
+        "tool_calls": 18,
+        "recruit_attempts": 0
+      }
+    ]
+  }
+]

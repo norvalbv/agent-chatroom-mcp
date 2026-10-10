@@ -175,9 +175,10 @@ export function setBoard(hub: Hub, roomName: string, pid: string, key: string, t
   if (opts.ifAbsent && previous) throw new HubError(`"${key}" already exists (by ${previous.by}, ${previous.updatedAt}).`, { existing: previous }, "state");
   if (opts.ifByMe && previous && previous.by !== p.name) throw new HubError(`"${key}" was written by ${previous.by}, not you. Use post_to_room or a different key.`, undefined, "ownership");
   // clearing is replacing with nothing: a peer's empty write once deleted any entry without overwrite (idea/board-empty-delete).
-  // A verify entry gates a proposal and an attack holds one, so only their author or a human may clear those.
+  // A verify entry gates a proposal and an attack holds one, so only their author or a human may clear or replace them:
+  // with overwrite a peer could swap someone's failing verdict for a passing one under their own name.
   const clearsPeer = !text.trim() && !!previous && previous.by !== p.name && p.agent !== "human";
-  if (clearsPeer && /^(verify|attack)\//.test(key)) throw new HubError(`"${key}" is ${previous!.by}'s entry; only its author or a human may clear it. Answer it on the board instead (for an attack, edit the attacked entry).`, undefined, "ownership");
+  if (previous && previous.by !== p.name && p.agent !== "human" && /^(verify|attack)\//.test(key)) throw new HubError(`"${key}" is ${previous.by}'s entry; only its author or a human may ${text.trim() ? "replace" : "clear"} it. Write your own (verify/<area>-<you>), or answer it on the board (for an attack, edit the attacked entry).`, undefined, "ownership");
   if (previous && previous.by !== p.name && !opts.overwrite && (text.trim() || clearsPeer) && !(key.startsWith("claim/") && (claimReleased(previous) || takeover))) {
     throw new HubError(
       `"${key}" was written by ${previous.by} at ${previous.updatedAt}; replacing it would discard their text. Merge with the current content below and resend with overwrite=true, or use your own key.`,

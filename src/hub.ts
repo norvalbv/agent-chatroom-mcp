@@ -12,7 +12,7 @@ import { mkdirSync } from "node:fs";
 import { analyzeReplyMetrics, type ReplyMetricEvent } from "./reply-metrics.js";
 
 export * from "./hub/types.js";
-import { VERIFY_HEAD_EXAMPLE, VERIFY_HEAD_RULE, parseVerifyHead, readVerifyHead, failToPassShortfall, citesCommit, hexTokens, addedUnchecked, uncoveredCommits, ROLES, REFUSAL_CODES, HubError } from "./hub/types.js";
+import { VERIFY_HEAD_EXAMPLE, VERIFY_HEAD_RULE, parseVerifyHead, readVerifyHead, failToPassShortfall, citesCommit, hexTokens, addedUnchecked, uncoveredCommits, verifyGaps, devRoomUrl, devReceiptFrom, type DevReceipt, ROLES, REFUSAL_CODES, HubError } from "./hub/types.js";
 import type { MessageKind, Vote, Quorum, RoomState, VerifyHead, Role, Participant, KickVote, Message, CodeState, BoardExpiryOptions, BoardEntry, Challenge, ElectorateSummary, ConclusionVerification, Proposal, RoomOptions, JoinOptions, Room, CallOutcome, RefusalCode, BoardManifestObservation } from "./hub/types.js";
 import { now, shortId, norm, emptyBoardManifestCounters, manifestBytes, codeState } from "./hub/internal.js";
 import type { Opts, Event, BoardManifestCounters } from "./hub/internal.js";
@@ -1715,9 +1715,9 @@ export class Hub {
   }
 
   /** The other half of the conclusion notice: what the text cites that nobody checked. */
-  static unverifiedLine(v: ConclusionVerification): string {
+  static unverifiedLine(v: ConclusionVerification, g: { key: string; by: string; gaps: string[] }[] = []): string {
     const u = v.unverified_commits ?? [];
-    return u.length ? `\nCited but checked by no verify entry: ${u.slice(0, 12).map((c) => c.slice(0, 12)).join(", ")}${u.length > 12 ? ` and ${u.length - 12} more` : ""}.` : "";
+    return (g.length ? `\nVerified PARTIAL, not shown by the reviewer: ${g.map((x) => `${x.key} (${x.by}): ${x.gaps.map((y) => y.slice(0, 160)).join("; ")}`).join(" | ").slice(0, 1200)}` : "") + (u.length ? `\nCited but checked by no verify entry: ${u.slice(0, 12).map((c) => c.slice(0, 12)).join(", ")}${u.length > 12 ? ` and ${u.length - 12} more` : ""}.` : "");
   }
 
   /** The verify/* entry that answers an executable challenge: names the proposal, reruns the challenge's exact
@@ -1933,6 +1933,7 @@ export class Hub {
       waiting_on: pr.status === "open" ? active.filter((p) => !pr.votes[p.id]).map((p) => nm(p)) : [],
       needs_challenge: needsChallenge,
       blocked_by: this.blockedBy(room, pr),
+      ...(pr.status === "open" && this.verificationGaps(room, pr).length ? { verification_gaps: this.verificationGaps(room, pr) } : {}),
       ...(pr.status === "open" && this.unverifiedCommits(room, pr).length ? { unverified_commits: this.unverifiedCommits(room, pr), unverified_commits_hint: "cited in the text, but no counting verify/* entry names them as commit or base_commit; one entry passes the gate, so these ride on it unchecked unless someone verifies them too" } : {}),
       challenges: pr.challenges.map((c) => ({ id: c.id, by: nm(c.by), objection: c.objection, status: c.status ?? "open", blocking: c.blocking !== false, version: c.version, ...(c.command ? { command: c.command } : {}) })),
       votes: Object.entries(pr.votes).map(([id, v]) => ({ name: nm({ id, name: v.name }), vote: v.vote, confidence: v.confidence, reason: v.reason, version: v.version, ...(v.version !== undefined && v.version !== pr.version ? { stale: `cast at v${v.version}` } : {}) })),
@@ -1990,6 +1991,42 @@ export class Hub {
       if (head && head.proposal === pr.id && head.exit_code === 0 && !failToPassShortfall(head) && citesCommit(pr.text, head.commit)) out.push(head);
     }
     return out;
+  }
+
+  /** What each counting verify entry's reviewer did not show (verifyGaps), entries with nothing missing left out. */
+  verificationGaps(room: Room, pr: Proposal): { key: string; by: string; gaps: string[] }[] {
+    if (!room.requireVerification) return [];
+    return [...room.board]
+      .map(([key, e]) => ({ key, e, v: this.verifyEntryVerdict(room, pr, key, e, undefined) }))
+      .filter((x) => x.v.head && !x.v.why)
+      .map((x) => ({ key: x.key, by: x.e.by, gaps: verifyGaps(x.v.head!, x.e.devReceipt) }))
+      .filter((x) => x.gaps.length);
+  }
+
+  /** Read the dev room a verify head names from its own running hub, and keep what it said on the entry. The
+   * fetch is the hub's, at its own time: a log file in the reviewer's worktree could be written by hand. */
+  async readDevRoom(roomName: string, key: string, fetcher: (url: string) => Promise<unknown> = Hub.fetchJson): Promise<DevReceipt | undefined> {
+    const room = this.getRoom(roomName);
+    const e = room.board.get(key);
+    const head = key.startsWith("verify/") && e ? parseVerifyHead(e.text) : undefined;
+    const url = devRoomUrl(head?.dev_room);
+    if (!e || !head?.dev_room || !url) return undefined;
+    let receipt: DevReceipt;
+    try {
+      receipt = devReceiptFrom(head.dev_room, await fetcher(url.href));
+    } catch (err) {
+      receipt = { url: head.dev_room, fetched_at: now(), error: String((err as Error)?.message ?? err).slice(0, 160) };
+    }
+    if (room.board.get(key) !== e) return receipt; // rewritten meanwhile: that write fetches its own
+    e.devReceipt = receipt;
+    this.persist({ type: "dev_receipt", room: roomName, key, updatedAt: e.updatedAt, receipt });
+    return receipt;
+  }
+
+  static async fetchJson(url: string): Promise<unknown> {
+    const res = await fetch(url, { signal: AbortSignal.timeout(3000) });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return res.json();
   }
 
   /** Every verify head that counts for this proposal, from any non-author, not only the assigned reviewer. */
@@ -2249,7 +2286,8 @@ export class Hub {
       base_commit: v.head.base_commit!, commit: v.head.commit!, ...(v.head.kind ? { kind: v.head.kind } : {}),
       ...(this.unverifiedCommits(room, pr).length ? { unverified_commits: this.unverifiedCommits(room, pr) } : {}),
     };
-    room.conclusion = { text: pr.text, proposalId: pr.id, decidedAt: now(), version: pr.version, tally, electorate, unresolved_objections: unresolved, ...(verification ? { verification } : {}) };
+    const gaps = this.verificationGaps(room, pr);
+    room.conclusion = { text: pr.text, proposalId: pr.id, decidedAt: now(), version: pr.version, tally, electorate, unresolved_objections: unresolved, ...(verification ? { verification } : {}), ...(gaps.length ? { verification_gaps: gaps } : {}) };
     this.persist({ type: "proposal", proposal: pr });
     this.setState(room, "concluded");
     if (room.nudgeTimer) clearTimeout(room.nudgeTimer);
@@ -2259,7 +2297,7 @@ export class Hub {
       undefined,
       `CONSENSUS REACHED on ${pr.id} v${pr.version} (${electorate.agree}/${electorate.electorate} agree; ${electorate.excluded_leavers} leavers-before-close excluded; quorum=${room.quorum}; ${pr.text.length} chars, text in room_status/conclusion)` +
         (unresolved.length ? `\nUnresolved objections, overruled: ${unresolved.map((u) => `${u.by}: "${u.objection.slice(0, 300)}${u.objection.length > 300 ? "…" : ""}"`).join(" | ")}` : "") +
-        (verification ? `\n${Hub.verificationLine(verification)}${Hub.unverifiedLine(verification)}` : ""),
+        (verification ? `\n${Hub.verificationLine(verification)}${Hub.unverifiedLine(verification, gaps)}` : ""),
       { proposalId: pr.id },
     );
     this.releaseClaims(room, "Room concluded");

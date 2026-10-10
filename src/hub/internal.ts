@@ -1,7 +1,7 @@
 /** Hub-private helpers shared by hub.ts and its section modules; not re-exported from hub.ts. */
 import { randomBytes } from "node:crypto";
 import { spawnSync } from "node:child_process";
-import type { RoomState, Participant, KickVote, Message, CodeState, BoardEntry, Challenge, Proposal, RoomOptions, Room, CallOutcome } from "./types.js";
+import type { RoomState, Participant, KickVote, Message, CodeState, BoardEntry, Challenge, Proposal, RoomOptions, Room, CallOutcome, DevReceipt } from "./types.js";
 
 export type Opts = Required<Omit<RoomOptions, "chair" | "parent">> & { chair?: string; parent?: string };
 
@@ -22,6 +22,7 @@ export type Event =
   | { type: "archive"; room: string; archived: boolean; by: string; ts: string }
   | { type: "board_manifest"; room: string; bytes: number; kind: "full" | "delta" | "empty" }
   | { type: "board"; room: string; key: string; entry: BoardEntry | null }
+  | { type: "dev_receipt"; room: string; key: string; updatedAt: string; receipt: DevReceipt }
   | { type: "amend"; room: string; proposalId: string; text: string; version: number; updatedAt?: string; votes: Proposal["votes"]; challenges?: Challenge[] }
   | { type: "refusal"; room: string; tool: string; reason: string; ts?: string; participant?: string | null }
   | { type: "call_completion"; room: string; tool: string; outcome: CallOutcome; ts: string; participant: string | null }

@@ -26,12 +26,17 @@ export interface VerifyHead {
   /** the refactor path: the proposal claims no behaviour change, so the check passes at both commits */
   refactor?: boolean;
   kind?: VerifyKind;
+  /** what the reviewer did NOT exercise, in its own words; carried on the open proposal and the conclusion */
+  unverified?: string[];
+  /** the dev room where the reviewer watched agents use the change: http://127.0.0.1:<port>/rooms/<room> on a hub
+   * that is still running when the entry is written; the hub fetches it itself (DevReceipt) */
+  dev_room?: string;
 }
 
 /** Canonical wording for what a verify/* entry must contain, quoted verbatim by refusals and prompts. */
 export const VERIFY_HEAD_EXAMPLE = '{"proposal":"<PROPOSAL_ID>","command":"<the check you ran>","cwd":"<working dir>","base_commit":"<parent commit, before the change>","base_exit_code":1,"commit":"<the proposal\'s commit>","exit_code":0,"output_tail":"<last lines of real output at commit>"}';
 /** The rest of the rule, said once after VERIFY_HEAD_EXAMPLE wherever it is quoted. */
-export const VERIFY_HEAD_RULE = 'base_exit_code is the same check at base_commit and must be nonzero (it failed before the change); a refactor with no behaviour change instead passes at both and adds "refactor":true; optional "kind": existing_tests, own_check or exercised; exit_code must be 0 for the entry to count';
+export const VERIFY_HEAD_RULE = 'base_exit_code is the same check at base_commit and must be nonzero (it failed before the change); a refactor with no behaviour change instead passes at both and adds "refactor":true; optional "kind": existing_tests, own_check or exercised; optional "unverified":["what you did not exercise"] and "dev_room":"http://127.0.0.1:<port>/rooms/<room>" (a running dev room where you watched agents use it; the hub reads it itself), and without them the conclusion says what was not shown; exit_code must be 0 for the entry to count';
 
 /** A verify/* entry must lead with one line of JSON matching VerifyHead; prose may follow. Shape-checking only: it proves an attributable,
  * re-runnable claim, not that the command ran. Optional fields are type-checked; existing census heads must keep parsing as before. */
@@ -60,6 +65,8 @@ export function readVerifyHead(text: string): { head: VerifyHead } | { error: st
   if (o.base_exit_code !== undefined && typeof o.base_exit_code !== "number") return { error: '"base_exit_code" must be a number' };
   if (o.refactor !== undefined && typeof o.refactor !== "boolean") return { error: '"refactor" must be true or false' };
   if (o.kind !== undefined && !VERIFY_KINDS.includes(o.kind as VerifyKind)) return { error: `"kind" must be one of ${VERIFY_KINDS.join(", ")}` };
+  if (o.unverified !== undefined && !(Array.isArray(o.unverified) && o.unverified.every((x) => typeof x === "string"))) return { error: '"unverified" must be a list of strings' };
+  if (o.dev_room !== undefined && typeof o.dev_room !== "string") return { error: '"dev_room" must be a string' };
   return { head: o as unknown as VerifyHead };
 }
 
@@ -249,6 +256,8 @@ export interface BoardEntry {
   ackRequired?: boolean;
   /** inbox/*.ack entries cover only the note text hashed when acknowledged. */
   acknowledgedTextHash?: string;
+  /** verify/* entries naming a dev_room: what the hub itself read from that room when the entry was written. */
+  devReceipt?: DevReceipt;
   /** claim/* entries only: the reviewer the hub assigned at creation (name/id), never client-supplied. */
   reviewer?: string;
   reviewerId?: string;
@@ -375,7 +384,7 @@ export interface Room {
   state: RoomState;
   /** Hidden from listings (dashboard, list_rooms) but fully kept on disk; set by a human or the archive-dead sweep. */
   archived?: boolean;
-  conclusion?: { text: string; proposalId: string; decidedAt: string; version?: number; tally?: { agree: number; disagree: number; abstain: number }; electorate?: ElectorateSummary; unresolved_objections?: { by: string; objection: string }[]; verification?: ConclusionVerification };
+  conclusion?: { text: string; proposalId: string; decidedAt: string; version?: number; tally?: { agree: number; disagree: number; abstain: number }; electorate?: ElectorateSummary; unresolved_objections?: { by: string; objection: string }[]; verification?: ConclusionVerification; verification_gaps?: { key: string; by: string; gaps: string[] }[] };
   /** identical silence nudges are posted at most twice */
   lastNudge?: { text: string; count: number };
   /** Lifetime refusal counts keyed by tool and bounded reason class (no bodies, no ids). */
@@ -456,4 +465,61 @@ export class HubError extends Error {
 export interface BoardManifestObservation {
   board_keys?: string[];
   board_delta?: { keys: string[]; tombstones: string[] };
+}
+
+/** What the hub read, at the time a verify entry was written, from the dev room its head names: fetched from the
+ * running hub over HTTP, never from a file the reviewer holds (a seat can write a log by hand, it cannot as easily
+ * keep a hub answering for a room it did not run). */
+export interface DevReceipt {
+  url: string;
+  fetched_at: string;
+  error?: string;
+  room?: string;
+  state?: string;
+  /** git HEAD of the project the dev hub served when that room was created */
+  code_head?: string;
+  code_dirty?: boolean;
+  /** non-human seats that joined, and how many of them posted at least one message */
+  agent_seats?: number;
+  speaking_seats?: number;
+  messages?: number;
+}
+
+/** Only a loopback dev hub's room summary: the hub never fetches anything else on a seat's say-so. */
+export function devRoomUrl(s: string | undefined): URL | undefined {
+  if (!s) return undefined;
+  try {
+    const u = new URL(s);
+    return u.protocol === "http:" && ["127.0.0.1", "localhost"].includes(u.hostname) && /^\/rooms\/[^/]+$/.test(u.pathname) ? u : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/** Reduce a dev hub's GET /rooms/<room> body to a receipt. */
+export function devReceiptFrom(url: string, body: unknown): DevReceipt {
+  const b = (body ?? {}) as { name?: string; state?: string; code_state?: { head?: string; dirty?: boolean } | null; message_count?: number; participants?: { agent?: string; messages?: number }[] };
+  const agents = (b.participants ?? []).filter((x) => x.agent !== "human");
+  return {
+    url, fetched_at: new Date().toISOString(), room: b.name, state: b.state,
+    ...(b.code_state?.head ? { code_head: b.code_state.head, code_dirty: !!b.code_state.dirty } : {}),
+    agent_seats: agents.length, speaking_seats: agents.filter((x) => (x.messages ?? 0) > 0).length, messages: b.message_count ?? 0,
+  };
+}
+
+/** What a passing verify head did not show: the reviewer's own list, then what the hub can tell about its dev room. */
+export function verifyGaps(h: VerifyHead, receipt?: DevReceipt): string[] {
+  const out = [...(h.unverified ?? [])].map((x) => x.trim()).filter(Boolean);
+  // A missing room is a gap only where the head claims it: "kind":"exercised" says the change was used as its users would
+  if (!h.dev_room) { if (h.kind === "exercised") out.push('"kind":"exercised" but no dev_room: the hub has no room where it can see agents used it'); }
+  else if (!devRoomUrl(h.dev_room)) out.push(`dev_room "${h.dev_room.slice(0, 80)}" is not http://127.0.0.1:<port>/rooms/<room>`);
+  else if (!receipt || receipt.url !== h.dev_room) out.push("dev_room was not read by the hub");
+  else if (receipt.error) out.push(`dev_room could not be read when the entry was written (${receipt.error})`);
+  else {
+    if (!receipt.code_head) out.push("dev_room's hub reported no git commit");
+    else if (!h.commit || !sameCommit(receipt.code_head, h.commit)) out.push(`dev_room ran ${receipt.code_head}, not ${h.commit ?? "the verified commit"}`);
+    else if (receipt.code_dirty) out.push(`dev_room ran ${receipt.code_head} with uncommitted changes`);
+    if ((receipt.speaking_seats ?? 0) < 2) out.push(`dev_room had ${receipt.speaking_seats ?? 0} agent seat(s) that spoke`);
+  }
+  return out;
 }

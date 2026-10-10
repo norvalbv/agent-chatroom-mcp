@@ -52,14 +52,22 @@ function fixture(t: { after: (fn: () => void) => void }) {
 
 test("the head's own unverified list and a missing dev room ride on the proposal and make the conclusion PARTIAL", (t) => {
   const { hub, room, pr, b, head, conclude } = fixture(t);
-  hub.setBoard(room.name, b.id, "verify/x", head({ unverified: ["full npm test", "a real recruit"] }));
+  hub.setBoard(room.name, b.id, "verify/x", head({ kind: "exercised", unverified: ["full npm test", "a real recruit"] }));
   assert.ok(hub.verifiedBy(room, pr), "still counts");
   const gaps = hub.proposalView(room, pr).verification_gaps;
   assert.deepEqual(gaps?.[0].gaps.slice(0, 2), ["full npm test", "a real recruit"]);
-  assert.match(gaps?.[0].gaps[2] ?? "", /no dev_room/);
+  assert.match(gaps?.[0].gaps[2] ?? "", /"kind":"exercised" but no dev_room/);
   const line = conclude();
-  assert.match(line, /Verified PARTIAL, not shown by the reviewer: verify\/x \(Bob\): full npm test; a real recruit; no dev_room/, line);
-  assert.equal(room.conclusion?.verification?.gaps?.[0].key, "verify/x");
+  assert.match(line, /Verified PARTIAL, not shown by the reviewer: verify\/x \(Bob\): full npm test; a real recruit; "kind":"exercised" but no dev_room/, line);
+  assert.equal(room.conclusion?.verification_gaps?.[0].key, "verify/x");
+});
+
+test("a head that claims nothing it did not show carries no gap", (t) => {
+  const { hub, room, pr, b, head, conclude } = fixture(t);
+  hub.setBoard(room.name, b.id, "verify/x", head({ kind: "own_check" }));
+  assert.equal(hub.proposalView(room, pr).verification_gaps, undefined);
+  assert.doesNotMatch(conclude(), /PARTIAL/);
+  assert.equal(room.conclusion?.verification_gaps, undefined);
 });
 
 test("a dev room the hub read itself, on the verified commit with two agents speaking, closes the gap", async (t) => {

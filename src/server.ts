@@ -13,7 +13,10 @@ import { fmtWait, steerCarry } from "./hub/steer.js";
 import { McpServer, ResourceTemplate, type RegisteredTool } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
-import { Hub, HubError, ROLES, VERIFY_HEAD_EXAMPLE, VERIFY_HEAD_RULE, type CallOutcome } from "./hub.js";
+import { Hub, HubError, ROLES, VERIFY_HEAD_EXAMPLE, VERIFY_HEAD_RULE, parseVerifyHead, verifyGaps, type CallOutcome } from "./hub.js";
+
+/** Words in a verify entry's prose that say something was not checked (45 of 313 passing heads in past rooms; scripts/verify-gaps-measure.py). */
+const VERIFY_GAP_PROSE = /not verified|did not (run|verify|exercise|watch|drive|check|test)|could not (run|verify|test)|not (run|exercised|watched|driven|checked) by me|untested|not tested|author-only|rests on the author/i;
 import type { Spawner } from "./spawner.js";
 import { createWaitView } from "./hub/wait-view.js";
 
@@ -598,12 +601,22 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
         participant_id: asArg,
       },
     },
-    guard("board_set", ({ room, key, text, if_absent, if_by_me, overwrite, ttl_seconds, expires_at, participant_id }) => {
+    guard("board_set", async ({ room, key, text, if_absent, if_by_me, overwrite, ttl_seconds, expires_at, participant_id }) => {
       const id = pid(room, participant_id);
       const e = hub.setBoard(room, id, key, text, { ifAbsent: if_absent, ifByMe: if_by_me, overwrite, ttlSeconds: ttl_seconds, expiresAt: expires_at });
       if (!e) return { key, deleted: true };
       const overlaps = hub.claimOverlaps(room, id, key);
-      return { key, chars: e.text.length, by: e.by, ...(overlaps.length ? { overlaps } : {}) };
+      const head = key.startsWith("verify/") ? parseVerifyHead(e.text) : undefined;
+      const receipt = head ? await hub.readDevRoom(room, key) : undefined;
+      const gaps = head && head.exit_code === 0 ? verifyGaps(head, receipt) : [];
+      // the prose says something was not checked but the head does not: the gate reads only the head
+      const proseGap = head && !head.unverified && VERIFY_GAP_PROSE.test(e.text.slice(e.text.indexOf("\n") + 1));
+      return {
+        key, chars: e.text.length, by: e.by, ...(overlaps.length ? { overlaps } : {}),
+        ...(receipt ? { dev_room_receipt: receipt } : {}),
+        ...(gaps.length ? { verification_gaps: gaps, verification_gaps_hint: "the open proposal and the conclusion carry these as not shown by you (PARTIAL); close them, or leave them listed" } : {}),
+        ...(proseGap ? { hint: "Your prose below the head says something was not verified, but the head has no \"unverified\" list, and only the head is read: put those items in \"unverified\":[...] so the proposal and the conclusion carry them." } : {}),
+      };
     }),
   );
 

@@ -11,6 +11,7 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { execFile, spawn } from "node:child_process";
 import { promisify } from "node:util";
+import { readFileSync } from "node:fs";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 
@@ -55,6 +56,15 @@ async function postFrom(key: string | undefined, path: string, body: object): Pr
 }
 const messages = async () => (await (await fetch(`${HTTP}/rooms/${ROOM}/messages`)).json()) as { kind: string; content: string; from?: { name: string } }[];
 
+// 0. A seat's own machine routes are not human routes: its MCP calls, its usage export and its heartbeat raise no
+// notice (integration-next 0c4e8507: every seat's /otlp/v1/logs export was announced as a refused forgery).
+const notices = async () => (await messages()).filter((m) => m.kind === "system" && /process tree/.test(m.content)).length;
+await postFrom(KEY, "/otlp/v1/logs", { resourceLogs: [] });
+await postFrom(KEY, "/mcp", { jsonrpc: "2.0", id: 1, method: "ping" });
+await postFrom(KEY, "/heartbeat", { seat_key: KEY, tool: "Bash", detail: "ls" });
+await postFrom(KEY, `/rooms/${ROOM}/dev-runs`, { participant_id: "p_none", commit: "abc1234", task: "x" });
+assert.equal(await notices(), 0, "a seat's own routes are never announced as forgeries");
+
 // 1. A seat's shell casts the human veto: refused, named, and the proposal keeps no human vote.
 const veto = await postFrom(KEY, `/rooms/${ROOM}/vote`, { name: "benji", proposal_id: pr.id, vote: "disagree", reason: "forged" });
 assert.equal(veto.status, 403, `a seat's shell is refused on a human route, got ${veto.status} ${veto.text}`);
@@ -83,6 +93,14 @@ const human = await postFrom(undefined, `/rooms/${ROOM}/messages`, { name: "benj
 assert.equal(human.status, 200, `the operator is not refused, got ${human.status} ${human.text}`);
 const ok = await postFrom(undefined, `/rooms/${ROOM}/vote`, { name: "benji", proposal_id: pr.id, vote: "agree" });
 assert.equal(ok.status, 200);
+
+// 5. Every route requireToken guards is one whose caller is looked up: a human route added without HUMAN_ROUTES would be
+// open to a seat's curl again, silently.
+const src = readFileSync(new URL("../src/index.ts", import.meta.url), "utf8");
+const HUMAN_ROUTES = new RegExp(/const HUMAN_ROUTES = \/(.+)\/;/.exec(src)![1]!);
+const guarded = [...src.matchAll(/app\.post\("([^"]+)",[^\n]*\n\s*if \(!requireToken\(req, res\)\)/g)].map((m) => m[1]!.replace(/:\w+/g, "x"));
+assert.ok(guarded.length >= 8, `found the guarded routes: ${guarded.join(", ")}`);
+for (const path of [...guarded, "/rooms/x/attachments"]) assert.match(path, HUMAN_ROUTES, `${path} calls requireToken but its caller is never looked up`);
 
 console.log("seat-human-route regression OK");
 process.exit(0);

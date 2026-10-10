@@ -132,6 +132,28 @@ test("the once-per-room refusal is on the record: the room sees it, and a hub re
   for (const hub of [h, h2]) for (const r of hub.rooms.values()) { clearTimeout(r.nudgeTimer); clearTimeout(r.openingsTimer); }
 });
 
+// Integration (verifier #306): research-depth's claims-without-findings refusal and this one both refuse the first
+// propose once. Stacked, a room was held twice in a row; now one refusal names both lists and leaves one receipt line.
+test("with an unexamined finding AND a bare claim, the room is held once in total, naming both, and the owner is asked", () => {
+  const { h, name, a, b, c } = room();
+  h.setBoard(name, c.id, "findings/research", FINDING.replace("recruited", "searched"));
+  h.setBoard(name, b.id, "claim/lexer", JSON.stringify({ area: "lexer", owner: "bob", status: "open" }));
+  throws(() => h.propose(name, a.id, "Build the hub-side trigger."), /CLAIMS WITHOUT FINDINGS: claim\/lexer \(bob\)[\s\S]*findings\/research/);
+  const held = h.getRoom(name).messages.filter((m) => m.kind === "system" && (/held once/.test(m.content) || /your claim has no findings/.test(m.content)));
+  assert.equal(held.length, 1, `one receipt line, got ${held.length}`);
+  assert.match(held[0].content, /@bob/);
+  assert.match(held[0].content, /findings\/research/);
+  assert.equal(h.propose(name, a.id, "Build the hub-side trigger.").status, "open", "the second propose goes through: no second hold");
+});
+
+test("either hold, once given, ends the other: a bare claim refused first, then an unexamined finding does not hold again", () => {
+  const { h, name, a, b, c } = room();
+  h.setBoard(name, b.id, "claim/lexer", JSON.stringify({ area: "lexer", owner: "bob", status: "open" }));
+  throws(() => h.propose(name, a.id, "Build it."), /CLAIMS WITHOUT FINDINGS/);
+  h.setBoard(name, c.id, "findings/research", FINDING.replace("recruited", "searched"));
+  assert.equal(h.propose(name, a.id, "Build it.").status, "open");
+});
+
 test("room_status carries the two lists only while there is something on them", () => {
   const { h, name, a, b } = room();
   assert.equal("scrutiny" in h.summary(h.getRoom(name)), false);

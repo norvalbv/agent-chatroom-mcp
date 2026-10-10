@@ -275,7 +275,6 @@ function attackOpen(attack: BoardEntry, target: BoardEntry): boolean {
 
 /** The system line posted with the one refusal; it is also the receipt, so a replayed room does not refuse again. */
 export const SCRUTINY_HELD = "A proposal was held once";
-export const scrutinyHeld = (room: Room) => room.messages.some((m) => m.kind === "system" && m.content.startsWith(SCRUTINY_HELD));
 
 const QUOTED = /["“]([^"”]{12,})["”]/g;
 

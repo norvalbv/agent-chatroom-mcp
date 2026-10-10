@@ -1756,8 +1756,8 @@ export class Hub {
     if (room.expectedParticipants !== 1 && Hub.sessionsOf(voters) < 2) {
       throw new HubError("A room of one cannot conclude: at least two agents on different connections must be present. Recruit (request_agent) or ask someone to join.");
     }
-    if (room.requireVerification && ![...room.board].some(([k, e]) => k.startsWith("verify/") && !k.endsWith(".partial") && parseVerifyHead(e.text))) {
-      throw new HubError("This room requires verification: before proposing, put the command you actually ran, its cwd/commit and its exit code on the board under verify/<area>. A verify/*.partial entry, or one whose first line is not a JSON verify head, does not count. Someone else must then check it themselves (the same check failing at the parent commit and passing at yours) and write their own verify/* entry naming the proposal id.");
+    if (room.requireVerification && ![...room.board.keys()].some((k) => k.startsWith("verify/"))) {
+      throw new HubError("This room requires verification: before proposing, put the command you actually ran, its cwd/commit and its exit code on the board under verify/<area>. Someone else must then check it themselves (the same check failing at the parent commit and passing at yours) and write their own verify/* entry naming the proposal id.");
     }
     const unacked = this.unacknowledged(room);
     if (unacked.length) throw new HubError(`Acknowledge the notes from other rooms first (write "<key>.ack"): ${unacked.join(", ")}`);

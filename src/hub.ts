@@ -22,6 +22,7 @@ import * as output from "./hub/output.js";
 import * as liveness from "./hub/liveness.js";
 import * as persistence from "./hub/persistence.js";
 import { barrenClaims, evidenceGaps, evidenceReceipt, offline, unsourcedClaims } from "./hub/work.js";
+import { apiRequests, UsageLedger, usageTotal } from "./hub/usage.js";
 
 /** The hub's ask to the owners of claims with no findings; its presence in the log is the receipt that the one refusal was given. */
 const BARREN_ASK = "is ready to propose and your claim has no findings on the board";
@@ -209,6 +210,7 @@ export class Hub {
         working: p.working ?? null,
         // dashboard and HTTP only: a seat gets the thin spots in its hint, and its room_status stays small
         ...(p.work && reveal ? { work: p.work } : {}),
+        ...((u) => (u && reveal ? { usage: u } : {}))(this.usage.get(p.seatKeyHash)),
         liveness: (() => {
           const age = (at: string) => Math.max(0, Math.floor((observedAt - Date.parse(at)) / 1000));
           const age_seconds = age(this.lastSeen(p));
@@ -241,6 +243,8 @@ export class Hub {
         return m ? { id: m.id, name: m.from.name, text: m.content } : null;
       })(),
       conclusion: room.conclusion ?? null,
+      // dashboard and HTTP only, like work: one total over the distinct seat processes in the room
+      ...((t) => (t && reveal ? { usage: t } : {}))(usageTotal([...new Set([...room.participants.values()].map((p) => p.seatKeyHash))].map((h) => this.usage.get(h)))),
     };
   }
 
@@ -2594,6 +2598,25 @@ export class Hub {
   seatParticipants(seatKey: string): { room: Room; p: Participant }[] { return this.seats.participants(seatKey); }
   seatEverHeld(seatKey: string): { room: Room; p: Participant }[] { return this.seats.everHeld(seatKey); }
   activity(roomName: string, name: string) { return this.seats.activity(roomName, name); }
+
+  /** Live usage per seat process (src/hub/usage.ts), keyed by seat key hash. */
+  /** @internal */ readonly usage = new UsageLedger();
+  /**
+   * An OTLP/HTTP JSON logs body from a seat's Claude Code (POST /otlp/v1/logs). Counts its api_request records toward
+   * that seat key and writes the new cumulative figure to the log of every room a participant of that seat is in,
+   * active or not, so a dead launcher or a hub restart loses at most the last export interval. Returns records counted.
+   */
+  recordUsage(seatKey: string, body: unknown): number {
+    const records = apiRequests(body);
+    const seat = liveness.seatHash(seatKey);
+    const ts = now();
+    if (!records.length || !this.usage.add(seat, records, ts)) return 0;
+    const usage = this.usage.get(seat)!;
+    for (const room of this.rooms.values()) {
+      if ([...room.participants.values()].some((p) => p.seatKeyHash === seat)) this.persist({ type: "usage", room: room.name, seat, usage, ts });
+    }
+    return records.length;
+  }
 
   // ---------- kick vote / removal ----------
 

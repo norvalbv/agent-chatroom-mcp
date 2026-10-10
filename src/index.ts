@@ -397,6 +397,14 @@ app.post("/heartbeat", (req, res) => {
   const marked = peek ? 0 : hub.heartbeatSeat(seat_key, { tool: tool ?? "?", step, detail });
   res.json({ ok: true, marked, pending: steerPeekSeat(hub, seat_key) });
 });
+// Live usage: a claude seat's OTLP log exporter (src/env.ts seatBeat) posts here with its seat key in a header. The
+// key only selects whose figure moves; a key no participant joined with is never shown (src/hub/usage.ts).
+app.post("/otlp/v1/logs", (req, res) => {
+  const seatKey = req.get("x-chatroom-seat-key");
+  if (!seatKey) return res.status(401).type("text/plain").send("x-chatroom-seat-key required");
+  hub.recordUsage(seatKey, req.body);
+  res.json({});
+});
 // Steering ack: the seat (hook, launcher or seat loop) put these pending asks into its model's context mid-turn, so
 // they count as delivered. Peek without ack leaves them for the next wait: a failed injection never loses an ask.
 app.post("/steer/ack", (req, res) => {

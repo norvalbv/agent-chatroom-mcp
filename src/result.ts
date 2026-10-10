@@ -28,6 +28,38 @@ export interface RunResult {
   /** The lead room's metrics as the hub computed them from its own log (GET /rooms/:room/metrics); absent when the hub
    * kept no log or on older artifacts. After a crash the same numbers come from scripts/run-metrics.ts on the log. */
   metrics?: RunMetrics;
+  /** What the hub saw live (participants[].usage, src/hub/usage.ts), recruits included; absent when no seat reported. */
+  hubUsage?: HubUsageRollup;
+}
+/**
+ * Usage as the hub recorded it while the run went on, from the room snapshots alone: a launcher that crashed, or a
+ * recruit the hub spawned (which no launcher receipt covers), is still counted. One figure per seat process: a seat in
+ * several rooms shows the same cumulative usage in each, so the largest is taken, never the sum.
+ */
+export interface HubUsageRollup {
+  requests: number;
+  input_tokens: number;
+  output_tokens: number;
+  cache_read_input_tokens: number;
+  cache_creation_input_tokens: number;
+  cost_usd: number;
+  seats: number;
+  recruits: { seats: number; cost_usd: number };
+}
+export function hubUsageRollup(rooms: readonly RoomSnapshot[]): HubUsageRollup | undefined {
+  const bySeat = new Map<string, { role: string; u: Record<string, number> }>();
+  for (const room of rooms) for (const p of (room.payload?.participants ?? []) as Record<string, any>[]) {
+    const u = p.usage;
+    if (!u || typeof u.requests !== 'number' || typeof u.cost_usd !== 'number') continue;
+    const seen = bySeat.get(p.name);
+    if (!seen || u.requests > seen.u.requests) bySeat.set(p.name, { role: p.role ?? 'worker', u });
+  }
+  if (!bySeat.size) return undefined;
+  const all = [...bySeat.values()];
+  const sum = (k: string, of = all) => of.reduce((n, s) => n + (Number(s.u[k]) || 0), 0);
+  const recruits = all.filter(s => s.role === 'recruit');
+  return { requests: sum('requests'), input_tokens: sum('input_tokens'), output_tokens: sum('output_tokens'), cache_read_input_tokens: sum('cache_read_input_tokens'),
+    cache_creation_input_tokens: sum('cache_creation_input_tokens'), cost_usd: sum('cost_usd'), seats: all.length, recruits: { seats: recruits.length, cost_usd: sum('cost_usd', recruits) } };
 }
 export type SeatEnding = 'left' | 'exited_without_leaving' | 'kicked' | 'killed_at_timeout' | 'gone_no_reason' | 'still_active';
 /**
@@ -53,6 +85,10 @@ export interface SeatScore {
   leftReason?: string;
   /** Absent when the seat reported no usage: unknown, never zero. */
   cost?: number;
+  /** "hub" when the cost is the hub's live figure because the launcher has none (a recruit, a crashed launcher). */
+  costSource?: 'launcher' | 'hub';
+  /** Model calls the hub counted for this seat (participants[].usage.requests); absent when it reported none. */
+  requests?: number;
   exitCode?: number | null;
   /** Commits on the seat's own branch since the run's base; absent when the seat had no branch. */
   commits?: number;
@@ -95,7 +131,9 @@ export function seatScorecard(rooms: readonly RoomSnapshot[], receipts: Readonly
         produced: false,
       };
       if (typeof p.left_reason === 'string' && p.left_reason) score.leftReason = p.left_reason;
-      if (typeof receipt?.cost === 'number') score.cost = receipt.cost;
+      if (typeof receipt?.cost === 'number') Object.assign(score, { cost: receipt.cost, costSource: 'launcher' });
+      else if (typeof p.usage?.cost_usd === 'number') Object.assign(score, { cost: p.usage.cost_usd, costSource: 'hub' });
+      if (typeof p.usage?.requests === 'number') score.requests = p.usage.requests;
       if (receipt && 'exitCode' in receipt) score.exitCode = receipt.exitCode ?? null;
       if (typeof receipt?.commits === 'number') score.commits = receipt.commits;
       // one process, one row: the first room listed (the lead room) says how the seat ended
@@ -107,6 +145,11 @@ export function seatScorecard(rooms: readonly RoomSnapshot[], receipts: Readonly
       seen.proposals += score.proposals;
       seen.challenges += score.challenges;
       seen.votes += score.votes;
+      // usage is per process: the same cumulative figure in every room, so keep the largest
+      if (score.requests !== undefined && score.requests > (seen.requests ?? -1)) {
+        seen.requests = score.requests;
+        if (seen.costSource !== 'launcher' && score.cost !== undefined) Object.assign(seen, { cost: score.cost, costSource: score.costSource });
+      }
     }
   }
   // a verifier's output is its verdict: a vote, a challenge or a verify entry
@@ -136,7 +179,7 @@ function renderScorecard(card: readonly SeatScore[]): string {
   let text = `## Seats\n\n${card.length} seat(s); ${idle.length} delivered nothing${idle.length ? ` (${idle.map(s => s.name).join(', ')})` : ''}.\n\n| seat | role | msgs | board (claim/verify/other) | commits | proposals | challenges | votes | cost | ended | note |\n|---|---|---|---|---|---|---|---|---|---|---|\n`;
   for (const s of card) {
     const exit = s.exitCode === undefined || s.exitCode === 0 ? '' : ` (exit ${s.exitCode ?? 'signal'})`;
-    text += `| ${s.name} | ${s.role} | ${s.messages} | ${s.board.claim}/${s.board.verify}/${s.board.other} | ${s.commits ?? '-'} | ${s.proposals} | ${s.challenges} | ${s.votes} | ${s.cost === undefined ? '?' : `$${s.cost.toFixed(2)}`} | ${ENDING_TEXT[s.ending]}${exit} | ${seatNote(s)} |\n`;
+    text += `| ${s.name} | ${s.role} | ${s.messages} | ${s.board.claim}/${s.board.verify}/${s.board.other} | ${s.commits ?? '-'} | ${s.proposals} | ${s.challenges} | ${s.votes} | ${s.cost === undefined ? '?' : `$${s.cost.toFixed(2)}${s.costSource === 'hub' ? ' (hub)' : ''}`} | ${ENDING_TEXT[s.ending]}${exit} | ${seatNote(s)} |\n`;
   }
   return `${text}\n`;
 }
@@ -304,6 +347,10 @@ export function renderRunReport(r: RunResult): string {
     ].filter((s): s is string => s !== null);
     const claudeSuffix = claudeBits.length ? ` (claude: ${claudeBits.join(', ')} tokens)` : '';
     text += `## Usage\n\n${r.usage.steps} steps, ${r.usage.prompt_tokens} prompt + ${r.usage.completion_tokens} completion tokens${claudeSuffix}, $${r.usage.cost_usd.toFixed(4)} across ${r.usage.seats} seat(s); ${r.usage.seats_with_usage}/${r.usage.seats} reported usage (coverage: ${r.usage.coverage})\n\n`;
+  }
+  if (r.hubUsage) {
+    const h = r.hubUsage;
+    text += `${r.usage ? '' : '## Usage\n\n'}Hub-observed (live, every seat incl. recruits): $${h.cost_usd.toFixed(4)} over ${h.requests} model calls by ${h.seats} seat(s)${h.recruits.seats ? `, of which ${h.recruits.seats} recruit(s) $${h.recruits.cost_usd.toFixed(4)}` : ''}; ${h.input_tokens} input, ${h.cache_read_input_tokens} cache-read, ${h.cache_creation_input_tokens} cache-creation, ${h.output_tokens} output tokens.\n\n`;
   }
   if (r.scorecard?.length) text += renderScorecard(r.scorecard);
   if (r.metrics) text += renderMetrics(r.metrics);

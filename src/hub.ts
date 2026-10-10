@@ -2264,7 +2264,33 @@ export class Hub {
    * a text also cites commits as history, and the hub cannot tell those from the ones it claims are done. */
   unverifiedCommits(room: Room, pr: Proposal): string[] {
     if (!room.requireVerification) return [];
-    return uncoveredCommits(pr.text, this.countingHeads(room, pr));
+    return uncoveredCommits(pr.text, [...this.countingHeads(room, pr), ...this.pendingCoverage(room, pr).map((x) => x.head)]);
+  }
+
+  /** A head written before there was a proposal to name: "pending", empty, or anything that is not a prop_ id. */
+  static isPending(head: VerifyHead): boolean {
+    return !/^prop_/.test(head.proposal.trim());
+  }
+
+  /**
+   * Verify entries written while builds were reviewed and no proposal existed (11 of 11 in swarm-082539-kns2;
+   * idea/pending-verify-counts) whose commit this text cites. They cover that commit, so it is not reported as
+   * unchecked, and their gaps ride on the conclusion; they never open the gate, which still needs a head naming this
+   * proposal: one small cited fix must not unlock a list of fourteen before anyone checked the merged tree (verifier,
+   * #287). Same shape rules as the gate: another connection, exit 0, failed at base. A verification binds to the commit
+   * (done-means-independently-verified).
+   */
+  pendingCoverage(room: Room, pr: Proposal): { key: string; e: BoardEntry; head: VerifyHead }[] {
+    const proposer = room.participants.get(pr.by.id);
+    const out: { key: string; e: BoardEntry; head: VerifyHead }[] = [];
+    for (const [key, e] of room.board) {
+      if (!key.startsWith("verify/") || key.endsWith(".partial") || e.by === pr.by.name) continue;
+      const author = [...room.participants.values()].find((x) => x.name === e.by);
+      if (author && proposer && author.session && author.session === proposer.session) continue;
+      const head = parseVerifyHead(e.text);
+      if (head && Hub.isPending(head) && head.commit?.trim() && head.exit_code === 0 && !failToPassShortfall(head) && citesCommit(pr.text, head.commit)) out.push({ key, e, head });
+    }
+    return out;
   }
 
   /** Heads that name this proposal, pass on shape (another connection, exit 0, fail-to-pass) and whose commit the text
@@ -2278,7 +2304,7 @@ export class Hub {
       const author = [...room.participants.values()].find((x) => x.name === e.by);
       if (author && proposer && author.session && author.session === proposer.session) continue;
       const head = parseVerifyHead(e.text);
-      if (head && head.proposal === pr.id && head.exit_code === 0 && !failToPassShortfall(head) && citesCommit(pr.text, head.commit)) out.push(head);
+      if (head && (head.proposal === pr.id || Hub.isPending(head)) && head.exit_code === 0 && !failToPassShortfall(head) && citesCommit(pr.text, head.commit)) out.push(head);
     }
     return out;
   }
@@ -2290,6 +2316,7 @@ export class Hub {
       .map(([key, e]) => ({ key, e, v: this.verifyEntryVerdict(room, pr, key, e, undefined) }))
       .filter((x) => x.v.head && !x.v.why)
       .map((x) => ({ key: x.key, by: x.e.by, gaps: [...verifyGaps(x.v.head!, x.e.devReceipt), ...this.devRunAuthorGap(room, pr, x.e.devReceipt, x.e.by)] }))
+      .concat(this.pendingCoverage(room, pr).map((x) => ({ key: x.key, by: x.e.by, gaps: [...verifyGaps(x.head, x.e.devReceipt), ...this.devRunAuthorGap(room, pr, x.e.devReceipt, x.e.by)] })))
       .filter((x) => x.gaps.length);
   }
 

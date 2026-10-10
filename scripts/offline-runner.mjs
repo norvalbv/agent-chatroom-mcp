@@ -218,6 +218,7 @@ export const offlineScripts = [
   'verify-gaps-regression.ts',
   'dev-runs-regression.ts',
   'verify-fail-to-pass-regression.ts',
+  'pending-verify-regression.ts',
 ];
 
 export function offlineCommands() {

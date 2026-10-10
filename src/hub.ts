@@ -207,7 +207,8 @@ export class Hub {
         last_active_at: p.lastActiveAt,
         last_seen_at: this.lastSeen(p),
         working: p.working ?? null,
-        ...(p.work ? { work: p.work } : {}),
+        // dashboard and HTTP only: a seat gets the thin spots in its hint, and its room_status stays small
+        ...(p.work && reveal ? { work: p.work } : {}),
         liveness: (() => {
           const age = (at: string) => Math.max(0, Math.floor((observedAt - Date.parse(at)) / 1000));
           const age_seconds = age(this.lastSeen(p));

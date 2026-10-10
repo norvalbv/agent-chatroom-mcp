@@ -565,9 +565,12 @@ for (const room of [...groupRooms, leadsRoom]) {
     .catch((e) => log(`${room}: could not post the run deadline: ${e instanceof Error ? e.message : String(e)}`));
 }
 let timedOut = false;
-const timeout = setTimeout(() => {
+/** The lead room just before the timeout kills its seats: afterwards every seat has left and blockers read as such. */
+let leadAtTimeout: Record<string, any> | null = null;
+const timeout = setTimeout(async () => {
   log(`timeout after ${TIMEOUT_MIN} min; stopping agents`);
   timedOut = true;
+  try { leadAtTimeout = await (await fetch(`${URL_}/rooms/${encodeURIComponent(leadsRoom)}`, { signal: AbortSignal.timeout(3_000) })).json() as Record<string, any>; } catch {}
   for (const [name, c] of seatChildren) if (c.exitCode === null && c.signalCode === null) killedAtTimeout.add(name);
   for (const c of children) c.kill();
   void sweepStrays("timeout");
@@ -625,7 +628,7 @@ const artifact: RunResult = {
   rooms: snapshots,
   verifier: { name: "verifier", output: results.find(r => r.name === "verifier")?.text ?? null },
   reportPath: resolve(OUT, "report.md"), artifactPath, collectionErrors, usage: rollupUsage([...results, ...replacedRuns]),
-  outcome: classifyOutcome(snapshots.find(r => r.name === leadsRoom)?.payload, { timedOut }),
+  outcome: classifyOutcome(snapshots.find(r => r.name === leadsRoom)?.payload, { timedOut, atTimeout: leadAtTimeout }),
   scorecard: seatScorecard(snapshots, Object.fromEntries([...exitCodes].map(([name, exitCode]) => [name, { exitCode, cost: seatCosts.get(name), killedAtTimeout: killedAtTimeout.has(name), commits: branchCommits(name) }]))),
 };
 writeRunResult(resolve(OUT, "result.json"), artifact);

@@ -14,7 +14,7 @@ import { registerRespawn } from "./respawn.js";
 import { fileURLToPath } from "node:url";
 import { carrySettings, devHubRule, heartbeatHookSettings, loadDotEnv, outputHeartbeat, seatBeat, seatChildEnv, type SeatBeat } from "./env.js";
 import { randomUUID } from "node:crypto";
-import { respawnDecision, type RespawnRoom } from "./respawn.js";
+import { respawnChain, type RespawnRoom } from "./respawn.js";
 import { claudeArgs } from "./claude-args.js";
 import { codexSeatCommand, codexUsageTracker } from "./codex-seat.js";
 import { claudeSandbox } from "./sandbox.js";
@@ -224,33 +224,21 @@ function runCodex(name: string, text: string, cwd: string, model: string | undef
  * verifier. A seat that finished, handed over and left is not replaced merely because the room is open; the first
  * respawning launcher did that 70 times in two runs (src/respawn.ts). Up to three times and never in the last five minutes.
  */
+/** Attempts a respawn replaced, by process name: their usage belongs in the run total (unknown stays unknown). */
+const replacedRuns: SeatRun[] = [];
 async function withRespawn(name: string, room: string, mk: (nm: string, note: string) => Promise<SeatOutcome>): Promise<SeatOutcome> {
-  let out: SeatOutcome = await mk(name, "");
-  let previousName = name;
-  for (let i = 1; RESPAWN && i <= 3; i++) {
-    if (STOPPING || Date.now() > RUN_STARTED + TIMEOUT_MIN * 60_000 - 5 * 60_000) break;
-    let summary: RespawnRoom | null = null;
-    try {
-      summary = (await (await fetch(`${URL_}/rooms/${encodeURIComponent(room)}`)).json()) as RespawnRoom;
-    } catch {}
-    const d = respawnDecision({ name: previousName, exitCode: exitCodes.get(previousName) ?? null, attempt: i, room: summary });
-    if (!d.respawn) {
-      log(`${previousName} exited; not respawning: ${d.reason}`);
-      break;
-    }
-    const nm = `${name}-r${i}`;
-    let note: string;
-    try {
-      note = await registerRespawn(URL_, room, previousName, nm, process.env.CHATROOM_LAUNCHER_TOKEN, undefined, d.reason);
-    } catch (error) {
-      log(`Not respawning ${previousName}: ${error instanceof Error ? error.message : "replacement registration failed"}`);
-      break;
-    }
-    log(`${previousName} exited while ${room} is ${summary?.state}; respawning as ${nm}: ${d.reason}`);
-    out = await mk(nm, note);
-    previousName = nm;
-  }
-  return out;
+  if (!RESPAWN) return mk(name, "");
+  const chain = await respawnChain<SeatOutcome>({
+    name,
+    stop: () => STOPPING || Date.now() > RUN_STARTED + TIMEOUT_MIN * 60_000 - 5 * 60_000,
+    room: async () => (await (await fetch(`${URL_}/rooms/${encodeURIComponent(room)}`)).json()) as RespawnRoom,
+    exitCode: (nm) => exitCodes.get(nm) ?? null,
+    register: (previousName, nm, reason) => registerRespawn(URL_, room, previousName, nm, process.env.CHATROOM_LAUNCHER_TOKEN, undefined, reason),
+    run: mk,
+    log,
+  });
+  for (const r of chain.replaced) replacedRuns.push({ name: r.name, ...r.outcome });
+  return chain.last;
 }
 
 /** Last exit code per seat name; withRespawn reads it to tell a crash from a finished seat. */
@@ -614,7 +602,7 @@ const artifact: RunResult = {
   leadRoom: leadsRoom,
   rooms: snapshots,
   verifier: { name: "verifier", output: results.find(r => r.name === "verifier")?.text ?? null },
-  reportPath: resolve(OUT, "report.md"), artifactPath, collectionErrors, usage: rollupUsage(results),
+  reportPath: resolve(OUT, "report.md"), artifactPath, collectionErrors, usage: rollupUsage([...results, ...replacedRuns]),
   outcome: classifyOutcome(snapshots.find(r => r.name === leadsRoom)?.payload, { timedOut }),
   scorecard: seatScorecard(snapshots, Object.fromEntries([...exitCodes].map(([name, exitCode]) => [name, { exitCode, cost: seatCosts.get(name), killedAtTimeout: killedAtTimeout.has(name) }]))),
 };

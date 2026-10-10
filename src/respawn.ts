@@ -89,3 +89,50 @@ export async function registerRespawn(
   if (typeof result.replacementToken !== "string" || !result.replacementToken) throw new Error("Replacement registration returned no join proof.");
   return `\n\nYou replace ${previousName}, who dropped out of this room${reason ? ` (${reason})` : ""}. The launcher has registered this replacement with the hub. On your first join_room call use name=${JSON.stringify(name)} and replacement_token=${JSON.stringify(result.replacementToken)}. This one-use join proof is only for this reserved seat: do not post it to chat or board. Before anything else read the board (board_get) and the recent messages (read_messages since_seq=0 is too much: read the last 40), take over any unfinished claim/* entry of theirs, and say in one line that you have.`;
 }
+
+export interface RespawnChainDeps<T> {
+  name: string;
+  maxAttempts?: number;
+  /** True once the launcher is stopping or too close to its timeout for a successor to be worth launching. */
+  stop: () => boolean;
+  room: () => Promise<RespawnRoom | null>;
+  exitCode: (name: string) => number | null;
+  /** Registers the successor with the hub and returns the note for its brief; a throw ends the chain. */
+  register: (previousName: string, name: string, reason: string) => Promise<string>;
+  run: (name: string, note: string) => Promise<T>;
+  log?: (line: string) => void;
+}
+/**
+ * Run a seat and, while respawnDecision says so, its successors `name-r1..rN`. Every replaced attempt is handed
+ * back under its own process name: the launcher used to keep only the last outcome, so a crashed attempt's
+ * usage dropped out of the run total while coverage still read "complete".
+ */
+export async function respawnChain<T>(d: RespawnChainDeps<T>): Promise<{ last: T; lastName: string; replaced: { name: string; outcome: T }[] }> {
+  const max = d.maxAttempts ?? 3;
+  const replaced: { name: string; outcome: T }[] = [];
+  let last = await d.run(d.name, "");
+  let lastName = d.name;
+  for (let i = 1; i <= max; i++) {
+    if (d.stop()) break;
+    let room: RespawnRoom | null = null;
+    try { room = await d.room(); } catch {}
+    const decision = respawnDecision({ name: lastName, exitCode: d.exitCode(lastName), attempt: i, room, maxAttempts: max });
+    if (!decision.respawn) {
+      d.log?.(`${lastName} exited; not respawning: ${decision.reason}`);
+      break;
+    }
+    const name = `${d.name}-r${i}`;
+    let note: string;
+    try {
+      note = await d.register(lastName, name, decision.reason);
+    } catch (error) {
+      d.log?.(`Not respawning ${lastName}: ${error instanceof Error ? error.message : "replacement registration failed"}`);
+      break;
+    }
+    d.log?.(`${lastName} exited while the room is ${room?.state}; respawning as ${name}: ${decision.reason}`);
+    replaced.push({ name: lastName, outcome: last });
+    last = await d.run(name, note);
+    lastName = name;
+  }
+  return { last, lastName, replaced };
+}

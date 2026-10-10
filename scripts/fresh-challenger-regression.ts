@@ -56,6 +56,7 @@ assert.ok(on.spawned[0].brief.includes("prop_a"), "the brief names the proposal 
 assert.ok(on.spawned[0].brief.includes(TEXT), "the brief carries the proposal text");
 assert.match(on.spawned[0].brief, /challenge/);
 assert.match(on.spawned[0].brief, /leave_room/);
+assert.match(on.spawned[0].brief, /no absolute path/, "the command must be rerunnable in another checkout (reviewer finding: a recruit filed one starting with an absolute cd)");
 assert.notEqual(on.requests[0].canEdit, true, "the fresh challenger is read-only");
 assert.equal(on.requests[0].count, 1);
 assert.ok(announcements.some((a) => /fresh challenger/i.test(a) && a.includes("prop_a")), "the room is told the hub recruited, and for which proposal");

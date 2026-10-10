@@ -3,7 +3,8 @@
  * The hub picked recruits as reviewers there and both left without reviewing (deadline-builder for claim/launcher-seat-port,
  * port-guard-builder for claim/verify-gaps: "I am a one-brief recruit and I am leaving now"). Across 256 past room logs
  * plus that room, 11 of 13 claims whose hub-assigned reviewer was a recruit never got a verify/* from it, against 231 of
- * 473 for standing seats (scripts/reviewer-recruit-measure.py). A recruit is still picked when it is the only one who can.
+ * 473 for standing seats (scripts/reviewer-recruit-measure.py). A recruit is still picked when it is the only one who can,
+ * and a registered successor (replacementOf, set at its token join) counts as standing: it inherits a seat and stays.
  * Run: npx tsx scripts/reviewer-recruit-regression.ts
  */
 import assert from "node:assert/strict";
@@ -61,6 +62,17 @@ test("a recruit's own claim gets a standing reviewer too", () => {
   h.join(name, "r2", "claude", {}, undefined, "s-r2", "recruit");
   const e = h.setBoard(name, r.id, "claim/area", claim("area", "r1"))!;
   assert.equal(e.reviewer, "owner");
+});
+
+test("a registered successor joined as a recruit is a standing seat: it took over a departed seat and stays (-7's attack)", () => {
+  const h = new Hub();
+  const name = `reviewer-recruit-${++serial}`;
+  const owner = h.join(name, "owner", "test", {}, undefined, "s-o").participant;
+  const succ = h.join(name, "seat-2-r1", "claude", {}, undefined, "s-r1", "recruit").participant;
+  succ.replacementOf = "p_departed"; // set by registerReplacement's token join, never by the seat
+  h.join(name, "carol", "test", {}, undefined, "s-c");
+  const got = ["a", "b"].map((x) => h.setBoard(name, owner.id, `claim/${x}`, claim(x, "owner"))!.reviewer);
+  assert.deepEqual(got, ["seat-2-r1", "carol"], "the successor joined first and shares the load like any standing seat");
 });
 
 if (failed) {

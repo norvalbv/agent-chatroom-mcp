@@ -15,6 +15,7 @@ const ROOM = "quiet-default";
 const join = (name: string, agent = "claude") => hub.join(ROOM, name, agent, { nudgeAfterMs: 0 }, undefined, `s-${name}`).participant;
 const a = join("A"), b = join("B"), c = join("C"), d = join("D");
 const human = join("benji", "human");
+const verifier = hub.join(ROOM, "V", "claude", {}, undefined, "s-V", "verifier").participant;
 const ids = (xs: { id: string }[]) => xs.map((x) => x.id).sort();
 // each send is forced so the stale-send guard (others' unread messages) never decides the case
 const say = (p: { id: string }, text: string, replyTo?: string, quiet?: boolean) => hub.send(ROOM, p.id, text, replyTo, true, quiet);
@@ -49,6 +50,10 @@ assert.ok(!say(a, "@B I'll run the parser dev room myself.").quiet, "a commitmen
 assert.ok(!say(a, "@B I'm taking the lexer, leave it.").quiet, "taking work is a commitment");
 assert.ok(!say(a, "@B per quiet-delivery-not-privacy a thread surfaces when cited.").quiet, "a settled-axis slug is public");
 assert.ok(!say(a, "@B this is a RE-TARGET of the prompt axis.").quiet, "a RE-TARGET is public");
+
+// 5c. the verifier and a lead act for the room: what they are asked is room business (attack/idea/quiet-default, -3 point 3)
+assert.ok(!say(a, "@V ready for integration when you are.").quiet, "a message to the verifier stays public");
+assert.ok(!say(verifier, "@A merged, thanks.").quiet, "and so does the verifier's own reply");
 
 // 6. anything naming a human is public
 assert.ok(!say(a, "@B @benji asked for this earlier, can you take it?").quiet, "a message naming a human is public");

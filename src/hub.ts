@@ -831,6 +831,9 @@ export class Hub {
     const author = parent && parent.from.id !== p.id && room.participants.get(parent.from.id)?.active ? [parent.from.id] : [];
     const targets = [...new Set([...named.map((x) => x!.id), ...inherited, ...author])].filter((id) => id !== p.id);
     if (targets.length < 1 || targets.length > 2) return undefined;
+    // the verifier, a lead or a chair act for the room: what passes between them and a seat is room business (-3)
+    const forRoom = (x?: Participant) => !!x && (x.role === "verifier" || x.role === "lead" || x.role === "chair");
+    if (forRoom(p) || targets.some((id) => forRoom(room.participants.get(id)))) return undefined;
     return targets;
   }
 

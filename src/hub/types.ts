@@ -500,6 +500,8 @@ export interface DevReceipt {
   agent_seats?: number;
   speaking_seats?: number;
   messages?: number;
+  /** set only when this hub started the dev run itself (start_dev_run): code_head is then the commit it built, not the dev hub's word */
+  launched?: { run: string; requested_by: string; commit: string; entry_sha256?: Record<string, string> };
 }
 
 /** Only a loopback dev hub's room summary: the hub never fetches anything else on a seat's say-so. */
@@ -537,6 +539,8 @@ export function verifyGaps(h: VerifyHead, receipt?: DevReceipt): string[] {
     else if (!h.commit || !sameCommit(receipt.code_head, h.commit)) out.push(`dev_room ran ${receipt.code_head}, not ${h.commit ?? "the verified commit"}`);
     else if (receipt.code_dirty) out.push(`dev_room ran ${receipt.code_head} with uncommitted changes`);
     if ((receipt.speaking_seats ?? 0) < 2) out.push(`dev_room had ${receipt.speaking_seats ?? 0} agent seat(s) that spoke`);
+    // SLSA L1 vs L2 (sources/slsa-build-levels): a hub some seat started reports its own commit and seats, and a static file can too
+    if (!receipt.launched) out.push("dev_room was not started by this hub (scripts/dev-run.ts), so its commit and seats are the dev hub's own word");
   }
   return out;
 }

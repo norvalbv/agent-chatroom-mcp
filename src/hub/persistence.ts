@@ -207,6 +207,10 @@ export function replay(hub: Hub) {
           applyBoard(room, ev.key, ev.entry);
           break;
         }
+        case "dev_run": {
+          hub.devRuns.restore(ev.run);
+          break;
+        }
         case "dev_receipt": {
           const e = hub.rooms.get(ev.room)?.board.get(ev.key);
           if (e && e.updatedAt === ev.updatedAt) e.devReceipt = ev.receipt;

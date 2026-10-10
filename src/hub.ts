@@ -22,6 +22,7 @@ import * as output from "./hub/output.js";
 import * as liveness from "./hub/liveness.js";
 import * as persistence from "./hub/persistence.js";
 import { barrenClaims, evidenceGaps, evidenceReceipt } from "./hub/work.js";
+import { DevRuns, DevRunError, type DevRunHost } from "./hub/dev-runs.js";
 
 /** The hub's ask to the owners of claims with no findings; its presence in the log is the receipt that the one refusal was given. */
 const BARREN_ASK = "is ready to propose and your claim has no findings on the board";
@@ -40,9 +41,17 @@ export class Hub {
   /** Ordered metric inputs retain historical membership, including in-memory rooms. */
   /** @internal */ readonly replyMetricEvents = new Map<string, ReplyMetricEvent[]>();
 
-  constructor(opts: { dataDir?: string; cwd?: string } = {}) {
+  /** Dev runs this hub started and watched itself: the receipts verify heads may cite (src/hub/dev-runs.ts). */
+  readonly devRuns: DevRuns;
+
+  constructor(opts: { dataDir?: string; cwd?: string; devRunHost?: DevRunHost; devPorts?: [number, number] } = {}) {
     this.dataDir = opts.dataDir;
     this.cwd = opts.cwd;
+    this.devRuns = new DevRuns({
+      repo: opts.cwd, host: opts.devRunHost, ports: opts.devPorts,
+      persist: (run) => { if (this.rooms.has(run.room)) this.persist({ type: "dev_run", room: run.room, run }); },
+      announce: (room, text) => { if (this.rooms.has(room)) this.announce(room, text); },
+    });
     if (this.dataDir) {
       mkdirSync(this.dataDir, { recursive: true });
       this.replay();
@@ -2201,8 +2210,31 @@ export class Hub {
     return [...room.board]
       .map(([key, e]) => ({ key, e, v: this.verifyEntryVerdict(room, pr, key, e, undefined) }))
       .filter((x) => x.v.head && !x.v.why)
-      .map((x) => ({ key: x.key, by: x.e.by, gaps: verifyGaps(x.v.head!, x.e.devReceipt) }))
+      .map((x) => ({ key: x.key, by: x.e.by, gaps: [...verifyGaps(x.v.head!, x.e.devReceipt), ...this.devRunAuthorGap(room, pr, x.e.devReceipt)] }))
       .filter((x) => x.gaps.length);
+  }
+
+  /** The brief's rule: agents watched by someone other than the change's author. A dev run the proposer started is their own demo. */
+  private devRunAuthorGap(room: Room, pr: Proposal, receipt: DevReceipt | undefined): string[] {
+    const by = receipt?.launched?.requested_by;
+    if (!by) return [];
+    const starter = [...room.participants.values()].find((x) => x.name === by);
+    const proposer = room.participants.get(pr.by.id);
+    const own = by === pr.by.name || (!!starter?.session && starter.session === proposer?.session);
+    return own ? [`dev run ${receipt!.launched!.run} was started by ${by}, the proposal's author, not by a reviewer`] : [];
+  }
+
+  /** start_dev_run over HTTP: the participant id is the requester's proof of identity (issued only to its own connection). */
+  async startDevRun(roomName: string, participantId: string, q: { commit: string; task: string; agents?: number; model?: string; timeoutMin?: number }) {
+    const room = this.getRoom(roomName);
+    const p = room.participants.get(participantId);
+    if (!p || !p.active) throw new HubError("participant_id is not an active participant of this room: pass the id join_room returned to you.", undefined, "auth");
+    try {
+      return await this.devRuns.start({ room: roomName, requestedBy: p.name, ...(p.session ? { session: p.session } : {}), ...q });
+    } catch (err) {
+      if (err instanceof DevRunError) throw new HubError(err.message);
+      throw err;
+    }
   }
 
   /** Read the dev room a verify head names from its own running hub, and keep what it said on the entry. The
@@ -2214,10 +2246,18 @@ export class Hub {
     const url = devRoomUrl(head?.dev_room);
     if (!e || !head?.dev_room || !url) return undefined;
     let receipt: DevReceipt;
+    const run = this.devRuns.forUrl(url);
     try {
-      receipt = devReceiptFrom(head.dev_room, await fetcher(url.href));
+      // a run this hub started: once it has ended, its port may be anyone's, so only the summary the hub kept counts
+      const seen = run?.rooms?.find((x) => `/rooms/${encodeURIComponent(x.room)}` === url.pathname || `/rooms/${x.room}` === url.pathname);
+      receipt = run && run.state !== "running"
+        ? { url: head.dev_room, fetched_at: now(), room: seen?.room, state: seen?.state, agent_seats: seen?.agent_seats, speaking_seats: seen?.speaking_seats, messages: seen?.messages }
+        : devReceiptFrom(head.dev_room, await fetcher(url.href));
     } catch (err) {
       receipt = { url: head.dev_room, fetched_at: now(), error: String((err as Error)?.message ?? err).slice(0, 160) };
+    }
+    if (run && !receipt.error) {
+      receipt = { ...receipt, code_head: run.commit, code_dirty: false, launched: { run: run.id, requested_by: run.requested_by, commit: run.commit, ...(run.entry_sha256 ? { entry_sha256: run.entry_sha256 } : {}) } };
     }
     if (room.board.get(key) !== e) return receipt; // rewritten meanwhile: that write fetches its own
     e.devReceipt = receipt;

@@ -367,6 +367,23 @@ app.post("/rooms/:room/archive", (req, res) => {
     res.status(400).type("text/plain").send(e instanceof HubError ? e.message : "error");
   }
 });
+// Dev runs the hub builds, starts and watches itself (src/hub/dev-runs.ts): the receipt a verify head's dev_room can
+// cite. A route, not an MCP tool, so no seat pays schema for a rare call (token-cost-is-resent-context); the
+// participant id, issued only to its own connection, is the requester's identity (identity-is-the-connection).
+app.post("/rooms/:room/dev-runs", async (req, res) => {
+  const { participant_id, commit, task, agents, model, timeout_min } = (req.body ?? {}) as { participant_id?: string; commit?: string; task?: string; agents?: number; model?: string; timeout_min?: number };
+  if (!participant_id || !commit || !task) return res.status(400).type("text/plain").send("participant_id, commit and task required");
+  try {
+    res.json(await hub.startDevRun(req.params.room, participant_id, { commit: String(commit), task: String(task), agents, model, timeoutMin: timeout_min }));
+  } catch (e) {
+    res.status(400).type("text/plain").send(e instanceof HubError ? e.message : String((e as Error)?.message ?? e));
+  }
+});
+app.get("/dev-runs", (_req, res) => res.json(hub.devRuns.status()));
+app.get("/dev-runs/:id", (req, res) => {
+  const r = hub.devRuns.status(req.params.id)[0];
+  return r ? res.json(r) : res.status(404).type("text/plain").send("no such dev run");
+});
 app.get("/rooms/:room", (req, res) => {
   try {
     res.json(hub.summary(hub.getRoom(req.params.room), true));

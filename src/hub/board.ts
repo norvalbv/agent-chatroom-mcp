@@ -202,6 +202,7 @@ export function setBoard(hub: Hub, roomName: string, pid: string, key: string, t
     ...(reviewer ? { reviewer: reviewer.name, reviewerId: reviewer.id }
       : previous?.reviewer ? { reviewer: previous.reviewer, reviewerId: previous.reviewerId } : {}),
     ...(postReveal ? { postReveal: true } : {}),
+    ...(attacked ? { attackedChars: norm(room.board.get(attacked.target)!.text).length } : {}),
     ...(workspace ? { workspace } : {}),
   };
   applyBoard(room, key, entry);
@@ -226,7 +227,7 @@ export function setBoard(hub: Hub, roomName: string, pid: string, key: string, t
     // chat kind for the same reason as the reviewer notice: the author's held wait must wake on it
     hub.post(room, "chat", undefined,
       `@${attacked.author} ${p.name} attacked your "${attacked.target}" in "${key}", quoting "${attacked.cites.slice(0, 80)}${attacked.cites.length > 80 ? "…" : ""}". ` +
-      `Answer it by editing "${attacked.target}": fix the clause, or add why it stands. An unanswered attack is listed to whoever proposes.`);
+      `Answer it by editing "${attacked.target}": change the quoted clause, or add a line saying why it stands. An unanswered attack is listed to whoever proposes.`);
   }
   if (takeover) {
     hub.post(room, "system", undefined, `${hub.shown(room, p)} took over "${key}" from ${hub.shown(room, takeover.owner)} (${takeover.reason === "successor" ? "registered successor" : `owner gone since ${hub.lastSeen(takeover.owner)}`}).`);
@@ -239,6 +240,8 @@ export function setBoard(hub: Hub, roomName: string, pid: string, key: string, t
 
 /** Coordination state, not findings: there is no claim about the world in these to attack. */
 const NOT_A_FINDING = ["claim/", "verify/", "hold/", "inbox/", "handoff/", "help/", "join-request/", "draft/", "attack/"];
+/** An author's answer that leaves the quoted clause standing must add at least this much: a reply, not a re-save. */
+export const ATTACK_REPLY_MIN_CHARS = 40;
 /** Below this an entry is a note (a todo, a port number), not a finding a proposal could rest on. */
 export const FINDING_MIN_CHARS = 200;
 
@@ -264,12 +267,22 @@ function checkAttack(room: Room, p: Participant, key: string, text: string): { t
   return { target, author: e.by, cites };
 }
 
+/** Open until the author removes every clause the attack quotes, or adds a reply to the attacked entry. */
+function attackOpen(attack: BoardEntry, target: BoardEntry): boolean {
+  const text = norm(target.text);
+  return [...attack.text.matchAll(QUOTED)].some((m) => text.includes(norm(m[1]))) && text.length < (attack.attackedChars ?? 0) + ATTACK_REPLY_MIN_CHARS;
+}
+
+/** The system line posted with the one refusal; it is also the receipt, so a replayed room does not refuse again. */
+export const SCRUTINY_HELD = "A proposal was held once";
+export const scrutinyHeld = (room: Room) => room.messages.some((m) => m.kind === "system" && m.content.startsWith(SCRUTINY_HELD));
+
 const QUOTED = /["“]([^"”]{12,})["”]/g;
 
 /**
  * What a proposal would rest on unexamined: findings by an agent that no other connection has attacked, quoted or even
- * named (in chat, a challenge or its own board entry), and attacks the author has not answered (answering is editing
- * the attacked entry after the attack was written). Naming counts because seats mostly check each other in chat: in
+ * named (in chat, a challenge or its own board entry), and attacks the author has not answered (answering is removing
+ * the quoted clause from the attacked entry, or adding a reply to it). Naming counts because seats mostly check each other in chat: in
  * dev room swarm-002346-crax a finding the verifier had reproduced there was listed as never looked at.
  */
 export function scrutiny(room: Room): { unexamined: string[]; open_attacks: string[] } {
@@ -287,7 +300,8 @@ export function scrutiny(room: Room): { unexamined: string[]; open_attacks: stri
   for (const [key, e] of room.board) {
     if (key.startsWith("attack/")) {
       const target = key.slice("attack/".length);
-      if (room.board.has(target) && (room.boardVersions.get(target) ?? 0) < (room.boardVersions.get(key) ?? 0)) open_attacks.push(key);
+      const t = room.board.get(target);
+      if (t && attackOpen(e, t)) open_attacks.push(key);
       continue;
     }
     const author = byName.get(e.by);

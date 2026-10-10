@@ -1635,16 +1635,17 @@ export class Hub {
           `Reply to them first with send_message reply_to="${human.id}" in plain prose, then propose.`,
       );
     }
-    // Once per room: the proposer hears what the proposal would rest on unexamined, and may go ahead anyway.
+    // Once per room: the proposer and the room hear what the proposal would rest on unexamined; the next propose goes ahead.
     const { unexamined, open_attacks } = board.scrutiny(room);
-    if (!room.scrutinyWarned && (unexamined.length || open_attacks.length)) {
-      room.scrutinyWarned = true;
+    if ((unexamined.length || open_attacks.length) && !board.scrutinyHeld(room)) {
       const first = (keys: string[]) => [...keys].sort((a, b) => Number(text.includes(b)) - Number(text.includes(a))).slice(0, 8).join(", ") + (keys.length > 8 ? `, and ${keys.length - 8} more` : "");
+      const what = (unexamined.length ? `${unexamined.length} board finding(s) have not been attacked, quoted or even named by anyone but their author: ${first(unexamined)}. ` : "") +
+        (open_attacks.length ? `${open_attacks.length} attack(s) are unanswered by the author of the entry attacked: ${first(open_attacks)}. ` : "");
+      this.post(room, "system", undefined, `${board.SCRUTINY_HELD}, from ${this.shown(room, p)}: ${what}Anyone but the author can check one and write attack/<key> quoting its weakest clause; an author answers an attack by editing the entry. The next propose goes through as things stand.`);
       throw new HubError(
-        (unexamined.length ? `${unexamined.length} board finding(s) have not been attacked, quoted or even named by anyone but their author: ${first(unexamined)}. ` +
-          `For each one this proposal rests on, ask a named seat to check it and write attack/<key> quoting its weakest clause (or do that yourself if it is not yours). ` : "") +
-        (open_attacks.length ? `${open_attacks.length} attack(s) are unanswered by the author of the entry attacked: ${first(open_attacks)}. The author answers by editing that entry. ` : "") +
-        `This refusal happens once per room: propose again to go ahead as things stand.`,
+        what + (unexamined.length ? `For each one this proposal rests on, ask a named seat to check it and write attack/<key> quoting its weakest clause (or do that yourself if it is not yours). ` : "") +
+          (open_attacks.length ? `The author answers by editing that entry. ` : "") +
+          `This refusal happens once per room and the room has been told: propose again to go ahead as things stand.`,
         { unexamined, open_attacks },
       );
     }

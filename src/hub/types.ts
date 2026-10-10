@@ -222,6 +222,8 @@ export interface BoardEntry {
   workspace?: { branch?: string; worktree: string };
   /** draft/* only: written or edited once peers' drafts were readable, so it is not an independent attempt (sticky). */
   postReveal?: boolean;
+  /** attack/* only: normalised length of the attacked entry when the attack was written, to tell a reply from a re-save. */
+  attackedChars?: number;
 }
 
 export interface Challenge {
@@ -379,8 +381,6 @@ export interface Room {
   lastBoardEventVersion?: number;
   /** human message ids the propose-gate has already warned about (once each) */
   humanWarned: Set<string>;
-  /** propose was refused once with the unexamined findings and unanswered attacks (never twice). */
-  scrutinyWarned?: boolean;
   /** who has been asked to answer each human message, so three agents do not all say hello */
   responders: Map<string, { pid: string; at: number }>;
   /** open and settled votes to remove a participant, keyed by target pid */

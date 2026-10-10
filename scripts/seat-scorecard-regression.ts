@@ -50,9 +50,10 @@ assert.equal(by('ghost').ending, 'killed_at_timeout');
 assert.equal(by('ghost').produced, false);
 assert.equal(by('ghost').cost, undefined, 'unknown cost is absent, never zero');
 assert.equal(by('stuck').ending, 'killed_at_timeout');
-assert.equal(by('stuck').produced, true, 'a claim on the board counts as output');
+assert.equal(by('stuck').produced, false, 'a claim is a promise, not output: 10 of 271 past claimants never delivered');
 assert.equal(by('booted').ending, 'kicked');
 assert.equal(by('live').ending, 'still_active');
+assert.equal(by('live').produced, false, 'four messages and nothing on the board is talk, not output');
 assert.equal(by('verifier').challenges, 1);
 assert.equal(by('verifier').board.verify, 1);
 // without a launcher receipt the cause of a silent exit is unknown, and says so
@@ -96,6 +97,9 @@ assert.ok(md.includes(open.detail), 'report states why the run did not conclude'
 assert.ok(md.includes('## Seats'), 'report has a Seats section');
 assert.match(md, /\| builder \|.*\| left \|/);
 assert.match(md, /\| ghost \|.*killed at timeout.*no output/);
+assert.match(md, /\| stuck \|.*claimed, delivered nothing/);
+assert.match(md, /\| live \|.*talk only/);
+assert.match(md, /7 seat\(s\); 5 delivered nothing \(voter, ghost, stuck, booted, live\)/);
 assert.ok(md.indexOf('## Seats') < md.indexOf('## Transcripts'), 'seats come before the transcript dump');
 // an artifact written before this change still renders
 const old = { ...artifact }; delete old.outcome; delete old.scorecard;

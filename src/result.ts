@@ -28,8 +28,8 @@ export interface RunResult {
 export type SeatEnding = 'left' | 'exited_without_leaving' | 'kicked' | 'killed_at_timeout' | 'gone_no_reason' | 'still_active';
 /**
  * What one seat left behind, read from the room snapshot plus the launcher's own receipt for that seat.
- * `produced` is deliberately coarse: a board entry, a proposal, a challenge or more than two messages
- * (for a verifier, a vote).
+ * `produced` is deliberately coarse: a board entry other than a claim, a proposal or a challenge (for a
+ * verifier, a vote). A claim is a promise and chat is talk: neither counts, and the report says which it was.
  * It separates a seat that left nothing from one that did something; it does not rank the ones that did.
  */
 export interface SeatScore {
@@ -102,7 +102,7 @@ export function seatScorecard(rooms: readonly RoomSnapshot[], receipts: Readonly
     }
   }
   // a verifier's output is its verdict: a vote, a challenge or a verify entry
-  for (const s of card) s.produced = s.board.claim + s.board.verify + s.board.other > 0 || s.proposals > 0 || s.challenges > 0 || (s.role === 'verifier' ? s.votes > 0 : s.messages > 2);
+  for (const s of card) s.produced = s.board.verify + s.board.other > 0 || s.proposals > 0 || s.challenges > 0 || (s.role === 'verifier' && s.votes > 0);
   return card;
 }
 /** Name the cause of a non-conclusion from the lead room's own payload, so the report never has to say only "no consensus". */
@@ -118,12 +118,13 @@ export function classifyOutcome(lead: Record<string, any> | null | undefined, op
   return { kind: 'proposal_open', timedOut, detail: `${how} with ${open.id} v${open.version} by ${open.by} still open.${blocked}${waiting}` };
 }
 const ENDING_TEXT: Record<SeatEnding, string> = { left: 'left', exited_without_leaving: 'exited without leaving', kicked: 'kicked', killed_at_timeout: 'killed at timeout', gone_no_reason: 'gone, no reason recorded', still_active: 'still active' };
+const seatNote = (s: SeatScore) => s.produced ? '' : s.board.claim ? 'claimed, delivered nothing' : s.messages > 2 ? 'talk only' : 'no output';
 function renderScorecard(card: readonly SeatScore[]): string {
   const idle = card.filter(s => !s.produced && s.role !== 'verifier');
-  let text = `## Seats\n\n${card.length} seat(s); ${idle.length} left no output${idle.length ? ` (${idle.map(s => s.name).join(', ')})` : ''}.\n\n| seat | role | msgs | board (claim/verify/other) | proposals | challenges | votes | cost | ended | note |\n|---|---|---|---|---|---|---|---|---|---|\n`;
+  let text = `## Seats\n\n${card.length} seat(s); ${idle.length} delivered nothing${idle.length ? ` (${idle.map(s => s.name).join(', ')})` : ''}.\n\n| seat | role | msgs | board (claim/verify/other) | proposals | challenges | votes | cost | ended | note |\n|---|---|---|---|---|---|---|---|---|---|\n`;
   for (const s of card) {
     const exit = s.exitCode === undefined || s.exitCode === 0 ? '' : ` (exit ${s.exitCode ?? 'signal'})`;
-    text += `| ${s.name} | ${s.role} | ${s.messages} | ${s.board.claim}/${s.board.verify}/${s.board.other} | ${s.proposals} | ${s.challenges} | ${s.votes} | ${s.cost === undefined ? '?' : `$${s.cost.toFixed(2)}`} | ${ENDING_TEXT[s.ending]}${exit} | ${s.produced ? '' : 'no output'} |\n`;
+    text += `| ${s.name} | ${s.role} | ${s.messages} | ${s.board.claim}/${s.board.verify}/${s.board.other} | ${s.proposals} | ${s.challenges} | ${s.votes} | ${s.cost === undefined ? '?' : `$${s.cost.toFixed(2)}`} | ${ENDING_TEXT[s.ending]}${exit} | ${seatNote(s)} |\n`;
   }
   return `${text}\n`;
 }

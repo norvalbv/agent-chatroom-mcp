@@ -14,7 +14,7 @@ import { analyzeReplyMetrics, type ReplyMetricEvent } from "./reply-metrics.js";
 export * from "./hub/types.js";
 import { VERIFY_HEAD_EXAMPLE, VERIFY_HEAD_RULE, parseVerifyHead, readVerifyHead, failToPassShortfall, citesCommit, hexTokens, addedUnchecked, uncoveredCommits, verifyGaps, devRoomUrl, devReceiptFrom, type DevReceipt, ROLES, REFUSAL_CODES, HubError } from "./hub/types.js";
 import type { MessageKind, Vote, Quorum, RoomState, VerifyHead, Role, Participant, KickVote, Message, CodeState, BoardExpiryOptions, BoardEntry, Challenge, ElectorateSummary, ConclusionVerification, Proposal, RoomOptions, JoinOptions, Room, CallOutcome, RefusalCode, BoardManifestObservation } from "./hub/types.js";
-import { now, shortId, norm, emptyBoardManifestCounters, manifestBytes, codeState } from "./hub/internal.js";
+import { now, shortId, norm, emptyBoardManifestCounters, manifestBytes, codeState, commitsIn } from "./hub/internal.js";
 import type { Opts, Event, BoardManifestCounters } from "./hub/internal.js";
 import * as board from "./hub/board.js";
 import * as kick from "./hub/kick.js";
@@ -26,16 +26,8 @@ import { barrenClaims, evidenceGaps, evidenceReceipt } from "./hub/work.js";
 /** The hub's ask to the owners of claims with no findings; its presence in the log is the receipt that the one refusal was given. */
 const BARREN_ASK = "is ready to propose and your claim has no findings on the board";
 
-/** commit-like tokens (7-40 hex with a letter and a digit) in a text */
-const commitsIn = (text: string) => (text.match(/\b[0-9a-f]{7,40}\b/g) ?? []).filter((t) => /[a-f]/.test(t) && /\d/.test(t));
 /** two spellings of one commit: one is a prefix of the other, at least 7 characters */
 const sameCommit = (x: string, y: string) => (x.length <= y.length ? y.startsWith(x) : x.startsWith(y));
-/** The commits a board notice's verify/* or attack/* entry covers (its current text), or none for any other entry. */
-function verdictCommits(room: Room, m: Message): string[] {
-  const key = /board entry "((?:verify|attack)\/[^"]+)"/.exec(m.content)?.[1];
-  const entry = key ? room.board.get(key) : undefined;
-  return entry && entry.by === m.from.name ? commitsIn(entry.text) : [];
-}
 
 export class Hub {
   readonly rooms = new Map<string, Room>();
@@ -1395,7 +1387,8 @@ export class Hub {
   /** Linked chat resolves agent debt: reply_to settles its target and @-back settles
    * every earlier ask from each named sender, including when both appear together.
    * One board write does too: a verify/* or attack/* entry by the addressee that covers a commit an ask names settles
-   * that ask, since the entry is the answer it asked for. Other post kinds never resolve debt (hub-carries-what-it-knows). */
+   * that ask, since the entry is the answer it asked for. An ask naming several commits is settled by an entry covering
+   * any one of them. Other post kinds never resolve debt (hub-carries-what-it-knows). */
   addressedBy(room: Room, p: Participant): Message[] {
     const declined = new Set(p.declinedAsks ?? []);
     // Snapshot only outstanding debt at registration; successors settle it under their own
@@ -1405,7 +1398,8 @@ export class Hub {
     for (const m of room.messages) {
       for (let i = pending.length - 1; i >= 0; i--) if ((p.declinedAt?.[pending[i].id] ?? Infinity) < m.seq) pending.splice(i, 1);
       if (m.kind === "board" && m.from.id === p.id) {
-        const covered = verdictCommits(room, m);
+        // the commits the entry covered when it was written: re-pointing or clearing it later does not reopen the ask
+        const covered = m.covers ?? [];
         if (covered.length) for (let i = pending.length - 1; i >= 0; i--) if (commitsIn(pending[i].content).some((c) => covered.some((v) => sameCommit(c, v)))) pending.splice(i, 1);
         continue;
       }

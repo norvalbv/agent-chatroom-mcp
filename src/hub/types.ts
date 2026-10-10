@@ -235,6 +235,8 @@ export interface Message {
   /** quiet: pushed only to `audience` (sender + mentions); still in the log for everyone */
   quiet?: boolean;
   audience?: string[];
+  /** a board notice for a verify/* or attack/* entry: the commits its text covered when written (settles asks naming them) */
+  covers?: string[];
 }
 
 export interface CodeState {

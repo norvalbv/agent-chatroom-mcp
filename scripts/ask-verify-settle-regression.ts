@@ -6,6 +6,9 @@
  * Run: npx tsx --test scripts/ask-verify-settle-regression.ts
  */
 import assert from "node:assert/strict";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import test from "node:test";
 import { Hub } from "../src/hub.js";
 
@@ -55,4 +58,31 @@ test("an ask with no commit, or a plain board entry, stays owed", (t) => {
   hub.setBoard(ROOM, r.id, "notes/r", "looked at 1b0871f5");
   hub.setBoard(ROOM, r.id, "verify/other", head("aaaa1111"));
   assert.equal(owed().length, 2);
+});
+
+test("re-pointing or clearing the entry later does not reopen a settled ask (-2's probe on 79df09a5)", (t) => {
+  const { hub, a, r, owed } = fixture(t);
+  hub.send(ROOM, a.id, "@R please verify 6abfeae0");
+  hub.setBoard(ROOM, r.id, "verify/run-metrics", head("6abfeae0"));
+  assert.deepEqual(owed(), []);
+  hub.setBoard(ROOM, r.id, "verify/run-metrics", head("1c6fc166"));
+  assert.deepEqual(owed(), [], "the entry now names another commit, but it did answer the ask when written");
+  hub.setBoard(ROOM, r.id, "verify/run-metrics", "");
+  assert.deepEqual(owed(), [], "clearing it does not un-answer the ask");
+});
+
+test("settlement survives a restart: the covered commits are in the persisted notice", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "ask-verify-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  let hub = new Hub({ dataDir: dir });
+  const a = hub.join(ROOM, "A", "test", {}, undefined, "s1").participant;
+  const r = hub.join(ROOM, "R", "test", {}, undefined, "s2").participant;
+  hub.send(ROOM, a.id, "@R please verify 4288e38d");
+  hub.setBoard(ROOM, r.id, "verify/x", head("4288e38d"));
+  hub.setBoard(ROOM, r.id, "verify/x", head("aaaa1111"));
+  clearTimeout(hub.getRoom(ROOM).nudgeTimer);
+  hub = new Hub({ dataDir: dir });
+  const room = hub.getRoom(ROOM);
+  t.after(() => { clearTimeout(room.nudgeTimer); clearTimeout(room.openingsTimer); });
+  assert.deepEqual(hub.addressedBy(room, room.participants.get(r.id)!).map((m: { content: string }) => m.content), []);
 });

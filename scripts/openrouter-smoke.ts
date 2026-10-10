@@ -13,9 +13,12 @@ import { createServer } from "node:http";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { Spawner } from "../src/spawner.js";
+import { ownHubPort } from "./lib/own-hub.js";
 
 const HUB_PORT = Number(process.env.PORT ?? 7734);
 const STUB_PORT = HUB_PORT + 1;
+await ownHubPort(HUB_PORT);
+await ownHubPort(STUB_PORT, "PORT+1");
 const HUB = `http://127.0.0.1:${HUB_PORT}`;
 const STUB = `http://127.0.0.1:${STUB_PORT}`;
 const ROOM = "openrouter-smoke";

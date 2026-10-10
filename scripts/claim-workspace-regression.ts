@@ -13,6 +13,10 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { seatBeat } from "../src/env.js";
 import { Hub } from "../src/hub.js";
+import { ownHubPort } from "./lib/own-hub.js";
+
+// before anything else: with the port taken, nothing below may run
+const PORT = await ownHubPort(Number(process.env.PORT ?? 20_000 + Math.floor(Math.random() * 20_000)));
 
 const scratch = realpathSync(mkdtempSync(join(tmpdir(), "claim-workspace-")));
 process.on("exit", () => rmSync(scratch, { recursive: true, force: true }));
@@ -52,7 +56,6 @@ assert.equal(new URL(seatBeat("http://127.0.0.1:1/mcp", "k").mcpUrl).searchParam
 }
 
 // 3. End to end: the MCP URL the launcher writes is how the hub learns it; board_get shows it.
-const PORT = Number(process.env.PORT ?? 20_000 + Math.floor(Math.random() * 20_000));
 assert.notEqual(PORT, 7717, "never the live hub");
 const HTTP = `http://127.0.0.1:${PORT}`;
 const server = spawn("npx", ["tsx", "src/index.ts"], { env: { ...process.env, PORT: String(PORT), CHATROOM_SPAWN_DRY: "1", CHATROOM_LOG_DIR: join(scratch, "spawn"), CHATROOM_INSECURE_LOCAL: "1", CHATROOM_DATA_DIR: "" }, stdio: ["ignore", "ignore", "inherit"] });

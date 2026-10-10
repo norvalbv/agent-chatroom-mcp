@@ -11,8 +11,9 @@ import { spawn } from "node:child_process";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { seatBeat } from "../src/env.js";
+import { ownHubPort } from "./lib/own-hub.js";
 
-const PORT = Number(process.env.PORT ?? 20_000 + Math.floor(Math.random() * 20_000));
+const PORT = await ownHubPort(Number(process.env.PORT ?? 20_000 + Math.floor(Math.random() * 20_000)));
 assert.notEqual(PORT, 7717, "never the live hub");
 const HTTP = `http://127.0.0.1:${PORT}`;
 const server = spawn("npx", ["tsx", "src/index.ts"], { env: { ...process.env, PORT: String(PORT), CHATROOM_SPAWN_DRY: "1", CHATROOM_LOG_DIR: "/tmp/chatroom-status-spawn", CHATROOM_INSECURE_LOCAL: "1", CHATROOM_DATA_DIR: "" }, stdio: ["ignore", "ignore", "inherit"] });

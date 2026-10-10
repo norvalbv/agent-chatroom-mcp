@@ -68,6 +68,8 @@ for (const [path, body] of [[`/rooms/${ROOM}/kick`, { name: "benji", target: "wo
   const r = await postFrom(KEY, path, body);
   assert.equal(r.status, 403, `${path} from a seat's shell is refused, got ${r.status} ${r.text}`);
 }
+// ...and four refusals put one notice in the room, not four: a retry loop cannot flood it.
+assert.equal((await messages()).filter((m) => m.kind === "system" && /worker-b's process tree/.test(m.content)).length, 1, "one notice per seat per window");
 const after = (await (await fetch(`${HTTP}/rooms/${ROOM}`)).json()) as { state: string; participants: { name: string; active: boolean }[] };
 assert.equal(after.state, "open");
 assert.ok(after.participants.find((p) => p.name === "worker-a")?.active);

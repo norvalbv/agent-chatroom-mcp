@@ -47,7 +47,7 @@ process.stdin.on("end", async () => {
     const event = ev.hook_event_name === "PostToolUse" ? "PostToolUse" : "PreToolUse";
     if (key && url && !tool.startsWith("mcp__chatroom__")) {
       const i = ev.tool_input ?? {};
-      const detail = String(i.command ?? i.file_path ?? i.pattern ?? i.path ?? i.url ?? i.description ?? "").slice(0, 300);
+      const detail = String(i.command ?? i.file_path ?? i.pattern ?? i.path ?? i.url ?? i.query ?? i.description ?? "").slice(0, 300);
       const body = event === "PostToolUse" ? { seat_key: key, peek: true } : { seat_key: key, tool, detail };
       const res = await fetch(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body), signal: AbortSignal.timeout(2_000) });
       const fetched = res.ok ? ((await res.json()).pending ?? []) : [];

@@ -62,6 +62,8 @@ await a("board_set", { room: ROOM, key: "claim/propose-audit", text: '{"owner":"
 await b("board_set", { room: ROOM, key: "claim/propose-audit-second-read", text: '{"owner":"seat-b","area":"second read of propose() refusals"}' });
 await a("request_agent", { room: ROOM, name: "reviewer-1", agent: "claude", model: "claude-opus-5-5", brief: BRIEF });
 for (let i = 0; i < 60 && !(await status()).participants.some((p) => p.name === "reviewer-1" && p.active); i++) await new Promise((r) => setTimeout(r, 2000));
+// the first propose over bare claims is refused once (scripts/barren-claim-regression.ts); the second goes through
+await a("propose", { room: ROOM, text: TEXT }).catch((e: Error) => console.log(`first propose: ${e.message.slice(0, 120)}`));
 await a("propose", { room: ROOM, text: TEXT });
 
 let filed: Status["proposals"][0]["challenges"][0] | undefined;

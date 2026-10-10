@@ -107,11 +107,32 @@ assert.equal(st.participants.find((p) => p.name === "quiet")?.usage, undefined);
 assert.equal((await post("seat-key-spender", { nope: true })).status, 200);
 assert.equal((await status("lu")).participants.find((p) => p.name === "spender")?.usage?.requests, 2);
 
+// 3b. The model name is the seat's own text: "__proto__" must not reach Object.prototype (review by -2). It is counted
+// under its own name in a prototype-free map, and nothing else in the hub process changes.
+await post("seat-key-spender", batch(apiRequest("req_p1", "__proto__", 1, 1, 0, 0, 0), apiRequest("req_p2", "constructor", 1, 1, 0, 0, 0)));
+assert.equal(({} as Record<string, unknown>).requests, undefined, "Object.prototype untouched in this process");
+const hubSide = (await status("lu")).participants.find((p) => p.name === "spender")?.usage;
+assert.equal(hubSide?.requests, 4);
+assert.equal(hubSide?.by_model?.["__proto__"]?.requests, 1);
+assert.equal(hubSide?.by_model?.["constructor"]?.requests, 1);
+assert.equal((await status("lu")).usage?.requests, 4, "the hub's own objects still add up (a polluted prototype turns them NaN)");
+// in process too, the way the hub calls it, and again after a replay restore
+{
+  const { UsageLedger, apiRequests } = await import("../src/hub/usage.js");
+  const l = new UsageLedger();
+  l.add("s", apiRequests(batch(apiRequest("r1", "__proto__", 1, 1, 0, 0, 1))), "t");
+  const back = new UsageLedger();
+  back.restore("s", JSON.parse(JSON.stringify(l.get("s"))));
+  back.add("s", apiRequests(batch(apiRequest("r2", "__proto__", 1, 1, 0, 0, 1))), "t");
+  assert.equal(back.get("s")?.by_model["__proto__"]?.requests, 2);
+  assert.equal(({} as Record<string, unknown>).requests, undefined, "no pollution after a restore either");
+}
+
 // 4. The room log keeps the cumulative figure with its time, keyed by the seat's key hash (never the key itself).
 const logged = readFileSync(join(DATA, "lu.jsonl"), "utf8").split("\n").filter(Boolean).map((l) => JSON.parse(l) as { type: string; seat?: string; usage?: Usage; ts?: string });
 const usageEvents = logged.filter((e) => e.type === "usage");
 assert.ok(usageEvents.length >= 1);
-assert.equal(usageEvents.at(-1)?.usage?.requests, 2);
+assert.equal(usageEvents.at(-1)?.usage?.requests, 4);
 assert.ok(usageEvents.every((e) => e.ts && e.seat && !readFileSync(join(DATA, "lu.jsonl"), "utf8").includes("seat-key-spender")));
 
 // 5. A hub started from the log has the usage, and later records add to it rather than restart from zero.
@@ -120,10 +141,10 @@ const second = startHub(PORT + 1);
 process.on("exit", () => second.kill());
 await up();
 st = await status("lu");
-assert.equal(st.participants.find((p) => p.name === "spender")?.usage?.requests, 2, "usage survives a restart");
+assert.equal(st.participants.find((p) => p.name === "spender")?.usage?.requests, 4, "usage survives a restart");
 await fetch(`${HTTP}/otlp/v1/logs`, { method: "POST", headers: { "content-type": "application/json", "x-chatroom-seat-key": "seat-key-spender" }, body: JSON.stringify(batch(apiRequest("req_3", "claude-sonnet-5-5", 2, 100, 27000, 300, 0.02))) });
 st = await status("lu");
-assert.equal(st.participants.find((p) => p.name === "spender")?.usage?.requests, 3);
+assert.equal(st.participants.find((p) => p.name === "spender")?.usage?.requests, 5);
 assert.equal(Math.round((st.participants.find((p) => p.name === "spender")?.usage?.cost_usd ?? 0) * 1e7), 859969);
 
 // 6. The run report reads it from the snapshots alone: a seat with no launcher receipt (a recruit, a crashed launcher)
@@ -132,15 +153,15 @@ const snaps = [await collectRoomSnapshot(HTTP, "lu"), await collectRoomSnapshot(
 const card = seatScorecard(snaps, { quiet: { cost: 1.5 } });
 const spender = card.find((s) => s.name === "spender");
 assert.equal(spender?.costSource, "hub");
-assert.equal(spender?.requests, 3);
+assert.equal(spender?.requests, 5);
 assert.equal(Math.round((spender?.cost ?? 0) * 1e7), 859969);
 assert.equal(card.find((s) => s.name === "quiet")?.costSource, "launcher", "the launcher's exit figure wins where it exists");
 const rollup = hubUsageRollup(snaps);
 assert.equal(rollup?.seats, 1, "one process across two rooms");
-assert.equal(rollup?.requests, 3);
+assert.equal(rollup?.requests, 5);
 const report = renderRunReport({ schemaVersion: 1, run: { id: "r", startedAt: "", completedAt: "", task: "t", doneWhen: "d" }, project: { cwd: "", canonicalPath: "", git: null }, leadRoom: "lu",
   rooms: snaps, verifier: { name: "verifier", output: null }, reportPath: "", artifactPath: "", hubUsage: rollup, scorecard: card } as RunResult);
-assert.match(report, /## Usage\n\nSeat-reported to the hub \(live OTLP, every seat incl\. recruits\): \$0\.0860 over 3 model calls by 1 seat\(s\)/);
+assert.match(report, /## Usage\n\nSeat-reported to the hub \(live OTLP, every seat incl\. recruits\): \$0\.0860 over 5 model calls by 1 seat\(s\)/);
 assert.match(report, /\| spender \|[^\n]*\$0\.09 \(hub\)/);
 
 console.log("LIVE USAGE OK");

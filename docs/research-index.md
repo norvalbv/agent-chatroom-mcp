@@ -17,7 +17,7 @@
 | arXiv:2306.05685 | measure-task-success-on-a-machine-oracle  |
 | arXiv:2307.03172 | docs/fleet-174517-summary hub-carries-what-it-knows  |
 | arXiv:2307.09009 | docs/measurement-design-audit-0919 docs/open-round-174126-report  |
-| arXiv:2308.00352 | board-delta-manifests-and-single-electorate docs/board-electorate-swarm-200859 docs/quiet-delivery-decision docs/self-improvement-lobby-swarm-190103 docs/swarm-protocol-spec done-means-independently-verified humans-answered-once-by-hub-enforcement proposal-is-a-document quiet-delivery-not-privacy README  |
+| arXiv:2308.00352 | board-delta-manifests-and-single-electorate docs/board-electorate-swarm-200859 docs/quiet-delivery-decision docs/self-improvement-lobby-swarm-190103 docs/swarm-protocol-spec done-means-independently-verified humans-answered-once-by-hub-enforcement minimal-prompt-hub-carries-coordination proposal-is-a-document quiet-delivery-not-privacy README  |
 | arXiv:2308.07201 | minimal-prompt-hub-carries-coordination README  |
 | arXiv:2308.08155 | docs/swarm-protocol-spec humans-answered-once-by-hub-enforcement README self-organising-teams-by-claims-and-recruitment  |
 | arXiv:2308.10848 | docs/swarm-protocol-spec self-organising-teams-by-claims-and-recruitment  |
@@ -44,12 +44,14 @@
 | arXiv:2405.15793 | docs/swarm-harness-intuition-2026-10-03  |
 | arXiv:2406.07155 | docs/swarm-protocol-spec done-means-independently-verified README self-organising-teams-by-claims-and-recruitment  |
 | arXiv:2406.09843 | docs/research-build-suite  |
+| arXiv:2406.11776 | minimal-prompt-hub-carries-coordination  |
 | arXiv:2406.16008 | hub-carries-what-it-knows  |
 | arXiv:2406.17744 | humans-answered-once-by-hub-enforcement  |
 | arXiv:2407.01502 | docs/harness-provenance-review-174126 docs/open-round-174126-report measure-task-success-on-a-machine-oracle  |
 | arXiv:2407.02043 | docs/swarm-efficiency-2026-10-03  |
 | arXiv:2407.03913 | docs/swarm-harness-intuition-2026-10-03  |
 | arXiv:2407.21787 | settle-disputes-by-spec-not-count  |
+| arXiv:2410.02506 | minimal-prompt-hub-carries-coordination  |
 | arXiv:2410.08115 | docs/swarm-protocol-spec self-organising-teams-by-claims-and-recruitment  |
 | arXiv:2410.10934 | docs/swarm-protocol-spec done-means-independently-verified  |
 | arXiv:2411.00114 | README  |

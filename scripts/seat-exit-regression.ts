@@ -81,7 +81,7 @@ assert.equal((await seat("silent")).active, true);
   let answer!: (v: unknown) => void, posted: { seat_key?: string; exited?: boolean } | undefined;
   const pending = new Promise((r) => (answer = r));
   const runProc = vm.runInNewContext(`${js};runProc;`, {
-    spawn: () => child, seatChildEnv: () => ({}), writeWorkers: new Set(), process: { env: {} }, children: [], writeFileSync: () => {}, resolve: (...a: string[]) => a.join("/"),
+    spawn: () => child, seatChildEnv: () => ({}), writeWorkers: new Set(), process: { env: {} }, children: [], seatChildren: new Map(), writeFileSync: () => {}, resolve: (...a: string[]) => a.join("/"),
     OUT: "/tmp", exitCodes: new Map(), log: () => {}, URL_: "http://hub.invalid", AbortSignal, String, JSON,
     fetch: (_url: string, init: { body: string }) => { posted = JSON.parse(init.body); return pending; },
   }) as (...a: unknown[]) => Promise<string>;
@@ -96,7 +96,7 @@ assert.equal((await seat("silent")).active, true);
   // a hub that is down or slow must not hang the launcher: a rejected receipt (the 5 s abort) still resolves the run
   const child2 = Object.assign(new EventEmitter(), { stdout: new EventEmitter(), stderr: new EventEmitter() });
   const runProc2 = vm.runInNewContext(`${js};runProc;`, {
-    spawn: () => child2, seatChildEnv: () => ({}), writeWorkers: new Set(), process: { env: {} }, children: [], writeFileSync: () => {}, resolve: (...a: string[]) => a.join("/"),
+    spawn: () => child2, seatChildEnv: () => ({}), writeWorkers: new Set(), process: { env: {} }, children: [], seatChildren: new Map(), writeFileSync: () => {}, resolve: (...a: string[]) => a.join("/"),
     OUT: "/tmp", exitCodes: new Map(), log: () => {}, URL_: "http://hub.invalid", AbortSignal, String, JSON,
     fetch: () => Promise.reject(new Error("hub down")),
   }) as (...a: unknown[]) => Promise<string>;

@@ -109,12 +109,16 @@ export function seatScorecard(rooms: readonly RoomSnapshot[], receipts: Readonly
   return card;
 }
 /** Name the cause of a non-conclusion from the lead room's own payload, so the report never has to say only "no consensus". */
-export function classifyOutcome(lead: Record<string, any> | null | undefined, opts: { timedOut?: boolean } = {}): RunOutcome {
+/**
+ * `atTimeout`: the lead room as the launcher read it just before its timeout killed the seats. The final snapshot is
+ * taken after the kill, when every seat has left, so an open proposal's blockers there read "0 voter(s) left".
+ */
+export function classifyOutcome(lead: Record<string, any> | null | undefined, opts: { timedOut?: boolean; atTimeout?: Record<string, any> | null } = {}): RunOutcome {
   const timedOut = opts.timedOut === true;
   const how = timedOut ? 'The run timed out' : 'The run ended because every seat exited';
   if (!lead || lead.state === 'missing') return { kind: 'room_missing', timedOut, detail: `${how} and the lead room could not be read from the hub.` };
   if (lead.conclusion) return { kind: 'concluded', timedOut, detail: 'The lead room concluded.' };
-  const open = ((lead.proposals ?? []) as Record<string, any>[]).filter(p => p.status === 'open').pop();
+  const open = (((opts.atTimeout ?? lead).proposals ?? []) as Record<string, any>[]).filter(p => p.status === 'open').pop();
   if (!open) return { kind: 'no_proposal', timedOut, detail: `${how}; nobody proposed a conclusion.` };
   const blocked = (open.blocked_by ?? []).length ? ` Blocked by: ${(open.blocked_by as string[]).join('; ')}.` : '';
   const waiting = (open.waiting_on ?? []).length ? ` Waiting on: ${(open.waiting_on as string[]).join(', ')}.` : '';

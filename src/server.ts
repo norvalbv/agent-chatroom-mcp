@@ -729,7 +729,7 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
           agent: z.enum(["claude", "codex", "openrouter"]).optional().describe("Requested runner; room_status.recruitment reports the hub's overriding policy and current budgets. Without a pin or request, defaults to claude."),
           model: z.string().optional().describe("Requested model (Claude alias, Codex model id or OpenRouter slug); the hub's model pin, if set, takes precedence."),
           cwd: z.string().optional().describe("Directory the newcomer works in (default: the hub's default project dir)."),
-          can_edit: z.boolean().optional().describe("Allow the newcomer to modify files (default false: investigate and report). It gets its own git worktree on its own branch swarm/<room>/<name>, never your checkout or the shared one; the reply names the branch, which is what you review."),
+          can_edit: z.boolean().optional().describe("Allow the newcomer to modify files (default false: investigate and report). It gets its own git worktree on its own branch swarm/<room>/<name>, never your checkout or the shared one; the reply names the branch, which is what you review. That branch starts from the shared checkout's HEAD, not from your branch: if it must build on your commits, name the commit in the brief."),
           new_room: z.string().optional().describe("Spawn a sub-team into this new room instead of yours; they report back with post_to_room."),
           room_topic: z.string().optional().describe("Topic for the new room."),
           count: z.number().int().min(1).max(3).optional().describe("How many to spawn (default 2 for a new room, 1 otherwise)."),

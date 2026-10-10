@@ -13,7 +13,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import { Hub } from "../src/hub.js";
-import { NO_OUTPUT_CLAIMED_MS, NO_OUTPUT_MS, noOutput, warnNoOutput, windowMs } from "../src/hub/output.js";
+import { NO_OUTPUT_CLAIMED_MS, NO_OUTPUT_MS, VOTE_AFTER_MS, noOutput, warnNoOutput, windowMs } from "../src/hub/output.js";
 import { statusView } from "../src/hub/status-view.js";
 
 const ROOM = "seat-output-regression";
@@ -81,7 +81,7 @@ test("a claim buys time, not immunity: a claim holder is listed only after the l
   assert.match(warnings(hub, "D")[0].content, /you hold 1 claim\. Work on your branch is invisible here/);
 });
 
-test("still nothing one window after the warning: the hub opens the vote itself, casts no ballot, and withdraws it when the seat delivers", () => {
+test("still nothing two windows after the warning: the hub opens the vote itself, casts no ballot, and withdraws it when the seat delivers", () => {
   const { hub, room, a, b, c, d } = room4();
   for (const p of [a, b, c]) hub.setBoard(ROOM, p.id, `evidence/${p.name}`, FINDINGS);
   age(hub);
@@ -91,12 +91,15 @@ test("still nothing one window after the warning: the hub opens the vote itself,
   const warned = warnings(hub, "D")[0];
   warned.ts = new Date(Date.now() - NO_OUTPUT_MS - 1000).toISOString();
   warnNoOutput(hub, room);
+  assert.equal(room.kickVotes.size, 0, "one window after the warning is still too soon");
+  warned.ts = new Date(Date.now() - VOTE_AFTER_MS - 1000).toISOString();
+  warnNoOutput(hub, room);
   warnNoOutput(hub, room);
   const kv = room.kickVotes.get(d.id)!;
   assert.equal(kv.status, "open");
   assert.equal(kv.by.name, "the hub");
   assert.deepEqual(kv.ballots, {}, "the hub casts no ballot");
-  const lines = room.messages.filter((m) => m.kind === "system" && /the hub opened a vote on closing D's seat/.test(m.content));
+  const lines = room.messages.filter((m) => m.from.id === "system" && /the hub opened a vote on closing the seat of @D/.test(m.content));
   assert.equal(lines.length, 1, "opened once");
   assert.match(lines[0].content, /Routine check.*Hub record for D: 0 claims, 0 evidence entries/);
   hub.kickVote(ROOM, a.id, "D", "kick");
@@ -108,12 +111,35 @@ test("still nothing one window after the warning: the hub opens the vote itself,
   assert.equal(room.participants.get(d.id)!.active, true);
 });
 
+test("a hub-opened vote stands only on its ground: ballots after delivery do not remove, a hold does not fake delivery, a new silence reopens", () => {
+  const { hub, room, a, b, c, d } = room4();
+  for (const p of [a, b, c]) hub.setBoard(ROOM, p.id, `evidence/${p.name}`, FINDINGS);
+  age(hub);
+  warnNoOutput(hub, room);
+  warnings(hub, "D")[0].ts = new Date(Date.now() - VOTE_AFTER_MS - 1000).toISOString();
+  warnNoOutput(hub, room);
+  const opened = room.messages.find((m) => /the hub opened a vote/.test(m.content))!;
+  assert.deepEqual(opened.mentions, [d.id], "the seat the vote is about is addressed");
+  hub.setBoard(ROOM, a.id, `hold/${ROOM}`, "paused while the owner checks something");
+  warnNoOutput(hub, room);
+  assert.equal(room.kickVotes.get(d.id)!.status, "open", "a hold is not delivery");
+  hub.setBoard(ROOM, a.id, `hold/${ROOM}`, "");
+  hub.setBoard(ROOM, d.id, "evidence/D", `late ${FINDINGS}`);
+  const kv = hub.kickVote(ROOM, a.id, "D", "kick");
+  assert.equal(kv.status, "dropped", "delivered before the sweep: the next ballot withdraws the hub's vote instead of counting");
+  assert.match(kv.outcome ?? "", /put something on the record/);
+  assert.equal(room.participants.get(d.id)!.active, true);
+  hub.setBoard(ROOM, d.id, "evidence/D", "");
+  warnNoOutput(hub, room);
+  assert.equal(room.kickVotes.get(d.id)!.status, "open", "silent again after a withdrawn vote: the hub may open another");
+});
+
 test("a hub-opened vote removes the seat on the room's threshold, and a seat-opened vote is never withdrawn by the hub", () => {
   const { hub, room, a, b, c, d } = room4();
   for (const p of [a, b, c]) hub.setBoard(ROOM, p.id, `evidence/${p.name}`, FINDINGS);
   age(hub);
   warnNoOutput(hub, room);
-  warnings(hub, "D")[0].ts = new Date(Date.now() - NO_OUTPUT_MS - 1000).toISOString();
+  warnings(hub, "D")[0].ts = new Date(Date.now() - VOTE_AFTER_MS - 1000).toISOString();
   warnNoOutput(hub, room);
   for (const p of [a, b, c]) hub.kickVote(ROOM, p.id, "D", "kick");
   assert.equal(room.participants.get(d.id)!.active, false);

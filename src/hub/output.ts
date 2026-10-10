@@ -8,7 +8,7 @@
  * by the human, none for work), and gives every kick vote the hub's numbers instead of the accuser's word. Everything is derived from room state, so a replay rebuilds it.
  */
 import type { Hub } from "../hub.js";
-import { openKickByHub, withdrawHubKick } from "./kick.js";
+import { openKickByHub, reevaluateOpenKicks } from "./kick.js";
 import type { Participant, Room } from "./types.js";
 
 /** In the room this long with nothing on the record before a worker is listed (the stale-claim and suspected-dead window). */
@@ -17,8 +17,13 @@ export const windowMs = (raw: string | undefined, fallback: number) => { const v
 export const NO_OUTPUT_MS = windowMs(process.env.CHATROOM_NO_OUTPUT_MS, 10 * 60_000);
 /** The same for a worker that holds a claim: a builder's commits never reach the hub, so a claim buys time, not immunity.
  * Replayed over 62 past rooms (392 worker seats): one 10 min window warns 61 seats of which 54 delivered minutes later;
- * 10 min unclaimed / 45 min claimed warns 12, of which 3 never delivered and 9 delivered a median 12 min later. */
+ * 10 min unclaimed / 45 min claimed, with two delivering witnesses, warns 14, of which 3 never delivered and 11 delivered
+ * a median 12 min later. */
 export const NO_OUTPUT_CLAIMED_MS = windowMs(process.env.CHATROOM_NO_OUTPUT_CLAIMED_MS, 45 * 60_000);
+/** Told, and still nothing this much later: the hub opens the vote. Two windows, not one: in the same replay 14 seats are
+ * warned under the final rule (11 delivered later, 3 never); a vote one window after the warning would open on 10 of them,
+ * 7 of whom delivered later, two windows after on 6: the 3 that never delivered and 3 that did (theirs is withdrawn). */
+export const VOTE_AFTER_MS = 2 * NO_OUTPUT_MS;
 
 export interface SeatOutput { claims: number; evidence: number; verifies: number; proposals: number; challenges: number; age_seconds: number | null }
 
@@ -50,6 +55,7 @@ export function seatOutput(room: Room, p: Participant, observedAt = Date.now()):
 
 const windowFor = (o: SeatOutput) => (o.claims ? NO_OUTPUT_CLAIMED_MS : NO_OUTPUT_MS);
 const delivered = (o: SeatOutput) => o.evidence + o.verifies + o.proposals + o.challenges > 0;
+export const hasDelivered = (room: Room, p: Participant) => delivered(seatOutput(room, p));
 const agents = (hub: Hub, room: Room) => hub.activeParticipants(room).filter((p) => p.agent !== "human" && p.role !== "chair");
 
 /** Workers in an open room past their window with nothing delivered, while at least two other agent seats, and more than
@@ -80,18 +86,14 @@ export function listedNoOutput(hub: Hub, room: Room, observedAt = Date.now()): P
   return noOutput(hub, room, observedAt).filter((p) => warning(hub, room, p));
 }
 
-/** Tell each such seat once, in the room, where its peers can see it; one further window later, open the vote. */
+/** Tell each such seat once, in the room, where its peers can see it; two further windows later, open the vote. */
 export function warnNoOutput(hub: Hub, room: Room): void {
-  const silent = noOutput(hub, room);
-  for (const kv of room.kickVotes.values()) {
-    const t = room.participants.get(kv.target);
-    if (t && !silent.includes(t)) withdrawHubKick(hub, room, t, `${kv.targetName} put something on the record`);
-  }
-  for (const p of silent) {
+  reevaluateOpenKicks(hub, room); // withdraws a hub-opened vote whose target has delivered
+  for (const p of noOutput(hub, room)) {
     const warned = warning(hub, room, p);
     if (warned) {
-      // still nothing one further window after being told: the hub opens the vote, once, and seats only ballot
-      if (Date.now() - Date.parse(warned.ts) >= NO_OUTPUT_MS && !room.kickVotes.has(p.id)) openKickByHub(hub, room, p, "nothing on the record, and nothing since the hub said so");
+      // still nothing two further windows after being told: the hub opens the vote, once, and seats only ballot
+      if (Date.now() - Date.parse(warned.ts) >= VOTE_AFTER_MS) openKickByHub(hub, room, p, "nothing on the record, and nothing since the hub said so");
       continue;
     }
     const o = seatOutput(room, p);

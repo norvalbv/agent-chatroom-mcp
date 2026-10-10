@@ -59,11 +59,24 @@ const tests: [string, () => void][] = [
     const f = fixture(); assert.throws(() => f.reply(f.bob.id), /not you/);
     assert.doesNotThrow(() => f.reply(f.alice.id));
   }],
-  ['takeover remains exclusive against third party and old addressee', () => {
+  ['takeover remains exclusive against a third party', () => {
     const f = fixture(); f.ask.ts = new Date(Date.now() - 61_000).toISOString();
     assert.equal(f.h.responderFor(f.room, f.ask, f.bob.id).mine, true);
     assert.throws(() => f.reply(f.carol.id), /not you/);
-    assert.throws(() => f.reply(f.alice.id), /not you/);
+    assert.doesNotThrow(() => f.reply(f.bob.id));
+  }],
+  // swarm-000525-jcz8-room: a human @-addressed the verifier and -6, who were mid-task past 60 s; the hub handed the ask to a
+  // seat nobody addressed (-4), which could not do what was asked, and refused the verifier three times when it did answer
+  // ("addressed that to claude-opus-5-5-4, not you"). The addressee the human chose may still answer while it is in the room.
+  ['a live addressee may still answer after the takeover window, and the takeover nominee is then told it is answered', () => {
+    const f = fixture(); f.ask.ts = new Date(Date.now() - 61_000).toISOString();
+    assert.equal(f.h.responderFor(f.room, f.ask, f.bob.id).mine, true, 'bob holds the takeover');
+    assert.doesNotThrow(() => f.reply(f.alice.id), 'the human asked alice; alice answers late');
+    assert.equal(f.h.isAnswered(f.room, f.ask), true);
+    assert.notEqual(f.h.attentionFocus(f.room, f.bob)?.id, f.ask.id, 'bob is no longer owed it');
+  }],
+  ['an addressee that has left cannot answer, the nominee can', () => {
+    const f = fixture(); f.h.leave(f.room.name, f.alice.id);
     assert.doesNotThrow(() => f.reply(f.bob.id));
   }],
 ];

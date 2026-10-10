@@ -21,6 +21,7 @@ import { Hub, parseVerifyHead } from "../src/hub.js";
 
 const COMMIT = "e4f5a6b";
 const DEV = "http://127.0.0.1:7999/rooms/dev-room";
+const NOT_LAUNCHED = "dev_room was not started by this hub (scripts/dev-run.ts), so its commit and seats are the dev hub's own word";
 
 function fixture(t: { after: (fn: () => void) => void }) {
   const dir = mkdtempSync(join(tmpdir(), "verify-gaps-"));
@@ -71,7 +72,7 @@ test("a head that claims nothing it did not show carries no gap", (t) => {
   assert.equal(room.conclusion?.verification_gaps, undefined);
 });
 
-test("a dev room the hub read itself, on the verified commit with two agents speaking, closes the gap", async (t) => {
+test("a dev room the hub read itself, on the verified commit with two agents speaking, is read, but reads PARTIAL unless this hub started it", async (t) => {
   const { hub, room, pr, b, head, devRoom, conclude } = fixture(t);
   hub.setBoard(room.name, b.id, "verify/x", head({ dev_room: DEV }));
   assert.match(hub.proposalView(room, pr).verification_gaps?.[0].gaps[0] ?? "", /not read by the hub/, "a URL alone proves nothing");
@@ -79,8 +80,8 @@ test("a dev room the hub read itself, on the verified commit with two agents spe
   const r = await hub.readDevRoom(room.name, "verify/x", async (u) => { seen.push(u); return devRoom(); });
   assert.deepEqual(seen, [DEV]);
   assert.equal(r?.agent_seats, 2);
-  assert.equal(hub.proposalView(room, pr).verification_gaps, undefined);
-  assert.doesNotMatch(conclude(), /PARTIAL/);
+  assert.deepEqual(hub.proposalView(room, pr).verification_gaps?.[0].gaps, [NOT_LAUNCHED], "read, but only the dev hub's word (dev-runs-regression)");
+  assert.match(conclude(), /PARTIAL.*not started by this hub/);
 });
 
 test("what the hub read decides, not what the head says", async (t) => {
@@ -118,7 +119,7 @@ test("the receipt is written to the log and replayed; a rewrite drops it", async
   const again = new Hub({ dataDir: dir });
   const r2 = again.getRoom(room.name);
   t.after(() => { clearTimeout(r2.nudgeTimer); clearTimeout(r2.openingsTimer); });
-  assert.equal(again.proposalView(r2, r2.proposals.get(pr.id)!).verification_gaps, undefined, "replayed hub keeps the receipt");
+  assert.deepEqual(again.proposalView(r2, r2.proposals.get(pr.id)!).verification_gaps?.[0].gaps, [NOT_LAUNCHED], "replayed hub keeps the receipt");
   hub.setBoard(room.name, b.id, "verify/x", head({ dev_room: DEV, output_tail: "rerun" }));
   assert.match(hub.proposalView(room, pr).verification_gaps?.[0].gaps[0] ?? "", /not read by the hub/, "a new text needs a new read");
 });
@@ -135,7 +136,7 @@ test("the real fetch reads a running hub's room summary over HTTP", async (t) =>
   hub.setBoard(room.name, b.id, "verify/x", head({ dev_room: url }));
   const r = await hub.readDevRoom(room.name, "verify/x");
   assert.equal(r?.code_head, COMMIT);
-  assert.equal(hub.proposalView(room, pr).verification_gaps, undefined);
+  assert.deepEqual(hub.proposalView(room, pr).verification_gaps?.[0].gaps, [NOT_LAUNCHED], "read, but only the dev hub's word (dev-runs-regression)");
 });
 
 test("the head shape: unverified is a list of strings, dev_room a string", () => {

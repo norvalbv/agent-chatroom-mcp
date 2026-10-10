@@ -3,6 +3,7 @@ import { randomBytes } from "node:crypto";
 import { spawnSync } from "node:child_process";
 import type { RoomState, Participant, KickVote, Message, CodeState, BoardEntry, Challenge, Proposal, RoomOptions, Room, CallOutcome, WorkClass, DevReceipt } from "./types.js";
 import type { SeatUsage } from "./usage.js";
+import type { DevRun } from "./dev-runs.js";
 
 export type Opts = Required<Omit<RoomOptions, "chair" | "parent">> & { chair?: string; parent?: string };
 
@@ -26,6 +27,8 @@ export type Event =
   | { type: "board_manifest"; room: string; bytes: number; kind: "full" | "delta" | "empty" }
   | { type: "board"; room: string; key: string; entry: BoardEntry | null }
   | { type: "dev_receipt"; room: string; key: string; updatedAt: string; receipt: DevReceipt }
+  /** A dev run this hub started (src/hub/dev-runs.ts), written at each state change; replay keeps the last. */
+  | { type: "dev_run"; room: string; run: DevRun }
   | { type: "amend"; room: string; proposalId: string; text: string; version: number; updatedAt?: string; votes: Proposal["votes"]; challenges?: Challenge[] }
   | { type: "refusal"; room: string; tool: string; reason: string; ts?: string; participant?: string | null }
   /** ms: how long the call took; empty: a wait that returned no new message (run-metrics splits idle polling on it) */

@@ -80,6 +80,12 @@ assert.equal(built.find((s: { name: string }) => s.name === 'stuck')!.produced, 
 assert.equal(built.find((s: { name: string }) => s.name === 'stuck')!.commits, 3);
 assert.equal(by('stuck').commits, undefined, 'no branch: unknown, not zero');
 
+// a recruit briefed to check one thing and report (the fresh challenger) delivers a chat line and leaves with a reason:
+// that is its whole brief, not talk (evidence/integration-dev-room marked fresh-challenger-1 "no output")
+const rec = seatScorecard([{ name: 'lead', payload: { participants: [seat('fresh-challenger-1', { role: 'recruit', messages: 1, left_reason: 'Checked the list by grep; it holds.' }), seat('idle-recruit', { role: 'recruit', messages: 1 })], board: {}, proposals: [] }, error: null, transcript: rooms[0].transcript }]);
+assert.equal(rec[0].produced, true, 'a recruit that reported and left with a reason delivered');
+assert.equal(rec[1].produced, false, 'a recruit that spoke once and vanished did not');
+
 // outcome: every non-conclusion names its cause
 const open = classifyOutcome(payload, { timedOut: true });
 assert.equal(open.kind, 'proposal_open');

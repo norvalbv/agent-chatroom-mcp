@@ -18,7 +18,9 @@ import { Hub, HubError, ROLES, VERIFY_HEAD_EXAMPLE, VERIFY_HEAD_RULE, parseVerif
 /** Words in a verify entry's prose that say something was not checked (45 of 313 passing heads in past rooms; scripts/verify-gaps-measure.py). */
 const VERIFY_GAP_PROSE = /not verified|did not (run|verify|exercise|watch|drive|check|test)|could not (run|verify|test)|not (run|exercised|watched|driven|checked) by me|untested|not tested|author-only|rests on the author/i;
 import type { SpawnedAgent, Spawner } from "./spawner.js";
+import type { Participant } from "./hub/types.js";
 import { createWaitView } from "./hub/wait-view.js";
+import { noteBoardRead } from "./hub/board.js";
 import { IDLE_HINT, ideaListHint, idleAgain, idleHint, idleStreak, leaveHint, listedItems, newlyNamed, offersLeave, openWork, stillOpenHint } from "./hub/open-work.js";
 
 /** The branch and worktree of each write recruit, for the reply of the call that spawned them; nothing for read-only recruits. */
@@ -706,12 +708,14 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
     guard("board_get", ({ room, key, participant_id }) => {
       const r = hub.getRoom(room);
       // a caller that has not joined (or is ambiguous) reads as an outsider: every sealed draft stays hidden
-      let viewer: string | undefined;
-      try { viewer = r.participants.get(pid(room, participant_id))?.name; } catch {}
+      let reader: Participant | undefined;
+      try { reader = r.participants.get(pid(room, participant_id)); } catch {}
+      const viewer = reader?.name;
       const sealed = (k: string, e: { by: string; text: string; updatedAt: string }) => hub.draftSealed(r, k, e as never, viewer);
       if (key) {
         const e = r.board.get(key);
         if (!e || sealed(key, e)) throw new HubError(`No board entry "${key}". Keys: ${[...r.board].filter(([k, x]) => !sealed(k, x)).map(([k]) => k).join(", ") || "(none)"}`);
+        if (reader) noteBoardRead(reader, key, e);
         return { key, ...e, ...(hub.boardEntryExpired(r, key, e) ? { expired: true, tombstone: "Archived by expiry; excluded from manifests, retained for explicit retrieval." } : {}) };
       }
       return Object.fromEntries([...r.board].filter(([k, e]) => !hub.boardEntryExpired(r, k, e) && !sealed(k, e)).map(([k, e]) => [k, { by: e.by, chars: e.text.length, updated_at: e.updatedAt, ...(e.ackRequired ? { ack_required: true } : {}), ...(e.postReveal ? { post_reveal: true } : {}), ...(e.reviewer ? { reviewer: e.reviewer } : {}), ...(e.workspace?.branch ? { branch: e.workspace.branch } : {}) }]));

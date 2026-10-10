@@ -129,6 +129,15 @@ export function applyBoard(room: Room, key: string, entry: BoardEntry | null) {
   else room.board.delete(key);
 }
 
+/** The version of each entry the hub last showed a seat (board_get of the key, a refusal carrying it, the seat's own
+ * write). Not persisted: after a hub restart the first overwrite of another author's entry is refused once, with it. */
+const boardSeen = new WeakMap<Participant, Map<string, string>>();
+export function noteBoardRead(p: Participant, key: string, entry: { updatedAt: string }): void {
+  const seen = boardSeen.get(p) ?? new Map<string, string>();
+  boardSeen.set(p, seen);
+  seen.set(key, entry.updatedAt);
+}
+
 export function setBoard(hub: Hub, roomName: string, pid: string, key: string, text: string, opts: BoardExpiryOptions & { ifAbsent?: boolean; ifByMe?: boolean; overwrite?: boolean } = {}): BoardEntry | null {
   const room = hub.getRoom(roomName);
   const p = hub.requireParticipant(room, pid);
@@ -180,8 +189,19 @@ export function setBoard(hub: Hub, roomName: string, pid: string, key: string, t
   const clearsPeer = !text.trim() && !!previous && previous.by !== p.name && p.agent !== "human";
   if (previous && previous.by !== p.name && p.agent !== "human" && /^(verify|attack)\//.test(key)) throw new HubError(`"${key}" is ${previous.by}'s entry; only its author or a human may ${text.trim() ? "replace" : "clear"} it. Write your own (verify/<area>-<you>), or answer it on the board (for an attack, edit the attacked entry).`, undefined, "ownership");
   if (previous && previous.by !== p.name && !opts.overwrite && (text.trim() || clearsPeer) && !(key.startsWith("claim/") && (claimReleased(previous) || takeover))) {
+    noteBoardRead(p, key, previous);
     throw new HubError(
       `"${key}" was written by ${previous.by} at ${previous.updatedAt}; replacing it would discard their text. Merge with the current content below and resend with overwrite=true, or use your own key.`,
+      { current: previous },
+      "ownership",
+    );
+  }
+  // overwrite=true from a stale read is a lost update (ranked/list, swarm-082539-kns2): refused once, with the version to merge
+  if (previous && previous.by !== p.name && opts.overwrite && !key.startsWith("claim/") && boardSeen.get(p)?.get(key) !== previous.updatedAt) {
+    const read = boardSeen.get(p)?.has(key);
+    noteBoardRead(p, key, previous);
+    throw new HubError(
+      `"${key}" ${read ? "changed since you last read it" : "is one you have not read"}: ${previous.by} wrote this version at ${previous.updatedAt}. Overwriting it would discard their edit. Merge your change into the current content below and resend with overwrite=true.`,
       { current: previous },
       "ownership",
     );
@@ -211,6 +231,7 @@ export function setBoard(hub: Hub, roomName: string, pid: string, key: string, t
     ...(workspace ? { workspace } : {}),
   };
   applyBoard(room, key, entry);
+  noteBoardRead(p, key, entry);
   hub.persist({ type: "board", room: roomName, key, entry });
   // a sealed draft's notice names neither key nor size (either can carry content); it says who is still owed a draft
   if (key.startsWith("draft/")) hub.openDrafts(room); // before the notice, so the first one already names the deadline

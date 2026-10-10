@@ -120,7 +120,7 @@ export function outputLine(hub: Hub, room: Room, p: Participant): string {
 export interface ConclusionOutput { agreed_without_output: string[]; undelivered_claims: { key: string; by: string }[] }
 
 /** Workers whose agree counted with nothing of their own on the record (5 seats over 57 concluded rooms), and claim/*
- * entries whose owner put no evidence or verify on the board (10 of 271 claimants). A released claim, and one whose
+ * entries whose owner put no evidence or verify on the board and wrote no proposal (10 of 271 claimants). A released claim, and one whose
  * area has a handoff/<area>, has been passed on and is not listed. */
 export function conclusionOutput(hub: Hub, room: Room, pr: Proposal): ConclusionOutput {
   const measured = (p: Participant) => p.agent !== "human" && (p.role ?? "worker") !== "chair" && p.role !== "verifier";
@@ -132,6 +132,9 @@ export function conclusionOutput(hub: Hub, room: Room, pr: Proposal): Conclusion
     const owner = [...room.participants.values()].find((p) => p.name === e.by);
     if (owner && !measured(owner)) continue;
     if ([...room.board].some(([k, o]) => o.by === e.by && !coordinates(k))) continue;
+    // a proposal is delivery: the builder of a small fix often commits and proposes with no finding on the board
+    // (swarm-082539-kns2 dev rooms swarm-084332-n0je and swarm-084600-o53f named the author of the concluded proposal)
+    if ([...room.proposals.values()].some((x) => x.by.name === e.by)) continue;
     undelivered_claims.push({ key, by: owner ? hub.shown(room, owner) : e.by });
   }
   return { agreed_without_output, undelivered_claims };

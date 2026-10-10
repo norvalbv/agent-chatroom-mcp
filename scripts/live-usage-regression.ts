@@ -54,6 +54,8 @@ assert.equal(env.OTEL_LOGS_EXPORTER, "otlp");
 assert.equal(env.OTEL_EXPORTER_OTLP_LOGS_PROTOCOL, "http/json");
 assert.equal(env.OTEL_EXPORTER_OTLP_LOGS_ENDPOINT, `${HTTP}/otlp/v1/logs`);
 assert.equal(env.OTEL_EXPORTER_OTLP_LOGS_HEADERS, "x-chatroom-seat-key=seat-key-spender");
+// a killed seat loses its unflushed batch: 1 s, not the 5 s default (probe: 3 of 8 calls lost at 5 s, 0 of 5 at 1 s)
+assert.equal(env.OTEL_LOGS_EXPORT_INTERVAL, "1000");
 
 // The shape a real claude 2.1.294 seat posted (probe on :7811): resource, scope, one record per event.
 const attr = (key: string, v: string | number) => ({ key, value: typeof v === "number" ? (Number.isInteger(v) ? { intValue: v } : { doubleValue: v }) : { stringValue: v } });
@@ -138,7 +140,7 @@ assert.equal(rollup?.seats, 1, "one process across two rooms");
 assert.equal(rollup?.requests, 3);
 const report = renderRunReport({ schemaVersion: 1, run: { id: "r", startedAt: "", completedAt: "", task: "t", doneWhen: "d" }, project: { cwd: "", canonicalPath: "", git: null }, leadRoom: "lu",
   rooms: snaps, verifier: { name: "verifier", output: null }, reportPath: "", artifactPath: "", hubUsage: rollup, scorecard: card } as RunResult);
-assert.match(report, /## Usage\n\nHub-observed \(live, every seat incl\. recruits\): \$0\.0860 over 3 model calls by 1 seat\(s\)/);
+assert.match(report, /## Usage\n\nSeat-reported to the hub \(live OTLP, every seat incl\. recruits\): \$0\.0860 over 3 model calls by 1 seat\(s\)/);
 assert.match(report, /\| spender \|[^\n]*\$0\.09 \(hub\)/);
 
 console.log("LIVE USAGE OK");

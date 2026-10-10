@@ -24,7 +24,7 @@ export interface RunResult {
   outcome?: RunOutcome;
   /** One row per agent seat across every room of the run; absent on older artifacts. */
   scorecard?: SeatScore[];
-  /** What the hub saw live (participants[].usage, src/hub/usage.ts), recruits included; absent when no seat reported. */
+  /** What seats reported to the hub live (participants[].usage, src/hub/usage.ts), recruits included; absent when no seat reported. */
   hubUsage?: HubUsageRollup;
 }
 /**
@@ -346,7 +346,7 @@ export function renderRunReport(r: RunResult): string {
   }
   if (r.hubUsage) {
     const h = r.hubUsage;
-    text += `${r.usage ? '' : '## Usage\n\n'}Hub-observed (live, every seat incl. recruits): $${h.cost_usd.toFixed(4)} over ${h.requests} model calls by ${h.seats} seat(s)${h.recruits.seats ? `, of which ${h.recruits.seats} recruit(s) $${h.recruits.cost_usd.toFixed(4)}` : ''}; ${h.input_tokens} input, ${h.cache_read_input_tokens} cache-read, ${h.cache_creation_input_tokens} cache-creation, ${h.output_tokens} output tokens.\n\n`;
+    text += `${r.usage ? '' : '## Usage\n\n'}Seat-reported to the hub (live OTLP, every seat incl. recruits): $${h.cost_usd.toFixed(4)} over ${h.requests} model calls by ${h.seats} seat(s)${h.recruits.seats ? `, of which ${h.recruits.seats} recruit(s) $${h.recruits.cost_usd.toFixed(4)}` : ''}; ${h.input_tokens} input, ${h.cache_read_input_tokens} cache-read, ${h.cache_creation_input_tokens} cache-creation, ${h.output_tokens} output tokens.\n\n`;
   }
   if (r.scorecard?.length) text += renderScorecard(r.scorecard);
   if (r.collectionErrors?.length) text += `Collection errors (partial snapshot):\n${r.collectionErrors.map(e => `- ${e}`).join('\n')}\n\n`;

@@ -10,6 +10,7 @@
  *   GET  /rooms/:room/messages?since=0
  *   GET  /rooms/:room/transcript      -> plain text
  *   GET  /rooms/:room/stats
+ *   GET  /rooms/:room/metrics[?format=md] -> run metrics computed from the room's log (src/run-metrics.ts)
  *   POST /rooms/:room/messages {name, content, reply_to?} -> speak as a human participant
  *   GET  /questions?names=benji       -> agents' unanswered asks to the human, across rooms
  *   POST /rooms/:room/vote {name, proposal_id, vote, reason} -> human vote (disagree = veto)
@@ -20,7 +21,8 @@ import { callerSeatKeys } from "./hub/caller.js";
 import { randomUUID } from "node:crypto";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { realpathSync } from "node:fs";
+import { existsSync, readFileSync, realpathSync } from "node:fs";
+import { gitShaAuthor, parseRoomLog, renderMetrics, runMetrics } from "./run-metrics.js";
 import { createMcpExpressApp } from "@modelcontextprotocol/sdk/server/express.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import express from "express";
@@ -557,6 +559,19 @@ app.post("/rooms/:room/close", (req, res) => {
     res.json(hub.summary(hub.closeRoom(req.params.room, (name || "human").trim(), reason), true));
   } catch (e) {
     res.status(400).type("text/plain").send(e instanceof HubError ? e.message : "error");
+  }
+});
+// reads the whole room log and runs git once per cited commit, synchronously: for a report or an operator's look, never a dashboard poll
+app.get("/rooms/:room/metrics", (req, res) => {
+  try {
+    const r = hub.getRoom(req.params.room);
+    const file = hub.dataDir ? resolve(hub.dataDir, `${r.name}.jsonl`) : undefined;
+    if (!file || !existsSync(file)) return void res.status(404).type("text/plain").send("no room log: this hub runs in memory");
+    const m = runMetrics(parseRoomLog(readFileSync(file, "utf8")), { shaAuthor: gitShaAuthor(hub.cwd) });
+    if (req.query.format === "md") res.type("text/markdown").send(renderMetrics(m));
+    else res.json(m);
+  } catch (e) {
+    notFound(res, e);
   }
 });
 app.get("/rooms/:room/transcript", (req, res) => {

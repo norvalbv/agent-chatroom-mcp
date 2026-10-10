@@ -119,6 +119,9 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
       const room = typeof a?.room === "string" ? a.room : typeof a?.from_room === "string" ? a.from_room : undefined;
       let participant = telemetryActor(room, a?.participant_id);
       let outcome: CallOutcome = "error";
+      const started = Date.now();
+      // a wait that returned no new message is idle polling; one that returned messages is the seat reacting (src/run-metrics.ts)
+      let empty: boolean | undefined;
       // every hub call is a step too (board_get, vote): the People tab shows it without a room turn. Not a wait: it
       // already refreshes last_seen_at when it returns, and logging idle waits would push real work out of the feed
       if (room && participant && tool !== "wait_for_messages") try { hub.heartbeat(room, participant, { tool, hub: true }); } catch { /* departed or unknown: the call itself reports it */ }
@@ -128,6 +131,7 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
         // no actor for tools without participant_id (room_status, board_get), and the kick bans the connection.
         if (room) for (const id of me.get(room) ?? []) hub.refuseKicked(room, id);
         let data = await fn(args);
+        if (tool === "wait_for_messages") empty = !((data as { messages?: unknown[] })?.messages?.length);
         // steering fallback: a hub tool result always reaches the model, so pending asks ride on it (and count as delivered)
         if (room && participant && !SELF_DELIVERING.has(tool)) {
           const steer = steerCarry(hub, room, participant);
@@ -146,7 +150,7 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
         }
         return fail(e);
       } finally {
-        hub.recordCallCompletion(room, tool, outcome, participant);
+        hub.recordCallCompletion(room, tool, outcome, participant, { ms: Date.now() - started, ...(empty === undefined ? {} : { empty }) });
       }
     };
 

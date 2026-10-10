@@ -641,6 +641,9 @@ for (const name of new Set([leadsRoom, ...groupRooms])) {
   snapshots.push(snapshot);
 }
 const leads = snapshots.find(r => r.name === leadsRoom)?.payload ?? { state: "missing", conclusion: null };
+// headline numbers by code, from the hub's own log; a hub without one (in memory) answers 404 and the report omits them
+let metrics: RunResult["metrics"];
+try { metrics = JSON.parse(await fetchText(`${URL_}/rooms/${encodeURIComponent(leadsRoom)}/metrics`)); } catch (e) { collectionErrors.push(`${leadsRoom} metrics: ${String(e)}`); }
 const artifactPath = resolve(flag("result-path", resolve(OUT, "result.json"))!);
 const artifact: RunResult = {
   schemaVersion: 1,
@@ -652,6 +655,7 @@ const artifact: RunResult = {
   reportPath: resolve(OUT, "report.md"), artifactPath, collectionErrors, usage: rollupUsage([...results, ...replacedRuns]),
   outcome: classifyOutcome(snapshots.find(r => r.name === leadsRoom)?.payload, { timedOut, atTimeout: leadAtTimeout }),
   scorecard: seatScorecard(snapshots, Object.fromEntries([...exitCodes].map(([name, exitCode]) => [name, { exitCode, cost: seatCosts.get(name), killedAtTimeout: killedAtTimeout.has(name), commits: branchCommits(name) }]))),
+  ...(metrics ? { metrics } : {}),
 };
 writeRunResult(resolve(OUT, "result.json"), artifact);
 if (artifactPath !== resolve(OUT, "result.json")) writeRunResult(artifactPath, artifact);

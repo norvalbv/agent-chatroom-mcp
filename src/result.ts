@@ -217,6 +217,18 @@ export function parseClaudeCliOutput(raw: string): { text: string; usage: SeatUs
   for (const k of CLAUDE_ONLY_USAGE_FIELDS) if (typeof u[k] === "number") usage[k] = u[k];
   return { text, usage, ...extra };
 }
+/**
+ * Where a run's proposed decision record goes. In the main checkout it is docs/decisions/proposed, where a human
+ * promotes it. A run launched from a linked worktree or a swarm/* seat branch is a dev room testing that branch:
+ * writing into its tracked docs/ puts the file one `git add -A` away from the branch under review, so the record
+ * goes next to the report instead. Null when the project keeps no decision log.
+ */
+export function proposedDecisionDir(project: RunResult['project'], outDir: string, hasDecisionLog: boolean): string | null {
+  if (!hasDecisionLog) return null;
+  const git = project.git;
+  const devRoom = git !== null && (git.branch.startsWith('swarm/') || resolve(git.commonDir) !== resolve(git.root, '.git'));
+  return devRoom ? outDir : resolve(project.cwd, 'docs', 'decisions', 'proposed');
+}
 /** Fetch the existing full room endpoint; no board/body projection or text slicing. */
 export async function collectRoomSnapshot(baseUrl: string, name: string): Promise<RoomSnapshot> {
   const base = `${baseUrl}/rooms/${encodeURIComponent(name)}`;

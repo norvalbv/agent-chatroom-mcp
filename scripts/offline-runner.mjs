@@ -157,6 +157,7 @@ export const offlineScripts = [
   'reply-metrics.test.ts',
   'respawn-regression.ts',
   'respawn-usage-regression.ts',
+  'proposed-decision-path-regression.ts',
   'result-fleet-compat.ts',
   'seat-scorecard-regression.ts',
   'result-fleet-regression.ts',

@@ -8,7 +8,7 @@
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
 import { createWriteStream, existsSync, mkdirSync, readFileSync, readdirSync, statSync, realpathSync, symlinkSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
-import { collectRoomSnapshot, renderRunReport, writeRunResult, rollupUsage, parseClaudeCliOutput, seatScorecard, classifyOutcome, type RunResult, type RoomSnapshot, type SeatUsageRollup } from "./result.js";
+import { collectRoomSnapshot, renderRunReport, writeRunResult, rollupUsage, parseClaudeCliOutput, seatScorecard, classifyOutcome, proposedDecisionDir, type RunResult, type RoomSnapshot, type SeatUsageRollup } from "./result.js";
 import { settledAxes } from "./settled.js";
 import { registerRespawn } from "./respawn.js";
 import { fileURLToPath } from "node:url";
@@ -615,11 +615,11 @@ writeFileSync(artifact.reportPath, renderRunReport(artifact));
   const rec = /DECISION RECORD[\s\S]*$/.exec(verdict)?.[0];
   // markdown puts the colon either side of the emphasis: **Slug:** `x` and **Slug**: `x` both count
   const slug = /slug\**:\**\s*`?([a-z0-9-]{3,80})/i.exec(rec ?? "")?.[1];
-  if (rec && slug && existsSync(resolve(CWD, "docs", "decisions"))) {
-    const dir = resolve(CWD, "docs", "decisions", "proposed");
+  const dir = rec && slug ? proposedDecisionDir(PROJECT_IDENTITY, OUT, existsSync(resolve(CWD, "docs", "decisions"))) : null;
+  if (rec && slug && dir) {
     mkdirSync(dir, { recursive: true });
     writeFileSync(resolve(dir, `${slug}.md`), `# Proposed decision: ${slug}\n\nFrom ${SWARM_ID} (${leads.state}); report: swarms/${SWARM_ID}/report.md. A human promotes this into docs/decisions/ with \`guard-decisions add\`; nothing is adopted automatically.\n\n${rec}\n`);
-    log(`decision record proposed: docs/decisions/proposed/${slug}.md`);
+    log(`decision record proposed: ${resolve(dir, `${slug}.md`)}`);
   }
 }
 

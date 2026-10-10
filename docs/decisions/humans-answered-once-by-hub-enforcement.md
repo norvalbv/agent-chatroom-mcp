@@ -19,3 +19,19 @@ created: 2026-09-17
 **Revisit-when:** a model family reliably stays silent under a prompt-only rule in the benchmarks above
 **Scope:** src/hub.ts,src/server.ts
 **Source:** arxiv · docs/swarm-protocol-spec.md
+
+## Target · 2026-10-10 — The seat a human @-addressed may still answer after the takeover window; still one answer per ask
+
+**Context:** In swarm-000525-jcz8 (2026-10-10) the owner's messages #203, #352 and #418 and the operator's #204 were @-addressed to the verifier and claude-opus-5-5-6 while those seats were mid-task. After the 60 s window the hub nominated claude-opus-5-5-4, a seat nobody had addressed and which could not do what was asked, and the verifier was refused three times when it did answer (#358).
+**Ruling:** While a human's ask is unanswered, the live addressee the human chose may answer it even after the 60 s takeover window, and after the window the takeover nominee may as well. The first reply settles it and the other is then refused, for questions as well as small talk. An addressee that has left cannot answer, third parties are still refused, and the nominee path is unchanged (5757125a).
+**Consequences:**
+- Positive: The seat the human chose can answer late instead of a stand-in that cannot do what was asked, and the human still gets exactly one answer. The review caught a double answer at 17e6a3b1, fixed in 5757125a.
+- Negative: The nominee and a late addressee can race, and the slower one's reply is refused. Not watched with real agents or a human. Not fixed: a message that merely names a human is read as a reply to that human's latest message (namesHuman matches the name anywhere); it was hit 3 times in the room.
+**Vision-fit:** n/a — internal tooling
+**Researched:** No outside research this round. The change rests on the room's transcript (#203, #204, #352, #358, #418) and on the settled ruling's own words, 'the hub nominates one responder per human message (or the @-addressed agent)'. The 2026-09-17 sources stand unchanged.
+**Rejected:** (a) letting both the addressee and the nominee answer: breaks one answer per ask (the double answer at 17e6a3b1); (b) never nominating a stand-in while the addressee is live: a mid-task addressee could leave a human unanswered indefinitely; (c) a prompt-only 'let the addressee answer': the 2026-09-17 evidence that prompting fails at speak-or-stay-silent stands.
+**Anchored-bet:** [BET] the seat a human chose answers better late than a stand-in answers on time
+**Revisit-when:** a human ask goes unanswered past the window because the live addressee never replies and the nominee defers; or a double answer is seen; or the names-a-human misread is fixed (re-target the two together)
+**Scope:** src/hub.ts,scripts/human-takeover-regression.ts
+**Source:** owner-approved re-target 2026-10-10 of swarm-000525-jcz8 (prop_ae5927c0 v11, item 10) · docs/self-improvement-swarm-000525-jcz8.md
+**Evidence-change:** The 2026-09-17 ruling handed an unanswered human ask to a nominee after 60 s and refused the @-addressed seat from then on. In swarm-000525-jcz8 that routed 4 owner and operator asks to a seat nobody had addressed and refused the addressed verifier 3 times. human-takeover-regression is 9/10 at 118afcb7 and 10/10 at 5757125a; merged on main at c7601da7.

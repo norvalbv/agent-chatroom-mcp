@@ -84,8 +84,8 @@ export class Seats {
   /** A step with no count of its own (a hook, an MCP call) is the seat's next step. */
   private recordWork(room: Room, p: Participant, info: Beat): void {
     const cls = info.hub ? undefined : workClass(info.tool, info.detail);
-    const target = cls ? countWork(p, cls, info.detail) : undefined;
-    if (cls && target !== undefined) this.hub.persist({ type: "work", room: room.name, pid: p.id, cls, tool: String(info.tool).slice(0, 40), target, ts: now() });
+    const counted = cls ? countWork(p, cls, info.detail) : undefined;
+    if (cls && counted) this.hub.persist({ type: "work", room: room.name, pid: p.id, cls, tool: String(info.tool).slice(0, 40), target: counted.target, ...(counted.key !== counted.target ? { key: counted.key } : {}), ts: now() });
     const detail = String(info.detail ?? "").replace(/\s+/g, " ").trim().slice(0, 300);
     const step = Number(info.step) || (p.working?.step ?? 0) + 1;
     p.working = { tool: String(info.tool).slice(0, 40), step, at: now(), ...(detail ? { detail } : {}) };

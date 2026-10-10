@@ -2,6 +2,7 @@
  * (scripts/heartbeat-hook.mjs, the codex launcher, src/seat.ts); the hub classes each one, keeps the counts on the
  * participant and in the room log (a "work" event with its time), and states them when someone proposes. Before this
  * the beats were dropped after the last 60, so no room could say how much it read or searched before it concluded. */
+import { createHash } from "node:crypto";
 import type { Participant, Room, WorkClass, WorkCounts } from "./types.js";
 
 const CLASSES: WorkClass[] = ["read", "search", "web", "run", "edit"];
@@ -41,21 +42,34 @@ function shellClass(command: string): WorkClass {
 
 const URL_HOST = /https?:\/\/([^\s/"')]+)/;
 const seen = new WeakMap<Participant, Set<string>>();
+const TARGET_MAX = 120;
+
+/** What the room log shows for a target: a shell call without its `cd dir;` prefix, a long path by its tail (the file
+ * name), anything else by its head. Display only: the ledger dedupes on the whole text's key (countWork). */
+function shortTarget(cls: WorkClass, text: string): string {
+  const t = cls === "run" || cls === "read" || cls === "search" ? text.replace(SHELL_PREFIX, "") || text : text;
+  if (t.length <= TARGET_MAX) return t;
+  return !/\s/.test(t.trim()) || /^\//.test(t) && (cls === "read" || cls === "edit") ? "…" + t.slice(-(TARGET_MAX - 1)) : t.slice(0, TARGET_MAX - 1) + "…";
+}
 
 /**
  * Count one local call toward a seat's ledger if its target is new: the file, the pattern, the command, or for the
  * web the host. Forty `ls` calls on one directory are one piece of work, and the room log gets one line per distinct
- * target instead of one per call. Returns the target when it counted (the caller persists it), undefined when not.
+ * target instead of one per call. Targets are told apart by the whole text, not its first 120 characters: in
+ * swarm-082539-kns2 every worktree path was 114 characters, so every file under it and every `cd "<worktree>"; ...`
+ * call had been one target. Returns the short target and its key when it counted (the caller persists both; replay
+ * passes the key back), undefined when not. An old log's events have no key: their target is the key, as counted then.
  */
-export function countWork(p: Participant, cls: WorkClass, detail = ""): string | undefined {
+export function countWork(p: Participant, cls: WorkClass, detail = "", key?: string): { target: string; key: string } | undefined {
   const text = detail.replace(/\s+/g, " ").trim();
-  const target = ((cls === "web" && URL_HOST.exec(text)?.[1]) || text).slice(0, 120);
+  const host = cls === "web" ? URL_HOST.exec(text)?.[1] : undefined;
+  const k = key ?? host ?? (text.length <= TARGET_MAX ? text : `#${createHash("sha256").update(text).digest("hex").slice(0, 16)}`);
   const mine = seen.get(p) ?? new Set<string>();
   seen.set(p, mine);
-  if (mine.has(`${cls} ${target}`)) return undefined;
-  mine.add(`${cls} ${target}`);
+  if (mine.has(`${cls} ${k}`)) return undefined;
+  mine.add(`${cls} ${k}`);
   p.work = { ...p.work, [cls]: (p.work?.[cls] ?? 0) + 1 };
-  return target;
+  return { target: host ?? shortTarget(cls, text), key: k };
 }
 
 /** A seat whose process is known to report each local tool call: it has been counted, or it is a claude seat with a

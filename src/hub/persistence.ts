@@ -60,7 +60,7 @@ export function replay(hub: Hub) {
       switch (ev.type) {
         case "work": {
           const p = hub.rooms.get(ev.room)?.participants.get(ev.pid);
-          if (p) countWork(p, ev.cls, ev.target);
+          if (p) countWork(p, ev.cls, ev.target, ev.key ?? ev.target);
           break;
         }
         case "attention": {

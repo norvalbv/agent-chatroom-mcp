@@ -50,12 +50,13 @@ function stopOurHub() {
 }
 after(() => { stopOurHub(); rmSync(base, { recursive: true, force: true }); });
 
-/** The worker prompts the stub claude received from one real launch (verifier left out). */
+/** The worker prompts the stub claude received from one real launch (verifier left out). Extra flags go before the task,
+ * so a boolean flag missing from BOOL_FLAGS would swallow the task as its value. */
 function launchWorkers(tag: string, extra: string[]): string[] {
   const [bin, records, data] = ["bin", "records", "data"].map((d) => join(base, tag, d));
   for (const d of [bin, records, data]) mkdirSync(d, { recursive: true });
   writeFakeBins(bin);
-  const r = spawnSync(process.execPath, ["dist/swarm.js", TASK, "--flat", "--agents", "4", "--no-carry", "--timeout", "1", "--port", PORT!, "--result-path", join(base, tag, "result.json"), ...extra], {
+  const r = spawnSync(process.execPath, ["dist/swarm.js", ...extra, TASK, "--flat", "--agents", "4", "--no-carry", "--timeout", "1", "--port", PORT!, "--result-path", join(base, tag, "result.json")], {
     encoding: "utf8",
     timeout: 90_000,
     env: { ...process.env, PATH: `${bin}:${process.env.PATH}`, FAKE_RECORD_DIR: records, CHATROOM_INSECURE_LOCAL: "1", CHATROOM_NO_RECRUIT: "1", CHATROOM_DATA_DIR: data },

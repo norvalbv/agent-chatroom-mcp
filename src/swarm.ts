@@ -8,7 +8,7 @@
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
 import { createWriteStream, existsSync, mkdirSync, readFileSync, readdirSync, statSync, realpathSync, symlinkSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
-import { collectRoomSnapshot, renderRunReport, writeRunResult, rollupUsage, parseClaudeCliOutput, type RunResult, type RoomSnapshot, type SeatUsageRollup } from "./result.js";
+import { collectRoomSnapshot, renderRunReport, writeRunResult, rollupUsage, parseClaudeCliOutput, seatScorecard, classifyOutcome, type RunResult, type RoomSnapshot, type SeatUsageRollup } from "./result.js";
 import { settledAxes } from "./settled.js";
 import { registerRespawn } from "./respawn.js";
 import { fileURLToPath } from "node:url";
@@ -143,6 +143,9 @@ async function ensureHub() {
 
 // ---------- agents ----------
 const children: ChildProcess[] = [];
+/** The latest process per seat name, and the seats the timeout had to kill: the report's "how it ended" column. */
+const seatChildren = new Map<string, ChildProcess>();
+const killedAtTimeout = new Set<string>();
 
 /**
  * R4 usage telemetry for claude seats: `--output-format json` turns stdout into one JSON blob carrying
@@ -265,6 +268,7 @@ function runProc(name: string, cmd: string, args: string[], cwd: string, outFile
       child.stderr?.on("data", send);
     }
     children.push(child);
+    seatChildren.set(name, child);
     let out = "";
     let err = "";
     // a seat whose final text comes from a file (codex -o) needs no copy of stdout held in memory
@@ -547,8 +551,11 @@ for (const sig of ["SIGTERM", "SIGINT"] as const) process.on(sig, () => {
   setTimeout(() => void swept.finally(() => process.exit(130)), 3000).unref();
 });
 const tail = setInterval(() => tailRooms([...groupRooms, leadsRoom]), 2000);
+let timedOut = false;
 const timeout = setTimeout(() => {
   log(`timeout after ${TIMEOUT_MIN} min; stopping agents`);
+  timedOut = true;
+  for (const [name, c] of seatChildren) if (c.exitCode === null && c.signalCode === null) killedAtTimeout.add(name);
   for (const c of children) c.kill();
   void sweepStrays("timeout");
 }, TIMEOUT_MIN * 60_000);
@@ -605,6 +612,8 @@ const artifact: RunResult = {
   rooms: snapshots,
   verifier: { name: "verifier", output: results.find(r => r.name === "verifier")?.text ?? null },
   reportPath: resolve(OUT, "report.md"), artifactPath, collectionErrors, usage: rollupUsage(results),
+  outcome: classifyOutcome(snapshots.find(r => r.name === leadsRoom)?.payload, { timedOut }),
+  scorecard: seatScorecard(snapshots, Object.fromEntries([...exitCodes].map(([name, exitCode]) => [name, { exitCode, cost: results.find(r => r.name === name)?.usage?.cost, killedAtTimeout: killedAtTimeout.has(name) }]))),
 };
 writeRunResult(resolve(OUT, "result.json"), artifact);
 if (artifactPath !== resolve(OUT, "result.json")) writeRunResult(artifactPath, artifact);

@@ -20,6 +20,101 @@ export interface RunResult {
   /** R4 usage telemetry: present only when runs carried usage; absent on pre-telemetry artifacts. */
   usage?: UsageRollup;
   collectionErrors?: string[];
+  /** Why the lead room ended as it did; absent on artifacts written before the scorecard. */
+  outcome?: RunOutcome;
+  /** One row per agent seat across every room of the run; absent on older artifacts. */
+  scorecard?: SeatScore[];
+}
+export type SeatEnding = 'left' | 'exited_without_leaving' | 'kicked' | 'killed_at_timeout' | 'gone_no_reason' | 'still_active';
+/**
+ * What one seat left behind, read from the room snapshot plus the launcher's own receipt for that seat.
+ * `produced` is deliberately coarse: a board entry, a proposal, a challenge or more than two messages.
+ * It separates a seat that left nothing from one that did something; it does not rank the ones that did.
+ */
+export interface SeatScore {
+  name: string;
+  room: string;
+  role: string;
+  agent: string;
+  messages: number;
+  board: { claim: number; verify: number; other: number };
+  proposals: number;
+  challenges: number;
+  votes: number;
+  ending: SeatEnding;
+  produced: boolean;
+  leftReason?: string;
+  /** Absent when the seat reported no usage: unknown, never zero. */
+  cost?: number;
+  exitCode?: number | null;
+}
+/** What only the launcher knows about a seat it spawned. A recruit spawned by the hub has no receipt. */
+export interface SeatReceipt { exitCode?: number | null; cost?: number; killedAtTimeout?: boolean }
+export interface RunOutcome {
+  kind: 'concluded' | 'proposal_open' | 'no_proposal' | 'room_missing';
+  timedOut: boolean;
+  detail: string;
+}
+const EXITED_WITHOUT_LEAVING = /^seat process exited|^MCP session closed without leave_room/;
+const seatEnding = (p: Record<string, any>, receipt?: SeatReceipt): SeatEnding => {
+  const reason = typeof p.left_reason === 'string' ? p.left_reason : '';
+  if (reason.startsWith('kicked')) return 'kicked';
+  if (EXITED_WITHOUT_LEAVING.test(reason)) return receipt?.killedAtTimeout ? 'killed_at_timeout' : 'exited_without_leaving';
+  if (reason) return 'left';
+  if (receipt?.killedAtTimeout) return 'killed_at_timeout';
+  return p.active ? 'still_active' : 'gone_no_reason';
+};
+export function seatScorecard(rooms: readonly RoomSnapshot[], receipts: Readonly<Record<string, SeatReceipt>> = {}): SeatScore[] {
+  const card: SeatScore[] = [];
+  for (const room of rooms) {
+    const payload = room.payload;
+    if (!payload) continue;
+    const entries = Object.entries((payload.board ?? {}) as Record<string, { by?: string }>);
+    const proposals = (payload.proposals ?? []) as { by?: string; challenges?: { by?: string }[]; votes?: { name?: string }[] }[];
+    for (const p of (payload.participants ?? []) as Record<string, any>[]) {
+      if (p.agent === 'human') continue;
+      const mine = entries.filter(([, e]) => e?.by === p.name).map(([key]) => key);
+      const board = { claim: mine.filter(k => k.startsWith('claim/')).length, verify: mine.filter(k => k.startsWith('verify/')).length, other: 0 };
+      board.other = mine.length - board.claim - board.verify;
+      const receipt = receipts[p.name];
+      const score: SeatScore = {
+        name: p.name, room: room.name, role: p.role ?? 'worker', agent: p.agent ?? 'unknown', messages: p.messages ?? 0, board,
+        proposals: proposals.filter(x => x.by === p.name).length,
+        challenges: proposals.reduce((n, x) => n + (x.challenges ?? []).filter(c => c.by === p.name).length, 0),
+        votes: proposals.reduce((n, x) => n + (x.votes ?? []).filter(v => v.name === p.name).length, 0),
+        ending: seatEnding(p, receipt),
+        produced: false,
+      };
+      score.produced = mine.length > 0 || score.proposals > 0 || score.challenges > 0 || score.messages > 2;
+      if (typeof p.left_reason === 'string' && p.left_reason) score.leftReason = p.left_reason;
+      if (typeof receipt?.cost === 'number') score.cost = receipt.cost;
+      if (receipt && 'exitCode' in receipt) score.exitCode = receipt.exitCode ?? null;
+      card.push(score);
+    }
+  }
+  return card;
+}
+/** Name the cause of a non-conclusion from the lead room's own payload, so the report never has to say only "no consensus". */
+export function classifyOutcome(lead: Record<string, any> | null | undefined, opts: { timedOut?: boolean } = {}): RunOutcome {
+  const timedOut = opts.timedOut === true;
+  const how = timedOut ? 'The run timed out' : 'The run ended because every seat exited';
+  if (!lead || lead.state === 'missing') return { kind: 'room_missing', timedOut, detail: `${how} and the lead room could not be read from the hub.` };
+  if (lead.conclusion) return { kind: 'concluded', timedOut, detail: 'The lead room concluded.' };
+  const open = ((lead.proposals ?? []) as Record<string, any>[]).filter(p => p.status === 'open').pop();
+  if (!open) return { kind: 'no_proposal', timedOut, detail: `${how}; nobody proposed a conclusion.` };
+  const blocked = (open.blocked_by ?? []).length ? ` Blocked by: ${(open.blocked_by as string[]).join('; ')}.` : '';
+  const waiting = (open.waiting_on ?? []).length ? ` Waiting on: ${(open.waiting_on as string[]).join(', ')}.` : '';
+  return { kind: 'proposal_open', timedOut, detail: `${how} with ${open.id} v${open.version} by ${open.by} still open.${blocked}${waiting}` };
+}
+const ENDING_TEXT: Record<SeatEnding, string> = { left: 'left', exited_without_leaving: 'exited without leaving', kicked: 'kicked', killed_at_timeout: 'killed at timeout', gone_no_reason: 'gone, no reason recorded', still_active: 'still active' };
+function renderScorecard(card: readonly SeatScore[]): string {
+  const idle = card.filter(s => !s.produced && s.role !== 'verifier');
+  let text = `## Seats\n\n${card.length} seat(s); ${idle.length} left no output${idle.length ? ` (${idle.map(s => s.name).join(', ')})` : ''}.\n\n| seat | role | msgs | board (claim/verify/other) | proposals | challenges | votes | cost | ended | note |\n|---|---|---|---|---|---|---|---|---|---|\n`;
+  for (const s of card) {
+    const exit = s.exitCode === undefined || s.exitCode === 0 ? '' : ` (exit ${s.exitCode ?? 'signal'})`;
+    text += `| ${s.name} | ${s.role} | ${s.messages} | ${s.board.claim}/${s.board.verify}/${s.board.other} | ${s.proposals} | ${s.challenges} | ${s.votes} | ${s.cost === undefined ? '?' : `$${s.cost.toFixed(2)}`} | ${ENDING_TEXT[s.ending]}${exit} | ${s.produced ? '' : 'no output'} |\n`;
+  }
+  return `${text}\n`;
 }
 /**
  * Per-seat usage as the seat reported it (cost in USD). `steps`/`prompt_tokens`/`completion_tokens` come
@@ -143,7 +238,7 @@ export function writeRunResult(path: string, artifact: RunResult): void {
 /** Human view only; consumers must read JSON, never parse this Markdown. */
 export function renderRunReport(r: RunResult): string {
   const lead = r.rooms.find(room => room.name === r.leadRoom)?.payload;
-  let text = `# ${r.run.id}\n\n**Task:** ${r.run.task}\n\n**Done when:** ${r.run.doneWhen}\n\n## Final answer (${lead?.state ?? 'missing'})\n\n${lead?.conclusion?.text ?? '_no consensus reached_'}\n\n## Verifier\n\n${r.verifier.output ?? '(none)'}\n\n## Groups\n\n`;
+  let text = `# ${r.run.id}\n\n**Task:** ${r.run.task}\n\n**Done when:** ${r.run.doneWhen}\n\n## Final answer (${lead?.state ?? 'missing'})\n\n${lead?.conclusion?.text ?? (r.outcome ? `_no consensus reached_: ${r.outcome.detail}` : '_no consensus reached_')}\n\n## Verifier\n\n${r.verifier.output ?? '(none)'}\n\n## Groups\n\n`;
   for (const room of r.rooms.filter(room => room.name !== r.leadRoom)) text += `### ${room.name} (${room.payload?.state ?? 'missing'})\n\n${room.payload?.conclusion?.text ?? '_no consensus_'}\n\n`;
   text += `## Result artifact\n\nAuthoritative full room snapshots, board evidence and raw transcripts: ${r.artifactPath}\n\n`;
   if (r.usage) {
@@ -158,6 +253,7 @@ export function renderRunReport(r: RunResult): string {
     const claudeSuffix = claudeBits.length ? ` (claude: ${claudeBits.join(', ')} tokens)` : '';
     text += `## Usage\n\n${r.usage.steps} steps, ${r.usage.prompt_tokens} prompt + ${r.usage.completion_tokens} completion tokens${claudeSuffix}, $${r.usage.cost_usd.toFixed(4)} across ${r.usage.seats} seat(s); ${r.usage.seats_with_usage}/${r.usage.seats} reported usage (coverage: ${r.usage.coverage})\n\n`;
   }
+  if (r.scorecard?.length) text += renderScorecard(r.scorecard);
   if (r.collectionErrors?.length) text += `Collection errors (partial snapshot):\n${r.collectionErrors.map(e => `- ${e}`).join('\n')}\n\n`;
   text += '## Transcripts\n\n';
   for (const room of r.rooms) text += '```\n' + (room.transcript.text ?? `(missing: ${room.transcript.error})`).replace(/\n#/g, '\n\\#') + '```\n\n';

@@ -175,6 +175,7 @@ export const offlineScripts = [
   'seat-shell-guards-regression.ts',
   'report-handoffs-regression.ts',
   'result-fleet-compat.ts',
+  'seat-human-route-regression.ts',
   'seat-scorecard-regression.ts',
   'result-fleet-regression.ts',
   'reviewer-assignment-regression.ts',

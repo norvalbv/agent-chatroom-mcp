@@ -71,6 +71,13 @@ export class Seats {
 
   hashOf(session: string | undefined): string | undefined { return session ? this.sessionSeatHashes.get(session) : undefined; }
 
+  /** Every participant, in any room and state, that a seat key's connection ever held: a seat stays a seat after it leaves. */
+  everHeld(seatKey: string): { room: Room; p: Participant }[] {
+    const session = this.seatSessions.get(seatKey);
+    if (!session) return [];
+    return [...this.hub.rooms.values()].flatMap((room) => [...room.participants.values()].filter((p) => p.session === session).map((p) => ({ room, p })));
+  }
+
   /**
    * A seat's own liveness signal (POST /rooms/:room/heartbeat from src/seat.ts on every step): what it is doing and
    * when. Local tools never reach the hub, so without this a builder on step 71 of a build looked like "1 msg, 12m ago"

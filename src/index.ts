@@ -16,6 +16,7 @@
  */
 import { steerAckAs, steerAckSeat, steerPeek, steerPeekSeat } from "./hub/steer.js";
 import { SUSPECTED_DEAD_MS } from "./hub/kick.js";
+import { callerSeatKeys } from "./hub/caller.js";
 import { randomUUID } from "node:crypto";
 import { resolve } from "node:path";
 import { createMcpExpressApp } from "@modelcontextprotocol/sdk/server/express.js";
@@ -252,10 +253,32 @@ setInterval(() => {
   for (const name of hub.sweepIdle(PARTICIPANT_IDLE_MS, connected)) spawner.stop(name);
 }, 60_000).unref();
 
+/**
+ * The seat whose process tree sent this loopback request, if any (src/hub/caller.ts). A seat acts through its MCP tools;
+ * the human routes are the human's, and under INSECURE_LOCAL nothing but this stops a seat's curl from voting, kicking
+ * or closing as "benji". The rooms the seat sits in are told, so the attempt is on the record and not only refused.
+ */
+function seatCaller(req: express.Request): string | undefined {
+  const source = req.socket.remotePort;
+  if (!source) return undefined;
+  const held = (callerSeatKeys(source, PORT) ?? []).flatMap((key) => hub.seatEverHeld(key));
+  if (!held.length) return undefined;
+  const name = held[0]!.p.name;
+  for (const room of new Set(held.map((h) => h.room.name))) {
+    try { hub.announce(room, `${name}'s process tree sent ${req.method} ${req.path} to a human route, as a human; the hub refused it. Seats act through their own tools.`); } catch { /* the room went away */ }
+  }
+  return name;
+}
 const requireToken = (req: express.Request, res: express.Response): boolean => {
   if (HUMAN_TOKEN && req.header("x-chatroom-token") === HUMAN_TOKEN) return true;
-  // The explicit loopback opt-in keeps the local dashboard usable without a token, with or without one configured.
-  if (INSECURE_LOCAL && LOOPBACK_HOST) return true;
+  // The explicit loopback opt-in keeps the local dashboard usable without a token, with or without one configured,
+  // for any caller that is not one of this hub's seats.
+  if (INSECURE_LOCAL && LOOPBACK_HOST) {
+    const seat = seatCaller(req);
+    if (!seat) return true;
+    res.status(403).type("text/plain").send(`refused: this request came from the process tree of seat ${seat}. The human routes are the human's; a seat votes, kicks and speaks through its own MCP tools.`);
+    return false;
+  }
   if (HUMAN_TOKEN) {
     res.status(401).type("text/plain").send("x-chatroom-token required");
     return false;

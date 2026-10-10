@@ -2585,6 +2585,7 @@ export class Hub {
   workspaceOf(p: Participant): { branch?: string; worktree: string } | undefined { return this.seats.workspaceOf(p); }
   heartbeatSeat(seatKey: string, info: liveness.Beat): number { return this.seats.heartbeatSeat(seatKey, info); }
   seatParticipants(seatKey: string): { room: Room; p: Participant }[] { return this.seats.participants(seatKey); }
+  seatEverHeld(seatKey: string): { room: Room; p: Participant }[] { return this.seats.everHeld(seatKey); }
   activity(roomName: string, name: string) { return this.seats.activity(roomName, name); }
 
   // ---------- kick vote / removal ----------

@@ -149,12 +149,12 @@ async function ensureHub() {
     return;
   }
   const child = spawn("node", [resolve(repoRoot, "dist/index.js")], {
-    env: { ...process.env, PORT: String(PORT), CHATROOM_DATA_DIR: resolve(repoRoot, "data"), ...(SANDBOX ? { CHATROOM_SANDBOX: "1" } : {}), ...(FRESH_CHALLENGER ? { CHATROOM_FRESH_CHALLENGER: "1" } : {}), ...ownHubEnv(HUB_IDLE_EXIT_MIN) },
+    env: { ...process.env, PORT: String(PORT), CHATROOM_DATA_DIR: resolve(repoRoot, "data"), ...(SANDBOX ? { CHATROOM_SANDBOX: "1" } : {}), ...(FRESH_CHALLENGER ? { CHATROOM_FRESH_CHALLENGER: "1" } : {}), ...ownHubEnv(HUB_IDLE_EXIT_MIN, PORT) },
     detached: true,
     stdio: "ignore",
   });
   child.unref();
-  log(`started hub pid ${child.pid} on :${PORT}; ${HUB_IDLE_EXIT_MIN > 0 ? `it stops itself after ${HUB_IDLE_EXIT_MIN} min with no request (--hub-idle-exit, --keep-hub)` : `it keeps running: stop it with kill ${child.pid}`}`);
+  log(`started hub pid ${child.pid} on :${PORT}; ${Object.keys(ownHubEnv(HUB_IDLE_EXIT_MIN, PORT)).length ? `it stops itself after ${HUB_IDLE_EXIT_MIN} min with no request (--hub-idle-exit, --keep-hub)` : `it keeps running: stop it with kill ${child.pid}`}`);
   for (let i = 0; i < 50; i++) {
     try {
       await fetch(URL_);

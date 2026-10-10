@@ -158,8 +158,9 @@ export function seatPortError(env: NodeJS.ProcessEnv, portFlag: string | undefin
  * hub does not outlive the work (in swarm-000525-jcz8 every dev hub had to be found and killed by PID) but still answers
  * a reviewer who reads the room after the run. 0 means never. A hub the launcher finds already running gets nothing.
  */
-export function ownHubEnv(idleMin: number): Record<string, string> {
-  return idleMin > 0 ? { CHATROOM_IDLE_EXIT_MIN: String(idleMin) } : {};
+export function ownHubEnv(idleMin: number, port?: number): Record<string, string> {
+  // 7717 is the operator's dashboard hub, which a launcher starts when none is running; it stays up
+  return idleMin > 0 && port !== 7717 ? { CHATROOM_IDLE_EXIT_MIN: String(idleMin) } : {};
 }
 
 /**

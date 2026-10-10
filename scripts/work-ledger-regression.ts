@@ -9,7 +9,7 @@
  * Run: npx tsx scripts/work-ledger-regression.ts (PORT= to pin the throwaway hub's port)
  */
 import assert from "node:assert/strict";
-import { spawn, spawnSync } from "node:child_process";
+import { spawn } from "node:child_process";
 import { mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -43,10 +43,13 @@ async function connect(url: string) {
 type Status = { participants: { name: string; work?: Record<string, number> }[]; proposals: { evidence?: string }[]; conclusion: { evidence?: string } | null };
 const status = async (room: string) => (await (await fetch(`${HTTP}/rooms/${room}`)).json()) as Status;
 const messages = async (room: string) => (await (await fetch(`${HTTP}/rooms/${room}/messages`)).json()) as { kind: string; content: string }[];
-const local = (env: Record<string, string>, tool_name: string, tool_input: Record<string, string>) => {
-  const run = spawnSync(process.execPath, [HEARTBEAT_HOOK], { input: JSON.stringify({ hook_event_name: "PreToolUse", tool_name, tool_input }), env: { PATH: process.env.PATH ?? "", ...env }, encoding: "utf8", timeout: 10_000 });
-  assert.equal(run.status, 0);
-};
+// async, not spawnSync: a blocked event loop cannot see the hub close an idle keep-alive socket, and the next call resets
+const local = (env: Record<string, string>, tool_name: string, tool_input: Record<string, string>) =>
+  new Promise<void>((done, fail) => {
+    const run = spawn(process.execPath, [HEARTBEAT_HOOK], { env: { PATH: process.env.PATH ?? "", ...env }, stdio: ["pipe", "ignore", "inherit"] });
+    run.on("exit", (code) => (code === 0 ? done() : fail(new Error(`heartbeat hook exited ${code}`))));
+    run.stdin.end(JSON.stringify({ hook_event_name: "PreToolUse", tool_name, tool_input }));
+  });
 
 const reader = seatBeat(`${HTTP}/mcp`, "seat-key-reader");
 const idler = seatBeat(`${HTTP}/mcp`, "seat-key-idler");
@@ -63,20 +66,20 @@ const B = { room: "wl", participant_id: jb.participant_id };
 
 // 1. Local tool calls are counted by class. A remote fetch through the shell is web; one aimed at this machine is run.
 const env = reader.env as Record<string, string>;
-local(env, "Read", { file_path: "src/hub.ts" });
-local(env, "Read", { file_path: "src/server.ts" });
+await local(env, "Read", { file_path: "src/hub.ts" });
+await local(env, "Read", { file_path: "src/server.ts" });
 // Distinct targets count, not calls: the same file again, or a second page on a host already fetched, adds nothing.
-for (let i = 0; i < 5; i++) local(env, "Read", { file_path: "src/server.ts" });
-local(env, "WebFetch", { url: "https://arxiv.org/abs/2308.08155" });
-local(env, "Grep", { pattern: "propose" });
-local(env, "WebSearch", { query: "multi-agent debate" });
-local(env, "Bash", { command: "curl -s https://arxiv.org/abs/2305.14325" });
-local(env, "Bash", { command: "curl -s http://127.0.0.1:7717/rooms" });
-local(env, "Bash", { command: "npm test" });
-local(env, "Edit", { file_path: "src/hub.ts" });
+for (let i = 0; i < 5; i++) await local(env, "Read", { file_path: "src/server.ts" });
+await local(env, "WebFetch", { url: "https://arxiv.org/abs/2308.08155" });
+await local(env, "Grep", { pattern: "propose" });
+await local(env, "WebSearch", { query: "multi-agent debate" });
+await local(env, "Bash", { command: "curl -s https://arxiv.org/abs/2305.14325" });
+await local(env, "Bash", { command: "curl -s http://127.0.0.1:7717/rooms" });
+await local(env, "Bash", { command: "npm test" });
+await local(env, "Edit", { file_path: "src/hub.ts" });
 // Seats read mostly through the shell: a shell call is classed by the command it starts with, past env and `cd dir &&`.
-local(env, "Bash", { command: "cd \"/tmp/a b\" && grep -n refuse src/hub.ts | head" });
-local(env, "Bash", { command: "M=/tmp sed -n 1,40p src/hub.ts" });
+await local(env, "Bash", { command: "cd \"/tmp/a b\" && grep -n refuse src/hub.ts | head" });
+await local(env, "Bash", { command: "M=/tmp sed -n 1,40p src/hub.ts" });
 // 2. Hub calls are not local work: a seat that only talks to the room has an empty ledger.
 await a("board_set", { ...A, key: "claim/reading", text: '{"owner":"reader","area":"reading"}' });
 await a("board_set", { ...A, key: "evidence/reading", text: "read hub.ts and server.ts; one paper" });

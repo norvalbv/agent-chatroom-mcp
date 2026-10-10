@@ -9,6 +9,9 @@
  */
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 
@@ -77,6 +80,36 @@ await h("board_set", { key: "claim/abandoned", text: '{"owner":"gone","area":"ab
 await h("leave_room", { reason: "handing off; nothing found" }).catch(() => h("leave_room", { reason: "handing off; nothing found" }));
 await i("room_status");
 assert.ok((await g("propose", { text: "The departed seat's claim does not hold us." })).id);
+
+// 5. Once per room holds across a hub restart: the line the hub posted is the receipt (a second hub reads the same log).
+const DATA = mkdtempSync(join(tmpdir(), "barren-claim-"));
+const hubOn = async (port: number) => {
+  const h = spawn("npx", ["tsx", "src/index.ts"], { env: { ...process.env, PORT: String(port), CHATROOM_SPAWN_DRY: "1", CHATROOM_LOG_DIR: join(DATA, "spawn"), CHATROOM_INSECURE_LOCAL: "1", CHATROOM_DATA_DIR: DATA }, stdio: ["ignore", "ignore", "inherit"] });
+  process.on("exit", () => h.kill());
+  for (let n = 0; ; n++) {
+    try { await fetch(`http://127.0.0.1:${port}/`); break; } catch { if (n > 100) throw new Error("hub did not start"); await new Promise((r) => setTimeout(r, 200)); }
+  }
+  return async (room: string, name: string, participant_id?: string, first = false) => {
+    const client = new Client({ name, version: "0.0.0" });
+    await client.connect(new StreamableHTTPClientTransport(new URL(`http://127.0.0.1:${port}/mcp`)));
+    const call = async (tool: string, args: Record<string, unknown> = {}) => {
+      const res = (await client.callTool({ name: tool, arguments: { room, ...args } })) as { isError?: boolean; content: { text: string }[] };
+      if (res.isError) throw new Error(res.content[0]?.text);
+      try { return JSON.parse(res.content[0]?.text ?? ""); } catch { return res.content[0]?.text; }
+    };
+    const joined = await call("join_room", { name, agent: "claude", ...(participant_id ? { participant_id } : {}), ...(first ? { expected_participants: 0, require_challenge: false } : {}) });
+    return { call, id: joined.participant_id as string };
+  };
+};
+const before = await hubOn(PORT + 2);
+const p1 = await before("restart", "proposer", undefined, true);
+const q1 = await before("restart", "quiet");
+await q1.call("board_set", { key: "claim/sources", text: '{"owner":"quiet","area":"sources"}' });
+await assert.rejects(p1.call("propose", { text: "Enough." }), /CLAIMS WITHOUT FINDINGS/);
+const after = await hubOn(PORT + 3);
+const p2 = await after("restart", "proposer", p1.id);
+await after("restart", "quiet", q1.id);
+assert.ok((await p2.call("propose", { text: "Enough." })).id, "a hub restarted on the log does not refuse a second time");
 
 console.log("BARREN CLAIM OK");
 process.exit(0);

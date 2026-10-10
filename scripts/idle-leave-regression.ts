@@ -109,15 +109,23 @@ await f.call("join_room", { room: room2, name: "F", agent: "test" });
 hints = await f.idle(room2, 6);
 assert.ok(hints.every((h) => h === OLD), "leaveWaits 0 disables the offer");
 
-// 8. A seat that holds a claim is pointed at the handoff entry leave_room will ask it for.
+// 8. A seat whose own claim is still unreviewed may be waiting on its own long job (dev room swarm-004642-76kz-room:
+// the offer reached the soak owner while its 6-minute soak ran). It is not offered the door; once a peer has reviewed
+// the work it is, and it is pointed at the handoff entry leave_room will ask it for.
 policy.leaveWaits = 3;
 const g = await seat("g");
+const h = await seat("h");
 const room3 = "idle-leave-claim";
 await g.call("join_room", { room: room3, name: "G", agent: "test" });
+await h.call("join_room", { room: room3, name: "H", agent: "test" });
 await g.call("board_set", { room: room3, key: "claim/parser", text: '{"owner":"G","area":"parser"}' });
-await g.call("board_set", { room: room3, key: "evidence/parser", text: "CRLF fix on g/parser @ abc1234, 7/7." });
+await g.call("board_set", { room: room3, key: "evidence/parser", text: "CRLF fix on g/parser @ abc1234, 7/7; soak running." });
+hints = await g.idle(room3, 6);
+assert.ok(hints.every((x) => !OFFER.test(x)), `a seat whose claim nobody has reviewed is not offered the door: ${JSON.stringify(hints)}`);
+await h.call("board_set", { room: room3, key: "review/parser", text: "Reran the parser tests at abc1234 myself: 7/7, holds." });
 hints = await g.idle(room3, 3);
-assert.match(hints[2], /handoff\/parser/, `a claim holder is told to write handoff/<its area> first: ${hints[2]}`);
+assert.match(hints[2], OFFER, `once reviewed, the claim holder is offered the door: ${JSON.stringify(hints)}`);
+assert.match(hints[2], /handoff\/parser/, `and told to write handoff/<its area> first: ${hints[2]}`);
 
 console.log("idle-leave-regression: OK");
 process.exit(0);

@@ -34,6 +34,31 @@ export function idleAgain(p: Participant): boolean {
   return !(p.activity ?? []).some((a) => Date.parse(a.at) > prev.at && !/wait_for_messages/.test(a.tool));
 }
 
+const area = (key: string) => key.slice(key.indexOf("/") + 1);
+
+/** A claim counts as reviewed once any seat but its owner has put a review where the room can read it: a board entry
+ * outside claim/ whose key is the claim's area or whose text names the area, the claim, or the owner's branch, or a
+ * chat message since the claim that names the area. Reviews land in verify/*, in review/* and in plain chat, and often
+ * from a seat other than the assigned reviewer; asking for one that is already there is noise a seat learns to skip
+ * (replay of 116 long idle runs: 15 of 23 review_owed hits). */
+function reviewedClaim(room: Room, claimKey: string, claim: BoardEntry): boolean {
+  const slug = area(claimKey);
+  const word = new RegExp(`(^|[^a-z0-9])${slug.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}([^a-z0-9]|$)`, "i");
+  const other = (name: string) => name !== claim.by;
+  for (const [k, e] of room.board) {
+    if (!e.text.trim() || !other(e.by) || NOT_REVIEW.some((pre) => k.startsWith(pre)) || k.endsWith(".partial")) continue;
+    if (area(k) === slug || word.test(e.text) || (!!claim.workspace?.branch && e.text.includes(claim.workspace.branch))) return true;
+  }
+  return room.messages.some((m) => m.kind === "chat" && m.from.agent !== "hub" && other(m.from.name) && m.ts >= claim.updatedAt && word.test(m.content));
+}
+
+/** This seat's claims whose work is still in flight: not released, not marked finished, and not yet reviewed by anyone
+ * else. A seat holding one may be waiting on its own long job (a soak, a test suite), which looks like polling. */
+function claimsInFlight(room: Room, p: Participant): string[] {
+  return [...room.board.entries()].filter(([k, e]) => k.startsWith("claim/") && e.by === p.name && e.text.trim() &&
+    !claimReleased(e) && !settled(e) && !reviewedClaim(room, k, e)).map(([k]) => k);
+}
+
 /** How many idle waits running (about one a minute) before a seat with nothing open is offered the door; 0 turns it off.
  * src/seat.ts hands a harnessed seat off after handoffIdleTurns with nothing actionable; a Claude Code seat has no
  * harness, so the hub is the only place that can say it. */
@@ -49,11 +74,14 @@ export function idleStreak(p: Participant, again: boolean): number {
 }
 
 /** Whether this idle wait carries the offer: every leaveWaits-th of a run, to a worker with nothing open while no
- * proposal is open (a vote is owed or about to be) and never to the verifier, lead or chair, whom the room needs at the end. */
+ * proposal is open (a vote is owed or about to be), never to a seat whose own claim is unreviewed (dev room
+ * swarm-004642-76kz-room: the offer reached a seat polling while its own 6-minute soak ran), and never to the verifier,
+ * lead or chair, whom the room needs at the end. */
 export function offersLeave(room: Room, p: Participant, streak: number, work: OpenWork[]): boolean {
   const n = idlePolicy.leaveWaits;
   if (!n || work.length || streak < n || streak % n !== 0 || room.state !== "open" || p.agent === "human") return false;
   if (p.role === "verifier" || p.role === "lead" || p.role === "chair") return false;
+  if (claimsInFlight(room, p).length) return false;
   return ![...room.proposals.values()].some((pr) => pr.status === "open");
 }
 
@@ -71,25 +99,12 @@ export function leaveHint(room: Room, p: Participant, streak: number): string {
 export function openWork(hub: Hub, room: Room, p: Participant, idle = true): OpenWork[] {
   if (room.state !== "open" || p.agent === "human") return [];
   const entries = [...room.board.entries()].filter(([, e]) => e.text.trim());
-  const area = (key: string) => key.slice(key.indexOf("/") + 1);
   const shownName = (name: string) => {
     const who = [...room.participants.values()].find((x) => x.name === name);
     return who ? hub.shown(room, who) : name;
   };
   const hasWork = (name: string) => entries.some(([k, e]) => e.by === name && !NOT_WORK.some((pre) => k.startsWith(pre)));
-  /** A claim counts as reviewed once any seat but its owner has put a review where the
-   * room can read it: a board entry outside claim/ whose key is the claim's area or whose text names the area, the
-   * claim, or the owner's branch, or a chat message since the claim that names the area. Reviews land in verify/*, in
-   * review/* and in plain chat, and often from a seat other than the assigned reviewer; asking for one that is
-   * already there is noise a seat learns to skip (replay of 116 long idle runs: 15 of 23 review_owed hits). */
-  const reviewed = (claimKey: string, claim: BoardEntry) => {
-    const slug = area(claimKey);
-    const word = new RegExp(`(^|[^a-z0-9])${slug.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}([^a-z0-9]|$)`, "i");
-    const mine = (name: string) => name !== claim.by;
-    if (entries.some(([k, e]) => mine(e.by) && !NOT_REVIEW.some((pre) => k.startsWith(pre)) && !k.endsWith(".partial") &&
-      (area(k) === slug || word.test(e.text) || (!!claim.workspace?.branch && e.text.includes(claim.workspace.branch))))) return true;
-    return room.messages.some((m) => m.kind === "chat" && m.from.agent !== "hub" && mine(m.from.name) && m.ts >= claim.updatedAt && word.test(m.content));
-  };
+  const reviewed = (claimKey: string, claim: BoardEntry) => reviewedClaim(room, claimKey, claim);
 
   const review: OpenWork[] = [], own: OpenWork[] = [], orphaned: OpenWork[] = [], help: OpenWork[] = [];
   for (const [k, e] of entries) {

@@ -8,6 +8,9 @@
  * Run: npx tsx scripts/board-attack-regression.ts
  */
 import assert from "node:assert/strict";
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { Hub } from "../src/hub.js";
 
 const cases: [string, () => Promise<void> | void][] = [];
@@ -79,7 +82,7 @@ test("nothing to say, nothing refused: short notes, reserved keys and fully atta
   h.setBoard(name, a.id, "claim/recruiting", JSON.stringify({ area: "recruiting", owner: "alice", note: FINDING }));
   h.setBoard(name, a.id, "findings/recruiting", FINDING);
   h.setBoard(name, b.id, "attack/findings/recruiting", ATTACK);
-  h.setBoard(name, a.id, "findings/recruiting", `${FINDING}\nRE attack: conceded, reworded.`);
+  h.setBoard(name, a.id, "findings/recruiting", `${FINDING}\nRE attack: conceded; the 20 refusals are calls, not seats, and the sentence above now says so.`);
   assert.deepEqual(h.scrutiny(name), { unexamined: [], open_attacks: [] });
   assert.equal(h.propose(name, a.id, "Build the hub-side trigger.").status, "open");
 });
@@ -99,13 +102,43 @@ test("a finding another connection already named or quoted in chat is not listed
   assert.deepEqual(alias.h.scrutiny(alias.name).unexamined, ["findings/recruiting"], "a same-connection alias is the author");
 });
 
+// Both found by the reviewer's probe (claude-opus-5-5-6, review/scrutiny-quality) at 6dc0ed7f.
+test("re-saving the attacked entry does not answer the attack: the quoted clause must go, or a reply of some length be added", () => {
+  const { h, name, a, b } = room();
+  h.setBoard(name, a.id, "findings/recruiting", FINDING);
+  h.setBoard(name, b.id, "attack/findings/recruiting", ATTACK);
+  h.setBoard(name, a.id, "findings/recruiting", `${FINDING} `);
+  assert.deepEqual(h.scrutiny(name).open_attacks, ["attack/findings/recruiting"], "a one-space edit");
+  h.setBoard(name, a.id, "findings/recruiting", `${FINDING}\nok.`);
+  assert.deepEqual(h.scrutiny(name).open_attacks, ["attack/findings/recruiting"], "a three-character reply");
+  h.setBoard(name, a.id, "findings/recruiting", FINDING.replace("refused calls are not the cause (20 refusals in total)", "20 calls were refused; seats that never tried are not counted"));
+  assert.deepEqual(h.scrutiny(name).open_attacks, [], "the quoted clause is gone");
+});
+
+test("the once-per-room refusal is on the record: the room sees it, and a hub restart does not refuse again", () => {
+  const dataDir = mkdtempSync(join(tmpdir(), "board-attack-"));
+  const h = new Hub({ dataDir });
+  const name = "board-attack-restart";
+  const a = h.join(name, "alice", "test", {}, undefined, "sess-alice").participant;
+  const b = h.join(name, "bob", "test", {}, undefined, "sess-bob").participant;
+  h.setBoard(name, a.id, "findings/recruiting", FINDING);
+  throws(() => h.propose(name, a.id, "Build the hub-side trigger."), /findings\/recruiting/);
+  const line = h.getRoom(name).messages.find((m) => m.kind === "system" && m.content.includes("findings/recruiting") && /held once/.test(m.content));
+  assert.ok(line, "one system line tells the room which findings nobody else examined");
+  const h2 = new Hub({ dataDir });
+  const a2 = h2.join(name, "alice", "test", {}, a.id, "sess-alice").participant;
+  h2.join(name, "bob", "test", {}, b.id, "sess-bob");
+  assert.equal(h2.propose(name, a2.id, "Build the hub-side trigger.").status, "open");
+  for (const hub of [h, h2]) for (const r of hub.rooms.values()) { clearTimeout(r.nudgeTimer); clearTimeout(r.openingsTimer); }
+});
+
 test("room_status carries the two lists only while there is something on them", () => {
   const { h, name, a, b } = room();
   assert.equal("scrutiny" in h.summary(h.getRoom(name)), false);
   h.setBoard(name, a.id, "findings/recruiting", FINDING);
   assert.deepEqual((h.summary(h.getRoom(name)) as { scrutiny?: unknown }).scrutiny, { unexamined: ["findings/recruiting"], open_attacks: [] });
   h.setBoard(name, b.id, "attack/findings/recruiting", ATTACK);
-  h.setBoard(name, a.id, "findings/recruiting", `${FINDING}\nRE attack: conceded.`);
+  h.setBoard(name, a.id, "findings/recruiting", `${FINDING}\nRE attack: conceded; the count is of refused calls and says nothing about seats that never tried.`);
   assert.equal("scrutiny" in h.summary(h.getRoom(name)), false);
 });
 

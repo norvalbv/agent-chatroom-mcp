@@ -837,10 +837,13 @@ export class Hub {
       const answered = this.isAnswered(room, target);
       const resp = this.responderFor(room, target, p.id);
       // The human room's verified contract (ea78cf9, human-takeover-regression): only the hub's responder may answer a
-      // targeted human ask: the addressee while live and within its window, then the nominated successor. An ask whose
+      // targeted human ask: the addressee while live and within its window, then the nominated successor... An ask whose
       // addressee left is therefore not open to everyone; it is handed to the current nominee (supersedes the
       // maintainer's "anyone may take an orphaned ask" fix of 9b69261, whose test now asserts the nominee path).
-      if (to && to !== "all" && !resp.mine) {
+      // ...and the addressee itself while it is in the room: the human chose that seat, and a seat mid-task past the window
+      // (the verifier in swarm-000525-jcz8-room, refused three times) still answers; the first reply settles it either way.
+      const addresseeLive = !!to && to !== "all" && to === p.id && p.active;
+      if (to && to !== "all" && !resp.mine && !addresseeLive) {
         throw new HubError(`${this.shown(room, target.from)} addressed that to ${resp.who}, not you. Leave it to them.`);
       }
       if (small && answered && !resp.mine) {

@@ -1675,10 +1675,10 @@ export class Hub {
     // (the line the hub posts is the receipt, so a restarted hub does not refuse a second time)
     // refused once per room: a first proposal often lands before a claimed area has reported (24% of past rooms;
     // scripts/barren-claims-measure.py). The owners are asked in the room; the second propose goes through regardless.
-    const barren = room.barrenWarned || room.messages.some((m) => m.kind === "system" && m.content.includes(BARREN_ASK)) ? [] : barrenClaims(room, voters.filter((v) => v.id !== p.id));
+    const barren = room.barrenWarned || room.messages.some((m) => m.kind === "system" && m.content.includes(BARREN_ASK)) ? [] : barrenClaims(room, voters.filter((v) => v.id !== p.id), (v) => this.shown(room, v));
     if (barren.length) {
       room.barrenWarned = true;
-      const owners = [...new Set(voters.filter((v) => barren.some((b) => b.endsWith(`(${v.name})`))).map((v) => `@${this.shown(room, v)}`))];
+      const owners = [...new Set(voters.filter((v) => barren.some((b) => b.endsWith(`(${this.shown(room, v)})`))).map((v) => `@${this.shown(room, v)}`))];
       this.post(room, "system", undefined, `${owners.join(" ")} ${this.shown(room, p)} ${BARREN_ASK} (${barren.join(", ")}). Post what you found, even if unfinished, or clear the claim.`);
       throw new HubError(`CLAIMS WITHOUT FINDINGS: ${barren.join(", ")}. Their owners are in the room and have put nothing but the claim on the board; the hub has asked them. Wait for their entries, or propose again to go ahead without them: this refusal is given once per room.`);
     }

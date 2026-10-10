@@ -67,10 +67,13 @@ const total = (w: WorkCounts | undefined) => CLASSES.reduce((n, c) => n + (w?.[c
 const line = (w: WorkCounts | undefined) => CLASSES.filter((c) => w?.[c]).map((c) => `${c} ${w?.[c]}`).join(", ") || "none";
 
 /** Claims whose owner has put nothing else on the board: an area somebody took and nobody reported on. */
-export function barrenClaims(room: Room, seats: Participant[]): string[] {
-  const names = new Set(seats.map((p) => p.name));
+export function barrenClaims(room: Room, seats: Participant[], shown: (p: Participant) => string = (p) => p.name): string[] {
+  const byName = new Map(seats.map((p) => [p.name, p]));
   const wrote = new Set([...room.board].filter(([k]) => !NOT_FINDINGS.test(k)).map(([, e]) => e.by));
-  return [...room.board].filter(([k, e]) => k.startsWith("claim/") && names.has(e.by) && !wrote.has(e.by)).map(([k, e]) => `${k} (${e.by})`);
+  return [...room.board].flatMap(([k, e]) => {
+    const owner = k.startsWith("claim/") && !wrote.has(e.by) ? byName.get(e.by) : undefined;
+    return owner ? [`${k} (${shown(owner)})`] : [];
+  });
 }
 
 /**
@@ -81,7 +84,7 @@ export function evidenceGaps(room: Room, voters: Participant[], shown: (p: Parti
   const reporting = voters.filter(reports);
   if (!reporting.length) return undefined;
   const idle = reporting.filter((p) => !total(p.work)).map(shown);
-  const barren = barrenClaims(room, voters);
+  const barren = barrenClaims(room, voters, shown);
   const gaps = [
     idle.length ? `${idle.join(", ")} made no local tool call` : "",
     reporting.some((p) => p.work?.web) ? "" : "no seat made a web call",
@@ -101,7 +104,7 @@ export function evidenceReceipt(room: Room, voters: Participant[], shown: (p: Pa
   const minutes = Math.max(0, Math.round((Date.now() - Date.parse(room.createdAt)) / 60_000));
   const idle = reporting.filter((p) => !total(p.work)).length;
   const offline = reporting.filter((p) => !p.work?.web).length;
-  const barren = barrenClaims(room, voters);
+  const barren = barrenClaims(room, voters, shown);
   const silent = voters.length - reporting.length;
   return `EVIDENCE BEHIND THIS PROPOSAL, ${minutes} min after the room opened. Distinct local targets since joining (files, patterns, commands, web hosts): ` +
     `${reporting.map((p) => `${shown(p)}: ${line(p.work)}`).join("; ")}. ` +

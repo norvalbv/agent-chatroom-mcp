@@ -81,6 +81,28 @@ await h("leave_room", { reason: "handing off; nothing found" }).catch(() => h("l
 await i("room_status");
 assert.ok((await g("propose", { text: "The departed seat's claim does not hold us." })).id);
 
+// 4b. In an anonymous room the refusal and the ask name seats by label, never by name.
+const anon = async (name: string) => {
+  const client = new Client({ name, version: "0.0.0" });
+  await client.connect(new StreamableHTTPClientTransport(new URL(`${HTTP}/mcp`)));
+  return async (tool: string, args: Record<string, unknown> = {}) => {
+    const res = (await client.callTool({ name: tool, arguments: { room: "anon2", ...args } })) as { isError?: boolean; content: { text: string }[] };
+    if (res.isError) throw new Error(res.content[0]?.text);
+    try { return JSON.parse(res.content[0]?.text ?? ""); } catch { return res.content[0]?.text; }
+  };
+};
+const x1 = await anon("x1");
+const x2 = await anon("x2");
+await x1("join_room", { name: "alice-real", agent: "claude", expected_participants: 0, anonymous: true, require_challenge: false });
+await x2("join_room", { name: "bob-real", agent: "claude" });
+await x2("board_set", { key: "claim/hidden", text: '{"area":"hidden"}' });
+await assert.rejects(x1("propose", { text: "Anonymous enough." }), (e: Error) => {
+  assert.match(e.message, /claim\/hidden \(Participant [A-Z]\)/);
+  assert.doesNotMatch(e.message, /bob-real/);
+  return true;
+});
+assert.ok(!(await messages("anon2")).some((m) => m.content.includes("bob-real") && m.content.includes("no findings")), "the ask names the label, not the name");
+
 // 5. Once per room holds across a hub restart: the line the hub posted is the receipt (a second hub reads the same log).
 const DATA = mkdtempSync(join(tmpdir(), "barren-claim-"));
 const hubOn = async (port: number) => {

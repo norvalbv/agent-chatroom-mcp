@@ -395,7 +395,7 @@ export interface Room {
   state: RoomState;
   /** Hidden from listings (dashboard, list_rooms) but fully kept on disk; set by a human or the archive-dead sweep. */
   archived?: boolean;
-  conclusion?: { text: string; proposalId: string; decidedAt: string; version?: number; tally?: { agree: number; disagree: number; abstain: number }; electorate?: ElectorateSummary; unresolved_objections?: { by: string; objection: string }[]; verification?: ConclusionVerification; verification_gaps?: { key: string; by: string; gaps: string[] }[]; evidence?: string };
+  conclusion?: { text: string; proposalId: string; decidedAt: string; version?: number; tally?: { agree: number; disagree: number; abstain: number }; electorate?: ElectorateSummary; unresolved_objections?: { by: string; objection: string }[]; agreed_without_output?: string[]; undelivered_claims?: { key: string; by: string }[]; verification?: ConclusionVerification; verification_gaps?: { key: string; by: string; gaps: string[] }[]; evidence?: string };
   /** identical silence nudges are posted at most twice */
   lastNudge?: { text: string; count: number };
   /** Lifetime refusal counts keyed by tool and bounded reason class (no bodies, no ids). */

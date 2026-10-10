@@ -116,6 +116,8 @@ export const offlineScripts = [
   'notice-send-gate-regression.ts',
   'per-turn-payload-regression.ts',
   'kick-vote-regression.ts',
+  'seat-output-regression.ts',
+  'conclusion-output-regression.ts',
   'human-answering.test.ts',
   'layer-rules-400-task.test.ts',
   'layer-views-task.test.ts',

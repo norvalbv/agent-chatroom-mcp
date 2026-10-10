@@ -18,6 +18,7 @@ import { now, shortId, norm, emptyBoardManifestCounters, manifestBytes, codeStat
 import type { Opts, Event, BoardManifestCounters } from "./hub/internal.js";
 import * as board from "./hub/board.js";
 import * as kick from "./hub/kick.js";
+import * as output from "./hub/output.js";
 import * as liveness from "./hub/liveness.js";
 import * as persistence from "./hub/persistence.js";
 import { barrenClaims, evidenceGaps, evidenceReceipt } from "./hub/work.js";
@@ -204,10 +205,12 @@ export class Hub {
           return { status: !p.active ? "left" : age_seconds < 60 ? "active" : age_seconds * 1000 < kick.SUSPECTED_DEAD_MS ? "idle" : "suspected_dead",
             age_seconds, heartbeat_age_seconds: p.working ? age(p.working.at) : null };
         })(),
+        output: output.seatOutput(room, p, observedAt),
         left_reason: p.active ? null : p.leaveReason ?? null,
         ...(p.kicked ? { kicked: p.kicked } : {}),
       })),
       kick_votes: [...room.kickVotes.values()].map((kv) => this.kickView(room, kv, reveal)),
+      no_output: output.listedNoOutput(this, room, observedAt).map(nm),
       // claim/* entries whose owner left: its registered successor may take one at once, anyone after Hub.STALE_CLAIM_MS
       stale_claims: this.staleClaims(room, reveal),
       ...((s) => (s.unexamined.length || s.open_attacks.length ? { scrutiny: s } : {}))(board.scrutiny(room)),
@@ -2365,8 +2368,9 @@ export class Hub {
       base_commit: v.head.base_commit!, commit: v.head.commit!, ...(v.head.kind ? { kind: v.head.kind } : {}),
       ...(this.unverifiedCommits(room, pr).length ? { unverified_commits: this.unverifiedCommits(room, pr) } : {}),
     };
+    const record = output.conclusionOutput(this, room, pr);
     const gaps = this.verificationGaps(room, pr);
-    room.conclusion = { text: pr.text, proposalId: pr.id, decidedAt: now(), version: pr.version, tally, electorate, unresolved_objections: unresolved, ...(verification ? { verification } : {}), ...(gaps.length ? { verification_gaps: gaps } : {}), ...(pr.evidence ? { evidence: pr.evidence } : {}) };
+    room.conclusion = { text: pr.text, proposalId: pr.id, decidedAt: now(), version: pr.version, tally, electorate, unresolved_objections: unresolved, ...record, ...(verification ? { verification } : {}), ...(gaps.length ? { verification_gaps: gaps } : {}), ...(pr.evidence ? { evidence: pr.evidence } : {}) };
     this.persist({ type: "proposal", proposal: pr });
     this.setState(room, "concluded");
     if (room.nudgeTimer) clearTimeout(room.nudgeTimer);
@@ -2375,7 +2379,7 @@ export class Hub {
       "conclusion",
       undefined,
       `CONSENSUS REACHED on ${pr.id} v${pr.version} (${electorate.agree}/${electorate.electorate} agree; ${electorate.excluded_leavers} leavers-before-close excluded; quorum=${room.quorum}; ${pr.text.length} chars, text in room_status/conclusion)` +
-        (unresolved.length ? `\nUnresolved objections, overruled: ${unresolved.map((u) => `${u.by}: "${u.objection.slice(0, 300)}${u.objection.length > 300 ? "…" : ""}"`).join(" | ")}` : "") +
+        (unresolved.length ? `\nUnresolved objections, overruled: ${unresolved.map((u) => `${u.by}: "${u.objection.slice(0, 300)}${u.objection.length > 300 ? "…" : ""}"`).join(" | ")}` : "") + output.conclusionOutputLines(record) +
         (verification ? `\n${Hub.verificationLine(verification)}${Hub.unverifiedLine(verification, gaps)}` : ""),
       { proposalId: pr.id },
     );
@@ -2531,6 +2535,7 @@ export class Hub {
         }
       }
       kick.reevaluateOpenKicks(this, room);
+      output.warnNoOutput(this, room);
     }
     return swept;
   }

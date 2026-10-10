@@ -4,6 +4,7 @@ import { applyBoard, sessionsOf, quorumNeeded } from "./board.js";
 import { HubError } from "./types.js";
 import type { Participant, KickVote, BoardEntry, Room } from "./types.js";
 import { now } from "./internal.js";
+import { hasDelivered, outputLine } from "./output.js";
 
 /** Who may be a kick target: an active non-human, non-chair participant of this room, by name (or id). */
 function kickTarget(hub: Hub, room: Room, target: string): Participant {
@@ -71,7 +72,7 @@ export function kickVote(hub: Hub, roomName: string, pid: string, target: string
   if (!kv || kv.status !== "open") {
     const why = reason?.trim() ?? "";
     if (vote !== "kick") throw new HubError(`There is no open vote to kick ${hub.shown(room, t)}; only a "kick" ballot with a reason starts one.`);
-    if (why.length < 8) throw new HubError("A kick vote needs a reason (one line): persistent disagreement blocking progress, or evidence the session is dead (liveness/last_seen_at).");
+    if (why.length < 8) throw new HubError("A kick vote needs a reason (one line): persistent disagreement blocking progress, evidence the session is dead (liveness/last_seen_at), or nothing on the record (room_status no_output / participants[].output).");
     const needed = hub.kickNeeded(room, t);
     if (kickPossible(hub, room, t) < needed) {
       throw new HubError(`A kick needs ${needed} ballots from distinct connections (never one seat alone) and only ${kickPossible(hub, room, t)} could vote here besides ${hub.shown(room, t)}. A human on the dashboard can supply one; otherwise the idle sweep marks a dead seat left after 10 min, and request_agent(replacing=${JSON.stringify(t.name)}) then needs no vote.`, undefined, "state");
@@ -79,7 +80,7 @@ export function kickVote(hub: Hub, roomName: string, pid: string, target: string
     kv = { target: t.id, targetName: t.name, by: { id: by.id, name: by.name }, reason: why.slice(0, 600), startedAt: now(), ballots: {}, status: "open" };
     room.kickVotes.set(t.id, kv);
     hub.post(room, "system", undefined,
-      `${hub.shown(room, by)} started a vote to kick ${hub.shown(room, t)}: ${kv.reason} — needs ${needed} kick ballot(s) from distinct connections (quorum=${room.quorum} over the other voters). ` +
+      `${hub.shown(room, by)} started a vote to kick ${hub.shown(room, t)}: ${kv.reason} — needs ${needed} kick ballot(s) from distinct connections (quorum=${room.quorum} over the other voters). ${outputLine(hub, room, t)}` +
       `Vote with kick_vote(target=${JSON.stringify(hub.shown(room, t))}, vote="kick"|"keep"); the target may not vote. On the threshold the hub removes them, releases their claim/* entries and their next call tells them they were kicked.`);
   }
   kv.ballots[by.id] = { name: by.name, vote, ts: now(), session: by.session, ...(human ? { human: true } : {}) };
@@ -87,6 +88,39 @@ export function kickVote(hub: Hub, roomName: string, pid: string, target: string
   hub.post(room, "system", undefined, `${hub.shown(room, by)} votes ${vote.toUpperCase()} on removing ${hub.shown(room, t)} (${kickTally(hub, room, kv).summary}).`);
   evaluateKick(hub, room, kv);
   return kv;
+}
+
+/** The hub's own id as the starter of a vote it opened: no seat volunteers to remove a peer (7 of the 9 votes on record were opened by the human). */
+export const HUB_STARTER = { id: "hub", name: "the hub" };
+
+/** The hub opens a removal vote on its own count and casts no ballot: seats and a dashboard human still decide. False when one is
+ * already open or too few connections could vote. */
+export function openKickByHub(hub: Hub, room: Room, t: Participant, reason: string): boolean {
+  const last = room.kickVotes.get(t.id);
+  // once per seat, except after a vote the hub itself withdrew for delivery: that seat can fall silent again
+  if (last && !(last.status === "dropped" && last.by.id === HUB_STARTER.id && last.outcome?.includes(DELIVERED))) return false;
+  const needed = hub.kickNeeded(room, t);
+  if (kickPossible(hub, room, t) < needed) return false;
+  const kv: KickVote = { target: t.id, targetName: t.name, by: HUB_STARTER, reason: reason.slice(0, 600), startedAt: now(), ballots: {}, status: "open" };
+  room.kickVotes.set(t.id, kv);
+  hub.persist({ type: "kick_vote", room: room.name, vote: kv });
+  // kind "chat" so the @-mention reaches the seat the vote is about (a "system" line carries no mention)
+  hub.post(room, "chat", undefined,
+    `Routine check: the hub opened a vote on closing the seat of @${hub.shown(room, t)}: ${kv.reason} — needs ${needed} kick ballot(s) from distinct connections (quorum=${room.quorum} over the other voters). ${outputLine(hub, room, t)}` +
+    `Vote with kick_vote(target=${JSON.stringify(hub.shown(room, t))}, vote="kick"|"keep"); keep if you know of work of theirs the record does not show. The vote is withdrawn if they put something on the record first.`);
+  return true;
+}
+
+/** How a hub-opened vote ends when its ground is gone; a later silence may open another. */
+export const DELIVERED = "put something on the record";
+
+/** A vote the hub opened stands only while its target has delivered nothing: checked before every tally, so ballots that land
+ * between sweeps cannot remove a seat that has since delivered. True when the vote was withdrawn. */
+export function withdrawIfDelivered(hub: Hub, room: Room, kv: KickVote): boolean {
+  const t = room.participants.get(kv.target);
+  if (kv.status !== "open" || kv.by.id !== HUB_STARTER.id || !t || !hasDelivered(room, t)) return false;
+  settleKick(hub, room, kv, "dropped", `they ${DELIVERED}`);
+  return true;
 }
 
 /** Ballots counted per connection over the current pool (a ballot from a seat that has since left no longer counts). */
@@ -118,7 +152,8 @@ function kickTally(hub: Hub, room: Room, kv: KickVote) {
 function evaluateKick(hub: Hub, room: Room, kv: KickVote): void {
   if (kv.status !== "open") return;
   const t = room.participants.get(kv.target);
-  if (!t || !t.active) { settleKick(hub, room, kv, "dropped", `${kv.targetName} is no longer in the room`); return; }
+  if (!t || !t.active) { settleKick(hub, room, kv, "dropped", "they are no longer in the room"); return; }
+  if (withdrawIfDelivered(hub, room, kv)) return;
   const tally = kickTally(hub, room, kv);
   if (tally.humanKeep) { settleKick(hub, room, kv, "dropped", "a human voted keep (veto)"); return; }
   if (tally.kick >= tally.needed) {
@@ -135,7 +170,8 @@ function settleKick(hub: Hub, room: Room, kv: KickVote, status: "kicked" | "drop
   kv.endedAt = now();
   kv.outcome = outcome;
   hub.persist({ type: "kick_vote", room: room.name, vote: kv });
-  if (status === "dropped") hub.post(room, "system", undefined, `The vote to kick ${kv.targetName} was dropped: ${outcome}.`);
+  // by the name the room sees: the stored targetName is the real one, which an anonymous room must not print
+  if (status === "dropped") hub.post(room, "system", undefined, `The vote to kick ${hub.shown(room, room.participants.get(kv.target) ?? { id: kv.target, name: kv.targetName })} was dropped: ${outcome}.`);
 }
 
 /** The single removal primitive (kick vote, replace): mark the target and its same-connection aliases kicked so they cannot call or rejoin,

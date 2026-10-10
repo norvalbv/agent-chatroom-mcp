@@ -194,6 +194,7 @@ export function replay(hub: Hub) {
             pr.version = ev.version;
             // Missing legacy timestamps must clear the previous text's freshness.
             pr.updatedAt = ev.updatedAt;
+            if (ev.commitsAddedAt) pr.commitsAddedAt = ev.commitsAddedAt;
             pr.votes = ev.votes;
             if (ev.challenges) pr.challenges = ev.challenges;
           }

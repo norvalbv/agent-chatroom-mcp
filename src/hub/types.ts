@@ -70,6 +70,37 @@ function sameCommit(a: string, b: string): boolean {
   return x === y;
 }
 
+/** Whether a proposal text cites a commit: a whole hex token of 7+ characters there that is the same commit as `commit`
+ * (abbreviated or full). A verify entry stays bound to the text for as long as the text cites the commit it checked. */
+export function citesCommit(text: string, commit: string | undefined): boolean {
+  const c = commit?.trim().toLowerCase() ?? "";
+  if (!/^[0-9a-f]{7,64}$/.test(c)) return false;
+  return hexTokens(text).some((t) => sameCommit(t, c));
+}
+
+function hexTokens(text: string): string[] {
+  return [...new Set(text.toLowerCase().match(/\b[0-9a-f]{7,64}\b/g) ?? [])];
+}
+
+/** The commits a text cites, as far as a hub can tell without a repository: whole hex tokens of 7 to 40 characters
+ * with both a digit and a letter (a date or a count is not one; neither is a sha256 digest). */
+export function citedCommits(text: string): string[] {
+  return hexTokens(text).filter((t) => t.length <= 40 && /\d/.test(t) && /[a-f]/.test(t));
+}
+
+/** Whether `next` cites a commit that `prev` did not and that none of `heads` (the verify heads counting before the
+ * amend) checked as its commit or base_commit: the amend that makes every earlier verify entry stale again. */
+export function addsCommit(prev: string, next: string, heads: VerifyHead[] = []): boolean {
+  const before = citedCommits(prev);
+  return uncoveredCommits(next, heads).some((t) => !before.some((b) => sameCommit(b, t)));
+}
+
+/** Cited commits that no given verify head covers as its commit or its base_commit. */
+export function uncoveredCommits(text: string, heads: VerifyHead[]): string[] {
+  const covered = heads.flatMap((h) => [h.commit, h.base_commit]).filter((c): c is string => !!c?.trim());
+  return citedCommits(text).filter((t) => !covered.some((c) => sameCommit(c, t)));
+}
+
 /** Fail-to-pass evidence (SWE-bench FAIL_TO_PASS): the head names the proposal's commit and its parent, with the same check failing at the parent;
  * a no-behaviour refactor instead sets "refactor":true with base_exit_code 0. Self-reported, the hub runs nothing. Returns what to fix, or undefined. */
 export function failToPassShortfall(h: VerifyHead): string | undefined {
@@ -260,6 +291,8 @@ export interface ConclusionVerification {
   base_commit: string;
   commit: string;
   kind?: VerifyKind;
+  /** commits the concluded text cites that no counting verify entry checked, as its commit or its base_commit */
+  unverified_commits?: string[];
 }
 
 export interface Proposal {
@@ -283,6 +316,8 @@ export interface Proposal {
   notPassedVersion?: number;
   /** last "stuck because" notice, so it is posted once per state change */
   stuckNotice?: string;
+  /** when an amend last cited a commit the text before it did not: verify entries older than this are stale again */
+  commitsAddedAt?: string;
 }
 
 export interface RoomOptions {

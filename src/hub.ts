@@ -12,7 +12,7 @@ import { mkdirSync } from "node:fs";
 import { analyzeReplyMetrics, type ReplyMetricEvent } from "./reply-metrics.js";
 
 export * from "./hub/types.js";
-import { VERIFY_HEAD_EXAMPLE, VERIFY_HEAD_RULE, parseVerifyHead, readVerifyHead, failToPassShortfall, ROLES, REFUSAL_CODES, HubError } from "./hub/types.js";
+import { VERIFY_HEAD_EXAMPLE, VERIFY_HEAD_RULE, parseVerifyHead, readVerifyHead, failToPassShortfall, citesCommit, addsCommit, uncoveredCommits, ROLES, REFUSAL_CODES, HubError } from "./hub/types.js";
 import type { MessageKind, Vote, Quorum, RoomState, VerifyHead, Role, Participant, KickVote, Message, CodeState, BoardExpiryOptions, BoardEntry, Challenge, ElectorateSummary, ConclusionVerification, Proposal, RoomOptions, JoinOptions, Room, CallOutcome, RefusalCode, BoardManifestObservation } from "./hub/types.js";
 import { now, shortId, norm, emptyBoardManifestCounters, manifestBytes, codeState } from "./hub/internal.js";
 import type { Opts, Event, BoardManifestCounters } from "./hub/internal.js";
@@ -1550,9 +1550,16 @@ export class Hub {
       next = pr.text.replace(find, replace);
     }
     if (next === pr.text) throw new HubError("That amendment changes nothing.");
+    const counting = () => {
+      const reviewer = this.activeReviewerFor(room, pr.by.name);
+      return [...room.board].filter(([key, e]) => { const v = this.verifyEntryVerdict(room, pr, key, e, reviewer); return v.head && !v.why; }).map(([key, e]) => `${key} by ${this.shown(room, { id: "", name: e.by })}`);
+    };
+    const verifiedBefore = room.requireVerification ? counting() : [];
+    const added = addsCommit(pr.text, next, room.requireVerification ? this.countingHeads(room, pr) : []);
     pr.text = next;
     pr.version += 1;
     pr.updatedAt = now();
+    if (added) pr.commitsAddedAt = pr.updatedAt;
     pr.notPassedVersion = undefined;
     pr.stuckNotice = undefined;
     const kept: Proposal["votes"] = {};
@@ -1579,15 +1586,19 @@ export class Hub {
         reopened.push(this.shown(room, c.by));
       }
     }
-    this.persist({ type: "amend", room: roomName, proposalId, text: pr.text, version: pr.version, updatedAt: pr.updatedAt, votes: pr.votes, challenges: pr.challenges });
+    this.persist({ type: "amend", room: roomName, proposalId, text: pr.text, version: pr.version, updatedAt: pr.updatedAt, ...(pr.commitsAddedAt ? { commitsAddedAt: pr.commitsAddedAt } : {}), votes: pr.votes, challenges: pr.challenges });
     const clip = (t: string, n: number) => (t.length > n ? t.slice(0, n) + "…" : t);
     const diff = replaceAll ? `replaced the whole text (${pr.text.length} chars)` : find ? `"${clip(find, 160)}" → "${clip(replace, 240)}"` : `appended "${clip(replace, 240)}"`;
     const survived = Object.values(kept).map((v) => this.shown(room, { id: "", name: v.name }));
+    const verifiedNow = verifiedBefore.length ? counting() : [];
+    const voided = verifiedBefore.filter((k) => !verifiedNow.includes(k));
     this.post(
       room,
       "amend",
       p,
       `AMENDED ${proposalId} to v${pr.version}: ${diff}\n(votes reset${survived.length ? ` except ${survived.join(", ")}, whose quoted clause survived` : ""}; the new text arrives with your next wait_for_messages` +
+        (verifiedNow.length ? `; ${verifiedNow.join(", ")} still counts: v${pr.version} cites the commit it checked` : "") +
+        (voided.length ? `; ${voided.join(", ")} no longer counts: v${pr.version} ${added ? "cites a commit the text it checked did not" : "does not cite the commit it checked"}, so check v${pr.version} and write it again` : "") +
         (answered.length ? `; challenge by ${answered.join(", ")} answered: the cited text is gone` : "") +
         (reopened.length ? `; challenge by ${reopened.join(", ")} REOPENED: the cited text is back` : "") +
         ")",
@@ -1701,6 +1712,12 @@ export class Hub {
     return v.path === "refactor"
       ? `Verified by ${v.by} (${v.key}) on the refactor path${kind}: the check passed at ${v.base_commit} and at ${v.commit}; no check failed before the change.`
       : `Verified by ${v.by} (${v.key})${kind}: the check failed at ${v.base_commit} and passes at ${v.commit}.`;
+  }
+
+  /** The other half of the conclusion notice: what the text cites that nobody checked. */
+  static unverifiedLine(v: ConclusionVerification): string {
+    const u = v.unverified_commits ?? [];
+    return u.length ? `\nCited but checked by no verify entry: ${u.slice(0, 12).map((c) => c.slice(0, 12)).join(", ")}${u.length > 12 ? ` and ${u.length - 12} more` : ""}.` : "";
   }
 
   /** The verify/* entry that answers an executable challenge: names the proposal, reruns the challenge's exact
@@ -1916,6 +1933,7 @@ export class Hub {
       waiting_on: pr.status === "open" ? active.filter((p) => !pr.votes[p.id]).map((p) => nm(p)) : [],
       needs_challenge: needsChallenge,
       blocked_by: this.blockedBy(room, pr),
+      ...(pr.status === "open" && this.unverifiedCommits(room, pr).length ? { unverified_commits: this.unverifiedCommits(room, pr), unverified_commits_hint: "cited in the text, but no counting verify/* entry names them as commit or base_commit; one entry passes the gate, so these ride on it unchecked unless someone verifies them too" } : {}),
       challenges: pr.challenges.map((c) => ({ id: c.id, by: nm(c.by), objection: c.objection, status: c.status ?? "open", blocking: c.blocking !== false, version: c.version, ...(c.command ? { command: c.command } : {}) })),
       votes: Object.entries(pr.votes).map(([id, v]) => ({ name: nm({ id, name: v.name }), vote: v.vote, confidence: v.confidence, reason: v.reason, version: v.version, ...(v.version !== undefined && v.version !== pr.version ? { stale: `cast at v${v.version}` } : {}) })),
     };
@@ -1950,6 +1968,19 @@ export class Hub {
     return this.verification(room, pr)?.entry;
   }
 
+  /** Commits the proposal's text cites that no counting verify entry checked (as commit or base_commit). One entry
+   * passes the gate however many commits the text cites; this is what it leaves unchecked, said rather than enforced:
+   * a text also cites commits as history, and the hub cannot tell those from the ones it claims are done. */
+  unverifiedCommits(room: Room, pr: Proposal): string[] {
+    if (!room.requireVerification) return [];
+    return uncoveredCommits(pr.text, this.countingHeads(room, pr));
+  }
+
+  /** Every verify head that counts for this proposal, from any non-author, not only the assigned reviewer. */
+  private countingHeads(room: Room, pr: Proposal): VerifyHead[] {
+    return [...room.board].map(([key, e]) => this.verifyEntryVerdict(room, pr, key, e, undefined)).filter((v) => v.head && !v.why).map((v) => v.head!);
+  }
+
   /** The entry verifiedBy() finds, with its key and parsed head. */
   verification(room: Room, pr: Proposal): { key: string; entry: BoardEntry; head: VerifyHead } | undefined {
     if (!pr.updatedAt) return undefined; // Legacy text timestamps are unknown, not fresh.
@@ -1980,7 +2011,18 @@ export class Hub {
     // activeReviewerFor) is preferred: only their entry counts while they are still in the room. Once they
     // leave, any qualifying non-author entry counts again, so an absent reviewer never deadlocks the room.
     if (reviewer && e.by !== reviewer.name) return no(`the assigned reviewer, ${this.shown(room, reviewer)}, is still in the room and only their entry counts`);
-    if (!pr.updatedAt || e.updatedAt < pr.updatedAt) return no(`it was written before v${pr.version}'s text: check v${pr.version} and write it again`);
+    // Bound to the commit, not the text version: an entry written before an amend still counts while the amended text
+    // cites the commit its head names (the agree rule, applied to what was checked). It names this proposal, so it was
+    // written after the proposal existed; an amend that drops or changes the commit voids it.
+    // An amend that cites a commit the text before it did not makes every earlier entry stale again: nobody has
+    // checked the proposal as it now stands.
+    const cited = head?.proposal === pr.id && citesCommit(pr.text, head.commit);
+    if (!pr.updatedAt || (e.updatedAt < pr.updatedAt && !(cited && e.updatedAt >= (pr.commitsAddedAt ?? "")))) {
+      const checked = head?.proposal !== pr.id || !head.commit?.trim() ? ""
+        : cited ? `, which cites a commit the text it checked did not`
+        : `, which does not cite the commit it checked (${head.commit.trim().slice(0, 12)})`;
+      return no(`it was written before v${pr.version}'s text${checked}: check v${pr.version} and write it again`);
+    }
     if (!head) return no("error" in read ? read.error : "its first line is not a JSON verify head");
     if (head.proposal !== pr.id) return { head, why: `it names ${head.proposal}`, named: false };
     if (head.exit_code !== 0) return no(`it reports exit_code ${head.exit_code} at the proposal's commit, and counts only once the check passes there`);
@@ -2186,6 +2228,7 @@ export class Hub {
     const verification: ConclusionVerification | undefined = v && {
       key: v.key, by: v.entry.by, path: v.head.refactor === true ? "refactor" : "fail_to_pass",
       base_commit: v.head.base_commit!, commit: v.head.commit!, ...(v.head.kind ? { kind: v.head.kind } : {}),
+      ...(this.unverifiedCommits(room, pr).length ? { unverified_commits: this.unverifiedCommits(room, pr) } : {}),
     };
     room.conclusion = { text: pr.text, proposalId: pr.id, decidedAt: now(), version: pr.version, tally, electorate, unresolved_objections: unresolved, ...(verification ? { verification } : {}) };
     this.persist({ type: "proposal", proposal: pr });
@@ -2197,7 +2240,7 @@ export class Hub {
       undefined,
       `CONSENSUS REACHED on ${pr.id} v${pr.version} (${electorate.agree}/${electorate.electorate} agree; ${electorate.excluded_leavers} leavers-before-close excluded; quorum=${room.quorum}; ${pr.text.length} chars, text in room_status/conclusion)` +
         (unresolved.length ? `\nUnresolved objections, overruled: ${unresolved.map((u) => `${u.by}: "${u.objection.slice(0, 300)}${u.objection.length > 300 ? "…" : ""}"`).join(" | ")}` : "") +
-        (verification ? `\n${Hub.verificationLine(verification)}` : ""),
+        (verification ? `\n${Hub.verificationLine(verification)}${Hub.unverifiedLine(verification)}` : ""),
       { proposalId: pr.id },
     );
     this.releaseClaims(room, "Room concluded");

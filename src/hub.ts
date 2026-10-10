@@ -2176,7 +2176,33 @@ export class Hub {
    * a text also cites commits as history, and the hub cannot tell those from the ones it claims are done. */
   unverifiedCommits(room: Room, pr: Proposal): string[] {
     if (!room.requireVerification) return [];
-    return uncoveredCommits(pr.text, this.countingHeads(room, pr));
+    return uncoveredCommits(pr.text, [...this.countingHeads(room, pr), ...this.pendingCoverage(room, pr).map((x) => x.head)]);
+  }
+
+  /** A head written before there was a proposal to name: "pending", empty, or anything that is not a prop_ id. */
+  static isPending(head: VerifyHead): boolean {
+    return !/^prop_/.test(head.proposal.trim());
+  }
+
+  /**
+   * Verify entries written while builds were reviewed and no proposal existed (11 of 11 in swarm-082539-kns2;
+   * idea/pending-verify-counts) whose commit this text cites. They cover that commit, so it is not reported as
+   * unchecked, and their gaps ride on the conclusion; they never open the gate, which still needs a head naming this
+   * proposal: one small cited fix must not unlock a list of fourteen before anyone checked the merged tree (verifier,
+   * #287). Same shape rules as the gate: another connection, exit 0, failed at base. A verification binds to the commit
+   * (done-means-independently-verified).
+   */
+  pendingCoverage(room: Room, pr: Proposal): { key: string; e: BoardEntry; head: VerifyHead }[] {
+    const proposer = room.participants.get(pr.by.id);
+    const out: { key: string; e: BoardEntry; head: VerifyHead }[] = [];
+    for (const [key, e] of room.board) {
+      if (!key.startsWith("verify/") || key.endsWith(".partial") || e.by === pr.by.name) continue;
+      const author = [...room.participants.values()].find((x) => x.name === e.by);
+      if (author && proposer && author.session && author.session === proposer.session) continue;
+      const head = parseVerifyHead(e.text);
+      if (head && Hub.isPending(head) && head.commit?.trim() && head.exit_code === 0 && !failToPassShortfall(head) && citesCommit(pr.text, head.commit)) out.push({ key, e, head });
+    }
+    return out;
   }
 
   /** Heads that name this proposal, pass on shape (another connection, exit 0, fail-to-pass) and whose commit the text
@@ -2190,7 +2216,7 @@ export class Hub {
       const author = [...room.participants.values()].find((x) => x.name === e.by);
       if (author && proposer && author.session && author.session === proposer.session) continue;
       const head = parseVerifyHead(e.text);
-      if (head && Hub.headIsFor(head, pr) && head.exit_code === 0 && !failToPassShortfall(head) && citesCommit(pr.text, head.commit)) out.push(head);
+      if (head && (head.proposal === pr.id || Hub.isPending(head)) && head.exit_code === 0 && !failToPassShortfall(head) && citesCommit(pr.text, head.commit)) out.push(head);
     }
     return out;
   }
@@ -2202,6 +2228,7 @@ export class Hub {
       .map(([key, e]) => ({ key, e, v: this.verifyEntryVerdict(room, pr, key, e, undefined) }))
       .filter((x) => x.v.head && !x.v.why)
       .map((x) => ({ key: x.key, by: x.e.by, gaps: verifyGaps(x.v.head!, x.e.devReceipt) }))
+      .concat(this.pendingCoverage(room, pr).map((x) => ({ key: x.key, by: x.e.by, gaps: verifyGaps(x.head, x.e.devReceipt) })))
       .filter((x) => x.gaps.length);
   }
 
@@ -2252,23 +2279,11 @@ export class Hub {
    * what stops it counting, in words that say what to write instead; `named` is whether the entry is about this
    * proposal at all (only those are worth naming back in a refusal).
    */
-  /**
-   * Whether a head is about this proposal: it names its id, or it was written before there was one to name ("pending",
-   * or anything that is not a prop_ id) and the text cites the commit it checked. Builds are reviewed while no proposal
-   * is open (11 of 11 heads in swarm-082539-kns2; idea/pending-verify-counts), and a verification binds to the commit,
-   * not to the text (done-means-independently-verified). A head naming another proposal's id is that proposal's.
-   */
-  static headIsFor(head: VerifyHead, pr: Proposal): boolean {
-    if (head.proposal === pr.id) return true;
-    return !/^prop_/.test(head.proposal.trim()) && !!head.commit?.trim() && citesCommit(pr.text, head.commit);
-  }
-
   private verifyEntryVerdict(room: Room, pr: Proposal, key: string, e: BoardEntry, reviewer: Participant | undefined): { head?: VerifyHead; why?: string; named: boolean } {
     if (!key.startsWith("verify/") || key.endsWith(".partial")) return { why: "not a verify/* entry", named: false };
     const read = readVerifyHead(e.text);
     const head = "head" in read ? read.head : undefined;
-    const pending = !!head && head.proposal !== pr.id && Hub.headIsFor(head, pr);
-    const named = head ? Hub.headIsFor(head, pr) : e.text.includes(pr.id);
+    const named = head ? head.proposal === pr.id : e.text.includes(pr.id);
     const no = (why: string) => ({ head, why, named });
     if (e.by === pr.by.name) return { ...no("written by the proposer"), named: false }; // the author's own run, required before propose
     const proposer = room.participants.get(pr.by.id);
@@ -2282,8 +2297,7 @@ export class Hub {
     // cites the commit its head names (the agree rule, applied to what was checked) and cites nothing new that nobody
     // checked. It names this proposal, so it was written after the proposal existed.
     if (!pr.updatedAt) return no(`it was written before v${pr.version}'s text: check v${pr.version} and write it again`);
-    // a pending head checked a commit, never a text: it holds while the text cites that commit (headIsFor), whatever else the text says
-    if (e.updatedAt < pr.updatedAt && !pending) {
+    if (e.updatedAt < pr.updatedAt) {
       const again = `check v${pr.version} and write it again`;
       const was = `it was written before v${pr.version}'s text`;
       if (head?.proposal !== pr.id || !head.commit?.trim()) return no(`${was}: ${again}`);
@@ -2295,7 +2309,7 @@ export class Hub {
       if (added.length) return no(`${was}, which cites ${added.slice(0, 3).map((t) => t.slice(0, 12)).join(", ")} that the text it checked did not and no verify entry covers: ${again}, or take it out of the text if it is not a commit`);
     }
     if (!head) return no("error" in read ? read.error : "its first line is not a JSON verify head");
-    if (!Hub.headIsFor(head, pr)) return { head, why: /^prop_/.test(head.proposal.trim()) ? `it names ${head.proposal}` : `it names no proposal and this text does not cite its commit ${head.commit?.trim().slice(0, 12) ?? "(none)"}`, named: false };
+    if (head.proposal !== pr.id) return { head, why: `it names ${head.proposal}`, named: false };
     if (head.exit_code !== 0) return no(`it reports exit_code ${head.exit_code} at the proposal's commit, and counts only once the check passes there`);
     const short = failToPassShortfall(head);
     return short ? no(short) : { head, named };

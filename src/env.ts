@@ -115,6 +115,12 @@ export interface DotEnvOptions {
   env?: NodeJS.ProcessEnv;
 }
 
+/** A hub that must hold no provider key: a bench hub with recruitment refused (CHATROOM_NO_RECRUIT=1) or one that
+ * recruits only claude seats, which authenticate on their own (CHATROOM_STRIP_SECRETS=1, scripts/bench-hub-env.ts). */
+export function hubDotEnvOptions(env: NodeJS.ProcessEnv = process.env): DotEnvOptions {
+  return env.CHATROOM_NO_RECRUIT === "1" || env.CHATROOM_STRIP_SECRETS === "1" ? { excludePattern: /API_KEY|TOKEN|SECRET|PASSWORD|CREDENTIAL/i } : {};
+}
+
 export function loadDotEnv(dir = repoRoot, options: DotEnvOptions = {}): string[] {
   const env = options.env ?? process.env;
   const excluded = new Set(options.exclude ?? []);

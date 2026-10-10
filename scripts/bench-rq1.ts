@@ -12,6 +12,11 @@
  *
  * node --import tsx scripts/bench-rq1.ts TASK_DIR ARM SEED --root DIR [--model sonnet] [--port N]
  *   [--seats N] [--timeout-ms N, default 900000] [--max-budget-usd N] [--effort low|medium|high] [--deadline-ms N] [--hub-entry PATH]
+ *   [--hub-env KEY=VAL]... [--recruit-model claude-opus-5-5|claude-sonnet-5-5]
+ *
+ * Arms C and D only: --hub-env switches on one allowlisted hub mechanism flag (repeatable), and --recruit-model lifts
+ * the hub's recruitment refusal with recruits pinned to claude and that model (scripts/bench-hub-env.ts). Both are
+ * recorded in result.hub_env / result.recruit_model, and recruits' usage from the hub's /agents joins the run's usage.
  *
  * Arm D: arm C's hub and seats, but each seat drafts in a private copy of the workspace, posts a draft/*
  * pointer, and the room settles disputed inputs against the spec; the conclusion's first line
@@ -33,6 +38,7 @@ import { claudeArgs } from "../src/claude-args.js";
 import { parseClaudeCliOutput, rollupUsage, type SeatUsageRollup } from "../src/result.js";
 import { seatChildEnv } from "../src/env.js";
 import { estimateSeatCost, StreamUsage, type SeatCostEstimate } from "./seat-cost-estimate.js";
+import { benchHubEnv, parseHubEnv, recruitRecords, type RecruitRecord } from "./bench-hub-env.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(here, "..");
@@ -341,13 +347,33 @@ function draftScaffold(o: { name: string; seats: number; isCodeTask: boolean; dr
   ].join("\n");
 }
 
+/** Once the seats are done, wait for the hub's recruits to exit until the run's deadline, then stop any still running.
+ * A stopped recruit has no CLI usage, so it is recorded as unknown. */
+async function settleRecruits(url: string, deadlineAt: number): Promise<RecruitRecord[]> {
+  const list = async () => {
+    try {
+      return recruitRecords(await (await fetch(`${url}/agents`, { signal: AbortSignal.timeout(3000) })).json());
+    } catch {
+      return [];
+    }
+  };
+  let recs = await list();
+  while (recs.some((r) => !r.ended_at) && Date.now() < deadlineAt) {
+    await delay(1000);
+    recs = await list();
+  }
+  for (const r of recs.filter((r) => !r.ended_at)) await fetch(`${url}/agents/${encodeURIComponent(r.name)}/stop`, { method: "POST", signal: AbortSignal.timeout(3000) }).catch(() => {});
+  if (recs.some((r) => !r.ended_at)) await delay(2000);
+  return recs.some((r) => !r.ended_at) ? await list() : recs;
+}
+
 async function main() {
   const argv = process.argv.slice(2);
   const taskArg = argv.shift();
   const armArg = argv.shift();
   const seedArg = argv.shift();
   if (!taskArg || (armArg !== "A" && armArg !== "AH" && armArg !== "B" && armArg !== "C" && armArg !== "D") || seedArg === undefined) {
-    throw new Error("Usage: bench-rq1.ts TASK_DIR ARM(A|AH|B|C|D) SEED --root DIR [--model sonnet] [--port N] [--seats N] [--timeout-ms N] [--max-budget-usd N] [--deadline-ms N] [--hub-entry PATH]");
+    throw new Error("Usage: bench-rq1.ts TASK_DIR ARM(A|AH|B|C|D) SEED --root DIR [--model sonnet] [--port N] [--seats N] [--timeout-ms N] [--max-budget-usd N] [--deadline-ms N] [--hub-entry PATH] [--hub-env KEY=VAL]... [--recruit-model M]");
   }
   const seed = Number(seedArg);
   if (!Number.isInteger(seed)) throw new Error(`Invalid seed: ${seedArg}`);
@@ -373,6 +399,9 @@ async function main() {
   if (effortLevel !== null && !["low", "medium", "high"].includes(effortLevel)) throw new Error(`Invalid --effort: ${effortLevel} (low|medium|high)`);
   const deadlineMs = Number(flag("deadline-ms", String(timeoutMs)));
   const hubEntry = resolve(flag("hub-entry", resolve(repoRoot, "dist/index.js"))!);
+  const hubEnvFlags = parseHubEnv(argv.flatMap((a, i) => (a === "--hub-env" && argv[i + 1] !== undefined ? [argv[i + 1]] : [])));
+  const recruitModel = flag("recruit-model");
+  if ((Object.keys(hubEnvFlags).length || recruitModel) && armArg !== "C" && armArg !== "D") throw new Error("--hub-env and --recruit-model apply to arms C and D only");
 
   const taskDir = realpathSync(resolve(taskArg));
   const scorerPath = resolve(here, "bench-oracle.ts");
@@ -423,6 +452,7 @@ async function main() {
     : "The room's final agreed proposal text must be exactly your answer and nothing else (no explanation) — that text is read as the submitted answer once the room concludes.";
 
   let seatRecords: SeatRecord[] = [];
+  let recruits: RecruitRecord[] = [];
   let startedAt = new Date();
   let completedAt = new Date();
   const build = {
@@ -513,13 +543,13 @@ async function main() {
     startedAt = new Date();
     const dataDir = join(root, "data");
     mkdirSync(dataDir, { recursive: true });
-    const hubEnv = { ...process.env };
-    for (const key of Object.keys(hubEnv)) if (key.startsWith("CHATROOM_") || /API_KEY|TOKEN|SECRET|PASSWORD|CREDENTIAL/i.test(key)) delete hubEnv[key];
+    // benchHubEnv strips every inherited CHATROOM_* and secret-shaped variable; only --hub-env flags come back.
     // Item 2 (swarm-125438-jp20): a benchmark hub must refuse recruitment outright, in addition to (not
     // instead of) stripping provider keys above — src/index.ts's loadDotEnv() would otherwise silently
     // refill a deleted OPENROUTER_API_KEY from the repo's .env, and CHATROOM_NO_RECRUIT=1 both stops that
     // reload (src/index.ts) and makes every request_agent call fail closed (src/spawner.ts), regardless.
-    Object.assign(hubEnv, { PORT: String(port), HOST: "127.0.0.1", CHATROOM_INSECURE_LOCAL: "1", CHATROOM_NO_RECRUIT: "1", CHATROOM_DATA_DIR: dataDir, CHATROOM_DEFAULT_CWD: workspace, CHATROOM_LOG_DIR: join(root, "spawned") });
+    // With --recruit-model, NO_RECRUIT is lifted and CHATROOM_STRIP_SECRETS=1 keeps the .env guard in its place.
+    const hubEnv = benchHubEnv(process.env, { port, dataDir, workspace, logDir: join(root, "spawned"), hubEnv: hubEnvFlags, recruitModel });
     const fd = openSync(join(root, "hub.log"), "w");
     const hubChild = track(spawn(process.execPath, [hubEntry], { cwd: workspace, env: hubEnv, stdio: ["ignore", fd, fd] }));
     const url = `http://127.0.0.1:${port}`;
@@ -582,6 +612,7 @@ async function main() {
       seatPromises.push(runClaudeSeat(name, args, draftDirs.get(name) ?? workspace, deadlineMs, text));
     }
     seatRecords = await Promise.all(seatPromises);
+    if (recruitModel) recruits = await settleRecruits(url, startedAt.getTime() + deadlineMs);
     completedAt = new Date();
     const conclusion = roomConclusion(join(dataDir, `${room}.jsonl`));
     await stop(hubChild);
@@ -632,12 +663,13 @@ async function main() {
   const outcome = !unchanged ? "tamper" : (failureReason ?? (killedByDeadline ? "timeout" : scored.reason));
   const passed = unchanged && !failureReason && !killedByDeadline && scored.passed;
 
-  const usage = rollupUsage(seatRecords.map((s) => ({ usage: s.usage })));
+  // Recruits count toward the run's spend: one still running or unparsed makes coverage partial, never a zero.
+  const usage = rollupUsage([...seatRecords.map((s) => ({ usage: s.usage })), ...recruits]);
   // usage.cost_usd reads 0 when a seat was killed (no total_cost_usd); this is the priced figure, marked as an
   // estimate, and null unless every seat has a real cost or an estimate.
   const seatsEstimated = seatRecords.filter((s) => s.usage == null && s.estimated_cost).length;
-  const estimated_cost = seatsEstimated > 0 && seatRecords.every((s) => typeof s.usage?.cost === "number" || s.estimated_cost)
-    ? { usd: seatRecords.reduce((a, s) => a + (typeof s.usage?.cost === "number" ? s.usage.cost : s.estimated_cost!.usd), 0), estimate: true as const, seats_estimated: seatsEstimated, seats: seatRecords.length }
+  const estimated_cost = seatsEstimated > 0 && seatRecords.every((s) => typeof s.usage?.cost === "number" || s.estimated_cost) && recruits.every((r) => r.usage)
+    ? { usd: seatRecords.reduce((a, s) => a + (typeof s.usage?.cost === "number" ? s.usage.cost : s.estimated_cost!.usd), 0) + recruits.reduce((a, r) => a + r.usage!.cost, 0), estimate: true as const, seats_estimated: seatsEstimated, seats: seatRecords.length }
     : null;
   const turnsKnown = seatRecords.filter((s) => typeof s.num_turns === "number");
   // Regime indicators for arm A/AH (the sentinel): the CLI reports camelCase thinkingTokens/outputTokens per
@@ -671,6 +703,9 @@ async function main() {
     seats: seatRecords.map((s) => ({ name: s.name, argv: s.argv, prompt: s.prompt ?? null, exit_code: s.exit_code, signal: s.signal, started_at: s.started_at, completed_at: s.completed_at, num_turns: s.num_turns, duration_ms: s.duration_ms, duration_api_ms: s.duration_api_ms, usage: s.usage, text: s.text, killed_by_deadline: s.killed_by_deadline, partial_usage: s.partial_usage, estimated_cost: s.estimated_cost, reported_models: s.reported_models, model_usage: s.model_usage })),
     usage,
     estimated_cost,
+    hub_env: onHub ? hubEnvFlags : null,
+    recruit_model: recruitModel ?? null,
+    recruits,
     turns: { per_seat: seatRecords.map((s) => ({ name: s.name, num_turns: s.num_turns })), summed: turnsKnown.reduce((a, s) => a + (s.num_turns ?? 0), 0), seats: seatRecords.length, seats_with_turns: turnsKnown.length, coverage: turnsKnown.length === 0 ? "none" : turnsKnown.length === seatRecords.length ? "complete" : "partial" },
     thinking_tokens,
     output_tokens,

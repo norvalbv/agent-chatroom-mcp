@@ -11,13 +11,23 @@ import { fileURLToPath } from "node:url";
 
 export const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
-/** Minimize human-control credentials in seats; this is not a same-user filesystem sandbox. */
+/**
+ * Minimize human-control credentials in seats; this is not a same-user filesystem sandbox.
+ * A seat also does not learn where its hub lives. It reaches the hub by its MCP URL, and with the hub's PORT in its
+ * shell every script that defaults to process.env.PORT drives the live hub: in swarm-000525-jcz8-room a recruit's bare
+ * `npx tsx scripts/seat-exit-regression.ts` created a room on the hub it was talking through, which then launched a
+ * real agent in the operator's checkout. The recruit pin and the caps stay: a private hub a seat starts keeps them.
+ */
 export const SEAT_ENV_EXCLUSIONS: readonly string[] = Object.freeze([
   "CHATROOM_HUMAN_TOKEN",
   "CHATROOM_LAUNCHER_TOKEN",
   "CHATROOM_INSECURE_LOCAL",
   // scripts/guard-baseline-freeze.mjs: bypasses the .devkit/baselines/** self-freeze guard. Maintainer-only.
   "CHATROOM_BASELINE_FREEZE_OVERRIDE",
+  "PORT",
+  "CHATROOM_DATA_DIR",
+  "CHATROOM_LOG_DIR",
+  "CHATROOM_DEFAULT_CWD",
 ]);
 
 /** Per-seat commit attribution without changing shared repository or global git config. */

@@ -15,6 +15,16 @@ import { test } from "node:test";
 import { Hub } from "../src/hub.js";
 
 const ROOM = "conclusion-output-regression";
+/** The first propose in a room is refused once while a present seat holds a bare claim (R3, CLAIMS WITHOUT FINDINGS); these
+ * cases are about what the record says at the conclusion, so they go ahead the way the refusal says: propose again. */
+const BARE_CLAIM_REFUSAL = /CLAIMS WITHOUT FINDINGS/;
+function proposeThrough(hub: Hub, room: string, pid: string, text: string) {
+  try { return hub.propose(room, pid, text); } catch (e) {
+    if (!BARE_CLAIM_REFUSAL.test(String((e as Error).message))) throw e;
+    return hub.propose(room, pid, text);
+  }
+}
+
 const TEXT = "Adopt x as measured in evidence/x.";
 type Carried = { agreed_without_output?: string[]; undelivered_claims?: { key: string; by: string }[] };
 
@@ -37,7 +47,7 @@ function thinRoom(dataDir?: string) {
   r.hub.setBoard(ROOM, r.a.id, "claim/x", JSON.stringify({ owner: "A", area: "x" }));
   r.hub.setBoard(ROOM, r.a.id, "evidence/x", "measured three rooms: two had an idle seat, one did not");
   r.hub.setBoard(ROOM, r.b.id, "claim/y", JSON.stringify({ owner: "B", area: "y" }));
-  const pr = r.hub.propose(ROOM, r.a.id, TEXT);
+  const pr = proposeThrough(r.hub, ROOM, r.a.id, TEXT);
   agree(r.hub, r.b.id, pr.id);
   agree(r.hub, r.d.id, pr.id);
   return r;
@@ -57,7 +67,7 @@ test("a room where every voter and every claimant delivered gets neither clause"
   const { hub, room, a, b, c } = room4();
   hub.setBoard(ROOM, a.id, "claim/x", JSON.stringify({ owner: "A", area: "x" }));
   for (const p of [a, b]) hub.setBoard(ROOM, p.id, `evidence/${p.name}`, "findings: measured three rooms, two had an idle seat");
-  const pr = hub.propose(ROOM, a.id, TEXT);
+  const pr = proposeThrough(hub, ROOM, a.id, TEXT);
   hub.challenge(ROOM, c.id, pr.id, 'The claim "Adopt x as measured" rests on three rooms only.', false);
   agree(hub, b.id, pr.id);
   agree(hub, c.id, pr.id);
@@ -81,7 +91,7 @@ test("a released claim and a claim with a handoff are not listed, and the verifi
   hub.setBoard(ROOM, c.id, "claim/z", JSON.stringify({ owner: "C", area: "z" }));
   hub.setBoard(ROOM, a.id, "handoff/y", "A took y over: nothing was started");
   room.board.set("claim/gone", { text: JSON.stringify({ status: "released", previous_owner: "E" }), by: "system", updatedAt: new Date().toISOString() });
-  const pr = hub.propose(ROOM, a.id, TEXT);
+  const pr = proposeThrough(hub, ROOM, a.id, TEXT);
   for (const p of [v, h, b, c]) if (room.state !== "concluded") agree(hub, p.id, pr.id);
   assert.equal(room.state, "concluded");
   const names = carried(hub).agreed_without_output!;

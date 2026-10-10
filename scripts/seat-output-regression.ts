@@ -17,6 +17,16 @@ import { NO_OUTPUT_CLAIMED_MS, NO_OUTPUT_MS, VOTE_AFTER_MS, noOutput, warnNoOutp
 import { statusView } from "../src/hub/status-view.js";
 
 const ROOM = "seat-output-regression";
+/** The first propose in a room is refused once while a present seat holds a bare claim (R3, CLAIMS WITHOUT FINDINGS); these
+ * cases are about what the record says at the conclusion, so they go ahead the way the refusal says: propose again. */
+const BARE_CLAIM_REFUSAL = /CLAIMS WITHOUT FINDINGS/;
+function proposeThrough(hub: Hub, room: string, pid: string, text: string) {
+  try { return hub.propose(room, pid, text); } catch (e) {
+    if (!BARE_CLAIM_REFUSAL.test(String((e as Error).message))) throw e;
+    return hub.propose(room, pid, text);
+  }
+}
+
 /** Long enough to count: an entry under 40 characters is a placeholder. */
 const FINDINGS = "findings: measured three rooms, two had an idle seat";
 type Row = { name: string; output: { claims: number; evidence: number; verifies: number; proposals: number; challenges: number; age_seconds: number | null } };
@@ -42,7 +52,7 @@ test("room_status counts what each seat put on the record", () => {
   hub.setBoard(ROOM, a.id, "evidence/x", FINDINGS);
   hub.setBoard(ROOM, a.id, "ideas/x", `one idea, with ${FINDINGS}`);
   hub.setBoard(ROOM, b.id, "claim/y", JSON.stringify({ owner: "B", area: "y" }));
-  const pr = hub.propose(ROOM, a.id, "Adopt x as measured in evidence/x.");
+  const pr = proposeThrough(hub, ROOM, a.id, "Adopt x as measured in evidence/x.");
   hub.challenge(ROOM, c.id, pr.id, 'The claim "Adopt x as measured" rests on three rooms only.');
   assert.deepEqual({ ...row(hub, "A").output, age_seconds: 0 }, { claims: 1, evidence: 2, verifies: 0, proposals: 1, challenges: 0, age_seconds: 0 });
   assert.deepEqual(row(hub, "B").output, { claims: 1, evidence: 0, verifies: 0, proposals: 0, challenges: 0, age_seconds: null }, "a claim alone is not output");

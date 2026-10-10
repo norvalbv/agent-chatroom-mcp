@@ -170,6 +170,7 @@ export const offlineScripts = [
   'smoke-ports-regression.ts',
   'own-hub-port-regression.ts',
   'seat-shell-guards-regression.ts',
+  'report-handoffs-regression.ts',
   'result-fleet-compat.ts',
   'seat-scorecard-regression.ts',
   'result-fleet-regression.ts',

@@ -262,10 +262,26 @@ export function writeRunResult(path: string, artifact: RunResult): void {
   writeFileSync(temp, JSON.stringify(artifact, null, 2) + '\n');
   renameSync(temp, path);
 }
+const NOT_FINDINGS = /^(claim|draft|hold|inbox|handoff)\//;
+/**
+ * What a run that did not conclude still wrote down. Handoffs are printed whole, since they are addressed to
+ * whoever continues; other findings are only named, the artifact has their text.
+ */
+function renderLeftOnBoard(lead: Record<string, any>): string {
+  const entries = Object.entries((lead.board ?? {}) as Record<string, { by?: string; text?: string }>);
+  const handoffs = entries.filter(([key]) => key.startsWith('handoff/'));
+  const others = entries.filter(([key]) => !NOT_FINDINGS.test(key));
+  let text = '## Left on the board\n\n';
+  if (!handoffs.length && !others.length) return `${text}No handoff/* entry and no findings: nothing recoverable was written down.\n\n`;
+  for (const [key, e] of handoffs) text += `### ${key} (${e.by ?? 'unknown'})\n\n${(e.text ?? '').replace(/^#/gm, '\\#')}\n\n`;
+  if (!handoffs.length) text += 'No handoff/* entry.\n\n';
+  if (others.length) text += `Other entries: ${others.map(([key, e]) => `${key} (${e.by ?? 'unknown'})`).join(', ')}\n\n`;
+  return text;
+}
 /** Human view only; consumers must read JSON, never parse this Markdown. */
 export function renderRunReport(r: RunResult): string {
   const lead = r.rooms.find(room => room.name === r.leadRoom)?.payload;
-  let text = `# ${r.run.id}\n\n**Task:** ${r.run.task}\n\n**Done when:** ${r.run.doneWhen}\n\n## Final answer (${lead?.state ?? 'missing'})\n\n${lead?.conclusion?.text ?? (r.outcome ? `_no consensus reached_: ${r.outcome.detail}` : '_no consensus reached_')}\n\n## Verifier\n\n${r.verifier.output ?? '(none)'}\n\n## Groups\n\n`;
+  let text = `# ${r.run.id}\n\n**Task:** ${r.run.task}\n\n**Done when:** ${r.run.doneWhen}\n\n## Final answer (${lead?.state ?? 'missing'})\n\n${lead?.conclusion?.text ?? (r.outcome ? `_no consensus reached_: ${r.outcome.detail}` : '_no consensus reached_')}\n\n${lead && !lead.conclusion ? renderLeftOnBoard(lead) : ''}## Verifier\n\n${r.verifier.output ?? '(none)'}\n\n## Groups\n\n`;
   for (const room of r.rooms.filter(room => room.name !== r.leadRoom)) text += `### ${room.name} (${room.payload?.state ?? 'missing'})\n\n${room.payload?.conclusion?.text ?? '_no consensus_'}\n\n`;
   text += `## Result artifact\n\nAuthoritative full room snapshots, board evidence and raw transcripts: ${r.artifactPath}\n\n`;
   if (r.usage) {

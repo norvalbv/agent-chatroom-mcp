@@ -26,6 +26,14 @@ assert.equal(typeof (env as Record<string, unknown>).ownHubEnv, "function", "env
 assert.deepEqual(env.ownHubEnv(20), { CHATROOM_IDLE_EXIT_MIN: "20" });
 assert.deepEqual(env.ownHubEnv(0), {}, "0 (or --keep-hub) means never");
 
+// a reused hub must run this build: a seat's dev room on a leftover hub would test someone else's code (-5's attack)
+assert.equal(typeof (env as Record<string, unknown>).reusedHubProblem, "function", "env.ts exports reusedHubProblem");
+const mine = { root: "/w/seat-7", head: "aaaa1111" };
+assert.equal(env.reusedHubProblem({ root: "/w/seat-7", head: "aaaa1111" }, mine), null, "same build: fine");
+assert.match(env.reusedHubProblem({ root: "/w/seat-2", head: "aaaa1111" }, mine) ?? "", /seat-2/, "another checkout's build is named");
+assert.match(env.reusedHubProblem({ root: "/w/seat-7", head: "bbbb2222" }, mine) ?? "", /bbbb2222.*aaaa1111/, "an older build of this checkout is named");
+assert.match(env.reusedHubProblem(undefined, mine) ?? "", /does not report its build/, "a hub that predates the build field is unknown, not fine");
+
 const hubs: ChildProcess[] = [];
 try {
   // (a) idle: exits by itself shortly after its last request (0.05 min = 3 s)
@@ -49,6 +57,11 @@ try {
   assert.equal(c.exited(), false, "an open long poll keeps the hub up");
   await client.close().catch(() => undefined);
   assert.equal(await waitExit(c, 12_000), true);
+
+  // the hub reports the build it was started from, which a later commit in its checkout does not change
+  const info = await fetch(`http://127.0.0.1:${(await (async () => { const h = await hub(); hubs.push(h.child); return h.port; })())}/`).then((r) => r.json()) as { build?: { root?: string; head?: string } };
+  assert.equal(info.build?.root, process.cwd(), "GET / names the checkout the hub was built from");
+  assert.match(info.build?.head ?? "", /^[0-9a-f]{7,}$/);
 
   // (d) without the variable (every operator hub) it never exits on its own
   const d = await hub(); hubs.push(d.child);

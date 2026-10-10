@@ -31,7 +31,7 @@ export class Hub {
   /** Fired on every room state transition (setState); the consolidator spawn listens for "concluded". */
   onRoomState?: (room: string, state: RoomState) => void;
   /** A proposal was opened (not amended). The spawner's fresh challenger hangs off this; a throwing listener never fails the propose. */
-  onProposalOpened?: (room: string, proposal: { id: string; text: string; by: string }) => void;
+  onProposalOpened?: (room: string, proposal: { id: string; text: string; by: string; cwd?: string }) => void;
   /** Observed waits only: deliberately not restored from historical room logs. */
   private readonly boardManifestObserved = new WeakMap<Room, BoardManifestCounters>();
   /** @internal */ readonly dataDir?: string;
@@ -1814,7 +1814,9 @@ export class Hub {
     this.post(room, "proposal", p, `PROPOSAL ${proposal.id}: ${text}`, { proposalId: proposal.id });
     if (evidence) this.post(room, "system", undefined, `${evidence} Counted by the hub, not claimed by the proposer.`);
     try {
-      this.onProposalOpened?.(roomName, { id: proposal.id, text, by: p.name });
+      // the proposer's worktree, when its launcher named one: a checker in another tree checks a different code state
+      const cwd = this.workspaceOf(p)?.worktree;
+      this.onProposalOpened?.(roomName, { id: proposal.id, text, by: p.name, ...(cwd ? { cwd } : {}) });
     } catch (e) {
       this.post(room, "system", undefined, `Proposal listener failed: ${(e as Error).message}`);
     }

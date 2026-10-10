@@ -110,6 +110,7 @@ export const offlineScripts = [
   'work-ledger-regression.ts',
   'barren-claim-regression.ts',
   'unsourced-claims-regression.ts',
+  'fresh-sourcer-regression.ts',
   'steer-contract-regression.ts',
   'steer-hook-regression.ts',
   'room-status-size-regression.ts',

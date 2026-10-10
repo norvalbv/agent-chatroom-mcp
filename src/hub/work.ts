@@ -114,6 +114,12 @@ export function unsourcedClaims(room: Room, seats: Participant[], shown: (p: Par
   });
 }
 
+/** Whether no seat that reports local work made a web call: true or false when at least one voter reports, else undefined. */
+export function offline(voters: Participant[]): boolean | undefined {
+  const reporting = voters.filter(reports);
+  return reporting.length ? !reporting.some((p) => p.work?.web) : undefined;
+}
+
 /**
  * What is thin right now, as one clause for the hint of a seat that owes a challenge: seats with no local tool call,
  * a room where nobody left the machine, claims with no findings. Undefined when nothing is thin or nobody reports.

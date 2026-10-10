@@ -588,11 +588,11 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
 
   server.registerTool(
     "room_status",
-    { title: "Room status", description: "Participants with last_seen_at, working tool/step/time and liveness ages in seconds (active <60s, idle <600s, suspected_dead otherwise; advisory only; left if departed, away if departed but not gone: its process still heartbeats, or a hub restart found it in the room under 10 min ago), mode, round/turn, proposals, conclusion and recruitment policy (null pins mean as requested). recruitment_details=true adds current budgets.", inputSchema: { room: roomArg, full_topic: z.boolean().optional().describe("Include the whole room topic (default: its opening)."), recruitment_details: z.boolean().optional().describe("Include current recruitment budgets and your depth/live limits. Snapshot, not a reservation; request_agent checks admission. Null limits are unbounded. machine_live counts joined seats when available; other budgets count recorded recruits.") } },
-    guard("room_status", ({ room, full_topic, recruitment_details }) => {
+    { title: "Room status", description: "Participants with last_seen_at, working tool/step/time and liveness ages in seconds (active <60s, idle <600s, suspected_dead otherwise; advisory only; left if departed, away if departed but not gone: its process still heartbeats, or a hub restart found it in the room under 10 min ago), mode, round/turn, proposals, conclusion and recruitment policy (null pins mean as requested). recruitment_details=true adds current budgets.", inputSchema: { room: roomArg, full_topic: z.boolean().optional().describe("Include the whole room topic (default: its opening)."), recruitment_details: z.boolean().optional().describe("Include current recruitment budgets and your depth/live limits. Snapshot, not a reservation; request_agent checks admission. Null limits are unbounded. machine_live counts joined seats when available; other budgets count recorded recruits."), refusals: z.boolean().optional().describe("Include the room's latest hub refusals (who, which tool, code, when; never the text), to check a claim that the hub refused something.") } },
+    guard("room_status", ({ room, full_topic, recruitment_details, refusals }) => {
       const r = hub.getRoom(room);
       const actor = telemetryActor(room, undefined);
-      return { ...statusView(hub.summary(r), full_topic === true), ...(spawner ? { recruitment: spawner.recruitmentStatus(room, actor ? r.participants.get(actor)?.name : undefined, recruitment_details === true) } : {}) };
+      return { ...statusView(hub.summary(r), full_topic === true), ...(refusals === true ? { refusals: hub.recentRefusals(r, 10) } : {}), ...(spawner ? { recruitment: spawner.recruitmentStatus(room, actor ? r.participants.get(actor)?.name : undefined, recruitment_details === true) } : {}) };
     }),
   );
 

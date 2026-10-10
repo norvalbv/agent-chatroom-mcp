@@ -68,3 +68,10 @@ export function codeState(cwd?: string): CodeState | undefined {
   const st = spawnSync("git", ["-C", cwd, "status", "--porcelain"], { encoding: "utf8" });
   return { head: head.stdout.trim(), dirty: st.stdout.trim().length > 0, at: now() };
 }
+
+/** How many of a room's latest refusals it keeps for room_status refusals=true (Hub.recentRefusals). */
+export const RECENT_REFUSALS = 20;
+/** Keep one refusal on the room, live and on replay alike: the actor id stays internal, the code is closed-enum. */
+export function keepRefusal(room: Room, r: NonNullable<Room["recentRefusals"]>[number]) {
+  room.recentRefusals = [...(room.recentRefusals ?? []), r].slice(-RECENT_REFUSALS);
+}

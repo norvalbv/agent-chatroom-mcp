@@ -209,6 +209,21 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
       const recent = focus && hub.focusExclusive(focus) ? [focus] : focus ? [focus, ...queue.slice(1).slice(-29)] : queue.slice(-30);
       hub.settleRead(r, participant, participant.lastSeenSeq, recent); // what join hands you counts as delivered; withheld human messages are kept
       const human = hub.unansweredHuman(r);
+      // a fresh challenger sees the proposal it was recruited to check and nothing that says who agreed with it
+      const blind = hub.freshChallengeFor(r, participant.name);
+      if (blind) {
+        const summary = hub.summary(r);
+        return {
+          participant_id: participant.id,
+          you_are: hub.shown(r, participant),
+          your_role: participant.role ?? "worker",
+          tool_scope: toolScope,
+          room: { ...summary, proposals: [{ id: blind.id, version: blind.version, status: blind.status, text: blind.text }], board: {}, quiet: undefined, stale_claims: undefined },
+          recent_messages: [`PROPOSAL ${blind.id} v${blind.version}: ${blind.text}`],
+          next_seq: participant.lastSeenSeq,
+          hint: `You are the fresh challenger for ${blind.id}: this join shows only its current text, not the discussion, the board or who agreed. Check one claim against the repository, report it (challenge with a command, or one message), then leave_room.`,
+        };
+      }
       return {
         participant_id: participant.id,
         you_are: hub.shown(r, participant),

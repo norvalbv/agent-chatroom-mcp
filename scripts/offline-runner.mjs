@@ -36,6 +36,7 @@ export const offlineScripts = [
   'blind-drafts-regression.ts',
   'breakout-regression.ts',
   'fresh-challenger-regression.ts',
+  'blind-challenger-regression.ts',
   'ak-select.test.ts',
   'adjudicator-trial.test.ts',
   'no-carry.test.ts',

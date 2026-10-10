@@ -1678,6 +1678,15 @@ export class Hub {
     }, windowMs + 25).unref();
   }
 
+  /**
+   * The open proposal a joining seat was recruited as a fresh challenger for, if it is that seat. Its join is cut to the
+   * proposal's current text: models that are right alone follow a wrong unanimous majority in 23.5% of cases
+   * (arXiv:2501.13381), and the votes, challenges and chat before the proposal are that majority.
+   */
+  freshChallengeFor(room: Room, name: string): Proposal | undefined {
+    return [...room.proposals.values()].find((pr) => pr.status === "open" && pr.awaiting?.name === name);
+  }
+
   /** The recruited challenger a proposal still waits for, if any. */
   scrutinyPending(room: Room, pr: Proposal): { name: string; until: string } | undefined {
     const w = pr.awaiting;

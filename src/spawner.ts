@@ -9,8 +9,9 @@
  */
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, writeFileSync, createWriteStream, symlinkSync } from "node:fs";
-import { dirname, resolve } from "node:path";
+import { existsSync, mkdirSync, readFileSync, writeFileSync, createWriteStream, symlinkSync, realpathSync, rmSync, unlinkSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { HubError } from "./hub.js";
 import { settledAxes } from "./settled.js";
@@ -53,6 +54,8 @@ export interface SpawnRequest {
   replacing?: string;
   /** a fresh challenger: told not to read the room before it reports, since an unread context is what it was recruited for */
   fresh?: boolean;
+  /** run in this detached snapshot (planSnapshot) instead of `cwd`: made at spawn, removed when the recruit exits */
+  snapshot?: Snapshot;
 }
 
 export interface SpawnedAgent {
@@ -153,6 +156,49 @@ export function recruitWorkspace(cwd: string, room: string, name: string): { roo
   if (top.status !== 0) return undefined;
   const root = top.stdout.trim();
   return { root, worktree: resolve(root, ".swarm-worktrees", room, name), branch: `swarm/${room}/${name}` };
+}
+
+/** A detached checkout of a proposer's commit for a read-only checker: `dir` (outside the repository), the commit, how many files of the live tree it leaves out. */
+export interface Snapshot { repo: string; dir: string; sha: string; dirty: number; sub: string }
+
+/**
+ * Where a fresh challenger checks `src` (the proposer's worktree): a detached worktree of its HEAD in the OS temp dir,
+ * so the checker's shell can neither move nor rewrite the tree the proposer is still working in (swarm-000525-jcz8
+ * remaining/recruiting 2; Claude Code isolates subagents the same way, with only tracked files of HEAD). Undefined
+ * outside a git checkout or before the first commit. Creates nothing.
+ */
+export function planSnapshot(src: string, label: string): Snapshot | undefined {
+  const g = (...args: string[]) => spawnSync("git", ["-C", src, ...args], { encoding: "utf8" });
+  const top = g("rev-parse", "--show-toplevel");
+  const head = g("rev-parse", "HEAD");
+  if (top.status !== 0 || head.status !== 0) return undefined;
+  const repo = top.stdout.trim();
+  const status = g("status", "--porcelain", "--untracked-files=normal");
+  const dirty = status.status === 0 ? status.stdout.split("\n").filter(Boolean).length : 0;
+  const sub = relative(realpathSync(repo), realpathSync(src));
+  const dir = resolve(tmpdir(), `chatroom-snapshot-${label.replace(/[^\w-]/g, "-").slice(0, 60)}-${randomUUID().slice(0, 8)}`);
+  return { repo, dir, sha: head.stdout.trim(), dirty, sub };
+}
+
+/** Make the planned snapshot; false (nothing made) when git refuses. node_modules is linked from the proposer's tree so the checker can run the project's scripts. */
+export function createSnapshot(plan: Snapshot): boolean {
+  const made = spawnSync("git", ["-C", plan.repo, "worktree", "add", "--detach", "--quiet", plan.dir, plan.sha], { encoding: "utf8" });
+  if (made.status !== 0) return false;
+  const modules = resolve(plan.repo, "node_modules");
+  if (existsSync(modules) && !existsSync(resolve(plan.dir, "node_modules"))) {
+    try { symlinkSync(modules, resolve(plan.dir, "node_modules")); } catch {}
+  }
+  return true;
+}
+
+/** Remove a snapshot: the node_modules link first (never what it points at), then the worktree and git's record of it. */
+export function removeSnapshot(plan: Pick<Snapshot, "repo" | "dir">): void {
+  try { unlinkSync(resolve(plan.dir, "node_modules")); } catch {}
+  const removed = spawnSync("git", ["-C", plan.repo, "worktree", "remove", "--force", plan.dir], { encoding: "utf8" });
+  if (removed.status !== 0) {
+    try { rmSync(plan.dir, { recursive: true, force: true }); } catch {}
+    spawnSync("git", ["-C", plan.repo, "worktree", "prune"], { encoding: "utf8" });
+  }
 }
 
 const workspaceOf = (cwd: string, room: string, name: string) => {
@@ -256,14 +302,21 @@ export class Spawner {
     if (newRoom) this.hooks?.ensureRoom(newRoom, req.roomTopic ?? req.brief.slice(0, 200));
     if (req.area) this.hooks?.claimArea(target, req.requestedBy, req.area, names);
 
-    const cwd = resolve(req.cwd ?? o.defaultCwd);
+    const home = resolve(req.cwd ?? o.defaultCwd);
+    // a read-only checker of a proposer's commit runs in a detached snapshot of it, never in the proposer's live tree
+    const snap = req.snapshot && !req.canEdit && count === 1 ? req.snapshot : undefined;
+    let cwd = home;
+    if (snap) {
+      if (o.dryRun || createSnapshot(snap)) cwd = resolve(snap.dir, snap.sub);
+      else this.hooks?.announce(target, `The hub could not make a snapshot of ${snap.sha.slice(0, 12)} for ${names[0]}, so it works in the proposer's tree.`);
+    }
     const template = readFileSync(resolve(repoRoot, "prompts", "recruit.md"), "utf8");
     const by = req.requestedByShown ?? req.requestedBy;
     const targetTopic = req.newRoom ? (req.roomTopic ?? "") : (this.hooks?.roomTopic?.(target) ?? "");
     const context =
       (targetTopic ? `The room's topic (the task everyone there is on): ${targetTopic}\n` : "") +
       (req.newRoom && req.parentTopic ? `The parent room's topic: ${req.parentTopic}\n` : "") +
-      settledAxes(cwd);
+      settledAxes(home);
     const out: SpawnedAgent[] = [];
     for (const name of names) {
       const log = resolve(o.logDir, `${name}.log`);
@@ -385,6 +438,7 @@ export class Spawner {
           rec.usage = usage;
         }
         this.children.delete(name);
+        if (snap && cwd !== home) removeSnapshot(snap);
         try {
           this.checkConsolidators();
         } catch (e) {
@@ -472,6 +526,7 @@ export class Spawner {
     if (firedHere >= Spawner.MAX_FRESH_CHALLENGERS_PER_ROOM) return undefined;
     this.freshChallengersFired.add(key);
     const cut = proposal.text.length > 2400;
+    const snapshot = proposal.cwd ? planSnapshot(proposal.cwd, `${room}-${proposal.id}`) : undefined;
     const brief =
       `The hub recruited you because you have NOT seen this room's discussion. ${proposal.by} has just proposed ${proposal.id} as the room's conclusion:\n\n` +
       `---\n${proposal.text.slice(0, 2400)}${cut ? "\n[cut: read the rest of the proposal with read_messages]" : ""}\n---\n\n` +
@@ -484,9 +539,14 @@ export class Spawner {
       (proposal.offline
         ? `The hub counted that no seat in this room made a web call before this proposal. So also find ONE source outside this repository (a paper, docs, another system; WebSearch / WebFetch) that bears on its main claim, and post its URL with one line on what it says. If it contradicts the claim, file that as the challenge instead, quoting the clause and citing the URL. `
         : "") +
+      (snapshot
+        ? `You work in a detached snapshot of ${proposal.by}'s commit ${snapshot.sha.slice(0, 12)}, made for you and removed when you leave, so nothing you run there touches their tree.` +
+          (snapshot.dirty ? ` Their tree also has ${snapshot.dirty} uncommitted file(s) the snapshot does not hold: a claim about those cannot be checked, so say so rather than challenge it.` : "") +
+          " "
+        : "") +
       `Then leave_room: the proposal waits for you only a few minutes, so report within five.`;
     try {
-      const [rec] = this.request({ room, count: 1, name: `fresh-challenger-${firedHere + 1}`, requestedBy: "hub", requestedByShown: "the hub", brief, fresh: true, ...(proposal.cwd ? { cwd: proposal.cwd } : {}) });
+      const [rec] = this.request({ room, count: 1, name: `fresh-challenger-${firedHere + 1}`, requestedBy: "hub", requestedByShown: "the hub", brief, fresh: true, ...(proposal.cwd ? { cwd: proposal.cwd } : {}), ...(snapshot ? { snapshot } : {}) });
       this.hooks?.announce(room, `The hub recruited ${rec.name} (${rec.agent}${rec.model ? `/${rec.model}` : ""}), a fresh challenger that has not seen this discussion, to check one claim of ${proposal.id}.`);
       return rec;
     } catch (e) {

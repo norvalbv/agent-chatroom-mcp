@@ -18,7 +18,8 @@ await ownHubPort(PORT);
 await ownHubPort(PORT + 1, "PORT+1");
 
 // the default recruit policy is asserted below, so the hubs must not inherit a pin from the caller (every recruit's shell has one)
-const { CHATROOM_RECRUIT_AGENT: _agent, CHATROOM_RECRUIT_MODEL: _model, ...hubEnv } = process.env;
+// the smoke hub runs the default policy: no CHATROOM_* hub setting of the shell that started it (a recruit inherits its parent hub's, e.g. CHATROOM_FRESH_CHALLENGER=1) may reach it
+const hubEnv = Object.fromEntries(Object.entries(process.env).filter(([k]) => !k.startsWith("CHATROOM_")));
 const server = spawn("npx", ["tsx", "src/index.ts"], { env: { ...hubEnv, PORT: String(PORT), CHATROOM_SPAWN_DRY: "1", CHATROOM_LOG_DIR: "/tmp/chatroom-smoke-spawn", CHATROOM_MAX_LIVE_PER_ROOM: "12", CHATROOM_INSECURE_LOCAL: "1", CHATROOM_HUMAN_TOKEN: "smoke-agent-control" }, stdio: ["ignore", "inherit", "inherit"] });
 const stop = () => server.kill();
 process.on("exit", stop);

@@ -36,7 +36,7 @@ const has = (name: string) => argv.includes(`--${name}`);
 const BOOL_FLAGS = new Set(["--apply", "--full-access", "--named", "--flat", "--require-verification", "--respawn", "--claude-full", "--no-carry", "--sandbox", "--no-web"]);
 const task = argv.find((a, i) => !a.startsWith("--") && (i === 0 || !argv[i - 1].startsWith("--") || BOOL_FLAGS.has(argv[i - 1])));
 if (!task) {
-  console.error('usage: swarm "<task>" [--flat] [--done-when text] [--verify text] [--agents 6] [--cwd dir] [--models sonnet,haiku] [--lead-model opus] [--verifier-model opus] [--planner-model opus] [--codex k] [--codex-models gpt-6-astra,gpt-5.6-sol,gpt-5.6-terra] [--openrouter k] [--openrouter-models deepseek/deepseek-v4.1-flash,...] [--verifier-openrouter slug] [--openrouter-reasoning low|medium|high] [--require-verification] [--quorum unanimous|majority|supermajority] [--prompt loop.md] [--respawn] [--apply] [--full-access] [--named] [--claude-full] [--no-carry] [--no-web] [--sandbox] [--timeout 30] [--port 7717] [--result-path path]');
+  console.error('usage: swarm "<task>" [--flat] [--done-when text] [--verify text] [--agents 6] [--cwd dir] [--models sonnet,haiku] [--lead-model opus] [--verifier-model opus] [--planner-model opus] [--codex k] [--codex-models gpt-6-astra,gpt-5.6-sol,gpt-5.6-terra] [--openrouter k] [--openrouter-models deepseek/deepseek-v4.1-flash,...] [--verifier-openrouter slug] [--openrouter-reasoning low|medium|high] [--require-verification] [--quorum unanimous|majority|supermajority] [--prompt loop.md] [--respawn] [--apply] [--full-access] [--named] [--claude-full] [--no-carry] [--no-seat-targets] [--no-web] [--sandbox] [--timeout 30] [--port 7717] [--result-path path]');
   process.exit(2);
 }
 const TOTAL = Math.max(2, Number(flag("agents", "4")));
@@ -77,6 +77,8 @@ const FLAT = has("flat");
 const FRESH_CHALLENGER = has("fresh-challenger");
 /** --no-carry: seats start from the brief alone (no settled axes, no PRIOR RUNS, auto-memory off); see carrySettings in env.ts */
 const NO_CARRY = has("no-carry");
+/** --no-seat-targets: flat seats all get the same brief, with no starting item each (the A arm when measuring src/seat-targets.ts) */
+const NO_SEAT_TARGETS = has("no-seat-targets");
 /**
  * --sandbox: every seat's shell runs in an OS sandbox (src/sandbox.ts), so a seat's pkill/killall cannot reach the hub,
  * the launcher or another seat (the room15-rep2 kill, docs/reuse-survey-2026-09-23.md). Claude seats get Claude Code's
@@ -425,7 +427,7 @@ writeFileSync(resolve(OUT, "plan.json"), JSON.stringify(plan, null, 2));
 log(`plan: ${plan.groups.map((g) => `${g.title} ×${g.workers}`).join(" | ")}`);
 
 const leadsRoom = FLAT ? `${SWARM_ID}-room` : `${SWARM_ID}-leads`;
-const FLAT_TARGETS = FLAT && seatTarget(task, 1, LENSES) ? (i: number) => seatTarget(task, i, LENSES) : undefined;
+const FLAT_TARGETS = FLAT && !NO_SEAT_TARGETS && seatTarget(task, 1, LENSES) ? (i: number) => seatTarget(task, i, LENSES) : undefined;
 const groupRooms = FLAT ? [] : plan.groups.map((g) => `${SWARM_ID}-${g.id}`);
 const runs: Promise<SeatRun>[] = [];
 /**

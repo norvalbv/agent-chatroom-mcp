@@ -50,18 +50,30 @@ function stopOurHub() {
 }
 after(() => { stopOurHub(); rmSync(base, { recursive: true, force: true }); });
 
-test("the launcher hands each flat worker a different starting item", () => {
-  const [bin, records, data] = ["bin", "records", "data"].map((d) => join(base, d));
-  for (const d of [bin, records, data]) mkdirSync(d);
+/** The worker prompts the stub claude received from one real launch (verifier left out). */
+function launchWorkers(tag: string, extra: string[]): string[] {
+  const [bin, records, data] = ["bin", "records", "data"].map((d) => join(base, tag, d));
+  for (const d of [bin, records, data]) mkdirSync(d, { recursive: true });
   writeFakeBins(bin);
-  const r = spawnSync(process.execPath, ["dist/swarm.js", TASK, "--flat", "--agents", "4", "--no-carry", "--timeout", "1", "--port", PORT, "--result-path", join(base, "result.json")], {
+  const r = spawnSync(process.execPath, ["dist/swarm.js", TASK, "--flat", "--agents", "4", "--no-carry", "--timeout", "1", "--port", PORT!, "--result-path", join(base, tag, "result.json"), ...extra], {
     encoding: "utf8",
     timeout: 90_000,
     env: { ...process.env, PATH: `${bin}:${process.env.PATH}`, FAKE_RECORD_DIR: records, CHATROOM_INSECURE_LOCAL: "1", CHATROOM_NO_RECRUIT: "1", CHATROOM_DATA_DIR: data },
   });
+  stopOurHub();
   const stdins = readdirSync(records).map((f) => (JSON.parse(readFileSync(join(records, f), "utf8")) as { stdin: string }).stdin);
-  const workers = stdins.filter((s) => /^You are claude-opus|one of 4 AI agents/m.test(s) && !/named "verifier"[^]*You are verifier/.test(s) && !s.includes("You are verifier"));
+  const workers = stdins.filter((s) => !s.includes("You are verifier"));
   assert.equal(workers.length, 3, `three worker prompts recorded (launcher exit ${r.status}; stderr tail: ${String(r.stderr).slice(-600)})`);
+  return workers;
+}
+
+test("the launcher hands each flat worker a different starting item", () => {
+  const workers = launchWorkers("on", []);
   const items = workers.map((s) => /Your starting area: item (\d+)/.exec(s)?.[1]);
   assert.deepEqual([...items].sort(), ["1", "2", "3"], `each worker opens on its own item: got ${JSON.stringify(items)}`);
+});
+
+test("--no-seat-targets launches the old byte-identical brief (the A arm)", () => {
+  const workers = launchWorkers("off", ["--no-seat-targets"]);
+  for (const w of workers) assert.ok(!w.includes("Your starting area"), "no starting item");
 });

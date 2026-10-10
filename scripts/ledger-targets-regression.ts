@@ -26,11 +26,11 @@ test("shell calls behind the same long cd prefix are different targets; a repeat
   assert.equal(p.work?.run, 3);
 });
 
-test("web counts hosts, as before", () => {
+test("web counts pages, not hosts (ledger-web-pages)", () => {
   const p = seat();
   countWork(p, "web", "curl https://arxiv.org/abs/2510.22954");
   countWork(p, "web", "curl https://arxiv.org/abs/2604.18005");
-  assert.equal(p.work?.web, 1);
+  assert.equal(p.work?.web, 2);
 });
 
 test("the persisted target is short and names what was touched; replaying its key reproduces the count", () => {

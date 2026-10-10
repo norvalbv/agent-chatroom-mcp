@@ -68,7 +68,8 @@ const B = { room: "wl", participant_id: jb.participant_id };
 const env = reader.env as Record<string, string>;
 await local(env, "Read", { file_path: "src/hub.ts" });
 await local(env, "Read", { file_path: "src/server.ts" });
-// Distinct targets count, not calls: the same file again, or a second page on a host already fetched, adds nothing.
+// Distinct targets count, not calls: the same file again adds nothing. A second paper on a host already fetched is a
+// second page and counts (ledger-web-pages: it was the host until every arXiv paper read counted as one).
 for (let i = 0; i < 5; i++) await local(env, "Read", { file_path: "src/server.ts" });
 await local(env, "WebFetch", { url: "https://arxiv.org/abs/2308.08155" });
 await local(env, "Grep", { pattern: "propose" });
@@ -88,13 +89,13 @@ await a("board_set", { ...A, key: "evidence/reading", text: "read hub.ts and ser
 await b("board_set", { ...B, key: "claim/idling", text: '{"owner":"idler","area":"idling"}' });
 await b("room_status", { room: "wl" });
 let st = await status("wl");
-assert.deepEqual(st.participants.find((p) => p.name === "reader")?.work, { read: 3, search: 2, web: 3, run: 2, edit: 1 }, "local calls counted by class");
+assert.deepEqual(st.participants.find((p) => p.name === "reader")?.work, { read: 3, search: 2, web: 4, run: 2, edit: 1 }, "local calls counted by class");
 assert.equal(st.participants.find((p) => p.name === "idler")?.work, undefined, "hub calls are not local work");
 
 // 3. The room log keeps every counted call with its time, so a later reader can ask what was done before the proposal.
 const logged = () => readFileSync(join(DATA, "wl.jsonl"), "utf8").split("\n").filter(Boolean).map((l) => JSON.parse(l) as { type: string; cls?: string; ts?: string });
 const work = logged().filter((e) => e.type === "work");
-assert.equal(work.length, 11);
+assert.equal(work.length, 12);
 assert.ok(work.every((e) => e.ts && e.cls));
 // A codex seat's key beats on output, not per tool call: nothing counted for it is unknown, and is said so.
 const cx = await connect(seatBeat(`${HTTP}/mcp`, "seat-key-codex").mcpUrl);
@@ -106,7 +107,7 @@ await assert.rejects(a("propose", { ...A, text: "The room has read enough to con
 const pr = await a("propose", { ...A, text: "The room has read enough to conclude." });
 st = await status("wl");
 const evidence = st.proposals[0]?.evidence ?? "";
-assert.match(evidence, /reader: read 3, search 2, web 3, run 2, edit 1/);
+assert.match(evidence, /reader: read 3, search 2, web 4, run 2, edit 1/);
 assert.match(evidence, /idler: none/);
 assert.match(evidence, /1 of 2 seats made no local tool call; 1 of 2 made no web call/);
 assert.match(evidence, /1 seat does not report local work: unknown, not zero/);
@@ -129,7 +130,7 @@ const second = startHub(PORT + 1);
 process.on("exit", () => second.kill());
 await up();
 st = await status("wl");
-assert.deepEqual(st.participants.find((p) => p.name === "reader")?.work, { read: 3, search: 2, web: 3, run: 2, edit: 1 }, "ledger survives a restart");
+assert.deepEqual(st.participants.find((p) => p.name === "reader")?.work, { read: 3, search: 2, web: 4, run: 2, edit: 1 }, "ledger survives a restart");
 assert.match(st.proposals[0]?.evidence ?? "", /idler: none/);
 const a2 = await connect(seatBeat(`${HTTP}/mcp`, "seat-key-reader").mcpUrl);
 const b2 = await connect(seatBeat(`${HTTP}/mcp`, "seat-key-idler").mcpUrl);

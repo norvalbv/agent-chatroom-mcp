@@ -40,7 +40,9 @@ function shellClass(command: string): WorkClass {
   return "run";
 }
 
-const URL_HOST = /https?:\/\/([^\s/"')]+)/;
+/** A web page: host, path and query, without the scheme, a fragment or a trailing slash. */
+const URL_PAGE = /https?:\/\/([^\s"'#)|>]+)/;
+const pageOf = (text: string) => URL_PAGE.exec(text)?.[1]?.replace(/\/+$/, "");
 const seen = new WeakMap<Participant, Set<string>>();
 const TARGET_MAX = 120;
 
@@ -54,7 +56,8 @@ function shortTarget(cls: WorkClass, text: string): string {
 
 /**
  * Count one local call toward a seat's ledger if its target is new: the file, the pattern, the command, or for the
- * web the host. Forty `ls` calls on one directory are one piece of work, and the room log gets one line per distinct
+ * web the page (host, path and query; it was the host until every arXiv paper a seat read counted as one, dev room
+ * swarm-084313-a8t8). Forty `ls` calls on one directory are one piece of work, and the room log gets one line per distinct
  * target instead of one per call. Targets are told apart by the whole text, not its first 120 characters: in
  * swarm-082539-kns2 every worktree path was 114 characters, so every file under it and every `cd "<worktree>"; ...`
  * call had been one target. Returns the short target and its key when it counted (the caller persists both; replay
@@ -62,14 +65,15 @@ function shortTarget(cls: WorkClass, text: string): string {
  */
 export function countWork(p: Participant, cls: WorkClass, detail = "", key?: string): { target: string; key: string } | undefined {
   const text = detail.replace(/\s+/g, " ").trim();
-  const host = cls === "web" ? URL_HOST.exec(text)?.[1] : undefined;
-  const k = key ?? host ?? (text.length <= TARGET_MAX ? text : `#${createHash("sha256").update(text).digest("hex").slice(0, 16)}`);
+  const page = cls === "web" ? pageOf(text) : undefined;
+  const what = page ?? text;
+  const k = key ?? (what.length <= TARGET_MAX ? what : `#${createHash("sha256").update(what).digest("hex").slice(0, 16)}`);
   const mine = seen.get(p) ?? new Set<string>();
   seen.set(p, mine);
   if (mine.has(`${cls} ${k}`)) return undefined;
   mine.add(`${cls} ${k}`);
   p.work = { ...p.work, [cls]: (p.work?.[cls] ?? 0) + 1 };
-  return { target: host ?? shortTarget(cls, text), key: k };
+  return { target: page ? (page.length <= TARGET_MAX ? page : page.slice(0, TARGET_MAX - 1) + "…") : shortTarget(cls, text), key: k };
 }
 
 /** A seat whose process is known to report each local tool call: it has been counted, or it is a claude seat with a
@@ -120,7 +124,7 @@ export function evidenceReceipt(room: Room, voters: Participant[], shown: (p: Pa
   const offline = reporting.filter((p) => !p.work?.web).length;
   const barren = barrenClaims(room, voters, shown);
   const silent = voters.length - reporting.length;
-  return `EVIDENCE BEHIND THIS PROPOSAL, ${minutes} min after the room opened. Distinct local targets since joining (files, patterns, commands, web hosts): ` +
+  return `EVIDENCE BEHIND THIS PROPOSAL, ${minutes} min after the room opened. Distinct local targets since joining (files, patterns, commands, web pages and searches): ` +
     `${reporting.map((p) => `${shown(p)}: ${line(p.work)}`).join("; ")}. ` +
     `${idle} of ${reporting.length} seats made no local tool call; ${offline} of ${reporting.length} made no web call.` +
     (barren.length ? ` Claims whose owner has no findings on the board: ${barren.join(", ")}.` : "") +

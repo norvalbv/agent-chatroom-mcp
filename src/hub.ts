@@ -207,7 +207,8 @@ export class Hub {
         last_active_at: p.lastActiveAt,
         last_seen_at: this.lastSeen(p),
         working: p.working ?? null,
-        ...(p.work ? { work: p.work } : {}),
+        // dashboard and HTTP only: a seat gets the thin spots in its hint, and its room_status stays small
+        ...(p.work && reveal ? { work: p.work } : {}),
         liveness: (() => {
           const age = (at: string) => Math.max(0, Math.floor((observedAt - Date.parse(at)) / 1000));
           const age_seconds = age(this.lastSeen(p));
@@ -2117,7 +2118,8 @@ export class Hub {
       chars: pr.text.length,
       status: pr.status,
       created_at: pr.createdAt,
-      ...(pr.evidence ? { evidence: pr.evidence } : {}),
+      // the room was told this line when the proposal opened; agents' room_status stays small (room-status-size-regression)
+      ...(pr.evidence && reveal ? { evidence: pr.evidence } : {}),
       tally,
       electorate: summary ?? null,
       // Dissent remains binding under the existing rules even when its author is not counted.

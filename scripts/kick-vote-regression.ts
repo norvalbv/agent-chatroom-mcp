@@ -16,6 +16,15 @@ import { SUSPECTED_DEAD_MS } from "../src/hub/kick.js";
 
 const ROOM = "kick-regression";
 const TEXT = "Adopt the kick primitive as the single removal path.";
+/** propose, and again if the only refusal is the once-per-room claims-without-findings one (its text says to) */
+function proposeThrough(hub: Hub, room: string, pid: string, text: string) {
+  try {
+    return hub.propose(room, pid, text);
+  } catch (e) {
+    if (!/CLAIMS WITHOUT FINDINGS/.test((e as Error).message)) throw e;
+    return hub.propose(room, pid, text);
+  }
+}
 const QUOTE = "single removal path";
 
 function fourSeats(dataDir?: string) {
@@ -88,7 +97,7 @@ test("the pool is electorate() minus the target's whole connection: a sibling id
 test("removal: claims released to anyone, further calls refused with KICKED, no rejoin by name or connection, electorate unstuck", () => {
   const { hub, room, a, b, c, d } = fourSeats();
   hub.setBoard(ROOM, d.id, "claim/thing", JSON.stringify({ area: "thing", owner: "D", status: "building" }));
-  const pr = hub.propose(ROOM, a.id, TEXT);
+  const pr = proposeThrough(hub, ROOM, a.id, TEXT);
   const kv = hub.kickVote(ROOM, a.id, "D", "kick", "dead session: last_seen_at 20 min ago");
   hub.kickVote(ROOM, b.id, "D", "kick");
   hub.kickVote(ROOM, c.id, "D", "kick");
@@ -125,7 +134,7 @@ test("quorum no longer waits on the kicked seat (unanimous room, expected_partic
   const c = hub.join(ROOM, "C", "test", {}, undefined, "s3").participant;
   hub.join(ROOM, "D", "test", {}, undefined, "s4");
   const room = hub.getRoom(ROOM);
-  const pr = hub.propose(ROOM, a.id, TEXT);
+  const pr = proposeThrough(hub, ROOM, a.id, TEXT);
   const agree = (id: string) => hub.vote(ROOM, id, pr.id, "agree", undefined, undefined, QUOTE);
   agree(b.id);
   agree(c.id);
@@ -234,7 +243,7 @@ test("existing gates untouched: leave_room refusal for an orphaned claim, room-o
   const { hub, room, a, b, c, d } = fourSeats();
   hub.setBoard(ROOM, a.id, "claim/x", JSON.stringify({ area: "x", owner: "A", status: "building" }));
   assert.match(hub.leaveRefusal(room, a)!, /you still own claim\/x/);
-  const pr = hub.propose(ROOM, b.id, TEXT);
+  const pr = proposeThrough(hub, ROOM, b.id, TEXT);
   hub.vote(ROOM, c.id, pr.id, "agree", undefined, undefined, QUOTE);
   hub.vote(ROOM, d.id, pr.id, "agree", undefined, undefined, QUOTE);
   assert.equal(room.state, "concluded");

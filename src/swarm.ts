@@ -20,6 +20,7 @@ import { codexSeatCommand, codexUsageTracker } from "./codex-seat.js";
 import { claudeSandbox } from "./sandbox.js";
 import { stopStrays } from "./strays.js";
 import { launchCostGuide } from "./cost-estimate.js";
+import { seatTarget } from "./seat-targets.js";
 loadDotEnv();
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -424,6 +425,7 @@ writeFileSync(resolve(OUT, "plan.json"), JSON.stringify(plan, null, 2));
 log(`plan: ${plan.groups.map((g) => `${g.title} ×${g.workers}`).join(" | ")}`);
 
 const leadsRoom = FLAT ? `${SWARM_ID}-room` : `${SWARM_ID}-leads`;
+const FLAT_TARGETS = FLAT && seatTarget(task, 1, LENSES) ? (i: number) => seatTarget(task, i, LENSES) : undefined;
 const groupRooms = FLAT ? [] : plan.groups.map((g) => `${SWARM_ID}-${g.id}`);
 const runs: Promise<SeatRun>[] = [];
 /**
@@ -513,6 +515,8 @@ for (const g of plan.groups) {
       ? SETTLED +
         "\n" +
         prompt(FLAT_PROMPT, { NAME: nm, N: TOTAL, ROOM: room, TOPIC: task, AGENT: agent }) +
+        // a distinct starting item per flat seat, so one brief does not put every seat on one target (src/seat-targets.ts)
+        (FLAT_TARGETS ? `\n${FLAT_TARGETS(i)}` : "") +
         `\nWorking directory: ${wcwd}; you may read the project and run commands. ${writeRule} A verifier named "verifier" sits in the room and the final proposal needs its agree vote. Organise yourselves: claim areas on the board, recruit or break out into sub-rooms with request_agent when depth is needed, and bring results back here.`
       : SETTLED + "\n" + prompt("worker.md", { ...vars, NAME: nm, CWD: wcwd, WRITE_RULE: writeRule });
     const mayWrite = FULL && !readOnlyWorkers.has(name);

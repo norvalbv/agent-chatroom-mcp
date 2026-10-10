@@ -19,7 +19,7 @@ import { Hub, HubError, ROLES, VERIFY_HEAD_EXAMPLE, VERIFY_HEAD_RULE, parseVerif
 const VERIFY_GAP_PROSE = /not verified|did not (run|verify|exercise|watch|drive|check|test)|could not (run|verify|test)|not (run|exercised|watched|driven|checked) by me|untested|not tested|author-only|rests on the author/i;
 import type { SpawnedAgent, Spawner } from "./spawner.js";
 import { createWaitView } from "./hub/wait-view.js";
-import { IDLE_HINT, idleAgain, idleHint, newlyNamed, openWork, stillOpenHint } from "./hub/open-work.js";
+import { IDLE_HINT, idleAgain, idleHint, idleStreak, leaveHint, newlyNamed, offersLeave, openWork, stillOpenHint } from "./hub/open-work.js";
 
 /** The branch and worktree of each write recruit, for the reply of the call that spawned them; nothing for read-only recruits. */
 const workspaces = (recs: SpawnedAgent[]) => {
@@ -478,7 +478,12 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
                               ? IDLE_HINT
                               : undefined);
       // an idle seat (nothing delivered, nothing owed) is told what the board says is open for it
-      const idleWork = hint === IDLE_HINT ? openWork(hub, r, p, idleAgain(p)) : [];
+      const again = hint === IDLE_HINT && idleAgain(p);
+      const idleWork = hint === IDLE_HINT ? openWork(hub, r, p, again) : [];
+      // a worker that has polled long enough with nothing open is offered the door, as src/seat.ts does for harnessed seats
+      const streak = hint === IDLE_HINT ? idleStreak(p, again) : 0;
+      const leaveOffer = streak && offersLeave(r, p, streak, idleWork) ? leaveHint(r, p, streak) : undefined;
+      if (leaveOffer) hub.persist({ type: "open_work", room: r.name, pid: p.id, ts: new Date().toISOString(), items: [`idle_leave_offered:${streak}`] });
       // the full list travels only when it differs from what this seat was last shown; otherwise one short line
       const named = hint === IDLE_HINT ? newlyNamed(p, idleWork) : null;
       if (named) hub.persist({ type: "open_work", room: r.name, pid: p.id, ts: new Date().toISOString(), items: named });
@@ -492,7 +497,7 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
       const blindHint = blind && (hub.attentionHint(r, p) ?? `You are the fresh challenger for ${blind.id}: check one claim of the text in open_proposal, report it (challenge with a command, or one message), then leave_room. The room's other messages are not pushed to you.`);
       // the hint goes first: it is the one line a weaker model must not lose to a clamp
       return compactWait(p, {
-        hint: blindHint || (toolsRegainedNote || moreNote ? toolsRegainedNote + (hint ? `${hint} ` : "") + moreNote : named ? idleHint(idleWork) : idleWork.length ? stillOpenHint(idleWork) : hint),
+        hint: blindHint || (toolsRegainedNote || moreNote ? toolsRegainedNote + (hint ? `${hint} ` : "") + moreNote : named ? idleHint(idleWork) : idleWork.length ? stillOpenHint(idleWork) : (leaveOffer ?? hint)),
         messages: shownMsgs.map((m) => fmtWait(hub, r, p, m)),
         remaining,
         ...(named && !blind ? { open_work: idleWork } : {}),

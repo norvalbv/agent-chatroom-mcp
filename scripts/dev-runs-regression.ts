@@ -77,7 +77,7 @@ test("a forged dev room (a static body on loopback naming the right commit) no l
 
 test("a run this hub started takes the commit from its own record, and a reviewer's run closes the gap", async (t) => {
   // the dev hub lies about its commit; the hub's record wins
-  const fake = fakeHost(() => devBody({ code_state: { head: "0000000", dirty: true } }));
+  const fake = fakeHost(() => devBody({ code_state: { head: "0000000", dirty: true }, usage: { cost_usd: 1.234 } }));
   const { hub, room, pr, b, head } = fixture(t, fake);
   const run = await hub.startDevRun(room.name, b.id, { commit: COMMIT.slice(0, 9), task: "use the change" });
   assert.equal(run.commit, COMMIT, "resolved to the full sha by the hub");
@@ -85,6 +85,7 @@ test("a run this hub started takes the commit from its own record, and a reviewe
   await until(() => run.state === "running");
   await hub.devRuns.observe(run);
   assert.equal(run.rooms?.[0]?.speaking_seats, 2);
+  assert.equal(run.rooms?.[0]?.cost_usd, 1.234, "the dev room's seat-reported spend is kept for a run total");
   hub.setBoard(room.name, b.id, "verify/x", head(`http://127.0.0.1:${run.port}/rooms/dev-room`));
   const r = await hub.readDevRoom(room.name, "verify/x");
   assert.equal(r?.launched?.run, run.id);
@@ -92,7 +93,7 @@ test("a run this hub started takes the commit from its own record, and a reviewe
   assert.equal(hub.proposalView(room, pr).verification_gaps, undefined, JSON.stringify(hub.proposalView(room, pr).verification_gaps));
   fake.end(0);
   await until(() => run.state === "ended");
-  assert.match(room.messages.at(-1)?.content ?? "", /dev run .* ended with exit 0\. What this hub saw: dev-room concluded, 2\/2 agent seats spoke/);
+  assert.match(room.messages.at(-1)?.content ?? "", /dev run .* ended with exit 0\. What this hub saw: dev-room concluded, 2\/2 agent seats spoke, 30 messages, \$1\.23 seat-reported/);
 });
 
 test("the proposer's own dev run reads PARTIAL; an ended run's port is not trusted again", async (t) => {

@@ -6,6 +6,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import * as path from 'node:path';
+import * as os from 'node:os';
 import * as url from 'node:url';
 import { EventEmitter } from 'node:events';
 import vm from 'node:vm';
@@ -32,7 +33,7 @@ async function harness(entry: string, env: Record<string, string>, argv: string[
       if (f.includes('/prompts/')) return 'Synthetic fixture prompt {{NAME}} {{ROOM}} {{TOPIC}}';
       throw new Error(`unexpected fixture read: ${f}`);
     },
-    mkdirSync() {}, writeFileSync() {}, createWriteStream() { return { write() { return true; }, end() {}, on() { return this; } }; }, symlinkSync() {}, readdirSync() { return []; }, statSync() { return { mtimeMs: 0 }; },
+    mkdirSync() {}, writeFileSync() {}, createWriteStream() { return { write() { return true; }, end() {}, on() { return this; } }; }, symlinkSync() {}, rmSync() {}, unlinkSync() {}, readdirSync() { return []; }, statSync() { return { mtimeMs: 0 }; },
     // src/sandbox.ts (--sandbox only): no node_modules link in the synthetic fixture
     lstatSync() { throw Object.assign(new Error('synthetic: no such path'), { code: 'ENOENT' }); },
   };
@@ -66,7 +67,7 @@ async function harness(entry: string, env: Record<string, string>, argv: string[
     },
   });
   const cache = new Map<string, any>();
-  const mocks: Record<string, any> = { 'node:fs': fs, 'node:path': path, 'node:url': url, 'node:child_process': cp, 'node:crypto': { randomUUID: () => 'synthetic-session-id' }, 'node:string_decoder': { StringDecoder }, './strays.js': { stopStrays: async () => 0 }, './hub.js': { HubError: Error }, './settled.js': { settledAxes: () => '' }, './seat.js': { runSeat: async () => ({ final: 'fixture', ok: true }) }, './seat-handoff-report.js': { handoffMarkerLine: () => '' }, './result.js': { collectRoomSnapshot: async (_base: string, name: string) => ({ name, payload: { state: 'concluded', conclusion: { text: 'fixture' } }, transcript: { text: '' } }), readRunResult: () => ({}), writeRunResult: () => undefined, renderRunReport: () => '', rollupUsage: () => undefined, parseClaudeCliOutput: (raw: string) => ({ text: raw, usage: null }), seatScorecard: () => [], classifyOutcome: () => ({ kind: 'concluded', timedOut: false, detail: '' }), proposedDecisionDir: () => null } };
+  const mocks: Record<string, any> = { 'node:fs': fs, 'node:path': path, 'node:os': os, 'node:url': url, 'node:child_process': cp, 'node:crypto': { randomUUID: () => 'synthetic-session-id' }, 'node:string_decoder': { StringDecoder }, './strays.js': { stopStrays: async () => 0 }, './hub.js': { HubError: Error }, './settled.js': { settledAxes: () => '' }, './seat.js': { runSeat: async () => ({ final: 'fixture', ok: true }) }, './seat-handoff-report.js': { handoffMarkerLine: () => '' }, './result.js': { collectRoomSnapshot: async (_base: string, name: string) => ({ name, payload: { state: 'concluded', conclusion: { text: 'fixture' } }, transcript: { text: '' } }), readRunResult: () => ({}), writeRunResult: () => undefined, renderRunReport: () => '', rollupUsage: () => undefined, parseClaudeCliOutput: (raw: string) => ({ text: raw, usage: null }), seatScorecard: () => [], classifyOutcome: () => ({ kind: 'concluded', timedOut: false, detail: '' }), proposedDecisionDir: () => null } };
   async function module(name: string): Promise<any> {
     if (cache.has(name)) return cache.get(name);
     if (mocks[name]) {

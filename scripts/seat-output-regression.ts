@@ -159,6 +159,26 @@ test("a hub-opened vote removes the seat on the room's threshold, and a seat-ope
   assert.equal(kv.status, "open");
 });
 
+test("on a vote the hub opened, a dashboard human decides alone: one human kick removes; peer ballots alone still need the threshold", () => {
+  const { hub, room, a, b, c, d } = room4();
+  for (const p of [a, b, c]) hub.setBoard(ROOM, p.id, `evidence/${p.name}`, FINDINGS);
+  age(hub);
+  warnNoOutput(hub, room);
+  warnings(hub, "D")[0].ts = new Date(Date.now() - VOTE_AFTER_MS - 1000).toISOString();
+  warnNoOutput(hub, room);
+  assert.match(room.messages.find((m) => /the hub opened a vote/.test(m.content))!.content, /A human on the dashboard can decide alone/);
+  const human = hub.join(ROOM, "benji", "human", {}, undefined, "http:benji").participant;
+  hub.kickVote(ROOM, human.id, "D", "kick");
+  assert.equal(room.participants.get(d.id)!.active, false, "the human's one kick ballot removes on a hub-opened vote");
+  assert.match(room.kickVotes.get(d.id)!.outcome ?? "", /human/);
+  // a vote a seat opened keeps the room's threshold (3 of A, B, C here), human or not
+  const fresh = room4();
+  const h2 = fresh.hub.join(ROOM, "benji", "human", {}, undefined, "http:benji").participant;
+  const kv = fresh.hub.kickVote(ROOM, fresh.a.id, "D", "kick", "persistent disagreement blocking progress");
+  fresh.hub.kickVote(ROOM, h2.id, "D", "kick");
+  assert.equal(kv.status, "open", "on a seat-opened vote a human kick is one ballot among the threshold");
+});
+
 test("no listing where the room does not work on the record, nor for verifier, chair or human", () => {
   const { hub, a } = room4();
   age(hub);

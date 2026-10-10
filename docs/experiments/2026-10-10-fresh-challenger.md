@@ -29,7 +29,7 @@ by rewording in a median 32 s), so the brief asks for one claim checked against 
 
 ## What was watched
 
-Both on private hubs built from commit `32e7c67d`, recruits on claude-opus-5-5.
+All on private hubs built from commit `32e7c67d`, recruits on claude-opus-5-5.
 
 1. `swarm-001503-htoq-room`, three seats, a true claim. The hub recruited in the second the proposal opened, the
    recruit joined 8 s later, the proposal had its three votes 28 s after opening and was held for 4 s, the recruit
@@ -40,8 +40,16 @@ Both on private hubs built from commit `32e7c67d`, recruits on claude-opus-5-5.
    `test "$(grep -c 'server.registerTool(' src/server.ts)" -eq 23`, which the hub then required a non-proposer to
    rerun with exit 0. The room did not conclude.
 
+3. `swarm-002026-x3p5-room`, three seats, a research question (which settled decision rests on the weakest
+   evidence). The first proposal came 47 s after the openings and cited seven file:line references. The recruit
+   joined 3 s later and, 19 s after that, reported that it had opened each cited line and grepped docs/ and
+   scripts/ for any measured token saving: the claim held, no challenge. It left before the seats had finished
+   their own two challenges and three amendments, so the hold cost nothing; the room concluded 56 s after the
+   proposal.
+
 ## Limits
 
-Two rooms show that it works, not how often it changes an outcome. No research-type room was run with it. The
+Three rooms show that it works, not how often it changes an outcome: the recruit caught the one false claim it was
+given and passed the two true ones. No room without the flag was run on the same briefs. The
 recruit costs one model seat per proposal, at most two per room. The wait is held in memory, so a hub restart
 stops waiting.

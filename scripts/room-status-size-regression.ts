@@ -43,6 +43,8 @@ await b("join_room", { room: R, name: "peer", agent: "codex" });
 assert.match(joined.data.room.topic, /END-OF-TOPIC$/);
 await a("board_set", { room: R, key: "claim/x", text: "{\"owner\":\"builder\",\"area\":\"x\"}" });
 await b("board_set", { room: R, key: "evidence/y", text: "y".repeat(2000) });
+// another connection has looked at the finding, so propose is not held once for scrutiny (board-attack-regression covers that)
+await a("send_message", { room: R, content: "Read evidence/y; it holds.", force: true });
 const PROPOSAL = `We conclude: ${"a long and careful conclusion. ".repeat(60)}PROPOSAL-END`;
 await a("propose", { room: R, text: PROPOSAL });
 

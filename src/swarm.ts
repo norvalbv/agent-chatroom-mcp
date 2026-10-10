@@ -307,6 +307,12 @@ async function tailRooms(rooms: string[]) {
 }
 
 /** With --full-access, give each worker its own git worktree so parallel edits cannot collide. */
+/** Commits a write seat left on its own branch: a builder's output is commits, which the board never shows. */
+const branchCommits = (name: string): number | undefined => {
+  if (!writeWorkers.has(name) || !PROJECT_IDENTITY.git) return undefined;
+  const n = Number(spawnSync("git", ["-C", CWD, "rev-list", "--count", `${PROJECT_IDENTITY.git.revision}..swarm/${SWARM_ID}/${name}`], { encoding: "utf8" }).stdout?.trim());
+  return Number.isFinite(n) ? n : undefined;
+};
 const isGitRepo = spawnSync("git", ["-C", CWD, "rev-parse", "--is-inside-work-tree"], { encoding: "utf8" }).stdout?.trim() === "true";
 const readOnlyWorkers = new Set<string>();
 function workerCwd(name: string): string {
@@ -604,7 +610,7 @@ const artifact: RunResult = {
   verifier: { name: "verifier", output: results.find(r => r.name === "verifier")?.text ?? null },
   reportPath: resolve(OUT, "report.md"), artifactPath, collectionErrors, usage: rollupUsage([...results, ...replacedRuns]),
   outcome: classifyOutcome(snapshots.find(r => r.name === leadsRoom)?.payload, { timedOut }),
-  scorecard: seatScorecard(snapshots, Object.fromEntries([...exitCodes].map(([name, exitCode]) => [name, { exitCode, cost: seatCosts.get(name), killedAtTimeout: killedAtTimeout.has(name) }]))),
+  scorecard: seatScorecard(snapshots, Object.fromEntries([...exitCodes].map(([name, exitCode]) => [name, { exitCode, cost: seatCosts.get(name), killedAtTimeout: killedAtTimeout.has(name), commits: branchCommits(name) }]))),
 };
 writeRunResult(resolve(OUT, "result.json"), artifact);
 if (artifactPath !== resolve(OUT, "result.json")) writeRunResult(artifactPath, artifact);

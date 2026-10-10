@@ -28,7 +28,7 @@ export interface RunResult {
 export type SeatEnding = 'left' | 'exited_without_leaving' | 'kicked' | 'killed_at_timeout' | 'gone_no_reason' | 'still_active';
 /**
  * What one seat left behind, read from the room snapshot plus the launcher's own receipt for that seat.
- * `produced` is deliberately coarse: a board entry other than a claim, a proposal or a challenge (for a
+ * `produced` is deliberately coarse: a board entry other than a claim, a commit, a proposal or a challenge (for a
  * verifier, a vote). A claim is a promise and chat is talk: neither counts, and the report says which it was.
  * It separates a seat that left nothing from one that did something; it does not rank the ones that did.
  */
@@ -49,9 +49,11 @@ export interface SeatScore {
   /** Absent when the seat reported no usage: unknown, never zero. */
   cost?: number;
   exitCode?: number | null;
+  /** Commits on the seat's own branch since the run's base; absent when the seat had no branch. */
+  commits?: number;
 }
 /** What only the launcher knows about a seat it spawned. A recruit spawned by the hub has no receipt. */
-export interface SeatReceipt { exitCode?: number | null; cost?: number; killedAtTimeout?: boolean }
+export interface SeatReceipt { exitCode?: number | null; cost?: number; killedAtTimeout?: boolean; commits?: number }
 export interface RunOutcome {
   kind: 'concluded' | 'proposal_open' | 'no_proposal' | 'room_missing';
   timedOut: boolean;
@@ -90,6 +92,7 @@ export function seatScorecard(rooms: readonly RoomSnapshot[], receipts: Readonly
       if (typeof p.left_reason === 'string' && p.left_reason) score.leftReason = p.left_reason;
       if (typeof receipt?.cost === 'number') score.cost = receipt.cost;
       if (receipt && 'exitCode' in receipt) score.exitCode = receipt.exitCode ?? null;
+      if (typeof receipt?.commits === 'number') score.commits = receipt.commits;
       // one process, one row: the first room listed (the lead room) says how the seat ended
       const seen = card.find(s => s.name === score.name);
       if (!seen) { card.push(score); continue; }
@@ -102,7 +105,7 @@ export function seatScorecard(rooms: readonly RoomSnapshot[], receipts: Readonly
     }
   }
   // a verifier's output is its verdict: a vote, a challenge or a verify entry
-  for (const s of card) s.produced = s.board.verify + s.board.other > 0 || s.proposals > 0 || s.challenges > 0 || (s.role === 'verifier' && s.votes > 0);
+  for (const s of card) s.produced = s.board.verify + s.board.other > 0 || (s.commits ?? 0) > 0 || s.proposals > 0 || s.challenges > 0 || (s.role === 'verifier' && s.votes > 0);
   return card;
 }
 /** Name the cause of a non-conclusion from the lead room's own payload, so the report never has to say only "no consensus". */
@@ -121,10 +124,10 @@ const ENDING_TEXT: Record<SeatEnding, string> = { left: 'left', exited_without_l
 const seatNote = (s: SeatScore) => s.produced ? '' : s.board.claim ? 'claimed, delivered nothing' : s.messages > 2 ? 'talk only' : 'no output';
 function renderScorecard(card: readonly SeatScore[]): string {
   const idle = card.filter(s => !s.produced && s.role !== 'verifier');
-  let text = `## Seats\n\n${card.length} seat(s); ${idle.length} delivered nothing${idle.length ? ` (${idle.map(s => s.name).join(', ')})` : ''}.\n\n| seat | role | msgs | board (claim/verify/other) | proposals | challenges | votes | cost | ended | note |\n|---|---|---|---|---|---|---|---|---|---|\n`;
+  let text = `## Seats\n\n${card.length} seat(s); ${idle.length} delivered nothing${idle.length ? ` (${idle.map(s => s.name).join(', ')})` : ''}.\n\n| seat | role | msgs | board (claim/verify/other) | commits | proposals | challenges | votes | cost | ended | note |\n|---|---|---|---|---|---|---|---|---|---|---|\n`;
   for (const s of card) {
     const exit = s.exitCode === undefined || s.exitCode === 0 ? '' : ` (exit ${s.exitCode ?? 'signal'})`;
-    text += `| ${s.name} | ${s.role} | ${s.messages} | ${s.board.claim}/${s.board.verify}/${s.board.other} | ${s.proposals} | ${s.challenges} | ${s.votes} | ${s.cost === undefined ? '?' : `$${s.cost.toFixed(2)}`} | ${ENDING_TEXT[s.ending]}${exit} | ${seatNote(s)} |\n`;
+    text += `| ${s.name} | ${s.role} | ${s.messages} | ${s.board.claim}/${s.board.verify}/${s.board.other} | ${s.commits ?? '-'} | ${s.proposals} | ${s.challenges} | ${s.votes} | ${s.cost === undefined ? '?' : `$${s.cost.toFixed(2)}`} | ${ENDING_TEXT[s.ending]}${exit} | ${seatNote(s)} |\n`;
   }
   return `${text}\n`;
 }

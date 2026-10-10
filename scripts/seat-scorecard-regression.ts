@@ -74,6 +74,12 @@ assert.equal(two[0].produced, true);
 assert.equal(two[0].ending, 'left', 'the lead room says how the seat ended');
 assert.equal(two[0].cost, 6.25);
 
+// a builder's output is commits on its branch: a claim plus commits is delivery even with nothing else on the board
+const built = seatScorecard(rooms, { ...receipts, stuck: { exitCode: 0, commits: 3 } });
+assert.equal(built.find((s: { name: string }) => s.name === 'stuck')!.produced, true);
+assert.equal(built.find((s: { name: string }) => s.name === 'stuck')!.commits, 3);
+assert.equal(by('stuck').commits, undefined, 'no branch: unknown, not zero');
+
 // outcome: every non-conclusion names its cause
 const open = classifyOutcome(payload, { timedOut: true });
 assert.equal(open.kind, 'proposal_open');
@@ -96,6 +102,7 @@ const md = renderRunReport(artifact);
 assert.ok(md.includes(open.detail), 'report states why the run did not conclude');
 assert.ok(md.includes('## Seats'), 'report has a Seats section');
 assert.match(md, /\| builder \|.*\| left \|/);
+assert.match(md, /\| builder \| worker \| 14 \| 1\/0\/1 \| - \| 1 \|/, 'commits column prints - when the seat had no branch');
 assert.match(md, /\| ghost \|.*killed at timeout.*no output/);
 assert.match(md, /\| stuck \|.*claimed, delivered nothing/);
 assert.match(md, /\| live \|.*talk only/);

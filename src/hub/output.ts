@@ -4,10 +4,11 @@
  * Liveness is a heartbeat: a seat that loops on local tools reads "active" for as long as it runs, so room_status could
  * say a seat is alive but never what it has produced. Across 57 concluded board-using rooms only 10 of 372 agent worker
  * seats (2.7%) left no evidence, verify, proposal or challenge, so nothing here removes a seat: the record makes such a
- * seat visible, tells it once, and gives a kick vote the hub's numbers instead of the accuser's word (all 9 kick votes
- * on record were for dead sessions, none for work). Everything is derived from room state, so a replay rebuilds it.
+ * seat visible, tells it once, opens the removal vote itself if nothing follows (7 of the 9 votes on record were opened
+ * by the human, none for work), and gives every kick vote the hub's numbers instead of the accuser's word. Everything is derived from room state, so a replay rebuilds it.
  */
 import type { Hub } from "../hub.js";
+import { openKickByHub, withdrawHubKick } from "./kick.js";
 import type { Participant, Room } from "./types.js";
 
 /** In the room this long with nothing on the record before a worker is listed (the stale-claim and suspected-dead window). */
@@ -61,9 +62,19 @@ const WARNED = "you have put nothing on the record";
 
 /** Tell each listed seat once, in the room, where its peers can see it. The line itself is the receipt, so a replay does not repeat it. */
 export function warnNoOutput(hub: Hub, room: Room): void {
-  for (const p of noOutput(hub, room)) {
+  const listed = noOutput(hub, room);
+  for (const kv of room.kickVotes.values()) {
+    const t = room.participants.get(kv.target);
+    if (t && !listed.includes(t)) withdrawHubKick(hub, room, t, `${kv.targetName} put something on the record`);
+  }
+  for (const p of listed) {
     const at = `@${p.name} `;
-    if (room.messages.some((m) => m.kind === "system" && m.content.startsWith(at) && m.content.includes(WARNED))) continue;
+    const warned = room.messages.find((m) => m.kind === "system" && m.content.startsWith(at) && m.content.includes(WARNED));
+    if (warned) {
+      // still nothing one further window after being told: the hub opens the vote, once, and seats only ballot
+      if (Date.now() - Date.parse(warned.ts) >= NO_OUTPUT_MS && !room.kickVotes.has(p.id)) openKickByHub(hub, room, p, "nothing on the record, and nothing since the hub said so");
+      continue;
+    }
     const o = seatOutput(room, p);
     hub.post(room, "system", undefined,
       `${at}${WARNED} of this room in ${Math.round(windowFor(o) / 60_000)} min: no board entry, verify, proposal or challenge, while most seats have` +

@@ -90,6 +90,30 @@ export function kickVote(hub: Hub, roomName: string, pid: string, target: string
   return kv;
 }
 
+/** The hub's own id as the starter of a vote it opened: no seat volunteers to remove a peer (7 of the 9 votes on record were opened by the human). */
+export const HUB_STARTER = { id: "hub", name: "the hub" };
+
+/** The hub opens a removal vote on its own count and casts no ballot: seats and a dashboard human still decide. False when one is
+ * already open or too few connections could vote. */
+export function openKickByHub(hub: Hub, room: Room, t: Participant, reason: string): boolean {
+  if (room.kickVotes.get(t.id)?.status === "open") return false;
+  const needed = hub.kickNeeded(room, t);
+  if (kickPossible(hub, room, t) < needed) return false;
+  const kv: KickVote = { target: t.id, targetName: t.name, by: HUB_STARTER, reason: reason.slice(0, 600), startedAt: now(), ballots: {}, status: "open" };
+  room.kickVotes.set(t.id, kv);
+  hub.persist({ type: "kick_vote", room: room.name, vote: kv });
+  hub.post(room, "system", undefined,
+    `Routine check: the hub opened a vote on closing ${hub.shown(room, t)}'s seat: ${kv.reason} — needs ${needed} kick ballot(s) from distinct connections (quorum=${room.quorum} over the other voters). ${outputLine(hub, room, t)} ` +
+    `Vote with kick_vote(target=${JSON.stringify(hub.shown(room, t))}, vote="kick"|"keep"); keep if you know of work of theirs the record does not show. The vote is withdrawn if they put something on the record first.`);
+  return true;
+}
+
+/** Withdraw a vote the hub opened once its ground is gone. */
+export function withdrawHubKick(hub: Hub, room: Room, t: Participant, why: string): void {
+  const kv = room.kickVotes.get(t.id);
+  if (kv?.status === "open" && kv.by.id === HUB_STARTER.id) settleKick(hub, room, kv, "dropped", why);
+}
+
 /** Ballots counted per connection over the current pool (a ballot from a seat that has since left no longer counts). */
 function kickTally(hub: Hub, room: Room, kv: KickVote) {
   const t = room.participants.get(kv.target)!;

@@ -75,6 +75,48 @@ test("a claim buys time, not immunity: a claim holder is listed only after the l
   assert.match(warnings(hub, "D")[0].content, /you hold 1 claim\. Work on your branch is invisible here/);
 });
 
+test("still nothing one window after the warning: the hub opens the vote itself, casts no ballot, and withdraws it when the seat delivers", () => {
+  const { hub, room, a, b, c, d } = room4();
+  for (const p of [a, b, c]) hub.setBoard(ROOM, p.id, `evidence/${p.name}`, "findings");
+  age(hub);
+  warnNoOutput(hub, room);
+  warnNoOutput(hub, room);
+  assert.equal(room.kickVotes.size, 0, "no vote inside the grace window");
+  const warned = warnings(hub, "D")[0];
+  warned.ts = new Date(Date.now() - NO_OUTPUT_MS - 1000).toISOString();
+  warnNoOutput(hub, room);
+  warnNoOutput(hub, room);
+  const kv = room.kickVotes.get(d.id)!;
+  assert.equal(kv.status, "open");
+  assert.equal(kv.by.name, "the hub");
+  assert.deepEqual(kv.ballots, {}, "the hub casts no ballot");
+  const lines = room.messages.filter((m) => m.kind === "system" && /the hub opened a vote on closing D's seat/.test(m.content));
+  assert.equal(lines.length, 1, "opened once");
+  assert.match(lines[0].content, /Routine check.*Hub record for D: 0 claims, 0 evidence entries/);
+  hub.kickVote(ROOM, a.id, "D", "kick");
+  assert.equal(room.participants.get(d.id)!.active, true, "one ballot never removes");
+  hub.setBoard(ROOM, d.id, "evidence/D", "late findings");
+  warnNoOutput(hub, room);
+  assert.equal(kv.status, "dropped");
+  assert.match(kv.outcome ?? "", /put something on the record/);
+  assert.equal(room.participants.get(d.id)!.active, true);
+});
+
+test("a hub-opened vote removes the seat on the room's threshold, and a seat-opened vote is never withdrawn by the hub", () => {
+  const { hub, room, a, b, c, d } = room4();
+  for (const p of [a, b, c]) hub.setBoard(ROOM, p.id, `evidence/${p.name}`, "findings");
+  age(hub);
+  warnNoOutput(hub, room);
+  warnings(hub, "D")[0].ts = new Date(Date.now() - NO_OUTPUT_MS - 1000).toISOString();
+  warnNoOutput(hub, room);
+  for (const p of [a, b, c]) hub.kickVote(ROOM, p.id, "D", "kick");
+  assert.equal(room.participants.get(d.id)!.active, false);
+  assert.ok(room.messages.some((m) => m.kind === "system" && /D was removed from the room by a kick vote started by the hub/.test(m.content)));
+  const kv = hub.kickVote(ROOM, a.id, "B", "kick", "persistent disagreement blocking progress");
+  warnNoOutput(hub, room);
+  assert.equal(kv.status, "open");
+});
+
 test("no listing where the room does not work on the record, nor for verifier, chair or human", () => {
   const { hub, a } = room4();
   age(hub);

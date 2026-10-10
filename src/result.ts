@@ -29,7 +29,8 @@ export type SeatEnding = 'left' | 'exited_without_leaving' | 'kicked' | 'killed_
 /**
  * What one seat left behind, read from the room snapshot plus the launcher's own receipt for that seat.
  * `produced` is deliberately coarse: a board entry other than a claim, a commit, a proposal or a challenge (for a
- * verifier, a vote). A claim is a promise and chat is talk: neither counts, and the report says which it was.
+ * verifier, a vote; for a recruit, a report in chat and a reasoned leave, since that is its whole brief). A claim is a
+ * promise and chat is talk: neither counts, and the report says which it was.
  * It separates a seat that left nothing from one that did something; it does not rank the ones that did.
  */
 export interface SeatScore {
@@ -105,7 +106,7 @@ export function seatScorecard(rooms: readonly RoomSnapshot[], receipts: Readonly
     }
   }
   // a verifier's output is its verdict: a vote, a challenge or a verify entry
-  for (const s of card) s.produced = s.board.verify + s.board.other > 0 || (s.commits ?? 0) > 0 || s.proposals > 0 || s.challenges > 0 || (s.role === 'verifier' && s.votes > 0);
+  for (const s of card) s.produced = s.board.verify + s.board.other > 0 || (s.commits ?? 0) > 0 || s.proposals > 0 || s.challenges > 0 || (s.role === 'verifier' && s.votes > 0) || (s.role === 'recruit' && s.messages > 0 && s.ending === 'left');
   return card;
 }
 /** Name the cause of a non-conclusion from the lead room's own payload, so the report never has to say only "no consensus". */

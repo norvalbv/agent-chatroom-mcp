@@ -219,6 +219,21 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
       const recent = focus && hub.focusExclusive(focus) ? [focus] : focus ? [focus, ...queue.slice(1).slice(-29)] : queue.slice(-30);
       hub.settleRead(r, participant, participant.lastSeenSeq, recent); // what join hands you counts as delivered; withheld human messages are kept
       const human = hub.unansweredHuman(r);
+      // a fresh challenger sees the proposal it was recruited to check and nothing that says who agreed with it
+      const blind = hub.freshChallengeFor(r, participant.name);
+      if (blind) {
+        const summary = hub.summary(r);
+        return {
+          participant_id: participant.id,
+          you_are: hub.shown(r, participant),
+          your_role: participant.role ?? "worker",
+          tool_scope: toolScope,
+          room: { ...summary, proposals: [{ id: blind.id, version: blind.version, status: blind.status, text: blind.text }], board: {}, quiet: undefined, stale_claims: undefined },
+          recent_messages: [`PROPOSAL ${blind.id} v${blind.version}: ${blind.text}`],
+          next_seq: participant.lastSeenSeq,
+          hint: `You are the fresh challenger for ${blind.id}: this join shows only its current text, not the discussion, the board or who agreed. Check one claim against the repository, report it (challenge with a command, or one message), then leave_room.`,
+        };
+      }
       return {
         participant_id: participant.id,
         you_are: hub.shown(r, participant),
@@ -469,14 +484,18 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
       if (named) hub.persist({ type: "open_work", room: r.name, pid: p.id, ts: new Date().toISOString(), items: named });
       // Snapshot AFTER the poll wake: concurrent waits serialize their per-participant cursor here.
       // boardManifest records its own telemetry; assembly happens here, after the poll wake.
-      const board = hub.boardManifest(room, id, follow);
-      hub.observeBoardManifest(r, board); // compact since-process-start observer; legacy recording is in assembly
+      // a fresh challenger's waits keep the cut its join made: the proposal, what is addressed to it, nothing about who agreed
+      const blind = hub.freshChallengeFor(r, p.name);
+      const board = blind ? {} : hub.boardManifest(room, id, follow);
+      if (!blind) hub.observeBoardManifest(r, board); // compact since-process-start observer; legacy recording is in assembly
+      const shownMsgs = blind ? msgs.filter((m) => m.mentions?.includes(id!) || m.from.agent === "human") : msgs;
+      const blindHint = blind && (hub.attentionHint(r, p) ?? `You are the fresh challenger for ${blind.id}: check one claim of the text in open_proposal, report it (challenge with a command, or one message), then leave_room. The room's other messages are not pushed to you.`);
       // the hint goes first: it is the one line a weaker model must not lose to a clamp
       return compactWait(p, {
-        hint: toolsRegainedNote || moreNote ? toolsRegainedNote + (hint ? `${hint} ` : "") + moreNote : named ? idleHint(idleWork) : idleWork.length ? stillOpenHint(idleWork) : hint,
-        messages: msgs.map((m) => fmtWait(hub, r, p, m)),
+        hint: blindHint || (toolsRegainedNote || moreNote ? toolsRegainedNote + (hint ? `${hint} ` : "") + moreNote : named ? idleHint(idleWork) : idleWork.length ? stillOpenHint(idleWork) : hint),
+        messages: shownMsgs.map((m) => fmtWait(hub, r, p, m)),
         remaining,
-        ...(named ? { open_work: idleWork } : {}),
+        ...(named && !blind ? { open_work: idleWork } : {}),
         // a capped page has not reached the end of the log: next_seq is the cursor, not the latest seq
         next_seq: remaining ? p.lastSeenSeq : (r.messages.at(-1)?.seq ?? since),
         room_state: r.state,
@@ -486,7 +505,9 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
         humans_present: hub.activeParticipants(r).filter((x) => x.agent === "human").map((x) => x.name),
         openings: r.expectedParticipants && !r.openingsRevealed ? { submitted: r.openings.size, expected: r.expectedParticipants, waiting_on: hub.openingsWaitingOn(r), revealed: false, chat_blocked: false, deadline_min_after_first: Math.round(r.nudgeAfterMs / 60000) } : undefined,
         unanswered_human: human && resp!.mine ? { id: human.id, name: hub.shown(r, human.from), text: human.content, you_answer: true } : human ? { name: hub.shown(r, human.from), responder: resp!.who, you_answer: false } : null,
-        open_proposal: openView
+        open_proposal: blind
+          ? { id: blind.id, version: blind.version, text: blind.text }
+          : openView
           ? { id: openView.id, version: openView.version, by: openView.by, chars: openView.chars, tally: openView.tally, waiting_on: openView.waiting_on, needs_challenge: openView.needs_challenge, blocked_by: openView.blocked_by, challenges: challengesView, ...("text" in openView ? { text: openView.text } : { text_omitted: openView.text_omitted }) }
           : null,
         leaving_would_block: block ? block.reason : false,

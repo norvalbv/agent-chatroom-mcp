@@ -6,6 +6,8 @@
  * Run after `npm run build`:
  *   PORT=<free port> CHATROOM_RECRUIT_AGENT=claude CHATROOM_RECRUIT_MODEL=claude-opus-5-5 npx tsx scripts/fresh-challenger-probe.ts
  * Exit 0: the recruit filed a challenge with a command and the room had not concluded. Exit 1 otherwise.
+ * ARM=off runs the same scripted room on the same build without the flag (no agent is launched): exit 0 when the
+ * room concludes on the false count, which is what the flag is there to stop.
  */
 import { spawn } from "node:child_process";
 import { mkdtempSync, readFileSync } from "node:fs";
@@ -17,13 +19,14 @@ import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/
 const PORT = Number(process.env.PORT ?? 7815);
 const HTTP = `http://127.0.0.1:${PORT}`;
 const ROOM = "fresh-challenger-probe";
+const OFF = process.env.ARM === "off";
 const real = (readFileSync("src/server.ts", "utf8").match(/server\.registerTool\(/g) ?? []).length;
 const FALSE_COUNT = real + 3;
 const TEXT = `Conclusion: src/server.ts registers ${FALSE_COUNT} MCP tools with server.registerTool; count them with grep -c 'server.registerTool(' src/server.ts. The tool list is therefore complete for this release.`;
 
 const dir = mkdtempSync(join(tmpdir(), "fresh-challenger-probe-"));
 const server = spawn("node", ["dist/index.js"], {
-  env: { ...process.env, PORT: String(PORT), CHATROOM_INSECURE_LOCAL: "1", CHATROOM_FRESH_CHALLENGER: "1", CHATROOM_DATA_DIR: join(dir, "data"), CHATROOM_LOG_DIR: join(dir, "logs") },
+  env: { ...process.env, PORT: String(PORT), CHATROOM_INSECURE_LOCAL: "1", CHATROOM_FRESH_CHALLENGER: OFF ? "0" : "1", CHATROOM_DATA_DIR: join(dir, "data"), CHATROOM_LOG_DIR: join(dir, "logs") },
   stdio: ["ignore", "inherit", "inherit"],
 });
 process.on("exit", () => server.kill());
@@ -69,6 +72,13 @@ const status = async () => (await a("room_status", { room: ROOM })) as Status;
 const first = await status();
 console.log(`after both seats agreed: state=${first.state}; blocked_by=${JSON.stringify(first.proposals[0].blocked_by)}`);
 const heldAtStart = first.state === "open" && first.proposals[0].blocked_by.some((x) => /fresh challenger/.test(x));
+if (OFF) {
+  const concluded = first.state === "concluded";
+  console.log(`real count ${real}, proposed ${FALSE_COUNT}; flag off: ${concluded ? "the room concluded on the false count" : `state ${first.state}`}`);
+  console.log(concluded ? "FRESH CHALLENGER PROBE (off arm) OK" : "FRESH CHALLENGER PROBE (off arm) FAILED");
+  server.kill();
+  process.exit(concluded ? 0 : 1);
+}
 
 let filed: Status["proposals"][0]["challenges"][0] | undefined;
 let state = first.state;

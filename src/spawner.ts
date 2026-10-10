@@ -464,7 +464,7 @@ export class Spawner {
    * Opt-in, once per proposal, bounded per room; any refusal (hold, cap, policy) is swallowed because the propose that
    * triggered it must stand. Returns the recruit so the hub can hold the conclusion for it (Hub.awaitScrutiny).
    */
-  freshChallenger(room: string, proposal: { id: string; text: string; by: string; cwd?: string }): SpawnedAgent | undefined {
+  freshChallenger(room: string, proposal: { id: string; text: string; by: string; cwd?: string; offline?: boolean }): SpawnedAgent | undefined {
     if (!this.opts.freshChallenger || process.env.CHATROOM_NO_RECRUIT === "1") return undefined;
     const key = `${room}\n${proposal.id}`;
     if (this.freshChallengersFired.has(key)) return undefined;
@@ -478,6 +478,10 @@ export class Spawner {
       `Do not join the debate and do not vote. Pick the ONE claim in it that can be checked against the repository, a cited file, command, transcript or source, and check it yourself. ` +
       `If it fails, file it with challenge(proposal_id="${proposal.id}", objection quoting the clause, command=<a read-only command that exits nonzero while the claim is false, written to run from the repository root with no absolute path or cd, so anyone can rerun it in their own checkout>): rewording cannot answer a command. ` +
       `If it holds, post one message naming the claim and the command you ran, and do not challenge. If nothing in it is checkable, post that in one sentence. ` +
+      // the work ledger (src/hub/work.ts) saw no web call behind this proposal: the room answered from the prompt and the repo
+      (proposal.offline
+        ? `The hub counted that no seat in this room made a web call before this proposal. So also find ONE source outside this repository (a paper, docs, another system; WebSearch / WebFetch) that bears on its main claim, and post its URL with one line on what it says. If it contradicts the claim, file that as the challenge instead, quoting the clause and citing the URL. `
+        : "") +
       `Then leave_room: the proposal waits for you only a few minutes, so report within five.`;
     try {
       const [rec] = this.request({ room, count: 1, name: `fresh-challenger-${firedHere + 1}`, requestedBy: "hub", requestedByShown: "the hub", brief, fresh: true, ...(proposal.cwd ? { cwd: proposal.cwd } : {}) });

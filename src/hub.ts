@@ -21,7 +21,7 @@ import * as kick from "./hub/kick.js";
 import * as output from "./hub/output.js";
 import * as liveness from "./hub/liveness.js";
 import * as persistence from "./hub/persistence.js";
-import { barrenClaims, evidenceGaps, evidenceReceipt } from "./hub/work.js";
+import { barrenClaims, evidenceGaps, evidenceReceipt, offline } from "./hub/work.js";
 
 /** The hub's ask to the owners of claims with no findings; its presence in the log is the receipt that the one refusal was given. */
 const BARREN_ASK = "is ready to propose and your claim has no findings on the board";
@@ -31,7 +31,7 @@ export class Hub {
   /** Fired on every room state transition (setState); the consolidator spawn listens for "concluded". */
   onRoomState?: (room: string, state: RoomState) => void;
   /** A proposal was opened (not amended). The spawner's fresh challenger hangs off this; a throwing listener never fails the propose. */
-  onProposalOpened?: (room: string, proposal: { id: string; text: string; by: string; cwd?: string }) => void;
+  onProposalOpened?: (room: string, proposal: { id: string; text: string; by: string; cwd?: string; offline?: boolean }) => void;
   /** Observed waits only: deliberately not restored from historical room logs. */
   private readonly boardManifestObserved = new WeakMap<Room, BoardManifestCounters>();
   /** @internal */ readonly dataDir?: string;
@@ -1819,7 +1819,8 @@ export class Hub {
     try {
       // the proposer's worktree, when its launcher named one: a checker in another tree checks a different code state
       const cwd = this.workspaceOf(p)?.worktree;
-      this.onProposalOpened?.(roomName, { id: proposal.id, text, by: p.name, ...(cwd ? { cwd } : {}) });
+      const noWeb = offline(voters);
+      this.onProposalOpened?.(roomName, { id: proposal.id, text, by: p.name, ...(cwd ? { cwd } : {}), ...(noWeb === undefined ? {} : { offline: noWeb }) });
     } catch (e) {
       this.post(room, "system", undefined, `Proposal listener failed: ${(e as Error).message}`);
     }

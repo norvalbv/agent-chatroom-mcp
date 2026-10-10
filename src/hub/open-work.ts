@@ -9,17 +9,20 @@ export const IDLE_HINT = "No new messages yet. Call wait_for_messages again.";
 export interface OpenWork {
   /** review_owed: the hub assigned this seat the review and it has written no verify/*. unreviewed: nobody has, and the
    * assigned reviewer is gone (or this seat is the verifier). own_claim_empty: this seat's claim has nothing behind it.
-   * claim_orphaned: the owner left and this seat may take it over now. help_wanted: an open help/* or join-request/*. */
-  kind: "review_owed" | "unreviewed" | "own_claim_empty" | "claim_orphaned" | "help_wanted";
+   * claim_orphaned: the owner left and this seat may take it over now. help_wanted: an open help/* or join-request/*.
+   * idea_unclaimed: an idea/<slug> nobody holds claim/<slug> for, shown only to a seat with nothing of its own in flight. */
+  kind: "review_owed" | "unreviewed" | "own_claim_empty" | "claim_orphaned" | "help_wanted" | "idea_unclaimed";
   key: string;
   owner?: string;
 }
 
 /** Board prefixes that are requests or bookkeeping, not work a claim's owner has produced. */
-const NOT_WORK = ["claim/", "help/", "join-request/", "inbox/", "hold/", "verify/"];
+const NOT_WORK = ["claim/", "help/", "join-request/", "inbox/", "hold/", "verify/", "idea/"];
 /** Board prefixes where an entry about an area is not a review of it. */
 const NOT_REVIEW = ["claim/", "help/", "join-request/", "inbox/", "hold/", "handoff/", "draft/"];
 const HINT_ITEMS = 3;
+/** An idea its author has already ruled on, by the words this room's board used (review/unclaimed-ideas). */
+const IDEA_SETTLED = /^\s*(rejected|dropped|withdrawn|built|merged|done)\b/i;
 
 /** The last idle wait each seat was handed: when, and how much it had said by then. */
 const lastIdle = new WeakMap<Participant, { at: number; said: number }>();
@@ -114,8 +117,13 @@ export function openWork(hub: Hub, room: Room, p: Participant, idle = true): Ope
   const hasWork = (name: string) => entries.some(([k, e]) => e.by === name && !NOT_WORK.some((pre) => k.startsWith(pre)));
   const reviewed = (claimKey: string, claim: BoardEntry) => reviewedClaim(room, claimKey, claim);
 
-  const review: OpenWork[] = [], own: OpenWork[] = [], orphaned: OpenWork[] = [], help: OpenWork[] = [];
+  const review: OpenWork[] = [], own: OpenWork[] = [], orphaned: OpenWork[] = [], help: OpenWork[] = [], ideas: OpenWork[] = [];
   for (const [k, e] of entries) {
+    if (k.startsWith("idea/")) {
+      const claim = room.board.get(`claim/${area(k)}`);
+      if ((!claim?.text.trim() || claimReleased(claim)) && !IDEA_SETTLED.test(e.text) && !settled(e)) ideas.push({ kind: "idea_unclaimed", key: k, owner: shownName(e.by) });
+      continue;
+    }
     if (k.startsWith("help/") || k.startsWith("join-request/")) {
       if (e.by !== p.name) help.push({ kind: "help_wanted", key: k, owner: shownName(e.by) });
       continue;
@@ -136,7 +144,10 @@ export function openWork(hub: Hub, room: Room, p: Participant, idle = true): Ope
       review.push({ kind: "unreviewed", key: k, owner: shownName(e.by) });
     }
   }
-  return [...review, ...orphaned, ...own, ...help];
+  // the request side of a blackboard (sources/2510.01285): an unbuilt idea is work only for a seat free to take it, so a
+  // seat with a live claim of its own is not pulled off it
+  const free = !entries.some(([k, e]) => k.startsWith("claim/") && e.by === p.name && !claimReleased(e) && !settled(e));
+  return [...review, ...orphaned, ...own, ...help, ...(free ? ideas : [])];
 }
 
 function describe(w: OpenWork): string {
@@ -147,6 +158,7 @@ function describe(w: OpenWork): string {
     case "claim_orphaned": return `${w.owner} left holding ${w.key}: you may take it over now (board_set ${w.key}; read handoff/${slug} first if it exists)`;
     case "own_claim_empty": return `your ${w.key} has nothing on the board behind it: post what you have found or built, or release the claim`;
     case "help_wanted": return `${w.owner} asked for help in ${w.key} (board_get it)`;
+    case "idea_unclaimed": return `${w.owner}'s ${w.key} is unbuilt and nobody holds claim/${slug}: board_get it, then claim/${slug} and start, or say in one line why it should not be built`;
   }
 }
 

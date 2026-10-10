@@ -24,6 +24,8 @@ export interface DevRunSummary {
   speaking_seats: number;
   messages: number;
   conclusion?: string;
+  /** seat-reported spend of the dev room, when the built commit reports usage (live-usage); absent means unknown, not $0 */
+  cost_usd?: number;
   read_at: string;
 }
 
@@ -157,7 +159,7 @@ export class DevRuns {
     r.ended_at = new Date().toISOString();
     await this.host.stop(r).catch(() => {});
     try { this.opts.persist(r); } catch {} // a log that went away must not turn the end of a run into a crash
-    const rooms = (r.rooms ?? []).map((x) => `${x.room} ${x.state ?? "?"}, ${x.speaking_seats}/${x.agent_seats} agent seats spoke, ${x.messages} messages`).join("; ");
+    const rooms = (r.rooms ?? []).map((x) => `${x.room} ${x.state ?? "?"}, ${x.speaking_seats}/${x.agent_seats} agent seats spoke, ${x.messages} messages${x.cost_usd !== undefined ? `, $${x.cost_usd.toFixed(2)} seat-reported` : ""}`).join("; ");
     try { this.opts.announce(r.room, `dev run ${r.id} (${r.requested_by}, commit ${r.commit.slice(0, 12)}) ${r.state}${r.error ? `: ${r.error}` : ` with exit ${r.exit_code}`}. ${rooms ? `What this hub saw: ${rooms}.` : "No room was seen."} Logs: ${r.dir} (run-data/, run-swarms/)`); } catch {}
   }
 
@@ -183,12 +185,12 @@ export class DevRuns {
       const seen: DevRunSummary[] = [];
       for (const name of names) {
         const b = (await this.host.fetchJson(`http://127.0.0.1:${r.port}/rooms/${encodeURIComponent(name)}`)) as {
-          state?: string; message_count?: number; conclusion?: { text?: string } | string | null; participants?: { agent?: string; messages?: number; output?: Record<string, number> }[];
+          state?: string; message_count?: number; usage?: { cost_usd?: number } | null; conclusion?: { text?: string } | string | null; participants?: { agent?: string; messages?: number; output?: Record<string, number> }[];
         };
         const agents = (b.participants ?? []).filter((x) => x.agent !== "human");
         // a seat that only wrote to the board, challenged or proposed did act: chat alone undercounted (dev run dr_mv254zpq0)
         const concl = typeof b.conclusion === "string" ? b.conclusion : b.conclusion?.text;
-        seen.push({ room: name, state: b.state, agent_seats: agents.length, speaking_seats: agents.filter(acted).length, messages: b.message_count ?? 0, ...(concl ? { conclusion: concl.slice(0, 300) } : {}), read_at: new Date().toISOString() });
+        seen.push({ room: name, state: b.state, agent_seats: agents.length, speaking_seats: agents.filter(acted).length, messages: b.message_count ?? 0, ...(concl ? { conclusion: concl.slice(0, 300) } : {}), ...(typeof b.usage?.cost_usd === "number" ? { cost_usd: b.usage.cost_usd } : {}), read_at: new Date().toISOString() });
       }
       if (seen.length) {
         const changed = JSON.stringify(seen.map(({ read_at: _, ...x }) => x)) !== JSON.stringify((r.rooms ?? []).map(({ read_at: _, ...x }) => x));

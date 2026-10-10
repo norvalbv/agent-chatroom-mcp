@@ -177,6 +177,7 @@ export const offlineScripts = [
   'seat-scorecard-regression.ts',
   'result-fleet-regression.ts',
   'reviewer-assignment-regression.ts',
+  'reviewer-recruit-regression.ts',
   'rq1-stats.test.ts',
   'rq1-usage-budget-regression.ts',
   'seat-cost-estimate.test.ts',

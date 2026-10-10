@@ -75,7 +75,7 @@ while (Date.now() < deadline && !filed) {
 const log = (await (await fetch(`${HTTP}/rooms/${ROOM}/messages`)).json()) as { seq: number; ts: string; kind: string; from: { name: string }; content: string }[];
 for (const m of log) console.log(`#${m.seq} ${m.ts.slice(11, 19)} ${m.from.name} (${m.kind}): ${m.content.slice(0, 700).replace(/\n/g, " ")}`);
 // an empty board any seat can see for itself; that the claimants ran nothing is known only from the hub's count
-const cited = !!filed && /hub counted|counted by the hub|(no|zero) local tool calls?/i.test(filed.objection);
+const cited = !!filed && /hub counted|counted by the hub|hub's (receipt|count|ledger)|(no|zero|0) local tool calls?/i.test(filed.objection);
 console.log(filed ? `\nreviewer-1 challenged: ${filed.objection}\ncommand: ${filed.command ?? "(none)"}` : "\nreviewer-1 filed no challenge");
 console.log(cited ? "WORK LEDGER PROBE OK: the challenge cites the hub's count" : "WORK LEDGER PROBE: the challenge does not cite the hub's count");
 server.kill();

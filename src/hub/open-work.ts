@@ -34,6 +34,38 @@ export function idleAgain(p: Participant): boolean {
   return !(p.activity ?? []).some((a) => Date.parse(a.at) > prev.at && !/wait_for_messages/.test(a.tool));
 }
 
+/** How many idle waits running (about one a minute) before a seat with nothing open is offered the door; 0 turns it off.
+ * src/seat.ts hands a harnessed seat off after handoffIdleTurns with nothing actionable; a Claude Code seat has no
+ * harness, so the hub is the only place that can say it. */
+export const idlePolicy = { leaveWaits: Number(process.env.CHATROOM_IDLE_LEAVE_WAITS ?? 8) };
+
+const streaks = new WeakMap<Participant, number>();
+
+/** Length of this seat's current run of idle waits, given idleAgain()'s verdict for this one. Call once per idle wait. */
+export function idleStreak(p: Participant, again: boolean): number {
+  const n = again ? (streaks.get(p) ?? 1) + 1 : 1;
+  streaks.set(p, n);
+  return n;
+}
+
+/** Whether this idle wait carries the offer: every leaveWaits-th of a run, to a worker with nothing open while no
+ * proposal is open (a vote is owed or about to be) and never to the verifier, lead or chair, whom the room needs at the end. */
+export function offersLeave(room: Room, p: Participant, streak: number, work: OpenWork[]): boolean {
+  const n = idlePolicy.leaveWaits;
+  if (!n || work.length || streak < n || streak % n !== 0 || room.state !== "open" || p.agent === "human") return false;
+  if (p.role === "verifier" || p.role === "lead" || p.role === "chair") return false;
+  return ![...room.proposals.values()].some((pr) => pr.status === "open");
+}
+
+export function leaveHint(room: Room, p: Participant, streak: number): string {
+  const mine = [...room.board.entries()].filter(([k, e]) => k.startsWith("claim/") && e.by === p.name && e.text.trim() && !claimReleased(e)).map(([k]) => k);
+  const handoff = mine.length ? `write handoff/${mine[0].slice("claim/".length)} (what is done, where it is, what is not), then leave_room with a reason`
+    : "leave_room with a reason saying what you finished and where it is";
+  return `No new messages on ${streak} waits running, and the hub sees nothing open for you. Each empty wait costs a full turn. ` +
+    `If your work is on the board, ${handoff}: leaving blocks nothing here and a successor can be recruited if you are needed. ` +
+    "If you are waiting on someone, say whom and for what in one line, so the room can see it, and carry on waiting.";
+}
+
 /** `idle`: the seat was already idle on its previous wait (idleAgain). Only then is its own claim with nothing behind it
  * listed, since that is also what a builder between commits looks like. */
 export function openWork(hub: Hub, room: Room, p: Participant, idle = true): OpenWork[] {

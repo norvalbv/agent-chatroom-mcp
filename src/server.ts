@@ -16,7 +16,7 @@ import { z } from "zod";
 import { Hub, HubError, ROLES, VERIFY_HEAD_EXAMPLE, VERIFY_HEAD_RULE, type CallOutcome } from "./hub.js";
 import type { Spawner } from "./spawner.js";
 import { createWaitView } from "./hub/wait-view.js";
-import { IDLE_HINT, idleAgain, idleHint, newlyNamed, openWork, stillOpenHint } from "./hub/open-work.js";
+import { IDLE_HINT, idleAgain, idleHint, idleStreak, leaveHint, newlyNamed, offersLeave, openWork, stillOpenHint } from "./hub/open-work.js";
 
 export const DEFAULT_WAIT_MS = 55_000; // gaps over 55s were 62-77% of sub-room wall time; wait() wakes on events so latency is unchanged
 export const MAX_WAIT_MS = 55_000; // stay under typical MCP client tool timeouts (Codex 60s)
@@ -453,7 +453,12 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
                               ? IDLE_HINT
                               : undefined);
       // an idle seat (nothing delivered, nothing owed) is told what the board says is open for it
-      const idleWork = hint === IDLE_HINT ? openWork(hub, r, p, idleAgain(p)) : [];
+      const again = hint === IDLE_HINT && idleAgain(p);
+      const idleWork = hint === IDLE_HINT ? openWork(hub, r, p, again) : [];
+      // a worker that has polled long enough with nothing open is offered the door, as src/seat.ts does for harnessed seats
+      const streak = hint === IDLE_HINT ? idleStreak(p, again) : 0;
+      const leaveOffer = streak && offersLeave(r, p, streak, idleWork) ? leaveHint(r, p, streak) : undefined;
+      if (leaveOffer) hub.persist({ type: "open_work", room: r.name, pid: p.id, ts: new Date().toISOString(), items: [`idle_leave_offered:${streak}`] });
       // the full list travels only when it differs from what this seat was last shown; otherwise one short line
       const named = hint === IDLE_HINT ? newlyNamed(p, idleWork) : null;
       if (named) hub.persist({ type: "open_work", room: r.name, pid: p.id, ts: new Date().toISOString(), items: named });
@@ -463,7 +468,7 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
       hub.observeBoardManifest(r, board); // compact since-process-start observer; legacy recording is in assembly
       // the hint goes first: it is the one line a weaker model must not lose to a clamp
       return compactWait(p, {
-        hint: toolsRegainedNote || moreNote ? toolsRegainedNote + (hint ? `${hint} ` : "") + moreNote : named ? idleHint(idleWork) : idleWork.length ? stillOpenHint(idleWork) : hint,
+        hint: toolsRegainedNote || moreNote ? toolsRegainedNote + (hint ? `${hint} ` : "") + moreNote : named ? idleHint(idleWork) : idleWork.length ? stillOpenHint(idleWork) : (leaveOffer ?? hint),
         messages: msgs.map((m) => fmtWait(hub, r, p, m)),
         remaining,
         ...(named ? { open_work: idleWork } : {}),

@@ -379,6 +379,8 @@ export interface Room {
   lastBoardEventVersion?: number;
   /** human message ids the propose-gate has already warned about (once each) */
   humanWarned: Set<string>;
+  /** propose was refused once with the unattacked findings and unanswered attacks (never twice). */
+  scrutinyWarned?: boolean;
   /** who has been asked to answer each human message, so three agents do not all say hello */
   responders: Map<string, { pid: string; at: number }>;
   /** open and settled votes to remove a participant, keyed by target pid */

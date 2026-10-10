@@ -70,6 +70,29 @@ function claimsInFlight(room: Room, p: Participant): string[] {
     !claimReleased(e) && !settled(e) && !reviewedClaim(room, k, e)).map(([k]) => k);
 }
 
+/** Enumerated items in a chat message: "(1) ... (2) ..." or lines starting "1." / "2)". Two or more distinct numbers
+ * make a list; one marker is a reference ("point (2) above"). */
+export function listedItems(content: string): number {
+  const nums = new Set<string>();
+  for (const m of content.matchAll(/\((\d{1,2})\)/g)) nums.add(m[1]);
+  for (const m of content.matchAll(/(?:^|\n)\s*(\d{1,2})[.)]\s/g)) nums.add(m[1]);
+  return nums.size >= 2 ? nums.size : 0;
+}
+
+const nudgedAt = new WeakMap<Participant, string>();
+
+/** The line a list in chat gets back: once, then not again until the seat has written an idea/* entry since. A list left
+ * in chat is owed by nobody; on idea/<slug> it is named to free seats until someone claims it (idea_unclaimed). */
+export function ideaListHint(room: Room, p: Participant, content: string, quiet: boolean): string | undefined {
+  const n = quiet || p.agent === "human" || room.state !== "open" ? 0 : listedItems(content);
+  if (!n) return undefined;
+  const last = nudgedAt.get(p);
+  if (last && ![...room.board.entries()].some(([k, e]) => k.startsWith("idea/") && e.by === p.name && e.updatedAt > last)) return undefined;
+  nudgedAt.set(p, new Date().toISOString());
+  return `You listed ${n} items. Each one you are not building now goes on idea/<slug> (one entry per idea: the flaw, the design, the evidence), ` +
+    "so others can attack it on attack/idea/<slug> and a free seat can claim it; a list left in chat is owed by nobody.";
+}
+
 /** How many idle waits running (about one a minute) before a seat with nothing open is offered the door; 0 turns it off.
  * src/seat.ts hands a harnessed seat off after handoffIdleTurns with nothing actionable; a Claude Code seat has no
  * harness, so the hub is the only place that can say it. */

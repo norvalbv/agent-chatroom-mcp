@@ -19,7 +19,7 @@ import { Hub, HubError, ROLES, VERIFY_HEAD_EXAMPLE, VERIFY_HEAD_RULE, parseVerif
 const VERIFY_GAP_PROSE = /not verified|did not (run|verify|exercise|watch|drive|check|test)|could not (run|verify|test)|not (run|exercised|watched|driven|checked) by me|untested|not tested|author-only|rests on the author/i;
 import type { SpawnedAgent, Spawner } from "./spawner.js";
 import { createWaitView } from "./hub/wait-view.js";
-import { IDLE_HINT, idleAgain, idleHint, idleStreak, leaveHint, newlyNamed, offersLeave, openWork, stillOpenHint } from "./hub/open-work.js";
+import { IDLE_HINT, ideaListHint, idleAgain, idleHint, idleStreak, leaveHint, listedItems, newlyNamed, offersLeave, openWork, stillOpenHint } from "./hub/open-work.js";
 
 /** The branch and worktree of each write recruit, for the reply of the call that spawned them; nothing for read-only recruits. */
 const workspaces = (recs: SpawnedAgent[]) => {
@@ -330,8 +330,12 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
     },
     guard("send_message", ({ room, content, reply_to, force, quiet, surface, participant_id }) => {
       const r = hub.getRoom(room);
-      const m = hub.send(room, pid(room, participant_id), content, reply_to, force, quiet, surface);
-      return { sent: hub.fmt(r, { ...m, content: "" }).trimEnd(), id: m.id, seq: m.seq };
+      const id = pid(room, participant_id);
+      const m = hub.send(room, id, content, reply_to, force, quiet, surface);
+      // a list of ideas left in chat is owed by nobody: say where each one goes (once, until the seat writes an idea/*)
+      const listHint = ideaListHint(r, hub.requireParticipant(r, id), content, !!quiet);
+      if (listHint) hub.persist({ type: "open_work", room: r.name, pid: id, ts: new Date().toISOString(), items: [`idea_list_nudged:${listedItems(content)}`] });
+      return { sent: hub.fmt(r, { ...m, content: "" }).trimEnd(), id: m.id, seq: m.seq, ...(listHint ? { hint: listHint } : {}) };
     }),
   );
 

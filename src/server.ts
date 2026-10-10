@@ -19,7 +19,7 @@ import { Hub, HubError, ROLES, VERIFY_HEAD_EXAMPLE, VERIFY_HEAD_RULE, parseVerif
 const VERIFY_GAP_PROSE = /not verified|did not (run|verify|exercise|watch|drive|check|test)|could not (run|verify|test)|not (run|exercised|watched|driven|checked) by me|untested|not tested|author-only|rests on the author/i;
 import type { SpawnedAgent, Spawner } from "./spawner.js";
 import { createWaitView } from "./hub/wait-view.js";
-import { IDLE_HINT, idleAgain, idleHint, idleStreak, leaveHint, newlyNamed, offersLeave, openWork, stillOpenHint } from "./hub/open-work.js";
+import { IDLE_HINT, ideaListHint, idleAgain, idleHint, idleStreak, leaveHint, listedItems, newlyNamed, offersLeave, openWork, stillOpenHint } from "./hub/open-work.js";
 
 /** The branch and worktree of each write recruit, for the reply of the call that spawned them; nothing for read-only recruits. */
 const workspaces = (recs: SpawnedAgent[]) => {
@@ -330,8 +330,12 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
     },
     guard("send_message", ({ room, content, reply_to, force, quiet, surface, participant_id }) => {
       const r = hub.getRoom(room);
-      const m = hub.send(room, pid(room, participant_id), content, reply_to, force, quiet, surface);
-      return { sent: hub.fmt(r, { ...m, content: "" }).trimEnd(), id: m.id, seq: m.seq };
+      const id = pid(room, participant_id);
+      const m = hub.send(room, id, content, reply_to, force, quiet, surface);
+      // a list of ideas left in chat is owed by nobody: say where each one goes (once, until the seat writes an idea/*)
+      const listHint = ideaListHint(r, hub.requireParticipant(r, id), content, !!quiet);
+      if (listHint) hub.persist({ type: "open_work", room: r.name, pid: id, ts: new Date().toISOString(), items: [`idea_list_nudged:${listedItems(content)}`] });
+      return { sent: hub.fmt(r, { ...m, content: "" }).trimEnd(), id: m.id, seq: m.seq, ...(listHint ? { hint: listHint } : {}) };
     }),
   );
 
@@ -346,11 +350,16 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
     },
     guard("submit_opening", ({ room, content, participant_id }) => {
       const r = hub.getRoom(room);
-      const out = hub.submitOpening(room, pid(room, participant_id), content);
+      const id = pid(room, participant_id);
+      const out = hub.submitOpening(room, id, content);
       const mins = Math.round(r.nudgeAfterMs / 60000);
+      // openings are where seats first list ideas (dev room swarm-013200-opmd-room): the same pointer as a chat list
+      const listHint = ideaListHint(r, hub.requireParticipant(r, id), content, false);
+      if (listHint) hub.persist({ type: "open_work", room: r.name, pid: id, ts: new Date().toISOString(), items: [`idea_list_nudged:${listedItems(content)}`] });
+      const held = `Openings are revealed when everyone has submitted, or ${mins} min after the first opening if the rest never arrive (the hub reveals what it has; chat does not delay it). Chat is not blocked meanwhile: wait_for_messages, and speak if you have something to say.`;
       return out.revealed
-        ? out
-        : { ...out, hint: `Openings are revealed when everyone has submitted, or ${mins} min after the first opening if the rest never arrive (the hub reveals what it has; chat does not delay it). Chat is not blocked meanwhile: wait_for_messages, and speak if you have something to say.` };
+        ? { ...out, ...(listHint ? { hint: listHint } : {}) }
+        : { ...out, hint: listHint ? `${listHint} ${held}` : held };
     }),
   );
 

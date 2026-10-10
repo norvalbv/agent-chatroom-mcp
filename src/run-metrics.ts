@@ -276,6 +276,8 @@ export function parseRoomLog(text: string): Ev[] {
   return text.split("\n").filter(Boolean).flatMap((l) => { try { return [JSON.parse(l)]; } catch { return []; } });
 }
 
+/** input tokens including cache reads and writes (Anthropic's input_tokens excludes them; OTel's gen_ai.usage.input_tokens includes them) */
+const tokens = (u: NonNullable<SeatMetrics["usage"]>) => (u.input_tokens ?? 0) + (u.cache_read_input_tokens ?? 0) + (u.cache_creation_input_tokens ?? 0);
 const pct = (x: number | undefined) => (x === undefined ? "?" : `${Math.round(x * 100)}%`);
 const at = (m: number | undefined, what: string) => (m === undefined ? `no ${what}` : `${what} ${m} min`);
 
@@ -287,11 +289,11 @@ export function renderMetrics(m: RunMetrics): string {
     (m.webSeats === undefined ? "no work ledger in this log, so reads, searches and web calls are unknown. " : `${m.webSeats} of ${m.seats.length} seats made a web call. `) +
     (m.usage ? `Seat-reported usage: $${m.usage.cost_usd.toFixed(2)}, ${m.usage.input_tokens} input + ${m.usage.output_tokens} output tokens from ${m.usage.seatsWithUsage} of ${m.seats.length} seats (the rest unknown). ` : "No seat reported usage to the hub. ") +
     (m.citedFrom === "none" ? "No proposal yet, so no citation credit.\n\n" : `Credit read from the ${m.citedFrom}${m.uncited.length ? `; findings never cited: ${m.uncited.join(", ")}` : ""}.\n\n`) +
-    "Work is distinct targets (files, patterns, commands, web hosts), not tool calls. Polling is time in wait_for_messages over time in the room; idle is the part that returned nothing new.\n\n" +
-    "| seat | role | read | search | web | run | edit | hub calls | polling (idle) | cost | recruits | proposals | challenges | verifies | votes | findings | cited |\n|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|\n";
+    "Work is distinct targets (files, patterns, commands, web hosts), not tool calls. Polling is time in wait_for_messages over time in the room; idle is the part that returned nothing new. Model calls and tokens are the seat's own report; tokens in include cache reads and writes.\n\n" +
+    "| seat | role | read | search | web | run | edit | hub calls | polling (idle) | model calls | tokens in/out | cost | recruits | proposals | challenges | verifies | votes | findings | cited |\n|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|\n";
   for (const s of m.seats) {
     const calls = Object.values(s.calls).reduce((a, b) => a + b, 0);
-    text += `| ${s.name} | ${s.role} | ${CLASSES.map((c) => s.work?.[c] ?? "?").join(" | ")} | ${calls} | ${pct(s.pollingShare)} (${pct(s.idlePollingShare)}) | ${s.usage?.cost_usd === undefined ? "?" : `$${s.usage.cost_usd.toFixed(2)}`} | ${s.recruits} | ${s.proposals} | ${s.challenges} | ${s.verifies} | ${s.votes} | ${s.findings} | ${s.cited.join(", ") || "-"} |\n`;
+    text += `| ${s.name} | ${s.role} | ${CLASSES.map((c) => s.work?.[c] ?? "?").join(" | ")} | ${calls} | ${pct(s.pollingShare)} (${pct(s.idlePollingShare)}) | ${s.usage?.requests ?? "?"} | ${s.usage ? `${tokens(s.usage)}/${s.usage.output_tokens ?? "?"}` : "?"} | ${s.usage?.cost_usd === undefined ? "?" : `$${s.usage.cost_usd.toFixed(2)}`} | ${s.recruits} | ${s.proposals} | ${s.challenges} | ${s.verifies} | ${s.votes} | ${s.findings} | ${s.cited.join(", ") || "-"} |\n`;
   }
   return `${text}\n`;
 }

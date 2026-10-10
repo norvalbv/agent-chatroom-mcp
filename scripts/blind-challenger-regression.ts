@@ -78,6 +78,19 @@ for (const secret of ["SECRET-OPENING", "SECRET-CHAT", "SECRET-BOARD", "evidence
 }
 assert.match(joined.hint, /fresh challenger/i, "the hint says why it sees so little");
 
+// ---------- 2b. ...and its waits keep it that way (review/blind-challenger, claude-opus-5-5-5: the first wait leaked the tally) ----------
+const w1 = await c("wait_for_messages", { room: R, timeout_ms: 0 });
+const w1s = JSON.stringify(w1);
+for (const secret of ["SECRET-OPENING", "SECRET-CHAT", "SECRET-BOARD", "evidence/bench", "is vague", "tally", "You have voted", "waiting_on", "blocked_by"]) {
+  assert.ok(!w1s.includes(secret), `the fresh challenger's first wait does not show ${secret}`);
+}
+assert.ok(w1s.includes(pr.id) && w1s.includes("writes are unchanged"), "its wait still carries the proposal it must check");
+await b("send_message", { room: R, content: "SECRET-LATER: I agree with it too", force: true });
+await b("send_message", { room: R, content: "@fresh-challenger-1 the bench script is scripts/bench.ts", force: true });
+const w2s = JSON.stringify(await c("wait_for_messages", { room: R, timeout_ms: 0 }));
+assert.ok(!w2s.includes("SECRET-LATER"), "a later message that is not addressed to it is not pushed to it");
+assert.ok(w2s.includes("the bench script is scripts/bench.ts"), "a message addressed to it still is");
+
 // ---------- 3. Anyone else joining late still gets the full view ----------
 const d = await connect("d");
 const late = JSON.stringify(await d("join_room", { room: R, name: "late-seat", agent: "claude" }));

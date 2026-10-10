@@ -468,12 +468,16 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
                               : undefined);
       // Snapshot AFTER the poll wake: concurrent waits serialize their per-participant cursor here.
       // boardManifest records its own telemetry; assembly happens here, after the poll wake.
-      const board = hub.boardManifest(room, id, follow);
-      hub.observeBoardManifest(r, board); // compact since-process-start observer; legacy recording is in assembly
+      // a fresh challenger's waits keep the cut its join made: the proposal, what is addressed to it, nothing about who agreed
+      const blind = hub.freshChallengeFor(r, p.name);
+      const board = blind ? {} : hub.boardManifest(room, id, follow);
+      if (!blind) hub.observeBoardManifest(r, board); // compact since-process-start observer; legacy recording is in assembly
+      const shownMsgs = blind ? msgs.filter((m) => m.mentions?.includes(id!) || m.from.agent === "human") : msgs;
+      const blindHint = blind && (hub.attentionHint(r, p) ?? `You are the fresh challenger for ${blind.id}: check one claim of the text in open_proposal, report it (challenge with a command, or one message), then leave_room. The room's other messages are not pushed to you.`);
       // the hint goes first: it is the one line a weaker model must not lose to a clamp
       return compactWait(p, {
-        hint: toolsRegainedNote || moreNote ? toolsRegainedNote + (hint ? `${hint} ` : "") + moreNote : hint,
-        messages: msgs.map((m) => fmtWait(hub, r, p, m)),
+        hint: blindHint || (toolsRegainedNote || moreNote ? toolsRegainedNote + (hint ? `${hint} ` : "") + moreNote : hint),
+        messages: shownMsgs.map((m) => fmtWait(hub, r, p, m)),
         remaining,
         // a capped page has not reached the end of the log: next_seq is the cursor, not the latest seq
         next_seq: remaining ? p.lastSeenSeq : (r.messages.at(-1)?.seq ?? since),
@@ -484,7 +488,9 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
         humans_present: hub.activeParticipants(r).filter((x) => x.agent === "human").map((x) => x.name),
         openings: r.expectedParticipants && !r.openingsRevealed ? { submitted: r.openings.size, expected: r.expectedParticipants, waiting_on: hub.openingsWaitingOn(r), revealed: false, chat_blocked: false, deadline_min_after_first: Math.round(r.nudgeAfterMs / 60000) } : undefined,
         unanswered_human: human && resp!.mine ? { id: human.id, name: hub.shown(r, human.from), text: human.content, you_answer: true } : human ? { name: hub.shown(r, human.from), responder: resp!.who, you_answer: false } : null,
-        open_proposal: openView
+        open_proposal: blind
+          ? { id: blind.id, version: blind.version, text: blind.text }
+          : openView
           ? { id: openView.id, version: openView.version, by: openView.by, chars: openView.chars, tally: openView.tally, waiting_on: openView.waiting_on, needs_challenge: openView.needs_challenge, blocked_by: openView.blocked_by, challenges: challengesView, ...("text" in openView ? { text: openView.text } : { text_omitted: openView.text_omitted }) }
           : null,
         leaving_would_block: block ? block.reason : false,

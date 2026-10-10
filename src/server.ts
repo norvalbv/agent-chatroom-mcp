@@ -111,7 +111,7 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
       let outcome: CallOutcome = "error";
       // every hub call is a step too (board_get, vote): the People tab shows it without a room turn. Not a wait: it
       // already refreshes last_seen_at when it returns, and logging idle waits would push real work out of the feed
-      if (room && participant && tool !== "wait_for_messages") try { hub.heartbeat(room, participant, { tool }); } catch { /* departed or unknown: the call itself reports it */ }
+      if (room && participant && tool !== "wait_for_messages") try { hub.heartbeat(room, participant, { tool, hub: true }); } catch { /* departed or unknown: the call itself reports it */ }
       try {
         // a seat removed by kick vote is told so on its very next call for that room, reads included. Every id this
         // connection holds there is checked, not only the resolved actor: a connection owning target+alias resolves

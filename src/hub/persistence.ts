@@ -56,6 +56,11 @@ export function replay(hub: Hub) {
       }
       recordReplyMetricEvent(hub, ev);
       switch (ev.type) {
+        case "work": {
+          const p = hub.rooms.get(ev.room)?.participants.get(ev.pid);
+          if (p) p.work = { ...p.work, [ev.cls]: (p.work?.[ev.cls] ?? 0) + 1 };
+          break;
+        }
         case "attention": {
           const p = hub.rooms.get(ev.room)?.participants.get(ev.pid);
           if (p) Object.assign(p, { lastSeenSeq: ev.lastSeenSeq, withheld: ev.withheld,

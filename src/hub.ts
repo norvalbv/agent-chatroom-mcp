@@ -20,6 +20,7 @@ import * as board from "./hub/board.js";
 import * as kick from "./hub/kick.js";
 import * as liveness from "./hub/liveness.js";
 import * as persistence from "./hub/persistence.js";
+import { evidenceReceipt } from "./hub/work.js";
 
 export class Hub {
   readonly rooms = new Map<string, Room>();
@@ -189,6 +190,7 @@ export class Hub {
         last_active_at: p.lastActiveAt,
         last_seen_at: this.lastSeen(p),
         working: p.working ?? null,
+        ...(p.work ? { work: p.work } : {}),
         liveness: (() => {
           const age = (at: string) => Math.max(0, Math.floor((observedAt - Date.parse(at)) / 1000));
           const age_seconds = age(this.lastSeen(p));
@@ -1647,9 +1649,12 @@ export class Hub {
       updatedAt: now(),
       snapshot: voters.map((v) => v.id),
     };
+    const evidence = evidenceReceipt(room, voters, (v) => this.shown(room, v));
+    if (evidence) proposal.evidence = evidence;
     room.proposals.set(proposal.id, proposal);
     this.persist({ type: "proposal", proposal });
     this.post(room, "proposal", p, `PROPOSAL ${proposal.id}: ${text}`, { proposalId: proposal.id });
+    if (evidence) this.post(room, "system", undefined, `${evidence} Counted by the hub, not claimed by the proposer; a challenger may name a seat or an area with nothing behind it.`);
     this.evaluate(room, proposal); // a solo room concludes immediately
     return proposal;
   }
@@ -1909,6 +1914,7 @@ export class Hub {
       chars: pr.text.length,
       status: pr.status,
       created_at: pr.createdAt,
+      ...(pr.evidence ? { evidence: pr.evidence } : {}),
       tally,
       electorate: summary ?? null,
       // Dissent remains binding under the existing rules even when its author is not counted.
@@ -2187,7 +2193,7 @@ export class Hub {
       key: v.key, by: v.entry.by, path: v.head.refactor === true ? "refactor" : "fail_to_pass",
       base_commit: v.head.base_commit!, commit: v.head.commit!, ...(v.head.kind ? { kind: v.head.kind } : {}),
     };
-    room.conclusion = { text: pr.text, proposalId: pr.id, decidedAt: now(), version: pr.version, tally, electorate, unresolved_objections: unresolved, ...(verification ? { verification } : {}) };
+    room.conclusion = { text: pr.text, proposalId: pr.id, decidedAt: now(), version: pr.version, tally, electorate, unresolved_objections: unresolved, ...(verification ? { verification } : {}), ...(pr.evidence ? { evidence: pr.evidence } : {}) };
     this.persist({ type: "proposal", proposal: pr });
     this.setState(room, "concluded");
     if (room.nudgeTimer) clearTimeout(room.nudgeTimer);

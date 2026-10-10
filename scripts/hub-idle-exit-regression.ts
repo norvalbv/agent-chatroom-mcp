@@ -8,7 +8,9 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import * as env from "../src/env.js";
 
-const freePort = () => new Promise<number>((done) => { const s = createServer(); s.listen(0, "127.0.0.1", () => { const p = (s.address() as { port: number }).port; s.close(() => done(p)); }); });
+// PORT=<first of your range> makes the hubs take PORT, PORT+1, ... (seats on a shared machine keep to their own ports)
+let nextPort = Number(process.env.PORT) || 0;
+const freePort = () => new Promise<number>((done) => { const s = createServer(); s.listen(nextPort ? nextPort++ : 0, "127.0.0.1", () => { const p = (s.address() as { port: number }).port; s.close(() => done(p)); }); });
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 async function hub(idleMin?: string): Promise<{ port: number; child: ChildProcess; exited: () => boolean }> {
   const port = await freePort();

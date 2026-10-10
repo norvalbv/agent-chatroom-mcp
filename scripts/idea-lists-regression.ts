@@ -57,9 +57,20 @@ await a("board_set", { room, key: "idea/pitfall-memory", text: "Keep a per-repo 
 r = await a("send_message", { room, content: "Two more: (1) one. (2) two.", force: true });
 assert.match(r.hint ?? "", /2 items/, `after writing an idea/*, the next list is nudged again: ${JSON.stringify(r)}`);
 
+// 4b. Openings are where seats first list ideas (dev room swarm-013200-opmd-room: both seats' lists were in their
+// openings, so a chat-only nudge never fired). An opening with a list gets the same pointer.
+const room2 = "idea-lists-openings";
+const d = await seat("d"); const e2 = await seat("e");
+await d("join_room", { room: room2, name: "D", agent: "test", expected_participants: 2 });
+await e2("join_room", { room: room2, name: "E", agent: "test" });
+r = await d("submit_opening", { room: room2, content: "Ideas: (1) null input returns 'null'. (2) letters NFKD cannot split are dropped. (3) no separator option." });
+assert.match(r.hint ?? "", /3 items/, `an opening with a list is pointed at idea/*: ${JSON.stringify(r)}`);
+r = await e2("submit_opening", { room: room2, content: "Build the transliteration fix; it is the only one that loses data." });
+assert.doesNotMatch(r.hint ?? "", /items/, "an opening without a list is not");
+
 // 5. Each nudge is in the room log, so a room can be measured afterwards.
 const logged = (hub.replyMetricEvents.get(room) ?? []).filter((e) => (e.type as string) === "open_work").length;
-assert.equal(logged, 3, `three nudges logged: ${logged}`);
+assert.equal(logged, 3, `three nudges logged in the first room: ${logged}`);
 
 console.log("idea-lists-regression: OK");
 process.exit(0);

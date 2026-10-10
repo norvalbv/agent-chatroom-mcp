@@ -22,7 +22,7 @@ export type Event =
   | { type: "archive"; room: string; archived: boolean; by: string; ts: string }
   | { type: "board_manifest"; room: string; bytes: number; kind: "full" | "delta" | "empty" }
   | { type: "board"; room: string; key: string; entry: BoardEntry | null }
-  | { type: "amend"; room: string; proposalId: string; text: string; version: number; updatedAt?: string; commitsAddedAt?: string; votes: Proposal["votes"]; challenges?: Challenge[] }
+  | { type: "amend"; room: string; proposalId: string; text: string; version: number; updatedAt?: string; votes: Proposal["votes"]; challenges?: Challenge[] }
   | { type: "refusal"; room: string; tool: string; reason: string; ts?: string; participant?: string | null }
   | { type: "call_completion"; room: string; tool: string; outcome: CallOutcome; ts: string; participant: string | null }
   | { type: "kick_vote"; room: string; vote: KickVote };

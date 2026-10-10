@@ -78,21 +78,24 @@ export function citesCommit(text: string, commit: string | undefined): boolean {
   return hexTokens(text).some((t) => sameCommit(t, c));
 }
 
-function hexTokens(text: string): string[] {
-  return [...new Set(text.toLowerCase().match(/\b[0-9a-f]{7,64}\b/g) ?? [])];
+/** Every whole lowercase hex token of 7 to 40 characters, as git prints a sha. Deliberately wide: an all-digit sha is
+ * one (3.7% of 7-character abbreviations have no letter), so a count or a date is too. Used where a false positive is
+ * the safe side (one more check); an upper-case example such as 'ABCDEF1' is not a sha anyone pasted and is not one. */
+export function hexTokens(text: string): string[] {
+  return [...new Set(text.match(/\b[0-9a-f]{7,40}\b/g) ?? [])];
 }
 
-/** The commits a text cites, as far as a hub can tell without a repository: whole hex tokens of 7 to 40 characters
- * with both a digit and a letter (a date or a count is not one; neither is a sha256 digest). */
+/** The commits a text cites, as far as a hub can tell without a repository: hex tokens with both a digit and a letter
+ * (a date or a count is not listed). Narrower than hexTokens because this list is only shown, never enforced. */
 export function citedCommits(text: string): string[] {
-  return hexTokens(text).filter((t) => t.length <= 40 && /\d/.test(t) && /[a-f]/.test(t));
+  return hexTokens(text).filter((t) => /\d/.test(t) && /[a-f]/.test(t));
 }
 
-/** Whether `next` cites a commit that `prev` did not and that none of `heads` (the verify heads counting before the
- * amend) checked as its commit or base_commit: the amend that makes every earlier verify entry stale again. */
-export function addsCommit(prev: string, next: string, heads: VerifyHead[] = []): boolean {
-  const before = citedCommits(prev);
-  return uncoveredCommits(next, heads).some((t) => !before.some((b) => sameCommit(b, t)));
+/** Hex tokens in `next` that `prev` did not have and that none of `heads` checked as its commit or base_commit: what
+ * an amend added that nobody has looked at. Any of these makes a verify entry written against `prev` stale. */
+export function addedUnchecked(prev: string[], next: string, heads: VerifyHead[]): string[] {
+  const covered = [...prev, ...heads.flatMap((h) => [h.commit, h.base_commit]).filter((c): c is string => !!c?.trim())];
+  return hexTokens(next).filter((t) => !covered.some((c) => sameCommit(c, t)));
 }
 
 /** Cited commits that no given verify head covers as its commit or its base_commit. */
@@ -316,8 +319,9 @@ export interface Proposal {
   notPassedVersion?: number;
   /** last "stuck because" notice, so it is posted once per state change */
   stuckNotice?: string;
-  /** when an amend last cited a commit the text before it did not: verify entries older than this are stale again */
-  commitsAddedAt?: string;
+  /** the hex tokens (hexTokens) of each version of the text and when it took effect, oldest first: what a verify
+   * entry written at a given time had in front of it. Absent on proposals made before this was recorded. */
+  cited?: { at: string; tokens: string[] }[];
 }
 
 export interface RoomOptions {

@@ -5,6 +5,7 @@ import { analyzeReplyMetrics, type ReplyMetricEvent } from "../reply-metrics.js"
 import type { Hub } from "../hub.js";
 import { applyBoard, applyBoardManifest } from "./board.js";
 import type { Participant, Proposal } from "./types.js";
+import { hexTokens } from "./types.js";
 import { now } from "./internal.js";
 import type { Opts, Event } from "./internal.js";
 
@@ -194,7 +195,7 @@ export function replay(hub: Hub) {
             pr.version = ev.version;
             // Missing legacy timestamps must clear the previous text's freshness.
             pr.updatedAt = ev.updatedAt;
-            if (ev.commitsAddedAt) pr.commitsAddedAt = ev.commitsAddedAt;
+            if (pr.cited && ev.updatedAt) pr.cited.push({ at: ev.updatedAt, tokens: hexTokens(ev.text) });
             pr.votes = ev.votes;
             if (ev.challenges) pr.challenges = ev.challenges;
           }

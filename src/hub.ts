@@ -12,7 +12,7 @@ import { mkdirSync } from "node:fs";
 import { analyzeReplyMetrics, type ReplyMetricEvent } from "./reply-metrics.js";
 
 export * from "./hub/types.js";
-import { VERIFY_HEAD_EXAMPLE, VERIFY_HEAD_RULE, parseVerifyHead, readVerifyHead, failToPassShortfall, citesCommit, addsCommit, uncoveredCommits, ROLES, REFUSAL_CODES, HubError } from "./hub/types.js";
+import { VERIFY_HEAD_EXAMPLE, VERIFY_HEAD_RULE, parseVerifyHead, readVerifyHead, failToPassShortfall, citesCommit, hexTokens, addedUnchecked, uncoveredCommits, ROLES, REFUSAL_CODES, HubError } from "./hub/types.js";
 import type { MessageKind, Vote, Quorum, RoomState, VerifyHead, Role, Participant, KickVote, Message, CodeState, BoardExpiryOptions, BoardEntry, Challenge, ElectorateSummary, ConclusionVerification, Proposal, RoomOptions, JoinOptions, Room, CallOutcome, RefusalCode, BoardManifestObservation } from "./hub/types.js";
 import { now, shortId, norm, emptyBoardManifestCounters, manifestBytes, codeState } from "./hub/internal.js";
 import type { Opts, Event, BoardManifestCounters } from "./hub/internal.js";
@@ -1555,11 +1555,10 @@ export class Hub {
       return [...room.board].filter(([key, e]) => { const v = this.verifyEntryVerdict(room, pr, key, e, reviewer); return v.head && !v.why; }).map(([key, e]) => `${key} by ${this.shown(room, { id: "", name: e.by })}`);
     };
     const verifiedBefore = room.requireVerification ? counting() : [];
-    const added = addsCommit(pr.text, next, room.requireVerification ? this.countingHeads(room, pr) : []);
     pr.text = next;
     pr.version += 1;
     pr.updatedAt = now();
-    if (added) pr.commitsAddedAt = pr.updatedAt;
+    pr.cited?.push({ at: pr.updatedAt, tokens: hexTokens(next) });
     pr.notPassedVersion = undefined;
     pr.stuckNotice = undefined;
     const kept: Proposal["votes"] = {};
@@ -1586,7 +1585,7 @@ export class Hub {
         reopened.push(this.shown(room, c.by));
       }
     }
-    this.persist({ type: "amend", room: roomName, proposalId, text: pr.text, version: pr.version, updatedAt: pr.updatedAt, ...(pr.commitsAddedAt ? { commitsAddedAt: pr.commitsAddedAt } : {}), votes: pr.votes, challenges: pr.challenges });
+    this.persist({ type: "amend", room: roomName, proposalId, text: pr.text, version: pr.version, updatedAt: pr.updatedAt, votes: pr.votes, challenges: pr.challenges });
     const clip = (t: string, n: number) => (t.length > n ? t.slice(0, n) + "…" : t);
     const diff = replaceAll ? `replaced the whole text (${pr.text.length} chars)` : find ? `"${clip(find, 160)}" → "${clip(replace, 240)}"` : `appended "${clip(replace, 240)}"`;
     const survived = Object.values(kept).map((v) => this.shown(room, { id: "", name: v.name }));
@@ -1598,7 +1597,7 @@ export class Hub {
       p,
       `AMENDED ${proposalId} to v${pr.version}: ${diff}\n(votes reset${survived.length ? ` except ${survived.join(", ")}, whose quoted clause survived` : ""}; the new text arrives with your next wait_for_messages` +
         (verifiedNow.length ? `; ${verifiedNow.join(", ")} still counts: v${pr.version} cites the commit it checked` : "") +
-        (voided.length ? `; ${voided.join(", ")} no longer counts: v${pr.version} ${added ? "cites a commit the text it checked did not" : "does not cite the commit it checked"}, so check v${pr.version} and write it again` : "") +
+        (voided.length ? `; ${voided.join(", ")} no longer counts for v${pr.version} (blocked_by says why): check v${pr.version} and write it again` : "") +
         (answered.length ? `; challenge by ${answered.join(", ")} answered: the cited text is gone` : "") +
         (reopened.length ? `; challenge by ${reopened.join(", ")} REOPENED: the cited text is back` : "") +
         ")",
@@ -1658,6 +1657,7 @@ export class Hub {
       updatedAt: now(),
       snapshot: voters.map((v) => v.id),
     };
+    proposal.cited = [{ at: proposal.updatedAt!, tokens: hexTokens(text) }];
     room.proposals.set(proposal.id, proposal);
     this.persist({ type: "proposal", proposal });
     this.post(room, "proposal", p, `PROPOSAL ${proposal.id}: ${text}`, { proposalId: proposal.id });
@@ -1976,6 +1976,22 @@ export class Hub {
     return uncoveredCommits(pr.text, this.countingHeads(room, pr));
   }
 
+  /** Heads that name this proposal, pass on shape (another connection, exit 0, fail-to-pass) and whose commit the text
+   * cites, whatever version they were written against: the commits somebody has checked. A commit an amend adds is
+   * not new to an older entry once one of these covers it, so two reviewers can each cover one branch of a proposal. */
+  private candidateHeads(room: Room, pr: Proposal): VerifyHead[] {
+    const proposer = room.participants.get(pr.by.id);
+    const out: VerifyHead[] = [];
+    for (const [key, e] of room.board) {
+      if (!key.startsWith("verify/") || key.endsWith(".partial") || e.by === pr.by.name) continue;
+      const author = [...room.participants.values()].find((x) => x.name === e.by);
+      if (author && proposer && author.session && author.session === proposer.session) continue;
+      const head = parseVerifyHead(e.text);
+      if (head && head.proposal === pr.id && head.exit_code === 0 && !failToPassShortfall(head) && citesCommit(pr.text, head.commit)) out.push(head);
+    }
+    return out;
+  }
+
   /** Every verify head that counts for this proposal, from any non-author, not only the assigned reviewer. */
   private countingHeads(room: Room, pr: Proposal): VerifyHead[] {
     return [...room.board].map(([key, e]) => this.verifyEntryVerdict(room, pr, key, e, undefined)).filter((v) => v.head && !v.why).map((v) => v.head!);
@@ -2012,16 +2028,19 @@ export class Hub {
     // leave, any qualifying non-author entry counts again, so an absent reviewer never deadlocks the room.
     if (reviewer && e.by !== reviewer.name) return no(`the assigned reviewer, ${this.shown(room, reviewer)}, is still in the room and only their entry counts`);
     // Bound to the commit, not the text version: an entry written before an amend still counts while the amended text
-    // cites the commit its head names (the agree rule, applied to what was checked). It names this proposal, so it was
-    // written after the proposal existed; an amend that drops or changes the commit voids it.
-    // An amend that cites a commit the text before it did not makes every earlier entry stale again: nobody has
-    // checked the proposal as it now stands.
-    const cited = head?.proposal === pr.id && citesCommit(pr.text, head.commit);
-    if (!pr.updatedAt || (e.updatedAt < pr.updatedAt && !(cited && e.updatedAt >= (pr.commitsAddedAt ?? "")))) {
-      const checked = head?.proposal !== pr.id || !head.commit?.trim() ? ""
-        : cited ? `, which cites a commit the text it checked did not`
-        : `, which does not cite the commit it checked (${head.commit.trim().slice(0, 12)})`;
-      return no(`it was written before v${pr.version}'s text${checked}: check v${pr.version} and write it again`);
+    // cites the commit its head names (the agree rule, applied to what was checked) and cites nothing new that nobody
+    // checked. It names this proposal, so it was written after the proposal existed.
+    if (!pr.updatedAt) return no(`it was written before v${pr.version}'s text: check v${pr.version} and write it again`);
+    if (e.updatedAt < pr.updatedAt) {
+      const again = `check v${pr.version} and write it again`;
+      const was = `it was written before v${pr.version}'s text`;
+      if (head?.proposal !== pr.id || !head.commit?.trim()) return no(`${was}: ${again}`);
+      if (!citesCommit(pr.text, head.commit)) return no(`${was}, which does not cite the commit it checked (${head.commit.trim().slice(0, 12)}): ${again}`);
+      // what the entry had in front of it: the latest version of the text not newer than the entry
+      const seen = pr.cited?.filter((v) => v.at <= e.updatedAt).at(-1);
+      const added = seen ? addedUnchecked(seen.tokens, pr.text, this.candidateHeads(room, pr)) : undefined;
+      if (!added) return no(`${was}: ${again}`);
+      if (added.length) return no(`${was}, which cites ${added.slice(0, 3).map((t) => t.slice(0, 12)).join(", ")} that the text it checked did not and no verify entry covers: ${again}, or take it out of the text if it is not a commit`);
     }
     if (!head) return no("error" in read ? read.error : "its first line is not a JSON verify head");
     if (head.proposal !== pr.id) return { head, why: `it names ${head.proposal}`, named: false };

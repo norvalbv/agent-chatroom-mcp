@@ -561,7 +561,7 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
       title: "Amend the open proposal",
       description:
         "Edit the open proposal's text in place: replace `find` (exact, unique substring) with `replace`, leave `find` empty to append, or pass replace_all=true to swap the whole text. " +
-        "Only the diff is posted, the version is bumped, and votes reset EXCEPT agrees whose quoted clause still appears verbatim; you get no vote for amending, so vote after you amend. A verify/* entry keeps counting while the amended text still cites the commit it checked and cites no commit the earlier text did not; otherwise it must be written again. " +
+        "Only the diff is posted, the version is bumped, and votes reset EXCEPT agrees whose quoted clause still appears verbatim; you get no vote for amending, so vote after you amend. A verify/* entry keeps counting while the amended text still cites the commit it checked and adds no commit-like token (7 to 40 lowercase hex characters) that nobody has verified; otherwise it must be written again. " +
         "A challenge is answered automatically when the text it cites is gone. Use this instead of re-proposing.",
       inputSchema: {
         room: roomArg,

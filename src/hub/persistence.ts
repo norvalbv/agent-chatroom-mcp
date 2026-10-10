@@ -6,6 +6,7 @@ import type { Hub } from "../hub.js";
 import { applyBoard, applyBoardManifest } from "./board.js";
 import { countWork } from "./work.js";
 import type { Participant, Proposal } from "./types.js";
+import { hexTokens } from "./types.js";
 import { now } from "./internal.js";
 import type { Opts, Event } from "./internal.js";
 
@@ -193,6 +194,11 @@ export function replay(hub: Hub) {
           applyBoard(room, ev.key, ev.entry);
           break;
         }
+        case "dev_receipt": {
+          const e = hub.rooms.get(ev.room)?.board.get(ev.key);
+          if (e && e.updatedAt === ev.updatedAt) e.devReceipt = ev.receipt;
+          break;
+        }
         case "amend": {
           const pr = hub.rooms.get(ev.room)?.proposals.get(ev.proposalId);
           if (pr) {
@@ -200,6 +206,7 @@ export function replay(hub: Hub) {
             pr.version = ev.version;
             // Missing legacy timestamps must clear the previous text's freshness.
             pr.updatedAt = ev.updatedAt;
+            if (pr.cited && ev.updatedAt) pr.cited.push({ at: ev.updatedAt, tokens: hexTokens(ev.text) });
             pr.votes = ev.votes;
             if (ev.challenges) pr.challenges = ev.challenges;
           }

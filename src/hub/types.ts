@@ -283,6 +283,8 @@ export interface Proposal {
   notPassedVersion?: number;
   /** last "stuck because" notice, so it is posted once per state change */
   stuckNotice?: string;
+  /** a hub-recruited fresh challenger the conclusion waits for: until it challenges, leaves, or `until` passes. In memory only: a restart stops waiting. */
+  awaiting?: { name: string; until: string };
 }
 
 export interface RoomOptions {

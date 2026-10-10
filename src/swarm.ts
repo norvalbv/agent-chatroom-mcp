@@ -125,7 +125,7 @@ async function ensureHub() {
   } catch {}
   log(`starting hub on :${PORT}`);
   const child = spawn("node", [resolve(repoRoot, "dist/index.js")], {
-    env: { ...process.env, PORT: String(PORT), CHATROOM_DATA_DIR: resolve(repoRoot, "data"), ...(SANDBOX ? { CHATROOM_SANDBOX: "1" } : {}) },
+    env: { ...process.env, PORT: String(PORT), CHATROOM_DATA_DIR: resolve(repoRoot, "data"), ...(SANDBOX ? { CHATROOM_SANDBOX: "1" } : {}), ...(has("fresh-challenger") ? { CHATROOM_FRESH_CHALLENGER: "1" } : {}) },
     detached: true,
     stdio: "ignore",
   });

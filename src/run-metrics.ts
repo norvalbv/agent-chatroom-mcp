@@ -232,8 +232,10 @@ export function runMetrics(events: readonly Ev[], opts: MetricsOptions = {}): Ru
   if (cited) {
     for (const [key, by] of boardBy) if (!NOT_CREDIT.test(key) && citesKey(cited, key)) named(by)?.cited.push(key);
     for (const sha of new Set(cited.match(SHA) ?? [])) {
-      if (!/[a-f]/.test(sha)) continue;
-      const author = opts.shaAuthor?.(sha) ?? shaFirst.get(sha);
+      // an all-digit token is a commit only if git knows it (6217618 in swarm-085449-i9fk); otherwise it is a number
+      const known = opts.shaAuthor?.(sha);
+      if (!/[a-f]/.test(sha) && known === undefined) continue;
+      const author = known ?? shaFirst.get(sha);
       named(author)?.cited.push(sha);
     }
   }
@@ -298,15 +300,27 @@ export function renderMetrics(m: RunMetrics): string {
   return `${text}\n`;
 }
 
-/** shaAuthor backed by git in `cwd`: the commit's author name, or undefined when the repo does not have it. */
-export function gitShaAuthor(cwd: string | undefined): MetricsOptions["shaAuthor"] {
-  if (!cwd) return undefined;
+/** shaAuthor backed by git: the commit's author name in the first of `dirs` that has it, or undefined when none does. */
+export function gitShaAuthor(...dirs: (string | undefined)[]): MetricsOptions["shaAuthor"] {
+  const repos = [...new Set(dirs.filter((d): d is string => !!d))];
+  if (!repos.length) return undefined;
   const memo = new Map<string, string | undefined>();
   return (sha) => {
     if (!memo.has(sha)) {
-      const r = spawnSync("git", ["-C", cwd, "log", "-1", "--format=%an", sha, "--"], { encoding: "utf8" });
-      memo.set(sha, r.status === 0 ? r.stdout.trim() || undefined : undefined);
+      let author: string | undefined;
+      for (const cwd of repos) {
+        const r = spawnSync("git", ["-C", cwd, "log", "-1", "--format=%an", `${sha}^{commit}`, "--"], { encoding: "utf8" });
+        if (r.status === 0 && r.stdout.trim()) { author = r.stdout.trim(); break; }
+      }
+      memo.set(sha, author);
     }
     return memo.get(sha);
   };
+}
+
+/** The checkouts a room's seats worked in, from the workspaces the hub recorded on claim/* entries: a launcher run with
+ * --cwd commits in another repository than the hub's own, so commits are looked up there first. */
+export function roomRepos(events: readonly Ev[]): string[] {
+  const dirs = events.flatMap((e) => (e.type === "board" && typeof e.entry?.workspace?.worktree === "string" ? [e.entry.workspace.worktree as string] : []));
+  return [...new Set(dirs)];
 }

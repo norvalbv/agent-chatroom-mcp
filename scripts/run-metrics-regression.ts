@@ -54,12 +54,12 @@ const events = [
   board('findings/a', 'bob', 15),
   // the hub persists the proposal again when it is accepted (swarm-083320-vya8: its dev room's own finding)
   { type: 'proposal', proposal: { id: 'prop_1', room: 'r', by: { id: 'p_a', name: 'alice' }, text: 'Built alpha (deadbeef12, findings/alpha). Cites sources/2401.00001.', createdAt: at(10), votes: {}, challenges: [], status: 'accepted', version: 1 } },
-  { type: 'state', room: 'r', state: 'concluded', conclusion: { text: 'Built alpha (deadbeef12, findings/alpha). Cites sources/2401.00001. Bob fixed it in cafef00d1. See footnotes and findings/alpha.', proposalId: 'prop_1', decidedAt: at(20) } },
+  { type: 'state', room: 'r', state: 'concluded', conclusion: { text: 'Built alpha (deadbeef12, findings/alpha). Cites sources/2401.00001. Bob fixed it in cafef00d1. See footnotes and findings/alpha. The fix is 6217618, not 1234567.', proposalId: 'prop_1', decidedAt: at(20) } },
 ];
 
 // a sha is credited to its git author when the repo knows it (seats commit under their own name, src/env.ts
 // seatGitIdentity), and to whoever first named it only when it does not: the first mention is often a reviewer
-const shaAuthor = (sha: string) => (sha === 'cafef00d1' ? 'bob' : undefined);
+const shaAuthor = (sha: string) => (sha === 'cafef00d1' ? 'bob' : sha === '6217618' ? 'alice' : undefined);
 const m = runMetrics(events, { shaAuthor });
 assert.equal(m.room, 'r');
 assert.deepEqual(m.minutesTo, { firstClaim: 2, firstSource: 4, firstProposal: 10, conclusion: 20 }, 'milestones in minutes after the room opened');
@@ -79,7 +79,7 @@ assert.equal(by('bob').challenges, 1);
 assert.equal(by('verifier').verifies, 1);
 assert.equal(by('alice').proposals, 1, 'a proposal persisted again at acceptance is one proposal');
 assert.equal(by('verifier').votes, 1);
-assert.deepEqual(by('alice').cited.sort(), ['deadbeef12', 'findings/alpha'], 'the conclusion cites alice\'s board key and the sha she first named');
+assert.deepEqual(by('alice').cited.sort(), ['6217618', 'deadbeef12', 'findings/alpha'], 'the conclusion cites alice\'s board key and the sha she first named');
 assert.deepEqual(by('bob').cited.sort(), ['cafef00d1', 'sources/2401.00001'], 'bob gets the sha git says he authored, though alice never named it');
 assert.ok(!by('bob').cited.includes('notes') && !by('bob').cited.includes('findings/a'), 'a key is cited only as a whole token, not inside "footnotes" or "findings/alpha"');
 assert.deepEqual(m.uncited, ['verifier'], 'seats that wrote board entries the conclusion never cites');

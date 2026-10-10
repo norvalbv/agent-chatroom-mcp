@@ -20,7 +20,7 @@ import { SUSPECTED_DEAD_MS } from "./hub/kick.js";
 import { randomUUID } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { gitShaAuthor, parseRoomLog, renderMetrics, runMetrics } from "./run-metrics.js";
+import { gitShaAuthor, parseRoomLog, renderMetrics, roomRepos, runMetrics } from "./run-metrics.js";
 import { createMcpExpressApp } from "@modelcontextprotocol/sdk/server/express.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import express from "express";
@@ -508,7 +508,8 @@ app.get("/rooms/:room/metrics", (req, res) => {
     const r = hub.getRoom(req.params.room);
     const file = hub.dataDir ? resolve(hub.dataDir, `${r.name}.jsonl`) : undefined;
     if (!file || !existsSync(file)) return void res.status(404).type("text/plain").send("no room log: this hub runs in memory");
-    const m = runMetrics(parseRoomLog(readFileSync(file, "utf8")), { shaAuthor: gitShaAuthor(hub.cwd) });
+    const events = parseRoomLog(readFileSync(file, "utf8"));
+    const m = runMetrics(events, { shaAuthor: gitShaAuthor(...roomRepos(events), process.env.CHATROOM_DEFAULT_CWD, hub.cwd) });
     if (req.query.format === "md") res.type("text/markdown").send(renderMetrics(m));
     else res.json(m);
   } catch (e) {

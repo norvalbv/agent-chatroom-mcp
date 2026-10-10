@@ -40,6 +40,7 @@ export const offlineScripts = [
   'board-attack-regression.ts',
   'breakout-regression.ts',
   'fresh-challenger-regression.ts',
+  'challenger-snapshot-regression.ts',
   'recruit-workspace-regression.ts',
   'blind-challenger-regression.ts',
   'ak-select.test.ts',

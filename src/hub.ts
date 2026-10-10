@@ -2117,7 +2117,8 @@ export class Hub {
       chars: pr.text.length,
       status: pr.status,
       created_at: pr.createdAt,
-      ...(pr.evidence ? { evidence: pr.evidence } : {}),
+      // the room was told this line when the proposal opened; agents' room_status stays small (room-status-size-regression)
+      ...(pr.evidence && reveal ? { evidence: pr.evidence } : {}),
       tally,
       electorate: summary ?? null,
       // Dissent remains binding under the existing rules even when its author is not counted.

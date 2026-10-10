@@ -868,8 +868,11 @@ export class Hub {
         throw new HubError(`It is ${this.shown(room, speaker)}'s turn to speak, not yours. Call wait_for_messages until your_turn is true.`);
       }
     } else if (!force && p.agent !== "human" && !this.resolvesAddress(room, p, content, replyTo)) {
-      // Stale-send guard: never talk past messages you have not read.
-      const unread = this.unread(room, p);
+      // Stale-send guard: never talk past messages you have not read. A fresh challenger is pushed only what names it
+      // or comes from a human, so only those can have "arrived while composing"; the refusal would otherwise hand it the
+      // discussion its join and waits withhold (integration dev room swarm-012403-lmdk: it left and rejoined to post).
+      const blind = this.freshChallengeFor(room, p.name);
+      const unread = this.unread(room, p).filter((m) => !blind || m.mentions?.includes(p.id) || m.from.agent === "human");
       if (unread.length) {
         // An ask the seat was already shown did not "arrive while composing": it is a reply still owed.
         const focus = this.attentionFocus(room, p);

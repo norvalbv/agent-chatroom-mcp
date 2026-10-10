@@ -59,6 +59,7 @@ const spawner = new Spawner({
   defaultCwd: resolve(process.env.CHATROOM_DEFAULT_CWD ?? process.cwd()),
   logDir: resolve(process.env.CHATROOM_LOG_DIR ?? "logs/spawned"),
   dryRun: process.env.CHATROOM_SPAWN_DRY === "1",
+  freshChallenger: process.env.CHATROOM_FRESH_CHALLENGER === "1",
   // a fleet of a hundred read-only seats is a legitimate machine-wide count; the default 24 was sized for one run
   maxLive: process.env.CHATROOM_MAX_LIVE_AGENTS ? Number(process.env.CHATROOM_MAX_LIVE_AGENTS) : undefined,
   wallClockMs: process.env.CHATROOM_RECRUIT_MAX_MIN ? Number(process.env.CHATROOM_RECRUIT_MAX_MIN) * 60_000 : undefined,
@@ -75,6 +76,12 @@ hub.onRoomState = (room, state) => {
     // child room: announce and swallow, mirroring the child-close handler in spawner.ts
     hub.announce(room, `Consolidator spawn check failed: ${(e as Error).message}`);
   }
+};
+// the conclusion waits for the fresh challenger up to this long: a recruit's first output lands a median 4.8 min after it joins
+const FRESH_CHALLENGER_WAIT_MS = Number(process.env.CHATROOM_FRESH_CHALLENGER_WAIT_MIN ?? 6) * 60_000;
+hub.onProposalOpened = (room, proposal) => {
+  const rec = spawner.freshChallenger(room, proposal);
+  if (rec) hub.awaitScrutiny(room, proposal.id, rec.name, FRESH_CHALLENGER_WAIT_MS);
 };
 spawner.attach({
   isHeld: (room) => {

@@ -117,6 +117,8 @@ export interface SpawnerOptions {
   wallClockMs?: number;
   /** test hook: record but do not launch */
   dryRun?: boolean;
+  /** CHATROOM_FRESH_CHALLENGER=1: the hub recruits one read-only seat per opened proposal to test it (Spawner.freshChallenger). */
+  freshChallenger?: boolean;
 }
 
 const READ_TOOLS = ["mcp__chatroom__*", "Read", "Grep", "Glob", "Bash", "WebSearch", "WebFetch"];
@@ -421,6 +423,46 @@ export class Spawner {
       // say "removed" only when this call removed them: a departed seat refused as away was never touched
       if (!removed) throw new HubError(`No successor for ${req.replacing}: ${msg}`, undefined, e instanceof HubError ? e.code : undefined);
       throw new HubError(`${req.replacing} was removed, but recruiting a successor failed: ${msg} Nobody was launched; call request_agent(replacing=${JSON.stringify(req.replacing)}) once that clears.`);
+    }
+  }
+
+  static readonly MAX_FRESH_CHALLENGERS_PER_ROOM = 2;
+  /** proposals that already got their fresh challenger, so it fires once per proposal and never on an amend */
+  private readonly freshChallengersFired = new Set<string>();
+
+  /**
+   * Fresh challenger: Claude worker seats recruited in 8 of 422 seat-runs and a topic sentence asking for recruits
+   * moved that to 6 of 190, while 127 of 153 recruits wrote a board entry once spawned (swarm-000525-jcz8,
+   * findings/recruiting). So staffing that waits for a seat to call request_agent does not happen; the hub recruits
+   * on a fact it holds instead, as checkConsolidators does. The fact here is "a proposal opened": every seat present
+   * has read the discussion that produced it, and a recruit is the one seat that has not. Rooms are not short of
+   * prose challenges (median 3 per concluded room, reworded away in a median 32 s; findings/scrutiny-quality), so the
+   * brief asks for one claim checked against the repo and filed with `command`, which rewording cannot answer.
+   * Opt-in, once per proposal, bounded per room; any refusal (hold, cap, policy) is swallowed because the propose that
+   * triggered it must stand. Returns the recruit so the hub can hold the conclusion for it (Hub.awaitScrutiny).
+   */
+  freshChallenger(room: string, proposal: { id: string; text: string; by: string }): SpawnedAgent | undefined {
+    if (!this.opts.freshChallenger || process.env.CHATROOM_NO_RECRUIT === "1") return undefined;
+    const key = `${room}\n${proposal.id}`;
+    if (this.freshChallengersFired.has(key)) return undefined;
+    const firedHere = [...this.freshChallengersFired].filter((k) => k.startsWith(`${room}\n`)).length;
+    if (firedHere >= Spawner.MAX_FRESH_CHALLENGERS_PER_ROOM) return undefined;
+    this.freshChallengersFired.add(key);
+    const cut = proposal.text.length > 2400;
+    const brief =
+      `The hub recruited you because you have NOT seen this room's discussion. ${proposal.by} has just proposed ${proposal.id} as the room's conclusion:\n\n` +
+      `---\n${proposal.text.slice(0, 2400)}${cut ? "\n[cut: read the rest of the proposal with read_messages]" : ""}\n---\n\n` +
+      `Do not join the debate and do not vote. Pick the ONE claim in it that can be checked against the repository, a cited file, command, transcript or source, and check it yourself. ` +
+      `If it fails, file it with challenge(proposal_id="${proposal.id}", objection quoting the clause, command=<a read-only command that exits nonzero while the claim is false, written to run from the repository root with no absolute path or cd, so anyone can rerun it in their own checkout>): rewording cannot answer a command. ` +
+      `If it holds, post one message naming the claim and the command you ran, and do not challenge. If nothing in it is checkable, post that in one sentence. ` +
+      `Then leave_room: the proposal waits for you only a few minutes, so report within five.`;
+    try {
+      const [rec] = this.request({ room, count: 1, name: `fresh-challenger-${firedHere + 1}`, requestedBy: "hub", requestedByShown: "the hub", brief });
+      this.hooks?.announce(room, `The hub recruited ${rec.name} (${rec.agent}${rec.model ? `/${rec.model}` : ""}), a fresh challenger that has not seen this discussion, to check one claim of ${proposal.id}.`);
+      return rec;
+    } catch (e) {
+      this.hooks?.announce(room, `No fresh challenger for ${proposal.id}: ${(e as Error).message}`);
+      return undefined;
     }
   }
 

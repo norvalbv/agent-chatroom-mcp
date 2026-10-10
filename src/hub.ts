@@ -25,6 +25,8 @@ export class Hub {
   readonly rooms = new Map<string, Room>();
   /** Fired on every room state transition (setState); the consolidator spawn listens for "concluded". */
   onRoomState?: (room: string, state: RoomState) => void;
+  /** A proposal was opened (not amended). The spawner's fresh challenger hangs off this; a throwing listener never fails the propose. */
+  onProposalOpened?: (room: string, proposal: { id: string; text: string; by: string }) => void;
   /** Observed waits only: deliberately not restored from historical room logs. */
   private readonly boardManifestObserved = new WeakMap<Room, BoardManifestCounters>();
   /** @internal */ readonly dataDir?: string;
@@ -1650,8 +1652,40 @@ export class Hub {
     room.proposals.set(proposal.id, proposal);
     this.persist({ type: "proposal", proposal });
     this.post(room, "proposal", p, `PROPOSAL ${proposal.id}: ${text}`, { proposalId: proposal.id });
+    try {
+      this.onProposalOpened?.(roomName, { id: proposal.id, text, by: p.name });
+    } catch (e) {
+      this.post(room, "system", undefined, `Proposal listener failed: ${(e as Error).message}`);
+    }
     this.evaluate(room, proposal); // a solo room concludes immediately
     return proposal;
+  }
+
+  /**
+   * Hold a proposal's conclusion for a seat the hub recruited to test it. The wait ends when that seat files a
+   * challenge on the proposal, joins and leaves, or `windowMs` passes, whichever is first: a recruit that never
+   * arrives or dies cannot stall the room, and one that reports cannot report to a closed room.
+   */
+  awaitScrutiny(roomName: string, proposalId: string, name: string, windowMs: number): void {
+    const room = this.getRoom(roomName);
+    const pr = room.proposals.get(proposalId);
+    if (!pr || pr.status !== "open") return;
+    pr.awaiting = { name, until: new Date(Date.now() + windowMs).toISOString() };
+    setTimeout(() => {
+      try {
+        this.evaluate(room, pr);
+      } catch {}
+    }, windowMs + 25).unref();
+  }
+
+  /** The recruited challenger a proposal still waits for, if any. */
+  scrutinyPending(room: Room, pr: Proposal): { name: string; until: string } | undefined {
+    const w = pr.awaiting;
+    if (!w || Date.parse(w.until) <= Date.now()) return undefined;
+    if (pr.challenges.some((c) => c.by.name === w.name)) return undefined;
+    const seat = [...room.participants.values()].find((x) => x.name === w.name);
+    if (seat && !seat.active) return undefined;
+    return w;
   }
 
   /** The span of the proposal an objection quotes (longest quoted run that occurs in the text), if any. */
@@ -1890,6 +1924,8 @@ export class Hub {
     if (openCh.length) out.push(this.challengeAdvice(room, openCh));
     if (room.requireVerification && !this.verifiedBy(room, pr)) out.push(this.verifyHeadRefusal(room, pr));
     if (this.hold(room)) out.push(`hold by ${this.hold(room)!.by}`);
+    const pending = this.scrutinyPending(room, pr);
+    if (pending) out.push(`fresh challenger ${pending.name} has not reported (it challenges or leaves; waited for until ${pending.until} at the latest)`);
     if (!active.some((p) => pr.votes[p.id] && (pr.votes[p.id].version ?? 1) === pr.version) && pr.version > 1) out.push(`no vote cast on v${pr.version} yet (carried-over agrees alone cannot pass a new version)`);
     return out;
   }
@@ -2078,6 +2114,11 @@ export class Hub {
       stuck(pr.challenges.length
         ? `${pr.id} has no qualifying challenge: its only blocking challenge(s) share the proposer's connection, which does not count as scrutiny (identity-is-the-connection). Someone other than ${this.shown(room, pr.by)} on a different connection must challenge before it can pass.`
         : `Everyone agrees with ${pr.id} but nobody has tested it. Someone other than ${this.shown(room, pr.by)} (on a different connection) should name its weakest claim (challenge) before it passes.`);
+      return;
+    }
+    const pending = this.scrutinyPending(room, pr);
+    if (accepted && pending) {
+      stuck(`${pr.id} has the votes but the hub recruited ${pending.name}, a seat that has not seen this discussion, to check it: it passes when ${pending.name} challenges or leaves, or at ${pending.until}, whichever is first.`);
       return;
     }
     const openCh = this.qualifyingChallenges(room, pr);

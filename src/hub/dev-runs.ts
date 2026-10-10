@@ -11,11 +11,11 @@
  */
 import { spawn, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, mkdtempSync, openSync, readFileSync, symlinkSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, openSync, readFileSync, realpathSync, symlinkSync } from "node:fs";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { stopStrays } from "../strays.js";
+import { inside, stopStrays } from "../strays.js";
 
 export interface DevRunSummary {
   room: string;
@@ -50,6 +50,10 @@ export interface DevRun {
   error?: string;
   /** every room the dev hub had, as the parent last read it while that hub was its own */
   rooms?: DevRunSummary[];
+  /** the dev hub's listening process, pinned the first time the hub saw it run from this run's tree */
+  hub_pid?: number;
+  /** set once the port answered from another process: nothing read after that is vouched for */
+  tampered?: string;
 }
 
 export interface DevRunRequest { room: string; requestedBy: string; session?: string; commit: string; task: string; agents?: number; model?: string; timeoutMin?: number }
@@ -63,6 +67,8 @@ export interface DevRunHost {
   freePort(from: number, to: number, taken: Set<number>): Promise<number | undefined>;
   launch(r: DevRun, tree: string): { pid?: number; exited: Promise<number | null> };
   fetchJson(url: string): Promise<unknown>;
+  /** the process listening on port, and its working directory */
+  listener(port: number): { pid: number; cwd?: string } | undefined;
   /** stop every process the run left under its dir (the dev hub, seats' jobs) */
   stop(r: DevRun): Promise<void>;
 }
@@ -114,7 +120,8 @@ export class DevRuns {
     const port = await this.host.freePort(from, to, new Set(this.live().map((r) => r.port)));
     if (!port) throw new DevRunError(`no free port in ${from}-${to} (CHATROOM_DEV_PORTS)`);
     const id = `dr_${Date.now().toString(36)}${(this.seq++).toString(36)}`;
-    const dir = mkdtempSync(join(tmpdir(), `devrun-${id}-`));
+    // realpath: macOS's tmpdir is a symlink, and the stray sweep compares the cwd lsof prints (the real path)
+    const dir = realpathSync(mkdtempSync(join(tmpdir(), `devrun-${id}-`)));
     const r: DevRun = {
       id, room: q.room, requested_by: q.requestedBy, ...(q.session ? { session: q.session } : {}), commit: sha, task: q.task.slice(0, 2000),
       agents, model, timeout_min: timeout, port, dir, state: "building", started_at: new Date().toISOString(),
@@ -154,19 +161,34 @@ export class DevRuns {
     try { this.opts.announce(r.room, `dev run ${r.id} (${r.requested_by}, commit ${r.commit.slice(0, 12)}) ${r.state}${r.error ? `: ${r.error}` : ` with exit ${r.exit_code}`}. ${rooms ? `What this hub saw: ${rooms}.` : "No room was seen."} Logs: ${r.dir}`); } catch {}
   }
 
-  /** Read every room of the dev hub this run owns and keep the summary; quiet on failure (the next poll retries). */
+  /** Read every room of the dev hub this run owns and keep the summary; quiet on failure (the next poll retries).
+   * Only while the listener is the process first seen serving from this run's tree: a seat that kills the dev hub and
+   * binds a stub on its port (verifier, attack/idea/hub-launched-dev-runs) freezes the record and marks it. */
   async observe(r: DevRun): Promise<void> {
+    if (r.tampered || r.state !== "running") return;
+    const l = this.host.listener(r.port);
+    if (!l) return;
+    if (r.hub_pid === undefined) {
+      if (!l.cwd || !inside(l.cwd, r.dir)) return; // not up yet, or someone else's: wait for ours
+      r.hub_pid = l.pid;
+    } else if (l.pid !== r.hub_pid) {
+      r.tampered = `port ${r.port} answered from pid ${l.pid}, not the dev hub this hub saw start (pid ${r.hub_pid})`;
+      this.opts.persist(r);
+      this.opts.announce(r.room, `dev run ${r.id}: ${r.tampered}. Nothing it serves from now on is vouched for.`);
+      return;
+    }
     try {
       const list = (await this.host.fetchJson(`http://127.0.0.1:${r.port}/rooms`)) as { name?: string }[] | { rooms?: { name?: string }[] };
       const names = (Array.isArray(list) ? list : list.rooms ?? []).map((x) => x.name).filter((x): x is string => !!x);
       const seen: DevRunSummary[] = [];
       for (const name of names) {
         const b = (await this.host.fetchJson(`http://127.0.0.1:${r.port}/rooms/${encodeURIComponent(name)}`)) as {
-          state?: string; message_count?: number; conclusion?: { text?: string } | string | null; participants?: { agent?: string; messages?: number }[];
+          state?: string; message_count?: number; conclusion?: { text?: string } | string | null; participants?: { agent?: string; messages?: number; output?: Record<string, number> }[];
         };
         const agents = (b.participants ?? []).filter((x) => x.agent !== "human");
+        // a seat that only wrote to the board, challenged or proposed did act: chat alone undercounted (dev run dr_mv254zpq0)
         const concl = typeof b.conclusion === "string" ? b.conclusion : b.conclusion?.text;
-        seen.push({ room: name, state: b.state, agent_seats: agents.length, speaking_seats: agents.filter((x) => (x.messages ?? 0) > 0).length, messages: b.message_count ?? 0, ...(concl ? { conclusion: concl.slice(0, 300) } : {}), read_at: new Date().toISOString() });
+        seen.push({ room: name, state: b.state, agent_seats: agents.length, speaking_seats: agents.filter(acted).length, messages: b.message_count ?? 0, ...(concl ? { conclusion: concl.slice(0, 300) } : {}), read_at: new Date().toISOString() });
       }
       if (seen.length) {
         const changed = JSON.stringify(seen.map(({ read_at: _, ...x }) => x)) !== JSON.stringify((r.rooms ?? []).map(({ read_at: _, ...x }) => x));
@@ -176,11 +198,11 @@ export class DevRuns {
     } catch {}
   }
 
-  /** The run that owns the dev hub a URL points at: same port, and the room was seen there by this hub. */
+  /** The run that owns the dev hub a URL points at: same port, and live now or the room was seen there by this hub. */
   forUrl(url: URL): DevRun | undefined {
     const port = Number(url.port);
     const room = decodeURIComponent(url.pathname.replace(/^\/rooms\//, ""));
-    return [...this.runs.values()].reverse().find((r) => r.port === port && (r.rooms ?? []).some((x) => x.room === room));
+    return [...this.runs.values()].reverse().find((r) => r.port === port && (r.state === "running" || (r.rooms ?? []).some((x) => x.room === room)));
   }
 
   status(id?: string, requestedBy?: string): DevRun[] {
@@ -192,6 +214,10 @@ export class DevRuns {
     this.runs.set(r.id, { ...r, ...(r.state === "building" || r.state === "running" ? { state: "failed", error: "the hub restarted while it ran; nobody watched the rest" } : {}) });
   }
 }
+
+/** a seat spoke in chat or put something on the record (board, claim, verify, proposal, challenge) */
+export const acted = (x: { messages?: number; output?: Record<string, number> }) =>
+  (x.messages ?? 0) > 0 || ["claims", "evidence", "verifies", "proposals", "challenges"].some((k) => (x.output?.[k] ?? 0) > 0);
 
 const sha256 = (path: string) => createHash("sha256").update(readFileSync(path)).digest("hex");
 
@@ -250,6 +276,12 @@ export const realHost: DevRunHost = {
     const res = await fetch(url, { signal: AbortSignal.timeout(3000) });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     return res.json();
+  },
+  listener(port) {
+    const pid = Number((spawnSync("lsof", ["-ti", `:${port}`, "-sTCP:LISTEN"], { encoding: "utf8" }).stdout ?? "").trim().split("\n")[0]);
+    if (!pid) return undefined;
+    const cwd = (spawnSync("lsof", ["-a", "-p", String(pid), "-d", "cwd", "-Fn"], { encoding: "utf8" }).stdout ?? "").split("\n").find((x) => x.startsWith("n"))?.slice(1);
+    return { pid, ...(cwd ? { cwd } : {}) };
   },
   async stop(r) {
     await stopStrays(r.dir);

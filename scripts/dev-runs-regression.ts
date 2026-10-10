@@ -24,10 +24,13 @@ const devBody = (over: Record<string, unknown> = {}) => ({
 /** a stand-in for git, tsc and the launcher: "launches" by starting a stub dev hub, and exits when told */
 function fakeHost(body: () => unknown) {
   let finish: (c: number) => void = () => {};
+  let runDir = "";
+  const listening = { pid: 5151 };
   const servers: ReturnType<typeof createServer>[] = [];
   const host = {
     resolveCommit: (_repo: string, ref: string) => (COMMIT.startsWith(ref) && ref.length >= 7 ? COMMIT : undefined),
-    prepare: async () => ({ tree: "/nowhere", entry_sha256: { "dist/index.js": "ab".repeat(32) } }),
+    prepare: async (_repo: string, _sha: string, dir: string) => { runDir = dir; return { tree: "/nowhere", entry_sha256: { "dist/index.js": "ab".repeat(32) } }; },
+    listener: () => ({ pid: listening.pid, cwd: join(runDir, "tree") }),
     freePort: async () => {
       const srv = createServer((req, res) => {
         res.setHeader("content-type", "application/json");
@@ -41,7 +44,7 @@ function fakeHost(body: () => unknown) {
     fetchJson: async (url: string) => (await fetch(url)).json(),
     stop: async () => { for (const s of servers) { s.closeAllConnections(); s.close(); } },
   };
-  return { host, end: (c = 0) => finish(c), close: () => { for (const s of servers) { s.closeAllConnections(); s.close(); } } };
+  return { host, listening, end: (c = 0) => finish(c), close: () => { for (const s of servers) { s.closeAllConnections(); s.close(); } } };
 }
 
 function fixture(t: { after: (fn: () => void) => void }, fake?: ReturnType<typeof fakeHost>) {
@@ -109,6 +112,34 @@ test("the proposer's own dev run reads PARTIAL; an ended run's port is not trust
   const r = await hub.readDevRoom(room.name, "verify/x", async () => { fetched = true; return devBody({ participants: [] }); });
   assert.equal(fetched, false);
   assert.equal(r?.speaking_seats, 2);
+});
+
+test("a seat that kills the dev hub and binds a stub on its port is caught: the record freezes and the receipt says so", async (t) => {
+  const fake = fakeHost(() => devBody());
+  const { hub, room, pr, b, head } = fixture(t, fake);
+  const run = await hub.startDevRun(room.name, b.id, { commit: COMMIT, task: "x" });
+  await until(() => run.state === "running");
+  await hub.devRuns.observe(run);
+  assert.equal(run.hub_pid, 5151, "pinned at first sight, serving from the run's own tree");
+  fake.listening.pid = 6262; // another process now answers on the port
+  hub.setBoard(room.name, b.id, "verify/x", head(`http://127.0.0.1:${run.port}/rooms/dev-room`));
+  const r = await hub.readDevRoom(room.name, "verify/x");
+  assert.match(r?.launched?.tampered ?? "", /answered from pid 6262, not the dev hub this hub saw start \(pid 5151\)/);
+  assert.match(hub.proposalView(room, pr).verification_gaps?.[0]?.gaps.join(" | ") ?? "", /was tampered with/);
+  assert.ok(room.messages.some((m) => /Nothing it serves from now on is vouched for/.test(m.content)));
+  fake.end(0);
+  await until(() => run.state === "ended");
+});
+
+test("a seat that only wrote to the board or challenged counts as having acted (chat alone said 0 of 2)", async (t) => {
+  const fake = fakeHost(() => devBody({ participants: [{ agent: "claude", messages: 0, output: { claims: 0, evidence: 1, verifies: 0, proposals: 1, challenges: 0 } }, { agent: "claude", messages: 0, output: { challenges: 1 } }] }));
+  const { hub, room, b } = fixture(t, fake);
+  const run = await hub.startDevRun(room.name, b.id, { commit: COMMIT, task: "x" });
+  await until(() => run.state === "running");
+  await hub.devRuns.observe(run);
+  assert.equal(run.rooms?.[0]?.speaking_seats, 2);
+  fake.end(0);
+  await until(() => run.state === "ended");
 });
 
 test("refusals: unknown commit, model outside the pins, too many agents, a second live run, a stranger's id", async (t) => {

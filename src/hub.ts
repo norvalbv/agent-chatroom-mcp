@@ -2248,16 +2248,18 @@ export class Hub {
     let receipt: DevReceipt;
     const run = this.devRuns.forUrl(url);
     try {
-      // a run this hub started: once it has ended, its port may be anyone's, so only the summary the hub kept counts
+      // a run this hub started: never the URL's word. What the hub itself saw, read again now if the run is live
+      // (observe() checks the listener is still the dev hub it saw start); once ended, its port may be anyone's.
+      if (run) await this.devRuns.observe(run);
       const seen = run?.rooms?.find((x) => `/rooms/${encodeURIComponent(x.room)}` === url.pathname || `/rooms/${x.room}` === url.pathname);
-      receipt = run && run.state !== "running"
+      receipt = run
         ? { url: head.dev_room, fetched_at: now(), room: seen?.room, state: seen?.state, agent_seats: seen?.agent_seats, speaking_seats: seen?.speaking_seats, messages: seen?.messages }
         : devReceiptFrom(head.dev_room, await fetcher(url.href));
     } catch (err) {
       receipt = { url: head.dev_room, fetched_at: now(), error: String((err as Error)?.message ?? err).slice(0, 160) };
     }
     if (run && !receipt.error) {
-      receipt = { ...receipt, code_head: run.commit, code_dirty: false, launched: { run: run.id, requested_by: run.requested_by, commit: run.commit, ...(run.entry_sha256 ? { entry_sha256: run.entry_sha256 } : {}) } };
+      receipt = { ...receipt, code_head: run.commit, code_dirty: false, launched: { run: run.id, requested_by: run.requested_by, commit: run.commit, ...(run.entry_sha256 ? { entry_sha256: run.entry_sha256 } : {}), ...(run.tampered ? { tampered: run.tampered } : {}) } };
     }
     if (room.board.get(key) !== e) return receipt; // rewritten meanwhile: that write fetches its own
     e.devReceipt = receipt;

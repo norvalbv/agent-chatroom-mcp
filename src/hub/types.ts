@@ -501,7 +501,7 @@ export interface DevReceipt {
   speaking_seats?: number;
   messages?: number;
   /** set only when this hub started the dev run itself (start_dev_run): code_head is then the commit it built, not the dev hub's word */
-  launched?: { run: string; requested_by: string; commit: string; entry_sha256?: Record<string, string> };
+  launched?: { run: string; requested_by: string; commit: string; entry_sha256?: Record<string, string>; tampered?: string };
 }
 
 /** Only a loopback dev hub's room summary: the hub never fetches anything else on a seat's say-so. */
@@ -517,12 +517,12 @@ export function devRoomUrl(s: string | undefined): URL | undefined {
 
 /** Reduce a dev hub's GET /rooms/<room> body to a receipt. */
 export function devReceiptFrom(url: string, body: unknown): DevReceipt {
-  const b = (body ?? {}) as { name?: string; state?: string; code_state?: { head?: string; dirty?: boolean } | null; message_count?: number; participants?: { agent?: string; messages?: number }[] };
+  const b = (body ?? {}) as { name?: string; state?: string; code_state?: { head?: string; dirty?: boolean } | null; message_count?: number; participants?: { agent?: string; messages?: number; output?: Record<string, number> }[] };
   const agents = (b.participants ?? []).filter((x) => x.agent !== "human");
   return {
     url, fetched_at: new Date().toISOString(), room: b.name, state: b.state,
     ...(b.code_state?.head ? { code_head: b.code_state.head, code_dirty: !!b.code_state.dirty } : {}),
-    agent_seats: agents.length, speaking_seats: agents.filter((x) => (x.messages ?? 0) > 0).length, messages: b.message_count ?? 0,
+    agent_seats: agents.length, speaking_seats: agents.filter((x) => (x.messages ?? 0) > 0 || ["claims", "evidence", "verifies", "proposals", "challenges"].some((k) => (x.output?.[k] ?? 0) > 0)).length, messages: b.message_count ?? 0,
   };
 }
 
@@ -538,8 +538,9 @@ export function verifyGaps(h: VerifyHead, receipt?: DevReceipt): string[] {
     if (!receipt.code_head) out.push("dev_room's hub reported no git commit");
     else if (!h.commit || !sameCommit(receipt.code_head, h.commit)) out.push(`dev_room ran ${receipt.code_head}, not ${h.commit ?? "the verified commit"}`);
     else if (receipt.code_dirty) out.push(`dev_room ran ${receipt.code_head} with uncommitted changes`);
-    if ((receipt.speaking_seats ?? 0) < 2) out.push(`dev_room had ${receipt.speaking_seats ?? 0} agent seat(s) that spoke`);
+    if ((receipt.speaking_seats ?? 0) < 2) out.push(`dev_room had ${receipt.speaking_seats ?? 0} agent seat(s) that spoke or wrote anything`);
     // SLSA L1 vs L2 (sources/slsa-build-levels): a hub some seat started reports its own commit and seats, and a static file can too
+    if (receipt.launched?.tampered) out.push(`dev run ${receipt.launched.run} was tampered with: ${receipt.launched.tampered}`);
     if (!receipt.launched) out.push("dev_room was not started by this hub (scripts/dev-run.ts), so its commit and seats are the dev hub's own word");
   }
   return out;

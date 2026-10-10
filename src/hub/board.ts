@@ -297,7 +297,8 @@ function assignReviewer(hub: Hub, room: Room, owner: Participant): Participant |
   const others = hub.voters(room).filter((x) => x.id !== owner.id && !(x.session && owner.session && x.session === owner.session));
   // A recruit came for one brief and leaves when it is done: 11 of 13 recruits the hub assigned never wrote a verify/*
   // (231 of 473 standing seats; scripts/reviewer-recruit-measure.py). Pick one only when nobody else can review.
-  const standing = others.filter((x) => x.role !== "recruit");
+  // A registered successor (replacementOf, set by the hub at its token join) took over a departed seat and stays: standing.
+  const standing = others.filter((x) => x.role !== "recruit" || !!x.replacementOf);
   const candidates = standing.length ? standing : others;
   if (!candidates.length) return undefined;
   // Assigned reviews count as load before verify history: claims arrive in a burst when every candidate ties, and

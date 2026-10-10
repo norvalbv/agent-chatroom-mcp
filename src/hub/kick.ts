@@ -107,7 +107,7 @@ export function openKickByHub(hub: Hub, room: Room, t: Participant, reason: stri
   // kind "chat" so the @-mention reaches the seat the vote is about (a "system" line carries no mention)
   hub.post(room, "chat", undefined,
     `Routine check: the hub opened a vote on closing the seat of @${hub.shown(room, t)}: ${kv.reason} — needs ${needed} kick ballot(s) from distinct connections (quorum=${room.quorum} over the other voters). ${outputLine(hub, room, t)}` +
-    `Vote with kick_vote(target=${JSON.stringify(hub.shown(room, t))}, vote="kick"|"keep"); keep if you know of work of theirs the record does not show. The vote is withdrawn if they put something on the record first.`);
+    `Vote with kick_vote(target=${JSON.stringify(hub.shown(room, t))}, vote="kick"|"keep"); keep if you know of work of theirs the record does not show. A human on the dashboard can decide alone. The vote is withdrawn if they put something on the record first.`);
   return true;
 }
 
@@ -131,13 +131,14 @@ function kickTally(hub: Hub, room: Room, kv: KickVote) {
   const kickSessions = new Set<string>();
   const keepSessions = new Set<string>();
   let humanKeep = false;
+  let humanKick = false;
   for (const [id, b] of Object.entries(kv.ballots)) {
     const voter = room.participants.get(id);
     if (!voter?.active) continue;
     const identity = voter.session ?? voter.id;
     if (b.human) {
       if (b.vote === "keep") humanKeep = true;
-      else kickSessions.add(identity);
+      else { kickSessions.add(identity); humanKick = true; }
       continue;
     }
     if (!eligible.has(id)) continue;
@@ -146,7 +147,7 @@ function kickTally(hub: Hub, room: Room, kv: KickVote) {
   const needed = hub.kickNeeded(room, t);
   const poolSessions = sessionsOf(pool);
   const possible = kickPossible(hub, room, t, keepSessions.size);
-  return { kick: kickSessions.size, keep: keepSessions.size, needed, pool: poolSessions, possible, humanKeep, summary: `${kickSessions.size}/${needed} kick, ${keepSessions.size} keep, ${poolSessions} eligible connection(s)` };
+  return { kick: kickSessions.size, keep: keepSessions.size, needed, pool: poolSessions, possible, humanKeep, humanKick, summary: `${kickSessions.size}/${needed} kick, ${keepSessions.size} keep, ${poolSessions} eligible connection(s)` };
 }
 
 function evaluateKick(hub: Hub, room: Room, kv: KickVote): void {
@@ -156,6 +157,15 @@ function evaluateKick(hub: Hub, room: Room, kv: KickVote): void {
   if (withdrawIfDelivered(hub, room, kv)) return;
   const tally = kickTally(hub, room, kv);
   if (tally.humanKeep) { settleKick(hub, room, kv, "dropped", "a human voted keep (veto)"); return; }
+  // On a vote the hub opened on its own count, a dashboard human is the audit and decides alone; seats are untrusted monitors
+  // of each other (peers shield a peer's shutdown: arXiv:2609.28274; untrusted monitors collude: arXiv:2312.06942), so their
+  // ballots alone still need the room's threshold. A hub-only removal is not built: in replay 3 of 6 would have hit seats
+  // that delivered later (sources/seat-performance).
+  if (tally.humanKick && kv.by.id === HUB_STARTER.id) {
+    settleKick(hub, room, kv, "kicked", "a human on the dashboard decided on the hub's record");
+    hub.removeParticipant(room.name, t.id, "a vote the hub opened, decided by a human", kv.reason);
+    return;
+  }
   if (tally.kick >= tally.needed) {
     settleKick(hub, room, kv, "kicked", `${tally.kick} of ${tally.needed} needed kick ballots`);
     hub.removeParticipant(room.name, t.id, `a kick vote started by ${kv.by.name}`, kv.reason);

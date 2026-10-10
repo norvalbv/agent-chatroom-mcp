@@ -30,6 +30,7 @@ export const offlineScripts = [
   'away-seat-regression.ts',
   'seat-exit-regression.ts',
   'wait-view-regression.ts',
+  'idle-open-work-regression.ts',
   'delivery-cap-regression.ts',
   'readas-limit-regression.ts',
   'baseline-freeze-guard-regression.ts',

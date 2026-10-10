@@ -601,7 +601,7 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
         "replaced in place and only a one-line notice goes to chat, so use this instead of re-posting long content. Empty text deletes the entry.",
       inputSchema: {
         room: roomArg,
-        key: z.string().describe("Short name, e.g. 'evidence', 'open questions', 'draft'. Reserved: claim/<area> (JSON, create-then-owner-only), verify/<area> (first line must be JSON " + VERIFY_HEAD_EXAMPLE.replace("<PROPOSAL_ID>", "<id>") + ": " + VERIFY_HEAD_RULE + "; free prose may follow, e.g. what you could not verify; otherwise it does not satisfy require_verification), hold/<room> (pause; author-only), inbox/* (written by post_to_room; acknowledge with '<key>.ack')."),
+        key: z.string().describe("Short name, e.g. 'evidence', 'open questions', 'draft'. Reserved: claim/<area> (JSON, create-then-owner-only), verify/<area> (first line must be JSON " + VERIFY_HEAD_EXAMPLE.replace("<PROPOSAL_ID>", "<id>") + ": " + VERIFY_HEAD_RULE + "; free prose may follow, e.g. what you could not verify; otherwise it does not satisfy require_verification), attack/<key> (your objection to someone else's entry <key>, quoting the clause in double quotes; its author answers by editing <key>), hold/<room> (pause; author-only), inbox/* (written by post_to_room; acknowledge with '<key>.ack')."),
         text: z.string(),
         ttl_seconds: z.number().positive().finite().optional().describe("Expiry for handoff/inbox only; body remains retrievable by key."),
         expires_at: z.string().optional().describe("Absolute expiry timestamp; use instead of ttl_seconds."),

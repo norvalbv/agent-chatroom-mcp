@@ -205,6 +205,7 @@ export class Hub {
       kick_votes: [...room.kickVotes.values()].map((kv) => this.kickView(room, kv, reveal)),
       // claim/* entries whose owner left: its registered successor may take one at once, anyone after Hub.STALE_CLAIM_MS
       stale_claims: this.staleClaims(room, reveal),
+      ...((s) => (s.unexamined.length || s.open_attacks.length ? { scrutiny: s } : {}))(board.scrutiny(room)),
       active_count: active.length,
       message_count: room.messages.length,
       latest_seq: room.messages.at(-1)?.seq ?? 0,
@@ -1401,6 +1402,7 @@ export class Hub {
   boardEntryExpired(room: Room, key: string, entry: BoardEntry, at = Date.now()): boolean { return board.boardEntryExpired(room, key, entry, at); }
   recordBoardManifest(roomName: string, envelope: { board_keys?: string[]; board_delta?: { keys: string[]; tombstones: string[] } }): void { board.recordBoardManifest(this, roomName, envelope); }
   static readonly BOARD_KEY = board.BOARD_KEY;
+  scrutiny(roomName: string): { unexamined: string[]; open_attacks: string[] } { return board.scrutiny(this.getRoom(roomName)); }
 
   /**
    * Seats expected to draft: voters other than the verifier. Independent attempts only help if they
@@ -1633,6 +1635,20 @@ export class Hub {
       throw new HubError(
         `${this.shown(room, human.from)} (a human) said "${human.content.slice(0, 200)}" (message ${human.id}) and nobody has answered. ` +
           `Reply to them first with send_message reply_to="${human.id}" in plain prose, then propose.`,
+      );
+    }
+    // Once per room: the proposer and the room hear what the proposal would rest on unexamined; the next propose goes ahead.
+    const { unexamined, open_attacks } = board.scrutiny(room);
+    if ((unexamined.length || open_attacks.length) && !board.scrutinyHeld(room)) {
+      const first = (keys: string[]) => [...keys].sort((a, b) => Number(text.includes(b)) - Number(text.includes(a))).slice(0, 8).join(", ") + (keys.length > 8 ? `, and ${keys.length - 8} more` : "");
+      const what = (unexamined.length ? `${unexamined.length} board finding(s) have not been attacked, quoted or even named by anyone but their author: ${first(unexamined)}. ` : "") +
+        (open_attacks.length ? `${open_attacks.length} attack(s) are unanswered by the author of the entry attacked: ${first(open_attacks)}. ` : "");
+      this.post(room, "system", undefined, `${board.SCRUTINY_HELD}, from ${this.shown(room, p)}: ${what}Anyone but the author can check one and write attack/<key> quoting its weakest clause; an author answers an attack by editing the entry. The next propose goes through as things stand.`);
+      throw new HubError(
+        what + (unexamined.length ? `For each one this proposal rests on, ask a named seat to check it and write attack/<key> quoting its weakest clause (or do that yourself if it is not yours). ` : "") +
+          (open_attacks.length ? `The author answers by editing that entry. ` : "") +
+          `This refusal happens once per room and the room has been told: propose again to go ahead as things stand.`,
+        { unexamined, open_attacks },
       );
     }
     this.surfaceCited(room, text, "cited in a proposal");

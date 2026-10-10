@@ -3,7 +3,7 @@ import { createHash } from "node:crypto";
 import type { Hub } from "../hub.js";
 import { HubError } from "./types.js";
 import type { Quorum, Participant, BoardExpiryOptions, BoardEntry, Room } from "./types.js";
-import { now, codeState } from "./internal.js";
+import { now, codeState, norm } from "./internal.js";
 
 function boardExpiry(key: string, opts: BoardExpiryOptions): string | undefined {
   if (opts.ttlSeconds === undefined && opts.expiresAt === undefined) return undefined;
@@ -147,6 +147,7 @@ export function setBoard(hub: Hub, roomName: string, pid: string, key: string, t
   }
   // author-only, and refused without echoing the text: an ownership error that returned the entry would unseal it
   if (key.startsWith("draft/") && previous && previous.by !== p.name) throw new HubError(`"${key}" is ${previous.by}'s draft; draft/* entries are author-only. Write your own, e.g. draft/${p.name}.`, undefined, "ownership");
+  const attacked = key.startsWith("attack/") && text.trim() ? checkAttack(room, p, key, text) : undefined;
   // Assigned once, at creation only: later edits (status updates, notes) keep the same reviewer.
   let reviewer: Participant | undefined;
   const takeover = key.startsWith("claim/") && previous && previous.by !== p.name && !claimReleased(previous) ? hub.claimTakeover(room, previous, p) : null;
@@ -201,6 +202,7 @@ export function setBoard(hub: Hub, roomName: string, pid: string, key: string, t
     ...(reviewer ? { reviewer: reviewer.name, reviewerId: reviewer.id }
       : previous?.reviewer ? { reviewer: previous.reviewer, reviewerId: previous.reviewerId } : {}),
     ...(postReveal ? { postReveal: true } : {}),
+    ...(attacked ? { attackedChars: norm(room.board.get(attacked.target)!.text).length } : {}),
     ...(workspace ? { workspace } : {}),
   };
   applyBoard(room, key, entry);
@@ -221,6 +223,12 @@ export function setBoard(hub: Hub, roomName: string, pid: string, key: string, t
       `Once ${p.name} proposes work from it, require_verification prefers a verify/* entry from you over anyone else's while you're still active; ` +
       `its JSON head (in the proposal's blocked_by) records one check of yours failing at the parent commit and passing at ${p.name}'s. Exercise the change the way its users would; do not only rerun ${p.name}'s tests.`);
   }
+  if (attacked) {
+    // chat kind for the same reason as the reviewer notice: the author's held wait must wake on it
+    hub.post(room, "chat", undefined,
+      `@${attacked.author} ${p.name} attacked your "${attacked.target}" in "${key}", quoting "${attacked.cites.slice(0, 80)}${attacked.cites.length > 80 ? "…" : ""}". ` +
+      `Answer it by editing "${attacked.target}": change the quoted clause, or add a line saying why it stands. An unanswered attack is listed to whoever proposes.`);
+  }
   if (takeover) {
     hub.post(room, "system", undefined, `${hub.shown(room, p)} took over "${key}" from ${hub.shown(room, takeover.owner)} (${takeover.reason === "successor" ? "registered successor" : `owner gone since ${hub.lastSeen(takeover.owner)}`}).`);
   }
@@ -228,6 +236,81 @@ export function setBoard(hub: Hub, roomName: string, pid: string, key: string, t
   if (key.endsWith(".ack") || key.startsWith("verify/")) for (const pr of room.proposals.values()) if (pr.status === "open") hub.evaluate(room, pr);
   if (key.startsWith("draft/")) hub.latchDrafts(room);
   return entry;
+}
+
+/** Coordination state, not findings: there is no claim about the world in these to attack. */
+const NOT_A_FINDING = ["claim/", "verify/", "hold/", "inbox/", "handoff/", "help/", "join-request/", "draft/", "attack/"];
+/** An author's answer that leaves the quoted clause standing must add at least this much: a reply, not a re-save. */
+export const ATTACK_REPLY_MIN_CHARS = 40;
+/** Below this an entry is a note (a todo, a port number), not a finding a proposal could rest on. */
+export const FINDING_MIN_CHARS = 200;
+
+const isFinding = (key: string) => !NOT_A_FINDING.some((x) => key.startsWith(x)) && !key.endsWith(".ack") && !key.endsWith(".partial");
+
+/**
+ * attack/<key>: scrutiny of a board entry before any proposal exists (challenge needs an open proposal, and in 82 past
+ * rooms the first one arrived a median 19.5 min in). Same rules as a blocking challenge: someone other than the author,
+ * on another connection, quoting the text objected to.
+ */
+function checkAttack(room: Room, p: Participant, key: string, text: string): { target: string; author: string; cites: string } {
+  const target = key.slice("attack/".length);
+  const e = room.board.get(target);
+  if (!isFinding(target)) throw new HubError(`"${target}" is coordination state and cannot be attacked; attack/<key> targets a finding, e.g. attack/evidence/x for "evidence/x".`, undefined, "key-format");
+  if (!e) throw new HubError(`There is no board entry "${target}" to attack. attack/<key> names an existing entry, e.g. attack/evidence/x for "evidence/x".`, undefined, "state");
+  if (e.by === p.name) throw new HubError(`"${target}" is your own entry; someone else must attack it. Edit it instead, or attack another seat's finding.`, undefined, "ownership");
+  const author = [...room.participants.values()].find((x) => x.name === e.by);
+  if (author?.session && p.session && author.session === p.session) {
+    throw new HubError(`You share a connection with ${e.by}, the author of "${target}": an attack must come from a different session (identity-is-the-connection).`, undefined, "ownership");
+  }
+  const cites = [...text.matchAll(QUOTED)].map((m) => m[1]).filter((q) => norm(e.text).includes(norm(q))).sort((a, b) => b.length - a.length)[0];
+  if (!cites) throw new HubError(`An attack must quote the clause of "${target}" it objects to (12+ characters, in double quotes), then say what is wrong with it. Read the entry with board_get and copy the text.`);
+  return { target, author: e.by, cites };
+}
+
+/** Open until the author removes every clause the attack quotes, or adds a reply to the attacked entry. */
+function attackOpen(attack: BoardEntry, target: BoardEntry): boolean {
+  const text = norm(target.text);
+  return [...attack.text.matchAll(QUOTED)].some((m) => text.includes(norm(m[1]))) && text.length < (attack.attackedChars ?? 0) + ATTACK_REPLY_MIN_CHARS;
+}
+
+/** The system line posted with the one refusal; it is also the receipt, so a replayed room does not refuse again. */
+export const SCRUTINY_HELD = "A proposal was held once";
+export const scrutinyHeld = (room: Room) => room.messages.some((m) => m.kind === "system" && m.content.startsWith(SCRUTINY_HELD));
+
+const QUOTED = /["“]([^"”]{12,})["”]/g;
+
+/**
+ * What a proposal would rest on unexamined: findings by an agent that no other connection has attacked, quoted or even
+ * named (in chat, a challenge or its own board entry), and attacks the author has not answered (answering is removing
+ * the quoted clause from the attacked entry, or adding a reply to it). Naming counts because seats mostly check each other in chat: in
+ * dev room swarm-002346-crax a finding the verifier had reproduced there was listed as never looked at.
+ */
+export function scrutiny(room: Room): { unexamined: string[]; open_attacks: string[] } {
+  const byName = new Map([...room.participants.values()].map((x) => [x.name, x]));
+  const other = (author: Participant, name: string) => {
+    const x = byName.get(name);
+    return !!x && x.id !== author.id && !(x.session && author.session && x.session === author.session);
+  };
+  const said: { by: string; text: string }[] = [
+    ...room.messages.filter((m) => m.kind !== "system" && m.kind !== "board").map((m) => ({ by: m.from.name, text: m.content })),
+    ...[...room.board].filter(([k]) => isFinding(k)).map(([, e]) => ({ by: e.by, text: e.text })),
+  ];
+  const unexamined: string[] = [];
+  const open_attacks: string[] = [];
+  for (const [key, e] of room.board) {
+    if (key.startsWith("attack/")) {
+      const target = key.slice("attack/".length);
+      const t = room.board.get(target);
+      if (t && attackOpen(e, t)) open_attacks.push(key);
+      continue;
+    }
+    const author = byName.get(e.by);
+    if (!isFinding(key) || e.text.length < FINDING_MIN_CHARS || !author || author.agent === "human" || room.board.has(`attack/${key}`)) continue;
+    const text = norm(e.text);
+    const looked = said.some((s) => other(author, s.by) && (s.text.includes(key) || [...s.text.matchAll(QUOTED)].some((m) => text.includes(norm(m[1])))));
+    if (!looked) unexamined.push(key);
+  }
+  return { unexamined, open_attacks };
 }
 
 const CLAIM_STOP = new Set(("the a an and or of to in on for by with from is are be it this that as at not no into via per its all any " +

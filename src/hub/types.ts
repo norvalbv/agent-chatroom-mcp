@@ -222,6 +222,8 @@ export interface BoardEntry {
   workspace?: { branch?: string; worktree: string };
   /** draft/* only: written or edited once peers' drafts were readable, so it is not an independent attempt (sticky). */
   postReveal?: boolean;
+  /** attack/* only: normalised length of the attacked entry when the attack was written, to tell a reply from a re-save. */
+  attackedChars?: number;
 }
 
 export interface Challenge {

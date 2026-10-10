@@ -25,6 +25,9 @@ const waitExit = async (h: { exited: () => boolean }, ms: number) => { for (let 
 assert.equal(typeof (env as Record<string, unknown>).ownHubEnv, "function", "env.ts exports ownHubEnv");
 assert.deepEqual(env.ownHubEnv(20), { CHATROOM_IDLE_EXIT_MIN: "20" });
 assert.deepEqual(env.ownHubEnv(0), {}, "0 (or --keep-hub) means never");
+// the operator's default hub (7717, started when no --port is given) is the dashboard hub: it never stops itself (-6)
+assert.deepEqual(env.ownHubEnv(120, 7717), {}, "the operator's hub never gets an idle exit");
+assert.deepEqual(env.ownHubEnv(120, 7874), { CHATROOM_IDLE_EXIT_MIN: "120" });
 
 // a reused hub must run this build: a seat's dev room on a leftover hub would test someone else's code (-5's attack)
 assert.equal(typeof (env as Record<string, unknown>).reusedHubProblem, "function", "env.ts exports reusedHubProblem");

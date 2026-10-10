@@ -100,6 +100,7 @@ const old = runMetrics(events.map((e) => (e.type === 'call_completion' ? { ...e,
 assert.equal(old.seats.find((s: { name: string }) => s.name === 'alice')!.pollingShare, undefined, 'no ms on the log: polling share unknown');
 
 const text = renderMetrics(m);
+assert.ok(text.includes('| 9 | 400/40 | $1.25 |'), `alice's row has model calls, tokens and cost: ${text}`);
 for (const want of ['first proposal 10 min', 'recruit', 'polling', 'alice', 'cited']) assert.ok(text.includes(want), `report text names ${want}: ${text}`);
 
 // The run report carries the section when the artifact has metrics.

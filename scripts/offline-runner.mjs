@@ -209,6 +209,7 @@ export const offlineScripts = [
   'verify-amend-survival-regression.ts',
   'verify-gaps-regression.ts',
   'verify-fail-to-pass-regression.ts',
+  'partial-pregate-regression.ts',
 ];
 
 export function offlineCommands() {

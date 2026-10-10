@@ -1756,8 +1756,13 @@ export class Hub {
     if (room.expectedParticipants !== 1 && Hub.sessionsOf(voters) < 2) {
       throw new HubError("A room of one cannot conclude: at least two agents on different connections must be present. Recruit (request_agent) or ask someone to join.");
     }
-    if (room.requireVerification && ![...room.board.keys()].some((k) => k.startsWith("verify/"))) {
-      throw new HubError("This room requires verification: before proposing, put the command you actually ran, its cwd/commit and its exit code on the board under verify/<area>. Someone else must then check it themselves (the same check failing at the parent commit and passing at yours) and write their own verify/* entry naming the proposal id.");
+    // a verify/<area>.partial never counts (verifyEntryVerdict), so it must not open this door either; head-less prose
+    // still does, as before (round 1's 6334c88f also refused prose, broke four suite tests and was reverted)
+    const verifyKeys = [...room.board.keys()].filter((k) => k.startsWith("verify/"));
+    if (room.requireVerification && !verifyKeys.some((k) => !k.endsWith(".partial"))) {
+      const partials = verifyKeys.slice(0, 3);
+      throw new HubError("This room requires verification: before proposing, put the command you actually ran, its cwd/commit and its exit code on the board under verify/<area>. Someone else must then check it themselves (the same check failing at the parent commit and passing at yours) and write their own verify/* entry naming the proposal id." +
+        (partials.length ? ` The board has only ${partials.join(", ")}: a .partial never counts, so write verify/<area> without it once the check has run.` : ""));
     }
     const unacked = this.unacknowledged(room);
     if (unacked.length) throw new HubError(`Acknowledge the notes from other rooms first (write "<key>.ack"): ${unacked.join(", ")}`);

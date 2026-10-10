@@ -45,14 +45,15 @@ export function openWork(hub: Hub, room: Room, p: Participant, idle = true): Ope
     return who ? hub.shown(room, who) : name;
   };
   const hasWork = (name: string) => entries.some(([k, e]) => e.by === name && !NOT_WORK.some((pre) => k.startsWith(pre)));
-  /** A claim counts as reviewed by `by` (anyone but its owner when omitted) once that seat has put a review where the
+  /** A claim counts as reviewed once any seat but its owner has put a review where the
    * room can read it: a board entry outside claim/ whose key is the claim's area or whose text names the area, the
    * claim, or the owner's branch, or a chat message since the claim that names the area. Reviews land in verify/*, in
-   * review/* and in plain chat; asking for one that is already there is noise a seat learns to skip. */
-  const reviewed = (claimKey: string, claim: BoardEntry, by?: string) => {
+   * review/* and in plain chat, and often from a seat other than the assigned reviewer; asking for one that is
+   * already there is noise a seat learns to skip (replay of 116 long idle runs: 15 of 23 review_owed hits). */
+  const reviewed = (claimKey: string, claim: BoardEntry) => {
     const slug = area(claimKey);
     const word = new RegExp(`(^|[^a-z0-9])${slug.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}([^a-z0-9]|$)`, "i");
-    const mine = (name: string) => name !== claim.by && (by === undefined || name === by);
+    const mine = (name: string) => name !== claim.by;
     if (entries.some(([k, e]) => mine(e.by) && !NOT_REVIEW.some((pre) => k.startsWith(pre)) && !k.endsWith(".partial") &&
       (area(k) === slug || word.test(e.text) || (!!claim.workspace?.branch && e.text.includes(claim.workspace.branch))))) return true;
     return room.messages.some((m) => m.kind === "chat" && m.from.agent !== "hub" && mine(m.from.name) && m.ts >= claim.updatedAt && word.test(m.content));
@@ -64,15 +65,16 @@ export function openWork(hub: Hub, room: Room, p: Participant, idle = true): Ope
       if (e.by !== p.name) help.push({ kind: "help_wanted", key: k, owner: shownName(e.by) });
       continue;
     }
-    if (!k.startsWith("claim/") || claimReleased(e)) continue;
+    if (!k.startsWith("claim/") || claimReleased(e) || settled(e)) continue;
     if (e.by === p.name) {
-      if (idle && !hasWork(p.name)) own.push({ kind: "own_claim_empty", key: k });
+      // work that lives in git and that a peer has already reviewed is not an empty claim
+      if (idle && !hasWork(p.name) && !reviewed(k, e)) own.push({ kind: "own_claim_empty", key: k });
       continue;
     }
     if (hub.claimTakeover(room, e, p)) { orphaned.push({ kind: "claim_orphaned", key: k, owner: shownName(e.by) }); continue; }
     if (!hasWork(e.by)) continue;
     const mine = e.reviewerId === p.id;
-    if (mine && !reviewed(k, e, p.name)) {
+    if (mine && !reviewed(k, e)) {
       review.push({ kind: "review_owed", key: k, owner: shownName(e.by) });
     } else if (!mine && !reviewed(k, e) &&
       (p.role === "verifier" || (!!e.reviewerId && !room.participants.get(e.reviewerId)?.active))) {
@@ -91,6 +93,11 @@ function describe(w: OpenWork): string {
     case "own_claim_empty": return `your ${w.key} has nothing on the board behind it: post what you have found or built, or release the claim`;
     case "help_wanted": return `${w.owner} asked for help in ${w.key} (board_get it)`;
   }
+}
+
+/** A claim whose own JSON status says the work is finished: nothing about it is open, whoever holds it. */
+function settled(e: BoardEntry): boolean {
+  try { return /^(verified|fixed|merged|done|complete|closed)/i.test(String((JSON.parse(e.text) as { status?: unknown }).status ?? "")); } catch { return false; }
 }
 
 const lastNamed = new WeakMap<Participant, string>();

@@ -2289,18 +2289,20 @@ export class Hub {
     return [...room.board]
       .map(([key, e]) => ({ key, e, v: this.verifyEntryVerdict(room, pr, key, e, undefined) }))
       .filter((x) => x.v.head && !x.v.why)
-      .map((x) => ({ key: x.key, by: x.e.by, gaps: [...verifyGaps(x.v.head!, x.e.devReceipt), ...this.devRunAuthorGap(room, pr, x.e.devReceipt)] }))
+      .map((x) => ({ key: x.key, by: x.e.by, gaps: [...verifyGaps(x.v.head!, x.e.devReceipt), ...this.devRunAuthorGap(room, pr, x.e.devReceipt, x.e.by)] }))
       .filter((x) => x.gaps.length);
   }
 
   /** The brief's rule: agents watched by someone other than the change's author. A dev run the proposer started is their own demo. */
-  private devRunAuthorGap(room: Room, pr: Proposal, receipt: DevReceipt | undefined): string[] {
+  private devRunAuthorGap(room: Room, pr: Proposal, receipt: DevReceipt | undefined, entryBy: string): string[] {
     const by = receipt?.launched?.requested_by;
     if (!by) return [];
     const starter = [...room.participants.values()].find((x) => x.name === by);
     const proposer = room.participants.get(pr.by.id);
     const own = by === pr.by.name || (!!starter?.session && starter.session === proposer?.session);
-    return own ? [`dev run ${receipt!.launched!.run} was started by ${by}, the proposal's author, not by a reviewer`] : [];
+    if (own) return [`dev run ${receipt!.launched!.run} was started by ${by}, the proposal's author, not by a reviewer`];
+    // the receipt says who started and watched the run; a reviewer citing someone else's run read it second-hand (verifier, verify/hub-launched-dev-runs)
+    return by !== entryBy ? [`dev run ${receipt!.launched!.run} was started by ${by}, not by ${entryBy} who cites it`] : [];
   }
 
   /** start_dev_run over HTTP: the participant id is the requester's proof of identity (issued only to its own connection). */

@@ -23,7 +23,7 @@ const devBody = (over: Record<string, unknown> = {}) => ({
 
 /** a stand-in for git, tsc and the launcher: "launches" by starting a stub dev hub, and exits when told */
 function fakeHost(body: () => unknown) {
-  let finish: (c: number) => void = () => {};
+  const finishers: ((c: number) => void)[] = [];
   let runDir = "";
   const listening = { pid: 5151 };
   const servers: ReturnType<typeof createServer>[] = [];
@@ -40,11 +40,11 @@ function fakeHost(body: () => unknown) {
       await new Promise<void>((r) => srv.listen(0, "127.0.0.1", r));
       return (srv.address() as AddressInfo).port;
     },
-    launch: () => ({ pid: 4242, exited: new Promise<number | null>((r) => { finish = r; }) }),
+    launch: () => ({ pid: 4242, exited: new Promise<number | null>((r) => { finishers.push(r); }) }),
     fetchJson: async (url: string) => (await fetch(url)).json(),
     stop: async () => { for (const s of servers) { s.closeAllConnections(); s.close(); } },
   };
-  return { host, listening, end: (c = 0) => finish(c), close: () => { for (const s of servers) { s.closeAllConnections(); s.close(); } } };
+  return { host, listening, end: (c = 0) => { for (const f of finishers) f(c); }, close: () => { for (const s of servers) { s.closeAllConnections(); s.close(); } } };
 }
 
 function fixture(t: { after: (fn: () => void) => void }, fake?: ReturnType<typeof fakeHost>) {
@@ -104,6 +104,14 @@ test("the proposer's own dev run reads PARTIAL; an ended run's port is not trust
   hub.setBoard(room.name, b.id, "verify/x", head(`http://127.0.0.1:${run.port}/rooms/dev-room`));
   await hub.readDevRoom(room.name, "verify/x");
   assert.match(hub.proposalView(room, pr).verification_gaps?.[0]?.gaps.join(" | ") ?? "", /started by Alice, the proposal's author/);
+  // a third seat citing Bob's run: it did not start or watch it
+  const c = hub.join(room.name, "Carol", "test", {}, undefined, "session-c").participant;
+  const run2 = await hub.startDevRun(room.name, b.id, { commit: COMMIT, task: "bob's" });
+  await until(() => run2.state === "running");
+  await hub.devRuns.observe(run2);
+  hub.setBoard(room.name, c.id, "verify/y", head(`http://127.0.0.1:${run2.port}/rooms/dev-room`));
+  await hub.readDevRoom(room.name, "verify/y");
+  assert.match(hub.proposalView(room, pr).verification_gaps?.find((g) => g.key === "verify/y")?.gaps.join(" | ") ?? "", /started by Bob, not by Carol who cites it/);
   fake.end(0);
   await until(() => run.state === "ended");
   // something else now answers on that port with a different story: the hub uses what it saw while the run was its own

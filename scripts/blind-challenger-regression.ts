@@ -91,6 +91,19 @@ const w2s = JSON.stringify(await c("wait_for_messages", { room: R, timeout_ms: 0
 assert.ok(!w2s.includes("SECRET-LATER"), "a later message that is not addressed to it is not pushed to it");
 assert.ok(w2s.includes("the bench script is scripts/bench.ts"), "a message addressed to it still is");
 
+// ---------- 2c. ...and its own report is not refused for messages it was never pushed (integration dev room: the
+// "arrived while you were composing" refusal handed it the room's unread chat, and it left and rejoined to post) ----------
+await c("pass", { room: R }); // declines the @-ask it was shown
+await b("send_message", { room: R, content: "SECRET-RACE: still agree, ship it", force: true });
+let sent: string;
+try {
+  sent = JSON.stringify(await c("send_message", { room: R, content: "Checked the 40% claim against scripts/bench.ts: it holds, no challenge." }));
+} catch (e) {
+  sent = `REFUSED ${(e as Error).message}`;
+}
+assert.ok(!sent.includes("SECRET-RACE"), `the send does not hand it the unread chat: ${sent.slice(0, 160)}`);
+assert.ok(!sent.startsWith("REFUSED"), `its report is not refused for messages it was never pushed: ${sent.slice(0, 160)}`);
+
 // ---------- 3. Anyone else joining late still gets the full view ----------
 const d = await connect("d");
 const late = JSON.stringify(await d("join_room", { room: R, name: "late-seat", agent: "claude" }));

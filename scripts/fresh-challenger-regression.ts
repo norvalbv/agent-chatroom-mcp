@@ -152,4 +152,19 @@ assert.equal(w3.r.state, "open");
 await new Promise((r) => setTimeout(r, 200));
 assert.equal(w3.r.state, "concluded", "the window passing concludes it with no further call");
 
+// ---------- 12. It works in the proposer's checkout, not the hub's default directory (dev room swarm-012737-3p24:
+// the recruit ran in the hub's cwd, counted 12 files where the seats' tree had 11, and challenged a true claim) ----------
+const where = make(true);
+const proposerTree = mkdtempSync(join(tmpdir(), "proposer-tree-"));
+where.spawner.freshChallenger("room-cwd", { ...prop("prop_cwd"), cwd: proposerTree });
+assert.equal(where.spawned[0].cwd, proposerTree, "the recruit's cwd is the proposer's worktree");
+const hub3 = new Hub({});
+hub3.bindSeat("seat-key-a", "s1", proposerTree);
+const { participant: e } = hub3.join(ROOM, "E", "test", { nudgeAfterMs: 0 }, undefined, "s1");
+hub3.join(ROOM, "F", "test", {}, undefined, "s2");
+const seen: { cwd?: string }[] = [];
+hub3.onProposalOpened = (_room, pr) => seen.push(pr);
+hub3.propose(ROOM, e.id, TEXT);
+assert.equal(seen[0].cwd, proposerTree, "the hub hands the spawner the proposer's worktree when its launcher named one");
+
 console.log("fresh-challenger-regression OK");

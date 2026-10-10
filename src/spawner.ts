@@ -464,7 +464,7 @@ export class Spawner {
    * Opt-in, once per proposal, bounded per room; any refusal (hold, cap, policy) is swallowed because the propose that
    * triggered it must stand. Returns the recruit so the hub can hold the conclusion for it (Hub.awaitScrutiny).
    */
-  freshChallenger(room: string, proposal: { id: string; text: string; by: string }): SpawnedAgent | undefined {
+  freshChallenger(room: string, proposal: { id: string; text: string; by: string; cwd?: string }): SpawnedAgent | undefined {
     if (!this.opts.freshChallenger || process.env.CHATROOM_NO_RECRUIT === "1") return undefined;
     const key = `${room}\n${proposal.id}`;
     if (this.freshChallengersFired.has(key)) return undefined;
@@ -480,7 +480,7 @@ export class Spawner {
       `If it holds, post one message naming the claim and the command you ran, and do not challenge. If nothing in it is checkable, post that in one sentence. ` +
       `Then leave_room: the proposal waits for you only a few minutes, so report within five.`;
     try {
-      const [rec] = this.request({ room, count: 1, name: `fresh-challenger-${firedHere + 1}`, requestedBy: "hub", requestedByShown: "the hub", brief, fresh: true });
+      const [rec] = this.request({ room, count: 1, name: `fresh-challenger-${firedHere + 1}`, requestedBy: "hub", requestedByShown: "the hub", brief, fresh: true, ...(proposal.cwd ? { cwd: proposal.cwd } : {}) });
       this.hooks?.announce(room, `The hub recruited ${rec.name} (${rec.agent}${rec.model ? `/${rec.model}` : ""}), a fresh challenger that has not seen this discussion, to check one claim of ${proposal.id}.`);
       return rec;
     } catch (e) {

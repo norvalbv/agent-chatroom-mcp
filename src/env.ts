@@ -133,6 +133,26 @@ export const HEARTBEAT_HOOK = resolve(repoRoot, "scripts", "heartbeat-hook.mjs")
 export interface SeatBeat { key: string; mcpUrl: string; env: NodeJS.ProcessEnv }
 
 /** `worktree`: the directory the seat works in, so the hub can stamp its claim/* entries with branch and path. */
+/**
+ * Why a process that is itself a seat may not start a launcher on this port, or null. A seat's shell has no hub of
+ * its own: with nothing named, the launcher falls back to 7717 (the operator's hub) and would put a room of agents
+ * on it. A seat names a private port, and never the hub it is talking through.
+ */
+/** The launcher's default hub: the operator's own, never a seat's private one. */
+const OPERATOR_PORT = 7717;
+export function seatPortError(env: NodeJS.ProcessEnv, portFlag: string | undefined): string | null {
+  if (!env.CHATROOM_SEAT_KEY) return null;
+  const raw = portFlag || env.PORT;
+  if (!raw) return "This shell belongs to a seat: pass --port <a free private port> so the run gets its own hub. With none, the launcher would use the operator's hub.";
+  // compared as the number the launcher will use, so "07741" is 7741
+  const port = Number(raw);
+  let own = Number.NaN;
+  try { own = Number(new URL(env.CHATROOM_HEARTBEAT_URL ?? "").port); } catch {}
+  if (port === own) return `Port ${port} is the hub this seat is talking through; pass --port <a free private port>.`;
+  if (port === OPERATOR_PORT) return `Port ${OPERATOR_PORT} is the operator's hub; a seat passes --port <a free private port>.`;
+  return null;
+}
+
 export function seatBeat(mcpUrl: string, key: string, worktree?: string): SeatBeat {
   const u = new URL(mcpUrl);
   u.searchParams.set("seat", key);

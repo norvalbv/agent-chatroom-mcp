@@ -169,6 +169,7 @@ export const offlineScripts = [
   'proposed-decision-path-regression.ts',
   'smoke-ports-regression.ts',
   'own-hub-port-regression.ts',
+  'seat-shell-guards-regression.ts',
   'result-fleet-compat.ts',
   'seat-scorecard-regression.ts',
   'result-fleet-regression.ts',

@@ -127,5 +127,21 @@ hints = await g.idle(room3, 3);
 assert.match(hints[2], OFFER, `once reviewed, the claim holder is offered the door: ${JSON.stringify(hints)}`);
 assert.match(hints[2], /handoff\/parser/, `and told to write handoff/<its area> first: ${hints[2]}`);
 
+// 9. A seat that is the hub-assigned reviewer of a live claim whose work has not landed yet is not free: its review is
+// coming (claude-opus-5-5-3's dev room swarm-005845-4g7o-room offered the door to exactly that seat).
+const i = await seat("i"); const j = await seat("j");
+const room4 = "idle-leave-reviewer";
+await i.call("join_room", { room: room4, name: "I", agent: "test" });
+await j.call("join_room", { room: room4, name: "J", agent: "test" });
+await i.call("board_set", { room: room4, key: "claim/slow", text: '{"owner":"I","area":"slow"}' });
+const rev = hub.getRoom(room4).board.get("claim/slow")!.reviewer;
+assert.equal(rev, "J", "J is the assigned reviewer of claim/slow");
+hints = await j.idle(room4, 6);
+assert.ok(hints.every((x) => !OFFER.test(x)), `the assigned reviewer of work still coming is not offered the door: ${JSON.stringify(hints)}`);
+await i.call("board_set", { room: room4, key: "evidence/slow", text: "Slow piece done on i/slow @ 1a2b3c4, 9/9." });
+await j.call("board_set", { room: room4, key: "verify/slow", text: "Reran slow at 1a2b3c4 myself: 9/9." });
+hints = await j.idle(room4, 3);
+assert.match(hints[2], OFFER, `once it has reviewed, it may be offered the door: ${JSON.stringify(hints)}`);
+
 console.log("idle-leave-regression: OK");
 process.exit(0);

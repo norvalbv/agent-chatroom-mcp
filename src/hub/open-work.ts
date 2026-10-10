@@ -54,6 +54,14 @@ function reviewedClaim(room: Room, claimKey: string, claim: BoardEntry): boolean
 
 /** This seat's claims whose work is still in flight: not released, not marked finished, and not yet reviewed by anyone
  * else. A seat holding one may be waiting on its own long job (a soak, a test suite), which looks like polling. */
+/** Live claims this seat was assigned to review and has not seen reviewed yet, whether or not their work has landed:
+ * a reviewer whose duty is still coming is not free (dev room swarm-005845-4g7o-room). */
+function reviewsComing(room: Room, p: Participant): string[] {
+  return [...room.board.entries()].filter(([k, e]) => k.startsWith("claim/") && e.reviewerId === p.id && e.by !== p.name && e.text.trim() &&
+    !claimReleased(e) && !settled(e) && [...room.participants.values()].some((x) => x.name === e.by && x.active) &&
+    !reviewedClaim(room, k, e)).map(([k]) => k);
+}
+
 function claimsInFlight(room: Room, p: Participant): string[] {
   return [...room.board.entries()].filter(([k, e]) => k.startsWith("claim/") && e.by === p.name && e.text.trim() &&
     !claimReleased(e) && !settled(e) && !reviewedClaim(room, k, e)).map(([k]) => k);
@@ -81,7 +89,7 @@ export function offersLeave(room: Room, p: Participant, streak: number, work: Op
   const n = idlePolicy.leaveWaits;
   if (!n || work.length || streak < n || streak % n !== 0 || room.state !== "open" || p.agent === "human") return false;
   if (p.role === "verifier" || p.role === "lead" || p.role === "chair") return false;
-  if (claimsInFlight(room, p).length) return false;
+  if (claimsInFlight(room, p).length || reviewsComing(room, p).length) return false;
   return ![...room.proposals.values()].some((pr) => pr.status === "open");
 }
 

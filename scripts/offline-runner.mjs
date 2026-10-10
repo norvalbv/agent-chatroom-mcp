@@ -104,6 +104,8 @@ export const offlineScripts = [
   'electorate-regression.ts',
   'handoff-regression.ts',
   'heartbeat-regression.ts',
+  'work-ledger-regression.ts',
+  'barren-claim-regression.ts',
   'steer-contract-regression.ts',
   'steer-hook-regression.ts',
   'room-status-size-regression.ts',

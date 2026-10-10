@@ -7,19 +7,21 @@ import { HubError } from "./types.js";
 import type { Participant, Room } from "./types.js";
 import { now } from "./internal.js";
 import { SUSPECTED_DEAD_MS } from "./kick.js";
+import { countWork, workClass } from "./work.js";
 
-export type Beat = { tool: string; step?: number; detail?: string };
+/** `hub`: the beat is a chatroom tool call the hub served itself, not local work the seat's process reported. */
+export type Beat = { tool: string; step?: number; detail?: string; hub?: boolean };
 
 /** sha256 of a launcher seat key, persisted on the participant (seatKeyHash) so a beat after a hub restart still finds its seat. */
 export function seatHash(seatKey: string): string { return createHash("sha256").update(seatKey).digest("hex"); }
 
 /** A beat no live connection claims (the hub restarted, or the MCP session dropped): the process is still running, so record
  * it on the inactive seats that key joined as. They stay inactive; room_status shows them as "away", not dead. */
-function beatAwaySeats(hub: Hub, seatKey: string, record: (p: Participant) => void): void {
+function beatAwaySeats(hub: Hub, seatKey: string, record: (room: Room, p: Participant) => void): void {
   const hash = seatHash(seatKey);
   for (const room of hub.rooms.values()) {
     if (room.state === "concluded" || room.state === "closed") continue;
-    for (const p of room.participants.values()) if (!p.active && p.seatKeyHash === hash) record(p);
+    for (const p of room.participants.values()) if (!p.active && p.seatKeyHash === hash) record(room, p);
   }
 }
 
@@ -76,11 +78,14 @@ export class Seats {
    */
   heartbeat(roomName: string, pid: string, info: Beat): void {
     const room = this.hub.getRoom(roomName);
-    this.recordWork(this.hub.requireParticipant(room, pid), info);
+    this.recordWork(room, this.hub.requireParticipant(room, pid), info);
   }
 
   /** A step with no count of its own (a hook, an MCP call) is the seat's next step. */
-  private recordWork(p: Participant, info: Beat): void {
+  private recordWork(room: Room, p: Participant, info: Beat): void {
+    const cls = info.hub ? undefined : workClass(info.tool, info.detail);
+    const target = cls ? countWork(p, cls, info.detail) : undefined;
+    if (cls && target !== undefined) this.hub.persist({ type: "work", room: room.name, pid: p.id, cls, tool: String(info.tool).slice(0, 40), target, ts: now() });
     const detail = String(info.detail ?? "").replace(/\s+/g, " ").trim().slice(0, 300);
     const step = Number(info.step) || (p.working?.step ?? 0) + 1;
     p.working = { tool: String(info.tool).slice(0, 40), step, at: now(), ...(detail ? { detail } : {}) };
@@ -100,8 +105,8 @@ export class Seats {
   /** Heartbeat every active participant the seat's connection holds, in rooms still open. Returns how many were marked. */
   heartbeatSeat(seatKey: string, info: Beat): number {
     const seats = this.participants(seatKey);
-    for (const { p } of seats) this.recordWork(p, info);
-    if (!seats.length) beatAwaySeats(this.hub, seatKey, (p) => this.recordWork(p, info));
+    for (const { room, p } of seats) this.recordWork(room, p, info);
+    if (!seats.length) beatAwaySeats(this.hub, seatKey, (room, p) => this.recordWork(room, p, info));
     return seats.length;
   }
 

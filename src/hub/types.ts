@@ -132,6 +132,8 @@ export interface Participant {
   working?: { tool: string; step: number; at: string; detail?: string };
   /** the last 60 heartbeats: what the seat ran, step by step (dashboard: click a person). Ephemeral. */
   activity?: { tool: string; step: number; at: string; detail: string }[];
+  /** distinct local targets (files, patterns, commands, web hosts) this seat's process reported, by class, since it joined (src/hub/work.ts). Kept in the room log. */
+  work?: WorkCounts;
   /** id of the addressed message this participant was last shown by wait_for_messages (the next wait without an answer is refused once) */
   addressWarned?: string;
   /** messages the last capped wait/read left undelivered (0 = it carried everything). Ephemeral. */
@@ -264,6 +266,9 @@ export interface ConclusionVerification {
   kind?: VerifyKind;
 }
 
+export type WorkClass = "read" | "search" | "web" | "run" | "edit";
+export type WorkCounts = Partial<Record<WorkClass, number>>;
+
 export interface Proposal {
   id: string;
   room: string;
@@ -279,6 +284,8 @@ export interface Proposal {
   updatedAt?: string;
   /** voters present when the proposal was made; unanimity is taken over these (late joiners are not waited on) */
   snapshot?: string[];
+  /** what the hub had counted behind this proposal when it was made (src/hub/work.ts); absent when no seat reports local work */
+  evidence?: string;
   /** set once the "needs a challenge" nudge has been posted */
   nudged?: boolean;
   /** version for which the "did not pass, amend it" notice was posted */
@@ -340,7 +347,7 @@ export interface Room {
   state: RoomState;
   /** Hidden from listings (dashboard, list_rooms) but fully kept on disk; set by a human or the archive-dead sweep. */
   archived?: boolean;
-  conclusion?: { text: string; proposalId: string; decidedAt: string; version?: number; tally?: { agree: number; disagree: number; abstain: number }; electorate?: ElectorateSummary; unresolved_objections?: { by: string; objection: string }[]; verification?: ConclusionVerification };
+  conclusion?: { text: string; proposalId: string; decidedAt: string; version?: number; tally?: { agree: number; disagree: number; abstain: number }; electorate?: ElectorateSummary; unresolved_objections?: { by: string; objection: string }[]; verification?: ConclusionVerification; evidence?: string };
   /** identical silence nudges are posted at most twice */
   lastNudge?: { text: string; count: number };
   /** Lifetime refusal counts keyed by tool and bounded reason class (no bodies, no ids). */
@@ -383,6 +390,8 @@ export interface Room {
   lastBoardEventVersion?: number;
   /** human message ids the propose-gate has already warned about (once each) */
   humanWarned: Set<string>;
+  /** the one "claims without findings" refusal has been given (propose). Ephemeral. */
+  barrenWarned?: boolean;
   /** who has been asked to answer each human message, so three agents do not all say hello */
   responders: Map<string, { pid: string; at: number }>;
   /** open and settled votes to remove a participant, keyed by target pid */

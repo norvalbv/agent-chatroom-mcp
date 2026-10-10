@@ -20,6 +20,10 @@ import * as board from "./hub/board.js";
 import * as kick from "./hub/kick.js";
 import * as liveness from "./hub/liveness.js";
 import * as persistence from "./hub/persistence.js";
+import { barrenClaims, evidenceGaps, evidenceReceipt } from "./hub/work.js";
+
+/** The hub's ask to the owners of claims with no findings; its presence in the log is the receipt that the one refusal was given. */
+const BARREN_ASK = "is ready to propose and your claim has no findings on the board";
 
 export class Hub {
   readonly rooms = new Map<string, Room>();
@@ -191,6 +195,7 @@ export class Hub {
         last_active_at: p.lastActiveAt,
         last_seen_at: this.lastSeen(p),
         working: p.working ?? null,
+        ...(p.work ? { work: p.work } : {}),
         liveness: (() => {
           const age = (at: string) => Math.max(0, Math.floor((observedAt - Date.parse(at)) / 1000));
           const age_seconds = age(this.lastSeen(p));
@@ -1608,6 +1613,9 @@ export class Hub {
     return room.requireChallenge;
   }
 
+  /** What the hub counts as thin behind the room's work right now (src/hub/work.ts), for the hint of a seat that owes a challenge. */
+  evidenceGaps(room: Room): string | undefined { return evidenceGaps(room, this.voters(room), (v) => this.shown(room, v)); }
+
   propose(roomName: string, pid: string, text: string): Proposal {
     const room = this.getRoom(roomName);
     const p = this.requireParticipant(room, pid);
@@ -1651,6 +1659,16 @@ export class Hub {
         { unexamined, open_attacks },
       );
     }
+    // (the line the hub posts is the receipt, so a restarted hub does not refuse a second time)
+    // refused once per room: a first proposal often lands before a claimed area has reported (24% of past rooms;
+    // scripts/barren-claims-measure.py). The owners are asked in the room; the second propose goes through regardless.
+    const barren = room.barrenWarned || room.messages.some((m) => m.kind === "system" && m.content.includes(BARREN_ASK)) ? [] : barrenClaims(room, voters.filter((v) => v.id !== p.id));
+    if (barren.length) {
+      room.barrenWarned = true;
+      const owners = [...new Set(voters.filter((v) => barren.some((b) => b.endsWith(`(${v.name})`))).map((v) => `@${this.shown(room, v)}`))];
+      this.post(room, "system", undefined, `${owners.join(" ")} ${this.shown(room, p)} ${BARREN_ASK} (${barren.join(", ")}). Post what you found, even if unfinished, or clear the claim.`);
+      throw new HubError(`CLAIMS WITHOUT FINDINGS: ${barren.join(", ")}. Their owners are in the room and have put nothing but the claim on the board; the hub has asked them. Wait for their entries, or propose again to go ahead without them: this refusal is given once per room.`);
+    }
     this.surfaceCited(room, text, "cited in a proposal");
     const proposal: Proposal = {
       id: shortId("prop"),
@@ -1665,9 +1683,12 @@ export class Hub {
       updatedAt: now(),
       snapshot: voters.map((v) => v.id),
     };
+    const evidence = evidenceReceipt(room, voters, (v) => this.shown(room, v));
+    if (evidence) proposal.evidence = evidence;
     room.proposals.set(proposal.id, proposal);
     this.persist({ type: "proposal", proposal });
     this.post(room, "proposal", p, `PROPOSAL ${proposal.id}: ${text}`, { proposalId: proposal.id });
+    if (evidence) this.post(room, "system", undefined, `${evidence} Counted by the hub, not claimed by the proposer.`);
     try {
       this.onProposalOpened?.(roomName, { id: proposal.id, text, by: p.name });
     } catch (e) {
@@ -1961,6 +1982,7 @@ export class Hub {
       chars: pr.text.length,
       status: pr.status,
       created_at: pr.createdAt,
+      ...(pr.evidence ? { evidence: pr.evidence } : {}),
       tally,
       electorate: summary ?? null,
       // Dissent remains binding under the existing rules even when its author is not counted.
@@ -2244,7 +2266,7 @@ export class Hub {
       key: v.key, by: v.entry.by, path: v.head.refactor === true ? "refactor" : "fail_to_pass",
       base_commit: v.head.base_commit!, commit: v.head.commit!, ...(v.head.kind ? { kind: v.head.kind } : {}),
     };
-    room.conclusion = { text: pr.text, proposalId: pr.id, decidedAt: now(), version: pr.version, tally, electorate, unresolved_objections: unresolved, ...(verification ? { verification } : {}) };
+    room.conclusion = { text: pr.text, proposalId: pr.id, decidedAt: now(), version: pr.version, tally, electorate, unresolved_objections: unresolved, ...(verification ? { verification } : {}), ...(pr.evidence ? { evidence: pr.evidence } : {}) };
     this.persist({ type: "proposal", proposal: pr });
     this.setState(room, "concluded");
     if (room.nudgeTimer) clearTimeout(room.nudgeTimer);

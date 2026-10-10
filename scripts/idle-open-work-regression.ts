@@ -52,8 +52,14 @@ assert.equal(w.open_work, undefined, "no open_work field when there is none");
 
 // 1. A claims an area and writes nothing else: A's own idle wait says the claim has nothing behind it.
 await ok(a.call("board_set", { room, key: "claim/parser", text: '{"owner":"A","area":"parser"}' }), "A claims");
+// Not on the first idle wait, and not while A is heartbeating local tool calls (a builder peeking between steps).
+assert.equal((await a.idle(room)).hint, OLD, "one empty wait is not idleness");
+await new Promise((r) => setTimeout(r, 5));
+hub.heartbeat(room, [...hub.getRoom(room).participants.values()].find((x) => x.name === "A")!.id, { tool: "Bash", detail: "npm test" });
+assert.equal((await a.idle(room)).hint, OLD, "a seat running local tools between waits is not told its claim is empty");
+await new Promise((r) => setTimeout(r, 5));
 w = await a.idle(room);
-assert.match(w.hint ?? "", /claim\/parser/, `A is told its claim has nothing on the board yet: ${w.hint}`);
+assert.match(w.hint ?? "", /claim\/parser/, `A, idle twice running, is told its claim has nothing on the board yet: ${w.hint}`);
 assert.deepEqual(w.open_work?.map((x) => x.kind), ["own_claim_empty"]);
 
 // The hub picked a reviewer for claim/parser. Until A posts work there is nothing to review.
@@ -115,6 +121,10 @@ w = await other.idle(room);
 assert.equal(w.open_work?.length, 5, "the structured list is complete");
 assert.equal((w.hint!.match(/\(\d\)/g) ?? []).length, 3, `the hint carries three items: ${w.hint}`);
 assert.match(w.hint!, /2 more/, "and counts the rest");
+
+// 8. Each change in what a seat was shown is written to the room log once, so a room can be measured afterwards.
+const logged = (hub.replyMetricEvents.get(room) ?? []).filter((e) => (e.type as string) === "open_work").length;
+assert.ok(logged >= 5 && logged <= 8, `open_work is logged on change, not on every wait: ${logged}`);
 
 console.log("idle-open-work-regression: OK");
 process.exit(0);

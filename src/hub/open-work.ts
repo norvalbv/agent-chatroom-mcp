@@ -19,7 +19,22 @@ export interface OpenWork {
 const NOT_WORK = ["claim/", "help/", "join-request/", "inbox/", "hold/", "verify/"];
 const HINT_ITEMS = 3;
 
-export function openWork(hub: Hub, room: Room, p: Participant): OpenWork[] {
+/** The last idle wait each seat was handed: when, and how much it had said by then. */
+const lastIdle = new WeakMap<Participant, { at: number; said: number }>();
+
+/** True when this idle wait directly follows another with nothing between them: no message sent and no local tool call
+ * heartbeated (a builder mid-task peeks at the room between steps; that is not idleness). Seats with no heartbeat are
+ * judged on the two waits alone. Call once per idle wait. */
+export function idleAgain(p: Participant): boolean {
+  const prev = lastIdle.get(p);
+  lastIdle.set(p, { at: Date.now(), said: p.messageCount });
+  if (!prev || prev.said !== p.messageCount) return false;
+  return !(p.activity ?? []).some((a) => Date.parse(a.at) > prev.at && !/wait_for_messages/.test(a.tool));
+}
+
+/** `idle`: the seat was already idle on its previous wait (idleAgain). Only then is its own claim with nothing behind it
+ * listed, since that is also what a builder between commits looks like. */
+export function openWork(hub: Hub, room: Room, p: Participant, idle = true): OpenWork[] {
   if (room.state !== "open" || p.agent === "human") return [];
   const entries = [...room.board.entries()].filter(([, e]) => e.text.trim());
   const area = (key: string) => key.slice(key.indexOf("/") + 1);
@@ -44,7 +59,7 @@ export function openWork(hub: Hub, room: Room, p: Participant): OpenWork[] {
     }
     if (!k.startsWith("claim/") || claimReleased(e)) continue;
     if (e.by === p.name) {
-      if (!hasWork(p.name)) own.push({ kind: "own_claim_empty", key: k });
+      if (idle && !hasWork(p.name)) own.push({ kind: "own_claim_empty", key: k });
       continue;
     }
     if (hub.claimTakeover(room, e, p)) { orphaned.push({ kind: "claim_orphaned", key: k, owner: shownName(e.by) }); continue; }
@@ -69,6 +84,17 @@ function describe(w: OpenWork): string {
     case "own_claim_empty": return `your ${w.key} has nothing on the board behind it: post what you have found or built, or release the claim`;
     case "help_wanted": return `${w.owner} asked for help in ${w.key} (board_get it)`;
   }
+}
+
+const lastNamed = new WeakMap<Participant, string>();
+
+/** The list as `kind:key` strings when it differs from what this seat was last shown, for the room log; null when unchanged. */
+export function newlyNamed(p: Participant, work: OpenWork[]): string[] | null {
+  const items = work.map((w) => `${w.kind}:${w.key}`);
+  const sig = items.join("\n");
+  if (lastNamed.get(p) === sig) return null;
+  lastNamed.set(p, sig);
+  return items;
 }
 
 /** The idle line with the first few items in it; the plain line when there is nothing to name. */

@@ -16,7 +16,7 @@ import { z } from "zod";
 import { Hub, HubError, ROLES, VERIFY_HEAD_EXAMPLE, VERIFY_HEAD_RULE, type CallOutcome } from "./hub.js";
 import type { Spawner } from "./spawner.js";
 import { createWaitView } from "./hub/wait-view.js";
-import { IDLE_HINT, idleHint, openWork } from "./hub/open-work.js";
+import { IDLE_HINT, idleAgain, idleHint, newlyNamed, openWork } from "./hub/open-work.js";
 
 export const DEFAULT_WAIT_MS = 55_000; // gaps over 55s were 62-77% of sub-room wall time; wait() wakes on events so latency is unchanged
 export const MAX_WAIT_MS = 55_000; // stay under typical MCP client tool timeouts (Codex 60s)
@@ -453,7 +453,9 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
                               ? IDLE_HINT
                               : undefined);
       // an idle seat (nothing delivered, nothing owed) is told what the board says is open for it
-      const idleWork = hint === IDLE_HINT ? openWork(hub, r, p) : [];
+      const idleWork = hint === IDLE_HINT ? openWork(hub, r, p, idleAgain(p)) : [];
+      const named = idleWork.length ? newlyNamed(p, idleWork) : null;
+      if (named) hub.persist({ type: "open_work", room: r.name, pid: p.id, ts: new Date().toISOString(), items: named });
       // Snapshot AFTER the poll wake: concurrent waits serialize their per-participant cursor here.
       // boardManifest records its own telemetry; assembly happens here, after the poll wake.
       const board = hub.boardManifest(room, id, follow);

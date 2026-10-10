@@ -476,6 +476,8 @@ export class Spawner {
       `The hub recruited you because you have NOT seen this room's discussion. ${proposal.by} has just proposed ${proposal.id} as the room's conclusion:\n\n` +
       `---\n${proposal.text.slice(0, 2400)}${cut ? "\n[cut: read the rest of the proposal with read_messages]" : ""}\n---\n\n` +
       `Do not join the debate and do not vote. Pick the ONE claim in it that can be checked against the repository, a cited file, command, transcript or source, and check it yourself. ` +
+      // evidence/fresh-challenger-bench (swarm-082539-kns2): 4 of 4 bench challengers re-ran the proposal's own spot checks and passed a wrong answer.
+      `Check it in a way the proposer did not: inputs the proposer did not try, an edge case the claim covers, or an independent reference (the spec, a system tool, a second implementation). Do not settle for re-running the examples, checks or cases the proposal already lists: they passed for the proposer already. ` +
       `If it fails, file it with challenge(proposal_id="${proposal.id}", objection quoting the clause, command=<a read-only command that exits nonzero while the claim is false, written to run from the repository root with no absolute path or cd, so anyone can rerun it in their own checkout>): rewording cannot answer a command. ` +
       `If it holds, post one message naming the claim and the command you ran, and do not challenge. If nothing in it is checkable, post that in one sentence. ` +
       // the work ledger (src/hub/work.ts) saw no web call behind this proposal: the room answered from the prompt and the repo

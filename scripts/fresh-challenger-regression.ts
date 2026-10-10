@@ -57,6 +57,10 @@ assert.ok(on.spawned[0].brief.includes(TEXT), "the brief carries the proposal te
 assert.match(on.spawned[0].brief, /challenge/);
 assert.match(on.spawned[0].brief, /leave_room/);
 assert.match(on.spawned[0].brief, /no absolute path/, "the command must be rerunnable in another checkout (reviewer finding: a recruit filed one starting with an absolute cd)");
+// evidence/fresh-challenger-bench (swarm-082539-kns2): 4 of 4 bench challengers picked the proposal's own spot-check list as
+// "the one checkable claim", re-ran exactly those cases, and filed nothing while the room failed a case nobody had claimed.
+assert.match(on.spawned[0].brief, /not .*re-?run(ning)? .*(examples|checks|cases) the proposal (already )?(lists|reports)/i, "the brief rules out re-running the proposer's own checks");
+assert.match(on.spawned[0].brief, /independent|reference|inputs the proposer did not/i, "the brief asks for a check the proposer did not run");
 assert.notEqual(on.requests[0].canEdit, true, "the fresh challenger is read-only");
 assert.equal(on.requests[0].count, 1);
 assert.ok(announcements.some((a) => /fresh challenger/i.test(a) && a.includes("prop_a")), "the room is told the hub recruited, and for which proposal");

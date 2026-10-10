@@ -208,6 +208,7 @@ export const offlineScripts = [
   'verify-verdict-regression.ts',
   'verify-amend-survival-regression.ts',
   'verify-gaps-regression.ts',
+  'dev-runs-regression.ts',
   'verify-fail-to-pass-regression.ts',
 ];
 

@@ -12,6 +12,10 @@ const SEARCH = /^(grep|glob|ls|search_files|list_dir)$/;
 const WEB = /^(websearch|webfetch|web_search|web_fetch|fetch_url)$/;
 const EDIT = /^(edit|write|notebookedit|multiedit|write_file|apply_patch)$/;
 const RUN = /^(bash|shell|run_command|exec)$/;
+/** env assignments and a leading `cd dir &&` before the command a shell call really runs */
+const SHELL_PREFIX = /^(\s*(\w+=("[^"]*"|'[^']*'|\S*)\s+|cd\s+("[^"]*"|'[^']*'|\S+)\s*(&&|;)\s*))*/;
+const SHELL_SEARCH = /^(grep|rg|find|fd|ls|tree|git\s+(grep|log|ls-files|branch|status))\b/;
+const SHELL_READ = /^(cat|head|tail|less|wc|jq|sed\s+-n|awk|git\s+(show|diff|blame))\b/;
 const NOT_FINDINGS = /^(claim|draft|inbox|hold)\//;
 
 /** The class of a local tool call, or undefined for anything that is not one (chatroom tools, launcher lines). */
@@ -22,8 +26,17 @@ export function workClass(tool: string, detail = ""): WorkClass | undefined {
   if (SEARCH.test(t)) return "search";
   if (WEB.test(t)) return "web";
   if (EDIT.test(t)) return "edit";
-  if (RUN.test(t)) return REMOTE_FETCH.test(detail) && !LOCAL_URL.test(detail) ? "web" : "run";
+  if (RUN.test(t)) return shellClass(detail);
   return undefined;
+}
+
+/** Seats do most of their reading through the shell (cat, grep, curl), so a shell call is classed by the command it starts with. */
+function shellClass(command: string): WorkClass {
+  if (REMOTE_FETCH.test(command) && !LOCAL_URL.test(command)) return "web";
+  const first = command.replace(SHELL_PREFIX, "");
+  if (SHELL_SEARCH.test(first)) return "search";
+  if (SHELL_READ.test(first)) return "read";
+  return "run";
 }
 
 const total = (w: WorkCounts | undefined) => CLASSES.reduce((n, c) => n + (w?.[c] ?? 0), 0);

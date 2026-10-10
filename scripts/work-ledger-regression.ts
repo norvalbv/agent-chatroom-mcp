@@ -67,26 +67,29 @@ local(env, "Bash", { command: "curl -s https://arxiv.org/abs/2305.14325" });
 local(env, "Bash", { command: "curl -s http://127.0.0.1:7717/rooms" });
 local(env, "Bash", { command: "npm test" });
 local(env, "Edit", { file_path: "src/hub.ts" });
+// Seats read mostly through the shell: a shell call is classed by the command it starts with, past env and `cd dir &&`.
+local(env, "Bash", { command: "cd \"/tmp/a b\" && grep -n refuse src/hub.ts | head" });
+local(env, "Bash", { command: "M=/tmp sed -n 1,40p src/hub.ts" });
 // 2. Hub calls are not local work: a seat that only talks to the room has an empty ledger.
 await a("board_set", { ...A, key: "claim/reading", text: '{"owner":"reader","area":"reading"}' });
 await a("board_set", { ...A, key: "evidence/reading", text: "read hub.ts and server.ts; one paper" });
 await b("board_set", { ...B, key: "claim/idling", text: '{"owner":"idler","area":"idling"}' });
 await b("room_status", { room: "wl" });
 let st = await status("wl");
-assert.deepEqual(st.participants.find((p) => p.name === "reader")?.work, { read: 2, search: 1, web: 2, run: 2, edit: 1 }, "local calls counted by class");
+assert.deepEqual(st.participants.find((p) => p.name === "reader")?.work, { read: 3, search: 2, web: 2, run: 2, edit: 1 }, "local calls counted by class");
 assert.equal(st.participants.find((p) => p.name === "idler")?.work, undefined, "hub calls are not local work");
 
 // 3. The room log keeps every counted call with its time, so a later reader can ask what was done before the proposal.
 const logged = () => readFileSync(join(DATA, "wl.jsonl"), "utf8").split("\n").filter(Boolean).map((l) => JSON.parse(l) as { type: string; cls?: string; ts?: string });
 const work = logged().filter((e) => e.type === "work");
-assert.equal(work.length, 8);
+assert.equal(work.length, 10);
 assert.ok(work.every((e) => e.ts && e.cls));
 
 // 4. Proposing states what the hub counted: per seat, how many did nothing, and the claim nobody reported on.
 const pr = await a("propose", { ...A, text: "The room has read enough to conclude." });
 st = await status("wl");
 const evidence = st.proposals[0]?.evidence ?? "";
-assert.match(evidence, /reader: read 2, search 1, web 2, run 2, edit 1/);
+assert.match(evidence, /reader: read 3, search 2, web 2, run 2, edit 1/);
 assert.match(evidence, /idler: none/);
 assert.match(evidence, /1 of 2 seats made no local tool call; 1 of 2 made no web call/);
 assert.match(evidence, /claim\/idling \(idler\)/);
@@ -102,7 +105,7 @@ await new Promise((r) => setTimeout(r, 500));
 server = startHub();
 await up();
 st = await status("wl");
-assert.deepEqual(st.participants.find((p) => p.name === "reader")?.work, { read: 2, search: 1, web: 2, run: 2, edit: 1 }, "ledger survives a restart");
+assert.deepEqual(st.participants.find((p) => p.name === "reader")?.work, { read: 3, search: 2, web: 2, run: 2, edit: 1 }, "ledger survives a restart");
 assert.match(st.proposals[0]?.evidence ?? "", /idler: none/);
 const a2 = await connect(reader.mcpUrl);
 const b2 = await connect(idler.mcpUrl);
@@ -110,7 +113,7 @@ await a2("join_room", { room: "wl", name: "reader", agent: "claude", participant
 await b2("join_room", { room: "wl", name: "idler", agent: "claude", participant_id: jb.participant_id });
 await b2("vote", { ...B, proposal_id: pr.id, vote: "agree", quote: "The room has read enough" });
 st = await status("wl");
-assert.match(st.conclusion?.evidence ?? "", /reader: read 2/, "the conclusion carries the evidence line");
+assert.match(st.conclusion?.evidence ?? "", /reader: read 3/, "the conclusion carries the evidence line");
 
 // 6. Seats no launcher started have no heartbeat key: nothing is counted, so nothing is claimed about them.
 const c = await connect(`${HTTP}/mcp`);

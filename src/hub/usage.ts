@@ -47,6 +47,11 @@ export function apiRequests(body: unknown): ApiRequest[] {
   return out;
 }
 
+/** by_model is keyed by the seat's own "model" text: with no prototype, "__proto__" or "constructor" is just a name and
+ * never reaches Object.prototype of the hub process (review by -2). */
+const byModel = (from: Record<string, { requests: number; cost_usd: number }> = {}) =>
+  Object.assign(Object.create(null) as Record<string, { requests: number; cost_usd: number }>, Object.fromEntries(Object.entries(from)));
+
 /** Seats tracked at most; a key nobody joined with is never shown, so the cap only bounds memory against junk keys. */
 const MAX_SEATS = 2_000;
 
@@ -67,7 +72,7 @@ export class UsageLedger {
     for (const r of records) {
       if (seen.has(r.id)) continue;
       seen.add(r.id);
-      u ??= { requests: 0, input_tokens: 0, output_tokens: 0, cache_read_input_tokens: 0, cache_creation_input_tokens: 0, cost_usd: 0, by_model: {}, at };
+      u ??= { requests: 0, input_tokens: 0, output_tokens: 0, cache_read_input_tokens: 0, cache_creation_input_tokens: 0, cost_usd: 0, by_model: byModel(), at };
       u.requests++;
       u.input_tokens += r.input;
       u.output_tokens += r.output;
@@ -89,7 +94,7 @@ export class UsageLedger {
   /** Replay: the log holds cumulative figures, so the one with the most requests wins. */
   restore(seatHash: string, u: SeatUsage): void {
     const have = this.bySeat.get(seatHash);
-    if (!have || u.requests >= have.requests) this.bySeat.set(seatHash, structuredClone(u));
+    if (!have || u.requests >= have.requests) this.bySeat.set(seatHash, { ...structuredClone(u), by_model: byModel(u.by_model) });
   }
 }
 

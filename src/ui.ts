@@ -318,14 +318,18 @@ ${ROOMS_JS}
   $('#newpill').onclick = toBottom;
   $('#log').addEventListener('scroll', function () { if (atBottom() && unreadPill) toBottom(); });
 
+  var polling = false;
   async function poll() {
-    if (!sel) return;
+    if (!sel || polling) return; // a slow fetch must not be overlapped by the next tick: both would draw the same batch
+    polling = true;
     var room = sel;
     try {
       var res = await fetch('/rooms/' + encodeURIComponent(room) + '/messages?since=' + seen);
       if (!res.ok || room !== sel) return;
       var fresh = await res.json();
-      if (!Array.isArray(fresh) || !fresh.length) return;
+      if (!Array.isArray(fresh)) return;
+      fresh = fresh.filter(function (m) { return m.seq > seen; });
+      if (!fresh.length) return;
       var stick = atBottom() || !msgs.length;
       var first = !msgs.length;
       if (first) $('#log').innerHTML = '';
@@ -339,7 +343,7 @@ ${ROOMS_JS}
       if (stick) { toBottom(); }
       else { unreadPill += fresh.length; $('#newpill').textContent = '↓ ' + unreadPill + ' new'; $('#newpill').style.display = 'block'; if (document.body.dataset.view !== 'chat') { $('#n-unread').textContent = unreadPill; $('#n-unread').style.display = ''; } }
       if (cur && tab === 'people') renderPane(); // last-active columns
-    } catch (e) {}
+    } catch (e) {} finally { polling = false; }
   }
 
   // ---------- inspector ----------

@@ -68,6 +68,8 @@ export class Hub {
   /** the deadline line is posted when a fifth of the run remains, but no later than MIN and no earlier than MAX before it */
   static DEADLINE_LEAD_MIN_MS = 2 * 60_000;
   static DEADLINE_LEAD_MAX_MS = 10 * 60_000;
+  /** with less than this left, or in a room that requires verification, the deadline line does not suggest a proposal */
+  static DEADLINE_PROPOSE_MIN_MS = 5 * 60_000;
   static readonly ROOM_NAME = /^[a-zA-Z0-9_-]{1,64}$/;
 
   static codeState(cwd?: string): CodeState | undefined { return codeState(cwd); }
@@ -180,7 +182,7 @@ export class Hub {
       hold: this.hold(room) ? { by: this.hold(room)!.by, reason: this.hold(room)!.text } : null,
       state: room.state,
       archived: !!room.archived,
-      ...(this.deadlineView(room) ?? {}),
+      ...(this.deadlineView(room, reveal) ?? {}),
       created_at: room.createdAt,
       openings: room.openingsRevealed
         ? "revealed"
@@ -1172,9 +1174,13 @@ export class Hub {
     this.armDeadline(room);
   }
 
-  /** room_status and the summary carry it from the moment it is set; a wait only inside the announce window (deadlineForWait). */
-  private deadlineView(room: Room): { deadline_at: string; seconds_left: number } | undefined {
-    if (!room.deadline) return undefined;
+  /**
+   * The dashboard and HTTP summary (reveal) carry it from the moment it is set. Seats (room_status, join_room, and a
+   * wait through deadlineForWait) only once it has been announced: three seats that read deadline_at at join said
+   * "the room deadline is ~5 min, post evidence fast" and concluded in 2 min on 2 of 9 files (swarm-002812-486p-room).
+   */
+  private deadlineView(room: Room, reveal: boolean): { deadline_at: string; seconds_left: number } | undefined {
+    if (!room.deadline || (!reveal && !room.deadline.announced)) return undefined;
     return { deadline_at: room.deadline.at, seconds_left: Math.max(0, Math.ceil((Date.parse(room.deadline.at) - Date.now()) / 1000)) };
   }
 
@@ -1182,13 +1188,16 @@ export class Hub {
   deadlineForWait(room: Room): { at: string; seconds_left: number } | undefined {
     const d = room.deadline;
     if (!d?.announced || room.state === "concluded" || room.state === "closed" || Date.parse(d.at) <= Date.now()) return undefined;
-    return { at: d.at, seconds_left: this.deadlineView(room)!.seconds_left };
+    return { at: d.at, seconds_left: this.deadlineView(room, true)!.seconds_left };
   }
 
   /**
    * One system line, once, when deadlineLeadMs of the run remains (at once if less does). Seats were killed at the
    * launcher's timeout without ever being told: 25 of 96 past lead rooms ended with no proposal and 174 of 753 seats
-   * with no reason and no handoff. A deadline already past (a log replayed after the run) is not announced.
+   * with no reason and no handoff. With no proposal open the line asks for a handoff, and suggests a proposal only where
+   * one can still pass: a verified room takes a median 5.6 min from propose to its last verify, so "propose now" at two
+   * minutes would trade a room with no proposal for one with a proposal open. A deadline already past (a log replayed
+   * after the run) is not announced.
    */
   /** @internal */ armDeadline(room: Room) {
     if (room.deadlineTimer) clearTimeout(room.deadlineTimer);
@@ -1197,9 +1206,11 @@ export class Hub {
     if (!d || d.announced) return;
     const at = Date.parse(d.at);
     if (at <= Date.now()) return;
-    const fireAt = at - Hub.deadlineLeadMs(at - Date.parse(d.setAt));
+    const delay = at - Hub.deadlineLeadMs(at - Date.parse(d.setAt)) - Date.now();
+    const MAX_DELAY = 2 ** 31 - 1; // setTimeout fires at once past this
     room.deadlineTimer = setTimeout(() => {
       room.deadlineTimer = undefined;
+      if (delay > MAX_DELAY) return this.armDeadline(room);
       if (room.deadline !== d || d.announced || room.state === "concluded" || room.state === "closed") return;
       const left = at - Date.now();
       if (left <= 0) return;
@@ -1210,9 +1221,10 @@ export class Hub {
       const view = open && this.proposalView(room, open, false, false);
       const advice = view
         ? `${view.id} is open and waits on ${view.waiting_on.join(", ") || "no further vote"}${view.blocked_by.length ? ` (blocked by: ${view.blocked_by.join("; ")})` : ""}: settle it now, and write handoff/<area> for what you own that it does not cover.`
-        : "If the board supports a conclusion, propose it now; otherwise write handoff/<area> for what you own.";
+        : "Write what you have and the next step on handoff/<area> now; a run that stops without a conclusion is judged by what is on the board." +
+          (!room.requireVerification && left >= Hub.DEADLINE_PROPOSE_MIN_MS ? " Propose only what the board already supports." : "");
       this.post(room, "system", undefined, `This run stops at ${d.at.slice(11, 19)} UTC (in ${span}). Seats are killed then. ${advice}`);
-    }, Math.max(0, fireAt - Date.now()));
+    }, Math.max(0, Math.min(delay, MAX_DELAY)));
     room.deadlineTimer.unref();
   }
 

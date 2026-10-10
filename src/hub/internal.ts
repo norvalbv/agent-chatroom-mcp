@@ -25,7 +25,7 @@ export type Event =
   | { type: "amend"; room: string; proposalId: string; text: string; version: number; updatedAt?: string; votes: Proposal["votes"]; challenges?: Challenge[] }
   | { type: "refusal"; room: string; tool: string; reason: string; ts?: string; participant?: string | null }
   | { type: "call_completion"; room: string; tool: string; outcome: CallOutcome; ts: string; participant: string | null }
-  | { type: "work"; room: string; pid: string; cls: WorkClass; tool: string; ts: string }
+  | { type: "work"; room: string; pid: string; cls: WorkClass; tool: string; target: string; ts: string }
   | { type: "kick_vote"; room: string; vote: KickVote };
 
 export const now = () => new Date().toISOString();

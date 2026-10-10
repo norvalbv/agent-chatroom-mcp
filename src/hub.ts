@@ -20,7 +20,7 @@ import * as board from "./hub/board.js";
 import * as kick from "./hub/kick.js";
 import * as liveness from "./hub/liveness.js";
 import * as persistence from "./hub/persistence.js";
-import { evidenceReceipt } from "./hub/work.js";
+import { evidenceGaps, evidenceReceipt } from "./hub/work.js";
 
 export class Hub {
   readonly rooms = new Map<string, Room>();
@@ -1606,6 +1606,9 @@ export class Hub {
     return room.requireChallenge;
   }
 
+  /** What the hub counts as thin behind the room's work right now (src/hub/work.ts), for the hint of a seat that owes a challenge. */
+  evidenceGaps(room: Room): string | undefined { return evidenceGaps(room, this.voters(room), (v) => this.shown(room, v)); }
+
   propose(roomName: string, pid: string, text: string): Proposal {
     const room = this.getRoom(roomName);
     const p = this.requireParticipant(room, pid);
@@ -1654,7 +1657,7 @@ export class Hub {
     room.proposals.set(proposal.id, proposal);
     this.persist({ type: "proposal", proposal });
     this.post(room, "proposal", p, `PROPOSAL ${proposal.id}: ${text}`, { proposalId: proposal.id });
-    if (evidence) this.post(room, "system", undefined, `${evidence} Counted by the hub, not claimed by the proposer; a challenger may name a seat or an area with nothing behind it.`);
+    if (evidence) this.post(room, "system", undefined, `${evidence} Counted by the hub, not claimed by the proposer.`);
     this.evaluate(room, proposal); // a solo room concludes immediately
     return proposal;
   }

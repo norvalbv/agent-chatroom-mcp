@@ -19,10 +19,10 @@ import { HEARTBEAT_HOOK, seatBeat } from "../src/env.js";
 
 const PORT = Number(process.env.PORT ?? 20_000 + Math.floor(Math.random() * 20_000));
 assert.notEqual(PORT, 7717, "never the live hub");
-const HTTP = `http://127.0.0.1:${PORT}`;
+let HTTP = `http://127.0.0.1:${PORT}`;
 const DATA = mkdtempSync(join(tmpdir(), "work-ledger-"));
-const startHub = () => spawn("npx", ["tsx", "src/index.ts"], { env: { ...process.env, PORT: String(PORT), CHATROOM_SPAWN_DRY: "1", CHATROOM_LOG_DIR: join(DATA, "spawn"), CHATROOM_INSECURE_LOCAL: "1", CHATROOM_DATA_DIR: DATA }, stdio: ["ignore", "ignore", "inherit"] });
-let server = startHub();
+const startHub = (port = PORT) => spawn("npx", ["tsx", "src/index.ts"], { env: { ...process.env, PORT: String(port), CHATROOM_SPAWN_DRY: "1", CHATROOM_LOG_DIR: join(DATA, "spawn"), CHATROOM_INSECURE_LOCAL: "1", CHATROOM_DATA_DIR: DATA }, stdio: ["ignore", "ignore", "inherit"] });
+const server = startHub();
 process.on("exit", () => server.kill());
 const up = async () => {
   for (let i = 0; ; i++) {
@@ -54,6 +54,10 @@ const a = await connect(reader.mcpUrl);
 const b = await connect(idler.mcpUrl);
 const ja = await a("join_room", { room: "wl", name: "reader", agent: "claude", expected_participants: 0, require_challenge: false });
 const jb = await b("join_room", { room: "wl", name: "idler", agent: "claude" });
+// a second room with the challenge gate on: the same connections, so the same beats count there
+const ua = await a("join_room", { room: "wl-untested", name: "reader", agent: "claude", expected_participants: 0, require_challenge: true });
+const ub = await b("join_room", { room: "wl-untested", name: "idler", agent: "claude" });
+await b("board_set", { room: "wl-untested", participant_id: ub.participant_id, key: "claim/idling", text: '{"owner":"idler","area":"idling"}' });
 const A = { room: "wl", participant_id: ja.participant_id };
 const B = { room: "wl", participant_id: jb.participant_id };
 
@@ -61,6 +65,9 @@ const B = { room: "wl", participant_id: jb.participant_id };
 const env = reader.env as Record<string, string>;
 local(env, "Read", { file_path: "src/hub.ts" });
 local(env, "Read", { file_path: "src/server.ts" });
+// Distinct targets count, not calls: the same file again, or a second page on a host already fetched, adds nothing.
+for (let i = 0; i < 5; i++) local(env, "Read", { file_path: "src/server.ts" });
+local(env, "WebFetch", { url: "https://arxiv.org/abs/2308.08155" });
 local(env, "Grep", { pattern: "propose" });
 local(env, "WebSearch", { query: "multi-agent debate" });
 local(env, "Bash", { command: "curl -s https://arxiv.org/abs/2305.14325" });
@@ -84,6 +91,9 @@ const logged = () => readFileSync(join(DATA, "wl.jsonl"), "utf8").split("\n").fi
 const work = logged().filter((e) => e.type === "work");
 assert.equal(work.length, 10);
 assert.ok(work.every((e) => e.ts && e.cls));
+// A codex seat's key beats on output, not per tool call: nothing counted for it is unknown, and is said so.
+const cx = await connect(seatBeat(`${HTTP}/mcp`, "seat-key-codex").mcpUrl);
+await cx("join_room", { room: "wl", name: "coder", agent: "codex" });
 
 // 4. Proposing states what the hub counted: per seat, how many did nothing, and the claim nobody reported on.
 const pr = await a("propose", { ...A, text: "The room has read enough to conclude." });
@@ -92,23 +102,29 @@ const evidence = st.proposals[0]?.evidence ?? "";
 assert.match(evidence, /reader: read 3, search 2, web 2, run 2, edit 1/);
 assert.match(evidence, /idler: none/);
 assert.match(evidence, /1 of 2 seats made no local tool call; 1 of 2 made no web call/);
+assert.match(evidence, /1 seat does not report local work: unknown, not zero/);
+assert.doesNotMatch(evidence, /coder: none/);
 assert.match(evidence, /claim\/idling \(idler\)/);
 assert.doesNotMatch(evidence, /claim\/reading/, "a claim with findings beside it is not listed");
 const said = (await messages("wl")).filter((m) => m.kind === "system" && m.content.includes("EVIDENCE BEHIND THIS PROPOSAL"));
 assert.equal(said.length, 1, "the room is told once, right after the proposal");
+// The seat that owes the challenge gets the thin spots in its own hint, the one line it acts on; the proposer does not.
+await a("propose", { room: "wl-untested", participant_id: ua.participant_id, text: "This one still needs its challenge." });
+const owed = await b("wait_for_messages", { room: "wl-untested", participant_id: ub.participant_id, timeout_ms: 0 });
+assert.match(owed.hint, /untested\. The hub counted: idler made no local tool call; claim\/idling \(idler\) has no findings on the board\./);
+assert.match(owed.hint, /Name its single weakest claim/);
 
-// 5. A hub restart keeps the ledger (replayed from the log), and the conclusion carries the line into the record.
-const pid = spawnSync("lsof", ["-ti", `:${PORT}`, "-sTCP:LISTEN"], { encoding: "utf8" }).stdout.trim().split("\n")[0];
-process.kill(Number(pid));
-server.kill();
-await new Promise((r) => setTimeout(r, 500));
-server = startHub();
+// 5. A hub started from the log keeps the ledger (replayed from the log), and the conclusion carries the line into the record.
+// (a second hub started on the same log, on the next port; the first is left alone and writes nothing more)
+HTTP = `http://127.0.0.1:${PORT + 1}`;
+const second = startHub(PORT + 1);
+process.on("exit", () => second.kill());
 await up();
 st = await status("wl");
 assert.deepEqual(st.participants.find((p) => p.name === "reader")?.work, { read: 3, search: 2, web: 2, run: 2, edit: 1 }, "ledger survives a restart");
 assert.match(st.proposals[0]?.evidence ?? "", /idler: none/);
-const a2 = await connect(reader.mcpUrl);
-const b2 = await connect(idler.mcpUrl);
+const a2 = await connect(seatBeat(`${HTTP}/mcp`, "seat-key-reader").mcpUrl);
+const b2 = await connect(seatBeat(`${HTTP}/mcp`, "seat-key-idler").mcpUrl);
 await a2("join_room", { room: "wl", name: "reader", agent: "claude", participant_id: ja.participant_id });
 await b2("join_room", { room: "wl", name: "idler", agent: "claude", participant_id: jb.participant_id });
 await b2("vote", { ...B, proposal_id: pr.id, vote: "agree", quote: "The room has read enough" });

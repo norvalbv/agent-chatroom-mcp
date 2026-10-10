@@ -422,6 +422,7 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
       const owed = hub.addressedBy(r, p);
       if (owed[0]) p.addressWarned = owed[0].id;
       const openingsHeld = r.expectedParticipants && !r.openingsRevealed;
+      const gaps = needsChallenge ? hub.evidenceGaps(r) : undefined;
       const hint = hub.attentionHint(r, p) ?? (
         r.state === "closed"
           ? "This room was closed without a conclusion. leave_room and stop."
@@ -437,11 +438,11 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
               : human
                 ? `${hub.shown(r, human.from)} (a human) said something; ${resp!.who} is answering it. You will see it with the reply. Carry on.`
                 : needsChallenge && needsMyVote
-                  ? "A proposal is open and untested. Name its single weakest claim in one sentence (challenge), then vote. If you want different wording, amend it instead of re-proposing."
+                  ? `A proposal is open and untested.${gaps ? ` The hub counted: ${gaps}. If the proposal leans on any of that, that is its weakest claim.` : ""} Name its single weakest claim in one sentence (challenge), then vote. If you want different wording, amend it instead of re-proposing.`
                   : needsMyVote
                     ? `Vote on the open proposal: agree with a verbatim quote of the clause you endorse, or disagree with the specific change you need (or just amend it).${open && hub.standingDisagrees(open).length === 0 && r.quorum === "unanimous" && openView!.waiting_on.length === 1 ? " Your vote decides it: a disagree keeps it open for amendment, it does not kill it." : ""}`
                     : needsChallenge && open && open.by.id !== id
-                      ? `${open.id} cannot pass until someone other than its author names its weakest claim (challenge). You have voted; if you can see a weak claim, challenge it now.`
+                      ? `${open.id} cannot pass until someone other than its author names its weakest claim (challenge). You have voted; if you can see a weak claim, challenge it now.${gaps ? ` The hub counted: ${gaps}.` : ""}`
                       : owed.length
                         ? `${hub.shown(r, owed[0].from)} addressed you directly. Reply (reply_to="${owed[0].id}") or pass.`
                         : openingsHeld && r.openings.has(id)

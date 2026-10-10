@@ -132,7 +132,7 @@ export interface Participant {
   working?: { tool: string; step: number; at: string; detail?: string };
   /** the last 60 heartbeats: what the seat ran, step by step (dashboard: click a person). Ephemeral. */
   activity?: { tool: string; step: number; at: string; detail: string }[];
-  /** local tool calls this seat's process reported, by class, since it joined (src/hub/work.ts). Kept in the room log. */
+  /** distinct local targets (files, patterns, commands, web hosts) this seat's process reported, by class, since it joined (src/hub/work.ts). Kept in the room log. */
   work?: WorkCounts;
   /** id of the addressed message this participant was last shown by wait_for_messages (the next wait without an answer is refused once) */
   addressWarned?: string;

@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { analyzeReplyMetrics, type ReplyMetricEvent } from "../reply-metrics.js";
 import type { Hub } from "../hub.js";
 import { applyBoard, applyBoardManifest } from "./board.js";
+import { countWork } from "./work.js";
 import type { Participant, Proposal } from "./types.js";
 import { now } from "./internal.js";
 import type { Opts, Event } from "./internal.js";
@@ -58,7 +59,7 @@ export function replay(hub: Hub) {
       switch (ev.type) {
         case "work": {
           const p = hub.rooms.get(ev.room)?.participants.get(ev.pid);
-          if (p) p.work = { ...p.work, [ev.cls]: (p.work?.[ev.cls] ?? 0) + 1 };
+          if (p) countWork(p, ev.cls, ev.target);
           break;
         }
         case "attention": {

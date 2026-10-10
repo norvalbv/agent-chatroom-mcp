@@ -56,5 +56,11 @@ assert.doesNotMatch(JSON.stringify(w3), /idea\/grow-seats/, "a claimed idea is n
 await ok(b.call("board_set", { room: R, key: "claim/grow-seats", text: "" }), "release");
 const w4 = await a.idle(R);
 assert.ok(JSON.stringify(w4).includes("idea/grow-seats") || /idea\/grow-seats/.test(w4.hint ?? ""), `released idea is open again for its author with nothing in flight: ${JSON.stringify(w4)}`);
+// 5. an idea its author marked rejected, dropped, withdrawn or built is not offered as unbuilt work
+for (const [slug, text] of [["branch-overlap", "REJECTED WITH DATA: two branches rarely touch one file."], ["old-thing", "Built: merged at abc1234."], ["gone", "withdrawn, see remaining/x"]]) {
+  await ok(a.call("board_set", { room: R, key: `idea/${slug}`, text }), `idea ${slug}`);
+}
+const w5 = JSON.stringify(await b.idle(R));
+for (const slug of ["branch-overlap", "old-thing", "gone"]) assert.ok(!w5.includes(`idea/${slug}`), `settled idea/${slug} is not offered: ${w5}`);
 console.log("UNCLAIMED IDEAS OK");
 process.exit(0);

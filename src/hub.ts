@@ -72,6 +72,11 @@ export class Hub {
   static DEFAULT_NUDGE_MS = Number(process.env.CHATROOM_NUDGE_AFTER_MS ?? 180_000);
   /** draft/* is revealed this long after the first draft even if some drafter never wrote one (0 = wait for all) */
   static DRAFT_REVEAL_MS = Number(process.env.CHATROOM_DRAFT_REVEAL_MS ?? 600_000);
+  /** the deadline line is posted when a fifth of the run remains, but no later than MIN and no earlier than MAX before it */
+  static DEADLINE_LEAD_MIN_MS = 2 * 60_000;
+  static DEADLINE_LEAD_MAX_MS = 10 * 60_000;
+  /** with less than this left, or in a room that requires verification, the deadline line does not suggest a proposal */
+  static DEADLINE_PROPOSE_MIN_MS = 5 * 60_000;
   static readonly ROOM_NAME = /^[a-zA-Z0-9_-]{1,64}$/;
 
   static codeState(cwd?: string): CodeState | undefined { return codeState(cwd); }
@@ -115,6 +120,11 @@ export class Hub {
     room.codeState = Hub.codeState(this.cwd);
     room.telemetryVersion = 1;
     this.persist({ type: "room", room: name, opts: full, createdAt: room.createdAt, telemetryVersion: 1 });
+    const heldDeadline = this.pendingDeadlines.get(name);
+    if (heldDeadline) {
+      this.pendingDeadlines.delete(name);
+      if (Date.parse(heldDeadline.at) > Date.now()) this.applyDeadline(room, heldDeadline.at, heldDeadline.setAt);
+    }
     if (requested > Hub.MAX_LIVE_PER_ROOM) this.post(room, "system", undefined, `expected_participants ${requested} exceeds this hub's cap of ${Hub.MAX_LIVE_PER_ROOM} live agents per room; clamped to ${Hub.MAX_LIVE_PER_ROOM} so the room can still conclude.`);
     return room;
   }
@@ -179,6 +189,7 @@ export class Hub {
       hold: this.hold(room) ? { by: this.hold(room)!.by, reason: this.hold(room)!.text } : null,
       state: room.state,
       archived: !!room.archived,
+      ...(this.deadlineView(room, reveal) ?? {}),
       created_at: room.createdAt,
       openings: room.openingsRevealed
         ? "revealed"
@@ -1133,6 +1144,99 @@ export class Hub {
       this.revealOpenings(room, room.openings.size ? `revealed on the ${mins} min deadline without one from ${waiting}, who can still speak in chat` : `nobody submitted one; ${waiting} can still speak in chat`);
     }, ms);
     room.openingsTimer.unref();
+  }
+
+  /** How long before the deadline the room is told: a fifth of the run, within the bounds, never more than the run. */
+  static deadlineLeadMs(totalMs: number): number {
+    return Math.min(totalMs, Math.max(Hub.DEADLINE_LEAD_MIN_MS, Math.min(Hub.DEADLINE_LEAD_MAX_MS, totalMs / 5)));
+  }
+
+  /** deadlines posted for rooms nobody has created yet (a launcher posts before its seats join); process-local */
+  private pendingDeadlines = new Map<string, { at: string; setAt: string }>();
+
+  /**
+   * The run that owns this room stops at `at` (its launcher kills every seat then). The hub says so once, late
+   * (armDeadline), instead of on every wait. A room that does not exist yet is not created here, because the first
+   * join_room decides its policy: the deadline is held in memory and applied when the room is created, on its original
+   * clock. Setting it again replaces it and allows one more announcement.
+   */
+  setDeadline(roomName: string, at: string): { room: string; deadline_at: string; seconds_left: number; announce_at: string; pending: boolean } {
+    const ms = typeof at === "string" ? Date.parse(at) : Number.NaN;
+    if (Number.isNaN(ms)) throw new HubError("deadline `at` must be an ISO time, e.g. 2026-10-10T01:30:00Z.");
+    if (ms <= Date.now()) throw new HubError("deadline `at` is in the past.");
+    const iso = new Date(ms).toISOString();
+    const setAt = now();
+    const room = this.rooms.get(roomName);
+    if (!room) {
+      if (!Hub.ROOM_NAME.test(roomName)) throw new HubError("Invalid room name.");
+      for (const [k, d] of this.pendingDeadlines) if (Date.parse(d.at) <= Date.now()) this.pendingDeadlines.delete(k);
+      this.pendingDeadlines.set(roomName, { at: iso, setAt });
+    } else {
+      if (room.state === "concluded" || room.state === "closed") throw new HubError(`Room "${roomName}" is ${room.state}; a deadline no longer applies.`);
+      this.applyDeadline(room, iso, setAt);
+    }
+    const total = ms - Date.parse(setAt);
+    return { room: roomName, deadline_at: iso, seconds_left: Math.ceil(total / 1000), announce_at: new Date(ms - Hub.deadlineLeadMs(total)).toISOString(), pending: !room };
+  }
+
+  private applyDeadline(room: Room, at: string, setAt: string) {
+    room.deadline = { at, setAt };
+    this.persist({ type: "deadline", room: room.name, at, setAt });
+    this.armDeadline(room);
+  }
+
+  /**
+   * The dashboard and HTTP summary (reveal) carry it from the moment it is set. Seats (room_status, join_room, and a
+   * wait through deadlineForWait) only once it has been announced: three seats that read deadline_at at join said
+   * "the room deadline is ~5 min, post evidence fast" and concluded in 2 min on 2 of 9 files (swarm-002812-486p-room).
+   */
+  private deadlineView(room: Room, reveal: boolean): { deadline_at: string; seconds_left: number } | undefined {
+    if (!room.deadline || (!reveal && !room.deadline.announced)) return undefined;
+    return { deadline_at: room.deadline.at, seconds_left: Math.max(0, Math.ceil((Date.parse(room.deadline.at) - Date.now()) / 1000)) };
+  }
+
+  /** token-cost-is-resent-context: no deadline field on every wait, only once the room has been told and until it stops. */
+  deadlineForWait(room: Room): { at: string; seconds_left: number } | undefined {
+    const d = room.deadline;
+    if (!d?.announced || room.state === "concluded" || room.state === "closed" || Date.parse(d.at) <= Date.now()) return undefined;
+    return { at: d.at, seconds_left: this.deadlineView(room, true)!.seconds_left };
+  }
+
+  /**
+   * One system line, once, when deadlineLeadMs of the run remains (at once if less does). Seats were killed at the
+   * launcher's timeout without ever being told: 25 of 96 past lead rooms ended with no proposal and 174 of 753 seats
+   * with no reason and no handoff. With no proposal open the line asks for a handoff, and suggests a proposal only where
+   * one can still pass: a verified room takes a median 5.6 min from propose to its last verify, so "propose now" at two
+   * minutes would trade a room with no proposal for one with a proposal open. A deadline already past (a log replayed
+   * after the run) is not announced.
+   */
+  /** @internal */ armDeadline(room: Room) {
+    if (room.deadlineTimer) clearTimeout(room.deadlineTimer);
+    room.deadlineTimer = undefined;
+    const d = room.deadline;
+    if (!d || d.announced) return;
+    const at = Date.parse(d.at);
+    if (at <= Date.now()) return;
+    const delay = at - Hub.deadlineLeadMs(at - Date.parse(d.setAt)) - Date.now();
+    const MAX_DELAY = 2 ** 31 - 1; // setTimeout fires at once past this
+    room.deadlineTimer = setTimeout(() => {
+      room.deadlineTimer = undefined;
+      if (delay > MAX_DELAY) return this.armDeadline(room);
+      if (room.deadline !== d || d.announced || room.state === "concluded" || room.state === "closed") return;
+      const left = at - Date.now();
+      if (left <= 0) return;
+      d.announced = true;
+      this.persist({ type: "deadline_announced", room: room.name });
+      const span = left < 90_000 ? `${Math.max(1, Math.round(left / 1000))} s` : `${Math.round(left / 60_000)} min`;
+      const open = [...room.proposals.values()].find((pr) => pr.status === "open");
+      const view = open && this.proposalView(room, open, false, false);
+      const advice = view
+        ? `${view.id} is open and waits on ${view.waiting_on.join(", ") || "no further vote"}${view.blocked_by.length ? ` (blocked by: ${view.blocked_by.join("; ")})` : ""}: settle it now, and write handoff/<area> for what you own that it does not cover.`
+        : "Write what you have and the next step on handoff/<area> now; a run that stops without a conclusion is judged by what is on the board." +
+          (!room.requireVerification && left >= Hub.DEADLINE_PROPOSE_MIN_MS ? " Propose only what the board already supports." : "");
+      this.post(room, "system", undefined, `This run stops at ${d.at.slice(11, 19)} UTC (in ${span}). Seats are killed then. ${advice}`);
+    }, Math.max(0, Math.min(delay, MAX_DELAY)));
+    room.deadlineTimer.unref();
   }
 
   private revealOpenings(room: Room, note?: string) {

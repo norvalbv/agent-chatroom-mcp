@@ -424,6 +424,9 @@ export interface Room {
   /** absolute deadline for the opening reveal, armed at creation and re-armed by the first opening; not reset by chat */
   openingsTimer?: NodeJS.Timeout;
   openingsWarned?: boolean;
+  /** when the run that owns this room stops (its launcher kills the seats); announced once, late in the run (Hub.setDeadline) */
+  deadline?: { at: string; setAt: string; announced?: boolean };
+  deadlineTimer?: NodeJS.Timeout;
   /** shared blackboard: named entries agents update in place instead of re-posting */
   board: Map<string, BoardEntry>;
   /** draft/* entries are sealed (author-only) until every drafter has one; latched once true and persisted */

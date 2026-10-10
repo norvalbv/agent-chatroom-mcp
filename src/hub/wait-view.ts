@@ -15,13 +15,15 @@ export interface WaitView {
   board_keys?: string[];
   board_delta?: unknown;
   board_reset?: boolean;
+  /** seconds_left ticks on every wait, so it is kept out of the unchanged comparison and re-sent as is */
+  deadline?: unknown;
   [key: string]: unknown;
 }
 
 export function createWaitView() {
   const delivered = new WeakMap<object, string>();
   return (participant: object, view: WaitView): WaitView | Record<string, unknown> => {
-    const { hint, messages, next_seq, remaining, board_keys, board_delta, board_reset, quiet_activity, ...state } = view;
+    const { hint, messages, next_seq, remaining, board_keys, board_delta, board_reset, quiet_activity, deadline, ...state } = view;
     const snapshot = JSON.stringify(state);
     const unchanged = delivered.get(participant) === snapshot;
     delivered.set(participant, snapshot);
@@ -30,6 +32,6 @@ export function createWaitView() {
     return { hint, messages, remaining, next_seq, room_state: view.room_state, your_turn: view.your_turn,
       your_role: view.your_role, leaving_would_block: view.leaving_would_block,
       open_proposal: view.open_proposal ? { id: view.open_proposal.id, version: view.open_proposal.version, unchanged: true } : null,
-      addressed_to_you: [], unchanged: true };
+      addressed_to_you: [], ...(deadline ? { deadline } : {}), unchanged: true };
   };
 }

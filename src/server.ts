@@ -490,6 +490,7 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
           ? { id: openView.id, version: openView.version, by: openView.by, chars: openView.chars, tally: openView.tally, waiting_on: openView.waiting_on, needs_challenge: openView.needs_challenge, blocked_by: openView.blocked_by, challenges: challengesView, ...("text" in openView ? { text: openView.text } : { text_omitted: openView.text_omitted }) }
           : null,
         leaving_would_block: block ? block.reason : false,
+        ...(hub.deadlineForWait(r) ? { deadline: hub.deadlineForWait(r) } : {}),
         ...(multi && hub.elsewhere(sessionKey, room).length ? { other_rooms: hub.elsewhere(sessionKey, room) } : {}),
         ...board,
         quiet_activity: hub.quietActivity(r, p, since),

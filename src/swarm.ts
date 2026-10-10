@@ -550,6 +550,13 @@ for (const sig of ["SIGTERM", "SIGINT"] as const) process.on(sig, () => {
   setTimeout(() => void swept.finally(() => process.exit(130)), 3000).unref();
 });
 const tail = setInterval(() => tailRooms([...groupRooms, leadsRoom]), 2000);
+// the hub is told when the seats will be killed, so it can say so in the room while there is still time to propose or
+// hand off; a hub that refuses (an older build already on this port) or does not answer never fails the run
+for (const room of [...groupRooms, leadsRoom]) {
+  fetch(`${URL_}/rooms/${encodeURIComponent(room)}/deadline`, { method: "POST", headers: { "content-type": "application/json", ...(process.env.CHATROOM_HUMAN_TOKEN ? { "x-chatroom-token": process.env.CHATROOM_HUMAN_TOKEN } : {}) }, body: JSON.stringify({ at: new Date(Date.now() + TIMEOUT_MIN * 60_000).toISOString() }), signal: AbortSignal.timeout(5_000) })
+    .then((r) => { if (!r.ok) log(`${room}: hub did not take the run deadline (${r.status})`); })
+    .catch((e) => log(`${room}: could not post the run deadline: ${e instanceof Error ? e.message : String(e)}`));
+}
 let timedOut = false;
 const timeout = setTimeout(() => {
   log(`timeout after ${TIMEOUT_MIN} min; stopping agents`);

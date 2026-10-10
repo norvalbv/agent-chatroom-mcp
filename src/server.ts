@@ -16,7 +16,7 @@ import { z } from "zod";
 import { Hub, HubError, ROLES, VERIFY_HEAD_EXAMPLE, VERIFY_HEAD_RULE, type CallOutcome } from "./hub.js";
 import type { Spawner } from "./spawner.js";
 import { createWaitView } from "./hub/wait-view.js";
-import { IDLE_HINT, idleAgain, idleHint, newlyNamed, openWork } from "./hub/open-work.js";
+import { IDLE_HINT, idleAgain, idleHint, newlyNamed, openWork, stillOpenHint } from "./hub/open-work.js";
 
 export const DEFAULT_WAIT_MS = 55_000; // gaps over 55s were 62-77% of sub-room wall time; wait() wakes on events so latency is unchanged
 export const MAX_WAIT_MS = 55_000; // stay under typical MCP client tool timeouts (Codex 60s)
@@ -454,7 +454,8 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
                               : undefined);
       // an idle seat (nothing delivered, nothing owed) is told what the board says is open for it
       const idleWork = hint === IDLE_HINT ? openWork(hub, r, p, idleAgain(p)) : [];
-      const named = idleWork.length ? newlyNamed(p, idleWork) : null;
+      // the full list travels only when it differs from what this seat was last shown; otherwise one short line
+      const named = hint === IDLE_HINT ? newlyNamed(p, idleWork) : null;
       if (named) hub.persist({ type: "open_work", room: r.name, pid: p.id, ts: new Date().toISOString(), items: named });
       // Snapshot AFTER the poll wake: concurrent waits serialize their per-participant cursor here.
       // boardManifest records its own telemetry; assembly happens here, after the poll wake.
@@ -462,10 +463,10 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
       hub.observeBoardManifest(r, board); // compact since-process-start observer; legacy recording is in assembly
       // the hint goes first: it is the one line a weaker model must not lose to a clamp
       return compactWait(p, {
-        hint: toolsRegainedNote || moreNote ? toolsRegainedNote + (hint ? `${hint} ` : "") + moreNote : idleWork.length ? idleHint(idleWork) : hint,
+        hint: toolsRegainedNote || moreNote ? toolsRegainedNote + (hint ? `${hint} ` : "") + moreNote : named ? idleHint(idleWork) : idleWork.length ? stillOpenHint(idleWork) : hint,
         messages: msgs.map((m) => fmtWait(hub, r, p, m)),
         remaining,
-        ...(idleWork.length ? { open_work: idleWork } : {}),
+        ...(named ? { open_work: idleWork } : {}),
         // a capped page has not reached the end of the log: next_seq is the cursor, not the latest seq
         next_seq: remaining ? p.lastSeenSeq : (r.messages.at(-1)?.seq ?? since),
         room_state: r.state,

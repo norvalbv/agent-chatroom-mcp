@@ -78,6 +78,14 @@ assert.match(w.hint ?? "", /claim\/parser/, `the reviewer's idle wait names the 
 assert.match(w.hint ?? "", /\bA\b/, "and its owner");
 assert.match(w.hint ?? "", /verify\/parser/, "and the entry to write");
 assert.deepEqual(w.open_work, [{ kind: "review_owed", key: "claim/parser", owner: "A" }]);
+// An unchanged list is not resent: the next idle waits carry one short line and no open_work, however many follow.
+const full = w.hint!.length;
+for (let i = 0; i < 3; i++) {
+  w = await reviewer.idle(room);
+  assert.match(w.hint ?? "", /still open \(first: claim\/parser\)/, `an unchanged list is a short reminder: ${w.hint}`);
+  assert.equal(w.open_work, undefined, "and the list itself is not resent");
+  assert.ok(w.hint!.length < full / 2, "at under half the length");
+}
 assert.equal((await other.idle(room)).hint, OLD, "the seat that was not assigned the review is not sent to it");
 // A verifier seat is shown unreviewed work whoever was assigned it.
 const v = await seat("v");
@@ -97,6 +105,18 @@ await ok(reviewer.call("board_set", { room, key: "verify/parser", text: "Ran the
 w = await reviewer.idle(room);
 assert.equal(w.hint, OLD, `a written review is not listed again: ${w.hint}`);
 assert.equal((await v.idle(room)).hint, OLD, "nor shown to the verifier once someone has reviewed it");
+
+// 4b. A review that lives in chat or under review/* counts too: seats put reviews in all three places, and asking
+// for one that is already there is noise. C claims, B or the hub's pick reviews it in chat only.
+await ok(other.call("board_set", { room, key: "claim/lexer", text: '{"owner":"lexer seat","area":"lexer"}' }), "second claim");
+await ok(other.call("board_set", { room, key: "evidence/lexer", text: "Tokenizer handles tabs; branch c/lex @ def5678." }), "second evidence");
+const lexRev = hub.getRoom(room).board.get("claim/lexer")!.reviewer!;
+const lexSeat = { A: a, B: b, C: c, V: v }[lexRev]!;
+w = await lexSeat.idle(room);
+assert.ok(w.open_work?.some((x) => x.kind === "review_owed" && x.key === "claim/lexer"), `lexer review is owed by ${lexRev}: ${JSON.stringify(w.open_work)}`);
+await ok(lexSeat.call("send_message", { room, content: "Reviewed the lexer piece: reran its tests and fed it tabs myself, holds.", force: true }), "review in chat");
+w = await lexSeat.idle(room);
+assert.ok(!w.open_work?.some((x) => x.key === "claim/lexer") && !/claim\/lexer/.test(w.hint ?? ""), `a review posted in chat is not asked for again: ${w.hint}`);
 
 // 5. An open help/* entry is named to everyone but its author.
 await ok(other.call("board_set", { room, key: "help/fixtures", text: "Need a second seat to build CRLF fixtures for the parser tests." }), "help posted");

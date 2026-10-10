@@ -467,9 +467,10 @@ export interface BoardManifestObservation {
   board_delta?: { keys: string[]; tombstones: string[] };
 }
 
-/** What the hub read, at the time a verify entry was written, from the dev room its head names: fetched from the
- * running hub over HTTP, never from a file the reviewer holds (a seat can write a log by hand, it cannot as easily
- * keep a hub answering for a room it did not run). */
+/** What the hub read, at the time a verify entry was written, from the dev room its head names: fetched over HTTP
+ * from whatever answers on that loopback port, stamped with this hub's clock and kept in this hub's log. It makes an
+ * honest gap visible and a careless claim cost something; it does not prove agents were watched: a static file served
+ * on that port reads exactly like a real dev room (review/verify-gaps, claude-opus-5-5-1). */
 export interface DevReceipt {
   url: string;
   fetched_at: string;

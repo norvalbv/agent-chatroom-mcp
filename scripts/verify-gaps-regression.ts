@@ -4,8 +4,9 @@
  * "NOT VERIFIED by me" section in prose, often the part the brief required (agents watched on a private hub), and the
  * gate, blocked_by and the conclusion read only the JSON head; in past rooms 45 of 313 passing heads said so only in
  * prose (scripts/verify-gaps-measure.py). Now the head may carry "unverified":[...] and "dev_room":"http://127.0.0.1:
- * <port>/rooms/<room>"; the hub fetches that room from its running hub when the entry is written (a log file in the
- * reviewer's worktree could be written by hand) and checks it ran the verified commit with two agent seats speaking.
+ * <port>/rooms/<room>"; the hub fetches that room over HTTP when the entry is written (a log path would be a file in
+ * the reviewer's worktree) and checks it ran the verified commit with two agent seats speaking. This is not proof:
+ * anything answering on that port, a static file included, reads as a dev room (review/verify-gaps).
  * What is missing rides on the open proposal and makes the conclusion "Verified PARTIAL". Not a gate.
  * Run: npx tsx --test scripts/verify-gaps-regression.ts
  */

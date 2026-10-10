@@ -118,6 +118,26 @@ await ok(lexSeat.call("send_message", { room, content: "Reviewed the lexer piece
 w = await lexSeat.idle(room);
 assert.ok(!w.open_work?.some((x) => x.key === "claim/lexer") && !/claim\/lexer/.test(w.hint ?? ""), `a review posted in chat is not asked for again: ${w.hint}`);
 
+// 4c. Precision, from replaying 116 past long idle runs (scripts/measure/open-work-replay.py): about half of what the
+// first rules named was finished work. A review by a seat other than the assigned reviewer settles the review, and a
+// claim whose own status says it is finished is not open for anyone.
+await ok(other.call("board_set", { room, key: "claim/printer", text: '{"owner":"printer seat","area":"printer","status":"in progress"}' }), "third claim");
+await ok(other.call("board_set", { room, key: "evidence/printer", text: "Pretty-printer keeps comments; branch c/print @ 0a1b2c3." }), "third evidence");
+const prRev = hub.getRoom(room).board.get("claim/printer")!.reviewer!;
+const seats = { A: a, B: b, C: c, V: v } as Record<string, typeof a>;
+const prSeat = seats[prRev]!;
+const bystander = Object.entries(seats).find(([n, s]) => n !== prRev && s !== other)![1];
+w = await prSeat.idle(room);
+assert.ok(w.open_work?.some((x) => x.kind === "review_owed" && x.key === "claim/printer"), `printer review owed by ${prRev}: ${JSON.stringify(w.open_work)}`);
+await ok(bystander.call("board_set", { room, key: "verify/printer", text: "Ran the printer on three files with comments at 0a1b2c3: output identical." }), "a non-assigned seat reviews it");
+w = await prSeat.idle(room);
+assert.ok(!w.open_work?.some((x) => x.key === "claim/printer") && !/claim\/printer/.test(w.hint ?? ""), `a review by another seat settles it for the assigned reviewer: ${w.hint}`);
+await ok(other.call("board_set", { room, key: "claim/emitter", text: '{"owner":"emitter seat","area":"emitter","status":"merged by verifier as 989ce35"}' }), "a finished claim");
+for (const [n, s] of Object.entries(seats)) {
+  w = await s.idle(room);
+  assert.ok(!w.open_work?.some((x) => x.key === "claim/emitter") && !/claim\/emitter/.test(w.hint ?? ""), `a claim marked merged is named to nobody (${n}): ${w.hint}`);
+}
+
 // 5. An open help/* entry is named to everyone but its author.
 await ok(other.call("board_set", { room, key: "help/fixtures", text: "Need a second seat to build CRLF fixtures for the parser tests." }), "help posted");
 w = await reviewer.idle(room);

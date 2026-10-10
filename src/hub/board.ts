@@ -259,26 +259,44 @@ function checkAttack(room: Room, p: Participant, key: string, text: string): { t
   if (author?.session && p.session && author.session === p.session) {
     throw new HubError(`You share a connection with ${e.by}, the author of "${target}": an attack must come from a different session (identity-is-the-connection).`, undefined, "ownership");
   }
-  const cites = [...text.matchAll(/["“]([^"”]{12,})["”]/g)].map((m) => m[1]).filter((q) => norm(e.text).includes(norm(q))).sort((a, b) => b.length - a.length)[0];
+  const cites = [...text.matchAll(QUOTED)].map((m) => m[1]).filter((q) => norm(e.text).includes(norm(q))).sort((a, b) => b.length - a.length)[0];
   if (!cites) throw new HubError(`An attack must quote the clause of "${target}" it objects to (12+ characters, in double quotes), then say what is wrong with it. Read the entry with board_get and copy the text.`);
   return { target, author: e.by, cites };
 }
 
+const QUOTED = /["“]([^"”]{12,})["”]/g;
+
 /**
- * What a proposal would rest on unexamined: findings by an agent that nobody else attacked, and attacks the author has
- * not answered (answering is editing the attacked entry after the attack was written).
+ * What a proposal would rest on unexamined: findings by an agent that no other connection has attacked, quoted or even
+ * named (in chat, a challenge or its own board entry), and attacks the author has not answered (answering is editing
+ * the attacked entry after the attack was written). Naming counts because seats mostly check each other in chat: in
+ * dev room swarm-002346-crax a finding the verifier had reproduced there was listed as never looked at.
  */
-export function scrutiny(room: Room): { unattacked: string[]; open_attacks: string[] } {
-  const agents = new Set([...room.participants.values()].filter((x) => x.agent !== "human").map((x) => x.name));
-  const unattacked: string[] = [];
+export function scrutiny(room: Room): { unexamined: string[]; open_attacks: string[] } {
+  const byName = new Map([...room.participants.values()].map((x) => [x.name, x]));
+  const other = (author: Participant, name: string) => {
+    const x = byName.get(name);
+    return !!x && x.id !== author.id && !(x.session && author.session && x.session === author.session);
+  };
+  const said: { by: string; text: string }[] = [
+    ...room.messages.filter((m) => m.kind !== "system" && m.kind !== "board").map((m) => ({ by: m.from.name, text: m.content })),
+    ...[...room.board].filter(([k]) => isFinding(k)).map(([, e]) => ({ by: e.by, text: e.text })),
+  ];
+  const unexamined: string[] = [];
   const open_attacks: string[] = [];
   for (const [key, e] of room.board) {
     if (key.startsWith("attack/")) {
       const target = key.slice("attack/".length);
       if (room.board.has(target) && (room.boardVersions.get(target) ?? 0) < (room.boardVersions.get(key) ?? 0)) open_attacks.push(key);
-    } else if (isFinding(key) && e.text.length >= FINDING_MIN_CHARS && agents.has(e.by) && !room.board.has(`attack/${key}`)) unattacked.push(key);
+      continue;
+    }
+    const author = byName.get(e.by);
+    if (!isFinding(key) || e.text.length < FINDING_MIN_CHARS || !author || author.agent === "human" || room.board.has(`attack/${key}`)) continue;
+    const text = norm(e.text);
+    const looked = said.some((s) => other(author, s.by) && (s.text.includes(key) || [...s.text.matchAll(QUOTED)].some((m) => text.includes(norm(m[1])))));
+    if (!looked) unexamined.push(key);
   }
-  return { unattacked, open_attacks };
+  return { unexamined, open_attacks };
 }
 
 const CLAIM_STOP = new Set(("the a an and or of to in on for by with from is are be it this that as at not no into via per its all any " +

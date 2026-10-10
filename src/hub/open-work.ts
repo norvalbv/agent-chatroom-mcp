@@ -21,6 +21,8 @@ const NOT_WORK = ["claim/", "help/", "join-request/", "inbox/", "hold/", "verify
 /** Board prefixes where an entry about an area is not a review of it. */
 const NOT_REVIEW = ["claim/", "help/", "join-request/", "inbox/", "hold/", "handoff/", "draft/"];
 const HINT_ITEMS = 3;
+/** An idea its author has already ruled on, by the words this room's board used (review/unclaimed-ideas). */
+const IDEA_SETTLED = /^\s*(rejected|dropped|withdrawn|built|merged|done)\b/i;
 
 /** The last idle wait each seat was handed: when, and how much it had said by then. */
 const lastIdle = new WeakMap<Participant, { at: number; said: number }>();
@@ -119,7 +121,7 @@ export function openWork(hub: Hub, room: Room, p: Participant, idle = true): Ope
   for (const [k, e] of entries) {
     if (k.startsWith("idea/")) {
       const claim = room.board.get(`claim/${area(k)}`);
-      if (!claim?.text.trim() || claimReleased(claim)) ideas.push({ kind: "idea_unclaimed", key: k, owner: shownName(e.by) });
+      if ((!claim?.text.trim() || claimReleased(claim)) && !IDEA_SETTLED.test(e.text) && !settled(e)) ideas.push({ kind: "idea_unclaimed", key: k, owner: shownName(e.by) });
       continue;
     }
     if (k.startsWith("help/") || k.startsWith("join-request/")) {

@@ -170,3 +170,25 @@ test("the run record is persisted; a run a restart interrupted replays as failed
   fake.end(0);
   await until(() => run.state === "ended");
 });
+
+test("stop() unregisters the run's worktree from the project's repo and keeps the room log (verifier: 5 left registered)", async () => {
+  const { realHost } = await import("../src/hub/dev-runs.js");
+  const { execFileSync } = await import("node:child_process");
+  const { existsSync, mkdirSync, realpathSync, writeFileSync } = await import("node:fs");
+  const repo = process.cwd();
+  const head = execFileSync("git", ["-C", repo, "rev-parse", "HEAD"], { encoding: "utf8" }).trim();
+  const dir = realpathSync(mkdtempSync(join(tmpdir(), "devrun-stop-")));
+  const tree = join(dir, "tree");
+  execFileSync("git", ["-C", repo, "worktree", "add", "--detach", "-q", tree, head]);
+  mkdirSync(join(tree, "data"));
+  writeFileSync(join(tree, "data", "room.jsonl"), "{}\n");
+  try {
+    await realHost.stop({ dir } as Parameters<typeof realHost.stop>[0]);
+    const listed = execFileSync("git", ["-C", repo, "worktree", "list", "--porcelain"], { encoding: "utf8" });
+    assert.ok(!listed.includes(tree), "the run's tree is still a registered worktree");
+    assert.ok(existsSync(join(dir, "run-data", "room.jsonl")), "the room log was not kept");
+  } finally {
+    try { execFileSync("git", ["-C", repo, "worktree", "remove", "--force", tree], { stdio: "ignore" }); } catch {}
+    rmSync(dir, { recursive: true, force: true });
+  }
+});

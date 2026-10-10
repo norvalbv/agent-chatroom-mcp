@@ -10,7 +10,7 @@ import assert from "node:assert/strict";
 import * as hubModule from "../src/hub.js";
 import { Hub } from "../src/hub.js";
 
-const hub = new Hub({});
+const hub = new Hub({ cwd: process.cwd() }); // the hub reads settled-axis slugs from <cwd>/docs/decisions
 const ROOM = "quiet-default";
 const join = (name: string, agent = "claude") => hub.join(ROOM, name, agent, { nudgeAfterMs: 0 }, undefined, `s-${name}`).participant;
 const a = join("A"), b = join("B"), c = join("C"), d = join("D");
@@ -42,6 +42,13 @@ assert.ok(!say(a, "@B verify/parser is up, please read it.").quiet, "a board key
 assert.ok(!say(a, "@B what do you make of prop_1a2b3c4d?").quiet, "a proposal id stays public");
 assert.ok(!say(a, "@B the fix is at 1b0871f5 on my branch.").quiet, "a commit stays public");
 assert.ok(say(a, "@B that was a deadbeef moment, nothing more.").quiet, "a hex-letter word without a digit is not a commit");
+
+// 5b. what stops duplicate work and what settles a dispute stays public too (attack/idea/quiet-default by -3 and -5):
+// a first-person commitment, a settled-axis slug, a RE-TARGET
+assert.ok(!say(a, "@B I'll run the parser dev room myself.").quiet, "a commitment is public: seeing it stops duplicate work");
+assert.ok(!say(a, "@B I'm taking the lexer, leave it.").quiet, "taking work is a commitment");
+assert.ok(!say(a, "@B per quiet-delivery-not-privacy a thread surfaces when cited.").quiet, "a settled-axis slug is public");
+assert.ok(!say(a, "@B this is a RE-TARGET of the prompt axis.").quiet, "a RE-TARGET is public");
 
 // 6. anything naming a human is public
 assert.ok(!say(a, "@B @benji asked for this earlier, can you take it?").quiet, "a message naming a human is public");

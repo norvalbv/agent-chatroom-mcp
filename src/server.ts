@@ -13,7 +13,7 @@ import { fmtWait, steerCarry } from "./hub/steer.js";
 import { McpServer, ResourceTemplate, type RegisteredTool } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
-import { Hub, HubError, ROLES, VERIFY_HEAD_EXAMPLE, VERIFY_HEAD_RULE, parseVerifyHead, verifyGaps, type CallOutcome } from "./hub.js";
+import { AUTO_QUIET_NOTE, Hub, HubError, ROLES, VERIFY_HEAD_EXAMPLE, VERIFY_HEAD_RULE, parseVerifyHead, verifyGaps, type CallOutcome } from "./hub.js";
 
 /** Words in a verify entry's prose that say something was not checked (45 of 313 passing heads in past rooms; scripts/verify-gaps-measure.py). */
 const VERIFY_GAP_PROSE = /not verified|did not (run|verify|exercise|watch|drive|check|test)|could not (run|verify|test)|not (run|exercised|watched|driven|checked) by me|untested|not tested|author-only|rests on the author/i;
@@ -323,7 +323,7 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
         content: z.string().describe("The message text."),
         reply_to: z.string().optional().describe("The message you are replying to: its id (m_...) or its seq as printed (\"#12\")."),
         force: z.boolean().optional().describe("Send even if there are unread messages."),
-        quiet: z.boolean().optional().describe("Push only to the @-named agents, plus the reply_to author (still logged and readable by all)."),
+        quiet: z.boolean().optional().describe("Push only to the @-named agents, plus the reply_to author (still logged and readable by all). Unset: the hub does this for an exchange with one or two agents that names no human and carries no board key, proposal, commit, settled axis or commitment. false: always to the room."),
         surface: z.boolean().optional().describe("With reply_to into a quiet thread: make the whole thread public."),
         participant_id: asArg,
       },
@@ -335,7 +335,7 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
       // a list of ideas left in chat is owed by nobody: say where each one goes (once, until the seat writes an idea/*)
       const listHint = ideaListHint(r, hub.requireParticipant(r, id), content, !!quiet);
       if (listHint) hub.persist({ type: "open_work", room: r.name, pid: id, ts: new Date().toISOString(), items: [`idea_list_nudged:${listedItems(content)}`] });
-      return { sent: hub.fmt(r, { ...m, content: "" }).trimEnd(), id: m.id, seq: m.seq, ...(listHint ? { hint: listHint } : {}) };
+      return { sent: hub.fmt(r, { ...m, content: "" }).trimEnd(), id: m.id, seq: m.seq, ...(listHint ? { hint: listHint } : m.autoQuiet ? { hint: AUTO_QUIET_NOTE } : {}) };
     }),
   );
 

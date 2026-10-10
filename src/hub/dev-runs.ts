@@ -11,7 +11,7 @@
  */
 import { spawn, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, mkdtempSync, openSync, readFileSync, realpathSync, symlinkSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, openSync, readFileSync, realpathSync, renameSync, symlinkSync } from "node:fs";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -158,7 +158,7 @@ export class DevRuns {
     await this.host.stop(r).catch(() => {});
     try { this.opts.persist(r); } catch {} // a log that went away must not turn the end of a run into a crash
     const rooms = (r.rooms ?? []).map((x) => `${x.room} ${x.state ?? "?"}, ${x.speaking_seats}/${x.agent_seats} agent seats spoke, ${x.messages} messages`).join("; ");
-    try { this.opts.announce(r.room, `dev run ${r.id} (${r.requested_by}, commit ${r.commit.slice(0, 12)}) ${r.state}${r.error ? `: ${r.error}` : ` with exit ${r.exit_code}`}. ${rooms ? `What this hub saw: ${rooms}.` : "No room was seen."} Logs: ${r.dir}`); } catch {}
+    try { this.opts.announce(r.room, `dev run ${r.id} (${r.requested_by}, commit ${r.commit.slice(0, 12)}) ${r.state}${r.error ? `: ${r.error}` : ` with exit ${r.exit_code}`}. ${rooms ? `What this hub saw: ${rooms}.` : "No room was seen."} Logs: ${r.dir} (run-data/, run-swarms/)`); } catch {}
   }
 
   /** Read every room of the dev hub this run owns and keep the summary; quiet on failure (the next poll retries).
@@ -285,5 +285,13 @@ export const realHost: DevRunHost = {
   },
   async stop(r) {
     await stopStrays(r.dir);
+    // keep what the run wrote (the room log, the run report), then unregister every worktree under the run dir, the
+    // run's tree last: each run left one registered in the project's repo (verifier, verify/hub-launched-dev-runs)
+    const tree = join(r.dir, "tree");
+    if (!existsSync(tree)) return;
+    for (const sub of ["data", "swarms"]) if (existsSync(join(tree, sub))) try { renameSync(join(tree, sub), join(r.dir, `run-${sub}`)); } catch {}
+    const listed = spawnSync("git", ["-C", tree, "worktree", "list", "--porcelain"], { encoding: "utf8" }).stdout ?? "";
+    const ours = listed.split("\n").filter((l) => l.startsWith("worktree ")).map((l) => l.slice(9)).filter((p) => inside(p, r.dir));
+    for (const p of ours.sort((a, b) => b.length - a.length)) spawnSync("git", ["-C", tree, "worktree", "remove", "--force", p], { encoding: "utf8" });
   },
 };

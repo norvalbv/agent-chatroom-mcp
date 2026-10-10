@@ -35,6 +35,7 @@ export const offlineScripts = [
   'baseline-freeze-guard-regression.ts',
   'blind-drafts-regression.ts',
   'breakout-regression.ts',
+  'recruit-workspace-regression.ts',
   'ak-select.test.ts',
   'adjudicator-trial.test.ts',
   'no-carry.test.ts',

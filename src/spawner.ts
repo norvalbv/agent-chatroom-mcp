@@ -60,6 +60,8 @@ export interface SpawnedAgent {
   agent: AgentKind;
   model?: string;
   cwd: string;
+  /** a write recruit's own git worktree and branch (never the shared `cwd`); absent for a read-only recruit or outside a git repository */
+  workspace?: { worktree: string; branch: string };
   requestedBy: string;
   parent?: string; // spawned agent that requested this one, if any
   depth: number;
@@ -140,6 +142,19 @@ export function policyFromEnv(env: NodeJS.ProcessEnv = process.env): RecruitPoli
 const CLAUDE_FULL = process.env.CHATROOM_CLAUDE_FULL === "1";
 /** CHATROOM_SANDBOX=1: recruits run their shell in an OS sandbox, matching the launcher's --sandbox (set in the hub's env when swarm.ts starts it). See src/sandbox.ts. */
 const SANDBOX = sandboxFromEnv();
+
+/** Where a write recruit works: .swarm-worktrees/<room>/<name> on branch swarm/<room>/<name> of the repository holding `cwd`. Undefined outside a git repository. Creates nothing. */
+export function recruitWorkspace(cwd: string, room: string, name: string): { root: string; worktree: string; branch: string } | undefined {
+  const top = spawnSync("git", ["-C", cwd, "rev-parse", "--show-toplevel"], { encoding: "utf8" });
+  if (top.status !== 0) return undefined;
+  const root = top.stdout.trim();
+  return { root, worktree: resolve(root, ".swarm-worktrees", room, name), branch: `swarm/${room}/${name}` };
+}
+
+const workspaceOf = (cwd: string, room: string, name: string) => {
+  const ws = recruitWorkspace(cwd, room, name);
+  return ws && { worktree: ws.worktree, branch: ws.branch };
+};
 
 export class Spawner {
   policy: RecruitPolicy = policyFromEnv();
@@ -291,6 +306,8 @@ export class Spawner {
         .split("{{REPORT_TO}}").join(req.newRoom ? `This is a sub-room; when it concludes, post the conclusion to the parent room with post_to_room(from_room="${target}", to_room="${req.room}", key="result").` : "")
         .split("{{WRITE_RULE}}").join(req.canEdit ? "You MAY edit files and run anything here. You are in your own git worktree on your own branch (git branch --show-current); commit there and name the branch in the room. Never touch the main checkout." + devHubRule(cwd, SANDBOX) : "Do NOT modify files; investigate and report.");
 
+      // a dry run plans the workspace without creating it, so what a seat is told matches what a real spawn does
+      if (o.dryRun && req.canEdit) rec.workspace = workspaceOf(cwd, target, name);
       if (o.dryRun) {
         writeFileSync(log, `[dry-run] would launch ${agent} in ${cwd}\n\n${prompt}`);
         rec.endedAt = new Date().toISOString();
@@ -300,6 +317,7 @@ export class Spawner {
       }
       // a write-enabled recruit works in its own worktree and branch, never in the shared checkout
       const seatCwd = req.canEdit && !o.dryRun ? (this.worktreeFor(cwd, target, name) ?? cwd) : cwd;
+      if (seatCwd !== cwd) rec.workspace = workspaceOf(cwd, target, name);
       // per seat: the MCP URL carries this seat's heartbeat key (so the file cannot be shared between recruits) and its
       // worktree, which the hub stamps on the seat's claim/* entries
       const beat = seatBeat(o.mcpUrl, randomUUID(), seatCwd);
@@ -463,12 +481,11 @@ export class Spawner {
 
   /** `git worktree add` for one recruit: .swarm-worktrees/<room>/<name> on branch swarm/<room>/<name>, node_modules linked so builds and tests work there. */
   private worktreeFor(cwd: string, room: string, name: string): string | undefined {
-    const top = spawnSync("git", ["-C", cwd, "rev-parse", "--show-toplevel"], { encoding: "utf8" });
-    if (top.status !== 0) return undefined;
-    const root = top.stdout.trim();
-    const dir = resolve(root, ".swarm-worktrees", room, name);
+    const ws = recruitWorkspace(cwd, room, name);
+    if (!ws) return undefined;
+    const { root, worktree: dir } = ws;
     if (existsSync(dir)) return dir;
-    const r = spawnSync("git", ["-C", root, "worktree", "add", "-b", `swarm/${room}/${name}`, dir], { encoding: "utf8" });
+    const r = spawnSync("git", ["-C", root, "worktree", "add", "-b", ws.branch, dir], { encoding: "utf8" });
     if (r.status !== 0) return undefined;
     const mods = resolve(root, "node_modules");
     if (existsSync(mods) && !existsSync(resolve(dir, "node_modules"))) {

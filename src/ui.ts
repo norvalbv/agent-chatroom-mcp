@@ -105,16 +105,33 @@ ${PALETTE_HTML}
   document.addEventListener('click', function (e) { var row = e.target.closest && e.target.closest('.person'); if (!row || e.target.closest('.act, .pacts')) return; var n = row.dataset.person; personOpen = personOpen === n ? null : n; if (personOpen) fetchActivity(personOpen); renderPane(); });
   setInterval(function () { if (personOpen && tab === 'people' && !document.hidden) fetchActivity(personOpen); }, 3000);
   /*act:start*/
+  // A step as a reader wants it: no leading "cd <dir>;" or "cd <dir> &&" or VAR=value prefixes, and paths inside the hub's
+  // checkout (or a seat's worktree under it) shown relative, so the command itself is what fits in the line.
+  function stepText(tool, detail) {
+    var s = String(detail == null ? '' : detail);
+    s = s.replace(/^(\\s*(cd\\s+("[^"]*"|'[^']*'|\\S+)\\s*(&&|;)|\\w+=("[^"]*"|'[^']*'|\\S*)\\s))+/, '');
+    s = s.replace(/(^|[\\s"'=])\\/(?:[^\\/\\n"';|&]+\\/)*?agent-chatroom-mcp(?:\\/\\.swarm-worktrees\\/[^\\/\\s"']+\\/[^\\/\\s"']+)?(\\/|(?=[\\s"']|$))/g, function (all, pre, slash) { return pre + (slash ? '' : '.'); });
+    return s.replace(/\\s+/g, ' ').trim();
+  }
+  // The People row's second line: messages, then when the seat was last seen or started its current tool, then that tool and command (the line's ellipsis eats the command, never the time).
+  function personStatus(p, esc, rel) {
+    var n = (p.messages || 0) + ' msg' + (p.messages === 1 ? '' : 's');
+    if (!p.active) return n + ' · left';
+    if (!(p.working && p.working.at > (p.last_active_at || ''))) return n + ' · ' + rel(p.last_seen_at || p.last_active_at);
+    var t = stepText(p.working.tool, p.working.detail);
+    if (t.length > 90) t = t.slice(0, 89) + '…';
+    return n + ' · ' + rel(p.working.at) + ' · <span class="tl">' + esc(p.working.tool) + '</span>' + (t ? ' ' + esc(t) : '');
+  }
   // The open person's steps, newest first, under one line saying what the seat is doing right now.
   function actPanel(p, list, esc, rel) {
     if (!list) return 'Loading…';
     var busy = p.active && p.working && (!p.last_active_at || p.working.at > p.last_active_at);
     var now = !p.active ? '<div class="now off">Left the room' + (p.left_reason ? ': ' + esc(p.left_reason) : '') + '</div>'
-      : busy ? '<div class="now live"><span class="dot"></span>Now: <span class="tl">' + esc(p.working.tool) + '</span> ' + esc(p.working.detail || '') + ' <span class="st">· started ' + rel(p.working.at) + '</span></div>'
+      : busy ? '<div class="now live"><span class="dot"></span>Now: <span class="tl">' + esc(p.working.tool) + '</span> ' + esc(stepText(p.working.tool, p.working.detail)) + ' <span class="st">· started ' + rel(p.working.at) + '</span></div>'
       : '<div class="now">Not running a tool · last active in the room ' + rel(p.last_active_at || p.last_seen_at) + '</div>';
     if (!list.length) return now + '<div class="st">No heartbeats yet (only seats started after 2026-09-18 send them).</div>';
     return now + '<div class="hdr">Recent steps, newest first</div>' + list.slice().reverse().map(function (a, i) {
-      return '<div data-k="' + esc(a.step + '@' + a.at) + '"' + (i === 0 ? ' class="latest"' : '') + '><span class="st">#' + a.step + ' ' + rel(a.at) + '</span> <span class="tl">' + esc(a.tool) + '</span> ' + esc(a.detail || '') + '</div>';
+      return '<div data-k="' + esc(a.step + '@' + a.at) + '"' + (i === 0 ? ' class="latest"' : '') + '><span class="st">#' + a.step + ' ' + rel(a.at) + '</span> <span class="tl">' + esc(a.tool) + '</span> ' + esc(stepText(a.tool, a.detail)) + '</div>';
     }).join('');
   }
   // Re-rendering replaces the panel, so keep the reader's place: at the top they follow the newest step; scrolled down,
@@ -411,7 +428,7 @@ ${ROOMS_JS}
     var rows = function (list) { return list.map(function (p) {
       var areas = areasOf(r, p.name), reviewing = reviewingOf(r, p.name);
       var aline = esc(areas.join(', ')) + (reviewing.length ? (areas.length ? ' · ' : '') + 'reviewing: ' + esc(reviewing.join(', ')) : '') + (p.left_reason ? (areas.length || reviewing.length ? ' · ' : '') + 'left: ' + esc(p.left_reason) : '');
-      return '<div class="person' + (p.active ? '' : ' off') + (canAct(p) ? ' hasacts' : '') + (personOpen === p.name ? ' sel' : '') + '" data-person="' + esc(p.name) + '">' + av(p.name, p.agent) + '<div><div class="n">' + esc(p.name) + roleTag(p) + '<span class="agent">' + esc(p.agent) + '</span></div><div class="a">' + aline + '</div></div><div class="s">' + p.messages + ' msg' + (p.messages === 1 ? '' : 's') + '<br>' + (p.active ? (p.working && p.working.at > (p.last_active_at || '') ? 'working: ' + esc(p.working.tool) + ' · ' + rel(p.working.at) : rel(p.last_seen_at || p.last_active_at)) : 'left') + '</div>' + (canAct(p) ? '<div class="pacts"><button class="mini warn" data-kick="' + esc(p.name) + '" data-kv="start" title="Start a vote to remove ' + esc(p.name) + '">Kick</button><button class="mini" data-replace="' + esc(p.name) + '" title="Remove ' + esc(p.name) + ' now and recruit a successor">Replace</button></div>' : '') + (personOpen === p.name ? '<div class="act" id="act">' + actPanel(p, activity[p.name], esc, rel) + '</div>' : '') + '</div>';
+      return '<div class="person' + (p.active ? '' : ' off') + (canAct(p) ? ' hasacts' : '') + (personOpen === p.name ? ' sel' : '') + '" data-person="' + esc(p.name) + '">' + av(p.name, p.agent) + '<div class="pm"><div class="n" title="' + esc(p.name) + '">' + esc(p.name) + roleTag(p) + '<span class="agent">' + esc(p.agent) + '</span></div><div class="a">' + aline + '</div><div class="s" title="' + esc(p.working ? p.working.tool + ' ' + stepText(p.working.tool, p.working.detail) : '') + '">' + personStatus(p, esc, rel) + '</div></div>' + (canAct(p) ? '<div class="pacts"><button class="mini warn" data-kick="' + esc(p.name) + '" data-kv="start" title="Start a vote to remove ' + esc(p.name) + '">Kick</button><button class="mini" data-replace="' + esc(p.name) + '" title="Remove ' + esc(p.name) + ' now and recruit a successor">Replace</button></div>' : '') + (personOpen === p.name ? '<div class="act" id="act">' + actPanel(p, activity[p.name], esc, rel) + '</div>' : '') + '</div>';
     }).join(''); };
     var active = r.participants.filter(function (p) { return p.active; }), gone = r.participants.filter(function (p) { return !p.active; });
     // open kick votes with a kick/keep button pair; settled ones are already in the chat log, so they leave the panel

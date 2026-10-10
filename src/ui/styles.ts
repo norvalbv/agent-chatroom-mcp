@@ -165,12 +165,12 @@ export const UI_CSS = `
   .vote-row .btn { flex:1; justify-content:center }
   .person { display:grid; grid-template-columns:28px minmax(0,1fr) auto; gap:9px; align-items:center; padding:6px 0; border-bottom:1px solid var(--line2) }
   .person:last-child { border:0 } .person.off .av { filter:grayscale(1) }
-  .person.hasacts { grid-template-columns:28px minmax(0,1fr) auto auto } .pacts { display:flex; gap:4px; align-items:center }
+  .pacts { display:flex; flex-direction:column; gap:3px; align-self:start }
   .mini { border:1px solid var(--line); background:var(--panel2); color:var(--dim); border-radius:6px; padding:2px 8px; font-size:11.5px; line-height:1.4; font-weight:500; white-space:nowrap }
   .mini:hover { color:var(--fg); border-color:var(--dim2) } .mini.warn:hover { color:var(--bad); border-color:var(--bad) }
-  .person .n { font-weight:600; font-size:13px; display:flex; gap:6px; align-items:center; flex-wrap:wrap } .person .n .agent { font-weight:400; color:var(--dim2); font-size:11px }
-  .person .a { color:var(--acc-fg); font-size:11.5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap } .person .a:empty::before { content:"no claimed area"; color:var(--dim2) }
-  .person .s { text-align:right; font-size:11px; color:var(--dim2); font-variant-numeric:tabular-nums; line-height:1.3 }
+  .person .pm { min-width:0 } .person .n { font-weight:600; font-size:13px; display:flex; gap:6px; align-items:baseline; white-space:nowrap; overflow:hidden; text-overflow:ellipsis } .person .n .agent { font-weight:400; color:var(--dim2); font-size:11px }
+  .person .a { color:var(--acc-fg); font-size:11.5px; overflow:hidden; overflow-wrap:anywhere; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical } .person .a:empty::before { content:"no claimed area"; color:var(--dim2) }
+  .person .s { font-size:11px; color:var(--dim2); font-variant-numeric:tabular-nums; line-height:1.3; white-space:nowrap; overflow:hidden; text-overflow:ellipsis } .person .s .tl { color:var(--fg); font-weight:600 }
   .bsearch { width:100%; margin-bottom:10px; font-size:13px; padding:7px 10px; background:var(--panel2) }
   .bgroup { margin-bottom:14px }
   .bentry { border:1px solid var(--line); border-radius:10px; margin-bottom:6px; background:var(--panel2); --clampbg:var(--panel2) }

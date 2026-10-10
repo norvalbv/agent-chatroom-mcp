@@ -30,6 +30,8 @@ export interface SeatMetrics {
   pollingShare?: number;
   idlePollingShare?: number;
   recruits: number;
+  /** the seat process's own usage, latest cumulative "usage" event (claude-opus-5-5-1's live usage); absent: unknown */
+  usage?: { requests?: number; input_tokens?: number; output_tokens?: number; cache_read_input_tokens?: number; cache_creation_input_tokens?: number; cost_usd?: number };
   proposals: number;
   challenges: number;
   votes: number;
@@ -46,8 +48,10 @@ export interface RunMetrics {
   lastEventAt?: string;
   /** minutes after the room opened; absent when it never happened */
   minutesTo: { firstClaim?: number; firstSource?: number; firstProposal?: number; conclusion?: number };
-  /** rate: workers who recruited at least once over workers */
+  /** rate: workers who recruited at least once over workers; calls counts every role's recruits (a verifier's too) */
   recruits: { calls: number; seats: number; workers: number; rate: number };
+  /** summed over seats that reported usage; seatsWithUsage of seats.length says how complete it is */
+  usage?: { cost_usd: number; input_tokens: number; output_tokens: number; seatsWithUsage: number };
   /** seats with at least one web call in the ledger; undefined when the log has no ledger */
   webSeats?: number;
   /** text the citation credit was read from */
@@ -61,6 +65,18 @@ type Ev = Record<string, any>;
 export interface MetricsOptions {
   /** git author of a commit (seats commit under their own name: src/env.ts seatGitIdentity); undefined when unknown */
   shaAuthor?: (sha: string) => string | undefined;
+}
+
+const KEY_CHAR = /[\w./-]/;
+/** The text names the key as a whole token: "notes" is not cited by "footnotes", nor "findings/a" by "findings/ab". */
+function citesKey(text: string, key: string): boolean {
+  for (let i = text.indexOf(key); i >= 0; i = text.indexOf(key, i + 1)) {
+    const before = text[i - 1] ?? " ";
+    const after = text[i + key.length] ?? " ";
+    // a trailing full stop or slash ends a sentence or a path, not the key
+    if (!KEY_CHAR.test(before) && (!KEY_CHAR.test(after) || /[./]/.test(after) && !KEY_CHAR.test(text[i + key.length + 1] ?? " "))) return true;
+  }
+  return false;
 }
 
 const minutes = (from: string | undefined, to: string | undefined) =>
@@ -78,6 +94,8 @@ export function runMetrics(events: readonly Ev[], opts: MetricsOptions = {}): Ru
   let conclusion: string | undefined;
   let proposal: string | undefined;
   let ledger = false;
+  const proposals = new Set<string>();
+  const byKey = new Map<string, string>();
 
   const seat = (id: string | null | undefined, name?: string) => {
     if (!id) return undefined;
@@ -109,6 +127,7 @@ export function runMetrics(events: readonly Ev[], opts: MetricsOptions = {}): Ru
         s.role = e.p.role ?? "worker";
         s.agent = e.p.agent ?? "unknown";
         s.joinedAt ??= e.p.joinedAt;
+        if (e.p.seatKeyHash) byKey.set(e.p.seatKeyHash, s.id);
         s.leftAt = undefined;
         stamp(e.p.joinedAt);
         break;
@@ -131,6 +150,13 @@ export function runMetrics(events: readonly Ev[], opts: MetricsOptions = {}): Ru
           if (e.empty === true) s.idleWaitMs = (s.idleWaitMs ?? 0) + e.ms;
           else s.idleWaitMs ??= 0;
         }
+        break;
+      }
+      case "usage": {
+        // cumulative per seat process: the latest event wins, events are never summed
+        stamp(e.ts);
+        const s = seat(byKey.get(e.seat));
+        if (s && e.usage) s.usage = e.usage;
         break;
       }
       case "work": {
@@ -167,6 +193,9 @@ export function runMetrics(events: readonly Ev[], opts: MetricsOptions = {}): Ru
         firstAt.proposal ??= p.createdAt;
         stamp(p.createdAt);
         proposal = p.text;
+        // the hub persists a proposal again when its status changes (accepted at the conclusion): count each id once
+        if (proposals.has(p.id)) break;
+        proposals.add(p.id);
         const s = seat(p.by?.id);
         if (s) s.proposals++;
         break;
@@ -201,7 +230,7 @@ export function runMetrics(events: readonly Ev[], opts: MetricsOptions = {}): Ru
   // or, when the repo does not know it, to whoever first named it in chat or on the board
   const cited = conclusion ?? proposal;
   if (cited) {
-    for (const [key, by] of boardBy) if (!NOT_CREDIT.test(key) && cited.includes(key)) named(by)?.cited.push(key);
+    for (const [key, by] of boardBy) if (!NOT_CREDIT.test(key) && citesKey(cited, key)) named(by)?.cited.push(key);
     for (const sha of new Set(cited.match(SHA) ?? [])) {
       if (!/[a-f]/.test(sha)) continue;
       const author = opts.shaAuthor?.(sha) ?? shaFirst.get(sha);
@@ -220,6 +249,8 @@ export function runMetrics(events: readonly Ev[], opts: MetricsOptions = {}): Ru
     return s as SeatMetrics;
   });
   const workers = list.filter((s) => s.role === "worker");
+  const priced = list.filter((s) => s.usage);
+  const sum = (k: "cost_usd" | "input_tokens" | "output_tokens") => priced.reduce((n, s) => n + (s.usage?.[k] ?? 0), 0);
   const recruiting = workers.filter((s) => s.recruits > 0).length;
   return {
     room,
@@ -232,6 +263,7 @@ export function runMetrics(events: readonly Ev[], opts: MetricsOptions = {}): Ru
       conclusion: minutes(createdAt, firstAt.conclusion),
     }).filter(([, v]) => v !== undefined)) as RunMetrics["minutesTo"],
     recruits: { calls: list.reduce((n, s) => n + s.recruits, 0), seats: recruiting, workers: workers.length, rate: workers.length ? recruiting / workers.length : 0 },
+    ...(priced.length ? { usage: { cost_usd: sum("cost_usd"), input_tokens: sum("input_tokens"), output_tokens: sum("output_tokens"), seatsWithUsage: priced.length } } : {}),
     ...(ledger ? { webSeats: list.filter((s) => (s.work?.web ?? 0) > 0).length } : {}),
     citedFrom: conclusion ? "conclusion" : proposal ? "proposal" : "none",
     uncited: cited ? list.filter((s) => s.findings > 0 && !s.cited.length).map((s) => s.name) : [],
@@ -251,14 +283,15 @@ const at = (m: number | undefined, what: string) => (m === undefined ? `no ${wha
 export function renderMetrics(m: RunMetrics): string {
   const t = m.minutesTo;
   let text = `## Metrics\n\nComputed from the hub's room log (${m.room}). ${[at(t.firstClaim, "first claim"), at(t.firstSource, "first source"), at(t.firstProposal, "first proposal"), at(t.conclusion, "conclusion")].join(", ")}. ` +
-    `${m.recruits.seats} of ${m.recruits.workers} workers recruited (${pct(m.recruits.rate)}, ${m.recruits.calls} recruit${m.recruits.calls === 1 ? "" : "s"}); ` +
+    `${m.recruits.seats} of ${m.recruits.workers} workers recruited (${pct(m.recruits.rate)}); ${m.recruits.calls} recruit${m.recruits.calls === 1 ? "" : "s"} by any seat, see the recruits column; ` +
     (m.webSeats === undefined ? "no work ledger in this log, so reads, searches and web calls are unknown. " : `${m.webSeats} of ${m.seats.length} seats made a web call. `) +
-    `Credit read from the ${m.citedFrom}${m.uncited.length ? `; findings never cited: ${m.uncited.join(", ")}` : ""}.\n\n` +
+    (m.usage ? `Seat-reported usage: $${m.usage.cost_usd.toFixed(2)}, ${m.usage.input_tokens} input + ${m.usage.output_tokens} output tokens from ${m.usage.seatsWithUsage} of ${m.seats.length} seats (the rest unknown). ` : "No seat reported usage to the hub. ") +
+    (m.citedFrom === "none" ? "No proposal yet, so no citation credit.\n\n" : `Credit read from the ${m.citedFrom}${m.uncited.length ? `; findings never cited: ${m.uncited.join(", ")}` : ""}.\n\n`) +
     "Work is distinct targets (files, patterns, commands, web hosts), not tool calls. Polling is time in wait_for_messages over time in the room; idle is the part that returned nothing new.\n\n" +
-    "| seat | role | read | search | web | run | edit | hub calls | polling (idle) | recruits | proposals | challenges | verifies | votes | findings | cited |\n|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|\n";
+    "| seat | role | read | search | web | run | edit | hub calls | polling (idle) | cost | recruits | proposals | challenges | verifies | votes | findings | cited |\n|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|\n";
   for (const s of m.seats) {
     const calls = Object.values(s.calls).reduce((a, b) => a + b, 0);
-    text += `| ${s.name} | ${s.role} | ${CLASSES.map((c) => s.work?.[c] ?? "?").join(" | ")} | ${calls} | ${pct(s.pollingShare)} (${pct(s.idlePollingShare)}) | ${s.recruits} | ${s.proposals} | ${s.challenges} | ${s.verifies} | ${s.votes} | ${s.findings} | ${s.cited.join(", ") || "-"} |\n`;
+    text += `| ${s.name} | ${s.role} | ${CLASSES.map((c) => s.work?.[c] ?? "?").join(" | ")} | ${calls} | ${pct(s.pollingShare)} (${pct(s.idlePollingShare)}) | ${s.usage?.cost_usd === undefined ? "?" : `$${s.usage.cost_usd.toFixed(2)}`} | ${s.recruits} | ${s.proposals} | ${s.challenges} | ${s.verifies} | ${s.votes} | ${s.findings} | ${s.cited.join(", ") || "-"} |\n`;
   }
   return `${text}\n`;
 }

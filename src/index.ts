@@ -502,6 +502,7 @@ app.post("/rooms/:room/close", (req, res) => {
     res.status(400).type("text/plain").send(e instanceof HubError ? e.message : "error");
   }
 });
+// reads the whole room log and runs git once per cited commit, synchronously: for a report or an operator's look, never a dashboard poll
 app.get("/rooms/:room/metrics", (req, res) => {
   try {
     const r = hub.getRoom(req.params.room);

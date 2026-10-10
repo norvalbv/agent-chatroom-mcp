@@ -16,7 +16,7 @@ const { runMetrics, renderMetrics } = mod;
 
 const T0 = Date.parse('2026-10-10T08:00:00.000Z');
 const at = (min: number) => new Date(T0 + min * 60_000).toISOString();
-const seat = (id: string, name: string, joinMin: number, role = 'worker') => ({ id, name, agent: 'claude', role, joinedAt: at(joinMin) });
+const seat = (id: string, name: string, joinMin: number, role = 'worker') => ({ id, name, agent: 'claude', role, joinedAt: at(joinMin), seatKeyHash: `k_${id}` });
 const call = (pid: string, tool: string, min: number, ms?: number, outcome = 'success', empty?: boolean) =>
   ({ type: 'call_completion', room: 'r', tool, outcome, ts: at(min), participant: pid, ...(ms === undefined ? {} : { ms }), ...(empty === undefined ? {} : { empty }) });
 const board = (key: string, by: string, min: number, text = 'x') => ({ type: 'board', room: 'r', key, entry: { text, by, updatedAt: at(min) } });
@@ -47,7 +47,14 @@ const events = [
   board('verify/alpha', 'verifier', 12, '{"proposal":"prop_1"}'),
   { type: 'vote', room: 'r', proposalId: 'prop_1', pid: 'p_v', entry: { vote: 'agree', name: 'verifier', ts: at(13) } },
   { type: 'leave', room: 'r', p: { ...seat('p_b', 'bob', 0), leftAt: at(14) } },
-  { type: 'state', room: 'r', state: 'concluded', conclusion: { text: 'Built alpha (deadbeef12, findings/alpha). Cites sources/2401.00001. Bob fixed it in cafef00d1.', proposalId: 'prop_1', decidedAt: at(20) } },
+  // usage is cumulative per seat process (claude-opus-5-5-1's live usage): the latest event wins, never a sum
+  { type: 'usage', room: 'r', seat: 'k_p_a', usage: { requests: 3, input_tokens: 100, output_tokens: 10, cost_usd: 0.5 }, ts: at(5) },
+  { type: 'usage', room: 'r', seat: 'k_p_a', usage: { requests: 9, input_tokens: 400, output_tokens: 40, cost_usd: 1.25 }, ts: at(9) },
+  board('notes', 'bob', 15),
+  board('findings/a', 'bob', 15),
+  // the hub persists the proposal again when it is accepted (swarm-083320-vya8: its dev room's own finding)
+  { type: 'proposal', proposal: { id: 'prop_1', room: 'r', by: { id: 'p_a', name: 'alice' }, text: 'Built alpha (deadbeef12, findings/alpha). Cites sources/2401.00001.', createdAt: at(10), votes: {}, challenges: [], status: 'accepted', version: 1 } },
+  { type: 'state', room: 'r', state: 'concluded', conclusion: { text: 'Built alpha (deadbeef12, findings/alpha). Cites sources/2401.00001. Bob fixed it in cafef00d1. See footnotes and findings/alpha.', proposalId: 'prop_1', decidedAt: at(20) } },
 ];
 
 // a sha is credited to its git author when the repo knows it (seats commit under their own name, src/env.ts
@@ -70,12 +77,18 @@ assert.equal(by('alice').recruits, 1);
 assert.equal(by('bob').recruits, 0, 'a refused request_agent is not a recruit');
 assert.equal(by('bob').challenges, 1);
 assert.equal(by('verifier').verifies, 1);
-assert.equal(by('alice').proposals, 1);
+assert.equal(by('alice').proposals, 1, 'a proposal persisted again at acceptance is one proposal');
 assert.equal(by('verifier').votes, 1);
 assert.deepEqual(by('alice').cited.sort(), ['deadbeef12', 'findings/alpha'], 'the conclusion cites alice\'s board key and the sha she first named');
 assert.deepEqual(by('bob').cited.sort(), ['cafef00d1', 'sources/2401.00001'], 'bob gets the sha git says he authored, though alice never named it');
+assert.ok(!by('bob').cited.includes('notes') && !by('bob').cited.includes('findings/a'), 'a key is cited only as a whole token, not inside "footnotes" or "findings/alpha"');
 assert.deepEqual(m.uncited, ['verifier'], 'seats that wrote board entries the conclusion never cites');
 assert.equal(m.webSeats, 1, 'seats that made any web call');
+assert.equal(by('alice').usage?.cost_usd, 1.25, 'latest cumulative usage per seat');
+assert.equal(by('bob').usage, undefined, 'a seat that reported no usage is unknown, not zero');
+assert.deepEqual(m.usage, { cost_usd: 1.25, input_tokens: 400, output_tokens: 40, seatsWithUsage: 1 });
+const none = renderMetrics(runMetrics(events.filter((e) => e.type !== 'proposal' && e.type !== 'state')));
+assert.ok(!none.includes('from the none') && none.includes('No proposal yet'), 'a room with no proposal says so');
 
 // A log from before the work ledger: reads, searches and web calls are unknown, never zero.
 const preLedger = runMetrics(events.filter((e) => e.type !== 'work'));

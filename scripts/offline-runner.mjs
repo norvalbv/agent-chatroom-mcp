@@ -220,6 +220,7 @@ export const offlineScripts = [
   'dev-runs-regression.ts',
   'verify-fail-to-pass-regression.ts',
   'pending-verify-regression.ts',
+  'partial-pregate-regression.ts',
 ];
 
 export function offlineCommands() {

@@ -12,7 +12,7 @@ import { collectRoomSnapshot, renderRunReport, writeRunResult, rollupUsage, pars
 import { settledAxes } from "./settled.js";
 import { registerRespawn } from "./respawn.js";
 import { fileURLToPath } from "node:url";
-import { carrySettings, devHubRule, heartbeatHookSettings, loadDotEnv, outputHeartbeat, seatBeat, seatChildEnv, seatPortError, type SeatBeat } from "./env.js";
+import { carrySettings, devHubRule, heartbeatHookSettings, loadDotEnv, outputHeartbeat, ownHubEnv, reusedHubProblem, seatBeat, seatChildEnv, seatPortError, type SeatBeat } from "./env.js";
 import { randomUUID } from "node:crypto";
 import { respawnChain, type RespawnRoom } from "./respawn.js";
 import { claudeArgs } from "./claude-args.js";
@@ -32,7 +32,7 @@ const flag = (name: string, def?: string) => {
   return i >= 0 ? argv[i + 1] : def;
 };
 const has = (name: string) => argv.includes(`--${name}`);
-const BOOL_FLAGS = new Set(["--apply", "--full-access", "--named", "--flat", "--require-verification", "--respawn", "--claude-full", "--no-carry", "--sandbox", "--no-web"]);
+const BOOL_FLAGS = new Set(["--keep-hub", "--reuse-hub", "--apply", "--full-access", "--named", "--flat", "--require-verification", "--respawn", "--claude-full", "--no-carry", "--sandbox", "--no-web"]);
 const task = argv.find((a, i) => !a.startsWith("--") && (i === 0 || !argv[i - 1].startsWith("--") || BOOL_FLAGS.has(argv[i - 1])));
 if (!task) {
   console.error('usage: swarm "<task>" [--flat] [--done-when text] [--verify text] [--agents 6] [--cwd dir] [--models sonnet,haiku] [--lead-model opus] [--verifier-model opus] [--planner-model opus] [--codex k] [--codex-models gpt-6-astra,gpt-5.6-sol,gpt-5.6-terra] [--openrouter k] [--openrouter-models deepseek/deepseek-v4.1-flash,...] [--verifier-openrouter slug] [--openrouter-reasoning low|medium|high] [--require-verification] [--quorum unanimous|majority|supermajority] [--prompt loop.md] [--respawn] [--apply] [--full-access] [--named] [--claude-full] [--no-carry] [--no-web] [--sandbox] [--timeout 30] [--port 7717] [--result-path path]');
@@ -114,6 +114,11 @@ const TIMEOUT_MIN = Number(flag("timeout", "30"));
     process.exit(2);
   }
 }
+/**
+ * Minutes a hub this run starts stays up with nobody using it. It must outlive the run so a reviewer can still read the
+ * room: in swarm-000525-jcz8 verify entries citing a dev room landed 30-50 min after it ended (-5), hence 120.
+ */
+const HUB_IDLE_EXIT_MIN = has("keep-hub") ? 0 : Number(flag("hub-idle-exit", "120"));
 const PORT = Number(flag("port", process.env.PORT ?? "7717"));
 const URL_ = `http://127.0.0.1:${PORT}`;
 const SWARM_ID = `swarm-${new Date().toISOString().slice(11, 19).replace(/:/g, "")}-${Math.random().toString(36).slice(2, 6)}`;
@@ -128,17 +133,28 @@ const prompt = (file: string, vars: Record<string, string | number>) =>
 
 // ---------- hub ----------
 async function ensureHub() {
+  let info: { build?: { root?: string; head?: string } } | undefined;
   try {
-    await fetch(URL_);
-    return;
+    info = await (await fetch(URL_)).json() as typeof info;
   } catch {}
-  log(`starting hub on :${PORT}`);
+  if (info) {
+    const head = spawnSync("git", ["-C", repoRoot, "rev-parse", "--short", "HEAD"], { encoding: "utf8" }).stdout?.trim() ?? "";
+    const problem = reusedHubProblem(info.build, { root: realpathSync(repoRoot), head });
+    // a seat's dev room must test its own build; the operator's runs on a shared hub only get the warning
+    if (problem && process.env.CHATROOM_SEAT_KEY && !has("reuse-hub")) {
+      console.error(`Refusing to run on :${PORT}: ${problem}. Pick a free port, or pass --reuse-hub if that is intended.`);
+      process.exit(2);
+    }
+    log(`using the hub already running on :${PORT} (not started by this run, so this run never stops it)${problem ? `; WARNING: ${problem}` : ""}`);
+    return;
+  }
   const child = spawn("node", [resolve(repoRoot, "dist/index.js")], {
-    env: { ...process.env, PORT: String(PORT), CHATROOM_DATA_DIR: resolve(repoRoot, "data"), ...(SANDBOX ? { CHATROOM_SANDBOX: "1" } : {}), ...(FRESH_CHALLENGER ? { CHATROOM_FRESH_CHALLENGER: "1" } : {}) },
+    env: { ...process.env, PORT: String(PORT), CHATROOM_DATA_DIR: resolve(repoRoot, "data"), ...(SANDBOX ? { CHATROOM_SANDBOX: "1" } : {}), ...(FRESH_CHALLENGER ? { CHATROOM_FRESH_CHALLENGER: "1" } : {}), ...ownHubEnv(HUB_IDLE_EXIT_MIN, PORT) },
     detached: true,
     stdio: "ignore",
   });
   child.unref();
+  log(`started hub pid ${child.pid} on :${PORT}; ${Object.keys(ownHubEnv(HUB_IDLE_EXIT_MIN, PORT)).length ? `it stops itself after ${HUB_IDLE_EXIT_MIN} min with no request (--hub-idle-exit, --keep-hub)` : `it keeps running: stop it with kill ${child.pid}`}`);
   for (let i = 0; i < 50; i++) {
     try {
       await fetch(URL_);

@@ -17,7 +17,9 @@
 import { steerAckAs, steerAckSeat, steerPeek, steerPeekSeat } from "./hub/steer.js";
 import { SUSPECTED_DEAD_MS } from "./hub/kick.js";
 import { randomUUID } from "node:crypto";
-import { resolve } from "node:path";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import { realpathSync } from "node:fs";
 import { createMcpExpressApp } from "@modelcontextprotocol/sdk/server/express.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import express from "express";
@@ -172,6 +174,26 @@ process.on("exit", () => spawner.stopAll());
 process.on("SIGINT", () => process.exit(0));
 process.on("SIGTERM", () => process.exit(0));
 const app = createMcpExpressApp({ host: HOST }); // already parses JSON bodies (100kb)
+/** The checkout and commit this process was started from; GET / reports it so a launcher can tell a stale hub. */
+const BUILD = (() => { const root = realpathSync(resolve(dirname(fileURLToPath(import.meta.url)), "..")); const st = Hub.codeState(root); return st ? { root, head: st.head } : null; })();
+// opt-in, for a hub a launcher started for one run: exit once no request has arrived or been in flight for this long.
+// A long poll counts while it is open, so a room with a waiting seat never trips it. Operator hubs leave it unset.
+const IDLE_EXIT_MS = Number(process.env.CHATROOM_IDLE_EXIT_MIN ?? 0) * 60_000;
+if (IDLE_EXIT_MS > 0) {
+  let inFlight = 0;
+  let lastUse = Date.now();
+  app.use((_req, res, next) => {
+    inFlight++;
+    lastUse = Date.now();
+    res.on("close", () => { inFlight--; lastUse = Date.now(); });
+    next();
+  });
+  setInterval(() => {
+    if (inFlight > 0 || Date.now() - lastUse < IDLE_EXIT_MS) return;
+    console.error(`agent-chatroom-mcp: no request for ${process.env.CHATROOM_IDLE_EXIT_MIN} min (CHATROOM_IDLE_EXIT_MIN); exiting`);
+    process.exit(0);
+  }, Math.min(10_000, Math.max(500, IDLE_EXIT_MS / 6))).unref();
+}
 
 const transports = new Map<string, { t: StreamableHTTPServerTransport; leaveAll: (reason?: string, final?: boolean) => void; session: string; lastSeen: number; seatKey?: string }>();
 /** The owning launcher's receipt that a seat's process exited: close every session that launch key opened. A killed CLI
@@ -278,7 +300,7 @@ app.delete("/mcp", sessionRoute);
 
 // ---- human-facing endpoints ----
 const notFound = (res: express.Response, e: unknown) => res.status(404).type("text/plain").send(e instanceof HubError ? e.message : "error");
-app.get("/", (_req, res) => res.json({ name: "agent-chatroom-mcp", mcp: "/mcp", ui: "/ui", rooms: "/rooms", sessions: transports.size, caps: { max_live_per_room: Hub.MAX_LIVE_PER_ROOM, max_rooms_per_run: Hub.MAX_ROOMS_PER_RUN }, code_state: Hub.codeState(resolve(process.env.CHATROOM_DEFAULT_CWD ?? process.cwd())) ?? null }));
+app.get("/", (_req, res) => res.json({ name: "agent-chatroom-mcp", mcp: "/mcp", ui: "/ui", rooms: "/rooms", sessions: transports.size, caps: { max_live_per_room: Hub.MAX_LIVE_PER_ROOM, max_rooms_per_run: Hub.MAX_ROOMS_PER_RUN }, code_state: Hub.codeState(resolve(process.env.CHATROOM_DEFAULT_CWD ?? process.cwd())) ?? null, build: BUILD }));
 app.get("/ui", (_req, res) => res.type("html").send(UI_HTML));
 registerPhotoRoutes(app, { directory: photoDirectory(`${DATA_DIR ?? process.cwd()}@${HOST}:${PORT}`), authorize: requireToken, roomExists: (room) => hub.rooms.has(room) });
 app.get("/config", (_req, res) => res.json({ human_token_required: !(INSECURE_LOCAL && LOOPBACK_HOST), agent_control_token_required: true }));

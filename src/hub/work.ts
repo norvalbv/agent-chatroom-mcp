@@ -76,6 +76,30 @@ export function barrenClaims(room: Room, seats: Participant[], shown: (p: Partic
   });
 }
 
+/** An outside source in text: an http(s) URL to a non-local host, an arXiv id or a DOI. */
+const OUTSIDE_SOURCE = /https?:\/\/(?!127\.0\.0\.1|localhost|\[::1\])[^\s"')]+|arXiv:\s?\d{4}\.\d{4,5}|\b\d{4}\.\d{5}\b|\b10\.\d{4,}\/\S+/i;
+
+/**
+ * Claims whose owner has findings but nothing from outside the repository behind them: the owner reports local work,
+ * made no web call, wrote no sources/* entry, and no board entry or chat line of theirs carries an outside source.
+ * At the first proposal of 154 past rooms that was 278 of 372 owners with findings, and 10 of them added a source later
+ * (scripts/unsourced-claims-measure.py). Bare claims are barrenClaims' business and are not repeated here.
+ */
+export function unsourcedClaims(room: Room, seats: Participant[], shown: (p: Participant) => string = (p) => p.name): string[] {
+  const owners = new Map(seats.filter(reports).map((p) => [p.name, p]));
+  const findings = new Set<string>();
+  const sourced = new Set<string>();
+  for (const [k, e] of room.board) {
+    if (!NOT_FINDINGS.test(k)) findings.add(e.by);
+    if (k.startsWith("sources/") || OUTSIDE_SOURCE.test(e.text)) sourced.add(e.by);
+  }
+  for (const m of room.messages) if (m.kind === "chat" && OUTSIDE_SOURCE.test(m.content)) sourced.add(m.from.name);
+  return [...room.board].flatMap(([k, e]) => {
+    const owner = k.startsWith("claim/") ? owners.get(e.by) : undefined;
+    return owner && findings.has(owner.name) && !sourced.has(owner.name) && !owner.work?.web ? [`${k} (${shown(owner)})`] : [];
+  });
+}
+
 /**
  * What is thin right now, as one clause for the hint of a seat that owes a challenge: seats with no local tool call,
  * a room where nobody left the machine, claims with no findings. Undefined when nothing is thin or nobody reports.

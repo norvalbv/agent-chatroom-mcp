@@ -21,7 +21,7 @@ import * as kick from "./hub/kick.js";
 import * as output from "./hub/output.js";
 import * as liveness from "./hub/liveness.js";
 import * as persistence from "./hub/persistence.js";
-import { barrenClaims, evidenceGaps, evidenceReceipt } from "./hub/work.js";
+import { barrenClaims, evidenceGaps, evidenceReceipt, unsourcedClaims } from "./hub/work.js";
 
 /** The hub's ask to the owners of claims with no findings; its presence in the log is the receipt that the one refusal was given. */
 const BARREN_ASK = "is ready to propose and your claim has no findings on the board";
@@ -1776,23 +1776,29 @@ export class Hub {
     const heldBefore = room.barrenWarned || room.messages.some((m) => m.kind === "system" && (m.content.includes(BARREN_ASK) || m.content.includes(board.SCRUTINY_HELD)));
     const { unexamined, open_attacks } = heldBefore ? { unexamined: [], open_attacks: [] } : board.scrutiny(room);
     const barren = heldBefore ? [] : barrenClaims(room, voters.filter((v) => v.id !== p.id), (v) => this.shown(room, v));
-    if (barren.length || unexamined.length || open_attacks.length) {
+    // and claims with findings but no outside source whose owner made no web call (the proposer's own included: its area too)
+    const unsourced = heldBefore ? [] : unsourcedClaims(room, voters, (v) => this.shown(room, v));
+    if (barren.length || unsourced.length || unexamined.length || open_attacks.length) {
       room.barrenWarned = true;
       const first = (keys: string[]) => [...keys].sort((a, b) => Number(text.includes(b)) - Number(text.includes(a))).slice(0, 8).join(", ") + (keys.length > 8 ? `, and ${keys.length - 8} more` : "");
-      const owners = [...new Set(voters.filter((v) => barren.some((x) => x.endsWith(`(${this.shown(room, v)})`))).map((v) => `@${this.shown(room, v)}`))];
+      const ownersOf = (keys: string[]) => [...new Set(voters.filter((v) => keys.some((x) => x.endsWith(`(${this.shown(room, v)})`))).map((v) => `@${this.shown(room, v)}`))];
+      const owners = ownersOf(barren);
+      const sourceAsk = unsourced.length ? `${ownersOf(unsourced).join(" ")} your claim has findings but nothing from outside this repository behind it, and you made no web call (${unsourced.join(", ")}): put one source on the board as sources/<id>, saying what it shows and whether your item agrees with, contradicts or duplicates it, or say why none applies. ` : "";
       const what = (unexamined.length ? `${unexamined.length} board finding(s) have not been attacked, quoted or even named by anyone but their author: ${first(unexamined)}. ` : "") +
         (open_attacks.length ? `${open_attacks.length} attack(s) are unanswered by the author of the entry attacked: ${first(open_attacks)}. ` : "");
       this.post(room, "system", undefined,
         (barren.length ? `${owners.join(" ")} ${this.shown(room, p)} ${BARREN_ASK} (${barren.join(", ")}). Post what you found, even if unfinished, or clear the claim. ` : "") +
+        sourceAsk +
         `${board.SCRUTINY_HELD}, from ${this.shown(room, p)}${barren.length ? "" : ": "}${barren.length && what ? `. Also: ${what}` : what}` +
         (what ? `Anyone but the author can check one and write attack/<key> quoting its weakest clause; an author answers an attack by editing the entry. ` : barren.length ? ". " : "") +
         `The next propose goes through as things stand.`);
       throw new HubError(
         (barren.length ? `CLAIMS WITHOUT FINDINGS: ${barren.join(", ")}. Their owners are in the room and have put nothing but the claim on the board; the hub has asked them. ` : "") +
+          (unsourced.length ? `CLAIMS WITHOUT SOURCES: ${unsourced.join(", ")}. Their owners made no web call and cite nothing from outside this repository; the hub has asked them for one. ` : "") +
           what + (unexamined.length ? `For each finding this proposal rests on, ask a named seat to check it and write attack/<key> quoting its weakest clause (or do that yourself if it is not yours). ` : "") +
           (open_attacks.length ? `The author answers by editing that entry. ` : "") +
           `Wait for those, or propose again to go ahead as things stand: this refusal is given once per room, for all of these reasons together.`,
-        { barren_claims: barren, unexamined, open_attacks },
+        { barren_claims: barren, unsourced_claims: unsourced, unexamined, open_attacks },
       );
     }
     this.surfaceCited(room, text, "cited in a proposal");

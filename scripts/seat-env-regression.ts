@@ -210,5 +210,43 @@ await test('authorship planner initializes before workers, no identity injection
   checkIdentity(seats[0]); // planner runs before worker worktrees exist
   checkIdentity(seats[1]); // verifier is never a worker
 });
+// A seat must not inherit where the hub that launched it lives. In swarm-000525-jcz8-room a recruit ran
+// `npx tsx scripts/seat-exit-regression.ts` bare; with the hub's PORT=7741 in its shell the script drove the live hub,
+// created a room on it and made it launch a real agent in the main checkout. A seat reaches its hub by its MCP URL.
+const hubLocation = { PORT: '7741', CHATROOM_DATA_DIR: '/synthetic/hub/data', CHATROOM_LOG_DIR: '/synthetic/hub/spawned', CHATROOM_DEFAULT_CWD: '/synthetic/main-checkout' };
+// Policy, not location: a private hub a seat starts stays under the operator's recruit pin and caps.
+const hubPolicy = { CHATROOM_RECRUIT_AGENT: 'claude', CHATROOM_RECRUIT_MODEL: 'claude-opus-5-5', CHATROOM_MAX_LIVE_AGENTS: '120', CHATROOM_MAX_RECRUIT_DEPTH: '3' };
+function checkNoHubLocation(env: Record<string, string>) {
+  for (const key of Object.keys(hubLocation)) assert.equal(Object.hasOwn(env, key), false, `seat env must omit the hub's ${key}`);
+  for (const [key, value] of Object.entries(hubPolicy)) assert.equal(env[key], value, `${key} retained`);
+}
+await test('helper drops the hub\'s PORT, data dir, log dir and default cwd', async () => {
+  const h = await harness('env', {});
+  const { seatChildEnv, SEAT_ENV_EXCLUSIONS } = h.exports;
+  const input = { ...hubLocation, ...hubPolicy, PATH: 'p' };
+  const out = seatChildEnv(input);
+  checkNoHubLocation(out);
+  assert.equal(out.PATH, 'p', 'PATH retained');
+  assert.equal(out.MCP_TOOL_TIMEOUT, '120000', 'seat timeout set');
+  assert.equal(input.PORT, '7741', 'caller env untouched');
+  for (const key of Object.keys(hubLocation)) assert.ok(SEAT_ENV_EXCLUSIONS.includes(key), `SEAT_ENV_EXCLUSIONS declares ${key}`);
+});
+for (const agent of ['claude', 'codex', 'openrouter']) for (const canEdit of [false, true]) await test(`hub location: spawner ${agent} canEdit=${canEdit} recruit`, async () => {
+  const h = await harness('spawner', { ...syntheticEnv(), ...hubLocation, ...hubPolicy }, [], 'success');
+  const spawner = new h.exports.Spawner({ mcpUrl: 'http://synthetic.invalid/mcp', defaultCwd: '/fixture', logDir: '/fixture/logs' });
+  spawner.request({ room: 'synthetic-room', requestedBy: 'parent', brief: 'Synthetic hub location minimization regression', agent, name: 'seat-abc', canEdit });
+  assert.equal(h.calls.length, 1); checkSeat(h.calls[0]); checkNoHubLocation(h.calls[0].options.env);
+  assert.ok(String(h.calls[0].options.env.CHATROOM_HEARTBEAT_URL).startsWith('http://synthetic.invalid/'), 'the seat still reaches its hub by URL');
+  assert.equal(h.env.PORT, '7741', 'hub environment unchanged');
+});
+await test('hub location: launcher seats omit it, the launcher\'s own hub keeps an explicit PORT and data dir', async () => {
+  const h = await harness('swarm', { ...syntheticEnv(), ...hubLocation, ...hubPolicy }, ['synthetic task', '--flat', '--agents', '4', '--codex', '1', '--openrouter', '1', '--port', '7999']);
+  const hub = h.calls.filter(c => c.args.some(a => a.endsWith('/dist/index.js')));
+  const seats = h.calls.filter(c => !hub.includes(c));
+  assert.equal(hub.length, 1); assert.equal(hub[0].options.env.PORT, '7999', 'the hub the launcher starts gets the launcher\'s port');
+  assert.ok(hub[0].options.env.CHATROOM_DATA_DIR, 'and a data dir');
+  assert.equal(seats.length, 4);
+  for (const seat of seats) { checkSeat(seat); checkNoHubLocation(seat.options.env); }
+});
 console.log(`SEAT ENV + AUTHORSHIP: ${failures ? `${failures} failed` : 'OK'}`);
 process.exitCode = failures ? 1 : 0;

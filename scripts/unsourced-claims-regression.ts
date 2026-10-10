@@ -89,7 +89,7 @@ for (const [why, act] of [
   const err = tryPropose(hub, name, a.id);
   assert.match(err, /CLAIMS WITHOUT FINDINGS: claim\/bare \(B\)/);
   assert.match(err, /CLAIMS WITHOUT SOURCES: claim\/x \(C\)/);
-  assert.doesNotMatch(err, /claim\/bare \(B\)[^]*CLAIMS WITHOUT SOURCES[^]*claim\/bare/, "a bare claim is not also called unsourced");
+  assert.doesNotMatch(err.slice(err.indexOf("CLAIMS WITHOUT SOURCES")), /claim\/bare/, "a bare claim is not also called unsourced");
   assert.equal(tryPropose(hub, name, a.id), "", "held once in total");
 }
 

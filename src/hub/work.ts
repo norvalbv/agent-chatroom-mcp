@@ -67,7 +67,7 @@ const total = (w: WorkCounts | undefined) => CLASSES.reduce((n, c) => n + (w?.[c
 const line = (w: WorkCounts | undefined) => CLASSES.filter((c) => w?.[c]).map((c) => `${c} ${w?.[c]}`).join(", ") || "none";
 
 /** Claims whose owner has put nothing else on the board: an area somebody took and nobody reported on. */
-function barrenClaims(room: Room, seats: Participant[]): string[] {
+export function barrenClaims(room: Room, seats: Participant[]): string[] {
   const names = new Set(seats.map((p) => p.name));
   const wrote = new Set([...room.board].filter(([k]) => !NOT_FINDINGS.test(k)).map(([, e]) => e.by));
   return [...room.board].filter(([k, e]) => k.startsWith("claim/") && names.has(e.by) && !wrote.has(e.by)).map(([k, e]) => `${k} (${e.by})`);

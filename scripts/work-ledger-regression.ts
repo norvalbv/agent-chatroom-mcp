@@ -96,6 +96,8 @@ const cx = await connect(seatBeat(`${HTTP}/mcp`, "seat-key-codex").mcpUrl);
 await cx("join_room", { room: "wl", name: "coder", agent: "codex" });
 
 // 4. Proposing states what the hub counted: per seat, how many did nothing, and the claim nobody reported on.
+// (the first propose over a claim with no findings is refused once: scripts/barren-claim-regression.ts)
+await assert.rejects(a("propose", { ...A, text: "The room has read enough to conclude." }), /CLAIMS WITHOUT FINDINGS/);
 const pr = await a("propose", { ...A, text: "The room has read enough to conclude." });
 st = await status("wl");
 const evidence = st.proposals[0]?.evidence ?? "";
@@ -109,6 +111,7 @@ assert.doesNotMatch(evidence, /claim\/reading/, "a claim with findings beside it
 const said = (await messages("wl")).filter((m) => m.kind === "system" && m.content.includes("EVIDENCE BEHIND THIS PROPOSAL"));
 assert.equal(said.length, 1, "the room is told once, right after the proposal");
 // The seat that owes the challenge gets the thin spots in its own hint, the one line it acts on; the proposer does not.
+await assert.rejects(a("propose", { room: "wl-untested", participant_id: ua.participant_id, text: "This one still needs its challenge." }), /CLAIMS WITHOUT FINDINGS/);
 await a("propose", { room: "wl-untested", participant_id: ua.participant_id, text: "This one still needs its challenge." });
 const owed = await b("wait_for_messages", { room: "wl-untested", participant_id: ub.participant_id, timeout_ms: 0 });
 assert.match(owed.hint, /untested\. The hub counted: idler made no local tool call; claim\/idling \(idler\) has no findings on the board\./);

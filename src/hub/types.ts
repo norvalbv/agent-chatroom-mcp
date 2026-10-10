@@ -386,6 +386,8 @@ export interface Room {
   lastBoardEventVersion?: number;
   /** human message ids the propose-gate has already warned about (once each) */
   humanWarned: Set<string>;
+  /** the one "claims without findings" refusal has been given (propose). Ephemeral. */
+  barrenWarned?: boolean;
   /** who has been asked to answer each human message, so three agents do not all say hello */
   responders: Map<string, { pid: string; at: number }>;
   /** open and settled votes to remove a participant, keyed by target pid */

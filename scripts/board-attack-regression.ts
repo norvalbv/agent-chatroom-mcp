@@ -25,13 +25,13 @@ const FINDING = "Measured on 40 rooms: seats recruited in 2% of seat-runs, and r
 const ATTACK = 'The clause "refused calls are not the cause (20 refusals in total)" counts refusals, not seats that never tried because the cap was in the brief.';
 const throws = (run: () => unknown, re: RegExp) => assert.throws(run, (e: Error) => re.test(e.message) || assert.fail(`unexpected message: ${e.message}`));
 
-test("a non-author attacks a finding by quoting it; the author is told and the entry leaves the unattacked list", () => {
+test("a non-author attacks a finding by quoting it; the author is told and the entry leaves the unexamined list", () => {
   const { h, name, a, b } = room();
   h.setBoard(name, a.id, "findings/recruiting", FINDING);
-  assert.deepEqual(h.scrutiny(name).unattacked, ["findings/recruiting"]);
+  assert.deepEqual(h.scrutiny(name).unexamined, ["findings/recruiting"]);
   h.setBoard(name, b.id, "attack/findings/recruiting", ATTACK);
   const s = h.scrutiny(name);
-  assert.deepEqual(s.unattacked, []);
+  assert.deepEqual(s.unexamined, []);
   assert.deepEqual(s.open_attacks, ["attack/findings/recruiting"]);
   const notice = h.getRoom(name).messages.find((m) => m.content.startsWith("@alice") && m.content.includes("attack/findings/recruiting"));
   assert.ok(notice, "the author gets an @-notice naming the attack");
@@ -57,12 +57,12 @@ test("the author answers an attack by editing the entry; an attack on an already
   h.setBoard(name, b.id, "attack/findings/recruiting", ATTACK);
   h.setBoard(name, a.id, "findings/recruiting", `${FINDING}\nRE attack: checked, 3 briefs named the cap; 0 of those seats recruited either way.`);
   assert.deepEqual(h.scrutiny(name).open_attacks, []);
-  assert.deepEqual(h.scrutiny(name).unattacked, [], "an answered attack still counts as scrutiny");
+  assert.deepEqual(h.scrutiny(name).unexamined, [], "an answered attack still counts as scrutiny");
   h.setBoard(name, b.id, "attack/findings/recruiting", `${ATTACK} Three briefs is not a sample.`);
   assert.deepEqual(h.scrutiny(name).open_attacks, ["attack/findings/recruiting"]);
 });
 
-test("the first propose is refused once, naming unattacked findings and unanswered attacks; the second goes through", () => {
+test("the first propose is refused once, naming unexamined findings and unanswered attacks; the second goes through", () => {
   const { h, name, a, b, c } = room();
   h.setBoard(name, a.id, "findings/recruiting", FINDING);
   h.setBoard(name, c.id, "findings/research", FINDING.replace("recruited", "searched"));
@@ -80,15 +80,30 @@ test("nothing to say, nothing refused: short notes, reserved keys and fully atta
   h.setBoard(name, a.id, "findings/recruiting", FINDING);
   h.setBoard(name, b.id, "attack/findings/recruiting", ATTACK);
   h.setBoard(name, a.id, "findings/recruiting", `${FINDING}\nRE attack: conceded, reworded.`);
-  assert.deepEqual(h.scrutiny(name), { unattacked: [], open_attacks: [] });
+  assert.deepEqual(h.scrutiny(name), { unexamined: [], open_attacks: [] });
   assert.equal(h.propose(name, a.id, "Build the hub-side trigger.").status, "open");
+});
+
+test("a finding another connection already named or quoted in chat is not listed (dev room swarm-002346-crax: the verifier had checked it in chat)", () => {
+  const { h, name, a, b, c } = room();
+  h.setBoard(name, a.id, "findings/recruiting", FINDING);
+  h.setBoard(name, c.id, "findings/research", FINDING.replace("recruited", "searched"));
+  h.send(name, a.id, "findings/recruiting is up, please look.", undefined, true);
+  assert.deepEqual(h.scrutiny(name).unexamined, ["findings/recruiting", "findings/research"], "the author naming it is not scrutiny");
+  h.send(name, b.id, "Reproduced findings/recruiting: I count 2% as well.", undefined, true);
+  h.send(name, b.id, 'carol, "seats searched in 2% of seat-runs" is seat-runs, not seats.', undefined, true);
+  assert.deepEqual(h.scrutiny(name).unexamined, []);
+  const alias = room(["sess-shared", "sess-shared", "sess-carol"]);
+  alias.h.setBoard(alias.name, alias.a.id, "findings/recruiting", FINDING);
+  alias.h.send(alias.name, alias.b.id, "Reproduced findings/recruiting: I count 2% as well.", undefined, true);
+  assert.deepEqual(alias.h.scrutiny(alias.name).unexamined, ["findings/recruiting"], "a same-connection alias is the author");
 });
 
 test("room_status carries the two lists only while there is something on them", () => {
   const { h, name, a, b } = room();
   assert.equal("scrutiny" in h.summary(h.getRoom(name)), false);
   h.setBoard(name, a.id, "findings/recruiting", FINDING);
-  assert.deepEqual((h.summary(h.getRoom(name)) as { scrutiny?: unknown }).scrutiny, { unattacked: ["findings/recruiting"], open_attacks: [] });
+  assert.deepEqual((h.summary(h.getRoom(name)) as { scrutiny?: unknown }).scrutiny, { unexamined: ["findings/recruiting"], open_attacks: [] });
   h.setBoard(name, b.id, "attack/findings/recruiting", ATTACK);
   h.setBoard(name, a.id, "findings/recruiting", `${FINDING}\nRE attack: conceded.`);
   assert.equal("scrutiny" in h.summary(h.getRoom(name)), false);

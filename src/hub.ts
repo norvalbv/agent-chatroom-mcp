@@ -26,6 +26,17 @@ import { barrenClaims, evidenceGaps, evidenceReceipt } from "./hub/work.js";
 /** The hub's ask to the owners of claims with no findings; its presence in the log is the receipt that the one refusal was given. */
 const BARREN_ASK = "is ready to propose and your claim has no findings on the board";
 
+/** commit-like tokens (7-40 hex with a letter and a digit) in a text */
+const commitsIn = (text: string) => (text.match(/\b[0-9a-f]{7,40}\b/g) ?? []).filter((t) => /[a-f]/.test(t) && /\d/.test(t));
+/** two spellings of one commit: one is a prefix of the other, at least 7 characters */
+const sameCommit = (x: string, y: string) => (x.length <= y.length ? y.startsWith(x) : x.startsWith(y));
+/** The commits a board notice's verify/* or attack/* entry covers (its current text), or none for any other entry. */
+function verdictCommits(room: Room, m: Message): string[] {
+  const key = /board entry "((?:verify|attack)\/[^"]+)"/.exec(m.content)?.[1];
+  const entry = key ? room.board.get(key) : undefined;
+  return entry && entry.by === m.from.name ? commitsIn(entry.text) : [];
+}
+
 export class Hub {
   readonly rooms = new Map<string, Room>();
   /** Fired on every room state transition (setState); the consolidator spawn listens for "concluded". */
@@ -1383,7 +1394,8 @@ export class Hub {
 
   /** Linked chat resolves agent debt: reply_to settles its target and @-back settles
    * every earlier ask from each named sender, including when both appear together.
-   * Other post kinds never resolve debt (hub-carries-what-it-knows). */
+   * One board write does too: a verify/* or attack/* entry by the addressee that covers a commit an ask names settles
+   * that ask, since the entry is the answer it asked for. Other post kinds never resolve debt (hub-carries-what-it-knows). */
   addressedBy(room: Room, p: Participant): Message[] {
     const declined = new Set(p.declinedAsks ?? []);
     // Snapshot only outstanding debt at registration; successors settle it under their own
@@ -1392,6 +1404,11 @@ export class Hub {
     const pending: Message[] = [];
     for (const m of room.messages) {
       for (let i = pending.length - 1; i >= 0; i--) if ((p.declinedAt?.[pending[i].id] ?? Infinity) < m.seq) pending.splice(i, 1);
+      if (m.kind === "board" && m.from.id === p.id) {
+        const covered = verdictCommits(room, m);
+        if (covered.length) for (let i = pending.length - 1; i >= 0; i--) if (commitsIn(pending[i].content).some((c) => covered.some((v) => sameCommit(c, v)))) pending.splice(i, 1);
+        continue;
+      }
       if (m.kind !== "chat" || m.tag === "opening") continue;
       if (m.from.id === p.id) {
         // A reply settles its target, and @-naming someone settles everything they asked before it:

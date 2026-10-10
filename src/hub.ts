@@ -14,7 +14,7 @@ import { analyzeReplyMetrics, type ReplyMetricEvent } from "./reply-metrics.js";
 export * from "./hub/types.js";
 import { VERIFY_HEAD_EXAMPLE, VERIFY_HEAD_RULE, parseVerifyHead, readVerifyHead, failToPassShortfall, citesCommit, hexTokens, addedUnchecked, uncoveredCommits, verifyGaps, devRoomUrl, devReceiptFrom, type DevReceipt, ROLES, REFUSAL_CODES, HubError } from "./hub/types.js";
 import type { MessageKind, Vote, Quorum, RoomState, VerifyHead, Role, Participant, KickVote, Message, CodeState, BoardExpiryOptions, BoardEntry, Challenge, ElectorateSummary, ConclusionVerification, Proposal, RoomOptions, JoinOptions, Room, CallOutcome, RefusalCode, BoardManifestObservation } from "./hub/types.js";
-import { now, shortId, norm, emptyBoardManifestCounters, manifestBytes, codeState } from "./hub/internal.js";
+import { now, shortId, norm, emptyBoardManifestCounters, manifestBytes, codeState, keepRefusal, RECENT_REFUSALS } from "./hub/internal.js";
 import type { Opts, Event, BoardManifestCounters } from "./hub/internal.js";
 import * as board from "./hub/board.js";
 import * as kick from "./hub/kick.js";
@@ -1047,7 +1047,22 @@ export class Hub {
     const key = `${tool}: ${reason}`;
     room.refusals = room.refusals ?? {};
     room.refusals[key] = (room.refusals[key] ?? 0) + 1;
-    this.persist({ type: "refusal", room: room.name, tool, reason, ts: now(), participant });
+    const ts = now();
+    keepRefusal(room, { pid: participant, tool, reason, ts });
+    this.persist({ type: "refusal", room: room.name, tool, reason, ts, participant });
+  }
+
+  static readonly RECENT_REFUSALS = RECENT_REFUSALS;
+
+  /**
+   * The room's latest refusals, newest first, so "the hub refused X" can be checked by someone other than the seat
+   * saying it (evidence/refusals-cited: about one such report per room where it happens; idea/refusals-visible).
+   * A display name, never the participant id (identity-is-the-connection); the closed-enum code, never the message,
+   * which can interpolate submitted text (recordRefusal).
+   */
+  recentRefusals(room: Room, n = 5): { name: string; tool: string; reason: string; ts: string }[] {
+    return (room.recentRefusals ?? []).slice(-Math.max(0, n)).reverse()
+      .map((r) => ({ name: (r.pid && room.participants.get(r.pid)?.name) || "unknown", tool: r.tool, reason: r.reason, ts: r.ts }));
   }
 
   /** Completed MCP guard invocations for existing rooms only; no arguments or error text.

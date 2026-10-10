@@ -7,7 +7,7 @@ import { applyBoard, applyBoardManifest } from "./board.js";
 import { countWork } from "./work.js";
 import type { Participant, Proposal } from "./types.js";
 import { hexTokens } from "./types.js";
-import { now } from "./internal.js";
+import { now, keepRefusal } from "./internal.js";
 import type { Opts, Event } from "./internal.js";
 
 function recordReplyMetricEvent(hub: Hub, ev: Event) {
@@ -149,6 +149,7 @@ export function replay(hub: Hub) {
             const key = `${ev.tool}: ${ev.reason}`;
             room.refusals = room.refusals ?? {};
             room.refusals[key] = (room.refusals[key] ?? 0) + 1;
+            if (ev.ts) keepRefusal(room, { pid: ev.participant ?? null, tool: ev.tool, reason: ev.reason, ts: ev.ts });
           }
           break;
         }

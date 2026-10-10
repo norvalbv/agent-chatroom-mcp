@@ -12,7 +12,7 @@ import { collectRoomSnapshot, renderRunReport, writeRunResult, rollupUsage, pars
 import { settledAxes } from "./settled.js";
 import { registerRespawn } from "./respawn.js";
 import { fileURLToPath } from "node:url";
-import { carrySettings, devHubRule, heartbeatHookSettings, loadDotEnv, outputHeartbeat, seatBeat, seatChildEnv, type SeatBeat } from "./env.js";
+import { carrySettings, devHubRule, heartbeatHookSettings, loadDotEnv, outputHeartbeat, seatBeat, seatChildEnv, seatPortError, type SeatBeat } from "./env.js";
 import { randomUUID } from "node:crypto";
 import { respawnChain, type RespawnRoom } from "./respawn.js";
 import { claudeArgs } from "./claude-args.js";
@@ -105,6 +105,13 @@ const WEB_TOOLS = has("no-web") ? [] : ["WebSearch", "WebFetch"];
 const READ_TOOLS = ["mcp__chatroom__*", "Read", "Grep", "Glob", "Bash", ...WEB_TOOLS];
 const WRITE_TOOLS = [...READ_TOOLS, "Edit", "Write", "MultiEdit", "NotebookEdit"];
 const TIMEOUT_MIN = Number(flag("timeout", "30"));
+{
+  const refused = seatPortError(process.env, flag("port"));
+  if (refused) {
+    console.error(refused);
+    process.exit(2);
+  }
+}
 const PORT = Number(flag("port", process.env.PORT ?? "7717"));
 const URL_ = `http://127.0.0.1:${PORT}`;
 const SWARM_ID = `swarm-${new Date().toISOString().slice(11, 19).replace(/:/g, "")}-${Math.random().toString(36).slice(2, 6)}`;

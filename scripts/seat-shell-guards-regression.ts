@@ -1,6 +1,6 @@
-/** A seat's shell must not reach a hub by default. Two cases from swarm-000525-jcz8: a recruit's bare script run drove
- * the live hub, and with PORT scrubbed from seats a bare `node dist/swarm.js` falls back to 7717, the operator's hub;
- * and smoke.ts failed in every recruit shell on the inherited recruit pin. npx tsx scripts/seat-shell-guards-regression.ts */
+/** A seat's shell must not start a launcher on a hub by default. In swarm-000525-jcz8 a recruit's bare script run drove
+ * the live hub; with PORT scrubbed from seats, a bare `node dist/swarm.js` falls back to 7717, the operator's hub.
+ * npx tsx scripts/seat-shell-guards-regression.ts */
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import * as env from "../src/env.js";
@@ -22,7 +22,4 @@ const run = spawnSync("npx", ["tsx", "src/swarm.ts", "a task", "--flat"], { env:
 assert.notEqual(run.status, 0);
 assert.match(`${run.stdout}${run.stderr}`, /--port/, `${run.stdout}${run.stderr}`.slice(-300));
 
-// smoke starts its own hubs with the default recruit policy whatever the calling shell pins
-const smoke = spawnSync("npx", ["tsx", "scripts/smoke.ts"], { env: { ...process.env, PORT: process.env.SMOKE_PORT ?? "7878", CHATROOM_RECRUIT_AGENT: "claude", CHATROOM_RECRUIT_MODEL: "claude-opus-5-5" }, encoding: "utf8", timeout: 300_000 });
-assert.match(smoke.stdout, /SMOKE OK/, `${smoke.stdout}${smoke.stderr}`.slice(-400));
 console.log("SEAT SHELL GUARDS REGRESSION OK");

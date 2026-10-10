@@ -2190,7 +2190,8 @@ export class Hub {
       key: v.key, by: v.entry.by, path: v.head.refactor === true ? "refactor" : "fail_to_pass",
       base_commit: v.head.base_commit!, commit: v.head.commit!, ...(v.head.kind ? { kind: v.head.kind } : {}),
     };
-    room.conclusion = { text: pr.text, proposalId: pr.id, decidedAt: now(), version: pr.version, tally, electorate, unresolved_objections: unresolved, ...(verification ? { verification } : {}) };
+    const record = output.conclusionOutput(this, room, pr);
+    room.conclusion = { text: pr.text, proposalId: pr.id, decidedAt: now(), version: pr.version, tally, electorate, unresolved_objections: unresolved, ...record, ...(verification ? { verification } : {}) };
     this.persist({ type: "proposal", proposal: pr });
     this.setState(room, "concluded");
     if (room.nudgeTimer) clearTimeout(room.nudgeTimer);
@@ -2199,7 +2200,7 @@ export class Hub {
       "conclusion",
       undefined,
       `CONSENSUS REACHED on ${pr.id} v${pr.version} (${electorate.agree}/${electorate.electorate} agree; ${electorate.excluded_leavers} leavers-before-close excluded; quorum=${room.quorum}; ${pr.text.length} chars, text in room_status/conclusion)` +
-        (unresolved.length ? `\nUnresolved objections, overruled: ${unresolved.map((u) => `${u.by}: "${u.objection.slice(0, 300)}${u.objection.length > 300 ? "…" : ""}"`).join(" | ")}` : "") +
+        (unresolved.length ? `\nUnresolved objections, overruled: ${unresolved.map((u) => `${u.by}: "${u.objection.slice(0, 300)}${u.objection.length > 300 ? "…" : ""}"`).join(" | ")}` : "") + output.conclusionOutputLines(record) +
         (verification ? `\n${Hub.verificationLine(verification)}` : ""),
       { proposalId: pr.id },
     );

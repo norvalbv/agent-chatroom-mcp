@@ -8,8 +8,9 @@
  * by the human, none for work), and gives every kick vote the hub's numbers instead of the accuser's word. Everything is derived from room state, so a replay rebuilds it.
  */
 import type { Hub } from "../hub.js";
+import { claimReleased } from "./board.js";
 import { openKickByHub, reevaluateOpenKicks } from "./kick.js";
-import type { Participant, Room } from "./types.js";
+import type { Participant, Proposal, Room } from "./types.js";
 
 /** In the room this long with nothing on the record before a worker is listed (the stale-claim and suspected-dead window). */
 /** An unset, empty or malformed value keeps the default: "" would read as 0 (everyone listed at once) and "2m" as NaN (silently off). */
@@ -113,4 +114,31 @@ export function outputLine(hub: Hub, room: Room, p: Participant): string {
   const o = seatOutput(room, p);
   return `Hub record for ${hub.shown(room, p)}: ${n(o.claims, "claim")}, ${n(o.evidence, "evidence entry", "evidence entries")}, ${n(o.verifies, "verify", "verifies")}, ` +
     `${n(o.proposals, "proposal")}, ${n(o.challenges, "challenge")}, ${n(p.messageCount, "chat message")}, ${Math.round((Date.now() - Date.parse(p.joinedAt)) / 60_000)} min in the room. `;
+}
+
+/** What a conclusion carries about the record behind it, the way it carries unresolved objections: reported, never refused. */
+export interface ConclusionOutput { agreed_without_output: string[]; undelivered_claims: { key: string; by: string }[] }
+
+/** Workers whose agree counted with nothing of their own on the record (5 seats over 57 concluded rooms), and claim/*
+ * entries whose owner put no evidence or verify on the board (10 of 271 claimants). A released claim, and one whose
+ * area has a handoff/<area>, has been passed on and is not listed. */
+export function conclusionOutput(hub: Hub, room: Room, pr: Proposal): ConclusionOutput {
+  const measured = (p: Participant) => p.agent !== "human" && (p.role ?? "worker") !== "chair" && p.role !== "verifier";
+  const agreed_without_output = hub.electorate(room, pr).members
+    .filter((p) => measured(p) && pr.votes[p.id]?.vote === "agree" && !delivered(seatOutput(room, p))).map((p) => hub.shown(room, p));
+  const undelivered_claims: ConclusionOutput["undelivered_claims"] = [];
+  for (const [key, e] of room.board) {
+    if (!key.startsWith("claim/") || !e.text.trim() || claimReleased(e) || room.board.has(`handoff/${key.slice("claim/".length)}`)) continue;
+    const owner = [...room.participants.values()].find((p) => p.name === e.by);
+    if (owner && !measured(owner)) continue;
+    if ([...room.board].some(([k, o]) => o.by === e.by && !coordinates(k))) continue;
+    undelivered_claims.push({ key, by: owner ? hub.shown(room, owner) : e.by });
+  }
+  return { agreed_without_output, undelivered_claims };
+}
+
+/** The clauses the conclusion line gains, each only when it has something to say. */
+export function conclusionOutputLines(o: ConclusionOutput): string {
+  return (o.agreed_without_output.length ? `\nAgreed with nothing on the record: ${o.agreed_without_output.join(", ")}` : "") +
+    (o.undelivered_claims.length ? `\nClaimed, nothing delivered: ${o.undelivered_claims.map((c) => `${c.key} (${c.by})`).join(", ")}` : "");
 }

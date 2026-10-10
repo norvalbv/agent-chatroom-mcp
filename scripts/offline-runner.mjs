@@ -37,6 +37,7 @@ export const offlineScripts = [
   'readas-limit-regression.ts',
   'baseline-freeze-guard-regression.ts',
   'blind-drafts-regression.ts',
+  'board-stale-overwrite-regression.ts',
   'board-attack-regression.ts',
   'breakout-regression.ts',
   'fresh-challenger-regression.ts',

@@ -146,6 +146,9 @@ const children: ChildProcess[] = [];
 /** The latest process per seat name, and the seats the timeout had to kill: the report's "how it ended" column. */
 const seatChildren = new Map<string, ChildProcess>();
 const killedAtTimeout = new Set<string>();
+/** Cost per process name (`name-rN` for a respawn): withRespawn hands back only the last attempt under the base name. */
+const seatCosts = new Map<string, number>();
+const priced = (name: string, o: SeatOutcome): SeatOutcome => { if (o.usage) seatCosts.set(name, o.usage.cost); return o; };
 
 /**
  * R4 usage telemetry for claude seats: `--output-format json` turns stdout into one JSON blob carrying
@@ -168,7 +171,7 @@ function runClaude(name: string, text: string, tools: string[], cwd: string, mod
     writeFileSync(outFile, final);
     // per-seat usage next to the .out, the same sidecar shape an OpenRouter seat writes (scripts/pool-run.ts reads it per seat)
     if (usage) writeFileSync(resolve(OUT, `${name}.usage.json`), JSON.stringify(usage));
-    return { text: final, usage };
+    return priced(name, { text: final, usage });
   });
 }
 
@@ -196,7 +199,7 @@ function runOpenRouter(name: string, text: string, cwd: string, model: string | 
   if (write) args.push("--write");
   if (OPENROUTER_REASONING) args.push("--reasoning", OPENROUTER_REASONING);
   if (SANDBOX) args.push("--sandbox");
-  return runProc(name, seatScript.cmd, args, cwd, outFile, false, undefined, false, text).then((t) => ({ text: t, usage: readSeatUsage(sidecar) }));
+  return runProc(name, seatScript.cmd, args, cwd, outFile, false, undefined, false, text).then((t) => priced(name, { text: t, usage: readSeatUsage(sidecar) }));
 }
 
 /**
@@ -212,7 +215,7 @@ function runCodex(name: string, text: string, cwd: string, model: string | undef
   // written on every turn.completed, so a seat stopped after one keeps what it had reported; a write error must not kill the launcher
   const track = codexUsageTracker((usage) => { try { writeFileSync(sidecar, JSON.stringify(usage, null, 2)); } catch (e) { log(`${name}: usage sidecar: ${e instanceof Error ? e.message : String(e)}`); } });
   const onStdout = (d: Buffer) => { events.write(d); track(d); };
-  return runProc(name, cmd, args, cwd, outFile, true, beat, false, text, onStdout).then((t) => { events.end(); return { text: t, usage: readSeatUsage(sidecar) }; });
+  return runProc(name, cmd, args, cwd, outFile, true, beat, false, text, onStdout).then((t) => { events.end(); return priced(name, { text: t, usage: readSeatUsage(sidecar) }); });
 }
 
 /**
@@ -613,7 +616,7 @@ const artifact: RunResult = {
   verifier: { name: "verifier", output: results.find(r => r.name === "verifier")?.text ?? null },
   reportPath: resolve(OUT, "report.md"), artifactPath, collectionErrors, usage: rollupUsage(results),
   outcome: classifyOutcome(snapshots.find(r => r.name === leadsRoom)?.payload, { timedOut }),
-  scorecard: seatScorecard(snapshots, Object.fromEntries([...exitCodes].map(([name, exitCode]) => [name, { exitCode, cost: results.find(r => r.name === name)?.usage?.cost, killedAtTimeout: killedAtTimeout.has(name) }]))),
+  scorecard: seatScorecard(snapshots, Object.fromEntries([...exitCodes].map(([name, exitCode]) => [name, { exitCode, cost: seatCosts.get(name), killedAtTimeout: killedAtTimeout.has(name) }]))),
 };
 writeRunResult(resolve(OUT, "result.json"), artifact);
 if (artifactPath !== resolve(OUT, "result.json")) writeRunResult(artifactPath, artifact);

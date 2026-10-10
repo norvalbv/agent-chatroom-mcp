@@ -58,6 +58,21 @@ assert.equal(by('verifier').board.verify, 1);
 // without a launcher receipt the cause of a silent exit is unknown, and says so
 assert.equal(seatScorecard(rooms).find((s: { name: string }) => s.name === 'ghost')!.ending, 'gone_no_reason');
 
+assert.equal(by('verifier').produced, true, "a verifier's vote is its output");
+// a lead sits in its group room and the leads room: one row, counts summed, never named idle for the quiet room
+const two = seatScorecard([
+  { name: 'leads', payload: { participants: [seat('lead-a', { messages: 1, left_reason: 'done' })], board: {}, proposals: [] }, error: null, transcript: rooms[0].transcript },
+  { name: 'group-a', payload: { participants: [seat('lead-a', { messages: 9 })], board: { 'evidence/a': { by: 'lead-a' } }, proposals: [{ id: 'p', by: 'lead-a', votes: [], challenges: [] }] }, error: null, transcript: rooms[0].transcript },
+], { 'lead-a': { exitCode: 0, cost: 6.25 } });
+assert.equal(two.length, 1, 'one row per seat, not per (seat, room)');
+assert.deepEqual(two[0].rooms, ['leads', 'group-a']);
+assert.equal(two[0].messages, 10);
+assert.equal(two[0].proposals, 1);
+assert.equal(two[0].board.other, 1);
+assert.equal(two[0].produced, true);
+assert.equal(two[0].ending, 'left', 'the lead room says how the seat ended');
+assert.equal(two[0].cost, 6.25);
+
 // outcome: every non-conclusion names its cause
 const open = classifyOutcome(payload, { timedOut: true });
 assert.equal(open.kind, 'proposal_open');

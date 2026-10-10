@@ -28,12 +28,14 @@ export interface RunResult {
 export type SeatEnding = 'left' | 'exited_without_leaving' | 'kicked' | 'killed_at_timeout' | 'gone_no_reason' | 'still_active';
 /**
  * What one seat left behind, read from the room snapshot plus the launcher's own receipt for that seat.
- * `produced` is deliberately coarse: a board entry, a proposal, a challenge or more than two messages.
+ * `produced` is deliberately coarse: a board entry, a proposal, a challenge or more than two messages
+ * (for a verifier, a vote).
  * It separates a seat that left nothing from one that did something; it does not rank the ones that did.
  */
 export interface SeatScore {
   name: string;
-  room: string;
+  /** Every room of the run the seat sat in (a lead sits in its group room and the leads room); counts are summed across them. */
+  rooms: string[];
   role: string;
   agent: string;
   messages: number;
@@ -78,20 +80,29 @@ export function seatScorecard(rooms: readonly RoomSnapshot[], receipts: Readonly
       board.other = mine.length - board.claim - board.verify;
       const receipt = receipts[p.name];
       const score: SeatScore = {
-        name: p.name, room: room.name, role: p.role ?? 'worker', agent: p.agent ?? 'unknown', messages: p.messages ?? 0, board,
+        name: p.name, rooms: [room.name], role: p.role ?? 'worker', agent: p.agent ?? 'unknown', messages: p.messages ?? 0, board,
         proposals: proposals.filter(x => x.by === p.name).length,
         challenges: proposals.reduce((n, x) => n + (x.challenges ?? []).filter(c => c.by === p.name).length, 0),
         votes: proposals.reduce((n, x) => n + (x.votes ?? []).filter(v => v.name === p.name).length, 0),
         ending: seatEnding(p, receipt),
         produced: false,
       };
-      score.produced = mine.length > 0 || score.proposals > 0 || score.challenges > 0 || score.messages > 2;
       if (typeof p.left_reason === 'string' && p.left_reason) score.leftReason = p.left_reason;
       if (typeof receipt?.cost === 'number') score.cost = receipt.cost;
       if (receipt && 'exitCode' in receipt) score.exitCode = receipt.exitCode ?? null;
-      card.push(score);
+      // one process, one row: the first room listed (the lead room) says how the seat ended
+      const seen = card.find(s => s.name === score.name);
+      if (!seen) { card.push(score); continue; }
+      seen.rooms.push(room.name);
+      seen.messages += score.messages;
+      for (const k of ['claim', 'verify', 'other'] as const) seen.board[k] += score.board[k];
+      seen.proposals += score.proposals;
+      seen.challenges += score.challenges;
+      seen.votes += score.votes;
     }
   }
+  // a verifier's output is its verdict: a vote, a challenge or a verify entry
+  for (const s of card) s.produced = s.board.claim + s.board.verify + s.board.other > 0 || s.proposals > 0 || s.challenges > 0 || (s.role === 'verifier' ? s.votes > 0 : s.messages > 2);
   return card;
 }
 /** Name the cause of a non-conclusion from the lead room's own payload, so the report never has to say only "no consensus". */

@@ -1,6 +1,7 @@
 /** Versioned, self-contained transport. Room payloads are deliberately not projected. */
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
+import { renderMetrics, type RunMetrics } from './run-metrics.js';
 
 export interface RoomSnapshot {
   name: string;
@@ -24,6 +25,9 @@ export interface RunResult {
   outcome?: RunOutcome;
   /** One row per agent seat across every room of the run; absent on older artifacts. */
   scorecard?: SeatScore[];
+  /** The lead room's metrics as the hub computed them from its own log (GET /rooms/:room/metrics); absent when the hub
+   * kept no log or on older artifacts. After a crash the same numbers come from scripts/run-metrics.ts on the log. */
+  metrics?: RunMetrics;
 }
 export type SeatEnding = 'left' | 'exited_without_leaving' | 'kicked' | 'killed_at_timeout' | 'gone_no_reason' | 'still_active';
 /**
@@ -302,6 +306,7 @@ export function renderRunReport(r: RunResult): string {
     text += `## Usage\n\n${r.usage.steps} steps, ${r.usage.prompt_tokens} prompt + ${r.usage.completion_tokens} completion tokens${claudeSuffix}, $${r.usage.cost_usd.toFixed(4)} across ${r.usage.seats} seat(s); ${r.usage.seats_with_usage}/${r.usage.seats} reported usage (coverage: ${r.usage.coverage})\n\n`;
   }
   if (r.scorecard?.length) text += renderScorecard(r.scorecard);
+  if (r.metrics) text += renderMetrics(r.metrics);
   if (r.collectionErrors?.length) text += `Collection errors (partial snapshot):\n${r.collectionErrors.map(e => `- ${e}`).join('\n')}\n\n`;
   text += '## Transcripts\n\n';
   for (const room of r.rooms) text += '```\n' + (room.transcript.text ?? `(missing: ${room.transcript.error})`).replace(/\n#/g, '\n\\#') + '```\n\n';

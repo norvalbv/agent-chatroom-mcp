@@ -27,7 +27,8 @@ export type Event =
   | { type: "dev_receipt"; room: string; key: string; updatedAt: string; receipt: DevReceipt }
   | { type: "amend"; room: string; proposalId: string; text: string; version: number; updatedAt?: string; votes: Proposal["votes"]; challenges?: Challenge[] }
   | { type: "refusal"; room: string; tool: string; reason: string; ts?: string; participant?: string | null }
-  | { type: "call_completion"; room: string; tool: string; outcome: CallOutcome; ts: string; participant: string | null }
+  /** ms: how long the call took; empty: a wait that returned no new message (run-metrics splits idle polling on it) */
+  | { type: "call_completion"; room: string; tool: string; outcome: CallOutcome; ts: string; participant: string | null; ms?: number; empty?: boolean }
   | { type: "work"; room: string; pid: string; cls: WorkClass; tool: string; target: string; ts: string }
   | { type: "kick_vote"; room: string; vote: KickVote }
   /** Telemetry only (replay ignores it): the open work an idle wait named to a seat, written when that list changes. */

@@ -470,6 +470,18 @@ app.post("/rooms/:room/replacements", (req, res) => {
     res.status(400).json({ error: error instanceof HubError ? error.message : "Replacement registration failed." });
   }
 });
+// When the run that owns a room stops (its launcher kills the seats then): the hub announces it once, late in the run.
+// A room that does not exist yet answers 202: the deadline is held and applied when a seat's join creates the room.
+app.post("/rooms/:room/deadline", (req, res) => {
+  if (!requireToken(req, res)) return;
+  try {
+    const { at } = (req.body ?? {}) as { at?: string };
+    const set = hub.setDeadline(req.params.room, at as string);
+    res.status(set.pending ? 202 : 200).json(set);
+  } catch (e) {
+    res.status(400).type("text/plain").send(e instanceof HubError ? e.message : "error");
+  }
+});
 // Close a stale or abandoned room (no conclusion). Dashboard button or curl -X POST .../close
 app.post("/rooms/:room/close", (req, res) => {
   if (!requireToken(req, res)) return;

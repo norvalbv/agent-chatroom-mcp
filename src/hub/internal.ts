@@ -19,6 +19,8 @@ export type Event =
   | { type: "openings_revealed"; room: string }
   | { type: "drafts_revealed"; room: string }
   | { type: "drafts_opened"; room: string; at: string }
+  | { type: "deadline"; room: string; at: string; setAt: string }
+  | { type: "deadline_announced"; room: string }
   | { type: "archive"; room: string; archived: boolean; by: string; ts: string }
   | { type: "board_manifest"; room: string; bytes: number; kind: "full" | "delta" | "empty" }
   | { type: "board"; room: string; key: string; entry: BoardEntry | null }

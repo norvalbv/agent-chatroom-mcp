@@ -166,6 +166,19 @@ export function replay(hub: Hub) {
           if (room) room.draftsOpenedAt = ev.at;
           break;
         }
+        case "deadline": {
+          const room = hub.rooms.get(ev.room);
+          if (room) {
+            room.deadline = { at: ev.at, setAt: ev.setAt };
+            hub.armDeadline(room);
+          }
+          break;
+        }
+        case "deadline_announced": {
+          const room = hub.rooms.get(ev.room);
+          if (room?.deadline) room.deadline.announced = true;
+          break;
+        }
         case "openings_revealed": {
           const room = hub.rooms.get(ev.room);
           if (room) room.openingsRevealed = true;

@@ -23,9 +23,10 @@ export function statusView(summary: Summary, fullTopic = false): Summary {
   return {
     ...summary,
     topic: !fullTopic && topic.length > TOPIC_HEAD ? `${topic.slice(0, TOPIC_HEAD)}… (${topic.length} chars; room_status full_topic=true carries it whole)` : topic,
-    // a seat's output record ships its non-zero counts and no age (last_seen_at is beside it); nothing on the record ships as no field at all
+    // a seat's output record ships what it delivered, non-zero counts only: no age (last_seen_at is beside it), no claims (the
+    // board keys name their authors), and nothing delivered ships as no field at all
     participants: summary.participants?.map(({ output, ...p }) => {
-      const counts = Object.entries(output ?? {}).filter(([k, v]) => v && k !== "age_seconds");
+      const counts = Object.entries(output ?? {}).filter(([k, v]) => v && k !== "age_seconds" && k !== "claims");
       return {
         ...p,
         ...(p.working?.detail ? { working: { ...p.working, detail: head(p.working.detail, DETAIL_HEAD) } } : {}),

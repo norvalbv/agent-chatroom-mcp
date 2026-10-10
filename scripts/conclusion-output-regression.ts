@@ -111,3 +111,17 @@ test("both lists are part of the persisted conclusion, so they survive a replay"
     assert.match(line(again), /Agreed with nothing on the record: B, D/);
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
+
+// swarm-082539-kns2 (idea/conclusion-credits-proposer): in two small build rooms the seat that claimed the fix, committed it
+// and wrote the proposal that became the conclusion was listed as "Claimed, nothing delivered". A proposal is delivery.
+test("a claimant who wrote a proposal delivered under its claim; a bare claimant beside it is still listed", () => {
+  const { hub, room, a, b, c } = room4();
+  hub.setBoard(ROOM, a.id, "claim/fix", JSON.stringify({ owner: "A", area: "fix" }));
+  hub.setBoard(ROOM, b.id, "claim/other", JSON.stringify({ owner: "B", area: "other" }));
+  const pr = proposeThrough(hub, ROOM, a.id, "Adopt x as measured: add returned a - b; 532ea99 makes it a + b and the test passes.");
+  agree(hub, b.id, pr.id);
+  agree(hub, c.id, pr.id);
+  assert.equal(room.state, "concluded");
+  assert.deepEqual(carried(hub).undelivered_claims, [{ key: "claim/other", by: "B" }], "the proposer delivered; B did not");
+  assert.doesNotMatch(line(hub), /claim\/fix/);
+});

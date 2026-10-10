@@ -39,7 +39,7 @@ test('naming a human after someone answered them is not refused as a second answ
 });
 
 test('replies in address position, by @name, or by reply_to still answer', () => {
-  for (const text of ['Thanks benji, checking progress now.', 'Benji: progress is fine.', '@benji progress is fine.', 'Understood, Benji. On it.']) {
+  for (const text of ['Thanks benji, checking progress now.', 'Benji: progress is fine.', '@benji progress is fine.', 'Understood, Benji. On it.', 'Done. Benji, the answer is 42.']) {
     const f = fixture('hello team');
     f.h.send(f.room.name, f.alice.id, text, undefined, true);
     assert.equal(f.h.isAnswered(f.room, f.q), true, `answered by "${text}"`);
@@ -47,6 +47,12 @@ test('replies in address position, by @name, or by reply_to still answer', () =>
   const f = fixture('hello team');
   f.h.send(f.room.name, f.alice.id, 'Progress is fine.', f.q.id, true);
   assert.equal(f.h.isAnswered(f.room, f.q), true, 'answered by reply_to');
+});
+
+test('a name opening a later sentence without punctuation after it is still a mention, not an answer', () => {
+  const f = fixture('hello team');
+  f.h.send(f.room.name, f.alice.id, '@bob checked. Benji explicitly wants opus seats only.', undefined, true);
+  assert.equal(f.h.isAnswered(f.room, f.q), false);
 });
 
 test('a seat the human did not address is still refused when it answers them by name', () => {

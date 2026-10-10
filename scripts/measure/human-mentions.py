@@ -9,7 +9,7 @@ def addresses(name,text):
     n=re.escape(name)
     if re.search(r"(?<![\w-])@"+n+r"(?![\w-])",text,re.I): return True
     if re.match(r"\s*@[\w-]",text): return False  # a message to other seats
-    pre=r"(?:^\s*(?:[A-Za-z]+[,!]?\s+){0,2}|[,;]\s+)"
+    pre=r"(?:^\s*(?:[A-Za-z]+[,!]?\s+){0,2}|[,;.!?]\s+)"
     post=r"(?=\s*(?:[,:!?—–]|\.(?:\s|$)|\s-\s|$))"
     return re.search(pre+n+post,text,re.I) is not None
 stats=collections.Counter(); ex=[]

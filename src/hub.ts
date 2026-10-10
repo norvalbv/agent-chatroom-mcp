@@ -1302,7 +1302,7 @@ export class Hub {
 
   /**
    * A message addresses a human by @name, or by the name in address position: within its first three words or after a
-   * comma ("Thanks benji, ...", "Benji: ...", "Understood, Benji."), followed by punctuation or the end. A name in
+   * comma or a sentence end ("Thanks benji, ...", "Benji: ...", "Understood, Benji.", "Done. Benji, ..."), followed by punctuation or the end. A name in
    * passing ("the rule from benji", "benji's #36", draft/ask-benji-graph) and a message that opens by @-addressing
    * other seats are not replies to the human: 72 of 616 agent messages recorded as replies to a human across 259 room
    * logs were only that (humans-answered-once-by-hub-enforcement, 2026-10-10 "Not fixed"). Case-insensitive.
@@ -1315,7 +1315,7 @@ export class Hub {
       const n = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
       if (new RegExp(`(?<![\\w-])@${n}(?![\\w-])`, "i").test(content)) return true;
       if (opensToOthers) return false;
-      return new RegExp(`(?:^\\s*(?:[A-Za-z]+[,!]?\\s+){0,2}|[,;]\\s+)${n}(?=\\s*(?:[,:!?\u2014\u2013]|\\.(?:\\s|$)|\\s-\\s|$))`, "i").test(content);
+      return new RegExp(`(?:^\\s*(?:[A-Za-z]+[,!]?\\s+){0,2}|[,;.!?]\\s+)${n}(?=\\s*(?:[,:!?\u2014\u2013]|\\.(?:\\s|$)|\\s-\\s|$))`, "i").test(content);
     });
   }
 

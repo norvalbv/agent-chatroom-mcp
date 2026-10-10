@@ -39,12 +39,27 @@ test('launcher control credential is excluded from seat environments and dotenv 
   assert.ok(SEAT_ENV_EXCLUSIONS.includes('CHATROOM_LAUNCHER_TOKEN'));
   assert.equal(env.CHATROOM_LAUNCHER_TOKEN, 'secret');
 });
-test('all provider respawns await registration before spawning and track immediate predecessor', () => {
-  const swarm = readFileSync(new URL('../src/swarm.ts', import.meta.url), 'utf8');
-  assert.match(swarm, /await registerRespawn\(URL_, room, previousName, nm/);
-  assert.match(swarm, /out = await mk\(nm, note\);\s*previousName = nm;/);
-  assert.match(swarm, /let previousName = name;/);
-});
+test('all provider respawns await registration before spawning and track immediate predecessor', async () => {
+  // the chain lives in respawn.ts (respawnChain) so a replaced attempt's usage is kept; swarm.ts hands it registerRespawn
+  const swarm = readFileSync(new URL('../src/swarm.ts', import.meta.url), 'utf8')
+  assert.match(swarm, /register: \(previousName, nm, reason\) => registerRespawn\(URL_, room, previousName, nm,/)
+  const { respawnChain } = await import('../src/respawn.js')
+  const events: string[] = []
+  let releaseRegistration!: () => void
+  const registered = new Promise<void>((r) => (releaseRegistration = r))
+  const room = { state: 'open', participants: [{ name: 'w', agent: 'claude', role: 'worker', active: false }], board: {} }
+  const chain = respawnChain<string>({
+    name: 'w', maxAttempts: 2, stop: () => false, room: async () => room, exitCode: () => 1,
+    register: async (previous, name) => { events.push(`register ${previous}->${name}`); if (name === 'w-r1') await registered; return '' },
+    run: async (name) => { events.push(`run ${name}`); return name },
+  })
+  await new Promise((r) => setTimeout(r, 20))
+  assert.deepEqual(events, ['run w', 'register w->w-r1'], 'the successor is not spawned while its registration is pending')
+  releaseRegistration()
+  await chain
+  assert.deepEqual(events, ['run w', 'register w->w-r1', 'run w-r1', 'register w-r1->w-r2', 'run w-r2'], 'each registration names the immediate predecessor')
+})
+
 
 test('launcher rejects success response without a one-use join proof', async () => {
   const { registerRespawn } = await impl();

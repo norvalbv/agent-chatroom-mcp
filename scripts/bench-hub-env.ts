@@ -19,6 +19,8 @@ export const HUB_FLAG_ALLOWLIST: ReadonlySet<string> = new Set([
   "CHATROOM_DRAFT_REVEAL_MS",
   "CHATROOM_STALE_CLAIM_MS",
 ]);
+/** Allowlisted flags whose mechanism recruits a seat, so they are void without --recruit-model. */
+const RECRUITING_FLAGS: ReadonlySet<string> = new Set(["CHATROOM_FRESH_CHALLENGER", "CHATROOM_FRESH_CHALLENGER_WAIT_MIN"]);
 export const RECRUIT_MODELS: ReadonlySet<string> = new Set(["claude-opus-5-5", "claude-sonnet-5-5"]);
 
 const SECRET = /API_KEY|TOKEN|SECRET|PASSWORD|CREDENTIAL/i;
@@ -46,6 +48,10 @@ export interface BenchHubWhere {
 
 export function benchHubEnv(base: NodeJS.ProcessEnv, o: BenchHubWhere): NodeJS.ProcessEnv {
   if (o.recruitModel !== undefined && !RECRUIT_MODELS.has(o.recruitModel)) throw new Error(`--recruit-model ${o.recruitModel}: expected one of ${[...RECRUIT_MODELS].join(", ")}`);
+  // The fresh challenger is a recruit (src/spawner.ts freshChallenger returns early under NO_RECRUIT), so switching it
+  // on without --recruit-model would record an arm as "on" that never could fire.
+  const needsRecruits = Object.keys(o.hubEnv ?? {}).filter((k) => RECRUITING_FLAGS.has(k) && !(k === "CHATROOM_FRESH_CHALLENGER" && o.hubEnv![k] !== "1"));
+  if (needsRecruits.length && !o.recruitModel) throw new Error(`--hub-env ${needsRecruits.join(", ")} recruits a seat: pass --recruit-model too (and the same one in the off arm)`);
   const env: NodeJS.ProcessEnv = {};
   for (const [k, v] of Object.entries(base)) if (!k.startsWith("CHATROOM_") && !SECRET.test(k)) env[k] = v;
   Object.assign(env, parseHubEnv(Object.entries(o.hubEnv ?? {}).map(([k, v]) => `${k}=${v}`)));

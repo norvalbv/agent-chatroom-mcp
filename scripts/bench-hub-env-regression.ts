@@ -49,6 +49,11 @@ for (const bad of ["CHATROOM_HUMAN_TOKEN=x", "CHATROOM_DATA_DIR=/x", "PORT=1", "
   assert.equal(env.CHATROOM_STRIP_SECRETS, "1", "the hub must still refuse to refill secrets from .env");
   assert.equal(env.OPENROUTER_API_KEY, undefined);
   assert.throws(() => benchHubEnv(base, { ...where, recruitModel: "deepseek/deepseek-v4-flash-0731" }), /recruit-model/);
+  // the fresh challenger is a recruit: switched on without --recruit-model, NO_RECRUIT would silently keep it off
+  // while result.hub_env recorded it as on (attack/findings/measurement, -5)
+  assert.throws(() => benchHubEnv(base, { ...where, hubEnv: { CHATROOM_FRESH_CHALLENGER: "1" } }), /--recruit-model/);
+  assert.throws(() => benchHubEnv(base, { ...where, hubEnv: { CHATROOM_FRESH_CHALLENGER_WAIT_MIN: "3" } }), /--recruit-model/);
+  assert.equal(benchHubEnv(base, { ...where, hubEnv: { CHATROOM_FRESH_CHALLENGER: "0" } }).CHATROOM_NO_RECRUIT, "1", "an explicit off needs no recruit model");
   // and the hub honours it: src/index.ts loads .env with hubDotEnvOptions(process.env)
   assert.ok(hubDotEnvOptions(env).excludePattern?.test("OPENROUTER_API_KEY"), "a recruiting bench hub must not refill secrets from .env");
   assert.ok(hubDotEnvOptions(benchHubEnv(base, where)).excludePattern?.test("OPENROUTER_API_KEY"));

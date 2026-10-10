@@ -51,3 +51,17 @@ test("capped, and rebuilt from the log on restart", (t) => {
   t.after(() => { clearTimeout(r2.nudgeTimer); clearTimeout(r2.openingsTimer); });
   assert.deepEqual(again.recentRefusals(r2).map((x) => [x.name, x.tool]), hub.recentRefusals(room).map((x) => [x.name, x.tool]));
 });
+
+test("an anonymous room shows labels, never real names (the leak b62f5cc0 fixed for barren claims; -7's probe)", (t) => {
+  const hub = new Hub({});
+  const R = "anon-refusals";
+  const a = hub.join(R, "real-name-alice", "claude", { anonymous: true }, undefined, "s1").participant;
+  hub.join(R, "real-name-bob", "claude", {}, undefined, "s2");
+  const room = hub.getRoom(R);
+  t.after(() => { clearTimeout(room.nudgeTimer); clearTimeout(room.openingsTimer); });
+  hub.recordRefusal(R, "propose", "x", a.id);
+  const out = hub.recentRefusals(room, 10);
+  assert.equal(out.length, 1);
+  assert.ok(!out[0].name.includes("real-name"), JSON.stringify(out));
+  assert.equal(out[0].name, hub.shown(room, a));
+});

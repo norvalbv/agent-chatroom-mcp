@@ -1057,12 +1057,13 @@ export class Hub {
   /**
    * The room's latest refusals, newest first, so "the hub refused X" can be checked by someone other than the seat
    * saying it (evidence/refusals-cited: about one such report per room where it happens; idea/refusals-visible).
-   * A display name, never the participant id (identity-is-the-connection); the closed-enum code, never the message,
+   * The name as the room shows it (its label in an anonymous room, -7's review), never the participant id
+   * (identity-is-the-connection); the closed-enum code, never the message,
    * which can interpolate submitted text (recordRefusal).
    */
   recentRefusals(room: Room, n = 5): { name: string; tool: string; reason: string; ts: string }[] {
     return (room.recentRefusals ?? []).slice(-Math.max(0, n)).reverse()
-      .map((r) => ({ name: (r.pid && room.participants.get(r.pid)?.name) || "unknown", tool: r.tool, reason: r.reason, ts: r.ts }));
+      .map((r) => { const p = r.pid ? room.participants.get(r.pid) : undefined; return { name: p ? this.shown(room, p) : "unknown", tool: r.tool, reason: r.reason, ts: r.ts }; });
   }
 
   /** Completed MCP guard invocations for existing rooms only; no arguments or error text.

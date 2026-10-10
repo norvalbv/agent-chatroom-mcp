@@ -113,9 +113,14 @@ ${PALETTE_HTML}
     s = s.replace(/(^|[\\s"'=])\\/(?:[^\\/\\n"';|&]+\\/)*?agent-chatroom-mcp(?:\\/\\.swarm-worktrees\\/[^\\/\\s"']+\\/[^\\/\\s"']+)?(\\/|(?=[\\s"']|$))/g, function (all, pre, slash) { return pre + (slash ? '' : '.'); });
     return s.replace(/\\s+/g, ' ').trim();
   }
-  // The People row's second line: messages, then when the seat was last seen or started its current tool, then that tool and command (the line's ellipsis eats the command, never the time).
+  // Seat-reported usage (participants[].usage, the room's usage): cost first, then model calls, and seats for a room. Empty when nothing was reported: unknown, never $0.00.
+  function usageText(u) {
+    if (!u || typeof u.cost_usd !== 'number') return '';
+    return '$' + u.cost_usd.toFixed(2) + ' seat-reported · ' + (u.requests || 0) + ' model call' + (u.requests === 1 ? '' : 's') + (u.seats ? ' · ' + u.seats + ' seat' + (u.seats === 1 ? '' : 's') : '');
+  }
+  // The People row's second line: messages and cost so far, then when the seat was last seen or started its current tool, then that tool and command (the line's ellipsis eats the command, never the time).
   function personStatus(p, esc, rel) {
-    var n = (p.messages || 0) + ' msg' + (p.messages === 1 ? '' : 's');
+    var n = (p.messages || 0) + ' msg' + (p.messages === 1 ? '' : 's') + (p.usage && typeof p.usage.cost_usd === 'number' ? ' · $' + p.usage.cost_usd.toFixed(2) : '');
     if (!p.active) return n + ' · left';
     if (!(p.working && p.working.at > (p.last_active_at || ''))) return n + ' · ' + rel(p.last_seen_at || p.last_active_at);
     var t = stepText(p.working.tool, p.working.detail);
@@ -129,6 +134,9 @@ ${PALETTE_HTML}
     var now = !p.active ? '<div class="now off">Left the room' + (p.left_reason ? ': ' + esc(p.left_reason) : '') + '</div>'
       : busy ? '<div class="now live"><span class="dot"></span>Now: <span class="tl">' + esc(p.working.tool) + '</span> ' + esc(stepText(p.working.tool, p.working.detail)) + ' <span class="st">· started ' + rel(p.working.at) + '</span></div>'
       : '<div class="now">Not running a tool · last active in the room ' + rel(p.last_active_at || p.last_seen_at) + '</div>';
+    var u = p.usage;
+    if (u && typeof u.cost_usd === 'number') now += '<div class="st">' + esc(usageText(u)) + ' · ' + (u.input_tokens || 0) + ' input · ' + (u.cache_read_input_tokens || 0) + ' cache-read · ' + (u.cache_creation_input_tokens || 0) + ' cache-write · ' + (u.output_tokens || 0) + ' output tokens'
+      + (u.by_model ? ' · ' + Object.keys(u.by_model).map(function (m) { return esc(m) + ' ' + u.by_model[m].requests; }).join(', ') : '') + '</div>';
     if (!list.length) return now + '<div class="st">No heartbeats yet (only seats started after 2026-09-18 send them).</div>';
     return now + '<div class="hdr">Recent steps, newest first</div>' + list.slice().reverse().map(function (a, i) {
       return '<div data-k="' + esc(a.step + '@' + a.at) + '"' + (i === 0 ? ' class="latest"' : '') + '><span class="st">#' + a.step + ' ' + rel(a.at) + '</span> <span class="tl">' + esc(a.tool) + '</span> ' + esc(stepText(a.tool, a.detail)) + '</div>';
@@ -417,6 +425,7 @@ ${ROOMS_JS}
       + '<b>Challenge</b><span>' + (r.require_challenge ? 'required before passing' : 'not required') + (r.require_verification ? ' · verification required' : '') + '</span>'
       + (r.chair ? '<b>Chair</b><span>' + esc(r.chair) + '</span>' : '')
       + (r.code_state ? '<b>Code</b><span class="mono">' + esc(r.code_state.head) + (r.code_state.dirty ? ' (dirty)' : '') + '</span>' : '')
+      + (r.usage ? '<b>Cost</b><span>' + esc(usageText(r.usage)) + '</span>' : '')
       + '<b>Created</b><span>' + rel(r.created_at) + '</span></div>'
       + '<div class="toolbar"><label><input type="checkbox" id="shownotices"' + (showNotices ? ' checked' : '') + '> show join/leave notices</label></div></div>';
     return h;

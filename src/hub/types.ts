@@ -235,6 +235,8 @@ export interface Message {
   /** quiet: pushed only to `audience` (sender + mentions); still in the log for everyone */
   quiet?: boolean;
   audience?: string[];
+  /** the sender left quiet unset and the hub delivered it quiet as a two-seat working exchange (Hub.autoQuietAudience) */
+  autoQuiet?: boolean;
 }
 
 export interface CodeState {

@@ -8,7 +8,8 @@
  * by the plain HTTP endpoints (humans), or by tests.
  */
 import { createHash, randomBytes } from "node:crypto";
-import { mkdirSync } from "node:fs";
+import { mkdirSync, readdirSync } from "node:fs";
+import { join } from "node:path";
 import { analyzeReplyMetrics, type ReplyMetricEvent } from "./reply-metrics.js";
 
 export * from "./hub/types.js";
@@ -24,6 +25,14 @@ import * as persistence from "./hub/persistence.js";
 import { barrenClaims, evidenceGaps, evidenceReceipt, offline, unsourcedClaims } from "./hub/work.js";
 import { apiRequests, UsageLedger, usageTotal } from "./hub/usage.js";
 import { DevRuns, DevRunError, type DevRunHost } from "./hub/dev-runs.js";
+
+/** An evidence pointer the minimal prompt keeps public: a coordination board key, a proposal id, a commit (hex with a digit). */
+const AUTO_QUIET_MARKER = /\b(?:claim|verify|build|final|findings|evidence|sources|idea|attack|review|remaining|handoff|draft|inbox)\/\S|\bprop_[0-9a-f]{4,}|\b(?=[0-9a-f]*\d)(?=[0-9a-f]*[a-f])[0-9a-f]{7,40}\b/i;
+/** A first-person commitment: seeing who took what is what stops duplicate work (attack/idea/quiet-default, -3). */
+const AUTO_QUIET_COMMITMENT = /\b(?:I'll|I will|I'm (?:taking|building|starting|running|writing|picking|claiming|on it)|I am (?:taking|building)|I take\b|I've (?:started|taken|claimed)|taking (?:it|this|that)\b|on it\b|leave (?:it|that) to me)|\bRE-TARGET\b/i;
+/** What the sender of an auto-quiet message is told (send_message result). */
+export const AUTO_QUIET_NOTE =
+  "Delivered quiet to the agents you addressed: a working exchange with one or two seats and no board key, proposal or commit in it. Everyone can still read it, and it surfaces when cited. Send with quiet=false when the room should get it.";
 
 /** The hub's ask to the owners of claims with no findings; its presence in the log is the receipt that the one refusal was given. */
 const BARREN_ASK = "is ready to propose and your claim has no findings on the board";
@@ -806,7 +815,43 @@ export class Hub {
     return msgs;
   }
 
-  send(roomName: string, pid: string, content: string, replyTo?: string, force = false, quiet = false, surface = false): Message {
+  /**
+   * The audience of a working exchange the hub delivers quiet when the sender left quiet unset, or undefined when the
+   * message is for the room. Claude seats send 9% of chat quiet with the prompt's quiet sentence (codex 44%), and a
+   * quarter of their chat is an exchange with one or two named agents pushed to every seat (sources/quiet-default in
+   * swarm-082539-kns2; RE-TARGET of minimal-prompt-hub-carries-coordination, whose revisit-when named this). Public stays
+   * public: a message naming a human, three or more agents, or carrying an evidence pointer (a coordination board key,
+   * a proposal id, a commit), which that axis keeps public.
+   */
+  private decisionSlugsCache?: string[];
+  /** Settled-axis slugs (<cwd>/docs/decisions/*.md): a message citing one is a ruling the room may build on (-5). */
+  private decisionSlugs(): string[] {
+    if (!this.decisionSlugsCache) {
+      try { this.decisionSlugsCache = this.cwd ? readdirSync(join(this.cwd, "docs", "decisions")).filter((f) => f.endsWith(".md")).map((f) => f.slice(0, -3)).filter((x) => x.length >= 8) : []; }
+      catch { this.decisionSlugsCache = []; }
+    }
+    return this.decisionSlugsCache;
+  }
+
+  private autoQuietAudience(room: Room, p: Participant, content: string, replyTo?: string): string[] | undefined {
+    if (AUTO_QUIET_MARKER.test(content) || AUTO_QUIET_COMMITMENT.test(content)) return undefined;
+    if (this.decisionSlugs().some((slug) => content.includes(slug))) return undefined;
+    const named = this.mentionsIn(room, content).filter((id) => id !== p.id).map((id) => room.participants.get(id));
+    if (named.some((x) => !x || x.agent === "human")) return undefined;
+    const parent = replyTo ? room.messages.find((m) => m.id === replyTo || `#${m.seq}` === replyTo || String(m.seq) === replyTo) : undefined;
+    if (parent && (parent.from.agent === "human" || parent.from.agent === "hub" || parent.kind !== "chat")) return undefined;
+    const inherited = parent?.quiet ? (parent.audience ?? []) : [];
+    const author = parent && parent.from.id !== p.id && room.participants.get(parent.from.id)?.active ? [parent.from.id] : [];
+    const targets = [...new Set([...named.map((x) => x!.id), ...inherited, ...author])].filter((id) => id !== p.id);
+    if (targets.length < 1 || targets.length > 2) return undefined;
+    // the verifier, a lead or a chair act for the room: what passes between them and a seat is room business (-3)
+    const forRoom = (x?: Participant) => !!x && (x.role === "verifier" || x.role === "lead" || x.role === "chair");
+    if (forRoom(p) || targets.some((id) => forRoom(room.participants.get(id)))) return undefined;
+    return targets;
+  }
+
+  send(roomName: string, pid: string, content: string, replyTo?: string, force = false, quietArg?: boolean, surface = false): Message {
+    let quiet = quietArg === true;
     const room = this.getRoom(roomName);
     const p = this.requireParticipant(room, pid);
     // Validate before any delivery, surfacing or turn mutation, even on forced sends.
@@ -910,6 +955,9 @@ export class Hub {
         );
       }
     }
+    // left unset, a working exchange between the sender and one or two named agents is delivered quiet (idea/quiet-default)
+    const autoQuiet = quietArg === undefined && !target && p.agent !== "human" && room.mode === "free" && !!this.autoQuietAudience(room, p, content, replyTo);
+    if (autoQuiet) quiet = true;
     if (!force && !quiet && !target && p.agent !== "human" && room.mode === "free" && this.addressedBy(room, p).length === 0) {
       const sh = this.share(room, p);
       const last = room.messages.at(-1);
@@ -942,7 +990,7 @@ export class Hub {
     // still delivers them.
     const notices = room.messages.filter((m) => m.seq > p.lastSeenSeq && m.from.id !== p.id && this.isHubNotice(m) && this.pushableTo(room, m, p.id));
     if (notices.length) p.withheld = [...new Set([...(p.withheld ?? []), ...notices.map((m) => m.seq)])];
-    const msg = this.post(room, "chat", p, content, { replyTo, ...(quiet ? { quiet: true, audience } : {}) });
+    const msg = this.post(room, "chat", p, content, { replyTo, ...(quiet ? { quiet: true, audience } : {}), ...(autoQuiet ? { autoQuiet: true } : {}) });
     p.messageCount += 1;
     p.lastSeenSeq = Math.max(p.lastSeenSeq, msg.seq);
     this.persistAttention(room, p);

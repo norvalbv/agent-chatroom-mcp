@@ -258,28 +258,31 @@ setInterval(() => {
  * the human routes are the human's, and under INSECURE_LOCAL nothing but this stops a seat's curl from voting, kicking
  * or closing as "benji". The rooms the seat sits in are told, so the attempt is on the record and not only refused.
  */
-async function seatCaller(req: express.Request): Promise<string | undefined> {
+async function seatCaller(req: express.Request): Promise<{ name: string; rooms: string[] } | undefined> {
   const source = req.socket.remotePort;
   if (!source) return undefined;
   const held = ((await callerSeatKeys(source, PORT)) ?? []).flatMap((key) => hub.seatEverHeld(key));
-  if (!held.length) return undefined;
-  const name = held[0]!.p.name;
-  // one notice per seat per window, so a retry loop is refused every time without flooding its rooms (review by -7)
-  if (Date.now() - (seatCallerAnnounced.get(name) ?? 0) > SEAT_CALLER_NOTICE_MS) {
-    seatCallerAnnounced.set(name, Date.now());
-    for (const room of new Set(held.map((h) => h.room.name))) {
-      try { hub.announce(room, `${name}'s process tree sent ${req.method} ${req.path} to a human route, as a human; the hub refused it. Seats act through their own tools.`); } catch { /* the room went away */ }
-    }
+  return held.length ? { name: held[0]!.p.name, rooms: [...new Set(held.map((h) => h.room.name))] } : undefined;
+}
+/** Told only when requireToken actually refuses, once per seat per window, so a retry loop is refused every time without
+ * flooding its rooms (review by -7). */
+function announceSeatCaller(req: express.Request, seat: { name: string; rooms: string[] }): void {
+  if (Date.now() - (seatCallerAnnounced.get(seat.name) ?? 0) <= SEAT_CALLER_NOTICE_MS) return;
+  seatCallerAnnounced.set(seat.name, Date.now());
+  for (const room of seat.rooms) {
+    try { hub.announce(room, `${seat.name}'s process tree sent ${req.method} ${req.path} to a human route, as a human; the hub refused it. Seats act through their own tools.`); } catch { /* the room went away */ }
   }
-  return name;
 }
 const SEAT_CALLER_NOTICE_MS = 10 * 60_000;
 const seatCallerAnnounced = new Map<string, number>();
-/** Seat-process routes that carry their own key or are hot; everything else a POST reaches below is resolved first. */
-const SEAT_ROUTES = /^\/(heartbeat|steer\/ack|rooms\/[^/]+\/(heartbeat|steer\/ack|replacements))$/;
+/** The routes requireToken guards: the only ones whose caller is looked up. A seat's own routes (/mcp, /heartbeat, steer,
+ * the usage export, dev runs) are never resolved or announced: on integration every seat's 1 s /otlp/v1/logs export was
+ * announced as a refused forgery when this was a deny-list (-3's composed dev room swarm-085449-i9fk). A new human route
+ * must be added here, or it is open to loopback callers as it was before this check. */
+const HUMAN_ROUTES = /^\/rooms\/(archive-dead|[^/]+\/(messages|vote|kick|replace|create|deadline|close|archive|attachments))$/;
 // Resolved before the routes, asynchronously, so requireToken stays a plain check and a lookup never blocks other rooms.
 app.use(async (req, res, next) => {
-  if (req.method === "POST" && INSECURE_LOCAL && LOOPBACK_HOST && !(HUMAN_TOKEN && req.header("x-chatroom-token") === HUMAN_TOKEN) && !SEAT_ROUTES.test(req.path)) {
+  if (req.method === "POST" && INSECURE_LOCAL && LOOPBACK_HOST && !(HUMAN_TOKEN && req.header("x-chatroom-token") === HUMAN_TOKEN) && HUMAN_ROUTES.test(req.path)) {
     res.locals.seatCaller = await seatCaller(req).catch(() => undefined);
   }
   next();
@@ -289,9 +292,10 @@ const requireToken = (req: express.Request, res: express.Response): boolean => {
   // The explicit loopback opt-in keeps the local dashboard usable without a token, with or without one configured,
   // for any caller that is not one of this hub's seats.
   if (INSECURE_LOCAL && LOOPBACK_HOST) {
-    const seat = res.locals.seatCaller as string | undefined;
+    const seat = res.locals.seatCaller as { name: string; rooms: string[] } | undefined;
     if (!seat) return true;
-    res.status(403).type("text/plain").send(`refused: this request came from the process tree of seat ${seat}. The human routes are the human's; a seat votes, kicks and speaks through its own MCP tools.`);
+    announceSeatCaller(req, seat);
+    res.status(403).type("text/plain").send(`refused: this request came from the process tree of seat ${seat.name}. The human routes are the human's; a seat votes, kicks and speaks through its own MCP tools.`);
     return false;
   }
   if (HUMAN_TOKEN) {

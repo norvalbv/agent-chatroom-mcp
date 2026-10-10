@@ -35,7 +35,7 @@ const line = (hub: Hub) => hub.getRoom(ROOM).messages.find((m) => m.kind === "co
 function thinRoom(dataDir?: string) {
   const r = room4(dataDir);
   r.hub.setBoard(ROOM, r.a.id, "claim/x", JSON.stringify({ owner: "A", area: "x" }));
-  r.hub.setBoard(ROOM, r.a.id, "evidence/x", "measured 3 rooms");
+  r.hub.setBoard(ROOM, r.a.id, "evidence/x", "measured three rooms: two had an idle seat, one did not");
   r.hub.setBoard(ROOM, r.b.id, "claim/y", JSON.stringify({ owner: "B", area: "y" }));
   const pr = r.hub.propose(ROOM, r.a.id, TEXT);
   agree(r.hub, r.b.id, pr.id);
@@ -56,7 +56,7 @@ test("the conclusion names seats that agreed with nothing on the record, and cla
 test("a room where every voter and every claimant delivered gets neither clause", () => {
   const { hub, room, a, b, c } = room4();
   hub.setBoard(ROOM, a.id, "claim/x", JSON.stringify({ owner: "A", area: "x" }));
-  for (const p of [a, b]) hub.setBoard(ROOM, p.id, `evidence/${p.name}`, "findings");
+  for (const p of [a, b]) hub.setBoard(ROOM, p.id, `evidence/${p.name}`, "findings: measured three rooms, two had an idle seat");
   const pr = hub.propose(ROOM, a.id, TEXT);
   hub.challenge(ROOM, c.id, pr.id, 'The claim "Adopt x as measured" rests on three rooms only.', false);
   agree(hub, b.id, pr.id);
@@ -76,7 +76,7 @@ test("a released claim and a claim with a handoff are not listed, and the verifi
   const v = hub.join(ROOM, "verifier", "test", {}, undefined, "sv", "verifier").participant;
   const h = hub.join(ROOM, "benji", "human", {}, undefined, "http:benji").participant;
   const room = hub.getRoom(ROOM);
-  hub.setBoard(ROOM, a.id, "evidence/x", "measured 3 rooms");
+  hub.setBoard(ROOM, a.id, "evidence/x", "measured three rooms: two had an idle seat, one did not");
   hub.setBoard(ROOM, b.id, "claim/y", JSON.stringify({ owner: "B", area: "y" }));
   hub.setBoard(ROOM, c.id, "claim/z", JSON.stringify({ owner: "C", area: "z" }));
   hub.setBoard(ROOM, a.id, "handoff/y", "A took y over: nothing was started");

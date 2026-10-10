@@ -42,6 +42,8 @@ export type Event =
   | { type: "open_work"; room: string; pid: string; ts: string; items: string[] };
 
 export const now = () => new Date().toISOString();
+/** commit-like tokens (7-40 hex with a letter and a digit) in a text */
+export const commitsIn = (text: string) => [...new Set((text.match(/\b[0-9a-f]{7,40}\b/g) ?? []).filter((t) => /[a-f]/.test(t) && /\d/.test(t)))];
 export const shortId = (prefix: string) => `${prefix}_${randomBytes(4).toString("hex")}`;
 export const norm = (s: string) => s.toLowerCase().replace(/\s+/g, " ").replace(/[“”]/g, '"').replace(/[‘’]/g, "'").trim();
 

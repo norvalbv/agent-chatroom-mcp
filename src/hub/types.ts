@@ -237,6 +237,8 @@ export interface Message {
   audience?: string[];
   /** the sender left quiet unset and the hub delivered it quiet as a two-seat working exchange (Hub.autoQuietAudience) */
   autoQuiet?: boolean;
+  /** a board notice for a verify/* or attack/* entry: the commits its text covered when written (settles asks naming them) */
+  covers?: string[];
 }
 
 export interface CodeState {

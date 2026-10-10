@@ -3,7 +3,7 @@ import { createHash } from "node:crypto";
 import type { Hub } from "../hub.js";
 import { HubError } from "./types.js";
 import type { Quorum, Participant, BoardExpiryOptions, BoardEntry, Room } from "./types.js";
-import { now, codeState, norm } from "./internal.js";
+import { now, codeState, norm, commitsIn } from "./internal.js";
 
 function boardExpiry(key: string, opts: BoardExpiryOptions): string | undefined {
   if (opts.ttlSeconds === undefined && opts.expiresAt === undefined) return undefined;
@@ -219,7 +219,8 @@ export function setBoard(hub: Hub, roomName: string, pid: string, key: string, t
     : `${previous ? "updated" : "added"} board entry "${key}" (${text.length} chars; read it with board_get)`
     + (postReveal ? " — post-reveal: written after peers' drafts were readable, so not an independent attempt" : "")
     + (workspace ? ` — ${workspace.branch ? `branch ${workspace.branch} in ` : ""}${workspace.worktree}` : "")
-    + (reviewer ? ` — reviewer: ${reviewer.name}` : ""));
+    + (reviewer ? ` — reviewer: ${reviewer.name}` : ""),
+    /^(verify|attack)\//.test(key) && commitsIn(text).length ? { covers: commitsIn(text) } : {});
   if (reviewer) {
     // kind "chat", not "system": an owed @-mention is resolved from content, so it still wakes a held wait after hub.wait() advanced lastSeenSeq
     // past this message; a "system" post with mentions arrives too late. "Exercise ... not only rerun" is the OpenHands qa-changes rule.

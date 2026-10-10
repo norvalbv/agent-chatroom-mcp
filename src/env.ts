@@ -30,6 +30,18 @@ export const SEAT_ENV_EXCLUSIONS: readonly string[] = Object.freeze([
   "CHATROOM_DEFAULT_CWD",
 ]);
 
+/**
+ * CHATROOM_* is the parent hub's configuration, and a seat that starts a private hub (smoke, a dev room) hands it on:
+ * a recruit of a hub started with CHATROOM_FRESH_CHALLENGER=1 ran smoke under the challenger and failed at smoke.ts:135.
+ * So a seat gets an allowlist, not a denylist: every other CHATROOM_* key, including mechanisms added later, is dropped.
+ * Kept: the seat's own wiring (seat key, heartbeat, MCP URL) and the guards that keep a seat's private hub inside the
+ * room's rules (recruit model pin, caps, no-recruit, lean/sandbox mode).
+ */
+const SEAT_ENV_KEEP: readonly RegExp[] = [
+  /^CHATROOM_(SEAT_KEY|HEARTBEAT_URL|MCP_URL|NO_RECRUIT|RECRUIT_AGENT|RECRUIT_MODEL|CLAUDE_FULL|SANDBOX)$/,
+  /^CHATROOM_MAX_/,
+];
+
 /** Per-seat commit attribution without changing shared repository or global git config. */
 export function seatGitIdentity(name: string): NodeJS.ProcessEnv {
   return {
@@ -43,6 +55,7 @@ export function seatGitIdentity(name: string): NodeJS.ProcessEnv {
 /** Clone rather than mutate the launcher/hub's environment: controller auth must keep working. */
 export function seatChildEnv(env: NodeJS.ProcessEnv = process.env, name?: string): NodeJS.ProcessEnv {
   const childEnv: NodeJS.ProcessEnv = { ...env, MCP_TOOL_TIMEOUT: "120000" };
+  for (const key of Object.keys(childEnv)) if (key.startsWith("CHATROOM_") && !SEAT_ENV_KEEP.some((re) => re.test(key))) delete childEnv[key];
   for (const key of SEAT_ENV_EXCLUSIONS) delete childEnv[key];
   if (name !== undefined) Object.assign(childEnv, seatGitIdentity(name));
   return childEnv;

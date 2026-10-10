@@ -153,6 +153,27 @@ export function seatPortError(env: NodeJS.ProcessEnv, portFlag: string | undefin
   return null;
 }
 
+/**
+ * Env for a hub the launcher starts itself: it stops on its own after `idleMin` minutes with no request, so a dev room's
+ * hub does not outlive the work (in swarm-000525-jcz8 every dev hub had to be found and killed by PID) but still answers
+ * a reviewer who reads the room after the run. 0 means never. A hub the launcher finds already running gets nothing.
+ */
+export function ownHubEnv(idleMin: number): Record<string, string> {
+  return idleMin > 0 ? { CHATROOM_IDLE_EXIT_MIN: String(idleMin) } : {};
+}
+
+/**
+ * Why a hub found already running on the port is not this run's build, or null. GET / reports the checkout and head
+ * the hub started from; a hub left over from another seat's dev room, or from before this branch's last commit, would
+ * run someone else's code under this run's name.
+ */
+export function reusedHubProblem(hubBuild: { root?: string; head?: string } | undefined, own: { root: string; head: string }): string | null {
+  if (!hubBuild?.root || !hubBuild.head) return "the hub on this port does not report its build (it predates the build field), so this run cannot tell whose code it runs";
+  if (hubBuild.root !== own.root) return `the hub on this port was built from ${hubBuild.root}, not this checkout (${own.root})`;
+  if (hubBuild.head !== own.head) return `the hub on this port runs ${hubBuild.head}, not this checkout's ${own.head}; it was started before the last commit`;
+  return null;
+}
+
 export function seatBeat(mcpUrl: string, key: string, worktree?: string): SeatBeat {
   const u = new URL(mcpUrl);
   u.searchParams.set("seat", key);

@@ -12,7 +12,7 @@ const DETAIL_HEAD = 80;
 
 type Summary = Record<string, unknown> & {
   topic?: string;
-  participants?: { working?: { detail?: string } | null }[];
+  participants?: { working?: { detail?: string } | null; output?: object }[];
   board?: Record<string, { by?: string; reviewer?: string; post_reveal?: boolean }>;
 };
 
@@ -23,8 +23,16 @@ export function statusView(summary: Summary, fullTopic = false): Summary {
   return {
     ...summary,
     topic: !fullTopic && topic.length > TOPIC_HEAD ? `${topic.slice(0, TOPIC_HEAD)}… (${topic.length} chars; room_status full_topic=true carries it whole)` : topic,
-    participants: summary.participants?.map((p) =>
-      p.working?.detail ? { ...p, working: { ...p.working, detail: head(p.working.detail, DETAIL_HEAD) } } : p),
+    // a seat's output record ships its non-zero counts and no age (last_seen_at is beside it); nothing on the record ships as no field at all
+    participants: summary.participants?.map(({ output, ...p }) => {
+      const counts = Object.entries(output ?? {}).filter(([k, v]) => v && k !== "age_seconds");
+      return {
+        ...p,
+        ...(p.working?.detail ? { working: { ...p.working, detail: head(p.working.detail, DETAIL_HEAD) } } : {}),
+        ...(counts.length ? { output: Object.fromEntries(counts) } : {}),
+      };
+    }),
+    no_output: (summary.no_output as unknown[] | undefined)?.length ? summary.no_output : undefined,
     board: summary.board && Object.fromEntries(Object.entries(summary.board).map(([k, e]) =>
       [k, { by: e.by, ...(e.reviewer ? { reviewer: e.reviewer } : {}), ...(e.post_reveal ? { post_reveal: true } : {}) }])),
   };

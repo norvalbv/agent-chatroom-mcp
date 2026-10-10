@@ -80,7 +80,7 @@ export function kickVote(hub: Hub, roomName: string, pid: string, target: string
     kv = { target: t.id, targetName: t.name, by: { id: by.id, name: by.name }, reason: why.slice(0, 600), startedAt: now(), ballots: {}, status: "open" };
     room.kickVotes.set(t.id, kv);
     hub.post(room, "system", undefined,
-      `${hub.shown(room, by)} started a vote to kick ${hub.shown(room, t)}: ${kv.reason} — needs ${needed} kick ballot(s) from distinct connections (quorum=${room.quorum} over the other voters). ${outputLine(hub, room, t)} ` +
+      `${hub.shown(room, by)} started a vote to kick ${hub.shown(room, t)}: ${kv.reason} — needs ${needed} kick ballot(s) from distinct connections (quorum=${room.quorum} over the other voters). ${outputLine(hub, room, t)}` +
       `Vote with kick_vote(target=${JSON.stringify(hub.shown(room, t))}, vote="kick"|"keep"); the target may not vote. On the threshold the hub removes them, releases their claim/* entries and their next call tells them they were kicked.`);
   }
   kv.ballots[by.id] = { name: by.name, vote, ts: now(), session: by.session, ...(human ? { human: true } : {}) };
@@ -103,7 +103,7 @@ export function openKickByHub(hub: Hub, room: Room, t: Participant, reason: stri
   room.kickVotes.set(t.id, kv);
   hub.persist({ type: "kick_vote", room: room.name, vote: kv });
   hub.post(room, "system", undefined,
-    `Routine check: the hub opened a vote on closing ${hub.shown(room, t)}'s seat: ${kv.reason} — needs ${needed} kick ballot(s) from distinct connections (quorum=${room.quorum} over the other voters). ${outputLine(hub, room, t)} ` +
+    `Routine check: the hub opened a vote on closing ${hub.shown(room, t)}'s seat: ${kv.reason} — needs ${needed} kick ballot(s) from distinct connections (quorum=${room.quorum} over the other voters). ${outputLine(hub, room, t)}` +
     `Vote with kick_vote(target=${JSON.stringify(hub.shown(room, t))}, vote="kick"|"keep"); keep if you know of work of theirs the record does not show. The vote is withdrawn if they put something on the record first.`);
   return true;
 }

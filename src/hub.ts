@@ -203,8 +203,7 @@ export class Hub {
         ...(p.kicked ? { kicked: p.kicked } : {}),
       })),
       kick_votes: [...room.kickVotes.values()].map((kv) => this.kickView(room, kv, reveal)),
-      // workers past the window with nothing on the record while most others have something (hub/output.ts)
-      no_output: output.noOutput(this, room, observedAt).map(nm),
+      no_output: output.listedNoOutput(this, room, observedAt).map(nm),
       // claim/* entries whose owner left: its registered successor may take one at once, anyone after Hub.STALE_CLAIM_MS
       stale_claims: this.staleClaims(room, reveal),
       active_count: active.length,

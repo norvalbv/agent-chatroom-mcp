@@ -12,16 +12,21 @@ import { openKickByHub, withdrawHubKick } from "./kick.js";
 import type { Participant, Room } from "./types.js";
 
 /** In the room this long with nothing on the record before a worker is listed (the stale-claim and suspected-dead window). */
-export const NO_OUTPUT_MS = Number(process.env.CHATROOM_NO_OUTPUT_MS ?? 10 * 60_000);
+/** An unset, empty or malformed value keeps the default: "" would read as 0 (everyone listed at once) and "2m" as NaN (silently off). */
+export const windowMs = (raw: string | undefined, fallback: number) => { const v = Number(raw); return raw?.trim() && Number.isFinite(v) && v > 0 ? v : fallback; };
+export const NO_OUTPUT_MS = windowMs(process.env.CHATROOM_NO_OUTPUT_MS, 10 * 60_000);
 /** The same for a worker that holds a claim: a builder's commits never reach the hub, so a claim buys time, not immunity.
  * Replayed over 62 past rooms (392 worker seats): one 10 min window warns 61 seats of which 54 delivered minutes later;
  * 10 min unclaimed / 45 min claimed warns 12, of which 3 never delivered and 9 delivered a median 12 min later. */
-export const NO_OUTPUT_CLAIMED_MS = Number(process.env.CHATROOM_NO_OUTPUT_CLAIMED_MS ?? 45 * 60_000);
+export const NO_OUTPUT_CLAIMED_MS = windowMs(process.env.CHATROOM_NO_OUTPUT_CLAIMED_MS, 45 * 60_000);
 
 export interface SeatOutput { claims: number; evidence: number; verifies: number; proposals: number; challenges: number; age_seconds: number | null }
 
-/** Board keys that coordinate rather than deliver: a claim is a promise, a hold or an ack is a switch. */
-const coordinates = (key: string) => key.startsWith("claim/") || key.startsWith("hold/") || (key.startsWith("inbox/") && key.endsWith(".ack"));
+/** Board keys that coordinate rather than deliver: a claim is a promise, a hold is a switch, and inbox/* is another room's
+ * note or its ack (its author is a name from that room, which a seat here may share). */
+const coordinates = (key: string) => key.startsWith("claim/") || key.startsWith("hold/") || key.startsWith("inbox/");
+/** Shorter than this an entry is a placeholder: one character must not clear a seat. */
+const MIN_ENTRY_CHARS = 40;
 
 export function seatOutput(room: Room, p: Participant, observedAt = Date.now()): SeatOutput {
   const out: SeatOutput = { claims: 0, evidence: 0, verifies: 0, proposals: 0, challenges: 0, age_seconds: null };
@@ -30,7 +35,7 @@ export function seatOutput(room: Room, p: Participant, observedAt = Date.now()):
   for (const [key, e] of room.board) {
     if (e.by !== p.name) continue;
     if (key.startsWith("claim/")) { out.claims++; continue; }
-    if (coordinates(key)) continue;
+    if (coordinates(key) || e.text.trim().length < MIN_ENTRY_CHARS) continue;
     if (key.startsWith("verify/")) out.verifies++;
     else out.evidence++;
     seen(e.updatedAt);
@@ -45,48 +50,65 @@ export function seatOutput(room: Room, p: Participant, observedAt = Date.now()):
 
 const windowFor = (o: SeatOutput) => (o.claims ? NO_OUTPUT_CLAIMED_MS : NO_OUTPUT_MS);
 const delivered = (o: SeatOutput) => o.evidence + o.verifies + o.proposals + o.challenges > 0;
-/** Seats the record is a fair measure of: agent workers. The verifier waits for work by design; humans and the chair steer. */
-const workers = (hub: Hub, room: Room) => hub.activeParticipants(room).filter((p) => p.agent !== "human" && (p.role ?? "worker") !== "chair" && p.role !== "verifier");
+const agents = (hub: Hub, room: Room) => hub.activeParticipants(room).filter((p) => p.agent !== "human" && p.role !== "chair");
 
-/** Workers in an open room past NO_OUTPUT_MS with nothing delivered, while more than half of the other workers have
- * delivered something: in a room that does not work on the record, an empty record says nothing about a seat. */
+/** Workers in an open room past their window with nothing delivered, while at least two other agent seats, and more than
+ * half of them, have delivered something: in a room that does not work on the record an empty record says nothing about
+ * a seat, and one peer's entry is not a room's habit. The verifier counts as a witness but is never listed: it waits for
+ * work by design. Humans and the chair steer. */
 export function noOutput(hub: Hub, room: Room, observedAt = Date.now()): Participant[] {
-  if (room.state === "concluded" || room.state === "closed") return [];
-  const ws = workers(hub, room).map((p) => { const o = seatOutput(room, p, observedAt); return { p, done: delivered(o), window: windowFor(o) }; });
-  return ws.filter((w) => !w.done && observedAt - Date.parse(w.p.joinedAt) >= w.window
-    && ws.filter((o) => o.p.id !== w.p.id && o.done).length * 2 > ws.length - 1).map((w) => w.p);
+  // nor while the room is held: nobody is expected to deliver under a hold
+  if (room.state === "concluded" || room.state === "closed" || hub.hold(room)) return [];
+  const seats = agents(hub, room).map((p) => { const o = seatOutput(room, p, observedAt); return { p, done: delivered(o), window: windowFor(o) }; });
+  return seats.filter((w) => {
+    if (w.done || w.p.role === "verifier" || observedAt - Date.parse(w.p.joinedAt) < w.window) return false;
+    const others = seats.filter((o) => o.p.id !== w.p.id);
+    const done = others.filter((o) => o.done).length;
+    return done >= 2 && done * 2 > others.length;
+  }).map((w) => w.p);
 }
 
 const n = (count: number, one: string, many = `${one}s`) => `${count} ${count === 1 ? one : many}`;
 const WARNED = "you have put nothing on the record";
 
-/** Tell each listed seat once, in the room, where its peers can see it. The line itself is the receipt, so a replay does not repeat it. */
+/** The hub's line to a seat, by the name the room sees; the line itself is the receipt, so a replay does not repeat it. */
+const warningTo = (hub: Hub, room: Room, p: Participant) => `@${hub.shown(room, p)} ${WARNED}`;
+const warning = (hub: Hub, room: Room, p: Participant) => room.messages.find((m) => m.from.id === "system" && m.content.startsWith(warningTo(hub, room, p)));
+
+/** What room_status lists: seats the hub has already told, so nobody is listed (or voted on) before they were warned. */
+export function listedNoOutput(hub: Hub, room: Room, observedAt = Date.now()): Participant[] {
+  return noOutput(hub, room, observedAt).filter((p) => warning(hub, room, p));
+}
+
+/** Tell each such seat once, in the room, where its peers can see it; one further window later, open the vote. */
 export function warnNoOutput(hub: Hub, room: Room): void {
-  const listed = noOutput(hub, room);
+  const silent = noOutput(hub, room);
   for (const kv of room.kickVotes.values()) {
     const t = room.participants.get(kv.target);
-    if (t && !listed.includes(t)) withdrawHubKick(hub, room, t, `${kv.targetName} put something on the record`);
+    if (t && !silent.includes(t)) withdrawHubKick(hub, room, t, `${kv.targetName} put something on the record`);
   }
-  for (const p of listed) {
-    const at = `@${p.name} `;
-    const warned = room.messages.find((m) => m.kind === "system" && m.content.startsWith(at) && m.content.includes(WARNED));
+  for (const p of silent) {
+    const warned = warning(hub, room, p);
     if (warned) {
       // still nothing one further window after being told: the hub opens the vote, once, and seats only ballot
       if (Date.now() - Date.parse(warned.ts) >= NO_OUTPUT_MS && !room.kickVotes.has(p.id)) openKickByHub(hub, room, p, "nothing on the record, and nothing since the hub said so");
       continue;
     }
     const o = seatOutput(room, p);
-    hub.post(room, "system", undefined,
-      `${at}${WARNED} of this room in ${Math.round(windowFor(o) / 60_000)} min: no board entry, verify, proposal or challenge, while most seats have` +
+    // kind "chat", not "system": only a chat line carries its @-mention as an owed ask, so it reaches a seat held in a wait (see board.ts, reviewer notice)
+    hub.post(room, "chat", undefined,
+      `${warningTo(hub, room, p)} of this room in ${Math.round(windowFor(o) / 60_000)} min: no board entry, verify, proposal or challenge, while most seats have` +
       `${o.claims ? `, and you hold ${n(o.claims, "claim")}. Work on your branch is invisible here until you say where it stands` : ""}. ` +
-      `room_status lists you under no_output and a kick vote would quote that. Put what you have on the board now (a partial finding or a status line counts), ` +
+      `room_status now lists you under no_output and a kick vote would quote that. Put what you have on the board (a partial finding counts; votes and chat do not), ` +
       `or hand your area over (handoff/<area>) and leave_room with the reason.`);
   }
 }
 
-/** One line of the hub's own numbers for a kick vote, so ballots are cast on the record. */
+/** One line of the hub's own numbers for a kick vote, so ballots are cast on the record. Empty for a verifier: it waits for
+ * work by design, so its zeros would read as a verdict they are not. */
 export function outputLine(hub: Hub, room: Room, p: Participant): string {
+  if (p.role === "verifier") return "";
   const o = seatOutput(room, p);
   return `Hub record for ${hub.shown(room, p)}: ${n(o.claims, "claim")}, ${n(o.evidence, "evidence entry", "evidence entries")}, ${n(o.verifies, "verify", "verifies")}, ` +
-    `${n(o.proposals, "proposal")}, ${n(o.challenges, "challenge")}, ${n(p.messageCount, "chat message")}, ${Math.round((Date.now() - Date.parse(p.joinedAt)) / 60_000)} min in the room.`;
+    `${n(o.proposals, "proposal")}, ${n(o.challenges, "challenge")}, ${n(p.messageCount, "chat message")}, ${Math.round((Date.now() - Date.parse(p.joinedAt)) / 60_000)} min in the room. `;
 }

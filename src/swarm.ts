@@ -8,13 +8,13 @@
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
 import { createWriteStream, existsSync, mkdirSync, readFileSync, readdirSync, statSync, realpathSync, symlinkSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
-import { collectRoomSnapshot, renderRunReport, writeRunResult, rollupUsage, parseClaudeCliOutput, type RunResult, type RoomSnapshot, type SeatUsageRollup } from "./result.js";
+import { collectRoomSnapshot, renderRunReport, writeRunResult, rollupUsage, parseClaudeCliOutput, seatScorecard, classifyOutcome, proposedDecisionDir, type RunResult, type RoomSnapshot, type SeatUsageRollup } from "./result.js";
 import { settledAxes } from "./settled.js";
 import { registerRespawn } from "./respawn.js";
 import { fileURLToPath } from "node:url";
 import { carrySettings, devHubRule, heartbeatHookSettings, loadDotEnv, outputHeartbeat, seatBeat, seatChildEnv, type SeatBeat } from "./env.js";
 import { randomUUID } from "node:crypto";
-import { respawnDecision, type RespawnRoom } from "./respawn.js";
+import { respawnChain, type RespawnRoom } from "./respawn.js";
 import { claudeArgs } from "./claude-args.js";
 import { codexSeatCommand, codexUsageTracker } from "./codex-seat.js";
 import { claudeSandbox } from "./sandbox.js";
@@ -145,6 +145,12 @@ async function ensureHub() {
 
 // ---------- agents ----------
 const children: ChildProcess[] = [];
+/** The latest process per seat name, and the seats the timeout had to kill: the report's "how it ended" column. */
+const seatChildren = new Map<string, ChildProcess>();
+const killedAtTimeout = new Set<string>();
+/** Cost per process name (`name-rN` for a respawn): withRespawn hands back only the last attempt under the base name. */
+const seatCosts = new Map<string, number>();
+const priced = (name: string, o: SeatOutcome): SeatOutcome => { if (o.usage) seatCosts.set(name, o.usage.cost); return o; };
 
 /**
  * R4 usage telemetry for claude seats: `--output-format json` turns stdout into one JSON blob carrying
@@ -167,7 +173,7 @@ function runClaude(name: string, text: string, tools: string[], cwd: string, mod
     writeFileSync(outFile, final);
     // per-seat usage next to the .out, the same sidecar shape an OpenRouter seat writes (scripts/pool-run.ts reads it per seat)
     if (usage) writeFileSync(resolve(OUT, `${name}.usage.json`), JSON.stringify(usage));
-    return { text: final, usage };
+    return priced(name, { text: final, usage });
   });
 }
 
@@ -195,7 +201,7 @@ function runOpenRouter(name: string, text: string, cwd: string, model: string | 
   if (write) args.push("--write");
   if (OPENROUTER_REASONING) args.push("--reasoning", OPENROUTER_REASONING);
   if (SANDBOX) args.push("--sandbox");
-  return runProc(name, seatScript.cmd, args, cwd, outFile, false, undefined, false, text).then((t) => ({ text: t, usage: readSeatUsage(sidecar) }));
+  return runProc(name, seatScript.cmd, args, cwd, outFile, false, undefined, false, text).then((t) => priced(name, { text: t, usage: readSeatUsage(sidecar) }));
 }
 
 /**
@@ -211,7 +217,7 @@ function runCodex(name: string, text: string, cwd: string, model: string | undef
   // written on every turn.completed, so a seat stopped after one keeps what it had reported; a write error must not kill the launcher
   const track = codexUsageTracker((usage) => { try { writeFileSync(sidecar, JSON.stringify(usage, null, 2)); } catch (e) { log(`${name}: usage sidecar: ${e instanceof Error ? e.message : String(e)}`); } });
   const onStdout = (d: Buffer) => { events.write(d); track(d); };
-  return runProc(name, cmd, args, cwd, outFile, true, beat, false, text, onStdout).then((t) => { events.end(); return { text: t, usage: readSeatUsage(sidecar) }; });
+  return runProc(name, cmd, args, cwd, outFile, true, beat, false, text, onStdout).then((t) => { events.end(); return priced(name, { text: t, usage: readSeatUsage(sidecar) }); });
 }
 
 /**
@@ -220,33 +226,21 @@ function runCodex(name: string, text: string, cwd: string, model: string | undef
  * verifier. A seat that finished, handed over and left is not replaced merely because the room is open; the first
  * respawning launcher did that 70 times in two runs (src/respawn.ts). Up to three times and never in the last five minutes.
  */
+/** Attempts a respawn replaced, by process name: their usage belongs in the run total (unknown stays unknown). */
+const replacedRuns: SeatRun[] = [];
 async function withRespawn(name: string, room: string, mk: (nm: string, note: string) => Promise<SeatOutcome>): Promise<SeatOutcome> {
-  let out: SeatOutcome = await mk(name, "");
-  let previousName = name;
-  for (let i = 1; RESPAWN && i <= 3; i++) {
-    if (STOPPING || Date.now() > RUN_STARTED + TIMEOUT_MIN * 60_000 - 5 * 60_000) break;
-    let summary: RespawnRoom | null = null;
-    try {
-      summary = (await (await fetch(`${URL_}/rooms/${encodeURIComponent(room)}`)).json()) as RespawnRoom;
-    } catch {}
-    const d = respawnDecision({ name: previousName, exitCode: exitCodes.get(previousName) ?? null, attempt: i, room: summary });
-    if (!d.respawn) {
-      log(`${previousName} exited; not respawning: ${d.reason}`);
-      break;
-    }
-    const nm = `${name}-r${i}`;
-    let note: string;
-    try {
-      note = await registerRespawn(URL_, room, previousName, nm, process.env.CHATROOM_LAUNCHER_TOKEN, undefined, d.reason);
-    } catch (error) {
-      log(`Not respawning ${previousName}: ${error instanceof Error ? error.message : "replacement registration failed"}`);
-      break;
-    }
-    log(`${previousName} exited while ${room} is ${summary?.state}; respawning as ${nm}: ${d.reason}`);
-    out = await mk(nm, note);
-    previousName = nm;
-  }
-  return out;
+  if (!RESPAWN) return mk(name, "");
+  const chain = await respawnChain<SeatOutcome>({
+    name,
+    stop: () => STOPPING || Date.now() > RUN_STARTED + TIMEOUT_MIN * 60_000 - 5 * 60_000,
+    room: async () => (await (await fetch(`${URL_}/rooms/${encodeURIComponent(room)}`)).json()) as RespawnRoom,
+    exitCode: (nm) => exitCodes.get(nm) ?? null,
+    register: (previousName, nm, reason) => registerRespawn(URL_, room, previousName, nm, process.env.CHATROOM_LAUNCHER_TOKEN, undefined, reason),
+    run: mk,
+    log,
+  });
+  for (const r of chain.replaced) replacedRuns.push({ name: r.name, ...r.outcome });
+  return chain.last;
 }
 
 /** Last exit code per seat name; withRespawn reads it to tell a crash from a finished seat. */
@@ -267,6 +261,7 @@ function runProc(name: string, cmd: string, args: string[], cwd: string, outFile
       child.stderr?.on("data", send);
     }
     children.push(child);
+    seatChildren.set(name, child);
     let out = "";
     let err = "";
     // a seat whose final text comes from a file (codex -o) needs no copy of stdout held in memory
@@ -314,6 +309,12 @@ async function tailRooms(rooms: string[]) {
 }
 
 /** With --full-access, give each worker its own git worktree so parallel edits cannot collide. */
+/** Commits a write seat left on its own branch: a builder's output is commits, which the board never shows. */
+const branchCommits = (name: string): number | undefined => {
+  if (!writeWorkers.has(name) || !PROJECT_IDENTITY.git) return undefined;
+  const n = Number(spawnSync("git", ["-C", CWD, "rev-list", "--count", `${PROJECT_IDENTITY.git.revision}..swarm/${SWARM_ID}/${name}`], { encoding: "utf8" }).stdout?.trim());
+  return Number.isFinite(n) ? n : undefined;
+};
 const isGitRepo = spawnSync("git", ["-C", CWD, "rev-parse", "--is-inside-work-tree"], { encoding: "utf8" }).stdout?.trim() === "true";
 const readOnlyWorkers = new Set<string>();
 function workerCwd(name: string): string {
@@ -549,8 +550,11 @@ for (const sig of ["SIGTERM", "SIGINT"] as const) process.on(sig, () => {
   setTimeout(() => void swept.finally(() => process.exit(130)), 3000).unref();
 });
 const tail = setInterval(() => tailRooms([...groupRooms, leadsRoom]), 2000);
+let timedOut = false;
 const timeout = setTimeout(() => {
   log(`timeout after ${TIMEOUT_MIN} min; stopping agents`);
+  timedOut = true;
+  for (const [name, c] of seatChildren) if (c.exitCode === null && c.signalCode === null) killedAtTimeout.add(name);
   for (const c of children) c.kill();
   void sweepStrays("timeout");
 }, TIMEOUT_MIN * 60_000);
@@ -606,7 +610,9 @@ const artifact: RunResult = {
   leadRoom: leadsRoom,
   rooms: snapshots,
   verifier: { name: "verifier", output: results.find(r => r.name === "verifier")?.text ?? null },
-  reportPath: resolve(OUT, "report.md"), artifactPath, collectionErrors, usage: rollupUsage(results),
+  reportPath: resolve(OUT, "report.md"), artifactPath, collectionErrors, usage: rollupUsage([...results, ...replacedRuns]),
+  outcome: classifyOutcome(snapshots.find(r => r.name === leadsRoom)?.payload, { timedOut }),
+  scorecard: seatScorecard(snapshots, Object.fromEntries([...exitCodes].map(([name, exitCode]) => [name, { exitCode, cost: seatCosts.get(name), killedAtTimeout: killedAtTimeout.has(name), commits: branchCommits(name) }]))),
 };
 writeRunResult(resolve(OUT, "result.json"), artifact);
 if (artifactPath !== resolve(OUT, "result.json")) writeRunResult(artifactPath, artifact);
@@ -617,11 +623,11 @@ writeFileSync(artifact.reportPath, renderRunReport(artifact));
   const rec = /DECISION RECORD[\s\S]*$/.exec(verdict)?.[0];
   // markdown puts the colon either side of the emphasis: **Slug:** `x` and **Slug**: `x` both count
   const slug = /slug\**:\**\s*`?([a-z0-9-]{3,80})/i.exec(rec ?? "")?.[1];
-  if (rec && slug && existsSync(resolve(CWD, "docs", "decisions"))) {
-    const dir = resolve(CWD, "docs", "decisions", "proposed");
+  const dir = rec && slug ? proposedDecisionDir(PROJECT_IDENTITY, OUT, existsSync(resolve(CWD, "docs", "decisions"))) : null;
+  if (rec && slug && dir) {
     mkdirSync(dir, { recursive: true });
     writeFileSync(resolve(dir, `${slug}.md`), `# Proposed decision: ${slug}\n\nFrom ${SWARM_ID} (${leads.state}); report: swarms/${SWARM_ID}/report.md. A human promotes this into docs/decisions/ with \`guard-decisions add\`; nothing is adopted automatically.\n\n${rec}\n`);
-    log(`decision record proposed: docs/decisions/proposed/${slug}.md`);
+    log(`decision record proposed: ${resolve(dir, `${slug}.md`)}`);
   }
 }
 

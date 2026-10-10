@@ -4,6 +4,7 @@
  * Run: npm run smoke
  */
 import { spawn } from "node:child_process";
+import { connect as tcpConnect } from "node:net";
 import { readFileSync } from "node:fs";
 import assert from "node:assert/strict";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
@@ -11,6 +12,18 @@ import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/
 
 const PORT = Number(process.env.PORT ?? 7733);
 const HTTP = `http://127.0.0.1:${PORT}`;
+
+// this script starts a second hub on PORT+1 further down; a hub already on either port fails it late, on an unrelated assertion
+for (const [port, label] of [[PORT, "PORT"], [PORT + 1, "PORT+1"]] as const) {
+  const free = await new Promise<boolean>((done) => {
+    // connect rather than bind: a listener on 127.0.0.1 does not stop a bind on the wildcard address
+    const probe = tcpConnect(port, "127.0.0.1").once("connect", () => { probe.destroy(); done(false); }).once("error", () => done(true));
+  });
+  if (!free) {
+    console.error(`smoke: port ${port} (${label}) is already in use; smoke needs PORT and PORT+1 free. Pick another PORT.`);
+    process.exit(2);
+  }
+}
 
 const server = spawn("npx", ["tsx", "src/index.ts"], { env: { ...process.env, PORT: String(PORT), CHATROOM_SPAWN_DRY: "1", CHATROOM_LOG_DIR: "/tmp/chatroom-smoke-spawn", CHATROOM_MAX_LIVE_PER_ROOM: "12", CHATROOM_INSECURE_LOCAL: "1", CHATROOM_HUMAN_TOKEN: "smoke-agent-control" }, stdio: ["ignore", "inherit", "inherit"] });
 const stop = () => server.kill();

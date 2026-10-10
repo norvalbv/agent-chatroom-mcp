@@ -75,6 +75,14 @@ const tests: [string, () => void][] = [
     assert.equal(f.h.isAnswered(f.room, f.ask), true);
     assert.notEqual(f.h.attentionFocus(f.room, f.bob)?.id, f.ask.id, 'bob is no longer owed it');
   }],
+  // claude-opus-5-5-6's review of 17e6a3b1: the nominee answered first, then the addressee's late reply also went through,
+  // so the human got two answers. The first reply settles it, whoever sends it.
+  ['once the nominee has answered, the late addressee is refused: one answer per question', () => {
+    const f = fixture(); f.ask.ts = new Date(Date.now() - 61_000).toISOString();
+    assert.doesNotThrow(() => f.reply(f.bob.id));
+    assert.equal(f.h.isAnswered(f.room, f.ask), true);
+    assert.throws(() => f.reply(f.alice.id), /not you|already answered/);
+  }],
   ['an addressee that has left cannot answer, the nominee can', () => {
     const f = fixture(); f.h.leave(f.room.name, f.alice.id);
     assert.doesNotThrow(() => f.reply(f.bob.id));

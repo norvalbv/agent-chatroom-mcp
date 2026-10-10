@@ -841,8 +841,8 @@ export class Hub {
       // addressee left is therefore not open to everyone; it is handed to the current nominee (supersedes the
       // maintainer's "anyone may take an orphaned ask" fix of 9b69261, whose test now asserts the nominee path).
       // ...and the addressee itself while it is in the room: the human chose that seat, and a seat mid-task past the window
-      // (the verifier in swarm-000525-jcz8-room, refused three times) still answers; the first reply settles it either way.
-      const addresseeLive = !!to && to !== "all" && to === p.id && p.active;
+      // (the verifier in swarm-000525-jcz8-room, refused three times) still answers, unless the nominee already has: one answer.
+      const addresseeLive = !!to && to !== "all" && to === p.id && p.active && !answered;
       if (to && to !== "all" && !resp.mine && !addresseeLive) {
         throw new HubError(`${this.shown(room, target.from)} addressed that to ${resp.who}, not you. Leave it to them.`);
       }

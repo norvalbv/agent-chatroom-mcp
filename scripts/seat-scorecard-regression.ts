@@ -93,6 +93,15 @@ assert.match(none.detail, /timed out/);
 assert.match(none.detail, /nobody proposed/);
 assert.equal(classifyOutcome({ ...payload, proposals: [] }, { timedOut: false }).kind, 'no_proposal');
 assert.match(classifyOutcome({ ...payload, proposals: [] }, { timedOut: false }).detail, /every seat exited/);
+// a timeout kills the seats before the launcher reads the room, so the open proposal's blockers are read as they were
+// at the kill (claude-opus-5-5-3 saw "0 voter(s) left" in a timed-out report: the snapshot was taken after the kill)
+const afterKill = { ...payload, proposals: [{ ...payload.proposals[0], blocked_by: ['0 voter(s) left'], waiting_on: [] }] };
+const atKill = classifyOutcome(afterKill, { timedOut: true, atTimeout: payload });
+assert.match(atKill.detail, /needs a verify\/\* entry by someone else/);
+assert.match(atKill.detail, /Waiting on: stuck, live/);
+assert.doesNotMatch(atKill.detail, /0 voter/);
+// a room that concluded in the seconds after the kill still reads as concluded
+assert.equal(classifyOutcome({ state: 'concluded', conclusion: { text: 'x' } }, { timedOut: true, atTimeout: payload }).kind, 'concluded');
 assert.equal(classifyOutcome(null, {}).kind, 'room_missing');
 assert.equal(classifyOutcome({ state: 'concluded', conclusion: { text: 'done' } }, {}).kind, 'concluded');
 

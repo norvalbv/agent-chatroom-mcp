@@ -196,7 +196,7 @@ export function reusedHubProblem(hubBuild: { root?: string; head?: string } | un
 
 /**
  * Claude Code's own OTLP log export, pointed at the hub: one `claude_code.api_request` record per model call, with its
- * tokens and cost, every OTEL_LOGS_EXPORT_INTERVAL ms (src/hub/usage.ts, board sources/claude-code-otel). Only the
+ * tokens and cost, every second (src/hub/usage.ts, board sources/claude-code-otel). Only the
  * logs signal and only the logs-specific variables, so an operator's own OTEL_EXPORTER_OTLP_ENDPOINT for metrics or
  * traces is left alone. A seat's other runtimes (codex, openrouter) ignore these. CHATROOM_SEAT_TELEMETRY=0 turns it off.
  */
@@ -208,7 +208,9 @@ function seatTelemetryEnv(mcpUrl: URL, key: string): NodeJS.ProcessEnv {
     OTEL_EXPORTER_OTLP_LOGS_PROTOCOL: "http/json",
     OTEL_EXPORTER_OTLP_LOGS_ENDPOINT: new URL("/otlp/v1/logs", mcpUrl).toString(),
     OTEL_EXPORTER_OTLP_LOGS_HEADERS: `x-chatroom-seat-key=${key}`,
-    OTEL_LOGS_EXPORT_INTERVAL: "5000",
+    // a SIGKILLed seat loses whatever its exporter had not flushed: at 5000 ms a probe lost 3 of 8 calls, at 1000 ms
+    // 0 of 5 (the exporter posts only when it has records: about one POST every 2-3 s from a busy seat)
+    OTEL_LOGS_EXPORT_INTERVAL: "1000",
   };
 }
 

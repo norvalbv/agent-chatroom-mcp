@@ -11,6 +11,10 @@ import { spawn } from "node:child_process";
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
 import { HEARTBEAT_HOOK, heartbeatHookSettings } from "../src/env.js";
+import { ownHubPort } from "./lib/own-hub.js";
+
+// before anything else: with the port taken, nothing below may run
+const PORT = await ownHubPort(Number(process.env.PORT ?? 20_000 + Math.floor(Math.random() * 20_000)));
 
 const seen: { path: string; body: any }[] = [];
 let pending: unknown[] = [];
@@ -115,7 +119,6 @@ stub.close();
 
 // 7. End to end on a real throwaway hub (never 7717): a peer @-mentions a seat that is busy in local tools; the seat's
 //    next tool hook carries the mention into its turn, the ack counts as delivery, and its next wait does not resend the body.
-const PORT = Number(process.env.PORT ?? 20_000 + Math.floor(Math.random() * 20_000));
 assert.notEqual(PORT, 7717, "never the live hub");
 const HTTP = `http://127.0.0.1:${PORT}`;
 const server = spawn("npx", ["tsx", "src/index.ts"], { env: { ...process.env, PORT: String(PORT), CHATROOM_SPAWN_DRY: "1", CHATROOM_LOG_DIR: "/tmp/chatroom-steer-hook", CHATROOM_INSECURE_LOCAL: "1", CHATROOM_DATA_DIR: "" }, stdio: ["ignore", "ignore", "inherit"] });

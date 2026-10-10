@@ -4,28 +4,22 @@
  * Run: npm run smoke
  */
 import { spawn } from "node:child_process";
-import { connect as tcpConnect } from "node:net";
 import { readFileSync } from "node:fs";
 import assert from "node:assert/strict";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
+import { ownHubPort } from "./lib/own-hub.js";
 
 const PORT = Number(process.env.PORT ?? 7733);
 const HTTP = `http://127.0.0.1:${PORT}`;
 
 // this script starts a second hub on PORT+1 further down; a hub already on either port fails it late, on an unrelated assertion
-for (const [port, label] of [[PORT, "PORT"], [PORT + 1, "PORT+1"]] as const) {
-  const free = await new Promise<boolean>((done) => {
-    // connect rather than bind: a listener on 127.0.0.1 does not stop a bind on the wildcard address
-    const probe = tcpConnect(port, "127.0.0.1").once("connect", () => { probe.destroy(); done(false); }).once("error", () => done(true));
-  });
-  if (!free) {
-    console.error(`smoke: port ${port} (${label}) is already in use; smoke needs PORT and PORT+1 free. Pick another PORT.`);
-    process.exit(2);
-  }
-}
+await ownHubPort(PORT);
+await ownHubPort(PORT + 1, "PORT+1");
 
-const server = spawn("npx", ["tsx", "src/index.ts"], { env: { ...process.env, PORT: String(PORT), CHATROOM_SPAWN_DRY: "1", CHATROOM_LOG_DIR: "/tmp/chatroom-smoke-spawn", CHATROOM_MAX_LIVE_PER_ROOM: "12", CHATROOM_INSECURE_LOCAL: "1", CHATROOM_HUMAN_TOKEN: "smoke-agent-control" }, stdio: ["ignore", "inherit", "inherit"] });
+// the default recruit policy is asserted below, so the hubs must not inherit a pin from the caller (every recruit's shell has one)
+const { CHATROOM_RECRUIT_AGENT: _agent, CHATROOM_RECRUIT_MODEL: _model, ...hubEnv } = process.env;
+const server = spawn("npx", ["tsx", "src/index.ts"], { env: { ...hubEnv, PORT: String(PORT), CHATROOM_SPAWN_DRY: "1", CHATROOM_LOG_DIR: "/tmp/chatroom-smoke-spawn", CHATROOM_MAX_LIVE_PER_ROOM: "12", CHATROOM_INSECURE_LOCAL: "1", CHATROOM_HUMAN_TOKEN: "smoke-agent-control" }, stdio: ["ignore", "inherit", "inherit"] });
 const stop = () => server.kill();
 process.on("exit", stop);
 
@@ -762,7 +756,7 @@ assert.deepEqual(tools, ["amend", "board_get", "board_set", "challenge", "join_r
   // nudge; someone never joined -> one warning, then the next nudge reveals. A short nudge timer on a second hub.
   const PORT2 = PORT + 1;
   const HTTP2 = `http://127.0.0.1:${PORT2}`;
-  const server2 = spawn("npx", ["tsx", "src/index.ts"], { env: { ...process.env, PORT: String(PORT2), CHATROOM_SPAWN_DRY: "1", CHATROOM_NUDGE_AFTER_MS: "1200", CHATROOM_LOG_DIR: "/tmp/chatroom-smoke-spawn2", CHATROOM_MAX_LIVE_PER_ROOM: "12" }, stdio: ["ignore", "inherit", "inherit"] });
+  const server2 = spawn("npx", ["tsx", "src/index.ts"], { env: { ...hubEnv, PORT: String(PORT2), CHATROOM_SPAWN_DRY: "1", CHATROOM_NUDGE_AFTER_MS: "1200", CHATROOM_LOG_DIR: "/tmp/chatroom-smoke-spawn2", CHATROOM_MAX_LIVE_PER_ROOM: "12" }, stdio: ["ignore", "inherit", "inherit"] });
   process.on("exit", () => server2.kill());
   for (let i = 0; i < 50; i++) {
     try {

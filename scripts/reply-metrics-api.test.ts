@@ -7,9 +7,11 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Hub } from "../src/hub.js";
+import { ownHubPort } from "./lib/own-hub.js";
 
 const port = Number(process.env.PORT ?? 18447);
 assert.ok(Number.isInteger(port) && port > 8000 && port < 65536, "PORT must exceed 8000");
+await ownHubPort(port);
 const dir = mkdtempSync(join(tmpdir(), "reply-metric-api-"));
 const fixture = new Hub({ dataDir: dir });
 fixture.join("api-fixture", "asker", "test", { expectedParticipants: 0 });

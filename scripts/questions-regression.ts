@@ -11,6 +11,10 @@ import { Hub } from "../src/hub.js";
 import { Script } from "node:vm";
 import { asksSomething, humanQuestions, questionsIn } from "../src/questions.js";
 import { UI_HTML } from "../src/ui.js";
+import { ownHubPort } from "./lib/own-hub.js";
+
+// before anything else: with the port taken, nothing below may run
+const PORT = await ownHubPort(Number(process.env.PORT ?? 7861));
 
 // ---- unit: the hub's own log ----
 const hub = new Hub({ dataDir: mkdtempSync(join(tmpdir(), "questions-")) });
@@ -109,7 +113,6 @@ new Script(UI_HTML.split("<script>")[1].split("</script>")[0]);
 }
 
 // ---- HTTP: the dashboard's calls against the built hub ----
-const PORT = Number(process.env.PORT ?? 7861);
 const HTTP = `http://127.0.0.1:${PORT}`;
 const data = mkdtempSync(join(tmpdir(), "questions-http-"));
 const server = spawn("node", ["dist/index.js"], { env: { ...process.env, PORT: String(PORT), CHATROOM_INSECURE_LOCAL: "1", CHATROOM_DATA_DIR: data, CHATROOM_SPAWN_DRY: "1" }, stdio: ["ignore", "ignore", "inherit"] });

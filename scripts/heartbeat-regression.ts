@@ -50,7 +50,8 @@ await b("join_room", { room: "hb", name: "peer", agent: "claude" });
 
 // 1. seatBeat: the key rides on the MCP URL and in the seat env, pointing the hook at <hub>/heartbeat.
 assert.equal(new URL(beat.mcpUrl).searchParams.get("seat"), "seat-key-A");
-assert.deepEqual(beat.env, { CHATROOM_SEAT_KEY: "seat-key-A", CHATROOM_HEARTBEAT_URL: `${HTTP}/heartbeat` });
+// (plus the OTLP log export to the hub: scripts/live-usage-regression.ts)
+assert.deepEqual({ CHATROOM_SEAT_KEY: beat.env.CHATROOM_SEAT_KEY, CHATROOM_HEARTBEAT_URL: beat.env.CHATROOM_HEARTBEAT_URL }, { CHATROOM_SEAT_KEY: "seat-key-A", CHATROOM_HEARTBEAT_URL: `${HTTP}/heartbeat` });
 
 // 2. The claude hook: a local tool call (no hub call at all) marks the seat as working in every room it is in,
 //    with the command as detail; its output is empty and it exits 0 (it must never block or alter the tool).

@@ -153,11 +153,29 @@ export function seatPortError(env: NodeJS.ProcessEnv, portFlag: string | undefin
   return null;
 }
 
+/**
+ * Claude Code's own OTLP log export, pointed at the hub: one `claude_code.api_request` record per model call, with its
+ * tokens and cost, every OTEL_LOGS_EXPORT_INTERVAL ms (src/hub/usage.ts, board sources/claude-code-otel). Only the
+ * logs signal and only the logs-specific variables, so an operator's own OTEL_EXPORTER_OTLP_ENDPOINT for metrics or
+ * traces is left alone. A seat's other runtimes (codex, openrouter) ignore these. CHATROOM_SEAT_TELEMETRY=0 turns it off.
+ */
+function seatTelemetryEnv(mcpUrl: URL, key: string): NodeJS.ProcessEnv {
+  if (process.env.CHATROOM_SEAT_TELEMETRY === "0") return {};
+  return {
+    CLAUDE_CODE_ENABLE_TELEMETRY: "1",
+    OTEL_LOGS_EXPORTER: "otlp",
+    OTEL_EXPORTER_OTLP_LOGS_PROTOCOL: "http/json",
+    OTEL_EXPORTER_OTLP_LOGS_ENDPOINT: new URL("/otlp/v1/logs", mcpUrl).toString(),
+    OTEL_EXPORTER_OTLP_LOGS_HEADERS: `x-chatroom-seat-key=${key}`,
+    OTEL_LOGS_EXPORT_INTERVAL: "5000",
+  };
+}
+
 export function seatBeat(mcpUrl: string, key: string, worktree?: string): SeatBeat {
   const u = new URL(mcpUrl);
   u.searchParams.set("seat", key);
   if (worktree) u.searchParams.set("worktree", worktree);
-  return { key, mcpUrl: u.toString(), env: { CHATROOM_SEAT_KEY: key, CHATROOM_HEARTBEAT_URL: new URL("/heartbeat", u).toString() } };
+  return { key, mcpUrl: u.toString(), env: { CHATROOM_SEAT_KEY: key, CHATROOM_HEARTBEAT_URL: new URL("/heartbeat", u).toString(), ...seatTelemetryEnv(u, key) } };
 }
 
 /**

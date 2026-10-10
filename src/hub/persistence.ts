@@ -63,6 +63,9 @@ export function replay(hub: Hub) {
           if (p) countWork(p, ev.cls, ev.target);
           break;
         }
+        case "usage":
+          hub.usage.restore(ev.seat, ev.usage);
+          break;
         case "attention": {
           const p = hub.rooms.get(ev.room)?.participants.get(ev.pid);
           if (p) Object.assign(p, { lastSeenSeq: ev.lastSeenSeq, withheld: ev.withheld,

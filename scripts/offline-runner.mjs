@@ -108,6 +108,7 @@ export const offlineScripts = [
   'handoff-regression.ts',
   'heartbeat-regression.ts',
   'work-ledger-regression.ts',
+  'live-usage-regression.ts',
   'barren-claim-regression.ts',
   'steer-contract-regression.ts',
   'steer-hook-regression.ts',

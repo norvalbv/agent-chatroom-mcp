@@ -2,6 +2,7 @@
 import { randomBytes } from "node:crypto";
 import { spawnSync } from "node:child_process";
 import type { RoomState, Participant, KickVote, Message, CodeState, BoardEntry, Challenge, Proposal, RoomOptions, Room, CallOutcome, WorkClass, DevReceipt } from "./types.js";
+import type { SeatUsage } from "./usage.js";
 
 export type Opts = Required<Omit<RoomOptions, "chair" | "parent">> & { chair?: string; parent?: string };
 
@@ -29,6 +30,8 @@ export type Event =
   | { type: "refusal"; room: string; tool: string; reason: string; ts?: string; participant?: string | null }
   | { type: "call_completion"; room: string; tool: string; outcome: CallOutcome; ts: string; participant: string | null }
   | { type: "work"; room: string; pid: string; cls: WorkClass; tool: string; target: string; ts: string }
+  /** a seat process's cumulative model usage (src/hub/usage.ts); seat is the seat key's sha256, never the key */
+  | { type: "usage"; room: string; seat: string; usage: SeatUsage; ts: string }
   | { type: "kick_vote"; room: string; vote: KickVote }
   /** Telemetry only (replay ignores it): the open work an idle wait named to a seat, written when that list changes. */
   | { type: "open_work"; room: string; pid: string; ts: string; items: string[] };

@@ -1300,17 +1300,26 @@ export class Hub {
 
   // ---------- humans in the loop ----------
 
-  /** Match human names literally and case-insensitively, never inside a larger word. */
-  private namesHuman(room: Room, human: Message, content: string): boolean {
+  /**
+   * A message addresses a human by @name, or by the name in address position: within its first three words or after a
+   * comma ("Thanks benji, ...", "Benji: ...", "Understood, Benji."), followed by punctuation or the end. A name in
+   * passing ("the rule from benji", "benji's #36", draft/ask-benji-graph) and a message that opens by @-addressing
+   * other seats are not replies to the human: 72 of 616 agent messages recorded as replies to a human across 259 room
+   * logs were only that (humans-answered-once-by-hub-enforcement, 2026-10-10 "Not fixed"). Case-insensitive.
+   */
+  private addressesHuman(room: Room, human: Message, content: string): boolean {
     const p = room.participants.get(human.from.id);
+    const opensToOthers = /^\s*@[\w-]/.test(content);
     return [human.from.name, p?.label].some((name) => {
       if (!name) return false;
-      const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-      return new RegExp(`(?<!\\w)${escaped}(?!\\w)`, "i").test(content);
+      const n = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      if (new RegExp(`(?<![\\w-])@${n}(?![\\w-])`, "i").test(content)) return true;
+      if (opensToOthers) return false;
+      return new RegExp(`(?:^\\s*(?:[A-Za-z]+[,!]?\\s+){0,2}|[,;]\\s+)${n}(?=\\s*(?:[,:!?\u2014\u2013]|\\.(?:\\s|$)|\\s-\\s|$))`, "i").test(content);
     });
   }
 
-  /** A human chat message counts as answered once a non-human replies to it (reply_to) or names them afterwards. */
+  /** A human chat message counts as answered once a non-human replies to it (reply_to) or addresses them afterwards. */
   isAnswered(room: Room, human: Message): boolean {
     // a later human message means an un-addressed "hi benji" reply belongs to that one, not this one
     const nextHumanSeq = room.messages.find((m) => m.seq > human.seq && m.kind === "chat" && m.from.agent === "human")?.seq ?? Infinity;
@@ -1329,7 +1338,7 @@ export class Hub {
         m.kind === "chat" &&
         m.from.agent !== "human" &&
         (m.replyTo === human.id ||
-          ((m.seq < nextHumanSeq || m.from.id === nominated || (addressed !== "all" && m.from.id === addressed)) && this.namesHuman(room, human, m.content))),
+          ((m.seq < nextHumanSeq || m.from.id === nominated || (addressed !== "all" && m.from.id === addressed)) && this.addressesHuman(room, human, m.content))),
     );
   }
 
@@ -1510,7 +1519,7 @@ export class Hub {
     for (let i = room.messages.length - 1; i >= 0; i--) {
       const m = room.messages[i];
       if (m.kind !== "chat" || m.from.agent !== "human") continue;
-      if (this.namesHuman(room, m, content)) return m;
+      if (this.addressesHuman(room, m, content)) return m;
       break; // only the most recent human message can be addressed by name
     }
     return undefined;

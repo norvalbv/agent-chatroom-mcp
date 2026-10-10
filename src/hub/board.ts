@@ -289,12 +289,16 @@ export function claimOverlapScore(a: Set<string>, aKey: Set<string>, b: Set<stri
   return { shared, jac, slugsMatch, fires: a.size >= 4 && shared.length >= 4 && (jac >= 0.4 || (slugsMatch && jac >= 0.2)) };
 }
 
-/** Reviewer for a new claim/<area>: an active voter other than the owner, fewest reviews assigned, then least-recently-verifying, then earliest join.
+/** Reviewer for a new claim/<area>: an active voter other than the owner, a standing seat before a recruit, fewest reviews assigned, then least-recently-verifying, then earliest join.
  * Hub-chosen, never client-supplied, so a claimant cannot pick their own reviewer by writing it into the JSON. */
 function assignReviewer(hub: Hub, room: Room, owner: Participant): Participant | undefined {
   // identity-is-the-connection: a second name on the owner's own MCP session is not "someone
   // else" (the same sock-puppet case verifiedBy() already excludes for authorship, hub.ts ~2190).
-  const candidates = hub.voters(room).filter((x) => x.id !== owner.id && !(x.session && owner.session && x.session === owner.session));
+  const others = hub.voters(room).filter((x) => x.id !== owner.id && !(x.session && owner.session && x.session === owner.session));
+  // A recruit came for one brief and leaves when it is done: 11 of 13 recruits the hub assigned never wrote a verify/*
+  // (231 of 473 standing seats; scripts/reviewer-recruit-measure.py). Pick one only when nobody else can review.
+  const standing = others.filter((x) => x.role !== "recruit");
+  const candidates = standing.length ? standing : others;
   if (!candidates.length) return undefined;
   // Assigned reviews count as load before verify history: claims arrive in a burst when every candidate ties, and
   // without this the earliest joiner became the sole accepted verifier for nearly every claim.

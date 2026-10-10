@@ -72,6 +72,8 @@ let STOPPING = false;
  * in the same room. Use it when the shape of the work is itself unknown (brainstorms, open questions).
  */
 const FLAT = has("flat");
+/** --fresh-challenger: a hub this launcher starts recruits one read-only seat per opened proposal to check it (Spawner.freshChallenger) */
+const FRESH_CHALLENGER = has("fresh-challenger");
 /** --no-carry: seats start from the brief alone (no settled axes, no PRIOR RUNS, auto-memory off); see carrySettings in env.ts */
 const NO_CARRY = has("no-carry");
 /**
@@ -125,7 +127,7 @@ async function ensureHub() {
   } catch {}
   log(`starting hub on :${PORT}`);
   const child = spawn("node", [resolve(repoRoot, "dist/index.js")], {
-    env: { ...process.env, PORT: String(PORT), CHATROOM_DATA_DIR: resolve(repoRoot, "data"), ...(SANDBOX ? { CHATROOM_SANDBOX: "1" } : {}), ...(has("fresh-challenger") ? { CHATROOM_FRESH_CHALLENGER: "1" } : {}) },
+    env: { ...process.env, PORT: String(PORT), CHATROOM_DATA_DIR: resolve(repoRoot, "data"), ...(SANDBOX ? { CHATROOM_SANDBOX: "1" } : {}), ...(FRESH_CHALLENGER ? { CHATROOM_FRESH_CHALLENGER: "1" } : {}) },
     detached: true,
     stdio: "ignore",
   });

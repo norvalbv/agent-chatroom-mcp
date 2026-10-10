@@ -15,7 +15,11 @@
  *   node --import tsx scripts/bench-grid.ts --tasks bench-fact-check,bench-bug-fix --seeds 1,2,3
  *     [--arms A,C] [--model sonnet] [--max-cost-usd 5] [--results-dir bench/results/rq1]
  *     [--runner scripts/bench-rq1.ts] [--tasks-dir tasks] [--seats N] [--timeout-ms N] [--deadline-ms N]
- *     [--hub-entry PATH] [--port-base 19850] [--include-retired]
+ *     [--hub-entry PATH] [--port-base 19850] [--include-retired] [--hub-env KEY=VAL]... [--recruit-model M]
+ *
+ * --hub-env and --recruit-model pass through to arm C runs (scripts/bench-hub-env.ts). A finished arm C result whose
+ * hub_env or recruit_model differs from the request is refused, never skipped as done, so one --results-dir holds
+ * one hub arm: an off-vs-on comparison uses two results dirs.
  *
  * Confirmatory mode (`--confirmatory`, paper/prereg-confirmatory.md): arms A, AH, B, K, C, all interleaved per
  * seed in a fixed rotation (offset (seed - 501) mod 5 over [A, AH, B, K, C]), so no arm is always first and a
@@ -43,6 +47,7 @@ import { basename, join, resolve } from "node:path";
 import { matchArmABudget } from "./rq1-usage-budget.js";
 import { classifyThinkingRegime, modelThinkingTokens, THINKING_REGIME_THRESHOLD } from "./confirmatory-regime.js";
 import { pricePerMTok } from "./seat-cost-estimate.js";
+import { parseHubEnv } from "./bench-hub-env.js";
 
 // Item 5 (orphans): spawnSync would block this process's event loop, so a SIGINT/SIGTERM sent to this
 // script while a run is in flight could not be handled until that run finished on its own — the signal
@@ -108,6 +113,22 @@ export function readGridResult(resultPath: string): GridRunResult {
   return { outcome: r.outcome, cost_usd: known ? r.usage.cost_usd : null, estimated_cost_usd: estimated, wall_clock_ms: r.wall_clock.duration_ms };
 }
 
+/** Why a finished arm C result was run under other hub flags than requested, or null when they match. A result written
+ * before --hub-env existed ran with none and no recruits. */
+export function hubArmMismatch(resultPath: string, hubEnv: Record<string, string>, recruitModel: string | null): string | null {
+  let r: { hub_env?: Record<string, string> | null; recruit_model?: string | null };
+  try {
+    r = JSON.parse(readFileSync(resultPath, "utf8"));
+  } catch {
+    return null;
+  }
+  const had = JSON.stringify(Object.entries(r.hub_env ?? {}).sort());
+  const want = JSON.stringify(Object.entries(hubEnv).sort());
+  if (had !== want) return `finished run has hub_env ${had}, requested ${want}`;
+  if ((r.recruit_model ?? null) !== recruitModel) return `finished run has recruit_model ${r.recruit_model ?? null}, requested ${recruitModel}`;
+  return null;
+}
+
 /** Sums usage.cost_usd across every result.json already under resultsDir, so a resumed grid respects prior spend. */
 export function sumExistingCost(resultsDir: string): number {
   return scanExistingCost(resultsDir).total;
@@ -164,6 +185,8 @@ export interface ParsedGridArgs {
   capUsd: number;
   capDeadlineMs: number;
   hubEntry: string | null;
+  hubEnv: Record<string, string>;
+  recruitModel: string | null;
   portBase: number;
 }
 
@@ -244,6 +267,8 @@ export function parseArgs(argv: string[], tasksDirDefault = "tasks"): ParsedGrid
     capUsd: Number(flag("cap-usd", String(CONFIRMATORY_CAP_USD))),
     capDeadlineMs: Number(flag("cap-deadline-ms", String(CONFIRMATORY_CAP_DEADLINE_MS))),
     hubEntry: flag("hub-entry") ?? null,
+    hubEnv: parseHubEnv(argv.flatMap((a, i) => (a === "--hub-env" && argv[i + 1] !== undefined ? [argv[i + 1]] : []))),
+    recruitModel: flag("recruit-model") ?? null,
     portBase: Number(flag("port-base", "19850")),
   };
 }
@@ -373,6 +398,12 @@ export async function runGrid(args: ParsedGridArgs, opts: { log?: (s: string) =>
         outcome = readGridResult(resultPath).outcome;
       } catch {}
       // Arm K keeps a killed attempt as a null vote inside the group, so its result is never retried.
+      const mismatch = item.arm === "C" ? hubArmMismatch(resultPath, args.hubEnv, args.recruitModel) : null;
+      if (mismatch) {
+        log(`[infra-fail] ${item.taskLabel} ${item.arm} seed${item.seed}: ${mismatch}; use a separate --results-dir per hub arm`);
+        summary.infra_failed++;
+        continue;
+      }
       if (outcome === "timeout" && item.arm !== "K" && !args.confirmatory) {
         log(`[retry:timeout] ${item.taskLabel} ${item.arm} seed${item.seed}: prior run was killed at the deadline, re-running`);
         rmSync(item.runDir, { recursive: true, force: true });
@@ -464,6 +495,8 @@ export async function runGrid(args: ParsedGridArgs, opts: { log?: (s: string) =>
       portCounter = port + 2;
       runnerArgs.push("--port", String(port));
       if (args.deadlineMs) runnerArgs.push("--deadline-ms", args.deadlineMs);
+      for (const [k, v] of Object.entries(args.hubEnv)) runnerArgs.push("--hub-env", `${k}=${v}`);
+      if (args.recruitModel) runnerArgs.push("--recruit-model", args.recruitModel);
     }
 
     const runnerPath = item.arm === "K" ? args.akRunner : args.runner;

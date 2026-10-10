@@ -263,8 +263,8 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
     {
       title: "Vote to remove a participant",
       description:
-        "Start or join a vote to remove another participant from the room (reasons: persistent disagreement blocking progress, or a dead/unresponsive session; " +
-        "check room_status last_seen_at/working first and cite it). Your first call with vote=\"kick\" and a reason opens the vote and counts as your ballot; others call " +
+        "Start or join a vote to remove another participant from the room (reasons: persistent disagreement blocking progress, a dead/unresponsive session, or a seat listed in room_status no_output; " +
+        "check room_status last_seen_at/working/output first and cite it; the hub adds the target's record to the announcement). Your first call with vote=\"kick\" and a reason opens the vote and counts as your ballot; others call " +
         "kick_vote(target, vote=\"kick\"|\"keep\"). Ballots count per connection; the target cannot vote; the threshold is the room's quorum over the other voters (never a single ballot when a second connection exists); " +
         "a human keep vetoes. On the threshold the hub marks the target left, releases their claim/* entries into a system line, refuses their further calls with KICKED, and quorum no longer waits on them. " +
         "Nobody who is dead or merely quiet needs kicking to conclude: leavers are already excluded from the electorate. Use this for a seat that is blocking, or before request_agent(replacing=) for a dead one.",

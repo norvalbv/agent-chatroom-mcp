@@ -4,6 +4,7 @@ import { applyBoard, sessionsOf, quorumNeeded } from "./board.js";
 import { HubError } from "./types.js";
 import type { Participant, KickVote, BoardEntry, Room } from "./types.js";
 import { now } from "./internal.js";
+import { outputLine } from "./output.js";
 
 /** Who may be a kick target: an active non-human, non-chair participant of this room, by name (or id). */
 function kickTarget(hub: Hub, room: Room, target: string): Participant {
@@ -71,7 +72,7 @@ export function kickVote(hub: Hub, roomName: string, pid: string, target: string
   if (!kv || kv.status !== "open") {
     const why = reason?.trim() ?? "";
     if (vote !== "kick") throw new HubError(`There is no open vote to kick ${hub.shown(room, t)}; only a "kick" ballot with a reason starts one.`);
-    if (why.length < 8) throw new HubError("A kick vote needs a reason (one line): persistent disagreement blocking progress, or evidence the session is dead (liveness/last_seen_at).");
+    if (why.length < 8) throw new HubError("A kick vote needs a reason (one line): persistent disagreement blocking progress, evidence the session is dead (liveness/last_seen_at), or nothing on the record (room_status no_output / participants[].output).");
     const needed = hub.kickNeeded(room, t);
     if (kickPossible(hub, room, t) < needed) {
       throw new HubError(`A kick needs ${needed} ballots from distinct connections (never one seat alone) and only ${kickPossible(hub, room, t)} could vote here besides ${hub.shown(room, t)}. A human on the dashboard can supply one; otherwise the idle sweep marks a dead seat left after 10 min, and request_agent(replacing=${JSON.stringify(t.name)}) then needs no vote.`, undefined, "state");
@@ -79,7 +80,7 @@ export function kickVote(hub: Hub, roomName: string, pid: string, target: string
     kv = { target: t.id, targetName: t.name, by: { id: by.id, name: by.name }, reason: why.slice(0, 600), startedAt: now(), ballots: {}, status: "open" };
     room.kickVotes.set(t.id, kv);
     hub.post(room, "system", undefined,
-      `${hub.shown(room, by)} started a vote to kick ${hub.shown(room, t)}: ${kv.reason} — needs ${needed} kick ballot(s) from distinct connections (quorum=${room.quorum} over the other voters). ` +
+      `${hub.shown(room, by)} started a vote to kick ${hub.shown(room, t)}: ${kv.reason} — needs ${needed} kick ballot(s) from distinct connections (quorum=${room.quorum} over the other voters). ${outputLine(hub, room, t)} ` +
       `Vote with kick_vote(target=${JSON.stringify(hub.shown(room, t))}, vote="kick"|"keep"); the target may not vote. On the threshold the hub removes them, releases their claim/* entries and their next call tells them they were kicked.`);
   }
   kv.ballots[by.id] = { name: by.name, vote, ts: now(), session: by.session, ...(human ? { human: true } : {}) };

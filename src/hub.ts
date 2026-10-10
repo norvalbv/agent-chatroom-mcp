@@ -18,6 +18,7 @@ import { now, shortId, norm, emptyBoardManifestCounters, manifestBytes, codeStat
 import type { Opts, Event, BoardManifestCounters } from "./hub/internal.js";
 import * as board from "./hub/board.js";
 import * as kick from "./hub/kick.js";
+import * as output from "./hub/output.js";
 import * as liveness from "./hub/liveness.js";
 import * as persistence from "./hub/persistence.js";
 
@@ -197,10 +198,13 @@ export class Hub {
           return { status: !p.active ? "left" : age_seconds < 60 ? "active" : age_seconds * 1000 < kick.SUSPECTED_DEAD_MS ? "idle" : "suspected_dead",
             age_seconds, heartbeat_age_seconds: p.working ? age(p.working.at) : null };
         })(),
+        output: output.seatOutput(room, p, observedAt),
         left_reason: p.active ? null : p.leaveReason ?? null,
         ...(p.kicked ? { kicked: p.kicked } : {}),
       })),
       kick_votes: [...room.kickVotes.values()].map((kv) => this.kickView(room, kv, reveal)),
+      // workers past the window with nothing on the record while most others have something (hub/output.ts)
+      no_output: output.noOutput(this, room, observedAt).map(nm),
       // claim/* entries whose owner left: its registered successor may take one at once, anyone after Hub.STALE_CLAIM_MS
       stale_claims: this.staleClaims(room, reveal),
       active_count: active.length,
@@ -2352,6 +2356,7 @@ export class Hub {
         }
       }
       kick.reevaluateOpenKicks(this, room);
+      output.warnNoOutput(this, room);
     }
     return swept;
   }

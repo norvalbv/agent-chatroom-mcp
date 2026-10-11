@@ -62,5 +62,24 @@ for (const [slug, text] of [["branch-overlap", "REJECTED WITH DATA: two branches
 }
 const w5 = JSON.stringify(await b.idle(R));
 for (const slug of ["branch-overlap", "old-thing", "gone"]) assert.ok(!w5.includes(`idea/${slug}`), `settled idea/${slug} is not offered: ${w5}`);
+// 6. unowned work and no free seat (brief item 2, idea/unowned-work-no-free-seat in swarm-003601-tky5): when every
+// worker holds a live claim, an unclaimed idea was named to nobody. Now its author is told both halves as a fact, with
+// the call that adds a hand; nobody else is (one seat recruits, not three), and a free seat still gets it as before.
+await ok(a.call("board_set", { room: R, key: "claim/author-area", text: '{"area":"author-area"}' }), "author claims");
+await ok(b.call("board_set", { room: R, key: "claim/free-area", text: '{"area":"free-area"}' }), "free claims");
+await ok(a.call("board_set", { room: R, key: "idea/recruit-me", text: "Measure the recorder's gaps per hour. Evidence: two gaps seen. Build: a scanner over the parquet files." }), "idea while all busy");
+const w6 = await a.idle(R);
+const item = (w6.open_work ?? []).find((x) => x.key === "idea/recruit-me");
+assert.equal(item?.kind, "idea_no_free_seat", `the author is told nobody is free to take it: ${JSON.stringify(w6)}`);
+assert.match(w6.hint ?? "", /idea\/recruit-me has no owner and all 3 workers hold a claim: request_agent\(.*area="recruit-me"/, w6.hint);
+const w7 = await c.idle(R);
+assert.ok(!JSON.stringify(w7).includes("idea/recruit-me"), `a busy seat that did not write the idea is not told: ${JSON.stringify(w7)}`);
+// a verifier does not count as a free worker, and a worker that frees up gets the plain idea back
+const v = await seat("v");
+await ok(v.call("join_room", { room: R, name: "checker", agent: "claude", role: "verifier" }), "join verifier");
+assert.equal(((await a.idle(R)).open_work ?? []).find((x) => x.key === "idea/recruit-me")?.kind, "idea_no_free_seat", "the verifier is not a free worker");
+await ok(c.call("board_set", { room: R, key: "claim/parser", text: "" }), "busy releases");
+assert.ok(!JSON.stringify(await a.idle(R)).includes("idea_no_free_seat"), "a free worker exists again: no recruiting line");
+assert.ok(((await c.idle(R)).open_work ?? []).some((x) => x.kind === "idea_unclaimed" && x.key === "idea/recruit-me"), "and the free seat is offered the idea");
 console.log("UNCLAIMED IDEAS OK");
 process.exit(0);

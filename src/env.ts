@@ -219,6 +219,20 @@ export function seatPortError(env: NodeJS.ProcessEnv, portFlag: string | undefin
  * hub does not outlive the work (in swarm-000525-jcz8 every dev hub had to be found and killed by PID) but still answers
  * a reviewer who reads the room after the run. 0 means never. A hub the launcher finds already running gets nothing.
  */
+/** How long the launcher waits for a hub it started to answer (CHATROOM_HUB_START_MS). 10 s was too short on a shared
+ * machine at load average 150-200, where a hub took 12-20 s to start (swarm-180216-182a, friction/machine-load). */
+export const HUB_START_MS = Number(process.env.CHATROOM_HUB_START_MS ?? 90_000);
+
+/** True once `url` answers within `ms`, polling every 200 ms; false if it never does. */
+export async function waitForHub(url: string, ms = HUB_START_MS): Promise<boolean> {
+  const t0 = Date.now();
+  while (Date.now() - t0 < ms) {
+    try { await fetch(url, { signal: AbortSignal.timeout(Math.max(200, Math.min(2000, ms - (Date.now() - t0)))) }); return true; } catch {}
+    await new Promise((r) => setTimeout(r, 200));
+  }
+  return false;
+}
+
 export function ownHubEnv(idleMin: number, port?: number): Record<string, string> {
   // 7717 is the operator's dashboard hub, which a launcher starts when none is running; it stays up
   return idleMin > 0 && port !== 7717 ? { CHATROOM_IDLE_EXIT_MIN: String(idleMin) } : {};

@@ -14,7 +14,7 @@ import { collectRoomSnapshot, renderRunReport, writeRunResult, rollupUsage, hubU
 import { settledAxes } from "./settled.js";
 import { registerRespawn, respawnProbe } from "./respawn.js";
 import { fileURLToPath } from "node:url";
-import { aiGatesLine, seatHoldMs, carrySettings, launcherHeaders, COMPACT_WINDOW_TESTED, compactWindow, devHubRule, heartbeatHookSettings, hubLogFile, loadDotEnv, outputHeartbeat, ownHubEnv, readLauncherToken, respawnTokenProblem, reusedHubProblem, seatBeat, seatChildEnv, seatPortError, type SeatBeat } from "./env.js";
+import { aiGatesLine, HUB_START_MS, waitForHub, seatHoldMs, carrySettings, launcherHeaders, COMPACT_WINDOW_TESTED, compactWindow, devHubRule, heartbeatHookSettings, hubLogFile, loadDotEnv, outputHeartbeat, ownHubEnv, readLauncherToken, respawnTokenProblem, reusedHubProblem, seatBeat, seatChildEnv, seatPortError, type SeatBeat } from "./env.js";
 import { randomUUID } from "node:crypto";
 import { claudeUsageProbe, exitDetail, fetchRespawnRoom, respawnChain, type RespawnRoom } from "./respawn.js";
 import { claudeArgs } from "./claude-args.js";
@@ -236,16 +236,13 @@ async function ensureHub() {
   });
   child.unref();
   log(`started a supervised hub on :${PORT} (supervisor pid ${child.pid}, log ${hubLogFile(repoRoot, PORT)}); it is restarted if it dies and ${keeps ? `keeps running: stop it with kill ${child.pid}` : `stops itself after ${HUB_IDLE_EXIT_MIN} min with no request (--hub-idle-exit, --keep-hub)`}`);
-  for (let i = 0; i < 50; i++) {
-    try {
-      await fetch(URL_);
-      launcherToken ??= readLauncherToken(repoRoot, PORT);
-      return;
-    } catch {
-      await new Promise((r) => setTimeout(r, 200));
-    }
+  const t0 = Date.now();
+  if (await waitForHub(URL_)) {
+    if (Date.now() - t0 > 10_000) log(`the hub took ${Math.round((Date.now() - t0) / 1000)} s to start`);
+    launcherToken ??= readLauncherToken(repoRoot, PORT);
+    return;
   }
-  throw new Error("hub did not start");
+  throw new Error(`hub did not start within ${HUB_START_MS / 1000} s (CHATROOM_HUB_START_MS)`);
 }
 
 // ---------- agents ----------

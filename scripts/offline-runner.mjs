@@ -54,6 +54,7 @@ export const offlineScripts = [
   'archive-regression.ts',
   'last-call-regression.ts',
   'skill-closing-regression.ts',
+  'launcher-hub-start-regression.ts',
   'amend-board-regression.ts',
   'amend-stale-regression.ts',
   'open-children-regression.ts',

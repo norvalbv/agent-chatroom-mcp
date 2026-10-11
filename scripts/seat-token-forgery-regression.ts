@@ -66,6 +66,27 @@ await check("a seat's shell holding the real token is refused on the message rou
   assert.ok(!all.some((m) => m.from.name === "benji"), "no message from benji was stored");
   assert.ok(all.some((m) => m.kind === "system" && /worker-b's process tree/.test(m.content) && /refused/.test(m.content)), "the room is told who tried");
 });
+/** The same from curl, as a seat's Bash would run it: directly, under sh -c, and detached with nohup (review/d33cda94). */
+async function curlFrom(key: string, path: string, body: object, how: "direct" | "sh" | "nohup"): Promise<{ status: number; text: string }> {
+  const childEnv: NodeJS.ProcessEnv = { ...process.env, CHATROOM_SEAT_KEY: key };
+  const args = ["-s", "-o", "-", "-w", "\n%{http_code}", "-X", "POST", `${HTTP}${path}`, "-H", "content-type: application/json", "-H", `x-chatroom-token: ${TOKEN}`, "-d", JSON.stringify(body)];
+  const quoted = args.map((a) => `'${a.replace(/'/g, "'\\''")}'`).join(" ");
+  // as in a real seat: the agent process (node, whose environment ps can read) carries the key, and its shell runs curl.
+  // macOS hides the environment of its own binaries (curl, sh), so the key is found on the agent ancestor, as it is for
+  // a launched seat's `claude -p` (measured: the key is visible on claude, not on zsh or curl)
+  const inner = how === "direct" ? `curl ${quoted}` : how === "sh" ? `sh -c ${JSON.stringify(`curl ${quoted}`)}` : `nohup curl ${quoted} 2>/dev/null`;
+  const agent = `process.stdout.write(require("node:child_process").execSync(${JSON.stringify(inner)}, { encoding: "utf8", shell: "/bin/sh" }))`;
+  const { stdout } = await run(process.execPath, ["-e", agent], { env: childEnv });
+  const lines = stdout.trimEnd().split("\n");
+  return { status: Number(lines.at(-1)), text: lines.slice(0, -1).join("\n") };
+}
+for (const how of ["direct", "sh", "nohup"] as const) {
+  await check(`curl from a seat's shell with the token is refused (${how})`, async () => {
+    const r = await curlFrom(KEY, `/rooms/${ROOM}/messages`, { name: "benji", content: `forged via curl ${how}` }, how);
+    assert.equal(r.status, 403, `expected 403, got ${r.status} ${r.text.slice(0, 120)}`);
+    assert.ok(!(await messages()).some((m) => m.content === `forged via curl ${how}`), "nothing was stored");
+  });
+}
 await check("the same seat cannot name a chair with the token", async () => {
   const r = await postFrom(KEY, `/rooms/${ROOM}/chair`, { name: "chair-x", by: "benji" }, true);
   assert.equal(r.status, 403, `expected 403, got ${r.status} ${r.text.slice(0, 120)}`);
@@ -85,5 +106,5 @@ await check("the owner's shell with the token names the chair", async () => {
 });
 
 server.kill();
-if (failed) { console.error(`SEAT TOKEN FORGERY: ${failed}/4 failed`); process.exitCode = 1; } else console.log("SEAT TOKEN FORGERY OK (4 cases)");
+if (failed) { console.error(`SEAT TOKEN FORGERY: ${failed}/7 failed`); process.exitCode = 1; } else console.log("SEAT TOKEN FORGERY OK (7 cases)");
 process.exit();

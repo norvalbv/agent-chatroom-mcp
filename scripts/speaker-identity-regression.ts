@@ -132,6 +132,7 @@ const cases: [string, () => void][] = [
     assert.match(launcher, /const OWNER_WORD_ON = has\("owner-word"\) \|\| process\.env\.CHATROOM_OWNER_WORD === "1";/);
     assert.match(readFileSync("src/spawner.ts", "utf8"), /process\.env\.CHATROOM_OWNER_WORD === "1" \? [^\n]*owner-word\.md/, "recruits get it only on a hub started with it");
     assert.ok(!/seats never hold/.test(word), "the paragraph does not claim seats cannot hold the token");
+    assert.ok(!/refuses that route to any process started by a seat/.test(word), "nor that every seat process is refused (a re-parented child is not traced: review/d33cda94)");
     assert.match(word, /you still refuse/, "and it does not widen what a seat will do, only who may change its brief");
   }],
   ["the hub's routes: the naming route takes the token only, and the create route marks a chair named only for a checked caller", () => {

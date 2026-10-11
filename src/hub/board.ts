@@ -385,13 +385,23 @@ function overlapsFor(room: Room, p: Participant, key: string, text: string) {
   const myKey = claimTerms(key, "");
   const hits: { key: string; by: string; shared_pct: number; shared: string[] }[] = [];
   for (const [k, e] of room.board) {
-    if (k === key || !k.startsWith("claim/") || e.by === p.name || !e.text.trim() || claimReleased(e)) continue;
+    if (k === key || !k.startsWith("claim/") || e.by === p.name || !e.text.trim() || claimReleased(e) || claimKeysSplit(key, k)) continue;
     const owner = [...room.participants.values()].find((x) => x.name === e.by);
     if (!owner?.active || (owner.session && p.session && owner.session === p.session)) continue;
     const s = claimOverlapScore(mine, myKey, claimTerms(k, e.text), claimTerms(k, ""));
     if (s.fires) hits.push({ key: k, by: e.by, shared_pct: Math.round(s.jac * 100), shared: s.shared.slice(0, 6) });
   }
   return hits.sort((a, b) => b.shared_pct - a.shared_pct);
+}
+
+/** Two claim keys that are the same apart from their numbers, with no number in common (markets-1-200 and
+ * markets-201-400, item-6 and item-7): an explicit split, not an overlap. The numbers are the only part that differs and
+ * are not terms, so the shared task nouns would otherwise fire (friction/claim-overlap-false-positive, swarm-003601-tky5;
+ * 15 of the 315 recorded firings, all item-N pairs in swarm-105802-0s9p-room, each a different item; it removes no other). */
+export function claimKeysSplit(a: string, b: string): boolean {
+  const nums = (k: string) => new Set(k.match(/\d+/g) ?? []);
+  const x = nums(a), y = nums(b);
+  return x.size > 0 && y.size > 0 && ![...x].some((n) => y.has(n)) && a.replace(/\d+/g, "#") === b.replace(/\d+/g, "#");
 }
 
 /** The one overlap rule, also read by scripts/claim-overlap-calibration.ts: >= 4 shared stems and Jaccard >= 0.4, or >= 0.2

@@ -1726,6 +1726,7 @@ export class Hub {
   private applyBoard(room: Room, key: string, entry: BoardEntry | null) { return board.applyBoard(room, key, entry); }
   setBoard(roomName: string, pid: string, key: string, text: string, opts: BoardExpiryOptions & { ifAbsent?: boolean; ifByMe?: boolean; overwrite?: boolean } = {}): BoardEntry | null { return board.setBoard(this, roomName, pid, key, text, opts); }
   static claimTerms(key: string, text: string): Set<string> { return board.claimTerms(key, text); }
+  static claimKeysSplit(a: string, b: string): boolean { return board.claimKeysSplit(a, b); }
   claimOverlaps(roomName: string, pid: string, key: string): { key: string; by: string; shared_pct: number; shared: string[] }[] { return board.claimOverlaps(this, roomName, pid, key); }
   static claimOverlapScore(a: Set<string>, aKey: Set<string>, b: Set<string>, bKey: Set<string>) { return board.claimOverlapScore(a, aKey, b, bKey); }
   private activeReviewerFor(room: Room, authorName: string): Participant | undefined { return board.activeReviewerFor(room, authorName); }

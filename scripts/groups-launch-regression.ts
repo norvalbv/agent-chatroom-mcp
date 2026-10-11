@@ -119,7 +119,7 @@ test("--digest-every starts a fresh consolidator seat on a timer, told every gro
   const r = spawnSync(process.execPath, ["dist/swarm.js", TASK, "--groups", file, "--digest-every", "0.03", "--no-carry", "--timeout", "1", "--port", PORT, "--result-path", result], {
     encoding: "utf8",
     timeout: 90_000,
-    env: { ...process.env, PATH: `${bin}:${process.env.PATH}`, FAKE_RECORD_DIR: records, FAKE_SLEEP_MS: "5000", CHATROOM_INSECURE_LOCAL: "1", CHATROOM_NO_RECRUIT: "1", CHATROOM_DATA_DIR: data },
+    env: { ...process.env, PATH: `${bin}:${process.env.PATH}`, FAKE_RECORD_DIR: records, FAKE_SLEEP_MS: "8000", CHATROOM_INSECURE_LOCAL: "1", CHATROOM_NO_RECRUIT: "1", CHATROOM_DATA_DIR: data },
   });
   stopOurHub();
   const tail = `launcher exit ${r.status}; stderr tail: ${String(r.stderr).slice(-600)}`;
@@ -173,16 +173,17 @@ test("no digest pass starts once the group rooms have concluded or closed", asyn
   const file = join(base, tag, "groups.json");
   writeFileSync(file, JSON.stringify(GROUPS));
   const { spawn } = await import("node:child_process");
-  const child = spawn(process.execPath, ["dist/swarm.js", TASK, "--groups", file, "--digest-every", "0.03", "--quorum", "majority", "--no-carry", "--timeout", "1", "--port", PORT, "--result-path", join(base, tag, "result.json")], {
+  const child = spawn(process.execPath, ["dist/swarm.js", TASK, "--groups", file, "--digest-every", "0.03", "--quorum", "majority", "--no-carry", "--timeout", "2", "--port", PORT, "--result-path", join(base, tag, "result.json")], {
     // --quorum makes the launcher create the group rooms itself (the stub seats never join one)
-    env: { ...process.env, PATH: `${bin}:${process.env.PATH}`, FAKE_RECORD_DIR: records, FAKE_SLEEP_MS: "9000", CHATROOM_INSECURE_LOCAL: "1", CHATROOM_NO_RECRUIT: "1", CHATROOM_DATA_DIR: data },
+    env: { ...process.env, PATH: `${bin}:${process.env.PATH}`, FAKE_RECORD_DIR: records, FAKE_SLEEP_MS: "30000", CHATROOM_INSECURE_LOCAL: "1", CHATROOM_NO_RECRUIT: "1", CHATROOM_DATA_DIR: data },
   });
   let out = "";
   child.stdout.on("data", (d) => (out += d));
   child.stderr.on("data", (d) => (out += d));
   const done = new Promise<number | null>((ok) => child.on("close", ok));
   const until = async (what: string, test: () => boolean) => {
-    for (let i = 0; i < 200 && !test(); i++) await new Promise((r) => setTimeout(r, 50));
+    // 90 s: the suite runs under load (load average 41 seen by the verifier), and the launcher must start a hub first
+    for (let i = 0; i < 1800 && !test(); i++) await new Promise((r) => setTimeout(r, 50));
     assert.ok(test(), `${what}; launcher output: ${out.slice(-600)}`);
   };
   await until("the first pass starts", () => /digest pass 1: started/.test(out));

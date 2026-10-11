@@ -17,7 +17,7 @@ import { AUTO_QUIET_NOTE, Hub, HubError, ROLES, VERIFY_HEAD_EXAMPLE, VERIFY_HEAD
 
 /** Words in a verify entry's prose that say something was not checked (45 of 313 passing heads in past rooms; scripts/verify-gaps-measure.py). */
 const VERIFY_GAP_PROSE = /not verified|did not (run|verify|exercise|watch|drive|check|test)|could not (run|verify|test)|not (run|exercised|watched|driven|checked) by me|untested|not tested|author-only|rests on the author/i;
-import type { SpawnedAgent, Spawner } from "./spawner.js";
+import { projectOf, type SpawnedAgent, type Spawner } from "./spawner.js";
 import type { Participant } from "./hub/types.js";
 import { createWaitView } from "./hub/wait-view.js";
 import { noteBoardRead } from "./hub/board.js";
@@ -677,7 +677,7 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
         "replaced in place and only a one-line notice goes to chat, so use this instead of re-posting long content. Empty text deletes the entry.",
       inputSchema: {
         room: roomArg,
-        key: z.string().describe("Short name, e.g. 'evidence', 'open questions', 'draft'. Reserved: claim/<area> (JSON, create-then-owner-only), verify/<area> (first line must be JSON " + VERIFY_HEAD_EXAMPLE.replace("<PROPOSAL_ID>", "<id>") + ": " + VERIFY_HEAD_RULE + "; free prose may follow, e.g. what you could not verify; otherwise it does not satisfy require_verification), attack/<key> (your objection to someone else's entry <key>, quoting the clause in double quotes; its author answers by editing <key>), idea/<slug> (an unbuilt idea with its evidence and how to build it; the hub names it to idle seats until someone writes claim/<slug>), resource/<name> (data, a tool or a limit that exists on this machine, with where it is and who shares it; the hub names these to every seat that joins), hold/<room> (pause; author-only), inbox/* (written by post_to_room; acknowledge with '<key>.ack')."),
+        key: z.string().describe("Short name, e.g. 'evidence', 'open questions', 'draft'. Reserved: claim/<area> (JSON, create-then-owner-only), take/<what> (claim/ is for an area you will build and want reviewed; take/ is one plain line for one item you do now, a piece smaller than an area, e.g. take/audit/exp-Q8 or a turn on a shared resource: write it BEFORE you start, a write to one someone else holds is refused with who holds it; start the line with @name to give it to that seat, who takes it by writing the key or declines by clearing it; clear yours to release it; room_status lists each seat's holds, claims and takes), verify/<area> (first line must be JSON " + VERIFY_HEAD_EXAMPLE.replace("<PROPOSAL_ID>", "<id>") + ": " + VERIFY_HEAD_RULE + "; free prose may follow, e.g. what you could not verify; otherwise it does not satisfy require_verification), attack/<key> (your objection to someone else's entry <key>, quoting the clause in double quotes; its author answers by editing <key>), idea/<slug> (an unbuilt idea with its evidence and how to build it; the hub names it to idle seats until someone writes claim/<slug>), resource/<name> (data, a tool or a limit that exists on this machine, with where it is and who shares it; the hub names these to every seat that joins), hold/<room> (pause; author-only), inbox/* (written by post_to_room; acknowledge with '<key>.ack')."),
         text: z.string(),
         ttl_seconds: z.number().positive().finite().optional().describe("Expiry for handoff/inbox only; body remains retrievable by key."),
         expires_at: z.string().optional().describe("Absolute expiry timestamp; use instead of ttl_seconds."),
@@ -852,7 +852,9 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
         }
         let recs: ReturnType<Spawner["request"]>;
         try {
-          recs = spawner.request({ room, brief: passed, requestedBy: me_.name, requestedByShown: hub.shown(r, me_), parentTopic: r.topic, name, agent, model, cwd, canEdit: can_edit, newRoom: new_room, roomTopic: room_topic, count, area, replacing });
+          // no cwd named: the recruiter's own project, which its launcher-bound worktree says, before the hub's directory
+          const home = cwd ?? ((wt) => (wt ? projectOf(wt) : undefined))(hub.workspaceOf(me_)?.worktree);
+          recs = spawner.request({ room, brief: passed, requestedBy: me_.name, requestedByShown: hub.shown(r, me_), parentTopic: r.topic, name, agent, model, cwd: home, canEdit: can_edit, newRoom: new_room, roomTopic: room_topic, count, area, replacing });
         } catch (e) {
           if (briefKey) try { hub.setBoard(room, me_.id, briefKey, ""); } catch {}
           throw e;

@@ -26,7 +26,7 @@ for (const f of readdirSync(dir).filter((x) => x.endsWith(".jsonl")).sort()) {
       if (o.by === e.entry.by) continue;
       pairs++;
       const s = Hub.claimOverlapScore(t, k, o.t, o.k);
-      if (!s.fires) continue;
+      if (!s.fires || Hub.claimKeysSplit(e.key, ok)) continue;
       if (s.jac >= 0.4) byJaccard++; else bySlug++;
       firedRooms.add(`${f}:${e.room}`);
       if (list) fired.push(`${s.jac.toFixed(2)} ${s.jac >= 0.4 ? "jac " : "slug"} ${e.room} ${ok} | ${e.key}`);

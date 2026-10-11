@@ -38,6 +38,26 @@ test("a duplicate claim gets one advisory notice @-naming both seats and the ear
   assert.equal(n[0].kind, "chat", "chat kind so the @-mentions wake a held wait");
 });
 
+// friction/claim-overlap-false-positive (swarm-003601-tky5): a split by range shares the task's nouns, and the numbers,
+// the only part that differs, are not terms. In the records the same rule fired 15 times in swarm-105802-0s9p-room on
+// claim/item-2, item-3, item-4 ... (one item each, all distinct work).
+test("a split by number (same key apart from its numbers, none shared) posts nothing", () => {
+  const { h, name, a, b, c } = room();
+  const job = (range: string, who: string) => claim(`markets-${range}`, who, `Fetch market trades for markets ${range} into /tmp/nbdev/csv and write the VWAP per market for this range.`);
+  h.setBoard(name, a.id, "claim/markets-1-200", job("1-200", "alice"));
+  h.setBoard(name, b.id, "claim/markets-201-400", job("201-400", "bob"));
+  assert.equal(notices(h, name).length, 0, "an explicit split by range");
+  h.setBoard(name, c.id, "claim/markets-1-200-recheck", job("1-200", "carol"));
+  assert.equal(notices(h, name).length, 1, "a different key over the same numbers still notices");
+  const { h: h2, name: n2, a: a2, b: b2 } = room();
+  h2.setBoard(n2, a2.id, "claim/item-7", JSON.stringify({ owner: "alice", item: 7, branch: "swarm/swarm-105802-0s9p/claude-opus-5-5-1" }));
+  h2.setBoard(n2, b2.id, "claim/item-6", JSON.stringify({ owner: "bob", item: 6, branch: "swarm/swarm-105802-0s9p/claude-opus-5-5-2" }));
+  assert.equal(notices(h2, n2).length, 0, "the recorded item-N pair");
+  assert.equal(Hub.claimKeysSplit("claim/item-7", "claim/item-7"), false);
+  assert.equal(Hub.claimKeysSplit("claim/part-1", "claim/part-1-and-2"), false);
+  assert.equal(Hub.claimKeysSplit("claim/selector", "claim/selector"), false, "no numbers: not a split");
+});
+
 test("unrelated claims post nothing", () => {
   const { h, name, a, b } = room();
   h.setBoard(name, a.id, "claim/blind-drafts", claim("blind-drafts", "alice", "Hidden draft/* board prefix, revealed together once every voter has drafted; regression script."));

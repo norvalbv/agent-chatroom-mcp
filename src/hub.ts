@@ -26,6 +26,9 @@ import * as persistence from "./hub/persistence.js";
 import { barrenClaims, evidenceGaps, evidenceReceipt, offline, unsourcedClaims } from "./hub/work.js";
 import { apiRequests, UsageLedger, usageTotal } from "./hub/usage.js";
 import { DevRuns, DevRunError, type DevRunHost } from "./hub/dev-runs.js";
+import { takesOf } from "./hub/take.js";
+import { MemoryWatch, memoryNotice, type MemoryEvent, type SeatMemory } from "./hub/memory.js";
+import type { SteerItem } from "./hub/steer.js";
 
 /** An evidence pointer the minimal prompt keeps public: a coordination board key, a proposal id, a commit (hex with a digit). */
 const AUTO_QUIET_MARKER = /\b(?:claim|verify|build|final|findings|evidence|sources|idea|attack|review|remaining|handoff|draft|inbox)\/\S|\bprop_[0-9a-f]{4,}|\b(?=[0-9a-f]*\d)(?=[0-9a-f]*[a-f])[0-9a-f]{7,40}\b/i;
@@ -238,6 +241,10 @@ export class Hub {
         // dashboard and HTTP only: a seat gets the thin spots in its hint, and its room_status stays small
         ...(p.work && reveal ? { work: p.work } : {}),
         ...((u) => (u && reveal ? { usage: u } : {}))(this.usage.get(p.seatKeyHash)),
+        // what the seat's processes hold (src/hub/memory.ts): a seat sees the figures, the dashboard also the process
+        ...((m) => (m ? { memory: reveal ? m : { mb: m.mb, peak_mb: m.peak_mb, budget_mb: m.budget_mb } } : {}))(this.memory.get(p.seatKeyHash)),
+        // take/<what> entries (src/hub/take.ts): what the seat holds and what is offered to it
+        ...takesOf(room, p, nm, (e) => !Hub.claimReleased(e)),
         liveness: (() => {
           const age = (at: string) => Math.max(0, Math.floor((observedAt - Date.parse(at)) / 1000));
           const age_seconds = age(this.lastSeen(p));
@@ -1846,6 +1853,7 @@ export class Hub {
   private applyBoard(room: Room, key: string, entry: BoardEntry | null) { return board.applyBoard(room, key, entry); }
   setBoard(roomName: string, pid: string, key: string, text: string, opts: BoardExpiryOptions & { ifAbsent?: boolean; ifByMe?: boolean; overwrite?: boolean } = {}): BoardEntry | null { return board.setBoard(this, roomName, pid, key, text, opts); }
   static claimTerms(key: string, text: string): Set<string> { return board.claimTerms(key, text); }
+  static claimKeysSplit(a: string, b: string): boolean { return board.claimKeysSplit(a, b); }
   claimOverlaps(roomName: string, pid: string, key: string): { key: string; by: string; shared_pct: number; shared: string[] }[] { return board.claimOverlaps(this, roomName, pid, key); }
   static claimOverlapScore(a: Set<string>, aKey: Set<string>, b: Set<string>, bKey: Set<string>) { return board.claimOverlapScore(a, aKey, b, bKey); }
   private activeReviewerFor(room: Room, authorName: string): Participant | undefined { return board.activeReviewerFor(room, authorName); }
@@ -2928,6 +2936,58 @@ export class Hub {
       if ([...room.participants.values()].some((p) => p.seatKeyHash === seat)) this.persist({ type: "usage", room: room.name, seat, usage, ts });
     }
     return records.length;
+  }
+
+  /**
+   * What each seat's processes hold, sampled from the process table (src/hub/memory.ts), keyed by seat key hash like
+   * usage. Sampling starts when the hub process calls watchMemory(); the budget is CHATROOM_SEAT_MEMORY_MB.
+   */
+  /** @internal */ readonly memory = new MemoryWatch({
+    budgetMb: Number(process.env.CHATROOM_SEAT_MEMORY_MB) || undefined,
+    watched: (seat) => this.seatRooms(seat).length > 0,
+    onSample: (seat, memory) => this.recordMemory(seat, memory),
+    onEvent: (e) => this.recordMemoryEvent(e),
+  });
+  private memoryLogged = new Map<string, number>();
+  private memoryNotices = new Map<string, SteerItem[]>();
+
+  /** Open rooms a seat process has an active participant in. */
+  private seatRooms(seat: string): { room: Room; p: Participant }[] {
+    return [...this.rooms.values()].filter((room) => room.state !== "concluded" && room.state !== "closed")
+      .flatMap((room) => [...room.participants.values()].filter((p) => p.active && p.seatKeyHash === seat).map((p) => ({ room, p })));
+  }
+
+  /** A sample goes to the room log when it moved by a quarter and at least 256 MB since the last one logged. */
+  private recordMemory(seat: string, memory: SeatMemory): void {
+    const last = this.memoryLogged.get(seat) ?? 0;
+    if (Math.abs(memory.mb - last) < Math.max(256, last / 4)) return;
+    this.memoryLogged.set(seat, memory.mb);
+    for (const { room } of this.seatRooms(seat)) this.persist({ type: "memory", room: room.name, seat, memory, ts: now() });
+  }
+
+  /**
+   * A warning or a stop: logged, said in every room the seat is in (the owner and the record see it), and queued for
+   * the seat's tool hook so a seat inside a long turn reads it at its next tool call (pendingMemoryNotices).
+   */
+  private recordMemoryEvent(e: MemoryEvent): void {
+    const text = memoryNotice(e);
+    const id = shortId("mem");
+    for (const { room, p } of this.seatRooms(e.seat)) {
+      this.persist({ type: "memory", room: room.name, seat: e.seat, event: e.kind, mb: e.mb, budget_mb: e.budget_mb, top: e.top, ...(e.kind === "stop" ? { signal: e.signal } : {}), ts: now() });
+      const m = this.post(room, "system", undefined, `@${this.shown(room, p)} ${text}`);
+      this.memoryNotices.set(e.seat, [...(this.memoryNotices.get(e.seat) ?? []), { room: room.name, id, seq: m.seq, from: "system", text }].slice(-5));
+    }
+  }
+
+  /** Memory notices this seat's hook has not put in front of its model yet. */
+  pendingMemoryNotices(seatKey: string): SteerItem[] { return this.memoryNotices.get(liveness.seatHash(seatKey)) ?? []; }
+
+  ackMemoryNotices(seatKey: string, ids: string[]): number {
+    const seat = liveness.seatHash(seatKey);
+    const pending = this.memoryNotices.get(seat) ?? [];
+    const left = pending.filter((n) => !ids.includes(n.id));
+    if (left.length) this.memoryNotices.set(seat, left); else this.memoryNotices.delete(seat);
+    return pending.length - left.length;
   }
 
   // ---------- kick vote / removal ----------

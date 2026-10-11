@@ -286,6 +286,12 @@ export function readLauncherToken(root: string, port: number, env: Env = process
   try { return readFileSync(launcherTokenFile(root, port, env), "utf8").trim() || undefined; } catch { return undefined; }
 }
 
+/** Headers for the launcher's own calls to a hub (room create, run deadline, resources): its launcher token, which a hub
+ * accepts on exactly those routes (a hubd hub has no human token), and the human token when the operator gave one. */
+export function launcherHeaders(launcherToken: string | undefined, humanToken: string | undefined = process.env.CHATROOM_HUMAN_TOKEN): Record<string, string> {
+  return { "content-type": "application/json", ...(launcherToken ? { "x-chatroom-launcher-token": launcherToken } : {}), ...(humanToken ? { "x-chatroom-token": humanToken } : {}) };
+}
+
 /** The line a launcher prints at launch when --respawn cannot work, or null. */
 export function respawnTokenProblem(respawn: boolean, token: string | undefined, port: number): string | null {
   if (!respawn || token) return null;

@@ -324,7 +324,7 @@ app.use(async (req, res, next) => {
   }
   next();
 });
-/** The launcher's own calls (resources, run deadline): its launcher token is the authority, as for replacements. A hub
+/** The launcher's own calls (room create with the run's policy, resources, run deadline): its launcher token is the authority, as for replacements. A hub
  * started by hubd has a launcher token and often neither a human token nor the loopback opt-in, and refused both. */
 const requireLauncherOrToken = (req: express.Request, res: express.Response): boolean => {
   const launcher = process.env.CHATROOM_LAUNCHER_TOKEN;
@@ -566,7 +566,7 @@ app.post("/rooms/:room/replace", (req, res) => {
 // A launcher creates a room with its policy (quorum, verification, expected seats) before any seat joins;
 // join_room settings only apply at creation, so without this the first seat to arrive decides the policy.
 app.post("/rooms/:room/create", (req, res) => {
-  if (!requireToken(req, res)) return;
+  if (!requireLauncherOrToken(req, res)) return;
   try {
     const b = (req.body ?? {}) as { topic?: string; quorum?: "unanimous" | "majority" | "supermajority"; expected_participants?: number; require_verification?: boolean; require_challenge?: boolean; mode?: "free" | "round_robin"; max_message_chars?: number; anonymous?: boolean; chair?: string };
     const existed = hub.listRooms().some((r) => r.name === req.params.room);

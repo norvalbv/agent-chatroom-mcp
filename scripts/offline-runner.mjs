@@ -193,6 +193,7 @@ export const offlineScripts = [
   'keepalive-regression.ts',
   'hubd-data-dir-regression.ts',
   'recruit-home-regression.ts',
+  'launcher-routes-regression.ts',
   'proposed-decision-path-regression.ts',
   'smoke-ports-regression.ts',
   'own-hub-port-regression.ts',

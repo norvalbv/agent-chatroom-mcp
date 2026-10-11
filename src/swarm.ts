@@ -12,7 +12,7 @@ import { collectRoomSnapshot, renderRunReport, writeRunResult, rollupUsage, hubU
 import { settledAxes } from "./settled.js";
 import { registerRespawn, respawnProbe } from "./respawn.js";
 import { fileURLToPath } from "node:url";
-import { carrySettings, COMPACT_WINDOW_TESTED, compactWindow, devHubRule, heartbeatHookSettings, hubLogFile, loadDotEnv, outputHeartbeat, ownHubEnv, readLauncherToken, respawnTokenProblem, reusedHubProblem, seatBeat, seatChildEnv, seatPortError, type SeatBeat } from "./env.js";
+import { carrySettings, launcherHeaders, COMPACT_WINDOW_TESTED, compactWindow, devHubRule, heartbeatHookSettings, hubLogFile, loadDotEnv, outputHeartbeat, ownHubEnv, readLauncherToken, respawnTokenProblem, reusedHubProblem, seatBeat, seatChildEnv, seatPortError, type SeatBeat } from "./env.js";
 import { randomUUID } from "node:crypto";
 import { exitDetail, fetchRespawnRoom, respawnChain, type RespawnRoom } from "./respawn.js";
 import { claudeArgs } from "./claude-args.js";
@@ -528,7 +528,7 @@ const FLAT_TARGETS = FLAT && !NO_SEAT_TARGETS && seatTarget(task, 1, LENSES) ? (
 const groupRooms = FLAT ? [] : plan.groups.map((g) => `${SWARM_ID}-${g.id}`);
 if (RESOURCES.length) {
   try {
-    for (const line of await seedResources(URL_, [...groupRooms, leadsRoom], RESOURCES, { token: process.env.CHATROOM_HUMAN_TOKEN, launcherToken })) log(line);
+    for (const line of await seedResources(URL_, [...groupRooms, leadsRoom], RESOURCES, { headers: launcherHeaders(launcherToken) })) log(line);
   } catch (e) {
     log(`not starting any seat: ${e instanceof Error ? e.message : String(e)}`);
     process.exit(2);
@@ -582,7 +582,7 @@ const verifierText = SETTLED + "\n" + prompt("verifier.md", {
 // the launcher fixes the room's policy before any seat joins (join_room settings only apply at creation)
 if (REQUIRE_VERIFICATION || QUORUM) {
   try {
-    const r = await fetch(`${URL_}/rooms/${encodeURIComponent(leadsRoom)}/create`, { method: "POST", headers: { "content-type": "application/json", ...(process.env.CHATROOM_HUMAN_TOKEN ? { "x-chatroom-token": process.env.CHATROOM_HUMAN_TOKEN } : {}) }, body: JSON.stringify({ topic: task, expected_participants: FLAT ? TOTAL : plan.groups.length + 1, require_verification: REQUIRE_VERIFICATION, quorum: QUORUM ?? "unanimous" }) });
+    const r = await fetch(`${URL_}/rooms/${encodeURIComponent(leadsRoom)}/create`, { method: "POST", headers: launcherHeaders(launcherToken), body: JSON.stringify({ topic: task, expected_participants: FLAT ? TOTAL : plan.groups.length + 1, require_verification: REQUIRE_VERIFICATION, quorum: QUORUM ?? "unanimous" }) });
     log(`${leadsRoom} created with quorum=${QUORUM ?? "unanimous"}${REQUIRE_VERIFICATION ? ", require_verification" : ""} (${r.status})`);
   } catch (e) {
     log(`could not pre-create ${leadsRoom}: ${e instanceof Error ? e.message : String(e)}${e instanceof Error && e.cause ? ` (cause: ${(e.cause as NodeJS.ErrnoException).code ?? (e.cause as Error).message})` : ""}`);
@@ -591,7 +591,7 @@ if (REQUIRE_VERIFICATION || QUORUM) {
   for (const g of GROUPS ? plan.groups : []) {
     const room = `${SWARM_ID}-${g.id}`;
     try {
-      const r = await fetch(`${URL_}/rooms/${encodeURIComponent(room)}/create`, { method: "POST", headers: { "content-type": "application/json", ...(process.env.CHATROOM_HUMAN_TOKEN ? { "x-chatroom-token": process.env.CHATROOM_HUMAN_TOKEN } : {}) }, body: JSON.stringify({ topic: `${g.title}: ${g.directive}`, expected_participants: g.workers, require_verification: REQUIRE_VERIFICATION, quorum: QUORUM ?? "unanimous" }) });
+      const r = await fetch(`${URL_}/rooms/${encodeURIComponent(room)}/create`, { method: "POST", headers: launcherHeaders(launcherToken), body: JSON.stringify({ topic: `${g.title}: ${g.directive}`, expected_participants: g.workers, require_verification: REQUIRE_VERIFICATION, quorum: QUORUM ?? "unanimous" }) });
       log(`${room} created with quorum=${QUORUM ?? "unanimous"}${REQUIRE_VERIFICATION ? ", require_verification" : ""} (${r.status})`);
     } catch (e) {
       log(`could not pre-create ${room}: ${e instanceof Error ? e.message : String(e)}`);
@@ -688,7 +688,7 @@ const tail = setInterval(() => tailRooms([...groupRooms, leadsRoom]), 2000);
 // the hub is told when the seats will be killed, so it can say so in the room while there is still time to propose or
 // hand off; a hub that refuses (an older build already on this port) or does not answer never fails the run
 for (const room of [...groupRooms, leadsRoom]) {
-  fetch(`${URL_}/rooms/${encodeURIComponent(room)}/deadline`, { method: "POST", headers: { "content-type": "application/json", ...(process.env.CHATROOM_HUMAN_TOKEN ? { "x-chatroom-token": process.env.CHATROOM_HUMAN_TOKEN } : {}), ...(launcherToken ? { "x-chatroom-launcher-token": launcherToken } : {}) }, body: JSON.stringify({ at: new Date(Date.now() + TIMEOUT_MIN * 60_000).toISOString() }), signal: AbortSignal.timeout(5_000) })
+  fetch(`${URL_}/rooms/${encodeURIComponent(room)}/deadline`, { method: "POST", headers: launcherHeaders(launcherToken), body: JSON.stringify({ at: new Date(Date.now() + TIMEOUT_MIN * 60_000).toISOString() }), signal: AbortSignal.timeout(5_000) })
     .then((r) => { if (!r.ok) log(`${room}: hub did not take the run deadline (${r.status})`); })
     .catch((e) => log(`${room}: could not post the run deadline: ${e instanceof Error ? e.message : String(e)}`));
 }

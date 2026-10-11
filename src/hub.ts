@@ -1132,12 +1132,14 @@ export class Hub {
   }
 
   /**
-   * A read of `roomName` by a connection that has no seat in it: a hub tool that needs no seat (board_get, read_messages,
-   * room_status) or a launched seat's local command naming the room's HTTP address. Recorded and counted, never refused:
-   * the consolidator and the verifier of a grouped run read group rooms by design, and a group that read another group's
-   * room is then a fact in the record instead of a guess (prompts/group.md only asks seats not to). Returns whether it counted.
+   * A launched seat's local command that reads `roomName` without a seat in it: its HTTP address (curl, WebFetch on
+   * /rooms/<room>) or its log file (<room>.jsonl). A hub tool called from outside is already on its call_completion; a
+   * shell is the way round that, and the seat's tool hook reports every command. Recorded and counted, never refused:
+   * the consolidator and the verifier of a grouped run read group rooms this way by design, and a group that read
+   * another group's room is then a fact in the record instead of a guess (prompts/group.md only asks seats not to).
+   * A lower bound: a command over the hook's 300 characters, or one that builds the address, is not seen.
    */
-  recordOutsideRead(roomName: string | undefined, session: string, via: "mcp" | "http", tool: string, key?: string): boolean {
+  recordOutsideRead(roomName: string | undefined, session: string, via: "http" | "file", tool: string): boolean {
     const room = roomName ? this.rooms.get(roomName) : undefined;
     if (!room || [...room.participants.values()].some((p) => p.session === session)) return false;
     // the reader is named by a seat it holds elsewhere: an active one in an open room first
@@ -1145,7 +1147,7 @@ export class Hub {
       .sort((a, b) => Number(b.p.active) - Number(a.p.active) || Number(b.r.state === "open") - Number(a.r.state === "open"));
     const by = seats[0] ? { room: seats[0].r.name, pid: seats[0].p.id } : null;
     this.applyOutsideRead(room, by);
-    this.persist({ type: "outside_read", room: room.name, by, via, tool: String(tool).slice(0, 40), ...(key ? { key: key.slice(0, 120) } : {}), ts: now() });
+    this.persist({ type: "outside_read", room: room.name, by, via, tool: String(tool).slice(0, 40), ts: now() });
     return true;
   }
 

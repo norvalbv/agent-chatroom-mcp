@@ -112,8 +112,6 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
     if (typeof override === "string") return ids?.has(override) ? override : null;
     return ids?.size === 1 ? [...ids][0] : null;
   };
-  /** Tools that read a room without a seat in it; such a read is recorded (Hub.recordOutsideRead), never refused. */
-  const SEATLESS_READS = new Set(["board_get", "read_messages", "room_status"]);
   /** Tools whose own result delivers addressed messages (or that leave): no steering piggyback on these. */
   const SELF_DELIVERING = new Set(["wait_for_messages", "read_messages", "join_room", "leave_room"]);
   const guard =
@@ -146,7 +144,6 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
         // post-join default. leave_room retains the authenticated pre-call actor.
         if (tool === "join_room") participant = telemetryActor(room, (data as { participant_id?: string })?.participant_id);
         outcome = "success";
-        if (room && SEATLESS_READS.has(tool) && !me.get(room)?.size) hub.recordOutsideRead(room, sessionKey, "mcp", tool, typeof (a as { key?: unknown }).key === "string" ? (a as { key?: string }).key : undefined);
         return result;
       } catch (e) {
         if (e instanceof HubError) {

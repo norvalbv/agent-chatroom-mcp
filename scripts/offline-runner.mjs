@@ -189,6 +189,8 @@ export const offlineScripts = [
   'recruit-room-breakout-regression.ts',
   'outside-calls-regression.ts',
   'groups-digest.test.ts',
+  'long-brief-regression.ts',
+  'keepalive-regression.ts',
   'proposed-decision-path-regression.ts',
   'smoke-ports-regression.ts',
   'own-hub-port-regression.ts',

@@ -105,6 +105,14 @@ try {
   assert.match(bBack.text, /join_room/);
   assert.ok(bId);
 
+  // (3b) b came back by join_room after leaving: it is a seat again, and its old goodbye does not stop the next re-seat
+  assert.equal((await call(b2, "join_room", { room: "r", name: "b", participant_id: bId })).error, false);
+  await stop(hub);
+  hub = await boot();
+  const b3 = await connect("key-b");
+  const bAgain = await call(b3, "send_message", { room: "r", content: "b after a second restart", force: true });
+  assert.equal(bAgain.error, false, `a seat that rejoined after leaving is re-seated like any other: ${bAgain.text}`);
+
   // (4) a seat with no key is told how to get back, in the refusal itself
   const walkIn2 = await connect();
   const refused = await call(walkIn2, "send_message", { room: "r", participant_id: wId, content: "walk-in after the restart" });

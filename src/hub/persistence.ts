@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { analyzeReplyMetrics, type ReplyMetricEvent } from "../reply-metrics.js";
 import type { Hub } from "../hub.js";
 import { applyBoard, applyBoardManifest } from "./board.js";
+import { ROOM_IDLE_MS } from "./idle.js";
 import { countWork } from "./work.js";
 import type { Participant, Proposal } from "./types.js";
 import { hexTokens } from "./types.js";
@@ -61,6 +62,18 @@ export function replay(hub: Hub) {
         case "work": {
           const p = hub.rooms.get(ev.room)?.participants.get(ev.pid);
           if (p) countWork(p, ev.cls, ev.target, ev.key ?? ev.target);
+          const room = hub.rooms.get(ev.room);
+          if (room && Date.parse(ev.ts) > Date.now() - 2 * ROOM_IDLE_MS) (room.workAt ??= []).push(Date.parse(ev.ts));
+          break;
+        }
+        case "room_idle": {
+          const room = hub.rooms.get(ev.room);
+          if (room) room.idle = ev.idle;
+          break;
+        }
+        case "room_active": {
+          const room = hub.rooms.get(ev.room);
+          if (room) room.idle = undefined;
           break;
         }
         case "usage":

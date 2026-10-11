@@ -2868,11 +2868,14 @@ export class Hub {
    * room but its process is alive, or restored by a hub restart less than 10 min ago: tky5's verifier-2 lost its vote to
    * "Room concluded while my session was disconnected"). The hold is bounded by what the hub already knows
    * (attack/decision/verifier-vote-counts): a verifier silent for SUSPECTED_DEAD_MS, e.g. waiting hours for a usage
-   * limit to reset, no longer holds, and the conclusion says it closed without the verifier's agree.
+   * limit to reset, no longer holds, and the conclusion says it closed without the verifier's agree. A verifier whose
+   * own command is still running is not silent, however long that command takes (review/cc372f8e).
    */
   private verifierSeats(room: Room): { p: Participant; silentMs: number }[] {
     return [...room.participants.values()].filter((p) => p.role === "verifier" && p.agent !== "human").flatMap((p) => {
-      if (p.active) return [{ p, silentMs: Math.max(0, Date.now() - Date.parse(this.lastSeen(p))) }];
+      // a job of its own running (jobsOf: a real command under 6 h old, read from the process table) is not silence: the
+      // heartbeat fires at the start of a tool call, so one foreground suite run longer than the bound sends nothing
+      if (p.active) return [{ p, silentMs: this.jobsOf(p).length ? 0 : Math.max(0, Date.now() - Date.parse(this.lastSeen(p))) }];
       const away = this.away(p);
       return away ? [{ p, silentMs: away.age_seconds * 1000 }] : [];
     });

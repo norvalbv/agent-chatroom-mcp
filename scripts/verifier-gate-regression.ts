@@ -95,3 +95,17 @@ test("a verifier that is busy (heartbeating) keeps holding however long its chec
   assert.equal(r.state, "open", "a verifier running a long check is alive and still owed");
   assert.equal(hub.verifierHolds(r, [...r.proposals.values()][0]).length, 1);
 });
+
+test("a verifier inside one long command (no heartbeat for 11 min, but a job of its own running) keeps holding", () => {
+  // review/cc372f8e (claude-opus-5-5-4): the heartbeat fires at the START of a tool call, so one foreground suite run longer
+  // than 10 minutes read as silence and the room could close while the verifier was checking
+  const { hub, r, b, c, d, v, agree } = setup("vg-job");
+  v.lastActiveAt = new Date(Date.now() - 11 * 60_000).toISOString();
+  const jobs = { on: true };
+  (hub as unknown as { jobsOf: (p: { id: string }) => unknown[] }).jobsOf = (p) => (jobs.on && p.id === v.id ? [{ pid: 4242, command: "node scripts/offline-runner.mjs", seconds: 660 }] : []);
+  agree(b.id); agree(c.id); agree(d.id);
+  assert.equal(r.state, "open", "the verifier's own job is running: it is checking, not gone");
+  assert.equal(hub.verifierHolds(r, [...r.proposals.values()][0]).length, 1);
+  jobs.on = false; // the job ended and still no call from the verifier: now it is silent
+  assert.equal(hub.verifierHolds(r, [...r.proposals.values()][0]).length, 0);
+});

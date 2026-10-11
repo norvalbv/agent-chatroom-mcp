@@ -16,7 +16,7 @@ import { registerRespawn, respawnProbe } from "./respawn.js";
 import { fileURLToPath } from "node:url";
 import { seatHoldMs, carrySettings, launcherHeaders, COMPACT_WINDOW_TESTED, compactWindow, devHubRule, heartbeatHookSettings, hubLogFile, loadDotEnv, outputHeartbeat, ownHubEnv, readLauncherToken, respawnTokenProblem, reusedHubProblem, seatBeat, seatChildEnv, seatPortError, type SeatBeat } from "./env.js";
 import { randomUUID } from "node:crypto";
-import { exitDetail, fetchRespawnRoom, respawnChain, usageLimit, type RespawnRoom } from "./respawn.js";
+import { claudeUsageProbe, exitDetail, fetchRespawnRoom, respawnChain, type RespawnRoom } from "./respawn.js";
 import { claudeArgs } from "./claude-args.js";
 import { codexSeatCommand, codexUsageTracker } from "./codex-seat.js";
 import { claudeSandbox } from "./sandbox.js";
@@ -323,7 +323,8 @@ function runCodex(name: string, text: string, cwd: string, model: string | undef
  */
 /** Attempts a respawn replaced, by process name: their usage belongs in the run total (unknown stays unknown). */
 const replacedRuns: SeatRun[] = [];
-async function withRespawn(name: string, room: string, mk: (nm: string, note: string) => Promise<SeatOutcome>): Promise<SeatOutcome> {
+/** `probeModel`: the Claude model this seat runs on (undefined: the CLI's default), which is the one asked when the usage limit stopped it. */
+async function withRespawn(name: string, room: string, probeModel: string | undefined, mk: (nm: string, note: string) => Promise<SeatOutcome>): Promise<SeatOutcome> {
   if (!RESPAWN) return mk(name, "");
   const chain = await respawnChain<SeatOutcome>({
     name,
@@ -332,7 +333,7 @@ async function withRespawn(name: string, room: string, mk: (nm: string, note: st
     exitCode: (nm) => exitCodes.get(nm) ?? null,
     signal: (nm) => exitSignals.get(nm) ?? null,
     detail: (nm) => exitDetails.get(nm) ?? "",
-    usageReady: claudeUsageReady,
+    usageReady: () => claudeUsageProbe({ model: probeModel, cwd: CWD, env: seatChildEnv(process.env), log, who: name }),
     ...(Number(process.env.CHATROOM_USAGE_POLL_MS) > 0 ? { usagePollMs: Number(process.env.CHATROOM_USAGE_POLL_MS) } : {}),
     register: (previousName, nm, reason) => registerRespawn(URL_, room, previousName, nm, launcherToken, undefined, reason),
     run: mk,
@@ -348,18 +349,6 @@ const exitCodes = new Map<string, number | null>();
 const exitSignals = new Map<string, string | null>();
 /** The exit receipt's detail per seat name (exitDetail): withRespawn waits out a usage-limit exit instead of relaunching into it. */
 const exitDetails = new Map<string, string>();
-/** Whether the account can run a Claude seat again: one tiny `claude -p` call (a refused one costs nothing). */
-function claudeUsageReady(): Promise<boolean> {
-  return new Promise((done) => {
-    const child = spawn("claude", ["-p", "Reply with the single word OK.", "--model", MODELS[0] ?? VERIFIER_MODEL ?? "claude-opus-5-5"], { cwd: CWD, env: seatChildEnv(process.env), stdio: ["ignore", "pipe", "pipe"] });
-    let out = "";
-    child.stdout.on("data", (d) => (out += d));
-    child.stderr.on("data", (d) => (out += d));
-    const timer = setTimeout(() => child.kill("SIGTERM"), 120_000);
-    child.on("close", (code) => { clearTimeout(timer); done(code === 0 && !usageLimit(out)); });
-    child.on("error", () => { clearTimeout(timer); done(false); });
-  });
-}
 /** Only successfully isolated workers receive seat commit attribution (never planner/verifier). */
 const writeWorkers = new Set<string>();
 
@@ -631,7 +620,7 @@ if (REQUIRE_VERIFICATION || QUORUM) {
 }
 launched.push({ name: "verifier", room: leadsRoom });
 runs.push(
-  withRespawn("verifier", leadsRoom, (nm, note) => (VERIFIER_OPENROUTER ? runOpenRouter(nm, verifierText.split("verifier\"").join(`${nm}\"`) + note, CWD, VERIFIER_OPENROUTER, APPLY || FULL) : runClaude(nm, verifierText + note, verifierTools, CWD, VERIFIER_MODEL))).then((o) => ({ name: "verifier", text: o.text, usage: o.usage })),
+  withRespawn("verifier", leadsRoom, VERIFIER_OPENROUTER ? undefined : VERIFIER_MODEL, (nm, note) => (VERIFIER_OPENROUTER ? runOpenRouter(nm, verifierText.split("verifier\"").join(`${nm}\"`) + note, CWD, VERIFIER_OPENROUTER, APPLY || FULL) : runClaude(nm, verifierText + note, verifierTools, CWD, VERIFIER_MODEL))).then((o) => ({ name: "verifier", text: o.text, usage: o.usage })),
 );
 
 for (const g of plan.groups) {
@@ -686,7 +675,7 @@ for (const g of plan.groups) {
           : runClaude(nm, buildText(nm) + note, mayWrite ? WRITE_TOOLS : READ_TOOLS, wcwd, model);
     };
     launched.push({ name, room });
-    runs.push(withRespawn(name, room, mk).then((o) => ({ name, text: o.text, usage: o.usage })));
+    runs.push(withRespawn(name, room, agent === "claude" ? model : undefined, mk).then((o) => ({ name, text: o.text, usage: o.usage })));
   }
 }
 

@@ -8,6 +8,8 @@
  * item asked for an explicit completed / error / orphaned-work distinction, a floor the room must keep, the verifier
  * preserved, and bounded retries. This module is that decision; the launcher supplies the room summary it already polls.
  */
+import { spawn } from "node:child_process";
+
 export interface RespawnRoom {
   state: string;
   quorum?: string | null;
@@ -205,6 +207,32 @@ export async function respawnProbe(url: string, token: string | undefined, reque
   if (response.status === 503) return `${lead}that hub was started with no launcher token, so it refuses every replacement seat. Stop it and restart it with \`npm run hubd\` (it sets a token and shares it), or with CHATROOM_LAUNCHER_TOKEN set in the hub's and this launcher's environment.${tail}`;
   if (response.status === 401) return `${lead}${token ? "that hub does not accept this launcher's token (it was started with another one; a token file left by an earlier hub is not this hub's)" : "this launcher has no CHATROOM_LAUNCHER_TOKEN and found no token file for that hub"}. Give this launcher the token the hub was started with.${tail}`;
   return null;
+}
+
+/** The `claude` arguments of the usage probe: one tiny call, on `model` when the seat had one, else on the CLI's default as the seat ran. */
+export function usageProbeArgs(model?: string): string[] {
+  return ["-p", "Reply with the single word OK.", ...(model ? ["--model", model] : [])];
+}
+
+/**
+ * Whether the account can run a Claude seat on `model` again: one tiny `claude -p` call (a refused one costs nothing).
+ * The limits are per model, so the model asked is the stopped seat's own: the launcher used to ask on its first worker
+ * model for every seat, and an answer from that one says nothing about a verifier or a worker on another.
+ */
+export function claudeUsageProbe(o: { model?: string; cwd: string; env: NodeJS.ProcessEnv; log?: (line: string) => void; who?: string; timeoutMs?: number }): Promise<boolean> {
+  return new Promise((done) => {
+    const said = (ready: boolean, why = "") => {
+      o.log?.(`usage probe${o.who ? ` for ${o.who}` : ""} on ${o.model ?? "the CLI's default model"}: ${ready ? "usage is back" : `still out of usage${why ? ` (${why})` : ""}`}`);
+      done(ready);
+    };
+    const child = spawn("claude", usageProbeArgs(o.model), { cwd: o.cwd, env: o.env, stdio: ["ignore", "pipe", "pipe"] });
+    let out = "";
+    child.stdout.on("data", (d) => (out += d));
+    child.stderr.on("data", (d) => (out += d));
+    const timer = setTimeout(() => child.kill("SIGTERM"), o.timeoutMs ?? 120_000);
+    child.on("close", (code) => { clearTimeout(timer); said(code === 0 && !usageLimit(out), usageLimit(out) ? "the limit notice" : `exit ${code}`); });
+    child.on("error", (e) => { clearTimeout(timer); said(false, e.message); });
+  });
 }
 
 export interface RespawnChainDeps<T> {

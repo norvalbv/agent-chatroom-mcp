@@ -236,6 +236,7 @@ export const offlineScripts = [
   'launcher-routes-regression.ts',
   'restart-notice-regression.ts',
   'respawn-usage-wait-regression.ts',
+  'usage-probe-model-regression.ts',
   'proposed-decision-path-regression.ts',
   'smoke-ports-regression.ts',
   'own-hub-port-regression.ts',

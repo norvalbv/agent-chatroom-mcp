@@ -715,6 +715,9 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
         const landed = [...hub.getRoom(room).board].find(([, x]) => x === e)?.[0] ?? key;
         return { key, landed_key: landed, chars: e.text.length, lines: e.text.split("\n").length, ...(landed !== key ? { hint: `"${key}" is full; your line is in "${landed}". Keep appending with key "${key}".` } : {}), ...clockReply(room, writer, `board:${landed}`, text) };
       }
+      // a second seat's verify/review/attack lands beside the first under its own key (src/hub/board.ts secondScrutiny)
+      const asked = key;
+      key = [...hub.getRoom(room).board].find(([, x]) => x === e)?.[0] ?? key;
       const overlaps = hub.claimOverlaps(room, id, key);
       const head = isReviewKey(key) ? parseVerifyHead(e.text) : undefined;
       const receipt = head ? await hub.readDevRoom(room, key) : undefined;
@@ -723,6 +726,7 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
       const proseGap = head && !head.unverified && VERIFY_GAP_PROSE.test(e.text.slice(e.text.indexOf("\n") + 1));
       return {
         key, chars: e.text.length, by: e.by, ...(overlaps.length ? { overlaps } : {}), ...clockReply(room, writer, `board:${key}`, text),
+        ...(key !== asked ? { asked_key: asked, landed_hint: `"${asked}" is another seat's entry, so yours was kept beside it as "${key}": cite and update it under that key.` } : {}),
         ...(receipt ? { dev_room_receipt: receipt } : {}),
         ...(gaps.length ? { verification_gaps: gaps, verification_gaps_hint: "the open proposal and the conclusion carry these as not shown by you (PARTIAL); close them, or leave them listed" } : {}),
         ...(proseGap ? { hint: "Your prose below the head says something was not verified, but the head has no \"unverified\" list, and only the head is read: put those items in \"unverified\":[...] so the proposal and the conclusion carry them." } : {}),

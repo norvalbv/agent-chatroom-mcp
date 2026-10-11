@@ -59,7 +59,10 @@ test("a failing, proposer-written or head-less review covers nothing", (t) => {
 test("review/* is author-only like verify/*: a peer cannot swap someone's failing verdict", (t) => {
   const { hub, room, b, c, head } = fixture(t);
   hub.setBoard(room.name, b.id, `review/${X}`, head(X, "pending", { exit_code: 1 }));
-  assert.throws(() => hub.setBoard(room.name, c.id, `review/${X}`, head(X))); // refused, and now read: overwrite=true would pass today
+  // a plain second write is kept beside it under the writer's own key (scripts/second-scrutiny-regression.ts) ...
+  hub.setBoard(room.name, c.id, `review/${X}`, head(X));
+  assert.ok(room.board.has(`review/${X}.Carol`));
+  // ... and replacing it is refused, however it is asked for
   assert.throws(() => hub.setBoard(room.name, c.id, `review/${X}`, head(X), { overwrite: true }), /only its author or a human/);
   assert.equal(JSON.parse(room.board.get(`review/${X}`)!.text).exit_code, 1);
 });

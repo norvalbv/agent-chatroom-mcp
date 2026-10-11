@@ -219,6 +219,11 @@ export function setBoard(hub: Hub, roomName: string, pid: string, key: string, t
   if (!BOARD_KEY.test(key)) throw new HubError("Board keys are short names like 'evidence', 'open questions', 'claim/auth', 'verify/auth'.", undefined, "key-format");
   if (opts.append) return appendBoard(hub, room, p, key, text, late);
   if (text.length > 8000) throw new HubError("Board entries are capped at 8000 characters.", undefined, "size");
+  // A second seat's scrutiny lands under its own key: refusing it for ownership came after the work was done
+  // (friction/second-attack-has-no-key: a 1,900-char attack lost to chat; 7 of 38 attack writes refused in the records).
+  const heldBy = opts.overwrite ? undefined : secondScrutiny(room, p, key, text); // overwrite=true asks to replace a peer's verdict: still refused
+  const asked = key;
+  if (heldBy) key = ownScrutinyKey(key, p.name);
   const expiresAt = boardExpiry(key, opts);
   const previous = room.board.get(key);
   // reserved prefixes (enforced here, the single write site)
@@ -338,11 +343,13 @@ export function setBoard(hub: Hub, roomName: string, pid: string, key: string, t
     + (postReveal ? " — post-reveal: written after peers' drafts were readable, so not an independent attempt" : "")
     + (workspace ? ` — ${workspace.branch ? `branch ${workspace.branch} in ` : ""}${workspace.worktree}` : "")
     + (reviewer ? ` — reviewer: ${reviewer.name}` : "")
+    + (heldBy ? ` — ${heldBy} already holds "${asked}", so yours is kept beside it under this key` : "")
     + (commitCheck ? missingCommits(commitCheck) : "")
     + (late ? " — late: written after the room concluded; recorded, the conclusion does not change" : ""),
     /^(verify|review|attack)\//.test(key) && commitsIn(text).length ? { covers: commitsIn(text) } : {});
   // a late verdict that fails a commit the conclusion cites contradicts what was decided: said once, not buried in "late"
   const contradicts = late && head?.commit?.trim() && room.conclusion && (head.exit_code !== 0 || failToPassShortfall(head)) && citesCommit(room.conclusion.text, head.commit) ? head.commit.trim() : undefined;
+  if (heldBy && !previous) hub.persist({ type: "second_scrutiny", room: roomName, asked, key, by: p.name, held_by: heldBy, ts: entry.updatedAt });
   if (late) hub.persist({ type: "late_write", room: roomName, key, by: p.name, after_s: late.after_s, ...(contradicts ? { contradicts } : {}), ts: entry.updatedAt });
   if (contradicts) hub.post(room, "system", undefined, `${key} by ${p.name} reports exit_code ${head!.exit_code} on ${contradicts}, which the conclusion cites: a verdict after the conclusion contradicts it. The conclusion stands as decided; read ${key} before relying on it.`);
   if (head) {
@@ -428,8 +435,29 @@ const isFinding = (key: string) => !NOT_A_FINDING.some((x) => key.startsWith(x))
  * rooms the first one arrived a median 19.5 min in). Same rules as a blocking challenge: someone other than the author,
  * on another connection, quoting the text objected to.
  */
+/** The seat that already holds this verify/, review/ or attack/ key, when the writer is another agent adding its own
+ * text (not clearing, not a human, not an anonymous room where a name in a key would unmask its author). */
+function secondScrutiny(room: Room, p: Participant, key: string, text: string): string | undefined {
+  if (!text.trim() || p.agent === "human" || room.anonymous || !/^(verify|review|attack)\//.test(key)) return undefined;
+  const held = room.board.get(key);
+  return held && held.text.trim() && held.by !== p.name ? held.by : undefined;
+}
+
+/** <key>.<writer>, the suffix before a .partial so a partial verdict stays one. */
+function ownScrutinyKey(key: string, name: string): string {
+  const own = key.endsWith(".partial") ? `${key.slice(0, -".partial".length)}.${name}.partial` : `${key}.${name}`;
+  if (!BOARD_KEY.test(own)) throw new HubError(`"${key}" is held by another seat and "${own}", where yours would go, is not a valid board key (80 characters at most): write it under a shorter key of your own.`, undefined, "key-format");
+  return own;
+}
+
+/** The entry an attack/* key targets: attack/<key>, or a second attacker's attack/<key>.<its name>. */
+export function attackTarget(room: Room, key: string, by: string): string {
+  const full = key.slice("attack/".length);
+  return !room.board.has(full) && full.endsWith(`.${by}`) && room.board.has(full.slice(0, -by.length - 1)) ? full.slice(0, -by.length - 1) : full;
+}
+
 function checkAttack(room: Room, p: Participant, key: string, text: string): { target: string; author: string; cites: string } {
-  const target = key.slice("attack/".length);
+  const target = attackTarget(room, key, p.name);
   const e = room.board.get(target);
   if (!isFinding(target)) throw new HubError(`"${target}" is coordination state and cannot be attacked; attack/<key> targets a finding, e.g. attack/evidence/x for "evidence/x".`, undefined, "key-format");
   if (!e) throw new HubError(`There is no board entry "${target}" to attack. attack/<key> names an existing entry, e.g. attack/evidence/x for "evidence/x".`, undefined, "state");
@@ -476,7 +504,7 @@ export function scrutiny(room: Room): { unexamined: string[]; open_attacks: stri
   const open_attacks: string[] = [];
   for (const [key, e] of room.board) {
     if (key.startsWith("attack/")) {
-      const target = key.slice("attack/".length);
+      const target = attackTarget(room, key, e.by);
       const t = room.board.get(target);
       if (t && attackOpen(e, t)) open_attacks.push(key);
       continue;

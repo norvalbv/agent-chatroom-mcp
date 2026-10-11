@@ -125,7 +125,9 @@ const HUB_IDLE_EXIT_MIN = has("keep-hub") ? 0 : Number(flag("hub-idle-exit", "12
 /**
  * --seat-memory-mb <n>: what the processes one seat starts may hold together. The hub this launcher starts stops a
  * seat's largest process past it and tells the seat (src/hub/memory.ts); every seat reads the figure as
- * CHATROOM_SEAT_MEMORY_MB. A hub that was already running keeps the budget it was started with.
+ * CHATROOM_SEAT_MEMORY_MB. A hub that was already running keeps the budget it was started with. Size it as a share of
+ * the machine, not per taste: (RAM minus about 8 GB for the system and whatever else runs) over the number of seats,
+ * recruits included, e.g. 2500 for six seats on 24 GB.
  */
 if (Number(flag("seat-memory-mb", "0")) > 0) process.env.CHATROOM_SEAT_MEMORY_MB = String(Number(flag("seat-memory-mb", "0")));
 const PORT = Number(flag("port", process.env.PORT ?? "7717"));

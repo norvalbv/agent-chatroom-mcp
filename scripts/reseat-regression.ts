@@ -63,6 +63,20 @@ try {
   const left = await call(b, "leave_room", { room: "r", reason: "done with my part, nothing left undone" });
   if (left.error) assert.equal((await call(b, "leave_room", { room: "r", reason: "done with my part, nothing left undone" })).error, false, left.text);
 
+  // (0) the connection drops and the client reconnects while the hub stays up: the hub still holds the old session and
+  // the seat is still active under it. The same key moves the seat to the new connection, and the old session's end
+  // (its DELETE, or the idle sweep) does not then take the seat out of the room.
+  const d = await connect("key-d");
+  await call(d, "join_room", { room: "r", name: "d" });
+  const d2 = await connect("key-d");
+  const moved = await call(d2, "send_message", { room: "r", content: "d on a second connection", force: true });
+  assert.equal(moved.error, false, `a second connection with the same seat key is the same seat: ${moved.text}`);
+  await (d.transport as StreamableHTTPClientTransport).terminateSession();
+  await sleep(300);
+  const still = await call(d2, "send_message", { room: "r", content: "d after the old session ended", force: true });
+  assert.equal(still.error, false, `the old session ending does not remove the seat: ${still.text}`);
+  assert.ok(!(await messages()).some((m) => /^d left the room/.test(m.content)), "and the room is not told d left");
+
   await stop(hub);
   hub = await boot();
 

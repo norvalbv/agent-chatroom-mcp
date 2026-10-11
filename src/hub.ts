@@ -2755,7 +2755,15 @@ export class Hub {
   reseat(roomName: string, session: string, wantId?: string): Participant | undefined {
     const room = this.rooms.get(roomName);
     const p = room && liveness.reseatable(room, this.seats.hashOf(session), wantId);
-    return p ? this.join(roomName, p.name, p.agent, {}, p.id, session).participant : undefined;
+    if (!p) return undefined;
+    if (!p.active) return this.join(roomName, p.name, p.agent, {}, p.id, session).participant;
+    p.session = session; // the seat moves to its newer connection; the older one's end no longer speaks for it (holds)
+    return p;
+  }
+  /** Whether this connection is the one a participant is seated on now (a seat re-seated elsewhere is no longer its to leave). */
+  holds(roomName: string, pid: string, session: string): boolean {
+    const p = this.rooms.get(roomName)?.participants.get(pid);
+    return !p?.session || p.session === session;
   }
   /** Out of the room but not a vacancy: it rejoins on its next hub call (liveness.away). */
   away(p: Participant) { return liveness.away(p); }

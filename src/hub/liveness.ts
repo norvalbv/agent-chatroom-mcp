@@ -57,8 +57,9 @@ export function away(p: Participant): { age_seconds: number; evidence: string } 
  */
 export function reseatable(room: Room, hash: string | undefined, wantId?: string): Participant | undefined {
   if (!hash) return undefined;
-  const mine = [...room.participants.values()].filter((p) => !p.active && p.seatKeyHash === hash && !p.kicked && !p.replacedBy && !p.pendingReplacementName &&
-    (!p.leaveReason || p.leaveReason.startsWith("MCP session closed")) && (!wantId || p.id === wantId));
+  // an active seat with this key is the same process on an older connection the hub has not yet seen close
+  const mine = [...room.participants.values()].filter((p) => p.seatKeyHash === hash && !p.kicked && !p.replacedBy && !p.pendingReplacementName &&
+    (p.active || !p.leaveReason || p.leaveReason.startsWith("MCP session closed")) && (!wantId || p.id === wantId));
   return mine.length === 1 ? mine[0] : undefined;
 }
 

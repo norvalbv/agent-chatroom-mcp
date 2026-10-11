@@ -159,7 +159,8 @@ async function ensureHub() {
   // A hub with no idle exit is meant to stay, so even a clean exit of it is restarted.
   const keeps = !Object.keys(ownHubEnv(HUB_IDLE_EXIT_MIN, PORT)).length;
   const child = spawn("node", [resolve(repoRoot, "dist/hubd.js"), "--port", String(PORT), ...(keeps ? ["--always"] : [])], {
-    env: { ...process.env, PORT: String(PORT), CHATROOM_DATA_DIR: resolve(repoRoot, "data"), ...(SANDBOX ? { CHATROOM_SANDBOX: "1" } : {}), ...(FRESH_CHALLENGER ? { CHATROOM_FRESH_CHALLENGER: "1" } : {}), ...ownHubEnv(HUB_IDLE_EXIT_MIN, PORT) },
+    // CHATROOM_DEFAULT_CWD: a recruit with no cwd and no worktree to go by works in this run's project, not in this checkout
+    env: { ...process.env, PORT: String(PORT), CHATROOM_DATA_DIR: resolve(repoRoot, "data"), CHATROOM_DEFAULT_CWD: process.env.CHATROOM_DEFAULT_CWD || CWD, ...(SANDBOX ? { CHATROOM_SANDBOX: "1" } : {}), ...(FRESH_CHALLENGER ? { CHATROOM_FRESH_CHALLENGER: "1" } : {}), ...ownHubEnv(HUB_IDLE_EXIT_MIN, PORT) },
     detached: true,
     stdio: "ignore",
   });

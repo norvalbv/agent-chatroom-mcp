@@ -17,7 +17,7 @@ import { AUTO_QUIET_NOTE, Hub, HubError, ROLES, VERIFY_HEAD_EXAMPLE, VERIFY_HEAD
 
 /** Words in a verify entry's prose that say something was not checked (45 of 313 passing heads in past rooms; scripts/verify-gaps-measure.py). */
 const VERIFY_GAP_PROSE = /not verified|did not (run|verify|exercise|watch|drive|check|test)|could not (run|verify|test)|not (run|exercised|watched|driven|checked) by me|untested|not tested|author-only|rests on the author/i;
-import type { SpawnedAgent, Spawner } from "./spawner.js";
+import { projectOf, type SpawnedAgent, type Spawner } from "./spawner.js";
 import type { Participant } from "./hub/types.js";
 import { createWaitView } from "./hub/wait-view.js";
 import { noteBoardRead } from "./hub/board.js";
@@ -833,7 +833,9 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
         }
         let recs: ReturnType<Spawner["request"]>;
         try {
-          recs = spawner.request({ room, brief: passed, requestedBy: me_.name, requestedByShown: hub.shown(r, me_), parentTopic: r.topic, name, agent, model, cwd, canEdit: can_edit, newRoom: new_room, roomTopic: room_topic, count, area, replacing });
+          // no cwd named: the recruiter's own project, which its launcher-bound worktree says, before the hub's directory
+          const home = cwd ?? ((wt) => (wt ? projectOf(wt) : undefined))(hub.workspaceOf(me_)?.worktree);
+          recs = spawner.request({ room, brief: passed, requestedBy: me_.name, requestedByShown: hub.shown(r, me_), parentTopic: r.topic, name, agent, model, cwd: home, canEdit: can_edit, newRoom: new_room, roomTopic: room_topic, count, area, replacing });
         } catch (e) {
           if (briefKey) try { hub.setBoard(room, me_.id, briefKey, ""); } catch {}
           throw e;

@@ -11,7 +11,7 @@ import { spawn, spawnSync, type ChildProcess } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync, createWriteStream, symlinkSync, realpathSync, rmSync, unlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, relative, resolve } from "node:path";
+import { basename, dirname, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { HubError } from "./hub.js";
 import { settledAxes } from "./settled.js";
@@ -156,6 +156,18 @@ export function recruitWorkspace(cwd: string, room: string, name: string): { roo
   if (top.status !== 0) return undefined;
   const root = top.stdout.trim();
   return { root, worktree: resolve(root, ".swarm-worktrees", room, name), branch: `swarm/${room}/${name}` };
+}
+
+/** The project a seat's worktree belongs to (the repository its .git is shared with), or undefined outside git. A recruit
+ * of that seat works there, not in the hub's own directory (swarm-003601-tky5: a hub started from the agent-chatroom-mcp
+ * checkout for a Polymarket room would have put builder recruits in agent-chatroom-mcp). */
+export function projectOf(worktree: string): string | undefined {
+  const r = spawnSync("git", ["-C", worktree, "rev-parse", "--path-format=absolute", "--git-common-dir"], { encoding: "utf8", timeout: 5_000 });
+  if (r.status !== 0) return undefined;
+  const common = r.stdout.trim();
+  if (basename(common) === ".git") return dirname(common);
+  const top = spawnSync("git", ["-C", worktree, "rev-parse", "--show-toplevel"], { encoding: "utf8", timeout: 5_000 });
+  return top.status === 0 ? top.stdout.trim() : undefined;
 }
 
 /** A detached checkout of a proposer's commit for a read-only checker: `dir` (outside the repository), the commit, how many files of the live tree it leaves out. */

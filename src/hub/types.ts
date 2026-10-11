@@ -33,6 +33,10 @@ export interface VerifyHead {
   dev_room?: string;
 }
 
+/** Board keys whose verify head is a review of the commit it names: verify/* (the gate) and review/<sha> (coverage only,
+ * written while builds are reviewed per commit; evidence-pack item 4). A .partial never counts. */
+export const isReviewKey = (key: string) => /^(verify|review)\//.test(key) && !key.endsWith(".partial");
+
 /** Canonical wording for what a verify/* entry must contain, quoted verbatim by refusals and prompts. */
 export const VERIFY_HEAD_EXAMPLE = '{"proposal":"<PROPOSAL_ID>","command":"<the check you ran>","cwd":"<working dir>","base_commit":"<parent commit, before the change>","base_exit_code":1,"commit":"<the proposal\'s commit>","exit_code":0,"output_tail":"<last lines of real output at commit>"}';
 /** The rest of the rule, said once after VERIFY_HEAD_EXAMPLE wherever it is quoted. */
@@ -148,6 +152,8 @@ export interface Participant {
   role?: Role;
   /** proposal id -> version of its text this participant was last sent (wait_for_messages ships text only when it changes) */
   seenProposal?: Record<string, number>;
+  /** when this seat was first sent each proposal/amend message, by message id (in memory only; Hub.seenTiming) */
+  versionSeenAt?: Record<string, string>;
   /** challenge id -> status its objection text was last sent at (wait_for_messages ships objections only when new or changed) */
   seenChallenges?: Record<string, string>;
   /** Ephemeral delivery receipts. A reconnect/rejoin starts with a full board manifest. */
@@ -216,7 +222,12 @@ export interface KickVote {
   status: "open" | "kicked" | "dropped";
   endedAt?: string;
   outcome?: string;
+  /** what the hub knew of the target when the vote opened (kick.targetLiveness): a live seat voted on as dead is countable */
+  targetLiveness?: TargetLiveness;
 }
+
+/** working: a tool step within the last minute, or a job of its own running; idle: a step or call within SUSPECTED_DEAD_MS; silent: neither. */
+export interface TargetLiveness { status: "working" | "idle" | "silent"; last_call_age_s: number; step_age_s?: number; tool?: string; detail?: string; job?: { pid: number; command: string; elapsed_s: number } }
 
 export interface Message {
   seq: number;
@@ -237,8 +248,20 @@ export interface Message {
   audience?: string[];
   /** the sender left quiet unset and the hub delivered it quiet as a two-seat working exchange (Hub.autoQuietAudience) */
   autoQuiet?: boolean;
+  /** a two-seat working exchange the hub would have delivered quiet, kept public because it names an entry on the room's board (Hub.namesBoardKey) */
+  keptPublic?: "board-key";
   /** a board notice for a verify/* or attack/* entry: the commits its text covered when written (settles asks naming them) */
   covers?: string[];
+  /** The channel the sender came through, stamped when the message was posted. human-token: the hub's human route with
+   * the human token. human-loopback: that route with no token, under CHATROOM_INSECURE_LOCAL, from a loopback process
+   * that carries no seat key; on a machine running several hubs that is not proof of the owner (attack by
+   * claude-opus-5-5-1 on decision/speaker-identity). mcp: an MCP connection, which may call itself anything. Absent on
+   * system lines and in logs from before this was recorded. */
+  via?: "human-token" | "human-loopback" | "mcp";
+  /** a human-route caller's own label for a script posting on the owner's behalf ("orchestrator") */
+  source?: string;
+  /** a chair's message: whether the chair had been named by the room's creator or the owner ("named") or had taken the role by joining first */
+  chair?: "named" | "self-claimed";
 }
 
 export interface CodeState {
@@ -264,6 +287,16 @@ export interface BoardEntry {
   acknowledgedTextHash?: string;
   /** verify/* entries naming a dev_room: what the hub itself read from that room when the entry was written. */
   devReceipt?: DevReceipt;
+  /** verify/* and review/* entries with a head: whether the commits it names exist in the writer's bound worktree, resolved by the hub at write time
+   * (2 of 22 SHAs named in verify heads across runs did not exist; evidence-pack item 4). A *_known field is absent when the writer has no bound worktree (not checked, not missing). */
+  commitCheck?: { commit?: string; commit_known?: boolean; base_commit?: string; base_known?: boolean };
+  /** the entries by other seats this entry checks (rerun/, audit/, review/, valid/, critique/, check/, attack/), resolved by
+   * the hub when it was written (src/hub/checks.ts); absent when it is not a check or names nothing */
+  checks?: string[];
+  /** what that check found, as its writer declared it on the first line (src/hub/checks.ts verdictOf); absent: not declared */
+  verdict?: "holds" | "fails" | "partial";
+  /** written after the room concluded, inside Hub.LATE_WRITE_MS (src/hub/board.ts lateWrite): on the record, not part of what was decided */
+  late?: boolean;
   /** claim/* entries only: the reviewer the hub assigned at creation (name/id), never client-supplied. */
   reviewer?: string;
   reviewerId?: string;
@@ -277,6 +310,12 @@ export interface BoardEntry {
   offeredBy?: string;
   /** attack/* only: normalised length of the attacked entry when the attack was written, to tell a reply from a re-save. */
   attackedChars?: number;
+  /** an entry written with append=true that reached the size cap: the continuation (<key>/2, /3...) later appends land in. */
+  continuedAt?: string;
+  /** normalised chars that seats other than `by` added with append=true since the author last wrote it whole: not the author's reply to an attack. */
+  othersChars?: number;
+  /** review/* only: the commit's author, told by the hub when this review was first written (review_notice). */
+  toldAuthor?: string;
 }
 
 export interface Challenge {
@@ -286,6 +325,11 @@ export interface Challenge {
   ts: string;
   /** proposal version the objection was written against */
   version?: number;
+  /** seconds from the hub first sending the challenger this version to the challenge (absent: never sent), and since the version was written (Hub.seenTiming, gap G13) */
+  seen_s?: number;
+  /** the version was made before this hub process started, so whether it was sent is not known */
+  seen_unknown?: true;
+  since_text_s?: number;
   /** open: unanswered. answered: the cited text was amended away. conceded: the challenger re-voted agree. overruled: the room concluded over it. */
   status?: "open" | "answered" | "conceded" | "overruled";
   /** the span of the proposal the objection quotes, if it quotes one (used to decide when an amend answers it) */
@@ -328,7 +372,8 @@ export interface Proposal {
   by: { id: string; name: string };
   text: string;
   createdAt: string;
-  votes: Record<string, { vote: Vote; reason?: string; quote?: string; confidence?: number; name: string; ts: string; version?: number }>;
+  /** seen_s / since_text_s: Hub.seenTiming (telemetry gap G13) */
+  votes: Record<string, { vote: Vote; reason?: string; quote?: string; confidence?: number; name: string; ts: string; version?: number; seen_s?: number; seen_unknown?: true; since_text_s?: number }>;
   challenges: Challenge[];
   status: "open" | "accepted" | "rejected" | "superseded";
   /** bumped by every amend; the text in `text` is always the current version */
@@ -350,6 +395,34 @@ export interface Proposal {
   /** the hex tokens (hexTokens) of each version of the text and when it took effect, oldest first: what a verify
    * entry written at a given time had in front of it. Absent on proposals made before this was recorded. */
   cited?: { at: string; tokens: string[] }[];
+  /** the text one version back, who amended it away and when (in memory only): lets a stale find be told what changed */
+  prev?: { text: string; version: number; by: string; at: string };
+  /** the last call this proposal is in or had (Hub.lastCallHolds): the version it was called on, when it closes, and who
+   * in the electorate had not voted on that version when it opened. Replayed from its last_call event, so a restart keeps its deadline. */
+  lastCall?: { version: number; startedAt: string; until: string; waitingOn: string[] };
+}
+
+/** How a room closed (telemetry gap "votes outstanding at conclusion", evidence-pack item 1): time from the proposal and
+ * from its last text change, the last call if there was one, and who in the electorate had not voted on the final version. */
+export interface ConclusionClosing {
+  /** the room's verifier seat at the close, when it had one (Hub.verifierHolds): agreed is its agree on the final version;
+   * agreed false means the room concluded without it because the seat had been silent for silent_minutes */
+  verifier?: { name: string; agreed: boolean; vote?: Vote; version?: number; silent_minutes?: number };
+  seconds_from_proposal: number;
+  seconds_from_last_text: number;
+  /** absent when everyone had voted on the final version before it had the votes, so no last call was needed */
+  last_call_seconds?: number;
+  /** window: the last call ran out; all_voted: everyone voted on the final version and no take/* was held before it did;
+   * none: no last call (off, or nothing to wait for) */
+  ended: "window" | "all_voted" | "none";
+  /** take/* entries still held by an active seat when the room concluded, as "key (holder)": work the conclusion cut off */
+  takes_held?: string[];
+  /** agrees on the final version by seats the hub never sent that version (Hub.seenTiming, gap G13) */
+  agreed_unsent?: string[];
+  /** breakouts of the room still open when it concluded: work its answer was fixed before */
+  children_open?: string[];
+  /** voted_version: the version their standing vote was cast on, when they had one */
+  not_voted_on_final: { name: string; role?: string; voted_version?: number }[];
 }
 
 export interface RoomOptions {
@@ -373,6 +446,9 @@ export interface RoomOptions {
   requireVerification?: boolean;
   /** Name of the participant honoured as chair (exempt from quorum, may veto). Set at creation, or by the first joiner to claim role=chair. */
   chair?: string;
+  /** The chair above was named by someone the hub checked: the launcher (its token) or the owner (the human token). Only
+   * the hub's own create route sets it; a seat creating a room over MCP can bind a chair's name but not this. */
+  chairNamed?: boolean;
   /** Breakout: the room this one was opened from. Set at creation by an active member of that room; its conclusion is carried back there. */
   parent?: string;
 }
@@ -397,6 +473,8 @@ export interface Room {
   nudgeAfterMs: number;
   requireVerification: boolean;
   chair?: string;
+  /** the chair was named by the launcher (--chair, under its token) or by the owner with the human token (Hub.nameChair), not taken by the first seat to ask */
+  chairNamed?: boolean;
   /** Breakout link: the room this one was opened from (its conclusion lands on that room's board as inbox/<this>/conclusion). */
   parent?: string;
   createdAt: string;
@@ -404,9 +482,11 @@ export interface Room {
   /** When each counted local tool call of the last windows happened, and the stall the room has been told of, if any (src/hub/idle.ts). */
   workAt?: number[];
   idle?: import("./idle.js").RoomIdle;
+  /** quiet, but a seat has a job running: recorded as waiting instead of told it has stalled (src/hub/idle.ts). Ephemeral. */
+  waiting?: import("./idle.js").RoomWaiting;
   /** Hidden from listings (dashboard, list_rooms) but fully kept on disk; set by a human or the archive-dead sweep. */
   archived?: boolean;
-  conclusion?: { text: string; proposalId: string; decidedAt: string; version?: number; tally?: { agree: number; disagree: number; abstain: number }; electorate?: ElectorateSummary; unresolved_objections?: { by: string; objection: string }[]; agreed_without_output?: string[]; undelivered_claims?: { key: string; by: string }[]; verification?: ConclusionVerification; verification_gaps?: { key: string; by: string; gaps: string[] }[]; evidence?: string };
+  conclusion?: { text: string; proposalId: string; decidedAt: string; version?: number; tally?: { agree: number; disagree: number; abstain: number }; electorate?: ElectorateSummary; unresolved_objections?: { by: string; objection: string }[]; agreed_without_output?: string[]; undelivered_claims?: { key: string; by: string }[]; verification?: ConclusionVerification; verification_gaps?: { key: string; by: string; gaps: string[] }[]; evidence?: string; closing?: ConclusionClosing };
   /** identical silence nudges are posted at most twice */
   lastNudge?: { text: string; count: number };
   /** Lifetime refusal counts keyed by tool and bounded reason class (no bodies, no ids). */
@@ -451,6 +531,10 @@ export interface Room {
   draftsRevealed?: boolean;
   /** when the first draft/* was written: starts the reveal deadline (persisted, so the deadline survives a restart) */
   draftsOpenedAt?: string;
+  /** updatedAt of the abandoned hold the room was told about (Hub.evaluate), so it is said once; in memory only */
+  holdLapsedNoted?: string;
+  /** whose write opened the running round (in memory only): Hub.draftSeal tells that writer it did */
+  draftsOpenedBy?: { name: string; key: string; entryAt: string };
   draftsTimer?: NodeJS.Timeout;
   /** Reconstructed from every board event, including deletes and system writes. */
   boardVersion: number;
@@ -479,10 +563,39 @@ export type RefusalCode =
   | "key-format"     // malformed board or inbox key
   | "size"           // content above the size cap
   | "state"          // valid actor and args, refused by room or entry state
+  | "inbox-cap"      // the target room already holds the maximum of unacknowledged inbox notes
+  // One code per guard family, so a room log says which rule refused a call (telemetry gap G6: 357 of 489 refusals in
+  // 21 logs were hub_guard). scripts/refusal-codes-typed-regression.ts fails on any HubError thrown without a code.
+  | "not-found"      // no such room, proposal, participant or board entry
+  | "invalid-arg"    // a required argument is empty, malformed or out of range
+  | "budget"         // a room, run, message or recruitment cap is used up
+  | "leave-warning"  // leave_room refused once, with what to do first
+  | "departed-mention" // a message @-names a seat that has left
+  | "human-ask"      // replying to a human the hub has given to someone else, or past their register
+  | "turn"           // round_robin: not this seat's turn
+  | "unread"         // stale send: messages arrived while composing
+  | "reply-owed"     // stale send: an ask already shown is still owed a reply
+  | "fair-share"     // the sender is over its share of recent messages
+  | "amend-find"     // amend's find is absent, ambiguous or too short, or the edit changes nothing
+  | "amend-stale"    // amend's find was in the previous version: another amend changed that text since the caller read it
+  | "proposal-open"  // propose while another proposal is open
+  | "room-of-one"    // propose with fewer than two connections present
+  | "needs-verify"   // propose in a verified room with no verify/* entry
+  | "unacked-notes"  // propose with inbox notes unacknowledged
+  | "human-unanswered" // propose while a human's message is unanswered
+  | "scrutiny-held"  // propose held once for unexamined findings, barren or unsourced claims
+  | "self-target"    // challenging one's own proposal, kicking or replacing oneself
+  | "same-session"   // a blocking challenge from the proposer's own connection
+  | "cite-required"  // a blocking challenge or attack that quotes no clause of its target
+  | "duplicate"      // a blocking challenge on a clause an open challenge already holds
+  | "vote-form"      // a vote without its required quote or reason, or a quote not in the text
   | "hub_guard";     // unknown or unclassifiable (legacy catch-all)
 
 export const REFUSAL_CODES: readonly RefusalCode[] =
-  ["expiry-prefix", "ownership", "auth", "key-format", "size", "state", "hub_guard"];
+  ["expiry-prefix", "ownership", "auth", "key-format", "size", "state", "inbox-cap",
+    "not-found", "invalid-arg", "budget", "leave-warning", "departed-mention", "human-ask", "turn", "unread", "reply-owed",
+    "fair-share", "amend-find", "amend-stale", "proposal-open", "room-of-one", "needs-verify", "unacked-notes", "human-unanswered",
+    "scrutiny-held", "self-target", "same-session", "cite-required", "duplicate", "vote-form", "hub_guard"];
 
 export class HubError extends Error {
   constructor(
@@ -545,8 +658,24 @@ export function devReceiptFrom(url: string, body: unknown): DevReceipt {
 }
 
 /** What a passing verify head did not show: the reviewer's own list, then what the hub can tell about its dev room. */
-export function verifyGaps(h: VerifyHead, receipt?: DevReceipt): string[] {
+/** git's empty tree: what a seat writes as base_commit when there is no parent commit to fail at (a read-only answer). */
+export const EMPTY_TREE = "4b825dc642cb6eb9a060e54bf8d69288fbee4904";
+
+/** A head whose commits are not commits: git's empty tree as base_commit (seats used it to pass the fail-to-pass gate on a
+ * read-only answer, devroom/integration-verifier), or a commit the writer's worktree does not hold (BoardEntry.commitCheck).
+ * The gate stays self-reported (done-means-independently-verified); these say what the head did not show. */
+export function commitGaps(h: VerifyHead, check?: BoardEntry["commitCheck"]): string[] {
+  const out: string[] = [];
+  const base = h.base_commit?.trim().toLowerCase();
+  if (base && base.length >= 7 && EMPTY_TREE.startsWith(base)) out.push(`base_commit ${base.slice(0, 8)} is git's empty tree, not a parent commit: no check ran before a change`);
+  else if (check?.base_known === false) out.push(`base_commit ${check.base_commit} is not a commit in the reviewer's repository`);
+  if (check?.commit_known === false) out.push(`commit ${check.commit} is not a commit in the reviewer's repository`);
+  return out;
+}
+
+export function verifyGaps(h: VerifyHead, receipt?: DevReceipt, check?: BoardEntry["commitCheck"]): string[] {
   const out = [...(h.unverified ?? [])].map((x) => x.trim()).filter(Boolean);
+  out.push(...commitGaps(h, check));
   // A missing room is a gap only where the head claims it: "kind":"exercised" says the change was used as its users would
   if (!h.dev_room) { if (h.kind === "exercised") out.push('"kind":"exercised" but no dev_room: the hub has no room where it can see agents used it'); }
   else if (!devRoomUrl(h.dev_room)) out.push(`dev_room "${h.dev_room.slice(0, 80)}" is not http://127.0.0.1:<port>/rooms/<room>`);

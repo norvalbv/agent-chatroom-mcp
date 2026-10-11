@@ -84,6 +84,8 @@ assert.equal((await seat("silent")).active, true);
   const runProc = vm.runInNewContext(`${js};runProc;`, {
     spawn: () => child, seatChildEnv: () => ({}), writeWorkers: new Set(), process: { env: {} }, children: [], seatChildren: new Map(), writeFileSync: () => {}, resolve: (...a: string[]) => a.join("/"),
     OUT: "/tmp", exitCodes: new Map(), exitSignals: new Map(), exitDetails: new Map(), log: () => {}, URL_: "http://hub.invalid", AbortSignal, String, JSON, exitDetail,
+    // the receipt also says who stopped the seat when the launcher did (run-end-seat-exit-regression): nobody here
+    killedAtTimeout: new Set(), STOPPING: false,
     fetch: (_url: string, init: { body: string }) => { posted = JSON.parse(init.body); return pending; },
   }) as (...a: unknown[]) => Promise<string>;
   let resolved = false;
@@ -100,6 +102,8 @@ assert.equal((await seat("silent")).active, true);
   const runProc2 = vm.runInNewContext(`${js};runProc;`, {
     spawn: () => child2, seatChildEnv: () => ({}), writeWorkers: new Set(), process: { env: {} }, children: [], seatChildren: new Map(), writeFileSync: () => {}, resolve: (...a: string[]) => a.join("/"),
     OUT: "/tmp", exitCodes: new Map(), exitSignals: new Map(), exitDetails: new Map(), log: () => {}, URL_: "http://hub.invalid", AbortSignal, String, JSON, exitDetail,
+    // the receipt also says who stopped the seat when the launcher did (run-end-seat-exit-regression): nobody here
+    killedAtTimeout: new Set(), STOPPING: false,
     fetch: () => Promise.reject(new Error("hub down")),
   }) as (...a: unknown[]) => Promise<string>;
   const run2 = runProc2("worker", "fake", [], "/tmp", "/tmp/out", false, { key: "key-launched", env: {} });

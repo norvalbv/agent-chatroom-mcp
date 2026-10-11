@@ -147,6 +147,46 @@ test("every step is a take record in the room log, refusals included", () => {
   assert.equal(again.getRoom(name).board.get("take/Q11")?.holder, "carol");
 });
 
+test("two spellings of the same non-commit work are one take: the second seat is told who holds it (dev room swarm-210624-lnap)", () => {
+  // the verifier's integration dev room: take/slow_count and take/slow_count-run were held by two seats and the scorer ran twice
+  const { h, name, a, b, c } = room();
+  h.setBoard(name, a.id, "take/slow_count", "running the slow_count scorer, ~150 s");
+  throws(() => h.setBoard(name, b.id, "take/slow_count-run", "I'll run the scorer"), /names the same work as "take\/slow_count", held by alice/);
+  throws(() => h.setBoard(name, b.id, "take/run/Slow-Count", "x"), /held by alice/);
+  throws(() => h.setBoard(name, c.id, "take/slow_count-bob", "x"), /held by alice/); // a seat name is not a difference either
+  // different work stays different: a narrower or wider key, another item, another kind
+  h.setBoard(name, b.id, "take/slow_count-gpu", "the gpu variant");
+  h.setBoard(name, b.id, "take/fast_count", "another scorer");
+  h.setBoard(name, c.id, "take/audit/slow_count", "auditing its output");
+  // a fragment of a seat's name is a real word (review/3f330ea8): seats here are alice, bob, carol, so use their own shapes
+  h.setBoard(name, a.id, "take/arm-1", "arm 1");
+  h.setBoard(name, b.id, "take/arm-2", "arm 2 is other work");
+  h.setBoard(name, a.id, "take/al-audit", "x");
+  h.setBoard(name, b.id, "take/ice-audit", "a word that is part of a name is not the name");
+  // the holder's own second key, and a take once the first is released, pass
+  h.setBoard(name, a.id, "take/slow_count-run", "same piece, my own note");
+  h.setBoard(name, a.id, "take/slow_count", ""); h.setBoard(name, a.id, "take/slow_count-run", "");
+  h.setBoard(name, b.id, "take/slow_count-run", "now mine");
+});
+
+test("seat names like claude-opus-5-5-1: only the whole name is dropped from a key, not its fragments (review/3f330ea8)", () => {
+  const h = new Hub({});
+  const [s1, s2] = ["claude-opus-5-5-1", "claude-opus-5-5-2"].map((n) => h.join("tk-names", n, "claude", {}, undefined, `s-tk-${n}`).participant);
+  h.setBoard("tk-names", s1!.id, "take/arm-1", "arm 1");
+  h.setBoard("tk-names", s2!.id, "take/arm-2", "arm 2 is other work");
+  h.setBoard("tk-names", s1!.id, "take/opus-audit", "x");
+  h.setBoard("tk-names", s2!.id, "take/claude-audit", "other work");
+  h.setBoard("tk-names", s1!.id, "take/slow_count", "running it");
+  throws(() => h.setBoard("tk-names", s2!.id, "take/slow_count-claude-opus-5-5-2", "mine"), /names the same work as "take\/slow_count"/);
+  throws(() => h.setBoard("tk-names", s2!.id, "take/slow_count-by-claude-opus-5-5-2", "mine"), /names the same work as "take\/slow_count"/);
+  // a seat name inside the work's words is part of the work (review/3241ee07-opus1)
+  const v = h.join("tk-names", "verifier", "claude", {}, undefined, "s-tk-verifier", "verifier").participant;
+  h.setBoard("tk-names", s1!.id, "take/gate-probe", "probing the gate");
+  h.setBoard("tk-names", v.id, "take/verifier-gate-probe", "the verifier's own gate probe is other work");
+  h.setBoard("tk-names", s1!.id, "take/s-audit", "x");
+  h.setBoard("tk-names", v.id, "take/verifiers-audit", "a word containing a name is not the name");
+});
+
 let failed = 0;
 for (const [name, run] of cases) {
   try {

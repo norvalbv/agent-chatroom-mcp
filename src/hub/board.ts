@@ -1,10 +1,12 @@
 /** The Hub's shared board, as functions over the Hub instance; Hub keeps a one-line delegator for each member called from outside. */
 import { createHash } from "node:crypto";
+import { COORDINATION_PREFIXES } from "./keys.js";
+import { checksOf, verdictOf } from "./checks.js";
 import type { Hub } from "../hub.js";
-import { HubError } from "./types.js";
+import { HubError, isReviewKey, readVerifyHead, citesCommit, failToPassShortfall } from "./types.js";
 import type { Quorum, Participant, BoardExpiryOptions, BoardEntry, Room } from "./types.js";
-import { now, codeState, norm, commitsIn } from "./internal.js";
-import { announceTake, takeWrite } from "./take.js";
+import { now, codeState, norm, commitsIn, commitKnown } from "./internal.js";
+import { announceTake, commitAuthor, takeWrite } from "./take.js";
 
 function boardExpiry(key: string, opts: BoardExpiryOptions): string | undefined {
   if (opts.ttlSeconds === undefined && opts.expiresAt === undefined) return undefined;
@@ -37,6 +39,17 @@ export function applyBoardManifest(room: Room, bytes: number, kind: "full" | "de
   stats.waits++; stats.bytes += bytes; stats[kind]++;
 }
 
+/** An acknowledgement that says nothing beyond "seen". */
+// one or more of these words and nothing else: "received, thanks" and "got it, thank you!" say no more than "ack"
+// (review/4e9505d8-opus5); "received, thanks: will rerun T-B3-4" says more and is a reply
+const BARE_ACK = /^\s*(?:(?:ack(?:nowledged)?|ok(?:ay)?|seen|received|read|noted|done|thanks?|thank you|got it|will do|roger)[\s.,;:!-]*)+$/i;
+
+/** The most one board entry or note holds. Stated in the room summary (limits) and in every refusal for size. */
+export const BOARD_ENTRY_MAX = 8000;
+/** A refusal for size says what was sent, what fits and how to carry on: "capped at 8000 characters" left seats to
+ * split ledgers by hand into ledger-2..7 (chat-and-friction issue 11). */
+export const tooLong = (key: string, chars: number) =>
+  `"${key}" would be ${chars} chars; a board entry holds ${BOARD_ENTRY_MAX}. Cut it, split it across keys (${key}-2, ...) and name them in the first, or for a log several seats add to use board_set append=true, which continues past the cap by itself.`;
 export const BOARD_KEY = /^[\w .:/-]{1,80}$/;
 
 export function hold(room: Room): BoardEntry | undefined {
@@ -139,21 +152,100 @@ export function noteBoardRead(p: Participant, key: string, entry: { updatedAt: s
   seen.set(key, entry.updatedAt);
 }
 
-export function setBoard(hub: Hub, roomName: string, pid: string, key: string, text: string, opts: BoardExpiryOptions & { ifAbsent?: boolean; ifByMe?: boolean; overwrite?: boolean } = {}): BoardEntry | null {
+/** Prefixes whose writes carry their own rules (holder, author-only, JSON head, ack hash): an append would bypass them. */
+const NO_APPEND = /^(claim|take|verify|review|attack|draft|hold|inbox)\//;
+
+/**
+ * board_set(append=true): one block "[HH:MMZ name] text" added to a shared log (ledger, queue, ranked list) by any seat
+ * (swarm-180216-182a, decision/board-append). 22 keys in 12 rooms were co-written by 2-5 seats as read-merge-overwrite:
+ * 0btz's ledger drew 15 ownership and 5 size refusals and was split by hand into ledger-2..7. An append discards nothing,
+ * so it is never refused for ownership or a stale read; the hub stamps its own clock and the author; past the size cap it
+ * lands in <key>/2, /3... and the head records continuedAt, so later appends to <key> go straight to the newest one.
+ */
+function appendBoard(hub: Hub, room: Room, p: Participant, key: string, text: string, late?: { after_s: number }): BoardEntry {
+  if (NO_APPEND.test(key)) throw new HubError(`append is for shared logs; "${key.split("/")[0]}/*" entries have their own write rules. Write it without append.`, undefined, "key-format");
+  if (!text.trim()) throw new HubError("append adds a line and an empty one adds nothing; to delete an entry, write empty text without append.", undefined, "state");
+  const line = `[${now().slice(11, 16)}Z ${p.name}] ${text.trim()}`;
+  // leaves room for a continuation's first line, so an entry never passes the 8000-char cap
+  if (line.length > 7800) throw new HubError(`One append is capped at 7800 characters with its stamp (this one is ${line.length}).`, undefined, "size");
+  const head = room.board.get(key);
+  let landed = head?.continuedAt && room.board.get(head.continuedAt) ? head.continuedAt : key;
+  for (let n = landed === key ? 2 : Number(landed.slice(key.length + 1)) + 1; ; n++) {
+    const cur = room.board.get(landed);
+    if (!cur || cur.text.length + 1 + line.length <= 8000) break;
+    landed = `${key}/${n}`;
+    if (!BOARD_KEY.test(landed)) throw new HubError(`"${key}" is full and its continuation key "${landed}" would pass the 80-character key limit: start a shorter key.`, undefined, "size");
+  }
+  const cur = room.board.get(landed);
+  // a line another seat adds is not the author's reply to an attack on the entry (attackOpen discounts it)
+  const others = cur && cur.by !== p.name ? (cur.othersChars ?? 0) + norm(line).length + 1 : cur?.othersChars;
+  const entry: BoardEntry = cur
+    ? { ...cur, text: `${cur.text}\n${line}`, updatedAt: now(), ...(others ? { othersChars: others } : {}) }
+    : { text: landed === key ? line : `continued from "${key}" (it reached the 8000-char cap; append with key "${key}")\n${line}`, by: p.name, updatedAt: now() };
+  if (late) entry.late = true;
+  applyBoard(room, landed, entry);
+  noteBoardRead(p, landed, entry);
+  hub.persist({ type: "board", room: room.name, key: landed, entry });
+  if (landed !== key && head && head.continuedAt !== landed) {
+    // the head's text and updatedAt are unchanged, so a seat's earlier read of it is still current for the stale-read guard
+    const pointed = { ...head, continuedAt: landed };
+    applyBoard(room, key, pointed);
+    hub.persist({ type: "board", room: room.name, key, entry: pointed });
+  }
+  hub.persist({ type: "board_append", room: room.name, key, landed_key: landed, by: p.name, chars: line.length, ts: entry.updatedAt });
+  if (late) hub.persist({ type: "late_write", room: room.name, key: landed, by: p.name, after_s: late.after_s, ts: entry.updatedAt });
+  hub.post(room, "board", p, `appended to "${landed}"${landed !== key ? ` (continuation of "${key}")` : ""}: ${text.trim().slice(0, 120)}`
+    + (late ? " — late: written after the room concluded; recorded, the conclusion does not change" : ""));
+  return entry;
+}
+
+/**
+ * What a reader of a log's head needs once it has rolled over (attack/decision/board-append: the writer was routed to
+ * the newest continuation and the reader was not, so a queue's newest line, its current state, went unread): where the
+ * log continues and its last lines, in the same board_get.
+ */
+export function boardContinuation(room: Room, key: string, entry: BoardEntry): { continued_in: string[]; newest_key: string; newest_lines: string[]; hint: string } | undefined {
+  const newest = entry.continuedAt ? room.board.get(entry.continuedAt) : undefined;
+  if (!entry.continuedAt || !newest) return undefined;
+  const last = Number(entry.continuedAt.slice(key.length + 1));
+  const continued_in = Array.from({ length: last - 1 }, (_, i) => `${key}/${i + 2}`).filter((k) => room.board.has(k));
+  return {
+    continued_in, newest_key: entry.continuedAt, newest_lines: newest.text.split("\n").slice(1).slice(-5),
+    hint: `This entry is full: it is the OLDEST part of the log. The newest lines are in "${entry.continuedAt}" (its last ${Math.min(5, newest.text.split("\n").length - 1)} are in newest_lines). Append with key "${key}" as before.`,
+  };
+}
+
+export function setBoard(hub: Hub, roomName: string, pid: string, key: string, text: string, opts: BoardExpiryOptions & { ifAbsent?: boolean; ifByMe?: boolean; overwrite?: boolean; append?: boolean } = {}): BoardEntry | null {
   const room = hub.getRoom(roomName);
   const p = hub.requireParticipant(room, pid);
-  if (room.state === "concluded" || room.state === "closed") {
-    throw new HubError(`Room "${roomName}" is ${room.state}: board writes are refused, there is nothing left to coordinate. Earlier entries, including verify/* and handoff/*, are still readable with board_get.`, undefined, "state");
+  // A concluded room keeps taking results for a while (lateWrite): a rerun that lands after the vote is recorded, not lost.
+  const late = lateWrite(hub, room, key);
+  if (room.state === "closed" || (room.state === "concluded" && !late)) {
+    const why = room.state === "closed" || LATE_REFUSED.some((x) => key.startsWith(x))
+      ? "there is nothing left to coordinate"
+      : `late results were accepted for ${Math.round(hub.lateWriteMs / 60_000)} min after it concluded, and that has passed`;
+    throw new HubError(`Room "${roomName}" is ${room.state}: board writes are refused, ${why}. Earlier entries, including verify/* and handoff/*, are still readable with board_get.`, undefined, "state");
   }
   if (!BOARD_KEY.test(key)) throw new HubError("Board keys are short names like 'evidence', 'open questions', 'claim/auth', 'verify/auth'.", undefined, "key-format");
-  if (text.length > 8000) throw new HubError("Board entries are capped at 8000 characters.", undefined, "size");
+  if (opts.append) {
+    const appended = appendBoard(hub, room, p, key, text, late);
+    hub.noteUsed(room, p, text, "board"); // a run ledger line that names a note is a use of it (review/4e9505d8-opus5)
+    return appended;
+  }
+  if (text.length > BOARD_ENTRY_MAX) throw new HubError(tooLong(key, text.length), undefined, "size");
+  // A second seat's scrutiny lands under its own key: refusing it for ownership came after the work was done
+  // (friction/second-attack-has-no-key: a 1,900-char attack lost to chat; 7 of 38 attack writes refused in the records).
+  const heldBy = opts.overwrite ? undefined : secondScrutiny(room, p, key, text); // overwrite=true asks to replace a peer's verdict: still refused
+  const asked = key;
+  if (heldBy) key = ownScrutinyKey(key, p.name);
   const expiresAt = boardExpiry(key, opts);
   const previous = room.board.get(key);
   // reserved prefixes (enforced here, the single write site)
-  if (key.startsWith("inbox/") && !key.endsWith(".ack")) throw new HubError("inbox/* entries are written by post_to_room from another room. To acknowledge one, write '<key>.ack'.");
+  if (key.startsWith("inbox/") && !key.endsWith(".ack")) throw new HubError("inbox/* entries are written by post_to_room from another room. To acknowledge one, write '<key>.ack'.", undefined, "invalid-arg");
   if (key.startsWith("hold/")) {
     if (key !== `hold/${room.name}`) throw new HubError(`A hold for this room is the key "hold/${room.name}".`, undefined, "key-format");
-    if (previous && previous.by !== p.name) throw new HubError(`The hold was placed by ${previous.by}; only they (or a human) can clear or change it.`, undefined, "ownership");
+    // a hold whose author has left the room is abandoned (Hub.hold): anyone may clear or replace it
+    if (previous && previous.by !== p.name && hub.holdAuthorPresent(room, previous)) throw new HubError(`The hold was placed by ${previous.by}; only they (or a human) can clear or change it.`, undefined, "ownership");
   }
   // author-only, and refused without echoing the text: an ownership error that returned the entry would unseal it
   if (key.startsWith("draft/") && previous && previous.by !== p.name) throw new HubError(`"${key}" is ${previous.by}'s draft; draft/* entries are author-only. Write your own, e.g. draft/${p.name}.`, undefined, "ownership");
@@ -170,13 +262,13 @@ export function setBoard(hub: Hub, roomName: string, pid: string, key: string, t
       try {
         parsed = JSON.parse(text);
       } catch {
-        throw new HubError('claim/* entries are JSON: {"area":..., "owner":..., "team":[names], "status":"open|fixed|verified", "note":...}');
+        throw new HubError('claim/* entries are JSON: {"area":..., "owner":..., "team":[names], "status":"open|fixed|verified", "note":...}', undefined, "invalid-arg");
       }
       if (parsed && (parsed.status === "fixed" || parsed.status === "verified")) {
         const team = Array.isArray(parsed.team) ? (parsed.team as unknown[]).map(String) : [];
         const members = hub.activeParticipants(room).filter((x) => team.includes(x.name) && x.agent !== "human");
         if (members.length < 2 || sessionsOf(members) < 2) {
-          throw new HubError(`A claim can only be marked ${parsed.status} by a team of 2+ distinct active agents; team=${JSON.stringify(team)} has ${members.length} active on ${sessionsOf(members)} connection(s).`);
+          throw new HubError(`A claim can only be marked ${parsed.status} by a team of 2+ distinct active agents; team=${JSON.stringify(team)} has ${members.length} active on ${sessionsOf(members)} connection(s).`, undefined, "state");
         }
       }
     }
@@ -190,11 +282,24 @@ export function setBoard(hub: Hub, roomName: string, pid: string, key: string, t
   // A verify entry gates a proposal and an attack holds one, so only their author or a human may clear or replace them:
   // with overwrite a peer could swap someone's failing verdict for a passing one under their own name.
   const clearsPeer = !text.trim() && !!previous && previous.by !== p.name && p.agent !== "human";
-  if (previous && previous.by !== p.name && p.agent !== "human" && /^(verify|attack)\//.test(key)) throw new HubError(`"${key}" is ${previous.by}'s entry; only its author or a human may ${text.trim() ? "replace" : "clear"} it. Write your own (verify/<area>-<you>), or answer it on the board (for an attack, edit the attacked entry).`, undefined, "ownership");
+  // An acknowledgement belongs to the room, not its first writer: 21 of 44 ownership refusals after take/ shipped were a
+  // second seat acking the same note (evidence/ack-races: 17 covering, 4 stale). A stale ack is simply replaced; on a
+  // current one a bare repeat is a no-op and a reply is appended, so no seat's answer to the note is discarded.
+  if (key.startsWith("inbox/") && key.endsWith(".ack") && previous && previous.by !== p.name && text.trim()) {
+    const acked = room.board.get(key.slice(0, -4));
+    if (acked && previous.acknowledgedTextHash === noteHash(acked.text)) {
+      if (BARE_ACK.test(text) || norm(text) === norm(previous.text) || previous.text.includes(`— ${p.name}: ${text.trim()}`)) return previous;
+      text = `${previous.text}\n— ${p.name}: ${text.trim()}`;
+      if (text.length > 8000) throw new HubError(`"${key}" already holds ${previous.text.length} chars of acknowledgements; yours would pass the 8000 cap. Put your reply in an entry of your own and ack with a short line.`, undefined, "size");
+    }
+    opts = { ...opts, overwrite: true };
+    noteBoardRead(p, key, previous);
+  }
+  if (previous && previous.by !== p.name && p.agent !== "human" && /^(verify|review|attack)\//.test(key)) throw new HubError(`"${key}" is ${previous.by}'s entry; only its author or a human may ${text.trim() ? "replace" : "clear"} it. Write your own (verify/<area>-<you>), or answer it on the board (for an attack, edit the attacked entry).`, undefined, "ownership");
   if (previous && previous.by !== p.name && !take && !opts.overwrite && (text.trim() || clearsPeer) && !(key.startsWith("claim/") && (claimReleased(previous) || takeover))) {
     noteBoardRead(p, key, previous);
     throw new HubError(
-      `"${key}" was written by ${previous.by} at ${previous.updatedAt}; replacing it would discard their text. Merge with the current content below and resend with overwrite=true, or use your own key.`,
+      `"${key}" was written by ${previous.by} at ${previous.updatedAt}; replacing it would discard their text. Merge with the current content below and resend with overwrite=true, or use your own key. To add a line to a shared log or queue, resend with append=true instead: nothing is replaced.`,
       { current: previous },
       "ownership",
     );
@@ -214,40 +319,88 @@ export function setBoard(hub: Hub, roomName: string, pid: string, key: string, t
     hub.persist({ type: "board", room: roomName, key, entry: null });
     if (take) { if (previous) announceTake(hub, room, p, key, text, take); return null; }
     hub.post(room, "board", p, `cleared board entry "${key}"${previous && previous.by !== p.name ? ` (${previous.by}'s)` : ""}`);
+    if (key.startsWith("draft/")) hub.cancelDraftsIfEmpty(room, p);
     if (key === `hold/${room.name}`) for (const pr of room.proposals.values()) if (pr.status === "open") hub.evaluate(room, pr);
     return null;
   }
   hub.surfaceCited(room, text, `cited on the board under ${key}`);
   const note = key.startsWith("inbox/") && key.endsWith(".ack") ? room.board.get(key.slice(0, -4)) : undefined;
+  // a note named in an entry, or acknowledged with a reply rather than a bare ack, was used (Hub.noteUsed, gap G7)
+  if (note) { if (!BARE_ACK.test(text)) hub.noteUsed(room, p, text, "ack-reply", key.slice(0, -4)); }
+  else if (!key.startsWith("inbox/")) hub.noteUsed(room, p, text, "board");
   if (key.startsWith("verify/")) p.lastVerifiedAt = now();
   // a draft written or edited after peers' drafts became readable may have copied them: say so wherever it is listed
   const postReveal = key.startsWith("draft/") && (!!previous?.postReveal || !!room.draftsRevealed || hub.draftsDue(room));
   const workspace = key.startsWith("claim/") ? hub.workspaceOf(p) : undefined;
+  const read = isReviewKey(key) ? readVerifyHead(text) : undefined;
+  const head = read && "head" in read ? read.head : undefined;
+  // the writer's own worktree, never the hub's: a shared hub serves rooms on other repos (devkit), whose commits it lacks
+  // a commit review is linked by its head (the review event); any other check, to the entry it checks (src/hub/checks.ts)
+  const checks = checksOf(key, p.name, text, room.board);
+  const commitCheck = head ? checkCommits(hub.workspaceOf(p)?.worktree, head) : undefined;
+  // a review's first write tells the commit's author, when that author is another seat in this room (review_notice)
+  const authorOf = key.startsWith("review/") && !previous && head?.commit?.trim() && commitCheck?.commit_known !== false ? commitAuthor(hub, room, p, head.commit.trim()) : undefined;
+  const toldAuthor = authorOf && authorOf.active && authorOf.id !== p.id && authorOf.agent !== "human" ? authorOf : undefined;
   const entry: BoardEntry = {
     text, by: p.name, updatedAt: now(),
+    ...(toldAuthor ? { toldAuthor: toldAuthor.name } : {}),
     ...(expiresAt ? { expiresAt } : {}),
     ...(key.startsWith("verify/") ? { codeState: codeState(hub.cwd) } : {}),
     ...(note ? { acknowledgedTextHash: noteHash(note.text) } : {}),
     ...(reviewer ? { reviewer: reviewer.name, reviewerId: reviewer.id }
       : previous?.reviewer ? { reviewer: previous.reviewer, reviewerId: previous.reviewerId } : {}),
     ...(postReveal ? { postReveal: true } : {}),
-    ...(attacked ? { attackedChars: norm(room.board.get(attacked.target)!.text).length } : {}),
+    ...(attacked ? { attackedChars: norm(room.board.get(attacked.target)!.text).length - (room.board.get(attacked.target)!.othersChars ?? 0) } : {}),
     ...(workspace ? { workspace } : {}),
+    ...(commitCheck ? { commitCheck } : {}),
+    ...(late ? { late: true } : {}),
+    ...(checks.length ? { checks: checks.map((c) => c.of) } : {}),
+    ...(checks.length && verdictOf(text) ? { verdict: verdictOf(text) } : {}),
     ...(take ? { holder: take.holder.name, ...(take.offeredBy ? { offeredBy: take.offeredBy.name } : {}) } : {}),
   };
   applyBoard(room, key, entry);
   noteBoardRead(p, key, entry);
   hub.persist({ type: "board", room: roomName, key, entry });
   // a sealed draft's notice names neither key nor size (either can carry content); it says who is still owed a draft
-  if (key.startsWith("draft/")) hub.openDrafts(room); // before the notice, so the first one already names the deadline
+  // before the notice, so the first one already names the deadline
+  const openedRound = key.startsWith("draft/") && hub.openDrafts(room, { name: p.name, key, entryAt: entry.updatedAt });
   if (take) { announceTake(hub, room, p, key, text, take); return entry; }
   const sealedDraft = key.startsWith("draft/") && !room.draftsRevealed && !hub.draftsComplete(room) && !hub.draftsDue(room);
-  hub.post(room, "board", p, sealedDraft ? `${previous ? "updated" : "wrote"} a sealed draft (${hub.draftProgress(room)})`
+  hub.post(room, "board", p, sealedDraft && openedRound
+    // said once, when a round opens: what it is and what it asks of the others (3 of 8 rounds in the records were one seat's working draft)
+    ? `opened a sealed draft round: each seat writes its own attempt as draft/<its name> before reading anyone else's, and they all become readable together (${hub.draftProgress(room)}). Nothing to draft? Say so; the deadline reveals what there is.`
+    : sealedDraft ? `${previous ? "updated" : "wrote"} a sealed draft (${hub.draftProgress(room)})`
     : `${previous ? "updated" : "added"} board entry "${key}" (${text.length} chars; read it with board_get)`
     + (postReveal ? " — post-reveal: written after peers' drafts were readable, so not an independent attempt" : "")
     + (workspace ? ` — ${workspace.branch ? `branch ${workspace.branch} in ` : ""}${workspace.worktree}` : "")
-    + (reviewer ? ` — reviewer: ${reviewer.name}` : ""),
-    /^(verify|attack)\//.test(key) && commitsIn(text).length ? { covers: commitsIn(text) } : {});
+    + (reviewer ? ` — reviewer: ${reviewer.name}` : "")
+    + (heldBy ? ` — ${heldBy} already holds "${asked}", so yours is kept beside it under this key` : "")
+    + (commitCheck ? missingCommits(commitCheck) : "")
+    + (late ? " — late: written after the room concluded; recorded, the conclusion does not change" : ""),
+    /^(verify|review|attack)\//.test(key) && commitsIn(text).length ? { covers: commitsIn(text) } : {});
+  // a late verdict that fails a commit the conclusion cites contradicts what was decided: said once, not buried in "late"
+  const contradicts = late && head?.commit?.trim() && room.conclusion && (head.exit_code !== 0 || failToPassShortfall(head)) && citesCommit(room.conclusion.text, head.commit) ? head.commit.trim() : undefined;
+  if (checks.length && (JSON.stringify(previous?.checks) !== JSON.stringify(entry.checks) || previous?.verdict !== entry.verdict)) hub.persist({ type: "check", room: roomName, key, by: p.name, of: entry.checks!, how: checks[0].how, ...(entry.verdict ? { verdict: entry.verdict } : {}), ts: entry.updatedAt });
+  if (heldBy && !previous) hub.persist({ type: "second_scrutiny", room: roomName, asked, key, by: p.name, held_by: heldBy, ts: entry.updatedAt });
+  if (late) hub.persist({ type: "late_write", room: roomName, key, by: p.name, after_s: late.after_s, ...(contradicts ? { contradicts } : {}), ts: entry.updatedAt });
+  if (contradicts) hub.post(room, "system", undefined, `${key} by ${p.name} reports exit_code ${head!.exit_code} on ${contradicts}, which the conclusion cites: a verdict after the conclusion contradicts it. The conclusion stands as decided; read ${key} before relying on it.`);
+  if (toldAuthor && head) {
+    // the author's turn, as Gerrit's attention set hands a change back to its owner (sources/gerrit-attention-set): in
+    // this room 41 chat messages existed only to say a review was up. Chat kind, so the @-mention wakes a held wait.
+    const passes = head.exit_code === 0;
+    const gaps = head.unverified?.length ? `; not shown: ${head.unverified.length}` : "";
+    const prose = text.includes("\n") ? (text.slice(text.indexOf("\n") + 1).trim().split("\n")[0] ?? "").slice(0, 160) : "";
+    hub.post(room, "chat", undefined, `@${hub.shown(room, toldAuthor)} ${hub.shown(room, p)} reviewed your ${head.commit!.trim()} in ${key}: ${passes ? "passes" : "FAILS"} (exit_code ${head.exit_code}${head.base_exit_code !== undefined ? `, base ${head.base_exit_code}` : ""})${gaps}.${prose ? ` ${prose}` : ""}`);
+    hub.persist({ type: "review_notice", room: roomName, key, commit: head.commit!.trim(), author: toldAuthor.name, by: p.name, passes, ts: entry.updatedAt });
+  }
+  if (head) {
+    hub.persist({
+      type: "review", room: roomName, key, by: p.name, proposal: head.proposal, ...commitCheck,
+      ...(head.commit !== undefined && !commitCheck?.commit ? { commit: head.commit } : {}),
+      exit_code: head.exit_code, ...(head.base_exit_code !== undefined ? { base_exit_code: head.base_exit_code } : {}),
+      ...(head.kind ? { kind: head.kind } : {}), unverified_n: head.unverified?.length ?? 0, ...(head.dev_room ? { dev_room: head.dev_room } : {}), ts: entry.updatedAt,
+    });
+  }
   if (reviewer) {
     // kind "chat", not "system": an owed @-mention is resolved from content, so it still wakes a held wait after hub.wait() advanced lastSeenSeq
     // past this message; a "system" post with mentions arrives too late. "Exercise ... not only rerun" is the OpenHands qa-changes rule.
@@ -271,8 +424,46 @@ export function setBoard(hub: Hub, roomName: string, pid: string, key: string, t
   return entry;
 }
 
+/** Coordination keys: with the room concluded nobody can join a team, take a turn, hold a vote or draft blind. attack/ asks
+ * its author to answer by editing, an ask nobody can usefully answer once the room is over (review/6a584cdd finding 1). */
+const LATE_REFUSED = ["claim/", "take/", "hold/", "draft/", "inbox/", "help/", "join-request/", "idea/", "attack/"];
+
+/** Whether a write to a concluded room is a late result the board still takes, and how long after the conclusion it is.
+ * Late results and verdicts were lost in 7 rooms (chat-and-friction issue 10): the seat's rerun or review finished
+ * after the vote did. The window is Hub.LATE_WRITE_MS; an entry written in it is marked late and changes nothing decided. */
+function lateWrite(hub: Hub, room: Room, key: string): { after_s: number } | undefined {
+  return LATE_REFUSED.some((x) => key.startsWith(x)) ? undefined : lateWindow(hub, room);
+}
+
+/** Whether a concluded room is still inside its late-results window, whatever the key (the hub's own late writes, e.g. a
+ * breakout's conclusion carried onto a parent that concluded first, go under inbox/). */
+export function lateWindow(hub: Hub, room: Room): { after_s: number } | undefined {
+  if (room.state !== "concluded" || !room.conclusion?.decidedAt) return undefined;
+  const after = Date.now() - Date.parse(room.conclusion.decidedAt);
+  return after < hub.lateWriteMs ? { after_s: Math.max(0, Math.round(after / 1000)) } : undefined;
+}
+
+/** The commits a verify head names, each resolved in the writer's worktree (commitKnown; unchecked without one); undefined if it names none. */
+function checkCommits(cwd: string | undefined, head: { commit?: string; base_commit?: string }): BoardEntry["commitCheck"] {
+  const out: NonNullable<BoardEntry["commitCheck"]> = {};
+  for (const f of ["commit", "base_commit"] as const) {
+    const sha = head[f]?.trim();
+    if (!sha) continue;
+    out[f] = sha;
+    const known = commitKnown(cwd, sha);
+    if (known !== undefined) out[f === "commit" ? "commit_known" : "base_known"] = known;
+  }
+  return Object.keys(out).length ? out : undefined;
+}
+
+/** Said in the board notice, not refused: a reviewer may cite a commit in another repo (devkit), and only they know. */
+function missingCommits(c: NonNullable<BoardEntry["commitCheck"]>): string {
+  const gone = [c.commit_known === false ? `commit ${c.commit}` : "", c.base_known === false ? `base_commit ${c.base_commit}` : ""].filter(Boolean);
+  return gone.length ? ` — names ${gone.join(" and ")}, which does not exist in your worktree's repository: check the SHA, or say which repo it is in` : "";
+}
+
 /** Coordination state, not findings: there is no claim about the world in these to attack. */
-const NOT_A_FINDING = ["claim/", "verify/", "hold/", "inbox/", "handoff/", "help/", "join-request/", "draft/", "attack/"];
+const NOT_A_FINDING = [...COORDINATION_PREFIXES, "verify/", "review/", "handoff/", "help/", "join-request/", "draft/", "attack/"];
 /** An author's answer that leaves the quoted clause standing must add at least this much: a reply, not a re-save. */
 export const ATTACK_REPLY_MIN_CHARS = 40;
 /** Below this an entry is a note (a todo, a port number), not a finding a proposal could rest on. */
@@ -285,8 +476,29 @@ const isFinding = (key: string) => !NOT_A_FINDING.some((x) => key.startsWith(x))
  * rooms the first one arrived a median 19.5 min in). Same rules as a blocking challenge: someone other than the author,
  * on another connection, quoting the text objected to.
  */
+/** The seat that already holds this verify/, review/ or attack/ key, when the writer is another agent adding its own
+ * text (not clearing, not a human, not an anonymous room where a name in a key would unmask its author). */
+function secondScrutiny(room: Room, p: Participant, key: string, text: string): string | undefined {
+  if (!text.trim() || p.agent === "human" || room.anonymous || !/^(verify|review|attack)\//.test(key)) return undefined;
+  const held = room.board.get(key);
+  return held && held.text.trim() && held.by !== p.name ? held.by : undefined;
+}
+
+/** <key>.<writer>, the suffix before a .partial so a partial verdict stays one. */
+function ownScrutinyKey(key: string, name: string): string {
+  const own = key.endsWith(".partial") ? `${key.slice(0, -".partial".length)}.${name}.partial` : `${key}.${name}`;
+  if (!BOARD_KEY.test(own)) throw new HubError(`"${key}" is held by another seat and "${own}", where yours would go, is not a valid board key (80 characters at most): write it under a shorter key of your own.`, undefined, "key-format");
+  return own;
+}
+
+/** The entry an attack/* key targets: attack/<key>, or a second attacker's attack/<key>.<its name>. */
+export function attackTarget(room: Room, key: string, by: string): string {
+  const full = key.slice("attack/".length);
+  return !room.board.has(full) && full.endsWith(`.${by}`) && room.board.has(full.slice(0, -by.length - 1)) ? full.slice(0, -by.length - 1) : full;
+}
+
 function checkAttack(room: Room, p: Participant, key: string, text: string): { target: string; author: string; cites: string } {
-  const target = key.slice("attack/".length);
+  const target = attackTarget(room, key, p.name);
   const e = room.board.get(target);
   if (!isFinding(target)) throw new HubError(`"${target}" is coordination state and cannot be attacked; attack/<key> targets a finding, e.g. attack/evidence/x for "evidence/x".`, undefined, "key-format");
   if (!e) throw new HubError(`There is no board entry "${target}" to attack. attack/<key> names an existing entry, e.g. attack/evidence/x for "evidence/x".`, undefined, "state");
@@ -296,14 +508,15 @@ function checkAttack(room: Room, p: Participant, key: string, text: string): { t
     throw new HubError(`You share a connection with ${e.by}, the author of "${target}": an attack must come from a different session (identity-is-the-connection).`, undefined, "ownership");
   }
   const cites = [...text.matchAll(QUOTED)].map((m) => m[1]).filter((q) => norm(e.text).includes(norm(q))).sort((a, b) => b.length - a.length)[0];
-  if (!cites) throw new HubError(`An attack must quote the clause of "${target}" it objects to (12+ characters, in double quotes), then say what is wrong with it. Read the entry with board_get and copy the text.`);
+  if (!cites) throw new HubError(`An attack must quote the clause of "${target}" it objects to (12+ characters, in double quotes), then say what is wrong with it. Read the entry with board_get and copy the text.`, undefined, "cite-required");
   return { target, author: e.by, cites };
 }
 
 /** Open until the author removes every clause the attack quotes, or adds a reply to the attacked entry. */
 function attackOpen(attack: BoardEntry, target: BoardEntry): boolean {
   const text = norm(target.text);
-  return [...attack.text.matchAll(QUOTED)].some((m) => text.includes(norm(m[1]))) && text.length < (attack.attackedChars ?? 0) + ATTACK_REPLY_MIN_CHARS;
+  // growth from other seats' appended lines (board_set append) is not a reply by the author
+  return [...attack.text.matchAll(QUOTED)].some((m) => text.includes(norm(m[1]))) && text.length - (target.othersChars ?? 0) < (attack.attackedChars ?? 0) + ATTACK_REPLY_MIN_CHARS;
 }
 
 /** The system line posted with the one refusal; it is also the receipt, so a replayed room does not refuse again. */
@@ -325,13 +538,14 @@ export function scrutiny(room: Room): { unexamined: string[]; open_attacks: stri
   };
   const said: { by: string; text: string }[] = [
     ...room.messages.filter((m) => m.kind !== "system" && m.kind !== "board").map((m) => ({ by: m.from.name, text: m.content })),
-    ...[...room.board].filter(([k]) => isFinding(k)).map(([, e]) => ({ by: e.by, text: e.text })),
+    // a review/* is scrutiny, not a finding: nobody owes it an attack, and what it names or quotes has been looked at
+    ...[...room.board].filter(([k]) => isFinding(k) || k.startsWith("review/")).map(([, e]) => ({ by: e.by, text: e.text })),
   ];
   const unexamined: string[] = [];
   const open_attacks: string[] = [];
   for (const [key, e] of room.board) {
     if (key.startsWith("attack/")) {
-      const target = key.slice("attack/".length);
+      const target = attackTarget(room, key, e.by);
       const t = room.board.get(target);
       if (t && attackOpen(e, t)) open_attacks.push(key);
       continue;
@@ -473,24 +687,58 @@ export function setBoardAs(hub: Hub, roomName: string, byName: string, key: stri
   return entry;
 }
 
+/** A full inbox the room was told of: the open notes it was told to acknowledge, and every note refused since. Ends when
+ * a note reaches the room again (in memory only: after a restart the room may be told once more). */
+const inboxFull = new WeakMap<Room, { open: string; refused: Set<string> }>();
+
+/**
+ * The cap refusal reaches the room that can release it, not only the sender (sources/reactive-streams-backpressure:
+ * the bound must be known to the receiver). It is logged in the target room as an inbox_refused event (no text), and
+ * the room hears once per full inbox which notes to acknowledge, and when notes reach it again, which were refused.
+ */
+function refuseNote(hub: Hub, to: Room, fromRoom: string, byName: string, full: string, chars: number, open: string[]): never {
+  const err = new HubError(`${to.name} already has 10 inbox notes awaiting acknowledgement; wait for them to be acknowledged or cleared. That room has been told your note "${full}" was refused; it was not stored, so send it again once a slot frees.`, undefined, "inbox-cap");
+  hub.recordRefusal(to.name, "post_to_room", err);
+  hub.persist({ type: "inbox_refused", room: to.name, ts: now(), from_room: fromRoom, by: byName, key: full, chars, open: open.length });
+  // one line per full inbox, not per refused note (devroom/inbox-cap: three refusals, three lines listing the same ten
+  // keys); a room that has since acknowledged some and filled up again is told again
+  const signature = [...open].sort().join(" ");
+  const episode = inboxFull.get(to);
+  if (episode && episode.open === signature) episode.refused.add(full);
+  else {
+    inboxFull.set(to, { open: signature, refused: new Set([...(episode?.refused ?? []), full]) });
+    hub.post(to, "system", undefined,
+      `A note from ${byName} in ${fromRoom} ("${full}", ${chars} chars) was refused: this room has ${open.length} notes awaiting acknowledgement, the most it holds. ` +
+      `Read and acknowledge them (board_set key="<key>.ack") so notes reach you again: ${open.join(", ")}.`);
+  }
+  throw err;
+}
+
 /** Cross-room note: written into the target room's board under inbox/<from>/<key> without joining it. */
 export function postToRoom(hub: Hub, fromRoom: string, pid: string, toRoom: string, key: string, text: string, ackRequired = false, opts: BoardExpiryOptions = {}): { key: string; entry: BoardEntry } {
   const from = hub.getRoom(fromRoom);
   const p = hub.requireParticipant(from, pid);
-  if (toRoom === fromRoom) throw new HubError("That is your own room; use board_set.");
+  if (toRoom === fromRoom) throw new HubError("That is your own room; use board_set.", undefined, "invalid-arg");
   const to = hub.getRoom(toRoom);
   if (to.state === "concluded" || to.state === "closed") {
     throw new HubError(`Room "${toRoom}" is ${to.state}: board writes are refused, there is nothing left to coordinate there.`, undefined, "state");
   }
   if (!/^[\w .:-]{1,40}$/.test(key)) throw new HubError("Inbox keys are short names without slashes.", undefined, "key-format");
-  if (text.length > 8000) throw new HubError("Notes are capped at 8000 characters.", undefined, "size");
+  if (text.length > BOARD_ENTRY_MAX) throw new HubError(`That note is ${text.length} chars; a note holds ${BOARD_ENTRY_MAX}. Send it as two notes (${key}-1, ${key}-2), or put the long part on your own board and send the key.`, undefined, "size");
   const full = `inbox/${fromRoom}/${key}`;
   const expiresAt = boardExpiry(full, opts);
   const entry: BoardEntry = { text, by: p.name, updatedAt: now(), ...(expiresAt ? { expiresAt } : {}), ...(ackRequired ? { ackRequired: true } : {}) };
+  // Only notes the room is asked to acknowledge hold a slot: optional ones (rulings, FYIs) once filled the cap with
+  // nothing telling anyone to ack them, and cut 0btz-build off for 49 min and 1nwp-external for 28.5 (claim/inbox-cap).
   // Replacing an open note consumes no extra slot. A changed text hash invalidates its old ack.
-  const otherOpen = [...to.board.entries()].filter(([k, e]) => k !== full && inboxOpen(to, k, e)).length;
-  if (inboxOpen(to, full, entry) && otherOpen >= 10) throw new HubError(`${toRoom} already has 10 inbox notes awaiting acknowledgement; wait for them to be acknowledged or cleared.`);
+  const otherOpen = unacknowledged(to).filter((k) => k !== full);
+  if (ackRequired && inboxOpen(to, full, entry) && otherOpen.length >= 10) refuseNote(hub, to, from.name, p.name, full, text.length, otherOpen);
+  const ended = inboxFull.get(to);
+  inboxFull.delete(to);
   applyBoard(to, full, entry);
+  // notes reach the room again: say which were refused while it was full, so it can ask their senders for them
+  const missed = [...(ended?.refused ?? [])].filter((k) => k !== full);
+  if (missed.length) hub.post(to, "system", undefined, `${missed.length} note(s) were refused while this room's inbox was full and have not arrived since: ${missed.join(", ")}. Their senders were told to send them again.`);
   hub.persist({ type: "board", room: toRoom, key: full, entry });
   hub.post(to, "system", undefined, `Note from ${p.name} in ${fromRoom} on the board as "${full}"${ackRequired ? ` (acknowledge by writing "${full}.ack")` : ""}: ${text.slice(0, 160)}${text.length > 160 ? "…" : ""}`);
   return { key: full, entry };

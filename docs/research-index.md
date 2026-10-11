@@ -3,7 +3,6 @@
 | Source | Cited in |
 |---|---|
 | 10.1145/2363.2433 | board-delta-manifests-and-single-electorate docs/board-electorate-swarm-200859 docs/swarm-protocol-spec proposal-is-a-document self-organising-teams-by-claims-and-recruitment  |
-| 10.1145/2363.2433. | board-delta-manifests-and-single-electorate  |
 | 10.1145/2635868.2635929 | docs/build-suite-round-191133-report  |
 | arXiv:2105.03546 | board-delta-manifests-and-single-electorate  |
 | arXiv:2109.10761 | board-delta-manifests-and-single-electorate  |

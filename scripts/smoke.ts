@@ -20,20 +20,28 @@ await ownHubPort(PORT + 1, "PORT+1");
 // the default recruit policy is asserted below, so the hubs must not inherit a pin from the caller (every recruit's shell has one)
 // the smoke hub runs the default policy: no CHATROOM_* hub setting of the shell that started it (a recruit inherits its parent hub's, e.g. CHATROOM_FRESH_CHALLENGER=1) may reach it
 const hubEnv = Object.fromEntries(Object.entries(process.env).filter(([k]) => !k.startsWith("CHATROOM_")));
-const server = spawn("npx", ["tsx", "src/index.ts"], { env: { ...hubEnv, PORT: String(PORT), CHATROOM_SPAWN_DRY: "1", CHATROOM_LOG_DIR: "/tmp/chatroom-smoke-spawn", CHATROOM_MAX_LIVE_PER_ROOM: "12", CHATROOM_INSECURE_LOCAL: "1", CHATROOM_HUMAN_TOKEN: "smoke-agent-control" }, stdio: ["ignore", "inherit", "inherit"] });
+// SMOKE_DATA_DIR / SMOKE_HEALTH_MS: persist the main hub's rooms (and its health samples) so a restart can be checked on
+// what the whole smoke wrote (scripts/restart-replay-regression.ts); unset, the hub runs in memory as before
+const persisted = { ...(process.env.SMOKE_DATA_DIR ? { CHATROOM_DATA_DIR: process.env.SMOKE_DATA_DIR } : {}), ...(process.env.SMOKE_HEALTH_MS ? { CHATROOM_HEALTH_MS: process.env.SMOKE_HEALTH_MS } : {}) };
+const server = spawn("npx", ["tsx", "src/index.ts"], { env: { ...hubEnv, ...persisted, PORT: String(PORT), CHATROOM_SPAWN_DRY: "1", CHATROOM_LOG_DIR: "/tmp/chatroom-smoke-spawn", CHATROOM_MAX_LIVE_PER_ROOM: "12", CHATROOM_INSECURE_LOCAL: "1", CHATROOM_HUMAN_TOKEN: "smoke-agent-control" }, stdio: ["ignore", "inherit", "inherit"] });
 const stop = () => server.kill();
 process.on("exit", stop);
 
-async function waitForServer() {
-  for (let i = 0; i < 50; i++) {
+// how long the hub may take to start: 10 s was not enough on a shared machine at load average 150-200, where an
+// unchanged tree failed "server did not start" (swarm-180216-182a, friction/machine-load). SMOKE_START_MS overrides it.
+const START_MS = Number(process.env.SMOKE_START_MS ?? 90_000);
+async function waitForServer(base = HTTP) {
+  const t0 = Date.now();
+  while (Date.now() - t0 < START_MS) {
     try {
-      await fetch(`${HTTP}/`);
+      await fetch(`${base}/`);
+      if (Date.now() - t0 > 10_000) console.log(`smoke: the hub took ${Math.round((Date.now() - t0) / 1000)} s to start`);
       return;
     } catch {
       await new Promise((r) => setTimeout(r, 200));
     }
   }
-  throw new Error("server did not start");
+  throw new Error(`server did not start within ${START_MS / 1000} s (SMOKE_START_MS)`);
 }
 
 async function connect(name: string) {
@@ -186,7 +194,8 @@ assert.deepEqual(tools, ["amend", "board_get", "board_set", "challenge", "join_r
   assert.equal(hp.status, 200);
   const humanMsg = (await hp.json()) as { id: string };
   const seenByC = await c.call("wait_for_messages", { room, timeout_ms: 0 });
-  assert.ok(seenByC.messages.some((m: string) => m.includes("Participant D: Chair here")), "human message not delivered under pseudonym");
+  // the sender's tag says which channel it came through (scripts/speaker-identity-regression.ts)
+  assert.ok(seenByC.messages.some((m: string) => m.includes("Participant D [human route: loopback, not checked]: Chair here")), "human message not delivered under pseudonym, tagged with its channel");
   // A is out of budget, but answering an unanswered human is always allowed
   await a.call("wait_for_messages", { room, timeout_ms: 0 });
   await a.call("send_message", { room, content: "On it, chair. Alpha or Beta, deciding now.", reply_to: humanMsg.id });
@@ -663,8 +672,10 @@ assert.deepEqual(tools, ["amend", "board_get", "board_set", "challenge", "join_r
   assert.ok(!("text" in man.notes), "keyless board_get is a manifest");
   const st2 = await a.call("room_status", { room });
   assert.ok(!("text" in st2.board.notes), "room_status carries a board manifest");
-  // once concluded, board writes are refused outright; reads of what was written before are untouched
-  await assert.rejects(a.call("board_set", { room, key: "late-notes", text: "too late" }), /concluded: board writes are refused/);
+  // once concluded, coordination writes are refused; a late result is kept and marked late (scripts/late-writes-regression.ts)
+  await assert.rejects(a.call("board_set", { room, key: "claim/late", text: "too late" }), /concluded: board writes are refused/);
+  await a.call("board_set", { room, key: "late-notes", text: "the rerun landed after the vote" });
+  assert.equal((await a.call("room_status", { room })).board["late-notes"].late, true, "a result written after conclusion is on the record, marked late");
   const stats = (await (await fetch(`${HTTP}/rooms/${room}/stats`)).json()) as { refusals: Record<string, number> };
   assert.ok(Object.values(stats.refusals).reduce((x, y) => x + y, 0) >= 2, "refusals are counted per tool and reason");
 }
@@ -759,14 +770,7 @@ assert.deepEqual(tools, ["amend", "board_get", "board_set", "challenge", "join_r
   const HTTP2 = `http://127.0.0.1:${PORT2}`;
   const server2 = spawn("npx", ["tsx", "src/index.ts"], { env: { ...hubEnv, PORT: String(PORT2), CHATROOM_SPAWN_DRY: "1", CHATROOM_NUDGE_AFTER_MS: "1200", CHATROOM_LOG_DIR: "/tmp/chatroom-smoke-spawn2", CHATROOM_MAX_LIVE_PER_ROOM: "12" }, stdio: ["ignore", "inherit", "inherit"] });
   process.on("exit", () => server2.kill());
-  for (let i = 0; i < 50; i++) {
-    try {
-      await fetch(`${HTTP2}/`);
-      break;
-    } catch {
-      await new Promise((r) => setTimeout(r, 200));
-    }
-  }
+  await waitForServer(HTTP2); // the same load-tolerant window as the first hub
   const mk = async (name: string) => {
     const client = new Client({ name, version: "0.0.0" });
     await client.connect(new StreamableHTTPClientTransport(new URL(`${HTTP2}/mcp`)));

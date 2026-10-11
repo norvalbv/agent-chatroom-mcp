@@ -7,6 +7,10 @@
  */
 import { readFileSync } from "node:fs";
 
+/** Ids a group cannot take: its room is <swarm>-<id>, and <swarm>-leads is the run's consolidation room, where the
+ * verifier and the consolidator sit. */
+export const RESERVED_GROUP_IDS: readonly string[] = ["leads"];
+
 export interface GroupsFile {
   done_when?: string;
   verifier_directive?: string;
@@ -27,6 +31,7 @@ export function loadGroups(file: string): GroupsFile {
   const groups = (raw.groups as Record<string, unknown>[]).map((g, i) => {
     const id = String(g.id ?? "");
     if (!/^[a-z0-9][a-z0-9-]{0,23}$/.test(id)) throw new Error(`--groups ${file}: group ${i + 1} needs an id of lower-case letters, digits and hyphens (it names the group's room)`);
+    if (RESERVED_GROUP_IDS.includes(id)) throw new Error(`--groups ${file}: id "${id}" is reserved: a group's room is <swarm>-<id>, and <swarm>-${id} is the room the verifier and the consolidator use. Give group ${i + 1} another id`);
     if (seen.has(id)) throw new Error(`--groups ${file}: id "${id}" is used twice`);
     seen.add(id);
     const brief = typeof g.brief === "string" ? g.brief.trim() : "";

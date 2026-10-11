@@ -95,16 +95,21 @@ test("the parent link survives a hub restart (replay), and the carried conclusio
   }
 });
 
-test("a parent that already concluded is not written to; a long conclusion is cut with a pointer, objections kept", () => {
+test("a parent past its late-results window is not written to; a long conclusion is cut with a pointer, objections kept", (t) => {
   const { hub, a, b } = room();
   const ca = hub.join(CHILD, "A", "test", { parent: PARENT, requireChallenge: false, quorum: "majority" }, undefined, "s1").participant;
   const cb = hub.join(CHILD, "B", "test", {}, undefined, "s2").participant;
+  // inside the window the late conclusion lands marked late (scripts/late-writes-regression.ts); past it the board is final
+  const saved = Hub.LATE_WRITE_MS;
+  t.after(() => { Hub.LATE_WRITE_MS = saved; });
+  Hub.LATE_WRITE_MS = 0;
   const pp = hub.propose(PARENT, a.id, "The parent decides first, before the breakout.");
   hub.vote(PARENT, b.id, pp.id, "agree", undefined, undefined, "The parent decides first");
   assert.equal(hub.getRoom(PARENT).state, "concluded");
   const pr = hub.propose(CHILD, ca.id, "The late breakout decision arrives after its parent.");
   hub.vote(CHILD, cb.id, pr.id, "agree", undefined, undefined, "The late breakout decision");
-  assert.equal(hub.getRoom(PARENT).board.has(`inbox/${CHILD}/conclusion`), false, "a concluded parent's board is final");
+  assert.equal(hub.getRoom(PARENT).board.has(`inbox/${CHILD}/conclusion`), false, "past the window a concluded parent's board is final");
+  Hub.LATE_WRITE_MS = saved;
 
   const second = room();
   const x = second.hub.join(CHILD, "A", "test", { parent: PARENT, requireChallenge: false, quorum: "majority" }, undefined, "s1").participant;

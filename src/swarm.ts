@@ -7,14 +7,16 @@
  */
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
 import { createWriteStream, existsSync, mkdirSync, readFileSync, readdirSync, statSync, realpathSync, symlinkSync, writeFileSync } from "node:fs";
+import { carryHooks, hooksLine, hooksOff } from "./worktree-hooks.js";
+import { checkJoined, joinLines, roomNames, type LaunchedSeat } from "./join-check.js";
 import { dirname, resolve } from "node:path";
-import { collectRoomSnapshot, renderRunReport, writeRunResult, rollupUsage, hubUsageRollup, parseClaudeCliOutput, seatScorecard, classifyOutcome, proposedDecisionDir, type RunResult, type RoomSnapshot, type SeatUsageRollup } from "./result.js";
+import { collectRoomSnapshot, renderRunReport, writeRunResult, rollupUsage, hubUsageRollup, parseClaudeCliOutput, transcriptPath, seatScorecard, classifyOutcome, proposedDecisionDir, type RunResult, type RoomSnapshot, type SeatUsageRollup } from "./result.js";
 import { settledAxes } from "./settled.js";
 import { registerRespawn, respawnProbe } from "./respawn.js";
 import { fileURLToPath } from "node:url";
-import { carrySettings, launcherHeaders, COMPACT_WINDOW_TESTED, compactWindow, devHubRule, heartbeatHookSettings, hubLogFile, loadDotEnv, outputHeartbeat, ownHubEnv, readLauncherToken, respawnTokenProblem, reusedHubProblem, seatBeat, seatChildEnv, seatPortError, type SeatBeat } from "./env.js";
+import { aiGatesLine, HUB_START_MS, waitForHub, seatHoldMs, carrySettings, launcherHeaders, COMPACT_WINDOW_TESTED, compactWindow, devHubRule, heartbeatHookSettings, hubLogFile, loadDotEnv, outputHeartbeat, ownHubEnv, readLauncherToken, respawnTokenProblem, reusedHubProblem, seatBeat, seatChildEnv, seatPortError, type SeatBeat } from "./env.js";
 import { randomUUID } from "node:crypto";
-import { exitDetail, fetchRespawnRoom, respawnChain, usageLimit, type RespawnRoom } from "./respawn.js";
+import { claudeUsageProbe, exitDetail, fetchRespawnRoom, respawnChain, type RespawnRoom } from "./respawn.js";
 import { claudeArgs } from "./claude-args.js";
 import { codexSeatCommand, codexUsageTracker } from "./codex-seat.js";
 import { claudeSandbox } from "./sandbox.js";
@@ -38,7 +40,7 @@ const has = (name: string) => argv.includes(`--${name}`);
 const BOOL_FLAGS = new Set(["--keep-hub", "--reuse-hub", "--apply", "--full-access", "--named", "--flat", "--require-verification", "--respawn", "--claude-full", "--no-carry", "--no-seat-targets", "--sandbox", "--no-web"]);
 const task = argv.find((a, i) => !a.startsWith("--") && (i === 0 || !argv[i - 1].startsWith("--") || BOOL_FLAGS.has(argv[i - 1])));
 if (!task) {
-  console.error('usage: swarm "<task>" [--flat] [--done-when text] [--verify text] [--agents 6] [--cwd dir] [--models sonnet,haiku] [--lead-model opus] [--verifier-model opus] [--planner-model opus] [--codex k] [--codex-models gpt-6-astra,gpt-5.6-sol,gpt-5.6-terra] [--openrouter k] [--openrouter-models deepseek/deepseek-v4.1-flash,...] [--verifier-openrouter slug] [--openrouter-reasoning low|medium|high] [--require-verification] [--quorum unanimous|majority|supermajority] [--prompt loop.md] [--groups groups.json [--digest-every 45]] [--resources file.md] [--respawn] [--apply] [--full-access] [--named] [--claude-full] [--no-carry] [--no-seat-targets] [--no-web] [--sandbox] [--timeout 30] [--port 7717] [--result-path path]');
+  console.error('usage: swarm "<task>" [--flat] [--done-when text] [--verify text] [--agents 6] [--cwd dir] [--models sonnet,haiku] [--lead-model opus] [--verifier-model opus] [--planner-model opus] [--codex k] [--codex-models gpt-6-astra,gpt-5.6-sol,gpt-5.6-terra] [--openrouter k] [--openrouter-models deepseek/deepseek-v4.1-flash,...] [--verifier-openrouter slug] [--openrouter-reasoning low|medium|high] [--require-verification] [--quorum unanimous|majority|supermajority] [--chair name] [--owner-word] [--seat-hooks off] [--seat-ai-gates on] [--prompt loop.md] [--groups groups.json [--digest-every 45]] [--resources file.md] [--respawn] [--apply] [--full-access] [--named] [--claude-full] [--no-carry] [--no-seat-targets] [--no-web] [--sandbox] [--timeout 30] [--port 7717] [--result-path path]');
   process.exit(2);
 }
 /** --groups <file.json>: the run's groups as the operator wrote them (src/groups.ts), one room and one brief each, on the
@@ -84,6 +86,8 @@ const CLAUDE_FULL = has("claude-full");
 const REQUIRE_VERIFICATION = has("require-verification");
 /** --quorum unanimous|majority|supermajority: the room's quorum, fixed by the launcher at creation (a forty-seat lobby cannot run on unanimity); supermajority = ceil(0.75 x electorate), the recommended default for flat runs that used to ask for plain majority */
 const QUORUM = flag("quorum") as "unanimous" | "majority" | "supermajority" | undefined;
+/** --chair <name>: the seat that will relay the owner in the lead room. Named when the room is created, so its messages are tagged [chair] and not [chair, self-claimed] (any seat can take an unnamed room's chair by joining first). */
+const CHAIR = flag("chair");
 /** --prompt <file in prompts/>: the flat-mode brief template (default minimal.md; loop.md for a self-improvement lobby) */
 const FLAT_PROMPT = flag("prompt", "minimal.md")!;
 /** --respawn: a seat that exits while its room is still open is relaunched (up to 3 times) with a note to read the board first */
@@ -91,7 +95,7 @@ const RESPAWN = has("respawn");
 const RUN_STARTED = Date.now();
 // Capture target identity before workers can change its revision.
 const gitIdentity = () => {
-  const git = (...args: string[]) => { const r = spawnSync("git", ["-C", CWD, ...args], { encoding: "utf8" }); if (r.status !== 0) throw new Error(r.stderr); return r.stdout.trim(); };
+  const git = (...args: string[]) => { const r = spawnSync("git", ["--no-optional-locks", "-C", CWD, ...args], { encoding: "utf8" }); if (r.status !== 0) throw new Error(r.stderr); return r.stdout.trim(); };
   try { return { root: realpathSync(git("rev-parse", "--show-toplevel")), commonDir: realpathSync(resolve(CWD, git("rev-parse", "--git-common-dir"))), revision: git("rev-parse", "HEAD"), branch: git("branch", "--show-current"), dirty: git("status", "--porcelain").length > 0 }; } catch { return null; }
 };
 const PROJECT_IDENTITY = { cwd: CWD, canonicalPath: realpathSync(CWD), git: gitIdentity() };
@@ -107,6 +111,15 @@ const FLAT = has("flat");
 const FRESH_CHALLENGER = has("fresh-challenger");
 /** --no-carry: seats start from the brief alone (no settled axes, no PRIOR RUNS, auto-memory off); see carrySettings in env.ts */
 const NO_CARRY = has("no-carry");
+/** --seat-hooks off: seat worktrees do not get the repository's commit hooks (c3d2d088 copies them by default). For runs whose
+ * commits are scratch: in devkit the pre-commit runs its LLM reviewer fleet on every commit (evidence/seat-hooks-cost-and-bypass). */
+const SEAT_HOOKS_OFF = flag("seat-hooks") === "off";
+/** --seat-ai-gates on: seat commits run the repository's AI reviewer gates too. Off by default (owner ruling #985): seats
+ * peer review each other, and their commits run only the deterministic gates (SEAT_AI_GATES_OFF in env.ts). Set in this
+ * process so seatChildEnv sees it, and so a hub this launcher starts hands it to its recruits. */
+if (flag("seat-ai-gates") === "on") process.env.CHATROOM_SEAT_AI_GATES = "on";
+/** --owner-word (or CHATROOM_OWNER_WORD=1): every seat's prompt gains prompts/owner-word.md, which makes a [human route: token] message, or a named [chair]'s relay, part of its brief. */
+const OWNER_WORD_ON = has("owner-word") || process.env.CHATROOM_OWNER_WORD === "1";
 /** --resources <file>: each `## <name>` entry goes on every room's board as resource/<name> before a seat starts (src/resources.ts) */
 let RESOURCES: ReturnType<typeof loadResources> = [];
 if (has("resources")) {
@@ -217,22 +230,21 @@ async function ensureHub() {
   const keeps = !Object.keys(ownHubEnv(HUB_IDLE_EXIT_MIN, PORT)).length;
   const child = spawn("node", [resolve(repoRoot, "dist/hubd.js"), "--port", String(PORT), ...(keeps ? ["--always"] : [])], {
     // CHATROOM_DEFAULT_CWD: a recruit with no cwd and no worktree to go by works in this run's project, not in this checkout
-    env: { ...process.env, PORT: String(PORT), CHATROOM_DATA_DIR: resolve(repoRoot, "data"), CHATROOM_DEFAULT_CWD: process.env.CHATROOM_DEFAULT_CWD || CWD, ...(SANDBOX ? { CHATROOM_SANDBOX: "1" } : {}), ...(FRESH_CHALLENGER ? { CHATROOM_FRESH_CHALLENGER: "1" } : {}), ...ownHubEnv(HUB_IDLE_EXIT_MIN, PORT) },
+    env: { ...process.env, PORT: String(PORT), CHATROOM_DATA_DIR: resolve(repoRoot, "data"), CHATROOM_DEFAULT_CWD: process.env.CHATROOM_DEFAULT_CWD || CWD, ...(SANDBOX ? { CHATROOM_SANDBOX: "1" } : {}), ...(OWNER_WORD_ON ? { CHATROOM_OWNER_WORD: "1" } : {}), ...(SEAT_HOOKS_OFF ? { CHATROOM_SEAT_HOOKS: "off" } : {}), ...(FRESH_CHALLENGER ? { CHATROOM_FRESH_CHALLENGER: "1" } : {}), ...ownHubEnv(HUB_IDLE_EXIT_MIN, PORT) },
     detached: true,
     stdio: "ignore",
   });
   child.unref();
+  let supervisorExited = false;
+  child.once("exit", () => { supervisorExited = true; });
   log(`started a supervised hub on :${PORT} (supervisor pid ${child.pid}, log ${hubLogFile(repoRoot, PORT)}); it is restarted if it dies and ${keeps ? `keeps running: stop it with kill ${child.pid}` : `stops itself after ${HUB_IDLE_EXIT_MIN} min with no request (--hub-idle-exit, --keep-hub)`}`);
-  for (let i = 0; i < 50; i++) {
-    try {
-      await fetch(URL_);
-      launcherToken ??= readLauncherToken(repoRoot, PORT);
-      return;
-    } catch {
-      await new Promise((r) => setTimeout(r, 200));
-    }
+  const t0 = Date.now();
+  if (await waitForHub(URL_, HUB_START_MS, () => supervisorExited)) {
+    if (Date.now() - t0 > 10_000) log(`the hub took ${Math.round((Date.now() - t0) / 1000)} s to start`);
+    launcherToken ??= readLauncherToken(repoRoot, PORT);
+    return;
   }
-  throw new Error("hub did not start");
+  throw new Error(supervisorExited ? `hub did not start: its supervisor exited after ${Math.round((Date.now() - t0) / 1000)} s (log ${hubLogFile(repoRoot, PORT)})` : `hub did not start within ${HUB_START_MS / 1000} s (CHATROOM_HUB_START_MS)`);
 }
 
 // ---------- agents ----------
@@ -242,6 +254,7 @@ const seatChildren = new Map<string, ChildProcess>();
 const killedAtTimeout = new Set<string>();
 /** Cost per process name (`name-rN` for a respawn): withRespawn hands back only the last attempt under the base name. */
 const seatCosts = new Map<string, number>();
+const seatTranscripts = new Map<string, string>();
 const priced = (name: string, o: SeatOutcome): SeatOutcome => { if (o.usage) seatCosts.set(name, o.usage.cost); return o; };
 
 /**
@@ -253,15 +266,19 @@ const priced = (name: string, o: SeatOutcome): SeatOutcome => { if (o.usage) sea
  */
 function runClaude(name: string, text: string, tools: string[], cwd: string, model?: string): Promise<SeatOutcome> {
   const outFile = resolve(OUT, `${name}.out`);
-  // per seat: the MCP URL carries this seat's heartbeat key, which its tool hook sends on every local tool call
-  const beat = seatBeat(`${URL_}/mcp`, randomUUID(), cwd);
+  // per seat: the MCP URL carries this seat's heartbeat key, which its tool hook sends on every local tool call, and how
+  // long its client waits for a tool, so the hub holds its empty waits that long (seatHoldMs)
+  const beat = seatBeat(`${URL_}/mcp`, randomUUID(), cwd, seatHoldMs());
   const seatMcp = resolve(OUT, `${name}.mcp.json`);
   writeFileSync(seatMcp, JSON.stringify({ mcpServers: { chatroom: { type: "http", url: beat.mcpUrl } } }));
   // a seat may write when its tool list lets it edit (WRITE_TOOLS); a read-only seat's Bash gets its cwd denied
   const sandbox = SANDBOX ? claudeSandbox({ cwd, write: tools.includes("Edit"), hubPort: PORT }) : undefined;
   const args = claudeArgs({ mcpJson: seatMcp, tools, model, full: CLAUDE_FULL, settings: carrySettings(NO_CARRY, heartbeatHookSettings()), sandbox });
   return runProc(name, "claude", args, cwd, outFile, false, beat, false, text).then((raw) => {
-    const { text: final, usage } = parseClaudeCliOutput(raw);
+    const { text: final, usage, sessionId } = parseClaudeCliOutput(raw);
+    // where the seat's transcript is, for result.json (gap G17: it is under the launcher's CLAUDE_CONFIG_DIR, not ~/.claude)
+    const transcript = transcriptPath(sessionId, cwd);
+    if (transcript) seatTranscripts.set(name, transcript);
     writeFileSync(outFile, final);
     // per-seat usage next to the .out, the same sidecar shape an OpenRouter seat writes (scripts/pool-run.ts reads it per seat)
     if (usage) writeFileSync(resolve(OUT, `${name}.usage.json`), JSON.stringify(usage));
@@ -320,7 +337,8 @@ function runCodex(name: string, text: string, cwd: string, model: string | undef
  */
 /** Attempts a respawn replaced, by process name: their usage belongs in the run total (unknown stays unknown). */
 const replacedRuns: SeatRun[] = [];
-async function withRespawn(name: string, room: string, mk: (nm: string, note: string) => Promise<SeatOutcome>): Promise<SeatOutcome> {
+/** `probeModel`: the Claude model this seat runs on (undefined: the CLI's default), which is the one asked when the usage limit stopped it. */
+async function withRespawn(name: string, room: string, probeModel: string | undefined, mk: (nm: string, note: string) => Promise<SeatOutcome>): Promise<SeatOutcome> {
   if (!RESPAWN) return mk(name, "");
   const chain = await respawnChain<SeatOutcome>({
     name,
@@ -329,7 +347,7 @@ async function withRespawn(name: string, room: string, mk: (nm: string, note: st
     exitCode: (nm) => exitCodes.get(nm) ?? null,
     signal: (nm) => exitSignals.get(nm) ?? null,
     detail: (nm) => exitDetails.get(nm) ?? "",
-    usageReady: claudeUsageReady,
+    usageReady: () => claudeUsageProbe({ model: probeModel, cwd: CWD, env: seatChildEnv(process.env), log, who: name }),
     ...(Number(process.env.CHATROOM_USAGE_POLL_MS) > 0 ? { usagePollMs: Number(process.env.CHATROOM_USAGE_POLL_MS) } : {}),
     register: (previousName, nm, reason) => registerRespawn(URL_, room, previousName, nm, launcherToken, undefined, reason),
     run: mk,
@@ -345,18 +363,6 @@ const exitCodes = new Map<string, number | null>();
 const exitSignals = new Map<string, string | null>();
 /** The exit receipt's detail per seat name (exitDetail): withRespawn waits out a usage-limit exit instead of relaunching into it. */
 const exitDetails = new Map<string, string>();
-/** Whether the account can run a Claude seat again: one tiny `claude -p` call (a refused one costs nothing). */
-function claudeUsageReady(): Promise<boolean> {
-  return new Promise((done) => {
-    const child = spawn("claude", ["-p", "Reply with the single word OK.", "--model", MODELS[0] ?? VERIFIER_MODEL ?? "claude-opus-5-5"], { cwd: CWD, env: seatChildEnv(process.env), stdio: ["ignore", "pipe", "pipe"] });
-    let out = "";
-    child.stdout.on("data", (d) => (out += d));
-    child.stderr.on("data", (d) => (out += d));
-    const timer = setTimeout(() => child.kill("SIGTERM"), 120_000);
-    child.on("close", (code) => { clearTimeout(timer); done(code === 0 && !usageLimit(out)); });
-    child.on("error", () => { clearTimeout(timer); done(false); });
-  });
-}
 /** Only successfully isolated workers receive seat commit attribution (never planner/verifier). */
 const writeWorkers = new Set<string>();
 
@@ -393,7 +399,7 @@ function runProc(name: string, cmd: string, args: string[], cwd: string, outFile
       log(`${name} exited (${exitDetails.get(name)!.replace(/^exit /, "")})`);
       // the exit receipt: the hub closes this seat's MCP sessions, so a dead seat is not read as alive in a long command.
       // Awaited (5 s at most): withRespawn reads the room's active seats next, and the launcher's own exit would cut it off.
-      if (beat) await fetch(`${URL_}/heartbeat`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ seat_key: beat.key, exited: true, detail: exitDetail(code, [final, err], Date.now(), signal) }), signal: AbortSignal.timeout(5_000) }).catch(() => {});
+      if (beat) await fetch(`${URL_}/heartbeat`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ seat_key: beat.key, exited: true, detail: exitDetail(code, [final, err], Date.now(), signal), ...(killedAtTimeout.has(name) ? { stopped_by: "timeout" } : STOPPING ? { stopped_by: "operator" } : {}) }), signal: AbortSignal.timeout(5_000) }).catch(() => {});
       res(final.trim());
     });
   });
@@ -452,6 +458,9 @@ function workerCwd(name: string): string {
   }
   writeWorkers.add(name);
   log(`${name} works in ${dir} (branch ${branch})`);
+  // nor a hooks runner: without it every commit this seat makes skips the repository's hooks (bugs.md 4)
+  log(hooksLine(name, SEAT_HOOKS_OFF ? hooksOff(CWD) : carryHooks(CWD, dir)));
+  log(`${name}: ${aiGatesLine(seatChildEnv(process.env, name))}`);
   return dir;
 }
 
@@ -557,6 +566,8 @@ if (RESOURCES.length) {
   }
 }
 const runs: Promise<SeatRun>[] = [];
+/** Every seat this launcher started and the room it was told to join (checked once by the join check below). */
+const launched: LaunchedSeat[] = [];
 /**
  * Alternate-provider seats: --codex k and --openrouter k take non-lead seats, rotating over their
  * own model lists. Claude keeps the lead and verifier seats.
@@ -572,13 +583,30 @@ for (let back = 0; back < Math.max(0, ...plan.groups.map((g) => g.workers)) && a
   for (const g of plan.groups) {
     if (altSlots.size >= ALT) break;
     const i = g.workers - back;
-    if (g.workers > 1 && i > (FLAT ? 0 : 1)) altSlots.add(`${g.id}:${i}`);
+    // a flat room has no lead seat, so its only worker may be the alt seat (bugs.md 6: `--flat --agents 2 --codex 1`
+    // silently launched Claude); a group keeps its first seat, the lead, on Claude
+    if ((FLAT || g.workers > 1) && i > (FLAT ? 0 : 1)) altSlots.add(`${g.id}:${i}`);
   }
+}
+{
+  const asked = Number(flag("codex", "0")) + Number(flag("openrouter", "0"));
+  // fewer alt seats than asked is said, never silent: a model-specific benchmark run was mislabelled that way
+  if (asked > altSlots.size) log(`asked for ${asked} alternate-provider seat(s); this run has room for ${altSlots.size} (the verifier${FLAT ? "" : " and each group's lead"} stay on Claude), so ${asked - altSlots.size} run as Claude instead`);
 }
 let workerIndex = 0;
 
 // verifier joins the leads room first so it is present for every report
 const verifierTools = APPLY || FULL ? WRITE_TOOLS : READ_TOOLS;
+/**
+ * Appended to every seat's launch prompt: which room messages carry the owner's word. A seat's brief is its user
+ * message and a room message is tool output, so an owner instruction in the room that changes the brief is ignored or
+ * refused unless the brief itself delegates to that channel (sources/2404.13208; "a message in the room does not carry
+ * that authority for me", swarm-115621-079m-benchmark #18). The tags it names are the hub's (Hub.speakerTag).
+ * OFF unless the run is launched with --owner-word: it makes a token-tagged room message part of every seat's brief,
+ * and the token is only as secret as this machine's process table (review/a9060d5e-verifier). The owner turns it on
+ * for a run they mean to steer.
+ */
+const OWNER_WORD = OWNER_WORD_ON ? "\n\n" + readFileSync(resolve(repoRoot, "prompts", "owner-word.md"), "utf8").trim() : "";
 const verifierText = SETTLED + "\n" + prompt("verifier.md", {
       NAME: "verifier",
       AGENT: VERIFIER_OPENROUTER ? "openrouter" : "claude",
@@ -602,26 +630,29 @@ const verifierText = SETTLED + "\n" + prompt("verifier.md", {
           : "Do NOT modify any files; verify by reading and running read-only commands only.",
     });
 // the launcher fixes the room's policy before any seat joins (join_room settings only apply at creation)
-if (REQUIRE_VERIFICATION || QUORUM) {
+if (REQUIRE_VERIFICATION || QUORUM || CHAIR) {
   try {
-    const r = await fetch(`${URL_}/rooms/${encodeURIComponent(leadsRoom)}/create`, { method: "POST", headers: launcherHeaders(launcherToken), body: JSON.stringify({ topic: task, expected_participants: FLAT ? TOTAL : plan.groups.length + 1, require_verification: REQUIRE_VERIFICATION, quorum: QUORUM ?? "unanimous" }) });
-    log(`${leadsRoom} created with quorum=${QUORUM ?? "unanimous"}${REQUIRE_VERIFICATION ? ", require_verification" : ""} (${r.status})`);
+    const r = await fetch(`${URL_}/rooms/${encodeURIComponent(leadsRoom)}/create`, { method: "POST", headers: launcherHeaders(launcherToken), body: JSON.stringify({ topic: task, expected_participants: FLAT ? TOTAL : plan.groups.length + 1, require_verification: REQUIRE_VERIFICATION, quorum: QUORUM ?? "unanimous", ...(CHAIR ? { chair: CHAIR } : {}) }) });
+    log(`${leadsRoom} created with quorum=${QUORUM ?? "unanimous"}${REQUIRE_VERIFICATION ? ", require_verification" : ""}${CHAIR ? `, chair ${CHAIR}${((await r.clone().json().catch(() => ({}))) as { chair_named?: boolean }).chair_named ? " (named)" : " (NOT named: the hub did not accept this launcher's token, so the chair will read as self-claimed)"}` : ""} (${r.status})`);
   } catch (e) {
     log(`could not pre-create ${leadsRoom}: ${e instanceof Error ? e.message : String(e)}${e instanceof Error && e.cause ? ` (cause: ${(e.cause as NodeJS.ErrnoException).code ?? (e.cause as Error).message})` : ""}`);
   }
-  // a hand-written group works for hours and concludes its own proposal, so its room gets the run's policy too
+  // a hand-written group works for hours and concludes its own proposal, so its room gets the run's policy too. It is a
+  // breakout of the leads room (parent): the hub carries its conclusion onto the leads board, the leads room's last call
+  // waits for it, and it is told when the leads room concludes (swarm-123021-1nwp: leads concluded 92 min before internal)
   for (const g of GROUPS ? plan.groups : []) {
     const room = `${SWARM_ID}-${g.id}`;
     try {
-      const r = await fetch(`${URL_}/rooms/${encodeURIComponent(room)}/create`, { method: "POST", headers: launcherHeaders(launcherToken), body: JSON.stringify({ topic: `${g.title}: ${g.directive}`, expected_participants: g.workers, require_verification: REQUIRE_VERIFICATION, quorum: QUORUM ?? "unanimous" }) });
+      const r = await fetch(`${URL_}/rooms/${encodeURIComponent(room)}/create`, { method: "POST", headers: launcherHeaders(launcherToken), body: JSON.stringify({ topic: `${g.title}: ${g.directive}`, expected_participants: g.workers, require_verification: REQUIRE_VERIFICATION, quorum: QUORUM ?? "unanimous", parent: leadsRoom }) });
       log(`${room} created with quorum=${QUORUM ?? "unanimous"}${REQUIRE_VERIFICATION ? ", require_verification" : ""} (${r.status})`);
     } catch (e) {
       log(`could not pre-create ${room}: ${e instanceof Error ? e.message : String(e)}`);
     }
   }
 }
+launched.push({ name: "verifier", room: leadsRoom });
 runs.push(
-  withRespawn("verifier", leadsRoom, (nm, note) => (VERIFIER_OPENROUTER ? runOpenRouter(nm, verifierText.split("verifier\"").join(`${nm}\"`) + note, CWD, VERIFIER_OPENROUTER, APPLY || FULL) : runClaude(nm, verifierText + note, verifierTools, CWD, VERIFIER_MODEL))).then((o) => ({ name: "verifier", text: o.text, usage: o.usage })),
+  withRespawn("verifier", leadsRoom, VERIFIER_OPENROUTER ? undefined : VERIFIER_MODEL, (nm, note) => (VERIFIER_OPENROUTER ? runOpenRouter(nm, verifierText.split("verifier\"").join(`${nm}\"`) + OWNER_WORD + note, CWD, VERIFIER_OPENROUTER, APPLY || FULL) : runClaude(nm, verifierText + OWNER_WORD + note, verifierTools, CWD, VERIFIER_MODEL))).then((o) => ({ name: "verifier", text: o.text, usage: o.usage })),
 );
 
 for (const g of plan.groups) {
@@ -670,12 +701,13 @@ for (const g of plan.groups) {
       // Replacements reuse the original successful worktree but commit under their new seat name.
       if (writeWorkers.has(name)) writeWorkers.add(nm);
       return agent === "codex"
-        ? runCodex(nm, buildText(nm) + note, wcwd, model, mayWrite)
+        ? runCodex(nm, buildText(nm) + OWNER_WORD + note, wcwd, model, mayWrite)
         : agent === "openrouter"
-          ? runOpenRouter(nm, buildText(nm) + note, wcwd, model, mayWrite)
-          : runClaude(nm, buildText(nm) + note, mayWrite ? WRITE_TOOLS : READ_TOOLS, wcwd, model);
+          ? runOpenRouter(nm, buildText(nm) + OWNER_WORD + note, wcwd, model, mayWrite)
+          : runClaude(nm, buildText(nm) + OWNER_WORD + note, mayWrite ? WRITE_TOOLS : READ_TOOLS, wcwd, model);
     };
-    runs.push(withRespawn(name, room, mk).then((o) => ({ name, text: o.text, usage: o.usage })));
+    launched.push({ name, room });
+    runs.push(withRespawn(name, room, agent === "claude" ? model : undefined, mk).then((o) => ({ name, text: o.text, usage: o.usage })));
   }
 }
 
@@ -699,9 +731,17 @@ function sweepStrays(why: string): Promise<void> {
   return sweeping;
 }
 // stopping the launcher stops its seats: an orphaned seat keeps polling the provider with nobody to collect its result
+/** Tell the hub why this run ended, in each of its rooms (run_end in the room log, one line in the room). Never fails the run:
+ * a hub that does not know the route (an older build on this port) answers 404 and the run goes on. */
+const postRunEnd = (cause: "concluded" | "timeout" | "operator_stop" | "seats_exited", detail?: string) =>
+  Promise.all([...new Set([leadsRoom, ...groupRooms])].map((room) =>
+    fetch(`${URL_}/rooms/${encodeURIComponent(room)}/run-end`, { method: "POST", headers: launcherHeaders(launcherToken), body: JSON.stringify({ cause, ...(detail ? { detail } : {}) }), signal: AbortSignal.timeout(2_000) })
+      .then((r) => { if (!r.ok && r.status !== 404) log(`${room}: hub did not take the run end (${r.status})`); })
+      .catch(() => {})));
 for (const sig of ["SIGTERM", "SIGINT"] as const) process.on(sig, () => {
   STOPPING = true;
   log(`${sig}: stopping ${children.length} agent(s)`);
+  void postRunEnd("operator_stop", `launcher received ${sig}`);
   for (const c of children) c.kill();
   const swept = sweepStrays(sig);
   setTimeout(() => void swept.finally(() => process.exit(130)), 3000).unref();
@@ -754,6 +794,35 @@ const digestTimer: ReturnType<typeof setInterval> | undefined = DIGEST_EVERY_MIN
   }));
 }, DIGEST_EVERY_MIN * 60_000) : undefined;
 let timedOut = false;
+/**
+ * A seat the hub never saw is working alone (bugs.md 2: the hub refused every connection, the room was created anyway
+ * and five seats overwrote each other). JOIN_CHECK_MS after launch the launcher compares the seats it started with the
+ * rooms' participants and says who is missing, here and in the run's collectionErrors. When none arrived it looks once
+ * more a minute later and then stops the run: nobody is coordinating, and write seats share a repository.
+ */
+const JOIN_CHECK_MS = Number(process.env.CHATROOM_JOIN_CHECK_MS ?? 180_000);
+const joinNotes: string[] = [];
+let joinChecked = false;
+/** first: on the timer; second: a minute after a first look that found nobody; final: as the run ends, if no check finished (seats that cannot connect exit within seconds). */
+async function joinCheck(when: "first" | "second" | "final" = "first"): Promise<void> {
+  if (joinChecked || (when !== "final" && (STOPPING || groupsDone))) return;
+  const c = await checkJoined(launched, roomNames(URL_));
+  const afterS = Math.round((Date.now() - RUN_STARTED) / 1000);
+  if (c.none && when === "first") { log(`no seat has joined after ${afterS} s; checking once more in 60 s`); setTimeout(() => void joinCheck("second"), 60_000).unref(); return; }
+  if (joinChecked) return;
+  joinChecked = true;
+  const lines = joinLines(c, afterS);
+  for (const line of lines) { log(line); joinNotes.push(line); }
+  if (!lines.length) log(`join check: all ${launched.length} seats reached their rooms (${afterS} s)`);
+  if (c.none && when === "second") {
+    log("stopping the run: no seat is in a room");
+    STOPPING = true;
+    for (const ch of children) ch.kill();
+    void sweepStrays("no seat joined");
+  }
+}
+const joinTimer = JOIN_CHECK_MS > 0 ? setTimeout(() => void joinCheck().catch(() => {}), JOIN_CHECK_MS) : undefined;
+joinTimer?.unref();
 /** The lead room just before the timeout kills its seats: afterwards every seat has left and blockers read as such. */
 let leadAtTimeout: Record<string, any> | null = null;
 const timeout = setTimeout(async () => {
@@ -782,6 +851,7 @@ const persistIncremental = (done: SeatRun[]) => {
 };
 const completedRuns: SeatRun[] = [];
 const results = await Promise.all(runs.map(async (p) => { const r = await p; completedRuns.push(r); persistIncremental(completedRuns); return r; }));
+if (JOIN_CHECK_MS > 0) await joinCheck("final").catch((e) => log(`join check failed: ${e instanceof Error ? e.message : String(e)}`));
 groupsDone = true;
 if (digestTimer) clearInterval(digestTimer);
 await Promise.all(digestPending); // a pass in flight ends with its own seat (or the timeout's kill)
@@ -792,7 +862,7 @@ clearInterval(tail);
 await tailRooms([...groupRooms, leadsRoom]);
 
 // ---------- report ----------
-const collectionErrors: string[] = [];
+const collectionErrors: string[] = [...joinNotes];
 const fetchText = async (url: string) => {
   const response = await fetch(url);
   if (!response.ok) throw new Error(`HTTP ${response.status}: ${url}`);
@@ -811,6 +881,8 @@ for (const name of new Set([leadsRoom, ...groupRooms])) {
   snapshots.push(snapshot);
 }
 const leads = snapshots.find(r => r.name === leadsRoom)?.payload ?? { state: "missing", conclusion: null };
+// why the run ended, as this launcher saw it; after the snapshots, so the line it adds is not in this run's own transcript
+await postRunEnd(timedOut ? "timeout" : (leads as { state?: string }).state === "concluded" ? "concluded" : "seats_exited", timedOut ? `after ${TIMEOUT_MIN} min` : undefined);
 // headline numbers by code, from the hub's own log; a hub without one (in memory) answers 404 and the report omits them
 let metrics: RunResult["metrics"];
 try { metrics = JSON.parse(await fetchText(`${URL_}/rooms/${encodeURIComponent(leadsRoom)}/metrics`)); } catch (e) { collectionErrors.push(`${leadsRoom} metrics: ${String(e)}`); }
@@ -825,7 +897,7 @@ const artifact: RunResult = {
   reportPath: resolve(OUT, "report.md"), artifactPath, collectionErrors, usage: rollupUsage([...results, ...replacedRuns, ...digestRuns]),
   outcome: classifyOutcome(snapshots.find(r => r.name === leadsRoom)?.payload, { timedOut, atTimeout: leadAtTimeout }),
   hubUsage: hubUsageRollup(snapshots),
-  scorecard: seatScorecard(snapshots, Object.fromEntries([...exitCodes].map(([name, exitCode]) => [name, { exitCode, cost: seatCosts.get(name), killedAtTimeout: killedAtTimeout.has(name), commits: branchCommits(name) }]))),
+  scorecard: seatScorecard(snapshots, Object.fromEntries([...exitCodes].map(([name, exitCode]) => [name, { exitCode, cost: seatCosts.get(name), killedAtTimeout: killedAtTimeout.has(name), commits: branchCommits(name), ...(seatTranscripts.has(name) ? { transcript: seatTranscripts.get(name) } : {}) }]))),
   ...(metrics ? { metrics } : {}),
 };
 if (digestPasses.length) {

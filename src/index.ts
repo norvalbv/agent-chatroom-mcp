@@ -15,9 +15,10 @@
  *   GET  /questions?names=benji       -> agents' unanswered asks to the human, across rooms
  *   POST /rooms/:room/vote {name, proposal_id, vote, reason} -> human vote (disagree = veto)
  */
+import "./node-compat.js";
 import { steerAckAs, steerAckSeat, steerPeek, steerPeekSeat } from "./hub/steer.js";
 import { SUSPECTED_DEAD_MS } from "./hub/kick.js";
-import { callerSeatKeys } from "./hub/caller.js";
+import { callerSeatKeys, CALLER_TIMEOUT_MS } from "./hub/caller.js";
 import { randomUUID } from "node:crypto";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -27,7 +28,8 @@ import { renderTimeline, runTimeline } from "./run-timeline.js";
 import { createMcpExpressApp } from "@modelcontextprotocol/sdk/server/express.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import express from "express";
-import { Hub, HubError } from "./hub.js";
+import { Hub, HubError, type OwnerVerdict } from "./hub.js";
+import { STOPPED_BY, type RunEndCause, type StoppedBy } from "./respawn.js";
 import { parseReplyWindowMinutes } from "./reply-metrics.js";
 import { createSessionServer } from "./server.js";
 import { Spawner, type RecruitPolicy } from "./spawner.js";
@@ -35,7 +37,15 @@ import { UI_HTML } from "./ui.js";
 import { humanQuestions } from "./questions.js";
 import { photoDirectory, registerPhotoRoutes } from "./photos/routes.js";
 import { hubDotEnvOptions, loadDotEnv } from "./env.js";
+import { holdFromQuery } from "./env.js";
 import { installLifecycle } from "./lifecycle.js";
+import { connect as tcpConnect } from "node:net";
+/** Something accepts a TCP connection on host:port within a second. */
+const portAnswers = (host: string, port: number) => new Promise<boolean>((done) => {
+  const sock = tcpConnect({ host, port });
+  const end = (ok: boolean) => { sock.destroy(); done(ok); };
+  sock.once("connect", () => end(true)).once("error", () => end(false)).setTimeout(1000, () => end(false));
+});
 // Item 2 (swarm-125438-jp20): CHATROOM_NO_RECRUIT=1 marks a hub that must never hold a provider key
 // (a benchmark hub, whose caller already stripped API_KEY/TOKEN/SECRET-shaped vars from this process's
 // env before spawning it). A bare loadDotEnv() call would otherwise silently refill those vars from the
@@ -59,6 +69,17 @@ const PARTICIPANT_IDLE_MS = 10 * 60_000;
 
 // before anything that can throw: why this process stops is written down by the process itself (src/lifecycle.ts)
 const lifecycle = installLifecycle({ port: PORT, dir: DATA_DIR, head: Hub.codeState(resolve(dirname(fileURLToPath(import.meta.url)), ".."))?.head });
+// A hub already serving this port and data directory: stop before replaying a room. A second hub used to load every
+// room, run the boot sweep and announce a restart before dying at listen, writing a hub_restart event and "The hub
+// restarted ..." into rooms the first hub was serving (decision/backlog-a; scripts/second-hub-regression.ts). A stale
+// pid file (its pid now some other process) with nothing answering on the port does not stop a start.
+if (lifecycle.heldBy && await portAnswers(HOST, PORT)) {
+  lifecycle.line(`pid=${lifecycle.heldBy} is running and answers on port ${PORT}: this process is not loading any room from ${DATA_DIR ?? "memory"} and stops`);
+  lifecycle.exiting(`another hub (pid ${lifecycle.heldBy}) already serves port ${PORT}`);
+  process.exit(0);
+}
+// last call before a conclusion (evidence-pack item 1, decision/last-call): on for the served hub, 0 turns it off
+Hub.LAST_CALL_MS = Number(process.env.CHATROOM_LAST_CALL_MS ?? Hub.SERVED_LAST_CALL_MS);
 const hub = new Hub({ dataDir: DATA_DIR, cwd: resolve(process.env.CHATROOM_DEFAULT_CWD ?? process.cwd()) });
 // At boot no MCP session exists, so every participant idle for longer than the sweep window is a leftover of the
 // previous process (e.g. a seat killed by hand whose session DELETE never arrived); mark them left now.
@@ -105,7 +126,7 @@ spawner.attach({
   claimArea: (room, requester, area, team) => {
     const r = hub.getRoom(room);
     const existing = r.board.get(`claim/${area}`);
-    if (existing && existing.by !== requester) throw new HubError(`claim/${area} is owned by ${existing.by}; recruit into their team instead.`);
+    if (existing && existing.by !== requester) throw new HubError(`claim/${area} is owned by ${existing.by}; recruit into their team instead.`, undefined, "ownership");
     hub.setBoardAs(room, requester, `claim/${area}`, JSON.stringify({ area, owner: requester, team: [requester, ...team], status: "open", note: "claimed at recruitment" }));
   },
   ensureRoom: (room, topic, parent) => {
@@ -139,7 +160,7 @@ spawner.attach({
   registerReplacement: (room, predecessor, successorName) => {
     const old = [...hub.getRoom(room).participants.values()].find(p => p.name === predecessor);
     // A recruit may replace a departed agent, never declare another live seat or human departed.
-    if (!old || old.active || old.agent === "human" || old.role === "chair") throw new HubError("Recruit replacement requires a departed nonhuman, non-chair participant.");
+    if (!old || old.active || old.agent === "human" || old.role === "chair") throw new HubError("Recruit replacement requires a departed nonhuman, non-chair participant.", undefined, "state");
     // Departed is not dead: after a hub restart every seat is restored inactive while its process keeps working, and a
     // successor would duplicate its claimed work (swarm-181144-uxtr, 6-astra-3). Its launcher's heartbeat says which.
     const away = hub.away(old);
@@ -183,6 +204,10 @@ spawner.attach({
 });
 process.on("exit", () => spawner.stopAll());
 const app = createMcpExpressApp({ host: HOST }); // already parses JSON bodies (100kb)
+// every HTTP request, counted before any route can answer it (review/0feee53b: registered after the routes, it saw none of
+// the /mcp tool calls); read and reset by the health sample below
+let httpRequests = 0;
+app.use((_req, _res, next) => { httpRequests++; next(); });
 /** The checkout and commit this process was started from; GET / reports it so a launcher can tell a stale hub. */
 const BUILD = (() => { const root = realpathSync(resolve(dirname(fileURLToPath(import.meta.url)), "..")); const st = Hub.codeState(root); return st ? { root, head: st.head } : null; })();
 // opt-in, for a hub a launcher started for one run: exit once no request has arrived or been in flight for this long.
@@ -210,8 +235,10 @@ const transports = new Map<string, { t: StreamableHTTPServerTransport; leaveAll:
  * never sends DELETE, so without this its session reads as connected for SESSION_IDLE_MS and replace_participant refuses a
  * dead seat as "alive inside a long command" (swarm-130854-nmek; chair #640 in swarm-202803-dpij). Knowing the key is the
  * authority, as for its heartbeats: only that seat's launcher and the seat itself hold it. */
-function seatExited(seatKey: string, detail: string): number {
+function seatExited(seatKey: string, detail: string, stoppedBy?: StoppedBy): number {
   let closed = 0;
+  // the structured record first: once its sessions are closed the seat is no longer in its rooms
+  if (seatKey) hub.recordSeatExit(seatKey, detail, stoppedBy);
   for (const [id, e] of transports) {
     if (!seatKey || e.seatKey !== seatKey) continue;
     e.leaveAll(`seat process exited (${detail.slice(0, 80)}, launcher receipt)`, true);
@@ -238,7 +265,8 @@ app.post("/mcp", async (req, res) => {
     res.status(503).type("text/plain").send("Too many sessions");
     return;
   }
-  const session = createSessionServer(hub, spawner);
+  // ...and ?hold=<ms> when its launcher set the seat's client tool timeout to match: empty waits are held that long
+  const session = createSessionServer(hub, spawner, { holdMs: holdFromQuery(req.query.hold) });
   // a launched seat's MCP URL carries ?seat=<key>; its tool hook heartbeats with the same key (POST /heartbeat)
   const seatKey = typeof req.query.seat === "string" ? req.query.seat.slice(0, 100) : "";
   // ...and ?worktree=<dir> when its launcher gave it one, so claim/* entries carry its branch and path
@@ -247,7 +275,7 @@ app.post("/mcp", async (req, res) => {
     sessionIdGenerator: () => randomUUID(),
     onsessioninitialized: (id) => {
       transports.set(id, { t: transport, leaveAll: session.leaveAll, session: session.sessionKey, lastSeen: Date.now(), ...(seatKey ? { seatKey } : {}) });
-      if (seatKey) hub.bindSeat(seatKey, session.sessionKey, worktree);
+      if (seatKey) { hub.bindSeat(seatKey, session.sessionKey, worktree); hub.seatConnected(seatKey); }
     },
   });
   transport.onclose = () => {
@@ -276,12 +304,25 @@ if (MEMORY_WATCH_MS > 0) {
   if (hub.memory.budgetMb) console.error(`agent-chatroom-mcp: seat memory budget ${hub.memory.budgetMb} MB (CHATROOM_SEAT_MEMORY_MB): past it the hub stops a seat's largest process`);
 }
 
+// the "no MCP session" line waits this long after a start (tests set it to 0)
+if (process.env.CHATROOM_UNCONNECTED_GRACE_MS !== undefined) Hub.UNCONNECTED_GRACE_MS = Number(process.env.CHATROOM_UNCONNECTED_GRACE_MS);
+// the hub's own health, one line a minute (src/lifecycle.ts): what it holds open and how many requests it served
+lifecycle.health(() => {
+  const rooms = [...hub.rooms.values()].filter((r) => r.state === "open" || r.state === "stalled");
+  const out = { sessions: transports.size, requests: httpRequests, rooms_open: rooms.length,
+    participants_active: rooms.reduce((n, r) => n + [...r.participants.values()].filter((p) => p.active).length, 0),
+    waiting: rooms.reduce((n, r) => n + r.waiters.size, 0) };
+  httpRequests = 0;
+  return out;
+});
+
 // Liveness: close idle MCP sessions and mark silent agents as left, so a dead process cannot block a quorum forever.
 setInterval(() => {
   const now = Date.now();
   for (const [id, e] of transports) {
     if (now - e.lastSeen > SESSION_IDLE_MS) {
-      e.leaveAll();
+      // the same opening words as a plain close: liveness.away and result.ts read them
+      e.leaveAll(`MCP session closed without leave_room (idle ${Math.round(SESSION_IDLE_MS / 60_000)} min, reaped)`);
       e.t.close().catch(() => {});
       transports.delete(id);
     }
@@ -297,10 +338,13 @@ setInterval(() => {
  * the human routes are the human's, and under INSECURE_LOCAL nothing but this stops a seat's curl from voting, kicking
  * or closing as "benji". The rooms the seat sits in are told, so the attempt is on the record and not only refused.
  */
-async function seatCaller(req: express.Request): Promise<{ name: string; rooms: string[] } | undefined> {
+async function seatCaller(req: express.Request, timeout?: number): Promise<{ name: string; rooms: string[] } | undefined | "untraced"> {
   const source = req.socket.remotePort;
-  if (!source) return undefined;
-  const held = ((await callerSeatKeys(source, PORT)) ?? []).flatMap((key) => hub.seatEverHeld(key));
+  if (!source) return "untraced";
+  const keys = await callerSeatKeys(source, PORT, timeout);
+  // the OS did not answer (lsof/ps timed out on a loaded machine): not the same as "no seat"
+  if (keys === undefined) return "untraced";
+  const held = keys.flatMap((key) => hub.seatEverHeld(key));
   return held.length ? { name: held[0]!.p.name, rooms: [...new Set(held.map((h) => h.room.name))] } : undefined;
 }
 /** Told only when requireToken actually refuses, once per seat per window, so a retry loop is refused every time without
@@ -318,14 +362,37 @@ const seatCallerAnnounced = new Map<string, number>();
  * the usage export, dev runs) are never resolved or announced: on integration every seat's 1 s /otlp/v1/logs export was
  * announced as a refused forgery when this was a deny-list (-3's composed dev room swarm-085449-i9fk). A new human route
  * must be added here, or it is open to loopback callers as it was before this check. */
-const HUMAN_ROUTES = /^\/rooms\/(archive-dead|[^/]+\/(messages|vote|kick|replace|create|deadline|resources|close|archive|attachments))$/;
+const HUMAN_ROUTES = /^\/rooms\/(archive-dead|[^/]+\/(messages|vote|kick|replace|create|deadline|resources|run-end|verdict|close|archive|attachments|chair))$/;
 // Resolved before the routes, asynchronously, so requireToken stays a plain check and a lookup never blocks other rooms.
+// A request that carries the human token is looked up too: the hub's environment is readable by any process of the
+// same user, so a seat can read the token (`ps eww -p <hub pid>`) and, unchecked, post as "[human route: token]"
+// (review/a9060d5e-verifier). The launcher's own calls carry its launcher token and are not looked up.
 app.use(async (req, res, next) => {
-  if (req.method === "POST" && INSECURE_LOCAL && LOOPBACK_HOST && !(HUMAN_TOKEN && req.header("x-chatroom-token") === HUMAN_TOKEN) && HUMAN_ROUTES.test(req.path)) {
-    res.locals.seatCaller = await seatCaller(req).catch(() => undefined);
+  const withToken = !!HUMAN_TOKEN && req.header("x-chatroom-token") === HUMAN_TOKEN;
+  if (req.method === "POST" && LOOPBACK_HOST && (INSECURE_LOCAL || withToken) && HUMAN_ROUTES.test(req.path)) {
+    let caller = await seatCaller(req).catch(() => "untraced" as const);
+    // a token request is not admitted on an untraced caller (review/d33cda94: at load 189 the lookup timed out and
+    // forged owner lines were stored); one retry with more time first, since the owner's own posts take this path
+    if (caller === "untraced" && withToken) caller = await seatCaller(req, CALLER_TIMEOUT_MS * 4).catch(() => "untraced" as const);
+    if (caller === "untraced") res.locals.callerUntraced = true;
+    else res.locals.seatCaller = caller;
   }
   next();
 });
+/** A human-route request from the process tree of one of this hub's seats is refused whatever it carries: the token
+ * proves the caller could read it, not that the caller is the human. Attribution, not a boundary: a detached child
+ * re-parented away from the seat escapes the walk. */
+const refuseSeatCaller = (req: express.Request, res: express.Response): boolean => {
+  if (res.locals.callerUntraced && HUMAN_TOKEN && req.header("x-chatroom-token") === HUMAN_TOKEN) {
+    res.status(503).type("text/plain").send("refused for now: the hub could not trace this request's caller (lsof/ps did not answer in time; the machine is loaded), and with the token it must know the caller is not one of its seats. Retry in a moment.");
+    return true;
+  }
+  const seat = res.locals.seatCaller as { name: string; rooms: string[] } | undefined;
+  if (!seat) return false;
+  announceSeatCaller(req, seat);
+  res.status(403).type("text/plain").send(`refused: this request came from the process tree of seat ${seat.name}. The human routes are the human's; a seat votes, kicks and speaks through its own MCP tools.`);
+  return true;
+};
 /** The launcher's own calls (room create with the run's policy, resources, run deadline): its launcher token is the authority, as for replacements. A hub
  * started by hubd has a launcher token and often neither a human token nor the loopback opt-in, and refused both. */
 const requireLauncherOrToken = (req: express.Request, res: express.Response): boolean => {
@@ -333,17 +400,14 @@ const requireLauncherOrToken = (req: express.Request, res: express.Response): bo
   if (launcher && req.header("x-chatroom-launcher-token") === launcher) return true;
   return requireToken(req, res);
 };
+/** The request carries this hub's human token (not merely a loopback caller the opt-in lets through). */
+const tokenChecked = (req: express.Request): boolean => !!HUMAN_TOKEN && req.header("x-chatroom-token") === HUMAN_TOKEN;
 const requireToken = (req: express.Request, res: express.Response): boolean => {
+  if (refuseSeatCaller(req, res)) return false;
   if (HUMAN_TOKEN && req.header("x-chatroom-token") === HUMAN_TOKEN) return true;
   // The explicit loopback opt-in keeps the local dashboard usable without a token, with or without one configured,
-  // for any caller that is not one of this hub's seats.
-  if (INSECURE_LOCAL && LOOPBACK_HOST) {
-    const seat = res.locals.seatCaller as { name: string; rooms: string[] } | undefined;
-    if (!seat) return true;
-    announceSeatCaller(req, seat);
-    res.status(403).type("text/plain").send(`refused: this request came from the process tree of seat ${seat.name}. The human routes are the human's; a seat votes, kicks and speaks through its own MCP tools.`);
-    return false;
-  }
+  // for any caller that is not one of this hub's seats (refused above).
+  if (INSECURE_LOCAL && LOOPBACK_HOST) return true;
   if (HUMAN_TOKEN) {
     res.status(401).type("text/plain").send("x-chatroom-token required");
     return false;
@@ -416,11 +480,14 @@ app.post("/rooms/:room/heartbeat", (req, res) => {
 // Seat liveness without a participant id: a claude -p tool hook or a launcher watching codex output knows only the seat
 // key its process was launched with; the hub heartbeats every room that key's MCP connection is in.
 app.post("/heartbeat", (req, res) => {
-  const { seat_key, tool, step, detail, peek, exited } = (req.body ?? {}) as { seat_key?: string; tool?: string; step?: number; detail?: string; peek?: boolean; exited?: boolean };
+  const { seat_key, tool, step, detail, peek, exited, stopped_by } = (req.body ?? {}) as { seat_key?: string; tool?: string; step?: number; detail?: string; peek?: boolean; exited?: boolean; stopped_by?: string };
   if (!seat_key) return res.status(400).type("text/plain").send("seat_key required");
-  if (exited === true) return res.json({ ok: true, closed: seatExited(seat_key, String(detail ?? "exit")) });
+  // stopped_by: the launcher saying it stopped the seat itself (its timeout, or the operator stopping it); a closed set
+  if (exited === true) return res.json({ ok: true, closed: seatExited(seat_key, String(detail ?? "exit"), STOPPED_BY.find((s) => s === stopped_by)) });
   // peek:true (a PostToolUse hook) only asks for pending asks: the PreToolUse beat already recorded this step
   const marked = peek ? 0 : hub.heartbeatSeat(seat_key, { tool: tool ?? "?", step, detail });
+  // working locally with no MCP session here: its chatroom calls are failing on its side (idea/client-side-disconnects)
+  if (!peek && ![...transports.values()].some((e) => e.seatKey === seat_key)) hub.seatUnconnected(seat_key, tool ?? "?");
   res.json({ ok: true, marked, pending: [...steerPeekSeat(hub, seat_key), ...hub.pendingMemoryNotices(seat_key)] });
 });
 // Live usage: a claude seat's OTLP log exporter (src/env.ts seatBeat) posts here with its seat key in a header. The
@@ -517,10 +584,23 @@ app.get("/rooms/:room/messages", (req, res) => {
 app.post("/rooms/:room/messages", (req, res) => {
   if (!requireToken(req, res)) return;
   try {
-    const { name, content, reply_to } = (req.body ?? {}) as { name?: string; content?: string; reply_to?: string };
+    // source: a script posting on the owner's behalf says which script it is; seats see it in the sender's tag
+    const { name, content, reply_to, source } = (req.body ?? {}) as { name?: string; content?: string; reply_to?: string; source?: string };
     const { participant } = hub.join(req.params.room, (name || "human").trim(), "human", {}, undefined, `http:${name || "human"}`);
-    const m = hub.send(req.params.room, participant.id, String(content ?? ""), typeof reply_to === "string" && reply_to ? reply_to : undefined, true);
+    const m = hub.send(req.params.room, participant.id, String(content ?? ""), typeof reply_to === "string" && reply_to ? reply_to : undefined, true, undefined, false, { token: tokenChecked(req), ...(typeof source === "string" ? { source } : {}) });
     res.json(m);
+  } catch (e) {
+    res.status(400).type("text/plain").send(e instanceof HubError ? e.message : "error");
+  }
+});
+// The owner names the room's chair: a chair that took the role by joining first is tagged self-claimed until then.
+// The human token and nothing less: the loopback opt-in admits any process on this machine that is not this hub's seat.
+app.post("/rooms/:room/chair", (req, res) => {
+  if (refuseSeatCaller(req, res) || !requireAgentControl(req, res)) return;
+  try {
+    const { name, by } = (req.body ?? {}) as { name?: string; by?: string };
+    hub.nameChair(req.params.room, String(name ?? "").trim(), (by || "human").trim());
+    res.json({ room: req.params.room, chair: hub.getRoom(req.params.room).chair, named: true });
   } catch (e) {
     res.status(400).type("text/plain").send(e instanceof HubError ? e.message : "error");
   }
@@ -570,10 +650,12 @@ app.post("/rooms/:room/replace", (req, res) => {
 app.post("/rooms/:room/create", (req, res) => {
   if (!requireLauncherOrToken(req, res)) return;
   try {
-    const b = (req.body ?? {}) as { topic?: string; quorum?: "unanimous" | "majority" | "supermajority"; expected_participants?: number; require_verification?: boolean; require_challenge?: boolean; mode?: "free" | "round_robin"; max_message_chars?: number; anonymous?: boolean; chair?: string };
+    const b = (req.body ?? {}) as { topic?: string; quorum?: "unanimous" | "majority" | "supermajority"; expected_participants?: number; require_verification?: boolean; require_challenge?: boolean; mode?: "free" | "round_robin"; max_message_chars?: number; anonymous?: boolean; chair?: string; parent?: string };
     const existed = hub.listRooms().some((r) => r.name === req.params.room);
-    const room = hub.createRoom(req.params.room, { topic: b.topic, quorum: b.quorum, expectedParticipants: b.expected_participants, requireVerification: b.require_verification, requireChallenge: b.require_challenge, mode: b.mode, maxMessageChars: b.max_message_chars, anonymous: b.anonymous, chair: b.chair });
-    res.status(existed ? 200 : 201).json({ ...hub.summary(room, true), created: !existed });
+    // a chair named here counts as named only when the caller was checked: the launcher's token or the human token
+    const checked = tokenChecked(req) || (!!process.env.CHATROOM_LAUNCHER_TOKEN && req.header("x-chatroom-launcher-token") === process.env.CHATROOM_LAUNCHER_TOKEN);
+    const room = hub.createRoom(req.params.room, { topic: b.topic, quorum: b.quorum, expectedParticipants: b.expected_participants, requireVerification: b.require_verification, requireChallenge: b.require_challenge, mode: b.mode, maxMessageChars: b.max_message_chars, anonymous: b.anonymous, chair: b.chair, ...(b.chair && checked ? { chairNamed: true } : {}), ...(b.parent ? { parent: b.parent } : {}) });
+    res.status(existed ? 200 : 201).json({ ...hub.summary(room, true), created: !existed, ...(room.chair ? { chair_named: !!room.chairNamed } : {}) });
   } catch (e) {
     res.status(400).type("text/plain").send(e instanceof HubError ? e.message : "error");
   }
@@ -589,7 +671,7 @@ app.post("/rooms/:room/replacements", (req, res) => {
   }
   try {
     const old = [...hub.getRoom(req.params.room).participants.values()].find(p => p.id === predecessor || p.name === predecessor);
-    if (old?.agent === "human" || old?.role === "chair") throw new HubError("Human and chair seats cannot be replaced by the launcher.");
+    if (old?.agent === "human" || old?.role === "chair") throw new HubError("Human and chair seats cannot be replaced by the launcher.", undefined, "state");
     res.json(hub.registerReplacement(req.params.room, predecessor, name));
   } catch (error) {
     res.status(400).json({ error: error instanceof HubError ? error.message : "Replacement registration failed." });
@@ -615,6 +697,27 @@ app.post("/rooms/:room/resources", (req, res) => {
     const { entries } = (req.body ?? {}) as { entries?: { key: string; text: string }[] };
     const set = hub.seedResources(req.params.room, entries as { key: string; text: string }[]);
     res.status(set.pending ? 202 : 200).json(set);
+  } catch (e) {
+    res.status(400).type("text/plain").send(e instanceof HubError ? e.message : "error");
+  }
+});
+// The owner's verdict on a room's conclusion, from the dashboard or curl: adopted, rejected or partial, with a note.
+app.post("/rooms/:room/verdict", (req, res) => {
+  if (!requireToken(req, res)) return;
+  try {
+    const { verdict, note, name } = (req.body ?? {}) as { verdict?: string; note?: string; name?: string };
+    res.json(hub.recordOwnerVerdict(req.params.room, verdict as OwnerVerdict, (typeof name === "string" && name.trim() ? name : "human").trim().slice(0, 64), typeof note === "string" ? note : undefined));
+  } catch (e) {
+    res.status(400).type("text/plain").send(e instanceof HubError ? e.message : "error");
+  }
+});
+// Why the run that owns a room ended, from its launcher (concluded, timeout, operator_stop, seats_exited): a run_end
+// event in the room log and one line in the room. A repeat is accepted and ignored: the first stands.
+app.post("/rooms/:room/run-end", (req, res) => {
+  if (!requireLauncherOrToken(req, res)) return;
+  try {
+    const { cause, detail } = (req.body ?? {}) as { cause?: string; detail?: string };
+    res.json(hub.recordRunEnd(req.params.room, cause as RunEndCause, typeof detail === "string" ? detail : undefined));
   } catch (e) {
     res.status(400).type("text/plain").send(e instanceof HubError ? e.message : "error");
   }

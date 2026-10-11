@@ -10,12 +10,13 @@
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync, createWriteStream, symlinkSync, realpathSync, rmSync, unlinkSync } from "node:fs";
+import { carryHooks, hooksLine, hooksOff, type HooksCarried } from "./worktree-hooks.js";
 import { tmpdir } from "node:os";
 import { basename, dirname, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { HubError } from "./hub.js";
 import { settledAxes } from "./settled.js";
-import { devHubRule, heartbeatHookSettings, seatBeat, seatChildEnv } from "./env.js";
+import { aiGatesLine, devHubRule, heartbeatHookSettings, seatBeat, seatChildEnv, seatHoldMs } from "./env.js";
 import { claudeArgs } from "./claude-args.js";
 import { exitDetail } from "./respawn.js";
 import { codexSeatCommand } from "./codex-seat.js";
@@ -43,6 +44,8 @@ export interface SpawnRequest {
   agent?: AgentKind;
   model?: string;
   cwd?: string;
+  /** the recruiter's worktree: a write recruit's branch is cut from its HEAD (recruitBase), not from the project checkout's */
+  baseDir?: string;
   canEdit?: boolean;
   /** spawn into a fresh room instead of `room` (a sub-team); the newcomers are told to report back to `room` */
   newRoom?: string;
@@ -67,7 +70,7 @@ export interface SpawnedAgent {
   model?: string;
   cwd: string;
   /** a write recruit's own git worktree and branch (never the shared `cwd`); absent for a read-only recruit or outside a git repository */
-  workspace?: { worktree: string; branch: string };
+  workspace?: { worktree: string; branch: string; /** the commit the branch was cut from and whose HEAD that was, when it is the recruiter's worktree (recruitBase) */ base?: { sha: string; from: string }; /** commit hooks in that worktree (src/worktree-hooks.ts); "missing" means its commits are ungated */ hooks?: HooksCarried["hooks"]; /** "off": its commits skip the AI reviewer gates (SEAT_AI_GATES_OFF in env.ts, owner ruling #985) */ aiGates?: "off" | "on" };
   requestedBy: string;
   parent?: string; // spawned agent that requested this one, if any
   depth: number;
@@ -163,6 +166,30 @@ export function recruitWorkspace(cwd: string, room: string, name: string): { roo
   return { root, worktree: resolve(root, ".swarm-worktrees", room, name), branch: `swarm/${room}/${name}` };
 }
 
+/**
+ * The commit a write recruit's branch starts from: HEAD of `from`, its recruiter's worktree, when that is a checkout of
+ * the repository `root` belongs to. Without one, `git worktree add` starts at the HEAD of the project checkout, which
+ * can be far behind the commit a room was launched on: swarm-123021-1nwp-audit #33, "Recruit worktrees are cut from
+ * main-checkout HEAD 7c43aef4 (#781, Oct 3) ... The machine-rules command therefore runs gpt-5.6-sol" (the room ran in
+ * devkit-correctness-swarm, a worktree of devkit, at eadfcdc2). Undefined when there is no such worktree.
+ */
+export function recruitBase(root: string, from?: string): { sha: string; from: string } | undefined {
+  if (!from) return undefined;
+  const common = (d: string) => {
+    const r = spawnSync("git", ["-C", d, "rev-parse", "--path-format=absolute", "--git-common-dir"], { encoding: "utf8", timeout: 5_000 });
+    return r.status === 0 ? r.stdout.trim() : undefined;
+  };
+  const mine = common(from);
+  if (!mine || mine !== common(root)) return undefined;
+  const head = spawnSync("git", ["-C", from, "rev-parse", "HEAD"], { encoding: "utf8", timeout: 5_000 });
+  return head.status === 0 && head.stdout.trim() ? { sha: head.stdout.trim(), from } : undefined;
+}
+
+/** `git worktree add -b <branch> <dir> [<base>]` in `root`; without a base the branch starts at root's HEAD. */
+export function createRecruitWorktree(root: string, dir: string, branch: string, base?: string): boolean {
+  return spawnSync("git", ["-C", root, "worktree", "add", "-b", branch, dir, ...(base ? [base] : [])], { encoding: "utf8" }).status === 0;
+}
+
 /** The project a seat's worktree belongs to (the repository its .git is shared with), or undefined outside git. A recruit
  * of that seat works there, not in the hub's own directory (swarm-003601-tky5: a hub started from the agent-chatroom-mcp
  * checkout for a Polymarket room would have put builder recruits in agent-chatroom-mcp). */
@@ -190,7 +217,8 @@ export function planSnapshot(src: string, label: string): Snapshot | undefined {
   const head = g("rev-parse", "HEAD");
   if (top.status !== 0 || head.status !== 0) return undefined;
   const repo = top.stdout.trim();
-  const status = g("status", "--porcelain", "--untracked-files=normal");
+  // read-only: without --no-optional-locks this takes the proposer's index.lock while they may be committing
+  const status = spawnSync("git", ["--no-optional-locks", "-C", src, "status", "--porcelain", "--untracked-files=normal"], { encoding: "utf8" });
   const dirty = status.status === 0 ? status.stdout.split("\n").filter(Boolean).length : 0;
   const sub = relative(realpathSync(repo), realpathSync(src));
   const dir = resolve(tmpdir(), `chatroom-snapshot-${label.replace(/[^\w-]/g, "-").slice(0, 60)}-${randomUUID().slice(0, 8)}`);
@@ -218,9 +246,10 @@ export function removeSnapshot(plan: Pick<Snapshot, "repo" | "dir">): void {
   }
 }
 
-const workspaceOf = (cwd: string, room: string, name: string) => {
+const workspaceOf = (cwd: string, room: string, name: string, baseDir?: string) => {
   const ws = recruitWorkspace(cwd, room, name);
-  return ws && { worktree: ws.worktree, branch: ws.branch };
+  const base = ws && recruitBase(ws.root, baseDir);
+  return ws && { worktree: ws.worktree, branch: ws.branch, ...(base ? { base } : {}) };
 };
 
 export class Spawner {
@@ -260,16 +289,16 @@ export class Spawner {
     if (process.env.CHATROOM_NO_RECRUIT === "1") {
       const msg = `Recruitment is disabled for this hub (CHATROOM_NO_RECRUIT=1): a protocol-fixed room (e.g. a benchmark run) may not recruit.`;
       this.hooks?.announce(req.room, msg);
-      throw new HubError(msg);
+      throw new HubError(msg, undefined, "budget");
     }
     const o = this.opts;
     const { maxDepth, maxPerRoom, maxLive, maxPerRequester, maxCumRoom, maxCumRun } = recruitmentLimits(o);
     const refuse = (msg: string) => {
       this.hooks?.announce(req.room, `Cap hit: ${msg}`);
-      throw new HubError(msg);
+      throw new HubError(msg, undefined, "budget");
     };
 
-    if (req.brief.trim().length < 20 || req.brief.length > 4000) throw new HubError("A brief of 20-4000 characters is required: say what to do and what done looks like.");
+    if (req.brief.trim().length < 20 || req.brief.length > 4000) throw new HubError("A brief of 20-4000 characters is required: say what to do and what done looks like.", undefined, "invalid-arg");
     const count = Math.max(1, Math.min(3, req.count ?? (req.newRoom ? 2 : 1)));
     // A break-out requested without a run prefix would be created under the LITERAL name: the launcher's
     // result artifact gathers rooms by startsWith(runPrefix) (src/swarm.ts:471) and the per-run recruit
@@ -284,10 +313,10 @@ export class Spawner {
     }
     const target = newRoom ?? req.room;
     if (req.replacing !== undefined && (!req.replacing.trim() || req.newRoom || count !== 1)) {
-      throw new HubError("Replacement requires one recruit in the same room and an exact predecessor name.");
+      throw new HubError("Replacement requires one recruit in the same room and an exact predecessor name.", undefined, "invalid-arg");
     }
-    if (req.replacing && !this.hooks?.registerReplacement) throw new HubError("Replacement registration is unavailable; no recruit launched.");
-    if (this.hooks?.isHeld(req.room)) throw new HubError(`${req.room} is on hold; no recruiting until the hold is cleared.`);
+    if (req.replacing && !this.hooks?.registerReplacement) throw new HubError("Replacement registration is unavailable; no recruit launched.", undefined, "state");
+    if (this.hooks?.isHeld(req.room)) throw new HubError(`${req.room} is on hold; no recruiting until the hold is cleared.`, undefined, "state");
     const depth = this.depthOf(req.requestedBy) + 1;
     if (depth > maxDepth) refuse(`recruits may not recruit beyond depth ${maxDepth} (${req.requestedBy} is at depth ${depth - 1}). Ask an original member to recruit.`);
     const mine = this.agents.filter((a) => a.requestedBy === req.requestedBy && a.endedAt === undefined).length;
@@ -308,7 +337,7 @@ export class Spawner {
     if (!req.model && this.policy.agent === agent && this.policy.model) req = { ...req, model: this.policy.model };
     const launched = `${agent}${req.model ? `/${req.model}` : ""}`;
     const policyOverride = (req.agent && req.agent !== agent) || (this.policy.model && (req.agent ?? "") && wanted !== launched && wanted !== `(default)`);
-    if (agent === "openrouter" && !process.env.OPENROUTER_API_KEY && !this.opts.dryRun) throw new HubError("An OpenRouter seat needs OPENROUTER_API_KEY in the hub's environment; recruit a claude or codex agent instead, or ask the human to set the key and restart the hub.");
+    if (agent === "openrouter" && !process.env.OPENROUTER_API_KEY && !this.opts.dryRun) throw new HubError("An OpenRouter seat needs OPENROUTER_API_KEY in the hub's environment; recruit a claude or codex agent instead, or ask the human to set the key and restart the hub.", undefined, "state");
     const base = (req.name?.trim() || `${agent}-recruit`).replace(/[^\w-]/g, "-").slice(0, 32);
     const names: string[] = [];
     for (let i = 0; i < count; i++) {
@@ -323,13 +352,17 @@ export class Spawner {
 
     const home = resolve(req.cwd ?? o.defaultCwd);
     // a read-only checker of a proposer's commit runs in a detached snapshot of it, never in the proposer's live tree
-    const snap = req.snapshot && !req.canEdit && count === 1 ? req.snapshot : undefined;
+    // (several read-only recruits of one request share the snapshot: nobody edits it, and it goes when the last one exits)
+    const snap = req.snapshot && !req.canEdit ? req.snapshot : undefined;
+    let snapUsers = names.length;
     let cwd = home;
     if (snap) {
       if (o.dryRun || createSnapshot(snap)) cwd = resolve(snap.dir, snap.sub);
       else this.hooks?.announce(target, `The hub could not make a snapshot of ${snap.sha.slice(0, 12)} for ${names[0]}, so it works in the proposer's tree.`);
     }
-    const template = readFileSync(resolve(repoRoot, "prompts", "recruit.md"), "utf8");
+    // owner-word.md: which room messages carry the owner's word (the brief has to say it; a hub tag alone is tool output).
+    // Only on a hub the owner started with CHATROOM_OWNER_WORD=1 (the launcher's --owner-word sets it for a hub it starts).
+    const template = readFileSync(resolve(repoRoot, "prompts", "recruit.md"), "utf8").trimEnd() + (process.env.CHATROOM_OWNER_WORD === "1" ? "\n\n" + readFileSync(resolve(repoRoot, "prompts", "owner-word.md"), "utf8") : "\n");
     const by = req.requestedByShown ?? req.requestedBy;
     const targetTopic = req.newRoom ? (req.roomTopic ?? "") : (this.hooks?.roomTopic?.(target) ?? "");
     const context =
@@ -357,7 +390,7 @@ export class Spawner {
       if (req.replacing && name === names[0]) {
         // the launcher registers the explicit successor; the recruit gets a one-use proof, never a control credential
         const replacementToken = this.hooks!.registerReplacement!(target, req.replacing, name);
-        if (!replacementToken) throw new HubError("Replacement registration returned no join proof.");
+        if (!replacementToken) throw new HubError("Replacement registration returned no join proof.", undefined, "state");
         const context = this.hooks?.predecessorContext?.(target, req.replacing) ?? "";
         replaceNote = `\n\nYou replace ${req.replacing}, who dropped out of this room. The launcher has registered you as their replacement with the hub. On your first join_room call use name=${JSON.stringify(name)} and replacement_token=${JSON.stringify(replacementToken)}. This one-use join proof is only for this reserved seat: do not post it to chat or board.` +
           (context ? `\n\nWhat ${req.replacing} was doing:\n${context}` : "");
@@ -383,10 +416,10 @@ export class Spawner {
             : "You are the only recruit on this brief.",
         )
         .split("{{REPORT_TO}}").join(req.newRoom ? `This is a sub-room of ${req.room}: when it concludes, the hub puts its conclusion on that room's board as inbox/${target}/conclusion. For anything they need before then, use post_to_room(from_room="${target}", to_room="${req.room}", key="<short name>").` : "")
-        .split("{{WRITE_RULE}}").join(req.canEdit ? "You MAY edit files and run anything here. You are in your own git worktree on your own branch (git branch --show-current); commit there and name the branch in the room. Never touch the main checkout." + devHubRule(cwd, SANDBOX) : "Do NOT modify files; investigate and report.");
+        .split("{{WRITE_RULE}}").join(req.canEdit ? "You MAY edit files and run anything here. You are in your own git worktree on your own branch (git branch --show-current); commit there and name the branch in the room. Never touch the main checkout." + (recruitBase(recruitWorkspace(cwd, target, name)?.root ?? cwd, req.baseDir) ? ` Your branch was cut from the HEAD of ${by}'s worktree (${recruitBase(recruitWorkspace(cwd, target, name)?.root ?? cwd, req.baseDir)!.sha.slice(0, 8)}), so it holds their commits; their uncommitted changes are not in it.` : "") + devHubRule(cwd, SANDBOX) : "Do NOT modify files; investigate and report." + (snap && cwd !== home ? ` You are in a detached copy of the tree at commit ${snap.sha.slice(0, 8)}${snap.dirty ? ` (${snap.dirty} uncommitted change${snap.dirty === 1 ? "" : "s"} in the tree it was taken from ${snap.dirty === 1 ? "is" : "are"} not in it)` : ""}: name that commit in what you report.` : ""));
 
       // a dry run plans the workspace without creating it, so what a seat is told matches what a real spawn does
-      if (o.dryRun && req.canEdit) rec.workspace = workspaceOf(cwd, target, name);
+      if (o.dryRun && req.canEdit) rec.workspace = workspaceOf(cwd, target, name, req.baseDir);
       if (o.dryRun) {
         writeFileSync(log, `[dry-run] would launch ${agent} in ${cwd}\n\n${prompt}`);
         rec.endedAt = new Date().toISOString();
@@ -395,11 +428,16 @@ export class Spawner {
         continue;
       }
       // a write-enabled recruit works in its own worktree and branch, never in the shared checkout
-      const seatCwd = req.canEdit && !o.dryRun ? (this.worktreeFor(cwd, target, name) ?? cwd) : cwd;
-      if (seatCwd !== cwd) rec.workspace = workspaceOf(cwd, target, name);
+      const seatCwd = req.canEdit && !o.dryRun ? (this.worktreeFor(cwd, target, name, req.baseDir) ?? cwd) : cwd;
+      if (seatCwd !== cwd) rec.workspace = workspaceOf(cwd, target, name, this.basedOn.get(seatCwd));
+      const carried = this.hooksIn.get(seatCwd);
+      if (rec.workspace && carried) rec.workspace.hooks = carried.hooks;
+      if (rec.workspace) rec.workspace.aiGates = /gates off/.test(aiGatesLine(seatChildEnv(process.env, name))) ? "off" : "on";
+      // said in the room only when it matters: this seat's commits will run no hooks
+      if (carried?.hooks === "missing") this.hooks?.announce(target, hooksLine(name, carried));
       // per seat: the MCP URL carries this seat's heartbeat key (so the file cannot be shared between recruits) and its
       // worktree, which the hub stamps on the seat's claim/* entries
-      const beat = seatBeat(o.mcpUrl, randomUUID(), seatCwd);
+      const beat = seatBeat(o.mcpUrl, randomUUID(), seatCwd, agent === "claude" ? seatHoldMs() : undefined);
       const mcpJson = resolve(o.logDir, `${name}.mcp.json`);
       writeFileSync(mcpJson, JSON.stringify({ mcpServers: { chatroom: { type: "http", url: beat.mcpUrl } } }));
       let cmd: string;
@@ -459,7 +497,7 @@ export class Spawner {
         }
         this.hooks?.seatExited?.(beat.key, exitDetail(code, said, Date.now(), signal));
         this.children.delete(name);
-        if (snap && cwd !== home) removeSnapshot(snap);
+        if (snap && cwd !== home && --snapUsers === 0) removeSnapshot(snap);
         try {
           this.checkConsolidators();
         } catch (e) {
@@ -488,17 +526,17 @@ export class Spawner {
    * rather than leaving a silent hole.
    */
   replace(req: Omit<SpawnRequest, "brief" | "newRoom" | "count"> & { reason: string; brief?: string; requesterIsHuman?: boolean; staleMs?: number }): SpawnedAgent[] {
-    if (!req.replacing?.trim()) throw new HubError("replace requires the exact name of the participant to remove.");
-    if (req.replacing === req.requestedBy) throw new HubError("You cannot replace yourself: leave_room instead.");
-    if (!this.hooks?.removeParticipant || !this.hooks?.targetStatus) throw new HubError("Replace is unavailable; no recruit launched.");
-    if (!req.reason.trim()) throw new HubError("A reason is required: why this seat is being replaced.");
+    if (!req.replacing?.trim()) throw new HubError("replace requires the exact name of the participant to remove.", undefined, "invalid-arg");
+    if (req.replacing === req.requestedBy) throw new HubError("You cannot replace yourself: leave_room instead.", undefined, "self-target");
+    if (!this.hooks?.removeParticipant || !this.hooks?.targetStatus) throw new HubError("Replace is unavailable; no recruit launched.", undefined, "state");
+    if (!req.reason.trim()) throw new HubError("A reason is required: why this seat is being replaced.", undefined, "invalid-arg");
     // request() enforces this too, but only after the recruit's other checks: validate here, before removal,
     // so a structurally-invalid replace (a group, a new room) never kicks the predecessor for nothing.
     if ((req as { newRoom?: string }).newRoom || ((req as { count?: number }).count ?? 1) !== 1) {
-      throw new HubError("Replacement requires one recruit in the same room and an exact predecessor name.");
+      throw new HubError("Replacement requires one recruit in the same room and an exact predecessor name.", undefined, "invalid-arg");
     }
     const status = this.hooks.targetStatus(req.room, req.replacing);
-    if (!status) throw new HubError(`No participant named "${req.replacing}" in "${req.room}".`);
+    if (!status) throw new HubError(`No participant named "${req.replacing}" in "${req.room}".`, undefined, "not-found");
     const staleMs = req.staleMs ?? 10 * 60_000;
     let removed = false;
     if (status.active && !status.kicked) {
@@ -520,7 +558,7 @@ export class Spawner {
       const msg = e instanceof HubError ? e.message : String(e);
       // say "removed" only when this call removed them: a departed seat refused as away was never touched
       if (!removed) throw new HubError(`No successor for ${req.replacing}: ${msg}`, undefined, e instanceof HubError ? e.code : undefined);
-      throw new HubError(`${req.replacing} was removed, but recruiting a successor failed: ${msg} Nobody was launched; call request_agent(replacing=${JSON.stringify(req.replacing)}) once that clears.`);
+      throw new HubError(`${req.replacing} was removed, but recruiting a successor failed: ${msg} Nobody was launched; call request_agent(replacing=${JSON.stringify(req.replacing)}) once that clears.`, undefined, "state");
     }
   }
 
@@ -614,19 +652,27 @@ export class Spawner {
   }
 
   /** `git worktree add` for one recruit: .swarm-worktrees/<room>/<name> on branch swarm/<room>/<name>, node_modules linked so builds and tests work there. */
-  private worktreeFor(cwd: string, room: string, name: string): string | undefined {
+  private readonly hooksIn = new Map<string, HooksCarried>();
+  /** the recruiter worktree each worktree made here was cut from; one that already existed has no entry, so nothing is claimed about it */
+  private readonly basedOn = new Map<string, string>();
+  private worktreeFor(cwd: string, room: string, name: string, baseDir?: string): string | undefined {
     const ws = recruitWorkspace(cwd, room, name);
     if (!ws) return undefined;
     const { root, worktree: dir } = ws;
     if (existsSync(dir)) return dir;
-    const r = spawnSync("git", ["-C", root, "worktree", "add", "-b", ws.branch, dir], { encoding: "utf8" });
-    if (r.status !== 0) return undefined;
+    // cut from the recruiter's HEAD when it has a worktree of this repository, else from the project checkout's HEAD
+    const base = recruitBase(root, baseDir);
+    if (!createRecruitWorktree(root, dir, ws.branch, base?.sha)) return undefined;
+    if (base) this.basedOn.set(dir, base.from);
     const mods = resolve(root, "node_modules");
     if (existsSync(mods) && !existsSync(resolve(dir, "node_modules"))) {
       try {
         symlinkSync(mods, resolve(dir, "node_modules"), "dir");
       } catch {}
     }
+    // and no hooks runner either: without this every commit a write recruit makes skips the repository's hooks
+    // CHATROOM_SEAT_HOOKS=off (the launcher's --seat-hooks off): the run chose ungated seat commits
+    this.hooksIn.set(dir, process.env.CHATROOM_SEAT_HOOKS === "off" ? hooksOff(root) : carryHooks(root, dir));
     return dir;
   }
 

@@ -8,6 +8,8 @@
  * item asked for an explicit completed / error / orphaned-work distinction, a floor the room must keep, the verifier
  * preserved, and bounded retries. This module is that decision; the launcher supplies the room summary it already polls.
  */
+import { spawn } from "node:child_process";
+
 export interface RespawnRoom {
   state: string;
   quorum?: string | null;
@@ -74,6 +76,33 @@ export function exitDetail(code: number | null, output: string | string[], now =
   return base;
 }
 
+/** Why a seat's process ended, as a closed set a run can be counted by (telemetry gap G4: "seat process exited (exit 1)"
+ * said nothing countable, and a usage limit was only in the seat's .out). unknown: a receipt this build cannot read. */
+export type SeatExitCause = "normal" | "usage_limit" | "thrash" | "sigterm" | "sigkill" | "signal" | "crash" | "unknown";
+export interface SeatExit { exit_code: number | null; signal?: string; cause: SeatExitCause; resets_utc?: string }
+
+/** exitDetail's words back as fields: the launcher and the spawner already send that string as the exit receipt. */
+export function exitCause(detail: string): SeatExit {
+  const by = /^(?:killed|stopped) by (SIG[A-Z0-9]+)/.exec(detail);
+  if (by) return { exit_code: null, signal: by[1], cause: by[1] === "SIGKILL" ? "sigkill" : by[1] === "SIGTERM" ? "sigterm" : "signal" };
+  const m = /^exit (-?\d+)(?::\s*(.*))?$/.exec(detail.trim());
+  if (!m) return { exit_code: null, cause: "unknown" };
+  const exit_code = Number(m[1]), why = m[2] ?? "";
+  const resets = /resets (\d{2}:\d{2}) UTC/.exec(why)?.[1];
+  if (/usage limit/.test(why)) return { exit_code, cause: "usage_limit", ...(resets ? { resets_utc: resets } : {}) };
+  if (/thrash/.test(why)) return { exit_code, cause: "thrash" };
+  // 128 + n: a shell or a wrapper reporting the signal that ended it as an exit code
+  if (exit_code === 143) return { exit_code, signal: "SIGTERM", cause: "sigterm" };
+  if (exit_code === 137) return { exit_code, signal: "SIGKILL", cause: "sigkill" };
+  return { exit_code, cause: exit_code === 0 ? "normal" : "crash" };
+}
+/** Who stopped a seat, when its launcher knows (G5: 11 exit-143s with no sender): the run's timeout, or the operator stopping the launcher. */
+export const STOPPED_BY = ["timeout", "operator"] as const;
+export type StoppedBy = (typeof STOPPED_BY)[number];
+/** Why a run ended, as its launcher saw it (G2; evidence pack item 13: a run stopped with SIGTERM left no reason). */
+export const RUN_END_CAUSES = ["concluded", "timeout", "operator_stop", "seats_exited"] as const;
+export type RunEndCause = (typeof RUN_END_CAUSES)[number];
+
 /** The smallest room that can still conclude under scrutiny: a proposer, a challenger and a verifier. */
 export const MIN_FLOOR = 3;
 
@@ -128,7 +157,13 @@ export async function fetchRespawnRoom(url: string, room: string, request: typeo
   }
   if (response.status === 404) return null;
   if (!response.ok) throw new HubUnreachable(`the hub answered ${response.status}`);
-  return await response.json() as RespawnRoom;
+  // the body is read inside a try too: a hub that dies after its headers throws here (TypeError "terminated", or a
+  // SyntaxError on half a body), and that is a hub that did not answer, not a room that is missing
+  try {
+    return await response.json() as RespawnRoom;
+  } catch (error) {
+    throw new HubUnreachable(`the hub's answer was cut off: ${error instanceof Error ? error.message : String(error)}`);
+  }
 }
 
 /**
@@ -172,6 +207,32 @@ export async function respawnProbe(url: string, token: string | undefined, reque
   if (response.status === 503) return `${lead}that hub was started with no launcher token, so it refuses every replacement seat. Stop it and restart it with \`npm run hubd\` (it sets a token and shares it), or with CHATROOM_LAUNCHER_TOKEN set in the hub's and this launcher's environment.${tail}`;
   if (response.status === 401) return `${lead}${token ? "that hub does not accept this launcher's token (it was started with another one; a token file left by an earlier hub is not this hub's)" : "this launcher has no CHATROOM_LAUNCHER_TOKEN and found no token file for that hub"}. Give this launcher the token the hub was started with.${tail}`;
   return null;
+}
+
+/** The `claude` arguments of the usage probe: one tiny call, on `model` when the seat had one, else on the CLI's default as the seat ran. */
+export function usageProbeArgs(model?: string): string[] {
+  return ["-p", "Reply with the single word OK.", ...(model ? ["--model", model] : [])];
+}
+
+/**
+ * Whether the account can run a Claude seat on `model` again: one tiny `claude -p` call (a refused one costs nothing).
+ * The limits are per model, so the model asked is the stopped seat's own: the launcher used to ask on its first worker
+ * model for every seat, and an answer from that one says nothing about a verifier or a worker on another.
+ */
+export function claudeUsageProbe(o: { model?: string; cwd: string; env: NodeJS.ProcessEnv; log?: (line: string) => void; who?: string; timeoutMs?: number }): Promise<boolean> {
+  return new Promise((done) => {
+    const said = (ready: boolean, why = "") => {
+      o.log?.(`usage probe${o.who ? ` for ${o.who}` : ""} on ${o.model ?? "the CLI's default model"}: ${ready ? "usage is back" : `still out of usage${why ? ` (${why})` : ""}`}`);
+      done(ready);
+    };
+    const child = spawn("claude", usageProbeArgs(o.model), { cwd: o.cwd, env: o.env, stdio: ["ignore", "pipe", "pipe"] });
+    let out = "";
+    child.stdout.on("data", (d) => (out += d));
+    child.stderr.on("data", (d) => (out += d));
+    const timer = setTimeout(() => child.kill("SIGTERM"), o.timeoutMs ?? 120_000);
+    child.on("close", (code) => { clearTimeout(timer); said(code === 0 && !usageLimit(out), usageLimit(out) ? "the limit notice" : `exit ${code}`); });
+    child.on("error", (e) => { clearTimeout(timer); said(false, e.message); });
+  });
 }
 
 export interface RespawnChainDeps<T> {
@@ -252,6 +313,9 @@ export async function respawnChain<T>(d: RespawnChainDeps<T>): Promise<{ last: T
       room = await reach(lastName, d.room);
     } catch (error) {
       if (error instanceof HubUnreachable) { gaveUp(lastName); break; }
+      // an error this chain does not know says nothing about the room: name it, never fall through to "room missing"
+      d.log?.(`${lastName} exited; not respawning: the room could not be read (${error instanceof Error ? `${error.name}: ${error.message}` : String(error)})`);
+      break;
     }
     if (room?.participants?.some((p) => p.name === lastName)) seatedName = lastName;
     // a seat the limit stopped before it ever joined (often before the room existed) has no seat to hand over: start it again

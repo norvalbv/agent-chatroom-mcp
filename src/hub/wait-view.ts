@@ -1,3 +1,5 @@
+import { hubTime } from "./clock.js";
+
 /** Per-session receipts for unchanged coordination state; delivery events always travel in full. */
 export interface WaitView {
   hint?: string;
@@ -17,6 +19,8 @@ export interface WaitView {
   board_reset?: boolean;
   /** seconds_left ticks on every wait, so it is kept out of the unchanged comparison and re-sent as is */
   deadline?: unknown;
+  /** the hub's clock (src/hub/clock.ts), added to every wait after the unchanged comparison: seats otherwise guess the time */
+  hub_time?: string;
   [key: string]: unknown;
 }
 
@@ -28,10 +32,10 @@ export function createWaitView() {
     const unchanged = delivered.get(participant) === snapshot;
     delivered.set(participant, snapshot);
     if (!unchanged || messages.length || remaining || board_keys !== undefined || board_delta !== undefined || board_reset ||
-        quiet_activity?.length || view.addressed_to_you.length || view.unanswered_human || view.room_state !== 'open') return view;
+        quiet_activity?.length || view.addressed_to_you.length || view.unanswered_human || view.room_state !== 'open') return { ...view, hub_time: hubTime() };
     return { hint, messages, remaining, next_seq, room_state: view.room_state, your_turn: view.your_turn,
       your_role: view.your_role, leaving_would_block: view.leaving_would_block,
       open_proposal: view.open_proposal ? { id: view.open_proposal.id, version: view.open_proposal.version, unchanged: true } : null,
-      addressed_to_you: [], ...(deadline ? { deadline } : {}), unchanged: true };
+      addressed_to_you: [], ...(deadline ? { deadline } : {}), unchanged: true, hub_time: hubTime() };
   };
 }

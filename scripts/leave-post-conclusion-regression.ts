@@ -1,6 +1,7 @@
 /** Once a room concludes or closes, leave_room never refuses for an abandoned claim/* or an owed ask: the hub
  * releases every claim/* itself in one system line instead of asking seats to write a handoff or a claim release.
- * A reason is still required. Board writes (board_set) are refused outright once concluded/closed, with a plain
+ * A reason is still required. Coordination writes (claim/, take/, hold/, draft/) are refused once concluded, and every
+ * board write once closed or after the late-results window (Hub.LATE_WRITE_MS), with a plain
  * message; verify/* and handoff/* entries written before conclusion stay readable.
  * Reproduction: room swarm-082729-8b5j-room made 14 forced handoff/*-add or claim/*-release board writes in the
  * 55 seconds after it concluded, one refused leave_room call per seat, because leaveRefusal did not know the
@@ -85,9 +86,12 @@ assert.ok(!r.error, "A's leave is not refused for the released claim: " + r.text
 r = await b.call("leave_room", { room, reason: "nothing more from me, room concluded" });
 assert.ok(!r.error, "B's leave is not refused for the owed ask: " + r.text);
 
-// Board writes are refused outright once concluded (any key, not just claim/*); reads of prior entries still work.
+// Coordination writes are refused once concluded (claim/, take/, hold/, draft/): there is nothing left to coordinate.
+// A late result is kept, marked late (scripts/late-writes-regression.ts). Reads of prior entries still work.
+r = await c.call("board_set", { room, key: "claim/final", text: JSON.stringify({ owner: "C", status: "open" }) });
+assert.ok(r.error && /concluded/.test(r.text), "a claim is refused outright post-conclusion: " + r.text);
 r = await c.call("board_set", { room, key: "evidence/final", text: "final note" });
-assert.ok(r.error && /concluded/.test(r.text), "board_set is refused outright post-conclusion: " + r.text);
+assert.ok(!r.error, "a late result is accepted post-conclusion: " + r.text);
 r = await c.call("board_get", { room, key: "verify/build" });
 assert.ok(!r.error && /exit 0/.test(r.text), "board_get still reads pre-conclusion entries: " + r.text);
 
@@ -116,14 +120,12 @@ assert.equal(rm2.state, "closed");
 assert.ok(rm2.board.has("claim/thing"), "claim/thing is released (announced), not deleted, on close");
 assert.ok(rm2.board.has("handoff/other"), "handoff/other written before close survives");
 
-// closeRoom already deactivated D (abandoned-room cleanup); a seat that reconnects afterwards (the launcher's
-// respawn/replacement path, or a late reconnect) still must not be refused for the already-released claim, and
-// board_set must still refuse outright even for a freshly (re)joined, active participant.
+// closeRoom already deactivated D (abandoned-room cleanup). A seat that reconnects afterwards and joins by hand is
+// not put back (scripts/closed-room-rejoin-regression.ts): the refusal says the room is closed, and the seat, already
+// out of the room, has no claim to hand off and nothing it can write there.
 r = await d.call("join_room", { room: room2, name: "D", agent: "test" });
-assert.ok(!r.error, "D rejoins the closed room: " + r.text);
+assert.ok(r.error && /is closed: nobody rejoins it/.test(r.text), "D cannot rejoin the closed room: " + r.text);
 r = await d.call("board_set", { room: room2, key: "evidence/late", text: "too late" });
-assert.ok(r.error && /closed/.test(r.text), "board_set is refused outright post-close: " + r.text);
-r = await d.call("leave_room", { room: room2, reason: "room closed, nothing left to do" });
-assert.ok(!r.error, "D's leave is not refused after close: " + r.text);
+assert.ok(r.error, "board_set is refused post-close: " + r.text);
 
 console.log("LEAVE-POST-CONCLUSION OK");

@@ -44,6 +44,22 @@ assert.ok(!say(a, "@B what do you make of prop_1a2b3c4d?").quiet, "a proposal id
 assert.ok(!say(a, "@B the fix is at 1b0871f5 on my branch.").quiet, "a commit stays public");
 assert.ok(say(a, "@B that was a deadbeef moment, nothing more.").quiet, "a hex-letter word without a digit is not a commit");
 
+// 5a. the room's OWN board keys are evidence pointers too, whatever prefix the room invented (swarm-180216-182a,
+// evidence/auto-quiet-hides-results): the fixed prefix list missed result/, rerun/, prereg/, take/ and bare keys like
+// "position", so in 0btz-break "New break, T-B2-8 ... (result/T-B2-8-...)" reached 2 of 3 seats; 91 of 164 auto-quieted
+// messages in 13 rooms named a key that was on the room's board.
+hub.setBoard(ROOM, a.id, "result/T-B2-8-wide-book", "wide-book reward is modelled but not paid: b = 0.03 per modelled dollar");
+hub.setBoard(ROOM, a.id, "position", "POSITION of the group (all three seats edit)");
+hub.setBoard(ROOM, b.id, "take/bench", "B has the bench");
+const m5a = say(a, "@B New break, T-B2-8, pre-registered (result/T-B2-8-wide-book). Reward from wide books is not paid.");
+assert.ok(!m5a.quiet, "a result on the board is the room's business");
+assert.equal((m5a as { keptPublic?: string }).keptPublic, "board-key", "the message records that the board-key rule kept it public");
+assert.equal((say(a, "The parser bug is fixed, see result/T-B2-8-wide-book.") as { keptPublic?: string }).keptPublic, undefined, "a message that was public anyway carries no mark");
+assert.ok(!say(a, "@B you still hold take/bench from the probe. Is anything running?").quiet, "who holds what is the room's business");
+assert.ok(!say(a, "@B position is now v11 and its second clause changed.").quiet, "a bare key that is on the board");
+assert.ok(!say(a, "@B result/T-B3-3-entrants is scored, once.").quiet, "a new key under a prefix the board already uses");
+assert.ok(say(a, "@B the bound in src/hub.ts and/or the parser looks off to me.").quiet, "a file path or a slash in prose is not a board key");
+
 // 5b. what stops duplicate work and what settles a dispute stays public too (attack/idea/quiet-default by -3 and -5):
 // a first-person commitment, a settled-axis slug, a RE-TARGET
 assert.ok(!say(a, "@B I'll run the parser dev room myself.").quiet, "a commitment is public: seeing it stops duplicate work");

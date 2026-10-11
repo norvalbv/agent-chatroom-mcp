@@ -3,6 +3,7 @@
  * participant and in the room log (a "work" event with its time), and states them when someone proposes. Before this
  * the beats were dropped after the last 60, so no room could say how much it read or searched before it concluded. */
 import { createHash } from "node:crypto";
+import { coordinates } from "./keys.js";
 import type { Participant, Room, WorkClass, WorkCounts } from "./types.js";
 
 const CLASSES: WorkClass[] = ["read", "search", "web", "run", "edit"];
@@ -17,7 +18,7 @@ const RUN = /^(bash|shell|run_command|exec)$/;
 const SHELL_PREFIX = /^(\s*(\w+=("[^"]*"|'[^']*'|\S*)\s+|cd\s+("[^"]*"|'[^']*'|\S+)\s*(&&|;)\s*))*/;
 const SHELL_SEARCH = /^(grep|rg|find|fd|ls|tree|git\s+(grep|log|ls-files|branch|status))\b/;
 const SHELL_READ = /^(cat|head|tail|less|wc|jq|sed\s+-n|awk|git\s+(show|diff|blame))\b/;
-const NOT_FINDINGS = /^(claim|draft|inbox|hold)\//;
+const NOT_FINDINGS = { test: (key: string) => coordinates(key) || key.startsWith("draft/") };
 
 /** The class of a local tool call, or undefined for anything that is not one (chatroom tools, launcher lines). */
 export function workClass(tool: string, detail = ""): WorkClass | undefined {

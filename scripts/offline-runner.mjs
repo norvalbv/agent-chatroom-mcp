@@ -3,34 +3,85 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { resolve, dirname } from 'node:path';
 
-/** Runs every command even after a failure, so one flaky script cannot hide later results; returns the first failure's exit code. */
-export function runCommands(commands, { cwd, timeout = 120_000, log = line => console.error(line) } = {}) {
-  const failures = [];
+/** Per-command limit when the caller passes none: CHATROOM_TEST_TIMEOUT_MS, else 300 s. It was a fixed 120 s with no
+ * override (bugs.md 8): under load from parallel worktrees 4 of 138 commands were SIGKILLed with no assertion failure,
+ * and bench-build-task.test.ts takes 124 s alone. */
+const defaultTimeout = () => { const n = Number(process.env.CHATROOM_TEST_TIMEOUT_MS); return Number.isFinite(n) && n > 0 ? n : 300_000; };
+
+/**
+ * Runs every command even after a failure, so one flaky script cannot hide later results. A command killed at the time
+ * limit is a failure whose reason says TIMED OUT, and the summary says how many of the failures were timeouts; exit 124
+ * when timeouts were the only failures. Each command's duration is printed, and the slowest at the end, so the limit is
+ * set from numbers.
+ * The line shapes are read by scripts/pool-suite-view.ts, which scores benchmark pools: `[offline] <name>` on stdout
+ * starts a command, `[offline] FAILED <name>: <reason>` and the `[offline] FAILED n of m commands:` list on stderr name
+ * the failures. So a timeout keeps the FAILED shape, and the timing lines carry the prefix `[offline:time]`, which that
+ * parser does not read as a command.
+ */
+export function runCommands(commands, { cwd, timeout = defaultTimeout(), log = line => console.error(line) } = {}) {
+  const failures = [], took = [];
+  const limit = `${(timeout / 1000).toFixed(timeout < 1000 ? 2 : 0)} s`;
   for (const { name, command, args } of commands) {
     console.log(`\n[offline] ${name}`);
+    const started = Date.now();
     const result = spawnSync(command, args, { cwd, stdio: 'inherit', timeout, killSignal: 'SIGKILL' });
-    if (result.error || result.signal || result.status !== 0) {
-      const reason = result.error?.message ?? result.signal ?? `exit ${result.status}`;
+    const seconds = (Date.now() - started) / 1000;
+    took.push({ name, seconds });
+    console.log(`[offline:time] ${name} took ${seconds.toFixed(1)} s`);
+    const timedOut = result.error?.code === 'ETIMEDOUT';
+    if (timedOut || result.error || result.signal || result.status !== 0) {
+      const reason = timedOut ? `TIMED OUT, killed at the ${limit} limit (no assertion failed)` : result.error?.message ?? result.signal ?? `exit ${result.status}`;
       log(`[offline] FAILED ${name}: ${reason}`);
-      failures.push({ name, reason, code: result.status || 1 });
+      failures.push({ name, reason, timedOut, code: timedOut ? 124 : result.status || 1 });
     }
   }
+  const slowest = took.slice().sort((a, b) => b.seconds - a.seconds).slice(0, 5);
+  if (commands.length > 1) console.log(`[offline:time] slowest: ${slowest.map(t => `${t.name} ${t.seconds.toFixed(1)} s`).join(', ')}`);
   if (failures.length) {
+    const timeouts = failures.filter(f => f.timedOut).length;
     log(`[offline] FAILED ${failures.length} of ${commands.length} commands:\n${failures.map(f => `  - ${f.name}: ${f.reason}`).join('\n')}`);
-    return failures[0].code;
+    if (timeouts) log(`[offline:time] ${timeouts} of the ${failures.length} failed by TIMING OUT at the ${limit} limit: a loaded machine, not a failed assertion. Rerun each alone, or raise CHATROOM_TEST_TIMEOUT_MS.`);
+    // a real failure decides the exit code; timeouts alone exit 124, the conventional timeout code
+    return (failures.find(f => !f.timedOut) ?? failures[0]).code;
   }
   console.log(`[offline] OK (${commands.length} commands)`);
   return 0;
 }
 
 export const offlineScripts = [
+  'base-not-a-commit-regression.ts',
+  'replay-skips-non-room-files-regression.ts',
+  'skill-review-claims-regression.ts',
   'archive-regression.ts',
+  'last-call-regression.ts',
+  'skill-closing-regression.ts',
+  'launcher-hub-start-regression.ts',
+  'amend-board-regression.ts',
+  'amend-stale-regression.ts',
+  'open-children-regression.ts',
+  'verifier-gate-regression.ts',
+  'challenge-wakes-proposer-regression.ts',
+  'challenge-wakes-held-wait-regression.ts',
+  'seen-before-acting-regression.ts',
+  'second-hub-regression.ts',
+  'vote-text-says-it-ends-regression.ts',
   'ask-settle-regression.ts',
   'attention-gate-regression.ts',
   'away-seat-regression.ts',
   'seat-exit-regression.ts',
   'wait-view-regression.ts',
+  'hub-clock-regression.ts',
+  'review-links-regression.ts',
+  'late-writes-regression.ts',
+  'review-coverage-regression.ts',
+  'second-scrutiny-regression.ts',
+  'take-not-output-regression.ts',
+  'limits-stated-regression.ts',
+  'check-links-regression.ts',
+  'check-verdict-regression.ts',
+  'cross-room-checks-regression.ts',
   'idle-open-work-regression.ts',
+  'finished-claim-key-regression.ts',
   'unclaimed-ideas-regression.ts',
   'idle-leave-regression.ts',
   'idea-lists-regression.ts',
@@ -38,12 +89,14 @@ export const offlineScripts = [
   'readas-limit-regression.ts',
   'baseline-freeze-guard-regression.ts',
   'blind-drafts-regression.ts',
+  'sealed-draft-misfire-regression.ts',
   'board-stale-overwrite-regression.ts',
   'board-attack-regression.ts',
   'breakout-regression.ts',
   'fresh-challenger-regression.ts',
   'challenger-snapshot-regression.ts',
   'recruit-workspace-regression.ts',
+  'recruit-base-regression.ts',
   'blind-challenger-regression.ts',
   'ak-select.test.ts',
   'adjudicator-trial.test.ts',
@@ -184,21 +237,31 @@ export const offlineScripts = [
   'respawn-regression.ts',
   'respawn-usage-regression.ts',
   'respawn-outage-regression.ts',
+  'respawn-cut-body-regression.ts',
   'hub-supervisor-regression.ts',
   'hub-death-log-regression.ts',
   'reseat-regression.ts',
+  'reseat-closed-room-regression.ts',
+  'closed-room-rejoin-regression.ts',
+  'review-of-claim-commit-regression.ts',
+  'alt-seat-placement-regression.ts',
+  'reseat-telemetry-regression.ts',
+  'room-idle-restart-regression.ts',
   'respawn-probe-regression.ts',
   'outside-reads-regression.ts',
   'recruit-room-breakout-regression.ts',
   'outside-calls-regression.ts',
   'groups-digest.test.ts',
+  'groups-reserved-id-regression.ts',
   'long-brief-regression.ts',
   'keepalive-regression.ts',
   'hubd-data-dir-regression.ts',
   'recruit-home-regression.ts',
   'launcher-routes-regression.ts',
   'restart-notice-regression.ts',
+  'stale-exit-line-regression.ts',
   'respawn-usage-wait-regression.ts',
+  'usage-probe-model-regression.ts',
   'proposed-decision-path-regression.ts',
   'smoke-ports-regression.ts',
   'own-hub-port-regression.ts',
@@ -208,6 +271,11 @@ export const offlineScripts = [
   'groups-launch-regression.ts',
   'seat-memory-regression.ts',
   'take-keys-regression.ts',
+  'take-commit-regression.ts',
+  'review-tells-author-regression.ts',
+  'research-index-regression.ts',
+  'board-append-regression.ts',
+  'ui-people-takes.test.ts',
   'breakout-holds-regression.ts',
   'result-fleet-compat.ts',
   'seat-human-route-regression.ts',
@@ -243,6 +311,22 @@ export const offlineScripts = [
   'stats-regression.ts',
   'telemetry-usage-regression.ts',
   'test-inbox-handover.ts',
+  'inbox-cap-regression.ts',
+  'worktree-hooks-regression.ts',
+  'short-proposal-regression.ts',
+  'node-crypto-regression.ts',
+  'join-check-regression.ts',
+  'git-no-lock-regression.ts',
+  'inbox-table-regression.ts',
+  'note-used-regression.ts',
+  'restart-replay-regression.ts',
+  'speaker-identity-regression.ts',
+  'seat-token-forgery-regression.ts',
+  'kick-liveness-regression.ts',
+  'caller-lookup-fails-closed-regression.ts',
+  'openings-recruits-regression.ts',
+  'hook-bypass-regression.ts',
+  'prompt-board-keys-regression.ts',
   'one-of-you-ask-regression.ts',
   'tool-surface-regression.ts',
   'trim-checkpoint-regression.ts',
@@ -255,6 +339,23 @@ export const offlineScripts = [
   'pending-verify-regression.ts',
   'partial-pregate-regression.ts',
   'refusals-visible-regression.ts',
+  'refusal-codes-typed-regression.ts',
+  'session-reap-regression.ts',
+  'runs-table-truth-regression.ts',
+  'runs-table-close-regression.ts',
+  'hold-lapses-regression.ts',
+  'idle-jobs-regression.ts',
+  'run-end-seat-exit-regression.ts',
+  'wait-cost-regression.ts',
+  'seat-hold-regression.ts',
+  'job-end-regression.ts',
+  'hub-health-regression.ts',
+  'owner-verdict-regression.ts',
+  'memory-high-regression.ts',
+  'seat-transcript-regression.ts',
+  'transcript-refusals-regression.ts',
+  'rejected-key-regression.ts',
+  'seat-unconnected-regression.ts',
 ];
 
 export function offlineCommands() {

@@ -118,6 +118,19 @@ ${PALETTE_HTML}
     if (!u || typeof u.cost_usd !== 'number') return '';
     return '$' + u.cost_usd.toFixed(2) + ' seat-reported · ' + (u.requests || 0) + ' model call' + (u.requests === 1 ? '' : 's') + (u.seats ? ' · ' + u.seats + ' seat' + (u.seats === 1 ? '' : 's') : '');
   }
+  // The People row's first line: claimed areas, then what the seat has taken (take/* from room_status holds, and takes
+  // offered to it), then the claims it was assigned to review, then why it left. Owner, swarm-180216-182a #104: takes were missing.
+  function personWork(p, board, areas, reviewing, esc) {
+    var tip = function (k) { var e = board && board[k]; return '<span title="' + esc(e ? e.text : '') + '">' + esc(k.slice(5)) + '</span>'; };
+    var takes = (p.holds || []).filter(function (k) { return k.indexOf('take/') === 0; });
+    var parts = [];
+    if (areas.length) parts.push(esc(areas.join(', ')));
+    if (takes.length) parts.push('taking: ' + takes.map(tip).join(', '));
+    if (p.offered && p.offered.length) parts.push('offered: ' + p.offered.map(function (o) { return tip(o.key) + ' by ' + esc(o.by); }).join(', '));
+    if (reviewing.length) parts.push('reviewing: ' + esc(reviewing.join(', ')));
+    if (p.left_reason) parts.push('left: ' + esc(p.left_reason));
+    return parts.join(' · ');
+  }
   // The People row's second line: messages and cost so far, then when the seat was last seen or started its current tool, then that tool and command (the line's ellipsis eats the command, never the time).
   function personStatus(p, esc, rel) {
     var n = (p.messages || 0) + ' msg' + (p.messages === 1 ? '' : 's') + (p.usage && typeof p.usage.cost_usd === 'number' ? ' · $' + p.usage.cost_usd.toFixed(2) : '');
@@ -243,6 +256,7 @@ ${ROOMS_JS}
     var act = '<a class="btn hidephone" href="/rooms/' + encodeURIComponent(r.name) + '/transcript" target="_blank" title="Plain-text transcript">Transcript</a>'
       + '<a class="btn hidephone" href="/rooms/' + encodeURIComponent(r.name) + '/metrics?format=md" target="_blank" title="Per-seat cost, context and waits; the run in half-hour steps; when it went quiet">Metrics</a>'
       + ((r.state === 'open' || r.state === 'stalled') ? '<button class="btn danger" id="closeroom" title="Close this room without a conclusion">Close room</button>' : '')
+      + ((r.state === 'concluded' || r.state === 'closed') ? '<button class="btn hidephone" id="verdictroom" title="Record whether the answer of this room was used: adopted, rejected or partial (owner_verdict in its log; the runs table shows it)">Verdict</button>' : '')
       + '<button class="btn" id="archroom" title="' + (r.archived ? 'Show this room in listings again' : 'Hide this room from listings; the transcript is kept') + '">' + (r.archived ? 'Unarchive' : 'Archive') + '</button>'
       + roomPinButton(r) + '<button class="btn icon" id="toginspect" title="Inspector">☰</button>';
     var topicOpen = !!expanded['topic'];
@@ -253,6 +267,7 @@ ${ROOMS_JS}
     $('#topic').onclick = function () { expanded['topic'] = !expanded['topic']; renderHead(r); };
     var cb = $('#closeroom'); if (cb) cb.onclick = function () { closeRoom(r); };
     var ab = $('#archroom'); if (ab) ab.onclick = function () { archiveRoom(r); };
+    var vb = $('#verdictroom'); if (vb) vb.onclick = function () { verdictRoom(r); };
     var wf = $('#whof'), keep = wf.value;
     wf.innerHTML = '<option value="">everyone</option>' + r.participants.slice().sort(function (a, b) { return a.name.localeCompare(b.name); }).map(function (p) { return '<option value="' + esc(p.name) + '">' + esc(p.name) + (p.active ? '' : ' (left)') + '</option>'; }).join('');
     wf.value = keep; if (wf.value !== keep) { whoF = ''; }
@@ -441,7 +456,7 @@ ${ROOMS_JS}
     var canAct = function (p) { return p.active && p.agent !== 'human' && p.role !== 'chair' && !openKv[p.name]; };
     var rows = function (list) { return list.map(function (p) {
       var areas = areasOf(r, p.name), reviewing = reviewingOf(r, p.name);
-      var aline = esc(areas.join(', ')) + (reviewing.length ? (areas.length ? ' · ' : '') + 'reviewing: ' + esc(reviewing.join(', ')) : '') + (p.left_reason ? (areas.length || reviewing.length ? ' · ' : '') + 'left: ' + esc(p.left_reason) : '');
+      var aline = personWork(p, r.board, areas, reviewing, esc);
       return '<div class="person' + (p.active ? '' : ' off') + (canAct(p) ? ' hasacts' : '') + (personOpen === p.name ? ' sel' : '') + '" data-person="' + esc(p.name) + '">' + av(p.name, p.agent) + '<div class="pm"><div class="n" title="' + esc(p.name) + '">' + esc(p.name) + roleTag(p) + '<span class="agent">' + esc(p.agent) + '</span></div><div class="a">' + aline + '</div><div class="s" title="' + esc(p.working ? p.working.tool + ' ' + stepText(p.working.tool, p.working.detail) : '') + '">' + personStatus(p, esc, rel) + '</div></div>' + (canAct(p) ? '<div class="pacts"><button class="mini warn" data-kick="' + esc(p.name) + '" data-kv="start" title="Start a vote to remove ' + esc(p.name) + '">Kick</button><button class="mini" data-replace="' + esc(p.name) + '" title="Remove ' + esc(p.name) + ' now and recruit a successor">Replace</button></div>' : '') + (personOpen === p.name ? '<div class="act" id="act">' + actPanel(p, activity[p.name], esc, rel) + '</div>' : '') + '</div>';
     }).join(''); };
     var active = r.participants.filter(function (p) { return p.active; }), gone = r.participants.filter(function (p) { return !p.active; });
@@ -457,7 +472,7 @@ ${ROOMS_JS}
     return '<div class="sec"><h3>In the room <span class="sp"></span><span class="c">' + active.length + '</span></h3>' + (rows(active) || '<div class="empty" style="padding:16px">Nobody here.</div>') + '</div>'
       + (anyActs ? '<div class="sec" style="font-size:11.5px;color:var(--dim2);padding-top:0">Kick starts a vote to remove a seat. Replace removes it at once and recruits a successor, for a dead seat.</div>' : '') + kickSec
       + (gone.length ? '<div class="sec"><h3>Left <span class="sp"></span><span class="c">' + gone.length + '</span></h3>' + rows(gone) + '</div>' : '')
-      + '<div class="sec" style="font-size:12px;color:var(--dim2)">Areas come from claim/* board entries; reviewing is the hub-assigned reviewer for that claim; the role tag is what the agent joined with.</div>';
+      + '<div class="sec" style="font-size:12px;color:var(--dim2)">Areas come from claim/* board entries; taking is what a seat wrote under take/* (hover for its line), offered is a take handed to it; reviewing is the hub-assigned reviewer for that claim; the role tag is what the agent joined with.</div>';
   }
   ${BOARD_JS}
   function paneStats(r) {
@@ -488,6 +503,16 @@ ${ROOMS_JS}
   async function closeRoom(r) {
     if (!window.confirm('Close ' + r.name + '? No conclusion will be recorded and agents still in it will be told to leave.')) return;
     await fetch('/rooms/' + encodeURIComponent(r.name) + '/close', { method: 'POST', headers: hdrs(), body: JSON.stringify({ name: myName(), reason: 'closed from dashboard' }) });
+    refreshRooms();
+  }
+  async function verdictRoom(r) {
+    var v = window.prompt('Your verdict on the answer of ' + r.name + ': adopted, rejected or partial', 'adopted');
+    if (!v) return;
+    v = v.trim().toLowerCase();
+    if (['adopted', 'rejected', 'partial'].indexOf(v) < 0) { window.alert('Type adopted, rejected or partial.'); return; }
+    var note = window.prompt('One line on why (optional)', '') || '';
+    var res = await fetch('/rooms/' + encodeURIComponent(r.name) + '/verdict', { method: 'POST', headers: hdrs(), body: JSON.stringify({ name: myName(), verdict: v, note: note }) });
+    if (!res.ok) { $('#sub').className = 'sub bad'; $('#sub').textContent = await res.text(); return; }
     refreshRooms();
   }
   async function archiveRoom(r) {

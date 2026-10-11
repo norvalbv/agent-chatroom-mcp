@@ -41,7 +41,8 @@ assert.ok(!r.error, "A drafted: " + r.text);
 
 // the chat notice for a sealed draft names neither key nor size, only who still owes one
 const notice = hub.getRoom(room).messages.filter((m) => m.kind === "board").at(-1)!;
-assert.ok(!notice.content.includes("draft/A") && !notice.content.includes(String(SECRET.length)) && /sealed draft \(0 of 2|1 of 2 drafters.*B has one/.test(notice.content), "sealed notice: " + notice.content);
+// (the size is looked for as a size: the bare digits also occur in the deadline's clock time, e.g. 18:31:00 for a 31-char secret, bugs.md 9)
+assert.ok(!notice.content.includes("draft/A") && !/\b\d+ chars\b/.test(notice.content) && !new RegExp(`\\(${SECRET.length}\\b`).test(notice.content) && /sealed draft \(0 of 2|1 of 2 drafters.*B has one/.test(notice.content), "sealed notice: " + notice.content);
 
 // A sees its own draft; B, the verifier and a non-member do not, by any read path
 r = await a.call("board_get", { room, key: "draft/A" });
@@ -125,7 +126,7 @@ await g.call("join_room", { room: room3, name: "G", agent: "test" });
 await h.call("join_room", { room: room3, name: "H", agent: "test" });
 await f.call("board_set", { room: room3, key: "draft/F", text: "f-draft" });
 await new Promise((res) => setTimeout(res, 150));
-assert.ok(hub.getRoom(room3).messages.some((m) => /wrote a sealed draft .*or until \d\d:\d\d:\d\d UTC \(the draft deadline\)/.test(m.content)), "the first sealed-draft notice already names the deadline");
+assert.ok(hub.getRoom(room3).messages.some((m) => /opened a sealed draft round.*or until \d\d:\d\d:\d\d UTC \(the draft deadline\)/.test(m.content)), "the first sealed-draft notice already names the deadline (and, since scripts/sealed-draft-misfire-regression.ts, says a round opened)");
 await g.call("board_set", { room: room3, key: "draft/G", text: "g-draft" }); // a later draft does not push the clock back
 r = await g.call("board_get", { room: room3, key: "draft/F" });
 assert.ok(r.error, "sealed before the deadline while H has not drafted");

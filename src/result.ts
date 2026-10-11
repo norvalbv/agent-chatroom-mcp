@@ -1,7 +1,9 @@
 /** Versioned, self-contained transport. Room payloads are deliberately not projected. */
-import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
+import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, writeFileSync } from 'node:fs';
+import { homedir } from 'node:os';
+import { dirname, join, resolve } from 'node:path';
 import { renderMetrics, type RunMetrics } from './run-metrics.js';
+import { coordinates } from './hub/keys.js';
 import { renderDigests, type DigestAck, type DigestRecord } from './groups.js';
 import { renderTimeline, type RunTimeline } from './run-timeline.js';
 
@@ -97,9 +99,11 @@ export interface SeatScore {
   exitCode?: number | null;
   /** Commits on the seat's own branch since the run's base; absent when the seat had no branch. */
   commits?: number;
+  /** The seat's Claude Code transcript (gap G17), where the launcher found it; absent when not found or not a claude seat. */
+  transcript?: string;
 }
 /** What only the launcher knows about a seat it spawned. A recruit spawned by the hub has no receipt. */
-export interface SeatReceipt { exitCode?: number | null; cost?: number; killedAtTimeout?: boolean; commits?: number }
+export interface SeatReceipt { exitCode?: number | null; cost?: number; killedAtTimeout?: boolean; commits?: number; transcript?: string }
 export interface RunOutcome {
   kind: 'concluded' | 'proposal_open' | 'no_proposal' | 'room_missing';
   timedOut: boolean;
@@ -141,6 +145,7 @@ export function seatScorecard(rooms: readonly RoomSnapshot[], receipts: Readonly
       if (typeof p.usage?.requests === 'number') score.requests = p.usage.requests;
       if (receipt && 'exitCode' in receipt) score.exitCode = receipt.exitCode ?? null;
       if (typeof receipt?.commits === 'number') score.commits = receipt.commits;
+      if (typeof receipt?.transcript === 'string') score.transcript = receipt.transcript;
       // one process, one row: the first room listed (the lead room) says how the seat ended
       const seen = card.find(s => s.name === score.name);
       if (!seen) { card.push(score); continue; }
@@ -259,7 +264,24 @@ export function rollupUsage(runs: readonly ({ usage?: SeatUsageRollup | null } |
  * so `num_turns` is the only real turn count available, and an old CLI without it must not read as
  * "zero turns".
  */
-export function parseClaudeCliOutput(raw: string): { text: string; usage: SeatUsageRollup | null; numTurns?: number; durationMs?: number; durationApiMs?: number } {
+/**
+ * Where Claude Code wrote a seat's transcript: <config dir>/projects/<cwd, every non-alphanumeric as "-">/<session>.jsonl,
+ * the config dir being the seat's CLAUDE_CONFIG_DIR (inherited from the launcher: a per-session directory under Frink
+ * Dev/claude-sessions on this machine, so ~/.claude holds almost none of them; gap G17). Found by the session id when the
+ * slug is spelled otherwise; undefined when it is not there, never a guessed path.
+ */
+export function transcriptPath(sessionId: string | undefined, cwd: string, configDir = process.env.CLAUDE_CONFIG_DIR || join(homedir(), '.claude')): string | undefined {
+  if (!sessionId || !/^[\w-]{1,80}$/.test(sessionId)) return undefined;
+  const projects = join(configDir, 'projects');
+  const direct = join(projects, cwd.replace(/[^A-Za-z0-9]/g, '-'), `${sessionId}.jsonl`);
+  if (existsSync(direct)) return direct;
+  try {
+    for (const d of readdirSync(projects)) { const f = join(projects, d, `${sessionId}.jsonl`); if (existsSync(f)) return f; }
+  } catch {}
+  return undefined;
+}
+
+export function parseClaudeCliOutput(raw: string): { text: string; usage: SeatUsageRollup | null; numTurns?: number; durationMs?: number; durationApiMs?: number; sessionId?: string } {
   let parsed: any;
   try {
     parsed = JSON.parse(raw);
@@ -267,7 +289,8 @@ export function parseClaudeCliOutput(raw: string): { text: string; usage: SeatUs
     return { text: raw, usage: null };
   }
   const text = typeof parsed?.result === "string" ? parsed.result : raw;
-  const extra: { numTurns?: number; durationMs?: number; durationApiMs?: number } = {};
+  const extra: { numTurns?: number; durationMs?: number; durationApiMs?: number; sessionId?: string } = {};
+  if (typeof parsed?.session_id === "string") extra.sessionId = parsed.session_id;
   if (typeof parsed?.num_turns === "number") extra.numTurns = parsed.num_turns;
   if (typeof parsed?.duration_ms === "number") extra.durationMs = parsed.duration_ms;
   if (typeof parsed?.duration_api_ms === "number") extra.durationApiMs = parsed.duration_api_ms;
@@ -319,7 +342,7 @@ export function writeRunResult(path: string, artifact: RunResult): void {
   writeFileSync(temp, JSON.stringify(artifact, null, 2) + '\n');
   renameSync(temp, path);
 }
-const NOT_FINDINGS = /^(claim|draft|hold|inbox|handoff)\//;
+const NOT_FINDINGS = { test: (key: string) => coordinates(key) || key.startsWith('draft/') || key.startsWith('handoff/') };
 /**
  * What a run that did not conclude still wrote down. Handoffs are printed whole, since they are addressed to
  * whoever continues; other findings are only named, the artifact has their text.

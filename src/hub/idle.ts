@@ -21,6 +21,7 @@
 import type { Hub } from "../hub.js";
 import { now } from "./internal.js";
 import { windowMs } from "./output.js";
+import type { Job } from "./memory.js";
 import type { Participant, Room } from "./types.js";
 
 /** The window the rule looks back over. CHATROOM_ROOM_IDLE_MS=0 turns the signal off. */
@@ -34,6 +35,14 @@ const REPEAT_SETTLE = 1 / 6;
 const OFF = process.env.CHATROOM_ROOM_IDLE_MS?.trim() === "0";
 /** Still quiet this long after the room was told: it is told again. */
 const REPEAT_WINDOWS = 2;
+
+/** How long a quiet room is excused by a running job before it is told anyway (a hung job, or a recorder left on for
+ * the whole run, must not silence the signal for good). CHATROOM_ROOM_JOB_WAIT_MS; default four windows. */
+export const ROOM_JOB_WAIT_MS = windowMs(process.env.CHATROOM_ROOM_JOB_WAIT_MS, 4 * ROOM_IDLE_MS);
+/** The jobs a seat has running: the memory watcher's, unless a test passes its own. */
+export type SeatJobs = (p: Participant) => Job[];
+/** A quiet room excused by a job: since when, and what it was waiting on when the hub last looked. */
+export interface RoomWaiting { since: string; jobs: (Job & { seat: string })[] }
 
 export interface QuietWindow { steps: number; seats: number; window_ms: number; quiet: boolean }
 /** What a stalled room carries: when the hub first said so, when it last did, and the numbers it quoted. */
@@ -69,9 +78,17 @@ export function noteWork(room: Room, at = Date.now()): void {
 }
 
 /** Agent seats here for the whole window whose tool calls reach the hub: a claude seat's hook reports each one, so for
- * it nothing counted means nothing done. For any other seat silence proves nothing, and a room with one is not judged. */
+ * it nothing counted means nothing done. For any other seat silence proves nothing, and a room with one is not judged;
+ * nor is one whose seats a hub restart put out and that are not all back yet. */
 function judged(hub: Hub, room: Room, at: number): Participant[] | undefined {
-  const seats = hub.activeParticipants(room).filter((p) => p.agent !== "human" && p.role !== "chair");
+  const agent = (p: Participant) => p.agent !== "human" && p.role !== "chair";
+  // After a restart every seat is restored out of the room until its next call. Until each is back, or silent long enough
+  // to read as gone (Hub.away), the seats in the room are not the room: judged on them, a stalled room read as working
+  // at boot ("one seat is not a room") and was told it had gone quiet a second time once they returned. Nor is an empty
+  // room working again.
+  if ([...room.participants.values()].some((p) => agent(p) && p.restoredAt && hub.away(p))) return undefined;
+  const seats = hub.activeParticipants(room).filter(agent);
+  if (!seats.length) return undefined;
   if (seats.some((p) => !p.work && !(p.seatKeyHash && p.agent === "claude"))) return undefined;
   return seats.every((p) => Date.parse(p.joinedAt) <= at - ROOM_IDLE_MS) ? seats : undefined;
 }
@@ -80,7 +97,12 @@ const span = (ms: number) => { const min = Math.round(ms / 60_000); return min <
 
 /** Called on the hub's sweep. Tells the room once per stall (and again every REPEAT_WINDOWS windows it lasts), tells
  * its parent, and writes room_idle / room_active to the record so a run's stalls can be read without a transcript. */
-export function checkRoomIdle(hub: Hub, room: Room, at = Date.now()): void {
+/** The jobs this room's agent seats have running now, each with its seat's name as the room shows it. */
+export function roomJobs(hub: Hub, room: Room, jobsOfSeat: SeatJobs = (p) => hub.jobsOf(p)): (Job & { seat: string })[] {
+  return hub.activeParticipants(room).filter((p) => p.agent !== "human").flatMap((p) => jobsOfSeat(p).map((j) => ({ seat: hub.shown(room, p), ...j })));
+}
+
+export function checkRoomIdle(hub: Hub, room: Room, at = Date.now(), jobsOfSeat: SeatJobs = (p) => hub.jobsOf(p)): void {
   if (OFF || room.state !== "open") return;
   const seats = judged(hub, room, at);
   const q = seats && quietWindow(roomSteps(room, at), seats.length, at);
@@ -88,8 +110,26 @@ export function checkRoomIdle(hub: Hub, room: Room, at = Date.now()): void {
     hub.persist({ type: "room_active", room: room.name, ts: now(), idle_min: Math.round((at - Date.parse(room.idle.since)) / 60_000) });
     room.idle = undefined;
   }
+  const endWait = (then: "active" | "idle" | "told") => {
+    if (!room.waiting) return;
+    hub.persist({ type: "room_waiting", room: room.name, ts: now(), state: "end", waited_min: Math.round((at - Date.parse(room.waiting.since)) / 60_000), then });
+    room.waiting = undefined;
+  };
+  if (q && !q.quiet) endWait("active");
   // a room waiting on a vote, held, or already told it is ending is not stalled; nor is one the hub cannot judge
   if (!q?.quiet || hub.hold(room) || room.deadline?.announced || [...room.proposals.values()].some((pr) => pr.status === "open")) return;
+  // nor is one waiting on a job a seat started (5 of 7 idle signals in 21 room logs were answered "waiting on PID n",
+  // and the process table the hub already samples held that process each time): recorded, not told, for a while
+  const jobs = seats!.flatMap((p) => jobsOfSeat(p).map((j) => ({ seat: hub.shown(room, p), ...j })));
+  if (jobs.length && !room.idle) {
+    const since = room.waiting?.since ?? new Date(at).toISOString();
+    if (at - Date.parse(since) <= ROOM_JOB_WAIT_MS) {
+      if (!room.waiting) hub.persist({ type: "room_waiting", room: room.name, ts: now(), state: "start", steps: q.steps, seats: q.seats, jobs });
+      room.waiting = { since, jobs };
+      return;
+    }
+  }
+  endWait(jobs.length ? "told" : "idle");
   if (room.idle && at - Date.parse(room.idle.toldAt) < REPEAT_WINDOWS * ROOM_IDLE_MS) return;
   if (room.idle && roomSteps(room, at, ROOM_IDLE_MS * REPEAT_SETTLE).length) return;
   const window_min = Math.round(q.window_ms / 60_000);
@@ -101,14 +141,21 @@ export function checkRoomIdle(hub: Hub, room: Room, at = Date.now()): void {
   const lasted = at - Date.parse(since);
   const facts = `its ${q.seats} seats made ${q.steps} new step${q.steps === 1 ? "" : "s"} between them in the last ${window_min} min (tool calls on something new, messages, board entries)` +
     `${lasted >= 60_000 ? `, quiet for ${Math.round(lasted / 60_000)} min now` : ""}${left > 0 ? `, and ${span(left)} remain` : ""}`;
+  // past the wait limit the job is named, so its owner need not answer "waiting on PID n" and the others know what on
+  const running = jobs.length ? ` ${jobs.slice(0, 3).map((j) => `${j.seat} has a job running (pid ${j.pid}, ${j.command.slice(0, 80)}, ${span(j.elapsed_s * 1000)} so far)`).join("; ")}: if it is still doing something, the rest of this is for the seats not waiting on it.` : "";
   // kind "chat" when a chair is named: only a chat line carries its @-mention as an owed ask (see output.ts)
   hub.post(room, chair ? "chat" : "system", undefined,
-    `${chair ? `@${hub.shown(room, chair)} this` : "This"} room has gone quiet: ${facts}. ` +
+    `${chair ? `@${hub.shown(room, chair)} this` : "This"} room has gone quiet: ${facts}.${running} ` +
     `Seats: if your area is finished, say so in one line and put what you would test next on idea/<slug>; if you are waiting on a job, say which and when it ends. Sleeping until the deadline tells nobody. ` +
     `Whoever steers: this is the moment for new inputs or a digest from the other groups, or for the room to vote what is done and carry on from there.`);
   const parent = room.parent ? hub.rooms.get(room.parent) : undefined;
   if (parent && parent.state === "open") hub.post(parent, "system", undefined, `Breakout ${room.name} has gone quiet: ${facts}. Its board holds where it stands (board_get room="${room.name}"); a note to it lands with post_to_room.`);
 }
 
+/** room_status: present only while a quiet room is excused by a running job. */
+export const waitingView = (room: Room, at = Date.now()) => room.waiting && {
+  since: room.waiting.since, waited_min: Math.round((at - Date.parse(room.waiting.since)) / 60_000),
+  jobs: room.waiting.jobs.map((j) => ({ seat: j.seat, pid: j.pid, command: j.command, elapsed_min: Math.round(j.elapsed_s / 60) })),
+};
 /** room_status: present only while the room is stalled. */
 export const idleView = (room: Room) => room.idle && { since: room.idle.since, told_at: room.idle.toldAt, steps: room.idle.steps, seats: room.idle.seats, window_min: room.idle.window_min };

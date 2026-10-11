@@ -63,9 +63,10 @@ let footprint = new Map<number, number>();
 const watch = (budgetMb: number | undefined, watched = (s: string) => s === A || s === B) =>
   new MemoryWatch({ budgetMb, watched, table: async () => current, footprints: async () => footprint, kill: (pid, signal) => { kills.push([pid, signal]); }, onEvent: (e) => events.push(e) });
 
-// no budget: measured, nothing stopped
+// no budget: measured, nothing stopped; a seat past the 2,000 MB mark is recorded as "high" (memory-high-regression), never acted on
 const measuring = watch(undefined);
-assert.deepEqual(await measuring.tick(), []);
+assert.deepEqual((await measuring.tick()).map((e) => e.kind), ["high", "high"], "A (3,906 MB) and B (8,789 MB) are past the mark: recorded, not stopped");
+events.length = 0;
 assert.equal(measuring.get(A)!.mb, 3906);
 assert.equal(measuring.get(A)!.agent_mb, 781);
 assert.equal(measuring.get(A)!.top!.pid, 102);

@@ -1,9 +1,12 @@
 /** Offline CLI regression: runs the compiled real fleet with a fake swarm executable. */
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, copyFileSync, writeFileSync, readFileSync, readdirSync, rmSync } from 'node:fs';
+import { cpSync, existsSync, mkdtempSync, mkdirSync, writeFileSync, readFileSync, readdirSync, rmSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
+/** The fleet subprocess's limit: RESULT_FLEET_TIMEOUT_MS, else the suite's per-command limit less a margin, else 120 s. */
+const FLEET_TIMEOUT_MS = Number(process.env.RESULT_FLEET_TIMEOUT_MS) > 0 ? Number(process.env.RESULT_FLEET_TIMEOUT_MS)
+  : Number(process.env.CHATROOM_TEST_TIMEOUT_MS) > 30_000 ? Number(process.env.CHATROOM_TEST_TIMEOUT_MS) - 20_000 : 120_000;
 
 const root = mkdtempSync(resolve(tmpdir(), 'fleet-result-'));
 const conclusion = 'Exact conclusion\n\n## Embedded heading\n\nretained\n\n### Verifier\n\nliteral conclusion content';
@@ -11,7 +14,9 @@ const verdicts = [null, 'VERIFIED\n\n## Raw heading\nunchanged', 'NOT VERIFIED\n
 try {
   mkdirSync(resolve(root, 'dist'));
   writeFileSync(resolve(root, 'package.json'), '{"type":"module"}');
-  for (const file of readdirSync('dist').filter(f => f.endsWith('.js'))) copyFileSync(resolve('dist', file), resolve(root, 'dist', file));
+  // the whole build, subfolders included: result.ts imports ./hub/keys.js since 67252b93, and a top-level-only copy
+  // made the fleet child die with ERR_MODULE_NOT_FOUND, which this test then reported as ENOENT on swarms/
+  cpSync('dist', resolve(root, 'dist'), { recursive: true, filter: (src) => statSync(src).isDirectory() || src.endsWith('.js') });
   writeFileSync(resolve(root, 'spec.json'), JSON.stringify({preamble:'test',areas: verdicts.map((_,i)=>({id:`area${i}`, title:`Area ${i}`, brief:''}))}));
   writeFileSync(resolve(root,'prior.md'), '## Prior area\n' + 'q'.repeat(65_000) + '\nPRIOR_END');
   writeFileSync(resolve(root, 'dist/swarm.js'), `
@@ -26,7 +31,11 @@ if(args.includes('--result-path')) { const p=get('--result-path'); mkdirSync(dir
 // Intentional boundaries defeat the old per-chunk discovery regex.
 process.stdout.write('swarm '+id.slice(0,-2)); setTimeout(()=>{process.stdout.write(id.slice(-2)+': task');},50);
 `);
-  const result = spawnSync(process.execPath, [resolve(root,'dist/fleet.js'), resolve(root,'spec.json'), '--model','test','--stagger','0','--consolidate','--consolidate-from',resolve(root,'prior.md')], {cwd:root,env:{...process.env,OPENROUTER_API_KEY:'offline-fixture'},encoding:'utf8',timeout:20000});
+  const result = spawnSync(process.execPath, [resolve(root,'dist/fleet.js'), resolve(root,'spec.json'), '--model','test','--stagger','0','--consolidate','--consolidate-from',resolve(root,'prior.md')], {cwd:root,env:{...process.env,OPENROUTER_API_KEY:'offline-fixture'},encoding:'utf8',timeout:FLEET_TIMEOUT_MS});
+  // under load the fixed 20 s ran out and the test failed later with ENOENT on swarms/ (verify/suite-preview-2 item 4): say it as a timeout
+  if ((result.error as NodeJS.ErrnoException | undefined)?.code === 'ETIMEDOUT') { console.error(`FAIL the fleet run TIMED OUT after ${FLEET_TIMEOUT_MS / 1000} s (a loaded machine, not a failed assertion; raise RESULT_FLEET_TIMEOUT_MS or CHATROOM_TEST_TIMEOUT_MS)`); process.exit(124); }
+  // a child that died says why here, not as a missing swarms/ folder below
+  if (result.status !== 0 && !existsSync(resolve(root, 'swarms'))) { console.error(`FAIL the fleet run exited ${result.status} before writing swarms/: ${String(result.stderr).trim().split('\n').slice(-3).join(' | ').slice(0, 400)}`); process.exit(1); }
   const fleetDir=resolve(root,'swarms', readdirSync(resolve(root,'swarms')).find(x=>x.startsWith('fleet-'))!);
   const summary=readFileSync(resolve(fleetDir,'summary.md'),'utf8');
   const digest=readFileSync(resolve(fleetDir,'consolidation-input.md'),'utf8');

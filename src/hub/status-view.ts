@@ -13,7 +13,7 @@ const DETAIL_HEAD = 80;
 type Summary = Record<string, unknown> & {
   topic?: string;
   participants?: { name?: string; working?: { detail?: string } | null; output?: object; holds?: string[] }[];
-  board?: Record<string, { by?: string; reviewer?: string; post_reveal?: boolean }>;
+  board?: Record<string, { by?: string; reviewer?: string; post_reveal?: boolean; late?: boolean }>;
 };
 
 const head = (s: string, n: number) => (s.length > n ? `${s.slice(0, n)}…` : s);
@@ -38,7 +38,9 @@ export function statusView(summary: Summary, fullTopic = false): Summary {
       };
     }),
     no_output: (summary.no_output as unknown[] | undefined)?.length ? summary.no_output : undefined,
+    // said once, in join_room: a seat polls room_status for who is doing what, not for constants
+    limits: undefined,
     board: summary.board && Object.fromEntries(Object.entries(summary.board).map(([k, e]) =>
-      [k, { by: e.by, ...(e.reviewer ? { reviewer: e.reviewer } : {}), ...(e.post_reveal ? { post_reveal: true } : {}) }])),
+      [k, { by: e.by, ...(e.reviewer ? { reviewer: e.reviewer } : {}), ...(e.post_reveal ? { post_reveal: true } : {}), ...(e.late ? { late: true } : {}) }])),
   };
 }

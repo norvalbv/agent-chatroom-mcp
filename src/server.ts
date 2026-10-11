@@ -13,15 +13,17 @@ import { fmtWait, steerCarry } from "./hub/steer.js";
 import { McpServer, ResourceTemplate, type RegisteredTool } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
-import { AUTO_QUIET_NOTE, Hub, HubError, ROLES, VERIFY_HEAD_EXAMPLE, VERIFY_HEAD_RULE, parseVerifyHead, verifyGaps, type CallOutcome } from "./hub.js";
+import { AUTO_QUIET_NOTE, Hub, HubError, ROLES, VERIFY_HEAD_EXAMPLE, VERIFY_HEAD_RULE, parseVerifyHead, isReviewKey, verifyGaps, type CallOutcome } from "./hub.js";
 
 /** Words in a verify entry's prose that say something was not checked (45 of 313 passing heads in past rooms; scripts/verify-gaps-measure.py). */
 const VERIFY_GAP_PROSE = /not verified|did not (run|verify|exercise|watch|drive|check|test)|could not (run|verify|test)|not (run|exercised|watched|driven|checked) by me|untested|not tested|author-only|rests on the author/i;
-import { projectOf, type SpawnedAgent, type Spawner } from "./spawner.js";
+import { planSnapshot, projectOf, type SpawnedAgent, type Spawner } from "./spawner.js";
 import type { Participant } from "./hub/types.js";
 import { createWaitView } from "./hub/wait-view.js";
-import { noteBoardRead } from "./hub/board.js";
-import { IDLE_HINT, ideaListHint, idleAgain, idleHint, idleStreak, leaveHint, listedItems, newlyNamed, offersLeave, openWork, stillOpenHint } from "./hub/open-work.js";
+import { hubTime, timeClaims, timeNote } from "./hub/clock.js";
+import { VERDICT_HINT } from "./hub/checks.js";
+import { boardContinuation, noteBoardRead } from "./hub/board.js";
+import { IDLE_HINT, ideaListHint, idleAgain, idleHint, idleStreak, leaveHint, leaveWaitsFor, listedItems, newlyNamed, offersLeave, openWork, stillOpenHint } from "./hub/open-work.js";
 
 /** The branch and worktree of each write recruit, for the reply of the call that spawned them; nothing for read-only recruits. */
 const workspaces = (recs: SpawnedAgent[]) => {
@@ -55,12 +57,28 @@ const fail = (err: unknown) => ({
 export interface SessionServer {
   server: McpServer;
   /** Mark every participant this connection owns as left (called when the transport closes). */
-  leaveAll(): void;
+  leaveAll(reason?: string, final?: boolean): void;
   /** the session key stamped on every participant this connection joins as (Participant.session) */
   sessionKey: string;
 }
 
-export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer {
+/** A refused board key as the log keeps it: its first segment when that is a plain prefix (digest, result), then every
+ * run of allowed characters as its length and every refused character as itself when it is visible punctuation, else
+ * "?" ("digest/src/x.ts@ab12" -> "digest/<8>@<4>"). Which prefix and which character the rule refused survive; no
+ * submitted text or secret does (src/hub.ts recordRefusal keeps no message text for the same reason). */
+export function keyShape(key: string): string {
+  const slash = key.indexOf("/");
+  const head = slash > 0 && /^[\w.-]{1,40}$/.test(key.slice(0, slash)) ? key.slice(0, slash + 1) : "";
+  const shape = head + key.slice(head.length).replace(/[\w .:/-]+|[^\w .:/-]/g, (m) => (m.length > 1 || /[\w .:/-]/.test(m) ? `<${m.length}>` : /[!-~]/.test(m) ? m : "?"));
+  return shape.length > 80 ? `${shape.slice(0, 80)}…` : shape;
+}
+
+/** A wait asked for at least this long is a full-length wait: the seat is waiting for the room, not polling. */
+const FULL_WAIT_MS = 50_000;
+
+/** `holdMs`: how long this connection's client waits for a tool, as its launcher said in the MCP URL (?hold=, src/env.ts
+ * seatHoldMs). A full-length wait_for_messages on it is held that long before it returns empty. */
+export function createSessionServer(hub: Hub, spawner?: Spawner, opts: { holdMs?: number; fullWaitMs?: number } = {}): SessionServer {
   const server = new McpServer(
     { name: "agent-chatroom", version: "0.2.0" },
     {
@@ -74,6 +92,14 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
   );
 
   const compactWait = createWaitView();
+  /** hub_time for a reply, plus a time_note (and a time_claim event) when the text just written states a time that is not the time. */
+  const clockReply = (room: string, by: string, where: string, text: string): { hub_time: string; time_note?: string } => {
+    const at = Date.now();
+    const claims = timeClaims(text, at);
+    for (const c of claims) hub.persist({ type: "time_claim", room, by, where, stated: c.stated, delta_min: c.delta_min, ts: new Date(at).toISOString() });
+    const note = timeNote(claims, at);
+    return { hub_time: hubTime(at), ...(note ? { time_note: note } : {}) };
+  };
   const me = new Map<string, Set<string>>();
   const sessionKey = randomUUID(); // one connection = one agent, whatever names it uses
 
@@ -98,6 +124,8 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
   const pid = (room: string, override?: string) => {
     let ids = me.get(room);
     if (override ? !ids?.has(override) : !ids?.size) { reseat(room, override); ids = me.get(room); }
+    // a closed room takes no seat back (liveness.reseatable): say so, instead of sending the seat to join_room again
+    if ((override ? !ids?.has(override) : !ids?.size) && hub.rooms.get(room)?.state === "closed") throw new HubError(`Room "${room}" is closed and this connection holds no seat in it. Nothing more can be done there: carry on in your own room, or stop.`, undefined, "state");
     if (override) {
       if (!ids?.has(override)) throw new HubError(`That participant_id was not issued to this connection. Use the id join_room returned to you. ${REJOIN}`, undefined, "auth");
       return override;
@@ -108,7 +136,7 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
       const names = [...ids].map((id) => r.participants.get(id)?.name ?? id).join(", ");
       throw new HubError(
         `This MCP connection has several participants in "${room}" (${names}). ` +
-          `Pass participant_id (returned by join_room) on every call so the room knows who you are.`,
+          `Pass participant_id (returned by join_room) on every call so the room knows who you are.`, undefined, "auth",
       );
     }
     return [...ids][0];
@@ -146,7 +174,14 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
       let participant = telemetryActor(room, a?.participant_id);
       let outcome: CallOutcome = "error";
       const started = Date.now();
-      const from = outsider(room, tool);
+      let from = outsider(room, tool);
+      // the tool itself puts a reconnecting seat back (pid -> reseat), after the two lines above have read this connection
+      // as holding no seat: read them again, or the seat's first call back is recorded as nobody's, from outside
+      const reseated = () => {
+        if (!room || tool === "join_room" || !me.get(room)?.size) return;
+        participant ??= telemetryActor(room, a?.participant_id);
+        if (from) from = outsider(room, tool);
+      };
       // a wait that returned no new message is idle polling; one that returned messages is the seat reacting (src/run-metrics.ts)
       let empty: boolean | undefined;
       // every hub call is a step too (board_get, vote): the People tab shows it without a room turn. Not a wait: it
@@ -158,6 +193,7 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
         // no actor for tools without participant_id (room_status, board_get), and the kick bans the connection.
         if (room) for (const id of me.get(room) ?? []) hub.refuseKicked(room, id);
         let data = await fn(args);
+        reseated();
         if (tool === "wait_for_messages") empty = !((data as { messages?: unknown[] })?.messages?.length);
         // steering fallback: a hub tool result always reaches the model, so pending asks ride on it (and count as delivered)
         if (room && participant && !SELF_DELIVERING.has(tool)) {
@@ -171,6 +207,7 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
         outcome = "success";
         return result;
       } catch (e) {
+        reseated();
         if (e instanceof HubError) {
           outcome = "hub_refusal";
           hub.recordRefusal(room, tool, e, participant);
@@ -179,8 +216,11 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
       } finally {
         // which entry a board_get read or a board_set wrote (or was refused): a board key is a short name, not content, and
         // without it no record can say who read what, or what a refused write was for (review/take-keys)
-        const key = (tool === "board_get" || tool === "board_set") && typeof (args as { key?: unknown })?.key === "string" && Hub.BOARD_KEY.test((args as { key: string }).key) ? (args as { key: string }).key : undefined;
-        hub.recordCallCompletion(room, tool, outcome, participant, { ms: Date.now() - started, ...(empty === undefined ? {} : { empty }), ...(from ? { outsider: from } : {}), ...(key === undefined ? {} : { key }) });
+        const raw = (tool === "board_get" || tool === "board_set") && typeof (args as { key?: unknown })?.key === "string" ? (args as { key: string }).key : undefined;
+        const key = raw !== undefined && Hub.BOARD_KEY.test(raw) ? raw : undefined;
+        // a key the board refused is kept by its shape only (keyShape), so a key-format refusal can be attributed
+        const rejected = raw !== undefined && key === undefined ? keyShape(raw) : undefined;
+        hub.recordCallCompletion(room, tool, outcome, participant, { ms: Date.now() - started, ...(empty === undefined ? {} : { empty }), ...(from ? { outsider: from } : {}), ...(key === undefined ? {} : { key }), ...(rejected ? { key_rejected: rejected } : {}) });
       }
     };
 
@@ -306,12 +346,12 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
       const r = hub.getRoom(room);
       const p = hub.requireParticipant(r, id);
       if (p.agent !== "human" && (reason ?? "").trim().length < 12) {
-        throw new HubError("leave_room needs a reason (one line): what you finished, where it is on the board (handoff/*), and what you leave undone. It is posted in the room so others can recruit if they disagree.");
+        throw new HubError("leave_room needs a reason (one line): what you finished, where it is on the board (handoff/*), and what you leave undone. It is posted in the room so others can recruit if they disagree.", undefined, "invalid-arg");
       }
       const block = hub.leavingWouldBlock(r, p);
       if (!block || p.leaveWarned === block.proposal.id) {
         const refusal = hub.leaveRefusal(r, p);
-        if (refusal) throw new HubError(refusal);
+        if (refusal) throw new HubError(refusal, undefined, "leave-warning");
       }
       hub.leave(room, id, reason);
       me.get(room)?.delete(id);
@@ -371,7 +411,7 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
       // a list of ideas left in chat is owed by nobody: say where each one goes (once, until the seat writes an idea/*)
       const listHint = ideaListHint(r, hub.requireParticipant(r, id), content, !!quiet);
       if (listHint) hub.persist({ type: "open_work", room: r.name, pid: id, ts: new Date().toISOString(), items: [`idea_list_nudged:${listedItems(content)}`] });
-      return { sent: hub.fmt(r, { ...m, content: "" }).trimEnd(), id: m.id, seq: m.seq, ...(listHint ? { hint: listHint } : m.autoQuiet ? { hint: AUTO_QUIET_NOTE } : {}) };
+      return { sent: hub.fmt(r, { ...m, content: "" }).trimEnd(), id: m.id, seq: m.seq, ...(listHint ? { hint: listHint } : m.autoQuiet ? { hint: AUTO_QUIET_NOTE } : {}), ...clockReply(r.name, m.from.name, "message", content) };
     }),
   );
 
@@ -405,7 +445,7 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
       title: "Wait for new messages",
       description:
         "Long-poll for messages from other participants. Returns immediately if there are unread messages, otherwise waits up to " +
-        "timeout_ms (default 55s, max 55s) for one to arrive. Call it again if it returns nothing; that is normal. " +
+        "timeout_ms (default 55s, max 55s) for one to arrive; a launched seat's connection may hold a full-length wait up to 4 minutes before returning nothing, and still returns at once when something arrives. Call it again if it returns nothing; that is normal. " +
         "Also reports the open proposal (its text only when the version changed since you last saw it), what blocks it, whether your leaving would block it, " +
         "openings progress, humans present, your_turn (round_robin rooms), and whether the room has concluded. " +
         "Only unchanged:true retains omitted fields from your last wait; otherwise the snapshot replaces them. Current hints still apply. " +
@@ -426,8 +466,16 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
       const p = hub.requireParticipant(r, id);
       const since = since_seq ?? p.lastSeenSeq;
       hub.answerBeforeWaiting(r, p, since);
-      const waitBudgetMs = Math.min(timeout_ms ?? DEFAULT_WAIT_MS, MAX_WAIT_MS);
+      const asked = Math.min(timeout_ms ?? DEFAULT_WAIT_MS, MAX_WAIT_MS);
+      // an empty return is a model request that re-reads the seat's context ($0.08 each in the records, 12% of spend): a
+      // connection whose client can wait longer is held longer. A short poll the seat asked for keeps its length.
+      const held = !!opts.holdMs && asked >= (opts.fullWaitMs ?? FULL_WAIT_MS);
+      const waitBudgetMs = held ? opts.holdMs! : asked;
       const waitDeadline = Date.now() + waitBudgetMs;
+      // the hold is for silence only: once anything has arrived, chatter is skipped no longer than the seat asked for, as
+      // before the hold (evidence/held-wait-misses-challenge: a proposer sat 172-188 s after two challenges on its own
+      // proposal, which are not "actionable" for it, until the hub's silence line woke it)
+      const chatterDeadline = Date.now() + asked;
       // a connection with seats in other rooms (a breakout and its parent) wakes for what it owes there too:
       // the long-poll runs in slices and checks the other rooms between them
       const multi = hub.sessionRoomCount(sessionKey) > 1;
@@ -441,8 +489,9 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
       if (hold_until_actionable) {
         // a delivered message that @-names this seat is actionable even once settled (a hub notice retires on delivery)
         // a capped page means more is already waiting: return it rather than piling the backlog into one result
-        while (!hub.deliveryRemaining(p) && !hub.actionableNow(r, p) && !msgs.some((m) => m.mentions?.includes(id!)) && !owedElsewhere()) {
-          const remaining = waitDeadline - Date.now();
+        // ...and so is another seat's challenge on this seat's own proposal, which this delivery may already have settled
+        while (!hub.deliveryRemaining(p) && !hub.actionableNow(r, p) && !msgs.some((m) => m.mentions?.includes(id!) || hub.challengesOwnProposal(r, p, m)) && !owedElsewhere()) {
+          const remaining = (msgs.length ? Math.min(waitDeadline, chatterDeadline) : waitDeadline) - Date.now();
           if (remaining <= 0) break;
           const more = await hub.wait(room, id, p.lastSeenSeq, slice(remaining));
           if (more.length) msgs = msgs.concat(more);
@@ -527,7 +576,7 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
       const idleWork = hint === IDLE_HINT ? openWork(hub, r, p, again) : [];
       // a worker that has polled long enough with nothing open is offered the door, as src/seat.ts does for harnessed seats
       const streak = hint === IDLE_HINT ? idleStreak(p, again) : 0;
-      const leaveOffer = streak && offersLeave(r, p, streak, idleWork) ? leaveHint(r, p, streak) : undefined;
+      const leaveOffer = streak && offersLeave(r, p, streak, idleWork, leaveWaitsFor(opts.holdMs)) ? leaveHint(r, p, streak) : undefined;
       if (leaveOffer) hub.persist({ type: "open_work", room: r.name, pid: p.id, ts: new Date().toISOString(), items: [`idle_leave_offered:${streak}`] });
       // the full list travels only when it differs from what this seat was last shown; otherwise one short line
       const named = hint === IDLE_HINT ? newlyNamed(p, idleWork) : null;
@@ -618,7 +667,7 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
 
   server.registerTool(
     "room_status",
-    { title: "Room status", description: "Participants with last_seen_at, working tool/step/time and liveness ages in seconds (active <60s, idle <600s, suspected_dead otherwise; advisory only; left if departed, away if departed but not gone: its process still heartbeats, or a hub restart found it in the room under 10 min ago), mode, round/turn, proposals, conclusion and recruitment policy (null pins mean as requested). recruitment_details=true adds current budgets.", inputSchema: { room: roomArg, full_topic: z.boolean().optional().describe("Include the whole room topic (default: its opening)."), recruitment_details: z.boolean().optional().describe("Include current recruitment budgets and your depth/live limits. Snapshot, not a reservation; request_agent checks admission. Null limits are unbounded. machine_live counts joined seats when available; other budgets count recorded recruits."), refusals: z.boolean().optional().describe("Include the room's latest hub refusals (who, which tool, code, when; never the text), to check a claim that the hub refused something.") } },
+    { title: "Room status", description: "Participants with last_seen_at, working tool/step/time and liveness ages in seconds (active <60s; busy when silent but a command of its own is running, with the job; disconnected when its tools still heartbeat but it holds no MCP session with this hub; idle <600s; suspected_dead otherwise; advisory only; left if departed, away if departed but not gone: its process still heartbeats, or a hub restart found it in the room under 10 min ago), mode, round/turn, proposals, conclusion and recruitment policy (null pins mean as requested). recruitment_details=true adds current budgets.", inputSchema: { room: roomArg, full_topic: z.boolean().optional().describe("Include the whole room topic (default: its opening)."), recruitment_details: z.boolean().optional().describe("Include current recruitment budgets and your depth/live limits. Snapshot, not a reservation; request_agent checks admission. Null limits are unbounded. machine_live counts joined seats when available; other budgets count recorded recruits."), refusals: z.boolean().optional().describe("Include the room's latest hub refusals (who, which tool, code, when; never the text), to check a claim that the hub refused something.") } },
     guard("room_status", ({ room, full_topic, recruitment_details, refusals }) => {
       const r = hub.getRoom(room);
       const actor = telemetryActor(room, undefined);
@@ -633,6 +682,7 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
       description:
         "Put a concrete statement to the room as the proposed conclusion. You automatically vote agree on your own proposal. " +
         "It is adopted when the room's quorum (default: every active participant) votes agree AND, in rooms of 2+, someone has challenged it. " +
+        "Adoption ENDS THE ROOM: votes, amends and challenges stop, and a result that lands afterwards is only recorded beside the conclusion, marked late; it never changes it. So propose once the work it reports is done. If it has the votes while someone has not voted on its current text, the hub announces a LAST CALL first and concludes when that runs out or they vote. " +
         "Only one proposal can be open at a time and it is a document: to change wording, use amend (posts only the diff) instead of proposing again. " +
         "A proposal that fails a vote stays open for amendment; it is never closed by a tally.",
       inputSchema: { room: roomArg, text: z.string().describe("The exact conclusion you propose the group adopt."), participant_id: asArg },
@@ -651,10 +701,11 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
       description:
         "Edit the open proposal's text in place: replace `find` (exact, unique substring) with `replace`, leave `find` empty to append, or pass replace_all=true to swap the whole text. " +
         "Only the diff is posted, the version is bumped, and votes reset EXCEPT agrees whose quoted clause still appears verbatim; you get no vote for amending, so vote after you amend. A verify/* entry keeps counting while the amended text still cites the commit it checked and adds no commit-like token (7 to 40 lowercase hex characters) that nobody has verified; otherwise it must be written again. " +
-        "A challenge is answered automatically when the text it cites is gone. Use this instead of re-proposing.",
+        "A challenge is answered automatically when the text it cites is gone. Use this instead of re-proposing. " +
+        "Given the key of a board entry you wrote instead of a proposal id, it edits that board entry in place the same way (find/replace, append, replace_all): send the changed passage, not the whole entry.",
       inputSchema: {
         room: roomArg,
-        proposal_id: z.string().describe("Proposal id (prop_...)."),
+        proposal_id: z.string().describe("Proposal id (prop_...), or the key of a board entry you wrote to edit that entry in place."),
         find: z.string().default("").describe("Exact text to replace; empty to append."),
         replace: z.string().describe("Replacement (or appended) text, or the whole new text with replace_all."),
         replace_all: z.boolean().optional().describe("Replace the entire text (keeps id, version chain and vote semantics)."),
@@ -663,6 +714,11 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
     },
     guard("amend", ({ room, proposal_id, find, replace, replace_all, participant_id }) => {
       const r = hub.getRoom(room);
+      // a board key instead of a proposal id: edit that entry in place (what 30 of 61 refused amends were asking for)
+      if (!r.proposals.has(proposal_id) && r.board.has(proposal_id)) {
+        const edited = hub.amendBoard(room, pid(room, participant_id), proposal_id, find, replace, replace_all);
+        return { board_key: edited.key, chars: edited.chars, diff: edited.diff, note: "Board entry edited in place; no proposal was touched and no vote changed." };
+      }
       const { proposal, diff, answered, reopened } = hub.amend(room, pid(room, participant_id), proposal_id, find, replace, replace_all);
       return { version: proposal.version, diff, challenges_answered: answered, challenges_reopened: reopened, proposal: hub.proposalView(r, proposal, false, false) };
     }),
@@ -677,31 +733,53 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
         "replaced in place and only a one-line notice goes to chat, so use this instead of re-posting long content. Empty text deletes the entry.",
       inputSchema: {
         room: roomArg,
-        key: z.string().describe("Short name, e.g. 'evidence', 'open questions', 'draft'. Reserved: claim/<area> (JSON, create-then-owner-only), take/<what> (claim/ is for an area you will build and want reviewed; take/ is one plain line for one item you do now, a piece smaller than an area, e.g. take/audit/exp-Q8 or a turn on a shared resource: write it BEFORE you start, a write to one someone else holds is refused with who holds it; start the line with @name to give it to that seat, who takes it by writing the key or declines by clearing it; clear yours to release it; room_status lists each seat's holds, claims and takes), verify/<area> (first line must be JSON " + VERIFY_HEAD_EXAMPLE.replace("<PROPOSAL_ID>", "<id>") + ": " + VERIFY_HEAD_RULE + "; free prose may follow, e.g. what you could not verify; otherwise it does not satisfy require_verification), attack/<key> (your objection to someone else's entry <key>, quoting the clause in double quotes; its author answers by editing <key>), idea/<slug> (an unbuilt idea with its evidence and how to build it; the hub names it to idle seats until someone writes claim/<slug>), resource/<name> (data, a tool or a limit that exists on this machine, with where it is and who shares it; the hub names these to every seat that joins), hold/<room> (pause; author-only), inbox/* (written by post_to_room; acknowledge with '<key>.ack')."),
+        key: z.string().describe("Short name, e.g. 'evidence', 'open questions', 'wip/summary' (a working draft others read at once). Reserved: draft/<your name> (your own INDEPENDENT attempt in a sealed round: hidden from the other seats until every seat has drafted or 10 min pass; never for a working draft you want read now), claim/<area> (JSON, create-then-owner-only), take/<what> (claim/ is for an area you will build and want reviewed; take/ is one plain line for one item you do now, a piece smaller than an area, e.g. take/audit/exp-Q8 or a turn on a shared resource: write it BEFORE you start, a write to one someone else holds is refused with who holds it; start the line with @name to give it to that seat, who takes it by writing the key or declines by clearing it; clear yours to release it; a take whose key names a commit, e.g. take/review-<sha>, is the take for that commit under any spelling, and a commit under a claim goes to that claim's assigned reviewer first; room_status lists each seat's holds, claims and takes), verify/<area> (first line must be JSON " + VERIFY_HEAD_EXAMPLE.replace("<PROPOSAL_ID>", "<id>") + ": " + VERIFY_HEAD_RULE + "; free prose may follow, e.g. what you could not verify; otherwise it does not satisfy require_verification), review/<short-sha> (your review of one commit while no proposal exists yet: the same JSON head with \"proposal\":\"pending\" and \"commit\" set to that commit; it covers the commit in the final proposal and never opens the gate), attack/<key> (your objection to someone else's entry <key>, quoting the clause in double quotes; its author answers by editing <key>), idea/<slug> (an unbuilt idea with its evidence and how to build it; the hub names it to idle seats until someone writes claim/<slug>), resource/<name> (data, a tool or a limit that exists on this machine, with where it is and who shares it; the hub names these to every seat that joins), hold/<room> (pause; author-only), inbox/* (written by post_to_room; acknowledge with '<key>.ack')."),
         text: z.string(),
         ttl_seconds: z.number().positive().finite().optional().describe("Expiry for handoff/inbox only; body remains retrievable by key."),
         expires_at: z.string().optional().describe("Absolute expiry timestamp; use instead of ttl_seconds."),
         if_absent: z.boolean().optional().describe("Create only; fail if the key exists (atomic claim)."),
         if_by_me: z.boolean().optional().describe("Update only if you wrote the existing entry."),
         overwrite: z.boolean().optional().describe("Replace another author's entry (refused otherwise, with their current text returned so you can merge)."),
+        append: z.boolean().optional().describe("Add text as one line, stamped by the hub with the time and your name, to a log or queue several seats share (e.g. a ledger of runs): anyone may append, nothing is replaced, and past 8000 chars it continues in <key>/2."),
         participant_id: asArg,
       },
     },
-    guard("board_set", async ({ room, key, text, if_absent, if_by_me, overwrite, ttl_seconds, expires_at, participant_id }) => {
+    guard("board_set", async ({ room, key, text, if_absent, if_by_me, overwrite, append, ttl_seconds, expires_at, participant_id }) => {
       const id = pid(room, participant_id);
-      const e = hub.setBoard(room, id, key, text, { ifAbsent: if_absent, ifByMe: if_by_me, overwrite, ttlSeconds: ttl_seconds, expiresAt: expires_at });
+      const e = hub.setBoard(room, id, key, text, { ifAbsent: if_absent, ifByMe: if_by_me, overwrite, append, ttlSeconds: ttl_seconds, expiresAt: expires_at });
       if (!e) return { key, deleted: true };
+      // the writer, not the entry's author: an appended line or a covering ack lands in an entry someone else began
+      const writer = hub.getRoom(room).participants.get(id)?.name ?? e.by;
+      if (append) {
+        // the line may have landed in a continuation: say where, so the seat reads and cites the right key
+        const landed = [...hub.getRoom(room).board].find(([, x]) => x === e)?.[0] ?? key;
+        return { key, landed_key: landed, chars: e.text.length, lines: e.text.split("\n").length, ...(landed !== key ? { hint: `"${key}" is full; your line is in "${landed}". Keep appending with key "${key}".` } : {}), ...clockReply(room, writer, `board:${landed}`, text) };
+      }
+      // a second seat's verify/review/attack lands beside the first under its own key (src/hub/board.ts secondScrutiny)
+      const asked = key;
+      key = [...hub.getRoom(room).board].find(([, x]) => x === e)?.[0] ?? key;
       const overlaps = hub.claimOverlaps(room, id, key);
-      const head = key.startsWith("verify/") ? parseVerifyHead(e.text) : undefined;
+      const head = isReviewKey(key) ? parseVerifyHead(e.text) : undefined;
       const receipt = head ? await hub.readDevRoom(room, key) : undefined;
-      const gaps = head && head.exit_code === 0 ? verifyGaps(head, receipt) : [];
+      const gaps = head && head.exit_code === 0 ? verifyGaps(head, receipt, e.commitCheck) : [];
       // the prose says something was not checked but the head does not: the gate reads only the head
       const proseGap = head && !head.unverified && VERIFY_GAP_PROSE.test(e.text.slice(e.text.indexOf("\n") + 1));
+      // a draft/* entry is hidden from the other seats: the writer is told so, and told when its write opened the round
+      const seal = hub.draftSeal(hub.getRoom(room), key, e);
       return {
-        key, chars: e.text.length, by: e.by, ...(overlaps.length ? { overlaps } : {}),
+        key, chars: e.text.length, by: e.by, ...(overlaps.length ? { overlaps } : {}), ...clockReply(room, writer, `board:${key}`, text),
+        // a check of another seat's entry: say what it was linked to, and ask for what it found if it did not say (idea/check-verdict)
+        ...(e.checks?.length ? { checks: e.checks, ...(e.verdict ? {} : { verdict_hint: VERDICT_HINT }) } : {}),
+        ...(key !== asked ? { asked_key: asked, landed_hint: `"${asked}" is another seat's entry, so yours was kept beside it as "${key}": cite and update it under that key.` } : {}),
+        ...(seal ? { sealed: seal, hint: seal.opened_round
+          ? `You opened a sealed draft round: draft/* is for each seat's own independent attempt, so this entry is hidden from ${seal.hidden_from.join(", ") || "the other seats"} until every drafter has written one${seal.until ? ` or ${seal.until.slice(11, 19)} UTC` : ""}. If this is a working draft you want them to read now, clear it (board_set key="${key}" text="", which cancels the round) and write it under another key, e.g. wip/${key.slice("draft/".length)}.`
+          : `Sealed: hidden from ${seal.hidden_from.join(", ") || "the other seats"} until every drafter has written a draft/*${seal.until ? ` or ${seal.until.slice(11, 19)} UTC` : ""}.` } : {}),
         ...(receipt ? { dev_room_receipt: receipt } : {}),
         ...(gaps.length ? { verification_gaps: gaps, verification_gaps_hint: "the open proposal and the conclusion carry these as not shown by you (PARTIAL); close them, or leave them listed" } : {}),
+        ...(e.toldAuthor ? { told_author: e.toldAuthor, told_author_hint: `The hub told ${e.toldAuthor}, the commit's author, that this review is up, with its verdict: no need to announce it in chat unless you have more to say.` } : {}),
         ...(proseGap ? { hint: "Your prose below the head says something was not verified, but the head has no \"unverified\" list, and only the head is read: put those items in \"unverified\":[...] so the proposal and the conclusion carry them." } : {}),
+        // a covering ack by a peer: a bare repeat stored nothing, a reply was appended under the caller's name (src/hub/board.ts)
+        ...(key.startsWith("inbox/") && key.endsWith(".ack") && e.by !== hub.getRoom(room).participants.get(id)?.name ? { already_acknowledged_by: e.by, hint: "This note was already acknowledged; your bare ack was not stored (nothing more is needed)." } : {}),
       };
     }),
   );
@@ -748,11 +826,11 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
       const sealed = (k: string, e: { by: string; text: string; updatedAt: string }) => hub.draftSealed(r, k, e as never, viewer);
       if (key) {
         const e = r.board.get(key);
-        if (!e || sealed(key, e)) throw new HubError(`No board entry "${key}". Keys: ${[...r.board].filter(([k, x]) => !sealed(k, x)).map(([k]) => k).join(", ") || "(none)"}`);
+        if (!e || sealed(key, e)) throw new HubError(`No board entry "${key}". Keys: ${[...r.board].filter(([k, x]) => !sealed(k, x)).map(([k]) => k).join(", ") || "(none)"}`, undefined, "not-found");
         if (reader) noteBoardRead(reader, key, e);
-        return { key, ...e, ...(hub.boardEntryExpired(r, key, e) ? { expired: true, tombstone: "Archived by expiry; excluded from manifests, retained for explicit retrieval." } : {}) };
+        return { key, ...e, ...(boardContinuation(r, key, e) ?? {}), ...(hub.boardEntryExpired(r, key, e) ? { expired: true, tombstone: "Archived by expiry; excluded from manifests, retained for explicit retrieval." } : {}) };
       }
-      return Object.fromEntries([...r.board].filter(([k, e]) => !hub.boardEntryExpired(r, k, e) && !sealed(k, e)).map(([k, e]) => [k, { by: e.by, chars: e.text.length, updated_at: e.updatedAt, ...(e.ackRequired ? { ack_required: true } : {}), ...(e.postReveal ? { post_reveal: true } : {}), ...(e.reviewer ? { reviewer: e.reviewer } : {}), ...(e.workspace?.branch ? { branch: e.workspace.branch } : {}) }]));
+      return Object.fromEntries([...r.board].filter(([k, e]) => !hub.boardEntryExpired(r, k, e) && !sealed(k, e)).map(([k, e]) => [k, { by: e.by, chars: e.text.length, updated_at: e.updatedAt, ...(e.ackRequired ? { ack_required: true } : {}), ...(e.postReveal ? { post_reveal: true } : {}), ...(e.reviewer ? { reviewer: e.reviewer } : {}), ...(e.workspace?.branch ? { branch: e.workspace.branch } : {}), ...(e.continuedAt ? { continued_at: e.continuedAt } : {}) }]));
     }),
   );
 
@@ -788,7 +866,8 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
       title: "Vote on a proposal",
       description:
         "Vote on a proposal. agree requires `quote`: a verbatim clause (15+ chars) from the proposal you endorse, checked by the server; while a challenge is open it also needs `reason`. " +
-        "disagree requires `reason` stating the specific change that would make you agree; a disagree keeps the proposal open for amendment (it never kills it) and stands until you re-vote or that text is amended. Optional confidence 0-1.",
+        "disagree requires `reason` stating the specific change that would make you agree; a disagree keeps the proposal open for amendment (it never kills it) and stands until you re-vote or that text is amended. Optional confidence 0-1. " +
+        "Your agree can be the one that concludes the room, after which no vote or amend is taken: agree only to the text as it stands, not to text you still mean to change.",
       inputSchema: {
         room: roomArg,
         proposal_id: z.string().describe("Proposal id (prop_...)."),
@@ -824,7 +903,7 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
           agent: z.enum(["claude", "codex", "openrouter"]).optional().describe("Requested runner; room_status.recruitment reports the hub's overriding policy and current budgets. Without a pin or request, defaults to claude."),
           model: z.string().optional().describe("Requested model (Claude alias, Codex model id or OpenRouter slug); the hub's model pin, if set, takes precedence."),
           cwd: z.string().optional().describe("Directory the newcomer works in (default: the hub's default project dir)."),
-          can_edit: z.boolean().optional().describe("Allow the newcomer to modify files (default false: investigate and report). It gets its own git worktree on its own branch swarm/<room>/<name>, never your checkout or the shared one; the reply names the branch, which is what you review. That branch starts from the shared checkout's HEAD, not from your branch: if it must build on your commits, name the commit in the brief."),
+          can_edit: z.boolean().optional().describe("Allow the newcomer to modify files (default false: investigate and report). It gets its own git worktree on its own branch swarm/<room>/<name>, never your checkout or the shared one; the reply names the branch, which is what you review. That branch is cut from the HEAD of YOUR worktree when the hub knows it (the reply's workspaces[].base names the commit), so it holds your commits but not your uncommitted changes: commit what the recruit must build on first. A read-only recruit reads a detached snapshot of that same HEAD. With an explicit cwd, or no worktree of yours, both use that checkout."),
           new_room: z.string().optional().describe("Spawn a sub-team into this new room instead of yours; they report back with post_to_room."),
           room_topic: z.string().optional().describe("Topic for the new room."),
           count: z.number().int().min(1).max(3).optional().describe("How many to spawn (default 2 for a new room, 1 otherwise)."),
@@ -851,17 +930,27 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
           hub.setBoard(room, me_.id, briefKey, brief, { ifAbsent: true });
         }
         let recs: ReturnType<Spawner["request"]>;
+        let reads: { sha: string; dirty: number } | undefined;
         try {
           // no cwd named: the recruiter's own project, which its launcher-bound worktree says, before the hub's directory
-          const home = cwd ?? ((wt) => (wt ? projectOf(wt) : undefined))(hub.workspaceOf(me_)?.worktree);
-          recs = spawner.request({ room, brief: passed, requestedBy: me_.name, requestedByShown: hub.shown(r, me_), parentTopic: r.topic, name, agent, model, cwd: home, canEdit: can_edit, newRoom: new_room, roomTopic: room_topic, count, area, replacing });
+          // and a recruit starts where its recruiter is: a write recruit's branch is cut from the HEAD of the recruiter's
+          // worktree, and a read-only one reads a detached snapshot of that HEAD, never the project checkout (which can be
+          // far behind: swarm-123021-1nwp-audit #33, recruits cut from the main checkout's Oct 3 HEAD ran the wrong
+          // benchmark model) and never the recruiter's live tree (attack/decision/recruit-base: its builds and
+          // half-typed edits would be shared)
+          const mine = cwd ? undefined : hub.workspaceOf(me_)?.worktree;
+          const home = cwd ?? (mine ? (can_edit ? projectOf(mine) : mine) : undefined);
+          const snapshot = mine && !can_edit ? planSnapshot(mine, `${room}-${name ?? "recruit"}`) : undefined;
+          recs = spawner.request({ room, brief: passed, requestedBy: me_.name, requestedByShown: hub.shown(r, me_), parentTopic: r.topic, name, agent, model, cwd: home, baseDir: mine, ...(snapshot ? { snapshot } : {}), canEdit: can_edit, newRoom: new_room, roomTopic: room_topic, count, area, replacing });
+          if (snapshot && recs[0].cwd !== home) reads = snapshot;
         } catch (e) {
           if (briefKey) try { hub.setBoard(room, me_.id, briefKey, ""); } catch {}
           throw e;
         }
         const who = recs.map((x) => x.name).join(", ");
-        hub.announce(room, `${hub.shown(r, me_)} recruited ${who} (${recs[0].agent}${recs[0].model ? `/${recs[0].model}` : ""}${new_room ? `, into ${new_room}` : ""}${area ? `, area ${area}` : ""}): ${brief.slice(0, 200)}${brief.length > 200 ? "…" : ""}`);
-        return { spawned: recs.map((x) => x.name), ...(briefKey ? { brief_on_board: briefKey } : {}), room: recs[0].room, depth: recs[0].depth, agent: recs[0].agent, model: recs[0].model ?? null, cwd: recs[0].cwd, ...workspaces(recs), logs: recs.map((x) => x.log), hint: `They will join within a minute or two. Carry on; you will see them arrive.${recs.some((x) => x.workspace) ? " Their commits land on the branch in workspaces, not in cwd." : ""}` };
+        const based = recs[0].workspace?.base;
+        hub.announce(room, `${hub.shown(r, me_)} recruited ${who} (${recs[0].agent}${recs[0].model ? `/${recs[0].model}` : ""}${new_room ? `, into ${new_room}` : ""}${area ? `, area ${area}` : ""}${based ? `, branch cut from ${based.sha.slice(0, 8)}, the HEAD of ${hub.shown(r, me_)}'s worktree` : ""}${reads ? `, reading a snapshot of ${reads.sha.slice(0, 8)}, the HEAD of ${hub.shown(r, me_)}'s worktree${reads.dirty ? ` (${reads.dirty} uncommitted change${reads.dirty === 1 ? "" : "s"} there not in it)` : ""}` : ""}): ${brief.slice(0, 200)}${brief.length > 200 ? "…" : ""}`);
+        return { spawned: recs.map((x) => x.name), ...(briefKey ? { brief_on_board: briefKey } : {}), room: recs[0].room, depth: recs[0].depth, agent: recs[0].agent, model: recs[0].model ?? null, cwd: recs[0].cwd, ...(reads ? { reads: { commit: reads.sha, uncommitted_not_included: reads.dirty } } : {}), ...workspaces(recs), logs: recs.map((x) => x.log), hint: `They will join within a minute or two. Carry on; you will see them arrive.${recs.some((x) => x.workspace) ? " Their commits land on the branch in workspaces, not in cwd." : ""}` };
       }),
     );
 
@@ -890,8 +979,16 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
       guard("replace_participant", ({ room, target, reason, brief, name, agent, model, cwd, can_edit, area, participant_id }) => {
         const r = hub.getRoom(room);
         const me_ = hub.requireParticipant(r, pid(room, participant_id));
-        const recs = spawner.replace({ room, requestedBy: me_.name, requestedByShown: hub.shown(r, me_), parentTopic: r.topic, replacing: target, reason, brief, name, agent, model, cwd, area, canEdit: can_edit ?? true, requesterIsHuman: Hub.dashboardHuman(me_) });
-        return { spawned: recs.map((x) => x.name), room: recs[0].room, agent: recs[0].agent, model: recs[0].model ?? null, ...workspaces(recs), logs: recs.map((x) => x.log), hint: "The room already saw the removal notice; the successor will join within a minute or two." };
+        // a successor takes over where its predecessor stopped: its branch is cut from the predecessor's worktree HEAD
+        // (the requester's when the hub knows none), never from the hub's own directory or a stale project checkout
+        const old = [...r.participants.values()].find((p) => p.name === target);
+        const from = cwd ? undefined : (old && hub.workspaceOf(old)?.worktree) ?? hub.workspaceOf(me_)?.worktree;
+        const editing = can_edit ?? true;
+        const left = from ? planSnapshot(from, "dirty-check") : undefined; // read-only: its count of uncommitted changes
+        const recs = spawner.replace({ room, requestedBy: me_.name, requestedByShown: hub.shown(r, me_), parentTopic: r.topic, replacing: target, reason, brief, name, agent, model, cwd: cwd ?? (from ? (editing ? projectOf(from) : from) : undefined), baseDir: from, area, canEdit: editing, requesterIsHuman: Hub.dashboardHuman(me_) });
+        // what a successor most needs to know: the branch holds the predecessor's commits, not what it had not committed
+        if (left?.dirty && recs[0].workspace?.base) hub.announce(room, `${recs[0].name}'s branch is cut from ${left.sha.slice(0, 8)}, ${target}'s last commit; ${left.dirty} uncommitted change${left.dirty === 1 ? "" : "s"} of ${target}'s ${left.dirty === 1 ? "is" : "are"} NOT in it and still in ${from}.`);
+        return { spawned: recs.map((x) => x.name), room: recs[0].room, agent: recs[0].agent, model: recs[0].model ?? null, ...workspaces(recs), ...(left?.dirty ? { predecessor_uncommitted: left.dirty, predecessor_worktree: from } : {}), logs: recs.map((x) => x.log), hint: "The room already saw the removal notice; the successor will join within a minute or two." };
       }),
     );
 
@@ -923,7 +1020,11 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
   const leaveAll = (reason = "MCP session closed without leave_room", final = false) => {
     for (const [room, ids] of me) {
       for (const id of ids) {
-        if (!hub.holds(room, id, sessionKey)) continue; // re-seated on a newer connection: this one ending is not the seat leaving
+        const r = hub.rooms.get(room), p = r?.participants.get(id);
+        const held = hub.holds(room, id, sessionKey);
+        // only a seat that was in the room: a session ending after leave_room or a kick says nothing new
+        if (r && p?.active) hub.recordSession(r, p, "closed", reason, !held);
+        if (!held) continue; // re-seated on a newer connection: this one ending is not the seat leaving
         for (let attempt = 0; attempt < (final ? 2 : 1); attempt++) {
           try {
             hub.leave(room, id, reason);

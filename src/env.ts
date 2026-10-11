@@ -75,7 +75,24 @@ export function seatChildEnv(env: NodeJS.ProcessEnv = process.env, name?: string
   for (const key of Object.keys(childEnv)) if (key.startsWith("CHATROOM_") && !SEAT_ENV_KEEP.some((re) => re.test(key))) delete childEnv[key];
   for (const key of SEAT_ENV_EXCLUSIONS) delete childEnv[key];
   if (name !== undefined) Object.assign(childEnv, seatGitIdentity(name));
+  if (env.CHATROOM_SEAT_AI_GATES !== "on") for (const key of SEAT_AI_GATES_OFF) childEnv[key] ??= "1";
   return childEnv;
+}
+
+/**
+ * Seat commits run a repository's deterministic gates but not its AI reviewer gates (owner ruling, #985: "the whole
+ * point is to peer review. you *can* use deterministc gates, but bypass ai"). Since c3d2d088 seat worktrees carry
+ * the hooks, and devkit's pre-commit runs an LLM reviewer fleet, a completeness judge, a decisions LLM and a qavis
+ * vision route on every commit (evidence/seat-hooks-cost-and-bypass). These are devkit's own documented off
+ * switches (gate-engine/config.mts reads GUARD_ or FRINK_), and devkit records each as a gate bypass. A value the
+ * operator exported is kept; CHATROOM_SEAT_AI_GATES=on (the launcher's --seat-ai-gates on) sets none of them.
+ */
+export const SEAT_AI_GATES_OFF: readonly string[] = Object.freeze(["GUARD_DECISION_NO_LLM", "GUARD_NO_REVIEW", "GUARD_NO_COMPLETENESS", "GUARD_NO_QAVIS_ADVISORY", "GUARD_NO_SENTRY_JUDGE"]);
+
+/** One line for a launcher or recruit log: which AI gate switches a seat's commits carry. */
+export function aiGatesLine(seatEnv: NodeJS.ProcessEnv): string {
+  const off = SEAT_AI_GATES_OFF.filter((k) => seatEnv[k] && seatEnv[k] !== "0");
+  return off.length ? `AI reviewer gates off for seat commits (${off.join(", ")}); deterministic gates still run` : "AI reviewer gates ON for seat commits (--seat-ai-gates on)";
 }
 
 /**
@@ -202,6 +219,26 @@ export function seatPortError(env: NodeJS.ProcessEnv, portFlag: string | undefin
  * hub does not outlive the work (in swarm-000525-jcz8 every dev hub had to be found and killed by PID) but still answers
  * a reviewer who reads the room after the run. 0 means never. A hub the launcher finds already running gets nothing.
  */
+/** How long the launcher waits for a hub it started to answer (CHATROOM_HUB_START_MS). 10 s was too short on a shared
+ * machine at load average 150-200, where a hub took 12-20 s to start (swarm-180216-182a, friction/machine-load). */
+export const HUB_START_MS = startMs(process.env.CHATROOM_HUB_START_MS);
+/** A positive number of ms, else the 90 s default (CHATROOM_HUB_START_MS=abc used to give NaN: no wait at all; review/07b6b507). */
+export function startMs(v: string | undefined): number {
+  const n = Number(v);
+  return v !== undefined && v.trim() !== "" && Number.isFinite(n) && n > 0 ? n : 90_000;
+}
+
+/** True once `url` answers within `ms`, polling every 200 ms; false if it never does, or as soon as `gone()` says the
+ * process that should serve it has exited (a hub that dies at start is reported at once, not after the whole window). */
+export async function waitForHub(url: string, ms = HUB_START_MS, gone: () => boolean = () => false): Promise<boolean> {
+  const t0 = Date.now();
+  while (Date.now() - t0 < ms && !gone()) {
+    try { await fetch(url, { signal: AbortSignal.timeout(Math.max(200, Math.min(2000, ms - (Date.now() - t0)))) }); return true; } catch {}
+    await new Promise((r) => setTimeout(r, 200));
+  }
+  return false;
+}
+
 export function ownHubEnv(idleMin: number, port?: number): Record<string, string> {
   // 7717 is the operator's dashboard hub, which a launcher starts when none is running; it stays up
   return idleMin > 0 && port !== 7717 ? { CHATROOM_IDLE_EXIT_MIN: String(idleMin) } : {};
@@ -239,13 +276,37 @@ function seatTelemetryEnv(mcpUrl: URL, key: string): NodeJS.ProcessEnv {
   };
 }
 
-export function seatBeat(mcpUrl: string, key: string, worktree?: string): SeatBeat {
+/**
+ * How long a launched Claude seat's connection holds an empty wait_for_messages (claim/empty-waits). A wait returned
+ * empty after 55 s, a cap set for Codex's 60 s client timeout, and each empty return is a model request that re-reads
+ * the seat's whole context: scripts/wait-cost.ts over the last 21 room logs gives 2,050 such requests, $163.62 of
+ * $1,427.97 (12%; 22% in the grouped Polymarket run), $0.08 each. Four minutes, because in the same records a seat's
+ * request 240-360 s after its last one still hit the prompt cache (1 miss in 45), so a longer hold does not trade polls
+ * for a context rewrite. CHATROOM_SEAT_HOLD_MS sets it; 0 turns it off.
+ */
+export const MAX_SEAT_HOLD_MS = 240_000;
+const MIN_SEAT_HOLD_MS = 55_000;
+export function seatHoldMs(raw: string | undefined = process.env.CHATROOM_SEAT_HOLD_MS): number | undefined {
+  if (raw?.trim() === "0") return undefined;
+  const n = Number(raw);
+  return Number.isFinite(n) && n >= MIN_SEAT_HOLD_MS ? Math.min(Math.round(n), MAX_SEAT_HOLD_MS) : MAX_SEAT_HOLD_MS;
+}
+/** The hub's reading of a connection's ?hold=<ms>: a number in range, or no hold. A client cannot make the hub hold longer than the cap. */
+export function holdFromQuery(raw: unknown): number | undefined {
+  const n = typeof raw === "string" && /^\d+$/.test(raw) ? Number(raw) : NaN;
+  return n >= MIN_SEAT_HOLD_MS ? Math.min(n, MAX_SEAT_HOLD_MS) : undefined;
+}
+
+/** `holdMs`: only for a seat whose client tool timeout this launcher sets (a claude seat): the hub is told in the URL, and
+ * the seat's MCP_TOOL_TIMEOUT is a minute longer, so a held wait never ends as a client-side tool timeout. */
+export function seatBeat(mcpUrl: string, key: string, worktree?: string, holdMs?: number): SeatBeat {
   const u = new URL(mcpUrl);
   u.searchParams.set("seat", key);
   if (worktree) u.searchParams.set("worktree", worktree);
+  if (holdMs) u.searchParams.set("hold", String(holdMs));
   // the seat's memory budget, when the hub enforces one (src/hub/memory.ts): its tools can size themselves to it
   const budget = Number(process.env.CHATROOM_SEAT_MEMORY_MB) > 0 ? { CHATROOM_SEAT_MEMORY_MB: String(Number(process.env.CHATROOM_SEAT_MEMORY_MB)) } : {};
-  return { key, mcpUrl: u.toString(), env: { CHATROOM_SEAT_KEY: key, CHATROOM_HEARTBEAT_URL: new URL("/heartbeat", u).toString(), ...budget, ...seatTelemetryEnv(u, key) } };
+  return { key, mcpUrl: u.toString(), env: { CHATROOM_SEAT_KEY: key, CHATROOM_HEARTBEAT_URL: new URL("/heartbeat", u).toString(), ...budget, ...seatTelemetryEnv(u, key), ...(holdMs ? { MCP_TOOL_TIMEOUT: String(holdMs + 60_000) } : {}) } };
 }
 
 /**

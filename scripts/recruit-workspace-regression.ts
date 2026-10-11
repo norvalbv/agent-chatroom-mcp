@@ -52,7 +52,7 @@ const tool = (await client.listTools()).tools.find((t) => t.name === "request_ag
 const canEdit = (tool.inputSchema.properties as Record<string, { description?: string }>).can_edit.description ?? "";
 assert.match(canEdit, /own git worktree/, "can_edit says the recruit gets its own worktree, so a seat need not fear a collision");
 assert.match(canEdit, /swarm\/<room>\/<name>/, "and names the branch pattern the requester will review");
-assert.match(canEdit, /not from your branch/, "and says the branch starts from the shared checkout's HEAD, so a brief that continues the requester's build must name its commit");
+assert.match(canEdit, /cut from the HEAD of YOUR worktree/, "and says where the branch starts (scripts/recruit-base-regression.ts): the requester's HEAD, so its commits are in it and its uncommitted changes are not");
 
 await call("join_room", { room: "ws-room", name: "seat-1", agent: "claude", topic: "build a parser", expected_participants: 1 });
 const built = await call("request_agent", { room: "ws-room", brief, name: "builder", can_edit: true });

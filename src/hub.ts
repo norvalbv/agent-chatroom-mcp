@@ -13,8 +13,8 @@ import { join } from "node:path";
 import { analyzeReplyMetrics, type ReplyMetricEvent } from "./reply-metrics.js";
 
 export * from "./hub/types.js";
-import { VERIFY_HEAD_EXAMPLE, VERIFY_HEAD_RULE, parseVerifyHead, readVerifyHead, failToPassShortfall, citesCommit, hexTokens, addedUnchecked, uncoveredCommits, verifyGaps, devRoomUrl, devReceiptFrom, type DevReceipt, ROLES, REFUSAL_CODES, HubError } from "./hub/types.js";
-import type { MessageKind, Vote, Quorum, RoomState, VerifyHead, Role, Participant, KickVote, Message, CodeState, BoardExpiryOptions, BoardEntry, Challenge, ElectorateSummary, ConclusionVerification, Proposal, RoomOptions, JoinOptions, Room, CallOutcome, RefusalCode, BoardManifestObservation } from "./hub/types.js";
+import { VERIFY_HEAD_EXAMPLE, VERIFY_HEAD_RULE, isReviewKey, parseVerifyHead, readVerifyHead, failToPassShortfall, citesCommit, hexTokens, addedUnchecked, uncoveredCommits, verifyGaps, devRoomUrl, devReceiptFrom, type DevReceipt, ROLES, REFUSAL_CODES, HubError } from "./hub/types.js";
+import type { MessageKind, Vote, Quorum, RoomState, VerifyHead, Role, Participant, KickVote, Message, CodeState, BoardExpiryOptions, BoardEntry, Challenge, ElectorateSummary, ConclusionVerification, ConclusionClosing, Proposal, RoomOptions, JoinOptions, Room, CallOutcome, RefusalCode, BoardManifestObservation } from "./hub/types.js";
 import { now, shortId, norm, emptyBoardManifestCounters, manifestBytes, codeState, commitsIn, keepRefusal, RECENT_REFUSALS } from "./hub/internal.js";
 import type { Opts, Event, BoardManifestCounters } from "./hub/internal.js";
 import * as board from "./hub/board.js";
@@ -27,7 +27,11 @@ import { barrenClaims, evidenceGaps, evidenceReceipt, offline, unsourcedClaims }
 import { apiRequests, UsageLedger, usageTotal } from "./hub/usage.js";
 import { DevRuns, DevRunError, type DevRunHost } from "./hub/dev-runs.js";
 import { takesOf } from "./hub/take.js";
-import { MemoryWatch, memoryNotice, type MemoryEvent, type SeatMemory } from "./hub/memory.js";
+import { MemoryWatch, memoryNotice, type Job, type MemoryEvent, type SeatMemory } from "./hub/memory.js";
+import { RUN_END_CAUSES, exitCause, type RunEndCause, type StoppedBy } from "./respawn.js";
+/** What the owner says became of a room's conclusion: used as it stands, overruled, or used in part. */
+export const OWNER_VERDICTS = ["adopted", "rejected", "partial"] as const;
+export type OwnerVerdict = (typeof OWNER_VERDICTS)[number];
 import type { SteerItem } from "./hub/steer.js";
 
 /** An evidence pointer the minimal prompt keeps public: a coordination board key, a proposal id, a commit (hex with a digit). */
@@ -74,6 +78,10 @@ export class Hub {
       this.replay();
       // a sealed draft round interrupted by a restart still reveals on its original deadline, announced
       for (const room of this.rooms.values()) if (room.state !== "concluded" && room.state !== "closed") this.armDraftsDeadline(room);
+      // ...and a last call interrupted by a restart still closes on its original deadline
+      for (const room of this.rooms.values()) if (room.state !== "concluded" && room.state !== "closed") {
+        for (const pr of room.proposals.values()) if (pr.status === "open" && pr.lastCall?.version === pr.version) this.armLastCall(room, pr);
+      }
     }
   }
 
@@ -85,7 +93,7 @@ export class Hub {
 
   getRoom(name: string): Room {
     const r = this.rooms.get(name);
-    if (!r) throw new HubError(Hub.ROOM_NAME.test(name) ? `Room "${name}" does not exist. Use join_room (it auto-creates) or list_rooms.` : "Invalid room name.");
+    if (!r) throw new HubError(Hub.ROOM_NAME.test(name) ? `Room "${name}" does not exist. Use join_room (it auto-creates) or list_rooms.` : "Invalid room name.", undefined, "not-found");
     return r;
   }
 
@@ -98,6 +106,11 @@ export class Hub {
   static DEFAULT_NUDGE_MS = Number(process.env.CHATROOM_NUDGE_AFTER_MS ?? 180_000);
   /** draft/* is revealed this long after the first draft even if some drafter never wrote one (0 = wait for all) */
   static DRAFT_REVEAL_MS = Number(process.env.CHATROOM_DRAFT_REVEAL_MS ?? 600_000);
+  /** last call: how long a proposal that has the votes waits for electorate members who have not voted on its current
+   * version before the room concludes (0 = conclude at once, the old behaviour); see lastCallHolds. The served hub
+   * (src/index.ts) turns it on; an in-process Hub keeps 0 unless CHATROOM_LAST_CALL_MS says otherwise. */
+  static LAST_CALL_MS = Number(process.env.CHATROOM_LAST_CALL_MS ?? 0);
+  static SERVED_LAST_CALL_MS = 180_000;
   /** the deadline line is posted when a fifth of the run remains, but no later than MIN and no earlier than MAX before it */
   static DEADLINE_LEAD_MIN_MS = 2 * 60_000;
   static DEADLINE_LEAD_MAX_MS = 10 * 60_000;
@@ -116,9 +129,10 @@ export class Hub {
     const existing = this.rooms.get(name);
     if (existing) return existing;
     if (!Hub.ROOM_NAME.test(name)) {
-      throw new HubError(`Room name must match [a-zA-Z0-9_-]{1,64}.`);
+      throw new HubError(`Room name must match [a-zA-Z0-9_-]{1,64}.`, undefined, "invalid-arg");
     }
-    if (this.rooms.size >= Hub.MAX_ROOMS) throw new HubError(`Room limit (${Hub.MAX_ROOMS}) reached.`);
+    if (this.rooms.size >= Hub.MAX_ROOMS) throw new HubError(`Room limit (${Hub.MAX_ROOMS}) reached.`, undefined, "budget");
+    if (opts.parent !== undefined && !this.rooms.has(opts.parent)) throw new HubError(`parent room "${opts.parent}" does not exist: create it first.`, undefined, "not-found");
     const full: Opts = {
       topic: opts.topic ?? "",
       mode: opts.mode ?? "free",
@@ -132,12 +146,13 @@ export class Hub {
       nudgeAfterMs: opts.nudgeAfterMs ?? Hub.DEFAULT_NUDGE_MS,
       requireVerification: opts.requireVerification ?? false,
       ...(opts.chair ? { chair: opts.chair } : {}),
+      ...(opts.chair && opts.chairNamed ? { chairNamed: true } : {}),
       ...(opts.parent ? { parent: opts.parent } : {}),
     };
     // Per-run room cap: rooms sharing a swarm prefix (swarm-<id>-*) are counted together.
     const prefix = Hub.runPrefix(name);
     if (prefix && [...this.rooms.keys()].filter((r) => Hub.runPrefix(r) === prefix && this.rooms.get(r)!.state === "open").length >= Hub.MAX_ROOMS_PER_RUN) {
-      throw new HubError(`Room limit for this run (${Hub.MAX_ROOMS_PER_RUN} open rooms with prefix ${prefix}) reached. Close or conclude a room first.`);
+      throw new HubError(`Room limit for this run (${Hub.MAX_ROOMS_PER_RUN} open rooms with prefix ${prefix}) reached. Close or conclude a room first.`, undefined, "budget");
     }
     // a threshold above the live cap can never be met (a 14-agent flat run deadlocked on it): clamp and say so
     const requested = full.expectedParticipants;
@@ -215,6 +230,8 @@ export class Hub {
       require_challenge: this.challengeRequired(room),
       require_verification: room.requireVerification,
       opening_max_chars: Math.min(room.maxMessageChars, 400),
+      // every size a write can be refused for, said up front (18 board_set size refusals in 6 rooms found the cap by hitting it)
+      limits: { message_chars: room.maxMessageChars, board_entry_chars: board.BOARD_ENTRY_MAX, opening_chars: Math.min(room.maxMessageChars, 400) },
       max_live_agents: Hub.MAX_LIVE_PER_ROOM,
       code_state: room.codeState ?? null,
       hold: this.hold(room) ? { by: this.hold(room)!.by, reason: this.hold(room)!.text } : null,
@@ -249,9 +266,20 @@ export class Hub {
           const age = (at: string) => Math.max(0, Math.floor((observedAt - Date.parse(at)) / 1000));
           const age_seconds = age(this.lastSeen(p));
           const away = this.away(p);
+          // its local tools heartbeat but it holds no MCP session here (seatUnconnected): its chatroom calls fail on its side,
+          // so it is neither idle nor dead, and a vote or an answer from it cannot arrive until its client reconnects
+          // (only once the grace after a hub start has passed and the room was told: just after a restart it is "away")
+          const lost = p.seatKeyHash && (p.active || away) ? this.unconnected.get(p.seatKeyHash) : undefined;
+          // ...and only while its tools still heartbeat: a seat that died while disconnected stops beating and falls through
+          // to idle / suspected_dead like any other (review/fe1ed533: it read "disconnected" 45 min after its last beat)
+          const beating = !!p.working && observedAt - Date.parse(p.working.at) < kick.SUSPECTED_DEAD_MS;
+          if (lost?.told && beating) return { status: "disconnected", age_seconds, heartbeat_age_seconds: age(p.working!.at), disconnected_s: Math.round((observedAt - lost.since) / 1000) };
           if (away) return { status: "away", age_seconds, heartbeat_age_seconds: p.working ? age(p.working.at) : null, away: away.evidence };
-          return { status: !p.active ? "left" : age_seconds < 60 ? "active" : age_seconds * 1000 < kick.SUSPECTED_DEAD_MS ? "idle" : "suspected_dead",
-            age_seconds, heartbeat_age_seconds: p.working ? age(p.working.at) : null };
+          // a seat inside one long command makes no calls and no steps, but the hub can see the command running (jobsOf):
+          // busy, not suspected dead (review/23f0620d: a verifier the hub was holding the room for read as dead from 601 s)
+          const job = p.active && age_seconds >= 60 ? this.jobsOf(p)[0] : undefined;
+          return { status: !p.active ? "left" : age_seconds < 60 ? "active" : job ? "busy" : age_seconds * 1000 < kick.SUSPECTED_DEAD_MS ? "idle" : "suspected_dead",
+            age_seconds, heartbeat_age_seconds: p.working ? age(p.working.at) : null, ...(job ? { job: { pid: job.pid, command: job.command, elapsed_s: job.elapsed_s } } : {}) };
         })(),
         output: output.seatOutput(room, p, observedAt),
         left_reason: p.active ? null : p.leaveReason ?? null,
@@ -261,15 +289,21 @@ export class Hub {
       no_output: output.listedNoOutput(this, room, observedAt).map(nm),
       // a room-wide stall the hub has told the room of (src/hub/idle.ts); absent while the room works
       ...(idle.idleView(room) ? { idle: idle.idleView(room) } : {}),
+      ...(idle.waitingView(room) ? { waiting: idle.waitingView(room) } : {}),
       // claim/* entries whose owner left: its registered successor may take one at once, anyone after Hub.STALE_CLAIM_MS
       stale_claims: this.staleClaims(room, reveal),
+      // per commit, the verify/* and review/* entries whose head names it (telemetry G3/G14): coverage read from the hub, not key names
+      ...((r) => (r.length ? { reviews: r } : {}))(this.reviewsByCommit(room)),
+      // chat messages by the channel they came through (telemetry gap 8: owner, script, chair and seat were one column)
+      // dashboard and HTTP only: telemetry for the owner, not something a seat polls (room-status-size cap: review of preview 2)
+      ...((sp) => (sp && reveal ? { speakers: sp } : {}))(this.speakers(room)),
       ...((s) => (s.unexamined.length || s.open_attacks.length ? { scrutiny: s } : {}))(board.scrutiny(room)),
       active_count: active.length,
       message_count: room.messages.length,
       latest_seq: room.messages.at(-1)?.seq ?? 0,
       proposals: [...room.proposals.values()].map((pr) => this.proposalView(room, pr, reveal, pr.status === "open" || pr.status === "accepted")),
       // agents get a manifest (board_get <key> fetches text); the human dashboard (reveal) gets the text
-      board: Object.fromEntries([...room.board].filter(([k, e]) => reveal || (!this.boardEntryExpired(room, k, e) && !this.draftSealed(room, k, e))).map(([k, e]) => [k, { ...(reveal ? { text: e.text } : {}), by: e.by, chars: e.text.length, updated_at: e.updatedAt, ...(e.postReveal ? { post_reveal: true } : {}), ...(e.reviewer ? { reviewer: e.reviewer } : {}) }])),
+      board: Object.fromEntries([...room.board].filter(([k, e]) => reveal || (!this.boardEntryExpired(room, k, e) && !this.draftSealed(room, k, e))).map(([k, e]) => [k, { ...(reveal ? { text: e.text } : {}), by: e.by, chars: e.text.length, updated_at: e.updatedAt, ...(e.postReveal ? { post_reveal: true } : {}), ...(e.reviewer ? { reviewer: e.reviewer } : {}), ...(e.late ? { late: true } : {}), ...(reveal && e.checks ? { checks: e.checks } : {}) }])),
       quiet: (() => {
         const qs = room.messages.filter((m) => m.quiet);
         return { messages: qs.length, unsurfaced_threads: new Set(qs.map((m) => this.threadRoot(room, m).id)).size };
@@ -378,14 +412,14 @@ export class Hub {
   registerReplacement(roomName: string, predecessor: string, successorName: string): { replacementToken: string } {
     const room = this.getRoom(roomName);
     const old = room.participants.get(predecessor) ?? [...room.participants.values()].find((p) => p.name === predecessor);
-    if (!old) throw new HubError("Replacement predecessor is not registered in this room.");
-    if (!successorName.trim() || successorName.length > 64 || !/^[^\n\r<>]+$/.test(successorName)) throw new HubError("Invalid replacement display name.");
+    if (!old) throw new HubError("Replacement predecessor is not registered in this room.", undefined, "not-found");
+    if (!successorName.trim() || successorName.length > 64 || !/^[^\n\r<>]+$/.test(successorName)) throw new HubError("Invalid replacement display name.", undefined, "invalid-arg");
     // a reserved successor that never joined (its process died first, e.g. of the account's usage limit) holds nothing:
     // a new reservation replaces it, so the launcher can try again; one that joined is a seat and is replaced itself
     const reservedJoined = old.pendingReplacementName && [...room.participants.values()].some((p) => p.name === old.pendingReplacementName);
-    if (old.replacedBy || reservedJoined) throw new HubError("A replacement is already registered for this participant.");
+    if (old.replacedBy || reservedJoined) throw new HubError("A replacement is already registered for this participant.", undefined, "state");
     if ([...room.participants.values()].some((p) => p.name === successorName || (p !== old && p.pendingReplacementName === successorName))) {
-      throw new HubError("Replacement must be a new, unreserved participant name.");
+      throw new HubError("Replacement must be a new, unreserved participant name.", undefined, "state");
     }
     // The launcher asserts the process exit; do not wait for the idle sweep to mark the old seat departed.
     const replacementToken = randomBytes(32).toString("hex");
@@ -418,28 +452,30 @@ export class Hub {
   join(roomName: string, name: string, agent: string, opts: JoinOptions = {}, reclaimId?: string, session?: string, role?: Role): { room: Room; participant: Participant } {
     const existing = this.rooms.get(roomName);
     if (existing && opts.parent !== undefined && existing.parent !== opts.parent) {
-      throw new HubError(`"${roomName}" already exists${existing.parent ? ` as a breakout of "${existing.parent}"` : " and is not a breakout"}; a room is never re-parented. Join it without parent, or open a breakout under a new name.`);
+      throw new HubError(`"${roomName}" already exists${existing.parent ? ` as a breakout of "${existing.parent}"` : " and is not a breakout"}; a room is never re-parented. Join it without parent, or open a breakout under a new name.`, undefined, "state");
     }
     const opening = opts.parent !== undefined && !existing;
     if (opening) this.checkBreakout(roomName, opts.parent!, session);
     const room = this.createRoom(roomName, opening ? opts : { ...opts, parent: undefined });
     if (opening) this.carryResources(opts.parent!, room.name);
     if (opening) this.announceBreakout(room, name);
-    if (role && !ROLES.includes(role)) throw new HubError(`role must be one of ${ROLES.join(", ")}.`);
+    if (role && !ROLES.includes(role)) throw new HubError(`role must be one of ${ROLES.join(", ")}.`, undefined, "invalid-arg");
     if (role === "chair") {
       // the chair is bound to a name: the room option (set at creation) or, failing that, the first claimant
-      if (room.chair && room.chair !== name) throw new HubError(`This room's chair is ${room.chair}. Join without role=chair.`);
+      if (room.chair && room.chair !== name) throw new HubError(`This room's chair is ${room.chair}. Join without role=chair.`, undefined, "state");
     }
-    if (!name.trim()) throw new HubError("A display name is required to join.");
-    if (name.length > 64) throw new HubError("Display names are capped at 64 characters.");
-    if (!/^[^\n\r<>]+$/.test(name)) throw new HubError("Display names cannot contain newlines or angle brackets.");
+    if (!name.trim()) throw new HubError("A display name is required to join.", undefined, "invalid-arg");
+    if (name.length > 64) throw new HubError("Display names are capped at 64 characters.", undefined, "invalid-arg");
+    // no square brackets: the tag the hub prints after a name ("[human route: token]", "[chair]") is how a seat knows whose
+    // word a message is, and a seat named "benji [human route: token]" printed the same line as the owner (review/e0a5d760)
+    if (!/^[^\n\r<>[\]]+$/.test(name)) throw new HubError("Display names cannot contain newlines, angle brackets or square brackets.", undefined, "invalid-arg");
 
     // Identity is the connection: the session that already holds this name in this room is asking again (a model
     // that dropped context and forgot it had joined). Give it its own seat back instead of "pick another name",
     // which is how bench-3 became bench-3b next to its own live seat.
     const mine = session ? [...room.participants.values()].find((p) => p.active && p.session === session && p.name === name) : undefined;
     let participant = mine ?? (reclaimId ? room.participants.get(reclaimId) : undefined);
-    if (participant && participant.name !== name) throw new HubError("participant_id does not belong to that name.");
+    if (participant && participant.name !== name) throw new HubError("participant_id does not belong to that name.", undefined, "auth");
     if (!participant) participant = [...room.participants.values()].find((p) => p.name === name && !p.active);
     // A removed seat stays removed: not under its old name, its old id, or a new name on the same connection.
     const kickedSeat = participant?.kicked ? participant
@@ -447,19 +483,21 @@ export class Hub {
     if (kickedSeat) throw new HubError(Hub.kickedMessage(room, kickedSeat), undefined, "auth");
     // Humans are identified by name alone (they come in over plain HTTP with no session), so they always reclaim.
     if (!participant && agent === "human") participant = [...room.participants.values()].find((p) => p.name === name && p.agent === "human");
-    if (participant && opts.replacementToken !== undefined) throw new HubError("Replacement token has already been consumed or is not reserved for this join.");
+    if (participant && opts.replacementToken !== undefined) throw new HubError("Replacement token has already been consumed or is not reserved for this join.", undefined, "auth");
+    // a closed room takes no new agent either: a join there reads as a live room (review/7ddbad3f); a human may still come in to read
+    if (!participant && room.state === "closed" && agent !== "human") throw new HubError(`Room "${roomName}" is closed: nobody joins it. Its board and log stay readable on the dashboard and at GET /rooms/${roomName}.`, undefined, "state");
     if (!participant) {
       const reserved = [...room.participants.values()].find((p) => p.pendingReplacementName === name);
       const tokenHash = opts.replacementToken ? createHash("sha256").update(opts.replacementToken).digest("hex") : undefined;
       if (reserved ? !tokenHash || tokenHash !== reserved.pendingReplacementTokenHash : opts.replacementToken !== undefined) {
-        throw new HubError("A valid launcher replacement token for this room and name is required.");
+        throw new HubError("A valid launcher replacement token for this room and name is required.", undefined, "auth");
       }
       if ([...room.participants.values()].some((p) => p.name === name && p.active)) {
-        throw new HubError(`Someone named "${name}" is already active in "${roomName}". Pick another name.`);
+        throw new HubError(`Someone named "${name}" is already active in "${roomName}". Pick another name.`, undefined, "state");
       }
       if (agent !== "human" && this.voters(room).length >= Hub.MAX_LIVE_PER_ROOM) {
         this.post(room, "system", undefined, `Cap hit: ${Hub.MAX_LIVE_PER_ROOM} live agents in this room; ${name} could not join. Recruit into a new room instead.`);
-        throw new HubError(`Room "${roomName}" already has ${Hub.MAX_LIVE_PER_ROOM} live agents (per-run cap). Open a sub-room instead.`);
+        throw new HubError(`Room "${roomName}" already has ${Hub.MAX_LIVE_PER_ROOM} live agents (per-run cap). Open a sub-room instead.`, undefined, "budget");
       }
       const n = room.participants.size;
       if (role === "chair" && !room.chair) room.chair = name;
@@ -491,6 +529,9 @@ export class Hub {
       this.persist({ type: "join", room: roomName, p: participant });
       this.post(room, "system", undefined, `${this.shown(room, participant)}${room.anonymous ? "" : ` (${agent})`}${this.roleTag(participant)} joined the room.`);
     } else if (!participant.active) {
+      // a closed room takes nobody back by hand either (d37025d8 closed the seat-key path; idea/closed-room-rejoin-by-hand):
+      // it has nothing left to act on, and a join line there reads as a live room. A human may come back to read it.
+      if (room.state === "closed" && participant.agent !== "human") throw new HubError(`Room "${roomName}" is closed: nobody rejoins it. Its board and log stay readable on the dashboard and at GET /rooms/${roomName}.`, undefined, "state");
       participant.active = true;
       participant.lastActiveAt = now();
       if (session) participant.session = session;
@@ -501,6 +542,14 @@ export class Hub {
       if (role && role !== "worker") participant.role = role;
       this.persist({ type: "join", room: roomName, p: participant });
       this.post(room, "system", undefined, `${this.shown(room, participant)} rejoined the room.`);
+    }
+    // A live seat taken back by its participant_id on a newer connection moves there, as a seat-key reseat does. Left on
+    // the older session, the seat was thrown out when that one was reaped idle 30 minutes later, while the newer session
+    // was serving it (bugs.md 3: a chair on one-session-per-call tooling dropped out about every 31 minutes).
+    if (session && reclaimId === participant.id && participant.session && participant.session !== session && participant.agent !== "human") {
+      participant.session = session;
+      participant.seatKeyHash = this.seats.hashOf(session) ?? participant.seatKeyHash;
+      this.recordSession(room, participant, "moved", "join_room with participant_id on a newer connection", true);
     }
     // Bind the chair only after admission succeeds: rejected joins must not reserve it.
     if (role === "chair") room.chair = name;
@@ -534,7 +583,7 @@ export class Hub {
       const mine = block.proposal.votes[p.id]?.vote;
       throw new HubError(
         `Leaving now would block ${block.proposal.id}: ${block.reason}. ${mine ? `You voted ${mine}.` : "You have not voted: vote or pass first."} ` +
-          "Call leave_room again to leave anyway.",
+          "Call leave_room again to leave anyway.", undefined, "leave-warning",
       );
     }
     p.active = false;
@@ -648,9 +697,50 @@ export class Hub {
       distinct_sessions: e.distinctSessions, denominator: "electorate" };
   }
 
+  /** Chat messages per channel, and per script label on the human route; undefined before any is recorded. */
+  speakers(room: Room): { mcp?: number; "human-token"?: number; "human-loopback"?: number; scripts?: Record<string, number> } | undefined {
+    const out: { mcp?: number; "human-token"?: number; "human-loopback"?: number; scripts?: Record<string, number> } = {};
+    for (const m of room.messages) {
+      if (m.kind !== "chat" || !m.via) continue;
+      out[m.via] = (out[m.via] ?? 0) + 1;
+      if (m.source) (out.scripts ??= {})[m.source] = (out.scripts[m.source] ?? 0) + 1;
+    }
+    return Object.keys(out).length ? out : undefined;
+  }
+
   /** "[chair]" etc. after a name; nothing for workers. */
   roleTag(p: { role?: Role }): string {
     return p.role && p.role !== "worker" ? ` [${p.role}]` : "";
+  }
+
+  /**
+   * The tag after a sender's name on a message, from what the hub itself knew when it was posted (Message.via, source,
+   * chair): seats refused owner instructions they could not tell from a seat's (evidence-pack item 10), and the hub
+   * showed a token-holder, a script, a self-declared "human" and a self-appointed chair alike. A message from before
+   * this was recorded falls back to the sender's role.
+   */
+  speakerTag(room: Room, m: Message): string {
+    if (m.from.agent === "human" && m.via === "human-token") return ` [human route: token${m.source ? `, script: ${m.source}` : ""}]`;
+    if (m.from.agent === "human" && m.via === "human-loopback") return ` [human route: loopback, not checked${m.source ? `, script: ${m.source}` : ""}]`;
+    if (m.from.agent === "human" && m.via === "mcp") return " [says human; joined over MCP, not checked]";
+    if (m.chair) return m.chair === "named" ? " [chair]" : " [chair, self-claimed]";
+    return this.roleTag(room.participants.get(m.from.id) ?? {});
+  }
+
+  /**
+   * The owner names this room's chair (index.ts POST /rooms/:room/chair, which takes the human token and nothing less):
+   * until then a chair that took the role by joining first is tagged self-claimed, because any seat can do that.
+   * Naming never replaces a chair already bound to another name.
+   */
+  nameChair(roomName: string, name: string, by: string): void {
+    const room = this.getRoom(roomName);
+    if (!name.trim()) throw new HubError("Name the chair.", undefined, "state");
+    if (room.chair && room.chair !== name) throw new HubError(`This room's chair is ${room.chair}; a chair is never swapped for another name.`, undefined, "state");
+    if (room.chairNamed && room.chair === name) return;
+    room.chair = name;
+    room.chairNamed = true;
+    this.persist({ type: "chair_named", room: roomName, name, by, ts: now() });
+    this.post(room, "system", undefined, `${by} named ${name} this room's chair with the hub's human token. From here ${name}'s messages are tagged [chair]: a relay that quotes the owner carries the owner's word.`);
   }
 
   currentSpeaker(room: Room): Participant | undefined {
@@ -781,6 +871,31 @@ export class Hub {
     return chain.length;
   }
 
+  /**
+   * Telemetry gap G7 (evidence-pack item 7: "an acknowledgement shows receipt, not use"): the first time a seat of the
+   * room names a note it was sent (inbox/<room>/<key>, not an ack) in what it writes, or acknowledges one with a reply
+   * rather than a bare ack, log note_used {note, by, via, after_s}. Once per (note, seat); in memory, so a restart may
+   * log one more.
+   */
+  noteUsed(room: Room, p: Participant, text: string, via: string, ackOf?: string): void {
+    if (p.agent === "human") return;
+    // the room's own note keys, matched as whole keys (a key may hold spaces: "digest pass 2", review/4e9505d8)
+    const keys = ackOf ? [ackOf] : [...room.board.keys()].filter((k) => k.startsWith("inbox/") && !k.endsWith(".ack") && Hub.namesKey(text, k));
+    const seen = (this.notesUsed.get(room) ?? this.notesUsed.set(room, new Set()).get(room))!;
+    for (const key of keys) {
+      const note = room.board.get(key);
+      if (!note || !note.text.trim() || seen.has(`${key}|${p.id}`)) continue;
+      seen.add(`${key}|${p.id}`);
+      this.persist({ type: "note_used", room: room.name, note: key, by: p.name, via, after_s: Math.max(0, Math.round((Date.now() - Date.parse(note.updatedAt)) / 1000)), ts: now() });
+    }
+  }
+  private readonly notesUsed = new WeakMap<Room, Set<string>>();
+  /** `key` appears in `text` as a whole key: not as the start of a longer one (inbox/a/n1 inside inbox/a/n10). */
+  static namesKey(text: string, key: string): boolean {
+    for (let i = text.indexOf(key); i >= 0; i = text.indexOf(key, i + 1)) if (!/^[\w/-]/.test(text.slice(i + key.length, i + key.length + 1)) && !/^\.\w/.test(text.slice(i + key.length, i + key.length + 2))) return true;
+    return false;
+  }
+
   /** Surface every quiet thread whose message id is cited in `text`. */
   surfaceCited(room: Room, text: string, reason: string) {
     for (const id of new Set(text.match(/m_[0-9a-f]{8}/g) ?? [])) {
@@ -792,6 +907,8 @@ export class Hub {
   /** Advance the read cursor, remembering anything withheld so it is delivered later. */
   settleRead(room: Room, p: Participant, since: number, delivered: Message[], upTo?: number) {
     since = Math.min(since, p.lastSeenSeq);
+    // when this seat was first sent each version of a proposal (seenTiming): the message that made it, by id
+    for (const m of delivered) if ((m.kind === "proposal" || m.kind === "amend") && !p.versionSeenAt?.[m.id]) p.versionSeenAt = { ...(p.versionSeenAt ?? {}), [m.id]: now() };
     const ceiling = upTo ?? room.messages.at(-1)?.seq ?? since;
     const deliveredSeqs = new Set(delivered.map((m) => m.seq));
     const receipts = new Set(p.quietReceipts ?? []);
@@ -860,6 +977,24 @@ export class Hub {
     return this.decisionSlugsCache;
   }
 
+  /**
+   * Whether a message names an entry on this room's board: a key that exists (six characters or more, so a short word
+   * is not one), or a new key under a prefix the board already uses. The fixed prefixes of AUTO_QUIET_MARKER missed the
+   * ones rooms invent (result/, rerun/, prereg/, take/, a bare "position"): 91 of 164 auto-quieted messages in 13 rooms
+   * named a key on the room's board, and in 0btz-break "New break, T-B2-8 ... (result/T-B2-8-...)" reached 2 of 3 seats.
+   * A file path (src/hub.ts) or a slash in prose is not one.
+   */
+  private namesBoardKey(room: Room, content: string): boolean {
+    const prefixes = new Set<string>();
+    for (const [key, e] of room.board) {
+      if (!e.text.trim()) continue;
+      if (key.length >= 6 && content.includes(key)) return true;
+      const slash = key.indexOf("/");
+      if (slash > 0) prefixes.add(key.slice(0, slash));
+    }
+    return [...content.matchAll(/(?<![\w./-])([\w.:-]+)\/[\w.:-]/g)].some((m) => prefixes.has(m[1]!));
+  }
+
   private autoQuietAudience(room: Room, p: Participant, content: string, replyTo?: string): string[] | undefined {
     if (AUTO_QUIET_MARKER.test(content) || AUTO_QUIET_COMMITMENT.test(content)) return undefined;
     if (this.decisionSlugs().some((slug) => content.includes(slug))) return undefined;
@@ -877,7 +1012,7 @@ export class Hub {
     return targets;
   }
 
-  send(roomName: string, pid: string, content: string, replyTo?: string, force = false, quietArg?: boolean, surface = false): Message {
+  send(roomName: string, pid: string, content: string, replyTo?: string, force = false, quietArg?: boolean, surface = false, human?: { token?: boolean; source?: string }): Message {
     let quiet = quietArg === true;
     const room = this.getRoom(roomName);
     const p = this.requireParticipant(room, pid);
@@ -896,13 +1031,13 @@ export class Hub {
       if (replacements.some(Boolean)) {
         throw new HubError(`Cannot send: ${departed.map((participant, i) =>
           `"${participant.name}" has left the room; ${replacements[i] ? `their replacement is "${replacements[i]!.name}"` : "no replacement is recorded"}`,
-        ).join("; ")}. Remove the departed @-mention or address an active participant.`);
+        ).join("; ")}. Remove the departed @-mention or address an active participant.`, undefined, "departed-mention");
       }
       throw new HubError(
-        `Cannot send: ${departed.map((participant) => `"${participant.name}"`).join(", ")} ${departed.length === 1 ? "has" : "have"} left the room. Remove the departed @-mention or address an active participant; no replacement is recorded.`,
+        `Cannot send: ${departed.map((participant) => `"${participant.name}"`).join(", ")} ${departed.length === 1 ? "has" : "have"} left the room. Remove the departed @-mention or address an active participant; no replacement is recorded.`, undefined, "departed-mention",
       );
     }
-    if (quiet && p.agent === "human") throw new HubError("Humans speak to the room; quiet is for agent working exchanges.");
+    if (quiet && p.agent === "human") throw new HubError("Humans speak to the room; quiet is for agent working exchanges.", undefined, "human-ask");
     // reply_to takes the id (m_...) or the seq as printed ("#12" or "12"), since delivered lines show the seq
     if (replyTo && /^#?\d+$/.test(replyTo)) replyTo = room.messages.find((m) => m.seq === Number(replyTo!.replace("#", "")))?.id ?? replyTo;
     if (surface && replyTo) {
@@ -911,9 +1046,9 @@ export class Hub {
       quiet = false; // a surfacing reply is public by definition
     }
     // Chat stays open after a conclusion so humans can still be answered; only proposals close.
-    if (!content.trim()) throw new HubError("Message content is empty.");
+    if (!content.trim()) throw new HubError("Message content is empty.", undefined, "invalid-arg");
     if (content.length > room.maxMessageChars) {
-      throw new HubError(`Message is ${content.length} chars; this room allows ${room.maxMessageChars}. Say less: one claim, one reason, one ask.`);
+      throw new HubError(`Message is ${content.length} chars; this room allows ${room.maxMessageChars} in chat. If it is a result, a conclusion or a list, board_set it under a key (up to ${board.BOARD_ENTRY_MAX} chars) and send a one-line message naming the key; otherwise say less: one claim, one reason, one ask.`, undefined, "size");
     }
     const target = p.agent === "human" ? undefined : this.addressedHuman(room, content, replyTo);
     if (target) {
@@ -929,31 +1064,31 @@ export class Hub {
       // (the verifier in swarm-000525-jcz8-room, refused three times) still answers, unless the nominee already has: one answer.
       const addresseeLive = !!to && to !== "all" && to === p.id && p.active && !answered;
       if (to && to !== "all" && !resp.mine && !addresseeLive) {
-        throw new HubError(`${this.shown(room, target.from)} addressed that to ${resp.who}, not you. Leave it to them.`);
+        throw new HubError(`${this.shown(room, target.from)} addressed that to ${resp.who}, not you. Leave it to them.`, undefined, "human-ask");
       }
       if (small && answered && !resp.mine) {
         throw new HubError(
-          `${resp.who} already answered ${this.shown(room, target.from)}'s "${target.content.slice(0, 60)}". One reply is enough; do not address them again unless they ask you something.`,
+          `${resp.who} already answered ${this.shown(room, target.from)}'s "${target.content.slice(0, 60)}". One reply is enough; do not address them again unless they ask you something.`, undefined, "human-ask",
         );
       }
       const cap = small ? 240 : 900;
       if (content.length > cap) {
         throw new HubError(
           `${this.shown(room, target.from)} wrote ${target.content.length} characters; match their register. A reply to that message is capped at ${cap} characters` +
-            (small ? " (a greeting gets a greeting, not a status report)." : ". Answer the question; keep the debate out of it."),
+            (small ? " (a greeting gets a greeting, not a status report)." : ". Answer the question; keep the debate out of it."), undefined, "human-ask",
         );
       }
       if (!replyTo) replyTo = target.id; // record the addressing so the room knows it was answered
     }
     if (room.maxMessagesPerParticipant && p.messageCount >= room.maxMessagesPerParticipant && p.agent !== "human" && !this.unansweredHuman(room)) {
       throw new HubError(
-        `You have used your ${room.maxMessagesPerParticipant} messages in this room. You can still propose, challenge and vote.`,
+        `You have used your ${room.maxMessagesPerParticipant} messages in this room. You can still propose, challenge and vote.`, undefined, "budget",
       );
     }
     if (room.mode === "round_robin") {
       const speaker = this.currentSpeaker(room);
       if (speaker && speaker.id !== p.id) {
-        throw new HubError(`It is ${this.shown(room, speaker)}'s turn to speak, not yours. Call wait_for_messages until your_turn is true.`);
+        throw new HubError(`It is ${this.shown(room, speaker)}'s turn to speak, not yours. Call wait_for_messages until your_turn is true.`, undefined, "turn");
       }
     } else if (!force && p.agent !== "human" && !this.resolvesAddress(room, p, content, replyTo)) {
       // Stale-send guard: never talk past messages you have not read. A fresh challenger is pushed only what names it
@@ -973,17 +1108,21 @@ export class Hub {
           throw new HubError(
             `You still owe a reply to #${owed.seq} from ${this.shown(room, owed.from)}. Reply with send_message reply_to="${owed.id}", or call pass to decline it. ` +
               `${queued} other message(s) queued behind it (below); the latest seq is #${latest}.`,
-            { hint: this.attentionHint(room, p), owed_seq: owed.seq, queued, latest_seq: latest, unread: unread.map((m) => this.fmt(room, m)), next_seq: latest },
+            { hint: this.attentionHint(room, p), owed_seq: owed.seq, queued, latest_seq: latest, unread: unread.map((m) => this.fmt(room, m)), next_seq: latest }, "reply-owed",
           );
         }
         throw new HubError(
           `${unread.length} message(s) arrived while you were composing. Read them (below); then retry send_message with force=true if your point is still new, or call wait_for_messages.`,
-          { hint: this.attentionHint(room, p), unread: unread.map((m) => this.fmt(room, m)), next_seq: room.messages.at(-1)!.seq },
+          { hint: this.attentionHint(room, p), unread: unread.map((m) => this.fmt(room, m)), next_seq: room.messages.at(-1)!.seq }, "unread",
         );
       }
     }
     // left unset, a working exchange between the sender and one or two named agents is delivered quiet (idea/quiet-default)
-    const autoQuiet = quietArg === undefined && !target && p.agent !== "human" && room.mode === "free" && !!this.autoQuietAudience(room, p, content, replyTo);
+    const exchange = quietArg === undefined && !target && p.agent !== "human" && room.mode === "free" && !!this.autoQuietAudience(room, p, content, replyTo);
+    // a working exchange that names an entry on the room's board is the room's business: public, and marked so a later
+    // room can count how often that rule, and not the sender, kept a message public
+    const keptPublic = exchange && this.namesBoardKey(room, content);
+    const autoQuiet = exchange && !keptPublic;
     if (autoQuiet) quiet = true;
     if (!force && !quiet && !target && p.agent !== "human" && room.mode === "free" && this.addressedBy(room, p).length === 0) {
       const sh = this.share(room, p);
@@ -993,7 +1132,7 @@ export class Hub {
         throw new HubError(
           `You have sent ${sh.mine} of the last ${sh.of} messages (fair share is about ${Math.round(sh.fair * sh.of)}). Let the others speak: call pass, ` +
             `or wait_for_messages. Send again only with genuinely new evidence (force=true).`,
-          { your_share: sh },
+          { your_share: sh }, "fair-share",
         );
       }
     }
@@ -1009,7 +1148,7 @@ export class Hub {
         const agent = room.participants.get(id)?.agent;
         return agent !== undefined && agent !== "human";
       });
-      if (targets.length === 0) throw new HubError("A quiet message must @-name at least one agent (not a human), or reply_to another agent's message. Quiet is not privacy: everyone can still read it.");
+      if (targets.length === 0) throw new HubError("A quiet message must @-name at least one agent (not a human), or reply_to another agent's message. Quiet is not privacy: everyone can still read it.", undefined, "invalid-arg");
       audience = [...new Set([p.id, ...targets])];
     }
     if (this.attentionFocus(room, p) || p.withheld?.length) this.settleRead(room, p, p.lastSeenSeq, []);
@@ -1017,10 +1156,15 @@ export class Hub {
     // still delivers them.
     const notices = room.messages.filter((m) => m.seq > p.lastSeenSeq && m.from.id !== p.id && this.isHubNotice(m) && this.pushableTo(room, m, p.id));
     if (notices.length) p.withheld = [...new Set([...(p.withheld ?? []), ...notices.map((m) => m.seq)])];
-    const msg = this.post(room, "chat", p, content, { replyTo, ...(quiet ? { quiet: true, audience } : {}), ...(autoQuiet ? { autoQuiet: true } : {}) });
+    // a script's own label for itself, kept only from the human route and only as a short plain name
+    const onRoute = !!p.session?.startsWith("http:");
+    const label = onRoute && human?.source && /^[\w .:-]{1,40}$/.test(human.source.trim()) ? human.source.trim() : undefined;
+    const msg = this.post(room, "chat", p, content, { replyTo, ...(quiet ? { quiet: true, audience } : {}), ...(autoQuiet ? { autoQuiet: true } : {}), ...(keptPublic ? { keptPublic: "board-key" as const } : {}),
+      ...(onRoute && human?.token ? { via: "human-token" as const } : {}), ...(label ? { source: label } : {}) });
     p.messageCount += 1;
     p.lastSeenSeq = Math.max(p.lastSeenSeq, msg.seq);
     this.persistAttention(room, p);
+    this.noteUsed(room, p, content, "chat");
     return msg;
   }
 
@@ -1060,12 +1204,15 @@ export class Hub {
    * Long-poll: resolves as soon as there is a message from someone else with
    * seq > sinceSeq (or immediately if there already is one), otherwise after timeoutMs.
    */
+  /** Participants inside a long-poll right now: a seat waiting on the hub is not inside a tool call of its own (jobEnded). */
+  private readonly waitingNow = new WeakMap<Participant, number>();
   async wait(roomName: string, pid: string | undefined, sinceSeq: number, timeoutMs: number): Promise<Message[]> {
     const room = this.getRoom(roomName);
     const p = pid ? room.participants.get(pid) : undefined;
     const pending = () => (p ? this.deliverable(room, p, sinceSeq) : room.messages.filter((m) => m.seq > sinceSeq));
     let msgs = pending();
     if (msgs.length === 0 && timeoutMs > 0) {
+      if (p) this.waitingNow.set(p, (this.waitingNow.get(p) ?? 0) + 1);
       await new Promise<void>((resolve) => {
         const timer = setTimeout(() => {
           room.waiters.delete(wake);
@@ -1078,6 +1225,7 @@ export class Hub {
         };
         room.waiters.add(wake);
       });
+      if (p) this.waitingNow.set(p, Math.max(0, (this.waitingNow.get(p) ?? 1) - 1));
       msgs = pending();
     }
     if (!p) return msgs;
@@ -1090,9 +1238,12 @@ export class Hub {
   /** Plain-text rendering of a message as agents see it (pseudonyms in anonymous rooms). */
   fmt(room: Room, m: Message): string {
     const tag = m.kind === "chat" ? "" : `[${m.kind.toUpperCase()}] `;
-    const who = m.from.id === "system" ? "system" : this.shown(room, m.from) + this.roleTag(room.participants.get(m.from.id) ?? {});
+    const who = m.from.id === "system" ? "system" : this.shown(room, m.from) + this.speakerTag(room, m);
     const q = m.audience ? `[${m.quiet ? "quiet" : "was quiet"} → ${m.audience.filter((id) => id !== m.from.id).map((id) => this.shown(room, room.participants.get(id) ?? { id, name: id })).join(", ")}] ` : "";
-    return `#${m.seq} ${who}: ${q}${tag}${m.content}`;
+    // a line inside the text that is shaped like another message's header ("#12 benji [human route: token]: ...") is quoted,
+    // so only the hub's own first line can carry a sender and a tag
+    const body = m.content.replace(/\n(?=\s*#\d+ )/g, "\n> ");
+    return `#${m.seq} ${who}: ${q}${tag}${body}`;
   }
 
   /** @internal */ post(room: Room, kind: MessageKind, from: Participant | undefined, content: string, extra: Partial<Message> = {}): Message {
@@ -1104,6 +1255,9 @@ export class Hub {
       from: from ? { id: from.id, name: from.name, agent: from.agent } : { id: "system", name: "system", agent: "hub" },
       content,
       ts: now(),
+      // the channel, as the hub knows it (index.ts joins a human-route caller with session "http:<name>")
+      ...(from ? { via: from.session?.startsWith("http:") ? "human-loopback" as const : "mcp" as const } : {}),
+      ...(from?.role === "chair" ? { chair: room.chairNamed && room.chair === from.name ? "named" as const : "self-claimed" as const } : {}),
       ...extra,
     };
     if (kind === "chat") {
@@ -1198,7 +1352,7 @@ export class Hub {
    * Pending calls, schema rejections outside guard, roomless calls and failed room creation
    * are excluded. The rate uses this event's matched numerator, never lifetime refusals.
    */
-  recordCallCompletion(roomName: string | undefined, tool: string, outcome: CallOutcome, participant: string | null, timing: { ms?: number; empty?: boolean; outsider?: string; key?: string } = {}) {
+  recordCallCompletion(roomName: string | undefined, tool: string, outcome: CallOutcome, participant: string | null, timing: { ms?: number; empty?: boolean; outsider?: string; key?: string; key_rejected?: string } = {}) {
     const room = roomName ? this.rooms.get(roomName) : undefined;
     if (!room) return;
     this.applyCallCompletion(room, tool, outcome, timing.outsider);
@@ -1257,6 +1411,9 @@ export class Hub {
         // a long run that has not been told it is ending: quiet is seats working or waiting, not a room that has
         // converged, and a group that concludes early can take no more digests. The room-idle line covers a real stall.
         if (this.longRunUnderWay(room)) return;
+        // nor is a room where a seat has a job running: it is waiting on the result, and "propose a conclusion" asks it
+        // to conclude without it (dev room swarm-183032-pcnc: told so twice, 3 and 6 min into a 6-minute scoring job)
+        if (idle.roomJobs(this, room).length) return;
         const talkers = [...room.participants.values()].filter((p) => p.active && p.agent !== "human").sort((a, b) => b.messageCount - a.messageCount);
         text = `${mins} min of silence. If the discussion has converged, ${talkers[0] ? this.shown(room, talkers[0]) : "someone"} should propose a conclusion.`;
       }
@@ -1270,20 +1427,30 @@ export class Hub {
 
   // ---------- blind openings ----------
 
+  /**
+   * Who the blind openings still wait for. A recruit is neither owed one nor counted as an arrival: the round is the
+   * founding seats' independent first answers, and a grouped run's leads room counted each one-minute consolidator pass
+   * as both ("still waiting for digest-1, 1 more participant(s)"; dev run swarm-194527-ofv7). A recruit may still submit.
+   */
   openingsWaitingOn(room: Room, reveal = false): string[] {
-    const active = this.voters(room);
-    const missing = active.filter((p) => !room.openings.has(p.id)).map((p) => (reveal ? p.name : this.shown(room, p)));
-    const shortfall = this.unarrived(room);
+    const founding = (p: Participant) => p.role !== "recruit";
+    const missing = this.voters(room).filter((p) => founding(p) && !room.openings.has(p.id)).map((p) => (reveal ? p.name : this.shown(room, p)));
+    const shortfall = this.openingsShortfall(room);
     return shortfall > 0 ? [...missing, `${shortfall} more participant(s) to join`] : missing;
+  }
+
+  /** Expected founding seats that never joined (unarrived, without recruits). */
+  private openingsShortfall(room: Room): number {
+    return Math.max(0, room.expectedParticipants - this.everJoinedVoters(room).filter((p) => p.role !== "recruit").length);
   }
 
   submitOpening(roomName: string, pid: string, content: string): { revealed: boolean; waiting_on: string[] } {
     const room = this.getRoom(roomName);
     const p = this.requireParticipant(room, pid);
-    if (room.openingsRevealed) throw new HubError("Openings have already been revealed in this room; use send_message.");
-    if (!content.trim()) throw new HubError("Opening statement is empty.");
+    if (room.openingsRevealed) throw new HubError("Openings have already been revealed in this room; use send_message.", undefined, "state");
+    if (!content.trim()) throw new HubError("Opening statement is empty.", undefined, "invalid-arg");
     const cap = Math.min(room.maxMessageChars, 400);
-    if (content.length > cap) throw new HubError(`Opening is ${content.length} chars; openings are capped at ${cap}. One or two sentences: your answer and the main reason. Detail goes in the discussion or on the board.`);
+    if (content.length > cap) throw new HubError(`Opening is ${content.length} chars; openings are capped at ${cap}. One or two sentences: your answer and the main reason. Detail goes in the discussion or on the board.`, undefined, "size");
     const first = room.openings.size === 0;
     room.openings.set(p.id, content);
     this.persist({ type: "opening", room: roomName, pid: p.id, content });
@@ -1307,7 +1474,7 @@ export class Hub {
       if (room.openingsRevealed || room.state === "concluded" || room.state === "closed") return;
       const mins = Math.round(room.nudgeAfterMs / 60000);
       const waiting = this.openingsWaitingOn(room).join(", ");
-      if (this.unarrived(room) > 0 && !room.openingsWarned) {
+      if (this.openingsShortfall(room) > 0 && !room.openingsWarned) {
         room.openingsWarned = true;
         this.post(room, "system", undefined, `Openings deadline: still waiting for ${waiting}. Chat is open meanwhile; whatever has arrived is revealed in ${mins} min.`);
         this.armOpeningsDeadline(room, room.nudgeAfterMs);
@@ -1334,17 +1501,17 @@ export class Hub {
    */
   setDeadline(roomName: string, at: string): { room: string; deadline_at: string; seconds_left: number; announce_at: string; pending: boolean } {
     const ms = typeof at === "string" ? Date.parse(at) : Number.NaN;
-    if (Number.isNaN(ms)) throw new HubError("deadline `at` must be an ISO time, e.g. 2026-10-10T01:30:00Z.");
-    if (ms <= Date.now()) throw new HubError("deadline `at` is in the past.");
+    if (Number.isNaN(ms)) throw new HubError("deadline `at` must be an ISO time, e.g. 2026-10-10T01:30:00Z.", undefined, "invalid-arg");
+    if (ms <= Date.now()) throw new HubError("deadline `at` is in the past.", undefined, "invalid-arg");
     const iso = new Date(ms).toISOString();
     const setAt = now();
     const room = this.rooms.get(roomName);
     if (!room) {
-      if (!Hub.ROOM_NAME.test(roomName)) throw new HubError("Invalid room name.");
+      if (!Hub.ROOM_NAME.test(roomName)) throw new HubError("Invalid room name.", undefined, "invalid-arg");
       for (const [k, d] of this.pendingDeadlines) if (Date.parse(d.at) <= Date.now()) this.pendingDeadlines.delete(k);
       this.pendingDeadlines.set(roomName, { at: iso, setAt });
     } else {
-      if (room.state === "concluded" || room.state === "closed") throw new HubError(`Room "${roomName}" is ${room.state}; a deadline no longer applies.`);
+      if (room.state === "concluded" || room.state === "closed") throw new HubError(`Room "${roomName}" is ${room.state}; a deadline no longer applies.`, undefined, "state");
       this.applyDeadline(room, iso, setAt);
     }
     const total = ms - Date.parse(setAt);
@@ -1361,16 +1528,16 @@ export class Hub {
    * are on the board before its first seat's join returns. Nothing is posted to chat: a seat is told on joining.
    */
   seedResources(roomName: string, entries: { key: string; text: string }[]): { room: string; keys: string[]; pending: boolean } {
-    if (!Array.isArray(entries) || !entries.length) throw new HubError("resources need at least one entry: [{ key: \"resource/<name>\", text }].");
+    if (!Array.isArray(entries) || !entries.length) throw new HubError("resources need at least one entry: [{ key: \"resource/<name>\", text }].", undefined, "invalid-arg");
     for (const e of entries) {
       if (typeof e?.key !== "string" || !/^resource\/./.test(e.key) || !board.BOARD_KEY.test(e.key)) throw new HubError(`A resource key is "resource/<name>" (got ${String(JSON.stringify(e?.key)).slice(0, 80)}).`, undefined, "key-format");
-      if (typeof e.text !== "string" || !e.text.trim()) throw new HubError(`"${e.key}" has no text.`);
-      if (e.text.length > 8000) throw new HubError("Board entries are capped at 8000 characters.", undefined, "size");
+      if (typeof e.text !== "string" || !e.text.trim()) throw new HubError(`"${e.key}" has no text.`, undefined, "invalid-arg");
+      if (e.text.length > board.BOARD_ENTRY_MAX) throw new HubError(board.tooLong(e.key, e.text.length), undefined, "size");
     }
     const clean = entries.map((e) => ({ key: e.key, text: e.text }));
     const room = this.rooms.get(roomName);
     if (!room) {
-      if (!Hub.ROOM_NAME.test(roomName)) throw new HubError("Invalid room name.");
+      if (!Hub.ROOM_NAME.test(roomName)) throw new HubError("Invalid room name.", undefined, "invalid-arg");
       this.pendingResources.set(roomName, clean);
     } else {
       if (room.state === "concluded" || room.state === "closed") throw new HubError(`Room "${roomName}" is ${room.state}; its board is final.`, undefined, "state");
@@ -1687,8 +1854,11 @@ export class Hub {
   /** A missing vote is individually owed; one current-version electorate vote clears carried-vote freshness. */
   needsVote(room: Room, p: Participant, pr: Proposal): boolean {
     if (pr.status !== "open") return false;
+    // the verifier owes its vote on every version, whether or not it was in the room when the proposal was made
+    if (this.verifierHolds(room, pr).some((h) => h.p.id === p.id)) return true;
     const members = this.electorate(room, pr).members;
     if (!members.some((v) => v.id === p.id)) return false;
+    if (this.inLastCall(pr)) return (pr.votes[p.id]?.version ?? (pr.votes[p.id] ? 1 : 0)) !== pr.version;
     return !pr.votes[p.id] || (pr.version > 1 &&
       !members.some((v) => pr.votes[v.id] && (pr.votes[v.id].version ?? 1) === pr.version));
   }
@@ -1701,7 +1871,26 @@ export class Hub {
     if (this.addressedBy(room, p).length) return true;
     const open = [...room.proposals.values()].find((pr) => pr.status === "open");
     if (!open) return false;
-    return this.needsVote(room, p, open) || this.owesChallenge(room, open, p);
+    return this.needsVote(room, p, open) || this.owesChallenge(room, open, p) || this.challengedUnseen(room, open, p);
+  }
+
+  /**
+   * An open blocking challenge on this seat's own proposal that it has not been sent yet: the proposer owes an answer
+   * (amend the cited text, or say why it stands). Nothing else made it actionable, so a held wait slept through it
+   * (evidence/held-wait-misses-challenge: five seats idle 172-188 s with two challenges open). Once delivered it no
+   * longer wakes the seat.
+   */
+  challengedUnseen(room: Room, open: Proposal, p: Participant): boolean {
+    if (open.by.id !== p.id || !open.challenges.some((c) => (c.status ?? "open") === "open" && c.blocking !== false && c.by.id !== p.id)) return false;
+    return room.messages.some((m) => m.seq > p.lastSeenSeq && this.challengesOwnProposal(room, p, m));
+  }
+
+  /** `m` is another seat's blocking challenge on `p`'s own open proposal. The held wait asks this of each message it has
+   * just delivered: delivery moves lastSeenSeq past it before actionableNow is asked (review/b6092d3d). */
+  challengesOwnProposal(room: Room, p: Participant, m: Message): boolean {
+    if (m.kind !== "challenge" || !m.proposalId || m.from.id === p.id || /non-blocking objection to/.test(m.content)) return false;
+    const pr = room.proposals.get(m.proposalId);
+    return !!pr && pr.status === "open" && pr.by.id === p.id;
   }
 
   /** The open proposal still needs a challenge and this seat could give it (this room's waits and other rooms' other_rooms). */
@@ -1798,11 +1987,43 @@ export class Hub {
   }
 
   /** The first draft starts the deadline clock; later drafts and edits do not push it back. */
-  /** @internal */ openDrafts(room: Room): void {
-    if (room.draftsOpenedAt || room.draftsRevealed) return;
+  /** True when this write opened the round. `by`, `key` and the entry's time say whose write that was (draftSeal). */
+  /** @internal */ openDrafts(room: Room, by?: { name: string; key: string; entryAt: string }): boolean {
+    if (room.draftsOpenedAt || room.draftsRevealed) return false;
     room.draftsOpenedAt = new Date().toISOString();
-    this.persist({ type: "drafts_opened", room: room.name, at: room.draftsOpenedAt });
+    room.draftsOpenedBy = by;
+    this.persist({ type: "drafts_opened", room: room.name, at: room.draftsOpenedAt, ...(by ? { by: by.name, key: by.key } : {}) });
     this.armDraftsDeadline(room);
+    return true;
+  }
+
+  /**
+   * A round whose only draft is withdrawn before the reveal is taken back: no deadline keeps running and nobody is
+   * "owed" a draft. In 3 of the 8 rooms that opened a round since 2026-10-10 (5y46, 22gz, fnko) one seat's working
+   * draft of the room's answer opened it and sat hidden for the full 10 minutes (claim/sealed-draft-misfire); the
+   * writer could not undo it. The next draft/* write opens a fresh round with its own deadline.
+   */
+  /** @internal */ cancelDraftsIfEmpty(room: Room, by: Participant): void {
+    if (!room.draftsOpenedAt || room.draftsRevealed) return;
+    if ([...room.board].some(([k, e]) => k.startsWith("draft/") && e.text.trim())) return;
+    const seconds = Math.round((Date.now() - Date.parse(room.draftsOpenedAt)) / 100) / 10;
+    room.draftsOpenedAt = undefined;
+    room.draftsOpenedBy = undefined;
+    if (room.draftsTimer) clearTimeout(room.draftsTimer);
+    room.draftsTimer = undefined;
+    this.persist({ type: "drafts_cancelled", room: room.name, by: by.name, seconds, ts: now() });
+    this.post(room, "system", undefined, `[SYSTEM] The sealed draft round was cancelled: ${this.shown(room, by)} withdrew its only draft, so nobody is owed one and no draft deadline is running.`);
+  }
+
+  /** What the writer of a still-sealed draft is told: whether its write opened the round, who cannot read it, until when. */
+  draftSeal(room: Room, key: string, entry: BoardEntry): { opened_round: boolean; hidden_from: string[]; until?: string } | undefined {
+    if (!key.startsWith("draft/") || !this.draftSealed(room, key, entry)) return undefined;
+    const o = room.draftsOpenedBy;
+    return {
+      opened_round: !!o && o.key === key && o.entryAt === entry.updatedAt,
+      hidden_from: this.activeParticipants(room).filter((p) => p.name !== entry.by && p.agent !== "human").map((p) => this.shown(room, p)),
+      ...(room.draftsOpenedAt && Hub.DRAFT_REVEAL_MS > 0 ? { until: new Date(Date.parse(room.draftsOpenedAt) + Hub.DRAFT_REVEAL_MS).toISOString() } : {}),
+    };
   }
 
   private armDraftsDeadline(room: Room): void {
@@ -1828,10 +2049,12 @@ export class Hub {
     room.draftsRevealed = true;
     if (room.draftsTimer) clearTimeout(room.draftsTimer);
     room.draftsTimer = undefined;
-    this.persist({ type: "drafts_revealed", room: room.name });
     const drafts = [...room.board].filter(([k]) => k.startsWith("draft/"));
     const keys = drafts.map(([k]) => k);
     const authors = new Set(drafts.map(([, e]) => e.by));
+    // how the round ended and how many had drafted: a deadline reveal with one drafter is a working draft that sat hidden
+    this.persist({ type: "drafts_revealed", room: room.name, by: complete ? "all" : "deadline", drafted: this.drafters(room).filter((d) => authors.has(d.name)).length, drafters: this.drafters(room).length,
+      ...(room.draftsOpenedAt ? { seconds: Math.round((Date.now() - Date.parse(room.draftsOpenedAt)) / 100) / 10 } : {}) });
     const missing = this.drafters(room).filter((d) => !authors.has(d.name)).map((d) => d.name);
     const why = complete
       ? `Every drafter (${this.drafters(room).map((d) => d.name).join(", ")}) has a draft`
@@ -1859,7 +2082,19 @@ export class Hub {
     return key.startsWith("draft/") && entry.by !== viewer && !room.draftsRevealed && !this.draftsComplete(room) && !this.draftsDue(room);
   }
 
-  hold(room: Room): BoardEntry | undefined { return board.hold(room); }
+  /**
+   * The room's hold, while it counts: its author is in the room (active, or away: process alive or restored by a restart
+   * under 10 min ago) or is a human. The LAST CALL line invites a seat with longer work to hold the room; a hold never
+   * expired and only its author could clear it, so a seat that held and then died left the proposal unable to pass.
+   */
+  hold(room: Room): BoardEntry | undefined {
+    const h = board.hold(room);
+    return h && this.holdAuthorPresent(room, h) ? h : undefined;
+  }
+  /** @internal */ holdAuthorPresent(room: Room, h: BoardEntry): boolean {
+    const by = [...room.participants.values()].filter((x) => x.name === h.by);
+    return by.length === 0 || by.some((x) => x.active || x.agent === "human" || !!this.away(x)); // a hold by the hub or a dashboard name with no seat stands
+  }
   unacknowledged(room: Room): string[] { return board.unacknowledged(room); }
   static sessionsOf(ps: Participant[]): number { return board.sessionsOf(ps); }
   static quorumNeeded(quorum: Quorum, electorateSize: number): number { return board.quorumNeeded(quorum, electorateSize); }
@@ -1870,7 +2105,13 @@ export class Hub {
     board_keys?: string[]; board_delta?: { keys: string[]; tombstones: string[] }; board_reset?: boolean;
   } { return board.boardManifest(this, roomName, pid, follow, forceFull); }
   private applyBoard(room: Room, key: string, entry: BoardEntry | null) { return board.applyBoard(room, key, entry); }
-  setBoard(roomName: string, pid: string, key: string, text: string, opts: BoardExpiryOptions & { ifAbsent?: boolean; ifByMe?: boolean; overwrite?: boolean } = {}): BoardEntry | null { return board.setBoard(this, roomName, pid, key, text, opts); }
+  setBoard(roomName: string, pid: string, key: string, text: string, opts: BoardExpiryOptions & { ifAbsent?: boolean; ifByMe?: boolean; overwrite?: boolean; append?: boolean } = {}): BoardEntry | null {
+    const entry = board.setBoard(this, roomName, pid, key, text, opts);
+    // a take released during a last call may be the last thing the conclusion was waiting for
+    const room = this.rooms.get(roomName);
+    if (room && key.startsWith("take/")) for (const pr of room.proposals.values()) if (pr.lastCall && pr.status === "open") this.evaluate(room, pr);
+    return entry;
+  }
   static claimTerms(key: string, text: string): Set<string> { return board.claimTerms(key, text); }
   static claimKeysSplit(a: string, b: string): boolean { return board.claimKeysSplit(a, b); }
   claimOverlaps(roomName: string, pid: string, key: string): { key: string; by: string; room?: string; shared_pct: number; shared: string[] }[] { return board.claimOverlaps(this, roomName, pid, key); }
@@ -1894,6 +2135,80 @@ export class Hub {
   }
 
   /**
+   * A find copied from the previous version, which someone's amend has since changed: 20 of 61 refused amends in the
+   * records came within 30 s of another seat's successful amend, and the refusal said only "does not occur" (9 of the 61
+   * were ever retried; idea/amend-stale-find). Refused with its own code so contention is countable, naming who changed
+   * the text and quoting what that passage reads now, so the retry is one call.
+   */
+  private refuseStaleFind(room: Room, pr: Proposal, find: string, replaceAll: boolean): void {
+    const prev = pr.prev;
+    if (replaceAll || !find || !prev || pr.text.includes(find) || !prev.text.includes(find)) return;
+    const who = this.shown(room, { id: "", name: prev.by });
+    const ago = Math.max(0, Math.round((Date.now() - Date.parse(prev.at)) / 1000));
+    // where the find sat: the text just before it in the old version, looked up in the new one
+    const at = prev.text.indexOf(find);
+    const lead = prev.text.slice(Math.max(0, at - 40), at);
+    const i = lead.trim().length >= 12 ? pr.text.indexOf(lead) : -1;
+    const from = i >= 0 ? i : 0;
+    const nowReads = i >= 0 || pr.text.length <= 240
+      ? (from ? "…" : "") + pr.text.slice(from, from + 240) + (from + 240 < pr.text.length ? "…" : "")
+      : this.closest(pr.text, find);
+    throw new HubError(
+      `"${find.slice(0, 80)}" was in ${pr.id} v${prev.version}, but ${who} amended it to v${pr.version} ${ago} s ago and that text is gone. The passage now reads: "${nowReads}". Re-read v${pr.version} and send your edit against it.`,
+      undefined, "amend-stale");
+  }
+
+  /** The text after one amend: `find` replaced once (it must occur exactly once), `replace` appended when find is empty,
+   * or the whole text swapped. Shared by proposals and board entries so both refuse a bad find the same way. */
+  private spliced(text: string, what: string, find: string, replace: string, replaceAll: boolean): string {
+    if (replaceAll) {
+      if (!replace.trim()) throw new HubError("replace_all needs the full new text.", undefined, "invalid-arg");
+      return replace;
+    }
+    if (!find) {
+      if (!replace.trim()) throw new HubError("Nothing to append.", undefined, "invalid-arg");
+      return text.trimEnd() + "\n" + replace;
+    }
+    const n = text.split(find).length - 1;
+    if (n === 0) {
+      throw new HubError(
+        `"${find.slice(0, 80)}" does not occur in ${what} (${text.length} chars). Copy the exact text to replace; the closest passage is: "${this.closest(text, find)}". For a whole rewrite use replace_all=true.`, undefined, "amend-find",
+      );
+    }
+    if (n > 1) throw new HubError(`"${find.slice(0, 80)}" occurs ${n} times; include more context so it is unique.`, undefined, "amend-find");
+    // a one-word find in a long document splices wherever that word happens to sit ("findings" for "find"); ask for a span
+    if (find.trim().length < 16 && text.length > 2000) throw new HubError(`"${find}" is too short a find for a ${text.length}-char document; copy at least 16 characters of the passage so the replacement lands where you mean.`, undefined, "amend-find");
+    // a function, so the replacement is taken literally: as a string, "$$", "$&" and "$1" would be rewritten by String.replace
+    return text.replace(find, () => replace);
+  }
+
+  /**
+   * amend, given a board key instead of a proposal id: edit that entry in place. Of 61 refused amends in 15 rooms, 30 came
+   * when no proposal had ever been made in the room, and 27 of those were followed within 90 s by the same seat's
+   * board_set of the whole entry (median 2,705 chars, 81,657 resent in all; claim/amend-board-entry): seats were asking
+   * for a find/replace on the board. The edit goes through setBoard, so ownership, the size cap, late marking and the
+   * board notice are the board's own; only the author edits an entry. Logged as board_edit with what was sent against
+   * the entry's size, so the saved resend can be counted.
+   */
+  amendBoard(roomName: string, pid: string, key: string, find: string, replace: string, replaceAll = false): { key: string; chars: number; diff: string } {
+    const room = this.getRoom(roomName);
+    const p = this.requireParticipant(room, pid);
+    const e = room.board.get(key);
+    if (!e || !e.text.trim() || this.draftSealed(room, key, e, p.name)) throw new HubError(`No board entry "${key}" in "${roomName}" to amend.`, undefined, "not-found");
+    if (e.by !== p.name) {
+      throw new HubError(`"${key}" was written by ${this.shown(room, { id: "", name: e.by })}: amend edits only an entry you wrote. Put your change in an entry of your own, or ask them; a log several seats add to takes board_set with append=true.`, undefined, "ownership");
+    }
+    const next = this.spliced(e.text, `board entry "${key}"`, find, replace, replaceAll);
+    if (next === e.text) throw new HubError("That amendment changes nothing.", undefined, "amend-find");
+    this.setBoard(roomName, pid, key, next);
+    const clip = (t: string, n: number) => (t.length > n ? t.slice(0, n) + "…" : t);
+    const diff = replaceAll ? `replaced the whole entry (${next.length} chars)` : find ? `"${clip(find, 160)}" → "${clip(replace, 240)}"` : `appended "${clip(replace, 240)}"`;
+    this.persist({ type: "board_edit", room: roomName, key, by: p.name, sent_chars: find.length + replace.length, entry_chars: next.length, ts: now() });
+    this.post(room, "board", p, `amended "${key}": ${diff}`);
+    return { key, chars: next.length, diff };
+  }
+
+  /**
    * Edit the open proposal in place. Posts only the diff and bumps the version. An amend never creates or restores a vote:
    * an existing agree survives only while its quoted clause still appears verbatim in the new text (the amender's included).
    * A challenge is answered when the text it cites is gone, and reopens if a later amend brings that text back.
@@ -1902,33 +2217,23 @@ export class Hub {
     const room = this.getRoom(roomName);
     const p = this.requireParticipant(room, pid);
     const pr = room.proposals.get(proposalId);
-    if (!pr) throw new HubError(`No proposal "${proposalId}" in "${roomName}".`);
-    if (pr.status !== "open") throw new HubError(`Proposal ${proposalId} is ${pr.status}; only open proposals can be amended.`);
-    let next: string;
-    if (replaceAll) {
-      if (!replace.trim()) throw new HubError("replace_all needs the full new text.");
-      next = replace;
-    } else if (!find) {
-      if (!replace.trim()) throw new HubError("Nothing to append.");
-      next = pr.text.trimEnd() + "\n" + replace;
-    } else {
-      const n = pr.text.split(find).length - 1;
-      if (n === 0) {
-        throw new HubError(
-          `"${find.slice(0, 80)}" does not occur in ${proposalId} v${pr.version} (${pr.text.length} chars). Copy the exact text to replace; the closest passage is: "${this.closest(pr.text, find)}". For a whole rewrite use replace_all=true.`,
-        );
-      }
-      if (n > 1) throw new HubError(`"${find.slice(0, 80)}" occurs ${n} times; include more context so it is unique.`);
-      // a one-word find in a long document splices wherever that word happens to sit ("findings" for "find"); ask for a span
-      if (find.trim().length < 16 && pr.text.length > 2000) throw new HubError(`"${find}" is too short a find for a ${pr.text.length}-char document; copy at least 16 characters of the passage so the replacement lands where you mean.`);
-      next = pr.text.replace(find, replace);
+    if (!pr) {
+      const open = [...room.proposals.values()].find((x) => x.status === "open");
+      const mine = [...room.board].filter(([k, e]) => e.by === p.name && e.text.trim()).map(([k]) => k);
+      throw new HubError(
+        `No proposal "${proposalId}" in "${roomName}", and no board entry of that name. amend edits ${open ? `the open proposal (${open.id})` : "the open proposal (there is none in this room yet)"} or, given a board key, that board entry in place` +
+        `${mine.length ? `; your entries: ${mine.slice(0, 12).join(", ")}${mine.length > 12 ? `, and ${mine.length - 12} more` : ""}` : ""}.`, undefined, "not-found");
     }
-    if (next === pr.text) throw new HubError("That amendment changes nothing.");
+    if (pr.status !== "open") throw new HubError(`Proposal ${proposalId} is ${pr.status}; only open proposals can be amended.`, undefined, "state");
+    this.refuseStaleFind(room, pr, find, replaceAll);
+    const next = this.spliced(pr.text, `${proposalId} v${pr.version}`, find, replace, replaceAll);
+    if (next === pr.text) throw new HubError("That amendment changes nothing.", undefined, "amend-find");
     const counting = () => {
       const reviewer = this.activeReviewerFor(room, pr.by.name);
       return [...room.board].filter(([key, e]) => { const v = this.verifyEntryVerdict(room, pr, key, e, reviewer); return v.head && !v.why; }).map(([key, e]) => `${key} by ${this.shown(room, { id: "", name: e.by })}`);
     };
     const verifiedBefore = room.requireVerification ? counting() : [];
+    pr.prev = { text: pr.text, version: pr.version, by: p.name, at: now() };
     pr.text = next;
     pr.version += 1;
     pr.updatedAt = now();
@@ -1960,6 +2265,7 @@ export class Hub {
       }
     }
     this.persist({ type: "amend", room: roomName, proposalId, text: pr.text, version: pr.version, updatedAt: pr.updatedAt, votes: pr.votes, challenges: pr.challenges });
+    this.noteUsed(room, p, replace, "amend");
     const clip = (t: string, n: number) => (t.length > n ? t.slice(0, n) + "…" : t);
     const diff = replaceAll ? `replaced the whole text (${pr.text.length} chars)` : find ? `"${clip(find, 160)}" → "${clip(replace, 240)}"` : `appended "${clip(replace, 240)}"`;
     const survived = Object.values(kept).map((v) => this.shown(room, { id: "", name: v.name }));
@@ -1994,18 +2300,18 @@ export class Hub {
   propose(roomName: string, pid: string, text: string): Proposal {
     const room = this.getRoom(roomName);
     const p = this.requireParticipant(room, pid);
-    if (room.state === "concluded" || room.state === "closed") throw new HubError(`Room "${roomName}" is ${room.state}.`);
-    if (!text.trim()) throw new HubError("Proposal text is empty.");
+    if (room.state === "concluded" || room.state === "closed") throw new HubError(`Room "${roomName}" is ${room.state}.`, undefined, "state");
+    if (!text.trim()) throw new HubError("Proposal text is empty.", undefined, "invalid-arg");
     const open = [...room.proposals.values()].find((pr) => pr.status === "open");
     if (open) {
       throw new HubError(
         `Proposal ${open.id} by ${this.shown(room, open.by)} is already open (v${open.version}): "${open.text.slice(0, 200)}". ` +
-          `Do not re-propose: use amend to change its wording, challenge it, or vote on it.`,
+          `Do not re-propose: use amend to change its wording, challenge it, or vote on it.`, undefined, "proposal-open",
       );
     }
     const voters = this.voters(room);
     if (room.expectedParticipants !== 1 && Hub.sessionsOf(voters) < 2) {
-      throw new HubError("A room of one cannot conclude: at least two agents on different connections must be present. Recruit (request_agent) or ask someone to join.");
+      throw new HubError("A room of one cannot conclude: at least two agents on different connections must be present. Recruit (request_agent) or ask someone to join.", undefined, "room-of-one");
     }
     // a verify/<area>.partial never counts (verifyEntryVerdict), so it must not open this door either; head-less prose
     // still does, as before (round 1's 6334c88f also refused prose, broke four suite tests and was reverted)
@@ -2013,16 +2319,16 @@ export class Hub {
     if (room.requireVerification && !verifyKeys.some((k) => !k.endsWith(".partial"))) {
       const partials = verifyKeys.slice(0, 3);
       throw new HubError("This room requires verification: before proposing, put the command you actually ran, its cwd/commit and its exit code on the board under verify/<area>. Someone else must then check it themselves (the same check failing at the parent commit and passing at yours) and write their own verify/* entry naming the proposal id." +
-        (partials.length ? ` The board has only ${partials.join(", ")}: a .partial never counts, so write verify/<area> without it once the check has run.` : ""));
+        (partials.length ? ` The board has only ${partials.join(", ")}: a .partial never counts, so write verify/<area> without it once the check has run.` : ""), undefined, "needs-verify");
     }
     const unacked = this.unacknowledged(room);
-    if (unacked.length) throw new HubError(`Acknowledge the notes from other rooms first (write "<key>.ack"): ${unacked.join(", ")}`);
+    if (unacked.length) throw new HubError(`Acknowledge the notes from other rooms first (write "<key>.ack"): ${unacked.join(", ")}`, undefined, "unacked-notes");
     const human = this.unansweredHuman(room);
     if (human && !room.humanWarned.has(human.id)) {
       room.humanWarned.add(human.id);
       throw new HubError(
         `${this.shown(room, human.from)} (a human) said "${human.content.slice(0, 200)}" (message ${human.id}) and nobody has answered. ` +
-          `Reply to them first with send_message reply_to="${human.id}" in plain prose, then propose.`,
+          `Reply to them first with send_message reply_to="${human.id}" in plain prose, then propose.`, undefined, "human-unanswered",
       );
     }
     // Held once per room in total, for either or both reasons, and the next propose goes ahead whatever the board says:
@@ -2054,10 +2360,11 @@ export class Hub {
           what + (unexamined.length ? `For each finding this proposal rests on, ask a named seat to check it and write attack/<key> quoting its weakest clause (or do that yourself if it is not yours). ` : "") +
           (open_attacks.length ? `The author answers by editing that entry. ` : "") +
           `Wait for those, or propose again to go ahead as things stand: this refusal is given once per room, for all of these reasons together.`,
-        { barren_claims: barren, unsourced_claims: unsourced, unexamined, open_attacks },
+        { barren_claims: barren, unsourced_claims: unsourced, unexamined, open_attacks }, "scrutiny-held",
       );
     }
     this.surfaceCited(room, text, "cited in a proposal");
+    this.noteUsed(room, p, text, "proposal");
     const proposal: Proposal = {
       id: shortId("prop"),
       room: roomName,
@@ -2129,6 +2436,9 @@ export class Hub {
   /** The span of the proposal an objection quotes (longest quoted run that occurs in the text), if any. */
   private citedSpan(text: string, objection: string): string | undefined {
     const spans = [...objection.matchAll(/["“]([^"”]{12,})["”]/g)].map((m) => m[1]).filter((q) => norm(text).includes(norm(q)));
+    // a proposal shorter than a 12-character span is cited by quoting all of it ("INSTALL" in dev room swarm-183234-3oie-room
+    // could be agreed after fa9b0c64 but not challenged, so the mandatory challenge needed a contrived command)
+    if (!spans.length && text.trim().length < 12 && [...objection.matchAll(/["“]([^"”]+)["”]/g)].some((m) => norm(m[1]) === norm(text))) return text.trim();
     return spans.sort((a, b) => b.length - a.length)[0];
   }
 
@@ -2229,25 +2539,25 @@ export class Hub {
     const room = this.getRoom(roomName);
     const p = this.requireParticipant(room, pid);
     const pr = room.proposals.get(proposalId);
-    if (!pr) throw new HubError(`No proposal "${proposalId}" in "${roomName}".`);
-    if (pr.status !== "open") throw new HubError(`Proposal ${proposalId} is already ${pr.status}.`);
-    if (pr.by.id === p.id) throw new HubError("You cannot challenge your own proposal; someone else must.");
+    if (!pr) throw new HubError(`No proposal "${proposalId}" in "${roomName}".`, undefined, "not-found");
+    if (pr.status !== "open") throw new HubError(`Proposal ${proposalId} is already ${pr.status}.`, undefined, "state");
+    if (pr.by.id === p.id) throw new HubError("You cannot challenge your own proposal; someone else must.", undefined, "self-target");
     if (blocking && !this.independentChallenger(room, { by: { id: p.id, name: p.name }, objection, ts: now(), version: pr.version }, pr.by.id)) {
       throw new HubError(
         `${this.shown(room, p)} shares a connection with the proposer ${this.shown(room, pr.by)}: a blocking challenge must come from a different session (identity-is-the-connection). ` +
-        `A non-blocking objection is still allowed, and a different connection must challenge before this proposal can pass.`,
+        `A non-blocking objection is still allowed, and a different connection must challenge before this proposal can pass.`, undefined, "same-session",
       );
     }
-    if (objection.trim().length < 20) throw new HubError("A challenge must state a specific objection (at least 20 characters).");
+    if (objection.trim().length < 20) throw new HubError("A challenge must state a specific objection (at least 20 characters).", undefined, "invalid-arg");
     const cmd = command?.trim() ? Hub.normCommand(command) : undefined;
-    if (cmd !== undefined && (cmd.length < 3 || cmd.length > 1000)) throw new HubError("An executable challenge's `command` must be a runnable command line (3-1000 characters).");
+    if (cmd !== undefined && (cmd.length < 3 || cmd.length > 1000)) throw new HubError("An executable challenge's `command` must be a runnable command line (3-1000 characters).", undefined, "invalid-arg");
     const cites = this.citedSpan(pr.text, objection);
     // An executable challenge is anchored to its command, not to a span of text: citing is optional.
     if (blocking && !cites && !cmd) {
       throw new HubError(
         `A blocking challenge must quote a matching proposal span (12+ characters) in double quotes. ` +
           `Copy the text from ${proposalId} v${pr.version}; the closest passage is: "${this.closest(pr.text, objection)}". ` +
-          `Use blocking=false to record uncited dissent without holding the proposal.`,
+          `Use blocking=false to record uncited dissent without holding the proposal.`, undefined, "cite-required",
       );
     }
     // Six seats filing the same objection within two minutes is one objection: point at the open one first.
@@ -2261,11 +2571,12 @@ export class Hub {
       throw new HubError(
         `${this.shown(room, same.by)} already challenged that clause ("${same.cites!.slice(0, 80)}${same.cites!.length > 80 ? "…" : ""}") in ${same.id}, which is still open. ` +
           `If your objection is the same, say so in chat or vote; if it adds something that challenge does not, file it again with confirm=true.`,
-        { duplicate_of: same.id },
+        { duplicate_of: same.id }, "duplicate",
       );
     }
     this.surfaceCited(room, objection, "cited in a challenge");
-    const challenge: Challenge = { id: shortId("ch"), by: { id: p.id, name: p.name }, objection, ts: now(), version: pr.version, status: "open", blocking, ...(cites ? { cites } : {}), ...(cmd ? { command: cmd } : {}) };
+    this.noteUsed(room, p, objection, "challenge");
+    const challenge: Challenge = { id: shortId("ch"), by: { id: p.id, name: p.name }, objection, ts: now(), version: pr.version, status: "open", blocking, ...this.seenTiming(room, p, pr), ...(cites ? { cites } : {}), ...(cmd ? { command: cmd } : {}) };
     pr.challenges.push(challenge);
     // A blocking challenge must be answered: the challenger's own vote (if any) is reset and must be re-cast
     // after the room has responded, so the proposal cannot pass in the same breath.
@@ -2289,27 +2600,28 @@ export class Hub {
     const room = this.getRoom(roomName);
     const p = this.requireParticipant(room, pid);
     const proposal = room.proposals.get(proposalId);
-    if (!proposal) throw new HubError(`No proposal "${proposalId}" in "${roomName}". See room_status for open proposals.`);
-    if (proposal.status !== "open") throw new HubError(`Proposal ${proposalId} is already ${proposal.status}.`);
+    if (!proposal) throw new HubError(`No proposal "${proposalId}" in "${roomName}". See room_status for open proposals.`, undefined, "not-found");
+    if (proposal.status !== "open") throw new HubError(`Proposal ${proposalId} is already ${proposal.status}.`, undefined, "state");
     const prior = proposal.votes[p.id];
     if (p.agent === "human" && prior && prior.vote === vote && (prior.version ?? proposal.version) === proposal.version) return proposal; // repeat human votes are idempotent
     if (p.agent !== "human") {
       if (vote === "agree") {
-        if (!quote || quote.trim().length < 15) {
-          throw new HubError("An agree vote must include `quote`: a verbatim clause (15+ chars) from the proposal you are endorsing. Read it before you vote.");
+        // a proposal shorter than 15 chars is agreed by quoting all of it ("TOTAL=4" in swarm-185546-uiax could never be agreed)
+        if (!quote || quote.trim().length < Math.min(15, proposal.text.trim().length)) {
+          throw new HubError("An agree vote must include `quote`: a verbatim clause (15+ chars) from the proposal you are endorsing. Read it before you vote.", undefined, "vote-form");
         }
         if (!norm(proposal.text).includes(norm(quote))) {
-          throw new HubError(`Your quote is not in ${proposalId} v${proposal.version} (${proposal.text.length} chars). Quote it verbatim; the closest passage is: "${this.closest(proposal.text, quote)}"`);
+          throw new HubError(`Your quote is not in ${proposalId} v${proposal.version} (${proposal.text.length} chars). Quote it verbatim; the closest passage is: "${this.closest(proposal.text, quote)}"`, undefined, "vote-form");
         }
         if (this.openChallenges(proposal).length && (!reason || reason.trim().length < 20)) {
-          throw new HubError(`A challenge is open on ${proposalId}; an agree now needs \`reason\` (20+ chars) saying why the objection does not hold, not only a quote.`);
+          throw new HubError(`A challenge is open on ${proposalId}; an agree now needs \`reason\` (20+ chars) saying why the objection does not hold, not only a quote.`, undefined, "vote-form");
         }
       }
       if (vote === "disagree" && (!reason || reason.trim().length < 20)) {
-        throw new HubError("A disagree vote must include `reason` stating the specific change that would make you agree (20+ chars).");
+        throw new HubError("A disagree vote must include `reason` stating the specific change that would make you agree (20+ chars).", undefined, "vote-form");
       }
     }
-    const entry = { vote, reason, quote, confidence, name: p.name, ts: now(), version: proposal.version };
+    const entry = { vote, reason, quote, confidence, name: p.name, ts: now(), version: proposal.version, ...this.seenTiming(room, p, proposal) };
     this.applyVote(proposal, p.id, entry);
     this.persist({ type: "vote", room: roomName, proposalId, pid: p.id, entry });
     const conf = confidence !== undefined ? ` (confidence ${confidence})` : "";
@@ -2368,8 +2680,10 @@ export class Hub {
     if (openCh.length) out.push(this.challengeAdvice(room, openCh));
     if (room.requireVerification && !this.verifiedBy(room, pr)) out.push(this.verifyHeadRefusal(room, pr));
     if (this.hold(room)) out.push(`hold by ${this.hold(room)!.by}`);
+    for (const h of this.verifierHolds(room, pr)) out.push(`the verifier's agree on v${pr.version}: ${this.shown(room, h.p)} ${h.why}`);
     const pending = this.scrutinyPending(room, pr);
     if (pending) out.push(`fresh challenger ${pending.name} has not reported (it challenges or leaves; waited for until ${pending.until} at the latest)`);
+    if (this.inLastCall(pr)) out.push(`last call: it concludes at ${pr.lastCall!.until} unless a vote or amend changes it, or as soon as ${this.lastCallWaits(room, pr)}`);
     if (!active.some((p) => pr.votes[p.id] && (pr.votes[p.id].version ?? 1) === pr.version) && pr.version > 1) out.push(`no vote cast on v${pr.version} yet (carried-over agrees alone cannot pass a new version)`);
     return out;
   }
@@ -2399,7 +2713,7 @@ export class Hub {
       needs_challenge: needsChallenge,
       blocked_by: this.blockedBy(room, pr),
       ...(pr.status === "open" && this.verificationGaps(room, pr).length ? { verification_gaps: this.verificationGaps(room, pr) } : {}),
-      ...(pr.status === "open" && this.unverifiedCommits(room, pr).length ? { unverified_commits: this.unverifiedCommits(room, pr), unverified_commits_hint: "cited in the text, but no counting verify/* entry names them as commit or base_commit; one entry passes the gate, so these ride on it unchecked unless someone verifies them too" } : {}),
+      ...(pr.status === "open" && this.unverifiedCommits(room, pr).length ? { unverified_commits: this.unverifiedCommits(room, pr), unverified_commits_hint: "cited in the text, but no counting verify/* or review/* entry names them as commit or base_commit; one entry passes the gate, so these ride on it unchecked unless someone verifies them too" } : {}),
       challenges: pr.challenges.map((c) => ({ id: c.id, by: nm(c.by), objection: c.objection, status: c.status ?? "open", blocking: c.blocking !== false, version: c.version, ...(c.command ? { command: c.command } : {}) })),
       votes: Object.entries(pr.votes).map(([id, v]) => ({ name: nm({ id, name: v.name }), vote: v.vote, confidence: v.confidence, reason: v.reason, version: v.version, ...(v.version !== undefined && v.version !== pr.version ? { stale: `cast at v${v.version}` } : {}) })),
     };
@@ -2459,11 +2773,28 @@ export class Hub {
     const proposer = room.participants.get(pr.by.id);
     const out: { key: string; e: BoardEntry; head: VerifyHead }[] = [];
     for (const [key, e] of room.board) {
-      if (!key.startsWith("verify/") || key.endsWith(".partial") || e.by === pr.by.name) continue;
+      if (!isReviewKey(key) || e.by === pr.by.name) continue;
       const author = [...room.participants.values()].find((x) => x.name === e.by);
       if (author && proposer && author.session && author.session === proposer.session) continue;
       const head = parseVerifyHead(e.text);
-      if (head && Hub.isPending(head) && head.commit?.trim() && head.exit_code === 0 && !failToPassShortfall(head) && citesCommit(pr.text, head.commit)) out.push({ key, e, head });
+      // a review/<sha> naming this proposal still only covers: the gate is verify/* (done-means-independently-verified)
+      if (head && (Hub.isPending(head) || (key.startsWith("review/") && head.proposal === pr.id)) && head.commit?.trim() && head.exit_code === 0 && !failToPassShortfall(head) && citesCommit(pr.text, head.commit)) out.push({ key, e, head });
+    }
+    return out;
+  }
+
+  /** Every commit a verify/* or review/* head names, in board order, with the entries naming it and whether each passes on
+   * shape (exit 0 and fail-to-pass or refactor). known: the writer's worktree has it (BoardEntry.commitCheck), absent if unasked. */
+  reviewsByCommit(room: Room): { commit: string; known?: boolean; by: { key: string; by: string; passes: boolean }[] }[] {
+    const out: { commit: string; known?: boolean; by: { key: string; by: string; passes: boolean }[] }[] = [];
+    for (const [key, e] of room.board) {
+      if (!isReviewKey(key)) continue;
+      const head = parseVerifyHead(e.text);
+      const commit = head?.commit?.trim();
+      if (!head || !commit) continue;
+      let row = out.find((r) => sameCommit(r.commit.toLowerCase(), commit.toLowerCase()));
+      if (!row) out.push(row = { commit, ...(e.commitCheck?.commit_known !== undefined ? { known: e.commitCheck.commit_known } : {}), by: [] });
+      row.by.push({ key, by: e.by, passes: head.exit_code === 0 && !failToPassShortfall(head) });
     }
     return out;
   }
@@ -2475,7 +2806,7 @@ export class Hub {
     const proposer = room.participants.get(pr.by.id);
     const out: VerifyHead[] = [];
     for (const [key, e] of room.board) {
-      if (!key.startsWith("verify/") || key.endsWith(".partial") || e.by === pr.by.name) continue;
+      if (!isReviewKey(key) || e.by === pr.by.name) continue;
       const author = [...room.participants.values()].find((x) => x.name === e.by);
       if (author && proposer && author.session && author.session === proposer.session) continue;
       const head = parseVerifyHead(e.text);
@@ -2490,8 +2821,8 @@ export class Hub {
     return [...room.board]
       .map(([key, e]) => ({ key, e, v: this.verifyEntryVerdict(room, pr, key, e, undefined) }))
       .filter((x) => x.v.head && !x.v.why)
-      .map((x) => ({ key: x.key, by: x.e.by, gaps: [...verifyGaps(x.v.head!, x.e.devReceipt), ...this.devRunAuthorGap(room, pr, x.e.devReceipt, x.e.by)] }))
-      .concat(this.pendingCoverage(room, pr).map((x) => ({ key: x.key, by: x.e.by, gaps: [...verifyGaps(x.head, x.e.devReceipt), ...this.devRunAuthorGap(room, pr, x.e.devReceipt, x.e.by)] })))
+      .map((x) => ({ key: x.key, by: x.e.by, gaps: [...verifyGaps(x.v.head!, x.e.devReceipt, x.e.commitCheck), ...this.devRunAuthorGap(room, pr, x.e.devReceipt, x.e.by)] }))
+      .concat(this.pendingCoverage(room, pr).map((x) => ({ key: x.key, by: x.e.by, gaps: [...verifyGaps(x.head, x.e.devReceipt, x.e.commitCheck), ...this.devRunAuthorGap(room, pr, x.e.devReceipt, x.e.by)] })))
       .filter((x) => x.gaps.length);
   }
 
@@ -2515,7 +2846,7 @@ export class Hub {
     try {
       return await this.devRuns.start({ room: roomName, requestedBy: p.name, ...(p.session ? { session: p.session } : {}), ...q });
     } catch (err) {
-      if (err instanceof DevRunError) throw new HubError(err.message);
+      if (err instanceof DevRunError) throw new HubError(err.message, undefined, "state");
       throw err;
     }
   }
@@ -2525,7 +2856,7 @@ export class Hub {
   async readDevRoom(roomName: string, key: string, fetcher: (url: string) => Promise<unknown> = Hub.fetchJson): Promise<DevReceipt | undefined> {
     const room = this.getRoom(roomName);
     const e = room.board.get(key);
-    const head = key.startsWith("verify/") && e ? parseVerifyHead(e.text) : undefined;
+    const head = isReviewKey(key) && e ? parseVerifyHead(e.text) : undefined;
     const url = devRoomUrl(head?.dev_room);
     if (!e || !head?.dev_room || !url) return undefined;
     let receipt: DevReceipt;
@@ -2629,6 +2960,180 @@ export class Hub {
     return `a verify/* board entry from ${who} whose first line is JSON ${VERIFY_HEAD_EXAMPLE.replace("<PROPOSAL_ID>", pr.id)} — ${VERIFY_HEAD_RULE}${misses.join("")}`;
   }
 
+  /**
+   * The verifier's agree is needed (evidence-pack item 1, claim/verifier-vote-counts). The launcher tells every seat "the
+   * final proposal needs its agree vote", but only a unanimous quorum made that true: of 8 concluded supermajority rooms
+   * with a verifier seat, 6 concluded with no standing verifier vote on the final version (mrkt: "Concluded 5/6 without
+   * my vote ... Change 2 disputed"). As with Gerrit's Verified label (sources/gerrit-review-labels), the approval must be
+   * on the current version, a rejection blocks, and an approval of an older version is outdated. Returns each active
+   * seat with role verifier that has not agreed to the current version, with why; a verifier that has left holds nothing.
+   */
+  verifierHolds(room: Room, pr: Proposal): { p: Participant; why: string }[] {
+    if (pr.status !== "open") return [];
+    return this.verifierSeats(room).filter((x) => x.silentMs < kick.SUSPECTED_DEAD_MS).flatMap(({ p }) => {
+      const v = pr.votes[p.id];
+      if (v?.vote === "agree" && (v.version ?? 1) === pr.version) return [];
+      const why = !v ? "has not voted"
+        : v.vote === "disagree" ? `voted disagree${(v.version ?? 1) === pr.version ? "" : ` on v${v.version ?? 1}`}${v.reason ? `: "${v.reason.slice(0, 200)}"` : ""}`
+        : v.vote === "agree" ? `agreed to v${v.version ?? 1}, not to v${pr.version}`
+        : "abstained";
+      return [{ p, why }];
+    });
+  }
+
+  /**
+   * The room's verifier seats and how long each has been silent. A seat counts while it is active, or away (out of the
+   * room but its process is alive, or restored by a hub restart less than 10 min ago: tky5's verifier-2 lost its vote to
+   * "Room concluded while my session was disconnected"). The hold is bounded by what the hub already knows
+   * (attack/decision/verifier-vote-counts): a verifier silent for SUSPECTED_DEAD_MS, e.g. waiting hours for a usage
+   * limit to reset, no longer holds, and the conclusion says it closed without the verifier's agree. A verifier whose
+   * own command is still running is not silent, however long that command takes (review/cc372f8e).
+   */
+  private verifierSeats(room: Room): { p: Participant; silentMs: number }[] {
+    return [...room.participants.values()].filter((p) => p.role === "verifier" && p.agent !== "human").flatMap((p) => {
+      // a job of its own running (jobsOf: a real command under 6 h old, read from the process table) is not silence: the
+      // heartbeat fires at the start of a tool call, so one foreground suite run longer than the bound sends nothing
+      if (p.active) return [{ p, silentMs: this.jobsOf(p).length ? 0 : Math.max(0, Date.now() - Date.parse(this.lastSeen(p))) }];
+      const away = this.away(p);
+      return away ? [{ p, silentMs: away.age_seconds * 1000 }] : [];
+    });
+  }
+
+  /** Re-evaluate when the quietest holding verifier would read as dead, so a silent verifier cannot hold a room for good. */
+  private armVerifierHold(room: Room, pr: Proposal): void {
+    const left = Math.min(...this.verifierSeats(room).filter((x) => x.silentMs < kick.SUSPECTED_DEAD_MS).map((x) => kick.SUSPECTED_DEAD_MS - x.silentMs));
+    if (!Number.isFinite(left)) return;
+    clearTimeout(this.verifierHoldTimers.get(pr.id));
+    const t = setTimeout(() => { try { this.evaluate(room, pr); } catch {} }, left + 50);
+    t.unref();
+    this.verifierHoldTimers.set(pr.id, t);
+  }
+  private readonly verifierHoldTimers = new Map<string, ReturnType<typeof setTimeout>>();
+
+  /**
+   * Telemetry gap G13 (evidence-pack item 1: in 00cp challenges arrived 6-21 s after the proposal and "the log cannot show
+   * where" the text was negotiated): seen_s, seconds from the hub first sending this seat the message that made the
+   * current version to now (absent: it never sent it, the seat read it elsewhere or not at all), and since_text_s,
+   * seconds since that version was written. The proposer is counted as having seen its own text when it wrote it.
+   */
+  private seenTiming(room: Room, p: Participant, pr: Proposal): { seen_s?: number; seen_unknown?: true; since_text_s: number } {
+    const t = Date.now();
+    const made = [...room.messages].reverse().find((m) => m.proposalId === pr.id && (m.kind === "proposal" || m.kind === "amend"));
+    const seenAt = made && (made.from.id === p.id ? made.ts : p.versionSeenAt?.[made.id]);
+    const s = (at: string) => Math.max(0, Math.round((t - Date.parse(at)) / 100) / 10);
+    // delivery stamps are in memory: a version made before this hub process started may have been sent by the last one
+    // (review/83871804), so its absence says nothing
+    const unknown = !seenAt && !!made && made.ts <= this.bootedAt; // <=: a restart in the same millisecond as the message (review: a 4-in-8 flake)
+    return { ...(seenAt ? { seen_s: s(seenAt) } : {}), ...(unknown ? { seen_unknown: true as const } : {}), since_text_s: s(pr.updatedAt ?? pr.createdAt) };
+  }
+  /** when this hub process started: delivery stamps older than this were lost with the last process */
+  private readonly bootedAt = new Date().toISOString();
+
+  /** Electorate members whose vote (if any) was not cast on the proposal's current version. */
+  unvotedOnCurrent(room: Room, pr: Proposal): Participant[] {
+    return this.electorate(room, pr).members.filter((p) => (pr.votes[p.id] ? pr.votes[p.id].version ?? 1 : 0) !== pr.version);
+  }
+
+  /** take/* entries an active seat holds now ("I am doing this"), as "key (holder)": work in flight that a conclusion
+   * would cut off (attack/decision/last-call: in 0btz-break a seat that had voted said its rerun was still running and
+   * the room concluded 6 s later). Offers nobody accepted and claim/* areas, which are rarely released, do not count. */
+  takesInFlight(room: Room): string[] {
+    return [...room.board].filter(([k, e]) => k.startsWith("take/") && e.text.trim() && !e.offeredBy &&
+      [...room.participants.values()].some((p) => p.active && p.name === (e.holder ?? e.by)))
+      .map(([k, e]) => `${k} (${e.holder ?? e.by})`);
+  }
+
+  /** Breakouts of this room (rooms whose parent it is, including launcher-made group rooms) that are still open with
+   * someone in them: work whose answer the room's conclusion would fix before it arrives (swarm-123021-1nwp: leads
+   * concluded 92 min before its internal group). An empty or archived breakout does not count. */
+  openBreakouts(room: Room): string[] {
+    return [...this.rooms.values()].filter((r) => r.parent === room.name && !r.archived && (r.state === "open" || r.state === "stalled") && this.activeParticipants(r).length > 0).map((r) => r.name);
+  }
+
+  /** A last call is running on the proposal's current version and has not run out. */
+  inLastCall(pr: Proposal): boolean {
+    return pr.status === "open" && pr.lastCall?.version === pr.version && Date.parse(pr.lastCall.until) > Date.now();
+  }
+
+  /**
+   * Last call (evidence-pack item 1, swarm-180216-182a). A proposal that has the votes concluded the room at once: in 13
+   * concluded rooms on hub 7717, 11 concluded within 14 s of the last amend, the verifier had not voted on the final text
+   * in 6, and 9 had a vote, amend or board write refused within 17 s of it. IETF practice confirms a decision over a
+   * last-call period rather than at the moment it is reached (RFC 2418 s3.2, s7.4), and judges consensus by open issues,
+   * not the count (RFC 7282). So while someone in the electorate has not voted on the current version, the room is told
+   * who and until when, they owe a vote, and it concludes when the window ends or as soon as they have all voted.
+   * True while the conclusion must wait.
+   */
+  private lastCallHolds(room: Room, pr: Proposal): boolean {
+    if (Hub.LAST_CALL_MS <= 0) return false;
+    const unvoted = this.unvotedOnCurrent(room, pr);
+    const takes = this.takesInFlight(room);
+    const children = this.openBreakouts(room);
+    if (!unvoted.length && !takes.length && !children.length) return false;
+    if (pr.lastCall?.version === pr.version) return Date.parse(pr.lastCall.until) > Date.now();
+    const startedAt = now();
+    const until = new Date(Date.now() + Hub.LAST_CALL_MS).toISOString();
+    const waitingOn = unvoted.map((p) => this.shown(room, p));
+    pr.lastCall = { version: pr.version, startedAt, until, waitingOn };
+    this.persist({ type: "last_call", room: room.name, proposalId: pr.id, version: pr.version, startedAt, until, waiting_on: unvoted.map((p) => p.name), ...(takes.length ? { takes_held: takes } : {}), ...(children.length ? { children_open: children } : {}) });
+    const secs = Math.round(Hub.LAST_CALL_MS / 1000);
+    this.post(room, "system", undefined,
+      `LAST CALL: ${pr.id} v${pr.version} has the votes. The room concludes at ${until} (in ${secs} s) unless a vote or amend changes that, ` +
+      `or as soon as ${this.lastCallWaits(room, pr)}. Once it concludes the room is closed to votes and amends (chat and late results are still recorded): ` +
+      `land any result, verify entry or vote you still owe it now; if work of yours is still running, write take/<what> (and clear it when it lands), or hold/${room.name} if it needs longer than this window.`);
+    // a breakout gets the same notice in its own room: the window is its chance to report before the answer is fixed
+    for (const name of children) {
+      this.post(this.rooms.get(name)!, "system", undefined,
+        `${room.name}, this room's parent, is in LAST CALL on ${pr.id} v${pr.version}: it concludes at ${until} (in ${secs} s), or sooner once this room concludes. ` +
+        `If a result here should change its answer, post_to_room it or say so there now; a seat that is in both rooms can write hold/${room.name} there.`);
+    }
+    this.armLastCall(room, pr);
+    return true;
+  }
+
+  /** Re-evaluate when the proposal's last call runs out (at once if it already has: a hub that was down past the deadline). */
+  private armLastCall(room: Room, pr: Proposal): void {
+    const left = Math.max(0, Date.parse(pr.lastCall!.until) - Date.now());
+    setTimeout(() => { try { this.evaluate(room, pr); } catch {} }, left + 25).unref();
+  }
+
+  /** What a last call is still waiting for, in words: the votes on the current version and the takes still held. */
+  private lastCallWaits(room: Room, pr: Proposal): string {
+    const unvoted = this.unvotedOnCurrent(room, pr).map((p) => this.shown(room, p));
+    const takes = this.takesInFlight(room);
+    return [
+      ...(unvoted.length ? [`${unvoted.join(", ")} vote${unvoted.length === 1 ? "s" : ""} on v${pr.version}`] : []),
+      ...(takes.length ? [`${takes.join(", ")} ${takes.length === 1 ? "is" : "are"} released (board_set the key with empty text)`] : []),
+      ...this.openBreakouts(room).map((c) => `breakout ${c} concludes`),
+    ].join(" and ") || "nothing is left to wait for";
+  }
+
+  /** How the room closed on pr: the telemetry in conclusion.closing. */
+  private closing(room: Room, pr: Proposal): ConclusionClosing {
+    const t = Date.now();
+    const lc = pr.lastCall?.version === pr.version ? pr.lastCall : undefined;
+    const unvoted = this.unvotedOnCurrent(room, pr);
+    const takes = this.takesInFlight(room);
+    const children = this.openBreakouts(room);
+    // the verifier seat that agreed to this version, else the one it closed without (silent past the bound)
+    const seats = this.verifierSeats(room);
+    const agreed = (p: Participant) => pr.votes[p.id]?.vote === "agree" && (pr.votes[p.id].version ?? 1) === pr.version;
+    const ver = seats.find((x) => agreed(x.p)) ?? seats[0];
+    const vv = ver && pr.votes[ver.p.id];
+    return {
+      ...(ver ? { verifier: { name: this.shown(room, ver.p), agreed: agreed(ver.p), ...(vv ? { vote: vv.vote, version: vv.version ?? 1 } : {}), ...(agreed(ver.p) ? {} : { silent_minutes: Math.round(ver.silentMs / 60_000) }) } } : {}),
+      seconds_from_proposal: Math.round((t - Date.parse(pr.createdAt)) / 100) / 10,
+      seconds_from_last_text: Math.round((t - Date.parse(pr.updatedAt ?? pr.createdAt)) / 100) / 10,
+      ...(lc ? { last_call_seconds: Math.round((t - Date.parse(lc.startedAt)) / 100) / 10 } : {}),
+      ended: lc ? (unvoted.length || takes.length || children.length ? "window" : "all_voted") : "none",
+      ...(takes.length ? { takes_held: takes } : {}),
+      ...(children.length ? { children_open: children } : {}),
+      // agrees on the final version cast by seats the hub never sent that version (gap G13: read elsewhere, or not at all)
+      ...((() => { const v = Object.values(pr.votes).filter((x) => x.vote === "agree" && (x.version ?? 1) === pr.version && x.since_text_s !== undefined && x.seen_s === undefined && !x.seen_unknown).map((x) => x.name); return v.length ? { agreed_unsent: v } : {}; })()),
+      not_voted_on_final: unvoted.map((p) => ({ name: this.shown(room, p), ...(p.role && p.role !== "worker" ? { role: p.role } : {}), ...(pr.votes[p.id] ? { voted_version: pr.votes[p.id].version ?? 1 } : {}) })),
+    };
+  }
+
   /** @internal */ evaluate(room: Room, pr: Proposal) {
     if (pr.status !== "open" || room.state === "concluded" || room.state === "closed") return;
     this.settleExecutableChallenges(room, pr);
@@ -2688,8 +3193,23 @@ export class Hub {
       stuck(`${pr.id} v${pr.version} carries only agrees cast on earlier versions; a version cannot pass until someone votes on its current text. Re-vote (quote a clause of v${pr.version}) to conclude.`);
       return;
     }
+    // a hold whose author left no longer holds: said once (Hub.hold)
+    const lapsed = board.hold(room);
+    if (lapsed && !this.hold(room) && room.holdLapsedNoted !== lapsed.updatedAt) {
+      room.holdLapsedNoted = lapsed.updatedAt;
+      this.post(room, "system", undefined, `The hold by ${lapsed.by} no longer holds the room: ${lapsed.by} has left it. Anyone may clear hold/${room.name} now (board_set with empty text and overwrite=true).`);
+    }
     if (accepted && this.hold(room)) {
       stuck(`${pr.id} has the votes but the room is on hold by ${this.hold(room)!.by}: ${this.hold(room)!.text.slice(0, 120)}. It passes when the hold is cleared.`);
+      return;
+    }
+    const held = accepted ? this.verifierHolds(room, pr) : [];
+    if (held.length) {
+      const who = held.map((h) => `${this.shown(room, h.p)} ${h.why}`).join("; ");
+      stuck(`${pr.id} v${pr.version} has the votes but the verifier has not agreed to it (${who}). A room with a verifier concludes only on its agree to the current text: ` +
+        `${held.map((h) => this.shown(room, h.p)).join(", ")} votes on v${pr.version}, or the text is amended to answer it. ` +
+        `If that seat is gone, replace_participant or kick_vote it; one that stays silent for ${Math.round(kick.SUSPECTED_DEAD_MS / 60_000)} min stops holding the room, and the conclusion will say it closed without the verifier's agree.`);
+      this.armVerifierHold(room, pr);
       return;
     }
     if (accepted && room.requireVerification && !this.verifiedBy(room, pr)) {
@@ -2716,6 +3236,7 @@ export class Hub {
       return;
     }
 
+    if (accepted && this.lastCallHolds(room, pr)) return;
     if (accepted) this.conclude(room, pr);
     else if (notPassed && pr.notPassedVersion !== pr.version) {
       pr.notPassedVersion = pr.version;
@@ -2732,9 +3253,9 @@ export class Hub {
   /** A breakout is opened from a room the opener is an active member of, by the same connection, and never from a closed one. */
   private checkBreakout(child: string, parent: string, session?: string): void {
     const from = this.rooms.get(parent);
-    if (!from) throw new HubError(`parent room "${parent}" does not exist. Open a breakout from a room you are in.`);
-    if (from.state === "concluded" || from.state === "closed") throw new HubError(`parent room "${parent}" is ${from.state}; nothing to carry a breakout's conclusion back to.`);
-    if (child === parent) throw new HubError("A room cannot be its own breakout.");
+    if (!from) throw new HubError(`parent room "${parent}" does not exist. Open a breakout from a room you are in.`, undefined, "not-found");
+    if (from.state === "concluded" || from.state === "closed") throw new HubError(`parent room "${parent}" is ${from.state}; nothing to carry a breakout's conclusion back to.`, undefined, "state");
+    if (child === parent) throw new HubError("A room cannot be its own breakout.", undefined, "invalid-arg");
     if (!session || ![...from.participants.values()].some((p) => p.active && p.session === session)) {
       throw new HubError(`Only an active member of "${parent}" can open a breakout from it: join_room it first.`, undefined, "auth");
     }
@@ -2808,12 +3329,16 @@ export class Hub {
 
   /**
    * A concluded breakout's decision, written onto its parent's board (no seat has to post_to_room it by hand). A parent
-   * that already concluded or closed is left alone: its board is final. Objections go before the text, and a text past
+   * that concluded first still takes it inside its late-results window, marked late (swarm-123021-1nwp: the internal
+   * group's table landed 92 min after the leads room concluded and was lost); a closed parent, or one past the window,
+   * is left alone. Objections go before the text, and a text past
    * the board cap is cut, never silently: where the whole of it lives (room_status on the child) leads the entry.
    */
   private carryConclusion(room: Room): void {
     const parent = room.parent ? this.rooms.get(room.parent) : undefined;
-    if (!parent || !room.conclusion || parent.state === "concluded" || parent.state === "closed") return;
+    if (!parent || !room.conclusion || parent.state === "closed") return;
+    const late = parent.state === "concluded" ? board.lateWindow(this, parent) : undefined;
+    if (parent.state === "concluded" && !late) return;
     const c = room.conclusion;
     const key = `inbox/${room.name}/conclusion`;
     // where the whole of it lives leads the entry, so no cut can drop it
@@ -2822,15 +3347,19 @@ export class Hub {
     const full = head + body;
     const marker = `\n[cut at the board cap: ${full.length} chars in all; whole text: room_status room="${room.name}"]`;
     const text = full.length <= 8000 ? full : full.slice(0, 8000 - marker.length) + marker;
-    const entry: BoardEntry = { text, by: "system", updatedAt: now() };
+    const entry: BoardEntry = { text, by: "system", updatedAt: now(), ...(late ? { late: true } : {}) };
     board.applyBoard(parent, key, entry);
     this.persist({ type: "board", room: parent.name, key, entry });
-    this.post(parent, "system", undefined, `[BOARD] breakout ${room.name} concluded; its conclusion is on this board as ${key} (board_get).`);
+    if (late) this.persist({ type: "late_write", room: parent.name, key, by: "system", after_s: late.after_s, ts: entry.updatedAt });
+    this.post(parent, "system", undefined, late
+      ? `[BOARD] breakout ${room.name} concluded after this room did; its conclusion is on this board as ${key}, marked late (board_get). This room's conclusion does not change.`
+      : `[BOARD] breakout ${room.name} concluded; its conclusion is on this board as ${key} (board_get).`);
   }
 
   private conclude(room: Room, pr: Proposal) {
     for (const m of room.messages) if (m.quiet) this.surfaceThread(room, this.threadRoot(room, m).id, "room concluded");
     pr.status = "accepted";
+    delete pr.prev; // only an open proposal can be amended: do not keep (or persist) a second copy of the text
     for (const other of room.proposals.values()) if (other.id !== pr.id && other.status === "open") other.status = "superseded";
     const unresolved = pr.challenges.filter((c) => (c.status ?? "open") === "open").map((c) => ({ by: this.shown(room, c.by), objection: c.objection }));
     for (const c of pr.challenges) if ((c.status ?? "open") === "open") c.status = "overruled";
@@ -2844,7 +3373,8 @@ export class Hub {
     };
     const record = output.conclusionOutput(this, room, pr);
     const gaps = this.verificationGaps(room, pr);
-    room.conclusion = { text: pr.text, proposalId: pr.id, decidedAt: now(), version: pr.version, tally, electorate, unresolved_objections: unresolved, ...record, ...(verification ? { verification } : {}), ...(gaps.length ? { verification_gaps: gaps } : {}), ...(pr.evidence ? { evidence: pr.evidence } : {}) };
+    const closing = this.closing(room, pr);
+    room.conclusion = { text: pr.text, proposalId: pr.id, decidedAt: now(), version: pr.version, tally, electorate, unresolved_objections: unresolved, ...record, ...(verification ? { verification } : {}), ...(gaps.length ? { verification_gaps: gaps } : {}), ...(pr.evidence ? { evidence: pr.evidence } : {}), closing };
     this.persist({ type: "proposal", proposal: pr });
     this.setState(room, "concluded");
     if (room.nudgeTimer) clearTimeout(room.nudgeTimer);
@@ -2853,12 +3383,34 @@ export class Hub {
       "conclusion",
       undefined,
       `CONSENSUS REACHED on ${pr.id} v${pr.version} (${electorate.agree}/${electorate.electorate} agree; ${electorate.excluded_leavers} leavers-before-close excluded; quorum=${room.quorum}; ${pr.text.length} chars, text in room_status/conclusion)` +
+        (closing.verifier && !closing.verifier.agreed ? `\nConcluded WITHOUT the verifier's agree: ${closing.verifier.name} ${closing.verifier.vote ? `last voted ${closing.verifier.vote} on v${closing.verifier.version}` : "never voted"} and has been silent for ${closing.verifier.silent_minutes} min.` : "") +
+        (closing.not_voted_on_final.length ? `\nNot voted on v${pr.version}: ${closing.not_voted_on_final.map((x) => `${x.name}${x.role ? ` (${x.role})` : ""}${x.voted_version ? ` (on v${x.voted_version})` : ""}`).join(", ")}${closing.ended === "window" ? " (last call ran out)" : ""}.` : "") +
         (unresolved.length ? `\nUnresolved objections, overruled: ${unresolved.map((u) => `${u.by}: "${u.objection.slice(0, 300)}${u.objection.length > 300 ? "…" : ""}"`).join(" | ")}` : "") + output.conclusionOutputLines(record) +
-        (verification ? `\n${Hub.verificationLine(verification)}${Hub.unverifiedLine(verification, gaps)}` : ""),
+        (verification ? `\n${Hub.verificationLine(verification)}${Hub.unverifiedLine(verification, gaps)}` : "") +
+        (Hub.LATE_WRITE_MS > 0 ? `\nThe board stays open to late results for ${Math.round(Hub.LATE_WRITE_MS / 60_000)} min: a result, verify/*, review/* or handoff/* that lands now is recorded and marked late, and this conclusion does not change.` : ""),
       { proposalId: pr.id },
     );
     this.releaseClaims(room, "Room concluded");
     this.carryConclusion(room);
+    this.tellOpenBreakouts(room, pr);
+    // a parent in last call may have been waiting only for this breakout
+    const parent = room.parent ? this.rooms.get(room.parent) : undefined;
+    if (parent) for (const p of parent.proposals.values()) if (p.status === "open" && p.lastCall) this.evaluate(parent, p);
+  }
+
+  /**
+   * Each breakout still open when its parent concludes is told at once that the parent's answer is fixed. In
+   * swarm-123021-1nwp the internal group kept waiting on a run with an ETA of 17:00 for 92 min after the leads room
+   * concluded at 14:34, never told, and its final board write was refused. Logged as parent_concluded in the breakout.
+   */
+  private tellOpenBreakouts(room: Room, pr: Proposal): void {
+    for (const name of this.openBreakouts(room)) {
+      const child = this.rooms.get(name)!;
+      this.persist({ type: "parent_concluded", room: name, parent: room.name, proposalId: pr.id, version: pr.version, ts: now() });
+      this.post(child, "system", undefined,
+        `${room.name}, this room's parent, concluded on ${pr.id} v${pr.version} at ${room.conclusion!.decidedAt}: its answer is fixed, and a conclusion here can no longer change it (at most it lands on its board as a late entry) ` +
+        `(its text: room_status room="${room.name}"). Decide whether the work still running here changes anything: if not, conclude or leave; if it does, say so in the parent's room or post_to_room it.`);
+    }
   }
 
   /**
@@ -2884,7 +3436,7 @@ export class Hub {
   /** Close a room without a conclusion (stale, abandoned, or a human decided to stop it). */
   closeRoom(roomName: string, by: string, reason = ""): Room {
     const room = this.getRoom(roomName);
-    if (room.state === "concluded") throw new HubError("Room already concluded.");
+    if (room.state === "concluded") throw new HubError("Room already concluded.", undefined, "state");
     if (room.state === "closed") return room;
     for (const pr of room.proposals.values()) if (pr.status === "open") pr.status = "superseded";
     for (const p of room.participants.values()) {
@@ -2907,7 +3459,7 @@ export class Hub {
   archiveRoom(roomName: string, by: string, archived = true): Room {
     const room = this.getRoom(roomName);
     if (archived && (room.state === "open" || room.state === "stalled") && this.activeParticipants(room).length === 0) this.closeRoom(roomName, by, "archived");
-    if (archived && (room.state === "open" || room.state === "stalled")) throw new HubError(`Room "${roomName}" still has participants; close it first.`);
+    if (archived && (room.state === "open" || room.state === "stalled")) throw new HubError(`Room "${roomName}" still has participants; close it first.`, undefined, "state");
     room.archived = archived;
     this.persist({ type: "archive", room: roomName, archived, by, ts: now() });
     return room;
@@ -2960,6 +3512,11 @@ export class Hub {
     p.session = session; // the seat moves to its newer connection; the older one's end no longer speaks for it (holds)
     return p;
   }
+  /** One line in the room log per session event that touches a seat: it moved to a newer connection, or a connection ended
+   * with (seat_kept) or without the seat still served elsewhere. Counted by scripts/session-events.ts. */
+  recordSession(room: Room, p: Participant, event: "moved" | "closed", reason: string, seatKept: boolean) {
+    this.persist({ type: "session", room: room.name, event, participant: p.id, name: p.name, reason: reason.slice(0, 160), seat_kept: seatKept, ts: now() });
+  }
   /** Whether this connection is the one a participant is seated on now (a seat re-seated elsewhere is no longer its to leave). */
   holds(roomName: string, pid: string, session: string): boolean {
     const p = this.rooms.get(roomName)?.participants.get(pid);
@@ -3001,6 +3558,7 @@ export class Hub {
     watched: (seat) => this.seatRooms(seat).length > 0,
     onSample: (seat, memory) => this.recordMemory(seat, memory),
     onEvent: (e) => this.recordMemoryEvent(e),
+    onJobEnd: (seat, job, others) => this.jobEnded(seat, job, others),
   });
   private memoryLogged = new Map<string, number>();
   private memoryNotices = new Map<string, SteerItem[]>();
@@ -3027,12 +3585,117 @@ export class Hub {
     const text = memoryNotice(e);
     const id = shortId("mem");
     for (const { room, p } of this.seatRooms(e.seat)) {
-      this.persist({ type: "memory", room: room.name, seat: e.seat, event: e.kind, mb: e.mb, budget_mb: e.budget_mb, top: e.top, ...(e.kind === "stop" ? { signal: e.signal } : {}), ts: now() });
+      this.persist({ type: "memory", room: room.name, seat: e.seat, event: e.kind, mb: e.mb, ...(e.kind === "high" ? { mark_mb: e.mark_mb } : { budget_mb: e.budget_mb }), top: e.top, ...(e.kind === "stop" ? { signal: e.signal } : {}), ts: now() });
       const m = this.post(room, "system", undefined, `@${this.shown(room, p)} ${text}`);
       this.memoryNotices.set(e.seat, [...(this.memoryNotices.get(e.seat) ?? []), { room: room.name, id, seq: m.seq, from: "system", text }].slice(-5));
     }
   }
 
+  /** Seats heartbeating without an MCP session, by seat key hash: since when, and the rooms told (idea/client-side-disconnects). */
+  private readonly unconnected = new Map<string, { since: number; rooms: string[]; told: boolean; tool: string }>();
+  /** When this hub process started: right after a restart every seat is briefly unconnected and the restart line says why. */
+  private readonly startedAt = Date.now();
+  /** No "no MCP session" line in the first minute after the hub started (review/d4370fd9): the event is still recorded. */
+  static UNCONNECTED_GRACE_MS = 60_000;
+  /**
+   * A seat's local tools heartbeat but its seat key holds no live MCP session: its chatroom calls fail on the client
+   * ("No such tool available ... has disconnected", with no hook fired) and nothing reaches any room. Said once per
+   * episode in each open room the seat holds a place in (active, or away after a restart or a reap), as seat_unconnected.
+   */
+  seatUnconnected(seatKey: string, tool: string): void {
+    const hash = liveness.seatHash(seatKey);
+    const open = this.unconnected.get(hash);
+    if (open) { if (!open.told) this.tellUnconnected(hash, open); return; }
+    const seats = [...this.rooms.values()].filter((r) => r.state === "open" || r.state === "stalled")
+      .flatMap((room) => [...room.participants.values()].filter((p) => p.seatKeyHash === hash && (p.active || liveness.away(p))).map((p) => ({ room, p })));
+    if (!seats.length) return;
+    const what = tool.slice(0, 40);
+    const ep = { since: Date.now(), rooms: seats.map(({ room }) => room.name), told: false, tool: what };
+    this.unconnected.set(hash, ep);
+    for (const { room, p } of seats) this.persist({ type: "seat_unconnected", room: room.name, seat: p.name, tool: what, ts: now() });
+    this.tellUnconnected(hash, ep);
+  }
+  /** The room line, once per episode, and not in the hub's first minute: a just-restarted hub's line already says why. */
+  private tellUnconnected(hash: string, ep: { rooms: string[]; told: boolean; tool: string }): void {
+    if (Date.now() - this.startedAt < Hub.UNCONNECTED_GRACE_MS) return;
+    ep.told = true;
+    for (const name of ep.rooms) {
+      const room = this.rooms.get(name);
+      const p = room && [...room.participants.values()].find((x) => x.seatKeyHash === hash);
+      if (room && p) this.post(room, "system", undefined, `${this.shown(room, p)} is working (${ep.tool}) but has no MCP session with this hub: its chatroom calls fail on its side until its client reconnects, so its silence here is not idleness. (A hub restart ends every session; a seat whose client does not reconnect needs its launcher to restart it.)`);
+    }
+  }
+  /** A new MCP session for a seat key ends its unconnected episode. */
+  seatConnected(seatKey: string): void {
+    const hash = liveness.seatHash(seatKey);
+    const ep = this.unconnected.get(hash);
+    if (!ep) return;
+    this.unconnected.delete(hash);
+    const away_s = Math.round((Date.now() - ep.since) / 1000);
+    for (const name of ep.rooms) {
+      const room = this.rooms.get(name);
+      const p = room && [...room.participants.values()].find((x) => x.seatKeyHash === hash);
+      if (room && p) this.persist({ type: "seat_reconnected", room: room.name, seat: p.name, away_s, ts: now() });
+    }
+  }
+
+  /**
+   * The owner's verdict on a room's conclusion (telemetry gap G19: whether a conclusion was right or used was recorded
+   * nowhere; swarm-102904-ouev's answer was overruled in prose only). Kept as an owner_verdict event naming the proposal
+   * it judges, and said in the room; a later verdict stands over an earlier one, both stay in the log.
+   */
+  recordOwnerVerdict(roomName: string, verdict: OwnerVerdict, by: string, note?: string): { verdict: OwnerVerdict; proposal_id: string | null } {
+    const room = this.getRoom(roomName);
+    if (!OWNER_VERDICTS.includes(verdict)) throw new HubError(`verdict must be one of ${OWNER_VERDICTS.join(", ")}.`, undefined, "invalid-arg");
+    const why = note?.trim().slice(0, 600);
+    const proposal_id = room.conclusion?.proposalId ?? null;
+    this.persist({ type: "owner_verdict", room: room.name, verdict, by, proposal_id, ...(why ? { note: why } : {}), ts: now() });
+    this.post(room, "system", undefined, `${by}'s verdict on this room's ${room.conclusion ? "conclusion" : "outcome (it has no conclusion)"}: ${verdict}${why ? ` (${why})` : ""}.`);
+    return { verdict, proposal_id };
+  }
+
+  /** A seat process ended: one seat_exit event in each room it holds a place in, before it is marked left. */
+  recordSeatExit(seatKey: string, detail: string, stoppedBy?: StoppedBy): number {
+    const seats = this.seats.participants(seatKey).filter(({ p }) => p.active);
+    for (const { room, p } of seats) this.persist({ type: "seat_exit", room: room.name, seat: p.name, ...exitCause(detail), ...(stoppedBy ? { stopped_by: stoppedBy } : {}), detail: detail.slice(0, 160), ts: now() });
+    return seats.length;
+  }
+  private readonly runEnded = new Set<string>();
+  /** The run that owns a room ended, as its launcher saw it: recorded once, and said in the room so a transcript shows why it stops. */
+  recordRunEnd(roomName: string, cause: RunEndCause, detail?: string): { recorded: boolean } {
+    const room = this.getRoom(roomName);
+    if (!RUN_END_CAUSES.includes(cause)) throw new HubError(`run-end cause must be one of ${RUN_END_CAUSES.join(", ")}.`, undefined, "invalid-arg");
+    if (this.runEnded.has(room.name)) return { recorded: false };
+    this.runEnded.add(room.name);
+    const why = detail?.trim().slice(0, 160);
+    this.persist({ type: "run_end", room: room.name, cause, ...(why ? { detail: why } : {}), ts: now() });
+    const words: Record<RunEndCause, string> = { concluded: "the room concluded", timeout: "its launcher's timeout stopped the seats", operator_stop: "the operator stopped its launcher", seats_exited: "every seat's process exited without a conclusion" };
+    this.post(room, "system", undefined, `The run that owns this room ended: ${words[cause]}${why ? ` (${why})` : ""}.`);
+    return { recorded: true };
+  }
+  /**
+   * A process the hub had counted as a seat's job is gone (src/hub/memory.ts): the seat is told in each room it sits in,
+   * by name, so its wait returns now and not when its hold ends (a held connection's empty wait lasts minutes, and seats
+   * use the wait as their timer while a job runs), and the record gets job_end. Said only to a seat that is waiting on
+   * the hub at that moment; nothing for a seat no longer in a room.
+   */
+  jobEnded(seat: string, job: Job, others = 0): void {
+    const mins = Math.round(job.elapsed_s / 60);
+    const ran = mins < 60 ? `${mins} min` : `${Math.floor(mins / 60)} h ${mins % 60} min`;
+    for (const { room, p } of this.seatRooms(seat)) {
+      const waiting = (this.waitingNow.get(p) ?? 0) > 0;
+      this.persist({ type: "job_end", room: room.name, seat: p.name, pid: job.pid, command: job.command, ran_s: job.elapsed_s, ...(others ? { others } : {}), told: waiting, ts: now() });
+      // a seat that is not waiting on the hub is inside a tool call of its own and has the command's result already (a
+      // three-minute test run in the foreground): it is recorded, not said
+      if (!waiting) continue;
+      // a chat-kind line from the hub: only that carries the @-mention as something addressed to the seat (as room-idle's does)
+      this.post(room, "chat", undefined, `@${this.shown(room, p)} your job has ended: pid ${job.pid} (${job.command.slice(0, 120)}), after ${ran}${others ? `, and ${others} other process${others === 1 ? "" : "es"} of yours with it` : ""}. Read its result and tell the room.`);
+    }
+  }
+  /** What a kick vote says of its target (src/hub/kick.ts targetLiveness). */
+  kickLiveness(p: Participant) { return kick.targetLiveness(this, p); }
+  /** The jobs a seat has running, from the memory watcher's last look at the process table (src/hub/memory.ts jobsOf). */
+  jobsOf(p: Participant): Job[] { return this.memory.jobs(p.seatKeyHash); }
   /** Memory notices this seat's hook has not put in front of its model yet. */
   pendingMemoryNotices(seatKey: string): SteerItem[] { return this.memoryNotices.get(liveness.seatHash(seatKey)) ?? []; }
 
@@ -3060,6 +3723,12 @@ export class Hub {
 
   /** How long a departed owner's claim/* stays reserved for its registered successor before anyone may take it over. */
   static STALE_CLAIM_MS = Number(process.env.CHATROOM_STALE_CLAIM_MS ?? 10 * 60_000);
+
+  /** How long after a room concludes its board still takes late results, marked late (src/hub/board.ts lateWrite). 0: refuse at once.
+   * Three hours: the latest lost result in the records landed 92 min after its room's parent concluded (swarm-123021-1nwp), the
+   * next 19 min after (0btz-break); an hour would have lost the first. */
+  static LATE_WRITE_MS = Number(process.env.CHATROOM_LATE_WRITE_MS ?? 180 * 60_000);
+  /** @internal */ get lateWriteMs(): number { return Hub.LATE_WRITE_MS; }
 
   /** The departed owner of a claim/* entry, if it has one: the most recent participant under that name, when inactive. */
   private departedClaimOwner(room: Room, e: BoardEntry): Participant | undefined {

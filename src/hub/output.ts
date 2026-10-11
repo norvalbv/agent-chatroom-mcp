@@ -8,6 +8,7 @@
  * by the human, none for work), and gives every kick vote the hub's numbers instead of the accuser's word. Everything is derived from room state, so a replay rebuilds it.
  */
 import type { Hub } from "../hub.js";
+import { coordinates } from "./keys.js";
 import { claimReleased } from "./board.js";
 import { openKickByHub, reevaluateOpenKicks } from "./kick.js";
 import type { Participant, Proposal, Room } from "./types.js";
@@ -30,7 +31,7 @@ export interface SeatOutput { claims: number; evidence: number; verifies: number
 
 /** Board keys that coordinate rather than deliver: a claim is a promise, a hold is a switch, and inbox/* is another room's
  * note or its ack (its author is a name from that room, which a seat here may share). */
-const coordinates = (key: string) => key.startsWith("claim/") || key.startsWith("hold/") || key.startsWith("inbox/");
+// (the list lives in keys.ts, shared with open-work, work and the scrutiny check, so a new reserved prefix is added once)
 /** Shorter than this an entry is a placeholder: one character must not clear a seat. */
 const MIN_ENTRY_CHARS = 40;
 
@@ -42,7 +43,7 @@ export function seatOutput(room: Room, p: Participant, observedAt = Date.now()):
     if (e.by !== p.name) continue;
     if (key.startsWith("claim/")) { out.claims++; continue; }
     if (coordinates(key) || e.text.trim().length < MIN_ENTRY_CHARS) continue;
-    if (key.startsWith("verify/")) out.verifies++;
+    if (key.startsWith("verify/") || key.startsWith("review/")) out.verifies++;
     else out.evidence++;
     seen(e.updatedAt);
   }

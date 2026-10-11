@@ -67,7 +67,10 @@ async function harness(entry: string, env: Record<string, string>, argv: string[
     },
   });
   const cache = new Map<string, any>();
-  const mocks: Record<string, any> = { 'node:fs': fs, 'node:path': path, 'node:os': os, 'node:url': url, 'node:child_process': cp, 'node:crypto': { randomUUID: () => 'synthetic-session-id' }, 'node:string_decoder': { StringDecoder }, './strays.js': { stopStrays: async () => 0 }, './hub.js': { HubError: Error }, './settled.js': { settledAxes: () => '' }, './resources.js': { loadResources: () => [], seedResources: async () => [] }, './seat.js': { runSeat: async () => ({ final: 'fixture', ok: true }) }, './seat-handoff-report.js': { handoffMarkerLine: () => '' }, './result.js': { collectRoomSnapshot: async (_base: string, name: string) => ({ name, payload: { state: 'concluded', conclusion: { text: 'fixture' } }, transcript: { text: '' } }), readRunResult: () => ({}), writeRunResult: () => undefined, renderRunReport: () => '', rollupUsage: () => undefined, hubUsageRollup: () => undefined, parseClaudeCliOutput: (raw: string) => ({ text: raw, usage: null }), seatScorecard: () => [], classifyOutcome: () => ({ kind: 'concluded', timedOut: false, detail: '' }), proposedDecisionDir: () => null } };
+  const mocks: Record<string, any> = { 'node:fs': fs, 'node:path': path, 'node:os': os, 'node:url': url, 'node:child_process': cp, 'node:crypto': { randomUUID: () => 'synthetic-session-id' }, 'node:string_decoder': { StringDecoder }, './strays.js': { stopStrays: async () => 0 }, './hub.js': { HubError: Error }, './settled.js': { settledAxes: () => '' }, './resources.js': { loadResources: () => [], seedResources: async () => [] }, './seat.js': { runSeat: async () => ({ final: 'fixture', ok: true }) }, './seat-handoff-report.js': { handoffMarkerLine: () => '' },
+    // launcher-side helpers with no part in a seat's argv or environment: the hooks copy and the join check (src/worktree-hooks.ts, src/join-check.ts)
+    './worktree-hooks.js': { carryHooks: () => ({ hooks: 'shared' }), hooksLine: () => '', hooksOff: () => ({ hooks: 'shared' }) },
+    './join-check.js': { checkJoined: async () => ({ missing: [], unknown: [], none: false }), joinLines: () => [], roomNames: () => async () => [] }, './result.js': { collectRoomSnapshot: async (_base: string, name: string) => ({ name, payload: { state: 'concluded', conclusion: { text: 'fixture' } }, transcript: { text: '' } }), readRunResult: () => ({}), writeRunResult: () => undefined, renderRunReport: () => '', rollupUsage: () => undefined, hubUsageRollup: () => undefined, transcriptPath: () => undefined, parseClaudeCliOutput: (raw: string) => ({ text: raw, usage: null }), seatScorecard: () => [], classifyOutcome: () => ({ kind: 'concluded', timedOut: false, detail: '' }), proposedDecisionDir: () => null } };
   async function module(name: string): Promise<any> {
     if (cache.has(name)) return cache.get(name);
     if (mocks[name]) {
@@ -94,7 +97,8 @@ function checkSeat(call: Capture) {
   for (const [key, value] of Object.entries(syntheticEnv())) {
     if (key !== 'CHATROOM_HUMAN_TOKEN' && key !== 'MCP_TOOL_TIMEOUT') assert.equal(call.options.env[key], value, `${key} retained`);
   }
-  assert.equal(call.options.env.MCP_TOOL_TIMEOUT, '120000');
+  // the default, or a minute over the 4-minute hold for a claude seat, whose MCP URL asks the hub to hold its empty waits (seat-hold-regression)
+  assert.ok(['120000', '300000'].includes(call.options.env.MCP_TOOL_TIMEOUT), `MCP_TOOL_TIMEOUT ${call.options.env.MCP_TOOL_TIMEOUT}`);
 }
 let failures = 0;
 async function test(name: string, fn: () => Promise<void>) {
@@ -159,7 +163,8 @@ await test('helper clone purity and API conformance', async () => {
   assert.equal(env.MCP_TOOL_TIMEOUT, '120000', 'sets seat timeout');
   const frozen = Object.freeze({ OPENROUTER_API_KEY: PROVIDER, CHATROOM_HUMAN_TOKEN: HUMAN });
   const out = seatChildEnv(frozen);
-  assert.equal(Object.keys(out).length, 2, 'clone is flat and exact');
+  // + the AI reviewer gate switches every seat carries (SEAT_AI_GATES_OFF, owner ruling #985)
+  assert.equal(Object.keys(out).length, 2 + h.exports.SEAT_AI_GATES_OFF.length, 'clone is flat and exact');
   assert.equal(out.OPENROUTER_API_KEY, PROVIDER, 'provider key preserved by value');
   assert.equal(out.MCP_TOOL_TIMEOUT, '120000', 'seat timeout set');
   assert.ok(Object.hasOwn(out, 'CHATROOM_HUMAN_TOKEN') === false, 'frozen input never mutated');

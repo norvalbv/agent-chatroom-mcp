@@ -1,8 +1,11 @@
 /** What an idle seat could pick up, read from the board the hub already holds: a wait that returns nothing names it
  * instead of only saying "wait again". Nothing here is owed (asks, votes and challenges outrank it) and nothing is enforced. */
 import type { Hub } from "../hub.js";
+import { COORDINATION_PREFIXES } from "./keys.js";
 import { claimReleased } from "./board.js";
 import type { BoardEntry, Participant, Room } from "./types.js";
+import { spawnSync } from "node:child_process";
+import { isReviewKey, parseVerifyHead } from "./types.js";
 
 export const IDLE_HINT = "No new messages yet. Call wait_for_messages again.";
 
@@ -21,9 +24,9 @@ export interface OpenWork {
 }
 
 /** Board prefixes that are requests or bookkeeping, not work a claim's owner has produced. */
-const NOT_WORK = ["claim/", "help/", "join-request/", "inbox/", "hold/", "verify/", "idea/"];
+const NOT_WORK = [...COORDINATION_PREFIXES, "help/", "join-request/", "verify/", "review/", "idea/"];
 /** Board prefixes where an entry about an area is not a review of it. */
-const NOT_REVIEW = ["claim/", "help/", "join-request/", "inbox/", "hold/", "handoff/", "draft/"];
+const NOT_REVIEW = [...COORDINATION_PREFIXES, "help/", "join-request/", "handoff/", "draft/"];
 const HINT_ITEMS = 3;
 /** An idea its author has already ruled on, by the words this room's board used (review/unclaimed-ideas). */
 const IDEA_SETTLED = /^\s*(rejected|dropped|withdrawn|built|merged|done)\b/i;
@@ -43,6 +46,19 @@ export function idleAgain(p: Participant): boolean {
 
 const area = (key: string) => key.slice(key.indexOf("/") + 1);
 
+/** Whether `commit` is on `branch` (git merge-base --is-ancestor, in the claim's worktree). Asked on idle waits, so a yes is
+ * kept for good and a no for a minute (the branch may grow to include it). */
+const onBranchSeen = new Map<string, { yes: boolean; at: number }>();
+function onBranch(worktree: string, branch: string, commit: string): boolean {
+  if (!/^[0-9a-fA-F]{7,64}$/.test(commit)) return false;
+  const k = `${worktree}\0${branch}\0${commit}`;
+  const seen = onBranchSeen.get(k);
+  if (seen && (seen.yes || Date.now() - seen.at < 60_000)) return seen.yes;
+  const yes = spawnSync("git", ["-C", worktree, "--no-optional-locks", "merge-base", "--is-ancestor", commit, branch], { timeout: 5_000 }).status === 0;
+  onBranchSeen.set(k, { yes, at: Date.now() });
+  return yes;
+}
+
 /** A claim counts as reviewed once any seat but its owner has put a review where the room can read it: a board entry
  * outside claim/ whose key is the claim's area or whose text names the area, the claim, or the owner's branch, or a
  * chat message since the claim that names the area. Reviews land in verify/*, in review/* and in plain chat, and often
@@ -55,6 +71,11 @@ function reviewedClaim(room: Room, claimKey: string, claim: BoardEntry): boolean
   for (const [k, e] of room.board) {
     if (!e.text.trim() || !other(e.by) || NOT_REVIEW.some((pre) => k.startsWith(pre)) || k.endsWith(".partial")) continue;
     if (area(k) === slug || word.test(e.text) || (!!claim.workspace?.branch && e.text.includes(claim.workspace.branch))) return true;
+    // a per-commit review (review/<sha>, verify/*) whose head names a commit on the owner's branch: this room's rule 2
+    // writes reviews that way, and they named neither the area nor the branch (swarm-180216-182a: the assigned reviewer
+    // of claim/telemetry-outcome-health was told it owed a review after writing three)
+    const commit = isReviewKey(k) ? parseVerifyHead(e.text)?.commit?.trim() : undefined;
+    if (commit && claim.workspace?.branch && onBranch(claim.workspace.worktree, claim.workspace.branch, commit)) return true;
   }
   return room.messages.some((m) => m.kind === "chat" && m.from.agent !== "hub" && other(m.from.name) && m.ts >= claim.updatedAt && word.test(m.content));
 }
@@ -102,6 +123,13 @@ export function ideaListHint(room: Room, p: Participant, content: string, quiet:
  * harness, so the hub is the only place that can say it. */
 export const idlePolicy = { leaveWaits: Number(process.env.CHATROOM_IDLE_LEAVE_WAITS ?? 8) };
 
+/** The same stretch of nothing, counted in this connection's waits: leaveWaits assumes a wait a minute, and a held
+ * connection's empty wait lasts minutes (src/env.ts seatHoldMs), so 8 of those would be half an hour (review/2ee29335). */
+export function leaveWaitsFor(holdMs?: number): number {
+  const n = idlePolicy.leaveWaits;
+  return n && holdMs && holdMs > 55_000 ? Math.max(2, Math.round((n * 55_000) / holdMs)) : n;
+}
+
 const streaks = new WeakMap<Participant, number>();
 
 /** Length of this seat's current run of idle waits, given idleAgain()'s verdict for this one. Call once per idle wait. */
@@ -115,8 +143,7 @@ export function idleStreak(p: Participant, again: boolean): number {
  * proposal is open (a vote is owed or about to be), never to a seat whose own claim is unreviewed (dev room
  * swarm-004642-76kz-room: the offer reached a seat polling while its own 6-minute soak ran), and never to the verifier,
  * lead or chair, whom the room needs at the end. */
-export function offersLeave(room: Room, p: Participant, streak: number, work: OpenWork[]): boolean {
-  const n = idlePolicy.leaveWaits;
+export function offersLeave(room: Room, p: Participant, streak: number, work: OpenWork[], n = idlePolicy.leaveWaits): boolean {
   if (!n || work.length || streak < n || streak % n !== 0 || room.state !== "open" || p.agent === "human") return false;
   if (p.role === "verifier" || p.role === "lead" || p.role === "chair") return false;
   if (claimsInFlight(room, p).length || reviewsComing(room, p).length) return false;
@@ -130,6 +157,13 @@ export function leaveHint(room: Room, p: Participant, streak: number): string {
   return `No new messages on ${streak} waits running, and the hub sees nothing open for you. Each empty wait costs a full turn. ` +
     `If your work is on the board, ${handoff}: leaving blocks nothing here and a successor can be recruited if you are needed. ` +
     "If you are waiting on someone, say whom and for what in one line, so the room can see it, and carry on waiting.";
+}
+
+/** Text names this board key whole: "claim/abc", "claim/ab/part" and "claim/ab.v2" do not name claim/ab, while the full
+ * stop or colon that ends a sentence after it does not hide it (a substring match read a longer claim's result as the
+ * shorter claim's, merge-review backlog B9b). */
+export function namesKey(text: string, key: string): boolean {
+  return new RegExp(`(?<![\\w./:-])${key.replace(/[.\\^$*+?()[\]{}|]/g, "\\$&")}(?![\\w/-]|[.:]\\w)`).test(text);
 }
 
 /** `idle`: the seat was already idle on its previous wait (idleAgain). Only then is its own claim with nothing behind it
@@ -171,7 +205,7 @@ export function openWork(hub: Hub, room: Room, p: Participant, idle = true): Ope
       // to twelve such claims, friction/orphaned-finished-claims). A handoff says something is left, so it is still named.
       const slug = area(k);
       const finished = entries.some(([rk, re]) => re.by === e.by && rk.startsWith("result/") &&
-        (rk === `result/${slug}` || rk.startsWith(`result/${slug}-`) || re.text.includes(k))) && !room.board.get(`handoff/${slug}`)?.text.trim();
+        (rk === `result/${slug}` || rk.startsWith(`result/${slug}-`) || namesKey(re.text, k))) && !room.board.get(`handoff/${slug}`)?.text.trim();
       if (!finished) orphaned.push({ kind: "claim_orphaned", key: k, owner: shownName(e.by) });
       continue;
     }

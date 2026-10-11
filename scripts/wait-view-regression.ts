@@ -31,7 +31,10 @@ const variants: Record<string, Partial<WaitView>> = {
 for (const [name, change] of Object.entries(variants)) {
   const render = createWaitView(); render(seat, initial());
   const next = { ...initial(), ...change };
-  assert.equal(render(seat, next), next, `${name} is delivered in full`);
+  // the hub's clock rides on every wait, outside the unchanged comparison (src/hub/clock.ts)
+  const { hub_time, ...sent } = render(seat, next) as WaitView;
+  assert.deepEqual(sent, next, `${name} is delivered in full`);
+  assert.match(String(hub_time), /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}Z$/);
 }
 const reveal = createWaitView();
 reveal(seat, { ...initial(), openings: { submitted: 1, revealed: false } });

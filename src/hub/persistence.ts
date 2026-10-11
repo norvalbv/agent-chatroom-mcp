@@ -47,7 +47,11 @@ export function persist(hub: Hub, ev: Event) {
 
 export function replay(hub: Hub) {
   if (!hub.dataDir || !existsSync(hub.dataDir)) return;
-  for (const file of readdirSync(hub.dataDir).filter((f) => f.endsWith(".jsonl"))) {
+  // only room logs: a room name has no dot (Hub.ROOM_NAME), and the data dir also holds the hub's own files, e.g. the
+  // health samples were hub-<port>.health.jsonl (0feee53b; now .health.log), and replayed as events they crashed every restart
+  const ROOM_LOG = /^[a-zA-Z0-9_-]{1,64}\.jsonl$/;
+  for (const file of readdirSync(hub.dataDir).filter((f) => ROOM_LOG.test(f))) {
+    let strays = 0;
     const lines = readFileSync(join(hub.dataDir, file), "utf8").split("\n").filter(Boolean);
     for (const line of lines) {
       let ev: Event;
@@ -55,6 +59,12 @@ export function replay(hub: Hub) {
         ev = JSON.parse(line) as Event;
       } catch {
         console.error(`[hub] skipping unreadable line in ${file} (truncated write?)`);
+        continue;
+      }
+      // a line that parses but is not an event (no type, or not an object) is skipped, never thrown on: one bad line
+      // must not stop a hub from starting
+      if (!ev || typeof ev !== "object" || typeof (ev as { type?: unknown }).type !== "string") {
+        if (!strays++) console.error(`[hub] skipping a line that is not an event in ${file}`);
         continue;
       }
       recordReplyMetricEvent(hub, ev);
@@ -100,6 +110,9 @@ export function replay(hub: Hub) {
             requireChallenge: legacy.requireChallenge ?? "auto",
             nudgeAfterMs: legacy.nudgeAfterMs ?? 180_000,
             requireVerification: legacy.requireVerification ?? false,
+            // a chair named at creation was dropped here, so after a restart the role went to the first seat to ask
+            ...(legacy.chair ? { chair: legacy.chair } : {}),
+            ...(legacy.chair && legacy.chairNamed ? { chairNamed: true } : {}),
             ...(legacy.parent ? { parent: legacy.parent } : {}),
           };
           const room = hub.materialiseRoom(ev.room, opts, ev.createdAt);
@@ -164,6 +177,11 @@ export function replay(hub: Hub) {
           if (room) hub.applyOutsideRead(room, ev.by ?? null);
           break;
         }
+        case "chair_named": {
+          const room = hub.rooms.get(ev.room);
+          if (room) { room.chair = ev.name; room.chairNamed = true; }
+          break;
+        }
         case "refusal": {
           const room = hub.rooms.get(ev.room);
           if (room) {
@@ -195,6 +213,11 @@ export function replay(hub: Hub) {
           if (room) room.draftsOpenedAt = ev.at;
           break;
         }
+        case "drafts_cancelled": {
+          const room = hub.rooms.get(ev.room);
+          if (room) room.draftsOpenedAt = undefined;
+          break;
+        }
         case "deadline": {
           const room = hub.rooms.get(ev.room);
           if (room) {
@@ -216,6 +239,12 @@ export function replay(hub: Hub) {
         case "kick_vote": {
           const room = hub.rooms.get(ev.room);
           if (room) room.kickVotes.set(ev.vote.target, ev.vote);
+          break;
+        }
+        case "last_call": {
+          // kept across a restart: the seats it names still owe a vote, and the hub re-arms its timer at boot (Hub.armLastCall)
+          const pr = hub.rooms.get(ev.room)?.proposals.get(ev.proposalId);
+          if (pr) pr.lastCall = { version: ev.version, startedAt: ev.startedAt, until: ev.until, waitingOn: ev.waiting_on };
           break;
         }
         case "archive": {

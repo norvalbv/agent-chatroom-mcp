@@ -8,10 +8,11 @@
  */
 import { spawnSync } from "node:child_process";
 import type { WorkClass } from "./hub/types.js";
+import { coordinates } from "./hub/keys.js";
 
 const CLASSES: WorkClass[] = ["read", "search", "web", "run", "edit"];
 const SHA = /\b[0-9a-f]{7,40}\b/g;
-const NOT_CREDIT = /^(claim|draft|inbox|hold)\//;
+const NOT_CREDIT = { test: (key: string) => coordinates(key) || key.startsWith("draft/") };
 const WAIT = "wait_for_messages";
 
 export interface SeatMetrics {
@@ -33,7 +34,7 @@ export interface SeatMetrics {
   /** the seat process's own usage, latest cumulative "usage" event (claude-opus-5-5-1's live usage); absent: unknown */
   usage?: { requests?: number; input_tokens?: number; output_tokens?: number; cache_read_input_tokens?: number; cache_creation_input_tokens?: number; cost_usd?: number };
   /** what the seat's processes held (hub "memory" events): the highest sample, and the hub's warnings and stops; absent: never sampled */
-  memory?: { peak_mb: number; warns: number; stops: number; ended?: number };
+  memory?: { peak_mb: number; warns: number; stops: number; ended?: number; /** past the no-budget mark (memory "high" events) */ highs?: number };
   proposals: number;
   challenges: number;
   votes: number;
@@ -54,8 +55,12 @@ export interface RunMetrics {
   recruits: { calls: number; seats: number; workers: number; rate: number };
   /** summed over seats that reported usage; seatsWithUsage of seats.length says how complete it is */
   usage?: { cost_usd: number; input_tokens: number; output_tokens: number; seatsWithUsage: number };
-  /** take/<what> steps by action (hub "take" events): take, offer, accept, handover, release, decline, withdraw, refused; absent: none */
+  /** take/<what> steps by action (hub "take" events): take, offer, accept, handover, release, decline, withdraw, refused, and refused:<reason> (held, same-commit, assigned-reviewer, already-reviewed, same-work); absent: none */
   takes?: Record<string, number>;
+  /** agent chat by delivery: quiet the sender chose, quiet the hub chose (autoQuiet), and two-seat exchanges kept public because they named a board key; absent: no agent chat */
+  quiet?: { chat: number; bySender: number; byHub: number; keptPublicForBoardKey: number };
+  /** board_set(append=true) lines per shared key (hub "board_append" events): appends, distinct appenders, continuations used; absent: none */
+  appends?: Record<string, { lines: number; seats: number; continuations: number }>;
   /** seats with at least one web call in the ledger; undefined when the log has no ledger */
   webSeats?: number;
   /** text the citation credit was read from */
@@ -99,6 +104,8 @@ export function runMetrics(events: readonly Ev[], opts: MetricsOptions = {}): Ru
   let proposal: string | undefined;
   let ledger = false;
   const takes: Record<string, number> = {};
+  const quiet = { chat: 0, bySender: 0, byHub: 0, keptPublicForBoardKey: 0 };
+  const appendsBy = new Map<string, { lines: number; seats: Set<string>; landed: Set<string> }>();
   const proposals = new Set<string>();
   const byKey = new Map<string, string>();
 
@@ -173,12 +180,22 @@ export function runMetrics(events: readonly Ev[], opts: MetricsOptions = {}): Ru
         if (e.event === "warn") m.warns++;
         if (e.event === "stop") m.stops++;
         if (e.event === "ended") m.ended = (m.ended ?? 0) + 1;
+        if (e.event === "high") m.highs = (m.highs ?? 0) + 1;
         break;
       }
       case "take":
         stamp(e.ts);
         takes[String(e.action)] = (takes[String(e.action)] ?? 0) + 1;
+        // why a take was refused before the work: held (same key), same-commit (another spelling), assigned-reviewer
+        if (e.action === "refused" && e.reason) takes[`refused:${String(e.reason)}`] = (takes[`refused:${String(e.reason)}`] ?? 0) + 1;
         break;
+      case "board_append": {
+        stamp(e.ts);
+        const a = appendsBy.get(String(e.key)) ?? { lines: 0, seats: new Set<string>(), landed: new Set<string>() };
+        a.lines++; a.seats.add(String(e.by)); if (e.landed_key !== e.key) a.landed.add(String(e.landed_key));
+        appendsBy.set(String(e.key), a);
+        break;
+      }
       case "work": {
         stamp(e.ts);
         const s = seat(e.pid);
@@ -206,6 +223,11 @@ export function runMetrics(events: readonly Ev[], opts: MetricsOptions = {}): Ru
         const m = e.msg ?? {};
         stamp(m.ts);
         if (m.kind === "chat") mention(m.content, m.from?.name);
+        if (m.kind === "chat" && m.from?.agent !== "hub" && m.from?.agent !== "human") {
+          quiet.chat++;
+          if (m.autoQuiet) quiet.byHub++; else if (m.quiet) quiet.bySender++;
+          if (m.keptPublic === "board-key") quiet.keptPublicForBoardKey++;
+        }
         break;
       }
       case "proposal": {
@@ -287,6 +309,8 @@ export function runMetrics(events: readonly Ev[], opts: MetricsOptions = {}): Ru
     recruits: { calls: list.reduce((n, s) => n + s.recruits, 0), seats: recruiting, workers: workers.length, rate: workers.length ? recruiting / workers.length : 0 },
     ...(priced.length ? { usage: { cost_usd: sum("cost_usd"), input_tokens: sum("input_tokens"), output_tokens: sum("output_tokens"), seatsWithUsage: priced.length } } : {}),
     ...(Object.keys(takes).length ? { takes } : {}),
+    ...(quiet.chat ? { quiet } : {}),
+    ...(appendsBy.size ? { appends: Object.fromEntries([...appendsBy].map(([k, a]) => [k, { lines: a.lines, seats: a.seats.size, continuations: a.landed.size }])) } : {}),
     ...(ledger ? { webSeats: list.filter((s) => (s.work?.web ?? 0) > 0).length } : {}),
     citedFrom: conclusion ? "conclusion" : proposal ? "proposal" : "none",
     uncited: cited ? list.filter((s) => s.findings > 0 && !s.cited.length).map((s) => s.name) : [],
@@ -320,7 +344,9 @@ export function renderMetrics(m: RunMetrics): string {
     (m.webSeats === undefined ? "no work ledger in this log, so reads, searches and web calls are unknown. " : `${m.webSeats} of ${m.seats.length} seats made a web call. `) +
     (m.usage ? `Seat-reported usage: $${m.usage.cost_usd.toFixed(2)}, ${m.usage.input_tokens} input + ${m.usage.output_tokens} output tokens from ${m.usage.seatsWithUsage} of ${m.seats.length} seats (the rest unknown). ` : "No seat reported usage to the hub. ") +
     memoryLine(m.seats) +
+    (m.quiet && (m.quiet.bySender || m.quiet.byHub || m.quiet.keptPublicForBoardKey) ? `Of ${m.quiet.chat} agent chat messages, ${m.quiet.bySender} were sent quiet, ${m.quiet.byHub} were made quiet by the hub, and ${m.quiet.keptPublicForBoardKey} two-seat exchanges stayed public because they named a board entry. ` : "") +
     (m.takes ? `take/* steps: ${Object.entries(m.takes).map(([k, n]) => `${n} ${k}`).join(", ")}. ` : "") +
+    (m.appends ? `Shared logs (board_set append): ${Object.entries(m.appends).map(([k, a]) => `${k} ${a.lines} line${a.lines === 1 ? "" : "s"} from ${a.seats} seat${a.seats === 1 ? "" : "s"}${a.continuations ? `, ${a.continuations} continuation${a.continuations === 1 ? "" : "s"}` : ""}`).join("; ")}. ` : "") +
     (m.citedFrom === "none" ? "No proposal yet, so no citation credit.\n\n" : `Credit read from the ${m.citedFrom}${m.uncited.length ? `; findings never cited: ${m.uncited.join(", ")}` : ""}.\n\n`) +
     "Work is distinct targets (files, patterns, commands, web hosts), not tool calls. Polling is time in wait_for_messages over time in the room; idle is the part that returned nothing new. Model calls and tokens are the seat's own report; tokens in include cache reads and writes.\n\n" +
     "| seat | role | read | search | web | run | edit | hub calls | polling (idle) | model calls | tokens in/out | cost | recruits | proposals | challenges | verifies | votes | findings | cited |\n|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|\n";

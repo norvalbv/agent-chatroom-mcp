@@ -64,7 +64,7 @@ const hub = new Hub({ dataDir: DATA_DIR, cwd: resolve(process.env.CHATROOM_DEFAU
 // previous process (e.g. a seat killed by hand whose session DELETE never arrived); mark them left now.
 for (const name of hub.sweepIdle(PARTICIPANT_IDLE_MS, new Set())) console.error(`boot sweep: ${name} marked as left`);
 // ...and each room it was serving is told that the hub restarted, and why the last one stopped (src/lifecycle.ts)
-hub.announceRestart(lifecycle.previous);
+hub.announceRestart(lifecycle.previous, lifecycle.lastAlive);
 const spawner = new Spawner({
   mcpUrl: `http://${HOST}:${PORT}/mcp`,
   defaultCwd: resolve(process.env.CHATROOM_DEFAULT_CWD ?? process.cwd()),

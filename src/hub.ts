@@ -2902,17 +2902,20 @@ export class Hub {
    * that it restarted, how long the room went without it and why the last hub stopped, and writes a hub_restart event.
    * On 2026-10-10 the record only went silent for eight minutes, and the seats learned of it from the chair.
    */
-  announceRestart(previous?: string): void {
+  announceRestart(previous?: string, lastAlive?: number): void {
     const at = Date.now();
     const clock = new Date(at).toISOString().slice(11, 19);
     for (const room of this.rooms.values()) {
       if (room.state !== "open" && room.state !== "stalled") continue;
       if (![...room.participants.values()].some((p) => p.restoredAt)) continue;
+      // the outage is the hub's: from when the last hub was last known alive, not from this room's last message (a room
+      // can be quiet for minutes before the hub dies); with no such stamp, the room's last message is an upper bound
       const last = room.messages.at(-1)?.ts;
-      const down_s = last ? Math.max(0, Math.round((at - Date.parse(last)) / 1000)) : 0;
-      this.persist({ type: "hub_restart", room: room.name, ts: now(), down_s, ...(previous ? { previous } : {}) });
+      const from = lastAlive ?? (last ? Date.parse(last) : at);
+      const down_s = Math.max(0, Math.round((at - from) / 1000));
+      this.persist({ type: "hub_restart", room: room.name, ts: now(), down_s, ...(lastAlive === undefined ? { down_upper_bound: true } : {}), ...(previous ? { previous } : {}) });
       this.post(room, "system", undefined,
-        `The hub restarted at ${clock} UTC, after ${down_s} s without a hub since this room's last message${previous ? `; ${previous}` : ""}. ` +
+        `The hub restarted at ${clock} UTC, down for ${lastAlive === undefined ? "at most" : "about"} ${down_s} s${previous ? `; ${previous}` : ""}. ` +
         "Every seat, the board and every message are kept: a seat's next chatroom call puts it back in its seat (join_room with its old participant_id if it was not launched with a seat key).");
     }
   }

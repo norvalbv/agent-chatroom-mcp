@@ -45,7 +45,7 @@ export type Event =
   | { type: "take"; room: string; key: string; action: string; by: string; holder: string; ts: string }
   | { type: "kick_vote"; room: string; vote: KickVote }
   /** A room-wide stall the hub told the room of, with the numbers it quoted, and its end (src/hub/idle.ts). */
-  | { type: "hub_restart"; room: string; ts: string; down_s: number; previous?: string }
+  | { type: "hub_restart"; room: string; ts: string; down_s: number; down_upper_bound?: boolean; previous?: string }
   | { type: "room_idle"; room: string; ts: string; idle: import("./idle.js").RoomIdle; steps: number; seats: number; window_min: number; seconds_left?: number }
   | { type: "room_active"; room: string; ts: string; idle_min: number }
   /** Telemetry only (replay ignores it): the open work an idle wait named to a seat, written when that list changes. */

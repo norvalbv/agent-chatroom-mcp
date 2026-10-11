@@ -62,6 +62,17 @@ export interface SessionServer {
   sessionKey: string;
 }
 
+/** A refused board key as the log keeps it: its first segment when that is a plain prefix (digest, result), then every
+ * run of allowed characters as its length and every refused character as itself when it is visible punctuation, else
+ * "?" ("digest/src/x.ts@ab12" -> "digest/<9>@<4>"). Which prefix and which character the rule refused survive; no
+ * submitted text or secret does (src/hub.ts recordRefusal keeps no message text for the same reason). */
+export function keyShape(key: string): string {
+  const slash = key.indexOf("/");
+  const head = slash > 0 && /^[\w.-]{1,40}$/.test(key.slice(0, slash)) ? key.slice(0, slash + 1) : "";
+  const shape = head + key.slice(head.length).replace(/[\w .:/-]+|[^\w .:/-]/g, (m) => (m.length > 1 || /[\w .:/-]/.test(m) ? `<${m.length}>` : /[!-~]/.test(m) ? m : "?"));
+  return shape.length > 80 ? `${shape.slice(0, 80)}…` : shape;
+}
+
 /** A wait asked for at least this long is a full-length wait: the seat is waiting for the room, not polling. */
 const FULL_WAIT_MS = 50_000;
 
@@ -205,8 +216,11 @@ export function createSessionServer(hub: Hub, spawner?: Spawner, opts: { holdMs?
       } finally {
         // which entry a board_get read or a board_set wrote (or was refused): a board key is a short name, not content, and
         // without it no record can say who read what, or what a refused write was for (review/take-keys)
-        const key = (tool === "board_get" || tool === "board_set") && typeof (args as { key?: unknown })?.key === "string" && Hub.BOARD_KEY.test((args as { key: string }).key) ? (args as { key: string }).key : undefined;
-        hub.recordCallCompletion(room, tool, outcome, participant, { ms: Date.now() - started, ...(empty === undefined ? {} : { empty }), ...(from ? { outsider: from } : {}), ...(key === undefined ? {} : { key }) });
+        const raw = (tool === "board_get" || tool === "board_set") && typeof (args as { key?: unknown })?.key === "string" ? (args as { key: string }).key : undefined;
+        const key = raw !== undefined && Hub.BOARD_KEY.test(raw) ? raw : undefined;
+        // a key the board refused is kept by its shape only (keyShape), so a key-format refusal can be attributed
+        const rejected = raw !== undefined && key === undefined ? keyShape(raw) : undefined;
+        hub.recordCallCompletion(room, tool, outcome, participant, { ms: Date.now() - started, ...(empty === undefined ? {} : { empty }), ...(from ? { outsider: from } : {}), ...(key === undefined ? {} : { key }), ...(rejected ? { key_rejected: rejected } : {}) });
       }
     };
 

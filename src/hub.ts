@@ -1317,7 +1317,7 @@ export class Hub {
    * Pending calls, schema rejections outside guard, roomless calls and failed room creation
    * are excluded. The rate uses this event's matched numerator, never lifetime refusals.
    */
-  recordCallCompletion(roomName: string | undefined, tool: string, outcome: CallOutcome, participant: string | null, timing: { ms?: number; empty?: boolean; outsider?: string; key?: string } = {}) {
+  recordCallCompletion(roomName: string | undefined, tool: string, outcome: CallOutcome, participant: string | null, timing: { ms?: number; empty?: boolean; outsider?: string; key?: string; key_rejected?: string } = {}) {
     const room = roomName ? this.rooms.get(roomName) : undefined;
     if (!room) return;
     this.applyCallCompletion(room, tool, outcome, timing.outsider);

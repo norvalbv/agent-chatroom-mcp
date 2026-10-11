@@ -344,6 +344,7 @@ export const offlineScripts = [
   'memory-high-regression.ts',
   'seat-transcript-regression.ts',
   'transcript-refusals-regression.ts',
+  'rejected-key-regression.ts',
 ];
 
 export function offlineCommands() {

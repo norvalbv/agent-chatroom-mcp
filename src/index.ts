@@ -281,7 +281,8 @@ setInterval(() => {
   const now = Date.now();
   for (const [id, e] of transports) {
     if (now - e.lastSeen > SESSION_IDLE_MS) {
-      e.leaveAll();
+      // the same opening words as a plain close: liveness.away and result.ts read them
+      e.leaveAll(`MCP session closed without leave_room (idle ${Math.round(SESSION_IDLE_MS / 60_000)} min, reaped)`);
       e.t.close().catch(() => {});
       transports.delete(id);
     }

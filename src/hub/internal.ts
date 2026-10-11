@@ -34,6 +34,9 @@ export type Event =
   | { type: "refusal"; room: string; tool: string; reason: string; ts?: string; participant?: string | null }
   /** Telemetry only (replay ignores it; src/hub/board.ts refuseNote): a post_to_room refused by this room's inbox cap. Never the text. */
   | { type: "inbox_refused"; room: string; ts: string; from_room: string; by: string; key: string; chars: number; open: number }
+  // what happened to an MCP session that held a seat (bugs.md 3: nothing recorded a session moving, closing or being reaped).
+  // seat_kept: the seat is still served by another session after this. Never a session key (identity-is-the-connection).
+  | { type: "session"; room: string; event: "moved" | "closed"; participant: string; name: string; reason: string; seat_kept: boolean; ts: string }
   | { type: "outside_read"; room: string; by: { room: string; pid: string } | null; via: "http" | "http_pattern" | "file"; tool: string; ts: string }
   /** ms: how long the call took; empty: a wait that returned no new message (run-metrics splits idle polling on it); outsider: the caller's seats elsewhere (name@room) when it holds none in this room; key: the entry a board_get read */
   | { type: "call_completion"; room: string; tool: string; outcome: CallOutcome; ts: string; participant: string | null; ms?: number; empty?: boolean; outsider?: string; key?: string }

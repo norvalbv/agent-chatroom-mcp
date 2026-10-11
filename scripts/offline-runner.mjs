@@ -256,6 +256,7 @@ export const offlineScripts = [
   'partial-pregate-regression.ts',
   'refusals-visible-regression.ts',
   'refusal-codes-typed-regression.ts',
+  'session-reap-regression.ts',
 ];
 
 export function offlineCommands() {

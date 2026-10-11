@@ -504,6 +504,14 @@ export class Hub {
       this.persist({ type: "join", room: roomName, p: participant });
       this.post(room, "system", undefined, `${this.shown(room, participant)} rejoined the room.`);
     }
+    // A live seat taken back by its participant_id on a newer connection moves there, as a seat-key reseat does. Left on
+    // the older session, the seat was thrown out when that one was reaped idle 30 minutes later, while the newer session
+    // was serving it (bugs.md 3: a chair on one-session-per-call tooling dropped out about every 31 minutes).
+    if (session && reclaimId === participant.id && participant.session && participant.session !== session && participant.agent !== "human") {
+      participant.session = session;
+      participant.seatKeyHash = this.seats.hashOf(session) ?? participant.seatKeyHash;
+      this.recordSession(room, participant, "moved", "join_room with participant_id on a newer connection", true);
+    }
     // Bind the chair only after admission succeeds: rejected joins must not reserve it.
     if (role === "chair") room.chair = name;
     // Reclaiming even an active seat is an explicit delivery reset (lost response recovery).
@@ -2978,6 +2986,11 @@ export class Hub {
     if (!p.active) return this.join(roomName, p.name, p.agent, {}, p.id, session).participant;
     p.session = session; // the seat moves to its newer connection; the older one's end no longer speaks for it (holds)
     return p;
+  }
+  /** One line in the room log per session event that touches a seat: it moved to a newer connection, or a connection ended
+   * with (seat_kept) or without the seat still served elsewhere. Counted by scripts/session-events.ts. */
+  recordSession(room: Room, p: Participant, event: "moved" | "closed", reason: string, seatKept: boolean) {
+    this.persist({ type: "session", room: room.name, event, participant: p.id, name: p.name, reason: reason.slice(0, 160), seat_kept: seatKept, ts: now() });
   }
   /** Whether this connection is the one a participant is seated on now (a seat re-seated elsewhere is no longer its to leave). */
   holds(roomName: string, pid: string, session: string): boolean {

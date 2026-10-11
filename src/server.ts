@@ -925,7 +925,11 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
   const leaveAll = (reason = "MCP session closed without leave_room", final = false) => {
     for (const [room, ids] of me) {
       for (const id of ids) {
-        if (!hub.holds(room, id, sessionKey)) continue; // re-seated on a newer connection: this one ending is not the seat leaving
+        const r = hub.rooms.get(room), p = r?.participants.get(id);
+        const held = hub.holds(room, id, sessionKey);
+        // only a seat that was in the room: a session ending after leave_room or a kick says nothing new
+        if (r && p?.active) hub.recordSession(r, p, "closed", reason, !held);
+        if (!held) continue; // re-seated on a newer connection: this one ending is not the seat leaving
         for (let attempt = 0; attempt < (final ? 2 : 1); attempt++) {
           try {
             hub.leave(room, id, reason);

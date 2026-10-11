@@ -63,11 +63,21 @@ export function commitAuthor(hub: Hub, room: Room, p: Participant, commit: strin
 const HOW_WORDS = new Set(["run", "rerun", "re", "job", "go", "now", "start", "my", "the", "do", "doing", "by", "task", "work"]);
 /** The work a take names, as its sorted words without how-words and seat names; "" when nothing is left. */
 function workWords(room: Room, key: string): string {
-  // whole seat names only, longest first: a fragment of one ("2" of claude-opus-5-5-2, "claude") is a real word in a key
-  // like take/arm-2 (review/3f330ea8)
-  let rest = key.slice("take/".length).toLowerCase();
-  for (const n of [...new Set([...room.participants.values()].map((x) => x.name.toLowerCase()))].sort((a, b) => b.length - a.length)) rest = rest.split(n).join(" ");
-  return [...new Set(rest.split(/[-/_.:\s]+/).filter((t) => t && !HOW_WORDS.has(t)))].sort().join(" ");
+  // a seat's name marks who, not what, only where keys put an owner: as the key's last words, or after "by"
+  // (slow_count-bob, rerun/T-B3-4-by-break-claude-2). Anywhere else it is a word of the work: a fragment ("2" of
+  // claude-opus-5-5-2) in take/arm-2 (review/3f330ea8), or "verifier" in take/verifier-gate-probe (review/3241ee07-opus1)
+  let toks = key.slice("take/".length).toLowerCase().split(/[-/_.:\s]+/).filter(Boolean);
+  const names = [...new Set([...room.participants.values()].map((x) => x.name.toLowerCase().split(/[-/_.:\s]+/).filter(Boolean)))].sort((a, b) => b.length - a.length);
+  const at = (i: number, n: string[]) => n.every((t, j) => toks[i + j] === t);
+  for (let changed = true; changed;) {
+    changed = false;
+    for (const n of names) {
+      if (toks.length > n.length && at(toks.length - n.length, n)) { toks = toks.slice(0, toks.length - n.length); changed = true; break; }
+      const by = toks.findIndex((t, i) => t === "by" && at(i + 1, n));
+      if (by >= 0) { toks = [...toks.slice(0, by), ...toks.slice(by + 1 + n.length)]; changed = true; break; }
+    }
+  }
+  return [...new Set(toks.filter((t) => !HOW_WORDS.has(t)))].sort().join(" ");
 }
 
 /** Commit tokens in a take's key, e.g. take/review-ba181129 and take/review/ba181129 both name ba181129. */

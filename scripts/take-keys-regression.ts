@@ -178,6 +178,13 @@ test("seat names like claude-opus-5-5-1: only the whole name is dropped from a k
   h.setBoard("tk-names", s2!.id, "take/claude-audit", "other work");
   h.setBoard("tk-names", s1!.id, "take/slow_count", "running it");
   throws(() => h.setBoard("tk-names", s2!.id, "take/slow_count-claude-opus-5-5-2", "mine"), /names the same work as "take\/slow_count"/);
+  throws(() => h.setBoard("tk-names", s2!.id, "take/slow_count-by-claude-opus-5-5-2", "mine"), /names the same work as "take\/slow_count"/);
+  // a seat name inside the work's words is part of the work (review/3241ee07-opus1)
+  const v = h.join("tk-names", "verifier", "claude", {}, undefined, "s-tk-verifier", "verifier").participant;
+  h.setBoard("tk-names", s1!.id, "take/gate-probe", "probing the gate");
+  h.setBoard("tk-names", v.id, "take/verifier-gate-probe", "the verifier's own gate probe is other work");
+  h.setBoard("tk-names", s1!.id, "take/s-audit", "x");
+  h.setBoard("tk-names", v.id, "take/verifiers-audit", "a word containing a name is not the name");
 });
 
 let failed = 0;

@@ -8,6 +8,7 @@
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
 import { createWriteStream, existsSync, mkdirSync, readFileSync, readdirSync, statSync, realpathSync, symlinkSync, writeFileSync } from "node:fs";
 import { carryHooks, hooksLine } from "./worktree-hooks.js";
+import { checkJoined, joinLines, roomNames, type LaunchedSeat } from "./join-check.js";
 import { dirname, resolve } from "node:path";
 import { collectRoomSnapshot, renderRunReport, writeRunResult, rollupUsage, hubUsageRollup, parseClaudeCliOutput, seatScorecard, classifyOutcome, proposedDecisionDir, type RunResult, type RoomSnapshot, type SeatUsageRollup } from "./result.js";
 import { settledAxes } from "./settled.js";
@@ -560,6 +561,8 @@ if (RESOURCES.length) {
   }
 }
 const runs: Promise<SeatRun>[] = [];
+/** Every seat this launcher started and the room it was told to join (checked once by the join check below). */
+const launched: LaunchedSeat[] = [];
 /**
  * Alternate-provider seats: --codex k and --openrouter k take non-lead seats, rotating over their
  * own model lists. Claude keeps the lead and verifier seats.
@@ -623,6 +626,7 @@ if (REQUIRE_VERIFICATION || QUORUM) {
     }
   }
 }
+launched.push({ name: "verifier", room: leadsRoom });
 runs.push(
   withRespawn("verifier", leadsRoom, (nm, note) => (VERIFIER_OPENROUTER ? runOpenRouter(nm, verifierText.split("verifier\"").join(`${nm}\"`) + note, CWD, VERIFIER_OPENROUTER, APPLY || FULL) : runClaude(nm, verifierText + note, verifierTools, CWD, VERIFIER_MODEL))).then((o) => ({ name: "verifier", text: o.text, usage: o.usage })),
 );
@@ -678,6 +682,7 @@ for (const g of plan.groups) {
           ? runOpenRouter(nm, buildText(nm) + note, wcwd, model, mayWrite)
           : runClaude(nm, buildText(nm) + note, mayWrite ? WRITE_TOOLS : READ_TOOLS, wcwd, model);
     };
+    launched.push({ name, room });
     runs.push(withRespawn(name, room, mk).then((o) => ({ name, text: o.text, usage: o.usage })));
   }
 }
@@ -757,6 +762,35 @@ const digestTimer: ReturnType<typeof setInterval> | undefined = DIGEST_EVERY_MIN
   }));
 }, DIGEST_EVERY_MIN * 60_000) : undefined;
 let timedOut = false;
+/**
+ * A seat the hub never saw is working alone (bugs.md 2: the hub refused every connection, the room was created anyway
+ * and five seats overwrote each other). JOIN_CHECK_MS after launch the launcher compares the seats it started with the
+ * rooms' participants and says who is missing, here and in the run's collectionErrors. When none arrived it looks once
+ * more a minute later and then stops the run: nobody is coordinating, and write seats share a repository.
+ */
+const JOIN_CHECK_MS = Number(process.env.CHATROOM_JOIN_CHECK_MS ?? 180_000);
+const joinNotes: string[] = [];
+let joinChecked = false;
+/** first: on the timer; second: a minute after a first look that found nobody; final: as the run ends, if no check finished (seats that cannot connect exit within seconds). */
+async function joinCheck(when: "first" | "second" | "final" = "first"): Promise<void> {
+  if (joinChecked || (when !== "final" && (STOPPING || groupsDone))) return;
+  const c = await checkJoined(launched, roomNames(URL_));
+  const afterS = Math.round((Date.now() - RUN_STARTED) / 1000);
+  if (c.none && when === "first") { log(`no seat has joined after ${afterS} s; checking once more in 60 s`); setTimeout(() => void joinCheck("second"), 60_000).unref(); return; }
+  if (joinChecked) return;
+  joinChecked = true;
+  const lines = joinLines(c, afterS);
+  for (const line of lines) { log(line); joinNotes.push(line); }
+  if (!lines.length) log(`join check: all ${launched.length} seats reached their rooms (${afterS} s)`);
+  if (c.none && when === "second") {
+    log("stopping the run: no seat is in a room");
+    STOPPING = true;
+    for (const ch of children) ch.kill();
+    void sweepStrays("no seat joined");
+  }
+}
+const joinTimer = JOIN_CHECK_MS > 0 ? setTimeout(() => void joinCheck().catch(() => {}), JOIN_CHECK_MS) : undefined;
+joinTimer?.unref();
 /** The lead room just before the timeout kills its seats: afterwards every seat has left and blockers read as such. */
 let leadAtTimeout: Record<string, any> | null = null;
 const timeout = setTimeout(async () => {
@@ -785,6 +819,7 @@ const persistIncremental = (done: SeatRun[]) => {
 };
 const completedRuns: SeatRun[] = [];
 const results = await Promise.all(runs.map(async (p) => { const r = await p; completedRuns.push(r); persistIncremental(completedRuns); return r; }));
+if (JOIN_CHECK_MS > 0) await joinCheck("final").catch((e) => log(`join check failed: ${e instanceof Error ? e.message : String(e)}`));
 groupsDone = true;
 if (digestTimer) clearInterval(digestTimer);
 await Promise.all(digestPending); // a pass in flight ends with its own seat (or the timeout's kill)
@@ -795,7 +830,7 @@ clearInterval(tail);
 await tailRooms([...groupRooms, leadsRoom]);
 
 // ---------- report ----------
-const collectionErrors: string[] = [];
+const collectionErrors: string[] = [...joinNotes];
 const fetchText = async (url: string) => {
   const response = await fetch(url);
   if (!response.ok) throw new Error(`HTTP ${response.status}: ${url}`);

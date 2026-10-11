@@ -248,6 +248,7 @@ export const offlineScripts = [
   'worktree-hooks-regression.ts',
   'short-proposal-regression.ts',
   'node-crypto-regression.ts',
+  'join-check-regression.ts',
   'one-of-you-ask-regression.ts',
   'tool-surface-regression.ts',
   'trim-checkpoint-regression.ts',

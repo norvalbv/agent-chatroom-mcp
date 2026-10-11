@@ -55,6 +55,7 @@ export const offlineScripts = [
   'amend-stale-regression.ts',
   'open-children-regression.ts',
   'verifier-gate-regression.ts',
+  'challenge-wakes-proposer-regression.ts',
   'ask-settle-regression.ts',
   'attention-gate-regression.ts',
   'away-seat-regression.ts',

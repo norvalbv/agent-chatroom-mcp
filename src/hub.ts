@@ -1816,7 +1816,18 @@ export class Hub {
     if (this.addressedBy(room, p).length) return true;
     const open = [...room.proposals.values()].find((pr) => pr.status === "open");
     if (!open) return false;
-    return this.needsVote(room, p, open) || this.owesChallenge(room, open, p);
+    return this.needsVote(room, p, open) || this.owesChallenge(room, open, p) || this.challengedUnseen(room, open, p);
+  }
+
+  /**
+   * An open blocking challenge on this seat's own proposal that it has not been sent yet: the proposer owes an answer
+   * (amend the cited text, or say why it stands). Nothing else made it actionable, so a held wait slept through it
+   * (evidence/held-wait-misses-challenge: five seats idle 172-188 s with two challenges open). Once delivered it no
+   * longer wakes the seat.
+   */
+  challengedUnseen(room: Room, open: Proposal, p: Participant): boolean {
+    if (open.by.id !== p.id || !open.challenges.some((c) => (c.status ?? "open") === "open" && c.blocking !== false && c.by.id !== p.id)) return false;
+    return room.messages.some((m) => m.kind === "challenge" && m.proposalId === open.id && m.seq > p.lastSeenSeq && m.from.id !== p.id && !/non-blocking objection to/.test(m.content));
   }
 
   /** The open proposal still needs a challenge and this seat could give it (this room's waits and other rooms' other_rooms). */

@@ -3,7 +3,7 @@
  * Run: npx tsx scripts/wait-cost-regression.ts
  */
 import assert from "node:assert/strict";
-import { emptyWaits, waitCost, renderWaitCost } from "../src/wait-cost.js";
+import { costByTool, emptyWaits, waitCost, renderWaitCost } from "../src/wait-cost.js";
 
 const T0 = Date.parse("2026-10-11T10:00:00.000Z");
 const at = (s: number) => new Date(T0 + s * 1000).toISOString();
@@ -35,6 +35,7 @@ assert.deepEqual(by, {
 }, "each request once, though the seat's usage is in two room logs; the first sample has no earlier one to difference");
 assert.ok(rows.every((r, i) => i === 0 || rows[i - 1].cost_usd >= r.cost_usd), "largest first");
 assert.match(renderWaitCost(rows), /\| wait_empty \| 2 \| \$0\.60 \| 19% \| \$0\.300 \|/);
+assert.deepEqual(Object.fromEntries(costByTool([group, leads]).map((t) => [t.tool, t.requests])), { board_set: 2, "local Bash": 1, "wait_for_messages (empty)": 2, "(no tool seen)": 1, "wait_for_messages (messages)": 1 }, "the same requests by the tool whose result woke the model");
 const held = [{ type: "call_completion", tool: "wait_for_messages", participant: "p", empty: true, ms: 240_000 }, { type: "call_completion", tool: "wait_for_messages", participant: "p", empty: true, ms: 55_000 }, { type: "call_completion", tool: "wait_for_messages", participant: "p", empty: true, ms: 239_000 }, { type: "call_completion", tool: "wait_for_messages", participant: "p", empty: false, ms: 900 }];
 assert.deepEqual(emptyWaits([held]), { waits: 4, empty: 3, median_empty_s: 239, empty_seat_minutes: 9 });
 console.log("WAIT COST OK");

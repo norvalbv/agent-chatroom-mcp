@@ -18,24 +18,27 @@ type Ev = Record<string, any>;
 export type Trigger = "wait_empty" | "wait_msg" | "hub_call" | "local_tool" | "no_tool_seen";
 export interface WaitCostRow { trigger: Trigger; requests: number; cost_usd: number; share: number }
 
-export function waitCost(logs: readonly (readonly Ev[])[]): WaitCostRow[] {
+export interface ToolCostRow { tool: string; requests: number; cost_usd: number; share: number }
+
+function attribute(logs: readonly (readonly Ev[])[]): { byTrigger: Map<Trigger, { requests: number; cost: number }>; byTool: Map<string, { requests: number; cost: number }> } {
   const seatOf = new Map<string, string>(); // participant id -> seat key hash
   for (const events of logs) for (const e of events) if (e.type === "join" && e.p?.id && e.p.seatKeyHash) seatOf.set(e.p.id, e.p.seatKeyHash);
-  const triggers = new Map<string, { t: number; trigger: Trigger }[]>();
+  const triggers = new Map<string, { t: number; trigger: Trigger; tool: string }[]>();
   const usage = new Map<string, Map<string, { t: number; requests: number; cost: number }>>();
-  const note = (seat: string | undefined, ts: unknown, trigger: Trigger) => {
+  const note = (seat: string | undefined, ts: unknown, trigger: Trigger, tool: string) => {
     const t = Date.parse(String(ts));
-    if (seat && !Number.isNaN(t)) (triggers.get(seat) ?? triggers.set(seat, []).get(seat)!).push({ t, trigger });
+    if (seat && !Number.isNaN(t)) (triggers.get(seat) ?? triggers.set(seat, []).get(seat)!).push({ t, trigger, tool });
   };
   for (const events of logs) for (const e of events) {
-    if (e.type === "call_completion") note(seatOf.get(e.participant), e.ts, e.tool !== "wait_for_messages" ? "hub_call" : e.empty ? "wait_empty" : "wait_msg");
-    else if (e.type === "work") note(seatOf.get(e.pid), e.ts, "local_tool");
+    if (e.type === "call_completion") note(seatOf.get(e.participant), e.ts, e.tool !== "wait_for_messages" ? "hub_call" : e.empty ? "wait_empty" : "wait_msg", e.tool !== "wait_for_messages" ? String(e.tool) : e.empty ? "wait_for_messages (empty)" : "wait_for_messages (messages)");
+    else if (e.type === "work") note(seatOf.get(e.pid), e.ts, "local_tool", `local ${String(e.tool ?? e.cls ?? "tool")}`);
     else if (e.type === "usage" && e.seat && e.usage) {
       const t = Date.parse(String(e.ts));
       if (!Number.isNaN(t)) (usage.get(e.seat) ?? usage.set(e.seat, new Map()).get(e.seat)!).set(String(e.usage.at ?? e.ts), { t, requests: Number(e.usage.requests ?? 0), cost: Number(e.usage.cost_usd ?? 0) });
     }
   }
   const sum = new Map<Trigger, { requests: number; cost: number }>();
+  const byTool = new Map<string, { requests: number; cost: number }>();
   for (const [seat, samples] of usage) {
     const seen = (triggers.get(seat) ?? []).sort((a, b) => a.t - b.t);
     let prev: { t: number; requests: number; cost: number } | undefined;
@@ -47,20 +50,34 @@ export function waitCost(logs: readonly (readonly Ev[])[]): WaitCostRow[] {
       const base = u.requests >= before.requests ? before : { t: before.t, requests: 0, cost: 0 };
       const requests = u.requests - base.requests;
       if (requests <= 0) continue;
-      let trigger: Trigger = "no_tool_seen";
+      let trigger: Trigger = "no_tool_seen", tool = "(no tool seen)";
       for (let i = seen.length - 1; i >= 0; i--) {
         if (seen[i].t > u.t) continue;
-        if (seen[i].t >= base.t) trigger = seen[i].trigger;
+        if (seen[i].t >= base.t) { trigger = seen[i].trigger; tool = seen[i].tool; }
         break;
       }
-      const row = sum.get(trigger) ?? sum.set(trigger, { requests: 0, cost: 0 }).get(trigger)!;
-      row.requests += requests;
-      row.cost += u.cost - base.cost;
+      for (const row of [sum.get(trigger) ?? sum.set(trigger, { requests: 0, cost: 0 }).get(trigger)!, byTool.get(tool) ?? byTool.set(tool, { requests: 0, cost: 0 }).get(tool)!]) {
+        row.requests += requests;
+        row.cost += u.cost - base.cost;
+      }
     }
   }
+  return { byTrigger: sum, byTool };
+}
+
+const round = (x: number, d: number) => Math.round(x * 10 ** d) / 10 ** d;
+
+export function waitCost(logs: readonly (readonly Ev[])[]): WaitCostRow[] {
+  const sum = attribute(logs).byTrigger;
   const total = [...sum.values()].reduce((n, r) => n + r.cost, 0);
-  const round = (x: number, d: number) => Math.round(x * 10 ** d) / 10 ** d;
   return [...sum].map(([trigger, r]) => ({ trigger, requests: r.requests, cost_usd: round(r.cost, 2), share: total > 0 ? round(r.cost / total, 3) : 0 })).sort((a, b) => b.cost_usd - a.cost_usd);
+}
+
+/** The same requests by the tool whose result woke the model: which hub tools and which local tools the turns went on. */
+export function costByTool(logs: readonly (readonly Ev[])[]): ToolCostRow[] {
+  const by = attribute(logs).byTool;
+  const total = [...by.values()].reduce((n, r) => n + r.cost, 0);
+  return [...by].map(([tool, r]) => ({ tool, requests: r.requests, cost_usd: round(r.cost, 2), share: total > 0 ? round(r.cost / total, 3) : 0 })).sort((a, b) => b.cost_usd - a.cost_usd);
 }
 
 /** How long empty waits were held before returning nothing: a seat on a held connection (?hold=, src/env.ts) shows

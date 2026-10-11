@@ -661,10 +661,11 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
       description:
         "Edit the open proposal's text in place: replace `find` (exact, unique substring) with `replace`, leave `find` empty to append, or pass replace_all=true to swap the whole text. " +
         "Only the diff is posted, the version is bumped, and votes reset EXCEPT agrees whose quoted clause still appears verbatim; you get no vote for amending, so vote after you amend. A verify/* entry keeps counting while the amended text still cites the commit it checked and adds no commit-like token (7 to 40 lowercase hex characters) that nobody has verified; otherwise it must be written again. " +
-        "A challenge is answered automatically when the text it cites is gone. Use this instead of re-proposing.",
+        "A challenge is answered automatically when the text it cites is gone. Use this instead of re-proposing. " +
+        "Given the key of a board entry you wrote instead of a proposal id, it edits that board entry in place the same way (find/replace, append, replace_all): send the changed passage, not the whole entry.",
       inputSchema: {
         room: roomArg,
-        proposal_id: z.string().describe("Proposal id (prop_...)."),
+        proposal_id: z.string().describe("Proposal id (prop_...), or the key of a board entry you wrote to edit that entry in place."),
         find: z.string().default("").describe("Exact text to replace; empty to append."),
         replace: z.string().describe("Replacement (or appended) text, or the whole new text with replace_all."),
         replace_all: z.boolean().optional().describe("Replace the entire text (keeps id, version chain and vote semantics)."),
@@ -673,6 +674,11 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
     },
     guard("amend", ({ room, proposal_id, find, replace, replace_all, participant_id }) => {
       const r = hub.getRoom(room);
+      // a board key instead of a proposal id: edit that entry in place (what 30 of 61 refused amends were asking for)
+      if (!r.proposals.has(proposal_id) && r.board.has(proposal_id)) {
+        const edited = hub.amendBoard(room, pid(room, participant_id), proposal_id, find, replace, replace_all);
+        return { board_key: edited.key, chars: edited.chars, diff: edited.diff, note: "Board entry edited in place; no proposal was touched and no vote changed." };
+      }
       const { proposal, diff, answered, reopened } = hub.amend(room, pid(room, participant_id), proposal_id, find, replace, replace_all);
       return { version: proposal.version, diff, challenges_answered: answered, challenges_reopened: reopened, proposal: hub.proposalView(r, proposal, false, false) };
     }),

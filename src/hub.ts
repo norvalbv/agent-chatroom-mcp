@@ -1949,6 +1949,55 @@ export class Hub {
     return (at ? "…" : "") + text.slice(at, at + 200) + (at + 200 < text.length ? "…" : "");
   }
 
+  /** The text after one amend: `find` replaced once (it must occur exactly once), `replace` appended when find is empty,
+   * or the whole text swapped. Shared by proposals and board entries so both refuse a bad find the same way. */
+  private spliced(text: string, what: string, find: string, replace: string, replaceAll: boolean): string {
+    if (replaceAll) {
+      if (!replace.trim()) throw new HubError("replace_all needs the full new text.", undefined, "invalid-arg");
+      return replace;
+    }
+    if (!find) {
+      if (!replace.trim()) throw new HubError("Nothing to append.", undefined, "invalid-arg");
+      return text.trimEnd() + "\n" + replace;
+    }
+    const n = text.split(find).length - 1;
+    if (n === 0) {
+      throw new HubError(
+        `"${find.slice(0, 80)}" does not occur in ${what} (${text.length} chars). Copy the exact text to replace; the closest passage is: "${this.closest(text, find)}". For a whole rewrite use replace_all=true.`, undefined, "amend-find",
+      );
+    }
+    if (n > 1) throw new HubError(`"${find.slice(0, 80)}" occurs ${n} times; include more context so it is unique.`, undefined, "amend-find");
+    // a one-word find in a long document splices wherever that word happens to sit ("findings" for "find"); ask for a span
+    if (find.trim().length < 16 && text.length > 2000) throw new HubError(`"${find}" is too short a find for a ${text.length}-char document; copy at least 16 characters of the passage so the replacement lands where you mean.`, undefined, "amend-find");
+    return text.replace(find, replace);
+  }
+
+  /**
+   * amend, given a board key instead of a proposal id: edit that entry in place. Of 61 refused amends in 15 rooms, 30 came
+   * when no proposal had ever been made in the room, and 27 of those were followed within 90 s by the same seat's
+   * board_set of the whole entry (median 2,705 chars, 81,657 resent in all; claim/amend-board-entry): seats were asking
+   * for a find/replace on the board. The edit goes through setBoard, so ownership, the size cap, late marking and the
+   * board notice are the board's own; only the author edits an entry. Logged as board_edit with what was sent against
+   * the entry's size, so the saved resend can be counted.
+   */
+  amendBoard(roomName: string, pid: string, key: string, find: string, replace: string, replaceAll = false): { key: string; chars: number; diff: string } {
+    const room = this.getRoom(roomName);
+    const p = this.requireParticipant(room, pid);
+    const e = room.board.get(key);
+    if (!e || !e.text.trim() || this.draftSealed(room, key, e, p.name)) throw new HubError(`No board entry "${key}" in "${roomName}" to amend.`, undefined, "not-found");
+    if (e.by !== p.name) {
+      throw new HubError(`"${key}" was written by ${this.shown(room, { id: "", name: e.by })}: amend edits only an entry you wrote. Put your change in an entry of your own, or ask them; a log several seats add to takes board_set with append=true.`, undefined, "ownership");
+    }
+    const next = this.spliced(e.text, `board entry "${key}"`, find, replace, replaceAll);
+    if (next === e.text) throw new HubError("That amendment changes nothing.", undefined, "amend-find");
+    this.setBoard(roomName, pid, key, next);
+    const clip = (t: string, n: number) => (t.length > n ? t.slice(0, n) + "…" : t);
+    const diff = replaceAll ? `replaced the whole entry (${next.length} chars)` : find ? `"${clip(find, 160)}" → "${clip(replace, 240)}"` : `appended "${clip(replace, 240)}"`;
+    this.persist({ type: "board_edit", room: roomName, key, by: p.name, sent_chars: find.length + replace.length, entry_chars: next.length, ts: now() });
+    this.post(room, "board", p, `amended "${key}": ${diff}`);
+    return { key, chars: next.length, diff };
+  }
+
   /**
    * Edit the open proposal in place. Posts only the diff and bumps the version. An amend never creates or restores a vote:
    * an existing agree survives only while its quoted clause still appears verbatim in the new text (the amender's included).
@@ -1958,27 +2007,15 @@ export class Hub {
     const room = this.getRoom(roomName);
     const p = this.requireParticipant(room, pid);
     const pr = room.proposals.get(proposalId);
-    if (!pr) throw new HubError(`No proposal "${proposalId}" in "${roomName}".`, undefined, "not-found");
-    if (pr.status !== "open") throw new HubError(`Proposal ${proposalId} is ${pr.status}; only open proposals can be amended.`, undefined, "state");
-    let next: string;
-    if (replaceAll) {
-      if (!replace.trim()) throw new HubError("replace_all needs the full new text.", undefined, "invalid-arg");
-      next = replace;
-    } else if (!find) {
-      if (!replace.trim()) throw new HubError("Nothing to append.", undefined, "invalid-arg");
-      next = pr.text.trimEnd() + "\n" + replace;
-    } else {
-      const n = pr.text.split(find).length - 1;
-      if (n === 0) {
-        throw new HubError(
-          `"${find.slice(0, 80)}" does not occur in ${proposalId} v${pr.version} (${pr.text.length} chars). Copy the exact text to replace; the closest passage is: "${this.closest(pr.text, find)}". For a whole rewrite use replace_all=true.`, undefined, "amend-find",
-        );
-      }
-      if (n > 1) throw new HubError(`"${find.slice(0, 80)}" occurs ${n} times; include more context so it is unique.`, undefined, "amend-find");
-      // a one-word find in a long document splices wherever that word happens to sit ("findings" for "find"); ask for a span
-      if (find.trim().length < 16 && pr.text.length > 2000) throw new HubError(`"${find}" is too short a find for a ${pr.text.length}-char document; copy at least 16 characters of the passage so the replacement lands where you mean.`, undefined, "amend-find");
-      next = pr.text.replace(find, replace);
+    if (!pr) {
+      const open = [...room.proposals.values()].find((x) => x.status === "open");
+      const mine = [...room.board].filter(([k, e]) => e.by === p.name && e.text.trim()).map(([k]) => k);
+      throw new HubError(
+        `No proposal "${proposalId}" in "${roomName}", and no board entry of that name. amend edits ${open ? `the open proposal (${open.id})` : "the open proposal (there is none in this room yet)"} or, given a board key, that board entry in place` +
+        `${mine.length ? `; your entries: ${mine.slice(0, 12).join(", ")}${mine.length > 12 ? `, and ${mine.length - 12} more` : ""}` : ""}.`, undefined, "not-found");
     }
+    if (pr.status !== "open") throw new HubError(`Proposal ${proposalId} is ${pr.status}; only open proposals can be amended.`, undefined, "state");
+    const next = this.spliced(pr.text, `${proposalId} v${pr.version}`, find, replace, replaceAll);
     if (next === pr.text) throw new HubError("That amendment changes nothing.", undefined, "amend-find");
     const counting = () => {
       const reviewer = this.activeReviewerFor(room, pr.by.name);

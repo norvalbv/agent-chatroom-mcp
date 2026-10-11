@@ -54,6 +54,24 @@ assert.deepEqual(registered.map(([p]) => p), ["v", "v"], "a successor that never
 assert.ok(logs.some((l) => /usage limit/.test(l) && /waiting/i.test(l)), `the log says it is waiting for usage: ${logs.join(" | ")}`);
 assert.equal(chain.lastName, "v-r2");
 
+// the limit stops a seat before it ever joined, before the room even exists: nothing to hand over, so after the wait it
+// is started again with no replacement registration (the launcher used to stop here on "room missing")
+const fresh: string[] = [];
+const freshRegistered: string[] = [];
+let roomExists = false;
+const early = await respawn.respawnChain<Out>({
+  name: "x", maxAttempts: 1, stop: () => false,
+  room: async () => (roomExists ? ({ state: "open", board: {}, participants: [{ name: "x-r1", agent: "claude", active: false }] } as respawn.RespawnRoom) : null),
+  exitCode: (nm: string) => (nm === "x" ? 1 : 0), detail: (nm: string) => (nm === "x" ? "exit 1: usage limit" : "exit 0"),
+  usageReady: async () => true,
+  register: async (prev: string) => { freshRegistered.push(prev); return ""; },
+  run: async (nm: string) => { fresh.push(nm); if (nm === "x-r1") roomExists = true; return { code: nm === "x" ? 1 : 0 }; },
+  usagePollMs: 1, sleep: async () => {},
+});
+assert.deepEqual(fresh, ["x", "x-r1"], "a seat stopped before the room existed is started again after the wait");
+assert.deepEqual(freshRegistered, [], "with no replacement registration, since it never held a seat");
+assert.equal(early.lastName, "x-r1");
+
 // a launcher that is stopping does not wait for usage
 const stopLogs: string[] = [];
 const stopped = await respawn.respawnChain<Out>({

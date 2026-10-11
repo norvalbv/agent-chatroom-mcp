@@ -330,6 +330,7 @@ async function withRespawn(name: string, room: string, mk: (nm: string, note: st
     signal: (nm) => exitSignals.get(nm) ?? null,
     detail: (nm) => exitDetails.get(nm) ?? "",
     usageReady: claudeUsageReady,
+    ...(Number(process.env.CHATROOM_USAGE_POLL_MS) > 0 ? { usagePollMs: Number(process.env.CHATROOM_USAGE_POLL_MS) } : {}),
     register: (previousName, nm, reason) => registerRespawn(URL_, room, previousName, nm, launcherToken, undefined, reason),
     run: mk,
     log,

@@ -23,6 +23,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { existsSync, readFileSync, realpathSync } from "node:fs";
 import { gitShaAuthor, parseRoomLog, renderMetrics, roomRepos, runMetrics } from "./run-metrics.js";
+import { renderTimeline, runTimeline } from "./run-timeline.js";
 import { createMcpExpressApp } from "@modelcontextprotocol/sdk/server/express.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import express from "express";
@@ -598,8 +599,9 @@ app.get("/rooms/:room/metrics", (req, res) => {
     if (!file || !existsSync(file)) return void res.status(404).type("text/plain").send("no room log: this hub runs in memory");
     const events = parseRoomLog(readFileSync(file, "utf8"));
     const m = runMetrics(events, { shaAuthor: gitShaAuthor(...roomRepos(events), process.env.CHATROOM_DEFAULT_CWD, hub.cwd) });
-    if (req.query.format === "md") res.type("text/markdown").send(renderMetrics(m));
-    else res.json(m);
+    const timeline = runTimeline(events);
+    if (req.query.format === "md") res.type("text/markdown").send(renderMetrics(m) + renderTimeline(timeline));
+    else res.json({ ...m, timeline });
   } catch (e) {
     notFound(res, e);
   }

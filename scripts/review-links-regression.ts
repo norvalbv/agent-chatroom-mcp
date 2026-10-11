@@ -98,3 +98,17 @@ test("a review/* entry is scrutiny, not a finding: it is never listed as unexami
   assert.deepEqual(hub.scrutiny(room.name).unexamined, [], "the review is not owed an attack, and the entry it names counts as examined");
   assert.equal((hub.summary(room).participants as { name: string; output: { verifies: number } }[]).find((p) => p.name === "Bob")!.output.verifies, 1, "a review counts as the seat's verifying output");
 });
+
+test("a review/<sha> naming a dev room gets the hub's own reading of it, like a verify/* entry", async (t) => {
+  const { hub, room, a, b, head } = fixture(t);
+  const DEV = "http://127.0.0.1:7999/rooms/dev-1";
+  hub.setBoard(room.name, a.id, "verify/own", "author's own run");
+  hub.setBoard(room.name, b.id, `review/${X}`, head(X, "pending", { dev_room: DEV }));
+  const seen: string[] = [];
+  const receipt = await hub.readDevRoom(room.name, `review/${X}`, async (u) => { seen.push(u); return { name: "dev-1", state: "concluded", code_state: { head: X, dirty: false }, participants: [{ agent: "claude", messages: 3 }, { agent: "claude", messages: 2 }], message_count: 9 }; });
+  assert.deepEqual(seen, [DEV], "the hub fetches the dev room itself");
+  assert.equal(receipt?.agent_seats, 2);
+  assert.equal(room.board.get(`review/${X}`)!.devReceipt?.agent_seats, 2, "and keeps what it read on the entry");
+  const pr = hub.propose(room.name, a.id, `built ${X}.`);
+  assert.doesNotMatch(hub.verificationGaps(room, pr).flatMap((g) => g.gaps).join(" | "), /not read by the hub/, "a read dev room is not reported as unread");
+});

@@ -2641,7 +2641,7 @@ export class Hub {
   async readDevRoom(roomName: string, key: string, fetcher: (url: string) => Promise<unknown> = Hub.fetchJson): Promise<DevReceipt | undefined> {
     const room = this.getRoom(roomName);
     const e = room.board.get(key);
-    const head = key.startsWith("verify/") && e ? parseVerifyHead(e.text) : undefined;
+    const head = isReviewKey(key) && e ? parseVerifyHead(e.text) : undefined;
     const url = devRoomUrl(head?.dev_room);
     if (!e || !head?.dev_room || !url) return undefined;
     let receipt: DevReceipt;

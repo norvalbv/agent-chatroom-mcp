@@ -226,6 +226,8 @@ export class Hub {
       require_challenge: this.challengeRequired(room),
       require_verification: room.requireVerification,
       opening_max_chars: Math.min(room.maxMessageChars, 400),
+      // every size a write can be refused for, said up front (18 board_set size refusals in 6 rooms found the cap by hitting it)
+      limits: { message_chars: room.maxMessageChars, board_entry_chars: board.BOARD_ENTRY_MAX, opening_chars: Math.min(room.maxMessageChars, 400) },
       max_live_agents: Hub.MAX_LIVE_PER_ROOM,
       code_state: room.codeState ?? null,
       hold: this.hold(room) ? { by: this.hold(room)!.by, reason: this.hold(room)!.text } : null,
@@ -953,7 +955,7 @@ export class Hub {
     // Chat stays open after a conclusion so humans can still be answered; only proposals close.
     if (!content.trim()) throw new HubError("Message content is empty.", undefined, "invalid-arg");
     if (content.length > room.maxMessageChars) {
-      throw new HubError(`Message is ${content.length} chars; this room allows ${room.maxMessageChars}. Say less: one claim, one reason, one ask.`, undefined, "size");
+      throw new HubError(`Message is ${content.length} chars; this room allows ${room.maxMessageChars} in chat. If it is a result, a conclusion or a list, board_set it under a key (up to ${board.BOARD_ENTRY_MAX} chars) and send a one-line message naming the key; otherwise say less: one claim, one reason, one ask.`, undefined, "size");
     }
     const target = p.agent === "human" ? undefined : this.addressedHuman(room, content, replyTo);
     if (target) {
@@ -1412,7 +1414,7 @@ export class Hub {
     for (const e of entries) {
       if (typeof e?.key !== "string" || !/^resource\/./.test(e.key) || !board.BOARD_KEY.test(e.key)) throw new HubError(`A resource key is "resource/<name>" (got ${String(JSON.stringify(e?.key)).slice(0, 80)}).`, undefined, "key-format");
       if (typeof e.text !== "string" || !e.text.trim()) throw new HubError(`"${e.key}" has no text.`, undefined, "invalid-arg");
-      if (e.text.length > 8000) throw new HubError("Board entries are capped at 8000 characters.", undefined, "size");
+      if (e.text.length > board.BOARD_ENTRY_MAX) throw new HubError(board.tooLong(e.key, e.text.length), undefined, "size");
     }
     const clean = entries.map((e) => ({ key: e.key, text: e.text }));
     const room = this.rooms.get(roomName);

@@ -65,6 +65,7 @@ export const offlineScripts = [
   'review-coverage-regression.ts',
   'second-scrutiny-regression.ts',
   'take-not-output-regression.ts',
+  'limits-stated-regression.ts',
   'idle-open-work-regression.ts',
   'finished-claim-key-regression.ts',
   'unclaimed-ideas-regression.ts',

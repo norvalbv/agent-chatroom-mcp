@@ -41,6 +41,12 @@ export function applyBoardManifest(room: Room, bytes: number, kind: "full" | "de
 /** An acknowledgement that says nothing beyond "seen". */
 const BARE_ACK = /^\s*(ack(nowledged)?|ok(ay)?|seen|received|read|noted|done|thanks?)[\s.!]*$/i;
 
+/** The most one board entry or note holds. Stated in the room summary (limits) and in every refusal for size. */
+export const BOARD_ENTRY_MAX = 8000;
+/** A refusal for size says what was sent, what fits and how to carry on: "capped at 8000 characters" left seats to
+ * split ledgers by hand into ledger-2..7 (chat-and-friction issue 11). */
+export const tooLong = (key: string, chars: number) =>
+  `"${key}" would be ${chars} chars; a board entry holds ${BOARD_ENTRY_MAX}. Cut it, split it across keys (${key}-2, ...) and name them in the first, or for a log several seats add to use board_set append=true, which continues past the cap by itself.`;
 export const BOARD_KEY = /^[\w .:/-]{1,80}$/;
 
 export function hold(room: Room): BoardEntry | undefined {
@@ -219,7 +225,7 @@ export function setBoard(hub: Hub, roomName: string, pid: string, key: string, t
   }
   if (!BOARD_KEY.test(key)) throw new HubError("Board keys are short names like 'evidence', 'open questions', 'claim/auth', 'verify/auth'.", undefined, "key-format");
   if (opts.append) return appendBoard(hub, room, p, key, text, late);
-  if (text.length > 8000) throw new HubError("Board entries are capped at 8000 characters.", undefined, "size");
+  if (text.length > BOARD_ENTRY_MAX) throw new HubError(tooLong(key, text.length), undefined, "size");
   // A second seat's scrutiny lands under its own key: refusing it for ownership came after the work was done
   // (friction/second-attack-has-no-key: a 1,900-char attack lost to chat; 7 of 38 attack writes refused in the records).
   const heldBy = opts.overwrite ? undefined : secondScrutiny(room, p, key, text); // overwrite=true asks to replace a peer's verdict: still refused
@@ -680,7 +686,7 @@ export function postToRoom(hub: Hub, fromRoom: string, pid: string, toRoom: stri
     throw new HubError(`Room "${toRoom}" is ${to.state}: board writes are refused, there is nothing left to coordinate there.`, undefined, "state");
   }
   if (!/^[\w .:-]{1,40}$/.test(key)) throw new HubError("Inbox keys are short names without slashes.", undefined, "key-format");
-  if (text.length > 8000) throw new HubError("Notes are capped at 8000 characters.", undefined, "size");
+  if (text.length > BOARD_ENTRY_MAX) throw new HubError(`That note is ${text.length} chars; a note holds ${BOARD_ENTRY_MAX}. Send it as two notes (${key}-1, ${key}-2), or put the long part on your own board and send the key.`, undefined, "size");
   const full = `inbox/${fromRoom}/${key}`;
   const expiresAt = boardExpiry(full, opts);
   const entry: BoardEntry = { text, by: p.name, updatedAt: now(), ...(expiresAt ? { expiresAt } : {}), ...(ackRequired ? { ackRequired: true } : {}) };

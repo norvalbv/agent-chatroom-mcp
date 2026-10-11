@@ -38,6 +38,8 @@ export function statusView(summary: Summary, fullTopic = false): Summary {
       };
     }),
     no_output: (summary.no_output as unknown[] | undefined)?.length ? summary.no_output : undefined,
+    // said once, in join_room: a seat polls room_status for who is doing what, not for constants
+    limits: undefined,
     board: summary.board && Object.fromEntries(Object.entries(summary.board).map(([k, e]) =>
       [k, { by: e.by, ...(e.reviewer ? { reviewer: e.reviewer } : {}), ...(e.post_reveal ? { post_reveal: true } : {}), ...(e.late ? { late: true } : {}) }])),
   };

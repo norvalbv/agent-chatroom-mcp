@@ -270,7 +270,10 @@ export class Hub {
           // so it is neither idle nor dead, and a vote or an answer from it cannot arrive until its client reconnects
           // (only once the grace after a hub start has passed and the room was told: just after a restart it is "away")
           const lost = p.seatKeyHash && (p.active || away) ? this.unconnected.get(p.seatKeyHash) : undefined;
-          if (lost?.told) return { status: "disconnected", age_seconds, heartbeat_age_seconds: p.working ? age(p.working.at) : null, disconnected_s: Math.round((observedAt - lost.since) / 1000) };
+          // ...and only while its tools still heartbeat: a seat that died while disconnected stops beating and falls through
+          // to idle / suspected_dead like any other (review/fe1ed533: it read "disconnected" 45 min after its last beat)
+          const beating = !!p.working && observedAt - Date.parse(p.working.at) < kick.SUSPECTED_DEAD_MS;
+          if (lost?.told && beating) return { status: "disconnected", age_seconds, heartbeat_age_seconds: age(p.working!.at), disconnected_s: Math.round((observedAt - lost.since) / 1000) };
           if (away) return { status: "away", age_seconds, heartbeat_age_seconds: p.working ? age(p.working.at) : null, away: away.evidence };
           // a seat inside one long command makes no calls and no steps, but the hub can see the command running (jobsOf):
           // busy, not suspected dead (review/23f0620d: a verifier the hub was holding the room for read as dead from 601 s)

@@ -67,6 +67,24 @@ assert.match(lines()[0], /^worker-1 is working \(Bash\) but has no MCP session w
 const live = async () => ((await (await fetch(`${HTTP}/rooms/${ROOM}`)).json()) as { participants: { name: string; liveness: { status: string; disconnected_s?: number } }[] }).participants.find((p) => p.name === "worker-1")!.liveness;
 assert.equal((await live()).status, "disconnected");
 assert.ok(typeof (await live()).disconnected_s === "number");
+// review/fe1ed533: a seat that dies while disconnected stops heartbeating; read 11 minutes later it is not "disconnected"
+{
+  const { Hub } = await import("../src/hub.js");
+  const h = new Hub({});
+  (Hub as unknown as { UNCONNECTED_GRACE_MS: number }).UNCONNECTED_GRACE_MS = 0;
+  h.bindSeat("seat-key-dead", "s-dead");
+  const p = h.join("dead-room", "w", "claude", { requireChallenge: false, expectedParticipants: 0 }, undefined, "s-dead").participant;
+  h.join("dead-room", "v", "claude", {}, undefined, "s-v");
+  h.heartbeatSeat("seat-key-dead", { tool: "Bash", detail: "python3 x.py" });
+  h.seatUnconnected("seat-key-dead", "Bash");
+  const status = () => (h.summary(h.getRoom("dead-room"), true) as unknown as { participants: { name: string; liveness: { status: string } }[] }).participants.find((x) => x.name === "w")!.liveness.status;
+  assert.equal(status(), "disconnected", "still heartbeating a moment ago");
+  // its last heartbeat, and its last hub call, were 11 minutes ago
+  const old = new Date(Date.now() - 11 * 60_000).toISOString();
+  p.working = { ...p.working!, at: old };
+  p.lastActiveAt = old; p.joinedAt = old;
+  assert.equal(status(), "suspected_dead", "no heartbeat for 11 minutes: suspected dead, not disconnected for ever");
+}
 // the seat's client reconnects: the episode ends
 const a2 = await seat(KEY);
 await a2.callTool({ name: "room_status", arguments: { room: ROOM } });

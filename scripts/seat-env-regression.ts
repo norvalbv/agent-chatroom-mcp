@@ -108,7 +108,7 @@ for (const agent of ['claude', 'codex', 'openrouter']) await test(`spawner ${age
 });
 await test('swarm all provider seats, hub env and controller header', async () => {
   const h = await harness('swarm', syntheticEnv(), ['synthetic task', '--flat', '--agents', '4', '--codex', '1', '--openrouter', '1', '--require-verification']);
-  const hub = h.calls.filter(c => c.args.some(a => a.endsWith('/dist/index.js')));
+  const hub = h.calls.filter(c => c.args.some(a => a.endsWith('/dist/hubd.js')));
   const seats = h.calls.filter(c => !hub.includes(c));
   assert.equal(hub.length, 1); assert.equal(hub[0].options.env.CHATROOM_HUMAN_TOKEN, HUMAN, 'hub controller credential retained');
   assert.equal(seats.length, 4); assert.ok(seats.some(c => c.args.includes('/fixture/src/codex/cli.ts'))); assert.ok(seats.some(c => c.args.includes('/fixture/src/openrouter.ts')));
@@ -195,7 +195,7 @@ for (const agent of ['claude', 'codex', 'openrouter']) for (const canEdit of [fa
 });
 for (const worktrees of ['none', 'success', 'fail'] as const) for (const full of [false, true]) await test(`authorship swarm full=${full} worktrees=${worktrees}`, async () => {
   const h = await harness('swarm', { ...syntheticEnv(), ...humanIdentity }, ['synthetic task', '--flat', '--agents', '4', '--codex', '1', '--openrouter', '1', ...(full ? ['--full-access'] : [])], worktrees);
-  const seats = h.calls.filter(c => !c.args.some(a => a.endsWith('/dist/index.js')));
+  const seats = h.calls.filter(c => !c.args.some(a => a.endsWith('/dist/hubd.js')));
   assert.equal(seats.length, 4);
   for (const call of seats) {
     const name = path.basename(call.options.cwd);
@@ -206,7 +206,7 @@ for (const worktrees of ['none', 'success', 'fail'] as const) for (const full of
 });
 await test('authorship planner initializes before workers, no identity injection', async () => {
   const h = await harness('swarm', { ...syntheticEnv(), ...humanIdentity }, ['synthetic task', '--agents', '4', '--full-access'], 'success');
-  const seats = h.calls.filter(c => !c.args.some(a => a.endsWith('/dist/index.js')));
+  const seats = h.calls.filter(c => !c.args.some(a => a.endsWith('/dist/hubd.js')));
   assert.equal(seats.length, 5);
   checkIdentity(seats[0]); // planner runs before worker worktrees exist
   checkIdentity(seats[1]); // verifier is never a worker
@@ -242,7 +242,7 @@ for (const agent of ['claude', 'codex', 'openrouter']) for (const canEdit of [fa
 });
 await test('hub location: launcher seats omit it, the launcher\'s own hub keeps an explicit PORT and data dir', async () => {
   const h = await harness('swarm', { ...syntheticEnv(), ...hubLocation, ...hubPolicy }, ['synthetic task', '--flat', '--agents', '4', '--codex', '1', '--openrouter', '1', '--port', '7999']);
-  const hub = h.calls.filter(c => c.args.some(a => a.endsWith('/dist/index.js')));
+  const hub = h.calls.filter(c => c.args.some(a => a.endsWith('/dist/hubd.js')));
   const seats = h.calls.filter(c => !hub.includes(c));
   assert.equal(hub.length, 1); assert.equal(hub[0].options.env.PORT, '7999', 'the hub the launcher starts gets the launcher\'s port');
   assert.ok(hub[0].options.env.CHATROOM_DATA_DIR, 'and a data dir');

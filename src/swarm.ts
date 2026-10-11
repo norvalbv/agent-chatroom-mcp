@@ -12,9 +12,9 @@ import { collectRoomSnapshot, renderRunReport, writeRunResult, rollupUsage, hubU
 import { settledAxes } from "./settled.js";
 import { registerRespawn } from "./respawn.js";
 import { fileURLToPath } from "node:url";
-import { carrySettings, devHubRule, heartbeatHookSettings, loadDotEnv, outputHeartbeat, ownHubEnv, reusedHubProblem, seatBeat, seatChildEnv, seatPortError, type SeatBeat } from "./env.js";
+import { carrySettings, devHubRule, heartbeatHookSettings, hubLogFile, loadDotEnv, outputHeartbeat, ownHubEnv, readLauncherToken, respawnTokenProblem, reusedHubProblem, seatBeat, seatChildEnv, seatPortError, type SeatBeat } from "./env.js";
 import { randomUUID } from "node:crypto";
-import { respawnChain, type RespawnRoom } from "./respawn.js";
+import { fetchRespawnRoom, respawnChain } from "./respawn.js";
 import { claudeArgs } from "./claude-args.js";
 import { codexSeatCommand, codexUsageTracker } from "./codex-seat.js";
 import { claudeSandbox } from "./sandbox.js";
@@ -135,6 +135,8 @@ const prompt = (file: string, vars: Record<string, string | number>) =>
 // ---------- settled axes: see src/settled.ts ----------
 
 // ---------- hub ----------
+/** What lets this launcher register a replacement seat: its own environment's, else the one the hub's supervisor left on disk. */
+let launcherToken = process.env.CHATROOM_LAUNCHER_TOKEN || undefined;
 async function ensureHub() {
   let info: { build?: { root?: string; head?: string } } | undefined;
   try {
@@ -149,18 +151,24 @@ async function ensureHub() {
       process.exit(2);
     }
     log(`using the hub already running on :${PORT} (not started by this run, so this run never stops it)${problem ? `; WARNING: ${problem}` : ""}`);
+    // a supervised hub leaves its launcher token next to its log, in the checkout it was started from
+    launcherToken ??= readLauncherToken(info.build?.root ?? repoRoot, PORT);
     return;
   }
-  const child = spawn("node", [resolve(repoRoot, "dist/index.js")], {
+  // through the supervisor (src/hubd.ts): a hub that dies mid-run is back within seconds instead of ending the room.
+  // A hub with no idle exit is meant to stay, so even a clean exit of it is restarted.
+  const keeps = !Object.keys(ownHubEnv(HUB_IDLE_EXIT_MIN, PORT)).length;
+  const child = spawn("node", [resolve(repoRoot, "dist/hubd.js"), "--port", String(PORT), ...(keeps ? ["--always"] : [])], {
     env: { ...process.env, PORT: String(PORT), CHATROOM_DATA_DIR: resolve(repoRoot, "data"), ...(SANDBOX ? { CHATROOM_SANDBOX: "1" } : {}), ...(FRESH_CHALLENGER ? { CHATROOM_FRESH_CHALLENGER: "1" } : {}), ...ownHubEnv(HUB_IDLE_EXIT_MIN, PORT) },
     detached: true,
     stdio: "ignore",
   });
   child.unref();
-  log(`started hub pid ${child.pid} on :${PORT}; ${Object.keys(ownHubEnv(HUB_IDLE_EXIT_MIN, PORT)).length ? `it stops itself after ${HUB_IDLE_EXIT_MIN} min with no request (--hub-idle-exit, --keep-hub)` : `it keeps running: stop it with kill ${child.pid}`}`);
+  log(`started a supervised hub on :${PORT} (supervisor pid ${child.pid}, log ${hubLogFile(repoRoot, PORT)}); it is restarted if it dies and ${keeps ? `keeps running: stop it with kill ${child.pid}` : `stops itself after ${HUB_IDLE_EXIT_MIN} min with no request (--hub-idle-exit, --keep-hub)`}`);
   for (let i = 0; i < 50; i++) {
     try {
       await fetch(URL_);
+      launcherToken ??= readLauncherToken(repoRoot, PORT);
       return;
     } catch {
       await new Promise((r) => setTimeout(r, 200));
@@ -259,9 +267,9 @@ async function withRespawn(name: string, room: string, mk: (nm: string, note: st
   const chain = await respawnChain<SeatOutcome>({
     name,
     stop: () => STOPPING || Date.now() > RUN_STARTED + TIMEOUT_MIN * 60_000 - 5 * 60_000,
-    room: async () => (await (await fetch(`${URL_}/rooms/${encodeURIComponent(room)}`)).json()) as RespawnRoom,
+    room: () => fetchRespawnRoom(URL_, room),
     exitCode: (nm) => exitCodes.get(nm) ?? null,
-    register: (previousName, nm, reason) => registerRespawn(URL_, room, previousName, nm, process.env.CHATROOM_LAUNCHER_TOKEN, undefined, reason),
+    register: (previousName, nm, reason) => registerRespawn(URL_, room, previousName, nm, launcherToken, undefined, reason),
     run: mk,
     log,
   });
@@ -376,6 +384,11 @@ interface Plan {
 }
 
 await ensureHub();
+{
+  // said now: the last Polymarket room learned it at 16:37, when the first replacement was refused
+  const problem = respawnTokenProblem(RESPAWN, launcherToken, PORT);
+  if (problem) console.error(`\x1b[1;31m${problem}\x1b[0m`);
+}
 if (FLAT) {
   const info = (await (await fetch(URL_)).json()) as { caps?: { max_live_per_room: number } };
   const cap = info.caps?.max_live_per_room ?? 12;

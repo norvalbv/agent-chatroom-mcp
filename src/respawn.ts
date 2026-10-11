@@ -68,6 +68,22 @@ export function respawnDecision(i: RespawnInput): RespawnDecision {
   return { respawn: false, reason: `completed: ${active} active seats (floor ${floor}), ${claims.length ? "claims handed over" : "no claim left behind"}` };
 }
 
+/** The hub did not answer (connection refused, timed out, or a 5xx): nothing is known about the room, so nothing is decided. */
+export class HubUnreachable extends Error {}
+
+/** The room's summary, or null when the hub answers that it has no such room. Throws HubUnreachable when the hub does not answer. */
+export async function fetchRespawnRoom(url: string, room: string, request: typeof fetch = fetch): Promise<RespawnRoom | null> {
+  let response: Response;
+  try {
+    response = await request(`${url}/rooms/${encodeURIComponent(room)}`, { signal: AbortSignal.timeout(10_000) });
+  } catch (error) {
+    throw new HubUnreachable(error instanceof Error ? error.message : String(error));
+  }
+  if (response.status === 404) return null;
+  if (!response.ok) throw new HubUnreachable(`the hub answered ${response.status}`);
+  return await response.json() as RespawnRoom;
+}
+
 /**
  * Launcher-side registration: the launcher (which knows the process exited) calls the hub's
  * POST /rooms/:room/replacements before launching the successor, and passes the returned
@@ -83,7 +99,7 @@ export async function registerRespawn(
     method: 'POST',
     headers: { 'content-type': 'application/json', 'x-chatroom-launcher-token': token },
     body: JSON.stringify({ replacement_of: previousName, name }),
-  });
+  }).catch((error: unknown) => { throw new HubUnreachable(error instanceof Error ? error.message : String(error)); });
   if (!response.ok) throw new Error(`Replacement registration failed (${response.status}); refusing to launch an unregistered replacement.`);
   const result = await response.json() as { replacementToken?: unknown };
   if (typeof result.replacementToken !== "string" || !result.replacementToken) throw new Error("Replacement registration returned no join proof.");
@@ -101,21 +117,51 @@ export interface RespawnChainDeps<T> {
   register: (previousName: string, name: string, reason: string) => Promise<string>;
   run: (name: string, note: string) => Promise<T>;
   log?: (line: string) => void;
+  /** How long a hub that does not answer is waited for before the chain gives up (default 10 minutes), and how often it is asked. */
+  unreachableWaitMs?: number;
+  pollMs?: number;
+  sleep?: (ms: number) => Promise<void>;
 }
 /**
  * Run a seat and, while respawnDecision says so, its successors `name-r1..rN`. Every replaced attempt is handed
  * back under its own process name: the launcher used to keep only the last outcome, so a crashed attempt's
  * usage dropped out of the run total while coverage still read "complete".
+ *
+ * A hub that does not answer (`room` or `register` throws HubUnreachable) is waited for, not taken as an answer: the
+ * launcher of swarm-094251-5y46 asked 45 s into an 8-minute outage and logged "room missing" for a room that came back.
  */
 export async function respawnChain<T>(d: RespawnChainDeps<T>): Promise<{ last: T; lastName: string; replaced: { name: string; outcome: T }[] }> {
   const max = d.maxAttempts ?? 3;
   const replaced: { name: string; outcome: T }[] = [];
+  const waitMs = d.unreachableWaitMs ?? 600_000;
+  const pollMs = d.pollMs ?? 5_000;
+  const sleep = d.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
+  /** `ask` again every pollMs while the hub is unreachable; rethrows HubUnreachable once waitMs has passed or the launcher is stopping. */
+  const reach = async <R>(who: string, ask: () => Promise<R>): Promise<R> => {
+    for (let waited = 0; ; waited += pollMs) {
+      try {
+        const answer = await ask();
+        if (waited) d.log?.(`the hub answers again after about ${Math.round(waited / 1000)} s`);
+        return answer;
+      } catch (error) {
+        if (!(error instanceof HubUnreachable)) throw error;
+        if (waited >= waitMs || d.stop()) throw error;
+        if (!waited) d.log?.(`${who} exited and the hub is unreachable (${error.message}); asking again every ${Math.round(pollMs / 1000)} s for up to ${Math.round(waitMs / 60_000)} min before deciding`);
+        await sleep(pollMs);
+      }
+    }
+  };
+  const gaveUp = (who: string) => d.log?.(`${who} exited; not respawning: ${d.stop() ? "the launcher is stopping" : `the hub was unreachable for ${Math.round(waitMs / 60_000)} min`}`);
   let last = await d.run(d.name, "");
   let lastName = d.name;
   for (let i = 1; i <= max; i++) {
     if (d.stop()) break;
     let room: RespawnRoom | null = null;
-    try { room = await d.room(); } catch {}
+    try {
+      room = await reach(lastName, d.room);
+    } catch (error) {
+      if (error instanceof HubUnreachable) { gaveUp(lastName); break; }
+    }
     const decision = respawnDecision({ name: lastName, exitCode: d.exitCode(lastName), attempt: i, room, maxAttempts: max });
     if (!decision.respawn) {
       d.log?.(`${lastName} exited; not respawning: ${decision.reason}`);
@@ -124,8 +170,9 @@ export async function respawnChain<T>(d: RespawnChainDeps<T>): Promise<{ last: T
     const name = `${d.name}-r${i}`;
     let note: string;
     try {
-      note = await d.register(lastName, name, decision.reason);
+      note = await reach(lastName, () => d.register(lastName, name, decision.reason));
     } catch (error) {
+      if (error instanceof HubUnreachable) { gaveUp(lastName); break; }
       d.log?.(`Not respawning ${lastName}: ${error instanceof Error ? error.message : "replacement registration failed"}`);
       break;
     }

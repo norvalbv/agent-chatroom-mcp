@@ -102,6 +102,7 @@ export function replay(hub: Hub) {
             requireVerification: legacy.requireVerification ?? false,
             // a chair named at creation was dropped here, so after a restart the role went to the first seat to ask
             ...(legacy.chair ? { chair: legacy.chair } : {}),
+            ...(legacy.chair && legacy.chairNamed ? { chairNamed: true } : {}),
             ...(legacy.parent ? { parent: legacy.parent } : {}),
           };
           const room = hub.materialiseRoom(ev.room, opts, ev.createdAt);

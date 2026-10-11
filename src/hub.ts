@@ -143,6 +143,7 @@ export class Hub {
       nudgeAfterMs: opts.nudgeAfterMs ?? Hub.DEFAULT_NUDGE_MS,
       requireVerification: opts.requireVerification ?? false,
       ...(opts.chair ? { chair: opts.chair } : {}),
+      ...(opts.chair && opts.chairNamed ? { chairNamed: true } : {}),
       ...(opts.parent ? { parent: opts.parent } : {}),
     };
     // Per-run room cap: rooms sharing a swarm prefix (swarm-<id>-*) are counted together.
@@ -175,7 +176,6 @@ export class Hub {
     const room: Room = {
       name,
       ...opts,
-      ...(opts.chair ? { chairNamed: true } : {}),
       createdAt,
       state: "open",
       participants: new Map(),
@@ -676,8 +676,8 @@ export class Hub {
   }
 
   /** Chat messages per channel, and per script label on the human route; undefined before any is recorded. */
-  speakers(room: Room): { mcp?: number; "human-route"?: number; scripts?: Record<string, number> } | undefined {
-    const out: { mcp?: number; "human-route"?: number; scripts?: Record<string, number> } = {};
+  speakers(room: Room): { mcp?: number; "human-token"?: number; "human-loopback"?: number; scripts?: Record<string, number> } | undefined {
+    const out: { mcp?: number; "human-token"?: number; "human-loopback"?: number; scripts?: Record<string, number> } = {};
     for (const m of room.messages) {
       if (m.kind !== "chat" || !m.via) continue;
       out[m.via] = (out[m.via] ?? 0) + 1;
@@ -698,16 +698,17 @@ export class Hub {
    * this was recorded falls back to the sender's role.
    */
   speakerTag(room: Room, m: Message): string {
-    if (m.from.agent === "human" && m.via === "human-route") return ` [human route${m.source ? `, script: ${m.source}` : ""}]`;
+    if (m.from.agent === "human" && m.via === "human-token") return ` [human route: token${m.source ? `, script: ${m.source}` : ""}]`;
+    if (m.from.agent === "human" && m.via === "human-loopback") return ` [human route: loopback, not checked${m.source ? `, script: ${m.source}` : ""}]`;
     if (m.from.agent === "human" && m.via === "mcp") return " [says human; joined over MCP, not checked]";
     if (m.chair) return m.chair === "named" ? " [chair]" : " [chair, self-claimed]";
     return this.roleTag(room.participants.get(m.from.id) ?? {});
   }
 
   /**
-   * The owner names this room's chair through the human route (index.ts POST /rooms/:room/chair): until then a chair
-   * that took the role by joining first is tagged self-claimed, because any seat can do that. Naming never replaces a
-   * chair already bound to another name.
+   * The owner names this room's chair (index.ts POST /rooms/:room/chair, which takes the human token and nothing less):
+   * until then a chair that took the role by joining first is tagged self-claimed, because any seat can do that.
+   * Naming never replaces a chair already bound to another name.
    */
   nameChair(roomName: string, name: string, by: string): void {
     const room = this.getRoom(roomName);
@@ -717,7 +718,7 @@ export class Hub {
     room.chair = name;
     room.chairNamed = true;
     this.persist({ type: "chair_named", room: roomName, name, by, ts: now() });
-    this.post(room, "system", undefined, `${by} named ${name} this room's chair through the human route. From here ${name}'s messages are tagged [chair]: a relay that quotes the owner carries the owner's word.`);
+    this.post(room, "system", undefined, `${by} named ${name} this room's chair with the hub's human token. From here ${name}'s messages are tagged [chair]: a relay that quotes the owner carries the owner's word.`);
   }
 
   currentSpeaker(room: Room): Participant | undefined {
@@ -962,7 +963,7 @@ export class Hub {
     return targets;
   }
 
-  send(roomName: string, pid: string, content: string, replyTo?: string, force = false, quietArg?: boolean, surface = false, source?: string): Message {
+  send(roomName: string, pid: string, content: string, replyTo?: string, force = false, quietArg?: boolean, surface = false, human?: { token?: boolean; source?: string }): Message {
     let quiet = quietArg === true;
     const room = this.getRoom(roomName);
     const p = this.requireParticipant(room, pid);
@@ -1107,8 +1108,10 @@ export class Hub {
     const notices = room.messages.filter((m) => m.seq > p.lastSeenSeq && m.from.id !== p.id && this.isHubNotice(m) && this.pushableTo(room, m, p.id));
     if (notices.length) p.withheld = [...new Set([...(p.withheld ?? []), ...notices.map((m) => m.seq)])];
     // a script's own label for itself, kept only from the human route and only as a short plain name
-    const label = source && p.session?.startsWith("http:") && /^[\w .:-]{1,40}$/.test(source.trim()) ? source.trim() : undefined;
-    const msg = this.post(room, "chat", p, content, { replyTo, ...(quiet ? { quiet: true, audience } : {}), ...(autoQuiet ? { autoQuiet: true } : {}), ...(keptPublic ? { keptPublic: "board-key" as const } : {}), ...(label ? { source: label } : {}) });
+    const onRoute = !!p.session?.startsWith("http:");
+    const label = onRoute && human?.source && /^[\w .:-]{1,40}$/.test(human.source.trim()) ? human.source.trim() : undefined;
+    const msg = this.post(room, "chat", p, content, { replyTo, ...(quiet ? { quiet: true, audience } : {}), ...(autoQuiet ? { autoQuiet: true } : {}), ...(keptPublic ? { keptPublic: "board-key" as const } : {}),
+      ...(onRoute && human?.token ? { via: "human-token" as const } : {}), ...(label ? { source: label } : {}) });
     p.messageCount += 1;
     p.lastSeenSeq = Math.max(p.lastSeenSeq, msg.seq);
     this.persistAttention(room, p);
@@ -1200,7 +1203,7 @@ export class Hub {
       content,
       ts: now(),
       // the channel, as the hub knows it (index.ts joins a human-route caller with session "http:<name>")
-      ...(from ? { via: from.session?.startsWith("http:") ? "human-route" as const : "mcp" as const } : {}),
+      ...(from ? { via: from.session?.startsWith("http:") ? "human-loopback" as const : "mcp" as const } : {}),
       ...(from?.role === "chair" ? { chair: room.chairNamed && room.chair === from.name ? "named" as const : "self-claimed" as const } : {}),
       ...extra,
     };

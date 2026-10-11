@@ -6,7 +6,7 @@ import type { SeatUsage } from "./usage.js";
 import type { SeatMemory } from "./memory.js";
 import type { DevRun } from "./dev-runs.js";
 
-export type Opts = Required<Omit<RoomOptions, "chair" | "parent">> & { chair?: string; parent?: string };
+export type Opts = Required<Omit<RoomOptions, "chair" | "chairNamed" | "parent">> & { chair?: string; chairNamed?: boolean; parent?: string };
 
 export type Event =
   | { type: "room"; room: string; opts: Opts; createdAt: string; telemetryVersion?: 1 }

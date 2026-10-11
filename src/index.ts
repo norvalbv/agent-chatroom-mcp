@@ -342,6 +342,8 @@ const requireLauncherOrToken = (req: express.Request, res: express.Response): bo
   if (launcher && req.header("x-chatroom-launcher-token") === launcher) return true;
   return requireToken(req, res);
 };
+/** The request carries this hub's human token (not merely a loopback caller the opt-in lets through). */
+const tokenChecked = (req: express.Request): boolean => !!HUMAN_TOKEN && req.header("x-chatroom-token") === HUMAN_TOKEN;
 const requireToken = (req: express.Request, res: express.Response): boolean => {
   if (HUMAN_TOKEN && req.header("x-chatroom-token") === HUMAN_TOKEN) return true;
   // The explicit loopback opt-in keeps the local dashboard usable without a token, with or without one configured,
@@ -530,15 +532,16 @@ app.post("/rooms/:room/messages", (req, res) => {
     // source: a script posting on the owner's behalf says which script it is; seats see it in the sender's tag
     const { name, content, reply_to, source } = (req.body ?? {}) as { name?: string; content?: string; reply_to?: string; source?: string };
     const { participant } = hub.join(req.params.room, (name || "human").trim(), "human", {}, undefined, `http:${name || "human"}`);
-    const m = hub.send(req.params.room, participant.id, String(content ?? ""), typeof reply_to === "string" && reply_to ? reply_to : undefined, true, undefined, false, typeof source === "string" ? source : undefined);
+    const m = hub.send(req.params.room, participant.id, String(content ?? ""), typeof reply_to === "string" && reply_to ? reply_to : undefined, true, undefined, false, { token: tokenChecked(req), ...(typeof source === "string" ? { source } : {}) });
     res.json(m);
   } catch (e) {
     res.status(400).type("text/plain").send(e instanceof HubError ? e.message : "error");
   }
 });
 // The owner names the room's chair: a chair that took the role by joining first is tagged self-claimed until then.
+// The human token and nothing less: the loopback opt-in admits any process on this machine that is not this hub's seat.
 app.post("/rooms/:room/chair", (req, res) => {
-  if (!requireToken(req, res)) return;
+  if (!requireAgentControl(req, res)) return;
   try {
     const { name, by } = (req.body ?? {}) as { name?: string; by?: string };
     hub.nameChair(req.params.room, String(name ?? "").trim(), (by || "human").trim());
@@ -594,7 +597,9 @@ app.post("/rooms/:room/create", (req, res) => {
   try {
     const b = (req.body ?? {}) as { topic?: string; quorum?: "unanimous" | "majority" | "supermajority"; expected_participants?: number; require_verification?: boolean; require_challenge?: boolean; mode?: "free" | "round_robin"; max_message_chars?: number; anonymous?: boolean; chair?: string; parent?: string };
     const existed = hub.listRooms().some((r) => r.name === req.params.room);
-    const room = hub.createRoom(req.params.room, { topic: b.topic, quorum: b.quorum, expectedParticipants: b.expected_participants, requireVerification: b.require_verification, requireChallenge: b.require_challenge, mode: b.mode, maxMessageChars: b.max_message_chars, anonymous: b.anonymous, chair: b.chair, ...(b.parent ? { parent: b.parent } : {}) });
+    // a chair named here counts as named only when the caller was checked: the launcher's token or the human token
+    const checked = tokenChecked(req) || (!!process.env.CHATROOM_LAUNCHER_TOKEN && req.header("x-chatroom-launcher-token") === process.env.CHATROOM_LAUNCHER_TOKEN);
+    const room = hub.createRoom(req.params.room, { topic: b.topic, quorum: b.quorum, expectedParticipants: b.expected_participants, requireVerification: b.require_verification, requireChallenge: b.require_challenge, mode: b.mode, maxMessageChars: b.max_message_chars, anonymous: b.anonymous, chair: b.chair, ...(b.chair && checked ? { chairNamed: true } : {}), ...(b.parent ? { parent: b.parent } : {}) });
     res.status(existed ? 200 : 201).json({ ...hub.summary(room, true), created: !existed });
   } catch (e) {
     res.status(400).type("text/plain").send(e instanceof HubError ? e.message : "error");

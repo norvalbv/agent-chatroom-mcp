@@ -245,10 +245,12 @@ export interface Message {
   keptPublic?: "board-key";
   /** a board notice for a verify/* or attack/* entry: the commits its text covered when written (settles asks naming them) */
   covers?: string[];
-  /** The channel the sender came through, stamped when the message was posted: the hub's human route (POST
-   * /rooms/:room/messages: the human token, or a loopback caller outside every seat's process tree) or an MCP
-   * connection, which may call itself anything. Absent on system lines and in logs from before this was recorded. */
-  via?: "human-route" | "mcp";
+  /** The channel the sender came through, stamped when the message was posted. human-token: the hub's human route with
+   * the human token. human-loopback: that route with no token, under CHATROOM_INSECURE_LOCAL, from a loopback process
+   * that carries no seat key; on a machine running several hubs that is not proof of the owner (attack by
+   * claude-opus-5-5-1 on decision/speaker-identity). mcp: an MCP connection, which may call itself anything. Absent on
+   * system lines and in logs from before this was recorded. */
+  via?: "human-token" | "human-loopback" | "mcp";
   /** a human-route caller's own label for a script posting on the owner's behalf ("orchestrator") */
   source?: string;
   /** a chair's message: whether the chair had been named by the room's creator or the owner ("named") or had taken the role by joining first */
@@ -420,6 +422,9 @@ export interface RoomOptions {
   requireVerification?: boolean;
   /** Name of the participant honoured as chair (exempt from quorum, may veto). Set at creation, or by the first joiner to claim role=chair. */
   chair?: string;
+  /** The chair above was named by someone the hub checked: the launcher (its token) or the owner (the human token). Only
+   * the hub's own create route sets it; a seat creating a room over MCP can bind a chair's name but not this. */
+  chairNamed?: boolean;
   /** Breakout: the room this one was opened from. Set at creation by an active member of that room; its conclusion is carried back there. */
   parent?: string;
 }
@@ -444,7 +449,7 @@ export interface Room {
   nudgeAfterMs: number;
   requireVerification: boolean;
   chair?: string;
-  /** the chair was named by whoever created the room (the launcher's --chair) or by the owner through the human route (Hub.nameChair), not taken by the first seat to ask */
+  /** the chair was named by the launcher (--chair, under its token) or by the owner with the human token (Hub.nameChair), not taken by the first seat to ask */
   chairNamed?: boolean;
   /** Breakout link: the room this one was opened from (its conclusion lands on that room's board as inbox/<this>/conclusion). */
   parent?: string;

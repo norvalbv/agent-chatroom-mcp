@@ -1,5 +1,6 @@
 /** The Hub's shared board, as functions over the Hub instance; Hub keeps a one-line delegator for each member called from outside. */
 import { createHash } from "node:crypto";
+import { COORDINATION_PREFIXES } from "./keys.js";
 import type { Hub } from "../hub.js";
 import { HubError, isReviewKey, readVerifyHead, citesCommit, failToPassShortfall } from "./types.js";
 import type { Quorum, Participant, BoardExpiryOptions, BoardEntry, Room } from "./types.js";
@@ -422,7 +423,7 @@ function missingCommits(c: NonNullable<BoardEntry["commitCheck"]>): string {
 }
 
 /** Coordination state, not findings: there is no claim about the world in these to attack. */
-const NOT_A_FINDING = ["claim/", "verify/", "review/", "hold/", "inbox/", "handoff/", "help/", "join-request/", "draft/", "attack/"];
+const NOT_A_FINDING = [...COORDINATION_PREFIXES, "verify/", "review/", "handoff/", "help/", "join-request/", "draft/", "attack/"];
 /** An author's answer that leaves the quoted clause standing must add at least this much: a reply, not a re-save. */
 export const ATTACK_REPLY_MIN_CHARS = 40;
 /** Below this an entry is a note (a todo, a port number), not a finding a proposal could rest on. */

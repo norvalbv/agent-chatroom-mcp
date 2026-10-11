@@ -1,6 +1,7 @@
 /** What an idle seat could pick up, read from the board the hub already holds: a wait that returns nothing names it
  * instead of only saying "wait again". Nothing here is owed (asks, votes and challenges outrank it) and nothing is enforced. */
 import type { Hub } from "../hub.js";
+import { COORDINATION_PREFIXES } from "./keys.js";
 import { claimReleased } from "./board.js";
 import type { BoardEntry, Participant, Room } from "./types.js";
 
@@ -21,9 +22,9 @@ export interface OpenWork {
 }
 
 /** Board prefixes that are requests or bookkeeping, not work a claim's owner has produced. */
-const NOT_WORK = ["claim/", "help/", "join-request/", "inbox/", "hold/", "verify/", "idea/"];
+const NOT_WORK = [...COORDINATION_PREFIXES, "help/", "join-request/", "verify/", "review/", "idea/"];
 /** Board prefixes where an entry about an area is not a review of it. */
-const NOT_REVIEW = ["claim/", "help/", "join-request/", "inbox/", "hold/", "handoff/", "draft/"];
+const NOT_REVIEW = [...COORDINATION_PREFIXES, "help/", "join-request/", "handoff/", "draft/"];
 const HINT_ITEMS = 3;
 /** An idea its author has already ruled on, by the words this room's board used (review/unclaimed-ideas). */
 const IDEA_SETTLED = /^\s*(rejected|dropped|withdrawn|built|merged|done)\b/i;

@@ -119,6 +119,22 @@ const measuringIdle = watch(undefined);
 await measuringIdle.tick();
 assert.equal(measuringIdle.get(A)!.mb, 2930, "with no budget the footprint is still read (every fourth tick, the first included)");
 footprint = new Map();
+// a warned process that ends by itself before the next check: the seat is told it ended, nothing is stopped
+current = parseTable("  100     1 800000    02:00:00 claude -p brief\n  102     1 3000000      09:00 python3 pull.py --all", withEnv);
+kills.length = 0; events.length = 0;
+const nearMiss = watch(1000);
+await nearMiss.tick();
+current = parseTable("  100     1 800000    02:00:00 claude -p brief", withEnv);
+await nearMiss.tick();
+await nearMiss.tick();
+assert.deepEqual([kills, events.map((e) => e.kind)], [[], ["over", "ended"]], "over, then ended by itself; told once");
+assert.match(memoryNotice(events[1]!), /pid 102 .*ended by itself.*Nothing was stopped/);
+// the notice names the script, not the interpreter's install path
+const longExe = "/opt/homebrew/Cellar/python@3.14/3.14.7/Frameworks/Python.framework/Versions/3.14/Resources/Python.app/Contents/MacOS/Python /tmp/rc5-dev/naive-claude-opus-5-5-2.py --all";
+const shown = memoryNotice({ kind: "over", seat: A, mb: 1300, budget_mb: 600, top: { pid: 7, mb: 1208, command: longExe } });
+assert.match(shown, /pid 7 \(1208 MB\): Python \/tmp\/rc5-dev\/naive-claude-opus-5-5-2\.py --all\./);
+const longArgs = memoryNotice({ kind: "over", seat: A, mb: 1300, budget_mb: 600, top: { pid: 7, mb: 1208, command: `python3 -c ${"x = 1; ".repeat(40)}print(done_marker)` } });
+assert.match(longArgs, /python3 -c x = 1;.*….*print\(done_marker\)\./, "a long command keeps its start and its end");
 // over budget only through many small processes: no single one is worth stopping (floor: 10% of the budget)
 current = parseTable([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11].map((i) => `  ${400 + i}     1  90000      01:00 python3 rec${i}.py`).join("\n") + "\n  100     1 1000    02:00:00 claude -p brief", [...[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11].map((i) => `  ${400 + i} python3 rec${i}.py CHATROOM_SEAT_KEY=seat-key-AAAA`), "  100 claude CHATROOM_SEAT_KEY=seat-key-AAAA"].join("\n"));
 kills.length = 0;
@@ -242,6 +258,7 @@ let hubWide = (await (await fetch(`${HTTP}/memory`)).json()) as HubWide;
 // other hubs' seats on this machine are unattributed here too: wait for a tick that has seen the orphan
 for (let i = 0; !hubWide.unattributed.top.some((p) => p.pid === orphan.pid) && i < 75; i++) { await sleep(200); hubWide = (await (await fetch(`${HTTP}/memory`)).json()) as HubWide; }
 assert.equal(hubWide.budget_mb, BUDGET);
+assert.match((hubWide as HubWide & { unattributed_is?: string }).unattributed_is ?? "", /not this hub's seats/);
 assert.ok(hubWide.unattributed.top.some((p) => p.pid === orphan.pid && p.mb >= 350), JSON.stringify(hubWide));
 
 // telemetry: the room log has the samples and the stop

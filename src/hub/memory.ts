@@ -33,9 +33,10 @@ export interface SeatMemory {
   budget_mb: number | null;
   at: string;
 }
-/** warn: past WARN_AT of the budget. over: past the budget on one sample (stopped on the next unless it shrinks). */
+/** warn: past WARN_AT of the budget. over: past the budget on one sample (stopped on the next unless it shrinks).
+ * ended: the process an "over" named exited by itself before the next check (a near miss: nothing was stopped). */
 export type MemoryEvent =
-  | { kind: "warn" | "over"; seat: string; mb: number; budget_mb: number; top: NonNullable<SeatMemory["top"]> }
+  | { kind: "warn" | "over" | "ended"; seat: string; mb: number; budget_mb: number; top: NonNullable<SeatMemory["top"]> }
   | { kind: "stop"; seat: string; mb: number; budget_mb: number; top: NonNullable<SeatMemory["top"]>; signal: "SIGTERM" | "SIGKILL" };
 /** Processes carrying a seat key no active participant of this hub holds: a seat that left, or another hub's. Reported, never signalled. */
 export interface Unattributed { mb: number; processes: number; top: { pid: number; mb: number; command: string }[] }
@@ -123,6 +124,8 @@ export class MemoryWatch {
   private readonly warned = new Set<string>();
   /** seats whose last sample was over budget: one sample is a thin basis for stopping a job, two in a row is not */
   private readonly over = new Set<string>();
+  /** the process each "over" named, until it is stopped or ends by itself */
+  private readonly named = new Map<string, NonNullable<SeatMemory["top"]>>();
   private others: Unattributed = { mb: 0, processes: 0, top: [] };
   /** pid the last tick asked to stop, per seat: still there on the next tick means it ignored SIGTERM */
   private readonly asked = new Map<string, number>();
@@ -162,17 +165,25 @@ export class MemoryWatch {
         const memory: SeatMemory = { mb, agent_mb: mbOf(u.agentKb), processes: u.own.length, top, peak_mb: Math.max(mb, this.bySeat.get(seat)?.peak_mb ?? 0), budget_mb: this.budgetMb, at };
         this.bySeat.set(seat, memory);
         this.o.onSample?.(seat, memory);
+        const pending = this.named.get(seat);
+        if (pending && this.budgetMb && !table.some((p) => p.pid === pending.pid)) {
+          this.named.delete(seat);
+          this.over.delete(seat);
+          events.push({ kind: "ended", seat, mb, budget_mb: this.budgetMb, top: pending });
+        }
         if (!this.budgetMb || !top) continue;
         if (mb >= this.budgetMb && top.mb >= this.budgetMb * STOP_FLOOR) {
           if (!this.over.has(seat)) {
             this.over.add(seat);
             this.warned.add(seat);
+            this.named.set(seat, top);
             events.push({ kind: "over", seat, mb, budget_mb: this.budgetMb, top });
             continue;
           }
           const signal = this.asked.get(seat) === top.pid ? "SIGKILL" : "SIGTERM";
           try { (this.o.kill ?? ((pid, sig) => process.kill(pid, sig)))(top.pid, signal); } catch { continue; }
           this.asked.set(seat, top.pid);
+          this.named.delete(seat);
           events.push({ kind: "stop", seat, mb, budget_mb: this.budgetMb, top, signal });
         } else {
           this.asked.delete(seat);
@@ -207,8 +218,18 @@ export class MemoryWatch {
  * (the correction arrives when the job fails, not only in a brief). CHATROOM_SEAT_MEMORY_HINT adds a room's own line,
  * e.g. where its helper lives.
  */
+/**
+ * A command as a seat recognises it: the interpreter's install directory dropped and, past `n` characters, its start and
+ * its end kept (the script and its arguments are at the end; two reviewers' seats saw only "…/Contents/MacOS/Py").
+ */
+export function shownCommand(command: string, n = 140): string {
+  const c = command.replace(/^\/(?:[^\s/]+\/)+/, "");
+  return c.length <= n ? c : `${c.slice(0, 40)}…${c.slice(c.length - (n - 41))}`;
+}
+
 export function memoryNotice(e: MemoryEvent, hint = process.env.CHATROOM_SEAT_MEMORY_HINT ?? ""): string {
-  const what = `pid ${e.top.pid} (${e.top.mb} MB): ${e.top.command.slice(0, 120)}`;
+  const what = `pid ${e.top.pid} (${e.top.mb} MB): ${shownCommand(e.top.command)}`;
+  if (e.kind === "ended") return `MEMORY: ${what}, which was over your ${e.budget_mb} MB budget, ended by itself before the next check. Nothing was stopped; the processes you started now hold ${e.mb} MB.`;
   const limit = Math.max(256, Math.floor((e.budget_mb * 0.6) / 256) * 256);
   const how = `Do not load a whole file: read it in chunks or as a stream. In DuckDB run \`SET memory_limit='${limit}MB'; SET threads=2; SET temp_directory='/tmp/duckdb-spill';\` first (its default is 80% of this machine's RAM for every process). Select only the columns and rows you need, and run one large job at a time. Your budget is in $CHATROOM_SEAT_MEMORY_MB.${hint ? ` ${hint}` : ""}`;
   if (e.kind === "warn") return `MEMORY: the processes you started hold ${e.mb} MB of your ${e.budget_mb} MB budget. Largest: ${what}. Past ${e.budget_mb} MB the hub stops your largest process. ${how}`;

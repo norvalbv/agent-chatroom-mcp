@@ -51,6 +51,7 @@ export function runCommands(commands, { cwd, timeout = defaultTimeout(), log = l
 export const offlineScripts = [
   'archive-regression.ts',
   'last-call-regression.ts',
+  'skill-closing-regression.ts',
   'amend-board-regression.ts',
   'amend-stale-regression.ts',
   'open-children-regression.ts',

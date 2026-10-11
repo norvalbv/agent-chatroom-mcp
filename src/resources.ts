@@ -45,10 +45,10 @@ export function loadResources(path: string): Resource[] {
 /** Posts the entries to every room, one request per room, and returns a log line for each. A room that does not exist
  * yet answers 202: the hub holds the entries and writes them when the room is created. Any other refusal throws (a hub
  * from an older build has no such route), because the launcher runs this before it starts a seat. */
-export async function seedResources(hubUrl: string, rooms: string[], entries: Resource[], opts: { token?: string; fetch?: typeof fetch } = {}): Promise<string[]> {
+export async function seedResources(hubUrl: string, rooms: string[], entries: Resource[], opts: { token?: string; launcherToken?: string; fetch?: typeof fetch } = {}): Promise<string[]> {
   const lines: string[] = [];
   for (const room of rooms) {
-    const r = await (opts.fetch ?? fetch)(`${hubUrl}/rooms/${encodeURIComponent(room)}/resources`, { method: "POST", headers: { "content-type": "application/json", ...(opts.token ? { "x-chatroom-token": opts.token } : {}) }, body: JSON.stringify({ entries }), signal: AbortSignal.timeout(5_000) });
+    const r = await (opts.fetch ?? fetch)(`${hubUrl}/rooms/${encodeURIComponent(room)}/resources`, { method: "POST", headers: { "content-type": "application/json", ...(opts.token ? { "x-chatroom-token": opts.token } : {}), ...(opts.launcherToken ? { "x-chatroom-launcher-token": opts.launcherToken } : {}) }, body: JSON.stringify({ entries }), signal: AbortSignal.timeout(5_000) });
     if (!r.ok) throw new Error(`${room}: the hub at ${hubUrl} did not take the resources (${r.status} ${(await r.text().catch(() => "")).slice(0, 200)}); --resources needs a hub from this build`);
     lines.push(`${room}: ${entries.length} resource${entries.length === 1 ? "" : "s"} ${r.status === 202 ? "held until the room is created" : "on the board"} (${entries.map((e) => e.key.slice("resource/".length)).join(", ")})`);
   }

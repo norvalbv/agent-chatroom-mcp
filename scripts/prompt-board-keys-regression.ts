@@ -40,6 +40,19 @@ try {
   assert.doesNotThrow(() => hub.setBoard("r", a.id, key, "board.ts: the shared board, reserved prefixes, inbox cap."));
   console.log(`PASS the digest key from worker.md is accepted by board_set (${key})`);
 } catch (e) { failed++; console.error(`FAIL ${e instanceof Error ? e.message.split("\n")[0] : e}`); }
+// review/4ee42a7e (claude-opus-5-5-4): a 300-char file summary was listed as an unexamined finding and counted as its
+// writer's evidence. It is a cache of a file's contents: nobody's result, and nothing to attack.
+try {
+  const hub = new Hub({});
+  const a = hub.join("cache", "seat-1", "claude", {}, undefined, "s1").participant;
+  hub.join("cache", "seat-2", "claude", {}, undefined, "s2");
+  hub.join("cache", "seat-3", "claude", {}, undefined, "s3");
+  hub.setBoard("cache", a.id, "filedigest/1a2b3c4d5e", "src/hub/board.ts\n" + "The shared board: reserved prefixes, the inbox cap, ownership rules and the scrutiny list. ".repeat(4));
+  assert.deepEqual(hub.scrutiny("cache").unexamined, [], "a file digest is not a finding somebody owes an attack");
+  const out = (hub.summary(hub.getRoom("cache"), true) as { participants: { name: string; output: { evidence: number } }[] }).participants.find((p) => p.name === "seat-1")!.output;
+  assert.equal(out.evidence, 0, "a file digest is not its writer's evidence");
+  console.log("PASS a file digest is a cache: not an unexamined finding, not evidence");
+} catch (e) { failed++; console.error(`FAIL ${e instanceof Error ? e.message.split("\n")[0] : e}`); }
 assert.ok(seen.length >= 5, `expected to find key shapes in the prompts, found ${seen.length}`);
 if (failed) { console.error(`PROMPT BOARD KEYS: ${failed} failed (${seen.length} shapes checked)`); process.exitCode = 1; }
 else console.log(`PROMPT BOARD KEYS OK (${seen.length} shapes checked)`);

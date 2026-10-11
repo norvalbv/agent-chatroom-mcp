@@ -45,7 +45,8 @@ test("a seat that wrote only a claim and a take has delivered nothing, and its c
 
 test("every coordination prefix is read the same way at all four sites", (t) => {
   const { hub, room, a, b } = fixture(t);
-  assert.deepEqual([...COORDINATION_PREFIXES].sort(), ["claim/", "hold/", "inbox/", "take/"]);
+  // filedigest/ joined the list with the file-summary cache the prompts name (scripts/prompt-board-keys-regression.ts)
+  assert.deepEqual([...COORDINATION_PREFIXES].sort(), ["claim/", "filedigest/", "hold/", "inbox/", "take/"]);
   hub.setBoard(room.name, a.id, "claim/x", JSON.stringify({ area: "x", owner: "Alice", team: ["Alice"], status: "open", note: LONG }));
   hub.setBoard(room.name, a.id, "take/x", LONG);
   hub.setBoard(room.name, a.id, `hold/${room.name}`, LONG);

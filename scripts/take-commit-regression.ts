@@ -81,6 +81,10 @@ test("a claim's commits are held by its hub-assigned reviewer: another seat's ta
   h.setBoard(name, a.id, `take/review/${A1}`, `@${other.name} the assigned reviewer is busy, please take it`);
   h.setBoard(name, other.id, `take/review/${A1}`, "accepted, reviewing");
   h.setBoard(name, other.id, `take/review/${A1}`, "");
+  // the assigned reviewer may delegate its review the same way (dev room swarm-183036-yisv: the verifier's hand-off was refused)
+  const rev0 = [...h.getRoom(name).participants.values()].find((p) => p.name === reviewer)!;
+  h.setBoard(name, rev0.id, `take/review-${A1}`, `@${other.name} I am busy, yours`);
+  h.setBoard(name, other.id, `take/review-${A1}`, "");
   // the assigned reviewer takes it; the author's own take on its commit passes; a commit by nobody with a claim passes
   const rev = [...h.getRoom(name).participants.values()].find((p) => p.name === reviewer)!;
   h.setBoard(name, rev.id, `take/review-${A1}`, "assigned, reviewing");

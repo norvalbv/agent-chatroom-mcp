@@ -91,13 +91,14 @@ function commitTake(hub: Hub, room: Room, p: Participant, key: string, w: TakeWr
     if (!author || author.id === w.holder.id || author.id === p.id) continue;
     const assigned = [...room.board].filter(([k, e]) => k.startsWith("claim/") && e.by === author.name && e.reviewerId && claimOpen(e))
       .map(([k, e]) => ({ key: k, reviewer: room.participants.get(e.reviewerId!) })).filter((x) => x.reviewer?.active);
-    if (!assigned.length || assigned.some((x) => x.reviewer!.id === w.holder.id)) continue;
+    // the assigned reviewer takes it, or hands it on: in dev room swarm-183036-yisv the verifier could not delegate its own review
+    if (!assigned.length || assigned.some((x) => x.reviewer!.id === w.holder.id || x.reviewer!.id === p.id)) continue;
     const a = hub.shown(room, author), who = [...new Set(assigned.map((x) => hub.shown(room, x.reviewer!)))];
     refuse("assigned-reviewer", commit, assigned[0]!.reviewer!,
       (assigned.length === 1
         ? `${who[0]} is the hub-assigned reviewer of ${a}'s "${assigned[0]!.key}", and ${commit} is ${a}'s commit. `
         : `${commit} is ${a}'s commit, and ${a}'s claims have hub-assigned reviewers: ${assigned.map((x) => `${hub.shown(room, x.reviewer!)} ("${x.key}")`).join(", ")}. `) +
-      `Ask ${who.map((n) => `@${n}`).join(" or ")} whether they are on it before you start. ${a} can also hand it to you (a take/ line starting with @${p.name}). If a second review is wanted, it needs no take: write it as review/${commit}-${p.name}.`);
+      `Ask ${who.map((n) => `@${n}`).join(" or ")} whether they are on it before you start. ${a} or the assigned reviewer can also hand it to you (a take/ line starting with @${p.name}). If a second review is wanted, it needs no take: write it as review/${commit}-${p.name}.`);
   }
   return w;
 }

@@ -800,7 +800,7 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
           "Write the brief the way you would for a capable colleague who has not seen the conversation.",
         inputSchema: {
           room: roomArg,
-          brief: z.string().describe("What the new agent should do, with the context it needs and what 'done' looks like."),
+          brief: z.string().describe("What the new agent should do, with the context it needs and what 'done' looks like. 20-8,000 characters: up to 4,000 reach the recruit as written; a longer one is put on the board as brief/<area or name> and the recruit is given its opening and the key."),
           name: z.string().optional().describe("Display name for the newcomer (default: <agent>-recruit-N)."),
           agent: z.enum(["claude", "codex", "openrouter"]).optional().describe("Requested runner; room_status.recruitment reports the hub's overriding policy and current budgets. Without a pin or request, defaults to claude."),
           model: z.string().optional().describe("Requested model (Claude alias, Codex model id or OpenRouter slug); the hub's model pin, if set, takes precedence."),

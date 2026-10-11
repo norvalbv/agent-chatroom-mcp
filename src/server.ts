@@ -177,8 +177,9 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
         }
         return fail(e);
       } finally {
-        // which entry a board_get read: a board key is a short name, not content, and without it no record can say who read what
-        const key = tool === "board_get" && typeof (args as { key?: unknown })?.key === "string" && Hub.BOARD_KEY.test((args as { key: string }).key) ? (args as { key: string }).key : undefined;
+        // which entry a board_get read or a board_set wrote (or was refused): a board key is a short name, not content, and
+        // without it no record can say who read what, or what a refused write was for (review/take-keys)
+        const key = (tool === "board_get" || tool === "board_set") && typeof (args as { key?: unknown })?.key === "string" && Hub.BOARD_KEY.test((args as { key: string }).key) ? (args as { key: string }).key : undefined;
         hub.recordCallCompletion(room, tool, outcome, participant, { ms: Date.now() - started, ...(empty === undefined ? {} : { empty }), ...(from ? { outsider: from } : {}), ...(key === undefined ? {} : { key }) });
       }
     };

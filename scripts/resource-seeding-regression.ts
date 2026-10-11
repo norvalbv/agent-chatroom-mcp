@@ -194,7 +194,16 @@ const completions = readFileSync(join(dir, "res-read.jsonl"), "utf8").trim().spl
 const gets = completions.filter((ev) => ev.tool === "board_get");
 assert.deepEqual(gets.map((ev) => ev.key), [KEYS[1], undefined, "resource/not-there"], "board_get records the key asked for, found or not; the manifest read has none");
 assert.equal(gets[0]!.participant, rJoin.participant_id, "with the seat that read it");
-assert.equal(completions.filter((ev) => ev.tool !== "board_get").some((ev) => "key" in ev), false, "no other tool's completion carries a key");
+// and which key a board_set wrote or was refused: a refused write was recorded with no key, so the record could not say
+// what a seat had tried to take (review/take-keys, an ownership refusal at 01:22:41 in swarm-012124-e291-room)
+const writer = await seat("writer");
+const wJoin = JSON.parse((await writer.call("join_room", { room: "res-read", name: "W", agent: "test" })).text) as { participant_id: string };
+await writer.call("board_set", { room: "res-read", key: "notes", text: "not mine", participant_id: wJoin.participant_id });
+const all = readFileSync(join(dir, "res-read.jsonl"), "utf8").trim().split("\n").map((l) => JSON.parse(l) as { type: string; tool?: string; key?: string; participant?: string; outcome?: string })
+  .filter((ev) => ev.type === "call_completion");
+const sets = all.filter((ev) => ev.tool === "board_set");
+assert.deepEqual(sets.map((ev) => [ev.key, ev.outcome, ev.participant]), [["notes", "success", rJoin.participant_id], ["notes", "hub_refusal", wJoin.participant_id]], "board_set records the key it wrote, and the key of a refused write");
+assert.equal(all.filter((ev) => ev.tool !== "board_get" && ev.tool !== "board_set").some((ev) => "key" in ev), false, "no other tool's completion carries a key");
 // and the hub still replays its own log
 assert.doesNotThrow(() => new Hub({ dataDir: dir }));
 

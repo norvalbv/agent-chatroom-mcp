@@ -262,3 +262,82 @@ export function renderTimeline(t: RunTimeline): string {
   if (t.recruitCalls.length) text += `\nRecruits: ${t.recruitCalls.map((r) => `${hhmm(r.at)} ${r.by}`).join(", ")}.\n`;
   return `${text}\n`;
 }
+
+/** One run, one row: what "further per hour and per dollar" can be read from (scripts/runs-table.ts). A result is a
+ * result/* entry and reviewed means another seat reran, verified, reviewed or attacked it; a finding is any board entry
+ * but claim/, draft/, inbox/ and hold/ (run-metrics' rule). Unknown cost stays undefined, never zero. */
+export interface RunRow {
+  room: string;
+  /** the topic's first line */
+  task: string;
+  start?: string;
+  hours: number;
+  seats: number;
+  costUsd?: number;
+  results: number;
+  reviewed: number;
+  findings: number;
+  firstProposalMin?: number;
+  conclusionMin?: number;
+  /** minutes from the start to the half hour output fell away for good (RunTimeline.quietFrom) */
+  quietFromMin?: number;
+  reviewedPerHour: number;
+  usdPerReviewed?: number;
+  usdPerFinding?: number;
+}
+
+const NOT_FINDING = /^(claim|draft|inbox|hold)\//;
+const round2 = (x: number) => Math.round(x * 100) / 100;
+
+export function runRow(events: readonly Ev[]): RunRow {
+  const t = runTimeline(events);
+  let task = "";
+  let firstProposal: number | undefined;
+  let conclusion: number | undefined;
+  const keys = new Set<string>();
+  let first: number | undefined;
+  let last: number | undefined;
+  for (const e of events) {
+    if (e.type === "room") task ||= String(e.opts?.topic ?? "").split("\n")[0].slice(0, 120);
+    const ts = Date.parse(stampOf(e) ?? "");
+    // the run is what seats did: a system line (the owner closing the room the next morning) does not lengthen it
+    const system = e.type === "message" && e.msg?.kind !== "chat";
+    if (!Number.isNaN(ts) && !system) { first = Math.min(first ?? ts, ts); last = Math.max(last ?? ts, ts); }
+    if (e.type === "board" && e.entry && !NOT_FINDING.test(String(e.key))) keys.add(String(e.key));
+    if (e.type === "proposal" && e.proposal?.createdAt) firstProposal ??= Date.parse(e.proposal.createdAt);
+    if (e.type === "state" && e.conclusion?.decidedAt) conclusion ??= Date.parse(e.conclusion.decidedAt);
+  }
+  const min = (ts: number | undefined) => (ts === undefined || first === undefined ? undefined : Math.round((ts - first) / 60_000));
+  const hours = first === undefined || last === undefined ? 0 : round2((last - first) / 3_600_000);
+  const priced = t.seats.filter((s) => s.requests > 0 || s.costUsd > 0);
+  const costUsd = priced.length ? round2(priced.reduce((n, s) => n + s.costUsd, 0)) : undefined;
+  const reviewed = t.reviews.filter((r) => r.minutes !== undefined).length;
+  return {
+    room: t.room,
+    task,
+    ...(first === undefined ? {} : { start: new Date(first).toISOString() }),
+    hours,
+    seats: t.seats.length,
+    ...(costUsd === undefined ? {} : { costUsd }),
+    results: t.reviews.length,
+    reviewed,
+    findings: keys.size,
+    ...(firstProposal === undefined ? {} : { firstProposalMin: min(firstProposal) }),
+    ...(conclusion === undefined ? {} : { conclusionMin: min(conclusion) }),
+    ...(t.quietFrom ? { quietFromMin: min(Date.parse(t.quietFrom)) } : {}),
+    reviewedPerHour: hours > 0 ? round2(reviewed / hours) : 0,
+    ...(costUsd !== undefined && reviewed ? { usdPerReviewed: round2(costUsd / reviewed) } : {}),
+    ...(costUsd !== undefined && keys.size ? { usdPerFinding: round2(costUsd / keys.size) } : {}),
+  };
+}
+
+/** Rows as a markdown table, oldest first. */
+export function renderRunsTable(rows: RunRow[]): string {
+  const v = (x: number | undefined, unit = "") => (x === undefined ? "?" : `${unit}${x}`);
+  const dash = (x: number | undefined) => (x === undefined ? "-" : String(x));
+  let text = "| room | task | hours | seats | cost | results / reviewed | reviewed per hour | $ per reviewed | findings | $ per finding | first proposal (min) | conclusion (min) | went quiet (min) |\n|---|---|---|---|---|---|---|---|---|---|---|---|---|\n";
+  for (const r of [...rows].sort((a, b) => (a.start ?? "").localeCompare(b.start ?? ""))) {
+    text += `| ${r.room} | ${r.task.replace(/\|/g, "/")} | ${r.hours} | ${r.seats} | ${v(r.costUsd, "$")} | ${r.results} / ${r.reviewed} | ${r.reviewedPerHour} | ${v(r.usdPerReviewed, "$")} | ${r.findings} | ${v(r.usdPerFinding, "$")} | ${dash(r.firstProposalMin)} | ${dash(r.conclusionMin)} | ${dash(r.quietFromMin)} |\n`;
+  }
+  return text;
+}

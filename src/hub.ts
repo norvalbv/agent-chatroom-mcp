@@ -2897,6 +2897,25 @@ export class Hub {
   /** @internal */ readonly seats = new liveness.Seats(this);
   heartbeat(roomName: string, pid: string, info: liveness.Beat): void { this.seats.heartbeat(roomName, pid, info); }
   bindSeat(seatKey: string, session: string, worktree?: string): void { this.seats.bind(seatKey, session, worktree); }
+  /**
+   * A hub that has just started tells each room it was serving (an open room with a seat restored from the last process)
+   * that it restarted, how long the room went without it and why the last hub stopped, and writes a hub_restart event.
+   * On 2026-10-10 the record only went silent for eight minutes, and the seats learned of it from the chair.
+   */
+  announceRestart(previous?: string): void {
+    const at = Date.now();
+    const clock = new Date(at).toISOString().slice(11, 19);
+    for (const room of this.rooms.values()) {
+      if (room.state !== "open" && room.state !== "stalled") continue;
+      if (![...room.participants.values()].some((p) => p.restoredAt)) continue;
+      const last = room.messages.at(-1)?.ts;
+      const down_s = last ? Math.max(0, Math.round((at - Date.parse(last)) / 1000)) : 0;
+      this.persist({ type: "hub_restart", room: room.name, ts: now(), down_s, ...(previous ? { previous } : {}) });
+      this.post(room, "system", undefined,
+        `The hub restarted at ${clock} UTC, after ${down_s} s without a hub since this room's last message${previous ? `; ${previous}` : ""}. ` +
+        "Every seat, the board and every message are kept: a seat's next chatroom call puts it back in its seat (join_room with its old participant_id if it was not launched with a seat key).");
+    }
+  }
   /** A reconnecting launched seat takes its seat back by its seat key (liveness.reseatable); undefined when it has none to take. */
   reseat(roomName: string, session: string, wantId?: string): Participant | undefined {
     const room = this.rooms.get(roomName);

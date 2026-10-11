@@ -54,7 +54,7 @@ export interface RunMetrics {
   recruits: { calls: number; seats: number; workers: number; rate: number };
   /** summed over seats that reported usage; seatsWithUsage of seats.length says how complete it is */
   usage?: { cost_usd: number; input_tokens: number; output_tokens: number; seatsWithUsage: number };
-  /** take/<what> steps by action (hub "take" events): take, offer, accept, handover, release, decline, withdraw, refused; absent: none */
+  /** take/<what> steps by action (hub "take" events): take, offer, accept, handover, release, decline, withdraw, refused, and refused:<reason> (held, same-commit, assigned-reviewer); absent: none */
   takes?: Record<string, number>;
   /** board_set(append=true) lines per shared key (hub "board_append" events): appends, distinct appenders, continuations used; absent: none */
   appends?: Record<string, { lines: number; seats: number; continuations: number }>;
@@ -181,6 +181,8 @@ export function runMetrics(events: readonly Ev[], opts: MetricsOptions = {}): Ru
       case "take":
         stamp(e.ts);
         takes[String(e.action)] = (takes[String(e.action)] ?? 0) + 1;
+        // why a take was refused before the work: held (same key), same-commit (another spelling), assigned-reviewer
+        if (e.action === "refused" && e.reason) takes[`refused:${String(e.reason)}`] = (takes[`refused:${String(e.reason)}`] ?? 0) + 1;
         break;
       case "board_append": {
         stamp(e.ts);

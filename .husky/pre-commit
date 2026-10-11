@@ -16,12 +16,36 @@ export PATH
 # comment: `devkit sync-hook-runner` only touches between the devkit-guards markers), so a
 # devkit sync never removes it. See scripts/guard-baseline-freeze.mjs for the mechanism and the
 # maintainer override (CHATROOM_BASELINE_FREEZE_OVERRIDE, never available to a seat).
-if ! node scripts/guard-baseline-freeze.mjs; then
-    exit 1
-fi
-# <<< baseline-freeze-guard <<<
 
 # >>> devkit-guards >>>
+# devkit:commit-index
+unset DEVKIT_COMMIT_INDEX_FILE DEVKIT_COMMIT_GIT_DIR
+__dk_exact() {
+    __dk_out="$("$@" && printf x)" || return 1
+    __dk_out="${__dk_out%x}"
+    __dk_out="${__dk_out%?}"
+}
+__dk_canonical_path() {
+    __dk_exact sh -c 'cd -P "$1" && pwd -P' sh "${1%/*}/" 2>/dev/null || return 1
+    __dk_out="${__dk_out%/}/${1##*/}"
+}
+__dk_commit_index_capture() {
+    [ -n "${GIT_INDEX_FILE:-}" ] || return 0
+    case "$GIT_INDEX_FILE" in /*) __dk_ci="$GIT_INDEX_FILE" ;; *) __dk_ci="$PWD/$GIT_INDEX_FILE" ;; esac
+    __dk_canonical_path "$__dk_ci" || return 0
+    __dk_ci="$__dk_out"
+    __dk_exact env -u GIT_INDEX_FILE git rev-parse --path-format=absolute --git-path index 2>/dev/null || return 0
+    __dk_canonical_path "$__dk_out" || return 0
+    [ "$__dk_ci" = "$__dk_out" ] && return 0
+    __dk_exact git rev-parse --absolute-git-dir 2>/dev/null || return 0
+    __dk_exact sh -c 'cd -P "$1" && pwd -P' sh "$__dk_out" 2>/dev/null || return 0
+    DEVKIT_COMMIT_INDEX_FILE="$__dk_ci"
+    DEVKIT_COMMIT_GIT_DIR="$__dk_out"
+    export DEVKIT_COMMIT_INDEX_FILE DEVKIT_COMMIT_GIT_DIR
+}
+__dk_commit_index_capture || true
+# /devkit:commit-index
+
 # devkit:commit-terminal
 if [ -z "${DEVKIT_SHIP_ID:-}" ] && [ -z "${DEVKIT_REVIEW_ID:-}" ] && [ -z "${DEVKIT_NO_TELEMETRY:-}" ]; then
     __dk_nonce="$(uuidgen 2>/dev/null || true)"
@@ -45,6 +69,13 @@ if [ -z "${DEVKIT_SHIP_ID:-}" ] && [ -z "${DEVKIT_REVIEW_ID:-}" ] && [ -z "${DEV
         [ -n "$__dk_r" ] || __dk_r="$(basename "$(git rev-parse --show-toplevel 2>/dev/null)")"
         printf '%s' "$__dk_r"
     }
+    __dk_parent_session() {
+        __dk_s="${CLAUDE_CODE_SESSION_ID:-${CODEX_THREAD_ID:-}}"
+        __dk_a=ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789
+        case $__dk_s in ''|[!$__dk_a]*|*[!$__dk_a._-]*) return 0 ;; esac
+        [ "${#__dk_s}" -le 128 ] || return 0
+        printf ',"parent_session_id":"%s"' "$__dk_s"
+    }
     __dk_commit_result() {
         [ -n "${__dk_done:-}" ] && return 0
         __dk_done=1
@@ -55,19 +86,87 @@ if [ -z "${DEVKIT_SHIP_ID:-}" ] && [ -z "${DEVKIT_REVIEW_ID:-}" ] && [ -z "${DEV
         fi
         __dk_events="${DEVKIT_GATE_EVENTS:-$HOME/.devkit/telemetry/gate-events.jsonl}"
         mkdir -p "$(dirname "$__dk_events")" 2>/dev/null || return 0
-        printf '{"type":"commit_result","ship_id":"%s","commit_tree":"%s","run_mode":"commit","repo":"%s","branch":"%s","exit_code":%d,"duration_s":%d,"ts":"%s"}\n' \
+        printf '{"type":"commit_result","ship_id":"%s","commit_tree":"%s","run_mode":"commit","repo":"%s","branch":"%s"%s,"exit_code":%d,"duration_s":%d,"ts":"%s"}\n' \
             "$(__dk_esc "$DEVKIT_COMMIT_ID")" "$__dk_tree" \
             "$(__dk_esc "$(__dk_repo)")" \
             "$(__dk_esc "$(git rev-parse --abbrev-ref HEAD 2>/dev/null)")" \
+            "$(__dk_parent_session)" \
             "${1:-0}" "$(( $(date +%s) - __dk_t0 ))" \
             "$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$__dk_events" 2>/dev/null || true
         if [ "${1:-0}" -ne 0 ] && [ -n "${__dk_commit_state:-}" ]; then
             rm -f "$__dk_commit_state" 2>/dev/null || true
         fi
     }
-    trap '__dk_commit_result "$?"' EXIT
 fi
 # /devkit:commit-terminal
+# devkit:gate-log
+# Full gate output → .devkit/last-commit-gates-<branch>.log; off under ship/review and DEVKIT_GATE_LOG=0.
+__dk_gate_log=""
+__dk_gate_log_open() {
+    case "${DEVKIT_GATE_LOG:-1}" in 0|off|false|no) return 0 ;; esac
+    [ -z "${DEVKIT_SHIP_ID:-}" ] && [ -z "${DEVKIT_REVIEW_ID:-}" ] && [ -z "${DEVKIT_RUN_MODE:-}" ] || return 0
+    __dk_gl_top="$(git rev-parse --show-toplevel 2>/dev/null)" || return 0
+    [ -n "$__dk_gl_top" ] || return 0
+    __dk_gl_br="$(git symbolic-ref --short -q HEAD 2>/dev/null || git rev-parse --short HEAD 2>/dev/null || echo detached)"
+    __dk_gl_path="$__dk_gl_top/.devkit/last-commit-gates-$(printf '%s' "$__dk_gl_br" | tr '/' '-').log"
+    __dk_gl_hand="$(git rev-parse --path-format=absolute --git-path devkit-gate-log 2>/dev/null || true)"
+    __dk_gl_mode=fresh
+    if [ "$__dk_gl_mode" = append ]; then
+        ( umask 077; : >> "$__dk_gl_path" ) 2>/dev/null || __dk_gl_mode=failed
+    else
+        ( umask 077; mkdir -p "$__dk_gl_top/.devkit" && : > "$__dk_gl_path" ) 2>/dev/null || __dk_gl_mode=failed
+    fi
+    # Self-ignoring, so neither a stale .gitignore nor a pruned overlay exclude offers the log to git add.
+    if [ "$__dk_gl_mode" = fresh ] && [ ! -e "$__dk_gl_top/.devkit/.gitignore" ]; then
+        printf '%s\n' '# devkit (sc-2755): local gate output, never committed.' \
+            '/last-commit-gates-*.log' '/.gitignore' > "$__dk_gl_top/.devkit/.gitignore" 2>/dev/null || true
+    fi
+    if [ "$__dk_gl_mode" = failed ]; then
+        echo "⚠️  devkit: could not write the gate log $__dk_gl_path — gates still run, output is not persisted." >&2
+        return 0
+    fi
+    __dk_gl_off="$(wc -c < "$__dk_gl_path" 2>/dev/null | tr -d ' ')"
+    printf '=== devkit pre-commit gates · %s · attempt %s · %s\n' \
+        "$__dk_gl_br" "${DEVKIT_COMMIT_ID:-none}" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$__dk_gl_path" 2>/dev/null || true
+    command exec 8>&1 9>&2 || return 0
+    if ! command exec >>"$__dk_gl_path" 2>&1; then
+        command exec 2>&9 || true
+        echo "⚠️  devkit: could not redirect into the gate log $__dk_gl_path — output is not persisted." >&2
+        return 0
+    fi
+    __dk_gate_log="$__dk_gl_path"
+    [ -n "$__dk_gl_hand" ] && { printf '%s\n' "$__dk_gate_log" > "$__dk_gl_hand"; } 2>/dev/null || true
+    # A terminal watches live; a pipe (agent, GUI client, CI) gets the same bytes replayed at exit.
+    __dk_gl_follow=""
+    if [ -t 9 ]; then
+        tail -c "+$(( ${__dk_gl_off:-0} + 1 ))" -f "$__dk_gate_log" >&9 2>/dev/null </dev/null &
+        __dk_gl_follow=$!
+    fi
+}
+__dk_gate_log_finish() {
+    [ -n "$__dk_gate_log" ] || return 0
+    __dk_gl_x="${__dk_gl_rc:-0}"
+    command exec 1>&8 2>&9 || return 0
+    if [ -n "$__dk_gl_follow" ]; then
+        sleep 1 2>/dev/null || true
+        kill "$__dk_gl_follow" 2>/dev/null || true
+        wait "$__dk_gl_follow" 2>/dev/null || true
+    else
+        tail -c "+$(( ${__dk_gl_off:-0} + 1 ))" "$__dk_gate_log" 2>/dev/null || true
+    fi
+    [ "$__dk_gl_x" -eq 0 ] || rm -f "$__dk_gl_hand" 2>/dev/null || true
+    if [ "$__dk_gl_x" -eq 0 ]; then
+        echo "✓ pre-commit gates ran — full output: $__dk_gate_log"
+        echo "  Review it for any SKIP / BYPASSED / DEGRADED / ⚠️ lines — a bypassed gate verified nothing."
+    else
+        echo "🛑 pre-commit blocked. Full log: $__dk_gate_log"
+        echo "   It holds every gate's output, including non-blocking findings above the blocking one."
+    fi
+    __dk_gate_log=""
+}
+__dk_gate_log_open "$@" || true
+# /devkit:gate-log
+trap '__dk_x=$?; __dk_gl_rc=$__dk_x; command -v __dk_commit_result >/dev/null 2>&1 && { __dk_commit_result "$__dk_x" || :; }; command -v __dk_gate_log_finish >/dev/null 2>&1 && { __dk_gate_log_finish "$__dk_x" || :; }; :' EXIT
 
 __dk_gate_selected() {
     case "${DEVKIT_RUN_MODE:-}" in review|dry-gates) ;; *) return 0 ;; esac
@@ -118,55 +217,96 @@ __dk_review_baseline_gate() {
     node "$__dk_baseline_gate" "$1" "$DEVKIT_REVIEW_BASELINE_DIR"
 }
 
+dk_review_failed=0
+dk_review_failed_gates=""
+__dk_block_deterministic() {
+    case "${DEVKIT_RUN_MODE:-}" in review|dry-gates) ;; *) exit 1 ;; esac
+    dk_review_failed=1
+    dk_review_failed_gates="$dk_review_failed_gates $1"
+}
+__dk_block_ai() {
+    [ "${DEVKIT_RUN_MODE:-}" = review ] || exit 1
+    dk_review_failed=1
+    dk_review_failed_gates="$dk_review_failed_gates $1"
+}
+
 # devkit:biome-format
-# Format staged files with biome, then re-stage exactly those (scoped — never a blanket
-# `git add -u`, which would sweep unrelated working-tree changes into the commit). Only
-# re-add files with NO unstaged edits, so partially-staged files commit exactly as staged.
-STAGED_FMT=$(git diff --cached --name-only --diff-filter=ACM | grep -E '\.(tsx?|jsx?|css|json|jsonc|mjs)$' || true)
-if [ -n "$STAGED_FMT" ]; then
+# Format staged files, then re-stage exactly those (scoped — never a blanket `git add -u`, which
+# would sweep unrelated working-tree changes into the commit). Only re-add files with NO unstaged
+# edits, so partially-staged files commit exactly as staged.
+#
+# EVERY branch reports, and each banner opens with the 🎨 stage anchor ship's log scraper keys on.
+# Silence used to be ambiguous: no staged match, a staged set entirely excluded by unstaged edits,
+# and a formatter binary that was never on disk all looked identical to a clean format — which is
+# how unformatted bytes reached a multi-minute LLM reviewer instead of this sub-second step (sc-2524).
+#
+# Paths move through this step NUL-delimited (`-z` out of git, `xargs -0` into the tools) and are
+# only ever newline-joined for the two line-oriented set operations in between. Git's default
+# output QUOTES any path with a space or a non-ASCII byte ("caf\303\251.mts", trailing quote
+# included), which the extension filter then fails to match — so such a file was silently never
+# formatted. `echo | xargs` compounded it by splitting the unquoted form on whitespace, handing the
+# formatter two paths that do not exist and making `git add` fatal on the pathspec, which `sh -e`
+# turns into a failed commit. Embedded newlines remain out of scope: nothing here can express them.
+#
+# Known limit, unchanged: xargs may split a very large FMT_SAFE across several invocations, so
+# FMT_RC reflects only the last one.
+# A function so the "no formatter here" arm is an early `return`, not a branch wrapping the whole
+# body — self-host replaces the setup outright, and an unreachable arm must not survive into it.
+__dk_format_staged() {
+    if [ ! -f biome.json ] && [ ! -f biome.jsonc ]; then
+        echo "🎨 No biome config here (biome.json / biome.jsonc) — staged files left as authored."
+        return 0
+    fi
+    FMT_TOOL=biome; FMT_BIN="$__dk_package_bin_dir/biome"
+    __dk_fmt_run() { xargs -0 "$__dk_package_bin_dir/biome" format --write; }
+STAGED_FMT=$(git diff --cached --name-only -z --diff-filter=ACM | tr '\0' '\n' | grep -E '\.(tsx?|jsx?|mts|cts|mjs|css|jsonc?)$' || true)
+if [ -z "$STAGED_FMT" ]; then
+    echo "🎨 $FMT_TOOL: no staged formattable path — nothing to format."
+else
     UNSTAGED_FMT_FILE=$(mktemp)
-    git diff --name-only | sort -u >"$UNSTAGED_FMT_FILE"
+    git diff --name-only -z | tr '\0' '\n' | sort -u >"$UNSTAGED_FMT_FILE"
     FMT_SAFE=$(printf '%s\n' "$STAGED_FMT" | grep -Fxvf "$UNSTAGED_FMT_FILE" || true)
+    FMT_SKIP=$(printf '%s\n' "$STAGED_FMT" | grep -Fxf "$UNSTAGED_FMT_FILE" || true)
     rm -f "$UNSTAGED_FMT_FILE"
-    if [ -n "$FMT_SAFE" ]; then
-        echo "🎨 Formatting staged files..."
-        echo "$FMT_SAFE" | xargs "$__dk_package_bin_dir/biome" format --write 2>/dev/null || true
-        echo "$FMT_SAFE" | xargs git add -f
+    # Reported whether the exclusion is TOTAL or PARTIAL. A partial one is the dangerous shape: the
+    # success banner counts only what it formatted, so "formatted 3" over a staged set of 5 reads as
+    # a clean pass while two unformatted files ride into the commit.
+    if [ -n "$FMT_SKIP" ]; then
+        echo "🎨 $FMT_TOOL: skipped $(printf '%s\n' "$FMT_SKIP" | grep -c '') staged path(s) that also carry unstaged edits, because formatting them would commit bytes you never staged:"
+        printf '%s\n' "$FMT_SKIP" | sed 's/^/     /'
+    fi
+    if [ -z "$FMT_SAFE" ]; then
+        echo "🎨 $FMT_TOOL: every eligible path also carries unstaged edits — nothing left to format."
+    else
+        FMT_N=$(printf '%s\n' "$FMT_SAFE" | grep -c '' || true)
+        FMT_RC=0
+        printf '%s\n' "$FMT_SAFE" | tr '\n' '\0' | __dk_fmt_run || FMT_RC=$?
+        if [ "$FMT_RC" -eq 127 ]; then
+            echo "🎨 $FMT_TOOL is not installed at $FMT_BIN — $FMT_N staged file(s) left UNFORMATTED. Run \`devkit doctor --fix\`; this commit continues."
+        elif [ "$FMT_RC" -ne 0 ]; then
+            echo "🎨 $FMT_TOOL failed over $FMT_N staged file(s) (xargs exit $FMT_RC) — some may be UNFORMATTED; its diagnostics are above. This commit continues."
+        fi
+        printf '%s\n' "$FMT_SAFE" | tr '\n' '\0' | xargs -0 git add -f
+        if [ "$FMT_RC" -eq 0 ]; then
+            echo "🎨 $FMT_TOOL formatted and re-staged $FMT_N staged file(s)."
+        fi
     fi
 fi
+}
+__dk_format_staged
 # /devkit:biome-format
 
-dk_review_det_failed=0
 __dk_gate_deterministic() {
     dk_det_rc=0
     __dk_no_git_env "$@" || dk_det_rc=$?
     [ "$dk_det_rc" -eq 0 ] && return 0
-    case "${DEVKIT_RUN_MODE:-}" in review|dry-gates) ;; *) exit 1 ;; esac
-    dk_review_det_failed=1
+    __dk_block_deterministic deterministic-gates
 }
 
 # devkit:deterministic
 echo "🚧 Deterministic gates (aggregated)..."
 __dk_gate_deterministic "$__dk_package_bin_dir/guard-deterministic" --hook "${DK_HOOK_PATH:-$0}"
 # /devkit:deterministic
-
-if __dk_gate_selected comments; then
-# devkit:guard-comments
-echo "🧯 Changed-comment firewall..."
-ccrc=0
-__dk_no_git_env "$__dk_package_bin_dir/guard-comments" gate || ccrc=$?
-if [ "$ccrc" -eq 1 ]; then
-    exit 1
-elif [ "$ccrc" -eq 4 ]; then
-    echo "   guard-comments: NOT a rejection — staged comment evidence is unreadable or unsupported."
-    exit 1
-elif [ "$ccrc" -ne 0 ]; then
-    echo "   guard-comments: unexpected exit $ccrc — blocking the commit."
-    exit 1
-fi
-# ccrc 0 = clean, 1 = paragraph over the 2-line budget, 4 = unreadable/unsupported evidence; anything else blocks.
-# /devkit:guard-comments
-fi
 
 if __dk_gate_selected decisions; then
 # devkit:guard-decisions
@@ -175,32 +315,37 @@ ddrc=0
 __dk_no_git_env "$__dk_package_bin_dir/guard-decisions" detect --gate || ddrc=$?
 if [ "$ddrc" -eq 1 ]; then
     echo "   Record the decision target, or bypass a non-decision: GUARD_NO_LOG=1 git commit ..."
-    exit 1
+    __dk_block_ai guard-decisions
 elif [ "$ddrc" -eq 3 ]; then
-    echo "   guard-decisions: judge unavailable — strict ship mode failed closed."
-    echo "   Follow the judge CLI remedy printed above, then re-run devkit ship (cleared judgements are cached)."
+    echo "   guard-decisions: judge unavailable or gate could not run — strict ship mode failed closed."
+    echo "   Follow the remedy printed above, then re-run devkit ship (cleared judgements are cached)."
     exit 1
 elif [ "$ddrc" -ne 0 ] && [ "$ddrc" -ne 2 ]; then
     echo "   guard-decisions: unexpected exit $ddrc — blocking the commit."
     exit 1
 fi
 # ddrc 0 = clean / staged / routine / bypassed, ddrc 2 = fail-open → continue; any other code blocks.
+# Only a confirmed finding (1) is deferred in review; an outage (3) still stops the run.
 # /devkit:guard-decisions
 fi
 
-if __dk_gate_selected qavis-advisory; then
-# devkit:guard-qavis-advisory
-qarc=0
-__dk_no_git_env "$__dk_package_bin_dir/guard-qavis-advisory" --gate || qarc=$?
-[ "$qarc" -eq 3 ] && exit 1
-# qarc 0 = continue (SILENT / advisory-only / receipt-cleared / qavis absent); 3 = strict-ship block
-# (the remedy — run qavis, or export GUARD_QAVIS_OK=1 — is printed by the bin).
-# /devkit:guard-qavis-advisory
+if __dk_gate_selected ui-evidence; then
+# devkit:guard-ui-evidence
+__dk_no_git_env "$__dk_package_bin_dir/guard-ui-evidence" || true
+# /devkit:guard-ui-evidence
 fi
 
-# devkit:review-deterministic-finalizer
-if [ "${dk_review_det_failed:-0}" -ne 0 ]; then exit 1; fi
-# /devkit:review-deterministic-finalizer
+# devkit:review-failure-finalizer
+if [ "${dk_review_failed:-0}" -ne 0 ]; then
+    echo "✗ ${DEVKIT_RUN_MODE:-}: failed gates:$dk_review_failed_gates (findings above)."
+    exit 1
+fi
+# /devkit:review-failure-finalizer
 # <<< devkit-guards <<<
+
+if ! node scripts/guard-baseline-freeze.mjs; then
+    exit 1
+fi
+# <<< baseline-freeze-guard <<<
 
 exit 0

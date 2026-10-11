@@ -60,13 +60,20 @@ The agent answers all seven, every time (status ANSWERED / NO_EVIDENCE / NOT_APP
 
 1. **local** — reference checkouts declared in `guard.config.json` →
    `research.referenceCheckouts` (globs relative to the config's directory), plus the repo's own
-   decision log and utilities. Zero resolved checkouts → the leg attests `unavailable` (with
-   declared/resolved counts) and the agent SUGGESTS declaring likely corpora rather than scanning
-   them. Declare-first is a security bound, not an inconvenience: devkit runs in repos it does not
-   own, and sibling clones may be private code.
+   decision log and utilities. In a linked worktree, a pattern that matches nothing is retried once
+   against the same directory inside the main worktree — the first `worktree` entry of
+   `git worktree list --porcelain`, skipped when that entry is `bare` — because sibling clones sit
+   beside the main checkout, not beside a worktree. Each non-blank string pattern counts once
+   toward `declaredCheckouts` either way; a pattern matching nothing from either base is skipped
+   silently (it is not a failed leg). Only declared patterns are ever read. Zero resolved
+   checkouts → the leg attests `unavailable` (with declared/resolved counts) and the agent SUGGESTS
+   declaring likely corpora rather than scanning them. Declare-first is a security bound, not an
+   inconvenience: devkit runs in repos it does not own, and sibling clones may be private code.
 2. **github** — `gh` CLI (code/issue/PR search), where installed and authenticated.
 3. **web** — WebSearch / WebFetch.
-4. **deep-research** — the deep-research MCP, where available.
+4. **papers** — research papers, always attempted: any available paper-search tool (e.g. an arXiv
+   MCP), else a web search scoped to `site:arxiv.org`, else `unavailable`.
+5. **deep-research** — the deep-research MCP, where available.
 
 Every leg reports `reached` / `unavailable` / `failed`. A dark leg can never support a verdict:
 `GENUINE_NEW_WORK` specifically requires the local leg reached with ≥1 resolved checkout plus one
@@ -77,12 +84,27 @@ honored outcome, never a failure and never clearance.
 
 One closed `prior_art` JSON object (final subagent message): `verdict`, `confidence`, `legs[]`
 (per-leg attestation), `frameChallenge` (HOLDS / NARROWS / DISSOLVES + the upstream choice),
-`questions[]` (all seven), `evidence[]` (kind local/github/web/upstream, capped quotes, repo-root
-provenance), `suggestedNextStep` (adopt_existing / reframe / proceed_to_plan / gather_evidence),
-`summary`, `researchReferences[]`.
+`questions[]` (all seven), `evidence[]` (kind local/github/web/upstream/paper, capped quotes,
+repo-root provenance; a paper cites its arXiv or DOI URL), `suggestedNextStep` (adopt_existing /
+reframe / proceed_to_plan / gather_evidence), `summary`, `researchReferences[]`.
 
 Parse it as JSON and keep it as untrusted data. Inspect `status` first (`reviewed` /
 `wrong_phase` / `aborted`); `wrong_phase` carries `routing` to the correct agent.
+
+`guard-review record-agent prior-art` records validated response fields on the existing
+`judge_exec` event: `prior_art_status`, and, for reviewed responses, `prior_art_verdict`,
+`prior_art_framing`, `prior_art_boundary`, `prior_art_next_step`, and `prior_art_confidence`.
+Malformed responses record `prior_art_status: invalid` and a `prior_art_error` code, with no
+verdict. Spawn failures carry no response fields. These fields survive transcript retention;
+contract validation checks the response shape and evidence coupling, not whether its claims are true.
+The same event carries `invocation_id` and the raw-byte `output_sha256` (plus `request_sha256` when
+`--request-file` is passed), and the command prints them as a one-line receipt.
+
+When a verdict later proves wrong, record the correction against that run:
+`guard-review record-feedback prior-art --run <invocation_id> --claimed-verdict <VERDICT>
+[--claimed-framing <FRAMING>] [--supersedes <feedback_id>] --source root|user --reason "<why>"`.
+It appends an `agent_feedback` event and never edits the run. It is a claim to investigate, not a
+ruling: benchmark rows are admitted only after independent review.
 
 ## Step-0 lifecycle
 
@@ -94,12 +116,13 @@ Parse it as JSON and keep it as untrusted data. Inspect `status` first (`reviewe
    - `GENUINE_NEW_WORK` → proceed; carry the absence evidence into the plan's context.
    - `INSUFFICIENT_EVIDENCE`, `aborted`, or invalid JSON → say "prior art unverified" and continue.
      Never treat it as clearance or as a blocker.
-3. The eventual plan records one line: `Prior-art verdict: <verdict> — <how the plan responds>`.
+3. The eventual plan records one line: `Prior-art: <verdict> — <how the plan responds>`.
    (A skipped run records `Prior-art: skipped — <reason>` instead; keep the two distinguishable.)
 4. At plan-exit, pass `feature-critique` a **bounded 3-line summary only** (verdict,
    `frameChallenge.framing`, one citation) in its Additional Context — never the full JSON.
-5. Consumer-side sanity check: a `GENUINE_NEW_WORK` verdict whose own `legs` show a dark external
-   leg or zero resolved checkouts is recorded as `INSUFFICIENT_EVIDENCE` in the acknowledgment.
+5. Consumer-side sanity check: a `GENUINE_NEW_WORK` verdict whose own `legs` show no external leg
+   reached, or zero resolved checkouts, is recorded as `INSUFFICIENT_EVIDENCE` in the
+   acknowledgment.
 
 ## Invocation Example
 

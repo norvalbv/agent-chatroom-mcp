@@ -1,11 +1,17 @@
 import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
-import { isAbsolute, matchesGlob, win32 } from 'node:path';
+import { isAbsolute, win32 } from 'node:path';
+
+// A confined codex judge runs from a scratch dir; every checklist imports this module, so its git
+// reads and `.claude/` state writes resolve against the repository under review.
+if (process.env.DEVKIT_JUDGE_REPO_ROOT) process.chdir(process.env.DEVKIT_JUDGE_REPO_ROOT);
 
 const MAX_REVIEW_PATTERNS = 128;
 const MAX_REVIEW_PATTERN_LENGTH = 512;
 const REVIEW_PATH_KEYS = new Set(['include', 'exclude']);
-const RE_GLOB_META = /[*?[\]{}()]/;
+const RE_GLOB_META = /[*?]/;
+const RE_UNSUPPORTED_GLOB = /[[\]{}]|[@!+?*]\(/;
+const RE_REGEX_SPECIAL = /[.*+?^${}()|[\]\\]/g;
 const RE_WILDCARD_SEGMENT = /^\*{1,2}$/;
 const RE_TEST_INFIX = /\.(test|spec)\./;
 const RE_INVALID_REPOSITORY_FILE = /(?:^\/|\/$|\/\/|\\|\0|(?:^|\/)\.{1,2}(?:\/|$))/;
@@ -26,6 +32,23 @@ export const isNonEmptyStringArray = (value) =>
   value.every((entry) => typeof entry === 'string' && entry.length > 0);
 
 /**
+ * The raw JSON of the gate-injected staged list: inline in DEVKIT_REVIEW_STAGED_FILES, or — for a
+ * list too large for an env var (sc-3400) — in the file DEVKIT_REVIEW_STAGED_FILES_PATH names. The
+ * inline form wins. Throws when the named file cannot be read; undefined when neither is set.
+ */
+function injectedStagedFilesJson() {
+  const inline = process.env.DEVKIT_REVIEW_STAGED_FILES;
+  if (inline !== undefined) return inline;
+  const file = process.env.DEVKIT_REVIEW_STAGED_FILES_PATH;
+  if (file === undefined) return undefined;
+  try {
+    return readFileSync(file, 'utf-8');
+  } catch {
+    throw new Error(`DEVKIT_REVIEW_STAGED_FILES_PATH names an unreadable file: ${file}`);
+  }
+}
+
+/**
  * The gate's authoritative staged file list for THIS reviewer (sc-1439). The gate selects
  * reviewers from its own topology; each checklist previously re-resolved files independently
  * (env/config roots + --diff-filter=ACM), and ANY divergence stranded generate() with zero files
@@ -35,7 +58,8 @@ export const isNonEmptyStringArray = (value) =>
  * review — the ACM mirror). Returns null when unset/invalid: standalone runs resolve as before.
  */
 export function stagedFilesOverride() {
-  const raw = process.env.DEVKIT_REVIEW_STAGED_FILES;
+  // Read OUTSIDE the catch: a named-but-unreadable list must fail loudly, never silently widen.
+  const raw = injectedStagedFilesJson();
   if (raw === undefined) return null;
   try {
     const files = JSON.parse(raw);
@@ -60,10 +84,10 @@ export function normalizeRepositoryFile(file, name = 'staged file') {
  * and fail loudly on a malformed override instead of silently resolving a different universe.
  */
 export function authoritativeStagedFilesOverride() {
-  const raw = process.env.DEVKIT_REVIEW_STAGED_FILES;
-  if (raw === undefined) return null;
   let files;
   try {
+    const raw = injectedStagedFilesJson();
+    if (raw === undefined) return null;
     files = JSON.parse(raw);
   } catch {
     throw new Error('DEVKIT_REVIEW_STAGED_FILES must be a non-empty JSON string array');
@@ -73,12 +97,43 @@ export function authoritativeStagedFilesOverride() {
   return [...new Set(files.map((file) => normalizeRepositoryFile(file)))];
 }
 
+// devkit's one repository glob grammar: a dot is an ordinary character, `*`/`?` stay within one
+// segment, a whole `**` segment spans any depth, everything else is literal. Compiling never throws.
+const segmentSource = (seg) =>
+  [...seg]
+    .map((ch) =>
+      ch === '*' ? '[^/]*' : ch === '?' ? '[^/]' : ch.replace(RE_REGEX_SPECIAL, '\\$&'),
+    )
+    .join('');
+
+export function compileRepoGlob(glob) {
+  const segs = glob.split('/');
+  const source = segs
+    .map((seg, i) => {
+      const slash = i > 0 && segs[i - 1] !== '**' ? '/' : '';
+      if (seg !== '**') return slash + segmentSource(seg);
+      return slash + (i === segs.length - 1 ? '.+' : '(?:[^/]+/)*');
+    })
+    .join('');
+  return new RegExp(`^${source}$`, 'su');
+}
+
+const compiledGlobs = new Map();
+
+export function matchesRepoGlob(path, glob) {
+  let re = compiledGlobs.get(glob);
+  if (!re) compiledGlobs.set(glob, (re = compileRepoGlob(glob)));
+  return re.test(path);
+}
+
+/** True when a glob uses syntax the grammar does not support: classes, braces or extglob groups. */
+export const hasUnsupportedGlobSyntax = (glob) => RE_UNSUPPORTED_GLOB.test(glob);
+
 function validateReviewGlob(pattern, name) {
-  try {
-    matchesGlob('devkit-glob-validation-probe', pattern);
-  } catch {
-    throw new Error(`${name} contains an invalid glob`);
-  }
+  if (hasUnsupportedGlobSyntax(pattern))
+    throw new Error(
+      `${name} pattern '${pattern}': only *, ? and whole-segment ** are supported; list each alternative as its own pattern`,
+    );
 }
 
 function rejectMissingIncludes(length, name, allowEmpty) {
@@ -134,7 +189,7 @@ function broadSubtreePrefix(pattern) {
 
 function excludeCoversInclude(include, exclude) {
   if (include === exclude) return true;
-  if (!RE_GLOB_META.test(include) && matchesGlob(include, exclude)) return true;
+  if (!RE_GLOB_META.test(include) && matchesRepoGlob(include, exclude)) return true;
   const prefix = broadSubtreePrefix(exclude);
   if (prefix === null) return false;
   return [prefix === '', include === prefix, include.startsWith(`${prefix}/`)].includes(true);
@@ -149,11 +204,6 @@ function rejectFullyExcludedScope(include, exclude, name) {
       `${name}.exclude must not disable the entire review scope; leave at least one include scope reviewable`,
     );
 }
-
-// `node:path.matchesGlob` follows dotfile glob rules, so bare `**` misses any path containing a
-// dot-prefixed segment. In review scope, `**` is the explicit repository-wide sentinel; consumers
-// should not need to enumerate every authored tool directory merely to keep it reviewable.
-const matchesReviewPath = (file, pattern) => pattern === '**' || matchesGlob(file, pattern);
 
 /** Strict, canonical config boundary for review.paths. */
 export function normalizeReviewPaths(value, name = 'review.paths') {
@@ -190,8 +240,8 @@ export function selectReviewFiles(files, { paths, roots, sourceExtensions }) {
       normalizeRepositoryFile(file);
       if (RE_OPAQUE_BINARY.test(file)) return false;
       return (
-        scope.include.some((pattern) => matchesReviewPath(file, pattern)) &&
-        !scope.exclude.some((pattern) => matchesReviewPath(file, pattern))
+        scope.include.some((pattern) => matchesRepoGlob(file, pattern)) &&
+        !scope.exclude.some((pattern) => matchesRepoGlob(file, pattern))
       );
     });
   }
@@ -278,18 +328,23 @@ export function resolveConfigRoots({ configKey, reviewerName }) {
 }
 
 /**
- * Every checklist selects its files with `--diff-filter=ACM`, which drops deletions. So a staged set
+ * Every checklist selects its files with `--diff-filter=ACMR`, which drops deletions. So a staged set
  * that is ENTIRELY deletions renders as "nothing to review" and the reviewer waves the commit
  * through — the exact blind spot that let a clobbered ship index (a foreign tree staged as a
  * ~5,976-file deletion of the whole repo) reach the review gate reporting "no items".
  *
- * Call this on the empty-ACM path, BEFORE reporting zero items. It re-asks git WITHOUT the filter:
+ * Call this on the empty-ACMR path, BEFORE reporting zero items. It re-asks git WITHOUT the filter:
  * if the index does hold staged paths after all, they are deletions the checklist cannot see, and
  * that must be loud rather than silent. This is the same rule the correctness checklist already
  * applies to a git FAILURE ("must never masquerade as nothing staged"), extended to a successful
  * query with an answer the filter made meaningless.
  *
- * Exits non-zero on detection; returns normally when there is genuinely nothing staged.
+ * Exits non-zero on detection; returns normally when there is genuinely nothing staged. Only a
+ * STANDALONE run reaches this: under the gate the script holds the gate's own staged list, which
+ * names a deletion-only change as a skip (sc-3400). There, a clobbered index is caught by the review
+ * gate's mass-deletion check (gate-engine/review/integrity/mass-deletion.mts) and ship's exact
+ * staged-set invariants. The gate's pre/post staged-tree check is NOT clobber protection: it only
+ * sees an index that changes WHILE the gate runs.
  */
 export function assertStagedSetSane(pathspecs, reviewerName) {
   let unfiltered;
@@ -298,14 +353,14 @@ export function assertStagedSetSane(pathspecs, reviewerName) {
       encoding: 'utf-8',
     });
   } catch {
-    // The ACM query already succeeded, so git works here; a failure now is not evidence of anything.
+    // The ACMR query already succeeded, so git works here; a failure now is not evidence of anything.
     // Stay silent and let the caller report its honest "nothing staged".
     return;
   }
   const staged = unfiltered.split('\n').filter((line) => line.trim().length > 0);
   if (staged.length === 0) return;
   console.error(
-    `❌ ${reviewerName}: ${staged.length} path(s) are staged but NONE are additions/copies/modifications — ` +
+    `❌ ${reviewerName}: ${staged.length} path(s) are staged but NONE are additions/copies/modifications/renames — ` +
       'the staged set is pure deletions. Refusing to report "no items": a reviewer that examines ' +
       'nothing must not read as a pass. If this is a deliberate deletion-only commit, review it by ' +
       'hand; if it is not, your index has been overwritten — check `git diff --cached --stat`.',

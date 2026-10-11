@@ -64,10 +64,15 @@ export function announceTake(hub: Hub, room: Room, p: Participant, key: string, 
   }
 }
 
-/** room_status, per seat: the takes it holds and the ones offered to it. Empty lists are left out. */
-export function takesOf(room: Room, p: Participant, nm: (x: Participant) => string): { holds?: string[]; offered?: { key: string; by: string }[] } {
+/**
+ * room_status, per seat: what it holds (its live claim/* entries and its take/* entries, so who holds what is one field
+ * whichever prefix a seat picked: in review/take-keys two seats took ranges as claims and one took items as takes) and
+ * the takes offered to it. Empty lists are left out.
+ */
+export function takesOf(room: Room, p: Participant, nm: (x: Participant) => string, claimLive: (e: BoardEntry) => boolean): { holds?: string[]; offered?: { key: string; by: string }[] } {
   const holds: string[] = [], offered: { key: string; by: string }[] = [];
   for (const [key, e] of room.board) {
+    if (key.startsWith("claim/") && e.text.trim() && e.by === p.name && named(room, e.by)?.id === p.id && claimLive(e)) holds.push(key);
     if (!key.startsWith("take/") || !e.text.trim() || named(room, e.holder ?? e.by)?.id !== p.id) continue;
     const by = e.offeredBy ? named(room, e.offeredBy) : undefined;
     if (e.offeredBy) offered.push({ key, by: by ? nm(by) : e.offeredBy }); else holds.push(key);

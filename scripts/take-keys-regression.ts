@@ -43,6 +43,16 @@ test("a seat takes a piece smaller than an area: one line, no reviewer, listed u
   assert.deepEqual(seat(h, name, "bob").holds, ["take/final-table"]);
 });
 
+test("holds lists the seat's live claims too, so who holds what is one field whichever prefix a seat picked", () => {
+  const { h, name, a, b } = room();
+  h.setBoard(name, a.id, "claim/jobs-5-8", JSON.stringify({ area: "jobs 5-8", owner: "alice", status: "open" }));
+  h.setBoard(name, a.id, "take/J1", "doing J1 now");
+  assert.deepEqual(seat(h, name, "alice").holds, ["claim/jobs-5-8", "take/J1"]);
+  assert.equal(seat(h, name, "bob").holds, undefined);
+  h.leave(name, a.id, "done here, nothing left undone");
+  assert.deepEqual(seat(h, name, "alice").holds, ["claim/jobs-5-8", "take/J1"], "a departed seat still shows what it held: its successor may take it (stale_claims)");
+});
+
 test("a second seat is told who holds it before it does the work; overwrite does not get past", () => {
   const { h, name, a, b } = room();
   h.setBoard(name, a.id, "take/audit/exp-Q8", "running the audit now");

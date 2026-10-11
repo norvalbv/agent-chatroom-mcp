@@ -238,7 +238,7 @@ export class Hub {
         // what the seat's processes hold (src/hub/memory.ts): a seat sees the figures, the dashboard also the process
         ...((m) => (m ? { memory: reveal ? m : { mb: m.mb, peak_mb: m.peak_mb, budget_mb: m.budget_mb } } : {}))(this.memory.get(p.seatKeyHash)),
         // take/<what> entries (src/hub/take.ts): what the seat holds and what is offered to it
-        ...takesOf(room, p, nm),
+        ...takesOf(room, p, nm, (e) => !Hub.claimReleased(e)),
         liveness: (() => {
           const age = (at: string) => Math.max(0, Math.floor((observedAt - Date.parse(at)) / 1000));
           const age_seconds = age(this.lastSeen(p));

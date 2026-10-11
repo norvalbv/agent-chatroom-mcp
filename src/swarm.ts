@@ -40,7 +40,7 @@ const has = (name: string) => argv.includes(`--${name}`);
 const BOOL_FLAGS = new Set(["--keep-hub", "--reuse-hub", "--apply", "--full-access", "--named", "--flat", "--require-verification", "--respawn", "--claude-full", "--no-carry", "--no-seat-targets", "--sandbox", "--no-web"]);
 const task = argv.find((a, i) => !a.startsWith("--") && (i === 0 || !argv[i - 1].startsWith("--") || BOOL_FLAGS.has(argv[i - 1])));
 if (!task) {
-  console.error('usage: swarm "<task>" [--flat] [--done-when text] [--verify text] [--agents 6] [--cwd dir] [--models sonnet,haiku] [--lead-model opus] [--verifier-model opus] [--planner-model opus] [--codex k] [--codex-models gpt-6-astra,gpt-5.6-sol,gpt-5.6-terra] [--openrouter k] [--openrouter-models deepseek/deepseek-v4.1-flash,...] [--verifier-openrouter slug] [--openrouter-reasoning low|medium|high] [--require-verification] [--quorum unanimous|majority|supermajority] [--prompt loop.md] [--groups groups.json [--digest-every 45]] [--resources file.md] [--respawn] [--apply] [--full-access] [--named] [--claude-full] [--no-carry] [--no-seat-targets] [--no-web] [--sandbox] [--timeout 30] [--port 7717] [--result-path path]');
+  console.error('usage: swarm "<task>" [--flat] [--done-when text] [--verify text] [--agents 6] [--cwd dir] [--models sonnet,haiku] [--lead-model opus] [--verifier-model opus] [--planner-model opus] [--codex k] [--codex-models gpt-6-astra,gpt-5.6-sol,gpt-5.6-terra] [--openrouter k] [--openrouter-models deepseek/deepseek-v4.1-flash,...] [--verifier-openrouter slug] [--openrouter-reasoning low|medium|high] [--require-verification] [--quorum unanimous|majority|supermajority] [--chair name] [--prompt loop.md] [--groups groups.json [--digest-every 45]] [--resources file.md] [--respawn] [--apply] [--full-access] [--named] [--claude-full] [--no-carry] [--no-seat-targets] [--no-web] [--sandbox] [--timeout 30] [--port 7717] [--result-path path]');
   process.exit(2);
 }
 /** --groups <file.json>: the run's groups as the operator wrote them (src/groups.ts), one room and one brief each, on the
@@ -86,6 +86,8 @@ const CLAUDE_FULL = has("claude-full");
 const REQUIRE_VERIFICATION = has("require-verification");
 /** --quorum unanimous|majority|supermajority: the room's quorum, fixed by the launcher at creation (a forty-seat lobby cannot run on unanimity); supermajority = ceil(0.75 x electorate), the recommended default for flat runs that used to ask for plain majority */
 const QUORUM = flag("quorum") as "unanimous" | "majority" | "supermajority" | undefined;
+/** --chair <name>: the seat that will relay the owner in the lead room. Named when the room is created, so its messages are tagged [chair] and not [chair, self-claimed] (any seat can take an unnamed room's chair by joining first). */
+const CHAIR = flag("chair");
 /** --prompt <file in prompts/>: the flat-mode brief template (default minimal.md; loop.md for a self-improvement lobby) */
 const FLAT_PROMPT = flag("prompt", "minimal.md")!;
 /** --respawn: a seat that exits while its room is still open is relaunched (up to 3 times) with a note to read the board first */
@@ -600,7 +602,7 @@ const verifierText = SETTLED + "\n" + prompt("verifier.md", {
 // the launcher fixes the room's policy before any seat joins (join_room settings only apply at creation)
 if (REQUIRE_VERIFICATION || QUORUM) {
   try {
-    const r = await fetch(`${URL_}/rooms/${encodeURIComponent(leadsRoom)}/create`, { method: "POST", headers: launcherHeaders(launcherToken), body: JSON.stringify({ topic: task, expected_participants: FLAT ? TOTAL : plan.groups.length + 1, require_verification: REQUIRE_VERIFICATION, quorum: QUORUM ?? "unanimous" }) });
+    const r = await fetch(`${URL_}/rooms/${encodeURIComponent(leadsRoom)}/create`, { method: "POST", headers: launcherHeaders(launcherToken), body: JSON.stringify({ topic: task, expected_participants: FLAT ? TOTAL : plan.groups.length + 1, require_verification: REQUIRE_VERIFICATION, quorum: QUORUM ?? "unanimous", ...(CHAIR ? { chair: CHAIR } : {}) }) });
     log(`${leadsRoom} created with quorum=${QUORUM ?? "unanimous"}${REQUIRE_VERIFICATION ? ", require_verification" : ""} (${r.status})`);
   } catch (e) {
     log(`could not pre-create ${leadsRoom}: ${e instanceof Error ? e.message : String(e)}${e instanceof Error && e.cause ? ` (cause: ${(e.cause as NodeJS.ErrnoException).code ?? (e.cause as Error).message})` : ""}`);

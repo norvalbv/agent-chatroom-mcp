@@ -327,7 +327,7 @@ const seatCallerAnnounced = new Map<string, number>();
  * the usage export, dev runs) are never resolved or announced: on integration every seat's 1 s /otlp/v1/logs export was
  * announced as a refused forgery when this was a deny-list (-3's composed dev room swarm-085449-i9fk). A new human route
  * must be added here, or it is open to loopback callers as it was before this check. */
-const HUMAN_ROUTES = /^\/rooms\/(archive-dead|[^/]+\/(messages|vote|kick|replace|create|deadline|resources|run-end|close|archive|attachments))$/;
+const HUMAN_ROUTES = /^\/rooms\/(archive-dead|[^/]+\/(messages|vote|kick|replace|create|deadline|resources|run-end|close|archive|attachments|chair))$/;
 // Resolved before the routes, asynchronously, so requireToken stays a plain check and a lookup never blocks other rooms.
 app.use(async (req, res, next) => {
   if (req.method === "POST" && INSECURE_LOCAL && LOOPBACK_HOST && !(HUMAN_TOKEN && req.header("x-chatroom-token") === HUMAN_TOKEN) && HUMAN_ROUTES.test(req.path)) {
@@ -527,10 +527,22 @@ app.get("/rooms/:room/messages", (req, res) => {
 app.post("/rooms/:room/messages", (req, res) => {
   if (!requireToken(req, res)) return;
   try {
-    const { name, content, reply_to } = (req.body ?? {}) as { name?: string; content?: string; reply_to?: string };
+    // source: a script posting on the owner's behalf says which script it is; seats see it in the sender's tag
+    const { name, content, reply_to, source } = (req.body ?? {}) as { name?: string; content?: string; reply_to?: string; source?: string };
     const { participant } = hub.join(req.params.room, (name || "human").trim(), "human", {}, undefined, `http:${name || "human"}`);
-    const m = hub.send(req.params.room, participant.id, String(content ?? ""), typeof reply_to === "string" && reply_to ? reply_to : undefined, true);
+    const m = hub.send(req.params.room, participant.id, String(content ?? ""), typeof reply_to === "string" && reply_to ? reply_to : undefined, true, undefined, false, typeof source === "string" ? source : undefined);
     res.json(m);
+  } catch (e) {
+    res.status(400).type("text/plain").send(e instanceof HubError ? e.message : "error");
+  }
+});
+// The owner names the room's chair: a chair that took the role by joining first is tagged self-claimed until then.
+app.post("/rooms/:room/chair", (req, res) => {
+  if (!requireToken(req, res)) return;
+  try {
+    const { name, by } = (req.body ?? {}) as { name?: string; by?: string };
+    hub.nameChair(req.params.room, String(name ?? "").trim(), (by || "human").trim());
+    res.json({ room: req.params.room, chair: hub.getRoom(req.params.room).chair, named: true });
   } catch (e) {
     res.status(400).type("text/plain").send(e instanceof HubError ? e.message : "error");
   }

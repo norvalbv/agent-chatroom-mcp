@@ -186,7 +186,8 @@ assert.deepEqual(tools, ["amend", "board_get", "board_set", "challenge", "join_r
   assert.equal(hp.status, 200);
   const humanMsg = (await hp.json()) as { id: string };
   const seenByC = await c.call("wait_for_messages", { room, timeout_ms: 0 });
-  assert.ok(seenByC.messages.some((m: string) => m.includes("Participant D: Chair here")), "human message not delivered under pseudonym");
+  // the sender's tag says which channel it came through (scripts/speaker-identity-regression.ts)
+  assert.ok(seenByC.messages.some((m: string) => m.includes("Participant D [human route]: Chair here")), "human message not delivered under pseudonym, tagged with its channel");
   // A is out of budget, but answering an unanswered human is always allowed
   await a.call("wait_for_messages", { room, timeout_ms: 0 });
   await a.call("send_message", { room, content: "On it, chair. Alpha or Beta, deciding now.", reply_to: humanMsg.id });

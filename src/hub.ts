@@ -175,6 +175,7 @@ export class Hub {
     const room: Room = {
       name,
       ...opts,
+      ...(opts.chair ? { chairNamed: true } : {}),
       createdAt,
       state: "open",
       participants: new Map(),
@@ -279,6 +280,8 @@ export class Hub {
       stale_claims: this.staleClaims(room, reveal),
       // per commit, the verify/* and review/* entries whose head names it (telemetry G3/G14): coverage read from the hub, not key names
       ...((r) => (r.length ? { reviews: r } : {}))(this.reviewsByCommit(room)),
+      // chat messages by the channel they came through (telemetry gap 8: owner, script, chair and seat were one column)
+      ...((sp) => (sp ? { speakers: sp } : {}))(this.speakers(room)),
       ...((s) => (s.unexamined.length || s.open_attacks.length ? { scrutiny: s } : {}))(board.scrutiny(room)),
       active_count: active.length,
       message_count: room.messages.length,
@@ -672,9 +675,49 @@ export class Hub {
       distinct_sessions: e.distinctSessions, denominator: "electorate" };
   }
 
+  /** Chat messages per channel, and per script label on the human route; undefined before any is recorded. */
+  speakers(room: Room): { mcp?: number; "human-route"?: number; scripts?: Record<string, number> } | undefined {
+    const out: { mcp?: number; "human-route"?: number; scripts?: Record<string, number> } = {};
+    for (const m of room.messages) {
+      if (m.kind !== "chat" || !m.via) continue;
+      out[m.via] = (out[m.via] ?? 0) + 1;
+      if (m.source) (out.scripts ??= {})[m.source] = (out.scripts[m.source] ?? 0) + 1;
+    }
+    return Object.keys(out).length ? out : undefined;
+  }
+
   /** "[chair]" etc. after a name; nothing for workers. */
   roleTag(p: { role?: Role }): string {
     return p.role && p.role !== "worker" ? ` [${p.role}]` : "";
+  }
+
+  /**
+   * The tag after a sender's name on a message, from what the hub itself knew when it was posted (Message.via, source,
+   * chair): seats refused owner instructions they could not tell from a seat's (evidence-pack item 10), and the hub
+   * showed a token-holder, a script, a self-declared "human" and a self-appointed chair alike. A message from before
+   * this was recorded falls back to the sender's role.
+   */
+  speakerTag(room: Room, m: Message): string {
+    if (m.from.agent === "human" && m.via === "human-route") return ` [human route${m.source ? `, script: ${m.source}` : ""}]`;
+    if (m.from.agent === "human" && m.via === "mcp") return " [says human; joined over MCP, not checked]";
+    if (m.chair) return m.chair === "named" ? " [chair]" : " [chair, self-claimed]";
+    return this.roleTag(room.participants.get(m.from.id) ?? {});
+  }
+
+  /**
+   * The owner names this room's chair through the human route (index.ts POST /rooms/:room/chair): until then a chair
+   * that took the role by joining first is tagged self-claimed, because any seat can do that. Naming never replaces a
+   * chair already bound to another name.
+   */
+  nameChair(roomName: string, name: string, by: string): void {
+    const room = this.getRoom(roomName);
+    if (!name.trim()) throw new HubError("Name the chair.", undefined, "state");
+    if (room.chair && room.chair !== name) throw new HubError(`This room's chair is ${room.chair}; a chair is never swapped for another name.`, undefined, "state");
+    if (room.chairNamed && room.chair === name) return;
+    room.chair = name;
+    room.chairNamed = true;
+    this.persist({ type: "chair_named", room: roomName, name, by, ts: now() });
+    this.post(room, "system", undefined, `${by} named ${name} this room's chair through the human route. From here ${name}'s messages are tagged [chair]: a relay that quotes the owner carries the owner's word.`);
   }
 
   currentSpeaker(room: Room): Participant | undefined {
@@ -919,7 +962,7 @@ export class Hub {
     return targets;
   }
 
-  send(roomName: string, pid: string, content: string, replyTo?: string, force = false, quietArg?: boolean, surface = false): Message {
+  send(roomName: string, pid: string, content: string, replyTo?: string, force = false, quietArg?: boolean, surface = false, source?: string): Message {
     let quiet = quietArg === true;
     const room = this.getRoom(roomName);
     const p = this.requireParticipant(room, pid);
@@ -1063,7 +1106,9 @@ export class Hub {
     // still delivers them.
     const notices = room.messages.filter((m) => m.seq > p.lastSeenSeq && m.from.id !== p.id && this.isHubNotice(m) && this.pushableTo(room, m, p.id));
     if (notices.length) p.withheld = [...new Set([...(p.withheld ?? []), ...notices.map((m) => m.seq)])];
-    const msg = this.post(room, "chat", p, content, { replyTo, ...(quiet ? { quiet: true, audience } : {}), ...(autoQuiet ? { autoQuiet: true } : {}), ...(keptPublic ? { keptPublic: "board-key" as const } : {}) });
+    // a script's own label for itself, kept only from the human route and only as a short plain name
+    const label = source && p.session?.startsWith("http:") && /^[\w .:-]{1,40}$/.test(source.trim()) ? source.trim() : undefined;
+    const msg = this.post(room, "chat", p, content, { replyTo, ...(quiet ? { quiet: true, audience } : {}), ...(autoQuiet ? { autoQuiet: true } : {}), ...(keptPublic ? { keptPublic: "board-key" as const } : {}), ...(label ? { source: label } : {}) });
     p.messageCount += 1;
     p.lastSeenSeq = Math.max(p.lastSeenSeq, msg.seq);
     this.persistAttention(room, p);
@@ -1140,7 +1185,7 @@ export class Hub {
   /** Plain-text rendering of a message as agents see it (pseudonyms in anonymous rooms). */
   fmt(room: Room, m: Message): string {
     const tag = m.kind === "chat" ? "" : `[${m.kind.toUpperCase()}] `;
-    const who = m.from.id === "system" ? "system" : this.shown(room, m.from) + this.roleTag(room.participants.get(m.from.id) ?? {});
+    const who = m.from.id === "system" ? "system" : this.shown(room, m.from) + this.speakerTag(room, m);
     const q = m.audience ? `[${m.quiet ? "quiet" : "was quiet"} → ${m.audience.filter((id) => id !== m.from.id).map((id) => this.shown(room, room.participants.get(id) ?? { id, name: id })).join(", ")}] ` : "";
     return `#${m.seq} ${who}: ${q}${tag}${m.content}`;
   }
@@ -1154,6 +1199,9 @@ export class Hub {
       from: from ? { id: from.id, name: from.name, agent: from.agent } : { id: "system", name: "system", agent: "hub" },
       content,
       ts: now(),
+      // the channel, as the hub knows it (index.ts joins a human-route caller with session "http:<name>")
+      ...(from ? { via: from.session?.startsWith("http:") ? "human-route" as const : "mcp" as const } : {}),
+      ...(from?.role === "chair" ? { chair: room.chairNamed && room.chair === from.name ? "named" as const : "self-claimed" as const } : {}),
       ...extra,
     };
     if (kind === "chat") {

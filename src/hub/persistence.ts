@@ -100,6 +100,8 @@ export function replay(hub: Hub) {
             requireChallenge: legacy.requireChallenge ?? "auto",
             nudgeAfterMs: legacy.nudgeAfterMs ?? 180_000,
             requireVerification: legacy.requireVerification ?? false,
+            // a chair named at creation was dropped here, so after a restart the role went to the first seat to ask
+            ...(legacy.chair ? { chair: legacy.chair } : {}),
             ...(legacy.parent ? { parent: legacy.parent } : {}),
           };
           const room = hub.materialiseRoom(ev.room, opts, ev.createdAt);
@@ -162,6 +164,11 @@ export function replay(hub: Hub) {
         case "outside_read": {
           const room = hub.rooms.get(ev.room);
           if (room) hub.applyOutsideRead(room, ev.by ?? null);
+          break;
+        }
+        case "chair_named": {
+          const room = hub.rooms.get(ev.room);
+          if (room) { room.chair = ev.name; room.chairNamed = true; }
           break;
         }
         case "refusal": {

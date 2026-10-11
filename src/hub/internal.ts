@@ -66,6 +66,8 @@ export type Event =
   | { type: "time_claim"; room: string; by: string; where: string; stated: string; delta_min: number; ts: string }
   /** Telemetry only (replay ignores it): a second seat's verify/, review/ or attack/ entry was kept under its own key instead of refused. */
   | { type: "second_scrutiny"; room: string; asked: string; key: string; by: string; held_by: string; ts: string }
+  /** the owner named this room's chair through the human route (Hub.nameChair) */
+  | { type: "chair_named"; room: string; name: string; by: string; ts: string }
   | { type: "kick_vote"; room: string; vote: KickVote }
   /** Telemetry only (replay ignores it; the board event carries the text): an entry edited in place with amend. sent_chars is what the seat sent, entry_chars what a whole board_set would have. */
   | { type: "board_edit"; room: string; key: string; by: string; sent_chars: number; entry_chars: number; ts: string }

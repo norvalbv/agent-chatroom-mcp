@@ -245,6 +245,14 @@ export interface Message {
   keptPublic?: "board-key";
   /** a board notice for a verify/* or attack/* entry: the commits its text covered when written (settles asks naming them) */
   covers?: string[];
+  /** The channel the sender came through, stamped when the message was posted: the hub's human route (POST
+   * /rooms/:room/messages: the human token, or a loopback caller outside every seat's process tree) or an MCP
+   * connection, which may call itself anything. Absent on system lines and in logs from before this was recorded. */
+  via?: "human-route" | "mcp";
+  /** a human-route caller's own label for a script posting on the owner's behalf ("orchestrator") */
+  source?: string;
+  /** a chair's message: whether the chair had been named by the room's creator or the owner ("named") or had taken the role by joining first */
+  chair?: "named" | "self-claimed";
 }
 
 export interface CodeState {
@@ -436,6 +444,8 @@ export interface Room {
   nudgeAfterMs: number;
   requireVerification: boolean;
   chair?: string;
+  /** the chair was named by whoever created the room (the launcher's --chair) or by the owner through the human route (Hub.nameChair), not taken by the first seat to ask */
+  chairNamed?: boolean;
   /** Breakout link: the room this one was opened from (its conclusion lands on that room's board as inbox/<this>/conclusion). */
   parent?: string;
   createdAt: string;

@@ -254,6 +254,7 @@ export const offlineScripts = [
   'node-crypto-regression.ts',
   'join-check-regression.ts',
   'git-no-lock-regression.ts',
+  'inbox-table-regression.ts',
   'one-of-you-ask-regression.ts',
   'tool-surface-regression.ts',
   'trim-checkpoint-regression.ts',

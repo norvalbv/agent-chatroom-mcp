@@ -22,7 +22,7 @@ import type { Participant } from "./hub/types.js";
 import { createWaitView } from "./hub/wait-view.js";
 import { hubTime, timeClaims, timeNote } from "./hub/clock.js";
 import { boardContinuation, noteBoardRead } from "./hub/board.js";
-import { IDLE_HINT, ideaListHint, idleAgain, idleHint, idleStreak, leaveHint, listedItems, newlyNamed, offersLeave, openWork, stillOpenHint } from "./hub/open-work.js";
+import { IDLE_HINT, ideaListHint, idleAgain, idleHint, idleStreak, leaveHint, leaveWaitsFor, listedItems, newlyNamed, offersLeave, openWork, stillOpenHint } from "./hub/open-work.js";
 
 /** The branch and worktree of each write recruit, for the reply of the call that spawned them; nothing for read-only recruits. */
 const workspaces = (recs: SpawnedAgent[]) => {
@@ -555,7 +555,7 @@ export function createSessionServer(hub: Hub, spawner?: Spawner, opts: { holdMs?
       const idleWork = hint === IDLE_HINT ? openWork(hub, r, p, again) : [];
       // a worker that has polled long enough with nothing open is offered the door, as src/seat.ts does for harnessed seats
       const streak = hint === IDLE_HINT ? idleStreak(p, again) : 0;
-      const leaveOffer = streak && offersLeave(r, p, streak, idleWork) ? leaveHint(r, p, streak) : undefined;
+      const leaveOffer = streak && offersLeave(r, p, streak, idleWork, leaveWaitsFor(opts.holdMs)) ? leaveHint(r, p, streak) : undefined;
       if (leaveOffer) hub.persist({ type: "open_work", room: r.name, pid: p.id, ts: new Date().toISOString(), items: [`idle_leave_offered:${streak}`] });
       // the full list travels only when it differs from what this seat was last shown; otherwise one short line
       const named = hint === IDLE_HINT ? newlyNamed(p, idleWork) : null;

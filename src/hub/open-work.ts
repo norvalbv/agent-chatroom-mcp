@@ -103,6 +103,13 @@ export function ideaListHint(room: Room, p: Participant, content: string, quiet:
  * harness, so the hub is the only place that can say it. */
 export const idlePolicy = { leaveWaits: Number(process.env.CHATROOM_IDLE_LEAVE_WAITS ?? 8) };
 
+/** The same stretch of nothing, counted in this connection's waits: leaveWaits assumes a wait a minute, and a held
+ * connection's empty wait lasts minutes (src/env.ts seatHoldMs), so 8 of those would be half an hour (review/2ee29335). */
+export function leaveWaitsFor(holdMs?: number): number {
+  const n = idlePolicy.leaveWaits;
+  return n && holdMs && holdMs > 55_000 ? Math.max(2, Math.round((n * 55_000) / holdMs)) : n;
+}
+
 const streaks = new WeakMap<Participant, number>();
 
 /** Length of this seat's current run of idle waits, given idleAgain()'s verdict for this one. Call once per idle wait. */
@@ -116,8 +123,7 @@ export function idleStreak(p: Participant, again: boolean): number {
  * proposal is open (a vote is owed or about to be), never to a seat whose own claim is unreviewed (dev room
  * swarm-004642-76kz-room: the offer reached a seat polling while its own 6-minute soak ran), and never to the verifier,
  * lead or chair, whom the room needs at the end. */
-export function offersLeave(room: Room, p: Participant, streak: number, work: OpenWork[]): boolean {
-  const n = idlePolicy.leaveWaits;
+export function offersLeave(room: Room, p: Participant, streak: number, work: OpenWork[], n = idlePolicy.leaveWaits): boolean {
   if (!n || work.length || streak < n || streak % n !== 0 || room.state !== "open" || p.agent === "human") return false;
   if (p.role === "verifier" || p.role === "lead" || p.role === "chair") return false;
   if (claimsInFlight(room, p).length || reviewsComing(room, p).length) return false;

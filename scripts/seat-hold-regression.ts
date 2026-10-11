@@ -11,6 +11,7 @@ import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { Hub } from "../src/hub.js";
 import { createSessionServer } from "../src/server.js";
 import { MAX_SEAT_HOLD_MS, holdFromQuery, seatBeat, seatHoldMs } from "../src/env.js";
+import { idlePolicy, leaveWaitsFor, offersLeave } from "../src/hub/open-work.js";
 
 Hub.DEFAULT_NUDGE_MS = 0;
 
@@ -34,6 +35,20 @@ assert.equal(holdFromQuery("99999999"), MAX_SEAT_HOLD_MS, "a client cannot ask t
 assert.equal(holdFromQuery("1000"), undefined, "below a normal wait it is not a hold");
 assert.equal(holdFromQuery(undefined), undefined);
 assert.equal(holdFromQuery(["240000"]), undefined);
+
+// the idle-leave offer counts waits; on a held connection the same eight minutes of nothing is two waits, not eight
+assert.equal(leaveWaitsFor(undefined), idlePolicy.leaveWaits, "a plain connection: unchanged");
+assert.equal(leaveWaitsFor(240_000), 2, "8 waits of 55 s is about 7 min: two 4-minute waits");
+assert.equal(leaveWaitsFor(120_000), 4);
+{
+  const h = new Hub({});
+  const a = h.join("leave", "a", "claude", { requireChallenge: false, expectedParticipants: 0 }, undefined, "s-a").participant;
+  h.join("leave", "b", "claude", {}, undefined, "s-b");
+  const room = h.getRoom("leave");
+  assert.equal(offersLeave(room, a, 2, []), false, "after two waits a plain connection is not offered the door");
+  assert.equal(offersLeave(room, a, 2, [], leaveWaitsFor(240_000)), true, "a held one is: it has waited as long");
+  assert.equal(offersLeave(room, a, 3, [], leaveWaitsFor(240_000)), false, "and again only every second wait");
+}
 
 const hub = new Hub({});
 const open: Client[] = [];

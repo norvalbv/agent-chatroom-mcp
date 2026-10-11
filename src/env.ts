@@ -243,3 +243,22 @@ export function outputHeartbeat(send: (detail: string) => void, everyMs = 10_000
     send(line);
   };
 }
+
+// ---------- a supervised hub's files (src/hubd.ts writes them, src/swarm.ts reads them) ----------
+type Env = Record<string, string | undefined>;
+
+/** `<checkout>/logs` unless CHATROOM_HUBD_LOG_DIR says otherwise (tests; a hub whose checkout is read-only). */
+export const hubLogDir = (root: string, env: Env = process.env) => resolve(env.CHATROOM_HUBD_LOG_DIR ?? resolve(root, "logs"));
+export const hubLogFile = (root: string, port: number, env: Env = process.env) => resolve(hubLogDir(root, env), `hub-${port}.log`);
+export const launcherTokenFile = (root: string, port: number, env: Env = process.env) => resolve(hubLogDir(root, env), `hub-${port}-token`);
+
+/** The launcher token of the supervised hub on `port` started from checkout `root`; undefined when there is none. */
+export function readLauncherToken(root: string, port: number, env: Env = process.env): string | undefined {
+  try { return readFileSync(launcherTokenFile(root, port, env), "utf8").trim() || undefined; } catch { return undefined; }
+}
+
+/** The line a launcher prints at launch when --respawn cannot work, or null. */
+export function respawnTokenProblem(respawn: boolean, token: string | undefined, port: number): string | null {
+  if (!respawn || token) return null;
+  return `WARNING: --respawn WILL NOT WORK on :${port}: this launcher has no CHATROOM_LAUNCHER_TOKEN and the hub left no token file, so the hub will refuse every replacement seat. Start the hub with \`npm run hubd\` (it writes logs/hub-${port}-token), or set CHATROOM_LAUNCHER_TOKEN to the hub's token.`;
+}

@@ -255,7 +255,7 @@ await test('--sandbox is off by default: no sandbox block, no --sandbox for Open
   const or = h.calls.filter(c => c.args.some(a => a.endsWith('openrouter.ts') || a.endsWith('openrouter.js')));
   assert.equal(or.length, 1, 'one OpenRouter seat');
   assert.ok(!or[0].args.includes('--sandbox'));
-  const hub = h.calls.find(c => c.args.some(a => a.endsWith('dist/index.js')));
+  const hub = h.calls.find(c => c.args.some(a => a.endsWith('dist/hubd.js')));
   assert.ok(hub, 'the launcher started the hub');
   assert.equal(hub?.options.env.CHATROOM_SANDBOX, undefined);
 });
@@ -273,7 +273,7 @@ await test('swarm --sandbox: every claude seat is sandboxed (read-only planner d
   const or = h.calls.filter(c => c.args.some(a => a.endsWith('openrouter.ts') || a.endsWith('openrouter.js')));
   assert.equal(or.length, 1);
   assert.ok(or[0].args.includes('--sandbox'), 'the OpenRouter seat wraps run_command in sandbox-runtime');
-  const hub = h.calls.find(c => c.args.some(a => a.endsWith('dist/index.js')));
+  const hub = h.calls.find(c => c.args.some(a => a.endsWith('dist/hubd.js')));
   assert.equal(hub?.options.env.CHATROOM_SANDBOX, '1', 'a hub the launcher starts sandboxes its recruits too');
 });
 await test('swarm --sandbox --claude-full: the sandbox is kept (a boundary, not a token saving)', async () => {

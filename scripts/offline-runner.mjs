@@ -177,6 +177,8 @@ export const offlineScripts = [
   'reply-metrics.test.ts',
   'respawn-regression.ts',
   'respawn-usage-regression.ts',
+  'respawn-outage-regression.ts',
+  'hub-supervisor-regression.ts',
   'proposed-decision-path-regression.ts',
   'smoke-ports-regression.ts',
   'own-hub-port-regression.ts',

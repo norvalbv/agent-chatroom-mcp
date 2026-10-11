@@ -256,6 +256,7 @@ ${ROOMS_JS}
     var act = '<a class="btn hidephone" href="/rooms/' + encodeURIComponent(r.name) + '/transcript" target="_blank" title="Plain-text transcript">Transcript</a>'
       + '<a class="btn hidephone" href="/rooms/' + encodeURIComponent(r.name) + '/metrics?format=md" target="_blank" title="Per-seat cost, context and waits; the run in half-hour steps; when it went quiet">Metrics</a>'
       + ((r.state === 'open' || r.state === 'stalled') ? '<button class="btn danger" id="closeroom" title="Close this room without a conclusion">Close room</button>' : '')
+      + ((r.state === 'concluded' || r.state === 'closed') ? '<button class="btn hidephone" id="verdictroom" title="Record whether the answer of this room was used: adopted, rejected or partial (owner_verdict in its log; the runs table shows it)">Verdict</button>' : '')
       + '<button class="btn" id="archroom" title="' + (r.archived ? 'Show this room in listings again' : 'Hide this room from listings; the transcript is kept') + '">' + (r.archived ? 'Unarchive' : 'Archive') + '</button>'
       + roomPinButton(r) + '<button class="btn icon" id="toginspect" title="Inspector">☰</button>';
     var topicOpen = !!expanded['topic'];
@@ -266,6 +267,7 @@ ${ROOMS_JS}
     $('#topic').onclick = function () { expanded['topic'] = !expanded['topic']; renderHead(r); };
     var cb = $('#closeroom'); if (cb) cb.onclick = function () { closeRoom(r); };
     var ab = $('#archroom'); if (ab) ab.onclick = function () { archiveRoom(r); };
+    var vb = $('#verdictroom'); if (vb) vb.onclick = function () { verdictRoom(r); };
     var wf = $('#whof'), keep = wf.value;
     wf.innerHTML = '<option value="">everyone</option>' + r.participants.slice().sort(function (a, b) { return a.name.localeCompare(b.name); }).map(function (p) { return '<option value="' + esc(p.name) + '">' + esc(p.name) + (p.active ? '' : ' (left)') + '</option>'; }).join('');
     wf.value = keep; if (wf.value !== keep) { whoF = ''; }
@@ -501,6 +503,16 @@ ${ROOMS_JS}
   async function closeRoom(r) {
     if (!window.confirm('Close ' + r.name + '? No conclusion will be recorded and agents still in it will be told to leave.')) return;
     await fetch('/rooms/' + encodeURIComponent(r.name) + '/close', { method: 'POST', headers: hdrs(), body: JSON.stringify({ name: myName(), reason: 'closed from dashboard' }) });
+    refreshRooms();
+  }
+  async function verdictRoom(r) {
+    var v = window.prompt('Your verdict on the answer of ' + r.name + ': adopted, rejected or partial', 'adopted');
+    if (!v) return;
+    v = v.trim().toLowerCase();
+    if (['adopted', 'rejected', 'partial'].indexOf(v) < 0) { window.alert('Type adopted, rejected or partial.'); return; }
+    var note = window.prompt('One line on why (optional)', '') || '';
+    var res = await fetch('/rooms/' + encodeURIComponent(r.name) + '/verdict', { method: 'POST', headers: hdrs(), body: JSON.stringify({ name: myName(), verdict: v, note: note }) });
+    if (!res.ok) { $('#sub').className = 'sub bad'; $('#sub').textContent = await res.text(); return; }
     refreshRooms();
   }
   async function archiveRoom(r) {

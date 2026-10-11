@@ -28,7 +28,7 @@ import { renderTimeline, runTimeline } from "./run-timeline.js";
 import { createMcpExpressApp } from "@modelcontextprotocol/sdk/server/express.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import express from "express";
-import { Hub, HubError } from "./hub.js";
+import { Hub, HubError, type OwnerVerdict } from "./hub.js";
 import { STOPPED_BY, type RunEndCause, type StoppedBy } from "./respawn.js";
 import { parseReplyWindowMinutes } from "./reply-metrics.js";
 import { createSessionServer } from "./server.js";
@@ -341,7 +341,7 @@ const seatCallerAnnounced = new Map<string, number>();
  * the usage export, dev runs) are never resolved or announced: on integration every seat's 1 s /otlp/v1/logs export was
  * announced as a refused forgery when this was a deny-list (-3's composed dev room swarm-085449-i9fk). A new human route
  * must be added here, or it is open to loopback callers as it was before this check. */
-const HUMAN_ROUTES = /^\/rooms\/(archive-dead|[^/]+\/(messages|vote|kick|replace|create|deadline|resources|run-end|close|archive|attachments|chair))$/;
+const HUMAN_ROUTES = /^\/rooms\/(archive-dead|[^/]+\/(messages|vote|kick|replace|create|deadline|resources|run-end|verdict|close|archive|attachments|chair))$/;
 // Resolved before the routes, asynchronously, so requireToken stays a plain check and a lookup never blocks other rooms.
 // A request that carries the human token is looked up too: the hub's environment is readable by any process of the
 // same user, so a seat can read the token (`ps eww -p <hub pid>`) and, unchecked, post as "[human route: token]"
@@ -675,6 +675,16 @@ app.post("/rooms/:room/resources", (req, res) => {
     const { entries } = (req.body ?? {}) as { entries?: { key: string; text: string }[] };
     const set = hub.seedResources(req.params.room, entries as { key: string; text: string }[]);
     res.status(set.pending ? 202 : 200).json(set);
+  } catch (e) {
+    res.status(400).type("text/plain").send(e instanceof HubError ? e.message : "error");
+  }
+});
+// The owner's verdict on a room's conclusion, from the dashboard or curl: adopted, rejected or partial, with a note.
+app.post("/rooms/:room/verdict", (req, res) => {
+  if (!requireToken(req, res)) return;
+  try {
+    const { verdict, note, name } = (req.body ?? {}) as { verdict?: string; note?: string; name?: string };
+    res.json(hub.recordOwnerVerdict(req.params.room, verdict as OwnerVerdict, (typeof name === "string" && name.trim() ? name : "human").trim().slice(0, 64), typeof note === "string" ? note : undefined));
   } catch (e) {
     res.status(400).type("text/plain").send(e instanceof HubError ? e.message : "error");
   }

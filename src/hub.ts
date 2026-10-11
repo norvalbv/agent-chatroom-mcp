@@ -29,6 +29,9 @@ import { DevRuns, DevRunError, type DevRunHost } from "./hub/dev-runs.js";
 import { takesOf } from "./hub/take.js";
 import { MemoryWatch, memoryNotice, type Job, type MemoryEvent, type SeatMemory } from "./hub/memory.js";
 import { RUN_END_CAUSES, exitCause, type RunEndCause, type StoppedBy } from "./respawn.js";
+/** What the owner says became of a room's conclusion: used as it stands, overruled, or used in part. */
+export const OWNER_VERDICTS = ["adopted", "rejected", "partial"] as const;
+export type OwnerVerdict = (typeof OWNER_VERDICTS)[number];
 import type { SteerItem } from "./hub/steer.js";
 
 /** An evidence pointer the minimal prompt keeps public: a coordination board key, a proposal id, a commit (hex with a digit). */
@@ -3515,6 +3518,21 @@ export class Hub {
       const m = this.post(room, "system", undefined, `@${this.shown(room, p)} ${text}`);
       this.memoryNotices.set(e.seat, [...(this.memoryNotices.get(e.seat) ?? []), { room: room.name, id, seq: m.seq, from: "system", text }].slice(-5));
     }
+  }
+
+  /**
+   * The owner's verdict on a room's conclusion (telemetry gap G19: whether a conclusion was right or used was recorded
+   * nowhere; swarm-102904-ouev's answer was overruled in prose only). Kept as an owner_verdict event naming the proposal
+   * it judges, and said in the room; a later verdict stands over an earlier one, both stay in the log.
+   */
+  recordOwnerVerdict(roomName: string, verdict: OwnerVerdict, by: string, note?: string): { verdict: OwnerVerdict; proposal_id: string | null } {
+    const room = this.getRoom(roomName);
+    if (!OWNER_VERDICTS.includes(verdict)) throw new HubError(`verdict must be one of ${OWNER_VERDICTS.join(", ")}.`, undefined, "invalid-arg");
+    const why = note?.trim().slice(0, 600);
+    const proposal_id = room.conclusion?.proposalId ?? null;
+    this.persist({ type: "owner_verdict", room: room.name, verdict, by, proposal_id, ...(why ? { note: why } : {}), ts: now() });
+    this.post(room, "system", undefined, `${by}'s verdict on this room's ${room.conclusion ? "conclusion" : "outcome (it has no conclusion)"}: ${verdict}${why ? ` (${why})` : ""}.`);
+    return { verdict, proposal_id };
   }
 
   /** A seat process ended: one seat_exit event in each room it holds a place in, before it is marked left. */

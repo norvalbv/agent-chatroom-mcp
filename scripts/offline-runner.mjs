@@ -333,6 +333,7 @@ export const offlineScripts = [
   'seat-hold-regression.ts',
   'job-end-regression.ts',
   'hub-health-regression.ts',
+  'owner-verdict-regression.ts',
 ];
 
 export function offlineCommands() {

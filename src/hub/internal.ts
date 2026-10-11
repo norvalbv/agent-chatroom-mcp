@@ -41,6 +41,8 @@ export type Event =
   | { type: "inbox_refused"; room: string; ts: string; from_room: string; by: string; key: string; chars: number; open: number }
   /** Telemetry only: a seat process ended (the launcher's or spawner's exit receipt), with the cause as a closed set. */
   | { type: "seat_exit"; room: string; seat: string; exit_code: number | null; signal?: string; cause: import("../respawn.js").SeatExitCause; resets_utc?: string; stopped_by?: import("../respawn.js").StoppedBy; detail: string; ts: string }
+  /** Telemetry only: the owner's verdict on the room's conclusion (proposal_id null: the room had none). The latest stands. */
+  | { type: "owner_verdict"; room: string; verdict: "adopted" | "rejected" | "partial"; by: string; proposal_id: string | null; note?: string; ts: string }
   /** Telemetry only: the run that owns this room ended, as its launcher saw it. One per room: the first stands. */
   | { type: "run_end"; room: string; cause: import("../respawn.js").RunEndCause; detail?: string; ts: string }
   // what happened to an MCP session that held a seat (bugs.md 3: nothing recorded a session moving, closing or being reaped).

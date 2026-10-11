@@ -50,15 +50,23 @@ test("what counts as a job: something a seat started that is not a sleep or the 
     "  105   100   1000       40:00 tail -f run.log",
     "  200     1 500000    02:00:00 claude -p other",
     "  201   200    900       09:00 sleep 590",
+    // review/966debc8, from this machine's live table: a private hub left up for 16.7 h and a recorder 30 h old are not jobs
+    "  300     1 500000    20:00:00 claude -p third",
+    "  301     1 150000    16:42:00 node dist/index.js",
+    "  302     1  90000  1-06:00:00 python3 recorder.py --market all",
+    "  303     1  90000    05:59:00 node /x/worktree/dist/hubd.js --always",
+    "  304     1  90000    05:59:00 python3 backtest.py --window 12-16",
   ].join("\n");
   const env = ["100 claude CHATROOM_SEAT_KEY=seat-key-AAAA", "101 zsh CHATROOM_SEAT_KEY=seat-key-AAAA", "102 sleep CHATROOM_SEAT_KEY=seat-key-AAAA", "103 Python CHATROOM_SEAT_KEY=seat-key-AAAA",
-    "104 python3 CHATROOM_SEAT_KEY=seat-key-AAAA", "105 tail CHATROOM_SEAT_KEY=seat-key-AAAA", "200 claude CHATROOM_SEAT_KEY=seat-key-BBBB", "201 sleep CHATROOM_SEAT_KEY=seat-key-BBBB"].join("\n");
+    "104 python3 CHATROOM_SEAT_KEY=seat-key-AAAA", "105 tail CHATROOM_SEAT_KEY=seat-key-AAAA", "200 claude CHATROOM_SEAT_KEY=seat-key-BBBB", "201 sleep CHATROOM_SEAT_KEY=seat-key-BBBB",
+    "300 claude CHATROOM_SEAT_KEY=seat-key-CCCC", "301 node CHATROOM_SEAT_KEY=seat-key-CCCC", "302 python3 CHATROOM_SEAT_KEY=seat-key-CCCC", "303 node CHATROOM_SEAT_KEY=seat-key-CCCC", "304 python3 CHATROOM_SEAT_KEY=seat-key-CCCC"].join("\n");
   const usage = seatUsage(parseTable(plain, env));
   const a = jobsOf(usage.get("seat-key-AAAA")!.own);
   assert.deepEqual(a.map((j) => j.pid), [103], "the scheduled scorer; not the sleep, its shell, a tail, or a 20-second script");
   assert.equal(a[0].elapsed_s, 5400);
   assert.match(a[0].command, /score_op\.py/);
   assert.deepEqual(jobsOf(usage.get("seat-key-BBBB")!.own), [], "a seat in a sleep loop has no job (swarm-094251-5y46)");
+  assert.deepEqual(jobsOf(usage.get("seat-key-CCCC")!.own).map((j) => j.pid), [304], "a 6-hour backtest is a job; a hub, its supervisor and a 30-hour recorder are things left running");
 });
 
 test("the memory watcher keeps each seat's jobs from the table it already reads", async () => {

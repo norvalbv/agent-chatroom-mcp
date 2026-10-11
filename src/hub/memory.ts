@@ -109,11 +109,17 @@ export interface Job { pid: number; command: string; elapsed_s: number }
 /** Not jobs: a sleep, the shells around a command, and the tools a seat watches a job with. A seat in a sleep loop is
  * idle (swarm-094251-5y46); one whose scorer starts at 16:15 is waiting (swarm-100951-0btz-build, pid 8148). */
 const NOT_A_JOB = /^(?:sleep|sh|bash|zsh|dash|fish|tail|cat|tee|watch|timeout|caffeinate|env|nohup|time)$/;
+/** Nor a server a seat left running: a private hub, its supervisor or a launcher never ends, so a room is not waiting on
+ * it (review/966debc8: on this machine a 16.7-hour-old dev hub read as a job). */
+const A_SERVER = /(?:^|[\s/])(?:dist\/(?:index|hubd|swarm)\.js|src\/(?:index|hubd|swarm)\.ts)(?:\s|$)/;
 /** Younger than this it is a tool call still running, which the work ledger already counts as a step. */
 export const JOB_MIN_S = 60;
+/** Older than this it is not something a room waits on but something left running (the Polymarket lab's recorders were 30
+ * hours old in the same review): a run is 8 hours and a scorer scheduled inside it is younger. CHATROOM_JOB_MAX_S. */
+export const JOB_MAX_S = Number(process.env.CHATROOM_JOB_MAX_S) > 0 ? Number(process.env.CHATROOM_JOB_MAX_S) : 6 * 3600;
 export function jobsOf(own: readonly Proc[]): Job[] {
   return own
-    .filter((p) => p.elapsedS >= JOB_MIN_S && !NOT_A_JOB.test((p.command.trim().split(/\s+/)[0] ?? "").replace(/^.*\//, "").replace(/^-/, "")))
+    .filter((p) => p.elapsedS >= JOB_MIN_S && p.elapsedS <= JOB_MAX_S && !A_SERVER.test(p.command) && !NOT_A_JOB.test((p.command.trim().split(/\s+/)[0] ?? "").replace(/^.*\//, "").replace(/^-/, "")))
     .map((p) => ({ pid: p.pid, command: shownCommand(p.command), elapsed_s: p.elapsedS }))
     .sort((a, b) => b.elapsed_s - a.elapsed_s);
 }

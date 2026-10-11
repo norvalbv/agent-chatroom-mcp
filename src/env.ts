@@ -52,6 +52,8 @@ export function seatGitIdentity(name: string): NodeJS.ProcessEnv {
   };
 }
 
+/** The smallest window at which a reading-heavy dev room ran through a compaction and concluded (swarm-010140-vgxm, 2 of 2 seats). */
+export const COMPACT_WINDOW_TESTED = 200_000;
 /**
  * --compact-at <tokens> / CHATROOM_SEAT_COMPACT_WINDOW: the transcript size at which a Claude seat compacts. A seat
  * re-reads its whole transcript on every request, and unset, Claude Code compacts only near the model's limit: in

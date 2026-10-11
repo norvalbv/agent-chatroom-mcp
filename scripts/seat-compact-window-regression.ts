@@ -19,4 +19,5 @@ assert.equal(env.seatChildEnv({ ...base }).CLAUDE_CODE_AUTO_COMPACT_WINDOW, unde
 assert.equal(env.seatChildEnv({ ...base, CHATROOM_SEAT_COMPACT_WINDOW: "200k" }).CLAUDE_CODE_AUTO_COMPACT_WINDOW, undefined, "a bad value is dropped, not passed on");
 assert.equal(env.seatChildEnv({ ...base, CLAUDE_CODE_AUTO_COMPACT_WINDOW: "500000" }).CLAUDE_CODE_AUTO_COMPACT_WINDOW, "500000", "the operator's own setting survives when the launcher sets none");
 assert.equal(env.seatChildEnv({ ...base, CLAUDE_CODE_AUTO_COMPACT_WINDOW: "500000", CHATROOM_SEAT_COMPACT_WINDOW: "200000" }).CLAUDE_CODE_AUTO_COMPACT_WINDOW, "200000", "the launcher's flag wins over an inherited setting");
+assert.equal((env as any).COMPACT_WINDOW_TESTED, 200000, "the launcher warns under the smallest window a dev room ran through");
 console.log("SEAT COMPACT WINDOW OK");

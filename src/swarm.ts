@@ -12,7 +12,7 @@ import { collectRoomSnapshot, renderRunReport, writeRunResult, rollupUsage, hubU
 import { settledAxes } from "./settled.js";
 import { registerRespawn } from "./respawn.js";
 import { fileURLToPath } from "node:url";
-import { carrySettings, compactWindow, devHubRule, heartbeatHookSettings, loadDotEnv, outputHeartbeat, ownHubEnv, reusedHubProblem, seatBeat, seatChildEnv, seatPortError, type SeatBeat } from "./env.js";
+import { carrySettings, COMPACT_WINDOW_TESTED, compactWindow, devHubRule, heartbeatHookSettings, loadDotEnv, outputHeartbeat, ownHubEnv, reusedHubProblem, seatBeat, seatChildEnv, seatPortError, type SeatBeat } from "./env.js";
 import { randomUUID } from "node:crypto";
 import { exitDetail, respawnChain, type RespawnRoom } from "./respawn.js";
 import { claudeArgs } from "./claude-args.js";
@@ -88,6 +88,8 @@ if (COMPACT_AT !== undefined) {
     process.exit(2);
   }
   process.env.CHATROOM_SEAT_COMPACT_WINDOW = COMPACT_AT;
+  // swarm-005342-qejc: at 100000 a seat reading large files died of "Autocompact is thrashing"; at 200000 the same task ran through
+  if (compactWindow(COMPACT_AT)! < COMPACT_WINDOW_TESTED) console.error(`--compact-at ${COMPACT_AT}: under ${COMPACT_WINDOW_TESTED} a seat that reads large files or outputs can refill its context within three turns of a compaction and stop ("Autocompact is thrashing").`);
 }
 /** --no-seat-targets: flat seats all get the same brief, with no starting item each (the A arm when measuring src/seat-targets.ts) */
 const NO_SEAT_TARGETS = has("no-seat-targets");

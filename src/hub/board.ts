@@ -384,7 +384,13 @@ const LATE_REFUSED = ["claim/", "take/", "hold/", "draft/", "inbox/", "help/", "
  * Late results and verdicts were lost in 7 rooms (chat-and-friction issue 10): the seat's rerun or review finished
  * after the vote did. The window is Hub.LATE_WRITE_MS; an entry written in it is marked late and changes nothing decided. */
 function lateWrite(hub: Hub, room: Room, key: string): { after_s: number } | undefined {
-  if (room.state !== "concluded" || !room.conclusion?.decidedAt || LATE_REFUSED.some((x) => key.startsWith(x))) return undefined;
+  return LATE_REFUSED.some((x) => key.startsWith(x)) ? undefined : lateWindow(hub, room);
+}
+
+/** Whether a concluded room is still inside its late-results window, whatever the key (the hub's own late writes, e.g. a
+ * breakout's conclusion carried onto a parent that concluded first, go under inbox/). */
+export function lateWindow(hub: Hub, room: Room): { after_s: number } | undefined {
+  if (room.state !== "concluded" || !room.conclusion?.decidedAt) return undefined;
   const after = Date.now() - Date.parse(room.conclusion.decidedAt);
   return after < hub.lateWriteMs ? { after_s: Math.max(0, Math.round(after / 1000)) } : undefined;
 }

@@ -94,3 +94,30 @@ test("an append to a shared log after conclusion is marked late and logged like 
   Hub.LATE_WRITE_MS = 0;
   assert.throws(() => hub.setBoard(room.name, b.id, "ledger", "too late", { append: true }), /concluded/);
 });
+
+test("a breakout that concludes after its parent delivers its conclusion to the parent's board, marked late", (t) => {
+  const dataDir = mkdtempSync(join(tmpdir(), "late-writes-"));
+  const hub = new Hub({ dataDir });
+  const opts = { requireChallenge: false, expectedParticipants: 2 };
+  const a = hub.join("late-parent", "Alice", "test", opts, undefined, "session-a").participant;
+  const b = hub.join("late-parent", "Bob", "test", {}, undefined, "session-b").participant;
+  const ca = hub.join("late-child", "Alice", "test", { ...opts, parent: "late-parent" }, undefined, "session-a").participant;
+  const cc = hub.join("late-child", "Carol", "test", {}, undefined, "session-c").participant;
+  const parent = hub.getRoom("late-parent"), child = hub.getRoom("late-child");
+  t.after(() => { for (const r of [parent, child]) { clearTimeout(r.nudgeTimer); clearTimeout(r.openingsTimer); } });
+  const pr = hub.propose("late-parent", a.id, "The leads room adopts the table as it stands.");
+  hub.vote("late-parent", b.id, pr.id, "agree", undefined, undefined, "adopts the table as it stands");
+  assert.equal(parent.state, "concluded");
+  const before = JSON.stringify(parent.conclusion);
+  const cp = hub.propose("late-child", ca.id, "Capacity is 17 diffs per run, measured on the internal set.");
+  hub.vote("late-child", cc.id, cp.id, "agree", undefined, undefined, "Capacity is 17 diffs per run");
+  assert.equal(child.state, "concluded");
+  const e = parent.board.get("inbox/late-child/conclusion");
+  assert.ok(e, "the late group's answer reaches the parent's board (1nwp-internal's 17-diff table did not)");
+  assert.equal(e!.late, true);
+  assert.match(e!.text, /Capacity is 17 diffs per run/);
+  assert.match(parent.messages.at(-1)!.content, /breakout late-child concluded after this room did; its conclusion is on this board as inbox\/late-child\/conclusion, marked late/);
+  assert.equal(JSON.stringify(parent.conclusion), before);
+  const events = readFileSync(join(dataDir, "late-parent.jsonl"), "utf8").trim().split("\n").map((l) => JSON.parse(l)).filter((x) => x.type === "late_write");
+  assert.deepEqual(events.map((x) => [x.key, x.by]), [["inbox/late-child/conclusion", "system"]]);
+});

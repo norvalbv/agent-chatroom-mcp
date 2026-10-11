@@ -2941,12 +2941,16 @@ export class Hub {
 
   /**
    * A concluded breakout's decision, written onto its parent's board (no seat has to post_to_room it by hand). A parent
-   * that already concluded or closed is left alone: its board is final. Objections go before the text, and a text past
+   * that concluded first still takes it inside its late-results window, marked late (swarm-123021-1nwp: the internal
+   * group's table landed 92 min after the leads room concluded and was lost); a closed parent, or one past the window,
+   * is left alone. Objections go before the text, and a text past
    * the board cap is cut, never silently: where the whole of it lives (room_status on the child) leads the entry.
    */
   private carryConclusion(room: Room): void {
     const parent = room.parent ? this.rooms.get(room.parent) : undefined;
-    if (!parent || !room.conclusion || parent.state === "concluded" || parent.state === "closed") return;
+    if (!parent || !room.conclusion || parent.state === "closed") return;
+    const late = parent.state === "concluded" ? board.lateWindow(this, parent) : undefined;
+    if (parent.state === "concluded" && !late) return;
     const c = room.conclusion;
     const key = `inbox/${room.name}/conclusion`;
     // where the whole of it lives leads the entry, so no cut can drop it
@@ -2955,10 +2959,13 @@ export class Hub {
     const full = head + body;
     const marker = `\n[cut at the board cap: ${full.length} chars in all; whole text: room_status room="${room.name}"]`;
     const text = full.length <= 8000 ? full : full.slice(0, 8000 - marker.length) + marker;
-    const entry: BoardEntry = { text, by: "system", updatedAt: now() };
+    const entry: BoardEntry = { text, by: "system", updatedAt: now(), ...(late ? { late: true } : {}) };
     board.applyBoard(parent, key, entry);
     this.persist({ type: "board", room: parent.name, key, entry });
-    this.post(parent, "system", undefined, `[BOARD] breakout ${room.name} concluded; its conclusion is on this board as ${key} (board_get).`);
+    if (late) this.persist({ type: "late_write", room: parent.name, key, by: "system", after_s: late.after_s, ts: entry.updatedAt });
+    this.post(parent, "system", undefined, late
+      ? `[BOARD] breakout ${room.name} concluded after this room did; its conclusion is on this board as ${key}, marked late (board_get). This room's conclusion does not change.`
+      : `[BOARD] breakout ${room.name} concluded; its conclusion is on this board as ${key} (board_get).`);
   }
 
   private conclude(room: Room, pr: Proposal) {
@@ -3204,8 +3211,10 @@ export class Hub {
   /** How long a departed owner's claim/* stays reserved for its registered successor before anyone may take it over. */
   static STALE_CLAIM_MS = Number(process.env.CHATROOM_STALE_CLAIM_MS ?? 10 * 60_000);
 
-  /** How long after a room concludes its board still takes late results, marked late (src/hub/board.ts lateWrite). 0: refuse at once. */
-  static LATE_WRITE_MS = Number(process.env.CHATROOM_LATE_WRITE_MS ?? 60 * 60_000);
+  /** How long after a room concludes its board still takes late results, marked late (src/hub/board.ts lateWrite). 0: refuse at once.
+   * Three hours: the latest lost result in the records landed 92 min after its room's parent concluded (swarm-123021-1nwp), the
+   * next 19 min after (0btz-break); an hour would have lost the first. */
+  static LATE_WRITE_MS = Number(process.env.CHATROOM_LATE_WRITE_MS ?? 180 * 60_000);
   /** @internal */ get lateWriteMs(): number { return Hub.LATE_WRITE_MS; }
 
   /** The departed owner of a claim/* entry, if it has one: the most recent participant under that name, when inactive. */

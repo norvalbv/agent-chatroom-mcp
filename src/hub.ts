@@ -346,6 +346,8 @@ export class Hub {
       board_manifest: this.boardManifestStats(room), // compact since-process-start counters (stats branch)
       refusals: room.refusals ?? {},
       call_outcomes: callOutcomes,
+      // who called this room's tools without a seat in it (isolated groups: did one group read the other's room)
+      outside_calls: room.outsideCalls ?? {},
       refusal_rates: refusalRates,
       refusal_rate_coverage: room.telemetryVersion === 1 ? "complete" : "unknown",
       near_simultaneous_replies: bursts,
@@ -1174,17 +1176,22 @@ export class Hub {
    * Pending calls, schema rejections outside guard, roomless calls and failed room creation
    * are excluded. The rate uses this event's matched numerator, never lifetime refusals.
    */
-  recordCallCompletion(roomName: string | undefined, tool: string, outcome: CallOutcome, participant: string | null, timing: { ms?: number; empty?: boolean } = {}) {
+  recordCallCompletion(roomName: string | undefined, tool: string, outcome: CallOutcome, participant: string | null, timing: { ms?: number; empty?: boolean; outsider?: string } = {}) {
     const room = roomName ? this.rooms.get(roomName) : undefined;
     if (!room) return;
-    this.applyCallCompletion(room, tool, outcome);
+    this.applyCallCompletion(room, tool, outcome, timing.outsider);
     this.persist({ type: "call_completion", room: room.name, tool, outcome, ts: now(), participant, ...timing });
   }
 
-  /** @internal */ applyCallCompletion(room: Room, tool: string, outcome: CallOutcome) {
+  /** @internal */ applyCallCompletion(room: Room, tool: string, outcome: CallOutcome, outsider?: string) {
     room.callOutcomes ??= {};
     const counts = room.callOutcomes[tool] ??= { success: 0, hub_refusal: 0, error: 0 };
     counts[outcome]++;
+    if (outsider) {
+      const key = `${outsider}: ${tool}`;
+      room.outsideCalls ??= {};
+      room.outsideCalls[key] = (room.outsideCalls[key] ?? 0) + 1;
+    }
   }
 
   /** Post a system notice from outside the hub (e.g. a recruitment). */
@@ -2624,6 +2631,17 @@ export class Hub {
     if (!session || ![...from.participants.values()].some((p) => p.active && p.session === session)) {
       throw new HubError(`Only an active member of "${parent}" can open a breakout from it: join_room it first.`, undefined, "auth");
     }
+  }
+
+  /**
+   * The room request_agent(new_room) opens, with swarm defaults. It is a breakout of the requester's room, so the parent
+   * lists it and its conclusion is carried back like any other; the recruiting line already tells the parent it exists.
+   * A room that already exists is left as it is (never re-parented), and a parent that could not take a conclusion is not linked.
+   */
+  recruitRoom(name: string, topic: string, parent?: string): Room {
+    const from = parent !== undefined && parent !== name ? this.rooms.get(parent) : undefined;
+    const link = from && (from.state === "open" || from.state === "stalled");
+    return this.createRoom(name, { topic, requireChallenge: true, requireVerification: true, expectedParticipants: 0, ...(link ? { parent } : {}) });
   }
 
   /** One line in the parent: the breakout exists, how to work in it, and where its conclusion will land. */

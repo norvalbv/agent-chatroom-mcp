@@ -85,8 +85,8 @@ export interface SpawnerHooks {
   isHeld(room: string): boolean;
   /** create/claim an area on behalf of the requester; throw HubError if taken */
   claimArea(room: string, requesterName: string, area: string, teamNames: string[]): void;
-  /** create a room with swarm defaults (require_challenge, verification) */
-  ensureRoom(room: string, topic: string): void;
+  /** create a room with swarm defaults (require_challenge, verification), as a breakout of the requester's room */
+  ensureRoom(room: string, topic: string, parent?: string): void;
   /** post a system line into a room */
   announce(room: string, text: string): void;
   /** live non-human participants across open rooms (originals + recruits) */
@@ -299,7 +299,7 @@ export class Spawner {
       while (this.agents.some((a) => a.name === n && a.endedAt === undefined)) n = `${base}-${++this.counter}`;
       names.push(n);
     }
-    if (newRoom) this.hooks?.ensureRoom(newRoom, req.roomTopic ?? req.brief.slice(0, 200));
+    if (newRoom) this.hooks?.ensureRoom(newRoom, req.roomTopic ?? req.brief.slice(0, 200), req.room);
     if (req.area) this.hooks?.claimArea(target, req.requestedBy, req.area, names);
 
     const home = resolve(req.cwd ?? o.defaultCwd);
@@ -363,7 +363,7 @@ export class Spawner {
             ? `You are one of ${count} recruits on this brief; your teammates are ${teammates.join(", ")}. Split the work between you on the board (claim/<area>) rather than duplicating it.`
             : "You are the only recruit on this brief.",
         )
-        .split("{{REPORT_TO}}").join(req.newRoom ? `This is a sub-room; when it concludes, post the conclusion to the parent room with post_to_room(from_room="${target}", to_room="${req.room}", key="result").` : "")
+        .split("{{REPORT_TO}}").join(req.newRoom ? `This is a sub-room of ${req.room}: when it concludes, the hub puts its conclusion on that room's board as inbox/${target}/conclusion. For anything they need before then, use post_to_room(from_room="${target}", to_room="${req.room}", key="<short name>").` : "")
         .split("{{WRITE_RULE}}").join(req.canEdit ? "You MAY edit files and run anything here. You are in your own git worktree on your own branch (git branch --show-current); commit there and name the branch in the room. Never touch the main checkout." + devHubRule(cwd, SANDBOX) : "Do NOT modify files; investigate and report.");
 
       // a dry run plans the workspace without creating it, so what a seat is told matches what a real spawn does

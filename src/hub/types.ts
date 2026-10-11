@@ -414,6 +414,8 @@ export interface Room {
   /** board wait receipts: count + serialized manifest bytes (telemetryVersion rooms only) */
 
   callOutcomes?: Record<string, CallOutcomes>;
+  /** calls made by connections with no seat in this room, keyed "<their seats elsewhere>: <tool>" */
+  outsideCalls?: Record<string, number>;
   boardManifests?: BoardManifestStats;
   /** git HEAD and dirty state of the project when the room was created */
   codeState?: CodeState;

@@ -183,6 +183,8 @@ export const offlineScripts = [
   'reseat-regression.ts',
   'respawn-probe-regression.ts',
   'outside-reads-regression.ts',
+  'recruit-room-breakout-regression.ts',
+  'outside-calls-regression.ts',
   'groups-digest.test.ts',
   'proposed-decision-path-regression.ts',
   'smoke-ports-regression.ts',

@@ -123,6 +123,19 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
     if (typeof override === "string") return ids?.has(override) ? override : null;
     return ids?.size === 1 ? [...ids][0] : null;
   };
+  /**
+   * A call on a room this connection holds no seat in: its seats elsewhere as name@room, so the room's record says which
+   * seat looked in from outside. Joining is how a seat becomes a member, so join_room is never an outside call.
+   */
+  const outsider = (room: string | undefined, tool: string): string | undefined => {
+    if (!room || tool === "join_room" || me.get(room)?.size || !hub.rooms.has(room)) return undefined;
+    const seats: string[] = [];
+    for (const [other, ids] of me) for (const id of ids) {
+      const p = hub.rooms.get(other)?.participants.get(id);
+      if (p?.active) seats.push(`${hub.shown(hub.rooms.get(other)!, p)}@${other}`);
+    }
+    return seats.sort().join(", ") || "(no seat)";
+  };
   /** Tools whose own result delivers addressed messages (or that leave): no steering piggyback on these. */
   const SELF_DELIVERING = new Set(["wait_for_messages", "read_messages", "join_room", "leave_room"]);
   const guard =
@@ -133,6 +146,7 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
       let participant = telemetryActor(room, a?.participant_id);
       let outcome: CallOutcome = "error";
       const started = Date.now();
+      const from = outsider(room, tool);
       // a wait that returned no new message is idle polling; one that returned messages is the seat reacting (src/run-metrics.ts)
       let empty: boolean | undefined;
       // every hub call is a step too (board_get, vote): the People tab shows it without a room turn. Not a wait: it
@@ -163,7 +177,7 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
         }
         return fail(e);
       } finally {
-        hub.recordCallCompletion(room, tool, outcome, participant, { ms: Date.now() - started, ...(empty === undefined ? {} : { empty }) });
+        hub.recordCallCompletion(room, tool, outcome, participant, { ms: Date.now() - started, ...(empty === undefined ? {} : { empty }), ...(from ? { outsider: from } : {}) });
       }
     };
 

@@ -20,6 +20,7 @@ const VERIFY_GAP_PROSE = /not verified|did not (run|verify|exercise|watch|drive|
 import { projectOf, type SpawnedAgent, type Spawner } from "./spawner.js";
 import type { Participant } from "./hub/types.js";
 import { createWaitView } from "./hub/wait-view.js";
+import { hubTime, timeClaims, timeNote } from "./hub/clock.js";
 import { boardContinuation, noteBoardRead } from "./hub/board.js";
 import { IDLE_HINT, ideaListHint, idleAgain, idleHint, idleStreak, leaveHint, listedItems, newlyNamed, offersLeave, openWork, stillOpenHint } from "./hub/open-work.js";
 
@@ -74,6 +75,14 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
   );
 
   const compactWait = createWaitView();
+  /** hub_time for a reply, plus a time_note (and a time_claim event) when the text just written states a time that is not the time. */
+  const clockReply = (room: string, by: string, where: string, text: string): { hub_time: string; time_note?: string } => {
+    const at = Date.now();
+    const claims = timeClaims(text, at);
+    for (const c of claims) hub.persist({ type: "time_claim", room, by, where, stated: c.stated, delta_min: c.delta_min, ts: new Date(at).toISOString() });
+    const note = timeNote(claims, at);
+    return { hub_time: hubTime(at), ...(note ? { time_note: note } : {}) };
+  };
   const me = new Map<string, Set<string>>();
   const sessionKey = randomUUID(); // one connection = one agent, whatever names it uses
 
@@ -371,7 +380,7 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
       // a list of ideas left in chat is owed by nobody: say where each one goes (once, until the seat writes an idea/*)
       const listHint = ideaListHint(r, hub.requireParticipant(r, id), content, !!quiet);
       if (listHint) hub.persist({ type: "open_work", room: r.name, pid: id, ts: new Date().toISOString(), items: [`idea_list_nudged:${listedItems(content)}`] });
-      return { sent: hub.fmt(r, { ...m, content: "" }).trimEnd(), id: m.id, seq: m.seq, ...(listHint ? { hint: listHint } : m.autoQuiet ? { hint: AUTO_QUIET_NOTE } : {}) };
+      return { sent: hub.fmt(r, { ...m, content: "" }).trimEnd(), id: m.id, seq: m.seq, ...(listHint ? { hint: listHint } : m.autoQuiet ? { hint: AUTO_QUIET_NOTE } : {}), ...clockReply(r.name, m.from.name, "message", content) };
     }),
   );
 
@@ -705,7 +714,7 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
       // the prose says something was not checked but the head does not: the gate reads only the head
       const proseGap = head && !head.unverified && VERIFY_GAP_PROSE.test(e.text.slice(e.text.indexOf("\n") + 1));
       return {
-        key, chars: e.text.length, by: e.by, ...(overlaps.length ? { overlaps } : {}),
+        key, chars: e.text.length, by: e.by, ...(overlaps.length ? { overlaps } : {}), ...clockReply(room, e.by, `board:${key}`, text),
         ...(receipt ? { dev_room_receipt: receipt } : {}),
         ...(gaps.length ? { verification_gaps: gaps, verification_gaps_hint: "the open proposal and the conclusion carry these as not shown by you (PARTIAL); close them, or leave them listed" } : {}),
         ...(proseGap ? { hint: "Your prose below the head says something was not verified, but the head has no \"unverified\" list, and only the head is read: put those items in \"unverified\":[...] so the proposal and the conclusion carry them." } : {}),

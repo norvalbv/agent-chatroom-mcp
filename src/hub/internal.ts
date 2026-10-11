@@ -55,6 +55,8 @@ export type Event =
   | { type: "review"; room: string; key: string; by: string; proposal: string; commit?: string; commit_known?: boolean; base_commit?: string; base_known?: boolean; exit_code: number; base_exit_code?: number; kind?: string; unverified_n: number; dev_room?: string; ts: string }
   /** Telemetry only (replay ignores it): a board entry accepted after the room concluded, how long after, and the cited commit a failing late verdict contradicts. */
   | { type: "late_write"; room: string; key: string; by: string; after_s: number; contradicts?: string; ts: string }
+  /** Telemetry only (replay ignores it; src/hub/clock.ts): a seat stated a present-tense time more than five minutes off the hub's clock. where: "message" or "board:<key>"; delta_min > 0 is a time in the future. */
+  | { type: "time_claim"; room: string; by: string; where: string; stated: string; delta_min: number; ts: string }
   | { type: "kick_vote"; room: string; vote: KickVote }
   /** A proposal had the votes while these electorate members had not voted on its version, or these takes were held (replayed: Hub.armLastCall). */
   | { type: "last_call"; room: string; proposalId: string; version: number; startedAt: string; until: string; waiting_on: string[]; takes_held?: string[]; children_open?: string[] }

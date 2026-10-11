@@ -70,7 +70,7 @@ const claimOpen = (e: BoardEntry) => { try { return (JSON.parse(e.text) as { sta
  */
 function commitTake(hub: Hub, room: Room, p: Participant, key: string, w: TakeWrite): TakeWrite {
   if (p.agent === "human") return w;
-  const refuse = (reason: "same-commit" | "assigned-reviewer", commit: string, holder: Participant, message: string): never => {
+  const refuse = (reason: "same-commit" | "assigned-reviewer" | "already-reviewed", commit: string, holder: Participant, message: string): never => {
     hub.persist({ type: "take", room: room.name, key, action: "refused", by: p.name, holder: holder.name, ts: new Date().toISOString(), reason, commit });
     throw new HubError(message, undefined, "ownership");
   };
@@ -83,8 +83,19 @@ function commitTake(hub: Hub, room: Room, p: Participant, key: string, w: TakeWr
         `commit ${commit} is already taken: "${k}" is held by ${hub.shown(room, holder)} since ${e.updatedAt}: "${e.text.slice(0, 200)}". ` +
         `Ask them before doing it, or take something nobody holds (room_status lists each seat's holds).`);
     }
+    if (!REVIEW_KIND.test(kindOf(key))) continue;
+    // already reviewed by someone else: say so and name it, rather than pointing at a second review (arm room
+    // swarm-192859-kneg: a seat refused for the assigned reviewer wrote review/<sha>-<name> on a commit already reviewed)
+    const done = [...room.board].filter(([k, e]) => k.startsWith("review/") && e.text.trim() && e.by !== p.name && commitsOf(`take/${k}`).some((c) => sameCommit(c, commit)));
+    if (done.length) {
+      const [k, e] = done[0]!;
+      const by = named(room, e.by) ?? p;
+      refuse("already-reviewed", commit, by,
+        `${commit} is already reviewed: ${k} by ${hub.shown(room, by)} at ${e.updatedAt}${done.length > 1 ? ` (and ${done.length - 1} more)` : ""}. Read it before doing another. ` +
+        `If it missed something, tell ${hub.shown(room, by)} what; a second review of the same commit is worth writing only when you checked something it did not, and then it needs no take.`);
+    }
     const worktree = hub.workspaceOf(p)?.worktree;
-    if (!worktree || !REVIEW_KIND.test(kindOf(key))) continue;
+    if (!worktree) continue;
     const r = spawnSync("git", ["-C", worktree, "log", "-1", "--format=%an", `${commit}^{commit}`], { encoding: "utf8", timeout: 5000 });
     const author = r.status === 0 ? named(room, r.stdout.trim()) : undefined;
     // the author's own takes pass, and so does a take the author hands to a seat: that is the author choosing its reviewer

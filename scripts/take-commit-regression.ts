@@ -92,6 +92,24 @@ test("a claim's commits are held by its hub-assigned reviewer: another seat's ta
   h.setBoard(name, d.id === rev.id ? other.id : d.id, `take/review-${BASE}`, "the launcher's commit: nobody is assigned");
 });
 
+test("a take on a commit that already has a review says so, names it, and does not invite a second one (arm swarm-192859-kneg)", () => {
+  const { h, name, a, d } = room();
+  const e = claim(h, name, a.id, "alice", "notes");
+  const rev = [...h.getRoom(name).participants.values()].find((p) => p.name === e.reviewer)!;
+  const other = [...h.getRoom(name).participants.values()].find((p) => p.name !== "alice" && p.id !== rev.id)!;
+  // the assigned reviewer took it, reviewed it and released the take
+  h.setBoard(name, rev.id, `take/review-${A1}`, "reviewing");
+  h.setBoard(name, rev.id, `review/${A1}`, `{"proposal":"pending","commit":"${A1}","exit_code":0}\nACCEPT: both sentences match the file.`);
+  h.setBoard(name, rev.id, `take/review-${A1}`, "");
+  let said = "";
+  try { h.setBoard(name, other.id, `take/review-${A1}`, "I'll review it too"); } catch (err) { said = (err as Error).message; }
+  assert.match(said, new RegExp(`${A1} is already reviewed: review/${A1} by ${rev.name}`), said);
+  assert.doesNotMatch(said, /write it as review\//, "no invitation to write a second review of a reviewed commit");
+  // a merge or a dev room on the reviewed commit is other work and still passes
+  h.setBoard(name, other.id, `take/merge-${A1}`, "merging it");
+  void d;
+});
+
 test("when the assigned reviewer has left, anyone may take the commit", () => {
   const { h, name, a } = room();
   const e = claim(h, name, a.id, "alice", "inbox-cap");

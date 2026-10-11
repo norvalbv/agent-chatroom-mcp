@@ -85,7 +85,7 @@ export class Hub {
 
   getRoom(name: string): Room {
     const r = this.rooms.get(name);
-    if (!r) throw new HubError(Hub.ROOM_NAME.test(name) ? `Room "${name}" does not exist. Use join_room (it auto-creates) or list_rooms.` : "Invalid room name.");
+    if (!r) throw new HubError(Hub.ROOM_NAME.test(name) ? `Room "${name}" does not exist. Use join_room (it auto-creates) or list_rooms.` : "Invalid room name.", undefined, "not-found");
     return r;
   }
 
@@ -116,9 +116,9 @@ export class Hub {
     const existing = this.rooms.get(name);
     if (existing) return existing;
     if (!Hub.ROOM_NAME.test(name)) {
-      throw new HubError(`Room name must match [a-zA-Z0-9_-]{1,64}.`);
+      throw new HubError(`Room name must match [a-zA-Z0-9_-]{1,64}.`, undefined, "invalid-arg");
     }
-    if (this.rooms.size >= Hub.MAX_ROOMS) throw new HubError(`Room limit (${Hub.MAX_ROOMS}) reached.`);
+    if (this.rooms.size >= Hub.MAX_ROOMS) throw new HubError(`Room limit (${Hub.MAX_ROOMS}) reached.`, undefined, "budget");
     const full: Opts = {
       topic: opts.topic ?? "",
       mode: opts.mode ?? "free",
@@ -137,7 +137,7 @@ export class Hub {
     // Per-run room cap: rooms sharing a swarm prefix (swarm-<id>-*) are counted together.
     const prefix = Hub.runPrefix(name);
     if (prefix && [...this.rooms.keys()].filter((r) => Hub.runPrefix(r) === prefix && this.rooms.get(r)!.state === "open").length >= Hub.MAX_ROOMS_PER_RUN) {
-      throw new HubError(`Room limit for this run (${Hub.MAX_ROOMS_PER_RUN} open rooms with prefix ${prefix}) reached. Close or conclude a room first.`);
+      throw new HubError(`Room limit for this run (${Hub.MAX_ROOMS_PER_RUN} open rooms with prefix ${prefix}) reached. Close or conclude a room first.`, undefined, "budget");
     }
     // a threshold above the live cap can never be met (a 14-agent flat run deadlocked on it): clamp and say so
     const requested = full.expectedParticipants;
@@ -380,14 +380,14 @@ export class Hub {
   registerReplacement(roomName: string, predecessor: string, successorName: string): { replacementToken: string } {
     const room = this.getRoom(roomName);
     const old = room.participants.get(predecessor) ?? [...room.participants.values()].find((p) => p.name === predecessor);
-    if (!old) throw new HubError("Replacement predecessor is not registered in this room.");
-    if (!successorName.trim() || successorName.length > 64 || !/^[^\n\r<>]+$/.test(successorName)) throw new HubError("Invalid replacement display name.");
+    if (!old) throw new HubError("Replacement predecessor is not registered in this room.", undefined, "not-found");
+    if (!successorName.trim() || successorName.length > 64 || !/^[^\n\r<>]+$/.test(successorName)) throw new HubError("Invalid replacement display name.", undefined, "invalid-arg");
     // a reserved successor that never joined (its process died first, e.g. of the account's usage limit) holds nothing:
     // a new reservation replaces it, so the launcher can try again; one that joined is a seat and is replaced itself
     const reservedJoined = old.pendingReplacementName && [...room.participants.values()].some((p) => p.name === old.pendingReplacementName);
-    if (old.replacedBy || reservedJoined) throw new HubError("A replacement is already registered for this participant.");
+    if (old.replacedBy || reservedJoined) throw new HubError("A replacement is already registered for this participant.", undefined, "state");
     if ([...room.participants.values()].some((p) => p.name === successorName || (p !== old && p.pendingReplacementName === successorName))) {
-      throw new HubError("Replacement must be a new, unreserved participant name.");
+      throw new HubError("Replacement must be a new, unreserved participant name.", undefined, "state");
     }
     // The launcher asserts the process exit; do not wait for the idle sweep to mark the old seat departed.
     const replacementToken = randomBytes(32).toString("hex");
@@ -420,28 +420,28 @@ export class Hub {
   join(roomName: string, name: string, agent: string, opts: JoinOptions = {}, reclaimId?: string, session?: string, role?: Role): { room: Room; participant: Participant } {
     const existing = this.rooms.get(roomName);
     if (existing && opts.parent !== undefined && existing.parent !== opts.parent) {
-      throw new HubError(`"${roomName}" already exists${existing.parent ? ` as a breakout of "${existing.parent}"` : " and is not a breakout"}; a room is never re-parented. Join it without parent, or open a breakout under a new name.`);
+      throw new HubError(`"${roomName}" already exists${existing.parent ? ` as a breakout of "${existing.parent}"` : " and is not a breakout"}; a room is never re-parented. Join it without parent, or open a breakout under a new name.`, undefined, "state");
     }
     const opening = opts.parent !== undefined && !existing;
     if (opening) this.checkBreakout(roomName, opts.parent!, session);
     const room = this.createRoom(roomName, opening ? opts : { ...opts, parent: undefined });
     if (opening) this.carryResources(opts.parent!, room.name);
     if (opening) this.announceBreakout(room, name);
-    if (role && !ROLES.includes(role)) throw new HubError(`role must be one of ${ROLES.join(", ")}.`);
+    if (role && !ROLES.includes(role)) throw new HubError(`role must be one of ${ROLES.join(", ")}.`, undefined, "invalid-arg");
     if (role === "chair") {
       // the chair is bound to a name: the room option (set at creation) or, failing that, the first claimant
-      if (room.chair && room.chair !== name) throw new HubError(`This room's chair is ${room.chair}. Join without role=chair.`);
+      if (room.chair && room.chair !== name) throw new HubError(`This room's chair is ${room.chair}. Join without role=chair.`, undefined, "state");
     }
-    if (!name.trim()) throw new HubError("A display name is required to join.");
-    if (name.length > 64) throw new HubError("Display names are capped at 64 characters.");
-    if (!/^[^\n\r<>]+$/.test(name)) throw new HubError("Display names cannot contain newlines or angle brackets.");
+    if (!name.trim()) throw new HubError("A display name is required to join.", undefined, "invalid-arg");
+    if (name.length > 64) throw new HubError("Display names are capped at 64 characters.", undefined, "invalid-arg");
+    if (!/^[^\n\r<>]+$/.test(name)) throw new HubError("Display names cannot contain newlines or angle brackets.", undefined, "invalid-arg");
 
     // Identity is the connection: the session that already holds this name in this room is asking again (a model
     // that dropped context and forgot it had joined). Give it its own seat back instead of "pick another name",
     // which is how bench-3 became bench-3b next to its own live seat.
     const mine = session ? [...room.participants.values()].find((p) => p.active && p.session === session && p.name === name) : undefined;
     let participant = mine ?? (reclaimId ? room.participants.get(reclaimId) : undefined);
-    if (participant && participant.name !== name) throw new HubError("participant_id does not belong to that name.");
+    if (participant && participant.name !== name) throw new HubError("participant_id does not belong to that name.", undefined, "auth");
     if (!participant) participant = [...room.participants.values()].find((p) => p.name === name && !p.active);
     // A removed seat stays removed: not under its old name, its old id, or a new name on the same connection.
     const kickedSeat = participant?.kicked ? participant
@@ -449,19 +449,19 @@ export class Hub {
     if (kickedSeat) throw new HubError(Hub.kickedMessage(room, kickedSeat), undefined, "auth");
     // Humans are identified by name alone (they come in over plain HTTP with no session), so they always reclaim.
     if (!participant && agent === "human") participant = [...room.participants.values()].find((p) => p.name === name && p.agent === "human");
-    if (participant && opts.replacementToken !== undefined) throw new HubError("Replacement token has already been consumed or is not reserved for this join.");
+    if (participant && opts.replacementToken !== undefined) throw new HubError("Replacement token has already been consumed or is not reserved for this join.", undefined, "auth");
     if (!participant) {
       const reserved = [...room.participants.values()].find((p) => p.pendingReplacementName === name);
       const tokenHash = opts.replacementToken ? createHash("sha256").update(opts.replacementToken).digest("hex") : undefined;
       if (reserved ? !tokenHash || tokenHash !== reserved.pendingReplacementTokenHash : opts.replacementToken !== undefined) {
-        throw new HubError("A valid launcher replacement token for this room and name is required.");
+        throw new HubError("A valid launcher replacement token for this room and name is required.", undefined, "auth");
       }
       if ([...room.participants.values()].some((p) => p.name === name && p.active)) {
-        throw new HubError(`Someone named "${name}" is already active in "${roomName}". Pick another name.`);
+        throw new HubError(`Someone named "${name}" is already active in "${roomName}". Pick another name.`, undefined, "state");
       }
       if (agent !== "human" && this.voters(room).length >= Hub.MAX_LIVE_PER_ROOM) {
         this.post(room, "system", undefined, `Cap hit: ${Hub.MAX_LIVE_PER_ROOM} live agents in this room; ${name} could not join. Recruit into a new room instead.`);
-        throw new HubError(`Room "${roomName}" already has ${Hub.MAX_LIVE_PER_ROOM} live agents (per-run cap). Open a sub-room instead.`);
+        throw new HubError(`Room "${roomName}" already has ${Hub.MAX_LIVE_PER_ROOM} live agents (per-run cap). Open a sub-room instead.`, undefined, "budget");
       }
       const n = room.participants.size;
       if (role === "chair" && !room.chair) room.chair = name;
@@ -536,7 +536,7 @@ export class Hub {
       const mine = block.proposal.votes[p.id]?.vote;
       throw new HubError(
         `Leaving now would block ${block.proposal.id}: ${block.reason}. ${mine ? `You voted ${mine}.` : "You have not voted: vote or pass first."} ` +
-          "Call leave_room again to leave anyway.",
+          "Call leave_room again to leave anyway.", undefined, "leave-warning",
       );
     }
     p.active = false;
@@ -898,13 +898,13 @@ export class Hub {
       if (replacements.some(Boolean)) {
         throw new HubError(`Cannot send: ${departed.map((participant, i) =>
           `"${participant.name}" has left the room; ${replacements[i] ? `their replacement is "${replacements[i]!.name}"` : "no replacement is recorded"}`,
-        ).join("; ")}. Remove the departed @-mention or address an active participant.`);
+        ).join("; ")}. Remove the departed @-mention or address an active participant.`, undefined, "departed-mention");
       }
       throw new HubError(
-        `Cannot send: ${departed.map((participant) => `"${participant.name}"`).join(", ")} ${departed.length === 1 ? "has" : "have"} left the room. Remove the departed @-mention or address an active participant; no replacement is recorded.`,
+        `Cannot send: ${departed.map((participant) => `"${participant.name}"`).join(", ")} ${departed.length === 1 ? "has" : "have"} left the room. Remove the departed @-mention or address an active participant; no replacement is recorded.`, undefined, "departed-mention",
       );
     }
-    if (quiet && p.agent === "human") throw new HubError("Humans speak to the room; quiet is for agent working exchanges.");
+    if (quiet && p.agent === "human") throw new HubError("Humans speak to the room; quiet is for agent working exchanges.", undefined, "human-ask");
     // reply_to takes the id (m_...) or the seq as printed ("#12" or "12"), since delivered lines show the seq
     if (replyTo && /^#?\d+$/.test(replyTo)) replyTo = room.messages.find((m) => m.seq === Number(replyTo!.replace("#", "")))?.id ?? replyTo;
     if (surface && replyTo) {
@@ -913,9 +913,9 @@ export class Hub {
       quiet = false; // a surfacing reply is public by definition
     }
     // Chat stays open after a conclusion so humans can still be answered; only proposals close.
-    if (!content.trim()) throw new HubError("Message content is empty.");
+    if (!content.trim()) throw new HubError("Message content is empty.", undefined, "invalid-arg");
     if (content.length > room.maxMessageChars) {
-      throw new HubError(`Message is ${content.length} chars; this room allows ${room.maxMessageChars}. Say less: one claim, one reason, one ask.`);
+      throw new HubError(`Message is ${content.length} chars; this room allows ${room.maxMessageChars}. Say less: one claim, one reason, one ask.`, undefined, "size");
     }
     const target = p.agent === "human" ? undefined : this.addressedHuman(room, content, replyTo);
     if (target) {
@@ -931,31 +931,31 @@ export class Hub {
       // (the verifier in swarm-000525-jcz8-room, refused three times) still answers, unless the nominee already has: one answer.
       const addresseeLive = !!to && to !== "all" && to === p.id && p.active && !answered;
       if (to && to !== "all" && !resp.mine && !addresseeLive) {
-        throw new HubError(`${this.shown(room, target.from)} addressed that to ${resp.who}, not you. Leave it to them.`);
+        throw new HubError(`${this.shown(room, target.from)} addressed that to ${resp.who}, not you. Leave it to them.`, undefined, "human-ask");
       }
       if (small && answered && !resp.mine) {
         throw new HubError(
-          `${resp.who} already answered ${this.shown(room, target.from)}'s "${target.content.slice(0, 60)}". One reply is enough; do not address them again unless they ask you something.`,
+          `${resp.who} already answered ${this.shown(room, target.from)}'s "${target.content.slice(0, 60)}". One reply is enough; do not address them again unless they ask you something.`, undefined, "human-ask",
         );
       }
       const cap = small ? 240 : 900;
       if (content.length > cap) {
         throw new HubError(
           `${this.shown(room, target.from)} wrote ${target.content.length} characters; match their register. A reply to that message is capped at ${cap} characters` +
-            (small ? " (a greeting gets a greeting, not a status report)." : ". Answer the question; keep the debate out of it."),
+            (small ? " (a greeting gets a greeting, not a status report)." : ". Answer the question; keep the debate out of it."), undefined, "human-ask",
         );
       }
       if (!replyTo) replyTo = target.id; // record the addressing so the room knows it was answered
     }
     if (room.maxMessagesPerParticipant && p.messageCount >= room.maxMessagesPerParticipant && p.agent !== "human" && !this.unansweredHuman(room)) {
       throw new HubError(
-        `You have used your ${room.maxMessagesPerParticipant} messages in this room. You can still propose, challenge and vote.`,
+        `You have used your ${room.maxMessagesPerParticipant} messages in this room. You can still propose, challenge and vote.`, undefined, "budget",
       );
     }
     if (room.mode === "round_robin") {
       const speaker = this.currentSpeaker(room);
       if (speaker && speaker.id !== p.id) {
-        throw new HubError(`It is ${this.shown(room, speaker)}'s turn to speak, not yours. Call wait_for_messages until your_turn is true.`);
+        throw new HubError(`It is ${this.shown(room, speaker)}'s turn to speak, not yours. Call wait_for_messages until your_turn is true.`, undefined, "turn");
       }
     } else if (!force && p.agent !== "human" && !this.resolvesAddress(room, p, content, replyTo)) {
       // Stale-send guard: never talk past messages you have not read. A fresh challenger is pushed only what names it
@@ -975,12 +975,12 @@ export class Hub {
           throw new HubError(
             `You still owe a reply to #${owed.seq} from ${this.shown(room, owed.from)}. Reply with send_message reply_to="${owed.id}", or call pass to decline it. ` +
               `${queued} other message(s) queued behind it (below); the latest seq is #${latest}.`,
-            { hint: this.attentionHint(room, p), owed_seq: owed.seq, queued, latest_seq: latest, unread: unread.map((m) => this.fmt(room, m)), next_seq: latest },
+            { hint: this.attentionHint(room, p), owed_seq: owed.seq, queued, latest_seq: latest, unread: unread.map((m) => this.fmt(room, m)), next_seq: latest }, "reply-owed",
           );
         }
         throw new HubError(
           `${unread.length} message(s) arrived while you were composing. Read them (below); then retry send_message with force=true if your point is still new, or call wait_for_messages.`,
-          { hint: this.attentionHint(room, p), unread: unread.map((m) => this.fmt(room, m)), next_seq: room.messages.at(-1)!.seq },
+          { hint: this.attentionHint(room, p), unread: unread.map((m) => this.fmt(room, m)), next_seq: room.messages.at(-1)!.seq }, "unread",
         );
       }
     }
@@ -995,7 +995,7 @@ export class Hub {
         throw new HubError(
           `You have sent ${sh.mine} of the last ${sh.of} messages (fair share is about ${Math.round(sh.fair * sh.of)}). Let the others speak: call pass, ` +
             `or wait_for_messages. Send again only with genuinely new evidence (force=true).`,
-          { your_share: sh },
+          { your_share: sh }, "fair-share",
         );
       }
     }
@@ -1011,7 +1011,7 @@ export class Hub {
         const agent = room.participants.get(id)?.agent;
         return agent !== undefined && agent !== "human";
       });
-      if (targets.length === 0) throw new HubError("A quiet message must @-name at least one agent (not a human), or reply_to another agent's message. Quiet is not privacy: everyone can still read it.");
+      if (targets.length === 0) throw new HubError("A quiet message must @-name at least one agent (not a human), or reply_to another agent's message. Quiet is not privacy: everyone can still read it.", undefined, "invalid-arg");
       audience = [...new Set([p.id, ...targets])];
     }
     if (this.attentionFocus(room, p) || p.withheld?.length) this.settleRead(room, p, p.lastSeenSeq, []);
@@ -1282,10 +1282,10 @@ export class Hub {
   submitOpening(roomName: string, pid: string, content: string): { revealed: boolean; waiting_on: string[] } {
     const room = this.getRoom(roomName);
     const p = this.requireParticipant(room, pid);
-    if (room.openingsRevealed) throw new HubError("Openings have already been revealed in this room; use send_message.");
-    if (!content.trim()) throw new HubError("Opening statement is empty.");
+    if (room.openingsRevealed) throw new HubError("Openings have already been revealed in this room; use send_message.", undefined, "state");
+    if (!content.trim()) throw new HubError("Opening statement is empty.", undefined, "invalid-arg");
     const cap = Math.min(room.maxMessageChars, 400);
-    if (content.length > cap) throw new HubError(`Opening is ${content.length} chars; openings are capped at ${cap}. One or two sentences: your answer and the main reason. Detail goes in the discussion or on the board.`);
+    if (content.length > cap) throw new HubError(`Opening is ${content.length} chars; openings are capped at ${cap}. One or two sentences: your answer and the main reason. Detail goes in the discussion or on the board.`, undefined, "size");
     const first = room.openings.size === 0;
     room.openings.set(p.id, content);
     this.persist({ type: "opening", room: roomName, pid: p.id, content });
@@ -1336,17 +1336,17 @@ export class Hub {
    */
   setDeadline(roomName: string, at: string): { room: string; deadline_at: string; seconds_left: number; announce_at: string; pending: boolean } {
     const ms = typeof at === "string" ? Date.parse(at) : Number.NaN;
-    if (Number.isNaN(ms)) throw new HubError("deadline `at` must be an ISO time, e.g. 2026-10-10T01:30:00Z.");
-    if (ms <= Date.now()) throw new HubError("deadline `at` is in the past.");
+    if (Number.isNaN(ms)) throw new HubError("deadline `at` must be an ISO time, e.g. 2026-10-10T01:30:00Z.", undefined, "invalid-arg");
+    if (ms <= Date.now()) throw new HubError("deadline `at` is in the past.", undefined, "invalid-arg");
     const iso = new Date(ms).toISOString();
     const setAt = now();
     const room = this.rooms.get(roomName);
     if (!room) {
-      if (!Hub.ROOM_NAME.test(roomName)) throw new HubError("Invalid room name.");
+      if (!Hub.ROOM_NAME.test(roomName)) throw new HubError("Invalid room name.", undefined, "invalid-arg");
       for (const [k, d] of this.pendingDeadlines) if (Date.parse(d.at) <= Date.now()) this.pendingDeadlines.delete(k);
       this.pendingDeadlines.set(roomName, { at: iso, setAt });
     } else {
-      if (room.state === "concluded" || room.state === "closed") throw new HubError(`Room "${roomName}" is ${room.state}; a deadline no longer applies.`);
+      if (room.state === "concluded" || room.state === "closed") throw new HubError(`Room "${roomName}" is ${room.state}; a deadline no longer applies.`, undefined, "state");
       this.applyDeadline(room, iso, setAt);
     }
     const total = ms - Date.parse(setAt);
@@ -1363,16 +1363,16 @@ export class Hub {
    * are on the board before its first seat's join returns. Nothing is posted to chat: a seat is told on joining.
    */
   seedResources(roomName: string, entries: { key: string; text: string }[]): { room: string; keys: string[]; pending: boolean } {
-    if (!Array.isArray(entries) || !entries.length) throw new HubError("resources need at least one entry: [{ key: \"resource/<name>\", text }].");
+    if (!Array.isArray(entries) || !entries.length) throw new HubError("resources need at least one entry: [{ key: \"resource/<name>\", text }].", undefined, "invalid-arg");
     for (const e of entries) {
       if (typeof e?.key !== "string" || !/^resource\/./.test(e.key) || !board.BOARD_KEY.test(e.key)) throw new HubError(`A resource key is "resource/<name>" (got ${String(JSON.stringify(e?.key)).slice(0, 80)}).`, undefined, "key-format");
-      if (typeof e.text !== "string" || !e.text.trim()) throw new HubError(`"${e.key}" has no text.`);
+      if (typeof e.text !== "string" || !e.text.trim()) throw new HubError(`"${e.key}" has no text.`, undefined, "invalid-arg");
       if (e.text.length > 8000) throw new HubError("Board entries are capped at 8000 characters.", undefined, "size");
     }
     const clean = entries.map((e) => ({ key: e.key, text: e.text }));
     const room = this.rooms.get(roomName);
     if (!room) {
-      if (!Hub.ROOM_NAME.test(roomName)) throw new HubError("Invalid room name.");
+      if (!Hub.ROOM_NAME.test(roomName)) throw new HubError("Invalid room name.", undefined, "invalid-arg");
       this.pendingResources.set(roomName, clean);
     } else {
       if (room.state === "concluded" || room.state === "closed") throw new HubError(`Room "${roomName}" is ${room.state}; its board is final.`, undefined, "state");
@@ -1904,28 +1904,28 @@ export class Hub {
     const room = this.getRoom(roomName);
     const p = this.requireParticipant(room, pid);
     const pr = room.proposals.get(proposalId);
-    if (!pr) throw new HubError(`No proposal "${proposalId}" in "${roomName}".`);
-    if (pr.status !== "open") throw new HubError(`Proposal ${proposalId} is ${pr.status}; only open proposals can be amended.`);
+    if (!pr) throw new HubError(`No proposal "${proposalId}" in "${roomName}".`, undefined, "not-found");
+    if (pr.status !== "open") throw new HubError(`Proposal ${proposalId} is ${pr.status}; only open proposals can be amended.`, undefined, "state");
     let next: string;
     if (replaceAll) {
-      if (!replace.trim()) throw new HubError("replace_all needs the full new text.");
+      if (!replace.trim()) throw new HubError("replace_all needs the full new text.", undefined, "invalid-arg");
       next = replace;
     } else if (!find) {
-      if (!replace.trim()) throw new HubError("Nothing to append.");
+      if (!replace.trim()) throw new HubError("Nothing to append.", undefined, "invalid-arg");
       next = pr.text.trimEnd() + "\n" + replace;
     } else {
       const n = pr.text.split(find).length - 1;
       if (n === 0) {
         throw new HubError(
-          `"${find.slice(0, 80)}" does not occur in ${proposalId} v${pr.version} (${pr.text.length} chars). Copy the exact text to replace; the closest passage is: "${this.closest(pr.text, find)}". For a whole rewrite use replace_all=true.`,
+          `"${find.slice(0, 80)}" does not occur in ${proposalId} v${pr.version} (${pr.text.length} chars). Copy the exact text to replace; the closest passage is: "${this.closest(pr.text, find)}". For a whole rewrite use replace_all=true.`, undefined, "amend-find",
         );
       }
-      if (n > 1) throw new HubError(`"${find.slice(0, 80)}" occurs ${n} times; include more context so it is unique.`);
+      if (n > 1) throw new HubError(`"${find.slice(0, 80)}" occurs ${n} times; include more context so it is unique.`, undefined, "amend-find");
       // a one-word find in a long document splices wherever that word happens to sit ("findings" for "find"); ask for a span
-      if (find.trim().length < 16 && pr.text.length > 2000) throw new HubError(`"${find}" is too short a find for a ${pr.text.length}-char document; copy at least 16 characters of the passage so the replacement lands where you mean.`);
+      if (find.trim().length < 16 && pr.text.length > 2000) throw new HubError(`"${find}" is too short a find for a ${pr.text.length}-char document; copy at least 16 characters of the passage so the replacement lands where you mean.`, undefined, "amend-find");
       next = pr.text.replace(find, replace);
     }
-    if (next === pr.text) throw new HubError("That amendment changes nothing.");
+    if (next === pr.text) throw new HubError("That amendment changes nothing.", undefined, "amend-find");
     const counting = () => {
       const reviewer = this.activeReviewerFor(room, pr.by.name);
       return [...room.board].filter(([key, e]) => { const v = this.verifyEntryVerdict(room, pr, key, e, reviewer); return v.head && !v.why; }).map(([key, e]) => `${key} by ${this.shown(room, { id: "", name: e.by })}`);
@@ -1996,18 +1996,18 @@ export class Hub {
   propose(roomName: string, pid: string, text: string): Proposal {
     const room = this.getRoom(roomName);
     const p = this.requireParticipant(room, pid);
-    if (room.state === "concluded" || room.state === "closed") throw new HubError(`Room "${roomName}" is ${room.state}.`);
-    if (!text.trim()) throw new HubError("Proposal text is empty.");
+    if (room.state === "concluded" || room.state === "closed") throw new HubError(`Room "${roomName}" is ${room.state}.`, undefined, "state");
+    if (!text.trim()) throw new HubError("Proposal text is empty.", undefined, "invalid-arg");
     const open = [...room.proposals.values()].find((pr) => pr.status === "open");
     if (open) {
       throw new HubError(
         `Proposal ${open.id} by ${this.shown(room, open.by)} is already open (v${open.version}): "${open.text.slice(0, 200)}". ` +
-          `Do not re-propose: use amend to change its wording, challenge it, or vote on it.`,
+          `Do not re-propose: use amend to change its wording, challenge it, or vote on it.`, undefined, "proposal-open",
       );
     }
     const voters = this.voters(room);
     if (room.expectedParticipants !== 1 && Hub.sessionsOf(voters) < 2) {
-      throw new HubError("A room of one cannot conclude: at least two agents on different connections must be present. Recruit (request_agent) or ask someone to join.");
+      throw new HubError("A room of one cannot conclude: at least two agents on different connections must be present. Recruit (request_agent) or ask someone to join.", undefined, "room-of-one");
     }
     // a verify/<area>.partial never counts (verifyEntryVerdict), so it must not open this door either; head-less prose
     // still does, as before (round 1's 6334c88f also refused prose, broke four suite tests and was reverted)
@@ -2015,16 +2015,16 @@ export class Hub {
     if (room.requireVerification && !verifyKeys.some((k) => !k.endsWith(".partial"))) {
       const partials = verifyKeys.slice(0, 3);
       throw new HubError("This room requires verification: before proposing, put the command you actually ran, its cwd/commit and its exit code on the board under verify/<area>. Someone else must then check it themselves (the same check failing at the parent commit and passing at yours) and write their own verify/* entry naming the proposal id." +
-        (partials.length ? ` The board has only ${partials.join(", ")}: a .partial never counts, so write verify/<area> without it once the check has run.` : ""));
+        (partials.length ? ` The board has only ${partials.join(", ")}: a .partial never counts, so write verify/<area> without it once the check has run.` : ""), undefined, "needs-verify");
     }
     const unacked = this.unacknowledged(room);
-    if (unacked.length) throw new HubError(`Acknowledge the notes from other rooms first (write "<key>.ack"): ${unacked.join(", ")}`);
+    if (unacked.length) throw new HubError(`Acknowledge the notes from other rooms first (write "<key>.ack"): ${unacked.join(", ")}`, undefined, "unacked-notes");
     const human = this.unansweredHuman(room);
     if (human && !room.humanWarned.has(human.id)) {
       room.humanWarned.add(human.id);
       throw new HubError(
         `${this.shown(room, human.from)} (a human) said "${human.content.slice(0, 200)}" (message ${human.id}) and nobody has answered. ` +
-          `Reply to them first with send_message reply_to="${human.id}" in plain prose, then propose.`,
+          `Reply to them first with send_message reply_to="${human.id}" in plain prose, then propose.`, undefined, "human-unanswered",
       );
     }
     // Held once per room in total, for either or both reasons, and the next propose goes ahead whatever the board says:
@@ -2056,7 +2056,7 @@ export class Hub {
           what + (unexamined.length ? `For each finding this proposal rests on, ask a named seat to check it and write attack/<key> quoting its weakest clause (or do that yourself if it is not yours). ` : "") +
           (open_attacks.length ? `The author answers by editing that entry. ` : "") +
           `Wait for those, or propose again to go ahead as things stand: this refusal is given once per room, for all of these reasons together.`,
-        { barren_claims: barren, unsourced_claims: unsourced, unexamined, open_attacks },
+        { barren_claims: barren, unsourced_claims: unsourced, unexamined, open_attacks }, "scrutiny-held",
       );
     }
     this.surfaceCited(room, text, "cited in a proposal");
@@ -2231,25 +2231,25 @@ export class Hub {
     const room = this.getRoom(roomName);
     const p = this.requireParticipant(room, pid);
     const pr = room.proposals.get(proposalId);
-    if (!pr) throw new HubError(`No proposal "${proposalId}" in "${roomName}".`);
-    if (pr.status !== "open") throw new HubError(`Proposal ${proposalId} is already ${pr.status}.`);
-    if (pr.by.id === p.id) throw new HubError("You cannot challenge your own proposal; someone else must.");
+    if (!pr) throw new HubError(`No proposal "${proposalId}" in "${roomName}".`, undefined, "not-found");
+    if (pr.status !== "open") throw new HubError(`Proposal ${proposalId} is already ${pr.status}.`, undefined, "state");
+    if (pr.by.id === p.id) throw new HubError("You cannot challenge your own proposal; someone else must.", undefined, "self-target");
     if (blocking && !this.independentChallenger(room, { by: { id: p.id, name: p.name }, objection, ts: now(), version: pr.version }, pr.by.id)) {
       throw new HubError(
         `${this.shown(room, p)} shares a connection with the proposer ${this.shown(room, pr.by)}: a blocking challenge must come from a different session (identity-is-the-connection). ` +
-        `A non-blocking objection is still allowed, and a different connection must challenge before this proposal can pass.`,
+        `A non-blocking objection is still allowed, and a different connection must challenge before this proposal can pass.`, undefined, "same-session",
       );
     }
-    if (objection.trim().length < 20) throw new HubError("A challenge must state a specific objection (at least 20 characters).");
+    if (objection.trim().length < 20) throw new HubError("A challenge must state a specific objection (at least 20 characters).", undefined, "invalid-arg");
     const cmd = command?.trim() ? Hub.normCommand(command) : undefined;
-    if (cmd !== undefined && (cmd.length < 3 || cmd.length > 1000)) throw new HubError("An executable challenge's `command` must be a runnable command line (3-1000 characters).");
+    if (cmd !== undefined && (cmd.length < 3 || cmd.length > 1000)) throw new HubError("An executable challenge's `command` must be a runnable command line (3-1000 characters).", undefined, "invalid-arg");
     const cites = this.citedSpan(pr.text, objection);
     // An executable challenge is anchored to its command, not to a span of text: citing is optional.
     if (blocking && !cites && !cmd) {
       throw new HubError(
         `A blocking challenge must quote a matching proposal span (12+ characters) in double quotes. ` +
           `Copy the text from ${proposalId} v${pr.version}; the closest passage is: "${this.closest(pr.text, objection)}". ` +
-          `Use blocking=false to record uncited dissent without holding the proposal.`,
+          `Use blocking=false to record uncited dissent without holding the proposal.`, undefined, "cite-required",
       );
     }
     // Six seats filing the same objection within two minutes is one objection: point at the open one first.
@@ -2263,7 +2263,7 @@ export class Hub {
       throw new HubError(
         `${this.shown(room, same.by)} already challenged that clause ("${same.cites!.slice(0, 80)}${same.cites!.length > 80 ? "…" : ""}") in ${same.id}, which is still open. ` +
           `If your objection is the same, say so in chat or vote; if it adds something that challenge does not, file it again with confirm=true.`,
-        { duplicate_of: same.id },
+        { duplicate_of: same.id }, "duplicate",
       );
     }
     this.surfaceCited(room, objection, "cited in a challenge");
@@ -2291,24 +2291,24 @@ export class Hub {
     const room = this.getRoom(roomName);
     const p = this.requireParticipant(room, pid);
     const proposal = room.proposals.get(proposalId);
-    if (!proposal) throw new HubError(`No proposal "${proposalId}" in "${roomName}". See room_status for open proposals.`);
-    if (proposal.status !== "open") throw new HubError(`Proposal ${proposalId} is already ${proposal.status}.`);
+    if (!proposal) throw new HubError(`No proposal "${proposalId}" in "${roomName}". See room_status for open proposals.`, undefined, "not-found");
+    if (proposal.status !== "open") throw new HubError(`Proposal ${proposalId} is already ${proposal.status}.`, undefined, "state");
     const prior = proposal.votes[p.id];
     if (p.agent === "human" && prior && prior.vote === vote && (prior.version ?? proposal.version) === proposal.version) return proposal; // repeat human votes are idempotent
     if (p.agent !== "human") {
       if (vote === "agree") {
         if (!quote || quote.trim().length < 15) {
-          throw new HubError("An agree vote must include `quote`: a verbatim clause (15+ chars) from the proposal you are endorsing. Read it before you vote.");
+          throw new HubError("An agree vote must include `quote`: a verbatim clause (15+ chars) from the proposal you are endorsing. Read it before you vote.", undefined, "vote-form");
         }
         if (!norm(proposal.text).includes(norm(quote))) {
-          throw new HubError(`Your quote is not in ${proposalId} v${proposal.version} (${proposal.text.length} chars). Quote it verbatim; the closest passage is: "${this.closest(proposal.text, quote)}"`);
+          throw new HubError(`Your quote is not in ${proposalId} v${proposal.version} (${proposal.text.length} chars). Quote it verbatim; the closest passage is: "${this.closest(proposal.text, quote)}"`, undefined, "vote-form");
         }
         if (this.openChallenges(proposal).length && (!reason || reason.trim().length < 20)) {
-          throw new HubError(`A challenge is open on ${proposalId}; an agree now needs \`reason\` (20+ chars) saying why the objection does not hold, not only a quote.`);
+          throw new HubError(`A challenge is open on ${proposalId}; an agree now needs \`reason\` (20+ chars) saying why the objection does not hold, not only a quote.`, undefined, "vote-form");
         }
       }
       if (vote === "disagree" && (!reason || reason.trim().length < 20)) {
-        throw new HubError("A disagree vote must include `reason` stating the specific change that would make you agree (20+ chars).");
+        throw new HubError("A disagree vote must include `reason` stating the specific change that would make you agree (20+ chars).", undefined, "vote-form");
       }
     }
     const entry = { vote, reason, quote, confidence, name: p.name, ts: now(), version: proposal.version };
@@ -2534,7 +2534,7 @@ export class Hub {
     try {
       return await this.devRuns.start({ room: roomName, requestedBy: p.name, ...(p.session ? { session: p.session } : {}), ...q });
     } catch (err) {
-      if (err instanceof DevRunError) throw new HubError(err.message);
+      if (err instanceof DevRunError) throw new HubError(err.message, undefined, "state");
       throw err;
     }
   }
@@ -2751,9 +2751,9 @@ export class Hub {
   /** A breakout is opened from a room the opener is an active member of, by the same connection, and never from a closed one. */
   private checkBreakout(child: string, parent: string, session?: string): void {
     const from = this.rooms.get(parent);
-    if (!from) throw new HubError(`parent room "${parent}" does not exist. Open a breakout from a room you are in.`);
-    if (from.state === "concluded" || from.state === "closed") throw new HubError(`parent room "${parent}" is ${from.state}; nothing to carry a breakout's conclusion back to.`);
-    if (child === parent) throw new HubError("A room cannot be its own breakout.");
+    if (!from) throw new HubError(`parent room "${parent}" does not exist. Open a breakout from a room you are in.`, undefined, "not-found");
+    if (from.state === "concluded" || from.state === "closed") throw new HubError(`parent room "${parent}" is ${from.state}; nothing to carry a breakout's conclusion back to.`, undefined, "state");
+    if (child === parent) throw new HubError("A room cannot be its own breakout.", undefined, "invalid-arg");
     if (!session || ![...from.participants.values()].some((p) => p.active && p.session === session)) {
       throw new HubError(`Only an active member of "${parent}" can open a breakout from it: join_room it first.`, undefined, "auth");
     }
@@ -2903,7 +2903,7 @@ export class Hub {
   /** Close a room without a conclusion (stale, abandoned, or a human decided to stop it). */
   closeRoom(roomName: string, by: string, reason = ""): Room {
     const room = this.getRoom(roomName);
-    if (room.state === "concluded") throw new HubError("Room already concluded.");
+    if (room.state === "concluded") throw new HubError("Room already concluded.", undefined, "state");
     if (room.state === "closed") return room;
     for (const pr of room.proposals.values()) if (pr.status === "open") pr.status = "superseded";
     for (const p of room.participants.values()) {
@@ -2926,7 +2926,7 @@ export class Hub {
   archiveRoom(roomName: string, by: string, archived = true): Room {
     const room = this.getRoom(roomName);
     if (archived && (room.state === "open" || room.state === "stalled") && this.activeParticipants(room).length === 0) this.closeRoom(roomName, by, "archived");
-    if (archived && (room.state === "open" || room.state === "stalled")) throw new HubError(`Room "${roomName}" still has participants; close it first.`);
+    if (archived && (room.state === "open" || room.state === "stalled")) throw new HubError(`Room "${roomName}" still has participants; close it first.`, undefined, "state");
     room.archived = archived;
     this.persist({ type: "archive", room: roomName, archived, by, ts: now() });
     return room;

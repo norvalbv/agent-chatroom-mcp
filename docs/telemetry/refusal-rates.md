@@ -12,8 +12,16 @@ in-process MCP client to the real guard and uses disposable JSONL logs.
   `"unknown"`. An unseen tool is absent, not a measured zero.
 
 The existing `refusals` map remains string → number, preserving old entries.
-New entries use `<tool>: hub_guard`. This deliberately coarser reason class
-replaces error-message prefixes, which can contain submitted text or secrets.
+New entries use `<tool>: <code>`, where the code is one of the closed set in
+`REFUSAL_CODES` (src/hub/types.ts): one per guard family (`unread`,
+`proposal-open`, `amend-find`, `vote-form`, `needs-verify` and so on), set at
+the throw site, never parsed from the error message, which can contain
+submitted text or secrets. `hub_guard` remains only for logs written before
+the codes and for an error with no code; `scripts/refusal-codes-typed-regression.ts`
+fails when a `HubError` is constructed without one.
+`npx tsx scripts/refusals-table.ts <room.jsonl>...` prints refusals by tool
+and code with how many the same seat got past (the same tool succeeding
+within 5 minutes).
 The rate numerator comes **only** from completion events, not `refusals`.
 
 ## Population and coverage

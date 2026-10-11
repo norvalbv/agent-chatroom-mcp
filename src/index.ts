@@ -105,7 +105,7 @@ spawner.attach({
   claimArea: (room, requester, area, team) => {
     const r = hub.getRoom(room);
     const existing = r.board.get(`claim/${area}`);
-    if (existing && existing.by !== requester) throw new HubError(`claim/${area} is owned by ${existing.by}; recruit into their team instead.`);
+    if (existing && existing.by !== requester) throw new HubError(`claim/${area} is owned by ${existing.by}; recruit into their team instead.`, undefined, "ownership");
     hub.setBoardAs(room, requester, `claim/${area}`, JSON.stringify({ area, owner: requester, team: [requester, ...team], status: "open", note: "claimed at recruitment" }));
   },
   ensureRoom: (room, topic, parent) => {
@@ -139,7 +139,7 @@ spawner.attach({
   registerReplacement: (room, predecessor, successorName) => {
     const old = [...hub.getRoom(room).participants.values()].find(p => p.name === predecessor);
     // A recruit may replace a departed agent, never declare another live seat or human departed.
-    if (!old || old.active || old.agent === "human" || old.role === "chair") throw new HubError("Recruit replacement requires a departed nonhuman, non-chair participant.");
+    if (!old || old.active || old.agent === "human" || old.role === "chair") throw new HubError("Recruit replacement requires a departed nonhuman, non-chair participant.", undefined, "state");
     // Departed is not dead: after a hub restart every seat is restored inactive while its process keeps working, and a
     // successor would duplicate its claimed work (swarm-181144-uxtr, 6-astra-3). Its launcher's heartbeat says which.
     const away = hub.away(old);
@@ -589,7 +589,7 @@ app.post("/rooms/:room/replacements", (req, res) => {
   }
   try {
     const old = [...hub.getRoom(req.params.room).participants.values()].find(p => p.id === predecessor || p.name === predecessor);
-    if (old?.agent === "human" || old?.role === "chair") throw new HubError("Human and chair seats cannot be replaced by the launcher.");
+    if (old?.agent === "human" || old?.role === "chair") throw new HubError("Human and chair seats cannot be replaced by the launcher.", undefined, "state");
     res.json(hub.registerReplacement(req.params.room, predecessor, name));
   } catch (error) {
     res.status(400).json({ error: error instanceof HubError ? error.message : "Replacement registration failed." });

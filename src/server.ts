@@ -108,7 +108,7 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
       const names = [...ids].map((id) => r.participants.get(id)?.name ?? id).join(", ");
       throw new HubError(
         `This MCP connection has several participants in "${room}" (${names}). ` +
-          `Pass participant_id (returned by join_room) on every call so the room knows who you are.`,
+          `Pass participant_id (returned by join_room) on every call so the room knows who you are.`, undefined, "auth",
       );
     }
     return [...ids][0];
@@ -306,12 +306,12 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
       const r = hub.getRoom(room);
       const p = hub.requireParticipant(r, id);
       if (p.agent !== "human" && (reason ?? "").trim().length < 12) {
-        throw new HubError("leave_room needs a reason (one line): what you finished, where it is on the board (handoff/*), and what you leave undone. It is posted in the room so others can recruit if they disagree.");
+        throw new HubError("leave_room needs a reason (one line): what you finished, where it is on the board (handoff/*), and what you leave undone. It is posted in the room so others can recruit if they disagree.", undefined, "invalid-arg");
       }
       const block = hub.leavingWouldBlock(r, p);
       if (!block || p.leaveWarned === block.proposal.id) {
         const refusal = hub.leaveRefusal(r, p);
-        if (refusal) throw new HubError(refusal);
+        if (refusal) throw new HubError(refusal, undefined, "leave-warning");
       }
       hub.leave(room, id, reason);
       me.get(room)?.delete(id);
@@ -750,7 +750,7 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
       const sealed = (k: string, e: { by: string; text: string; updatedAt: string }) => hub.draftSealed(r, k, e as never, viewer);
       if (key) {
         const e = r.board.get(key);
-        if (!e || sealed(key, e)) throw new HubError(`No board entry "${key}". Keys: ${[...r.board].filter(([k, x]) => !sealed(k, x)).map(([k]) => k).join(", ") || "(none)"}`);
+        if (!e || sealed(key, e)) throw new HubError(`No board entry "${key}". Keys: ${[...r.board].filter(([k, x]) => !sealed(k, x)).map(([k]) => k).join(", ") || "(none)"}`, undefined, "not-found");
         if (reader) noteBoardRead(reader, key, e);
         return { key, ...e, ...(hub.boardEntryExpired(r, key, e) ? { expired: true, tombstone: "Archived by expiry; excluded from manifests, retained for explicit retrieval." } : {}) };
       }

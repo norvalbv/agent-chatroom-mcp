@@ -153,7 +153,7 @@ export function setBoard(hub: Hub, roomName: string, pid: string, key: string, t
   const expiresAt = boardExpiry(key, opts);
   const previous = room.board.get(key);
   // reserved prefixes (enforced here, the single write site)
-  if (key.startsWith("inbox/") && !key.endsWith(".ack")) throw new HubError("inbox/* entries are written by post_to_room from another room. To acknowledge one, write '<key>.ack'.");
+  if (key.startsWith("inbox/") && !key.endsWith(".ack")) throw new HubError("inbox/* entries are written by post_to_room from another room. To acknowledge one, write '<key>.ack'.", undefined, "invalid-arg");
   if (key.startsWith("hold/")) {
     if (key !== `hold/${room.name}`) throw new HubError(`A hold for this room is the key "hold/${room.name}".`, undefined, "key-format");
     if (previous && previous.by !== p.name) throw new HubError(`The hold was placed by ${previous.by}; only they (or a human) can clear or change it.`, undefined, "ownership");
@@ -173,13 +173,13 @@ export function setBoard(hub: Hub, roomName: string, pid: string, key: string, t
       try {
         parsed = JSON.parse(text);
       } catch {
-        throw new HubError('claim/* entries are JSON: {"area":..., "owner":..., "team":[names], "status":"open|fixed|verified", "note":...}');
+        throw new HubError('claim/* entries are JSON: {"area":..., "owner":..., "team":[names], "status":"open|fixed|verified", "note":...}', undefined, "invalid-arg");
       }
       if (parsed && (parsed.status === "fixed" || parsed.status === "verified")) {
         const team = Array.isArray(parsed.team) ? (parsed.team as unknown[]).map(String) : [];
         const members = hub.activeParticipants(room).filter((x) => team.includes(x.name) && x.agent !== "human");
         if (members.length < 2 || sessionsOf(members) < 2) {
-          throw new HubError(`A claim can only be marked ${parsed.status} by a team of 2+ distinct active agents; team=${JSON.stringify(team)} has ${members.length} active on ${sessionsOf(members)} connection(s).`);
+          throw new HubError(`A claim can only be marked ${parsed.status} by a team of 2+ distinct active agents; team=${JSON.stringify(team)} has ${members.length} active on ${sessionsOf(members)} connection(s).`, undefined, "state");
         }
       }
     }
@@ -345,7 +345,7 @@ function checkAttack(room: Room, p: Participant, key: string, text: string): { t
     throw new HubError(`You share a connection with ${e.by}, the author of "${target}": an attack must come from a different session (identity-is-the-connection).`, undefined, "ownership");
   }
   const cites = [...text.matchAll(QUOTED)].map((m) => m[1]).filter((q) => norm(e.text).includes(norm(q))).sort((a, b) => b.length - a.length)[0];
-  if (!cites) throw new HubError(`An attack must quote the clause of "${target}" it objects to (12+ characters, in double quotes), then say what is wrong with it. Read the entry with board_get and copy the text.`);
+  if (!cites) throw new HubError(`An attack must quote the clause of "${target}" it objects to (12+ characters, in double quotes), then say what is wrong with it. Read the entry with board_get and copy the text.`, undefined, "cite-required");
   return { target, author: e.by, cites };
 }
 
@@ -550,7 +550,7 @@ function refuseNote(hub: Hub, to: Room, fromRoom: string, byName: string, full: 
 export function postToRoom(hub: Hub, fromRoom: string, pid: string, toRoom: string, key: string, text: string, ackRequired = false, opts: BoardExpiryOptions = {}): { key: string; entry: BoardEntry } {
   const from = hub.getRoom(fromRoom);
   const p = hub.requireParticipant(from, pid);
-  if (toRoom === fromRoom) throw new HubError("That is your own room; use board_set.");
+  if (toRoom === fromRoom) throw new HubError("That is your own room; use board_set.", undefined, "invalid-arg");
   const to = hub.getRoom(toRoom);
   if (to.state === "concluded" || to.state === "closed") {
     throw new HubError(`Room "${toRoom}" is ${to.state}: board writes are refused, there is nothing left to coordinate there.`, undefined, "state");

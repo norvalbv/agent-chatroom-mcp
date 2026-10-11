@@ -260,16 +260,16 @@ export class Spawner {
     if (process.env.CHATROOM_NO_RECRUIT === "1") {
       const msg = `Recruitment is disabled for this hub (CHATROOM_NO_RECRUIT=1): a protocol-fixed room (e.g. a benchmark run) may not recruit.`;
       this.hooks?.announce(req.room, msg);
-      throw new HubError(msg);
+      throw new HubError(msg, undefined, "budget");
     }
     const o = this.opts;
     const { maxDepth, maxPerRoom, maxLive, maxPerRequester, maxCumRoom, maxCumRun } = recruitmentLimits(o);
     const refuse = (msg: string) => {
       this.hooks?.announce(req.room, `Cap hit: ${msg}`);
-      throw new HubError(msg);
+      throw new HubError(msg, undefined, "budget");
     };
 
-    if (req.brief.trim().length < 20 || req.brief.length > 4000) throw new HubError("A brief of 20-4000 characters is required: say what to do and what done looks like.");
+    if (req.brief.trim().length < 20 || req.brief.length > 4000) throw new HubError("A brief of 20-4000 characters is required: say what to do and what done looks like.", undefined, "invalid-arg");
     const count = Math.max(1, Math.min(3, req.count ?? (req.newRoom ? 2 : 1)));
     // A break-out requested without a run prefix would be created under the LITERAL name: the launcher's
     // result artifact gathers rooms by startsWith(runPrefix) (src/swarm.ts:471) and the per-run recruit
@@ -284,10 +284,10 @@ export class Spawner {
     }
     const target = newRoom ?? req.room;
     if (req.replacing !== undefined && (!req.replacing.trim() || req.newRoom || count !== 1)) {
-      throw new HubError("Replacement requires one recruit in the same room and an exact predecessor name.");
+      throw new HubError("Replacement requires one recruit in the same room and an exact predecessor name.", undefined, "invalid-arg");
     }
-    if (req.replacing && !this.hooks?.registerReplacement) throw new HubError("Replacement registration is unavailable; no recruit launched.");
-    if (this.hooks?.isHeld(req.room)) throw new HubError(`${req.room} is on hold; no recruiting until the hold is cleared.`);
+    if (req.replacing && !this.hooks?.registerReplacement) throw new HubError("Replacement registration is unavailable; no recruit launched.", undefined, "state");
+    if (this.hooks?.isHeld(req.room)) throw new HubError(`${req.room} is on hold; no recruiting until the hold is cleared.`, undefined, "state");
     const depth = this.depthOf(req.requestedBy) + 1;
     if (depth > maxDepth) refuse(`recruits may not recruit beyond depth ${maxDepth} (${req.requestedBy} is at depth ${depth - 1}). Ask an original member to recruit.`);
     const mine = this.agents.filter((a) => a.requestedBy === req.requestedBy && a.endedAt === undefined).length;
@@ -308,7 +308,7 @@ export class Spawner {
     if (!req.model && this.policy.agent === agent && this.policy.model) req = { ...req, model: this.policy.model };
     const launched = `${agent}${req.model ? `/${req.model}` : ""}`;
     const policyOverride = (req.agent && req.agent !== agent) || (this.policy.model && (req.agent ?? "") && wanted !== launched && wanted !== `(default)`);
-    if (agent === "openrouter" && !process.env.OPENROUTER_API_KEY && !this.opts.dryRun) throw new HubError("An OpenRouter seat needs OPENROUTER_API_KEY in the hub's environment; recruit a claude or codex agent instead, or ask the human to set the key and restart the hub.");
+    if (agent === "openrouter" && !process.env.OPENROUTER_API_KEY && !this.opts.dryRun) throw new HubError("An OpenRouter seat needs OPENROUTER_API_KEY in the hub's environment; recruit a claude or codex agent instead, or ask the human to set the key and restart the hub.", undefined, "state");
     const base = (req.name?.trim() || `${agent}-recruit`).replace(/[^\w-]/g, "-").slice(0, 32);
     const names: string[] = [];
     for (let i = 0; i < count; i++) {
@@ -357,7 +357,7 @@ export class Spawner {
       if (req.replacing && name === names[0]) {
         // the launcher registers the explicit successor; the recruit gets a one-use proof, never a control credential
         const replacementToken = this.hooks!.registerReplacement!(target, req.replacing, name);
-        if (!replacementToken) throw new HubError("Replacement registration returned no join proof.");
+        if (!replacementToken) throw new HubError("Replacement registration returned no join proof.", undefined, "state");
         const context = this.hooks?.predecessorContext?.(target, req.replacing) ?? "";
         replaceNote = `\n\nYou replace ${req.replacing}, who dropped out of this room. The launcher has registered you as their replacement with the hub. On your first join_room call use name=${JSON.stringify(name)} and replacement_token=${JSON.stringify(replacementToken)}. This one-use join proof is only for this reserved seat: do not post it to chat or board.` +
           (context ? `\n\nWhat ${req.replacing} was doing:\n${context}` : "");
@@ -488,17 +488,17 @@ export class Spawner {
    * rather than leaving a silent hole.
    */
   replace(req: Omit<SpawnRequest, "brief" | "newRoom" | "count"> & { reason: string; brief?: string; requesterIsHuman?: boolean; staleMs?: number }): SpawnedAgent[] {
-    if (!req.replacing?.trim()) throw new HubError("replace requires the exact name of the participant to remove.");
-    if (req.replacing === req.requestedBy) throw new HubError("You cannot replace yourself: leave_room instead.");
-    if (!this.hooks?.removeParticipant || !this.hooks?.targetStatus) throw new HubError("Replace is unavailable; no recruit launched.");
-    if (!req.reason.trim()) throw new HubError("A reason is required: why this seat is being replaced.");
+    if (!req.replacing?.trim()) throw new HubError("replace requires the exact name of the participant to remove.", undefined, "invalid-arg");
+    if (req.replacing === req.requestedBy) throw new HubError("You cannot replace yourself: leave_room instead.", undefined, "self-target");
+    if (!this.hooks?.removeParticipant || !this.hooks?.targetStatus) throw new HubError("Replace is unavailable; no recruit launched.", undefined, "state");
+    if (!req.reason.trim()) throw new HubError("A reason is required: why this seat is being replaced.", undefined, "invalid-arg");
     // request() enforces this too, but only after the recruit's other checks: validate here, before removal,
     // so a structurally-invalid replace (a group, a new room) never kicks the predecessor for nothing.
     if ((req as { newRoom?: string }).newRoom || ((req as { count?: number }).count ?? 1) !== 1) {
-      throw new HubError("Replacement requires one recruit in the same room and an exact predecessor name.");
+      throw new HubError("Replacement requires one recruit in the same room and an exact predecessor name.", undefined, "invalid-arg");
     }
     const status = this.hooks.targetStatus(req.room, req.replacing);
-    if (!status) throw new HubError(`No participant named "${req.replacing}" in "${req.room}".`);
+    if (!status) throw new HubError(`No participant named "${req.replacing}" in "${req.room}".`, undefined, "not-found");
     const staleMs = req.staleMs ?? 10 * 60_000;
     let removed = false;
     if (status.active && !status.kicked) {
@@ -520,7 +520,7 @@ export class Spawner {
       const msg = e instanceof HubError ? e.message : String(e);
       // say "removed" only when this call removed them: a departed seat refused as away was never touched
       if (!removed) throw new HubError(`No successor for ${req.replacing}: ${msg}`, undefined, e instanceof HubError ? e.code : undefined);
-      throw new HubError(`${req.replacing} was removed, but recruiting a successor failed: ${msg} Nobody was launched; call request_agent(replacing=${JSON.stringify(req.replacing)}) once that clears.`);
+      throw new HubError(`${req.replacing} was removed, but recruiting a successor failed: ${msg} Nobody was launched; call request_agent(replacing=${JSON.stringify(req.replacing)}) once that clears.`, undefined, "state");
     }
   }
 

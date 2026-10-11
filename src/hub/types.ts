@@ -486,11 +486,38 @@ export type RefusalCode =
   | "key-format"     // malformed board or inbox key
   | "size"           // content above the size cap
   | "state"          // valid actor and args, refused by room or entry state
-  | "inbox-cap"      // post_to_room: the target room already has 10 notes awaiting acknowledgement
+  | "inbox-cap"      // the target room already holds the maximum of unacknowledged inbox notes
+  // One code per guard family, so a room log says which rule refused a call (telemetry gap G6: 357 of 489 refusals in
+  // 21 logs were hub_guard). scripts/refusal-codes-typed-regression.ts fails on any HubError thrown without a code.
+  | "not-found"      // no such room, proposal, participant or board entry
+  | "invalid-arg"    // a required argument is empty, malformed or out of range
+  | "budget"         // a room, run, message or recruitment cap is used up
+  | "leave-warning"  // leave_room refused once, with what to do first
+  | "departed-mention" // a message @-names a seat that has left
+  | "human-ask"      // replying to a human the hub has given to someone else, or past their register
+  | "turn"           // round_robin: not this seat's turn
+  | "unread"         // stale send: messages arrived while composing
+  | "reply-owed"     // stale send: an ask already shown is still owed a reply
+  | "fair-share"     // the sender is over its share of recent messages
+  | "amend-find"     // amend's find is absent, ambiguous or too short, or the edit changes nothing
+  | "proposal-open"  // propose while another proposal is open
+  | "room-of-one"    // propose with fewer than two connections present
+  | "needs-verify"   // propose in a verified room with no verify/* entry
+  | "unacked-notes"  // propose with inbox notes unacknowledged
+  | "human-unanswered" // propose while a human's message is unanswered
+  | "scrutiny-held"  // propose held once for unexamined findings, barren or unsourced claims
+  | "self-target"    // challenging one's own proposal, kicking or replacing oneself
+  | "same-session"   // a blocking challenge from the proposer's own connection
+  | "cite-required"  // a blocking challenge or attack that quotes no clause of its target
+  | "duplicate"      // a blocking challenge on a clause an open challenge already holds
+  | "vote-form"      // a vote without its required quote or reason, or a quote not in the text
   | "hub_guard";     // unknown or unclassifiable (legacy catch-all)
 
 export const REFUSAL_CODES: readonly RefusalCode[] =
-  ["expiry-prefix", "ownership", "auth", "key-format", "size", "state", "inbox-cap", "hub_guard"];
+  ["expiry-prefix", "ownership", "auth", "key-format", "size", "state", "inbox-cap",
+    "not-found", "invalid-arg", "budget", "leave-warning", "departed-mention", "human-ask", "turn", "unread", "reply-owed",
+    "fair-share", "amend-find", "proposal-open", "room-of-one", "needs-verify", "unacked-notes", "human-unanswered",
+    "scrutiny-held", "self-target", "same-session", "cite-required", "duplicate", "vote-form", "hub_guard"];
 
 export class HubError extends Error {
   constructor(

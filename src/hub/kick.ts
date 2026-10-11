@@ -9,7 +9,7 @@ import { hasDelivered, outputLine } from "./output.js";
 /** Who may be a kick target: an active non-human, non-chair participant of this room, by name (or id). */
 function kickTarget(hub: Hub, room: Room, target: string): Participant {
   const p = room.participants.get(target) ?? [...room.participants.values()].filter((x) => x.name === target).sort((a, b) => (b.active ? 1 : 0) - (a.active ? 1 : 0))[0];
-  if (!p) throw new HubError(`No participant named "${target}" in "${room.name}".`);
+  if (!p) throw new HubError(`No participant named "${target}" in "${room.name}".`, undefined, "not-found");
   if (p.kicked) throw new HubError(`${hub.shown(room, p)} was already removed from "${room.name}" (${p.kicked.reason}).`, undefined, "state");
   if (!p.active) throw new HubError(`${hub.shown(room, p)} has already left "${room.name}"; there is nothing to remove. To bring in a successor, request_agent(replacing=${JSON.stringify(p.name)}).`, undefined, "state");
   if (p.agent === "human" || p.role === "chair") throw new HubError("Humans and the chair are the room's controllers; they cannot be voted out.", undefined, "auth");
@@ -60,7 +60,7 @@ export function kickVote(hub: Hub, roomName: string, pid: string, target: string
   const by = hub.requireParticipant(room, pid);
   if (room.state === "concluded" || room.state === "closed") throw new HubError(`Room "${roomName}" is ${room.state}; nobody can be removed from it.`, undefined, "state");
   const t = kickTarget(hub, room, target);
-  if (t.id === by.id) throw new HubError("You cannot vote to kick yourself: leave_room instead.");
+  if (t.id === by.id) throw new HubError("You cannot vote to kick yourself: leave_room instead.", undefined, "self-target");
   // everyone, self-declared humans included: a seat that joins a second name as agent="human" on its own
   // connection is still that connection (identity-is-the-connection), so it may not veto its own kick
   if (by.session && t.session && by.session === t.session) throw new HubError("That participant shares your connection; identity is the connection, so this would be a vote on yourself.", undefined, "auth");
@@ -71,8 +71,8 @@ export function kickVote(hub: Hub, roomName: string, pid: string, target: string
   let kv = room.kickVotes.get(t.id);
   if (!kv || kv.status !== "open") {
     const why = reason?.trim() ?? "";
-    if (vote !== "kick") throw new HubError(`There is no open vote to kick ${hub.shown(room, t)}; only a "kick" ballot with a reason starts one.`);
-    if (why.length < 8) throw new HubError("A kick vote needs a reason (one line): persistent disagreement blocking progress, evidence the session is dead (liveness/last_seen_at), or nothing on the record (room_status no_output / participants[].output).");
+    if (vote !== "kick") throw new HubError(`There is no open vote to kick ${hub.shown(room, t)}; only a "kick" ballot with a reason starts one.`, undefined, "state");
+    if (why.length < 8) throw new HubError("A kick vote needs a reason (one line): persistent disagreement blocking progress, evidence the session is dead (liveness/last_seen_at), or nothing on the record (room_status no_output / participants[].output).", undefined, "invalid-arg");
     const needed = hub.kickNeeded(room, t);
     if (kickPossible(hub, room, t) < needed) {
       throw new HubError(`A kick needs ${needed} ballots from distinct connections (never one seat alone) and only ${kickPossible(hub, room, t)} could vote here besides ${hub.shown(room, t)}. A human on the dashboard can supply one; otherwise the idle sweep marks a dead seat left after 10 min, and request_agent(replacing=${JSON.stringify(t.name)}) then needs no vote.`, undefined, "state");

@@ -163,7 +163,7 @@ export class Seats {
   activity(roomName: string, name: string): { tool: string; step: number; at: string; detail: string }[] {
     const room = this.hub.getRoom(roomName);
     const p = [...room.participants.values()].filter((x) => x.name === name).sort((a, b) => (b.active ? 1 : 0) - (a.active ? 1 : 0))[0];
-    if (!p) throw new HubError(`No participant named "${name}" in "${roomName}".`);
+    if (!p) throw new HubError(`No participant named "${name}" in "${roomName}".`, undefined, "not-found");
     return p.activity ?? [];
   }
 }

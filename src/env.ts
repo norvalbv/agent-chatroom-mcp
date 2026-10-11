@@ -148,6 +148,14 @@ export function loadDotEnv(dir = repoRoot, options: DotEnvOptions = {}): string[
  * tool hook (scripts/heartbeat-hook.mjs) reads it to POST <hub>/heartbeat on every local tool call.
  */
 export const HEARTBEAT_HOOK = resolve(repoRoot, "scripts", "heartbeat-hook.mjs");
+/**
+ * Seats share one machine: a seat's Bash may not kill by command-line pattern, nor a PID another seat started
+ * (scripts/seat-guard-hook.mjs; swarm-094251-5y46, where one seat's pkill killed another's script three times).
+ * SEAT_PROCS is what the refusal offers instead: list or stop this seat's own processes, told apart by the
+ * CHATROOM_SEAT_KEY they inherit. CHATROOM_SEAT_GUARD=0 on the launcher leaves the guard out.
+ */
+export const SEAT_GUARD_HOOK = resolve(repoRoot, "scripts", "seat-guard-hook.mjs");
+export const SEAT_PROCS = resolve(repoRoot, "scripts", "seat-procs.mjs");
 
 export interface SeatBeat { key: string; mcpUrl: string; env: NodeJS.ProcessEnv }
 
@@ -224,11 +232,13 @@ export function seatBeat(mcpUrl: string, key: string, worktree?: string): SeatBe
 /**
  * --settings JSON for a claude -p seat: a PreToolUse hook, so a long Bash shows as the seat's current step while it
  * runs, and the same hook on PostToolUse, so an @-mention that lands during that Bash is steered into the turn when it
- * ends (hook additionalContext reaches the model from both events; probed on claude 2.1.288).
+ * ends (hook additionalContext reaches the model from both events; probed on claude 2.1.288). A second PreToolUse
+ * hook, on Bash only, is the seat guard above.
  */
-export function heartbeatHookSettings(hook = HEARTBEAT_HOOK): string {
+export function heartbeatHookSettings(hook = HEARTBEAT_HOOK, guard = SEAT_GUARD_HOOK): string {
   const entry = [{ matcher: "*", hooks: [{ type: "command", command: `node ${JSON.stringify(hook)}`, timeout: 5 }] }];
-  return JSON.stringify({ hooks: { PreToolUse: entry, PostToolUse: entry } });
+  const guarded = process.env.CHATROOM_SEAT_GUARD === "0" ? [] : [{ matcher: "Bash", hooks: [{ type: "command", command: `node ${JSON.stringify(guard)}`, timeout: 5 }] }];
+  return JSON.stringify({ hooks: { PreToolUse: [...entry, ...guarded], PostToolUse: entry } });
 }
 
 /** A launcher's heartbeat from a seat's output (codex exec has no tool hooks): at most one per `everyMs`, with the last line as detail. */

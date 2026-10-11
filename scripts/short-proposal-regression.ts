@@ -33,6 +33,35 @@ const cases: [string, () => void][] = [
     assert.throws(() => hub.vote("r", b.id, pr.id, "agree", undefined, undefined, "Adopt the"), /15\+ chars/);
     assert.doesNotThrow(() => hub.vote("r", b.id, pr.id, "agree", undefined, undefined, "Adopt the measured table"));
   }],
+  // dev room swarm-183234-3oie-room (7836): "INSTALL" was agreed, but a cited blocking challenge was refused (it must
+  // quote 12+ characters), so the mandatory-challenge gate could only be met with a contrived executable challenge
+  ["a short proposal takes a blocking challenge that quotes all of it", () => {
+    const hub = new Hub({});
+    const a = hub.join("r", "a", "claude", { expectedParticipants: 3 }, undefined, "s1").participant;
+    const b = hub.join("r", "b", "claude", {}, undefined, "s2").participant;
+    hub.join("r", "c", "claude", {}, undefined, "s3");
+    const pr = hub.propose("r", a.id, "INSTALL");
+    assert.doesNotThrow(() => hub.challenge("r", b.id, pr.id, 'I object to "INSTALL": a README must first say what the project is, or installing it means nothing.'));
+    assert.equal(hub.getRoom("r").proposals.get(pr.id)!.challenges[0].cites, "INSTALL");
+  }],
+  ["a short proposal still refuses a blocking challenge that quotes only part of it, or nothing", () => {
+    const hub = new Hub({});
+    const a = hub.join("r", "a", "claude", { expectedParticipants: 3 }, undefined, "s1").participant;
+    const b = hub.join("r", "b", "claude", {}, undefined, "s2").participant;
+    hub.join("r", "c", "claude", {}, undefined, "s3");
+    const pr = hub.propose("r", a.id, "INSTALL");
+    assert.throws(() => hub.challenge("r", b.id, pr.id, 'I object to "INST": a README must first say what the project is.'), /must quote/);
+    assert.throws(() => hub.challenge("r", b.id, pr.id, "A README must first say what the project is, or installing it means nothing."), /must quote/);
+  }],
+  ["a long proposal still needs a 12-character quoted span to block", () => {
+    const hub = new Hub({});
+    const a = hub.join("r", "a", "claude", { expectedParticipants: 3 }, undefined, "s1").participant;
+    const b = hub.join("r", "b", "claude", {}, undefined, "s2").participant;
+    hub.join("r", "c", "claude", {}, undefined, "s3");
+    const pr = hub.propose("r", a.id, "Adopt the measured table as the answer.");
+    assert.throws(() => hub.challenge("r", b.id, pr.id, 'I object to "measured": nobody reran the measurement after the fix.'), /must quote/);
+    assert.doesNotThrow(() => hub.challenge("r", b.id, pr.id, 'I object to "the measured table": nobody reran the measurement after the fix.'));
+  }],
 ];
 let failed = 0;
 for (const [name, test] of cases) {

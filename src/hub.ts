@@ -2155,6 +2155,9 @@ export class Hub {
   /** The span of the proposal an objection quotes (longest quoted run that occurs in the text), if any. */
   private citedSpan(text: string, objection: string): string | undefined {
     const spans = [...objection.matchAll(/["“]([^"”]{12,})["”]/g)].map((m) => m[1]).filter((q) => norm(text).includes(norm(q)));
+    // a proposal shorter than a 12-character span is cited by quoting all of it ("INSTALL" in dev room swarm-183234-3oie-room
+    // could be agreed after fa9b0c64 but not challenged, so the mandatory challenge needed a contrived command)
+    if (!spans.length && text.trim().length < 12 && [...objection.matchAll(/["“]([^"”]+)["”]/g)].some((m) => norm(m[1]) === norm(text))) return text.trim();
     return spans.sort((a, b) => b.length - a.length)[0];
   }
 

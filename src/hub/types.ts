@@ -283,6 +283,9 @@ export interface BoardEntry {
   /** verify/* and review/* entries with a head: whether the commits it names exist in the writer's bound worktree, resolved by the hub at write time
    * (2 of 22 SHAs named in verify heads across runs did not exist; evidence-pack item 4). A *_known field is absent when the writer has no bound worktree (not checked, not missing). */
   commitCheck?: { commit?: string; commit_known?: boolean; base_commit?: string; base_known?: boolean };
+  /** the entries by other seats this entry checks (rerun/, audit/, review/, valid/, critique/, check/, attack/), resolved by
+   * the hub when it was written (src/hub/checks.ts); absent when it is not a check or names nothing */
+  checks?: string[];
   /** written after the room concluded, inside Hub.LATE_WRITE_MS (src/hub/board.ts lateWrite): on the record, not part of what was decided */
   late?: boolean;
   /** claim/* entries only: the reviewer the hub assigned at creation (name/id), never client-supplied. */

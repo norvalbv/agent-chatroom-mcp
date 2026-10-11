@@ -288,7 +288,7 @@ export class Hub {
       latest_seq: room.messages.at(-1)?.seq ?? 0,
       proposals: [...room.proposals.values()].map((pr) => this.proposalView(room, pr, reveal, pr.status === "open" || pr.status === "accepted")),
       // agents get a manifest (board_get <key> fetches text); the human dashboard (reveal) gets the text
-      board: Object.fromEntries([...room.board].filter(([k, e]) => reveal || (!this.boardEntryExpired(room, k, e) && !this.draftSealed(room, k, e))).map(([k, e]) => [k, { ...(reveal ? { text: e.text } : {}), by: e.by, chars: e.text.length, updated_at: e.updatedAt, ...(e.postReveal ? { post_reveal: true } : {}), ...(e.reviewer ? { reviewer: e.reviewer } : {}), ...(e.late ? { late: true } : {}) }])),
+      board: Object.fromEntries([...room.board].filter(([k, e]) => reveal || (!this.boardEntryExpired(room, k, e) && !this.draftSealed(room, k, e))).map(([k, e]) => [k, { ...(reveal ? { text: e.text } : {}), by: e.by, chars: e.text.length, updated_at: e.updatedAt, ...(e.postReveal ? { post_reveal: true } : {}), ...(e.reviewer ? { reviewer: e.reviewer } : {}), ...(e.late ? { late: true } : {}), ...(reveal && e.checks ? { checks: e.checks } : {}) }])),
       quiet: (() => {
         const qs = room.messages.filter((m) => m.quiet);
         return { messages: qs.length, unsurfaced_threads: new Set(qs.map((m) => this.threadRoot(room, m).id)).size };

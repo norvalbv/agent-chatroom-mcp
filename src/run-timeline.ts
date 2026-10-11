@@ -8,6 +8,7 @@
  * The hub's live "room idle" rule is src/hub/idle.ts; quietFrom here is the after-the-fact reading of the same stall.
  */
 import { coordinates } from "./hub/keys.js";
+import { checksOf } from "./hub/checks.js";
 
 type Ev = Record<string, any>;
 
@@ -58,9 +59,13 @@ export interface RunTimeline {
   /** every note another room sent here (post_to_room: a board write of inbox/<from room>/<key>), in order, with the
    * minutes until this room acknowledged it (<key>.ack); a note rewritten before any ack was never acknowledged */
   notes: { key: string; from: string; at: string; by?: string; ackMinutes?: number }[];
-  /** each result/<slug> entry and the first rerun/, verify/, review/ or attack/ entry on it (key <prefix>/<slug> or
-   * <prefix>/<slug>-<anything>) written by someone other than the result's author; no review: by and minutes absent */
+  /** each result/<slug> entry and the first entry that checks it (src/hub/checks.ts: rerun/, audit/, review/, valid/,
+   * critique/, check/, attack/, verify/, matched by key, by id or by naming it) written by someone other than the
+   * result's author; no review: by and minutes absent */
   reviews: { key: string; at: string; author?: string; by?: string; minutes?: number }[];
+  /** every entry, whatever the room called it (exp/Q4, result/x, decision/y), that another seat's check names: the count
+   * that still means something in a room with no result/* keys (7 devkit logs read 0 / 0 in the pack's table) */
+  checkedEntries: string[];
   /** the hub's own room-idle episodes (room_idle / room_active events, src/hub/idle.ts); an open one has no minutes */
   idle: { from: string; minutes?: number }[];
   /** each time the hub started again while this room was open (hub_restart events, src/hub.ts announceRestart): when, the
@@ -77,7 +82,6 @@ export interface RunTimeline {
 
 const QUIET_SHARE = 0.2;
 const SILENCE_MIN = 5;
-const REVIEW = /^(?:rerun|verify|review|attack)\/(.+)$/;
 const stampOf = (e: Ev): string | undefined => e.ts ?? e.msg?.ts ?? e.entry?.updatedAt ?? e.entry?.ts ?? e.proposal?.createdAt ?? e.challenge?.ts ?? e.updatedAt ?? e.createdAt ?? (e.type === "join" ? e.p?.joinedAt : e.p?.leftAt);
 
 /** The first bucket index from which output never recovers, or -1. Needs two buckets of work before it and two after. */
@@ -100,6 +104,8 @@ export function runTimeline(events: readonly Ev[], bucketMinutes = 30): RunTimel
   const recruitCalls: RunTimeline["recruitCalls"] = [];
   const openNote = new Map<string, RunTimeline["notes"][number]>();
   const reviews: RunTimeline["reviews"] = [];
+  const boardNow = new Map<string, { by: string }>();
+  const checkedEntries = new Set<string>();
   const idle: RunTimeline["idle"] = [];
   const restarts: RunTimeline["restarts"] = [];
   const buckets: TimelineBucket[] = [];
@@ -189,11 +195,11 @@ export function runTimeline(events: readonly Ev[], bucketMinutes = 30): RunTimel
         const key = String(e.key ?? "");
         const by = e.entry?.by as string | undefined;
         if (key.startsWith("result/") && !reviews.some((r) => r.key === key)) reviews.push({ key, at: new Date(ts).toISOString(), ...(by ? { author: by } : {}) });
-        const checked = REVIEW.exec(key)?.[1];
-        if (checked) for (const r of reviews) {
-          const slug = r.key.slice("result/".length);
-          if (r.by === undefined && by && by !== r.author && (checked === slug || checked.startsWith(`${slug}-`))) Object.assign(r, { by, minutes: Math.round((ts - Date.parse(r.at)) / 6_000) / 10 });
-        }
+        // the hub's own resolver (src/hub/checks.ts), over the board as it stood when the check was written
+        const checked = by && e.entry ? checksOf(key, by, String(e.entry.text ?? ""), boardNow).map((c) => c.of) : [];
+        for (const k of checked) checkedEntries.add(k);
+        for (const r of reviews) if (r.by === undefined && by && by !== r.author && checked.includes(r.key)) Object.assign(r, { by, minutes: Math.round((ts - Date.parse(r.at)) / 6_000) / 10 });
+        if (e.entry && by) boardNow.set(key, { by }); else if (!e.entry) boardNow.delete(key);
         if (!key.startsWith("inbox/") || !e.entry) break;
         if (key.endsWith(".ack")) {
           const sent = openNote.get(key.slice(0, -4));
@@ -233,6 +239,7 @@ export function runTimeline(events: readonly Ev[], bucketMinutes = 30): RunTimel
     silences,
     notes,
     reviews,
+    checkedEntries: [...checkedEntries],
     idle,
     restarts,
     recruitCalls,
@@ -296,6 +303,8 @@ export interface RunRow {
   endCause?: string;
   /** seats whose process ended, by cause (seat_exit events): usage_limit, sigterm, crash...; absent: none recorded */
   seatExits?: Record<string, number>;
+  /** entries of any prefix that another seat's check names (RunTimeline.checkedEntries) */
+  entriesChecked: number;
   reviewedPerHour: number;
   usdPerReviewed?: number;
   usdPerFinding?: number;
@@ -349,6 +358,7 @@ export function runRow(events: readonly Ev[]): RunRow {
     ...(costUsd === undefined ? {} : { costUsd }),
     results: t.reviews.length,
     reviewed,
+    entriesChecked: t.checkedEntries.length,
     findings: keys.size,
     ...(firstProposal === undefined ? {} : { firstProposalMin: min(firstProposal) }),
     ...(conclusion === undefined ? {} : { conclusionMin: min(conclusion) }),
@@ -407,9 +417,9 @@ export function renderRunTotals(runs: RunTotals[]): string {
 export function renderRunsTable(rows: RunRow[]): string {
   const v = (x: number | undefined, unit = "") => (x === undefined ? "?" : `${unit}${x}`);
   const dash = (x: number | undefined) => (x === undefined ? "-" : String(x));
-  let text = "| room | task | hours | seats | cost | results / reviewed | reviewed per hour | $ per reviewed | findings | $ per finding | first proposal (min) | conclusion (min) | went quiet (min) | run ended | seat exits |\n|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|\n";
+  let text = "| room | task | hours | seats | cost | results / reviewed | reviewed per hour | $ per reviewed | findings | $ per finding | first proposal (min) | conclusion (min) | went quiet (min) | run ended | seat exits | entries checked |\n|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|\n";
   for (const r of [...rows].sort((a, b) => (a.start ?? "").localeCompare(b.start ?? ""))) {
-    text += `| ${r.room} | ${r.task.replace(/\|/g, "/")} | ${r.hours} | ${r.seats} | ${v(r.costUsd, "$")} | ${r.results} / ${r.reviewed} | ${r.reviewedPerHour} | ${v(r.usdPerReviewed, "$")} | ${r.findings} | ${v(r.usdPerFinding, "$")} | ${dash(r.firstProposalMin)} | ${dash(r.conclusionMin)} | ${dash(r.quietFromMin)} | ${r.endCause ?? "-"} | ${r.seatExits ? Object.entries(r.seatExits).map(([k, n]) => `${k} ${n}`).join(", ") : "-"} |\n`;
+    text += `| ${r.room} | ${r.task.replace(/\|/g, "/")} | ${r.hours} | ${r.seats} | ${v(r.costUsd, "$")} | ${r.results} / ${r.reviewed} | ${r.reviewedPerHour} | ${v(r.usdPerReviewed, "$")} | ${r.findings} | ${v(r.usdPerFinding, "$")} | ${dash(r.firstProposalMin)} | ${dash(r.conclusionMin)} | ${dash(r.quietFromMin)} | ${r.endCause ?? "-"} | ${r.seatExits ? Object.entries(r.seatExits).map(([k, n]) => `${k} ${n}`).join(", ") : "-"} | ${r.entriesChecked} |\n`;
   }
   return text;
 }

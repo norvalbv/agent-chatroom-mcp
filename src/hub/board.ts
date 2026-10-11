@@ -1,6 +1,7 @@
 /** The Hub's shared board, as functions over the Hub instance; Hub keeps a one-line delegator for each member called from outside. */
 import { createHash } from "node:crypto";
 import { COORDINATION_PREFIXES } from "./keys.js";
+import { checksOf } from "./checks.js";
 import type { Hub } from "../hub.js";
 import { HubError, isReviewKey, readVerifyHead, citesCommit, failToPassShortfall } from "./types.js";
 import type { Quorum, Participant, BoardExpiryOptions, BoardEntry, Room } from "./types.js";
@@ -324,6 +325,8 @@ export function setBoard(hub: Hub, roomName: string, pid: string, key: string, t
   const read = isReviewKey(key) ? readVerifyHead(text) : undefined;
   const head = read && "head" in read ? read.head : undefined;
   // the writer's own worktree, never the hub's: a shared hub serves rooms on other repos (devkit), whose commits it lacks
+  // a commit review is linked by its head (the review event); any other check, to the entry it checks (src/hub/checks.ts)
+  const checks = checksOf(key, p.name, text, room.board);
   const commitCheck = head ? checkCommits(hub.workspaceOf(p)?.worktree, head) : undefined;
   const entry: BoardEntry = {
     text, by: p.name, updatedAt: now(),
@@ -337,6 +340,7 @@ export function setBoard(hub: Hub, roomName: string, pid: string, key: string, t
     ...(workspace ? { workspace } : {}),
     ...(commitCheck ? { commitCheck } : {}),
     ...(late ? { late: true } : {}),
+    ...(checks.length ? { checks: checks.map((c) => c.of) } : {}),
     ...(take ? { holder: take.holder.name, ...(take.offeredBy ? { offeredBy: take.offeredBy.name } : {}) } : {}),
   };
   applyBoard(room, key, entry);
@@ -361,6 +365,7 @@ export function setBoard(hub: Hub, roomName: string, pid: string, key: string, t
     /^(verify|review|attack)\//.test(key) && commitsIn(text).length ? { covers: commitsIn(text) } : {});
   // a late verdict that fails a commit the conclusion cites contradicts what was decided: said once, not buried in "late"
   const contradicts = late && head?.commit?.trim() && room.conclusion && (head.exit_code !== 0 || failToPassShortfall(head)) && citesCommit(room.conclusion.text, head.commit) ? head.commit.trim() : undefined;
+  if (checks.length && JSON.stringify(previous?.checks) !== JSON.stringify(entry.checks)) hub.persist({ type: "check", room: roomName, key, by: p.name, of: entry.checks!, how: checks[0].how, ts: entry.updatedAt });
   if (heldBy && !previous) hub.persist({ type: "second_scrutiny", room: roomName, asked, key, by: p.name, held_by: heldBy, ts: entry.updatedAt });
   if (late) hub.persist({ type: "late_write", room: roomName, key, by: p.name, after_s: late.after_s, ...(contradicts ? { contradicts } : {}), ts: entry.updatedAt });
   if (contradicts) hub.post(room, "system", undefined, `${key} by ${p.name} reports exit_code ${head!.exit_code} on ${contradicts}, which the conclusion cites: a verdict after the conclusion contradicts it. The conclusion stands as decided; read ${key} before relying on it.`);

@@ -1106,12 +1106,15 @@ export class Hub {
    * Long-poll: resolves as soon as there is a message from someone else with
    * seq > sinceSeq (or immediately if there already is one), otherwise after timeoutMs.
    */
+  /** Participants inside a long-poll right now: a seat waiting on the hub is not inside a tool call of its own (jobEnded). */
+  private readonly waitingNow = new WeakMap<Participant, number>();
   async wait(roomName: string, pid: string | undefined, sinceSeq: number, timeoutMs: number): Promise<Message[]> {
     const room = this.getRoom(roomName);
     const p = pid ? room.participants.get(pid) : undefined;
     const pending = () => (p ? this.deliverable(room, p, sinceSeq) : room.messages.filter((m) => m.seq > sinceSeq));
     let msgs = pending();
     if (msgs.length === 0 && timeoutMs > 0) {
+      if (p) this.waitingNow.set(p, (this.waitingNow.get(p) ?? 0) + 1);
       await new Promise<void>((resolve) => {
         const timer = setTimeout(() => {
           room.waiters.delete(wake);
@@ -1124,6 +1127,7 @@ export class Hub {
         };
         room.waiters.add(wake);
       });
+      if (p) this.waitingNow.set(p, Math.max(0, (this.waitingNow.get(p) ?? 1) - 1));
       msgs = pending();
     }
     if (!p) return msgs;
@@ -3349,6 +3353,7 @@ export class Hub {
     watched: (seat) => this.seatRooms(seat).length > 0,
     onSample: (seat, memory) => this.recordMemory(seat, memory),
     onEvent: (e) => this.recordMemoryEvent(e),
+    onJobEnd: (seat, job) => this.jobEnded(seat, job),
   });
   private memoryLogged = new Map<string, number>();
   private memoryNotices = new Map<string, SteerItem[]>();
@@ -3399,6 +3404,25 @@ export class Hub {
     const words: Record<RunEndCause, string> = { concluded: "the room concluded", timeout: "its launcher's timeout stopped the seats", operator_stop: "the operator stopped its launcher", seats_exited: "every seat's process exited without a conclusion" };
     this.post(room, "system", undefined, `The run that owns this room ended: ${words[cause]}${why ? ` (${why})` : ""}.`);
     return { recorded: true };
+  }
+  /**
+   * A process the hub had counted as a seat's job is gone (src/hub/memory.ts): the seat is told in each room it sits in,
+   * by name, so its wait returns now and not when its hold ends (a held connection's empty wait lasts minutes, and seats
+   * use the wait as their timer while a job runs), and the record gets job_end. Said only to a seat that is waiting on
+   * the hub at that moment; nothing for a seat no longer in a room.
+   */
+  jobEnded(seat: string, job: Job): void {
+    const mins = Math.round(job.elapsed_s / 60);
+    const ran = mins < 60 ? `${mins} min` : `${Math.floor(mins / 60)} h ${mins % 60} min`;
+    for (const { room, p } of this.seatRooms(seat)) {
+      const waiting = (this.waitingNow.get(p) ?? 0) > 0;
+      this.persist({ type: "job_end", room: room.name, seat: p.name, pid: job.pid, command: job.command, ran_s: job.elapsed_s, told: waiting, ts: now() });
+      // a seat that is not waiting on the hub is inside a tool call of its own and has the command's result already (a
+      // three-minute test run in the foreground): it is recorded, not said
+      if (!waiting) continue;
+      // a chat-kind line from the hub: only that carries the @-mention as something addressed to the seat (as room-idle's does)
+      this.post(room, "chat", undefined, `@${this.shown(room, p)} your job has ended: pid ${job.pid} (${job.command.slice(0, 120)}), after ${ran}. Read its result and tell the room.`);
+    }
   }
   /** The jobs a seat has running, from the memory watcher's last look at the process table (src/hub/memory.ts jobsOf). */
   jobsOf(p: Participant): Job[] { return this.memory.jobs(p.seatKeyHash); }

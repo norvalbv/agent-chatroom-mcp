@@ -320,6 +320,7 @@ export const offlineScripts = [
   'run-end-seat-exit-regression.ts',
   'wait-cost-regression.ts',
   'seat-hold-regression.ts',
+  'job-end-regression.ts',
 ];
 
 export function offlineCommands() {

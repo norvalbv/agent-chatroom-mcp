@@ -133,6 +133,8 @@ export interface MemoryWatchOptions {
   watched: (seat: string) => boolean;
   onSample?: (seat: string, memory: SeatMemory) => void;
   onEvent?: (event: MemoryEvent) => void;
+  /** a process counted as a seat's job on an earlier tick is gone: with how long it had run when last seen */
+  onJobEnd?: (seat: string, job: Job) => void;
   /** test seams */
   table?: () => Promise<Proc[]>;
   footprints?: () => Promise<Map<number, number>>;
@@ -142,6 +144,8 @@ export interface MemoryWatchOptions {
 export class MemoryWatch {
   private readonly bySeat = new Map<string, SeatMemory>();
   private readonly jobsBySeat = new Map<string, Job[]>();
+  /** every process once counted as a job and still in the table, so its end is reported even after it stops counting */
+  private readonly watching = new Map<string, Job[]>();
   private readonly warned = new Set<string>();
   /** seats whose last sample was over budget: one sample is a thin basis for stopping a job, two in a row is not */
   private readonly over = new Set<string>();
@@ -182,7 +186,12 @@ export class MemoryWatch {
         const seat = seatHash(key);
         if (!this.o.watched(seat)) { orphans.push({ ...u.agent, kb: u.agentKb }, ...u.own); continue; }
         seen.add(seat);
-        this.jobsBySeat.set(seat, jobsOf(u.own));
+        const jobs = jobsOf(u.own);
+        this.jobsBySeat.set(seat, jobs);
+        // gone from the table, not merely too old to count as a job any more: a process still running has not ended
+        const alive = new Set(table.map((p) => p.pid));
+        for (const was of this.watching.get(seat) ?? []) if (!alive.has(was.pid)) this.o.onJobEnd?.(seat, was);
+        this.watching.set(seat, [...jobs, ...(this.watching.get(seat) ?? []).filter((was) => alive.has(was.pid) && !jobs.some((j) => j.pid === was.pid))]);
         const biggest = u.own[0];
         const top = biggest ? { pid: biggest.pid, mb: mbOf(biggest.kb), command: biggest.command.slice(0, 200) } : null;
         const mb = mbOf(u.kb);
@@ -221,7 +230,13 @@ export class MemoryWatch {
       orphans.sort((a, b) => b.kb - a.kb);
       this.others = { mb: mbOf(orphans.reduce((n, p) => n + p.kb, 0)), processes: orphans.length, top: orphans.slice(0, 5).map((p) => ({ pid: p.pid, mb: mbOf(p.kb), command: p.command.slice(0, 200) })) };
       // a seat with nothing running any more reads as 0, not as its last sample
-      for (const seat of [...this.jobsBySeat.keys()]) if (!seen.has(seat)) this.jobsBySeat.delete(seat);
+      // a seat with nothing left in the table (its agent process included) has no jobs; the ones it had have ended
+      for (const [seat, jobs] of [...this.watching]) {
+        if (seen.has(seat)) continue;
+        for (const was of jobs) if (!table.some((p) => p.pid === was.pid)) this.o.onJobEnd?.(seat, was);
+        this.watching.delete(seat);
+        this.jobsBySeat.delete(seat);
+      }
       for (const [seat, last] of this.bySeat) {
         if (seen.has(seat)) continue;
         this.over.delete(seat);

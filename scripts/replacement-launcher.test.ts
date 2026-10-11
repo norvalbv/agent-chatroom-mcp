@@ -51,7 +51,9 @@ test('all provider respawns await registration before spawning and track immedia
   const chain = respawnChain<string>({
     name: 'w', maxAttempts: 2, stop: () => false, room: async () => room, exitCode: () => 1,
     register: async (previous, name) => { events.push(`register ${previous}->${name}`); if (name === 'w-r1') await registered; return '' },
-    run: async (name) => { events.push(`run ${name}`); return name },
+    // an attempt that ran took its seat, as a real successor does on its first join_room (one that died before joining is
+    // replaced in its predecessor's name: scripts/respawn-usage-wait-regression.ts)
+    run: async (name) => { events.push(`run ${name}`); if (name !== 'w') room.participants.push({ name, agent: 'claude', role: 'worker', active: false }); return name },
   })
   await new Promise((r) => setTimeout(r, 20))
   assert.deepEqual(events, ['run w', 'register w->w-r1'], 'the successor is not spawned while its registration is pending')

@@ -39,6 +39,13 @@ import { photoDirectory, registerPhotoRoutes } from "./photos/routes.js";
 import { hubDotEnvOptions, loadDotEnv } from "./env.js";
 import { holdFromQuery } from "./env.js";
 import { installLifecycle } from "./lifecycle.js";
+import { connect as tcpConnect } from "node:net";
+/** Something accepts a TCP connection on host:port within a second. */
+const portAnswers = (host: string, port: number) => new Promise<boolean>((done) => {
+  const sock = tcpConnect({ host, port });
+  const end = (ok: boolean) => { sock.destroy(); done(ok); };
+  sock.once("connect", () => end(true)).once("error", () => end(false)).setTimeout(1000, () => end(false));
+});
 // Item 2 (swarm-125438-jp20): CHATROOM_NO_RECRUIT=1 marks a hub that must never hold a provider key
 // (a benchmark hub, whose caller already stripped API_KEY/TOKEN/SECRET-shaped vars from this process's
 // env before spawning it). A bare loadDotEnv() call would otherwise silently refill those vars from the
@@ -62,6 +69,15 @@ const PARTICIPANT_IDLE_MS = 10 * 60_000;
 
 // before anything that can throw: why this process stops is written down by the process itself (src/lifecycle.ts)
 const lifecycle = installLifecycle({ port: PORT, dir: DATA_DIR, head: Hub.codeState(resolve(dirname(fileURLToPath(import.meta.url)), ".."))?.head });
+// A hub already serving this port and data directory: stop before replaying a room. A second hub used to load every
+// room, run the boot sweep and announce a restart before dying at listen, writing a hub_restart event and "The hub
+// restarted ..." into rooms the first hub was serving (decision/backlog-a; scripts/second-hub-regression.ts). A stale
+// pid file (its pid now some other process) with nothing answering on the port does not stop a start.
+if (lifecycle.heldBy && await portAnswers(HOST, PORT)) {
+  lifecycle.line(`pid=${lifecycle.heldBy} is running and answers on port ${PORT}: this process is not loading any room from ${DATA_DIR ?? "memory"} and stops`);
+  lifecycle.exiting(`another hub (pid ${lifecycle.heldBy}) already serves port ${PORT}`);
+  process.exit(0);
+}
 // last call before a conclusion (evidence-pack item 1, decision/last-call): on for the served hub, 0 turns it off
 Hub.LAST_CALL_MS = Number(process.env.CHATROOM_LAST_CALL_MS ?? Hub.SERVED_LAST_CALL_MS);
 const hub = new Hub({ dataDir: DATA_DIR, cwd: resolve(process.env.CHATROOM_DEFAULT_CWD ?? process.cwd()) });

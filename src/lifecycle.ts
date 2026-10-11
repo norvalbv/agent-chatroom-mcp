@@ -24,6 +24,10 @@ export interface Lifecycle {
   previous?: string;
   /** When the previous hub was last known alive (its alive-stamp, or its exit line), epoch ms; undefined when unknown. */
   lastAlive?: number;
+  /** The running pid that holds this port's pid file: another hub may be serving this data directory. */
+  heldBy?: number;
+  /** Write one line to this port's lifecycle log (and stderr). */
+  line(text: string): void;
 }
 
 export function installLifecycle(opts: { port: number; dir?: string; head?: string }): Lifecycle {
@@ -55,12 +59,13 @@ export function installLifecycle(opts: { port: number; dir?: string; head?: stri
     if (exit) { previous = `the last hub (pid ${exit[2]}) stopped: ${exit[3]}`; lastAlive = Date.parse(exit[1]); }
   } catch {}
   let ownsPidFile = !!pidFile;
+  let heldBy: number | undefined;
   if (pidFile && existsSync(pidFile)) {
     const prevPid = readFileSync(pidFile, "utf8").trim();
     let running = false;
     try { process.kill(Number(prevPid), 0); running = true; } catch {}
     // a second hub on a port that is taken dies at listen; the pid file stays the first one's
-    if (running) { ownsPidFile = false; line(`pid=${prevPid} already holds ${pidFile} and is running`); }
+    if (running) { ownsPidFile = false; heldBy = Number(prevPid); line(`pid=${prevPid} already holds ${pidFile} and is running`); }
     else if (exit?.[2] !== prevPid) {
       // ...and that second hub's exit line stays the last line of the log while the first serves on. Only the hub that
       // held the port owns the pid file, so an exit line under another pid is not how the last hub stopped, and its time
@@ -74,7 +79,8 @@ export function installLifecycle(opts: { port: number; dir?: string; head?: stri
   if (pidFile && ownsPidFile) writeFileSync(pidFile, `${process.pid}\n`);
   line(`start pid=${process.pid} ppid=${process.ppid} port=${opts.port} tty=${process.stdout.isTTY || process.stderr.isTTY ? "yes" : "no"}${opts.head ? ` head=${opts.head}` : ""}`);
 
-  if (aliveFile) {
+  // the alive-stamp is the pid-file owner's: a second hub that may stop at once must not claim it
+  if (aliveFile && ownsPidFile) {
     try { writeFileSync(aliveFile, `${process.pid}\n`); } catch {}
     setInterval(() => { try { const t = new Date(); utimesSync(aliveFile, t, t); } catch {} }, ALIVE_MS).unref();
   }
@@ -124,5 +130,5 @@ export function installLifecycle(opts: { port: number; dir?: string; head?: stri
     line(`exit pid=${process.pid} reason=${reason ?? `process.exit(${code})`} code=${code} uptime_s=${Math.round((Date.now() - started) / 1000)}${lastHealth ? ` last_health=${JSON.stringify(lastHealth)}` : ""}`);
     try { if (pidFile && ownsPidFile && readFileSync(pidFile, "utf8").trim() === String(process.pid)) unlinkSync(pidFile); } catch {}
   });
-  return { exiting, health, ...(previous ? { previous } : {}), ...(lastAlive !== undefined && Number.isFinite(lastAlive) ? { lastAlive } : {}) };
+  return { exiting, health, line, ...(heldBy ? { heldBy } : {}), ...(previous ? { previous } : {}), ...(lastAlive !== undefined && Number.isFinite(lastAlive) ? { lastAlive } : {}) };
 }

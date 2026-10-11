@@ -188,6 +188,10 @@ spawner.attach({
 });
 process.on("exit", () => spawner.stopAll());
 const app = createMcpExpressApp({ host: HOST }); // already parses JSON bodies (100kb)
+// every HTTP request, counted before any route can answer it (review/0feee53b: registered after the routes, it saw none of
+// the /mcp tool calls); read and reset by the health sample below
+let httpRequests = 0;
+app.use((_req, _res, next) => { httpRequests++; next(); });
 /** The checkout and commit this process was started from; GET / reports it so a launcher can tell a stale hub. */
 const BUILD = (() => { const root = realpathSync(resolve(dirname(fileURLToPath(import.meta.url)), "..")); const st = Hub.codeState(root); return st ? { root, head: st.head } : null; })();
 // opt-in, for a hub a launcher started for one run: exit once no request has arrived or been in flight for this long.
@@ -285,7 +289,6 @@ if (MEMORY_WATCH_MS > 0) {
 }
 
 // the hub's own health, one line a minute (src/lifecycle.ts): what it holds open and how many requests it served
-let httpRequests = 0;
 lifecycle.health(() => {
   const rooms = [...hub.rooms.values()].filter((r) => r.state === "open" || r.state === "stalled");
   const out = { sessions: transports.size, requests: httpRequests, rooms_open: rooms.length,
@@ -346,7 +349,6 @@ const HUMAN_ROUTES = /^\/rooms\/(archive-dead|[^/]+\/(messages|vote|kick|replace
 // A request that carries the human token is looked up too: the hub's environment is readable by any process of the
 // same user, so a seat can read the token (`ps eww -p <hub pid>`) and, unchecked, post as "[human route: token]"
 // (review/a9060d5e-verifier). The launcher's own calls carry its launcher token and are not looked up.
-app.use((_req, _res, next) => { httpRequests++; next(); });
 app.use(async (req, res, next) => {
   const withToken = !!HUMAN_TOKEN && req.header("x-chatroom-token") === HUMAN_TOKEN;
   if (req.method === "POST" && LOOPBACK_HOST && (INSECURE_LOCAL || withToken) && HUMAN_ROUTES.test(req.path)) {

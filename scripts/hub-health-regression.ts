@@ -44,7 +44,10 @@ assert.equal(s.rooms_open, 1);
 assert.equal(s.participants_active, 1);
 assert.equal(s.waiting, 1, "the long-poll in flight");
 assert.ok(typeof s.loop_lag_ms.p99 === "number" && typeof s.loop_lag_ms.max === "number");
-assert.ok(samples.some((x) => x.requests > 0), "HTTP requests are counted per interval");
+// every request is counted, MCP tool calls included: this script made at least 5 (initialize, initialized, tools list
+// or join, wait) before reading, plus GET / while starting
+const counted = samples.reduce((n, x) => n + x.requests, 0);
+assert.ok(counted >= 5, `HTTP requests counted across samples: ${counted}`);
 await waiting;
 await client.close();
 

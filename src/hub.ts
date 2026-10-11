@@ -1222,6 +1222,19 @@ export class Hub {
     for (const wake of [...room.waiters]) wake();
   }
 
+  /**
+   * A run this long is a research-and-build room, not a debate: its brief says when to propose. The Polymarket room
+   * (8 h, "do not wrap up early") was told "3 min of silence. If the discussion has converged, X should propose a
+   * conclusion" 6 times, and in the grouped dress rehearsal (swarm-013051-mgzm) all three rooms were, while waiting
+   * on late data. Judged by the run deadline the launcher posts to every room it starts.
+   */
+  static LONG_RUN_MS = 60 * 60_000;
+  /** True while a long run's room has a deadline ahead that the hub has not yet announced. */
+  private longRunUnderWay(room: Room): boolean {
+    const d = room.deadline;
+    return !!d && !d.announced && Date.parse(d.at) > Date.now() && Date.parse(d.at) - Date.parse(d.setAt) >= Hub.LONG_RUN_MS;
+  }
+
   /** After a period of silence in an open room, remind people what is blocking. */
   private armNudge(room: Room) {
     if (room.nudgeTimer) clearTimeout(room.nudgeTimer);
@@ -1238,6 +1251,9 @@ export class Hub {
         // the reveal itself runs on the openings deadline (not reset by chat); this is only the reminder
         text = `${mins} min of silence. Still waiting for openings from ${this.openingsWaitingOn(room).join(", ")}. Chat is open meanwhile; the openings are revealed on their deadline regardless.`;
       } else {
+        // a long run that has not been told it is ending: quiet is seats working or waiting, not a room that has
+        // converged, and a group that concludes early can take no more digests. The room-idle line covers a real stall.
+        if (this.longRunUnderWay(room)) return;
         const talkers = [...room.participants.values()].filter((p) => p.active && p.agent !== "human").sort((a, b) => b.messageCount - a.messageCount);
         text = `${mins} min of silence. If the discussion has converged, ${talkers[0] ? this.shown(room, talkers[0]) : "someone"} should propose a conclusion.`;
       }

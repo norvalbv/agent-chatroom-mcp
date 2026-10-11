@@ -18,6 +18,7 @@ import type { MessageKind, Vote, Quorum, RoomState, VerifyHead, Role, Participan
 import { now, shortId, norm, emptyBoardManifestCounters, manifestBytes, codeState, commitsIn, keepRefusal, RECENT_REFUSALS } from "./hub/internal.js";
 import type { Opts, Event, BoardManifestCounters } from "./hub/internal.js";
 import * as board from "./hub/board.js";
+import * as idle from "./hub/idle.js";
 import * as kick from "./hub/kick.js";
 import * as output from "./hub/output.js";
 import * as liveness from "./hub/liveness.js";
@@ -246,6 +247,8 @@ export class Hub {
       })),
       kick_votes: [...room.kickVotes.values()].map((kv) => this.kickView(room, kv, reveal)),
       no_output: output.listedNoOutput(this, room, observedAt).map(nm),
+      // a room-wide stall the hub has told the room of (src/hub/idle.ts); absent while the room works
+      ...(idle.idleView(room) ? { idle: idle.idleView(room) } : {}),
       // claim/* entries whose owner left: its registered successor may take one at once, anyone after Hub.STALE_CLAIM_MS
       stale_claims: this.staleClaims(room, reveal),
       ...((s) => (s.unexamined.length || s.open_attacks.length ? { scrutiny: s } : {}))(board.scrutiny(room)),
@@ -2852,6 +2855,7 @@ export class Hub {
       }
       kick.reevaluateOpenKicks(this, room);
       output.warnNoOutput(this, room);
+      idle.checkRoomIdle(this, room);
     }
     return swept;
   }

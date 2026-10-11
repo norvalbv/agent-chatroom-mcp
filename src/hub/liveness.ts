@@ -7,6 +7,7 @@ import { HubError } from "./types.js";
 import type { Participant, Room } from "./types.js";
 import { now } from "./internal.js";
 import { SUSPECTED_DEAD_MS } from "./kick.js";
+import { noteWork } from "./idle.js";
 import { countWork, workClass } from "./work.js";
 
 /** `hub`: the beat is a chatroom tool call the hub served itself, not local work the seat's process reported. */
@@ -92,6 +93,7 @@ export class Seats {
   private recordWork(room: Room, p: Participant, info: Beat): void {
     const cls = info.hub ? undefined : workClass(info.tool, info.detail);
     const counted = cls ? countWork(p, cls, info.detail) : undefined;
+    if (cls && counted) noteWork(room);
     if (cls && counted) this.hub.persist({ type: "work", room: room.name, pid: p.id, cls, tool: String(info.tool).slice(0, 40), target: counted.target, ...(counted.key !== counted.target ? { key: counted.key } : {}), ts: now() });
     const detail = String(info.detail ?? "").replace(/\s+/g, " ").trim().slice(0, 300);
     const step = Number(info.step) || (p.working?.step ?? 0) + 1;

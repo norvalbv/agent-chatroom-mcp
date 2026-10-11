@@ -38,6 +38,9 @@ export type Event =
   /** a seat process's cumulative model usage (src/hub/usage.ts); seat is the seat key's sha256, never the key */
   | { type: "usage"; room: string; seat: string; usage: SeatUsage; ts: string }
   | { type: "kick_vote"; room: string; vote: KickVote }
+  /** A room-wide stall the hub told the room of, with the numbers it quoted, and its end (src/hub/idle.ts). */
+  | { type: "room_idle"; room: string; ts: string; idle: import("./idle.js").RoomIdle; steps: number; seats: number; window_min: number; seconds_left?: number }
+  | { type: "room_active"; room: string; ts: string; idle_min: number }
   /** Telemetry only (replay ignores it): the open work an idle wait named to a seat, written when that list changes. */
   | { type: "open_work"; room: string; pid: string; ts: string; items: string[] };
 

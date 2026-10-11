@@ -128,9 +128,12 @@ const SHELL = /^(?:sh|bash|zsh|dash|fish)$/;
 function shellJob(p: Proc): boolean {
   const words = p.command.trim().split(/\s+/);
   if (!SHELL.test((words[0] ?? "").replace(/^.*\//, "").replace(/^-/, ""))) return false;
-  const first = words.slice(1).find((w) => !/^-[a-zA-Z]+$/.test(w) || w === "-c");
+  // -c in any spelling: alone, inside a short-flag cluster ("-lc", how Codex runs every tool call) or after long options
+  // ("--norc -c"); long options and other short flags are skipped when looking for the script word (review/3e17117f)
+  const isC = (w: string) => /^-[a-zA-Z]*c[a-zA-Z]*$/.test(w);
+  const first = words.slice(1).find((w) => isC(w) || !/^--?[a-zA-Z][\w-]*$/.test(w));
   if (first === undefined) return false;
-  return first === "-c" ? p.ppid === 1 : true;
+  return isC(first) ? p.ppid === 1 : true;
 }
 export function jobsOf(own: readonly Proc[]): Job[] {
   const jobs = own.filter((p) => p.elapsedS >= JOB_MIN_S && p.elapsedS <= JOB_MAX_S && !A_SERVER.test(p.command) &&

@@ -82,10 +82,15 @@ test("a shell-script job is a job: the script's shell, not its sleep (devroom/in
     "  130   100  20000       03:00 /bin/zsh -c -l source /x/snapshot.sh && eval 'sleep 590' < /dev/null",
     "  131   130    900       03:00 sleep 590",
     "  140     1  20000       04:00 bash scripts/run_bench.sh --seed 1",
+    // review/3e17117f: -c inside a flag cluster or behind a long option is still -c (Codex runs every tool call as
+    // "bash -lc <command>"); under the agent these are the seat's own foreground wrappers, not jobs
+    "  150   100  20000       03:00 /bin/zsh -lc source /x/snapshot.sh && eval 'sleep 590'",
+    "  160   100  20000       03:00 /bin/bash --norc -c sleep 590",
+    "  170     1  20000       03:00 bash --norc -lc ./slow_count.sh",
   ].join("\n");
-  const env = ["100", "110", "111", "120", "121", "130", "131", "140"].map((p) => `${p} x CHATROOM_SEAT_KEY=seat-key-AAAA`).join("\n");
+  const env = ["100", "110", "111", "120", "121", "130", "131", "140", "150", "160", "170"].map((p) => `${p} x CHATROOM_SEAT_KEY=seat-key-AAAA`).join("\n");
   const jobs = jobsOf(seatUsage(parseTable(plain, env)).get("seat-key-AAAA")!.own);
-  assert.deepEqual(jobs.map((j) => j.pid).sort(), [110, 120, 140], "the script, the backgrounded sh -c and bash <script>; not the sleeps under them, not the seat's own tool wrapper or its sleep");
+  assert.deepEqual(jobs.map((j) => j.pid).sort(), [110, 120, 140, 170], "the script, the backgrounded sh -c (also as -lc behind --norc) and bash <script>; not the sleeps under them, not the seat's own tool wrappers in any -c spelling");
 });
 
 test("the memory watcher keeps each seat's jobs from the table it already reads", async () => {

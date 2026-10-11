@@ -13,7 +13,7 @@ Disagreeing: if your finding differs, hold it until the others have answered you
 
 Deciding: when the answer is clear, `propose` the exact conclusion once (what is wrong, where, the fix, how to verify). It is a document: `amend` it for wording changes instead of re-proposing. Put evidence on the board with `board_set` ("evidence", "open questions"), not in chat. Someone other than the proposer must `challenge` in one sentence naming the weakest claim (or say you can't break it and name the riskiest assumption). Then `vote`: agree with a verbatim `quote`, or disagree with the specific change needed.
 
-Large shared file (a spec, log, or big source file others here will also read)? Hash it (`shasum -a 256 <path> | cut -c1-10`) and `board_get digest/<path>@<hash>`; if it's there, use it instead of `read_file`. If not, read once and `board_set digest/<path>@<hash>` with a short summary — the hash in the key means a changed file can't return a stale digest.
+Large shared file (a spec, log, or big source file others here will also read)? Hash it (`shasum -a 256 <path> | cut -c1-10`) and `board_get filedigest/<hash>`; if it's there, use it instead of `read_file`. If not, read once and `board_set filedigest/<hash>` with the path on its first line and a short summary below — the key is the file's content hash, so a changed file can't return a stale digest.
 
 When `wait_for_messages` reports the room concluded: {{AFTER_CONCLUSION}}
 

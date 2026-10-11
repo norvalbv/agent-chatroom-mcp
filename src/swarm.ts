@@ -519,7 +519,7 @@ const FLAT_TARGETS = FLAT && !NO_SEAT_TARGETS && seatTarget(task, 1, LENSES) ? (
 const groupRooms = FLAT ? [] : plan.groups.map((g) => `${SWARM_ID}-${g.id}`);
 if (RESOURCES.length) {
   try {
-    for (const line of await seedResources(URL_, [...groupRooms, leadsRoom], RESOURCES, { token: process.env.CHATROOM_HUMAN_TOKEN })) log(line);
+    for (const line of await seedResources(URL_, [...groupRooms, leadsRoom], RESOURCES, { token: process.env.CHATROOM_HUMAN_TOKEN, launcherToken })) log(line);
   } catch (e) {
     log(`not starting any seat: ${e instanceof Error ? e.message : String(e)}`);
     process.exit(2);
@@ -679,7 +679,7 @@ const tail = setInterval(() => tailRooms([...groupRooms, leadsRoom]), 2000);
 // the hub is told when the seats will be killed, so it can say so in the room while there is still time to propose or
 // hand off; a hub that refuses (an older build already on this port) or does not answer never fails the run
 for (const room of [...groupRooms, leadsRoom]) {
-  fetch(`${URL_}/rooms/${encodeURIComponent(room)}/deadline`, { method: "POST", headers: { "content-type": "application/json", ...(process.env.CHATROOM_HUMAN_TOKEN ? { "x-chatroom-token": process.env.CHATROOM_HUMAN_TOKEN } : {}) }, body: JSON.stringify({ at: new Date(Date.now() + TIMEOUT_MIN * 60_000).toISOString() }), signal: AbortSignal.timeout(5_000) })
+  fetch(`${URL_}/rooms/${encodeURIComponent(room)}/deadline`, { method: "POST", headers: { "content-type": "application/json", ...(process.env.CHATROOM_HUMAN_TOKEN ? { "x-chatroom-token": process.env.CHATROOM_HUMAN_TOKEN } : {}), ...(launcherToken ? { "x-chatroom-launcher-token": launcherToken } : {}) }, body: JSON.stringify({ at: new Date(Date.now() + TIMEOUT_MIN * 60_000).toISOString() }), signal: AbortSignal.timeout(5_000) })
     .then((r) => { if (!r.ok) log(`${room}: hub did not take the run deadline (${r.status})`); })
     .catch((e) => log(`${room}: could not post the run deadline: ${e instanceof Error ? e.message : String(e)}`));
 }

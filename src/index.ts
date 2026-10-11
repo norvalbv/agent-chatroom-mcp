@@ -316,6 +316,13 @@ app.use(async (req, res, next) => {
   }
   next();
 });
+/** The launcher's own calls (resources, run deadline): its launcher token is the authority, as for replacements. A hub
+ * started by hubd has a launcher token and often neither a human token nor the loopback opt-in, and refused both. */
+const requireLauncherOrToken = (req: express.Request, res: express.Response): boolean => {
+  const launcher = process.env.CHATROOM_LAUNCHER_TOKEN;
+  if (launcher && req.header("x-chatroom-launcher-token") === launcher) return true;
+  return requireToken(req, res);
+};
 const requireToken = (req: express.Request, res: express.Response): boolean => {
   if (HUMAN_TOKEN && req.header("x-chatroom-token") === HUMAN_TOKEN) return true;
   // The explicit loopback opt-in keeps the local dashboard usable without a token, with or without one configured,
@@ -576,7 +583,7 @@ app.post("/rooms/:room/replacements", (req, res) => {
 // When the run that owns a room stops (its launcher kills the seats then): the hub announces it once, late in the run.
 // A room that does not exist yet answers 202: the deadline is held and applied when a seat's join creates the room.
 app.post("/rooms/:room/deadline", (req, res) => {
-  if (!requireToken(req, res)) return;
+  if (!requireLauncherOrToken(req, res)) return;
   try {
     const { at } = (req.body ?? {}) as { at?: string };
     const set = hub.setDeadline(req.params.room, at as string);
@@ -588,7 +595,7 @@ app.post("/rooms/:room/deadline", (req, res) => {
 // What a run was launched knowing about this machine, written to the room's board as resource/<name> before its seats
 // join (swarm --resources). A room that does not exist yet answers 202: held, and written when the room is created.
 app.post("/rooms/:room/resources", (req, res) => {
-  if (!requireToken(req, res)) return;
+  if (!requireLauncherOrToken(req, res)) return;
   try {
     const { entries } = (req.body ?? {}) as { entries?: { key: string; text: string }[] };
     const set = hub.seedResources(req.params.room, entries as { key: string; text: string }[]);

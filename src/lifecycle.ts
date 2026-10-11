@@ -7,12 +7,19 @@
  * hub-<port>.pid (removed on a clean stop). A hub killed outright can write nothing, so the next start names it.
  * An in-memory hub (no data directory) gets the same behaviour with the lines on stderr only.
  */
-import { appendFileSync, existsSync, mkdirSync, readFileSync, statSync, unlinkSync, utimesSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, readFileSync, renameSync, statSync, unlinkSync, utimesSync, writeFileSync } from "node:fs";
+import { monitorEventLoopDelay } from "node:perf_hooks";
 import { resolve } from "node:path";
 
 export interface Lifecycle {
   /** The reason the coming process.exit is for, when it is not a signal or a crash (the idle exit). */
   exiting(reason: string): void;
+  /**
+   * Sample the hub's health every CHATROOM_HEALTH_MS (default 60 s; 0 = off) into hub-<port>.health.jsonl, and put the last
+   * sample on the exit line. Nothing sampled the hub before a death (bugs.md telemetry 3: none was recorded for the
+   * 2026-09-19 and 2026-10-10 deaths). `counts` is read at each sample: what the hub has open right now.
+   */
+  health(counts: () => Record<string, number>): void;
   /** How the previous hub on this port and data directory stopped, in words, or undefined when there was none. */
   previous?: string;
   /** When the previous hub was last known alive (its alive-stamp, or its exit line), epoch ms; undefined when unknown. */
@@ -74,6 +81,35 @@ export function installLifecycle(opts: { port: number; dir?: string; head?: stri
 
   let reason: string | undefined;
   const exiting = (why: string) => { reason ??= why; };
+  let lastHealth: Record<string, unknown> | undefined;
+  const healthFile = opts.dir ? resolve(opts.dir, `hub-${opts.port}.health.jsonl`) : undefined;
+  const HEALTH_MS = process.env.CHATROOM_HEALTH_MS === undefined ? 60_000 : Number(process.env.CHATROOM_HEALTH_MS);
+  const health = (counts: () => Record<string, number>) => {
+    if (!(HEALTH_MS > 0)) return;
+    // event-loop lag over each interval: a hub that is alive but stuck shows here before it shows anywhere else
+    const lag = monitorEventLoopDelay({ resolution: 20 });
+    lag.enable();
+    const ms = (ns: number) => Math.round(ns / 1e5) / 10;
+    setInterval(() => {
+      const m = process.memoryUsage();
+      let c: Record<string, number> = {};
+      try { c = counts(); } catch {}
+      lastHealth = {
+        ts: new Date().toISOString(), pid: process.pid, uptime_s: Math.round((Date.now() - started) / 1000),
+        rss_mb: Math.round(m.rss / 1048576), heap_used_mb: Math.round(m.heapUsed / 1048576), heap_total_mb: Math.round(m.heapTotal / 1048576), external_mb: Math.round(m.external / 1048576),
+        loop_lag_ms: { p50: ms(lag.percentile(50)), p99: ms(lag.percentile(99)), max: ms(lag.max) },
+        ...c,
+      };
+      lag.reset();
+      // one line a minute is about 300 KB a day; past 20 MB the file starts again beside a .1 copy
+      try {
+        if (healthFile) {
+          if (existsSync(healthFile) && statSync(healthFile).size > 20 * 1048576) renameSync(healthFile, `${healthFile}.1`);
+          appendFileSync(healthFile, `${JSON.stringify(lastHealth)}\n`);
+        }
+      } catch {}
+    }, HEALTH_MS).unref();
+  };
   // the terminal this hub was started from closed: rooms outlive it
   process.on("SIGHUP", () => line(`SIGHUP ignored pid=${process.pid} (the terminal that started this hub closed; the hub keeps running, stop it with kill ${process.pid})`));
   for (const signal of ["SIGINT", "SIGTERM"] as const) process.on(signal, () => { exiting(signal); process.exit(0); });
@@ -84,8 +120,9 @@ export function installLifecycle(opts: { port: number; dir?: string; head?: stri
     try { if (logFile) appendFileSync(logFile, `${String(e?.stack ?? e)}\n`); } catch {}
   });
   process.on("exit", (code) => {
-    line(`exit pid=${process.pid} reason=${reason ?? `process.exit(${code})`} code=${code} uptime_s=${Math.round((Date.now() - started) / 1000)}`);
+    // the last health sample rides on the exit line: how the hub looked just before it stopped, in the line that says why
+    line(`exit pid=${process.pid} reason=${reason ?? `process.exit(${code})`} code=${code} uptime_s=${Math.round((Date.now() - started) / 1000)}${lastHealth ? ` last_health=${JSON.stringify(lastHealth)}` : ""}`);
     try { if (pidFile && ownsPidFile && readFileSync(pidFile, "utf8").trim() === String(process.pid)) unlinkSync(pidFile); } catch {}
   });
-  return { exiting, ...(previous ? { previous } : {}), ...(lastAlive !== undefined && Number.isFinite(lastAlive) ? { lastAlive } : {}) };
+  return { exiting, health, ...(previous ? { previous } : {}), ...(lastAlive !== undefined && Number.isFinite(lastAlive) ? { lastAlive } : {}) };
 }

@@ -284,6 +284,17 @@ if (MEMORY_WATCH_MS > 0) {
   if (hub.memory.budgetMb) console.error(`agent-chatroom-mcp: seat memory budget ${hub.memory.budgetMb} MB (CHATROOM_SEAT_MEMORY_MB): past it the hub stops a seat's largest process`);
 }
 
+// the hub's own health, one line a minute (src/lifecycle.ts): what it holds open and how many requests it served
+let httpRequests = 0;
+lifecycle.health(() => {
+  const rooms = [...hub.rooms.values()].filter((r) => r.state === "open" || r.state === "stalled");
+  const out = { sessions: transports.size, requests: httpRequests, rooms_open: rooms.length,
+    participants_active: rooms.reduce((n, r) => n + [...r.participants.values()].filter((p) => p.active).length, 0),
+    waiting: rooms.reduce((n, r) => n + r.waiters.size, 0) };
+  httpRequests = 0;
+  return out;
+});
+
 // Liveness: close idle MCP sessions and mark silent agents as left, so a dead process cannot block a quorum forever.
 setInterval(() => {
   const now = Date.now();
@@ -332,6 +343,7 @@ const HUMAN_ROUTES = /^\/rooms\/(archive-dead|[^/]+\/(messages|vote|kick|replace
 // A request that carries the human token is looked up too: the hub's environment is readable by any process of the
 // same user, so a seat can read the token (`ps eww -p <hub pid>`) and, unchecked, post as "[human route: token]"
 // (review/a9060d5e-verifier). The launcher's own calls carry its launcher token and are not looked up.
+app.use((_req, _res, next) => { httpRequests++; next(); });
 app.use(async (req, res, next) => {
   const withToken = !!HUMAN_TOKEN && req.header("x-chatroom-token") === HUMAN_TOKEN;
   if (req.method === "POST" && LOOPBACK_HOST && (INSECURE_LOCAL || withToken) && HUMAN_ROUTES.test(req.path)) {

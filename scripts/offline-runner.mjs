@@ -3,22 +3,44 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { resolve, dirname } from 'node:path';
 
-/** Runs every command even after a failure, so one flaky script cannot hide later results; returns the first failure's exit code. */
-export function runCommands(commands, { cwd, timeout = 120_000, log = line => console.error(line) } = {}) {
-  const failures = [];
+/** Per-command limit when the caller passes none: CHATROOM_TEST_TIMEOUT_MS, else 300 s. It was a fixed 120 s with no
+ * override (bugs.md 8): under load from parallel worktrees 4 of 138 commands were SIGKILLed with no assertion failure,
+ * and bench-build-task.test.ts takes 124 s alone. */
+const defaultTimeout = () => { const n = Number(process.env.CHATROOM_TEST_TIMEOUT_MS); return Number.isFinite(n) && n > 0 ? n : 300_000; };
+
+/**
+ * Runs every command even after a failure, so one flaky script cannot hide later results. A command killed at the time
+ * limit is reported as TIMED OUT, apart from the ones that failed an assertion; each command's duration is printed, and
+ * the slowest at the end, so the limit is set from numbers. Returns the first real failure's exit code, or 124 when the
+ * only failures were timeouts.
+ */
+export function runCommands(commands, { cwd, timeout = defaultTimeout(), log = line => console.error(line) } = {}) {
+  const failures = [], timeouts = [], took = [];
+  const limit = `${(timeout / 1000).toFixed(timeout < 1000 ? 2 : 0)} s`;
   for (const { name, command, args } of commands) {
     console.log(`\n[offline] ${name}`);
+    const started = Date.now();
     const result = spawnSync(command, args, { cwd, stdio: 'inherit', timeout, killSignal: 'SIGKILL' });
-    if (result.error || result.signal || result.status !== 0) {
+    const seconds = (Date.now() - started) / 1000;
+    took.push({ name, seconds });
+    console.log(`[offline] done ${name} in ${seconds.toFixed(1)} s`);
+    if (result.error?.code === 'ETIMEDOUT') {
+      log(`[offline] TIMED OUT ${name}: killed at the ${limit} limit, no assertion failed`);
+      timeouts.push({ name });
+    } else if (result.error || result.signal || result.status !== 0) {
       const reason = result.error?.message ?? result.signal ?? `exit ${result.status}`;
       log(`[offline] FAILED ${name}: ${reason}`);
       failures.push({ name, reason, code: result.status || 1 });
     }
   }
-  if (failures.length) {
-    log(`[offline] FAILED ${failures.length} of ${commands.length} commands:\n${failures.map(f => `  - ${f.name}: ${f.reason}`).join('\n')}`);
-    return failures[0].code;
+  const slowest = took.slice().sort((a, b) => b.seconds - a.seconds).slice(0, 5);
+  if (commands.length > 1) console.log(`[offline] slowest: ${slowest.map(t => `${t.name} ${t.seconds.toFixed(1)} s`).join(', ')}`);
+  if (failures.length) log(`[offline] FAILED ${failures.length} of ${commands.length} commands:\n${failures.map(f => `  - ${f.name}: ${f.reason}`).join('\n')}`);
+  if (timeouts.length) {
+    log(`[offline] TIMED OUT ${timeouts.length} of ${commands.length} commands at the ${limit} limit (a loaded machine, not a failed assertion; rerun each alone, or raise CHATROOM_TEST_TIMEOUT_MS):\n${timeouts.map(t => `  - ${t.name}`).join('\n')}`);
   }
+  if (failures.length) return failures[0].code;
+  if (timeouts.length) return 124;
   console.log(`[offline] OK (${commands.length} commands)`);
   return 0;
 }

@@ -2,8 +2,8 @@
  * Nobody is put back in a closed room by joining it by hand (idea/closed-room-rejoin-by-hand, from merge-review backlog
  * B9d). d37025d8 stopped a seat-key reseat from re-activating a seat in a closed room, but join_room with the seat's old
  * name or participant_id still did: active again, a join event in the log and "rejoined the room" posted in a room
- * nobody can act in. A closed room refuses the rejoin (typed "state"), and a new name, as before; a concluded room is
- * different (seats still read the conclusion there) and is unchanged. A human may still come back to read.
+ * nobody can act in. A closed room refuses the rejoin (typed "state"), and a new agent name too (review/7ddbad3f); a
+ * concluded room is different (seats still read the conclusion there) and is unchanged. A human may still come back to read.
  * Run: npx tsx --test scripts/closed-room-rejoin-regression.ts
  */
 import assert from "node:assert/strict";
@@ -32,6 +32,7 @@ test("a closed room refuses a rejoin by participant_id or by name, and writes no
   const lines = room.messages.length;
   assert.equal(code(() => hub.join("cr", "A", "claude", {}, a.id, "s1-new")), "state", "rejoin by participant_id");
   assert.equal(code(() => hub.join("cr", "B", "claude", {}, undefined, "s2-new")), "state", "rejoin by name");
+  assert.equal(code(() => hub.join("cr", "Newcomer", "claude", {}, undefined, "s3")), "state", "a new agent name");
   assert.equal(room.participants.get(a.id)!.active, false);
   assert.equal(room.participants.get(b.id)!.active, false);
   assert.equal(room.messages.length, lines, "no 'rejoined the room' line");

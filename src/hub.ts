@@ -475,6 +475,8 @@ export class Hub {
     // Humans are identified by name alone (they come in over plain HTTP with no session), so they always reclaim.
     if (!participant && agent === "human") participant = [...room.participants.values()].find((p) => p.name === name && p.agent === "human");
     if (participant && opts.replacementToken !== undefined) throw new HubError("Replacement token has already been consumed or is not reserved for this join.", undefined, "auth");
+    // a closed room takes no new agent either: a join there reads as a live room (review/7ddbad3f); a human may still come in to read
+    if (!participant && room.state === "closed" && agent !== "human") throw new HubError(`Room "${roomName}" is closed: nobody joins it. Its board and log stay readable on the dashboard and at GET /rooms/${roomName}.`, undefined, "state");
     if (!participant) {
       const reserved = [...room.participants.values()].find((p) => p.pendingReplacementName === name);
       const tokenHash = opts.replacementToken ? createHash("sha256").update(opts.replacementToken).digest("hex") : undefined;

@@ -184,6 +184,7 @@ export const offlineScripts = [
   'respawn-probe-regression.ts',
   'long-brief-regression.ts',
   'keepalive-regression.ts',
+  'hubd-data-dir-regression.ts',
   'proposed-decision-path-regression.ts',
   'smoke-ports-regression.ts',
   'own-hub-port-regression.ts',

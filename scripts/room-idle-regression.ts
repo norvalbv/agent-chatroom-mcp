@@ -158,6 +158,23 @@ test("not raised where it would be noise or a guess", () => {
   }
 });
 
+test("only the room's own seats count: another room's note, the launcher's seeding and the hub's lines do not", () => {
+  // the dress rehearsal (swarm-013051-mgzm on 7857): a consolidator's digest written into a group's board, and the
+  // launcher's resource/* seeding, read as the group working; a group that only receives notes is still quiet
+  const { hub, room, a, b, c } = room3(undefined, "idle-outside");
+  work(hub, "idle-outside", [a.id, b.id, c.id], 2);
+  elapse(hub, "idle-outside", ROOM_IDLE_MS + 60_000);
+  // as many as the room's own threshold: the kit seeds 10 resource/* entries, and each digest pass writes a note
+  for (let i = 0; i < 10; i++) hub.setBoardAs("idle-outside", "launcher", `resource/r${i}`, `resource ${i}: where it is and who shares it`);
+  for (let i = 0; i < 3 * ROOM_IDLE_STEPS; i++) hub.setBoardAs("idle-outside", `digest-${i}`, `inbox/run-leads/digest-${i}`, `Pass ${i}. From the break room: r03 still disputed.`);
+  checkRoomIdle(hub, room);
+  assert.equal(lines(hub, "idle-outside").length, 1, "notes from outside do not make a room busy");
+  hub.setBoard("idle-outside", a.id, "inbox/run-leads/digest.ack", "ack: the split by id is running now");
+  work(hub, "idle-outside", [a.id, b.id, c.id], ROOM_IDLE_STEPS);
+  checkRoomIdle(hub, room);
+  assert.equal(idle(hub, "idle-outside"), undefined, "its own seats' answer does");
+});
+
 test("a breakout's stall reaches its parent, where the chair or consolidator sits", () => {
   const { hub, a, b } = room3(undefined, "idle-parent");
   for (const [p, s] of [[a, "s-idle-parent-A"], [b, "s-idle-parent-B"]] as const) hub.join("idle-child", p.name, "claude", { parent: "idle-parent", requireChallenge: false, nudgeAfterMs: 0, expectedParticipants: 0 }, undefined, s);

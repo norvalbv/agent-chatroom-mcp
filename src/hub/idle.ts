@@ -48,13 +48,17 @@ export function quietWindow(steps: number[], seats: number, at: number, opts: { 
   return { steps: n, seats, window_ms, quiet: seats >= 2 && n < perSeat * seats };
 }
 
-/** When each step in the window happened: counted local tool calls, agents' chat messages, board writes. */
+/** When each step in the window happened: counted local tool calls, agents' chat messages, and board writes by the
+ * room's own agent seats. A note another room wrote here (a consolidator's digest), the launcher's resource/* seeding
+ * and the hub's own entries are things the room received, not work it did: in the dress rehearsal a digest landing on
+ * a quiet group's board read as that group working. */
 export function roomSteps(room: Room, at: number, window = ROOM_IDLE_MS): number[] {
   const within = (t: number) => t > at - window && t <= at;
+  const own = new Set([...room.participants.values()].filter((p) => p.agent !== "human").map((p) => p.name));
   return [
     ...(room.workAt ?? []),
     ...room.messages.filter((m) => m.kind === "chat" && m.from.id !== "system" && m.from.agent !== "human").map((m) => Date.parse(m.ts)),
-    ...[...room.board.values()].filter((e) => e.by !== "system").map((e) => Date.parse(e.updatedAt)),
+    ...[...room.board.values()].filter((e) => own.has(e.by)).map((e) => Date.parse(e.updatedAt)),
   ].filter(within);
 }
 

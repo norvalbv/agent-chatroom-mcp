@@ -271,6 +271,10 @@ export interface BoardEntry {
   workspace?: { branch?: string; worktree: string };
   /** draft/* only: written or edited once peers' drafts were readable, so it is not an independent attempt (sticky). */
   postReveal?: boolean;
+  /** take/* only (src/hub/take.ts): the seat that holds it, or is offered it while offeredBy is set; never client-supplied. */
+  holder?: string;
+  /** take/* only: the seat that offered it to `holder`, until that seat accepts by writing the key. */
+  offeredBy?: string;
   /** attack/* only: normalised length of the attacked entry when the attack was written, to tell a reply from a re-save. */
   attackedChars?: number;
 }

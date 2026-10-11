@@ -4,6 +4,7 @@ import type { Hub } from "../hub.js";
 import { HubError } from "./types.js";
 import type { Quorum, Participant, BoardExpiryOptions, BoardEntry, Room } from "./types.js";
 import { now, codeState, norm, commitsIn } from "./internal.js";
+import { announceTake, takeWrite } from "./take.js";
 
 function boardExpiry(key: string, opts: BoardExpiryOptions): string | undefined {
   if (opts.ttlSeconds === undefined && opts.expiresAt === undefined) return undefined;
@@ -181,6 +182,8 @@ export function setBoard(hub: Hub, roomName: string, pid: string, key: string, t
     }
     reviewer = previous ? undefined : assignReviewer(hub, room, p);
   }
+  // take/<what>: holder-only, offered with a leading @name; refused before any other rule so overwrite cannot pass it
+  const take = key.startsWith("take/") ? takeWrite(hub, room, p, key, text, previous?.text.trim() ? previous : undefined) : undefined;
   if (opts.ifAbsent && previous) throw new HubError(`"${key}" already exists (by ${previous.by}, ${previous.updatedAt}).`, { existing: previous }, "state");
   if (opts.ifByMe && previous && previous.by !== p.name) throw new HubError(`"${key}" was written by ${previous.by}, not you. Use post_to_room or a different key.`, undefined, "ownership");
   // clearing is replacing with nothing: a peer's empty write once deleted any entry without overwrite (idea/board-empty-delete).
@@ -188,7 +191,7 @@ export function setBoard(hub: Hub, roomName: string, pid: string, key: string, t
   // with overwrite a peer could swap someone's failing verdict for a passing one under their own name.
   const clearsPeer = !text.trim() && !!previous && previous.by !== p.name && p.agent !== "human";
   if (previous && previous.by !== p.name && p.agent !== "human" && /^(verify|attack)\//.test(key)) throw new HubError(`"${key}" is ${previous.by}'s entry; only its author or a human may ${text.trim() ? "replace" : "clear"} it. Write your own (verify/<area>-<you>), or answer it on the board (for an attack, edit the attacked entry).`, undefined, "ownership");
-  if (previous && previous.by !== p.name && !opts.overwrite && (text.trim() || clearsPeer) && !(key.startsWith("claim/") && (claimReleased(previous) || takeover))) {
+  if (previous && previous.by !== p.name && !take && !opts.overwrite && (text.trim() || clearsPeer) && !(key.startsWith("claim/") && (claimReleased(previous) || takeover))) {
     noteBoardRead(p, key, previous);
     throw new HubError(
       `"${key}" was written by ${previous.by} at ${previous.updatedAt}; replacing it would discard their text. Merge with the current content below and resend with overwrite=true, or use your own key.`,
@@ -197,7 +200,7 @@ export function setBoard(hub: Hub, roomName: string, pid: string, key: string, t
     );
   }
   // overwrite=true from a stale read is a lost update (ranked/list, swarm-082539-kns2): refused once, with the version to merge
-  if (previous && previous.by !== p.name && opts.overwrite && !key.startsWith("claim/") && boardSeen.get(p)?.get(key) !== previous.updatedAt) {
+  if (previous && previous.by !== p.name && !take && opts.overwrite && !key.startsWith("claim/") && boardSeen.get(p)?.get(key) !== previous.updatedAt) {
     const read = boardSeen.get(p)?.has(key);
     noteBoardRead(p, key, previous);
     throw new HubError(
@@ -209,6 +212,7 @@ export function setBoard(hub: Hub, roomName: string, pid: string, key: string, t
   if (!text.trim()) {
     applyBoard(room, key, null);
     hub.persist({ type: "board", room: roomName, key, entry: null });
+    if (take) { if (previous) announceTake(hub, room, p, key, text, take); return null; }
     hub.post(room, "board", p, `cleared board entry "${key}"${previous && previous.by !== p.name ? ` (${previous.by}'s)` : ""}`);
     if (key === `hold/${room.name}`) for (const pr of room.proposals.values()) if (pr.status === "open") hub.evaluate(room, pr);
     return null;
@@ -229,12 +233,14 @@ export function setBoard(hub: Hub, roomName: string, pid: string, key: string, t
     ...(postReveal ? { postReveal: true } : {}),
     ...(attacked ? { attackedChars: norm(room.board.get(attacked.target)!.text).length } : {}),
     ...(workspace ? { workspace } : {}),
+    ...(take ? { holder: take.holder.name, ...(take.offeredBy ? { offeredBy: take.offeredBy.name } : {}) } : {}),
   };
   applyBoard(room, key, entry);
   noteBoardRead(p, key, entry);
   hub.persist({ type: "board", room: roomName, key, entry });
   // a sealed draft's notice names neither key nor size (either can carry content); it says who is still owed a draft
   if (key.startsWith("draft/")) hub.openDrafts(room); // before the notice, so the first one already names the deadline
+  if (take) { announceTake(hub, room, p, key, text, take); return entry; }
   const sealedDraft = key.startsWith("draft/") && !room.draftsRevealed && !hub.draftsComplete(room) && !hub.draftsDue(room);
   hub.post(room, "board", p, sealedDraft ? `${previous ? "updated" : "wrote"} a sealed draft (${hub.draftProgress(room)})`
     : `${previous ? "updated" : "added"} board entry "${key}" (${text.length} chars; read it with board_get)`

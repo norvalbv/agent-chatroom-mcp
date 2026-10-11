@@ -25,6 +25,7 @@ import * as persistence from "./hub/persistence.js";
 import { barrenClaims, evidenceGaps, evidenceReceipt, offline, unsourcedClaims } from "./hub/work.js";
 import { apiRequests, UsageLedger, usageTotal } from "./hub/usage.js";
 import { DevRuns, DevRunError, type DevRunHost } from "./hub/dev-runs.js";
+import { takesOf } from "./hub/take.js";
 import { MemoryWatch, memoryNotice, type MemoryEvent, type SeatMemory } from "./hub/memory.js";
 import type { SteerItem } from "./hub/steer.js";
 
@@ -236,6 +237,8 @@ export class Hub {
         ...((u) => (u && reveal ? { usage: u } : {}))(this.usage.get(p.seatKeyHash)),
         // what the seat's processes hold (src/hub/memory.ts): a seat sees the figures, the dashboard also the process
         ...((m) => (m ? { memory: reveal ? m : { mb: m.mb, peak_mb: m.peak_mb, budget_mb: m.budget_mb } } : {}))(this.memory.get(p.seatKeyHash)),
+        // take/<what> entries (src/hub/take.ts): what the seat holds and what is offered to it
+        ...takesOf(room, p, nm),
         liveness: (() => {
           const age = (at: string) => Math.max(0, Math.floor((observedAt - Date.parse(at)) / 1000));
           const age_seconds = age(this.lastSeen(p));

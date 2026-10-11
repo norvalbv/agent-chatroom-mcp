@@ -40,6 +40,8 @@ export type Event =
   | { type: "usage"; room: string; seat: string; usage: SeatUsage; ts: string }
   /** Telemetry only (replay ignores it; src/hub/memory.ts): a sample of what a seat's processes hold, or a warning/stop. */
   | { type: "memory"; room: string; seat: string; ts: string; memory?: SeatMemory; event?: "warn" | "over" | "stop"; mb?: number; budget_mb?: number; top?: SeatMemory["top"]; signal?: string }
+  /** Telemetry only (replay ignores it; src/hub/take.ts): one step of a take/<what> entry. by and holder are seat names. */
+  | { type: "take"; room: string; key: string; action: string; by: string; holder: string; ts: string }
   | { type: "kick_vote"; room: string; vote: KickVote }
   /** Telemetry only (replay ignores it): the open work an idle wait named to a seat, written when that list changes. */
   | { type: "open_work"; room: string; pid: string; ts: string; items: string[] };

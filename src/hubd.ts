@@ -4,7 +4,8 @@
  *
  *   node dist/hubd.js [--port 7717] [--always]        (npm run hubd)
  *
- * Starts the hub as a child in its own session, with its output appended to logs/hub-<port>.log, and starts it again
+ * Starts the hub as a child in its own session, with its output appended to logs/hub-<port>.log and its rooms in
+ * CHATROOM_DATA_DIR (default <checkout>/data, as the launcher's hub), and starts it again
  * whenever it dies. Every exit is logged with its UTC time, exit code and signal. SIGHUP is ignored, so closing the
  * terminal this was started from stops nothing. The launcher token (CHATROOM_LAUNCHER_TOKEN, generated when unset) is
  * handed to the hub and written to logs/hub-<port>-token (0600), where a launcher that attaches to the hub reads it.
@@ -64,7 +65,8 @@ function start() {
   const out = openSync(logFile, "a");
   // run the hub the way this file is being run: node on dist/index.js, or tsx on src/index.ts
   hub = spawn(process.execPath, [...process.execArgv, resolve(dirname(self), `index${extname(self)}`)], {
-    env: { ...process.env, PORT: String(PORT), CHATROOM_LAUNCHER_TOKEN: token },
+    // rooms on disk unless told otherwise, as the launcher's hub has them: a restart of an in-memory hub would wipe them
+    env: { ...process.env, PORT: String(PORT), CHATROOM_LAUNCHER_TOKEN: token, CHATROOM_DATA_DIR: process.env.CHATROOM_DATA_DIR || resolve(root, "data") },
     detached: true, // its own session: no controlling terminal to take it down
     stdio: ["ignore", out, out],
   });

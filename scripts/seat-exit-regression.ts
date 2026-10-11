@@ -19,6 +19,7 @@ import vm from "node:vm";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { ownHubPort } from "./lib/own-hub.js";
+import { exitDetail } from "../src/respawn.js";
 
 const PORT = await ownHubPort(Number(process.env.PORT ?? 20_000 + Math.floor(Math.random() * 20_000)));
 assert.notEqual(PORT, 7717, "never the live hub");
@@ -82,7 +83,7 @@ assert.equal((await seat("silent")).active, true);
   const pending = new Promise((r) => (answer = r));
   const runProc = vm.runInNewContext(`${js};runProc;`, {
     spawn: () => child, seatChildEnv: () => ({}), writeWorkers: new Set(), process: { env: {} }, children: [], seatChildren: new Map(), writeFileSync: () => {}, resolve: (...a: string[]) => a.join("/"),
-    OUT: "/tmp", exitCodes: new Map(), log: () => {}, URL_: "http://hub.invalid", AbortSignal, String, JSON,
+    OUT: "/tmp", exitCodes: new Map(), log: () => {}, URL_: "http://hub.invalid", AbortSignal, String, JSON, exitDetail,
     fetch: (_url: string, init: { body: string }) => { posted = JSON.parse(init.body); return pending; },
   }) as (...a: unknown[]) => Promise<string>;
   let resolved = false;
@@ -90,6 +91,7 @@ assert.equal((await seat("silent")).active, true);
   child.emit("close", 143);
   await new Promise((r) => setTimeout(r, 50));
   assert.deepEqual({ seat_key: posted?.seat_key, exited: posted?.exited }, { seat_key: "key-launched", exited: true }, "child close posts the exit receipt");
+  assert.equal((posted as { detail?: string } | undefined)?.detail, "exit 143", "the receipt names the exit (src/respawn.ts exitDetail)");
   assert.equal(resolved, false, "the seat's run does not resolve while its exit receipt is unanswered");
   answer({ ok: true });
   await run;
@@ -97,7 +99,7 @@ assert.equal((await seat("silent")).active, true);
   const child2 = Object.assign(new EventEmitter(), { stdout: new EventEmitter(), stderr: new EventEmitter() });
   const runProc2 = vm.runInNewContext(`${js};runProc;`, {
     spawn: () => child2, seatChildEnv: () => ({}), writeWorkers: new Set(), process: { env: {} }, children: [], seatChildren: new Map(), writeFileSync: () => {}, resolve: (...a: string[]) => a.join("/"),
-    OUT: "/tmp", exitCodes: new Map(), log: () => {}, URL_: "http://hub.invalid", AbortSignal, String, JSON,
+    OUT: "/tmp", exitCodes: new Map(), log: () => {}, URL_: "http://hub.invalid", AbortSignal, String, JSON, exitDetail,
     fetch: () => Promise.reject(new Error("hub down")),
   }) as (...a: unknown[]) => Promise<string>;
   const run2 = runProc2("worker", "fake", [], "/tmp", "/tmp/out", false, { key: "key-launched", env: {} });

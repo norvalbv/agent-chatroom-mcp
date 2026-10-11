@@ -23,4 +23,9 @@ assert.match(section, /Concluded WITHOUT the verifier's agree/);
 assert.match(hub, /LAST CALL: /);
 assert.match(hub, /agreed_unsent/);
 assert.match(hub, /"amend-stale"/);
+// the launcher creates group rooms (as breakouts) only under these flags: the section names each (review/77d2048f)
+const swarm = readFileSync(new URL("../src/swarm.ts", import.meta.url), "utf8");
+const cond = /if \((REQUIRE_VERIFICATION[^)]*)\) \{\s*\n\s*try \{\s*\n\s*const r = await fetch\(`\$\{URL_\}\/rooms\/\$\{encodeURIComponent\(leadsRoom\)\}\/create`/.exec(swarm);
+assert.ok(cond, "found the launcher's room-create condition");
+for (const [v, flag] of [["REQUIRE_VERIFICATION", "--require-verification"], ["QUORUM", "--quorum"], ["CHAIR", "--chair"]] as const) if (cond![1].includes(v)) assert.ok(section.includes(flag), `the section names ${flag}`);
 console.log("skill-closing-regression OK");

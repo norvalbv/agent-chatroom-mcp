@@ -55,14 +55,12 @@ const cases: [string, () => void][] = [
     room.board.get(key)!.updatedAt = oldTime;
     assert.deepEqual(hub.unacknowledged(room), [key]);
   }],
-  ["optional notes share cap but only required notes block proposals", () => {
-    const { hub, b, room, post, ack } = setup();
+  // optional notes once shared the cap and cut 0btz-build and 1nwp-external off (scripts/inbox-cap-regression.ts)
+  ["optional notes hold no cap slot and only required notes block proposals", () => {
+    const { hub, b, room, post } = setup();
     for (let i = 0; i < 10; i++) post(`info${i}`, "FYI", false);
     assert.deepEqual(hub.unacknowledged(room), []);
-    assert.throws(() => post("action"), /10 inbox/);
-    assert.throws(() => post("eleventh-info", "FYI", false), /10 inbox/);
-    assert.doesNotThrow(() => post("info0", "updated FYI", false));
-    ack("inbox/source/info0");
+    assert.doesNotThrow(() => post("eleventh-info", "FYI", false));
     assert.doesNotThrow(() => post("action"));
     assert.equal(hub.unacknowledged(room).length, 1);
     assert.throws(() => hub.propose("target", b.id, "Adopt the reviewed result."), /Acknowledge the notes/);

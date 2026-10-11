@@ -37,6 +37,9 @@ export function applyBoardManifest(room: Room, bytes: number, kind: "full" | "de
   stats.waits++; stats.bytes += bytes; stats[kind]++;
 }
 
+/** An acknowledgement that says nothing beyond "seen". */
+const BARE_ACK = /^\s*(ack(nowledged)?|ok(ay)?|seen|received|read|noted|done|thanks?)[\s.!]*$/i;
+
 export const BOARD_KEY = /^[\w .:/-]{1,80}$/;
 
 export function hold(room: Room): BoardEntry | undefined {
@@ -190,6 +193,19 @@ export function setBoard(hub: Hub, roomName: string, pid: string, key: string, t
   // A verify entry gates a proposal and an attack holds one, so only their author or a human may clear or replace them:
   // with overwrite a peer could swap someone's failing verdict for a passing one under their own name.
   const clearsPeer = !text.trim() && !!previous && previous.by !== p.name && p.agent !== "human";
+  // An acknowledgement belongs to the room, not its first writer: 21 of 44 ownership refusals after take/ shipped were a
+  // second seat acking the same note (evidence/ack-races: 17 covering, 4 stale). A stale ack is simply replaced; on a
+  // current one a bare repeat is a no-op and a reply is appended, so no seat's answer to the note is discarded.
+  if (key.startsWith("inbox/") && key.endsWith(".ack") && previous && previous.by !== p.name && text.trim()) {
+    const acked = room.board.get(key.slice(0, -4));
+    if (acked && previous.acknowledgedTextHash === noteHash(acked.text)) {
+      if (BARE_ACK.test(text) || norm(text) === norm(previous.text) || previous.text.includes(`— ${p.name}: ${text.trim()}`)) return previous;
+      text = `${previous.text}\n— ${p.name}: ${text.trim()}`;
+      if (text.length > 8000) throw new HubError(`"${key}" already holds ${previous.text.length} chars of acknowledgements; yours would pass the 8000 cap. Put your reply in an entry of your own and ack with a short line.`, undefined, "size");
+    }
+    opts = { ...opts, overwrite: true };
+    noteBoardRead(p, key, previous);
+  }
   if (previous && previous.by !== p.name && p.agent !== "human" && /^(verify|review|attack)\//.test(key)) throw new HubError(`"${key}" is ${previous.by}'s entry; only its author or a human may ${text.trim() ? "replace" : "clear"} it. Write your own (verify/<area>-<you>), or answer it on the board (for an attack, edit the attacked entry).`, undefined, "ownership");
   if (previous && previous.by !== p.name && !take && !opts.overwrite && (text.trim() || clearsPeer) && !(key.startsWith("claim/") && (claimReleased(previous) || takeover))) {
     noteBoardRead(p, key, previous);
@@ -506,6 +522,29 @@ export function setBoardAs(hub: Hub, roomName: string, byName: string, key: stri
   return entry;
 }
 
+/** Notes whose refusal the target room was already told of, until they land (not persisted: a restart may tell once more). */
+const inboxRefusedTold = new WeakMap<Room, Set<string>>();
+
+/**
+ * The cap refusal reaches the room that can release it, not only the sender (sources/reactive-streams-backpressure:
+ * the bound must be known to the receiver). It is logged in the target room as an inbox_refused event (no text), and
+ * the room hears once per refused note which notes to acknowledge.
+ */
+function refuseNote(hub: Hub, to: Room, fromRoom: string, byName: string, full: string, chars: number, open: string[]): never {
+  const err = new HubError(`${to.name} already has 10 inbox notes awaiting acknowledgement; wait for them to be acknowledged or cleared. That room has been told your note "${full}" was refused; it was not stored, so send it again once a slot frees.`, undefined, "inbox-cap");
+  hub.recordRefusal(to.name, "post_to_room", err);
+  hub.persist({ type: "inbox_refused", room: to.name, ts: now(), from_room: fromRoom, by: byName, key: full, chars, open: open.length });
+  const told = inboxRefusedTold.get(to) ?? new Set<string>();
+  inboxRefusedTold.set(to, told);
+  if (!told.has(full)) {
+    told.add(full);
+    hub.post(to, "system", undefined,
+      `A note from ${byName} in ${fromRoom} ("${full}", ${chars} chars) was refused: this room has ${open.length} notes awaiting acknowledgement, the most it holds. ` +
+      `Read and acknowledge them (board_set key="<key>.ack") so notes reach you again: ${open.join(", ")}.`);
+  }
+  throw err;
+}
+
 /** Cross-room note: written into the target room's board under inbox/<from>/<key> without joining it. */
 export function postToRoom(hub: Hub, fromRoom: string, pid: string, toRoom: string, key: string, text: string, ackRequired = false, opts: BoardExpiryOptions = {}): { key: string; entry: BoardEntry } {
   const from = hub.getRoom(fromRoom);
@@ -520,9 +559,12 @@ export function postToRoom(hub: Hub, fromRoom: string, pid: string, toRoom: stri
   const full = `inbox/${fromRoom}/${key}`;
   const expiresAt = boardExpiry(full, opts);
   const entry: BoardEntry = { text, by: p.name, updatedAt: now(), ...(expiresAt ? { expiresAt } : {}), ...(ackRequired ? { ackRequired: true } : {}) };
+  // Only notes the room is asked to acknowledge hold a slot: optional ones (rulings, FYIs) once filled the cap with
+  // nothing telling anyone to ack them, and cut 0btz-build off for 49 min and 1nwp-external for 28.5 (claim/inbox-cap).
   // Replacing an open note consumes no extra slot. A changed text hash invalidates its old ack.
-  const otherOpen = [...to.board.entries()].filter(([k, e]) => k !== full && inboxOpen(to, k, e)).length;
-  if (inboxOpen(to, full, entry) && otherOpen >= 10) throw new HubError(`${toRoom} already has 10 inbox notes awaiting acknowledgement; wait for them to be acknowledged or cleared.`);
+  const otherOpen = unacknowledged(to).filter((k) => k !== full);
+  if (ackRequired && inboxOpen(to, full, entry) && otherOpen.length >= 10) refuseNote(hub, to, from.name, p.name, full, text.length, otherOpen);
+  inboxRefusedTold.get(to)?.delete(full);
   applyBoard(to, full, entry);
   hub.persist({ type: "board", room: toRoom, key: full, entry });
   hub.post(to, "system", undefined, `Note from ${p.name} in ${fromRoom} on the board as "${full}"${ackRequired ? ` (acknowledge by writing "${full}.ack")` : ""}: ${text.slice(0, 160)}${text.length > 160 ? "…" : ""}`);

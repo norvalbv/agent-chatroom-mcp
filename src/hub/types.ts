@@ -486,10 +486,11 @@ export type RefusalCode =
   | "key-format"     // malformed board or inbox key
   | "size"           // content above the size cap
   | "state"          // valid actor and args, refused by room or entry state
+  | "inbox-cap"      // post_to_room: the target room already has 10 notes awaiting acknowledgement
   | "hub_guard";     // unknown or unclassifiable (legacy catch-all)
 
 export const REFUSAL_CODES: readonly RefusalCode[] =
-  ["expiry-prefix", "ownership", "auth", "key-format", "size", "state", "hub_guard"];
+  ["expiry-prefix", "ownership", "auth", "key-format", "size", "state", "inbox-cap", "hub_guard"];
 
 export class HubError extends Error {
   constructor(

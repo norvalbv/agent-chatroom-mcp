@@ -352,7 +352,9 @@ export class Spawner {
 
     const home = resolve(req.cwd ?? o.defaultCwd);
     // a read-only checker of a proposer's commit runs in a detached snapshot of it, never in the proposer's live tree
-    const snap = req.snapshot && !req.canEdit && count === 1 ? req.snapshot : undefined;
+    // (several read-only recruits of one request share the snapshot: nobody edits it, and it goes when the last one exits)
+    const snap = req.snapshot && !req.canEdit ? req.snapshot : undefined;
+    let snapUsers = names.length;
     let cwd = home;
     if (snap) {
       if (o.dryRun || createSnapshot(snap)) cwd = resolve(snap.dir, snap.sub);
@@ -412,7 +414,7 @@ export class Spawner {
             : "You are the only recruit on this brief.",
         )
         .split("{{REPORT_TO}}").join(req.newRoom ? `This is a sub-room of ${req.room}: when it concludes, the hub puts its conclusion on that room's board as inbox/${target}/conclusion. For anything they need before then, use post_to_room(from_room="${target}", to_room="${req.room}", key="<short name>").` : "")
-        .split("{{WRITE_RULE}}").join(req.canEdit ? "You MAY edit files and run anything here. You are in your own git worktree on your own branch (git branch --show-current); commit there and name the branch in the room. Never touch the main checkout." + (recruitBase(recruitWorkspace(cwd, target, name)?.root ?? cwd, req.baseDir) ? ` Your branch was cut from the HEAD of ${by}'s worktree (${recruitBase(recruitWorkspace(cwd, target, name)?.root ?? cwd, req.baseDir)!.sha.slice(0, 8)}), so it holds their commits; their uncommitted changes are not in it.` : "") + devHubRule(cwd, SANDBOX) : "Do NOT modify files; investigate and report.");
+        .split("{{WRITE_RULE}}").join(req.canEdit ? "You MAY edit files and run anything here. You are in your own git worktree on your own branch (git branch --show-current); commit there and name the branch in the room. Never touch the main checkout." + (recruitBase(recruitWorkspace(cwd, target, name)?.root ?? cwd, req.baseDir) ? ` Your branch was cut from the HEAD of ${by}'s worktree (${recruitBase(recruitWorkspace(cwd, target, name)?.root ?? cwd, req.baseDir)!.sha.slice(0, 8)}), so it holds their commits; their uncommitted changes are not in it.` : "") + devHubRule(cwd, SANDBOX) : "Do NOT modify files; investigate and report." + (snap && cwd !== home ? ` You are in a detached copy of the tree at commit ${snap.sha.slice(0, 8)}${snap.dirty ? ` (${snap.dirty} uncommitted change${snap.dirty === 1 ? "" : "s"} in the tree it was taken from ${snap.dirty === 1 ? "is" : "are"} not in it)` : ""}: name that commit in what you report.` : ""));
 
       // a dry run plans the workspace without creating it, so what a seat is told matches what a real spawn does
       if (o.dryRun && req.canEdit) rec.workspace = workspaceOf(cwd, target, name, req.baseDir);
@@ -492,7 +494,7 @@ export class Spawner {
         }
         this.hooks?.seatExited?.(beat.key, exitDetail(code, said, Date.now(), signal));
         this.children.delete(name);
-        if (snap && cwd !== home) removeSnapshot(snap);
+        if (snap && cwd !== home && --snapUsers === 0) removeSnapshot(snap);
         try {
           this.checkConsolidators();
         } catch (e) {

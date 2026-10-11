@@ -11,12 +11,12 @@
  */
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdtempSync, realpathSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import * as spawnerModule from "../src/spawner.js";
-import { Spawner } from "../src/spawner.js";
+import { Spawner, createSnapshot, planSnapshot, removeSnapshot } from "../src/spawner.js";
 
 const git = (cwd: string, ...a: string[]) => execFileSync("git", ["-C", cwd, ...a], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
 
@@ -71,7 +71,7 @@ test("a write recruit's worktree is cut from that commit, not from the main chec
   assert.equal(git(dir2, "rev-parse", "HEAD"), r.stale);
 });
 
-test("the spawn record says which commit a write recruit starts from, and whose; a read-only recruit works in the recruiter's tree", () => {
+test("the spawn record says which commit a write recruit starts from, and whose", () => {
   const r = repo();
   const spawner = new Spawner({ mcpUrl: "http://test/mcp", defaultCwd: r.main, logDir: mkdtempSync(join(tmpdir(), "recruit-base-log-")), dryRun: true });
   spawner.attach({ isHeld: () => false, claimArea: () => {}, ensureRoom: () => {}, announce: () => {}, liveAgents: () => 0 });
@@ -80,4 +80,29 @@ test("the spawn record says which commit a write recruit starts from, and whose;
   assert.ok(w.workspace!.worktree.startsWith(join(r.main, ".swarm-worktrees")), "the worktree still lives under the project");
   const [plain] = spawner.request({ room: "room-a", requestedBy: "seat-1", brief: "Build the lexer and commit it on your branch.", name: "builder-2", canEdit: true, cwd: r.main });
   assert.equal((plain.workspace as { base?: unknown }).base, undefined, "no recruiter worktree known: nothing claimed about the base");
+});
+
+test("a read-only recruit reads a detached snapshot of its recruiter's HEAD: not the stale checkout, not the half-typed edits", () => {
+  // attack/decision/recruit-base (claude-opus-5-5-4): sharing the recruiter's live tree would share its builds and its uncommitted edits
+  const r = repo();
+  writeFileSync(join(r.seat, "result.txt"), "HALF-TYPED, not committed\n");
+  const plan = planSnapshot(r.seat, "room-a-reader")!;
+  assert.equal(plan.sha, r.seatHead, "the snapshot is of the recruiter's HEAD");
+  assert.equal(plan.dirty, 1, "and it knows one change there is not committed");
+  assert.ok(!plan.dir.startsWith(r.main), "it lives outside the repository");
+  assert.ok(createSnapshot(plan));
+  try {
+    assert.equal(readFileSync(join(plan.dir, "result.txt"), "utf8"), "seat-1's result\n", "the recruit reads the committed file, not the recruiter's uncommitted edit");
+    assert.equal(readFileSync(join(plan.dir, "bench.txt"), "utf8"), "model claude-haiku-5-5\n", "and not the main checkout's stale one");
+  } finally { removeSnapshot(plan); }
+  // two read-only recruits of one request share that snapshot; each brief names the commit and the uncommitted count
+  const logDir = mkdtempSync(join(tmpdir(), "recruit-base-log-"));
+  const spawner = new Spawner({ mcpUrl: "http://test/mcp", defaultCwd: r.main, logDir, dryRun: true });
+  spawner.attach({ isHeld: () => false, claimArea: () => {}, ensureRoom: () => {}, announce: () => {}, liveAgents: () => 0 });
+  const recs = spawner.request({ room: "room-a", requestedBy: "seat-1", brief: "Rerun the check on the parser and report what you find.", name: "reader", count: 2, cwd: r.seat, snapshot: planSnapshot(r.seat, "room-a-reader") });
+  assert.equal(recs.length, 2);
+  for (const x of recs) assert.ok(x.cwd.includes("chatroom-snapshot-room-a-reader"), `${x.name} runs in the snapshot, not in ${r.seat}`);
+  assert.equal(recs[0].cwd, recs[1].cwd, "one snapshot for the request");
+  const brief = readFileSync(recs[0].log, "utf8");
+  assert.match(brief, new RegExp(`detached copy of the tree at commit ${r.seatHead.slice(0, 8)} \\(1 uncommitted change`), "the recruit is told which commit it reads and that one change is not in it");
 });

@@ -89,7 +89,9 @@ export function codeState(cwd?: string): CodeState | undefined {
   if (!cwd) return undefined;
   const head = spawnSync("git", ["-C", cwd, "rev-parse", "--short", "HEAD"], { encoding: "utf8" });
   if (head.status !== 0) return undefined;
-  const st = spawnSync("git", ["-C", cwd, "status", "--porcelain"], { encoding: "utf8" });
+  // --no-optional-locks: plain `git status` rewrites the index under index.lock, and a hub serving from a seat's
+  // worktree then races that seat's own `git add` / `git commit` ("index.lock: File exists", friction/git-index-lock)
+  const st = spawnSync("git", ["--no-optional-locks", "-C", cwd, "status", "--porcelain"], { encoding: "utf8" });
   return { head: head.stdout.trim(), dirty: st.stdout.trim().length > 0, at: now() };
 }
 

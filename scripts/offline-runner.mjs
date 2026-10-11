@@ -249,6 +249,7 @@ export const offlineScripts = [
   'short-proposal-regression.ts',
   'node-crypto-regression.ts',
   'join-check-regression.ts',
+  'git-no-lock-regression.ts',
   'one-of-you-ask-regression.ts',
   'tool-surface-regression.ts',
   'trim-checkpoint-regression.ts',

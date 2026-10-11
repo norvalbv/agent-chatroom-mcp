@@ -93,7 +93,7 @@ const RESPAWN = has("respawn");
 const RUN_STARTED = Date.now();
 // Capture target identity before workers can change its revision.
 const gitIdentity = () => {
-  const git = (...args: string[]) => { const r = spawnSync("git", ["-C", CWD, ...args], { encoding: "utf8" }); if (r.status !== 0) throw new Error(r.stderr); return r.stdout.trim(); };
+  const git = (...args: string[]) => { const r = spawnSync("git", ["--no-optional-locks", "-C", CWD, ...args], { encoding: "utf8" }); if (r.status !== 0) throw new Error(r.stderr); return r.stdout.trim(); };
   try { return { root: realpathSync(git("rev-parse", "--show-toplevel")), commonDir: realpathSync(resolve(CWD, git("rev-parse", "--git-common-dir"))), revision: git("rev-parse", "HEAD"), branch: git("branch", "--show-current"), dirty: git("status", "--porcelain").length > 0 }; } catch { return null; }
 };
 const PROJECT_IDENTITY = { cwd: CWD, canonicalPath: realpathSync(CWD), git: gitIdentity() };

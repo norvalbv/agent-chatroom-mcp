@@ -191,7 +191,8 @@ export function planSnapshot(src: string, label: string): Snapshot | undefined {
   const head = g("rev-parse", "HEAD");
   if (top.status !== 0 || head.status !== 0) return undefined;
   const repo = top.stdout.trim();
-  const status = g("status", "--porcelain", "--untracked-files=normal");
+  // read-only: without --no-optional-locks this takes the proposer's index.lock while they may be committing
+  const status = spawnSync("git", ["--no-optional-locks", "-C", src, "status", "--porcelain", "--untracked-files=normal"], { encoding: "utf8" });
   const dirty = status.status === 0 ? status.stdout.split("\n").filter(Boolean).length : 0;
   const sub = relative(realpathSync(repo), realpathSync(src));
   const dir = resolve(tmpdir(), `chatroom-snapshot-${label.replace(/[^\w-]/g, "-").slice(0, 60)}-${randomUUID().slice(0, 8)}`);

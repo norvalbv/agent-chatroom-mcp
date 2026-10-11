@@ -112,6 +112,8 @@ export function createSessionServer(hub: Hub, spawner?: Spawner, opts: { holdMs?
   const pid = (room: string, override?: string) => {
     let ids = me.get(room);
     if (override ? !ids?.has(override) : !ids?.size) { reseat(room, override); ids = me.get(room); }
+    // a closed room takes no seat back (liveness.reseatable): say so, instead of sending the seat to join_room again
+    if ((override ? !ids?.has(override) : !ids?.size) && hub.rooms.get(room)?.state === "closed") throw new HubError(`Room "${room}" is closed and this connection holds no seat in it. Nothing more can be done there: carry on in your own room, or stop.`, undefined, "state");
     if (override) {
       if (!ids?.has(override)) throw new HubError(`That participant_id was not issued to this connection. Use the id join_room returned to you. ${REJOIN}`, undefined, "auth");
       return override;

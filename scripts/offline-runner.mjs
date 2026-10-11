@@ -225,6 +225,7 @@ export const offlineScripts = [
   'hub-supervisor-regression.ts',
   'hub-death-log-regression.ts',
   'reseat-regression.ts',
+  'reseat-closed-room-regression.ts',
   'respawn-probe-regression.ts',
   'outside-reads-regression.ts',
   'recruit-room-breakout-regression.ts',

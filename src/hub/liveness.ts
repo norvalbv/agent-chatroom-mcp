@@ -54,10 +54,13 @@ export function away(p: Participant): { age_seconds: number; evidence: string } 
  * dropped MCP session) the client opens a new session, as the protocol requires, and the hub no longer knows who it is;
  * in a drill both seats' first call was refused and they had to work out that join_room with the old id was the way
  * back (swarm-003601-tky5, evidence/reconnect-drill). The key is the proof, as for heartbeats: only the seat's process
- * and its launcher hold it. A seat that left on purpose, was kicked or has a successor is not brought back.
+ * and its launcher hold it. A seat that left on purpose, was kicked or has a successor is not brought back, and nobody
+ * is brought back into a closed room.
  */
 export function reseatable(room: Room, hash: string | undefined, wantId?: string): Participant | undefined {
-  if (!hash) return undefined;
+  // closing a room marks every seat inactive with no leave reason, which reads like a dropped session: nobody is put back
+  // in a room nobody can act in (a concluded room keeps its seats, they read the conclusion there)
+  if (!hash || room.state === "closed") return undefined;
   // an active seat with this key is the same process on an older connection the hub has not yet seen close
   const mine = [...room.participants.values()].filter((p) => p.seatKeyHash === hash && !p.kicked && !p.replacedBy && !p.pendingReplacementName &&
     (p.active || !p.leaveReason || p.leaveReason.startsWith("MCP session closed")) && (!wantId || p.id === wantId));

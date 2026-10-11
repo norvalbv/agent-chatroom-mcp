@@ -199,6 +199,8 @@ export const offlineScripts = [
   'report-handoffs-regression.ts',
   'report-positions-regression.ts',
   'groups-launch-regression.ts',
+  'seat-memory-regression.ts',
+  'take-keys-regression.ts',
   'result-fleet-compat.ts',
   'seat-human-route-regression.ts',
   'prior-sources-regression.ts',

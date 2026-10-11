@@ -32,6 +32,8 @@ export interface SeatMetrics {
   recruits: number;
   /** the seat process's own usage, latest cumulative "usage" event (claude-opus-5-5-1's live usage); absent: unknown */
   usage?: { requests?: number; input_tokens?: number; output_tokens?: number; cache_read_input_tokens?: number; cache_creation_input_tokens?: number; cost_usd?: number };
+  /** what the seat's processes held (hub "memory" events): the highest sample, and the hub's warnings and stops; absent: never sampled */
+  memory?: { peak_mb: number; warns: number; stops: number; ended?: number };
   proposals: number;
   challenges: number;
   votes: number;
@@ -52,6 +54,8 @@ export interface RunMetrics {
   recruits: { calls: number; seats: number; workers: number; rate: number };
   /** summed over seats that reported usage; seatsWithUsage of seats.length says how complete it is */
   usage?: { cost_usd: number; input_tokens: number; output_tokens: number; seatsWithUsage: number };
+  /** take/<what> steps by action (hub "take" events): take, offer, accept, handover, release, decline, withdraw, refused; absent: none */
+  takes?: Record<string, number>;
   /** seats with at least one web call in the ledger; undefined when the log has no ledger */
   webSeats?: number;
   /** text the citation credit was read from */
@@ -94,6 +98,7 @@ export function runMetrics(events: readonly Ev[], opts: MetricsOptions = {}): Ru
   let conclusion: string | undefined;
   let proposal: string | undefined;
   let ledger = false;
+  const takes: Record<string, number> = {};
   const proposals = new Set<string>();
   const byKey = new Map<string, string>();
 
@@ -159,6 +164,21 @@ export function runMetrics(events: readonly Ev[], opts: MetricsOptions = {}): Ru
         if (s && e.usage) s.usage = e.usage;
         break;
       }
+      case "memory": {
+        stamp(e.ts);
+        const s = seat(byKey.get(e.seat));
+        if (!s) break;
+        const m = (s.memory ??= { peak_mb: 0, warns: 0, stops: 0 });
+        m.peak_mb = Math.max(m.peak_mb, Number(e.memory?.peak_mb ?? e.mb ?? 0));
+        if (e.event === "warn") m.warns++;
+        if (e.event === "stop") m.stops++;
+        if (e.event === "ended") m.ended = (m.ended ?? 0) + 1;
+        break;
+      }
+      case "take":
+        stamp(e.ts);
+        takes[String(e.action)] = (takes[String(e.action)] ?? 0) + 1;
+        break;
       case "work": {
         stamp(e.ts);
         const s = seat(e.pid);
@@ -266,6 +286,7 @@ export function runMetrics(events: readonly Ev[], opts: MetricsOptions = {}): Ru
     }).filter(([, v]) => v !== undefined)) as RunMetrics["minutesTo"],
     recruits: { calls: list.reduce((n, s) => n + s.recruits, 0), seats: recruiting, workers: workers.length, rate: workers.length ? recruiting / workers.length : 0 },
     ...(priced.length ? { usage: { cost_usd: sum("cost_usd"), input_tokens: sum("input_tokens"), output_tokens: sum("output_tokens"), seatsWithUsage: priced.length } } : {}),
+    ...(Object.keys(takes).length ? { takes } : {}),
     ...(ledger ? { webSeats: list.filter((s) => (s.work?.web ?? 0) > 0).length } : {}),
     citedFrom: conclusion ? "conclusion" : proposal ? "proposal" : "none",
     uncited: cited ? list.filter((s) => s.findings > 0 && !s.cited.length).map((s) => s.name) : [],
@@ -283,6 +304,14 @@ const tokens = (u: NonNullable<SeatMetrics["usage"]>) => (u.input_tokens ?? 0) +
 const pct = (x: number | undefined) => (x === undefined ? "?" : `${Math.round(x * 100)}%`);
 const at = (m: number | undefined, what: string) => (m === undefined ? `no ${what}` : `${what} ${m} min`);
 
+/** Seat memory in one sentence, or nothing when the log has no memory events (a hub before src/hub/memory.ts). */
+function memoryLine(seats: SeatMetrics[]): string {
+  const sampled = seats.filter((s) => s.memory);
+  if (!sampled.length) return "";
+  const stops = sampled.reduce((n, s) => n + s.memory!.stops, 0);
+  return `Peak memory of what each seat started: ${sampled.sort((a, b) => b.memory!.peak_mb - a.memory!.peak_mb).map((s) => `${s.name} ${s.memory!.peak_mb} MB`).join(", ")}; the hub stopped ${stops} process${stops === 1 ? "" : "es"} over budget. `;
+}
+
 /** The metrics as a report section: one headline line, then one row per seat. */
 export function renderMetrics(m: RunMetrics): string {
   const t = m.minutesTo;
@@ -290,6 +319,8 @@ export function renderMetrics(m: RunMetrics): string {
     `${m.recruits.seats} of ${m.recruits.workers} workers recruited (${pct(m.recruits.rate)}); ${m.recruits.calls} recruit${m.recruits.calls === 1 ? "" : "s"} by any seat, see the recruits column; ` +
     (m.webSeats === undefined ? "no work ledger in this log, so reads, searches and web calls are unknown. " : `${m.webSeats} of ${m.seats.length} seats made a web call. `) +
     (m.usage ? `Seat-reported usage: $${m.usage.cost_usd.toFixed(2)}, ${m.usage.input_tokens} input + ${m.usage.output_tokens} output tokens from ${m.usage.seatsWithUsage} of ${m.seats.length} seats (the rest unknown). ` : "No seat reported usage to the hub. ") +
+    memoryLine(m.seats) +
+    (m.takes ? `take/* steps: ${Object.entries(m.takes).map(([k, n]) => `${n} ${k}`).join(", ")}. ` : "") +
     (m.citedFrom === "none" ? "No proposal yet, so no citation credit.\n\n" : `Credit read from the ${m.citedFrom}${m.uncited.length ? `; findings never cited: ${m.uncited.join(", ")}` : ""}.\n\n`) +
     "Work is distinct targets (files, patterns, commands, web hosts), not tool calls. Polling is time in wait_for_messages over time in the room; idle is the part that returned nothing new. Model calls and tokens are the seat's own report; tokens in include cache reads and writes.\n\n" +
     "| seat | role | read | search | web | run | edit | hub calls | polling (idle) | model calls | tokens in/out | cost | recruits | proposals | challenges | verifies | votes | findings | cited |\n|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|\n";

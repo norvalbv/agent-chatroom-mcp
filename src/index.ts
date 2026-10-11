@@ -266,6 +266,14 @@ const sessionRoute = async (req: express.Request, res: express.Response) => {
   await entry.t.handleRequest(req, res);
 };
 
+// Seat memory (src/hub/memory.ts): sample the process table; CHATROOM_MEMORY_WATCH_MS=0 turns it off. The budget
+// (CHATROOM_SEAT_MEMORY_MB) is enforced only when set.
+const MEMORY_WATCH_MS = Number(process.env.CHATROOM_MEMORY_WATCH_MS ?? 15_000);
+if (MEMORY_WATCH_MS > 0) {
+  setInterval(() => { void hub.memory.tick().catch(() => {}); }, Math.max(250, MEMORY_WATCH_MS)).unref();
+  if (hub.memory.budgetMb) console.error(`agent-chatroom-mcp: seat memory budget ${hub.memory.budgetMb} MB (CHATROOM_SEAT_MEMORY_MB): past it the hub stops a seat's largest process`);
+}
+
 // Liveness: close idle MCP sessions and mark silent agents as left, so a dead process cannot block a quorum forever.
 setInterval(() => {
   const now = Date.now();
@@ -404,7 +412,7 @@ app.post("/heartbeat", (req, res) => {
   if (exited === true) return res.json({ ok: true, closed: seatExited(seat_key, String(detail ?? "exit")) });
   // peek:true (a PostToolUse hook) only asks for pending asks: the PreToolUse beat already recorded this step
   const marked = peek ? 0 : hub.heartbeatSeat(seat_key, { tool: tool ?? "?", step, detail });
-  res.json({ ok: true, marked, pending: steerPeekSeat(hub, seat_key) });
+  res.json({ ok: true, marked, pending: [...steerPeekSeat(hub, seat_key), ...hub.pendingMemoryNotices(seat_key)] });
 });
 // Live usage: a claude seat's OTLP log exporter (src/env.ts seatBeat) posts here with its seat key in a header. The
 // key only selects whose figure moves; a key no participant joined with is never shown (src/hub/usage.ts).
@@ -414,12 +422,17 @@ app.post("/otlp/v1/logs", (req, res) => {
   hub.recordUsage(seatKey, req.body);
   res.json({});
 });
+// Seat memory, hub-wide: the budget, and tagged processes of no live seat (a finished room's recorder, a respawned
+// seat's old script). Those are reported here and never stopped.
+app.get("/memory", (_req, res) => {
+  res.json({ budget_mb: hub.memory.budgetMb, unattributed: hub.memory.unattributed(), unattributed_is: "not this hub's seats: tagged processes of no active seat here (other hubs' seats on this machine, seats that left, finished rooms' recorders). Never stopped." });
+});
 // Steering ack: the seat (hook, launcher or seat loop) put these pending asks into its model's context mid-turn, so
 // they count as delivered. Peek without ack leaves them for the next wait: a failed injection never loses an ask.
 app.post("/steer/ack", (req, res) => {
   const { seat_key, ids } = (req.body ?? {}) as { seat_key?: string; ids?: string[] };
   if (!seat_key || !Array.isArray(ids)) return res.status(400).type("text/plain").send("seat_key and ids required");
-  res.json({ ok: true, acked: steerAckSeat(hub, seat_key, ids.map(String)) });
+  res.json({ ok: true, acked: steerAckSeat(hub, seat_key, ids.map(String)) + hub.ackMemoryNotices(seat_key, ids.map(String)) });
 });
 app.post("/rooms/:room/steer/ack", (req, res) => {
   try {

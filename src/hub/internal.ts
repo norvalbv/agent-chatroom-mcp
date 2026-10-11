@@ -3,6 +3,7 @@ import { randomBytes } from "node:crypto";
 import { spawnSync } from "node:child_process";
 import type { RoomState, Participant, KickVote, Message, CodeState, BoardEntry, Challenge, Proposal, RoomOptions, Room, CallOutcome, WorkClass, DevReceipt } from "./types.js";
 import type { SeatUsage } from "./usage.js";
+import type { SeatMemory } from "./memory.js";
 import type { DevRun } from "./dev-runs.js";
 
 export type Opts = Required<Omit<RoomOptions, "chair" | "parent">> & { chair?: string; parent?: string };
@@ -38,6 +39,10 @@ export type Event =
   | { type: "work"; room: string; pid: string; cls: WorkClass; tool: string; target: string; key?: string; ts: string }
   /** a seat process's cumulative model usage (src/hub/usage.ts); seat is the seat key's sha256, never the key */
   | { type: "usage"; room: string; seat: string; usage: SeatUsage; ts: string }
+  /** Telemetry only (replay ignores it; src/hub/memory.ts): a sample of what a seat's processes hold, or a warning/stop. */
+  | { type: "memory"; room: string; seat: string; ts: string; memory?: SeatMemory; event?: "warn" | "over" | "ended" | "stop"; mb?: number; budget_mb?: number; top?: SeatMemory["top"]; signal?: string }
+  /** Telemetry only (replay ignores it; src/hub/take.ts): one step of a take/<what> entry. by and holder are seat names. */
+  | { type: "take"; room: string; key: string; action: string; by: string; holder: string; ts: string }
   | { type: "kick_vote"; room: string; vote: KickVote }
   /** A room-wide stall the hub told the room of, with the numbers it quoted, and its end (src/hub/idle.ts). */
   | { type: "room_idle"; room: string; ts: string; idle: import("./idle.js").RoomIdle; steps: number; seats: number; window_min: number; seconds_left?: number }

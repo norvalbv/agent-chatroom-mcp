@@ -171,6 +171,14 @@ const TIMEOUT_MIN = Number(flag("timeout", "30"));
  * room: in swarm-000525-jcz8 verify entries citing a dev room landed 30-50 min after it ended (-5), hence 120.
  */
 const HUB_IDLE_EXIT_MIN = has("keep-hub") ? 0 : Number(flag("hub-idle-exit", "120"));
+/**
+ * --seat-memory-mb <n>: what the processes one seat starts may hold together. The hub this launcher starts stops a
+ * seat's largest process past it and tells the seat (src/hub/memory.ts); every seat reads the figure as
+ * CHATROOM_SEAT_MEMORY_MB. A hub that was already running keeps the budget it was started with. Size it as a share of
+ * the machine, not per taste: (RAM minus about 8 GB for the system and whatever else runs) over the number of seats,
+ * recruits included, e.g. 2500 for six seats on 24 GB.
+ */
+if (Number(flag("seat-memory-mb", "0")) > 0) process.env.CHATROOM_SEAT_MEMORY_MB = String(Number(flag("seat-memory-mb", "0")));
 const PORT = Number(flag("port", process.env.PORT ?? "7717"));
 const URL_ = `http://127.0.0.1:${PORT}`;
 const SWARM_ID = `swarm-${new Date().toISOString().slice(11, 19).replace(/:/g, "")}-${Math.random().toString(36).slice(2, 6)}`;

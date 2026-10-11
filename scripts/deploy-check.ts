@@ -31,7 +31,9 @@ const work = mkdtempSync(join(tmpdir(), "deploy-check-"));
 const data = join(work, "data");
 cpSync(SRC, data, { recursive: true });
 const URL_ = `http://127.0.0.1:${PORT}`;
-const env = { ...process.env, PORT: String(PORT), CHATROOM_DATA_DIR: data, CHATROOM_SPAWN_DRY: "1", CHATROOM_INSECURE_LOCAL: "1", CHATROOM_HEALTH_MS: "500", CHATROOM_LOG_DIR: join(work, "spawn-logs") };
+// the caller's own hub settings (a seat's shell carries some) must not reach the hubs under test, as in smoke.ts
+const clean = Object.fromEntries(Object.entries(process.env).filter(([k]) => !k.startsWith("CHATROOM_")));
+const env = { ...clean, PORT: String(PORT), CHATROOM_DATA_DIR: data, CHATROOM_SPAWN_DRY: "1", CHATROOM_INSECURE_LOCAL: "1", CHATROOM_HEALTH_MS: "500", CHATROOM_LOG_DIR: join(work, "spawn-logs") };
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const files = () => Object.fromEntries(readdirSync(data).filter((f) => statSync(join(data, f)).isFile()).map((f) => [f, createHash("sha256").update(readFileSync(join(data, f))).digest("hex")]));
 const before = files();
@@ -93,8 +95,11 @@ try {
       if (await up(undefined, `${what}, after the kill`)) await readBack(`${what}, after the kill`);
     }
     sup.kill("SIGTERM");
+    // the supervisor first, so it cannot start the hub again after the listener is gone (review/e52d137b)
+    for (let i = 0; i < 40 && sup.exitCode === null && sup.signalCode === null; i++) await sleep(250);
+    if (sup.exitCode === null && sup.signalCode === null) { sup.kill("SIGKILL"); fail(`${what}: the supervisor did not stop on SIGTERM`); }
     for (let i = 0; i < 40 && listening().length; i++) await sleep(250);
-    if (listening().length) fail(`${what}: the hub is still listening after SIGTERM to the supervisor`);
+    if (listening().length) fail(`${what}: the hub is still listening after its supervisor stopped`);
   }
   const after = files();
   const added = Object.keys(after).filter((f) => !(f in before));

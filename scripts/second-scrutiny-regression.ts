@@ -61,6 +61,9 @@ test("a second review or verify entry lands under its own key too; replacing or 
   assert.deepEqual((hub.summary(room).reviews as { by: { key: string }[] }[])[0].by.map((x) => x.key), ["review/a1b2c3d4", "review/a1b2c3d4.Carol"]);
   hub.setBoard(room.name, b.id, "verify/build", head(0));
   assert.equal(keyOf(room, hub.setBoard(room.name, c.id, "verify/build", head(0))), "verify/build.Carol");
+  // a second .partial stays a .partial (it must never count toward the gate), with the writer's name before the suffix
+  hub.setBoard(room.name, b.id, "verify/soak.partial", "could not run the soak: no free port");
+  assert.equal(keyOf(room, hub.setBoard(room.name, c.id, "verify/soak.partial", "ran 2 of 10 minutes, then the hub was stopped")), "verify/soak.Carol.partial");
   assert.throws(() => hub.setBoard(room.name, c.id, "review/a1b2c3d4", ""), /only its author or a human may clear/);
   assert.throws(() => hub.setBoard(room.name, c.id, "review/a1b2c3d4", head(0), { overwrite: true }), /only its author or a human may replace/, "overwrite=true asks to replace a peer's verdict");
   assert.throws(() => hub.setBoard(room.name, c.id, "attack/decision/nothing-here", 'no such "target entry at all"'), /no board entry/);

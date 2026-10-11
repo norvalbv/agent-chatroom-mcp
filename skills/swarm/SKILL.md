@@ -17,7 +17,7 @@ Always run the orchestrator. Do NOT hand-roll the swarm by spawning subagents th
 ```bash
 cd "$HOME/Desktop/Personal and learning/agent-chatroom-mcp"   # same folder under the home directory on both machines
 node dist/swarm.js "<task in the user's words>" --agents <N> --cwd "<absolute project dir>" \
-  [--flat] [--models sonnet,haiku,fable,opus] [--lead-model opus] [--verifier-model fable] \
+  [--flat | --groups groups.json [--digest-every <min>]] [--resources resources.md] [--models sonnet,haiku,fable,opus] [--lead-model opus] [--verifier-model fable] \
   [--apply | --full-access] [--codex <k>] [--openrouter <k>] [--openrouter-reasoning low|medium|high] [--sandbox] [--fresh-challenger] [--timeout <minutes>] [--done-when "<criterion>"] [--verify "<what the verifier checks>"]
 ```
 
@@ -49,6 +49,25 @@ node dist/swarm.js "<task in the user's words>" --agents <N> --cwd "<absolute pr
 - **Fleet** (`node dist/fleet.js fleet/<spec>.json --model <slug> [--only a,b] [--consolidate --consolidate-from <summary.md,...>] [--require-verification] [--full-access]`): one flat run per area from a JSON spec (areas with `lenses` become competing rooms), staggered, with every conclusion gathered into `swarms/fleet-<id>/summary.md`; `--consolidate` runs one more room that merges the summaries into one ranked consensus. Rate limits are per model and account: `deepseek/deepseek-v4-flash-0731` allows 100 requests/min, which fits about 36 seats (three rooms); `fleet/run-batches.sh` runs the rest back to back.
 
 Every prompt automatically carries the project's settled axes (`docs/decisions/`), the sources already read, and the last six prior runs (`swarms/*/report.md`), so tell agents to ratify or refute by reference rather than re-derive.
+
+## Groups: the Navier-Stokes shape (`--groups`, `--digest-every`)
+
+Separate groups that talk only within their own room, with opposing or different briefs, and a fresh agent that carries the useful findings between them on a timer (OpenAI's Navier-Stokes effort, scaled down; sources and what carries over at six seats: `docs/self-improvement-swarm-003601-tky5.md`, `sources/group-shape-summary`). Use it when the user asks for opposing teams, build-versus-break, or that shape by name; otherwise the flat room is the default.
+
+```bash
+node dist/swarm.js "<task, with the scoring rule both groups share>" --groups groups.json --digest-every 30 \
+  --models claude-opus-5-5 --lead-model claude-opus-5-5 --verifier-model claude-opus-5-5 \
+  --full-access --respawn --no-carry --quorum supermajority --timeout 480 --cwd "<project>" [--resources resources.md]
+```
+
+- `--groups <file.json>` replaces the planner and cannot be combined with `--flat`: `{"done_when": "...", "verifier_directive": "...", "groups": [{"id": "build", "title": "Build the case", "workers": 3, "brief": "..."}, {"id": "break", ...}]}`. Each group gets its own room `<run>-<id>` and its own brief on `prompts/group.md`; `workers` is at least 2 (a room of one cannot conclude); `--agents` is ignored (the total is the groups' workers plus the verifier). The verifier is the referee in `<run>-leads`, with the file's `verifier_directive`. When a group concludes, its first seat (the lead, on `--lead-model`) carries the group's conclusion to the leads room (`prompts/lead-tail.md`), where one final proposal is adopted. Do not use `leads` as a group id (it collides with that room). Group ids are lower-case letters, digits and hyphens.
+- Each group keeps its current answer on its board as `position`. Isolation is a sentence in the brief, not enforced: any seat can read another room over HTTP. Reads of a room by a seat outside it are counted in `room_status` (`outside_calls`), a lower bound.
+- `--digest-every <min>` (needs `--groups`): each pass is a fresh consolidator seat (`prompts/consolidator.md`), never two at once. It joins the leads room and reads each group's room over HTTP without joining it. Each group that has a `position` gets one note by `post_to_room` (key `digest`, `ack_required`, so the group must acknowledge it before it can propose; the same key each pass, so only the latest is held). The pass writes `digest/<n>` on the leads board as the next pass's cursor. A group with no `position` yet is sent nothing. No pass runs once every group room has concluded. Passes and acknowledgements are in `result.json` (`digests`, `digestAcks`) and `report.md`, and the report shows each group's position even if it never concluded.
+- A concluded room refuses notes and proposals, so a group must not conclude before the last round: brief the groups to propose late (the Polymarket kit: groups propose from T-90 and conclude by T-60; the last hour is the leads-room merge).
+- Give both groups the same fixed scoring rule in the task before they split: two agents briefed with opposite goals on one dataset each found what they were told to find (2604.22080).
+- Measured so far (2 fixtures x 2 arms, minutes long): grouped and flat were both always correct; grouped cost 1.1 to 2.5x and took about twice as long. Whether groups give better answers over hours is unmeasured.
+- `--resources <file.md>`: every `## <name>` section goes on every room's board as `resource/<name>` before a seat starts, and the hub names the `resource/` prefix to each seat on join. It works with any shape and survives `--no-carry`. Use it for data, tools and limits already on the machine. Seats used what a brief named within seconds and never looked for what it did not, and a chat line does not cross a group wall.
+- A ready example: `/Users/benji/.frink/builds/room-rsi/kit/polymarket/` (`groups.json`, `task.txt`, `hub.sh` for its own supervised hub, `launch.sh`, `README.md`).
 
 ## Running it and watching
 

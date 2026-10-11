@@ -436,6 +436,8 @@ export interface Room {
   /** When each counted local tool call of the last windows happened, and the stall the room has been told of, if any (src/hub/idle.ts). */
   workAt?: number[];
   idle?: import("./idle.js").RoomIdle;
+  /** quiet, but a seat has a job running: recorded as waiting instead of told it has stalled (src/hub/idle.ts). Ephemeral. */
+  waiting?: import("./idle.js").RoomWaiting;
   /** Hidden from listings (dashboard, list_rooms) but fully kept on disk; set by a human or the archive-dead sweep. */
   archived?: boolean;
   conclusion?: { text: string; proposalId: string; decidedAt: string; version?: number; tally?: { agree: number; disagree: number; abstain: number }; electorate?: ElectorateSummary; unresolved_objections?: { by: string; objection: string }[]; agreed_without_output?: string[]; undelivered_claims?: { key: string; by: string }[]; verification?: ConclusionVerification; verification_gaps?: { key: string; by: string; gaps: string[] }[]; evidence?: string; closing?: ConclusionClosing };

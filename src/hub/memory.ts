@@ -104,6 +104,20 @@ export function seatUsage(table: Proc[], footprintKb?: Map<number, number>): Map
   return out;
 }
 
+/** A process a seat started that is doing or awaiting real work, as the idle rule needs it (src/hub/idle.ts). */
+export interface Job { pid: number; command: string; elapsed_s: number }
+/** Not jobs: a sleep, the shells around a command, and the tools a seat watches a job with. A seat in a sleep loop is
+ * idle (swarm-094251-5y46); one whose scorer starts at 16:15 is waiting (swarm-100951-0btz-build, pid 8148). */
+const NOT_A_JOB = /^(?:sleep|sh|bash|zsh|dash|fish|tail|cat|tee|watch|timeout|caffeinate|env|nohup|time)$/;
+/** Younger than this it is a tool call still running, which the work ledger already counts as a step. */
+export const JOB_MIN_S = 60;
+export function jobsOf(own: readonly Proc[]): Job[] {
+  return own
+    .filter((p) => p.elapsedS >= JOB_MIN_S && !NOT_A_JOB.test((p.command.trim().split(/\s+/)[0] ?? "").replace(/^.*\//, "").replace(/^-/, "")))
+    .map((p) => ({ pid: p.pid, command: shownCommand(p.command), elapsed_s: p.elapsedS }))
+    .sort((a, b) => b.elapsed_s - a.elapsed_s);
+}
+
 const sh = (cmd: string, args: string[], timeout = 5_000) =>
   new Promise<string>((done) => execFile(cmd, args, { encoding: "utf8", timeout, maxBuffer: 64 << 20 }, (_err, out) => done(out ?? "")));
 
@@ -121,6 +135,7 @@ export interface MemoryWatchOptions {
 
 export class MemoryWatch {
   private readonly bySeat = new Map<string, SeatMemory>();
+  private readonly jobsBySeat = new Map<string, Job[]>();
   private readonly warned = new Set<string>();
   /** seats whose last sample was over budget: one sample is a thin basis for stopping a job, two in a row is not */
   private readonly over = new Set<string>();
@@ -138,6 +153,8 @@ export class MemoryWatch {
   }
 
   get(seat: string | undefined): SeatMemory | undefined { return seat ? this.bySeat.get(seat) : undefined; }
+  /** The jobs a seat has running as of the last tick (jobsOf): none for a seat with no key or nothing started. */
+  jobs(seat: string | undefined): Job[] { return (seat && this.jobsBySeat.get(seat)) || []; }
   /** What tagged processes of no live seat hold (a recorder a finished room left running, a respawned seat's old script). */
   unattributed(): Unattributed { return this.others; }
 
@@ -159,6 +176,7 @@ export class MemoryWatch {
         const seat = seatHash(key);
         if (!this.o.watched(seat)) { orphans.push({ ...u.agent, kb: u.agentKb }, ...u.own); continue; }
         seen.add(seat);
+        this.jobsBySeat.set(seat, jobsOf(u.own));
         const biggest = u.own[0];
         const top = biggest ? { pid: biggest.pid, mb: mbOf(biggest.kb), command: biggest.command.slice(0, 200) } : null;
         const mb = mbOf(u.kb);
@@ -197,6 +215,7 @@ export class MemoryWatch {
       orphans.sort((a, b) => b.kb - a.kb);
       this.others = { mb: mbOf(orphans.reduce((n, p) => n + p.kb, 0)), processes: orphans.length, top: orphans.slice(0, 5).map((p) => ({ pid: p.pid, mb: mbOf(p.kb), command: p.command.slice(0, 200) })) };
       // a seat with nothing running any more reads as 0, not as its last sample
+      for (const seat of [...this.jobsBySeat.keys()]) if (!seen.has(seat)) this.jobsBySeat.delete(seat);
       for (const [seat, last] of this.bySeat) {
         if (seen.has(seat)) continue;
         this.over.delete(seat);

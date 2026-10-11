@@ -62,6 +62,10 @@ export type Event =
   | { type: "hub_restart"; room: string; ts: string; down_s: number; down_upper_bound?: boolean; previous?: string }
   | { type: "room_idle"; room: string; ts: string; idle: import("./idle.js").RoomIdle; steps: number; seats: number; window_min: number; seconds_left?: number }
   | { type: "room_active"; room: string; ts: string; idle_min: number }
+  /** A quiet room excused by a seat's running job (start, with the jobs), and how that ended: work resumed (active), the
+   * job ended with nobody picking up (idle), or the wait outlasted ROOM_JOB_WAIT_MS and the room was told (told). */
+  | { type: "room_waiting"; room: string; ts: string; state: "start"; steps: number; seats: number; jobs: (import("./memory.js").Job & { seat: string })[] }
+  | { type: "room_waiting"; room: string; ts: string; state: "end"; waited_min: number; then: "active" | "idle" | "told" }
   /** Telemetry only (replay ignores it): the open work an idle wait named to a seat, written when that list changes. */
   | { type: "open_work"; room: string; pid: string; ts: string; items: string[] };
 

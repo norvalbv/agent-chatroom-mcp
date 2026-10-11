@@ -270,6 +270,7 @@ export class Hub {
       no_output: output.listedNoOutput(this, room, observedAt).map(nm),
       // a room-wide stall the hub has told the room of (src/hub/idle.ts); absent while the room works
       ...(idle.idleView(room) ? { idle: idle.idleView(room) } : {}),
+      ...(idle.waitingView(room) ? { waiting: idle.waitingView(room) } : {}),
       // claim/* entries whose owner left: its registered successor may take one at once, anyone after Hub.STALE_CLAIM_MS
       stale_claims: this.staleClaims(room, reveal),
       // per commit, the verify/* and review/* entries whose head names it (telemetry G3/G14): coverage read from the hub, not key names

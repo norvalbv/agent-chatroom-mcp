@@ -1734,6 +1734,8 @@ export class Hub {
   /** A missing vote is individually owed; one current-version electorate vote clears carried-vote freshness. */
   needsVote(room: Room, p: Participant, pr: Proposal): boolean {
     if (pr.status !== "open") return false;
+    // the verifier owes its vote on every version, whether or not it was in the room when the proposal was made
+    if (this.verifierHolds(room, pr).some((h) => h.p.id === p.id)) return true;
     const members = this.electorate(room, pr).members;
     if (!members.some((v) => v.id === p.id)) return false;
     if (this.inLastCall(pr)) return (pr.votes[p.id]?.version ?? (pr.votes[p.id] ? 1 : 0)) !== pr.version;
@@ -2426,6 +2428,7 @@ export class Hub {
     if (openCh.length) out.push(this.challengeAdvice(room, openCh));
     if (room.requireVerification && !this.verifiedBy(room, pr)) out.push(this.verifyHeadRefusal(room, pr));
     if (this.hold(room)) out.push(`hold by ${this.hold(room)!.by}`);
+    for (const h of this.verifierHolds(room, pr)) out.push(`the verifier's agree on v${pr.version}: ${this.shown(room, h.p)} ${h.why}`);
     const pending = this.scrutinyPending(room, pr);
     if (pending) out.push(`fresh challenger ${pending.name} has not reported (it challenges or leaves; waited for until ${pending.until} at the latest)`);
     if (this.inLastCall(pr)) out.push(`last call: it concludes at ${pr.lastCall!.until} unless a vote or amend changes it, or as soon as ${this.lastCallWaits(room, pr)}`);
@@ -2705,6 +2708,53 @@ export class Hub {
     return `a verify/* board entry from ${who} whose first line is JSON ${VERIFY_HEAD_EXAMPLE.replace("<PROPOSAL_ID>", pr.id)} — ${VERIFY_HEAD_RULE}${misses.join("")}`;
   }
 
+  /**
+   * The verifier's agree is needed (evidence-pack item 1, claim/verifier-vote-counts). The launcher tells every seat "the
+   * final proposal needs its agree vote", but only a unanimous quorum made that true: of 8 concluded supermajority rooms
+   * with a verifier seat, 6 concluded with no standing verifier vote on the final version (mrkt: "Concluded 5/6 without
+   * my vote ... Change 2 disputed"). As with Gerrit's Verified label (sources/gerrit-review-labels), the approval must be
+   * on the current version, a rejection blocks, and an approval of an older version is outdated. Returns each active
+   * seat with role verifier that has not agreed to the current version, with why; a verifier that has left holds nothing.
+   */
+  verifierHolds(room: Room, pr: Proposal): { p: Participant; why: string }[] {
+    if (pr.status !== "open") return [];
+    return this.verifierSeats(room).filter((x) => x.silentMs < kick.SUSPECTED_DEAD_MS).flatMap(({ p }) => {
+      const v = pr.votes[p.id];
+      if (v?.vote === "agree" && (v.version ?? 1) === pr.version) return [];
+      const why = !v ? "has not voted"
+        : v.vote === "disagree" ? `voted disagree${(v.version ?? 1) === pr.version ? "" : ` on v${v.version ?? 1}`}${v.reason ? `: "${v.reason.slice(0, 200)}"` : ""}`
+        : v.vote === "agree" ? `agreed to v${v.version ?? 1}, not to v${pr.version}`
+        : "abstained";
+      return [{ p, why }];
+    });
+  }
+
+  /**
+   * The room's verifier seats and how long each has been silent. A seat counts while it is active, or away (out of the
+   * room but its process is alive, or restored by a hub restart less than 10 min ago: tky5's verifier-2 lost its vote to
+   * "Room concluded while my session was disconnected"). The hold is bounded by what the hub already knows
+   * (attack/decision/verifier-vote-counts): a verifier silent for SUSPECTED_DEAD_MS, e.g. waiting hours for a usage
+   * limit to reset, no longer holds, and the conclusion says it closed without the verifier's agree.
+   */
+  private verifierSeats(room: Room): { p: Participant; silentMs: number }[] {
+    return [...room.participants.values()].filter((p) => p.role === "verifier" && p.agent !== "human").flatMap((p) => {
+      if (p.active) return [{ p, silentMs: Math.max(0, Date.now() - Date.parse(this.lastSeen(p))) }];
+      const away = this.away(p);
+      return away ? [{ p, silentMs: away.age_seconds * 1000 }] : [];
+    });
+  }
+
+  /** Re-evaluate when the quietest holding verifier would read as dead, so a silent verifier cannot hold a room for good. */
+  private armVerifierHold(room: Room, pr: Proposal): void {
+    const left = Math.min(...this.verifierSeats(room).filter((x) => x.silentMs < kick.SUSPECTED_DEAD_MS).map((x) => kick.SUSPECTED_DEAD_MS - x.silentMs));
+    if (!Number.isFinite(left)) return;
+    clearTimeout(this.verifierHoldTimers.get(pr.id));
+    const t = setTimeout(() => { try { this.evaluate(room, pr); } catch {} }, left + 50);
+    t.unref();
+    this.verifierHoldTimers.set(pr.id, t);
+  }
+  private readonly verifierHoldTimers = new Map<string, ReturnType<typeof setTimeout>>();
+
   /** Electorate members whose vote (if any) was not cast on the proposal's current version. */
   unvotedOnCurrent(room: Room, pr: Proposal): Participant[] {
     return this.electorate(room, pr).members.filter((p) => (pr.votes[p.id] ? pr.votes[p.id].version ?? 1 : 0) !== pr.version);
@@ -2791,7 +2841,13 @@ export class Hub {
     const unvoted = this.unvotedOnCurrent(room, pr);
     const takes = this.takesInFlight(room);
     const children = this.openBreakouts(room);
+    // the verifier seat that agreed to this version, else the one it closed without (silent past the bound)
+    const seats = this.verifierSeats(room);
+    const agreed = (p: Participant) => pr.votes[p.id]?.vote === "agree" && (pr.votes[p.id].version ?? 1) === pr.version;
+    const ver = seats.find((x) => agreed(x.p)) ?? seats[0];
+    const vv = ver && pr.votes[ver.p.id];
     return {
+      ...(ver ? { verifier: { name: this.shown(room, ver.p), agreed: agreed(ver.p), ...(vv ? { vote: vv.vote, version: vv.version ?? 1 } : {}), ...(agreed(ver.p) ? {} : { silent_minutes: Math.round(ver.silentMs / 60_000) }) } } : {}),
       seconds_from_proposal: Math.round((t - Date.parse(pr.createdAt)) / 100) / 10,
       seconds_from_last_text: Math.round((t - Date.parse(pr.updatedAt ?? pr.createdAt)) / 100) / 10,
       ...(lc ? { last_call_seconds: Math.round((t - Date.parse(lc.startedAt)) / 100) / 10 } : {}),
@@ -2863,6 +2919,15 @@ export class Hub {
     }
     if (accepted && this.hold(room)) {
       stuck(`${pr.id} has the votes but the room is on hold by ${this.hold(room)!.by}: ${this.hold(room)!.text.slice(0, 120)}. It passes when the hold is cleared.`);
+      return;
+    }
+    const held = accepted ? this.verifierHolds(room, pr) : [];
+    if (held.length) {
+      const who = held.map((h) => `${this.shown(room, h.p)} ${h.why}`).join("; ");
+      stuck(`${pr.id} v${pr.version} has the votes but the verifier has not agreed to it (${who}). A room with a verifier concludes only on its agree to the current text: ` +
+        `${held.map((h) => this.shown(room, h.p)).join(", ")} votes on v${pr.version}, or the text is amended to answer it. ` +
+        `If that seat is gone, replace_participant or kick_vote it; one that stays silent for ${Math.round(kick.SUSPECTED_DEAD_MS / 60_000)} min stops holding the room, and the conclusion will say it closed without the verifier's agree.`);
+      this.armVerifierHold(room, pr);
       return;
     }
     if (accepted && room.requireVerification && !this.verifiedBy(room, pr)) {
@@ -3035,6 +3100,7 @@ export class Hub {
       "conclusion",
       undefined,
       `CONSENSUS REACHED on ${pr.id} v${pr.version} (${electorate.agree}/${electorate.electorate} agree; ${electorate.excluded_leavers} leavers-before-close excluded; quorum=${room.quorum}; ${pr.text.length} chars, text in room_status/conclusion)` +
+        (closing.verifier && !closing.verifier.agreed ? `\nConcluded WITHOUT the verifier's agree: ${closing.verifier.name} ${closing.verifier.vote ? `last voted ${closing.verifier.vote} on v${closing.verifier.version}` : "never voted"} and has been silent for ${closing.verifier.silent_minutes} min.` : "") +
         (closing.not_voted_on_final.length ? `\nNot voted on v${pr.version}: ${closing.not_voted_on_final.map((x) => `${x.name}${x.role ? ` (${x.role})` : ""}${x.voted_version ? ` (on v${x.voted_version})` : ""}`).join(", ")}${closing.ended === "window" ? " (last call ran out)" : ""}.` : "") +
         (unresolved.length ? `\nUnresolved objections, overruled: ${unresolved.map((u) => `${u.by}: "${u.objection.slice(0, 300)}${u.objection.length > 300 ? "…" : ""}"`).join(" | ")}` : "") + output.conclusionOutputLines(record) +
         (verification ? `\n${Hub.verificationLine(verification)}${Hub.unverifiedLine(verification, gaps)}` : "") +

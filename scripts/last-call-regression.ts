@@ -24,7 +24,8 @@ function setup(room: string, lastCallMs: number, dataDir?: string) {
   const hub = new Hub({ dataDir });
   const { room: r, participant: a } = hub.join(room, "A", "test", { quorum: "majority", nudgeAfterMs: 0, expectedParticipants: 3, requireChallenge: false }, undefined, "s1");
   const { participant: b } = hub.join(room, "B", "test", {}, undefined, "s2");
-  const { participant: v } = hub.join(room, "verifier", "test", {}, undefined, "s3", "verifier");
+  // the third seat is a plain worker: a seat with role verifier is waited for without a window (scripts/verifier-gate-regression.ts)
+  const { participant: v } = hub.join(room, "C", "test", {}, undefined, "s3");
   const pr = hub.propose(room, a.id, TEXT);
   const agree = (id: string) => hub.vote(room, id, pr.id, "agree", "checked", undefined, QUOTE);
   return { hub, r, a, b, v, pr, agree };
@@ -33,10 +34,10 @@ function setup(room: string, lastCallMs: number, dataDir?: string) {
 test("majority with a seat unvoted opens a last call instead of concluding", async () => {
   const { hub, r, b, v, pr, agree } = setup("lc-window", 300);
   agree(b.id);
-  assert.equal(r.state, "open", "a majority with the verifier unvoted must not conclude at once");
+  assert.equal(r.state, "open", "a majority with C unvoted must not conclude at once");
   const notice = r.messages.find((m) => m.kind === "system" && /LAST CALL/.test(m.content));
   assert.ok(notice, "the room is told it is in last call");
-  assert.match(notice!.content, /verifier/, "the notice names who has not voted on the current version");
+  assert.match(notice!.content, /or as soon as C votes on v1/, "the notice names who has not voted on the current version");
   assert.ok(hub.needsVote(r, v, pr), "the unvoted seat owes a vote during last call");
   assert.ok(hub.blockedBy(r, pr).some((x) => /last call/.test(x)), "blocked_by says the room is in last call");
   // board writes still land during the window
@@ -45,10 +46,9 @@ test("majority with a seat unvoted opens a last call instead of concluding", asy
   assert.equal(r.state, "concluded", "the window ends and the room concludes on the votes it has");
   const c = r.conclusion!.closing!;
   assert.equal(c.ended, "window");
-  assert.deepEqual(c.not_voted_on_final.map((x) => x.name), ["verifier"]);
-  assert.equal(c.not_voted_on_final[0].role, "verifier");
+  assert.deepEqual(c.not_voted_on_final.map((x) => x.name), ["C"]);
   assert.ok(c.last_call_seconds !== undefined && c.last_call_seconds >= 0.2);
-  assert.match(r.messages.find((m) => m.kind === "conclusion")!.content, /not voted on v1: verifier/i);
+  assert.match(r.messages.find((m) => m.kind === "conclusion")!.content, /not voted on v1: C/i);
 });
 
 test("everyone voting on the current version ends the last call at once", () => {
@@ -82,7 +82,7 @@ test("an amend during last call drops it; the new version gets its own; LAST_CAL
   assert.equal(r.state, "open", "a version without the votes does not conclude when the old window ends");
   hub.vote("lc-amend", b.id, pr.id, "agree", "ok", undefined, "only reads change");
   hub.vote("lc-amend", a.id, pr.id, "agree", "ok", undefined, "only reads change");
-  assert.equal(r.state, "open", "v2 has the votes but the verifier has not voted on it: a new last call");
+  assert.equal(r.state, "open", "v2 has the votes but C has not voted on it: a new last call");
   assert.equal(r.messages.filter((m) => /LAST CALL/.test(m.content)).length, 2);
   assert.match(r.messages.filter((m) => /LAST CALL/.test(m.content))[1].content, /v2/);
   const off = setup("lc-off", 0);
@@ -117,9 +117,9 @@ test("a hub restart mid last call keeps the call: the seat still owes a vote and
   const pr = [...r.proposals.values()][0];
   assert.equal(r.state, "open");
   assert.ok(restored.inLastCall(pr), "review/6cfe8ad9 finding 1: the last call is replayed, not lost");
-  // restored seats are inactive until their processes reconnect, as after any restart (the verifier first: with only A
+  // restored seats are inactive until their processes reconnect, as after any restart (C first: with only A
   // and B back the electorate is the two of them, both voted, and the room concludes; that is the existing restart rule)
-  const v = restored.join("lc-restart", "verifier", "test", {}, v0.id, "s3", "verifier").participant;
+  const v = restored.join("lc-restart", "C", "test", {}, v0.id, "s3").participant;
   restored.join("lc-restart", "A", "test", {}, a.id, "s1");
   restored.join("lc-restart", "B", "test", {}, b.id, "s2");
   assert.ok(restored.needsVote(r, v, pr), "the unvoted seat still owes a vote after the restart");
@@ -136,7 +136,7 @@ test("the last call is logged as an event", () => {
   const lines = readFileSync(join(dir, "lc-log.jsonl"), "utf8").split("\n").filter(Boolean).map((l) => JSON.parse(l));
   const ev = lines.find((e) => e.type === "last_call");
   assert.ok(ev, "a last_call event is persisted");
-  assert.deepEqual(ev.waiting_on, ["verifier"]);
+  assert.deepEqual(ev.waiting_on, ["C"]);
   assert.equal(ev.version, 1);
   Hub.LAST_CALL_MS = 0; // let node:test exit without the open window's timer mattering
 });

@@ -373,6 +373,9 @@ export interface Proposal {
 /** How a room closed (telemetry gap "votes outstanding at conclusion", evidence-pack item 1): time from the proposal and
  * from its last text change, the last call if there was one, and who in the electorate had not voted on the final version. */
 export interface ConclusionClosing {
+  /** the room's verifier seat at the close, when it had one (Hub.verifierHolds): agreed is its agree on the final version;
+   * agreed false means the room concluded without it because the seat had been silent for silent_minutes */
+  verifier?: { name: string; agreed: boolean; vote?: Vote; version?: number; silent_minutes?: number };
   seconds_from_proposal: number;
   seconds_from_last_text: number;
   /** absent when everyone had voted on the final version before it had the votes, so no last call was needed */

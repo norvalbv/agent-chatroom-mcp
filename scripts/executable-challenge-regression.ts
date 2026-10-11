@@ -118,6 +118,7 @@ test("a verifier may rule a bogus command invalid at any exit code with a reason
   hub.setBoard(ROOM, v.id, "verify/ruling", `${head(pr.id, "false", 1)}\n\`false\` always exits 1 and probes nothing in the spec.`);
   assert.equal(pr.challenges[0].status, "answered");
   assert.ok(room.messages.some((m) => m.kind === "system" && /answered by ruling: V/.test(m.content)));
-  for (const p of [a, c]) hub.vote(ROOM, p.id, pr.id, "agree", REASON, undefined, QUOTE);
+  // V is this room's verifier, so its own agree is needed too (scripts/verifier-gate-regression.ts)
+  for (const p of [a, c, v]) hub.vote(ROOM, p.id, pr.id, "agree", REASON, undefined, QUOTE);
   assert.equal(room.state, "concluded");
 });

@@ -49,6 +49,7 @@ export const offlineScripts = [
   'archive-regression.ts',
   'last-call-regression.ts',
   'open-children-regression.ts',
+  'verifier-gate-regression.ts',
   'ask-settle-regression.ts',
   'attention-gate-regression.ts',
   'away-seat-regression.ts',

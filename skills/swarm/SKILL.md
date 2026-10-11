@@ -20,7 +20,7 @@ Choosing between flat and groups is NOT settled by evidence yet. The only measur
 | the work splits into separate approaches whose findings help each other now and then | cost and time matter more than independence |
 | (arXiv 2409.14051: at six agents, two groups of three with a digest beat one room, on short closed-answer tasks only) | |
 
-Between these two, pick flat unless the user asks for groups or the task clearly fits the left column. A same-brief comparison over hours (grouped vs flat, compared with `scripts/runs-table.ts`) is the open experiment.
+Between these two, pick flat unless the user asks for groups or the task clearly fits the left column. A same-brief comparison over hours (grouped vs flat, compared with `scripts/runs-table.ts --by-run`, which counts a group lead's usage once) is the open experiment.
 
 ## Run it
 

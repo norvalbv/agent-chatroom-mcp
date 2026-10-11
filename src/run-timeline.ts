@@ -297,6 +297,14 @@ export interface RunRow {
 
 const NOT_FINDING = /^(claim|draft|inbox|hold)\//;
 const round2 = (x: number) => Math.round(x * 100) / 100;
+/** Things that happen to a room after its seats stop: the owner archiving it from the dashboard (gwhf read 36.08 h for
+ * 0.19 h of work), the sweep marking seats left, a hub restart, memory samples, idle signals, and a later room's seats
+ * reading this log (outside_read: tky5 read 17.5 h because this round's seats opened its file 14 h after it ended).
+ * They do not lengthen the run. A seat's usage still does: it is the seat working, though for a group lead it may be
+ * work in its other room (1nwp-leads reads 3.62 h for 2.07 h to its conclusion); runTotals is the run's true span. */
+const NOT_RUN_TIME = new Set(["archive", "leave", "hub_restart", "memory", "room_idle", "room_active", "board_manifest", "outside_read"]);
+/** Entries the launcher seeds (resource/* with --resources) are what the room was given, not what it found (35 of 214 in 0btz). */
+const SEEDED_BY = new Set(["launcher"]);
 
 export function runRow(events: readonly Ev[]): RunRow {
   const t = runTimeline(events);
@@ -310,9 +318,10 @@ export function runRow(events: readonly Ev[]): RunRow {
     if (e.type === "room") task ||= String(e.opts?.topic ?? "").split("\n")[0].slice(0, 120);
     const ts = Date.parse(stampOf(e) ?? "");
     // the run is what seats did: a system line (the owner closing the room the next morning) does not lengthen it
-    const system = e.type === "message" && e.msg?.kind !== "chat";
+    // ...nor does a wait that came back empty: polling, not work (0btz-leads: a chair polled every 15 s for an hour after it concluded)
+    const system = (e.type === "message" && e.msg?.kind !== "chat") || NOT_RUN_TIME.has(e.type) || (e.type === "call_completion" && e.empty === true);
     if (!Number.isNaN(ts) && !system) { first = Math.min(first ?? ts, ts); last = Math.max(last ?? ts, ts); }
-    if (e.type === "board" && e.entry && !NOT_FINDING.test(String(e.key))) keys.add(String(e.key));
+    if (e.type === "board" && e.entry && !NOT_FINDING.test(String(e.key)) && !SEEDED_BY.has(String(e.entry.by))) keys.add(String(e.key));
     if (e.type === "proposal" && e.proposal?.createdAt) firstProposal ??= Date.parse(e.proposal.createdAt);
     if (e.type === "state" && e.conclusion?.decidedAt) conclusion ??= Date.parse(e.conclusion.decidedAt);
   }
@@ -338,6 +347,48 @@ export function runRow(events: readonly Ev[]): RunRow {
     ...(costUsd !== undefined && reviewed ? { usdPerReviewed: round2(costUsd / reviewed) } : {}),
     ...(costUsd !== undefined && keys.size ? { usdPerFinding: round2(costUsd / keys.size) } : {}),
   };
+}
+
+/** One run across its room logs (a grouped run has a leads room and a room per group). The hub writes a seat process's
+ * cumulative usage to every room the seat sits in, so summing rooms pays a lead twice (0btz: $436.19 summed, $331.09
+ * real; telemetry gap G1). Here each seat key's usage is merged across the logs, de-duplicated by its own timestamp,
+ * and differenced once, with a counter that goes down read as a new process (respawn), as runTimeline does. */
+export interface RunTotals { run: string; rooms: string[]; seats: number; costUsd?: number; hours: number; start?: string }
+
+export function runTotals(logs: readonly (readonly Ev[])[], run = ""): RunTotals {
+  const rows = logs.map((events) => runRow(events));
+  const seen = new Map<string, Map<string, Record<string, any>>>(); // seat key -> usage.at|ts -> usage
+  for (const events of logs) for (const e of events) {
+    if (e.type !== "usage" || !e.seat || !e.usage) continue;
+    const key = String(e.usage.at ?? e.ts);
+    (seen.get(e.seat) ?? seen.set(e.seat, new Map()).get(e.seat)!).set(key, e.usage);
+  }
+  let cost = 0;
+  for (const byAt of seen.values()) {
+    let prev: Record<string, any> = {};
+    for (const [, u] of [...byAt].sort(([a], [b]) => a.localeCompare(b))) {
+      const base = Number(u.requests ?? 0) >= Number(prev.requests ?? 0) ? prev : {};
+      cost += Number(u.cost_usd ?? 0) - Number(base.cost_usd ?? 0);
+      prev = u;
+    }
+  }
+  const starts = rows.map((r) => r.start).filter((x): x is string => !!x).sort();
+  const ends = rows.filter((r) => r.start).map((r) => Date.parse(r.start!) + r.hours * 3_600_000);
+  return {
+    run, rooms: rows.map((r) => r.room).sort(), seats: seen.size,
+    ...(seen.size ? { costUsd: round2(cost) } : {}),
+    hours: starts.length ? round2((Math.max(...ends) - Date.parse(starts[0])) / 3_600_000) : 0,
+    ...(starts.length ? { start: starts[0] } : {}),
+  };
+}
+
+/** The run a room belongs to, read from the launcher's naming (swarm-HHMMSS-xxxx-<room>): no room event records it yet (gap G12). */
+export const runOf = (room: string) => /^(swarm-\d{6}-[a-z0-9]{4})/.exec(room)?.[1] ?? room;
+
+export function renderRunTotals(runs: RunTotals[]): string {
+  let text = "| run | rooms | seat processes | cost (each seat process once) | hours |\n|---|---|---|---|---|\n";
+  for (const r of [...runs].sort((a, b) => (a.start ?? "").localeCompare(b.start ?? ""))) text += `| ${r.run} | ${r.rooms.length} | ${r.seats} | ${r.costUsd === undefined ? "?" : `$${r.costUsd}`} | ${r.hours} |\n`;
+  return text;
 }
 
 /** Rows as a markdown table, oldest first. */

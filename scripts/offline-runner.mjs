@@ -258,6 +258,7 @@ export const offlineScripts = [
   'refusals-visible-regression.ts',
   'refusal-codes-typed-regression.ts',
   'session-reap-regression.ts',
+  'runs-table-truth-regression.ts',
 ];
 
 export function offlineCommands() {

@@ -143,7 +143,7 @@ export function replay(hub: Hub) {
         }
         case "call_completion": {
           const room = hub.rooms.get(ev.room);
-          if (room) hub.applyCallCompletion(room, ev.tool, ev.outcome);
+          if (room) hub.applyCallCompletion(room, ev.tool, ev.outcome, ev.outsider);
           break;
         }
         case "refusal": {

@@ -345,6 +345,8 @@ export class Hub {
       board_manifest: this.boardManifestStats(room), // compact since-process-start counters (stats branch)
       refusals: room.refusals ?? {},
       call_outcomes: callOutcomes,
+      // who called this room's tools without a seat in it (isolated groups: did one group read the other's room)
+      outside_calls: room.outsideCalls ?? {},
       refusal_rates: refusalRates,
       refusal_rate_coverage: room.telemetryVersion === 1 ? "complete" : "unknown",
       near_simultaneous_replies: bursts,
@@ -1134,17 +1136,22 @@ export class Hub {
    * Pending calls, schema rejections outside guard, roomless calls and failed room creation
    * are excluded. The rate uses this event's matched numerator, never lifetime refusals.
    */
-  recordCallCompletion(roomName: string | undefined, tool: string, outcome: CallOutcome, participant: string | null, timing: { ms?: number; empty?: boolean } = {}) {
+  recordCallCompletion(roomName: string | undefined, tool: string, outcome: CallOutcome, participant: string | null, timing: { ms?: number; empty?: boolean; outsider?: string } = {}) {
     const room = roomName ? this.rooms.get(roomName) : undefined;
     if (!room) return;
-    this.applyCallCompletion(room, tool, outcome);
+    this.applyCallCompletion(room, tool, outcome, timing.outsider);
     this.persist({ type: "call_completion", room: room.name, tool, outcome, ts: now(), participant, ...timing });
   }
 
-  /** @internal */ applyCallCompletion(room: Room, tool: string, outcome: CallOutcome) {
+  /** @internal */ applyCallCompletion(room: Room, tool: string, outcome: CallOutcome, outsider?: string) {
     room.callOutcomes ??= {};
     const counts = room.callOutcomes[tool] ??= { success: 0, hub_refusal: 0, error: 0 };
     counts[outcome]++;
+    if (outsider) {
+      const key = `${outsider}: ${tool}`;
+      room.outsideCalls ??= {};
+      room.outsideCalls[key] = (room.outsideCalls[key] ?? 0) + 1;
+    }
   }
 
   /** Post a system notice from outside the hub (e.g. a recruitment). */

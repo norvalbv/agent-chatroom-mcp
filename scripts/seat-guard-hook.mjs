@@ -15,7 +15,7 @@ import { seatKeyOf } from "./seat-procs.mjs";
 
 const SEAT_PROCS = join(dirname(fileURLToPath(import.meta.url)), "seat-procs.mjs");
 // where a shell starts reading a command: line start, after ; & | ( or a keyword, behind sudo/xargs/nohup, or as the string given to sh -c
-const AT_COMMAND = String.raw`(?:^|[;&|(\n` + "`" + String.raw`]|\$\(|\b(?:then|do|else|sudo|exec|nohup|time)\s|\s-c\s+["'])\s*`;
+const AT_COMMAND = String.raw`(?:^|[;&|(\n` + "`" + String.raw`]|\$\(|\b(?:then|do|else|sudo|exec|nohup|time)\s|\s-\w*c\s+["']|\beval\s+["'])\s*`;
 const BY_NAME = new RegExp(AT_COMMAND + String.raw`(?:pkill|killall)\b([^;&|\n]*)`);
 const BY_PGREP = new RegExp(AT_COMMAND + String.raw`kill\b[^;&|\n]*(?:\$\(|` + "`" + String.raw`)\s*pgrep\b`);
 const BY_XARGS = /\|\s*xargs\b[^;&|\n]*\bkill\b/;
@@ -30,9 +30,21 @@ const BY_PID = new RegExp(AT_COMMAND + String.raw`kill((?:\s+-\S+)*)((?:\s+\d+)+
 /** A heredoc's body is a file being written, not commands this shell runs. */
 const withoutHeredocs = (command) => command.replace(/<<-?\s*(['"]?)(\w+)\1([^\n]*)\n[\s\S]*?\n[ \t]*\2(?=\n|$)/g, "$3");
 
+/** A quoted string is text (a commit message, a note that says "Stop: pkill -f x"), not commands, unless it is the
+ * script handed to a shell (`sh -c '...'`, `bash -lc "..."`) or to eval: those are kept, everything else is emptied.
+ * Double-quoted substitutions are kept too, since `kill "$(pgrep -f x)"` runs one. */
+const SHELL_ARG = /(?:\b(?:ba|z|da|k)?sh\b(?:\s+-\w+)*\s+-\w*c|\beval)\s+$/;
+function withoutQuotedText(command) {
+  return command.replace(/'[^']*'|"(?:[^"\\]|\\.)*"/g, (q, at) => {
+    if (SHELL_ARG.test(command.slice(0, at))) return q;
+    if (q[0] === "'") return "''";
+    return `"${(q.match(/\$\([^)]*\)|`[^`]*`|\$\{?\w+\}?/g) ?? []).join(" ")}"`;
+  });
+}
+
 /** Why this Bash command is refused, or null. */
 export function refusal(command, key, keyOf = seatKeyOf) {
-  const cmd = withoutHeredocs(command);
+  const cmd = withoutQuotedText(withoutHeredocs(command));
   const stop = (pattern) => `node ${JSON.stringify(SEAT_PROCS)} stop ${pattern}`;
   const named = BY_NAME.exec(cmd);
   const byXargs = BY_XARGS.test(cmd) && !(BY_PORT.test(cmd) && !BY_XARGS.test(cmd.replace(new RegExp(BY_PORT.source, "g"), ";")));

@@ -71,6 +71,11 @@ for (const cmd of [
   "pgrep -f fetch_trades.py | while read p; do kill \"$p\"; done",
   "for p in `ps aux | grep fetch_trades | awk '{print $2}'`; do kill $p; done",
   "lsof -ti:7810 | xargs kill; pgrep -f fetch | xargs kill",
+  // quotes that do run: a shell's -c script, eval, a substitution inside double quotes
+  "bash -lc \"sleep 1; pkill -f fetch_trades.py\"",
+  "eval 'pkill -f fetch_trades.py'",
+  "kill \"$(pgrep -f fetch_trades.py)\"",
+  "nohup sh -c 'pkill -f fetch_trades.py; python3 fetch_trades.py' &",
 ]) {
   const reason = guard(cmd);
   assert.ok(reason, `refused: ${cmd}`);
@@ -83,6 +88,11 @@ for (const cmd of [
   "git commit -m \"guard: refuse pkill in a seat's shell\"",
   "grep -c pkill data/room.jsonl",
   "echo 'never use pkill or killall'",
+  // quoted text is not a command, even with a ; or | inside it (the verifier's probes)
+  "git commit -m \"guard: refuse pkill; killall too\"",
+  "echo \"x; pkill y\"",
+  "echo 'stop it with: ps aux | grep fetch | xargs kill'",
+  "python3 -c 'print(\"Stop: pkill -f code/watchdog.sh\")'",
   "cat > README.md <<'EOF'\nStop it with: pkill -f code/watchdog.sh\nEOF",
   "kill $(cat /tmp/my.pid)",
   "kill -TERM $PID",

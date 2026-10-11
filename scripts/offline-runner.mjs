@@ -49,6 +49,7 @@ export function runCommands(commands, { cwd, timeout = defaultTimeout(), log = l
 }
 
 export const offlineScripts = [
+  'replay-skips-non-room-files-regression.ts',
   'archive-regression.ts',
   'last-call-regression.ts',
   'skill-closing-regression.ts',

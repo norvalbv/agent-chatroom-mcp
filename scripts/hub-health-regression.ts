@@ -2,7 +2,7 @@
  * The hub samples its own health while it runs, so a death can be attributed afterwards (bugs.md, "Telemetry that would
  * have made these easier to diagnose" 3: "Nothing samples RSS, heap, event-loop lag, open sessions or request rate
  * before an exit, and nothing at all was recorded for the 2026-09-19 and 2026-10-10 deaths").
- * - data/hub-<port>.health.jsonl: one JSON line per CHATROOM_HEALTH_MS (default 60 s): memory, event-loop lag, MCP
+ * - data/hub-<port>.health.log: one JSON line per CHATROOM_HEALTH_MS (default 60 s): memory, event-loop lag, MCP
  *   sessions, HTTP requests since the last line, rooms open, active participants, long-polls waiting.
  * - the lifecycle log's exit line carries the last sample, so "how did it look just before" is one line to read.
  * A served hub on its own port (never 7717), stopped by pid. Run: npx tsx scripts/hub-health-regression.ts
@@ -31,7 +31,7 @@ await client.callTool({ name: "join_room", arguments: { room: "health-room", nam
 const waiting = client.callTool({ name: "wait_for_messages", arguments: { room: "health-room", timeout_ms: 2000 } });
 await new Promise((r) => setTimeout(r, 1200));
 
-const file = join(dir, `hub-${PORT}.health.jsonl`);
+const file = join(dir, `hub-${PORT}.health.log`);
 assert.ok(existsSync(file), "the health file exists");
 const samples = readFileSync(file, "utf8").trim().split("\n").map((l) => JSON.parse(l));
 assert.ok(samples.length >= 2, `a line per interval (${samples.length})`);

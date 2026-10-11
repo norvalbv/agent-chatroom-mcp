@@ -47,7 +47,11 @@ export function persist(hub: Hub, ev: Event) {
 
 export function replay(hub: Hub) {
   if (!hub.dataDir || !existsSync(hub.dataDir)) return;
-  for (const file of readdirSync(hub.dataDir).filter((f) => f.endsWith(".jsonl"))) {
+  // only room logs: a room name has no dot (Hub.ROOM_NAME), and the data dir also holds the hub's own files, e.g. the
+  // health samples were hub-<port>.health.jsonl (0feee53b; now .health.log), and replayed as events they crashed every restart
+  const ROOM_LOG = /^[a-zA-Z0-9_-]{1,64}\.jsonl$/;
+  for (const file of readdirSync(hub.dataDir).filter((f) => ROOM_LOG.test(f))) {
+    let strays = 0;
     const lines = readFileSync(join(hub.dataDir, file), "utf8").split("\n").filter(Boolean);
     for (const line of lines) {
       let ev: Event;
@@ -55,6 +59,12 @@ export function replay(hub: Hub) {
         ev = JSON.parse(line) as Event;
       } catch {
         console.error(`[hub] skipping unreadable line in ${file} (truncated write?)`);
+        continue;
+      }
+      // a line that parses but is not an event (no type, or not an object) is skipped, never thrown on: one bad line
+      // must not stop a hub from starting
+      if (!ev || typeof ev !== "object" || typeof (ev as { type?: unknown }).type !== "string") {
+        if (!strays++) console.error(`[hub] skipping a line that is not an event in ${file}`);
         continue;
       }
       recordReplyMetricEvent(hub, ev);

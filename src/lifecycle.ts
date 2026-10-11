@@ -15,7 +15,7 @@ export interface Lifecycle {
   /** The reason the coming process.exit is for, when it is not a signal or a crash (the idle exit). */
   exiting(reason: string): void;
   /**
-   * Sample the hub's health every CHATROOM_HEALTH_MS (default 60 s; 0 = off) into hub-<port>.health.jsonl, and put the last
+   * Sample the hub's health every CHATROOM_HEALTH_MS (default 60 s; 0 = off) into hub-<port>.health.log (JSON lines; not .jsonl, the room logs' extension, which replay reads), and put the last
    * sample on the exit line. Nothing sampled the hub before a death (bugs.md telemetry 3: none was recorded for the
    * 2026-09-19 and 2026-10-10 deaths). `counts` is read at each sample: what the hub has open right now.
    */
@@ -88,7 +88,8 @@ export function installLifecycle(opts: { port: number; dir?: string; head?: stri
   let reason: string | undefined;
   const exiting = (why: string) => { reason ??= why; };
   let lastHealth: Record<string, unknown> | undefined;
-  const healthFile = opts.dir ? resolve(opts.dir, `hub-${opts.port}.health.jsonl`) : undefined;
+  // .log, like the lifecycle log beside it: a *.jsonl in the data dir is a room log to replay and to every room-log reader
+  const healthFile = opts.dir ? resolve(opts.dir, `hub-${opts.port}.health.log`) : undefined;
   const HEALTH_MS = process.env.CHATROOM_HEALTH_MS === undefined ? 60_000 : Number(process.env.CHATROOM_HEALTH_MS);
   const health = (counts: () => Record<string, number>) => {
     if (!(HEALTH_MS > 0)) return;

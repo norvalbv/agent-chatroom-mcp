@@ -56,6 +56,8 @@ export interface RunMetrics {
   usage?: { cost_usd: number; input_tokens: number; output_tokens: number; seatsWithUsage: number };
   /** take/<what> steps by action (hub "take" events): take, offer, accept, handover, release, decline, withdraw, refused, and refused:<reason> (held, same-commit, assigned-reviewer); absent: none */
   takes?: Record<string, number>;
+  /** agent chat by delivery: quiet the sender chose, quiet the hub chose (autoQuiet), and two-seat exchanges kept public because they named a board key; absent: no agent chat */
+  quiet?: { chat: number; bySender: number; byHub: number; keptPublicForBoardKey: number };
   /** board_set(append=true) lines per shared key (hub "board_append" events): appends, distinct appenders, continuations used; absent: none */
   appends?: Record<string, { lines: number; seats: number; continuations: number }>;
   /** seats with at least one web call in the ledger; undefined when the log has no ledger */
@@ -101,6 +103,7 @@ export function runMetrics(events: readonly Ev[], opts: MetricsOptions = {}): Ru
   let proposal: string | undefined;
   let ledger = false;
   const takes: Record<string, number> = {};
+  const quiet = { chat: 0, bySender: 0, byHub: 0, keptPublicForBoardKey: 0 };
   const appendsBy = new Map<string, { lines: number; seats: Set<string>; landed: Set<string> }>();
   const proposals = new Set<string>();
   const byKey = new Map<string, string>();
@@ -218,6 +221,11 @@ export function runMetrics(events: readonly Ev[], opts: MetricsOptions = {}): Ru
         const m = e.msg ?? {};
         stamp(m.ts);
         if (m.kind === "chat") mention(m.content, m.from?.name);
+        if (m.kind === "chat" && m.from?.agent !== "hub" && m.from?.agent !== "human") {
+          quiet.chat++;
+          if (m.autoQuiet) quiet.byHub++; else if (m.quiet) quiet.bySender++;
+          if (m.keptPublic === "board-key") quiet.keptPublicForBoardKey++;
+        }
         break;
       }
       case "proposal": {
@@ -299,6 +307,7 @@ export function runMetrics(events: readonly Ev[], opts: MetricsOptions = {}): Ru
     recruits: { calls: list.reduce((n, s) => n + s.recruits, 0), seats: recruiting, workers: workers.length, rate: workers.length ? recruiting / workers.length : 0 },
     ...(priced.length ? { usage: { cost_usd: sum("cost_usd"), input_tokens: sum("input_tokens"), output_tokens: sum("output_tokens"), seatsWithUsage: priced.length } } : {}),
     ...(Object.keys(takes).length ? { takes } : {}),
+    ...(quiet.chat ? { quiet } : {}),
     ...(appendsBy.size ? { appends: Object.fromEntries([...appendsBy].map(([k, a]) => [k, { lines: a.lines, seats: a.seats.size, continuations: a.landed.size }])) } : {}),
     ...(ledger ? { webSeats: list.filter((s) => (s.work?.web ?? 0) > 0).length } : {}),
     citedFrom: conclusion ? "conclusion" : proposal ? "proposal" : "none",
@@ -333,6 +342,7 @@ export function renderMetrics(m: RunMetrics): string {
     (m.webSeats === undefined ? "no work ledger in this log, so reads, searches and web calls are unknown. " : `${m.webSeats} of ${m.seats.length} seats made a web call. `) +
     (m.usage ? `Seat-reported usage: $${m.usage.cost_usd.toFixed(2)}, ${m.usage.input_tokens} input + ${m.usage.output_tokens} output tokens from ${m.usage.seatsWithUsage} of ${m.seats.length} seats (the rest unknown). ` : "No seat reported usage to the hub. ") +
     memoryLine(m.seats) +
+    (m.quiet && (m.quiet.bySender || m.quiet.byHub || m.quiet.keptPublicForBoardKey) ? `Of ${m.quiet.chat} agent chat messages, ${m.quiet.bySender} were sent quiet, ${m.quiet.byHub} were made quiet by the hub, and ${m.quiet.keptPublicForBoardKey} two-seat exchanges stayed public because they named a board entry. ` : "") +
     (m.takes ? `take/* steps: ${Object.entries(m.takes).map(([k, n]) => `${n} ${k}`).join(", ")}. ` : "") +
     (m.appends ? `Shared logs (board_set append): ${Object.entries(m.appends).map(([k, a]) => `${k} ${a.lines} line${a.lines === 1 ? "" : "s"} from ${a.seats} seat${a.seats === 1 ? "" : "s"}${a.continuations ? `, ${a.continuations} continuation${a.continuations === 1 ? "" : "s"}` : ""}`).join("; ")}. ` : "") +
     (m.citedFrom === "none" ? "No proposal yet, so no citation credit.\n\n" : `Credit read from the ${m.citedFrom}${m.uncited.length ? `; findings never cited: ${m.uncited.join(", ")}` : ""}.\n\n`) +

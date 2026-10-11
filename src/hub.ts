@@ -881,6 +881,24 @@ export class Hub {
     return this.decisionSlugsCache;
   }
 
+  /**
+   * Whether a message names an entry on this room's board: a key that exists (six characters or more, so a short word
+   * is not one), or a new key under a prefix the board already uses. The fixed prefixes of AUTO_QUIET_MARKER missed the
+   * ones rooms invent (result/, rerun/, prereg/, take/, a bare "position"): 91 of 164 auto-quieted messages in 13 rooms
+   * named a key on the room's board, and in 0btz-break "New break, T-B2-8 ... (result/T-B2-8-...)" reached 2 of 3 seats.
+   * A file path (src/hub.ts) or a slash in prose is not one.
+   */
+  private namesBoardKey(room: Room, content: string): boolean {
+    const prefixes = new Set<string>();
+    for (const [key, e] of room.board) {
+      if (!e.text.trim()) continue;
+      if (key.length >= 6 && content.includes(key)) return true;
+      const slash = key.indexOf("/");
+      if (slash > 0) prefixes.add(key.slice(0, slash));
+    }
+    return [...content.matchAll(/(?<![\w./-])([\w.:-]+)\/[\w.:-]/g)].some((m) => prefixes.has(m[1]!));
+  }
+
   private autoQuietAudience(room: Room, p: Participant, content: string, replyTo?: string): string[] | undefined {
     if (AUTO_QUIET_MARKER.test(content) || AUTO_QUIET_COMMITMENT.test(content)) return undefined;
     if (this.decisionSlugs().some((slug) => content.includes(slug))) return undefined;
@@ -1004,7 +1022,11 @@ export class Hub {
       }
     }
     // left unset, a working exchange between the sender and one or two named agents is delivered quiet (idea/quiet-default)
-    const autoQuiet = quietArg === undefined && !target && p.agent !== "human" && room.mode === "free" && !!this.autoQuietAudience(room, p, content, replyTo);
+    const exchange = quietArg === undefined && !target && p.agent !== "human" && room.mode === "free" && !!this.autoQuietAudience(room, p, content, replyTo);
+    // a working exchange that names an entry on the room's board is the room's business: public, and marked so a later
+    // room can count how often that rule, and not the sender, kept a message public
+    const keptPublic = exchange && this.namesBoardKey(room, content);
+    const autoQuiet = exchange && !keptPublic;
     if (autoQuiet) quiet = true;
     if (!force && !quiet && !target && p.agent !== "human" && room.mode === "free" && this.addressedBy(room, p).length === 0) {
       const sh = this.share(room, p);
@@ -1038,7 +1060,7 @@ export class Hub {
     // still delivers them.
     const notices = room.messages.filter((m) => m.seq > p.lastSeenSeq && m.from.id !== p.id && this.isHubNotice(m) && this.pushableTo(room, m, p.id));
     if (notices.length) p.withheld = [...new Set([...(p.withheld ?? []), ...notices.map((m) => m.seq)])];
-    const msg = this.post(room, "chat", p, content, { replyTo, ...(quiet ? { quiet: true, audience } : {}), ...(autoQuiet ? { autoQuiet: true } : {}) });
+    const msg = this.post(room, "chat", p, content, { replyTo, ...(quiet ? { quiet: true, audience } : {}), ...(autoQuiet ? { autoQuiet: true } : {}), ...(keptPublic ? { keptPublic: "board-key" as const } : {}) });
     p.messageCount += 1;
     p.lastSeenSeq = Math.max(p.lastSeenSeq, msg.seq);
     this.persistAttention(room, p);

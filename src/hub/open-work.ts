@@ -4,6 +4,8 @@ import type { Hub } from "../hub.js";
 import { COORDINATION_PREFIXES } from "./keys.js";
 import { claimReleased } from "./board.js";
 import type { BoardEntry, Participant, Room } from "./types.js";
+import { spawnSync } from "node:child_process";
+import { isReviewKey, parseVerifyHead } from "./types.js";
 
 export const IDLE_HINT = "No new messages yet. Call wait_for_messages again.";
 
@@ -44,6 +46,19 @@ export function idleAgain(p: Participant): boolean {
 
 const area = (key: string) => key.slice(key.indexOf("/") + 1);
 
+/** Whether `commit` is on `branch` (git merge-base --is-ancestor, in the claim's worktree). Asked on idle waits, so a yes is
+ * kept for good and a no for a minute (the branch may grow to include it). */
+const onBranchSeen = new Map<string, { yes: boolean; at: number }>();
+function onBranch(worktree: string, branch: string, commit: string): boolean {
+  if (!/^[0-9a-fA-F]{7,64}$/.test(commit)) return false;
+  const k = `${worktree}\0${branch}\0${commit}`;
+  const seen = onBranchSeen.get(k);
+  if (seen && (seen.yes || Date.now() - seen.at < 60_000)) return seen.yes;
+  const yes = spawnSync("git", ["-C", worktree, "--no-optional-locks", "merge-base", "--is-ancestor", commit, branch], { timeout: 5_000 }).status === 0;
+  onBranchSeen.set(k, { yes, at: Date.now() });
+  return yes;
+}
+
 /** A claim counts as reviewed once any seat but its owner has put a review where the room can read it: a board entry
  * outside claim/ whose key is the claim's area or whose text names the area, the claim, or the owner's branch, or a
  * chat message since the claim that names the area. Reviews land in verify/*, in review/* and in plain chat, and often
@@ -56,6 +71,11 @@ function reviewedClaim(room: Room, claimKey: string, claim: BoardEntry): boolean
   for (const [k, e] of room.board) {
     if (!e.text.trim() || !other(e.by) || NOT_REVIEW.some((pre) => k.startsWith(pre)) || k.endsWith(".partial")) continue;
     if (area(k) === slug || word.test(e.text) || (!!claim.workspace?.branch && e.text.includes(claim.workspace.branch))) return true;
+    // a per-commit review (review/<sha>, verify/*) whose head names a commit on the owner's branch: this room's rule 2
+    // writes reviews that way, and they named neither the area nor the branch (swarm-180216-182a: the assigned reviewer
+    // of claim/telemetry-outcome-health was told it owed a review after writing three)
+    const commit = isReviewKey(k) ? parseVerifyHead(e.text)?.commit?.trim() : undefined;
+    if (commit && claim.workspace?.branch && onBranch(claim.workspace.worktree, claim.workspace.branch, commit)) return true;
   }
   return room.messages.some((m) => m.kind === "chat" && m.from.agent !== "hub" && other(m.from.name) && m.ts >= claim.updatedAt && word.test(m.content));
 }

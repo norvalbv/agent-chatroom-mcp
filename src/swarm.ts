@@ -14,7 +14,7 @@ import { registerRespawn, respawnProbe } from "./respawn.js";
 import { fileURLToPath } from "node:url";
 import { carrySettings, launcherHeaders, COMPACT_WINDOW_TESTED, compactWindow, devHubRule, heartbeatHookSettings, hubLogFile, loadDotEnv, outputHeartbeat, ownHubEnv, readLauncherToken, respawnTokenProblem, reusedHubProblem, seatBeat, seatChildEnv, seatPortError, type SeatBeat } from "./env.js";
 import { randomUUID } from "node:crypto";
-import { exitDetail, fetchRespawnRoom, respawnChain, type RespawnRoom } from "./respawn.js";
+import { exitDetail, fetchRespawnRoom, respawnChain, usageLimit, type RespawnRoom } from "./respawn.js";
 import { claudeArgs } from "./claude-args.js";
 import { codexSeatCommand, codexUsageTracker } from "./codex-seat.js";
 import { claudeSandbox } from "./sandbox.js";
@@ -328,6 +328,8 @@ async function withRespawn(name: string, room: string, mk: (nm: string, note: st
     room: () => fetchRespawnRoom(URL_, room),
     exitCode: (nm) => exitCodes.get(nm) ?? null,
     signal: (nm) => exitSignals.get(nm) ?? null,
+    detail: (nm) => exitDetails.get(nm) ?? "",
+    usageReady: claudeUsageReady,
     register: (previousName, nm, reason) => registerRespawn(URL_, room, previousName, nm, launcherToken, undefined, reason),
     run: mk,
     log,
@@ -340,6 +342,20 @@ async function withRespawn(name: string, room: string, mk: (nm: string, note: st
 const exitCodes = new Map<string, number | null>();
 /** The signal that ended a seat, when one did: code is null for every signal, and SIGKILL (out of memory) is not a stop. */
 const exitSignals = new Map<string, string | null>();
+/** The exit receipt's detail per seat name (exitDetail): withRespawn waits out a usage-limit exit instead of relaunching into it. */
+const exitDetails = new Map<string, string>();
+/** Whether the account can run a Claude seat again: one tiny `claude -p` call (a refused one costs nothing). */
+function claudeUsageReady(): Promise<boolean> {
+  return new Promise((done) => {
+    const child = spawn("claude", ["-p", "Reply with the single word OK.", "--model", MODELS[0] ?? VERIFIER_MODEL ?? "claude-opus-5-5"], { cwd: CWD, env: seatChildEnv(process.env), stdio: ["ignore", "pipe", "pipe"] });
+    let out = "";
+    child.stdout.on("data", (d) => (out += d));
+    child.stderr.on("data", (d) => (out += d));
+    const timer = setTimeout(() => child.kill("SIGTERM"), 120_000);
+    child.on("close", (code) => { clearTimeout(timer); done(code === 0 && !usageLimit(out)); });
+    child.on("error", () => { clearTimeout(timer); done(false); });
+  });
+}
 /** Only successfully isolated workers receive seat commit attribution (never planner/verifier). */
 const writeWorkers = new Set<string>();
 
@@ -372,7 +388,8 @@ function runProc(name: string, cmd: string, args: string[], cwd: string, outFile
       const final = outViaFile ? safeRead(outFile) : out;
       exitCodes.set(name, code);
       exitSignals.set(name, signal);
-      log(`${name} exited (${exitDetail(code, [final, err], Date.now(), signal).replace(/^exit /, "")})`);
+      exitDetails.set(name, exitDetail(code, [final, err], Date.now(), signal));
+      log(`${name} exited (${exitDetails.get(name)!.replace(/^exit /, "")})`);
       // the exit receipt: the hub closes this seat's MCP sessions, so a dead seat is not read as alive in a long command.
       // Awaited (5 s at most): withRespawn reads the room's active seats next, and the launcher's own exit would cut it off.
       if (beat) await fetch(`${URL_}/heartbeat`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ seat_key: beat.key, exited: true, detail: exitDetail(code, [final, err], Date.now(), signal) }), signal: AbortSignal.timeout(5_000) }).catch(() => {});

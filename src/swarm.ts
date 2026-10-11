@@ -12,10 +12,9 @@ import { collectRoomSnapshot, renderRunReport, writeRunResult, rollupUsage, hubU
 import { settledAxes } from "./settled.js";
 import { registerRespawn } from "./respawn.js";
 import { fileURLToPath } from "node:url";
-import { carrySettings, devHubRule, heartbeatHookSettings, loadDotEnv, outputHeartbeat, ownHubEnv, reusedHubProblem, seatBeat, seatChildEnv, seatPortError, type SeatBeat } from "./env.js";
+import { carrySettings, devHubRule, heartbeatHookSettings, hubLogFile, loadDotEnv, outputHeartbeat, ownHubEnv, readLauncherToken, respawnTokenProblem, reusedHubProblem, seatBeat, seatChildEnv, seatPortError, type SeatBeat } from "./env.js";
 import { randomUUID } from "node:crypto";
 import { fetchRespawnRoom, respawnChain } from "./respawn.js";
-import { hubLogFile, readLauncherToken, respawnTokenProblem } from "./hub-supervisor.js";
 import { claudeArgs } from "./claude-args.js";
 import { codexSeatCommand, codexUsageTracker } from "./codex-seat.js";
 import { claudeSandbox } from "./sandbox.js";

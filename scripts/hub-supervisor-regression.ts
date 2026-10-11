@@ -8,6 +8,7 @@ import { existsSync, mkdtempSync, readFileSync, statSync } from "node:fs";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
+import * as hubFiles from "../src/env.js";
 import * as sup from "../src/hub-supervisor.js";
 
 // PORT=<first of your range> makes the hubs take PORT, PORT+1 (seats on a shared machine keep to their own ports)
@@ -24,9 +25,9 @@ const answers = (port: number) => fetch(`http://127.0.0.1:${port}/`, { signal: A
 const dir = mkdtempSync(resolve(tmpdir(), "hubd-"));
 const logs = resolve(dir, "logs");
 const env = { CHATROOM_HUBD_LOG_DIR: logs };
-assert.equal(sup.launcherTokenFile("/repo", 7717, {}), "/repo/logs/hub-7717-token", "next to the hub's log, the name the main checkout already uses");
-assert.equal(sup.launcherTokenFile("/repo", 7901, env), resolve(logs, "hub-7901-token"));
-assert.equal(sup.readLauncherToken("/repo", 7901, env), undefined, "no file: no token");
+assert.equal(hubFiles.launcherTokenFile("/repo", 7717, {}), "/repo/logs/hub-7717-token", "next to the hub's log, the name the main checkout already uses");
+assert.equal(hubFiles.launcherTokenFile("/repo", 7901, env), resolve(logs, "hub-7901-token"));
+assert.equal(hubFiles.readLauncherToken("/repo", 7901, env), undefined, "no file: no token");
 // a first death restarts after a second; dying again within the minute doubles the wait up to 30 s; a minute up resets it
 assert.equal(sup.restartDelay(0, 500), 1_000);
 assert.equal(sup.restartDelay(1_000, 2_000), 2_000);
@@ -34,9 +35,9 @@ assert.equal(sup.restartDelay(16_000, 2_000), 30_000);
 assert.equal(sup.restartDelay(30_000, 2_000), 30_000);
 assert.equal(sup.restartDelay(30_000, 61_000), 1_000);
 // --respawn without a token is said at launch, not seven hours later when the first seat dies
-assert.equal(sup.respawnTokenProblem(false, undefined, 7717), null, "no --respawn: nothing to warn about");
-assert.equal(sup.respawnTokenProblem(true, "t", 7717), null);
-assert.match(sup.respawnTokenProblem(true, undefined, 7717) ?? "", /--respawn.*CHATROOM_LAUNCHER_TOKEN/s);
+assert.equal(hubFiles.respawnTokenProblem(false, undefined, 7717), null, "no --respawn: nothing to warn about");
+assert.equal(hubFiles.respawnTokenProblem(true, "t", 7717), null);
+assert.match(hubFiles.respawnTokenProblem(true, undefined, 7717) ?? "", /--respawn.*CHATROOM_LAUNCHER_TOKEN/s);
 
 // ---- a real supervisor, a real hub ----
 const { CHATROOM_SEAT_KEY: _k, CHATROOM_HEARTBEAT_URL: _h, CHATROOM_LAUNCHER_TOKEN: _t, CHATROOM_IDLE_EXIT_MIN: _i, ...rest } = process.env;
@@ -64,8 +65,8 @@ try {
   assert.equal(Number(spawnSync("ps", ["-o", "pgid=", "-p", String(first)], { encoding: "utf8" }).stdout.trim()), first, "the hub leads its own process group");
 
   // the launcher token: generated, handed to the hub, and readable by this user only
-  const file = sup.launcherTokenFile(process.cwd(), port, env);
-  const token = sup.readLauncherToken(process.cwd(), port, env);
+  const file = hubFiles.launcherTokenFile(process.cwd(), port, env);
+  const token = hubFiles.readLauncherToken(process.cwd(), port, env);
   assert.match(token ?? "", /^[0-9a-f]{32,}$/, "a token is generated when none is set");
   assert.equal(statSync(file).mode & 0o777, 0o600, "the token file is 0600");
   await fetch(`http://127.0.0.1:${port}/rooms/kept/create`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ topic: "survives a restart" }) });
@@ -106,14 +107,14 @@ try {
   const a = supervisor(port2, ["--always"]);
   assert.ok(await until(() => answers(port2), 20_000));
   const h1 = listener(port2); hubPids.push(h1);
-  assert.equal(sup.readLauncherToken(process.cwd(), port2, env), "given-by-the-operator");
+  assert.equal(hubFiles.readLauncherToken(process.cwd(), port2, env), "given-by-the-operator");
   process.kill(h1, "SIGTERM");
   assert.ok(await until(async () => { const p = listener(port2); return p !== 0 && p !== h1 && await answers(port2); }, 10_000), "--always restarts a hub that exited 0");
   const h2 = listener(port2); hubPids.push(h2);
   process.kill(a.pid!, "SIGTERM");
   assert.ok(await until(() => a.exitCode !== null, 10_000), "SIGTERM stops the supervisor");
   assert.ok(await until(() => !alive(h2), 5_000), "and its hub");
-  assert.equal(existsSync(sup.launcherTokenFile(process.cwd(), port2, env)), false);
+  assert.equal(existsSync(hubFiles.launcherTokenFile(process.cwd(), port2, env)), false);
 
   // a port something already listens on is refused rather than fought over
   const port3 = await freePort();

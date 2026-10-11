@@ -19,7 +19,8 @@ import { appendFileSync, mkdirSync, openSync, rmSync } from "node:fs";
 import { connect } from "node:net";
 import { dirname, extname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { hubLogDir, hubLogFile, launcherTokenFile, restartDelay, writeLauncherToken } from "./hub-supervisor.js";
+import { hubLogDir, hubLogFile, launcherTokenFile } from "./env.js";
+import { restartDelay, writeLauncherToken } from "./hub-supervisor.js";
 
 const self = fileURLToPath(import.meta.url);
 const root = resolve(dirname(self), "..");

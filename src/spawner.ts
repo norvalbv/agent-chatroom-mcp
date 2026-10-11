@@ -44,6 +44,8 @@ export interface SpawnRequest {
   agent?: AgentKind;
   model?: string;
   cwd?: string;
+  /** the recruiter's worktree: a write recruit's branch is cut from its HEAD (recruitBase), not from the project checkout's */
+  baseDir?: string;
   canEdit?: boolean;
   /** spawn into a fresh room instead of `room` (a sub-team); the newcomers are told to report back to `room` */
   newRoom?: string;
@@ -68,7 +70,7 @@ export interface SpawnedAgent {
   model?: string;
   cwd: string;
   /** a write recruit's own git worktree and branch (never the shared `cwd`); absent for a read-only recruit or outside a git repository */
-  workspace?: { worktree: string; branch: string; /** commit hooks in that worktree (src/worktree-hooks.ts); "missing" means its commits are ungated */ hooks?: HooksCarried["hooks"] };
+  workspace?: { worktree: string; branch: string; /** the commit the branch was cut from and whose HEAD that was, when it is the recruiter's worktree (recruitBase) */ base?: { sha: string; from: string }; /** commit hooks in that worktree (src/worktree-hooks.ts); "missing" means its commits are ungated */ hooks?: HooksCarried["hooks"] };
   requestedBy: string;
   parent?: string; // spawned agent that requested this one, if any
   depth: number;
@@ -164,6 +166,30 @@ export function recruitWorkspace(cwd: string, room: string, name: string): { roo
   return { root, worktree: resolve(root, ".swarm-worktrees", room, name), branch: `swarm/${room}/${name}` };
 }
 
+/**
+ * The commit a write recruit's branch starts from: HEAD of `from`, its recruiter's worktree, when that is a checkout of
+ * the repository `root` belongs to. Without one, `git worktree add` starts at the HEAD of the project checkout, which
+ * can be far behind the commit a room was launched on: swarm-123021-1nwp-audit #33, "Recruit worktrees are cut from
+ * main-checkout HEAD 7c43aef4 (#781, Oct 3) ... The machine-rules command therefore runs gpt-5.6-sol" (the room ran in
+ * devkit-correctness-swarm, a worktree of devkit, at eadfcdc2). Undefined when there is no such worktree.
+ */
+export function recruitBase(root: string, from?: string): { sha: string; from: string } | undefined {
+  if (!from) return undefined;
+  const common = (d: string) => {
+    const r = spawnSync("git", ["-C", d, "rev-parse", "--path-format=absolute", "--git-common-dir"], { encoding: "utf8", timeout: 5_000 });
+    return r.status === 0 ? r.stdout.trim() : undefined;
+  };
+  const mine = common(from);
+  if (!mine || mine !== common(root)) return undefined;
+  const head = spawnSync("git", ["-C", from, "rev-parse", "HEAD"], { encoding: "utf8", timeout: 5_000 });
+  return head.status === 0 && head.stdout.trim() ? { sha: head.stdout.trim(), from } : undefined;
+}
+
+/** `git worktree add -b <branch> <dir> [<base>]` in `root`; without a base the branch starts at root's HEAD. */
+export function createRecruitWorktree(root: string, dir: string, branch: string, base?: string): boolean {
+  return spawnSync("git", ["-C", root, "worktree", "add", "-b", branch, dir, ...(base ? [base] : [])], { encoding: "utf8" }).status === 0;
+}
+
 /** The project a seat's worktree belongs to (the repository its .git is shared with), or undefined outside git. A recruit
  * of that seat works there, not in the hub's own directory (swarm-003601-tky5: a hub started from the agent-chatroom-mcp
  * checkout for a Polymarket room would have put builder recruits in agent-chatroom-mcp). */
@@ -220,9 +246,10 @@ export function removeSnapshot(plan: Pick<Snapshot, "repo" | "dir">): void {
   }
 }
 
-const workspaceOf = (cwd: string, room: string, name: string) => {
+const workspaceOf = (cwd: string, room: string, name: string, baseDir?: string) => {
   const ws = recruitWorkspace(cwd, room, name);
-  return ws && { worktree: ws.worktree, branch: ws.branch };
+  const base = ws && recruitBase(ws.root, baseDir);
+  return ws && { worktree: ws.worktree, branch: ws.branch, ...(base ? { base } : {}) };
 };
 
 export class Spawner {
@@ -385,10 +412,10 @@ export class Spawner {
             : "You are the only recruit on this brief.",
         )
         .split("{{REPORT_TO}}").join(req.newRoom ? `This is a sub-room of ${req.room}: when it concludes, the hub puts its conclusion on that room's board as inbox/${target}/conclusion. For anything they need before then, use post_to_room(from_room="${target}", to_room="${req.room}", key="<short name>").` : "")
-        .split("{{WRITE_RULE}}").join(req.canEdit ? "You MAY edit files and run anything here. You are in your own git worktree on your own branch (git branch --show-current); commit there and name the branch in the room. Never touch the main checkout." + devHubRule(cwd, SANDBOX) : "Do NOT modify files; investigate and report.");
+        .split("{{WRITE_RULE}}").join(req.canEdit ? "You MAY edit files and run anything here. You are in your own git worktree on your own branch (git branch --show-current); commit there and name the branch in the room. Never touch the main checkout." + (recruitBase(recruitWorkspace(cwd, target, name)?.root ?? cwd, req.baseDir) ? ` Your branch was cut from the HEAD of ${by}'s worktree (${recruitBase(recruitWorkspace(cwd, target, name)?.root ?? cwd, req.baseDir)!.sha.slice(0, 8)}), so it holds their commits; their uncommitted changes are not in it.` : "") + devHubRule(cwd, SANDBOX) : "Do NOT modify files; investigate and report.");
 
       // a dry run plans the workspace without creating it, so what a seat is told matches what a real spawn does
-      if (o.dryRun && req.canEdit) rec.workspace = workspaceOf(cwd, target, name);
+      if (o.dryRun && req.canEdit) rec.workspace = workspaceOf(cwd, target, name, req.baseDir);
       if (o.dryRun) {
         writeFileSync(log, `[dry-run] would launch ${agent} in ${cwd}\n\n${prompt}`);
         rec.endedAt = new Date().toISOString();
@@ -397,8 +424,8 @@ export class Spawner {
         continue;
       }
       // a write-enabled recruit works in its own worktree and branch, never in the shared checkout
-      const seatCwd = req.canEdit && !o.dryRun ? (this.worktreeFor(cwd, target, name) ?? cwd) : cwd;
-      if (seatCwd !== cwd) rec.workspace = workspaceOf(cwd, target, name);
+      const seatCwd = req.canEdit && !o.dryRun ? (this.worktreeFor(cwd, target, name, req.baseDir) ?? cwd) : cwd;
+      if (seatCwd !== cwd) rec.workspace = workspaceOf(cwd, target, name, this.basedOn.get(seatCwd));
       const carried = this.hooksIn.get(seatCwd);
       if (rec.workspace && carried) rec.workspace.hooks = carried.hooks;
       // said in the room only when it matters: this seat's commits will run no hooks
@@ -621,13 +648,17 @@ export class Spawner {
 
   /** `git worktree add` for one recruit: .swarm-worktrees/<room>/<name> on branch swarm/<room>/<name>, node_modules linked so builds and tests work there. */
   private readonly hooksIn = new Map<string, HooksCarried>();
-  private worktreeFor(cwd: string, room: string, name: string): string | undefined {
+  /** the recruiter worktree each worktree made here was cut from; one that already existed has no entry, so nothing is claimed about it */
+  private readonly basedOn = new Map<string, string>();
+  private worktreeFor(cwd: string, room: string, name: string, baseDir?: string): string | undefined {
     const ws = recruitWorkspace(cwd, room, name);
     if (!ws) return undefined;
     const { root, worktree: dir } = ws;
     if (existsSync(dir)) return dir;
-    const r = spawnSync("git", ["-C", root, "worktree", "add", "-b", ws.branch, dir], { encoding: "utf8" });
-    if (r.status !== 0) return undefined;
+    // cut from the recruiter's HEAD when it has a worktree of this repository, else from the project checkout's HEAD
+    const base = recruitBase(root, baseDir);
+    if (!createRecruitWorktree(root, dir, ws.branch, base?.sha)) return undefined;
+    if (base) this.basedOn.set(dir, base.from);
     const mods = resolve(root, "node_modules");
     if (existsSync(mods) && !existsSync(resolve(dir, "node_modules"))) {
       try {

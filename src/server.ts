@@ -842,7 +842,7 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
           agent: z.enum(["claude", "codex", "openrouter"]).optional().describe("Requested runner; room_status.recruitment reports the hub's overriding policy and current budgets. Without a pin or request, defaults to claude."),
           model: z.string().optional().describe("Requested model (Claude alias, Codex model id or OpenRouter slug); the hub's model pin, if set, takes precedence."),
           cwd: z.string().optional().describe("Directory the newcomer works in (default: the hub's default project dir)."),
-          can_edit: z.boolean().optional().describe("Allow the newcomer to modify files (default false: investigate and report). It gets its own git worktree on its own branch swarm/<room>/<name>, never your checkout or the shared one; the reply names the branch, which is what you review. That branch starts from the shared checkout's HEAD, not from your branch: if it must build on your commits, name the commit in the brief."),
+          can_edit: z.boolean().optional().describe("Allow the newcomer to modify files (default false: investigate and report). It gets its own git worktree on its own branch swarm/<room>/<name>, never your checkout or the shared one; the reply names the branch, which is what you review. That branch is cut from the HEAD of YOUR worktree when the hub knows it (the reply's workspaces[].base names the commit), so it holds your commits but not your uncommitted changes: commit what the recruit must build on first. With an explicit cwd, or no worktree of yours, it starts from that checkout's HEAD."),
           new_room: z.string().optional().describe("Spawn a sub-team into this new room instead of yours; they report back with post_to_room."),
           room_topic: z.string().optional().describe("Topic for the new room."),
           count: z.number().int().min(1).max(3).optional().describe("How many to spawn (default 2 for a new room, 1 otherwise)."),
@@ -871,14 +871,19 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
         let recs: ReturnType<Spawner["request"]>;
         try {
           // no cwd named: the recruiter's own project, which its launcher-bound worktree says, before the hub's directory
-          const home = cwd ?? ((wt) => (wt ? projectOf(wt) : undefined))(hub.workspaceOf(me_)?.worktree);
-          recs = spawner.request({ room, brief: passed, requestedBy: me_.name, requestedByShown: hub.shown(r, me_), parentTopic: r.topic, name, agent, model, cwd: home, canEdit: can_edit, newRoom: new_room, roomTopic: room_topic, count, area, replacing });
+          // and a recruit starts where its recruiter is: a write recruit's branch is cut from the HEAD of the recruiter's
+          // worktree, and a read-only one reads that worktree, not the project checkout (which can be far behind:
+          // swarm-123021-1nwp-audit #33, recruits cut from the main checkout's Oct 3 HEAD ran the wrong benchmark model)
+          const mine = cwd ? undefined : hub.workspaceOf(me_)?.worktree;
+          const home = cwd ?? (mine ? (can_edit ? projectOf(mine) : mine) : undefined);
+          recs = spawner.request({ room, brief: passed, requestedBy: me_.name, requestedByShown: hub.shown(r, me_), parentTopic: r.topic, name, agent, model, cwd: home, baseDir: mine, canEdit: can_edit, newRoom: new_room, roomTopic: room_topic, count, area, replacing });
         } catch (e) {
           if (briefKey) try { hub.setBoard(room, me_.id, briefKey, ""); } catch {}
           throw e;
         }
         const who = recs.map((x) => x.name).join(", ");
-        hub.announce(room, `${hub.shown(r, me_)} recruited ${who} (${recs[0].agent}${recs[0].model ? `/${recs[0].model}` : ""}${new_room ? `, into ${new_room}` : ""}${area ? `, area ${area}` : ""}): ${brief.slice(0, 200)}${brief.length > 200 ? "…" : ""}`);
+        const based = recs[0].workspace?.base;
+        hub.announce(room, `${hub.shown(r, me_)} recruited ${who} (${recs[0].agent}${recs[0].model ? `/${recs[0].model}` : ""}${new_room ? `, into ${new_room}` : ""}${area ? `, area ${area}` : ""}${based ? `, branch cut from ${based.sha.slice(0, 8)}, the HEAD of ${hub.shown(r, me_)}'s worktree` : ""}): ${brief.slice(0, 200)}${brief.length > 200 ? "…" : ""}`);
         return { spawned: recs.map((x) => x.name), ...(briefKey ? { brief_on_board: briefKey } : {}), room: recs[0].room, depth: recs[0].depth, agent: recs[0].agent, model: recs[0].model ?? null, cwd: recs[0].cwd, ...workspaces(recs), logs: recs.map((x) => x.log), hint: `They will join within a minute or two. Carry on; you will see them arrive.${recs.some((x) => x.workspace) ? " Their commits land on the branch in workspaces, not in cwd." : ""}` };
       }),
     );
@@ -908,7 +913,12 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
       guard("replace_participant", ({ room, target, reason, brief, name, agent, model, cwd, can_edit, area, participant_id }) => {
         const r = hub.getRoom(room);
         const me_ = hub.requireParticipant(r, pid(room, participant_id));
-        const recs = spawner.replace({ room, requestedBy: me_.name, requestedByShown: hub.shown(r, me_), parentTopic: r.topic, replacing: target, reason, brief, name, agent, model, cwd, area, canEdit: can_edit ?? true, requesterIsHuman: Hub.dashboardHuman(me_) });
+        // a successor takes over where its predecessor stopped: its branch is cut from the predecessor's worktree HEAD
+        // (the requester's when the hub knows none), never from the hub's own directory or a stale project checkout
+        const old = [...r.participants.values()].find((p) => p.name === target);
+        const from = cwd ? undefined : (old && hub.workspaceOf(old)?.worktree) ?? hub.workspaceOf(me_)?.worktree;
+        const editing = can_edit ?? true;
+        const recs = spawner.replace({ room, requestedBy: me_.name, requestedByShown: hub.shown(r, me_), parentTopic: r.topic, replacing: target, reason, brief, name, agent, model, cwd: cwd ?? (from ? (editing ? projectOf(from) : from) : undefined), baseDir: from, area, canEdit: editing, requesterIsHuman: Hub.dashboardHuman(me_) });
         return { spawned: recs.map((x) => x.name), room: recs[0].room, agent: recs[0].agent, model: recs[0].model ?? null, ...workspaces(recs), logs: recs.map((x) => x.log), hint: "The room already saw the removal notice; the successor will join within a minute or two." };
       }),
     );

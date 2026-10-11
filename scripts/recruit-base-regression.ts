@@ -1,0 +1,83 @@
+/**
+ * A recruit starts where its recruiter is (evidence-pack item 13, chat-and-friction 12; claim/recruit-base).
+ * swarm-123021-1nwp-audit #33: "Recruit worktrees are cut from main-checkout HEAD 7c43aef4 (#781, Oct 3), and
+ * BENCH_CORRECTNESS_MODEL does not exist at that commit. The machine-rules command therefore runs gpt-5.6-sol". The room
+ * was launched from devkit-correctness-swarm, a git worktree of devkit at eadfcdc2, while the main devkit checkout sat
+ * at 7c43aef4: request_agent with no cwd took the recruiter's PROJECT (the main checkout) and `git worktree add` with
+ * no start point, so a write recruit's branch began at the main checkout's HEAD, and a read-only recruit read the main
+ * checkout's stale files. Now a write recruit's branch is cut from the HEAD of its recruiter's worktree, and the spawn
+ * record says which commit and whose. Red on main: recruitBase does not exist and the branch starts at the stale commit.
+ * Run: npx tsx scripts/recruit-base-regression.ts
+ */
+import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
+import { existsSync, mkdtempSync, realpathSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { test } from "node:test";
+import * as spawnerModule from "../src/spawner.js";
+import { Spawner } from "../src/spawner.js";
+
+const git = (cwd: string, ...a: string[]) => execFileSync("git", ["-C", cwd, ...a], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
+
+/** A main checkout at an old commit and a worktree of it two commits ahead: the shape of devkit and devkit-correctness-swarm. */
+function repo() {
+  const main = realpathSync(mkdtempSync(join(tmpdir(), "recruit-base-main-")));
+  git(main, "init", "-q", "-b", "main");
+  git(main, "config", "user.email", "t@t"); git(main, "config", "user.name", "t");
+  writeFileSync(join(main, "bench.txt"), "model gpt-old\n");
+  git(main, "add", "-A"); git(main, "commit", "-q", "-m", "old main");
+  const stale = git(main, "rev-parse", "HEAD");
+  const launch = join(main, "..", `recruit-base-launch-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`);
+  git(main, "worktree", "add", "-q", "-b", "launch", launch);
+  writeFileSync(join(launch, "bench.txt"), "model claude-haiku-5-5\n");
+  git(launch, "commit", "-q", "-am", "haiku support");
+  // the recruiter's own seat worktree, cut from the launch checkout, with one more commit of its own
+  const seat = join(main, ".swarm-worktrees", "room-a", "seat-1");
+  git(launch, "worktree", "add", "-q", "-b", "swarm/room-a/seat-1", seat);
+  writeFileSync(join(seat, "result.txt"), "seat-1's result\n");
+  git(seat, "add", "-A"); git(seat, "commit", "-q", "-m", "seat work");
+  return { main, launch: realpathSync(launch), seat: realpathSync(seat), stale, seatHead: git(seat, "rev-parse", "HEAD") };
+}
+
+type Mod = typeof spawnerModule & {
+  recruitBase?: (root: string, from?: string) => { sha: string; from: string } | undefined;
+  createRecruitWorktree?: (root: string, dir: string, branch: string, base?: string) => boolean;
+};
+const mod = spawnerModule as Mod;
+
+test("recruitBase: the recruiter's worktree HEAD, only when it is a checkout of the same repository", () => {
+  const r = repo();
+  assert.equal(typeof mod.recruitBase, "function", "recruitBase is exported");
+  assert.deepEqual(mod.recruitBase!(r.main, r.seat), { sha: r.seatHead, from: r.seat });
+  assert.equal(mod.recruitBase!(r.main, undefined), undefined, "no recruiter worktree: the project's HEAD, as before");
+  const other = repo();
+  assert.equal(mod.recruitBase!(r.main, other.seat), undefined, "a worktree of another repository is never a base");
+  assert.equal(mod.recruitBase!(r.main, tmpdir()), undefined, "nor is a directory outside git");
+});
+
+test("a write recruit's worktree is cut from that commit, not from the main checkout's HEAD", () => {
+  const r = repo();
+  assert.equal(typeof mod.createRecruitWorktree, "function", "createRecruitWorktree is exported");
+  const dir = join(r.main, ".swarm-worktrees", "room-a", "builder");
+  assert.ok(mod.createRecruitWorktree!(r.main, dir, "swarm/room-a/builder", r.seatHead));
+  assert.equal(git(dir, "rev-parse", "HEAD"), r.seatHead, "the recruit starts at its recruiter's HEAD");
+  assert.equal(git(dir, "show", "HEAD:bench.txt"), "model claude-haiku-5-5", "so it runs the benchmark the room is on");
+  assert.ok(existsSync(join(dir, "result.txt")), "and has the recruiter's own commits");
+  assert.equal(git(dir, "branch", "--show-current"), "swarm/room-a/builder");
+  // without a base it is the old behaviour: the main checkout's HEAD
+  const dir2 = join(r.main, ".swarm-worktrees", "room-a", "plain");
+  assert.ok(mod.createRecruitWorktree!(r.main, dir2, "swarm/room-a/plain"));
+  assert.equal(git(dir2, "rev-parse", "HEAD"), r.stale);
+});
+
+test("the spawn record says which commit a write recruit starts from, and whose; a read-only recruit works in the recruiter's tree", () => {
+  const r = repo();
+  const spawner = new Spawner({ mcpUrl: "http://test/mcp", defaultCwd: r.main, logDir: mkdtempSync(join(tmpdir(), "recruit-base-log-")), dryRun: true });
+  spawner.attach({ isHeld: () => false, claimArea: () => {}, ensureRoom: () => {}, announce: () => {}, liveAgents: () => 0 });
+  const [w] = spawner.request({ room: "room-a", requestedBy: "seat-1", brief: "Build the parser and commit it on your branch.", name: "builder", canEdit: true, cwd: r.main, baseDir: r.seat } as never);
+  assert.deepEqual((w.workspace as { base?: unknown }).base, { sha: r.seatHead, from: r.seat });
+  assert.ok(w.workspace!.worktree.startsWith(join(r.main, ".swarm-worktrees")), "the worktree still lives under the project");
+  const [plain] = spawner.request({ room: "room-a", requestedBy: "seat-1", brief: "Build the lexer and commit it on your branch.", name: "builder-2", canEdit: true, cwd: r.main });
+  assert.equal((plain.workspace as { base?: unknown }).base, undefined, "no recruiter worktree known: nothing claimed about the base");
+});

@@ -94,3 +94,64 @@ test("--groups refuses a file it cannot launch, before any seat starts", () => {
     assert.equal(r.prompts.length, 0, `${tag}: no seat was started`);
   }
 });
+
+/** A stub claude that stays up for FAKE_SLEEP_MS, so the run lasts long enough for a digest pass to come due. */
+const SLOW_CLAUDE = `#!/usr/bin/env node
+const fs = require('node:fs'), path = require('node:path'), crypto = require('node:crypto');
+const argv = process.argv.slice(2), stdin = fs.readFileSync(0, 'utf8');
+fs.writeFileSync(path.join(process.env.FAKE_RECORD_DIR, 'claude-' + crypto.randomUUID() + '.json'), JSON.stringify({ argv, stdin, cwd: process.cwd(), at: Date.now() }));
+setTimeout(() => process.stdout.write(JSON.stringify({ type: 'result', subtype: 'success', is_error: false, result: 'ok', total_cost_usd: 0.25, usage: {} }) + '\\n'), Number(process.env.FAKE_SLEEP_MS || 0));
+`;
+
+test("--digest-every starts a fresh consolidator seat on a timer, told every group's room and where to send what it finds", () => {
+  const tag = "digest";
+  const [bin, records, data] = ["bin", "records", "data"].map((d) => join(base, tag, d));
+  for (const d of [bin, records, data]) mkdirSync(d, { recursive: true });
+  writeFileSync(join(bin, "claude"), SLOW_CLAUDE, { mode: 0o755 });
+  const file = join(base, tag, "groups.json");
+  writeFileSync(file, JSON.stringify(GROUPS));
+  const result = join(base, tag, "result.json");
+  // 0.03 min = 1.8 s between passes; the group seats stay up 5 s, a consolidator 0.5 s
+  const r = spawnSync(process.execPath, ["dist/swarm.js", TASK, "--groups", file, "--digest-every", "0.03", "--no-carry", "--timeout", "1", "--port", PORT!, "--result-path", result], {
+    encoding: "utf8",
+    timeout: 90_000,
+    env: { ...process.env, PATH: `${bin}:${process.env.PATH}`, FAKE_RECORD_DIR: records, FAKE_SLEEP_MS: "5000", CHATROOM_INSECURE_LOCAL: "1", CHATROOM_NO_RECRUIT: "1", CHATROOM_DATA_DIR: data },
+  });
+  stopOurHub();
+  const tail = `launcher exit ${r.status}; stderr tail: ${String(r.stderr).slice(-600)}`;
+  const prompts = readdirSync(records).map((f) => (JSON.parse(readFileSync(join(records, f), "utf8")) as { stdin: string }).stdin);
+  const digests = prompts.filter((p) => /You are digest-\d+/.test(p));
+  assert.ok(digests.length >= 1, `at least one consolidator seat was started (${tail})`);
+  const first = digests.find((p) => p.includes("You are digest-1,"))!;
+  assert.ok(first, "passes are numbered from 1");
+  const swarm = /`(swarm-\d{6}-[a-z0-9]{4})-leads`/.exec(first)?.[1];
+  assert.ok(swarm, "it is told the consolidation room");
+  for (const id of ["build", "break"]) {
+    assert.ok(first.includes(`${swarm}-${id}`), `it is told the ${id} group's room`);
+    assert.ok(first.includes(`http://127.0.0.1:${PORT}/rooms/${swarm}-${id}`), `and where to read the ${id} room without joining it`);
+  }
+  assert.ok(first.includes("BUILD-BRIEF-MARKER") && first.includes("BREAK-BRIEF-MARKER"), "it sees every group's brief");
+  assert.ok(first.includes('key="digest-1"') && first.includes("ack_required=true"), "it sends each group a note the group must acknowledge");
+  assert.ok(first.includes("digest/1"), "and leaves the pass on the consolidation room's board for the next one");
+  assert.match(String(r.stdout), /digest pass 1: started digest-1/, "the launcher logs each pass");
+  // a pass that is still running is not doubled: passes are numbered without gaps and none repeats
+  const numbers = digests.map((p) => Number(/You are digest-(\d+)/.exec(p)![1])).sort((a, b) => a - b);
+  assert.deepEqual(numbers, numbers.map((_, i) => i + 1), `passes 1..n, each once: ${JSON.stringify(numbers)}`);
+  const usage = (JSON.parse(readFileSync(result, "utf8")) as { usage?: { seats?: number; cost_usd?: number } }).usage;
+  assert.equal(usage?.seats, 5 + digests.length, "each consolidator's usage is counted in the run's result, beside the five seats'");
+  assert.equal(usage?.cost_usd, 0.25 * (5 + digests.length));
+});
+
+test("--digest-every without --groups is refused", () => {
+  const bin = join(base, "nogroups-bin"), records = join(base, "nogroups-rec");
+  for (const d of [bin, records]) mkdirSync(d, { recursive: true });
+  writeFakeBins(bin);
+  const r = spawnSync(process.execPath, ["dist/swarm.js", TASK, "--flat", "--digest-every", "30", "--no-carry", "--timeout", "1", "--port", PORT!], {
+    encoding: "utf8", timeout: 60_000,
+    env: { ...process.env, PATH: `${bin}:${process.env.PATH}`, FAKE_RECORD_DIR: records, CHATROOM_INSECURE_LOCAL: "1", CHATROOM_NO_RECRUIT: "1", CHATROOM_DATA_DIR: join(base, "nogroups-data") },
+  });
+  stopOurHub();
+  assert.equal(r.status, 2);
+  assert.match(String(r.stderr), /--digest-every needs --groups/);
+  assert.equal(readdirSync(records).length, 0, "no seat was started");
+});

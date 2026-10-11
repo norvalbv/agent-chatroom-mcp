@@ -66,7 +66,7 @@ const FULL_WAIT_MS = 50_000;
 
 /** `holdMs`: how long this connection's client waits for a tool, as its launcher said in the MCP URL (?hold=, src/env.ts
  * seatHoldMs). A full-length wait_for_messages on it is held that long before it returns empty. */
-export function createSessionServer(hub: Hub, spawner?: Spawner, opts: { holdMs?: number } = {}): SessionServer {
+export function createSessionServer(hub: Hub, spawner?: Spawner, opts: { holdMs?: number; fullWaitMs?: number } = {}): SessionServer {
   const server = new McpServer(
     { name: "agent-chatroom", version: "0.2.0" },
     {
@@ -454,8 +454,13 @@ export function createSessionServer(hub: Hub, spawner?: Spawner, opts: { holdMs?
       const asked = Math.min(timeout_ms ?? DEFAULT_WAIT_MS, MAX_WAIT_MS);
       // an empty return is a model request that re-reads the seat's context ($0.08 each in the records, 12% of spend): a
       // connection whose client can wait longer is held longer. A short poll the seat asked for keeps its length.
-      const waitBudgetMs = opts.holdMs && asked >= FULL_WAIT_MS ? opts.holdMs : asked;
+      const held = !!opts.holdMs && asked >= (opts.fullWaitMs ?? FULL_WAIT_MS);
+      const waitBudgetMs = held ? opts.holdMs! : asked;
       const waitDeadline = Date.now() + waitBudgetMs;
+      // the hold is for silence only: once anything has arrived, chatter is skipped no longer than the seat asked for, as
+      // before the hold (evidence/held-wait-misses-challenge: a proposer sat 172-188 s after two challenges on its own
+      // proposal, which are not "actionable" for it, until the hub's silence line woke it)
+      const chatterDeadline = Date.now() + asked;
       // a connection with seats in other rooms (a breakout and its parent) wakes for what it owes there too:
       // the long-poll runs in slices and checks the other rooms between them
       const multi = hub.sessionRoomCount(sessionKey) > 1;
@@ -470,7 +475,7 @@ export function createSessionServer(hub: Hub, spawner?: Spawner, opts: { holdMs?
         // a delivered message that @-names this seat is actionable even once settled (a hub notice retires on delivery)
         // a capped page means more is already waiting: return it rather than piling the backlog into one result
         while (!hub.deliveryRemaining(p) && !hub.actionableNow(r, p) && !msgs.some((m) => m.mentions?.includes(id!)) && !owedElsewhere()) {
-          const remaining = waitDeadline - Date.now();
+          const remaining = (msgs.length ? Math.min(waitDeadline, chatterDeadline) : waitDeadline) - Date.now();
           if (remaining <= 0) break;
           const more = await hub.wait(room, id, p.lastSeenSeq, slice(remaining));
           if (more.length) msgs = msgs.concat(more);

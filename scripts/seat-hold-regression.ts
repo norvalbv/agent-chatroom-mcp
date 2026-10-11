@@ -52,8 +52,8 @@ assert.equal(leaveWaitsFor(120_000), 4);
 
 const hub = new Hub({});
 const open: Client[] = [];
-async function seat(name: string, holdMs?: number) {
-  const session = createSessionServer(hub, undefined, { holdMs });
+async function seat(name: string, holdMs?: number, fullWaitMs?: number) {
+  const session = createSessionServer(hub, undefined, { holdMs, ...(fullWaitMs ? { fullWaitMs } : {}) });
   const client = new Client({ name, version: "1" });
   const [ct, st] = InMemoryTransport.createLinkedPair();
   await session.server.connect(st);
@@ -92,6 +92,31 @@ try {
   const woke = await waiting;
   assert.ok(woke.ms < 1200, `woken by the message, not by the hold ending (${woke.ms} ms)`);
   assert.equal(woke.out.messages.length, 1);
+  // evidence/held-wait-misses-challenge (claude-opus-5-5-1's A/B on integration): a proposer in a hold_until_actionable
+  // wait sat 172-188 s after two challenges on its own proposal, because a challenge is not "actionable" for it and the
+  // hold had stretched the time chatter is skipped from the seat's own 55 s to 4 min. Scaled down: a "full-length" wait
+  // here is 1 s (fullWaitMs), the hold 4 s. Silence is held 4 s; a message that is not addressed to the seat ends the
+  // wait once its own 1 s has passed, not at 4 s.
+  {
+    const c = await seat("held-chatter", 4000, 1000);
+    await c("wait_for_messages", { timeout_ms: 0 });
+    const quiet = await timed(() => c("wait_for_messages", { timeout_ms: 1000, hold_until_actionable: true }));
+    assert.ok(quiet.ms >= 3800, `silence is still held to the hold (${quiet.ms} ms)`);
+    const run = timed(() => c("wait_for_messages", { timeout_ms: 1000, hold_until_actionable: true }));
+    await new Promise((r) => setTimeout(r, 300));
+    await b("send_message", { content: "an aside nobody has to answer", force: true });
+    const got = await run;
+    assert.ok(got.ms >= 900 && got.ms < 2000, `chatter is skipped for the seat's own budget only, then returned (${got.ms} ms, not 4000)`);
+    assert.equal(got.out.messages.length, 1);
+    // and a message after that budget is returned at once, not held to the end of the hold
+    const late = timed(() => c("wait_for_messages", { timeout_ms: 1000, hold_until_actionable: true }));
+    await new Promise((r) => setTimeout(r, 1800));
+    const t = Date.now();
+    await b("send_message", { content: "another aside", force: true });
+    const got2 = await late;
+    assert.ok(Date.now() - t < 500, `a message after the seat's own budget returns the held wait at once (${Date.now() - t} ms after it)`);
+    assert.equal(got2.out.messages.length, 1);
+  }
   console.log("seat-hold-regression OK");
 } finally {
   for (const c of open) await c.close().catch(() => {});

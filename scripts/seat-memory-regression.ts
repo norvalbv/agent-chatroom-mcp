@@ -59,8 +59,9 @@ const A = seatHash("seat-key-AAAA"), B = seatHash("seat-key-BBBB");
 const kills: [number, string][] = [];
 const events: MemoryEvent[] = [];
 let current: Proc[] = table;
+let footprint = new Map<number, number>();
 const watch = (budgetMb: number | undefined, watched = (s: string) => s === A || s === B) =>
-  new MemoryWatch({ budgetMb, watched, table: async () => current, footprints: async () => new Map(), kill: (pid, signal) => { kills.push([pid, signal]); }, onEvent: (e) => events.push(e) });
+  new MemoryWatch({ budgetMb, watched, table: async () => current, footprints: async () => footprint, kill: (pid, signal) => { kills.push([pid, signal]); }, onEvent: (e) => events.push(e) });
 
 // no budget: measured, nothing stopped
 const measuring = watch(undefined);
@@ -104,6 +105,20 @@ kills.length = 0; events.length = 0;
 await agentOnly.tick(); await agentOnly.tick();
 assert.deepEqual([kills, events], [[], []], "a seat whose only large process is its own agent is neither warned nor stopped");
 assert.equal(agentOnly.get(A)!.agent_mb, 8789, "but its agent's size is reported");
+// an idle process's pages are compressed or swapped within a minute: 11 MB resident, 2.9 GB footprint. It is still seen.
+current = parseTable("  100     1 800000    02:00:00 claude -p brief\n  102     1 11008      09:00 python3 pull.py --all", withEnv);
+footprint = new Map([[102, 3_000_000]]);
+kills.length = 0; events.length = 0;
+const idle = watch(1000);
+await idle.tick();
+assert.equal(idle.get(A)!.mb, 2930, "the footprint, not the 11 MB that is resident");
+assert.deepEqual(events.map((e) => e.kind), ["over"]);
+await idle.tick();
+assert.deepEqual(kills, [[102, "SIGTERM"]]);
+const measuringIdle = watch(undefined);
+await measuringIdle.tick();
+assert.equal(measuringIdle.get(A)!.mb, 2930, "with no budget the footprint is still read (every fourth tick, the first included)");
+footprint = new Map();
 // over budget only through many small processes: no single one is worth stopping (floor: 10% of the budget)
 current = parseTable([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11].map((i) => `  ${400 + i}     1  90000      01:00 python3 rec${i}.py`).join("\n") + "\n  100     1 1000    02:00:00 claude -p brief", [...[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11].map((i) => `  ${400 + i} python3 rec${i}.py CHATROOM_SEAT_KEY=seat-key-AAAA`), "  100 claude CHATROOM_SEAT_KEY=seat-key-AAAA"].join("\n"));
 kills.length = 0;
@@ -182,7 +197,7 @@ const hog = proc(keyA, 400, "hog");
 
 for (let i = 0; alive(hog); i++) { assert.ok(i < 150, "the over-budget process was not stopped within 30 s"); await sleep(200); }
 assert.equal(hog.signalCode, "SIGTERM", "stopped by signal, by the hub");
-await sleep(1200); // two more ticks: nothing else goes
+await sleep(4000); // two more ticks (a tick reads the footprint with top, about a second): nothing else goes
 assert.ok(alive(agentA), "the seat's agent process is never stopped");
 assert.ok(alive(small), "only the largest process of the over-budget seat");
 assert.ok(alive(peerJob) && alive(agentB), "another seat's processes are untouched");
@@ -218,7 +233,7 @@ const c = await connect(seatBeat(`${HTTP}/mcp`, keyGone).mcpUrl);
 await c("join_room", { room: "mem", name: "leaver", agent: "claude" });
 await c("leave_room", { room: "mem", reason: "done: nothing left undone here" });
 const orphan = proc(keyGone, 400, "orphan");
-await sleep(2500);
+await sleep(5000);
 assert.ok(alive(orphan), "a process of a seat that left is never stopped, even over the budget");
 const hubWide = (await (await fetch(`${HTTP}/memory`)).json()) as { budget_mb: number; unattributed: { top: { pid: number; mb: number }[] } };
 assert.equal(hubWide.budget_mb, BUDGET);

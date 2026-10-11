@@ -4,9 +4,12 @@
  * nothing in the hub or launcher measured it; board evidence/seat-memory in swarm-003601-tky5).
  * - Whose: every process a seat starts inherits CHATROOM_SEAT_KEY and keeps it after nohup hands it to PID 1, so the
  *   process table groups by seat with no wrapper (as src/hub/caller.ts does for one caller).
- * - How much: resident size from ps on every tick. Resident size under-reports a process whose pages are compressed or
- *   swapped, which is the case that matters (45.6 GB cannot be resident on 24 GB), so once a seat is near its budget
- *   the figure is the footprint from `top` (macOS; 0.7 s a call, so not on every tick).
+ * - How much: the larger of resident size (ps) and footprint (`top`, macOS). Resident size under-reports a process
+ *   whose pages are compressed or swapped, which is the case that matters (45.6 GB cannot be resident on 24 GB), and
+ *   it does so within a minute for an idle process: measured here, a script that read 800 MB and slept showed 834 MB
+ *   resident for 32 s and 11 MB at 48 s with its footprint unchanged at 807 MB; in dev room swarm-010108-n9m2 three
+ *   1.2 GB scripts went unseen for 93 s. So the footprint is read on every tick under a budget, and on every
+ *   FOOTPRINT_EVERY-th tick when the hub only measures (`top` costs about a second).
  * - The budget (CHATROOM_SEAT_MEMORY_MB, off when unset) is on what the seat started, not on the seat's own agent
  *   process: at WARN_AT of it the seat is told; at the budget the hub stops that seat's largest process by PID and tells
  *   the seat which, how large and what to do instead (arXiv:2602.09345: act on the tool's process, keep the agent, say
@@ -42,8 +45,8 @@ export const WARN_AT = 0.7;
 const REARM_AT = 0.5;
 /** a process under this share of the budget is not worth stopping: the seat is told its total instead */
 const STOP_FLOOR = 0.1;
-/** resident size past this share of the budget: read the footprint instead */
-const FOOTPRINT_AT = 0.4;
+/** with no budget to enforce, the footprint is read on every this-many-th tick */
+const FOOTPRINT_EVERY = 4;
 const KEY = /(?:^|\s)CHATROOM_SEAT_KEY=([\w-]{8,100})/;
 const mbOf = (kb: number) => Math.round(kb / 1024);
 
@@ -124,6 +127,7 @@ export class MemoryWatch {
   /** pid the last tick asked to stop, per seat: still there on the next tick means it ignored SIGTERM */
   private readonly asked = new Map<string, number>();
   private running = false;
+  private ticks = 0;
   readonly budgetMb: number | null;
 
   constructor(private readonly o: MemoryWatchOptions) {
@@ -140,10 +144,10 @@ export class MemoryWatch {
     this.running = true;
     try {
       const table = await (this.o.table ?? (async () => parseTable(await sh("ps", ["-Ao", "pid=,ppid=,rss=,etime=,command="]), await sh("ps", ["eww", "-Ao", "pid=,command="]))))();
-      let usage = seatUsage(table);
-      const budgetKb = this.budgetMb ? this.budgetMb * 1024 : null;
-      const near = budgetKb !== null && [...usage].some(([key, u]) => this.o.watched(seatHash(key)) && u.kb >= budgetKb * FOOTPRINT_AT);
-      if (near) usage = seatUsage(table, await (this.o.footprints ?? (async () => (process.platform === "darwin" ? parseFootprints(await sh("top", ["-l", "1", "-stats", "pid,mem"], 10_000)) : new Map<number, number>())))());
+      // only when some watched seat has started something: an idle hub does not run top
+      const busy = [...seatUsage(table)].some(([key, u]) => u.own.length > 0 && this.o.watched(seatHash(key)));
+      const footprint = busy && (this.budgetMb !== null || this.ticks++ % FOOTPRINT_EVERY === 0);
+      const usage = seatUsage(table, footprint ? await (this.o.footprints ?? (async () => (process.platform === "darwin" ? parseFootprints(await sh("top", ["-l", "1", "-stats", "pid,mem"], 10_000)) : new Map<number, number>())))() : undefined);
       const events: MemoryEvent[] = [];
       const at = new Date().toISOString();
       const seen = new Set<string>();

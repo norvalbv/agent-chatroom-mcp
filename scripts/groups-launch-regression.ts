@@ -1,4 +1,4 @@
-/** Hand-written groups: PORT=<free port> npx tsx --test scripts/groups-launch-regression.ts (needs npm run build)
+/** Hand-written groups: [PORT=<port in your range>] npx tsx --test scripts/groups-launch-regression.ts (needs npm run build)
  * The planned mode asks a planner model for the groups, so an operator could not launch groups with briefs they wrote
  * themselves (two groups with opposing briefs, each talking only in its own room). --groups <file.json> takes them as
  * given. The launcher is run for real with stub claude binaries on PATH, and each seat's prompt is read from what the
@@ -9,10 +9,10 @@ import { spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { writeFakeBins } from "./seat-launch-fixture.ts";
+import { freePort, writeFakeBins } from "./seat-launch-fixture.ts";
 
-const PORT = process.env.PORT;
-if (!PORT) throw new Error("set PORT to a free port in your range");
+// a seat on a shared machine passes a port from its own range; the suite passes none and gets a free one
+const PORT = process.env.PORT ?? String(await freePort());
 
 const TASK = "Decide whether the widget rebate pays a small account.";
 const GROUPS = {
@@ -42,7 +42,7 @@ function launch(tag: string, groups: unknown, extra: string[] = []): Launch {
   const file = join(base, tag, "groups.json");
   writeFileSync(file, typeof groups === "string" ? groups : JSON.stringify(groups));
   const result = join(base, tag, "result.json");
-  const r = spawnSync(process.execPath, ["dist/swarm.js", TASK, "--groups", file, ...extra, "--no-carry", "--timeout", "1", "--port", PORT!, "--result-path", result], {
+  const r = spawnSync(process.execPath, ["dist/swarm.js", TASK, "--groups", file, ...extra, "--no-carry", "--timeout", "1", "--port", PORT, "--result-path", result], {
     encoding: "utf8",
     timeout: 90_000,
     env: { ...process.env, PATH: `${bin}:${process.env.PATH}`, FAKE_RECORD_DIR: records, CHATROOM_INSECURE_LOCAL: "1", CHATROOM_NO_RECRUIT: "1", CHATROOM_DATA_DIR: data },
@@ -116,7 +116,7 @@ test("--digest-every starts a fresh consolidator seat on a timer, told every gro
   writeFileSync(file, JSON.stringify(GROUPS));
   const result = join(base, tag, "result.json");
   // 0.03 min = 1.8 s between passes; the group seats stay up 5 s, a consolidator 0.5 s
-  const r = spawnSync(process.execPath, ["dist/swarm.js", TASK, "--groups", file, "--digest-every", "0.03", "--no-carry", "--timeout", "1", "--port", PORT!, "--result-path", result], {
+  const r = spawnSync(process.execPath, ["dist/swarm.js", TASK, "--groups", file, "--digest-every", "0.03", "--no-carry", "--timeout", "1", "--port", PORT, "--result-path", result], {
     encoding: "utf8",
     timeout: 90_000,
     env: { ...process.env, PATH: `${bin}:${process.env.PATH}`, FAKE_RECORD_DIR: records, FAKE_SLEEP_MS: "5000", CHATROOM_INSECURE_LOCAL: "1", CHATROOM_NO_RECRUIT: "1", CHATROOM_DATA_DIR: data },
@@ -155,7 +155,7 @@ test("--digest-every without --groups is refused", () => {
   const bin = join(base, "nogroups-bin"), records = join(base, "nogroups-rec");
   for (const d of [bin, records]) mkdirSync(d, { recursive: true });
   writeFakeBins(bin);
-  const r = spawnSync(process.execPath, ["dist/swarm.js", TASK, "--flat", "--digest-every", "30", "--no-carry", "--timeout", "1", "--port", PORT!], {
+  const r = spawnSync(process.execPath, ["dist/swarm.js", TASK, "--flat", "--digest-every", "30", "--no-carry", "--timeout", "1", "--port", PORT], {
     encoding: "utf8", timeout: 60_000,
     env: { ...process.env, PATH: `${bin}:${process.env.PATH}`, FAKE_RECORD_DIR: records, CHATROOM_INSECURE_LOCAL: "1", CHATROOM_NO_RECRUIT: "1", CHATROOM_DATA_DIR: join(base, "nogroups-data") },
   });
@@ -173,7 +173,7 @@ test("no digest pass starts once the group rooms have concluded or closed", asyn
   const file = join(base, tag, "groups.json");
   writeFileSync(file, JSON.stringify(GROUPS));
   const { spawn } = await import("node:child_process");
-  const child = spawn(process.execPath, ["dist/swarm.js", TASK, "--groups", file, "--digest-every", "0.03", "--quorum", "majority", "--no-carry", "--timeout", "1", "--port", PORT!, "--result-path", join(base, tag, "result.json")], {
+  const child = spawn(process.execPath, ["dist/swarm.js", TASK, "--groups", file, "--digest-every", "0.03", "--quorum", "majority", "--no-carry", "--timeout", "1", "--port", PORT, "--result-path", join(base, tag, "result.json")], {
     // --quorum makes the launcher create the group rooms itself (the stub seats never join one)
     env: { ...process.env, PATH: `${bin}:${process.env.PATH}`, FAKE_RECORD_DIR: records, FAKE_SLEEP_MS: "9000", CHATROOM_INSECURE_LOCAL: "1", CHATROOM_NO_RECRUIT: "1", CHATROOM_DATA_DIR: data },
   });
@@ -189,7 +189,7 @@ test("no digest pass starts once the group rooms have concluded or closed", asyn
   const swarm = /swarm (swarm-\d{6}-[a-z0-9]{4}):/.exec(out)?.[1] ?? /(swarm-\d{6}-[a-z0-9]{4})-build/.exec(out)?.[1];
   assert.ok(swarm, `the run's id is in the launcher output: ${out.slice(0, 400)}`);
   for (const id of ["build", "break"]) {
-    const r = await fetch(`http://127.0.0.1:${PORT}/rooms/${swarm}-${id}/close`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ name: "test", reason: "groups done" }) });
+    const r: Response = await fetch(`http://127.0.0.1:${PORT}/rooms/${swarm}-${id}/close`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ name: "test", reason: "groups done" }) });
     assert.equal(r.status, 200, `closed ${id}: ${await r.text()}`);
   }
   const startedAtClose = (out.match(/digest pass \d+: started/g) ?? []).length;

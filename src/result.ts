@@ -334,11 +334,26 @@ function renderLeftOnBoard(lead: Record<string, any>): string {
   if (others.length) text += `Other entries: ${others.map(([key, e]) => `${key} (${e.by ?? 'unknown'})`).join(', ')}\n\n`;
   return text;
 }
+type BoardText = Record<string, { by?: string; text?: string; updated_at?: string }>;
+const quoted = (text: string | undefined) => (text ?? '').replace(/^#/gm, '\\#');
+/** A group that did not conclude still has an answer if it kept `position` on its board (prompts/group.md). */
+function renderPosition(payload: Record<string, any> | null): string {
+  const e = ((payload?.board ?? {}) as BoardText).position;
+  if (!payload || payload.conclusion) return '';
+  return e?.text?.trim() ? `Its last \`position\` (${e.by ?? 'unknown'}, ${e.updated_at ?? 'time unknown'}):\n\n${quoted(e.text)}\n\n` : `No \`position\` entry on its board.\n\n`;
+}
+/** The lead room's latest digest/<n>: what a consolidation pass last carried between the groups. */
+function renderLatestDigest(lead: Record<string, any>): string {
+  const passes = Object.entries((lead.board ?? {}) as BoardText).filter(([k]) => /^digest\/\d+$/.test(k)).sort((a, b) => Number(b[0].slice(7)) - Number(a[0].slice(7)));
+  return passes[0] ? `### Latest consolidation pass: ${passes[0][0]} (${passes[0][1].by ?? 'unknown'})\n\n${quoted(passes[0][1].text)}\n\n` : '';
+}
 /** Human view only; consumers must read JSON, never parse this Markdown. */
 export function renderRunReport(r: RunResult): string {
   const lead = r.rooms.find(room => room.name === r.leadRoom)?.payload;
-  let text = `# ${r.run.id}\n\n**Task:** ${r.run.task}\n\n**Done when:** ${r.run.doneWhen}\n\n## Final answer (${lead?.state ?? 'missing'})\n\n${lead?.conclusion?.text ?? (r.outcome ? `_no consensus reached_: ${r.outcome.detail}` : '_no consensus reached_')}\n\n${lead && !lead.conclusion ? renderLeftOnBoard(lead) : ''}## Verifier\n\n${r.verifier.output ?? '(none)'}\n\n## Groups\n\n`;
-  for (const room of r.rooms.filter(room => room.name !== r.leadRoom)) text += `### ${room.name} (${room.payload?.state ?? 'missing'})\n\n${room.payload?.conclusion?.text ?? '_no consensus_'}\n\n`;
+  let text = `# ${r.run.id}\n\n**Task:** ${r.run.task}\n\n**Done when:** ${r.run.doneWhen}\n\n## Final answer (${lead?.state ?? 'missing'})\n\n${lead?.conclusion?.text ?? (r.outcome ? `_no consensus reached_: ${r.outcome.detail}` : '_no consensus reached_')}\n\n${lead && !lead.conclusion ? renderLeftOnBoard(lead) + renderLatestDigest(lead) : ''}## Verifier\n\n${r.verifier.output ?? '(none)'}\n\n## Groups\n\n`;
+  // only a run whose groups keep a position prints it (or its absence): other runs' reports are unchanged
+  const grouped = r.rooms.some(room => room.name !== r.leadRoom && ((room.payload?.board ?? {}) as BoardText).position);
+  for (const room of r.rooms.filter(room => room.name !== r.leadRoom)) text += `### ${room.name} (${room.payload?.state ?? 'missing'})\n\n${room.payload?.conclusion?.text ?? '_no consensus_'}\n\n${grouped ? renderPosition(room.payload) : ''}`;
   text += `## Result artifact\n\nAuthoritative full room snapshots, board evidence and raw transcripts: ${r.artifactPath}\n\n`;
   if (r.usage) {
     // claude seats have no steps/prompt_tokens/completion_tokens; without this, a claude-only run's real

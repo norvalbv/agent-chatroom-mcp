@@ -13,6 +13,8 @@
 import assert from "node:assert/strict";
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
 import { mkdtempSync, writeFileSync } from "node:fs";
+import { createServer } from "node:http";
+import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { claudeArgs } from "../src/claude-args.js";
@@ -85,6 +87,33 @@ for (const cmd of [
 assert.equal(guard("pkill -f x", A, "Read"), null, "only Bash");
 assert.equal(guard("pkill -f x", {}), null, "a shell that is not a seat's is left alone");
 assert.equal(spawnSync(process.execPath, [SEAT_GUARD_HOOK], { input: "not json", env: { ...base, ...A }, encoding: "utf8" }).status, 0, "garbage in still exits 0");
+
+//    A refusal is posted to the hub as a step, so the room's record can count them; a pass posts nothing, and a
+//    dead hub does not hold the refusal up.
+{
+  const seen: { seat_key: string; tool: string; detail: string }[] = [];
+  const hub = createServer((req, res) => {
+    let body = "";
+    req.on("data", (d) => (body += d));
+    req.on("end", () => { seen.push(JSON.parse(body)); res.end("{}"); });
+  });
+  await new Promise<void>((r) => hub.listen(0, "127.0.0.1", r));
+  const url = `http://127.0.0.1:${(hub.address() as AddressInfo).port}/heartbeat`;
+  const run = (command: string, heartbeat: string) => new Promise<string>((done) => {
+    const c = spawn(process.execPath, [SEAT_GUARD_HOOK], { env: { ...base, ...A, CHATROOM_HEARTBEAT_URL: heartbeat }, stdio: ["pipe", "pipe", "ignore"] });
+    let out = "";
+    c.stdout.on("data", (d) => (out += d));
+    c.on("close", () => done(out));
+    c.stdin.end(JSON.stringify({ hook_event_name: "PreToolUse", tool_name: "Bash", tool_input: { command } }));
+  });
+  assert.ok(await run("pkill -f fetch_trades.py", url));
+  assert.equal(await run("ls", url), "");
+  assert.deepEqual(seen, [{ seat_key: A.CHATROOM_SEAT_KEY, tool: "seat-guard", detail: "refused: pkill -f fetch_trades.py" }]);
+  hub.close();
+  const t0 = Date.now();
+  assert.ok(await run("pkill -f fetch_trades.py", "http://127.0.0.1:9/heartbeat"), "refused with the hub down");
+  assert.ok(Date.now() - t0 < 4_000, "and promptly");
+}
 
 // 4. Two seats, one file name (the incident). Each seat's processes inherit its key, detached or not.
 const dir = mkdtempSync(join(tmpdir(), "seat-guard-"));

@@ -5,7 +5,8 @@
 // the shell refuses it. Denied: pkill and killall, a kill fed by pgrep or by a pipe into xargs (the same match by
 // command line), and a kill of a literal PID that another seat started (its env carries a different CHATROOM_SEAT_KEY).
 // The denial names the replacement, scripts/seat-procs.mjs, which stops by the same pattern among this seat's own
-// processes only. Everything else passes: no output, exit 0. A shell with no seat key is not a seat's and is left alone.
+// processes only, and is posted to the hub as a step (tool "seat-guard") so the room's record counts refusals.
+// Everything else passes: no output, exit 0. A shell with no seat key is not a seat's and is left alone.
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { seatKeyOf } from "./seat-procs.mjs";
@@ -41,14 +42,19 @@ export function refusal(command, key, keyOf = seatKeyOf) {
 
 let raw = "";
 process.stdin.on("data", (d) => (raw += d));
-process.stdin.on("end", () => {
+process.stdin.on("end", async () => {
   try {
     const ev = JSON.parse(raw || "{}");
     const key = process.env.CHATROOM_SEAT_KEY;
     const command = ev.tool_input?.command;
     if (key && ev.tool_name === "Bash" && typeof command === "string") {
       const permissionDecisionReason = refusal(command, key);
-      if (permissionDecisionReason) process.stdout.write(JSON.stringify({ hookSpecificOutput: { hookEventName: "PreToolUse", permissionDecision: "deny", permissionDecisionReason } }));
+      if (permissionDecisionReason) {
+        process.stdout.write(JSON.stringify({ hookSpecificOutput: { hookEventName: "PreToolUse", permissionDecision: "deny", permissionDecisionReason } }));
+        // the refusal is a step in the room's record (tool "seat-guard"), so a room can count them
+        const url = process.env.CHATROOM_HEARTBEAT_URL;
+        if (url) await fetch(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ seat_key: key, tool: "seat-guard", detail: `refused: ${command.slice(0, 280)}` }), signal: AbortSignal.timeout(2_000) }).catch(() => {});
+      }
     }
   } catch { /* a guard that cannot read the call lets it through: the seat's work matters more than this check */ }
   process.exit(0);

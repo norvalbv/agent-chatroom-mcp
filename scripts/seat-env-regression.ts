@@ -97,7 +97,8 @@ function checkSeat(call: Capture) {
   for (const [key, value] of Object.entries(syntheticEnv())) {
     if (key !== 'CHATROOM_HUMAN_TOKEN' && key !== 'MCP_TOOL_TIMEOUT') assert.equal(call.options.env[key], value, `${key} retained`);
   }
-  assert.equal(call.options.env.MCP_TOOL_TIMEOUT, '120000');
+  // the default, or a minute over the 4-minute hold for a claude seat, whose MCP URL asks the hub to hold its empty waits (seat-hold-regression)
+  assert.ok(['120000', '300000'].includes(call.options.env.MCP_TOOL_TIMEOUT), `MCP_TOOL_TIMEOUT ${call.options.env.MCP_TOOL_TIMEOUT}`);
 }
 let failures = 0;
 async function test(name: string, fn: () => Promise<void>) {

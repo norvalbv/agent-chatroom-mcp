@@ -239,13 +239,37 @@ function seatTelemetryEnv(mcpUrl: URL, key: string): NodeJS.ProcessEnv {
   };
 }
 
-export function seatBeat(mcpUrl: string, key: string, worktree?: string): SeatBeat {
+/**
+ * How long a launched Claude seat's connection holds an empty wait_for_messages (claim/empty-waits). A wait returned
+ * empty after 55 s, a cap set for Codex's 60 s client timeout, and each empty return is a model request that re-reads
+ * the seat's whole context: scripts/wait-cost.ts over the last 21 room logs gives 2,050 such requests, $163.62 of
+ * $1,427.97 (12%; 22% in the grouped Polymarket run), $0.08 each. Four minutes, because in the same records a seat's
+ * request 240-360 s after its last one still hit the prompt cache (1 miss in 45), so a longer hold does not trade polls
+ * for a context rewrite. CHATROOM_SEAT_HOLD_MS sets it; 0 turns it off.
+ */
+export const MAX_SEAT_HOLD_MS = 240_000;
+const MIN_SEAT_HOLD_MS = 55_000;
+export function seatHoldMs(raw: string | undefined = process.env.CHATROOM_SEAT_HOLD_MS): number | undefined {
+  if (raw?.trim() === "0") return undefined;
+  const n = Number(raw);
+  return Number.isFinite(n) && n >= MIN_SEAT_HOLD_MS ? Math.min(Math.round(n), MAX_SEAT_HOLD_MS) : MAX_SEAT_HOLD_MS;
+}
+/** The hub's reading of a connection's ?hold=<ms>: a number in range, or no hold. A client cannot make the hub hold longer than the cap. */
+export function holdFromQuery(raw: unknown): number | undefined {
+  const n = typeof raw === "string" && /^\d+$/.test(raw) ? Number(raw) : NaN;
+  return n >= MIN_SEAT_HOLD_MS ? Math.min(n, MAX_SEAT_HOLD_MS) : undefined;
+}
+
+/** `holdMs`: only for a seat whose client tool timeout this launcher sets (a claude seat): the hub is told in the URL, and
+ * the seat's MCP_TOOL_TIMEOUT is a minute longer, so a held wait never ends as a client-side tool timeout. */
+export function seatBeat(mcpUrl: string, key: string, worktree?: string, holdMs?: number): SeatBeat {
   const u = new URL(mcpUrl);
   u.searchParams.set("seat", key);
   if (worktree) u.searchParams.set("worktree", worktree);
+  if (holdMs) u.searchParams.set("hold", String(holdMs));
   // the seat's memory budget, when the hub enforces one (src/hub/memory.ts): its tools can size themselves to it
   const budget = Number(process.env.CHATROOM_SEAT_MEMORY_MB) > 0 ? { CHATROOM_SEAT_MEMORY_MB: String(Number(process.env.CHATROOM_SEAT_MEMORY_MB)) } : {};
-  return { key, mcpUrl: u.toString(), env: { CHATROOM_SEAT_KEY: key, CHATROOM_HEARTBEAT_URL: new URL("/heartbeat", u).toString(), ...budget, ...seatTelemetryEnv(u, key) } };
+  return { key, mcpUrl: u.toString(), env: { CHATROOM_SEAT_KEY: key, CHATROOM_HEARTBEAT_URL: new URL("/heartbeat", u).toString(), ...budget, ...seatTelemetryEnv(u, key), ...(holdMs ? { MCP_TOOL_TIMEOUT: String(holdMs + 60_000) } : {}) } };
 }
 
 /**

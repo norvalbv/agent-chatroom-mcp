@@ -37,6 +37,7 @@ import { UI_HTML } from "./ui.js";
 import { humanQuestions } from "./questions.js";
 import { photoDirectory, registerPhotoRoutes } from "./photos/routes.js";
 import { hubDotEnvOptions, loadDotEnv } from "./env.js";
+import { holdFromQuery } from "./env.js";
 import { installLifecycle } from "./lifecycle.js";
 // Item 2 (swarm-125438-jp20): CHATROOM_NO_RECRUIT=1 marks a hub that must never hold a provider key
 // (a benchmark hub, whose caller already stripped API_KEY/TOKEN/SECRET-shaped vars from this process's
@@ -244,7 +245,8 @@ app.post("/mcp", async (req, res) => {
     res.status(503).type("text/plain").send("Too many sessions");
     return;
   }
-  const session = createSessionServer(hub, spawner);
+  // ...and ?hold=<ms> when its launcher set the seat's client tool timeout to match: empty waits are held that long
+  const session = createSessionServer(hub, spawner, { holdMs: holdFromQuery(req.query.hold) });
   // a launched seat's MCP URL carries ?seat=<key>; its tool hook heartbeats with the same key (POST /heartbeat)
   const seatKey = typeof req.query.seat === "string" ? req.query.seat.slice(0, 100) : "";
   // ...and ?worktree=<dir> when its launcher gave it one, so claim/* entries carry its branch and path

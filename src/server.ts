@@ -61,7 +61,12 @@ export interface SessionServer {
   sessionKey: string;
 }
 
-export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer {
+/** A wait asked for at least this long is a full-length wait: the seat is waiting for the room, not polling. */
+const FULL_WAIT_MS = 50_000;
+
+/** `holdMs`: how long this connection's client waits for a tool, as its launcher said in the MCP URL (?hold=, src/env.ts
+ * seatHoldMs). A full-length wait_for_messages on it is held that long before it returns empty. */
+export function createSessionServer(hub: Hub, spawner?: Spawner, opts: { holdMs?: number } = {}): SessionServer {
   const server = new McpServer(
     { name: "agent-chatroom", version: "0.2.0" },
     {
@@ -414,7 +419,7 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
       title: "Wait for new messages",
       description:
         "Long-poll for messages from other participants. Returns immediately if there are unread messages, otherwise waits up to " +
-        "timeout_ms (default 55s, max 55s) for one to arrive. Call it again if it returns nothing; that is normal. " +
+        "timeout_ms (default 55s, max 55s) for one to arrive; a launched seat's connection may hold a full-length wait up to 4 minutes before returning nothing, and still returns at once when something arrives. Call it again if it returns nothing; that is normal. " +
         "Also reports the open proposal (its text only when the version changed since you last saw it), what blocks it, whether your leaving would block it, " +
         "openings progress, humans present, your_turn (round_robin rooms), and whether the room has concluded. " +
         "Only unchanged:true retains omitted fields from your last wait; otherwise the snapshot replaces them. Current hints still apply. " +
@@ -435,7 +440,10 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
       const p = hub.requireParticipant(r, id);
       const since = since_seq ?? p.lastSeenSeq;
       hub.answerBeforeWaiting(r, p, since);
-      const waitBudgetMs = Math.min(timeout_ms ?? DEFAULT_WAIT_MS, MAX_WAIT_MS);
+      const asked = Math.min(timeout_ms ?? DEFAULT_WAIT_MS, MAX_WAIT_MS);
+      // an empty return is a model request that re-reads the seat's context ($0.08 each in the records, 12% of spend): a
+      // connection whose client can wait longer is held longer. A short poll the seat asked for keeps its length.
+      const waitBudgetMs = opts.holdMs && asked >= FULL_WAIT_MS ? opts.holdMs : asked;
       const waitDeadline = Date.now() + waitBudgetMs;
       // a connection with seats in other rooms (a breakout and its parent) wakes for what it owes there too:
       // the long-poll runs in slices and checks the other rooms between them

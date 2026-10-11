@@ -16,7 +16,7 @@ import { basename, dirname, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { HubError } from "./hub.js";
 import { settledAxes } from "./settled.js";
-import { devHubRule, heartbeatHookSettings, seatBeat, seatChildEnv } from "./env.js";
+import { devHubRule, heartbeatHookSettings, seatBeat, seatChildEnv, seatHoldMs } from "./env.js";
 import { claudeArgs } from "./claude-args.js";
 import { exitDetail } from "./respawn.js";
 import { codexSeatCommand } from "./codex-seat.js";
@@ -434,7 +434,7 @@ export class Spawner {
       if (carried?.hooks === "missing") this.hooks?.announce(target, hooksLine(name, carried));
       // per seat: the MCP URL carries this seat's heartbeat key (so the file cannot be shared between recruits) and its
       // worktree, which the hub stamps on the seat's claim/* entries
-      const beat = seatBeat(o.mcpUrl, randomUUID(), seatCwd);
+      const beat = seatBeat(o.mcpUrl, randomUUID(), seatCwd, agent === "claude" ? seatHoldMs() : undefined);
       const mcpJson = resolve(o.logDir, `${name}.mcp.json`);
       writeFileSync(mcpJson, JSON.stringify({ mcpServers: { chatroom: { type: "http", url: beat.mcpUrl } } }));
       let cmd: string;

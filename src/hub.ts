@@ -2813,8 +2813,8 @@ export class Hub {
     return [...room.board]
       .map(([key, e]) => ({ key, e, v: this.verifyEntryVerdict(room, pr, key, e, undefined) }))
       .filter((x) => x.v.head && !x.v.why)
-      .map((x) => ({ key: x.key, by: x.e.by, gaps: [...verifyGaps(x.v.head!, x.e.devReceipt), ...this.devRunAuthorGap(room, pr, x.e.devReceipt, x.e.by)] }))
-      .concat(this.pendingCoverage(room, pr).map((x) => ({ key: x.key, by: x.e.by, gaps: [...verifyGaps(x.head, x.e.devReceipt), ...this.devRunAuthorGap(room, pr, x.e.devReceipt, x.e.by)] })))
+      .map((x) => ({ key: x.key, by: x.e.by, gaps: [...verifyGaps(x.v.head!, x.e.devReceipt, x.e.commitCheck), ...this.devRunAuthorGap(room, pr, x.e.devReceipt, x.e.by)] }))
+      .concat(this.pendingCoverage(room, pr).map((x) => ({ key: x.key, by: x.e.by, gaps: [...verifyGaps(x.head, x.e.devReceipt, x.e.commitCheck), ...this.devRunAuthorGap(room, pr, x.e.devReceipt, x.e.by)] })))
       .filter((x) => x.gaps.length);
   }
 

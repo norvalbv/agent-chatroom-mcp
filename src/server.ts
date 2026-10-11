@@ -761,7 +761,7 @@ export function createSessionServer(hub: Hub, spawner?: Spawner, opts: { holdMs?
       const overlaps = hub.claimOverlaps(room, id, key);
       const head = isReviewKey(key) ? parseVerifyHead(e.text) : undefined;
       const receipt = head ? await hub.readDevRoom(room, key) : undefined;
-      const gaps = head && head.exit_code === 0 ? verifyGaps(head, receipt) : [];
+      const gaps = head && head.exit_code === 0 ? verifyGaps(head, receipt, e.commitCheck) : [];
       // the prose says something was not checked but the head does not: the gate reads only the head
       const proseGap = head && !head.unverified && VERIFY_GAP_PROSE.test(e.text.slice(e.text.indexOf("\n") + 1));
       // a draft/* entry is hidden from the other seats: the writer is told so, and told when its write opened the round

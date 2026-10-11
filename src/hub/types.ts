@@ -658,8 +658,24 @@ export function devReceiptFrom(url: string, body: unknown): DevReceipt {
 }
 
 /** What a passing verify head did not show: the reviewer's own list, then what the hub can tell about its dev room. */
-export function verifyGaps(h: VerifyHead, receipt?: DevReceipt): string[] {
+/** git's empty tree: what a seat writes as base_commit when there is no parent commit to fail at (a read-only answer). */
+export const EMPTY_TREE = "4b825dc642cb6eb9a060e54bf8d69288fbee4904";
+
+/** A head whose commits are not commits: git's empty tree as base_commit (seats used it to pass the fail-to-pass gate on a
+ * read-only answer, devroom/integration-verifier), or a commit the writer's worktree does not hold (BoardEntry.commitCheck).
+ * The gate stays self-reported (done-means-independently-verified); these say what the head did not show. */
+export function commitGaps(h: VerifyHead, check?: BoardEntry["commitCheck"]): string[] {
+  const out: string[] = [];
+  const base = h.base_commit?.trim().toLowerCase();
+  if (base && base.length >= 7 && EMPTY_TREE.startsWith(base)) out.push(`base_commit ${base.slice(0, 8)} is git's empty tree, not a parent commit: no check ran before a change`);
+  else if (check?.base_known === false) out.push(`base_commit ${check.base_commit} is not a commit in the reviewer's repository`);
+  if (check?.commit_known === false) out.push(`commit ${check.commit} is not a commit in the reviewer's repository`);
+  return out;
+}
+
+export function verifyGaps(h: VerifyHead, receipt?: DevReceipt, check?: BoardEntry["commitCheck"]): string[] {
   const out = [...(h.unverified ?? [])].map((x) => x.trim()).filter(Boolean);
+  out.push(...commitGaps(h, check));
   // A missing room is a gap only where the head claims it: "kind":"exercised" says the change was used as its users would
   if (!h.dev_room) { if (h.kind === "exercised") out.push('"kind":"exercised" but no dev_room: the hub has no room where it can see agents used it'); }
   else if (!devRoomUrl(h.dev_room)) out.push(`dev_room "${h.dev_room.slice(0, 80)}" is not http://127.0.0.1:<port>/rooms/<room>`);

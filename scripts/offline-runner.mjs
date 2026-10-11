@@ -263,6 +263,7 @@ export const offlineScripts = [
   'seat-memory-regression.ts',
   'take-keys-regression.ts',
   'take-commit-regression.ts',
+  'review-tells-author-regression.ts',
   'research-index-regression.ts',
   'board-append-regression.ts',
   'ui-people-takes.test.ts',

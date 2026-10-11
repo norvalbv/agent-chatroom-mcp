@@ -762,6 +762,7 @@ export function createSessionServer(hub: Hub, spawner?: Spawner, opts: { holdMs?
           : `Sealed: hidden from ${seal.hidden_from.join(", ") || "the other seats"} until every drafter has written a draft/*${seal.until ? ` or ${seal.until.slice(11, 19)} UTC` : ""}.` } : {}),
         ...(receipt ? { dev_room_receipt: receipt } : {}),
         ...(gaps.length ? { verification_gaps: gaps, verification_gaps_hint: "the open proposal and the conclusion carry these as not shown by you (PARTIAL); close them, or leave them listed" } : {}),
+        ...(e.toldAuthor ? { told_author: e.toldAuthor, told_author_hint: `The hub told ${e.toldAuthor}, the commit's author, that this review is up, with its verdict: no need to announce it in chat unless you have more to say.` } : {}),
         ...(proseGap ? { hint: "Your prose below the head says something was not verified, but the head has no \"unverified\" list, and only the head is read: put those items in \"unverified\":[...] so the proposal and the conclusion carry them." } : {}),
         // a covering ack by a peer: a bare repeat stored nothing, a reply was appended under the caller's name (src/hub/board.ts)
         ...(key.startsWith("inbox/") && key.endsWith(".ack") && e.by !== hub.getRoom(room).participants.get(id)?.name ? { already_acknowledged_by: e.by, hint: "This note was already acknowledged; your bare ack was not stored (nothing more is needed)." } : {}),

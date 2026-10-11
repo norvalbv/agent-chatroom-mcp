@@ -47,6 +47,18 @@ export function takeWrite(hub: Hub, room: Room, p: Participant, key: string, tex
   return commitTake(hub, room, p, key, { action: "take", holder: p });
 }
 
+/**
+ * The seat in this room that authored `commit`, read with git in `p`'s own worktree (seat commits carry the seat's name
+ * as author, src/env.ts); undefined when the hub does not know p's worktree, git does not know the commit, or no seat
+ * here has that name. Used by the review take rule and by the review notice (src/hub/board.ts).
+ */
+export function commitAuthor(hub: Hub, room: Room, p: Participant, commit: string): Participant | undefined {
+  const worktree = hub.workspaceOf(p)?.worktree;
+  if (!worktree) return undefined;
+  const r = spawnSync("git", ["-C", worktree, "log", "-1", "--format=%an", `${commit}^{commit}`], { encoding: "utf8", timeout: 5000 });
+  return r.status === 0 ? named(room, r.stdout.trim()) : undefined;
+}
+
 /** Commit tokens in a take's key, e.g. take/review-ba181129 and take/review/ba181129 both name ba181129. */
 const commitsOf = (key: string) => commitsIn(key.slice("take/".length));
 const sameCommit = (a: string, b: string) => a.startsWith(b) || b.startsWith(a);
@@ -94,10 +106,7 @@ function commitTake(hub: Hub, room: Room, p: Participant, key: string, w: TakeWr
         `${commit} is already reviewed: ${k} by ${hub.shown(room, by)} at ${e.updatedAt}${done.length > 1 ? ` (and ${done.length - 1} more)` : ""}. Read it before doing another. ` +
         `If it missed something, tell ${hub.shown(room, by)} what; a second review of the same commit is worth writing only when you checked something it did not, and then it needs no take.`);
     }
-    const worktree = hub.workspaceOf(p)?.worktree;
-    if (!worktree) continue;
-    const r = spawnSync("git", ["-C", worktree, "log", "-1", "--format=%an", `${commit}^{commit}`], { encoding: "utf8", timeout: 5000 });
-    const author = r.status === 0 ? named(room, r.stdout.trim()) : undefined;
+    const author = commitAuthor(hub, room, p, commit);
     // the author's own takes pass, and so does a take the author hands to a seat: that is the author choosing its reviewer
     if (!author || author.id === w.holder.id || author.id === p.id) continue;
     const assigned = [...room.board].filter(([k, e]) => k.startsWith("claim/") && e.by === author.name && e.reviewerId && claimOpen(e))

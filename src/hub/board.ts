@@ -6,7 +6,7 @@ import type { Hub } from "../hub.js";
 import { HubError, isReviewKey, readVerifyHead, citesCommit, failToPassShortfall } from "./types.js";
 import type { Quorum, Participant, BoardExpiryOptions, BoardEntry, Room } from "./types.js";
 import { now, codeState, norm, commitsIn, commitKnown } from "./internal.js";
-import { announceTake, takeWrite } from "./take.js";
+import { announceTake, commitAuthor, takeWrite } from "./take.js";
 
 function boardExpiry(key: string, opts: BoardExpiryOptions): string | undefined {
   if (opts.ttlSeconds === undefined && opts.expiresAt === undefined) return undefined;
@@ -328,8 +328,12 @@ export function setBoard(hub: Hub, roomName: string, pid: string, key: string, t
   // a commit review is linked by its head (the review event); any other check, to the entry it checks (src/hub/checks.ts)
   const checks = checksOf(key, p.name, text, room.board);
   const commitCheck = head ? checkCommits(hub.workspaceOf(p)?.worktree, head) : undefined;
+  // a review's first write tells the commit's author, when that author is another seat in this room (review_notice)
+  const authorOf = key.startsWith("review/") && !previous && head?.commit?.trim() && commitCheck?.commit_known !== false ? commitAuthor(hub, room, p, head.commit.trim()) : undefined;
+  const toldAuthor = authorOf && authorOf.active && authorOf.id !== p.id && authorOf.agent !== "human" ? authorOf : undefined;
   const entry: BoardEntry = {
     text, by: p.name, updatedAt: now(),
+    ...(toldAuthor ? { toldAuthor: toldAuthor.name } : {}),
     ...(expiresAt ? { expiresAt } : {}),
     ...(key.startsWith("verify/") ? { codeState: codeState(hub.cwd) } : {}),
     ...(note ? { acknowledgedTextHash: noteHash(note.text) } : {}),
@@ -370,6 +374,15 @@ export function setBoard(hub: Hub, roomName: string, pid: string, key: string, t
   if (heldBy && !previous) hub.persist({ type: "second_scrutiny", room: roomName, asked, key, by: p.name, held_by: heldBy, ts: entry.updatedAt });
   if (late) hub.persist({ type: "late_write", room: roomName, key, by: p.name, after_s: late.after_s, ...(contradicts ? { contradicts } : {}), ts: entry.updatedAt });
   if (contradicts) hub.post(room, "system", undefined, `${key} by ${p.name} reports exit_code ${head!.exit_code} on ${contradicts}, which the conclusion cites: a verdict after the conclusion contradicts it. The conclusion stands as decided; read ${key} before relying on it.`);
+  if (toldAuthor && head) {
+    // the author's turn, as Gerrit's attention set hands a change back to its owner (sources/gerrit-attention-set): in
+    // this room 41 chat messages existed only to say a review was up. Chat kind, so the @-mention wakes a held wait.
+    const passes = head.exit_code === 0;
+    const gaps = head.unverified?.length ? `; not shown: ${head.unverified.length}` : "";
+    const prose = text.includes("\n") ? (text.slice(text.indexOf("\n") + 1).trim().split("\n")[0] ?? "").slice(0, 160) : "";
+    hub.post(room, "chat", undefined, `@${hub.shown(room, toldAuthor)} ${hub.shown(room, p)} reviewed your ${head.commit!.trim()} in ${key}: ${passes ? "passes" : "FAILS"} (exit_code ${head.exit_code}${head.base_exit_code !== undefined ? `, base ${head.base_exit_code}` : ""})${gaps}.${prose ? ` ${prose}` : ""}`);
+    hub.persist({ type: "review_notice", room: roomName, key, commit: head.commit!.trim(), author: toldAuthor.name, by: p.name, passes, ts: entry.updatedAt });
+  }
   if (head) {
     hub.persist({
       type: "review", room: roomName, key, by: p.name, proposal: head.proposal, ...commitCheck,

@@ -314,6 +314,8 @@ export interface BoardEntry {
   continuedAt?: string;
   /** normalised chars that seats other than `by` added with append=true since the author last wrote it whole: not the author's reply to an attack. */
   othersChars?: number;
+  /** review/* only: the commit's author, told by the hub when this review was first written (review_notice). */
+  toldAuthor?: string;
 }
 
 export interface Challenge {

@@ -24,16 +24,21 @@ const server = spawn("npx", ["tsx", "src/index.ts"], { env: { ...hubEnv, PORT: S
 const stop = () => server.kill();
 process.on("exit", stop);
 
+// how long the hub may take to start: 10 s was not enough on a shared machine at load average 150-200, where an
+// unchanged tree failed "server did not start" (swarm-180216-182a, friction/machine-load). SMOKE_START_MS overrides it.
+const START_MS = Number(process.env.SMOKE_START_MS ?? 90_000);
 async function waitForServer() {
-  for (let i = 0; i < 50; i++) {
+  const t0 = Date.now();
+  while (Date.now() - t0 < START_MS) {
     try {
       await fetch(`${HTTP}/`);
+      if (Date.now() - t0 > 10_000) console.log(`smoke: the hub took ${Math.round((Date.now() - t0) / 1000)} s to start`);
       return;
     } catch {
       await new Promise((r) => setTimeout(r, 200));
     }
   }
-  throw new Error("server did not start");
+  throw new Error(`server did not start within ${START_MS / 1000} s (SMOKE_START_MS)`);
 }
 
 async function connect(name: string) {

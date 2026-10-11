@@ -383,7 +383,50 @@ export function runRow(events: readonly Ev[]): RunRow {
  * cumulative usage to every room the seat sits in, so summing rooms pays a lead twice (0btz: $436.19 summed, $331.09
  * real; telemetry gap G1). Here each seat key's usage is merged across the logs, de-duplicated by its own timestamp,
  * and differenced once, with a counter that goes down read as a new process (respawn), as runTimeline does. */
-export interface RunTotals { run: string; rooms: string[]; seats: number; costUsd?: number; hours: number; start?: string }
+export interface RunTotals {
+  run: string; rooms: string[]; seats: number; costUsd?: number; hours: number; start?: string;
+  /** per room with result/* entries: how many of them a seat checked from ANOTHER room of the run (crossRoomChecks) */
+  crossChecked?: Record<string, { results: number; checkedFromOtherRooms: number; namedFromOtherRooms: number }>;
+}
+
+/**
+ * Checks across the rooms of one run. Grouped runs put opposing groups in separate rooms, so a break group's rerun of a
+ * build group's result sits in the break room: in swarm-100951-0btz the pack counted "build 5 of 14 reviewed (2 by
+ * break)" by hand. The logs are merged in time order with a board per room; a check that resolves to nothing in its own
+ * room (checksOf, the hub's resolver) is resolved against the other rooms as they stood at that moment.
+ */
+export function crossRoomChecks(logs: readonly (readonly Ev[])[]): Record<string, { results: number; checkedFromOtherRooms: number; namedFromOtherRooms: number }> {
+  const events = logs.flatMap((log) => log.filter((e) => e.type === "board" && e.room).map((e) => ({ e, ts: Date.parse(stampOf(e) ?? "") })))
+    .filter((x) => !Number.isNaN(x.ts)).sort((a, b) => a.ts - b.ts);
+  const boards = new Map<string, Map<string, { by: string }>>();
+  const results = new Map<string, Set<string>>();
+  const checked = new Map<string, Set<string>>();
+  const named = new Map<string, Set<string>>();
+  const add = (m: Map<string, Set<string>>, room: string, key: string) => (m.get(room) ?? m.set(room, new Set()).get(room)!).add(key);
+  for (const { e } of events) {
+    const room = String(e.room), key = String(e.key ?? "");
+    const mine = boards.get(room) ?? boards.set(room, new Map()).get(room)!;
+    if (!e.entry) { mine.delete(key); continue; }
+    const by = String(e.entry.by ?? "");
+    if (key.startsWith("result/")) (results.get(room) ?? results.set(room, new Set()).get(room)!).add(key);
+    const text = String(e.entry.text ?? "");
+    // a note another room sent here under a checking name (inbox/<room>/attack-lone-pay-factor) is that room's check
+    const note = /^inbox\/[^/]+\/((?:rerun|audit|review|valid|critique|check|attack)-.+)$/.exec(key)?.[1];
+    const asCheck = note ? note.replace("-", "/") : key;
+    if (by && !key.endsWith(".ack") && !checksOf(asCheck, by, text, mine).length) {
+      for (const [other, b] of boards) {
+        if (other === room) continue;
+        for (const c of checksOf(asCheck, by, text, b)) if (c.of.startsWith("result/")) add(checked, other, c.of);
+        // looser: any entry of this room's seats that names another room's result as a whole key, other than a digest or
+        // an ack (in 0btz the break group answered build's results with result/* entries of its own, not reruns)
+        if (!/digest|\.ack$/.test(key) && !/^digest/.test(by)) for (const [k, x] of b) if (k.startsWith("result/") && x.by !== by && text.includes(k)) add(named, other, k);
+      }
+    }
+    mine.set(key, { by });
+  }
+  const count = (m: Map<string, Set<string>>, room: string, keys: Set<string>) => [...(m.get(room) ?? [])].filter((k) => keys.has(k)).length;
+  return Object.fromEntries([...results].map(([room, keys]) => [room, { results: keys.size, checkedFromOtherRooms: count(checked, room, keys), namedFromOtherRooms: count(named, room, keys) }]));
+}
 
 export function runTotals(logs: readonly (readonly Ev[])[], run = ""): RunTotals {
   const rows = logs.map((events) => runRow(events));
@@ -409,6 +452,7 @@ export function runTotals(logs: readonly (readonly Ev[])[], run = ""): RunTotals
     ...(seen.size ? { costUsd: round2(cost) } : {}),
     hours: starts.length ? round2((Math.max(...ends) - Date.parse(starts[0])) / 3_600_000) : 0,
     ...(starts.length ? { start: starts[0] } : {}),
+    ...((x) => (Object.keys(x).length ? { crossChecked: x } : {}))(logs.length > 1 ? crossRoomChecks(logs) : {}),
   };
 }
 
@@ -416,8 +460,11 @@ export function runTotals(logs: readonly (readonly Ev[])[], run = ""): RunTotals
 export const runOf = (room: string) => /^(swarm-\d{6}-[a-z0-9]{4})/.exec(room)?.[1] ?? room;
 
 export function renderRunTotals(runs: RunTotals[]): string {
-  let text = "| run | rooms | seat processes | cost (each seat process once) | hours |\n|---|---|---|---|---|\n";
-  for (const r of [...runs].sort((a, b) => (a.start ?? "").localeCompare(b.start ?? ""))) text += `| ${r.run} | ${r.rooms.length} | ${r.seats} | ${r.costUsd === undefined ? "?" : `$${r.costUsd}`} | ${r.hours} |\n`;
+  let text = "| run | rooms | seat processes | cost (each seat process once) | hours | results checked from another room (named there) |\n|---|---|---|---|---|---|\n";
+  for (const r of [...runs].sort((a, b) => (a.start ?? "").localeCompare(b.start ?? ""))) {
+    const cross = r.crossChecked ? Object.entries(r.crossChecked).map(([room, c]) => `${room} ${c.checkedFromOtherRooms} of ${c.results} (named ${c.namedFromOtherRooms})`).join(", ") : "-";
+    text += `| ${r.run} | ${r.rooms.length} | ${r.seats} | ${r.costUsd === undefined ? "?" : `$${r.costUsd}`} | ${r.hours} | ${cross} |\n`;
+  }
   return text;
 }
 

@@ -14,7 +14,7 @@ import { registerRespawn } from "./respawn.js";
 import { fileURLToPath } from "node:url";
 import { carrySettings, devHubRule, heartbeatHookSettings, loadDotEnv, outputHeartbeat, ownHubEnv, reusedHubProblem, seatBeat, seatChildEnv, seatPortError, type SeatBeat } from "./env.js";
 import { randomUUID } from "node:crypto";
-import { respawnChain, type RespawnRoom } from "./respawn.js";
+import { fetchRespawnRoom, respawnChain } from "./respawn.js";
 import { hubLogFile, readLauncherToken, respawnTokenProblem } from "./hub-supervisor.js";
 import { claudeArgs } from "./claude-args.js";
 import { codexSeatCommand, codexUsageTracker } from "./codex-seat.js";
@@ -268,7 +268,7 @@ async function withRespawn(name: string, room: string, mk: (nm: string, note: st
   const chain = await respawnChain<SeatOutcome>({
     name,
     stop: () => STOPPING || Date.now() > RUN_STARTED + TIMEOUT_MIN * 60_000 - 5 * 60_000,
-    room: async () => (await (await fetch(`${URL_}/rooms/${encodeURIComponent(room)}`)).json()) as RespawnRoom,
+    room: () => fetchRespawnRoom(URL_, room),
     exitCode: (nm) => exitCodes.get(nm) ?? null,
     register: (previousName, nm, reason) => registerRespawn(URL_, room, previousName, nm, launcherToken, undefined, reason),
     run: mk,

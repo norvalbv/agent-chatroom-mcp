@@ -117,7 +117,13 @@ export class Seats {
     const session = this.seatSessions.get(seatKey);
     if (session && !info.hub && info.detail) {
       const named = (re: RegExp) => new Set([...info.detail!.matchAll(re)].map((x) => x[1]));
-      for (const m of named(/\/rooms\/([A-Za-z0-9._~%-]+)/g)) {
+      for (const m of new Set([...info.detail.matchAll(/\/rooms\/([A-Za-z0-9._~%-]+)(\$)?/g)].map((x) => x[1] + (x[2] ?? "")))) {
+        // a name finished by a shell variable (`/rooms/<run>-$g` in a loop, dev room swarm-010735-tvdw) reads every
+        // room that starts with what is written: counted as a pattern read of each, an upper bound for that command
+        if (m.endsWith("$")) {
+          for (const name of this.hub.rooms.keys()) if (name.startsWith(m.slice(0, -1)) && name.length > m.length - 1) this.hub.recordOutsideRead(name, session, "http_pattern", info.tool);
+          continue;
+        }
         let name = m;
         try { name = decodeURIComponent(m); } catch { /* not an encoded name */ }
         this.hub.recordOutsideRead(name, session, "http", info.tool);

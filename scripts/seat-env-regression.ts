@@ -163,7 +163,8 @@ await test('helper clone purity and API conformance', async () => {
   assert.equal(env.MCP_TOOL_TIMEOUT, '120000', 'sets seat timeout');
   const frozen = Object.freeze({ OPENROUTER_API_KEY: PROVIDER, CHATROOM_HUMAN_TOKEN: HUMAN });
   const out = seatChildEnv(frozen);
-  assert.equal(Object.keys(out).length, 2, 'clone is flat and exact');
+  // + the AI reviewer gate switches every seat carries (SEAT_AI_GATES_OFF, owner ruling #985)
+  assert.equal(Object.keys(out).length, 2 + h.exports.SEAT_AI_GATES_OFF.length, 'clone is flat and exact');
   assert.equal(out.OPENROUTER_API_KEY, PROVIDER, 'provider key preserved by value');
   assert.equal(out.MCP_TOOL_TIMEOUT, '120000', 'seat timeout set');
   assert.ok(Object.hasOwn(out, 'CHATROOM_HUMAN_TOKEN') === false, 'frozen input never mutated');

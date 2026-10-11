@@ -14,7 +14,7 @@ import { collectRoomSnapshot, renderRunReport, writeRunResult, rollupUsage, hubU
 import { settledAxes } from "./settled.js";
 import { registerRespawn, respawnProbe } from "./respawn.js";
 import { fileURLToPath } from "node:url";
-import { seatHoldMs, carrySettings, launcherHeaders, COMPACT_WINDOW_TESTED, compactWindow, devHubRule, heartbeatHookSettings, hubLogFile, loadDotEnv, outputHeartbeat, ownHubEnv, readLauncherToken, respawnTokenProblem, reusedHubProblem, seatBeat, seatChildEnv, seatPortError, type SeatBeat } from "./env.js";
+import { aiGatesLine, seatHoldMs, carrySettings, launcherHeaders, COMPACT_WINDOW_TESTED, compactWindow, devHubRule, heartbeatHookSettings, hubLogFile, loadDotEnv, outputHeartbeat, ownHubEnv, readLauncherToken, respawnTokenProblem, reusedHubProblem, seatBeat, seatChildEnv, seatPortError, type SeatBeat } from "./env.js";
 import { randomUUID } from "node:crypto";
 import { claudeUsageProbe, exitDetail, fetchRespawnRoom, respawnChain, type RespawnRoom } from "./respawn.js";
 import { claudeArgs } from "./claude-args.js";
@@ -40,7 +40,7 @@ const has = (name: string) => argv.includes(`--${name}`);
 const BOOL_FLAGS = new Set(["--keep-hub", "--reuse-hub", "--apply", "--full-access", "--named", "--flat", "--require-verification", "--respawn", "--claude-full", "--no-carry", "--no-seat-targets", "--sandbox", "--no-web"]);
 const task = argv.find((a, i) => !a.startsWith("--") && (i === 0 || !argv[i - 1].startsWith("--") || BOOL_FLAGS.has(argv[i - 1])));
 if (!task) {
-  console.error('usage: swarm "<task>" [--flat] [--done-when text] [--verify text] [--agents 6] [--cwd dir] [--models sonnet,haiku] [--lead-model opus] [--verifier-model opus] [--planner-model opus] [--codex k] [--codex-models gpt-6-astra,gpt-5.6-sol,gpt-5.6-terra] [--openrouter k] [--openrouter-models deepseek/deepseek-v4.1-flash,...] [--verifier-openrouter slug] [--openrouter-reasoning low|medium|high] [--require-verification] [--quorum unanimous|majority|supermajority] [--chair name] [--owner-word] [--seat-hooks off] [--prompt loop.md] [--groups groups.json [--digest-every 45]] [--resources file.md] [--respawn] [--apply] [--full-access] [--named] [--claude-full] [--no-carry] [--no-seat-targets] [--no-web] [--sandbox] [--timeout 30] [--port 7717] [--result-path path]');
+  console.error('usage: swarm "<task>" [--flat] [--done-when text] [--verify text] [--agents 6] [--cwd dir] [--models sonnet,haiku] [--lead-model opus] [--verifier-model opus] [--planner-model opus] [--codex k] [--codex-models gpt-6-astra,gpt-5.6-sol,gpt-5.6-terra] [--openrouter k] [--openrouter-models deepseek/deepseek-v4.1-flash,...] [--verifier-openrouter slug] [--openrouter-reasoning low|medium|high] [--require-verification] [--quorum unanimous|majority|supermajority] [--chair name] [--owner-word] [--seat-hooks off] [--seat-ai-gates on] [--prompt loop.md] [--groups groups.json [--digest-every 45]] [--resources file.md] [--respawn] [--apply] [--full-access] [--named] [--claude-full] [--no-carry] [--no-seat-targets] [--no-web] [--sandbox] [--timeout 30] [--port 7717] [--result-path path]');
   process.exit(2);
 }
 /** --groups <file.json>: the run's groups as the operator wrote them (src/groups.ts), one room and one brief each, on the
@@ -114,6 +114,10 @@ const NO_CARRY = has("no-carry");
 /** --seat-hooks off: seat worktrees do not get the repository's commit hooks (c3d2d088 copies them by default). For runs whose
  * commits are scratch: in devkit the pre-commit runs its LLM reviewer fleet on every commit (evidence/seat-hooks-cost-and-bypass). */
 const SEAT_HOOKS_OFF = flag("seat-hooks") === "off";
+/** --seat-ai-gates on: seat commits run the repository's AI reviewer gates too. Off by default (owner ruling #985): seats
+ * peer review each other, and their commits run only the deterministic gates (SEAT_AI_GATES_OFF in env.ts). Set in this
+ * process so seatChildEnv sees it, and so a hub this launcher starts hands it to its recruits. */
+if (flag("seat-ai-gates") === "on") process.env.CHATROOM_SEAT_AI_GATES = "on";
 /** --owner-word (or CHATROOM_OWNER_WORD=1): every seat's prompt gains prompts/owner-word.md, which makes a [human route: token] message, or a named [chair]'s relay, part of its brief. */
 const OWNER_WORD_ON = has("owner-word") || process.env.CHATROOM_OWNER_WORD === "1";
 /** --resources <file>: each `## <name>` entry goes on every room's board as resource/<name> before a seat starts (src/resources.ts) */
@@ -457,6 +461,7 @@ function workerCwd(name: string): string {
   log(`${name} works in ${dir} (branch ${branch})`);
   // nor a hooks runner: without it every commit this seat makes skips the repository's hooks (bugs.md 4)
   log(hooksLine(name, SEAT_HOOKS_OFF ? hooksOff(CWD) : carryHooks(CWD, dir)));
+  log(`${name}: ${aiGatesLine(seatChildEnv(process.env, name))}`);
   return dir;
 }
 

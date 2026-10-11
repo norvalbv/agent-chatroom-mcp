@@ -16,7 +16,7 @@ import { basename, dirname, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { HubError } from "./hub.js";
 import { settledAxes } from "./settled.js";
-import { devHubRule, heartbeatHookSettings, seatBeat, seatChildEnv, seatHoldMs } from "./env.js";
+import { aiGatesLine, devHubRule, heartbeatHookSettings, seatBeat, seatChildEnv, seatHoldMs } from "./env.js";
 import { claudeArgs } from "./claude-args.js";
 import { exitDetail } from "./respawn.js";
 import { codexSeatCommand } from "./codex-seat.js";
@@ -70,7 +70,7 @@ export interface SpawnedAgent {
   model?: string;
   cwd: string;
   /** a write recruit's own git worktree and branch (never the shared `cwd`); absent for a read-only recruit or outside a git repository */
-  workspace?: { worktree: string; branch: string; /** the commit the branch was cut from and whose HEAD that was, when it is the recruiter's worktree (recruitBase) */ base?: { sha: string; from: string }; /** commit hooks in that worktree (src/worktree-hooks.ts); "missing" means its commits are ungated */ hooks?: HooksCarried["hooks"] };
+  workspace?: { worktree: string; branch: string; /** the commit the branch was cut from and whose HEAD that was, when it is the recruiter's worktree (recruitBase) */ base?: { sha: string; from: string }; /** commit hooks in that worktree (src/worktree-hooks.ts); "missing" means its commits are ungated */ hooks?: HooksCarried["hooks"]; /** "off": its commits skip the AI reviewer gates (SEAT_AI_GATES_OFF in env.ts, owner ruling #985) */ aiGates?: "off" | "on" };
   requestedBy: string;
   parent?: string; // spawned agent that requested this one, if any
   depth: number;
@@ -432,6 +432,7 @@ export class Spawner {
       if (seatCwd !== cwd) rec.workspace = workspaceOf(cwd, target, name, this.basedOn.get(seatCwd));
       const carried = this.hooksIn.get(seatCwd);
       if (rec.workspace && carried) rec.workspace.hooks = carried.hooks;
+      if (rec.workspace) rec.workspace.aiGates = /gates off/.test(aiGatesLine(seatChildEnv(process.env, name))) ? "off" : "on";
       // said in the room only when it matters: this seat's commits will run no hooks
       if (carried?.hooks === "missing") this.hooks?.announce(target, hooksLine(name, carried));
       // per seat: the MCP URL carries this seat's heartbeat key (so the file cannot be shared between recruits) and its

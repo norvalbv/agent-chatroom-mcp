@@ -75,7 +75,24 @@ export function seatChildEnv(env: NodeJS.ProcessEnv = process.env, name?: string
   for (const key of Object.keys(childEnv)) if (key.startsWith("CHATROOM_") && !SEAT_ENV_KEEP.some((re) => re.test(key))) delete childEnv[key];
   for (const key of SEAT_ENV_EXCLUSIONS) delete childEnv[key];
   if (name !== undefined) Object.assign(childEnv, seatGitIdentity(name));
+  if (env.CHATROOM_SEAT_AI_GATES !== "on") for (const key of SEAT_AI_GATES_OFF) childEnv[key] ??= "1";
   return childEnv;
+}
+
+/**
+ * Seat commits run a repository's deterministic gates but not its AI reviewer gates (owner ruling, #985: "the whole
+ * point is to peer review. you *can* use deterministc gates, but bypass ai"). Since c3d2d088 seat worktrees carry
+ * the hooks, and devkit's pre-commit runs an LLM reviewer fleet, a completeness judge, a decisions LLM and a qavis
+ * vision route on every commit (evidence/seat-hooks-cost-and-bypass). These are devkit's own documented off
+ * switches (gate-engine/config.mts reads GUARD_ or FRINK_), and devkit records each as a gate bypass. A value the
+ * operator exported is kept; CHATROOM_SEAT_AI_GATES=on (the launcher's --seat-ai-gates on) sets none of them.
+ */
+export const SEAT_AI_GATES_OFF: readonly string[] = Object.freeze(["GUARD_DECISION_NO_LLM", "GUARD_NO_REVIEW", "GUARD_NO_COMPLETENESS", "GUARD_NO_QAVIS_ADVISORY", "GUARD_NO_SENTRY_JUDGE"]);
+
+/** One line for a launcher or recruit log: which AI gate switches a seat's commits carry. */
+export function aiGatesLine(seatEnv: NodeJS.ProcessEnv): string {
+  const off = SEAT_AI_GATES_OFF.filter((k) => seatEnv[k] && seatEnv[k] !== "0");
+  return off.length ? `AI reviewer gates off for seat commits (${off.join(", ")}); deterministic gates still run` : "AI reviewer gates ON for seat commits (--seat-ai-gates on)";
 }
 
 /**

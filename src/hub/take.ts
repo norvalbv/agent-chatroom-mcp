@@ -63,8 +63,11 @@ export function commitAuthor(hub: Hub, room: Room, p: Participant, commit: strin
 const HOW_WORDS = new Set(["run", "rerun", "re", "job", "go", "now", "start", "my", "the", "do", "doing", "by", "task", "work"]);
 /** The work a take names, as its sorted words without how-words and seat names; "" when nothing is left. */
 function workWords(room: Room, key: string): string {
-  const seats = new Set([...room.participants.values()].flatMap((x) => [x.name.toLowerCase(), ...x.name.toLowerCase().split(/[-_]/)]));
-  return [...new Set(key.slice("take/".length).toLowerCase().split(/[-/_.:\s]+/).filter((t) => t && !HOW_WORDS.has(t) && !seats.has(t)))].sort().join(" ");
+  // whole seat names only, longest first: a fragment of one ("2" of claude-opus-5-5-2, "claude") is a real word in a key
+  // like take/arm-2 (review/3f330ea8)
+  let rest = key.slice("take/".length).toLowerCase();
+  for (const n of [...new Set([...room.participants.values()].map((x) => x.name.toLowerCase()))].sort((a, b) => b.length - a.length)) rest = rest.split(n).join(" ");
+  return [...new Set(rest.split(/[-/_.:\s]+/).filter((t) => t && !HOW_WORDS.has(t)))].sort().join(" ");
 }
 
 /** Commit tokens in a take's key, e.g. take/review-ba181129 and take/review/ba181129 both name ba181129. */

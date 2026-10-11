@@ -158,10 +158,26 @@ test("two spellings of the same non-commit work are one take: the second seat is
   h.setBoard(name, b.id, "take/slow_count-gpu", "the gpu variant");
   h.setBoard(name, b.id, "take/fast_count", "another scorer");
   h.setBoard(name, c.id, "take/audit/slow_count", "auditing its output");
+  // a fragment of a seat's name is a real word (review/3f330ea8): seats here are alice, bob, carol, so use their own shapes
+  h.setBoard(name, a.id, "take/arm-1", "arm 1");
+  h.setBoard(name, b.id, "take/arm-2", "arm 2 is other work");
+  h.setBoard(name, a.id, "take/al-audit", "x");
+  h.setBoard(name, b.id, "take/ice-audit", "a word that is part of a name is not the name");
   // the holder's own second key, and a take once the first is released, pass
   h.setBoard(name, a.id, "take/slow_count-run", "same piece, my own note");
   h.setBoard(name, a.id, "take/slow_count", ""); h.setBoard(name, a.id, "take/slow_count-run", "");
   h.setBoard(name, b.id, "take/slow_count-run", "now mine");
+});
+
+test("seat names like claude-opus-5-5-1: only the whole name is dropped from a key, not its fragments (review/3f330ea8)", () => {
+  const h = new Hub({});
+  const [s1, s2] = ["claude-opus-5-5-1", "claude-opus-5-5-2"].map((n) => h.join("tk-names", n, "claude", {}, undefined, `s-tk-${n}`).participant);
+  h.setBoard("tk-names", s1!.id, "take/arm-1", "arm 1");
+  h.setBoard("tk-names", s2!.id, "take/arm-2", "arm 2 is other work");
+  h.setBoard("tk-names", s1!.id, "take/opus-audit", "x");
+  h.setBoard("tk-names", s2!.id, "take/claude-audit", "other work");
+  h.setBoard("tk-names", s1!.id, "take/slow_count", "running it");
+  throws(() => h.setBoard("tk-names", s2!.id, "take/slow_count-claude-opus-5-5-2", "mine"), /names the same work as "take\/slow_count"/);
 });
 
 let failed = 0;

@@ -28,6 +28,9 @@ export interface InboxRow {
   refused: number;
   /** acknowledgement writes the hub refused (two seats acknowledging one note) */
   ackRefusals: number;
+  /** notes a seat of the room went on to name in what it wrote, or acked with a reply (note_used events, hubs from the
+   * note_used commit on; 0 in older logs, which do not record it) */
+  used: number;
   /** minutes with 10 or more notes open counting every note (the rule before 81d4f9c2) and counting only ack-required ones (the rule since): what the same traffic costs under each */
   fullMinAllNotes: number;
   fullMinRequiredOnly: number;
@@ -40,9 +43,10 @@ const quantile = (xs: number[], q: number) => { const s = [...xs].sort((a, b) =>
 const stamp = (e: Ev): number => Date.parse(e.entry?.updatedAt ?? e.ts ?? e.msg?.ts ?? e.createdAt ?? "");
 
 export function inboxRow(events: readonly Ev[]): InboxRow {
-  const row: InboxRow = { room: "", notes: 0, required: 0, optional: 0, acked: 0, requiredUnacked: 0, bareAcks: 0, replyAcks: 0, refused: 0, ackRefusals: 0, fullMinAllNotes: 0, fullMinRequiredOnly: 0 };
+  const row: InboxRow = { room: "", notes: 0, required: 0, optional: 0, acked: 0, requiredUnacked: 0, bareAcks: 0, replyAcks: 0, refused: 0, ackRefusals: 0, used: 0, fullMinAllNotes: 0, fullMinRequiredOnly: 0 };
   const open = new Map<string, { at: number; required: boolean }>();
   const latencies: number[] = [];
+  const usedNotes = new Set<string>();
   let last = NaN, fullAllSince: number | undefined, fullReqSince: number | undefined, end = NaN;
   const tick = (t: number) => {
     if (Number.isNaN(t)) return;
@@ -57,6 +61,7 @@ export function inboxRow(events: readonly Ev[]): InboxRow {
     // once the room concludes it can be sent nothing anyway: the cap clock stops there
     if (e.type === "state" && (e.state === "concluded" || e.state === "closed") && Number.isNaN(end)) end = Number.isNaN(t) ? last : t;
     if (e.type === "inbox_refused") row.refused++;
+    if (e.type === "note_used") usedNotes.add(String(e.note));
     if (e.type === "call_completion" && e.tool === "board_set" && e.outcome === "hub_refusal" && /^inbox\/.*\.ack$/.test(String(e.key ?? ""))) row.ackRefusals++;
     if (e.type !== "board" || !String(e.key ?? "").startsWith("inbox/")) continue;
     const key = String(e.key);
@@ -87,12 +92,13 @@ export function inboxRow(events: readonly Ev[]): InboxRow {
   row.fullMinAllNotes = round1(row.fullMinAllNotes);
   row.fullMinRequiredOnly = round1(row.fullMinRequiredOnly);
   if (latencies.length) { row.ackMedianMin = round1(quantile(latencies, 0.5)); row.ackP90Min = round1(quantile(latencies, 0.9)); }
+  row.used = usedNotes.size;
   return row;
 }
 
 export function renderInboxTable(rows: InboxRow[]): string {
   const v = (x: number | undefined) => (x === undefined ? "-" : String(x));
-  let text = "| room | notes (ack-required / optional) | acked | ack-required never acked | ack median / p90 (min) | bare / reply acks | refused at the cap | refused ack writes | min full, every note counted | min full, ack-required only |\n|---|---|---|---|---|---|---|---|---|---|\n";
-  for (const r of rows) text += `| ${r.room} | ${r.notes} (${r.required} / ${r.optional}) | ${r.acked} | ${r.requiredUnacked} | ${v(r.ackMedianMin)} / ${v(r.ackP90Min)} | ${r.bareAcks} / ${r.replyAcks} | ${r.refused} | ${r.ackRefusals} | ${r.fullMinAllNotes} | ${r.fullMinRequiredOnly} |\n`;
+  let text = "| room | notes (ack-required / optional) | acked | ack-required never acked | ack median / p90 (min) | bare / reply acks | refused at the cap | refused ack writes | used | min full, every note counted | min full, ack-required only |\n|---|---|---|---|---|---|---|---|---|---|---|\n";
+  for (const r of rows) text += `| ${r.room} | ${r.notes} (${r.required} / ${r.optional}) | ${r.acked} | ${r.requiredUnacked} | ${v(r.ackMedianMin)} / ${v(r.ackP90Min)} | ${r.bareAcks} / ${r.replyAcks} | ${r.refused} | ${r.ackRefusals} | ${r.used} | ${r.fullMinAllNotes} | ${r.fullMinRequiredOnly} |\n`;
   return text;
 }

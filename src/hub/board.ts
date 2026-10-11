@@ -319,6 +319,9 @@ export function setBoard(hub: Hub, roomName: string, pid: string, key: string, t
   }
   hub.surfaceCited(room, text, `cited on the board under ${key}`);
   const note = key.startsWith("inbox/") && key.endsWith(".ack") ? room.board.get(key.slice(0, -4)) : undefined;
+  // a note named in an entry, or acknowledged with a reply rather than a bare ack, was used (Hub.noteUsed, gap G7)
+  if (note) { if (!BARE_ACK.test(text)) hub.noteUsed(room, p, text, "ack-reply", key.slice(0, -4)); }
+  else if (!key.startsWith("inbox/")) hub.noteUsed(room, p, text, "board");
   if (key.startsWith("verify/")) p.lastVerifiedAt = now();
   // a draft written or edited after peers' drafts became readable may have copied them: say so wherever it is listed
   const postReveal = key.startsWith("draft/") && (!!previous?.postReveal || !!room.draftsRevealed || hub.draftsDue(room));

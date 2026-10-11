@@ -863,6 +863,25 @@ export class Hub {
     return chain.length;
   }
 
+  /**
+   * Telemetry gap G7 (evidence-pack item 7: "an acknowledgement shows receipt, not use"): the first time a seat of the
+   * room names a note it was sent (inbox/<room>/<key>, not an ack) in what it writes, or acknowledges one with a reply
+   * rather than a bare ack, log note_used {note, by, via, after_s}. Once per (note, seat); in memory, so a restart may
+   * log one more.
+   */
+  noteUsed(room: Room, p: Participant, text: string, via: string, ackOf?: string): void {
+    if (p.agent === "human") return;
+    const keys = ackOf ? [ackOf] : [...new Set(text.match(/inbox\/[\w.-]+\/[\w.\/-]+/g) ?? [])].map((k) => k.replace(/[.,;:)]+$/, "")).filter((k) => !k.endsWith(".ack"));
+    const seen = (this.notesUsed.get(room) ?? this.notesUsed.set(room, new Set()).get(room))!;
+    for (const key of keys) {
+      const note = room.board.get(key);
+      if (!note || !note.text.trim() || seen.has(`${key}|${p.id}`)) continue;
+      seen.add(`${key}|${p.id}`);
+      this.persist({ type: "note_used", room: room.name, note: key, by: p.name, via, after_s: Math.max(0, Math.round((Date.now() - Date.parse(note.updatedAt)) / 1000)), ts: now() });
+    }
+  }
+  private readonly notesUsed = new WeakMap<Room, Set<string>>();
+
   /** Surface every quiet thread whose message id is cited in `text`. */
   surfaceCited(room: Room, text: string, reason: string) {
     for (const id of new Set(text.match(/m_[0-9a-f]{8}/g) ?? [])) {
@@ -1131,6 +1150,7 @@ export class Hub {
     p.messageCount += 1;
     p.lastSeenSeq = Math.max(p.lastSeenSeq, msg.seq);
     this.persistAttention(room, p);
+    this.noteUsed(room, p, content, "chat");
     return msg;
   }
 
@@ -2231,6 +2251,7 @@ export class Hub {
       }
     }
     this.persist({ type: "amend", room: roomName, proposalId, text: pr.text, version: pr.version, updatedAt: pr.updatedAt, votes: pr.votes, challenges: pr.challenges });
+    this.noteUsed(room, p, replace, "amend");
     const clip = (t: string, n: number) => (t.length > n ? t.slice(0, n) + "…" : t);
     const diff = replaceAll ? `replaced the whole text (${pr.text.length} chars)` : find ? `"${clip(find, 160)}" → "${clip(replace, 240)}"` : `appended "${clip(replace, 240)}"`;
     const survived = Object.values(kept).map((v) => this.shown(room, { id: "", name: v.name }));
@@ -2329,6 +2350,7 @@ export class Hub {
       );
     }
     this.surfaceCited(room, text, "cited in a proposal");
+    this.noteUsed(room, p, text, "proposal");
     const proposal: Proposal = {
       id: shortId("prop"),
       room: roomName,
@@ -2539,6 +2561,7 @@ export class Hub {
       );
     }
     this.surfaceCited(room, objection, "cited in a challenge");
+    this.noteUsed(room, p, objection, "challenge");
     const challenge: Challenge = { id: shortId("ch"), by: { id: p.id, name: p.name }, objection, ts: now(), version: pr.version, status: "open", blocking, ...this.seenTiming(room, p, pr), ...(cites ? { cites } : {}), ...(cmd ? { command: cmd } : {}) };
     pr.challenges.push(challenge);
     // A blocking challenge must be answered: the challenger's own vote (if any) is reset and must be re-cast

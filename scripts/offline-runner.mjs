@@ -313,6 +313,7 @@ export const offlineScripts = [
   'join-check-regression.ts',
   'git-no-lock-regression.ts',
   'inbox-table-regression.ts',
+  'note-used-regression.ts',
   'restart-replay-regression.ts',
   'speaker-identity-regression.ts',
   'seat-token-forgery-regression.ts',

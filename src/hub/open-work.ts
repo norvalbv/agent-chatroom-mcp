@@ -10,10 +10,14 @@ export interface OpenWork {
   /** review_owed: the hub assigned this seat the review and it has written no verify/*. unreviewed: nobody has, and the
    * assigned reviewer is gone (or this seat is the verifier). own_claim_empty: this seat's claim has nothing behind it.
    * claim_orphaned: the owner left and this seat may take it over now. help_wanted: an open help/* or join-request/*.
-   * idea_unclaimed: an idea/<slug> nobody holds claim/<slug> for, shown only to a seat with nothing of its own in flight. */
-  kind: "review_owed" | "unreviewed" | "own_claim_empty" | "claim_orphaned" | "help_wanted" | "idea_unclaimed";
+   * idea_unclaimed: an idea/<slug> nobody holds claim/<slug> for, shown only to a seat with nothing of its own in flight.
+   * idea_no_free_seat: the same idea while every worker holds a live claim, shown only to its author: a hand is added
+   * with request_agent or the idea is dropped (brief item 2 of swarm-003601-tky5; idea/unowned-work-no-free-seat). */
+  kind: "review_owed" | "unreviewed" | "own_claim_empty" | "claim_orphaned" | "help_wanted" | "idea_unclaimed" | "idea_no_free_seat";
   key: string;
   owner?: string;
+  /** idea_no_free_seat: how many workers there are, every one holding a live claim */
+  workers?: number;
 }
 
 /** Board prefixes that are requests or bookkeeping, not work a claim's owner has produced. */
@@ -140,11 +144,14 @@ export function openWork(hub: Hub, room: Room, p: Participant, idle = true): Ope
   const hasWork = (name: string) => entries.some(([k, e]) => e.by === name && !NOT_WORK.some((pre) => k.startsWith(pre)));
   const reviewed = (claimKey: string, claim: BoardEntry) => reviewedClaim(room, claimKey, claim);
 
-  const review: OpenWork[] = [], own: OpenWork[] = [], orphaned: OpenWork[] = [], help: OpenWork[] = [], ideas: OpenWork[] = [];
+  const review: OpenWork[] = [], own: OpenWork[] = [], orphaned: OpenWork[] = [], help: OpenWork[] = [], ideas: OpenWork[] = [], myIdeas: string[] = [];
   for (const [k, e] of entries) {
     if (k.startsWith("idea/")) {
       const claim = room.board.get(`claim/${area(k)}`);
-      if ((!claim?.text.trim() || claimReleased(claim)) && !IDEA_SETTLED.test(e.text) && !settled(e)) ideas.push({ kind: "idea_unclaimed", key: k, owner: shownName(e.by) });
+      if ((!claim?.text.trim() || claimReleased(claim)) && !IDEA_SETTLED.test(e.text) && !settled(e)) {
+        ideas.push({ kind: "idea_unclaimed", key: k, owner: shownName(e.by) });
+        if (e.by === p.name) myIdeas.push(k);
+      }
       continue;
     }
     if (k.startsWith("help/") || k.startsWith("join-request/")) {
@@ -169,8 +176,15 @@ export function openWork(hub: Hub, room: Room, p: Participant, idle = true): Ope
   }
   // the request side of a blackboard (sources/2510.01285): an unbuilt idea is work only for a seat free to take it, so a
   // seat with a live claim of its own is not pulled off it
-  const free = !entries.some(([k, e]) => k.startsWith("claim/") && e.by === p.name && !claimReleased(e) && !settled(e));
-  return [...review, ...orphaned, ...own, ...help, ...(free ? ideas : [])];
+  const holds = (name: string) => entries.some(([k, e]) => k.startsWith("claim/") && e.by === name && !claimReleased(e) && !settled(e));
+  const free = !holds(p.name);
+  // Unowned work and no free seat, both stated as fact, is what preceded this room's recruiting (#25, #28 there); a seat
+  // never weighed it unprompted (3% of Claude seat-rooms recruited, evidence/recruiting-never-used). Told to the idea's
+  // author only, so one seat adds a hand, not every busy seat at once. The verifier, a lead and the chair are not workers.
+  const workers = hub.activeParticipants(room).filter((x) => x.agent !== "human" && !["verifier", "lead", "chair"].includes(x.role ?? "worker"));
+  const noneFree = !free && workers.length > 0 && workers.every((x) => holds(x.name));
+  const recruit: OpenWork[] = noneFree ? myIdeas.map((key) => ({ kind: "idea_no_free_seat" as const, key, workers: workers.length })) : [];
+  return [...review, ...orphaned, ...own, ...help, ...recruit, ...(free ? ideas : [])];
 }
 
 function describe(w: OpenWork): string {
@@ -181,6 +195,7 @@ function describe(w: OpenWork): string {
     case "claim_orphaned": return `${w.owner} left holding ${w.key}: you may take it over now (board_set ${w.key}; read handoff/${slug} first if it exists)`;
     case "own_claim_empty": return `your ${w.key} has nothing on the board behind it: post what you have found or built, or release the claim`;
     case "help_wanted": return `${w.owner} asked for help in ${w.key} (board_get it)`;
+    case "idea_no_free_seat": return `your ${w.key} has no owner and all ${w.workers} workers hold a claim: request_agent(area="${slug}", brief=<what it is and what done looks like; it may just say board_get ${w.key}>) adds a seat for it, or write one line on ${w.key} saying why it is dropped`;
     case "idea_unclaimed": return `${w.owner}'s ${w.key} is unbuilt and nobody holds claim/${slug}: board_get it, then claim/${slug} and start, or say in one line why it should not be built`;
   }
 }

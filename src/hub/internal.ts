@@ -39,7 +39,7 @@ export type Event =
   /** a seat process's cumulative model usage (src/hub/usage.ts); seat is the seat key's sha256, never the key */
   | { type: "usage"; room: string; seat: string; usage: SeatUsage; ts: string }
   /** Telemetry only (replay ignores it; src/hub/memory.ts): a sample of what a seat's processes hold, or a warning/stop. */
-  | { type: "memory"; room: string; seat: string; ts: string; memory?: SeatMemory; event?: "warn" | "stop"; mb?: number; budget_mb?: number; top?: SeatMemory["top"]; signal?: string }
+  | { type: "memory"; room: string; seat: string; ts: string; memory?: SeatMemory; event?: "warn" | "over" | "stop"; mb?: number; budget_mb?: number; top?: SeatMemory["top"]; signal?: string }
   | { type: "kick_vote"; room: string; vote: KickVote }
   /** Telemetry only (replay ignores it): the open work an idle wait named to a seat, written when that list changes. */
   | { type: "open_work"; room: string; pid: string; ts: string; items: string[] };

@@ -30,13 +30,18 @@ export interface SeatMemory {
   budget_mb: number | null;
   at: string;
 }
+/** warn: past WARN_AT of the budget. over: past the budget on one sample (stopped on the next unless it shrinks). */
 export type MemoryEvent =
-  | { kind: "warn"; seat: string; mb: number; budget_mb: number; top: NonNullable<SeatMemory["top"]> }
+  | { kind: "warn" | "over"; seat: string; mb: number; budget_mb: number; top: NonNullable<SeatMemory["top"]> }
   | { kind: "stop"; seat: string; mb: number; budget_mb: number; top: NonNullable<SeatMemory["top"]>; signal: "SIGTERM" | "SIGKILL" };
+/** Processes carrying a seat key no active participant of this hub holds: a seat that left, or another hub's. Reported, never signalled. */
+export interface Unattributed { mb: number; processes: number; top: { pid: number; mb: number; command: string }[] }
 
 export const WARN_AT = 0.7;
 /** below this share of the budget a seat may be warned again */
 const REARM_AT = 0.5;
+/** a process under this share of the budget is not worth stopping: the seat is told its total instead */
+const STOP_FLOOR = 0.1;
 /** resident size past this share of the budget: read the footprint instead */
 const FOOTPRINT_AT = 0.4;
 const KEY = /(?:^|\s)CHATROOM_SEAT_KEY=([\w-]{8,100})/;
@@ -113,6 +118,9 @@ export interface MemoryWatchOptions {
 export class MemoryWatch {
   private readonly bySeat = new Map<string, SeatMemory>();
   private readonly warned = new Set<string>();
+  /** seats whose last sample was over budget: one sample is a thin basis for stopping a job, two in a row is not */
+  private readonly over = new Set<string>();
+  private others: Unattributed = { mb: 0, processes: 0, top: [] };
   /** pid the last tick asked to stop, per seat: still there on the next tick means it ignored SIGTERM */
   private readonly asked = new Map<string, number>();
   private running = false;
@@ -123,6 +131,8 @@ export class MemoryWatch {
   }
 
   get(seat: string | undefined): SeatMemory | undefined { return seat ? this.bySeat.get(seat) : undefined; }
+  /** What tagged processes of no live seat hold (a recorder a finished room left running, a respawned seat's old script). */
+  unattributed(): Unattributed { return this.others; }
 
   /** One pass over the process table. Never overlaps itself; a failed ps is an empty table, not an error. */
   async tick(): Promise<MemoryEvent[]> {
@@ -137,9 +147,10 @@ export class MemoryWatch {
       const events: MemoryEvent[] = [];
       const at = new Date().toISOString();
       const seen = new Set<string>();
+      const orphans: (Proc & { kb: number })[] = [];
       for (const [key, u] of usage) {
         const seat = seatHash(key);
-        if (!this.o.watched(seat)) continue;
+        if (!this.o.watched(seat)) { orphans.push({ ...u.agent, kb: u.agentKb }, ...u.own); continue; }
         seen.add(seat);
         const biggest = u.own[0];
         const top = biggest ? { pid: biggest.pid, mb: mbOf(biggest.kb), command: biggest.command.slice(0, 200) } : null;
@@ -148,22 +159,33 @@ export class MemoryWatch {
         this.bySeat.set(seat, memory);
         this.o.onSample?.(seat, memory);
         if (!this.budgetMb || !top) continue;
-        if (mb >= this.budgetMb) {
+        if (mb >= this.budgetMb && top.mb >= this.budgetMb * STOP_FLOOR) {
+          if (!this.over.has(seat)) {
+            this.over.add(seat);
+            this.warned.add(seat);
+            events.push({ kind: "over", seat, mb, budget_mb: this.budgetMb, top });
+            continue;
+          }
           const signal = this.asked.get(seat) === top.pid ? "SIGKILL" : "SIGTERM";
           try { (this.o.kill ?? ((pid, sig) => process.kill(pid, sig)))(top.pid, signal); } catch { continue; }
           this.asked.set(seat, top.pid);
           events.push({ kind: "stop", seat, mb, budget_mb: this.budgetMb, top, signal });
         } else {
           this.asked.delete(seat);
+          this.over.delete(seat);
           if (mb >= this.budgetMb * WARN_AT && !this.warned.has(seat)) {
             this.warned.add(seat);
             events.push({ kind: "warn", seat, mb, budget_mb: this.budgetMb, top });
           } else if (mb < this.budgetMb * REARM_AT) this.warned.delete(seat);
         }
       }
+      orphans.sort((a, b) => b.kb - a.kb);
+      this.others = { mb: mbOf(orphans.reduce((n, p) => n + p.kb, 0)), processes: orphans.length, top: orphans.slice(0, 5).map((p) => ({ pid: p.pid, mb: mbOf(p.kb), command: p.command.slice(0, 200) })) };
       // a seat with nothing running any more reads as 0, not as its last sample
       for (const [seat, last] of this.bySeat) {
-        if (seen.has(seat) || (last.mb === 0 && !last.top)) continue;
+        if (seen.has(seat)) continue;
+        this.over.delete(seat);
+        if (last.mb === 0 && !last.top) continue;
         const memory: SeatMemory = { ...last, mb: 0, agent_mb: 0, processes: 0, top: null, at };
         this.bySeat.set(seat, memory);
         this.o.onSample?.(seat, memory);
@@ -176,10 +198,16 @@ export class MemoryWatch {
   }
 }
 
-/** What the seat is told, in words it can act on: the number, the process, and the cheaper way. */
-export function memoryNotice(e: MemoryEvent): string {
+/**
+ * What the seat is told, in words it can act on: the number, the process, and the cheaper way with the exact setting
+ * (the correction arrives when the job fails, not only in a brief). CHATROOM_SEAT_MEMORY_HINT adds a room's own line,
+ * e.g. where its helper lives.
+ */
+export function memoryNotice(e: MemoryEvent, hint = process.env.CHATROOM_SEAT_MEMORY_HINT ?? ""): string {
   const what = `pid ${e.top.pid} (${e.top.mb} MB): ${e.top.command.slice(0, 120)}`;
-  const how = "Do not load a whole file: read it in chunks or as a stream; in DuckDB `SET memory_limit='<n>GB'; SET threads=2;` and set a temp_directory so it spills to disk; select only the columns and rows you need; run one large job at a time.";
-  if (e.kind === "warn") return `MEMORY: the processes you started hold ${e.mb} MB of your ${e.budget_mb} MB budget. Largest: ${what}. At ${e.budget_mb} MB the hub stops your largest process. ${how}`;
-  return `MEMORY: the processes you started held ${e.mb} MB, over your ${e.budget_mb} MB budget, so the hub stopped your largest one (${e.signal}): ${what}. Nothing else of yours was touched. Rerun it so that it needs less. ${how}`;
+  const limit = Math.max(256, Math.floor((e.budget_mb * 0.6) / 256) * 256);
+  const how = `Do not load a whole file: read it in chunks or as a stream. In DuckDB run \`SET memory_limit='${limit}MB'; SET threads=2; SET temp_directory='/tmp/duckdb-spill';\` first (its default is 80% of this machine's RAM for every process). Select only the columns and rows you need, and run one large job at a time. Your budget is in $CHATROOM_SEAT_MEMORY_MB.${hint ? ` ${hint}` : ""}`;
+  if (e.kind === "warn") return `MEMORY: the processes you started hold ${e.mb} MB of your ${e.budget_mb} MB budget. Largest: ${what}. Past ${e.budget_mb} MB the hub stops your largest process. ${how}`;
+  if (e.kind === "over") return `MEMORY: the processes you started hold ${e.mb} MB, over your ${e.budget_mb} MB budget. Largest: ${what}. It will be stopped at the next check, in a few seconds, unless it shrinks. ${how}`;
+  return `MEMORY: the processes you started held ${e.mb} MB, over your ${e.budget_mb} MB budget, so the hub stopped your largest one (${"signal" in e ? e.signal : "SIGTERM"}): ${what}. Nothing else of yours was touched. Rerun it so that it needs less. ${how}`;
 }

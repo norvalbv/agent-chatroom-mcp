@@ -417,6 +417,11 @@ app.post("/otlp/v1/logs", (req, res) => {
   hub.recordUsage(seatKey, req.body);
   res.json({});
 });
+// Seat memory, hub-wide: the budget, and tagged processes of no live seat (a finished room's recorder, a respawned
+// seat's old script). Those are reported here and never stopped.
+app.get("/memory", (_req, res) => {
+  res.json({ budget_mb: hub.memory.budgetMb, unattributed: hub.memory.unattributed() });
+});
 // Steering ack: the seat (hook, launcher or seat loop) put these pending asks into its model's context mid-turn, so
 // they count as delivered. Peek without ack leaves them for the next wait: a failed injection never loses an ask.
 app.post("/steer/ack", (req, res) => {

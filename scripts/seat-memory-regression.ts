@@ -71,11 +71,16 @@ assert.equal(measuring.get(A)!.top!.pid, 102);
 assert.equal(measuring.get(A)!.budget_mb, null);
 assert.deepEqual(kills, []);
 
-// budget 5000 MB: seat A (3906 MB) is past 70% -> warned once; seat B (8789 MB) is over -> its largest process, and only it
+// budget 5000 MB: seat A (3906 MB) is past 70% -> warned once; seat B (8789 MB) is over -> told first, stopped on the
+// next sample if still over, and only its largest process
 const w = watch(5000);
 await w.tick();
+assert.deepEqual(kills, [], "one sample over the budget is a warning with the number, not a stop");
+assert.deepEqual(events.map((e) => [e.kind, e.seat === A ? "A" : "B"]), [["warn", "A"], ["over", "B"]]);
+await w.tick();
 assert.deepEqual(kills, [[201, "SIGTERM"]], "only the over-budget seat's own largest process; never Chrome (no key), never seat A's");
-assert.deepEqual(events.map((e) => [e.kind, e.seat === A ? "A" : "B"]), [["warn", "A"], ["stop", "B"]]);
+assert.deepEqual(events.map((e) => e.kind), ["warn", "over", "stop"]);
+const [warn, over, stop] = events as [MemoryEvent, MemoryEvent, MemoryEvent];
 await w.tick();
 assert.deepEqual(kills, [[201, "SIGTERM"], [201, "SIGKILL"]], "still there a tick later: it ignored SIGTERM");
 assert.equal(events.filter((e) => e.kind === "warn").length, 1, "one warning per episode, not one per tick");
@@ -87,22 +92,40 @@ assert.deepEqual(kills, []);
 assert.equal(w.get(B)!.mb, 0);
 assert.equal(w.get(B)!.peak_mb, 8789, "the peak is kept");
 
-// the agent itself is never stopped, even when it is the seat's largest process and the seat is over budget
+// the agent itself is never stopped or counted, even when it is the seat's largest process
 current = parseTable("  100     1 9000000    02:00:00 claude -p brief\n  103   100 600000       05:00 python3 small.py", withEnv);
 kills.length = 0;
 const tight = watch(500);
-await tight.tick();
+await tight.tick(); await tight.tick();
 assert.deepEqual(kills, [[103, "SIGTERM"]]);
-// a key no participant of this hub holds (another hub's seat) is not this hub's to stop
+const agentOnly = watch(500);
+current = parseTable("  100     1 9000000    02:00:00 claude -p brief", withEnv);
+kills.length = 0; events.length = 0;
+await agentOnly.tick(); await agentOnly.tick();
+assert.deepEqual([kills, events], [[], []], "a seat whose only large process is its own agent is neither warned nor stopped");
+assert.equal(agentOnly.get(A)!.agent_mb, 8789, "but its agent's size is reported");
+// over budget only through many small processes: no single one is worth stopping (floor: 10% of the budget)
+current = parseTable([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11].map((i) => `  ${400 + i}     1  90000      01:00 python3 rec${i}.py`).join("\n") + "\n  100     1 1000    02:00:00 claude -p brief", [...[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11].map((i) => `  ${400 + i} python3 rec${i}.py CHATROOM_SEAT_KEY=seat-key-AAAA`), "  100 claude CHATROOM_SEAT_KEY=seat-key-AAAA"].join("\n"));
+kills.length = 0;
+const floor = watch(1000);
+await floor.tick(); await floor.tick();
+assert.deepEqual(kills, [], "twelve 88 MB recorders over a 1000 MB budget: none is stopped");
+// a key no active participant of this hub holds (a finished room's recorder, a respawned seat's old script, another
+// hub's seat): measured and reported as unattributed, never signalled, however large
 current = table;
 kills.length = 0;
-await watch(1000, (s) => s === A).tick();
-assert.deepEqual(kills, [[102, "SIGTERM"]]);
+const orphanWatch = watch(1000, (s) => s === A);
+await orphanWatch.tick(); await orphanWatch.tick();
+assert.deepEqual(kills, [[102, "SIGTERM"]], "seat A's own largest only; seat B's 8.6 GB script is not this hub's seat");
+assert.equal(orphanWatch.unattributed().processes, 2);
+assert.equal(orphanWatch.unattributed().top[0]!.pid, 201);
+assert.equal(orphanWatch.unattributed().mb, 8789 + 488);
 
-const stop = events.find((e) => e.kind === "stop")!;
 assert.match(memoryNotice(stop), /held 8789 MB, over your 5000 MB budget.*stopped your largest one \(SIGTERM\): pid 201 \(8789 MB\): python3 theirs\.py/);
-assert.match(memoryNotice(stop), /memory_limit/);
-assert.match(memoryNotice(events.find((e) => e.kind === "warn")!), /hold 3906 MB of your 5000 MB budget/);
+assert.match(memoryNotice(stop), /SET memory_limit='2816MB'; SET threads=2;/, "the exact setting, sized from the budget");
+assert.match(memoryNotice(stop, "Helper: kit/tools/lab_duckdb.py"), /Helper: kit\/tools\/lab_duckdb\.py$/);
+assert.match(memoryNotice(over), /hold 8789 MB, over your 5000 MB budget.*will be stopped at the next check/);
+assert.match(memoryNotice(warn), /hold 3906 MB of your 5000 MB budget/);
 
 // the budget reaches a seat's env when the hub or launcher has one, and only then
 assert.equal(seatBeat("http://127.0.0.1:1/mcp", "seat-key-AAAA").env.CHATROOM_SEAT_MEMORY_MB, undefined);
@@ -188,6 +211,18 @@ assert.ok(pending.length >= 1, "the notice is pending for the seat's hook");
 assert.equal((await beat(keyB)).filter((m) => /^MEMORY:/.test(m.text)).length, 0);
 await fetch(`${HTTP}/steer/ack`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ seat_key: keyA, ids: pending.map((m) => m.id) }) });
 assert.equal((await beat(keyA)).filter((m) => /^MEMORY:/.test(m.text)).length, 0);
+
+// a tagged process whose seat has left is reported hub-wide and outlives every tick
+const keyGone = `mem-test-${PORT}-GONE`;
+const c = await connect(seatBeat(`${HTTP}/mcp`, keyGone).mcpUrl);
+await c("join_room", { room: "mem", name: "leaver", agent: "claude" });
+await c("leave_room", { room: "mem", reason: "done: nothing left undone here" });
+const orphan = proc(keyGone, 400, "orphan");
+await sleep(2500);
+assert.ok(alive(orphan), "a process of a seat that left is never stopped, even over the budget");
+const hubWide = (await (await fetch(`${HTTP}/memory`)).json()) as { budget_mb: number; unattributed: { top: { pid: number; mb: number }[] } };
+assert.equal(hubWide.budget_mb, BUDGET);
+assert.ok(hubWide.unattributed.top.some((p) => p.pid === orphan.pid && p.mb >= 350), JSON.stringify(hubWide));
 
 // telemetry: the room log has the samples and the stop
 const events2 = readdirSync(DATA).filter((f) => f.endsWith(".jsonl")).flatMap((f) => readFileSync(join(DATA, f), "utf8").split("\n").filter(Boolean).map((l) => JSON.parse(l) as { type: string; event?: string; top?: { pid: number }; memory?: { mb: number } }));

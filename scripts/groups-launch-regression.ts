@@ -98,12 +98,13 @@ test("--groups refuses a file it cannot launch, before any seat starts", () => {
   }
 });
 
-/** A stub claude that stays up for FAKE_SLEEP_MS, so the run lasts long enough for a digest pass to come due. */
+/** A stub claude that stays up for FAKE_SLEEP_MS (a consolidator for half a second), so the run lasts long enough for
+ * digest passes to come due. */
 const SLOW_CLAUDE = `#!/usr/bin/env node
 const fs = require('node:fs'), path = require('node:path'), crypto = require('node:crypto');
 const argv = process.argv.slice(2), stdin = fs.readFileSync(0, 'utf8');
 fs.writeFileSync(path.join(process.env.FAKE_RECORD_DIR, 'claude-' + crypto.randomUUID() + '.json'), JSON.stringify({ argv, stdin, cwd: process.cwd(), at: Date.now() }));
-setTimeout(() => process.stdout.write(JSON.stringify({ type: 'result', subtype: 'success', is_error: false, result: 'ok', total_cost_usd: 0.25, usage: {} }) + '\\n'), Number(process.env.FAKE_SLEEP_MS || 0));
+setTimeout(() => process.stdout.write(JSON.stringify({ type: 'result', subtype: 'success', is_error: false, result: 'ok', total_cost_usd: 0.25, usage: {} }) + '\\n'), /You are digest-\\d+/.test(stdin) ? 500 : Number(process.env.FAKE_SLEEP_MS || 0));
 `;
 
 test("--digest-every starts a fresh consolidator seat on a timer, told every group's room and where to send what it finds", () => {
@@ -162,4 +163,38 @@ test("--digest-every without --groups is refused", () => {
   assert.equal(r.status, 2);
   assert.match(String(r.stderr), /--digest-every needs --groups/);
   assert.equal(readdirSync(records).length, 0, "no seat was started");
+});
+
+test("no digest pass starts once the group rooms have concluded or closed", async () => {
+  const tag = "closed";
+  const [bin, records, data] = ["bin", "records", "data"].map((d) => join(base, tag, d));
+  for (const d of [bin, records, data]) mkdirSync(d, { recursive: true });
+  writeFileSync(join(bin, "claude"), SLOW_CLAUDE, { mode: 0o755 });
+  const file = join(base, tag, "groups.json");
+  writeFileSync(file, JSON.stringify(GROUPS));
+  const { spawn } = await import("node:child_process");
+  const child = spawn(process.execPath, ["dist/swarm.js", TASK, "--groups", file, "--digest-every", "0.03", "--quorum", "majority", "--no-carry", "--timeout", "1", "--port", PORT!, "--result-path", join(base, tag, "result.json")], {
+    // --quorum makes the launcher create the group rooms itself (the stub seats never join one)
+    env: { ...process.env, PATH: `${bin}:${process.env.PATH}`, FAKE_RECORD_DIR: records, FAKE_SLEEP_MS: "9000", CHATROOM_INSECURE_LOCAL: "1", CHATROOM_NO_RECRUIT: "1", CHATROOM_DATA_DIR: data },
+  });
+  let out = "";
+  child.stdout.on("data", (d) => (out += d));
+  child.stderr.on("data", (d) => (out += d));
+  const done = new Promise<number | null>((ok) => child.on("close", ok));
+  const until = async (what: string, test: () => boolean) => {
+    for (let i = 0; i < 200 && !test(); i++) await new Promise((r) => setTimeout(r, 50));
+    assert.ok(test(), `${what}; launcher output: ${out.slice(-600)}`);
+  };
+  await until("the first pass starts", () => /digest pass 1: started/.test(out));
+  const swarm = /swarm (swarm-\d{6}-[a-z0-9]{4}):/.exec(out)?.[1] ?? /(swarm-\d{6}-[a-z0-9]{4})-build/.exec(out)?.[1];
+  assert.ok(swarm, `the run's id is in the launcher output: ${out.slice(0, 400)}`);
+  for (const id of ["build", "break"]) {
+    const r = await fetch(`http://127.0.0.1:${PORT}/rooms/${swarm}-${id}/close`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ name: "test", reason: "groups done" }) });
+    assert.equal(r.status, 200, `closed ${id}: ${await r.text()}`);
+  }
+  const startedAtClose = (out.match(/digest pass \d+: started/g) ?? []).length;
+  await done;
+  stopOurHub();
+  assert.match(out, /no further digest pass: 2 of 2 group rooms have concluded/);
+  assert.equal((out.match(/digest pass \d+: started/g) ?? []).length, startedAtClose, "no pass was started after the rooms closed");
 });

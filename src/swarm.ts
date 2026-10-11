@@ -646,9 +646,22 @@ const digestRuns: SeatRun[] = [];
 const digestPasses: { pass: number; name: string; startedAt: string; finishedAt?: string; cost?: number | null }[] = [];
 const digestPending: Promise<void>[] = [];
 let digestPass = 0, digestRunning = false, groupsDone = false;
-const digestTimer = DIGEST_EVERY_MIN ? setInterval(() => {
+/** Group rooms that can still take a note: a concluded or closed room refuses post_to_room. A room the hub does not
+ * answer for counts as open, so a slow hub never ends the passes. */
+const openGroupRooms = async (): Promise<string[]> => (await Promise.all(groupRooms.map(async (room) => {
+  try { return ["concluded", "closed"].includes(String(((await (await fetch(`${URL_}/rooms/${encodeURIComponent(room)}`, { signal: AbortSignal.timeout(3_000) })).json()) as { state?: string }).state)) ? "" : room; } catch { return room; }
+}))).filter(Boolean);
+const digestTimer: ReturnType<typeof setInterval> | undefined = DIGEST_EVERY_MIN ? setInterval(async () => {
   if (STOPPING || groupsDone || Date.now() > RUN_STARTED + TIMEOUT_MIN * 60_000 - Math.min(5, TIMEOUT_MIN / 2) * 60_000) return;
   if (digestRunning) return log(`digest pass ${digestPass} is still running; the next one waits for it`);
+  // a pass with fewer than two groups left to carry findings between is a seat spent on nothing
+  digestRunning = true;
+  const open = await openGroupRooms();
+  digestRunning = false;
+  if (open.length < 2) {
+    log(`no further digest pass: ${groupRooms.length - open.length} of ${groupRooms.length} group rooms have concluded`);
+    return clearInterval(digestTimer);
+  }
   const n = ++digestPass, name = `digest-${n}`;
   digestRunning = true;
   const record: (typeof digestPasses)[number] = { pass: n, name, startedAt: new Date().toISOString() };

@@ -82,6 +82,7 @@ for (const cmd of [
   assert.ok(reason.includes(SEAT_PROCS) && /\bstop\b/.test(reason), `names the replacement: ${reason}`);
 }
 assert.ok(guard("pkill -f fetch_trades.py")!.includes(`stop fetch_trades.py`), "the replacement carries the seat's own pattern");
+assert.ok(guard("pkill -9 -f \"crypto/fetch.py markets\"; sleep 1")!.includes(`stop "crypto/fetch.py markets"`), "quoted, as most were typed");
 
 // 3. Not a kill by pattern: the word in a message, a search, a file being written; a kill by PID or by a PID file.
 for (const cmd of [

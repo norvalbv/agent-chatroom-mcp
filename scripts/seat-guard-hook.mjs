@@ -49,7 +49,9 @@ export function refusal(command, key, keyOf = seatKeyOf) {
   const named = BY_NAME.exec(cmd);
   const byXargs = BY_XARGS.test(cmd) && !(BY_PORT.test(cmd) && !BY_XARGS.test(cmd.replace(new RegExp(BY_PORT.source, "g"), ";")));
   if (named || BY_PGREP.test(cmd) || byXargs || (LOOKUP.test(cmd) && KILL_VAR.test(cmd))) {
-    const pattern = named?.[1].trim().split(/\s+/).filter((w) => !w.startsWith("-")).pop()?.replace(/^["']|["']$/g, "");
+    // the seat's own pattern, quotes and all, from the command as typed (the quoted text was emptied for the match)
+    const typed = new RegExp(AT_COMMAND + String.raw`(?:pkill|killall)((?:\s+-\w+)*)\s+("[^"]*"|'[^']*'|[^\s;&|]+)`).exec(withoutHeredocs(command));
+    const pattern = named && typed?.[2];
     return `Refused: this kills by matching command lines, and other seats on this machine run processes whose names match yours (one seat's pkill killed another seat's script that way). Stop only what you started: \`${stop(pattern || "<pattern>")}\` matches the same way among your own processes and leaves everyone else's; \`node ${JSON.stringify(SEAT_PROCS)} list\` shows them. For a shell loop, keep its PID when you start it (\`... & echo $! > x.pid\`) and \`kill $(cat x.pid)\`.`;
   }
   const foreign = [];

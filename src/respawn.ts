@@ -40,9 +40,12 @@ export interface RespawnDecision { respawn: boolean; reason: string }
 const LIMIT = /You(?:'|’)ve hit your (?:session|weekly|usage|[a-z0-9 -]{1,30}) limit(?:\s*·\s*resets\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm)\s*\(([A-Za-z_]+\/[A-Za-z_/+-]+)\))?/i;
 const THRASH = /Autocompact is thrashing/;
 
+/** The CLI prints its notice as the seat's final line; an earlier line that quotes one (a seat that read another seat's log) is not it. */
+const lastLine = (output: string) => output.trimEnd().split("\n").pop() ?? "";
+
 /** The usage-limit notice in a seat's output, with the instant it resets when the notice names a time and zone we can read. */
 export function usageLimit(output: string, now = Date.now()): { resetsAt?: string } | null {
-  const m = LIMIT.exec(output.slice(-2000));
+  const m = LIMIT.exec(lastLine(output));
   if (!m) return null;
   if (!m[1] || !m[4]) return {};
   let local: Intl.DateTimeFormatPart[];
@@ -55,12 +58,15 @@ export function usageLimit(output: string, now = Date.now()): { resetsAt?: strin
 }
 
 /** The detail of a seat's exit receipt: its exit code and, for a failed exit, the reason its output names. */
-export function exitDetail(code: number | null, output: string, now = Date.now()): string {
+export function exitDetail(code: number | null, output: string | string[], now = Date.now()): string {
   const base = `exit ${code}`;
   if (code === 0 || code === null) return base;
-  const limit = usageLimit(output, now);
-  if (limit) return `${base}: usage limit${limit.resetsAt ? `, resets ${limit.resetsAt.slice(11, 16)} UTC` : ""}`;
-  if (THRASH.test(output.slice(-2000))) return `${base}: compaction thrashing, the compact window is too small for what the seat reads`;
+  // stdout and stderr are separate streams: the notice is the last line of one of them
+  for (const out of typeof output === "string" ? [output] : output) {
+    const limit = usageLimit(out, now);
+    if (limit) return `${base}: usage limit${limit.resetsAt ? `, resets ${limit.resetsAt.slice(11, 16)} UTC` : ""}`;
+    if (THRASH.test(lastLine(out))) return `${base}: compaction thrashing, the compact window is too small`;
+  }
   return base;
 }
 

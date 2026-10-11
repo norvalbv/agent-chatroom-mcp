@@ -432,12 +432,12 @@ export class Spawner {
         clearTimeout(wall);
         rec.endedAt = new Date().toISOString();
         rec.exitCode = code;
-        let said = "";
+        let said: string[] = [];
         if (agent === "claude") {
           const { text, usage } = parseClaudeCliOutput(claudeStdout.trim());
           writeFileSync(log, claudeStderr + text);
           rec.usage = usage;
-          said = `${text}\n${claudeStderr}`;
+          said = [text, claudeStderr];
         }
         this.hooks?.seatExited?.(beat.key, exitDetail(code, said));
         this.children.delete(name);

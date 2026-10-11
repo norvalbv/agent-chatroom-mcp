@@ -19,11 +19,17 @@ assert.deepEqual(usageLimit("You've hit your weekly limit · resets 9:30pm (Amer
 // the limit named without a time we can read is still the reason
 assert.equal(exitDetail(1, "You've hit your session limit", now), "exit 1: usage limit");
 assert.equal(exitDetail(1, "You've hit your session limit · resets soon (Nowhere/Zone)", now), "exit 1: usage limit");
-assert.equal(exitDetail(1, "Autocompact is thrashing: the context refilled to the limit within 3 turns of the previous compact, 3 times in a row.", now), "exit 1: compaction thrashing, the compact window is too small for what the seat reads");
+assert.equal(exitDetail(1, "Autocompact is thrashing: the context refilled to the limit within 3 turns of the previous compact, 3 times in a row.", now), "exit 1: compaction thrashing, the compact window is too small");
 // anything else is what it was
 assert.equal(exitDetail(1, "TypeError: x is not a function", now), "exit 1");
 assert.equal(exitDetail(0, "CONCLUSION: done. Earlier a seat said: You've hit your session limit", now), "exit 0", "a clean exit is not relabelled by what its text quotes");
 assert.equal(exitDetail(null, "", now), "exit null");
 assert.equal(usageLimit("all good", now), null);
 assert.ok(exitDetail(1, "x".repeat(5000) + "You've hit your session limit · resets 2:10am (Europe/London)", now).length <= 80, "fits the hub's 80-character receipt");
+// only the seat's last line counts: a crash whose earlier output quotes another seat's notice is still a crash
+assert.equal(exitDetail(1, "grep found: You've hit your session limit · resets 2:10am (Europe/London)\nTypeError: boom\n", now), "exit 1");
+assert.equal(exitDetail(1, "Autocompact is thrashing, said another seat\nError: ENOENT\n", now), "exit 1");
+for (const out of ["You've hit your session limit · resets 2:10am (Europe/London)", "Autocompact is thrashing: the context refilled"])
+  assert.ok(exitDetail(1, out, now).length <= 80, `the hub keeps 80 characters: "${exitDetail(1, out, now)}"`);
+assert.equal(exitDetail(1, ["You've hit your session limit · resets 2:10am (Europe/London)\n", "some stderr warning\n"], now), "exit 1: usage limit, resets 01:10 UTC", "stdout and stderr are checked separately");
 console.log("EXIT REASON OK");

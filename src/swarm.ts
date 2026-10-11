@@ -316,10 +316,10 @@ function runProc(name: string, cmd: string, args: string[], cwd: string, outFile
       if (!outViaFile) writeFileSync(outFile, out);
       const final = outViaFile ? safeRead(outFile) : out;
       exitCodes.set(name, code);
-      log(`${name} exited (${exitDetail(code, `${final}\n${err}`).slice(5)})`);
+      log(`${name} exited (${exitDetail(code, [final, err]).slice(5)})`);
       // the exit receipt: the hub closes this seat's MCP sessions, so a dead seat is not read as alive in a long command.
       // Awaited (5 s at most): withRespawn reads the room's active seats next, and the launcher's own exit would cut it off.
-      if (beat) await fetch(`${URL_}/heartbeat`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ seat_key: beat.key, exited: true, detail: exitDetail(code, `${final}\n${err}`) }), signal: AbortSignal.timeout(5_000) }).catch(() => {});
+      if (beat) await fetch(`${URL_}/heartbeat`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ seat_key: beat.key, exited: true, detail: exitDetail(code, [final, err]) }), signal: AbortSignal.timeout(5_000) }).catch(() => {});
       res(final.trim());
     });
   });

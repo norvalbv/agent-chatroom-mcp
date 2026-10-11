@@ -103,13 +103,25 @@ test('inactive successor is never recommended', () => {
 
 for (const scenario of ['missing', 'same', 'existing', 'duplicate'] as const) test(`invalid registration (${scenario}) rejected atomically`, () => {
   const f = fixture();
-  if (scenario === 'duplicate') register(f.hub, f.room.name, 'old', 'next');
+  // a duplicate is refused once the reserved successor has joined; before that a new reservation replaces it (next test)
+  if (scenario === 'duplicate') { register(f.hub, f.room.name, 'old', 'next'); joinSuccessor(f.hub, f.room.name, 'next'); }
   const snapshot = () => JSON.stringify([...room(f.hub, f.room.name).participants.values()].map((p: any) => [p.id, p.name, p.active]));
   const before = snapshot();
   const pred = scenario === 'missing' ? 'missing' : 'old';
   const succ = scenario === 'same' ? 'old' : scenario === 'existing' ? 'sender' : 'other';
   assert.throws(() => register(f.hub, f.room.name, pred, succ), HubError);
   assert.equal(snapshot(), before);
+});
+
+test('a reservation whose successor never joined is replaced by a new one, and only the new token works', () => {
+  // the launcher's successor can die before it joins (the account's usage limit, swarm-003601-tky5): the launcher must
+  // be able to reserve again, or the seat is gone for the rest of the run
+  const f = fixture(); register(f.hub, f.room.name, 'old', 'next');
+  const stale = tokens.get('next');
+  register(f.hub, f.room.name, 'old', 'next-2');
+  assert.throws(() => f.hub.join(f.room.name, 'next', 'test', { replacementToken: stale } as any), HubError, 'the replaced reservation no longer admits anyone');
+  assert.equal(joinSuccessor(f.hub, f.room.name, 'next-2').replacementOf, f.old.id);
+  assert.throws(() => register(f.hub, f.room.name, 'old', 'next-3'), HubError, 'once a successor has joined, it is the seat to replace');
 });
 
 test('successor join without the reserved token is refused before any seat exists', () => {

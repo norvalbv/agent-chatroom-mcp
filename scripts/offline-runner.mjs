@@ -334,6 +334,7 @@ export const offlineScripts = [
   'job-end-regression.ts',
   'hub-health-regression.ts',
   'owner-verdict-regression.ts',
+  'memory-high-regression.ts',
 ];
 
 export function offlineCommands() {

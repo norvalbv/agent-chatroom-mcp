@@ -56,7 +56,7 @@ export type Event =
   /** a seat process's cumulative model usage (src/hub/usage.ts); seat is the seat key's sha256, never the key */
   | { type: "usage"; room: string; seat: string; usage: SeatUsage; ts: string }
   /** Telemetry only (replay ignores it; src/hub/memory.ts): a sample of what a seat's processes hold, or a warning/stop. */
-  | { type: "memory"; room: string; seat: string; ts: string; memory?: SeatMemory; event?: "warn" | "over" | "ended" | "stop"; mb?: number; budget_mb?: number; top?: SeatMemory["top"]; signal?: string }
+  | { type: "memory"; room: string; seat: string; ts: string; memory?: SeatMemory; event?: "warn" | "over" | "ended" | "stop" | "high"; mb?: number; budget_mb?: number; mark_mb?: number; top?: SeatMemory["top"]; signal?: string }
   /** Telemetry only (replay ignores it; src/hub/take.ts): one step of a take/<what> entry. by and holder are seat names. */
   /** reason and commit only on action "refused": held (the same key), same-commit (another key naming the commit), assigned-reviewer */
   | { type: "take"; room: string; key: string; action: string; by: string; holder: string; ts: string; reason?: "held" | "same-commit" | "assigned-reviewer" | "already-reviewed"; commit?: string }

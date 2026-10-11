@@ -37,11 +37,15 @@ export interface SeatMemory {
  * ended: the process an "over" named exited by itself before the next check (a near miss: nothing was stopped). */
 export type MemoryEvent =
   | { kind: "warn" | "over" | "ended"; seat: string; mb: number; budget_mb: number; top: NonNullable<SeatMemory["top"]> }
+  /** no budget is set, and what the seat started passed the mark: recorded and said, never stopped (telemetry gap G11) */
+  | { kind: "high"; seat: string; mb: number; mark_mb: number; top: NonNullable<SeatMemory["top"]> }
   | { kind: "stop"; seat: string; mb: number; budget_mb: number; top: NonNullable<SeatMemory["top"]>; signal: "SIGTERM" | "SIGKILL" };
 /** Processes carrying a seat key no active participant of this hub holds: a seat that left, or another hub's. Reported, never signalled. */
 export interface Unattributed { mb: number; processes: number; top: { pid: number; mb: number; command: string }[] }
 
 export const WARN_AT = 0.7;
+/** With no budget, the size at which a seat's processes are recorded and the seat told (CHATROOM_SEAT_MEMORY_MARK_MB, 0 = off). */
+const MARK_MB = process.env.CHATROOM_SEAT_MEMORY_MARK_MB === undefined ? 2000 : Number(process.env.CHATROOM_SEAT_MEMORY_MARK_MB);
 /** below this share of the budget a seat may be warned again */
 const REARM_AT = 0.5;
 /** a process under this share of the budget is not worth stopping: the seat is told its total instead */
@@ -214,6 +218,12 @@ export class MemoryWatch {
           this.over.delete(seat);
           events.push({ kind: "ended", seat, mb, budget_mb: this.budgetMb, top: pending });
         }
+        // no budget: nothing is enforced, but a seat past the mark is recorded and told once per crossing (on hub 7717
+        // budget_mb was null and four seats peaked at 2.5-3.5 GB with no event at all)
+        if (!this.budgetMb && top && MARK_MB > 0) {
+          if (mb >= MARK_MB && !this.warned.has(seat)) { this.warned.add(seat); events.push({ kind: "high", seat, mb, mark_mb: MARK_MB, top }); }
+          else if (mb < MARK_MB * REARM_AT) this.warned.delete(seat);
+        }
         if (!this.budgetMb || !top) continue;
         if (mb >= this.budgetMb && top.mb >= this.budgetMb * STOP_FLOOR) {
           if (!this.over.has(seat)) {
@@ -279,6 +289,10 @@ export function shownCommand(command: string, n = 140): string {
 
 export function memoryNotice(e: MemoryEvent, hint = process.env.CHATROOM_SEAT_MEMORY_HINT ?? ""): string {
   const what = `pid ${e.top.pid} (${e.top.mb} MB): ${shownCommand(e.top.command)}`;
+  if (e.kind === "high") {
+    const what = `pid ${e.top.pid} (${e.top.mb} MB): ${shownCommand(e.top.command)}`;
+    return `MEMORY: the processes you started hold ${e.mb} MB, past ${e.mark_mb} MB. Largest: ${what}. No budget is enforced on this hub, so nothing will be stopped, but this machine and its memory are shared: do not load a whole file, read it in chunks or as a stream, and check what a job holds before starting the next.`;
+  }
   if (e.kind === "ended") return `MEMORY: ${what}, which was over your ${e.budget_mb} MB budget, ended by itself before the next check. Nothing was stopped; the processes you started now hold ${e.mb} MB.`;
   const limit = Math.max(256, Math.floor((e.budget_mb * 0.6) / 256) * 256);
   const how = `Do not load a whole file: read it in chunks or as a stream. In DuckDB run \`SET memory_limit='${limit}MB'; SET threads=2; SET temp_directory='/tmp/duckdb-spill';\` first (its default is 80% of this machine's RAM for every process). Select only the columns and rows you need, and run one large job at a time. Your budget is in $CHATROOM_SEAT_MEMORY_MB.${hint ? ` ${hint}` : ""}`;

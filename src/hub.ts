@@ -3514,7 +3514,7 @@ export class Hub {
     const text = memoryNotice(e);
     const id = shortId("mem");
     for (const { room, p } of this.seatRooms(e.seat)) {
-      this.persist({ type: "memory", room: room.name, seat: e.seat, event: e.kind, mb: e.mb, budget_mb: e.budget_mb, top: e.top, ...(e.kind === "stop" ? { signal: e.signal } : {}), ts: now() });
+      this.persist({ type: "memory", room: room.name, seat: e.seat, event: e.kind, mb: e.mb, ...(e.kind === "high" ? { mark_mb: e.mark_mb } : { budget_mb: e.budget_mb }), top: e.top, ...(e.kind === "stop" ? { signal: e.signal } : {}), ts: now() });
       const m = this.post(room, "system", undefined, `@${this.shown(room, p)} ${text}`);
       this.memoryNotices.set(e.seat, [...(this.memoryNotices.get(e.seat) ?? []), { room: room.name, id, seq: m.seq, from: "system", text }].slice(-5));
     }

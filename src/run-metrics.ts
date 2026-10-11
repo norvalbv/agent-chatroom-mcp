@@ -34,7 +34,7 @@ export interface SeatMetrics {
   /** the seat process's own usage, latest cumulative "usage" event (claude-opus-5-5-1's live usage); absent: unknown */
   usage?: { requests?: number; input_tokens?: number; output_tokens?: number; cache_read_input_tokens?: number; cache_creation_input_tokens?: number; cost_usd?: number };
   /** what the seat's processes held (hub "memory" events): the highest sample, and the hub's warnings and stops; absent: never sampled */
-  memory?: { peak_mb: number; warns: number; stops: number; ended?: number };
+  memory?: { peak_mb: number; warns: number; stops: number; ended?: number; /** past the no-budget mark (memory "high" events) */ highs?: number };
   proposals: number;
   challenges: number;
   votes: number;
@@ -180,6 +180,7 @@ export function runMetrics(events: readonly Ev[], opts: MetricsOptions = {}): Ru
         if (e.event === "warn") m.warns++;
         if (e.event === "stop") m.stops++;
         if (e.event === "ended") m.ended = (m.ended ?? 0) + 1;
+        if (e.event === "high") m.highs = (m.highs ?? 0) + 1;
         break;
       }
       case "take":

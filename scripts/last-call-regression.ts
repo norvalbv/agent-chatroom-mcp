@@ -38,6 +38,9 @@ test("majority with a seat unvoted opens a last call instead of concluding", asy
   const notice = r.messages.find((m) => m.kind === "system" && /LAST CALL/.test(m.content));
   assert.ok(notice, "the room is told it is in last call");
   assert.match(notice!.content, /or as soon as C votes on v1/, "the notice names who has not voted on the current version");
+  // review/874e4d57 (claude-opus-5-5-3): chat is still accepted in a concluded room, so the notice must not say it closes
+  assert.ok(!/closed to votes, amends and chat/.test(notice!.content), "the notice does not claim chat stops at the conclusion");
+  assert.match(notice!.content, /closed to votes and amends/);
   assert.ok(hub.needsVote(r, v, pr), "the unvoted seat owes a vote during last call");
   assert.ok(hub.blockedBy(r, pr).some((x) => /last call/.test(x)), "blocked_by says the room is in last call");
   // board writes still land during the window

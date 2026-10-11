@@ -3019,7 +3019,7 @@ export class Hub {
     const secs = Math.round(Hub.LAST_CALL_MS / 1000);
     this.post(room, "system", undefined,
       `LAST CALL: ${pr.id} v${pr.version} has the votes. The room concludes at ${until} (in ${secs} s) unless a vote or amend changes that, ` +
-      `or as soon as ${this.lastCallWaits(room, pr)}. Once it concludes the room is closed to votes, amends and chat: ` +
+      `or as soon as ${this.lastCallWaits(room, pr)}. Once it concludes the room is closed to votes and amends (chat and late results are still recorded): ` +
       `land any result, verify entry or vote you still owe it now; if work of yours is still running, write take/<what> (and clear it when it lands), or hold/${room.name} if it needs longer than this window.`);
     // a breakout gets the same notice in its own room: the window is its chance to report before the answer is fixed
     for (const name of children) {

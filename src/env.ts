@@ -221,12 +221,18 @@ export function seatPortError(env: NodeJS.ProcessEnv, portFlag: string | undefin
  */
 /** How long the launcher waits for a hub it started to answer (CHATROOM_HUB_START_MS). 10 s was too short on a shared
  * machine at load average 150-200, where a hub took 12-20 s to start (swarm-180216-182a, friction/machine-load). */
-export const HUB_START_MS = Number(process.env.CHATROOM_HUB_START_MS ?? 90_000);
+export const HUB_START_MS = startMs(process.env.CHATROOM_HUB_START_MS);
+/** A positive number of ms, else the 90 s default (CHATROOM_HUB_START_MS=abc used to give NaN: no wait at all; review/07b6b507). */
+export function startMs(v: string | undefined): number {
+  const n = Number(v);
+  return v !== undefined && v.trim() !== "" && Number.isFinite(n) && n > 0 ? n : 90_000;
+}
 
-/** True once `url` answers within `ms`, polling every 200 ms; false if it never does. */
-export async function waitForHub(url: string, ms = HUB_START_MS): Promise<boolean> {
+/** True once `url` answers within `ms`, polling every 200 ms; false if it never does, or as soon as `gone()` says the
+ * process that should serve it has exited (a hub that dies at start is reported at once, not after the whole window). */
+export async function waitForHub(url: string, ms = HUB_START_MS, gone: () => boolean = () => false): Promise<boolean> {
   const t0 = Date.now();
-  while (Date.now() - t0 < ms) {
+  while (Date.now() - t0 < ms && !gone()) {
     try { await fetch(url, { signal: AbortSignal.timeout(Math.max(200, Math.min(2000, ms - (Date.now() - t0)))) }); return true; } catch {}
     await new Promise((r) => setTimeout(r, 200));
   }

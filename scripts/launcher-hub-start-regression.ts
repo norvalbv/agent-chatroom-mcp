@@ -13,6 +13,7 @@ const E = env as Record<string, any>;
 assert.equal(typeof E.waitForHub, "function", "env.ts exports waitForHub");
 assert.equal(E.HUB_START_MS, 90_000, "the default start window is 90 s");
 // a hub that starts answering after 1.5 s: a 1 s window gives up, a 5 s window waits for it
+const swarm = (await import("node:fs")).readFileSync(new URL("../src/swarm.ts", import.meta.url), "utf8");
 const port = 7000 + Math.floor(Math.random() * 900);
 const later = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const slow = createServer((_q, s) => s.end("{}"));
@@ -23,8 +24,13 @@ assert.equal(await E.waitForHub(`http://127.0.0.1:${port}`, 5000), true, "a wind
 assert.ok(Date.now() - t0 < 5000);
 slow.close();
 await later(10);
+// review/07b6b507 (claude-opus-5-5-3): a bad value is the default, not NaN; a supervisor that exits ends the wait at once
+assert.equal(E.startMs("abc"), 90_000); assert.equal(E.startMs(""), 90_000); assert.equal(E.startMs("-5"), 90_000); assert.equal(E.startMs("4000"), 4000);
+const t1 = Date.now(); let dead = false; setTimeout(() => { dead = true; }, 300);
+assert.equal(await E.waitForHub("http://127.0.0.1:9/", 20_000, () => dead), false);
+assert.ok(Date.now() - t1 < 3000, `gave up ${Date.now() - t1} ms after the supervisor died, not after 20 s`);
+assert.match(swarm, /waitForHub\(URL_, HUB_START_MS, \(\) => supervisorExited\)/, "the launcher passes its supervisor's exit");
 // the launcher uses it, not its own 50 x 200 ms loop
-const swarm = (await import("node:fs")).readFileSync(new URL("../src/swarm.ts", import.meta.url), "utf8");
 assert.match(swarm, /waitForHub\(URL_/, "ensureHub waits with waitForHub");
 assert.ok(!/for \(let i = 0; i < 50; i\+\+\) \{\s*try \{\s*await fetch\(URL_\);/.test(swarm), "the 10 s loop is gone");
 console.log("launcher-hub-start-regression OK");

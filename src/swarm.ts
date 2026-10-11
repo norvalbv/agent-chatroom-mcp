@@ -235,14 +235,16 @@ async function ensureHub() {
     stdio: "ignore",
   });
   child.unref();
+  let supervisorExited = false;
+  child.once("exit", () => { supervisorExited = true; });
   log(`started a supervised hub on :${PORT} (supervisor pid ${child.pid}, log ${hubLogFile(repoRoot, PORT)}); it is restarted if it dies and ${keeps ? `keeps running: stop it with kill ${child.pid}` : `stops itself after ${HUB_IDLE_EXIT_MIN} min with no request (--hub-idle-exit, --keep-hub)`}`);
   const t0 = Date.now();
-  if (await waitForHub(URL_)) {
+  if (await waitForHub(URL_, HUB_START_MS, () => supervisorExited)) {
     if (Date.now() - t0 > 10_000) log(`the hub took ${Math.round((Date.now() - t0) / 1000)} s to start`);
     launcherToken ??= readLauncherToken(repoRoot, PORT);
     return;
   }
-  throw new Error(`hub did not start within ${HUB_START_MS / 1000} s (CHATROOM_HUB_START_MS)`);
+  throw new Error(supervisorExited ? `hub did not start: its supervisor exited after ${Math.round((Date.now() - t0) / 1000)} s (log ${hubLogFile(repoRoot, PORT)})` : `hub did not start within ${HUB_START_MS / 1000} s (CHATROOM_HUB_START_MS)`);
 }
 
 // ---------- agents ----------

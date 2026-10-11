@@ -10,12 +10,16 @@ const defaultTimeout = () => { const n = Number(process.env.CHATROOM_TEST_TIMEOU
 
 /**
  * Runs every command even after a failure, so one flaky script cannot hide later results. A command killed at the time
- * limit is reported as TIMED OUT, apart from the ones that failed an assertion; each command's duration is printed, and
- * the slowest at the end, so the limit is set from numbers. Returns the first real failure's exit code, or 124 when the
- * only failures were timeouts.
+ * limit is a failure whose reason says TIMED OUT, and the summary says how many of the failures were timeouts; exit 124
+ * when timeouts were the only failures. Each command's duration is printed, and the slowest at the end, so the limit is
+ * set from numbers.
+ * The line shapes are read by scripts/pool-suite-view.ts, which scores benchmark pools: `[offline] <name>` on stdout
+ * starts a command, `[offline] FAILED <name>: <reason>` and the `[offline] FAILED n of m commands:` list on stderr name
+ * the failures. So a timeout keeps the FAILED shape, and the timing lines carry the prefix `[offline:time]`, which that
+ * parser does not read as a command.
  */
 export function runCommands(commands, { cwd, timeout = defaultTimeout(), log = line => console.error(line) } = {}) {
-  const failures = [], timeouts = [], took = [];
+  const failures = [], took = [];
   const limit = `${(timeout / 1000).toFixed(timeout < 1000 ? 2 : 0)} s`;
   for (const { name, command, args } of commands) {
     console.log(`\n[offline] ${name}`);
@@ -23,24 +27,23 @@ export function runCommands(commands, { cwd, timeout = defaultTimeout(), log = l
     const result = spawnSync(command, args, { cwd, stdio: 'inherit', timeout, killSignal: 'SIGKILL' });
     const seconds = (Date.now() - started) / 1000;
     took.push({ name, seconds });
-    console.log(`[offline] done ${name} in ${seconds.toFixed(1)} s`);
-    if (result.error?.code === 'ETIMEDOUT') {
-      log(`[offline] TIMED OUT ${name}: killed at the ${limit} limit, no assertion failed`);
-      timeouts.push({ name });
-    } else if (result.error || result.signal || result.status !== 0) {
-      const reason = result.error?.message ?? result.signal ?? `exit ${result.status}`;
+    console.log(`[offline:time] ${name} took ${seconds.toFixed(1)} s`);
+    const timedOut = result.error?.code === 'ETIMEDOUT';
+    if (timedOut || result.error || result.signal || result.status !== 0) {
+      const reason = timedOut ? `TIMED OUT, killed at the ${limit} limit (no assertion failed)` : result.error?.message ?? result.signal ?? `exit ${result.status}`;
       log(`[offline] FAILED ${name}: ${reason}`);
-      failures.push({ name, reason, code: result.status || 1 });
+      failures.push({ name, reason, timedOut, code: timedOut ? 124 : result.status || 1 });
     }
   }
   const slowest = took.slice().sort((a, b) => b.seconds - a.seconds).slice(0, 5);
-  if (commands.length > 1) console.log(`[offline] slowest: ${slowest.map(t => `${t.name} ${t.seconds.toFixed(1)} s`).join(', ')}`);
-  if (failures.length) log(`[offline] FAILED ${failures.length} of ${commands.length} commands:\n${failures.map(f => `  - ${f.name}: ${f.reason}`).join('\n')}`);
-  if (timeouts.length) {
-    log(`[offline] TIMED OUT ${timeouts.length} of ${commands.length} commands at the ${limit} limit (a loaded machine, not a failed assertion; rerun each alone, or raise CHATROOM_TEST_TIMEOUT_MS):\n${timeouts.map(t => `  - ${t.name}`).join('\n')}`);
+  if (commands.length > 1) console.log(`[offline:time] slowest: ${slowest.map(t => `${t.name} ${t.seconds.toFixed(1)} s`).join(', ')}`);
+  if (failures.length) {
+    const timeouts = failures.filter(f => f.timedOut).length;
+    log(`[offline] FAILED ${failures.length} of ${commands.length} commands:\n${failures.map(f => `  - ${f.name}: ${f.reason}`).join('\n')}`);
+    if (timeouts) log(`[offline:time] ${timeouts} of the ${failures.length} failed by TIMING OUT at the ${limit} limit: a loaded machine, not a failed assertion. Rerun each alone, or raise CHATROOM_TEST_TIMEOUT_MS.`);
+    // a real failure decides the exit code; timeouts alone exit 124, the conventional timeout code
+    return (failures.find(f => !f.timedOut) ?? failures[0]).code;
   }
-  if (failures.length) return failures[0].code;
-  if (timeouts.length) return 124;
   console.log(`[offline] OK (${commands.length} commands)`);
   return 0;
 }

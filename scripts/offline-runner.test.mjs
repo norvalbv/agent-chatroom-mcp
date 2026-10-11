@@ -29,9 +29,9 @@ try {
   const slow = { name: 'slow under load', command: process.execPath, args: ['-e', 'setTimeout(()=>{},700)'] };
   const tcode = runCommands([slow, { name: 'real failure', command: process.execPath, args: ['-e', 'process.exit(5)'] }], { cwd: dir, timeout: 150, log: line => tlines.push(line) });
   const tsum = tlines.join('\n');
-  assert.match(tsum, /TIMED OUT slow under load: killed at the 0\.15 s limit/, 'a timeout is named as one, with the limit');
-  assert.match(tsum, /FAILED 1 of 2 commands[\s\S]*real failure: exit 5/, 'assertion failures are counted apart from timeouts');
-  assert.match(tsum, /TIMED OUT 1 of 2 commands[\s\S]*CHATROOM_TEST_TIMEOUT_MS/, 'the summary says how to raise the limit');
+  assert.match(tsum, /\[offline\] FAILED slow under load: TIMED OUT, killed at the 0\.15 s limit \(no assertion failed\)/, 'a timeout is named as one, with the limit, in the FAILED shape the pool parser reads');
+  assert.match(tsum, /\[offline\] FAILED 2 of 2 commands:\n  - slow under load: TIMED OUT[^\n]*\n  - real failure: exit 5/, 'one summary lists both, each with its reason');
+  assert.match(tsum, /\[offline:time\] 1 of the 2 failed by TIMING OUT[\s\S]*CHATROOM_TEST_TIMEOUT_MS/, 'the summary says how many were timeouts and how to raise the limit');
   assert.equal(tcode, 5, 'a real failure decides the exit code');
   assert.equal(runCommands([slow], { cwd: dir, timeout: 150, log: () => {} }), 124, 'timeouts alone exit 124, the conventional timeout code');
   process.env.CHATROOM_TEST_TIMEOUT_MS = '5000';
@@ -43,8 +43,10 @@ try {
   const out = [];
   const realLog = console.log; console.log = (...a) => out.push(a.join(' '));
   try { runCommands([{ name: 'quick', command: process.execPath, args: ['-e', ''] }, slow], { cwd: dir, timeout: 5000, log: () => {} }); } finally { console.log = realLog; }
-  assert.match(out.join('\n'), /\[offline\] done quick in \d+\.\d s/);
-  assert.match(out.join('\n'), /\[offline\] slowest: slow under load \d+\.\d s/);
+  assert.match(out.join('\n'), /\[offline:time\] quick took \d+\.\d s/);
+  assert.match(out.join('\n'), /\[offline:time\] slowest: slow under load \d+\.\d s/);
+  // scripts/pool-suite-view.ts reads every stdout line "[offline] <name>" as a command starting: only the two commands are
+  assert.deepEqual(out.join('\n').split('\n').filter(l => /^\[offline\] /.test(l) && !/^\[offline\] OK /.test(l)), ['[offline] quick', '[offline] slow under load']);
   console.log('OFFLINE RUNNER SELF-TEST OK');
 } finally {
   rmSync(dir, { recursive: true, force: true });

@@ -225,7 +225,11 @@ export function setBoard(hub: Hub, roomName: string, pid: string, key: string, t
     throw new HubError(`Room "${roomName}" is ${room.state}: board writes are refused, ${why}. Earlier entries, including verify/* and handoff/*, are still readable with board_get.`, undefined, "state");
   }
   if (!BOARD_KEY.test(key)) throw new HubError("Board keys are short names like 'evidence', 'open questions', 'claim/auth', 'verify/auth'.", undefined, "key-format");
-  if (opts.append) return appendBoard(hub, room, p, key, text, late);
+  if (opts.append) {
+    const appended = appendBoard(hub, room, p, key, text, late);
+    hub.noteUsed(room, p, text, "board"); // a run ledger line that names a note is a use of it (review/4e9505d8-opus5)
+    return appended;
+  }
   if (text.length > BOARD_ENTRY_MAX) throw new HubError(tooLong(key, text.length), undefined, "size");
   // A second seat's scrutiny lands under its own key: refusing it for ownership came after the work was done
   // (friction/second-attack-has-no-key: a 1,900-char attack lost to chat; 7 of 38 attack writes refused in the records).

@@ -56,3 +56,18 @@ test("a note key with spaces counts; a longer key that starts with it does not c
   const used = readFileSync(join(dir, "nu2-dst.jsonl"), "utf8").split("\n").filter(Boolean).map((l) => JSON.parse(l)).filter((e) => e.type === "note_used").map((e) => e.note).sort();
   assert.deepEqual(used, ["inbox/nu2-src/digest pass 2", "inbox/nu2-src/n10"], "n1 is not used just because n10 starts with it");
 });
+
+test("a ledger line appended with append=true that names a note counts as its use", () => {
+  // review/4e9505d8-opus5 (claude-opus-5-5-5): run ledgers are where grouped rooms record what they did with a digest
+  Hub.LAST_CALL_MS = 0;
+  const dir = mkdtempSync(join(tmpdir(), "note-used-3-"));
+  const hub = new Hub({ dataDir: dir });
+  const s = hub.join("nu3-src", "S", "test", { nudgeAfterMs: 0 }, undefined, "s1").participant;
+  hub.join("nu3-src", "S2", "test", {}, undefined, "s2");
+  const t = hub.join("nu3-dst", "T", "test", { nudgeAfterMs: 0 }, undefined, "s3").participant;
+  hub.join("nu3-dst", "U", "test", {}, undefined, "s4");
+  hub.postToRoom("nu3-src", s.id, "nu3-dst", "digest", "Digest: build found 0.62.", true);
+  hub.setBoard("nu3-dst", t.id, "ledger", "run 7: reran per inbox/nu3-src/digest, got 0.58", { append: true });
+  const used = readFileSync(join(dir, "nu3-dst.jsonl"), "utf8").split("\n").filter(Boolean).map((l) => JSON.parse(l)).filter((e) => e.type === "note_used").map((e) => [e.note, e.via]);
+  assert.deepEqual(used, [["inbox/nu3-src/digest", "board"]]);
+});

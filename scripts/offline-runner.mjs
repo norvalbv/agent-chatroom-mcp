@@ -239,6 +239,7 @@ export const offlineScripts = [
   'reseat-closed-room-regression.ts',
   'closed-room-rejoin-regression.ts',
   'review-of-claim-commit-regression.ts',
+  'alt-seat-placement-regression.ts',
   'reseat-telemetry-regression.ts',
   'room-idle-restart-regression.ts',
   'respawn-probe-regression.ts',

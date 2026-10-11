@@ -579,8 +579,15 @@ for (let back = 0; back < Math.max(0, ...plan.groups.map((g) => g.workers)) && a
   for (const g of plan.groups) {
     if (altSlots.size >= ALT) break;
     const i = g.workers - back;
-    if (g.workers > 1 && i > (FLAT ? 0 : 1)) altSlots.add(`${g.id}:${i}`);
+    // a flat room has no lead seat, so its only worker may be the alt seat (bugs.md 6: `--flat --agents 2 --codex 1`
+    // silently launched Claude); a group keeps its first seat, the lead, on Claude
+    if ((FLAT || g.workers > 1) && i > (FLAT ? 0 : 1)) altSlots.add(`${g.id}:${i}`);
   }
+}
+{
+  const asked = Number(flag("codex", "0")) + Number(flag("openrouter", "0"));
+  // fewer alt seats than asked is said, never silent: a model-specific benchmark run was mislabelled that way
+  if (asked > altSlots.size) log(`asked for ${asked} alternate-provider seat(s); this run has room for ${altSlots.size} (the verifier${FLAT ? "" : " and each group's lead"} stay on Claude), so ${asked - altSlots.size} run as Claude instead`);
 }
 let workerIndex = 0;
 

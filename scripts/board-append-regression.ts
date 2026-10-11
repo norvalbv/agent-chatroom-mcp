@@ -103,6 +103,17 @@ test("a reader of the head after a rollover gets the newest lines in the same re
   assert.match(r.messages.at(-1)!.content, /appended to "benchqueue\/2" \(continuation of "benchqueue"\)/);
 });
 
+test("an append by another seat does not answer an attack on the entry; the author's own append can (review/abf7c25c)", () => {
+  const { h, name, a, b, c } = room();
+  h.setBoard(name, a.id, "evidence/queue-wait", "Seats wait a median 16 minutes for the shared bench, measured over three rooms.");
+  h.setBoard(name, c.id, "attack/evidence/queue-wait", 'The clause "a median 16 minutes for the shared bench" counts one room twice.');
+  assert.deepEqual(h.scrutiny(name).open_attacks, ["attack/evidence/queue-wait"]);
+  h.setBoard(name, b.id, "evidence/queue-wait", "bob: my own run waited 3 minutes today, unrelated to the objection above, just logging it here.", { append: true });
+  assert.deepEqual(h.scrutiny(name).open_attacks, ["attack/evidence/queue-wait"], "a bystander's line is not the author's reply");
+  h.setBoard(name, a.id, "evidence/queue-wait", "Reply: recounted without the duplicate room; the median is 14 minutes, see evidence/queue-recount.", { append: true });
+  assert.deepEqual(h.scrutiny(name).open_attacks, [], "the author's appended reply answers it");
+});
+
 test("a single append that could not fit even a fresh continuation is refused with the limit", () => {
   const { h, name, a } = room();
   throws(() => h.setBoard(name, a.id, "ledger", "z".repeat(7801), { append: true }), /7800/);

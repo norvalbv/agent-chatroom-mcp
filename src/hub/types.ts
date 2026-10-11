@@ -288,6 +288,8 @@ export interface BoardEntry {
   attackedChars?: number;
   /** an entry written with append=true that reached the size cap: the continuation (<key>/2, /3...) later appends land in. */
   continuedAt?: string;
+  /** normalised chars that seats other than `by` added with append=true since the author last wrote it whole: not the author's reply to an attack. */
+  othersChars?: number;
 }
 
 export interface Challenge {

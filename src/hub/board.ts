@@ -167,8 +167,10 @@ function appendBoard(hub: Hub, room: Room, p: Participant, key: string, text: st
     if (!BOARD_KEY.test(landed)) throw new HubError(`"${key}" is full and its continuation key "${landed}" would pass the 80-character key limit: start a shorter key.`, undefined, "size");
   }
   const cur = room.board.get(landed);
+  // a line another seat adds is not the author's reply to an attack on the entry (attackOpen discounts it)
+  const others = cur && cur.by !== p.name ? (cur.othersChars ?? 0) + norm(line).length + 1 : cur?.othersChars;
   const entry: BoardEntry = cur
-    ? { ...cur, text: `${cur.text}\n${line}`, updatedAt: now() }
+    ? { ...cur, text: `${cur.text}\n${line}`, updatedAt: now(), ...(others ? { othersChars: others } : {}) }
     : { text: landed === key ? line : `continued from "${key}" (it reached the 8000-char cap; append with key "${key}")\n${line}`, by: p.name, updatedAt: now() };
   applyBoard(room, landed, entry);
   noteBoardRead(p, landed, entry);
@@ -315,7 +317,7 @@ export function setBoard(hub: Hub, roomName: string, pid: string, key: string, t
     ...(reviewer ? { reviewer: reviewer.name, reviewerId: reviewer.id }
       : previous?.reviewer ? { reviewer: previous.reviewer, reviewerId: previous.reviewerId } : {}),
     ...(postReveal ? { postReveal: true } : {}),
-    ...(attacked ? { attackedChars: norm(room.board.get(attacked.target)!.text).length } : {}),
+    ...(attacked ? { attackedChars: norm(room.board.get(attacked.target)!.text).length - (room.board.get(attacked.target)!.othersChars ?? 0) } : {}),
     ...(workspace ? { workspace } : {}),
     ...(commitCheck ? { commitCheck } : {}),
     ...(late ? { late: true } : {}),
@@ -435,7 +437,8 @@ function checkAttack(room: Room, p: Participant, key: string, text: string): { t
 /** Open until the author removes every clause the attack quotes, or adds a reply to the attacked entry. */
 function attackOpen(attack: BoardEntry, target: BoardEntry): boolean {
   const text = norm(target.text);
-  return [...attack.text.matchAll(QUOTED)].some((m) => text.includes(norm(m[1]))) && text.length < (attack.attackedChars ?? 0) + ATTACK_REPLY_MIN_CHARS;
+  // growth from other seats' appended lines (board_set append) is not a reply by the author
+  return [...attack.text.matchAll(QUOTED)].some((m) => text.includes(norm(m[1]))) && text.length - (target.othersChars ?? 0) < (attack.attackedChars ?? 0) + ATTACK_REPLY_MIN_CHARS;
 }
 
 /** The system line posted with the one refusal; it is also the receipt, so a replayed room does not refuse again. */

@@ -229,6 +229,7 @@ export const offlineScripts = [
   'recruit-room-breakout-regression.ts',
   'outside-calls-regression.ts',
   'groups-digest.test.ts',
+  'groups-reserved-id-regression.ts',
   'long-brief-regression.ts',
   'keepalive-regression.ts',
   'hubd-data-dir-regression.ts',

@@ -49,6 +49,24 @@ const cases: [string, () => void][] = [
     assert.match(told[0], /\.ack/);
     assert.equal(room.refusals?.["post_to_room: inbox-cap"], 2, "the refusal is counted in the room it was meant for");
   }],
+  // devroom/inbox-cap room 2: three refused notes gave three lines listing the same ten keys
+  ["one line per full inbox, not per refused note; when notes reach the room again it hears which were refused", () => {
+    const { hub, post, b } = setup();
+    for (let i = 0; i < 10; i++) post(`n${i}`);
+    const before = systemLines(hub).length;
+    assert.throws(() => post("eleventh"));
+    assert.throws(() => post("twelfth"));
+    assert.throws(() => post("thirteenth"));
+    const during = systemLines(hub).slice(before);
+    assert.equal(during.length, 1, `one line while the inbox stays full, got ${during.length}`);
+    hub.setBoard("target", b.id, "inbox/source/n0.ack", "ack");
+    post("eleventh");
+    const after = systemLines(hub).slice(before + 1);
+    const summary = after.find((l) => /were refused while this room's inbox was full/.test(l));
+    assert.ok(summary, `a summary when notes land again: ${JSON.stringify(after)}`);
+    assert.match(summary!, /inbox\/source\/twelfth/);
+    assert.match(summary!, /inbox\/source\/thirteenth/);
+  }],
   ["a second seat's acknowledgement of an acknowledged note is not refused", () => {
     const { hub, b, c, room, post } = setup();
     const key = post("digest");

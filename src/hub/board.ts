@@ -678,22 +678,26 @@ export function setBoardAs(hub: Hub, roomName: string, byName: string, key: stri
   return entry;
 }
 
-/** Notes whose refusal the target room was already told of, until they land (not persisted: a restart may tell once more). */
-const inboxRefusedTold = new WeakMap<Room, Set<string>>();
+/** A full inbox the room was told of: the open notes it was told to acknowledge, and every note refused since. Ends when
+ * a note reaches the room again (in memory only: after a restart the room may be told once more). */
+const inboxFull = new WeakMap<Room, { open: string; refused: Set<string> }>();
 
 /**
  * The cap refusal reaches the room that can release it, not only the sender (sources/reactive-streams-backpressure:
  * the bound must be known to the receiver). It is logged in the target room as an inbox_refused event (no text), and
- * the room hears once per refused note which notes to acknowledge.
+ * the room hears once per full inbox which notes to acknowledge, and when notes reach it again, which were refused.
  */
 function refuseNote(hub: Hub, to: Room, fromRoom: string, byName: string, full: string, chars: number, open: string[]): never {
   const err = new HubError(`${to.name} already has 10 inbox notes awaiting acknowledgement; wait for them to be acknowledged or cleared. That room has been told your note "${full}" was refused; it was not stored, so send it again once a slot frees.`, undefined, "inbox-cap");
   hub.recordRefusal(to.name, "post_to_room", err);
   hub.persist({ type: "inbox_refused", room: to.name, ts: now(), from_room: fromRoom, by: byName, key: full, chars, open: open.length });
-  const told = inboxRefusedTold.get(to) ?? new Set<string>();
-  inboxRefusedTold.set(to, told);
-  if (!told.has(full)) {
-    told.add(full);
+  // one line per full inbox, not per refused note (devroom/inbox-cap: three refusals, three lines listing the same ten
+  // keys); a room that has since acknowledged some and filled up again is told again
+  const signature = [...open].sort().join(" ");
+  const episode = inboxFull.get(to);
+  if (episode && episode.open === signature) episode.refused.add(full);
+  else {
+    inboxFull.set(to, { open: signature, refused: new Set([...(episode?.refused ?? []), full]) });
     hub.post(to, "system", undefined,
       `A note from ${byName} in ${fromRoom} ("${full}", ${chars} chars) was refused: this room has ${open.length} notes awaiting acknowledgement, the most it holds. ` +
       `Read and acknowledge them (board_set key="<key>.ack") so notes reach you again: ${open.join(", ")}.`);
@@ -720,8 +724,12 @@ export function postToRoom(hub: Hub, fromRoom: string, pid: string, toRoom: stri
   // Replacing an open note consumes no extra slot. A changed text hash invalidates its old ack.
   const otherOpen = unacknowledged(to).filter((k) => k !== full);
   if (ackRequired && inboxOpen(to, full, entry) && otherOpen.length >= 10) refuseNote(hub, to, from.name, p.name, full, text.length, otherOpen);
-  inboxRefusedTold.get(to)?.delete(full);
+  const ended = inboxFull.get(to);
+  inboxFull.delete(to);
   applyBoard(to, full, entry);
+  // notes reach the room again: say which were refused while it was full, so it can ask their senders for them
+  const missed = [...(ended?.refused ?? [])].filter((k) => k !== full);
+  if (missed.length) hub.post(to, "system", undefined, `${missed.length} note(s) were refused while this room's inbox was full and have not arrived since: ${missed.join(", ")}. Their senders were told to send them again.`);
   hub.persist({ type: "board", room: toRoom, key: full, entry });
   hub.post(to, "system", undefined, `Note from ${p.name} in ${fromRoom} on the board as "${full}"${ackRequired ? ` (acknowledge by writing "${full}.ack")` : ""}: ${text.slice(0, 160)}${text.length > 160 ? "…" : ""}`);
   return { key: full, entry };

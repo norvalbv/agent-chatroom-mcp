@@ -224,8 +224,8 @@ export interface KickVote {
   targetLiveness?: TargetLiveness;
 }
 
-/** working: a tool step within the last minute; idle: a step or call within SUSPECTED_DEAD_MS; silent: neither. */
-export interface TargetLiveness { status: "working" | "idle" | "silent"; last_call_age_s: number; step_age_s?: number; tool?: string; detail?: string }
+/** working: a tool step within the last minute, or a job of its own running; idle: a step or call within SUSPECTED_DEAD_MS; silent: neither. */
+export interface TargetLiveness { status: "working" | "idle" | "silent"; last_call_age_s: number; step_age_s?: number; tool?: string; detail?: string; job?: { pid: number; command: string; elapsed_s: number } }
 
 export interface Message {
   seq: number;

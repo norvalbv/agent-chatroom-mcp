@@ -264,8 +264,11 @@ export class Hub {
           const age_seconds = age(this.lastSeen(p));
           const away = this.away(p);
           if (away) return { status: "away", age_seconds, heartbeat_age_seconds: p.working ? age(p.working.at) : null, away: away.evidence };
-          return { status: !p.active ? "left" : age_seconds < 60 ? "active" : age_seconds * 1000 < kick.SUSPECTED_DEAD_MS ? "idle" : "suspected_dead",
-            age_seconds, heartbeat_age_seconds: p.working ? age(p.working.at) : null };
+          // a seat inside one long command makes no calls and no steps, but the hub can see the command running (jobsOf):
+          // busy, not suspected dead (review/23f0620d: a verifier the hub was holding the room for read as dead from 601 s)
+          const job = p.active && age_seconds >= 60 ? this.jobsOf(p)[0] : undefined;
+          return { status: !p.active ? "left" : age_seconds < 60 ? "active" : job ? "busy" : age_seconds * 1000 < kick.SUSPECTED_DEAD_MS ? "idle" : "suspected_dead",
+            age_seconds, heartbeat_age_seconds: p.working ? age(p.working.at) : null, ...(job ? { job: { pid: job.pid, command: job.command, elapsed_s: job.elapsed_s } } : {}) };
         })(),
         output: output.seatOutput(room, p, observedAt),
         left_reason: p.active ? null : p.leaveReason ?? null,
@@ -3510,6 +3513,8 @@ export class Hub {
       this.post(room, "chat", undefined, `@${this.shown(room, p)} your job has ended: pid ${job.pid} (${job.command.slice(0, 120)}), after ${ran}${others ? `, and ${others} other process${others === 1 ? "" : "es"} of yours with it` : ""}. Read its result and tell the room.`);
     }
   }
+  /** What a kick vote says of its target (src/hub/kick.ts targetLiveness). */
+  kickLiveness(p: Participant) { return kick.targetLiveness(this, p); }
   /** The jobs a seat has running, from the memory watcher's last look at the process table (src/hub/memory.ts jobsOf). */
   jobsOf(p: Participant): Job[] { return this.memory.jobs(p.seatKeyHash); }
   /** Memory notices this seat's hook has not put in front of its model yet. */

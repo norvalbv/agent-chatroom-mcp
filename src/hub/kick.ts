@@ -33,10 +33,13 @@ export function targetLiveness(hub: Hub, p: Participant): TargetLiveness {
   const last_call_age_s = age(hub.lastSeen(p));
   const step_age_s = p.working ? age(p.working.at) : undefined;
   const freshest = Math.min(last_call_age_s, step_age_s ?? Infinity);
+  // a command of its own still running is work, however long ago its last step was (Hub.jobsOf, the process table)
+  const job = hub.jobsOf(p)[0];
   return {
-    status: step_age_s !== undefined && step_age_s < 60 ? "working" : freshest * 1000 < SUSPECTED_DEAD_MS ? "idle" : "silent",
+    status: (step_age_s !== undefined && step_age_s < 60) || job ? "working" : freshest * 1000 < SUSPECTED_DEAD_MS ? "idle" : "silent",
     last_call_age_s,
     ...(step_age_s !== undefined ? { step_age_s, tool: p.working!.tool, ...(p.working!.detail ? { detail: p.working!.detail.slice(0, 80) } : {}) } : {}),
+    ...(job ? { job: { pid: job.pid, command: job.command.slice(0, 80), elapsed_s: job.elapsed_s } } : {}),
   };
 }
 
@@ -48,7 +51,8 @@ export function targetLiveness(hub: Hub, p: Participant): TargetLiveness {
 function livenessLine(hub: Hub, room: Room, p: Participant, l: TargetLiveness): string {
   const ago = (s: number) => (s < 120 ? `${s} s` : `${Math.round(s / 60)} min`);
   const step = l.step_age_s !== undefined ? `last tool step ${ago(l.step_age_s)} ago (${l.tool}${l.detail ? `: ${l.detail}` : ""})` : "no tool step reported";
-  if (l.status === "working") return `${hub.shown(room, p)} is working now by the hub's own signals: ${step}, last hub call ${ago(l.last_call_age_s)} ago. A seat inside a long command is not dead. `;
+  const job = l.job ? `; a command of its own is running: pid ${l.job.pid} (${l.job.command}), ${ago(l.job.elapsed_s)} so far` : "";
+  if (l.status === "working") return `${hub.shown(room, p)} is working now by the hub's own signals: ${step}${job}, last hub call ${ago(l.last_call_age_s)} ago. A seat inside a long command is not dead. `;
   if (l.status === "idle") return `${hub.shown(room, p)} is idle by the hub's own signals: ${step}, last hub call ${ago(l.last_call_age_s)} ago. `;
   return `${hub.shown(room, p)} has been silent by the hub's own signals: ${step}, last hub call ${ago(l.last_call_age_s)} ago. `;
 }

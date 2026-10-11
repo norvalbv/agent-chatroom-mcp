@@ -52,5 +52,20 @@ check("a seat with no step for 10 minutes is described as silent, not working", 
   const line = room.messages.filter((m) => m.kind === "system" && /started a vote to kick seat-9/.test(m.content)).at(-1)?.content ?? "";
   assert.match(line, /seat-9 has been silent by the hub's own signals: last tool step 1[01] min ago/, line.slice(0, 400));
 });
+// review/23f0620d (claude-opus-5-5-4): a verifier inside one 11-minute command was "suspected_dead" in room_status from
+// 601 s on, while the hub itself held the room open for it because its job was running (Hub.jobsOf)
+check("a seat whose own job is running is busy, not suspected dead, in room_status and in a kick vote", () => {
+  const v = hub.join(R, "verifier", "claude", {}, undefined, "sv", "verifier").participant;
+  hub.heartbeat(R, v.id, { tool: "Bash", step: 40, detail: "node scripts/offline-runner.mjs" });
+  v.working!.at = new Date(Date.now() - 11 * 60_000).toISOString();
+  v.lastActiveAt = new Date(Date.now() - 11 * 60_000).toISOString();
+  (hub as unknown as { jobsOf: (p: { id: string }) => unknown[] }).jobsOf = (p) => (p.id === v.id ? [{ pid: 4242, command: "node scripts/offline-runner.mjs", elapsed_s: 660 }] : []);
+  const seen = (hub.summary(room, true) as { participants: { name: string; liveness: { status: string; job?: { pid: number } } }[] }).participants.find((p) => p.name === "verifier")!.liveness;
+  assert.equal(seen.status, "busy", `room_status says ${seen.status}`);
+  assert.equal(seen.job?.pid, 4242);
+  const live = (hub as unknown as { kickLiveness: (p: unknown) => { status: string; job?: { pid: number } } }).kickLiveness(v);
+  assert.equal(live.status, "working");
+  assert.equal(live.job?.pid, 4242);
+});
 rmSync(dataDir, { recursive: true, force: true });
-if (failed) { console.error(`KICK LIVENESS: ${failed}/3 failed`); process.exitCode = 1; } else console.log("KICK LIVENESS OK (3 cases)");
+if (failed) { console.error(`KICK LIVENESS: ${failed}/4 failed`); process.exitCode = 1; } else console.log("KICK LIVENESS OK (4 cases)");

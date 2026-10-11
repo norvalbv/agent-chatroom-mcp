@@ -362,7 +362,7 @@ export interface Proposal {
    * entry written at a given time had in front of it. Absent on proposals made before this was recorded. */
   cited?: { at: string; tokens: string[] }[];
   /** the last call this proposal is in or had (Hub.lastCallHolds): the version it was called on, when it closes, and who
-   * in the electorate had not voted on that version when it opened. In memory only: a restart concludes on the next evaluate. */
+   * in the electorate had not voted on that version when it opened. Replayed from its last_call event, so a restart keeps its deadline. */
   lastCall?: { version: number; startedAt: string; until: string; waitingOn: string[] };
 }
 

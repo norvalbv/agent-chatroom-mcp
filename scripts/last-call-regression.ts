@@ -108,6 +108,27 @@ test("a seat that has voted but holds a take/* keeps the room open until it rele
   assert.ok(r.board.has("result/rerun-join"), "the late result is on the board");
 });
 
+test("a hub restart mid last call keeps the call: the seat still owes a vote and the room concludes on the original deadline", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "last-call-restart-"));
+  const { a, b, v: v0, agree } = setup("lc-restart", 3000, dir);
+  agree(b.id);
+  const restored = new Hub({ dataDir: dir });
+  const r = restored.getRoom("lc-restart");
+  const pr = [...r.proposals.values()][0];
+  assert.equal(r.state, "open");
+  assert.ok(restored.inLastCall(pr), "review/6cfe8ad9 finding 1: the last call is replayed, not lost");
+  // restored seats are inactive until their processes reconnect, as after any restart (the verifier first: with only A
+  // and B back the electorate is the two of them, both voted, and the room concludes; that is the existing restart rule)
+  const v = restored.join("lc-restart", "verifier", "test", {}, v0.id, "s3", "verifier").participant;
+  restored.join("lc-restart", "A", "test", {}, a.id, "s1");
+  restored.join("lc-restart", "B", "test", {}, b.id, "s2");
+  assert.ok(restored.needsVote(r, v, pr), "the unvoted seat still owes a vote after the restart");
+  await sleep(Date.parse(pr.lastCall!.until) - Date.now() + 150);
+  assert.equal(r.state, "concluded", "the restarted hub re-arms the timer and concludes when the original window ends");
+  assert.equal(r.conclusion!.closing!.ended, "window");
+  assert.equal(r.messages.filter((m) => /LAST CALL/.test(m.content)).length, 1, "no second LAST CALL line after the restart");
+});
+
 test("the last call is logged as an event", () => {
   const dir = mkdtempSync(join(tmpdir(), "last-call-"));
   const { b, agree } = setup("lc-log", 60_000, dir);

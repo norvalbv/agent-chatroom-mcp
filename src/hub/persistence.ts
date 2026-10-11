@@ -218,6 +218,12 @@ export function replay(hub: Hub) {
           if (room) room.kickVotes.set(ev.vote.target, ev.vote);
           break;
         }
+        case "last_call": {
+          // kept across a restart: the seats it names still owe a vote, and the hub re-arms its timer at boot (Hub.armLastCall)
+          const pr = hub.rooms.get(ev.room)?.proposals.get(ev.proposalId);
+          if (pr) pr.lastCall = { version: ev.version, startedAt: ev.startedAt, until: ev.until, waitingOn: ev.waiting_on };
+          break;
+        }
         case "archive": {
           const room = hub.rooms.get(ev.room);
           if (room) room.archived = ev.archived;

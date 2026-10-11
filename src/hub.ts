@@ -74,6 +74,10 @@ export class Hub {
       this.replay();
       // a sealed draft round interrupted by a restart still reveals on its original deadline, announced
       for (const room of this.rooms.values()) if (room.state !== "concluded" && room.state !== "closed") this.armDraftsDeadline(room);
+      // ...and a last call interrupted by a restart still closes on its original deadline
+      for (const room of this.rooms.values()) if (room.state !== "concluded" && room.state !== "closed") {
+        for (const pr of room.proposals.values()) if (pr.status === "open" && pr.lastCall?.version === pr.version) this.armLastCall(room, pr);
+      }
     }
   }
 
@@ -2711,10 +2715,16 @@ export class Hub {
     const secs = Math.round(Hub.LAST_CALL_MS / 1000);
     this.post(room, "system", undefined,
       `LAST CALL: ${pr.id} v${pr.version} has the votes. The room concludes at ${until} (in ${secs} s) unless a vote or amend changes that, ` +
-      `or as soon as ${this.lastCallWaits(room, pr)}. A concluded room accepts no more writes: ` +
+      `or as soon as ${this.lastCallWaits(room, pr)}. Once it concludes the room is closed to votes, amends and chat: ` +
       `land any result, verify entry or vote you still owe it now; if work of yours is still running, write take/<what> (and clear it when it lands), or hold/${room.name} if it needs longer than this window.`);
-    setTimeout(() => { try { this.evaluate(room, pr); } catch {} }, Hub.LAST_CALL_MS + 25).unref();
+    this.armLastCall(room, pr);
     return true;
+  }
+
+  /** Re-evaluate when the proposal's last call runs out (at once if it already has: a hub that was down past the deadline). */
+  private armLastCall(room: Room, pr: Proposal): void {
+    const left = Math.max(0, Date.parse(pr.lastCall!.until) - Date.now());
+    setTimeout(() => { try { this.evaluate(room, pr); } catch {} }, left + 25).unref();
   }
 
   /** What a last call is still waiting for, in words: the votes on the current version and the takes still held. */

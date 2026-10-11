@@ -55,7 +55,7 @@ export type Event =
   /** Telemetry only (replay ignores it): a board entry accepted after the room concluded, and how long after. */
   | { type: "late_write"; room: string; key: string; by: string; after_s: number; ts: string }
   | { type: "kick_vote"; room: string; vote: KickVote }
-  /** Telemetry only (replay ignores it): a proposal had the votes while these electorate members had not voted on its version. */
+  /** A proposal had the votes while these electorate members had not voted on its version, or these takes were held (replayed: Hub.armLastCall). */
   | { type: "last_call"; room: string; proposalId: string; version: number; startedAt: string; until: string; waiting_on: string[]; takes_held?: string[] }
   /** A room-wide stall the hub told the room of, with the numbers it quoted, and its end (src/hub/idle.ts). */
   | { type: "hub_restart"; room: string; ts: string; down_s: number; down_upper_bound?: boolean; previous?: string }

@@ -56,7 +56,7 @@ const fail = (err: unknown) => ({
 export interface SessionServer {
   server: McpServer;
   /** Mark every participant this connection owns as left (called when the transport closes). */
-  leaveAll(): void;
+  leaveAll(reason?: string, final?: boolean): void;
   /** the session key stamped on every participant this connection joins as (Participant.session) */
   sessionKey: string;
 }

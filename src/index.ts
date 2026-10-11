@@ -15,6 +15,7 @@
  *   GET  /questions?names=benji       -> agents' unanswered asks to the human, across rooms
  *   POST /rooms/:room/vote {name, proposal_id, vote, reason} -> human vote (disagree = veto)
  */
+import "./node-compat.js";
 import { steerAckAs, steerAckSeat, steerPeek, steerPeekSeat } from "./hub/steer.js";
 import { SUSPECTED_DEAD_MS } from "./hub/kick.js";
 import { callerSeatKeys } from "./hub/caller.js";

@@ -3,6 +3,9 @@
   "version": "0.1.0",
   "description": "MCP server that gives AI agents (Claude Code, Codex, OpenRouter models, ...) a shared chatroom with consensus primitives",
   "main": "index.js",
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "test": "node scripts/offline-runner.mjs",
     "build": "tsc",

@@ -475,7 +475,8 @@ export function createSessionServer(hub: Hub, spawner?: Spawner, opts: { holdMs?
       if (hold_until_actionable) {
         // a delivered message that @-names this seat is actionable even once settled (a hub notice retires on delivery)
         // a capped page means more is already waiting: return it rather than piling the backlog into one result
-        while (!hub.deliveryRemaining(p) && !hub.actionableNow(r, p) && !msgs.some((m) => m.mentions?.includes(id!)) && !owedElsewhere()) {
+        // ...and so is another seat's challenge on this seat's own proposal, which this delivery may already have settled
+        while (!hub.deliveryRemaining(p) && !hub.actionableNow(r, p) && !msgs.some((m) => m.mentions?.includes(id!) || hub.challengesOwnProposal(r, p, m)) && !owedElsewhere()) {
           const remaining = (msgs.length ? Math.min(waitDeadline, chatterDeadline) : waitDeadline) - Date.now();
           if (remaining <= 0) break;
           const more = await hub.wait(room, id, p.lastSeenSeq, slice(remaining));

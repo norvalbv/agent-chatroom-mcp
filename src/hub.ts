@@ -1827,7 +1827,15 @@ export class Hub {
    */
   challengedUnseen(room: Room, open: Proposal, p: Participant): boolean {
     if (open.by.id !== p.id || !open.challenges.some((c) => (c.status ?? "open") === "open" && c.blocking !== false && c.by.id !== p.id)) return false;
-    return room.messages.some((m) => m.kind === "challenge" && m.proposalId === open.id && m.seq > p.lastSeenSeq && m.from.id !== p.id && !/non-blocking objection to/.test(m.content));
+    return room.messages.some((m) => m.seq > p.lastSeenSeq && this.challengesOwnProposal(room, p, m));
+  }
+
+  /** `m` is another seat's blocking challenge on `p`'s own open proposal. The held wait asks this of each message it has
+   * just delivered: delivery moves lastSeenSeq past it before actionableNow is asked (review/b6092d3d). */
+  challengesOwnProposal(room: Room, p: Participant, m: Message): boolean {
+    if (m.kind !== "challenge" || !m.proposalId || m.from.id === p.id || /non-blocking objection to/.test(m.content)) return false;
+    const pr = room.proposals.get(m.proposalId);
+    return !!pr && pr.status === "open" && pr.by.id === p.id;
   }
 
   /** The open proposal still needs a challenge and this seat could give it (this room's waits and other rooms' other_rooms). */

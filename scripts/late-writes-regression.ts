@@ -80,3 +80,17 @@ test("a late verdict that fails a commit the conclusion cites is said in the roo
   const events = readFileSync(join(dataDir, `${name}.jsonl`), "utf8").trim().split("\n").map((l) => JSON.parse(l)).filter((e) => e.type === "late_write");
   assert.deepEqual(events.map((e) => [e.key, e.contradicts ?? null]), [["verify/late-pass", null], ["verify/late-fail", "f6e5d4c3b2"], ["review/0a0b0c0d0e", null]]);
 });
+
+test("an append to a shared log after conclusion is marked late and logged like any late write (verifier, #140)", (t) => {
+  const dataDir = mkdtempSync(join(tmpdir(), "late-writes-"));
+  const { hub, room, b } = concluded(t, dataDir);
+  const e = hub.setBoard(room.name, b.id, "ledger", "T-9 | rerun finished after the vote", { append: true })!;
+  assert.equal(e.late, true, "the appended entry is marked late");
+  assert.match(room.messages.filter((m) => m.kind === "board").at(-1)!.content, /appended to "ledger".*late: written after the room concluded/);
+  const events = readFileSync(join(dataDir, `${room.name}.jsonl`), "utf8").trim().split("\n").map((l) => JSON.parse(l)).filter((x) => x.type === "late_write");
+  assert.deepEqual(events.map((x) => [x.key, x.by]), [["ledger", "Bob"]]);
+  const saved = Hub.LATE_WRITE_MS;
+  t.after(() => { Hub.LATE_WRITE_MS = saved; });
+  Hub.LATE_WRITE_MS = 0;
+  assert.throws(() => hub.setBoard(room.name, b.id, "ledger", "too late", { append: true }), /concluded/);
+});

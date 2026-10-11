@@ -152,7 +152,7 @@ const NO_APPEND = /^(claim|take|verify|review|attack|draft|hold|inbox)\//;
  * so it is never refused for ownership or a stale read; the hub stamps its own clock and the author; past the size cap it
  * lands in <key>/2, /3... and the head records continuedAt, so later appends to <key> go straight to the newest one.
  */
-function appendBoard(hub: Hub, room: Room, p: Participant, key: string, text: string): BoardEntry {
+function appendBoard(hub: Hub, room: Room, p: Participant, key: string, text: string, late?: { after_s: number }): BoardEntry {
   if (NO_APPEND.test(key)) throw new HubError(`append is for shared logs; "${key.split("/")[0]}/*" entries have their own write rules. Write it without append.`, undefined, "key-format");
   if (!text.trim()) throw new HubError("append adds a line and an empty one adds nothing; to delete an entry, write empty text without append.", undefined, "state");
   const line = `[${now().slice(11, 16)}Z ${p.name}] ${text.trim()}`;
@@ -172,6 +172,7 @@ function appendBoard(hub: Hub, room: Room, p: Participant, key: string, text: st
   const entry: BoardEntry = cur
     ? { ...cur, text: `${cur.text}\n${line}`, updatedAt: now(), ...(others ? { othersChars: others } : {}) }
     : { text: landed === key ? line : `continued from "${key}" (it reached the 8000-char cap; append with key "${key}")\n${line}`, by: p.name, updatedAt: now() };
+  if (late) entry.late = true;
   applyBoard(room, landed, entry);
   noteBoardRead(p, landed, entry);
   hub.persist({ type: "board", room: room.name, key: landed, entry });
@@ -182,7 +183,9 @@ function appendBoard(hub: Hub, room: Room, p: Participant, key: string, text: st
     hub.persist({ type: "board", room: room.name, key, entry: pointed });
   }
   hub.persist({ type: "board_append", room: room.name, key, landed_key: landed, by: p.name, chars: line.length, ts: entry.updatedAt });
-  hub.post(room, "board", p, `appended to "${landed}"${landed !== key ? ` (continuation of "${key}")` : ""}: ${text.trim().slice(0, 120)}`);
+  if (late) hub.persist({ type: "late_write", room: room.name, key: landed, by: p.name, after_s: late.after_s, ts: entry.updatedAt });
+  hub.post(room, "board", p, `appended to "${landed}"${landed !== key ? ` (continuation of "${key}")` : ""}: ${text.trim().slice(0, 120)}`
+    + (late ? " — late: written after the room concluded; recorded, the conclusion does not change" : ""));
   return entry;
 }
 
@@ -214,7 +217,7 @@ export function setBoard(hub: Hub, roomName: string, pid: string, key: string, t
     throw new HubError(`Room "${roomName}" is ${room.state}: board writes are refused, ${why}. Earlier entries, including verify/* and handoff/*, are still readable with board_get.`, undefined, "state");
   }
   if (!BOARD_KEY.test(key)) throw new HubError("Board keys are short names like 'evidence', 'open questions', 'claim/auth', 'verify/auth'.", undefined, "key-format");
-  if (opts.append) return appendBoard(hub, room, p, key, text);
+  if (opts.append) return appendBoard(hub, room, p, key, text, late);
   if (text.length > 8000) throw new HubError("Board entries are capped at 8000 characters.", undefined, "size");
   const expiresAt = boardExpiry(key, opts);
   const previous = room.board.get(key);

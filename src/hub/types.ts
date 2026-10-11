@@ -33,6 +33,10 @@ export interface VerifyHead {
   dev_room?: string;
 }
 
+/** Board keys whose verify head is a review of the commit it names: verify/* (the gate) and review/<sha> (coverage only,
+ * written while builds are reviewed per commit; evidence-pack item 4). A .partial never counts. */
+export const isReviewKey = (key: string) => /^(verify|review)\//.test(key) && !key.endsWith(".partial");
+
 /** Canonical wording for what a verify/* entry must contain, quoted verbatim by refusals and prompts. */
 export const VERIFY_HEAD_EXAMPLE = '{"proposal":"<PROPOSAL_ID>","command":"<the check you ran>","cwd":"<working dir>","base_commit":"<parent commit, before the change>","base_exit_code":1,"commit":"<the proposal\'s commit>","exit_code":0,"output_tail":"<last lines of real output at commit>"}';
 /** The rest of the rule, said once after VERIFY_HEAD_EXAMPLE wherever it is quoted. */
@@ -264,6 +268,9 @@ export interface BoardEntry {
   acknowledgedTextHash?: string;
   /** verify/* entries naming a dev_room: what the hub itself read from that room when the entry was written. */
   devReceipt?: DevReceipt;
+  /** verify/* and review/* entries with a head: whether the commits it names exist in the writer's bound worktree, resolved by the hub at write time
+   * (2 of 22 SHAs named in verify heads across runs did not exist; evidence-pack item 4). A *_known field is absent when the writer has no bound worktree (not checked, not missing). */
+  commitCheck?: { commit?: string; commit_known?: boolean; base_commit?: string; base_known?: boolean };
   /** claim/* entries only: the reviewer the hub assigned at creation (name/id), never client-supplied. */
   reviewer?: string;
   reviewerId?: string;

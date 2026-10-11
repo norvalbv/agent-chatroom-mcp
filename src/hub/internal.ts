@@ -43,6 +43,8 @@ export type Event =
   | { type: "memory"; room: string; seat: string; ts: string; memory?: SeatMemory; event?: "warn" | "over" | "ended" | "stop"; mb?: number; budget_mb?: number; top?: SeatMemory["top"]; signal?: string }
   /** Telemetry only (replay ignores it; src/hub/take.ts): one step of a take/<what> entry. by and holder are seat names. */
   | { type: "take"; room: string; key: string; action: string; by: string; holder: string; ts: string }
+  /** Telemetry only (replay ignores it; src/hub/board.ts): a verify/* or review/* entry with a head, the commit it reviewed and whether the hub's repo has it. */
+  | { type: "review"; room: string; key: string; by: string; proposal: string; commit?: string; commit_known?: boolean; base_commit?: string; base_known?: boolean; exit_code: number; base_exit_code?: number; kind?: string; unverified_n: number; dev_room?: string; ts: string }
   | { type: "kick_vote"; room: string; vote: KickVote }
   /** A room-wide stall the hub told the room of, with the numbers it quoted, and its end (src/hub/idle.ts). */
   | { type: "hub_restart"; room: string; ts: string; down_s: number; down_upper_bound?: boolean; previous?: string }
@@ -77,6 +79,14 @@ export function codeState(cwd?: string): CodeState | undefined {
   if (head.status !== 0) return undefined;
   const st = spawnSync("git", ["-C", cwd, "status", "--porcelain"], { encoding: "utf8" });
   return { head: head.stdout.trim(), dirty: st.stdout.trim().length > 0, at: now() };
+}
+
+/** Whether `sha` names a commit in the repo at cwd; undefined when there is no repo to ask or the token is not hex. */
+export function commitKnown(cwd: string | undefined, sha: string | undefined): boolean | undefined {
+  const t = sha?.trim();
+  if (!cwd || !t || !/^[0-9a-fA-F]{4,64}$/.test(t)) return undefined;
+  if (spawnSync("git", ["-C", cwd, "rev-parse", "--git-dir"], { encoding: "utf8" }).status !== 0) return undefined;
+  return spawnSync("git", ["-C", cwd, "cat-file", "-e", `${t}^{commit}`], { encoding: "utf8" }).status === 0;
 }
 
 /** How many of a room's latest refusals it keeps for room_status refusals=true (Hub.recentRefusals). */

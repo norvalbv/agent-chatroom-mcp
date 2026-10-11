@@ -13,7 +13,7 @@ import { join } from "node:path";
 import { analyzeReplyMetrics, type ReplyMetricEvent } from "./reply-metrics.js";
 
 export * from "./hub/types.js";
-import { VERIFY_HEAD_EXAMPLE, VERIFY_HEAD_RULE, parseVerifyHead, readVerifyHead, failToPassShortfall, citesCommit, hexTokens, addedUnchecked, uncoveredCommits, verifyGaps, devRoomUrl, devReceiptFrom, type DevReceipt, ROLES, REFUSAL_CODES, HubError } from "./hub/types.js";
+import { VERIFY_HEAD_EXAMPLE, VERIFY_HEAD_RULE, isReviewKey, parseVerifyHead, readVerifyHead, failToPassShortfall, citesCommit, hexTokens, addedUnchecked, uncoveredCommits, verifyGaps, devRoomUrl, devReceiptFrom, type DevReceipt, ROLES, REFUSAL_CODES, HubError } from "./hub/types.js";
 import type { MessageKind, Vote, Quorum, RoomState, VerifyHead, Role, Participant, KickVote, Message, CodeState, BoardExpiryOptions, BoardEntry, Challenge, ElectorateSummary, ConclusionVerification, Proposal, RoomOptions, JoinOptions, Room, CallOutcome, RefusalCode, BoardManifestObservation } from "./hub/types.js";
 import { now, shortId, norm, emptyBoardManifestCounters, manifestBytes, codeState, commitsIn, keepRefusal, RECENT_REFUSALS } from "./hub/internal.js";
 import type { Opts, Event, BoardManifestCounters } from "./hub/internal.js";
@@ -263,6 +263,8 @@ export class Hub {
       ...(idle.idleView(room) ? { idle: idle.idleView(room) } : {}),
       // claim/* entries whose owner left: its registered successor may take one at once, anyone after Hub.STALE_CLAIM_MS
       stale_claims: this.staleClaims(room, reveal),
+      // per commit, the verify/* and review/* entries whose head names it (telemetry G3/G14): coverage read from the hub, not key names
+      ...((r) => (r.length ? { reviews: r } : {}))(this.reviewsByCommit(room)),
       ...((s) => (s.unexamined.length || s.open_attacks.length ? { scrutiny: s } : {}))(board.scrutiny(room)),
       active_count: active.length,
       message_count: room.messages.length,
@@ -2399,7 +2401,7 @@ export class Hub {
       needs_challenge: needsChallenge,
       blocked_by: this.blockedBy(room, pr),
       ...(pr.status === "open" && this.verificationGaps(room, pr).length ? { verification_gaps: this.verificationGaps(room, pr) } : {}),
-      ...(pr.status === "open" && this.unverifiedCommits(room, pr).length ? { unverified_commits: this.unverifiedCommits(room, pr), unverified_commits_hint: "cited in the text, but no counting verify/* entry names them as commit or base_commit; one entry passes the gate, so these ride on it unchecked unless someone verifies them too" } : {}),
+      ...(pr.status === "open" && this.unverifiedCommits(room, pr).length ? { unverified_commits: this.unverifiedCommits(room, pr), unverified_commits_hint: "cited in the text, but no counting verify/* or review/* entry names them as commit or base_commit; one entry passes the gate, so these ride on it unchecked unless someone verifies them too" } : {}),
       challenges: pr.challenges.map((c) => ({ id: c.id, by: nm(c.by), objection: c.objection, status: c.status ?? "open", blocking: c.blocking !== false, version: c.version, ...(c.command ? { command: c.command } : {}) })),
       votes: Object.entries(pr.votes).map(([id, v]) => ({ name: nm({ id, name: v.name }), vote: v.vote, confidence: v.confidence, reason: v.reason, version: v.version, ...(v.version !== undefined && v.version !== pr.version ? { stale: `cast at v${v.version}` } : {}) })),
     };
@@ -2459,11 +2461,28 @@ export class Hub {
     const proposer = room.participants.get(pr.by.id);
     const out: { key: string; e: BoardEntry; head: VerifyHead }[] = [];
     for (const [key, e] of room.board) {
-      if (!key.startsWith("verify/") || key.endsWith(".partial") || e.by === pr.by.name) continue;
+      if (!isReviewKey(key) || e.by === pr.by.name) continue;
       const author = [...room.participants.values()].find((x) => x.name === e.by);
       if (author && proposer && author.session && author.session === proposer.session) continue;
       const head = parseVerifyHead(e.text);
-      if (head && Hub.isPending(head) && head.commit?.trim() && head.exit_code === 0 && !failToPassShortfall(head) && citesCommit(pr.text, head.commit)) out.push({ key, e, head });
+      // a review/<sha> naming this proposal still only covers: the gate is verify/* (done-means-independently-verified)
+      if (head && (Hub.isPending(head) || (key.startsWith("review/") && head.proposal === pr.id)) && head.commit?.trim() && head.exit_code === 0 && !failToPassShortfall(head) && citesCommit(pr.text, head.commit)) out.push({ key, e, head });
+    }
+    return out;
+  }
+
+  /** Every commit a verify/* or review/* head names, in board order, with the entries naming it and whether each passes on
+   * shape (exit 0 and fail-to-pass or refactor). known: the writer's worktree has it (BoardEntry.commitCheck), absent if unasked. */
+  reviewsByCommit(room: Room): { commit: string; known?: boolean; by: { key: string; by: string; passes: boolean }[] }[] {
+    const out: { commit: string; known?: boolean; by: { key: string; by: string; passes: boolean }[] }[] = [];
+    for (const [key, e] of room.board) {
+      if (!isReviewKey(key)) continue;
+      const head = parseVerifyHead(e.text);
+      const commit = head?.commit?.trim();
+      if (!head || !commit) continue;
+      let row = out.find((r) => sameCommit(r.commit.toLowerCase(), commit.toLowerCase()));
+      if (!row) out.push(row = { commit, ...(e.commitCheck?.commit_known !== undefined ? { known: e.commitCheck.commit_known } : {}), by: [] });
+      row.by.push({ key, by: e.by, passes: head.exit_code === 0 && !failToPassShortfall(head) });
     }
     return out;
   }
@@ -2475,7 +2494,7 @@ export class Hub {
     const proposer = room.participants.get(pr.by.id);
     const out: VerifyHead[] = [];
     for (const [key, e] of room.board) {
-      if (!key.startsWith("verify/") || key.endsWith(".partial") || e.by === pr.by.name) continue;
+      if (!isReviewKey(key) || e.by === pr.by.name) continue;
       const author = [...room.participants.values()].find((x) => x.name === e.by);
       if (author && proposer && author.session && author.session === proposer.session) continue;
       const head = parseVerifyHead(e.text);

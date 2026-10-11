@@ -1,9 +1,9 @@
 /** The Hub's shared board, as functions over the Hub instance; Hub keeps a one-line delegator for each member called from outside. */
 import { createHash } from "node:crypto";
 import type { Hub } from "../hub.js";
-import { HubError } from "./types.js";
+import { HubError, isReviewKey, readVerifyHead } from "./types.js";
 import type { Quorum, Participant, BoardExpiryOptions, BoardEntry, Room } from "./types.js";
-import { now, codeState, norm, commitsIn } from "./internal.js";
+import { now, codeState, norm, commitsIn, commitKnown } from "./internal.js";
 import { announceTake, takeWrite } from "./take.js";
 
 function boardExpiry(key: string, opts: BoardExpiryOptions): string | undefined {
@@ -190,7 +190,7 @@ export function setBoard(hub: Hub, roomName: string, pid: string, key: string, t
   // A verify entry gates a proposal and an attack holds one, so only their author or a human may clear or replace them:
   // with overwrite a peer could swap someone's failing verdict for a passing one under their own name.
   const clearsPeer = !text.trim() && !!previous && previous.by !== p.name && p.agent !== "human";
-  if (previous && previous.by !== p.name && p.agent !== "human" && /^(verify|attack)\//.test(key)) throw new HubError(`"${key}" is ${previous.by}'s entry; only its author or a human may ${text.trim() ? "replace" : "clear"} it. Write your own (verify/<area>-<you>), or answer it on the board (for an attack, edit the attacked entry).`, undefined, "ownership");
+  if (previous && previous.by !== p.name && p.agent !== "human" && /^(verify|review|attack)\//.test(key)) throw new HubError(`"${key}" is ${previous.by}'s entry; only its author or a human may ${text.trim() ? "replace" : "clear"} it. Write your own (verify/<area>-<you>), or answer it on the board (for an attack, edit the attacked entry).`, undefined, "ownership");
   if (previous && previous.by !== p.name && !take && !opts.overwrite && (text.trim() || clearsPeer) && !(key.startsWith("claim/") && (claimReleased(previous) || takeover))) {
     noteBoardRead(p, key, previous);
     throw new HubError(
@@ -223,6 +223,10 @@ export function setBoard(hub: Hub, roomName: string, pid: string, key: string, t
   // a draft written or edited after peers' drafts became readable may have copied them: say so wherever it is listed
   const postReveal = key.startsWith("draft/") && (!!previous?.postReveal || !!room.draftsRevealed || hub.draftsDue(room));
   const workspace = key.startsWith("claim/") ? hub.workspaceOf(p) : undefined;
+  const read = isReviewKey(key) ? readVerifyHead(text) : undefined;
+  const head = read && "head" in read ? read.head : undefined;
+  // the writer's own worktree, never the hub's: a shared hub serves rooms on other repos (devkit), whose commits it lacks
+  const commitCheck = head ? checkCommits(hub.workspaceOf(p)?.worktree, head) : undefined;
   const entry: BoardEntry = {
     text, by: p.name, updatedAt: now(),
     ...(expiresAt ? { expiresAt } : {}),
@@ -233,6 +237,7 @@ export function setBoard(hub: Hub, roomName: string, pid: string, key: string, t
     ...(postReveal ? { postReveal: true } : {}),
     ...(attacked ? { attackedChars: norm(room.board.get(attacked.target)!.text).length } : {}),
     ...(workspace ? { workspace } : {}),
+    ...(commitCheck ? { commitCheck } : {}),
     ...(take ? { holder: take.holder.name, ...(take.offeredBy ? { offeredBy: take.offeredBy.name } : {}) } : {}),
   };
   applyBoard(room, key, entry);
@@ -246,8 +251,17 @@ export function setBoard(hub: Hub, roomName: string, pid: string, key: string, t
     : `${previous ? "updated" : "added"} board entry "${key}" (${text.length} chars; read it with board_get)`
     + (postReveal ? " — post-reveal: written after peers' drafts were readable, so not an independent attempt" : "")
     + (workspace ? ` — ${workspace.branch ? `branch ${workspace.branch} in ` : ""}${workspace.worktree}` : "")
-    + (reviewer ? ` — reviewer: ${reviewer.name}` : ""),
-    /^(verify|attack)\//.test(key) && commitsIn(text).length ? { covers: commitsIn(text) } : {});
+    + (reviewer ? ` — reviewer: ${reviewer.name}` : "")
+    + (commitCheck ? missingCommits(commitCheck) : ""),
+    /^(verify|review|attack)\//.test(key) && commitsIn(text).length ? { covers: commitsIn(text) } : {});
+  if (head) {
+    hub.persist({
+      type: "review", room: roomName, key, by: p.name, proposal: head.proposal, ...commitCheck,
+      ...(head.commit !== undefined && !commitCheck?.commit ? { commit: head.commit } : {}),
+      exit_code: head.exit_code, ...(head.base_exit_code !== undefined ? { base_exit_code: head.base_exit_code } : {}),
+      ...(head.kind ? { kind: head.kind } : {}), unverified_n: head.unverified?.length ?? 0, ...(head.dev_room ? { dev_room: head.dev_room } : {}), ts: entry.updatedAt,
+    });
+  }
   if (reviewer) {
     // kind "chat", not "system": an owed @-mention is resolved from content, so it still wakes a held wait after hub.wait() advanced lastSeenSeq
     // past this message; a "system" post with mentions arrives too late. "Exercise ... not only rerun" is the OpenHands qa-changes rule.
@@ -269,6 +283,25 @@ export function setBoard(hub: Hub, roomName: string, pid: string, key: string, t
   if (key.endsWith(".ack") || key.startsWith("verify/")) for (const pr of room.proposals.values()) if (pr.status === "open") hub.evaluate(room, pr);
   if (key.startsWith("draft/")) hub.latchDrafts(room);
   return entry;
+}
+
+/** The commits a verify head names, each resolved in the writer's worktree (commitKnown; unchecked without one); undefined if it names none. */
+function checkCommits(cwd: string | undefined, head: { commit?: string; base_commit?: string }): BoardEntry["commitCheck"] {
+  const out: NonNullable<BoardEntry["commitCheck"]> = {};
+  for (const f of ["commit", "base_commit"] as const) {
+    const sha = head[f]?.trim();
+    if (!sha) continue;
+    out[f] = sha;
+    const known = commitKnown(cwd, sha);
+    if (known !== undefined) out[f === "commit" ? "commit_known" : "base_known"] = known;
+  }
+  return Object.keys(out).length ? out : undefined;
+}
+
+/** Said in the board notice, not refused: a reviewer may cite a commit in another repo (devkit), and only they know. */
+function missingCommits(c: NonNullable<BoardEntry["commitCheck"]>): string {
+  const gone = [c.commit_known === false ? `commit ${c.commit}` : "", c.base_known === false ? `base_commit ${c.base_commit}` : ""].filter(Boolean);
+  return gone.length ? ` — names ${gone.join(" and ")}, which does not exist in your worktree's repository: check the SHA, or say which repo it is in` : "";
 }
 
 /** Coordination state, not findings: there is no claim about the world in these to attack. */

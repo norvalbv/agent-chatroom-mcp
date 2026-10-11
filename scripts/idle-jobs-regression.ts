@@ -93,6 +93,38 @@ test("a shell-script job is a job: the script's shell, not its sleep (devroom/in
   assert.deepEqual(jobs.map((j) => j.pid).sort(), [110, 120, 140, 170], "the script, the backgrounded sh -c (also as -lc behind --norc) and bash <script>; not the sleeps under them, not the seat's own tool wrappers in any -c spelling");
 });
 
+test("a system binary's environment is hidden from ps: a shell script is the seat's through its parent, and stays so after it is re-parented", async () => {
+  // dev room swarm-212818-t3sr and the verifier's probe: `ps eww` prints no environment for /bin/sh, /bin/zsh or sleep
+  // (macOS hides it for its own binaries), so "/bin/sh ./slow_count.sh" carried no seat key and no seat had the job.
+  // The key is inherited from the nearest ancestor that has one; once seen, a pid keeps its seat when launchd adopts it.
+  const AGENT = "  100     1 800000    02:00:00 claude -p brief";
+  const envOnlyAgent = "100 claude CHATROOM_SEAT_KEY=seat-key-AAAA";
+  const first = parseTable([AGENT, "  105   100  20000       01:10 /bin/zsh -c -l source /x/snapshot.sh && eval './slow_count.sh &'", "  110   105  20000       01:10 /bin/sh ./slow_count.sh", "  111   110    900       01:10 sleep 150"].join("\n"), envOnlyAgent);
+  assert.deepEqual(first.filter((p) => p.pid !== 100).map((p) => [p.key, p.inherited]), [[null, "seat-key-AAAA"], [null, "seat-key-AAAA"], [null, "seat-key-AAAA"]], "the wrapper, the script and its sleep descend from the agent; none shows a key of its own");
+  assert.deepEqual(seatUsage(first).get("seat-key-AAAA")!.own, [], "memory accounting and the budget stay on processes that carry the key themselves");
+  assert.deepEqual(jobsOf(first.filter((p) => p.inherited === "seat-key-AAAA")).map((j) => j.pid), [110]);
+  // the wrapper exits; launchd adopts the script. Its own environment is still hidden and it has no keyed ancestor now.
+  // (the ticks of this test follow each other at once, so the elapsed times stay as they were: same pid, same start)
+  const later = [AGENT, "  110     1  20000       01:10 /bin/sh ./slow_count.sh", "  111   110    900       01:10 sleep 150"].join("\n");
+  assert.equal(parseTable(later, envOnlyAgent).find((p) => p.pid === 110)!.inherited, undefined, "ps alone can no longer say whose it is");
+  const ticks = [first, parseTable(later, envOnlyAgent), parseTable(AGENT, envOnlyAgent)];
+  const ended: number[] = [];
+  let i = 0;
+  const watch = new MemoryWatch({ watched: () => true, table: async () => ticks[i++], footprints: async () => new Map(), onJobEnd: (_s, job) => ended.push(job.pid) });
+  await watch.tick();
+  assert.deepEqual(watch.jobs(seatHash("seat-key-AAAA")).map((j) => j.pid), [110]);
+  await watch.tick();
+  assert.deepEqual(watch.jobs(seatHash("seat-key-AAAA")).map((j) => j.pid), [110], "the watcher remembers whose pid 110 is");
+  await watch.tick();
+  assert.deepEqual(ended, [110], "and reports its end to that seat");
+  // a reused pid is a different process: same number, started at another time, no key of its own and no keyed ancestor
+  const reuse = [first, parseTable([AGENT, "  110     1  20000       00:05 /bin/sh ./somebody_elses.sh"].join("\n"), envOnlyAgent)];
+  let k = 0;
+  const w2 = new MemoryWatch({ watched: () => true, table: async () => reuse[k++], footprints: async () => new Map() });
+  await w2.tick(); await w2.tick();
+  assert.deepEqual(w2.jobs(seatHash("seat-key-AAAA")).map((j) => j.pid), [], "pid 110 started a minute later is not the seat's remembered script");
+});
+
 test("the memory watcher keeps each seat's jobs from the table it already reads", async () => {
   const watch = new MemoryWatch({
     watched: () => true,

@@ -19,7 +19,10 @@
 import { execFile } from "node:child_process";
 import { seatHash } from "./liveness.js";
 
-export interface Proc { pid: number; ppid: number; rssKb: number; elapsedS: number; command: string; key: string | null }
+export interface Proc { pid: number; ppid: number; rssKb: number; elapsedS: number; command: string; key: string | null;
+  /** the seat key of its nearest keyed ancestor, when it shows none of its own (macOS hides a system binary's environment).
+   * Used for the job signal only: memory accounting and the budget's stop stay on processes that carry the key themselves. */
+  inherited?: string }
 export interface SeatMemory {
   /** what the seat started (its agent process excluded), in MB */
   mb: number;
@@ -76,6 +79,16 @@ export function parseTable(plain: string, withEnv: string): Proc[] {
   for (const line of plain.split("\n")) {
     const m = /^\s*(\d+)\s+(\d+)\s+(\d+)\s+(\S+)\s+(.*)$/.exec(line);
     if (m) table.push({ pid: Number(m[1]), ppid: Number(m[2]), rssKb: Number(m[3]), elapsedS: elapsedSeconds(m[4]!), command: m[5]!, key: keys.get(Number(m[1])) ?? null });
+  }
+  // macOS prints no environment for its own binaries (/bin/sh, /bin/zsh, sleep, curl), so a shell script a seat started
+  // carried no key and belonged to nobody (the verifier's ./slow_probe.sh; dev room swarm-212818-t3sr). A process with
+  // no key of its own is marked with its nearest keyed ancestor's (Proc.inherited).
+  const byPid = new Map(table.map((p) => [p.pid, p]));
+  for (const p of table) {
+    if (p.key) continue;
+    for (let up = byPid.get(p.ppid), hops = 0; up && hops < 32; up = byPid.get(up.ppid), hops++) {
+      if (keys.has(up.pid)) { p.inherited = keys.get(up.pid)!; break; }
+    }
   }
   return table;
 }
@@ -177,6 +190,10 @@ export class MemoryWatch {
   private others: Unattributed = { mb: 0, processes: 0, top: [] };
   /** pid the last tick asked to stop, per seat: still there on the next tick means it ignored SIGTERM */
   private readonly asked = new Map<string, number>();
+  /** Whose each key-less pid was when last seen under a keyed ancestor, with when it started: a script launchd has
+   * since adopted has no keyed ancestor left and no readable environment, and is still that seat's. Dropped when the
+   * pid is gone or was reused. */
+  private readonly ownerOf = new Map<number, { key: string; startedMs: number }>();
   private running = false;
   private ticks = 0;
   readonly budgetMb: number | null;
@@ -203,6 +220,16 @@ export class MemoryWatch {
     this.running = true;
     try {
       const table = await (this.o.table ?? (async () => parseTable(await sh("ps", ["-Ao", "pid=,ppid=,rss=,etime=,command="]), await sh("ps", ["eww", "-Ao", "pid=,command="]))))();
+      const nowMs = Date.now();
+      for (const p of table) {
+        const startedMs = nowMs - p.elapsedS * 1000;
+        const was = this.ownerOf.get(p.pid);
+        // the same pid with the same start time (to ps's one-second grain, and a little for the tick) is the same process
+        if (!p.key && !p.inherited && was && Math.abs(was.startedMs - startedMs) < 5_000) p.inherited = was.key;
+        if (!p.key && p.inherited) this.ownerOf.set(p.pid, { key: p.inherited, startedMs });
+      }
+      const alivePids = new Set(table.map((p) => p.pid));
+      for (const pid of [...this.ownerOf.keys()]) if (!alivePids.has(pid)) this.ownerOf.delete(pid);
       // only when some watched seat has started something: an idle hub does not run top
       const busy = [...seatUsage(table)].some(([key, u]) => u.own.length > 0 && this.o.watched(seatHash(key)));
       const footprint = busy && (this.budgetMb !== null || this.ticks++ % FOOTPRINT_EVERY === 0);
@@ -215,7 +242,8 @@ export class MemoryWatch {
         const seat = seatHash(key);
         if (!this.o.watched(seat)) { orphans.push({ ...u.agent, kb: u.agentKb }, ...u.own); continue; }
         seen.add(seat);
-        const jobs = jobsOf(u.own);
+        // the seat's jobs: what it started with its key showing, and what shows no key but descends from it
+        const jobs = jobsOf([...u.own, ...table.filter((p) => !p.key && p.inherited === key)]);
         this.jobsBySeat.set(seat, jobs);
         // gone from the table, not merely too old to count as a job any more: a process still running has not ended
         const alive = new Set(table.map((p) => p.pid));

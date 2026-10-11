@@ -65,6 +65,12 @@ for (const cmd of [
   "ps aux | grep fetch_trades | grep -v grep | awk '{print $2}' | xargs kill -9",
   "sh -c 'pkill -f fetch_trades.py'",
   "cd /x && pkill -9 -f fetch_trades.py",
+  // what a seat writes next once pkill is refused (review/seat-guard-and-room-idle)
+  "for p in $(pgrep -f fetch); do kill $p; done",
+  "PID=$(pgrep -f fetch_trades.py); kill -9 $PID",
+  "pgrep -f fetch_trades.py | while read p; do kill \"$p\"; done",
+  "for p in `ps aux | grep fetch_trades | awk '{print $2}'`; do kill $p; done",
+  "lsof -ti:7810 | xargs kill; pgrep -f fetch | xargs kill",
 ]) {
   const reason = guard(cmd);
   assert.ok(reason, `refused: ${cmd}`);
@@ -83,6 +89,14 @@ for (const cmd of [
   "kill 999999",
   "npm run build && node dist/index.js",
   "pgrep -fl fetch_trades.py",
+  // by port, in both forms: how this project's own rules say to stop a private hub
+  "kill $(lsof -ti:7810 -sTCP:LISTEN)",
+  "lsof -ti:7810 -sTCP:LISTEN | xargs kill",
+  "cd /x && lsof -ti :7810 -sTCP:LISTEN | xargs kill -9",
+  // a look by name beside a kill by PID file is not a kill by name
+  "pgrep -fl fetch_trades.py; kill $(cat fetch.pid)",
+  "kill $(cat fetch.pid); sleep 1; pgrep -fl fetch_trades.py || echo stopped",
+  "pgrep -F fetch.pid && kill $(<fetch.pid)",
 ]) assert.equal(guard(cmd), null, `allowed: ${cmd}`);
 assert.equal(guard("pkill -f x", A, "Read"), null, "only Bash");
 assert.equal(guard("pkill -f x", {}), null, "a shell that is not a seat's is left alone");
@@ -117,7 +131,9 @@ assert.equal(spawnSync(process.execPath, [SEAT_GUARD_HOOK], { input: "not json",
 
 // 4. Two seats, one file name (the incident). Each seat's processes inherit its key, detached or not.
 const dir = mkdtempSync(join(tmpdir(), "seat-guard-"));
-const script = join(dir, "fetch_trades.py.mjs");
+// a name of this run's own: other seats on this machine run a fetch_trades.py too, which is the point of the guard
+const NAME = `fetch_trades_${process.pid}.py`;
+const script = join(dir, `${NAME}.mjs`);
 writeFileSync(script, "setTimeout(() => {}, 60_000);\n");
 const started: ChildProcess[] = [];
 const start = (env: Record<string, string>) => {
@@ -144,7 +160,7 @@ assert.ok(other && other.includes(String(b1)) && !other.includes(String(a1)), `a
 assert.equal(guard(`kill ${plain}`), null, "a process no seat started is not this guard's business");
 
 //    stop <pattern>: the same habit as pkill -f, scoped. Seat A's two die; seat B's same-named one and the untagged one live.
-const stopped = procs(["stop", "fetch_trades.py"], A);
+const stopped = procs(["stop", NAME], A);
 assert.equal(stopped.status, 0, stopped.stderr);
 await new Promise((r) => setTimeout(r, 500));
 assert.ok(!alive(a1) && !alive(a2), "its own processes are stopped");
@@ -154,10 +170,10 @@ assert.match(stopped.stdout, /stopped 2/);
 assert.match(stopped.stdout, /left 2 .*not started by this seat/, "says what it matched and left alone");
 
 //    nothing of its own matches: exit 1, nothing touched. No seat key: refuses outright.
-const none = procs(["stop", "fetch_trades.py"], A);
+const none = procs(["stop", NAME], A);
 assert.equal(none.status, 1);
 assert.ok(alive(b1));
-assert.equal(procs(["stop", "fetch_trades.py"], {}).status, 2, "no seat key, no pattern stop");
+assert.equal(procs(["stop", NAME], {}).status, 2, "no seat key, no pattern stop");
 assert.ok(alive(b1) && alive(plain));
 
 console.log("SEAT GUARD OK");

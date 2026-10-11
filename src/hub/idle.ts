@@ -11,7 +11,9 @@
  * ledger dedupes on the target, so the same sleep run fifty times is one step), a chat message from an agent, or a
  * board write. A room is quiet when its seats made fewer than ROOM_IDLE_STEPS steps each over ROOM_IDLE_MS. Replayed
  * over every record with work events from three or more seats and an hour of life (3 rooms, 10 room-hours: thin), 5
- * steps over 30 minutes fires once, in that room at 13:57 UTC with 3 h 35 min left, and nowhere else.
+ * steps over 30 minutes fires once, in that room at 13:57 UTC with 3 h 35 min left, and nowhere else. It is late:
+ * that room's steps per 30 minutes ran 188-371 while it worked, then 125, 72, 49, 28, so the line comes about 40
+ * minutes into the stall (a second replay by its reviewer, review/seat-guard-and-room-idle).
  *
  * Nothing is enforced: the room is told, with the numbers, and so is the room it was opened from. Who acts is the
  * chair or consolidator (new inputs, a digest from the other groups, a vote on what is done) and the seats themselves.
@@ -23,8 +25,12 @@ import type { Participant, Room } from "./types.js";
 
 /** The window the rule looks back over. CHATROOM_ROOM_IDLE_MS=0 turns the signal off. */
 export const ROOM_IDLE_MS = windowMs(process.env.CHATROOM_ROOM_IDLE_MS, 30 * 60_000);
-/** New steps per seat over the window below which a room is quiet. */
+/** New steps per seat per 30 minutes below which a room is quiet: a rate, so a shorter window asks for proportionally
+ * fewer (a dev room on a 2-minute window read an active room as quiet against the unscaled count). */
 export const ROOM_IDLE_STEPS = windowMs(process.env.CHATROOM_ROOM_IDLE_STEPS, 5);
+const RATE_WINDOW_MS = 30 * 60_000;
+/** A repeat waits while anything was said or written this recently: "quiet for N min" on top of a message is false. */
+const REPEAT_SETTLE = 1 / 6;
 const OFF = process.env.CHATROOM_ROOM_IDLE_MS?.trim() === "0";
 /** Still quiet this long after the room was told: it is told again. */
 const REPEAT_WINDOWS = 2;
@@ -38,7 +44,8 @@ export interface RoomIdle { since: string; toldAt: string; steps: number; seats:
 export function quietWindow(steps: number[], seats: number, at: number, opts: { windowMs?: number; stepsPerSeat?: number } = {}): QuietWindow {
   const window_ms = opts.windowMs ?? ROOM_IDLE_MS;
   const n = steps.filter((t) => t > at - window_ms && t <= at).length;
-  return { steps: n, seats, window_ms, quiet: seats >= 2 && n < (opts.stepsPerSeat ?? ROOM_IDLE_STEPS) * seats };
+  const perSeat = opts.stepsPerSeat ?? Math.max(1, ROOM_IDLE_STEPS * window_ms / RATE_WINDOW_MS);
+  return { steps: n, seats, window_ms, quiet: seats >= 2 && n < perSeat * seats };
 }
 
 /** When each step in the window happened: counted local tool calls, agents' chat messages, board writes. */
@@ -80,6 +87,7 @@ export function checkRoomIdle(hub: Hub, room: Room, at = Date.now()): void {
   // a room waiting on a vote, held, or already told it is ending is not stalled; nor is one the hub cannot judge
   if (!q?.quiet || hub.hold(room) || room.deadline?.announced || [...room.proposals.values()].some((pr) => pr.status === "open")) return;
   if (room.idle && at - Date.parse(room.idle.toldAt) < REPEAT_WINDOWS * ROOM_IDLE_MS) return;
+  if (room.idle && roomSteps(room, at, ROOM_IDLE_MS * REPEAT_SETTLE).length) return;
   const window_min = Math.round(q.window_ms / 60_000);
   const since = room.idle?.since ?? new Date(at).toISOString();
   room.idle = { since, toldAt: new Date(at).toISOString(), steps: q.steps, seats: q.seats, window_min };

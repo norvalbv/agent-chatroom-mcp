@@ -53,6 +53,12 @@ test("the rule: fewer than N new steps per seat over the window", () => {
   assert.equal(quietWindow(steps(200, ROOM_IDLE_MS + 1), 6, at).steps, 0, "steps before the window do not count");
   assert.equal(quietWindow(steps(0, 0), 1, at).quiet, false, "one seat is not a room");
   assert.equal(quietWindow(steps(3, 0), 2, at, { windowMs: 60_000, stepsPerSeat: 2 }).quiet, true, "both numbers can be passed");
+  // the threshold is a rate (steps per seat per 30 minutes): a shorter window asks for proportionally fewer steps.
+  // Dev room swarm-005430-pwis-room ran a 2-minute window against the 30-minute count and called 12 steps from 4 seats quiet.
+  assert.equal(quietWindow(steps(12, 1_000), 4, at, { windowMs: 120_000 }).quiet, false, "12 steps from 4 seats in 2 minutes is a working room");
+  assert.equal(quietWindow(steps(3, 1_000), 4, at, { windowMs: 120_000 }).quiet, true, "3 from 4 is not: under one each");
+  assert.equal(quietWindow(steps(59, 1_000), 6, at, { windowMs: 60 * 60_000 }).quiet, true, "and a longer one for more: 59 from 6 seats in an hour is under ten each");
+  assert.equal(quietWindow(steps(60, 1_000), 6, at, { windowMs: 60 * 60_000 }).quiet, false);
 });
 
 test("a working room is not told; a stalled one is told once, with the numbers, and room_status carries it", () => {
@@ -84,6 +90,11 @@ test("a working room is not told; a stalled one is told once, with the numbers, 
   checkRoomIdle(hub, room);
   assert.equal(lines(hub).length, 1, "told once, not on every sweep");
   elapse(hub, ROOM, 2 * ROOM_IDLE_MS + 60_000);
+  // a seat has just spoken: the repeat waits, since "quiet for N min" said seconds after a message is false
+  hub.send(ROOM, a.id, "waiting on the 14:00 close, the recorder scores it at 14:05", undefined, true);
+  checkRoomIdle(hub, room);
+  assert.equal(lines(hub).length, 1, "not repeated on top of a message");
+  elapse(hub, ROOM, ROOM_IDLE_MS / 2);
   checkRoomIdle(hub, room);
   assert.equal(lines(hub).length, 2, "still stalled two windows later: told again");
   assert.match(lines(hub)[1].content, /quiet for \d+ min/, "and says for how long");

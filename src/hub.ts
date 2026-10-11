@@ -2985,7 +2985,7 @@ export class Hub {
     const s = (at: string) => Math.max(0, Math.round((t - Date.parse(at)) / 100) / 10);
     // delivery stamps are in memory: a version made before this hub process started may have been sent by the last one
     // (review/83871804), so its absence says nothing
-    const unknown = !seenAt && !!made && made.ts < this.bootedAt;
+    const unknown = !seenAt && !!made && made.ts <= this.bootedAt; // <=: a restart in the same millisecond as the message (review: a 4-in-8 flake)
     return { ...(seenAt ? { seen_s: s(seenAt) } : {}), ...(unknown ? { seen_unknown: true as const } : {}), since_text_s: s(pr.updatedAt ?? pr.createdAt) };
   }
   /** when this hub process started: delivery stamps older than this were lost with the last process */

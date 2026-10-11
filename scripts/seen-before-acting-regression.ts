@@ -51,7 +51,7 @@ test("votes and challenges say how long after the seat was sent the version they
   assert.ok(evs.some((e) => e.type === "vote" && e.entry.since_text_s !== undefined), "the vote event carries it");
 });
 
-test("after a hub restart a version made before it is 'unknown', not 'never sent'", () => {
+test("after a hub restart a version made before it is 'unknown', not 'never sent'", async () => {
   // review/83871804 (claude-opus-5-5-2): delivery stamps are in memory, so a restart must not turn readers into non-readers
   Hub.LAST_CALL_MS = 0;
   const dir = mkdtempSync(join(tmpdir(), "seen-restart-"));
@@ -62,6 +62,7 @@ test("after a hub restart a version made before it is 'unknown', not 'never sent
   const pr = hub.propose("sr-room", a.id, "Use --no-cache: the three existing opt-outs are all spelled --no-.");
   const room = hub.getRoom("sr-room");
   hub.settleRead(room, b, b.lastSeenSeq, room.messages.filter((m) => m.seq > b.lastSeenSeq)); // B was sent v1 before the restart
+  await sleep(5); // a restart is never in the same millisecond as the message in life; the hub must not depend on it either way
   const restored = new Hub({ dataDir: dir });
   restored.join("sr-room", "B", "test", {}, b.id, "s2");
   restored.join("sr-room", "A", "test", {}, a.id, "s1");

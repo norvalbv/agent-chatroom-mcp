@@ -3,8 +3,8 @@ import { spawnSync } from "node:child_process";
 import { cpSync, existsSync, readdirSync, writeFileSync } from "node:fs";
 import { isAbsolute, resolve } from "node:path";
 
-/** shared: the hooks directory is one every worktree already uses; present: the worktree has it; copied; missing: the main checkout has none to copy. */
-export interface HooksCarried { hooks: "shared" | "present" | "copied" | "missing"; path?: string; files?: number }
+/** shared: the hooks directory is one every worktree already uses; present: the worktree has it; copied; missing: the main checkout has none to copy; off: the run turned the copy off (--seat-hooks off). */
+export interface HooksCarried { hooks: "shared" | "present" | "copied" | "missing" | "off"; path?: string; files?: number }
 
 /**
  * A relative core.hooksPath (husky's `.husky/_`) is resolved inside each worktree, and its contents are untracked, so
@@ -34,5 +34,6 @@ export function carryHooks(root: string, worktree: string): HooksCarried {
 export function hooksLine(name: string, h: HooksCarried): string {
   if (h.hooks === "copied") return `${name}: commit hooks copied into its worktree (${h.path}, ${h.files} file(s))`;
   if (h.hooks === "missing") return `${name}: NO commit hooks in its worktree: core.hooksPath is ${h.path}, which the main checkout does not have, so its commits are ungated`;
+  if (h.hooks === "off") return `${name}: commit hooks NOT copied (--seat-hooks off): its commits are ungated`;
   return `${name}: commit hooks ${h.hooks === "present" ? `already in its worktree (${h.path})` : "shared with the main checkout"}`;
 }

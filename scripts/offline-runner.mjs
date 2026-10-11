@@ -317,6 +317,7 @@ export const offlineScripts = [
   'kick-liveness-regression.ts',
   'caller-lookup-fails-closed-regression.ts',
   'openings-recruits-regression.ts',
+  'hook-bypass-regression.ts',
   'prompt-board-keys-regression.ts',
   'one-of-you-ask-regression.ts',
   'tool-surface-regression.ts',

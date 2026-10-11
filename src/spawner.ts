@@ -670,7 +670,8 @@ export class Spawner {
       } catch {}
     }
     // and no hooks runner either: without this every commit a write recruit makes skips the repository's hooks
-    this.hooksIn.set(dir, carryHooks(root, dir));
+    // CHATROOM_SEAT_HOOKS=off (the launcher's --seat-hooks off): the run chose ungated seat commits
+    this.hooksIn.set(dir, process.env.CHATROOM_SEAT_HOOKS === "off" ? { hooks: "off" } : carryHooks(root, dir));
     return dir;
   }
 

@@ -42,6 +42,23 @@ function withoutQuotedText(command) {
   });
 }
 
+// A git command that skips the repository's commit hooks: --no-verify, commit's -n, HUSKY=0, or core.hooksPath pointed
+// away. Not refused (whether a seat may is the owner's policy): recorded, so a room's record counts bypasses. Chatroom
+// seats ran 152 such commands in 24 sessions on this machine, one disclosed (evidence/seat-hooks-cost-and-bypass).
+const GIT_HOOKED = String.raw`git\b(?:\s+-[cC]\s+\S+)*\s+(?:commit|push|merge|rebase|cherry-pick|am|revert)\b`;
+const BYPASS = [
+  new RegExp(AT_COMMAND + GIT_HOOKED + String.raw`[^;&|\n]*\s--no-verify\b`),
+  new RegExp(AT_COMMAND + String.raw`git\b(?:\s+-[cC]\s+\S+)*\s+commit\b[^;&|\n]*\s-[a-zA-Z]*n[a-zA-Z]*\b`),
+  new RegExp(AT_COMMAND + String.raw`(?:\w+=\S*\s+)*HUSKY=0\s+(?:\w+=\S*\s+)*` + GIT_HOOKED),
+  new RegExp(AT_COMMAND + String.raw`git\b(?:\s+-[cC]\s+\S+)*\s+-c\s+core\.hooks[Pp]ath=\S*`),
+];
+
+/** The bypass this command makes, as typed, or null. Quoted text and heredocs are not commands. */
+export function hookBypass(command) {
+  const cmd = withoutQuotedText(withoutHeredocs(command));
+  return BYPASS.some((re) => re.test(cmd)) ? command.slice(0, 280) : null;
+}
+
 /** Why this Bash command is refused, or null. */
 export function refusal(command, key, keyOf = seatKeyOf) {
   const cmd = withoutQuotedText(withoutHeredocs(command));
@@ -71,6 +88,12 @@ process.stdin.on("end", async () => {
     const key = process.env.CHATROOM_SEAT_KEY;
     const command = ev.tool_input?.command;
     if (key && ev.tool_name === "Bash" && typeof command === "string") {
+      const bypass = refusal(command, key) ? null : hookBypass(command);
+      if (bypass) {
+        process.stdout.write(JSON.stringify({ hookSpecificOutput: { hookEventName: "PreToolUse", additionalContext: "[chatroom] This git command skips the repository's commit hooks (its gates). It runs, and the bypass is recorded in the room's record; say in the room why the hooks were skipped." } }));
+        const url = process.env.CHATROOM_HEARTBEAT_URL;
+        if (url) await fetch(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ seat_key: key, tool: "seat-guard", detail: `bypassed hooks: ${bypass}` }), signal: AbortSignal.timeout(3_000) }).catch(() => {});
+      }
       const permissionDecisionReason = refusal(command, key);
       if (permissionDecisionReason) {
         process.stdout.write(JSON.stringify({ hookSpecificOutput: { hookEventName: "PreToolUse", permissionDecision: "deny", permissionDecisionReason } }));

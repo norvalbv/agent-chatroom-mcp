@@ -52,6 +52,8 @@ export type Event =
   | { type: "take"; room: string; key: string; action: string; by: string; holder: string; ts: string }
   /** Telemetry only (replay ignores it; src/hub/board.ts): a verify/* or review/* entry with a head, the commit it reviewed and whether the hub's repo has it. */
   | { type: "review"; room: string; key: string; by: string; proposal: string; commit?: string; commit_known?: boolean; base_commit?: string; base_known?: boolean; exit_code: number; base_exit_code?: number; kind?: string; unverified_n: number; dev_room?: string; ts: string }
+  /** Telemetry only (replay ignores it): a board entry accepted after the room concluded, and how long after. */
+  | { type: "late_write"; room: string; key: string; by: string; after_s: number; ts: string }
   | { type: "kick_vote"; room: string; vote: KickVote }
   /** Telemetry only (replay ignores it): a proposal had the votes while these electorate members had not voted on its version. */
   | { type: "last_call"; room: string; proposalId: string; version: number; startedAt: string; until: string; waiting_on: string[]; takes_held?: string[] }

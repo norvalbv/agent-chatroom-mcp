@@ -276,7 +276,7 @@ export class Hub {
       latest_seq: room.messages.at(-1)?.seq ?? 0,
       proposals: [...room.proposals.values()].map((pr) => this.proposalView(room, pr, reveal, pr.status === "open" || pr.status === "accepted")),
       // agents get a manifest (board_get <key> fetches text); the human dashboard (reveal) gets the text
-      board: Object.fromEntries([...room.board].filter(([k, e]) => reveal || (!this.boardEntryExpired(room, k, e) && !this.draftSealed(room, k, e))).map(([k, e]) => [k, { ...(reveal ? { text: e.text } : {}), by: e.by, chars: e.text.length, updated_at: e.updatedAt, ...(e.postReveal ? { post_reveal: true } : {}), ...(e.reviewer ? { reviewer: e.reviewer } : {}) }])),
+      board: Object.fromEntries([...room.board].filter(([k, e]) => reveal || (!this.boardEntryExpired(room, k, e) && !this.draftSealed(room, k, e))).map(([k, e]) => [k, { ...(reveal ? { text: e.text } : {}), by: e.by, chars: e.text.length, updated_at: e.updatedAt, ...(e.postReveal ? { post_reveal: true } : {}), ...(e.reviewer ? { reviewer: e.reviewer } : {}), ...(e.late ? { late: true } : {}) }])),
       quiet: (() => {
         const qs = room.messages.filter((m) => m.quiet);
         return { messages: qs.length, unsurfaced_threads: new Set(qs.map((m) => this.threadRoot(room, m).id)).size };
@@ -2971,7 +2971,8 @@ export class Hub {
       `CONSENSUS REACHED on ${pr.id} v${pr.version} (${electorate.agree}/${electorate.electorate} agree; ${electorate.excluded_leavers} leavers-before-close excluded; quorum=${room.quorum}; ${pr.text.length} chars, text in room_status/conclusion)` +
         (closing.not_voted_on_final.length ? `\nNot voted on v${pr.version}: ${closing.not_voted_on_final.map((x) => `${x.name}${x.role ? ` (${x.role})` : ""}${x.voted_version ? ` (on v${x.voted_version})` : ""}`).join(", ")}${closing.ended === "window" ? " (last call ran out)" : ""}.` : "") +
         (unresolved.length ? `\nUnresolved objections, overruled: ${unresolved.map((u) => `${u.by}: "${u.objection.slice(0, 300)}${u.objection.length > 300 ? "…" : ""}"`).join(" | ")}` : "") + output.conclusionOutputLines(record) +
-        (verification ? `\n${Hub.verificationLine(verification)}${Hub.unverifiedLine(verification, gaps)}` : ""),
+        (verification ? `\n${Hub.verificationLine(verification)}${Hub.unverifiedLine(verification, gaps)}` : "") +
+        (Hub.LATE_WRITE_MS > 0 ? `\nThe board stays open to late results for ${Math.round(Hub.LATE_WRITE_MS / 60_000)} min: a result, verify/*, review/* or handoff/* that lands now is recorded and marked late, and this conclusion does not change.` : ""),
       { proposalId: pr.id },
     );
     this.releaseClaims(room, "Room concluded");
@@ -3182,6 +3183,10 @@ export class Hub {
 
   /** How long a departed owner's claim/* stays reserved for its registered successor before anyone may take it over. */
   static STALE_CLAIM_MS = Number(process.env.CHATROOM_STALE_CLAIM_MS ?? 10 * 60_000);
+
+  /** How long after a room concludes its board still takes late results, marked late (src/hub/board.ts lateWrite). 0: refuse at once. */
+  static LATE_WRITE_MS = Number(process.env.CHATROOM_LATE_WRITE_MS ?? 60 * 60_000);
+  /** @internal */ get lateWriteMs(): number { return Hub.LATE_WRITE_MS; }
 
   /** The departed owner of a claim/* entry, if it has one: the most recent participant under that name, when inactive. */
   private departedClaimOwner(room: Room, e: BoardEntry): Participant | undefined {

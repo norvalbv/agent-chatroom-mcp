@@ -1,6 +1,7 @@
 /** Once a room concludes or closes, leave_room never refuses for an abandoned claim/* or an owed ask: the hub
  * releases every claim/* itself in one system line instead of asking seats to write a handoff or a claim release.
- * A reason is still required. Board writes (board_set) are refused outright once concluded/closed, with a plain
+ * A reason is still required. Coordination writes (claim/, take/, hold/, draft/) are refused once concluded, and every
+ * board write once closed or after the late-results window (Hub.LATE_WRITE_MS), with a plain
  * message; verify/* and handoff/* entries written before conclusion stay readable.
  * Reproduction: room swarm-082729-8b5j-room made 14 forced handoff/*-add or claim/*-release board writes in the
  * 55 seconds after it concluded, one refused leave_room call per seat, because leaveRefusal did not know the
@@ -85,9 +86,12 @@ assert.ok(!r.error, "A's leave is not refused for the released claim: " + r.text
 r = await b.call("leave_room", { room, reason: "nothing more from me, room concluded" });
 assert.ok(!r.error, "B's leave is not refused for the owed ask: " + r.text);
 
-// Board writes are refused outright once concluded (any key, not just claim/*); reads of prior entries still work.
+// Coordination writes are refused once concluded (claim/, take/, hold/, draft/): there is nothing left to coordinate.
+// A late result is kept, marked late (scripts/late-writes-regression.ts). Reads of prior entries still work.
+r = await c.call("board_set", { room, key: "claim/final", text: JSON.stringify({ owner: "C", status: "open" }) });
+assert.ok(r.error && /concluded/.test(r.text), "a claim is refused outright post-conclusion: " + r.text);
 r = await c.call("board_set", { room, key: "evidence/final", text: "final note" });
-assert.ok(r.error && /concluded/.test(r.text), "board_set is refused outright post-conclusion: " + r.text);
+assert.ok(!r.error, "a late result is accepted post-conclusion: " + r.text);
 r = await c.call("board_get", { room, key: "verify/build" });
 assert.ok(!r.error && /exit 0/.test(r.text), "board_get still reads pre-conclusion entries: " + r.text);
 

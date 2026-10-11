@@ -203,8 +203,13 @@ export function boardContinuation(room: Room, key: string, entry: BoardEntry): {
 export function setBoard(hub: Hub, roomName: string, pid: string, key: string, text: string, opts: BoardExpiryOptions & { ifAbsent?: boolean; ifByMe?: boolean; overwrite?: boolean; append?: boolean } = {}): BoardEntry | null {
   const room = hub.getRoom(roomName);
   const p = hub.requireParticipant(room, pid);
-  if (room.state === "concluded" || room.state === "closed") {
-    throw new HubError(`Room "${roomName}" is ${room.state}: board writes are refused, there is nothing left to coordinate. Earlier entries, including verify/* and handoff/*, are still readable with board_get.`, undefined, "state");
+  // A concluded room keeps taking results for a while (lateWrite): a rerun that lands after the vote is recorded, not lost.
+  const late = lateWrite(hub, room, key);
+  if (room.state === "closed" || (room.state === "concluded" && !late)) {
+    const why = room.state === "closed" || LATE_REFUSED.some((x) => key.startsWith(x))
+      ? "there is nothing left to coordinate"
+      : `late results were accepted for ${Math.round(hub.lateWriteMs / 60_000)} min after it concluded, and that has passed`;
+    throw new HubError(`Room "${roomName}" is ${room.state}: board writes are refused, ${why}. Earlier entries, including verify/* and handoff/*, are still readable with board_get.`, undefined, "state");
   }
   if (!BOARD_KEY.test(key)) throw new HubError("Board keys are short names like 'evidence', 'open questions', 'claim/auth', 'verify/auth'.", undefined, "key-format");
   if (opts.append) return appendBoard(hub, room, p, key, text);
@@ -313,6 +318,7 @@ export function setBoard(hub: Hub, roomName: string, pid: string, key: string, t
     ...(attacked ? { attackedChars: norm(room.board.get(attacked.target)!.text).length } : {}),
     ...(workspace ? { workspace } : {}),
     ...(commitCheck ? { commitCheck } : {}),
+    ...(late ? { late: true } : {}),
     ...(take ? { holder: take.holder.name, ...(take.offeredBy ? { offeredBy: take.offeredBy.name } : {}) } : {}),
   };
   applyBoard(room, key, entry);
@@ -327,8 +333,10 @@ export function setBoard(hub: Hub, roomName: string, pid: string, key: string, t
     + (postReveal ? " — post-reveal: written after peers' drafts were readable, so not an independent attempt" : "")
     + (workspace ? ` — ${workspace.branch ? `branch ${workspace.branch} in ` : ""}${workspace.worktree}` : "")
     + (reviewer ? ` — reviewer: ${reviewer.name}` : "")
-    + (commitCheck ? missingCommits(commitCheck) : ""),
+    + (commitCheck ? missingCommits(commitCheck) : "")
+    + (late ? " — late: written after the room concluded; recorded, the conclusion does not change" : ""),
     /^(verify|review|attack)\//.test(key) && commitsIn(text).length ? { covers: commitsIn(text) } : {});
+  if (late) hub.persist({ type: "late_write", room: roomName, key, by: p.name, after_s: late.after_s, ts: entry.updatedAt });
   if (head) {
     hub.persist({
       type: "review", room: roomName, key, by: p.name, proposal: head.proposal, ...commitCheck,
@@ -358,6 +366,18 @@ export function setBoard(hub: Hub, roomName: string, pid: string, key: string, t
   if (key.endsWith(".ack") || key.startsWith("verify/")) for (const pr of room.proposals.values()) if (pr.status === "open") hub.evaluate(room, pr);
   if (key.startsWith("draft/")) hub.latchDrafts(room);
   return entry;
+}
+
+/** Coordination keys: with the room concluded nobody can join a team, take a turn, hold a vote or draft blind. */
+const LATE_REFUSED = ["claim/", "take/", "hold/", "draft/", "inbox/", "help/", "join-request/", "idea/"];
+
+/** Whether a write to a concluded room is a late result the board still takes, and how long after the conclusion it is.
+ * Late results and verdicts were lost in 7 rooms (chat-and-friction issue 10): the seat's rerun or review finished
+ * after the vote did. The window is Hub.LATE_WRITE_MS; an entry written in it is marked late and changes nothing decided. */
+function lateWrite(hub: Hub, room: Room, key: string): { after_s: number } | undefined {
+  if (room.state !== "concluded" || !room.conclusion?.decidedAt || LATE_REFUSED.some((x) => key.startsWith(x))) return undefined;
+  const after = Date.now() - Date.parse(room.conclusion.decidedAt);
+  return after < hub.lateWriteMs ? { after_s: Math.max(0, Math.round(after / 1000)) } : undefined;
 }
 
 /** The commits a verify head names, each resolved in the writer's worktree (commitKnown; unchecked without one); undefined if it names none. */

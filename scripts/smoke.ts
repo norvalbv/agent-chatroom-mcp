@@ -663,8 +663,10 @@ assert.deepEqual(tools, ["amend", "board_get", "board_set", "challenge", "join_r
   assert.ok(!("text" in man.notes), "keyless board_get is a manifest");
   const st2 = await a.call("room_status", { room });
   assert.ok(!("text" in st2.board.notes), "room_status carries a board manifest");
-  // once concluded, board writes are refused outright; reads of what was written before are untouched
-  await assert.rejects(a.call("board_set", { room, key: "late-notes", text: "too late" }), /concluded: board writes are refused/);
+  // once concluded, coordination writes are refused; a late result is kept and marked late (scripts/late-writes-regression.ts)
+  await assert.rejects(a.call("board_set", { room, key: "claim/late", text: "too late" }), /concluded: board writes are refused/);
+  await a.call("board_set", { room, key: "late-notes", text: "the rerun landed after the vote" });
+  assert.equal((await a.call("room_status", { room })).board["late-notes"].late, true, "a result written after conclusion is on the record, marked late");
   const stats = (await (await fetch(`${HTTP}/rooms/${room}/stats`)).json()) as { refusals: Record<string, number> };
   assert.ok(Object.values(stats.refusals).reduce((x, y) => x + y, 0) >= 2, "refusals are counted per tool and reason");
 }

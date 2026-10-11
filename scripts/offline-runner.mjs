@@ -220,6 +220,7 @@ export const offlineScripts = [
   'respawn-regression.ts',
   'respawn-usage-regression.ts',
   'respawn-outage-regression.ts',
+  'respawn-cut-body-regression.ts',
   'hub-supervisor-regression.ts',
   'hub-death-log-regression.ts',
   'reseat-regression.ts',

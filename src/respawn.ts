@@ -155,7 +155,13 @@ export async function fetchRespawnRoom(url: string, room: string, request: typeo
   }
   if (response.status === 404) return null;
   if (!response.ok) throw new HubUnreachable(`the hub answered ${response.status}`);
-  return await response.json() as RespawnRoom;
+  // the body is read inside a try too: a hub that dies after its headers throws here (TypeError "terminated", or a
+  // SyntaxError on half a body), and that is a hub that did not answer, not a room that is missing
+  try {
+    return await response.json() as RespawnRoom;
+  } catch (error) {
+    throw new HubUnreachable(`the hub's answer was cut off: ${error instanceof Error ? error.message : String(error)}`);
+  }
 }
 
 /**
@@ -279,6 +285,9 @@ export async function respawnChain<T>(d: RespawnChainDeps<T>): Promise<{ last: T
       room = await reach(lastName, d.room);
     } catch (error) {
       if (error instanceof HubUnreachable) { gaveUp(lastName); break; }
+      // an error this chain does not know says nothing about the room: name it, never fall through to "room missing"
+      d.log?.(`${lastName} exited; not respawning: the room could not be read (${error instanceof Error ? `${error.name}: ${error.message}` : String(error)})`);
+      break;
     }
     if (room?.participants?.some((p) => p.name === lastName)) seatedName = lastName;
     // a seat the limit stopped before it ever joined (often before the room existed) has no seat to hand over: start it again

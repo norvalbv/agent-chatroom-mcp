@@ -1392,11 +1392,21 @@ export class Hub {
 
   // ---------- blind openings ----------
 
+  /**
+   * Who the blind openings still wait for. A recruit is neither owed one nor counted as an arrival: the round is the
+   * founding seats' independent first answers, and a grouped run's leads room counted each one-minute consolidator pass
+   * as both ("still waiting for digest-1, 1 more participant(s)"; dev run swarm-194527-ofv7). A recruit may still submit.
+   */
   openingsWaitingOn(room: Room, reveal = false): string[] {
-    const active = this.voters(room);
-    const missing = active.filter((p) => !room.openings.has(p.id)).map((p) => (reveal ? p.name : this.shown(room, p)));
-    const shortfall = this.unarrived(room);
+    const founding = (p: Participant) => p.role !== "recruit";
+    const missing = this.voters(room).filter((p) => founding(p) && !room.openings.has(p.id)).map((p) => (reveal ? p.name : this.shown(room, p)));
+    const shortfall = this.openingsShortfall(room);
     return shortfall > 0 ? [...missing, `${shortfall} more participant(s) to join`] : missing;
+  }
+
+  /** Expected founding seats that never joined (unarrived, without recruits). */
+  private openingsShortfall(room: Room): number {
+    return Math.max(0, room.expectedParticipants - this.everJoinedVoters(room).filter((p) => p.role !== "recruit").length);
   }
 
   submitOpening(roomName: string, pid: string, content: string): { revealed: boolean; waiting_on: string[] } {
@@ -1429,7 +1439,7 @@ export class Hub {
       if (room.openingsRevealed || room.state === "concluded" || room.state === "closed") return;
       const mins = Math.round(room.nudgeAfterMs / 60000);
       const waiting = this.openingsWaitingOn(room).join(", ");
-      if (this.unarrived(room) > 0 && !room.openingsWarned) {
+      if (this.openingsShortfall(room) > 0 && !room.openingsWarned) {
         room.openingsWarned = true;
         this.post(room, "system", undefined, `Openings deadline: still waiting for ${waiting}. Chat is open meanwhile; whatever has arrived is revealed in ${mins} min.`);
         this.armOpeningsDeadline(room, room.nudgeAfterMs);

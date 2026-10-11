@@ -7,7 +7,7 @@
  */
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
 import { createWriteStream, existsSync, mkdirSync, readFileSync, readdirSync, statSync, realpathSync, symlinkSync, writeFileSync } from "node:fs";
-import { carryHooks, hooksLine } from "./worktree-hooks.js";
+import { carryHooks, hooksLine, hooksOff } from "./worktree-hooks.js";
 import { checkJoined, joinLines, roomNames, type LaunchedSeat } from "./join-check.js";
 import { dirname, resolve } from "node:path";
 import { collectRoomSnapshot, renderRunReport, writeRunResult, rollupUsage, hubUsageRollup, parseClaudeCliOutput, transcriptPath, seatScorecard, classifyOutcome, proposedDecisionDir, type RunResult, type RoomSnapshot, type SeatUsageRollup } from "./result.js";
@@ -456,7 +456,7 @@ function workerCwd(name: string): string {
   writeWorkers.add(name);
   log(`${name} works in ${dir} (branch ${branch})`);
   // nor a hooks runner: without it every commit this seat makes skips the repository's hooks (bugs.md 4)
-  log(SEAT_HOOKS_OFF ? `${name}: commit hooks NOT copied (--seat-hooks off): its commits are ungated` : hooksLine(name, carryHooks(CWD, dir)));
+  log(hooksLine(name, SEAT_HOOKS_OFF ? hooksOff(CWD) : carryHooks(CWD, dir)));
   return dir;
 }
 

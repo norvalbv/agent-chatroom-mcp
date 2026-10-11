@@ -10,7 +10,7 @@
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync, createWriteStream, symlinkSync, realpathSync, rmSync, unlinkSync } from "node:fs";
-import { carryHooks, hooksLine, type HooksCarried } from "./worktree-hooks.js";
+import { carryHooks, hooksLine, hooksOff, type HooksCarried } from "./worktree-hooks.js";
 import { tmpdir } from "node:os";
 import { basename, dirname, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -671,7 +671,7 @@ export class Spawner {
     }
     // and no hooks runner either: without this every commit a write recruit makes skips the repository's hooks
     // CHATROOM_SEAT_HOOKS=off (the launcher's --seat-hooks off): the run chose ungated seat commits
-    this.hooksIn.set(dir, process.env.CHATROOM_SEAT_HOOKS === "off" ? { hooks: "off" } : carryHooks(root, dir));
+    this.hooksIn.set(dir, process.env.CHATROOM_SEAT_HOOKS === "off" ? hooksOff(root) : carryHooks(root, dir));
     return dir;
   }
 

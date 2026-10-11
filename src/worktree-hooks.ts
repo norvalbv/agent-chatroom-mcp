@@ -30,10 +30,20 @@ export function carryHooks(root: string, worktree: string): HooksCarried {
   }
 }
 
+/**
+ * What --seat-hooks off can do for this repository: with a relative core.hooksPath (husky) the hooks are simply not
+ * copied, so the seat's commits are ungated; with it unset or absolute the hooks are shared by every worktree, and
+ * turning the copy off stops nothing (review/69f1f804). Never runs `git config` to change that.
+ */
+export function hooksOff(root: string): HooksCarried {
+  const path = spawnSync("git", ["-C", root, "config", "--get", "core.hooksPath"], { encoding: "utf8", timeout: 5_000 }).stdout?.trim();
+  return !path || isAbsolute(path) || path.startsWith("~") ? { hooks: "shared" } : { hooks: "off", path };
+}
+
 /** One line for a launcher or recruit log. */
 export function hooksLine(name: string, h: HooksCarried): string {
   if (h.hooks === "copied") return `${name}: commit hooks copied into its worktree (${h.path}, ${h.files} file(s))`;
   if (h.hooks === "missing") return `${name}: NO commit hooks in its worktree: core.hooksPath is ${h.path}, which the main checkout does not have, so its commits are ungated`;
   if (h.hooks === "off") return `${name}: commit hooks NOT copied (--seat-hooks off): its commits are ungated`;
-  return `${name}: commit hooks ${h.hooks === "present" ? `already in its worktree (${h.path})` : "shared with the main checkout"}`;
+  return `${name}: commit hooks ${h.hooks === "present" ? `already in its worktree (${h.path})` : "shared with the main checkout (core.hooksPath unset or absolute), so they run even under --seat-hooks off"}`;
 }

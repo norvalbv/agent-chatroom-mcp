@@ -83,6 +83,18 @@ const cases: [string, () => void | Promise<void>][] = [
     assert.equal(git(gone, "worktree", "add", "-q", "-b", "b1", dir3).status, 0);
     assert.deepEqual(carryHooks(gone, dir3), { hooks: "missing", path: ".husky/_" }, "nothing to copy: said, not hidden");
   }],
+  // review/69f1f804 (claude-opus-5-5-5): with --seat-hooks off the log said "its commits are ungated" even where the
+  // hooks are shared (core.hooksPath unset or absolute), which turning the copy off cannot stop
+  ["--seat-hooks off says what it did: nothing copied, or hooks that are shared and still run", async () => {
+    const { hooksOff } = await import("../src/worktree-hooks.js");
+    const relative = repoWithHooks(".husky/_"); made.push(relative);
+    assert.deepEqual(hooksOff(relative), { hooks: "off", path: ".husky/_" });
+    const shared = repoWithHooks(null); made.push(shared);
+    assert.deepEqual(hooksOff(shared), { hooks: "shared" }, "nothing to turn off: .git/hooks is every worktree's");
+    const { hooksLine } = await import("../src/worktree-hooks.js");
+    assert.match(hooksLine("s1", hooksOff(relative)), /NOT copied \(--seat-hooks off\): its commits are ungated/);
+    assert.match(hooksLine("s1", hooksOff(shared)), /shared with the main checkout/);
+  }],
 ];
 
 let failed = 0;

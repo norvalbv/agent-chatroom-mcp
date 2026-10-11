@@ -52,9 +52,24 @@ export function seatGitIdentity(name: string): NodeJS.ProcessEnv {
   };
 }
 
+/**
+ * --compact-at <tokens> / CHATROOM_SEAT_COMPACT_WINDOW: the transcript size at which a Claude seat compacts. A seat
+ * re-reads its whole transcript on every request, and unset, Claude Code compacts only near the model's limit: in
+ * swarm-094251-5y46 six seats sat at 0.45-0.9M tokens for five hours and cache read was 65% of the run's $296.
+ * Claude Code takes a plain integer from 100000 to 1000000 and reads "200k" as 200, clamped to its minimum, so
+ * anything else is refused here (null) instead of compacting at a size nobody asked for.
+ */
+export function compactWindow(raw: string | undefined): number | null {
+  if (raw === undefined || !/^\d+$/.test(raw)) return null;
+  const n = Number(raw);
+  return n >= 100_000 && n <= 1_000_000 ? n : null;
+}
+
 /** Clone rather than mutate the launcher/hub's environment: controller auth must keep working. */
 export function seatChildEnv(env: NodeJS.ProcessEnv = process.env, name?: string): NodeJS.ProcessEnv {
   const childEnv: NodeJS.ProcessEnv = { ...env, MCP_TOOL_TIMEOUT: "120000" };
+  const window = compactWindow(env.CHATROOM_SEAT_COMPACT_WINDOW);
+  if (window !== null) childEnv.CLAUDE_CODE_AUTO_COMPACT_WINDOW = String(window);
   for (const key of Object.keys(childEnv)) if (key.startsWith("CHATROOM_") && !SEAT_ENV_KEEP.some((re) => re.test(key))) delete childEnv[key];
   for (const key of SEAT_ENV_EXCLUSIONS) delete childEnv[key];
   if (name !== undefined) Object.assign(childEnv, seatGitIdentity(name));

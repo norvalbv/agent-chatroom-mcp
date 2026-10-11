@@ -12,7 +12,7 @@ import { collectRoomSnapshot, renderRunReport, writeRunResult, rollupUsage, hubU
 import { settledAxes } from "./settled.js";
 import { registerRespawn } from "./respawn.js";
 import { fileURLToPath } from "node:url";
-import { carrySettings, devHubRule, heartbeatHookSettings, loadDotEnv, outputHeartbeat, ownHubEnv, reusedHubProblem, seatBeat, seatChildEnv, seatPortError, type SeatBeat } from "./env.js";
+import { carrySettings, compactWindow, devHubRule, heartbeatHookSettings, loadDotEnv, outputHeartbeat, ownHubEnv, reusedHubProblem, seatBeat, seatChildEnv, seatPortError, type SeatBeat } from "./env.js";
 import { randomUUID } from "node:crypto";
 import { respawnChain, type RespawnRoom } from "./respawn.js";
 import { claudeArgs } from "./claude-args.js";
@@ -77,6 +77,18 @@ const FLAT = has("flat");
 const FRESH_CHALLENGER = has("fresh-challenger");
 /** --no-carry: seats start from the brief alone (no settled axes, no PRIOR RUNS, auto-memory off); see carrySettings in env.ts */
 const NO_CARRY = has("no-carry");
+/**
+ * --compact-at <tokens>: every Claude seat, and every recruit of a hub this launcher starts, compacts its transcript at
+ * this size (compactWindow in env.ts). A hub that was already running keeps its own setting for the seats it recruits.
+ */
+const COMPACT_AT = flag("compact-at");
+if (COMPACT_AT !== undefined) {
+  if (compactWindow(COMPACT_AT) === null) {
+    console.error(`--compact-at takes a whole number of tokens from 100000 to 1000000 (got "${COMPACT_AT}"); "200k" is not accepted.`);
+    process.exit(2);
+  }
+  process.env.CHATROOM_SEAT_COMPACT_WINDOW = COMPACT_AT;
+}
 /** --no-seat-targets: flat seats all get the same brief, with no starting item each (the A arm when measuring src/seat-targets.ts) */
 const NO_SEAT_TARGETS = has("no-seat-targets");
 /**
@@ -407,6 +419,7 @@ function priorRuns(): string {
 }
 const SETTLED = NO_CARRY ? "" : settledAxes(CWD) + priorRuns();
 if (NO_CARRY) log("--no-carry: no settled axes or prior runs injected; seat auto-memory off");
+if (COMPACT_AT !== undefined) log(`--compact-at: Claude seats compact their transcript at ${COMPACT_AT} tokens`);
 if (SETTLED) log(`decision log found: ${SETTLED.split("\n").length - 4} settled axes injected into every prompt`);
 let plan: Plan;
 if (FLAT) {

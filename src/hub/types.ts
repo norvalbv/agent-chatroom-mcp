@@ -404,6 +404,9 @@ export interface Room {
   lastNudge?: { text: string; count: number };
   /** Lifetime refusal counts keyed by tool and bounded reason class (no bodies, no ids). */
   refusals?: Record<string, number>;
+  /** Reads of this room by a connection with no seat in it, counted per reader: "<its room>\n<its participant id>", or
+   * "" for a connection with no seat anywhere (Hub.recordOutsideRead). */
+  outsideReads?: Record<string, number>;
   /** the latest refusals, oldest first, capped at Hub.RECENT_REFUSALS: actor id (internal), tool, closed-enum code, time */
   recentRefusals?: { pid: string | null; tool: string; reason: string; ts: string }[];
   /** Only versioned rooms have a complete guarded-call observation epoch. */

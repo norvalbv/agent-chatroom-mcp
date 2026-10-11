@@ -146,6 +146,11 @@ export function replay(hub: Hub) {
           if (room) hub.applyCallCompletion(room, ev.tool, ev.outcome);
           break;
         }
+        case "outside_read": {
+          const room = hub.rooms.get(ev.room);
+          if (room) hub.applyOutsideRead(room, ev.by ?? null);
+          break;
+        }
         case "refusal": {
           const room = hub.rooms.get(ev.room);
           if (room) {

@@ -577,6 +577,13 @@ let workerIndex = 0;
 
 // verifier joins the leads room first so it is present for every report
 const verifierTools = APPLY || FULL ? WRITE_TOOLS : READ_TOOLS;
+/**
+ * Appended to every seat's launch prompt: which room messages carry the owner's word. A seat's brief is its user
+ * message and a room message is tool output, so an owner instruction in the room that changes the brief is ignored or
+ * refused unless the brief itself delegates to that channel (sources/2404.13208; "a message in the room does not carry
+ * that authority for me", swarm-115621-079m-benchmark #18). The tags it names are the hub's (Hub.speakerTag).
+ */
+const OWNER_WORD = "\n\n" + readFileSync(resolve(repoRoot, "prompts", "owner-word.md"), "utf8").trim();
 const verifierText = SETTLED + "\n" + prompt("verifier.md", {
       NAME: "verifier",
       AGENT: VERIFIER_OPENROUTER ? "openrouter" : "claude",
@@ -622,7 +629,7 @@ if (REQUIRE_VERIFICATION || QUORUM) {
 }
 launched.push({ name: "verifier", room: leadsRoom });
 runs.push(
-  withRespawn("verifier", leadsRoom, VERIFIER_OPENROUTER ? undefined : VERIFIER_MODEL, (nm, note) => (VERIFIER_OPENROUTER ? runOpenRouter(nm, verifierText.split("verifier\"").join(`${nm}\"`) + note, CWD, VERIFIER_OPENROUTER, APPLY || FULL) : runClaude(nm, verifierText + note, verifierTools, CWD, VERIFIER_MODEL))).then((o) => ({ name: "verifier", text: o.text, usage: o.usage })),
+  withRespawn("verifier", leadsRoom, VERIFIER_OPENROUTER ? undefined : VERIFIER_MODEL, (nm, note) => (VERIFIER_OPENROUTER ? runOpenRouter(nm, verifierText.split("verifier\"").join(`${nm}\"`) + OWNER_WORD + note, CWD, VERIFIER_OPENROUTER, APPLY || FULL) : runClaude(nm, verifierText + OWNER_WORD + note, verifierTools, CWD, VERIFIER_MODEL))).then((o) => ({ name: "verifier", text: o.text, usage: o.usage })),
 );
 
 for (const g of plan.groups) {
@@ -671,10 +678,10 @@ for (const g of plan.groups) {
       // Replacements reuse the original successful worktree but commit under their new seat name.
       if (writeWorkers.has(name)) writeWorkers.add(nm);
       return agent === "codex"
-        ? runCodex(nm, buildText(nm) + note, wcwd, model, mayWrite)
+        ? runCodex(nm, buildText(nm) + OWNER_WORD + note, wcwd, model, mayWrite)
         : agent === "openrouter"
-          ? runOpenRouter(nm, buildText(nm) + note, wcwd, model, mayWrite)
-          : runClaude(nm, buildText(nm) + note, mayWrite ? WRITE_TOOLS : READ_TOOLS, wcwd, model);
+          ? runOpenRouter(nm, buildText(nm) + OWNER_WORD + note, wcwd, model, mayWrite)
+          : runClaude(nm, buildText(nm) + OWNER_WORD + note, mayWrite ? WRITE_TOOLS : READ_TOOLS, wcwd, model);
     };
     launched.push({ name, room });
     runs.push(withRespawn(name, room, agent === "claude" ? model : undefined, mk).then((o) => ({ name, text: o.text, usage: o.usage })));

@@ -360,7 +360,8 @@ export class Spawner {
       if (o.dryRun || createSnapshot(snap)) cwd = resolve(snap.dir, snap.sub);
       else this.hooks?.announce(target, `The hub could not make a snapshot of ${snap.sha.slice(0, 12)} for ${names[0]}, so it works in the proposer's tree.`);
     }
-    const template = readFileSync(resolve(repoRoot, "prompts", "recruit.md"), "utf8");
+    // owner-word.md: which room messages carry the owner's word (the brief has to say it; a hub tag alone is tool output)
+    const template = readFileSync(resolve(repoRoot, "prompts", "recruit.md"), "utf8").trimEnd() + "\n\n" + readFileSync(resolve(repoRoot, "prompts", "owner-word.md"), "utf8");
     const by = req.requestedByShown ?? req.requestedBy;
     const targetTopic = req.newRoom ? (req.roomTopic ?? "") : (this.hooks?.roomTopic?.(target) ?? "");
     const context =

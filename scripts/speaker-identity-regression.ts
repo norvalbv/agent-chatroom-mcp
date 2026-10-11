@@ -79,6 +79,27 @@ const cases: [string, () => void][] = [
     humanRoute(hub, "r5", "benji", "three", "orchestrator");
     assert.deepEqual((hub.summary(hub.getRoom("r5"), true) as { speakers?: unknown }).speakers, { mcp: 1, "human-route": 2, scripts: { orchestrator: 1 } });
   }],
+  // the delegation: a hub tag alone is tool output, so the launch prompt must say which tags carry the owner's word
+  ["every seat's launch prompt names the hub's own tags, so the wording cannot drift from what the hub prints", () => {
+    const word = readFileSync("prompts/owner-word.md", "utf8");
+    const hub = new Hub({});
+    hub.createRoom("tags", { chair: "named-chair" });
+    hub.join("tags", "seat-1", "claude", {}, undefined, "s1");
+    const tagOf = (m: ReturnType<Hub["send"]>) => hub.speakerTag(hub.getRoom("tags"), m).trim();
+    const named = hub.join("tags", "named-chair", "claude", {}, undefined, "s-n", "chair").participant;
+    const fake = hub.join("tags", "someone", "human", {}, undefined, "s-f").participant;
+    const self = hub.join("tags2", "self-chair", "claude", {}, undefined, "s-s", "chair").participant;
+    hub.join("tags2", "seat-1", "claude", {}, undefined, "s1");
+    for (const tag of [
+      tagOf(humanRoute(hub, "tags", "benji", "x")),
+      tagOf(hub.send("tags", named.id, "x", undefined, true)),
+      tagOf(hub.send("tags", fake.id, "x", undefined, true)),
+      hub.speakerTag(hub.getRoom("tags2"), hub.send("tags2", self.id, "x", undefined, true)).trim(),
+    ]) assert.ok(word.includes("`" + tag + "`"), `prompts/owner-word.md does not name the hub's tag ${tag}`);
+    const launcher = readFileSync("src/swarm.ts", "utf8");
+    assert.equal(launcher.match(/\+ OWNER_WORD \+ note/g)?.length, 5, "worker (claude, codex, openrouter) and verifier (claude, openrouter) prompts all carry it");
+    assert.match(readFileSync("src/spawner.ts", "utf8"), /recruit\.md.*owner-word\.md/s, "a recruit's prompt carries it too");
+  }],
 ];
 let failed = 0;
 for (const [name, test] of cases) {

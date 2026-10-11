@@ -67,6 +67,13 @@ test("replies carry hub_time; a mis-stated time is answered in the reply and log
   assert.match(String(set.hub_time), minute);
   assert.match(String(set.time_note), /the hub's clock reads/);
 
+  // an appended line gets the same answer, under the writer's name even in a log someone else began (review/7f620d69)
+  const app = await b("board_set", { room, key: "ledger", text: `run 7 started ${wrong} UTC`, append: true });
+  assert.match(String(app.hub_time), minute);
+  assert.match(String(app.time_note), /the hub's clock reads/);
+  const app2 = await a("board_set", { room, key: "ledger", text: "run 8 queued behind run 7", append: true });
+  assert.equal(app2.time_note, undefined);
+
   const events = readFileSync(join(dataDir, `${room}.jsonl`), "utf8").trim().split("\n").map((l) => JSON.parse(l)).filter((e) => e.type === "time_claim");
-  assert.deepEqual(events.map((e) => [e.by, e.where, e.stated, Math.abs(e.delta_min - 20) <= 1]), [["A", "message", wrong, true], ["A", "board:ranked/list", wrong, true]]);
+  assert.deepEqual(events.map((e) => [e.by, e.where, e.stated, Math.abs(e.delta_min - 20) <= 1]), [["A", "message", wrong, true], ["A", "board:ranked/list", wrong, true], ["B", "board:ledger", wrong, true]]);
 });

@@ -708,10 +708,12 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
       const id = pid(room, participant_id);
       const e = hub.setBoard(room, id, key, text, { ifAbsent: if_absent, ifByMe: if_by_me, overwrite, append, ttlSeconds: ttl_seconds, expiresAt: expires_at });
       if (!e) return { key, deleted: true };
+      // the writer, not the entry's author: an appended line or a covering ack lands in an entry someone else began
+      const writer = hub.getRoom(room).participants.get(id)?.name ?? e.by;
       if (append) {
         // the line may have landed in a continuation: say where, so the seat reads and cites the right key
         const landed = [...hub.getRoom(room).board].find(([, x]) => x === e)?.[0] ?? key;
-        return { key, landed_key: landed, chars: e.text.length, lines: e.text.split("\n").length, ...(landed !== key ? { hint: `"${key}" is full; your line is in "${landed}". Keep appending with key "${key}".` } : {}) };
+        return { key, landed_key: landed, chars: e.text.length, lines: e.text.split("\n").length, ...(landed !== key ? { hint: `"${key}" is full; your line is in "${landed}". Keep appending with key "${key}".` } : {}), ...clockReply(room, writer, `board:${landed}`, text) };
       }
       const overlaps = hub.claimOverlaps(room, id, key);
       const head = key.startsWith("verify/") ? parseVerifyHead(e.text) : undefined;
@@ -720,7 +722,7 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
       // the prose says something was not checked but the head does not: the gate reads only the head
       const proseGap = head && !head.unverified && VERIFY_GAP_PROSE.test(e.text.slice(e.text.indexOf("\n") + 1));
       return {
-        key, chars: e.text.length, by: e.by, ...(overlaps.length ? { overlaps } : {}), ...clockReply(room, e.by, `board:${key}`, text),
+        key, chars: e.text.length, by: e.by, ...(overlaps.length ? { overlaps } : {}), ...clockReply(room, writer, `board:${key}`, text),
         ...(receipt ? { dev_room_receipt: receipt } : {}),
         ...(gaps.length ? { verification_gaps: gaps, verification_gaps_hint: "the open proposal and the conclusion carry these as not shown by you (PARTIAL); close them, or leave them listed" } : {}),
         ...(proseGap ? { hint: "Your prose below the head says something was not verified, but the head has no \"unverified\" list, and only the head is read: put those items in \"unverified\":[...] so the proposal and the conclusion carry them." } : {}),

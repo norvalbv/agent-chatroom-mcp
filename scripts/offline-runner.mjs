@@ -204,6 +204,7 @@ export const offlineScripts = [
   'groups-launch-regression.ts',
   'seat-memory-regression.ts',
   'take-keys-regression.ts',
+  'breakout-holds-regression.ts',
   'result-fleet-compat.ts',
   'seat-human-route-regression.ts',
   'prior-sources-regression.ts',

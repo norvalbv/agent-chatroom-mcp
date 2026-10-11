@@ -121,8 +121,20 @@ export const JOB_MIN_S = 60;
 /** Older than this it is not something a room waits on but something left running (the Polymarket lab's recorders were 30
  * hours old in the same review): a run is 8 hours and a scorer scheduled inside it is younger. CHATROOM_JOB_MAX_S. */
 export const JOB_MAX_S = Number(process.env.CHATROOM_JOB_MAX_S) > 0 ? Number(process.env.CHATROOM_JOB_MAX_S) : 6 * 3600;
+/** A shell that is itself the job: it runs a script file ("/bin/sh ./slow_count.sh", "bash scripts/run.sh"), or it is a
+ * "sh -c" the seat sent to the background, which launchd has adopted (ppid 1). The seat's own foreground tool wrapper
+ * ("zsh -c ... eval '<command>'", a child of the agent) is neither (devroom/integration-verifier finding 2). */
+const SHELL = /^(?:sh|bash|zsh|dash|fish)$/;
+function shellJob(p: Proc): boolean {
+  const words = p.command.trim().split(/\s+/);
+  if (!SHELL.test((words[0] ?? "").replace(/^.*\//, "").replace(/^-/, ""))) return false;
+  const first = words.slice(1).find((w) => !/^-[a-zA-Z]+$/.test(w) || w === "-c");
+  if (first === undefined) return false;
+  return first === "-c" ? p.ppid === 1 : true;
+}
 export function jobsOf(own: readonly Proc[]): Job[] {
-  const jobs = own.filter((p) => p.elapsedS >= JOB_MIN_S && p.elapsedS <= JOB_MAX_S && !A_SERVER.test(p.command) && !NOT_A_JOB.test((p.command.trim().split(/\s+/)[0] ?? "").replace(/^.*\//, "").replace(/^-/, "")));
+  const jobs = own.filter((p) => p.elapsedS >= JOB_MIN_S && p.elapsedS <= JOB_MAX_S && !A_SERVER.test(p.command) &&
+    (shellJob(p) || !NOT_A_JOB.test((p.command.trim().split(/\s+/)[0] ?? "").replace(/^.*\//, "").replace(/^-/, ""))));
   // a job that is a tree of processes is one job: its root (review/304c9538: a runner with three workers ended as four lines)
   const pids = new Set(jobs.map((p) => p.pid));
   return jobs

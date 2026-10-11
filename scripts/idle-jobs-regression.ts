@@ -69,6 +69,25 @@ test("what counts as a job: something a seat started that is not a sleep or the 
   assert.deepEqual(jobsOf(usage.get("seat-key-CCCC")!.own).map((j) => j.pid), [304], "a 6-hour backtest is a job; a hub, its supervisor and a 30-hour recorder are things left running");
 });
 
+test("a shell-script job is a job: the script's shell, not its sleep (devroom/integration-verifier finding 2)", () => {
+  // a scorer started as ./slow_count.sh runs as "/bin/sh ./slow_count.sh" with a sleep under it; both were NOT_A_JOB, so
+  // the commonest job shape gave no room_waiting and no job_end. A shell running a script file is a job; so is a
+  // "sh -c" the seat backgrounded (re-parented to launchd, ppid 1); the seat's own foreground tool wrapper is neither.
+  const plain = [
+    "  100     1 800000    02:00:00 claude -p brief",
+    "  110     1  20000       02:30 /bin/sh ./slow_count.sh",
+    "  111   110    900       02:30 sleep 150",
+    "  120     1  20000       05:00 bash -c sleep 300; python3 score.py > out.txt",
+    "  121   120    900       05:00 sleep 300",
+    "  130   100  20000       03:00 /bin/zsh -c -l source /x/snapshot.sh && eval 'sleep 590' < /dev/null",
+    "  131   130    900       03:00 sleep 590",
+    "  140     1  20000       04:00 bash scripts/run_bench.sh --seed 1",
+  ].join("\n");
+  const env = ["100", "110", "111", "120", "121", "130", "131", "140"].map((p) => `${p} x CHATROOM_SEAT_KEY=seat-key-AAAA`).join("\n");
+  const jobs = jobsOf(seatUsage(parseTable(plain, env)).get("seat-key-AAAA")!.own);
+  assert.deepEqual(jobs.map((j) => j.pid).sort(), [110, 120, 140], "the script, the backgrounded sh -c and bash <script>; not the sleeps under them, not the seat's own tool wrapper or its sleep");
+});
+
 test("the memory watcher keeps each seat's jobs from the table it already reads", async () => {
   const watch = new MemoryWatch({
     watched: () => true,

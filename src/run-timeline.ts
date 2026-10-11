@@ -306,6 +306,10 @@ export interface RunRow {
   seatExits?: Record<string, number>;
   /** entries of any prefix that another seat's check names (RunTimeline.checkedEntries) */
   entriesChecked: number;
+  /** how the room closed (evidence/ab-last-call-verifier-gate): electorate seats whose vote was not on the concluded version,
+   * whether the verifier had agreed to it (null: no verifier seat), the last call's length; from conclusion.closing when the
+   * log has it, else derived from join/leave/vote/amend events */
+  close?: { version: number; notVotedOnFinal: number; electorate: number; verifierAgreed: boolean | null; lastCallSeconds?: number; source: "closing" | "events" };
   /** the reviewed results by what the first check declared (VERDICT: line); unstated: it declared none */
   verdicts: { holds: number; fails: number; partial: number; unstated: number };
   /** the owner's latest verdict on the room's conclusion (owner_verdict events): adopted, rejected, partial; absent: none given */
@@ -326,6 +330,25 @@ const NOT_RUN_TIME = new Set(["archive", "leave", "hub_restart", "memory", "room
 /** Entries the launcher seeds (resource/* with --resources) are what the room was given, not what it found (35 of 214 in 0btz). */
 const SEEDED_BY = new Set(["launcher"]);
 
+/** RunRow.close: the conclusion's own closing record when it has one, else the same counts from the events. */
+function closeOf(c: Record<string, any> | undefined, seats: Map<string, { name: string; role?: string; agent?: string; active: boolean }>, votesOf: Map<string, Record<string, { vote?: string; version?: number }>>): RunRow["close"] {
+  if (!c) return undefined;
+  const version = Number(c.version ?? 1);
+  const electorate = [...seats].filter(([, p]) => p.active && p.agent !== "human" && p.role !== "chair");
+  const hasVerifier = electorate.some(([, p]) => p.role === "verifier");
+  if (c.closing) {
+    const cl = c.closing;
+    return { version, notVotedOnFinal: (cl.not_voted_on_final ?? []).length, electorate: electorate.length,
+      verifierAgreed: cl.verifier ? !!cl.verifier.agreed : hasVerifier ? false : null,
+      ...(typeof cl.last_call_seconds === "number" ? { lastCallSeconds: cl.last_call_seconds } : {}), source: "closing" };
+  }
+  const votes = votesOf.get(String(c.proposalId)) ?? {};
+  const onFinal = (id: string) => (votes[id]?.version ?? 1) === version && !!votes[id]?.vote;
+  const v = electorate.find(([, p]) => p.role === "verifier");
+  return { version, notVotedOnFinal: electorate.filter(([id]) => !onFinal(id)).length, electorate: electorate.length,
+    verifierAgreed: v ? votes[v[0]]?.vote === "agree" && onFinal(v[0]) : null, source: "events" };
+}
+
 export function runRow(events: readonly Ev[]): RunRow {
   const t = runTimeline(events);
   let task = "";
@@ -335,6 +358,10 @@ export function runRow(events: readonly Ev[]): RunRow {
   let endCause: string | undefined;
   let ownerVerdict: string | undefined;
   const seatExits: Record<string, number> = {};
+  // for the close (RunRow.close): seats present, the concluded proposal's standing votes, the conclusion record
+  const seatsIn = new Map<string, { name: string; role?: string; agent?: string; active: boolean }>();
+  const votesOf = new Map<string, Record<string, { vote?: string; version?: number }>>();
+  let concluded: Record<string, any> | undefined;
   let first: number | undefined;
   let last: number | undefined;
   for (const e of events) {
@@ -350,6 +377,14 @@ export function runRow(events: readonly Ev[]): RunRow {
     if (e.type === "owner_verdict") ownerVerdict = String(e.verdict);
     if (e.type === "seat_exit") seatExits[String(e.cause)] = (seatExits[String(e.cause)] ?? 0) + 1;
     if (e.type === "state" && e.conclusion?.decidedAt) conclusion ??= Date.parse(e.conclusion.decidedAt);
+    if (!concluded) {
+      if (e.type === "join" && e.p?.id) seatsIn.set(String(e.p.id), { name: String(e.p.name), role: e.p.role, agent: e.p.agent, active: true });
+      if (e.type === "leave" && e.p?.id && seatsIn.has(String(e.p.id))) seatsIn.get(String(e.p.id))!.active = false;
+      if (e.type === "proposal" && e.proposal?.id) votesOf.set(String(e.proposal.id), { ...(e.proposal.votes ?? {}) });
+      if (e.type === "vote" && e.proposalId) votesOf.set(String(e.proposalId), { ...(votesOf.get(String(e.proposalId)) ?? {}), [String(e.pid)]: e.entry ?? {} });
+      if (e.type === "amend" && e.proposalId) votesOf.set(String(e.proposalId), { ...(e.votes ?? {}) });
+      if (e.type === "state" && e.state === "concluded" && e.conclusion) concluded = e.conclusion;
+    }
   }
   const min = (ts: number | undefined) => (ts === undefined || first === undefined ? undefined : Math.round((ts - first) / 60_000));
   const hours = first === undefined || last === undefined ? 0 : round2((last - first) / 3_600_000);
@@ -378,6 +413,7 @@ export function runRow(events: readonly Ev[]): RunRow {
     ...(endCause ? { endCause } : {}),
     ...(ownerVerdict ? { ownerVerdict } : {}),
     ...(Object.keys(seatExits).length ? { seatExits } : {}),
+    ...((() => { const c = closeOf(concluded, seatsIn, votesOf); return c ? { close: c } : {}; })()),
     reviewedPerHour: hours > 0 ? round2(reviewed / hours) : 0,
     ...(costUsd !== undefined && reviewed ? { usdPerReviewed: round2(costUsd / reviewed) } : {}),
     ...(costUsd !== undefined && keys.size ? { usdPerFinding: round2(costUsd / keys.size) } : {}),
@@ -474,12 +510,13 @@ export function renderRunTotals(runs: RunTotals[]): string {
 }
 
 /** Rows as a markdown table, oldest first. */
+const closeText = (c: RunRow["close"]) => !c ? "-" : `${c.notVotedOnFinal} of ${c.electorate} unvoted${c.verifierAgreed === null ? "" : c.verifierAgreed ? ", verifier agreed" : ", verifier did not agree"}${c.lastCallSeconds !== undefined ? `, last call ${Math.round(c.lastCallSeconds)} s` : ""}`;
 export function renderRunsTable(rows: RunRow[]): string {
   const v = (x: number | undefined, unit = "") => (x === undefined ? "?" : `${unit}${x}`);
   const dash = (x: number | undefined) => (x === undefined ? "-" : String(x));
-  let text = "| room | task | hours | seats | cost | results / reviewed | reviewed per hour | $ per reviewed | findings | $ per finding | first proposal (min) | conclusion (min) | went quiet (min) | run ended | seat exits | entries checked | owner verdict |\n|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|\n";
+  let text = "| room | task | hours | seats | cost | results / reviewed | reviewed per hour | $ per reviewed | findings | $ per finding | first proposal (min) | conclusion (min) | went quiet (min) | run ended | seat exits | entries checked | owner verdict | at the close |\n|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|\n";
   for (const r of [...rows].sort((a, b) => (a.start ?? "").localeCompare(b.start ?? ""))) {
-    text += `| ${r.room} | ${r.task.replace(/\|/g, "/")} | ${r.hours} | ${r.seats} | ${v(r.costUsd, "$")} | ${r.results} / ${r.reviewed} | ${r.reviewedPerHour} | ${v(r.usdPerReviewed, "$")} | ${r.findings} | ${v(r.usdPerFinding, "$")} | ${dash(r.firstProposalMin)} | ${dash(r.conclusionMin)} | ${dash(r.quietFromMin)} | ${r.endCause ?? "-"} | ${r.seatExits ? Object.entries(r.seatExits).map(([k, n]) => `${k} ${n}`).join(", ") : "-"} | ${r.entriesChecked} | ${r.ownerVerdict ?? "-"} |\n`;
+    text += `| ${r.room} | ${r.task.replace(/\|/g, "/")} | ${r.hours} | ${r.seats} | ${v(r.costUsd, "$")} | ${r.results} / ${r.reviewed} | ${r.reviewedPerHour} | ${v(r.usdPerReviewed, "$")} | ${r.findings} | ${v(r.usdPerFinding, "$")} | ${dash(r.firstProposalMin)} | ${dash(r.conclusionMin)} | ${dash(r.quietFromMin)} | ${r.endCause ?? "-"} | ${r.seatExits ? Object.entries(r.seatExits).map(([k, n]) => `${k} ${n}`).join(", ") : "-"} | ${r.entriesChecked} | ${r.ownerVerdict ?? "-"} | ${closeText(r.close)} |\n`;
   }
   return text;
 }

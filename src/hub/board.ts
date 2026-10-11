@@ -184,6 +184,22 @@ function appendBoard(hub: Hub, room: Room, p: Participant, key: string, text: st
   return entry;
 }
 
+/**
+ * What a reader of a log's head needs once it has rolled over (attack/decision/board-append: the writer was routed to
+ * the newest continuation and the reader was not, so a queue's newest line, its current state, went unread): where the
+ * log continues and its last lines, in the same board_get.
+ */
+export function boardContinuation(room: Room, key: string, entry: BoardEntry): { continued_in: string[]; newest_key: string; newest_lines: string[]; hint: string } | undefined {
+  const newest = entry.continuedAt ? room.board.get(entry.continuedAt) : undefined;
+  if (!entry.continuedAt || !newest) return undefined;
+  const last = Number(entry.continuedAt.slice(key.length + 1));
+  const continued_in = Array.from({ length: last - 1 }, (_, i) => `${key}/${i + 2}`).filter((k) => room.board.has(k));
+  return {
+    continued_in, newest_key: entry.continuedAt, newest_lines: newest.text.split("\n").slice(1).slice(-5),
+    hint: `This entry is full: it is the OLDEST part of the log. The newest lines are in "${entry.continuedAt}" (its last ${Math.min(5, newest.text.split("\n").length - 1)} are in newest_lines). Append with key "${key}" as before.`,
+  };
+}
+
 export function setBoard(hub: Hub, roomName: string, pid: string, key: string, text: string, opts: BoardExpiryOptions & { ifAbsent?: boolean; ifByMe?: boolean; overwrite?: boolean; append?: boolean } = {}): BoardEntry | null {
   const room = hub.getRoom(roomName);
   const p = hub.requireParticipant(room, pid);

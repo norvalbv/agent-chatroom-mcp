@@ -20,7 +20,7 @@ const VERIFY_GAP_PROSE = /not verified|did not (run|verify|exercise|watch|drive|
 import { projectOf, type SpawnedAgent, type Spawner } from "./spawner.js";
 import type { Participant } from "./hub/types.js";
 import { createWaitView } from "./hub/wait-view.js";
-import { noteBoardRead } from "./hub/board.js";
+import { boardContinuation, noteBoardRead } from "./hub/board.js";
 import { IDLE_HINT, ideaListHint, idleAgain, idleHint, idleStreak, leaveHint, listedItems, newlyNamed, offersLeave, openWork, stillOpenHint } from "./hub/open-work.js";
 
 /** The branch and worktree of each write recruit, for the reply of the call that spawned them; nothing for read-only recruits. */
@@ -693,6 +693,11 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
       const id = pid(room, participant_id);
       const e = hub.setBoard(room, id, key, text, { ifAbsent: if_absent, ifByMe: if_by_me, overwrite, append, ttlSeconds: ttl_seconds, expiresAt: expires_at });
       if (!e) return { key, deleted: true };
+      if (append) {
+        // the line may have landed in a continuation: say where, so the seat reads and cites the right key
+        const landed = [...hub.getRoom(room).board].find(([, x]) => x === e)?.[0] ?? key;
+        return { key, landed_key: landed, chars: e.text.length, lines: e.text.split("\n").length, ...(landed !== key ? { hint: `"${key}" is full; your line is in "${landed}". Keep appending with key "${key}".` } : {}) };
+      }
       const overlaps = hub.claimOverlaps(room, id, key);
       const head = key.startsWith("verify/") ? parseVerifyHead(e.text) : undefined;
       const receipt = head ? await hub.readDevRoom(room, key) : undefined;
@@ -754,9 +759,9 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
         const e = r.board.get(key);
         if (!e || sealed(key, e)) throw new HubError(`No board entry "${key}". Keys: ${[...r.board].filter(([k, x]) => !sealed(k, x)).map(([k]) => k).join(", ") || "(none)"}`, undefined, "not-found");
         if (reader) noteBoardRead(reader, key, e);
-        return { key, ...e, ...(hub.boardEntryExpired(r, key, e) ? { expired: true, tombstone: "Archived by expiry; excluded from manifests, retained for explicit retrieval." } : {}) };
+        return { key, ...e, ...(boardContinuation(r, key, e) ?? {}), ...(hub.boardEntryExpired(r, key, e) ? { expired: true, tombstone: "Archived by expiry; excluded from manifests, retained for explicit retrieval." } : {}) };
       }
-      return Object.fromEntries([...r.board].filter(([k, e]) => !hub.boardEntryExpired(r, k, e) && !sealed(k, e)).map(([k, e]) => [k, { by: e.by, chars: e.text.length, updated_at: e.updatedAt, ...(e.ackRequired ? { ack_required: true } : {}), ...(e.postReveal ? { post_reveal: true } : {}), ...(e.reviewer ? { reviewer: e.reviewer } : {}), ...(e.workspace?.branch ? { branch: e.workspace.branch } : {}) }]));
+      return Object.fromEntries([...r.board].filter(([k, e]) => !hub.boardEntryExpired(r, k, e) && !sealed(k, e)).map(([k, e]) => [k, { by: e.by, chars: e.text.length, updated_at: e.updatedAt, ...(e.ackRequired ? { ack_required: true } : {}), ...(e.postReveal ? { post_reveal: true } : {}), ...(e.reviewer ? { reviewer: e.reviewer } : {}), ...(e.workspace?.branch ? { branch: e.workspace.branch } : {}), ...(e.continuedAt ? { continued_at: e.continuedAt } : {}) }]));
     }),
   );
 

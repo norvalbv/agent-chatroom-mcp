@@ -6,13 +6,17 @@
  * board_set(append=true) adds one block "[HH:MMZ name] text" to the entry: never refused for ownership or a stale read
  * (an append discards nothing), stamped with the real UTC time and author, rolled to <key>/2, /3... at the cap, refused
  * on prefixes with their own write rules, and logged as a board_append record.
- * Run: npx tsx scripts/board-append-regression.ts
+ * Run: npx tsx scripts/board-append-regression.ts (PORT= to pin the hub the last case starts)
  */
 import assert from "node:assert/strict";
+import { spawn } from "node:child_process";
 import { mkdtempSync, readFileSync, readdirSync } from "node:fs";
 import { tmpdir } from "node:os";
+import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { join } from "node:path";
 import { Hub } from "../src/hub.js";
+import { boardContinuation } from "../src/hub/board.js";
 import { parseRoomLog, renderMetrics, runMetrics } from "../src/run-metrics.js";
 
 const cases: [string, () => Promise<void> | void][] = [];
@@ -82,6 +86,23 @@ test("past the 8000-char cap an append lands in <key>/2, and later appends to <k
   assert.equal(h.getRoom(name).board.get("ledger")!.continuedAt, "ledger/3");
 });
 
+test("a reader of the head after a rollover gets the newest lines in the same read (attack/decision/board-append)", () => {
+  const { h, name, a, b } = room();
+  h.setBoard(name, a.id, "benchqueue", "QUEUE\n" + "x".repeat(7990));
+  const r = h.getRoom(name);
+  assert.equal(boardContinuation(r, "benchqueue", r.board.get("benchqueue")!), undefined, "nothing extra before a rollover");
+  h.setBoard(name, a.id, "benchqueue", "alice holds the bench until 12:40", { append: true });
+  h.setBoard(name, b.id, "benchqueue", "bob queued behind alice", { append: true });
+  const c = boardContinuation(r, "benchqueue", r.board.get("benchqueue")!)!;
+  assert.deepEqual(c.continued_in, ["benchqueue/2"]);
+  assert.equal(c.newest_key, "benchqueue/2");
+  assert.equal(c.newest_lines.length, 2);
+  assert.match(c.newest_lines.at(-1)!, /\[\d\d:\d\dZ bob\] bob queued behind alice/);
+  assert.match(c.hint, /OLDEST part of the log.*"benchqueue\/2"/);
+  // the room hears where each line landed, so a seat following the key learns of the continuation
+  assert.match(r.messages.at(-1)!.content, /appended to "benchqueue\/2" \(continuation of "benchqueue"\)/);
+});
+
 test("a single append that could not fit even a fresh continuation is refused with the limit", () => {
   const { h, name, a } = room();
   throws(() => h.setBoard(name, a.id, "ledger", "z".repeat(7801), { append: true }), /7800/);
@@ -113,6 +134,42 @@ test("every append is a board_append record, and a restart rebuilds the entry an
   const again = new Hub({ dataDir });
   assert.equal(again.getRoom(name).board.get("ledger")!.continuedAt, "ledger/2");
   assert.match(again.getRoom(name).board.get("ledger/2")!.text, /T-1[\s\S]*T-2/);
+});
+
+test("over MCP: the tool takes append, answers where the line landed, and board_get of a full head carries the newest lines", async () => {
+  const PORT = Number(process.env.PORT ?? 20_000 + Math.floor(Math.random() * 20_000));
+  assert.ok(![7717, 7719, 7750].includes(PORT), "never a live hub");
+  const server = spawn("npx", ["tsx", "src/index.ts"], { env: { ...process.env, PORT: String(PORT), CHATROOM_SPAWN_DRY: "1", CHATROOM_LOG_DIR: "/tmp/chatroom-board-append-spawn", CHATROOM_INSECURE_LOCAL: "1", CHATROOM_DATA_DIR: "" }, stdio: ["ignore", "ignore", "inherit"] });
+  try {
+    for (let i = 0; ; i++) {
+      try { await fetch(`http://127.0.0.1:${PORT}/`); break; } catch { if (i > 75) throw new Error("hub did not start"); await new Promise((r) => setTimeout(r, 200)); }
+    }
+    const seat = async (name: string) => {
+      const client = new Client({ name, version: "0.0.0" });
+      await client.connect(new StreamableHTTPClientTransport(new URL(`http://127.0.0.1:${PORT}/mcp`)));
+      const call = async (tool: string, args: Record<string, unknown> = {}) => {
+        const res = (await client.callTool({ name: tool, arguments: { room: "append-mcp", ...args } })) as { isError?: boolean; content: { text: string }[] };
+        const text = res.content[0]?.text ?? "";
+        if (res.isError) throw new Error(`${name}.${tool}: ${text}`);
+        return JSON.parse(text) as Record<string, unknown>;
+      };
+      await call("join_room", { name, agent: "test" });
+      return { call, close: () => client.close() };
+    };
+    const a = await seat("alice"), b = await seat("bob");
+    await a.call("board_set", { key: "ledger", text: "LEDGER\n" + "x".repeat(7990) });
+    const r1 = await b.call("board_set", { key: "ledger", text: "T-1 | passed", append: true });
+    assert.equal(r1.landed_key, "ledger/2");
+    assert.match(String(r1.hint), /your line is in "ledger\/2"/);
+    const r2 = await a.call("board_set", { key: "ledger", text: "T-2 | failed", append: true });
+    assert.deepEqual([r2.landed_key, r2.lines], ["ledger/2", 3]);
+    const head = await b.call("board_get", { key: "ledger" });
+    assert.equal(head.newest_key, "ledger/2");
+    assert.match((head.newest_lines as string[]).at(-1)!, /alice\] T-2 \| failed/);
+    const manifest = await b.call("board_get") as Record<string, { continued_at?: string }>;
+    assert.equal(manifest.ledger!.continued_at, "ledger/2");
+    await a.close(); await b.close();
+  } finally { server.kill(); }
 });
 
 let failed = 0;

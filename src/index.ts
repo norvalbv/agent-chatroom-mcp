@@ -18,7 +18,7 @@
 import "./node-compat.js";
 import { steerAckAs, steerAckSeat, steerPeek, steerPeekSeat } from "./hub/steer.js";
 import { SUSPECTED_DEAD_MS } from "./hub/kick.js";
-import { callerSeatKeys } from "./hub/caller.js";
+import { callerSeatKeys, CALLER_TIMEOUT_MS } from "./hub/caller.js";
 import { randomUUID } from "node:crypto";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -317,10 +317,13 @@ setInterval(() => {
  * the human routes are the human's, and under INSECURE_LOCAL nothing but this stops a seat's curl from voting, kicking
  * or closing as "benji". The rooms the seat sits in are told, so the attempt is on the record and not only refused.
  */
-async function seatCaller(req: express.Request): Promise<{ name: string; rooms: string[] } | undefined> {
+async function seatCaller(req: express.Request, timeout?: number): Promise<{ name: string; rooms: string[] } | undefined | "untraced"> {
   const source = req.socket.remotePort;
-  if (!source) return undefined;
-  const held = ((await callerSeatKeys(source, PORT)) ?? []).flatMap((key) => hub.seatEverHeld(key));
+  if (!source) return "untraced";
+  const keys = await callerSeatKeys(source, PORT, timeout);
+  // the OS did not answer (lsof/ps timed out on a loaded machine): not the same as "no seat"
+  if (keys === undefined) return "untraced";
+  const held = keys.flatMap((key) => hub.seatEverHeld(key));
   return held.length ? { name: held[0]!.p.name, rooms: [...new Set(held.map((h) => h.room.name))] } : undefined;
 }
 /** Told only when requireToken actually refuses, once per seat per window, so a retry loop is refused every time without
@@ -347,7 +350,12 @@ app.use((_req, _res, next) => { httpRequests++; next(); });
 app.use(async (req, res, next) => {
   const withToken = !!HUMAN_TOKEN && req.header("x-chatroom-token") === HUMAN_TOKEN;
   if (req.method === "POST" && LOOPBACK_HOST && (INSECURE_LOCAL || withToken) && HUMAN_ROUTES.test(req.path)) {
-    res.locals.seatCaller = await seatCaller(req).catch(() => undefined);
+    let caller = await seatCaller(req).catch(() => "untraced" as const);
+    // a token request is not admitted on an untraced caller (review/d33cda94: at load 189 the lookup timed out and
+    // forged owner lines were stored); one retry with more time first, since the owner's own posts take this path
+    if (caller === "untraced" && withToken) caller = await seatCaller(req, CALLER_TIMEOUT_MS * 4).catch(() => "untraced" as const);
+    if (caller === "untraced") res.locals.callerUntraced = true;
+    else res.locals.seatCaller = caller;
   }
   next();
 });
@@ -355,6 +363,10 @@ app.use(async (req, res, next) => {
  * proves the caller could read it, not that the caller is the human. Attribution, not a boundary: a detached child
  * re-parented away from the seat escapes the walk. */
 const refuseSeatCaller = (req: express.Request, res: express.Response): boolean => {
+  if (res.locals.callerUntraced && HUMAN_TOKEN && req.header("x-chatroom-token") === HUMAN_TOKEN) {
+    res.status(503).type("text/plain").send("refused for now: the hub could not trace this request's caller (lsof/ps did not answer in time; the machine is loaded), and with the token it must know the caller is not one of its seats. Retry in a moment.");
+    return true;
+  }
   const seat = res.locals.seatCaller as { name: string; rooms: string[] } | undefined;
   if (!seat) return false;
   announceSeatCaller(req, seat);

@@ -13,12 +13,14 @@ import { readFile } from "node:fs/promises";
 
 const MAX_DEPTH = 40;
 const KEY = /(?:^|\s|\0)CHATROOM_SEAT_KEY=([\w-]{8,100})/g;
-const sh = (cmd: string, args: string[]) =>
-  new Promise<string | undefined>((done) => execFile(cmd, args, { encoding: "utf8", timeout: 2_000, maxBuffer: 4 << 20 }, (err, out) => done(err ? undefined : out)));
+/** How long one lsof or ps may take (CHATROOM_CALLER_TIMEOUT_MS). On a loaded machine they time out and the caller is untraced. */
+export const CALLER_TIMEOUT_MS = Number(process.env.CHATROOM_CALLER_TIMEOUT_MS ?? 2_000);
+const sh = (cmd: string, args: string[], timeout = CALLER_TIMEOUT_MS) =>
+  new Promise<string | undefined>((done) => execFile(cmd, args, { encoding: "utf8", timeout, maxBuffer: 4 << 20 }, (err, out) => done(err ? undefined : out)));
 
 /** The process on this host whose end of a loopback TCP connection is `sourcePort` and whose other end is `hubPort`. */
-export async function peerPid(sourcePort: number, hubPort: number): Promise<number | undefined> {
-  const out = await sh("lsof", ["-nP", `-iTCP:${sourcePort}`, "-sTCP:ESTABLISHED", "-Fpn"]);
+export async function peerPid(sourcePort: number, hubPort: number, timeout = CALLER_TIMEOUT_MS): Promise<number | undefined> {
+  const out = await sh("lsof", ["-nP", `-iTCP:${sourcePort}`, "-sTCP:ESTABLISHED", "-Fpn"], timeout);
   if (!out) return undefined;
   let pid: number | undefined;
   const mine = new RegExp(`:${sourcePort}->.*:${hubPort}$`);
@@ -30,19 +32,19 @@ export async function peerPid(sourcePort: number, hubPort: number): Promise<numb
 }
 
 /** Seat keys in a process's environment (macOS `ps -E` appends it to the command; Linux has /proc). */
-async function envKeys(pid: number): Promise<string[]> {
-  const text = await readFile(`/proc/${pid}/environ`, "utf8").catch(() => sh("ps", ["-E", "-ww", "-o", "command=", "-p", String(pid)]));
+async function envKeys(pid: number, timeout = CALLER_TIMEOUT_MS): Promise<string[]> {
+  const text = await readFile(`/proc/${pid}/environ`, "utf8").catch(() => sh("ps", ["-E", "-ww", "-o", "command=", "-p", String(pid)], timeout));
   return text ? [...text.matchAll(KEY)].map((m) => m[1]!) : [];
 }
 
 /** Every seat key on the calling process and its ancestors, nearest first; undefined when the caller cannot be found. */
-export async function callerSeatKeys(sourcePort: number, hubPort: number): Promise<string[] | undefined> {
-  const [pid, table] = await Promise.all([peerPid(sourcePort, hubPort), sh("ps", ["-A", "-o", "pid=,ppid="])]);
+export async function callerSeatKeys(sourcePort: number, hubPort: number, timeout = CALLER_TIMEOUT_MS): Promise<string[] | undefined> {
+  const [pid, table] = await Promise.all([peerPid(sourcePort, hubPort, timeout), sh("ps", ["-A", "-o", "pid=,ppid="], timeout)]);
   if (!pid || !table) return undefined;
   const parent = new Map(table.trim().split("\n").map((l) => l.trim().split(/\s+/).map(Number) as [number, number]));
   const chain: number[] = [];
   for (let p: number | undefined = pid; p && p > 1 && chain.length < MAX_DEPTH && !chain.includes(p); p = parent.get(p)) chain.push(p);
   const keys: string[] = [];
-  for (const found of await Promise.all(chain.map(envKeys))) for (const k of found) if (!keys.includes(k)) keys.push(k);
+  for (const found of await Promise.all(chain.map((p) => envKeys(p, timeout)))) for (const k of found) if (!keys.includes(k)) keys.push(k);
   return keys;
 }

@@ -817,10 +817,30 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
       guard("request_agent", ({ room, brief, name, agent, model, cwd, can_edit, new_room, room_topic, count, area, replacing, participant_id }) => {
         const r = hub.getRoom(room);
         const me_ = hub.requireParticipant(r, pid(room, participant_id));
-        const recs = spawner.request({ room, brief, requestedBy: me_.name, requestedByShown: hub.shown(r, me_), parentTopic: r.topic, name, agent, model, cwd, canEdit: can_edit, newRoom: new_room, roomTopic: room_topic, count, area, replacing });
+        // A brief over the recruit cap goes on the board and the recruit gets its opening and the key: what seats did
+        // by hand after the refusal (friction/brief-cap, swarm-003601-tky5), and the brief stays editable by its author.
+        let briefKey: string | undefined;
+        let passed = brief;
+        if (brief.length > 4000) {
+          if (brief.length > 8000) throw new HubError(`A brief of ${brief.length} characters is too long: up to 4,000 go straight to the recruit, and up to 8,000 are put on the board for it. Put the long material in its own board entries and name their keys in a shorter brief.`, undefined, "size");
+          const stem = `brief/${(area ?? name ?? "recruit").replace(/[^a-zA-Z0-9_-]+/g, "-").slice(0, 40) || "recruit"}`;
+          briefKey = stem;
+          for (let i = 2; r.board.has(briefKey); i++) briefKey = `${stem}-${i}`;
+          const cut = brief.slice(0, 600);
+          const opening = cut.slice(0, Math.max(cut.lastIndexOf("\n"), cut.lastIndexOf(". ") + 1) || cut.length).trim();
+          passed = `${opening}\n\nThat is only the opening. Your full brief (${brief.length} characters) is the board entry "${briefKey}" in room "${room}": read it with board_get(room="${room}", key="${briefKey}") before you do anything else.`;
+          hub.setBoard(room, me_.id, briefKey, brief, { ifAbsent: true });
+        }
+        let recs: ReturnType<Spawner["request"]>;
+        try {
+          recs = spawner.request({ room, brief: passed, requestedBy: me_.name, requestedByShown: hub.shown(r, me_), parentTopic: r.topic, name, agent, model, cwd, canEdit: can_edit, newRoom: new_room, roomTopic: room_topic, count, area, replacing });
+        } catch (e) {
+          if (briefKey) try { hub.setBoard(room, me_.id, briefKey, ""); } catch {}
+          throw e;
+        }
         const who = recs.map((x) => x.name).join(", ");
         hub.announce(room, `${hub.shown(r, me_)} recruited ${who} (${recs[0].agent}${recs[0].model ? `/${recs[0].model}` : ""}${new_room ? `, into ${new_room}` : ""}${area ? `, area ${area}` : ""}): ${brief.slice(0, 200)}${brief.length > 200 ? "…" : ""}`);
-        return { spawned: recs.map((x) => x.name), room: recs[0].room, depth: recs[0].depth, agent: recs[0].agent, model: recs[0].model ?? null, cwd: recs[0].cwd, ...workspaces(recs), logs: recs.map((x) => x.log), hint: `They will join within a minute or two. Carry on; you will see them arrive.${recs.some((x) => x.workspace) ? " Their commits land on the branch in workspaces, not in cwd." : ""}` };
+        return { spawned: recs.map((x) => x.name), ...(briefKey ? { brief_on_board: briefKey } : {}), room: recs[0].room, depth: recs[0].depth, agent: recs[0].agent, model: recs[0].model ?? null, cwd: recs[0].cwd, ...workspaces(recs), logs: recs.map((x) => x.log), hint: `They will join within a minute or two. Carry on; you will see them arrive.${recs.some((x) => x.workspace) ? " Their commits land on the branch in workspaces, not in cwd." : ""}` };
       }),
     );
 

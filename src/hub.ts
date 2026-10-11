@@ -474,6 +474,8 @@ export class Hub {
       if (session) participant.session = session;
       participant.seatKeyHash = this.seats.hashOf(session) ?? participant.seatKeyHash;
       delete participant.restoredAt;
+      // back in the room: an earlier goodbye no longer describes it (away and re-seat read it)
+      delete participant.leaveReason;
       if (role && role !== "worker") participant.role = role;
       this.persist({ type: "join", room: roomName, p: participant });
       this.post(room, "system", undefined, `${this.shown(room, participant)} rejoined the room.`);

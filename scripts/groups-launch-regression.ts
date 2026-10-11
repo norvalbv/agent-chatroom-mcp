@@ -73,6 +73,7 @@ test("--groups launches the groups as written: no planner, one room and one brie
     assert.ok(p.includes(TASK), "every seat sees the whole task");
     assert.ok(!p.includes("max_messages_per_participant"), "a long-room brief, not the eight-message debate brief");
     assert.match(p, /expected_participants=2\b/, "the room expects its own group, not the whole run");
+    assert.ok(p.includes("`position`") && /inbox\/swarm-\d{6}-[a-z0-9]{4}-leads\/digest\.ack/.test(p), "it is told to hold a position and to acknowledge the digest");
   }
   const verifier = r.prompts.find((p) => p.includes("You are verifier"))!;
   assert.ok(verifier.includes("Build the rebate case") && verifier.includes("Break the rebate case"), "the verifier is told the groups");
@@ -131,7 +132,8 @@ test("--digest-every starts a fresh consolidator seat on a timer, told every gro
     assert.ok(first.includes(`http://127.0.0.1:${PORT}/rooms/${swarm}-${id}`), `and where to read the ${id} room without joining it`);
   }
   assert.ok(first.includes("BUILD-BRIEF-MARKER") && first.includes("BREAK-BRIEF-MARKER"), "it sees every group's brief");
-  assert.ok(first.includes('key="digest-1"') && first.includes("ack_required=true"), "it sends each group a note the group must acknowledge");
+  assert.ok(first.includes('key="digest", ack_required=true') && first.includes('"Pass 1."'), "it sends each group one note, replaced each pass, that the group must acknowledge");
+  assert.ok(first.includes("`position`"), "and sends nothing to a group that has not put its own position on the board");
   assert.ok(first.includes("digest/1"), "and leaves the pass on the consolidation room's board for the next one");
   assert.match(String(r.stdout), /digest pass 1: started digest-1/, "the launcher logs each pass");
   // a pass that is still running is not doubled: passes are numbered without gaps and none repeats

@@ -1969,7 +1969,8 @@ export class Hub {
     if (n > 1) throw new HubError(`"${find.slice(0, 80)}" occurs ${n} times; include more context so it is unique.`, undefined, "amend-find");
     // a one-word find in a long document splices wherever that word happens to sit ("findings" for "find"); ask for a span
     if (find.trim().length < 16 && text.length > 2000) throw new HubError(`"${find}" is too short a find for a ${text.length}-char document; copy at least 16 characters of the passage so the replacement lands where you mean.`, undefined, "amend-find");
-    return text.replace(find, replace);
+    // a function, so the replacement is taken literally: as a string, "$$", "$&" and "$1" would be rewritten by String.replace
+    return text.replace(find, () => replace);
   }
 
   /**

@@ -73,3 +73,20 @@ test("an id that is neither a proposal nor a board key says what amend edits, an
   assert.equal(ev.sent_chars, "rerun pending".length + "rerun done".length, "what the seat had to send");
   assert.ok(ev.entry_chars > 1500, "against what a whole-entry board_set would have resent");
 });
+
+test("a replacement is taken literally: $$, $& and $1 are stored as written, in an entry and in a proposal", () => {
+  // review/ba71f1ef finding (claude-opus-5-5-2): String.replace reads $-sequences in a replacement string
+  const { hub, a, b, room } = setup();
+  const h = hub as WithBoardAmend;
+  hub.setBoard("ab-room", a.id, "cmds", "run: PENDING1\ncost: PENDING2 per call");
+  h.amendBoard!("ab-room", a.id, "cmds", "PENDING1", "kill $$ && echo $& and $1");
+  h.amendBoard!("ab-room", a.id, "cmds", "PENDING2", "$0.064");
+  assert.equal(room.board.get("cmds")!.text, "run: kill $$ && echo $& and $1\ncost: $0.064 per call");
+  void b;
+  const fresh = new Hub(); // a room with no board entries, so propose is not held once for unexamined findings
+  const p1 = fresh.join("ab-prop", "A", "test", { nudgeAfterMs: 0 }, undefined, "s1").participant;
+  fresh.join("ab-prop", "B", "test", {}, undefined, "s2");
+  const pr = fresh.propose("ab-prop", p1.id, "Grouped runs paid PRICE per model request in the records.");
+  fresh.amend("ab-prop", p1.id, pr.id, "PRICE", "$0.064 (not $$ or $&)");
+  assert.equal(pr.text, "Grouped runs paid $0.064 (not $$ or $&) per model request in the records.");
+});

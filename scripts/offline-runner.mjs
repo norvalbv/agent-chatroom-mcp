@@ -181,6 +181,7 @@ export const offlineScripts = [
   'hub-supervisor-regression.ts',
   'hub-death-log-regression.ts',
   'reseat-regression.ts',
+  'respawn-probe-regression.ts',
   'proposed-decision-path-regression.ts',
   'smoke-ports-regression.ts',
   'own-hub-port-regression.ts',

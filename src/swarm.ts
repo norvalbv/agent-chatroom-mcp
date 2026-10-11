@@ -10,7 +10,7 @@ import { createWriteStream, existsSync, mkdirSync, readFileSync, readdirSync, st
 import { dirname, resolve } from "node:path";
 import { collectRoomSnapshot, renderRunReport, writeRunResult, rollupUsage, hubUsageRollup, parseClaudeCliOutput, seatScorecard, classifyOutcome, proposedDecisionDir, type RunResult, type RoomSnapshot, type SeatUsageRollup } from "./result.js";
 import { settledAxes } from "./settled.js";
-import { registerRespawn } from "./respawn.js";
+import { registerRespawn, respawnProbe } from "./respawn.js";
 import { fileURLToPath } from "node:url";
 import { carrySettings, devHubRule, heartbeatHookSettings, hubLogFile, loadDotEnv, outputHeartbeat, ownHubEnv, readLauncherToken, respawnTokenProblem, reusedHubProblem, seatBeat, seatChildEnv, seatPortError, type SeatBeat } from "./env.js";
 import { randomUUID } from "node:crypto";
@@ -386,7 +386,8 @@ interface Plan {
 await ensureHub();
 {
   // said now: the last Polymarket room learned it at 16:37, when the first replacement was refused
-  const problem = respawnTokenProblem(RESPAWN, launcherToken, PORT);
+  // ...and asked of the hub itself: a token in hand is not a token the hub accepts (hub 7717 was started with none)
+  const problem = RESPAWN ? (await respawnProbe(URL_, launcherToken)) ?? respawnTokenProblem(RESPAWN, launcherToken, PORT) : null;
   if (problem) console.error(`\x1b[1;31m${problem}\x1b[0m`);
 }
 if (FLAT) {

@@ -106,6 +106,27 @@ export async function registerRespawn(
   return `\n\nYou replace ${previousName}, who dropped out of this room${reason ? ` (${reason})` : ""}. The launcher has registered this replacement with the hub. On your first join_room call use name=${JSON.stringify(name)} and replacement_token=${JSON.stringify(result.replacementToken)}. This one-use join proof is only for this reserved seat: do not post it to chat or board. Before anything else read the board (board_get) and the recent messages (read_messages since_seq=0 is too much: read the last 40), take over any unfinished claim/* entry of theirs, and say in one line that you have.`;
 }
 
+/**
+ * Whether the hub at `url` would accept a replacement from this launcher, asked at launch: the line to print when it
+ * would not, or null. Holding a token proves nothing (a token file can be an earlier hub's, and a hub started with no
+ * CHATROOM_LAUNCHER_TOKEN refuses them all), so the launcher asks with a room name that cannot exist: 503 is a hub
+ * with no token, 401 one that has another, anything else got past the credential check. Nothing is created.
+ */
+export async function respawnProbe(url: string, token: string | undefined, request: typeof fetch = fetch): Promise<string | null> {
+  const response = await request(`${url}/rooms/${encodeURIComponent("respawn probe")}/replacements`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', ...(token ? { 'x-chatroom-launcher-token': token } : {}) },
+    body: JSON.stringify({ replacement_of: "probe", name: "probe" }),
+    signal: AbortSignal.timeout(5_000),
+  }).catch(() => undefined);
+  if (!response) return null;
+  const lead = `WARNING: --respawn WILL NOT WORK on ${url}: `;
+  const tail = " A seat that dies in this run will not be replaced by the launcher; seats can still recruit a replacement themselves (request_agent replacing=<name>).";
+  if (response.status === 503) return `${lead}that hub was started with no launcher token, so it refuses every replacement seat. Stop it and restart it with \`npm run hubd\` (it sets a token and shares it), or with CHATROOM_LAUNCHER_TOKEN set in the hub's and this launcher's environment.${tail}`;
+  if (response.status === 401) return `${lead}${token ? "that hub does not accept this launcher's token (it was started with another one; a token file left by an earlier hub is not this hub's)" : "this launcher has no CHATROOM_LAUNCHER_TOKEN and found no token file for that hub"}. Give this launcher the token the hub was started with.${tail}`;
+  return null;
+}
+
 export interface RespawnChainDeps<T> {
   name: string;
   maxAttempts?: number;

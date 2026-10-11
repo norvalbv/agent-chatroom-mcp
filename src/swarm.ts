@@ -512,7 +512,12 @@ const verifierText = SETTLED + "\n" + prompt("verifier.md", {
       CWD,
       TASK: task,
       DONE_WHEN: plan.done_when,
-      GROUP_LIST: FLAT ? "none: every agent is in this one room with you, and may recruit or break out into sub-rooms" : plan.groups.map((g) => g.title).join("; "),
+      GROUP_LIST: FLAT ? "none: every agent is in this one room with you, and may recruit or break out into sub-rooms"
+        // hand-written groups run for hours before a lead reports: the verifier is told where each one works, so it can
+        // check results as they land on a group's board and answer a group that asks it for a ruling
+        : GROUPS ? plan.groups.map((g) => `${g.title}, in room \`${SWARM_ID}-${g.id}\` (read its board and conclusion at ${URL_}/rooms/${SWARM_ID}-${g.id} with curl, without joining it)`).join("; ") +
+          `. The groups do not read each other's rooms and report here only at the end. Until then, check what lands on their boards; a group asks you for a ruling with post_to_room into this room (it arrives as inbox/<its room>/<key>), and you answer with post_to_room (from_room="${leadsRoom}", to_room=<its room>)`
+        : plan.groups.map((g) => g.title).join("; "),
       VERIFIER_DIRECTIVE: plan.verifier_directive,
       LEADS_ROOM: leadsRoom,
       LEADS_N: FLAT ? TOTAL : plan.groups.length + 1,

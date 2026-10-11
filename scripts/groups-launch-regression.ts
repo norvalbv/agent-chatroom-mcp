@@ -78,6 +78,8 @@ test("--groups launches the groups as written: no planner, one room and one brie
   const verifier = r.prompts.find((p) => p.includes("You are verifier"))!;
   assert.ok(verifier.includes("Build the rebate case") && verifier.includes("Break the rebate case"), "the verifier is told the groups");
   assert.ok(verifier.includes(GROUPS.verifier_directive), "and given the file's verifier directive");
+  for (const id of ["build", "break"]) assert.match(verifier, new RegExp(`room \`swarm-\\d{6}-[a-z0-9]{4}-${id}\`[^\\n]*http://127\\.0\\.0\\.1:${PORT}/rooms/swarm-\\d{6}-[a-z0-9]{4}-${id}\\b`), `the verifier is told the ${id} group's room and where to read its board without joining`);
+  assert.ok(verifier.includes("post_to_room"), "and how to answer a group that asks it for a ruling");
   assert.match(r.stdout, /groups file: Build the rebate case ×2 \| Break the rebate case ×2/, "the launcher logs the groups it took from the file");
 });
 

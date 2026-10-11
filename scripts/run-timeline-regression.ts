@@ -98,6 +98,24 @@ assert.deepEqual(n.recruitCalls, [{ at: at(20), by: 'alice' }], 'each successful
 assert.match(renderTimeline(n), /4 notes from other rooms, 2 acknowledged \(median 2\.5 min\), 2 never/);
 assert.match(renderTimeline(n), /Recruits: 09:20 alice/);
 
+// review latency: a result/<slug> and the first rerun/, verify/, review/ or attack/ entry on it by someone else
+const rv = runTimeline([
+  { type: 'room', room: 'r', opts: {}, createdAt: at(0) },
+  note('result/carry', 10, 'alice'), note('rerun/carry', 12, 'alice'), note('rerun/carry-bob', 19, 'bob'), note('verify/carry', 30, 'carol'),
+  note('result/fade-v2', 20, 'bob'), note('result/fade', 21, 'bob'), note('rerun/fade', 26, 'alice'),
+  note('result/lonely', 40, 'carol'),
+  // the hub's room-idle episodes (src/hub/idle.ts) as they are in the record
+  { type: 'room_idle', room: 'r', ts: at(45), idle: { since: at(45) }, steps: 2, seats: 3, window_min: 30 },
+  { type: 'room_active', room: 'r', ts: at(58), idle_min: 13 },
+  { type: 'room_idle', room: 'r', ts: at(70), idle: { since: at(70) }, steps: 0, seats: 3, window_min: 30 },
+]);
+assert.deepEqual(rv.reviews.map((x: any) => [x.key, x.by, x.minutes]), [
+  ['result/carry', 'bob', 9], ['result/fade-v2', undefined, undefined], ['result/fade', 'alice', 5], ['result/lonely', undefined, undefined],
+], 'first review by someone other than the author; the author rerunning their own result is not a review; rerun/fade is not a review of fade-v2');
+assert.deepEqual(rv.idle.map((x: any) => [x.from, x.minutes]), [[at(45), 13], [at(70), undefined]], 'idle episodes, an open one has no length');
+assert.match(renderTimeline(rv), /4 results, 2 reviewed by another seat \(median 7 min\), 2 never/);
+assert.match(renderTimeline(rv), /The hub said the room was idle at 09:45 \(13 min\), 10:10 \(still idle at the end\)/);
+
 const text = renderTimeline(t);
 assert.match(text, /## Timeline/);
 assert.match(text, /went quiet at 11:00/);

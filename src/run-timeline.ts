@@ -56,6 +56,11 @@ export interface RunTimeline {
   /** every note another room sent here (post_to_room: a board write of inbox/<from room>/<key>), in order, with the
    * minutes until this room acknowledged it (<key>.ack); a note rewritten before any ack was never acknowledged */
   notes: { key: string; from: string; at: string; by?: string; ackMinutes?: number }[];
+  /** each result/<slug> entry and the first rerun/, verify/, review/ or attack/ entry on it (key <prefix>/<slug> or
+   * <prefix>/<slug>-<anything>) written by someone other than the result's author; no review: by and minutes absent */
+  reviews: { key: string; at: string; author?: string; by?: string; minutes?: number }[];
+  /** the hub's own room-idle episodes (room_idle / room_active events, src/hub/idle.ts); an open one has no minutes */
+  idle: { from: string; minutes?: number }[];
   /** each successful request_agent call */
   recruitCalls: { at: string; by: string }[];
   /** start of the first bucket from which every later bucket's output stays under a fifth of the mean before it;
@@ -67,6 +72,7 @@ export interface RunTimeline {
 
 const QUIET_SHARE = 0.2;
 const SILENCE_MIN = 5;
+const REVIEW = /^(?:rerun|verify|review|attack)\/(.+)$/;
 const stampOf = (e: Ev): string | undefined => e.ts ?? e.msg?.ts ?? e.entry?.updatedAt ?? e.entry?.ts ?? e.proposal?.createdAt ?? e.challenge?.ts ?? e.updatedAt ?? e.createdAt ?? (e.type === "join" ? e.p?.joinedAt : e.p?.leftAt);
 
 /** The first bucket index from which output never recovers, or -1. Needs two buckets of work before it and two after. */
@@ -88,6 +94,8 @@ export function runTimeline(events: readonly Ev[], bucketMinutes = 30): RunTimel
   const notes: RunTimeline["notes"] = [];
   const recruitCalls: RunTimeline["recruitCalls"] = [];
   const openNote = new Map<string, RunTimeline["notes"][number]>();
+  const reviews: RunTimeline["reviews"] = [];
+  const idle: RunTimeline["idle"] = [];
   const buckets: TimelineBucket[] = [];
   const names = new Map<string, string>();
   const byKey = new Map<string, string>();
@@ -173,6 +181,13 @@ export function runTimeline(events: readonly Ev[], bucketMinutes = 30): RunTimel
       case "board": {
         b.boardWrites++;
         const key = String(e.key ?? "");
+        const by = e.entry?.by as string | undefined;
+        if (key.startsWith("result/") && !reviews.some((r) => r.key === key)) reviews.push({ key, at: new Date(ts).toISOString(), ...(by ? { author: by } : {}) });
+        const checked = REVIEW.exec(key)?.[1];
+        if (checked) for (const r of reviews) {
+          const slug = r.key.slice("result/".length);
+          if (r.by === undefined && by && by !== r.author && (checked === slug || checked.startsWith(`${slug}-`))) Object.assign(r, { by, minutes: Math.round((ts - Date.parse(r.at)) / 6_000) / 10 });
+        }
         if (!key.startsWith("inbox/") || !e.entry) break;
         if (key.endsWith(".ack")) {
           const sent = openNote.get(key.slice(0, -4));
@@ -188,6 +203,14 @@ export function runTimeline(events: readonly Ev[], bucketMinutes = 30): RunTimel
       case "work":
         b.work++;
         break;
+      case "room_idle":
+        if (!idle.length || idle[idle.length - 1].minutes !== undefined) idle.push({ from: new Date(ts).toISOString() });
+        break;
+      case "room_active": {
+        const open = idle[idle.length - 1];
+        if (open && open.minutes === undefined) open.minutes = Math.round((ts - Date.parse(open.from)) / 6_000) / 10;
+        break;
+      }
     }
   }
 
@@ -200,12 +223,16 @@ export function runTimeline(events: readonly Ev[], bucketMinutes = 30): RunTimel
     ...(silence ? { longestSilence: silence } : {}),
     silences,
     notes,
+    reviews,
+    idle,
     recruitCalls,
     ...(q >= 0 ? { quietFrom: buckets[q].start, quietCostUsd: Math.round(buckets.slice(q).reduce((a, b) => a + b.costUsd, 0) * 100) / 100 } : {}),
   };
 }
 
 const hhmm = (iso: string) => iso.slice(11, 16);
+/** of a sorted list */
+const median = (xs: number[]) => (xs[Math.floor((xs.length - 1) / 2)] + xs[Math.ceil((xs.length - 1) / 2)]) / 2;
 const k = (n: number) => (n >= 1_000_000 ? `${(n / 1_000_000).toFixed(1)}M` : n >= 1000 ? `${Math.round(n / 1000)}k` : String(Math.round(n)));
 
 /** The timeline as a report section (times are UTC). */
@@ -222,11 +249,16 @@ export function renderTimeline(t: RunTimeline): string {
   for (const s of t.seats) text += `| ${s.name} | ${s.requests} | ${k(s.meanContext)} | ${k(s.peakContext)} | ${s.compactions} | ${k(s.cacheReadTokens)} | ${k(s.cacheWriteTokens)} | ${k(s.outputTokens)} | $${s.costUsd.toFixed(2)} | ${s.waits} (${s.emptyWaits}) |\n`;
   if (t.notes.length) {
     const acked = t.notes.flatMap((x) => (x.ackMinutes === undefined ? [] : [x.ackMinutes])).sort((a, b) => a - b);
-    const median = acked.length ? (acked[Math.floor((acked.length - 1) / 2)] + acked[Math.ceil((acked.length - 1) / 2)]) / 2 : undefined;
-    text += `\n${t.notes.length} notes from other rooms, ${acked.length} acknowledged${median === undefined ? "" : ` (median ${median} min)`}, ${t.notes.length - acked.length} never.\n\n` +
+    text += `\n${t.notes.length} notes from other rooms, ${acked.length} acknowledged${acked.length ? ` (median ${median(acked)} min)` : ""}, ${t.notes.length - acked.length} never.\n\n` +
       "| at | note | from | acknowledged after |\n|---|---|---|---|\n" +
       t.notes.map((x) => `| ${hhmm(x.at)} | ${x.key} | ${x.by ?? x.from} | ${x.ackMinutes === undefined ? "never" : `${x.ackMinutes} min`} |\n`).join("");
   }
+  if (t.reviews.length) {
+    const done = t.reviews.flatMap((r) => (r.minutes === undefined ? [] : [r.minutes])).sort((a, b) => a - b);
+    text += `\n${t.reviews.length} results, ${done.length} reviewed by another seat${done.length ? ` (median ${median(done)} min)` : ""}, ${t.reviews.length - done.length} never` +
+      (t.reviews.length > done.length ? `: ${t.reviews.filter((r) => r.minutes === undefined).map((r) => r.key).join(", ")}` : "") + ".\n";
+  }
+  if (t.idle.length) text += `\nThe hub said the room was idle at ${t.idle.map((x) => `${hhmm(x.from)} (${x.minutes === undefined ? "still idle at the end" : `${x.minutes} min`})`).join(", ")}.\n`;
   if (t.recruitCalls.length) text += `\nRecruits: ${t.recruitCalls.map((r) => `${hhmm(r.at)} ${r.by}`).join(", ")}.\n`;
   return `${text}\n`;
 }

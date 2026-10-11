@@ -6,7 +6,23 @@
  * Classes: client:* for a call that did not reach the hub, otherwise the hub's refusal family read from its words (the
  * typed code itself is not in the transcript). Reads one file at a time, line by line.
  */
-import { readFileSync } from "node:fs";
+import { closeSync, openSync, readSync } from "node:fs";
+
+/** A file's lines, read 1 MB at a time: a transcript can be tens of MB and several are read in one run. */
+function* linesOf(file: string): Generator<string> {
+  let fd: number;
+  try { fd = openSync(file, "r"); } catch { return; }
+  const buf = Buffer.alloc(1 << 20);
+  let rest = "";
+  try {
+    for (let n = readSync(fd, buf); n > 0; n = readSync(fd, buf)) {
+      const parts = (rest + buf.toString("utf8", 0, n)).split("\n");
+      rest = parts.pop() ?? "";
+      yield* parts;
+    }
+    if (rest) yield rest;
+  } finally { closeSync(fd); }
+}
 
 const CLIENT: [string, RegExp][] = [
   ["client:not-connected", /is not connected/],
@@ -22,7 +38,7 @@ const HUB: [string, RegExp][] = [
   ["ownership", /replacing it would discard|is held by|is owned by|only its author/],
   ["scrutiny-held", /CLAIMS WITHOUT|have not been attacked, quoted|this refusal is given once per room/],
   ["amend-find", /does not occur in|occurs \d+ times|too short a find|changes nothing/],
-  ["amend-stale", /was in v\d+|amended it/],
+  ["amend-stale", /was in prop_\w+ v\d+, but .* amended it to v\d+/],
   ["proposal-open", /is already open \(v/],
   ["needs-verify", /requires verification: before proposing/],
   ["cite-required", /must quote a matching proposal span|An attack must quote/],
@@ -47,10 +63,8 @@ export interface FailureRow { tool: string; cls: string; n: number }
 export function transcriptFailures(files: readonly string[]): FailureRow[] {
   const counts = new Map<string, number>();
   for (const file of files) {
-    let text = "";
-    try { text = readFileSync(file, "utf8"); } catch { continue; }
     const toolOf = new Map<string, string>();
-    for (const line of text.split("\n")) {
+    for (const line of linesOf(file)) {
       if (!line.includes("mcp__chatroom__") && !line.includes('"is_error":true')) continue;
       let e: any;
       try { e = JSON.parse(line); } catch { continue; }

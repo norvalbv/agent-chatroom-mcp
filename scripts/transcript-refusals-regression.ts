@@ -15,6 +15,8 @@ assert.equal(classifyFailure("ECONNRESET: The socket connection was closed unexp
 assert.equal(classifyFailure("ECONNREFUSED: Unable to connect."), "client:connection-refused");
 assert.equal(classifyFailure("<tool_use_error>Error: No such tool available: mcp__chatroom__wait_for_messages. Its MCP server"), "client:no-such-tool");
 assert.equal(classifyFailure("MCP error -32001: Request timed out"), "client:timeout");
+assert.equal(classifyFailure('"the old clause" was in prop_ab12cd34 v3, but bob amended it to v4 12 s ago and that text is gone.'), "amend-stale");
+assert.equal(classifyFailure("I amended it already"), "other", "amend-stale only from the hub's own words (review/b6e4f285)");
 assert.equal(classifyFailure("something new"), "other");
 
 const dir = mkdtempSync(join(tmpdir(), "transcript-refusals-"));

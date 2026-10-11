@@ -2742,6 +2742,8 @@ export class Hub {
       `When it concludes, its conclusion lands here as inbox/${child.name}/conclusion.`);
   }
 
+  static readonly BREAKOUT_HOLDS_SHOWN = 6;
+
   /**
    * Breakouts of a room (rooms whose parent is it): name, state, active member names, and what is held there: live
    * claim/* and take/* keys with their holder, "key (holder)", so a parent seat sees what its break-out has taken before
@@ -2750,8 +2752,11 @@ export class Hub {
   breakouts(room: Room): { room: string; state: RoomState; members: string[]; holds?: string[] }[] {
     return [...this.rooms.values()].filter((r) => r.parent === room.name && !r.archived)
       .map((r) => {
-        const holds = [...r.board].filter(([k, e]) => (k.startsWith("claim/") || k.startsWith("take/")) && e.text.trim() && !Hub.claimReleased(e))
+        const all = [...r.board].filter(([k, e]) => (k.startsWith("claim/") || k.startsWith("take/")) && e.text.trim() && !Hub.claimReleased(e))
           .map(([k, e]) => `${k} (${e.offeredBy ? `offered to ${e.holder}` : e.holder ?? e.by})`);
+        // capped: this lands in every parent seat's room_status (review/breakout-holds: 16 holds were 1,105 bytes)
+        const holds = all.length > Hub.BREAKOUT_HOLDS_SHOWN + 1
+          ? [...all.slice(0, Hub.BREAKOUT_HOLDS_SHOWN), `+${all.length - Hub.BREAKOUT_HOLDS_SHOWN} more: board_get(room="${r.name}")`] : all;
         return { room: r.name, state: r.state, members: this.activeParticipants(r).map((p) => this.shown(r, p)), ...(holds.length ? { holds } : {}) };
       });
   }

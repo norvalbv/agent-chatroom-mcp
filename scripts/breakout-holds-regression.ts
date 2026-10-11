@@ -40,6 +40,15 @@ test("the parent's room_status lists each break-out's live claims and takes with
   assert.deepEqual(breakouts(h, PARENT)[0]!.holds, ["claim/outside-reads (R)"], "a released take drops out");
 });
 
+test("a busy break-out's holds are capped in the parent's room_status, with how to read the rest", () => {
+  const { h, r } = rooms();
+  for (let i = 1; i <= 16; i++) h.setBoard(CHILD, r.id, `take/item-${i}`, `doing item ${i}`);
+  const holds = breakouts(h, PARENT)[0]!.holds!;
+  assert.equal(holds.length, 7, "six keys and one line for the rest");
+  assert.equal(holds[6], `+10 more: board_get(room="${CHILD}")`);
+  assert.ok(JSON.stringify(breakouts(h, PARENT)).length < 400, `breakouts bytes ${JSON.stringify(breakouts(h, PARENT)).length}`);
+});
+
 test("a parent seat claiming what a break-out already holds is told, with the room named", () => {
   const { h, a, r } = rooms();
   h.setBoard(CHILD, r.id, "claim/outside-reads", claim("outside-reads", "R", READS));

@@ -25,11 +25,13 @@ const events = [
   usage("ka", 120, 50, 102_000), usage("kb", 120, 50, 102_000),
   { type: "proposal", room: "r", proposal: { id: "p1", createdAt: at(100), text: "x", by: { id: "p_a" } } },
   { type: "state", room: "r", conclusion: { text: "done", decidedAt: at(110) } },
+  // the owner closing the room from the dashboard the next morning is not part of the run
+  { type: "message", msg: { seq: 9, kind: "system", from: { id: "system", name: "system" }, content: "Room closed by benji", ts: at(900) } },
 ];
 const row = runRow(events);
 assert.equal(row.room, "r");
 assert.equal(row.task, "GOAL: find a way to make money", "the topic's first line");
-assert.equal(row.hours, 2, "first to last event");
+assert.equal(row.hours, 2, "first to last thing a seat did, not a system line hours later");
 assert.equal(row.seats, 2);
 assert.equal(row.costUsd, 100);
 assert.equal(row.results, 2);

@@ -300,7 +300,9 @@ export function runRow(events: readonly Ev[]): RunRow {
   for (const e of events) {
     if (e.type === "room") task ||= String(e.opts?.topic ?? "").split("\n")[0].slice(0, 120);
     const ts = Date.parse(stampOf(e) ?? "");
-    if (!Number.isNaN(ts)) { first = Math.min(first ?? ts, ts); last = Math.max(last ?? ts, ts); }
+    // the run is what seats did: a system line (the owner closing the room the next morning) does not lengthen it
+    const system = e.type === "message" && e.msg?.kind !== "chat";
+    if (!Number.isNaN(ts) && !system) { first = Math.min(first ?? ts, ts); last = Math.max(last ?? ts, ts); }
     if (e.type === "board" && e.entry && !NOT_FINDING.test(String(e.key))) keys.add(String(e.key));
     if (e.type === "proposal" && e.proposal?.createdAt) firstProposal ??= Date.parse(e.proposal.createdAt);
     if (e.type === "state" && e.conclusion?.decidedAt) conclusion ??= Date.parse(e.conclusion.decidedAt);

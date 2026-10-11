@@ -154,7 +154,7 @@ assert.match(many, /and 10 more/, "the rest are counted");
 
 // the tool description says what the prefix is for (the prompts are not changed)
 const tools = await (async () => { const session = createSessionServer(hub); const client = new Client({ name: "t", version: "1" }); const [ct, st] = InMemoryTransport.createLinkedPair(); await session.server.connect(st); await client.connect(ct); return (await client.listTools()).tools; })();
-const keyDesc = (tools.find((t) => t.name === "board_set")!.inputSchema as { properties: { key: { description: string } } }).properties.key.description;
+const keyDesc = (tools.find((t) => t.name === "board_set")!.inputSchema as unknown as { properties: { key: { description: string } } }).properties.key.description;
 assert.ok(keyDesc.includes("resource/<name> (data, a tool or a limit that exists on this machine, with where it is and who shares it"), "board_set names the resource/ prefix");
 
 // 5. a break-out starts with its parent's resources (chat and briefs do not cross a room wall; the machine is the same)

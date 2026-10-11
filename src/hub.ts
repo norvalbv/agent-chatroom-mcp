@@ -1150,7 +1150,7 @@ export class Hub {
    * another group's room is then a fact in the record instead of a guess (prompts/group.md only asks seats not to).
    * A lower bound: a command over the hook's 300 characters, or one that builds the address, is not seen.
    */
-  recordOutsideRead(roomName: string | undefined, session: string, via: "http" | "file", tool: string): boolean {
+  recordOutsideRead(roomName: string | undefined, session: string, via: "http" | "http_pattern" | "file", tool: string): boolean {
     const room = roomName ? this.rooms.get(roomName) : undefined;
     if (!room || [...room.participants.values()].some((p) => p.session === session)) return false;
     // the reader is named by a seat it holds elsewhere: an active one in an open room first

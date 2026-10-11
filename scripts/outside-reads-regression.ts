@@ -40,6 +40,12 @@ test("a seat's shell command that fetches another room's address is recorded too
   hub.heartbeatSeat("seat-key-build", { tool: "Bash", detail: `curl -s http://127.0.0.1:7717/rooms/${BREAK}-2` });
   assert.equal((hub.summary(hub.getRoom(BREAK), true) as Summary).outside_reads?.total, 2);
   assert.equal((hub.summary(hub.getRoom(`${BREAK}-2`), true) as Summary).outside_reads?.total, 1);
+  // a loop that builds the room name from a variable (dev room swarm-010735-tvdw: `for g in build break; do curl
+  // .../rooms/<run>-$g`) reads every room starting with what is written, except the reader's own
+  hub.heartbeatSeat("seat-key-build", { tool: "Bash", detail: "for g in build break; do curl -s http://127.0.0.1:7717/rooms/swarm-000001-outs-$g; done" });
+  assert.equal((hub.summary(hub.getRoom(BREAK), true) as Summary).outside_reads?.total, 3, "the other group's room counts");
+  assert.equal((hub.summary(hub.getRoom(`${BREAK}-2`), true) as Summary).outside_reads?.total, 2);
+  assert.equal((hub.summary(hub.getRoom(BUILD), true) as Summary).outside_reads, undefined, "the reader's own room does not");
   assert.ok(a.active);
 });
 

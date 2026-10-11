@@ -5,10 +5,22 @@ description: Run a swarm of N AI agents that discuss a problem in a shared chatr
 
 # Swarm
 
-One command runs the whole thing. Two shapes:
+One command runs the whole thing. Three shapes:
 
 - **Planned** (default): a planner agent splits the task into sub-questions, worker agents investigate each in their own room, each room's lead carries its conclusion to a leads room, and a verifier with a unanimous-quorum vote checks the claims against the real project. Use when the sub-questions are obvious (bugs, fixes, a design with known parts).
 - **Flat** (`--flat`): no planner. Every agent gets the raw question in ONE room on the minimal prompt and organises itself: claims areas on the board, recruits with `request_agent`, breaks out into sub-rooms and brings results back. The verifier sits in the same room. Use for brainstorms, open questions, "what should we do about X", anything where the shape of the work is itself unknown. Benji prefers this when the task is loose.
+- **Groups** (`--groups groups.json [--digest-every <min>]`): you write the groups yourself, each with its own room and its own brief (for example one builds a case and one tries to break it), and they talk only within their room. A fresh agent carries findings between the rooms on a timer, and a referee outside every group holds the scoring rule and checks results. This is the Navier-Stokes shape; details are under "Groups" below.
+
+Choosing between flat and groups is NOT settled by evidence yet. The only measurement is 2 short fixtures x 2 arms: both shapes always reached the correct answer, and groups cost 1.1 to 2.5x as much and took about twice as long. What follows is the expected trade-off, unmeasured over hours; say so when you pick one.
+
+| Groups are likely better when | Flat is likely better when |
+|---|---|
+| a claim needs a real attack: one team builds it, another tries to break it, and neither should share the other's framing | everyone works on one codebase and merges to one branch (separate rooms lose work to merge conflicts; that is the measured reason one room beat split agents on 20-item backlogs) |
+| a single room tends to settle on one answer early and different approaches need to stay alive | the work needs lots of quick back-and-forth between agents |
+| the work splits into separate approaches whose findings help each other now and then | cost and time matter more than independence |
+| (arXiv 2409.14051: at six agents, two groups of three with a digest beat one room, on short closed-answer tasks only) | |
+
+Between these two, pick flat unless the user asks for groups or the task clearly fits the left column. A same-brief comparison over hours (grouped vs flat, compared with `scripts/runs-table.ts`) is the open experiment.
 
 ## Run it
 

@@ -8,10 +8,11 @@
  */
 import { spawnSync } from "node:child_process";
 import type { WorkClass } from "./hub/types.js";
+import { coordinates } from "./hub/keys.js";
 
 const CLASSES: WorkClass[] = ["read", "search", "web", "run", "edit"];
 const SHA = /\b[0-9a-f]{7,40}\b/g;
-const NOT_CREDIT = /^(claim|draft|inbox|hold)\//;
+const NOT_CREDIT = { test: (key: string) => coordinates(key) || key.startsWith("draft/") };
 const WAIT = "wait_for_messages";
 
 export interface SeatMetrics {

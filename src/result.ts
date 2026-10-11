@@ -2,6 +2,7 @@
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { renderMetrics, type RunMetrics } from './run-metrics.js';
+import { coordinates } from './hub/keys.js';
 import { renderDigests, type DigestAck, type DigestRecord } from './groups.js';
 import { renderTimeline, type RunTimeline } from './run-timeline.js';
 
@@ -319,7 +320,7 @@ export function writeRunResult(path: string, artifact: RunResult): void {
   writeFileSync(temp, JSON.stringify(artifact, null, 2) + '\n');
   renameSync(temp, path);
 }
-const NOT_FINDINGS = /^(claim|draft|hold|inbox|handoff)\//;
+const NOT_FINDINGS = { test: (key: string) => coordinates(key) || key.startsWith('draft/') || key.startsWith('handoff/') };
 /**
  * What a run that did not conclude still wrote down. Handoffs are printed whole, since they are addressed to
  * whoever continues; other findings are only named, the artifact has their text.

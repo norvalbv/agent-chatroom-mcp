@@ -12,6 +12,8 @@ import test from "node:test";
 import { Hub } from "../src/hub.js";
 import { COORDINATION_PREFIXES } from "../src/hub/keys.js";
 import { barrenClaims } from "../src/hub/work.js";
+import { runMetrics } from "../src/run-metrics.js";
+import { runRow } from "../src/run-timeline.js";
 
 const LONG = "holding the benchmark machine for the 12:00-16:00 scoring window; nothing else may run on it until I release this. ".repeat(3);
 
@@ -50,4 +52,18 @@ test("every coordination prefix is read the same way at all four sites", (t) => 
   assert.equal(output(hub, room, "Alice").evidence, 0);
   assert.deepEqual(barrenClaims(room, [a, b]), ["claim/x (Alice)"]);
   assert.deepEqual(hub.scrutiny(room.name).unexamined, []);
+});
+
+test("the offline readers count a take as neither a finding nor credit (runs table, run metrics)", () => {
+  const at = (s: number) => new Date(Date.parse("2026-10-11T18:00:00Z") + s * 1000).toISOString();
+  const p = (name: string) => ({ id: `p_${name}`, name, agent: "claude", active: true });
+  const board = (key: string, by: string, s: number) => ({ type: "board", room: "r", key, entry: { text: LONG, by, updatedAt: at(s) } });
+  const log = [
+    { type: "room", room: "r", opts: { topic: "t" }, createdAt: at(0) },
+    { type: "join", room: "r", p: p("Alice") }, { type: "join", room: "r", p: p("Bob") },
+    board("take/bench-machine", "Alice", 10), board("claim/bench", "Alice", 11), board("result/bench", "Bob", 20),
+  ];
+  assert.equal(runRow(log as never).findings, 1, "the runs table's findings column: Bob's result only");
+  const seats = runMetrics(log as never).seats as { name: string; findings: number }[];
+  assert.deepEqual(seats.map((s) => [s.name, s.findings]).sort(), [["Alice", 0], ["Bob", 1]]);
 });

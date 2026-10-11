@@ -7,6 +7,8 @@
  * Usage is the seat process's own cumulative report; a counter that goes down is a respawned process, counted from zero.
  * The hub's live "room idle" rule is src/hub/idle.ts; quietFrom here is the after-the-fact reading of the same stall.
  */
+import { coordinates } from "./hub/keys.js";
+
 type Ev = Record<string, any>;
 
 export interface TimelineBucket {
@@ -299,7 +301,7 @@ export interface RunRow {
   usdPerFinding?: number;
 }
 
-const NOT_FINDING = /^(claim|draft|inbox|hold)\//;
+const NOT_FINDING = { test: (key: string) => coordinates(key) || key.startsWith("draft/") };
 const round2 = (x: number) => Math.round(x * 100) / 100;
 /** Things that happen to a room after its seats stop: the owner archiving it from the dashboard (gwhf read 36.08 h for
  * 0.19 h of work), the sweep marking seats left, a hub restart, memory samples, idle signals, and a later room's seats

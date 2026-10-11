@@ -162,7 +162,14 @@ export function createSessionServer(hub: Hub, spawner?: Spawner, opts: { holdMs?
       let participant = telemetryActor(room, a?.participant_id);
       let outcome: CallOutcome = "error";
       const started = Date.now();
-      const from = outsider(room, tool);
+      let from = outsider(room, tool);
+      // the tool itself puts a reconnecting seat back (pid -> reseat), after the two lines above have read this connection
+      // as holding no seat: read them again, or the seat's first call back is recorded as nobody's, from outside
+      const reseated = () => {
+        if (!room || tool === "join_room" || !me.get(room)?.size) return;
+        participant ??= telemetryActor(room, a?.participant_id);
+        if (from) from = outsider(room, tool);
+      };
       // a wait that returned no new message is idle polling; one that returned messages is the seat reacting (src/run-metrics.ts)
       let empty: boolean | undefined;
       // every hub call is a step too (board_get, vote): the People tab shows it without a room turn. Not a wait: it
@@ -174,6 +181,7 @@ export function createSessionServer(hub: Hub, spawner?: Spawner, opts: { holdMs?
         // no actor for tools without participant_id (room_status, board_get), and the kick bans the connection.
         if (room) for (const id of me.get(room) ?? []) hub.refuseKicked(room, id);
         let data = await fn(args);
+        reseated();
         if (tool === "wait_for_messages") empty = !((data as { messages?: unknown[] })?.messages?.length);
         // steering fallback: a hub tool result always reaches the model, so pending asks ride on it (and count as delivered)
         if (room && participant && !SELF_DELIVERING.has(tool)) {
@@ -187,6 +195,7 @@ export function createSessionServer(hub: Hub, spawner?: Spawner, opts: { holdMs?
         outcome = "success";
         return result;
       } catch (e) {
+        reseated();
         if (e instanceof HubError) {
           outcome = "hub_refusal";
           hub.recordRefusal(room, tool, e, participant);

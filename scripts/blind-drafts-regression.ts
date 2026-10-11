@@ -41,7 +41,8 @@ assert.ok(!r.error, "A drafted: " + r.text);
 
 // the chat notice for a sealed draft names neither key nor size, only who still owes one
 const notice = hub.getRoom(room).messages.filter((m) => m.kind === "board").at(-1)!;
-assert.ok(!notice.content.includes("draft/A") && !notice.content.includes(String(SECRET.length)) && /sealed draft \(0 of 2|1 of 2 drafters.*B has one/.test(notice.content), "sealed notice: " + notice.content);
+// (the size is looked for as a size: the bare digits also occur in the deadline's clock time, e.g. 18:31:00 for a 31-char secret, bugs.md 9)
+assert.ok(!notice.content.includes("draft/A") && !/\b\d+ chars\b/.test(notice.content) && !new RegExp(`\\(${SECRET.length}\\b`).test(notice.content) && /sealed draft \(0 of 2|1 of 2 drafters.*B has one/.test(notice.content), "sealed notice: " + notice.content);
 
 // A sees its own draft; B, the verifier and a non-member do not, by any read path
 r = await a.call("board_get", { room, key: "draft/A" });

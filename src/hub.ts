@@ -264,6 +264,7 @@ export class Hub {
         return m ? { id: m.id, name: m.from.name, text: m.content } : null;
       })(),
       conclusion: room.conclusion ?? null,
+      ...((o) => (o ? { outside_reads: o } : {}))(this.outsideReads(room, reveal)),
       // dashboard and HTTP only, like work: one total over the distinct seat processes in the room
       ...((t) => (t && reveal ? { usage: t } : {}))(usageTotal([...new Set([...room.participants.values()].map((p) => p.seatKeyHash))].map((h) => this.usage.get(h)))),
     };
@@ -1128,6 +1129,45 @@ export class Hub {
   recentRefusals(room: Room, n = 5): { name: string; tool: string; reason: string; ts: string }[] {
     return (room.recentRefusals ?? []).slice(-Math.max(0, n)).reverse()
       .map((r) => { const p = r.pid ? room.participants.get(r.pid) : undefined; return { name: p ? this.shown(room, p) : "unknown", tool: r.tool, reason: r.reason, ts: r.ts }; });
+  }
+
+  /**
+   * A launched seat's local command that reads `roomName` without a seat in it: its HTTP address (curl, WebFetch on
+   * /rooms/<room>) or its log file (<room>.jsonl). A hub tool called from outside is already on its call_completion; a
+   * shell is the way round that, and the seat's tool hook reports every command. Recorded and counted, never refused:
+   * the consolidator and the verifier of a grouped run read group rooms this way by design, and a group that read
+   * another group's room is then a fact in the record instead of a guess (prompts/group.md only asks seats not to).
+   * A lower bound: a command over the hook's 300 characters, or one that builds the address, is not seen.
+   */
+  recordOutsideRead(roomName: string | undefined, session: string, via: "http" | "file", tool: string): boolean {
+    const room = roomName ? this.rooms.get(roomName) : undefined;
+    if (!room || [...room.participants.values()].some((p) => p.session === session)) return false;
+    // the reader is named by a seat it holds elsewhere: an active one in an open room first
+    const seats = [...this.rooms.values()].flatMap((r) => [...r.participants.values()].filter((p) => p.session === session).map((p) => ({ r, p })))
+      .sort((a, b) => Number(b.p.active) - Number(a.p.active) || Number(b.r.state === "open") - Number(a.r.state === "open"));
+    const by = seats[0] ? { room: seats[0].r.name, pid: seats[0].p.id } : null;
+    this.applyOutsideRead(room, by);
+    this.persist({ type: "outside_read", room: room.name, by, via, tool: String(tool).slice(0, 40), ts: now() });
+    return true;
+  }
+
+  /** @internal */ applyOutsideRead(room: Room, by: { room: string; pid: string } | null) {
+    const k = by ? `${by.room}\n${by.pid}` : "";
+    (room.outsideReads ??= {})[k] = (room.outsideReads[k] ?? 0) + 1;
+  }
+
+  /** Outside reads per reader, named as the reader's own room shows it (a label in an anonymous room unless `reveal`). */
+  outsideReads(room: Room, reveal = false): { total: number; by: Record<string, number> } | undefined {
+    const entries = Object.entries(room.outsideReads ?? {});
+    if (!entries.length) return undefined;
+    const by: Record<string, number> = {};
+    for (const [k, n] of entries) {
+      const [home, pid] = k.split("\n");
+      const r = k ? this.rooms.get(home) : undefined, p = r?.participants.get(pid);
+      const name = !k ? "a connection with no seat" : r && p ? `${reveal ? p.name : this.shown(r, p)} (${home})` : `a seat of ${home}`;
+      by[name] = (by[name] ?? 0) + n;
+    }
+    return { total: entries.reduce((a, [, n]) => a + n, 0), by };
   }
 
   /** Completed MCP guard invocations for existing rooms only; no arguments or error text.

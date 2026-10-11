@@ -128,6 +128,17 @@ export class Seats {
   heartbeatSeat(seatKey: string, info: Beat): number {
     const seats = this.participants(seatKey);
     for (const { room, p } of seats) this.recordWork(room, p, info);
+    // a local command naming another room's HTTP address or log file reads that room from outside (curl, WebFetch, cat)
+    const session = this.seatSessions.get(seatKey);
+    if (session && !info.hub && info.detail) {
+      const named = (re: RegExp) => new Set([...info.detail!.matchAll(re)].map((x) => x[1]));
+      for (const m of named(/\/rooms\/([A-Za-z0-9._~%-]+)/g)) {
+        let name = m;
+        try { name = decodeURIComponent(m); } catch { /* not an encoded name */ }
+        this.hub.recordOutsideRead(name, session, "http", info.tool);
+      }
+      for (const name of named(/([A-Za-z0-9._~-]+)\.jsonl\b/g)) this.hub.recordOutsideRead(name, session, "file", info.tool);
+    }
     if (!seats.length) beatAwaySeats(this.hub, seatKey, (room, p) => this.recordWork(room, p, info));
     return seats.length;
   }

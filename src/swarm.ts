@@ -21,6 +21,7 @@ import { claudeSandbox } from "./sandbox.js";
 import { stopStrays } from "./strays.js";
 import { launchCostGuide } from "./cost-estimate.js";
 import { seatTarget } from "./seat-targets.js";
+import { digestAcks, digestRecords, loadGroups, renderDigests, type GroupsFile } from "./groups.js";
 loadDotEnv();
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -36,10 +37,38 @@ const has = (name: string) => argv.includes(`--${name}`);
 const BOOL_FLAGS = new Set(["--keep-hub", "--reuse-hub", "--apply", "--full-access", "--named", "--flat", "--require-verification", "--respawn", "--claude-full", "--no-carry", "--no-seat-targets", "--sandbox", "--no-web"]);
 const task = argv.find((a, i) => !a.startsWith("--") && (i === 0 || !argv[i - 1].startsWith("--") || BOOL_FLAGS.has(argv[i - 1])));
 if (!task) {
-  console.error('usage: swarm "<task>" [--flat] [--done-when text] [--verify text] [--agents 6] [--cwd dir] [--models sonnet,haiku] [--lead-model opus] [--verifier-model opus] [--planner-model opus] [--codex k] [--codex-models gpt-6-astra,gpt-5.6-sol,gpt-5.6-terra] [--openrouter k] [--openrouter-models deepseek/deepseek-v4.1-flash,...] [--verifier-openrouter slug] [--openrouter-reasoning low|medium|high] [--require-verification] [--quorum unanimous|majority|supermajority] [--prompt loop.md] [--respawn] [--apply] [--full-access] [--named] [--claude-full] [--no-carry] [--no-seat-targets] [--no-web] [--sandbox] [--timeout 30] [--port 7717] [--result-path path]');
+  console.error('usage: swarm "<task>" [--flat] [--done-when text] [--verify text] [--agents 6] [--cwd dir] [--models sonnet,haiku] [--lead-model opus] [--verifier-model opus] [--planner-model opus] [--codex k] [--codex-models gpt-6-astra,gpt-5.6-sol,gpt-5.6-terra] [--openrouter k] [--openrouter-models deepseek/deepseek-v4.1-flash,...] [--verifier-openrouter slug] [--openrouter-reasoning low|medium|high] [--require-verification] [--quorum unanimous|majority|supermajority] [--prompt loop.md] [--groups groups.json [--digest-every 45]] [--respawn] [--apply] [--full-access] [--named] [--claude-full] [--no-carry] [--no-seat-targets] [--no-web] [--sandbox] [--timeout 30] [--port 7717] [--result-path path]');
   process.exit(2);
 }
-const TOTAL = Math.max(2, Number(flag("agents", "4")));
+/** --groups <file.json>: the run's groups as the operator wrote them (src/groups.ts), one room and one brief each, on the
+ * long-room brief (prompts/group.md). No planner runs, and --agents is the file's workers plus the verifier. */
+let GROUPS: GroupsFile | undefined;
+if (flag("groups")) {
+  if (has("flat")) {
+    console.error("--groups gives each group its own room; --flat puts everyone in one. Pass one of them.");
+    process.exit(2);
+  }
+  try {
+    GROUPS = loadGroups(resolve(flag("groups")!));
+  } catch (e) {
+    console.error(e instanceof Error ? e.message : String(e));
+    process.exit(2);
+  }
+}
+/** --digest-every <minutes>: with --groups, a fresh consolidator seat is started on this interval. It reads every group's
+ * room over HTTP without joining it, sends each group what the others found that bears on its brief (post_to_room with
+ * ack_required, so the group cannot propose until it has read it) and leaves the pass on the consolidation room's board
+ * as digest/<n> for the next pass (prompts/consolidator.md). A seat per pass, not one that polls between them. */
+const DIGEST_EVERY_MIN = Number(flag("digest-every", "0"));
+if (flag("digest-every") && !(DIGEST_EVERY_MIN > 0)) {
+  console.error("--digest-every takes the minutes between consolidation passes, e.g. --digest-every 45");
+  process.exit(2);
+}
+if (DIGEST_EVERY_MIN && !GROUPS) {
+  console.error("--digest-every needs --groups: it passes findings between the groups' rooms, and without --groups there is one room or the planner's.");
+  process.exit(2);
+}
+const TOTAL = GROUPS ? GROUPS.groups.reduce((a, g) => a + g.workers, 0) + 1 : Math.max(2, Number(flag("agents", "4")));
 const WORKERS = TOTAL - 1; // one seat is the verifier
 const CWD = resolve(flag("cwd", process.cwd())!);
 const CODEX = Math.min(WORKERS, Number(flag("codex", "0")));
@@ -431,6 +460,14 @@ if (FLAT) {
     groups: [{ id: "room", title: "Room", workers: WORKERS, directive: task }],
     verifier_directive: flag("verify", "Check the concrete claims in the final proposal against the files, transcripts or commands they cite; agree only with evidence.")!,
   };
+} else if (GROUPS) {
+  plan = {
+    summary: task,
+    done_when: flag("done-when", GROUPS.done_when ?? "Every group has concluded and this room has adopted one proposal that answers the task, challenged and verified.")!,
+    groups: GROUPS.groups,
+    verifier_directive: flag("verify", GROUPS.verifier_directive ?? "Check the concrete claims in each group's conclusion and in the final proposal against the files, transcripts or commands they cite; agree only with evidence.")!,
+  };
+  log(`groups file: ${plan.groups.map((g) => `${g.title} ×${g.workers}`).join(" | ")}`);
 } else {
   log("planning…");
   const planRaw = (await runClaude("planner", prompt("planner.md", { TASK: task, CWD, WORKERS, MAX_GROUPS: Math.max(1, Math.floor(WORKERS / 2)) }) + "\n\n" + SETTLED, READ_TOOLS.filter((t) => !t.startsWith("mcp__")), CWD, PLANNER_MODEL)).text;
@@ -489,7 +526,12 @@ const verifierText = SETTLED + "\n" + prompt("verifier.md", {
       CWD,
       TASK: task,
       DONE_WHEN: plan.done_when,
-      GROUP_LIST: FLAT ? "none: every agent is in this one room with you, and may recruit or break out into sub-rooms" : plan.groups.map((g) => g.title).join("; "),
+      GROUP_LIST: FLAT ? "none: every agent is in this one room with you, and may recruit or break out into sub-rooms"
+        // hand-written groups run for hours before a lead reports: the verifier is told where each one works, so it can
+        // check results as they land on a group's board and answer a group that asks it for a ruling
+        : GROUPS ? plan.groups.map((g) => `${g.title}, in room \`${SWARM_ID}-${g.id}\` (read its board and conclusion at ${URL_}/rooms/${SWARM_ID}-${g.id} with curl, without joining it)`).join("; ") +
+          `. The groups do not read each other's rooms and report here only at the end. Until then, check what lands on their boards; a group asks you for a ruling with post_to_room into this room (it arrives as inbox/<its room>/<key>), and you answer with post_to_room (from_room="${leadsRoom}", to_room=<its room>)`
+        : plan.groups.map((g) => g.title).join("; "),
       VERIFIER_DIRECTIVE: plan.verifier_directive,
       LEADS_ROOM: leadsRoom,
       LEADS_N: FLAT ? TOTAL : plan.groups.length + 1,
@@ -506,6 +548,16 @@ if (REQUIRE_VERIFICATION || QUORUM) {
     log(`${leadsRoom} created with quorum=${QUORUM ?? "unanimous"}${REQUIRE_VERIFICATION ? ", require_verification" : ""} (${r.status})`);
   } catch (e) {
     log(`could not pre-create ${leadsRoom}: ${e instanceof Error ? e.message : String(e)}${e instanceof Error && e.cause ? ` (cause: ${(e.cause as NodeJS.ErrnoException).code ?? (e.cause as Error).message})` : ""}`);
+  }
+  // a hand-written group works for hours and concludes its own proposal, so its room gets the run's policy too
+  for (const g of GROUPS ? plan.groups : []) {
+    const room = `${SWARM_ID}-${g.id}`;
+    try {
+      const r = await fetch(`${URL_}/rooms/${encodeURIComponent(room)}/create`, { method: "POST", headers: { "content-type": "application/json", ...(process.env.CHATROOM_HUMAN_TOKEN ? { "x-chatroom-token": process.env.CHATROOM_HUMAN_TOKEN } : {}) }, body: JSON.stringify({ topic: `${g.title}: ${g.directive}`, expected_participants: g.workers, require_verification: REQUIRE_VERIFICATION, quorum: QUORUM ?? "unanimous" }) });
+      log(`${room} created with quorum=${QUORUM ?? "unanimous"}${REQUIRE_VERIFICATION ? ", require_verification" : ""} (${r.status})`);
+    } catch (e) {
+      log(`could not pre-create ${room}: ${e instanceof Error ? e.message : String(e)}`);
+    }
   }
 }
 runs.push(
@@ -550,7 +602,9 @@ for (const g of plan.groups) {
         // a distinct starting item per flat seat, so one brief does not put every seat on one target (src/seat-targets.ts)
         (FLAT_TARGETS ? `\n${FLAT_TARGETS(i)}` : "") +
         `\nWorking directory: ${wcwd}; you may read the project and run commands. ${writeRule} A verifier named "verifier" sits in the room and the final proposal needs its agree vote. Organise yourselves: claim areas on the board, recruit or break out into sub-rooms with request_agent when depth is needed, and bring results back here.`
-      : SETTLED + "\n" + prompt("worker.md", { ...vars, NAME: nm, CWD: wcwd, WRITE_RULE: writeRule });
+      : SETTLED + "\n" + (GROUPS
+        ? prompt("group.md", { ...vars, NAME: nm, GROUPS_N: plan.groups.length, WRITE_RULE: `Working directory: ${wcwd}; you may read the project and run commands. ${writeRule}` })
+        : prompt("worker.md", { ...vars, NAME: nm, CWD: wcwd, WRITE_RULE: writeRule }));
     const mayWrite = FULL && !readOnlyWorkers.has(name);
     const mk = (nm: string, note: string) => {
       // Replacements reuse the original successful worktree but commit under their new seat name.
@@ -600,6 +654,45 @@ for (const room of [...groupRooms, leadsRoom]) {
     .then((r) => { if (!r.ok) log(`${room}: hub did not take the run deadline (${r.status})`); })
     .catch((e) => log(`${room}: could not post the run deadline: ${e instanceof Error ? e.message : String(e)}`));
 }
+/** Consolidation passes (--digest-every): started on a timer while group seats run, never two at once, and none in the
+ * last five minutes, when a pass could not be acted on. Their usage is rolled into the run's with the seats'. */
+const digestRuns: SeatRun[] = [];
+const digestPasses: { pass: number; name: string; startedAt: string; finishedAt?: string; cost?: number | null }[] = [];
+const digestPending: Promise<void>[] = [];
+let digestPass = 0, digestRunning = false, groupsDone = false;
+/** Group rooms that can still take a note: a concluded or closed room refuses post_to_room. A room the hub does not
+ * answer for counts as open, so a slow hub never ends the passes. */
+const openGroupRooms = async (): Promise<string[]> => (await Promise.all(groupRooms.map(async (room) => {
+  try { return ["concluded", "closed"].includes(String(((await (await fetch(`${URL_}/rooms/${encodeURIComponent(room)}`, { signal: AbortSignal.timeout(3_000) })).json()) as { state?: string }).state)) ? "" : room; } catch { return room; }
+}))).filter(Boolean);
+const digestTimer: ReturnType<typeof setInterval> | undefined = DIGEST_EVERY_MIN ? setInterval(async () => {
+  if (STOPPING || groupsDone || Date.now() > RUN_STARTED + TIMEOUT_MIN * 60_000 - Math.min(5, TIMEOUT_MIN / 2) * 60_000) return;
+  if (digestRunning) return log(`digest pass ${digestPass} is still running; the next one waits for it`);
+  // a pass with fewer than two groups left to carry findings between is a seat spent on nothing
+  digestRunning = true;
+  const open = await openGroupRooms();
+  digestRunning = false;
+  if (open.length < 2) {
+    log(`no further digest pass: ${groupRooms.length - open.length} of ${groupRooms.length} group rooms have concluded`);
+    return clearInterval(digestTimer);
+  }
+  const n = ++digestPass, name = `digest-${n}`;
+  digestRunning = true;
+  const record: (typeof digestPasses)[number] = { pass: n, name, startedAt: new Date().toISOString() };
+  digestPasses.push(record);
+  log(`digest pass ${n}: started ${name}`);
+  const text = prompt("consolidator.md", {
+    NAME: name, AGENT: "claude", PASS: n, PREVIOUS: n - 1, TASK: task, LEADS_ROOM: leadsRoom, URL: URL_, GROUPS_N: plan.groups.length, EVERY: DIGEST_EVERY_MIN,
+    GROUP_LIST: plan.groups.map((g) => `- room \`${SWARM_ID}-${g.id}\` (${g.title}), read it at ${URL_}/rooms/${SWARM_ID}-${g.id} and ${URL_}/rooms/${SWARM_ID}-${g.id}/messages?since=<seq>. Its brief: ${g.directive}`).join("\n"),
+  });
+  digestPending.push(runClaude(name, text, READ_TOOLS, CWD, VERIFIER_MODEL).then((o) => {
+    digestRuns.push({ name, text: o.text, usage: o.usage });
+    // a pass the timeout killed has no finish time and an unknown cost
+    if (!killedAtTimeout.has(name)) Object.assign(record, { finishedAt: new Date().toISOString(), cost: o.usage?.cost ?? null });
+    digestRunning = false;
+    log(`digest pass ${n}: ${name} finished`);
+  }));
+}, DIGEST_EVERY_MIN * 60_000) : undefined;
 let timedOut = false;
 /** The lead room just before the timeout kills its seats: afterwards every seat has left and blockers read as such. */
 let leadAtTimeout: Record<string, any> | null = null;
@@ -629,6 +722,9 @@ const persistIncremental = (done: SeatRun[]) => {
 };
 const completedRuns: SeatRun[] = [];
 const results = await Promise.all(runs.map(async (p) => { const r = await p; completedRuns.push(r); persistIncremental(completedRuns); return r; }));
+groupsDone = true;
+if (digestTimer) clearInterval(digestTimer);
+await Promise.all(digestPending); // a pass in flight ends with its own seat (or the timeout's kill)
 clearTimeout(timeout);
 // every seat has exited; a dev hub one of them left behind has not
 await sweepStrays("end of run");
@@ -666,12 +762,17 @@ const artifact: RunResult = {
   leadRoom: leadsRoom,
   rooms: snapshots,
   verifier: { name: "verifier", output: results.find(r => r.name === "verifier")?.text ?? null },
-  reportPath: resolve(OUT, "report.md"), artifactPath, collectionErrors, usage: rollupUsage([...results, ...replacedRuns]),
+  reportPath: resolve(OUT, "report.md"), artifactPath, collectionErrors, usage: rollupUsage([...results, ...replacedRuns, ...digestRuns]),
   outcome: classifyOutcome(snapshots.find(r => r.name === leadsRoom)?.payload, { timedOut, atTimeout: leadAtTimeout }),
   hubUsage: hubUsageRollup(snapshots),
   scorecard: seatScorecard(snapshots, Object.fromEntries([...exitCodes].map(([name, exitCode]) => [name, { exitCode, cost: seatCosts.get(name), killedAtTimeout: killedAtTimeout.has(name), commits: branchCommits(name) }]))),
   ...(metrics ? { metrics } : {}),
 };
+if (digestPasses.length) {
+  const board = (room: string) => snapshots.find((r) => r.name === room)?.payload?.board as Record<string, { text?: string; updated_at?: string }> | undefined;
+  artifact.digests = digestRecords(digestPasses, board(leadsRoom));
+  artifact.digestAcks = digestAcks(leadsRoom, Object.fromEntries(plan.groups.map((g) => [`${SWARM_ID}-${g.id}`, board(`${SWARM_ID}-${g.id}`)])));
+}
 writeRunResult(resolve(OUT, "result.json"), artifact);
 if (artifactPath !== resolve(OUT, "result.json")) writeRunResult(artifactPath, artifact);
 writeFileSync(artifact.reportPath, renderRunReport(artifact));

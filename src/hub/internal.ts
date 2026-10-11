@@ -31,6 +31,7 @@ export type Event =
   | { type: "dev_run"; room: string; run: DevRun }
   | { type: "amend"; room: string; proposalId: string; text: string; version: number; updatedAt?: string; votes: Proposal["votes"]; challenges?: Challenge[] }
   | { type: "refusal"; room: string; tool: string; reason: string; ts?: string; participant?: string | null }
+  | { type: "outside_read"; room: string; by: { room: string; pid: string } | null; via: "http" | "file"; tool: string; ts: string }
   /** ms: how long the call took; empty: a wait that returned no new message (run-metrics splits idle polling on it) */
   | { type: "call_completion"; room: string; tool: string; outcome: CallOutcome; ts: string; participant: string | null; ms?: number; empty?: boolean }
   /** key: what the ledger dedupes on when it is not the target itself (a long target is shortened for display) */

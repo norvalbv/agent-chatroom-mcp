@@ -2,7 +2,7 @@
 /** Rank 6 failing-first regression: shared read-digest convention taught in the prompts
  * (swarm-082729-8b5j-room prop_a7a385ba item 6). Static content check, not a hub/behaviour test:
  * prompts/*.md are literal text baked into every seat's system prompt, and the convention itself
- * (board_get digest/<path>@<hash> before read_file; the first reader board_set's it for later
+ * (board_get filedigest/<hash> before read_file, originally digest/<path>@<hash>, which the board refused; the first reader board_set's it for later
  * readers) cannot be hub-enforced — read_file is a local seat tool in src/seat.ts, invisible to the
  * hub. This proves the instruction exists, is worded consistently across the target prompts, and
  * encodes a real staleness guard: the file's hash lives IN THE KEY, so an edited file's digest is
@@ -27,7 +27,9 @@ const HASH_CMD = "shasum -a 256";
 
 for (const file of FILES) {
   const text = readFileSync(resolve(root, "prompts", file), "utf8");
-  assert.match(text, /digest\/<path>@<hash>/, `[${file}] must document the digest/<path>@<hash> board-key convention`);
+  // filedigest/<hash> since 4ee42a7e: board keys have no "@", so digest/<path>@<hash> was refused (bugs.md 7); the
+  // content hash alone is the key and the path is the entry's first line
+  assert.match(text, /filedigest\/<hash>/, `[${file}] must document the filedigest/<hash> board-key convention`);
   assert.ok(text.includes(HASH_CMD), `[${file}] must name the hash command so every seat computes the same key`);
   assert.match(text, /board_get/, `[${file}] must tell seats to board_get the digest before reading`);
   assert.match(text, /board_set/, `[${file}] must tell the first reader to board_set the digest for later readers`);
@@ -36,4 +38,4 @@ for (const file of FILES) {
 const minimal = readFileSync(resolve(root, "prompts", "minimal.md"), "utf8");
 assert.ok(!minimal.includes("digest/"), "minimal.md must not carry the digest convention (minimal-prompt-hub-carries-coordination)");
 
-console.log(`PASS read-digest-regression: ${FILES.join(", ")} document a consistent digest/<path>@<hash> convention (${HASH_CMD} ... | cut -c1-10); minimal.md correctly excluded`);
+console.log(`PASS read-digest-regression: ${FILES.join(", ")} document a consistent filedigest/<hash> convention (${HASH_CMD} ... | cut -c1-10); minimal.md correctly excluded`);

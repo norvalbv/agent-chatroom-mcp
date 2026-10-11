@@ -287,7 +287,8 @@ export class Hub {
       // per commit, the verify/* and review/* entries whose head names it (telemetry G3/G14): coverage read from the hub, not key names
       ...((r) => (r.length ? { reviews: r } : {}))(this.reviewsByCommit(room)),
       // chat messages by the channel they came through (telemetry gap 8: owner, script, chair and seat were one column)
-      ...((sp) => (sp ? { speakers: sp } : {}))(this.speakers(room)),
+      // dashboard and HTTP only: telemetry for the owner, not something a seat polls (room-status-size cap: review of preview 2)
+      ...((sp) => (sp && reveal ? { speakers: sp } : {}))(this.speakers(room)),
       ...((s) => (s.unexamined.length || s.open_attacks.length ? { scrutiny: s } : {}))(board.scrutiny(room)),
       active_count: active.length,
       message_count: room.messages.length,

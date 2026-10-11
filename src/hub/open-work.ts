@@ -133,6 +133,13 @@ export function leaveHint(room: Room, p: Participant, streak: number): string {
     "If you are waiting on someone, say whom and for what in one line, so the room can see it, and carry on waiting.";
 }
 
+/** Text names this board key whole: "claim/abc", "claim/ab/part" and "claim/ab.v2" do not name claim/ab, while the full
+ * stop or colon that ends a sentence after it does not hide it (a substring match read a longer claim's result as the
+ * shorter claim's, merge-review backlog B9b). */
+export function namesKey(text: string, key: string): boolean {
+  return new RegExp(`(?<![\\w./:-])${key.replace(/[.\\^$*+?()[\]{}|]/g, "\\$&")}(?![\\w/-]|[.:]\\w)`).test(text);
+}
+
 /** `idle`: the seat was already idle on its previous wait (idleAgain). Only then is its own claim with nothing behind it
  * listed, since that is also what a builder between commits looks like. */
 export function openWork(hub: Hub, room: Room, p: Participant, idle = true): OpenWork[] {
@@ -172,7 +179,7 @@ export function openWork(hub: Hub, room: Room, p: Participant, idle = true): Ope
       // to twelve such claims, friction/orphaned-finished-claims). A handoff says something is left, so it is still named.
       const slug = area(k);
       const finished = entries.some(([rk, re]) => re.by === e.by && rk.startsWith("result/") &&
-        (rk === `result/${slug}` || rk.startsWith(`result/${slug}-`) || re.text.includes(k))) && !room.board.get(`handoff/${slug}`)?.text.trim();
+        (rk === `result/${slug}` || rk.startsWith(`result/${slug}-`) || namesKey(re.text, k))) && !room.board.get(`handoff/${slug}`)?.text.trim();
       if (!finished) orphaned.push({ kind: "claim_orphaned", key: k, owner: shownName(e.by) });
       continue;
     }

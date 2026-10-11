@@ -50,7 +50,12 @@ test("two spellings of a take for one commit are one take: the second seat is to
   const { h, name, c, d } = room();
   h.setBoard(name, c.id, `take/review-${A1}`, "carol reviewing with an own check");
   throws(() => h.setBoard(name, d.id, `take/review/${A1}`, "dave reviewing"), new RegExp(`commit ${A1} is already taken: "take/review-${A1}" is held by carol`));
-  throws(() => h.setBoard(name, d.id, `take/rerun/${A1}`, "dave reruns"), /is held by carol/);
+  throws(() => h.setBoard(name, d.id, `take/Review: ${A1}`, "dave, another spelling"), /is held by carol/);
+  // other work on the same commit is not a duplicate review (review/c11f3f22): a rerun, a merge, a dev room
+  h.setBoard(name, d.id, `take/rerun/${A1}`, "dave reruns it independently");
+  h.setBoard(name, d.id, `take/merge-${A1}`, "dave merges it");
+  h.setBoard(name, d.id, `take/rerun/${A1}`, "");
+  h.setBoard(name, d.id, `take/merge-${A1}`, "");
   // a different commit, or a key with no commit in it, is nobody else's business
   h.setBoard(name, d.id, `take/review-${B1}`, "dave reviews bob's");
   h.setBoard(name, d.id, "take/benchlock", "dave has the bench");
@@ -69,6 +74,9 @@ test("a claim's commits are held by its hub-assigned reviewer: another seat's ta
   const other = [h.getRoom(name).participants.values()].flatMap((x) => [...x]).find((p) => p.name !== "alice" && p.name !== reviewer)!;
   throws(() => h.setBoard(name, other.id, `take/review/${A1}`, "reviewing, the author asked me"),
     new RegExp(`${reviewer} is the hub-assigned reviewer of alice's "claim/session-reap", and ${A1} is alice's commit.*review/${A1}-${other.name}`));
+  // only the review is the reviewer's: a merge or a dev room on that commit is other work, for any seat
+  h.setBoard(name, other.id, `take/merge-${A1}`, "merging it");
+  h.setBoard(name, other.id, `take/devroom-${A1}`, "watching agents use it");
   // the author may hand its commit to the seat it asked: that is the author choosing, and the seat accepts as usual
   h.setBoard(name, a.id, `take/review/${A1}`, `@${other.name} the assigned reviewer is busy, please take it`);
   h.setBoard(name, other.id, `take/review/${A1}`, "accepted, reviewing");

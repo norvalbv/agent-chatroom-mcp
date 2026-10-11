@@ -50,6 +50,10 @@ export function takeWrite(hub: Hub, room: Room, p: Participant, key: string, tex
 /** Commit tokens in a take's key, e.g. take/review-ba181129 and take/review/ba181129 both name ba181129. */
 const commitsOf = (key: string) => commitsIn(key.slice("take/".length));
 const sameCommit = (a: string, b: string) => a.startsWith(b) || b.startsWith(a);
+/** The kind of work a commit take names: its key without the commits and separators (take/review-<sha>, take/review/<sha> -> "review"). */
+const kindOf = (key: string) => commitsOf(key).reduce((k, c) => k.split(c).join(""), key.slice("take/".length)).replace(/[^a-z0-9]+/gi, "").toLowerCase();
+/** Kinds the assigned reviewer holds first: the review itself. A merge, a dev room or a rerun on the commit is other work (review/c11f3f22). */
+const REVIEW_KIND = /review|verify/;
 const claimOpen = (e: BoardEntry) => { try { return (JSON.parse(e.text) as { status?: string }).status !== "released"; } catch { return true; } };
 
 /**
@@ -57,8 +61,9 @@ const claimOpen = (e: BoardEntry) => { try { return (JSON.parse(e.text) as { sta
  * commit and the second learned it at its finished write: the same piece was spelled take/review/<sha> and
  * take/review-<sha>, and nothing tied a take to the reviewer the hub had assigned (all 6 assigned reviewers wrote their
  * review; both duplicates came from a seat that was not assigned). So, before the work:
- * - another active seat's take naming the same commit, under any key, refuses this one with its holder;
- * - a commit authored by a seat whose live claim has an active hub-assigned reviewer is that reviewer's: any other
+ * - another active seat's take for the same kind of work on the same commit, however the key is spelled, refuses this
+ *   one with its holder (a merge, a dev room or a rerun on a commit someone is reviewing is other work and passes);
+ * - reviewing a commit authored by a seat whose live claim has an active hub-assigned reviewer is that reviewer's: any other
  *   holder is refused with who to ask. The author's own takes pass, as does a take the author hands to a seat, and a
  *   seat whose worktree the hub does not know (the commit's author cannot be read there). A second review needs no
  *   take: review/<sha>-<name>.
@@ -71,7 +76,7 @@ function commitTake(hub: Hub, room: Room, p: Participant, key: string, w: TakeWr
   };
   for (const commit of commitsOf(key)) {
     for (const [k, e] of room.board) {
-      if (k === key || !k.startsWith("take/") || !e.text.trim() || !commitsOf(k).some((c) => sameCommit(c, commit))) continue;
+      if (k === key || !k.startsWith("take/") || !e.text.trim() || kindOf(k) !== kindOf(key) || !commitsOf(k).some((c) => sameCommit(c, commit))) continue;
       const holder = named(room, e.holder ?? e.by);
       if (!holder?.active || holder.id === w.holder.id) continue;
       refuse("same-commit", commit, holder,
@@ -79,7 +84,7 @@ function commitTake(hub: Hub, room: Room, p: Participant, key: string, w: TakeWr
         `Ask them before doing it, or take something nobody holds (room_status lists each seat's holds).`);
     }
     const worktree = hub.workspaceOf(p)?.worktree;
-    if (!worktree) continue;
+    if (!worktree || !REVIEW_KIND.test(kindOf(key))) continue;
     const r = spawnSync("git", ["-C", worktree, "log", "-1", "--format=%an", `${commit}^{commit}`], { encoding: "utf8", timeout: 5000 });
     const author = r.status === 0 ? named(room, r.stdout.trim()) : undefined;
     // the author's own takes pass, and so does a take the author hands to a seat: that is the author choosing its reviewer

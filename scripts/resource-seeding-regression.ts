@@ -8,9 +8,12 @@
  * `swarm --resources <file>`: each `## <name>` heading in the file is one resource, written as resource/<slug> to the
  * board of every room of the run before a seat is started. A room nobody has created yet (a group room is created by
  * its first join) holds them and gets them at creation. A missing file, or one with no `## ` entry, stops the launch.
+ * resource/ is a reserved board prefix, and the hub names a room's resource/* keys to every seat when it joins (one
+ * line, its own field in the join_room reply) and in a recruit's orientation, so nobody has to know to look. A
+ * break-out room starts with its parent's resource/* entries. No prompt file is changed.
  * npx tsx scripts/resource-seeding-regression.ts */
 import assert from "node:assert/strict";
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
@@ -18,6 +21,7 @@ import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { Hub, HubError } from "../src/hub.js";
 import { createSessionServer } from "../src/server.js";
 import { loadResources, parseResources, seedResources } from "../src/resources.js";
+import { Spawner } from "../src/spawner.js";
 
 Hub.DEFAULT_NUDGE_MS = 0;
 const dir = mkdtempSync(join(tmpdir(), "resource-seeding-"));
@@ -112,6 +116,68 @@ assert.equal(lines.length, 2, "one log line per room");
 assert.match(lines[0]!, /run-g1.*3 resource.*held until/);
 const oldHub = (async () => new Response("Cannot POST", { status: 404 })) as typeof fetch;
 await assert.rejects(seedResources("http://127.0.0.1:1", ["run-leads"], parsed, { fetch: oldHub }), /run-leads.*404.*--resources/s, "a hub without the route stops the launch and says why");
+
+// 4. a seat is told on joining: the keys, one line, in a field of its own (the hint is replaced when a human is waiting)
+const told = (text: string) => (JSON.parse(text) as { resources?: string }).resources;
+const KEYS = parsed.map((r) => r.key);
+const c = await seat("c");
+const cJoin = await c.call("join_room", { room: "res-group", name: "C", agent: "test" });
+assert.equal(typeof told(cJoin.text), "string", "join_room names the room's resources");
+for (const k of KEYS) assert.ok(told(cJoin.text)!.includes(k), `the line names ${k}`);
+assert.equal(told(cJoin.text)!.includes("\n"), false, "one line");
+assert.match(told(cJoin.text)!, /board_get/, "and says how to read one");
+assert.match(told(cJoin.text)!, /board_set.*resource\/<name>/, "and where to put the next one a seat finds");
+assert.equal(cJoin.text.indexOf('"resources"') < cJoin.text.indexOf('"room"'), true, "ahead of the room summary, not after it");
+// the first seat of a held room is told too: the entries are written before its join returns
+const d = await seat("d");
+hub.seedResources("res-late", parsed);
+assert.ok(told((await d.call("join_room", { room: "res-late", name: "D", agent: "test" })).text)?.includes(KEYS[0]!), "the seat whose join creates the room is told");
+// a room with none says nothing, and a cleared entry is no longer named
+const e = await seat("e");
+const eJoin = JSON.parse((await e.call("join_room", { room: "res-none", name: "E", agent: "test" })).text) as { participant_id: string; resources?: string };
+assert.equal(eJoin.resources, undefined, "no resources, no line");
+// a seat's own resource/* write is named to the next seat to join: the prefix is the registry, not only the launcher's
+await e.call("board_set", { room: "res-none", key: "resource/found-by-e", text: "gateway.example refuses above 5 requests a second from this IP", participant_id: eJoin.participant_id });
+const f = await seat("f");
+assert.ok(told((await f.call("join_room", { room: "res-none", name: "F", agent: "test" })).text)?.includes("resource/found-by-e"), "a seat-written resource is named to later joiners");
+await e.call("board_set", { room: "res-none", key: "resource/found-by-e", text: "", participant_id: eJoin.participant_id });
+const g = await seat("g");
+assert.equal(told((await g.call("join_room", { room: "res-none", name: "G", agent: "test" })).text), undefined, "a deleted resource is not named");
+// many resources: the line stays short and says how many it left out
+hub.seedResources("res-many", Array.from({ length: 30 }, (_, i) => ({ key: `resource/item-${String(i).padStart(2, "0")}`, text: `thing ${i}` })));
+const h = await seat("h");
+const many = told((await h.call("join_room", { room: "res-many", name: "H", agent: "test" })).text)!;
+assert.ok(many.includes("resource/item-00") && !many.includes("resource/item-29"), "the first keys are named");
+assert.match(many, /and 10 more/, "the rest are counted");
+
+// the tool description says what the prefix is for (the prompts are not changed)
+const tools = await (async () => { const session = createSessionServer(hub); const client = new Client({ name: "t", version: "1" }); const [ct, st] = InMemoryTransport.createLinkedPair(); await session.server.connect(st); await client.connect(ct); return (await client.listTools()).tools; })();
+const keyDesc = (tools.find((t) => t.name === "board_set")!.inputSchema as { properties: { key: { description: string } } }).properties.key.description;
+assert.ok(keyDesc.includes("resource/<name> (data, a tool or a limit that exists on this machine, with where it is and who shares it"), "board_set names the resource/ prefix");
+
+// 5. a break-out starts with its parent's resources (chat and briefs do not cross a room wall; the machine is the same)
+const child = JSON.parse((await c.call("join_room", { room: "res-group-brk", name: "C", agent: "test", parent: "res-group" })).text) as { resources?: string };
+assert.deepEqual([...hub.getRoom("res-group-brk").board.keys()].filter((k) => k.startsWith("resource/")), KEYS, "a break-out's board starts with the parent's resource/* entries");
+assert.ok(child.resources?.includes(KEYS[0]!), "and its opener is told");
+assert.equal(hub.getRoom("res-group-brk").board.get(KEYS[0]!)?.by, "launcher", "authorship is kept");
+
+// 6. a recruit's orientation names them: its brief is written by a seat, not by the launcher
+const logDir = mkdtempSync(join(tmpdir(), "resource-recruit-"));
+const sp = new Spawner({ logDir, dryRun: true, mcpUrl: "http://127.0.0.1:0/mcp", defaultCwd: logDir });
+const carried: string[] = [];
+sp.attach({ isHeld: () => false, claimArea: () => {}, ensureRoom: (room, topic) => { hub.createRoom(room, { topic }); }, announce: () => {}, liveAgents: () => 0,
+  resourceNote: (room) => hub.resourceNote(room), carryResources: (from, to) => { carried.push(`${from}>${to}`); hub.carryResources(from, to); } });
+const [rec] = sp.request({ room: "res-group", requestedBy: "C", brief: "Count the rows in the fills archive and report the number on the board.", count: 1, name: "probe" });
+const recruitPrompt = readFileSync(rec!.log, "utf8"); // a dry run writes the prompt it would have sent
+for (const k of KEYS) assert.ok(recruitPrompt.includes(k), `the recruit's prompt names ${k}`);
+// recruits sent to a new room: the room gets the requester room's resources, and the recruit is told of them
+const [rec2] = sp.request({ room: "res-group", requestedBy: "C", brief: "Open a sub-room and split the fills archive count between two of you.", newRoom: "res-sub", count: 1, name: "probe2" });
+assert.deepEqual(carried, [`res-group>${rec2!.room}`]);
+assert.deepEqual([...hub.getRoom(rec2!.room).board.keys()].filter((k) => k.startsWith("resource/")), KEYS, "a recruits' new room starts with the requester room's resources");
+assert.ok(readFileSync(rec2!.log, "utf8").includes(KEYS[0]!), "and its recruit's prompt names them");
+// a fresh challenger is told nothing of the board
+const [rec3] = sp.request({ room: "res-group", requestedBy: "C", brief: "Check one claim of the open proposal against the repository.", count: 1, name: "probe3", fresh: true });
+assert.equal(readFileSync(rec3!.log, "utf8").includes(KEYS[0]!), false, "a fresh challenger's prompt names no board key");
 
 console.log("RESOURCE SEEDING REGRESSION OK");
 process.exit(0);

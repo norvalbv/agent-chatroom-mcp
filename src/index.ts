@@ -110,6 +110,8 @@ spawner.attach({
       hub.announce(room, text);
     } catch {}
   },
+  resourceNote: (room) => hub.resourceNote(room),
+  carryResources: (from, to) => hub.carryResources(from, to),
   liveAgents: () => [...hub.rooms.values()].filter((r) => r.state === "open" || r.state === "stalled").reduce((n, r) => n + hub.voters(r).length, 0),
   roomTopic: (room) => hub.rooms.get(room)?.topic,
   roomState: (room) => {

@@ -407,6 +407,7 @@ export class Hub {
     const opening = opts.parent !== undefined && !existing;
     if (opening) this.checkBreakout(roomName, opts.parent!, session);
     const room = this.createRoom(roomName, opening ? opts : { ...opts, parent: undefined });
+    if (opening) this.carryResources(opts.parent!, room.name);
     if (opening) this.announceBreakout(room, name);
     if (role && !ROLES.includes(role)) throw new HubError(`role must be one of ${ROLES.join(", ")}.`);
     if (role === "chair") {
@@ -1297,6 +1298,38 @@ export class Hub {
       this.applyResources(room, clean);
     }
     return { room: roomName, keys: clean.map((e) => e.key), pending: !room };
+  }
+
+  /** How many resource/* keys the join line names before it counts the rest. */
+  static readonly RESOURCES_NAMED = 20;
+
+  /**
+   * The one line a seat is given on joining a room that has resource/* entries (join_room's `resources`, a recruit's
+   * orientation): the keys, how to read one, and where the next one goes. Seats read what they are handed and did not
+   * look for what they were not (evidence/data-not-found), so the hub says it at the join and no prompt has to.
+   */
+  resourceNote(roomName: string): string | undefined {
+    const room = this.rooms.get(roomName);
+    if (!room) return undefined;
+    const keys = [...room.board.entries()].filter(([k, e]) => k.startsWith("resource/") && e.text.trim() && !board.boardEntryExpired(room, k, e)).map(([k]) => k);
+    if (!keys.length) return undefined;
+    const more = keys.length - Hub.RESOURCES_NAMED;
+    return `Data, tools and limits already on this machine are on this room's board: ${keys.slice(0, Hub.RESOURCES_NAMED).join(", ")}${more > 0 ? ` and ${more} more (board_get with no key lists them)` : ""}. ` +
+      "Not a complete list. board_get the ones your work touches before you fetch, download or build the same thing; when you find or make another, board_set resource/<name> (what it is, where it is, any limit and who shares it) so recruits and other rooms get it.";
+  }
+
+  /** A room opened from another (a break-out, a recruits' new room) starts with that room's resource/* entries: chat and
+   * briefs do not cross a room wall, and the machine is the same on both sides. Entries the room already has are kept. */
+  carryResources(fromRoom: string, toRoom: string): void {
+    const from = this.rooms.get(fromRoom);
+    const to = this.rooms.get(toRoom);
+    if (!from || !to || from === to || to.state === "concluded" || to.state === "closed") return;
+    for (const [key, e] of from.board) {
+      if (!key.startsWith("resource/") || !e.text.trim() || to.board.has(key) || board.boardEntryExpired(from, key, e)) continue;
+      const entry: BoardEntry = { text: e.text, by: e.by, updatedAt: now() };
+      board.applyBoard(to, key, entry);
+      this.persist({ type: "board", room: to.name, key, entry });
+    }
   }
 
   private applyResources(room: Room, entries: { key: string; text: string }[]) {

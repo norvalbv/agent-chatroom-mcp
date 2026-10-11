@@ -41,12 +41,12 @@ export function installLifecycle(opts: { port: number; dir?: string; head?: stri
   // last alive: the exit line's time, else its alive-stamp
   let previous: string | undefined;
   let lastAlive: number | undefined;
+  let exit: RegExpExecArray | null = null;
   try {
     const last = logFile && existsSync(logFile) ? readFileSync(logFile, "utf8").trimEnd().split("\n").at(-1) ?? "" : "";
-    const exit = /^(\S+) exit pid=(\d+) reason=(.*?) code=/.exec(last);
+    exit = /^(\S+) exit pid=(\d+) reason=(.*?) code=/.exec(last);
     if (exit) { previous = `the last hub (pid ${exit[2]}) stopped: ${exit[3]}`; lastAlive = Date.parse(exit[1]); }
   } catch {}
-  try { if (lastAlive === undefined && aliveFile && existsSync(aliveFile)) lastAlive = statSync(aliveFile).mtimeMs; } catch {}
   let ownsPidFile = !!pidFile;
   if (pidFile && existsSync(pidFile)) {
     const prevPid = readFileSync(pidFile, "utf8").trim();
@@ -54,11 +54,16 @@ export function installLifecycle(opts: { port: number; dir?: string; head?: stri
     try { process.kill(Number(prevPid), 0); running = true; } catch {}
     // a second hub on a port that is taken dies at listen; the pid file stays the first one's
     if (running) { ownsPidFile = false; line(`pid=${prevPid} already holds ${pidFile} and is running`); }
-    else {
+    else if (exit?.[2] !== prevPid) {
+      // ...and that second hub's exit line stays the last line of the log while the first serves on. Only the hub that
+      // held the port owns the pid file, so an exit line under another pid is not how the last hub stopped, and its time
+      // is not when the last hub was alive: a restart notice once counted the outage from it
+      if (exit) { line(`stale exit line of pid=${exit[2]} ignored: pid=${prevPid} held ${pidFile} after it (the line is from ${exit[1]})`); lastAlive = undefined; }
       line(`previous pid=${prevPid} left no exit line: it was killed outright (SIGKILL, out of memory, power loss)`);
       previous = `the last hub (pid ${prevPid}) left no exit line: it was killed outright (SIGKILL, out of memory, power loss)`;
     }
   }
+  try { if (lastAlive === undefined && aliveFile && existsSync(aliveFile)) lastAlive = statSync(aliveFile).mtimeMs; } catch {}
   if (pidFile && ownsPidFile) writeFileSync(pidFile, `${process.pid}\n`);
   line(`start pid=${process.pid} ppid=${process.ppid} port=${opts.port} tty=${process.stdout.isTTY || process.stderr.isTTY ? "yes" : "no"}${opts.head ? ` head=${opts.head}` : ""}`);
 

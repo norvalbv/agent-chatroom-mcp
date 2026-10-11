@@ -10,6 +10,7 @@
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync, createWriteStream, symlinkSync, realpathSync, rmSync, unlinkSync } from "node:fs";
+import { carryHooks, hooksLine, type HooksCarried } from "./worktree-hooks.js";
 import { tmpdir } from "node:os";
 import { basename, dirname, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -67,7 +68,7 @@ export interface SpawnedAgent {
   model?: string;
   cwd: string;
   /** a write recruit's own git worktree and branch (never the shared `cwd`); absent for a read-only recruit or outside a git repository */
-  workspace?: { worktree: string; branch: string };
+  workspace?: { worktree: string; branch: string; /** commit hooks in that worktree (src/worktree-hooks.ts); "missing" means its commits are ungated */ hooks?: HooksCarried["hooks"] };
   requestedBy: string;
   parent?: string; // spawned agent that requested this one, if any
   depth: number;
@@ -397,6 +398,10 @@ export class Spawner {
       // a write-enabled recruit works in its own worktree and branch, never in the shared checkout
       const seatCwd = req.canEdit && !o.dryRun ? (this.worktreeFor(cwd, target, name) ?? cwd) : cwd;
       if (seatCwd !== cwd) rec.workspace = workspaceOf(cwd, target, name);
+      const carried = this.hooksIn.get(seatCwd);
+      if (rec.workspace && carried) rec.workspace.hooks = carried.hooks;
+      // said in the room only when it matters: this seat's commits will run no hooks
+      if (carried?.hooks === "missing") this.hooks?.announce(target, hooksLine(name, carried));
       // per seat: the MCP URL carries this seat's heartbeat key (so the file cannot be shared between recruits) and its
       // worktree, which the hub stamps on the seat's claim/* entries
       const beat = seatBeat(o.mcpUrl, randomUUID(), seatCwd);
@@ -614,6 +619,7 @@ export class Spawner {
   }
 
   /** `git worktree add` for one recruit: .swarm-worktrees/<room>/<name> on branch swarm/<room>/<name>, node_modules linked so builds and tests work there. */
+  private readonly hooksIn = new Map<string, HooksCarried>();
   private worktreeFor(cwd: string, room: string, name: string): string | undefined {
     const ws = recruitWorkspace(cwd, room, name);
     if (!ws) return undefined;
@@ -627,6 +633,8 @@ export class Spawner {
         symlinkSync(mods, resolve(dir, "node_modules"), "dir");
       } catch {}
     }
+    // and no hooks runner either: without this every commit a write recruit makes skips the repository's hooks
+    this.hooksIn.set(dir, carryHooks(root, dir));
     return dir;
   }
 

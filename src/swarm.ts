@@ -7,6 +7,7 @@
  */
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
 import { createWriteStream, existsSync, mkdirSync, readFileSync, readdirSync, statSync, realpathSync, symlinkSync, writeFileSync } from "node:fs";
+import { carryHooks, hooksLine } from "./worktree-hooks.js";
 import { dirname, resolve } from "node:path";
 import { collectRoomSnapshot, renderRunReport, writeRunResult, rollupUsage, hubUsageRollup, parseClaudeCliOutput, seatScorecard, classifyOutcome, proposedDecisionDir, type RunResult, type RoomSnapshot, type SeatUsageRollup } from "./result.js";
 import { settledAxes } from "./settled.js";
@@ -452,6 +453,8 @@ function workerCwd(name: string): string {
   }
   writeWorkers.add(name);
   log(`${name} works in ${dir} (branch ${branch})`);
+  // nor a hooks runner: without it every commit this seat makes skips the repository's hooks (bugs.md 4)
+  log(hooksLine(name, carryHooks(CWD, dir)));
   return dir;
 }
 

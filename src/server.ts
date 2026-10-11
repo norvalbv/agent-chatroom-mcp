@@ -633,6 +633,7 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
       description:
         "Put a concrete statement to the room as the proposed conclusion. You automatically vote agree on your own proposal. " +
         "It is adopted when the room's quorum (default: every active participant) votes agree AND, in rooms of 2+, someone has challenged it. " +
+        "Adoption ENDS THE ROOM: nothing more can be written there, so propose once the work it reports is done. If it has the votes while someone has not voted on its current text, the hub announces a LAST CALL first and concludes when that runs out or they vote. " +
         "Only one proposal can be open at a time and it is a document: to change wording, use amend (posts only the diff) instead of proposing again. " +
         "A proposal that fails a vote stays open for amendment; it is never closed by a tally.",
       inputSchema: { room: roomArg, text: z.string().describe("The exact conclusion you propose the group adopt."), participant_id: asArg },

@@ -357,6 +357,22 @@ export interface Proposal {
   /** the hex tokens (hexTokens) of each version of the text and when it took effect, oldest first: what a verify
    * entry written at a given time had in front of it. Absent on proposals made before this was recorded. */
   cited?: { at: string; tokens: string[] }[];
+  /** the last call this proposal is in or had (Hub.lastCallHolds): the version it was called on, when it closes, and who
+   * in the electorate had not voted on that version when it opened. In memory only: a restart concludes on the next evaluate. */
+  lastCall?: { version: number; startedAt: string; until: string; waitingOn: string[] };
+}
+
+/** How a room closed (telemetry gap "votes outstanding at conclusion", evidence-pack item 1): time from the proposal and
+ * from its last text change, the last call if there was one, and who in the electorate had not voted on the final version. */
+export interface ConclusionClosing {
+  seconds_from_proposal: number;
+  seconds_from_last_text: number;
+  /** absent when everyone had voted on the final version before it had the votes, so no last call was needed */
+  last_call_seconds?: number;
+  /** window: the last call ran out; all_voted: everyone voted on the final version first; none: no last call (off, or nobody unvoted) */
+  ended: "window" | "all_voted" | "none";
+  /** voted_version: the version their standing vote was cast on, when they had one */
+  not_voted_on_final: { name: string; role?: string; voted_version?: number }[];
 }
 
 export interface RoomOptions {
@@ -413,7 +429,7 @@ export interface Room {
   idle?: import("./idle.js").RoomIdle;
   /** Hidden from listings (dashboard, list_rooms) but fully kept on disk; set by a human or the archive-dead sweep. */
   archived?: boolean;
-  conclusion?: { text: string; proposalId: string; decidedAt: string; version?: number; tally?: { agree: number; disagree: number; abstain: number }; electorate?: ElectorateSummary; unresolved_objections?: { by: string; objection: string }[]; agreed_without_output?: string[]; undelivered_claims?: { key: string; by: string }[]; verification?: ConclusionVerification; verification_gaps?: { key: string; by: string; gaps: string[] }[]; evidence?: string };
+  conclusion?: { text: string; proposalId: string; decidedAt: string; version?: number; tally?: { agree: number; disagree: number; abstain: number }; electorate?: ElectorateSummary; unresolved_objections?: { by: string; objection: string }[]; agreed_without_output?: string[]; undelivered_claims?: { key: string; by: string }[]; verification?: ConclusionVerification; verification_gaps?: { key: string; by: string; gaps: string[] }[]; evidence?: string; closing?: ConclusionClosing };
   /** identical silence nudges are posted at most twice */
   lastNudge?: { text: string; count: number };
   /** Lifetime refusal counts keyed by tool and bounded reason class (no bodies, no ids). */

@@ -25,6 +25,7 @@ export function runCommands(commands, { cwd, timeout = 120_000, log = line => co
 
 export const offlineScripts = [
   'archive-regression.ts',
+  'last-call-regression.ts',
   'ask-settle-regression.ts',
   'attention-gate-regression.ts',
   'away-seat-regression.ts',

@@ -14,7 +14,7 @@ import { analyzeReplyMetrics, type ReplyMetricEvent } from "./reply-metrics.js";
 
 export * from "./hub/types.js";
 import { VERIFY_HEAD_EXAMPLE, VERIFY_HEAD_RULE, isReviewKey, parseVerifyHead, readVerifyHead, failToPassShortfall, citesCommit, hexTokens, addedUnchecked, uncoveredCommits, verifyGaps, devRoomUrl, devReceiptFrom, type DevReceipt, ROLES, REFUSAL_CODES, HubError } from "./hub/types.js";
-import type { MessageKind, Vote, Quorum, RoomState, VerifyHead, Role, Participant, KickVote, Message, CodeState, BoardExpiryOptions, BoardEntry, Challenge, ElectorateSummary, ConclusionVerification, Proposal, RoomOptions, JoinOptions, Room, CallOutcome, RefusalCode, BoardManifestObservation } from "./hub/types.js";
+import type { MessageKind, Vote, Quorum, RoomState, VerifyHead, Role, Participant, KickVote, Message, CodeState, BoardExpiryOptions, BoardEntry, Challenge, ElectorateSummary, ConclusionVerification, ConclusionClosing, Proposal, RoomOptions, JoinOptions, Room, CallOutcome, RefusalCode, BoardManifestObservation } from "./hub/types.js";
 import { now, shortId, norm, emptyBoardManifestCounters, manifestBytes, codeState, commitsIn, keepRefusal, RECENT_REFUSALS } from "./hub/internal.js";
 import type { Opts, Event, BoardManifestCounters } from "./hub/internal.js";
 import * as board from "./hub/board.js";
@@ -98,6 +98,11 @@ export class Hub {
   static DEFAULT_NUDGE_MS = Number(process.env.CHATROOM_NUDGE_AFTER_MS ?? 180_000);
   /** draft/* is revealed this long after the first draft even if some drafter never wrote one (0 = wait for all) */
   static DRAFT_REVEAL_MS = Number(process.env.CHATROOM_DRAFT_REVEAL_MS ?? 600_000);
+  /** last call: how long a proposal that has the votes waits for electorate members who have not voted on its current
+   * version before the room concludes (0 = conclude at once, the old behaviour); see lastCallHolds. The served hub
+   * (src/index.ts) turns it on; an in-process Hub keeps 0 unless CHATROOM_LAST_CALL_MS says otherwise. */
+  static LAST_CALL_MS = Number(process.env.CHATROOM_LAST_CALL_MS ?? 0);
+  static SERVED_LAST_CALL_MS = 180_000;
   /** the deadline line is posted when a fifth of the run remains, but no later than MIN and no earlier than MAX before it */
   static DEADLINE_LEAD_MIN_MS = 2 * 60_000;
   static DEADLINE_LEAD_MAX_MS = 10 * 60_000;
@@ -1699,6 +1704,7 @@ export class Hub {
     if (pr.status !== "open") return false;
     const members = this.electorate(room, pr).members;
     if (!members.some((v) => v.id === p.id)) return false;
+    if (this.inLastCall(pr)) return (pr.votes[p.id]?.version ?? (pr.votes[p.id] ? 1 : 0)) !== pr.version;
     return !pr.votes[p.id] || (pr.version > 1 &&
       !members.some((v) => pr.votes[v.id] && (pr.votes[v.id].version ?? 1) === pr.version));
   }
@@ -2380,6 +2386,7 @@ export class Hub {
     if (this.hold(room)) out.push(`hold by ${this.hold(room)!.by}`);
     const pending = this.scrutinyPending(room, pr);
     if (pending) out.push(`fresh challenger ${pending.name} has not reported (it challenges or leaves; waited for until ${pending.until} at the latest)`);
+    if (this.inLastCall(pr)) out.push(`last call: it concludes at ${pr.lastCall!.until} unless a vote or amend changes it, or as soon as ${this.unvotedOnCurrent(room, pr).map((p) => this.shown(room, p)).join(", ") || "everyone"} vote${this.unvotedOnCurrent(room, pr).length === 1 ? "s" : ""} on v${pr.version}`);
     if (!active.some((p) => pr.votes[p.id] && (pr.votes[p.id].version ?? 1) === pr.version) && pr.version > 1) out.push(`no vote cast on v${pr.version} yet (carried-over agrees alone cannot pass a new version)`);
     return out;
   }
@@ -2656,6 +2663,58 @@ export class Hub {
     return `a verify/* board entry from ${who} whose first line is JSON ${VERIFY_HEAD_EXAMPLE.replace("<PROPOSAL_ID>", pr.id)} — ${VERIFY_HEAD_RULE}${misses.join("")}`;
   }
 
+  /** Electorate members whose vote (if any) was not cast on the proposal's current version. */
+  unvotedOnCurrent(room: Room, pr: Proposal): Participant[] {
+    return this.electorate(room, pr).members.filter((p) => (pr.votes[p.id] ? pr.votes[p.id].version ?? 1 : 0) !== pr.version);
+  }
+
+  /** A last call is running on the proposal's current version and has not run out. */
+  inLastCall(pr: Proposal): boolean {
+    return pr.status === "open" && pr.lastCall?.version === pr.version && Date.parse(pr.lastCall.until) > Date.now();
+  }
+
+  /**
+   * Last call (evidence-pack item 1, swarm-180216-182a). A proposal that has the votes concluded the room at once: in 13
+   * concluded rooms on hub 7717, 11 concluded within 14 s of the last amend, the verifier had not voted on the final text
+   * in 6, and 9 had a vote, amend or board write refused within 17 s of it. IETF practice confirms a decision over a
+   * last-call period rather than at the moment it is reached (RFC 2418 s3.2, s7.4), and judges consensus by open issues,
+   * not the count (RFC 7282). So while someone in the electorate has not voted on the current version, the room is told
+   * who and until when, they owe a vote, and it concludes when the window ends or as soon as they have all voted.
+   * True while the conclusion must wait.
+   */
+  private lastCallHolds(room: Room, pr: Proposal): boolean {
+    if (Hub.LAST_CALL_MS <= 0) return false;
+    const unvoted = this.unvotedOnCurrent(room, pr);
+    if (!unvoted.length) return false;
+    if (pr.lastCall?.version === pr.version) return Date.parse(pr.lastCall.until) > Date.now();
+    const startedAt = now();
+    const until = new Date(Date.now() + Hub.LAST_CALL_MS).toISOString();
+    const waitingOn = unvoted.map((p) => this.shown(room, p));
+    pr.lastCall = { version: pr.version, startedAt, until, waitingOn };
+    this.persist({ type: "last_call", room: room.name, proposalId: pr.id, version: pr.version, startedAt, until, waiting_on: unvoted.map((p) => p.name) });
+    const secs = Math.round(Hub.LAST_CALL_MS / 1000);
+    this.post(room, "system", undefined,
+      `LAST CALL: ${pr.id} v${pr.version} has the votes. The room concludes at ${until} (in ${secs} s) unless a vote or amend changes that, ` +
+      `or as soon as ${waitingOn.join(", ")} vote${waitingOn.length === 1 ? "s" : ""} on v${pr.version}. A concluded room accepts no more writes: ` +
+      `land any result, verify entry or vote you still owe it now; if you need longer, write hold/${room.name}.`);
+    setTimeout(() => { try { this.evaluate(room, pr); } catch {} }, Hub.LAST_CALL_MS + 25).unref();
+    return true;
+  }
+
+  /** How the room closed on pr: the telemetry in conclusion.closing. */
+  private closing(room: Room, pr: Proposal): ConclusionClosing {
+    const t = Date.now();
+    const lc = pr.lastCall?.version === pr.version ? pr.lastCall : undefined;
+    const unvoted = this.unvotedOnCurrent(room, pr);
+    return {
+      seconds_from_proposal: Math.round((t - Date.parse(pr.createdAt)) / 100) / 10,
+      seconds_from_last_text: Math.round((t - Date.parse(pr.updatedAt ?? pr.createdAt)) / 100) / 10,
+      ...(lc ? { last_call_seconds: Math.round((t - Date.parse(lc.startedAt)) / 100) / 10 } : {}),
+      ended: lc ? (unvoted.length ? "window" : "all_voted") : "none",
+      not_voted_on_final: unvoted.map((p) => ({ name: this.shown(room, p), ...(p.role && p.role !== "worker" ? { role: p.role } : {}), ...(pr.votes[p.id] ? { voted_version: pr.votes[p.id].version ?? 1 } : {}) })),
+    };
+  }
+
   /** @internal */ evaluate(room: Room, pr: Proposal) {
     if (pr.status !== "open" || room.state === "concluded" || room.state === "closed") return;
     this.settleExecutableChallenges(room, pr);
@@ -2743,6 +2802,7 @@ export class Hub {
       return;
     }
 
+    if (accepted && this.lastCallHolds(room, pr)) return;
     if (accepted) this.conclude(room, pr);
     else if (notPassed && pr.notPassedVersion !== pr.version) {
       pr.notPassedVersion = pr.version;
@@ -2871,7 +2931,8 @@ export class Hub {
     };
     const record = output.conclusionOutput(this, room, pr);
     const gaps = this.verificationGaps(room, pr);
-    room.conclusion = { text: pr.text, proposalId: pr.id, decidedAt: now(), version: pr.version, tally, electorate, unresolved_objections: unresolved, ...record, ...(verification ? { verification } : {}), ...(gaps.length ? { verification_gaps: gaps } : {}), ...(pr.evidence ? { evidence: pr.evidence } : {}) };
+    const closing = this.closing(room, pr);
+    room.conclusion = { text: pr.text, proposalId: pr.id, decidedAt: now(), version: pr.version, tally, electorate, unresolved_objections: unresolved, ...record, ...(verification ? { verification } : {}), ...(gaps.length ? { verification_gaps: gaps } : {}), ...(pr.evidence ? { evidence: pr.evidence } : {}), closing };
     this.persist({ type: "proposal", proposal: pr });
     this.setState(room, "concluded");
     if (room.nudgeTimer) clearTimeout(room.nudgeTimer);
@@ -2880,6 +2941,7 @@ export class Hub {
       "conclusion",
       undefined,
       `CONSENSUS REACHED on ${pr.id} v${pr.version} (${electorate.agree}/${electorate.electorate} agree; ${electorate.excluded_leavers} leavers-before-close excluded; quorum=${room.quorum}; ${pr.text.length} chars, text in room_status/conclusion)` +
+        (closing.not_voted_on_final.length ? `\nNot voted on v${pr.version}: ${closing.not_voted_on_final.map((x) => `${x.name}${x.role ? ` (${x.role})` : ""}${x.voted_version ? ` (on v${x.voted_version})` : ""}`).join(", ")}${closing.ended === "window" ? " (last call ran out)" : ""}.` : "") +
         (unresolved.length ? `\nUnresolved objections, overruled: ${unresolved.map((u) => `${u.by}: "${u.objection.slice(0, 300)}${u.objection.length > 300 ? "…" : ""}"`).join(" | ")}` : "") + output.conclusionOutputLines(record) +
         (verification ? `\n${Hub.verificationLine(verification)}${Hub.unverifiedLine(verification, gaps)}` : ""),
       { proposalId: pr.id },

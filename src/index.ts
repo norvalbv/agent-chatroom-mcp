@@ -59,6 +59,8 @@ const PARTICIPANT_IDLE_MS = 10 * 60_000;
 
 // before anything that can throw: why this process stops is written down by the process itself (src/lifecycle.ts)
 const lifecycle = installLifecycle({ port: PORT, dir: DATA_DIR, head: Hub.codeState(resolve(dirname(fileURLToPath(import.meta.url)), ".."))?.head });
+// last call before a conclusion (evidence-pack item 1, decision/last-call): on for the served hub, 0 turns it off
+Hub.LAST_CALL_MS = Number(process.env.CHATROOM_LAST_CALL_MS ?? Hub.SERVED_LAST_CALL_MS);
 const hub = new Hub({ dataDir: DATA_DIR, cwd: resolve(process.env.CHATROOM_DEFAULT_CWD ?? process.cwd()) });
 // At boot no MCP session exists, so every participant idle for longer than the sweep window is a leftover of the
 // previous process (e.g. a seat killed by hand whose session DELETE never arrived); mark them left now.

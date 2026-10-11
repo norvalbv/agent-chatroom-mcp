@@ -34,6 +34,7 @@ import { UI_HTML } from "./ui.js";
 import { humanQuestions } from "./questions.js";
 import { photoDirectory, registerPhotoRoutes } from "./photos/routes.js";
 import { hubDotEnvOptions, loadDotEnv } from "./env.js";
+import { installLifecycle } from "./lifecycle.js";
 // Item 2 (swarm-125438-jp20): CHATROOM_NO_RECRUIT=1 marks a hub that must never hold a provider key
 // (a benchmark hub, whose caller already stripped API_KEY/TOKEN/SECRET-shaped vars from this process's
 // env before spawning it). A bare loadDotEnv() call would otherwise silently refill those vars from the
@@ -55,6 +56,8 @@ const MAX_SESSIONS = 500;
 const SESSION_IDLE_MS = 30 * 60_000;
 const PARTICIPANT_IDLE_MS = 10 * 60_000;
 
+// before anything that can throw: why this process stops is written down by the process itself (src/lifecycle.ts)
+const lifecycle = installLifecycle({ port: PORT, dir: DATA_DIR, head: Hub.codeState(resolve(dirname(fileURLToPath(import.meta.url)), ".."))?.head });
 const hub = new Hub({ dataDir: DATA_DIR, cwd: resolve(process.env.CHATROOM_DEFAULT_CWD ?? process.cwd()) });
 // At boot no MCP session exists, so every participant idle for longer than the sweep window is a leftover of the
 // previous process (e.g. a seat killed by hand whose session DELETE never arrived); mark them left now.
@@ -174,8 +177,6 @@ spawner.attach({
   },
 });
 process.on("exit", () => spawner.stopAll());
-process.on("SIGINT", () => process.exit(0));
-process.on("SIGTERM", () => process.exit(0));
 const app = createMcpExpressApp({ host: HOST }); // already parses JSON bodies (100kb)
 /** The checkout and commit this process was started from; GET / reports it so a launcher can tell a stale hub. */
 const BUILD = (() => { const root = realpathSync(resolve(dirname(fileURLToPath(import.meta.url)), "..")); const st = Hub.codeState(root); return st ? { root, head: st.head } : null; })();
@@ -194,6 +195,7 @@ if (IDLE_EXIT_MS > 0) {
   setInterval(() => {
     if (inFlight > 0 || Date.now() - lastUse < IDLE_EXIT_MS) return;
     console.error(`agent-chatroom-mcp: no request for ${process.env.CHATROOM_IDLE_EXIT_MIN} min (CHATROOM_IDLE_EXIT_MIN); exiting`);
+    lifecycle.exiting(`idle for ${process.env.CHATROOM_IDLE_EXIT_MIN} min (CHATROOM_IDLE_EXIT_MIN)`);
     process.exit(0);
   }, Math.min(10_000, Math.max(500, IDLE_EXIT_MS / 6))).unref();
 }

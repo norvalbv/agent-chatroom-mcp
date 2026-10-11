@@ -48,6 +48,20 @@ export function away(p: Participant): { age_seconds: number; evidence: string } 
   return undefined;
 }
 
+/**
+ * The seat a reconnecting connection held in this room, if its launcher's seat key says so. After a hub restart (or a
+ * dropped MCP session) the client opens a new session, as the protocol requires, and the hub no longer knows who it is;
+ * in a drill both seats' first call was refused and they had to work out that join_room with the old id was the way
+ * back (swarm-003601-tky5, evidence/reconnect-drill). The key is the proof, as for heartbeats: only the seat's process
+ * and its launcher hold it. A seat that left on purpose, was kicked or has a successor is not brought back.
+ */
+export function reseatable(room: Room, hash: string | undefined, wantId?: string): Participant | undefined {
+  if (!hash) return undefined;
+  const mine = [...room.participants.values()].filter((p) => !p.active && p.seatKeyHash === hash && !p.kicked && !p.replacedBy && !p.pendingReplacementName &&
+    (!p.leaveReason || p.leaveReason.startsWith("MCP session closed")) && (!wantId || p.id === wantId));
+  return mine.length === 1 ? mine[0] : undefined;
+}
+
 export class Seats {
   constructor(private readonly hub: Hub) {}
 

@@ -2751,6 +2751,12 @@ export class Hub {
   /** @internal */ readonly seats = new liveness.Seats(this);
   heartbeat(roomName: string, pid: string, info: liveness.Beat): void { this.seats.heartbeat(roomName, pid, info); }
   bindSeat(seatKey: string, session: string, worktree?: string): void { this.seats.bind(seatKey, session, worktree); }
+  /** A reconnecting launched seat takes its seat back by its seat key (liveness.reseatable); undefined when it has none to take. */
+  reseat(roomName: string, session: string, wantId?: string): Participant | undefined {
+    const room = this.rooms.get(roomName);
+    const p = room && liveness.reseatable(room, this.seats.hashOf(session), wantId);
+    return p ? this.join(roomName, p.name, p.agent, {}, p.id, session).participant : undefined;
+  }
   /** Out of the room but not a vacancy: it rejoins on its next hub call (liveness.away). */
   away(p: Participant) { return liveness.away(p); }
   workspaceOf(p: Participant): { branch?: string; worktree: string } | undefined { return this.seats.workspaceOf(p); }

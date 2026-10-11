@@ -349,6 +349,7 @@ export const offlineScripts = [
   'seat-transcript-regression.ts',
   'transcript-refusals-regression.ts',
   'rejected-key-regression.ts',
+  'seat-unconnected-regression.ts',
 ];
 
 export function offlineCommands() {

@@ -275,7 +275,7 @@ app.post("/mcp", async (req, res) => {
     sessionIdGenerator: () => randomUUID(),
     onsessioninitialized: (id) => {
       transports.set(id, { t: transport, leaveAll: session.leaveAll, session: session.sessionKey, lastSeen: Date.now(), ...(seatKey ? { seatKey } : {}) });
-      if (seatKey) hub.bindSeat(seatKey, session.sessionKey, worktree);
+      if (seatKey) { hub.bindSeat(seatKey, session.sessionKey, worktree); hub.seatConnected(seatKey); }
     },
   });
   transport.onclose = () => {
@@ -484,6 +484,8 @@ app.post("/heartbeat", (req, res) => {
   if (exited === true) return res.json({ ok: true, closed: seatExited(seat_key, String(detail ?? "exit"), STOPPED_BY.find((s) => s === stopped_by)) });
   // peek:true (a PostToolUse hook) only asks for pending asks: the PreToolUse beat already recorded this step
   const marked = peek ? 0 : hub.heartbeatSeat(seat_key, { tool: tool ?? "?", step, detail });
+  // working locally with no MCP session here: its chatroom calls are failing on its side (idea/client-side-disconnects)
+  if (!peek && ![...transports.values()].some((e) => e.seatKey === seat_key)) hub.seatUnconnected(seat_key, tool ?? "?");
   res.json({ ok: true, marked, pending: [...steerPeekSeat(hub, seat_key), ...hub.pendingMemoryNotices(seat_key)] });
 });
 // Live usage: a claude seat's OTLP log exporter (src/env.ts seatBeat) posts here with its seat key in a header. The

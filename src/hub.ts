@@ -3554,6 +3554,40 @@ export class Hub {
     }
   }
 
+  /** Seats heartbeating without an MCP session, by seat key hash: since when, and the rooms told (idea/client-side-disconnects). */
+  private readonly unconnected = new Map<string, { since: number; rooms: string[] }>();
+  /**
+   * A seat's local tools heartbeat but its seat key holds no live MCP session: its chatroom calls fail on the client
+   * ("No such tool available ... has disconnected", with no hook fired) and nothing reaches any room. Said once per
+   * episode in each open room the seat holds a place in (active, or away after a restart or a reap), as seat_unconnected.
+   */
+  seatUnconnected(seatKey: string, tool: string): void {
+    const hash = liveness.seatHash(seatKey);
+    if (this.unconnected.has(hash)) return;
+    const seats = [...this.rooms.values()].filter((r) => r.state === "open" || r.state === "stalled")
+      .flatMap((room) => [...room.participants.values()].filter((p) => p.seatKeyHash === hash && (p.active || liveness.away(p))).map((p) => ({ room, p })));
+    if (!seats.length) return;
+    this.unconnected.set(hash, { since: Date.now(), rooms: seats.map(({ room }) => room.name) });
+    const what = tool.slice(0, 40);
+    for (const { room, p } of seats) {
+      this.persist({ type: "seat_unconnected", room: room.name, seat: p.name, tool: what, ts: now() });
+      this.post(room, "system", undefined, `${this.shown(room, p)} is working (${what}) but has no MCP session with this hub: its chatroom calls fail on its side until its client reconnects, so its silence here is not idleness. (A hub restart ends every session; a seat whose client does not reconnect needs its launcher to restart it.)`);
+    }
+  }
+  /** A new MCP session for a seat key ends its unconnected episode. */
+  seatConnected(seatKey: string): void {
+    const hash = liveness.seatHash(seatKey);
+    const ep = this.unconnected.get(hash);
+    if (!ep) return;
+    this.unconnected.delete(hash);
+    const away_s = Math.round((Date.now() - ep.since) / 1000);
+    for (const name of ep.rooms) {
+      const room = this.rooms.get(name);
+      const p = room && [...room.participants.values()].find((x) => x.seatKeyHash === hash);
+      if (room && p) this.persist({ type: "seat_reconnected", room: room.name, seat: p.name, away_s, ts: now() });
+    }
+  }
+
   /**
    * The owner's verdict on a room's conclusion (telemetry gap G19: whether a conclusion was right or used was recorded
    * nowhere; swarm-102904-ouev's answer was overruled in prose only). Kept as an owner_verdict event naming the proposal

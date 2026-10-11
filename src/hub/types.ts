@@ -531,6 +531,8 @@ export interface Room {
   draftsRevealed?: boolean;
   /** when the first draft/* was written: starts the reveal deadline (persisted, so the deadline survives a restart) */
   draftsOpenedAt?: string;
+  /** updatedAt of the abandoned hold the room was told about (Hub.evaluate), so it is said once; in memory only */
+  holdLapsedNoted?: string;
   /** whose write opened the running round (in memory only): Hub.draftSeal tells that writer it did */
   draftsOpenedBy?: { name: string; key: string; entryAt: string };
   draftsTimer?: NodeJS.Timeout;

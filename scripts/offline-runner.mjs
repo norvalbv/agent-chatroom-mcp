@@ -336,6 +336,7 @@ export const offlineScripts = [
   'session-reap-regression.ts',
   'runs-table-truth-regression.ts',
   'runs-table-close-regression.ts',
+  'hold-lapses-regression.ts',
   'idle-jobs-regression.ts',
   'run-end-seat-exit-regression.ts',
   'wait-cost-regression.ts',

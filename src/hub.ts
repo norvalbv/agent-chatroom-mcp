@@ -2047,7 +2047,19 @@ export class Hub {
     return key.startsWith("draft/") && entry.by !== viewer && !room.draftsRevealed && !this.draftsComplete(room) && !this.draftsDue(room);
   }
 
-  hold(room: Room): BoardEntry | undefined { return board.hold(room); }
+  /**
+   * The room's hold, while it counts: its author is in the room (active, or away: process alive or restored by a restart
+   * under 10 min ago) or is a human. The LAST CALL line invites a seat with longer work to hold the room; a hold never
+   * expired and only its author could clear it, so a seat that held and then died left the proposal unable to pass.
+   */
+  hold(room: Room): BoardEntry | undefined {
+    const h = board.hold(room);
+    return h && this.holdAuthorPresent(room, h) ? h : undefined;
+  }
+  /** @internal */ holdAuthorPresent(room: Room, h: BoardEntry): boolean {
+    const by = [...room.participants.values()].filter((x) => x.name === h.by);
+    return by.length === 0 || by.some((x) => x.active || x.agent === "human" || !!this.away(x)); // a hold by the hub or a dashboard name with no seat stands
+  }
   unacknowledged(room: Room): string[] { return board.unacknowledged(room); }
   static sessionsOf(ps: Participant[]): number { return board.sessionsOf(ps); }
   static quorumNeeded(quorum: Quorum, electorateSize: number): number { return board.quorumNeeded(quorum, electorateSize); }
@@ -3142,6 +3154,12 @@ export class Hub {
     if (accepted && pr.version > 1 && !active.some((p) => pr.votes[p.id] && (pr.votes[p.id].version ?? 1) === pr.version)) {
       stuck(`${pr.id} v${pr.version} carries only agrees cast on earlier versions; a version cannot pass until someone votes on its current text. Re-vote (quote a clause of v${pr.version}) to conclude.`);
       return;
+    }
+    // a hold whose author left no longer holds: said once (Hub.hold)
+    const lapsed = board.hold(room);
+    if (lapsed && !this.hold(room) && room.holdLapsedNoted !== lapsed.updatedAt) {
+      room.holdLapsedNoted = lapsed.updatedAt;
+      this.post(room, "system", undefined, `The hold by ${lapsed.by} no longer holds the room: ${lapsed.by} has left it. Anyone may clear hold/${room.name} now (board_set with empty text and overwrite=true).`);
     }
     if (accepted && this.hold(room)) {
       stuck(`${pr.id} has the votes but the room is on hold by ${this.hold(room)!.by}: ${this.hold(room)!.text.slice(0, 120)}. It passes when the hold is cleared.`);

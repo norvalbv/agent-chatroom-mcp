@@ -12,9 +12,9 @@ import { collectRoomSnapshot, renderRunReport, writeRunResult, rollupUsage, hubU
 import { settledAxes } from "./settled.js";
 import { registerRespawn, respawnProbe } from "./respawn.js";
 import { fileURLToPath } from "node:url";
-import { carrySettings, devHubRule, heartbeatHookSettings, hubLogFile, loadDotEnv, outputHeartbeat, ownHubEnv, readLauncherToken, respawnTokenProblem, reusedHubProblem, seatBeat, seatChildEnv, seatPortError, type SeatBeat } from "./env.js";
+import { carrySettings, COMPACT_WINDOW_TESTED, compactWindow, devHubRule, heartbeatHookSettings, hubLogFile, loadDotEnv, outputHeartbeat, ownHubEnv, readLauncherToken, respawnTokenProblem, reusedHubProblem, seatBeat, seatChildEnv, seatPortError, type SeatBeat } from "./env.js";
 import { randomUUID } from "node:crypto";
-import { fetchRespawnRoom, respawnChain } from "./respawn.js";
+import { exitDetail, fetchRespawnRoom, respawnChain, type RespawnRoom } from "./respawn.js";
 import { claudeArgs } from "./claude-args.js";
 import { codexSeatCommand, codexUsageTracker } from "./codex-seat.js";
 import { claudeSandbox } from "./sandbox.js";
@@ -111,6 +111,20 @@ const NO_CARRY = has("no-carry");
 let RESOURCES: ReturnType<typeof loadResources> = [];
 if (has("resources")) {
   try { RESOURCES = loadResources(resolve(flag("resources") ?? "")); } catch (e) { console.error(e instanceof Error ? e.message : String(e)); process.exit(2); }
+}
+/**
+ * --compact-at <tokens>: every Claude seat, and every recruit of a hub this launcher starts, compacts its transcript at
+ * this size (compactWindow in env.ts). A hub that was already running keeps its own setting for the seats it recruits.
+ */
+const COMPACT_AT = flag("compact-at");
+if (COMPACT_AT !== undefined) {
+  if (compactWindow(COMPACT_AT) === null) {
+    console.error(`--compact-at takes a whole number of tokens from 100000 to 1000000 (got "${COMPACT_AT}"); "200k" is not accepted.`);
+    process.exit(2);
+  }
+  process.env.CHATROOM_SEAT_COMPACT_WINDOW = COMPACT_AT;
+  // swarm-005342-qejc: at 100000 a seat reading large files died of "Autocompact is thrashing"; at 200000 the same task ran through
+  if (compactWindow(COMPACT_AT)! < COMPACT_WINDOW_TESTED) console.error(`--compact-at ${COMPACT_AT}: under ${COMPACT_WINDOW_TESTED} a seat that reads large files or outputs can refill its context within three turns of a compaction and stop ("Autocompact is thrashing").`);
 }
 /** --no-seat-targets: flat seats all get the same brief, with no starting item each (the A arm when measuring src/seat-targets.ts) */
 const NO_SEAT_TARGETS = has("no-seat-targets");
@@ -345,10 +359,10 @@ function runProc(name: string, cmd: string, args: string[], cwd: string, outFile
       if (!outViaFile) writeFileSync(outFile, out);
       const final = outViaFile ? safeRead(outFile) : out;
       exitCodes.set(name, code);
-      log(`${name} exited (${code})`);
+      log(`${name} exited (${exitDetail(code, [final, err]).slice(5)})`);
       // the exit receipt: the hub closes this seat's MCP sessions, so a dead seat is not read as alive in a long command.
       // Awaited (5 s at most): withRespawn reads the room's active seats next, and the launcher's own exit would cut it off.
-      if (beat) await fetch(`${URL_}/heartbeat`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ seat_key: beat.key, exited: true, detail: `exit ${code}` }), signal: AbortSignal.timeout(5_000) }).catch(() => {});
+      if (beat) await fetch(`${URL_}/heartbeat`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ seat_key: beat.key, exited: true, detail: exitDetail(code, [final, err]) }), signal: AbortSignal.timeout(5_000) }).catch(() => {});
       res(final.trim());
     });
   });
@@ -456,6 +470,7 @@ function priorRuns(): string {
 }
 const SETTLED = NO_CARRY ? "" : settledAxes(CWD) + priorRuns();
 if (NO_CARRY) log("--no-carry: no settled axes or prior runs injected; seat auto-memory off");
+if (COMPACT_AT !== undefined) log(`--compact-at: Claude seats compact their transcript at ${COMPACT_AT} tokens`);
 if (SETTLED) log(`decision log found: ${SETTLED.split("\n").length - 4} settled axes injected into every prompt`);
 let plan: Plan;
 if (FLAT) {

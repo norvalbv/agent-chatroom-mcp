@@ -31,6 +31,7 @@ export const offlineScripts = [
   'seat-exit-regression.ts',
   'wait-view-regression.ts',
   'idle-open-work-regression.ts',
+  'unclaimed-ideas-regression.ts',
   'idle-leave-regression.ts',
   'idea-lists-regression.ts',
   'delivery-cap-regression.ts',

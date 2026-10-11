@@ -227,6 +227,7 @@ export const offlineScripts = [
   'reseat-regression.ts',
   'reseat-closed-room-regression.ts',
   'reseat-telemetry-regression.ts',
+  'room-idle-restart-regression.ts',
   'respawn-probe-regression.ts',
   'outside-reads-regression.ts',
   'recruit-room-breakout-regression.ts',

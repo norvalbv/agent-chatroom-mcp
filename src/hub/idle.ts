@@ -78,9 +78,17 @@ export function noteWork(room: Room, at = Date.now()): void {
 }
 
 /** Agent seats here for the whole window whose tool calls reach the hub: a claude seat's hook reports each one, so for
- * it nothing counted means nothing done. For any other seat silence proves nothing, and a room with one is not judged. */
+ * it nothing counted means nothing done. For any other seat silence proves nothing, and a room with one is not judged;
+ * nor is one whose seats a hub restart put out and that are not all back yet. */
 function judged(hub: Hub, room: Room, at: number): Participant[] | undefined {
-  const seats = hub.activeParticipants(room).filter((p) => p.agent !== "human" && p.role !== "chair");
+  const agent = (p: Participant) => p.agent !== "human" && p.role !== "chair";
+  // After a restart every seat is restored out of the room until its next call. Until each is back, or silent long enough
+  // to read as gone (Hub.away), the seats in the room are not the room: judged on them, a stalled room read as working
+  // at boot ("one seat is not a room") and was told it had gone quiet a second time once they returned. Nor is an empty
+  // room working again.
+  if ([...room.participants.values()].some((p) => agent(p) && p.restoredAt && hub.away(p))) return undefined;
+  const seats = hub.activeParticipants(room).filter(agent);
+  if (!seats.length) return undefined;
   if (seats.some((p) => !p.work && !(p.seatKeyHash && p.agent === "claude"))) return undefined;
   return seats.every((p) => Date.parse(p.joinedAt) <= at - ROOM_IDLE_MS) ? seats : undefined;
 }

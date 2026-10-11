@@ -22,6 +22,9 @@ export interface RespawnInput {
   name: string;
   /** Child exit code; null when killed by a signal. Anything but 0 is a failure, not completion. */
   exitCode: number | null;
+  /** The signal that killed it, when one did (node reports code null for every signal, so the code alone cannot tell an
+   * operator's SIGTERM from the SIGKILL macOS sends when memory runs out). */
+  signal?: string | null;
   /** 1 for the first replacement. */
   attempt: number;
   room: RespawnRoom | null;
@@ -58,7 +61,8 @@ export function usageLimit(output: string, now = Date.now()): { resetsAt?: strin
 }
 
 /** The detail of a seat's exit receipt: its exit code and, for a failed exit, the reason its output names. */
-export function exitDetail(code: number | null, output: string | string[], now = Date.now()): string {
+export function exitDetail(code: number | null, output: string | string[], now = Date.now(), signal?: string | null): string {
+  if (code === null && signal) return signal === "SIGKILL" ? "killed by SIGKILL: out of memory or another process" : `stopped by ${signal}`;
   const base = `exit ${code}`;
   if (code === 0 || code === null) return base;
   // stdout and stderr are separate streams: the notice is the last line of one of them
@@ -96,6 +100,9 @@ export function respawnDecision(i: RespawnInput): RespawnDecision {
   if (i.name === "verifier" || me?.role === "verifier") return { respawn: true, reason: "the verifier seat is required" };
   // 143 is SIGTERM: an operator (or the launcher itself) stopped the seat on purpose; bench-3 was killed by hand and
   // relaunched three times before this line existed.
+  // SIGKILL (code null, or 137 from a wrapper) is not that: macOS kills with it when memory runs out, and so does a stray
+  // `kill -9` from another seat. A grouped run lost a seat to one and did not replace it (swarm-003601-tky5 #296).
+  if (i.signal === "SIGKILL" || i.exitCode === 137) return { respawn: true, reason: `killed by SIGKILL${i.exitCode === 137 ? " (exit 137)" : ""}: out of memory or another process, not a stop` };
   if (i.exitCode === 143 || i.exitCode === null) return { respawn: false, reason: "stopped by signal, not a crash" };
   if (i.exitCode !== 0) return { respawn: true, reason: `exit code ${i.exitCode} is a failure, not completion` };
   const claims = Object.entries(i.room.board).filter(([k, v]) => k.startsWith("claim/") && v.by === i.name).map(([k]) => k);
@@ -174,6 +181,8 @@ export interface RespawnChainDeps<T> {
   stop: () => boolean;
   room: () => Promise<RespawnRoom | null>;
   exitCode: (name: string) => number | null;
+  /** The signal that ended it, if one did. */
+  signal?: (name: string) => string | null;
   /** Registers the successor with the hub and returns the note for its brief; a throw ends the chain. */
   register: (previousName: string, name: string, reason: string) => Promise<string>;
   run: (name: string, note: string) => Promise<T>;
@@ -223,7 +232,7 @@ export async function respawnChain<T>(d: RespawnChainDeps<T>): Promise<{ last: T
     } catch (error) {
       if (error instanceof HubUnreachable) { gaveUp(lastName); break; }
     }
-    const decision = respawnDecision({ name: lastName, exitCode: d.exitCode(lastName), attempt: i, room, maxAttempts: max });
+    const decision = respawnDecision({ name: lastName, exitCode: d.exitCode(lastName), signal: d.signal?.(lastName), attempt: i, room, maxAttempts: max });
     if (!decision.respawn) {
       d.log?.(`${lastName} exited; not respawning: ${decision.reason}`);
       break;

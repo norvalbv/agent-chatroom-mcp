@@ -32,4 +32,8 @@ assert.equal(exitDetail(1, "Autocompact is thrashing, said another seat\nError: 
 for (const out of ["You've hit your session limit · resets 2:10am (Europe/London)", "Autocompact is thrashing: the context refilled"])
   assert.ok(exitDetail(1, out, now).length <= 80, `the hub keeps 80 characters: "${exitDetail(1, out, now)}"`);
 assert.equal(exitDetail(1, ["You've hit your session limit · resets 2:10am (Europe/London)\n", "some stderr warning\n"], now), "exit 1: usage limit, resets 01:10 UTC", "stdout and stderr are checked separately");
+// a signal is named: the launcher used to keep only the code, and every signal read as code null
+assert.equal(exitDetail(null, "", now, "SIGKILL"), "killed by SIGKILL: out of memory or another process");
+assert.equal(exitDetail(null, "", now, "SIGTERM"), "stopped by SIGTERM");
+assert.equal(exitDetail(null, ""), "exit null");
 console.log("EXIT REASON OK");

@@ -220,7 +220,12 @@ export interface KickVote {
   status: "open" | "kicked" | "dropped";
   endedAt?: string;
   outcome?: string;
+  /** what the hub knew of the target when the vote opened (kick.targetLiveness): a live seat voted on as dead is countable */
+  targetLiveness?: TargetLiveness;
 }
+
+/** working: a tool step within the last minute; idle: a step or call within SUSPECTED_DEAD_MS; silent: neither. */
+export interface TargetLiveness { status: "working" | "idle" | "silent"; last_call_age_s: number; step_age_s?: number; tool?: string; detail?: string }
 
 export interface Message {
   seq: number;

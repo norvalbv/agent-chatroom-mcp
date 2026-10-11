@@ -2,7 +2,7 @@
 import type { Hub } from "../hub.js";
 import { applyBoard, sessionsOf, quorumNeeded } from "./board.js";
 import { HubError } from "./types.js";
-import type { Participant, KickVote, BoardEntry, Room } from "./types.js";
+import type { Participant, KickVote, BoardEntry, Room, TargetLiveness } from "./types.js";
 import { now } from "./internal.js";
 import { hasDelivered, outputLine } from "./output.js";
 
@@ -26,6 +26,32 @@ function kickPool(hub: Hub, room: Room, target: Participant): Participant[] {
 
 /** No hub call or heartbeat for this long reads as suspected_dead; such a seat can never ballot, so it is no kick voter. */
 export const SUSPECTED_DEAD_MS = 10 * 60_000;
+
+/** The target's liveness by the hub's own signals: its last hub call and its last tool step (the heartbeat hook). */
+export function targetLiveness(hub: Hub, p: Participant): TargetLiveness {
+  const age = (at: string) => Math.max(0, Math.round((Date.now() - Date.parse(at)) / 1000));
+  const last_call_age_s = age(hub.lastSeen(p));
+  const step_age_s = p.working ? age(p.working.at) : undefined;
+  const freshest = Math.min(last_call_age_s, step_age_s ?? Infinity);
+  return {
+    status: step_age_s !== undefined && step_age_s < 60 ? "working" : freshest * 1000 < SUSPECTED_DEAD_MS ? "idle" : "silent",
+    last_call_age_s,
+    ...(step_age_s !== undefined ? { step_age_s, tool: p.working!.tool, ...(p.working!.detail ? { detail: p.working!.detail.slice(0, 80) } : {}) } : {}),
+  };
+}
+
+/**
+ * Said where a kick vote opens, so the ballots are cast on what the hub knows: in swarm-205034-nkli the owner voted to
+ * remove a seat as "dead agent" while it was running and writing results, and the vote needed one more ballot; only
+ * the chair's manual pid check stopped it. A heads-down seat makes no hub calls, but its heartbeat hook reports steps.
+ */
+function livenessLine(hub: Hub, room: Room, p: Participant, l: TargetLiveness): string {
+  const ago = (s: number) => (s < 120 ? `${s} s` : `${Math.round(s / 60)} min`);
+  const step = l.step_age_s !== undefined ? `last tool step ${ago(l.step_age_s)} ago (${l.tool}${l.detail ? `: ${l.detail}` : ""})` : "no tool step reported";
+  if (l.status === "working") return `${hub.shown(room, p)} is working now by the hub's own signals: ${step}, last hub call ${ago(l.last_call_age_s)} ago. A seat inside a long command is not dead. `;
+  if (l.status === "idle") return `${hub.shown(room, p)} is idle by the hub's own signals: ${step}, last hub call ${ago(l.last_call_age_s)} ago. `;
+  return `${hub.shown(room, p)} has been silent by the hub's own signals: ${step}, last hub call ${ago(l.last_call_age_s)} ago. `;
+}
 
 /** Re-judge every open kick vote: the idle sweep calls this, so a swept target drops its vote and a shrinking pool can pass one. */
 export function reevaluateOpenKicks(hub: Hub, room: Room): void {
@@ -77,10 +103,11 @@ export function kickVote(hub: Hub, roomName: string, pid: string, target: string
     if (kickPossible(hub, room, t) < needed) {
       throw new HubError(`A kick needs ${needed} ballots from distinct connections (never one seat alone) and only ${kickPossible(hub, room, t)} could vote here besides ${hub.shown(room, t)}. A human on the dashboard can supply one; otherwise the idle sweep marks a dead seat left after 10 min, and request_agent(replacing=${JSON.stringify(t.name)}) then needs no vote.`, undefined, "state");
     }
-    kv = { target: t.id, targetName: t.name, by: { id: by.id, name: by.name }, reason: why.slice(0, 600), startedAt: now(), ballots: {}, status: "open" };
+    const live = targetLiveness(hub, t);
+    kv = { target: t.id, targetName: t.name, by: { id: by.id, name: by.name }, reason: why.slice(0, 600), startedAt: now(), ballots: {}, status: "open", targetLiveness: live };
     room.kickVotes.set(t.id, kv);
     hub.post(room, "system", undefined,
-      `${hub.shown(room, by)} started a vote to kick ${hub.shown(room, t)}: ${kv.reason} — needs ${needed} kick ballot(s) from distinct connections (quorum=${room.quorum} over the other voters). ${outputLine(hub, room, t)}` +
+      `${hub.shown(room, by)} started a vote to kick ${hub.shown(room, t)}: ${kv.reason} — needs ${needed} kick ballot(s) from distinct connections (quorum=${room.quorum} over the other voters). ${livenessLine(hub, room, t, live)}${outputLine(hub, room, t)}` +
       `Vote with kick_vote(target=${JSON.stringify(hub.shown(room, t))}, vote="kick"|"keep"); the target may not vote. On the threshold the hub removes them, releases their claim/* entries and their next call tells them they were kicked.`);
   }
   kv.ballots[by.id] = { name: by.name, vote, ts: now(), session: by.session, ...(human ? { human: true } : {}) };
@@ -101,12 +128,13 @@ export function openKickByHub(hub: Hub, room: Room, t: Participant, reason: stri
   if (last && !(last.status === "dropped" && last.by.id === HUB_STARTER.id && last.outcome?.includes(DELIVERED))) return false;
   const needed = hub.kickNeeded(room, t);
   if (kickPossible(hub, room, t) < needed) return false;
-  const kv: KickVote = { target: t.id, targetName: t.name, by: HUB_STARTER, reason: reason.slice(0, 600), startedAt: now(), ballots: {}, status: "open" };
+  const live = targetLiveness(hub, t);
+  const kv: KickVote = { target: t.id, targetName: t.name, by: HUB_STARTER, reason: reason.slice(0, 600), startedAt: now(), ballots: {}, status: "open", targetLiveness: live };
   room.kickVotes.set(t.id, kv);
   hub.persist({ type: "kick_vote", room: room.name, vote: kv });
   // kind "chat" so the @-mention reaches the seat the vote is about (a "system" line carries no mention)
   hub.post(room, "chat", undefined,
-    `Routine check: the hub opened a vote on closing the seat of @${hub.shown(room, t)}: ${kv.reason} — needs ${needed} kick ballot(s) from distinct connections (quorum=${room.quorum} over the other voters). ${outputLine(hub, room, t)}` +
+    `Routine check: the hub opened a vote on closing the seat of @${hub.shown(room, t)}: ${kv.reason} — needs ${needed} kick ballot(s) from distinct connections (quorum=${room.quorum} over the other voters). ${livenessLine(hub, room, t, live)}${outputLine(hub, room, t)}` +
     `Vote with kick_vote(target=${JSON.stringify(hub.shown(room, t))}, vote="kick"|"keep"); keep if you know of work of theirs the record does not show. A human on the dashboard can decide alone. The vote is withdrawn if they put something on the record first.`);
   return true;
 }

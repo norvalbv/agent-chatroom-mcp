@@ -305,6 +305,7 @@ export const offlineScripts = [
   'inbox-table-regression.ts',
   'speaker-identity-regression.ts',
   'seat-token-forgery-regression.ts',
+  'kick-liveness-regression.ts',
   'prompt-board-keys-regression.ts',
   'one-of-you-ask-regression.ts',
   'tool-surface-regression.ts',

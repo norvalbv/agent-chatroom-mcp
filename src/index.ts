@@ -574,9 +574,9 @@ app.post("/rooms/:room/replace", (req, res) => {
 app.post("/rooms/:room/create", (req, res) => {
   if (!requireLauncherOrToken(req, res)) return;
   try {
-    const b = (req.body ?? {}) as { topic?: string; quorum?: "unanimous" | "majority" | "supermajority"; expected_participants?: number; require_verification?: boolean; require_challenge?: boolean; mode?: "free" | "round_robin"; max_message_chars?: number; anonymous?: boolean; chair?: string };
+    const b = (req.body ?? {}) as { topic?: string; quorum?: "unanimous" | "majority" | "supermajority"; expected_participants?: number; require_verification?: boolean; require_challenge?: boolean; mode?: "free" | "round_robin"; max_message_chars?: number; anonymous?: boolean; chair?: string; parent?: string };
     const existed = hub.listRooms().some((r) => r.name === req.params.room);
-    const room = hub.createRoom(req.params.room, { topic: b.topic, quorum: b.quorum, expectedParticipants: b.expected_participants, requireVerification: b.require_verification, requireChallenge: b.require_challenge, mode: b.mode, maxMessageChars: b.max_message_chars, anonymous: b.anonymous, chair: b.chair });
+    const room = hub.createRoom(req.params.room, { topic: b.topic, quorum: b.quorum, expectedParticipants: b.expected_participants, requireVerification: b.require_verification, requireChallenge: b.require_challenge, mode: b.mode, maxMessageChars: b.max_message_chars, anonymous: b.anonymous, chair: b.chair, ...(b.parent ? { parent: b.parent } : {}) });
     res.status(existed ? 200 : 201).json({ ...hub.summary(room, true), created: !existed });
   } catch (e) {
     res.status(400).type("text/plain").send(e instanceof HubError ? e.message : "error");

@@ -128,6 +128,7 @@ export class Hub {
       throw new HubError(`Room name must match [a-zA-Z0-9_-]{1,64}.`, undefined, "invalid-arg");
     }
     if (this.rooms.size >= Hub.MAX_ROOMS) throw new HubError(`Room limit (${Hub.MAX_ROOMS}) reached.`, undefined, "budget");
+    if (opts.parent !== undefined && !this.rooms.has(opts.parent)) throw new HubError(`parent room "${opts.parent}" does not exist: create it first.`, undefined, "not-found");
     const full: Opts = {
       topic: opts.topic ?? "",
       mode: opts.mode ?? "free",
@@ -2695,6 +2696,13 @@ export class Hub {
       .map(([k, e]) => `${k} (${e.holder ?? e.by})`);
   }
 
+  /** Breakouts of this room (rooms whose parent it is, including launcher-made group rooms) that are still open with
+   * someone in them: work whose answer the room's conclusion would fix before it arrives (swarm-123021-1nwp: leads
+   * concluded 92 min before its internal group). An empty or archived breakout does not count. */
+  openBreakouts(room: Room): string[] {
+    return [...this.rooms.values()].filter((r) => r.parent === room.name && !r.archived && (r.state === "open" || r.state === "stalled") && this.activeParticipants(r).length > 0).map((r) => r.name);
+  }
+
   /** A last call is running on the proposal's current version and has not run out. */
   inLastCall(pr: Proposal): boolean {
     return pr.status === "open" && pr.lastCall?.version === pr.version && Date.parse(pr.lastCall.until) > Date.now();
@@ -2713,18 +2721,25 @@ export class Hub {
     if (Hub.LAST_CALL_MS <= 0) return false;
     const unvoted = this.unvotedOnCurrent(room, pr);
     const takes = this.takesInFlight(room);
-    if (!unvoted.length && !takes.length) return false;
+    const children = this.openBreakouts(room);
+    if (!unvoted.length && !takes.length && !children.length) return false;
     if (pr.lastCall?.version === pr.version) return Date.parse(pr.lastCall.until) > Date.now();
     const startedAt = now();
     const until = new Date(Date.now() + Hub.LAST_CALL_MS).toISOString();
     const waitingOn = unvoted.map((p) => this.shown(room, p));
     pr.lastCall = { version: pr.version, startedAt, until, waitingOn };
-    this.persist({ type: "last_call", room: room.name, proposalId: pr.id, version: pr.version, startedAt, until, waiting_on: unvoted.map((p) => p.name), ...(takes.length ? { takes_held: takes } : {}) });
+    this.persist({ type: "last_call", room: room.name, proposalId: pr.id, version: pr.version, startedAt, until, waiting_on: unvoted.map((p) => p.name), ...(takes.length ? { takes_held: takes } : {}), ...(children.length ? { children_open: children } : {}) });
     const secs = Math.round(Hub.LAST_CALL_MS / 1000);
     this.post(room, "system", undefined,
       `LAST CALL: ${pr.id} v${pr.version} has the votes. The room concludes at ${until} (in ${secs} s) unless a vote or amend changes that, ` +
       `or as soon as ${this.lastCallWaits(room, pr)}. Once it concludes the room is closed to votes, amends and chat: ` +
       `land any result, verify entry or vote you still owe it now; if work of yours is still running, write take/<what> (and clear it when it lands), or hold/${room.name} if it needs longer than this window.`);
+    // a breakout gets the same notice in its own room: the window is its chance to report before the answer is fixed
+    for (const name of children) {
+      this.post(this.rooms.get(name)!, "system", undefined,
+        `${room.name}, this room's parent, is in LAST CALL on ${pr.id} v${pr.version}: it concludes at ${until} (in ${secs} s), or sooner once this room concludes. ` +
+        `If a result here should change its answer, post_to_room it or say so there now; a seat that is in both rooms can write hold/${room.name} there.`);
+    }
     this.armLastCall(room, pr);
     return true;
   }
@@ -2742,6 +2757,7 @@ export class Hub {
     return [
       ...(unvoted.length ? [`${unvoted.join(", ")} vote${unvoted.length === 1 ? "s" : ""} on v${pr.version}`] : []),
       ...(takes.length ? [`${takes.join(", ")} ${takes.length === 1 ? "is" : "are"} released (board_set the key with empty text)`] : []),
+      ...this.openBreakouts(room).map((c) => `breakout ${c} concludes`),
     ].join(" and ") || "nothing is left to wait for";
   }
 
@@ -2751,12 +2767,14 @@ export class Hub {
     const lc = pr.lastCall?.version === pr.version ? pr.lastCall : undefined;
     const unvoted = this.unvotedOnCurrent(room, pr);
     const takes = this.takesInFlight(room);
+    const children = this.openBreakouts(room);
     return {
       seconds_from_proposal: Math.round((t - Date.parse(pr.createdAt)) / 100) / 10,
       seconds_from_last_text: Math.round((t - Date.parse(pr.updatedAt ?? pr.createdAt)) / 100) / 10,
       ...(lc ? { last_call_seconds: Math.round((t - Date.parse(lc.startedAt)) / 100) / 10 } : {}),
-      ended: lc ? (unvoted.length || takes.length ? "window" : "all_voted") : "none",
+      ended: lc ? (unvoted.length || takes.length || children.length ? "window" : "all_voted") : "none",
       ...(takes.length ? { takes_held: takes } : {}),
+      ...(children.length ? { children_open: children } : {}),
       not_voted_on_final: unvoted.map((p) => ({ name: this.shown(room, p), ...(p.role && p.role !== "worker" ? { role: p.role } : {}), ...(pr.votes[p.id] ? { voted_version: pr.votes[p.id].version ?? 1 } : {}) })),
     };
   }
@@ -3002,6 +3020,25 @@ export class Hub {
     );
     this.releaseClaims(room, "Room concluded");
     this.carryConclusion(room);
+    this.tellOpenBreakouts(room, pr);
+    // a parent in last call may have been waiting only for this breakout
+    const parent = room.parent ? this.rooms.get(room.parent) : undefined;
+    if (parent) for (const p of parent.proposals.values()) if (p.status === "open" && p.lastCall) this.evaluate(parent, p);
+  }
+
+  /**
+   * Each breakout still open when its parent concludes is told at once that the parent's answer is fixed. In
+   * swarm-123021-1nwp the internal group kept waiting on a run with an ETA of 17:00 for 92 min after the leads room
+   * concluded at 14:34, never told, and its final board write was refused. Logged as parent_concluded in the breakout.
+   */
+  private tellOpenBreakouts(room: Room, pr: Proposal): void {
+    for (const name of this.openBreakouts(room)) {
+      const child = this.rooms.get(name)!;
+      this.persist({ type: "parent_concluded", room: name, parent: room.name, proposalId: pr.id, version: pr.version, ts: now() });
+      this.post(child, "system", undefined,
+        `${room.name}, this room's parent, concluded on ${pr.id} v${pr.version} at ${room.conclusion!.decidedAt}: its answer is fixed, and a conclusion here can no longer change it (at most it lands on its board as a late entry) ` +
+        `(its text: room_status room="${room.name}"). Decide whether the work still running here changes anything: if not, conclude or leave; if it does, say so in the parent's room or post_to_room it.`);
+    }
   }
 
   /**

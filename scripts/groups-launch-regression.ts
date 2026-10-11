@@ -194,6 +194,9 @@ test("no digest pass starts once the group rooms have concluded or closed", asyn
   const swarm = /swarm (swarm-\d{6}-[a-z0-9]{4}):/.exec(out)?.[1] ?? /(swarm-\d{6}-[a-z0-9]{4})-build/.exec(out)?.[1];
   assert.ok(swarm, `the run's id is in the launcher output: ${out.slice(0, 400)}`);
   for (const id of ["build", "break"]) {
+    // claim/open-children-at-close: each group room is a breakout of the leads room
+    const info = (await (await fetch(`http://127.0.0.1:${PORT}/rooms/${swarm}-${id}`)).json()) as { parent?: string };
+    assert.equal(info.parent, `${swarm}-leads`, `group room ${id} is linked to the leads room`);
     const r: Response = await fetch(`http://127.0.0.1:${PORT}/rooms/${swarm}-${id}/close`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ name: "test", reason: "groups done" }) });
     assert.equal(r.status, 200, `closed ${id}: ${await r.text()}`);
   }

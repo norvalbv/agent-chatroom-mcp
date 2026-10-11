@@ -615,11 +615,13 @@ if (REQUIRE_VERIFICATION || QUORUM) {
   } catch (e) {
     log(`could not pre-create ${leadsRoom}: ${e instanceof Error ? e.message : String(e)}${e instanceof Error && e.cause ? ` (cause: ${(e.cause as NodeJS.ErrnoException).code ?? (e.cause as Error).message})` : ""}`);
   }
-  // a hand-written group works for hours and concludes its own proposal, so its room gets the run's policy too
+  // a hand-written group works for hours and concludes its own proposal, so its room gets the run's policy too. It is a
+  // breakout of the leads room (parent): the hub carries its conclusion onto the leads board, the leads room's last call
+  // waits for it, and it is told when the leads room concludes (swarm-123021-1nwp: leads concluded 92 min before internal)
   for (const g of GROUPS ? plan.groups : []) {
     const room = `${SWARM_ID}-${g.id}`;
     try {
-      const r = await fetch(`${URL_}/rooms/${encodeURIComponent(room)}/create`, { method: "POST", headers: launcherHeaders(launcherToken), body: JSON.stringify({ topic: `${g.title}: ${g.directive}`, expected_participants: g.workers, require_verification: REQUIRE_VERIFICATION, quorum: QUORUM ?? "unanimous" }) });
+      const r = await fetch(`${URL_}/rooms/${encodeURIComponent(room)}/create`, { method: "POST", headers: launcherHeaders(launcherToken), body: JSON.stringify({ topic: `${g.title}: ${g.directive}`, expected_participants: g.workers, require_verification: REQUIRE_VERIFICATION, quorum: QUORUM ?? "unanimous", parent: leadsRoom }) });
       log(`${room} created with quorum=${QUORUM ?? "unanimous"}${REQUIRE_VERIFICATION ? ", require_verification" : ""} (${r.status})`);
     } catch (e) {
       log(`could not pre-create ${room}: ${e instanceof Error ? e.message : String(e)}`);

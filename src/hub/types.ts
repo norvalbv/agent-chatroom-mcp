@@ -380,6 +380,8 @@ export interface ConclusionClosing {
   ended: "window" | "all_voted" | "none";
   /** take/* entries still held by an active seat when the room concluded, as "key (holder)": work the conclusion cut off */
   takes_held?: string[];
+  /** breakouts of the room still open when it concluded: work its answer was fixed before */
+  children_open?: string[];
   /** voted_version: the version their standing vote was cast on, when they had one */
   not_voted_on_final: { name: string; role?: string; voted_version?: number }[];
 }

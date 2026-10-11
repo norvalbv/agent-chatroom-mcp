@@ -57,7 +57,9 @@ export type Event =
   | { type: "late_write"; room: string; key: string; by: string; after_s: number; contradicts?: string; ts: string }
   | { type: "kick_vote"; room: string; vote: KickVote }
   /** A proposal had the votes while these electorate members had not voted on its version, or these takes were held (replayed: Hub.armLastCall). */
-  | { type: "last_call"; room: string; proposalId: string; version: number; startedAt: string; until: string; waiting_on: string[]; takes_held?: string[] }
+  | { type: "last_call"; room: string; proposalId: string; version: number; startedAt: string; until: string; waiting_on: string[]; takes_held?: string[]; children_open?: string[] }
+  /** Telemetry only (replay ignores it): this breakout was still open when its parent concluded (Hub.tellOpenBreakouts). */
+  | { type: "parent_concluded"; room: string; parent: string; proposalId: string; version: number; ts: string }
   /** A room-wide stall the hub told the room of, with the numbers it quoted, and its end (src/hub/idle.ts). */
   | { type: "hub_restart"; room: string; ts: string; down_s: number; down_upper_bound?: boolean; previous?: string }
   | { type: "room_idle"; room: string; ts: string; idle: import("./idle.js").RoomIdle; steps: number; seats: number; window_min: number; seconds_left?: number }

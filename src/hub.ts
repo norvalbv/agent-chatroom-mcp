@@ -266,6 +266,11 @@ export class Hub {
           const age = (at: string) => Math.max(0, Math.floor((observedAt - Date.parse(at)) / 1000));
           const age_seconds = age(this.lastSeen(p));
           const away = this.away(p);
+          // its local tools heartbeat but it holds no MCP session here (seatUnconnected): its chatroom calls fail on its side,
+          // so it is neither idle nor dead, and a vote or an answer from it cannot arrive until its client reconnects
+          // (only once the grace after a hub start has passed and the room was told: just after a restart it is "away")
+          const lost = p.seatKeyHash && (p.active || away) ? this.unconnected.get(p.seatKeyHash) : undefined;
+          if (lost?.told) return { status: "disconnected", age_seconds, heartbeat_age_seconds: p.working ? age(p.working.at) : null, disconnected_s: Math.round((observedAt - lost.since) / 1000) };
           if (away) return { status: "away", age_seconds, heartbeat_age_seconds: p.working ? age(p.working.at) : null, away: away.evidence };
           // a seat inside one long command makes no calls and no steps, but the hub can see the command running (jobsOf):
           // busy, not suspected dead (review/23f0620d: a verifier the hub was holding the room for read as dead from 601 s)

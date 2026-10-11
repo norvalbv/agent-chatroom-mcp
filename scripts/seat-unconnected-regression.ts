@@ -63,6 +63,10 @@ await beat();
 assert.equal(events().filter((e) => e.type === "seat_unconnected").length, 1, "still one event");
 assert.match(lines()[0], /^worker-1 is working \(Bash\) but has no MCP session with this hub/);
 
+// step 3: room_status reads the seat as disconnected, not idle or suspected_dead, for as long as the episode lasts
+const live = async () => ((await (await fetch(`${HTTP}/rooms/${ROOM}`)).json()) as { participants: { name: string; liveness: { status: string; disconnected_s?: number } }[] }).participants.find((p) => p.name === "worker-1")!.liveness;
+assert.equal((await live()).status, "disconnected");
+assert.ok(typeof (await live()).disconnected_s === "number");
 // the seat's client reconnects: the episode ends
 const a2 = await seat(KEY);
 await a2.callTool({ name: "room_status", arguments: { room: ROOM } });
@@ -72,6 +76,7 @@ assert.equal(back[0].seat, "worker-1");
 assert.ok(typeof back[0].away_s === "number" && back[0].away_s >= 0);
 await beat();
 assert.equal(events().filter((e) => e.type === "seat_unconnected").length, 1, "connected again: no new episode");
+assert.notEqual((await live()).status, "disconnected", "back: no longer disconnected");
 
 // a heartbeat from a key that holds no seat anywhere says nothing
 await fetch(`${HTTP}/heartbeat`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ seat_key: "seat-key-nobody-here", tool: "Bash" }) });

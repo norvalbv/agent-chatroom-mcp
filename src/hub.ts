@@ -2321,7 +2321,8 @@ export class Hub {
     if (p.agent === "human" && prior && prior.vote === vote && (prior.version ?? proposal.version) === proposal.version) return proposal; // repeat human votes are idempotent
     if (p.agent !== "human") {
       if (vote === "agree") {
-        if (!quote || quote.trim().length < 15) {
+        // a proposal shorter than 15 chars is agreed by quoting all of it ("TOTAL=4" in swarm-185546-uiax could never be agreed)
+        if (!quote || quote.trim().length < Math.min(15, proposal.text.trim().length)) {
           throw new HubError("An agree vote must include `quote`: a verbatim clause (15+ chars) from the proposal you are endorsing. Read it before you vote.", undefined, "vote-form");
         }
         if (!norm(proposal.text).includes(norm(quote))) {

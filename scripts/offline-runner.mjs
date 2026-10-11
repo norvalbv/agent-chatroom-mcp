@@ -303,7 +303,6 @@ export const offlineScripts = [
   'speaker-identity-regression.ts',
   'seat-token-forgery-regression.ts',
   'prompt-board-keys-regression.ts',
-  'speaker-identity-regression.ts',
   'one-of-you-ask-regression.ts',
   'tool-surface-regression.ts',
   'trim-checkpoint-regression.ts',

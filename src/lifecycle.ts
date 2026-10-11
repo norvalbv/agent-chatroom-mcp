@@ -13,6 +13,8 @@ import { resolve } from "node:path";
 export interface Lifecycle {
   /** The reason the coming process.exit is for, when it is not a signal or a crash (the idle exit). */
   exiting(reason: string): void;
+  /** How the previous hub on this port and data directory stopped, in words, or undefined when there was none. */
+  previous?: string;
 }
 
 export function installLifecycle(opts: { port: number; dir?: string; head?: string }): Lifecycle {
@@ -30,14 +32,24 @@ export function installLifecycle(opts: { port: number; dir?: string; head?: stri
   process.stderr.on("error", () => {});
 
   if (opts.dir) mkdirSync(opts.dir, { recursive: true });
+  // how the last hub here stopped: its own exit line if it wrote one (read before this start is logged)
+  let previous: string | undefined;
+  try {
+    const last = logFile && existsSync(logFile) ? readFileSync(logFile, "utf8").trimEnd().split("\n").at(-1) ?? "" : "";
+    const exit = / exit pid=(\d+) reason=(.*?) code=/.exec(last);
+    if (exit) previous = `the last hub (pid ${exit[1]}) stopped: ${exit[2]}`;
+  } catch {}
   let ownsPidFile = !!pidFile;
   if (pidFile && existsSync(pidFile)) {
-    const previous = readFileSync(pidFile, "utf8").trim();
+    const prevPid = readFileSync(pidFile, "utf8").trim();
     let running = false;
-    try { process.kill(Number(previous), 0); running = true; } catch {}
+    try { process.kill(Number(prevPid), 0); running = true; } catch {}
     // a second hub on a port that is taken dies at listen; the pid file stays the first one's
-    if (running) { ownsPidFile = false; line(`pid=${previous} already holds ${pidFile} and is running`); }
-    else line(`previous pid=${previous} left no exit line: it was killed outright (SIGKILL, out of memory, power loss)`);
+    if (running) { ownsPidFile = false; line(`pid=${prevPid} already holds ${pidFile} and is running`); }
+    else {
+      line(`previous pid=${prevPid} left no exit line: it was killed outright (SIGKILL, out of memory, power loss)`);
+      previous = `the last hub (pid ${prevPid}) left no exit line: it was killed outright (SIGKILL, out of memory, power loss)`;
+    }
   }
   if (pidFile && ownsPidFile) writeFileSync(pidFile, `${process.pid}\n`);
   line(`start pid=${process.pid} ppid=${process.ppid} port=${opts.port} tty=${process.stdout.isTTY || process.stderr.isTTY ? "yes" : "no"}${opts.head ? ` head=${opts.head}` : ""}`);
@@ -57,5 +69,5 @@ export function installLifecycle(opts: { port: number; dir?: string; head?: stri
     line(`exit pid=${process.pid} reason=${reason ?? `process.exit(${code})`} code=${code} uptime_s=${Math.round((Date.now() - started) / 1000)}`);
     try { if (pidFile && ownsPidFile && readFileSync(pidFile, "utf8").trim() === String(process.pid)) unlinkSync(pidFile); } catch {}
   });
-  return { exiting };
+  return { exiting, ...(previous ? { previous } : {}) };
 }

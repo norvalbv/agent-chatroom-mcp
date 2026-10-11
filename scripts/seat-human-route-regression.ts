@@ -94,11 +94,11 @@ assert.equal(human.status, 200, `the operator is not refused, got ${human.status
 const ok = await postFrom(undefined, `/rooms/${ROOM}/vote`, { name: "benji", proposal_id: pr.id, vote: "agree" });
 assert.equal(ok.status, 200);
 
-// 5. Every route requireToken guards is one whose caller is looked up: a human route added without HUMAN_ROUTES would be
+// 5. Every route requireToken (or requireLauncherOrToken, which falls back to it) guards is one whose caller is looked up: a human route added without HUMAN_ROUTES would be
 // open to a seat's curl again, silently.
 const src = readFileSync(new URL("../src/index.ts", import.meta.url), "utf8");
 const HUMAN_ROUTES = new RegExp(/const HUMAN_ROUTES = \/(.+)\/;/.exec(src)![1]!);
-const guarded = [...src.matchAll(/app\.post\("([^"]+)",[^\n]*\n\s*if \(!requireToken\(req, res\)\)/g)].map((m) => m[1]!.replace(/:\w+/g, "x"));
+const guarded = [...src.matchAll(/app\.post\("([^"]+)",[^\n]*\n\s*if \(!require(?:LauncherOr)?Token\(req, res\)\)/g)].map((m) => m[1]!.replace(/:\w+/g, "x"));
 assert.ok(guarded.length >= 8, `found the guarded routes: ${guarded.join(", ")}`);
 for (const path of [...guarded, "/rooms/x/attachments"]) assert.match(path, HUMAN_ROUTES, `${path} calls requireToken but its caller is never looked up`);
 

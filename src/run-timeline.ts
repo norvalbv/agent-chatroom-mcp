@@ -61,6 +61,9 @@ export interface RunTimeline {
   reviews: { key: string; at: string; author?: string; by?: string; minutes?: number }[];
   /** the hub's own room-idle episodes (room_idle / room_active events, src/hub/idle.ts); an open one has no minutes */
   idle: { from: string; minutes?: number }[];
+  /** each time the hub started again while this room was open (hub_restart events, src/hub.ts announceRestart): when, the
+   * seconds the room went without a hub, and how the last hub stopped as far as it could say */
+  restarts: { at: string; downSeconds: number; previous?: string }[];
   /** each successful request_agent call */
   recruitCalls: { at: string; by: string }[];
   /** start of the first bucket from which every later bucket's output stays under a fifth of the mean before it;
@@ -96,6 +99,7 @@ export function runTimeline(events: readonly Ev[], bucketMinutes = 30): RunTimel
   const openNote = new Map<string, RunTimeline["notes"][number]>();
   const reviews: RunTimeline["reviews"] = [];
   const idle: RunTimeline["idle"] = [];
+  const restarts: RunTimeline["restarts"] = [];
   const buckets: TimelineBucket[] = [];
   const names = new Map<string, string>();
   const byKey = new Map<string, string>();
@@ -203,6 +207,9 @@ export function runTimeline(events: readonly Ev[], bucketMinutes = 30): RunTimel
       case "work":
         b.work++;
         break;
+      case "hub_restart":
+        restarts.push({ at: new Date(ts).toISOString(), downSeconds: Number(e.down_s) || 0, ...(e.previous ? { previous: String(e.previous) } : {}) });
+        break;
       case "room_idle":
         if (!idle.length || idle[idle.length - 1].minutes !== undefined) idle.push({ from: new Date(ts).toISOString() });
         break;
@@ -225,6 +232,7 @@ export function runTimeline(events: readonly Ev[], bucketMinutes = 30): RunTimel
     notes,
     reviews,
     idle,
+    restarts,
     recruitCalls,
     ...(q >= 0 ? { quietFrom: buckets[q].start, quietCostUsd: Math.round(buckets.slice(q).reduce((a, b) => a + b.costUsd, 0) * 100) / 100 } : {}),
   };
@@ -258,6 +266,7 @@ export function renderTimeline(t: RunTimeline): string {
     text += `\n${t.reviews.length} results, ${done.length} reviewed by another seat${done.length ? ` (median ${median(done)} min)` : ""}, ${t.reviews.length - done.length} never` +
       (t.reviews.length > done.length ? `: ${t.reviews.filter((r) => r.minutes === undefined).map((r) => r.key).join(", ")}` : "") + ".\n";
   }
+  if (t.restarts.length) text += `\n${t.restarts.map((r) => `The hub restarted at ${hhmm(r.at)} after ${r.downSeconds} s${r.previous ? ` (${r.previous})` : ""}.`).join("\n")}\n`;
   if (t.idle.length) text += `\nThe hub said the room was idle at ${t.idle.map((x) => `${hhmm(x.from)} (${x.minutes === undefined ? "still idle at the end" : `${x.minutes} min`})`).join(", ")}.\n`;
   if (t.recruitCalls.length) text += `\nRecruits: ${t.recruitCalls.map((r) => `${hhmm(r.at)} ${r.by}`).join(", ")}.\n`;
   return `${text}\n`;

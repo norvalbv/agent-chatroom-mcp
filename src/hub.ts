@@ -871,7 +871,8 @@ export class Hub {
    */
   noteUsed(room: Room, p: Participant, text: string, via: string, ackOf?: string): void {
     if (p.agent === "human") return;
-    const keys = ackOf ? [ackOf] : [...new Set(text.match(/inbox\/[\w.-]+\/[\w.\/-]+/g) ?? [])].map((k) => k.replace(/[.,;:)]+$/, "")).filter((k) => !k.endsWith(".ack"));
+    // the room's own note keys, matched as whole keys (a key may hold spaces: "digest pass 2", review/4e9505d8)
+    const keys = ackOf ? [ackOf] : [...room.board.keys()].filter((k) => k.startsWith("inbox/") && !k.endsWith(".ack") && Hub.namesKey(text, k));
     const seen = (this.notesUsed.get(room) ?? this.notesUsed.set(room, new Set()).get(room))!;
     for (const key of keys) {
       const note = room.board.get(key);
@@ -881,6 +882,11 @@ export class Hub {
     }
   }
   private readonly notesUsed = new WeakMap<Room, Set<string>>();
+  /** `key` appears in `text` as a whole key: not as the start of a longer one (inbox/a/n1 inside inbox/a/n10). */
+  static namesKey(text: string, key: string): boolean {
+    for (let i = text.indexOf(key); i >= 0; i = text.indexOf(key, i + 1)) if (!/^[\w/-]/.test(text.slice(i + key.length, i + key.length + 1)) && !/^\.\w/.test(text.slice(i + key.length, i + key.length + 2))) return true;
+    return false;
+  }
 
   /** Surface every quiet thread whose message id is cited in `text`. */
   surfaceCited(room: Room, text: string, reason: string) {

@@ -39,3 +39,20 @@ test("citing a note, or acking it with a reply, is logged once per seat and note
   assert.equal(row.notes, 3);
   assert.equal(row.used, 2, "the inbox table counts the notes used: 2 of 3 (fyi never was)");
 });
+
+test("a note key with spaces counts; a longer key that starts with it does not count for it", () => {
+  // review/4e9505d8 (claude-opus-5-5-3): board keys may hold spaces, and inbox/x/n1 is a prefix of inbox/x/n10
+  Hub.LAST_CALL_MS = 0;
+  const dir = mkdtempSync(join(tmpdir(), "note-used-2-"));
+  const hub = new Hub({ dataDir: dir });
+  const s = hub.join("nu2-src", "S", "test", { nudgeAfterMs: 0 }, undefined, "s1").participant;
+  hub.join("nu2-src", "S2", "test", {}, undefined, "s2");
+  const t = hub.join("nu2-dst", "T", "test", { nudgeAfterMs: 0 }, undefined, "s3").participant;
+  hub.join("nu2-dst", "U", "test", {}, undefined, "s4");
+  hub.postToRoom("nu2-src", s.id, "nu2-dst", "digest pass 2", "Digest pass 2: build found 0.62.", false);
+  hub.postToRoom("nu2-src", s.id, "nu2-dst", "n1", "note one", false);
+  hub.postToRoom("nu2-src", s.id, "nu2-dst", "n10", "note ten", false);
+  hub.setBoard("nu2-dst", t.id, "result/a", "Per inbox/nu2-src/digest pass 2, and see inbox/nu2-src/n10.");
+  const used = readFileSync(join(dir, "nu2-dst.jsonl"), "utf8").split("\n").filter(Boolean).map((l) => JSON.parse(l)).filter((e) => e.type === "note_used").map((e) => e.note).sort();
+  assert.deepEqual(used, ["inbox/nu2-src/digest pass 2", "inbox/nu2-src/n10"], "n1 is not used just because n10 starts with it");
+});

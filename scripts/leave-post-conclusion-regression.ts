@@ -120,14 +120,12 @@ assert.equal(rm2.state, "closed");
 assert.ok(rm2.board.has("claim/thing"), "claim/thing is released (announced), not deleted, on close");
 assert.ok(rm2.board.has("handoff/other"), "handoff/other written before close survives");
 
-// closeRoom already deactivated D (abandoned-room cleanup); a seat that reconnects afterwards (the launcher's
-// respawn/replacement path, or a late reconnect) still must not be refused for the already-released claim, and
-// board_set must still refuse outright even for a freshly (re)joined, active participant.
+// closeRoom already deactivated D (abandoned-room cleanup). A seat that reconnects afterwards and joins by hand is
+// not put back (scripts/closed-room-rejoin-regression.ts): the refusal says the room is closed, and the seat, already
+// out of the room, has no claim to hand off and nothing it can write there.
 r = await d.call("join_room", { room: room2, name: "D", agent: "test" });
-assert.ok(!r.error, "D rejoins the closed room: " + r.text);
+assert.ok(r.error && /is closed: nobody rejoins it/.test(r.text), "D cannot rejoin the closed room: " + r.text);
 r = await d.call("board_set", { room: room2, key: "evidence/late", text: "too late" });
-assert.ok(r.error && /closed/.test(r.text), "board_set is refused outright post-close: " + r.text);
-r = await d.call("leave_room", { room: room2, reason: "room closed, nothing left to do" });
-assert.ok(!r.error, "D's leave is not refused after close: " + r.text);
+assert.ok(r.error, "board_set is refused post-close: " + r.text);
 
 console.log("LEAVE-POST-CONCLUSION OK");

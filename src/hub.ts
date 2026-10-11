@@ -518,6 +518,9 @@ export class Hub {
       this.persist({ type: "join", room: roomName, p: participant });
       this.post(room, "system", undefined, `${this.shown(room, participant)}${room.anonymous ? "" : ` (${agent})`}${this.roleTag(participant)} joined the room.`);
     } else if (!participant.active) {
+      // a closed room takes nobody back by hand either (d37025d8 closed the seat-key path; idea/closed-room-rejoin-by-hand):
+      // it has nothing left to act on, and a join line there reads as a live room. A human may come back to read it.
+      if (room.state === "closed" && participant.agent !== "human") throw new HubError(`Room "${roomName}" is closed: nobody rejoins it. Its board and log stay readable on the dashboard and at GET /rooms/${roomName}.`, undefined, "state");
       participant.active = true;
       participant.lastActiveAt = now();
       if (session) participant.session = session;

@@ -79,6 +79,18 @@ const cases: [string, () => void][] = [
     assert.match(merged.text, /peer: peer will rerun T-B3-4/);
     assert.deepEqual(hub.unacknowledged(room), []);
   }],
+  // review/4e9505d8-opus5 (claude-opus-5-5-5): "received, thanks" was read as a reply (one bare word only was bare)
+  ["an acknowledgement made only of bare words is bare, however many", () => {
+    const { hub, b, c, room, post } = setup();
+    const key = post("digest");
+    hub.setBoard("target", b.id, `${key}.ack`, "ack");
+    for (const bare of ["received, thanks", "Got it, thank you!", "ok - noted.", "Acknowledged; read."]) {
+      hub.setBoard("target", c.id, `${key}.ack`, bare);
+      assert.equal(room.board.get(`${key}.ack`)!.text, "ack", `"${bare}" is a bare repeat, not appended`);
+    }
+    hub.setBoard("target", c.id, `${key}.ack`, "received, thanks: will rerun T-B3-4");
+    assert.match(room.board.get(`${key}.ack`)!.text, /peer: received, thanks: will rerun T-B3-4/, "a reply that says something is still appended");
+  }],
   ["a stale acknowledgement is replaced by any seat without overwrite", () => {
     const { hub, b, c, room, post } = setup();
     const key = post("digest", "pass 1");

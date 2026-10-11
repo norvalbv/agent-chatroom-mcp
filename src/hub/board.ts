@@ -40,7 +40,9 @@ export function applyBoardManifest(room: Room, bytes: number, kind: "full" | "de
 }
 
 /** An acknowledgement that says nothing beyond "seen". */
-const BARE_ACK = /^\s*(ack(nowledged)?|ok(ay)?|seen|received|read|noted|done|thanks?)[\s.!]*$/i;
+// one or more of these words and nothing else: "received, thanks" and "got it, thank you!" say no more than "ack"
+// (review/4e9505d8-opus5); "received, thanks: will rerun T-B3-4" says more and is a reply
+const BARE_ACK = /^\s*(?:(?:ack(?:nowledged)?|ok(?:ay)?|seen|received|read|noted|done|thanks?|thank you|got it|will do|roger)[\s.,;:!-]*)+$/i;
 
 /** The most one board entry or note holds. Stated in the room summary (limits) and in every refusal for size. */
 export const BOARD_ENTRY_MAX = 8000;

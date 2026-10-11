@@ -3439,7 +3439,7 @@ export class Hub {
     watched: (seat) => this.seatRooms(seat).length > 0,
     onSample: (seat, memory) => this.recordMemory(seat, memory),
     onEvent: (e) => this.recordMemoryEvent(e),
-    onJobEnd: (seat, job) => this.jobEnded(seat, job),
+    onJobEnd: (seat, job, others) => this.jobEnded(seat, job, others),
   });
   private memoryLogged = new Map<string, number>();
   private memoryNotices = new Map<string, SteerItem[]>();
@@ -3497,17 +3497,17 @@ export class Hub {
    * use the wait as their timer while a job runs), and the record gets job_end. Said only to a seat that is waiting on
    * the hub at that moment; nothing for a seat no longer in a room.
    */
-  jobEnded(seat: string, job: Job): void {
+  jobEnded(seat: string, job: Job, others = 0): void {
     const mins = Math.round(job.elapsed_s / 60);
     const ran = mins < 60 ? `${mins} min` : `${Math.floor(mins / 60)} h ${mins % 60} min`;
     for (const { room, p } of this.seatRooms(seat)) {
       const waiting = (this.waitingNow.get(p) ?? 0) > 0;
-      this.persist({ type: "job_end", room: room.name, seat: p.name, pid: job.pid, command: job.command, ran_s: job.elapsed_s, told: waiting, ts: now() });
+      this.persist({ type: "job_end", room: room.name, seat: p.name, pid: job.pid, command: job.command, ran_s: job.elapsed_s, ...(others ? { others } : {}), told: waiting, ts: now() });
       // a seat that is not waiting on the hub is inside a tool call of its own and has the command's result already (a
       // three-minute test run in the foreground): it is recorded, not said
       if (!waiting) continue;
       // a chat-kind line from the hub: only that carries the @-mention as something addressed to the seat (as room-idle's does)
-      this.post(room, "chat", undefined, `@${this.shown(room, p)} your job has ended: pid ${job.pid} (${job.command.slice(0, 120)}), after ${ran}. Read its result and tell the room.`);
+      this.post(room, "chat", undefined, `@${this.shown(room, p)} your job has ended: pid ${job.pid} (${job.command.slice(0, 120)}), after ${ran}${others ? `, and ${others} other process${others === 1 ? "" : "es"} of yours with it` : ""}. Read its result and tell the room.`);
     }
   }
   /** The jobs a seat has running, from the memory watcher's last look at the process table (src/hub/memory.ts jobsOf). */

@@ -19,6 +19,6 @@ if (!files.length || bad.length) {
 const logs = files.map((f) => parseRoomLog(readFileSync(f, "utf8")));
 const rows = waitCost(logs), waits = emptyWaits(logs);
 const tools = argv.includes("--by-tool") ? costByTool(logs) : undefined;
-const toolTable = tools ? `\n\n| woke on | requests | cost | share |\n|---|---|---|---|\n${tools.slice(0, 20).map((t) => `| ${t.tool} | ${t.requests} | $${t.cost_usd.toFixed(2)} | ${Math.round(t.share * 100)}% |`).join("\n")}` : "";
+const toolTable = tools ? `\n\n| woke on | requests | cost | share |\n|---|---|---|---|\n${tools.slice(0, 20).map((t) => `| ${t.tool} | ${t.requests} | $${t.cost_usd.toFixed(2)} | ${Math.round(t.share * 100)}% |`).join("\n")}${((rest) => (rest.length ? `\n| other (${rest.length} tools) | ${rest.reduce((n, t) => n + t.requests, 0)} | $${rest.reduce((n, t) => n + t.cost_usd, 0).toFixed(2)} | ${Math.round(rest.reduce((n, t) => n + t.share, 0) * 100)}% |` : ""))(tools.slice(20))}` : "";
 console.log(argv.includes("--json") ? JSON.stringify({ rows, waits, ...(tools ? { tools } : {}) }, null, 2)
   : `${renderWaitCost(rows)}\n${waits.waits} waits, ${waits.empty} returned nothing after a median ${waits.median_empty_s ?? "-"} s (${waits.empty_seat_minutes} seat-minutes spent in them: the more minutes per empty wait, the fewer requests they cost).${toolTable}`);

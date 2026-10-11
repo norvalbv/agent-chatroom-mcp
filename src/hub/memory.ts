@@ -118,8 +118,11 @@ export const JOB_MIN_S = 60;
  * hours old in the same review): a run is 8 hours and a scorer scheduled inside it is younger. CHATROOM_JOB_MAX_S. */
 export const JOB_MAX_S = Number(process.env.CHATROOM_JOB_MAX_S) > 0 ? Number(process.env.CHATROOM_JOB_MAX_S) : 6 * 3600;
 export function jobsOf(own: readonly Proc[]): Job[] {
-  return own
-    .filter((p) => p.elapsedS >= JOB_MIN_S && p.elapsedS <= JOB_MAX_S && !A_SERVER.test(p.command) && !NOT_A_JOB.test((p.command.trim().split(/\s+/)[0] ?? "").replace(/^.*\//, "").replace(/^-/, "")))
+  const jobs = own.filter((p) => p.elapsedS >= JOB_MIN_S && p.elapsedS <= JOB_MAX_S && !A_SERVER.test(p.command) && !NOT_A_JOB.test((p.command.trim().split(/\s+/)[0] ?? "").replace(/^.*\//, "").replace(/^-/, "")));
+  // a job that is a tree of processes is one job: its root (review/304c9538: a runner with three workers ended as four lines)
+  const pids = new Set(jobs.map((p) => p.pid));
+  return jobs
+    .filter((p) => !pids.has(p.ppid))
     .map((p) => ({ pid: p.pid, command: shownCommand(p.command), elapsed_s: p.elapsedS }))
     .sort((a, b) => b.elapsed_s - a.elapsed_s);
 }
@@ -133,8 +136,9 @@ export interface MemoryWatchOptions {
   watched: (seat: string) => boolean;
   onSample?: (seat: string, memory: SeatMemory) => void;
   onEvent?: (event: MemoryEvent) => void;
-  /** a process counted as a seat's job on an earlier tick is gone: with how long it had run when last seen */
-  onJobEnd?: (seat: string, job: Job) => void;
+  /** a process counted as a seat's job on an earlier tick is gone: with how long it had run when last seen. Several
+   * gone on the same tick are one report: the longest-running, and how many others ended with it. */
+  onJobEnd?: (seat: string, job: Job, others: number) => void;
   /** test seams */
   table?: () => Promise<Proc[]>;
   footprints?: () => Promise<Map<number, number>>;
@@ -168,6 +172,12 @@ export class MemoryWatch {
   /** What tagged processes of no live seat hold (a recorder a finished room left running, a respawned seat's old script). */
   unattributed(): Unattributed { return this.others; }
 
+  private reportEnded(seat: string, ended: Job[]): void {
+    if (!ended.length) return;
+    const [first, ...rest] = [...ended].sort((a, b) => b.elapsed_s - a.elapsed_s);
+    this.o.onJobEnd?.(seat, first, rest.length);
+  }
+
   /** One pass over the process table. Never overlaps itself; a failed ps is an empty table, not an error. */
   async tick(): Promise<MemoryEvent[]> {
     if (this.running) return [];
@@ -190,7 +200,7 @@ export class MemoryWatch {
         this.jobsBySeat.set(seat, jobs);
         // gone from the table, not merely too old to count as a job any more: a process still running has not ended
         const alive = new Set(table.map((p) => p.pid));
-        for (const was of this.watching.get(seat) ?? []) if (!alive.has(was.pid)) this.o.onJobEnd?.(seat, was);
+        this.reportEnded(seat, (this.watching.get(seat) ?? []).filter((was) => !alive.has(was.pid)));
         this.watching.set(seat, [...jobs, ...(this.watching.get(seat) ?? []).filter((was) => alive.has(was.pid) && !jobs.some((j) => j.pid === was.pid))]);
         const biggest = u.own[0];
         const top = biggest ? { pid: biggest.pid, mb: mbOf(biggest.kb), command: biggest.command.slice(0, 200) } : null;
@@ -233,7 +243,7 @@ export class MemoryWatch {
       // a seat with nothing left in the table (its agent process included) has no jobs; the ones it had have ended
       for (const [seat, jobs] of [...this.watching]) {
         if (seen.has(seat)) continue;
-        for (const was of jobs) if (!table.some((p) => p.pid === was.pid)) this.o.onJobEnd?.(seat, was);
+        this.reportEnded(seat, jobs.filter((was) => !table.some((p) => p.pid === was.pid)));
         this.watching.delete(seat);
         this.jobsBySeat.delete(seat);
       }

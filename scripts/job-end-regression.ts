@@ -38,6 +38,19 @@ test("the watcher reports a job that was running and is gone, once, and not a sh
   assert.equal(ended.length, 1, "once");
 });
 
+test("a job that is a tree of processes is one job and one report (review/304c9538)", async () => {
+  // a runner (pid 200) with three workers it started, and a second, unrelated job of the same seat that ends on the same tick
+  const tree = ["  200     1 300000       05:00 python3 runner.py", "  201   200 100000       04:58 python3 worker.py 1", "  202   200 100000       04:58 python3 worker.py 2", "  203   200 100000       04:58 python3 worker.py 3", "  300     1 100000       02:00 node score.mjs"];
+  const ticks = [table([AGENT, ...tree]), table([AGENT])];
+  const ended: { pid: number; others: number }[] = [];
+  let i = 0;
+  const watch = new MemoryWatch({ watched: () => true, table: async () => ticks[i++], footprints: async () => new Map(), onJobEnd: (_seat, job, others) => ended.push({ pid: job.pid, others }) });
+  await watch.tick();
+  assert.deepEqual(watch.jobs(seatHash("seat-key-AAAA")).map((j) => j.pid), [200, 300], "the runner and the scorer; the workers are the runner's");
+  await watch.tick();
+  assert.deepEqual(ended, [{ pid: 200, others: 1 }], "one report: the longest-running, and the other job that ended with it");
+});
+
 test("the hub tells the seat in its room, which wakes its wait, and records job_end", async () => {
   const dir = mkdtempSync(join(tmpdir(), "job-end-"));
   try {
@@ -64,8 +77,12 @@ test("the hub tells the seat in its room, which wakes its wait, and records job_
     assert.equal(hub.getRoom("jobs").messages.filter((m) => /your job has ended/.test(m.content)).length, 1, "no second line");
     const all = readFileSync(join(dir, "jobs.jsonl"), "utf8").trim().split("\n").map((l) => JSON.parse(l)).filter((e) => e.type === "job_end");
     assert.deepEqual(all.map((e) => [e.pid, e.told]), [[8148, true], [9001, false]]);
+    // several processes gone on one tick are one line
+    const again = hub.wait("jobs", a.id, hub.getRoom("jobs").messages.at(-1)!.seq, 5000);
+    hub.jobEnded(seatHash("seat-key-AAAA"), { pid: 200, command: "python3 runner.py", elapsed_s: 300 }, 3);
+    assert.match((await again)[0].content, /pid 200 \(python3 runner\.py\), after 5 min, and 3 other processes of yours with it\./);
     // a seat key nobody holds: nothing said, nothing thrown
     hub.jobEnded(seatHash("seat-key-none"), { pid: 1, command: "x", elapsed_s: 100 });
-    assert.equal(hub.getRoom("jobs").messages.filter((m) => /your job has ended/.test(m.content)).length, 1);
+    assert.equal(hub.getRoom("jobs").messages.filter((m) => /your job has ended/.test(m.content)).length, 2);
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });

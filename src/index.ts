@@ -618,6 +618,11 @@ app.get("/rooms/:room/transcript", (req, res) => {
   }
 });
 
-app.listen(PORT, HOST, () => {
+const server = app.listen(PORT, HOST, () => {
   console.error(`agent-chatroom-mcp: MCP at http://${HOST}:${PORT}/mcp, dashboard at http://${HOST}:${PORT}/ui${DATA_DIR ? ` (persisting to ${DATA_DIR})` : " (in-memory)"}`);
 });
+// node closes an idle keep-alive connection after 5 s; a seat pauses longer than that between two calls, and a client
+// reusing the connection as it closed lost the call to ECONNRESET (7 of 582 chatroom calls, swarm-003601-tky5,
+// friction/econnreset). Keep idle connections longer than a seat's usual pause; headers must outlast them.
+server.keepAliveTimeout = 65_000;
+server.headersTimeout = 66_000;

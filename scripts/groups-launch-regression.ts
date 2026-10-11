@@ -138,6 +138,10 @@ test("--digest-every starts a fresh consolidator seat on a timer, told every gro
   assert.ok(first.includes('key="digest", ack_required=true') && first.includes('"Pass 1."'), "it sends each group one note, replaced each pass, that the group must acknowledge");
   assert.ok(first.includes("`position`"), "and sends nothing to a group that has not put its own position on the board");
   assert.ok(first.includes("digest/1"), "and leaves the pass on the consolidation room's board for the next one");
+  // dress rehearsal swarm-013051-mgzm: a pass told the break group to back its claim "or concede"; the group ran the
+  // build group's own method and switched sides before the data arrived (the convergence sources/2604.22080 warns of)
+  assert.match(first, /never tell a group what to conclude/i, "it relays evidence and asks for a settling command; it does not tell a group what to hold");
+  assert.ok(!/\bconcede\b/.test(first.replace(/never[^.]*\./gi, "")), "and nothing in it asks a group to concede");
   assert.match(String(r.stdout), /digest pass 1: started digest-1/, "the launcher logs each pass");
   // a pass that is still running is not doubled: passes are numbered without gaps and none repeats
   const numbers = digests.map((p) => Number(/You are digest-(\d+)/.exec(p)![1])).sort((a, b) => a - b);

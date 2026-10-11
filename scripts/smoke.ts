@@ -27,11 +27,11 @@ process.on("exit", stop);
 // how long the hub may take to start: 10 s was not enough on a shared machine at load average 150-200, where an
 // unchanged tree failed "server did not start" (swarm-180216-182a, friction/machine-load). SMOKE_START_MS overrides it.
 const START_MS = Number(process.env.SMOKE_START_MS ?? 90_000);
-async function waitForServer() {
+async function waitForServer(base = HTTP) {
   const t0 = Date.now();
   while (Date.now() - t0 < START_MS) {
     try {
-      await fetch(`${HTTP}/`);
+      await fetch(`${base}/`);
       if (Date.now() - t0 > 10_000) console.log(`smoke: the hub took ${Math.round((Date.now() - t0) / 1000)} s to start`);
       return;
     } catch {
@@ -767,14 +767,7 @@ assert.deepEqual(tools, ["amend", "board_get", "board_set", "challenge", "join_r
   const HTTP2 = `http://127.0.0.1:${PORT2}`;
   const server2 = spawn("npx", ["tsx", "src/index.ts"], { env: { ...hubEnv, PORT: String(PORT2), CHATROOM_SPAWN_DRY: "1", CHATROOM_NUDGE_AFTER_MS: "1200", CHATROOM_LOG_DIR: "/tmp/chatroom-smoke-spawn2", CHATROOM_MAX_LIVE_PER_ROOM: "12" }, stdio: ["ignore", "inherit", "inherit"] });
   process.on("exit", () => server2.kill());
-  for (let i = 0; i < 50; i++) {
-    try {
-      await fetch(`${HTTP2}/`);
-      break;
-    } catch {
-      await new Promise((r) => setTimeout(r, 200));
-    }
-  }
+  await waitForServer(HTTP2); // the same load-tolerant window as the first hub
   const mk = async (name: string) => {
     const client = new Client({ name, version: "0.0.0" });
     await client.connect(new StreamableHTTPClientTransport(new URL(`${HTTP2}/mcp`)));

@@ -327,6 +327,7 @@ async function withRespawn(name: string, room: string, mk: (nm: string, note: st
     stop: () => STOPPING || Date.now() > RUN_STARTED + TIMEOUT_MIN * 60_000 - 5 * 60_000,
     room: () => fetchRespawnRoom(URL_, room),
     exitCode: (nm) => exitCodes.get(nm) ?? null,
+    signal: (nm) => exitSignals.get(nm) ?? null,
     register: (previousName, nm, reason) => registerRespawn(URL_, room, previousName, nm, launcherToken, undefined, reason),
     run: mk,
     log,
@@ -337,6 +338,8 @@ async function withRespawn(name: string, room: string, mk: (nm: string, note: st
 
 /** Last exit code per seat name; withRespawn reads it to tell a crash from a finished seat. */
 const exitCodes = new Map<string, number | null>();
+/** The signal that ended a seat, when one did: code is null for every signal, and SIGKILL (out of memory) is not a stop. */
+const exitSignals = new Map<string, string | null>();
 /** Only successfully isolated workers receive seat commit attribution (never planner/verifier). */
 const writeWorkers = new Set<string>();
 
@@ -363,15 +366,16 @@ function runProc(name: string, cmd: string, args: string[], cwd: string, outFile
       // a seat's rate-limit retries, provider errors and budget exits are worth seeing live, not only in its log at exit
       for (const line of String(d).split("\n")) if (/retry|provider error|budget spent|step cap|could not leave|OpenRouter:/.test(line)) log(`${name}: ${line.replace(/^\[openrouter [^\]]*\] /, "").slice(0, 160)}`);
     });
-    child.on("close", async (code) => {
+    child.on("close", async (code, signal) => {
       writeFileSync(resolve(OUT, `${name}.log`), err);
       if (!outViaFile) writeFileSync(outFile, out);
       const final = outViaFile ? safeRead(outFile) : out;
       exitCodes.set(name, code);
-      log(`${name} exited (${exitDetail(code, [final, err]).slice(5)})`);
+      exitSignals.set(name, signal);
+      log(`${name} exited (${exitDetail(code, [final, err], Date.now(), signal).slice(5)})`);
       // the exit receipt: the hub closes this seat's MCP sessions, so a dead seat is not read as alive in a long command.
       // Awaited (5 s at most): withRespawn reads the room's active seats next, and the launcher's own exit would cut it off.
-      if (beat) await fetch(`${URL_}/heartbeat`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ seat_key: beat.key, exited: true, detail: exitDetail(code, [final, err]) }), signal: AbortSignal.timeout(5_000) }).catch(() => {});
+      if (beat) await fetch(`${URL_}/heartbeat`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ seat_key: beat.key, exited: true, detail: exitDetail(code, [final, err], Date.now(), signal) }), signal: AbortSignal.timeout(5_000) }).catch(() => {});
       res(final.trim());
     });
   });

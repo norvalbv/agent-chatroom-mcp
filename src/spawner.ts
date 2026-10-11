@@ -446,7 +446,7 @@ export class Spawner {
         child.kill();
       }, o.wallClockMs) : undefined;
       wall?.unref();
-      child.on("close", (code) => {
+      child.on("close", (code, signal) => {
         clearTimeout(wall);
         rec.endedAt = new Date().toISOString();
         rec.exitCode = code;
@@ -457,7 +457,7 @@ export class Spawner {
           rec.usage = usage;
           said = [text, claudeStderr];
         }
-        this.hooks?.seatExited?.(beat.key, exitDetail(code, said));
+        this.hooks?.seatExited?.(beat.key, exitDetail(code, said, Date.now(), signal));
         this.children.delete(name);
         if (snap && cwd !== home) removeSnapshot(snap);
         try {

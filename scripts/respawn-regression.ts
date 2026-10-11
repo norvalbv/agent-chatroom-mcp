@@ -51,6 +51,12 @@ assert.equal(d.respawn, true, d.reason); assert.match(d.reason, /floor of 10/);
 // 13. A deliberate SIGTERM (exit 143, or a signal with no code) is an operator stopping the seat, not a crash: no respawn.
 d = decide({ exitCode: 143 }); assert.equal(d.respawn, false, d.reason); assert.match(d.reason, /signal/);
 d = decide({ exitCode: null }); assert.equal(d.respawn, false, d.reason);
+d = decide({ exitCode: null, signal: "SIGTERM" }); assert.equal(d.respawn, false, d.reason);
+d = decide({ exitCode: null, signal: "SIGINT" }); assert.equal(d.respawn, false, d.reason);
+// 14. SIGKILL is not an operator's stop: macOS kills a process with it when memory runs out (flaw 4), and a stray `kill -9`
+//     or `pkill -9` from another seat (flaw 5) sends it too. A grouped run lost a seat this way and did not replace it (#296).
+d = decide({ exitCode: null, signal: "SIGKILL" }); assert.equal(d.respawn, true, d.reason); assert.match(d.reason, /SIGKILL/);
+d = decide({ exitCode: 137 }); assert.equal(d.respawn, true, d.reason); assert.match(d.reason, /137/);
 // 11. Humans do not count toward the floor.
 d = decide({ room: room({ participants: [seat("u-0"), seat("u-1"), seat("benji", true, "worker", "human"), seat("gone", false)] }) });
 assert.equal(d.respawn, true, d.reason);

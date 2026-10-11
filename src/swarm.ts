@@ -21,6 +21,7 @@ import { claudeSandbox } from "./sandbox.js";
 import { stopStrays } from "./strays.js";
 import { launchCostGuide } from "./cost-estimate.js";
 import { seatTarget } from "./seat-targets.js";
+import { loadGroups, type GroupsFile } from "./groups.js";
 loadDotEnv();
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -36,10 +37,25 @@ const has = (name: string) => argv.includes(`--${name}`);
 const BOOL_FLAGS = new Set(["--keep-hub", "--reuse-hub", "--apply", "--full-access", "--named", "--flat", "--require-verification", "--respawn", "--claude-full", "--no-carry", "--no-seat-targets", "--sandbox", "--no-web"]);
 const task = argv.find((a, i) => !a.startsWith("--") && (i === 0 || !argv[i - 1].startsWith("--") || BOOL_FLAGS.has(argv[i - 1])));
 if (!task) {
-  console.error('usage: swarm "<task>" [--flat] [--done-when text] [--verify text] [--agents 6] [--cwd dir] [--models sonnet,haiku] [--lead-model opus] [--verifier-model opus] [--planner-model opus] [--codex k] [--codex-models gpt-6-astra,gpt-5.6-sol,gpt-5.6-terra] [--openrouter k] [--openrouter-models deepseek/deepseek-v4.1-flash,...] [--verifier-openrouter slug] [--openrouter-reasoning low|medium|high] [--require-verification] [--quorum unanimous|majority|supermajority] [--prompt loop.md] [--respawn] [--apply] [--full-access] [--named] [--claude-full] [--no-carry] [--no-seat-targets] [--no-web] [--sandbox] [--timeout 30] [--port 7717] [--result-path path]');
+  console.error('usage: swarm "<task>" [--flat] [--done-when text] [--verify text] [--agents 6] [--cwd dir] [--models sonnet,haiku] [--lead-model opus] [--verifier-model opus] [--planner-model opus] [--codex k] [--codex-models gpt-6-astra,gpt-5.6-sol,gpt-5.6-terra] [--openrouter k] [--openrouter-models deepseek/deepseek-v4.1-flash,...] [--verifier-openrouter slug] [--openrouter-reasoning low|medium|high] [--require-verification] [--quorum unanimous|majority|supermajority] [--prompt loop.md] [--groups groups.json] [--respawn] [--apply] [--full-access] [--named] [--claude-full] [--no-carry] [--no-seat-targets] [--no-web] [--sandbox] [--timeout 30] [--port 7717] [--result-path path]');
   process.exit(2);
 }
-const TOTAL = Math.max(2, Number(flag("agents", "4")));
+/** --groups <file.json>: the run's groups as the operator wrote them (src/groups.ts), one room and one brief each, on the
+ * long-room brief (prompts/group.md). No planner runs, and --agents is the file's workers plus the verifier. */
+let GROUPS: GroupsFile | undefined;
+if (flag("groups")) {
+  if (has("flat")) {
+    console.error("--groups gives each group its own room; --flat puts everyone in one. Pass one of them.");
+    process.exit(2);
+  }
+  try {
+    GROUPS = loadGroups(resolve(flag("groups")!));
+  } catch (e) {
+    console.error(e instanceof Error ? e.message : String(e));
+    process.exit(2);
+  }
+}
+const TOTAL = GROUPS ? GROUPS.groups.reduce((a, g) => a + g.workers, 0) + 1 : Math.max(2, Number(flag("agents", "4")));
 const WORKERS = TOTAL - 1; // one seat is the verifier
 const CWD = resolve(flag("cwd", process.cwd())!);
 const CODEX = Math.min(WORKERS, Number(flag("codex", "0")));
@@ -417,6 +433,14 @@ if (FLAT) {
     groups: [{ id: "room", title: "Room", workers: WORKERS, directive: task }],
     verifier_directive: flag("verify", "Check the concrete claims in the final proposal against the files, transcripts or commands they cite; agree only with evidence.")!,
   };
+} else if (GROUPS) {
+  plan = {
+    summary: task,
+    done_when: flag("done-when", GROUPS.done_when ?? "Every group has concluded and this room has adopted one proposal that answers the task, challenged and verified.")!,
+    groups: GROUPS.groups,
+    verifier_directive: flag("verify", GROUPS.verifier_directive ?? "Check the concrete claims in each group's conclusion and in the final proposal against the files, transcripts or commands they cite; agree only with evidence.")!,
+  };
+  log(`groups file: ${plan.groups.map((g) => `${g.title} ×${g.workers}`).join(" | ")}`);
 } else {
   log("planning…");
   const planRaw = (await runClaude("planner", prompt("planner.md", { TASK: task, CWD, WORKERS, MAX_GROUPS: Math.max(1, Math.floor(WORKERS / 2)) }) + "\n\n" + SETTLED, READ_TOOLS.filter((t) => !t.startsWith("mcp__")), CWD, PLANNER_MODEL)).text;
@@ -493,6 +517,16 @@ if (REQUIRE_VERIFICATION || QUORUM) {
   } catch (e) {
     log(`could not pre-create ${leadsRoom}: ${e instanceof Error ? e.message : String(e)}${e instanceof Error && e.cause ? ` (cause: ${(e.cause as NodeJS.ErrnoException).code ?? (e.cause as Error).message})` : ""}`);
   }
+  // a hand-written group works for hours and concludes its own proposal, so its room gets the run's policy too
+  for (const g of GROUPS ? plan.groups : []) {
+    const room = `${SWARM_ID}-${g.id}`;
+    try {
+      const r = await fetch(`${URL_}/rooms/${encodeURIComponent(room)}/create`, { method: "POST", headers: { "content-type": "application/json", ...(process.env.CHATROOM_HUMAN_TOKEN ? { "x-chatroom-token": process.env.CHATROOM_HUMAN_TOKEN } : {}) }, body: JSON.stringify({ topic: `${g.title}: ${g.directive}`, expected_participants: g.workers, require_verification: REQUIRE_VERIFICATION, quorum: QUORUM ?? "unanimous" }) });
+      log(`${room} created with quorum=${QUORUM ?? "unanimous"}${REQUIRE_VERIFICATION ? ", require_verification" : ""} (${r.status})`);
+    } catch (e) {
+      log(`could not pre-create ${room}: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  }
 }
 runs.push(
   withRespawn("verifier", leadsRoom, (nm, note) => (VERIFIER_OPENROUTER ? runOpenRouter(nm, verifierText.split("verifier\"").join(`${nm}\"`) + note, CWD, VERIFIER_OPENROUTER, APPLY || FULL) : runClaude(nm, verifierText + note, verifierTools, CWD, VERIFIER_MODEL))).then((o) => ({ name: "verifier", text: o.text, usage: o.usage })),
@@ -536,7 +570,9 @@ for (const g of plan.groups) {
         // a distinct starting item per flat seat, so one brief does not put every seat on one target (src/seat-targets.ts)
         (FLAT_TARGETS ? `\n${FLAT_TARGETS(i)}` : "") +
         `\nWorking directory: ${wcwd}; you may read the project and run commands. ${writeRule} A verifier named "verifier" sits in the room and the final proposal needs its agree vote. Organise yourselves: claim areas on the board, recruit or break out into sub-rooms with request_agent when depth is needed, and bring results back here.`
-      : SETTLED + "\n" + prompt("worker.md", { ...vars, NAME: nm, CWD: wcwd, WRITE_RULE: writeRule });
+      : SETTLED + "\n" + (GROUPS
+        ? prompt("group.md", { ...vars, NAME: nm, GROUPS_N: plan.groups.length, WRITE_RULE: `Working directory: ${wcwd}; you may read the project and run commands. ${writeRule}` })
+        : prompt("worker.md", { ...vars, NAME: nm, CWD: wcwd, WRITE_RULE: writeRule }));
     const mayWrite = FULL && !readOnlyWorkers.has(name);
     const mk = (nm: string, note: string) => {
       // Replacements reuse the original successful worktree but commit under their new seat name.

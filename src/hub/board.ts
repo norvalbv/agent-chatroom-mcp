@@ -1,7 +1,7 @@
 /** The Hub's shared board, as functions over the Hub instance; Hub keeps a one-line delegator for each member called from outside. */
 import { createHash } from "node:crypto";
 import type { Hub } from "../hub.js";
-import { HubError, isReviewKey, readVerifyHead } from "./types.js";
+import { HubError, isReviewKey, readVerifyHead, citesCommit, failToPassShortfall } from "./types.js";
 import type { Quorum, Participant, BoardExpiryOptions, BoardEntry, Room } from "./types.js";
 import { now, codeState, norm, commitsIn, commitKnown } from "./internal.js";
 import { announceTake, takeWrite } from "./take.js";
@@ -336,7 +336,10 @@ export function setBoard(hub: Hub, roomName: string, pid: string, key: string, t
     + (commitCheck ? missingCommits(commitCheck) : "")
     + (late ? " — late: written after the room concluded; recorded, the conclusion does not change" : ""),
     /^(verify|review|attack)\//.test(key) && commitsIn(text).length ? { covers: commitsIn(text) } : {});
-  if (late) hub.persist({ type: "late_write", room: roomName, key, by: p.name, after_s: late.after_s, ts: entry.updatedAt });
+  // a late verdict that fails a commit the conclusion cites contradicts what was decided: said once, not buried in "late"
+  const contradicts = late && head?.commit?.trim() && room.conclusion && (head.exit_code !== 0 || failToPassShortfall(head)) && citesCommit(room.conclusion.text, head.commit) ? head.commit.trim() : undefined;
+  if (late) hub.persist({ type: "late_write", room: roomName, key, by: p.name, after_s: late.after_s, ...(contradicts ? { contradicts } : {}), ts: entry.updatedAt });
+  if (contradicts) hub.post(room, "system", undefined, `${key} by ${p.name} reports exit_code ${head!.exit_code} on ${contradicts}, which the conclusion cites: a verdict after the conclusion contradicts it. The conclusion stands as decided; read ${key} before relying on it.`);
   if (head) {
     hub.persist({
       type: "review", room: roomName, key, by: p.name, proposal: head.proposal, ...commitCheck,
@@ -368,8 +371,9 @@ export function setBoard(hub: Hub, roomName: string, pid: string, key: string, t
   return entry;
 }
 
-/** Coordination keys: with the room concluded nobody can join a team, take a turn, hold a vote or draft blind. */
-const LATE_REFUSED = ["claim/", "take/", "hold/", "draft/", "inbox/", "help/", "join-request/", "idea/"];
+/** Coordination keys: with the room concluded nobody can join a team, take a turn, hold a vote or draft blind. attack/ asks
+ * its author to answer by editing, an ask nobody can usefully answer once the room is over (review/6a584cdd finding 1). */
+const LATE_REFUSED = ["claim/", "take/", "hold/", "draft/", "inbox/", "help/", "join-request/", "idea/", "attack/"];
 
 /** Whether a write to a concluded room is a late result the board still takes, and how long after the conclusion it is.
  * Late results and verdicts were lost in 7 rooms (chat-and-friction issue 10): the seat's rerun or review finished

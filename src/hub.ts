@@ -148,6 +148,11 @@ export class Hub {
       this.pendingDeadlines.delete(name);
       if (Date.parse(heldDeadline.at) > Date.now()) this.applyDeadline(room, heldDeadline.at, heldDeadline.setAt);
     }
+    const heldResources = this.pendingResources.get(name);
+    if (heldResources) {
+      this.pendingResources.delete(name);
+      this.applyResources(room, heldResources);
+    }
     if (requested > Hub.MAX_LIVE_PER_ROOM) this.post(room, "system", undefined, `expected_participants ${requested} exceeds this hub's cap of ${Hub.MAX_LIVE_PER_ROOM} live agents per room; clamped to ${Hub.MAX_LIVE_PER_ROOM} so the room can still conclude.`);
     return room;
   }
@@ -408,6 +413,7 @@ export class Hub {
     const opening = opts.parent !== undefined && !existing;
     if (opening) this.checkBreakout(roomName, opts.parent!, session);
     const room = this.createRoom(roomName, opening ? opts : { ...opts, parent: undefined });
+    if (opening) this.carryResources(opts.parent!, room.name);
     if (opening) this.announceBreakout(room, name);
     if (role && !ROLES.includes(role)) throw new HubError(`role must be one of ${ROLES.join(", ")}.`);
     if (role === "chair") {
@@ -1175,11 +1181,12 @@ export class Hub {
     return { total: entries.reduce((a, [, n]) => a + n, 0), by };
   }
 
-  /** Completed MCP guard invocations for existing rooms only; no arguments or error text.
+  /** Completed MCP guard invocations for existing rooms only; no arguments or error text, except the board key a
+   * board_get asked for (a short name matching BOARD_KEY, never an entry's text).
    * Pending calls, schema rejections outside guard, roomless calls and failed room creation
    * are excluded. The rate uses this event's matched numerator, never lifetime refusals.
    */
-  recordCallCompletion(roomName: string | undefined, tool: string, outcome: CallOutcome, participant: string | null, timing: { ms?: number; empty?: boolean; outsider?: string } = {}) {
+  recordCallCompletion(roomName: string | undefined, tool: string, outcome: CallOutcome, participant: string | null, timing: { ms?: number; empty?: boolean; outsider?: string; key?: string } = {}) {
     const room = roomName ? this.rooms.get(roomName) : undefined;
     if (!room) return;
     this.applyCallCompletion(room, tool, outcome, timing.outsider);
@@ -1314,6 +1321,74 @@ export class Hub {
     }
     const total = ms - Date.parse(setAt);
     return { room: roomName, deadline_at: iso, seconds_left: Math.ceil(total / 1000), announce_at: new Date(ms - Hub.deadlineLeadMs(total)).toISOString(), pending: !room };
+  }
+
+  /** resources posted for rooms nobody has created yet (a launcher posts before its seats join); process-local */
+  private pendingResources = new Map<string, { key: string; text: string }[]>();
+
+  /**
+   * What a run was launched knowing about this machine (data, a tool, a limit), written to the room's board as
+   * resource/<name> by the launcher (swarm --resources). All or none: one bad entry writes nothing. Like a deadline,
+   * a room that does not exist yet is not created here; the entries are held and written when it is created, so they
+   * are on the board before its first seat's join returns. Nothing is posted to chat: a seat is told on joining.
+   */
+  seedResources(roomName: string, entries: { key: string; text: string }[]): { room: string; keys: string[]; pending: boolean } {
+    if (!Array.isArray(entries) || !entries.length) throw new HubError("resources need at least one entry: [{ key: \"resource/<name>\", text }].");
+    for (const e of entries) {
+      if (typeof e?.key !== "string" || !/^resource\/./.test(e.key) || !board.BOARD_KEY.test(e.key)) throw new HubError(`A resource key is "resource/<name>" (got ${String(JSON.stringify(e?.key)).slice(0, 80)}).`, undefined, "key-format");
+      if (typeof e.text !== "string" || !e.text.trim()) throw new HubError(`"${e.key}" has no text.`);
+      if (e.text.length > 8000) throw new HubError("Board entries are capped at 8000 characters.", undefined, "size");
+    }
+    const clean = entries.map((e) => ({ key: e.key, text: e.text }));
+    const room = this.rooms.get(roomName);
+    if (!room) {
+      if (!Hub.ROOM_NAME.test(roomName)) throw new HubError("Invalid room name.");
+      this.pendingResources.set(roomName, clean);
+    } else {
+      if (room.state === "concluded" || room.state === "closed") throw new HubError(`Room "${roomName}" is ${room.state}; its board is final.`, undefined, "state");
+      this.applyResources(room, clean);
+    }
+    return { room: roomName, keys: clean.map((e) => e.key), pending: !room };
+  }
+
+  /** How many resource/* keys the join line names before it counts the rest. */
+  static readonly RESOURCES_NAMED = 20;
+
+  /**
+   * The one line a seat is given on joining a room that has resource/* entries (join_room's `resources`, a recruit's
+   * orientation): the keys, how to read one, and where the next one goes. Seats read what they are handed and did not
+   * look for what they were not (evidence/data-not-found), so the hub says it at the join and no prompt has to.
+   */
+  resourceNote(roomName: string): string | undefined {
+    const room = this.rooms.get(roomName);
+    if (!room) return undefined;
+    const keys = [...room.board.entries()].filter(([k, e]) => k.startsWith("resource/") && e.text.trim() && !board.boardEntryExpired(room, k, e)).map(([k]) => k);
+    if (!keys.length) return undefined;
+    const more = keys.length - Hub.RESOURCES_NAMED;
+    return `Data, tools and limits already on this machine are on this room's board: ${keys.slice(0, Hub.RESOURCES_NAMED).join(", ")}${more > 0 ? ` and ${more} more (board_get with no key lists them)` : ""}. ` +
+      "Not a complete list. board_get the ones your work touches before you fetch, download or build the same thing; when you find or make another, board_set resource/<name> (what it is, where it is, any limit and who shares it) so recruits and other rooms get it.";
+  }
+
+  /** A room opened from another (a break-out, a recruits' new room) starts with that room's resource/* entries: chat and
+   * briefs do not cross a room wall, and the machine is the same on both sides. Entries the room already has are kept. */
+  carryResources(fromRoom: string, toRoom: string): void {
+    const from = this.rooms.get(fromRoom);
+    const to = this.rooms.get(toRoom);
+    if (!from || !to || from === to || to.state === "concluded" || to.state === "closed") return;
+    for (const [key, e] of from.board) {
+      if (!key.startsWith("resource/") || !e.text.trim() || to.board.has(key) || board.boardEntryExpired(from, key, e)) continue;
+      const entry: BoardEntry = { text: e.text, by: e.by, updatedAt: now() };
+      board.applyBoard(to, key, entry);
+      this.persist({ type: "board", room: to.name, key, entry });
+    }
+  }
+
+  private applyResources(room: Room, entries: { key: string; text: string }[]) {
+    for (const { key, text } of entries) {
+      const entry: BoardEntry = { text, by: "launcher", updatedAt: now() };
+      board.applyBoard(room, key, entry);
+      this.persist({ type: "board", room: room.name, key, entry });
+    }
   }
 
   private applyDeadline(room: Room, at: string, setAt: string) {

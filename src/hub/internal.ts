@@ -32,8 +32,8 @@ export type Event =
   | { type: "amend"; room: string; proposalId: string; text: string; version: number; updatedAt?: string; votes: Proposal["votes"]; challenges?: Challenge[] }
   | { type: "refusal"; room: string; tool: string; reason: string; ts?: string; participant?: string | null }
   | { type: "outside_read"; room: string; by: { room: string; pid: string } | null; via: "http" | "file"; tool: string; ts: string }
-  /** ms: how long the call took; empty: a wait that returned no new message (run-metrics splits idle polling on it); outsider: the caller's seats elsewhere (name@room) when it holds none in this room */
-  | { type: "call_completion"; room: string; tool: string; outcome: CallOutcome; ts: string; participant: string | null; ms?: number; empty?: boolean; outsider?: string }
+  /** ms: how long the call took; empty: a wait that returned no new message (run-metrics splits idle polling on it); outsider: the caller's seats elsewhere (name@room) when it holds none in this room; key: the entry a board_get read */
+  | { type: "call_completion"; room: string; tool: string; outcome: CallOutcome; ts: string; participant: string | null; ms?: number; empty?: boolean; outsider?: string; key?: string }
   /** key: what the ledger dedupes on when it is not the target itself (a long target is shortened for display) */
   | { type: "work"; room: string; pid: string; cls: WorkClass; tool: string; target: string; key?: string; ts: string }
   /** a seat process's cumulative model usage (src/hub/usage.ts); seat is the seat key's sha256, never the key */

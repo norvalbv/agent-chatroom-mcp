@@ -136,6 +136,7 @@ export const offlineScripts = [
   'leave-post-conclusion-regression.ts',
   'liveness-regression.ts',
   'room-deadline-regression.ts',
+  'resource-seeding-regression.ts',
   'idlewaits-actionable-regression.ts',
   'lease-lock-tasks.test.ts',
   'shelf-quiet-task.test.ts',

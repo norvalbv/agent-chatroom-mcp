@@ -177,7 +177,9 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
         }
         return fail(e);
       } finally {
-        hub.recordCallCompletion(room, tool, outcome, participant, { ms: Date.now() - started, ...(empty === undefined ? {} : { empty }), ...(from ? { outsider: from } : {}) });
+        // which entry a board_get read: a board key is a short name, not content, and without it no record can say who read what
+        const key = tool === "board_get" && typeof (args as { key?: unknown })?.key === "string" && Hub.BOARD_KEY.test((args as { key: string }).key) ? (args as { key: string }).key : undefined;
+        hub.recordCallCompletion(room, tool, outcome, participant, { ms: Date.now() - started, ...(empty === undefined ? {} : { empty }), ...(from ? { outsider: from } : {}), ...(key === undefined ? {} : { key }) });
       }
     };
 
@@ -271,6 +273,8 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
         your_role: participant.role ?? "worker",
         tool_scope: toolScope,
         humans_present: hub.activeParticipants(r).filter((x) => x.agent === "human").map((x) => x.name),
+        // its own field, ahead of the summary: the hint is replaced whenever something is owed, and a board of 60 keys buries ten
+        ...(hub.resourceNote(r.name) ? { resources: hub.resourceNote(r.name) } : {}),
         room: hub.summary(r),
         recent_messages: recent.map((m) => hub.fmt(r, m)),
         next_seq: participant.lastSeenSeq,
@@ -672,7 +676,7 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
         "replaced in place and only a one-line notice goes to chat, so use this instead of re-posting long content. Empty text deletes the entry.",
       inputSchema: {
         room: roomArg,
-        key: z.string().describe("Short name, e.g. 'evidence', 'open questions', 'draft'. Reserved: claim/<area> (JSON, create-then-owner-only), verify/<area> (first line must be JSON " + VERIFY_HEAD_EXAMPLE.replace("<PROPOSAL_ID>", "<id>") + ": " + VERIFY_HEAD_RULE + "; free prose may follow, e.g. what you could not verify; otherwise it does not satisfy require_verification), attack/<key> (your objection to someone else's entry <key>, quoting the clause in double quotes; its author answers by editing <key>), idea/<slug> (an unbuilt idea with its evidence and how to build it; the hub names it to idle seats until someone writes claim/<slug>), hold/<room> (pause; author-only), inbox/* (written by post_to_room; acknowledge with '<key>.ack')."),
+        key: z.string().describe("Short name, e.g. 'evidence', 'open questions', 'draft'. Reserved: claim/<area> (JSON, create-then-owner-only), verify/<area> (first line must be JSON " + VERIFY_HEAD_EXAMPLE.replace("<PROPOSAL_ID>", "<id>") + ": " + VERIFY_HEAD_RULE + "; free prose may follow, e.g. what you could not verify; otherwise it does not satisfy require_verification), attack/<key> (your objection to someone else's entry <key>, quoting the clause in double quotes; its author answers by editing <key>), idea/<slug> (an unbuilt idea with its evidence and how to build it; the hub names it to idle seats until someone writes claim/<slug>), resource/<name> (data, a tool or a limit that exists on this machine, with where it is and who shares it; the hub names these to every seat that joins), hold/<room> (pause; author-only), inbox/* (written by post_to_room; acknowledge with '<key>.ack')."),
         text: z.string(),
         ttl_seconds: z.number().positive().finite().optional().describe("Expiry for handoff/inbox only; body remains retrievable by key."),
         expires_at: z.string().optional().describe("Absolute expiry timestamp; use instead of ttl_seconds."),

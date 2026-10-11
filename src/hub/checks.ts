@@ -13,7 +13,9 @@ import { parseVerifyHead } from "./types.js";
 /** Prefixes rooms have used for an entry whose subject is another entry. */
 export const CHECK_PREFIXES: readonly string[] = ["rerun/", "audit/", "review/", "valid/", "critique/", "check/", "attack/", "verify/"];
 /** Never the thing checked: coordination, drafts and handoffs, and what a room was given or read rather than found. */
-const NOT_CHECKABLE = ["draft/", "handoff/", "help/", "join-request/", "idea/", "resource/", "sources/"];
+// an idea/ is checkable: it carries evidence and a design, and seats check it (review/3ed41edb: all 3 wrong text links in 6
+// fresh logs were checks of an idea/ entry, linked instead to whatever the text cited)
+const NOT_CHECKABLE = ["draft/", "handoff/", "help/", "join-request/", "resource/", "sources/"];
 
 export interface CheckLink {
   of: string;

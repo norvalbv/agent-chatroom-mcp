@@ -49,6 +49,7 @@ test("what is not a check: your own entry, coordination keys, other checks, a no
   assert.deepEqual(of("critique/older", "seat-b"), [], "a check of a check is not linked");
   assert.deepEqual(of("evidence/Q4-notes", "seat-b", "about exp/Q4"), [], "evidence/ is not a checking prefix");
   assert.deepEqual(of("audit/unrelated", "seat-b", "nothing here names an entry"), []);
+  assert.deepEqual(checksOf("attack/idea/pending-verify-counts", "seat-b", "the evidence cites result/x", [["idea/pending-verify-counts", { by: "seat-a" }], ["result/x", { by: "seat-a" }]]).map((l) => `${l.of} (${l.how})`), ["idea/pending-verify-counts (key)"], "an idea is checkable, so its check is not sent to whatever its text cites (review/3ed41edb)");
   const head = JSON.stringify({ proposal: "pending", command: "x", cwd: "/w", base_commit: "0123abc", base_exit_code: 1, commit: "a1b2c3d4", exit_code: 0, output_tail: "ok" });
   assert.deepEqual(of("review/a1b2c3d4", "seat-b", `${head}\nalso read exp/Q4`), [], "a headed review is a review of its commit (the review event), not of a board entry");
 });

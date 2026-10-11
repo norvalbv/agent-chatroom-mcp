@@ -2,6 +2,7 @@
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { renderMetrics, type RunMetrics } from './run-metrics.js';
+import { renderDigests, type DigestAck, type DigestRecord } from './groups.js';
 
 export interface RoomSnapshot {
   name: string;
@@ -30,6 +31,9 @@ export interface RunResult {
   metrics?: RunMetrics;
   /** What seats reported to the hub live (participants[].usage, src/hub/usage.ts), recruits included; absent when no seat reported. */
   hubUsage?: HubUsageRollup;
+  /** --digest-every: one row per consolidation pass, and each group's latest digest note at the end (src/groups.ts). */
+  digests?: DigestRecord[];
+  digestAcks?: DigestAck[];
 }
 /**
  * Usage as the hub recorded it while the run went on, from the room snapshots alone: a launcher that crashed, or a
@@ -354,6 +358,7 @@ export function renderRunReport(r: RunResult): string {
   }
   if (r.scorecard?.length) text += renderScorecard(r.scorecard);
   if (r.metrics) text += renderMetrics(r.metrics);
+  if (r.digests?.length) text += renderDigests(r.digests, r.digestAcks ?? []);
   if (r.collectionErrors?.length) text += `Collection errors (partial snapshot):\n${r.collectionErrors.map(e => `- ${e}`).join('\n')}\n\n`;
   text += '## Transcripts\n\n';
   for (const room of r.rooms) text += '```\n' + (room.transcript.text ?? `(missing: ${room.transcript.error})`).replace(/\n#/g, '\n\\#') + '```\n\n';

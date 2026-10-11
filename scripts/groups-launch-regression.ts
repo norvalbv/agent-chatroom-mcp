@@ -139,7 +139,11 @@ test("--digest-every starts a fresh consolidator seat on a timer, told every gro
   // a pass that is still running is not doubled: passes are numbered without gaps and none repeats
   const numbers = digests.map((p) => Number(/You are digest-(\d+)/.exec(p)![1])).sort((a, b) => a - b);
   assert.deepEqual(numbers, numbers.map((_, i) => i + 1), `passes 1..n, each once: ${JSON.stringify(numbers)}`);
-  const usage = (JSON.parse(readFileSync(result, "utf8")) as { usage?: { seats?: number; cost_usd?: number } }).usage;
+  const artifact = JSON.parse(readFileSync(result, "utf8")) as { usage?: { seats?: number; cost_usd?: number }; digests?: { pass: number; name: string; written: boolean; cost_usd: number | null; finished_at: string | null }[]; digestAcks?: { room: string; sent_at: string | null }[] };
+  const usage = artifact.usage;
+  assert.deepEqual(artifact.digests?.map((d) => d.pass), numbers, "the result records every pass");
+  assert.deepEqual(artifact.digests?.[0] && { name: artifact.digests[0].name, written: artifact.digests[0].written, cost_usd: artifact.digests[0].cost_usd }, { name: "digest-1", written: false, cost_usd: 0.25 }, "with its cost, and that this stub wrote no digest");
+  assert.deepEqual(artifact.digestAcks?.map((a) => [a.room.replace(/^swarm-\d{6}-[a-z0-9]{4}-/, ""), a.sent_at]), [["build", null], ["break", null]], "and each group's note state");
   assert.equal(usage?.seats, 5 + digests.length, "each consolidator's usage is counted in the run's result, beside the five seats'");
   assert.equal(usage?.cost_usd, 0.25 * (5 + digests.length));
 });

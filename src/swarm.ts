@@ -21,7 +21,7 @@ import { claudeSandbox } from "./sandbox.js";
 import { stopStrays } from "./strays.js";
 import { launchCostGuide } from "./cost-estimate.js";
 import { seatTarget } from "./seat-targets.js";
-import { loadGroups, type GroupsFile } from "./groups.js";
+import { digestAcks, digestRecords, loadGroups, renderDigests, type GroupsFile } from "./groups.js";
 loadDotEnv();
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -638,6 +638,7 @@ for (const room of [...groupRooms, leadsRoom]) {
 /** Consolidation passes (--digest-every): started on a timer while group seats run, never two at once, and none in the
  * last five minutes, when a pass could not be acted on. Their usage is rolled into the run's with the seats'. */
 const digestRuns: SeatRun[] = [];
+const digestPasses: { pass: number; name: string; startedAt: string; finishedAt?: string; cost?: number | null }[] = [];
 const digestPending: Promise<void>[] = [];
 let digestPass = 0, digestRunning = false, groupsDone = false;
 const digestTimer = DIGEST_EVERY_MIN ? setInterval(() => {
@@ -645,6 +646,8 @@ const digestTimer = DIGEST_EVERY_MIN ? setInterval(() => {
   if (digestRunning) return log(`digest pass ${digestPass} is still running; the next one waits for it`);
   const n = ++digestPass, name = `digest-${n}`;
   digestRunning = true;
+  const record: (typeof digestPasses)[number] = { pass: n, name, startedAt: new Date().toISOString() };
+  digestPasses.push(record);
   log(`digest pass ${n}: started ${name}`);
   const text = prompt("consolidator.md", {
     NAME: name, AGENT: "claude", PASS: n, PREVIOUS: n - 1, TASK: task, LEADS_ROOM: leadsRoom, URL: URL_, GROUPS_N: plan.groups.length, EVERY: DIGEST_EVERY_MIN,
@@ -652,6 +655,8 @@ const digestTimer = DIGEST_EVERY_MIN ? setInterval(() => {
   });
   digestPending.push(runClaude(name, text, READ_TOOLS, CWD, VERIFIER_MODEL).then((o) => {
     digestRuns.push({ name, text: o.text, usage: o.usage });
+    // a pass the timeout killed has no finish time and an unknown cost
+    if (!killedAtTimeout.has(name)) Object.assign(record, { finishedAt: new Date().toISOString(), cost: o.usage?.cost ?? null });
     digestRunning = false;
     log(`digest pass ${n}: ${name} finished`);
   }));
@@ -731,6 +736,11 @@ const artifact: RunResult = {
   scorecard: seatScorecard(snapshots, Object.fromEntries([...exitCodes].map(([name, exitCode]) => [name, { exitCode, cost: seatCosts.get(name), killedAtTimeout: killedAtTimeout.has(name), commits: branchCommits(name) }]))),
   ...(metrics ? { metrics } : {}),
 };
+if (digestPasses.length) {
+  const board = (room: string) => snapshots.find((r) => r.name === room)?.payload?.board as Record<string, { text?: string; updated_at?: string }> | undefined;
+  artifact.digests = digestRecords(digestPasses, board(leadsRoom));
+  artifact.digestAcks = digestAcks(leadsRoom, Object.fromEntries(plan.groups.map((g) => [`${SWARM_ID}-${g.id}`, board(`${SWARM_ID}-${g.id}`)])));
+}
 writeRunResult(resolve(OUT, "result.json"), artifact);
 if (artifactPath !== resolve(OUT, "result.json")) writeRunResult(artifactPath, artifact);
 writeFileSync(artifact.reportPath, renderRunReport(artifact));

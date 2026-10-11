@@ -28,6 +28,7 @@ import { apiRequests, UsageLedger, usageTotal } from "./hub/usage.js";
 import { DevRuns, DevRunError, type DevRunHost } from "./hub/dev-runs.js";
 import { takesOf } from "./hub/take.js";
 import { MemoryWatch, memoryNotice, type Job, type MemoryEvent, type SeatMemory } from "./hub/memory.js";
+import { RUN_END_CAUSES, exitCause, type RunEndCause, type StoppedBy } from "./respawn.js";
 import type { SteerItem } from "./hub/steer.js";
 
 /** An evidence pointer the minimal prompt keeps public: a coordination board key, a proposal id, a commit (hex with a digit). */
@@ -3240,6 +3241,25 @@ export class Hub {
     }
   }
 
+  /** A seat process ended: one seat_exit event in each room it holds a place in, before it is marked left. */
+  recordSeatExit(seatKey: string, detail: string, stoppedBy?: StoppedBy): number {
+    const seats = this.seats.participants(seatKey).filter(({ p }) => p.active);
+    for (const { room, p } of seats) this.persist({ type: "seat_exit", room: room.name, seat: p.name, ...exitCause(detail), ...(stoppedBy ? { stopped_by: stoppedBy } : {}), detail: detail.slice(0, 160), ts: now() });
+    return seats.length;
+  }
+  private readonly runEnded = new Set<string>();
+  /** The run that owns a room ended, as its launcher saw it: recorded once, and said in the room so a transcript shows why it stops. */
+  recordRunEnd(roomName: string, cause: RunEndCause, detail?: string): { recorded: boolean } {
+    const room = this.getRoom(roomName);
+    if (!RUN_END_CAUSES.includes(cause)) throw new HubError(`run-end cause must be one of ${RUN_END_CAUSES.join(", ")}.`, undefined, "invalid-arg");
+    if (this.runEnded.has(room.name)) return { recorded: false };
+    this.runEnded.add(room.name);
+    const why = detail?.trim().slice(0, 160);
+    this.persist({ type: "run_end", room: room.name, cause, ...(why ? { detail: why } : {}), ts: now() });
+    const words: Record<RunEndCause, string> = { concluded: "the room concluded", timeout: "its launcher's timeout stopped the seats", operator_stop: "the operator stopped its launcher", seats_exited: "every seat's process exited without a conclusion" };
+    this.post(room, "system", undefined, `The run that owns this room ended: ${words[cause]}${why ? ` (${why})` : ""}.`);
+    return { recorded: true };
+  }
   /** The jobs a seat has running, from the memory watcher's last look at the process table (src/hub/memory.ts jobsOf). */
   jobsOf(p: Participant): Job[] { return this.memory.jobs(p.seatKeyHash); }
   /** Memory notices this seat's hook has not put in front of its model yet. */

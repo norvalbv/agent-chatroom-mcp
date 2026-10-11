@@ -395,7 +395,7 @@ function runProc(name: string, cmd: string, args: string[], cwd: string, outFile
       log(`${name} exited (${exitDetails.get(name)!.replace(/^exit /, "")})`);
       // the exit receipt: the hub closes this seat's MCP sessions, so a dead seat is not read as alive in a long command.
       // Awaited (5 s at most): withRespawn reads the room's active seats next, and the launcher's own exit would cut it off.
-      if (beat) await fetch(`${URL_}/heartbeat`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ seat_key: beat.key, exited: true, detail: exitDetail(code, [final, err], Date.now(), signal) }), signal: AbortSignal.timeout(5_000) }).catch(() => {});
+      if (beat) await fetch(`${URL_}/heartbeat`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ seat_key: beat.key, exited: true, detail: exitDetail(code, [final, err], Date.now(), signal), ...(killedAtTimeout.has(name) ? { stopped_by: "timeout" } : STOPPING ? { stopped_by: "operator" } : {}) }), signal: AbortSignal.timeout(5_000) }).catch(() => {});
       res(final.trim());
     });
   });
@@ -709,9 +709,17 @@ function sweepStrays(why: string): Promise<void> {
   return sweeping;
 }
 // stopping the launcher stops its seats: an orphaned seat keeps polling the provider with nobody to collect its result
+/** Tell the hub why this run ended, in each of its rooms (run_end in the room log, one line in the room). Never fails the run:
+ * a hub that does not know the route (an older build on this port) answers 404 and the run goes on. */
+const postRunEnd = (cause: "concluded" | "timeout" | "operator_stop" | "seats_exited", detail?: string) =>
+  Promise.all([...new Set([leadsRoom, ...groupRooms])].map((room) =>
+    fetch(`${URL_}/rooms/${encodeURIComponent(room)}/run-end`, { method: "POST", headers: launcherHeaders(launcherToken), body: JSON.stringify({ cause, ...(detail ? { detail } : {}) }), signal: AbortSignal.timeout(2_000) })
+      .then((r) => { if (!r.ok && r.status !== 404) log(`${room}: hub did not take the run end (${r.status})`); })
+      .catch(() => {})));
 for (const sig of ["SIGTERM", "SIGINT"] as const) process.on(sig, () => {
   STOPPING = true;
   log(`${sig}: stopping ${children.length} agent(s)`);
+  void postRunEnd("operator_stop", `launcher received ${sig}`);
   for (const c of children) c.kill();
   const swept = sweepStrays(sig);
   setTimeout(() => void swept.finally(() => process.exit(130)), 3000).unref();
@@ -851,6 +859,8 @@ for (const name of new Set([leadsRoom, ...groupRooms])) {
   snapshots.push(snapshot);
 }
 const leads = snapshots.find(r => r.name === leadsRoom)?.payload ?? { state: "missing", conclusion: null };
+// why the run ended, as this launcher saw it; after the snapshots, so the line it adds is not in this run's own transcript
+await postRunEnd(timedOut ? "timeout" : (leads as { state?: string }).state === "concluded" ? "concluded" : "seats_exited", timedOut ? `after ${TIMEOUT_MIN} min` : undefined);
 // headline numbers by code, from the hub's own log; a hub without one (in memory) answers 404 and the report omits them
 let metrics: RunResult["metrics"];
 try { metrics = JSON.parse(await fetchText(`${URL_}/rooms/${encodeURIComponent(leadsRoom)}/metrics`)); } catch (e) { collectionErrors.push(`${leadsRoom} metrics: ${String(e)}`); }

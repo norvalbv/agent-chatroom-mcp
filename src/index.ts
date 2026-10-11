@@ -29,6 +29,7 @@ import { createMcpExpressApp } from "@modelcontextprotocol/sdk/server/express.js
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import express from "express";
 import { Hub, HubError } from "./hub.js";
+import { STOPPED_BY, type RunEndCause, type StoppedBy } from "./respawn.js";
 import { parseReplyWindowMinutes } from "./reply-metrics.js";
 import { createSessionServer } from "./server.js";
 import { Spawner, type RecruitPolicy } from "./spawner.js";
@@ -213,8 +214,10 @@ const transports = new Map<string, { t: StreamableHTTPServerTransport; leaveAll:
  * never sends DELETE, so without this its session reads as connected for SESSION_IDLE_MS and replace_participant refuses a
  * dead seat as "alive inside a long command" (swarm-130854-nmek; chair #640 in swarm-202803-dpij). Knowing the key is the
  * authority, as for its heartbeats: only that seat's launcher and the seat itself hold it. */
-function seatExited(seatKey: string, detail: string): number {
+function seatExited(seatKey: string, detail: string, stoppedBy?: StoppedBy): number {
   let closed = 0;
+  // the structured record first: once its sessions are closed the seat is no longer in its rooms
+  if (seatKey) hub.recordSeatExit(seatKey, detail, stoppedBy);
   for (const [id, e] of transports) {
     if (!seatKey || e.seatKey !== seatKey) continue;
     e.leaveAll(`seat process exited (${detail.slice(0, 80)}, launcher receipt)`, true);
@@ -420,9 +423,10 @@ app.post("/rooms/:room/heartbeat", (req, res) => {
 // Seat liveness without a participant id: a claude -p tool hook or a launcher watching codex output knows only the seat
 // key its process was launched with; the hub heartbeats every room that key's MCP connection is in.
 app.post("/heartbeat", (req, res) => {
-  const { seat_key, tool, step, detail, peek, exited } = (req.body ?? {}) as { seat_key?: string; tool?: string; step?: number; detail?: string; peek?: boolean; exited?: boolean };
+  const { seat_key, tool, step, detail, peek, exited, stopped_by } = (req.body ?? {}) as { seat_key?: string; tool?: string; step?: number; detail?: string; peek?: boolean; exited?: boolean; stopped_by?: string };
   if (!seat_key) return res.status(400).type("text/plain").send("seat_key required");
-  if (exited === true) return res.json({ ok: true, closed: seatExited(seat_key, String(detail ?? "exit")) });
+  // stopped_by: the launcher saying it stopped the seat itself (its timeout, or the operator stopping it); a closed set
+  if (exited === true) return res.json({ ok: true, closed: seatExited(seat_key, String(detail ?? "exit"), STOPPED_BY.find((s) => s === stopped_by)) });
   // peek:true (a PostToolUse hook) only asks for pending asks: the PreToolUse beat already recorded this step
   const marked = peek ? 0 : hub.heartbeatSeat(seat_key, { tool: tool ?? "?", step, detail });
   res.json({ ok: true, marked, pending: [...steerPeekSeat(hub, seat_key), ...hub.pendingMemoryNotices(seat_key)] });
@@ -619,6 +623,17 @@ app.post("/rooms/:room/resources", (req, res) => {
     const { entries } = (req.body ?? {}) as { entries?: { key: string; text: string }[] };
     const set = hub.seedResources(req.params.room, entries as { key: string; text: string }[]);
     res.status(set.pending ? 202 : 200).json(set);
+  } catch (e) {
+    res.status(400).type("text/plain").send(e instanceof HubError ? e.message : "error");
+  }
+});
+// Why the run that owns a room ended, from its launcher (concluded, timeout, operator_stop, seats_exited): a run_end
+// event in the room log and one line in the room. A repeat is accepted and ignored: the first stands.
+app.post("/rooms/:room/run-end", (req, res) => {
+  if (!requireLauncherOrToken(req, res)) return;
+  try {
+    const { cause, detail } = (req.body ?? {}) as { cause?: string; detail?: string };
+    res.json(hub.recordRunEnd(req.params.room, cause as RunEndCause, typeof detail === "string" ? detail : undefined));
   } catch (e) {
     res.status(400).type("text/plain").send(e instanceof HubError ? e.message : "error");
   }

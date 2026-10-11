@@ -74,6 +74,33 @@ export function exitDetail(code: number | null, output: string | string[], now =
   return base;
 }
 
+/** Why a seat's process ended, as a closed set a run can be counted by (telemetry gap G4: "seat process exited (exit 1)"
+ * said nothing countable, and a usage limit was only in the seat's .out). unknown: a receipt this build cannot read. */
+export type SeatExitCause = "normal" | "usage_limit" | "thrash" | "sigterm" | "sigkill" | "signal" | "crash" | "unknown";
+export interface SeatExit { exit_code: number | null; signal?: string; cause: SeatExitCause; resets_utc?: string }
+
+/** exitDetail's words back as fields: the launcher and the spawner already send that string as the exit receipt. */
+export function exitCause(detail: string): SeatExit {
+  const by = /^(?:killed|stopped) by (SIG[A-Z0-9]+)/.exec(detail);
+  if (by) return { exit_code: null, signal: by[1], cause: by[1] === "SIGKILL" ? "sigkill" : by[1] === "SIGTERM" ? "sigterm" : "signal" };
+  const m = /^exit (-?\d+)(?::\s*(.*))?$/.exec(detail.trim());
+  if (!m) return { exit_code: null, cause: "unknown" };
+  const exit_code = Number(m[1]), why = m[2] ?? "";
+  const resets = /resets (\d{2}:\d{2}) UTC/.exec(why)?.[1];
+  if (/usage limit/.test(why)) return { exit_code, cause: "usage_limit", ...(resets ? { resets_utc: resets } : {}) };
+  if (/thrash/.test(why)) return { exit_code, cause: "thrash" };
+  // 128 + n: a shell or a wrapper reporting the signal that ended it as an exit code
+  if (exit_code === 143) return { exit_code, signal: "SIGTERM", cause: "sigterm" };
+  if (exit_code === 137) return { exit_code, signal: "SIGKILL", cause: "sigkill" };
+  return { exit_code, cause: exit_code === 0 ? "normal" : "crash" };
+}
+/** Who stopped a seat, when its launcher knows (G5: 11 exit-143s with no sender): the run's timeout, or the operator stopping the launcher. */
+export const STOPPED_BY = ["timeout", "operator"] as const;
+export type StoppedBy = (typeof STOPPED_BY)[number];
+/** Why a run ended, as its launcher saw it (G2; evidence pack item 13: a run stopped with SIGTERM left no reason). */
+export const RUN_END_CAUSES = ["concluded", "timeout", "operator_stop", "seats_exited"] as const;
+export type RunEndCause = (typeof RUN_END_CAUSES)[number];
+
 /** The smallest room that can still conclude under scrutiny: a proposer, a challenger and a verifier. */
 export const MIN_FLOOR = 3;
 

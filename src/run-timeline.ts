@@ -290,6 +290,10 @@ export interface RunRow {
   conclusionMin?: number;
   /** minutes from the start to the half hour output fell away for good (RunTimeline.quietFrom) */
   quietFromMin?: number;
+  /** why the run ended, as its launcher told the hub (run_end event): concluded, timeout, operator_stop, seats_exited; absent: not recorded */
+  endCause?: string;
+  /** seats whose process ended, by cause (seat_exit events): usage_limit, sigterm, crash...; absent: none recorded */
+  seatExits?: Record<string, number>;
   reviewedPerHour: number;
   usdPerReviewed?: number;
   usdPerFinding?: number;
@@ -302,7 +306,7 @@ const round2 = (x: number) => Math.round(x * 100) / 100;
  * reading this log (outside_read: tky5 read 17.5 h because this round's seats opened its file 14 h after it ended).
  * They do not lengthen the run. A seat's usage still does: it is the seat working, though for a group lead it may be
  * work in its other room (1nwp-leads reads 3.62 h for 2.07 h to its conclusion); runTotals is the run's true span. */
-const NOT_RUN_TIME = new Set(["archive", "leave", "hub_restart", "memory", "room_idle", "room_active", "board_manifest", "outside_read"]);
+const NOT_RUN_TIME = new Set(["archive", "leave", "hub_restart", "memory", "room_idle", "room_active", "room_waiting", "board_manifest", "outside_read", "run_end", "seat_exit"]);
 /** Entries the launcher seeds (resource/* with --resources) are what the room was given, not what it found (35 of 214 in 0btz). */
 const SEEDED_BY = new Set(["launcher"]);
 
@@ -312,6 +316,8 @@ export function runRow(events: readonly Ev[]): RunRow {
   let firstProposal: number | undefined;
   let conclusion: number | undefined;
   const keys = new Set<string>();
+  let endCause: string | undefined;
+  const seatExits: Record<string, number> = {};
   let first: number | undefined;
   let last: number | undefined;
   for (const e of events) {
@@ -323,6 +329,8 @@ export function runRow(events: readonly Ev[]): RunRow {
     if (!Number.isNaN(ts) && !system) { first = Math.min(first ?? ts, ts); last = Math.max(last ?? ts, ts); }
     if (e.type === "board" && e.entry && !NOT_FINDING.test(String(e.key)) && !SEEDED_BY.has(String(e.entry.by))) keys.add(String(e.key));
     if (e.type === "proposal" && e.proposal?.createdAt) firstProposal ??= Date.parse(e.proposal.createdAt);
+    if (e.type === "run_end") endCause ??= String(e.cause);
+    if (e.type === "seat_exit") seatExits[String(e.cause)] = (seatExits[String(e.cause)] ?? 0) + 1;
     if (e.type === "state" && e.conclusion?.decidedAt) conclusion ??= Date.parse(e.conclusion.decidedAt);
   }
   const min = (ts: number | undefined) => (ts === undefined || first === undefined ? undefined : Math.round((ts - first) / 60_000));
@@ -343,6 +351,8 @@ export function runRow(events: readonly Ev[]): RunRow {
     ...(firstProposal === undefined ? {} : { firstProposalMin: min(firstProposal) }),
     ...(conclusion === undefined ? {} : { conclusionMin: min(conclusion) }),
     ...(t.quietFrom ? { quietFromMin: min(Date.parse(t.quietFrom)) } : {}),
+    ...(endCause ? { endCause } : {}),
+    ...(Object.keys(seatExits).length ? { seatExits } : {}),
     reviewedPerHour: hours > 0 ? round2(reviewed / hours) : 0,
     ...(costUsd !== undefined && reviewed ? { usdPerReviewed: round2(costUsd / reviewed) } : {}),
     ...(costUsd !== undefined && keys.size ? { usdPerFinding: round2(costUsd / keys.size) } : {}),
@@ -395,9 +405,9 @@ export function renderRunTotals(runs: RunTotals[]): string {
 export function renderRunsTable(rows: RunRow[]): string {
   const v = (x: number | undefined, unit = "") => (x === undefined ? "?" : `${unit}${x}`);
   const dash = (x: number | undefined) => (x === undefined ? "-" : String(x));
-  let text = "| room | task | hours | seats | cost | results / reviewed | reviewed per hour | $ per reviewed | findings | $ per finding | first proposal (min) | conclusion (min) | went quiet (min) |\n|---|---|---|---|---|---|---|---|---|---|---|---|---|\n";
+  let text = "| room | task | hours | seats | cost | results / reviewed | reviewed per hour | $ per reviewed | findings | $ per finding | first proposal (min) | conclusion (min) | went quiet (min) | run ended | seat exits |\n|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|\n";
   for (const r of [...rows].sort((a, b) => (a.start ?? "").localeCompare(b.start ?? ""))) {
-    text += `| ${r.room} | ${r.task.replace(/\|/g, "/")} | ${r.hours} | ${r.seats} | ${v(r.costUsd, "$")} | ${r.results} / ${r.reviewed} | ${r.reviewedPerHour} | ${v(r.usdPerReviewed, "$")} | ${r.findings} | ${v(r.usdPerFinding, "$")} | ${dash(r.firstProposalMin)} | ${dash(r.conclusionMin)} | ${dash(r.quietFromMin)} |\n`;
+    text += `| ${r.room} | ${r.task.replace(/\|/g, "/")} | ${r.hours} | ${r.seats} | ${v(r.costUsd, "$")} | ${r.results} / ${r.reviewed} | ${r.reviewedPerHour} | ${v(r.usdPerReviewed, "$")} | ${r.findings} | ${v(r.usdPerFinding, "$")} | ${dash(r.firstProposalMin)} | ${dash(r.conclusionMin)} | ${dash(r.quietFromMin)} | ${r.endCause ?? "-"} | ${r.seatExits ? Object.entries(r.seatExits).map(([k, n]) => `${k} ${n}`).join(", ") : "-"} |\n`;
   }
   return text;
 }

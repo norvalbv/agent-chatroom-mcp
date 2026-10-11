@@ -275,6 +275,7 @@ export const offlineScripts = [
   'session-reap-regression.ts',
   'runs-table-truth-regression.ts',
   'idle-jobs-regression.ts',
+  'run-end-seat-exit-regression.ts',
 ];
 
 export function offlineCommands() {

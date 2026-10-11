@@ -25,6 +25,10 @@ Docs-, config-, and comment-only changes do not require a test run.
 2. **Write the test next to its peers**, following the project's existing test layout and naming. Reuse existing fixtures and helpers before adding new ones.
 3. **Run the full command**, not a single-file subset, before declaring done — a change can break a sibling.
 
+### Before writing a suite
+
+When the repository runs anti-slop (`.devkit/anti-slop/` exists), write the first test file, then run `devkit anti-slop check <that file>` before writing the rest. Its policy is static, so a violation is visible after one file rather than after a whole suite. Module mocking (labelled examples: `vi.mock`, `jest.mock`) is refused: give the module under test a seam instead, such as an optional `deps` parameter that defaults to the real imports and that the test fills with fakes. With the anti-slop component installed, a PostToolUse hook runs the same check after each edit.
+
 ## Reading a run
 
 Read the runner's summary line (labelled examples: vitest `Test Files … Tests …`; pytest `=== N passed in Ns ===`), the command's exit status, and any error printed *instead of* a summary. Not the last thing on screen.
@@ -39,6 +43,22 @@ Read the runner's summary line (labelled examples: vitest `Test Files … Tests 
 - A failing test was already named → **failed**. A run killed after reporting a failure still reported it.
 - An error says why the run could not start (missing dependency, bad config, unreadable path) → **failed**. Re-running changes nothing; fix what it names.
 - Neither — output just stops, or the process was killed (`Terminated`, `Killed`, exit 130/137/143) → **inconclusive, not failed**. It reached no verdict and names nothing, so any conclusion drawn from it is invented. Re-run before reporting a regression.
+
+**Before you attribute a red run to your change**, check whether it was red already. In a repo with
+devkit installed, `devkit baseline-status --file <path> --json` answers from the per-file test-report
+artifact CI uploads, not from log scraping — a CI log interleaves failures from nested runs, so
+grepping it cannot prove a file passed. It reports `passed` / `failed` / `skipped` / `excluded` /
+`absent` / `unknown` separately, and reports the whole run's status apart from the test step's,
+because those two differ constantly. A file that is already failing on the default branch is not
+yours to fix; say so instead of burning fix cycles on it. A red FILE does not make every failing
+test in it pre-existing: add `--test "<name>"` (as the console prints it) for that one test.
+`failed` means it is red on the default branch too. `passed` means it passed there, so suspect your
+change or this machine's load, not main. `file-passed` (the file passed, names not recorded) is
+file-level only. `unknown` is never a pass. An `unknown` carrying a remedy line
+(`workflow-missing`, or `no-usable-run` with no artifact) means this repo's CI does not produce
+the report yet — follow the remedy (`devkit test-report-run --help`) rather than re-running tests.
+The answer names the branch `head` it walked back from and `commitsBehindHead`; above 0, read
+`skippedRuns` and `commitsWithoutRun` for why the newer commits could not answer.
 
 ## Fixing failures — max 2 cycles
 
@@ -75,11 +95,33 @@ So:
 
 Making these changes is fixing a broken test, not weakening a real one — the timing claim was never what the test was protecting.
 
+A test that asserts a product's **own** timeout (for example, "the ceiling fires and names the stuck step") races setup against that timeout. Have the stuck step print a marker. Before the strict assertions, check for it: if the timeout fired and the marker is absent, the timeout won the race before the step under test ran. Fail with a distinct, greppable label that says so, and include the machine load. Do not reuse the assertion's message. A reached marker with the wrong outcome is a real regression and must keep failing on the strict assertions.
+
+## Coverage of code run in a subprocess
+
+V8 coverage measures the test process. Code a test reaches by spawning a CLI (`node cli.mts …`) counts only when the runner attaches child processes, usually by handing each child `NODE_V8_COVERAGE` through its environment (labelled examples: vitest 5 `coverage.autoAttachSubprocess: true` with the `v8` provider). Without it, a CLI module that dozens of tests drive end to end reports near 0%.
+
+Before treating a low number on a CLI module as untested code, rule out the measurement:
+
+- **The child's environment.** A spawn that replaces `env` (`{ HOME, PATH }`) instead of spreading `process.env` drops `NODE_V8_COVERAGE`, so that child is never measured.
+- **How the child ended.** Node writes the profile on a normal exit. A child killed with `SIGKILL`, or still running when the test file finishes, contributes nothing.
+- **The path.** The child reports its real path. A project root reached through a symlink (macOS `/tmp` is `/private/tmp`) matches none of it and scores 0%.
+- **A module both imported and spawned.** A runner can merge the in-process profile and the child's profile of the same file before converting them, so the combined number under-reports (labelled examples: vitest 5.0.3). Read such a file's number as a floor, not a measurement.
+
+A number explained by one of these is a measurement gap. Say so in the report rather than writing tests to chase it.
+
 ## Reviewing test adequacy
 
 When judging whether a change is adequately tested, ask:
 
 - Is the new/changed behaviour exercised by at least one test?
-- Does a bug fix have a regression test that would have caught the original bug?
+- Does a bug fix have a regression test that would have caught the original bug? Asserting that it
+  *would* have is cheap and usually wrong. When the claim has to hold up — a reported regression, a
+  fix someone will re-litigate — `devkit prove-regression --red <ref> --green <ref> -- <test command>`
+  runs the same argv at both refs in two disposable clones and records the exits. Land a test-only
+  red commit first, then the fix. **Disposable is not sandboxed** — your command runs unconfined on
+  the host, so the test command and BOTH refs must be trusted; never point it at an unreviewed
+  branch. It captures execution evidence; it does not prove the red failure had the cause you
+  claim, so read the retained red output before publishing it.
 - Are the meaningful edge cases (empty, boundary, error) covered, not just the happy path?
 - Do the tests assert on observable behaviour, not implementation detail that will break on any refactor?

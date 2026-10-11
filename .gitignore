@@ -20,6 +20,11 @@ swarms/
 .devkit/anti-slop-baseline-upgrade.json
 .devkit/*.lock
 .devkit/adhd-off
+.env
+.devkit/ui-evidence-verdict-cache.json
+.devkit/last-commit-gates-*.log
+.decisions/index.json
+.decisions/index.json.*.tmp
 .devkit/*
 !.devkit/
 !.devkit/config.json
@@ -45,4 +50,3 @@ swarms/
 !.devkit/oxc/**
 !.devkit/vendored-skills/
 !.devkit/vendored-skills/**
-.env

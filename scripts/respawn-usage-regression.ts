@@ -14,7 +14,9 @@ const launched: string[] = [];
 const chain = await respawnChain<Outcome>({
   name: "w1",
   stop: () => false,
-  room: async () => ({ ...room, participants: [...room.participants, ...Array.from({ length: 4 }, (_, i) => ({ name: `u${i}`, agent: "claude", role: "worker", active: true }))] }),
+  // each attempt that ran took its seat (a successor that died before joining is replaced in its predecessor's name:
+  // scripts/respawn-usage-wait-regression.ts)
+  room: async () => ({ ...room, participants: [...room.participants, ...launched.slice(1).map((l) => ({ name: l.split(" ")[0], agent: "claude", role: "worker", active: false })), ...Array.from({ length: 4 }, (_, i) => ({ name: `u${i}`, agent: "claude", role: "worker", active: true }))] }),
   exitCode: (name) => exits[name] ?? null,
   register: async (previous, name) => ` replaces ${previous} as ${name}`,
   run: async (name, note) => { launched.push(name + note); return { text: name, usage: usage[name] }; },

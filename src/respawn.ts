@@ -187,6 +187,11 @@ export interface RespawnChainDeps<T> {
   register: (previousName: string, name: string, reason: string) => Promise<string>;
   run: (name: string, note: string) => Promise<T>;
   log?: (line: string) => void;
+  /** The exit receipt's detail for a seat (exitDetail): a usage-limit exit is respawned only once usageReady says so. */
+  detail?: (name: string) => string;
+  /** Whether the account can run a seat again (a tiny model call that is not refused); asked every usagePollMs. */
+  usageReady?: () => Promise<boolean>;
+  usagePollMs?: number;
   /** How long a hub that does not answer is waited for before the chain gives up (default 10 minutes), and how often it is asked. */
   unreachableWaitMs?: number;
   pollMs?: number;
@@ -224,29 +229,54 @@ export async function respawnChain<T>(d: RespawnChainDeps<T>): Promise<{ last: T
   const gaveUp = (who: string) => d.log?.(`${who} exited; not respawning: ${d.stop() ? "the launcher is stopping" : `the hub was unreachable for ${Math.round(waitMs / 60_000)} min`}`);
   let last = await d.run(d.name, "");
   let lastName = d.name;
+  // the last attempt that actually took its seat: a successor that died before joining is replaced in this one's name.
+  // Unknown until the room shows it; the first attempt is assumed seated unless it was stopped by the usage limit.
+  let seatedName: string | undefined;
+  const usagePollMs = d.usagePollMs ?? 300_000;
   for (let i = 1; i <= max; i++) {
     if (d.stop()) break;
+    // stopped by the account's usage limit: a successor started now dies of the same limit within seconds (swarm-003601-tky5
+    // lost its verifier that way), so wait until the account runs a seat again, or the launcher stops
+    const outOfUsage = !!d.usageReady && /usage limit/.test(d.detail?.(lastName) ?? "");
+    if (outOfUsage) {
+      d.log?.(`${lastName} was stopped by the account's usage limit (${d.detail?.(lastName)}); waiting for usage before respawning, checking every ${Math.round(usagePollMs / 60_000) || 1} min`);
+      let ready = false;
+      for (let waited = 0; !d.stop(); waited += usagePollMs) {
+        if ((ready = await d.usageReady!().catch(() => false))) { d.log?.(`usage is back after about ${Math.round(waited / 60_000)} min`); break; }
+        await sleep(usagePollMs);
+      }
+      if (!ready) { d.log?.(`${lastName} exited; not respawning: the launcher is stopping while the account is out of usage`); break; }
+    }
     let room: RespawnRoom | null = null;
     try {
       room = await reach(lastName, d.room);
     } catch (error) {
       if (error instanceof HubUnreachable) { gaveUp(lastName); break; }
     }
-    const decision = respawnDecision({ name: lastName, exitCode: d.exitCode(lastName), signal: d.signal?.(lastName), attempt: i, room, maxAttempts: max });
+    if (room?.participants?.some((p) => p.name === lastName)) seatedName = lastName;
+    // a seat the limit stopped before it ever joined (often before the room existed) has no seat to hand over: start it again
+    const decision = outOfUsage && !seatedName
+      ? { respawn: true, reason: "stopped by the account's usage limit before it joined" }
+      : respawnDecision({ name: lastName, exitCode: d.exitCode(lastName), signal: d.signal?.(lastName), attempt: i, room, maxAttempts: max });
     if (!decision.respawn) {
       d.log?.(`${lastName} exited; not respawning: ${decision.reason}`);
       break;
     }
     const name = `${d.name}-r${i}`;
-    let note: string;
-    try {
-      note = await reach(lastName, () => d.register(lastName, name, decision.reason));
-    } catch (error) {
-      if (error instanceof HubUnreachable) { gaveUp(lastName); break; }
-      d.log?.(`Not respawning ${lastName}: ${error instanceof Error ? error.message : "replacement registration failed"}`);
-      break;
+    // whom the successor replaces: the last attempt seen in the room; if none was seen, the one that just exited, except
+    // after a usage-limit exit, where an attempt not seen in the room never joined and there is nothing to hand over
+    const predecessor = seatedName ?? (outOfUsage ? undefined : lastName);
+    let note = "";
+    if (predecessor) {
+      try {
+        note = await reach(lastName, () => d.register(predecessor, name, decision.reason));
+      } catch (error) {
+        if (error instanceof HubUnreachable) { gaveUp(lastName); break; }
+        d.log?.(`Not respawning ${lastName}: ${error instanceof Error ? error.message : "replacement registration failed"}`);
+        break;
+      }
     }
-    d.log?.(`${lastName} exited while the room is ${room?.state}; respawning as ${name}: ${decision.reason}`);
+    d.log?.(`${lastName} exited while the room is ${room?.state ?? "not yet created"}; respawning as ${name}: ${decision.reason}`);
     replaced.push({ name: lastName, outcome: last });
     last = await d.run(name, note);
     lastName = name;

@@ -380,8 +380,11 @@ export class Hub {
     const old = room.participants.get(predecessor) ?? [...room.participants.values()].find((p) => p.name === predecessor);
     if (!old) throw new HubError("Replacement predecessor is not registered in this room.");
     if (!successorName.trim() || successorName.length > 64 || !/^[^\n\r<>]+$/.test(successorName)) throw new HubError("Invalid replacement display name.");
-    if (old.replacedBy || old.pendingReplacementName) throw new HubError("A replacement is already registered for this participant.");
-    if ([...room.participants.values()].some((p) => p.name === successorName || p.pendingReplacementName === successorName)) {
+    // a reserved successor that never joined (its process died first, e.g. of the account's usage limit) holds nothing:
+    // a new reservation replaces it, so the launcher can try again; one that joined is a seat and is replaced itself
+    const reservedJoined = old.pendingReplacementName && [...room.participants.values()].some((p) => p.name === old.pendingReplacementName);
+    if (old.replacedBy || reservedJoined) throw new HubError("A replacement is already registered for this participant.");
+    if ([...room.participants.values()].some((p) => p.name === successorName || (p !== old && p.pendingReplacementName === successorName))) {
       throw new HubError("Replacement must be a new, unreserved participant name.");
     }
     // The launcher asserts the process exit; do not wait for the idle sweep to mark the old seat departed.

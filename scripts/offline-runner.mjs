@@ -61,6 +61,7 @@ export const offlineScripts = [
   'attempts.test.ts',
   'dev-hub-rule.test.ts',
   'ui-button-styles.test.ts',
+  'ui-metrics-link.test.ts',
   'ui-activity-panel.test.ts',
   'ui-board-panel.test.ts',
   'ui-served-script.test.ts',

@@ -241,6 +241,7 @@ ${ROOMS_JS}
     if (r.unanswered_human) chips += '<span class="chip hum">waiting on a reply to ' + esc(r.unanswered_human.name) + '</span>';
     if (r.openings && r.openings !== 'revealed' && (r.state === 'open')) chips += '<span class="chip" title="openings: ' + esc(r.openings) + '">openings: ' + esc(r.openings.replace(/, waiting for nobody$/, '')) + '</span>';
     var act = '<a class="btn hidephone" href="/rooms/' + encodeURIComponent(r.name) + '/transcript" target="_blank" title="Plain-text transcript">Transcript</a>'
+      + '<a class="btn hidephone" href="/rooms/' + encodeURIComponent(r.name) + '/metrics?format=md" target="_blank" title="Per-seat cost, context and waits; the run in half-hour steps; when it went quiet">Metrics</a>'
       + ((r.state === 'open' || r.state === 'stalled') ? '<button class="btn danger" id="closeroom" title="Close this room without a conclusion">Close room</button>' : '')
       + '<button class="btn" id="archroom" title="' + (r.archived ? 'Show this room in listings again' : 'Hide this room from listings; the transcript is kept') + '">' + (r.archived ? 'Unarchive' : 'Archive') + '</button>'
       + roomPinButton(r) + '<button class="btn icon" id="toginspect" title="Inspector">☰</button>';

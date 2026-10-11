@@ -8,7 +8,7 @@
  * The hub's live "room idle" rule is src/hub/idle.ts; quietFrom here is the after-the-fact reading of the same stall.
  */
 import { coordinates } from "./hub/keys.js";
-import { checksOf } from "./hub/checks.js";
+import { checksOf, verdictOf } from "./hub/checks.js";
 
 type Ev = Record<string, any>;
 
@@ -62,7 +62,7 @@ export interface RunTimeline {
   /** each result/<slug> entry and the first entry that checks it (src/hub/checks.ts: rerun/, audit/, review/, valid/,
    * critique/, check/, attack/, verify/, matched by key, by id or by naming it) written by someone other than the
    * result's author; no review: by and minutes absent */
-  reviews: { key: string; at: string; author?: string; by?: string; minutes?: number }[];
+  reviews: { key: string; at: string; author?: string; by?: string; minutes?: number; verdict?: "holds" | "fails" | "partial" }[];
   /** every entry, whatever the room called it (exp/Q4, result/x, decision/y), that another seat's check names: the count
    * that still means something in a room with no result/* keys (7 devkit logs read 0 / 0 in the pack's table) */
   checkedEntries: string[];
@@ -198,7 +198,8 @@ export function runTimeline(events: readonly Ev[], bucketMinutes = 30): RunTimel
         // the hub's own resolver (src/hub/checks.ts), over the board as it stood when the check was written
         const checked = by && e.entry ? checksOf(key, by, String(e.entry.text ?? ""), boardNow).map((c) => c.of) : [];
         for (const k of checked) checkedEntries.add(k);
-        for (const r of reviews) if (r.by === undefined && by && by !== r.author && checked.includes(r.key)) Object.assign(r, { by, minutes: Math.round((ts - Date.parse(r.at)) / 6_000) / 10 });
+        const verdict = checked.length ? verdictOf(String(e.entry?.text ?? "")) : undefined;
+        for (const r of reviews) if (r.by === undefined && by && by !== r.author && checked.includes(r.key)) Object.assign(r, { by, minutes: Math.round((ts - Date.parse(r.at)) / 6_000) / 10, ...(verdict ? { verdict } : {}) });
         if (e.entry && by) boardNow.set(key, { by }); else if (!e.entry) boardNow.delete(key);
         if (!key.startsWith("inbox/") || !e.entry) break;
         if (key.endsWith(".ack")) {
@@ -305,6 +306,8 @@ export interface RunRow {
   seatExits?: Record<string, number>;
   /** entries of any prefix that another seat's check names (RunTimeline.checkedEntries) */
   entriesChecked: number;
+  /** the reviewed results by what the first check declared (VERDICT: line); unstated: it declared none */
+  verdicts: { holds: number; fails: number; partial: number; unstated: number };
   reviewedPerHour: number;
   usdPerReviewed?: number;
   usdPerFinding?: number;
@@ -359,6 +362,11 @@ export function runRow(events: readonly Ev[]): RunRow {
     results: t.reviews.length,
     reviewed,
     entriesChecked: t.checkedEntries.length,
+    verdicts: (() => {
+      const done = t.reviews.filter((r) => r.minutes !== undefined);
+      const n = (v?: string) => done.filter((r) => r.verdict === v).length;
+      return { holds: n("holds"), fails: n("fails"), partial: n("partial"), unstated: n(undefined) };
+    })(),
     findings: keys.size,
     ...(firstProposal === undefined ? {} : { firstProposalMin: min(firstProposal) }),
     ...(conclusion === undefined ? {} : { conclusionMin: min(conclusion) }),

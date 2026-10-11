@@ -21,6 +21,7 @@ import { planSnapshot, projectOf, type SpawnedAgent, type Spawner } from "./spaw
 import type { Participant } from "./hub/types.js";
 import { createWaitView } from "./hub/wait-view.js";
 import { hubTime, timeClaims, timeNote } from "./hub/clock.js";
+import { VERDICT_HINT } from "./hub/checks.js";
 import { boardContinuation, noteBoardRead } from "./hub/board.js";
 import { IDLE_HINT, ideaListHint, idleAgain, idleHint, idleStreak, leaveHint, leaveWaitsFor, listedItems, newlyNamed, offersLeave, openWork, stillOpenHint } from "./hub/open-work.js";
 
@@ -752,6 +753,8 @@ export function createSessionServer(hub: Hub, spawner?: Spawner, opts: { holdMs?
       const seal = hub.draftSeal(hub.getRoom(room), key, e);
       return {
         key, chars: e.text.length, by: e.by, ...(overlaps.length ? { overlaps } : {}), ...clockReply(room, writer, `board:${key}`, text),
+        // a check of another seat's entry: say what it was linked to, and ask for what it found if it did not say (idea/check-verdict)
+        ...(e.checks?.length ? { checks: e.checks, ...(e.verdict ? {} : { verdict_hint: VERDICT_HINT }) } : {}),
         ...(key !== asked ? { asked_key: asked, landed_hint: `"${asked}" is another seat's entry, so yours was kept beside it as "${key}": cite and update it under that key.` } : {}),
         ...(seal ? { sealed: seal, hint: seal.opened_round
           ? `You opened a sealed draft round: draft/* is for each seat's own independent attempt, so this entry is hidden from ${seal.hidden_from.join(", ") || "the other seats"} until every drafter has written one${seal.until ? ` or ${seal.until.slice(11, 19)} UTC` : ""}. If this is a working draft you want them to read now, clear it (board_set key="${key}" text="", which cancels the round) and write it under another key, e.g. wip/${key.slice("draft/".length)}.`

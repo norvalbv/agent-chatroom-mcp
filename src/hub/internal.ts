@@ -69,7 +69,7 @@ export type Event =
   /** the owner named this room's chair through the human route (Hub.nameChair) */
   | { type: "chair_named"; room: string; name: string; by: string; ts: string }
   /** Telemetry only (replay ignores it; src/hub/checks.ts): a checking entry and the entries by other seats it checks. how: key | segment | text, the rule that found the first. */
-  | { type: "check"; room: string; key: string; by: string; of: string[]; how: string; ts: string }
+  | { type: "check"; room: string; key: string; by: string; of: string[]; how: string; verdict?: "holds" | "fails" | "partial"; ts: string }
   | { type: "kick_vote"; room: string; vote: KickVote }
   /** Telemetry only (replay ignores it; the board event carries the text): an entry edited in place with amend. sent_chars is what the seat sent, entry_chars what a whole board_set would have. */
   | { type: "board_edit"; room: string; key: string; by: string; sent_chars: number; entry_chars: number; ts: string }

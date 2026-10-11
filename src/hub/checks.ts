@@ -85,3 +85,16 @@ export function checksOf(key: string, by: string, text: string, board: Iterable<
     .slice(0, 3)
     .map((x) => ({ of: x.k, how: "text" as const }));
 }
+
+export type Verdict = "holds" | "fails" | "partial";
+/** A verdict the checker declared on the first line ("VERDICT: holds|fails|partial ..."), nothing else. Read from prose a
+ * verdict is wrong too often to count: of 151 checks in the records 41% state no verdict word and some read backwards
+ * ("H1 REFUTED ... It confirms -1's verdict" holds). decision/check-verdict-not-built. */
+export function verdictOf(text: string): Verdict | undefined {
+  const m = /^\s*verdict\s*[:\-–—]\s*(holds|fails|partial)\b/i.exec(text.split("\n", 1)[0] ?? "");
+  return m ? (m[1].toLowerCase() as Verdict) : undefined;
+}
+
+/** What the hub says to a check that declares no verdict. */
+export const VERDICT_HINT = "Put \"VERDICT: holds|fails|partial — <one clause>\" on this entry's first line so the record says what your check found, not only what it checked; prose is not read for it.";
+

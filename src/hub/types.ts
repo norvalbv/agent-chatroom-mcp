@@ -286,6 +286,8 @@ export interface BoardEntry {
   /** the entries by other seats this entry checks (rerun/, audit/, review/, valid/, critique/, check/, attack/), resolved by
    * the hub when it was written (src/hub/checks.ts); absent when it is not a check or names nothing */
   checks?: string[];
+  /** what that check found, as its writer declared it on the first line (src/hub/checks.ts verdictOf); absent: not declared */
+  verdict?: "holds" | "fails" | "partial";
   /** written after the room concluded, inside Hub.LATE_WRITE_MS (src/hub/board.ts lateWrite): on the record, not part of what was decided */
   late?: boolean;
   /** claim/* entries only: the reviewer the hub assigned at creation (name/id), never client-supplied. */

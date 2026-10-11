@@ -10,7 +10,7 @@ import { closeSync, openSync, readSync } from "node:fs";
 import { StringDecoder } from "node:string_decoder";
 
 /** A file's lines, read 1 MB at a time: a transcript can be tens of MB and several are read in one run. */
-function* linesOf(file: string): Generator<string> {
+export function* linesOf(file: string): Generator<string> {
   let fd: number;
   try { fd = openSync(file, "r"); } catch { return; }
   const buf = Buffer.alloc(1 << 20);

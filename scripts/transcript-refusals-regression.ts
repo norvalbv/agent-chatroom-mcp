@@ -6,7 +6,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
-import { classifyFailure, transcriptFailures } from "../src/transcript-failures.js";
+import { classifyFailure, linesOf, transcriptFailures } from "../src/transcript-failures.js";
 
 assert.equal(classifyFailure("3 message(s) arrived while you were composing. Read them (below); then retry"), "unread");
 assert.equal(classifyFailure('"evidence/x" was written by bob at 2026-10-11T10:00:00Z; replacing it would discard their text.'), "ownership");
@@ -50,6 +50,12 @@ try {
     const res = JSON.stringify({ type: "user", message: { content: [{ type: "tool_result", tool_use_id: "u1", is_error: true, content: [{ type: "text", text: "“quoted” – 2 message(s) arrived while you were composing." }] }] } });
     writeFileSync(f, use + "\n" + res + "\n");
     assert.deepEqual(transcriptFailures([f]).map((r) => [r.tool, r.cls, r.n]), [["send_message", "unread", 1]]);
+    // and the text itself: an "é" whose two bytes straddle byte 1,048,576 decodes as "é", not two replacement characters
+    const g = join(d, "u.jsonl");
+    writeFileSync(g, Buffer.concat([Buffer.from("x".repeat((1 << 20) - 1)), Buffer.from("é\nnext\n")]));
+    const read = [...linesOf(g)];
+    assert.equal(read.length, 2);
+    assert.ok(read[0].endsWith("xé"), `decoded across the boundary: ...${JSON.stringify(read[0].slice(-3))}`);
   } finally { rmSync(d, { recursive: true, force: true }); }
 }
 console.log("transcript-refusals-regression OK");

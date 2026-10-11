@@ -1886,7 +1886,13 @@ export class Hub {
     board_keys?: string[]; board_delta?: { keys: string[]; tombstones: string[] }; board_reset?: boolean;
   } { return board.boardManifest(this, roomName, pid, follow, forceFull); }
   private applyBoard(room: Room, key: string, entry: BoardEntry | null) { return board.applyBoard(room, key, entry); }
-  setBoard(roomName: string, pid: string, key: string, text: string, opts: BoardExpiryOptions & { ifAbsent?: boolean; ifByMe?: boolean; overwrite?: boolean } = {}): BoardEntry | null { return board.setBoard(this, roomName, pid, key, text, opts); }
+  setBoard(roomName: string, pid: string, key: string, text: string, opts: BoardExpiryOptions & { ifAbsent?: boolean; ifByMe?: boolean; overwrite?: boolean } = {}): BoardEntry | null {
+    const entry = board.setBoard(this, roomName, pid, key, text, opts);
+    // a take released during a last call may be the last thing the conclusion was waiting for
+    const room = this.rooms.get(roomName);
+    if (room && key.startsWith("take/")) for (const pr of room.proposals.values()) if (pr.lastCall && pr.status === "open") this.evaluate(room, pr);
+    return entry;
+  }
   static claimTerms(key: string, text: string): Set<string> { return board.claimTerms(key, text); }
   static claimKeysSplit(a: string, b: string): boolean { return board.claimKeysSplit(a, b); }
   claimOverlaps(roomName: string, pid: string, key: string): { key: string; by: string; room?: string; shared_pct: number; shared: string[] }[] { return board.claimOverlaps(this, roomName, pid, key); }
@@ -2386,7 +2392,7 @@ export class Hub {
     if (this.hold(room)) out.push(`hold by ${this.hold(room)!.by}`);
     const pending = this.scrutinyPending(room, pr);
     if (pending) out.push(`fresh challenger ${pending.name} has not reported (it challenges or leaves; waited for until ${pending.until} at the latest)`);
-    if (this.inLastCall(pr)) out.push(`last call: it concludes at ${pr.lastCall!.until} unless a vote or amend changes it, or as soon as ${this.unvotedOnCurrent(room, pr).map((p) => this.shown(room, p)).join(", ") || "everyone"} vote${this.unvotedOnCurrent(room, pr).length === 1 ? "s" : ""} on v${pr.version}`);
+    if (this.inLastCall(pr)) out.push(`last call: it concludes at ${pr.lastCall!.until} unless a vote or amend changes it, or as soon as ${this.lastCallWaits(room, pr)}`);
     if (!active.some((p) => pr.votes[p.id] && (pr.votes[p.id].version ?? 1) === pr.version) && pr.version > 1) out.push(`no vote cast on v${pr.version} yet (carried-over agrees alone cannot pass a new version)`);
     return out;
   }
@@ -2668,6 +2674,15 @@ export class Hub {
     return this.electorate(room, pr).members.filter((p) => (pr.votes[p.id] ? pr.votes[p.id].version ?? 1 : 0) !== pr.version);
   }
 
+  /** take/* entries an active seat holds now ("I am doing this"), as "key (holder)": work in flight that a conclusion
+   * would cut off (attack/decision/last-call: in 0btz-break a seat that had voted said its rerun was still running and
+   * the room concluded 6 s later). Offers nobody accepted and claim/* areas, which are rarely released, do not count. */
+  takesInFlight(room: Room): string[] {
+    return [...room.board].filter(([k, e]) => k.startsWith("take/") && e.text.trim() && !e.offeredBy &&
+      [...room.participants.values()].some((p) => p.active && p.name === (e.holder ?? e.by)))
+      .map(([k, e]) => `${k} (${e.holder ?? e.by})`);
+  }
+
   /** A last call is running on the proposal's current version and has not run out. */
   inLastCall(pr: Proposal): boolean {
     return pr.status === "open" && pr.lastCall?.version === pr.version && Date.parse(pr.lastCall.until) > Date.now();
@@ -2685,20 +2700,31 @@ export class Hub {
   private lastCallHolds(room: Room, pr: Proposal): boolean {
     if (Hub.LAST_CALL_MS <= 0) return false;
     const unvoted = this.unvotedOnCurrent(room, pr);
-    if (!unvoted.length) return false;
+    const takes = this.takesInFlight(room);
+    if (!unvoted.length && !takes.length) return false;
     if (pr.lastCall?.version === pr.version) return Date.parse(pr.lastCall.until) > Date.now();
     const startedAt = now();
     const until = new Date(Date.now() + Hub.LAST_CALL_MS).toISOString();
     const waitingOn = unvoted.map((p) => this.shown(room, p));
     pr.lastCall = { version: pr.version, startedAt, until, waitingOn };
-    this.persist({ type: "last_call", room: room.name, proposalId: pr.id, version: pr.version, startedAt, until, waiting_on: unvoted.map((p) => p.name) });
+    this.persist({ type: "last_call", room: room.name, proposalId: pr.id, version: pr.version, startedAt, until, waiting_on: unvoted.map((p) => p.name), ...(takes.length ? { takes_held: takes } : {}) });
     const secs = Math.round(Hub.LAST_CALL_MS / 1000);
     this.post(room, "system", undefined,
       `LAST CALL: ${pr.id} v${pr.version} has the votes. The room concludes at ${until} (in ${secs} s) unless a vote or amend changes that, ` +
-      `or as soon as ${waitingOn.join(", ")} vote${waitingOn.length === 1 ? "s" : ""} on v${pr.version}. A concluded room accepts no more writes: ` +
-      `land any result, verify entry or vote you still owe it now; if you need longer, write hold/${room.name}.`);
+      `or as soon as ${this.lastCallWaits(room, pr)}. A concluded room accepts no more writes: ` +
+      `land any result, verify entry or vote you still owe it now; if work of yours is still running, write take/<what> (and clear it when it lands), or hold/${room.name} if it needs longer than this window.`);
     setTimeout(() => { try { this.evaluate(room, pr); } catch {} }, Hub.LAST_CALL_MS + 25).unref();
     return true;
+  }
+
+  /** What a last call is still waiting for, in words: the votes on the current version and the takes still held. */
+  private lastCallWaits(room: Room, pr: Proposal): string {
+    const unvoted = this.unvotedOnCurrent(room, pr).map((p) => this.shown(room, p));
+    const takes = this.takesInFlight(room);
+    return [
+      ...(unvoted.length ? [`${unvoted.join(", ")} vote${unvoted.length === 1 ? "s" : ""} on v${pr.version}`] : []),
+      ...(takes.length ? [`${takes.join(", ")} ${takes.length === 1 ? "is" : "are"} released (board_set the key with empty text)`] : []),
+    ].join(" and ") || "nothing is left to wait for";
   }
 
   /** How the room closed on pr: the telemetry in conclusion.closing. */
@@ -2706,11 +2732,13 @@ export class Hub {
     const t = Date.now();
     const lc = pr.lastCall?.version === pr.version ? pr.lastCall : undefined;
     const unvoted = this.unvotedOnCurrent(room, pr);
+    const takes = this.takesInFlight(room);
     return {
       seconds_from_proposal: Math.round((t - Date.parse(pr.createdAt)) / 100) / 10,
       seconds_from_last_text: Math.round((t - Date.parse(pr.updatedAt ?? pr.createdAt)) / 100) / 10,
       ...(lc ? { last_call_seconds: Math.round((t - Date.parse(lc.startedAt)) / 100) / 10 } : {}),
-      ended: lc ? (unvoted.length ? "window" : "all_voted") : "none",
+      ended: lc ? (unvoted.length || takes.length ? "window" : "all_voted") : "none",
+      ...(takes.length ? { takes_held: takes } : {}),
       not_voted_on_final: unvoted.map((p) => ({ name: this.shown(room, p), ...(p.role && p.role !== "worker" ? { role: p.role } : {}), ...(pr.votes[p.id] ? { voted_version: pr.votes[p.id].version ?? 1 } : {}) })),
     };
   }

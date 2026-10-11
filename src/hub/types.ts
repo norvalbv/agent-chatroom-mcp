@@ -369,8 +369,11 @@ export interface ConclusionClosing {
   seconds_from_last_text: number;
   /** absent when everyone had voted on the final version before it had the votes, so no last call was needed */
   last_call_seconds?: number;
-  /** window: the last call ran out; all_voted: everyone voted on the final version first; none: no last call (off, or nobody unvoted) */
+  /** window: the last call ran out; all_voted: everyone voted on the final version and no take/* was held before it did;
+   * none: no last call (off, or nothing to wait for) */
   ended: "window" | "all_voted" | "none";
+  /** take/* entries still held by an active seat when the room concluded, as "key (holder)": work the conclusion cut off */
+  takes_held?: string[];
   /** voted_version: the version their standing vote was cast on, when they had one */
   not_voted_on_final: { name: string; role?: string; voted_version?: number }[];
 }

@@ -92,6 +92,22 @@ test("an amend during last call drops it; the new version gets its own; LAST_CAL
   Hub.LAST_CALL_MS = 0;
 });
 
+test("a seat that has voted but holds a take/* keeps the room open until it releases it", async () => {
+  const { hub, r, b, v, agree } = setup("lc-take", 60_000);
+  hub.setBoard("lc-take", b.id, "take/rerun-join", "outside rerun still running");
+  agree(b.id);
+  agree(v.id);
+  assert.equal(r.state, "open", "everyone voted, but B said it is still doing something");
+  const notice = r.messages.find((m) => m.kind === "system" && /LAST CALL/.test(m.content))!;
+  assert.match(notice.content, /take\/rerun-join \(B\)/, "the notice names the take and its holder");
+  hub.setBoard("lc-take", b.id, "result/rerun-join", "the rerun landed: 3 of 3");
+  hub.setBoard("lc-take", b.id, "take/rerun-join", "");
+  assert.equal(r.state, "concluded", "releasing the take ends the last call");
+  assert.equal(r.conclusion!.closing!.ended, "all_voted");
+  assert.equal(r.conclusion!.closing!.takes_held, undefined);
+  assert.ok(r.board.has("result/rerun-join"), "the late result is on the board");
+});
+
 test("the last call is logged as an event", () => {
   const dir = mkdtempSync(join(tmpdir(), "last-call-"));
   const { b, agree } = setup("lc-log", 60_000, dir);

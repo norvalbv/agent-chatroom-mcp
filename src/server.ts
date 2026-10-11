@@ -64,7 +64,7 @@ export interface SessionServer {
 
 /** A refused board key as the log keeps it: its first segment when that is a plain prefix (digest, result), then every
  * run of allowed characters as its length and every refused character as itself when it is visible punctuation, else
- * "?" ("digest/src/x.ts@ab12" -> "digest/<9>@<4>"). Which prefix and which character the rule refused survive; no
+ * "?" ("digest/src/x.ts@ab12" -> "digest/<8>@<4>"). Which prefix and which character the rule refused survive; no
  * submitted text or secret does (src/hub.ts recordRefusal keeps no message text for the same reason). */
 export function keyShape(key: string): string {
   const slash = key.indexOf("/");

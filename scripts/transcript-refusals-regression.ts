@@ -40,4 +40,16 @@ try {
   assert.match(out.stdout, /\| seat-1 \| wait_for_messages \| client:not-connected \| 1 \|/);
   assert.match(out.stdout, /1 of 2 seats have a transcript/);
 } finally { rmSync(dir, { recursive: true, force: true }); }
+// a multi-byte character across the 1 MB read boundary survives (review/50342cc6)
+{
+  const d = mkdtempSync(join(tmpdir(), "transcript-utf8-"));
+  try {
+    const pad = "x".repeat((1 << 20) - 60);
+    const use = JSON.stringify({ type: "assistant", message: { content: [{ type: "tool_use", id: "u1", name: "mcp__chatroom__send_message", input: { pad } }] } });
+    const f = join(d, "t.jsonl");
+    const res = JSON.stringify({ type: "user", message: { content: [{ type: "tool_result", tool_use_id: "u1", is_error: true, content: [{ type: "text", text: "“quoted” – 2 message(s) arrived while you were composing." }] }] } });
+    writeFileSync(f, use + "\n" + res + "\n");
+    assert.deepEqual(transcriptFailures([f]).map((r) => [r.tool, r.cls, r.n]), [["send_message", "unread", 1]]);
+  } finally { rmSync(d, { recursive: true, force: true }); }
+}
 console.log("transcript-refusals-regression OK");

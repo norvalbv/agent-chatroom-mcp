@@ -7,19 +7,23 @@
  * typed code itself is not in the transcript). Reads one file at a time, line by line.
  */
 import { closeSync, openSync, readSync } from "node:fs";
+import { StringDecoder } from "node:string_decoder";
 
 /** A file's lines, read 1 MB at a time: a transcript can be tens of MB and several are read in one run. */
 function* linesOf(file: string): Generator<string> {
   let fd: number;
   try { fd = openSync(file, "r"); } catch { return; }
   const buf = Buffer.alloc(1 << 20);
+  // a multi-byte character cut by a chunk boundary is held over to the next chunk, not decoded as two halves (review/50342cc6)
+  const decoder = new StringDecoder("utf8");
   let rest = "";
   try {
     for (let n = readSync(fd, buf); n > 0; n = readSync(fd, buf)) {
-      const parts = (rest + buf.toString("utf8", 0, n)).split("\n");
+      const parts = (rest + decoder.write(buf.subarray(0, n))).split("\n");
       rest = parts.pop() ?? "";
       yield* parts;
     }
+    rest += decoder.end();
     if (rest) yield rest;
   } finally { closeSync(fd); }
 }

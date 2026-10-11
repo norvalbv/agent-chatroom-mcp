@@ -55,7 +55,7 @@ export interface RunMetrics {
   recruits: { calls: number; seats: number; workers: number; rate: number };
   /** summed over seats that reported usage; seatsWithUsage of seats.length says how complete it is */
   usage?: { cost_usd: number; input_tokens: number; output_tokens: number; seatsWithUsage: number };
-  /** take/<what> steps by action (hub "take" events): take, offer, accept, handover, release, decline, withdraw, refused, and refused:<reason> (held, same-commit, assigned-reviewer, already-reviewed); absent: none */
+  /** take/<what> steps by action (hub "take" events): take, offer, accept, handover, release, decline, withdraw, refused, and refused:<reason> (held, same-commit, assigned-reviewer, already-reviewed, same-work); absent: none */
   takes?: Record<string, number>;
   /** agent chat by delivery: quiet the sender chose, quiet the hub chose (autoQuiet), and two-seat exchanges kept public because they named a board key; absent: no agent chat */
   quiet?: { chat: number; bySender: number; byHub: number; keptPublicForBoardKey: number };

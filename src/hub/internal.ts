@@ -64,7 +64,7 @@ export type Event =
   | { type: "memory"; room: string; seat: string; ts: string; memory?: SeatMemory; event?: "warn" | "over" | "ended" | "stop" | "high"; mb?: number; budget_mb?: number; mark_mb?: number; top?: SeatMemory["top"]; signal?: string }
   /** Telemetry only (replay ignores it; src/hub/take.ts): one step of a take/<what> entry. by and holder are seat names. */
   /** reason and commit only on action "refused": held (the same key), same-commit (another key naming the commit), assigned-reviewer */
-  | { type: "take"; room: string; key: string; action: string; by: string; holder: string; ts: string; reason?: "held" | "same-commit" | "assigned-reviewer" | "already-reviewed"; commit?: string }
+  | { type: "take"; room: string; key: string; action: string; by: string; holder: string; ts: string; reason?: "held" | "same-commit" | "assigned-reviewer" | "already-reviewed" | "same-work"; commit?: string }
   /** Telemetry only (replay ignores it; src/hub/board.ts): a verify/* or review/* entry with a head, the commit it reviewed and whether the hub's repo has it. */
   | { type: "review"; room: string; key: string; by: string; proposal: string; commit?: string; commit_known?: boolean; base_commit?: string; base_known?: boolean; exit_code: number; base_exit_code?: number; kind?: string; unverified_n: number; dev_room?: string; ts: string }
   /** Telemetry only (replay ignores it): a board entry accepted after the room concluded, how long after, and the cited commit a failing late verdict contradicts. */

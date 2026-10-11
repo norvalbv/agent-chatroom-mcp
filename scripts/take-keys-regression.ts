@@ -147,6 +147,23 @@ test("every step is a take record in the room log, refusals included", () => {
   assert.equal(again.getRoom(name).board.get("take/Q11")?.holder, "carol");
 });
 
+test("two spellings of the same non-commit work are one take: the second seat is told who holds it (dev room swarm-210624-lnap)", () => {
+  // the verifier's integration dev room: take/slow_count and take/slow_count-run were held by two seats and the scorer ran twice
+  const { h, name, a, b, c } = room();
+  h.setBoard(name, a.id, "take/slow_count", "running the slow_count scorer, ~150 s");
+  throws(() => h.setBoard(name, b.id, "take/slow_count-run", "I'll run the scorer"), /names the same work as "take\/slow_count", held by alice/);
+  throws(() => h.setBoard(name, b.id, "take/run/Slow-Count", "x"), /held by alice/);
+  throws(() => h.setBoard(name, c.id, "take/slow_count-bob", "x"), /held by alice/); // a seat name is not a difference either
+  // different work stays different: a narrower or wider key, another item, another kind
+  h.setBoard(name, b.id, "take/slow_count-gpu", "the gpu variant");
+  h.setBoard(name, b.id, "take/fast_count", "another scorer");
+  h.setBoard(name, c.id, "take/audit/slow_count", "auditing its output");
+  // the holder's own second key, and a take once the first is released, pass
+  h.setBoard(name, a.id, "take/slow_count-run", "same piece, my own note");
+  h.setBoard(name, a.id, "take/slow_count", ""); h.setBoard(name, a.id, "take/slow_count-run", "");
+  h.setBoard(name, b.id, "take/slow_count-run", "now mine");
+});
+
 let failed = 0;
 for (const [name, run] of cases) {
   try {

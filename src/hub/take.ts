@@ -59,6 +59,14 @@ export function commitAuthor(hub: Hub, room: Room, p: Participant, commit: strin
   return r.status === 0 ? named(room, r.stdout.trim()) : undefined;
 }
 
+/** Words a take key spends on how, not what: a key that differs only by these, or by a seat's name, names the same work. */
+const HOW_WORDS = new Set(["run", "rerun", "re", "job", "go", "now", "start", "my", "the", "do", "doing", "by", "task", "work"]);
+/** The work a take names, as its sorted words without how-words and seat names; "" when nothing is left. */
+function workWords(room: Room, key: string): string {
+  const seats = new Set([...room.participants.values()].flatMap((x) => [x.name.toLowerCase(), ...x.name.toLowerCase().split(/[-_]/)]));
+  return [...new Set(key.slice("take/".length).toLowerCase().split(/[-/_.:\s]+/).filter((t) => t && !HOW_WORDS.has(t) && !seats.has(t)))].sort().join(" ");
+}
+
 /** Commit tokens in a take's key, e.g. take/review-ba181129 and take/review/ba181129 both name ba181129. */
 const commitsOf = (key: string) => commitsIn(key.slice("take/".length));
 const sameCommit = (a: string, b: string) => a.startsWith(b) || b.startsWith(a);
@@ -82,10 +90,23 @@ const claimOpen = (e: BoardEntry) => { try { return (JSON.parse(e.text) as { sta
  */
 function commitTake(hub: Hub, room: Room, p: Participant, key: string, w: TakeWrite): TakeWrite {
   if (p.agent === "human") return w;
-  const refuse = (reason: "same-commit" | "assigned-reviewer" | "already-reviewed", commit: string, holder: Participant, message: string): never => {
-    hub.persist({ type: "take", room: room.name, key, action: "refused", by: p.name, holder: holder.name, ts: new Date().toISOString(), reason, commit });
+  const refuse = (reason: "same-commit" | "assigned-reviewer" | "already-reviewed" | "same-work", commit: string, holder: Participant, message: string): never => {
+    hub.persist({ type: "take", room: room.name, key, action: "refused", by: p.name, holder: holder.name, ts: new Date().toISOString(), reason, ...(commit ? { commit } : {}) });
     throw new HubError(message, undefined, "ownership");
   };
+  // the same work under another spelling (the verifier's dev room swarm-210624-lnap: take/slow_count and
+  // take/slow_count-run, two seats, the scorer ran twice). Equal words only, so a narrower key (slow_count-gpu) is other
+  // work; across every room log this rule matched no pair of takes, so it should not refuse what was meant as different.
+  const words = workWords(room, key);
+  if (words && !commitsOf(key).length) {
+    for (const [k, e] of room.board) {
+      if (k === key || !k.startsWith("take/") || !e.text.trim() || commitsOf(k).length || workWords(room, k) !== words) continue;
+      const holder = named(room, e.holder ?? e.by);
+      if (!holder?.active || holder.id === w.holder.id) continue;
+      refuse("same-work", "", holder, `"${key}" names the same work as "${k}", held by ${hub.shown(room, holder)} since ${e.updatedAt}: "${e.text.slice(0, 200)}". ` +
+        `Ask them before doing it. If it is different work, use a key that says how it differs (e.g. ${k}-<what>).`);
+    }
+  }
   for (const commit of commitsOf(key)) {
     for (const [k, e] of room.board) {
       if (k === key || !k.startsWith("take/") || !e.text.trim() || kindOf(k) !== kindOf(key) || !commitsOf(k).some((c) => sameCommit(c, commit))) continue;

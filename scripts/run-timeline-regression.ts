@@ -79,6 +79,25 @@ assert.equal(re.buckets[0].requests, 12);
 assert.equal(re.buckets[0].outputTokens, 1300);
 assert.equal(re.quietFrom, undefined, 'a short room has no stall to report');
 
+// notes between rooms (post_to_room lands as inbox/<from room>/<key>): each write is one note, acknowledged by the next
+// write of <key>.ack. A digest re-sent under one key every pass keeps only its last text on the board; the log has all.
+const note = (key: string, min: number, by = 'consolidator') => ({ type: 'board', room: 'r', key, entry: { text: 'x', by, updatedAt: at(min) } });
+const n = runTimeline([
+  { type: 'room', room: 'r', opts: {}, createdAt: at(0) },
+  { type: 'join', room: 'r', p: { id: 'p_a', name: 'alice', agent: 'claude', joinedAt: at(0), seatKeyHash: 'ka' } },
+  note('inbox/leads/digest', 10), note('inbox/leads/digest.ack', 12, 'alice'),
+  note('inbox/leads/digest', 30), note('inbox/leads/digest', 50), note('inbox/leads/digest.ack', 53, 'alice'),
+  note('inbox/other/tip', 55),
+  { type: 'call_completion', room: 'r', tool: 'request_agent', outcome: 'success', ts: at(20), participant: 'p_a', ms: 5 },
+  { type: 'call_completion', room: 'r', tool: 'request_agent', outcome: 'hub_refusal', ts: at(21), participant: 'p_a', ms: 5 },
+]);
+assert.deepEqual(n.notes.map((x: any) => [x.key, x.from, x.ackMinutes]), [
+  ['inbox/leads/digest', 'leads', 2], ['inbox/leads/digest', 'leads', undefined], ['inbox/leads/digest', 'leads', 3], ['inbox/other/tip', 'other', undefined],
+], 'every note write, with minutes to its acknowledgement; a note overwritten before any ack was never acknowledged');
+assert.deepEqual(n.recruitCalls, [{ at: at(20), by: 'alice' }], 'each successful recruit, when and by whom');
+assert.match(renderTimeline(n), /4 notes from other rooms, 2 acknowledged \(median 2\.5 min\), 2 never/);
+assert.match(renderTimeline(n), /Recruits: 09:20 alice/);
+
 const text = renderTimeline(t);
 assert.match(text, /## Timeline/);
 assert.match(text, /went quiet at 11:00/);

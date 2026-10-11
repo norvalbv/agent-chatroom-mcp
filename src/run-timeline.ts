@@ -53,6 +53,11 @@ export interface RunTimeline {
   longestSilence?: { from: string; to: string; minutes: number };
   /** every stretch of five minutes or more with no event, in order */
   silences: { from: string; to: string; minutes: number }[];
+  /** every note another room sent here (post_to_room: a board write of inbox/<from room>/<key>), in order, with the
+   * minutes until this room acknowledged it (<key>.ack); a note rewritten before any ack was never acknowledged */
+  notes: { key: string; from: string; at: string; by?: string; ackMinutes?: number }[];
+  /** each successful request_agent call */
+  recruitCalls: { at: string; by: string }[];
   /** start of the first bucket from which every later bucket's output stays under a fifth of the mean before it;
    * undefined when the run never went quiet or is shorter than four buckets */
   quietFrom?: string;
@@ -80,6 +85,9 @@ export function runTimeline(events: readonly Ev[], bucketMinutes = 30): RunTimel
   let last: number | undefined;
   let silence: RunTimeline["longestSilence"];
   const silences: RunTimeline["silences"] = [];
+  const notes: RunTimeline["notes"] = [];
+  const recruitCalls: RunTimeline["recruitCalls"] = [];
+  const openNote = new Map<string, RunTimeline["notes"][number]>();
   const buckets: TimelineBucket[] = [];
   const names = new Map<string, string>();
   const byKey = new Map<string, string>();
@@ -145,7 +153,10 @@ export function runTimeline(events: readonly Ev[], bucketMinutes = 30): RunTimel
       }
       case "call_completion": {
         b.hubCalls++;
-        if (e.tool === "request_agent" && e.outcome === "success") b.recruits++;
+        if (e.tool === "request_agent" && e.outcome === "success") {
+          b.recruits++;
+          recruitCalls.push({ at: new Date(ts).toISOString(), by: names.get(e.participant) ?? "?" });
+        }
         if (e.tool !== "wait_for_messages") break;
         const s = seat(e.participant);
         b.waits++;
@@ -159,9 +170,21 @@ export function runTimeline(events: readonly Ev[], bucketMinutes = 30): RunTimel
       case "message":
         if (e.msg?.kind === "chat" && e.msg.from?.id !== "system") b.chat++;
         break;
-      case "board":
+      case "board": {
         b.boardWrites++;
+        const key = String(e.key ?? "");
+        if (!key.startsWith("inbox/") || !e.entry) break;
+        if (key.endsWith(".ack")) {
+          const sent = openNote.get(key.slice(0, -4));
+          if (sent) sent.ackMinutes = Math.round((ts - Date.parse(sent.at)) / 6_000) / 10;
+          openNote.delete(key.slice(0, -4));
+          break;
+        }
+        const sent = { key, from: key.split("/")[1] ?? "", at: new Date(ts).toISOString(), ...(e.entry.by ? { by: e.entry.by as string } : {}) };
+        notes.push(sent);
+        openNote.set(key, sent);
         break;
+      }
       case "work":
         b.work++;
         break;
@@ -176,6 +199,8 @@ export function runTimeline(events: readonly Ev[], bucketMinutes = 30): RunTimel
     seats: [...seats.values()].map(({ prev: _prev, context, lastContext: _last, ...s }) => ({ ...s, meanContext: s.requests > 0 ? context / s.requests : 0 })),
     ...(silence ? { longestSilence: silence } : {}),
     silences,
+    notes,
+    recruitCalls,
     ...(q >= 0 ? { quietFrom: buckets[q].start, quietCostUsd: Math.round(buckets.slice(q).reduce((a, b) => a + b.costUsd, 0) * 100) / 100 } : {}),
   };
 }
@@ -195,5 +220,13 @@ export function renderTimeline(t: RunTimeline): string {
   text += "\nContext is the input a seat sent per model request, cache reads and writes included: its transcript, re-read every time.\n\n" +
     "| seat | model requests | mean context | peak context | compactions | cache read | cache write | output | cost | waits (empty) |\n|---|---|---|---|---|---|---|---|---|---|\n";
   for (const s of t.seats) text += `| ${s.name} | ${s.requests} | ${k(s.meanContext)} | ${k(s.peakContext)} | ${s.compactions} | ${k(s.cacheReadTokens)} | ${k(s.cacheWriteTokens)} | ${k(s.outputTokens)} | $${s.costUsd.toFixed(2)} | ${s.waits} (${s.emptyWaits}) |\n`;
+  if (t.notes.length) {
+    const acked = t.notes.flatMap((x) => (x.ackMinutes === undefined ? [] : [x.ackMinutes])).sort((a, b) => a - b);
+    const median = acked.length ? (acked[Math.floor((acked.length - 1) / 2)] + acked[Math.ceil((acked.length - 1) / 2)]) / 2 : undefined;
+    text += `\n${t.notes.length} notes from other rooms, ${acked.length} acknowledged${median === undefined ? "" : ` (median ${median} min)`}, ${t.notes.length - acked.length} never.\n\n` +
+      "| at | note | from | acknowledged after |\n|---|---|---|---|\n" +
+      t.notes.map((x) => `| ${hhmm(x.at)} | ${x.key} | ${x.by ?? x.from} | ${x.ackMinutes === undefined ? "never" : `${x.ackMinutes} min`} |\n`).join("");
+  }
+  if (t.recruitCalls.length) text += `\nRecruits: ${t.recruitCalls.map((r) => `${hhmm(r.at)} ${r.by}`).join(", ")}.\n`;
   return `${text}\n`;
 }

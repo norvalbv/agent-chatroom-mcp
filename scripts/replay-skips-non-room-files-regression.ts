@@ -12,8 +12,12 @@ import assert from "node:assert/strict";
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import test from "node:test";
+import test, { after } from "node:test";
 import { Hub } from "../src/hub.js";
+
+// a hub that failed to construct can leave its timers behind; with the bug present that kept this file running
+// for good (two reviewers' runs hung), so the file exits once its tests are done, with their exit code
+after(() => { setTimeout(() => process.exit(), 200).unref(); });
 
 test("a health file and a stray line in the data dir do not stop a restart, and the rooms still load", (t) => {
   const dir = mkdtempSync(join(tmpdir(), "replay-skip-"));
@@ -42,7 +46,12 @@ test("a served hub that has sampled its health starts again on the same data dir
   const dir = mkdtempSync(join(tmpdir(), "replay-restart-"));
   const env = { ...process.env, PORT: String(PORT), CHATROOM_DATA_DIR: dir, CHATROOM_HEALTH_MS: "300", CHATROOM_INSECURE_LOCAL: "1", CHATROOM_SPAWN_DRY: "1" };
   const up = async () => { for (let i = 0; i < 450; i++) { try { await fetch(`http://127.0.0.1:${PORT}/`); return true; } catch { await new Promise((r) => setTimeout(r, 200)); } } return false; };
-  const start = () => spawn(process.execPath, ["--import", "tsx", "src/index.ts"], { env, stdio: "ignore" });
+  const children: ReturnType<typeof spawn>[] = [];
+  // every hub this test starts is stopped however the test ends: a failed assertion must not leave a hub on PORT
+  const start = () => { const c = spawn(process.execPath, ["--import", "tsx", "src/index.ts"], { env, stdio: "ignore" }); children.push(c); return c; };
+  const stopAll = () => { for (const c of children) if (c.exitCode === null && c.signalCode === null) c.kill(); };
+  process.once("exit", stopAll);
+  try {
   const first = start();
   assert.ok(await up(), "first start");
   await fetch(`http://127.0.0.1:${PORT}/rooms/r1/create`, { method: "POST", headers: { "content-type": "application/json" }, body: "{}" }).catch(() => {});
@@ -58,4 +67,5 @@ test("a served hub that has sampled its health starts again on the same data dir
   const ok = await up();
   second.kill();
   assert.ok(ok && exited === undefined, `the second start serves (exit ${exited})`);
+  } finally { stopAll(); }
 });

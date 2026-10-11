@@ -120,6 +120,8 @@ const cases: [string, () => void][] = [
     assert.match(src, /app\.post\("\/rooms\/:room\/chair", \(req, res\) => \{\n  if \(!requireAgentControl\(req, res\)\) return;/);
     assert.match(src, /b\.chair && checked \? \{ chairNamed: true \}/);
     assert.match(src, /hub\.send\([^\n]*\{ token: tokenChecked\(req\)/);
+    // dev arm E, first try (swarm-185831-j3iu-room): --chair alone created no room, so the chair read as self-claimed
+    assert.match(readFileSync("src/swarm.ts", "utf8"), /if \(REQUIRE_VERIFICATION \|\| QUORUM \|\| CHAIR\) \{/, "the launcher creates the room when only --chair is given");
   }],
 ];
 let failed = 0;

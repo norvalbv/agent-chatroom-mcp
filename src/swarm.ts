@@ -607,10 +607,10 @@ const verifierText = SETTLED + "\n" + prompt("verifier.md", {
           : "Do NOT modify any files; verify by reading and running read-only commands only.",
     });
 // the launcher fixes the room's policy before any seat joins (join_room settings only apply at creation)
-if (REQUIRE_VERIFICATION || QUORUM) {
+if (REQUIRE_VERIFICATION || QUORUM || CHAIR) {
   try {
     const r = await fetch(`${URL_}/rooms/${encodeURIComponent(leadsRoom)}/create`, { method: "POST", headers: launcherHeaders(launcherToken), body: JSON.stringify({ topic: task, expected_participants: FLAT ? TOTAL : plan.groups.length + 1, require_verification: REQUIRE_VERIFICATION, quorum: QUORUM ?? "unanimous", ...(CHAIR ? { chair: CHAIR } : {}) }) });
-    log(`${leadsRoom} created with quorum=${QUORUM ?? "unanimous"}${REQUIRE_VERIFICATION ? ", require_verification" : ""} (${r.status})`);
+    log(`${leadsRoom} created with quorum=${QUORUM ?? "unanimous"}${REQUIRE_VERIFICATION ? ", require_verification" : ""}${CHAIR ? `, chair ${CHAIR}${((await r.clone().json().catch(() => ({}))) as { chair_named?: boolean }).chair_named ? " (named)" : " (NOT named: the hub did not accept this launcher's token, so the chair will read as self-claimed)"}` : ""} (${r.status})`);
   } catch (e) {
     log(`could not pre-create ${leadsRoom}: ${e instanceof Error ? e.message : String(e)}${e instanceof Error && e.cause ? ` (cause: ${(e.cause as NodeJS.ErrnoException).code ?? (e.cause as Error).message})` : ""}`);
   }

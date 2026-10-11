@@ -600,7 +600,7 @@ app.post("/rooms/:room/create", (req, res) => {
     // a chair named here counts as named only when the caller was checked: the launcher's token or the human token
     const checked = tokenChecked(req) || (!!process.env.CHATROOM_LAUNCHER_TOKEN && req.header("x-chatroom-launcher-token") === process.env.CHATROOM_LAUNCHER_TOKEN);
     const room = hub.createRoom(req.params.room, { topic: b.topic, quorum: b.quorum, expectedParticipants: b.expected_participants, requireVerification: b.require_verification, requireChallenge: b.require_challenge, mode: b.mode, maxMessageChars: b.max_message_chars, anonymous: b.anonymous, chair: b.chair, ...(b.chair && checked ? { chairNamed: true } : {}), ...(b.parent ? { parent: b.parent } : {}) });
-    res.status(existed ? 200 : 201).json({ ...hub.summary(room, true), created: !existed });
+    res.status(existed ? 200 : 201).json({ ...hub.summary(room, true), created: !existed, ...(room.chair ? { chair_named: !!room.chairNamed } : {}) });
   } catch (e) {
     res.status(400).type("text/plain").send(e instanceof HubError ? e.message : "error");
   }

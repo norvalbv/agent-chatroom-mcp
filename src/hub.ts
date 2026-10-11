@@ -3555,7 +3555,11 @@ export class Hub {
   }
 
   /** Seats heartbeating without an MCP session, by seat key hash: since when, and the rooms told (idea/client-side-disconnects). */
-  private readonly unconnected = new Map<string, { since: number; rooms: string[] }>();
+  private readonly unconnected = new Map<string, { since: number; rooms: string[]; told: boolean; tool: string }>();
+  /** When this hub process started: right after a restart every seat is briefly unconnected and the restart line says why. */
+  private readonly startedAt = Date.now();
+  /** No "no MCP session" line in the first minute after the hub started (review/d4370fd9): the event is still recorded. */
+  static UNCONNECTED_GRACE_MS = 60_000;
   /**
    * A seat's local tools heartbeat but its seat key holds no live MCP session: its chatroom calls fail on the client
    * ("No such tool available ... has disconnected", with no hook fired) and nothing reaches any room. Said once per
@@ -3563,15 +3567,25 @@ export class Hub {
    */
   seatUnconnected(seatKey: string, tool: string): void {
     const hash = liveness.seatHash(seatKey);
-    if (this.unconnected.has(hash)) return;
+    const open = this.unconnected.get(hash);
+    if (open) { if (!open.told) this.tellUnconnected(hash, open); return; }
     const seats = [...this.rooms.values()].filter((r) => r.state === "open" || r.state === "stalled")
       .flatMap((room) => [...room.participants.values()].filter((p) => p.seatKeyHash === hash && (p.active || liveness.away(p))).map((p) => ({ room, p })));
     if (!seats.length) return;
-    this.unconnected.set(hash, { since: Date.now(), rooms: seats.map(({ room }) => room.name) });
     const what = tool.slice(0, 40);
-    for (const { room, p } of seats) {
-      this.persist({ type: "seat_unconnected", room: room.name, seat: p.name, tool: what, ts: now() });
-      this.post(room, "system", undefined, `${this.shown(room, p)} is working (${what}) but has no MCP session with this hub: its chatroom calls fail on its side until its client reconnects, so its silence here is not idleness. (A hub restart ends every session; a seat whose client does not reconnect needs its launcher to restart it.)`);
+    const ep = { since: Date.now(), rooms: seats.map(({ room }) => room.name), told: false, tool: what };
+    this.unconnected.set(hash, ep);
+    for (const { room, p } of seats) this.persist({ type: "seat_unconnected", room: room.name, seat: p.name, tool: what, ts: now() });
+    this.tellUnconnected(hash, ep);
+  }
+  /** The room line, once per episode, and not in the hub's first minute: a just-restarted hub's line already says why. */
+  private tellUnconnected(hash: string, ep: { rooms: string[]; told: boolean; tool: string }): void {
+    if (Date.now() - this.startedAt < Hub.UNCONNECTED_GRACE_MS) return;
+    ep.told = true;
+    for (const name of ep.rooms) {
+      const room = this.rooms.get(name);
+      const p = room && [...room.participants.values()].find((x) => x.seatKeyHash === hash);
+      if (room && p) this.post(room, "system", undefined, `${this.shown(room, p)} is working (${ep.tool}) but has no MCP session with this hub: its chatroom calls fail on its side until its client reconnects, so its silence here is not idleness. (A hub restart ends every session; a seat whose client does not reconnect needs its launcher to restart it.)`);
     }
   }
   /** A new MCP session for a seat key ends its unconnected episode. */

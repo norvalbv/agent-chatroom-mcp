@@ -22,7 +22,7 @@ const HTTP = `http://127.0.0.1:${PORT}`;
 const dir = mkdtempSync(join(tmpdir(), "seat-unconnected-"));
 let hub: ChildProcess | undefined;
 const start = async () => {
-  hub = spawn(process.execPath, ["--import", "tsx", "src/index.ts"], { env: { ...process.env, PORT: String(PORT), CHATROOM_DATA_DIR: dir, CHATROOM_INSECURE_LOCAL: "1", CHATROOM_SPAWN_DRY: "1", CHATROOM_HEALTH_MS: "0", CHATROOM_NUDGE_MS: "0" }, stdio: "ignore" });
+  hub = spawn(process.execPath, ["--import", "tsx", "src/index.ts"], { env: { ...process.env, PORT: String(PORT), CHATROOM_DATA_DIR: dir, CHATROOM_INSECURE_LOCAL: "1", CHATROOM_SPAWN_DRY: "1", CHATROOM_HEALTH_MS: "0", CHATROOM_NUDGE_MS: "0", CHATROOM_UNCONNECTED_GRACE_MS: process.env.GRACE ?? "3000" }, stdio: "ignore" });
   for (let i = 0; ; i++) { try { await fetch(`${HTTP}/`); return; } catch { if (i > 300) throw new Error("hub did not start"); await new Promise((r) => setTimeout(r, 200)); } }
 };
 const stop = async () => { if (!hub) return; hub.kill("SIGTERM"); await new Promise((r) => hub!.once("exit", r)); hub = undefined; };
@@ -55,7 +55,12 @@ await beat("Read");
 const un = events().filter((e) => e.type === "seat_unconnected");
 assert.equal(un.length, 1, "one event per episode, not per heartbeat");
 assert.deepEqual({ seat: un[0].seat, tool: un[0].tool }, { seat: "worker-1", tool: "Bash" });
-assert.equal(lines().length, 1);
+// review/d4370fd9: right after a restart every seat is briefly unconnected and the hub's restart line says why, so the
+// room line waits out the grace (3 s here, 60 s by default) and comes only if the seat is still unconnected after it
+assert.equal(lines().length, 0, "no line inside the grace after the hub started");
+await new Promise((r) => setTimeout(r, 3200));
+await beat();
+assert.equal(events().filter((e) => e.type === "seat_unconnected").length, 1, "still one event");
 assert.match(lines()[0], /^worker-1 is working \(Bash\) but has no MCP session with this hub/);
 
 // the seat's client reconnects: the episode ends

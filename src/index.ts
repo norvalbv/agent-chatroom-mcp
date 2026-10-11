@@ -304,6 +304,8 @@ if (MEMORY_WATCH_MS > 0) {
   if (hub.memory.budgetMb) console.error(`agent-chatroom-mcp: seat memory budget ${hub.memory.budgetMb} MB (CHATROOM_SEAT_MEMORY_MB): past it the hub stops a seat's largest process`);
 }
 
+// the "no MCP session" line waits this long after a start (tests set it to 0)
+if (process.env.CHATROOM_UNCONNECTED_GRACE_MS !== undefined) Hub.UNCONNECTED_GRACE_MS = Number(process.env.CHATROOM_UNCONNECTED_GRACE_MS);
 // the hub's own health, one line a minute (src/lifecycle.ts): what it holds open and how many requests it served
 lifecycle.health(() => {
   const rooms = [...hub.rooms.values()].filter((r) => r.state === "open" || r.state === "stalled");

@@ -203,11 +203,13 @@ assert.ok(alive(small), "only the largest process of the over-budget seat");
 assert.ok(alive(peerJob) && alive(agentB), "another seat's processes are untouched");
 
 type Person = { name: string; memory?: { mb: number; peak_mb: number; budget_mb: number | null; top?: unknown } };
-const people = ((await (await fetch(`${HTTP}/rooms/mem`)).json()) as { participants: Person[] }).participants;
-const builder = people.find((p) => p.name === "builder")!;
+// the figure after the stop is the next completed tick's; a tick reads top (about a second, more under load)
+const builderNow = async () => ((await (await fetch(`${HTTP}/rooms/mem`)).json()) as { participants: Person[] }).participants.find((p) => p.name === "builder")!;
+let builder = await builderNow();
+for (let i = 0; (builder.memory?.mb ?? 0) >= BUDGET && i < 75; i++) { await sleep(200); builder = await builderNow(); }
 assert.ok(builder.memory, "the dashboard shows the seat's memory");
 assert.ok(builder.memory.peak_mb >= BUDGET, `peak ${builder.memory.peak_mb} MB`);
-assert.ok(builder.memory.mb < BUDGET, `after the stop ${builder.memory.mb} MB`);
+assert.ok(builder.memory.mb < BUDGET, `after the stop ${JSON.stringify(builder.memory)}`);
 assert.equal(builder.memory.budget_mb, BUDGET);
 const mine = ((await a("room_status", { room: "mem" })) as { participants: Person[] }).participants.find((p) => p.name === "builder")!;
 assert.deepEqual(Object.keys(mine.memory ?? {}).sort(), ["budget_mb", "mb", "peak_mb"], "a seat's room_status carries the three figures, not the process list");
@@ -235,7 +237,10 @@ await c("leave_room", { room: "mem", reason: "done: nothing left undone here" })
 const orphan = proc(keyGone, 400, "orphan");
 await sleep(5000);
 assert.ok(alive(orphan), "a process of a seat that left is never stopped, even over the budget");
-const hubWide = (await (await fetch(`${HTTP}/memory`)).json()) as { budget_mb: number; unattributed: { top: { pid: number; mb: number }[] } };
+type HubWide = { budget_mb: number; unattributed: { top: { pid: number; mb: number }[] } };
+let hubWide = (await (await fetch(`${HTTP}/memory`)).json()) as HubWide;
+// other hubs' seats on this machine are unattributed here too: wait for a tick that has seen the orphan
+for (let i = 0; !hubWide.unattributed.top.some((p) => p.pid === orphan.pid) && i < 75; i++) { await sleep(200); hubWide = (await (await fetch(`${HTTP}/memory`)).json()) as HubWide; }
 assert.equal(hubWide.budget_mb, BUDGET);
 assert.ok(hubWide.unattributed.top.some((p) => p.pid === orphan.pid && p.mb >= 350), JSON.stringify(hubWide));
 

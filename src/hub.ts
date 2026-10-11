@@ -2045,6 +2045,30 @@ export class Hub {
     return (at ? "…" : "") + text.slice(at, at + 200) + (at + 200 < text.length ? "…" : "");
   }
 
+  /**
+   * A find copied from the previous version, which someone's amend has since changed: 20 of 61 refused amends in the
+   * records came within 30 s of another seat's successful amend, and the refusal said only "does not occur" (9 of the 61
+   * were ever retried; idea/amend-stale-find). Refused with its own code so contention is countable, naming who changed
+   * the text and quoting what that passage reads now, so the retry is one call.
+   */
+  private refuseStaleFind(room: Room, pr: Proposal, find: string, replaceAll: boolean): void {
+    const prev = pr.prev;
+    if (replaceAll || !find || !prev || pr.text.includes(find) || !prev.text.includes(find)) return;
+    const who = this.shown(room, { id: "", name: prev.by });
+    const ago = Math.max(0, Math.round((Date.now() - Date.parse(prev.at)) / 1000));
+    // where the find sat: the text just before it in the old version, looked up in the new one
+    const at = prev.text.indexOf(find);
+    const lead = prev.text.slice(Math.max(0, at - 40), at);
+    const i = lead.trim().length >= 12 ? pr.text.indexOf(lead) : -1;
+    const from = i >= 0 ? i : 0;
+    const nowReads = i >= 0 || pr.text.length <= 240
+      ? (from ? "…" : "") + pr.text.slice(from, from + 240) + (from + 240 < pr.text.length ? "…" : "")
+      : this.closest(pr.text, find);
+    throw new HubError(
+      `"${find.slice(0, 80)}" was in ${pr.id} v${prev.version}, but ${who} amended it to v${pr.version} ${ago} s ago and that text is gone. The passage now reads: "${nowReads}". Re-read v${pr.version} and send your edit against it.`,
+      undefined, "amend-stale");
+  }
+
   /** The text after one amend: `find` replaced once (it must occur exactly once), `replace` appended when find is empty,
    * or the whole text swapped. Shared by proposals and board entries so both refuse a bad find the same way. */
   private spliced(text: string, what: string, find: string, replace: string, replaceAll: boolean): string {
@@ -2112,6 +2136,7 @@ export class Hub {
         `${mine.length ? `; your entries: ${mine.slice(0, 12).join(", ")}${mine.length > 12 ? `, and ${mine.length - 12} more` : ""}` : ""}.`, undefined, "not-found");
     }
     if (pr.status !== "open") throw new HubError(`Proposal ${proposalId} is ${pr.status}; only open proposals can be amended.`, undefined, "state");
+    this.refuseStaleFind(room, pr, find, replaceAll);
     const next = this.spliced(pr.text, `${proposalId} v${pr.version}`, find, replace, replaceAll);
     if (next === pr.text) throw new HubError("That amendment changes nothing.", undefined, "amend-find");
     const counting = () => {
@@ -2119,6 +2144,7 @@ export class Hub {
       return [...room.board].filter(([key, e]) => { const v = this.verifyEntryVerdict(room, pr, key, e, reviewer); return v.head && !v.why; }).map(([key, e]) => `${key} by ${this.shown(room, { id: "", name: e.by })}`);
     };
     const verifiedBefore = room.requireVerification ? counting() : [];
+    pr.prev = { text: pr.text, version: pr.version, by: p.name, at: now() };
     pr.text = next;
     pr.version += 1;
     pr.updatedAt = now();
@@ -3214,6 +3240,7 @@ export class Hub {
   private conclude(room: Room, pr: Proposal) {
     for (const m of room.messages) if (m.quiet) this.surfaceThread(room, this.threadRoot(room, m).id, "room concluded");
     pr.status = "accepted";
+    delete pr.prev; // only an open proposal can be amended: do not keep (or persist) a second copy of the text
     for (const other of room.proposals.values()) if (other.id !== pr.id && other.status === "open") other.status = "superseded";
     const unresolved = pr.challenges.filter((c) => (c.status ?? "open") === "open").map((c) => ({ by: this.shown(room, c.by), objection: c.objection }));
     for (const c of pr.challenges) if ((c.status ?? "open") === "open") c.status = "overruled";

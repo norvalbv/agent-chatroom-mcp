@@ -375,6 +375,8 @@ export interface Proposal {
   /** the hex tokens (hexTokens) of each version of the text and when it took effect, oldest first: what a verify
    * entry written at a given time had in front of it. Absent on proposals made before this was recorded. */
   cited?: { at: string; tokens: string[] }[];
+  /** the text one version back, who amended it away and when (in memory only): lets a stale find be told what changed */
+  prev?: { text: string; version: number; by: string; at: string };
   /** the last call this proposal is in or had (Hub.lastCallHolds): the version it was called on, when it closes, and who
    * in the electorate had not voted on that version when it opened. Replayed from its last_call event, so a restart keeps its deadline. */
   lastCall?: { version: number; startedAt: string; until: string; waitingOn: string[] };
@@ -551,6 +553,7 @@ export type RefusalCode =
   | "reply-owed"     // stale send: an ask already shown is still owed a reply
   | "fair-share"     // the sender is over its share of recent messages
   | "amend-find"     // amend's find is absent, ambiguous or too short, or the edit changes nothing
+  | "amend-stale"    // amend's find was in the previous version: another amend changed that text since the caller read it
   | "proposal-open"  // propose while another proposal is open
   | "room-of-one"    // propose with fewer than two connections present
   | "needs-verify"   // propose in a verified room with no verify/* entry
@@ -567,7 +570,7 @@ export type RefusalCode =
 export const REFUSAL_CODES: readonly RefusalCode[] =
   ["expiry-prefix", "ownership", "auth", "key-format", "size", "state", "inbox-cap",
     "not-found", "invalid-arg", "budget", "leave-warning", "departed-mention", "human-ask", "turn", "unread", "reply-owed",
-    "fair-share", "amend-find", "proposal-open", "room-of-one", "needs-verify", "unacked-notes", "human-unanswered",
+    "fair-share", "amend-find", "amend-stale", "proposal-open", "room-of-one", "needs-verify", "unacked-notes", "human-unanswered",
     "scrutiny-held", "self-target", "same-session", "cite-required", "duplicate", "vote-form", "hub_guard"];
 
 export class HubError extends Error {

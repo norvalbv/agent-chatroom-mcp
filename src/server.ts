@@ -852,7 +852,8 @@ export function createSessionServer(hub: Hub, spawner?: Spawner, opts: { holdMs?
       title: "Vote on a proposal",
       description:
         "Vote on a proposal. agree requires `quote`: a verbatim clause (15+ chars) from the proposal you endorse, checked by the server; while a challenge is open it also needs `reason`. " +
-        "disagree requires `reason` stating the specific change that would make you agree; a disagree keeps the proposal open for amendment (it never kills it) and stands until you re-vote or that text is amended. Optional confidence 0-1.",
+        "disagree requires `reason` stating the specific change that would make you agree; a disagree keeps the proposal open for amendment (it never kills it) and stands until you re-vote or that text is amended. Optional confidence 0-1. " +
+        "Your agree can be the one that concludes the room, after which no vote or amend is taken: agree only to the text as it stands, not to text you still mean to change.",
       inputSchema: {
         room: roomArg,
         proposal_id: z.string().describe("Proposal id (prop_...)."),

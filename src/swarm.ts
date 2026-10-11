@@ -21,6 +21,7 @@ import { claudeSandbox } from "./sandbox.js";
 import { stopStrays } from "./strays.js";
 import { launchCostGuide } from "./cost-estimate.js";
 import { seatTarget } from "./seat-targets.js";
+import { loadResources, seedResources } from "./resources.js";
 loadDotEnv();
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -36,7 +37,7 @@ const has = (name: string) => argv.includes(`--${name}`);
 const BOOL_FLAGS = new Set(["--keep-hub", "--reuse-hub", "--apply", "--full-access", "--named", "--flat", "--require-verification", "--respawn", "--claude-full", "--no-carry", "--no-seat-targets", "--sandbox", "--no-web"]);
 const task = argv.find((a, i) => !a.startsWith("--") && (i === 0 || !argv[i - 1].startsWith("--") || BOOL_FLAGS.has(argv[i - 1])));
 if (!task) {
-  console.error('usage: swarm "<task>" [--flat] [--done-when text] [--verify text] [--agents 6] [--cwd dir] [--models sonnet,haiku] [--lead-model opus] [--verifier-model opus] [--planner-model opus] [--codex k] [--codex-models gpt-6-astra,gpt-5.6-sol,gpt-5.6-terra] [--openrouter k] [--openrouter-models deepseek/deepseek-v4.1-flash,...] [--verifier-openrouter slug] [--openrouter-reasoning low|medium|high] [--require-verification] [--quorum unanimous|majority|supermajority] [--prompt loop.md] [--respawn] [--apply] [--full-access] [--named] [--claude-full] [--no-carry] [--no-seat-targets] [--no-web] [--sandbox] [--timeout 30] [--port 7717] [--result-path path]');
+  console.error('usage: swarm "<task>" [--flat] [--done-when text] [--verify text] [--agents 6] [--cwd dir] [--models sonnet,haiku] [--lead-model opus] [--verifier-model opus] [--planner-model opus] [--codex k] [--codex-models gpt-6-astra,gpt-5.6-sol,gpt-5.6-terra] [--openrouter k] [--openrouter-models deepseek/deepseek-v4.1-flash,...] [--verifier-openrouter slug] [--openrouter-reasoning low|medium|high] [--require-verification] [--quorum unanimous|majority|supermajority] [--prompt loop.md] [--respawn] [--apply] [--full-access] [--named] [--claude-full] [--no-carry] [--no-seat-targets] [--resources file.md] [--no-web] [--sandbox] [--timeout 30] [--port 7717] [--result-path path]');
   process.exit(2);
 }
 const TOTAL = Math.max(2, Number(flag("agents", "4")));
@@ -77,6 +78,11 @@ const FLAT = has("flat");
 const FRESH_CHALLENGER = has("fresh-challenger");
 /** --no-carry: seats start from the brief alone (no settled axes, no PRIOR RUNS, auto-memory off); see carrySettings in env.ts */
 const NO_CARRY = has("no-carry");
+/** --resources <file>: each `## <name>` entry goes on every room's board as resource/<name> before a seat starts (src/resources.ts) */
+let RESOURCES: ReturnType<typeof loadResources> = [];
+if (has("resources")) {
+  try { RESOURCES = loadResources(resolve(flag("resources") ?? "")); } catch (e) { console.error(e instanceof Error ? e.message : String(e)); process.exit(2); }
+}
 /** --no-seat-targets: flat seats all get the same brief, with no starting item each (the A arm when measuring src/seat-targets.ts) */
 const NO_SEAT_TARGETS = has("no-seat-targets");
 /**
@@ -445,6 +451,14 @@ log(`plan: ${plan.groups.map((g) => `${g.title} ×${g.workers}`).join(" | ")}`);
 const leadsRoom = FLAT ? `${SWARM_ID}-room` : `${SWARM_ID}-leads`;
 const FLAT_TARGETS = FLAT && !NO_SEAT_TARGETS && seatTarget(task, 1, LENSES) ? (i: number) => seatTarget(task, i, LENSES) : undefined;
 const groupRooms = FLAT ? [] : plan.groups.map((g) => `${SWARM_ID}-${g.id}`);
+if (RESOURCES.length) {
+  try {
+    for (const line of await seedResources(URL_, [...groupRooms, leadsRoom], RESOURCES, { token: process.env.CHATROOM_HUMAN_TOKEN })) log(line);
+  } catch (e) {
+    log(`not starting any seat: ${e instanceof Error ? e.message : String(e)}`);
+    process.exit(2);
+  }
+}
 const runs: Promise<SeatRun>[] = [];
 /**
  * Alternate-provider seats: --codex k and --openrouter k take non-lead seats, rotating over their

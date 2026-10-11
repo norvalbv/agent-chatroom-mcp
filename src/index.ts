@@ -303,7 +303,7 @@ const seatCallerAnnounced = new Map<string, number>();
  * the usage export, dev runs) are never resolved or announced: on integration every seat's 1 s /otlp/v1/logs export was
  * announced as a refused forgery when this was a deny-list (-3's composed dev room swarm-085449-i9fk). A new human route
  * must be added here, or it is open to loopback callers as it was before this check. */
-const HUMAN_ROUTES = /^\/rooms\/(archive-dead|[^/]+\/(messages|vote|kick|replace|create|deadline|close|archive|attachments))$/;
+const HUMAN_ROUTES = /^\/rooms\/(archive-dead|[^/]+\/(messages|vote|kick|replace|create|deadline|resources|close|archive|attachments))$/;
 // Resolved before the routes, asynchronously, so requireToken stays a plain check and a lookup never blocks other rooms.
 app.use(async (req, res, next) => {
   if (req.method === "POST" && INSECURE_LOCAL && LOOPBACK_HOST && !(HUMAN_TOKEN && req.header("x-chatroom-token") === HUMAN_TOKEN) && HUMAN_ROUTES.test(req.path)) {
@@ -575,6 +575,18 @@ app.post("/rooms/:room/deadline", (req, res) => {
   try {
     const { at } = (req.body ?? {}) as { at?: string };
     const set = hub.setDeadline(req.params.room, at as string);
+    res.status(set.pending ? 202 : 200).json(set);
+  } catch (e) {
+    res.status(400).type("text/plain").send(e instanceof HubError ? e.message : "error");
+  }
+});
+// What a run was launched knowing about this machine, written to the room's board as resource/<name> before its seats
+// join (swarm --resources). A room that does not exist yet answers 202: held, and written when the room is created.
+app.post("/rooms/:room/resources", (req, res) => {
+  if (!requireToken(req, res)) return;
+  try {
+    const { entries } = (req.body ?? {}) as { entries?: { key: string; text: string }[] };
+    const set = hub.seedResources(req.params.room, entries as { key: string; text: string }[]);
     res.status(set.pending ? 202 : 200).json(set);
   } catch (e) {
     res.status(400).type("text/plain").send(e instanceof HubError ? e.message : "error");

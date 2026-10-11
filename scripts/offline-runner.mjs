@@ -182,6 +182,8 @@ export const offlineScripts = [
   'own-hub-port-regression.ts',
   'seat-shell-guards-regression.ts',
   'report-handoffs-regression.ts',
+  'seat-memory-regression.ts',
+  'take-keys-regression.ts',
   'result-fleet-compat.ts',
   'seat-human-route-regression.ts',
   'prior-sources-regression.ts',

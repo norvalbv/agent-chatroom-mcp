@@ -42,7 +42,7 @@ export function seatOutput(room: Room, p: Participant, observedAt = Date.now()):
     if (e.by !== p.name) continue;
     if (key.startsWith("claim/")) { out.claims++; continue; }
     if (coordinates(key) || e.text.trim().length < MIN_ENTRY_CHARS) continue;
-    if (key.startsWith("verify/")) out.verifies++;
+    if (key.startsWith("verify/") || key.startsWith("review/")) out.verifies++;
     else out.evidence++;
     seen(e.updatedAt);
   }

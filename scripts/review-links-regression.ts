@@ -88,3 +88,13 @@ test("the hub checks a reviewed commit exists in the writer's own worktree, says
   const reviews = hub.summary(room).reviews as { commit: string; known?: boolean; by: { key: string; by: string; passes: boolean }[] }[];
   assert.deepEqual(reviews.map((r) => [r.commit, r.known, r.by.map((x) => x.key)]), [[HEAD.slice(0, 8), true, [`review/${HEAD.slice(0, 8)}`]], ["ca10a76f", false, ["review/ghost", "review/unbound"]]]);
 });
+
+test("a review/* entry is scrutiny, not a finding: it is never listed as unexamined, and what it names has been looked at", (t) => {
+  const { hub, room, a, b, head } = fixture(t);
+  const finding = "The cap counts notes that need no acknowledgement, so ten digests block every later note to the room. ".repeat(3);
+  hub.setBoard(room.name, a.id, "evidence/inbox-cap", finding);
+  assert.deepEqual(hub.scrutiny(room.name).unexamined, ["evidence/inbox-cap"]);
+  hub.setBoard(room.name, b.id, `review/${X}`, `${head(X)}\nExercised evidence/inbox-cap's claim on a private hub: ${"it holds as written. ".repeat(12)}`);
+  assert.deepEqual(hub.scrutiny(room.name).unexamined, [], "the review is not owed an attack, and the entry it names counts as examined");
+  assert.equal((hub.summary(room).participants as { name: string; output: { verifies: number } }[]).find((p) => p.name === "Bob")!.output.verifies, 1, "a review counts as the seat's verifying output");
+});

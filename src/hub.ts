@@ -1854,7 +1854,7 @@ export class Hub {
   setBoard(roomName: string, pid: string, key: string, text: string, opts: BoardExpiryOptions & { ifAbsent?: boolean; ifByMe?: boolean; overwrite?: boolean } = {}): BoardEntry | null { return board.setBoard(this, roomName, pid, key, text, opts); }
   static claimTerms(key: string, text: string): Set<string> { return board.claimTerms(key, text); }
   static claimKeysSplit(a: string, b: string): boolean { return board.claimKeysSplit(a, b); }
-  claimOverlaps(roomName: string, pid: string, key: string): { key: string; by: string; shared_pct: number; shared: string[] }[] { return board.claimOverlaps(this, roomName, pid, key); }
+  claimOverlaps(roomName: string, pid: string, key: string): { key: string; by: string; room?: string; shared_pct: number; shared: string[] }[] { return board.claimOverlaps(this, roomName, pid, key); }
   static claimOverlapScore(a: Set<string>, aKey: Set<string>, b: Set<string>, bKey: Set<string>) { return board.claimOverlapScore(a, aKey, b, bKey); }
   private activeReviewerFor(room: Room, authorName: string): Participant | undefined { return board.activeReviewerFor(room, authorName); }
   setBoardAs(roomName: string, byName: string, key: string, text: string): BoardEntry { return board.setBoardAs(this, roomName, byName, key, text); }
@@ -2742,10 +2742,18 @@ export class Hub {
       `When it concludes, its conclusion lands here as inbox/${child.name}/conclusion.`);
   }
 
-  /** Breakouts of a room (rooms whose parent is it): name, state and active member names. */
-  breakouts(room: Room): { room: string; state: RoomState; members: string[] }[] {
+  /**
+   * Breakouts of a room (rooms whose parent is it): name, state, active member names, and what is held there: live
+   * claim/* and take/* keys with their holder, "key (holder)", so a parent seat sees what its break-out has taken before
+   * building the same thing (friction/sub-room-work-invisible, swarm-003601-tky5). No holds field when nothing is held.
+   */
+  breakouts(room: Room): { room: string; state: RoomState; members: string[]; holds?: string[] }[] {
     return [...this.rooms.values()].filter((r) => r.parent === room.name && !r.archived)
-      .map((r) => ({ room: r.name, state: r.state, members: this.activeParticipants(r).map((p) => this.shown(r, p)) }));
+      .map((r) => {
+        const holds = [...r.board].filter(([k, e]) => (k.startsWith("claim/") || k.startsWith("take/")) && e.text.trim() && !Hub.claimReleased(e))
+          .map(([k, e]) => `${k} (${e.offeredBy ? `offered to ${e.holder}` : e.holder ?? e.by})`);
+        return { room: r.name, state: r.state, members: this.activeParticipants(r).map((p) => this.shown(r, p)), ...(holds.length ? { holds } : {}) };
+      });
   }
 
   /**

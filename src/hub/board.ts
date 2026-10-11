@@ -363,33 +363,47 @@ export function claimTerms(key: string, text: string): Set<string> {
 /** Seats herd onto overlapping claims; advisory, never a refusal: one line @-naming the new claimant and the existing owner(s),
  * so the duplicate is caught when it is claimed, not at review. */
 function noticeClaimOverlap(hub: Hub, room: Room, p: Participant, key: string, text: string) {
-  const top = overlapsFor(room, p, key, text).slice(0, 2);
+  const top = overlapsFor(hub, room, p, key, text).slice(0, 2);
   if (!top.length) return;
-  // kind "chat" so the @-mentions wake a held wait, same reason as the reviewer notice above
+  // kind "chat" so the @-mentions wake a held wait, same reason as the reviewer notice above; an owner in a linked room
+  // is named without @ (not a participant here) and the room is named
   hub.post(room, "chat", undefined,
-    `@${p.name} your "${key}" overlaps ${top.map((h) => `@${h.by}'s "${h.key}" (${h.shared_pct}% shared terms: ${h.shared.join(", ")})`).join(" and ")}. ` +
+    `@${p.name} your "${key}" overlaps ${top.map((h) => `${h.room ? "" : "@"}${h.by}'s "${h.key}"${h.room ? ` in ${h.room}` : ""} (${h.shared_pct}% shared terms: ${h.shared.join(", ")})`).join(" and ")}. ` +
     `Before both of you build it: merge into one team (claim JSON team:[...]), split it explicitly, or pick another area. Advisory only, the claim stands.`);
 }
 
 /** Live claims by other active connections sharing >= 40% of term stems (Jaccard, >= 4 shared) with this claim, best first.
  * Read by the creation notice and by board_set's response, so the claimant sees the collision synchronously too. */
-export function claimOverlaps(hub: Hub, roomName: string, pid: string, key: string): { key: string; by: string; shared_pct: number; shared: string[] }[] {
+export function claimOverlaps(hub: Hub, roomName: string, pid: string, key: string): { key: string; by: string; room?: string; shared_pct: number; shared: string[] }[] {
   const room = hub.getRoom(roomName);
   const e = room.board.get(key);
-  return key.startsWith("claim/") && e ? overlapsFor(room, hub.requireParticipant(room, pid), key, e.text) : [];
+  return key.startsWith("claim/") && e ? overlapsFor(hub, room, hub.requireParticipant(room, pid), key, e.text) : [];
 }
 
-function overlapsFor(room: Room, p: Participant, key: string, text: string) {
+/**
+ * The rooms whose claims are compared with this room's: itself, its parent and its break-outs, one hop. A parent did not
+ * see what its break-out had taken (friction/sub-room-work-invisible, swarm-003601-tky5). Two break-outs of one parent are
+ * two hops apart and never compared: groups with opposing briefs must not see each other's work.
+ */
+function linkedRooms(hub: Hub, room: Room): Room[] {
+  const parent = room.parent ? hub.rooms.get(room.parent) : undefined;
+  return [room, ...(parent ? [parent] : []), ...[...hub.rooms.values()].filter((r) => r.parent === room.name && !r.archived)];
+}
+
+function overlapsFor(hub: Hub, room: Room, p: Participant, key: string, text: string) {
   const mine = claimTerms(key, text);
   if (mine.size < 4) return [];
   const myKey = claimTerms(key, "");
-  const hits: { key: string; by: string; shared_pct: number; shared: string[] }[] = [];
-  for (const [k, e] of room.board) {
-    if (k === key || !k.startsWith("claim/") || e.by === p.name || !e.text.trim() || claimReleased(e) || claimKeysSplit(key, k)) continue;
-    const owner = [...room.participants.values()].find((x) => x.name === e.by);
-    if (!owner?.active || (owner.session && p.session && owner.session === p.session)) continue;
-    const s = claimOverlapScore(mine, myKey, claimTerms(k, e.text), claimTerms(k, ""));
-    if (s.fires) hits.push({ key: k, by: e.by, shared_pct: Math.round(s.jac * 100), shared: s.shared.slice(0, 6) });
+  const hits: { key: string; by: string; room?: string; shared_pct: number; shared: string[] }[] = [];
+  for (const r of linkedRooms(hub, room)) {
+    if (r !== room && (r.state === "concluded" || r.state === "closed")) continue;
+    for (const [k, e] of r.board) {
+      if ((r === room && (k === key || e.by === p.name)) || !k.startsWith("claim/") || !e.text.trim() || claimReleased(e) || claimKeysSplit(key, k)) continue;
+      const owner = [...r.participants.values()].filter((x) => x.name === e.by).at(-1);
+      if (!owner?.active || (owner.session && p.session && owner.session === p.session)) continue;
+      const s = claimOverlapScore(mine, myKey, claimTerms(k, e.text), claimTerms(k, ""));
+      if (s.fires) hits.push({ key: k, by: e.by, ...(r !== room ? { room: r.name } : {}), shared_pct: Math.round(s.jac * 100), shared: s.shared.slice(0, 6) });
+    }
   }
   return hits.sort((a, b) => b.shared_pct - a.shared_pct);
 }

@@ -195,6 +195,11 @@ export function replay(hub: Hub) {
           if (room) room.draftsOpenedAt = ev.at;
           break;
         }
+        case "drafts_cancelled": {
+          const room = hub.rooms.get(ev.room);
+          if (room) room.draftsOpenedAt = undefined;
+          break;
+        }
         case "deadline": {
           const room = hub.rooms.get(ev.room);
           if (room) {

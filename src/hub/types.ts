@@ -492,6 +492,8 @@ export interface Room {
   draftsRevealed?: boolean;
   /** when the first draft/* was written: starts the reveal deadline (persisted, so the deadline survives a restart) */
   draftsOpenedAt?: string;
+  /** whose write opened the running round (in memory only): Hub.draftSeal tells that writer it did */
+  draftsOpenedBy?: { name: string; key: string; entryAt: string };
   draftsTimer?: NodeJS.Timeout;
   /** Reconstructed from every board event, including deletes and system writes. */
   boardVersion: number;

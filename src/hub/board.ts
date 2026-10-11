@@ -311,6 +311,7 @@ export function setBoard(hub: Hub, roomName: string, pid: string, key: string, t
     hub.persist({ type: "board", room: roomName, key, entry: null });
     if (take) { if (previous) announceTake(hub, room, p, key, text, take); return null; }
     hub.post(room, "board", p, `cleared board entry "${key}"${previous && previous.by !== p.name ? ` (${previous.by}'s)` : ""}`);
+    if (key.startsWith("draft/")) hub.cancelDraftsIfEmpty(room, p);
     if (key === `hold/${room.name}`) for (const pr of room.proposals.values()) if (pr.status === "open") hub.evaluate(room, pr);
     return null;
   }
@@ -342,10 +343,14 @@ export function setBoard(hub: Hub, roomName: string, pid: string, key: string, t
   noteBoardRead(p, key, entry);
   hub.persist({ type: "board", room: roomName, key, entry });
   // a sealed draft's notice names neither key nor size (either can carry content); it says who is still owed a draft
-  if (key.startsWith("draft/")) hub.openDrafts(room); // before the notice, so the first one already names the deadline
+  // before the notice, so the first one already names the deadline
+  const openedRound = key.startsWith("draft/") && hub.openDrafts(room, { name: p.name, key, entryAt: entry.updatedAt });
   if (take) { announceTake(hub, room, p, key, text, take); return entry; }
   const sealedDraft = key.startsWith("draft/") && !room.draftsRevealed && !hub.draftsComplete(room) && !hub.draftsDue(room);
-  hub.post(room, "board", p, sealedDraft ? `${previous ? "updated" : "wrote"} a sealed draft (${hub.draftProgress(room)})`
+  hub.post(room, "board", p, sealedDraft && openedRound
+    // said once, when a round opens: what it is and what it asks of the others (3 of 8 rounds in the records were one seat's working draft)
+    ? `opened a sealed draft round: each seat writes its own attempt as draft/<its name> before reading anyone else's, and they all become readable together (${hub.draftProgress(room)}). Nothing to draft? Say so; the deadline reveals what there is.`
+    : sealedDraft ? `${previous ? "updated" : "wrote"} a sealed draft (${hub.draftProgress(room)})`
     : `${previous ? "updated" : "added"} board entry "${key}" (${text.length} chars; read it with board_get)`
     + (postReveal ? " — post-reveal: written after peers' drafts were readable, so not an independent attempt" : "")
     + (workspace ? ` — ${workspace.branch ? `branch ${workspace.branch} in ` : ""}${workspace.worktree}` : "")

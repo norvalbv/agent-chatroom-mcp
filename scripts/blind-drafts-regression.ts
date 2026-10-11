@@ -126,7 +126,7 @@ await g.call("join_room", { room: room3, name: "G", agent: "test" });
 await h.call("join_room", { room: room3, name: "H", agent: "test" });
 await f.call("board_set", { room: room3, key: "draft/F", text: "f-draft" });
 await new Promise((res) => setTimeout(res, 150));
-assert.ok(hub.getRoom(room3).messages.some((m) => /wrote a sealed draft .*or until \d\d:\d\d:\d\d UTC \(the draft deadline\)/.test(m.content)), "the first sealed-draft notice already names the deadline");
+assert.ok(hub.getRoom(room3).messages.some((m) => /opened a sealed draft round.*or until \d\d:\d\d:\d\d UTC \(the draft deadline\)/.test(m.content)), "the first sealed-draft notice already names the deadline (and, since scripts/sealed-draft-misfire-regression.ts, says a round opened)");
 await g.call("board_set", { room: room3, key: "draft/G", text: "g-draft" }); // a later draft does not push the clock back
 r = await g.call("board_get", { room: room3, key: "draft/F" });
 assert.ok(r.error, "sealed before the deadline while H has not drafted");

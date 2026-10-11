@@ -1850,11 +1850,43 @@ export class Hub {
   }
 
   /** The first draft starts the deadline clock; later drafts and edits do not push it back. */
-  /** @internal */ openDrafts(room: Room): void {
-    if (room.draftsOpenedAt || room.draftsRevealed) return;
+  /** True when this write opened the round. `by`, `key` and the entry's time say whose write that was (draftSeal). */
+  /** @internal */ openDrafts(room: Room, by?: { name: string; key: string; entryAt: string }): boolean {
+    if (room.draftsOpenedAt || room.draftsRevealed) return false;
     room.draftsOpenedAt = new Date().toISOString();
-    this.persist({ type: "drafts_opened", room: room.name, at: room.draftsOpenedAt });
+    room.draftsOpenedBy = by;
+    this.persist({ type: "drafts_opened", room: room.name, at: room.draftsOpenedAt, ...(by ? { by: by.name, key: by.key } : {}) });
     this.armDraftsDeadline(room);
+    return true;
+  }
+
+  /**
+   * A round whose only draft is withdrawn before the reveal is taken back: no deadline keeps running and nobody is
+   * "owed" a draft. In 3 of the 8 rooms that opened a round since 2026-10-10 (5y46, 22gz, fnko) one seat's working
+   * draft of the room's answer opened it and sat hidden for the full 10 minutes (claim/sealed-draft-misfire); the
+   * writer could not undo it. The next draft/* write opens a fresh round with its own deadline.
+   */
+  /** @internal */ cancelDraftsIfEmpty(room: Room, by: Participant): void {
+    if (!room.draftsOpenedAt || room.draftsRevealed) return;
+    if ([...room.board].some(([k, e]) => k.startsWith("draft/") && e.text.trim())) return;
+    const seconds = Math.round((Date.now() - Date.parse(room.draftsOpenedAt)) / 100) / 10;
+    room.draftsOpenedAt = undefined;
+    room.draftsOpenedBy = undefined;
+    if (room.draftsTimer) clearTimeout(room.draftsTimer);
+    room.draftsTimer = undefined;
+    this.persist({ type: "drafts_cancelled", room: room.name, by: by.name, seconds, ts: now() });
+    this.post(room, "system", undefined, `[SYSTEM] The sealed draft round was cancelled: ${this.shown(room, by)} withdrew its only draft, so nobody is owed one and no draft deadline is running.`);
+  }
+
+  /** What the writer of a still-sealed draft is told: whether its write opened the round, who cannot read it, until when. */
+  draftSeal(room: Room, key: string, entry: BoardEntry): { opened_round: boolean; hidden_from: string[]; until?: string } | undefined {
+    if (!key.startsWith("draft/") || !this.draftSealed(room, key, entry)) return undefined;
+    const o = room.draftsOpenedBy;
+    return {
+      opened_round: !!o && o.key === key && o.entryAt === entry.updatedAt,
+      hidden_from: this.activeParticipants(room).filter((p) => p.name !== entry.by && p.agent !== "human").map((p) => this.shown(room, p)),
+      ...(room.draftsOpenedAt && Hub.DRAFT_REVEAL_MS > 0 ? { until: new Date(Date.parse(room.draftsOpenedAt) + Hub.DRAFT_REVEAL_MS).toISOString() } : {}),
+    };
   }
 
   private armDraftsDeadline(room: Room): void {
@@ -1880,10 +1912,12 @@ export class Hub {
     room.draftsRevealed = true;
     if (room.draftsTimer) clearTimeout(room.draftsTimer);
     room.draftsTimer = undefined;
-    this.persist({ type: "drafts_revealed", room: room.name });
     const drafts = [...room.board].filter(([k]) => k.startsWith("draft/"));
     const keys = drafts.map(([k]) => k);
     const authors = new Set(drafts.map(([, e]) => e.by));
+    // how the round ended and how many had drafted: a deadline reveal with one drafter is a working draft that sat hidden
+    this.persist({ type: "drafts_revealed", room: room.name, by: complete ? "all" : "deadline", drafted: this.drafters(room).filter((d) => authors.has(d.name)).length, drafters: this.drafters(room).length,
+      ...(room.draftsOpenedAt ? { seconds: Math.round((Date.now() - Date.parse(room.draftsOpenedAt)) / 100) / 10 } : {}) });
     const missing = this.drafters(room).filter((d) => !authors.has(d.name)).map((d) => d.name);
     const why = complete
       ? `Every drafter (${this.drafters(room).map((d) => d.name).join(", ")}) has a draft`

@@ -20,8 +20,11 @@ export type Event =
   | { type: "state"; room: string; state: RoomState; conclusion?: Room["conclusion"] }
   | { type: "opening"; room: string; pid: string; content: string }
   | { type: "openings_revealed"; room: string }
-  | { type: "drafts_revealed"; room: string }
-  | { type: "drafts_opened"; room: string; at: string }
+  /** by/drafted/drafters/seconds are telemetry (replay reads only the type): how the round ended and how many had drafted */
+  | { type: "drafts_revealed"; room: string; by?: "all" | "deadline"; drafted?: number; drafters?: number; seconds?: number }
+  | { type: "drafts_opened"; room: string; at: string; by?: string; key?: string }
+  /** the round's only draft was withdrawn before the reveal (Hub.cancelDraftsIfEmpty) */
+  | { type: "drafts_cancelled"; room: string; by: string; seconds: number; ts: string }
   | { type: "deadline"; room: string; at: string; setAt: string }
   | { type: "deadline_announced"; room: string }
   | { type: "archive"; room: string; archived: boolean; by: string; ts: string }

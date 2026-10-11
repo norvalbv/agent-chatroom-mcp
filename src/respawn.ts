@@ -30,6 +30,40 @@ export interface RespawnInput {
 
 export interface RespawnDecision { respawn: boolean; reason: string }
 
+/**
+ * Why a Claude seat's process ended, read from its own last output, for the launcher's exit receipt. A seat stopped by
+ * the account's usage limit prints one line ("You've hit your session limit · resets 2:10am (Europe/London)") and exits
+ * 1; the room was told only "seat process exited (exit 1, launcher receipt)", so three such exits in one minute read
+ * as three crashes until a seat opened another seat's output file (swarm-003601-tky5 #139-#146). Same for a seat whose
+ * compaction window (--compact-at) is too small for what it reads. The hub keeps the first 80 characters of a receipt.
+ */
+const LIMIT = /You(?:'|’)ve hit your (?:session|weekly|usage|[a-z0-9 -]{1,30}) limit(?:\s*·\s*resets\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm)\s*\(([A-Za-z_]+\/[A-Za-z_/+-]+)\))?/i;
+const THRASH = /Autocompact is thrashing/;
+
+/** The usage-limit notice in a seat's output, with the instant it resets when the notice names a time and zone we can read. */
+export function usageLimit(output: string, now = Date.now()): { resetsAt?: string } | null {
+  const m = LIMIT.exec(output.slice(-2000));
+  if (!m) return null;
+  if (!m[1] || !m[4]) return {};
+  let local: Intl.DateTimeFormatPart[];
+  try { local = new Intl.DateTimeFormat("en-GB", { timeZone: m[4], hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23" }).formatToParts(now); } catch { return {}; }
+  const part = (type: string) => Number(local.find((p) => p.type === type)?.value ?? 0);
+  const target = (Number(m[1]) % 12 + (m[3].toLowerCase() === "pm" ? 12 : 0)) * 60 + Number(m[2] ?? 0);
+  // minutes from the zone's clock now to the next time it reads the target (a daylight-saving change in between is ignored)
+  const ahead = (target - (part("hour") * 60 + part("minute")) + 1440) % 1440 || 1440;
+  return { resetsAt: new Date(Math.floor(now / 60_000) * 60_000 + ahead * 60_000).toISOString() };
+}
+
+/** The detail of a seat's exit receipt: its exit code and, for a failed exit, the reason its output names. */
+export function exitDetail(code: number | null, output: string, now = Date.now()): string {
+  const base = `exit ${code}`;
+  if (code === 0 || code === null) return base;
+  const limit = usageLimit(output, now);
+  if (limit) return `${base}: usage limit${limit.resetsAt ? `, resets ${limit.resetsAt.slice(11, 16)} UTC` : ""}`;
+  if (THRASH.test(output.slice(-2000))) return `${base}: compaction thrashing, the compact window is too small for what the seat reads`;
+  return base;
+}
+
 /** The smallest room that can still conclude under scrutiny: a proposer, a challenger and a verifier. */
 export const MIN_FLOOR = 3;
 

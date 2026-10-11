@@ -17,6 +17,7 @@ import { HubError } from "./hub.js";
 import { settledAxes } from "./settled.js";
 import { devHubRule, heartbeatHookSettings, seatBeat, seatChildEnv } from "./env.js";
 import { claudeArgs } from "./claude-args.js";
+import { exitDetail } from "./respawn.js";
 import { codexSeatCommand } from "./codex-seat.js";
 import { claudeSandbox, hubPortOf, sandboxFromEnv } from "./sandbox.js";
 import { parseClaudeCliOutput, type SeatUsageRollup } from "./result.js";
@@ -431,12 +432,14 @@ export class Spawner {
         clearTimeout(wall);
         rec.endedAt = new Date().toISOString();
         rec.exitCode = code;
-        this.hooks?.seatExited?.(beat.key, `exit ${code}`);
+        let said = "";
         if (agent === "claude") {
           const { text, usage } = parseClaudeCliOutput(claudeStdout.trim());
           writeFileSync(log, claudeStderr + text);
           rec.usage = usage;
+          said = `${text}\n${claudeStderr}`;
         }
+        this.hooks?.seatExited?.(beat.key, exitDetail(code, said));
         this.children.delete(name);
         if (snap && cwd !== home) removeSnapshot(snap);
         try {

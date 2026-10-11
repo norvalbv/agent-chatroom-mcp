@@ -7,7 +7,7 @@
  * hub-<port>.pid (removed on a clean stop). A hub killed outright can write nothing, so the next start names it.
  * An in-memory hub (no data directory) gets the same behaviour with the lines on stderr only.
  */
-import { appendFileSync, existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, readFileSync, statSync, unlinkSync, utimesSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 export interface Lifecycle {
@@ -15,12 +15,17 @@ export interface Lifecycle {
   exiting(reason: string): void;
   /** How the previous hub on this port and data directory stopped, in words, or undefined when there was none. */
   previous?: string;
+  /** When the previous hub was last known alive (its alive-stamp, or its exit line), epoch ms; undefined when unknown. */
+  lastAlive?: number;
 }
 
 export function installLifecycle(opts: { port: number; dir?: string; head?: string }): Lifecycle {
   const started = Date.now();
   const logFile = opts.dir ? resolve(opts.dir, `hub-${opts.port}.lifecycle.log`) : undefined;
   const pidFile = opts.dir ? resolve(opts.dir, `hub-${opts.port}.pid`) : undefined;
+  // touched every ALIVE_MS while the hub runs: a hub killed outright writes nothing, and this says when it was last alive
+  const aliveFile = opts.dir ? resolve(opts.dir, `hub-${opts.port}.alive`) : undefined;
+  const ALIVE_MS = Number(process.env.CHATROOM_ALIVE_MS) || 10_000;
   const line = (text: string) => {
     const entry = `${new Date().toISOString()} ${text}\n`;
     // sync, and never fatal: this runs inside signal and exit handlers, possibly with the terminal already gone
@@ -32,13 +37,16 @@ export function installLifecycle(opts: { port: number; dir?: string; head?: stri
   process.stderr.on("error", () => {});
 
   if (opts.dir) mkdirSync(opts.dir, { recursive: true });
-  // how the last hub here stopped: its own exit line if it wrote one (read before this start is logged)
+  // how the last hub here stopped: its own exit line if it wrote one (read before this start is logged), and when it was
+  // last alive: the exit line's time, else its alive-stamp
   let previous: string | undefined;
+  let lastAlive: number | undefined;
   try {
     const last = logFile && existsSync(logFile) ? readFileSync(logFile, "utf8").trimEnd().split("\n").at(-1) ?? "" : "";
-    const exit = / exit pid=(\d+) reason=(.*?) code=/.exec(last);
-    if (exit) previous = `the last hub (pid ${exit[1]}) stopped: ${exit[2]}`;
+    const exit = /^(\S+) exit pid=(\d+) reason=(.*?) code=/.exec(last);
+    if (exit) { previous = `the last hub (pid ${exit[2]}) stopped: ${exit[3]}`; lastAlive = Date.parse(exit[1]); }
   } catch {}
+  try { if (lastAlive === undefined && aliveFile && existsSync(aliveFile)) lastAlive = statSync(aliveFile).mtimeMs; } catch {}
   let ownsPidFile = !!pidFile;
   if (pidFile && existsSync(pidFile)) {
     const prevPid = readFileSync(pidFile, "utf8").trim();
@@ -53,6 +61,11 @@ export function installLifecycle(opts: { port: number; dir?: string; head?: stri
   }
   if (pidFile && ownsPidFile) writeFileSync(pidFile, `${process.pid}\n`);
   line(`start pid=${process.pid} ppid=${process.ppid} port=${opts.port} tty=${process.stdout.isTTY || process.stderr.isTTY ? "yes" : "no"}${opts.head ? ` head=${opts.head}` : ""}`);
+
+  if (aliveFile) {
+    try { writeFileSync(aliveFile, `${process.pid}\n`); } catch {}
+    setInterval(() => { try { const t = new Date(); utimesSync(aliveFile, t, t); } catch {} }, ALIVE_MS).unref();
+  }
 
   let reason: string | undefined;
   const exiting = (why: string) => { reason ??= why; };
@@ -69,5 +82,5 @@ export function installLifecycle(opts: { port: number; dir?: string; head?: stri
     line(`exit pid=${process.pid} reason=${reason ?? `process.exit(${code})`} code=${code} uptime_s=${Math.round((Date.now() - started) / 1000)}`);
     try { if (pidFile && ownsPidFile && readFileSync(pidFile, "utf8").trim() === String(process.pid)) unlinkSync(pidFile); } catch {}
   });
-  return { exiting, ...(previous ? { previous } : {}) };
+  return { exiting, ...(previous ? { previous } : {}), ...(lastAlive !== undefined && Number.isFinite(lastAlive) ? { lastAlive } : {}) };
 }

@@ -20,7 +20,7 @@ const dir = mkdtempSync(join(tmpdir(), "restart-notice-"));
 const procs: ChildProcess[] = [];
 async function boot(): Promise<ChildProcess> {
   const { CHATROOM_SEAT_KEY: _k, CHATROOM_HEARTBEAT_URL: _h, ...rest } = process.env;
-  const child = spawn(process.execPath, ["--import", "tsx", "src/index.ts"], { env: { ...rest, PORT: String(port), CHATROOM_DATA_DIR: dir, CHATROOM_INSECURE_LOCAL: "1", CHATROOM_SPAWN_DRY: "1", CHATROOM_LOG_DIR: join(dir, "spawned") }, stdio: "ignore" });
+  const child = spawn(process.execPath, ["--import", "tsx", "src/index.ts"], { env: { ...rest, PORT: String(port), CHATROOM_DATA_DIR: dir, CHATROOM_INSECURE_LOCAL: "1", CHATROOM_SPAWN_DRY: "1", CHATROOM_LOG_DIR: join(dir, "spawned"), CHATROOM_ALIVE_MS: "500" }, stdio: "ignore" });
   procs.push(child);
   for (let i = 0; i < 150; i++) { try { await fetch(`http://127.0.0.1:${port}/`); return child; } catch { await sleep(200); } }
   throw new Error("hub did not start");
@@ -49,7 +49,8 @@ try {
   await d.connect(new StreamableHTTPClientTransport(new URL(`http://127.0.0.1:${port}/mcp`)));
   await d.callTool({ name: "join_room", arguments: { room: "empty", name: "b", topic: "t" } });
   await d.callTool({ name: "leave_room", arguments: { room: "empty", reason: "done, nothing left" } });
-  await sleep(1200);
+  // the room then goes quiet for a while before the hub dies: the outage is the hub's, not the room's silence
+  await sleep(6000);
 
   // (1) killed outright
   await stop(hub, "SIGKILL");
@@ -57,13 +58,14 @@ try {
   let lines = await restartLines("live");
   assert.equal(lines.length, 1, "the room it was serving is told once");
   assert.match(lines[0].content, /hub restarted at \d\d:\d\d:\d\d UTC/i, "when");
-  assert.match(lines[0].content, /after [0-9]+ s/, "how long the room went without it");
+  const down = Number(/down for (?:about|at most) (\d+) s/.exec(lines[0].content)?.[1] ?? NaN);
+  assert.ok(down >= 0 && down <= 4, `the outage it reports is the hub's own, not the room's 6 s of silence (said: ${lines[0].content.slice(0, 120)})`);
   assert.match(lines[0].content, /left no exit line/, "why the last one stopped, as far as anyone can know");
   assert.match(lines[0].content, /seat/i, "and what a seat does now");
   assert.equal((await restartLines("empty")).length, 0, "a room with nobody in it is not told");
   const ev = record("live").filter((e) => e.type === "hub_restart");
   assert.equal(ev.length, 1, "the record carries a hub_restart event");
-  assert.equal(typeof ev[0].down_s, "number");
+  assert.ok(typeof ev[0].down_s === "number" && (ev[0].down_s as number) <= 4, `down_s in the record is the outage (${ev[0].down_s})`);
   assert.match(String(ev[0].previous), /no exit line/);
 
   // (2) stopped on purpose: the reason the last hub wrote is quoted

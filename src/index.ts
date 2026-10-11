@@ -325,7 +325,7 @@ const seatCallerAnnounced = new Map<string, number>();
  * the usage export, dev runs) are never resolved or announced: on integration every seat's 1 s /otlp/v1/logs export was
  * announced as a refused forgery when this was a deny-list (-3's composed dev room swarm-085449-i9fk). A new human route
  * must be added here, or it is open to loopback callers as it was before this check. */
-const HUMAN_ROUTES = /^\/rooms\/(archive-dead|[^/]+\/(messages|vote|kick|replace|create|deadline|resources|close|archive|attachments))$/;
+const HUMAN_ROUTES = /^\/rooms\/(archive-dead|[^/]+\/(messages|vote|kick|replace|create|deadline|resources|run-end|close|archive|attachments))$/;
 // Resolved before the routes, asynchronously, so requireToken stays a plain check and a lookup never blocks other rooms.
 app.use(async (req, res, next) => {
   if (req.method === "POST" && INSECURE_LOCAL && LOOPBACK_HOST && !(HUMAN_TOKEN && req.header("x-chatroom-token") === HUMAN_TOKEN) && HUMAN_ROUTES.test(req.path)) {

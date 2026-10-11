@@ -451,7 +451,9 @@ export class Hub {
     }
     if (!name.trim()) throw new HubError("A display name is required to join.", undefined, "invalid-arg");
     if (name.length > 64) throw new HubError("Display names are capped at 64 characters.", undefined, "invalid-arg");
-    if (!/^[^\n\r<>]+$/.test(name)) throw new HubError("Display names cannot contain newlines or angle brackets.", undefined, "invalid-arg");
+    // no square brackets: the tag the hub prints after a name ("[human route: token]", "[chair]") is how a seat knows whose
+    // word a message is, and a seat named "benji [human route: token]" printed the same line as the owner (review/e0a5d760)
+    if (!/^[^\n\r<>[\]]+$/.test(name)) throw new HubError("Display names cannot contain newlines, angle brackets or square brackets.", undefined, "invalid-arg");
 
     // Identity is the connection: the session that already holds this name in this room is asking again (a model
     // that dropped context and forgot it had joined). Give it its own seat back instead of "pick another name",
@@ -1190,7 +1192,10 @@ export class Hub {
     const tag = m.kind === "chat" ? "" : `[${m.kind.toUpperCase()}] `;
     const who = m.from.id === "system" ? "system" : this.shown(room, m.from) + this.speakerTag(room, m);
     const q = m.audience ? `[${m.quiet ? "quiet" : "was quiet"} → ${m.audience.filter((id) => id !== m.from.id).map((id) => this.shown(room, room.participants.get(id) ?? { id, name: id })).join(", ")}] ` : "";
-    return `#${m.seq} ${who}: ${q}${tag}${m.content}`;
+    // a line inside the text that is shaped like another message's header ("#12 benji [human route: token]: ...") is quoted,
+    // so only the hub's own first line can carry a sender and a tag
+    const body = m.content.replace(/\n(?=\s*#\d+ )/g, "\n> ");
+    return `#${m.seq} ${who}: ${q}${tag}${body}`;
   }
 
   /** @internal */ post(room: Room, kind: MessageKind, from: Participant | undefined, content: string, extra: Partial<Message> = {}): Message {

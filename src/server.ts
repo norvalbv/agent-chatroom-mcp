@@ -152,7 +152,9 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
         }
         return fail(e);
       } finally {
-        hub.recordCallCompletion(room, tool, outcome, participant, { ms: Date.now() - started, ...(empty === undefined ? {} : { empty }) });
+        // which entry a board_get read: a board key is a short name, not content, and without it no record can say who read what
+        const key = tool === "board_get" && typeof (args as { key?: unknown })?.key === "string" && Hub.BOARD_KEY.test((args as { key: string }).key) ? (args as { key: string }).key : undefined;
+        hub.recordCallCompletion(room, tool, outcome, participant, { ms: Date.now() - started, ...(empty === undefined ? {} : { empty }), ...(key === undefined ? {} : { key }) });
       }
     };
 

@@ -11,6 +11,8 @@
  * resource/ is a reserved board prefix, and the hub names a room's resource/* keys to every seat when it joins (one
  * line, its own field in the join_room reply) and in a recruit's orientation, so nobody has to know to look. A
  * break-out room starts with its parent's resource/* entries. No prompt file is changed.
+ * The record says who read what: call_completion for board_get carries the key (it did not, so no record could say
+ * which seat ever read a resource entry; seats made 5 to 69 board_get calls each against 216 keys).
  * npx tsx scripts/resource-seeding-regression.ts */
 import assert from "node:assert/strict";
 import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
@@ -178,6 +180,23 @@ assert.ok(readFileSync(rec2!.log, "utf8").includes(KEYS[0]!), "and its recruit's
 // a fresh challenger is told nothing of the board
 const [rec3] = sp.request({ room: "res-group", requestedBy: "C", brief: "Check one claim of the open proposal against the repository.", count: 1, name: "probe3", fresh: true });
 assert.equal(readFileSync(rec3!.log, "utf8").includes(KEYS[0]!), false, "a fresh challenger's prompt names no board key");
+
+// 7. the room record says which key a board_get read; a manifest read and every other tool carry none
+const reader = await seat("reader");
+const rJoin = JSON.parse((await reader.call("join_room", { room: "res-read", name: "R", agent: "test" })).text) as { participant_id: string };
+hub.seedResources("res-read", parsed);
+await reader.call("board_get", { room: "res-read", key: KEYS[1], participant_id: rJoin.participant_id });
+await reader.call("board_get", { room: "res-read", participant_id: rJoin.participant_id });
+await reader.call("board_get", { room: "res-read", key: "resource/not-there", participant_id: rJoin.participant_id });
+await reader.call("board_set", { room: "res-read", key: "notes", text: "a note", participant_id: rJoin.participant_id });
+const completions = readFileSync(join(dir, "res-read.jsonl"), "utf8").trim().split("\n").map((l) => JSON.parse(l) as { type: string; tool?: string; key?: string; participant?: string; outcome?: string })
+  .filter((ev) => ev.type === "call_completion");
+const gets = completions.filter((ev) => ev.tool === "board_get");
+assert.deepEqual(gets.map((ev) => ev.key), [KEYS[1], undefined, "resource/not-there"], "board_get records the key asked for, found or not; the manifest read has none");
+assert.equal(gets[0]!.participant, rJoin.participant_id, "with the seat that read it");
+assert.equal(completions.filter((ev) => ev.tool !== "board_get").some((ev) => "key" in ev), false, "no other tool's completion carries a key");
+// and the hub still replays its own log
+assert.doesNotThrow(() => new Hub({ dataDir: dir }));
 
 console.log("RESOURCE SEEDING REGRESSION OK");
 process.exit(0);

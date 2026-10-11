@@ -1136,11 +1136,12 @@ export class Hub {
       .map((r) => { const p = r.pid ? room.participants.get(r.pid) : undefined; return { name: p ? this.shown(room, p) : "unknown", tool: r.tool, reason: r.reason, ts: r.ts }; });
   }
 
-  /** Completed MCP guard invocations for existing rooms only; no arguments or error text.
+  /** Completed MCP guard invocations for existing rooms only; no arguments or error text, except the board key a
+   * board_get asked for (a short name matching BOARD_KEY, never an entry's text).
    * Pending calls, schema rejections outside guard, roomless calls and failed room creation
    * are excluded. The rate uses this event's matched numerator, never lifetime refusals.
    */
-  recordCallCompletion(roomName: string | undefined, tool: string, outcome: CallOutcome, participant: string | null, timing: { ms?: number; empty?: boolean } = {}) {
+  recordCallCompletion(roomName: string | undefined, tool: string, outcome: CallOutcome, participant: string | null, timing: { ms?: number; empty?: boolean; key?: string } = {}) {
     const room = roomName ? this.rooms.get(roomName) : undefined;
     if (!room) return;
     this.applyCallCompletion(room, tool, outcome);

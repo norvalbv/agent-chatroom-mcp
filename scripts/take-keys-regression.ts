@@ -13,6 +13,7 @@ import { mkdtempSync, readFileSync, readdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Hub } from "../src/hub.js";
+import { statusView } from "../src/hub/status-view.js";
 
 const cases: [string, () => Promise<void> | void][] = [];
 const test = (name: string, run: () => Promise<void> | void) => cases.push([name, run]);
@@ -49,6 +50,10 @@ test("holds lists the seat's live claims too, so who holds what is one field whi
   h.setBoard(name, a.id, "take/J1", "doing J1 now");
   assert.deepEqual(seat(h, name, "alice").holds, ["claim/jobs-5-8", "take/J1"]);
   assert.equal(seat(h, name, "bob").holds, undefined);
+  // a seat's own room_status already names each claim's author in the board manifest: holds there keeps the takes
+  const view = statusView(h.summary(h.getRoom(name)) as Parameters<typeof statusView>[0]);
+  assert.deepEqual((view.participants as Seat[]).find((p) => p.name === "alice")!.holds, ["take/J1"]);
+  assert.equal((view.board as Record<string, { by: string }>)["claim/jobs-5-8"]!.by, "alice");
   h.leave(name, a.id, "done here, nothing left undone");
   assert.deepEqual(seat(h, name, "alice").holds, ["claim/jobs-5-8", "take/J1"], "a departed seat still shows what it held: its successor may take it (stale_claims)");
 });

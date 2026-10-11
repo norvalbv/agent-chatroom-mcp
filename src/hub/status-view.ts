@@ -12,7 +12,7 @@ const DETAIL_HEAD = 80;
 
 type Summary = Record<string, unknown> & {
   topic?: string;
-  participants?: { working?: { detail?: string } | null; output?: object }[];
+  participants?: { name?: string; working?: { detail?: string } | null; output?: object; holds?: string[] }[];
   board?: Record<string, { by?: string; reviewer?: string; post_reveal?: boolean }>;
 };
 
@@ -25,10 +25,14 @@ export function statusView(summary: Summary, fullTopic = false): Summary {
     topic: !fullTopic && topic.length > TOPIC_HEAD ? `${topic.slice(0, TOPIC_HEAD)}… (${topic.length} chars; room_status full_topic=true carries it whole)` : topic,
     // a seat's output record ships what it delivered, non-zero counts only: no age (last_seen_at is beside it), no claims (the
     // board keys name their authors), and nothing delivered ships as no field at all
-    participants: summary.participants?.map(({ output, ...p }) => {
+    participants: summary.participants?.map(({ output, holds: held, ...p }) => {
       const counts = Object.entries(output ?? {}).filter(([k, v]) => v && k !== "age_seconds" && k !== "claims");
+      // a claim the seat wrote is already in the board manifest under its name: holds carries what the manifest cannot
+      // (takes, whose holder may not be their author); the dashboard keeps both
+      const holds = held?.filter((k) => !(k.startsWith("claim/") && summary.board?.[k]?.by === p.name));
       return {
         ...p,
+        ...(holds?.length ? { holds } : {}),
         ...(p.working?.detail ? { working: { ...p.working, detail: head(p.working.detail, DETAIL_HEAD) } } : {}),
         ...(counts.length ? { output: Object.fromEntries(counts) } : {}),
       };

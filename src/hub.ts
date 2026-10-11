@@ -865,6 +865,8 @@ export class Hub {
   /** Advance the read cursor, remembering anything withheld so it is delivered later. */
   settleRead(room: Room, p: Participant, since: number, delivered: Message[], upTo?: number) {
     since = Math.min(since, p.lastSeenSeq);
+    // when this seat was first sent each version of a proposal (seenTiming): the message that made it, by id
+    for (const m of delivered) if ((m.kind === "proposal" || m.kind === "amend") && !p.versionSeenAt?.[m.id]) p.versionSeenAt = { ...(p.versionSeenAt ?? {}), [m.id]: now() };
     const ceiling = upTo ?? room.messages.at(-1)?.seq ?? since;
     const deliveredSeqs = new Set(delivered.map((m) => m.seq));
     const receipts = new Set(p.quietReceipts ?? []);
@@ -2506,7 +2508,7 @@ export class Hub {
       );
     }
     this.surfaceCited(room, objection, "cited in a challenge");
-    const challenge: Challenge = { id: shortId("ch"), by: { id: p.id, name: p.name }, objection, ts: now(), version: pr.version, status: "open", blocking, ...(cites ? { cites } : {}), ...(cmd ? { command: cmd } : {}) };
+    const challenge: Challenge = { id: shortId("ch"), by: { id: p.id, name: p.name }, objection, ts: now(), version: pr.version, status: "open", blocking, ...this.seenTiming(room, p, pr), ...(cites ? { cites } : {}), ...(cmd ? { command: cmd } : {}) };
     pr.challenges.push(challenge);
     // A blocking challenge must be answered: the challenger's own vote (if any) is reset and must be re-cast
     // after the room has responded, so the proposal cannot pass in the same breath.
@@ -2551,7 +2553,7 @@ export class Hub {
         throw new HubError("A disagree vote must include `reason` stating the specific change that would make you agree (20+ chars).", undefined, "vote-form");
       }
     }
-    const entry = { vote, reason, quote, confidence, name: p.name, ts: now(), version: proposal.version };
+    const entry = { vote, reason, quote, confidence, name: p.name, ts: now(), version: proposal.version, ...this.seenTiming(room, p, proposal) };
     this.applyVote(proposal, p.id, entry);
     this.persist({ type: "vote", room: roomName, proposalId, pid: p.id, entry });
     const conf = confidence !== undefined ? ` (confidence ${confidence})` : "";
@@ -2940,6 +2942,20 @@ export class Hub {
   }
   private readonly verifierHoldTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
+  /**
+   * Telemetry gap G13 (evidence-pack item 1: in 00cp challenges arrived 6-21 s after the proposal and "the log cannot show
+   * where" the text was negotiated): seen_s, seconds from the hub first sending this seat the message that made the
+   * current version to now (absent: it never sent it, the seat read it elsewhere or not at all), and since_text_s,
+   * seconds since that version was written. The proposer is counted as having seen its own text when it wrote it.
+   */
+  private seenTiming(room: Room, p: Participant, pr: Proposal): { seen_s?: number; since_text_s: number } {
+    const t = Date.now();
+    const made = [...room.messages].reverse().find((m) => m.proposalId === pr.id && (m.kind === "proposal" || m.kind === "amend"));
+    const seenAt = made && (made.from.id === p.id ? made.ts : p.versionSeenAt?.[made.id]);
+    const s = (at: string) => Math.max(0, Math.round((t - Date.parse(at)) / 100) / 10);
+    return { ...(seenAt ? { seen_s: s(seenAt) } : {}), since_text_s: s(pr.updatedAt ?? pr.createdAt) };
+  }
+
   /** Electorate members whose vote (if any) was not cast on the proposal's current version. */
   unvotedOnCurrent(room: Room, pr: Proposal): Participant[] {
     return this.electorate(room, pr).members.filter((p) => (pr.votes[p.id] ? pr.votes[p.id].version ?? 1 : 0) !== pr.version);
@@ -3039,6 +3055,8 @@ export class Hub {
       ended: lc ? (unvoted.length || takes.length || children.length ? "window" : "all_voted") : "none",
       ...(takes.length ? { takes_held: takes } : {}),
       ...(children.length ? { children_open: children } : {}),
+      // agrees on the final version cast by seats the hub never sent that version (gap G13: read elsewhere, or not at all)
+      ...((() => { const v = Object.values(pr.votes).filter((x) => x.vote === "agree" && (x.version ?? 1) === pr.version && x.since_text_s !== undefined && x.seen_s === undefined).map((x) => x.name); return v.length ? { agreed_unsent: v } : {}; })()),
       not_voted_on_final: unvoted.map((p) => ({ name: this.shown(room, p), ...(p.role && p.role !== "worker" ? { role: p.role } : {}), ...(pr.votes[p.id] ? { voted_version: pr.votes[p.id].version ?? 1 } : {}) })),
     };
   }

@@ -152,6 +152,8 @@ export interface Participant {
   role?: Role;
   /** proposal id -> version of its text this participant was last sent (wait_for_messages ships text only when it changes) */
   seenProposal?: Record<string, number>;
+  /** when this seat was first sent each proposal/amend message, by message id (in memory only; Hub.seenTiming) */
+  versionSeenAt?: Record<string, string>;
   /** challenge id -> status its objection text was last sent at (wait_for_messages ships objections only when new or changed) */
   seenChallenges?: Record<string, string>;
   /** Ephemeral delivery receipts. A reconnect/rejoin starts with a full board manifest. */
@@ -321,6 +323,9 @@ export interface Challenge {
   ts: string;
   /** proposal version the objection was written against */
   version?: number;
+  /** seconds from the hub first sending the challenger this version to the challenge (absent: never sent), and since the version was written (Hub.seenTiming, gap G13) */
+  seen_s?: number;
+  since_text_s?: number;
   /** open: unanswered. answered: the cited text was amended away. conceded: the challenger re-voted agree. overruled: the room concluded over it. */
   status?: "open" | "answered" | "conceded" | "overruled";
   /** the span of the proposal the objection quotes, if it quotes one (used to decide when an amend answers it) */
@@ -363,7 +368,8 @@ export interface Proposal {
   by: { id: string; name: string };
   text: string;
   createdAt: string;
-  votes: Record<string, { vote: Vote; reason?: string; quote?: string; confidence?: number; name: string; ts: string; version?: number }>;
+  /** seen_s / since_text_s: Hub.seenTiming (telemetry gap G13) */
+  votes: Record<string, { vote: Vote; reason?: string; quote?: string; confidence?: number; name: string; ts: string; version?: number; seen_s?: number; since_text_s?: number }>;
   challenges: Challenge[];
   status: "open" | "accepted" | "rejected" | "superseded";
   /** bumped by every amend; the text in `text` is always the current version */
@@ -407,6 +413,8 @@ export interface ConclusionClosing {
   ended: "window" | "all_voted" | "none";
   /** take/* entries still held by an active seat when the room concluded, as "key (holder)": work the conclusion cut off */
   takes_held?: string[];
+  /** agrees on the final version by seats the hub never sent that version (Hub.seenTiming, gap G13) */
+  agreed_unsent?: string[];
   /** breakouts of the room still open when it concluded: work its answer was fixed before */
   children_open?: string[];
   /** voted_version: the version their standing vote was cast on, when they had one */

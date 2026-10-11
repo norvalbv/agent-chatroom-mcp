@@ -329,12 +329,26 @@ const seatCallerAnnounced = new Map<string, number>();
  * must be added here, or it is open to loopback callers as it was before this check. */
 const HUMAN_ROUTES = /^\/rooms\/(archive-dead|[^/]+\/(messages|vote|kick|replace|create|deadline|resources|run-end|close|archive|attachments|chair))$/;
 // Resolved before the routes, asynchronously, so requireToken stays a plain check and a lookup never blocks other rooms.
+// A request that carries the human token is looked up too: the hub's environment is readable by any process of the
+// same user, so a seat can read the token (`ps eww -p <hub pid>`) and, unchecked, post as "[human route: token]"
+// (review/a9060d5e-verifier). The launcher's own calls carry its launcher token and are not looked up.
 app.use(async (req, res, next) => {
-  if (req.method === "POST" && INSECURE_LOCAL && LOOPBACK_HOST && !(HUMAN_TOKEN && req.header("x-chatroom-token") === HUMAN_TOKEN) && HUMAN_ROUTES.test(req.path)) {
+  const withToken = !!HUMAN_TOKEN && req.header("x-chatroom-token") === HUMAN_TOKEN;
+  if (req.method === "POST" && LOOPBACK_HOST && (INSECURE_LOCAL || withToken) && HUMAN_ROUTES.test(req.path)) {
     res.locals.seatCaller = await seatCaller(req).catch(() => undefined);
   }
   next();
 });
+/** A human-route request from the process tree of one of this hub's seats is refused whatever it carries: the token
+ * proves the caller could read it, not that the caller is the human. Attribution, not a boundary: a detached child
+ * re-parented away from the seat escapes the walk. */
+const refuseSeatCaller = (req: express.Request, res: express.Response): boolean => {
+  const seat = res.locals.seatCaller as { name: string; rooms: string[] } | undefined;
+  if (!seat) return false;
+  announceSeatCaller(req, seat);
+  res.status(403).type("text/plain").send(`refused: this request came from the process tree of seat ${seat.name}. The human routes are the human's; a seat votes, kicks and speaks through its own MCP tools.`);
+  return true;
+};
 /** The launcher's own calls (room create with the run's policy, resources, run deadline): its launcher token is the authority, as for replacements. A hub
  * started by hubd has a launcher token and often neither a human token nor the loopback opt-in, and refused both. */
 const requireLauncherOrToken = (req: express.Request, res: express.Response): boolean => {
@@ -345,16 +359,11 @@ const requireLauncherOrToken = (req: express.Request, res: express.Response): bo
 /** The request carries this hub's human token (not merely a loopback caller the opt-in lets through). */
 const tokenChecked = (req: express.Request): boolean => !!HUMAN_TOKEN && req.header("x-chatroom-token") === HUMAN_TOKEN;
 const requireToken = (req: express.Request, res: express.Response): boolean => {
+  if (refuseSeatCaller(req, res)) return false;
   if (HUMAN_TOKEN && req.header("x-chatroom-token") === HUMAN_TOKEN) return true;
   // The explicit loopback opt-in keeps the local dashboard usable without a token, with or without one configured,
-  // for any caller that is not one of this hub's seats.
-  if (INSECURE_LOCAL && LOOPBACK_HOST) {
-    const seat = res.locals.seatCaller as { name: string; rooms: string[] } | undefined;
-    if (!seat) return true;
-    announceSeatCaller(req, seat);
-    res.status(403).type("text/plain").send(`refused: this request came from the process tree of seat ${seat.name}. The human routes are the human's; a seat votes, kicks and speaks through its own MCP tools.`);
-    return false;
-  }
+  // for any caller that is not one of this hub's seats (refused above).
+  if (INSECURE_LOCAL && LOOPBACK_HOST) return true;
   if (HUMAN_TOKEN) {
     res.status(401).type("text/plain").send("x-chatroom-token required");
     return false;
@@ -541,7 +550,7 @@ app.post("/rooms/:room/messages", (req, res) => {
 // The owner names the room's chair: a chair that took the role by joining first is tagged self-claimed until then.
 // The human token and nothing less: the loopback opt-in admits any process on this machine that is not this hub's seat.
 app.post("/rooms/:room/chair", (req, res) => {
-  if (!requireAgentControl(req, res)) return;
+  if (refuseSeatCaller(req, res) || !requireAgentControl(req, res)) return;
   try {
     const { name, by } = (req.body ?? {}) as { name?: string; by?: string };
     hub.nameChair(req.params.room, String(name ?? "").trim(), (by || "human").trim());

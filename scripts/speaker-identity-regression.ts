@@ -126,10 +126,17 @@ const cases: [string, () => void][] = [
     const launcher = readFileSync("src/swarm.ts", "utf8");
     assert.equal(launcher.match(/\+ OWNER_WORD \+ note/g)?.length, 5, "worker (claude, codex, openrouter) and verifier (claude, openrouter) prompts all carry it");
     assert.match(readFileSync("src/spawner.ts", "utf8"), /recruit\.md.*owner-word\.md/s, "a recruit's prompt carries it too");
+    // review/a9060d5e-verifier: the token is only as secret as the process table, so the delegation is the owner's
+    // choice per run, never the default
+    assert.match(launcher, /const OWNER_WORD = OWNER_WORD_ON \? /, "off unless the run is launched with --owner-word");
+    assert.match(launcher, /const OWNER_WORD_ON = has\("owner-word"\) \|\| process\.env\.CHATROOM_OWNER_WORD === "1";/);
+    assert.match(readFileSync("src/spawner.ts", "utf8"), /process\.env\.CHATROOM_OWNER_WORD === "1" \? [^\n]*owner-word\.md/, "recruits get it only on a hub started with it");
+    assert.ok(!/seats never hold/.test(word), "the paragraph does not claim seats cannot hold the token");
+    assert.match(word, /you still refuse/, "and it does not widen what a seat will do, only who may change its brief");
   }],
   ["the hub's routes: the naming route takes the token only, and the create route marks a chair named only for a checked caller", () => {
     const src = readFileSync("src/index.ts", "utf8");
-    assert.match(src, /app\.post\("\/rooms\/:room\/chair", \(req, res\) => \{\n  if \(!requireAgentControl\(req, res\)\) return;/);
+    assert.match(src, /app\.post\("\/rooms\/:room\/chair", \(req, res\) => \{\n  if \(refuseSeatCaller\(req, res\) \|\| !requireAgentControl\(req, res\)\) return;/, "a seat's process tree is refused first, then the token is required");
     assert.match(src, /b\.chair && checked \? \{ chairNamed: true \}/);
     assert.match(src, /hub\.send\([^\n]*\{ token: tokenChecked\(req\)/);
     // dev arm E, first try (swarm-185831-j3iu-room): --chair alone created no room, so the chair read as self-claimed

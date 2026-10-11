@@ -360,8 +360,9 @@ export class Spawner {
       if (o.dryRun || createSnapshot(snap)) cwd = resolve(snap.dir, snap.sub);
       else this.hooks?.announce(target, `The hub could not make a snapshot of ${snap.sha.slice(0, 12)} for ${names[0]}, so it works in the proposer's tree.`);
     }
-    // owner-word.md: which room messages carry the owner's word (the brief has to say it; a hub tag alone is tool output)
-    const template = readFileSync(resolve(repoRoot, "prompts", "recruit.md"), "utf8").trimEnd() + "\n\n" + readFileSync(resolve(repoRoot, "prompts", "owner-word.md"), "utf8");
+    // owner-word.md: which room messages carry the owner's word (the brief has to say it; a hub tag alone is tool output).
+    // Only on a hub the owner started with CHATROOM_OWNER_WORD=1 (the launcher's --owner-word sets it for a hub it starts).
+    const template = readFileSync(resolve(repoRoot, "prompts", "recruit.md"), "utf8").trimEnd() + (process.env.CHATROOM_OWNER_WORD === "1" ? "\n\n" + readFileSync(resolve(repoRoot, "prompts", "owner-word.md"), "utf8") : "\n");
     const by = req.requestedByShown ?? req.requestedBy;
     const targetTopic = req.newRoom ? (req.roomTopic ?? "") : (this.hooks?.roomTopic?.(target) ?? "");
     const context =

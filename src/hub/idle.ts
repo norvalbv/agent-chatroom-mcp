@@ -89,7 +89,12 @@ const span = (ms: number) => { const min = Math.round(ms / 60_000); return min <
 
 /** Called on the hub's sweep. Tells the room once per stall (and again every REPEAT_WINDOWS windows it lasts), tells
  * its parent, and writes room_idle / room_active to the record so a run's stalls can be read without a transcript. */
-export function checkRoomIdle(hub: Hub, room: Room, at = Date.now(), jobsOfSeat: SeatJobs = (p) => hub.memory.jobs(p.seatKeyHash)): void {
+/** The jobs this room's agent seats have running now, each with its seat's name as the room shows it. */
+export function roomJobs(hub: Hub, room: Room, jobsOfSeat: SeatJobs = (p) => hub.jobsOf(p)): (Job & { seat: string })[] {
+  return hub.activeParticipants(room).filter((p) => p.agent !== "human").flatMap((p) => jobsOfSeat(p).map((j) => ({ seat: hub.shown(room, p), ...j })));
+}
+
+export function checkRoomIdle(hub: Hub, room: Room, at = Date.now(), jobsOfSeat: SeatJobs = (p) => hub.jobsOf(p)): void {
   if (OFF || room.state !== "open") return;
   const seats = judged(hub, room, at);
   const q = seats && quietWindow(roomSteps(room, at), seats.length, at);

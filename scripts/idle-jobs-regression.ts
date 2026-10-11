@@ -131,3 +131,17 @@ test("the control: the same quiet room with no job is told at once, as before", 
   assert.equal(lines(hub, "jobs-none").length, 1);
   assert.doesNotMatch(lines(hub, "jobs-none")[0].content, /job running/);
 });
+
+test("the silence nudge does not tell a room to propose a conclusion while a seat's job is running", async () => {
+  const nudged = async (withJob: boolean) => {
+    const hub = new Hub({});
+    const name = `jobs-nudge-${withJob}`;
+    const [a] = ["A", "B"].map((n, i) => hub.join(name, n, "claude", i ? {} : { requireChallenge: false, nudgeAfterMs: 40, expectedParticipants: 0 }, undefined, `s-${name}-${n}`).participant);
+    if (withJob) hub.jobsOf = (p) => (p.id === a.id ? [job] : []);
+    hub.send(name, a.id, "the scorer has started; its table lands in six minutes", undefined, true);
+    await new Promise((r) => setTimeout(r, 150));
+    return hub.getRoom(name).messages.filter((m) => m.from.id === "system" && /should propose a conclusion/.test(m.content)).length;
+  };
+  assert.ok((await nudged(false)) >= 1, "the control: a silent short room with no job is nudged");
+  assert.equal(await nudged(true), 0, "waiting on a job is not a discussion that has converged");
+});

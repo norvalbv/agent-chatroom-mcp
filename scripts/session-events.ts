@@ -5,7 +5,7 @@
  *   npx tsx scripts/session-events.ts <data/room.jsonl>... [--json]
  * A log from before the `session` event has none; its drops show only as "MCP session closed" leave reasons.
  */
-import { readFileSync } from "node:fs";
+import { readFileSync, statSync } from "node:fs";
 import { parseRoomLog } from "../src/run-metrics.js";
 
 const argv = process.argv.slice(2);
@@ -16,6 +16,7 @@ if (!files.length) {
 }
 const rows = new Map<string, { room: string; seat: string; moved: number; closed_seat_kept: number; closed_seat_left: number; reasons: Record<string, number> }>();
 for (const f of files) {
+  if (!statSync(f, { throwIfNoEntry: false })?.isFile()) { console.error(`session-events: not a room log file: ${f}`); process.exit(2); }
   for (const e of parseRoomLog(readFileSync(f, "utf8"))) {
     if (e.type !== "session") continue;
     const k = `${e.room}|${e.name}`;

@@ -27,7 +27,7 @@ import { barrenClaims, evidenceGaps, evidenceReceipt, offline, unsourcedClaims }
 import { apiRequests, UsageLedger, usageTotal } from "./hub/usage.js";
 import { DevRuns, DevRunError, type DevRunHost } from "./hub/dev-runs.js";
 import { takesOf } from "./hub/take.js";
-import { MemoryWatch, memoryNotice, type MemoryEvent, type SeatMemory } from "./hub/memory.js";
+import { MemoryWatch, memoryNotice, type Job, type MemoryEvent, type SeatMemory } from "./hub/memory.js";
 import type { SteerItem } from "./hub/steer.js";
 
 /** An evidence pointer the minimal prompt keeps public: a coordination board key, a proposal id, a commit (hex with a digit). */
@@ -1277,6 +1277,9 @@ export class Hub {
         // a long run that has not been told it is ending: quiet is seats working or waiting, not a room that has
         // converged, and a group that concludes early can take no more digests. The room-idle line covers a real stall.
         if (this.longRunUnderWay(room)) return;
+        // nor is a room where a seat has a job running: it is waiting on the result, and "propose a conclusion" asks it
+        // to conclude without it (dev room swarm-183032-pcnc: told so twice, 3 and 6 min into a 6-minute scoring job)
+        if (idle.roomJobs(this, room).length) return;
         const talkers = [...room.participants.values()].filter((p) => p.active && p.agent !== "human").sort((a, b) => b.messageCount - a.messageCount);
         text = `${mins} min of silence. If the discussion has converged, ${talkers[0] ? this.shown(room, talkers[0]) : "someone"} should propose a conclusion.`;
       }
@@ -3171,6 +3174,8 @@ export class Hub {
     }
   }
 
+  /** The jobs a seat has running, from the memory watcher's last look at the process table (src/hub/memory.ts jobsOf). */
+  jobsOf(p: Participant): Job[] { return this.memory.jobs(p.seatKeyHash); }
   /** Memory notices this seat's hook has not put in front of its model yet. */
   pendingMemoryNotices(seatKey: string): SteerItem[] { return this.memoryNotices.get(liveness.seatHash(seatKey)) ?? []; }
 

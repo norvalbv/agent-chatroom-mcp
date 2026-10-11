@@ -102,8 +102,8 @@ spawner.attach({
     if (existing && existing.by !== requester) throw new HubError(`claim/${area} is owned by ${existing.by}; recruit into their team instead.`);
     hub.setBoardAs(room, requester, `claim/${area}`, JSON.stringify({ area, owner: requester, team: [requester, ...team], status: "open", note: "claimed at recruitment" }));
   },
-  ensureRoom: (room, topic) => {
-    hub.createRoom(room, { topic, requireChallenge: true, requireVerification: true, expectedParticipants: 0 });
+  ensureRoom: (room, topic, parent) => {
+    hub.recruitRoom(room, topic, parent);
   },
   announce: (room, text) => {
     try {

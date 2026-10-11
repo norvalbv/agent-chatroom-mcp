@@ -2586,6 +2586,17 @@ export class Hub {
     }
   }
 
+  /**
+   * The room request_agent(new_room) opens, with swarm defaults. It is a breakout of the requester's room, so the parent
+   * lists it and its conclusion is carried back like any other; the recruiting line already tells the parent it exists.
+   * A room that already exists is left as it is (never re-parented), and a parent that could not take a conclusion is not linked.
+   */
+  recruitRoom(name: string, topic: string, parent?: string): Room {
+    const from = parent !== undefined && parent !== name ? this.rooms.get(parent) : undefined;
+    const link = from && (from.state === "open" || from.state === "stalled");
+    return this.createRoom(name, { topic, requireChallenge: true, requireVerification: true, expectedParticipants: 0, ...(link ? { parent } : {}) });
+  }
+
   /** One line in the parent: the breakout exists, how to work in it, and where its conclusion will land. */
   private announceBreakout(child: Room, opener: string): void {
     const parent = this.rooms.get(child.parent!);

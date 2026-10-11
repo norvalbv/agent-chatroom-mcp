@@ -85,13 +85,24 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
     toolScope = scope;
     for (const t of decisionTools) (scope === "restricted" ? t.disable : t.enable).call(t);
   };
+  // A new connection that is an old seat (the hub restarted, or the MCP session dropped and the client reconnected):
+  // its launcher's seat key puts it back in its seat, so the call it was making is served instead of refused.
+  const reseat = (room: string, override?: string) => {
+    let back: ReturnType<Hub["reseat"]>;
+    try { back = hub.reseat(room, sessionKey, override); } catch { return; }
+    if (!back) return;
+    if (!me.has(room)) me.set(room, new Set());
+    me.get(room)!.add(back.id);
+  };
+  const REJOIN = "If the hub restarted or your connection dropped, call join_room again with your name and your old participant_id to take your seat back.";
   const pid = (room: string, override?: string) => {
-    const ids = me.get(room);
+    let ids = me.get(room);
+    if (override ? !ids?.has(override) : !ids?.size) { reseat(room, override); ids = me.get(room); }
     if (override) {
-      if (!ids?.has(override)) throw new HubError("That participant_id was not issued to this connection. Use the id join_room returned to you.", undefined, "auth");
+      if (!ids?.has(override)) throw new HubError(`That participant_id was not issued to this connection. Use the id join_room returned to you. ${REJOIN}`, undefined, "auth");
       return override;
     }
-    if (!ids || ids.size === 0) throw new HubError(`You have not joined "${room}" on this connection. Call join_room first.`, undefined, "auth");
+    if (!ids || ids.size === 0) throw new HubError(`You have not joined "${room}" on this connection. Call join_room first. ${REJOIN}`, undefined, "auth");
     if (ids.size > 1) {
       const r = hub.getRoom(room);
       const names = [...ids].map((id) => r.participants.get(id)?.name ?? id).join(", ");

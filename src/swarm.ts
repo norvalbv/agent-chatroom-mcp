@@ -10,7 +10,7 @@ import { createWriteStream, existsSync, mkdirSync, readFileSync, readdirSync, st
 import { carryHooks, hooksLine } from "./worktree-hooks.js";
 import { checkJoined, joinLines, roomNames, type LaunchedSeat } from "./join-check.js";
 import { dirname, resolve } from "node:path";
-import { collectRoomSnapshot, renderRunReport, writeRunResult, rollupUsage, hubUsageRollup, parseClaudeCliOutput, seatScorecard, classifyOutcome, proposedDecisionDir, type RunResult, type RoomSnapshot, type SeatUsageRollup } from "./result.js";
+import { collectRoomSnapshot, renderRunReport, writeRunResult, rollupUsage, hubUsageRollup, parseClaudeCliOutput, transcriptPath, seatScorecard, classifyOutcome, proposedDecisionDir, type RunResult, type RoomSnapshot, type SeatUsageRollup } from "./result.js";
 import { settledAxes } from "./settled.js";
 import { registerRespawn, respawnProbe } from "./respawn.js";
 import { fileURLToPath } from "node:url";
@@ -248,6 +248,7 @@ const seatChildren = new Map<string, ChildProcess>();
 const killedAtTimeout = new Set<string>();
 /** Cost per process name (`name-rN` for a respawn): withRespawn hands back only the last attempt under the base name. */
 const seatCosts = new Map<string, number>();
+const seatTranscripts = new Map<string, string>();
 const priced = (name: string, o: SeatOutcome): SeatOutcome => { if (o.usage) seatCosts.set(name, o.usage.cost); return o; };
 
 /**
@@ -268,7 +269,10 @@ function runClaude(name: string, text: string, tools: string[], cwd: string, mod
   const sandbox = SANDBOX ? claudeSandbox({ cwd, write: tools.includes("Edit"), hubPort: PORT }) : undefined;
   const args = claudeArgs({ mcpJson: seatMcp, tools, model, full: CLAUDE_FULL, settings: carrySettings(NO_CARRY, heartbeatHookSettings()), sandbox });
   return runProc(name, "claude", args, cwd, outFile, false, beat, false, text).then((raw) => {
-    const { text: final, usage } = parseClaudeCliOutput(raw);
+    const { text: final, usage, sessionId } = parseClaudeCliOutput(raw);
+    // where the seat's transcript is, for result.json (gap G17: it is under the launcher's CLAUDE_CONFIG_DIR, not ~/.claude)
+    const transcript = transcriptPath(sessionId, cwd);
+    if (transcript) seatTranscripts.set(name, transcript);
     writeFileSync(outFile, final);
     // per-seat usage next to the .out, the same sidecar shape an OpenRouter seat writes (scripts/pool-run.ts reads it per seat)
     if (usage) writeFileSync(resolve(OUT, `${name}.usage.json`), JSON.stringify(usage));
@@ -879,7 +883,7 @@ const artifact: RunResult = {
   reportPath: resolve(OUT, "report.md"), artifactPath, collectionErrors, usage: rollupUsage([...results, ...replacedRuns, ...digestRuns]),
   outcome: classifyOutcome(snapshots.find(r => r.name === leadsRoom)?.payload, { timedOut, atTimeout: leadAtTimeout }),
   hubUsage: hubUsageRollup(snapshots),
-  scorecard: seatScorecard(snapshots, Object.fromEntries([...exitCodes].map(([name, exitCode]) => [name, { exitCode, cost: seatCosts.get(name), killedAtTimeout: killedAtTimeout.has(name), commits: branchCommits(name) }]))),
+  scorecard: seatScorecard(snapshots, Object.fromEntries([...exitCodes].map(([name, exitCode]) => [name, { exitCode, cost: seatCosts.get(name), killedAtTimeout: killedAtTimeout.has(name), commits: branchCommits(name), ...(seatTranscripts.has(name) ? { transcript: seatTranscripts.get(name) } : {}) }]))),
   ...(metrics ? { metrics } : {}),
 };
 if (digestPasses.length) {

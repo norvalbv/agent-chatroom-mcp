@@ -335,6 +335,7 @@ export const offlineScripts = [
   'hub-health-regression.ts',
   'owner-verdict-regression.ts',
   'memory-high-regression.ts',
+  'seat-transcript-regression.ts',
 ];
 
 export function offlineCommands() {

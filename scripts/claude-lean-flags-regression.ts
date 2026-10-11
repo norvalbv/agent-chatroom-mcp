@@ -87,7 +87,7 @@ async function harness(entry: string, env: Record<string, string>, argv: string[
     // launcher-side helpers with no part in a seat's argv or environment: the hooks copy and the join check (src/worktree-hooks.ts, src/join-check.ts)
     './worktree-hooks.js': { carryHooks: () => ({ hooks: 'shared' }), hooksLine: () => '' },
     './join-check.js': { checkJoined: async () => ({ missing: [], unknown: [], none: false }), joinLines: () => [], roomNames: () => async () => [] },
-    './result.js': { collectRoomSnapshot: async (_base: string, name: string) => ({ name, payload: { state: 'concluded', conclusion: { text: 'fixture' } }, transcript: { text: '' } }), readRunResult: () => ({}), writeRunResult: () => undefined, renderRunReport: () => '', rollupUsage: () => undefined, hubUsageRollup: () => undefined, parseClaudeCliOutput: (raw: string) => ({ text: raw, usage: null }), seatScorecard: () => [], classifyOutcome: () => ({ kind: 'concluded', timedOut: false, detail: '' }), proposedDecisionDir: () => null },
+    './result.js': { collectRoomSnapshot: async (_base: string, name: string) => ({ name, payload: { state: 'concluded', conclusion: { text: 'fixture' } }, transcript: { text: '' } }), readRunResult: () => ({}), writeRunResult: () => undefined, renderRunReport: () => '', rollupUsage: () => undefined, hubUsageRollup: () => undefined, transcriptPath: () => undefined, parseClaudeCliOutput: (raw: string) => ({ text: raw, usage: null }), seatScorecard: () => [], classifyOutcome: () => ({ kind: 'concluded', timedOut: false, detail: '' }), proposedDecisionDir: () => null },
   };
   async function module(name: string): Promise<any> {
     if (cache.has(name)) return cache.get(name);

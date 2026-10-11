@@ -166,5 +166,27 @@ assert.match(w.hint!, /2 more/, "and counts the rest");
 const logged = (hub.replyMetricEvents.get(room) ?? []).filter((e) => (e.type as string) === "open_work").length;
 assert.ok(logged >= 5 && logged <= 8, `open_work is logged on change, not on every wait: ${logged}`);
 
+// 9. A departed owner whose area is finished is not offered as a takeover: it wrote result/<area> and no handoff/<area>.
+// In swarm-003601-tky5 the usage limit stopped three seats whose work was all merged, and every idle wait then named
+// up to twelve "left holding claim/...: you may take it over now" items that were not work (friction/orphaned-finished-claims).
+const d = await seat("D");
+await ok(d.call("join_room", { room, name: "D" }), "D joins");
+await ok(d.call("board_set", { room, key: "claim/linker", text: '{"owner":"D","area":"linker"}' }), "D claims");
+await ok(d.call("board_set", { room, key: "result/linker", text: "Linker built on d/linker at 1234abc; test linker-regression fails at parent, passes at head." }), "D posts its result");
+await ok(d.call("board_set", { room, key: "claim/archiver", text: '{"owner":"D","area":"archiver"}' }), "D claims a second area");
+await ok(d.call("board_set", { room, key: "result/packing", text: "RESULT for claim/archiver: packing built at 5678def." }), "D's result for it has another name but names the claim");
+const e2 = await seat("E");
+await ok(e2.call("join_room", { room, name: "E" }), "E joins");
+await ok(e2.call("board_set", { room, key: "claim/loader", text: '{"owner":"E","area":"loader"}' }), "E claims");
+await ok(e2.call("board_set", { room, key: "result/loader", text: "Loader half done on e/loader." }), "E posts a result");
+await ok(e2.call("board_set", { room, key: "handoff/loader", text: "Undone: the Windows path case; branch e/loader." }), "E writes a handoff");
+for (const s of [d, e2]) for (let i = 0; i < 2; i++) await s.call("leave_room", { room, reason: "stopped by the account's usage limit; my result is on the board" });
+w = await other.idle(room);
+const offered = (w.open_work ?? []).filter((x) => x.kind === "claim_orphaned").map((x) => x.key);
+assert.ok(!offered.includes("claim/linker"), `a finished area (result, no handoff) is not offered as a takeover: ${JSON.stringify(offered)}`);
+assert.ok(!offered.includes("claim/archiver"), `a result that names the claim counts too: ${JSON.stringify(offered)}`);
+assert.ok(offered.includes("claim/loader"), `an area with a handoff is still offered, so a successor reads it: ${JSON.stringify(offered)}`);
+assert.ok(offered.includes("claim/parser"), "and a claim with nothing behind it still is");
+
 console.log("idle-open-work-regression: OK");
 process.exit(0);

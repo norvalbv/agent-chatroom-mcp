@@ -157,7 +157,17 @@ export function openWork(hub: Hub, room: Room, p: Participant, idle = true): Ope
       if (idle && !hasWork(p.name) && !reviewed(k, e)) own.push({ kind: "own_claim_empty", key: k });
       continue;
     }
-    if (hub.claimTakeover(room, e, p)) { orphaned.push({ kind: "claim_orphaned", key: k, owner: shownName(e.by) }); continue; }
+    if (hub.claimTakeover(room, e, p)) {
+      // a departed owner who posted its result (result/<area>, or a result/* naming the claim) and left no handoff/<area>
+      // finished it: nothing there to take over
+      // (swarm-003601-tky5: the usage limit stopped three seats whose work was merged, and every idle wait then named up
+      // to twelve such claims, friction/orphaned-finished-claims). A handoff says something is left, so it is still named.
+      const slug = area(k);
+      const finished = entries.some(([rk, re]) => re.by === e.by && rk.startsWith("result/") &&
+        (rk === `result/${slug}` || rk.startsWith(`result/${slug}-`) || re.text.includes(k))) && !room.board.get(`handoff/${slug}`)?.text.trim();
+      if (!finished) orphaned.push({ kind: "claim_orphaned", key: k, owner: shownName(e.by) });
+      continue;
+    }
     if (!hasWork(e.by)) continue;
     const mine = e.reviewerId === p.id;
     if (mine && !reviewed(k, e)) {

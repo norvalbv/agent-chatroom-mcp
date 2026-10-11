@@ -325,6 +325,8 @@ export interface Challenge {
   version?: number;
   /** seconds from the hub first sending the challenger this version to the challenge (absent: never sent), and since the version was written (Hub.seenTiming, gap G13) */
   seen_s?: number;
+  /** the version was made before this hub process started, so whether it was sent is not known */
+  seen_unknown?: true;
   since_text_s?: number;
   /** open: unanswered. answered: the cited text was amended away. conceded: the challenger re-voted agree. overruled: the room concluded over it. */
   status?: "open" | "answered" | "conceded" | "overruled";
@@ -369,7 +371,7 @@ export interface Proposal {
   text: string;
   createdAt: string;
   /** seen_s / since_text_s: Hub.seenTiming (telemetry gap G13) */
-  votes: Record<string, { vote: Vote; reason?: string; quote?: string; confidence?: number; name: string; ts: string; version?: number; seen_s?: number; since_text_s?: number }>;
+  votes: Record<string, { vote: Vote; reason?: string; quote?: string; confidence?: number; name: string; ts: string; version?: number; seen_s?: number; seen_unknown?: true; since_text_s?: number }>;
   challenges: Challenge[];
   status: "open" | "accepted" | "rejected" | "superseded";
   /** bumped by every amend; the text in `text` is always the current version */

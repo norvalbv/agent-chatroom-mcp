@@ -50,3 +50,25 @@ test("votes and challenges say how long after the seat was sent the version they
   assert.ok(evs.some((e) => e.type === "challenge" && e.challenge.seen_s !== undefined), "the challenge event carries it");
   assert.ok(evs.some((e) => e.type === "vote" && e.entry.since_text_s !== undefined), "the vote event carries it");
 });
+
+test("after a hub restart a version made before it is 'unknown', not 'never sent'", () => {
+  // review/83871804 (claude-opus-5-5-2): delivery stamps are in memory, so a restart must not turn readers into non-readers
+  Hub.LAST_CALL_MS = 0;
+  const dir = mkdtempSync(join(tmpdir(), "seen-restart-"));
+  const hub = new Hub({ dataDir: dir });
+  const a = hub.join("sr-room", "A", "test", { nudgeAfterMs: 0, quorum: "majority" }, undefined, "s1").participant;
+  const b = hub.join("sr-room", "B", "test", {}, undefined, "s2").participant;
+  hub.join("sr-room", "C", "test", {}, undefined, "s3");
+  const pr = hub.propose("sr-room", a.id, "Use --no-cache: the three existing opt-outs are all spelled --no-.");
+  const room = hub.getRoom("sr-room");
+  hub.settleRead(room, b, b.lastSeenSeq, room.messages.filter((m) => m.seq > b.lastSeenSeq)); // B was sent v1 before the restart
+  const restored = new Hub({ dataDir: dir });
+  restored.join("sr-room", "B", "test", {}, b.id, "s2");
+  restored.join("sr-room", "A", "test", {}, a.id, "s1");
+  const rpr = restored.getRoom("sr-room").proposals.get(pr.id)!;
+  restored.vote("sr-room", b.id, pr.id, "agree", "read it before the restart", undefined, "the three existing opt-outs");
+  assert.equal(rpr.votes[b.id].seen_s, undefined);
+  assert.equal(rpr.votes[b.id].seen_unknown, true, "not known, rather than never sent");
+  const c = restored.getRoom("sr-room");
+  if (c.state === "concluded") assert.equal(c.conclusion!.closing!.agreed_unsent, undefined, "and not listed as agreeing unsent");
+});

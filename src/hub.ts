@@ -2948,13 +2948,18 @@ export class Hub {
    * current version to now (absent: it never sent it, the seat read it elsewhere or not at all), and since_text_s,
    * seconds since that version was written. The proposer is counted as having seen its own text when it wrote it.
    */
-  private seenTiming(room: Room, p: Participant, pr: Proposal): { seen_s?: number; since_text_s: number } {
+  private seenTiming(room: Room, p: Participant, pr: Proposal): { seen_s?: number; seen_unknown?: true; since_text_s: number } {
     const t = Date.now();
     const made = [...room.messages].reverse().find((m) => m.proposalId === pr.id && (m.kind === "proposal" || m.kind === "amend"));
     const seenAt = made && (made.from.id === p.id ? made.ts : p.versionSeenAt?.[made.id]);
     const s = (at: string) => Math.max(0, Math.round((t - Date.parse(at)) / 100) / 10);
-    return { ...(seenAt ? { seen_s: s(seenAt) } : {}), since_text_s: s(pr.updatedAt ?? pr.createdAt) };
+    // delivery stamps are in memory: a version made before this hub process started may have been sent by the last one
+    // (review/83871804), so its absence says nothing
+    const unknown = !seenAt && !!made && made.ts < this.bootedAt;
+    return { ...(seenAt ? { seen_s: s(seenAt) } : {}), ...(unknown ? { seen_unknown: true as const } : {}), since_text_s: s(pr.updatedAt ?? pr.createdAt) };
   }
+  /** when this hub process started: delivery stamps older than this were lost with the last process */
+  private readonly bootedAt = new Date().toISOString();
 
   /** Electorate members whose vote (if any) was not cast on the proposal's current version. */
   unvotedOnCurrent(room: Room, pr: Proposal): Participant[] {
@@ -3056,7 +3061,7 @@ export class Hub {
       ...(takes.length ? { takes_held: takes } : {}),
       ...(children.length ? { children_open: children } : {}),
       // agrees on the final version cast by seats the hub never sent that version (gap G13: read elsewhere, or not at all)
-      ...((() => { const v = Object.values(pr.votes).filter((x) => x.vote === "agree" && (x.version ?? 1) === pr.version && x.since_text_s !== undefined && x.seen_s === undefined).map((x) => x.name); return v.length ? { agreed_unsent: v } : {}; })()),
+      ...((() => { const v = Object.values(pr.votes).filter((x) => x.vote === "agree" && (x.version ?? 1) === pr.version && x.since_text_s !== undefined && x.seen_s === undefined && !x.seen_unknown).map((x) => x.name); return v.length ? { agreed_unsent: v } : {}; })()),
       not_voted_on_final: unvoted.map((p) => ({ name: this.shown(room, p), ...(p.role && p.role !== "worker" ? { role: p.role } : {}), ...(pr.votes[p.id] ? { voted_version: pr.votes[p.id].version ?? 1 } : {}) })),
     };
   }

@@ -1886,7 +1886,7 @@ export class Hub {
     board_keys?: string[]; board_delta?: { keys: string[]; tombstones: string[] }; board_reset?: boolean;
   } { return board.boardManifest(this, roomName, pid, follow, forceFull); }
   private applyBoard(room: Room, key: string, entry: BoardEntry | null) { return board.applyBoard(room, key, entry); }
-  setBoard(roomName: string, pid: string, key: string, text: string, opts: BoardExpiryOptions & { ifAbsent?: boolean; ifByMe?: boolean; overwrite?: boolean } = {}): BoardEntry | null {
+  setBoard(roomName: string, pid: string, key: string, text: string, opts: BoardExpiryOptions & { ifAbsent?: boolean; ifByMe?: boolean; overwrite?: boolean; append?: boolean } = {}): BoardEntry | null {
     const entry = board.setBoard(this, roomName, pid, key, text, opts);
     // a take released during a last call may be the last thing the conclusion was waiting for
     const room = this.rooms.get(roomName);

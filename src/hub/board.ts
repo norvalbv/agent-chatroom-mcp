@@ -142,13 +142,56 @@ export function noteBoardRead(p: Participant, key: string, entry: { updatedAt: s
   seen.set(key, entry.updatedAt);
 }
 
-export function setBoard(hub: Hub, roomName: string, pid: string, key: string, text: string, opts: BoardExpiryOptions & { ifAbsent?: boolean; ifByMe?: boolean; overwrite?: boolean } = {}): BoardEntry | null {
+/** Prefixes whose writes carry their own rules (holder, author-only, JSON head, ack hash): an append would bypass them. */
+const NO_APPEND = /^(claim|take|verify|review|attack|draft|hold|inbox)\//;
+
+/**
+ * board_set(append=true): one block "[HH:MMZ name] text" added to a shared log (ledger, queue, ranked list) by any seat
+ * (swarm-180216-182a, decision/board-append). 22 keys in 12 rooms were co-written by 2-5 seats as read-merge-overwrite:
+ * 0btz's ledger drew 15 ownership and 5 size refusals and was split by hand into ledger-2..7. An append discards nothing,
+ * so it is never refused for ownership or a stale read; the hub stamps its own clock and the author; past the size cap it
+ * lands in <key>/2, /3... and the head records continuedAt, so later appends to <key> go straight to the newest one.
+ */
+function appendBoard(hub: Hub, room: Room, p: Participant, key: string, text: string): BoardEntry {
+  if (NO_APPEND.test(key)) throw new HubError(`append is for shared logs; "${key.split("/")[0]}/*" entries have their own write rules. Write it without append.`, undefined, "key-format");
+  if (!text.trim()) throw new HubError("append adds a line and an empty one adds nothing; to delete an entry, write empty text without append.", undefined, "state");
+  const line = `[${now().slice(11, 16)}Z ${p.name}] ${text.trim()}`;
+  // leaves room for a continuation's first line, so an entry never passes the 8000-char cap
+  if (line.length > 7800) throw new HubError(`One append is capped at 7800 characters with its stamp (this one is ${line.length}).`, undefined, "size");
+  const head = room.board.get(key);
+  let landed = head?.continuedAt && room.board.get(head.continuedAt) ? head.continuedAt : key;
+  for (let n = landed === key ? 2 : Number(landed.slice(key.length + 1)) + 1; ; n++) {
+    const cur = room.board.get(landed);
+    if (!cur || cur.text.length + 1 + line.length <= 8000) break;
+    landed = `${key}/${n}`;
+    if (!BOARD_KEY.test(landed)) throw new HubError(`"${key}" is full and its continuation key "${landed}" would pass the 80-character key limit: start a shorter key.`, undefined, "size");
+  }
+  const cur = room.board.get(landed);
+  const entry: BoardEntry = cur
+    ? { ...cur, text: `${cur.text}\n${line}`, updatedAt: now() }
+    : { text: landed === key ? line : `continued from "${key}" (it reached the 8000-char cap; append with key "${key}")\n${line}`, by: p.name, updatedAt: now() };
+  applyBoard(room, landed, entry);
+  noteBoardRead(p, landed, entry);
+  hub.persist({ type: "board", room: room.name, key: landed, entry });
+  if (landed !== key && head && head.continuedAt !== landed) {
+    // the head's text and updatedAt are unchanged, so a seat's earlier read of it is still current for the stale-read guard
+    const pointed = { ...head, continuedAt: landed };
+    applyBoard(room, key, pointed);
+    hub.persist({ type: "board", room: room.name, key, entry: pointed });
+  }
+  hub.persist({ type: "board_append", room: room.name, key, landed_key: landed, by: p.name, chars: line.length, ts: entry.updatedAt });
+  hub.post(room, "board", p, `appended to "${landed}"${landed !== key ? ` (continuation of "${key}")` : ""}: ${text.trim().slice(0, 120)}`);
+  return entry;
+}
+
+export function setBoard(hub: Hub, roomName: string, pid: string, key: string, text: string, opts: BoardExpiryOptions & { ifAbsent?: boolean; ifByMe?: boolean; overwrite?: boolean; append?: boolean } = {}): BoardEntry | null {
   const room = hub.getRoom(roomName);
   const p = hub.requireParticipant(room, pid);
   if (room.state === "concluded" || room.state === "closed") {
     throw new HubError(`Room "${roomName}" is ${room.state}: board writes are refused, there is nothing left to coordinate. Earlier entries, including verify/* and handoff/*, are still readable with board_get.`, undefined, "state");
   }
   if (!BOARD_KEY.test(key)) throw new HubError("Board keys are short names like 'evidence', 'open questions', 'claim/auth', 'verify/auth'.", undefined, "key-format");
+  if (opts.append) return appendBoard(hub, room, p, key, text);
   if (text.length > 8000) throw new HubError("Board entries are capped at 8000 characters.", undefined, "size");
   const expiresAt = boardExpiry(key, opts);
   const previous = room.board.get(key);
@@ -210,7 +253,7 @@ export function setBoard(hub: Hub, roomName: string, pid: string, key: string, t
   if (previous && previous.by !== p.name && !take && !opts.overwrite && (text.trim() || clearsPeer) && !(key.startsWith("claim/") && (claimReleased(previous) || takeover))) {
     noteBoardRead(p, key, previous);
     throw new HubError(
-      `"${key}" was written by ${previous.by} at ${previous.updatedAt}; replacing it would discard their text. Merge with the current content below and resend with overwrite=true, or use your own key.`,
+      `"${key}" was written by ${previous.by} at ${previous.updatedAt}; replacing it would discard their text. Merge with the current content below and resend with overwrite=true, or use your own key. To add a line to a shared log or queue, resend with append=true instead: nothing is replaced.`,
       { current: previous },
       "ownership",
     );

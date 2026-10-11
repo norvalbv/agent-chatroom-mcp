@@ -685,12 +685,13 @@ export function createSessionServer(hub: Hub, spawner?: Spawner): SessionServer 
         if_absent: z.boolean().optional().describe("Create only; fail if the key exists (atomic claim)."),
         if_by_me: z.boolean().optional().describe("Update only if you wrote the existing entry."),
         overwrite: z.boolean().optional().describe("Replace another author's entry (refused otherwise, with their current text returned so you can merge)."),
+        append: z.boolean().optional().describe("Add text as one line, stamped by the hub with the time and your name, to a log or queue several seats share (e.g. a ledger of runs): anyone may append, nothing is replaced, and past 8000 chars it continues in <key>/2."),
         participant_id: asArg,
       },
     },
-    guard("board_set", async ({ room, key, text, if_absent, if_by_me, overwrite, ttl_seconds, expires_at, participant_id }) => {
+    guard("board_set", async ({ room, key, text, if_absent, if_by_me, overwrite, append, ttl_seconds, expires_at, participant_id }) => {
       const id = pid(room, participant_id);
-      const e = hub.setBoard(room, id, key, text, { ifAbsent: if_absent, ifByMe: if_by_me, overwrite, ttlSeconds: ttl_seconds, expiresAt: expires_at });
+      const e = hub.setBoard(room, id, key, text, { ifAbsent: if_absent, ifByMe: if_by_me, overwrite, append, ttlSeconds: ttl_seconds, expiresAt: expires_at });
       if (!e) return { key, deleted: true };
       const overlaps = hub.claimOverlaps(room, id, key);
       const head = key.startsWith("verify/") ? parseVerifyHead(e.text) : undefined;

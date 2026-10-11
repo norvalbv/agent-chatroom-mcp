@@ -27,6 +27,8 @@ export type Event =
   | { type: "archive"; room: string; archived: boolean; by: string; ts: string }
   | { type: "board_manifest"; room: string; bytes: number; kind: "full" | "delta" | "empty" }
   | { type: "board"; room: string; key: string; entry: BoardEntry | null }
+  /** telemetry only (replay rebuilds the entry from the "board" record): one board_set(append=true) line and where it landed */
+  | { type: "board_append"; room: string; key: string; landed_key: string; by: string; chars: number; ts: string }
   | { type: "dev_receipt"; room: string; key: string; updatedAt: string; receipt: DevReceipt }
   /** A dev run this hub started (src/hub/dev-runs.ts), written at each state change; replay keeps the last. */
   | { type: "dev_run"; room: string; run: DevRun }

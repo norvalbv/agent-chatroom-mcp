@@ -284,6 +284,8 @@ export interface BoardEntry {
   offeredBy?: string;
   /** attack/* only: normalised length of the attacked entry when the attack was written, to tell a reply from a re-save. */
   attackedChars?: number;
+  /** an entry written with append=true that reached the size cap: the continuation (<key>/2, /3...) later appends land in. */
+  continuedAt?: string;
 }
 
 export interface Challenge {

@@ -4,7 +4,7 @@
  * Run: npx tsx scripts/job-wake-probe.ts   (about 80 s: a process is a job only after JOB_MIN_S)
  * Exit 0 when nothing was started while the job ran and the stub received the brief after it stopped, 1 otherwise.
  */
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { chmodSync, existsSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { delimiter, join } from "node:path";
@@ -23,8 +23,11 @@ process.env.PATH = `${dir}${delimiter}${process.env.PATH}`;
 const env = { ...process.env, CHATROOM_SEAT_KEY: KEY };
 const agent = spawn(process.execPath, ["-e", "setTimeout(()=>{}, 600000) // agent"], { env, stdio: "ignore" });
 await sleep(1500);
-const job = spawn(process.execPath, ["-e", "setTimeout(()=>{}, 600000) // bench-round"], { env, stdio: "ignore", detached: true });
-job.unref();
+// started the way a seat starts one: from a shell that returns at once, so launchd adopts it (ppid 1)
+const started = spawnSync("sh", ["-c", `nohup "${process.execPath}" -e "setTimeout(()=>{}, 600000) // bench-round" > /dev/null 2>&1 & echo $!`], { env, encoding: "utf8" });
+const job = { pid: Number(started.stdout.trim()) };
+// and its last foreground command, which ends with the seat: it has no wake/ entry and must start nobody
+const fg = spawn(process.execPath, ["-e", "setTimeout(()=>{}, 600000) // foreground"], { env, stdio: "ignore" });
 let code = 1;
 try {
   const hub = new Hub({ dataDir: join(dir, "data") });
@@ -41,6 +44,7 @@ try {
   console.log("job counted for the live seat:", hub.memory.jobs(seatHash(KEY)).some((j) => j.pid === job.pid));
   hub.setBoard("jobs", a.id, `wake/${job.pid}`, BRIEF);
   agent.kill("SIGKILL");
+  fg.kill("SIGKILL");
   hub.leave("jobs", a.id, "round runs an hour; brief in wake/");
   await sleep(1500);
   await hub.memory.tick();
@@ -56,7 +60,7 @@ try {
   console.log("successors started after it stopped:", spawner.agents.length, "| stub claude received the brief:", prompt.includes(BRIEF), "\n ", line ?? "(room not told)");
   code = early === 0 && spawner.agents.length === 1 && prompt.includes(BRIEF) && line ? 0 : 1;
 } finally {
-  for (const p of [agent, job]) try { process.kill(p.pid!, "SIGKILL"); } catch {}
+  for (const p of [agent, fg, job]) try { process.kill(p.pid!, "SIGKILL"); } catch {}
   await sleep(500);
   rmSync(dir, { recursive: true, force: true });
 }

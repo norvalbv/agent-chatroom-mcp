@@ -42,7 +42,7 @@ try {
   for(let i=0;i<6;i++){
     const args=['dist/openrouter.js','-p',prompts[i],'--model',manifest.model,'--mcp-url',`http://127.0.0.1:${port}/mcp`,'--cwd',cwd,'--no-shell','--max-minutes','12'];
     const outFd=openSync(resolve(root,`${names[i]}.log`),'w');
-    const child=spawn(process.execPath,args,{cwd,env:seatChildEnv(env),stdio:['ignore',outFd,outFd]}); seats.push(child); seatFds.push(outFd);
+    const child=spawn(process.execPath,args,{cwd,env:seatChildEnv(env,undefined,true),stdio:['ignore',outFd,outFd]}); seats.push(child); seatFds.push(outFd);
     const record:any={name:names[i],pid:child.pid,args,started_at:new Date().toISOString()};manifest.children.push(record);save();
     child.on('exit',(code,signal)=>{record.exit_code=code;record.exit_signal=signal;record.exit_at=new Date().toISOString();save();});
   }

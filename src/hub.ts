@@ -3662,9 +3662,11 @@ export class Hub {
     const seats = this.seats.participants(seatKey).filter(({ p }) => p.active);
     for (const { room, p } of seats) this.persist({ type: "seat_exit", room: room.name, seat: p.name, ...exitCause(detail), ...(stoppedBy ? { stopped_by: stoppedBy } : {}), detail: detail.slice(0, 160), ts: now() });
     // what it left running has no owner now: named once, so a seat can take it over before it ends (jobEnded says when)
-    for (const { room, p } of seats) {
-      const job = this.jobsOf(p)[0];
-      if (job && room.state !== "concluded" && room.state !== "closed") this.post(room, "chat", undefined, `${this.shown(room, p)}'s process exited with a job still counted as running: pid ${job.pid} (${job.command.slice(0, 120)}), ${Math.round(job.elapsed_s / 60)} min in. It has no owner now: check it is alive (kill -0 ${job.pid}) and write its take/ entry to own its result. The hub will say here when it stops.`);
+    // (a seat that called leave_room first is no longer active here, and its detached job is just as ownerless)
+    const hash = liveness.seatHash(seatKey), job = this.memory.outliving(hash)[0];
+    for (const room of job ? this.rooms.values() : []) {
+      const p = [...room.participants.values()].find((x) => x.seatKeyHash === hash);
+      if (p && room.state !== "concluded" && room.state !== "closed") this.post(room, "chat", undefined, `${this.shown(room, p)}'s process exited with a job still counted as running: pid ${job!.pid} (${job!.command.slice(0, 120)}), ${Math.round(job!.elapsed_s / 60)} min in. It has no owner now: check it is alive (kill -0 ${job!.pid}) and write its take/ entry to own its result. The hub will say here when it stops.`);
     }
     return seats.length;
   }

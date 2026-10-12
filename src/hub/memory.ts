@@ -122,7 +122,9 @@ export function seatUsage(table: Proc[], footprintKb?: Map<number, number>): Map
 }
 
 /** A process a seat started that is doing or awaiting real work, as the idle rule needs it (src/hub/idle.ts). */
-export interface Job { pid: number; command: string; elapsed_s: number }
+export interface Job { pid: number; command: string; elapsed_s: number;
+  /** launchd has adopted it (ppid 1): it does not end with the seat that started it, as a foreground command does */
+  detached?: true }
 /** Not jobs: a sleep, the shells around a command, and the tools a seat watches a job with. A seat in a sleep loop is
  * idle (swarm-094251-5y46); one whose scorer starts at 16:15 is waiting (swarm-100951-0btz-build, pid 8148). */
 const NOT_A_JOB = /^(?:sleep|sh|bash|zsh|dash|fish|tail|cat|tee|watch|timeout|caffeinate|env|nohup|time)$/;
@@ -155,7 +157,7 @@ export function jobsOf(own: readonly Proc[]): Job[] {
   const pids = new Set(jobs.map((p) => p.pid));
   return jobs
     .filter((p) => !pids.has(p.ppid))
-    .map((p) => ({ pid: p.pid, command: shownCommand(p.command), elapsed_s: p.elapsedS }))
+    .map((p) => ({ pid: p.pid, command: shownCommand(p.command), elapsed_s: p.elapsedS, ...(p.ppid === 1 ? { detached: true as const } : {}) }))
     .sort((a, b) => b.elapsed_s - a.elapsed_s);
 }
 
@@ -208,6 +210,8 @@ export class MemoryWatch {
   jobs(seat: string | undefined): Job[] { return (seat && this.jobsBySeat.get(seat)) || []; }
   /** What tagged processes of no live seat hold (a recorder a finished room left running, a respawned seat's old script). */
   unattributed(): Unattributed { return this.others; }
+  /** The detached jobs a seat has or had running: what can outlive it, and is followed once it has left. */
+  outliving(seat: string | undefined): Job[] { return ((seat && this.watching.get(seat)) || []).filter((j) => j.detached); }
 
   private reportEnded(seat: string, ended: Job[]): void {
     if (!ended.length) return;
@@ -297,14 +301,24 @@ export class MemoryWatch {
       // a seat with nothing left in the table (its agent process included) has no jobs; the ones it had have ended
       for (const [seat, jobs] of [...this.watching]) {
         if (seen.has(seat)) continue;
-        this.reportEnded(seat, jobs.filter((was) => !table.some((p) => p.pid === was.pid)));
+        // still holding a place, with nothing left in the table: everything it had has ended, as before
+        if (this.o.watched(seat)) {
+          this.reportEnded(seat, jobs.filter((was) => !table.some((p) => p.pid === was.pid)));
+          this.watching.delete(seat);
+          this.jobsBySeat.delete(seat);
+          continue;
+        }
+        // a seat that has left: what it ran in the foreground ended with it and is nobody's news (dev room
+        // swarm-214212-*: a 90-second command the leaving seat had just run was announced as its job). Only what launchd
+        // had adopted is followed.
         // a job that outlives its seat (a detached benchmark whose seat hit the usage limit) is followed until it ends, so
         // the room it was started for hears of it; it is no longer one of a live seat's jobs, and is never signalled
         // nothing but the pid ties a row to a job whose seat is gone, and a round is long enough for the number to come
         // round again (review/6ecee967): a row that has run for less time than the job had is another process
         const same = (was: Job) => table.find((x) => x.pid === was.pid && x.elapsedS >= was.elapsed_s);
-        this.reportEnded(seat, jobs.filter((was) => table.some((x) => x.pid === was.pid) && !same(was)));
-        const left = jobs.flatMap((was) => { const p = same(was); return p ? [{ ...was, elapsed_s: p.elapsedS }] : []; });
+        const detached = jobs.filter((was) => was.detached);
+        this.reportEnded(seat, detached.filter((was) => !same(was)));
+        const left = detached.flatMap((was) => { const p = same(was); return p ? [{ ...was, elapsed_s: p.elapsedS }] : []; });
         if (left.length) this.watching.set(seat, left); else this.watching.delete(seat);
         this.jobsBySeat.delete(seat);
       }

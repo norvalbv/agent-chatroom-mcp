@@ -113,10 +113,13 @@ test("the hub tells the room a departed seat's job has ended, and names it when 
     const a = hub.join("jobs", "ann", "claude", { requireChallenge: false, nudgeAfterMs: 0, expectedParticipants: 0 }, undefined, "sess-a").participant;
     const b = hub.join("jobs", "bob", "claude", {}, undefined, "sess-b").participant;
     const job = { pid: 103, command: "node reviewbench-bench.mts --run h-a1", elapsed_s: 2400 };
-    (hub.memory as unknown as { jobsBySeat: Map<string, Job[]> }).jobsBySeat.set(seatHash("seat-key-AAAA"), [job]);
+    (hub.memory as unknown as { watching: Map<string, Job[]> }).watching.set(seatHash("seat-key-AAAA"), [{ ...job, detached: true }, { pid: 104, command: "python3 -c sleep", elapsed_s: 90 }]);
     hub.recordSeatExit("seat-key-AAAA", "exit 1: usage limit");
     assert.match(hub.getRoom("jobs").messages.at(-1)!.content, /^ann's process exited with a job still counted as running: pid 103 \(node reviewbench-bench\.mts --run h-a1\), 40 min in\. It has no owner now/);
     hub.leave("jobs", a.id, "process exited");
+    // a seat that left the room before its process exited is named too: its detached job is just as ownerless
+    hub.recordSeatExit("seat-key-AAAA", "exit 0");
+    assert.equal(hub.getRoom("jobs").messages.filter((m) => /exited with a job still counted as running: pid 103/.test(m.content)).length, 2);
     const waiting = hub.wait("jobs", b.id, hub.getRoom("jobs").messages.at(-1)!.seq, 5000);
     const t = Date.now();
     hub.jobEnded(seatHash("seat-key-AAAA"), { ...job, elapsed_s: 5400 });
@@ -147,4 +150,20 @@ test("a departed seat's job whose pid number is reused by another process is rep
   assert.deepEqual(ended, [2460], "the pid now belongs to something younger than the job was: the job has ended");
   await watch.tick();
   assert.equal(ended.length, 1, "once, and the other process is not followed");
+});
+
+test("what a departed seat ran in the foreground is not followed or announced (dev room swarm-214213-94xp)", async () => {
+  // the seat's last tool call (pid 104, a child of its shell) dies with it; its detached benchmark (pid 103) runs on
+  const BENCH = "  103     1 300000       40:00 node reviewbench-bench.mts --run h-a1", FG = "  104   100  20000       01:30 python3 -c sleep";
+  const ticks = [table([AGENT, BENCH, FG]), table([BENCH]), table([])];
+  const ended: number[] = [];
+  let i = 0, held = true;
+  const watch = new MemoryWatch({ watched: () => held, table: async () => ticks[i++], footprints: async () => new Map(), onJobEnd: (_s, job, others) => ended.push(job.pid, others) });
+  await watch.tick();
+  assert.deepEqual(watch.outliving(seatHash("seat-key-AAAA")).map((j) => j.pid), [103], "only the detached one can outlive the seat");
+  held = false;
+  await watch.tick();
+  assert.deepEqual(ended, [], "the foreground command ended with its seat: nobody is told");
+  await watch.tick();
+  assert.deepEqual(ended, [103, 0], "the detached job's end is reported, alone");
 });

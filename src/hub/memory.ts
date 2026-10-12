@@ -121,6 +121,7 @@ export function seatUsage(table: Proc[], footprintKb?: Map<number, number>): Map
   return out;
 }
 
+const pidAlive = (pid: number) => { try { process.kill(pid, 0); return true; } catch (e) { return (e as NodeJS.ErrnoException).code === "EPERM"; } };
 /** A process a seat started that is doing or awaiting real work, as the idle rule needs it (src/hub/idle.ts). */
 export interface Job { pid: number; command: string; elapsed_s: number;
   /** launchd has adopted it (ppid 1): it does not end with the seat that started it, as a foreground command does */
@@ -174,6 +175,8 @@ export interface MemoryWatchOptions {
    * gone on the same tick are one report: the longest-running, and how many others ended with it. */
   /** `pids`: every process of the seat that ended in this look, the reported `job` among them (wake/<pid> is keyed by any of them) */
   onJobEnd?: (seat: string, job: Job, others: number, pids: number[]) => void;
+  /** whether a process exists now (tests); default: signal 0 */
+  alive?: (pid: number) => boolean;
   /** test seams */
   table?: () => Promise<Proc[]>;
   footprints?: () => Promise<Map<number, number>>;
@@ -210,8 +213,13 @@ export class MemoryWatch {
   jobs(seat: string | undefined): Job[] { return (seat && this.jobsBySeat.get(seat)) || []; }
   /** What tagged processes of no live seat hold (a recorder a finished room left running, a respawned seat's old script). */
   unattributed(): Unattributed { return this.others; }
-  /** The detached jobs a seat has or had running: what can outlive it, and is followed once it has left. */
-  outliving(seat: string | undefined): Job[] { return ((seat && this.watching.get(seat)) || []).filter((j) => j.detached); }
+  /** The jobs of a seat that can outlive it or have: those launchd had adopted, then any other whose process is alive now.
+   * Asked as the seat exits: a job the seat started directly is its child until that moment and shows ppid 1 only in the
+   * next sample (review/f2dbce54-verifier), while a foreground command that ended with the seat is gone already. */
+  outliving(seat: string | undefined): Job[] {
+    const had = (seat && this.watching.get(seat)) || [];
+    return [...had.filter((j) => j.detached), ...had.filter((j) => !j.detached && (this.o.alive ?? pidAlive)(j.pid))];
+  }
 
   private reportEnded(seat: string, ended: Job[]): void {
     if (!ended.length) return;
@@ -310,15 +318,17 @@ export class MemoryWatch {
         }
         // a seat that has left: what it ran in the foreground ended with it and is nobody's news (dev room
         // swarm-214212-*: a 90-second command the leaving seat had just run was announced as its job). Only what launchd
-        // had adopted is followed.
+        // has adopted is announced.
         // a job that outlives its seat (a detached benchmark whose seat hit the usage limit) is followed until it ends, so
         // the room it was started for hears of it; it is no longer one of a live seat's jobs, and is never signalled
         // nothing but the pid ties a row to a job whose seat is gone, and a round is long enough for the number to come
         // round again (review/6ecee967): a row that has run for less time than the job had is another process
         const same = (was: Job) => table.find((x) => x.pid === was.pid && x.elapsedS >= was.elapsed_s);
-        const detached = jobs.filter((was) => was.detached);
-        this.reportEnded(seat, detached.filter((was) => !same(was)));
-        const left = detached.flatMap((was) => { const p = same(was); return p ? [{ ...was, elapsed_s: p.elapsedS }] : []; });
+        // which it is, is read from each sample after the seat has gone and not only from the last one before: a job the
+        // seat started directly was its child until it exited (review/f2dbce54-verifier). So what is still running is
+        // kept, and its end is news only once launchd has been seen to hold it.
+        this.reportEnded(seat, jobs.filter((was) => was.detached && !same(was)));
+        const left = jobs.flatMap((was) => { const p = same(was); return p ? [{ ...was, elapsed_s: p.elapsedS, ...(p.ppid === 1 ? { detached: true as const } : {}) }] : []; });
         if (left.length) this.watching.set(seat, left); else this.watching.delete(seat);
         this.jobsBySeat.delete(seat);
       }

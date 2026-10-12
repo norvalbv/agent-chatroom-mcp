@@ -21,10 +21,14 @@ writeFileSync(join(dir, "claude"), `#!/bin/sh\ncat > "${got}.stdin"\nprintf '%s\
 chmodSync(join(dir, "claude"), 0o755);
 process.env.PATH = `${dir}${delimiter}${process.env.PATH}`;
 const env = { ...process.env, CHATROOM_SEAT_KEY: KEY };
-const agent = spawn(process.execPath, ["-e", "setTimeout(()=>{}, 600000) // agent"], { env, stdio: "ignore" });
+// PROBE_CHILD=1: the agent itself starts the job (detached, its own session), so the job is the agent's child until the
+// agent dies and launchd adopts it only then (review/f2dbce54-verifier). Otherwise the job is started the way a seat's
+// shell starts one: from a shell that returns at once, so launchd holds it from the start.
+const CHILD = process.env.PROBE_CHILD === "1";
+const agent = spawn(process.execPath, ["-e", CHILD ? `const c = require("child_process").spawn(process.execPath, ["-e", "setTimeout(()=>{}, 600000) // bench-round"], { detached: true, stdio: "ignore" }); c.unref(); console.log(c.pid); setTimeout(()=>{}, 600000) // agent` : "setTimeout(()=>{}, 600000) // agent"], { env, stdio: ["ignore", "pipe", "ignore"] });
+const said = new Promise<string>((r) => agent.stdout!.once("data", (d) => r(String(d))));
 await sleep(1500);
-// started the way a seat starts one: from a shell that returns at once, so launchd adopts it (ppid 1)
-const started = spawnSync("sh", ["-c", `nohup "${process.execPath}" -e "setTimeout(()=>{}, 600000) // bench-round" > /dev/null 2>&1 & echo $!`], { env, encoding: "utf8" });
+const started = CHILD ? { stdout: await said } : spawnSync("sh", ["-c", `nohup "${process.execPath}" -e "setTimeout(()=>{}, 600000) // bench-round" > /dev/null 2>&1 & echo $!`], { env, encoding: "utf8" });
 const job = { pid: Number(started.stdout.trim()) };
 // and its last foreground command, which ends with the seat: it has no wake/ entry and must start nobody
 const fg = spawn(process.execPath, ["-e", "setTimeout(()=>{}, 600000) // foreground"], { env, stdio: "ignore" });

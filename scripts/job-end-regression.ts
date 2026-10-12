@@ -158,7 +158,7 @@ test("what a departed seat ran in the foreground is not followed or announced (d
   const ticks = [table([AGENT, BENCH, FG]), table([BENCH]), table([])];
   const ended: number[] = [];
   let i = 0, held = true;
-  const watch = new MemoryWatch({ watched: () => held, table: async () => ticks[i++], footprints: async () => new Map(), onJobEnd: (_s, job, others) => ended.push(job.pid, others) });
+  const watch = new MemoryWatch({ watched: () => held, table: async () => ticks[i++], footprints: async () => new Map(), alive: (pid) => pid === 103, onJobEnd: (_s, job, others) => ended.push(job.pid, others) });
   await watch.tick();
   assert.deepEqual(watch.outliving(seatHash("seat-key-AAAA")).map((j) => j.pid), [103], "only the detached one can outlive the seat");
   held = false;
@@ -166,4 +166,23 @@ test("what a departed seat ran in the foreground is not followed or announced (d
   assert.deepEqual(ended, [], "the foreground command ended with its seat: nobody is told");
   await watch.tick();
   assert.deepEqual(ended, [103, 0], "the detached job's end is reported, alone");
+});
+
+test("a job its seat started directly is its child until the seat exits, and is followed all the same (review/f2dbce54-verifier)", async () => {
+  // pid 103 is a child of the agent (pid 100) in every sample taken while the seat lives; launchd adopts it only afterwards
+  const CHILD = "  103   100 300000       40:00 node reviewbench-bench.mts --run h-a1", FG = "  104   100  20000       01:30 python3 -c sleep";
+  const ticks = [table([AGENT, CHILD, FG]), table([CHILD.replace("  100 ", "    1 ").replace("40:00", "40:15")]), table([CHILD.replace("  100 ", "    1 ").replace("40:00", "55:00")]), table([]), table([])];
+  const ended: number[] = [];
+  let i = 0, held = true;
+  const watch = new MemoryWatch({ watched: () => held, table: async () => ticks[i++], footprints: async () => new Map(), alive: (pid) => pid === 103, onJobEnd: (_s, job, others) => ended.push(job.pid, others) });
+  await watch.tick();
+  assert.deepEqual(watch.outliving(seatHash("seat-key-AAAA")).map((j) => j.pid), [103], "as the seat exits it is alive, so it is the job the room is told has no owner; the dead foreground command is not");
+  held = false;
+  await watch.tick();
+  await watch.tick();
+  assert.deepEqual(ended, [], "still running: nothing said, and the foreground command that died with the seat is nobody's news");
+  await watch.tick();
+  assert.deepEqual(ended, [103, 0], "its end is reported once it is gone");
+  await watch.tick();
+  assert.equal(ended.length, 2, "once");
 });

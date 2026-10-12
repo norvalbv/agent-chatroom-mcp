@@ -6,20 +6,23 @@
  *
  * Drives a REAL hub (subprocess) so the "hub unreachable" path is genuinely exercised, and runs
  * the ACTUAL shell block from .husky/pre-commit (extracted by its own markers, executed with
- * /bin/sh) against a throwaway git repo, not a reimplementation of it.
+ * /bin/sh) against a throwaway git repo, not a reimplementation of it. That block is checked to
+ * be the guard alone before it runs, and runs in a process group with a deadline (sc-5346).
  *
  * Run: npx tsx scripts/baseline-freeze-guard-regression.ts
  */
 import assert from "node:assert/strict";
 import { spawn, spawnSync } from "node:child_process";
+import { randomBytes } from "node:crypto";
 import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync, mkdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { test } from "node:test";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { evaluate, HUB_URL_ENV, OVERRIDE_ENV } from "./guard-baseline-freeze.mjs";
+import { runGrouped } from "./pool-mutation.ts";
 import { SEAT_ENV_EXCLUSIONS, seatChildEnv } from "../src/env.js";
 
 const PORT = Number(process.env.BASELINE_GUARD_PORT ?? 20_000 + Math.floor(Math.random() * 20_000)); // own port: seats run npm test side by side
@@ -211,12 +214,59 @@ await test("the maintainer override var is stripped from every seat's environmen
 });
 
 // ---- end-to-end: the ACTUAL .husky/pre-commit block, extracted by its own markers, run for real ----
-function extractGuardBlock(): string {
-  const hook = readFileSync(join(REPO_ROOT, ".husky", "pre-commit"), "utf8");
-  const m = /# >>> baseline-freeze-guard >>>\n([\s\S]*?)# <<< baseline-freeze-guard <<</.exec(hook);
-  assert.ok(m, ".husky/pre-commit must contain a baseline-freeze-guard marker block");
-  return m![1];
+const GUARD_OPEN = "# >>> baseline-freeze-guard >>>\n";
+const GUARD_CLOSE = "# <<< baseline-freeze-guard <<<";
+const DEVKIT_OPEN = "# >>> devkit-guards >>>";
+const MAX_GUARD_LINES = 20;
+const VERIFY_BASELINE = /verify\/baseline-/, DEVKIT_GATES_RAN = /Deterministic gates/;
+const MOVED_INSIDE = /sc-5346/, GUARD_NOT_FIRST = /before the devkit-guards region/, DID_NOT_EXIT = /did not exit on its own/;
+
+/** The text between the guard's markers, refused unless it is the guard alone: it is about to be executed. */
+function extractGuardBlock(hook = readFileSync(join(REPO_ROOT, ".husky", "pre-commit"), "utf8")): string {
+  const start = hook.indexOf(GUARD_OPEN);
+  const end = hook.indexOf(GUARD_CLOSE, start);
+  assert.ok(start >= 0 && end > start, ".husky/pre-commit must contain a baseline-freeze-guard marker block");
+  const block = hook.slice(start + GUARD_OPEN.length, end);
+  const moved = "devkit init/upgrade moved its region inside the baseline-freeze-guard markers of .husky/pre-commit (sc-5346): move the guard loop and its closing marker back above '# >>> devkit-guards >>>'";
+  assert.ok(!block.includes("devkit-guards") && !block.includes("__dk_"), moved);
+  const lines = block.split("\n").length;
+  assert.ok(lines < MAX_GUARD_LINES, `the baseline-freeze-guard block is ${lines} lines, expected under ${MAX_GUARD_LINES}: it must hold the guard and nothing else (sc-5346)`);
+  assert.ok(block.includes("node scripts/guard-baseline-freeze.mjs"), "the baseline-freeze-guard block must call scripts/guard-baseline-freeze.mjs");
+  const devkit = hook.indexOf(DEVKIT_OPEN);
+  assert.ok(devkit < 0 || end < devkit, "the baseline-freeze guard must run before the devkit-guards region (sc-5346)");
+  return block;
 }
+
+const BLOCK_TIMEOUT_MS = 30_000;
+
+/** Runs hook text with /bin/sh in a process group of its own, killed at the deadline and when this process dies by any
+ * means (runGrouped's lifeline), so a block that never exits fails the test instead of outliving it. */
+async function runGuardBlock(dir: string, env: NodeJS.ProcessEnv, block = extractGuardBlock(), timeoutMs = BLOCK_TIMEOUT_MS) {
+  const r = await runGrouped(["sh", "-c", block], dir, timeoutMs, env);
+  assert.ok(!r.timed_out && r.signal === null, `the hook block did not exit on its own (timed out at ${timeoutMs} ms: ${r.timed_out}, signal: ${r.signal}); it was killed. Output: ${r.output_tail}`);
+  return r;
+}
+
+/** Live processes whose command line carries `marker`, a random string only this test's own processes carry. */
+const withMarker = (marker: string) =>
+  spawnSync("ps", ["-Ao", "pid=,command="], { encoding: "utf8" }).stdout.split("\n").filter((l) => l.includes(marker) && !l.includes("ps -Ao"));
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+/** Waits up to `ms` for every marker process to be gone; returns what is left. */
+async function settled(marker: string, ms: number) {
+  const until = Date.now() + ms;
+  while (withMarker(marker).length && Date.now() < until) await sleep(100);
+  return withMarker(marker);
+}
+/** Cleanup when containment failed: SIGKILL what escaped (a spinning hook shell ignores SIGTERM). */
+function stopEscaped(marker: string) {
+  for (const l of withMarker(marker)) {
+    try {
+      process.kill(Number.parseInt(l, 10), "SIGKILL");
+    } catch {}
+  }
+}
+/** A shell loop that never exits, as the devkit region did under `sh -c`; the marker rides in the shell's own argv. */
+const spinner = (marker: string) => `while :; do :; done # ${marker}`;
 
 /** The hook's relative `node scripts/guard-baseline-freeze.mjs` only resolves if a repo has that file too. */
 function installGuardScript(dir: string) {
@@ -227,11 +277,10 @@ function installGuardScript(dir: string) {
 await test("the real .husky/pre-commit block blocks an unreviewed baseline commit", async () => {
   const dir = stageBaselineChange(10);
   installGuardScript(dir);
-  const block = extractGuardBlock();
   try {
-    const r = spawnSync("sh", ["-c", block], { cwd: dir, encoding: "utf8", env: { ...GIT_ENV, [HUB_URL_ENV]: HTTP, PATH: process.env.PATH } });
-    assert.notEqual(r.status, 0, `expected the hook block to exit non-zero; got ${r.status}, stderr: ${r.stderr}`);
-    assert.match(r.stderr, /verify\/baseline-/);
+    const r = await runGuardBlock(dir, { ...GIT_ENV, [HUB_URL_ENV]: HTTP, PATH: process.env.PATH });
+    assert.notEqual(r.exit_code, 0, `expected the hook block to exit non-zero; got ${r.exit_code}, output: ${r.output_tail}`);
+    assert.match(r.output_tail, /verify\/baseline-/);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -240,12 +289,77 @@ await test("the real .husky/pre-commit block blocks an unreviewed baseline commi
 await test("the real .husky/pre-commit block allows a verified baseline commit", async () => {
   const dir = stageBaselineChange(11);
   installGuardScript(dir);
-  const block = extractGuardBlock();
   try {
     const tree = git(["write-tree"], dir);
     await boardSetAs("reviewer-seat-3", "verify/baseline-e2e", `staged tree ${tree} reviewed, exit 0`);
-    const r = spawnSync("sh", ["-c", block], { cwd: dir, encoding: "utf8", env: { ...GIT_ENV, [HUB_URL_ENV]: HTTP, PATH: process.env.PATH } });
-    assert.equal(r.status, 0, `expected the hook block to exit 0; got ${r.status}, stderr: ${r.stderr}`);
+    const r = await runGuardBlock(dir, { ...GIT_ENV, [HUB_URL_ENV]: HTTP, PATH: process.env.PATH });
+    assert.equal(r.exit_code, 0, `expected the hook block to exit 0; got ${r.exit_code}, output: ${r.output_tail}`);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// ---- sc-5346: the block is the guard alone, and no run of it can outlive this test ----
+await test("a hook whose devkit region sits inside the guard markers is refused before anything runs", () => {
+  const guard = "for __bfg in 1; do\n    node scripts/guard-baseline-freeze.mjs || exit 1\ndone\n";
+  const devkit = `${DEVKIT_OPEN}\n__dk_gate() { :; }\n# <<< devkit-guards <<<\n`;
+  // what `devkit upgrade` to v0.69.0 produced: the region between the guard's comment and its command
+  assert.throws(() => extractGuardBlock(`#!/bin/sh\n${GUARD_OPEN}# why\n\n${devkit}\n${guard}${GUARD_CLOSE}\n`), MOVED_INSIDE);
+  // the guard alone, but after the devkit gates
+  assert.throws(() => extractGuardBlock(`#!/bin/sh\n${devkit}\n${GUARD_OPEN}${guard}${GUARD_CLOSE}\n`), GUARD_NOT_FIRST);
+  assert.equal(extractGuardBlock(`#!/bin/sh\n${GUARD_OPEN}${guard}${GUARD_CLOSE}\n\n${devkit}`), guard);
+  // a consumer that drops devkit keeps a guard-only hook: no devkit region is not a misplaced one
+  assert.equal(extractGuardBlock(`#!/bin/sh\n${GUARD_OPEN}${guard}${GUARD_CLOSE}\nexit 0\n`), guard);
+});
+
+await test("a hook block that never exits is killed at the deadline and fails the test", async () => {
+  const marker = `baseline-guard-spin-${randomBytes(6).toString("hex")}`;
+  try {
+    await assert.rejects(runGuardBlock(tmpdir(), process.env, spinner(marker), 1500), DID_NOT_EXIT);
+    assert.deepEqual(await settled(marker, 3000), [], "the spinning shell outlived its deadline");
+  } finally {
+    stopEscaped(marker);
+  }
+});
+
+await test("SIGKILL to a process running a hook block leaves no shell behind", async () => {
+  const marker = `baseline-guard-orphan-${randomBytes(6).toString("hex")}`;
+  const lib = JSON.stringify(join(REPO_ROOT, "scripts", "pool-mutation.ts"));
+  const code = `import { runGrouped } from ${lib}; await runGrouped(["sh", "-c", ${JSON.stringify(spinner(marker))}], ${JSON.stringify(tmpdir())}, 120000, process.env);`;
+  // what scripts/offline-runner.mjs does to a test at its time limit: SIGKILL to that one process, no handler runs
+  const caller = spawn(process.execPath, ["--import", "tsx", "--input-type=module", "-e", code], { cwd: REPO_ROOT, stdio: "ignore" });
+  try {
+    const until = Date.now() + 60_000;
+    while (!withMarker(marker).some((l) => l.includes("sh -c")) && Date.now() < until) await sleep(100);
+    assert.ok(withMarker(marker).some((l) => l.includes("sh -c")), "the shell started");
+    caller.kill("SIGKILL");
+    assert.deepEqual(await settled(marker, 5000), [], "a shell outlived the process that ran it");
+  } finally {
+    caller.kill("SIGKILL");
+    stopEscaped(marker);
+  }
+});
+
+await test("the pinned devkit's init/upgrade rewrite leaves the guard block whole and first", async () => {
+  // The same call `devkit init` / `devkit upgrade` make: drop the devkit-guards region, re-insert it after the preamble.
+  // The bare `if` the v0.69.0 upgrade split is not a fixed point of it; the loop is. Not a package export, so by file.
+  const lib = join(REPO_ROOT, "node_modules", "@norvalbv", "devkit", "dist", "cli", "lib", "husky", "husky-block.mjs");
+  const { extractGuardBlock: devkitBlock, replaceGuardBlock } = await import(pathToFileURL(lib).href);
+  const hook = readFileSync(join(REPO_ROOT, ".husky", "pre-commit"), "utf8");
+  const rewritten: string = replaceGuardBlock(hook, devkitBlock(hook));
+  assert.equal(rewritten, hook, "a devkit init/upgrade would rewrite .husky/pre-commit (sc-5346)");
+  extractGuardBlock(rewritten);
+});
+
+await test("the whole .husky/pre-commit, run as husky runs it (sh -e), refuses before any devkit gate", async () => {
+  const dir = stageBaselineChange(12);
+  installGuardScript(dir);
+  try {
+    const r = await runGrouped(["sh", "-e", join(REPO_ROOT, ".husky", "pre-commit")], dir, BLOCK_TIMEOUT_MS, { ...GIT_ENV, [HUB_URL_ENV]: HTTP, PATH: process.env.PATH });
+    assert.equal(r.timed_out, false, `the hook did not exit on its own. Output: ${r.output_tail}`);
+    assert.notEqual(r.exit_code, 0, `expected the hook to refuse; output: ${r.output_tail}`);
+    assert.match(r.output_tail, VERIFY_BASELINE);
+    assert.doesNotMatch(r.output_tail, DEVKIT_GATES_RAN, "a devkit gate ran before the baseline-freeze guard");
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

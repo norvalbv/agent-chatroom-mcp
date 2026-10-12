@@ -55,7 +55,7 @@ function runSeat(name: string, note: string): Promise<number | null> {
   const fd = openSync(resolve(OUT, `${name}.log`), "a");
   log(`launching ${name} [${MODEL}] cwd=${cwd}${seatArgs.includes("--write") ? " (write)" : ""}`);
   return new Promise((res) => {
-    const child = spawn(process.execPath, seatArgs, { cwd: repoRoot, env: seatChildEnv(), stdio: ["pipe", fd, fd] });
+    const child = spawn(process.execPath, seatArgs, { cwd: repoRoot, env: seatChildEnv(process.env, undefined, true), stdio: ["pipe", fd, fd] });
     child.stdin?.on("error", () => {});
     child.stdin?.end(promptFor(name, note));
     children.push(child);

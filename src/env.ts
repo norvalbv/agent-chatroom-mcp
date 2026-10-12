@@ -31,6 +31,14 @@ export const SEAT_ENV_EXCLUSIONS: readonly string[] = Object.freeze([
 ]);
 
 /**
+ * Keys that spend money outside the operator's subscription. Only a seat that runs on that provider gets one: the hub
+ * and the launcher load OPENROUTER_API_KEY from .env for OpenRouter seats, and every Claude and Codex seat inherited it
+ * too (swarm-123021-1nwp: seats on a benchmark spent 16 dollars of credit nobody approved). An empty value exported by
+ * the launcher covers the seats it starts, never the recruits of a hub that read .env itself.
+ */
+export const SEAT_PAID_KEYS: readonly string[] = Object.freeze(["OPENROUTER_API_KEY"]);
+
+/**
  * CHATROOM_* is the parent hub's configuration, and a seat that starts a private hub (smoke, a dev room) hands it on:
  * a recruit of a hub started with CHATROOM_FRESH_CHALLENGER=1 ran smoke under the challenger and failed at smoke.ts:135.
  * So a seat gets an allowlist, not a denylist: every other CHATROOM_* key, including mechanisms added later, is dropped.
@@ -68,12 +76,13 @@ export function compactWindow(raw: string | undefined): number | null {
 }
 
 /** Clone rather than mutate the launcher/hub's environment: controller auth must keep working. */
-export function seatChildEnv(env: NodeJS.ProcessEnv = process.env, name?: string): NodeJS.ProcessEnv {
+export function seatChildEnv(env: NodeJS.ProcessEnv = process.env, name?: string, paid = false): NodeJS.ProcessEnv {
   const childEnv: NodeJS.ProcessEnv = { ...env, MCP_TOOL_TIMEOUT: "120000" };
   const window = compactWindow(env.CHATROOM_SEAT_COMPACT_WINDOW);
   if (window !== null) childEnv.CLAUDE_CODE_AUTO_COMPACT_WINDOW = String(window);
   for (const key of Object.keys(childEnv)) if (key.startsWith("CHATROOM_") && !SEAT_ENV_KEEP.some((re) => re.test(key))) delete childEnv[key];
   for (const key of SEAT_ENV_EXCLUSIONS) delete childEnv[key];
+  if (!paid) for (const key of SEAT_PAID_KEYS) delete childEnv[key];
   if (name !== undefined) Object.assign(childEnv, seatGitIdentity(name));
   if (env.CHATROOM_SEAT_AI_GATES !== "on") for (const key of SEAT_AI_GATES_OFF) childEnv[key] ??= "1";
   return childEnv;

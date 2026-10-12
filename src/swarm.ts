@@ -310,6 +310,7 @@ function runOpenRouter(name: string, text: string, cwd: string, model: string | 
   if (write) args.push("--write");
   if (OPENROUTER_REASONING) args.push("--reasoning", OPENROUTER_REASONING);
   if (SANDBOX) args.push("--sandbox");
+  openRouterSeats.add(name);
   return runProc(name, seatScript.cmd, args, cwd, outFile, false, undefined, false, text).then((t) => priced(name, { text: t, usage: readSeatUsage(sidecar) }));
 }
 
@@ -365,11 +366,13 @@ const exitSignals = new Map<string, string | null>();
 const exitDetails = new Map<string, string>();
 /** Only successfully isolated workers receive seat commit attribution (never planner/verifier). */
 const writeWorkers = new Set<string>();
+/** Seats that run on OpenRouter: the only ones whose environment keeps the paid key (SEAT_PAID_KEYS in env.ts). */
+const openRouterSeats = new Set<string>();
 
 /** `beat`: the seat's heartbeat key and env; `beatOnOutput`: its output is its heartbeat (codex exec has no tool hooks); `stdin`: the prompt; `onStdout`: sees stdout as it arrives. */
 function runProc(name: string, cmd: string, args: string[], cwd: string, outFile: string, outViaFile = false, beat?: SeatBeat, beatOnOutput = false, stdin?: string, onStdout?: (d: Buffer) => void): Promise<string> {
   return new Promise((res) => {
-    const child = spawn(cmd, args, { cwd, env: { ...seatChildEnv(process.env, writeWorkers.has(name) ? name : undefined), ...beat?.env }, stdio: [stdin === undefined ? "ignore" : "pipe", "pipe", "pipe"] });
+    const child = spawn(cmd, args, { cwd, env: { ...seatChildEnv(process.env, writeWorkers.has(name) ? name : undefined, openRouterSeats.has(name)), ...beat?.env }, stdio: [stdin === undefined ? "ignore" : "pipe", "pipe", "pipe"] });
     if (stdin !== undefined) { child.stdin?.on("error", () => {}); child.stdin?.end(stdin); } // the prompt, never argv (claude-args.ts)
     if (beat && beatOnOutput) {
       const send = outputHeartbeat((detail) => {

@@ -3658,6 +3658,11 @@ export class Hub {
   recordSeatExit(seatKey: string, detail: string, stoppedBy?: StoppedBy): number {
     const seats = this.seats.participants(seatKey).filter(({ p }) => p.active);
     for (const { room, p } of seats) this.persist({ type: "seat_exit", room: room.name, seat: p.name, ...exitCause(detail), ...(stoppedBy ? { stopped_by: stoppedBy } : {}), detail: detail.slice(0, 160), ts: now() });
+    // what it left running has no owner now: named once, so a seat can take it over before it ends (jobEnded says when)
+    for (const { room, p } of seats) {
+      const job = this.jobsOf(p)[0];
+      if (job && room.state !== "concluded" && room.state !== "closed") this.post(room, "chat", undefined, `${this.shown(room, p)}'s process exited with a job still counted as running: pid ${job.pid} (${job.command.slice(0, 120)}), ${Math.round(job.elapsed_s / 60)} min in. It has no owner now: check it is alive (kill -0 ${job.pid}) and write its take/ entry to own its result. The hub will say here when it stops.`);
+    }
     return seats.length;
   }
   private readonly runEnded = new Set<string>();
@@ -3682,7 +3687,20 @@ export class Hub {
   jobEnded(seat: string, job: Job, others = 0): void {
     const mins = Math.round(job.elapsed_s / 60);
     const ran = mins < 60 ? `${mins} min` : `${Math.floor(mins / 60)} h ${mins % 60} min`;
-    for (const { room, p } of this.seatRooms(seat)) {
+    const live = this.seatRooms(seat);
+    // the seat that started it has left (bench-facts 2026-10-11: a benchmark outlived the seat that started it and its
+    // result reached no room): said to the open room it sat in, unaddressed, so whoever holds the job's take/ reads it
+    if (!live.length) {
+      for (const room of this.rooms.values()) {
+        if (room.state === "concluded" || room.state === "closed") continue;
+        const p = [...room.participants.values()].find((x) => !x.active && x.seatKeyHash === seat);
+        if (!p) continue;
+        this.persist({ type: "job_end", room: room.name, seat: p.name, pid: job.pid, command: job.command, ran_s: job.elapsed_s, ...(others ? { others } : {}), told: false, departed: true, ts: now() });
+        this.post(room, "chat", undefined, `A job ${this.shown(room, p)} started before leaving is no longer running: pid ${job.pid} (${job.command.slice(0, 120)}), after ${ran}${others ? `, and ${others} other process${others === 1 ? "" : "es"} of theirs with it` : ""}. Nobody is waiting on it: whoever holds its take/ entry, or picks up ${this.shown(room, p)}'s work, read its result and tell the room.`);
+      }
+      return;
+    }
+    for (const { room, p } of live) {
       const waiting = (this.waitingNow.get(p) ?? 0) > 0;
       this.persist({ type: "job_end", room: room.name, seat: p.name, pid: job.pid, command: job.command, ran_s: job.elapsed_s, ...(others ? { others } : {}), told: waiting, ts: now() });
       // a seat that is not waiting on the hub is inside a tool call of its own and has the command's result already (a

@@ -297,7 +297,10 @@ export class MemoryWatch {
       for (const [seat, jobs] of [...this.watching]) {
         if (seen.has(seat)) continue;
         this.reportEnded(seat, jobs.filter((was) => !table.some((p) => p.pid === was.pid)));
-        this.watching.delete(seat);
+        // a job that outlives its seat (a detached benchmark whose seat hit the usage limit) is followed until it ends, so
+        // the room it was started for hears of it; it is no longer one of a live seat's jobs, and is never signalled
+        const left = jobs.flatMap((was) => { const p = table.find((x) => x.pid === was.pid); return p ? [{ ...was, elapsed_s: p.elapsedS }] : []; });
+        if (left.length) this.watching.set(seat, left); else this.watching.delete(seat);
         this.jobsBySeat.delete(seat);
       }
       for (const [seat, last] of this.bySeat) {

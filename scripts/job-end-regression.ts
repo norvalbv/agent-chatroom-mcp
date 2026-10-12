@@ -86,3 +86,47 @@ test("the hub tells the seat in its room, which wakes its wait, and records job_
     assert.equal(hub.getRoom("jobs").messages.filter((m) => /your job has ended/.test(m.content)).length, 2);
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
+
+test("a job that outlives its seat is followed, and the room is told when it ends (bench-facts 2026-10-11)", async () => {
+  // the seat's agent (pid 100) dies of the usage limit; the benchmark it detached (pid 103, adopted by launchd) runs on
+  const BENCH = "  103     1 300000       40:00 node reviewbench-bench.mts --run h-a1";
+  const ticks = [table([AGENT, BENCH]), table([BENCH.replace("40:00", "40:15")]), table([BENCH.replace("40:00", "55:00")]), table([]), table([])];
+  const ended: { seat: string; job: Job }[] = [];
+  let i = 0, held = true;
+  const watch = new MemoryWatch({ watched: () => held, table: async () => ticks[i++], footprints: async () => new Map(), onJobEnd: (seat, job) => ended.push({ seat, job }) });
+  await watch.tick();
+  held = false; // the participant is marked left: no room holds this seat key any more
+  await watch.tick(); await watch.tick();
+  assert.equal(ended.length, 0, "still running after its seat left: not reported as ended");
+  assert.deepEqual(watch.jobs(seatHash("seat-key-AAAA")), [], "and not a live seat's job");
+  await watch.tick();
+  assert.deepEqual(ended.map((e) => [e.seat === seatHash("seat-key-AAAA"), e.job.pid, e.job.elapsed_s]), [[true, 103, 3300]], "reported when it ends, with how long it ran");
+  await watch.tick();
+  assert.equal(ended.length, 1, "once");
+});
+
+test("the hub tells the room a departed seat's job has ended, and names it when the seat exits", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "job-end-departed-"));
+  try {
+    const hub = new Hub({ dataDir: dir });
+    hub.bindSeat("seat-key-AAAA", "sess-a");
+    const a = hub.join("jobs", "ann", "claude", { requireChallenge: false, nudgeAfterMs: 0, expectedParticipants: 0 }, undefined, "sess-a").participant;
+    const b = hub.join("jobs", "bob", "claude", {}, undefined, "sess-b").participant;
+    const job = { pid: 103, command: "node reviewbench-bench.mts --run h-a1", elapsed_s: 2400 };
+    (hub.memory as unknown as { jobsBySeat: Map<string, Job[]> }).jobsBySeat.set(seatHash("seat-key-AAAA"), [job]);
+    hub.recordSeatExit("seat-key-AAAA", "exit 1: usage limit");
+    assert.match(hub.getRoom("jobs").messages.at(-1)!.content, /^ann's process exited with a job still counted as running: pid 103 \(node reviewbench-bench\.mts --run h-a1\), 40 min in\. It has no owner now/);
+    hub.leave("jobs", a.id, "process exited");
+    const waiting = hub.wait("jobs", b.id, hub.getRoom("jobs").messages.at(-1)!.seq, 5000);
+    const t = Date.now();
+    hub.jobEnded(seatHash("seat-key-AAAA"), { ...job, elapsed_s: 5400 });
+    const msgs = await waiting;
+    assert.ok(Date.now() - t < 1000, "a seat waiting in the room hears at once");
+    assert.match(msgs[0].content, /^A job ann started before leaving is no longer running: pid 103 \(node reviewbench-bench\.mts --run h-a1\), after 1 h 30 min\. Nobody is waiting on it/);
+    const ev = readFileSync(join(dir, "jobs.jsonl"), "utf8").trim().split("\n").map((l) => JSON.parse(l)).filter((e) => e.type === "job_end");
+    assert.deepEqual(ev.map(({ ts, ...e }) => e), [{ type: "job_end", room: "jobs", seat: "ann", pid: 103, command: job.command, ran_s: 5400, told: false, departed: true }]);
+    // a seat key no room ever held: still nothing said, nothing thrown
+    hub.jobEnded(seatHash("seat-key-none"), { pid: 1, command: "x", elapsed_s: 100 });
+    assert.equal(hub.getRoom("jobs").messages.filter((m) => /is no longer running/.test(m.content)).length, 1);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});

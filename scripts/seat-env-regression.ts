@@ -95,8 +95,11 @@ async function harness(entry: string, env: Record<string, string>, argv: string[
 function checkSeat(call: Capture) {
   assert.equal(Object.hasOwn(call.options.env, 'CHATROOM_HUMAN_TOKEN'), false, 'seat spawn options must omit human token');
   for (const [key, value] of Object.entries(syntheticEnv())) {
-    if (key !== 'CHATROOM_HUMAN_TOKEN' && key !== 'MCP_TOOL_TIMEOUT') assert.equal(call.options.env[key], value, `${key} retained`);
+    if (key !== 'CHATROOM_HUMAN_TOKEN' && key !== 'MCP_TOOL_TIMEOUT' && key !== 'OPENROUTER_API_KEY') assert.equal(call.options.env[key], value, `${key} retained`);
   }
+  // the paid key reaches a seat that runs on OpenRouter and no other (SEAT_PAID_KEYS): a Claude or Codex seat that holds it can spend it
+  const onOpenRouter = call.args.some(a => /\/openrouter\.(ts|js)$/.test(a));
+  assert.equal(call.options.env.OPENROUTER_API_KEY, onOpenRouter ? PROVIDER : undefined, `OPENROUTER_API_KEY ${onOpenRouter ? 'kept by an OpenRouter seat' : `must not reach a ${call.cmd} seat`}`);
   // the default, or a minute over the 4-minute hold for a claude seat, whose MCP URL asks the hub to hold its empty waits (seat-hold-regression)
   assert.ok(['120000', '300000'].includes(call.options.env.MCP_TOOL_TIMEOUT), `MCP_TOOL_TIMEOUT ${call.options.env.MCP_TOOL_TIMEOUT}`);
 }
@@ -162,10 +165,11 @@ await test('helper clone purity and API conformance', async () => {
   assert.ok(Object.hasOwn(input, 'CHATROOM_HUMAN_TOKEN') === true, 'caller env untouched');
   assert.equal(env.MCP_TOOL_TIMEOUT, '120000', 'sets seat timeout');
   const frozen = Object.freeze({ OPENROUTER_API_KEY: PROVIDER, CHATROOM_HUMAN_TOKEN: HUMAN });
-  const out = seatChildEnv(frozen);
+  const out = seatChildEnv(frozen, undefined, true);
   // + the AI reviewer gate switches every seat carries (SEAT_AI_GATES_OFF, owner ruling #985)
   assert.equal(Object.keys(out).length, 2 + h.exports.SEAT_AI_GATES_OFF.length, 'clone is flat and exact');
-  assert.equal(out.OPENROUTER_API_KEY, PROVIDER, 'provider key preserved by value');
+  assert.equal(out.OPENROUTER_API_KEY, PROVIDER, 'provider key preserved by value for a seat on that provider');
+  assert.equal(Object.hasOwn(seatChildEnv(frozen), 'OPENROUTER_API_KEY'), false, 'no other seat inherits the paid key');
   assert.equal(out.MCP_TOOL_TIMEOUT, '120000', 'seat timeout set');
   assert.ok(Object.hasOwn(out, 'CHATROOM_HUMAN_TOKEN') === false, 'frozen input never mutated');
   assert.equal(Object.hasOwn(frozen, 'CHATROOM_HUMAN_TOKEN'), true, 'frozen input still has its key');

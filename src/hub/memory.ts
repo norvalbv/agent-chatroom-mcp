@@ -175,6 +175,10 @@ export interface MemoryWatchOptions {
    * gone on the same tick are one report: the longest-running, and how many others ended with it. */
   /** `pids`: every process of the seat that ended in this look, the reported `job` among them (wake/<pid> is keyed by any of them) */
   onJobEnd?: (seat: string, job: Job, others: number, pids: number[]) => void;
+  /** Pids seats have named on the board (wake/<pid>, src/hub/wake.ts), each with its seat. Followed by pid alone: macOS
+   * hides the environment of /bin/sh and /bin/bash, so a detached shell script (`nohup sh round.sh &`) shows no seat key,
+   * and launchd adopts it before a look can tie it to a keyed ancestor (dev room swarm-214213-94xp: its end was never said). */
+  registered?: () => { seat: string; pid: number }[];
   /** whether a process exists now (tests); default: signal 0 */
   alive?: (pid: number) => boolean;
   /** test seams */
@@ -240,6 +244,12 @@ export class MemoryWatch {
         // the same pid with the same start time (to ps's one-second grain, and a little for the tick) is the same process
         if (!p.key && !p.inherited && was && Math.abs(was.startedMs - startedMs) < 5_000) p.inherited = was.key;
         if (!p.key && p.inherited) this.ownerOf.set(p.pid, { key: p.inherited, startedMs });
+      }
+      for (const { seat, pid } of this.o.registered?.() ?? []) {
+        const p = table.find((x) => x.pid === pid);
+        if (!p || (this.watching.get(seat) ?? []).some((j) => j.pid === pid)) continue;
+        // named by its seat, so its end is news whoever its parent is: it counts as detached from the start
+        this.watching.set(seat, [...(this.watching.get(seat) ?? []), { pid, command: shownCommand(p.command), elapsed_s: p.elapsedS, detached: true }]);
       }
       const alivePids = new Set(table.map((p) => p.pid));
       for (const pid of [...this.ownerOf.keys()]) if (!alivePids.has(pid)) this.ownerOf.delete(pid);

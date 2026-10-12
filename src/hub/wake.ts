@@ -14,6 +14,20 @@ export const WAKE_KEY = /^wake\/(\d+)$/;
 /** what a wake entry starts with once the hub has acted on it: it is never acted on twice */
 const SPENT = "[wake spent: ";
 
+/** Every unspent wake/<pid> in an open room, with its author's seat: the pids the watcher follows by number alone. */
+export function registeredWakes(hub: Hub): { seat: string; pid: number }[] {
+  const out: { seat: string; pid: number }[] = [];
+  for (const room of hub.rooms.values()) {
+    if (room.state === "concluded" || room.state === "closed") continue;
+    for (const [key, e] of room.board) {
+      const pid = Number(WAKE_KEY.exec(key)?.[1]);
+      const seat = pid && !e.text.startsWith(SPENT) ? [...room.participants.values()].find((x) => x.name === e.by)?.seatKeyHash : undefined;
+      if (seat) out.push({ seat, pid });
+    }
+  }
+  return out;
+}
+
 export interface Wake { key: string; by: string; pid: number; brief: string; worktree?: string }
 
 /** The departed seat `p`'s own unspent wake entries for the processes that just ended, each spent before its successor is asked for. */

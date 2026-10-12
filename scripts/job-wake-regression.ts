@@ -102,3 +102,45 @@ test("a refused start is said in the room, and the entry is spent so it is not r
   assert.equal(spawner.agents.length, 0);
   assert.equal(said(/^No successor was started for wake\/103: Recruitment is disabled.*Whoever is here reads the result of pid 103 instead\.$/).length, 1);
 }));
+
+test("a detached shell script shows no seat key in ps; the pid its seat named in wake/ is followed all the same (dev room swarm-214213-94xp)", () => scratch(async (dir) => {
+  const { hub, spawner, ann, said } = room(dir);
+  // macOS hides the environment of /bin/sh: the row for pid 103 carries no key, and launchd had it before any look
+  const rows = (r: string[]) => parseTable(r.join("\n"), "  100 claude -p brief CHATROOM_SEAT_KEY=seat-key-AAAA");
+  const AGENT = "  100     1 800000    02:00:00 claude -p brief", SH = "  103     1   2000       05:00 sh ./round.sh a1";
+  const ticks = [rows([AGENT, SH]), rows([SH.replace("05:00", "05:15")]), rows([SH.replace("05:00", "45:00")]), rows([]), rows([])];
+  let i = 0;
+  const o = (hub.memory as unknown as { o: { table: () => Promise<unknown>; footprints: () => Promise<Map<number, number>> } }).o;
+  o.table = async () => ticks[i++];
+  o.footprints = async () => new Map();
+  hub.setBoard("jobs", ann.id, "wake/103", BRIEF);
+  await hub.memory.tick();
+  assert.deepEqual(hub.memory.jobs(seatHash("seat-key-AAAA")), [], "nothing ties the script to the seat but the board entry");
+  hub.leave("jobs", ann.id, "left");
+  await hub.memory.tick();
+  await hub.memory.tick();
+  assert.equal(spawner.agents.length, 0, "still running: nobody started");
+  await hub.memory.tick();
+  assert.equal(said(/^A job ann started before leaving is no longer running: pid 103 \(sh \.\/round\.sh a1\), after 45 min/).length, 1, "the room is told");
+  assert.equal(spawner.agents.length, 1, "and the successor is started");
+  await hub.memory.tick();
+  assert.equal(spawner.agents.length, 1, "once");
+}));
+
+test("a seat still in the room is told when the shell script it named ends", () => scratch(async (dir) => {
+  const { hub, spawner, ann, said } = room(dir);
+  const rows = (r: string[]) => parseTable(r.join("\n"), "  100 claude -p brief CHATROOM_SEAT_KEY=seat-key-AAAA");
+  const AGENT = "  100     1 800000    02:00:00 claude -p brief", SH = "  103     1   2000       05:00 sh ./round.sh a1";
+  const ticks = [rows([AGENT, SH]), rows([AGENT])];
+  let i = 0;
+  const o = (hub.memory as unknown as { o: { table: () => Promise<unknown>; footprints: () => Promise<Map<number, number>> } }).o;
+  o.table = async () => ticks[i++];
+  o.footprints = async () => new Map();
+  hub.setBoard("jobs", ann.id, "wake/103", BRIEF);
+  await hub.memory.tick();
+  const waiting = hub.wait("jobs", ann.id, hub.getRoom("jobs").messages.at(-1)!.seq, 5000);
+  await hub.memory.tick();
+  await waiting;
+  assert.equal(said(/^@ann your job has ended: pid 103 \(sh \.\/round\.sh a1\)/).length, 1);
+  assert.equal(spawner.agents.length, 0);
+}));

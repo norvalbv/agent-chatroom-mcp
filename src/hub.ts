@@ -27,7 +27,7 @@ import { barrenClaims, evidenceGaps, evidenceReceipt, offline, unsourcedClaims }
 import { apiRequests, UsageLedger, usageTotal } from "./hub/usage.js";
 import { DevRuns, DevRunError, type DevRunHost } from "./hub/dev-runs.js";
 import { takesOf } from "./hub/take.js";
-import { wakeSuccessors, type Wake } from "./hub/wake.js";
+import { registeredWakes, wakeSuccessors, type Wake } from "./hub/wake.js";
 import { MemoryWatch, memoryNotice, type Job, type MemoryEvent, type SeatMemory } from "./hub/memory.js";
 import { RUN_END_CAUSES, exitCause, type RunEndCause, type StoppedBy } from "./respawn.js";
 /** What the owner says became of a room's conclusion: used as it stands, overruled, or used in part. */
@@ -3562,6 +3562,7 @@ export class Hub {
     onSample: (seat, memory) => this.recordMemory(seat, memory),
     onEvent: (e) => this.recordMemoryEvent(e),
     onJobEnd: (seat, job, others, pids) => this.jobEnded(seat, job, others, pids),
+    registered: () => registeredWakes(this),
   });
   private memoryLogged = new Map<string, number>();
   private memoryNotices = new Map<string, SteerItem[]>();

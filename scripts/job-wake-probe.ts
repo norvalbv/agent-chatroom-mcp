@@ -28,7 +28,10 @@ const CHILD = process.env.PROBE_CHILD === "1";
 const agent = spawn(process.execPath, ["-e", CHILD ? `const c = require("child_process").spawn(process.execPath, ["-e", "setTimeout(()=>{}, 600000) // bench-round"], { detached: true, stdio: "ignore" }); c.unref(); console.log(c.pid); setTimeout(()=>{}, 600000) // agent` : "setTimeout(()=>{}, 600000) // agent"], { env, stdio: ["ignore", "pipe", "ignore"] });
 const said = new Promise<string>((r) => agent.stdout!.once("data", (d) => r(String(d))));
 await sleep(1500);
-const started = CHILD ? { stdout: await said } : spawnSync("sh", ["-c", `nohup "${process.execPath}" -e "setTimeout(()=>{}, 600000) // bench-round" > /dev/null 2>&1 & echo $!`], { env, encoding: "utf8" });
+// PROBE_SH=1: the job is a shell script, as round.sh is. macOS hides a shell's environment, so only wake/<pid> ties it to its seat.
+writeFileSync(join(dir, "job.sh"), "while :; do sleep 1; done\n");
+const body = process.env.PROBE_SH === "1" ? `sh "${join(dir, "job.sh")}"` : `"${process.execPath}" -e "setTimeout(()=>{}, 600000) // bench-round"`;
+const started = CHILD ? { stdout: await said } : spawnSync("sh", ["-c", `nohup ${body} > /dev/null 2>&1 & echo $!`], { env, encoding: "utf8" });
 const job = { pid: Number(started.stdout.trim()) };
 // and its last foreground command, which ends with the seat: it has no wake/ entry and must start nobody
 const fg = spawn(process.execPath, ["-e", "setTimeout(()=>{}, 600000) // foreground"], { env, stdio: "ignore" });
@@ -43,10 +46,11 @@ try {
   hub.bindSeat(KEY, "sess-a");
   const a = hub.join("jobs", "ann", "claude", { requireChallenge: false, nudgeAfterMs: 0, expectedParticipants: 0 }, undefined, "sess-a").participant;
   hub.join("jobs", "bob", "claude", {}, undefined, "sess-b");
+  // written when the job is started, as a seat does: the hub follows the pid from its next look
+  hub.setBoard("jobs", a.id, `wake/${job.pid}`, BRIEF);
   await sleep(63_000);
   await hub.memory.tick();
   console.log("job counted for the live seat:", hub.memory.jobs(seatHash(KEY)).some((j) => j.pid === job.pid));
-  hub.setBoard("jobs", a.id, `wake/${job.pid}`, BRIEF);
   agent.kill("SIGKILL");
   fg.kill("SIGKILL");
   hub.leave("jobs", a.id, "round runs an hour; brief in wake/");

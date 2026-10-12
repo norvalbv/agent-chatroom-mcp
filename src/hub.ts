@@ -27,6 +27,7 @@ import { barrenClaims, evidenceGaps, evidenceReceipt, offline, unsourcedClaims }
 import { apiRequests, UsageLedger, usageTotal } from "./hub/usage.js";
 import { DevRuns, DevRunError, type DevRunHost } from "./hub/dev-runs.js";
 import { takesOf } from "./hub/take.js";
+import { wakeSuccessors, type Wake } from "./hub/wake.js";
 import { MemoryWatch, memoryNotice, type Job, type MemoryEvent, type SeatMemory } from "./hub/memory.js";
 import { RUN_END_CAUSES, exitCause, type RunEndCause, type StoppedBy } from "./respawn.js";
 /** What the owner says became of a room's conclusion: used as it stands, overruled, or used in part. */
@@ -53,6 +54,8 @@ export class Hub {
   /** Fired on every room state transition (setState); the consolidator spawn listens for "concluded". */
   onRoomState?: (room: string, state: RoomState) => void;
   /** A proposal was opened (not amended). The spawner's fresh challenger hangs off this; a throwing listener never fails the propose. */
+  /** A departed seat's job ended and it left a wake/<pid> brief (src/hub/wake.ts): start one successor, return its name. Throws when refused. */
+  onJobWake?: (room: string, wake: Wake) => string | undefined;
   onProposalOpened?: (room: string, proposal: { id: string; text: string; by: string; cwd?: string; offline?: boolean }) => void;
   /** Observed waits only: deliberately not restored from historical room logs. */
   private readonly boardManifestObserved = new WeakMap<Room, BoardManifestCounters>();
@@ -3558,7 +3561,7 @@ export class Hub {
     watched: (seat) => this.seatRooms(seat).length > 0,
     onSample: (seat, memory) => this.recordMemory(seat, memory),
     onEvent: (e) => this.recordMemoryEvent(e),
-    onJobEnd: (seat, job, others) => this.jobEnded(seat, job, others),
+    onJobEnd: (seat, job, others, pids) => this.jobEnded(seat, job, others, pids),
   });
   private memoryLogged = new Map<string, number>();
   private memoryNotices = new Map<string, SteerItem[]>();
@@ -3684,7 +3687,7 @@ export class Hub {
    * use the wait as their timer while a job runs), and the record gets job_end. Said only to a seat that is waiting on
    * the hub at that moment; nothing for a seat no longer in a room.
    */
-  jobEnded(seat: string, job: Job, others = 0): void {
+  jobEnded(seat: string, job: Job, others = 0, pids: number[] = [job.pid]): void {
     const mins = Math.round(job.elapsed_s / 60);
     const ran = mins < 60 ? `${mins} min` : `${Math.floor(mins / 60)} h ${mins % 60} min`;
     const live = this.seatRooms(seat);
@@ -3697,6 +3700,7 @@ export class Hub {
         if (!p) continue;
         this.persist({ type: "job_end", room: room.name, seat: p.name, pid: job.pid, command: job.command, ran_s: job.elapsed_s, ...(others ? { others } : {}), told: false, departed: true, ts: now() });
         this.post(room, "chat", undefined, `A job ${this.shown(room, p)} started before leaving is no longer running: pid ${job.pid} (${job.command.slice(0, 120)}), after ${ran}${others ? `, and ${others} other process${others === 1 ? "" : "es"} of theirs with it` : ""}. Nobody is waiting on it: whoever holds its take/ entry, or picks up ${this.shown(room, p)}'s work, read its result and tell the room.`);
+        wakeSuccessors(this, room, p, job, pids);
       }
       return;
     }

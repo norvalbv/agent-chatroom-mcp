@@ -170,7 +170,8 @@ export interface MemoryWatchOptions {
   onEvent?: (event: MemoryEvent) => void;
   /** a process counted as a seat's job on an earlier tick is gone: with how long it had run when last seen. Several
    * gone on the same tick are one report: the longest-running, and how many others ended with it. */
-  onJobEnd?: (seat: string, job: Job, others: number) => void;
+  /** `pids`: every process of the seat that ended in this look, the reported `job` among them (wake/<pid> is keyed by any of them) */
+  onJobEnd?: (seat: string, job: Job, others: number, pids: number[]) => void;
   /** test seams */
   table?: () => Promise<Proc[]>;
   footprints?: () => Promise<Map<number, number>>;
@@ -211,7 +212,7 @@ export class MemoryWatch {
   private reportEnded(seat: string, ended: Job[]): void {
     if (!ended.length) return;
     const [first, ...rest] = [...ended].sort((a, b) => b.elapsed_s - a.elapsed_s);
-    this.o.onJobEnd?.(seat, first, rest.length);
+    this.o.onJobEnd?.(seat, first, rest.length, ended.map((j) => j.pid));
   }
 
   /** One pass over the process table. Never overlaps itself; a failed ps is an empty table, not an error. */

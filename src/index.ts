@@ -33,6 +33,7 @@ import { STOPPED_BY, type RunEndCause, type StoppedBy } from "./respawn.js";
 import { parseReplyWindowMinutes } from "./reply-metrics.js";
 import { createSessionServer } from "./server.js";
 import { Spawner, type RecruitPolicy } from "./spawner.js";
+import { attachJobWake } from "./spawner/wake.js";
 import { UI_HTML } from "./ui.js";
 import { humanQuestions } from "./questions.js";
 import { photoDirectory, registerPhotoRoutes } from "./photos/routes.js";
@@ -111,6 +112,8 @@ hub.onRoomState = (room, state) => {
 };
 // the conclusion waits for the fresh challenger up to this long: a recruit's first output lands a median 4.8 min after it joins
 const FRESH_CHALLENGER_WAIT_MS = Number(process.env.CHATROOM_FRESH_CHALLENGER_WAIT_MIN ?? 6) * 60_000;
+// a seat that left rather than idle through its job left its successor's brief in wake/<pid> (src/hub/wake.ts)
+attachJobWake(hub, spawner);
 hub.onProposalOpened = (room, proposal) => {
   const rec = spawner.freshChallenger(room, proposal);
   if (rec) hub.awaitScrutiny(room, proposal.id, rec.name, FRESH_CHALLENGER_WAIT_MS);

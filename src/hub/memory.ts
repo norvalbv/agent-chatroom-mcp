@@ -121,8 +121,11 @@ export function seatUsage(table: Proc[], footprintKb?: Map<number, number>): Map
   return out;
 }
 
+const pidAlive = (pid: number) => { try { process.kill(pid, 0); return true; } catch (e) { return (e as NodeJS.ErrnoException).code === "EPERM"; } };
 /** A process a seat started that is doing or awaiting real work, as the idle rule needs it (src/hub/idle.ts). */
-export interface Job { pid: number; command: string; elapsed_s: number }
+export interface Job { pid: number; command: string; elapsed_s: number;
+  /** launchd has adopted it (ppid 1): it does not end with the seat that started it, as a foreground command does */
+  detached?: true }
 /** Not jobs: a sleep, the shells around a command, and the tools a seat watches a job with. A seat in a sleep loop is
  * idle (swarm-094251-5y46); one whose scorer starts at 16:15 is waiting (swarm-100951-0btz-build, pid 8148). */
 const NOT_A_JOB = /^(?:sleep|sh|bash|zsh|dash|fish|tail|cat|tee|watch|timeout|caffeinate|env|nohup|time)$/;
@@ -155,7 +158,7 @@ export function jobsOf(own: readonly Proc[]): Job[] {
   const pids = new Set(jobs.map((p) => p.pid));
   return jobs
     .filter((p) => !pids.has(p.ppid))
-    .map((p) => ({ pid: p.pid, command: shownCommand(p.command), elapsed_s: p.elapsedS }))
+    .map((p) => ({ pid: p.pid, command: shownCommand(p.command), elapsed_s: p.elapsedS, ...(p.ppid === 1 ? { detached: true as const } : {}) }))
     .sort((a, b) => b.elapsed_s - a.elapsed_s);
 }
 
@@ -170,7 +173,14 @@ export interface MemoryWatchOptions {
   onEvent?: (event: MemoryEvent) => void;
   /** a process counted as a seat's job on an earlier tick is gone: with how long it had run when last seen. Several
    * gone on the same tick are one report: the longest-running, and how many others ended with it. */
-  onJobEnd?: (seat: string, job: Job, others: number) => void;
+  /** `pids`: every process of the seat that ended in this look, the reported `job` among them (wake/<pid> is keyed by any of them) */
+  onJobEnd?: (seat: string, job: Job, others: number, pids: number[]) => void;
+  /** Pids seats have named on the board (wake/<pid>, src/hub/wake.ts), each with its seat. Followed by pid alone: macOS
+   * hides the environment of /bin/sh and /bin/bash, so a detached shell script (`nohup sh round.sh &`) shows no seat key,
+   * and launchd adopts it before a look can tie it to a keyed ancestor (dev room swarm-214213-94xp: its end was never said). */
+  registered?: () => { seat: string; pid: number }[];
+  /** whether a process exists now (tests); default: signal 0 */
+  alive?: (pid: number) => boolean;
   /** test seams */
   table?: () => Promise<Proc[]>;
   footprints?: () => Promise<Map<number, number>>;
@@ -207,11 +217,18 @@ export class MemoryWatch {
   jobs(seat: string | undefined): Job[] { return (seat && this.jobsBySeat.get(seat)) || []; }
   /** What tagged processes of no live seat hold (a recorder a finished room left running, a respawned seat's old script). */
   unattributed(): Unattributed { return this.others; }
+  /** The jobs of a seat that can outlive it or have: those launchd had adopted, then any other whose process is alive now.
+   * Asked as the seat exits: a job the seat started directly is its child until that moment and shows ppid 1 only in the
+   * next sample (review/f2dbce54-verifier), while a foreground command that ended with the seat is gone already. */
+  outliving(seat: string | undefined): Job[] {
+    const had = (seat && this.watching.get(seat)) || [];
+    return [...had.filter((j) => j.detached), ...had.filter((j) => !j.detached && (this.o.alive ?? pidAlive)(j.pid))];
+  }
 
   private reportEnded(seat: string, ended: Job[]): void {
     if (!ended.length) return;
     const [first, ...rest] = [...ended].sort((a, b) => b.elapsed_s - a.elapsed_s);
-    this.o.onJobEnd?.(seat, first, rest.length);
+    this.o.onJobEnd?.(seat, first, rest.length, ended.map((j) => j.pid));
   }
 
   /** One pass over the process table. Never overlaps itself; a failed ps is an empty table, not an error. */
@@ -227,6 +244,12 @@ export class MemoryWatch {
         // the same pid with the same start time (to ps's one-second grain, and a little for the tick) is the same process
         if (!p.key && !p.inherited && was && Math.abs(was.startedMs - startedMs) < 5_000) p.inherited = was.key;
         if (!p.key && p.inherited) this.ownerOf.set(p.pid, { key: p.inherited, startedMs });
+      }
+      for (const { seat, pid } of this.o.registered?.() ?? []) {
+        const p = table.find((x) => x.pid === pid);
+        if (!p || (this.watching.get(seat) ?? []).some((j) => j.pid === pid)) continue;
+        // named by its seat, so its end is news whoever its parent is: it counts as detached from the start
+        this.watching.set(seat, [...(this.watching.get(seat) ?? []), { pid, command: shownCommand(p.command), elapsed_s: p.elapsedS, detached: true }]);
       }
       const alivePids = new Set(table.map((p) => p.pid));
       for (const pid of [...this.ownerOf.keys()]) if (!alivePids.has(pid)) this.ownerOf.delete(pid);
@@ -296,8 +319,27 @@ export class MemoryWatch {
       // a seat with nothing left in the table (its agent process included) has no jobs; the ones it had have ended
       for (const [seat, jobs] of [...this.watching]) {
         if (seen.has(seat)) continue;
-        this.reportEnded(seat, jobs.filter((was) => !table.some((p) => p.pid === was.pid)));
-        this.watching.delete(seat);
+        // still holding a place, with nothing left in the table: everything it had has ended, as before
+        if (this.o.watched(seat)) {
+          this.reportEnded(seat, jobs.filter((was) => !table.some((p) => p.pid === was.pid)));
+          this.watching.delete(seat);
+          this.jobsBySeat.delete(seat);
+          continue;
+        }
+        // a seat that has left: what it ran in the foreground ended with it and is nobody's news (dev room
+        // swarm-214212-*: a 90-second command the leaving seat had just run was announced as its job). Only what launchd
+        // has adopted is announced.
+        // a job that outlives its seat (a detached benchmark whose seat hit the usage limit) is followed until it ends, so
+        // the room it was started for hears of it; it is no longer one of a live seat's jobs, and is never signalled
+        // nothing but the pid ties a row to a job whose seat is gone, and a round is long enough for the number to come
+        // round again (review/6ecee967): a row that has run for less time than the job had is another process
+        const same = (was: Job) => table.find((x) => x.pid === was.pid && x.elapsedS >= was.elapsed_s);
+        // which it is, is read from each sample after the seat has gone and not only from the last one before: a job the
+        // seat started directly was its child until it exited (review/f2dbce54-verifier). So what is still running is
+        // kept, and its end is news only once launchd has been seen to hold it.
+        this.reportEnded(seat, jobs.filter((was) => was.detached && !same(was)));
+        const left = jobs.flatMap((was) => { const p = same(was); return p ? [{ ...was, elapsed_s: p.elapsedS, ...(p.ppid === 1 ? { detached: true as const } : {}) }] : []; });
+        if (left.length) this.watching.set(seat, left); else this.watching.delete(seat);
         this.jobsBySeat.delete(seat);
       }
       for (const [seat, last] of this.bySeat) {

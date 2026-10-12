@@ -86,3 +86,103 @@ test("the hub tells the seat in its room, which wakes its wait, and records job_
     assert.equal(hub.getRoom("jobs").messages.filter((m) => /your job has ended/.test(m.content)).length, 2);
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
+
+test("a job that outlives its seat is followed, and the room is told when it ends (bench-facts 2026-10-11)", async () => {
+  // the seat's agent (pid 100) dies of the usage limit; the benchmark it detached (pid 103, adopted by launchd) runs on
+  const BENCH = "  103     1 300000       40:00 node reviewbench-bench.mts --run h-a1";
+  const ticks = [table([AGENT, BENCH]), table([BENCH.replace("40:00", "40:15")]), table([BENCH.replace("40:00", "55:00")]), table([]), table([])];
+  const ended: { seat: string; job: Job }[] = [];
+  let i = 0, held = true;
+  const watch = new MemoryWatch({ watched: () => held, table: async () => ticks[i++], footprints: async () => new Map(), onJobEnd: (seat, job) => ended.push({ seat, job }) });
+  await watch.tick();
+  held = false; // the participant is marked left: no room holds this seat key any more
+  await watch.tick(); await watch.tick();
+  assert.equal(ended.length, 0, "still running after its seat left: not reported as ended");
+  assert.deepEqual(watch.jobs(seatHash("seat-key-AAAA")), [], "and not a live seat's job");
+  await watch.tick();
+  assert.deepEqual(ended.map((e) => [e.seat === seatHash("seat-key-AAAA"), e.job.pid, e.job.elapsed_s]), [[true, 103, 3300]], "reported when it ends, with how long it ran");
+  await watch.tick();
+  assert.equal(ended.length, 1, "once");
+});
+
+test("the hub tells the room a departed seat's job has ended, and names it when the seat exits", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "job-end-departed-"));
+  try {
+    const hub = new Hub({ dataDir: dir });
+    hub.bindSeat("seat-key-AAAA", "sess-a");
+    const a = hub.join("jobs", "ann", "claude", { requireChallenge: false, nudgeAfterMs: 0, expectedParticipants: 0 }, undefined, "sess-a").participant;
+    const b = hub.join("jobs", "bob", "claude", {}, undefined, "sess-b").participant;
+    const job = { pid: 103, command: "node reviewbench-bench.mts --run h-a1", elapsed_s: 2400 };
+    (hub.memory as unknown as { watching: Map<string, Job[]> }).watching.set(seatHash("seat-key-AAAA"), [{ ...job, detached: true }, { pid: 104, command: "python3 -c sleep", elapsed_s: 90 }]);
+    hub.recordSeatExit("seat-key-AAAA", "exit 1: usage limit");
+    assert.match(hub.getRoom("jobs").messages.at(-1)!.content, /^ann's process exited with a job still counted as running: pid 103 \(node reviewbench-bench\.mts --run h-a1\), 40 min in\. It has no owner now/);
+    hub.leave("jobs", a.id, "process exited");
+    // a seat that left the room before its process exited is named too: its detached job is just as ownerless
+    hub.recordSeatExit("seat-key-AAAA", "exit 0");
+    assert.equal(hub.getRoom("jobs").messages.filter((m) => /exited with a job still counted as running: pid 103/.test(m.content)).length, 2);
+    const waiting = hub.wait("jobs", b.id, hub.getRoom("jobs").messages.at(-1)!.seq, 5000);
+    const t = Date.now();
+    hub.jobEnded(seatHash("seat-key-AAAA"), { ...job, elapsed_s: 5400 });
+    const msgs = await waiting;
+    assert.ok(Date.now() - t < 1000, "a seat waiting in the room hears at once");
+    assert.match(msgs[0].content, /^A job ann started before leaving is no longer running: pid 103 \(node reviewbench-bench\.mts --run h-a1\), after 1 h 30 min\. Nobody is waiting on it/);
+    const ev = readFileSync(join(dir, "jobs.jsonl"), "utf8").trim().split("\n").map((l) => JSON.parse(l)).filter((e) => e.type === "job_end");
+    assert.deepEqual(ev.map(({ ts, ...e }) => e), [{ type: "job_end", room: "jobs", seat: "ann", pid: 103, command: job.command, ran_s: 5400, told: false, departed: true }]);
+    // a seat key no room ever held: still nothing said, nothing thrown
+    hub.jobEnded(seatHash("seat-key-none"), { pid: 1, command: "x", elapsed_s: 100 });
+    assert.equal(hub.getRoom("jobs").messages.filter((m) => /is no longer running/.test(m.content)).length, 1);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("a departed seat's job whose pid number is reused by another process is reported as ended (review/6ecee967)", async () => {
+  const BENCH = "  103     1 300000       40:00 node reviewbench-bench.mts --run h-a1";
+  // the benchmark ends, and an unrelated process without the seat key later holds pid 103 with a fresh clock
+  const other = parseTable("  103     1  20000       00:05 /usr/bin/some-daemon", "");
+  const ticks = [table([AGENT, BENCH]), table([BENCH.replace("40:00", "41:00")]), other, other];
+  const ended: number[] = [];
+  let i = 0, held = true;
+  const watch = new MemoryWatch({ watched: () => held, table: async () => ticks[i++], footprints: async () => new Map(), onJobEnd: (_s, job) => ended.push(job.elapsed_s) });
+  await watch.tick();
+  held = false;
+  await watch.tick();
+  assert.deepEqual(ended, [], "still the same process: followed");
+  await watch.tick();
+  assert.deepEqual(ended, [2460], "the pid now belongs to something younger than the job was: the job has ended");
+  await watch.tick();
+  assert.equal(ended.length, 1, "once, and the other process is not followed");
+});
+
+test("what a departed seat ran in the foreground is not followed or announced (dev room swarm-214213-94xp)", async () => {
+  // the seat's last tool call (pid 104, a child of its shell) dies with it; its detached benchmark (pid 103) runs on
+  const BENCH = "  103     1 300000       40:00 node reviewbench-bench.mts --run h-a1", FG = "  104   100  20000       01:30 python3 -c sleep";
+  const ticks = [table([AGENT, BENCH, FG]), table([BENCH]), table([])];
+  const ended: number[] = [];
+  let i = 0, held = true;
+  const watch = new MemoryWatch({ watched: () => held, table: async () => ticks[i++], footprints: async () => new Map(), alive: (pid) => pid === 103, onJobEnd: (_s, job, others) => ended.push(job.pid, others) });
+  await watch.tick();
+  assert.deepEqual(watch.outliving(seatHash("seat-key-AAAA")).map((j) => j.pid), [103], "only the detached one can outlive the seat");
+  held = false;
+  await watch.tick();
+  assert.deepEqual(ended, [], "the foreground command ended with its seat: nobody is told");
+  await watch.tick();
+  assert.deepEqual(ended, [103, 0], "the detached job's end is reported, alone");
+});
+
+test("a job its seat started directly is its child until the seat exits, and is followed all the same (review/f2dbce54-verifier)", async () => {
+  // pid 103 is a child of the agent (pid 100) in every sample taken while the seat lives; launchd adopts it only afterwards
+  const CHILD = "  103   100 300000       40:00 node reviewbench-bench.mts --run h-a1", FG = "  104   100  20000       01:30 python3 -c sleep";
+  const ticks = [table([AGENT, CHILD, FG]), table([CHILD.replace("  100 ", "    1 ").replace("40:00", "40:15")]), table([CHILD.replace("  100 ", "    1 ").replace("40:00", "55:00")]), table([]), table([])];
+  const ended: number[] = [];
+  let i = 0, held = true;
+  const watch = new MemoryWatch({ watched: () => held, table: async () => ticks[i++], footprints: async () => new Map(), alive: (pid) => pid === 103, onJobEnd: (_s, job, others) => ended.push(job.pid, others) });
+  await watch.tick();
+  assert.deepEqual(watch.outliving(seatHash("seat-key-AAAA")).map((j) => j.pid), [103], "as the seat exits it is alive, so it is the job the room is told has no owner; the dead foreground command is not");
+  held = false;
+  await watch.tick();
+  await watch.tick();
+  assert.deepEqual(ended, [], "still running: nothing said, and the foreground command that died with the seat is nobody's news");
+  await watch.tick();
+  assert.deepEqual(ended, [103, 0], "its end is reported once it is gone");
+  await watch.tick();
+  assert.equal(ended.length, 2, "once");
+});

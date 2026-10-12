@@ -130,3 +130,21 @@ test("the hub tells the room a departed seat's job has ended, and names it when 
     assert.equal(hub.getRoom("jobs").messages.filter((m) => /is no longer running/.test(m.content)).length, 1);
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
+
+test("a departed seat's job whose pid number is reused by another process is reported as ended (review/6ecee967)", async () => {
+  const BENCH = "  103     1 300000       40:00 node reviewbench-bench.mts --run h-a1";
+  // the benchmark ends, and an unrelated process without the seat key later holds pid 103 with a fresh clock
+  const other = parseTable("  103     1  20000       00:05 /usr/bin/some-daemon", "");
+  const ticks = [table([AGENT, BENCH]), table([BENCH.replace("40:00", "41:00")]), other, other];
+  const ended: number[] = [];
+  let i = 0, held = true;
+  const watch = new MemoryWatch({ watched: () => held, table: async () => ticks[i++], footprints: async () => new Map(), onJobEnd: (_s, job) => ended.push(job.elapsed_s) });
+  await watch.tick();
+  held = false;
+  await watch.tick();
+  assert.deepEqual(ended, [], "still the same process: followed");
+  await watch.tick();
+  assert.deepEqual(ended, [2460], "the pid now belongs to something younger than the job was: the job has ended");
+  await watch.tick();
+  assert.equal(ended.length, 1, "once, and the other process is not followed");
+});

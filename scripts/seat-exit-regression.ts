@@ -82,7 +82,7 @@ assert.equal((await seat("silent")).active, true);
   let answer!: (v: unknown) => void, posted: { seat_key?: string; exited?: boolean } | undefined;
   const pending = new Promise((r) => (answer = r));
   const runProc = vm.runInNewContext(`${js};runProc;`, {
-    spawn: () => child, seatChildEnv: () => ({}), writeWorkers: new Set(), process: { env: {} }, children: [], seatChildren: new Map(), writeFileSync: () => {}, resolve: (...a: string[]) => a.join("/"),
+    spawn: () => child, seatChildEnv: () => ({}), writeWorkers: new Set(), openRouterSeats: new Set(), process: { env: {} }, children: [], seatChildren: new Map(), writeFileSync: () => {}, resolve: (...a: string[]) => a.join("/"),
     OUT: "/tmp", exitCodes: new Map(), exitSignals: new Map(), exitDetails: new Map(), log: () => {}, URL_: "http://hub.invalid", AbortSignal, String, JSON, exitDetail,
     // the receipt also says who stopped the seat when the launcher did (run-end-seat-exit-regression): nobody here
     killedAtTimeout: new Set(), STOPPING: false,
@@ -100,7 +100,7 @@ assert.equal((await seat("silent")).active, true);
   // a hub that is down or slow must not hang the launcher: a rejected receipt (the 5 s abort) still resolves the run
   const child2 = Object.assign(new EventEmitter(), { stdout: new EventEmitter(), stderr: new EventEmitter() });
   const runProc2 = vm.runInNewContext(`${js};runProc;`, {
-    spawn: () => child2, seatChildEnv: () => ({}), writeWorkers: new Set(), process: { env: {} }, children: [], seatChildren: new Map(), writeFileSync: () => {}, resolve: (...a: string[]) => a.join("/"),
+    spawn: () => child2, seatChildEnv: () => ({}), writeWorkers: new Set(), openRouterSeats: new Set(), process: { env: {} }, children: [], seatChildren: new Map(), writeFileSync: () => {}, resolve: (...a: string[]) => a.join("/"),
     OUT: "/tmp", exitCodes: new Map(), exitSignals: new Map(), exitDetails: new Map(), log: () => {}, URL_: "http://hub.invalid", AbortSignal, String, JSON, exitDetail,
     // the receipt also says who stopped the seat when the launcher did (run-end-seat-exit-regression): nobody here
     killedAtTimeout: new Set(), STOPPING: false,

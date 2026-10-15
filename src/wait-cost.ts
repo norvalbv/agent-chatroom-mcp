@@ -147,6 +147,41 @@ export function trafficShare(logs: readonly (readonly Ev[])[]): { hub_tokens_est
   return { hub_tokens_est: hub, context_written_tokens: written, rewritten_tokens: rewritten, ...(written > 0 && hubChars > 0 ? { share: round(hub / written, 3) } : {}) };
 }
 
+/** What the share above costs: a hub result is re-read by every later request of the same seat process, so its tokens
+ * times those requests, over all the cache-read tokens the seats paid for. Compaction is not modelled (a result is
+ * counted as re-read until its process ends), so this is an upper bound where trafficShare is a lower one. */
+export function trafficReread(logs: readonly (readonly Ev[])[]): { hub_reread_tokens_est: number; cache_read_tokens: number; share?: number } {
+  const seatOf = new Map<string, string>();
+  for (const events of logs) for (const e of events) if (e.type === "join" && e.p?.id && e.p.seatKeyHash) seatOf.set(e.p.id, e.p.seatKeyHash);
+  const samples = new Map<string, Map<string, { t: number; requests: number; read: number }>>();
+  const results = new Map<string, { t: number; chars: number }[]>();
+  for (const events of logs) for (const e of events) {
+    if (e.type === "usage" && e.seat && e.usage) (samples.get(e.seat) ?? samples.set(e.seat, new Map()).get(e.seat)!).set(String(e.usage.at ?? e.ts), { t: Date.parse(String(e.ts)), requests: Number(e.usage.requests ?? 0), read: Number(e.usage.cache_read_input_tokens ?? 0) });
+    const chars = e.type === "call_completion" ? e.result_chars : e.type === "steer_injected" ? e.chars : undefined;
+    const seat = seatOf.get(e.participant);
+    if (typeof chars === "number" && seat) (results.get(seat) ?? results.set(seat, []).get(seat)!).push({ t: Date.parse(String(e.ts)), chars });
+  }
+  let reread = 0, read = 0;
+  for (const [seat, byAt] of samples) {
+    // split into processes (a counter going down starts one), each with its requests over time
+    const procs: { t: number; requests: number }[][] = [];
+    let prev: { requests: number; read: number } | undefined;
+    for (const u of [...byAt.values()].sort((a, b) => a.t - b.t)) {
+      if (!prev || u.requests < prev.requests) { procs.push([]); prev = { requests: 0, read: 0 }; }
+      read += u.read - prev.read;
+      procs[procs.length - 1].push(u);
+      prev = u;
+    }
+    for (const r of results.get(seat) ?? []) {
+      const proc = procs.find((p) => p.length && p[0].t <= r.t && r.t <= p[p.length - 1].t) ?? procs.find((p) => p.length && r.t < p[0].t);
+      if (!proc) continue;
+      const at = [...proc].reverse().find((u) => u.t <= r.t)?.requests ?? 0;
+      reread += (r.chars / 4) * Math.max(0, proc[proc.length - 1].requests - at);
+    }
+  }
+  return { hub_reread_tokens_est: Math.round(reread), cache_read_tokens: read, ...(read > 0 && reread > 0 ? { share: round(reread / read, 3) } : {}) };
+}
+
 /** How long empty waits were held before returning nothing: a seat on a held connection (?hold=, src/env.ts) shows
  * minutes here, any other seat about 55 s. Read from call_completion events (ms, empty). */
 export function emptyWaits(logs: readonly (readonly Ev[])[]): { waits: number; empty: number; median_empty_s?: number; empty_seat_minutes: number } {

@@ -17,7 +17,7 @@ import { Hub } from "../src/hub.js";
 import { createSessionServer } from "../src/server.js";
 import { steerAckSeat, steerPeekSeat } from "../src/hub/steer.js";
 import { parseRoomLog } from "../src/run-metrics.js";
-import { roomTraffic, trafficShare } from "../src/wait-cost.js";
+import { roomTraffic, trafficReread, trafficShare } from "../src/wait-cost.js";
 
 Hub.DEFAULT_NUDGE_MS = 0;
 const dir = mkdtempSync(join(tmpdir(), "result-chars-"));
@@ -72,6 +72,12 @@ try {
   const injected = events.find((e) => e.type === "steer_injected");
   assert.ok(injected && injected.chars === asks[0].text.length && injected.asks === 1, "the injected text's size is logged");
   assert.equal(t.find((r) => r.tool.startsWith("(asks injected"))?.result_chars, asks[0].text.length, "and counted as room traffic");
+  // re-read cost: a 400-char result at request 4 of a process that ends at request 10 is re-read 6 times
+  const joined = { type: "join", p: { id: "p_k", seatKeyHash: "k" } };
+  const r = (s: number, requests: number, read: number) => ({ type: "usage", seat: "k", ts: ts(s), usage: { requests, cache_read_input_tokens: read, at: ts(s) } });
+  const reread = trafficReread([[joined, r(1, 4, 1000), { type: "call_completion", participant: "p_k", ts: ts(2), result_chars: 400 }, r(3, 10, 5000), r(4, 2, 300)]]);
+  assert.equal(reread.hub_reread_tokens_est, 600);
+  assert.equal(reread.cache_read_tokens, 5300, "a respawned process (counter down) counts from zero");
   console.log("result-chars regression: ok");
 } finally {
   rmSync(dir, { recursive: true, force: true });

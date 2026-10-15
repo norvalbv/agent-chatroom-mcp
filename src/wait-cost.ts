@@ -139,7 +139,8 @@ export function trafficShare(logs: readonly (readonly Ev[])[]): { hub_tokens_est
     for (const u of [...samples.values()].sort((a, b) => a.t - b.t)) {
       const base = u.requests >= prev.requests ? prev : { requests: 0, write: 0, sent: 0 };
       const write = u.write - base.write, sent = u.sent - base.sent, requests = Math.max(1, u.requests - base.requests);
-      if (write > sent / 2 && write / requests > 20_000) rewritten += write; else written += write;
+      // a process start (base zero) writes its prompt and tool-schema prefix: new content, never a rewrite
+      if (base.requests > 0 && write > sent / 2 && write / requests > 20_000) rewritten += write; else written += write;
       prev = u;
     }
   }
@@ -173,7 +174,8 @@ export function trafficReread(logs: readonly (readonly Ev[])[]): { hub_reread_to
       prev = u;
     }
     for (const r of results.get(seat) ?? []) {
-      const proc = procs.find((p) => p.length && p[0].t <= r.t && r.t <= p[p.length - 1].t) ?? procs.find((p) => p.length && r.t < p[0].t);
+      // before the first sample it is the first process's; between two processes it is unknown and dropped
+      const proc = procs.find((p) => p.length && p[0].t <= r.t && r.t <= p[p.length - 1].t) ?? (procs[0]?.length && r.t < procs[0][0].t ? procs[0] : undefined);
       if (!proc) continue;
       const at = [...proc].reverse().find((u) => u.t <= r.t)?.requests ?? 0;
       reread += (r.chars / 4) * Math.max(0, proc[proc.length - 1].requests - at);

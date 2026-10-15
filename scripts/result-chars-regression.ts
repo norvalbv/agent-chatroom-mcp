@@ -69,6 +69,9 @@ try {
   const share = trafficShare([[...events.filter((e) => e.type === "call_completion")], ...[one, two]]);
   assert.equal(share.context_written_tokens, 12_000, "10k + 1k + 1k of new content, the same sample in two logs counted once");
   assert.equal(share.rewritten_tokens, 100_000, "a 100k write on one request that was most of what it sent is a rewrite");
+  // a fresh process's first sample is its prompt and tool-schema prefix: new content, not a rewrite (review/f9001f7e)
+  const fresh = trafficShare([[u(10, 2, 70_000, 0), u(20, 50, 120_000, 2_000_000)]]);
+  assert.deepEqual([fresh.context_written_tokens, fresh.rewritten_tokens], [120_000, 0], "a process start is written, not rewritten");
   const injected = events.find((e) => e.type === "steer_injected");
   assert.ok(injected && injected.chars === asks[0].text.length && injected.asks === 1, "the injected text's size is logged");
   assert.equal(t.find((r) => r.tool.startsWith("(asks injected"))?.result_chars, asks[0].text.length, "and counted as room traffic");
@@ -78,6 +81,9 @@ try {
   const reread = trafficReread([[joined, r(1, 4, 1000), { type: "call_completion", participant: "p_k", ts: ts(2), result_chars: 400 }, r(3, 10, 5000), r(4, 2, 300)]]);
   assert.equal(reread.hub_reread_tokens_est, 600);
   assert.equal(reread.cache_read_tokens, 5300, "a respawned process (counter down) counts from zero");
+  // a result between process A's last sample and process B's first is not charged to every request of B (review/f9001f7e)
+  const gap = trafficReread([[joined, r(1, 4, 1000), r(3, 10, 5000), { type: "call_completion", participant: "p_k", ts: ts(4), result_chars: 40_000 }, r(5, 2, 300), r(6, 105, 9000)]]);
+  assert.equal(gap.hub_reread_tokens_est, 0, "a gap result is charged to neither process");
   console.log("result-chars regression: ok");
 } finally {
   rmSync(dir, { recursive: true, force: true });

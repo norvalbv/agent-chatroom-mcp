@@ -41,8 +41,10 @@
       "skipTouchTargets": false
     }
   },
-  "//maxLines": "Raw line cap per source file (guard-size ratchet enforces it; existing giants grandfathered shrink-only). 0 = off. Per-FUNCTION caps need a parser — not yet.",
+  "//maxLines": "Raw line cap per source file (guard-size ratchet enforces it; existing giants grandfathered shrink-only). 0 = off. Per-FUNCTION caps need a parser \u2014 not yet.",
   "maxLines": 500,
   "//maxTestLines": "Loose raw line cap per test file; existing oversized tests are grandfathered shrink-only. 0 = off.",
-  "maxTestLines": 2000
+  "maxTestLines": 2000,
+  "//noLlm": "Owner ruling 2026-10-15: no AI reviewers in this repo's commit gates. noLlm skips the decisions gate's LLM judge (detect and alignment); its deterministic decision checks still run.",
+  "noLlm": true
 }

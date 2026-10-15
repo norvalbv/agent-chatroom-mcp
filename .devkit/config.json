@@ -32,10 +32,11 @@
       "dup",
       "clone",
       "comments",
-      "decisions",
-      "ui-evidence"
+      "decisions"
     ],
-    "disabledGuards": []
+    "disabledGuards": [
+      "ui-evidence"
+    ]
   },
   "review": {
     "enabled": false,
@@ -45,8 +46,7 @@
       "dup",
       "clone",
       "comments",
-      "decisions",
-      "ui-evidence"
+      "decisions"
     ],
     "decisionsDir": "docs/decisions"
   }

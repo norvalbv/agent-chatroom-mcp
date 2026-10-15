@@ -338,12 +338,6 @@ fi
 # /devkit:guard-decisions
 fi
 
-if __dk_gate_selected ui-evidence; then
-# devkit:guard-ui-evidence
-__dk_no_git_env "$__dk_package_bin_dir/guard-ui-evidence" || true
-# /devkit:guard-ui-evidence
-fi
-
 # devkit:review-failure-finalizer
 if [ "${dk_review_failed:-0}" -ne 0 ]; then
     echo "✗ ${DEVKIT_RUN_MODE:-}: failed gates:$dk_review_failed_gates (findings above)."

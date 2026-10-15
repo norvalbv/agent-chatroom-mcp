@@ -12,7 +12,6 @@ import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { basename, dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-// @ts-expect-error untyped .mjs
 import { offlineScripts, runCommands } from "./offline-runner.mjs";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");

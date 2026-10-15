@@ -17,6 +17,8 @@ const defaultTimeout = () => { const n = Number(process.env.CHATROOM_TEST_TIMEOU
  * starts a command, `[offline] FAILED <name>: <reason>` and the `[offline] FAILED n of m commands:` list on stderr name
  * the failures. So a timeout keeps the FAILED shape, and the timing lines carry the prefix `[offline:time]`, which that
  * parser does not read as a command.
+ * @param {{ name: string, command: string, args: string[] }[]} commands
+ * @param {{ cwd?: string, timeout?: number, log?: (line: string) => void }} [options]
  */
 export function runCommands(commands, { cwd, timeout = defaultTimeout(), log = line => console.error(line) } = {}) {
   const failures = [], took = [];

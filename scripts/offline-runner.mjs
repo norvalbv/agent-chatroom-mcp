@@ -290,6 +290,7 @@ export const offlineScripts = [
   'seat-cost-estimate.test.ts',
   'killed-seat-output-tokens.test.ts',
   'seat-env-regression.ts',
+  'seat-compact-default-regression.ts',
   'runs-table-regression.ts',
   'launcher-authority-regression.ts',
   'exit-reason-regression.ts',

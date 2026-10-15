@@ -59,6 +59,19 @@ test("a job missing from one look at the process table but still alive has not e
   if (process.getuid?.() !== 0) assert.equal(ownPidAlive(1), false, "another user's process (init) is not ours: a reused pid, not the job");
 });
 
+test("a short table that drops the seat's agent row too does not end a job still alive (review/5f2f4e41-opus-3)", async () => {
+  const job = "  103     1 300000       05:00 python3 score_op.py";
+  const ticks = [table([AGENT, job]), table([]), table([AGENT, job.replace("05:00", "05:30")]), table([])];
+  const live = [true, true, true, false];
+  const ended: Job[] = [];
+  let i = 0;
+  const watch = new MemoryWatch({ watched: () => true, table: async () => ticks[i++], alive: () => live[i - 1]!, footprints: async () => new Map(), onJobEnd: (_seat, j) => ended.push(j) });
+  await watch.tick(); await watch.tick();
+  assert.equal(ended.length, 0, "seat and job both absent from a short table, job alive by signal 0: not ended");
+  await watch.tick(); await watch.tick();
+  assert.deepEqual(ended.map((j) => [j.pid, j.elapsed_s]), [[103, 330]], "reported once, when it is really gone");
+});
+
 test("a job that is a tree of processes is one job and one report (review/304c9538)", async () => {
   // a runner (pid 200) with three workers it started, and a second, unrelated job of the same seat that ends on the same tick
   const tree = ["  200     1 300000       05:00 python3 runner.py", "  201   200 100000       04:58 python3 worker.py 1", "  202   200 100000       04:58 python3 worker.py 2", "  203   200 100000       04:58 python3 worker.py 3", "  300     1 100000       02:00 node score.mjs"];

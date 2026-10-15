@@ -59,8 +59,11 @@ export function commitAuthor(hub: Hub, room: Room, p: Participant, commit: strin
   return r.status === 0 ? named(room, r.stdout.trim()) : undefined;
 }
 
-/** Words a take key spends on how, not what: a key that differs only by these, or by a seat's name, names the same work. */
-const HOW_WORDS = new Set(["run", "rerun", "re", "job", "go", "now", "start", "my", "the", "do", "doing", "by", "task", "work"]);
+/** Words a take key spends on how, not what: a key that differs only by these, or by a seat's name, names the same work.
+ * Not "rerun"/"re": rerunning another seat's result is other work, and the rule refused it twice in swarm-130459-mrw4-esports
+ * (take/rerun-final-bid-esports, take/final-bid-esports-rerun vs take/final-bid-esports; board evidence/take-matcher-labels).
+ * What a word list cannot see is left to the advisory meaning check (src/hub/overlap/semantic.ts). */
+const HOW_WORDS = new Set(["run", "job", "go", "now", "start", "my", "the", "do", "doing", "by", "task", "work"]);
 /** A plural is not a difference: take/decode-takers and take/taker-decode were one piece taken twice, 3 s apart
  * (swarm-130459-mrw4-crypto, evidence/duplication). "ss" words (class, pass) and short words keep their s. */
 const singular = (t: string) => (t.length > 3 && /[^s]s$/.test(t) ? t.slice(0, -1) : t);

@@ -366,6 +366,7 @@ export const offlineScripts = [
   'rejected-key-regression.ts',
   'seat-unconnected-regression.ts',
   'take-same-work-regression.ts',
+  'take-semantic-regression.ts',
   'cache-reset-regression.ts',
   'review-suites-regression.ts',
   'topic-once-regression.ts',

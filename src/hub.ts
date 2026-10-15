@@ -1350,12 +1350,12 @@ export class Hub {
     return { total: entries.reduce((a, [, n]) => a + n, 0), by };
   }
 
-  /** Completed MCP guard invocations for existing rooms only; no arguments or error text, except the board key a
-   * board_get asked for (a short name matching BOARD_KEY, never an entry's text).
+  /** Completed MCP guard invocations for existing rooms only; no arguments or error text, except the board key a board_get
+   * asked for (a short name matching BOARD_KEY, never an entry's text) and sizes in chars (args_chars, result_chars).
    * Pending calls, schema rejections outside guard, roomless calls and failed room creation
    * are excluded. The rate uses this event's matched numerator, never lifetime refusals.
    */
-  recordCallCompletion(roomName: string | undefined, tool: string, outcome: CallOutcome, participant: string | null, timing: { ms?: number; empty?: boolean; outsider?: string; key?: string; key_rejected?: string } = {}) {
+  recordCallCompletion(roomName: string | undefined, tool: string, outcome: CallOutcome, participant: string | null, timing: { ms?: number; empty?: boolean; outsider?: string; key?: string; key_rejected?: string; result_chars?: number; args_chars?: number } = {}) {
     const room = roomName ? this.rooms.get(roomName) : undefined;
     if (!room) return;
     this.applyCallCompletion(room, tool, outcome, timing.outsider);

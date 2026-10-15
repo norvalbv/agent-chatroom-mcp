@@ -182,8 +182,8 @@ export function createSessionServer(hub: Hub, spawner?: Spawner, opts: { holdMs?
         participant ??= telemetryActor(room, a?.participant_id);
         if (from) from = outsider(room, tool);
       };
-      // a wait that returned no new message is idle polling; one that returned messages is the seat reacting (src/run-metrics.ts)
-      let empty: boolean | undefined;
+      // a wait that returned no new message is idle polling (src/run-metrics.ts); resultChars: what the call put into the
+      let empty: boolean | undefined, resultChars: number | undefined; // seat's context, re-read until it compacts (wait-cost --traffic)
       // every hub call is a step too (board_get, vote): the People tab shows it without a room turn. Not a wait: it
       // already refreshes last_seen_at when it returns, and logging idle waits would push real work out of the feed
       if (room && participant && tool !== "wait_for_messages") try { hub.heartbeat(room, participant, { tool, hub: true }); } catch { /* departed or unknown: the call itself reports it */ }
@@ -200,7 +200,7 @@ export function createSessionServer(hub: Hub, spawner?: Spawner, opts: { holdMs?
           const steer = steerCarry(hub, room, participant);
           if (steer.length) data = typeof data === "string" ? `${data}\n\naddressed_to_you_meanwhile:\n${steer.join("\n")}` : { ...(data as object), addressed_to_you_meanwhile: steer };
         }
-        const result = ok(data);
+        const result = ok(data); resultChars = result.content[0].text.length;
         // join_room can create a second identity: use its issued id, not an ambiguous
         // post-join default. leave_room retains the authenticated pre-call actor.
         if (tool === "join_room") participant = telemetryActor(room, (data as { participant_id?: string })?.participant_id);
@@ -212,7 +212,7 @@ export function createSessionServer(hub: Hub, spawner?: Spawner, opts: { holdMs?
           outcome = "hub_refusal";
           hub.recordRefusal(room, tool, e, participant);
         }
-        return fail(e);
+        const failed = fail(e); resultChars = failed.content[0].text.length; return failed;
       } finally {
         // which entry a board_get read or a board_set wrote (or was refused): a board key is a short name, not content, and
         // without it no record can say who read what, or what a refused write was for (review/take-keys)
@@ -220,7 +220,7 @@ export function createSessionServer(hub: Hub, spawner?: Spawner, opts: { holdMs?
         const key = raw !== undefined && Hub.BOARD_KEY.test(raw) ? raw : undefined;
         // a key the board refused is kept by its shape only (keyShape), so a key-format refusal can be attributed
         const rejected = raw !== undefined && key === undefined ? keyShape(raw) : undefined;
-        hub.recordCallCompletion(room, tool, outcome, participant, { ms: Date.now() - started, ...(empty === undefined ? {} : { empty }), ...(from ? { outsider: from } : {}), ...(key === undefined ? {} : { key }), ...(rejected ? { key_rejected: rejected } : {}) });
+        hub.recordCallCompletion(room, tool, outcome, participant, { ms: Date.now() - started, ...(empty === undefined ? {} : { empty }), ...(from ? { outsider: from } : {}), ...(key === undefined ? {} : { key }), ...(rejected ? { key_rejected: rejected } : {}), ...(resultChars === undefined ? {} : { result_chars: resultChars }), args_chars: JSON.stringify(args ?? {}).length });
       }
     };
 

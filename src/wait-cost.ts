@@ -101,6 +101,43 @@ export function costByKey(logs: readonly (readonly Ev[])[]): ToolCostRow[] {
   return [...byKey].map(([tool, r]) => ({ tool, requests: r.requests, cost_usd: round(r.cost, 2), share: total > 0 ? round(r.cost / total, 3) : 0 })).sort((a, b) => b.cost_usd - a.cost_usd);
 }
 
+export interface TrafficRow { tool: string; calls: number; result_chars: number; args_chars: number; share: number }
+
+/** What the hub put into seats' contexts, by tool: the summed size of every call's result (call_completion result_chars,
+ * recorded by hub builds from swarm-092526-89rn on; older logs have none and return no rows). A result stays in the seat's context and
+ * is re-read on every later request until compaction, so this is the room's share of what seats carry. */
+export function roomTraffic(logs: readonly (readonly Ev[])[]): TrafficRow[] {
+  const by = new Map<string, { calls: number; result: number; args: number }>();
+  for (const events of logs) for (const e of events) {
+    if (e.type !== "call_completion" || typeof e.result_chars !== "number" || !e.participant) continue;
+    const tool = e.tool === "wait_for_messages" ? (e.empty ? "wait_for_messages (empty)" : "wait_for_messages (messages)") : String(e.tool);
+    const row = by.get(tool) ?? by.set(tool, { calls: 0, result: 0, args: 0 }).get(tool)!;
+    row.calls++; row.result += e.result_chars; row.args += Number(e.args_chars ?? 0);
+  }
+  const total = [...by.values()].reduce((n, r) => n + r.result, 0);
+  return [...by].map(([tool, r]) => ({ tool, calls: r.calls, result_chars: r.result, args_chars: r.args, share: total > 0 ? round(r.result / total, 3) : 0 })).sort((a, b) => b.result_chars - a.result_chars);
+}
+
+/** Room traffic against everything written into seats' contexts: hub result tokens (chars / 4, an estimate) over the
+ * cache-write and uncached input tokens the seats' usage reports (each new token enters the context once as one of
+ * those). The rest is the seat's own work: its prompt, its local tool results, its own output. A respawned seat process
+ * (counter going down) starts a new sum. */
+export function trafficShare(logs: readonly (readonly Ev[])[]): { hub_tokens_est: number; context_written_tokens: number; share?: number } {
+  const hubChars = roomTraffic(logs).reduce((n, r) => n + r.result_chars, 0);
+  const last = new Map<string, Map<string, number>>(); // seat -> sample at -> written so far
+  for (const events of logs) for (const e of events) if (e.type === "usage" && e.seat && e.usage) {
+    const w = Number(e.usage.cache_creation_input_tokens ?? 0) + Number(e.usage.input_tokens ?? 0);
+    (last.get(e.seat) ?? last.set(e.seat, new Map()).get(e.seat)!).set(String(e.usage.at ?? e.ts), w);
+  }
+  let written = 0;
+  for (const samples of last.values()) {
+    let prev = 0;
+    for (const w of samples.values()) { written += w >= prev ? w - prev : w; prev = w; }
+  }
+  const hub = Math.round(hubChars / 4);
+  return { hub_tokens_est: hub, context_written_tokens: written, ...(written > 0 && hubChars > 0 ? { share: round(hub / written, 3) } : {}) };
+}
+
 /** How long empty waits were held before returning nothing: a seat on a held connection (?hold=, src/env.ts) shows
  * minutes here, any other seat about 55 s. Read from call_completion events (ms, empty). */
 export function emptyWaits(logs: readonly (readonly Ev[])[]): { waits: number; empty: number; median_empty_s?: number; empty_seat_minutes: number } {

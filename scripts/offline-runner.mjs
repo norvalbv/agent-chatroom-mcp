@@ -363,6 +363,7 @@ export const offlineScripts = [
   'seat-unconnected-regression.ts',
   'take-same-work-regression.ts',
   'cache-reset-regression.ts',
+  'review-suites-regression.ts',
 ];
 
 export function offlineCommands() {

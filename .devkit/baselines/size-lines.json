@@ -3,10 +3,15 @@
   "maxLines": 500,
   "maxTestLines": 2000,
   "files": {
-    "src/hub.ts": 2318,
-    "src/seat.ts": 669,
-    "src/server.ts": 692,
-    "src/swarm.ts": 514,
-    "src/ui.ts": 641
+    "src/hub.ts": 3824,
+    "src/hub/board.ts": 751,
+    "src/hub/types.ts": 694,
+    "src/index.ts": 772,
+    "src/run-timeline.ts": 522,
+    "src/seat.ts": 719,
+    "src/server.ts": 1042,
+    "src/spawner.ts": 689,
+    "src/swarm.ts": 934,
+    "src/ui.ts": 615
   }
 }

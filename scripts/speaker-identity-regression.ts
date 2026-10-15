@@ -141,7 +141,9 @@ const cases: [string, () => void][] = [
     assert.match(src, /b\.chair && checked \? \{ chairNamed: true \}/);
     assert.match(src, /hub\.send\([^\n]*\{ token: tokenChecked\(req\)/);
     // dev arm E, first try (swarm-185831-j3iu-room): --chair alone created no room, so the chair read as self-claimed
-    assert.match(readFileSync("src/swarm.ts", "utf8"), /if \(REQUIRE_VERIFICATION \|\| QUORUM \|\| CHAIR\) \{/, "the launcher creates the room when only --chair is given");
+    // since swarm-092526-89rn the launcher creates the leads/flat room whatever the flags, so --chair alone creates it too
+    const swarmSrc = readFileSync("src/swarm.ts", "utf8");
+    assert.match(swarmSrc, /\n\{\n  try \{\n    const r = await fetch\(`\$\{URL_\}\/rooms\/\$\{encodeURIComponent\(leadsRoom\)\}\/create`[^\n]*\.\.\.\(CHAIR \? \{ chair: CHAIR \} : \{\}\)/, "the launcher creates the room, with its chair, when only --chair is given");
   }],
 ];
 let failed = 0;

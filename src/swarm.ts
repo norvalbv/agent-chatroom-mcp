@@ -643,6 +643,8 @@ const verifierText = SETTLED + "\n" + prompt("verifier.md", {
   } catch (e) {
     log(`could not pre-create ${leadsRoom}: ${e instanceof Error ? e.message : String(e)}${e instanceof Error && e.cause ? ` (cause: ${(e.cause as NodeJS.ErrnoException).code ?? (e.cause as Error).message})` : ""}`);
   }
+}
+if (REQUIRE_VERIFICATION || QUORUM || CHAIR) {
   // a hand-written group works for hours and concludes its own proposal, so its room gets the run's policy too. It is a
   // breakout of the leads room (parent): the hub carries its conclusion onto the leads board, the leads room's last call
   // waits for it, and it is told when the leads room concludes (swarm-123021-1nwp: leads concluded 92 min before internal)

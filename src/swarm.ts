@@ -632,8 +632,10 @@ const verifierText = SETTLED + "\n" + prompt("verifier.md", {
             (FULL && isGitRepo ? ` Workers may have committed on branches named swarm/${SWARM_ID}/<name>; inspect and merge or cherry-pick from them as needed.` : "")
           : "Do NOT modify any files; verify by reading and running read-only commands only.",
     });
-// the launcher fixes the room's policy before any seat joins (join_room settings only apply at creation)
-if (REQUIRE_VERIFICATION || QUORUM || CHAIR) {
+// the launcher fixes the room's policy and topic before any seat joins (join_room settings only apply at creation), with
+// or without policy flags: the flat briefs no longer pass topic= to join_room (it put the topic in every seat's context a
+// second and third time, scripts/topic-once-regression.ts), so the first seat to join must not be the one creating it
+{
   try {
     const r = await fetch(`${URL_}/rooms/${encodeURIComponent(leadsRoom)}/create`, { method: "POST", headers: launcherHeaders(launcherToken), body: JSON.stringify({ topic: task, expected_participants: FLAT ? TOTAL : plan.groups.length + 1, require_verification: REQUIRE_VERIFICATION, quorum: QUORUM ?? "unanimous", ...(CHAIR ? { chair: CHAIR } : {}) }) });
     log(`${leadsRoom} created with quorum=${QUORUM ?? "unanimous"}${REQUIRE_VERIFICATION ? ", require_verification" : ""}${CHAIR ? `, chair ${CHAIR}${((await r.clone().json().catch(() => ({}))) as { chair_named?: boolean }).chair_named ? " (named)" : " (NOT named: the hub did not accept this launcher's token, so the chair will read as self-claimed)"}` : ""} (${r.status})`);

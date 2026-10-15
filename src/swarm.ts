@@ -40,18 +40,12 @@ const flag = (name: string, def?: string) => {
 const has = (name: string) => argv.includes(`--${name}`);
 const BOOL_FLAGS = new Set(["--keep-hub", "--reuse-hub", "--apply", "--full-access", "--named", "--flat", "--require-verification", "--respawn", "--claude-full", "--no-carry", "--no-seat-targets", "--sandbox", "--no-web"]);
 const task = argv.find((a, i) => !a.startsWith("--") && (i === 0 || !argv[i - 1].startsWith("--") || BOOL_FLAGS.has(argv[i - 1])));
-if (!task) {
-  console.error('usage: swarm "<task>" [--flat] [--done-when text] [--verify text] [--agents 6] [--cwd dir] [--models sonnet,haiku] [--lead-model opus] [--verifier-model opus] [--planner-model opus] [--codex k] [--codex-models gpt-6-astra,gpt-5.6-sol,gpt-5.6-terra] [--openrouter k] [--openrouter-models deepseek/deepseek-v4.1-flash,...] [--verifier-openrouter slug] [--openrouter-reasoning low|medium|high] [--require-verification] [--quorum unanimous|majority|supermajority] [--chair name] [--owner-word] [--seat-hooks off] [--seat-ai-gates on] [--prompt loop.md] [--groups groups.json [--digest-every 45]] [--resources file.md] [--respawn] [--apply] [--full-access] [--named] [--claude-full] [--no-carry] [--no-seat-targets] [--no-web] [--sandbox] [--timeout 30] [--port 7717] [--result-path path]');
-  process.exit(2);
-}
+if (!task) { console.error('usage: swarm "<task>" [--flat] [--done-when text] [--verify text] [--agents 6] [--cwd dir] [--models sonnet,haiku] [--lead-model opus] [--verifier-model opus] [--planner-model opus] [--codex k] [--codex-models gpt-6-astra,gpt-5.6-sol,gpt-5.6-terra] [--openrouter k] [--openrouter-models deepseek/deepseek-v4.1-flash,...] [--verifier-openrouter slug] [--openrouter-reasoning low|medium|high] [--require-verification] [--quorum unanimous|majority|supermajority] [--chair name] [--owner-word] [--seat-hooks off] [--seat-ai-gates on] [--prompt loop.md] [--groups groups.json [--digest-every 45]] [--resources file.md] [--respawn] [--apply] [--full-access] [--named] [--claude-full] [--no-carry] [--no-seat-targets] [--no-web] [--sandbox] [--timeout 30] [--port 7717] [--result-path path]'); process.exit(2); }
 /** --groups <file.json>: the run's groups as the operator wrote them (src/groups.ts), one room and one brief each, on the
  * long-room brief (prompts/group.md). No planner runs, and --agents is the file's workers plus the verifier. */
 let GROUPS: GroupsFile | undefined;
 if (flag("groups")) {
-  if (has("flat")) {
-    console.error("--groups gives each group its own room; --flat puts everyone in one. Pass one of them.");
-    process.exit(2);
-  }
+  if (has("flat")) { console.error("--groups gives each group its own room; --flat puts everyone in one. Pass one of them."); process.exit(2); }
   try {
     GROUPS = loadGroups(resolve(flag("groups")!));
   } catch (e) {
@@ -64,14 +58,8 @@ if (flag("groups")) {
  * ack_required, so the group cannot propose until it has read it) and leaves the pass on the consolidation room's board
  * as digest/<n> for the next pass (prompts/consolidator.md). A seat per pass, not one that polls between them. */
 const DIGEST_EVERY_MIN = Number(flag("digest-every", "0"));
-if (flag("digest-every") && !(DIGEST_EVERY_MIN > 0)) {
-  console.error("--digest-every takes the minutes between consolidation passes, e.g. --digest-every 45");
-  process.exit(2);
-}
-if (DIGEST_EVERY_MIN && !GROUPS) {
-  console.error("--digest-every needs --groups: it passes findings between the groups' rooms, and without --groups there is one room or the planner's.");
-  process.exit(2);
-}
+if (flag("digest-every") && !(DIGEST_EVERY_MIN > 0)) { console.error("--digest-every takes the minutes between consolidation passes, e.g. --digest-every 45"); process.exit(2); }
+if (DIGEST_EVERY_MIN && !GROUPS) { console.error("--digest-every needs --groups: it passes findings between the groups' rooms, and without --groups there is one room or the planner's."); process.exit(2); }
 const TOTAL = GROUPS ? GROUPS.groups.reduce((a, g) => a + g.workers, 0) + 1 : Math.max(2, Number(flag("agents", "4")));
 const WORKERS = TOTAL - 1; // one seat is the verifier
 const CWD = resolve(flag("cwd", process.cwd())!);
@@ -165,10 +153,7 @@ const OPENROUTER_MODELS = (flag("openrouter-models", process.env.OPENROUTER_MODE
 const VERIFIER_OPENROUTER = flag("verifier-openrouter");
 /** --openrouter-reasoning low|medium|high: passed to every OpenRouter seat (models without a reasoning parameter ignore it) */
 const OPENROUTER_REASONING = flag("openrouter-reasoning", process.env.OPENROUTER_REASONING);
-if ((OPENROUTER > 0 || VERIFIER_OPENROUTER) && !process.env.OPENROUTER_API_KEY) {
-  console.error("--openrouter needs OPENROUTER_API_KEY (https://openrouter.ai/keys); a dead seat still counts toward the room's expected participants, so refusing to launch.");
-  process.exit(2);
-}
+if ((OPENROUTER > 0 || VERIFIER_OPENROUTER) && !process.env.OPENROUTER_API_KEY) { console.error("--openrouter needs OPENROUTER_API_KEY (https://openrouter.ai/keys); a dead seat still counts toward the room's expected participants, so refusing to launch."); process.exit(2); }
 // workers may edit files and run anything; each gets its own git worktree
 /** --no-web: no seat may search or fetch the web, e.g. on a benchmark whose answers are published online. */
 const WEB_TOOLS = has("no-web") ? [] : ["WebSearch", "WebFetch"];

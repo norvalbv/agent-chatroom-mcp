@@ -415,9 +415,7 @@ export function setBoard(hub: Hub, roomName: string, pid: string, key: string, t
       `@${attacked.author} ${p.name} attacked your "${attacked.target}" in "${key}", quoting "${attacked.cites.slice(0, 80)}${attacked.cites.length > 80 ? "…" : ""}". ` +
       `Answer it by editing "${attacked.target}": change the quoted clause, or add a line saying why it stands. An unanswered attack is listed to whoever proposes.`);
   }
-  if (takeover) {
-    hub.post(room, "system", undefined, `${hub.shown(room, p)} took over "${key}" from ${hub.shown(room, takeover.owner)} (${takeover.reason === "successor" ? "registered successor" : `owner gone since ${hub.lastSeen(takeover.owner)}`}).`);
-  }
+  if (takeover) hub.post(room, "system", undefined, `${hub.shown(room, p)} took over "${key}" from ${hub.shown(room, takeover.owner)} (${takeover.reason === "successor" ? "registered successor" : `owner gone since ${hub.lastSeen(takeover.owner)}`}).`);
   if (key.startsWith("claim/") && (!previous || claimReleased(previous))) { noticeClaimOverlap(hub, room, p, key, text); noticeSameWork(hub, room, p, key); }
   if (key.endsWith(".ack") || key.startsWith("verify/")) for (const pr of room.proposals.values()) if (pr.status === "open") hub.evaluate(room, pr);
   if (key.startsWith("draft/")) hub.latchDrafts(room);

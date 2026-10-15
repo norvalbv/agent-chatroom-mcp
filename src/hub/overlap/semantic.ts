@@ -7,7 +7,8 @@
  * fitted on half the pairs scored 0.90 precision on the other half (n=21), so it advises; 5 hits cannot bound a refusal's
  * false rate (sources/take-matcher: the rule of three wants 300). Claim vs claim stays on board.ts's stem rule, which
  * measured better there (S∪P precision 0.89 at 272/377 recall).
- * Asynchronous with a hard timeout, after the write: a dead endpoint costs a semantic_check record, never a delay.
+ * Asynchronous with a hard timeout (10 s: a cold model load on this machine took over 2 s, warm checks 41-113 ms), after
+ * the write: a dead endpoint costs a semantic_check record, never a delay.
  */
 import type { Hub } from "../../hub.js";
 import { commitsIn } from "../internal.js";
@@ -24,7 +25,7 @@ export function semanticConfig(env = process.env) {
   if (!url) return undefined;
   const model = env.CHATROOM_EMBED_MODEL?.trim() || "embeddinggemma";
   const min = Number(env.CHATROOM_EMBED_MIN) || MODEL_MIN[model.split(":")[0]!];
-  return min ? { url, model, min, timeoutMs: Number(env.CHATROOM_EMBED_TIMEOUT_MS) || 2000 } : undefined;
+  return min ? { url, model, min, timeoutMs: Number(env.CHATROOM_EMBED_TIMEOUT_MS) || 10_000 } : undefined;
 }
 
 /** What is embedded: the key's words and the entry's prose (a claim's JSON strings minus who/where fields), as scored offline. */

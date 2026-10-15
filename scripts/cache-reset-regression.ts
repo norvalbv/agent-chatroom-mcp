@@ -2,16 +2,23 @@
  * A cache reset is not work (board evidence/cache-rewrites-mrw4, swarm-092526-89rn). In swarm-130459-mrw4, 36% of all
  * cache-write tokens (17.1M, ~$107 of $958) came in 5 bursts in which nearly every live seat rewrote its whole context
  * within minutes, 4 of them at a cswap cross-org account switch. run-metrics showed them only as cost, so a reader took
- * them for work. cacheResets() names each burst: when, how many of the live seats, the tokens and their $ at $6.25/M.
+ * them for work. cacheResets() names each burst: when, how many of the live seats, the tokens and their $.
+ * A seat's cache writes are all 1-hour-TTL writes, so a rewrite is priced at the snapshot's 1h rate ($8/M for Opus 5.5),
+ * not the 5-minute $6.25/M it first used, which understated resets by 22% (idea/cache-ttl-5m, swarm-092526-89rn).
  * Run: npx tsx scripts/cache-reset-regression.ts
  */
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { cacheResets, renderCacheResets } from "../src/metrics/cache-reset.js";
 
 type Ev = Record<string, any>;
 
 const cases: [string, () => void][] = [];
 const test = (name: string, run: () => void) => cases.push([name, run]);
+
+const prices = JSON.parse(readFileSync(new URL("./litellm-model-prices.json", import.meta.url), "utf8"));
+const WRITE_1H_PER_M = prices["claude-opus-5-5"].cache_creation_input_token_cost_above_1hr * 1e6;
+const usd = (tokens: number) => Math.round((tokens * WRITE_1H_PER_M) / 10_000) / 100;
 
 const T0 = Date.parse("2026-10-14T13:30:00Z");
 /** cumulative usage samples for one seat: [minute, requests, cache writes] */
@@ -35,10 +42,10 @@ test("two of three live seats rewriting ~150k within 5 min is one burst, with it
   assert.equal(x.seats, 2);
   assert.equal(x.liveSeats, 3);
   assert.equal(x.rewriteTokens, 300_000);
-  assert.equal(x.costUsd, 1.88); // 300k x $6.25/M
+  assert.equal(x.costUsd, usd(300_000)); // 300k at the 1h write rate: $2.40
   assert.equal(x.from, new Date(T0 + 6 * 60_000).toISOString());
   assert.equal(r.rewriteTokens, 300_000);
-  assert.match(renderCacheResets(r), /13:36-13:37: 2 of 3 live seats.*300k.*\$1\.88/);
+  assert.match(renderCacheResets(r), /13:36-13:37: 2 of 3 live seats.*300k.*\$2\.40/);
 });
 
 test("one seat rewriting alone is not a reset (a compaction or a cache expiry is that seat's own)", () => {

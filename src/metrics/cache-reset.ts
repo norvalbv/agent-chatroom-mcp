@@ -1,7 +1,7 @@
 /**
  * Cache resets from the hub's usage samples: a burst in which most live seats rewrite their whole context at once, which
  * a credential switch to another org does (the prompt cache is per org) and work does not. In swarm-130459-mrw4 five
- * such bursts carried 36% of all cache-write tokens, ~11% of the run's cost (board evidence/cache-rewrites-mrw4).
+ * such bursts carried 36% of all cache-write tokens, ~14% of the run's cost (board evidence/cache-rewrites-mrw4).
  * Seats of every log given share one pool, since one switch hits every room on the machine.
  */
 type Ev = Record<string, any>;
@@ -12,7 +12,9 @@ const REWRITE_REQUESTS = 3;
 const WINDOW_MS = 5 * 60_000;
 /** a seat with a usage sample this long before a burst is live */
 const LIVE_MS = 15 * 60_000;
-const WRITE_USD_PER_M = 6.25;
+/** Seats' cache writes are all 1-hour-TTL writes: Opus 5.5 cache_creation_input_token_cost_above_1hr in
+ * scripts/litellm-model-prices.json (2x input), not the 5-minute $6.25/M (idea/cache-ttl-5m) */
+const WRITE_USD_PER_M = 8;
 
 export interface CacheReset {
   from: string;

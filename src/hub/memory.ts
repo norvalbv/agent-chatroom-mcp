@@ -123,7 +123,7 @@ export function seatUsage(table: Proc[], footprintKb?: Map<number, number>): Map
 
 const pidAlive = (pid: number) => { try { process.kill(pid, 0); return true; } catch (e) { return (e as NodeJS.ErrnoException).code === "EPERM"; } };
 /** Alive and this user's: a seat's job never turns into another user's process, so EPERM means its pid was reused */
-const ownPidAlive = (pid: number) => { try { process.kill(pid, 0); return true; } catch { return false; } };
+export const ownPidAlive = (pid: number) => { try { process.kill(pid, 0); return true; } catch { return false; } };
 /** A process a seat started that is doing or awaiting real work, as the idle rule needs it (src/hub/idle.ts). */
 export interface Job { pid: number; command: string; elapsed_s: number;
   /** launchd has adopted it (ppid 1): it does not end with the seat that started it, as a foreground command does */

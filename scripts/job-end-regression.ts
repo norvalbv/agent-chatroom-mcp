@@ -14,7 +14,8 @@ import { join } from "node:path";
 import { test } from "node:test";
 import { Hub } from "../src/hub.js";
 import { seatHash } from "../src/hub/liveness.js";
-import { MemoryWatch, parseTable, type Job } from "../src/hub/memory.js";
+import { MemoryWatch, ownPidAlive, parseTable, type Job } from "../src/hub/memory.js";
+import { spawnSync } from "node:child_process";
 
 Hub.DEFAULT_NUDGE_MS = 0;
 const table = (rows: string[]) => parseTable(rows.join("\n"), rows.map((r) => `${r.trim().split(/\s+/)[0]} x CHATROOM_SEAT_KEY=seat-key-AAAA`).join("\n"));
@@ -51,6 +52,11 @@ test("a job missing from one look at the process table but still alive has not e
   assert.equal(ended.length, 0, "absent from a short table, alive by signal 0: not ended");
   await watch.tick(); await watch.tick();
   assert.deepEqual(ended.map((j) => [j.pid, j.elapsed_s]), [[103, 330]], "reported once, when it is really gone, with its last seen run time");
+  // the hub's own check, which the watcher uses when no test says what is alive
+  assert.equal(ownPidAlive(process.pid), true, "this process is alive and ours");
+  const done = spawnSync(process.execPath, ["-e", ""]).pid;
+  assert.equal(ownPidAlive(done), false, "a process that has exited is not");
+  if (process.getuid?.() !== 0) assert.equal(ownPidAlive(1), false, "another user's process (init) is not ours: a reused pid, not the job");
 });
 
 test("a job that is a tree of processes is one job and one report (review/304c9538)", async () => {

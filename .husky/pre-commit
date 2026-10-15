@@ -12,10 +12,19 @@ export PATH
 
 # >>> baseline-freeze-guard >>>
 # Rank 3 (swarm-100622-6jdx peer-review plan): an author cannot self-freeze their own quality
-# baseline. Deliberately OUTSIDE the devkit-owned region below (see that region's own header
-# comment: `devkit sync-hook-runner` only touches between the devkit-guards markers), so a
-# devkit sync never removes it. See scripts/guard-baseline-freeze.mjs for the mechanism and the
-# maintainer override (CHATROOM_BASELINE_FREEZE_OVERRIDE, never available to a seat).
+# baseline. Deliberately OUTSIDE and BEFORE the devkit-owned region below, so `devkit init` /
+# `devkit upgrade` never remove it and it refuses before any devkit gate runs. See
+# scripts/guard-baseline-freeze.mjs for the mechanism and the maintainer override
+# (CHATROOM_BASELINE_FREEZE_OVERRIDE, never available to a seat).
+#
+# The one-pass loop is load-bearing (sc-5346): devkit re-inserts its region before the first plain
+# command of this file, and a loop is not one. Written as a bare `if`, the v0.69.0 upgrade put the
+# whole devkit region between these markers; scripts/baseline-freeze-guard-regression.ts runs
+# what is between them.
+for __bfg in 1; do
+    node scripts/guard-baseline-freeze.mjs || exit 1
+done
+# <<< baseline-freeze-guard <<<
 
 # >>> devkit-guards >>>
 # devkit:commit-index
@@ -342,10 +351,5 @@ if [ "${dk_review_failed:-0}" -ne 0 ]; then
 fi
 # /devkit:review-failure-finalizer
 # <<< devkit-guards <<<
-
-if ! node scripts/guard-baseline-freeze.mjs; then
-    exit 1
-fi
-# <<< baseline-freeze-guard <<<
 
 exit 0

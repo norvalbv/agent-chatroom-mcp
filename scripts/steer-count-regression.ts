@@ -38,4 +38,6 @@ assert.equal(r.steers, 5, "1 human + 1 chair chat + 1 note + 2 corrections");
 assert.equal(r.first_steer_min, 10, "first steer 10 minutes after the room opened");
 assert.equal(r.seats, 2, "two working seats read each steer");
 assert.equal(steerCount([[{ type: "room", room: "q", opts: {}, ts: t(0) }] as never])[0].steers, 0);
+const early = steerCount([room as never], 15)[0];
+assert.equal(early.steers, 1, "--minutes 15: only the chair's message at minute 10");
 console.log("steer-count regression: ok");

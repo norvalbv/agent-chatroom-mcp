@@ -4,7 +4,7 @@
  * correction (or supersedes or withdraws an earlier one), counts as a correction rather than a note: in
  * swarm-130459-mrw4 the chair carried rulings to six rooms and corrected several, and every seat re-read each version.
  * A steer is evidence the room did not see something itself; fewer steers for the same brief is the proactivity measure.
- *   npx tsx scripts/steer-count.ts <data/room.jsonl>... [--json]
+ *   npx tsx scripts/steer-count.ts <data/room.jsonl>... [--json] [--minutes N]
  */
 type Ev = Record<string, any>;
 
@@ -26,7 +26,8 @@ export interface SteerRow {
 const CORRECTION = /correction|supersed|withdrawn|retract/i;
 const tsOf = (e: Ev): number => Date.parse(String(e.ts ?? e.msg?.ts ?? e.entry?.updatedAt ?? e.p?.joinedAt ?? ""));
 
-export function steerCount(logs: readonly (readonly Ev[])[]): SteerRow[] {
+/** withinMin: count only the room's first N minutes, so a short probe is compared with the same window of a long run. */
+export function steerCount(logs: readonly (readonly Ev[])[], withinMin = Infinity): SteerRow[] {
   // a chair or human named in any of the logs is one in all of them (the chair carries notes from its own room)
   const steerer = new Set<string>(), seatsBy = new Map<string, Set<string>>();
   for (const events of logs) for (const e of events) if (e.type === "join" && e.p?.name) {
@@ -41,6 +42,7 @@ export function steerCount(logs: readonly (readonly Ev[])[]): SteerRow[] {
     for (const e of events) {
       const t = tsOf(e);
       if (!Number.isNaN(t)) start = Math.min(start, t);
+      if (!Number.isNaN(t) && t - start > withinMin * 60_000) continue;
       let steer = false;
       if (e.type === "message" && e.msg?.kind === "chat" && steerer.has(e.msg.from?.name)) {
         steer = true;

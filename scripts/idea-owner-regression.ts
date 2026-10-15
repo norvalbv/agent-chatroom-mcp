@@ -63,5 +63,9 @@ assert.equal(owed(await o.idle(R), "idea/trim-schema"), undefined, "a claimed pi
 await ok(s.call("board_set", { room: R, key: "idea/third", text: "PROBLEM: evidence/cache-resets. Third." }), "pitch 3");
 await ok(s.call("board_set", { room: R, key: "idea/third", text: "REJECTED: owner showed it is already done in src/x.ts." }), "settled");
 assert.equal(owed(await o.idle(R), "idea/third"), undefined, "a settled pitch is no longer owed");
+// 5. the verdict decision/scout asks for, "ADOPTED", settles it too when the pitch's author records it (review/5d1d757a-claude-opus-5-5-1)
+await ok(s.call("board_set", { room: R, key: "idea/fourth", text: "PROBLEM: evidence/cache-resets. Fourth." }), "pitch 4");
+await ok(s.call("board_set", { room: R, key: "idea/fourth", text: "ADOPTED by owner: built in abc1234. PROBLEM: evidence/cache-resets." }), "adopted line");
+assert.equal(owed(await o.idle(R), "idea/fourth"), undefined, "an adopted pitch is no longer owed");
 console.log("IDEA OWNER OK");
 process.exit(0);

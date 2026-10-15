@@ -457,7 +457,7 @@ export class Spawner {
         args = claudeArgs({ mcpJson, tools: req.canEdit ? WRITE_TOOLS : READ_TOOLS, model: req.model, full: CLAUDE_FULL, settings: heartbeatHookSettings(), sandbox });
       }
       // every seat kind reads its prompt from stdin, never argv: claude -p, codex exec - and src/openrouter.ts (claude-args.ts)
-      const child = spawn(cmd, args, { cwd: seatCwd, env: { ...seatChildEnv(process.env, req.canEdit ? name : undefined, agent === "openrouter"), ...beat.env }, stdio: ["pipe", "pipe", "pipe"] });
+      const child = spawn(cmd, args, { cwd: seatCwd, env: { ...seatChildEnv(process.env, req.canEdit ? name : undefined, agent === "openrouter", cmd === "claude"), ...beat.env }, stdio: ["pipe", "pipe", "pipe"] });
       child.stdin?.on("error", () => {});
       child.stdin?.end(prompt);
       // claude always runs --output-format json now (telemetry), so its raw stdout is a JSON blob, not the

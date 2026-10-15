@@ -375,7 +375,7 @@ const openRouterSeats = new Set<string>();
 /** `beat`: the seat's heartbeat key and env; `beatOnOutput`: its output is its heartbeat (codex exec has no tool hooks); `stdin`: the prompt; `onStdout`: sees stdout as it arrives. */
 function runProc(name: string, cmd: string, args: string[], cwd: string, outFile: string, outViaFile = false, beat?: SeatBeat, beatOnOutput = false, stdin?: string, onStdout?: (d: Buffer) => void): Promise<string> {
   return new Promise((res) => {
-    const child = spawn(cmd, args, { cwd, env: { ...seatChildEnv(process.env, writeWorkers.has(name) ? name : undefined, openRouterSeats.has(name)), ...beat?.env }, stdio: [stdin === undefined ? "ignore" : "pipe", "pipe", "pipe"] });
+    const child = spawn(cmd, args, { cwd, env: { ...seatChildEnv(process.env, writeWorkers.has(name) ? name : undefined, openRouterSeats.has(name), cmd === "claude"), ...beat?.env }, stdio: [stdin === undefined ? "ignore" : "pipe", "pipe", "pipe"] });
     if (stdin !== undefined) { child.stdin?.on("error", () => {}); child.stdin?.end(stdin); } // the prompt, never argv (claude-args.ts)
     if (beat && beatOnOutput) {
       const send = outputHeartbeat((detail) => {
@@ -518,7 +518,7 @@ const SETTLED = NO_CARRY ? "" : settledAxes(CWD) + priorRuns();
 if (NO_CARRY) log("--no-carry: no settled axes or prior runs injected; seat auto-memory off");
 {
   // what the seat actually gets: an inherited CLAUDE_CODE_AUTO_COMPACT_WINDOW (e.g. this launcher itself runs in a seat) passes through
-  const window = seatChildEnv(process.env).CLAUDE_CODE_AUTO_COMPACT_WINDOW;
+  const window = seatChildEnv(process.env, undefined, false, true).CLAUDE_CODE_AUTO_COMPACT_WINDOW;
   const why = seatCompactWindow(process.env) !== null ? (COMPACT_AT === undefined ? "default; --compact-at to change" : "--compact-at") : window ? "inherited CLAUDE_CODE_AUTO_COMPACT_WINDOW" : "--compact-at off / --claude-full";
   log(`compact window: Claude seats compact their transcript at ${window ? `${window} tokens` : "Claude Code's own default (near the model's limit)"} (${why})`);
 }

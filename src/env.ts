@@ -83,18 +83,20 @@ export function compactWindow(raw: string | undefined): number | null {
  */
 export const SEAT_COMPACT_DEFAULT = 300_000;
 
-/** The CLAUDE_CODE_AUTO_COMPACT_WINDOW a seat gets from this environment, or null for Claude Code's own default. */
-export function seatCompactWindow(env: NodeJS.ProcessEnv): number | null {
+/** The CLAUDE_CODE_AUTO_COMPACT_WINDOW a seat gets from this environment, or null for Claude Code's own default. The
+ * default goes to Claude seats only (`claude`): codex and OpenRouter seats never read it, so their env stays as it was. */
+export function seatCompactWindow(env: NodeJS.ProcessEnv, claude = true): number | null {
   const set = compactWindow(env.CHATROOM_SEAT_COMPACT_WINDOW);
   if (set !== null) return set;
-  if (env.CHATROOM_SEAT_COMPACT_WINDOW === "off" || env.CHATROOM_CLAUDE_FULL === "1" || env.CLAUDE_CODE_AUTO_COMPACT_WINDOW) return null;
+  if (!claude || env.CHATROOM_SEAT_COMPACT_WINDOW === "off" || env.CHATROOM_CLAUDE_FULL === "1" || env.CLAUDE_CODE_AUTO_COMPACT_WINDOW) return null;
   return SEAT_COMPACT_DEFAULT;
 }
 
-/** Clone rather than mutate the launcher/hub's environment: controller auth must keep working. */
-export function seatChildEnv(env: NodeJS.ProcessEnv = process.env, name?: string, paid = false): NodeJS.ProcessEnv {
+/** Clone rather than mutate the launcher/hub's environment: controller auth must keep working. `claude`: the child is a
+ * `claude` seat, which gets SEAT_COMPACT_DEFAULT when no window was set. */
+export function seatChildEnv(env: NodeJS.ProcessEnv = process.env, name?: string, paid = false, claude = false): NodeJS.ProcessEnv {
   const childEnv: NodeJS.ProcessEnv = { ...env, MCP_TOOL_TIMEOUT: "120000" };
-  const window = seatCompactWindow(env);
+  const window = seatCompactWindow(env, claude);
   if (window !== null) childEnv.CLAUDE_CODE_AUTO_COMPACT_WINDOW = String(window);
   for (const key of Object.keys(childEnv)) if (key.startsWith("CHATROOM_") && !SEAT_ENV_KEEP.some((re) => re.test(key))) delete childEnv[key];
   for (const key of SEAT_ENV_EXCLUSIONS) delete childEnv[key];

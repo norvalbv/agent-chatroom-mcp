@@ -350,6 +350,7 @@ export const offlineScripts = [
   'result-chars-regression.ts',
   'steer-count-regression.ts',
   'p90-context-regression.ts',
+  'absence-claim-regression.ts',
   'seat-hold-regression.ts',
   'job-end-regression.ts',
   'job-wake-regression.ts',

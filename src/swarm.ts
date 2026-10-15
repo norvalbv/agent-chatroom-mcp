@@ -14,7 +14,7 @@ import { collectRoomSnapshot, renderRunReport, writeRunResult, rollupUsage, hubU
 import { settledAxes } from "./settled.js";
 import { registerRespawn, respawnProbe } from "./respawn.js";
 import { fileURLToPath } from "node:url";
-import { aiGatesLine, HUB_START_MS, waitForHub, seatHoldMs, carrySettings, launcherHeaders, COMPACT_WINDOW_TESTED, compactWindow, devHubRule, heartbeatHookSettings, hubLogFile, loadDotEnv, outputHeartbeat, ownHubEnv, readLauncherToken, respawnTokenProblem, reusedHubProblem, seatBeat, seatChildEnv, seatPortError, type SeatBeat } from "./env.js";
+import { aiGatesLine, HUB_START_MS, waitForHub, seatHoldMs, carrySettings, launcherHeaders, COMPACT_WINDOW_TESTED, compactWindow, devHubRule, heartbeatHookSettings, hubLogFile, loadDotEnv, outputHeartbeat, ownHubEnv, readLauncherToken, respawnTokenProblem, reusedHubProblem, seatBeat, seatChildEnv, seatCompactWindow, seatPortError, type SeatBeat } from "./env.js";
 import { randomUUID } from "node:crypto";
 import { claudeUsageProbe, exitDetail, fetchRespawnRoom, respawnChain, type RespawnRoom } from "./respawn.js";
 import { claudeArgs } from "./claude-args.js";
@@ -129,11 +129,13 @@ if (has("resources")) {
 /**
  * --compact-at <tokens>: every Claude seat, and every recruit of a hub this launcher starts, compacts its transcript at
  * this size (compactWindow in env.ts). A hub that was already running keeps its own setting for the seats it recruits.
+ * Unset, lean seats compact at SEAT_COMPACT_DEFAULT (300000); "--compact-at off", or --claude-full, leaves Claude Code's own default.
  */
-const COMPACT_AT = flag("compact-at");
-if (COMPACT_AT !== undefined) {
+const COMPACT_AT = flag("compact-at") ?? (CLAUDE_FULL ? "off" : undefined);
+if (COMPACT_AT === "off") process.env.CHATROOM_SEAT_COMPACT_WINDOW = "off";
+else if (COMPACT_AT !== undefined) {
   if (compactWindow(COMPACT_AT) === null) {
-    console.error(`--compact-at takes a whole number of tokens from 100000 to 1000000 (got "${COMPACT_AT}"); "200k" is not accepted.`);
+    console.error(`--compact-at takes a whole number of tokens from 100000 to 1000000, or "off" (got "${COMPACT_AT}"); "200k" is not accepted.`);
     process.exit(2);
   }
   process.env.CHATROOM_SEAT_COMPACT_WINDOW = COMPACT_AT;
@@ -514,7 +516,10 @@ function priorRuns(): string {
 }
 const SETTLED = NO_CARRY ? "" : settledAxes(CWD) + priorRuns();
 if (NO_CARRY) log("--no-carry: no settled axes or prior runs injected; seat auto-memory off");
-if (COMPACT_AT !== undefined) log(`--compact-at: Claude seats compact their transcript at ${COMPACT_AT} tokens`);
+{
+  const window = seatCompactWindow(process.env);
+  log(`compact window: Claude seats compact their transcript at ${window ?? "Claude Code's own default (near the model's limit)"}${window !== null ? " tokens" : ""}${COMPACT_AT === undefined ? " (default; --compact-at to change)" : ""}`);
+}
 if (SETTLED) log(`decision log found: ${SETTLED.split("\n").length - 4} settled axes injected into every prompt`);
 let plan: Plan;
 if (FLAT) {

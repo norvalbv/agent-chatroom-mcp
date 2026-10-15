@@ -75,10 +75,26 @@ export function compactWindow(raw: string | undefined): number | null {
   return n >= 100_000 && n <= 1_000_000 ? n : null;
 }
 
+/**
+ * The window a seat compacts at when nobody set one (evidence/compaction-replay, swarm-092526-89rn): in swarm-180216-182a
+ * seats on the 1M window re-read a mean 456k tokens per request and compacted 5 times, at ~962k; mrw4's 24 seats
+ * compacted 87 times at ~268k without thrashing. Replaying 182a's transcripts at 300k puts cache read at 0.33x actual.
+ * "--compact-at 1000000" restores the full window; "off" or CHATROOM_CLAUDE_FULL=1 leaves Claude Code's own default.
+ */
+export const SEAT_COMPACT_DEFAULT = 300_000;
+
+/** The CLAUDE_CODE_AUTO_COMPACT_WINDOW a seat gets from this environment, or null for Claude Code's own default. */
+export function seatCompactWindow(env: NodeJS.ProcessEnv): number | null {
+  const set = compactWindow(env.CHATROOM_SEAT_COMPACT_WINDOW);
+  if (set !== null) return set;
+  if (env.CHATROOM_SEAT_COMPACT_WINDOW === "off" || env.CHATROOM_CLAUDE_FULL === "1" || env.CLAUDE_CODE_AUTO_COMPACT_WINDOW) return null;
+  return SEAT_COMPACT_DEFAULT;
+}
+
 /** Clone rather than mutate the launcher/hub's environment: controller auth must keep working. */
 export function seatChildEnv(env: NodeJS.ProcessEnv = process.env, name?: string, paid = false): NodeJS.ProcessEnv {
   const childEnv: NodeJS.ProcessEnv = { ...env, MCP_TOOL_TIMEOUT: "120000" };
-  const window = compactWindow(env.CHATROOM_SEAT_COMPACT_WINDOW);
+  const window = seatCompactWindow(env);
   if (window !== null) childEnv.CLAUDE_CODE_AUTO_COMPACT_WINDOW = String(window);
   for (const key of Object.keys(childEnv)) if (key.startsWith("CHATROOM_") && !SEAT_ENV_KEEP.some((re) => re.test(key))) delete childEnv[key];
   for (const key of SEAT_ENV_EXCLUSIONS) delete childEnv[key];

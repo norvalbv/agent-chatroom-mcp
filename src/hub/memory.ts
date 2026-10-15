@@ -122,6 +122,8 @@ export function seatUsage(table: Proc[], footprintKb?: Map<number, number>): Map
 }
 
 const pidAlive = (pid: number) => { try { process.kill(pid, 0); return true; } catch (e) { return (e as NodeJS.ErrnoException).code === "EPERM"; } };
+/** Alive and this user's: a seat's job never turns into another user's process, so EPERM means its pid was reused */
+export const ownPidAlive = (pid: number) => { try { process.kill(pid, 0); return true; } catch { return false; } };
 /** A process a seat started that is doing or awaiting real work, as the idle rule needs it (src/hub/idle.ts). */
 export interface Job { pid: number; command: string; elapsed_s: number;
   /** launchd has adopted it (ppid 1): it does not end with the seat that started it, as a foreground command does */
@@ -237,6 +239,8 @@ export class MemoryWatch {
     this.running = true;
     try {
       const table = await (this.o.table ?? (async () => parseTable(await sh("ps", ["-Ao", "pid=,ppid=,rss=,etime=,command="]), await sh("ps", ["eww", "-Ao", "pid=,command="]))))();
+      // (a test's own table is the whole truth unless the test also says what is alive: its pids are made up)
+      const confirm = this.o.alive ?? (this.o.table ? () => false : ownPidAlive);
       const nowMs = Date.now();
       for (const p of table) {
         const startedMs = nowMs - p.elapsedS * 1000;
@@ -269,7 +273,10 @@ export class MemoryWatch {
         const jobs = jobsOf([...u.own, ...table.filter((p) => !p.key && p.inherited === key)]);
         this.jobsBySeat.set(seat, jobs);
         // gone from the table, not merely too old to count as a job any more: a process still running has not ended
-        const alive = new Set(table.map((p) => p.pid));
+        // and not merely missing from this one look: ps on a loaded machine can return a short table, which on hub 7717 told
+        // a seat three times that a job still running had ended (swarm-092526-89rn, pid 87064), so signal 0 has the last word
+        const listed = new Set(table.map((p) => p.pid));
+        const alive = { has: (pid: number) => listed.has(pid) || confirm(pid) };
         this.reportEnded(seat, (this.watching.get(seat) ?? []).filter((was) => !alive.has(was.pid)));
         this.watching.set(seat, [...jobs, ...(this.watching.get(seat) ?? []).filter((was) => alive.has(was.pid) && !jobs.some((j) => j.pid === was.pid))]);
         const biggest = u.own[0];
@@ -321,8 +328,11 @@ export class MemoryWatch {
         if (seen.has(seat)) continue;
         // still holding a place, with nothing left in the table: everything it had has ended, as before
         if (this.o.watched(seat)) {
-          this.reportEnded(seat, jobs.filter((was) => !table.some((p) => p.pid === was.pid)));
-          this.watching.delete(seat);
+          // the same short table can drop the seat's agent row too (review/5f2f4e41-opus-3): what signal 0 still finds
+          // running is kept, not ended
+          const running = jobs.filter((was) => table.some((p) => p.pid === was.pid) || confirm(was.pid));
+          this.reportEnded(seat, jobs.filter((was) => !running.includes(was)));
+          if (running.length) this.watching.set(seat, running); else this.watching.delete(seat);
           this.jobsBySeat.delete(seat);
           continue;
         }

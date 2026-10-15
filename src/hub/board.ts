@@ -6,7 +6,8 @@ import type { Hub } from "../hub.js";
 import { HubError, isReviewKey, readVerifyHead, citesCommit, failToPassShortfall } from "./types.js";
 import type { Quorum, Participant, BoardExpiryOptions, BoardEntry, Room } from "./types.js";
 import { now, codeState, norm, commitsIn, commitKnown } from "./internal.js";
-import { announceTake, commitAuthor, takeWrite } from "./take.js";
+import { announceTake, commitAuthor, noticeSameWork, takeWrite } from "./take.js";
+import { noticeSemantic } from "./overlap/semantic.js";
 
 function boardExpiry(key: string, opts: BoardExpiryOptions): string | undefined {
   if (opts.ttlSeconds === undefined && opts.expiresAt === undefined) return undefined;
@@ -364,7 +365,7 @@ export function setBoard(hub: Hub, roomName: string, pid: string, key: string, t
   // a sealed draft's notice names neither key nor size (either can carry content); it says who is still owed a draft
   // before the notice, so the first one already names the deadline
   const openedRound = key.startsWith("draft/") && hub.openDrafts(room, { name: p.name, key, entryAt: entry.updatedAt });
-  if (take) { announceTake(hub, room, p, key, text, take); return entry; }
+  if (take) { announceTake(hub, room, p, key, text, take); if (take.action === "take" || take.action === "accept") { noticeSameWork(hub, room, take.holder, key); void noticeSemantic(hub, room, take.holder, key); } return entry; }
   const sealedDraft = key.startsWith("draft/") && !room.draftsRevealed && !hub.draftsComplete(room) && !hub.draftsDue(room);
   hub.post(room, "board", p, sealedDraft && openedRound
     // said once, when a round opens: what it is and what it asks of the others (3 of 8 rounds in the records were one seat's working draft)
@@ -415,10 +416,8 @@ export function setBoard(hub: Hub, roomName: string, pid: string, key: string, t
       `@${attacked.author} ${p.name} attacked your "${attacked.target}" in "${key}", quoting "${attacked.cites.slice(0, 80)}${attacked.cites.length > 80 ? "…" : ""}". ` +
       `Answer it by editing "${attacked.target}": change the quoted clause, or add a line saying why it stands. An unanswered attack is listed to whoever proposes.`);
   }
-  if (takeover) {
-    hub.post(room, "system", undefined, `${hub.shown(room, p)} took over "${key}" from ${hub.shown(room, takeover.owner)} (${takeover.reason === "successor" ? "registered successor" : `owner gone since ${hub.lastSeen(takeover.owner)}`}).`);
-  }
-  if (key.startsWith("claim/") && (!previous || claimReleased(previous))) noticeClaimOverlap(hub, room, p, key, text);
+  if (takeover) hub.post(room, "system", undefined, `${hub.shown(room, p)} took over "${key}" from ${hub.shown(room, takeover.owner)} (${takeover.reason === "successor" ? "registered successor" : `owner gone since ${hub.lastSeen(takeover.owner)}`}).`);
+  if (key.startsWith("claim/") && (!previous || claimReleased(previous))) { noticeClaimOverlap(hub, room, p, key, text); noticeSameWork(hub, room, p, key); void noticeSemantic(hub, room, p, key); }
   if (key.endsWith(".ack") || key.startsWith("verify/")) for (const pr of room.proposals.values()) if (pr.status === "open") hub.evaluate(room, pr);
   if (key.startsWith("draft/")) hub.latchDrafts(room);
   return entry;
@@ -579,6 +578,7 @@ export function claimTerms(key: string, text: string): Set<string> {
 function noticeClaimOverlap(hub: Hub, room: Room, p: Participant, key: string, text: string) {
   const top = overlapsFor(hub, room, p, key, text).slice(0, 2);
   if (!top.length) return;
+  for (const h of top) hub.persist({ type: "overlap_notice", room: room.name, key, other: h.key, by: p.name, other_by: h.by, rule: "claim-terms", shared_pct: h.shared_pct, ...(h.room ? { other_room: h.room } : {}), ts: now() });
   // kind "chat" so the @-mentions wake a held wait, same reason as the reviewer notice above; an owner in a linked room
   // is named without @ (not a participant here) and the room is named
   hub.post(room, "chat", undefined,

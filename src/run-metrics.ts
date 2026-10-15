@@ -381,3 +381,31 @@ export function roomRepos(events: readonly Ev[]): string[] {
   const dirs = events.flatMap((e) => (e.type === "board" && typeof e.entry?.workspace?.worktree === "string" ? [e.entry.workspace.worktree as string] : []));
   return [...new Set(dirs)];
 }
+
+/**
+ * Absence claims in proposals, read from room logs: sentences saying something is absent, zero or never happens, and
+ * whether each names where it looked (a file, a grep or scan, a row count). Such a claim is true only over a source
+ * that would show the thing if it existed; probe p1-esports concluded "no rebate rows… earn none" from a copied file
+ * that lacked them, while data-api /activity held $73k of TAKER_REBATE rows. A heuristic count for comparing rooms, not a judge of any one sentence.
+ */
+
+export interface AbsenceClaim { id: string; version: number; claim: string; sourced: boolean }
+
+const ABSENT = /\b(no|none|zero|never|nothing|absent|not any)\b/i;
+const SOURCE = /\b[\w-]+\.(csv|jsonl?|parquet|db|txt|py|ts|md)\b|\bgrep\b|\bscan(ned)?\b|\bchecked\b|\bover all\b|\b\d[\d,]* (rows|lines|records|fills|events)\b/i;
+
+export function absenceClaims(logs: readonly (readonly Ev[])[]): AbsenceClaim[] {
+  const out: AbsenceClaim[] = [];
+  const versions = new Map<string, number>();
+  for (const events of logs) for (const e of events) {
+    const id = e.type === "proposal" ? e.proposal?.id : e.type === "amend" ? e.proposalId : undefined;
+    const text = e.type === "proposal" ? e.proposal?.text : e.text;
+    if (typeof id !== "string" || typeof text !== "string") continue;
+    const version = (versions.get(id) ?? 0) + 1;
+    versions.set(id, version);
+    for (const sentence of text.split(/(?<=[.;!?])\s+|\n+/)) {
+      if (ABSENT.test(sentence)) out.push({ id, version, claim: sentence.trim().slice(0, 200), sourced: SOURCE.test(sentence) });
+    }
+  }
+  return out;
+}

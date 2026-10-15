@@ -269,7 +269,7 @@ app.post("/mcp", async (req, res) => {
     return;
   }
   // ...and ?hold=<ms> when its launcher set the seat's client tool timeout to match: empty waits are held that long
-  const session = createSessionServer(hub, spawner, { holdMs: holdFromQuery(req.query.hold) });
+  const session = createSessionServer(hub, spawner, { holdMs: holdFromQuery(req.query.hold), ...(typeof req.query.topic_held === "string" ? { topicHeld: req.query.topic_held } : {}) });
   // a launched seat's MCP URL carries ?seat=<key>; its tool hook heartbeats with the same key (POST /heartbeat)
   const seatKey = typeof req.query.seat === "string" ? req.query.seat.slice(0, 100) : "";
   // ...and ?worktree=<dir> when its launcher gave it one, so claim/* entries carry its branch and path

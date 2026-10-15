@@ -59,14 +59,20 @@ export function commitAuthor(hub: Hub, room: Room, p: Participant, commit: strin
   return r.status === 0 ? named(room, r.stdout.trim()) : undefined;
 }
 
-/** Words a take key spends on how, not what: a key that differs only by these, or by a seat's name, names the same work. */
-const HOW_WORDS = new Set(["run", "rerun", "re", "job", "go", "now", "start", "my", "the", "do", "doing", "by", "task", "work"]);
-/** The work a take names, as its sorted words without how-words and seat names; "" when nothing is left. */
-function workWords(room: Room, key: string): string {
+/** Words a take key spends on how, not what: a key that differs only by these, or by a seat's name, names the same work.
+ * Not "rerun"/"re": rerunning another seat's result is other work, and the rule refused it twice in swarm-130459-mrw4-esports
+ * (take/rerun-final-bid-esports, take/final-bid-esports-rerun vs take/final-bid-esports; board evidence/take-matcher-labels).
+ * What a word list cannot see is left to the advisory meaning check (src/hub/overlap/semantic.ts). */
+const HOW_WORDS = new Set(["run", "job", "go", "now", "start", "my", "the", "do", "doing", "by", "task", "work"]);
+/** A plural is not a difference: take/decode-takers and take/taker-decode were one piece taken twice, 3 s apart
+ * (swarm-130459-mrw4-crypto, evidence/duplication). "ss" words (class, pass) and short words keep their s. */
+const singular = (t: string) => (t.length > 3 && /[^s]s$/.test(t) ? t.slice(0, -1) : t);
+/** The work a take (or a claim's area) names, as its sorted words without how-words and seat names; "" when nothing is left. */
+export function workWords(room: Room, key: string): string {
   // a seat's name marks who, not what, only where keys put an owner: as the key's last words, or after "by"
   // (slow_count-bob, rerun/T-B3-4-by-break-claude-2). Anywhere else it is a word of the work: a fragment ("2" of
   // claude-opus-5-5-2) in take/arm-2 (review/3f330ea8), or "verifier" in take/verifier-gate-probe (review/3241ee07-opus1)
-  let toks = key.slice("take/".length).toLowerCase().split(/[-/_.:\s]+/).filter(Boolean);
+  let toks = key.replace(/^(take|claim)\//, "").toLowerCase().split(/[-/_.:\s]+/).filter(Boolean);
   const names = [...new Set([...room.participants.values()].map((x) => x.name.toLowerCase().split(/[-/_.:\s]+/).filter(Boolean)))].sort((a, b) => b.length - a.length);
   const at = (i: number, n: string[]) => n.every((t, j) => toks[i + j] === t);
   for (let changed = true; changed;) {
@@ -77,7 +83,7 @@ function workWords(room: Room, key: string): string {
       if (by >= 0) { toks = [...toks.slice(0, by), ...toks.slice(by + 1 + n.length)]; changed = true; break; }
     }
   }
-  return [...new Set(toks.filter((t) => !HOW_WORDS.has(t)))].sort().join(" ");
+  return [...new Set(toks.filter((t) => !HOW_WORDS.has(t)).map(singular))].sort().join(" ");
 }
 
 /** Commit tokens in a take's key, e.g. take/review-ba181129 and take/review/ba181129 both name ba181129. */
@@ -155,6 +161,28 @@ function commitTake(hub: Hub, room: Room, p: Participant, key: string, w: TakeWr
       `Ask ${who.map((n) => `@${n}`).join(" or ")} whether they are on it before you start. ${a} or the assigned reviewer can also hand it to you (a take/ line starting with @${p.name}). If a second review is wanted, it needs no take: write it as review/${commit}-${p.name}.`);
   }
   return w;
+}
+
+/**
+ * A take and a claim naming the same work (equal key words, src/hub/take.ts workWords): take/ and claim/ were never
+ * compared, and in swarm-130459-mrw4-tennis take/data-feed-lag and claim/data-feed-lag were written 6 s apart by two
+ * seats for one piece (evidence/duplication). Advisory, like the claim overlap notice: a claim is never refused for
+ * overlap, and a take inside someone's area may be help. Take-vs-take is refused in commitTake; claim-vs-claim is board.ts noticeClaimOverlap.
+ */
+export function noticeSameWork(hub: Hub, room: Room, p: Participant, key: string) {
+  const words = workWords(room, key);
+  const mine = room.board.get(key);
+  if (!words || commitsIn(key).length || !mine || (key.startsWith("claim/") && !claimOpen(mine))) return;
+  const isTake = key.startsWith("take/");
+  for (const [k, e] of room.board) {
+    if (k.startsWith("take/") === isTake || !/^(take|claim)\//.test(k) || !e.text.trim() || (k.startsWith("claim/") && !claimOpen(e))) continue;
+    const owner = [...room.participants.values()].filter((x) => x.name === (e.holder ?? e.by)).at(-1);
+    if (!owner?.active || owner.id === p.id || (owner.session && p.session && owner.session === p.session) || workWords(room, k) !== words) continue;
+    hub.persist({ type: "overlap_notice", room: room.name, key, other: k, by: p.name, other_by: owner.name, rule: "same-work", ts: new Date().toISOString() });
+    hub.post(room, "chat", undefined,
+      `@${p.name} your "${key}" names the same work as @${owner.name}'s "${k}". Before both of you do it: agree who does it, split it explicitly, or pick other work. Advisory only, both stand.`);
+    return;
+  }
 }
 
 /** What the room is told: the board notice, and for an offer or a decline an @-line to the seat that must act on it. */

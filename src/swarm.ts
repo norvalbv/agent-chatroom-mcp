@@ -14,12 +14,13 @@ import { collectRoomSnapshot, renderRunReport, writeRunResult, rollupUsage, hubU
 import { settledAxes } from "./settled.js";
 import { registerRespawn, respawnProbe } from "./respawn.js";
 import { fileURLToPath } from "node:url";
-import { aiGatesLine, HUB_START_MS, waitForHub, seatHoldMs, carrySettings, launcherHeaders, COMPACT_WINDOW_TESTED, compactWindow, devHubRule, heartbeatHookSettings, hubLogFile, loadDotEnv, outputHeartbeat, ownHubEnv, readLauncherToken, respawnTokenProblem, reusedHubProblem, seatBeat, seatChildEnv, seatPortError, type SeatBeat } from "./env.js";
+import { aiGatesLine, HUB_START_MS, waitForHub, seatHoldMs, carrySettings, launcherHeaders, COMPACT_WINDOW_TESTED, compactWindow, devHubRule, heartbeatHookSettings, hubLogFile, loadDotEnv, outputHeartbeat, ownHubEnv, readLauncherToken, respawnTokenProblem, reusedHubProblem, seatBeat, seatChildEnv, seatCompactWindow, seatPortError, type SeatBeat } from "./env.js";
 import { randomUUID } from "node:crypto";
 import { claudeUsageProbe, exitDetail, fetchRespawnRoom, respawnChain, type RespawnRoom } from "./respawn.js";
 import { claudeArgs } from "./claude-args.js";
 import { codexSeatCommand, codexUsageTracker } from "./codex-seat.js";
 import { claudeSandbox } from "./sandbox.js";
+import { topicDigest } from "./hub/status-view.js";
 import { stopStrays } from "./strays.js";
 import { launchCostGuide } from "./cost-estimate.js";
 import { seatTarget } from "./seat-targets.js";
@@ -39,18 +40,12 @@ const flag = (name: string, def?: string) => {
 const has = (name: string) => argv.includes(`--${name}`);
 const BOOL_FLAGS = new Set(["--keep-hub", "--reuse-hub", "--apply", "--full-access", "--named", "--flat", "--require-verification", "--respawn", "--claude-full", "--no-carry", "--no-seat-targets", "--sandbox", "--no-web"]);
 const task = argv.find((a, i) => !a.startsWith("--") && (i === 0 || !argv[i - 1].startsWith("--") || BOOL_FLAGS.has(argv[i - 1])));
-if (!task) {
-  console.error('usage: swarm "<task>" [--flat] [--done-when text] [--verify text] [--agents 6] [--cwd dir] [--models sonnet,haiku] [--lead-model opus] [--verifier-model opus] [--planner-model opus] [--codex k] [--codex-models gpt-6-astra,gpt-5.6-sol,gpt-5.6-terra] [--openrouter k] [--openrouter-models deepseek/deepseek-v4.1-flash,...] [--verifier-openrouter slug] [--openrouter-reasoning low|medium|high] [--require-verification] [--quorum unanimous|majority|supermajority] [--chair name] [--owner-word] [--seat-hooks off] [--seat-ai-gates on] [--prompt loop.md] [--groups groups.json [--digest-every 45]] [--resources file.md] [--respawn] [--apply] [--full-access] [--named] [--claude-full] [--no-carry] [--no-seat-targets] [--no-web] [--sandbox] [--timeout 30] [--port 7717] [--result-path path]');
-  process.exit(2);
-}
+if (!task) { console.error('usage: swarm "<task>" [--flat] [--done-when text] [--verify text] [--agents 6] [--cwd dir] [--models sonnet,haiku] [--lead-model opus] [--verifier-model opus] [--planner-model opus] [--codex k] [--codex-models gpt-6-astra,gpt-5.6-sol,gpt-5.6-terra] [--openrouter k] [--openrouter-models deepseek/deepseek-v4.1-flash,...] [--verifier-openrouter slug] [--openrouter-reasoning low|medium|high] [--require-verification] [--quorum unanimous|majority|supermajority] [--chair name] [--owner-word] [--seat-hooks off] [--seat-ai-gates on] [--prompt loop.md] [--groups groups.json [--digest-every 45]] [--resources file.md] [--respawn] [--apply] [--full-access] [--named] [--claude-full] [--no-carry] [--no-seat-targets] [--no-web] [--sandbox] [--timeout 30] [--port 7717] [--result-path path]'); process.exit(2); }
 /** --groups <file.json>: the run's groups as the operator wrote them (src/groups.ts), one room and one brief each, on the
  * long-room brief (prompts/group.md). No planner runs, and --agents is the file's workers plus the verifier. */
 let GROUPS: GroupsFile | undefined;
 if (flag("groups")) {
-  if (has("flat")) {
-    console.error("--groups gives each group its own room; --flat puts everyone in one. Pass one of them.");
-    process.exit(2);
-  }
+  if (has("flat")) { console.error("--groups gives each group its own room; --flat puts everyone in one. Pass one of them."); process.exit(2); }
   try {
     GROUPS = loadGroups(resolve(flag("groups")!));
   } catch (e) {
@@ -63,14 +58,8 @@ if (flag("groups")) {
  * ack_required, so the group cannot propose until it has read it) and leaves the pass on the consolidation room's board
  * as digest/<n> for the next pass (prompts/consolidator.md). A seat per pass, not one that polls between them. */
 const DIGEST_EVERY_MIN = Number(flag("digest-every", "0"));
-if (flag("digest-every") && !(DIGEST_EVERY_MIN > 0)) {
-  console.error("--digest-every takes the minutes between consolidation passes, e.g. --digest-every 45");
-  process.exit(2);
-}
-if (DIGEST_EVERY_MIN && !GROUPS) {
-  console.error("--digest-every needs --groups: it passes findings between the groups' rooms, and without --groups there is one room or the planner's.");
-  process.exit(2);
-}
+if (flag("digest-every") && !(DIGEST_EVERY_MIN > 0)) { console.error("--digest-every takes the minutes between consolidation passes, e.g. --digest-every 45"); process.exit(2); }
+if (DIGEST_EVERY_MIN && !GROUPS) { console.error("--digest-every needs --groups: it passes findings between the groups' rooms, and without --groups there is one room or the planner's."); process.exit(2); }
 const TOTAL = GROUPS ? GROUPS.groups.reduce((a, g) => a + g.workers, 0) + 1 : Math.max(2, Number(flag("agents", "4")));
 const WORKERS = TOTAL - 1; // one seat is the verifier
 const CWD = resolve(flag("cwd", process.cwd())!);
@@ -128,11 +117,13 @@ if (has("resources")) {
 /**
  * --compact-at <tokens>: every Claude seat, and every recruit of a hub this launcher starts, compacts its transcript at
  * this size (compactWindow in env.ts). A hub that was already running keeps its own setting for the seats it recruits.
+ * Unset, lean seats compact at SEAT_COMPACT_DEFAULT (300000); "--compact-at off", or --claude-full, leaves Claude Code's own default.
  */
-const COMPACT_AT = flag("compact-at");
-if (COMPACT_AT !== undefined) {
+const COMPACT_AT = flag("compact-at") ?? (CLAUDE_FULL ? "off" : undefined);
+if (COMPACT_AT === "off") process.env.CHATROOM_SEAT_COMPACT_WINDOW = "off";
+else if (COMPACT_AT !== undefined) {
   if (compactWindow(COMPACT_AT) === null) {
-    console.error(`--compact-at takes a whole number of tokens from 100000 to 1000000 (got "${COMPACT_AT}"); "200k" is not accepted.`);
+    console.error(`--compact-at takes a whole number of tokens from 100000 to 1000000, or "off" (got "${COMPACT_AT}"); "200k" is not accepted.`);
     process.exit(2);
   }
   process.env.CHATROOM_SEAT_COMPACT_WINDOW = COMPACT_AT;
@@ -162,10 +153,7 @@ const OPENROUTER_MODELS = (flag("openrouter-models", process.env.OPENROUTER_MODE
 const VERIFIER_OPENROUTER = flag("verifier-openrouter");
 /** --openrouter-reasoning low|medium|high: passed to every OpenRouter seat (models without a reasoning parameter ignore it) */
 const OPENROUTER_REASONING = flag("openrouter-reasoning", process.env.OPENROUTER_REASONING);
-if ((OPENROUTER > 0 || VERIFIER_OPENROUTER) && !process.env.OPENROUTER_API_KEY) {
-  console.error("--openrouter needs OPENROUTER_API_KEY (https://openrouter.ai/keys); a dead seat still counts toward the room's expected participants, so refusing to launch.");
-  process.exit(2);
-}
+if ((OPENROUTER > 0 || VERIFIER_OPENROUTER) && !process.env.OPENROUTER_API_KEY) { console.error("--openrouter needs OPENROUTER_API_KEY (https://openrouter.ai/keys); a dead seat still counts toward the room's expected participants, so refusing to launch."); process.exit(2); }
 // workers may edit files and run anything; each gets its own git worktree
 /** --no-web: no seat may search or fetch the web, e.g. on a benchmark whose answers are published online. */
 const WEB_TOOLS = has("no-web") ? [] : ["WebSearch", "WebFetch"];
@@ -268,7 +256,7 @@ function runClaude(name: string, text: string, tools: string[], cwd: string, mod
   const outFile = resolve(OUT, `${name}.out`);
   // per seat: the MCP URL carries this seat's heartbeat key, which its tool hook sends on every local tool call, and how
   // long its client waits for a tool, so the hub holds its empty waits that long (seatHoldMs)
-  const beat = seatBeat(`${URL_}/mcp`, randomUUID(), cwd, seatHoldMs());
+  const beat = seatBeat(`${URL_}/mcp`, randomUUID(), cwd, seatHoldMs(), task && text.includes(task) ? topicDigest(task) : undefined);
   const seatMcp = resolve(OUT, `${name}.mcp.json`);
   writeFileSync(seatMcp, JSON.stringify({ mcpServers: { chatroom: { type: "http", url: beat.mcpUrl } } }));
   // a seat may write when its tool list lets it edit (WRITE_TOOLS); a read-only seat's Bash gets its cwd denied
@@ -372,7 +360,7 @@ const openRouterSeats = new Set<string>();
 /** `beat`: the seat's heartbeat key and env; `beatOnOutput`: its output is its heartbeat (codex exec has no tool hooks); `stdin`: the prompt; `onStdout`: sees stdout as it arrives. */
 function runProc(name: string, cmd: string, args: string[], cwd: string, outFile: string, outViaFile = false, beat?: SeatBeat, beatOnOutput = false, stdin?: string, onStdout?: (d: Buffer) => void): Promise<string> {
   return new Promise((res) => {
-    const child = spawn(cmd, args, { cwd, env: { ...seatChildEnv(process.env, writeWorkers.has(name) ? name : undefined, openRouterSeats.has(name)), ...beat?.env }, stdio: [stdin === undefined ? "ignore" : "pipe", "pipe", "pipe"] });
+    const child = spawn(cmd, args, { cwd, env: { ...seatChildEnv(process.env, writeWorkers.has(name) ? name : undefined, openRouterSeats.has(name), cmd === "claude"), ...beat?.env }, stdio: [stdin === undefined ? "ignore" : "pipe", "pipe", "pipe"] });
     if (stdin !== undefined) { child.stdin?.on("error", () => {}); child.stdin?.end(stdin); } // the prompt, never argv (claude-args.ts)
     if (beat && beatOnOutput) {
       const send = outputHeartbeat((detail) => {
@@ -513,7 +501,12 @@ function priorRuns(): string {
 }
 const SETTLED = NO_CARRY ? "" : settledAxes(CWD) + priorRuns();
 if (NO_CARRY) log("--no-carry: no settled axes or prior runs injected; seat auto-memory off");
-if (COMPACT_AT !== undefined) log(`--compact-at: Claude seats compact their transcript at ${COMPACT_AT} tokens`);
+{
+  // what the seat actually gets: an inherited CLAUDE_CODE_AUTO_COMPACT_WINDOW (e.g. this launcher itself runs in a seat) passes through
+  const window = seatChildEnv(process.env, undefined, false, true).CLAUDE_CODE_AUTO_COMPACT_WINDOW;
+  const why = seatCompactWindow(process.env) !== null ? (COMPACT_AT === undefined ? "default; --compact-at to change" : "--compact-at") : window ? "inherited CLAUDE_CODE_AUTO_COMPACT_WINDOW" : "--compact-at off / --claude-full";
+  log(`compact window: Claude seats compact their transcript at ${window ? `${window} tokens` : "Claude Code's own default (near the model's limit)"} (${why})`);
+}
 if (SETTLED) log(`decision log found: ${SETTLED.split("\n").length - 4} settled axes injected into every prompt`);
 let plan: Plan;
 if (FLAT) {
@@ -632,14 +625,18 @@ const verifierText = SETTLED + "\n" + prompt("verifier.md", {
             (FULL && isGitRepo ? ` Workers may have committed on branches named swarm/${SWARM_ID}/<name>; inspect and merge or cherry-pick from them as needed.` : "")
           : "Do NOT modify any files; verify by reading and running read-only commands only.",
     });
-// the launcher fixes the room's policy before any seat joins (join_room settings only apply at creation)
-if (REQUIRE_VERIFICATION || QUORUM || CHAIR) {
+// the launcher fixes the room's policy and topic before any seat joins (join_room settings only apply at creation), with
+// or without policy flags: the flat briefs no longer pass topic= to join_room (it put the topic in every seat's context a
+// second and third time, scripts/topic-once-regression.ts), so the first seat to join must not be the one creating it
+{
   try {
     const r = await fetch(`${URL_}/rooms/${encodeURIComponent(leadsRoom)}/create`, { method: "POST", headers: launcherHeaders(launcherToken), body: JSON.stringify({ topic: task, expected_participants: FLAT ? TOTAL : plan.groups.length + 1, require_verification: REQUIRE_VERIFICATION, quorum: QUORUM ?? "unanimous", ...(CHAIR ? { chair: CHAIR } : {}) }) });
     log(`${leadsRoom} created with quorum=${QUORUM ?? "unanimous"}${REQUIRE_VERIFICATION ? ", require_verification" : ""}${CHAIR ? `, chair ${CHAIR}${((await r.clone().json().catch(() => ({}))) as { chair_named?: boolean }).chair_named ? " (named)" : " (NOT named: the hub did not accept this launcher's token, so the chair will read as self-claimed)"}` : ""} (${r.status})`);
   } catch (e) {
     log(`could not pre-create ${leadsRoom}: ${e instanceof Error ? e.message : String(e)}${e instanceof Error && e.cause ? ` (cause: ${(e.cause as NodeJS.ErrnoException).code ?? (e.cause as Error).message})` : ""}`);
   }
+}
+if (REQUIRE_VERIFICATION || QUORUM || CHAIR) {
   // a hand-written group works for hours and concludes its own proposal, so its room gets the run's policy too. It is a
   // breakout of the leads room (parent): the hub carries its conclusion onto the leads board, the leads room's last call
   // waits for it, and it is told when the leads room concludes (swarm-123021-1nwp: leads concluded 92 min before internal)

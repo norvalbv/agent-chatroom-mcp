@@ -17,6 +17,8 @@ const defaultTimeout = () => { const n = Number(process.env.CHATROOM_TEST_TIMEOU
  * starts a command, `[offline] FAILED <name>: <reason>` and the `[offline] FAILED n of m commands:` list on stderr name
  * the failures. So a timeout keeps the FAILED shape, and the timing lines carry the prefix `[offline:time]`, which that
  * parser does not read as a command.
+ * @param {{ name: string, command: string, args: string[] }[]} commands
+ * @param {{ cwd?: string, timeout?: number, log?: (line: string) => void }} [options]
  */
 export function runCommands(commands, { cwd, timeout = defaultTimeout(), log = line => console.error(line) } = {}) {
   const failures = [], took = [];
@@ -83,6 +85,7 @@ export const offlineScripts = [
   'idle-open-work-regression.ts',
   'finished-claim-key-regression.ts',
   'unclaimed-ideas-regression.ts',
+  'idea-owner-regression.ts',
   'idle-leave-regression.ts',
   'idea-lists-regression.ts',
   'delivery-cap-regression.ts',
@@ -289,6 +292,7 @@ export const offlineScripts = [
   'seat-cost-estimate.test.ts',
   'killed-seat-output-tokens.test.ts',
   'seat-env-regression.ts',
+  'seat-compact-default-regression.ts',
   'runs-table-regression.ts',
   'launcher-authority-regression.ts',
   'exit-reason-regression.ts',
@@ -347,6 +351,10 @@ export const offlineScripts = [
   'idle-jobs-regression.ts',
   'run-end-seat-exit-regression.ts',
   'wait-cost-regression.ts',
+  'result-chars-regression.ts',
+  'steer-count-regression.ts',
+  'p90-context-regression.ts',
+  'absence-claim-regression.ts',
   'seat-hold-regression.ts',
   'job-end-regression.ts',
   'job-wake-regression.ts',
@@ -357,6 +365,12 @@ export const offlineScripts = [
   'transcript-refusals-regression.ts',
   'rejected-key-regression.ts',
   'seat-unconnected-regression.ts',
+  'take-same-work-regression.ts',
+  'take-semantic-regression.ts',
+  'cache-reset-regression.ts',
+  'review-suites-regression.ts',
+  'topic-once-regression.ts',
+  'join-topic-held-regression.ts',
 ];
 
 export function offlineCommands() {

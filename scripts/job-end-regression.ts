@@ -14,7 +14,8 @@ import { join } from "node:path";
 import { test } from "node:test";
 import { Hub } from "../src/hub.js";
 import { seatHash } from "../src/hub/liveness.js";
-import { MemoryWatch, parseTable, type Job } from "../src/hub/memory.js";
+import { MemoryWatch, ownPidAlive, parseTable, type Job } from "../src/hub/memory.js";
+import { spawnSync } from "node:child_process";
 
 Hub.DEFAULT_NUDGE_MS = 0;
 const table = (rows: string[]) => parseTable(rows.join("\n"), rows.map((r) => `${r.trim().split(/\s+/)[0]} x CHATROOM_SEAT_KEY=seat-key-AAAA`).join("\n"));
@@ -36,6 +37,39 @@ test("the watcher reports a job that was running and is gone, once, and not a sh
   assert.deepEqual(ended.map((e) => [e.seat === seatHash("seat-key-AAAA"), e.job.pid, e.job.elapsed_s]), [[true, 103, 315]], "gone on this tick: reported with how long it had run when last seen");
   await watch.tick();
   assert.equal(ended.length, 1, "once");
+});
+
+test("a job missing from one look at the process table but still alive has not ended (swarm-092526-89rn)", async () => {
+  // hub 7717, 10:34-10:41: "your job has ended: pid 87064" three times (ran_s 369, 556, 742) while it ran; the same tick
+  // reported another seat's live job too (scout-1's 91807 at 10:38:24.338 and 10:41:17.341), so the table was short, not the job gone
+  const job = "  103     1 300000       05:00 python3 score_op.py";
+  const ticks = [table([AGENT, job]), table([AGENT]), table([AGENT, job.replace("05:00", "05:30")]), table([AGENT])];
+  const live = [true, true, true, false];
+  const ended: Job[] = [];
+  let i = 0;
+  const watch = new MemoryWatch({ watched: () => true, table: async () => ticks[i++], alive: () => live[i - 1]!, footprints: async () => new Map(), onJobEnd: (_seat, j) => ended.push(j) });
+  await watch.tick(); await watch.tick();
+  assert.equal(ended.length, 0, "absent from a short table, alive by signal 0: not ended");
+  await watch.tick(); await watch.tick();
+  assert.deepEqual(ended.map((j) => [j.pid, j.elapsed_s]), [[103, 330]], "reported once, when it is really gone, with its last seen run time");
+  // the hub's own check, which the watcher uses when no test says what is alive
+  assert.equal(ownPidAlive(process.pid), true, "this process is alive and ours");
+  const done = spawnSync(process.execPath, ["-e", ""]).pid;
+  assert.equal(ownPidAlive(done), false, "a process that has exited is not");
+  if (process.getuid?.() !== 0) assert.equal(ownPidAlive(1), false, "another user's process (init) is not ours: a reused pid, not the job");
+});
+
+test("a short table that drops the seat's agent row too does not end a job still alive (review/5f2f4e41-opus-3)", async () => {
+  const job = "  103     1 300000       05:00 python3 score_op.py";
+  const ticks = [table([AGENT, job]), table([]), table([AGENT, job.replace("05:00", "05:30")]), table([])];
+  const live = [true, true, true, false];
+  const ended: Job[] = [];
+  let i = 0;
+  const watch = new MemoryWatch({ watched: () => true, table: async () => ticks[i++], alive: () => live[i - 1]!, footprints: async () => new Map(), onJobEnd: (_seat, j) => ended.push(j) });
+  await watch.tick(); await watch.tick();
+  assert.equal(ended.length, 0, "seat and job both absent from a short table, job alive by signal 0: not ended");
+  await watch.tick(); await watch.tick();
+  assert.deepEqual(ended.map((j) => [j.pid, j.elapsed_s]), [[103, 330]], "reported once, when it is really gone");
 });
 
 test("a job that is a tree of processes is one job and one report (review/304c9538)", async () => {

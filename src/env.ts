@@ -75,10 +75,28 @@ export function compactWindow(raw: string | undefined): number | null {
   return n >= 100_000 && n <= 1_000_000 ? n : null;
 }
 
-/** Clone rather than mutate the launcher/hub's environment: controller auth must keep working. */
-export function seatChildEnv(env: NodeJS.ProcessEnv = process.env, name?: string, paid = false): NodeJS.ProcessEnv {
+/**
+ * The window a seat compacts at when nobody set one (evidence/compaction-replay, swarm-092526-89rn): in swarm-180216-182a
+ * seats on the 1M window re-read a mean 456k tokens per request and compacted 5 times, at ~962k; mrw4's 24 seats
+ * compacted 87 times at ~268k without thrashing. Replaying 182a's transcripts at 300k puts cache read at 0.33x actual.
+ * "--compact-at 1000000" restores the full window; "off" or CHATROOM_CLAUDE_FULL=1 leaves Claude Code's own default.
+ */
+export const SEAT_COMPACT_DEFAULT = 300_000;
+
+/** The CLAUDE_CODE_AUTO_COMPACT_WINDOW a seat gets from this environment, or null for Claude Code's own default. The
+ * default goes to Claude seats only (`claude`): codex and OpenRouter seats never read it, so their env stays as it was. */
+export function seatCompactWindow(env: NodeJS.ProcessEnv, claude = true): number | null {
+  const set = compactWindow(env.CHATROOM_SEAT_COMPACT_WINDOW);
+  if (set !== null) return set;
+  if (!claude || env.CHATROOM_SEAT_COMPACT_WINDOW === "off" || env.CHATROOM_CLAUDE_FULL === "1" || env.CLAUDE_CODE_AUTO_COMPACT_WINDOW) return null;
+  return SEAT_COMPACT_DEFAULT;
+}
+
+/** Clone rather than mutate the launcher/hub's environment: controller auth must keep working. `claude`: the child is a
+ * `claude` seat, which gets SEAT_COMPACT_DEFAULT when no window was set. */
+export function seatChildEnv(env: NodeJS.ProcessEnv = process.env, name?: string, paid = false, claude = false): NodeJS.ProcessEnv {
   const childEnv: NodeJS.ProcessEnv = { ...env, MCP_TOOL_TIMEOUT: "120000" };
-  const window = compactWindow(env.CHATROOM_SEAT_COMPACT_WINDOW);
+  const window = seatCompactWindow(env, claude);
   if (window !== null) childEnv.CLAUDE_CODE_AUTO_COMPACT_WINDOW = String(window);
   for (const key of Object.keys(childEnv)) if (key.startsWith("CHATROOM_") && !SEAT_ENV_KEEP.some((re) => re.test(key))) delete childEnv[key];
   for (const key of SEAT_ENV_EXCLUSIONS) delete childEnv[key];
@@ -308,11 +326,13 @@ export function holdFromQuery(raw: unknown): number | undefined {
 
 /** `holdMs`: only for a seat whose client tool timeout this launcher sets (a claude seat): the hub is told in the URL, and
  * the seat's MCP_TOOL_TIMEOUT is a minute longer, so a held wait never ends as a client-side tool timeout. */
-export function seatBeat(mcpUrl: string, key: string, worktree?: string, holdMs?: number): SeatBeat {
+export function seatBeat(mcpUrl: string, key: string, worktree?: string, holdMs?: number, topicHeld?: string): SeatBeat {
   const u = new URL(mcpUrl);
   u.searchParams.set("seat", key);
   if (worktree) u.searchParams.set("worktree", worktree);
   if (holdMs) u.searchParams.set("hold", String(holdMs));
+  // the digest of a room topic this seat's brief already carries: that room's join_room ships only its opening
+  if (topicHeld) u.searchParams.set("topic_held", topicHeld);
   // the seat's memory budget, when the hub enforces one (src/hub/memory.ts): its tools can size themselves to it
   const budget = Number(process.env.CHATROOM_SEAT_MEMORY_MB) > 0 ? { CHATROOM_SEAT_MEMORY_MB: String(Number(process.env.CHATROOM_SEAT_MEMORY_MB)) } : {};
   return { key, mcpUrl: u.toString(), env: { CHATROOM_SEAT_KEY: key, CHATROOM_HEARTBEAT_URL: new URL("/heartbeat", u).toString(), ...budget, ...seatTelemetryEnv(u, key), ...(holdMs ? { MCP_TOOL_TIMEOUT: String(holdMs + 60_000) } : {}) } };

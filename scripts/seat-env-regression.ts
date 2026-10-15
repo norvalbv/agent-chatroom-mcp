@@ -12,6 +12,8 @@ import { EventEmitter } from 'node:events';
 import vm from 'node:vm';
 import { StringDecoder } from 'node:string_decoder';
 import { transformSync } from 'esbuild';
+// swarm.ts imports topicDigest (scripts/join-topic-held-regression.ts): the real one, so a seat's topic_held is the true digest
+import { topicDigest } from '../src/hub/status-view.js';
 
 const root = path.resolve(path.dirname(url.fileURLToPath(import.meta.url)), '..');
 const HUMAN = 'synthetic-human';
@@ -67,7 +69,7 @@ async function harness(entry: string, env: Record<string, string>, argv: string[
     },
   });
   const cache = new Map<string, any>();
-  const mocks: Record<string, any> = { 'node:fs': fs, 'node:path': path, 'node:os': os, 'node:url': url, 'node:child_process': cp, 'node:crypto': { randomUUID: () => 'synthetic-session-id' }, 'node:string_decoder': { StringDecoder }, './strays.js': { stopStrays: async () => 0 }, './hub.js': { HubError: Error }, './settled.js': { settledAxes: () => '' }, './resources.js': { loadResources: () => [], seedResources: async () => [] }, './seat.js': { runSeat: async () => ({ final: 'fixture', ok: true }) }, './seat-handoff-report.js': { handoffMarkerLine: () => '' },
+  const mocks: Record<string, any> = { 'node:fs': fs, 'node:path': path, 'node:os': os, 'node:url': url, 'node:child_process': cp, 'node:crypto': { randomUUID: () => 'synthetic-session-id' }, 'node:string_decoder': { StringDecoder }, './strays.js': { stopStrays: async () => 0 }, './hub/status-view.js': { topicDigest }, './hub.js': { HubError: Error }, './settled.js': { settledAxes: () => '' }, './resources.js': { loadResources: () => [], seedResources: async () => [] }, './seat.js': { runSeat: async () => ({ final: 'fixture', ok: true }) }, './seat-handoff-report.js': { handoffMarkerLine: () => '' },
     // launcher-side helpers with no part in a seat's argv or environment: the hooks copy and the join check (src/worktree-hooks.ts, src/join-check.ts)
     './worktree-hooks.js': { carryHooks: () => ({ hooks: 'shared' }), hooksLine: () => '', hooksOff: () => ({ hooks: 'shared' }) },
     './join-check.js': { checkJoined: async () => ({ missing: [], unknown: [], none: false }), joinLines: () => [], roomNames: () => async () => [] }, './result.js': { collectRoomSnapshot: async (_base: string, name: string) => ({ name, payload: { state: 'concluded', conclusion: { text: 'fixture' } }, transcript: { text: '' } }), readRunResult: () => ({}), writeRunResult: () => undefined, renderRunReport: () => '', rollupUsage: () => undefined, hubUsageRollup: () => undefined, transcriptPath: () => undefined, parseClaudeCliOutput: (raw: string) => ({ text: raw, usage: null }), seatScorecard: () => [], classifyOutcome: () => ({ kind: 'concluded', timedOut: false, detail: '' }), proposedDecisionDir: () => null } };

@@ -29,6 +29,8 @@ export type Event =
   | { type: "deadline_announced"; room: string }
   | { type: "archive"; room: string; archived: boolean; by: string; ts: string }
   | { type: "board_manifest"; room: string; bytes: number; kind: "full" | "delta" | "empty" }
+  /** telemetry: asks a seat's hook or loop put into its model's context mid-turn, outside any hub call (wait-cost --traffic) */
+  | { type: "steer_injected"; room: string; participant: string; asks: number; chars: number; ts: string }
   | { type: "board"; room: string; key: string; entry: BoardEntry | null }
   /** telemetry: a review/* with a verify head was first written and the hub @-named the commit's author */
   | { type: "review_notice"; room: string; key: string; commit: string; author: string; by: string; passes: boolean; ts: string }
@@ -53,6 +55,10 @@ export type Event =
   // what happened to an MCP session that held a seat (bugs.md 3: nothing recorded a session moving, closing or being reaped).
   // seat_kept: the seat is still served by another session after this. Never a session key (identity-is-the-connection).
   | { type: "session"; room: string; event: "moved" | "closed"; participant: string; name: string; reason: string; seat_kept: boolean; ts: string }
+  /** Telemetry only: the hub told two seats a claim or take overlaps another seat's (rule claim-terms: shared stems; same-work: equal key words across take/ and claim/; semantic: embedding cosine, shared_pct = cosine x 100, src/hub/overlap/semantic.ts). */
+  | { type: "overlap_notice"; room: string; key: string; other: string; by: string; other_by: string; rule: "claim-terms" | "same-work" | "semantic"; shared_pct?: number; other_room?: string; ts: string }
+  /** Telemetry only (replay ignores it; src/hub/overlap/semantic.ts): one meaning check of a take or claim, notified or not, or the endpoint's error. */
+  | { type: "semantic_check"; room: string; key: string; by: string; model: string; compared: number; notified: boolean; ms: number; ts: string; other?: string; other_by?: string; cos?: number; min?: number; error?: string }
   | { type: "outside_read"; room: string; by: { room: string; pid: string } | null; via: "http" | "http_pattern" | "file"; tool: string; ts: string }
   /** ms: how long the call took; empty: a wait that returned no new message (run-metrics splits idle polling on it); outsider: the caller's seats elsewhere (name@room) when it holds none in this room; key: the entry a board_get read */
   | { type: "call_completion"; room: string; tool: string; outcome: CallOutcome; ts: string; participant: string | null; ms?: number; empty?: boolean; outsider?: string; key?: string; key_rejected?: string }

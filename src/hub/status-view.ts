@@ -5,10 +5,21 @@
  * and join_room; it polls room_status for who is doing what, the proposal and the board keys. So: the topic is cut to
  * its opening, a working detail to one line, and a board key to its author (plus reviewer). Proposals, votes,
  * challenges, liveness, claims and everything else pass through unchanged. room_status(full_topic=true), join_room,
- * list_rooms and the dashboard keep the whole topic.
+ * list_rooms and the dashboard keep the whole topic; join_room cuts it only for a seat whose brief already holds it
+ * (topic_held=, swarm-092526-89rn).
  */
+import { createHash } from "node:crypto";
+
 const TOPIC_HEAD = 240;
 const DETAIL_HEAD = 80;
+
+/** A topic's opening, pointing to where the whole of it is: what room_status and a topic-holding seat's join_room ship. */
+export const topicHead = (topic: string) =>
+  topic.length > TOPIC_HEAD ? `${topic.slice(0, TOPIC_HEAD)}… (${topic.length} chars; room_status full_topic=true carries it whole)` : topic;
+
+/** The launcher puts this in a seat's MCP URL (topic_held=) when the seat's brief carries that exact topic, so join_room
+ * need not hand it over a second time (scripts/join-topic-held-regression.ts); a digest, not the text, so the URL stays short. */
+export const topicDigest = (topic: string) => createHash("sha256").update(topic).digest("hex").slice(0, 16);
 
 type Summary = Record<string, unknown> & {
   topic?: string;
@@ -22,7 +33,7 @@ export function statusView(summary: Summary, fullTopic = false): Summary {
   const topic = summary.topic ?? "";
   return {
     ...summary,
-    topic: !fullTopic && topic.length > TOPIC_HEAD ? `${topic.slice(0, TOPIC_HEAD)}… (${topic.length} chars; room_status full_topic=true carries it whole)` : topic,
+    topic: fullTopic ? topic : topicHead(topic),
     // a seat's output record ships what it delivered, non-zero counts only: no age (last_seen_at is beside it), no claims (the
     // board keys name their authors), and nothing delivered ships as no field at all
     participants: summary.participants?.map(({ output, holds: held, ...p }) => {

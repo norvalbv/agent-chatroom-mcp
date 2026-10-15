@@ -26,6 +26,12 @@ for (const file of ["minimal.md", "terse.md", "loop.md"]) {
   assert.equal(n, 1, `[${file}] renders the topic ${n} times; a flat brief should carry it once`);
 }
 
+// the verifier joins the same pre-created room; its topic="Final answer: {{TASK}}" argument was the one copy left
+// (dev room swarm-095501-i8xt: the verifier's join_room args were 1664 chars, the worker's 103, for a 1506-char topic)
+const verifier = readFileSync(resolve(root, "prompts", "verifier.md"), "utf8").split("{{TASK}}").join(MARK);
+const nv = verifier.split(MARK).length - 1;
+assert.equal(nv, 1, `[verifier.md] renders the task ${nv} times; the verifier joins the pre-created room, so topic= is dead weight`);
+
 // with no topic= in the join instruction, the first seat to join would otherwise create a room with no topic
 const swarm = readFileSync(resolve(root, "src", "swarm.ts"), "utf8");
 const create = swarm.indexOf("/rooms/${encodeURIComponent(leadsRoom)}/create");

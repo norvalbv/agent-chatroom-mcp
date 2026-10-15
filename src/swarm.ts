@@ -517,8 +517,10 @@ function priorRuns(): string {
 const SETTLED = NO_CARRY ? "" : settledAxes(CWD) + priorRuns();
 if (NO_CARRY) log("--no-carry: no settled axes or prior runs injected; seat auto-memory off");
 {
-  const window = seatCompactWindow(process.env);
-  log(`compact window: Claude seats compact their transcript at ${window ?? "Claude Code's own default (near the model's limit)"}${window !== null ? " tokens" : ""}${COMPACT_AT === undefined ? " (default; --compact-at to change)" : ""}`);
+  // what the seat actually gets: an inherited CLAUDE_CODE_AUTO_COMPACT_WINDOW (e.g. this launcher itself runs in a seat) passes through
+  const window = seatChildEnv(process.env).CLAUDE_CODE_AUTO_COMPACT_WINDOW;
+  const why = seatCompactWindow(process.env) !== null ? (COMPACT_AT === undefined ? "default; --compact-at to change" : "--compact-at") : window ? "inherited CLAUDE_CODE_AUTO_COMPACT_WINDOW" : "--compact-at off / --claude-full";
+  log(`compact window: Claude seats compact their transcript at ${window ? `${window} tokens` : "Claude Code's own default (near the model's limit)"} (${why})`);
 }
 if (SETTLED) log(`decision log found: ${SETTLED.split("\n").length - 4} settled axes injected into every prompt`);
 let plan: Plan;

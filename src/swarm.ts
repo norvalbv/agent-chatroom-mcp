@@ -20,6 +20,7 @@ import { claudeUsageProbe, exitDetail, fetchRespawnRoom, respawnChain, type Resp
 import { claudeArgs } from "./claude-args.js";
 import { codexSeatCommand, codexUsageTracker } from "./codex-seat.js";
 import { claudeSandbox } from "./sandbox.js";
+import { topicDigest } from "./hub/status-view.js";
 import { stopStrays } from "./strays.js";
 import { launchCostGuide } from "./cost-estimate.js";
 import { seatTarget } from "./seat-targets.js";
@@ -268,7 +269,7 @@ function runClaude(name: string, text: string, tools: string[], cwd: string, mod
   const outFile = resolve(OUT, `${name}.out`);
   // per seat: the MCP URL carries this seat's heartbeat key, which its tool hook sends on every local tool call, and how
   // long its client waits for a tool, so the hub holds its empty waits that long (seatHoldMs)
-  const beat = seatBeat(`${URL_}/mcp`, randomUUID(), cwd, seatHoldMs());
+  const beat = seatBeat(`${URL_}/mcp`, randomUUID(), cwd, seatHoldMs(), task && text.includes(task) ? topicDigest(task) : undefined);
   const seatMcp = resolve(OUT, `${name}.mcp.json`);
   writeFileSync(seatMcp, JSON.stringify({ mcpServers: { chatroom: { type: "http", url: beat.mcpUrl } } }));
   // a seat may write when its tool list lets it edit (WRITE_TOOLS); a read-only seat's Bash gets its cwd denied

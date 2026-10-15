@@ -308,11 +308,13 @@ export function holdFromQuery(raw: unknown): number | undefined {
 
 /** `holdMs`: only for a seat whose client tool timeout this launcher sets (a claude seat): the hub is told in the URL, and
  * the seat's MCP_TOOL_TIMEOUT is a minute longer, so a held wait never ends as a client-side tool timeout. */
-export function seatBeat(mcpUrl: string, key: string, worktree?: string, holdMs?: number): SeatBeat {
+export function seatBeat(mcpUrl: string, key: string, worktree?: string, holdMs?: number, topicHeld?: string): SeatBeat {
   const u = new URL(mcpUrl);
   u.searchParams.set("seat", key);
   if (worktree) u.searchParams.set("worktree", worktree);
   if (holdMs) u.searchParams.set("hold", String(holdMs));
+  // the digest of a room topic this seat's brief already carries: that room's join_room ships only its opening
+  if (topicHeld) u.searchParams.set("topic_held", topicHeld);
   // the seat's memory budget, when the hub enforces one (src/hub/memory.ts): its tools can size themselves to it
   const budget = Number(process.env.CHATROOM_SEAT_MEMORY_MB) > 0 ? { CHATROOM_SEAT_MEMORY_MB: String(Number(process.env.CHATROOM_SEAT_MEMORY_MB)) } : {};
   return { key, mcpUrl: u.toString(), env: { CHATROOM_SEAT_KEY: key, CHATROOM_HEARTBEAT_URL: new URL("/heartbeat", u).toString(), ...budget, ...seatTelemetryEnv(u, key), ...(holdMs ? { MCP_TOOL_TIMEOUT: String(holdMs + 60_000) } : {}) } };

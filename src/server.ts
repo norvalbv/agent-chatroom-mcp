@@ -8,7 +8,7 @@
  * Loop as an agent sees it: join_room -> submit_opening -> send_message /
  * wait_for_messages -> propose -> challenge -> vote -> room concludes -> leave_room.
  */
-import { statusView } from "./hub/status-view.js";
+import { statusView, topicDigest, topicHead } from "./hub/status-view.js";
 import { fmtWait, steerCarry } from "./hub/steer.js";
 import { McpServer, ResourceTemplate, type RegisteredTool } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { randomUUID } from "node:crypto";
@@ -78,7 +78,7 @@ const FULL_WAIT_MS = 50_000;
 
 /** `holdMs`: how long this connection's client waits for a tool, as its launcher said in the MCP URL (?hold=, src/env.ts
  * seatHoldMs). A full-length wait_for_messages on it is held that long before it returns empty. */
-export function createSessionServer(hub: Hub, spawner?: Spawner, opts: { holdMs?: number; fullWaitMs?: number } = {}): SessionServer {
+export function createSessionServer(hub: Hub, spawner?: Spawner, opts: { holdMs?: number; fullWaitMs?: number; topicHeld?: string } = {}): SessionServer {
   const server = new McpServer(
     { name: "agent-chatroom", version: "0.2.0" },
     {
@@ -316,7 +316,7 @@ export function createSessionServer(hub: Hub, spawner?: Spawner, opts: { holdMs?
         humans_present: hub.activeParticipants(r).filter((x) => x.agent === "human").map((x) => x.name),
         // its own field, ahead of the summary: the hint is replaced whenever something is owed, and a board of 60 keys buries ten
         ...(hub.resourceNote(r.name) ? { resources: hub.resourceNote(r.name) } : {}),
-        room: hub.summary(r),
+        room: ((s) => (opts.topicHeld && s.topic && topicDigest(s.topic) === opts.topicHeld ? { ...s, topic: topicHead(s.topic) } : s))(hub.summary(r)), // a seat whose brief holds it: its opening
         recent_messages: recent.map((m) => hub.fmt(r, m)),
         next_seq: participant.lastSeenSeq,
         hint: hub.attentionHint(r, participant) ??

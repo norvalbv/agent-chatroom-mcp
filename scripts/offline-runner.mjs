@@ -83,6 +83,7 @@ export const offlineScripts = [
   'idle-open-work-regression.ts',
   'finished-claim-key-regression.ts',
   'unclaimed-ideas-regression.ts',
+  'idea-owner-regression.ts',
   'idle-leave-regression.ts',
   'idea-lists-regression.ts',
   'delivery-cap-regression.ts',

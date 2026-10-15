@@ -15,10 +15,14 @@ export interface OpenWork {
    * claim_orphaned: the owner left and this seat may take it over now. help_wanted: an open help/* or join-request/*.
    * idea_unclaimed: an idea/<slug> nobody holds claim/<slug> for, shown only to a seat with nothing of its own in flight.
    * idea_no_free_seat: the same idea while every worker holds a live claim, shown only to its author: a hand is added
-   * with request_agent or the idea is dropped (brief item 2 of swarm-003601-tky5; idea/unowned-work-no-free-seat). */
-  kind: "review_owed" | "unreviewed" | "own_claim_empty" | "claim_orphaned" | "help_wanted" | "idea_unclaimed" | "idea_no_free_seat";
+   * with request_agent or the idea is dropped (brief item 2 of swarm-003601-tky5; idea/unowned-work-no-free-seat).
+   * idea_verdict_owed: an open idea that names this seat's board entry (`cites`), shown busy or not: the seat whose problem
+   * it answers claims or attacks it (decision/scout; 74% of pitches were never closed, evidence/scout-ideas-closure). */
+  kind: "review_owed" | "unreviewed" | "own_claim_empty" | "claim_orphaned" | "help_wanted" | "idea_unclaimed" | "idea_no_free_seat" | "idea_verdict_owed";
   key: string;
   owner?: string;
+  /** idea_verdict_owed: this seat's entry the idea names */
+  cites?: string;
   /** idea_no_free_seat: how many workers there are, every one holding a live claim */
   workers?: number;
 }
@@ -179,12 +183,17 @@ export function openWork(hub: Hub, room: Room, p: Participant, idle = true): Ope
   const reviewed = (claimKey: string, claim: BoardEntry) => reviewedClaim(room, claimKey, claim);
 
   const review: OpenWork[] = [], own: OpenWork[] = [], orphaned: OpenWork[] = [], help: OpenWork[] = [], ideas: OpenWork[] = [], myIdeas: string[] = [];
+  const verdicts: OpenWork[] = [];
   for (const [k, e] of entries) {
     if (k.startsWith("idea/")) {
       const claim = room.board.get(`claim/${area(k)}`);
       if ((!claim?.text.trim() || claimReleased(claim)) && !IDEA_SETTLED.test(e.text) && !settled(e)) {
         ideas.push({ kind: "idea_unclaimed", key: k, owner: shownName(e.by) });
         if (e.by === p.name) myIdeas.push(k);
+        // a reasoned rejection is an outcome too; the pitch's author never rules on its own pitch
+        const cites = e.by === p.name || room.board.get(`attack/${k}`)?.text.trim() ? undefined
+          : entries.find(([ck, ce]) => ce.by === p.name && !NOT_REVIEW.some((pre) => ck.startsWith(pre)) && !ck.startsWith("idea/") && namesKey(e.text, ck))?.[0];
+        if (cites) verdicts.push({ kind: "idea_verdict_owed", key: k, owner: shownName(e.by), cites });
       }
       continue;
     }
@@ -228,7 +237,8 @@ export function openWork(hub: Hub, room: Room, p: Participant, idle = true): Ope
   const workers = hub.activeParticipants(room).filter((x) => x.agent !== "human" && !["verifier", "lead", "chair"].includes(x.role ?? "worker"));
   const noneFree = !free && workers.length > 0 && workers.every((x) => holds(x.name));
   const recruit: OpenWork[] = noneFree ? myIdeas.map((key) => ({ kind: "idea_no_free_seat" as const, key, workers: workers.length })) : [];
-  return [...review, ...orphaned, ...own, ...help, ...recruit, ...(free ? ideas : [])];
+  const owedHere = new Set(verdicts.map((w) => w.key));
+  return [...review, ...verdicts, ...orphaned, ...own, ...help, ...recruit, ...(free ? ideas.filter((w) => !owedHere.has(w.key)) : [])];
 }
 
 function describe(w: OpenWork): string {
@@ -240,6 +250,7 @@ function describe(w: OpenWork): string {
     case "own_claim_empty": return `your ${w.key} has nothing on the board behind it: post what you have found or built, or release the claim`;
     case "help_wanted": return `${w.owner} asked for help in ${w.key} (board_get it)`;
     case "idea_no_free_seat": return `your ${w.key} has no owner and all ${w.workers} workers hold a claim: request_agent(area="${slug}", brief=<what it is and what done looks like; it may just say board_get ${w.key}>) adds a seat for it, or write one line on ${w.key} saying why it is dropped`;
+    case "idea_verdict_owed": return `${w.owner}'s ${w.key} cites your ${w.cites}: board_get it, then claim/${slug} to build it or attack/idea/${slug} with the reason it should not be built`;
     case "idea_unclaimed": return `${w.owner}'s ${w.key} is unbuilt and nobody holds claim/${slug}: board_get it, then claim/${slug} and start, or say in one line why it should not be built`;
   }
 }

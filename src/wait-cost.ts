@@ -20,17 +20,27 @@ export interface WaitCostRow { trigger: Trigger; requests: number; cost_usd: num
 
 export interface ToolCostRow { tool: string; requests: number; cost_usd: number; share: number }
 
-function attribute(logs: readonly (readonly Ev[])[]): { byTrigger: Map<Trigger, { requests: number; cost: number }>; byTool: Map<string, { requests: number; cost: number }> } {
+/** The board area a keyed hub call touched: the key's first segment, with inbox notes and their acknowledgements apart
+ * (inbox/* vs inbox/*.ack), so the cost of cross-room notes can be read on its own. */
+export function keyClass(key: unknown): string | undefined {
+  const k = typeof key === "string" ? key : "";
+  if (!k) return undefined;
+  if (k.startsWith("inbox/")) return k.endsWith(".ack") ? "inbox/*.ack" : "inbox/*";
+  const slash = k.indexOf("/");
+  return slash > 0 ? `${k.slice(0, slash)}/*` : k.length > 24 ? "(other key)" : k;
+}
+
+function attribute(logs: readonly (readonly Ev[])[]): { byTrigger: Map<Trigger, { requests: number; cost: number }>; byTool: Map<string, { requests: number; cost: number }>; byKey: Map<string, { requests: number; cost: number }> } {
   const seatOf = new Map<string, string>(); // participant id -> seat key hash
   for (const events of logs) for (const e of events) if (e.type === "join" && e.p?.id && e.p.seatKeyHash) seatOf.set(e.p.id, e.p.seatKeyHash);
-  const triggers = new Map<string, { t: number; trigger: Trigger; tool: string }[]>();
+  const triggers = new Map<string, { t: number; trigger: Trigger; tool: string; key?: string }[]>();
   const usage = new Map<string, Map<string, { t: number; requests: number; cost: number }>>();
-  const note = (seat: string | undefined, ts: unknown, trigger: Trigger, tool: string) => {
+  const note = (seat: string | undefined, ts: unknown, trigger: Trigger, tool: string, key?: string) => {
     const t = Date.parse(String(ts));
-    if (seat && !Number.isNaN(t)) (triggers.get(seat) ?? triggers.set(seat, []).get(seat)!).push({ t, trigger, tool });
+    if (seat && !Number.isNaN(t)) (triggers.get(seat) ?? triggers.set(seat, []).get(seat)!).push({ t, trigger, tool, ...(key ? { key } : {}) });
   };
   for (const events of logs) for (const e of events) {
-    if (e.type === "call_completion") note(seatOf.get(e.participant), e.ts, e.tool !== "wait_for_messages" ? "hub_call" : e.empty ? "wait_empty" : "wait_msg", e.tool !== "wait_for_messages" ? String(e.tool) : e.empty ? "wait_for_messages (empty)" : "wait_for_messages (messages)");
+    if (e.type === "call_completion") note(seatOf.get(e.participant), e.ts, e.tool !== "wait_for_messages" ? "hub_call" : e.empty ? "wait_empty" : "wait_msg", e.tool !== "wait_for_messages" ? String(e.tool) : e.empty ? "wait_for_messages (empty)" : "wait_for_messages (messages)", e.tool !== "wait_for_messages" ? keyClass(e.key) : undefined);
     else if (e.type === "work") note(seatOf.get(e.pid), e.ts, "local_tool", `local ${String(e.tool ?? e.cls ?? "tool")}`);
     else if (e.type === "usage" && e.seat && e.usage) {
       const t = Date.parse(String(e.ts));
@@ -39,6 +49,7 @@ function attribute(logs: readonly (readonly Ev[])[]): { byTrigger: Map<Trigger, 
   }
   const sum = new Map<Trigger, { requests: number; cost: number }>();
   const byTool = new Map<string, { requests: number; cost: number }>();
+  const byKey = new Map<string, { requests: number; cost: number }>();
   for (const [seat, samples] of usage) {
     const seen = (triggers.get(seat) ?? []).sort((a, b) => a.t - b.t);
     let prev: { t: number; requests: number; cost: number } | undefined;
@@ -50,19 +61,21 @@ function attribute(logs: readonly (readonly Ev[])[]): { byTrigger: Map<Trigger, 
       const base = u.requests >= before.requests ? before : { t: before.t, requests: 0, cost: 0 };
       const requests = u.requests - base.requests;
       if (requests <= 0) continue;
-      let trigger: Trigger = "no_tool_seen", tool = "(no tool seen)";
+      let trigger: Trigger = "no_tool_seen", tool = "(no tool seen)", key: string | undefined;
       for (let i = seen.length - 1; i >= 0; i--) {
         if (seen[i].t > u.t) continue;
-        if (seen[i].t >= base.t) { trigger = seen[i].trigger; tool = seen[i].tool; }
+        if (seen[i].t >= base.t) { trigger = seen[i].trigger; tool = seen[i].tool; key = seen[i].key; }
         break;
       }
-      for (const row of [sum.get(trigger) ?? sum.set(trigger, { requests: 0, cost: 0 }).get(trigger)!, byTool.get(tool) ?? byTool.set(tool, { requests: 0, cost: 0 }).get(tool)!]) {
+      const rows = [sum.get(trigger) ?? sum.set(trigger, { requests: 0, cost: 0 }).get(trigger)!, byTool.get(tool) ?? byTool.set(tool, { requests: 0, cost: 0 }).get(tool)!];
+      if (key) rows.push(byKey.get(`${tool} ${key}`) ?? byKey.set(`${tool} ${key}`, { requests: 0, cost: 0 }).get(`${tool} ${key}`)!);
+      for (const row of rows) {
         row.requests += requests;
         row.cost += u.cost - base.cost;
       }
     }
   }
-  return { byTrigger: sum, byTool };
+  return { byTrigger: sum, byTool, byKey };
 }
 
 const round = (x: number, d: number) => Math.round(x * 10 ** d) / 10 ** d;
@@ -78,6 +91,14 @@ export function costByTool(logs: readonly (readonly Ev[])[]): ToolCostRow[] {
   const by = attribute(logs).byTool;
   const total = [...by.values()].reduce((n, r) => n + r.cost, 0);
   return [...by].map(([tool, r]) => ({ tool, requests: r.requests, cost_usd: round(r.cost, 2), share: total > 0 ? round(r.cost / total, 3) : 0 })).sort((a, b) => b.cost_usd - a.cost_usd);
+}
+
+/** Keyed hub calls (board_get, board_set) by the tool and the board area they touched, e.g. "board_set inbox/*.ack":
+ * what reading and acknowledging cross-room notes cost next to the rest of the board traffic. */
+export function costByKey(logs: readonly (readonly Ev[])[]): ToolCostRow[] {
+  const { byKey, byTool } = attribute(logs);
+  const total = [...byTool.values()].reduce((n, r) => n + r.cost, 0);
+  return [...byKey].map(([tool, r]) => ({ tool, requests: r.requests, cost_usd: round(r.cost, 2), share: total > 0 ? round(r.cost / total, 3) : 0 })).sort((a, b) => b.cost_usd - a.cost_usd);
 }
 
 /** How long empty waits were held before returning nothing: a seat on a held connection (?hold=, src/env.ts) shows

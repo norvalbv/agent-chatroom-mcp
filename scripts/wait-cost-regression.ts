@@ -3,7 +3,7 @@
  * Run: npx tsx scripts/wait-cost-regression.ts
  */
 import assert from "node:assert/strict";
-import { costByTool, emptyWaits, waitCost, renderWaitCost } from "../src/wait-cost.js";
+import { costByKey, costByTool, emptyWaits, keyClass, waitCost, renderWaitCost } from "../src/wait-cost.js";
 
 const T0 = Date.parse("2026-10-11T10:00:00.000Z");
 const at = (s: number) => new Date(T0 + s * 1000).toISOString();
@@ -36,6 +36,21 @@ assert.deepEqual(by, {
 assert.ok(rows.every((r, i) => i === 0 || rows[i - 1].cost_usd >= r.cost_usd), "largest first");
 assert.match(renderWaitCost(rows), /\| wait_empty \| 2 \| \$0\.60 \| 19% \| \$0\.300 \|/);
 assert.deepEqual(Object.fromEntries(costByTool([group, leads]).map((t) => [t.tool, t.requests])), { board_set: 2, "local Bash": 1, "wait_for_messages (empty)": 2, "(no tool seen)": 1, "wait_for_messages (messages)": 1 }, "the same requests by the tool whose result woke the model");
+// keyed hub calls by board area: reading a cross-room note and acknowledging it are told apart from the rest of the board
+const keyed = [
+  { type: "join", room: "k", p: { id: "p_k", name: "k", seatKeyHash: "kk" } },
+  { type: "usage", room: "k", seat: "kk", ts: at(0), usage: { requests: 1, cost_usd: 1, at: at(0) } },
+  { type: "call_completion", room: "k", tool: "board_get", outcome: "success", participant: "p_k", ts: at(10), key: "inbox/leads/ruling-3" },
+  { type: "usage", room: "k", seat: "kk", ts: at(15), usage: { requests: 2, cost_usd: 1.5, at: at(15) } },
+  { type: "call_completion", room: "k", tool: "board_set", outcome: "success", participant: "p_k", ts: at(20), key: "inbox/leads/ruling-3.ack" },
+  { type: "usage", room: "k", seat: "kk", ts: at(25), usage: { requests: 3, cost_usd: 2, at: at(25) } },
+  { type: "call_completion", room: "k", tool: "board_set", outcome: "success", participant: "p_k", ts: at(30), key: "ledger" },
+  { type: "usage", room: "k", seat: "kk", ts: at(35), usage: { requests: 5, cost_usd: 3, at: at(35) } },
+];
+assert.deepEqual(Object.fromEntries(costByKey([keyed]).map((t) => [t.tool, [t.requests, t.cost_usd]])), { "board_get inbox/*": [1, 0.5], "board_set inbox/*.ack": [1, 0.5], "board_set ledger": [2, 1] }, "keyed hub calls by tool and board area, notes apart from their acks");
+assert.equal(keyClass("claim/inbox-cost"), "claim/*");
+assert.equal(keyClass(undefined), undefined);
+
 const held = [{ type: "call_completion", tool: "wait_for_messages", participant: "p", empty: true, ms: 240_000 }, { type: "call_completion", tool: "wait_for_messages", participant: "p", empty: true, ms: 55_000 }, { type: "call_completion", tool: "wait_for_messages", participant: "p", empty: true, ms: 239_000 }, { type: "call_completion", tool: "wait_for_messages", participant: "p", empty: false, ms: 900 }];
 assert.deepEqual(emptyWaits([held]), { waits: 4, empty: 3, median_empty_s: 239, empty_seat_minutes: 9 });
 console.log("WAIT COST OK");

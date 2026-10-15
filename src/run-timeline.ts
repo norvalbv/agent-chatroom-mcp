@@ -40,7 +40,7 @@ export interface SeatTimeline {
   costUsd: number;
   /** input tokens per model request, cache reads and writes included: the transcript the seat re-read each time */
   meanContext: number;
-  peakContext: number;
+  peakContext: number; /** request-weighted 90th percentile of the per-sample context: what most requests stay under */ p90Context: number;
   /** times the per-request context fell below 60% of a previous one above 100k tokens */
   compactions: number;
   waits: number;
@@ -111,12 +111,12 @@ export function runTimeline(events: readonly Ev[], bucketMinutes = 30): RunTimel
   const buckets: TimelineBucket[] = [];
   const names = new Map<string, string>();
   const byKey = new Map<string, string>();
-  const seats = new Map<string, SeatTimeline & { prev?: Ev; context: number; lastContext?: number }>();
+  const seats = new Map<string, SeatTimeline & { prev?: Ev; context: number; lastContext?: number; samples: [number, number][] }>();
   const seat = (id: string | undefined) => {
     const name = id ? names.get(id) : undefined;
     if (!id || !name) return undefined;
     let s = seats.get(id);
-    if (!s) seats.set(id, (s = { name, requests: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0, costUsd: 0, meanContext: 0, peakContext: 0, compactions: 0, waits: 0, emptyWaits: 0, context: 0 }));
+    if (!s) seats.set(id, (s = { name, requests: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0, costUsd: 0, meanContext: 0, peakContext: 0, p90Context: 0, compactions: 0, waits: 0, emptyWaits: 0, context: 0, samples: [] }));
     return s;
   };
   const bucket = (ts: number) => {
@@ -165,7 +165,7 @@ export function runTimeline(events: readonly Ev[], bucketMinutes = 30): RunTimel
         s.costUsd += d("cost_usd");
         if (requests <= 0) break;
         const context = (d("input_tokens") + read + write) / requests;
-        s.context += context * requests;
+        s.context += context * requests; s.samples.push([context, requests]);
         s.peakContext = Math.max(s.peakContext, context);
         if (s.lastContext !== undefined && s.lastContext > 100_000 && context < s.lastContext * 0.6) s.compactions++;
         s.lastContext = context;
@@ -235,7 +235,7 @@ export function runTimeline(events: readonly Ev[], bucketMinutes = 30): RunTimel
     room,
     bucketMinutes,
     buckets,
-    seats: [...seats.values()].map(({ prev: _prev, context, lastContext: _last, ...s }) => ({ ...s, meanContext: s.requests > 0 ? context / s.requests : 0 })),
+    seats: [...seats.values()].map(({ prev: _prev, context, lastContext: _last, samples, ...s }) => ({ ...s, meanContext: s.requests > 0 ? context / s.requests : 0, p90Context: ((xs, total, seen = 0) => xs.find(([, w]) => (seen += w) >= 0.9 * total)?.[0] ?? 0)(samples.sort((x, y) => x[0] - y[0]), s.requests) })),
     ...(silence ? { longestSilence: silence } : {}),
     silences,
     notes,
@@ -263,8 +263,8 @@ export function renderTimeline(t: RunTimeline): string {
     "| from | model requests | output tokens | cost | chat | board writes | tool calls | hub calls | waits (empty) | recruits |\n|---|---|---|---|---|---|---|---|---|---|\n";
   for (const b of t.buckets) text += `| ${hhmm(b.start)} | ${b.requests} | ${k(b.outputTokens)} | $${b.costUsd.toFixed(2)} | ${b.chat} | ${b.boardWrites} | ${b.work} | ${b.hubCalls} | ${b.waits} (${b.emptyWaits}) | ${b.recruits} |\n`;
   text += "\nContext is the input a seat sent per model request, cache reads and writes included: its transcript, re-read every time.\n\n" +
-    "| seat | model requests | mean context | peak context | compactions | cache read | cache write | output | cost | waits (empty) |\n|---|---|---|---|---|---|---|---|---|---|\n";
-  for (const s of t.seats) text += `| ${s.name} | ${s.requests} | ${k(s.meanContext)} | ${k(s.peakContext)} | ${s.compactions} | ${k(s.cacheReadTokens)} | ${k(s.cacheWriteTokens)} | ${k(s.outputTokens)} | $${s.costUsd.toFixed(2)} | ${s.waits} (${s.emptyWaits}) |\n`;
+    "| seat | model requests | mean context | p90 context | peak context | compactions | cache read | cache write | output | cost | waits (empty) |\n|---|---|---|---|---|---|---|---|---|---|---|\n";
+  for (const s of t.seats) text += `| ${s.name} | ${s.requests} | ${k(s.meanContext)} | ${k(s.p90Context)} | ${k(s.peakContext)} | ${s.compactions} | ${k(s.cacheReadTokens)} | ${k(s.cacheWriteTokens)} | ${k(s.outputTokens)} | $${s.costUsd.toFixed(2)} | ${s.waits} (${s.emptyWaits}) |\n`;
   if (t.notes.length) {
     const acked = t.notes.flatMap((x) => (x.ackMinutes === undefined ? [] : [x.ackMinutes])).sort((a, b) => a - b);
     text += `\n${t.notes.length} notes from other rooms, ${acked.length} acknowledged${acked.length ? ` (median ${median(acked)} min)` : ""}, ${t.notes.length - acked.length} never.\n\n` +

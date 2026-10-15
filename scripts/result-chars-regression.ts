@@ -55,6 +55,7 @@ try {
   assert.ok(get, "board_get recorded");
   assert.equal(get.result_chars, got, "board_get records the exact length of the text the model received");
   assert.ok(get.result_chars > 5000, "the entry's text is in the result");
+  assert.ok(set, "board_set recorded");
   assert.ok(set.args_chars > 5000 && set.result_chars < 1000, "board_set: big arguments, small result");
   for (const e of done) assert.equal(typeof e.result_chars, "number", `${e.tool} records result_chars`);
   assert.ok(refused > 0);

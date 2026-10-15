@@ -38,6 +38,21 @@ test("the watcher reports a job that was running and is gone, once, and not a sh
   assert.equal(ended.length, 1, "once");
 });
 
+test("a job missing from one look at the process table but still alive has not ended (swarm-092526-89rn)", async () => {
+  // hub 7717, 10:34-10:41: "your job has ended: pid 87064" three times (ran_s 369, 556, 742) while it ran; the same tick
+  // reported another seat's live job too (scout-1's 91807 at 10:38:24.338 and 10:41:17.341), so the table was short, not the job gone
+  const job = "  103     1 300000       05:00 python3 score_op.py";
+  const ticks = [table([AGENT, job]), table([AGENT]), table([AGENT, job.replace("05:00", "05:30")]), table([AGENT])];
+  const live = [true, true, true, false];
+  const ended: Job[] = [];
+  let i = 0;
+  const watch = new MemoryWatch({ watched: () => true, table: async () => ticks[i++], alive: () => live[i - 1]!, footprints: async () => new Map(), onJobEnd: (_seat, j) => ended.push(j) });
+  await watch.tick(); await watch.tick();
+  assert.equal(ended.length, 0, "absent from a short table, alive by signal 0: not ended");
+  await watch.tick(); await watch.tick();
+  assert.deepEqual(ended.map((j) => [j.pid, j.elapsed_s]), [[103, 330]], "reported once, when it is really gone, with its last seen run time");
+});
+
 test("a job that is a tree of processes is one job and one report (review/304c9538)", async () => {
   // a runner (pid 200) with three workers it started, and a second, unrelated job of the same seat that ends on the same tick
   const tree = ["  200     1 300000       05:00 python3 runner.py", "  201   200 100000       04:58 python3 worker.py 1", "  202   200 100000       04:58 python3 worker.py 2", "  203   200 100000       04:58 python3 worker.py 3", "  300     1 100000       02:00 node score.mjs"];

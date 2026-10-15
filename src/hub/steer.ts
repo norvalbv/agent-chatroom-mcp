@@ -36,10 +36,13 @@ export function steerLine(hub: Hub, room: Room, m: Message): SteerItem {
  * The consumer injected these asks: delivered (settleRead up to them: earlier unseen chatter is kept as withheld and still
  * delivered by the next wait, in order) and never peeked again. Debt is unchanged: an ask stays owed until a reply or pass.
  */
-export function steerAck(hub: Hub, room: Room, p: Participant, ids: string[]): number {
+export function steerAck(hub: Hub, room: Room, p: Participant, ids: string[], carried = false): number {
   const want = new Set(ids);
   const msgs = steerPending(hub, room, p).filter((m) => want.has(m.id));
   if (!msgs.length) return 0;
+  // injected by a hook or seat loop, outside any hub call: room traffic no call_completion's result_chars counts (a
+  // carried ask rides on a hub result and is in that call's result_chars already)
+  if (!carried) hub.persist({ type: "steer_injected", room: room.name, participant: p.id, asks: msgs.length, chars: msgs.reduce((n, m) => n + steerLine(hub, room, m).text.length, 0), ts: new Date().toISOString() });
   hub.settleRead(room, p, p.lastSeenSeq, msgs, Math.max(p.lastSeenSeq, ...msgs.map((m) => m.seq)));
   p.steered = [...(p.steered ?? []), ...msgs.map((m) => m.id)].slice(-100);
   return msgs.length;
@@ -77,6 +80,6 @@ export function steerCarry(hub: Hub, roomName: string, pid: string): string[] {
   const p = room?.participants.get(pid);
   if (!room || !p) return [];
   const msgs = steerPending(hub, room, p);
-  if (msgs.length) steerAck(hub, room, p, msgs.map((m) => m.id));
+  if (msgs.length) steerAck(hub, room, p, msgs.map((m) => m.id), true);
   return msgs.map((m) => steerLine(hub, room, m).text);
 }

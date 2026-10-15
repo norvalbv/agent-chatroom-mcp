@@ -29,6 +29,8 @@ export type Event =
   | { type: "deadline_announced"; room: string }
   | { type: "archive"; room: string; archived: boolean; by: string; ts: string }
   | { type: "board_manifest"; room: string; bytes: number; kind: "full" | "delta" | "empty" }
+  /** telemetry: asks a seat's hook or loop put into its model's context mid-turn, outside any hub call (wait-cost --traffic) */
+  | { type: "steer_injected"; room: string; participant: string; asks: number; chars: number; ts: string }
   | { type: "board"; room: string; key: string; entry: BoardEntry | null }
   /** telemetry: a review/* with a verify head was first written and the hub @-named the commit's author */
   | { type: "review_notice"; room: string; key: string; commit: string; author: string; by: string; passes: boolean; ts: string }

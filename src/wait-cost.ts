@@ -108,7 +108,8 @@ export interface TrafficRow { tool: string; calls: number; result_chars: number;
  * is re-read on every later request until compaction, so this is the room's share of what seats carry. */
 export function roomTraffic(logs: readonly (readonly Ev[])[]): TrafficRow[] {
   const by = new Map<string, { calls: number; result: number; args: number }>();
-  for (const events of logs) for (const e of events) {
+  for (const events of logs) for (let e of events) {
+    if (e.type === "steer_injected") e = { tool: "(asks injected mid-turn by the seat's hook)", result_chars: Number(e.chars ?? 0), participant: e.participant, type: "call_completion" };
     if (e.type !== "call_completion" || typeof e.result_chars !== "number" || !e.participant) continue;
     const tool = e.tool === "wait_for_messages" ? (e.empty ? "wait_for_messages (empty)" : "wait_for_messages (messages)") : String(e.tool);
     const row = by.get(tool) ?? by.set(tool, { calls: 0, result: 0, args: 0 }).get(tool)!;
@@ -118,24 +119,32 @@ export function roomTraffic(logs: readonly (readonly Ev[])[]): TrafficRow[] {
   return [...by].map(([tool, r]) => ({ tool, calls: r.calls, result_chars: r.result, args_chars: r.args, share: total > 0 ? round(r.result / total, 3) : 0 })).sort((a, b) => b.result_chars - a.result_chars);
 }
 
-/** Room traffic against everything written into seats' contexts: hub result tokens (chars / 4, an estimate) over the
- * cache-write and uncached input tokens the seats' usage reports (each new token enters the context once as one of
- * those). The rest is the seat's own work: its prompt, its local tool results, its own output. A respawned seat process
- * (counter going down) starts a new sum. */
-export function trafficShare(logs: readonly (readonly Ev[])[]): { hub_tokens_est: number; context_written_tokens: number; share?: number } {
+/** Room traffic against the new content written into seats' contexts: hub result tokens (chars / 4, an estimate and a
+ * lower bound for JSON) over the uncached input and cache-write tokens the seats' usage reports. A sample interval whose
+ * writes are most of the context it sent (over half of it, and over 20k tokens a request) is a rewrite of context
+ * already there, after an account switch, a cache expiry or a compaction, not new content: it is left out of the
+ * denominator and reported as rewritten_tokens. Samples are keyed by their own stamp, so a seat whose usage is logged in
+ * two rooms is counted once, and put in time order; a counter that goes down is a new seat process. */
+export function trafficShare(logs: readonly (readonly Ev[])[]): { hub_tokens_est: number; context_written_tokens: number; rewritten_tokens: number; share?: number } {
   const hubChars = roomTraffic(logs).reduce((n, r) => n + r.result_chars, 0);
-  const last = new Map<string, Map<string, number>>(); // seat -> sample at -> written so far
+  const bySeat = new Map<string, Map<string, { t: number; requests: number; write: number; sent: number }>>();
   for (const events of logs) for (const e of events) if (e.type === "usage" && e.seat && e.usage) {
-    const w = Number(e.usage.cache_creation_input_tokens ?? 0) + Number(e.usage.input_tokens ?? 0);
-    (last.get(e.seat) ?? last.set(e.seat, new Map()).get(e.seat)!).set(String(e.usage.at ?? e.ts), w);
+    const u = e.usage, n = (k: string) => Number(u[k] ?? 0), at = String(u.at ?? e.ts);
+    const write = n("cache_creation_input_tokens") + n("input_tokens");
+    (bySeat.get(e.seat) ?? bySeat.set(e.seat, new Map()).get(e.seat)!).set(at, { t: Date.parse(String(e.ts ?? at)), requests: n("requests"), write, sent: write + n("cache_read_input_tokens") });
   }
-  let written = 0;
-  for (const samples of last.values()) {
-    let prev = 0;
-    for (const w of samples.values()) { written += w >= prev ? w - prev : w; prev = w; }
+  let written = 0, rewritten = 0;
+  for (const samples of bySeat.values()) {
+    let prev = { requests: 0, write: 0, sent: 0 };
+    for (const u of [...samples.values()].sort((a, b) => a.t - b.t)) {
+      const base = u.requests >= prev.requests ? prev : { requests: 0, write: 0, sent: 0 };
+      const write = u.write - base.write, sent = u.sent - base.sent, requests = Math.max(1, u.requests - base.requests);
+      if (write > sent / 2 && write / requests > 20_000) rewritten += write; else written += write;
+      prev = u;
+    }
   }
   const hub = Math.round(hubChars / 4);
-  return { hub_tokens_est: hub, context_written_tokens: written, ...(written > 0 && hubChars > 0 ? { share: round(hub / written, 3) } : {}) };
+  return { hub_tokens_est: hub, context_written_tokens: written, rewritten_tokens: rewritten, ...(written > 0 && hubChars > 0 ? { share: round(hub / written, 3) } : {}) };
 }
 
 /** How long empty waits were held before returning nothing: a seat on a held connection (?hold=, src/env.ts) shows

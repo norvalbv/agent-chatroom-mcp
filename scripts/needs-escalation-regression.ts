@@ -64,6 +64,7 @@ test("a blocks: line names the claims the blocker stops; their owners are pinged
   const filed = events().filter((e) => e.type === "need_filed")[0];
   assert.deepEqual(filed.blocks, ["claim/crypto-maker", "claim/goal-lag", "claim/nonexistent"]);
   assert.deepEqual(filed.told, ["chair-claude", "bob"], "the filer is not told about their own claim; an unknown claim tells nobody");
+  assert.match(m.content, /claim\/nonexistent is not on the board/, "a blocks: key nobody claimed is said, so the filer can fix it");
 });
 
 test("with no chair and no human the notice says nobody is here to decide, so the seat knows the owner sees it only in the report", () => {

@@ -52,7 +52,7 @@ export interface RunMetrics {
   /** minutes after the room opened; absent when it never happened */
   minutesTo: { firstClaim?: number; firstSource?: number; firstProposal?: number; firstNeed?: number; conclusion?: number };
   /** needs/* the room filed for the owner (hub need_filed / need_cleared events, src/hub/needs.ts): filed, cleared, and claims named as blocked; absent: none */
-  needs?: { filed: number; cleared: number; blocks: number };
+  needs?: { filed: number; cleared: number; blocks: number; nudged: number };
   /** rate: workers who recruited at least once over workers; calls counts every role's recruits (a verifier's too) */
   recruits: { calls: number; seats: number; workers: number; rate: number };
   /** summed over seats that reported usage; seatsWithUsage of seats.length says how complete it is */
@@ -106,7 +106,7 @@ export function runMetrics(events: readonly Ev[], opts: MetricsOptions = {}): Ru
   let proposal: string | undefined;
   let ledger = false;
   const takes: Record<string, number> = {};
-  const needs = { filed: 0, cleared: 0, blocks: 0 };
+  const needs = { filed: 0, cleared: 0, blocks: 0, nudged: 0 };
   let firstNeed: string | undefined;
   const quiet = { chat: 0, bySender: 0, byHub: 0, keptPublicForBoardKey: 0 };
   const appendsBy = new Map<string, { lines: number; seats: Set<string>; landed: Set<string> }>();
@@ -201,6 +201,10 @@ export function runMetrics(events: readonly Ev[], opts: MetricsOptions = {}): Ru
       case "need_cleared":
         stamp(e.ts);
         needs.cleared++;
+        break;
+      case "blocker_nudged":
+        stamp(e.ts);
+        needs.nudged++;
         break;
       case "board_append": {
         stamp(e.ts);
@@ -323,7 +327,7 @@ export function runMetrics(events: readonly Ev[], opts: MetricsOptions = {}): Ru
     recruits: { calls: list.reduce((n, s) => n + s.recruits, 0), seats: recruiting, workers: workers.length, rate: workers.length ? recruiting / workers.length : 0 },
     ...(priced.length ? { usage: { cost_usd: sum("cost_usd"), input_tokens: sum("input_tokens"), output_tokens: sum("output_tokens"), seatsWithUsage: priced.length } } : {}),
     ...(Object.keys(takes).length ? { takes } : {}),
-    ...(needs.filed || needs.cleared ? { needs } : {}),
+    ...(needs.filed || needs.cleared || needs.nudged ? { needs } : {}),
     ...(quiet.chat ? { quiet } : {}),
     ...(appendsBy.size ? { appends: Object.fromEntries([...appendsBy].map(([k, a]) => [k, { lines: a.lines, seats: a.seats.size, continuations: a.landed.size }])) } : {}),
     ...(ledger ? { webSeats: list.filter((s) => (s.work?.web ?? 0) > 0).length } : {}),
@@ -360,7 +364,7 @@ export function renderMetrics(m: RunMetrics): string {
     (m.usage ? `Seat-reported usage: $${m.usage.cost_usd.toFixed(2)}, ${m.usage.input_tokens} input + ${m.usage.output_tokens} output tokens from ${m.usage.seatsWithUsage} of ${m.seats.length} seats (the rest unknown). ` : "No seat reported usage to the hub. ") +
     memoryLine(m.seats) +
     (m.quiet && (m.quiet.bySender || m.quiet.byHub || m.quiet.keptPublicForBoardKey) ? `Of ${m.quiet.chat} agent chat messages, ${m.quiet.bySender} were sent quiet, ${m.quiet.byHub} were made quiet by the hub, and ${m.quiet.keptPublicForBoardKey} two-seat exchanges stayed public because they named a board entry. ` : "") +
-    (m.needs ? `needs/* for the owner: ${m.needs.filed} filed${t.firstNeed !== undefined ? `, the first at ${t.firstNeed} min` : ""}, ${m.needs.cleared} cleared, ${m.needs.blocks} claim${m.needs.blocks === 1 ? "" : "s"} named as blocked. ` : "") +
+    (m.needs ? `needs/* for the owner: ${m.needs.filed} filed${t.firstNeed !== undefined ? `, the first at ${t.firstNeed} min` : ""}, ${m.needs.cleared} cleared, ${m.needs.blocks} claim${m.needs.blocks === 1 ? "" : "s"} named as blocked, ${m.needs.nudged} blocker${m.needs.nudged === 1 ? "" : "s"} named in chat and pointed at needs/. ` : "") +
     (m.takes ? `take/* steps: ${Object.entries(m.takes).map(([k, n]) => `${n} ${k}`).join(", ")}. ` : "") +
     (m.appends ? `Shared logs (board_set append): ${Object.entries(m.appends).map(([k, a]) => `${k} ${a.lines} line${a.lines === 1 ? "" : "s"} from ${a.seats} seat${a.seats === 1 ? "" : "s"}${a.continuations ? `, ${a.continuations} continuation${a.continuations === 1 ? "" : "s"}` : ""}`).join("; ")}. ` : "") +
     (m.citedFrom === "none" ? "No proposal yet, so no citation credit.\n\n" : `Credit read from the ${m.citedFrom}${m.uncited.length ? `; findings never cited: ${m.uncited.join(", ")}` : ""}.\n\n`) +

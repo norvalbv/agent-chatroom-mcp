@@ -56,3 +56,31 @@ export function openNeeds(room: Room): { key: string; by: string; age_minutes: n
     .sort((x, y) => y.age_minutes - x.age_minutes);
   return open.length ? open : undefined;
 }
+
+/** Something outside the room, named in chat: the machine, the network path, a region rule. "server" only when it is not
+ * a server timestamp or clock (the false hits of the scan over the Polymarket room logs). */
+const OUTSIDE = /\b(laptop|this machine|our machine|the machine|vpn|nordvpn|colocat\w*|co-locat\w*|vps|server(?![-\s]?(?:ts|timestamps?|time|clock|stamps?|side)\b)(?!'s)|latency|rtt|load average|geoblock\w*|restricted region|region rule|feed lag|slow consumer|rate[- ]?limit\w*)\b/i;
+/** ...said in words that it stops the work, not that a step was hard. */
+const BLOCKING = /\b(bottleneck|too slow|can'?t|cannot|only (?:worth|works|possible)|territory|need(?:s|ed)? (?:a|an) (?:server|vps|colocat\w*|host|box|feed)|blocks|blocked|blocking|invalidat\w*|out of reach|not a laptop|unfixable|nothing we can)\b/i;
+
+/** The outside term a message names in blocking words, or undefined. */
+export function blockerTerm(content: string): string | undefined {
+  const outside = OUTSIDE.exec(content);
+  return outside && BLOCKING.test(content) ? outside[0] : undefined;
+}
+
+const blockerNudgedAt = new WeakMap<Participant, string>();
+
+/** The line a seat's chat message gets back when it names a blocker outside the room (inputs/owner-1: a room notices a
+ * blocker by itself). Once, then not again until the seat has filed a needs/* entry since; logged as blocker_nudged. */
+export function blockerHint(hub: Hub, room: Room, p: Participant, content: string, quiet: boolean, seq: number): string | undefined {
+  const term = quiet || p.agent === "human" || room.state !== "open" ? undefined : blockerTerm(content);
+  if (!term) return undefined;
+  const last = blockerNudgedAt.get(p);
+  if (last && ![...room.board].some(([k, e]) => k.startsWith(NEEDS_PREFIX) && e.by === p.name && e.updatedAt > last)) return undefined;
+  const at = new Date().toISOString();
+  blockerNudgedAt.set(p, at);
+  hub.persist({ type: "blocker_nudged", room: room.name, by: p.name, term, seq, ts: at });
+  return `You named "${term}" as something that stops the work. If it blocks or invalidates what the room is testing, stop that work and write ` +
+    "needs/<name> (what, cost, what it unblocks, and a blocks: claim/... line): the hub tells the chair and the owner. If it blocks nothing, ignore this.";
+}

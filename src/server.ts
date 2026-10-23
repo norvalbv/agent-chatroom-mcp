@@ -23,7 +23,7 @@ import { createWaitView } from "./hub/wait-view.js";
 import { hubTime, timeClaims, timeNote } from "./hub/clock.js";
 import { VERDICT_HINT } from "./hub/checks.js";
 import { boardContinuation, noteBoardRead } from "./hub/board.js";
-import { IDLE_HINT, ideaListHint, idleAgain, idleHint, idleStreak, leaveHint, leaveWaitsFor, listedItems, newlyNamed, offersLeave, openWork, stillOpenHint } from "./hub/open-work.js";
+import { IDLE_HINT, blockerHint, ideaListHint, idleAgain, idleHint, idleStreak, leaveHint, leaveWaitsFor, listedItems, newlyNamed, offersLeave, openWork, stillOpenHint } from "./hub/open-work.js";
 
 /** The branch and worktree of each write recruit, for the reply of the call that spawned them; nothing for read-only recruits. */
 const workspaces = (recs: SpawnedAgent[]) => {
@@ -409,9 +409,9 @@ export function createSessionServer(hub: Hub, spawner?: Spawner, opts: { holdMs?
       const id = pid(room, participant_id);
       const m = hub.send(room, id, content, reply_to, force, quiet, surface);
       // a list of ideas left in chat is owed by nobody: say where each one goes (once, until the seat writes an idea/*)
-      const listHint = ideaListHint(r, hub.requireParticipant(r, id), content, !!quiet);
+      const listHint = ideaListHint(r, hub.requireParticipant(r, id), content, !!quiet), needHint = blockerHint(hub, r, hub.requireParticipant(r, id), content, !!quiet, m.seq); // a blocker named in chat: src/hub/needs/
       if (listHint) hub.persist({ type: "open_work", room: r.name, pid: id, ts: new Date().toISOString(), items: [`idea_list_nudged:${listedItems(content)}`] });
-      return { sent: hub.fmt(r, { ...m, content: "" }).trimEnd(), id: m.id, seq: m.seq, ...(listHint ? { hint: listHint } : m.autoQuiet ? { hint: AUTO_QUIET_NOTE } : {}), ...clockReply(r.name, m.from.name, "message", content) };
+      return { sent: hub.fmt(r, { ...m, content: "" }).trimEnd(), id: m.id, seq: m.seq, ...(listHint || needHint ? { hint: [listHint, needHint].filter(Boolean).join(" ") } : m.autoQuiet ? { hint: AUTO_QUIET_NOTE } : {}), ...clockReply(r.name, m.from.name, "message", content) };
     }),
   );
 

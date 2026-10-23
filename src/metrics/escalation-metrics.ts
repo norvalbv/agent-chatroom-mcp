@@ -17,11 +17,11 @@ type Ev = Record<string, any>;
 import { runRow } from "../run-timeline.js";
 
 /** words that say the setup itself (machine, network path, location) limits the result */
-export const CONSTRAINT = /\b(laptop|colocat\w*|VPN|geoblock\w*|slow consumer|swap|clock (?:offset|drift|runs)|loop lag|machine stall)\b/i;
+export const CONSTRAINT = /\b(laptop|colocat\w*|VPN|geoblock\w*|slow consumer|swapping|swap (?:used|usage)|clock (?:offset|drift|runs)|loop lag|machine stall)\b/i;
 /** words that name the environment in a question to the chair or a human */
 const ENV_WORDS = /\b(server|VPS|colocat\w*|VPN|machine|laptop|install\w*|infrastructure|network|latency|dublin|london|region|geoblock\w*)\b/i;
 /** an environment measurement in chat: a network, clock or load reading */
-const ENV_MEASURE = /\b(RTT|ping|traceroute|default route|exit (?:IP|node)|VPN|clock offset|sntp|ntp|load average|loadavg|swap|loop lag)\b/i;
+const ENV_MEASURE = /\b(RTT|ping|traceroute|default route|exit (?:IP|node)|VPN|clock offset|sntp|ntp|load average|loadavg|swapping|swap (?:used|usage)|loop lag)\b/i;
 const EXPERIMENT_KEY = /^(trades|running|experiment)\//;
 const ESCALATION_KEY = /^(needs|hold|blocked)\//;
 const PREFLIGHT_KEY = /^(preflight\/|resource\/preflight-)/;
@@ -47,6 +47,9 @@ export interface EscalationMetrics {
   ranOnUnescalatedMin?: number;
   /** the first stop a human or the chair called after the evidence (lc0a: #612, the owner's), and minutes after it */
   outsideStop?: { at: string; seq: number; by: string; afterEvidenceMin: number };
+  /** owner step-ins: human messages in the room, chair posts that relay the owner, owner_relay events. chairMessages (grants,
+   * answers, relays) are listed beside them but not counted: lc0a's chair posted 19 times, 4 of them relaying the owner,
+   * while the owner sent ~37 messages to the chair's own session that no room log holds (evidence/owner-interventions). */
   interventions: { humanMessages: number; chairMessages: number; chairRelays: number; ownerRelayEvents: number; total: number };
   costUsd?: number;
 }
@@ -105,7 +108,7 @@ export function escalationMetrics(events: readonly Ev[], opts: { evidenceSeq?: n
     if (!escalation && /@(chair[\w-]*|benji|owner|human)\b/i.test(text) && text.includes("?") && ENV_WORDS.test(text))
       escalation = { at: m.ts, seq: m.seq, by: m.from?.name, how: `question to the chair/owner #${m.seq}: ${ENV_WORDS.exec(text)![0]}` };
   }
-  iv.total = iv.humanMessages + iv.chairMessages + iv.ownerRelayEvents;
+  iv.total = iv.humanMessages + iv.chairRelays + iv.ownerRelayEvents;
   const row = runRow(events);
   const out: EscalationMetrics = {
     room: room || row.room, start, firstExperiment, preflight,
@@ -127,7 +130,7 @@ export function renderEscalation(r: EscalationMetrics): string {
     `  first evidence of a blocking constraint: ${ev}`,
     `  escalation: ${esc}`,
     `  stop called from outside the seats: ${r.outsideStop ? `${r.outsideStop.at.slice(11, 19)} #${r.outsideStop.seq} by ${r.outsideStop.by}, ${r.outsideStop.afterEvidenceMin} min after the evidence` : "none"}`,
-    `  step-ins: ${r.interventions.total} (human ${r.interventions.humanMessages}, chair ${r.interventions.chairMessages} of which owner relays ${r.interventions.chairRelays}, owner_relay events ${r.interventions.ownerRelayEvents})`,
+    `  owner step-ins: ${r.interventions.total} (human messages ${r.interventions.humanMessages}, chair relays of the owner ${r.interventions.chairRelays}, owner_relay events ${r.interventions.ownerRelayEvents}; chair posts in all ${r.interventions.chairMessages}; out-of-band messages to the chair's session are not in the log)`,
     `  cost: ${r.costUsd === undefined ? "unknown" : `$${r.costUsd.toFixed(2)}`}`,
   ].join("\n");
 }

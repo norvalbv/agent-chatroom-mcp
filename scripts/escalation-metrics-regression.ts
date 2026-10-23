@@ -32,6 +32,13 @@ assert.equal(b.ranOnUnescalatedMin, 61);
 assert.equal(b.outsideStop?.seq, 13);
 assert.equal(b.outsideStop?.afterEvidenceMin, 61);
 assert.deepEqual(b.interventions, { humanMessages: 1, chairMessages: 1, chairRelays: 1, ownerRelayEvents: 0, total: 2 });
+// a chair grant is not an owner step-in, and a token swap is neither a preflight nor a machine constraint
+const grant = escalationMetrics([{ type: "room", room: "g" }, join("s1"), join("chair-claude", "claude", "chair"),
+  msg(1, 0, "s1", "plan: swap 0.5 ETH on the AMM at 12 bps"), board(1, "trades/x", "s1"), msg(2, 2, "chair-claude", "@s1 granted: $20 moved to you")]);
+assert.equal(grant.interventions.total, 0);
+assert.equal(grant.interventions.chairMessages, 1);
+assert.equal(grant.preflight, undefined);
+assert.equal(grant.firstEvidence, undefined);
 
 // the room the change should produce: preflight first, a needs/ entry after the evidence, no outside stop
 const after = [

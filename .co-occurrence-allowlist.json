@@ -20,6 +20,26 @@
       "lines": 7,
       "rangeA": "18-24",
       "rangeB": "23-29"
+    },
+    {
+      "fragmentHash": "499be0e83f89514e",
+      "fileA": "src/openrouter.ts",
+      "fileB": "src/swarm.ts",
+      "description": "pre-existing: swarm.ts's argv flag parser (unchanged) re-hashed because an import line above it shifted it by one; openrouter.ts's parser echoes it (allowlisted 2026-09-18 as 0ab9da9b83700a77)",
+      "date": "2026-10-23",
+      "lines": 12,
+      "rangeA": "19-30",
+      "rangeB": "36-42"
+    },
+    {
+      "fragmentHash": "72c3b7b890b905e6",
+      "fileA": "src/attempts.ts",
+      "fileB": "src/swarm.ts",
+      "description": "pre-existing: swarm.ts's argv flag parser (unchanged) re-hashed after an import line above it shifted it by one; attempts.ts's flag parser has the same shape",
+      "date": "2026-10-23",
+      "lines": 6,
+      "rangeA": "151-156",
+      "rangeB": "36-41"
     }
   ]
 }

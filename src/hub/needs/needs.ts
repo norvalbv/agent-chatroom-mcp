@@ -67,19 +67,23 @@ export function openNeeds(room: Room): { key: string; by: string; age_minutes: n
   return open.length ? open : undefined;
 }
 
-/** The question a proposal gets back while the room has no open needs/*, whatever its words (decision/blocker-detection,
+/** The question every proposal gets back, whatever its words (decision/blocker-detection,
  * inputs/owner-3). A word list deciding which messages name a blocker scored 0 of 1 on held-out labels (esc-before-2),
  * and an embedding check did no better; the seats had known their blocker all along (lc0a #235; esc-before-1's final
  * said a host "would be a needs/ decision" and filed none), so the hub asks the seat to judge its own conclusion at the
  * moment it commits to it. Worded so the owner, not the room, decides whether a server is worth paying for: esc-before-2's
- * final rejected a VPS on its own model and lc0a's filed colocation as "an engineering project". Logged as need_asked. */
+ * final rejected a VPS on its own model and lc0a's filed colocation as "an engineering project". An open need does not
+ * end it: esc-after-2 filed needs/polymarket-eligibility and left the London box in its final's prose (probe/esc-after-2),
+ * so the question names what is open and asks for anything else. Logged as need_asked. */
 export function proposalNeedHint(hub: Hub, room: Room, p: Participant): string | undefined {
-  if (p.agent === "human" || [...room.board].some(([k, e]) => k.startsWith(NEEDS_PREFIX) && e.text.trim())) return undefined;
+  if (p.agent === "human") return undefined;
+  const open = [...room.board].filter(([k, e]) => k.startsWith(NEEDS_PREFIX) && e.text.trim()).map(([k]) => k);
   hub.persist({ type: "need_asked", room: room.name, by: p.name, where: "proposal", ts: new Date().toISOString() });
-  const ask = "Before this passes: does the conclusion depend on anything outside the room that only the owner can change (the machine, the network path or VPN, " +
+  const what = open.length ? `Open: ${open.join(", ")}. Does the conclusion depend on anything else` : "Does the conclusion depend on anything";
+  const ask = `Before this passes: ${what} outside the room that only the owner can change (the machine, the network path or VPN, ` +
     "a region or account rule, data or a feed you cannot get, money)? If so, write needs/<name> (what, cost, what it unblocks, a blocks: claim/... line) " +
     "even if you judge it not worth paying for: the owner decides that, not the room. If nothing outside limits it, ignore this.";
   // the voters read it too: any seat may file the need, not only the proposer (review/aef07b4d note 1)
-  hub.post(room, "system", undefined, `[NEEDS] No needs/* is open. ${ask}`);
+  hub.post(room, "system", undefined, `[NEEDS] ${open.length ? "" : "No needs/* is open. "}${ask}`);
   return ask;
 }

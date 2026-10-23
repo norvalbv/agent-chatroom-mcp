@@ -92,4 +92,24 @@ const clock = JSON.stringify({ check: "clock-offset", status: "ok", value: "+12 
   assert.match(f.stdout, /- FAIL vpn-route: .*\(owner fix: trade from a host/, "a non-strict FAIL prints its owner fix at launch");
   assert.doesNotMatch(f.stdout, /clock-offset/, "OK lines stay off the launch log");
 }
+// 4. the room log records the preflight as an event, so a scorer or runs-table counts it without parsing board text
+//    (review/53d25a5d note 1; src/metrics/escalation-metrics.ts reads type "preflight")
+{
+  const { Hub } = await import(path.join(root, "src", "hub.ts"));
+  const { mkdtempSync, readFileSync, readdirSync } = await import("node:fs");
+  const { tmpdir } = await import("node:os");
+  const dir = mkdtempSync(path.join(tmpdir(), "preflight-event-"));
+  const hub = new Hub({ dataDir: dir });
+  const bad = parsePreflight("kit/netcheck", `${vpn}\n${rtt}\n${clock}`, 0, 900, AT);
+  hub.seedResources("pf-room", [preflightResource(bad), { key: "resource/other", text: "not a preflight" }]);
+  hub.seedResources("pf-ok", [preflightResource(parsePreflight("kit/netcheck", clock, 0, 900, AT))]);
+  hub.join("pf-room", "a", "claude"); hub.join("pf-ok", "a", "claude");
+  const events = (room: string) => readdirSync(dir).filter((f) => f.startsWith(room) && f.endsWith(".jsonl")).flatMap((f) => readFileSync(path.join(dir, f), "utf8").trim().split("\n").map((l) => JSON.parse(l)));
+  const pf = events("pf-room").filter((e) => e.type === "preflight");
+  assert.equal(pf.length, 1, `one preflight event per seeded preflight resource, got ${pf.length}`);
+  assert.deepEqual({ fails: pf[0].fails, warns: pf[0].warns, ok: pf[0].ok, key: pf[0].key }, { fails: 1, warns: 1, ok: false, key: PREFLIGHT_RESOURCE_KEY });
+  assert.ok(pf[0].ts, "the event carries its time");
+  const okEv = events("pf-ok").filter((e) => e.type === "preflight");
+  assert.deepEqual({ fails: okEv[0]?.fails, warns: okEv[0]?.warns, ok: okEv[0]?.ok }, { fails: 0, warns: 0, ok: true });
+}
 console.log("preflight-regression OK");

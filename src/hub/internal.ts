@@ -104,7 +104,18 @@ export type Event =
   | { type: "room_waiting"; room: string; ts: string; state: "start"; steps: number; seats: number; jobs: (import("./memory.js").Job & { seat: string })[] }
   | { type: "room_waiting"; room: string; ts: string; state: "end"; waited_min: number; then: "active" | "idle" | "told" }
   /** Telemetry only (replay ignores it): the open work an idle wait named to a seat, written when that list changes. */
-  | { type: "open_work"; room: string; pid: string; ts: string; items: string[] };
+  | { type: "open_work"; room: string; pid: string; ts: string; items: string[] }
+  /** Telemetry only (replay ignores it): the launcher's preflight was seeded on this board (src/launch/preflight.ts), with its counts. */
+  | { type: "preflight"; room: string; key: string; fails: number; warns: number; ok: boolean; ts: string };
+
+/** The board record for a seeded resource, plus a preflight event when it is the launcher's preflight result, whose
+ * first line is "preflight environment at launch (N FAIL, M WARN | M WARN | all OK)". */
+export function resourceEvents(room: string, key: string, entry: BoardEntry): Event[] {
+  const head = key === "resource/preflight-environment-at-launch" ? /\((?:(\d+) FAIL, )?(?:(\d+) WARN|all OK)\)/.exec(entry.text.split("\n")[0]) : null;
+  if (!head) return [{ type: "board", room, key, entry }];
+  const fails = Number(head[1] ?? 0), warns = Number(head[2] ?? 0);
+  return [{ type: "board", room, key, entry }, { type: "preflight", room, key, fails, warns, ok: !fails, ts: entry.updatedAt }];
+}
 
 export const now = () => new Date().toISOString();
 /** commit-like tokens (7-40 hex with a letter and a digit) in a text */

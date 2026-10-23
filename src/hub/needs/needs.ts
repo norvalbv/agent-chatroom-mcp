@@ -34,7 +34,8 @@ export function noticeNeed(hub: Hub, room: Room, p: Participant, key: string, en
   const first = entry.text.trim().split("\n")[0]!.slice(0, 160);
   const who = told.length ? told.map((q) => `@${hub.shown(room, q)}`).join(" ") + " " : "";
   const decider = chair || humans.length ? "" : " No chair or human is in this room, so the owner sees it only in the run's report.";
-  const blocked = blocks.length ? ` It blocks ${blocks.join(", ")}: pause that work until it is answered, or say why it goes on.` : "";
+  const unclaimed = blocks.filter((k) => !room.board.get(k)?.text.trim());
+  const blocked = blocks.length ? ` It blocks ${blocks.join(", ")}: pause that work until it is answered, or say why it goes on.${unclaimed.length ? ` ${unclaimed.join(", ")} ${unclaimed.length === 1 ? "is" : "are"} not on the board: name the claim keys the work is under.` : ""}` : "";
   hub.post(room, "chat", undefined, `${who}${hub.shown(room, p)} filed ${key}, a need only the owner can meet: "${first}".${blocked}${decider} Clear the entry once it is met or refused.`);
   hub.persist({
     type: "need_filed", room: room.name, key, by: p.name, minutes_since_open: minutesSince(room.createdAt, entry.updatedAt),
@@ -63,10 +64,14 @@ const OUTSIDE = /\b(laptop|this machine|our machine|the machine|vpn|nordvpn|colo
 /** ...said in words that it stops the work, not that a step was hard. */
 const BLOCKING = /\b(bottleneck|too slow|can'?t|cannot|only (?:worth|works|possible)|territory|need(?:s|ed)? (?:a|an) (?:server|vps|colocat\w*|host|box|feed)|blocks|blocked|blocking|invalidat\w*|out of reach|not a laptop|unfixable|nothing we can|(?:is|was) the (?:cause|problem|bottleneck|limit)|the cause is|caused by)\b/i;
 
+/** A message about another room or a commit review: a post-mortem talks about blockers it is not under (this room's
+ * own log had 6 flags, 0 true, all citing lc0a, a #seq or a review/; review/0d659f43-claude-opus-5-5-3). */
+const CITES_ELSEWHERE = /\bswarm-\d{6}-[a-z0-9]{4}\b|\blc0a\b|\bmrw4\b|\breview\/|(?<![\w/])#\d{2,4}\b/i;
+
 /** The outside term a message names in blocking words, or undefined. */
 export function blockerTerm(content: string): string | undefined {
   const outside = OUTSIDE.exec(content);
-  return outside && BLOCKING.test(content) ? outside[0] : undefined;
+  return outside && BLOCKING.test(content) && !CITES_ELSEWHERE.test(content) ? outside[0] : undefined;
 }
 
 const blockerNudgedAt = new WeakMap<Participant, string>();

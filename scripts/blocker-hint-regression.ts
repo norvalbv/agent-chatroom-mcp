@@ -32,6 +32,10 @@ for (const fp of [
   "for the same trade, data-api block timestamp minus the CLOB print's server ts; I can't read rec/ since your restart.",
   "R9b makes fills use the server clock, so recorder backlog cannot create phantom fills.",
   "I swapped the order of the two tests; can't see why that matters.",
+  // about another room's blocker, or a code review: this room's own log had 6 such flags, 0 true (review/0d659f43-claude-opus-5-5-3)
+  "In lc0a (#235) the laptop was the bottleneck, so the room should have paused.",
+  "review/178fc4a: one blocking bug, the rtt check can't survive a 2 s gap.",
+  "swarm-185621-lc0a never filed it, although the VPN was the cause.",
 ]) assert.equal(blockerTerm(fp), undefined, `not a blocker: ${fp.slice(0, 60)}`);
 
 // 2. Through the tool, as a seat sees it.
@@ -82,6 +86,8 @@ const events = parseRoomLog(readFileSync(join(dataDir, `${room}.jsonl`), "utf8")
 const nudges = events.filter((e) => e.type === "blocker_nudged");
 assert.equal(nudges.length, 3, "two chat nudges and one opening");
 assert.equal(nudges[0].term.toLowerCase(), "laptop");
-assert.equal(runMetrics(events).needs?.nudged, 3, "run-metrics counts nudges beside filings");
+const metrics = runMetrics(events);
+assert.equal(metrics.needs?.nudged, 3, "run-metrics counts nudges beside filings");
+assert.equal(metrics.needs?.nudgedThenFiled, 1, "A filed needs/colocated-host after its nudge: the conversion that shows the hint working");
 console.log("blocker-hint regression OK");
 process.exit(0);

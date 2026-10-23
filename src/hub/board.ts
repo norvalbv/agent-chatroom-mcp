@@ -8,7 +8,7 @@ import type { Quorum, Participant, BoardExpiryOptions, BoardEntry, Room } from "
 import { now, codeState, norm, commitsIn, commitKnown } from "./internal.js";
 import { announceTake, commitAuthor, noticeSameWork, takeWrite } from "./take.js";
 import { noticeSemantic } from "./overlap/semantic.js";
-
+import { NEEDS_PREFIX, noticeNeed, noticeNeedCleared, openNeeds } from "./needs/needs.js"; export { openNeeds };
 function boardExpiry(key: string, opts: BoardExpiryOptions): string | undefined {
   if (opts.ttlSeconds === undefined && opts.expiresAt === undefined) return undefined;
   if (!key.startsWith("handoff/") && !key.startsWith("inbox/")) throw new HubError("Expiry is supported only for handoff/ and inbox/ entries.", undefined, "expiry-prefix");
@@ -317,7 +317,7 @@ export function setBoard(hub: Hub, roomName: string, pid: string, key: string, t
   }
   if (!text.trim()) {
     applyBoard(room, key, null);
-    hub.persist({ type: "board", room: roomName, key, entry: null });
+    hub.persist({ type: "board", room: roomName, key, entry: null }); if (key.startsWith(NEEDS_PREFIX) && previous?.text.trim()) noticeNeedCleared(hub, room, p, key, previous);
     if (take) { if (previous) announceTake(hub, room, p, key, text, take); return null; }
     hub.post(room, "board", p, `cleared board entry "${key}"${previous && previous.by !== p.name ? ` (${previous.by}'s)` : ""}`);
     if (key.startsWith("draft/")) hub.cancelDraftsIfEmpty(room, p);
@@ -419,7 +419,7 @@ export function setBoard(hub: Hub, roomName: string, pid: string, key: string, t
   if (takeover) hub.post(room, "system", undefined, `${hub.shown(room, p)} took over "${key}" from ${hub.shown(room, takeover.owner)} (${takeover.reason === "successor" ? "registered successor" : `owner gone since ${hub.lastSeen(takeover.owner)}`}).`);
   if (key.startsWith("claim/") && (!previous || claimReleased(previous))) { noticeClaimOverlap(hub, room, p, key, text); noticeSameWork(hub, room, p, key); void noticeSemantic(hub, room, p, key); }
   if (key.endsWith(".ack") || key.startsWith("verify/")) for (const pr of room.proposals.values()) if (pr.status === "open") hub.evaluate(room, pr);
-  if (key.startsWith("draft/")) hub.latchDrafts(room);
+  if (key.startsWith("draft/")) hub.latchDrafts(room); else if (key.startsWith(NEEDS_PREFIX) && !previous?.text.trim()) noticeNeed(hub, room, p, key, entry);
   return entry;
 }
 

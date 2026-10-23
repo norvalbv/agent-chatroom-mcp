@@ -73,6 +73,8 @@ export class MachineWatch {
 
   /** Probe every PROBE_MS; unref'd, so it never keeps a process alive. */
   start(probeMs = PROBE_MS): void {
+    // swap is read in the background: start it now, so the first room's baseline has it (dev room 4hkb's had null)
+    swapUsedMb();
     let due = Date.now() + probeMs;
     const tick = () => {
       const now = Date.now();

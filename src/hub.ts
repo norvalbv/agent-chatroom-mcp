@@ -15,7 +15,7 @@ import { analyzeReplyMetrics, type ReplyMetricEvent } from "./reply-metrics.js";
 export * from "./hub/types.js";
 import { VERIFY_HEAD_EXAMPLE, VERIFY_HEAD_RULE, isReviewKey, parseVerifyHead, readVerifyHead, failToPassShortfall, citesCommit, hexTokens, addedUnchecked, uncoveredCommits, verifyGaps, devRoomUrl, devReceiptFrom, type DevReceipt, ROLES, REFUSAL_CODES, HubError } from "./hub/types.js";
 import type { MessageKind, Vote, Quorum, RoomState, VerifyHead, Role, Participant, KickVote, Message, CodeState, BoardExpiryOptions, BoardEntry, Challenge, ElectorateSummary, ConclusionVerification, ConclusionClosing, Proposal, RoomOptions, JoinOptions, Room, CallOutcome, RefusalCode, BoardManifestObservation } from "./hub/types.js";
-import { now, shortId, norm, emptyBoardManifestCounters, manifestBytes, codeState, commitsIn, keepRefusal, RECENT_REFUSALS } from "./hub/internal.js";
+import { now, shortId, norm, emptyBoardManifestCounters, manifestBytes, codeState, commitsIn, keepRefusal, RECENT_REFUSALS, resourceEvents } from "./hub/internal.js";
 import type { Opts, Event, BoardManifestCounters } from "./hub/internal.js";
 import * as board from "./hub/board.js";
 import * as idle from "./hub/idle.js";
@@ -1585,7 +1585,7 @@ export class Hub {
     for (const { key, text } of entries) {
       const entry: BoardEntry = { text, by: "launcher", updatedAt: now() };
       board.applyBoard(room, key, entry);
-      this.persist({ type: "board", room: room.name, key, entry });
+      for (const ev of resourceEvents(room.name, key, entry)) this.persist(ev);
     }
   }
 

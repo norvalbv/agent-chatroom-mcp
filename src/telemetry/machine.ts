@@ -15,13 +15,21 @@ import { cpus, freemem, loadavg, platform } from "node:os";
 import type { Hub } from "../hub.js";
 
 export interface MachineSample { load1: number; ncpu: number; swap_used_mb: number | null; free_mb: number }
+/** machine: the hub was starved (it used little CPU while late), so every process here was; hub: the hub itself was busy */
+export type StallCause = "machine" | "hub";
 export type MachineEvent =
-  | { kind: "stall_start"; at: string; drift_ms: number; sample: MachineSample }
-  | { kind: "stall_end"; since: string; last_late: string; seconds: number; late_ticks: number; max_drift_ms: number; sample: MachineSample };
+  | { kind: "stall_start"; at: string; drift_ms: number; cause: StallCause; hub_cpu: number | null; sample: MachineSample }
+  | { kind: "stall_end"; since: string; last_late: string; seconds: number; late_ticks: number; max_drift_ms: number; cause: StallCause; sample: MachineSample }
+  /** the timers were suspended for minutes: the machine slept (a laptop lid), which is not load */
+  | { kind: "sleep"; at: string; slept_s: number; sample: MachineSample };
 
 export const PROBE_MS = 500;
 export const STALL_MS = 1000;
 export const QUIET_MS = 60_000;
+/** a tick this late is a machine that slept, not one that stalled */
+export const SLEEP_MS = 300_000;
+/** the hub used at least this share of one core across a late tick: the hub was busy, not starved */
+export const HUB_BUSY = 0.8;
 
 let swapMb: number | null = null;
 let swapAt = 0;
@@ -47,25 +55,32 @@ export interface MachineWatchOptions {
 }
 
 export class MachineWatch {
-  private open: { since: number; last: number; ticks: number; max: number } | null = null;
+  private open: { since: number; last: number; ticks: number; max: number; cause: StallCause } | null = null;
   constructor(private readonly o: MachineWatchOptions) {}
   sample(): MachineSample { return (this.o.sample ?? machineSample)(); }
 
-  /** One probe tick at `nowMs` that fired `driftMs` late. Returns the event it caused, if any. */
-  observe(nowMs: number, driftMs: number): MachineEvent | undefined {
+  /**
+   * One probe tick at `nowMs` that fired `driftMs` late, while the hub used `hubCpu` of one core (null: unknown).
+   * Returns the event it caused, if any.
+   */
+  observe(nowMs: number, driftMs: number, hubCpu: number | null = null): MachineEvent | undefined {
     const iso = (t: number) => new Date(t).toISOString();
     let e: MachineEvent | undefined;
-    if (driftMs >= STALL_MS) {
+    if (driftMs >= SLEEP_MS) {
+      // an open episode is not closed by a sleep: it closes after its quiet minute as usual
+      e = { kind: "sleep", at: iso(nowMs - driftMs), slept_s: Math.round(driftMs / 1000), sample: this.sample() };
+    } else if (driftMs >= STALL_MS) {
       if (!this.open) {
-        this.open = { since: nowMs, last: nowMs, ticks: 1, max: driftMs };
-        e = { kind: "stall_start", at: iso(nowMs), drift_ms: Math.round(driftMs), sample: this.sample() };
+        const cause: StallCause = hubCpu !== null && hubCpu >= HUB_BUSY ? "hub" : "machine";
+        this.open = { since: nowMs, last: nowMs, ticks: 1, max: driftMs, cause };
+        e = { kind: "stall_start", at: iso(nowMs), drift_ms: Math.round(driftMs), cause, hub_cpu: hubCpu === null ? null : Math.round(hubCpu * 100) / 100, sample: this.sample() };
       } else {
         this.open.last = nowMs; this.open.ticks++; this.open.max = Math.max(this.open.max, driftMs);
       }
     } else if (this.open && nowMs - this.open.last >= QUIET_MS) {
       const o = this.open;
       this.open = null;
-      e = { kind: "stall_end", since: iso(o.since), last_late: iso(o.last), seconds: Math.round((o.last - o.since) / 1000), late_ticks: o.ticks, max_drift_ms: Math.round(o.max), sample: this.sample() };
+      e = { kind: "stall_end", since: iso(o.since), last_late: iso(o.last), seconds: Math.round((o.last - o.since) / 1000), late_ticks: o.ticks, max_drift_ms: Math.round(o.max), cause: o.cause, sample: this.sample() };
     }
     if (e) this.o.onEvent(e);
     return e;
@@ -76,9 +91,15 @@ export class MachineWatch {
     // swap is read in the background: start it now, so the first room's baseline has it (dev room 4hkb's had null)
     swapUsedMb();
     let due = Date.now() + probeMs;
+    let last = Date.now();
+    let cpu = process.cpuUsage();
     const tick = () => {
       const now = Date.now();
-      try { this.observe(now, Math.max(0, now - due)); } catch {}
+      // the hub's own CPU over the interval: busy while late is the hub's doing, idle while late is the machine's
+      const used = process.cpuUsage(cpu);
+      const share = now > last ? (used.user + used.system) / 1000 / (now - last) : null;
+      cpu = process.cpuUsage(); last = now;
+      try { this.observe(now, Math.max(0, now - due), share); } catch {}
       due = now + probeMs;
       setTimeout(tick, probeMs).unref();
     };
@@ -92,9 +113,17 @@ const load = (s: MachineSample) => `load ${s.load1} on ${s.ncpu} cores${s.swap_u
 
 /** The room line for an episode: what was measured, what it means for anything timed on this machine, what to do. */
 export function machineNotice(e: MachineEvent): string {
+  if (e.kind === "sleep") {
+    return `MACHINE: this machine slept for ${Math.round(e.slept_s / 60)} min from ${hhmmss(e.at)} UTC (the hub's timers were suspended). ` +
+      `A recorder or bot running across that window has a gap there; it is not market silence.`;
+  }
+  if (e.cause === "hub") {
+    if (e.kind === "stall_start") return `MACHINE: the hub itself was busy: its ${PROBE_MS / 1000} s timer fired ${secs(e.drift_ms)} late at ${hhmmss(e.at)} UTC while it used ${Math.round((e.hub_cpu ?? 0) * 100)}% of a core (${load(e.sample)}). Hub replies may lag; processes outside the hub were not necessarily affected.`;
+    return `MACHINE: the hub's busy spell from ${hhmmss(e.since)} to ${hhmmss(e.last_late)} UTC is over (worst ${secs(e.max_drift_ms)}).`;
+  }
   if (e.kind === "stall_start") {
     return `MACHINE: this machine is stalling: the hub's own ${PROBE_MS / 1000} s timer fired ${secs(e.drift_ms)} late at ${hhmmss(e.at)} UTC (${load(e.sample)}). ` +
-      `Unless the hub alone is busy, every process on this machine stalls with it, bots and feeds included. A second line says when it is over.`;
+      `${e.hub_cpu === null ? "E" : `The hub used ${Math.round(e.hub_cpu * 100)}% of a core meanwhile, so it was starved, not busy: e`}very process on this machine stalls with it, bots and feeds included. A second line says when it is over.`;
   }
   const dur = `${Math.floor(e.seconds / 60)} min ${e.seconds % 60} s`;
   return `MACHINE: the stall from ${hhmmss(e.since)} to ${hhmmss(e.last_late)} UTC is over (${dur}, ${e.late_ticks} late tick${e.late_ticks === 1 ? "" : "s"}, worst ${secs(e.max_drift_ms)}). ` +

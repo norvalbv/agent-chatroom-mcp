@@ -28,6 +28,7 @@ const T0 = Date.parse("2026-10-22T19:30:00Z");
   const [start, end] = events as [Extract<MachineEvent, { kind: "stall_start" }>, Extract<MachineEvent, { kind: "stall_end" }>];
   assert.equal(start.at, "2026-10-22T19:30:04.000Z");
   assert.equal(start.drift_ms, 3500);
+  assert.equal(start.cause, "machine", "no CPU reading: the machine, as before");
   assert.equal(end.since, "2026-10-22T19:30:04.000Z");
   assert.equal(end.last_late, "2026-10-22T19:37:20.000Z", "the window ends at the last late tick, not when the quiet minute ran out");
   assert.equal(end.max_drift_ms, 14400);
@@ -35,11 +36,26 @@ const T0 = Date.parse("2026-10-22T19:30:00Z");
   assert.equal(end.seconds, 436);
   const said = machineNotice(start);
   assert.match(said, /^MACHINE: this machine is stalling: the hub's own 0\.5 s timer fired 3\.5 s late at 19:30:04 UTC \(load 18\.2 on 10 cores, swap 9966 MB used\)\./);
-  assert.match(said, /every process on this machine stalls with it, bots and feeds included/);
+  assert.match(said, /[Ee]very process on this machine stalls with it, bots and feeds included/);
   const over = machineNotice(end);
   assert.match(over, /^MACHINE: the stall from 19:30:04 to 19:37:20 UTC is over \(7 min 16 s, 5 late ticks, worst 14\.4 s\)\./);
   assert.match(over, /A latency, fill time or feed lag measured in that window is this machine's, not the market's/);
   assert.match(over, /needs\/<name>/, "a stall that recurs is a limit of this machine for the owner, not something to work around");
+  // the hub's own CPU tells a busy hub from a starved machine
+  assert.match(machineNotice({ ...start, hub_cpu: 0.03 }), /The hub used 3% of a core meanwhile, so it was starved, not busy: every process/);
+  const busy: MachineEvent[] = [];
+  const hw = new MachineWatch({ onEvent: (x) => busy.push(x), sample: () => sample });
+  hw.observe(T0, 2500, 0.97);
+  hw.observe(T0 + 61_000, 3, 0.1);
+  assert.deepEqual(busy.map((x) => [x.kind, "cause" in x ? x.cause : ""]), [["stall_start", "hub"], ["stall_end", "hub"]]);
+  assert.match(machineNotice(busy[0]!), /^MACHINE: the hub itself was busy: its 0\.5 s timer fired 2\.5 s late at 19:30:00 UTC while it used 97% of a core/);
+  assert.doesNotMatch(machineNotice(busy[1]!), /needs\//, "a busy hub is not a limit of the machine");
+  // a laptop that slept is one line, not a stall episode
+  const slept: MachineEvent[] = [];
+  const sw = new MachineWatch({ onEvent: (x) => slept.push(x), sample: () => sample });
+  sw.observe(T0 + 3_600_000, 3_600_000 - 500, 0);
+  assert.deepEqual(slept.map((x) => x.kind), ["sleep"]);
+  assert.match(machineNotice(slept[0]!), /^MACHINE: this machine slept for 60 min from 19:30:00 UTC/);
   // a second episode opens only after the first has closed
   w.observe(T0 + 600_000, 1500);
   assert.equal(events.length, 3);

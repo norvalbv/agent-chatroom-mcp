@@ -29,7 +29,7 @@ Always run the orchestrator. Do NOT hand-roll the swarm by spawning subagents th
 ```bash
 cd "$HOME/Desktop/Personal and learning/agent-chatroom-mcp"   # same folder under the home directory on both machines
 node dist/swarm.js "<task in the user's words>" --agents <N> --cwd "<absolute project dir>" \
-  [--flat | --groups groups.json [--digest-every <min>]] [--resources resources.md] [--models sonnet,haiku,fable,opus] [--lead-model opus] [--verifier-model fable] \
+  [--flat | --groups groups.json [--digest-every <min>]] [--resources resources.md] [--preflight "<cmd>" | --preflight-strict "<cmd>"] [--models sonnet,haiku,fable,opus] [--lead-model opus] [--verifier-model fable] \
   [--apply | --full-access] [--codex <k>] [--openrouter <k>] [--openrouter-reasoning low|medium|high] [--sandbox] [--fresh-challenger] [--timeout <minutes>] [--done-when "<criterion>"] [--verify "<what the verifier checks>"]
 ```
 
@@ -84,6 +84,7 @@ node dist/swarm.js "<task, with the scoring rule both groups share>" --groups gr
 - Give both groups the same fixed scoring rule in the task before they split: two agents briefed with opposite goals on one dataset each found what they were told to find (2604.22080).
 - Measured so far (2 fixtures x 2 arms, minutes long): grouped and flat were both always correct; grouped cost 1.1 to 2.5x and took about twice as long. Whether groups give better answers over hours is unmeasured.
 - `--resources <file.md>`: every `## <name>` section goes on every room's board as `resource/<name>` before a seat starts, and the hub names the `resource/` prefix to each seat on join. It works with any shape and survives `--no-carry`. Use it for data, tools and limits already on the machine. Seats used what a brief named within seconds and never looked for what it did not, and a chat line does not cross a group wall.
+- `--preflight "<cmd>"` / `--preflight-strict "<cmd>"`: the launcher runs the kit's environment checks before any hub or seat starts. The command prints one JSON line per check, `{"check","status":"ok|warn|fail","value","why"?,"fix"?}`; a command that crashes, times out or prints no check counts as a FAIL. Each FAIL/WARN line is printed at launch with its owner fix, goes on every room's board as `resource/preflight-environment-at-launch`, opens every seat's brief with an instruction to file `needs/<name>` rather than route around it, and is recorded in `result.json` and `report.md`. Strict exits 2 on any FAIL. A kit whose experiment depends on the machine or its network (latency, geoblock, clock) declares one; live money uses strict. Why: the 13 Oct room measured the VPN link as unfit, the fact was trimmed out of the 22 Oct live room's resources, and that room traded from it (swarm-073112-zcd7 evidence/earlier-rooms). Test: `scripts/preflight-regression.ts`.
 - A ready example: `/Users/benji/.frink/builds/room-rsi/kit/polymarket/` (`groups.json`, `task.txt`, `hub.sh` for its own supervised hub, `launch.sh`, `README.md`).
 
 ## How a room closes (since swarm-180216-182a)

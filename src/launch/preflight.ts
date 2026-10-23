@@ -112,5 +112,7 @@ export function preflightAtLaunch(argv: string[], cwd: string, timeoutMs = Numbe
   const refusal = strict !== undefined ? strictRefusal(result) : null;
   if (refusal) { console.error(refusal); process.exit(2); }
   console.log(`preflight: ${preflightVerdict(result)} in ${result.durationMs} ms (${result.checks.length} check${result.checks.length === 1 ? "" : "s"}${result.error ? `; the command ${result.error}` : ""})`);
+  // whoever launches reads what to install here, before the seats start, not later on the board
+  for (const c of result.checks) if (c.status !== "ok") console.log(line(c));
   return { result, text: preflightBrief(result) + "\n", resource: preflightResource(result) };
 }

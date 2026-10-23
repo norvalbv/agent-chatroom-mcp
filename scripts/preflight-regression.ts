@@ -60,6 +60,8 @@ const clock = JSON.stringify({ check: "clock-offset", status: "ok", value: "+12 
   assert.doesNotMatch(brief, /clock-offset/, "OK lines stay off the brief");
   assert.match(brief, /needs\/<name>/);
   assert.match(brief, /tell the chair/);
+  assert.match(brief, /blocks: claim\//, "the needs/ entry names the claims it stops, so the hub can tell their owners (needs-escalation, 20024008)");
+  assert.match(brief, /measure this machine, not the market/, "a FAIL invalidates a measurement; it is not itself the answer (dev room swarm-074439-k6yj #25)");
   assert.match(brief, /owner fix: trade from a host/);
   const ok = preflightBrief(parsePreflight("kit/netcheck", clock, 0, 900, AT));
   assert.equal(ok.trim().split("\n").length, 1, "a clean machine costs the brief one line");

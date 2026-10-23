@@ -71,7 +71,7 @@ export function preflightBrief(r: PreflightResult): string {
     head,
     ...(r.error ? [`- FAIL preflight: the check command ${r.error}, so the environment is UNKNOWN`] : []),
     ...bad.map(line),
-    "Before you experiment, decide whether any FAIL or WARN above blocks or invalidates what you are about to measure. If it does: do not route around it and do not start that work. Write needs/<name> on the board (what, why, what it unblocks, how you would check it worked) and tell the chair, then work on what it does not block.",
+    "These lines measure this machine, not the market: a FAIL says a number taken here would be the machine's, it does not answer your question. Before you experiment, decide whether any FAIL or WARN blocks or invalidates what you are about to measure. If it does: do not route around it and do not start that work. Write needs/<name> on the board (what, why, what it unblocks, how you would check it worked, and a `blocks: claim/...` line) and tell the chair, then work on what it does not block, such as what can be measured from exchange timestamps or recorded data rather than this machine's clock.",
     "",
   ].join("\n");
 }

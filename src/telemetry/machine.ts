@@ -15,11 +15,13 @@ import { cpus, freemem, loadavg, platform } from "node:os";
 import type { Hub } from "../hub.js";
 
 export interface MachineSample { load1: number; ncpu: number; swap_used_mb: number | null; free_mb: number }
+/** a process among the busiest when a stall began (ps: CPU share is the kernel's decaying average) */
+export interface Busy { pid: number; cpu: number; mb: number; command: string }
 /** machine: the hub was starved (it used little CPU while late), so every process here was; hub: the hub itself was busy */
 export type StallCause = "machine" | "hub";
 export type MachineEvent =
   | { kind: "stall_start"; at: string; drift_ms: number; cause: StallCause; hub_cpu: number | null; sample: MachineSample }
-  | { kind: "stall_end"; since: string; last_late: string; seconds: number; late_ticks: number; max_drift_ms: number; cause: StallCause; sample: MachineSample }
+  | { kind: "stall_end"; since: string; last_late: string; seconds: number; late_ticks: number; max_drift_ms: number; cause: StallCause; sample: MachineSample; busiest?: Busy[] }
   /** the timers were suspended for minutes: the machine slept (a laptop lid), which is not load */
   | { kind: "sleep"; at: string; slept_s: number; sample: MachineSample };
 
@@ -49,13 +51,26 @@ export function machineSample(): MachineSample {
   return { load1: Math.round(loadavg()[0]! * 10) / 10, ncpu: cpus().length, swap_used_mb: swapUsedMb(), free_mb: Math.round(freemem() / 1048576) };
 }
 
+/** The three busiest processes by CPU, from ps; [] when ps fails. */
+export function busiest(): Promise<Busy[]> {
+  return new Promise((done) => execFile("ps", ["-Ao", "pid=,pcpu=,rss=,comm="], { timeout: 10_000, maxBuffer: 8 << 20 }, (err, out) => {
+    if (err) return done([]);
+    const rows = out.split("\n").map((l) => /^\s*(\d+)\s+([\d.]+)\s+(\d+)\s+(.*)$/.exec(l)).filter((m): m is RegExpExecArray => !!m)
+      .map((m) => ({ pid: Number(m[1]), cpu: Math.round(Number(m[2])), mb: Math.round(Number(m[3]) / 1024), command: m[4]!.split("/").pop()!.slice(0, 60) }))
+      .filter((r) => r.pid !== process.pid);
+    done(rows.sort((a, b) => b.cpu - a.cpu).slice(0, 3));
+  }));
+}
+
 export interface MachineWatchOptions {
   onEvent: (e: MachineEvent) => void;
   sample?: () => MachineSample;
+  /** what was busy when an episode began, said at its end (lc0a could not tell what held the CPU at 19:28-19:38) */
+  busiest?: () => Promise<Busy[]>;
 }
 
 export class MachineWatch {
-  private open: { since: number; last: number; ticks: number; max: number; cause: StallCause } | null = null;
+  private open: { since: number; last: number; ticks: number; max: number; cause: StallCause; busiest?: Busy[] } | null = null;
   constructor(private readonly o: MachineWatchOptions) {}
   sample(): MachineSample { return (this.o.sample ?? machineSample)(); }
 
@@ -72,7 +87,9 @@ export class MachineWatch {
     } else if (driftMs >= STALL_MS) {
       if (!this.open) {
         const cause: StallCause = hubCpu !== null && hubCpu >= HUB_BUSY ? "hub" : "machine";
-        this.open = { since: nowMs, last: nowMs, ticks: 1, max: driftMs, cause };
+        const open: NonNullable<MachineWatch["open"]> = { since: nowMs, last: nowMs, ticks: 1, max: driftMs, cause };
+        this.open = open;
+        if (cause === "machine") void (this.o.busiest ?? busiest)().then((b) => { open.busiest = b; }, () => {});
         e = { kind: "stall_start", at: iso(nowMs), drift_ms: Math.round(driftMs), cause, hub_cpu: hubCpu === null ? null : Math.round(hubCpu * 100) / 100, sample: this.sample() };
       } else {
         this.open.last = nowMs; this.open.ticks++; this.open.max = Math.max(this.open.max, driftMs);
@@ -80,7 +97,7 @@ export class MachineWatch {
     } else if (this.open && nowMs - this.open.last >= QUIET_MS) {
       const o = this.open;
       this.open = null;
-      e = { kind: "stall_end", since: iso(o.since), last_late: iso(o.last), seconds: Math.round((o.last - o.since) / 1000), late_ticks: o.ticks, max_drift_ms: Math.round(o.max), cause: o.cause, sample: this.sample() };
+      e = { kind: "stall_end", since: iso(o.since), last_late: iso(o.last), seconds: Math.round((o.last - o.since) / 1000), late_ticks: o.ticks, max_drift_ms: Math.round(o.max), cause: o.cause, sample: this.sample(), ...(o.busiest?.length ? { busiest: o.busiest } : {}) };
     }
     if (e) this.o.onEvent(e);
     return e;
@@ -127,7 +144,7 @@ export function machineNotice(e: MachineEvent): string {
   }
   const dur = `${Math.floor(e.seconds / 60)} min ${e.seconds % 60} s`;
   return `MACHINE: the stall from ${hhmmss(e.since)} to ${hhmmss(e.last_late)} UTC is over (${dur}, ${e.late_ticks} late tick${e.late_ticks === 1 ? "" : "s"}, worst ${secs(e.max_drift_ms)}). ` +
-    `Now ${load(e.sample)}. A latency, fill time or feed lag measured in that window is this machine's, not the market's: exclude it or measure again. ` +
+    `Now ${load(e.sample)}.${e.busiest?.length ? ` Busiest as it began: ${e.busiest.map((b) => `${b.command} (pid ${b.pid}) ${b.cpu}% CPU, ${b.mb} MB`).join("; ")}.` : ""} A latency, fill time or feed lag measured in that window is this machine's, not the market's: exclude it or measure again. ` +
     `If stalls recur, this machine is a limit of the experiment: write it down as needs/<name> for the owner rather than working around it.`;
 }
 

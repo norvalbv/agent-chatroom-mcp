@@ -21,9 +21,9 @@ const T0 = Date.parse("2026-10-22T19:30:00Z");
 // 1. the episode logic, on lc0a's shape: on time, a 3.5 s tick, more late ticks, then on time for over a minute
 {
   const events: MachineEvent[] = [];
-  const w = new MachineWatch({ onEvent: (e) => events.push(e), sample: () => sample });
+  const w = new MachineWatch({ onEvent: (e) => events.push(e), sample: () => sample, busiest: async () => [{ pid: 68760, cpu: 92, mb: 2185, command: "Python" }] });
   const ticks: [number, number][] = [[0, 3], [0.5, 4], [4, 3500], [10, 20], [190, 8600], [263, 14400], [326, 5800], [380, 900], [440, 2300], [441, 10], [480, 12], [499, 8], [502, 9]];
-  for (const [s, drift] of ticks) w.observe(T0 + s * 1000, drift);
+  for (const [s, drift] of ticks) { w.observe(T0 + s * 1000, drift); await Promise.resolve(); }
   assert.deepEqual(events.map((e) => e.kind), ["stall_start", "stall_end"], "one episode: a start at the first late tick and one end after 60 s on time");
   const [start, end] = events as [Extract<MachineEvent, { kind: "stall_start" }>, Extract<MachineEvent, { kind: "stall_end" }>];
   assert.equal(start.at, "2026-10-22T19:30:04.000Z");
@@ -39,6 +39,8 @@ const T0 = Date.parse("2026-10-22T19:30:00Z");
   assert.match(said, /[Ee]very process on this machine stalls with it, bots and feeds included/);
   const over = machineNotice(end);
   assert.match(over, /^MACHINE: the stall from 19:30:04 to 19:37:20 UTC is over \(7 min 16 s, 5 late ticks, worst 14\.4 s\)\./);
+  assert.deepEqual(end.busiest, [{ pid: 68760, cpu: 92, mb: 2185, command: "Python" }], "what was busy as the episode began rides on its end");
+  assert.match(over, /Busiest as it began: Python \(pid 68760\) 92% CPU, 2185 MB\./);
   assert.match(over, /A latency, fill time or feed lag measured in that window is this machine's, not the market's/);
   assert.match(over, /needs\/<name>/, "a stall that recurs is a limit of this machine for the owner, not something to work around");
   // the hub's own CPU tells a busy hub from a starved machine

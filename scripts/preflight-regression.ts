@@ -87,5 +87,9 @@ const clock = JSON.stringify({ check: "clock-offset", status: "ok", value: "+12 
   const w = spawnSync("node", [dist, "preflight regression task", "--flat", "--groups", "/nonexistent/groups.json", "--agents", "1", "--preflight-strict", `printf '%s\\n' '${rtt}'`, "--port", "1"], { cwd: root, encoding: "utf8", timeout: 30_000, env: { ...process.env, CHATROOM_INSECURE_LOCAL: "1" } });
   assert.doesNotMatch(w.stderr, /not starting any seat/, "a WARN-only preflight passes strict mode and the launch goes on (here to the --groups refusal)");
   assert.match(w.stdout + w.stderr, /preflight: 1 WARN/, "the launcher logs the verdict");
+  assert.match(w.stdout, /- WARN clob-tls-rtt: p50 160 ms/, "whoever launches sees each FAIL/WARN line, not only counts, before the room starts");
+  const f = spawnSync("node", [dist, "preflight regression task", "--flat", "--groups", "/nonexistent/groups.json", "--agents", "1", "--preflight", `printf '%s\\n' '${vpn}' '${clock}'`, "--port", "1"], { cwd: root, encoding: "utf8", timeout: 30_000, env: { ...process.env, CHATROOM_INSECURE_LOCAL: "1" } });
+  assert.match(f.stdout, /- FAIL vpn-route: .*\(owner fix: trade from a host/, "a non-strict FAIL prints its owner fix at launch");
+  assert.doesNotMatch(f.stdout, /clock-offset/, "OK lines stay off the launch log");
 }
 console.log("preflight-regression OK");

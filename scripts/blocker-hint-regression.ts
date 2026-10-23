@@ -5,8 +5,9 @@
  * 1 yes) it flagged 1 message and that one was false, and an embedding check did no better. The seats had known their
  * blocker all along: lc0a #235 said "colocated-bot territory"; esc-before-1's final said a host "would be a needs/
  * decision" and filed none; esc-before-2's final rejected a VPS on its own model. So the chat and opening hints are gone,
- * and every proposal in a room with no open needs/* gets one question, worded so the owner decides what is worth paying
- * for. Logged as need_asked; run-metrics counts asks and the needs/* filed within 15 min of one.
+ * and every proposal gets one question, worded so the owner decides what is worth paying for; with a needs/* open it
+ * names it and asks for anything else (probe/esc-after-2). Logged as need_asked; run-metrics counts asks and the
+ * needs/* filed within 15 min of one.
  *
  * npx tsx scripts/blocker-hint-regression.ts */
 import assert from "node:assert/strict";
@@ -53,14 +54,17 @@ assert.match(r.hint ?? "", /owner decides/, "the owner, not the room, decides wh
 assert.ok(hub.getRoom(room).messages.some((m) => m.kind === "system" && /outside the room/.test(m.content)), "the voters see it too, not only the proposer (review/aef07b4d note 1)");
 await a("board_set", { room, key: "needs/london-host", text: "a host near the exchange, ~$10/mo\nblocks: claim/maker" });
 
-// 3. With a needs/* open the room has already escalated: no question.
+// 3. A need already open does not end the question: esc-after-2 filed needs/polymarket-eligibility, then left the
+// London box in its final's prose with no need (probe/esc-after-2). The question names what is open and asks for the rest.
 const room2 = "blocker-hint-filed";
 const c = await seat("c");
 await c("join_room", { room: room2, name: "C", agent: "test" });
 await (await seat("d"))("join_room", { room: room2, name: "D", agent: "test" });
 await c("board_set", { room: room2, key: "needs/budget", text: "+$20" });
-r = await c("propose", { room: room2, text: "FINAL: the budget ran out; see needs/budget." });
-assert.equal(r.hint, undefined, "no question once a needs/* is open");
+r = await c("propose", { room: room2, text: "FINAL: the budget ran out (needs/budget); a London box would also help." });
+assert.match(r.hint ?? "", /needs\/budget/, `the open need is named: ${JSON.stringify(r).slice(0, 300)}`);
+assert.match(r.hint ?? "", /anything else/i, "and the proposer is asked for any other outside limit");
+assert.ok(hub.getRoom(room2).messages.some((m) => m.kind === "system" && /needs\/budget/.test(m.content) && /anything else/i.test(m.content)));
 
 const events = parseRoomLog(readFileSync(join(dataDir, `${room}.jsonl`), "utf8"));
 assert.equal(events.filter((e) => e.type === "need_asked").length, 1, "one need_asked for the one proposal");

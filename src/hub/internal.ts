@@ -81,8 +81,8 @@ export type Event =
   | { type: "second_scrutiny"; room: string; asked: string; key: string; by: string; held_by: string; ts: string }
   /** Telemetry only (replay ignores it; src/hub/needs.ts): the first write of a needs/* entry, who was @-mentioned, the claims it names as blocked. */
   | { type: "need_filed"; room: string; key: string; by: string; minutes_since_open: number; blocks: string[]; told: string[]; ts: string }
-  /** Telemetry only (src/hub/needs/needs.ts blockerHint): a seat's chat named a blocker outside the room and was pointed at needs/. */
-  | { type: "blocker_nudged"; room: string; by: string; term: string; seq: number; where?: "proposal"; ts: string }
+  /** Telemetry only (src/hub/needs/needs.ts proposalNeedHint): a proposal in a room with no open needs/* was asked whether an outside limit decides it. */
+  | { type: "need_asked"; room: string; by: string; where: "proposal"; ts: string }
   /** Telemetry only: a needs/* entry was cleared (met or refused), and how long it stayed open. */
   | { type: "need_cleared"; room: string; key: string; by: string; filed_by: string; open_minutes: number; ts: string }
   /** the owner named this room's chair through the human route (Hub.nameChair) */

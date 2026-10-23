@@ -1,12 +1,12 @@
 /**
- * A blocker named in chat and never filed (swarm-073112-zcd7, inputs/owner-1: "how a room notices one by itself"). In the
- * live-money room swarm-185621-lc0a a seat wrote at #235 (19:54) that the crypto maker's problem is "mostly the room's
- * laptop ... colocated-bot territory, not a laptop behind a gateway"; no needs/* followed, trading went on and the
- * owner found the need himself in another session at 20:24. A chat message that names something outside the room (the
- * machine, the network path, a region rule) in blocking words now gets one line back in the send result: if it blocks
- * work, file needs/<name> with a blocks: line. Once per seat until it files a needs/* entry; never for quiet or human
- * messages; logged as blocker_nudged. Scanned over the Polymarket room logs: lc0a 2 true of 2 hits (#235, #238) after
- * the server-timestamp exclusion (decision/needs-escalation).
+ * A proposal is asked whether something outside the room decides it, whatever its words (decision/blocker-detection,
+ * inputs/owner-3). From 0d659f43 to bb5e6028 the hub pointed chat, openings and proposals at needs/ only when a word list
+ * said they named a blocker. On held-out labels (esc-before-2, seat 2's blind bench/labels-swarm-075523-g6y5, n=20,
+ * 1 yes) it flagged 1 message and that one was false, and an embedding check did no better. The seats had known their
+ * blocker all along: lc0a #235 said "colocated-bot territory"; esc-before-1's final said a host "would be a needs/
+ * decision" and filed none; esc-before-2's final rejected a VPS on its own model. So the chat and opening hints are gone,
+ * and every proposal in a room with no open needs/* gets one question, worded so the owner decides what is worth paying
+ * for. Logged as need_asked; run-metrics counts asks and the needs/* filed within 15 min of one.
  *
  * npx tsx scripts/blocker-hint-regression.ts */
 import assert from "node:assert/strict";
@@ -16,40 +16,9 @@ import { join } from "node:path";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { Hub } from "../src/hub.js";
-import { blockerTerm } from "../src/hub/needs/needs.js";
 import { parseRoomLog, runMetrics } from "../src/run-metrics.js";
 import { createSessionServer } from "../src/server.js";
 
-// 1. What counts: the lc0a messages that named the blocker, and the false hits the first scan found.
-const LC0A_235 = "Both, and it's mostly the room's laptop. A maker here needs feed plus cancel inside ~0.1-0.2s of the Binance event. That's colocated-bot territory, not a laptop behind a gateway.";
-const LC0A_238 = "Agreed: from this laptop we are too slow to cancel before the takers arrive.";
-assert.ok(blockerTerm(LC0A_235), "lc0a #235 is a blocker");
-assert.ok(blockerTerm(LC0A_238), "lc0a #238 is a blocker");
-assert.ok(blockerTerm("Host is the cause: VPN default route (utun8), load 31, swap 7.3/8G, feed lag p99 4.6s vs competitors' 0.09s."), "dev room swarm-074902-bz3m's openings named the cause, not a block");
-assert.ok(blockerTerm("The VPN path has 5% loss at 196 ms RTT, so one TCP flow can't keep up with the book."), "mrw4-crypto #180");
-for (const fp of [
-  "I fixed timing.py to the server timestamp: the wallet filled 0.8 s after the book move, so ARocky33 is pure first-block speed.",
-  "for the same trade, data-api block timestamp minus the CLOB print's server ts; I can't read rec/ since your restart.",
-  "R9b makes fills use the server clock, so recorder backlog cannot create phantom fills.",
-  "I swapped the order of the two tests; can't see why that matters.",
-  // about another room's blocker, or a code review: this room's own log had 6 such flags, 0 true (review/0d659f43-claude-opus-5-5-3)
-  "In lc0a (#235) the laptop was the bottleneck, so the room should have paused.",
-  "review/178fc4a: one blocking bug, the rtt check can't survive a 2 s gap.",
-  "swarm-185621-lc0a never filed it, although the VPN was the cause.",
-]) assert.equal(blockerTerm(fp), undefined, `not a blocker: ${fp.slice(0, 60)}`);
-// a room citing its own #seq or its own id is still talking about its own blocker (seat 3 #276, seat 2 #264)
-assert.equal(blockerTerm("the laptop is the bottleneck (my #212 numbers)"), "laptop", "a bare #seq is this room's own message");
-assert.equal(blockerTerm("swarm-074313-2bcr: the laptop is the bottleneck", "swarm-074313-2bcr-room"), "laptop", "the room's own id");
-assert.equal(blockerTerm("swarm-185621-lc0a: the laptop is the bottleneck", "swarm-074313-2bcr-room"), undefined, "another room's id");
-// esc-before-1 (swarm-074313-2bcr), lc0a's paper reproduction, named its latency limit in words the first list missed
-for (const tp of [
-  "Through the gateway from this laptop … a Binance-watching cancel from here mostly loses the race; the guard fired 16 times.",
-  "A 5-share joiner from this laptop got the back of the queue, and money fixes neither queue position nor speed.",
-  "A low-latency host near the CLOB is the one paid item that could move limit (c). It would be a needs/ decision for Benji.",
-  "The latency gradient is a hypothesis, and L=0 is unreachable from here.",
-]) assert.ok(blockerTerm(tp), `esc-before-1: ${tp.slice(0, 60)}`);
-
-// 2. Through the tool, as a seat sees it.
 Hub.DEFAULT_NUDGE_MS = 0;
 const dataDir = mkdtempSync(join(tmpdir(), "blocker-hint-"));
 const hub = new Hub({ dataDir });
@@ -65,40 +34,37 @@ async function seat(name: string) {
     return JSON.parse(text);
   };
 }
+
+// 1. Chat and openings are not judged by words any more: lc0a #235 itself gets no needs/ line back.
 const room = "blocker-hint";
 const a = await seat("a"); const b = await seat("b");
 await a("join_room", { room, name: "A", agent: "test" });
 await b("join_room", { room, name: "B", agent: "test" });
+let r = await a("send_message", { room, content: "Both, and it's mostly the room's laptop. That's colocated-bot territory, not a laptop behind a gateway.", force: true });
+assert.doesNotMatch(r.hint ?? "", /needs\//, `no word-list hint on chat: ${JSON.stringify(r)}`);
+r = await b("submit_opening", { room, content: "No. Host is the cause: VPN default route, load 31, feed lag p99 4.6 s." });
+assert.doesNotMatch(r.hint ?? "", /needs\//, `no word-list hint on an opening: ${JSON.stringify(r)}`);
 
-let r = await a("send_message", { room, content: LC0A_235, force: true });
-assert.match(r.hint ?? "", /needs\/<name>/, `the send result points at needs/: ${JSON.stringify(r)}`);
-assert.match(r.hint ?? "", /laptop/, "it names the term it saw, so the seat can judge a false hit");
-r = await a("send_message", { room, content: LC0A_238, force: true });
-assert.doesNotMatch(r.hint ?? "", /needs\/<name>/, "once until the seat files a needs/* entry");
-await a("board_set", { room, key: "needs/colocated-host", text: "a host near the exchange\nblocks: claim/crypto-maker" });
-r = await a("send_message", { room, content: "And the VPN exit is in a restricted region, so we cannot trade from here at all.", force: true });
-assert.match(r.hint ?? "", /needs\/<name>/, "after a filing, a new blocker is pointed out again");
-r = await b("send_message", { room, content: `@A ${LC0A_238}`, quiet: true, force: true });
-assert.doesNotMatch(r.hint ?? "", /needs\/<name>/, "a quiet working exchange is not nudged");
+// 2. A proposal is asked whatever it says, here esc-before-2's own rejection of a server, while no needs/* is open.
+r = await a("propose", { room, text: "FINAL: no edge for a maker. A VPS or colocation isn't worth paying for, since the zero-latency replay still loses." });
+assert.match(r.hint ?? "", /outside the room/, `the proposal is asked: ${JSON.stringify(r).slice(0, 300)}`);
+assert.match(r.hint ?? "", /needs\/<name>/);
+assert.match(r.hint ?? "", /owner decides/, "the owner, not the room, decides whether it is worth paying for");
+await a("board_set", { room, key: "needs/london-host", text: "a host near the exchange, ~$10/mo\nblocks: claim/maker" });
 
-// openings and proposals are where dev room swarm-074902-bz3m named its blocker: both point at needs/ too
+// 3. With a needs/* open the room has already escalated: no question.
+const room2 = "blocker-hint-filed";
 const c = await seat("c");
-await c("join_room", { room, name: "C", agent: "test" });
-r = await c("submit_opening", { room, content: "No. Host is the cause: VPN default route, load 31, feed lag p99 4.6 s." });
-assert.match(r.hint ?? "", /needs\/<name>/, `an opening that names a blocker is pointed at needs/: ${JSON.stringify(r)}`);
-const p2 = await seat("p2");
-const room2 = "blocker-hint-propose";
-await p2("join_room", { room: room2, name: "P", agent: "test" });
-await (await seat("q"))("join_room", { room: room2, name: "Q", agent: "test" });
-r = await p2("propose", { room: room2, text: "VERDICT: no edge. The fix is infrastructure: the laptop behind the VPN is too slow (#69), so a host near the exchange is the next step." });
-assert.match(r.hint ?? "", /needs\/<name>/, `a proposal naming a blocker with no needs/* filed is pointed at needs/: ${JSON.stringify(r).slice(0, 300)}`);
+await c("join_room", { room: room2, name: "C", agent: "test" });
+await (await seat("d"))("join_room", { room: room2, name: "D", agent: "test" });
+await c("board_set", { room: room2, key: "needs/budget", text: "+$20" });
+r = await c("propose", { room: room2, text: "FINAL: the budget ran out; see needs/budget." });
+assert.equal(r.hint, undefined, "no question once a needs/* is open");
 
 const events = parseRoomLog(readFileSync(join(dataDir, `${room}.jsonl`), "utf8"));
-const nudges = events.filter((e) => e.type === "blocker_nudged");
-assert.equal(nudges.length, 3, "two chat nudges and one opening");
-assert.equal(nudges[0].term.toLowerCase(), "laptop");
+assert.equal(events.filter((e) => e.type === "need_asked").length, 1, "one need_asked for the one proposal");
 const metrics = runMetrics(events);
-assert.equal(metrics.needs?.nudged, 3, "run-metrics counts nudges beside filings");
-assert.equal(metrics.needs?.nudgedThenFiled, 1, "A filed needs/colocated-host after its nudge: the conversion that shows the hint working");
+assert.equal(metrics.needs?.asked, 1);
+assert.equal(metrics.needs?.askedThenFiled, 1, "needs/london-host followed the question: the conversion that shows it working");
 console.log("blocker-hint regression OK");
 process.exit(0);

@@ -6,6 +6,7 @@ import { renderMetrics, type RunMetrics } from './run-metrics.js';
 import { coordinates } from './hub/keys.js';
 import { renderDigests, type DigestAck, type DigestRecord } from './groups.js';
 import { renderTimeline, type RunTimeline } from './run-timeline.js';
+import { renderPreflight, type PreflightResult } from './launch/preflight.js';
 
 export interface RoomSnapshot {
   name: string;
@@ -37,6 +38,8 @@ export interface RunResult {
   /** --digest-every: one row per consolidation pass, and each group's latest digest note at the end (src/groups.ts). */
   digests?: DigestRecord[];
   digestAcks?: DigestAck[];
+  /** --preflight: the environment checks run before any seat started (src/preflight.ts); absent when none ran. */
+  preflight?: PreflightResult;
 }
 /**
  * Usage as the hub recorded it while the run went on, from the room snapshots alone: a launcher that crashed, or a
@@ -378,6 +381,7 @@ export function renderRunReport(r: RunResult): string {
   // only a run whose groups keep a position prints it (or its absence): other runs' reports are unchanged
   const grouped = r.rooms.some(room => room.name !== r.leadRoom && ((room.payload?.board ?? {}) as BoardText).position);
   for (const room of r.rooms.filter(room => room.name !== r.leadRoom)) text += `### ${room.name} (${room.payload?.state ?? 'missing'})\n\n${room.payload?.conclusion?.text ?? '_no consensus_'}\n\n${grouped ? renderPosition(room.payload) : ''}`;
+  text += renderPreflight(r.preflight);
   text += `## Result artifact\n\nAuthoritative full room snapshots, board evidence and raw transcripts: ${r.artifactPath}\n\n`;
   if (r.usage) {
     // claude seats have no steps/prompt_tokens/completion_tokens; without this, a claude-only run's real

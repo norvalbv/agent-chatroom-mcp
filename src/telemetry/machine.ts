@@ -168,13 +168,13 @@ export function attachMachineWatch(hub: Hub, probeMs = PROBE_MS): MachineWatch {
     },
   });
   const observe = watch.observe.bind(watch);
-  watch.observe = (nowMs, driftMs) => {
+  watch.observe = (nowMs, driftMs, hubCpu = null) => {
     for (const room of live()) {
       if (seen.has(room.name)) continue;
       seen.add(room.name);
       hub.persist({ type: "machine", room: room.name, sample: watch.sample(), ts: now() });
     }
-    return observe(nowMs, driftMs);
+    return observe(nowMs, driftMs, hubCpu);
   };
   if (probeMs > 0) watch.start(probeMs);
   return watch;

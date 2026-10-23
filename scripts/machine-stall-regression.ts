@@ -90,6 +90,11 @@ const T0 = Date.parse("2026-10-22T19:30:00Z");
       const m = runMetrics(ev);
       assert.deepEqual(m.machine, { stalls: 1, stalled_s: 1, worst_ms: 3000 }, `${room}: run-metrics counts the episode`);
     }
+    // the hub's CPU reaches the episode through the hub's watch too (review/e3f26dee: the wrapper dropped it)
+    watch.observe(T0 + 200_000, 2500, 0.95);
+    const busy = parseRoomLog(readFileSync(join(dataDir, "ms-a.jsonl"), "utf8")).filter((e) => e.type === "machine_stall").at(-1);
+    assert.equal(busy.cause, "hub");
+    assert.equal(busy.hub_cpu, 0.95);
   } finally { rmSync(dataDir, { recursive: true, force: true }); }
 }
 console.log("machine-stall-regression OK");

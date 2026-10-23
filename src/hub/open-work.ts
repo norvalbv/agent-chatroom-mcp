@@ -108,6 +108,7 @@ export function listedItems(content: string): number {
   return nums.size >= 2 ? nums.size : 0;
 }
 
+export { proposalNeedHint } from "./needs/needs.js";
 const nudgedAt = new WeakMap<Participant, string>();
 
 /** The line a list in chat gets back: once, then not again until the seat has written an idea/* entry since. A list left

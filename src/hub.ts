@@ -15,7 +15,7 @@ import { analyzeReplyMetrics, type ReplyMetricEvent } from "./reply-metrics.js";
 export * from "./hub/types.js";
 import { VERIFY_HEAD_EXAMPLE, VERIFY_HEAD_RULE, isReviewKey, parseVerifyHead, readVerifyHead, failToPassShortfall, citesCommit, hexTokens, addedUnchecked, uncoveredCommits, verifyGaps, devRoomUrl, devReceiptFrom, type DevReceipt, ROLES, REFUSAL_CODES, HubError } from "./hub/types.js";
 import type { MessageKind, Vote, Quorum, RoomState, VerifyHead, Role, Participant, KickVote, Message, CodeState, BoardExpiryOptions, BoardEntry, Challenge, ElectorateSummary, ConclusionVerification, ConclusionClosing, Proposal, RoomOptions, JoinOptions, Room, CallOutcome, RefusalCode, BoardManifestObservation } from "./hub/types.js";
-import { now, shortId, norm, emptyBoardManifestCounters, manifestBytes, codeState, commitsIn, keepRefusal, RECENT_REFUSALS } from "./hub/internal.js";
+import { now, shortId, norm, emptyBoardManifestCounters, manifestBytes, codeState, commitsIn, keepRefusal, RECENT_REFUSALS, resourceEvents } from "./hub/internal.js";
 import type { Opts, Event, BoardManifestCounters } from "./hub/internal.js";
 import * as board from "./hub/board.js";
 import * as idle from "./hub/idle.js";
@@ -294,7 +294,7 @@ export class Hub {
       ...(idle.idleView(room) ? { idle: idle.idleView(room) } : {}),
       ...(idle.waitingView(room) ? { waiting: idle.waitingView(room) } : {}),
       // claim/* entries whose owner left: its registered successor may take one at once, anyone after Hub.STALE_CLAIM_MS
-      stale_claims: this.staleClaims(room, reveal),
+      stale_claims: this.staleClaims(room, reveal), ...((n) => (n ? { open_needs: n } : {}))(board.openNeeds(room)), // needs/* filed for the owner and not cleared (src/hub/needs/); absent: none
       // per commit, the verify/* and review/* entries whose head names it (telemetry G3/G14): coverage read from the hub, not key names
       ...((r) => (r.length ? { reviews: r } : {}))(this.reviewsByCommit(room)),
       // chat messages by the channel they came through (telemetry gap 8: owner, script, chair and seat were one column)
@@ -929,7 +929,7 @@ export class Hub {
     // reply_to, so once delivered it retires instead of staying the focused ask. Left as debt, it pinned every
     // later wait/read to that one message and refused send_message as "arrived while composing" until pass.
     for (const m of delivered) {
-      if (m.from.id !== "system" || m.kind !== "chat" || !m.mentions?.includes(p.id) || p.declinedAsks?.includes(m.id)) continue;
+      if (m.from.id !== "system" || m.kind !== "chat" || m.tag === "need" || !m.mentions?.includes(p.id) || p.declinedAsks?.includes(m.id)) continue;
       p.declinedAsks = [...(p.declinedAsks ?? []), m.id];
       p.declinedAt = { ...(p.declinedAt ?? {}), [m.id]: m.seq };
     }
@@ -1585,7 +1585,7 @@ export class Hub {
     for (const { key, text } of entries) {
       const entry: BoardEntry = { text, by: "launcher", updatedAt: now() };
       board.applyBoard(room, key, entry);
-      this.persist({ type: "board", room: room.name, key, entry });
+      for (const ev of resourceEvents(room.name, key, entry)) this.persist(ev);
     }
   }
 
@@ -1845,7 +1845,7 @@ export class Hub {
     const human = [...room.messages].reverse().find((m) => m.kind === "chat" && m.tag !== "opening" &&
       m.from.agent === "human" && !this.isAnswered(room, m) && !p.declinedAsks?.includes(m.id) && this.responderFor(room, m, p.id).mine);
     // hub notices ride the normal stream (settleRead retires them on delivery); only an author can be answered
-    return human ?? this.addressedBy(room, p).find((m) => m.from.id !== "system");
+    return human ?? this.addressedBy(room, p).find((m) => m.from.id !== "system" || m.tag === "need"); // needs/needs.ts: an ask to a blocked claim owner
   }
 
   attentionHint(room: Room, p: Participant): string | undefined {

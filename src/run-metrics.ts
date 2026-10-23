@@ -50,7 +50,9 @@ export interface RunMetrics {
   createdAt?: string;
   lastEventAt?: string;
   /** minutes after the room opened; absent when it never happened */
-  minutesTo: { firstClaim?: number; firstSource?: number; firstProposal?: number; conclusion?: number };
+  minutesTo: { firstClaim?: number; firstSource?: number; firstProposal?: number; firstNeed?: number; conclusion?: number };
+  /** needs/* the room filed for the owner (hub need_filed / need_cleared events, src/hub/needs.ts): filed, cleared, and claims named as blocked; absent: none */
+  needs?: { filed: number; cleared: number; blocks: number; asked: number; askedThenFiled: number; asksOfOwners: number; ownersAnswered: number };
   /** rate: workers who recruited at least once over workers; calls counts every role's recruits (a verifier's too) */
   recruits: { calls: number; seats: number; workers: number; rate: number };
   /** summed over seats that reported usage; seatsWithUsage of seats.length says how complete it is */
@@ -61,6 +63,8 @@ export interface RunMetrics {
   quiet?: { chat: number; bySender: number; byHub: number; keptPublicForBoardKey: number };
   /** board_set(append=true) lines per shared key (hub "board_append" events): appends, distinct appenders, continuations used; absent: none */
   appends?: Record<string, { lines: number; seats: number; continuations: number }>;
+  /** machine stall episodes the hub said in this room (hub "machine_stall" end events, src/hub/machine.ts); absent: none */
+  machine?: { stalls: number; stalled_s: number; worst_ms: number };
   /** seats with at least one web call in the ledger; undefined when the log has no ledger */
   webSeats?: number;
   /** text the citation credit was read from */
@@ -104,10 +108,17 @@ export function runMetrics(events: readonly Ev[], opts: MetricsOptions = {}): Ru
   let proposal: string | undefined;
   let ledger = false;
   const takes: Record<string, number> = {};
+  const needs = { filed: 0, cleared: 0, blocks: 0, asked: 0, askedThenFiled: 0, asksOfOwners: 0, ownersAnswered: 0 };
+  /** open "need" asks to blocked claims' owners (src/hub/needs/needs.ts), by message id; a reply_to one answers it */
+  const ownerAsks = new Set<string>();
+  /** when the hub last asked the room about an outside limit (need_asked; blocker_nudged in older logs); a need_filed within 15 min converts it */
+  let askOpen: string | undefined;
+  let firstNeed: string | undefined;
   const quiet = { chat: 0, bySender: 0, byHub: 0, keptPublicForBoardKey: 0 };
   const appendsBy = new Map<string, { lines: number; seats: Set<string>; landed: Set<string> }>();
   const proposals = new Set<string>();
   const byKey = new Map<string, string>();
+  let machine: RunMetrics["machine"];
 
   const seat = (id: string | null | undefined, name?: string) => {
     if (!id) return undefined;
@@ -171,6 +182,14 @@ export function runMetrics(events: readonly Ev[], opts: MetricsOptions = {}): Ru
         if (s && e.usage) s.usage = e.usage;
         break;
       }
+      case "machine_stall": {
+        if (e.event !== "end") break;
+        machine ??= { stalls: 0, stalled_s: 0, worst_ms: 0 };
+        machine.stalls++;
+        machine.stalled_s += Number(e.seconds ?? 0);
+        machine.worst_ms = Math.max(machine.worst_ms, Number(e.max_drift_ms ?? 0));
+        break;
+      }
       case "memory": {
         stamp(e.ts);
         const s = seat(byKey.get(e.seat));
@@ -188,6 +207,23 @@ export function runMetrics(events: readonly Ev[], opts: MetricsOptions = {}): Ru
         takes[String(e.action)] = (takes[String(e.action)] ?? 0) + 1;
         // why a take was refused before the work: held (same key), same-commit (another spelling), assigned-reviewer
         if (e.action === "refused" && e.reason) takes[`refused:${String(e.reason)}`] = (takes[`refused:${String(e.reason)}`] ?? 0) + 1;
+        break;
+      case "need_filed":
+        stamp(e.ts);
+        needs.filed++; needs.blocks += Array.isArray(e.blocks) ? e.blocks.length : 0;
+        if (askOpen && Date.parse(e.ts) - Date.parse(askOpen) <= 15 * 60_000) needs.askedThenFiled++;
+        askOpen = undefined;
+        if (typeof e.ts === "string" && (!firstNeed || e.ts < firstNeed)) firstNeed = e.ts;
+        break;
+      case "need_cleared":
+        stamp(e.ts);
+        needs.cleared++;
+        break;
+      case "need_asked":
+      case "blocker_nudged":
+        stamp(e.ts);
+        needs.asked++;
+        askOpen = e.ts;
         break;
       case "board_append": {
         stamp(e.ts);
@@ -223,6 +259,8 @@ export function runMetrics(events: readonly Ev[], opts: MetricsOptions = {}): Ru
         const m = e.msg ?? {};
         stamp(m.ts);
         if (m.kind === "chat") mention(m.content, m.from?.name);
+        if (m.tag === "need") { needs.asksOfOwners++; ownerAsks.add(m.id); }
+        else if (m.replyTo && ownerAsks.delete(m.replyTo)) needs.ownersAnswered++;
         if (m.kind === "chat" && m.from?.agent !== "hub" && m.from?.agent !== "human") {
           quiet.chat++;
           if (m.autoQuiet) quiet.byHub++; else if (m.quiet) quiet.bySender++;
@@ -304,13 +342,16 @@ export function runMetrics(events: readonly Ev[], opts: MetricsOptions = {}): Ru
       firstClaim: minutes(createdAt, firstAt.claim),
       firstSource: minutes(createdAt, firstAt.source),
       firstProposal: minutes(createdAt, firstAt.proposal),
+      firstNeed: minutes(createdAt, firstNeed),
       conclusion: minutes(createdAt, firstAt.conclusion),
     }).filter(([, v]) => v !== undefined)) as RunMetrics["minutesTo"],
     recruits: { calls: list.reduce((n, s) => n + s.recruits, 0), seats: recruiting, workers: workers.length, rate: workers.length ? recruiting / workers.length : 0 },
     ...(priced.length ? { usage: { cost_usd: sum("cost_usd"), input_tokens: sum("input_tokens"), output_tokens: sum("output_tokens"), seatsWithUsage: priced.length } } : {}),
     ...(Object.keys(takes).length ? { takes } : {}),
+    ...(needs.filed || needs.cleared || needs.asked ? { needs } : {}),
     ...(quiet.chat ? { quiet } : {}),
     ...(appendsBy.size ? { appends: Object.fromEntries([...appendsBy].map(([k, a]) => [k, { lines: a.lines, seats: a.seats.size, continuations: a.landed.size }])) } : {}),
+    ...(machine ? { machine } : {}),
     ...(ledger ? { webSeats: list.filter((s) => (s.work?.web ?? 0) > 0).length } : {}),
     citedFrom: conclusion ? "conclusion" : proposal ? "proposal" : "none",
     uncited: cited ? list.filter((s) => s.findings > 0 && !s.cited.length).map((s) => s.name) : [],
@@ -344,7 +385,9 @@ export function renderMetrics(m: RunMetrics): string {
     (m.webSeats === undefined ? "no work ledger in this log, so reads, searches and web calls are unknown. " : `${m.webSeats} of ${m.seats.length} seats made a web call. `) +
     (m.usage ? `Seat-reported usage: $${m.usage.cost_usd.toFixed(2)}, ${m.usage.input_tokens} input + ${m.usage.output_tokens} output tokens from ${m.usage.seatsWithUsage} of ${m.seats.length} seats (the rest unknown). ` : "No seat reported usage to the hub. ") +
     memoryLine(m.seats) +
+    (m.machine ? `The machine stalled ${m.machine.stalls} time${m.machine.stalls === 1 ? "" : "s"} (${m.machine.stalled_s} s in all, worst timer drift ${Math.round(m.machine.worst_ms / 100) / 10} s); timings measured then are the machine\'s. ` : "") +
     (m.quiet && (m.quiet.bySender || m.quiet.byHub || m.quiet.keptPublicForBoardKey) ? `Of ${m.quiet.chat} agent chat messages, ${m.quiet.bySender} were sent quiet, ${m.quiet.byHub} were made quiet by the hub, and ${m.quiet.keptPublicForBoardKey} two-seat exchanges stayed public because they named a board entry. ` : "") +
+    (m.needs ? `needs/* for the owner: ${m.needs.filed} filed${t.firstNeed !== undefined ? `, the first at ${t.firstNeed} min` : ""}, ${m.needs.cleared} cleared, ${m.needs.blocks} claim${m.needs.blocks === 1 ? "" : "s"} named as blocked, asked about outside limits ${m.needs.asked} time${m.needs.asked === 1 ? "" : "s"} (${m.needs.askedThenFiled} followed by a needs/* within 15 min), ${m.needs.ownersAnswered} of ${m.needs.asksOfOwners} blocked-claim owner${m.needs.asksOfOwners === 1 ? "" : "s"} answered. ` : "") +
     (m.takes ? `take/* steps: ${Object.entries(m.takes).map(([k, n]) => `${n} ${k}`).join(", ")}. ` : "") +
     (m.appends ? `Shared logs (board_set append): ${Object.entries(m.appends).map(([k, a]) => `${k} ${a.lines} line${a.lines === 1 ? "" : "s"} from ${a.seats} seat${a.seats === 1 ? "" : "s"}${a.continuations ? `, ${a.continuations} continuation${a.continuations === 1 ? "" : "s"}` : ""}`).join("; ")}. ` : "") +
     (m.citedFrom === "none" ? "No proposal yet, so no citation credit.\n\n" : `Credit read from the ${m.citedFrom}${m.uncited.length ? `; findings never cited: ${m.uncited.join(", ")}` : ""}.\n\n`) +

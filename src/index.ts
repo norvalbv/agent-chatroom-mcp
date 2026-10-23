@@ -37,8 +37,8 @@ import { attachJobWake } from "./spawner/wake.js";
 import { UI_HTML } from "./ui.js";
 import { humanQuestions } from "./questions.js";
 import { photoDirectory, registerPhotoRoutes } from "./photos/routes.js";
-import { hubDotEnvOptions, loadDotEnv } from "./env.js";
-import { holdFromQuery } from "./env.js";
+import { holdFromQuery, hubDotEnvOptions, loadDotEnv } from "./env.js";
+import { attachMachineWatch } from "./telemetry/machine.js";
 import { installLifecycle } from "./lifecycle.js";
 import { connect as tcpConnect } from "node:net";
 /** Something accepts a TCP connection on host:port within a second. */
@@ -299,13 +299,13 @@ const sessionRoute = async (req: express.Request, res: express.Response) => {
   await entry.t.handleRequest(req, res);
 };
 
-// Seat memory (src/hub/memory.ts): sample the process table; CHATROOM_MEMORY_WATCH_MS=0 turns it off. The budget
-// (CHATROOM_SEAT_MEMORY_MB) is enforced only when set.
+// Seat memory (src/hub/memory.ts; CHATROOM_MEMORY_WATCH_MS=0 off; CHATROOM_SEAT_MEMORY_MB enforced only when set) and machine stalls (src/telemetry/machine.ts; CHATROOM_MACHINE_WATCH_MS=0 off)
 const MEMORY_WATCH_MS = Number(process.env.CHATROOM_MEMORY_WATCH_MS ?? 15_000);
 if (MEMORY_WATCH_MS > 0) {
   setInterval(() => { void hub.memory.tick().catch(() => {}); }, Math.max(250, MEMORY_WATCH_MS)).unref();
   if (hub.memory.budgetMb) console.error(`agent-chatroom-mcp: seat memory budget ${hub.memory.budgetMb} MB (CHATROOM_SEAT_MEMORY_MB): past it the hub stops a seat's largest process`);
 }
+attachMachineWatch(hub, Number(process.env.CHATROOM_MACHINE_WATCH_MS ?? 500));
 
 // the "no MCP session" line waits this long after a start (tests set it to 0)
 if (process.env.CHATROOM_UNCONNECTED_GRACE_MS !== undefined) Hub.UNCONNECTED_GRACE_MS = Number(process.env.CHATROOM_UNCONNECTED_GRACE_MS);

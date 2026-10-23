@@ -26,6 +26,7 @@ import { launchCostGuide } from "./cost-estimate.js";
 import { seatTarget } from "./seat-targets.js";
 import { digestAcks, digestRecords, loadGroups, renderDigests, type GroupsFile } from "./groups.js";
 import { loadResources, seedResources } from "./resources.js";
+import { preflightAtLaunch } from "./launch/preflight.js";
 loadDotEnv();
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -40,7 +41,8 @@ const flag = (name: string, def?: string) => {
 const has = (name: string) => argv.includes(`--${name}`);
 const BOOL_FLAGS = new Set(["--keep-hub", "--reuse-hub", "--apply", "--full-access", "--named", "--flat", "--require-verification", "--respawn", "--claude-full", "--no-carry", "--no-seat-targets", "--sandbox", "--no-web"]);
 const task = argv.find((a, i) => !a.startsWith("--") && (i === 0 || !argv[i - 1].startsWith("--") || BOOL_FLAGS.has(argv[i - 1])));
-if (!task) { console.error('usage: swarm "<task>" [--flat] [--done-when text] [--verify text] [--agents 6] [--cwd dir] [--models sonnet,haiku] [--lead-model opus] [--verifier-model opus] [--planner-model opus] [--codex k] [--codex-models gpt-6-astra,gpt-5.6-sol,gpt-5.6-terra] [--openrouter k] [--openrouter-models deepseek/deepseek-v4.1-flash,...] [--verifier-openrouter slug] [--openrouter-reasoning low|medium|high] [--require-verification] [--quorum unanimous|majority|supermajority] [--chair name] [--owner-word] [--seat-hooks off] [--seat-ai-gates on] [--prompt loop.md] [--groups groups.json [--digest-every 45]] [--resources file.md] [--respawn] [--apply] [--full-access] [--named] [--claude-full] [--no-carry] [--no-seat-targets] [--no-web] [--sandbox] [--timeout 30] [--port 7717] [--result-path path]'); process.exit(2); }
+if (!task) { console.error('usage: swarm "<task>" [--flat] [--done-when text] [--verify text] [--agents 6] [--cwd dir] [--models sonnet,haiku] [--lead-model opus] [--verifier-model opus] [--planner-model opus] [--codex k] [--codex-models gpt-6-astra,gpt-5.6-sol,gpt-5.6-terra] [--openrouter k] [--openrouter-models deepseek/deepseek-v4.1-flash,...] [--verifier-openrouter slug] [--openrouter-reasoning low|medium|high] [--require-verification] [--quorum unanimous|majority|supermajority] [--chair name] [--owner-word] [--seat-hooks off] [--seat-ai-gates on] [--prompt loop.md] [--groups groups.json [--digest-every 45]] [--resources file.md] [--preflight "<cmd>" | --preflight-strict "<cmd>"] [--respawn] [--apply] [--full-access] [--named] [--claude-full] [--no-carry] [--no-seat-targets] [--no-web] [--sandbox] [--timeout 30] [--port 7717] [--result-path path]'); process.exit(2); }
+const PF = preflightAtLaunch(argv, resolve(flag("cwd", process.cwd())!)); // --preflight / --preflight-strict: the kit's environment checks, before anything starts (src/launch/preflight.ts)
 /** --groups <file.json>: the run's groups as the operator wrote them (src/groups.ts), one room and one brief each, on the
  * long-room brief (prompts/group.md). No planner runs, and --agents is the file's workers plus the verifier. */
 let GROUPS: GroupsFile | undefined;
@@ -553,6 +555,7 @@ log(`plan: ${plan.groups.map((g) => `${g.title} ×${g.workers}`).join(" | ")}`);
 const leadsRoom = FLAT ? `${SWARM_ID}-room` : `${SWARM_ID}-leads`;
 const FLAT_TARGETS = FLAT && !NO_SEAT_TARGETS && seatTarget(task, 1, LENSES) ? (i: number) => seatTarget(task, i, LENSES) : undefined;
 const groupRooms = FLAT ? [] : plan.groups.map((g) => `${SWARM_ID}-${g.id}`);
+if (PF.resource) RESOURCES.push(PF.resource);
 if (RESOURCES.length) {
   try {
     for (const line of await seedResources(URL_, [...groupRooms, leadsRoom], RESOURCES, { headers: launcherHeaders(launcherToken) })) log(line);
@@ -603,7 +606,7 @@ const verifierTools = APPLY || FULL ? WRITE_TOOLS : READ_TOOLS;
  * for a run they mean to steer.
  */
 const OWNER_WORD = OWNER_WORD_ON ? "\n\n" + readFileSync(resolve(repoRoot, "prompts", "owner-word.md"), "utf8").trim() : "";
-const verifierText = SETTLED + "\n" + prompt("verifier.md", {
+const verifierText = PF.text + SETTLED + "\n" + prompt("verifier.md", {
       NAME: "verifier",
       AGENT: VERIFIER_OPENROUTER ? "openrouter" : "claude",
       TOTAL,
@@ -686,7 +689,7 @@ for (const g of plan.groups) {
       FULL && !readOnlyWorkers.has(name)
         ? `You MAY modify files and run anything; you are on your own git branch in ${wcwd}. Commit what you want the verifier to test and say so in the room.${devHubRule(CWD, SANDBOX)}`
         : "Do NOT modify any files.";
-    const buildText = (nm: string) => FLAT
+    const buildText = (nm: string) => PF.text + (FLAT
       ? SETTLED +
         "\n" +
         prompt(FLAT_PROMPT, { NAME: nm, N: TOTAL, ROOM: room, TOPIC: task, AGENT: agent }) +
@@ -695,7 +698,7 @@ for (const g of plan.groups) {
         `\nWorking directory: ${wcwd}; you may read the project and run commands. ${writeRule} A verifier named "verifier" sits in the room and the final proposal needs its agree vote. Organise yourselves: claim areas on the board, recruit or break out into sub-rooms with request_agent when depth is needed, and bring results back here.`
       : SETTLED + "\n" + (GROUPS
         ? prompt("group.md", { ...vars, NAME: nm, GROUPS_N: plan.groups.length, WRITE_RULE: `Working directory: ${wcwd}; you may read the project and run commands. ${writeRule}` })
-        : prompt("worker.md", { ...vars, NAME: nm, CWD: wcwd, WRITE_RULE: writeRule }));
+        : prompt("worker.md", { ...vars, NAME: nm, CWD: wcwd, WRITE_RULE: writeRule })));
     const mayWrite = FULL && !readOnlyWorkers.has(name);
     const mk = (nm: string, note: string) => {
       // Replacements reuse the original successful worktree but commit under their new seat name.
@@ -846,7 +849,7 @@ const persistIncremental = (done: SeatRun[]) => {
     reportPath: resolve(OUT, "report.md"),
     artifactPath: resolve(flag("result-path", resolve(OUT, "result.json"))!),
     collectionErrors: [`incremental checkpoint: ${done.length}/${runs.length} runs complete`],
-    usage: rollupUsage(done),
+    usage: rollupUsage(done), ...(PF.result ? { preflight: PF.result } : {}),
   });
 };
 const completedRuns: SeatRun[] = [];
@@ -898,7 +901,7 @@ const artifact: RunResult = {
   outcome: classifyOutcome(snapshots.find(r => r.name === leadsRoom)?.payload, { timedOut, atTimeout: leadAtTimeout }),
   hubUsage: hubUsageRollup(snapshots),
   scorecard: seatScorecard(snapshots, Object.fromEntries([...exitCodes].map(([name, exitCode]) => [name, { exitCode, cost: seatCosts.get(name), killedAtTimeout: killedAtTimeout.has(name), commits: branchCommits(name), ...(seatTranscripts.has(name) ? { transcript: seatTranscripts.get(name) } : {}) }]))),
-  ...(metrics ? { metrics } : {}),
+  ...(metrics ? { metrics } : {}), ...(PF.result ? { preflight: PF.result } : {}),
 };
 if (digestPasses.length) {
   const board = (room: string) => snapshots.find((r) => r.name === room)?.payload?.board as Record<string, { text?: string; updated_at?: string }> | undefined;

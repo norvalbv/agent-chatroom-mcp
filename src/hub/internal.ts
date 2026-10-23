@@ -4,6 +4,7 @@ import { spawnSync } from "node:child_process";
 import type { RoomState, Participant, KickVote, Message, CodeState, BoardEntry, Challenge, Proposal, RoomOptions, Room, CallOutcome, WorkClass, DevReceipt } from "./types.js";
 import type { SeatUsage } from "./usage.js";
 import type { SeatMemory } from "./memory.js";
+import type { MachineSample } from "../telemetry/machine.js";
 import type { DevRun } from "./dev-runs.js";
 
 export type Opts = Required<Omit<RoomOptions, "chair" | "chairNamed" | "parent">> & { chair?: string; chairNamed?: boolean; parent?: string };
@@ -68,6 +69,9 @@ export type Event =
   | { type: "usage"; room: string; seat: string; usage: SeatUsage; ts: string }
   /** Telemetry only (replay ignores it; src/hub/memory.ts): a sample of what a seat's processes hold, or a warning/stop. */
   | { type: "memory"; room: string; seat: string; ts: string; memory?: SeatMemory; event?: "warn" | "over" | "ended" | "stop" | "high"; mb?: number; budget_mb?: number; mark_mb?: number; top?: SeatMemory["top"]; signal?: string }
+  /** Telemetry only (replay ignores it; src/telemetry/machine.ts): the machine a room opened on, and each stall episode said in it. */
+  | { type: "machine"; room: string; sample: MachineSample; ts: string }
+  | { type: "machine_stall"; room: string; event: "start" | "end"; sample: MachineSample; ts: string; at?: string; drift_ms?: number; since?: string; last_late?: string; seconds?: number; late_ticks?: number; max_drift_ms?: number }
   /** Telemetry only (replay ignores it; src/hub/take.ts): one step of a take/<what> entry. by and holder are seat names. */
   /** reason and commit only on action "refused": held (the same key), same-commit (another key naming the commit), assigned-reviewer */
   | { type: "take"; room: string; key: string; action: string; by: string; holder: string; ts: string; reason?: "held" | "same-commit" | "assigned-reviewer" | "already-reviewed" | "same-work"; commit?: string }
@@ -79,6 +83,12 @@ export type Event =
   | { type: "time_claim"; room: string; by: string; where: string; stated: string; delta_min: number; ts: string }
   /** Telemetry only (replay ignores it): a second seat's verify/, review/ or attack/ entry was kept under its own key instead of refused. */
   | { type: "second_scrutiny"; room: string; asked: string; key: string; by: string; held_by: string; ts: string }
+  /** Telemetry only (replay ignores it; src/hub/needs.ts): the first write of a needs/* entry, who was @-mentioned, the claims it names as blocked. */
+  | { type: "need_filed"; room: string; key: string; by: string; minutes_since_open: number; blocks: string[]; told: string[]; ts: string }
+  /** Telemetry only (src/hub/needs/needs.ts proposalNeedHint): a proposal in a room with no open needs/* was asked whether an outside limit decides it. */
+  | { type: "need_asked"; room: string; by: string; where: "proposal"; ts: string }
+  /** Telemetry only: a needs/* entry was cleared (met or refused), and how long it stayed open. */
+  | { type: "need_cleared"; room: string; key: string; by: string; filed_by: string; open_minutes: number; ts: string }
   /** the owner named this room's chair through the human route (Hub.nameChair) */
   | { type: "chair_named"; room: string; name: string; by: string; ts: string }
   /** Telemetry only (replay ignores it; src/hub/checks.ts): a checking entry and the entries by other seats it checks. how: key | segment | text, the rule that found the first. */
@@ -104,7 +114,18 @@ export type Event =
   | { type: "room_waiting"; room: string; ts: string; state: "start"; steps: number; seats: number; jobs: (import("./memory.js").Job & { seat: string })[] }
   | { type: "room_waiting"; room: string; ts: string; state: "end"; waited_min: number; then: "active" | "idle" | "told" }
   /** Telemetry only (replay ignores it): the open work an idle wait named to a seat, written when that list changes. */
-  | { type: "open_work"; room: string; pid: string; ts: string; items: string[] };
+  | { type: "open_work"; room: string; pid: string; ts: string; items: string[] }
+  /** Telemetry only (replay ignores it): the launcher's preflight was seeded on this board (src/launch/preflight.ts), with its counts. */
+  | { type: "preflight"; room: string; key: string; fails: number; warns: number; ok: boolean; ts: string };
+
+/** The board record for a seeded resource, plus a preflight event when it is the launcher's preflight result, whose
+ * first line is "preflight environment at launch (N FAIL, M WARN | M WARN | all OK)". */
+export function resourceEvents(room: string, key: string, entry: BoardEntry): Event[] {
+  const head = key === "resource/preflight-environment-at-launch" ? /\((?:(\d+) FAIL, )?(?:(\d+) WARN|all OK)\)/.exec(entry.text.split("\n")[0]) : null;
+  if (!head) return [{ type: "board", room, key, entry }];
+  const fails = Number(head[1] ?? 0), warns = Number(head[2] ?? 0);
+  return [{ type: "board", room, key, entry }, { type: "preflight", room, key, fails, warns, ok: !fails, ts: entry.updatedAt }];
+}
 
 export const now = () => new Date().toISOString();
 /** commit-like tokens (7-40 hex with a letter and a digit) in a text */

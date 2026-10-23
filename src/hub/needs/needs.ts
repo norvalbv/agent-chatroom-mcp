@@ -76,7 +76,10 @@ export function openNeeds(room: Room): { key: string; by: string; age_minutes: n
 export function proposalNeedHint(hub: Hub, room: Room, p: Participant): string | undefined {
   if (p.agent === "human" || [...room.board].some(([k, e]) => k.startsWith(NEEDS_PREFIX) && e.text.trim())) return undefined;
   hub.persist({ type: "need_asked", room: room.name, by: p.name, where: "proposal", ts: new Date().toISOString() });
-  return "Before this passes: does the conclusion depend on anything outside the room that only the owner can change (the machine, the network path or VPN, " +
+  const ask = "Before this passes: does the conclusion depend on anything outside the room that only the owner can change (the machine, the network path or VPN, " +
     "a region or account rule, data or a feed you cannot get, money)? If so, write needs/<name> (what, cost, what it unblocks, a blocks: claim/... line) " +
     "even if you judge it not worth paying for: the owner decides that, not the room. If nothing outside limits it, ignore this.";
+  // the voters read it too: any seat may file the need, not only the proposer (review/aef07b4d note 1)
+  hub.post(room, "system", undefined, `[NEEDS] No needs/* is open. ${ask}`);
+  return ask;
 }

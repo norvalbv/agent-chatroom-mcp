@@ -50,6 +50,7 @@ r = await a("propose", { room, text: "FINAL: no edge for a maker. A VPS or coloc
 assert.match(r.hint ?? "", /outside the room/, `the proposal is asked: ${JSON.stringify(r).slice(0, 300)}`);
 assert.match(r.hint ?? "", /needs\/<name>/);
 assert.match(r.hint ?? "", /owner decides/, "the owner, not the room, decides whether it is worth paying for");
+assert.ok(hub.getRoom(room).messages.some((m) => m.kind === "system" && /outside the room/.test(m.content)), "the voters see it too, not only the proposer (review/aef07b4d note 1)");
 await a("board_set", { room, key: "needs/london-host", text: "a host near the exchange, ~$10/mo\nblocks: claim/maker" });
 
 // 3. With a needs/* open the room has already escalated: no question.

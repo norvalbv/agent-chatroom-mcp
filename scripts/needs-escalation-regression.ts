@@ -57,14 +57,36 @@ test("a blocks: line names the claims the blocker stops; their owners are pinged
   const { h, name, a, b, events } = room({ chair: true });
   h.setBoard(name, b.id, "claim/goal-lag", "{\"area\":\"in-play goal sniping\"}");
   h.setBoard(name, a.id, "claim/crypto-maker", "{\"area\":\"crypto maker\"}");
+  const before = h.getRoom(name).messages.length;
   h.setBoard(name, a.id, "needs/colocated-feed", "Binance->Polymarket in <50 ms\nblocks: claim/crypto-maker, claim/goal-lag, claim/nonexistent");
-  const m = last(h, name);
+  const m = { content: h.getRoom(name).messages.slice(before).map((x) => x.content).join("\n") };
   assert.match(m.content, /@bob/, "the goal-lag owner is told its test is blocked");
   assert.match(m.content, /claim\/goal-lag/);
   const filed = events().filter((e) => e.type === "need_filed")[0];
   assert.deepEqual(filed.blocks, ["claim/crypto-maker", "claim/goal-lag", "claim/nonexistent"]);
   assert.deepEqual(filed.told, ["chair-claude", "bob"], "the filer is not told about their own claim; an unknown claim tells nobody");
   assert.match(m.content, /claim\/nonexistent is not on the board/, "a blocks: key nobody claimed is said, so the filer can fix it");
+});
+
+test("the owner of a blocked claim owes an answer (paused, or why it goes on) until it replies or passes; the chair is not pinned", () => {
+  const { h, name, a, b, dataDir } = room({ chair: true });
+  h.setBoard(name, b.id, "claim/goal-lag", "{\"area\":\"in-play goal sniping\"}");
+  h.setBoard(name, a.id, "needs/colocated-feed", "Binance->Polymarket in <50 ms\nblocks: claim/goal-lag");
+  const r = h.getRoom(name);
+  const ask = h.attentionFocus(r, b);
+  assert.ok(ask, "bob is asked: in lc0a nothing made a blocked strategy's owner say whether it stopped");
+  assert.match(ask!.content, /claim\/goal-lag/);
+  assert.match(ask!.content, /reply/i);
+  h.readAs(r, b, 0, 200);
+  assert.equal(h.attentionFocus(r, b)?.id, ask!.id, "still owed once delivered: a hub notice would retire on delivery");
+  const chair = [...r.participants.values()].find((q) => q.name === "chair-claude")!;
+  h.readAs(r, chair, 0, 200);
+  assert.ok(!h.addressedBy(r, chair).some((m) => m.id === ask!.id), "the chair is told, never pinned");
+  h.send(name, b.id, "Paused goal-lag at 20:01; it is latency-bound like crypto-maker.", ask!.id);
+  assert.equal(h.attentionFocus(r, b), undefined, "a reply_to answers it");
+  const m = runMetrics(parseRoomLog(readFileSync(join(dataDir, `${name}.jsonl`), "utf8")));
+  assert.equal(m.needs?.asksOfOwners, 1);
+  assert.equal(m.needs?.ownersAnswered, 1, "run-metrics counts the owners who answered");
 });
 
 test("with no chair and no human the notice says nobody is here to decide, so the seat knows the owner sees it only in the report", () => {

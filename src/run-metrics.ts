@@ -52,7 +52,7 @@ export interface RunMetrics {
   /** minutes after the room opened; absent when it never happened */
   minutesTo: { firstClaim?: number; firstSource?: number; firstProposal?: number; firstNeed?: number; conclusion?: number };
   /** needs/* the room filed for the owner (hub need_filed / need_cleared events, src/hub/needs.ts): filed, cleared, and claims named as blocked; absent: none */
-  needs?: { filed: number; cleared: number; blocks: number; asked: number; askedThenFiled: number };
+  needs?: { filed: number; cleared: number; blocks: number; asked: number; askedThenFiled: number; asksOfOwners: number; ownersAnswered: number };
   /** rate: workers who recruited at least once over workers; calls counts every role's recruits (a verifier's too) */
   recruits: { calls: number; seats: number; workers: number; rate: number };
   /** summed over seats that reported usage; seatsWithUsage of seats.length says how complete it is */
@@ -106,7 +106,9 @@ export function runMetrics(events: readonly Ev[], opts: MetricsOptions = {}): Ru
   let proposal: string | undefined;
   let ledger = false;
   const takes: Record<string, number> = {};
-  const needs = { filed: 0, cleared: 0, blocks: 0, asked: 0, askedThenFiled: 0 };
+  const needs = { filed: 0, cleared: 0, blocks: 0, asked: 0, askedThenFiled: 0, asksOfOwners: 0, ownersAnswered: 0 };
+  /** open "need" asks to blocked claims' owners (src/hub/needs/needs.ts), by message id; a reply_to one answers it */
+  const ownerAsks = new Set<string>();
   /** when the hub last asked the room about an outside limit (need_asked; blocker_nudged in older logs); a need_filed within 15 min converts it */
   let askOpen: string | undefined;
   let firstNeed: string | undefined;
@@ -246,6 +248,8 @@ export function runMetrics(events: readonly Ev[], opts: MetricsOptions = {}): Ru
         const m = e.msg ?? {};
         stamp(m.ts);
         if (m.kind === "chat") mention(m.content, m.from?.name);
+        if (m.tag === "need") { needs.asksOfOwners++; ownerAsks.add(m.id); }
+        else if (m.replyTo && ownerAsks.delete(m.replyTo)) needs.ownersAnswered++;
         if (m.kind === "chat" && m.from?.agent !== "hub" && m.from?.agent !== "human") {
           quiet.chat++;
           if (m.autoQuiet) quiet.byHub++; else if (m.quiet) quiet.bySender++;
@@ -370,7 +374,7 @@ export function renderMetrics(m: RunMetrics): string {
     (m.usage ? `Seat-reported usage: $${m.usage.cost_usd.toFixed(2)}, ${m.usage.input_tokens} input + ${m.usage.output_tokens} output tokens from ${m.usage.seatsWithUsage} of ${m.seats.length} seats (the rest unknown). ` : "No seat reported usage to the hub. ") +
     memoryLine(m.seats) +
     (m.quiet && (m.quiet.bySender || m.quiet.byHub || m.quiet.keptPublicForBoardKey) ? `Of ${m.quiet.chat} agent chat messages, ${m.quiet.bySender} were sent quiet, ${m.quiet.byHub} were made quiet by the hub, and ${m.quiet.keptPublicForBoardKey} two-seat exchanges stayed public because they named a board entry. ` : "") +
-    (m.needs ? `needs/* for the owner: ${m.needs.filed} filed${t.firstNeed !== undefined ? `, the first at ${t.firstNeed} min` : ""}, ${m.needs.cleared} cleared, ${m.needs.blocks} claim${m.needs.blocks === 1 ? "" : "s"} named as blocked, asked about outside limits ${m.needs.asked} time${m.needs.asked === 1 ? "" : "s"} (${m.needs.askedThenFiled} followed by a needs/* within 15 min). ` : "") +
+    (m.needs ? `needs/* for the owner: ${m.needs.filed} filed${t.firstNeed !== undefined ? `, the first at ${t.firstNeed} min` : ""}, ${m.needs.cleared} cleared, ${m.needs.blocks} claim${m.needs.blocks === 1 ? "" : "s"} named as blocked, asked about outside limits ${m.needs.asked} time${m.needs.asked === 1 ? "" : "s"} (${m.needs.askedThenFiled} followed by a needs/* within 15 min), ${m.needs.ownersAnswered} of ${m.needs.asksOfOwners} blocked-claim owner${m.needs.asksOfOwners === 1 ? "" : "s"} answered. ` : "") +
     (m.takes ? `take/* steps: ${Object.entries(m.takes).map(([k, n]) => `${n} ${k}`).join(", ")}. ` : "") +
     (m.appends ? `Shared logs (board_set append): ${Object.entries(m.appends).map(([k, a]) => `${k} ${a.lines} line${a.lines === 1 ? "" : "s"} from ${a.seats} seat${a.seats === 1 ? "" : "s"}${a.continuations ? `, ${a.continuations} continuation${a.continuations === 1 ? "" : "s"}` : ""}`).join("; ")}. ` : "") +
     (m.citedFrom === "none" ? "No proposal yet, so no citation credit.\n\n" : `Credit read from the ${m.citedFrom}${m.uncited.length ? `; findings never cited: ${m.uncited.join(", ")}` : ""}.\n\n`) +

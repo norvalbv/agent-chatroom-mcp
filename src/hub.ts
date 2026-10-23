@@ -929,7 +929,7 @@ export class Hub {
     // reply_to, so once delivered it retires instead of staying the focused ask. Left as debt, it pinned every
     // later wait/read to that one message and refused send_message as "arrived while composing" until pass.
     for (const m of delivered) {
-      if (m.from.id !== "system" || m.kind !== "chat" || !m.mentions?.includes(p.id) || p.declinedAsks?.includes(m.id)) continue;
+      if (m.from.id !== "system" || m.kind !== "chat" || m.tag === "need" || !m.mentions?.includes(p.id) || p.declinedAsks?.includes(m.id)) continue;
       p.declinedAsks = [...(p.declinedAsks ?? []), m.id];
       p.declinedAt = { ...(p.declinedAt ?? {}), [m.id]: m.seq };
     }
@@ -1845,7 +1845,7 @@ export class Hub {
     const human = [...room.messages].reverse().find((m) => m.kind === "chat" && m.tag !== "opening" &&
       m.from.agent === "human" && !this.isAnswered(room, m) && !p.declinedAsks?.includes(m.id) && this.responderFor(room, m, p.id).mine);
     // hub notices ride the normal stream (settleRead retires them on delivery); only an author can be answered
-    return human ?? this.addressedBy(room, p).find((m) => m.from.id !== "system");
+    return human ?? this.addressedBy(room, p).find((m) => m.from.id !== "system" || m.tag === "need"); // needs/needs.ts: an ask to a blocked claim owner
   }
 
   attentionHint(room: Room, p: Participant): string | undefined {

@@ -326,7 +326,7 @@ const round2 = (x: number) => Math.round(x * 100) / 100;
  * reading this log (outside_read: tky5 read 17.5 h because this round's seats opened its file 14 h after it ended).
  * They do not lengthen the run. A seat's usage still does: it is the seat working, though for a group lead it may be
  * work in its other room (1nwp-leads reads 3.62 h for 2.07 h to its conclusion); runTotals is the run's true span. */
-const NOT_RUN_TIME = new Set(["archive", "leave", "hub_restart", "memory", "room_idle", "room_active", "room_waiting", "board_manifest", "outside_read", "overlap_notice", "run_end", "seat_exit", "owner_verdict"]);
+const NOT_RUN_TIME = new Set(["archive", "leave", "hub_restart", "memory", "machine", "machine_stall", "room_idle", "room_active", "room_waiting", "board_manifest", "outside_read", "overlap_notice", "run_end", "seat_exit", "owner_verdict"]);
 /** Entries the launcher seeds (resource/* with --resources) are what the room was given, not what it found (35 of 214 in 0btz). */
 const SEEDED_BY = new Set(["launcher"]);
 

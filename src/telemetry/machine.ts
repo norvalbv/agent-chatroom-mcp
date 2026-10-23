@@ -1,0 +1,135 @@
+/**
+ * Machine stalls: when this machine starves every process on it, the rooms are told (evidence/machine in swarm-073112-zcd7).
+ * In swarm-185621-lc0a (live money) the hub's loop lag p50 went from 21 ms to 14.4 s at 19:30-19:38 with its own rss
+ * and sessions flat, and the crypto bot's Binance ticks stalled past 1 s in the same minutes (#235): the laptop, not the
+ * hub or the network. The hub sampled seat processes only (src/hub/memory.ts), so no room log recorded it and the seats
+ * read their own stall as market latency until one of them correlated it by hand.
+ * - How: a timer due every PROBE_MS that fires STALL_MS or more late opens an episode (a starved hub is a starved
+ *   machine unless the hub itself is busy, so the line carries load and swap to tell the two apart). The episode is
+ *   said once when it opens and once when QUIET_MS have passed on time, with its window and worst drift
+ *   (arXiv:2003.04824: performance on shared machines moves in regimes; a measurement is only meaningful tagged with its regime).
+ * - CHATROOM_MACHINE_WATCH_MS=0 turns the probe off (src/index.ts).
+ */
+import { execFile } from "node:child_process";
+import { cpus, freemem, loadavg, platform } from "node:os";
+import type { Hub } from "../hub.js";
+
+export interface MachineSample { load1: number; ncpu: number; swap_used_mb: number | null; free_mb: number }
+export type MachineEvent =
+  | { kind: "stall_start"; at: string; drift_ms: number; sample: MachineSample }
+  | { kind: "stall_end"; since: string; last_late: string; seconds: number; late_ticks: number; max_drift_ms: number; sample: MachineSample };
+
+export const PROBE_MS = 500;
+export const STALL_MS = 1000;
+export const QUIET_MS = 60_000;
+
+let swapMb: number | null = null;
+let swapAt = 0;
+/** Swap in use, refreshed in the background at most once a minute (macOS sysctl; null elsewhere or until the first read). */
+function swapUsedMb(): number | null {
+  if (platform() === "darwin" && Date.now() - swapAt > 60_000) {
+    swapAt = Date.now();
+    execFile("sysctl", ["-n", "vm.swapusage"], { timeout: 5_000 }, (err, out) => {
+      const m = !err && /used = ([\d.]+)M/.exec(out);
+      if (m) swapMb = Math.round(Number(m[1]));
+    });
+  }
+  return swapMb;
+}
+
+export function machineSample(): MachineSample {
+  return { load1: Math.round(loadavg()[0]! * 10) / 10, ncpu: cpus().length, swap_used_mb: swapUsedMb(), free_mb: Math.round(freemem() / 1048576) };
+}
+
+export interface MachineWatchOptions {
+  onEvent: (e: MachineEvent) => void;
+  sample?: () => MachineSample;
+}
+
+export class MachineWatch {
+  private open: { since: number; last: number; ticks: number; max: number } | null = null;
+  constructor(private readonly o: MachineWatchOptions) {}
+  sample(): MachineSample { return (this.o.sample ?? machineSample)(); }
+
+  /** One probe tick at `nowMs` that fired `driftMs` late. Returns the event it caused, if any. */
+  observe(nowMs: number, driftMs: number): MachineEvent | undefined {
+    const iso = (t: number) => new Date(t).toISOString();
+    let e: MachineEvent | undefined;
+    if (driftMs >= STALL_MS) {
+      if (!this.open) {
+        this.open = { since: nowMs, last: nowMs, ticks: 1, max: driftMs };
+        e = { kind: "stall_start", at: iso(nowMs), drift_ms: Math.round(driftMs), sample: this.sample() };
+      } else {
+        this.open.last = nowMs; this.open.ticks++; this.open.max = Math.max(this.open.max, driftMs);
+      }
+    } else if (this.open && nowMs - this.open.last >= QUIET_MS) {
+      const o = this.open;
+      this.open = null;
+      e = { kind: "stall_end", since: iso(o.since), last_late: iso(o.last), seconds: Math.round((o.last - o.since) / 1000), late_ticks: o.ticks, max_drift_ms: Math.round(o.max), sample: this.sample() };
+    }
+    if (e) this.o.onEvent(e);
+    return e;
+  }
+
+  /** Probe every PROBE_MS; unref'd, so it never keeps a process alive. */
+  start(probeMs = PROBE_MS): void {
+    // swap is read in the background: start it now, so the first room's baseline has it (dev room 4hkb's had null)
+    swapUsedMb();
+    let due = Date.now() + probeMs;
+    const tick = () => {
+      const now = Date.now();
+      try { this.observe(now, Math.max(0, now - due)); } catch {}
+      due = now + probeMs;
+      setTimeout(tick, probeMs).unref();
+    };
+    setTimeout(tick, probeMs).unref();
+  }
+}
+
+const hhmmss = (iso: string) => iso.slice(11, 19);
+const secs = (ms: number) => `${Math.round(ms / 100) / 10} s`;
+const load = (s: MachineSample) => `load ${s.load1} on ${s.ncpu} cores${s.swap_used_mb === null ? "" : `, swap ${s.swap_used_mb} MB used`}`;
+
+/** The room line for an episode: what was measured, what it means for anything timed on this machine, what to do. */
+export function machineNotice(e: MachineEvent): string {
+  if (e.kind === "stall_start") {
+    return `MACHINE: this machine is stalling: the hub's own ${PROBE_MS / 1000} s timer fired ${secs(e.drift_ms)} late at ${hhmmss(e.at)} UTC (${load(e.sample)}). ` +
+      `Unless the hub alone is busy, every process on this machine stalls with it, bots and feeds included. A second line says when it is over.`;
+  }
+  const dur = `${Math.floor(e.seconds / 60)} min ${e.seconds % 60} s`;
+  return `MACHINE: the stall from ${hhmmss(e.since)} to ${hhmmss(e.last_late)} UTC is over (${dur}, ${e.late_ticks} late tick${e.late_ticks === 1 ? "" : "s"}, worst ${secs(e.max_drift_ms)}). ` +
+    `Now ${load(e.sample)}. A latency, fill time or feed lag measured in that window is this machine's, not the market's: exclude it or measure again. ` +
+    `If stalls recur, this machine is a limit of the experiment: write it down as needs/<name> for the owner rather than working around it.`;
+}
+
+/**
+ * The watch on a hub: each room with an active seat records the machine it opened on (the first tick after it opens)
+ * and is told each episode at its start and its end. probeMs 0 returns the watch without starting the probe (tests).
+ * Rooms on a long-lived hub stay open after their seats leave, so a room nobody is in is not told.
+ */
+export function attachMachineWatch(hub: Hub, probeMs = PROBE_MS): MachineWatch {
+  const seen = new Set<string>();
+  const live = () => [...hub.rooms.values()].filter((r) => (r.state === "open" || r.state === "stalled") && [...r.participants.values()].some((p) => p.active));
+  const now = () => new Date().toISOString();
+  const watch = new MachineWatch({
+    onEvent: (e) => {
+      const text = machineNotice(e);
+      for (const room of live()) {
+        const { kind, ...rest } = e;
+        hub.persist({ type: "machine_stall", room: room.name, event: kind === "stall_start" ? "start" : "end", ...rest, ts: now() });
+        hub.post(room, "system", undefined, text);
+      }
+    },
+  });
+  const observe = watch.observe.bind(watch);
+  watch.observe = (nowMs, driftMs) => {
+    for (const room of live()) {
+      if (seen.has(room.name)) continue;
+      seen.add(room.name);
+      hub.persist({ type: "machine", room: room.name, sample: watch.sample(), ts: now() });
+    }
+    return observe(nowMs, driftMs);
+  };
+  if (probeMs > 0) watch.start(probeMs);
+  return watch;
+}

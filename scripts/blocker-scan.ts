@@ -10,9 +10,9 @@ for (const path of process.argv.slice(2)) {
     let e: { type?: string; msg?: { seq: number; ts: string; kind: string; content: string; from: { name: string; agent?: string } } };
     try { e = JSON.parse(line); } catch { continue; }
     const m = e.msg;
-    if (e.type !== "message" || !m || m.kind !== "chat" || m.from.name === "system" || m.from.agent === "human") continue;
+    if (e.type !== "message" || !m || !(m.kind === "chat" || m.kind === "proposal") || m.from.name === "system" || m.from.agent === "human") continue;
     chat++;
-    const term = blockerTerm(m.content);
+    const term = blockerTerm(m.content, path.split("/").pop()!.replace(/\.jsonl$/, ""));
     if (term) hits.push(`  #${m.seq} ${m.ts.slice(11, 19)} ${m.from.name} [${term}] ${m.content.replace(/\s+/g, " ").slice(0, 150)}`);
   }
   console.log(`${path.split("/").pop()}: ${chat} agent chat, ${hits.length} flagged`);

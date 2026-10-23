@@ -20,7 +20,8 @@ export interface Busy { pid: number; cpu: number; mb: number; command: string }
 /** machine: the hub was starved (it used little CPU while late), so every process here was; hub: the hub itself was busy */
 export type StallCause = "machine" | "hub";
 export type MachineEvent =
-  | { kind: "stall_start"; at: string; drift_ms: number; cause: StallCause; hub_cpu: number | null; sample: MachineSample }
+  /** at: when the late tick fired; from: when it was due, so the stall began no later than that */
+  | { kind: "stall_start"; at: string; from: string; drift_ms: number; cause: StallCause; hub_cpu: number | null; sample: MachineSample }
   | { kind: "stall_end"; since: string; last_late: string; seconds: number; late_ticks: number; max_drift_ms: number; cause: StallCause; sample: MachineSample; busiest?: Busy[] }
   /** the timers were suspended for minutes: the machine slept (a laptop lid), which is not load */
   | { kind: "sleep"; at: string; slept_s: number; sample: MachineSample };
@@ -87,10 +88,10 @@ export class MachineWatch {
     } else if (driftMs >= STALL_MS) {
       if (!this.open) {
         const cause: StallCause = hubCpu !== null && hubCpu >= HUB_BUSY ? "hub" : "machine";
-        const open: NonNullable<MachineWatch["open"]> = { since: nowMs, last: nowMs, ticks: 1, max: driftMs, cause };
+        const open: NonNullable<MachineWatch["open"]> = { since: nowMs - driftMs, last: nowMs, ticks: 1, max: driftMs, cause };
         this.open = open;
         if (cause === "machine") void (this.o.busiest ?? busiest)().then((b) => { open.busiest = b; }, () => {});
-        e = { kind: "stall_start", at: iso(nowMs), drift_ms: Math.round(driftMs), cause, hub_cpu: hubCpu === null ? null : Math.round(hubCpu * 100) / 100, sample: this.sample() };
+        e = { kind: "stall_start", at: iso(nowMs), from: iso(nowMs - driftMs), drift_ms: Math.round(driftMs), cause, hub_cpu: hubCpu === null ? null : Math.round(hubCpu * 100) / 100, sample: this.sample() };
       } else {
         this.open.last = nowMs; this.open.ticks++; this.open.max = Math.max(this.open.max, driftMs);
       }
@@ -139,7 +140,7 @@ export function machineNotice(e: MachineEvent): string {
     return `MACHINE: the hub's busy spell from ${hhmmss(e.since)} to ${hhmmss(e.last_late)} UTC is over (worst ${secs(e.max_drift_ms)}).`;
   }
   if (e.kind === "stall_start") {
-    return `MACHINE: this machine is stalling: the hub's own ${PROBE_MS / 1000} s timer fired ${secs(e.drift_ms)} late at ${hhmmss(e.at)} UTC (${load(e.sample)}). ` +
+    return `MACHINE: this machine is stalling: the hub's own ${PROBE_MS / 1000} s timer fired ${secs(e.drift_ms)} late at ${hhmmss(e.at)} UTC, so it has stalled since ${hhmmss(e.from)} (${load(e.sample)}). ` +
       `${e.hub_cpu === null ? "E" : `The hub used ${Math.round(e.hub_cpu * 100)}% of a core meanwhile, so it was starved, not busy: e`}very process on this machine stalls with it, bots and feeds included. A second line says when it is over.`;
   }
   const dur = `${Math.floor(e.seconds / 60)} min ${e.seconds % 60} s`;

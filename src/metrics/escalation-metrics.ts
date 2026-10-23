@@ -32,6 +32,7 @@ const ESCALATION_EVENTS = new Set(["need_filed", "need", "pause", "room_pause", 
 const PREFLIGHT_EVENTS = new Set(["preflight", "machine_baseline"]);
 const EVIDENCE_EVENTS = new Set(["machine_stall"]);
 const STOP = /\b(new (?:trading|orders?) (?:is |are )?(?:stopped|halted)|stop (?:all )?(?:trading|experiments?)|trading (?:is )?(?:stopped|halted|paused)|halt(?:ed)? (?:the )?(?:gateway|room|trading)|pause (?:the )?(?:room|trading|experiments?)|stopped as of)\b/i;
+const OWNER_INPUT_KEY = /^inputs\/owner-[^/.]+$/;
 const RELAY = /\b(from (?:benji|the owner)|benji(?:'s)? (?:decision|answer|asked|says)|the owner (?:says|asked|decided))\b/i;
 
 export interface EscalationMetrics {
@@ -79,6 +80,7 @@ export function escalationMetrics(events: readonly Ev[], opts: { evidenceSeq?: n
   let hubKnew: EscalationMetrics["hubKnew"];
   const restricted = new Map<string, string>();
   const iv = { humanMessages: 0, chairMessages: 0, chairRelays: 0, ownerRelayEvents: 0, total: 0 };
+  const relayed = new Set<string>();
   for (const e of events as any[]) {
     const ts = tsOf(e);
     if (ts) start ??= ts;
@@ -87,6 +89,9 @@ export function escalationMetrics(events: readonly Ev[], opts: { evidenceSeq?: n
     if (e.type === "owner_relay") { iv.ownerRelayEvents++; continue; }
     if (e.type === "board" && typeof e.key === "string" && (e.entry?.text ?? "") !== "") {
       const at = e.entry?.updatedAt ?? ts ?? "";
+      // the chair carrying the owner's word in on the board (inputs/owner-N) is a relay, once per entry; its .ack is not
+      const writer = e.by ?? e.entry?.by;
+      if (OWNER_INPUT_KEY.test(e.key) && roles.get(writer)?.role === "chair" && !relayed.has(e.key)) { relayed.add(e.key); iv.chairRelays++; }
       if (e.key.startsWith("needs/")) { const r = RESTRICTED.exec(e.entry.text); if (r) restricted.set(e.key, r[0]); else restricted.delete(e.key); }
       if (!firstExperiment && EXPERIMENT_KEY.test(e.key)) firstExperiment = { at, key: e.key };
       if (!preflight && PREFLIGHT_KEY.test(e.key)) preflight = { at, how: `board ${e.key}` };

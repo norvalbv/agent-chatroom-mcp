@@ -62,16 +62,19 @@ export function openNeeds(room: Room): { key: string; by: string; age_minutes: n
  * a server timestamp or clock (the false hits of the scan over the Polymarket room logs). */
 const OUTSIDE = /\b(laptop|this machine|our machine|the machine|vpn|nordvpn|colocat\w*|co-locat\w*|vps|server(?![-\s]?(?:ts|timestamps?|time|clock|stamps?|side)\b)(?!'s)|latency|rtt|load average|geoblock\w*|restricted region|region rule|feed lag|slow consumer|rate[- ]?limit\w*)\b/i;
 /** ...said in words that it stops the work, not that a step was hard. */
-const BLOCKING = /\b(bottleneck|too slow|can'?t|cannot|only (?:worth|works|possible)|territory|need(?:s|ed)? (?:a|an) (?:server|vps|colocat\w*|host|box|feed)|blocks|blocked|blocking|invalidat\w*|out of reach|not a laptop|unfixable|nothing we can|(?:is|was) the (?:cause|problem|bottleneck|limit)|the cause is|caused by)\b/i;
+const BLOCKING = /\b(bottleneck|too slow|can'?t|cannot|only (?:worth|works|possible)|territory|need(?:s|ed)? (?:a|an) (?:server|vps|colocat\w*|host|box|feed)|blocks|blocked|blocking|invalidat\w*|out of reach|unreachable|not a laptop|unfixable|nothing we can|(?:is|was) the (?:cause|problem|bottleneck|limit)|the cause is|caused by|los(?:es|e|ing) the race|fixes neither|paid item|needs\/ decision)\b/i;
 
 /** A message about another room or a commit review: a post-mortem talks about blockers it is not under (this room's
- * own log had 6 flags, 0 true, all citing lc0a, a #seq or a review/; review/0d659f43-claude-opus-5-5-3). */
-const CITES_ELSEWHERE = /\bswarm-\d{6}-[a-z0-9]{4}\b|\blc0a\b|\bmrw4\b|\breview\/|(?<![\w/])#\d{2,4}\b/i;
+ * own log had 6 flags, 0 true, all citing lc0a or a review/; review/0d659f43-claude-opus-5-5-3). A bare #seq or the
+ * room's own id is this room talking about itself, so it does not count (seat 3 #276, seat 2 #264). */
+const ELSEWHERE = /\b(swarm-\d{6}-[a-z0-9]{4})\b|\b(lc0a|mrw4)\b|\breview\//gi;
 
-/** The outside term a message names in blocking words, or undefined. */
-export function blockerTerm(content: string): string | undefined {
+/** The outside term a message names in blocking words, or undefined. `room` is the room it was said in. */
+export function blockerTerm(content: string, room = ""): string | undefined {
   const outside = OUTSIDE.exec(content);
-  return outside && BLOCKING.test(content) && !CITES_ELSEWHERE.test(content) ? outside[0] : undefined;
+  if (!outside || !BLOCKING.test(content)) return undefined;
+  for (const m of content.matchAll(ELSEWHERE)) if (!room.toLowerCase().includes((m[1] ?? m[2] ?? m[0]).toLowerCase())) return undefined;
+  return outside[0];
 }
 
 const blockerNudgedAt = new WeakMap<Participant, string>();
@@ -79,7 +82,7 @@ const blockerNudgedAt = new WeakMap<Participant, string>();
 /** The line a proposal gets back when it names a blocker outside the room and the room has filed no needs/*: the
  * last place the infrastructure ask would otherwise stay in prose (dev rooms swarm-074424-34mn, swarm-074902-bz3m). */
 export function proposalNeedHint(hub: Hub, room: Room, p: Participant, text: string): string | undefined {
-  const term = blockerTerm(text);
+  const term = blockerTerm(text, room.name);
   if (!term || [...room.board].some(([k, e]) => k.startsWith(NEEDS_PREFIX) && e.text.trim())) return undefined;
   hub.persist({ type: "blocker_nudged", room: room.name, by: p.name, term, seq: -1, where: "proposal", ts: new Date().toISOString() });
   return `This proposal names "${term}" as what stops the work, and the room has filed no needs/*. If only the owner can fix it, write needs/<name> ` +
@@ -89,7 +92,7 @@ export function proposalNeedHint(hub: Hub, room: Room, p: Participant, text: str
 /** The line a seat's chat message gets back when it names a blocker outside the room (inputs/owner-1: a room notices a
  * blocker by itself). Once, then not again until the seat has filed a needs/* entry since; logged as blocker_nudged. */
 export function blockerHint(hub: Hub, room: Room, p: Participant, content: string, quiet: boolean, seq: number): string | undefined {
-  const term = quiet || p.agent === "human" || room.state !== "open" ? undefined : blockerTerm(content);
+  const term = quiet || p.agent === "human" || room.state !== "open" ? undefined : blockerTerm(content, room.name);
   if (!term) return undefined;
   const last = blockerNudgedAt.get(p);
   if (last && ![...room.board].some(([k, e]) => k.startsWith(NEEDS_PREFIX) && e.by === p.name && e.updatedAt > last)) return undefined;

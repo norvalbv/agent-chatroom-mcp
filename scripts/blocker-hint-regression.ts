@@ -37,6 +37,17 @@ for (const fp of [
   "review/178fc4a: one blocking bug, the rtt check can't survive a 2 s gap.",
   "swarm-185621-lc0a never filed it, although the VPN was the cause.",
 ]) assert.equal(blockerTerm(fp), undefined, `not a blocker: ${fp.slice(0, 60)}`);
+// a room citing its own #seq or its own id is still talking about its own blocker (seat 3 #276, seat 2 #264)
+assert.equal(blockerTerm("the laptop is the bottleneck (my #212 numbers)"), "laptop", "a bare #seq is this room's own message");
+assert.equal(blockerTerm("swarm-074313-2bcr: the laptop is the bottleneck", "swarm-074313-2bcr-room"), "laptop", "the room's own id");
+assert.equal(blockerTerm("swarm-185621-lc0a: the laptop is the bottleneck", "swarm-074313-2bcr-room"), undefined, "another room's id");
+// esc-before-1 (swarm-074313-2bcr), lc0a's paper reproduction, named its latency limit in words the first list missed
+for (const tp of [
+  "Through the gateway from this laptop … a Binance-watching cancel from here mostly loses the race; the guard fired 16 times.",
+  "A 5-share joiner from this laptop got the back of the queue, and money fixes neither queue position nor speed.",
+  "A low-latency host near the CLOB is the one paid item that could move limit (c). It would be a needs/ decision for Benji.",
+  "The latency gradient is a hypothesis, and L=0 is unreachable from here.",
+]) assert.ok(blockerTerm(tp), `esc-before-1: ${tp.slice(0, 60)}`);
 
 // 2. Through the tool, as a seat sees it.
 Hub.DEFAULT_NUDGE_MS = 0;
@@ -79,7 +90,7 @@ const p2 = await seat("p2");
 const room2 = "blocker-hint-propose";
 await p2("join_room", { room: room2, name: "P", agent: "test" });
 await (await seat("q"))("join_room", { room: room2, name: "Q", agent: "test" });
-r = await p2("propose", { room: room2, text: "VERDICT: no edge. The fix is infrastructure: the laptop behind the VPN is too slow, so a host near the exchange is the next step." });
+r = await p2("propose", { room: room2, text: "VERDICT: no edge. The fix is infrastructure: the laptop behind the VPN is too slow (#69), so a host near the exchange is the next step." });
 assert.match(r.hint ?? "", /needs\/<name>/, `a proposal naming a blocker with no needs/* filed is pointed at needs/: ${JSON.stringify(r).slice(0, 300)}`);
 
 const events = parseRoomLog(readFileSync(join(dataDir, `${room}.jsonl`), "utf8"));

@@ -83,6 +83,10 @@ export type Event =
   | { type: "time_claim"; room: string; by: string; where: string; stated: string; delta_min: number; ts: string }
   /** Telemetry only (replay ignores it): a second seat's verify/, review/ or attack/ entry was kept under its own key instead of refused. */
   | { type: "second_scrutiny"; room: string; asked: string; key: string; by: string; held_by: string; ts: string }
+  /** Telemetry only (replay ignores it; src/hub/needs.ts): the first write of a needs/* entry, who was @-mentioned, the claims it names as blocked. */
+  | { type: "need_filed"; room: string; key: string; by: string; minutes_since_open: number; blocks: string[]; told: string[]; ts: string }
+  /** Telemetry only: a needs/* entry was cleared (met or refused), and how long it stayed open. */
+  | { type: "need_cleared"; room: string; key: string; by: string; filed_by: string; open_minutes: number; ts: string }
   /** the owner named this room's chair through the human route (Hub.nameChair) */
   | { type: "chair_named"; room: string; name: string; by: string; ts: string }
   /** Telemetry only (replay ignores it; src/hub/checks.ts): a checking entry and the entries by other seats it checks. how: key | segment | text, the rule that found the first. */

@@ -50,7 +50,9 @@ export interface RunMetrics {
   createdAt?: string;
   lastEventAt?: string;
   /** minutes after the room opened; absent when it never happened */
-  minutesTo: { firstClaim?: number; firstSource?: number; firstProposal?: number; conclusion?: number };
+  minutesTo: { firstClaim?: number; firstSource?: number; firstProposal?: number; firstNeed?: number; conclusion?: number };
+  /** needs/* the room filed for the owner (hub need_filed / need_cleared events, src/hub/needs.ts): filed, cleared, and claims named as blocked; absent: none */
+  needs?: { filed: number; cleared: number; blocks: number };
   /** rate: workers who recruited at least once over workers; calls counts every role's recruits (a verifier's too) */
   recruits: { calls: number; seats: number; workers: number; rate: number };
   /** summed over seats that reported usage; seatsWithUsage of seats.length says how complete it is */
@@ -106,6 +108,8 @@ export function runMetrics(events: readonly Ev[], opts: MetricsOptions = {}): Ru
   let proposal: string | undefined;
   let ledger = false;
   const takes: Record<string, number> = {};
+  const needs = { filed: 0, cleared: 0, blocks: 0 };
+  let firstNeed: string | undefined;
   const quiet = { chat: 0, bySender: 0, byHub: 0, keptPublicForBoardKey: 0 };
   const appendsBy = new Map<string, { lines: number; seats: Set<string>; landed: Set<string> }>();
   const proposals = new Set<string>();
@@ -199,6 +203,15 @@ export function runMetrics(events: readonly Ev[], opts: MetricsOptions = {}): Ru
         takes[String(e.action)] = (takes[String(e.action)] ?? 0) + 1;
         // why a take was refused before the work: held (same key), same-commit (another spelling), assigned-reviewer
         if (e.action === "refused" && e.reason) takes[`refused:${String(e.reason)}`] = (takes[`refused:${String(e.reason)}`] ?? 0) + 1;
+        break;
+      case "need_filed":
+        stamp(e.ts);
+        needs.filed++; needs.blocks += Array.isArray(e.blocks) ? e.blocks.length : 0;
+        if (typeof e.ts === "string" && (!firstNeed || e.ts < firstNeed)) firstNeed = e.ts;
+        break;
+      case "need_cleared":
+        stamp(e.ts);
+        needs.cleared++;
         break;
       case "board_append": {
         stamp(e.ts);
@@ -315,11 +328,13 @@ export function runMetrics(events: readonly Ev[], opts: MetricsOptions = {}): Ru
       firstClaim: minutes(createdAt, firstAt.claim),
       firstSource: minutes(createdAt, firstAt.source),
       firstProposal: minutes(createdAt, firstAt.proposal),
+      firstNeed: minutes(createdAt, firstNeed),
       conclusion: minutes(createdAt, firstAt.conclusion),
     }).filter(([, v]) => v !== undefined)) as RunMetrics["minutesTo"],
     recruits: { calls: list.reduce((n, s) => n + s.recruits, 0), seats: recruiting, workers: workers.length, rate: workers.length ? recruiting / workers.length : 0 },
     ...(priced.length ? { usage: { cost_usd: sum("cost_usd"), input_tokens: sum("input_tokens"), output_tokens: sum("output_tokens"), seatsWithUsage: priced.length } } : {}),
     ...(Object.keys(takes).length ? { takes } : {}),
+    ...(needs.filed || needs.cleared ? { needs } : {}),
     ...(quiet.chat ? { quiet } : {}),
     ...(appendsBy.size ? { appends: Object.fromEntries([...appendsBy].map(([k, a]) => [k, { lines: a.lines, seats: a.seats.size, continuations: a.landed.size }])) } : {}),
     ...(machine ? { machine } : {}),
@@ -358,6 +373,7 @@ export function renderMetrics(m: RunMetrics): string {
     memoryLine(m.seats) +
     (m.machine ? `The machine stalled ${m.machine.stalls} time${m.machine.stalls === 1 ? "" : "s"} (${m.machine.stalled_s} s in all, worst timer drift ${Math.round(m.machine.worst_ms / 100) / 10} s); timings measured then are the machine\'s. ` : "") +
     (m.quiet && (m.quiet.bySender || m.quiet.byHub || m.quiet.keptPublicForBoardKey) ? `Of ${m.quiet.chat} agent chat messages, ${m.quiet.bySender} were sent quiet, ${m.quiet.byHub} were made quiet by the hub, and ${m.quiet.keptPublicForBoardKey} two-seat exchanges stayed public because they named a board entry. ` : "") +
+    (m.needs ? `needs/* for the owner: ${m.needs.filed} filed${t.firstNeed !== undefined ? `, the first at ${t.firstNeed} min` : ""}, ${m.needs.cleared} cleared, ${m.needs.blocks} claim${m.needs.blocks === 1 ? "" : "s"} named as blocked. ` : "") +
     (m.takes ? `take/* steps: ${Object.entries(m.takes).map(([k, n]) => `${n} ${k}`).join(", ")}. ` : "") +
     (m.appends ? `Shared logs (board_set append): ${Object.entries(m.appends).map(([k, a]) => `${k} ${a.lines} line${a.lines === 1 ? "" : "s"} from ${a.seats} seat${a.seats === 1 ? "" : "s"}${a.continuations ? `, ${a.continuations} continuation${a.continuations === 1 ? "" : "s"}` : ""}`).join("; ")}. ` : "") +
     (m.citedFrom === "none" ? "No proposal yet, so no citation credit.\n\n" : `Credit read from the ${m.citedFrom}${m.uncited.length ? `; findings never cited: ${m.uncited.join(", ")}` : ""}.\n\n`) +

@@ -294,7 +294,7 @@ export class Hub {
       ...(idle.idleView(room) ? { idle: idle.idleView(room) } : {}),
       ...(idle.waitingView(room) ? { waiting: idle.waitingView(room) } : {}),
       // claim/* entries whose owner left: its registered successor may take one at once, anyone after Hub.STALE_CLAIM_MS
-      stale_claims: this.staleClaims(room, reveal),
+      stale_claims: this.staleClaims(room, reveal), ...((n) => (n ? { open_needs: n } : {}))(board.openNeeds(room)), // needs/* filed for the owner and not cleared (src/hub/needs/); absent: none
       // per commit, the verify/* and review/* entries whose head names it (telemetry G3/G14): coverage read from the hub, not key names
       ...((r) => (r.length ? { reviews: r } : {}))(this.reviewsByCommit(room)),
       // chat messages by the channel they came through (telemetry gap 8: owner, script, chair and seat were one column)

@@ -61,6 +61,8 @@ export interface RunMetrics {
   quiet?: { chat: number; bySender: number; byHub: number; keptPublicForBoardKey: number };
   /** board_set(append=true) lines per shared key (hub "board_append" events): appends, distinct appenders, continuations used; absent: none */
   appends?: Record<string, { lines: number; seats: number; continuations: number }>;
+  /** machine stall episodes the hub said in this room (hub "machine_stall" end events, src/hub/machine.ts); absent: none */
+  machine?: { stalls: number; stalled_s: number; worst_ms: number };
   /** seats with at least one web call in the ledger; undefined when the log has no ledger */
   webSeats?: number;
   /** text the citation credit was read from */
@@ -108,6 +110,7 @@ export function runMetrics(events: readonly Ev[], opts: MetricsOptions = {}): Ru
   const appendsBy = new Map<string, { lines: number; seats: Set<string>; landed: Set<string> }>();
   const proposals = new Set<string>();
   const byKey = new Map<string, string>();
+  let machine: RunMetrics["machine"];
 
   const seat = (id: string | null | undefined, name?: string) => {
     if (!id) return undefined;
@@ -169,6 +172,14 @@ export function runMetrics(events: readonly Ev[], opts: MetricsOptions = {}): Ru
         stamp(e.ts);
         const s = seat(byKey.get(e.seat));
         if (s && e.usage) s.usage = e.usage;
+        break;
+      }
+      case "machine_stall": {
+        if (e.event !== "end") break;
+        machine ??= { stalls: 0, stalled_s: 0, worst_ms: 0 };
+        machine.stalls++;
+        machine.stalled_s += Number(e.seconds ?? 0);
+        machine.worst_ms = Math.max(machine.worst_ms, Number(e.max_drift_ms ?? 0));
         break;
       }
       case "memory": {
@@ -311,6 +322,7 @@ export function runMetrics(events: readonly Ev[], opts: MetricsOptions = {}): Ru
     ...(Object.keys(takes).length ? { takes } : {}),
     ...(quiet.chat ? { quiet } : {}),
     ...(appendsBy.size ? { appends: Object.fromEntries([...appendsBy].map(([k, a]) => [k, { lines: a.lines, seats: a.seats.size, continuations: a.landed.size }])) } : {}),
+    ...(machine ? { machine } : {}),
     ...(ledger ? { webSeats: list.filter((s) => (s.work?.web ?? 0) > 0).length } : {}),
     citedFrom: conclusion ? "conclusion" : proposal ? "proposal" : "none",
     uncited: cited ? list.filter((s) => s.findings > 0 && !s.cited.length).map((s) => s.name) : [],
@@ -344,6 +356,7 @@ export function renderMetrics(m: RunMetrics): string {
     (m.webSeats === undefined ? "no work ledger in this log, so reads, searches and web calls are unknown. " : `${m.webSeats} of ${m.seats.length} seats made a web call. `) +
     (m.usage ? `Seat-reported usage: $${m.usage.cost_usd.toFixed(2)}, ${m.usage.input_tokens} input + ${m.usage.output_tokens} output tokens from ${m.usage.seatsWithUsage} of ${m.seats.length} seats (the rest unknown). ` : "No seat reported usage to the hub. ") +
     memoryLine(m.seats) +
+    (m.machine ? `The machine stalled ${m.machine.stalls} time${m.machine.stalls === 1 ? "" : "s"} (${m.machine.stalled_s} s in all, worst timer drift ${Math.round(m.machine.worst_ms / 100) / 10} s); timings measured then are the machine\'s. ` : "") +
     (m.quiet && (m.quiet.bySender || m.quiet.byHub || m.quiet.keptPublicForBoardKey) ? `Of ${m.quiet.chat} agent chat messages, ${m.quiet.bySender} were sent quiet, ${m.quiet.byHub} were made quiet by the hub, and ${m.quiet.keptPublicForBoardKey} two-seat exchanges stayed public because they named a board entry. ` : "") +
     (m.takes ? `take/* steps: ${Object.entries(m.takes).map(([k, n]) => `${n} ${k}`).join(", ")}. ` : "") +
     (m.appends ? `Shared logs (board_set append): ${Object.entries(m.appends).map(([k, a]) => `${k} ${a.lines} line${a.lines === 1 ? "" : "s"} from ${a.seats} seat${a.seats === 1 ? "" : "s"}${a.continuations ? `, ${a.continuations} continuation${a.continuations === 1 ? "" : "s"}` : ""}`).join("; ")}. ` : "") +

@@ -23,7 +23,7 @@ import { createWaitView } from "./hub/wait-view.js";
 import { hubTime, timeClaims, timeNote } from "./hub/clock.js";
 import { VERDICT_HINT } from "./hub/checks.js";
 import { boardContinuation, noteBoardRead } from "./hub/board.js";
-import { IDLE_HINT, blockerHint, ideaListHint, idleAgain, idleHint, idleStreak, leaveHint, leaveWaitsFor, listedItems, newlyNamed, offersLeave, openWork, stillOpenHint } from "./hub/open-work.js";
+import { IDLE_HINT, blockerHint, ideaListHint, proposalNeedHint, idleAgain, idleHint, idleStreak, leaveHint, leaveWaitsFor, listedItems, newlyNamed, offersLeave, openWork, stillOpenHint } from "./hub/open-work.js";
 
 /** The branch and worktree of each write recruit, for the reply of the call that spawned them; nothing for read-only recruits. */
 const workspaces = (recs: SpawnedAgent[]) => {
@@ -430,8 +430,8 @@ export function createSessionServer(hub: Hub, spawner?: Spawner, opts: { holdMs?
       const out = hub.submitOpening(room, id, content);
       const mins = Math.round(r.nudgeAfterMs / 60000);
       // openings are where seats first list ideas (dev room swarm-013200-opmd-room): the same pointer as a chat list
-      const listHint = ideaListHint(r, hub.requireParticipant(r, id), content, false);
-      if (listHint) hub.persist({ type: "open_work", room: r.name, pid: id, ts: new Date().toISOString(), items: [`idea_list_nudged:${listedItems(content)}`] });
+      const ideaHint = ideaListHint(r, hub.requireParticipant(r, id), content, false), listHint = [ideaHint, blockerHint(hub, r, hub.requireParticipant(r, id), content, false, -1)].filter(Boolean).join(" ") || undefined;
+      if (ideaHint) hub.persist({ type: "open_work", room: r.name, pid: id, ts: new Date().toISOString(), items: [`idea_list_nudged:${listedItems(content)}`] });
       const held = `Openings are revealed when everyone has submitted, or ${mins} min after the first opening if the rest never arrive (the hub reveals what it has; chat does not delay it). Chat is not blocked meanwhile: wait_for_messages, and speak if you have something to say.`;
       return out.revealed
         ? { ...out, ...(listHint ? { hint: listHint } : {}) }
@@ -690,7 +690,7 @@ export function createSessionServer(hub: Hub, spawner?: Spawner, opts: { holdMs?
     guard("propose", ({ room, text, participant_id }) => {
       const r = hub.getRoom(room);
       const pr = hub.propose(room, pid(room, participant_id), text);
-      return hub.proposalView(r, pr, false, false);
+      return ((h) => ({ ...hub.proposalView(r, pr, false, false), ...(h ? { hint: h } : {}) }))(proposalNeedHint(hub, r, hub.requireParticipant(r, pid(room, participant_id)), text));
     }),
   ));
 

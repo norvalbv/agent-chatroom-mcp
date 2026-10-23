@@ -25,6 +25,7 @@ const LC0A_235 = "Both, and it's mostly the room's laptop. A maker here needs fe
 const LC0A_238 = "Agreed: from this laptop we are too slow to cancel before the takers arrive.";
 assert.ok(blockerTerm(LC0A_235), "lc0a #235 is a blocker");
 assert.ok(blockerTerm(LC0A_238), "lc0a #238 is a blocker");
+assert.ok(blockerTerm("Host is the cause: VPN default route (utun8), load 31, swap 7.3/8G, feed lag p99 4.6s vs competitors' 0.09s."), "dev room swarm-074902-bz3m's openings named the cause, not a block");
 assert.ok(blockerTerm("The VPN path has 5% loss at 196 ms RTT, so one TCP flow can't keep up with the book."), "mrw4-crypto #180");
 for (const fp of [
   "I fixed timing.py to the server timestamp: the wallet filled 0.8 s after the book move, so ARocky33 is pure first-block speed.",
@@ -65,10 +66,22 @@ assert.match(r.hint ?? "", /needs\/<name>/, "after a filing, a new blocker is po
 r = await b("send_message", { room, content: `@A ${LC0A_238}`, quiet: true, force: true });
 assert.doesNotMatch(r.hint ?? "", /needs\/<name>/, "a quiet working exchange is not nudged");
 
+// openings and proposals are where dev room swarm-074902-bz3m named its blocker: both point at needs/ too
+const c = await seat("c");
+await c("join_room", { room, name: "C", agent: "test" });
+r = await c("submit_opening", { room, content: "No. Host is the cause: VPN default route, load 31, feed lag p99 4.6 s." });
+assert.match(r.hint ?? "", /needs\/<name>/, `an opening that names a blocker is pointed at needs/: ${JSON.stringify(r)}`);
+const p2 = await seat("p2");
+const room2 = "blocker-hint-propose";
+await p2("join_room", { room: room2, name: "P", agent: "test" });
+await (await seat("q"))("join_room", { room: room2, name: "Q", agent: "test" });
+r = await p2("propose", { room: room2, text: "VERDICT: no edge. The fix is infrastructure: the laptop behind the VPN is too slow, so a host near the exchange is the next step." });
+assert.match(r.hint ?? "", /needs\/<name>/, `a proposal naming a blocker with no needs/* filed is pointed at needs/: ${JSON.stringify(r).slice(0, 300)}`);
+
 const events = parseRoomLog(readFileSync(join(dataDir, `${room}.jsonl`), "utf8"));
 const nudges = events.filter((e) => e.type === "blocker_nudged");
-assert.equal(nudges.length, 2);
+assert.equal(nudges.length, 3, "two chat nudges and one opening");
 assert.equal(nudges[0].term.toLowerCase(), "laptop");
-assert.equal(runMetrics(events).needs?.nudged, 2, "run-metrics counts nudges beside filings");
+assert.equal(runMetrics(events).needs?.nudged, 3, "run-metrics counts nudges beside filings");
 console.log("blocker-hint regression OK");
 process.exit(0);

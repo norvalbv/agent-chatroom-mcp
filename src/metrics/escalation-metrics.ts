@@ -23,7 +23,7 @@ const ENV_WORDS = /\b(server|VPS|colocat\w*|VPN|machine|laptop|install\w*|infras
 /** an environment measurement in chat: a network, clock or load reading */
 const ENV_MEASURE = /\b(RTT|ping|traceroute|default route|exit (?:IP|node)|VPN|clock offset|sntp|ntp|load average|loadavg|swap|loop lag)\b/i;
 const EXPERIMENT_KEY = /^(trades|running|experiment)\//;
-const ESCALATION_KEY = /^(needs|hold)\//;
+const ESCALATION_KEY = /^(needs|hold|blocked)\//;
 const PREFLIGHT_KEY = /^preflight\//;
 const ESCALATION_EVENTS = new Set(["need_filed", "need", "pause", "room_pause", "hold"]);
 const PREFLIGHT_EVENTS = new Set(["preflight", "machine_baseline"]);

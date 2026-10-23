@@ -17,13 +17,16 @@ type Ev = Record<string, any>;
 import { runRow } from "../run-timeline.js";
 
 /** words that say the setup itself (machine, network path, location) limits the result */
-export const CONSTRAINT = /\b(laptop|colocat\w*|VPN|geoblock\w*|slow consumer|swapping|swap (?:used|usage)|clock (?:offset|drift|runs)|loop lag|machine stall)\b/i;
+export const CONSTRAINT = /\b(colocat\w*|co-locat\w*|VPN|geoblock\w*|slow consumer|swapping|swap (?:used|usage)|loop lag|machine stall\w*|(?:laptop|machine)(?:'s)? (?:is |was )?(?:too )?(?:slow|overloaded|stall\w*)|not a laptop|mostly the (?:room's )?laptop)\b/i;
 /** words that name the environment in a question to the chair or a human */
-const ENV_WORDS = /\b(server|VPS|colocat\w*|VPN|machine|laptop|install\w*|infrastructure|network|latency|dublin|london|region|geoblock\w*)\b/i;
+const ENV_WORDS = /\b(server|VPS|colocat\w*|VPN|install\w*|infrastructure|dublin|london|region|geoblock\w*|hosting|data ?cent(?:er|re))\b/i;
 /** an environment measurement in chat: a network, clock or load reading */
 const ENV_MEASURE = /\b(RTT|ping|traceroute|default route|exit (?:IP|node)|VPN|clock offset|sntp|ntp|load average|loadavg|swapping|swap (?:used|usage)|loop lag)\b/i;
 const EXPERIMENT_KEY = /^(trades|running|experiment)\//;
 const ESCALATION_KEY = /^(needs|hold|blocked)\//;
+/** what the launcher or a seat's coordination wrote, not a finding: resources, claims, takes, the brief's own words */
+const RESTRICTED = /\b(turn(?:ing)? (?:off|down) the VPN|without the VPN|(?:trade|trading|orders?|box|server|VPS)\b[^.]{0,40}\b(?:in|from) (?:the UK|GB|Britain|London|Ireland|Dublin|IE|the Netherlands|Amsterdam|NL|eu-west-[12])\b)/i;
+const SEEDED = /^(resource|claim|take|inputs|needs|blocked|hold|preflight|review|verify|draft)\//;
 const PREFLIGHT_KEY = /^(preflight\/|resource\/preflight-)/;
 const ESCALATION_EVENTS = new Set(["need_filed", "need", "pause", "room_pause", "hold"]);
 const PREFLIGHT_EVENTS = new Set(["preflight", "machine_baseline"]);
@@ -41,6 +44,12 @@ export interface EscalationMetrics {
   hubKnew?: { at: string; what: string };
   firstEvidence?: { at: string; seq?: number; by?: string; match: string; how: "pattern" | "event" | "given" };
   escalation?: { at: string; seq?: number; by?: string; how: string };
+  /** minutes from the room's start to the escalation: the same yardstick when a room never names its constraint */
+  openToEscalationMin?: number;
+  /** needs/* entries whose text proposes trading from a place Polymarket restricts for this owner (GB close-only, IE and
+   * NL restricted) or switching the VPN off to trade; the owner's own session made that mistake twice (seat 3, #175).
+   * A pattern flags candidates for a reader; it does not judge them. */
+  restrictedPlaceNeeds: string[];
   /** minutes from firstEvidence to escalation; undefined when either is missing */
   evidenceToEscalationMin?: number;
   /** minutes from firstEvidence to the room's last message when nothing escalated: the time it ran on */
@@ -68,6 +77,7 @@ export function escalationMetrics(events: readonly Ev[], opts: { evidenceSeq?: n
   let escalation: EscalationMetrics["escalation"];
   let outsideStop: EscalationMetrics["outsideStop"];
   let hubKnew: EscalationMetrics["hubKnew"];
+  const restricted = new Map<string, string>();
   const iv = { humanMessages: 0, chairMessages: 0, chairRelays: 0, ownerRelayEvents: 0, total: 0 };
   for (const e of events as any[]) {
     const ts = tsOf(e);
@@ -77,9 +87,13 @@ export function escalationMetrics(events: readonly Ev[], opts: { evidenceSeq?: n
     if (e.type === "owner_relay") { iv.ownerRelayEvents++; continue; }
     if (e.type === "board" && typeof e.key === "string" && (e.entry?.text ?? "") !== "") {
       const at = e.entry?.updatedAt ?? ts ?? "";
+      if (e.key.startsWith("needs/")) { const r = RESTRICTED.exec(e.entry.text); if (r) restricted.set(e.key, r[0]); else restricted.delete(e.key); }
       if (!firstExperiment && EXPERIMENT_KEY.test(e.key)) firstExperiment = { at, key: e.key };
       if (!preflight && PREFLIGHT_KEY.test(e.key)) preflight = { at, how: `board ${e.key}` };
       if (firstEvidence && !escalation && ESCALATION_KEY.test(e.key)) escalation = { at, by: e.by ?? e.entry?.by, how: `board ${e.key}` };
+      // a finding written straight to the board (lc0a's trades/crypto-maker, a probe's evidence/net-rtt) is evidence too
+      if (!firstEvidence && opts.evidenceSeq === undefined && !SEEDED.test(e.key) && CONSTRAINT.test(e.entry.text))
+        firstEvidence = { at, by: e.by ?? e.entry?.by, match: `${CONSTRAINT.exec(e.entry.text)![0]} in ${e.key}`, how: "pattern" };
       continue;
     }
     if (PREFLIGHT_EVENTS.has(e.type) && !preflight && ts) preflight = { at: ts, how: `event ${e.type}` };
@@ -113,8 +127,9 @@ export function escalationMetrics(events: readonly Ev[], opts: { evidenceSeq?: n
   const out: EscalationMetrics = {
     room: room || row.room, start, firstExperiment, preflight,
     preflightBeforeExperiment: !!preflight && (!firstExperiment || Date.parse(preflight.at) <= Date.parse(firstExperiment.at)),
-    hubKnew, firstEvidence, escalation, outsideStop, interventions: iv, costUsd: row.costUsd,
+    hubKnew, firstEvidence, escalation, outsideStop, restrictedPlaceNeeds: [...restricted].map(([k, w]) => `${k}: "${w}"`), interventions: iv, costUsd: row.costUsd,
   };
+  if (start && escalation) out.openToEscalationMin = mins(start, escalation.at);
   if (firstEvidence && escalation) out.evidenceToEscalationMin = mins(firstEvidence.at, escalation.at);
   else if (firstEvidence && end) out.ranOnUnescalatedMin = mins(firstEvidence.at, end);
   return out;
@@ -129,6 +144,7 @@ export function renderEscalation(r: EscalationMetrics): string {
     `  hub's own machine reading: ${r.hubKnew ? `${r.hubKnew.at.slice(11, 19)} ${r.hubKnew.what}` : "none"}`,
     `  first evidence of a blocking constraint: ${ev}`,
     `  escalation: ${esc}`,
+    `  minutes from open to escalation: ${r.openToEscalationMin ?? "none"}; needs/* proposing a restricted place: ${r.restrictedPlaceNeeds.length ? r.restrictedPlaceNeeds.join("; ") : "none"}`,
     `  stop called from outside the seats: ${r.outsideStop ? `${r.outsideStop.at.slice(11, 19)} #${r.outsideStop.seq} by ${r.outsideStop.by}, ${r.outsideStop.afterEvidenceMin} min after the evidence` : "none"}`,
     `  owner step-ins: ${r.interventions.total} (human messages ${r.interventions.humanMessages}, chair relays of the owner ${r.interventions.chairRelays}, owner_relay events ${r.interventions.ownerRelayEvents}; chair posts in all ${r.interventions.chairMessages}; out-of-band messages to the chair's session are not in the log)`,
     `  cost: ${r.costUsd === undefined ? "unknown" : `$${r.costUsd.toFixed(2)}`}`,

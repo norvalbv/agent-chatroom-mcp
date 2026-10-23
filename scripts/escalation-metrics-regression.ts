@@ -54,4 +54,19 @@ assert.equal(asked.escalation?.seq, 14);
 assert.equal(asked.evidenceToEscalationMin, 3);
 assert.equal(asked.firstEvidence?.how, "given");
 
+// the hub's machine baseline is not the room preflighting; a machine_stall start is evidence at its own `at`
+const hub = escalationMetrics([
+  { type: "room", room: "probe-hub" }, join("s1"),
+  { type: "machine", ts: t(0), sample: { load1: 19 } },
+  board(1, "trades/maker", "s1"),
+  { type: "machine_stall", event: "start", at: t(2), ts: t(3) },
+  { type: "machine_stall", event: "end", at: t(4), ts: t(4) },
+  board(7, "blocked/laptop-too-slow", "s1"),
+]);
+assert.equal(hub.preflightBeforeExperiment, false);
+assert.equal(hub.hubKnew?.what, "machine");
+assert.equal(hub.firstEvidence?.how, "event");
+assert.equal(hub.firstEvidence?.at, t(2));
+assert.equal(hub.evidenceToEscalationMin, 5);
+
 console.log("PASS escalation-metrics-regression: before = no preflight, no escalation, outside stop 61 min after the evidence; after = preflight, needs/ 4 min after; question to the chair counts");

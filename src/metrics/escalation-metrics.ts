@@ -24,7 +24,7 @@ const ENV_WORDS = /\b(server|VPS|colocat\w*|VPN|machine|laptop|install\w*|infras
 const ENV_MEASURE = /\b(RTT|ping|traceroute|default route|exit (?:IP|node)|VPN|clock offset|sntp|ntp|load average|loadavg|swap|loop lag)\b/i;
 const EXPERIMENT_KEY = /^(trades|running|experiment)\//;
 const ESCALATION_KEY = /^(needs|hold|blocked)\//;
-const PREFLIGHT_KEY = /^preflight\//;
+const PREFLIGHT_KEY = /^(preflight\/|resource\/preflight-)/;
 const ESCALATION_EVENTS = new Set(["need_filed", "need", "pause", "room_pause", "hold"]);
 const PREFLIGHT_EVENTS = new Set(["preflight", "machine_baseline"]);
 const EVIDENCE_EVENTS = new Set(["machine_stall"]);
@@ -37,6 +37,8 @@ export interface EscalationMetrics {
   firstExperiment?: { at: string; key: string };
   preflight?: { at: string; how: string };
   preflightBeforeExperiment: boolean;
+  /** the hub's own machine reading (machine baseline or a machine_stall start): what the hub knew, not what the seats did */
+  hubKnew?: { at: string; what: string };
   firstEvidence?: { at: string; seq?: number; by?: string; match: string; how: "pattern" | "event" | "given" };
   escalation?: { at: string; seq?: number; by?: string; how: string };
   /** minutes from firstEvidence to escalation; undefined when either is missing */
@@ -62,6 +64,7 @@ export function escalationMetrics(events: readonly Ev[], opts: { evidenceSeq?: n
   let firstEvidence: EscalationMetrics["firstEvidence"];
   let escalation: EscalationMetrics["escalation"];
   let outsideStop: EscalationMetrics["outsideStop"];
+  let hubKnew: EscalationMetrics["hubKnew"];
   const iv = { humanMessages: 0, chairMessages: 0, chairRelays: 0, ownerRelayEvents: 0, total: 0 };
   for (const e of events as any[]) {
     const ts = tsOf(e);
@@ -77,7 +80,8 @@ export function escalationMetrics(events: readonly Ev[], opts: { evidenceSeq?: n
       continue;
     }
     if (PREFLIGHT_EVENTS.has(e.type) && !preflight && ts) preflight = { at: ts, how: `event ${e.type}` };
-    if (EVIDENCE_EVENTS.has(e.type) && !firstEvidence && opts.evidenceSeq === undefined && ts) firstEvidence = { at: ts, match: e.type, how: "event" };
+    if (e.type === "machine" || (e.type === "machine_stall" && e.event !== "end")) hubKnew ??= { at: e.at ?? ts ?? "", what: e.type };
+    if (EVIDENCE_EVENTS.has(e.type) && e.event !== "end" && !firstEvidence && opts.evidenceSeq === undefined && (e.at ?? ts)) firstEvidence = { at: e.at ?? ts, match: e.type, how: "event" };
     if (ESCALATION_EVENTS.has(e.type) && firstEvidence && !escalation && ts) escalation = { at: ts, how: `event ${e.type}` };
     if (e.type !== "message") continue;
     const m = e.msg;
@@ -106,7 +110,7 @@ export function escalationMetrics(events: readonly Ev[], opts: { evidenceSeq?: n
   const out: EscalationMetrics = {
     room: room || row.room, start, firstExperiment, preflight,
     preflightBeforeExperiment: !!preflight && (!firstExperiment || Date.parse(preflight.at) <= Date.parse(firstExperiment.at)),
-    firstEvidence, escalation, outsideStop, interventions: iv, costUsd: row.costUsd,
+    hubKnew, firstEvidence, escalation, outsideStop, interventions: iv, costUsd: row.costUsd,
   };
   if (firstEvidence && escalation) out.evidenceToEscalationMin = mins(firstEvidence.at, escalation.at);
   else if (firstEvidence && end) out.ranOnUnescalatedMin = mins(firstEvidence.at, end);
@@ -119,6 +123,7 @@ export function renderEscalation(r: EscalationMetrics): string {
   return [
     `room ${r.room}`,
     `  preflight before first experiment: ${r.preflightBeforeExperiment ? "yes" : "no"} (preflight ${r.preflight ? `${r.preflight.at.slice(11, 19)} ${r.preflight.how}` : "none"}; first experiment ${r.firstExperiment ? `${r.firstExperiment.at.slice(11, 19)} ${r.firstExperiment.key}` : "none"})`,
+    `  hub's own machine reading: ${r.hubKnew ? `${r.hubKnew.at.slice(11, 19)} ${r.hubKnew.what}` : "none"}`,
     `  first evidence of a blocking constraint: ${ev}`,
     `  escalation: ${esc}`,
     `  stop called from outside the seats: ${r.outsideStop ? `${r.outsideStop.at.slice(11, 19)} #${r.outsideStop.seq} by ${r.outsideStop.by}, ${r.outsideStop.afterEvidenceMin} min after the evidence` : "none"}`,

@@ -94,6 +94,7 @@ const T0 = Date.parse("2026-10-22T19:30:00Z");
     // the hub's CPU reaches the episode through the hub's watch too (review/e3f26dee: the wrapper dropped it)
     watch.observe(T0 + 200_000, 2500, 0.95);
     const busy = parseRoomLog(readFileSync(join(dataDir, "ms-a.jsonl"), "utf8")).filter((e) => e.type === "machine_stall").at(-1);
+    assert.ok(busy, "the busy-hub episode is recorded");
     assert.equal(busy.cause, "hub");
     assert.equal(busy.hub_cpu, 0.95);
   } finally { rmSync(dataDir, { recursive: true, force: true }); }

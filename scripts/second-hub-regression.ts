@@ -20,8 +20,9 @@ rmSync(DIR, { recursive: true, force: true });
 const env = { ...process.env, PORT: String(PORT), CHATROOM_DATA_DIR: DIR, CHATROOM_SPAWN_DRY: "1", CHATROOM_INSECURE_LOCAL: "1" };
 const up = async () => { for (let i = 0; i < 80; i++) { try { if ((await fetch(`http://127.0.0.1:${PORT}/rooms`)).ok) return; } catch {} await new Promise((r) => setTimeout(r, 250)); } throw new Error("hub did not start"); };
 
-// 1. a live hub with a seat in a room
-const first = spawn(process.execPath, ["dist/index.js"], { env, stdio: "ignore" });
+// 1. a live hub with a seat in a room; its machine watch is off, so its own baseline and stall lines (src/telemetry/machine.ts)
+// never land in the window below: only the second hub, whose watch is on, is under test there
+const first = spawn(process.execPath, ["dist/index.js"], { env: { ...env, CHATROOM_MACHINE_WATCH_MS: "0" }, stdio: "ignore" });
 let code = 1;
 try {
   await up();

@@ -175,6 +175,7 @@ export const offlineScripts = [
   'work-ledger-regression.ts',
   'live-usage-regression.ts',
   'ledger-web-pages-regression.ts',
+  'source-refs-regression.ts',
   'barren-claim-regression.ts',
   'unsourced-claims-regression.ts',
   'fresh-sourcer-regression.ts',

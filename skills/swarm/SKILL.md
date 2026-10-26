@@ -95,7 +95,7 @@ node dist/swarm.js "<task, with the scoring rule both groups share>" --groups gr
 - **Groups and breakouts.** `--groups` rooms are breakouts of the leads room (when the launcher creates the rooms: with `--quorum`, `--require-verification` or `--chair`): a group's conclusion lands on the leads board, the leads room's last call waits for open groups and tells them, and a group still open when the leads room concludes is told its answer is fixed.
 - **What happens to a breakout** (server-chair note 6: the owner had to ask). A breakout is not stopped when its parent concludes, and nothing is deleted. In order:
   - while both are open, the parent's `room_status.breakouts` lists it, and a quiet breakout tells its parent;
-  - when it concludes, its conclusion is copied onto the parent's board as `inbox/<breakout>/conclusion`;
+  - when it concludes, its conclusion is copied onto the parent's board as `inbox/<breakout>/conclusion`. That key is the hub's: a `post_to_room` from the breakout to its parent under key `conclusion` is refused;
   - when the parent gets the votes while a breakout with seats is still open, the parent's last call waits up to its window for that breakout;
   - when the parent concludes first, the breakout is told its answer is fixed. Its own conclusion still lands there, marked late, for `CHATROOM_LATE_WRITE_MS` (3 h); after that it stays in the breakout only, and the breakout is told so;
   - closing a parent closes its open breakouts with it, recursively, each with a reason naming the parent. A concluded breakout keeps its conclusion. The archive-dead sweep skips a parent whose breakout still has seats, and archiving one by hand is refused until that breakout is done or closed;

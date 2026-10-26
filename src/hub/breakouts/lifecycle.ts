@@ -18,7 +18,7 @@
 import type { Hub } from "../../hub.js";
 import { lateWindow } from "../board.js";
 import { now } from "../internal.js";
-import type { Proposal, Room, RoomState } from "../types.js";
+import { HubError, type Proposal, type Room, type RoomState } from "../types.js";
 
 export type CarryDrop = "parent_closed" | "past_window" | "parent_missing";
 
@@ -37,6 +37,16 @@ export interface BreakoutFate {
 
 /** Where a breakout's conclusion lands on its parent's board. */
 export const carryKey = (child: string): string => `inbox/${child}/conclusion`;
+
+/**
+ * post_to_room from a breakout to its own parent under key "conclusion" would land on the carry key and replace the
+ * hub's copy, after which breakout_fate could no longer tell whether the copy was made (review/09371908 F1; 1 of 21
+ * such entries in the records was a seat's, swarm-104626-vyfd). The key is the hub's.
+ */
+export function refuseCarryKey(hub: Hub, fromRoom: string, toRoom: string, key: string): void {
+  if (key !== "conclusion" || hub.rooms.get(fromRoom)?.parent !== toRoom) return;
+  throw new HubError(`${carryKey(fromRoom)} is where the hub copies this room's conclusion when it concludes; send this note under another key.`, undefined, "invalid-arg");
+}
 
 /** Why a conclusion cannot be copied to this parent now; undefined when it can (on time or late). */
 export function carryDrop(hub: Hub, parent: Room | undefined): CarryDrop | undefined {
@@ -124,6 +134,11 @@ export function breakoutFate(hub: Hub, room: Room, lastCallMs: number): Breakout
     if (carried) {
       return { ...base, line: `Concluded; its conclusion was copied to ${name} as ${key} at ${at(carried.at)}` +
         (carried.late ? `, marked late: ${name} had already concluded, so it did not change that answer.` : ".") };
+    }
+    // the parent takes it, yet the hub's copy is not there: someone else's text on the key (a record from before
+    // refuseCarryKey) or no entry at all. Not a drop, and "not on this hub" would be false.
+    if (!drop && parent) {
+      return { ...base, line: `Concluded; ${key} on ${name} ${entry ? `was last written by ${entry.by}, not by the hub, so it may not be this room's conclusion` : "is not on its board"}. The whole conclusion is in this room (room_status).` };
     }
     const why = drop ?? "parent_missing";
     return { ...base, not_carried: why, line: `Concluded; its conclusion was not copied to ${name}: ${dropWords(hub, name, why, parent)}. It is in this room only.` };

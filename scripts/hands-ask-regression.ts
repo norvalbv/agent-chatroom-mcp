@@ -4,7 +4,7 @@
  *
  * open-work.ts has named this case since swarm-003601-tky5 (idea_no_free_seat), but only on an idle wait, only to the
  * idea's author while that author held a claim of its own, and with the line ending "if you are mid-task, carry on and
- * ignore this". Across 332 room logs (MAIN/data and the research server's copy) it fired 9 times in 6 rooms and a
+ * ignore this". Across 332 room logs (MAIN/data and the research server's copy) it fired 9 times in 5 rooms and a
  * recruit followed within 30 minutes 0 times; 73 of 81 idea/* entries were never claimed (evidence/bottlenecks-9f66).
  *
  * Now the hub's sweep asks once, when the condition has held: an idea/<slug> nobody has claimed for HANDS_AFTER_MS while

@@ -4,7 +4,7 @@
  *
  * open-work.ts names this case as idea_no_free_seat, but only on an idle wait, only to the idea's author while it holds a
  * claim of its own (so is busy), and with a line ending "if you are mid-task, carry on and ignore this". Across 332 room
- * logs it fired 9 times in 6 rooms and no recruit followed within 30 minutes; 73 of 81 idea/* entries were never claimed
+ * logs it fired 9 times in 5 rooms and no recruit followed within 30 minutes; 73 of 81 idea/* entries were never claimed
  * (evidence/bottlenecks-9f66). The idle seats it was written for never existed at that moment: every worker held a claim.
  *
  * So the periodic sweep asks once, after the condition has held for HANDS_AFTER_MS: an idea/<slug> with no live

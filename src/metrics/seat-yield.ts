@@ -2,7 +2,7 @@
  * Seat yield per room: how many agent seats a room held, the most at once, how many wrote no finding, and the fewest
  * that wrote 80% of the findings. Owner ask 4 ("how many agents to put into a room"), decision/room-size in
  * swarm-005940-77tu-room: an extra seat adds a seat's cost and a seat's board output inside one room, but landed results
- * do not grow and idle seats rise with size (4% of seats at 2-3, 18% at 13+, over 105 Claude rooms), so a room's record
+ * do not grow and idle seats rise with size (4% of seats at 2-3, 18% at 13+, over 110 Claude rooms), so a room's record
  * should say whether its size paid. A finding is what runs-table counts as one (src/run-timeline.ts NOT_FINDING,
  * SEEDED_BY), credited to whoever wrote the key first. Seats are agents other than the chair and humans.
  */

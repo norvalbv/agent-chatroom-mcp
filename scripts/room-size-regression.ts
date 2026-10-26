@@ -119,5 +119,13 @@ const above = est.SIZE_NOTE_ABOVE as number;
 assert.match(skill, new RegExp(`Above ${above} in one room the launcher prints a size note`), "--agents names the note's threshold");
 assert.match(skill, new RegExp(`\\*\\*Grow a room by recruiting into a named item, not by launching wide\\*\\*[^\\n]*\\n(?:[^\\n]*\\n)*?[^\\n]*Above ${above} agents in one room the launcher prints a size note[^\\n]*scripts/runs-table\\.ts`), "Sizing a run: the evidence, the note and the seat-yield table");
 assert.doesNotMatch(skill, /"lots" = 8/, "no fixed 8 for \"lots\": start at 5 to 6 and recruit");
+// the seat-size table can be rebuilt to the row: it states which rooms it counts, and its rows add up to that count
+const sized = /Across (\d+) Claude rooms \(([^)]*)\)[^\n]*\n\n  \| Seats in room \| Rooms \|[^\n]*\n  \|[-|]+\|\n((?:  \|[^\n]*\n)+)/.exec(skill);
+assert.ok(sized, "Sizing a run: the seat-size table names its room count and selection");
+assert.match(sized[2], /at least 80% Claude seats/, "which rooms: mostly-Claude ones");
+assert.match(sized[2], /at least 9 minutes and 3 findings/, "which rooms: long enough to have made something");
+assert.match(sized[2], /most seats at once/, "banded by peak seats, not seats ever joined");
+const rooms = sized[3].trim().split("\n").map((l) => Number(l.split("|")[2]));
+assert.equal(rooms.reduce((a, b) => a + b, 0), Number(sized[1]), "the Rooms column adds up to the stated count");
 
 console.log("room-size regression: ok");

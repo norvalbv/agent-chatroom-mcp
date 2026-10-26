@@ -16,8 +16,8 @@ export function launchCostGuide(seats: number, timeoutMin: number): string {
 }
 
 /** Above this many agents in one room the launcher prints a size note. 4 is the default and 5 + a verifier the owner's
- * usual room; past 6, Claude rooms made 2.6 findings per seat against 3.5 at 4-5 seats (runs-table over 332 room
- * records, n=25 and 41; decision/room-size). */
+ * usual room; past 6, Claude rooms made 2.5 findings per seat against 3.2 at 4-5 seats (runs-table over 332 room
+ * records, n=27 and 44; decision/room-size). */
 export const SIZE_NOTE_ABOVE = 6;
 
 /**
@@ -26,8 +26,8 @@ export const SIZE_NOTE_ABOVE = 6;
  * seat adds a seat's cost and a seat's board output (26 rooms, 209 half-hours), recruits yield like launch seats
  * (37 rooms, sign test p=0.74), but landed results do not grow (paper Study 3: 15 seats landed no more of a 20-item pool
  * than 3, at 2.5-3.5x the cost per item), and the share of seats with no finding rises from 4% at 2-3 seats to 10% at
- * 9-12 and 18% at 13+ (runs-table idleSeats over 105 Claude rooms; task and era confound it). `briefItems` is the
- * brief's numbered list (src/seat-targets.ts).
+ * 9-12 and 18% at 13+ (runs-table idleSeats over 110 Claude rooms; task and era confound it). `briefItems` is the
+ * brief's first numbered list (src/seat-targets.ts), so a brief that numbers its rules first counts the rules.
  */
 export function launchSizeNote(o: { roomSeats: number; workers: number; briefItems: number }): string {
   if (o.roomSeats <= SIZE_NOTE_ABOVE) return "";

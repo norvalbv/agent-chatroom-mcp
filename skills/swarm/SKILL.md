@@ -129,13 +129,13 @@ Merge only branches named in the conclusion that carry a `verify/*` entry, in ra
 Pick the smallest shape that fits the work; more seats was the weakest lever measured.
 
 - **A backlog of separable items: keep the default `--agents 4`** (3 workers and a verifier). On pools of 20 independent items with hidden tests (paper Study 3, 2026-09-24), that room landed 5 more items than three isolated agents splitting the list, in both completed pools, mostly because it integrated onto one branch where the split lost items to merge conflicts. Fifteen seats never landed more than three, at $1.14 against $0.33 and $1.76 against $0.71 per passing item, and on the third pool a 15-seat room took 27 minutes and $68 for the same 20/20 a split finished in 11 minutes for $9. The launcher prints a cost guide at start (Opus seats cost about $0.17 per seat-minute, measured). Before starting more than 4 seats on a subscription, check account headroom (`cswap list`) and say what the run will cost: every Claude session on the machine shares the active account, and a 15-seat room drained one account's 5-hour window in about 20 minutes.
-- **Grow a room by recruiting into a named item, not by launching wide** (swarm-005940-77tu-room decision/room-size and evidence/room-size, 332 room records). Start at 4 to 5 (5 plus a verifier is the usual room) and give every worker an item it can name now. When a new item has no free seat, recruit one seat for it. Recruits added later wrote as many findings per seat-hour as launch seats: 2.70 against 2.54 over 37 rooms, 17 higher and 20 lower, sign test p=0.74. Within one room, an extra active seat added a seat's cost and a seat's board output, and no more: over 26 Opus rooms and 209 half-hours with time partialled out, r was -0.04 for cost per seat-minute and +0.02 for findings per seat-minute. Landed results did not grow (Study 3, above). Across 105 Claude rooms, by runs-table's finding rule:
+- **Grow a room by recruiting into a named item, not by launching wide** (swarm-005940-77tu-room decision/room-size and evidence/room-size, 332 room records). Start at 4 to 5 (5 plus a verifier is the usual room) and give every worker an item it can name now. When a new item has no free seat, recruit one seat for it. Recruits added later wrote as many findings per seat-hour as launch seats: 2.70 against 2.54 over 37 rooms, 17 higher and 20 lower, sign test p=0.74. Within one room, an extra active seat added a seat's cost and a seat's board output, and no more: over 26 Opus rooms and 209 half-hours with time partialled out, r was -0.04 for cost per seat-minute and +0.02 for findings per seat-minute. Landed results did not grow (Study 3, above). Across 110 Claude rooms (at least 80% Claude seats, at least 9 minutes and 3 findings, banded by the most seats at once; median findings per seat, mean share of seats with none), by runs-table's finding rule:
 
   | Seats in room | Rooms | Findings per seat | Seats with no finding |
   |---|---|---|---|
   | 2-3 | 27 | 3.0 | 4% |
-  | 4-5 | 41 | 3.5 | 7% |
-  | 6-8 | 25 | 2.6 | 7% |
+  | 4-5 | 44 | 3.2 | 9% |
+  | 6-8 | 27 | 2.5 | 6% |
   | 9-12 | 8 | 2.6 | 10% |
   | 13+ | 4 | 2.0 | 18% |
 

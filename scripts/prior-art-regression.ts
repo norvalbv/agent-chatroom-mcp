@@ -8,7 +8,7 @@
  * each and the outside references handed in against those the seats found. */
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
-import { mkdtempSync, readFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
@@ -113,6 +113,22 @@ test("run-metrics: a log from before the tags is classified from its stored targ
   assert.match(renderMetrics(m), /first fetch from a code host never, first outside code run never/);
   const none = runMetrics([{ type: "room", room: "r", opts: {}, createdAt: at(0) }, seat("p_a", "alice"), work("p_a", 1, "web", "WebFetch", "polymtradebot.com")]);
   assert.match(renderMetrics(none), /prior art: no search for existing code, packages or papers/);
+});
+
+test("the swarm skill's prior-art bullet names the sentence run-metrics prints and where to read it", () => {
+  // the session that launches a room reads the skill, not the code: a renamed measure must fail here, not leave it wrong
+  const bullet = readFileSync(new URL("../skills/swarm/SKILL.md", import.meta.url), "utf8").split("\n").find((l) => l.startsWith("- **Prior art first.**"));
+  assert.ok(bullet, "skills/swarm/SKILL.md has a Prior art first bullet");
+  const printed = renderMetrics(runMetrics([
+    { type: "room", room: "r", opts: {}, createdAt: at(0) }, seat("p_a", "alice"),
+    work("p_a", 1, "web", "WebFetch", "arxiv.org/abs/2409.07440", "search"),
+  ]));
+  for (const phrase of ["prior art:", "first fetch from a code host", "first outside code run", "handed in", "found by seats"]) {
+    assert.ok(printed.includes(phrase), `run-metrics prints "${phrase}"`);
+    assert.ok(bullet.includes(phrase), `the skill names "${phrase}"`);
+  }
+  assert.ok(existsSync(new URL("../scripts/run-metrics.ts", import.meta.url)) && bullet.includes("scripts/run-metrics.ts"));
+  assert.ok(bullet.includes("`--resources`") && bullet.includes("`blocked: <reason>`") && bullet.includes("`needs/<name>`"));
 });
 
 test("the hub tags the persisted work event from the whole command, not its 120-character display", async () => {

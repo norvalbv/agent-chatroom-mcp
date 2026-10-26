@@ -6,6 +6,7 @@ import { claimReleased } from "./board.js";
 import type { BoardEntry, Participant, Room } from "./types.js";
 import { spawnSync } from "node:child_process";
 import { isReviewKey, parseVerifyHead } from "./types.js";
+import { claimOwners, unownedItems } from "./coverage/coverage.js";
 
 export const IDLE_HINT = "No new messages yet. Call wait_for_messages again.";
 
@@ -17,8 +18,10 @@ export interface OpenWork {
    * idea_no_free_seat: the same idea while every worker holds a live claim, shown only to its author: a hand is added
    * with request_agent or the idea is dropped (brief item 2 of swarm-003601-tky5; idea/unowned-work-no-free-seat).
    * idea_verdict_owed: an open idea that names this seat's board entry (`cites`), shown busy or not: the seat whose problem
-   * it answers claims or attacks it (decision/scout; 74% of pitches were never closed, evidence/scout-ideas-closure). */
-  kind: "review_owed" | "unreviewed" | "own_claim_empty" | "claim_orphaned" | "help_wanted" | "idea_unclaimed" | "idea_no_free_seat" | "idea_verdict_owed";
+   * it answers claims or attacks it (decision/scout; 74% of pitches were never closed, evidence/scout-ideas-closure).
+   * item_unowned: a problem the brief requires (item/<slug>) that no claim covers, shown to a seat with nothing of its own
+   * in flight, before any idea: an idea is optional, an item is not (src/hub/coverage/coverage.ts, inputs/owner-3 (a)). */
+  kind: "review_owed" | "unreviewed" | "own_claim_empty" | "claim_orphaned" | "help_wanted" | "idea_unclaimed" | "idea_no_free_seat" | "idea_verdict_owed" | "item_unowned";
   key: string;
   owner?: string;
   /** idea_verdict_owed: this seat's entry the idea names */
@@ -53,7 +56,7 @@ const area = (key: string) => key.slice(key.indexOf("/") + 1);
 /** Whether `commit` is on `branch` (git merge-base --is-ancestor, in the claim's worktree). Asked on idle waits, so a yes is
  * kept for good and a no for a minute (the branch may grow to include it). */
 const onBranchSeen = new Map<string, { yes: boolean; at: number }>();
-function onBranch(worktree: string, branch: string, commit: string): boolean {
+export function onBranch(worktree: string, branch: string, commit: string): boolean {
   if (!/^[0-9a-fA-F]{7,64}$/.test(commit)) return false;
   const k = `${worktree}\0${branch}\0${commit}`;
   const seen = onBranchSeen.get(k);
@@ -68,7 +71,7 @@ function onBranch(worktree: string, branch: string, commit: string): boolean {
  * chat message since the claim that names the area. Reviews land in verify/*, in review/* and in plain chat, and often
  * from a seat other than the assigned reviewer; asking for one that is already there is noise a seat learns to skip
  * (replay of 116 long idle runs: 15 of 23 review_owed hits). */
-function reviewedClaim(room: Room, claimKey: string, claim: BoardEntry): boolean {
+export function reviewedClaim(room: Room, claimKey: string, claim: BoardEntry): boolean {
   const slug = area(claimKey);
   const word = new RegExp(`(^|[^a-z0-9])${slug.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}([^a-z0-9]|$)`, "i");
   const other = (name: string) => name !== claim.by;
@@ -229,8 +232,9 @@ export function openWork(hub: Hub, room: Room, p: Participant, idle = true): Ope
     }
   }
   // the request side of a blackboard (sources/2510.01285): an unbuilt idea is work only for a seat free to take it, so a
-  // seat with a live claim of its own is not pulled off it
-  const holds = (name: string) => entries.some(([k, e]) => k.startsWith("claim/") && e.by === name && !claimReleased(e) && !settled(e));
+  // seat with a live claim of its own is not pulled off it. A claim's JSON team holds it too: a recruit given area= is
+  // on the team of a claim the requester wrote (#254 in swarm-005940-77tu-room), and is not free.
+  const holds = (name: string) => entries.some(([k, e]) => k.startsWith("claim/") && claimOwners(e).includes(name) && !claimReleased(e) && !settled(e));
   const free = !holds(p.name);
   // Unowned work and no free seat, both stated as fact, is what preceded this room's recruiting (#25, #28 there); a seat
   // never weighed it unprompted (3% of Claude seat-rooms recruited, evidence/recruiting-never-used). Told to the idea's
@@ -239,7 +243,8 @@ export function openWork(hub: Hub, room: Room, p: Participant, idle = true): Ope
   const noneFree = !free && workers.length > 0 && workers.every((x) => holds(x.name));
   const recruit: OpenWork[] = noneFree ? myIdeas.map((key) => ({ kind: "idea_no_free_seat" as const, key, workers: workers.length })) : [];
   const owedHere = new Set(verdicts.map((w) => w.key));
-  return [...review, ...verdicts, ...orphaned, ...own, ...help, ...recruit, ...(free ? ideas.filter((w) => !owedHere.has(w.key)) : [])];
+  const items: OpenWork[] = free ? unownedItems(room).map((it) => ({ kind: "item_unowned", key: it.key, owner: shownName(it.author) })) : [];
+  return [...review, ...verdicts, ...orphaned, ...own, ...help, ...recruit, ...items, ...(free ? ideas.filter((w) => !owedHere.has(w.key)) : [])];
 }
 
 function describe(w: OpenWork): string {
@@ -253,11 +258,12 @@ function describe(w: OpenWork): string {
     case "idea_no_free_seat": return `your ${w.key} has no owner and all ${w.workers} workers hold a claim: request_agent(area="${slug}", brief=<what it is and what done looks like; it may just say board_get ${w.key}>) adds a seat for it, or write one line on ${w.key} saying why it is dropped`;
     case "idea_verdict_owed": return `${w.owner}'s ${w.key} cites your ${w.cites}: board_get it, then claim/${slug} to build it or attack/idea/${slug} with the reason it should not be built`;
     case "idea_unclaimed": return `${w.owner}'s ${w.key} is unbuilt and nobody holds claim/${slug}: board_get it, then claim/${slug} and start, or say in one line why it should not be built`;
+    case "item_unowned": return `${w.key} is a problem the brief requires and no claim covers it: board_get it, then claim/${slug} and start, or tell ${w.owner} in one line why it should be dropped`;
   }
 }
 
 /** A claim whose own JSON status says the work is finished: nothing about it is open, whoever holds it. */
-function settled(e: BoardEntry): boolean {
+export function settled(e: BoardEntry): boolean {
   try { return /^(verified|fixed|merged|done|complete|closed)/i.test(String((JSON.parse(e.text) as { status?: unknown }).status ?? "")); } catch { return false; }
 }
 

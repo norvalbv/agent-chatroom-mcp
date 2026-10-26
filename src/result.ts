@@ -374,6 +374,13 @@ function renderLatestDigest(lead: Record<string, any>): string {
   const passes = Object.entries((lead.board ?? {}) as BoardText).filter(([k]) => /^digest\/\d+$/.test(k)).sort((a, b) => Number(b[0].slice(7)) - Number(a[0].slice(7)));
   return passes[0] ? `### Latest consolidation pass: ${passes[0][0]} (${passes[0][1].by ?? 'unknown'})\n\n${quoted(passes[0][1].text)}\n\n` : '';
 }
+/** The lead room's item/* ledger (src/hub/coverage/coverage.ts): which problems in the brief ended with an owner and how. */
+function renderCoverage(lead: Record<string, any> | null | undefined): string {
+  const c = lead?.coverage as { open: string[]; rows: { key: string; state: string; owners: string[] }[] } | undefined;
+  if (!c?.rows?.length) return '';
+  const rows = c.rows.map(r => `| ${r.key} | ${r.state} | ${r.owners.join(', ') || '-'} |`).join('\n');
+  return `## Coverage\n\n| item | state | owners |\n|---|---|---|\n${rows}\n\n${c.open.length ? `Nobody on: ${c.open.join(', ')}.` : 'Every item has an owner or is settled.'}\n\n`;
+}
 /** Human view only; consumers must read JSON, never parse this Markdown. */
 export function renderRunReport(r: RunResult): string {
   const lead = r.rooms.find(room => room.name === r.leadRoom)?.payload;
@@ -381,7 +388,7 @@ export function renderRunReport(r: RunResult): string {
   // only a run whose groups keep a position prints it (or its absence): other runs' reports are unchanged
   const grouped = r.rooms.some(room => room.name !== r.leadRoom && ((room.payload?.board ?? {}) as BoardText).position);
   for (const room of r.rooms.filter(room => room.name !== r.leadRoom)) text += `### ${room.name} (${room.payload?.state ?? 'missing'})\n\n${room.payload?.conclusion?.text ?? '_no consensus_'}\n\n${grouped ? renderPosition(room.payload) : ''}`;
-  text += renderPreflight(r.preflight);
+  text += renderCoverage(lead) + renderPreflight(r.preflight);
   text += `## Result artifact\n\nAuthoritative full room snapshots, board evidence and raw transcripts: ${r.artifactPath}\n\n`;
   if (r.usage) {
     // claude seats have no steps/prompt_tokens/completion_tokens; without this, a claude-only run's real

@@ -27,6 +27,7 @@ import { barrenClaims, evidenceGaps, evidenceReceipt, offline, unsourcedClaims }
 import { apiRequests, UsageLedger, usageTotal } from "./hub/usage.js";
 import { DevRuns, DevRunError, type DevRunHost } from "./hub/dev-runs.js";
 import { takesOf } from "./hub/take.js";
+import { coverage } from "./hub/coverage/coverage.js";
 import { registeredWakes, wakeSuccessors, type Wake } from "./hub/wake.js";
 import { MemoryWatch, memoryNotice, type Job, type MemoryEvent, type SeatMemory } from "./hub/memory.js";
 import { RUN_END_CAUSES, exitCause, type RunEndCause, type StoppedBy } from "./respawn.js";
@@ -294,7 +295,7 @@ export class Hub {
       ...(idle.idleView(room) ? { idle: idle.idleView(room) } : {}),
       ...(idle.waitingView(room) ? { waiting: idle.waitingView(room) } : {}),
       // claim/* entries whose owner left: its registered successor may take one at once, anyone after Hub.STALE_CLAIM_MS
-      stale_claims: this.staleClaims(room, reveal), ...((n) => (n ? { open_needs: n } : {}))(board.openNeeds(room)), // needs/* filed for the owner and not cleared (src/hub/needs/); absent: none
+      stale_claims: this.staleClaims(room, reveal), ...((n) => (n ? { open_needs: n } : {}))(board.openNeeds(room)), ...((c) => (c ? { coverage: c } : {}))(coverage(room)), // needs/* filed for the owner and not cleared (src/hub/needs/); absent: none. coverage: each item/* the brief names, its owners and state (src/hub/coverage/); absent: no item/*
       // per commit, the verify/* and review/* entries whose head names it (telemetry G3/G14): coverage read from the hub, not key names
       ...((r) => (r.length ? { reviews: r } : {}))(this.reviewsByCommit(room)),
       // chat messages by the channel they came through (telemetry gap 8: owner, script, chair and seat were one column)
@@ -1533,12 +1534,11 @@ export class Hub {
   seedResources(roomName: string, entries: { key: string; text: string }[]): { room: string; keys: string[]; pending: boolean } {
     if (!Array.isArray(entries) || !entries.length) throw new HubError("resources need at least one entry: [{ key: \"resource/<name>\", text }].", undefined, "invalid-arg");
     for (const e of entries) {
-      if (typeof e?.key !== "string" || !/^resource\/./.test(e.key) || !board.BOARD_KEY.test(e.key)) throw new HubError(`A resource key is "resource/<name>" (got ${String(JSON.stringify(e?.key)).slice(0, 80)}).`, undefined, "key-format");
+      if (typeof e?.key !== "string" || !/^(resource|item)\/./.test(e.key) || !board.BOARD_KEY.test(e.key)) throw new HubError(`A resource key is "resource/<name>", or "item/<slug>" for a problem the brief names (got ${String(JSON.stringify(e?.key)).slice(0, 80)}).`, undefined, "key-format");
       if (typeof e.text !== "string" || !e.text.trim()) throw new HubError(`"${e.key}" has no text.`, undefined, "invalid-arg");
       if (e.text.length > board.BOARD_ENTRY_MAX) throw new HubError(board.tooLong(e.key, e.text.length), undefined, "size");
     }
-    const clean = entries.map((e) => ({ key: e.key, text: e.text }));
-    const room = this.rooms.get(roomName);
+    const clean = entries.map((e) => ({ key: e.key, text: e.text })), room = this.rooms.get(roomName);
     if (!room) {
       if (!Hub.ROOM_NAME.test(roomName)) throw new HubError("Invalid room name.", undefined, "invalid-arg");
       this.pendingResources.set(roomName, clean);

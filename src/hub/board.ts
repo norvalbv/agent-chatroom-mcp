@@ -512,7 +512,7 @@ function checkAttack(room: Room, p: Participant, key: string, text: string): { t
 }
 
 /** Open until the author removes every clause the attack quotes, or adds a reply to the attacked entry. */
-function attackOpen(attack: BoardEntry, target: BoardEntry): boolean {
+export function attackOpen(attack: BoardEntry, target: BoardEntry): boolean {
   const text = norm(target.text);
   // growth from other seats' appended lines (board_set append) is not a reply by the author
   return [...attack.text.matchAll(QUOTED)].some((m) => text.includes(norm(m[1]))) && text.length - (target.othersChars ?? 0) < (attack.attackedChars ?? 0) + ATTACK_REPLY_MIN_CHARS;

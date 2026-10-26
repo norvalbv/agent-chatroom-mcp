@@ -373,6 +373,7 @@ export const offlineScripts = [
   'review-suites-regression.ts',
   'topic-once-regression.ts',
   'join-topic-held-regression.ts',
+  'conduct-guidance-regression.ts',
 ];
 
 export function offlineCommands() {

@@ -1,4 +1,5 @@
 /** Versioned, self-contained transport. Room payloads are deliberately not projected. */
+import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
@@ -43,6 +44,9 @@ export interface RunResult {
   preflight?: PreflightResult;
   /** What the launcher filed from the verifier's DECISION RECORD, from where, or why nothing (src/launch/decision-record.ts); absent on older artifacts. */
   decisionRecord?: DecisionRecordSummary;
+  /** Template file -> first 12 hex of its sha256, for the prompts this run's seats were launched with (recruit.md as the
+   * launcher's checkout has it); absent on older artifacts. promptDigests below */
+  prompts?: Record<string, string>;
 }
 /**
  * Usage as the hub recorded it while the run went on, from the room snapshots alone: a launcher that crashed, or a
@@ -270,6 +274,21 @@ export function rollupUsage(runs: readonly ({ usage?: SeatUsageRollup | null } |
  * so `num_turns` is the only real turn count available, and an old CLI without it must not read as
  * "zero turns".
  */
+/**
+ * Which prompt texts a run's seats were launched with: template file -> first 12 hex of sha256(contents); a template
+ * that is not there is left out. Guidance is a change like code (owner ask 5, swarm-005940-77tu), but a room log does not
+ * say which verifier.md or recruit.md its seats read, so a replay could only split conduct by date. Recruits are briefed
+ * by the hub from its own checkout; this is the launcher's copy, the same file when the launcher started the hub.
+ */
+export function promptDigests(dir: string, files: readonly string[]): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const f of files) {
+    const p = resolve(dir, f);
+    if (existsSync(p)) out[f] = createHash('sha256').update(readFileSync(p)).digest('hex').slice(0, 12);
+  }
+  return out;
+}
+
 /**
  * Where Claude Code wrote a seat's transcript: <config dir>/projects/<cwd, every non-alphanumeric as "-">/<session>.jsonl,
  * the config dir being the seat's CLAUDE_CONFIG_DIR (inherited from the launcher: a per-session directory under Frink

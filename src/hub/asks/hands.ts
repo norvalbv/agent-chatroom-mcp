@@ -110,7 +110,7 @@ export function checkHands(hub: Hub, room: Room, at = Date.now()): void {
     }
     const slug = slugOf(idea.key);
     const whose = author ? "" : ` ${idea.author} wrote it and has left, so it is yours to settle.`;
-    hub.post(room, "chat", undefined, `@${hub.shown(room, to)} ${idea.key} has had no owner for ${minutes} min, and all ${workers.length} workers hold a claim.${whose} ` +
+    hub.post(room, "chat", undefined, `@${hub.shown(room, to)} ${idea.key} has had no owner for ${minutes} min, and ${workers.length === 1 ? "the only worker holds" : `all ${workers.length} workers hold`} a claim.${whose} ` +
       `Choose one: request_agent(area="${slug}", brief=<what it is and what done looks like; it may just say board_get ${idea.key}>) adds a seat for it; ` +
       `board_set claim/${slug} if you will take it yourself after your current work; or start ${idea.key} with "dropped:" and the reason. Reply to this message with which.`, { tag: "hands" });
     seen.set(idea.key, false);

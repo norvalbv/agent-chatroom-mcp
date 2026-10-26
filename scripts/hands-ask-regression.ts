@@ -60,6 +60,7 @@ test("an idea unclaimed for 10 min while every worker holds a claim gets one owe
   assert.match(m.content, /request_agent\(area="gamma"/, "the recruit call is spelled out");
   assert.match(m.content, /dropped:/, "dropping it is a named answer too");
   assert.doesNotMatch(m.content, /ignore this/i, "the author is busy by construction: the ask must not excuse it");
+  assert.match(m.content, /all 2 workers hold a claim/);
   assert.equal(h.attentionFocus(r, a)?.id, m.id, "owed: it is the author's focused ask");
   h.readAs(r, a, 0, 200);
   assert.equal(h.attentionFocus(r, a)?.id, m.id, "still owed once delivered (a plain hub notice retires on delivery)");
@@ -159,6 +160,23 @@ test("a recruit holds the claim written for it at recruitment: it is on the team
   r.board.get("idea/gamma")!.updatedAt = OLD();
   h.sweepIdle(DAY);
   assert.equal(hands().length, 1, "this room's shape (swarm-005940-77tu): every recruit's claim is written by its recruiter");
+  assert.match(hands()[0].content, /all 3 workers hold a claim/);
+});
+
+test("a lone worker that wrote the idea and holds a claim is asked: there is no self-skip", () => {
+  const dataDir = mkdtempSync(join(tmpdir(), "hands-"));
+  const h = new Hub({ dataDir });
+  const w = h.join("solo", "worker-1", "claude", {}, undefined, "sess-w").participant;
+  h.join("solo", "verifier", "claude", {}, undefined, "sess-v", "verifier");
+  h.setBoard("solo", w.id, "claim/a", JSON.stringify({ area: "a" }));
+  h.setBoard("solo", w.id, "idea/d", "item D");
+  const r = h.getRoom("solo");
+  r.board.get("idea/d")!.updatedAt = OLD();
+  h.sweepIdle(DAY);
+  const asked = r.messages.filter((m) => m.tag === ("hands" as never));
+  assert.equal(asked.length, 1, "chair-claude #339: the 2-seat probe rests on this");
+  assert.equal(h.attentionFocus(r, w)?.id, asked[0].id);
+  assert.match(asked[0].content, /the only worker holds a claim/);
 });
 
 test("run-metrics reports asks and how they were resolved", () => {

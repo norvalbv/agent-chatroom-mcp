@@ -2,7 +2,7 @@
  * The brief's problems against who holds them (inputs/owner-3 (a), decision/coverage-tracking). The brief's numbered list
  * was read only to give flat seats a starting line, and nothing afterwards said which problems had an owner: the chair
  * read the brief and the board by hand to find six unowned asks (this room's inputs/owner-3), and recruited one area
- * twice. A claim alone does not answer it either: of 1,289 claims in 220 rooms, 72% were still "held" when their owner
+ * twice. A claim alone does not answer it either: of 1,289 claims in 220 rooms, 87% were still "held" when their owner
  * left and 9-11% ever said done (evidence/claims-census). A task ledger kept up to date is what Magentic-One's
  * orchestrator re-reads every step (2411.04468: 31% worse on GAIA without it); here the hub computes one from the board.
  *

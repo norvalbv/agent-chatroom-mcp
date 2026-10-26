@@ -2,7 +2,7 @@
  * Every problem a brief names has an owner, and the room shows it without the chair checking by hand (inputs/owner-3 (a),
  * decision/coverage-tracking). The brief's numbered list was parsed only to give flat seats a starting line and then
  * dropped: nothing on the board or in room_status named the problems, and a claim showed that someone took one, not
- * that it was being worked or done (72% of 1,289 claims were still "held" when their owner left, evidence/claims-census).
+ * that it was being worked or done (87% of 1,289 claims were still "held" when their owner left, evidence/claims-census).
  * item/<slug> entries now name the problems (the chair writes them; a launcher may seed them like resource/*), and the
  * hub computes each one's owner and state from item/* and claim/* in room_status.coverage, open_work and a coverage event.
  * Run: npx tsx scripts/coverage-regression.ts

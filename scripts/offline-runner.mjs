@@ -230,6 +230,7 @@ export const offlineScripts = [
   'shelf-lang-tasks.test.ts',
   'arrow-task.test.ts',
   'quiet-guidance-regression.ts',
+  'recruit-guidance-regression.ts',
   'quiet-default-regression.ts',
   'quiet-receipts.ts',
   'quiet-reply-audience-regression.ts',
@@ -384,6 +385,7 @@ export function offlineCommands() {
     { name: 'historical tool census', command: 'python3', args: ['scripts/historical-tool-usage-regression.py'] },
     { name: 'scripts type-check test', command: process.execPath, args: ['scripts/scripts-typecheck.test.mjs'] },
     { name: 'swarm-tool-usage-regression.py', command: 'python3', args: ['scripts/swarm-tool-usage-regression.py'] },
+    { name: 'recruit-census-regression.py', command: 'python3', args: ['scripts/recruit-census-regression.py'] },
     // Fleet CLI fixtures consume dist: compile every run rather than testing stale output.
     { name: 'build', command: process.execPath, args: ['node_modules/typescript/bin/tsc'] },
     // tsconfig.json covers src/ only; scripts/ gets its own no-emit check so "tsc clean" includes them.

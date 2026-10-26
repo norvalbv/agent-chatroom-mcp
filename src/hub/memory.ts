@@ -215,6 +215,10 @@ export class MemoryWatch {
   }
 
   get(seat: string | undefined): SeatMemory | undefined { return seat ? this.bySeat.get(seat) : undefined; }
+  /** When a sample last held this seat's agent process, not orphaned: the idle sweep's "process" signal (src/hub/liveness.ts, reapIdle).
+   * A job a dead seat left behind is adopted by launchd (ppid 1) and does not keep the seat. */
+  agentSeenAt(seat: string): number | undefined { return this.agentSeen.get(seat); }
+  private readonly agentSeen = new Map<string, number>();
   /** The jobs a seat has running as of the last tick (jobsOf): none for a seat with no key or nothing started. */
   jobs(seat: string | undefined): Job[] { return (seat && this.jobsBySeat.get(seat)) || []; }
   /** What tagged processes of no live seat hold (a recorder a finished room left running, a respawned seat's old script). */
@@ -269,6 +273,7 @@ export class MemoryWatch {
         const seat = seatHash(key);
         if (!this.o.watched(seat)) { orphans.push({ ...u.agent, kb: u.agentKb }, ...u.own); continue; }
         seen.add(seat);
+        if (u.agent.ppid !== 1) this.agentSeen.set(seat, nowMs);
         // the seat's jobs: what it started with its key showing, and what shows no key but descends from it
         const jobs = jobsOf([...u.own, ...table.filter((p) => !p.key && p.inherited === key)]);
         this.jobsBySeat.set(seat, jobs);

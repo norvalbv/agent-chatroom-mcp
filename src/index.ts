@@ -40,6 +40,7 @@ import { photoDirectory, registerPhotoRoutes } from "./photos/routes.js";
 import { holdFromQuery, hubDotEnvOptions, loadDotEnv } from "./env.js";
 import { attachMachineWatch } from "./telemetry/machine.js";
 import { installLifecycle } from "./lifecycle.js";
+import { noteBeat, reapIdle, watchStream, type SessionEntry } from "./hub/liveness.js";
 import { connect as tcpConnect } from "node:net";
 /** Something accepts a TCP connection on host:port within a second. */
 const portAnswers = (host: string, port: number) => new Promise<boolean>((done) => {
@@ -233,7 +234,7 @@ if (IDLE_EXIT_MS > 0) {
   }, Math.min(10_000, Math.max(500, IDLE_EXIT_MS / 6))).unref();
 }
 
-const transports = new Map<string, { t: StreamableHTTPServerTransport; leaveAll: (reason?: string, final?: boolean) => void; session: string; lastSeen: number; seatKey?: string }>();
+const transports = new Map<string, SessionEntry & { t: StreamableHTTPServerTransport }>(); // what is alive and what is reaped: src/hub/liveness.ts reapIdle
 /** The owning launcher's receipt that a seat's process exited: close every session that launch key opened. A killed CLI
  * never sends DELETE, so without this its session reads as connected for SESSION_IDLE_MS and replace_participant refuses a
  * dead seat as "alive inside a long command" (swarm-130854-nmek; chair #640 in swarm-202803-dpij). Knowing the key is the
@@ -277,7 +278,7 @@ app.post("/mcp", async (req, res) => {
   const transport = new StreamableHTTPServerTransport({
     sessionIdGenerator: () => randomUUID(),
     onsessioninitialized: (id) => {
-      transports.set(id, { t: transport, leaveAll: session.leaveAll, session: session.sessionKey, lastSeen: Date.now(), ...(seatKey ? { seatKey } : {}) });
+      transports.set(id, { t: transport, leaveAll: session.leaveAll, session: session.sessionKey, lastSeen: Date.now(), streams: 0, ...(seatKey ? { seatKey } : {}) });
       if (seatKey) { hub.bindSeat(seatKey, session.sessionKey, worktree); hub.seatConnected(seatKey); }
     },
   });
@@ -296,6 +297,7 @@ const sessionRoute = async (req: express.Request, res: express.Response) => {
     return;
   }
   entry.lastSeen = Date.now();
+  if (req.method === "GET") watchStream(entry, req, res); // the client's standing stream: alive while it is open
   await entry.t.handleRequest(req, res);
 };
 
@@ -319,21 +321,15 @@ lifecycle.health(() => {
   return out;
 });
 
-// Liveness: close idle MCP sessions and mark silent agents as left, so a dead process cannot block a quorum forever.
+// Liveness: close idle MCP sessions whose client shows no sign of life and mark silent agents as left, so a dead process
+// cannot block a quorum forever (src/hub/liveness.ts reapIdle: an open stream, a heartbeat or the seat's process spares a session).
 setInterval(() => {
-  const now = Date.now();
-  for (const [id, e] of transports) {
-    if (now - e.lastSeen > SESSION_IDLE_MS) {
-      // the same opening words as a plain close: liveness.away and result.ts read them
-      e.leaveAll(`MCP session closed without leave_room (idle ${Math.round(SESSION_IDLE_MS / 60_000)} min, reaped)`);
-      e.t.close().catch(() => {});
-      transports.delete(id);
-    }
-  }
+  reapIdle(hub, transports, { idleMs: SESSION_IDLE_MS, processFreshMs: Math.max(3 * MEMORY_WATCH_MS, 1_000) });
   // identity is the connection: a participant whose MCP session is still open is alive however long it works locally;
-  // the sweep is for sessions that died without a DELETE (a killed CLI), which leaveAll above has not yet seen
+  // the sweep is for sessions that died without a DELETE (a killed CLI), which leaveAll above has not yet seen. A chair
+  // keeps its seat here too: it is never waited on.
   const connected = new Set([...transports.values()].map((e) => e.session));
-  for (const name of hub.sweepIdle(PARTICIPANT_IDLE_MS, connected)) spawner.stop(name);
+  for (const name of hub.sweepIdle(PARTICIPANT_IDLE_MS, connected, true)) spawner.stop(name);
 }, REAP_SWEEP_MS).unref();
 
 /**
@@ -474,6 +470,7 @@ app.post("/rooms/:room/heartbeat", (req, res) => {
     if (!participant_id) return res.status(400).type("text/plain").send("participant_id required");
     const { detail } = (req.body ?? {}) as { detail?: string };
     if (!peek) hub.heartbeat(req.params.room, participant_id, { tool: tool ?? "?", step, detail });
+    noteBeat(transports, (e) => e.session === hub.rooms.get(req.params.room)?.participants.get(participant_id)?.session);
     // steering peek: addressed asks not yet delivered; the seat acks the ones it injected (POST /rooms/:room/steer/ack)
     res.json({ ok: true, pending: steerPeek(hub, req.params.room, participant_id) });
   } catch (e) {
@@ -487,6 +484,7 @@ app.post("/heartbeat", (req, res) => {
   if (!seat_key) return res.status(400).type("text/plain").send("seat_key required");
   // stopped_by: the launcher saying it stopped the seat itself (its timeout, or the operator stopping it); a closed set
   if (exited === true) return res.json({ ok: true, closed: seatExited(seat_key, String(detail ?? "exit"), STOPPED_BY.find((s) => s === stopped_by)) });
+  noteBeat(transports, (e) => e.seatKey === seat_key); // its process tree is alive: the idle sweep spares its sessions
   // peek:true (a PostToolUse hook) only asks for pending asks: the PreToolUse beat already recorded this step
   const marked = peek ? 0 : hub.heartbeatSeat(seat_key, { tool: tool ?? "?", step, detail });
   // working locally with no MCP session here: its chatroom calls are failing on its side (idea/client-side-disconnects)

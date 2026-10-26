@@ -1,6 +1,7 @@
 /** Seat liveness: launcher seat keys bound to MCP connections, heartbeats, the steps a seat ran, and which departed seats
  * are only away. The Hub keeps a one-line delegator for each member called from outside. */
 import { createHash } from "node:crypto";
+import type { IncomingMessage, ServerResponse } from "node:http";
 import { spawnSync } from "node:child_process";
 import type { Hub } from "../hub.js";
 import { HubError } from "./types.js";
@@ -168,5 +169,97 @@ export class Seats {
     const p = [...room.participants.values()].filter((x) => x.name === name).sort((a, b) => (b.active ? 1 : 0) - (a.active ? 1 : 0))[0];
     if (!p) throw new HubError(`No participant named "${name}" in "${roomName}".`, undefined, "not-found");
     return p.activity ?? [];
+  }
+}
+
+// ---------- idle MCP sessions: which the sweep reaps and which it spares ----------
+/**
+ * Idle MCP sessions: which the liveness sweep reaps and which it spares (decision/reaping-liveness).
+ *
+ * The sweep closed a session after SESSION_IDLE_MS with no MCP request and its seat left every room. Over hub 7717's
+ * records and the research server's, 15 of 17 such reaps in open rooms took a seat that was alive (scripts/reap-replay.mjs):
+ * a seat parked on a background job makes no call of any kind (swarm-164210-9f66 bk4: claude-recruit-11 was reaped at
+ * 23:32, lost its claim to another seat and came back at 00:22 when its job ended), and a chair talking to the owner
+ * makes none either. The hub held proof each time and did not look at it:
+ * - stream: an SDK client (Claude Code included) holds a GET /mcp SSE stream open for the life of its session. Its socket
+ *   closes when the process ends; TCP keepalive finds a peer that vanished without closing it.
+ * - heartbeat: a launched seat's tool hook (POST /heartbeat) or seat loop (POST /rooms/:room/heartbeat) within the window.
+ * - process: the seat key's agent process in the memory watcher's last process-table sample, while that process is not an
+ *   orphan (a job left behind by a dead seat is adopted by launchd and does not keep its seat).
+ * A session with none of these is reaped as before; a killed launched seat is closed sooner by its launcher's exit receipt.
+ * A chair's idle session is closed but the chair keeps its seat: it is never waited on, so marking it left frees nothing,
+ * and a departed chair cannot be @-named (departed-mention). Each idle episode writes one reap_check event.
+ */
+export type AliveBy = "stream" | "heartbeat" | "process";
+export type ReapOutcome = "spared" | "reaped" | "chair_kept";
+
+/** What the hub keeps per MCP session (src/index.ts transports). */
+export interface SessionEntry {
+  t: { close(): Promise<void> };
+  leaveAll: (reason?: string, final?: boolean, keepChair?: boolean) => void;
+  /** the hub-side session key (never logged) */
+  session: string;
+  /** the last MCP request on this session */
+  lastSeen: number;
+  seatKey?: string;
+  /** GET /mcp streams open now */
+  streams: number;
+  /** the last heartbeat from this session's seat */
+  lastBeat?: number;
+  /** this idle episode has been recorded as spared */
+  spared?: boolean;
+}
+
+/** The signals that say an idle session's client is still alive, in a fixed order. */
+export function aliveBy(e: Pick<SessionEntry, "streams" | "lastBeat">, at: number, idleMs: number, agentSeenAt?: number, processFreshMs = 0): AliveBy[] {
+  const by: AliveBy[] = [];
+  if (e.streams > 0) by.push("stream");
+  if (e.lastBeat !== undefined && at - e.lastBeat <= idleMs) by.push("heartbeat");
+  if (agentSeenAt !== undefined && at - agentSeenAt <= processFreshMs) by.push("process");
+  return by;
+}
+
+/** A GET /mcp is the client's standing stream: counted while it is open. */
+export function watchStream(e: SessionEntry, req: IncomingMessage, res: ServerResponse): void {
+  e.streams++;
+  req.socket.setKeepAlive(true, 30_000);
+  res.once("close", () => { e.streams = Math.max(0, e.streams - 1); });
+}
+
+/** A heartbeat from a seat's process tree: every session of that seat is alive as of now. */
+export function noteBeat(transports: Map<string, SessionEntry>, mine: (e: SessionEntry) => boolean, at = Date.now()): void {
+  for (const e of transports.values()) if (mine(e)) e.lastBeat = at;
+}
+
+/** One reap_check per seat the session holds in an open room: what kept it, or that nothing did. */
+export function recordReapCheck(hub: Hub, session: string, outcome: "spared" | "reaped", alive: AliveBy[], idleMs: number): void {
+  for (const room of hub.rooms.values()) {
+    if (room.state === "concluded" || room.state === "closed") continue;
+    for (const p of room.participants.values()) {
+      if (!p.active || p.session !== session) continue;
+      hub.persist({ type: "reap_check", room: room.name, participant: p.id, name: p.name,
+        outcome: outcome === "reaped" && p.role === "chair" ? "chair_kept" : outcome, alive_by: alive,
+        idle_s: Math.round(idleMs / 1000), idle_min: Math.round(idleMs / 60_000), ts: now() });
+    }
+  }
+}
+
+/** The sweep: spare what is alive (once per idle episode on the record), reap the rest. */
+export function reapIdle(hub: Hub, transports: Map<string, SessionEntry>, opts: { idleMs: number; processFreshMs: number; at?: number }): void {
+  const at = opts.at ?? Date.now();
+  for (const [id, e] of transports) {
+    const idle = at - e.lastSeen;
+    if (idle <= opts.idleMs) { e.spared = false; continue; }
+    const alive = aliveBy(e, at, opts.idleMs, e.seatKey ? hub.memory.agentSeenAt(seatHash(e.seatKey)) : undefined, opts.processFreshMs);
+    if (alive.length) {
+      if (!e.spared) recordReapCheck(hub, e.session, "spared", alive, idle);
+      e.spared = true;
+      continue;
+    }
+    recordReapCheck(hub, e.session, "reaped", [], idle);
+    // the same opening words as a plain close: liveness.away and result.ts read them
+    e.leaveAll(`MCP session closed without leave_room (idle ${Math.round(opts.idleMs / 60_000)} min, reaped)`, false, true);
+    e.t.close().catch(() => {});
+    transports.delete(id);
   }
 }

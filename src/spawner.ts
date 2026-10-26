@@ -101,7 +101,7 @@ export interface SpawnerHooks {
   roomTopic?(room: string): string | undefined;
   /** the launching run's seat settings a room's recruits inherit (Hub.seatSettingsFor); undefined: the hub's own environment */
   seatSettings?(room: string): SeatSettings | undefined;
-  /** persist one recruit_spawn telemetry event: who was launched, by whom, and the settings it was started with (src/seat/settings.ts) */
+  /** persist one recruit_spawn telemetry event at the request: who was accepted, by whom, and the settings it starts with (src/seat/settings.ts) */
   recordSpawn?(room: string, ev: RecruitSpawn): void;
   /** register with the hub that a recruit replaces a departed participant; must throw on failure */
   registerReplacement?(room: string, predecessor: string, successorName: string): string;

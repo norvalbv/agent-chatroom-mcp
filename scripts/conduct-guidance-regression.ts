@@ -44,6 +44,8 @@ check("verifier.md names what lands in a flat room: a seat's commit and a break-
   assert.match(verifier, /break-out/i);
 });
 check("verifier.md checks the parent's text carries a break-out's numbers and caveats", () => assert.match(verifier, /numbers and caveats/i));
+// review/6e6c5e67 nit (a): a break-out can seat its own verifier, and 5c8a0bf0's SKILL text says "usually"
+check("verifier.md does not say a break-out never has a verifier", () => assert.match(verifier, /break-out usually has no verifier/i));
 check("verifier.md looks for someone else's review before checking", () => assert.match(verifier, /review\/<sha>/));
 check("verifier.md keeps what other suites assert (absence claims, Slug line, background jobs, quoted hold)", () => {
   assert.match(verifier, /absent, zero or never/i);

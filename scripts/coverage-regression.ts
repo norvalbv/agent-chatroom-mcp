@@ -14,6 +14,7 @@ import { join } from "node:path";
 import { Hub } from "../src/hub.js";
 import { openWork } from "../src/hub/open-work.js";
 import { renderRunReport, type RunResult } from "../src/result.js";
+import { parseResources } from "../src/resources.js";
 import { replayCoverage } from "./coverage-replay.js";
 
 const cases: [string, () => Promise<void> | void][] = [];
@@ -154,6 +155,13 @@ test("a launcher can seed item/* entries through the resources route, as it does
   const items = [{ key: "item/room-size", text: "How many agents" }, { key: "item/recruit-timing", text: "When to recruit" }];
   assert.deepEqual(h.seedResources("coverage-seeded", items).keys, ["item/room-size", "item/recruit-timing"]);
   assert.throws(() => h.seedResources("coverage-seeded", [{ key: "other/x", text: "no" }]), /resource\/<name>/);
+});
+
+test("swarm --resources seeds an item/<slug> from a '## item: <name>' heading, and resource/<slug> from any other", () => {
+  const parsed = parseResources("# brief problems\n\n## item: Room size\nHow many agents to put into a room\n\n## Item: recruit timing\nWhen to recruit\n\n## rooms dataset\n/tmp/rooms.jsonl\n");
+  assert.deepEqual(parsed.map((r) => r.key), ["item/room-size", "item/recruit-timing", "resource/rooms-dataset"]);
+  assert.equal(parsed[0].text, "Room size\nHow many agents to put into a room");
+  assert.deepEqual(new Hub().seedResources("coverage-launch", parsed).keys, ["item/room-size", "item/recruit-timing", "resource/rooms-dataset"]);
 });
 
 test("the run report prints the lead room's coverage, and nothing when the room had no items", () => {

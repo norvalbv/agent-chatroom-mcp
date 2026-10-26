@@ -111,9 +111,9 @@ node dist/swarm.js "<task, with the scoring rule both groups share>" --groups gr
   The record: every copy attempt is a `breakout_carry` event in the breakout's log (`delivered`, `late` or `dropped` with its reason), and each close of a parent writes `parent_closed`.
 
   Across 36 breakouts in 332 room logs (MAIN/data plus the 9f66 server copy):
-  - 20 concluded before their parent, none after;
-  - 15 belonged to 3 runs the owner stopped. In every one the chair closed the parent and all its breakouts by hand within the same second;
-  - 1 unprefixed breakout (kcj5's `swarm-005617-verdict-telemetry`) is missing from its run's `result.json`.
+  - 20 concluded before their parent, none after. One of them, kcj5's unprefixed `swarm-005617-verdict-telemetry`, is missing from its run's `result.json`;
+  - 15 belonged to 3 runs the owner stopped. In every one the chair closed the parent and all its breakouts by hand within about a second (0.4-1.0 s);
+  - 1 never concluded (kcj5's `-telemetry`): its seats left, it was never told its parent had concluded, and it was archived later.
 
   In 9f66, all 5 breakouts reached the parent's inbox on time. bk2 concluded 0.14 s before the parent, which had held its last call for it. The recruits left 0.2-2.7 min after their breakout concluded and spent $3.29 in total after that. The late-copy and dropped paths have not occurred in these records (`scripts/breakout-fate-regression.ts`, evidence/breakout-fate).
 - **What the record says.** `conclusion.closing` carries who had not voted on the final version, the verifier's vote, the last call's length, takes still held, groups still open, and agrees from seats never sent the final text (`agreed_unsent`); votes and challenges carry `seen_s`. `scripts/runs-table.ts` shows it in the "at the close" column, for older logs too.

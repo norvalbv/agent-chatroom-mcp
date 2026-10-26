@@ -113,4 +113,11 @@ try {
   rmSync(dir, { recursive: true, force: true });
 }
 
+// the operator's guide says the same threshold the launcher uses, and where to read a room's seat yield
+const skill = readFileSync("skills/swarm/SKILL.md", "utf8");
+const above = est.SIZE_NOTE_ABOVE as number;
+assert.match(skill, new RegExp(`Above ${above} in one room the launcher prints a size note`), "--agents names the note's threshold");
+assert.match(skill, new RegExp(`\\*\\*Grow a room by recruiting into a named item, not by launching wide\\*\\*[^\\n]*\\n(?:[^\\n]*\\n)*?[^\\n]*Above ${above} agents in one room the launcher prints a size note[^\\n]*scripts/runs-table\\.ts`), "Sizing a run: the evidence, the note and the seat-yield table");
+assert.doesNotMatch(skill, /"lots" = 8/, "no fixed 8 for \"lots\": start at 5 to 6 and recruit");
+
 console.log("room-size regression: ok");

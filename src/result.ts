@@ -40,6 +40,9 @@ export interface RunResult {
   digestAcks?: DigestAck[];
   /** --preflight: the environment checks run before any seat started (src/preflight.ts); absent when none ran. */
   preflight?: PreflightResult;
+  /** The largest room the launcher started, the brief's numbered items, and whether the size note was printed
+   * (src/cost-estimate.ts launchSizeNote); absent on older artifacts and planned runs. */
+  sizing?: { room_seats: number; workers: number; brief_items: number; note: boolean };
 }
 /**
  * Usage as the hub recorded it while the run went on, from the room snapshots alone: a launcher that crashed, or a

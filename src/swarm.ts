@@ -22,7 +22,7 @@ import { codexSeatCommand, codexUsageTracker } from "./codex-seat.js";
 import { claudeSandbox } from "./sandbox.js";
 import { topicDigest } from "./hub/status-view.js";
 import { stopStrays } from "./strays.js";
-import { launchCostGuide } from "./cost-estimate.js";
+import { launchGuide } from "./cost-estimate.js";
 import { seatTarget } from "./seat-targets.js";
 import { digestAcks, digestRecords, loadGroups, renderDigests, type GroupsFile } from "./groups.js";
 import { loadResources, seedResources } from "./resources.js";
@@ -481,7 +481,7 @@ if (FLAT) {
   }
 }
 log(`swarm ${SWARM_ID}: ${TOTAL} agents (${WORKERS} workers + verifier), project ${CWD}`);
-log(launchCostGuide(TOTAL, TIMEOUT_MIN));
+const SIZING = launchGuide({ total: TOTAL, timeoutMin: TIMEOUT_MIN, flat: FLAT, groupWorkers: GROUPS?.groups.map((g) => g.workers), task, seatTargets: !NO_SEAT_TARGETS }, log);
 if (SANDBOX) log(`--sandbox: claude seats run Bash in Claude Code's sandbox, OpenRouter seats wrap run_command in sandbox-runtime${CODEX ? `; the ${CODEX} codex seat(s) are NOT sandboxed by this flag` : ""}`);
 /** Earlier runs in this checkout: a room should ratify or refute them by reference, not re-derive them. */
 function priorRuns(): string {
@@ -901,7 +901,7 @@ const artifact: RunResult = {
   outcome: classifyOutcome(snapshots.find(r => r.name === leadsRoom)?.payload, { timedOut, atTimeout: leadAtTimeout }),
   hubUsage: hubUsageRollup(snapshots),
   scorecard: seatScorecard(snapshots, Object.fromEntries([...exitCodes].map(([name, exitCode]) => [name, { exitCode, cost: seatCosts.get(name), killedAtTimeout: killedAtTimeout.has(name), commits: branchCommits(name), ...(seatTranscripts.has(name) ? { transcript: seatTranscripts.get(name) } : {}) }]))),
-  ...(metrics ? { metrics } : {}), ...(PF.result ? { preflight: PF.result } : {}),
+  ...(metrics ? { metrics } : {}), ...(PF.result ? { preflight: PF.result } : {}), ...(SIZING ? { sizing: SIZING } : {}),
 };
 if (digestPasses.length) {
   const board = (room: string) => snapshots.find((r) => r.name === room)?.payload?.board as Record<string, { text?: string; updated_at?: string }> | undefined;

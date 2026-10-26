@@ -1,0 +1,1 @@
+A background watcher I'd started was stopped at its time limit. It was only waiting for the test run to finish, and that run had already reported "[offline] OK (326 commands)" through the other job, so nothing was lost and I won't restart it. My verdict above (VERIFIED) and its decision record are unchanged.

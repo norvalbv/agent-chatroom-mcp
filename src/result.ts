@@ -7,6 +7,7 @@ import { coordinates } from './hub/keys.js';
 import { renderDigests, type DigestAck, type DigestRecord } from './groups.js';
 import { renderTimeline, type RunTimeline } from './run-timeline.js';
 import { renderPreflight, type PreflightResult } from './launch/preflight.js';
+import { renderDecisionRecord, type DecisionRecordSummary } from './launch/decision-record.js';
 
 export interface RoomSnapshot {
   name: string;
@@ -40,6 +41,8 @@ export interface RunResult {
   digestAcks?: DigestAck[];
   /** --preflight: the environment checks run before any seat started (src/preflight.ts); absent when none ran. */
   preflight?: PreflightResult;
+  /** What the launcher filed from the verifier's DECISION RECORD, from where, or why nothing (src/launch/decision-record.ts); absent on older artifacts. */
+  decisionRecord?: DecisionRecordSummary;
 }
 /**
  * Usage as the hub recorded it while the run went on, from the room snapshots alone: a launcher that crashed, or a
@@ -374,10 +377,17 @@ function renderLatestDigest(lead: Record<string, any>): string {
   const passes = Object.entries((lead.board ?? {}) as BoardText).filter(([k]) => /^digest\/\d+$/.test(k)).sort((a, b) => Number(b[0].slice(7)) - Number(a[0].slice(7)));
   return passes[0] ? `### Latest consolidation pass: ${passes[0][0]} (${passes[0][1].by ?? 'unknown'})\n\n${quoted(passes[0][1].text)}\n\n` : '';
 }
+/** The verifier's verdict: when a later turn (a background job ending) became the CLI result, the turn that carried the
+ * record and its verdict comes first, and that later turn after it (RSI-4 printed only "A background watcher ..."). */
+function renderVerifier(r: RunResult): string {
+  const verdict = r.decisionRecord?.verdict;
+  if (!verdict) return r.verifier.output ?? '(none)';
+  return `${verdict}\n\n_The verifier's last turn (the CLI result), after the one above:_\n\n${r.verifier.output ?? '(none)'}`;
+}
 /** Human view only; consumers must read JSON, never parse this Markdown. */
 export function renderRunReport(r: RunResult): string {
   const lead = r.rooms.find(room => room.name === r.leadRoom)?.payload;
-  let text = `# ${r.run.id}\n\n**Task:** ${r.run.task}\n\n**Done when:** ${r.run.doneWhen}\n\n## Final answer (${lead?.state ?? 'missing'})\n\n${lead?.conclusion?.text ?? (r.outcome ? `_no consensus reached_: ${r.outcome.detail}` : '_no consensus reached_')}\n\n${lead && !lead.conclusion ? renderLeftOnBoard(lead) + renderLatestDigest(lead) : ''}## Verifier\n\n${r.verifier.output ?? '(none)'}\n\n## Groups\n\n`;
+  let text = `# ${r.run.id}\n\n**Task:** ${r.run.task}\n\n**Done when:** ${r.run.doneWhen}\n\n## Final answer (${lead?.state ?? 'missing'})\n\n${lead?.conclusion?.text ?? (r.outcome ? `_no consensus reached_: ${r.outcome.detail}` : '_no consensus reached_')}\n\n${lead && !lead.conclusion ? renderLeftOnBoard(lead) + renderLatestDigest(lead) : ''}## Verifier\n\n${renderVerifier(r)}\n\n${renderDecisionRecord(r.decisionRecord)}## Groups\n\n`;
   // only a run whose groups keep a position prints it (or its absence): other runs' reports are unchanged
   const grouped = r.rooms.some(room => room.name !== r.leadRoom && ((room.payload?.board ?? {}) as BoardText).position);
   for (const room of r.rooms.filter(room => room.name !== r.leadRoom)) text += `### ${room.name} (${room.payload?.state ?? 'missing'})\n\n${room.payload?.conclusion?.text ?? '_no consensus_'}\n\n${grouped ? renderPosition(room.payload) : ''}`;

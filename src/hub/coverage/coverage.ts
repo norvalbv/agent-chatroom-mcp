@@ -23,7 +23,7 @@ import type { Hub } from "../../hub.js";
 import type { Event } from "../internal.js";
 import type { BoardEntry, Room } from "../types.js";
 import { attackOpen, attackTarget, claimReleased } from "../board.js";
-import { namesKey, onBranch, settled } from "../open-work.js";
+import { namesKey, settled } from "../open-work.js";
 import { isReviewKey, parseVerifyHead } from "../types.js";
 
 export const ITEM_PREFIX = "item/";
@@ -72,21 +72,38 @@ export function claimOwners(e: BoardEntry): string[] {
 
 const live = (e: BoardEntry) => !!e.text.trim() && !claimReleased(e);
 
-/** A non-owner's review/* or verify/* that passes and is about this claim: keyed by its slug, naming the claim, the item
- * or the owner's branch, told to an owner as a commit's author (review_notice), or naming a commit on the owner's branch.
- * Stricter than open-work's reviewedClaim, which also counts any chat line or board entry naming the area: there, asking
- * for a review that exists is the cost; here, calling unreviewed work done would be the overstatement this replaces. */
-function reviewed(room: Room, claimKey: string, claim: BoardEntry, itemKey: string, owners: string[]): boolean {
-  const slug = slugOf(claimKey), branch = claim.workspace?.branch;
+/** The claim or item slug a review/verify key is about: the longest one the key's area equals or starts with plus "-",
+ * so verify/breakout-fate-dev is about breakout-fate, not breakout. */
+function keyedSlug(area: string, slugs: string[]): string | undefined {
+  return slugs.filter((s) => area === s || area.startsWith(`${s}-`)).sort((a, b) => b.length - a.length)[0];
+}
+
+/** A non-owner's review/* or verify/* that passes and is about this claim: keyed by its slug, or naming the claim or the
+ * item. When the owners hold this claim alone, also one naming their branch or told to an owner as a commit's author
+ * (review_notice): those identify the seat, not the claim, so for a seat holding two claims they would credit both
+ * (review/4ddcfe6d). No git: this runs on every claim, review and attack write, and open-work's onBranch is a
+ * spawnSync per review commit (review/4ddcfe6d's unverified cost; decision/machine-load found the hub blocking on git). Stricter than open-work's reviewedClaim, which also counts any
+ * chat line or board entry naming the area: there, asking for a review that exists is the cost; here, calling
+ * unreviewed work done would be the overstatement this replaces. */
+type Review = { key: string; e: BoardEntry; area: string };
+/** The board's passing review/* and verify/* entries, read once per ledger rather than once per item. */
+function passingReviews(room: Room, slugs: string[]): Review[] {
+  const out: Review[] = [];
   for (const [k, e] of room.board) {
-    if (!isReviewKey(k) || k.endsWith(".partial") || owners.includes(e.by) || !e.text.trim()) continue;
+    if (!isReviewKey(k) || k.endsWith(".partial") || !e.text.trim()) continue;
     const head = parseVerifyHead(e.text);
     if ((head && head.exit_code !== 0) || e.verdict === "fails") continue;
-    const area = slugOf(k);
-    if (area === slug || area.startsWith(`${slug}-`) || namesKey(e.text, claimKey) || namesKey(e.text, itemKey) || (!!branch && e.text.includes(branch))) return true;
-    if (e.toldAuthor && owners.includes(e.toldAuthor)) return true;
-    const commit = head?.commit?.trim();
-    if (commit && branch && claim.workspace && onBranch(claim.workspace.worktree, branch, commit)) return true;
+    out.push({ key: k, e, area: keyedSlug(slugOf(k), slugs) ?? "" });
+  }
+  return out;
+}
+function reviewed(reviews: Review[], claimKey: string, claim: BoardEntry, itemKey: string, owners: string[], sole: boolean): boolean {
+  const slug = slugOf(claimKey), branch = claim.workspace?.branch;
+  for (const { e, area } of reviews) {
+    if (owners.includes(e.by)) continue;
+    if (area === slug || namesKey(e.text, claimKey) || namesKey(e.text, itemKey)) return true;
+    if (!sole) continue;
+    if ((!!branch && e.text.includes(branch)) || (e.toldAuthor && owners.includes(e.toldAuthor))) return true;
   }
   return false;
 }
@@ -108,6 +125,10 @@ export function coverage(room: Room): Coverage | undefined {
   if (!items.length) return undefined;
   const active = new Set([...room.participants.values()].filter((p) => p.active).map((p) => p.name));
   const claims = [...room.board.entries()].filter(([k, e]) => k.startsWith("claim/") && live(e));
+  const slugs = [...new Set([...claims, ...items].map(([k]) => slugOf(k)))];
+  const held = new Map<string, number>();
+  for (const [, e] of claims) for (const n of claimOwners(e)) held.set(n, (held.get(n) ?? 0) + 1);
+  const reviews = passingReviews(room, slugs);
   const rows: ItemRow[] = items.map(([key, item]) => {
     const slug = slugOf(key);
     const covering = claims.filter(([k, e]) => k === `claim/${slug}` || namesKey(e.text, key));
@@ -117,7 +138,7 @@ export function coverage(room: Room): Coverage | undefined {
     const head = SETTLED_ITEM.exec(item.text);
     if (head) return row(head[1].toLowerCase() === "dropped" ? "dropped" : "done");
     if (!covering.length) return row("unowned");
-    const checked = covering.some(([k, e]) => reviewed(room, k, e, key, owners));
+    const checked = covering.some(([k, e]) => reviewed(reviews, k, e, key, owners, claimOwners(e).every((n) => held.get(n) === 1)));
     const saysDone = covering.some(([, e]) => settled(e));
     if (saysDone && checked) return row(attacked(room, slug, [key, ...covering.map(([k]) => k)]) ? "reviewed" : "done");
     if (saysDone) return row("built");

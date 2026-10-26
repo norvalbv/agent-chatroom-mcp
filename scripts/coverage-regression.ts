@@ -95,6 +95,29 @@ test("chat naming the area, another seat's note, or a failing check is not a rev
 });
 const carolOf = (h: Hub, name: string) => [...h.getRoom(name).participants.values()].find((p) => p.name === "carol")!;
 
+test("a review told to a seat holding two claims counts for neither unless it names one (review/4ddcfe6d)", () => {
+  const { h, name, chair, alice, bob, row } = room();
+  h.setBoard(name, chair.id, "item/a", "first");
+  h.setBoard(name, chair.id, "item/b", "second");
+  h.setBoard(name, alice.id, "claim/a", claim("a", "alice", { status: "done" }));
+  h.setBoard(name, alice.id, "claim/b", claim("b", "alice", { status: "done" }));
+  h.setBoard(name, bob.id, "review/abcdef12", '{"proposal":"pending","command":"npx tsx t.ts","cwd":".","base_commit":"1111111a","base_exit_code":1,"commit":"abcdef12","exit_code":0,"output_tail":"ok"}\nthe fix holds');
+  h.getRoom(name).board.get("review/abcdef12")!.toldAuthor = "alice"; // as review_notice sets it for the commit's author
+  assert.deepEqual([row("item/a")!.state, row("item/b")!.state], ["built", "built"]);
+  h.setBoard(name, bob.id, "review/abcdef12", '{"proposal":"pending","command":"npx tsx t.ts","cwd":".","base_commit":"1111111a","base_exit_code":1,"commit":"abcdef12","exit_code":0,"output_tail":"ok"}\nthe fix for claim/a holds');
+  assert.deepEqual([row("item/a")!.state, row("item/b")!.state], ["done", "built"]);
+});
+
+test("a verify keyed by a longer slug credits that slug's item, not a shorter one it starts with", () => {
+  const { h, name, chair, alice, bob, row } = room();
+  h.setBoard(name, chair.id, "item/breakout", "the break-out itself");
+  h.setBoard(name, chair.id, "item/breakout-fate", "what happens to it after");
+  h.setBoard(name, alice.id, "claim/breakout", claim("breakout", "alice", { status: "done" }));
+  h.setBoard(name, carolOf(h, name).id, "claim/breakout-fate", claim("breakout-fate", "carol", { status: "done" }));
+  h.setBoard(name, bob.id, "verify/breakout-fate-dev", "checked the fate line in a dev room");
+  assert.deepEqual([row("item/breakout")!.state, row("item/breakout-fate")!.state], ["built", "done"]);
+});
+
 test("an item whose every owner left without a review is orphaned and open again", () => {
   const { h, name, chair, alice, row, cov } = room();
   h.setBoard(name, chair.id, "item/room-size", "How many agents");

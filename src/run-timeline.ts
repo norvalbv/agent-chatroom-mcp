@@ -319,7 +319,7 @@ export interface RunRow {
   usdPerFinding?: number;
 }
 
-const NOT_FINDING = { test: (key: string) => coordinates(key) || key.startsWith("draft/") };
+export const NOT_FINDING = { test: (key: string) => coordinates(key) || key.startsWith("draft/") };
 const round2 = (x: number) => Math.round(x * 100) / 100;
 /** Things that happen to a room after its seats stop: the owner archiving it from the dashboard (gwhf read 36.08 h for
  * 0.19 h of work), the sweep marking seats left, a hub restart, memory samples, idle signals, and a later room's seats
@@ -328,7 +328,7 @@ const round2 = (x: number) => Math.round(x * 100) / 100;
  * work in its other room (1nwp-leads reads 3.62 h for 2.07 h to its conclusion); runTotals is the run's true span. */
 const NOT_RUN_TIME = new Set(["archive", "leave", "hub_restart", "memory", "machine", "machine_stall", "room_idle", "room_active", "room_waiting", "board_manifest", "outside_read", "overlap_notice", "run_end", "seat_exit", "owner_verdict"]);
 /** Entries the launcher seeds (resource/* with --resources) are what the room was given, not what it found (35 of 214 in 0btz). */
-const SEEDED_BY = new Set(["launcher"]);
+export const SEEDED_BY = new Set(["launcher"]);
 
 /** RunRow.close: the conclusion's own closing record when it has one, else the same counts from the events. */
 function closeOf(c: Record<string, any> | undefined, seats: Map<string, { name: string; role?: string; agent?: string; active: boolean }>, votesOf: Map<string, Record<string, { vote?: string; version?: number }>>): RunRow["close"] {

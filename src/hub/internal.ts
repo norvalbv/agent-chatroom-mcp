@@ -64,7 +64,8 @@ export type Event =
   /** ms: how long the call took; empty: a wait that returned no new message (run-metrics splits idle polling on it); outsider: the caller's seats elsewhere (name@room) when it holds none in this room; key: the entry a board_get read */
   | { type: "call_completion"; room: string; tool: string; outcome: CallOutcome; ts: string; participant: string | null; ms?: number; empty?: boolean; outsider?: string; key?: string; key_rejected?: string }
   /** key: what the ledger dedupes on when it is not the target itself (a long target is shortened for display) */
-  | { type: "work"; room: string; pid: string; cls: WorkClass; tool: string; target: string; key?: string; ts: string }
+  /** prior: a prior-art search, a fetch of outside code or a run of it, tagged from the whole detail (src/telemetry/prior-art.ts) */
+  | { type: "work"; room: string; pid: string; cls: WorkClass; tool: string; target: string; key?: string; prior?: "search" | "fetch" | "run"; ts: string }
   /** a seat process's cumulative model usage (src/hub/usage.ts); seat is the seat key's sha256, never the key */
   | { type: "usage"; room: string; seat: string; usage: SeatUsage; ts: string }
   /** Telemetry only (replay ignores it; src/hub/memory.ts): a sample of what a seat's processes hold, or a warning/stop. */

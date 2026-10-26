@@ -9,9 +9,15 @@ import { now } from "./internal.js";
 import { SUSPECTED_DEAD_MS } from "./kick.js";
 import { noteWork } from "./idle.js";
 import { countWork, workClass } from "./work.js";
+import { priorArt } from "../telemetry/prior-art.js";
 
 /** `hub`: the beat is a chatroom tool call the hub served itself, not local work the seat's process reported. */
 export type Beat = { tool: string; step?: number; detail?: string; hub?: boolean };
+
+/** Where a room's remote clones landed, so a later run inside one is tagged as running outside code. In memory only: a run
+ * after a hub restart of a clone made before it goes untagged. */
+const roomClones = new WeakMap<Room, Set<string>>();
+const clonesOf = (room: Room) => { let s = roomClones.get(room); if (!s) roomClones.set(room, (s = new Set())); return s; };
 
 /** sha256 of a launcher seat key, persisted on the participant (seatKeyHash) so a beat after a hub restart still finds its seat. */
 export function seatHash(seatKey: string): string { return createHash("sha256").update(seatKey).digest("hex"); }
@@ -112,7 +118,9 @@ export class Seats {
     const cls = info.hub ? undefined : workClass(info.tool, info.detail);
     const counted = cls ? countWork(p, cls, info.detail) : undefined;
     if (cls && counted) noteWork(room);
-    if (cls && counted) this.hub.persist({ type: "work", room: room.name, pid: p.id, cls, tool: String(info.tool).slice(0, 40), target: counted.target, ...(counted.key !== counted.target ? { key: counted.key } : {}), ts: now() });
+    // tagged from the whole detail the seat sent, before the target is cut to 120 characters for display
+    const prior = cls && counted ? priorArt(cls, String(info.tool), String(info.detail ?? ""), clonesOf(room)) : undefined;
+    if (cls && counted) this.hub.persist({ type: "work", room: room.name, pid: p.id, cls, tool: String(info.tool).slice(0, 40), target: counted.target, ...(counted.key !== counted.target ? { key: counted.key } : {}), ...(prior ? { prior } : {}), ts: now() });
     const detail = String(info.detail ?? "").replace(/\s+/g, " ").trim().slice(0, 300);
     const step = Number(info.step) || (p.working?.step ?? 0) + 1;
     p.working = { tool: String(info.tool).slice(0, 40), step, at: now(), ...(detail ? { detail } : {}) };

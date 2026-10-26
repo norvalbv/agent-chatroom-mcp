@@ -62,7 +62,8 @@ const events = [
 const shaAuthor = (sha: string) => (sha === 'cafef00d1' ? 'bob' : sha === '6217618' ? 'alice' : undefined);
 const m = runMetrics(events, { shaAuthor });
 assert.equal(m.room, 'r');
-assert.deepEqual(m.minutesTo, { firstClaim: 2, firstSource: 4, firstProposal: 10, conclusion: 20 }, 'milestones in minutes after the room opened');
+// alice's WebFetch of arxiv.org at 3 min is a prior-art search (src/telemetry/prior-art.ts)
+assert.deepEqual(m.minutesTo, { firstClaim: 2, firstSource: 4, firstProposal: 10, conclusion: 20, firstPriorArt: 3 }, 'milestones in minutes after the room opened');
 assert.deepEqual(m.recruits, { calls: 1, seats: 1, workers: 2, rate: 0.5 }, 'only a successful request_agent counts; rate is recruiting workers over workers');
 const by = (n: string) => m.seats.find((s: { name: string }) => s.name === n)!;
 assert.deepEqual(by('alice').work, { read: 1, search: 0, web: 1, run: 0, edit: 1 }, 'work ledger per seat, by class (distinct targets)');

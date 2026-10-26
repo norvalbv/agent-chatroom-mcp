@@ -15,9 +15,10 @@ const DOI = /\b(10\.\d{4,9}\/[^\s"'<>,;)]+)/gi;
 /** arXiv's own DOI for a paper, 10.48550/arXiv.<id>: the paper, not a second source */
 const ARXIV_DOI = new RegExp(String.raw`^10\.48550\/arxiv\.(${ARXIV_NEW})(?:v\d+)?$`, "i");
 /** owner/repo on GitHub's own hosts and from `gh repo clone`; owner names that are site sections are not owners */
-const GITHUB = /(?<![\w.-])(?:github\.com|codeload\.github\.com|raw\.githubusercontent\.com)\/([\w.-]+)\/([\w.-]+)|api\.github\.com\/repos\/([\w.-]+)\/([\w.-]+)|\bgh\s+repo\s+clone\s+([\w.-]+)\/([\w.-]+)/gi;
+const GITHUB = /(?<![\w.-])(?:github\.com|codeload\.github\.com|raw\.githubusercontent\.com)\/([\w.-]+)\/([\w.-]+)|api\.github\.com\/repos\/([\w.-]+)\/([\w.-]+)|\bgh\s+repo\s+clone\s+([\w.-]+)\/([\w.-]+)|(?<![\w.-])gh:([\w.-]+)\/([\w.-]+)/gi;
 const NOT_OWNER = new Set(["search", "topics", "orgs", "features", "settings", "marketplace", "apps", "sponsors", "login", "about", "pricing", "collections", "trending", "explore", "notifications", "issues", "pulls", "enterprise", "security", "site", "contact", "readme", "events", "users"]);
-const PACKAGE = /pypi\.org\/project\/([\w.-]+)|npmjs\.com\/package\/((?:@[\w.-]+\/)?[\w.-]+)/gi;
+// an id this module wrote (gh:, pypi:, npm:) reads back as itself, so a list of ids printed into a prompt parses again
+const PACKAGE = /pypi\.org\/project\/([\w.-]+)|npmjs\.com\/package\/((?:@[\w.-]+\/)?[\w.-]+)|(?<![\w.-])pypi:([\w.-]+)|(?<![\w.-])npm:((?:@[\w.-]+\/)?[\w.-]+)/gi;
 const URL_PAGE = /https?:\/\/([^\s"'#)|>\]]+)/gi;
 const LOCAL = /^(127\.0\.0\.1|localhost|\[::1\]|0\.0\.0\.0)(:|\/|$)/i;
 
@@ -38,12 +39,12 @@ export function refsIn(text: string, opts: { pages?: boolean } = {}): string[] {
     add(m.index!, paper ? `arXiv:${paper}` : `doi:${doi.toLowerCase()}`);
   }
   for (const m of t.matchAll(GITHUB)) {
-    const owner = (m[1] ?? m[3] ?? m[5])!.toLowerCase();
-    const repo = trimEnd((m[2] ?? m[4] ?? m[6])!).replace(/\.git$/i, "").toLowerCase();
+    const owner = (m[1] ?? m[3] ?? m[5] ?? m[7])!.toLowerCase();
+    const repo = trimEnd((m[2] ?? m[4] ?? m[6] ?? m[8])!).replace(/\.git$/i, "").toLowerCase();
     if (!repo || (m[1] && NOT_OWNER.has(owner))) continue;
     add(m.index!, `gh:${owner}/${repo}`);
   }
-  for (const m of t.matchAll(PACKAGE)) add(m.index!, m[1] ? `pypi:${trimEnd(m[1]).toLowerCase()}` : `npm:${trimEnd(m[2]!).toLowerCase()}`);
+  for (const m of t.matchAll(PACKAGE)) { const py = m[1] ?? m[3]; add(m.index!, py ? `pypi:${trimEnd(py).toLowerCase()}` : `npm:${trimEnd((m[2] ?? m[4])!).toLowerCase()}`); }
   if (opts.pages) {
     for (const m of t.matchAll(URL_PAGE)) {
       const page = trimEnd(m[1]!).replace(/\/+$/, "");

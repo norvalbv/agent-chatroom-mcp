@@ -11,7 +11,7 @@ import { carryHooks, hooksLine, hooksOff } from "./worktree-hooks.js";
 import { checkJoined, joinLines, roomNames, type LaunchedSeat } from "./join-check.js";
 import { dirname, resolve } from "node:path";
 import { collectRoomSnapshot, renderRunReport, writeRunResult, rollupUsage, hubUsageRollup, parseClaudeCliOutput, transcriptPath, seatScorecard, classifyOutcome, proposedDecisionDir, promptDigests, type RunResult, type RoomSnapshot, type SeatUsageRollup } from "./result.js";
-import { settledAxes } from "./settled.js";
+import { carriedSummary, settledAxes } from "./settled.js";
 import { registerRespawn, respawnProbe } from "./respawn.js";
 import { fileURLToPath } from "node:url";
 import { aiGatesLine, HUB_START_MS, waitForHub, seatHoldMs, carrySettings, launcherHeaders, COMPACT_WINDOW_TESTED, compactWindow, devHubRule, heartbeatHookSettings, hubLogFile, loadDotEnv, outputHeartbeat, ownHubEnv, readLauncherToken, respawnTokenProblem, reusedHubProblem, seatBeat, seatChildEnv, seatCompactWindow, seatPortError, type SeatBeat } from "./env.js";
@@ -504,14 +504,13 @@ function priorRuns(): string {
   return rows.length ? `PRIOR RUNS in this checkout (read the report before re-deriving; ratify or refute by reference):\n${rows.join("\n")}\n` : "";
 }
 const SETTLED = NO_CARRY ? "" : settledAxes(CWD) + priorRuns();
-if (NO_CARRY) log("--no-carry: no settled axes or prior runs injected; seat auto-memory off");
 {
   // what the seat actually gets: an inherited CLAUDE_CODE_AUTO_COMPACT_WINDOW (e.g. this launcher itself runs in a seat) passes through
   const window = seatChildEnv(process.env, undefined, false, true).CLAUDE_CODE_AUTO_COMPACT_WINDOW;
   const why = seatCompactWindow(process.env) !== null ? (COMPACT_AT === undefined ? "default; --compact-at to change" : "--compact-at") : window ? "inherited CLAUDE_CODE_AUTO_COMPACT_WINDOW" : "--compact-at off / --claude-full";
   log(`compact window: Claude seats compact their transcript at ${window ? `${window} tokens` : "Claude Code's own default (near the model's limit)"} (${why})`);
 }
-if (SETTLED) log(`decision log found: ${SETTLED.split("\n").length - 4} settled axes injected into every prompt`);
+if (NO_CARRY || SETTLED) log(NO_CARRY ? "--no-carry: no settled axes or prior runs injected; seat auto-memory off" : ((c) => `decision log found: ${c.axes} settled axes and ${c.ids.length} sources already read injected into every prompt`)(carriedSummary(SETTLED)));
 let plan: Plan;
 if (FLAT) {
   log("flat mode: no planner; everyone in one room");
@@ -758,6 +757,7 @@ for (const room of [...groupRooms, leadsRoom]) {
   fetch(`${URL_}/rooms/${encodeURIComponent(room)}/deadline`, { method: "POST", headers: launcherHeaders(launcherToken), body: JSON.stringify({ at: new Date(Date.now() + TIMEOUT_MIN * 60_000).toISOString() }), signal: AbortSignal.timeout(5_000) })
     .then((r) => { if (!r.ok) log(`${room}: hub did not take the run deadline (${r.status})`); })
     .catch((e) => log(`${room}: could not post the run deadline: ${e instanceof Error ? e.message : String(e)}`));
+  fetch(`${URL_}/rooms/${encodeURIComponent(room)}/carried`, { method: "POST", headers: launcherHeaders(launcherToken), body: JSON.stringify({ text: SETTLED, no_carry: NO_CARRY }), signal: AbortSignal.timeout(5_000) }).catch(() => {}); // what every seat was told was already read (inputs/owner-4)
 }
 /** Consolidation passes (--digest-every): started on a timer while group seats run, never two at once, and none in the
  * last five minutes, when a pass could not be acted on. Their usage is rolled into the run's with the seats'. */

@@ -56,6 +56,9 @@ export type Event =
   | { type: "owner_verdict"; room: string; verdict: "adopted" | "rejected" | "partial"; by: string; proposal_id: string | null; note?: string; ts: string }
   /** Telemetry only: the run that owns this room ended, as its launcher saw it. One per room: the first stands. */
   | { type: "run_end"; room: string; cause: import("../respawn.js").RunEndCause; detail?: string; ts: string }
+  /** telemetry only (replay ignores it; Hub.recordCarried, inputs/owner-4): what seats were told was already settled and
+   * read (src/settled.ts), as ids; from the launcher once per room (seats absent: every seat it started), from the spawner per recruit */
+  | { type: "carried"; room: string; from: "launcher" | "spawner"; seats?: string[]; ids: string[]; axes: number; chars: number; no_carry?: true; ts: string }
   // what happened to an MCP session that held a seat (bugs.md 3: nothing recorded a session moving, closing or being reaped).
   // seat_kept: the seat is still served by another session after this. Never a session key (identity-is-the-connection).
   | { type: "session"; room: string; event: "moved" | "closed"; participant: string; name: string; reason: string; seat_kept: boolean; ts: string }

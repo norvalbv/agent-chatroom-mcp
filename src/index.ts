@@ -29,7 +29,7 @@ import { createMcpExpressApp } from "@modelcontextprotocol/sdk/server/express.js
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import express from "express";
 import { Hub, HubError, type OwnerVerdict } from "./hub.js";
-import { STOPPED_BY, type RunEndCause, type StoppedBy } from "./respawn.js";
+import { STOPPED_BY, type StoppedBy } from "./respawn.js";
 import { parseReplyWindowMinutes } from "./reply-metrics.js";
 import { createSessionServer } from "./server.js";
 import { Spawner, type RecruitPolicy } from "./spawner.js";
@@ -39,6 +39,7 @@ import { humanQuestions } from "./questions.js";
 import { photoDirectory, registerPhotoRoutes } from "./photos/routes.js";
 import { holdFromQuery, hubDotEnvOptions, loadDotEnv } from "./env.js";
 import { attachMachineWatch } from "./telemetry/machine.js";
+import { registerLaunchReports } from "./telemetry/launch-reports.js";
 import { installLifecycle } from "./lifecycle.js";
 import { noteBeat, reapIdle, watchStream, type SessionEntry } from "./hub/liveness.js";
 import { connect as tcpConnect } from "node:net";
@@ -707,17 +708,9 @@ app.post("/rooms/:room/verdict", (req, res) => {
     res.status(400).type("text/plain").send(e instanceof HubError ? e.message : "error");
   }
 });
-// Why the run that owns a room ended, from its launcher (concluded, timeout, operator_stop, seats_exited): a run_end
-// event in the room log and one line in the room. A repeat is accepted and ignored: the first stands.
-app.post("/rooms/:room/run-end", (req, res) => {
-  if (!requireLauncherOrToken(req, res)) return;
-  try {
-    const { cause, detail } = (req.body ?? {}) as { cause?: string; detail?: string };
-    res.json(hub.recordRunEnd(req.params.room, cause as RunEndCause, typeof detail === "string" ? detail : undefined));
-  } catch (e) {
-    res.status(400).type("text/plain").send(e instanceof HubError ? e.message : "error");
-  }
-});
+// Reports from the run's launcher kept in the room log: why the run ended (POST .../run-end) and what its seats were told
+// was already settled and read (POST .../carried, inputs/owner-4), with each recruit's brief from the spawner.
+registerLaunchReports(app, hub, requireLauncherOrToken);
 // Close a stale or abandoned room (no conclusion). Dashboard button or curl -X POST .../close
 app.post("/rooms/:room/close", (req, res) => {
   if (!requireToken(req, res)) return;

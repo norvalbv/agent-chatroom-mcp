@@ -182,6 +182,7 @@ export const offlineScripts = [
   'ledger-web-pages-regression.ts',
   'source-refs-regression.ts',
   'prior-art-regression.ts',
+  're-research-regression.ts',
   'barren-claim-regression.ts',
   'unsourced-claims-regression.ts',
   'fresh-sourcer-regression.ts',

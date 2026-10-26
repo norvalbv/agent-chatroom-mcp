@@ -1,0 +1,235 @@
+VERIFIED: the room concluded with all 7 seats agreeing to prop_eeb97041 v20. Everything is on the integration branch at commit 5f3f0423; nothing landed on main.
+
+**What I checked at 5f3f0423 myself:**
+- **Tests and build:** npm test passed all 326 commands. Build, the scripts type-check and the smoke test (SMOKE OK, port 7881) all passed.
+- **Gates against 83da418f:** guard-size and guard-comments pass. guard-clone fails only on the 2 clones at swarm.ts:35 that existed before this room (from 4fe12cc7). guard-dup is opted out and did not run.
+- **Take-matcher (#895):**
+  - **Regression:** it fails 4 of 7 cases at 2f636cdc and passes 7 of 7 at 5f3f0423.
+  - **Reviews:** I reviewed it and so did opus-4.
+  - **Live test:** in 7 new pairs scored against the real embeddinggemma, it raised 1 false notice and caught none of the 3 reworded duplicates. That is why it stays advisory and off by default.
+- **Review coverage:** 34 of 35 commits have a passing review by someone other than the author. The 11 rebased copies on integration are identical to the reviewed commits.
+- **Figures:** the cost and handoff numbers match my own recounts.
+
+**Not verified:**
+- The live dollar saving from the 300k compaction default. It comes from replaying old transcripts, not a live run.
+- Work quality after a real compaction.
+- Zero false "job ended" notices on a live hub. Hub 7717 doesn't run this build, and it sent two more on my own test run today.
+- Items 2 to 4 rest on one run each.
+- The take-matcher switched on at hub 7717, and driven through a private hub over HTTP/MCP (I ran it in-process).
+- npm test at the base commit 83da418f.
+- 8 rebased commits no verify entry names directly. Their originals were reviewed, and the copies match them line for line.
+
+DECISION RECORD
+
+**Target 1: claude-seats-compact-at-300k.** RE-TARGET token-cost-is-resent-context.
+- **Context:**
+  - A seat's cost is requests × context × $0.20/M for cache reads, plus cache writes at $8/M.
+  - In room 182a, seats re-read a mean of 333k tokens per request (5,413 requests). They compacted only near 962k.
+- **Ruling:**
+  - Claude seats get CLAUDE_CODE_AUTO_COMPACT_WINDOW=300000 unless one of these overrides it: --compact-at N, the operator's own CLAUDE_CODE_AUTO_COMPACT_WINDOW, --compact-at off, or --claude-full.
+  - Codex and OpenRouter seats get nothing, because they don't read it.
+  - The launcher logs the window each seat gets.
+  - Commits: 3976124a, 8c5daaf1 and b9b21098, merged as bcf144c6.
+  - Test: scripts/seat-compact-default-regression.ts, run by npm test since 43849239 (merged as f53f838b).
+- **Consequences:**
+  - A replay of 182a gives cache reads at 0.34× actual. That is about −37% of cost, about $250 of $684, and it is an upper estimate.
+  - Live in this room, at an inherited 200k window, mean context was 90–101k.
+  - Quality was not measured: the compaction A/B never actually compacted.
+  - The tool-error rate was 3.06% below 150k of context and 2.47% above 300k (observational).
+- **Tradeoff:**
+  - A summary can drop detail a seat needs later. The ARC study shows this, but it transfers weakly to this setting.
+  - Each compaction pays one cache rewrite.
+- **Sources:** arXiv:2601.14470 (NEW), arXiv:2606.05304 (NEW), ARC compaction (NEW), arXiv:2605.23296 (SETTLED).
+- **Rejected:**
+  - A 200k default: 37 compactions instead of 21.
+  - A default for non-Claude seats.
+- **Revisit when:**
+  - a task scores lower at 300k than at 1M on the same brief; or
+  - a seat redoes work after a compaction; or
+  - Claude Code changes how it reads the variable.
+
+**Target 2: room-topic-carried-once.** Extends token-cost-is-resent-context.
+- **Context:** a seat's context held the room topic three times: in the brief, in the topic= argument of join_room, and in join_room's result.
+- **Ruling:**
+  - No topic= argument in join instructions (2021467b, c35347aa).
+  - The launcher always creates the room first (e1163078).
+  - When the digest in the seat's URL matches, join_room returns only the topic's first 240 characters (02927c93).
+- **Consequences:**
+  - Saves about 3.4–4.3k tokens per seat per request.
+  - About $3.0 of 182a's $684 (0.44%), and about $1.5 on mrw4-leads. These come from replays.
+- **Tradeoff:** a seat that loses its brief to compaction gets only the 240-character head back. room_status full_topic=true returns the whole topic.
+- **Sources:** arXiv:2601.14470, plus Anthropic's prompt-caching docs.
+- **Rejected:**
+  - Cutting the topic for humans or hand-joined agents, who have no other copy.
+  - Keeping topic=.
+- **Revisit when:**
+  - a seat misses something only the full topic held; or
+  - a launcher path joins a room it did not create; or
+  - a seat's join_room result is longer than the topic again.
+
+**Target 3: absence-claims-need-a-complete-source.**
+- **Context:** the "no rebates" zero came from a partial copy of the data. Each wallet's net was understated by about $73k.
+- **Ruling:**
+  - New line in prompts/verifier.md step 2: an absent, zero or never claim holds only over a source that would show it.
+  - Telemetry: absenceClaims().
+  - Probe arms must not be able to read each other's folders.
+  - Commits 157a8627 and 21d00384.
+- **Consequences:** one run per arm (p2 vs p4). After the change, the conclusion carries the caveat. This is an anecdote.
+- **Tradeoff:**
+  - The line exposes the gap but does not close it: neither arm fetched data-api.
+  - The counter flags 5 of 5 honest scope statements falsely.
+- **Sources:** the room's own data-api ground truth. No external sources.
+- **Rejected:**
+  - A hub gate that blocks proposals with unsourced absence words.
+  - Untested stronger wording, "fetch the complete source or report a lower bound". It is the next arm to test, not adopted.
+- **Revisit when:**
+  - a concluded total omits a category with no caveat; or
+  - the pair repeated at 3 or more runs per arm shows no difference; or
+  - the stronger wording is tested.
+
+**Target 4: cache-resets-are-not-work.**
+- **Context:** whole-context rewrite bursts happen within 30 seconds of a cswap cross-org account switch.
+  - 182a: $170 (25%). mrw4: $134 (14%).
+  - Fleet-wide: $755 of $5,311.
+- **Ruling:**
+  - Comparisons between runs subtract resets, priced at $8/M.
+  - Telemetry: src/metrics/cache-reset.ts and scripts/cache-resets.ts.
+  - Correction to the board record: it says "$6.25 still hardcoded", but 1a465322 (merged as cd751a91) fixed that, so the code now prices at $8/M. $6.25/M is 1.25× input; the 5-minute write rate is $5/M, not $6.25.
+  - The lever sits outside this repo: defer cross-org switches until between rooms.
+- **Consequences:**
+  - Fleet-wide, $382 fall near a cswap switch, a probable $137 more predate the cswap log, $84 follow a compaction and $49 are session starts.
+  - $103 are unexplained, mostly one burst on 13 Oct.
+- **Tradeoff:**
+  - This only measures resets; nothing prevents one.
+  - It is a CLI only, not part of the run report.
+- **Sources:** Anthropic prompt-caching docs (the cache is scoped to an org).
+- **Rejected:** folding resets into each seat's compaction cost.
+- **Revisit when:**
+  - cswap defers switches; or
+  - a burst happens with no switch nearby; or
+  - Anthropic changes cache scoping.
+
+**Target 5: inbox-notes-not-inlined.**
+- **Context:** in mrw4, inbox traffic was about 6.4% of $1,003.
+- **Ruling:**
+  - Do not inline note bodies into chat.
+  - Keep wait-cost --by-key (98713764) as the telemetry.
+- **Consequences:** the most it could save is about 1.6% net, which is inside run-to-run noise.
+- **Tradeoff:** 136 reads of other seats' acks stay.
+- **Sources:** room logs only.
+- **Rejected:** inline delivery.
+- **Revisit when:**
+  - inbox traffic is above 15% of a run's cost; or
+  - mean context falls below about 30k.
+
+**Target 6: review-runs-the-suites-a-commit-reaches.**
+- **Context:** 3 reviewed commits broke suites their reviewers never ran.
+- **Ruling:**
+  - The reviewer runs `npx tsx scripts/review-suites.ts <sha> --run` (a73b6fe8).
+  - Only one run per machine at a time, because 8 suites bind fixed ports.
+- **Consequences:**
+  - It selected all 4 broken suites, and recall was 5 of 5.
+  - A hub-core change selects about 40% of the suite.
+- **Tradeoff:** a module loaded through a computed path is invisible to the selection.
+- **Sources:** Ekstazi (ISSTA 2015), NEW.
+- **Rejected:**
+  - Name matching.
+  - A full suite per review.
+- **Revisit when:**
+  - a reviewed commit breaks a suite the tool did not select; or
+  - typical commits select more than half the suite.
+
+**Target 7: every-commit-reviewed-by-a-non-author-who-runs-what-it-reaches.** New, under done-means-independently-verified.
+- **Ruling:**
+  1. Every commit gets a review/<sha> by a non-author.
+  2. The review runs review-suites.
+     - 2b. It also runs `tsc -p tsconfig.scripts.json`.
+     - 2c. A probe-gate reviewer confirms each planted error is a premise the task consumes, not a value the task outputs.
+  3. A failure counts as a break only if it passes at the parent.
+  4. One suite run per machine at a time.
+  5. Trust a "job ended" notice only after seat-procs confirms it.
+- **Consequences:**
+  - 34 of 35 commits carry a passing non-author review, with 0 self-reviews.
+  - 3 of 22 reviewed commits slipped through review, and all 3 were caught before main.
+- **Sources:** Ekstazi.
+- **Rejected:**
+  - Running only the commit's new test.
+  - Name matching.
+  - A full suite per review.
+- **Revisit when:**
+  - a reviewed commit breaks a suite that was not selected; or
+  - the coverage check shows self-reviewed or unreviewed commits; or
+  - the fixed-port suites move to dynamic ports.
+
+**Target 8: research-scout.**
+- **Context:** 74% of 61 pitched ideas were never closed, because an idea reached only seats holding no claim.
+- **Ruling:**
+  - One persistent, read-only scout per room, working in rounds and tied to a board key.
+  - The owner of the entry a pitch cites owes it a verdict (idea_verdict_owed, 5d1d757a and 69f38485).
+  - Claims are checked in tiers.
+- **Consequences:**
+  - The trial cost $7.35 across 2 scouts.
+  - 3 pitches: 1 adopted (the cost-rate correction, which led to 1a465322), 1 rejected with data, 1 deferred.
+  - The scout A/B saturated at 4/4 vs 4/4.
+  - It paid in quality, not yet in dollars.
+- **Sources:**
+  - 2409.04109 and 2507.08350 (Ueda);
+  - 2502.18864 (co-scientist);
+  - 2606.18237 (ReproRepo), 2609.22111 (ReAgent) and 2504.01848 (PaperBench).
+  - All previously listed in this room.
+- **Rejected:**
+  - An Elo tournament.
+  - A breakout room.
+  - A scout that judges its own pitches.
+  - A one-shot scout.
+- **Revisit when:** across 3 or more runs with 5d1d757a, closure stays below 50% or the adopted pitches don't cover the scouts' cost.
+
+**Target 9: task-switch-consolidates-not-respawns.**
+- **Ruling:**
+  - On a task switch, the seat writes a consolidated handoff note for the new task.
+  - No respawn mechanism.
+- **Consequences:**
+  - Not switching cost under $1 (one run).
+  - The handoff-note A/B (probes 9–10) is unmeasured: it saturated at 2/2 vs 2/2 and cost about $12.8.
+- **Sources:**
+  - 2505.06120: a consolidated fresh turn keeps 95.1% of performance, against 66–77% for a recap.
+  - 2510.05381, 2508.21433, 2510.11967, 2606.11213.
+  - Promotion rule: 2505.16067.
+- **Rejected:** self-replacement on every switch.
+- **Revisit when:**
+  - a task done after a switch scores lower with the auto-summary than with a consolidated note; or
+  - seats run with a window of 500k or more again.
+
+**Target 10: take-matcher (new).**
+- **Ruling:**
+  - A refusal stays exact equality of the work words. "rerun" and "re" are no longer dropped as how-words.
+  - An advisory meaning notice (embeddinggemma, cosine ≥ 0.869) is off unless CHATROOM_EMBED_URL is set. It runs async with a 10-second abort, fails open, and writes semantic_check telemetry.
+  - Claim-vs-claim matching keeps the existing stem rule.
+  - Commits: 7c827857 and 5f3f0423.
+- **Consequences:**
+  - Labels: 609 pairs. Agreement between two blind labellers is κ 0.90.
+  - On the 5 concurrent true duplicates: the word rule catches 1, and the meaning check catches 3 (in-sample).
+  - Held out: same-work precision 0.90 (0.71–0.97).
+  - On 7 new pairs: 1 false notice and 0 of 3 rewordings caught.
+- **Sources:**
+  - PAWS 1904.01130, SBERT 1908.10084, MTEB 2210.07316, 2212.09976, 2308.09193, CUPID 2308.10022, PARAPHRASUS 2409.12060.
+  - All NEW against the settled axes.
+- **Rejected:** a semantic refusal. Bounding false refusals below 1% needs 300 or more refusals with 0 false.
+- **Revisit when:**
+  - 300 or more notices have known outcomes; or
+  - a refused take proves to be different work; or
+  - a different embedding model is wanted.
+
+**Target 11: lessons-from-89rn.** Only entries that carry a rule are listed.
+- **Run the suites a commit reaches before review:** review-suites --run, diffed against the parent (friction/told-run-grep-suites).
+- **Type-check scripts:** any review touching scripts/ also runs tsc -p tsconfig.scripts.json (friction/told-type-check-scripts).
+- **Check probe data against the brief:** before launch, check every field the brief promises against the copied data (friction/told-check-own-ground-truth).
+- **Test the edges of a bound:** a figure labelled a bound gets its edge cases tested (process start, end and respawn) before the label is written (friction/told-telemetry-boundaries).
+- **Read the board before a second review:** check for review/<sha>* and write a second review only if it adds coverage (friction/told-review-already-done).
+- **List claims before building:** list claim/* and take/* before building from a friction or idea entry (friction/told-check-claims-before-building).
+- **Keep a stopped process running:** when the owner names a process that stopped, the fix keeps it running instead of running it once more (friction/told-scout-persistent).
+- **Watch probes, records and A/Bs properly:** poll the probe hub's room state, not the clock. Decision records go through the verifier's record. A compaction A/B must first show its arms reach the ceiling (friction/told-probe-concluded).
+- **Cite the price source:** every $ figure cites scripts/litellm-model-prices.json and reconstructs one seat's recorded cost within 5% (friction/told-cost-rates).
+- **Plant probe errors in premises:** a planted error must be a premise the task consumes, not a value it outputs (friction/told-probe-seed-on-task-path).
+- **Use take/ while proposing:** a proposer with an open proposal takes new work with take/, not claim/. Only clearing a claim lifts its gate; setting it to "released" does not (friction/told-claim-gates-own-proposal).
+- **Confirm job-end notices:** trust a "job ended" notice only after confirming the process with ps or seat-procs (friction/job-ended-notice-early).

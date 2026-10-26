@@ -74,6 +74,8 @@ async function harness(entry: string, env: Record<string, string>, argv: string[
     './worktree-hooks.js': { carryHooks: () => ({ hooks: 'shared' }), hooksLine: () => '', hooksOff: () => ({ hooks: 'shared' }) },
     // the launch preflight (src/launch/preflight.ts) runs a kit command before any seat and only adds brief text; no flag is given here
     './launch/preflight.js': { preflightAtLaunch: () => ({ text: '' }) },
+    // the run's decision record (src/launch/decision-record.ts) is filed after every seat has exited; it adds nothing to a seat's argv or environment
+    './launch/decision-record.js': { decisionRecordLine: () => '', fileRunDecisionRecord: () => ({ source: null, slugs: [], files: [], searched: { final_text: false, session_texts: 0, room_messages: 0 } }), isVerifierSeat: () => false },
     './join-check.js': { checkJoined: async () => ({ missing: [], unknown: [], none: false }), joinLines: () => [], roomNames: () => async () => [] }, './result.js': { collectRoomSnapshot: async (_base: string, name: string) => ({ name, payload: { state: 'concluded', conclusion: { text: 'fixture' } }, transcript: { text: '' } }), readRunResult: () => ({}), writeRunResult: () => undefined, renderRunReport: () => '', rollupUsage: () => undefined, hubUsageRollup: () => undefined, transcriptPath: () => undefined, parseClaudeCliOutput: (raw: string) => ({ text: raw, usage: null }), seatScorecard: () => [], classifyOutcome: () => ({ kind: 'concluded', timedOut: false, detail: '' }), proposedDecisionDir: () => null } };
   async function module(name: string): Promise<any> {
     if (cache.has(name)) return cache.get(name);

@@ -27,6 +27,7 @@ import { seatTarget } from "./seat-targets.js";
 import { digestAcks, digestRecords, loadGroups, renderDigests, type GroupsFile } from "./groups.js";
 import { loadResources, seedResources } from "./resources.js";
 import { preflightAtLaunch } from "./launch/preflight.js";
+import { decisionRecordLine, fileRunDecisionRecord, isVerifierSeat } from "./launch/decision-record.js";
 loadDotEnv();
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -908,22 +909,15 @@ if (digestPasses.length) {
   artifact.digests = digestRecords(digestPasses, board(leadsRoom));
   artifact.digestAcks = digestAcks(leadsRoom, Object.fromEntries(plan.groups.map((g) => [`${SWARM_ID}-${g.id}`, board(`${SWARM_ID}-${g.id}`)])));
 }
+// the decision record is filed where the next run's settledAxes() can find it once a human promotes it: one proposed decision
+// per Target, from the newest place the verifier wrote it, not only the CLI's last turn (RSI-4; src/launch/decision-record.ts)
+artifact.decisionRecord = fileRunDecisionRecord({ finalText: results.find((r) => r.name === "verifier")?.text,
+  transcripts: [...seatTranscripts].filter(([n]) => isVerifierSeat(n)).map(([, path]) => path), roomTranscript: snapshots.find((r) => r.name === leadsRoom)?.transcript.text },
+  { runId: SWARM_ID, state: String(leads.state), outDir: OUT, dir: proposedDecisionDir(PROJECT_IDENTITY, OUT, existsSync(resolve(CWD, "docs", "decisions"))) });
+log(decisionRecordLine(artifact.decisionRecord));
 writeRunResult(resolve(OUT, "result.json"), artifact);
 if (artifactPath !== resolve(OUT, "result.json")) writeRunResult(artifactPath, artifact);
 writeFileSync(artifact.reportPath, renderRunReport(artifact));
-{
-  // a decision-record-shaped verdict is written where the next run's settledAxes() can find it once a human promotes it
-  const verdict = results.find((r) => r.name === "verifier")?.text ?? "";
-  const rec = /DECISION RECORD[\s\S]*$/.exec(verdict)?.[0];
-  // markdown puts the colon either side of the emphasis: **Slug:** `x` and **Slug**: `x` both count
-  const slug = /slug\**:\**\s*`?([a-z0-9-]{3,80})/i.exec(rec ?? "")?.[1];
-  const dir = rec && slug ? proposedDecisionDir(PROJECT_IDENTITY, OUT, existsSync(resolve(CWD, "docs", "decisions"))) : null;
-  if (rec && slug && dir) {
-    mkdirSync(dir, { recursive: true });
-    writeFileSync(resolve(dir, `${slug}.md`), `# Proposed decision: ${slug}\n\nFrom ${SWARM_ID} (${leads.state}); report: swarms/${SWARM_ID}/report.md. A human promotes this into docs/decisions/ with \`guard-decisions add\`; nothing is adopted automatically.\n\n${rec}\n`);
-    log(`decision record proposed: ${resolve(dir, `${slug}.md`)}`);
-  }
-}
 
 console.log("\n==================== FINAL ANSWER ====================");
 console.log(leads.conclusion?.text ?? "NO CONSENSUS");

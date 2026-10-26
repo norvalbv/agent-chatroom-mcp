@@ -13,9 +13,16 @@
  * after delivery and is steered into a busy seat's turn, until a reply or pass. It names three answers: recruit, claim it
  * for later, or drop it. hands_asked and hands_resolved (recruited / claimed / dropped / built) are logged; run-metrics
  * counts them.
+ *
+ * An unowned item/<slug> (src/hub/coverage/coverage.ts: a problem the brief requires) is asked about the same way, and
+ * the ledger decides when it stops being unowned: a claim naming it counts, not only claim/<slug>. One difference: an
+ * idea with nobody to ask is only logged (hands_unasked). An item whose author and chair are both absent (one the
+ * launcher seeded in a flat room, say) goes instead to the worker holding the fewest live claims, counting the asks this
+ * sweep already gave out, because nobody else will answer for a problem the brief requires.
  */
 import type { Hub } from "../../hub.js";
 import { claimReleased } from "../board.js";
+import { coverage, ITEM_PREFIX, unownedItems } from "../coverage/coverage.js";
 import { IDEA_SETTLED, settled } from "../open-work.js";
 import { windowMs } from "../output.js";
 import type { BoardEntry, Participant, Room } from "../types.js";
@@ -23,7 +30,8 @@ import type { BoardEntry, Participant, Room } from "../types.js";
 /** 0 turns the ask off. */
 export const HANDS_AFTER_MS = process.env.CHATROOM_HANDS_AFTER_MS?.trim() === "0" ? 0 : windowMs(process.env.CHATROOM_HANDS_AFTER_MS, 10 * 60_000);
 const NOT_WORKERS = ["verifier", "lead", "chair"];
-const ASKED = /(?:^|\s)(idea\/\S+) has had no owner for /;
+const ASKED = /(?:^|\s)((?:idea|item)\/\S+) has had no owner for /;
+const RECRUITED = /"note"\s*:\s*"claimed at recruitment/;
 
 const slugOf = (key: string) => key.slice(key.indexOf("/") + 1);
 const live = (e: BoardEntry | undefined): e is BoardEntry => !!e?.text.trim() && !claimReleased(e) && !settled(e);
@@ -42,11 +50,11 @@ export function unownedIdeas(room: Room): { key: string; author: string; since: 
 
 /** Active workers, and whether each holds a live claim, as writer or as a named owner or team member: a recruit's claim is
  * written by whoever recruited it (friction/recruit-area-claim-owner), with the recruit on its team. */
-function workersBusy(hub: Hub, room: Room): { workers: Participant[]; allBusy: boolean } {
+function workersBusy(hub: Hub, room: Room): { workers: Participant[]; allBusy: boolean; held: Map<string, number> } {
   const workers = hub.activeParticipants(room).filter((p) => p.agent !== "human" && !NOT_WORKERS.includes(p.role ?? "worker"));
-  const holders = new Set<string>();
-  for (const [k, e] of room.board) if (k.startsWith("claim/") && live(e)) for (const n of [e.by, ...team(e)]) holders.add(n);
-  return { workers, allBusy: workers.length > 0 && workers.every((p) => holders.has(p.name)) };
+  const held = new Map<string, number>();
+  for (const [k, e] of room.board) if (k.startsWith("claim/") && live(e)) for (const n of new Set([e.by, ...team(e)])) held.set(n, (held.get(n) ?? 0) + 1);
+  return { workers, allBusy: workers.length > 0 && workers.every((p) => held.has(p.name)), held };
 }
 
 /** Keys already asked about, read back from the room's own messages so a restarted hub does not ask again. */
@@ -60,12 +68,19 @@ export function askedKeys(room: Room): Map<string, string> {
 }
 
 type How = "recruited" | "claimed" | "dropped" | "built";
-/** How an asked-about idea stopped being unowned, if it has. */
+/** How an asked-about idea or item stopped being unowned, if it has. */
 function resolution(room: Room, key: string): { how: How; by: string } | undefined {
   const idea = room.board.get(key);
   if (!idea?.text.trim()) return { how: "dropped", by: idea?.by ?? "?" };
+  if (key.startsWith(ITEM_PREFIX)) {
+    const row = coverage(room)?.rows.find((r) => r.key === key);
+    if (!row || row.state === "unowned") return undefined;
+    if (row.state === "dropped") return { how: "dropped", by: idea.by };
+    const held = row.claims.map((k) => room.board.get(k)).find((e) => !!e);
+    return held ? { how: RECRUITED.test(held.text) ? "recruited" : "claimed", by: held.by } : { how: "built", by: idea.by };
+  }
   const claim = room.board.get(`claim/${slugOf(key)}`);
-  if (live(claim)) return { how: /"note"\s*:\s*"claimed at recruitment/.test(claim.text) ? "recruited" : "claimed", by: claim.by };
+  if (live(claim)) return { how: RECRUITED.test(claim.text) ? "recruited" : "claimed", by: claim.by };
   const word = IDEA_SETTLED.exec(idea.text)?.[1]?.toLowerCase();
   if (word) return { how: ["adopted", "built", "merged", "done"].includes(word) ? "built" : "dropped", by: idea.by };
   return settled(idea) ? { how: "built", by: idea.by } : undefined;
@@ -92,15 +107,17 @@ export function checkHands(hub: Hub, room: Room, at = Date.now()): void {
     seen.set(key, true);
     hub.persist({ type: "hands_resolved", room: room.name, key, how: done.how, by: done.by, after_min: Math.round((at - Date.parse(ts)) / 6_000) / 10, ts: new Date(at).toISOString() });
   }
-  const { workers, allBusy } = workersBusy(hub, room);
+  const { workers, allBusy, held } = workersBusy(hub, room);
   if (!allBusy) return;
-  for (const idea of unownedIdeas(room)) {
+  for (const idea of [...unownedIdeas(room), ...unownedItems(room)]) {
     const age = at - Date.parse(idea.since);
     if (asked.has(idea.key) || age < HANDS_AFTER_MS) continue;
     const active = hub.activeParticipants(room);
     const author = active.find((p) => p.name === idea.author);
     const chair = room.chair ? active.find((p) => p.name === room.chair) : undefined;
-    const to = author ?? chair;
+    // stable sort: the earliest joined of the least loaded
+    const leastHeld = idea.key.startsWith(ITEM_PREFIX) ? [...workers].sort((x, y) => (held.get(x.name) ?? 0) - (held.get(y.name) ?? 0))[0] : undefined;
+    const to = author ?? chair ?? leastHeld;
     const minutes = Math.round(age / 60_000);
     if (!to) {
       const logged = unasked.get(room) ?? new Set<string>();
@@ -109,11 +126,14 @@ export function checkHands(hub: Hub, room: Room, at = Date.now()): void {
       continue;
     }
     const slug = slugOf(idea.key);
-    const whose = author ? "" : ` ${idea.author} wrote it and has left, so it is yours to settle.`;
+    const wasHere = [...room.participants.values()].some((p) => p.name === idea.author);
+    const whose = author ? "" : ` ${idea.author} wrote it and ${wasHere ? "has left" : "is not in this room"}, so it is yours to settle.`;
     hub.post(room, "chat", undefined, `@${hub.shown(room, to)} ${idea.key} has had no owner for ${minutes} min, and ${workers.length === 1 ? "the only worker holds" : `all ${workers.length} workers hold`} a claim.${whose} ` +
       `Choose one: request_agent(area="${slug}", brief=<what it is and what done looks like; it may just say board_get ${idea.key}>) adds a seat for it; ` +
       `board_set claim/${slug} if you are building it already or will take it after your current work; or start ${idea.key} with "dropped:" and the reason. Reply to this message with which.`, { tag: "hands" });
     seen.set(idea.key, false);
+    // an owed ask is load: the next item goes to another worker (review/af7ae3e9 F1)
+    if (!author && !chair) held.set(to.name, (held.get(to.name) ?? 0) + 1);
     hub.persist({ type: "hands_asked", room: room.name, key: idea.key, author: idea.author, asked: to.name, workers: workers.length, idea_age_min: minutes, ts: new Date(at).toISOString() });
   }
 }

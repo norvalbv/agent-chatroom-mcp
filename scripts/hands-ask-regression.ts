@@ -189,6 +189,55 @@ test("a recruitment claim whose note the chair extended still reads as recruited
   assert.equal(events().filter((e) => e.type === "hands_resolved")[0]?.how, "recruited", "review/203a9a94 (b): claim/room-size here carries such a note");
 });
 
+test("an item/* nobody holds gets the same ask; a claim naming it, not only claim/<slug>, resolves it", () => {
+  const { h, name, r, a, b, chair, hands, events } = room({ chair: true });
+  h.setBoard(name, a.id, "claim/alpha", JSON.stringify({ area: "alpha" }));
+  h.setBoard(name, b.id, "claim/beta", JSON.stringify({ area: "beta" }));
+  h.setBoard(name, chair!.id, "item/gamma", "the brief's third problem");
+  r.board.get("item/gamma")!.updatedAt = OLD();
+  h.sweepIdle(DAY);
+  assert.equal(hands().length, 1, "decision/coverage-tracking (a): a brief problem with no free seat was named only to free seats (open_work item_unowned)");
+  assert.match(hands()[0].content, /item\/gamma has had no owner for \d+ min/);
+  assert.match(hands()[0].content, /request_agent\(area="gamma"/);
+  assert.deepEqual(hands()[0].mentions, [chair!.id], "the chair wrote the item");
+  h.setBoard(name, b.id, "claim/beta", JSON.stringify({ area: "beta", note: "also item/gamma, same file" }));
+  h.sweepIdle(DAY);
+  const done = events().filter((e) => e.type === "hands_resolved");
+  assert.equal(done.length, 1, "the ledger's owners decide, as in room_status.coverage");
+  assert.equal(done[0].key, "item/gamma");
+  assert.equal(done[0].how, "claimed");
+  assert.equal(done[0].by, "bob");
+});
+
+test("an item the launcher seeded, in a room with no chair, is put to the worker holding the fewest claims", () => {
+  const { h, name, r, a, b, hands, events, dataDir } = room();
+  h.setBoard(name, a.id, "claim/alpha", JSON.stringify({ area: "alpha" }));
+  h.setBoard(name, a.id, "claim/alpha-2", JSON.stringify({ area: "alpha-2" }));
+  h.setBoard(name, b.id, "claim/beta", JSON.stringify({ area: "beta" }));
+  h.seedResources(name, [{ key: "item/gamma", text: "the brief's third problem" }]);
+  r.board.get("item/gamma")!.updatedAt = OLD();
+  h.sweepIdle(DAY);
+  assert.equal(events().filter((e) => e.type === "hands_unasked").length, 0, "an idea here is logged unasked; a required problem needs someone to answer for it");
+  assert.equal(hands().length, 1);
+  assert.deepEqual(hands()[0].mentions, [b.id], "bob holds 1 claim, alice 2");
+  assert.match(hands()[0].content, /launcher wrote it and is not in this room, so it is yours to settle/);
+  h.setBoardAs(name, "launcher", "item/gamma", "dropped: the beta result covers it");
+  h.sweepIdle(DAY);
+  assert.equal(events().filter((e) => e.type === "hands_resolved")[0]?.how, "dropped");
+  const m = runMetrics(parseRoomLog(readFileSync(join(dataDir, `${name}.jsonl`), "utf8")));
+  assert.equal(m.hands?.items, 1, "run-metrics tells brief items from ideas");
+});
+
+test("several items with nobody to answer for them are spread over the workers, not all put to the earliest joiner", () => {
+  const { h, name, r, a, b, hands } = room();
+  h.setBoard(name, a.id, "claim/alpha", JSON.stringify({ area: "alpha" }));
+  h.setBoard(name, b.id, "claim/beta", JSON.stringify({ area: "beta" }));
+  h.seedResources(name, ["p1", "p2", "p3", "p4"].map((s) => ({ key: `item/${s}`, text: `problem ${s}` })));
+  for (const s of ["p1", "p2", "p3", "p4"]) r.board.get(`item/${s}`)!.updatedAt = OLD();
+  h.sweepIdle(DAY);
+  assert.deepEqual(hands().map((m) => m.mentions?.[0]), [a.id, b.id, a.id, b.id], "review/af7ae3e9 F1: one sweep gave alice all 4");
+});
+
 test("run-metrics reports asks and how they were resolved", () => {
   const { h, name, busyWithIdea, dataDir } = room();
   busyWithIdea();

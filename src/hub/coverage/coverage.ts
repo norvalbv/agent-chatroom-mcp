@@ -17,7 +17,8 @@
  *   orphaned  every owner has left and nobody reviewed it
  *   dropped   "dropped: <why>" on the item's first line
  * The owner's own word is never "done" on its own (attack/decision/coverage-tracking: two commits in this room needed
- * rework after review).
+ * rework after review). States are not monotone: a review that identifies only the seat stops counting once that seat
+ * holds a second claim, so done can go back to built. That is the safe direction (review/eacedc5b nit 1).
  */
 import type { Hub } from "../../hub.js";
 import type { Event } from "../internal.js";
@@ -29,7 +30,8 @@ import { isReviewKey, parseVerifyHead } from "../types.js";
 export const ITEM_PREFIX = "item/";
 export type ItemState = "unowned" | "owned" | "reviewed" | "built" | "done" | "orphaned" | "dropped";
 const STATES: readonly ItemState[] = ["unowned", "owned", "reviewed", "built", "done", "orphaned", "dropped"];
-/** States that still need someone: listed as `open`, named to free seats (open_work item_unowned) and to hands.ts. */
+/** States that still need someone, listed as `open`. Unowned ones are offered to free seats (open_work item_unowned) and,
+ * with no free seat, put to someone who can add one (hands.ts). */
 const OPEN: readonly ItemState[] = ["unowned", "orphaned"];
 
 export interface ItemRow {

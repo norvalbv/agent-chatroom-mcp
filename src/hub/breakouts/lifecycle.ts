@@ -40,8 +40,8 @@ export const carryKey = (child: string): string => `inbox/${child}/conclusion`;
 
 /**
  * post_to_room from a breakout to its own parent under key "conclusion" would land on the carry key and replace the
- * hub's copy, after which breakout_fate could no longer tell whether the copy was made (review/09371908 F1; 1 of 21
- * such entries in the records was a seat's, swarm-104626-vyfd). The key is the hub's.
+ * hub's copy, after which breakout_fate could no longer tell whether the copy was made (review/09371908 F1). No record
+ * has it (0 of 20 carry keys were a seat's, review/fb9db2b6), but nothing stopped it. The key is the hub's.
  */
 export function refuseCarryKey(hub: Hub, fromRoom: string, toRoom: string, key: string): void {
   if (key !== "conclusion" || hub.rooms.get(fromRoom)?.parent !== toRoom) return;
@@ -135,9 +135,10 @@ export function breakoutFate(hub: Hub, room: Room, lastCallMs: number): Breakout
       return { ...base, line: `Concluded; its conclusion was copied to ${name} as ${key} at ${at(carried.at)}` +
         (carried.late ? `, marked late: ${name} had already concluded, so it did not change that answer.` : ".") };
     }
-    // the parent takes it, yet the hub's copy is not there: someone else's text on the key (a record from before
-    // refuseCarryKey) or no entry at all. Not a drop, and "not on this hub" would be false.
-    if (!drop && parent) {
+    // someone else's text on the key (setBoardAs, or a record from before refuseCarryKey), whatever the parent's state
+    // now: the copy may have been made and replaced, so neither "not copied" nor "not on this hub" is known
+    // (review/fb9db2b6 N1). Or the parent takes it and there is no entry at all. Not a drop either way.
+    if (entry || (!drop && parent)) {
       return { ...base, line: `Concluded; ${key} on ${name} ${entry ? `was last written by ${entry.by}, not by the hub, so it may not be this room's conclusion` : "is not on its board"}. The whole conclusion is in this room (room_status).` };
     }
     const why = drop ?? "parent_missing";

@@ -161,13 +161,20 @@ test("the carry key is the hub's: a breakout seat cannot post over it, and an en
   concludeChild();
   const key = "inbox/bf-child/conclusion";
   assert.equal(parent.board.get(key)!.by, "system");
-  // a record from before the refusal (swarm-104626-vyfd: 1 of 21 such entries was a seat's): the parent is open, so
-  // "not on this hub" would be false
+  // someone else's text on the key (only setBoardAs can still write it; 0 of 20 such entries in the records,
+  // review/fb9db2b6 point 4): the parent is open, so "not on this hub" would be false
   parent.board.set(key, { ...parent.board.get(key)!, by: "Carol" });
   const f = fate(hub, child)!;
   assert.equal(f.not_carried, undefined);
   assert.doesNotMatch(f.line, /not on this hub/);
   assert.match(f.line, /Concluded; inbox\/bf-child\/conclusion on bf-parent was last written by Carol, not by the hub/);
+  // and once the parent is closed: the hub did copy it, so "not copied: closed without a conclusion" would be false too
+  // (review/fb9db2b6 N1)
+  hub.closeRoom("bf-parent", "chair", "stopped");
+  const g = fate(hub, child)!;
+  assert.equal(g.not_carried, undefined, "whether the copy was made is in breakout_carry, not on the overwritten key");
+  assert.doesNotMatch(g.line, /not copied/);
+  assert.match(g.line, /Concluded; inbox\/bf-child\/conclusion on bf-parent was last written by Carol, not by the hub/);
 });
 
 test("the launcher's room list follows the parent link, not only the run's name prefix (kcj5's verdict-telemetry)", async () => {

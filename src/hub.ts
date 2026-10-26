@@ -3344,8 +3344,8 @@ export class Hub {
     if (parent.state === "concluded" && !late) return;
     const c = room.conclusion;
     const key = `inbox/${room.name}/conclusion`;
-    // where the whole of it lives leads the entry, so no cut can drop it
-    const head = `Breakout ${room.name} concluded on ${c.proposalId} v${c.version ?? 1} (${c.tally?.agree ?? "?"}/${c.electorate?.electorate ?? "?"} agree; whole text: room_status room="${room.name}").\n`;
+    // where the whole of it lives, then what was verified in it (chair note 4: the parent's verifier reran what it could not see), lead the entry, so no cut can drop them
+    const head = `Breakout ${room.name} concluded on ${c.proposalId} v${c.version ?? 1} (${c.tally?.agree ?? "?"}/${c.electorate?.electorate ?? "?"} agree; whole text: room_status room="${room.name}").\n` + (c.verification ? `${Hub.verificationLine(c.verification)}${Hub.unverifiedLine(c.verification, c.verification_gaps)}\n` : `Not verified by the hub: ${room.requireVerification ? "no verify/* entry counted" : "this breakout did not require a verify/* entry"}.\n`);
     const body = (c.unresolved_objections?.length ? `Unresolved objections: ${c.unresolved_objections.map((u) => `${u.by}: ${u.objection}`).join(" | ")}\n` : "") + c.text;
     const full = head + body;
     const marker = `\n[cut at the board cap: ${full.length} chars in all; whole text: room_status room="${room.name}"]`;

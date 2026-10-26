@@ -179,6 +179,16 @@ test("a lone worker that wrote the idea and holds a claim is asked: there is no 
   assert.match(asked[0].content, /the only worker holds a claim/);
 });
 
+test("a recruitment claim whose note the chair extended still reads as recruited; the ask names claiming what you already build", () => {
+  const { h, name, busyWithIdea, hands, events } = room();
+  busyWithIdea();
+  h.sweepIdle(DAY);
+  assert.match(hands()[0].content, /claim\/gamma if you are building it already/, "review/203a9a94 (c): 2 of 10 replayed ideas were being built without a claim");
+  h.setBoardAs(name, "alice", "claim/gamma", JSON.stringify({ area: "gamma", owner: "alice", team: ["alice", "recruit-1"], status: "open", note: "claimed at recruitment; recruit-1 does the work, alice reviews" }));
+  h.sweepIdle(DAY);
+  assert.equal(events().filter((e) => e.type === "hands_resolved")[0]?.how, "recruited", "review/203a9a94 (b): claim/room-size here carries such a note");
+});
+
 test("run-metrics reports asks and how they were resolved", () => {
   const { h, name, busyWithIdea, dataDir } = room();
   busyWithIdea();

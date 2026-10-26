@@ -65,7 +65,7 @@ function resolution(room: Room, key: string): { how: How; by: string } | undefin
   const idea = room.board.get(key);
   if (!idea?.text.trim()) return { how: "dropped", by: idea?.by ?? "?" };
   const claim = room.board.get(`claim/${slugOf(key)}`);
-  if (live(claim)) return { how: /"note"\s*:\s*"claimed at recruitment"/.test(claim.text) ? "recruited" : "claimed", by: claim.by };
+  if (live(claim)) return { how: /"note"\s*:\s*"claimed at recruitment/.test(claim.text) ? "recruited" : "claimed", by: claim.by };
   const word = IDEA_SETTLED.exec(idea.text)?.[1]?.toLowerCase();
   if (word) return { how: ["adopted", "built", "merged", "done"].includes(word) ? "built" : "dropped", by: idea.by };
   return settled(idea) ? { how: "built", by: idea.by } : undefined;
@@ -112,7 +112,7 @@ export function checkHands(hub: Hub, room: Room, at = Date.now()): void {
     const whose = author ? "" : ` ${idea.author} wrote it and has left, so it is yours to settle.`;
     hub.post(room, "chat", undefined, `@${hub.shown(room, to)} ${idea.key} has had no owner for ${minutes} min, and ${workers.length === 1 ? "the only worker holds" : `all ${workers.length} workers hold`} a claim.${whose} ` +
       `Choose one: request_agent(area="${slug}", brief=<what it is and what done looks like; it may just say board_get ${idea.key}>) adds a seat for it; ` +
-      `board_set claim/${slug} if you will take it yourself after your current work; or start ${idea.key} with "dropped:" and the reason. Reply to this message with which.`, { tag: "hands" });
+      `board_set claim/${slug} if you are building it already or will take it after your current work; or start ${idea.key} with "dropped:" and the reason. Reply to this message with which.`, { tag: "hands" });
     seen.set(idea.key, false);
     hub.persist({ type: "hands_asked", room: room.name, key: idea.key, author: idea.author, asked: to.name, workers: workers.length, idea_age_min: minutes, ts: new Date(at).toISOString() });
   }

@@ -17,7 +17,7 @@ import { fileURLToPath } from "node:url";
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const fx = (f: string) => join(root, "scripts", "fixtures", "decision-record", f);
 const mod = await import("../src/launch/decision-record.js").catch((e) => assert.fail(`src/launch/decision-record.ts does not load: ${e}`));
-const { findDecisionRecord, sessionCandidates, roomMessageCandidates, parseDecisionRecord, fileDecisionRecord, verifierCandidates } = mod;
+const { findDecisionRecord, sessionCandidates, roomMessageCandidates, parseDecisionRecord, fileDecisionRecord, fileRunDecisionRecord, verifierCandidates, decisionRecordLine } = mod;
 
 // ---- RSI-4: the last turn is a background-wake note; the record is one turn earlier, in the session transcript ----
 const rsi4Final = readFileSync(fx("rsi4-verifier-final.txt"), "utf8");
@@ -112,6 +112,18 @@ assert.deepEqual(s3.files, []);
 assert.deepEqual(s3.slugs, ["lc0a-postmortem-escalation-build"]);
 assert.ok(s3.verdict?.startsWith("VERIFIED:"), "the record's own turn is carried when the CLI result was a later turn");
 
+// ---- the launcher's step never throws: it runs before result.json and report.md are written (verifier, review of 80da69ea) ----
+const blocked = fileDecisionRecord(rsi3, { runId: "r", state: "concluded", outDir: out, dir: "/dev/null/sub" });
+assert.match(blocked.missing ?? "", /^error: .*ENOTDIR/, "a write that fails is reported, not thrown");
+assert.equal(blocked.slugs.length, 11, "what was found is still said");
+assert.match(decisionRecordLine(blocked), /11 target\(s\).*error: /);
+const noOut = fileDecisionRecord(rsi3, { runId: "r", state: "concluded", outDir: "/dev/null/x", dir });
+assert.match(noOut.missing ?? "", /^error: /);
+assert.equal(noOut.wholeRecord, undefined, "a whole record that was not written is not claimed");
+const thrown = fileRunDecisionRecord({ finalText: "x", transcripts: [], roomTranscript: {} as unknown as string }, { runId: "r", state: "concluded", outDir: out, dir });
+assert.match(thrown.missing ?? "", /^error: /, "an error while searching is reported too");
+assert.deepEqual(fileRunDecisionRecord({ finalText: readFileSync(fx("rsi4-verifier-final.txt"), "utf8"), transcripts: [fx("rsi4-verifier-session.jsonl")], roomTranscript: null }, { runId: "r4", state: "concluded", outDir: out, dir: null }).slugs, ["lc0a-postmortem-escalation-build"]);
+
 // ---- verifierCandidates reads the launcher's own sources: final text, session transcripts, the lead room's transcript ----
 const cands = verifierCandidates({ finalText: rsi4Final, transcripts: [fx("rsi4-verifier-session.jsonl"), join(out, "no-such.jsonl")], roomTranscript: transcript });
 assert.equal(findDecisionRecord(cands).found?.source, "room_message", "the room message at 05:20 is newer than the 09:44 turn of 23 Oct");
@@ -119,7 +131,7 @@ assert.equal(findDecisionRecord(cands).found?.source, "room_message", "the room 
 // ---- the launcher files through this module, not the old one-slug regex ----
 const swarm = readFileSync(join(root, "src", "swarm.ts"), "utf8");
 assert.ok(!swarm.includes("/slug\\**:\\**\\s*`?([a-z0-9-]{3,80})/i"), "src/swarm.ts no longer files one slug from the last turn");
-assert.match(swarm, /fileDecisionRecord\(/, "src/swarm.ts files through src/launch/decision-record.ts");
+assert.match(swarm, /fileRunDecisionRecord\(/, "src/swarm.ts files through src/launch/decision-record.ts, in the step that never throws");
 
 // ---- the verifier is told the shape the launcher files, and what replaced RSI-4's final turn ----
 const brief = readFileSync(join(root, "prompts", "verifier.md"), "utf8");

@@ -170,24 +170,42 @@ export function fileDecisionRecord(search: DecisionRecordSearch, o: { runId: str
   const from = `the verifier's ${label[rec.source]}${rec.at ? ` at ${rec.at}` : ""}`;
   const targets = search.found?.targets ?? [];
   summary.slugs = targets.map((t) => t.slug);
-  mkdirSync(o.outDir, { recursive: true });
-  summary.wholeRecord = join(o.outDir, "decision-record.md");
-  writeFileSync(summary.wholeRecord, `# Decision record of ${o.runId}\n\nFrom ${from}. ${targets.length ? `Targets filed: ${summary.slugs.join(", ")}.` : `Nothing filed: ${search.missing}.`}\n\n${rec.turn}\n`);
-  if (!o.dir || !targets.length) return summary;
-  mkdirSync(o.dir, { recursive: true });
-  targets.forEach((t, i) => {
-    const path = join(o.dir!, `${t.slug}.md`);
-    const of = targets.length > 1 ? `, target ${i + 1} of ${targets.length}; the whole record is swarms/${o.runId}/decision-record.md` : "";
-    writeFileSync(path, `# Proposed decision: ${t.slug}\n\nFrom ${o.runId} (${o.state}); report: swarms/${o.runId}/report.md; taken from ${from}${of}. A human promotes this into docs/decisions/ with \`guard-decisions add\`; nothing is adopted automatically.\n\n${targets.length > 1 ? t.text : rec.record}\n`);
-    summary.files.push(path);
-  });
+  try {
+    mkdirSync(o.outDir, { recursive: true });
+    const whole = join(o.outDir, "decision-record.md");
+    writeFileSync(whole, `# Decision record of ${o.runId}\n\nFrom ${from}. ${targets.length ? `Targets filed: ${summary.slugs.join(", ")}.` : `Nothing filed: ${search.missing}.`}\n\n${rec.turn}\n`);
+    summary.wholeRecord = whole;
+    if (!o.dir || !targets.length) return summary;
+    mkdirSync(o.dir, { recursive: true });
+    targets.forEach((t, i) => {
+      const path = join(o.dir!, `${t.slug}.md`);
+      const of = targets.length > 1 ? `, target ${i + 1} of ${targets.length}; the whole record is swarms/${o.runId}/decision-record.md` : "";
+      writeFileSync(path, `# Proposed decision: ${t.slug}\n\nFrom ${o.runId} (${o.state}); report: swarms/${o.runId}/report.md; taken from ${from}${of}. A human promotes this into docs/decisions/ with \`guard-decisions add\`; nothing is adopted automatically.\n\n${targets.length > 1 ? t.text : rec.record}\n`);
+      summary.files.push(path);
+    });
+  } catch (e) {
+    // a write that fails says so; the files written before it stay listed
+    summary.missing = `error: ${e instanceof Error ? e.message : String(e)}`;
+  }
   return summary;
+}
+
+/**
+ * The launcher's whole step, which never throws: it runs before result.json and report.md are written, so an error here
+ * becomes `missing: "error: ..."` in the summary instead of losing the run's records (the verifier's review of 80da69ea).
+ */
+export function fileRunDecisionRecord(sources: Parameters<typeof verifierCandidates>[0], o: Parameters<typeof fileDecisionRecord>[1]): DecisionRecordSummary {
+  try {
+    return fileDecisionRecord(findDecisionRecord(verifierCandidates(sources)), o);
+  } catch (e) {
+    return { source: null, slugs: [], files: [], searched: { final_text: false, session_texts: 0, room_messages: 0 }, missing: `error: ${e instanceof Error ? e.message : String(e)}` };
+  }
 }
 
 /** The launcher's log line: what it filed and from where, or why nothing. */
 export function decisionRecordLine(d: DecisionRecordSummary): string {
   return d.slugs.length
-    ? `decision record: ${d.slugs.length} target(s) from the verifier's ${d.source}${d.at ? ` at ${d.at}` : ""}${d.files.length ? `, proposed: ${d.files.join(", ")}` : ""}`
+    ? `decision record: ${d.slugs.length} target(s) from the verifier's ${d.source}${d.at ? ` at ${d.at}` : ""}${d.files.length ? `, proposed: ${d.files.join(", ")}` : ""}${d.missing ? `; ${d.missing}` : ""}`
     : `decision record: none filed (${d.missing})`;
 }
 
@@ -196,7 +214,7 @@ export function renderDecisionRecord(s: DecisionRecordSummary | undefined): stri
   if (!s) return "";
   const where = s.source ? `the verifier's ${label[s.source]}${s.at ? ` at ${s.at}` : ""}` : "";
   let text = "## Decision record\n\n";
-  if (s.slugs.length) text += `${s.slugs.length} target(s) from ${where}: ${s.slugs.join(", ")}.${s.files.length ? ` Proposed: ${s.files.join(", ")}.` : " No decision log in this project, so none proposed."}`;
+  if (s.slugs.length) text += `${s.slugs.length} target(s) from ${where}: ${s.slugs.join(", ")}.${s.files.length ? ` Proposed: ${s.files.join(", ")}.` : s.missing ? "" : " No decision log in this project, so none proposed."}${s.missing ? ` Filing failed: ${s.missing}.` : ""}`;
   else text += `None filed: ${s.missing ?? "no record"}.`;
   if (s.wholeRecord) text += ` Whole record: ${s.wholeRecord}.`;
   if (s.source && s.source !== "final_text") text += ` The verifier's last turn did not carry it, so the CLI result under Verifier is a later turn.`;

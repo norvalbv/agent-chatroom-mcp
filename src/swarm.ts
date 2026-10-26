@@ -27,7 +27,7 @@ import { seatTarget } from "./seat-targets.js";
 import { digestAcks, digestRecords, loadGroups, renderDigests, type GroupsFile } from "./groups.js";
 import { loadResources, seedResources } from "./resources.js";
 import { preflightAtLaunch } from "./launch/preflight.js";
-import { decisionRecordLine, fileDecisionRecord, findDecisionRecord, isVerifierSeat, verifierCandidates } from "./launch/decision-record.js";
+import { decisionRecordLine, fileRunDecisionRecord, isVerifierSeat } from "./launch/decision-record.js";
 loadDotEnv();
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -911,8 +911,8 @@ if (digestPasses.length) {
 }
 // the decision record is filed where the next run's settledAxes() can find it once a human promotes it: one proposed decision
 // per Target, from the newest place the verifier wrote it, not only the CLI's last turn (RSI-4; src/launch/decision-record.ts)
-artifact.decisionRecord = fileDecisionRecord(findDecisionRecord(verifierCandidates({ finalText: results.find((r) => r.name === "verifier")?.text,
-  transcripts: [...seatTranscripts].filter(([n]) => isVerifierSeat(n)).map(([, path]) => path), roomTranscript: snapshots.find((r) => r.name === leadsRoom)?.transcript.text })),
+artifact.decisionRecord = fileRunDecisionRecord({ finalText: results.find((r) => r.name === "verifier")?.text,
+  transcripts: [...seatTranscripts].filter(([n]) => isVerifierSeat(n)).map(([, path]) => path), roomTranscript: snapshots.find((r) => r.name === leadsRoom)?.transcript.text },
   { runId: SWARM_ID, state: String(leads.state), outDir: OUT, dir: proposedDecisionDir(PROJECT_IDENTITY, OUT, existsSync(resolve(CWD, "docs", "decisions"))) });
 log(decisionRecordLine(artifact.decisionRecord));
 writeRunResult(resolve(OUT, "result.json"), artifact);

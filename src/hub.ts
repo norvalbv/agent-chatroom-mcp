@@ -18,6 +18,7 @@ import type { MessageKind, Vote, Quorum, RoomState, VerifyHead, Role, Participan
 import { now, shortId, norm, emptyBoardManifestCounters, manifestBytes, codeState, commitsIn, keepRefusal, RECENT_REFUSALS, resourceEvents } from "./hub/internal.js";
 import type { Opts, Event, BoardManifestCounters } from "./hub/internal.js";
 import * as board from "./hub/board.js";
+import * as hands from "./hub/asks/hands.js";
 import * as idle from "./hub/idle.js";
 import * as kick from "./hub/kick.js";
 import * as output from "./hub/output.js";
@@ -929,7 +930,7 @@ export class Hub {
     // reply_to, so once delivered it retires instead of staying the focused ask. Left as debt, it pinned every
     // later wait/read to that one message and refused send_message as "arrived while composing" until pass.
     for (const m of delivered) {
-      if (m.from.id !== "system" || m.kind !== "chat" || m.tag === "need" || !m.mentions?.includes(p.id) || p.declinedAsks?.includes(m.id)) continue;
+      if (m.from.id !== "system" || m.kind !== "chat" || m.tag === "need" || m.tag === "hands" || !m.mentions?.includes(p.id) || p.declinedAsks?.includes(m.id)) continue;
       p.declinedAsks = [...(p.declinedAsks ?? []), m.id];
       p.declinedAt = { ...(p.declinedAt ?? {}), [m.id]: m.seq };
     }
@@ -1845,7 +1846,7 @@ export class Hub {
     const human = [...room.messages].reverse().find((m) => m.kind === "chat" && m.tag !== "opening" &&
       m.from.agent === "human" && !this.isAnswered(room, m) && !p.declinedAsks?.includes(m.id) && this.responderFor(room, m, p.id).mine);
     // hub notices ride the normal stream (settleRead retires them on delivery); only an author can be answered
-    return human ?? this.addressedBy(room, p).find((m) => m.from.id !== "system" || m.tag === "need"); // needs/needs.ts: an ask to a blocked claim owner
+    return human ?? this.addressedBy(room, p).find((m) => m.from.id !== "system" || m.tag === "need" || m.tag === "hands"); // needs/needs.ts: an ask to a blocked claim owner; asks/hands.ts: who adds a hand
   }
 
   attentionHint(room: Room, p: Participant): string | undefined {
@@ -3810,9 +3811,7 @@ export class Hub {
           this.latchDrafts(room);
         }
       }
-      kick.reevaluateOpenKicks(this, room);
-      output.warnNoOutput(this, room);
-      idle.checkRoomIdle(this, room);
+      for (const check of [kick.reevaluateOpenKicks, output.warnNoOutput, idle.checkRoomIdle, hands.checkHands]) check(this, room);
     }
     return swept;
   }

@@ -15,7 +15,8 @@ export interface SteerItem { room: string; id: string; seq: number; from: string
 
 /**
  * Asks addressed to this seat and not delivered yet by any path (wait, read, carry, an earlier ack): the human message it
- * is the nominated responder for, then authored @-mentions and replies to it. Hub notices are news, not asks.
+ * is the nominated responder for, then authored @-mentions and replies to it. Hub notices are news, not asks, except the
+ * hands ask (hub/asks/hands.ts): it goes to a seat that is busy by construction, so it must reach it mid-turn.
  */
 export function steerPending(hub: Hub, room: Room, p: Participant): Message[] {
   if (!p.active || p.agent === "human" || room.state === "concluded" || room.state === "closed") return [];
@@ -23,7 +24,7 @@ export function steerPending(hub: Hub, room: Room, p: Participant): Message[] {
   const steered = new Set(p.steered ?? []);
   const unseen = (m: Message) => (m.seq > p.lastSeenSeq || held.has(m.seq)) && !steered.has(m.id);
   const focus = hub.attentionFocus(room, p);
-  const asks = [...(focus?.from.agent === "human" ? [focus] : []), ...hub.addressedBy(room, p).filter((m) => m.from.id !== "system")];
+  const asks = [...(focus?.from.agent === "human" ? [focus] : []), ...hub.addressedBy(room, p).filter((m) => m.from.id !== "system" || m.tag === "hands")];
   return [...new Map(asks.filter(unseen).map((m) => [m.id, m])).values()].sort((a, b) => a.seq - b.seq);
 }
 

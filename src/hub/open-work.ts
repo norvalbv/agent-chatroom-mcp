@@ -33,7 +33,7 @@ const NOT_WORK = [...COORDINATION_PREFIXES, "help/", "join-request/", "verify/",
 const NOT_REVIEW = [...COORDINATION_PREFIXES, "help/", "join-request/", "handoff/", "draft/"];
 const HINT_ITEMS = 3;
 /** An idea its author has already ruled on, by the words this room's board used (review/unclaimed-ideas). */
-const IDEA_SETTLED = /^\s*(rejected|adopted|dropped|withdrawn|built|merged|done)\b/i;
+export const IDEA_SETTLED = /^\s*(rejected|adopted|dropped|withdrawn|built|merged|done)\b/i;
 
 /** The last idle wait each seat was handed: when, and how much it had said by then. */
 const lastIdle = new WeakMap<Participant, { at: number; said: number }>();
@@ -257,7 +257,7 @@ function describe(w: OpenWork): string {
 }
 
 /** A claim whose own JSON status says the work is finished: nothing about it is open, whoever holds it. */
-function settled(e: BoardEntry): boolean {
+export function settled(e: BoardEntry): boolean {
   try { return /^(verified|fixed|merged|done|complete|closed)/i.test(String((JSON.parse(e.text) as { status?: unknown }).status ?? "")); } catch { return false; }
 }
 

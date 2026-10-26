@@ -239,8 +239,8 @@ export interface Message {
   ts: string;
   replyTo?: string;
   proposalId?: string;
-  /** "opening" marks a blind opening revealed in a batch; "need" a needs/* ask to a blocked claim owner, owed until answered */
-  tag?: "opening" | "need";
+  /** "opening" marks a blind opening revealed in a batch; "need" a needs/* ask to a blocked claim owner and "hands" one about an idea nobody can take (hub/asks/hands.ts), both owed until answered */
+  tag?: "opening" | "need" | "hands";
   /** participant ids named with @ in the content */
   mentions?: string[];
   /** quiet: pushed only to `audience` (sender + mentions); still in the log for everyone */

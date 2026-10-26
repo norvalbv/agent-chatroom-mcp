@@ -29,7 +29,10 @@ export async function carryRows(files: string[]): Promise<CarryRow[]> {
   }
   return [...notes.values()].map(({ parent, breakout, text }) => {
     const v = verified.get(breakout);
-    const note_says = /\nVerified PARTIAL/.test(text) ? "partial" : /\nVerified by /.test(text) ? "verified" : /\nNot verified by the hub/.test(text) ? "not required" : "nothing";
+    // read the hub's head only (line 1 the pointer, line 2 the verification, line 3 a partial), never the breakout's text
+    const [first = "", second = "", third = ""] = text.split("\n");
+    const head = first.startsWith(`Breakout ${breakout} concluded on `);
+    const note_says = !head ? "nothing" : second.startsWith("Verified by ") ? (third.startsWith("Verified PARTIAL") ? "partial" : "verified") : second.startsWith("Not verified by the hub") ? "not required" : "nothing";
     const breakout_verified = v === undefined ? "unknown (no breakout log)" : v === null ? "none" : `${v.by}, ${v.kind ?? "no kind"}, ${v.base_commit}->${v.commit}`;
     return { parent, breakout, breakout_verified, note_says, lost: !!v && note_says === "nothing" };
   });

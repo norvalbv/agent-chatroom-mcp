@@ -114,6 +114,9 @@ test("a departed seat's carried disagree does not hold a unanimous room (attack/
   hub.leave(r.name, b.id, "done");
   hub.amend(r.name, a.id, pr.id, "Owner input: none yet.", "Owner input: keep.");
   assert.deepEqual(hub.standingDisagrees(pr), [], "nobody can ask a departed seat to re-vote, so its carried disagree does not stand");
+  // review/dea5937a N2: room_status must not leave the reader to infer that a carried vote blocks when it does not
+  const shown = hub.proposalView(r, pr).votes.find((x) => x.name === "B") as { carried?: string };
+  assert.equal(shown.carried, "cast at v1; its quoted clause is unchanged in v2, but its author left, so it does not stand");
   agree(a.id); agree(c.id); agree(d.id); agree(v.id);
   assert.equal(r.state, "concluded", "as before the carry: an amend cleared a departed seat's disagree");
 });

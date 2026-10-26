@@ -95,3 +95,18 @@ test("telemetry: breakout-carry reads, per carried note, whether the breakout's 
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test("telemetry reads the note's head, not a line in the breakout's text that starts \"Verified by\" (review/c2933768 N3)", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "breakout-verified-carry-"));
+  try {
+    const { hub, a, conclude } = rooms(false, dir);
+    const pr = hub.getRoom(CHILD).proposals.values().next().value!;
+    hub.amend(CHILD, a.id, pr.id, "(t 4.7).", "(t 4.7).\nVerified by the grader on the held-out half.");
+    conclude();
+    const { carryRows } = await import("./breakout-carry.js");
+    const rows = await carryRows([join(dir, `${PARENT}.jsonl`), join(dir, `${CHILD}.jsonl`)]);
+    assert.deepEqual(rows.map((r) => r.note_says), ["not required"], "line 2 says the breakout did not require verification");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});

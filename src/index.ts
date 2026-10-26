@@ -18,6 +18,7 @@
 import "./node-compat.js";
 import { steerAckAs, steerAckSeat, steerPeek, steerPeekSeat } from "./hub/steer.js";
 import { SUSPECTED_DEAD_MS } from "./hub/kick.js";
+import { recruitmentClaim } from "./hub/coverage/coverage.js";
 import { callerSeatKeys, CALLER_TIMEOUT_MS } from "./hub/caller.js";
 import { randomUUID } from "node:crypto";
 import { dirname, resolve } from "node:path";
@@ -29,7 +30,7 @@ import { createMcpExpressApp } from "@modelcontextprotocol/sdk/server/express.js
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import express from "express";
 import { Hub, HubError, type OwnerVerdict } from "./hub.js";
-import { STOPPED_BY, type RunEndCause, type StoppedBy } from "./respawn.js";
+import { STOPPED_BY, type StoppedBy } from "./respawn.js";
 import { parseReplyWindowMinutes } from "./reply-metrics.js";
 import { createSessionServer } from "./server.js";
 import { Spawner, type RecruitPolicy } from "./spawner.js";
@@ -37,9 +38,11 @@ import { attachJobWake } from "./spawner/wake.js";
 import { UI_HTML } from "./ui.js";
 import { humanQuestions } from "./questions.js";
 import { photoDirectory, registerPhotoRoutes } from "./photos/routes.js";
-import { holdFromQuery, hubDotEnvOptions, loadDotEnv } from "./env.js";
+import { holdFromQuery, hubDotEnvOptions, loadDotEnv, recruitSettingsHooks, SeatSettingsError, seatSettingsOpt } from "./env.js";
 import { attachMachineWatch } from "./telemetry/machine.js";
+import { registerLaunchReports } from "./telemetry/launch-reports.js";
 import { installLifecycle } from "./lifecycle.js";
+import { noteBeat, reapIdle, watchStream, type SessionEntry } from "./hub/liveness.js";
 import { connect as tcpConnect } from "node:net";
 /** Something accepts a TCP connection on host:port within a second. */
 const portAnswers = (host: string, port: number) => new Promise<boolean>((done) => {
@@ -65,7 +68,7 @@ const HUMAN_TOKEN = process.env.CHATROOM_HUMAN_TOKEN; // optional shared secret 
 const INSECURE_LOCAL = process.env.CHATROOM_INSECURE_LOCAL === "1";
 const LOOPBACK_HOST = HOST === "127.0.0.1" || HOST === "localhost" || HOST === "::1";
 const MAX_SESSIONS = 500;
-const SESSION_IDLE_MS = 30 * 60_000;
+const SESSION_IDLE_MS = Number(process.env.CHATROOM_SESSION_IDLE_MS) || 30 * 60_000, REAP_SWEEP_MS = Number(process.env.CHATROOM_REAP_SWEEP_MS) || 60_000, SPARE_MAX_MS = Number(process.env.CHATROOM_SESSION_SPARE_MAX_MS) || 4 * SESSION_IDLE_MS; // tests shorten all three
 const PARTICIPANT_IDLE_MS = 10 * 60_000;
 
 // before anything that can throw: why this process stops is written down by the process itself (src/lifecycle.ts)
@@ -118,19 +121,12 @@ hub.onProposalOpened = (room, proposal) => {
   const rec = spawner.freshChallenger(room, proposal);
   if (rec) hub.awaitScrutiny(room, proposal.id, rec.name, FRESH_CHALLENGER_WAIT_MS);
 };
-spawner.attach({
-  isHeld: (room) => {
-    try {
-      return Boolean(hub.hold(hub.getRoom(room)));
-    } catch {
-      return false;
-    }
-  },
-  claimArea: (room, requester, area, team) => {
-    const r = hub.getRoom(room);
-    const existing = r.board.get(`claim/${area}`);
+spawner.attach({ ...recruitSettingsHooks(hub), // a room's run settings for its recruits, one recruit_spawn event each (src/seat/settings.ts)
+  isHeld: (room) => { try { return Boolean(hub.hold(hub.getRoom(room))); } catch { return false; } },
+  claimArea: (room, requester, area, team, brief) => {
+    const r = hub.getRoom(room), existing = r.board.get(`claim/${area}`);
     if (existing && existing.by !== requester) throw new HubError(`claim/${area} is owned by ${existing.by}; recruit into their team instead.`, undefined, "ownership");
-    hub.setBoardAs(room, requester, `claim/${area}`, JSON.stringify({ area, owner: requester, team: [requester, ...team], status: "open", note: "claimed at recruitment" }));
+    hub.setBoardAs(room, requester, `claim/${area}`, recruitmentClaim(r, requester, area, team, brief));
   },
   ensureRoom: (room, topic, parent) => {
     hub.recruitRoom(room, topic, parent);
@@ -204,6 +200,7 @@ spawner.attach({
     if (inboxKeys.length) parts.push(`Open room inbox/* keys (board_get to read): ${inboxKeys.join(", ")}`);
     return parts.join("\n\n").slice(0, 4000);
   },
+  recordWorktree: (room, e) => { if (hub.rooms.has(room)) hub.persist({ type: "worktree", room, ...e, ts: new Date().toISOString() }); },
 });
 process.on("exit", () => spawner.stopAll());
 const app = createMcpExpressApp({ host: HOST }); // already parses JSON bodies (100kb)
@@ -233,7 +230,7 @@ if (IDLE_EXIT_MS > 0) {
   }, Math.min(10_000, Math.max(500, IDLE_EXIT_MS / 6))).unref();
 }
 
-const transports = new Map<string, { t: StreamableHTTPServerTransport; leaveAll: (reason?: string, final?: boolean) => void; session: string; lastSeen: number; seatKey?: string }>();
+const transports = new Map<string, SessionEntry & { t: StreamableHTTPServerTransport }>(); // what is alive and what is reaped: src/hub/liveness.ts reapIdle
 /** The owning launcher's receipt that a seat's process exited: close every session that launch key opened. A killed CLI
  * never sends DELETE, so without this its session reads as connected for SESSION_IDLE_MS and replace_participant refuses a
  * dead seat as "alive inside a long command" (swarm-130854-nmek; chair #640 in swarm-202803-dpij). Knowing the key is the
@@ -277,7 +274,7 @@ app.post("/mcp", async (req, res) => {
   const transport = new StreamableHTTPServerTransport({
     sessionIdGenerator: () => randomUUID(),
     onsessioninitialized: (id) => {
-      transports.set(id, { t: transport, leaveAll: session.leaveAll, session: session.sessionKey, lastSeen: Date.now(), ...(seatKey ? { seatKey } : {}) });
+      transports.set(id, { t: transport, leaveAll: session.leaveAll, session: session.sessionKey, lastSeen: Date.now(), streams: 0, ...(seatKey ? { seatKey } : {}) });
       if (seatKey) { hub.bindSeat(seatKey, session.sessionKey, worktree); hub.seatConnected(seatKey); }
     },
   });
@@ -296,6 +293,7 @@ const sessionRoute = async (req: express.Request, res: express.Response) => {
     return;
   }
   entry.lastSeen = Date.now();
+  if (req.method === "GET") watchStream(entry, req, res); // the client's standing stream: alive while it is open
   await entry.t.handleRequest(req, res);
 };
 
@@ -319,22 +317,16 @@ lifecycle.health(() => {
   return out;
 });
 
-// Liveness: close idle MCP sessions and mark silent agents as left, so a dead process cannot block a quorum forever.
+// Liveness: close idle MCP sessions whose client shows no sign of life and mark silent agents as left, so a dead process
+// cannot block a quorum forever (src/hub/liveness.ts reapIdle: a stream, heartbeat or process spares a session; past SPARE_MAX_MS only a job or tool call).
 setInterval(() => {
-  const now = Date.now();
-  for (const [id, e] of transports) {
-    if (now - e.lastSeen > SESSION_IDLE_MS) {
-      // the same opening words as a plain close: liveness.away and result.ts read them
-      e.leaveAll(`MCP session closed without leave_room (idle ${Math.round(SESSION_IDLE_MS / 60_000)} min, reaped)`);
-      e.t.close().catch(() => {});
-      transports.delete(id);
-    }
-  }
+  reapIdle(hub, transports, { idleMs: SESSION_IDLE_MS, spareMaxMs: SPARE_MAX_MS, processFreshMs: SESSION_IDLE_MS });
   // identity is the connection: a participant whose MCP session is still open is alive however long it works locally;
-  // the sweep is for sessions that died without a DELETE (a killed CLI), which leaveAll above has not yet seen
+  // the sweep is for sessions that died without a DELETE (a killed CLI), which leaveAll above has not yet seen. A chair
+  // keeps its seat here too: it is never waited on.
   const connected = new Set([...transports.values()].map((e) => e.session));
-  for (const name of hub.sweepIdle(PARTICIPANT_IDLE_MS, connected)) spawner.stop(name);
-}, 60_000).unref();
+  for (const name of hub.sweepIdle(PARTICIPANT_IDLE_MS, connected, true)) spawner.stop(name);
+}, REAP_SWEEP_MS).unref();
 
 /**
  * The seat whose process tree sent this loopback request, if any (src/hub/caller.ts). A seat acts through its MCP tools;
@@ -474,6 +466,7 @@ app.post("/rooms/:room/heartbeat", (req, res) => {
     if (!participant_id) return res.status(400).type("text/plain").send("participant_id required");
     const { detail } = (req.body ?? {}) as { detail?: string };
     if (!peek) hub.heartbeat(req.params.room, participant_id, { tool: tool ?? "?", step, detail });
+    noteBeat(transports, (e) => e.session === hub.rooms.get(req.params.room)?.participants.get(participant_id)?.session);
     // steering peek: addressed asks not yet delivered; the seat acks the ones it injected (POST /rooms/:room/steer/ack)
     res.json({ ok: true, pending: steerPeek(hub, req.params.room, participant_id) });
   } catch (e) {
@@ -487,6 +480,7 @@ app.post("/heartbeat", (req, res) => {
   if (!seat_key) return res.status(400).type("text/plain").send("seat_key required");
   // stopped_by: the launcher saying it stopped the seat itself (its timeout, or the operator stopping it); a closed set
   if (exited === true) return res.json({ ok: true, closed: seatExited(seat_key, String(detail ?? "exit"), STOPPED_BY.find((s) => s === stopped_by)) });
+  noteBeat(transports, (e) => e.seatKey === seat_key); // its process tree is alive: the idle sweep spares its sessions
   // peek:true (a PostToolUse hook) only asks for pending asks: the PreToolUse beat already recorded this step
   const marked = peek ? 0 : hub.heartbeatSeat(seat_key, { tool: tool ?? "?", step, detail });
   // working locally with no MCP session here: its chatroom calls are failing on its side (idea/client-side-disconnects)
@@ -653,14 +647,14 @@ app.post("/rooms/:room/replace", (req, res) => {
 app.post("/rooms/:room/create", (req, res) => {
   if (!requireLauncherOrToken(req, res)) return;
   try {
-    const b = (req.body ?? {}) as { topic?: string; quorum?: "unanimous" | "majority" | "supermajority"; expected_participants?: number; require_verification?: boolean; require_challenge?: boolean; mode?: "free" | "round_robin"; max_message_chars?: number; anonymous?: boolean; chair?: string; parent?: string };
+    const b = (req.body ?? {}) as { topic?: string; quorum?: "unanimous" | "majority" | "supermajority"; expected_participants?: number; require_verification?: boolean; require_challenge?: boolean; mode?: "free" | "round_robin"; max_message_chars?: number; anonymous?: boolean; chair?: string; parent?: string; seat_settings?: unknown };
     const existed = hub.listRooms().some((r) => r.name === req.params.room);
     // a chair named here counts as named only when the caller was checked: the launcher's token or the human token
     const checked = tokenChecked(req) || (!!process.env.CHATROOM_LAUNCHER_TOKEN && req.header("x-chatroom-launcher-token") === process.env.CHATROOM_LAUNCHER_TOKEN);
-    const room = hub.createRoom(req.params.room, { topic: b.topic, quorum: b.quorum, expectedParticipants: b.expected_participants, requireVerification: b.require_verification, requireChallenge: b.require_challenge, mode: b.mode, maxMessageChars: b.max_message_chars, anonymous: b.anonymous, chair: b.chair, ...(b.chair && checked ? { chairNamed: true } : {}), ...(b.parent ? { parent: b.parent } : {}) });
-    res.status(existed ? 200 : 201).json({ ...hub.summary(room, true), created: !existed, ...(room.chair ? { chair_named: !!room.chairNamed } : {}) });
+    const room = hub.createRoom(req.params.room, { topic: b.topic, quorum: b.quorum, expectedParticipants: b.expected_participants, requireVerification: b.require_verification, requireChallenge: b.require_challenge, mode: b.mode, maxMessageChars: b.max_message_chars, anonymous: b.anonymous, chair: b.chair, ...(b.chair && checked ? { chairNamed: true } : {}), ...(b.parent ? { parent: b.parent } : {}), ...seatSettingsOpt(b.seat_settings) });
+    res.status(existed ? 200 : 201).json({ ...hub.summary(room, true), created: !existed, ...(room.chair ? { chair_named: !!room.chairNamed } : {}), ...(hub.seatSettingsFor(room.name) ? { seat_settings: hub.seatSettingsFor(room.name) } : {}) });
   } catch (e) {
-    res.status(400).type("text/plain").send(e instanceof HubError ? e.message : "error");
+    res.status(400).type("text/plain").send(e instanceof HubError || e instanceof SeatSettingsError ? e.message : "error");
   }
 });
 // Launcher authority is deliberately separate from optional dashboard authentication.
@@ -714,17 +708,9 @@ app.post("/rooms/:room/verdict", (req, res) => {
     res.status(400).type("text/plain").send(e instanceof HubError ? e.message : "error");
   }
 });
-// Why the run that owns a room ended, from its launcher (concluded, timeout, operator_stop, seats_exited): a run_end
-// event in the room log and one line in the room. A repeat is accepted and ignored: the first stands.
-app.post("/rooms/:room/run-end", (req, res) => {
-  if (!requireLauncherOrToken(req, res)) return;
-  try {
-    const { cause, detail } = (req.body ?? {}) as { cause?: string; detail?: string };
-    res.json(hub.recordRunEnd(req.params.room, cause as RunEndCause, typeof detail === "string" ? detail : undefined));
-  } catch (e) {
-    res.status(400).type("text/plain").send(e instanceof HubError ? e.message : "error");
-  }
-});
+// Reports from the run's launcher kept in the room log: why the run ended (POST .../run-end) and what its seats were told
+// was already settled and read (POST .../carried, inputs/owner-4), with each recruit's brief from the spawner.
+registerLaunchReports(app, hub, requireLauncherOrToken);
 // Close a stale or abandoned room (no conclusion). Dashboard button or curl -X POST .../close
 app.post("/rooms/:room/close", (req, res) => {
   if (!requireToken(req, res)) return;

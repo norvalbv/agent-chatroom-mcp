@@ -260,8 +260,8 @@ ${ROOMS_JS}
       + '<button class="btn" id="archroom" title="' + (r.archived ? 'Show this room in listings again' : 'Hide this room from listings; the transcript is kept') + '">' + (r.archived ? 'Unarchive' : 'Archive') + '</button>'
       + roomPinButton(r) + '<button class="btn icon" id="toginspect" title="Inspector">☰</button>';
     var topicOpen = !!expanded['topic'];
-    $('#head').innerHTML = '<div class="t1"><h2>' + esc(r.name) + '</h2>' + chips + '</div><div class="acts">' + act + '</div>'
-      + '<div class="topic' + (topicOpen ? ' open' : '') + '" id="topic" title="Click to expand">' + esc(r.topic || '(no topic)') + '</div><div id="pinstrip"></div>';
+    $('#head').innerHTML = '<div class="t1"><h2>' + esc(r.name) + '</h2>' + chips + fateChips(r, esc) + '</div><div class="acts">' + act + '</div>'
+      + '<div class="topic' + (topicOpen ? ' open' : '') + '" id="topic" title="Click to expand">' + esc(r.topic || '(no topic)') + '</div>' + fateLine(r, esc) + '<div id="pinstrip"></div>';
     renderPins();
     bindRoomPin(r, pinFocus);
     $('#topic').onclick = function () { expanded['topic'] = !expanded['topic']; renderHead(r); };
@@ -501,7 +501,7 @@ ${ROOMS_JS}
 
   // ---------- actions ----------
   async function closeRoom(r) {
-    if (!window.confirm('Close ' + r.name + '? No conclusion will be recorded and agents still in it will be told to leave.')) return;
+    if (!window.confirm(closeWords(r))) return;
     await fetch('/rooms/' + encodeURIComponent(r.name) + '/close', { method: 'POST', headers: hdrs(), body: JSON.stringify({ name: myName(), reason: 'closed from dashboard' }) });
     refreshRooms();
   }

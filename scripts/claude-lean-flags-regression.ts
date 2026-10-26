@@ -84,14 +84,18 @@ async function harness(entry: string, env: Record<string, string>, argv: string[
   const cache = new Map<string, any>();
   const mocks: Record<string, any> = {
     'node:fs': fs, 'node:path': path, 'node:os': os, 'node:url': url, 'node:child_process': cp, 'node:crypto': { randomUUID: () => 'synthetic-session-id' }, 'node:string_decoder': { StringDecoder }, './strays.js': { stopStrays: async () => 0 }, './hub/status-view.js': { topicDigest },
-    './hub.js': { HubError: Error }, './settled.js': { settledAxes: () => '' }, './resources.js': { loadResources: () => [], seedResources: async () => [] }, './seat.js': { runSeat: async () => ({ final: 'fixture', ok: true }) },
+    './hub.js': { HubError: Error }, './settled.js': { settledAxes: () => '', toldSettled: () => '', carriedSummary: () => ({ ids: [], axes: 0, chars: 0 }) }, './resources.js': { loadResources: () => [], seedResources: async () => [] }, './seat.js': { runSeat: async () => ({ final: 'fixture', ok: true }) },
     './seat-handoff-report.js': { handoffMarkerLine: () => '' },
     // launcher-side helpers with no part in a seat's argv or environment: the hooks copy and the join check (src/worktree-hooks.ts, src/join-check.ts)
     './worktree-hooks.js': { carryHooks: () => ({ hooks: 'shared' }), hooksLine: () => '', hooksOff: () => ({ hooks: 'shared' }) },
+    // where a recruit works (src/spawner/worktrees.ts): the fixture is outside git, so no worktree, branch or snapshot, as the real helpers say over the git mock above
+    './spawner/worktrees.js': { recruitWorkspace: () => undefined, recruitBase: () => undefined, createRecruitWorktree: async () => ({ ok: false }), projectOf: () => undefined, planSnapshot: () => undefined, createSnapshot: () => false, removeSnapshot: () => {}, workspaceOf: () => undefined, WorktreeMaker: class { hooksIn = new Map(); make() { return Promise.resolve(undefined); } } },
     // the launch preflight (src/launch/preflight.ts) runs a kit command before any seat and only adds brief text; no flag is given here
     './launch/preflight.js': { preflightAtLaunch: () => ({ text: '' }) },
+    // the run's decision record (src/launch/decision-record.ts) is filed after every seat has exited; it adds nothing to a seat's argv or environment
+    './launch/decision-record.js': { decisionRecordLine: () => '', fileRunDecisionRecord: () => ({ source: null, slugs: [], files: [], searched: { final_text: false, session_texts: 0, room_messages: 0 } }), isVerifierSeat: () => false },
     './join-check.js': { checkJoined: async () => ({ missing: [], unknown: [], none: false }), joinLines: () => [], roomNames: () => async () => [] },
-    './result.js': { collectRoomSnapshot: async (_base: string, name: string) => ({ name, payload: { state: 'concluded', conclusion: { text: 'fixture' } }, transcript: { text: '' } }), readRunResult: () => ({}), writeRunResult: () => undefined, renderRunReport: () => '', rollupUsage: () => undefined, hubUsageRollup: () => undefined, transcriptPath: () => undefined, parseClaudeCliOutput: (raw: string) => ({ text: raw, usage: null }), seatScorecard: () => [], classifyOutcome: () => ({ kind: 'concluded', timedOut: false, detail: '' }), proposedDecisionDir: () => null },
+    './result.js': { collectRoomSnapshot: async (_base: string, name: string) => ({ name, payload: { state: 'concluded', conclusion: { text: 'fixture' } }, transcript: { text: '' } }), readRunResult: () => ({}), writeRunResult: () => undefined, renderRunReport: () => '', rollupUsage: () => undefined, hubUsageRollup: () => undefined, transcriptPath: () => undefined, parseClaudeCliOutput: (raw: string) => ({ text: raw, usage: null }), seatScorecard: () => [], classifyOutcome: () => ({ kind: 'concluded', timedOut: false, detail: '' }), proposedDecisionDir: () => null, promptDigests: () => ({}) },
   };
   async function module(name: string): Promise<any> {
     if (cache.has(name)) return cache.get(name);
@@ -101,16 +105,17 @@ async function harness(entry: string, env: Record<string, string>, argv: string[
       cache.set(name, mod); return mod;
     }
     const base = name.replace(/^\.\//, '').replace(/\.js$/, '');
-    // Real source for these only: swarm/spawner (under test), env/respawn (their real deps), claude-args (the shared lean-args builder, pure), sandbox (its --sandbox block, pure over the mocked fs), cost-estimate (the launch cost guide, pure).
-    assert.ok(['env', 'spawner', 'spawner/recruitment', 'swarm', 'respawn', 'claude-args', 'codex-seat', 'sandbox', 'cost-estimate', 'seat-targets', 'groups'].includes(base), `unmocked import ${name}`);
+    // Real source for these only: swarm/spawner (under test), env/respawn (their real deps), claude-args (the shared lean-args builder, pure), sandbox (its --sandbox block, pure over the mocked fs), cost-estimate (the launch cost guide, pure), launch/run-rooms (the run's room list, pure), seat/settings (the run's seat settings, type imports only).
+    assert.ok(['env', 'spawner', 'spawner/recruitment', 'swarm', 'respawn', 'claude-args', 'codex-seat', 'sandbox', 'cost-estimate', 'seat-targets', 'groups', 'launch/run-rooms', 'seat/settings'].includes(base), `unmocked import ${name}`);
     const source = readFileSync(path.join(root, 'src', `${base}.ts`), 'utf8');
     const code = transformSync(source, { loader: 'ts', format: 'esm', target: 'es2022' }).code;
     const mod = new vm.SourceTextModule(code, { context, initializeImportMeta(meta) { meta.url = `file:///fixture/src/${base}.js`; meta.resolve = () => "file:///synthetic/tsx.mjs"; } });
     cache.set(name, mod);
-    await mod.link((specifier: string) => module(specifier));
     return mod;
   }
   const mod = await module(entry);
+  // Node links each unlinked import itself, awaited by its first importer; a module this loader linked itself reached a second importer mid-link
+  await mod.link((specifier: string) => module(specifier));
   await mod.evaluate();
   return { exports: mod.namespace as any, env, calls };
 }

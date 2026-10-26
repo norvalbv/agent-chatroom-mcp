@@ -101,7 +101,7 @@ test("spawner: codex recruits read the brief from stdin; read-only recruits run 
 test("source-only Codex recruits resolve their loader from the adapter, outside the target project", async () => {
   const sourceRoot = join(base, "source-adapter");
   mkdirSync(join(sourceRoot, "src"), { recursive: true });
-  for (const file of ["codex-seat.ts", "env.ts", "codex"]) cpSync(resolve("src", file), join(sourceRoot, "src", file), { recursive: true });
+  for (const file of ["codex-seat.ts", "env.ts", "seat", "codex"]) cpSync(resolve("src", file), join(sourceRoot, "src", file), { recursive: true });
   writeFileSync(join(sourceRoot, "package.json"), '{"type":"module"}');
   symlinkSync(resolve("node_modules"), join(sourceRoot, "node_modules"));
   const { codexSeatCommand } = await import(join(sourceRoot, "src/codex-seat.ts"));

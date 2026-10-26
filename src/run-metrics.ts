@@ -9,6 +9,8 @@
 import { spawnSync } from "node:child_process";
 import type { WorkClass } from "./hub/types.js";
 import { coordinates } from "./hub/keys.js";
+import { researchLine, researchMetrics, type ResearchMetrics } from "./telemetry/prior-art.js";
+import { reResearch, reResearchSentence, type ReResearch } from "./telemetry/re-research.js";
 
 const CLASSES: WorkClass[] = ["read", "search", "web", "run", "edit"];
 const SHA = /\b[0-9a-f]{7,40}\b/g;
@@ -50,9 +52,14 @@ export interface RunMetrics {
   createdAt?: string;
   lastEventAt?: string;
   /** minutes after the room opened; absent when it never happened */
-  minutesTo: { firstClaim?: number; firstSource?: number; firstProposal?: number; firstNeed?: number; conclusion?: number };
+  minutesTo: { firstClaim?: number; firstSource?: number; firstProposal?: number; firstNeed?: number; conclusion?: number; firstPriorArt?: number; firstCodeFetch?: number; firstThirdPartyRun?: number };
+  /** prior art (src/telemetry/prior-art.ts): steps by tag and outside references handed in against found; absent without a ledger */
+  research?: ResearchMetrics;
   /** needs/* the room filed for the owner (hub need_filed / need_cleared events, src/hub/needs.ts): filed, cleared, and claims named as blocked; absent: none */
   needs?: { filed: number; cleared: number; blocks: number; asked: number; askedThenFiled: number; asksOfOwners: number; ownersAnswered: number };
+  /** ideas and brief items nobody could take, put to their author or the chair (hub hands_asked / hands_resolved / hands_unasked, src/hub/asks/hands.ts):
+   * asks, of them about item/* (the brief's problems), asks with nobody to ask, asks answered by a reply, and how the work stopped being unowned; absent: none */
+  hands?: { asked: number; items: number; unasked: number; answered: number; resolved: { recruited: number; claimed: number; dropped: number; built: number } };
   /** rate: workers who recruited at least once over workers; calls counts every role's recruits (a verifier's too) */
   recruits: { calls: number; seats: number; workers: number; rate: number };
   /** summed over seats that reported usage; seatsWithUsage of seats.length says how complete it is */
@@ -63,10 +70,16 @@ export interface RunMetrics {
   quiet?: { chat: number; bySender: number; byHub: number; keptPublicForBoardKey: number };
   /** board_set(append=true) lines per shared key (hub "board_append" events): appends, distinct appenders, continuations used; absent: none */
   appends?: Record<string, { lines: number; seats: number; continuations: number }>;
-  /** machine stall episodes the hub said in this room (hub "machine_stall" end events, src/hub/machine.ts); absent: none */
-  machine?: { stalls: number; stalled_s: number; worst_ms: number };
+  /**
+   * machine stall episodes the hub said in this room (hub "machine_stall" end events, src/telemetry/machine.ts); absent:
+   * none. hub_blocks: episodes that were the hub's own (busy, or blocked on its own work while its reference clock kept
+   * time), which are not the machine stalling and are not in stalls.
+   */
+  machine?: { stalls: number; stalled_s: number; worst_ms: number; hub_blocks?: number };
   /** seats with at least one web call in the ledger; undefined when the log has no ledger */
   webSeats?: number;
+  /** re-research (inputs/owner-4, src/telemetry/re-research.ts); absent when no seat fetched a paper, repo or package */
+  reResearch?: ReResearch;
   /** text the citation credit was read from */
   citedFrom: "conclusion" | "proposal" | "none";
   /** seats with findings on the board that the cited text never credits */
@@ -111,6 +124,9 @@ export function runMetrics(events: readonly Ev[], opts: MetricsOptions = {}): Ru
   const needs = { filed: 0, cleared: 0, blocks: 0, asked: 0, askedThenFiled: 0, asksOfOwners: 0, ownersAnswered: 0 };
   /** open "need" asks to blocked claims' owners (src/hub/needs/needs.ts), by message id; a reply_to one answers it */
   const ownerAsks = new Set<string>();
+  const hands = { asked: 0, items: 0, unasked: 0, answered: 0, resolved: { recruited: 0, claimed: 0, dropped: 0, built: 0 } };
+  /** open "hands" asks (src/hub/asks/hands.ts), by message id; a reply_to one answers it */
+  const handsAsks = new Set<string>();
   /** when the hub last asked the room about an outside limit (need_asked; blocker_nudged in older logs); a need_filed within 15 min converts it */
   let askOpen: string | undefined;
   let firstNeed: string | undefined;
@@ -185,6 +201,7 @@ export function runMetrics(events: readonly Ev[], opts: MetricsOptions = {}): Ru
       case "machine_stall": {
         if (e.event !== "end") break;
         machine ??= { stalls: 0, stalled_s: 0, worst_ms: 0 };
+        if (e.cause === "blocked" || e.cause === "hub") { machine.hub_blocks = (machine.hub_blocks ?? 0) + 1; break; }
         machine.stalls++;
         machine.stalled_s += Number(e.seconds ?? 0);
         machine.worst_ms = Math.max(machine.worst_ms, Number(e.max_drift_ms ?? 0));
@@ -218,6 +235,19 @@ export function runMetrics(events: readonly Ev[], opts: MetricsOptions = {}): Ru
       case "need_cleared":
         stamp(e.ts);
         needs.cleared++;
+        break;
+      case "hands_asked":
+        stamp(e.ts);
+        hands.asked++;
+        if (String(e.key).startsWith("item/")) hands.items++;
+        break;
+      case "hands_unasked":
+        stamp(e.ts);
+        hands.unasked++;
+        break;
+      case "hands_resolved":
+        stamp(e.ts);
+        if (e.how in hands.resolved) hands.resolved[e.how as keyof typeof hands.resolved]++;
         break;
       case "need_asked":
       case "blocker_nudged":
@@ -261,6 +291,8 @@ export function runMetrics(events: readonly Ev[], opts: MetricsOptions = {}): Ru
         if (m.kind === "chat") mention(m.content, m.from?.name);
         if (m.tag === "need") { needs.asksOfOwners++; ownerAsks.add(m.id); }
         else if (m.replyTo && ownerAsks.delete(m.replyTo)) needs.ownersAnswered++;
+        if (m.tag === "hands") handsAsks.add(m.id);
+        else if (m.replyTo && handsAsks.delete(m.replyTo)) hands.answered++;
         if (m.kind === "chat" && m.from?.agent !== "hub" && m.from?.agent !== "human") {
           quiet.chat++;
           if (m.autoQuiet) quiet.byHub++; else if (m.quiet) quiet.bySender++;
@@ -334,6 +366,8 @@ export function runMetrics(events: readonly Ev[], opts: MetricsOptions = {}): Ru
   const priced = list.filter((s) => s.usage);
   const sum = (k: "cost_usd" | "input_tokens" | "output_tokens") => priced.reduce((n, s) => n + (s.usage?.[k] ?? 0), 0);
   const recruiting = workers.filter((s) => s.recruits > 0).length;
+  const research = ledger ? researchMetrics(events) : undefined;
+  const firstPrior = research ? Object.values(research.firstAt).sort()[0] : undefined;
   return {
     room,
     createdAt,
@@ -344,15 +378,21 @@ export function runMetrics(events: readonly Ev[], opts: MetricsOptions = {}): Ru
       firstProposal: minutes(createdAt, firstAt.proposal),
       firstNeed: minutes(createdAt, firstNeed),
       conclusion: minutes(createdAt, firstAt.conclusion),
+      firstPriorArt: minutes(createdAt, firstPrior),
+      firstCodeFetch: minutes(createdAt, research?.firstAt.fetch),
+      firstThirdPartyRun: minutes(createdAt, research?.firstAt.run),
     }).filter(([, v]) => v !== undefined)) as RunMetrics["minutesTo"],
     recruits: { calls: list.reduce((n, s) => n + s.recruits, 0), seats: recruiting, workers: workers.length, rate: workers.length ? recruiting / workers.length : 0 },
     ...(priced.length ? { usage: { cost_usd: sum("cost_usd"), input_tokens: sum("input_tokens"), output_tokens: sum("output_tokens"), seatsWithUsage: priced.length } } : {}),
     ...(Object.keys(takes).length ? { takes } : {}),
     ...(needs.filed || needs.cleared || needs.asked ? { needs } : {}),
+    ...(hands.asked || hands.unasked ? { hands } : {}),
     ...(quiet.chat ? { quiet } : {}),
     ...(appendsBy.size ? { appends: Object.fromEntries([...appendsBy].map(([k, a]) => [k, { lines: a.lines, seats: a.seats.size, continuations: a.landed.size }])) } : {}),
     ...(machine ? { machine } : {}),
     ...(ledger ? { webSeats: list.filter((s) => (s.work?.web ?? 0) > 0).length } : {}),
+    ...(research ? { research } : {}),
+    ...((r) => (r.fetches || r.carriedSummaries ? { reResearch: r } : {}))(reResearch(events)),
     citedFrom: conclusion ? "conclusion" : proposal ? "proposal" : "none",
     uncited: cited ? list.filter((s) => s.findings > 0 && !s.cited.length).map((s) => s.name) : [],
     seats: list,
@@ -383,11 +423,15 @@ export function renderMetrics(m: RunMetrics): string {
   let text = `## Metrics\n\nComputed from the hub's room log (${m.room}). ${[at(t.firstClaim, "first claim"), at(t.firstSource, "first source"), at(t.firstProposal, "first proposal"), at(t.conclusion, "conclusion")].join(", ")}. ` +
     `${m.recruits.seats} of ${m.recruits.workers} workers recruited (${pct(m.recruits.rate)}); ${m.recruits.calls} recruit${m.recruits.calls === 1 ? "" : "s"} by any seat, see the recruits column; ` +
     (m.webSeats === undefined ? "no work ledger in this log, so reads, searches and web calls are unknown. " : `${m.webSeats} of ${m.seats.length} seats made a web call. `) +
+    (m.research ? researchLine(m.research, t) : "") +
+    (m.reResearch ? `${reResearchSentence(m.reResearch)} ` : "") +
     (m.usage ? `Seat-reported usage: $${m.usage.cost_usd.toFixed(2)}, ${m.usage.input_tokens} input + ${m.usage.output_tokens} output tokens from ${m.usage.seatsWithUsage} of ${m.seats.length} seats (the rest unknown). ` : "No seat reported usage to the hub. ") +
     memoryLine(m.seats) +
-    (m.machine ? `The machine stalled ${m.machine.stalls} time${m.machine.stalls === 1 ? "" : "s"} (${m.machine.stalled_s} s in all, worst timer drift ${Math.round(m.machine.worst_ms / 100) / 10} s); timings measured then are the machine\'s. ` : "") +
+    (m.machine?.stalls ? `The machine stalled ${m.machine.stalls} time${m.machine.stalls === 1 ? "" : "s"} (${m.machine.stalled_s} s in all, worst timer drift ${Math.round(m.machine.worst_ms / 100) / 10} s); timings measured then are the machine\'s. ` : "") +
+    (m.machine?.hub_blocks ? `The hub held up its own replies ${m.machine.hub_blocks} time${m.machine.hub_blocks === 1 ? "" : "s"} (busy, or waiting on its own work while its reference clock kept time); the machine did not stall then. ` : "") +
     (m.quiet && (m.quiet.bySender || m.quiet.byHub || m.quiet.keptPublicForBoardKey) ? `Of ${m.quiet.chat} agent chat messages, ${m.quiet.bySender} were sent quiet, ${m.quiet.byHub} were made quiet by the hub, and ${m.quiet.keptPublicForBoardKey} two-seat exchanges stayed public because they named a board entry. ` : "") +
     (m.needs ? `needs/* for the owner: ${m.needs.filed} filed${t.firstNeed !== undefined ? `, the first at ${t.firstNeed} min` : ""}, ${m.needs.cleared} cleared, ${m.needs.blocks} claim${m.needs.blocks === 1 ? "" : "s"} named as blocked, asked about outside limits ${m.needs.asked} time${m.needs.asked === 1 ? "" : "s"} (${m.needs.askedThenFiled} followed by a needs/* within 15 min), ${m.needs.ownersAnswered} of ${m.needs.asksOfOwners} blocked-claim owner${m.needs.asksOfOwners === 1 ? "" : "s"} answered. ` : "") +
+    (m.hands ? `Ideas nobody was free to take: ${m.hands.asked} put to their author or the chair (${m.hands.items ? `${m.hands.items} of them brief items, ` : ""}${m.hands.answered} answered by a reply)${m.hands.unasked ? `, ${m.hands.unasked} with nobody to ask` : ""}; resolved by ${m.hands.resolved.recruited} recruit${m.hands.resolved.recruited === 1 ? "" : "s"}, ${m.hands.resolved.claimed} claimed, ${m.hands.resolved.dropped} dropped, ${m.hands.resolved.built} built. ` : "") +
     (m.takes ? `take/* steps: ${Object.entries(m.takes).map(([k, n]) => `${n} ${k}`).join(", ")}. ` : "") +
     (m.appends ? `Shared logs (board_set append): ${Object.entries(m.appends).map(([k, a]) => `${k} ${a.lines} line${a.lines === 1 ? "" : "s"} from ${a.seats} seat${a.seats === 1 ? "" : "s"}${a.continuations ? `, ${a.continuations} continuation${a.continuations === 1 ? "" : "s"}` : ""}`).join("; ")}. ` : "") +
     (m.citedFrom === "none" ? "No proposal yet, so no citation credit.\n\n" : `Credit read from the ${m.citedFrom}${m.uncited.length ? `; findings never cited: ${m.uncited.join(", ")}` : ""}.\n\n`) +

@@ -40,7 +40,9 @@ function attribute(logs: readonly (readonly Ev[])[]): { byTrigger: Map<Trigger, 
     if (seat && !Number.isNaN(t)) (triggers.get(seat) ?? triggers.set(seat, []).get(seat)!).push({ t, trigger, tool, ...(key ? { key } : {}) });
   };
   for (const events of logs) for (const e of events) {
-    if (e.type === "call_completion") note(seatOf.get(e.participant), e.ts, e.tool !== "wait_for_messages" ? "hub_call" : e.empty ? "wait_empty" : "wait_msg", e.tool !== "wait_for_messages" ? String(e.tool) : e.empty ? "wait_for_messages (empty)" : "wait_for_messages (messages)", e.tool !== "wait_for_messages" ? keyClass(e.key) : undefined);
+    // a wait that says why it returned (call_completion.woke, hub builds from claim/redundant-calls on) is split by it:
+    // "wait_for_messages (notices)" is a held wait that ended with only board notices, a wake nobody had to act on
+    if (e.type === "call_completion") note(seatOf.get(e.participant), e.ts, e.tool !== "wait_for_messages" ? "hub_call" : e.empty ? "wait_empty" : "wait_msg", e.tool !== "wait_for_messages" ? String(e.tool) : e.empty ? "wait_for_messages (empty)" : `wait_for_messages (${typeof e.woke === "string" && e.woke !== "empty" ? e.woke : "messages"})`, e.tool !== "wait_for_messages" ? keyClass(e.key) : undefined);
     else if (e.type === "work") note(seatOf.get(e.pid), e.ts, "local_tool", `local ${String(e.tool ?? e.cls ?? "tool")}`);
     else if (e.type === "usage" && e.seat && e.usage) {
       const t = Date.parse(String(e.ts));

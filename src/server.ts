@@ -19,7 +19,7 @@ import { AUTO_QUIET_NOTE, Hub, HubError, ROLES, VERIFY_HEAD_EXAMPLE, VERIFY_HEAD
 const VERIFY_GAP_PROSE = /not verified|did not (run|verify|exercise|watch|drive|check|test)|could not (run|verify|test)|not (run|exercised|watched|driven|checked) by me|untested|not tested|author-only|rests on the author/i;
 import { planSnapshot, projectOf, type SpawnedAgent, type Spawner } from "./spawner.js";
 import type { Participant } from "./hub/types.js";
-import { createWaitView } from "./hub/wait-view.js";
+import { createWaitView, WAIT_WOKE, withWoke, wokeOf, type WokeTag } from "./hub/wait-view.js";
 import { hubTime, timeClaims, timeNote } from "./hub/clock.js";
 import { VERDICT_HINT } from "./hub/checks.js";
 import { boardContinuation, noteBoardRead } from "./hub/board.js";
@@ -57,7 +57,7 @@ const fail = (err: unknown) => ({
 export interface SessionServer {
   server: McpServer;
   /** Mark every participant this connection owns as left (called when the transport closes). */
-  leaveAll(reason?: string, final?: boolean): void;
+  leaveAll(reason?: string, final?: boolean, keepChair?: boolean): void;
   /** the session key stamped on every participant this connection joins as (Participant.session) */
   sessionKey: string;
 }
@@ -183,7 +183,7 @@ export function createSessionServer(hub: Hub, spawner?: Spawner, opts: { holdMs?
         if (from) from = outsider(room, tool);
       };
       // a wait that returned no new message is idle polling (src/run-metrics.ts); resultChars: what the call put into the
-      let empty: boolean | undefined, resultChars: number | undefined; // seat's context, re-read until it compacts (wait-cost --traffic)
+      let empty: boolean | undefined, resultChars: number | undefined, woke: WokeTag | undefined; // seat's context, re-read until it compacts (wait-cost --traffic); woke: why a wait returned
       // every hub call is a step too (board_get, vote): the People tab shows it without a room turn. Not a wait: it
       // already refreshes last_seen_at when it returns, and logging idle waits would push real work out of the feed
       if (room && participant && tool !== "wait_for_messages") try { hub.heartbeat(room, participant, { tool, hub: true }); } catch { /* departed or unknown: the call itself reports it */ }
@@ -194,7 +194,7 @@ export function createSessionServer(hub: Hub, spawner?: Spawner, opts: { holdMs?
         if (room) for (const id of me.get(room) ?? []) hub.refuseKicked(room, id);
         let data = await fn(args);
         reseated();
-        if (tool === "wait_for_messages") empty = !((data as { messages?: unknown[] })?.messages?.length);
+        if (tool === "wait_for_messages") { empty = !((data as { messages?: unknown[] })?.messages?.length); woke = (data as { [WAIT_WOKE]?: WokeTag })?.[WAIT_WOKE]; }
         // steering fallback: a hub tool result always reaches the model, so pending asks ride on it (and count as delivered)
         if (room && participant && !SELF_DELIVERING.has(tool)) {
           const steer = steerCarry(hub, room, participant);
@@ -220,7 +220,7 @@ export function createSessionServer(hub: Hub, spawner?: Spawner, opts: { holdMs?
         const key = raw !== undefined && Hub.BOARD_KEY.test(raw) ? raw : undefined;
         // a key the board refused is kept by its shape only (keyShape), so a key-format refusal can be attributed
         const rejected = raw !== undefined && key === undefined ? keyShape(raw) : undefined;
-        hub.recordCallCompletion(room, tool, outcome, participant, { ms: Date.now() - started, ...(empty === undefined ? {} : { empty }), ...(from ? { outsider: from } : {}), ...(key === undefined ? {} : { key }), ...(rejected ? { key_rejected: rejected } : {}), ...(resultChars === undefined ? {} : { result_chars: resultChars }), args_chars: JSON.stringify(args ?? {}).length });
+        hub.recordCallCompletion(room, tool, outcome, participant, { ms: Date.now() - started, ...(empty === undefined ? {} : { empty }), ...(woke ?? {}), ...(from ? { outsider: from } : {}), ...(key === undefined ? {} : { key }), ...(rejected ? { key_rejected: rejected } : {}), ...(resultChars === undefined ? {} : { result_chars: resultChars }), args_chars: JSON.stringify(args ?? {}).length });
       }
     };
 
@@ -491,13 +491,13 @@ export function createSessionServer(hub: Hub, spawner?: Spawner, opts: { holdMs?
         // a capped page means more is already waiting: return it rather than piling the backlog into one result
         // ...and so is another seat's challenge on this seat's own proposal, which this delivery may already have settled
         while (!hub.deliveryRemaining(p) && !hub.actionableNow(r, p) && !msgs.some((m) => m.mentions?.includes(id!) || hub.challengesOwnProposal(r, p, m)) && !owedElsewhere()) {
-          const remaining = (msgs.length ? Math.min(waitDeadline, chatterDeadline) : waitDeadline) - Date.now();
+          const remaining = (msgs.some((m) => m.kind !== "board") ? Math.min(waitDeadline, chatterDeadline) : waitDeadline) - Date.now(); // board notices alone ride the whole hold (evidence/redundant-calls: in 9f66 they ended it at the seat's own 55 s)
           if (remaining <= 0) break;
           const more = await hub.wait(room, id, p.lastSeenSeq, slice(remaining));
           if (more.length) msgs = msgs.concat(more);
         }
       }
-      const remaining = hub.deliveryRemaining(p);
+      const remaining = hub.deliveryRemaining(p), woke = wokeOf(msgs, { capped: remaining > 0, actionable: hub.actionableNow(r, p) || msgs.some((m) => m.mentions?.includes(id!) || hub.challengesOwnProposal(r, p, m)) || owedElsewhere(), held: !!hold_until_actionable, holdOver: Date.now() >= waitDeadline });
       const moreNote = remaining ? `${remaining} more message(s) remain queued (this delivery was capped); call wait_for_messages again with timeout_ms=0 to receive them. ` : "";
       const open = [...r.proposals.values()].find((pr) => pr.status === "open");
       const needsMyVote = open && hub.needsVote(r, p, open);
@@ -529,14 +529,14 @@ export function createSessionServer(hub: Hub, spawner?: Spawner, opts: { holdMs?
       // an ask already carried in this response's messages[] is referenced by id, not sent twice
       const delivered = new Set(msgs.map((m) => m.id));
       // only a human's message strips the envelope; a peer ask rides the full one (proposal, board, queue)
-      if (focus && hub.focusExclusive(focus)) return compactWait(p, {
+      if (focus && hub.focusExclusive(focus)) return withWoke(compactWait(p, {
         hint: toolsRegainedNote || moreNote ? toolsRegainedNote + (hub.attentionHint(r, p) ?? "") + (moreNote ? ` ${moreNote}` : "") : hub.attentionHint(r, p), messages: msgs.map((m) => fmtWait(hub, r, p, m)), remaining,
         next_seq: p.lastSeenSeq, room_state: r.state, your_turn: r.mode === "free" || hub.currentSpeaker(r)?.id === id,
         your_role: p.role ?? "worker", humans_present: hub.activeParticipants(r).filter((x) => x.agent === "human").map((x) => x.name),
         unanswered_human: human ? (resp!.mine ? { id: human.id, name: hub.shown(r, human.from), text: human.content, you_answer: true } : { name: hub.shown(r, human.from), responder: resp!.who, you_answer: false }) : null,
         addressed_to_you: [{ id: focus.id, from: hub.shown(r, focus.from), ...(delivered.has(focus.id) ? { in_messages: true } : { text: focus.content }) }],
         open_proposal: null, conclusion: null, leaving_would_block: !!block,
-      });
+      }), woke);
       if (open) p.seenProposal = { ...(p.seenProposal ?? {}), [open.id]: open.version };
       const owed = hub.addressedBy(r, p);
       if (owed[0]) p.addressWarned = owed[0].id;
@@ -590,7 +590,7 @@ export function createSessionServer(hub: Hub, spawner?: Spawner, opts: { holdMs?
       const shownMsgs = blind ? msgs.filter((m) => m.mentions?.includes(id!) || m.from.agent === "human") : msgs;
       const blindHint = blind && (hub.attentionHint(r, p) ?? `You are the fresh challenger for ${blind.id}: check one claim of the text in open_proposal, report it (challenge with a command, or one message), then leave_room. The room's other messages are not pushed to you.`);
       // the hint goes first: it is the one line a weaker model must not lose to a clamp
-      return compactWait(p, {
+      return withWoke(compactWait(p, {
         hint: blindHint || (toolsRegainedNote || moreNote ? toolsRegainedNote + (hint ? `${hint} ` : "") + moreNote : named ? idleHint(idleWork) : idleWork.length ? stillOpenHint(idleWork) : (leaveOffer ?? hint)),
         messages: shownMsgs.map((m) => fmtWait(hub, r, p, m)),
         remaining,
@@ -620,7 +620,7 @@ export function createSessionServer(hub: Hub, spawner?: Spawner, opts: { holdMs?
           return { messages: sh.mine, of_last: sh.of, fair: sh.fair, over: sh.over };
         })(),
         conclusion,
-      });
+      }), woke);
     }),
   );
 
@@ -700,7 +700,7 @@ export function createSessionServer(hub: Hub, spawner?: Spawner, opts: { holdMs?
       title: "Amend the open proposal",
       description:
         "Edit the open proposal's text in place: replace `find` (exact, unique substring) with `replace`, leave `find` empty to append, or pass replace_all=true to swap the whole text. " +
-        "Only the diff is posted, the version is bumped, and votes reset EXCEPT agrees whose quoted clause still appears verbatim; you get no vote for amending, so vote after you amend. A verify/* entry keeps counting while the amended text still cites the commit it checked and adds no commit-like token (7 to 40 lowercase hex characters) that nobody has verified; otherwise it must be written again. " +
+        "Only the diff is posted, the version is bumped, and votes reset EXCEPT agrees and disagrees whose quoted clause still appears verbatim; you get no vote for amending, so vote after you amend. A verify/* entry keeps counting while the amended text still cites the commit it checked and adds no commit-like token (7 to 40 lowercase hex characters) that nobody has verified; otherwise it must be written again. " +
         "A challenge is answered automatically when the text it cites is gone. Use this instead of re-proposing. " +
         "Given the key of a board entry you wrote instead of a proposal id, it edits that board entry in place the same way (find/replace, append, replace_all): send the changed passage, not the whole entry.",
       inputSchema: {
@@ -866,13 +866,13 @@ export function createSessionServer(hub: Hub, spawner?: Spawner, opts: { holdMs?
       title: "Vote on a proposal",
       description:
         "Vote on a proposal. agree requires `quote`: a verbatim clause (15+ chars) from the proposal you endorse, checked by the server; while a challenge is open it also needs `reason`. " +
-        "disagree requires `reason` stating the specific change that would make you agree; a disagree keeps the proposal open for amendment (it never kills it) and stands until you re-vote or that text is amended. Optional confidence 0-1. " +
+        "disagree requires `reason` stating the specific change that would make you agree; a disagree keeps the proposal open for amendment (it never kills it). Give it `quote`, the clause you object to or are waiting on, and it stands across amends that keep that clause until you re-vote; without one, any amend resets it. Checked but waiting on an input: disagree quoting the pending line, not a fresh disagree per version. Optional confidence 0-1. " +
         "Your agree can be the one that concludes the room, after which no vote or amend is taken: agree only to the text as it stands, not to text you still mean to change.",
       inputSchema: {
         room: roomArg,
         proposal_id: z.string().describe("Proposal id (prop_...)."),
         vote: z.enum(["agree", "disagree", "abstain"]),
-        quote: z.string().optional().describe("agree only: verbatim clause from the proposal text."),
+        quote: z.string().optional().describe("Verbatim clause from the proposal text (15+ chars): required for agree; for disagree, the clause it objects to or waits on."),
         reason: z.string().optional().describe("Why. Required for disagree: the change that would make you agree."),
         confidence: z.number().min(0).max(1).optional(),
         participant_id: asArg,
@@ -998,7 +998,7 @@ export function createSessionServer(hub: Hub, spawner?: Spawner, opts: { holdMs?
       guard("list_agents", ({ room }) =>
         spawner.agents
           .filter((a) => !room || a.room === room)
-          .map((a) => ({ name: a.name, room: a.room, report_to: a.reportTo ?? null, agent: a.agent, model: a.model ?? null, requested_by: a.requestedBy, depth: a.depth, ...(a.workspace ? { branch: a.workspace.branch } : {}), running: a.endedAt === undefined, exit_code: a.exitCode ?? null, brief: a.brief.slice(0, 160) })),
+          .map((a) => ({ name: a.name, room: a.room, report_to: a.reportTo ?? null, agent: a.agent, model: a.model ?? null, requested_by: a.requestedBy, depth: a.depth, ...(a.workspace ? { branch: a.workspace.branch } : {}), ...(a.settings ? { settings: { effort: a.settings.effort, compact_window: a.settings.compact_window, from: a.settings.source.effort } } : {}), running: a.endedAt === undefined, exit_code: a.exitCode ?? null, brief: a.brief.slice(0, 160) })),
       ),
     );
   }
@@ -1016,15 +1016,15 @@ export function createSessionServer(hub: Hub, spawner?: Spawner, opts: { holdMs?
     },
   );
 
-  // `final`: the seat's process is known to have exited (launcher receipt), so a leave refused once as blocking is retried
-  const leaveAll = (reason = "MCP session closed without leave_room", final = false) => {
+  // `final`: the seat's process exited (launcher receipt), so a refused leave is retried; `keepChair`: src/hub/liveness.ts reapIdle
+  const leaveAll = (reason = "MCP session closed without leave_room", final = false, keepChair = false) => {
     for (const [room, ids] of me) {
       for (const id of ids) {
         const r = hub.rooms.get(room), p = r?.participants.get(id);
-        const held = hub.holds(room, id, sessionKey);
-        // only a seat that was in the room: a session ending after leave_room or a kick says nothing new
-        if (r && p?.active) hub.recordSession(r, p, "closed", reason, !held);
-        if (!held) continue; // re-seated on a newer connection: this one ending is not the seat leaving
+        // re-seated on a newer connection, or a chair an idle reap keeps: this one ending is not the seat leaving
+        const kept = !hub.holds(room, id, sessionKey) || (keepChair && p?.role === "chair");
+        if (r && p?.active) hub.recordSession(r, p, "closed", reason, kept); // only a seat that was in the room says anything
+        if (kept) continue;
         for (let attempt = 0; attempt < (final ? 2 : 1); attempt++) {
           try {
             hub.leave(room, id, reason);

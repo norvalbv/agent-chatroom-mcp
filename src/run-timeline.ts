@@ -9,6 +9,7 @@
  */
 import { coordinates } from "./hub/keys.js";
 import { checksOf, verdictOf } from "./hub/checks.js";
+import { lateCells, runColumns, type RunColumns } from "./telemetry/run-columns.js";
 
 type Ev = Record<string, any>;
 
@@ -285,7 +286,7 @@ export function renderTimeline(t: RunTimeline): string {
 /** One run, one row: what "further per hour and per dollar" can be read from (scripts/runs-table.ts). A result is a
  * result/* entry and reviewed means another seat reran, verified, reviewed or attacked it; a finding is any board entry
  * but claim/, draft/, inbox/ and hold/ (run-metrics' rule). Unknown cost stays undefined, never zero. */
-export interface RunRow {
+export interface RunRow extends RunColumns {
   room: string;
   /** the topic's first line */
   task: string;
@@ -302,8 +303,6 @@ export interface RunRow {
   quietFromMin?: number;
   /** why the run ended, as its launcher told the hub (run_end event): concluded, timeout, operator_stop, seats_exited; absent: not recorded */
   endCause?: string;
-  /** seats whose process ended, by cause (seat_exit events): usage_limit, sigterm, crash...; absent: none recorded */
-  seatExits?: Record<string, number>;
   /** entries of any prefix that another seat's check names (RunTimeline.checkedEntries) */
   entriesChecked: number;
   /** how the room closed (evidence/ab-last-call-verifier-gate): electorate seats whose vote was not on the concluded version,
@@ -319,16 +318,16 @@ export interface RunRow {
   usdPerFinding?: number;
 }
 
-const NOT_FINDING = { test: (key: string) => coordinates(key) || key.startsWith("draft/") };
+export const NOT_FINDING = { test: (key: string) => coordinates(key) || key.startsWith("draft/") };
 const round2 = (x: number) => Math.round(x * 100) / 100;
 /** Things that happen to a room after its seats stop: the owner archiving it from the dashboard (gwhf read 36.08 h for
  * 0.19 h of work), the sweep marking seats left, a hub restart, memory samples, idle signals, and a later room's seats
  * reading this log (outside_read: tky5 read 17.5 h because this round's seats opened its file 14 h after it ended).
  * They do not lengthen the run. A seat's usage still does: it is the seat working, though for a group lead it may be
  * work in its other room (1nwp-leads reads 3.62 h for 2.07 h to its conclusion); runTotals is the run's true span. */
-const NOT_RUN_TIME = new Set(["archive", "leave", "hub_restart", "memory", "machine", "machine_stall", "room_idle", "room_active", "room_waiting", "board_manifest", "outside_read", "overlap_notice", "run_end", "seat_exit", "owner_verdict"]);
+const NOT_RUN_TIME = new Set(["carried", "reap_check", "archive", "leave", "hub_restart", "memory", "machine", "machine_stall", "room_idle", "room_active", "room_waiting", "board_manifest", "outside_read", "overlap_notice", "run_end", "seat_exit", "owner_verdict"]);
 /** Entries the launcher seeds (resource/* with --resources) are what the room was given, not what it found (35 of 214 in 0btz). */
-const SEEDED_BY = new Set(["launcher"]);
+export const SEEDED_BY = new Set(["launcher"]);
 
 /** RunRow.close: the conclusion's own closing record when it has one, else the same counts from the events. */
 function closeOf(c: Record<string, any> | undefined, seats: Map<string, { name: string; role?: string; agent?: string; active: boolean }>, votesOf: Map<string, Record<string, { vote?: string; version?: number }>>): RunRow["close"] {
@@ -357,7 +356,6 @@ export function runRow(events: readonly Ev[]): RunRow {
   const keys = new Set<string>();
   let endCause: string | undefined;
   let ownerVerdict: string | undefined;
-  const seatExits: Record<string, number> = {};
   // for the close (RunRow.close): seats present, the concluded proposal's standing votes, the conclusion record
   const seatsIn = new Map<string, { name: string; role?: string; agent?: string; active: boolean }>();
   const votesOf = new Map<string, Record<string, { vote?: string; version?: number }>>();
@@ -375,7 +373,6 @@ export function runRow(events: readonly Ev[]): RunRow {
     if (e.type === "proposal" && e.proposal?.createdAt) firstProposal ??= Date.parse(e.proposal.createdAt);
     if (e.type === "run_end") endCause ??= String(e.cause);
     if (e.type === "owner_verdict") ownerVerdict = String(e.verdict);
-    if (e.type === "seat_exit") seatExits[String(e.cause)] = (seatExits[String(e.cause)] ?? 0) + 1;
     if (e.type === "state" && e.conclusion?.decidedAt) conclusion ??= Date.parse(e.conclusion.decidedAt);
     if (!concluded) {
       if (e.type === "join" && e.p?.id) seatsIn.set(String(e.p.id), { name: String(e.p.name), role: e.p.role, agent: e.p.agent, active: true });
@@ -412,7 +409,7 @@ export function runRow(events: readonly Ev[]): RunRow {
     ...(t.quietFrom ? { quietFromMin: min(Date.parse(t.quietFrom)) } : {}),
     ...(endCause ? { endCause } : {}),
     ...(ownerVerdict ? { ownerVerdict } : {}),
-    ...(Object.keys(seatExits).length ? { seatExits } : {}),
+    ...runColumns(events), // seat exits, reaps and re-research
     ...((() => { const c = closeOf(concluded, seatsIn, votesOf); return c ? { close: c } : {}; })()),
     reviewedPerHour: hours > 0 ? round2(reviewed / hours) : 0,
     ...(costUsd !== undefined && reviewed ? { usdPerReviewed: round2(costUsd / reviewed) } : {}),
@@ -514,9 +511,9 @@ const closeText = (c: RunRow["close"]) => !c ? "-" : `${c.notVotedOnFinal} of ${
 export function renderRunsTable(rows: RunRow[]): string {
   const v = (x: number | undefined, unit = "") => (x === undefined ? "?" : `${unit}${x}`);
   const dash = (x: number | undefined) => (x === undefined ? "-" : String(x));
-  let text = "| room | task | hours | seats | cost | results / reviewed | reviewed per hour | $ per reviewed | findings | $ per finding | first proposal (min) | conclusion (min) | went quiet (min) | run ended | seat exits | entries checked | owner verdict | at the close |\n|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|\n";
+  let text = "| room | task | hours | seats | cost | results / reviewed | reviewed per hour | $ per reviewed | findings | $ per finding | first proposal (min) | conclusion (min) | went quiet (min) | run ended | seat exits | entries checked | owner verdict | at the close | reaps | re-research |\n|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|\n";
   for (const r of [...rows].sort((a, b) => (a.start ?? "").localeCompare(b.start ?? ""))) {
-    text += `| ${r.room} | ${r.task.replace(/\|/g, "/")} | ${r.hours} | ${r.seats} | ${v(r.costUsd, "$")} | ${r.results} / ${r.reviewed} | ${r.reviewedPerHour} | ${v(r.usdPerReviewed, "$")} | ${r.findings} | ${v(r.usdPerFinding, "$")} | ${dash(r.firstProposalMin)} | ${dash(r.conclusionMin)} | ${dash(r.quietFromMin)} | ${r.endCause ?? "-"} | ${r.seatExits ? Object.entries(r.seatExits).map(([k, n]) => `${k} ${n}`).join(", ") : "-"} | ${r.entriesChecked} | ${r.ownerVerdict ?? "-"} | ${closeText(r.close)} |\n`;
+    text += `| ${r.room} | ${r.task.replace(/\|/g, "/")} | ${r.hours} | ${r.seats} | ${v(r.costUsd, "$")} | ${r.results} / ${r.reviewed} | ${r.reviewedPerHour} | ${v(r.usdPerReviewed, "$")} | ${r.findings} | ${v(r.usdPerFinding, "$")} | ${dash(r.firstProposalMin)} | ${dash(r.conclusionMin)} | ${dash(r.quietFromMin)} | ${r.endCause ?? "-"} | ${r.seatExits ? Object.entries(r.seatExits).map(([k, n]) => `${k} ${n}`).join(", ") : "-"} | ${r.entriesChecked} | ${r.ownerVerdict ?? "-"} | ${closeText(r.close)} | ${lateCells(r)} |\n`;
   }
   return text;
 }

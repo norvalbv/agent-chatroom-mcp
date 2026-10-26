@@ -8,6 +8,10 @@
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import type { AgentKind } from "./spawner.js";
+import { EFFORTS, type Effort, type SeatSettings } from "./seat/settings.js";
+// a run's seat settings are laid over this environment for its recruits (src/seat/settings.ts, decision/recruit-settings)
+export { effectiveSeatSettings, parseSeatSettings, recruitRun, recruitSettingsHooks, seatSettingsOpt, SeatSettingsError, withSeatSettings, type RecruitRun, type RecruitSpawn, type SeatSettings } from "./seat/settings.js";
 
 export const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -104,6 +108,66 @@ export function seatChildEnv(env: NodeJS.ProcessEnv = process.env, name?: string
   if (name !== undefined) Object.assign(childEnv, seatGitIdentity(name));
   if (env.CHATROOM_SEAT_AI_GATES !== "on") for (const key of SEAT_AI_GATES_OFF) childEnv[key] ??= "1";
   return childEnv;
+}
+
+/**
+ * The launcher's --compact-at <tokens> and --effort <level>, set in its own environment so seatChildEnv gives them to every
+ * Claude seat, and launcherSeatSettings carries them to the run's recruits on whichever hub. --compact-at: compactWindow;
+ * "off" (or --claude-full) leaves Claude Code's own default. --effort: CLAUDE_CODE_EFFORT_LEVEL (low, medium, high, xhigh,
+ * max or auto); unset, the launcher's own, else Claude Code's default (medium on Opus 5.5). `error`: exit 2 with it.
+ */
+export function applySeatFlags(env: NodeJS.ProcessEnv, f: { compactAt?: string; effort?: string }): { error?: string; warnings: string[] } {
+  const warnings: string[] = [];
+  if (f.compactAt === "off") env.CHATROOM_SEAT_COMPACT_WINDOW = "off";
+  else if (f.compactAt !== undefined) {
+    if (compactWindow(f.compactAt) === null) return { error: `--compact-at takes a whole number of tokens from 100000 to 1000000, or "off" (got "${f.compactAt}"); "200k" is not accepted.`, warnings };
+    env.CHATROOM_SEAT_COMPACT_WINDOW = f.compactAt;
+    // swarm-005342-qejc: at 100000 a seat reading large files died of "Autocompact is thrashing"; at 200000 the same task ran through
+    if (compactWindow(f.compactAt)! < COMPACT_WINDOW_TESTED) warnings.push(`--compact-at ${f.compactAt}: under ${COMPACT_WINDOW_TESTED} a seat that reads large files or outputs can refill its context within three turns of a compaction and stop ("Autocompact is thrashing").`);
+  }
+  if (f.effort !== undefined) {
+    if (!EFFORTS.includes(f.effort as Effort) || f.effort === "default") return { error: `--effort takes one of ${EFFORTS.filter((e) => e !== "default").join(", ")} (got "${f.effort}").`, warnings };
+    env.CLAUDE_CODE_EFFORT_LEVEL = f.effort;
+  }
+  return { warnings };
+}
+
+/** What the launcher's Claude seats get from its environment and flags (as seatChildEnv gives it them): the seat_settings it
+ * sends with every room it creates, so the hub's recruits there get the same whatever that hub's own environment says. */
+export function launcherSeatSettings(env: NodeJS.ProcessEnv, o: { seatHooksOff?: boolean; claudeFull?: boolean; sandbox?: boolean; web?: boolean; carry?: boolean; models?: string[] }): SeatSettings {
+  const level = env.CLAUDE_CODE_EFFORT_LEVEL;
+  const window = seatChildEnv(env, undefined, false, true).CLAUDE_CODE_AUTO_COMPACT_WINDOW;
+  return {
+    effort: level && EFFORTS.includes(level as Effort) ? (level as Effort) : "default",
+    compact_window: window && Number.isInteger(Number(window)) ? Number(window) : "off",
+    ai_gates: env.CHATROOM_SEAT_AI_GATES === "on" ? "on" : "off",
+    seat_hooks: o.seatHooksOff ? "off" : "on",
+    claude_full: !!o.claudeFull,
+    sandbox: !!o.sandbox,
+    web: o.web ?? true,
+    carry: o.carry ?? true,
+    ...(o.models?.length ? { models: [...new Set(o.models)] } : {}),
+  };
+}
+
+/** The launcher's one log line on what its seats, and so its recruits, run with. */
+export function seatSettingsLine(s: SeatSettings): string {
+  const effort = s.effort === "default" ? "Claude Code's default (medium on Opus 5.5; --effort to set it)" : s.effort;
+  return `seat settings, which the run's recruits inherit through its rooms: effort ${effort}, compact window ${s.compact_window}, AI gates ${s.ai_gates}, commit hooks ${s.seat_hooks}${s.claude_full ? ", full flags" : ""}${s.sandbox ? ", sandboxed" : ""}${s.web ? "" : ", no web"}${s.carry ? "" : ", no carry"}`;
+}
+
+/** Which provider and model every recruit is launched as, whatever was asked for. Live, settable from the dashboard (POST /policy). */
+export interface RecruitPolicy {
+  /** force this provider for every recruit; undefined = as requested */
+  agent?: AgentKind;
+  /** force this model for every recruit; undefined = as requested (or the provider's default) */
+  model?: string;
+}
+/** Default: the free model only. CHATROOM_RECRUIT_AGENT / CHATROOM_RECRUIT_MODEL override the default at start; "any" unpins. */
+export function policyFromEnv(env: NodeJS.ProcessEnv = process.env): RecruitPolicy {
+  const agent = env.CHATROOM_RECRUIT_AGENT ?? "openrouter";
+  const model = env.CHATROOM_RECRUIT_MODEL ?? "deepseek/deepseek-v4-flash-0731";
+  return { agent: agent === "any" ? undefined : (agent as AgentKind), model: model === "any" ? undefined : model };
 }
 
 /**

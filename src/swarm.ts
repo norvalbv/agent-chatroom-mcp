@@ -10,11 +10,11 @@ import { createWriteStream, existsSync, mkdirSync, readFileSync, readdirSync, st
 import { carryHooks, hooksLine, hooksOff } from "./worktree-hooks.js";
 import { checkJoined, joinLines, roomNames, type LaunchedSeat } from "./join-check.js";
 import { dirname, resolve } from "node:path";
-import { collectRoomSnapshot, renderRunReport, writeRunResult, rollupUsage, hubUsageRollup, parseClaudeCliOutput, transcriptPath, seatScorecard, classifyOutcome, proposedDecisionDir, type RunResult, type RoomSnapshot, type SeatUsageRollup } from "./result.js";
-import { settledAxes } from "./settled.js";
+import { collectRoomSnapshot, renderRunReport, writeRunResult, rollupUsage, hubUsageRollup, parseClaudeCliOutput, transcriptPath, seatScorecard, classifyOutcome, proposedDecisionDir, promptDigests, type RunResult, type RoomSnapshot, type SeatUsageRollup } from "./result.js";
+import { carriedSummary, settledAxes } from "./settled.js";
 import { registerRespawn, respawnProbe } from "./respawn.js";
 import { fileURLToPath } from "node:url";
-import { aiGatesLine, HUB_START_MS, waitForHub, seatHoldMs, carrySettings, launcherHeaders, COMPACT_WINDOW_TESTED, compactWindow, devHubRule, heartbeatHookSettings, hubLogFile, loadDotEnv, outputHeartbeat, ownHubEnv, readLauncherToken, respawnTokenProblem, reusedHubProblem, seatBeat, seatChildEnv, seatCompactWindow, seatPortError, type SeatBeat } from "./env.js";
+import { aiGatesLine, HUB_START_MS, waitForHub, seatHoldMs, carrySettings, applySeatFlags, launcherHeaders, launcherSeatSettings, devHubRule, heartbeatHookSettings, hubLogFile, loadDotEnv, outputHeartbeat, ownHubEnv, readLauncherToken, respawnTokenProblem, reusedHubProblem, seatBeat, seatChildEnv, seatCompactWindow, seatPortError, seatSettingsLine, type SeatBeat } from "./env.js";
 import { randomUUID } from "node:crypto";
 import { claudeUsageProbe, exitDetail, fetchRespawnRoom, respawnChain, type RespawnRoom } from "./respawn.js";
 import { claudeArgs } from "./claude-args.js";
@@ -22,11 +22,13 @@ import { codexSeatCommand, codexUsageTracker } from "./codex-seat.js";
 import { claudeSandbox } from "./sandbox.js";
 import { topicDigest } from "./hub/status-view.js";
 import { stopStrays } from "./strays.js";
-import { launchCostGuide } from "./cost-estimate.js";
+import { launchGuide } from "./cost-estimate.js";
 import { seatTarget } from "./seat-targets.js";
+import { runRooms } from "./launch/run-rooms.js";
 import { digestAcks, digestRecords, loadGroups, renderDigests, type GroupsFile } from "./groups.js";
 import { loadResources, seedResources } from "./resources.js";
 import { preflightAtLaunch } from "./launch/preflight.js";
+import { decisionRecordLine, fileRunDecisionRecord, isVerifierSeat } from "./launch/decision-record.js";
 loadDotEnv();
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -117,21 +119,14 @@ if (has("resources")) {
   try { RESOURCES = loadResources(resolve(flag("resources") ?? "")); } catch (e) { console.error(e instanceof Error ? e.message : String(e)); process.exit(2); }
 }
 /**
- * --compact-at <tokens>: every Claude seat, and every recruit of a hub this launcher starts, compacts its transcript at
- * this size (compactWindow in env.ts). A hub that was already running keeps its own setting for the seats it recruits.
- * Unset, lean seats compact at SEAT_COMPACT_DEFAULT (300000); "--compact-at off", or --claude-full, leaves Claude Code's own default.
+ * --compact-at <tokens>: every Claude seat, and every recruit of this run's rooms, compacts its transcript at this size; unset, lean
+ * seats compact at SEAT_COMPACT_DEFAULT (300000); "--compact-at off", or --claude-full, leaves Claude Code's own default. --effort
+ * <level>: every Claude seat and recruit runs at this CLAUDE_CODE_EFFORT_LEVEL. The rooms carry both to a hub this run did not start.
  */
 const COMPACT_AT = flag("compact-at") ?? (CLAUDE_FULL ? "off" : undefined);
-if (COMPACT_AT === "off") process.env.CHATROOM_SEAT_COMPACT_WINDOW = "off";
-else if (COMPACT_AT !== undefined) {
-  if (compactWindow(COMPACT_AT) === null) {
-    console.error(`--compact-at takes a whole number of tokens from 100000 to 1000000, or "off" (got "${COMPACT_AT}"); "200k" is not accepted.`);
-    process.exit(2);
-  }
-  process.env.CHATROOM_SEAT_COMPACT_WINDOW = COMPACT_AT;
-  // swarm-005342-qejc: at 100000 a seat reading large files died of "Autocompact is thrashing"; at 200000 the same task ran through
-  if (compactWindow(COMPACT_AT)! < COMPACT_WINDOW_TESTED) console.error(`--compact-at ${COMPACT_AT}: under ${COMPACT_WINDOW_TESTED} a seat that reads large files or outputs can refill its context within three turns of a compaction and stop ("Autocompact is thrashing").`);
-}
+const SEAT_FLAGS = applySeatFlags(process.env, { compactAt: COMPACT_AT, effort: flag("effort") });
+for (const w of SEAT_FLAGS.warnings) console.error(w);
+if (SEAT_FLAGS.error) { console.error(SEAT_FLAGS.error); process.exit(2); }
 /** --no-seat-targets: flat seats all get the same brief, with no starting item each (the A arm when measuring src/seat-targets.ts) */
 const NO_SEAT_TARGETS = has("no-seat-targets");
 /**
@@ -481,7 +476,7 @@ if (FLAT) {
   }
 }
 log(`swarm ${SWARM_ID}: ${TOTAL} agents (${WORKERS} workers + verifier), project ${CWD}`);
-log(launchCostGuide(TOTAL, TIMEOUT_MIN));
+const SIZING = launchGuide({ total: TOTAL, timeoutMin: TIMEOUT_MIN, flat: FLAT, groupWorkers: GROUPS?.groups.map((g) => g.workers), task, seatTargets: !NO_SEAT_TARGETS }, log);
 if (SANDBOX) log(`--sandbox: claude seats run Bash in Claude Code's sandbox, OpenRouter seats wrap run_command in sandbox-runtime${CODEX ? `; the ${CODEX} codex seat(s) are NOT sandboxed by this flag` : ""}`);
 /** Earlier runs in this checkout: a room should ratify or refute them by reference, not re-derive them. */
 function priorRuns(): string {
@@ -502,14 +497,16 @@ function priorRuns(): string {
   return rows.length ? `PRIOR RUNS in this checkout (read the report before re-deriving; ratify or refute by reference):\n${rows.join("\n")}\n` : "";
 }
 const SETTLED = NO_CARRY ? "" : settledAxes(CWD) + priorRuns();
-if (NO_CARRY) log("--no-carry: no settled axes or prior runs injected; seat auto-memory off");
 {
   // what the seat actually gets: an inherited CLAUDE_CODE_AUTO_COMPACT_WINDOW (e.g. this launcher itself runs in a seat) passes through
   const window = seatChildEnv(process.env, undefined, false, true).CLAUDE_CODE_AUTO_COMPACT_WINDOW;
   const why = seatCompactWindow(process.env) !== null ? (COMPACT_AT === undefined ? "default; --compact-at to change" : "--compact-at") : window ? "inherited CLAUDE_CODE_AUTO_COMPACT_WINDOW" : "--compact-at off / --claude-full";
   log(`compact window: Claude seats compact their transcript at ${window ? `${window} tokens` : "Claude Code's own default (near the model's limit)"} (${why})`);
 }
-if (SETTLED) log(`decision log found: ${SETTLED.split("\n").length - 4} settled axes injected into every prompt`);
+// what this run's Claude seats get, sent with every room it creates for its recruits there (decision/recruit-settings)
+const SEAT_SETTINGS = launcherSeatSettings(process.env, { seatHooksOff: SEAT_HOOKS_OFF, claudeFull: CLAUDE_FULL, sandbox: SANDBOX, web: !has("no-web"), carry: !NO_CARRY, models: [...MODELS, ...(VERIFIER_OPENROUTER ? [] : [VERIFIER_MODEL])].filter((m): m is string => !!m) });
+log(seatSettingsLine(SEAT_SETTINGS));
+if (NO_CARRY || SETTLED) log(NO_CARRY ? "--no-carry: no settled axes or prior runs injected; seat auto-memory off" : ((c) => `decision log found: ${c.axes} settled axes and ${c.ids.length} sources already read injected into every prompt`)(carriedSummary(SETTLED)));
 let plan: Plan;
 if (FLAT) {
   log("flat mode: no planner; everyone in one room");
@@ -633,7 +630,7 @@ const verifierText = PF.text + SETTLED + "\n" + prompt("verifier.md", {
 // second and third time, scripts/topic-once-regression.ts), so the first seat to join must not be the one creating it
 {
   try {
-    const r = await fetch(`${URL_}/rooms/${encodeURIComponent(leadsRoom)}/create`, { method: "POST", headers: launcherHeaders(launcherToken), body: JSON.stringify({ topic: task, expected_participants: FLAT ? TOTAL : plan.groups.length + 1, require_verification: REQUIRE_VERIFICATION, quorum: QUORUM ?? "unanimous", ...(CHAIR ? { chair: CHAIR } : {}) }) });
+    const r = await fetch(`${URL_}/rooms/${encodeURIComponent(leadsRoom)}/create`, { method: "POST", headers: launcherHeaders(launcherToken), body: JSON.stringify({ topic: task, expected_participants: FLAT ? TOTAL : plan.groups.length + 1, require_verification: REQUIRE_VERIFICATION, quorum: QUORUM ?? "unanimous", ...(CHAIR ? { chair: CHAIR } : {}), seat_settings: SEAT_SETTINGS }) });
     log(`${leadsRoom} created with quorum=${QUORUM ?? "unanimous"}${REQUIRE_VERIFICATION ? ", require_verification" : ""}${CHAIR ? `, chair ${CHAIR}${((await r.clone().json().catch(() => ({}))) as { chair_named?: boolean }).chair_named ? " (named)" : " (NOT named: the hub did not accept this launcher's token, so the chair will read as self-claimed)"}` : ""} (${r.status})`);
   } catch (e) {
     log(`could not pre-create ${leadsRoom}: ${e instanceof Error ? e.message : String(e)}${e instanceof Error && e.cause ? ` (cause: ${(e.cause as NodeJS.ErrnoException).code ?? (e.cause as Error).message})` : ""}`);
@@ -646,7 +643,7 @@ if (REQUIRE_VERIFICATION || QUORUM || CHAIR) {
   for (const g of GROUPS ? plan.groups : []) {
     const room = `${SWARM_ID}-${g.id}`;
     try {
-      const r = await fetch(`${URL_}/rooms/${encodeURIComponent(room)}/create`, { method: "POST", headers: launcherHeaders(launcherToken), body: JSON.stringify({ topic: `${g.title}: ${g.directive}`, expected_participants: g.workers, require_verification: REQUIRE_VERIFICATION, quorum: QUORUM ?? "unanimous", parent: leadsRoom }) });
+      const r = await fetch(`${URL_}/rooms/${encodeURIComponent(room)}/create`, { method: "POST", headers: launcherHeaders(launcherToken), body: JSON.stringify({ topic: `${g.title}: ${g.directive}`, expected_participants: g.workers, require_verification: REQUIRE_VERIFICATION, quorum: QUORUM ?? "unanimous", parent: leadsRoom, seat_settings: SEAT_SETTINGS }) });
       log(`${room} created with quorum=${QUORUM ?? "unanimous"}${REQUIRE_VERIFICATION ? ", require_verification" : ""} (${r.status})`);
     } catch (e) {
       log(`could not pre-create ${room}: ${e instanceof Error ? e.message : String(e)}`);
@@ -756,6 +753,7 @@ for (const room of [...groupRooms, leadsRoom]) {
   fetch(`${URL_}/rooms/${encodeURIComponent(room)}/deadline`, { method: "POST", headers: launcherHeaders(launcherToken), body: JSON.stringify({ at: new Date(Date.now() + TIMEOUT_MIN * 60_000).toISOString() }), signal: AbortSignal.timeout(5_000) })
     .then((r) => { if (!r.ok) log(`${room}: hub did not take the run deadline (${r.status})`); })
     .catch((e) => log(`${room}: could not post the run deadline: ${e instanceof Error ? e.message : String(e)}`));
+  fetch(`${URL_}/rooms/${encodeURIComponent(room)}/carried`, { method: "POST", headers: launcherHeaders(launcherToken), body: JSON.stringify({ text: SETTLED, no_carry: NO_CARRY }), signal: AbortSignal.timeout(5_000) }).catch(() => {}); // what every seat was told was already read (inputs/owner-4)
 }
 /** Consolidation passes (--digest-every): started on a timer while group seats run, never two at once, and none in the
  * last five minutes, when a pass could not be acted on. Their usage is rolled into the run's with the seats'. */
@@ -871,10 +869,9 @@ const fetchText = async (url: string) => {
   if (!response.ok) throw new Error(`HTTP ${response.status}: ${url}`);
   return response.text();
 };
-// Fetch full GET payload for every room, including dynamically created break-outs.
+// Fetch full GET payload for every room, including dynamically created break-outs, by name and by parent link (src/launch/run-rooms.ts).
 try {
-  const all = JSON.parse(await fetchText(`${URL_}/rooms`)) as { name: string }[];
-  for (const room of all.filter(r => r.name.startsWith(`${SWARM_ID}-`) && r.name !== leadsRoom)) groupRooms.push(room.name);
+  groupRooms.push(...runRooms(JSON.parse(await fetchText(`${URL_}/rooms`)), SWARM_ID, [leadsRoom, ...groupRooms], log));
 } catch (e) { collectionErrors.push(`Room discovery: ${String(e)}`); }
 const snapshots: RoomSnapshot[] = [];
 for (const name of new Set([leadsRoom, ...groupRooms])) {
@@ -901,29 +898,22 @@ const artifact: RunResult = {
   outcome: classifyOutcome(snapshots.find(r => r.name === leadsRoom)?.payload, { timedOut, atTimeout: leadAtTimeout }),
   hubUsage: hubUsageRollup(snapshots),
   scorecard: seatScorecard(snapshots, Object.fromEntries([...exitCodes].map(([name, exitCode]) => [name, { exitCode, cost: seatCosts.get(name), killedAtTimeout: killedAtTimeout.has(name), commits: branchCommits(name), ...(seatTranscripts.has(name) ? { transcript: seatTranscripts.get(name) } : {}) }]))),
-  ...(metrics ? { metrics } : {}), ...(PF.result ? { preflight: PF.result } : {}),
+  ...(metrics ? { metrics } : {}), ...(PF.result ? { preflight: PF.result } : {}), ...(SIZING ? { sizing: SIZING } : {}), prompts: promptDigests(resolve(repoRoot, "prompts"), ["verifier.md", FLAT ? FLAT_PROMPT : GROUPS ? "group.md" : "worker.md", "recruit.md", ...(FLAT ? [] : ["lead-tail.md"]), ...(OWNER_WORD_ON ? ["owner-word.md"] : [])]),
 };
 if (digestPasses.length) {
   const board = (room: string) => snapshots.find((r) => r.name === room)?.payload?.board as Record<string, { text?: string; updated_at?: string }> | undefined;
   artifact.digests = digestRecords(digestPasses, board(leadsRoom));
   artifact.digestAcks = digestAcks(leadsRoom, Object.fromEntries(plan.groups.map((g) => [`${SWARM_ID}-${g.id}`, board(`${SWARM_ID}-${g.id}`)])));
 }
+// the decision record is filed where the next run's settledAxes() can find it once a human promotes it: one proposed decision
+// per Target, from the newest place the verifier wrote it, not only the CLI's last turn (RSI-4; src/launch/decision-record.ts)
+artifact.decisionRecord = fileRunDecisionRecord({ finalText: results.find((r) => r.name === "verifier")?.text,
+  transcripts: [...seatTranscripts].filter(([n]) => isVerifierSeat(n)).map(([, path]) => path), roomTranscript: snapshots.find((r) => r.name === leadsRoom)?.transcript.text },
+  { runId: SWARM_ID, state: String(leads.state), outDir: OUT, dir: proposedDecisionDir(PROJECT_IDENTITY, OUT, existsSync(resolve(CWD, "docs", "decisions"))) });
+log(decisionRecordLine(artifact.decisionRecord));
 writeRunResult(resolve(OUT, "result.json"), artifact);
 if (artifactPath !== resolve(OUT, "result.json")) writeRunResult(artifactPath, artifact);
 writeFileSync(artifact.reportPath, renderRunReport(artifact));
-{
-  // a decision-record-shaped verdict is written where the next run's settledAxes() can find it once a human promotes it
-  const verdict = results.find((r) => r.name === "verifier")?.text ?? "";
-  const rec = /DECISION RECORD[\s\S]*$/.exec(verdict)?.[0];
-  // markdown puts the colon either side of the emphasis: **Slug:** `x` and **Slug**: `x` both count
-  const slug = /slug\**:\**\s*`?([a-z0-9-]{3,80})/i.exec(rec ?? "")?.[1];
-  const dir = rec && slug ? proposedDecisionDir(PROJECT_IDENTITY, OUT, existsSync(resolve(CWD, "docs", "decisions"))) : null;
-  if (rec && slug && dir) {
-    mkdirSync(dir, { recursive: true });
-    writeFileSync(resolve(dir, `${slug}.md`), `# Proposed decision: ${slug}\n\nFrom ${SWARM_ID} (${leads.state}); report: swarms/${SWARM_ID}/report.md. A human promotes this into docs/decisions/ with \`guard-decisions add\`; nothing is adopted automatically.\n\n${rec}\n`);
-    log(`decision record proposed: ${resolve(dir, `${slug}.md`)}`);
-  }
-}
 
 console.log("\n==================== FINAL ANSWER ====================");
 console.log(leads.conclusion?.text ?? "NO CONSENSUS");

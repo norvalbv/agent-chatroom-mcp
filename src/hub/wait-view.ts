@@ -39,3 +39,21 @@ export function createWaitView() {
       addressed_to_you: [], ...(deadline ? { deadline } : {}), unchanged: true, hub_time: hubTime() };
   };
 }
+
+/** Why a wait_for_messages returned, kept on its call_completion and never sent to the seat (wait-cost --by-tool splits on
+ * it): empty; message (no hold asked); actionable (addressed, owed, own proposal challenged, owed elsewhere); capped (one
+ * page of a backlog); chatter (a message that is not a board notice, after the seat's own budget); timeout (the hold ended
+ * with chatter in it); notices (the hold ended with only board notices: news nobody had to act on, evidence/redundant-calls). */
+export type WaitWoke = "empty" | "message" | "actionable" | "capped" | "chatter" | "timeout" | "notices";
+export type WokeTag = { woke: WaitWoke; board_notices: number };
+export const WAIT_WOKE = Symbol("wait_woke");
+
+export function wokeOf(msgs: readonly { kind: string }[], s: { capped: boolean; actionable: boolean; held: boolean; holdOver: boolean }): WokeTag {
+  const board_notices = msgs.filter((m) => m.kind === "board").length;
+  const woke: WaitWoke = s.capped ? "capped" : s.actionable ? "actionable" : !msgs.length ? "empty" : !s.held ? "message"
+    : board_notices === msgs.length ? "notices" : s.holdOver ? "timeout" : "chatter";
+  return { woke, board_notices };
+}
+
+/** Tags a wait's view with its WokeTag: non-enumerable, so JSON (what the seat reads) and spreads leave it behind. */
+export const withWoke = <T extends object>(view: T, tag: WokeTag): T => Object.defineProperty(view, WAIT_WOKE, { value: tag, enumerable: false });

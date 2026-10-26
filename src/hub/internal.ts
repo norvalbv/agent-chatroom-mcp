@@ -61,8 +61,8 @@ export type Event =
   /** Telemetry only (replay ignores it; src/hub/overlap/semantic.ts): one meaning check of a take or claim, notified or not, or the endpoint's error. */
   | { type: "semantic_check"; room: string; key: string; by: string; model: string; compared: number; notified: boolean; ms: number; ts: string; other?: string; other_by?: string; cos?: number; min?: number; error?: string }
   | { type: "outside_read"; room: string; by: { room: string; pid: string } | null; via: "http" | "http_pattern" | "file"; tool: string; ts: string }
-  /** ms: how long the call took; empty: a wait that returned no new message (run-metrics splits idle polling on it); outsider: the caller's seats elsewhere (name@room) when it holds none in this room; key: the entry a board_get read */
-  | { type: "call_completion"; room: string; tool: string; outcome: CallOutcome; ts: string; participant: string | null; ms?: number; empty?: boolean; outsider?: string; key?: string; key_rejected?: string }
+  /** ms: how long the call took; empty: a wait that returned no new message (run-metrics splits idle polling on it); woke: why a wait returned (hub/wait-view.ts WaitWoke) and board_notices: how many board notices it carried; outsider: the caller's seats elsewhere (name@room) when it holds none in this room; key: the entry a board_get read */
+  | { type: "call_completion"; room: string; tool: string; outcome: CallOutcome; ts: string; participant: string | null; ms?: number; empty?: boolean; woke?: string; board_notices?: number; outsider?: string; key?: string; key_rejected?: string }
   /** key: what the ledger dedupes on when it is not the target itself (a long target is shortened for display) */
   | { type: "work"; room: string; pid: string; cls: WorkClass; tool: string; target: string; key?: string; ts: string }
   /** a seat process's cumulative model usage (src/hub/usage.ts); seat is the seat key's sha256, never the key */
@@ -97,7 +97,7 @@ export type Event =
   /** Telemetry only (replay ignores it; Hub.noteUsed, gap G7): a seat of this room named a note it was sent, or acked it with a reply */
   | { type: "note_used"; room: string; note: string; by: string; via: string; after_s: number; ts: string }
   /** Telemetry only (replay ignores it; the board event carries the text): an entry edited in place with amend. sent_chars is what the seat sent, entry_chars what a whole board_set would have. */
-  | { type: "board_edit"; room: string; key: string; by: string; sent_chars: number; entry_chars: number; ts: string }
+  | { type: "board_edit"; room: string; key: string; by: string; sent_chars: number; entry_chars: number; notice_seq?: number; ts: string }
   /** A proposal had the votes while these electorate members had not voted on its version, or these takes were held (replayed: Hub.armLastCall). */
   | { type: "last_call"; room: string; proposalId: string; version: number; startedAt: string; until: string; waiting_on: string[]; takes_held?: string[]; children_open?: string[] }
   /** Telemetry only (replay ignores it): this breakout was still open when its parent concluded (Hub.tellOpenBreakouts). */

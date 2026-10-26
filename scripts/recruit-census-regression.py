@@ -69,17 +69,17 @@ class RecruitRows(unittest.TestCase):
                 board(parent, "r1", 6, "findings/r1", "87% delivered"),
                 usage(parent, "s_r1", 9, 3.5),
                 say(parent, "p_w", "worker-1", 8, "per findings/r1 the census holds"),
-                say(parent, "", "", 9, "worker-1 recruited r2 (claude/claude-opus-5-5): build it", kind="system"),
+                say(parent, "", "", 9, "worker-1 recruited r2 (claude/claude-opus-5-5, reading a snapshot of af5450e6, the HEAD of worker-1's worktree (1 uncommitted change there not in it)): build it", kind="system"),
                 join(parent, "p_r2", "r2", 9, role="recruit"),
                 say(parent, "p_r2", "r2", 12, "committed 9534bff5 on my branch"),
-                say(parent, "", "", 10, "chair-claude recruited b1, b2 (claude/claude-opus-5-5, into swarm-010000-abcd-child): argue it out", kind="system"),
+                usage(parent, "s_b1", 31, 12.0),  # the hub may log a seat's usage in another room of the run
+                say(parent, "", "", 10, "chair-claude recruited b1, b2 (claude/claude-opus-5-5, into child, area child): argue it out", kind="system"),
             ])
             write(root, child, [
                 join(child, "p_b1", "b1", 10, role="recruit", seat="s_b1"),
                 board(child, "b1", 30, "decision/child", "the answer"),
                 board(child, "b1", 31, "findings/b", "a second note"),
                 say(child, "p_x2", "other-seat", 32, "see findings/b2 and decision/children, not b1's keys"),
-                usage(child, "s_b1", 31, 12.0),
             ])
             write(root, other, [
                 join(other, "p_x", "worker-9", 0),
@@ -96,12 +96,14 @@ class RecruitRows(unittest.TestCase):
         self.assertTrue(r1["joined"] and r1["delivered"] and r1["cited"], r1)
         self.assertEqual(r1["first_deliv_min"], 5.0, "claim/* is not a deliverable; findings/r1 at +5 min is")
         self.assertEqual(r1["cost_usd"], 3.5)
-        self.assertEqual((b1["kind"], b1["room"]), ("breakout", "swarm-010000-abcd-child"))
+        self.assertEqual((b1["kind"], b1["room"]), ("breakout", "swarm-010000-abcd-child"), "the hub announces the breakout without its run prefix")
         self.assertTrue(b1["delivered"] and not b1["cited"], "findings/b2 and decision/children are other keys, not a citation of b1's")
         self.assertFalse(b2["joined"], "b2 never joined its breakout")
         self.assertEqual((s1["kind"], s1["by"], s1["by_role"], s1["compact_window"]), ("in-room", "worker-9", "worker", 300000), "read from recruit_spawn")
         self.assertTrue(s1["delivered"], s1)
-        self.assertTrue(rows["r2"]["delivered"] and rows["r2"]["commit"], "a commit named in chat is a deliverable")
+        self.assertEqual(b1["cost_usd"], 12.0, "a breakout seat is priced from usage logged anywhere in its run")
+        self.assertTrue(rows["r2"]["delivered"], "a commit named in chat is a deliverable")
+        self.assertEqual(rows["r2"]["commit"], "9534bff5", "the row names the commit, since deliv_keys holds board keys only")
         self.assertEqual(rows["r2"]["first_deliv_min"], 3.0)
         self.assertIn("recruits by kind", out)
         self.assertRegex(out, r"in-room\s+3 .*delivered 3", "summary counts r1, r2 and s1 as in-room deliveries")

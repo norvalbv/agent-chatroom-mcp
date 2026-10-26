@@ -82,7 +82,7 @@ n = len(recruit_out)
 print(f"recruit seats {n}: posted a message {sum(1 for m, _ in recruit_out if m)}, wrote a board entry {sum(1 for _, b in recruit_out if b)}, neither {sum(1 for m, b in recruit_out if not m and not b)}")
 
 NONDELIV = ("take/", "claim/", "hold/", "wake/", "inbox/", "draft/", "join-request/", "help/")
-ANNOUNCE = re.compile(r"^(?P<by>\S+) recruited (?P<names>.+?) \((?P<agent>[a-z]+)(?:/[^,)\s]+)?(?P<rest>[^)]*)\): ", re.S)
+ANNOUNCE = re.compile(r"^(?P<by>\S+) recruited (?P<names>.+?) \((?P<agent>[a-z]+)(?:/[^,)\s]+)?(?P<rest>[^)]*(?:\([^)]*\)[^)]*)*)\): ", re.S)
 RUN = re.compile(r"^(swarm-\d{6}-[a-z0-9]{4})")
 SHA = re.compile(r"\b(?=[0-9a-f]*[a-f])(?=[0-9a-f]*[0-9])[0-9a-f]{7,40}\b")
 mins = lambda a, b: round((parse(b) - parse(a)).total_seconds() / 60, 1)
@@ -119,9 +119,11 @@ def read_room(path):
 def recruits(paths):
     rooms = {os.path.basename(p)[:-6]: read_room(p) for p in paths}
     run_of = lambda room: (RUN.match(room) or [room])[0]
-    texts = collections.defaultdict(list)
+    texts, cost = collections.defaultdict(list), collections.defaultdict(dict)
     for name, r in rooms.items():
         texts[run_of(name)] += r["texts"]
+        for seat, usd in r["cost"].items():  # a seat's usage may be logged in any room of its run
+            cost[run_of(name)][seat] = max(cost[run_of(name)].get(seat, 0), usd)
     rows = []
     for name, r in rooms.items():
         asked = [dict(at=e["ts"], name=e["name"], by=e["requested_by"], by_role=e.get("by_role") or "worker", kind=e.get("kind") or "in-room",
@@ -129,27 +131,28 @@ def recruits(paths):
         if not r["spawns"]:  # older logs: the hub's "X recruited A, B (agent/model, into R, area X ...)" line
             for at, m in r["ann"]:
                 into = re.search(r", into (\S+?)(?:,|$)", m["rest"])
+                child = into and (into.group(1) if into.group(1) in rooms else f"{run_of(name)}-{into.group(1)}")  # announced without the run prefix
                 area = re.search(r", area (\S+?)(?:,|$)", m["rest"])
                 by_role = (r["joins"].get(m["by"]) or {}).get("role") or "worker"
                 for nm in (n.strip() for n in m["names"].split(",")):
                     asked.append(dict(at=at, name=nm, by=m["by"], by_role=by_role, kind="breakout" if into else "in-room",
-                                      room=into.group(1) if into else name, area=area.group(1) if area else None, compact_window=None))
+                                      room=child or name, area=area.group(1) if area else None, compact_window=None))
         for a in asked:
-            target = rooms.get(a["room"]) or {"joins": {}, "writes": {}, "cost": {}}
+            target, priced = rooms.get(a["room"]) or {"joins": {}, "writes": {}}, cost[run_of(a["room"])]
             p = target["joins"].get(a["name"])
             joined = bool(p and p.get("joinedAt") and p["joinedAt"] >= a["at"])
             mine = sorted(w for w in target["writes"].get(a["name"], []) if w[0] and w[0] >= a["at"]) if joined else []
             deliv = [w for w in mine if not w[1].startswith(NONDELIV) and not w[1].endswith(".ack")]
-            shas = sorted((ts, f"commit {m.group(0)}") for ts, by, text in texts[run_of(a["room"])] if joined and by == a["name"] and ts and ts >= a["at"]
+            shas = sorted((ts, m.group(0)) for ts, by, text in texts[run_of(a["room"])] if joined and by == a["name"] and ts and ts >= a["at"]
                           for m in [SHA.search(text)] if m) if joined else []
             keys = {k for _, k in deliv}
             deliv = sorted(deliv + shas[:1])
             named = re.compile("|".join(rf"(?<![\w/.-]){re.escape(k)}(?![\w/-])" for k in sorted(keys))) if keys else None
             cited = any(by != a["name"] and named.search(text) for _, by, text in texts[run_of(a["room"])]) if keys else False
             rows.append({**a, "joined": joined, "join_s": round(mins(a["at"], p["joinedAt"]) * 60) if joined else None,
-                         "delivered": bool(deliv), "commit": bool(shas), "cited": cited, "deliv_keys": sorted(keys)[:8],
+                         "delivered": bool(deliv), "commit": shas[0][1] if shas else None, "cited": cited, "deliv_keys": sorted(keys)[:8],
                          "first_deliv_min": mins(a["at"], deliv[0][0]) if deliv else None,
-                         "cost_usd": round(target["cost"].get(p.get("seatKeyHash"), 0), 2) if joined and target["cost"].get(p.get("seatKeyHash")) else None})
+                         "cost_usd": round(priced[p.get("seatKeyHash")], 2) if joined and priced.get(p.get("seatKeyHash")) else None})
     return rows
 
 

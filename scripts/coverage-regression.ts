@@ -103,6 +103,21 @@ test("a handoff or brief line that names an item to say nobody did it does not c
   assert.deepEqual(JSON.parse(recruitmentClaim(h.getRoom(name), "alice", "x", ["dave"], "Build item/slugify.\nitem/chunk: not yours, leave it")).items, ["item/slugify"]);
 });
 
+test("an item listed under a negated header (NOT DONE:, FOLLOW-UPS:) is not covered; the next header ends it (review/c11debb2 F2)", () => {
+  const { h, name, row } = room();
+  for (const s of ["slugify", "clamp", "chunk"]) h.setBoardAs(name, "launcher", `item/${s}`, s);
+  const covered = (text: string) => JSON.parse(recruitmentClaim(h.getRoom(name), "alice", "x", ["dave"], text)).items ?? [];
+  assert.deepEqual(covered("DONE:\n- 17ff11c item/slugify\nNOT DONE:\n- item/chunk (out of time)"), ["item/slugify"]);
+  assert.deepEqual(covered("Built: 17ff11c item/slugify.\nFOLLOW-UPS for a fresh recruit:\n(1) item/chunk"), ["item/slugify"]);
+  assert.deepEqual(covered("NOT SHOWN:\n- item/chunk with agents\nBuilt here:\n- item/clamp"), ["item/clamp"]);
+  assert.deepEqual(covered("Build item/slugify.\nLeave alone:\n- item/chunk\nDo not touch item/clamp either."), ["item/slugify"]);
+  // the same rule reads handoff/<area>
+  const carol = [...h.getRoom(name).participants.values()].find((p) => p.name === "carol")!;
+  h.setBoardAs(name, "alice", "claim/build-utils", JSON.stringify({ area: "build-utils", owner: "alice", team: ["alice", "carol"], status: "open", note: "claimed at recruitment" }));
+  h.setBoard(name, carol.id, "handoff/build-utils", "DONE:\n- 17ff11c item/slugify\nNOT DONE:\n- item/chunk (out of time)");
+  assert.deepEqual([row("item/slugify")!.state, row("item/chunk")!.state], ["owned", "unowned"]);
+});
+
 test("a recruit whose brief names item/* keys covers them from recruitment, before any handoff (#1358)", () => {
   const { h, name, alice, row } = room();
   for (const s of ["slugify", "clamp", "chunk"]) h.setBoardAs(name, "launcher", `item/${s}`, s);

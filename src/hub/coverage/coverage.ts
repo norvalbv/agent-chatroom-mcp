@@ -118,12 +118,21 @@ function reviewed(reviews: Review[], claimKey: string, claim: BoardEntry, itemKe
 /** Where a claim's writer or owner says what it covered: handoff/<area>, decision/<area> (or a continuation, -2). */
 const RECORD = /^(handoff|decision)\//;
 type Records = [string, BoardEntry][];
-/** A line that names an item to say nobody did it ("NOT DONE, nobody has it: item/chunk", review/af792f45 F1) */
-const NOT_COVERED = /\b(not (?:done|started|built|covered|mine|yours)|undone|nobody|no one|unowned|unclaimed|todo|left (?:open|undone)|skipped)\b/i;
-/** Whether some line of a record or brief names the item without saying it is not covered. A negated line fails safe:
- * the item stays as it was without that record. */
+/** A line that names an item to say nobody did it ("NOT DONE, nobody has it: item/chunk", review/af792f45 F1), or a brief
+ * line telling the recruit to keep off it (review/c11debb2 n1) */
+const NOT_COVERED = /\b(not (?:done|started|built|covered|mine|yours)|undone|nobody|no one|unowned|unclaimed|todo|left (?:open|undone)|skipped|(?:do not|don't) (?:touch|build|take|do)|leave (?:it )?alone)\b/i;
+/** A header line ("NOT DONE:", "FOLLOW-UPS for a fresh recruit:") whose bullets are not covered (review/c11debb2 F2) */
+const NOT_COVERED_HEADER = /\b(follow-?ups?|not (?:shown|merged|run)|unmeasured)\b/i;
+/** Whether some line of a record or brief names the item without saying it is not covered, itself or under its header
+ * (a line ending in ":"; the next header ends the section). Negated fails safe: the item stays as it was without it. */
 function namedAsCovered(text: string, itemKey: string): boolean {
-  return text.split("\n").some((line) => namesKey(line, itemKey) && !NOT_COVERED.test(line));
+  let negated = false;
+  for (const line of text.split("\n")) {
+    const names = namesKey(line, itemKey);
+    if (!names && /:\s*$/.test(line)) negated = NOT_COVERED.test(line) || NOT_COVERED_HEADER.test(line);
+    else if (names && !negated && !NOT_COVERED.test(line)) return true;
+  }
+  return false;
 }
 function recorded(records: Records, slugs: string[], claimKey: string, claim: BoardEntry, itemKey: string): boolean {
   const area = slugOf(claimKey), by = [claim.by, ...claimOwners(claim)];

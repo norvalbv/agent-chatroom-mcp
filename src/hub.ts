@@ -2122,7 +2122,7 @@ export class Hub {
   static claimOverlapScore(a: Set<string>, aKey: Set<string>, b: Set<string>, bKey: Set<string>) { return board.claimOverlapScore(a, aKey, b, bKey); }
   private activeReviewerFor(room: Room, authorName: string): Participant | undefined { return board.activeReviewerFor(room, authorName); }
   setBoardAs(roomName: string, byName: string, key: string, text: string): BoardEntry { return board.setBoardAs(this, roomName, byName, key, text); }
-  postToRoom(fromRoom: string, pid: string, toRoom: string, key: string, text: string, ackRequired = false, opts: BoardExpiryOptions = {}): { key: string; entry: BoardEntry } { return board.postToRoom(this, fromRoom, pid, toRoom, key, text, ackRequired, opts); }
+  postToRoom(fromRoom: string, pid: string, toRoom: string, key: string, text: string, ackRequired = false, opts: BoardExpiryOptions = {}): { key: string; entry: BoardEntry } { breakouts.refuseCarryKey(this, fromRoom, toRoom, key); return board.postToRoom(this, fromRoom, pid, toRoom, key, text, ackRequired, opts); }
 
   // ---------- proposals as documents ----------
 

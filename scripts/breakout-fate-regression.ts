@@ -153,6 +153,23 @@ test("a breakout that concluded after the window says it was not carried, and wh
   assert.match(f.line, /Concluded; its conclusion was not copied to bf-parent: bf-parent concluded at .+ and its late window closed at .+ It is in this room only/);
 });
 
+test("the carry key is the hub's: a breakout seat cannot post over it, and an entry someone else wrote is not read as the hub's copy (review/09371908 F1)", (t) => {
+  const { hub, parent, child, concludeChild } = family(t);
+  const carol = [...child.participants.values()].find((p) => p.name === "Carol")!;
+  assert.throws(() => hub.postToRoom("bf-child", carol.id, "bf-parent", "conclusion", "my own summary"), /inbox\/bf-child\/conclusion is where the hub copies this room's conclusion.*another key/);
+  hub.postToRoom("bf-child", carol.id, "bf-parent", "summary", "my own summary");
+  concludeChild();
+  const key = "inbox/bf-child/conclusion";
+  assert.equal(parent.board.get(key)!.by, "system");
+  // a record from before the refusal (swarm-104626-vyfd: 1 of 21 such entries was a seat's): the parent is open, so
+  // "not on this hub" would be false
+  parent.board.set(key, { ...parent.board.get(key)!, by: "Carol" });
+  const f = fate(hub, child)!;
+  assert.equal(f.not_carried, undefined);
+  assert.doesNotMatch(f.line, /not on this hub/);
+  assert.match(f.line, /Concluded; inbox\/bf-child\/conclusion on bf-parent was last written by Carol, not by the hub/);
+});
+
 test("the launcher's room list follows the parent link, not only the run's name prefix (kcj5's verdict-telemetry)", async () => {
   const { runRooms } = await import("../src/launch/run-rooms.js");
   const all = [

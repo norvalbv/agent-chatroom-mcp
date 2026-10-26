@@ -5,7 +5,7 @@
  *   no line (hub.ts carryConclusion returned early): it is now said in the breakout and logged, and every carry attempt
  *   is a breakout_carry event (delivered | late | dropped).
  * - Closing a parent left its breakouts open and untold: in 3 of 3 stopped runs (dois, hgmm, kvkj) the chair closed the
- *   parent and all 15 children by hand within the same second. A parent's close now closes its open breakouts,
+ *   parent and all 15 children by hand within about a second. A parent's close now closes its open breakouts,
  *   recursively, each with a reason naming the parent and a parent_closed event; a conclusion still does not.
  * - The archive-dead sweep does not take a parent whose breakout still has seats in it (that close would now cascade).
  * - room_status and GET /rooms give a breakout one breakout_fate line: where its conclusion goes and until when.

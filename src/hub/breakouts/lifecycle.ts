@@ -5,11 +5,12 @@
  * A breakout is not stopped by its parent's conclusion: its seats are told the parent's answer is fixed (tellOpenBreakouts),
  * and its own conclusion is still copied onto the parent's board, marked late, for Hub.LATE_WRITE_MS (src/hub.ts carryConclusion).
  * Across 36 breakouts in 332 recorded rooms (evidence/breakout-fate), 20 concluded before their parent and none after;
- * the other 15 were children of runs the owner stopped, and in all three of those the chair closed the parent and every
- * child by hand within the same second. Two parts went unsaid until now. A conclusion the parent could no longer take
- * (closed, or past the window) vanished with no event and no line, the silent empty return of arXiv:2607.28802's
- * delegation failure; and a parent's close neither told nor closed its breakouts, where a supervisor's or a nursery's
- * cancel ends its children (sources/erlang-otp-supervisor, sources/vorpus-structured-concurrency).
+ * 15 of the other 16 were children of runs the owner stopped, and in all three of those the chair closed the parent and
+ * every child by hand within about a second (0.4-1.0 s); the 16th never concluded and was never told. Two parts went
+ * unsaid until now. A conclusion the parent could no longer take (closed, or past the window) vanished with no event and
+ * no line, the silent empty return of arXiv:2607.28802's delegation failure; and a parent's close neither told nor
+ * closed its breakouts, where a supervisor's or a nursery's cancel ends its children (sources/erlang-otp-supervisor,
+ * sources/vorpus-structured-concurrency).
  *
  * Telemetry: breakout_carry (every attempt to copy a conclusion: delivered | late | dropped, with the reason) and
  * parent_closed in the breakout's own log; breakout_fate in room_status and GET /rooms, so the agents in a breakout and

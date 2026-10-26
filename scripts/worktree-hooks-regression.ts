@@ -44,7 +44,7 @@ function blockedCommit(dir: string): number | null {
 }
 
 const spawner = () => new Spawner({ mcpUrl: "http://test/mcp", defaultCwd: process.cwd(), logDir: mkdtempSync(join(tmpdir(), "wt-hooks-logs-")), dryRun: true });
-const recruitWorktree = (repo: string, name: string) => (spawner() as unknown as { worktreeFor(cwd: string, room: string, name: string): string | undefined }).worktreeFor(repo, "room", name);
+const recruitWorktree = (repo: string, name: string) => (spawner() as unknown as { worktreeFor(cwd: string, room: string, name: string): Promise<string | undefined> }).worktreeFor(repo, "room", name);
 
 const made: string[] = [];
 const cases: [string, () => void | Promise<void>][] = [
@@ -52,17 +52,17 @@ const cases: [string, () => void | Promise<void>][] = [
     const repo = repoWithHooks(".husky/_"); made.push(repo);
     assert.equal(blockedCommit(repo), 1);
   }],
-  ["a recruit's worktree runs the same hook", () => {
+  ["a recruit's worktree runs the same hook", async () => {
     const repo = repoWithHooks(".husky/_"); made.push(repo);
-    const wt = recruitWorktree(repo, "builder");
+    const wt = await recruitWorktree(repo, "builder");
     assert.ok(wt && existsSync(wt), "worktree made");
     assert.ok(existsSync(join(wt!, ".husky", "_", "pre-commit")), "the hooks runner is in the worktree");
     assert.equal(blockedCommit(wt!), 1, "a commit the hook refuses is refused in the seat's worktree too");
     assert.equal(git(wt!, "status", "--porcelain", "--", ".husky").stdout.trim(), "", "the copied runner is not something the seat would commit");
   }],
-  ["the worktree holds a copy, so a seat cannot rewrite the main checkout's hooks through it", () => {
+  ["the worktree holds a copy, so a seat cannot rewrite the main checkout's hooks through it", async () => {
     const repo = repoWithHooks(".husky/_"); made.push(repo);
-    const wt = recruitWorktree(repo, "builder")!;
+    const wt = (await recruitWorktree(repo, "builder"))!;
     writeFileSync(join(wt, ".husky", "_", "pre-commit"), "#!/bin/sh\nexit 0\n");
     assert.equal(blockedCommit(repo), 1, "the main checkout's hook still refuses");
   }],

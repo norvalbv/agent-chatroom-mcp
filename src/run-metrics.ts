@@ -66,8 +66,12 @@ export interface RunMetrics {
   quiet?: { chat: number; bySender: number; byHub: number; keptPublicForBoardKey: number };
   /** board_set(append=true) lines per shared key (hub "board_append" events): appends, distinct appenders, continuations used; absent: none */
   appends?: Record<string, { lines: number; seats: number; continuations: number }>;
-  /** machine stall episodes the hub said in this room (hub "machine_stall" end events, src/hub/machine.ts); absent: none */
-  machine?: { stalls: number; stalled_s: number; worst_ms: number };
+  /**
+   * machine stall episodes the hub said in this room (hub "machine_stall" end events, src/telemetry/machine.ts); absent:
+   * none. hub_blocks: episodes that were the hub's own (busy, or blocked on its own work while its reference clock kept
+   * time), which are not the machine stalling and are not in stalls.
+   */
+  machine?: { stalls: number; stalled_s: number; worst_ms: number; hub_blocks?: number };
   /** seats with at least one web call in the ledger; undefined when the log has no ledger */
   webSeats?: number;
   /** text the citation credit was read from */
@@ -188,6 +192,7 @@ export function runMetrics(events: readonly Ev[], opts: MetricsOptions = {}): Ru
       case "machine_stall": {
         if (e.event !== "end") break;
         machine ??= { stalls: 0, stalled_s: 0, worst_ms: 0 };
+        if (e.cause === "blocked" || e.cause === "hub") { machine.hub_blocks = (machine.hub_blocks ?? 0) + 1; break; }
         machine.stalls++;
         machine.stalled_s += Number(e.seconds ?? 0);
         machine.worst_ms = Math.max(machine.worst_ms, Number(e.max_drift_ms ?? 0));
@@ -395,7 +400,8 @@ export function renderMetrics(m: RunMetrics): string {
     (m.research ? researchLine(m.research, t) : "") +
     (m.usage ? `Seat-reported usage: $${m.usage.cost_usd.toFixed(2)}, ${m.usage.input_tokens} input + ${m.usage.output_tokens} output tokens from ${m.usage.seatsWithUsage} of ${m.seats.length} seats (the rest unknown). ` : "No seat reported usage to the hub. ") +
     memoryLine(m.seats) +
-    (m.machine ? `The machine stalled ${m.machine.stalls} time${m.machine.stalls === 1 ? "" : "s"} (${m.machine.stalled_s} s in all, worst timer drift ${Math.round(m.machine.worst_ms / 100) / 10} s); timings measured then are the machine\'s. ` : "") +
+    (m.machine?.stalls ? `The machine stalled ${m.machine.stalls} time${m.machine.stalls === 1 ? "" : "s"} (${m.machine.stalled_s} s in all, worst timer drift ${Math.round(m.machine.worst_ms / 100) / 10} s); timings measured then are the machine\'s. ` : "") +
+    (m.machine?.hub_blocks ? `The hub held up its own replies ${m.machine.hub_blocks} time${m.machine.hub_blocks === 1 ? "" : "s"} (busy, or waiting on its own work while its reference clock kept time); the machine did not stall then. ` : "") +
     (m.quiet && (m.quiet.bySender || m.quiet.byHub || m.quiet.keptPublicForBoardKey) ? `Of ${m.quiet.chat} agent chat messages, ${m.quiet.bySender} were sent quiet, ${m.quiet.byHub} were made quiet by the hub, and ${m.quiet.keptPublicForBoardKey} two-seat exchanges stayed public because they named a board entry. ` : "") +
     (m.needs ? `needs/* for the owner: ${m.needs.filed} filed${t.firstNeed !== undefined ? `, the first at ${t.firstNeed} min` : ""}, ${m.needs.cleared} cleared, ${m.needs.blocks} claim${m.needs.blocks === 1 ? "" : "s"} named as blocked, asked about outside limits ${m.needs.asked} time${m.needs.asked === 1 ? "" : "s"} (${m.needs.askedThenFiled} followed by a needs/* within 15 min), ${m.needs.ownersAnswered} of ${m.needs.asksOfOwners} blocked-claim owner${m.needs.asksOfOwners === 1 ? "" : "s"} answered. ` : "") +
     (m.takes ? `take/* steps: ${Object.entries(m.takes).map(([k, n]) => `${n} ${k}`).join(", ")}. ` : "") +

@@ -68,6 +68,8 @@ export const offlineScripts = [
   'challenge-wakes-held-wait-regression.ts',
   'seen-before-acting-regression.ts',
   'second-hub-regression.ts',
+  'machine-blocked-regression.ts',
+  'recruit-worktree-async-regression.ts',
   'vote-text-says-it-ends-regression.ts',
   'ask-settle-regression.ts',
   'attention-gate-regression.ts',

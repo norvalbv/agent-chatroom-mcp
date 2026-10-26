@@ -75,7 +75,8 @@ export type Event =
   | { type: "memory"; room: string; seat: string; ts: string; memory?: SeatMemory; event?: "warn" | "over" | "ended" | "stop" | "high"; mb?: number; budget_mb?: number; mark_mb?: number; top?: SeatMemory["top"]; signal?: string }
   /** Telemetry only (replay ignores it; src/telemetry/machine.ts): the machine a room opened on, and each stall episode said in it. */
   | { type: "machine"; room: string; sample: MachineSample; ts: string }
-  | { type: "machine_stall"; room: string; event: "start" | "end"; sample: MachineSample; ts: string; at?: string; drift_ms?: number; since?: string; last_late?: string; seconds?: number; late_ticks?: number; max_drift_ms?: number }
+  /** cause "blocked": the hub waited on its own work while its reference clock kept time; ref_*: that clock's lateness */
+  | { type: "machine_stall"; room: string; event: "start" | "end"; sample: MachineSample; ts: string; at?: string; drift_ms?: number; since?: string; last_late?: string; seconds?: number; late_ticks?: number; max_drift_ms?: number; cause?: "machine" | "hub" | "blocked"; hub_cpu?: number | null; ref_drift_ms?: number | null; ref_max_drift_ms?: number | null }
   /** Telemetry only (replay ignores it; src/hub/take.ts): one step of a take/<what> entry. by and holder are seat names. */
   /** reason and commit only on action "refused": held (the same key), same-commit (another key naming the commit), assigned-reviewer */
   | { type: "take"; room: string; key: string; action: string; by: string; holder: string; ts: string; reason?: "held" | "same-commit" | "assigned-reviewer" | "already-reviewed" | "same-work"; commit?: string }
@@ -117,6 +118,8 @@ export type Event =
   /** Telemetry only: a process the hub had counted as a seat's job (src/hub/memory.ts jobsOf) is gone, after ran_s seconds. told: the seat was waiting on the hub and got a line. */
   | { type: "job_wake"; room: string; seat: string; pid: number; key: string; successor: string | null; ts: string }
   | { type: "job_end"; room: string; seat: string; pid: number; command: string; ran_s: number; others?: number; told: boolean; departed?: true; ts: string }
+  /** a write recruit's worktree was made, off the hub's event loop (Spawner.worktreeFor): how long git ran and waited behind the others */
+  | { type: "worktree"; room: string; seat: string; branch: string; ms: number; waited_ms: number; ok: boolean; error?: string; ts: string }
   /** A quiet room excused by a seat's running job (start, with the jobs), and how that ended: work resumed (active), the
    * job ended with nobody picking up (idle), or the wait outlasted ROOM_JOB_WAIT_MS and the room was told (told). */
   | { type: "room_waiting"; room: string; ts: string; state: "start"; steps: number; seats: number; jobs: (import("./memory.js").Job & { seat: string })[] }

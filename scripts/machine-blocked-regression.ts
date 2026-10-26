@@ -91,6 +91,9 @@ const observe = (w: MachineWatch, ...a: [number, number, number | null, number |
     const esc = escalationMetrics([{ type: "room", room: "mb" }, ...ev.filter((e) => e.type === "machine_stall")]);
     assert.equal(esc.firstEvidence, undefined, "a blocked hub is not evidence of a machine constraint");
     assert.equal(escalationMetrics([{ type: "room", room: "mb" }, { ...stalls[0], cause: "machine" }]).firstEvidence?.how, "event", "a machine stall still is");
+    // one rule with run-metrics, which files a busy hub with hub_blocks too (review/6acfc33c n1)
+    assert.equal(escalationMetrics([{ type: "room", room: "mb" }, { ...stalls[0], cause: "hub" }]).firstEvidence, undefined, "nor is the hub busy on its own work");
+    assert.equal(escalationMetrics([{ type: "room", room: "mb" }, { ...stalls[0], cause: undefined }]).firstEvidence?.how, "event", "a log from before causes were recorded: the machine, as it was then");
   } finally { rmSync(dataDir, { recursive: true, force: true }); }
 }
 

@@ -103,8 +103,9 @@ export function escalationMetrics(events: readonly Ev[], opts: { evidenceSeq?: n
     }
     if (PREFLIGHT_EVENTS.has(e.type) && !preflight && ts) preflight = { at: ts, how: `event ${e.type}` };
     if (e.type === "machine" || (e.type === "machine_stall" && e.event !== "end")) hubKnew ??= { at: e.at ?? ts ?? "", what: e.type };
-    // the hub blocking itself (its reference clock kept time) is not this machine limiting the work
-    if (EVIDENCE_EVENTS.has(e.type) && e.event !== "end" && e.cause !== "blocked" && !firstEvidence && opts.evidenceSeq === undefined && (e.at ?? ts)) firstEvidence = { at: e.at ?? ts, match: e.type, how: "event" };
+    // the hub busy, or blocking itself (its reference clock kept time), is not this machine limiting the work: run-metrics
+    // files both as hub_blocks; a log from before causes were recorded has none
+    if (EVIDENCE_EVENTS.has(e.type) && e.event !== "end" && (e.cause ?? "machine") === "machine" && !firstEvidence && opts.evidenceSeq === undefined && (e.at ?? ts)) firstEvidence = { at: e.at ?? ts, match: e.type, how: "event" };
     if (ESCALATION_EVENTS.has(e.type) && firstEvidence && !escalation && ts) escalation = { at: ts, how: `event ${e.type}` };
     if (e.type !== "message") continue;
     const m = e.msg;

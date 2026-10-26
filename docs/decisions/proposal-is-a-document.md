@@ -19,3 +19,4 @@ created: 2026-09-17
 **Revisit-when:** amend storms make rooms slower than re-proposing would, measured on the same task
 **Scope:** src/hub.ts
 **Source:** collab · docs/swarm-protocol-spec.md
+- 2026-10-26 — Narrowed by verifier-hold (swarm-005940-77tu, 2026-10-26, dd4195b8): an amend no longer resets a disagree whose quoted clause survives the amend; it stands while its author is present. Evidence: 267 dropped disagrees and 106 re-casts in 319 logs. See docs/decisions/verifier-hold.md.

@@ -15,6 +15,13 @@ test("an arXiv paper is one id in every spelling", () => {
   assert.deepEqual(refsIn("arXiv:cs/9810005"), ["arXiv:cs/9810005"]);
 });
 
+test("a paper mirror and the arXiv DOI are the arXiv id", () => {
+  // review/024099de: these reached no id, or a DOI apart from the paper's arXiv id
+  for (const t of ["https://www.alphaxiv.org/abs/2409.07440", "alphaxiv.org/overview/2409.07440v1", "https://huggingface.co/papers/2409.07440", "https://hyper.ai/en/papers/2409.07440", "doi:10.48550/arXiv.2409.07440", "https://doi.org/10.48550/arxiv.2409.07440v3"]) {
+    assert.deepEqual(refsIn(t), ["arXiv:2409.07440"], t);
+  }
+});
+
 test("a number that cannot be an arXiv id is not one", () => {
   // the month part of a new-style id is 01-12, the year 07 or later
   assert.deepEqual(refsIn("filled at 1234.5678, epoch 1792886400.123, 2026.10261 shares, 0.94 to 0.99"), []);

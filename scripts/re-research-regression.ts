@@ -99,6 +99,13 @@ const recruitLog = [...base, join_("pr", "recruit-1", "recruit"),
 const rr = reResearch(recruitLog);
 assert.equal(rr.carriedFetches, 1, "the recruit was told; seat a was not (no launcher event): only the recruit's fetch is a carried re-fetch");
 assert.equal(rr.listKnown, false, "seat a's list is unknown, so the room's is not wholly known");
+// a recruit with no spawner event of its own (an older hub, or one that joined by hand) is not covered by the launcher's
+// list: the launcher never told it anything (review/f8faed7f F1)
+const untold = reResearch([...base, join_("pr", "recruit-1", "recruit"),
+  { type: "carried", room: "r", from: "launcher", ids: ["arXiv:2401.12345"], axes: 1, chars: 50, ts: T(0) },
+  work("pr", "arxiv.org/abs/2401.12345", 1)]);
+assert.equal(untold.carriedFetches, 0, "the recruit was never told the launcher's list, so its fetch is not a carried re-fetch");
+assert.equal(untold.listKnown, false, "the recruit's list is unknown");
 
 // ---------- 3. the readers show it ----------
 const row = runRow(log);

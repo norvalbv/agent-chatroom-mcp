@@ -3,7 +3,9 @@
  * researched ... please ensure it's covered in a form of telemetry"). Read by runs-table and run-metrics.
  * A fetch is a web work event (WebFetch, or a command reaching a URL) whose target names a paper, repo or package
  * (refsIn, src/telemetry/source-refs.ts); a page with no such id is not counted. Each counted fetch is at most one of:
- * - carried: the id was on the list the seat was told was already read (the `carried` event, Hub.recordCarried);
+ * - carried: the id was on the list the seat was told was already read (the `carried` event, recordCarried in
+ *   src/telemetry/launch-reports.ts: one per room the launcher creates, one per recruit request; a break-out opened with
+ *   join_room(parent=) gets neither, so its seats' lists read unknown);
  * - afterSummary: another seat had already put a sources/* entry for that id on this room's board;
  * - repeat: another seat had fetched it first (no summary yet);
  * - verifierRepeat: a verifier reading what a seat cited, the check it is there for, kept apart.
@@ -39,8 +41,8 @@ export function reResearch(events: readonly Ev[]): ReResearch {
   const fetchers = new Set<string>();
   let fetches = 0, carried = 0, repeat = 0, after = 0, verifier = 0, carriedSum = 0;
   let anyList = false;
-  const listOf = (seat: string): Set<string> | undefined => told.get(seat) ?? (launcherList && names.get(seat)?.role !== "recruit" ? launcherList : undefined);
   const byName = new Map<string, string>(); // name -> role
+  const listOf = (seat: string): Set<string> | undefined => told.get(seat) ?? (launcherList && byName.get(seat) !== "recruit" ? launcherList : undefined);
   // seats and what they were told first: a seat is told at its start, while the launcher's event can land after a seat's first call
   for (const e of events) {
     if (e.type === "join" && e.p?.id) { names.set(String(e.p.id), { name: String(e.p.name), role: e.p.role }); byName.set(String(e.p.name), e.p.role); }
@@ -56,7 +58,7 @@ export function reResearch(events: readonly Ev[]): ReResearch {
       const key = String(e.key), by = String(e.entry.by ?? "");
       if (by === "launcher") continue;
       const own = refsIn(key.slice("sources/".length)).length ? refsIn(key.slice("sources/".length)) : refsIn(String(e.entry.text ?? "").split("\n")[0]);
-      const list = told.get(by) ?? (launcherList && byName.get(by) !== "recruit" ? launcherList : undefined);
+      const list = listOf(by);
       if (list && own.some((id) => list.has(id))) carriedSum++;
       for (const id of own) if (!summarisedBy.has(id)) summarisedBy.set(id, by);
     } else if (e.type === "work" && e.cls === "web") {

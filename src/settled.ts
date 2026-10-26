@@ -40,8 +40,8 @@ export function settledAxes(cwd: string): string {
 }
 
 /**
- * What a seat was told was already settled and read, as the room log records it (the `carried` event: Hub.recordCarried,
- * from the launcher and from the spawner): the outside ids in the text (refsIn), how many settled axes it listed, and its
+ * What a seat was told was already settled and read, as the room log records it (the `carried` event: recordCarried in
+ * src/telemetry/launch-reports.ts, from the launcher and from the spawner): the outside ids in the text (refsIn), how many settled axes it listed, and its
  * length. Without it the log could not show whether the list works: a NO_CARRY arm looked like a run that had it.
  */
 export function carriedSummary(text: string): { ids: string[]; axes: number; chars: number } {

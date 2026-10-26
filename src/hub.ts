@@ -27,6 +27,7 @@ import { barrenClaims, evidenceGaps, evidenceReceipt, offline, unsourcedClaims }
 import { apiRequests, UsageLedger, usageTotal } from "./hub/usage.js";
 import { DevRuns, DevRunError, type DevRunHost } from "./hub/dev-runs.js";
 import { takesOf } from "./hub/take.js";
+import * as votes from "./hub/consensus/votes.js";
 import { registeredWakes, wakeSuccessors, type Wake } from "./hub/wake.js";
 import { MemoryWatch, memoryNotice, type Job, type MemoryEvent, type SeatMemory } from "./hub/memory.js";
 import { RUN_END_CAUSES, exitCause, type RunEndCause, type StoppedBy } from "./respawn.js";
@@ -1857,8 +1858,8 @@ export class Hub {
   /** A missing vote is individually owed; one current-version electorate vote clears carried-vote freshness. */
   needsVote(room: Room, p: Participant, pr: Proposal): boolean {
     if (pr.status !== "open") return false;
-    // the verifier owes its vote on every version, whether or not it was in the room when the proposal was made
-    if (this.verifierHolds(room, pr).some((h) => h.p.id === p.id)) return true;
+    // the verifier owes its vote on every version, whether or not it was in the room when the proposal was made, unless its disagree stands on this text (hub/consensus/votes.ts)
+    if (this.verifierHolds(room, pr).some((h) => h.p.id === p.id)) return !votes.disagreeStands(pr, pr.votes[p.id]);
     const members = this.electorate(room, pr).members;
     if (!members.some((v) => v.id === p.id)) return false;
     if (this.inLastCall(pr)) return (pr.votes[p.id]?.version ?? (pr.votes[p.id] ? 1 : 0)) !== pr.version;
@@ -2243,8 +2244,7 @@ export class Hub {
     pr.cited?.push({ at: pr.updatedAt, tokens: hexTokens(next) });
     pr.notPassedVersion = undefined;
     pr.stuckNotice = undefined;
-    const kept: Proposal["votes"] = {};
-    for (const [id, v] of Object.entries(pr.votes)) if (v.vote === "agree" && v.quote && norm(next).includes(norm(v.quote))) kept[id] = v;
+    const { kept, carried: carriedDisagrees } = votes.keptOnAmend(pr.votes, next); // quoted agrees and disagrees whose clause survived
     pr.votes = kept;
     const answered: string[] = [];
     const reopened: string[] = [];
@@ -2267,18 +2267,18 @@ export class Hub {
         reopened.push(this.shown(room, c.by));
       }
     }
-    this.persist({ type: "amend", room: roomName, proposalId, text: pr.text, version: pr.version, updatedAt: pr.updatedAt, votes: pr.votes, challenges: pr.challenges });
+    this.persist({ type: "amend", room: roomName, proposalId, text: pr.text, version: pr.version, updatedAt: pr.updatedAt, votes: pr.votes, challenges: pr.challenges, ...(carriedDisagrees.length ? { carried_disagrees: carriedDisagrees } : {}) });
     this.noteUsed(room, p, replace, "amend");
     const clip = (t: string, n: number) => (t.length > n ? t.slice(0, n) + "…" : t);
     const diff = replaceAll ? `replaced the whole text (${pr.text.length} chars)` : find ? `"${clip(find, 160)}" → "${clip(replace, 240)}"` : `appended "${clip(replace, 240)}"`;
-    const survived = Object.values(kept).map((v) => this.shown(room, { id: "", name: v.name }));
+    const named = (ids: string[]) => ids.map((id) => this.shown(room, { id, name: kept[id].name }));
     const verifiedNow = verifiedBefore.length ? counting() : [];
     const voided = verifiedBefore.filter((k) => !verifiedNow.includes(k));
     this.post(
       room,
       "amend",
       p,
-      `AMENDED ${proposalId} to v${pr.version}: ${diff}\n(votes reset${survived.length ? ` except ${survived.join(", ")}, whose quoted clause survived` : ""}; the new text arrives with your next wait_for_messages` +
+      `AMENDED ${proposalId} to v${pr.version}: ${diff}\n(${votes.amendVoteNote(named(Object.keys(kept).filter((id) => kept[id].vote === "agree")), named(carriedDisagrees))}; the new text arrives with your next wait_for_messages` +
         (verifiedNow.length ? `; ${verifiedNow.join(", ")} still counts: v${pr.version} cites the commit it checked` : "") +
         (voided.length ? `; ${voided.join(", ")} no longer counts for v${pr.version} (blocked_by says why): check v${pr.version} and write it again` : "") +
         (answered.length ? `; challenge by ${answered.join(", ")} answered: the cited text is gone` : "") +
@@ -2623,6 +2623,7 @@ export class Hub {
       if (vote === "disagree" && (!reason || reason.trim().length < 20)) {
         throw new HubError("A disagree vote must include `reason` stating the specific change that would make you agree (20+ chars).", undefined, "vote-form");
       }
+      const badQuote = vote === "disagree" ? votes.disagreeQuoteRefusal(proposal, quote, (t, q) => this.closest(t, q)) : undefined; if (badQuote) throw new HubError(badQuote, undefined, "vote-form");
     }
     const entry = { vote, reason, quote, confidence, name: p.name, ts: now(), version: proposal.version, ...this.seenTiming(room, p, proposal) };
     this.applyVote(proposal, p.id, entry);
@@ -2641,11 +2642,10 @@ export class Hub {
     for (const c of pr.challenges) if (c.by.id === pid && (c.status ?? "open") === "open") c.status = "conceded";
   }
 
-  /** Disagree votes cast against the current text by anyone, present or departed: an objection outlives the agent who filed it. */
+  /** Disagrees standing on the current text, present or departed: an objection outlives its author; a carried one only while they are in the room (hub/consensus/votes.ts). */
   standingDisagrees(pr: Proposal): { id: string; name: string }[] {
-    return Object.entries(pr.votes)
-      .filter(([, v]) => v.vote === "disagree" && (v.version ?? pr.version) === pr.version)
-      .map(([id, v]) => ({ id, name: v.name }));
+    const room = this.rooms.get(pr.room);
+    return votes.standingDisagrees(pr, (id) => { const a = room?.participants.get(id); return !!a && (a.active || !!this.away(a)); });
   }
 
   /** Legacy uncited blockers cannot be answered by amending an imaginary target. */

@@ -700,7 +700,7 @@ export function createSessionServer(hub: Hub, spawner?: Spawner, opts: { holdMs?
       title: "Amend the open proposal",
       description:
         "Edit the open proposal's text in place: replace `find` (exact, unique substring) with `replace`, leave `find` empty to append, or pass replace_all=true to swap the whole text. " +
-        "Only the diff is posted, the version is bumped, and votes reset EXCEPT agrees whose quoted clause still appears verbatim; you get no vote for amending, so vote after you amend. A verify/* entry keeps counting while the amended text still cites the commit it checked and adds no commit-like token (7 to 40 lowercase hex characters) that nobody has verified; otherwise it must be written again. " +
+        "Only the diff is posted, the version is bumped, and votes reset EXCEPT agrees and disagrees whose quoted clause still appears verbatim; you get no vote for amending, so vote after you amend. A verify/* entry keeps counting while the amended text still cites the commit it checked and adds no commit-like token (7 to 40 lowercase hex characters) that nobody has verified; otherwise it must be written again. " +
         "A challenge is answered automatically when the text it cites is gone. Use this instead of re-proposing. " +
         "Given the key of a board entry you wrote instead of a proposal id, it edits that board entry in place the same way (find/replace, append, replace_all): send the changed passage, not the whole entry.",
       inputSchema: {
@@ -866,13 +866,13 @@ export function createSessionServer(hub: Hub, spawner?: Spawner, opts: { holdMs?
       title: "Vote on a proposal",
       description:
         "Vote on a proposal. agree requires `quote`: a verbatim clause (15+ chars) from the proposal you endorse, checked by the server; while a challenge is open it also needs `reason`. " +
-        "disagree requires `reason` stating the specific change that would make you agree; a disagree keeps the proposal open for amendment (it never kills it) and stands until you re-vote or that text is amended. Optional confidence 0-1. " +
+        "disagree requires `reason` stating the specific change that would make you agree; a disagree keeps the proposal open for amendment (it never kills it). Give it `quote`, the clause you object to or are waiting on, and it stands across amends that keep that clause until you re-vote; without one, any amend resets it. Checked but waiting on an input: disagree quoting the pending line, not a fresh disagree per version. Optional confidence 0-1. " +
         "Your agree can be the one that concludes the room, after which no vote or amend is taken: agree only to the text as it stands, not to text you still mean to change.",
       inputSchema: {
         room: roomArg,
         proposal_id: z.string().describe("Proposal id (prop_...)."),
         vote: z.enum(["agree", "disagree", "abstain"]),
-        quote: z.string().optional().describe("agree only: verbatim clause from the proposal text."),
+        quote: z.string().optional().describe("Verbatim clause from the proposal text (15+ chars): required for agree; for disagree, the clause it objects to or waits on."),
         reason: z.string().optional().describe("Why. Required for disagree: the change that would make you agree."),
         confidence: z.number().min(0).max(1).optional(),
         participant_id: asArg,

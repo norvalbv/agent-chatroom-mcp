@@ -226,6 +226,7 @@ export const offlineScripts = [
   'shelf-lang-tasks.test.ts',
   'arrow-task.test.ts',
   'quiet-guidance-regression.ts',
+  'recruit-guidance-regression.ts',
   'quiet-default-regression.ts',
   'quiet-receipts.ts',
   'quiet-reply-audience-regression.ts',

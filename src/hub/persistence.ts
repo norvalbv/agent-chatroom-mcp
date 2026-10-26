@@ -6,6 +6,7 @@ import type { Hub } from "../hub.js";
 import { applyBoard, applyBoardManifest } from "./board.js";
 import { ROOM_IDLE_MS } from "./idle.js";
 import { countWork } from "./work.js";
+import { noteCoverage } from "./coverage/coverage.js";
 import type { Participant, Proposal } from "./types.js";
 import { hexTokens } from "./types.js";
 import { now, keepRefusal } from "./internal.js";
@@ -43,6 +44,7 @@ export function persist(hub: Hub, ev: Event) {
   if (!hub.dataDir) return;
   const roomName = "room" in ev ? ev.room : ev.type === "message" ? ev.msg.room : ev.proposal.room;
   appendFileSync(join(hub.dataDir, `${roomName}.jsonl`), JSON.stringify(ev) + "\n");
+  noteCoverage(hub, ev);
 }
 
 export function replay(hub: Hub) {

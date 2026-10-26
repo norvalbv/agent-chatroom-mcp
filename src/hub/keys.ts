@@ -5,9 +5,10 @@
  * a finding (merge-review backlog item 3, docs/self-improvement-swarm-003601-tky5.md). A claim is a promise, a take is a
  * reservation, a hold is a switch, and inbox/* is another room's note or its ack. filedigest/<hash> is a cache of a
  * file's contents (prompts/worker.md): the same treatment, since a 300-char summary was listed as an unexamined finding
- * and counted as its writer's evidence (review/4ee42a7e).
+ * and counted as its writer's evidence (review/4ee42a7e). item/<slug> names a problem the brief requires (src/hub/coverage/):
+ * a chair or launcher listing the brief has delivered nothing, and the item is not a review of the claim that covers it.
  */
-export const COORDINATION_PREFIXES: readonly string[] = ["claim/", "take/", "hold/", "inbox/", "filedigest/"];
+export const COORDINATION_PREFIXES: readonly string[] = ["claim/", "take/", "hold/", "inbox/", "filedigest/", "item/"];
 
 /** Whether a key is coordination state: nobody's output, no work behind a claim, nothing to attack. */
 export const coordinates = (key: string) => COORDINATION_PREFIXES.some((p) => key.startsWith(p));

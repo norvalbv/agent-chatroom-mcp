@@ -35,6 +35,9 @@ export type Event =
   | { type: "board"; room: string; key: string; entry: BoardEntry | null }
   /** telemetry: a review/* with a verify head was first written and the hub @-named the commit's author */
   | { type: "review_notice"; room: string; key: string; commit: string; author: string; by: string; passes: boolean; ts: string }
+  /** telemetry: the item/* ledger changed (src/hub/coverage/coverage.ts): counts by state, the items nobody is on, and
+   * each item's state and owners, so scripts/coverage-replay.ts can time every item without the board */
+  | { type: "coverage"; room: string; items: number; unowned: number; owned: number; reviewed: number; built: number; done: number; orphaned: number; dropped: number; open: string[]; states: Record<string, string>; owners: Record<string, string[]>; ts: string }
   /** telemetry only (replay rebuilds the entry from the "board" record): one board_set(append=true) line and where it landed */
   | { type: "board_append"; room: string; key: string; landed_key: string; by: string; chars: number; ts: string }
   | { type: "dev_receipt"; room: string; key: string; updatedAt: string; receipt: DevReceipt }

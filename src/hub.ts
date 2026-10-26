@@ -1356,7 +1356,7 @@ export class Hub {
    * Pending calls, schema rejections outside guard, roomless calls and failed room creation
    * are excluded. The rate uses this event's matched numerator, never lifetime refusals.
    */
-  recordCallCompletion(roomName: string | undefined, tool: string, outcome: CallOutcome, participant: string | null, timing: { ms?: number; empty?: boolean; outsider?: string; key?: string; key_rejected?: string; result_chars?: number; args_chars?: number } = {}) {
+  recordCallCompletion(roomName: string | undefined, tool: string, outcome: CallOutcome, participant: string | null, timing: { ms?: number; empty?: boolean; woke?: string; board_notices?: number; outsider?: string; key?: string; key_rejected?: string; result_chars?: number; args_chars?: number } = {}) {
     const room = roomName ? this.rooms.get(roomName) : undefined;
     if (!room) return;
     this.applyCallCompletion(room, tool, outcome, timing.outsider);
@@ -2109,7 +2109,7 @@ export class Hub {
     board_keys?: string[]; board_delta?: { keys: string[]; tombstones: string[] }; board_reset?: boolean;
   } { return board.boardManifest(this, roomName, pid, follow, forceFull); }
   private applyBoard(room: Room, key: string, entry: BoardEntry | null) { return board.applyBoard(room, key, entry); }
-  setBoard(roomName: string, pid: string, key: string, text: string, opts: BoardExpiryOptions & { ifAbsent?: boolean; ifByMe?: boolean; overwrite?: boolean; append?: boolean } = {}): BoardEntry | null {
+  setBoard(roomName: string, pid: string, key: string, text: string, opts: BoardExpiryOptions & { ifAbsent?: boolean; ifByMe?: boolean; overwrite?: boolean; append?: boolean; diff?: string } = {}): BoardEntry | null {
     const entry = board.setBoard(this, roomName, pid, key, text, opts);
     // a take released during a last call may be the last thing the conclusion was waiting for
     const room = this.rooms.get(roomName);
@@ -2204,11 +2204,11 @@ export class Hub {
     }
     const next = this.spliced(e.text, `board entry "${key}"`, find, replace, replaceAll);
     if (next === e.text) throw new HubError("That amendment changes nothing.", undefined, "amend-find");
-    this.setBoard(roomName, pid, key, next);
     const clip = (t: string, n: number) => (t.length > n ? t.slice(0, n) + "…" : t);
-    const diff = replaceAll ? `replaced the whole entry (${next.length} chars)` : find ? `"${clip(find, 160)}" → "${clip(replace, 240)}"` : `appended "${clip(replace, 240)}"`;
-    this.persist({ type: "board_edit", room: roomName, key, by: p.name, sent_chars: find.length + replace.length, entry_chars: next.length, ts: now() });
-    this.post(room, "board", p, `amended "${key}": ${diff}`);
+    const diff = replaceAll ? "replaced the whole entry" : find ? `"${clip(find, 160)}" → "${clip(replace, 240)}"` : `appended "${clip(replace, 240)}"`;
+    const before = room.messages.at(-1)?.seq ?? 0; // the board's one notice carries the diff (a sealed draft's names none): two per amend were 25% of 9f66's messages
+    this.setBoard(roomName, pid, key, next, { diff });
+    this.persist({ type: "board_edit", room: roomName, key, by: p.name, sent_chars: find.length + replace.length, entry_chars: next.length, notice_seq: room.messages.find((m) => m.seq > before && m.kind === "board" && m.from.id === p.id)?.seq, ts: now() });
     return { key, chars: next.length, diff };
   }
 

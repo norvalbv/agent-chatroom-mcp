@@ -38,6 +38,8 @@ const BRIEF = "a stub recruit for this test; it does nothing at all";
 const said: string[] = [];
 const recorded: { room: string; seat: string; ms: number; ok: boolean }[] = [];
 const spawner = new Spawner({ mcpUrl: "http://127.0.0.1:1/mcp", defaultCwd: repo, logDir: join(work, "logs") });
+// the stub above, whatever CHATROOM_RECRUIT_AGENT says: the hub's policy wins over a request's agent (unset, it is openrouter)
+spawner.policy = { agent: "claude" };
 spawner.attach({ isHeld: () => false, claimArea: () => {}, ensureRoom: () => {}, announce: (_r, t) => said.push(t), liveAgents: () => 0, recordWorktree: (room, e) => recorded.push({ room, ...e }) } as Parameters<Spawner["attach"]>[0]);
 
 try {

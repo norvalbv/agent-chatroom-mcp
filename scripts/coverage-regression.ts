@@ -68,6 +68,28 @@ test("a claim made at recruitment counts its recruit as owner, not the chair tha
   assert.equal(cov()!.multi_claim_seats?.chair, undefined);
 });
 
+test("a claim also covers the items its owner names in handoff/<area> or decision/<area>, which a recruitment claim cannot (probe/coverage-1)", () => {
+  const dir = mkdtempSync(join(tmpdir(), "coverage-"));
+  const { h, name, alice, bob, carol, row } = room(dir);
+  for (const s of ["slugify", "clamp", "chunk"]) h.setBoardAs(name, "launcher", `item/${s}`, s);
+  // the hub's claim at recruitment: area and team, no item. alice asked, carol builds.
+  h.setBoardAs(name, "alice", "claim/build-utils", JSON.stringify({ area: "build-utils", owner: "alice", team: ["alice", "carol"], status: "open", note: "claimed at recruitment" }));
+  h.setBoard(name, bob.id, "decision/build-utils", "bob thinks this covers item/clamp"); // not the claim's writer or owner
+  h.setBoard(name, carol.id, "evidence/notes", "item/chunk is next"); // not keyed by the area
+  assert.deepEqual(["slugify", "clamp", "chunk"].map((s) => row(`item/${s}`)!.state), ["unowned", "unowned", "unowned"]);
+  h.setBoard(name, carol.id, "handoff/build-utils", "commits, one per item:\n- 17ff11c item/slugify: slugify(s)\n- 2a405a3 item/clamp: clamp(x, lo, hi)");
+  assert.deepEqual([row("item/slugify")!.state, row("item/slugify")!.owners, row("item/slugify")!.claims], ["owned", ["carol"], ["claim/build-utils"]]);
+  assert.deepEqual([row("item/clamp")!.state, row("item/chunk")!.state], ["owned", "unowned"]);
+  const log = () => readFileSync(join(dir, `${name}.jsonl`), "utf8").split("\n").filter(Boolean).map((l) => JSON.parse(l)).filter((e) => e.type === "coverage");
+  assert.equal(log().at(-1).states["item/slugify"], "owned", "the handoff write itself logs the change");
+  h.setBoard(name, alice.id, "review/17ff11c", "APPROVE item/slugify: tests fail at the parent, pass here");
+  assert.equal(row("item/slugify")!.state, "reviewed");
+  h.setBoard(name, alice.id, "decision/build-utils-2", "item/chunk is carol's too"); // the claim's writer, a continuation key
+  assert.equal(row("item/chunk")!.state, "owned");
+  h.leave(name, carol.id, "built all three");
+  assert.deepEqual(["slugify", "clamp", "chunk"].map((s) => row(`item/${s}`)!.state), ["reviewed", "orphaned", "orphaned"]);
+});
+
 test("the owner's own done is 'built' until someone else reviews it; a review alone is 'reviewed'; both are 'done'", () => {
   const { h, name, chair, alice, bob, row } = room();
   h.setBoard(name, chair.id, "item/room-size", "How many agents");

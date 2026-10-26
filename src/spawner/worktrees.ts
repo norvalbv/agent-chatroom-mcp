@@ -125,7 +125,7 @@ export class WorktreeMaker {
   private queue: Promise<unknown> = Promise.resolve();
 
   /** The worktree's directory once it exists (at once if it already did), or undefined when git refuses; `made` hears of each one git ran for. */
-  make(ws: { root: string; worktree: string; branch: string }, base: { sha: string } | undefined, made?: (e: WorktreeMade) => void): Promise<string | undefined> {
+  make(ws: { root: string; worktree: string; branch: string }, base: { sha: string } | undefined, made?: (e: WorktreeMade) => void, hooksOff = process.env.CHATROOM_SEAT_HOOKS === "off"): Promise<string | undefined> {
     if (existsSync(ws.worktree)) return Promise.resolve(ws.worktree);
     const queued = Date.now();
     const done = this.queue.then(async () => {
@@ -133,14 +133,14 @@ export class WorktreeMaker {
       // cut from the recruiter's HEAD when it has a worktree of this repository, else from the project checkout's HEAD
       const r = await createRecruitWorktree(ws.root, ws.worktree, ws.branch, base?.sha);
       made?.({ branch: ws.branch, ms: Date.now() - started, waited_ms: started - queued, ok: r.ok, ...(r.error ? { error: r.error } : {}) });
-      return r.ok ? this.fitOut(ws.root, ws.worktree) : undefined;
+      return r.ok ? this.fitOut(ws.root, ws.worktree, hooksOff) : undefined;
     });
     this.queue = done.catch(() => {});
     return done;
   }
 
   /** node_modules linked so builds and tests work there, and the repository's commit hooks carried in */
-  private fitOut(root: string, dir: string): string {
+  private fitOut(root: string, dir: string, off: boolean): string {
     const mods = resolve(root, "node_modules");
     if (existsSync(mods) && !existsSync(resolve(dir, "node_modules"))) {
       try {
@@ -148,8 +148,8 @@ export class WorktreeMaker {
       } catch {}
     }
     // and no hooks runner either: without this every commit a write recruit makes skips the repository's hooks
-    // CHATROOM_SEAT_HOOKS=off (the launcher's --seat-hooks off): the run chose ungated seat commits
-    this.hooksIn.set(dir, process.env.CHATROOM_SEAT_HOOKS === "off" ? hooksOff(root) : carryHooks(root, dir));
+    // CHATROOM_SEAT_HOOKS=off, or the room's run settings say --seat-hooks off: the run chose ungated seat commits
+    this.hooksIn.set(dir, off ? hooksOff(root) : carryHooks(root, dir));
     return dir;
   }
 }

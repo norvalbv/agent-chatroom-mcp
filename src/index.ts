@@ -37,7 +37,7 @@ import { attachJobWake } from "./spawner/wake.js";
 import { UI_HTML } from "./ui.js";
 import { humanQuestions } from "./questions.js";
 import { photoDirectory, registerPhotoRoutes } from "./photos/routes.js";
-import { holdFromQuery, hubDotEnvOptions, loadDotEnv } from "./env.js";
+import { holdFromQuery, hubDotEnvOptions, loadDotEnv, recruitSettingsHooks, SeatSettingsError, seatSettingsOpt } from "./env.js";
 import { attachMachineWatch } from "./telemetry/machine.js";
 import { installLifecycle } from "./lifecycle.js";
 import { noteBeat, reapIdle, watchStream, type SessionEntry } from "./hub/liveness.js";
@@ -119,7 +119,7 @@ hub.onProposalOpened = (room, proposal) => {
   const rec = spawner.freshChallenger(room, proposal);
   if (rec) hub.awaitScrutiny(room, proposal.id, rec.name, FRESH_CHALLENGER_WAIT_MS);
 };
-spawner.attach({
+spawner.attach({ ...recruitSettingsHooks(hub), // a room's run settings for its recruits, one recruit_spawn event each (src/seat/settings.ts)
   isHeld: (room) => { try { return Boolean(hub.hold(hub.getRoom(room))); } catch { return false; } },
   claimArea: (room, requester, area, team) => {
     const r = hub.getRoom(room);
@@ -646,14 +646,14 @@ app.post("/rooms/:room/replace", (req, res) => {
 app.post("/rooms/:room/create", (req, res) => {
   if (!requireLauncherOrToken(req, res)) return;
   try {
-    const b = (req.body ?? {}) as { topic?: string; quorum?: "unanimous" | "majority" | "supermajority"; expected_participants?: number; require_verification?: boolean; require_challenge?: boolean; mode?: "free" | "round_robin"; max_message_chars?: number; anonymous?: boolean; chair?: string; parent?: string };
+    const b = (req.body ?? {}) as { topic?: string; quorum?: "unanimous" | "majority" | "supermajority"; expected_participants?: number; require_verification?: boolean; require_challenge?: boolean; mode?: "free" | "round_robin"; max_message_chars?: number; anonymous?: boolean; chair?: string; parent?: string; seat_settings?: unknown };
     const existed = hub.listRooms().some((r) => r.name === req.params.room);
     // a chair named here counts as named only when the caller was checked: the launcher's token or the human token
     const checked = tokenChecked(req) || (!!process.env.CHATROOM_LAUNCHER_TOKEN && req.header("x-chatroom-launcher-token") === process.env.CHATROOM_LAUNCHER_TOKEN);
-    const room = hub.createRoom(req.params.room, { topic: b.topic, quorum: b.quorum, expectedParticipants: b.expected_participants, requireVerification: b.require_verification, requireChallenge: b.require_challenge, mode: b.mode, maxMessageChars: b.max_message_chars, anonymous: b.anonymous, chair: b.chair, ...(b.chair && checked ? { chairNamed: true } : {}), ...(b.parent ? { parent: b.parent } : {}) });
-    res.status(existed ? 200 : 201).json({ ...hub.summary(room, true), created: !existed, ...(room.chair ? { chair_named: !!room.chairNamed } : {}) });
+    const room = hub.createRoom(req.params.room, { topic: b.topic, quorum: b.quorum, expectedParticipants: b.expected_participants, requireVerification: b.require_verification, requireChallenge: b.require_challenge, mode: b.mode, maxMessageChars: b.max_message_chars, anonymous: b.anonymous, chair: b.chair, ...(b.chair && checked ? { chairNamed: true } : {}), ...(b.parent ? { parent: b.parent } : {}), ...seatSettingsOpt(b.seat_settings) });
+    res.status(existed ? 200 : 201).json({ ...hub.summary(room, true), created: !existed, ...(room.chair ? { chair_named: !!room.chairNamed } : {}), ...(hub.seatSettingsFor(room.name) ? { seat_settings: hub.seatSettingsFor(room.name) } : {}) });
   } catch (e) {
-    res.status(400).type("text/plain").send(e instanceof HubError ? e.message : "error");
+    res.status(400).type("text/plain").send(e instanceof HubError || e instanceof SeatSettingsError ? e.message : "error");
   }
 });
 // Launcher authority is deliberately separate from optional dashboard authentication.

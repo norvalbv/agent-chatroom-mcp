@@ -6,8 +6,32 @@ import type { SeatUsage } from "./usage.js";
 import type { SeatMemory } from "./memory.js";
 import type { MachineSample } from "../telemetry/machine.js";
 import type { DevRun } from "./dev-runs.js";
+import type { RecruitSpawn, SeatSettings } from "../seat/settings.js";
 
-export type Opts = Required<Omit<RoomOptions, "chair" | "chairNamed" | "parent">> & { chair?: string; chairNamed?: boolean; parent?: string };
+/** seatSettings: the launching run's seat settings, which its recruits inherit (src/seat/settings.ts). Only the hub's create
+ * route sets them, under the launcher's or the human token, so they are a room option no join_room can pass. */
+export type Opts = Required<Omit<RoomOptions, "chair" | "chairNamed" | "parent">> & { chair?: string; chairNamed?: boolean; parent?: string; seatSettings?: SeatSettings };
+
+/** "swarm-093235-fsxs-leads" -> "swarm-093235-fsxs" (Hub.runPrefix) */
+export function runPrefix(name: string): string | undefined {
+  const m = /^(swarm-[0-9]{6}(?:-[a-z0-9]{4})?)-/.exec(name);
+  return m?.[1];
+}
+
+/** The seat settings a room's recruits inherit: its own, else the nearest parent's, so a break-out runs as the room it came
+ * from, else another room of the same run (swarm-<id>-*: a group room a seat's join created, which the launcher did not)
+ * (decision/recruit-settings). Undefined for a room no launcher configured: its recruits keep the hub's environment.
+ * A room carries them from its creation opts (materialiseRoom spreads Opts), which Room's own type does not list. */
+export function seatSettingsOf(rooms: ReadonlyMap<string, Room & Pick<Opts, "seatSettings">>, name: string): SeatSettings | undefined {
+  const seen = new Set<string>();
+  for (let r = rooms.get(name); r && !seen.has(r.name); r = r.parent ? rooms.get(r.parent) : undefined) {
+    if (r.seatSettings) return r.seatSettings;
+    seen.add(r.name);
+  }
+  const prefix = runPrefix(name);
+  if (prefix) for (const r of rooms.values()) if (r.seatSettings && runPrefix(r.name) === prefix) return r.seatSettings;
+  return undefined;
+}
 
 export type Event =
   | { type: "room"; room: string; opts: Opts; createdAt: string; telemetryVersion?: 1 }
@@ -56,6 +80,9 @@ export type Event =
   | { type: "owner_verdict"; room: string; verdict: "adopted" | "rejected" | "partial"; by: string; proposal_id: string | null; note?: string; ts: string }
   /** Telemetry only: the run that owns this room ended, as its launcher saw it. One per room: the first stands. */
   | { type: "run_end"; room: string; cause: import("../respawn.js").RunEndCause; detail?: string; ts: string }
+  /** Telemetry only: one per recruit the hub launched, with the settings it was started with and where each came from
+   * (src/seat/settings.ts effectiveSeatSettings: the run's seat_settings, the hub's environment, or Claude Code's default). */
+  | ({ type: "recruit_spawn"; room: string; by_role?: string; ts: string } & RecruitSpawn)
   // what happened to an MCP session that held a seat (bugs.md 3: nothing recorded a session moving, closing or being reaped).
   // seat_kept: the seat is still served by another session after this. Never a session key (identity-is-the-connection).
   | { type: "session"; room: string; event: "moved" | "closed"; participant: string; name: string; reason: string; seat_kept: boolean; ts: string }

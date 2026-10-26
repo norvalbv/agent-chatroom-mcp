@@ -21,7 +21,7 @@ assert.equal(win({ ...base, CHATROOM_CLAUDE_FULL: "1" }), undefined, "CHATROOM_C
 assert.equal(env.seatChildEnv({ ...base, CHATROOM_SEAT_COMPACT_WINDOW: "off" }, undefined, false, true).CHATROOM_SEAT_COMPACT_WINDOW, undefined, "the switch itself never reaches the seat");
 assert.equal(env.seatChildEnv({ ...base }).CLAUDE_CODE_AUTO_COMPACT_WINDOW, undefined, "codex and OpenRouter seats get no default: they never read it (seat-env-regression's flat clone)");
 assert.equal(env.seatChildEnv({ ...base }, undefined, true).CLAUDE_CODE_AUTO_COMPACT_WINDOW, undefined, "a paid OpenRouter seat neither");
-for (const [file, call] of [["src/swarm.ts", 'openRouterSeats.has(name), cmd === "claude")'], ["src/spawner.ts", 'agent === "openrouter", cmd === "claude")']]) {
+for (const [file, call] of [["src/swarm.ts", 'openRouterSeats.has(name), cmd === "claude")'], ["src/spawner.ts", 'agent === "openrouter", agent === "claude")']]) {
   assert.ok(readFileSync(new URL(`../${file}`, import.meta.url), "utf8").includes(call), `${file} marks its claude seats for the default`);
 }
 console.log("SEAT COMPACT DEFAULT OK");

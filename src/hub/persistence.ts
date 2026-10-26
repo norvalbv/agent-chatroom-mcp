@@ -116,6 +116,8 @@ export function replay(hub: Hub) {
             ...(legacy.chair ? { chair: legacy.chair } : {}),
             ...(legacy.chair && legacy.chairNamed ? { chairNamed: true } : {}),
             ...(legacy.parent ? { parent: legacy.parent } : {}),
+            // the run's seat settings, which its recruits inherit: dropped here, a restart would hand recruits the hub's own again
+            ...(legacy.seatSettings ? { seatSettings: legacy.seatSettings } : {}),
           };
           const room = hub.materialiseRoom(ev.room, opts, ev.createdAt);
           room.telemetryVersion = ev.telemetryVersion;

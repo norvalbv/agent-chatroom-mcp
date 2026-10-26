@@ -14,7 +14,7 @@ import { collectRoomSnapshot, renderRunReport, writeRunResult, rollupUsage, hubU
 import { settledAxes } from "./settled.js";
 import { registerRespawn, respawnProbe } from "./respawn.js";
 import { fileURLToPath } from "node:url";
-import { aiGatesLine, HUB_START_MS, waitForHub, seatHoldMs, carrySettings, launcherHeaders, COMPACT_WINDOW_TESTED, compactWindow, devHubRule, heartbeatHookSettings, hubLogFile, loadDotEnv, outputHeartbeat, ownHubEnv, readLauncherToken, respawnTokenProblem, reusedHubProblem, seatBeat, seatChildEnv, seatCompactWindow, seatPortError, type SeatBeat } from "./env.js";
+import { aiGatesLine, HUB_START_MS, waitForHub, seatHoldMs, carrySettings, applySeatFlags, launcherHeaders, launcherSeatSettings, devHubRule, heartbeatHookSettings, hubLogFile, loadDotEnv, outputHeartbeat, ownHubEnv, readLauncherToken, respawnTokenProblem, reusedHubProblem, seatBeat, seatChildEnv, seatCompactWindow, seatPortError, seatSettingsLine, type SeatBeat } from "./env.js";
 import { randomUUID } from "node:crypto";
 import { claudeUsageProbe, exitDetail, fetchRespawnRoom, respawnChain, type RespawnRoom } from "./respawn.js";
 import { claudeArgs } from "./claude-args.js";
@@ -119,21 +119,14 @@ if (has("resources")) {
   try { RESOURCES = loadResources(resolve(flag("resources") ?? "")); } catch (e) { console.error(e instanceof Error ? e.message : String(e)); process.exit(2); }
 }
 /**
- * --compact-at <tokens>: every Claude seat, and every recruit of a hub this launcher starts, compacts its transcript at
- * this size (compactWindow in env.ts). A hub that was already running keeps its own setting for the seats it recruits.
- * Unset, lean seats compact at SEAT_COMPACT_DEFAULT (300000); "--compact-at off", or --claude-full, leaves Claude Code's own default.
+ * --compact-at <tokens>: every Claude seat, and every recruit of this run's rooms, compacts its transcript at this size; unset, lean
+ * seats compact at SEAT_COMPACT_DEFAULT (300000); "--compact-at off", or --claude-full, leaves Claude Code's own default. --effort
+ * <level>: every Claude seat and recruit runs at this CLAUDE_CODE_EFFORT_LEVEL. The rooms carry both to a hub this run did not start.
  */
 const COMPACT_AT = flag("compact-at") ?? (CLAUDE_FULL ? "off" : undefined);
-if (COMPACT_AT === "off") process.env.CHATROOM_SEAT_COMPACT_WINDOW = "off";
-else if (COMPACT_AT !== undefined) {
-  if (compactWindow(COMPACT_AT) === null) {
-    console.error(`--compact-at takes a whole number of tokens from 100000 to 1000000, or "off" (got "${COMPACT_AT}"); "200k" is not accepted.`);
-    process.exit(2);
-  }
-  process.env.CHATROOM_SEAT_COMPACT_WINDOW = COMPACT_AT;
-  // swarm-005342-qejc: at 100000 a seat reading large files died of "Autocompact is thrashing"; at 200000 the same task ran through
-  if (compactWindow(COMPACT_AT)! < COMPACT_WINDOW_TESTED) console.error(`--compact-at ${COMPACT_AT}: under ${COMPACT_WINDOW_TESTED} a seat that reads large files or outputs can refill its context within three turns of a compaction and stop ("Autocompact is thrashing").`);
-}
+const SEAT_FLAGS = applySeatFlags(process.env, { compactAt: COMPACT_AT, effort: flag("effort") });
+for (const w of SEAT_FLAGS.warnings) console.error(w);
+if (SEAT_FLAGS.error) { console.error(SEAT_FLAGS.error); process.exit(2); }
 /** --no-seat-targets: flat seats all get the same brief, with no starting item each (the A arm when measuring src/seat-targets.ts) */
 const NO_SEAT_TARGETS = has("no-seat-targets");
 /**
@@ -511,6 +504,9 @@ if (NO_CARRY) log("--no-carry: no settled axes or prior runs injected; seat auto
   const why = seatCompactWindow(process.env) !== null ? (COMPACT_AT === undefined ? "default; --compact-at to change" : "--compact-at") : window ? "inherited CLAUDE_CODE_AUTO_COMPACT_WINDOW" : "--compact-at off / --claude-full";
   log(`compact window: Claude seats compact their transcript at ${window ? `${window} tokens` : "Claude Code's own default (near the model's limit)"} (${why})`);
 }
+// what this run's Claude seats get, sent with every room it creates for its recruits there (decision/recruit-settings)
+const SEAT_SETTINGS = launcherSeatSettings(process.env, { seatHooksOff: SEAT_HOOKS_OFF, claudeFull: CLAUDE_FULL, sandbox: SANDBOX, web: !has("no-web"), carry: !NO_CARRY, models: [...MODELS, ...(VERIFIER_OPENROUTER ? [] : [VERIFIER_MODEL])].filter((m): m is string => !!m) });
+log(seatSettingsLine(SEAT_SETTINGS));
 if (SETTLED) log(`decision log found: ${SETTLED.split("\n").length - 4} settled axes injected into every prompt`);
 let plan: Plan;
 if (FLAT) {
@@ -635,7 +631,7 @@ const verifierText = PF.text + SETTLED + "\n" + prompt("verifier.md", {
 // second and third time, scripts/topic-once-regression.ts), so the first seat to join must not be the one creating it
 {
   try {
-    const r = await fetch(`${URL_}/rooms/${encodeURIComponent(leadsRoom)}/create`, { method: "POST", headers: launcherHeaders(launcherToken), body: JSON.stringify({ topic: task, expected_participants: FLAT ? TOTAL : plan.groups.length + 1, require_verification: REQUIRE_VERIFICATION, quorum: QUORUM ?? "unanimous", ...(CHAIR ? { chair: CHAIR } : {}) }) });
+    const r = await fetch(`${URL_}/rooms/${encodeURIComponent(leadsRoom)}/create`, { method: "POST", headers: launcherHeaders(launcherToken), body: JSON.stringify({ topic: task, expected_participants: FLAT ? TOTAL : plan.groups.length + 1, require_verification: REQUIRE_VERIFICATION, quorum: QUORUM ?? "unanimous", ...(CHAIR ? { chair: CHAIR } : {}), seat_settings: SEAT_SETTINGS }) });
     log(`${leadsRoom} created with quorum=${QUORUM ?? "unanimous"}${REQUIRE_VERIFICATION ? ", require_verification" : ""}${CHAIR ? `, chair ${CHAIR}${((await r.clone().json().catch(() => ({}))) as { chair_named?: boolean }).chair_named ? " (named)" : " (NOT named: the hub did not accept this launcher's token, so the chair will read as self-claimed)"}` : ""} (${r.status})`);
   } catch (e) {
     log(`could not pre-create ${leadsRoom}: ${e instanceof Error ? e.message : String(e)}${e instanceof Error && e.cause ? ` (cause: ${(e.cause as NodeJS.ErrnoException).code ?? (e.cause as Error).message})` : ""}`);
@@ -648,7 +644,7 @@ if (REQUIRE_VERIFICATION || QUORUM || CHAIR) {
   for (const g of GROUPS ? plan.groups : []) {
     const room = `${SWARM_ID}-${g.id}`;
     try {
-      const r = await fetch(`${URL_}/rooms/${encodeURIComponent(room)}/create`, { method: "POST", headers: launcherHeaders(launcherToken), body: JSON.stringify({ topic: `${g.title}: ${g.directive}`, expected_participants: g.workers, require_verification: REQUIRE_VERIFICATION, quorum: QUORUM ?? "unanimous", parent: leadsRoom }) });
+      const r = await fetch(`${URL_}/rooms/${encodeURIComponent(room)}/create`, { method: "POST", headers: launcherHeaders(launcherToken), body: JSON.stringify({ topic: `${g.title}: ${g.directive}`, expected_participants: g.workers, require_verification: REQUIRE_VERIFICATION, quorum: QUORUM ?? "unanimous", parent: leadsRoom, seat_settings: SEAT_SETTINGS }) });
       log(`${room} created with quorum=${QUORUM ?? "unanimous"}${REQUIRE_VERIFICATION ? ", require_verification" : ""} (${r.status})`);
     } catch (e) {
       log(`could not pre-create ${room}: ${e instanceof Error ? e.message : String(e)}`);

@@ -15,7 +15,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { HubError } from "./hub.js";
 import { settledAxes } from "./settled.js";
-import { aiGatesLine, devHubRule, heartbeatHookSettings, seatBeat, seatChildEnv, seatHoldMs } from "./env.js";
+import { aiGatesLine, carrySettings, devHubRule, effectiveSeatSettings, heartbeatHookSettings, policyFromEnv, recruitRun, seatBeat, seatChildEnv, seatHoldMs, type RecruitPolicy, type RecruitSpawn, type SeatSettings } from "./env.js";
 import { claudeArgs } from "./claude-args.js";
 import { exitDetail } from "./respawn.js";
 import { codexSeatCommand } from "./codex-seat.js";
@@ -82,6 +82,8 @@ export interface SpawnedAgent {
   log: string;
   /** claude recruits only: usage parsed from --output-format json stdout once the seat exits; undefined until then, null if unparseable */
   usage?: SeatUsageRollup | null;
+  /** the settings it was started with and where each came from (src/seat/settings.ts effectiveSeatSettings) */
+  settings?: ReturnType<typeof effectiveSeatSettings>;
 }
 
 export interface SpawnerHooks {
@@ -97,6 +99,10 @@ export interface SpawnerHooks {
   liveAgents(): number;
   /** topic of an existing room, if any */
   roomTopic?(room: string): string | undefined;
+  /** the launching run's seat settings a room's recruits inherit (Hub.seatSettingsFor); undefined: the hub's own environment */
+  seatSettings?(room: string): SeatSettings | undefined;
+  /** persist one recruit_spawn telemetry event: who was launched, by whom, and the settings it was started with (src/seat/settings.ts) */
+  recordSpawn?(room: string, ev: RecruitSpawn): void;
   /** register with the hub that a recruit replaces a departed participant; must throw on failure */
   registerReplacement?(room: string, predecessor: string, successorName: string): string;
   /** current state of a room ("open" | "concluded" | "stalled" | "closed"); undefined when unknown. Consolidator spawn asks this. */
@@ -141,24 +147,8 @@ export interface SpawnerOptions {
 const READ_TOOLS = ["mcp__chatroom__*", "Read", "Grep", "Glob", "Bash", "WebSearch", "WebFetch"];
 const WRITE_TOOLS = [...READ_TOOLS, "Edit", "Write", "MultiEdit", "NotebookEdit"];
 
-/** Which provider and model every recruit is launched as, whatever was asked for. Live, settable from the dashboard (POST /policy). */
-export interface RecruitPolicy {
-  /** force this provider for every recruit; undefined = as requested */
-  agent?: AgentKind;
-  /** force this model for every recruit; undefined = as requested (or the provider's default) */
-  model?: string;
-}
-/** Default: the free model only. CHATROOM_RECRUIT_AGENT / CHATROOM_RECRUIT_MODEL override the default at start; "any" unpins. */
-export function policyFromEnv(env: NodeJS.ProcessEnv = process.env): RecruitPolicy {
-  const agent = env.CHATROOM_RECRUIT_AGENT ?? "openrouter";
-  const model = env.CHATROOM_RECRUIT_MODEL ?? "deepseek/deepseek-v4-flash-0731";
-  return { agent: agent === "any" ? undefined : (agent as AgentKind), model: model === "any" ? undefined : model };
-}
-
-/** CHATROOM_CLAUDE_FULL=1: claude recruits get today's full (non-lean) flags too, matching the launcher's --claude-full opt-out (propagated to the hub's env when swarm.ts spawns it). */
-const CLAUDE_FULL = process.env.CHATROOM_CLAUDE_FULL === "1";
-/** CHATROOM_SANDBOX=1: recruits run their shell in an OS sandbox, matching the launcher's --sandbox (set in the hub's env when swarm.ts starts it). See src/sandbox.ts. */
-const SANDBOX = sandboxFromEnv();
+// what a recruit is launched as: the hub's provider/model pin (env.ts policyFromEnv) and its room's run settings (recruitRun)
+export { policyFromEnv, type RecruitPolicy };
 
 export { createRecruitWorktree, createSnapshot, planSnapshot, projectOf, recruitBase, recruitWorkspace, removeSnapshot, type Snapshot };
 
@@ -259,6 +249,9 @@ export class Spawner {
     if (newRoom) this.hooks?.carryResources?.(req.room, newRoom);
     const resources = req.fresh ? undefined : this.hooks?.resourceNote?.(target);
     if (req.area) this.hooks?.claimArea(target, req.requestedBy, req.area, names);
+    // the launching run's seat settings over the hub's env (decision/recruit-settings): the target room's, else the requester's room's
+    const run = recruitRun(process.env, this.hooks?.seatSettings?.(target) ?? (newRoom ? this.hooks?.seatSettings?.(req.room) : undefined));
+    const sandboxed = sandboxFromEnv(run.env);
 
     const home = resolve(req.cwd ?? o.defaultCwd);
     // a read-only checker of a proposer's commit runs in a detached snapshot of it, never in the proposer's live tree
@@ -278,7 +271,7 @@ export class Spawner {
     const context =
       (targetTopic ? `The room's topic (the task everyone there is on): ${targetTopic}\n` : "") +
       (req.newRoom && req.parentTopic ? `The parent room's topic: ${req.parentTopic}\n` : "") +
-      settledAxes(home);
+      (run.carry ? settledAxes(home) : ""); // --no-carry: the run's seats start from the brief alone, so its recruits do too
     // one look for the whole request: every write recruit's branch is cut from the same commit
     const writeBase = req.canEdit ? recruitBase(recruitWorkspace(cwd, target, names[0]!)?.root ?? cwd, req.baseDir) : undefined;
     const out: SpawnedAgent[] = [];
@@ -328,7 +321,7 @@ export class Spawner {
             : "You are the only recruit on this brief.",
         )
         .split("{{REPORT_TO}}").join(req.newRoom ? `This is a sub-room of ${req.room}: when it concludes, the hub puts its conclusion on that room's board as inbox/${target}/conclusion. For anything they need before then, use post_to_room(from_room="${target}", to_room="${req.room}", key="<short name>").` : "")
-        .split("{{WRITE_RULE}}").join(req.canEdit ? "You MAY edit files and run anything here. You are in your own git worktree on your own branch (git branch --show-current); commit there and name the branch in the room. Never touch the main checkout." + (writeBase ? ` Your branch was cut from the HEAD of ${by}'s worktree (${writeBase.sha.slice(0, 8)}), so it holds their commits; their uncommitted changes are not in it.` : "") + devHubRule(cwd, SANDBOX) : "Do NOT modify files; investigate and report." + (snap && cwd !== home ? ` You are in a detached copy of the tree at commit ${snap.sha.slice(0, 8)}${snap.dirty ? ` (${snap.dirty} uncommitted change${snap.dirty === 1 ? "" : "s"} in the tree it was taken from ${snap.dirty === 1 ? "is" : "are"} not in it)` : ""}: name that commit in what you report.` : ""));
+        .split("{{WRITE_RULE}}").join(req.canEdit ? "You MAY edit files and run anything here. You are in your own git worktree on your own branch (git branch --show-current); commit there and name the branch in the room. Never touch the main checkout." + (writeBase ? ` Your branch was cut from the HEAD of ${by}'s worktree (${writeBase.sha.slice(0, 8)}), so it holds their commits; their uncommitted changes are not in it.` : "") + devHubRule(cwd, sandboxed) : "Do NOT modify files; investigate and report." + (snap && cwd !== home ? ` You are in a detached copy of the tree at commit ${snap.sha.slice(0, 8)}${snap.dirty ? ` (${snap.dirty} uncommitted change${snap.dirty === 1 ? "" : "s"} in the tree it was taken from ${snap.dirty === 1 ? "is" : "are"} not in it)` : ""}: name that commit in what you report.` : ""));
 
       // a dry run plans the workspace without creating it, so what a seat is told matches what a real spawn does
       if (o.dryRun && req.canEdit) rec.workspace = workspaceOf(cwd, target, name, req.baseDir);
@@ -342,7 +335,11 @@ export class Spawner {
       // a write-enabled recruit works in its own worktree and branch, never in the shared checkout. git checks it out in
       // a child the hub does not wait on (worktreeFor) and the seat starts once it exists; the reply already names it
       const ws = req.canEdit ? recruitWorkspace(cwd, target, name) : undefined;
-      if (ws) rec.workspace = { worktree: ws.worktree, branch: ws.branch, ...(writeBase && !existsSync(ws.worktree) ? { base: writeBase } : {}), aiGates: /gates off/.test(aiGatesLine(seatChildEnv(process.env, name))) ? "off" : "on" };
+      if (ws) rec.workspace = { worktree: ws.worktree, branch: ws.branch, ...(writeBase && !existsSync(ws.worktree) ? { base: writeBase } : {}), aiGates: /gates off/.test(aiGatesLine(seatChildEnv(run.env, name))) ? "off" : "on" };
+      // the seat's environment and its effective settings are known now, before any worktree exists: telemetry, read back from that environment
+      const seatEnv = seatChildEnv(run.env, req.canEdit ? name : undefined, agent === "openrouter", agent === "claude");
+      rec.settings = effectiveSeatSettings(seatEnv, run, agent === "claude");
+      this.hooks?.recordSpawn?.(target, { name, requested_by: req.requestedBy, kind: req.replacing ? "replacement" : newRoom ? "breakout" : "in-room", ...(newRoom ? { parent_room: req.room } : {}), ...(req.area ? { area: req.area } : {}), depth, can_edit: !!req.canEdit, agent, model: req.model ?? null, ...(run.run?.models ? { run_models: run.run.models } : {}), ...rec.settings });
       const launch = (seatCwd: string) => {
         const carried = this.worktrees.hooksIn.get(seatCwd);
         if (rec.workspace && carried) rec.workspace.hooks = carried.hooks;
@@ -361,16 +358,17 @@ export class Spawner {
           args = [...(existsSync(seatBuild) ? [seatBuild] : ["tsx", resolve(repoRoot, "src", "openrouter.ts")]), "--mcp-url", beat.mcpUrl, "--cwd", seatCwd];
           if (req.model) args.push("--model", req.model);
           if (req.canEdit) args.push("--write");
-          if (SANDBOX) args.push("--sandbox");
+          if (sandboxed) args.push("--sandbox");
         } else if (agent === "codex") {
           ({ cmd, args } = codexSeatCommand({ cwd: seatCwd, mcpUrl: beat.mcpUrl, model: req.model, readOnly: !req.canEdit, usageSidecar: resolve(o.logDir, `${name}.usage.json`) }));
         } else {
           cmd = "claude";
-          const sandbox = SANDBOX ? claudeSandbox({ cwd: seatCwd, write: !!req.canEdit, hubPort: hubPortOf(o.mcpUrl) }) : undefined;
-          args = claudeArgs({ mcpJson, tools: req.canEdit ? WRITE_TOOLS : READ_TOOLS, model: req.model, full: CLAUDE_FULL, settings: heartbeatHookSettings(), sandbox });
+          const sandbox = sandboxed ? claudeSandbox({ cwd: seatCwd, write: !!req.canEdit, hubPort: hubPortOf(o.mcpUrl) }) : undefined;
+          // --no-web: the run's seats have no web tools; --no-carry under --claude-full: no auto-memory either (as swarm.ts runClaude)
+          args = claudeArgs({ mcpJson, tools: (req.canEdit ? WRITE_TOOLS : READ_TOOLS).filter((t) => run.web || !t.startsWith("Web")), model: req.model, full: run.env.CHATROOM_CLAUDE_FULL === "1", settings: carrySettings(!run.carry, heartbeatHookSettings()), sandbox });
         }
         // every seat kind reads its prompt from stdin, never argv: claude -p, codex exec - and src/openrouter.ts (claude-args.ts)
-        const child = spawn(cmd, args, { cwd: seatCwd, env: { ...seatChildEnv(process.env, req.canEdit ? name : undefined, agent === "openrouter", cmd === "claude"), ...beat.env }, stdio: ["pipe", "pipe", "pipe"] });
+        const child = spawn(cmd, args, { cwd: seatCwd, env: { ...seatEnv, ...beat.env }, stdio: ["pipe", "pipe", "pipe"] });
         child.stdin?.on("error", () => {});
         child.stdin?.end(prompt);
         // claude always runs --output-format json now (telemetry), so its raw stdout is a JSON blob, not the
@@ -422,7 +420,7 @@ export class Spawner {
       if (!ws) launch(cwd);
       else {
         this.unlaunched.set(name, rec);
-        this.worktreeFor(cwd, target, name, req.baseDir, ws, writeBase)
+        this.worktreeFor(cwd, target, name, req.baseDir, ws, writeBase, run.env.CHATROOM_SEAT_HOOKS === "off")
           .then((dir) => {
             if (this.unlaunched.get(name) !== rec) return; // stopped while its worktree was being made
             this.unlaunched.delete(name);
@@ -590,8 +588,8 @@ export class Spawner {
   private readonly worktrees = new WorktreeMaker();
   /** write recruits whose worktree is still being made: stop() before their seat starts means it never starts */
   private readonly unlaunched = new Map<string, SpawnedAgent>();
-  private worktreeFor(cwd: string, room: string, name: string, baseDir?: string, ws = recruitWorkspace(cwd, room, name), base = ws && recruitBase(ws.root, baseDir)): Promise<string | undefined> {
-    return ws ? this.worktrees.make(ws, base, (e) => this.hooks?.recordWorktree?.(room, { seat: name, ...e })) : Promise.resolve(undefined);
+  private worktreeFor(cwd: string, room: string, name: string, baseDir?: string, ws = recruitWorkspace(cwd, room, name), base = ws && recruitBase(ws.root, baseDir), hooksOff?: boolean): Promise<string | undefined> {
+    return ws ? this.worktrees.make(ws, base, (e) => this.hooks?.recordWorktree?.(room, { seat: name, ...e }), hooksOff) : Promise.resolve(undefined);
   }
 
   stop(name: string): boolean {

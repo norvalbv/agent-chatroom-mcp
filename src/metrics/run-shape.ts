@@ -25,7 +25,7 @@ export function runShape(logs: readonly (readonly Ev[])[], run = ""): RunShape |
   const names = new Set(rooms.map((r) => r.name));
   // the room an opener line names: the full name, or the new_room as the requester typed it (the hub prefixes the run)
   const resolve = (s: string) => (names.has(s) ? s : rooms.find((r) => r.name.endsWith(`-${s}`))?.name);
-  const opened = new Map<string, { by: string; role: string }>();
+  const opened = new Map<string, { by: string; role?: string }>();
   for (const events of logs) {
     const roleOf = new Map<string, string>();
     const chair = events.find((e) => e.type === "room")?.opts?.chair;
@@ -39,7 +39,9 @@ export function runShape(logs: readonly (readonly Ev[])[], run = ""): RunShape |
       const text = String(e.msg.content ?? "");
       const m = /^(.+?) opened breakout room ([A-Za-z0-9_-]+)/.exec(text) ?? /^(.+?) recruited .*?\([^)]*?, into ([A-Za-z0-9_-]+)/.exec(text);
       const room = m && resolve(m[2]);
-      if (m && room && !opened.has(room)) opened.set(room, { by: m[1], role: roleOf.get(m[1]) ?? (m[1] === chair ? "chair" : "worker") });
+      // an opener with no join line here has no known role (review/8b73d0ed nit 2): shapeText counts it as "unknown"
+      const role = roleOf.get(m?.[1] ?? "") ?? (m?.[1] === chair ? "chair" : undefined);
+      if (m && room && !opened.has(room)) opened.set(room, { by: m[1], ...(role ? { role } : {}) });
     }
   }
   const main = rooms.find((r) => r.name === `${run}-room`) ?? rooms.find((r) => r.name.endsWith("-room") && !r.parent);
@@ -76,4 +78,28 @@ export function renderRunShapes(shapes: { run: string; shape?: RunShape }[]): st
     text += `| ${run} | ${shapeText(shape)} | ${list || "-"} |\n`;
   }
   return text;
+}
+
+
+/** Room logs grouped into runs: by the run in the room's name (runOf), except that a room opened from another goes with
+ * the room its parent chain starts at. A break-out named without its run's tag (kcj5's swarm-005617-verdict-telemetry,
+ * opened from swarm-005617-kcj5-room) otherwise read as a run of its own, and its run missed it (review/8b73d0ed nit 1). */
+export function groupRuns<T extends readonly Ev[]>(logs: readonly T[], runOf: (room: string) => string): Map<string, T[]> {
+  const roomOf = (events: T) => String(events.find((e) => e.type === "room")?.room ?? "");
+  const parent = new Map<string, string>();
+  for (const events of logs) {
+    const p = events.find((e) => e.type === "room")?.opts?.parent;
+    if (p) parent.set(roomOf(events), String(p));
+  }
+  const root = (room: string) => {
+    const seen = new Set<string>();
+    while (parent.has(room) && !seen.has(room)) { seen.add(room); room = parent.get(room)!; }
+    return room;
+  };
+  const out = new Map<string, T[]>();
+  for (const events of logs) {
+    const run = runOf(root(roomOf(events)));
+    (out.get(run) ?? out.set(run, []).get(run)!).push(events);
+  }
+  return out;
 }

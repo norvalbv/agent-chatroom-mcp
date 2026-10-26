@@ -64,6 +64,7 @@ export const offlineScripts = [
   'breakout-fate-regression.ts',
   'verifier-gate-regression.ts',
   'disagree-carry-regression.ts',
+  'breakout-verified-carry-regression.ts',
   'challenge-wakes-proposer-regression.ts',
   'challenge-wakes-held-wait-regression.ts',
   'seen-before-acting-regression.ts',

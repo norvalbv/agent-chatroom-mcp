@@ -27,6 +27,15 @@ export function disagreeStands(pr: Proposal, v: VoteEntry | undefined): boolean 
   return !!v.quote && norm(pr.text).includes(norm(v.quote));
 }
 
+/** How the status view labels a vote cast on an earlier version. One an amend carried is not stale: its clause is still in
+ *  the text (review/dd4195b8 nit a: room_status said "stale" of the disagree that blocked_by called standing). A carried
+ *  disagree that does not stand (`stands`: its author left) says so (review/dea5937a N2). */
+export function versionLabel(pr: Proposal, v: VoteEntry, stands: boolean): { carried?: string; stale?: string } {
+  if (v.version === undefined || v.version === pr.version) return {};
+  if (!v.quote || !norm(pr.text).includes(norm(v.quote))) return { stale: `cast at v${v.version}` };
+  return { carried: `cast at v${v.version}; its quoted clause is unchanged in v${pr.version}${v.vote === "disagree" && !stands ? ", but its author left, so it does not stand" : ""}` };
+}
+
 /**
  * Disagrees that stand on the current text. One cast on this version outlives its author (an objection outlives the agent
  * who filed it); a carried one stands only while `present(id)`: before the carry an amend always cleared a departed seat's

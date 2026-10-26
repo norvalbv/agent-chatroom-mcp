@@ -8,7 +8,11 @@
  *
  * item/<slug> names one problem. The chair writes one per problem the brief and the owner name; a launcher may seed them
  * through the resources route. Not parsed from the brief: its first numbered list is often its rules (this room's seed
- * seats opened on "rule 2" from seat-targets.ts). An item is covered by claim/<slug> or by any claim naming item/<slug>:
+ * seats opened on "rule 2" from seat-targets.ts). An item is covered by claim/<slug>, by any claim naming item/<slug>, or
+ * by a claim whose writer or owner names item/<slug> in handoff/<area> or decision/<area>. A claim the hub writes at
+ * recruitment is JSON naming only its area, so without that last rule probe/coverage-1's three items stayed "unowned"
+ * through one recruit building all three and three reviews naming them, and the run report said nobody was on them.
+ * States:
  *   unowned   no claim covers it
  *   owned     a live owner holds it and nobody else has reviewed it yet
  *   reviewed  a non-owner's passing review/* or verify/* covers the claim, and the owner has not said done
@@ -110,6 +114,14 @@ function reviewed(reviews: Review[], claimKey: string, claim: BoardEntry, itemKe
   return false;
 }
 
+/** Where a claim's writer or owner says what it covered: handoff/<area>, decision/<area> (or a continuation, -2). */
+const RECORD = /^(handoff|decision)\//;
+type Records = [string, BoardEntry][];
+function recorded(records: Records, slugs: string[], claimKey: string, claim: BoardEntry, itemKey: string): boolean {
+  const area = slugOf(claimKey), by = [claim.by, ...claimOwners(claim)];
+  return records.some(([k, e]) => by.includes(e.by) && keyedSlug(slugOf(k), slugs) === area && namesKey(e.text, itemKey));
+}
+
 /** An attack on one of these keys, or on an entry keyed by the item's slug, that its target's author has not answered. */
 function attacked(room: Room, slug: string, keys: string[]): boolean {
   for (const [k, e] of room.board) {
@@ -131,9 +143,10 @@ export function coverage(room: Room): Coverage | undefined {
   const held = new Map<string, number>();
   for (const [, e] of claims) for (const n of claimOwners(e)) held.set(n, (held.get(n) ?? 0) + 1);
   const reviews = passingReviews(room, slugs);
+  const records: Records = [...room.board.entries()].filter(([k, e]) => RECORD.test(k) && e.text.trim());
   const rows: ItemRow[] = items.map(([key, item]) => {
     const slug = slugOf(key);
-    const covering = claims.filter(([k, e]) => k === `claim/${slug}` || namesKey(e.text, key));
+    const covering = claims.filter(([k, e]) => k === `claim/${slug}` || namesKey(e.text, key) || recorded(records, slugs, k, e, key));
     const owners = [...new Set(covering.flatMap(([, e]) => claimOwners(e)))];
     const since = covering.length ? covering.map(([, e]) => e.updatedAt).sort()[0] : item.updatedAt;
     const row = (state: ItemState): ItemRow => ({ key, state, owners, claims: covering.map(([k]) => k), since });
@@ -168,8 +181,9 @@ export function coverageLine(c: Coverage): string {
 }
 
 const lastLogged = new WeakMap<Room, string>();
-/** Events after which the ledger can have changed: an item, claim, review or attack written, or a seat joining or leaving. */
-const MOVES = /^(item|claim|review|verify|attack)\//;
+/** Events after which the ledger can have changed: an item, claim, review, attack or claim record written, or a seat
+ * joining or leaving. */
+const MOVES = /^(item|claim|review|verify|attack|handoff|decision)\//;
 
 /** Telemetry: a `coverage` event whenever any item's state or owners change, so a replay shows how long each item waited
  * for an owner, who held it, and how it ended (scripts/coverage-replay.ts). Called by persistence for every event. */

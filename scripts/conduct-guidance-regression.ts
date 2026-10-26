@@ -3,7 +3,8 @@
  * Failing-first regression for owner ask 5 ("general better guidance to verifier, and agents within said room"),
  * swarm-005940-77tu evidence/seat-verifier-guidance. Run: node --import tsx scripts/conduct-guidance-regression.ts
  *
- * - 139 of 155 runs with a verifier were flat, yet verifier.md told it "the others investigate in sub-rooms and their
+ * - 155 of 168 runs planned before swarm-005940-77tu were flat (plan.json groups <= 1, MAIN plus the server copy; 128 of
+ *   135 with a result.json), yet verifier.md told the verifier "the others investigate in sub-rooms and their
  *   leads bring conclusions" and that the room was unanimous; its flat-room work (a seat's commit, a break-out's
  *   inbox/<room>/conclusion) was never named. In 9f66 the parent verifier reran bk2/bk4/bk5 by choice (#2910, #2934).
  * - Seats had to be told, in 46 board entries over 14 rooms: look at claim/take/review before building (10 entries,

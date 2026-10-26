@@ -2,17 +2,18 @@
  * A disagree that quotes the clause it objects to stands across amends that keep that clause (server chair note 3,
  * swarm-164210-9f66, claim/verifier-hold-and-breakout-review). The 9f66 verifier had checked the final text and was
  * waiting on three breakout slots marked [PENDING]; it said so by voting disagree "HOLD, not a content objection".
- * Every amend dropped that disagree (src/hub.ts amend kept only agrees whose quote survived), so it re-cast it five
- * times (v7, v8, v9, v10, v14), chatted every 8 minutes to stay under the verifier-silence lapse, and a worker had to
- * warn it that the room could close without bk2 (#2907). The vote tool already said a disagree "stands until you
- * re-vote or that text is amended"; the code did not. Over 319 room logs on hub 7717, 267 disagrees were dropped by an
- * amend and 106 were re-cast by the same seat on a later version. Gerrit keeps a Code-Review -2 "valid across all patch
- * sets" and GitHub keeps a "Request changes" review until its author approves (sources/gerrit-config-labels,
- * sources/github-protected-branches). Now a disagree may carry `quote`; an amend that keeps the quoted clause keeps the
- * disagree, as it keeps an agree, and it counts as standing. A disagree with no quote resets as before.
+ * Every amend dropped that disagree (src/hub.ts amend kept only agrees whose quote survived), so it cast it on v7 and
+ * re-cast it four times (v8, v9, v10, v14), promised a note "at least every 8 minutes" (#2837; its gaps were 0.8-9.3
+ * min) to stay under the verifier-silence lapse, and a worker had to warn it that the room could close without bk2
+ * (#2907). The vote tool already said a disagree "stands until you re-vote or that text is amended"; the code did not.
+ * Over 319 room logs on hub 7717, 267 disagrees were dropped by an amend and 106 were re-cast by the same seat on a
+ * later version. Gerrit keeps a Code-Review -2 "valid across all patch sets" and GitHub keeps a "Request changes"
+ * review until its author approves (sources/gerrit-config-labels, sources/github-protected-branches). Now a disagree
+ * may carry `quote`; an amend that keeps the quoted clause keeps the disagree, as it keeps an agree, and it counts as
+ * standing. A disagree with no quote resets as before.
  * Second half: a verifier whose disagree stands on the current text no longer "owes a vote". It did (needsVote), so
  * hold_until_actionable never held it: in 9f66 its waits returned after a median 9.1 s (n=26) while its disagree stood,
- * against 55 s for the five other seats (n=81) over the same 25 minutes.
+ * against 55 s for the five other seats (n=81) while it stood (between 23:58 and 00:28).
  * Run: npx tsx --test scripts/disagree-carry-regression.ts
  */
 import assert from "node:assert/strict";

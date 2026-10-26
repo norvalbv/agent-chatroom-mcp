@@ -89,8 +89,8 @@ export interface SpawnedAgent {
 export interface SpawnerHooks {
   /** is the room on hold? */
   isHeld(room: string): boolean;
-  /** create/claim an area on behalf of the requester; throw HubError if taken */
-  claimArea(room: string, requesterName: string, area: string, teamNames: string[]): void;
+  /** create/claim an area on behalf of the requester; throw HubError if taken. The brief: the item/* keys it names go in the claim */
+  claimArea(room: string, requesterName: string, area: string, teamNames: string[], brief?: string): void;
   /** create a room with swarm defaults (require_challenge, verification), as a breakout of the requester's room */
   ensureRoom(room: string, topic: string, parent?: string): void;
   /** post a system line into a room */
@@ -248,7 +248,7 @@ export class Spawner {
     if (newRoom) this.hooks?.ensureRoom(newRoom, req.roomTopic ?? req.brief.slice(0, 200), req.room);
     if (newRoom) this.hooks?.carryResources?.(req.room, newRoom);
     const resources = req.fresh ? undefined : this.hooks?.resourceNote?.(target);
-    if (req.area) this.hooks?.claimArea(target, req.requestedBy, req.area, names);
+    if (req.area) this.hooks?.claimArea(target, req.requestedBy, req.area, names, req.brief);
     // the launching run's seat settings over the hub's env (decision/recruit-settings): the target room's, else the requester's room's
     const run = recruitRun(process.env, this.hooks?.seatSettings?.(target) ?? (newRoom ? this.hooks?.seatSettings?.(req.room) : undefined));
     const sandboxed = sandboxFromEnv(run.env);

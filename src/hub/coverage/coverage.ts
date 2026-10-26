@@ -10,8 +10,9 @@
  * through the resources route. Not parsed from the brief: its first numbered list is often its rules (this room's seed
  * seats opened on "rule 2" from seat-targets.ts). An item is covered by claim/<slug>, by any claim naming item/<slug>, or
  * by a claim whose writer or owner names item/<slug> in handoff/<area> or decision/<area>. A claim the hub writes at
- * recruitment is JSON naming only its area, so without that last rule probe/coverage-1's three items stayed "unowned"
- * through one recruit building all three and three reviews naming them, and the run report said nobody was on them.
+ * recruitment was JSON naming only its area, so probe/coverage-1's three items stayed "unowned" through one recruit
+ * building all three and three reviews naming them, and the run report said nobody was on them. Now that claim also
+ * lists the item/* keys its brief names (recruitmentClaim); a brief that names none is covered once the handoff does.
  * States:
  *   unowned   no claim covers it
  *   owned     a live owner holds it and nobody else has reviewed it yet
@@ -117,9 +118,16 @@ function reviewed(reviews: Review[], claimKey: string, claim: BoardEntry, itemKe
 /** Where a claim's writer or owner says what it covered: handoff/<area>, decision/<area> (or a continuation, -2). */
 const RECORD = /^(handoff|decision)\//;
 type Records = [string, BoardEntry][];
+/** A line that names an item to say nobody did it ("NOT DONE, nobody has it: item/chunk", review/af792f45 F1) */
+const NOT_COVERED = /\b(not (?:done|started|built|covered|mine|yours)|undone|nobody|no one|unowned|unclaimed|todo|left (?:open|undone)|skipped)\b/i;
+/** Whether some line of a record or brief names the item without saying it is not covered. A negated line fails safe:
+ * the item stays as it was without that record. */
+function namedAsCovered(text: string, itemKey: string): boolean {
+  return text.split("\n").some((line) => namesKey(line, itemKey) && !NOT_COVERED.test(line));
+}
 function recorded(records: Records, slugs: string[], claimKey: string, claim: BoardEntry, itemKey: string): boolean {
   const area = slugOf(claimKey), by = [claim.by, ...claimOwners(claim)];
-  return records.some(([k, e]) => by.includes(e.by) && keyedSlug(slugOf(k), slugs) === area && namesKey(e.text, itemKey));
+  return records.some(([k, e]) => by.includes(e.by) && keyedSlug(slugOf(k), slugs) === area && namedAsCovered(e.text, itemKey));
 }
 
 /** An attack on one of these keys, or on an entry keyed by the item's slug, that its target's author has not answered. */
@@ -165,6 +173,13 @@ export function coverage(room: Room): Coverage | undefined {
   for (const [, e] of claims) if (!settled(e)) for (const n of claimOwners(e)) if (active.has(n)) perSeat.set(n, (perSeat.get(n) ?? 0) + 1);
   const multi = Object.fromEntries([...perSeat].filter(([, n]) => n >= 2));
   return { items: rows.length, by_state, open: rows.filter((r) => OPEN.includes(r.state)).map((r) => r.key), rows, ...(Object.keys(multi).length ? { multi_claim_seats: multi } : {}) };
+}
+
+/** The claim the hub writes at recruitment (src/index.ts claimArea), naming the board's item/* keys the brief names: a
+ * recruit sent to build items covers them from its first minute, not only once its handoff names them (#1358). */
+export function recruitmentClaim(room: Room, requester: string, area: string, team: string[], brief = ""): string {
+  const items = [...room.board.entries()].filter(([k, e]) => k.startsWith(ITEM_PREFIX) && e.text.trim() && namedAsCovered(brief, k)).map(([k]) => k);
+  return JSON.stringify({ area, owner: requester, team: [requester, ...team], status: "open", note: "claimed at recruitment", ...(items.length ? { items } : {}) });
 }
 
 /** Unowned items, oldest first, for whoever asks for a hand (open_work item_unowned; src/hub/asks/hands.ts). */

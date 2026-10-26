@@ -12,7 +12,9 @@ import { mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Hub } from "../src/hub.js";
+import { recruitmentClaim, unownedItems } from "../src/hub/coverage/coverage.js";
 import { openWork } from "../src/hub/open-work.js";
+import { Spawner } from "../src/spawner.js";
 import { renderRunReport, type RunResult } from "../src/result.js";
 import { parseResources } from "../src/resources.js";
 import { replayCoverage } from "./coverage-replay.js";
@@ -88,6 +90,33 @@ test("a claim also covers the items its owner names in handoff/<area> or decisio
   assert.equal(row("item/chunk")!.state, "owned");
   h.leave(name, carol.id, "built all three");
   assert.deepEqual(["slugify", "clamp", "chunk"].map((s) => row(`item/${s}`)!.state), ["reviewed", "orphaned", "orphaned"]);
+});
+
+test("a handoff or brief line that names an item to say nobody did it does not cover it (review/af792f45 F1)", () => {
+  const { h, name, carol, row } = room();
+  for (const s of ["slugify", "chunk"]) h.setBoardAs(name, "launcher", `item/${s}`, s);
+  h.setBoardAs(name, "alice", "claim/build-utils", JSON.stringify({ area: "build-utils", owner: "alice", team: ["alice", "carol"], status: "open", note: "claimed at recruitment" }));
+  h.setBoard(name, carol.id, "handoff/build-utils", "DONE: 17ff11c item/slugify.\nNOT DONE, nobody has it: item/chunk (out of time).");
+  assert.deepEqual([row("item/slugify")!.state, row("item/chunk")!.state], ["owned", "unowned"]);
+  h.leave(name, carol.id, "left chunk undone");
+  assert.deepEqual(unownedItems(h.getRoom(name)).map((x) => x.key), ["item/chunk"], "chunk is still asked about");
+  assert.deepEqual(JSON.parse(recruitmentClaim(h.getRoom(name), "alice", "x", ["dave"], "Build item/slugify.\nitem/chunk: not yours, leave it")).items, ["item/slugify"]);
+});
+
+test("a recruit whose brief names item/* keys covers them from recruitment, before any handoff (#1358)", () => {
+  const { h, name, alice, row } = room();
+  for (const s of ["slugify", "clamp", "chunk"]) h.setBoardAs(name, "launcher", `item/${s}`, s);
+  const spawner = new Spawner({ mcpUrl: "http://test/mcp", defaultCwd: process.cwd(), logDir: mkdtempSync(join(tmpdir(), "coverage-spawn-")), dryRun: true });
+  // the hook as src/index.ts wires it
+  spawner.attach({ isHeld: () => false, ensureRoom: () => {}, announce: () => {}, liveAgents: () => 0, roomTopic: () => "t",
+    claimArea: (r, by, area, team, brief) => void h.setBoardAs(r, by, `claim/${area}`, recruitmentClaim(h.getRoom(r), by, area, team, brief)) });
+  spawner.request({ room: name, requestedBy: alice.name, area: "build-utils", name: "builder", canEdit: true,
+    brief: "Build item/slugify and item/clamp in util.js, one commit each; chunk comes later. Post handoff/build-utils with the shas." });
+  h.join(name, "builder", "claude", {}, undefined, "sess-builder", "recruit"); // the dry run spawns nothing; the recruit joins
+  assert.deepEqual([row("item/slugify")!.state, row("item/slugify")!.owners, row("item/slugify")!.claims], ["owned", ["builder"], ["claim/build-utils"]]);
+  assert.equal(row("item/clamp")!.state, "owned");
+  assert.equal(row("item/chunk")!.state, "unowned", "a bare name is not an item key: NOT SHOWN, SKILL.md asks for the key");
+  assert.equal(JSON.parse(h.getRoom(name).board.get("claim/build-utils")!.text).note, "claimed at recruitment");
 });
 
 test("the owner's own done is 'built' until someone else reviews it; a review alone is 'reviewed'; both are 'done'", () => {

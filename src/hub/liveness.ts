@@ -197,9 +197,10 @@ export class Seats {
  * A session with none of these is reaped as before; a killed launched seat is closed sooner by its launcher's exit receipt.
  * The three say the CLI is alive, not that it is getting anywhere: a background `until [ -f x ]; do sleep 30; done` on a
  * file that never comes keeps the CLI, its stream and its process forever (attack/decision/reaping-liveness 1). So past
- * spareMaxMs idle (CHATROOM_SESSION_SPARE_MAX_MS, default four windows: the live seats reaped in the records came back
- * within 80 min) only a running job (memory.ts jobsOf: a sleep or a shell loop is not one) or a tool call within the
- * window keeps the seat. Recorded jobs ran p95 48 min, p99 166 min, n=1628, so a job is not cut off at the ceiling.
+ * spareMaxMs idle (CHATROOM_SESSION_SPARE_MAX_MS, default four windows: the 15 live seats reaped in the records came back
+ * at most 94 min after their last call, a chair; the 4 that were not chairs, 80 min) only a running job (memory.ts
+ * jobsOf: a sleep or a shell loop is not one) or a tool call within the window keeps the seat. Recorded jobs ran p95
+ * 48 min, p99 166 min, n=1628, so a job is not cut off at the ceiling.
  * A chair's idle session is closed but the chair keeps its seat: it is never waited on, so marking it left frees nothing,
  * and a departed chair cannot be @-named (departed-mention). Each idle episode writes one reap_check event, with the jobs
  * it waits on, and a spared seat's rooms get one line saying so, so a room waiting on it sees why it is quiet.

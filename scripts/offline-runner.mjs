@@ -62,6 +62,7 @@ export const offlineScripts = [
   'amend-stale-regression.ts',
   'open-children-regression.ts',
   'verifier-gate-regression.ts',
+  'disagree-carry-regression.ts',
   'challenge-wakes-proposer-regression.ts',
   'challenge-wakes-held-wait-regression.ts',
   'seen-before-acting-regression.ts',

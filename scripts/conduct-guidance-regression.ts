@@ -9,8 +9,9 @@
  * - Seats had to be told, in 46 board entries over 14 rooms: look at claim/take/review before building (10 entries,
  *   4 rooms) and take figures from the record, reading earlier findings first (9 incidents, 3 rooms). No seat prompt
  *   said either.
- * - filedigest/<hash> was prescribed in recruit.md and written 0 times in 332 logs (73 rooms since the key became
- *   valid); help/ and join-request/ 4 each. The verify head stays: verify-fail-to-pass-regression requires it.
+ * - help/<area> and join-request/<area> were prescribed in recruit.md and written 4 times each in 332 logs. Two lines
+ *   stay that other suites require: the verify head (verify-fail-to-pass-regression) and filedigest/<hash>
+ *   (read-digest-regression, settled axis token-cost-is-resent-context), though filedigest/ was written 0 times.
  * - IFScale (sources/arXiv:2507.11538): more instructions, worse following, earlier ones favoured. So both files must
  *   carry the new rules in FEWER words than at f6a9eabb (verifier.md 574, recruit.md 455).
  * RED at 3ab2f440 (dd4195b8 + 80da69ea + 0d9cc769): 8 failed; GREEN after.
@@ -61,7 +62,7 @@ check("recruit.md: figures from the record, earlier findings first", () => {
   assert.match(recruit, /already found/i);
 });
 check("recruit.md drops the conventions nobody used", () => {
-  for (const dead of [/filedigest/, /help\/<area>/, /join-request\/<area>/]) assert.doesNotMatch(recruit, dead);
+  for (const dead of [/help\/<area>/, /join-request\/<area>/]) assert.doesNotMatch(recruit, dead);
   assert.match(recruit, /board_set/, "it points at the tool that carries the conventions");
 });
 check("fewer words than at f6a9eabb (verifier.md 574, recruit.md 455)", () => {

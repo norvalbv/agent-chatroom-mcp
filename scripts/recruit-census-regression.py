@@ -77,6 +77,8 @@ class RecruitRows(unittest.TestCase):
             write(root, child, [
                 join(child, "p_b1", "b1", 10, role="recruit", seat="s_b1"),
                 board(child, "b1", 30, "decision/child", "the answer"),
+                board(child, "b1", 31, "findings/b", "a second note"),
+                say(child, "p_x2", "other-seat", 32, "see findings/b2 and decision/children, not b1's keys"),
                 usage(child, "s_b1", 31, 12.0),
             ])
             write(root, other, [
@@ -95,7 +97,7 @@ class RecruitRows(unittest.TestCase):
         self.assertEqual(r1["first_deliv_min"], 5.0, "claim/* is not a deliverable; findings/r1 at +5 min is")
         self.assertEqual(r1["cost_usd"], 3.5)
         self.assertEqual((b1["kind"], b1["room"]), ("breakout", "swarm-010000-abcd-child"))
-        self.assertTrue(b1["delivered"] and not b1["cited"], b1)
+        self.assertTrue(b1["delivered"] and not b1["cited"], "findings/b2 and decision/children are other keys, not a citation of b1's")
         self.assertFalse(b2["joined"], "b2 never joined its breakout")
         self.assertEqual((s1["kind"], s1["by"], s1["by_role"], s1["compact_window"]), ("in-room", "worker-9", "worker", 300000), "read from recruit_spawn")
         self.assertTrue(s1["delivered"], s1)

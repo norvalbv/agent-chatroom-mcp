@@ -144,7 +144,8 @@ def recruits(paths):
                           for m in [SHA.search(text)] if m) if joined else []
             keys = {k for _, k in deliv}
             deliv = sorted(deliv + shas[:1])
-            cited = any(by != a["name"] and any(k in text for k in keys) for _, by, text in texts[run_of(a["room"])]) if keys else False
+            named = re.compile("|".join(rf"(?<![\w/.-]){re.escape(k)}(?![\w/-])" for k in sorted(keys))) if keys else None
+            cited = any(by != a["name"] and named.search(text) for _, by, text in texts[run_of(a["room"])]) if keys else False
             rows.append({**a, "joined": joined, "join_s": round(mins(a["at"], p["joinedAt"]) * 60) if joined else None,
                          "delivered": bool(deliv), "commit": bool(shas), "cited": cited, "deliv_keys": sorted(keys)[:8],
                          "first_deliv_min": mins(a["at"], deliv[0][0]) if deliv else None,

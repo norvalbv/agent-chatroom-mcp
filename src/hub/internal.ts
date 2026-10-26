@@ -118,7 +118,7 @@ export type Event =
   | { type: "room_waiting"; room: string; ts: string; state: "start"; steps: number; seats: number; jobs: (import("./memory.js").Job & { seat: string })[] }
   | { type: "room_waiting"; room: string; ts: string; state: "end"; waited_min: number; then: "active" | "idle" | "told" }
   /** Telemetry only: an MCP session idle past the window, once per episode: spared (alive_by says why), reaped, or a chair kept (src/hub/liveness.ts reapIdle). */
-  | { type: "reap_check"; room: string; participant: string; name: string; outcome: import("./liveness.js").ReapOutcome; alive_by: import("./liveness.js").AliveBy[]; idle_s: number; idle_min: number; ts: string }
+  | { type: "reap_check"; room: string; participant: string; name: string; outcome: import("./liveness.js").ReapOutcome; alive_by: import("./liveness.js").AliveBy[]; waiting_on: string[]; past_ceiling?: true; idle_s: number; idle_min: number; ts: string }
   /** Telemetry only (replay ignores it): the open work an idle wait named to a seat, written when that list changes. */
   | { type: "open_work"; room: string; pid: string; ts: string; items: string[] }
   /** Telemetry only (replay ignores it): the launcher's preflight was seeded on this board (src/launch/preflight.ts), with its counts. */

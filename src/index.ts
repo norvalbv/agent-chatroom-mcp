@@ -66,7 +66,7 @@ const HUMAN_TOKEN = process.env.CHATROOM_HUMAN_TOKEN; // optional shared secret 
 const INSECURE_LOCAL = process.env.CHATROOM_INSECURE_LOCAL === "1";
 const LOOPBACK_HOST = HOST === "127.0.0.1" || HOST === "localhost" || HOST === "::1";
 const MAX_SESSIONS = 500;
-const SESSION_IDLE_MS = Number(process.env.CHATROOM_SESSION_IDLE_MS) || 30 * 60_000, REAP_SWEEP_MS = Number(process.env.CHATROOM_REAP_SWEEP_MS) || 60_000; // tests shorten both
+const SESSION_IDLE_MS = Number(process.env.CHATROOM_SESSION_IDLE_MS) || 30 * 60_000, REAP_SWEEP_MS = Number(process.env.CHATROOM_REAP_SWEEP_MS) || 60_000, SPARE_MAX_MS = Number(process.env.CHATROOM_SESSION_SPARE_MAX_MS) || 4 * SESSION_IDLE_MS; // tests shorten all three
 const PARTICIPANT_IDLE_MS = 10 * 60_000;
 
 // before anything that can throw: why this process stops is written down by the process itself (src/lifecycle.ts)
@@ -322,9 +322,9 @@ lifecycle.health(() => {
 });
 
 // Liveness: close idle MCP sessions whose client shows no sign of life and mark silent agents as left, so a dead process
-// cannot block a quorum forever (src/hub/liveness.ts reapIdle: an open stream, a heartbeat or the seat's process spares a session).
+// cannot block a quorum forever (src/hub/liveness.ts reapIdle: a stream, heartbeat or process spares a session; past SPARE_MAX_MS only a job or tool call).
 setInterval(() => {
-  reapIdle(hub, transports, { idleMs: SESSION_IDLE_MS, processFreshMs: Math.max(3 * MEMORY_WATCH_MS, 1_000) });
+  reapIdle(hub, transports, { idleMs: SESSION_IDLE_MS, spareMaxMs: SPARE_MAX_MS, processFreshMs: SESSION_IDLE_MS });
   // identity is the connection: a participant whose MCP session is still open is alive however long it works locally;
   // the sweep is for sessions that died without a DELETE (a killed CLI), which leaveAll above has not yet seen. A chair
   // keeps its seat here too: it is never waited on.

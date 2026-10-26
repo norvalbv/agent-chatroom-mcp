@@ -18,6 +18,7 @@ import type { MessageKind, Vote, Quorum, RoomState, VerifyHead, Role, Participan
 import { now, shortId, norm, emptyBoardManifestCounters, manifestBytes, codeState, commitsIn, keepRefusal, RECENT_REFUSALS, resourceEvents } from "./hub/internal.js";
 import type { Opts, Event, BoardManifestCounters } from "./hub/internal.js";
 import * as board from "./hub/board.js";
+import * as breakouts from "./hub/breakouts/lifecycle.js";
 import * as idle from "./hub/idle.js";
 import * as kick from "./hub/kick.js";
 import * as output from "./hub/output.js";
@@ -222,7 +223,7 @@ export class Hub {
     return {
       name: room.name,
       topic: room.topic,
-      ...(room.parent ? { parent: room.parent } : {}),
+      ...(room.parent ? { parent: room.parent, breakout_fate: breakouts.breakoutFate(this, room, Hub.LAST_CALL_MS) } : {}),
       ...(this.breakouts(room).length ? { breakouts: this.breakouts(room) } : {}),
       mode: room.mode,
       quorum: room.quorum,
@@ -3336,12 +3337,14 @@ export class Hub {
    * group's table landed 92 min after the leads room concluded and was lost); a closed parent, or one past the window,
    * is left alone. Objections go before the text, and a text past
    * the board cap is cut, never silently: where the whole of it lives (room_status on the child) leads the entry.
+   * A drop is said in the breakout, and every attempt is a breakout_carry event (src/hub/breakouts/lifecycle.ts).
    */
   private carryConclusion(room: Room): void {
-    const parent = room.parent ? this.rooms.get(room.parent) : undefined;
-    if (!parent || !room.conclusion || parent.state === "closed") return;
+    if (!room.parent || !room.conclusion) return;
+    const parent = this.rooms.get(room.parent);
+    const drop = breakouts.carryDrop(this, parent);
+    if (drop || !parent) return breakouts.carryDropped(this, room, drop ?? "parent_missing");
     const late = parent.state === "concluded" ? board.lateWindow(this, parent) : undefined;
-    if (parent.state === "concluded" && !late) return;
     const c = room.conclusion;
     const key = `inbox/${room.name}/conclusion`;
     // where the whole of it lives leads the entry, so no cut can drop it
@@ -3354,6 +3357,7 @@ export class Hub {
     board.applyBoard(parent, key, entry);
     this.persist({ type: "board", room: parent.name, key, entry });
     if (late) this.persist({ type: "late_write", room: parent.name, key, by: "system", after_s: late.after_s, ts: entry.updatedAt });
+    breakouts.carryRecorded(this, room, key, late);
     this.post(parent, "system", undefined, late
       ? `[BOARD] breakout ${room.name} concluded after this room did; its conclusion is on this board as ${key}, marked late (board_get). This room's conclusion does not change.`
       : `[BOARD] breakout ${room.name} concluded; its conclusion is on this board as ${key} (board_get).`);
@@ -3395,25 +3399,10 @@ export class Hub {
     );
     this.releaseClaims(room, "Room concluded");
     this.carryConclusion(room);
-    this.tellOpenBreakouts(room, pr);
+    breakouts.tellOpenBreakouts(this, room, pr);
     // a parent in last call may have been waiting only for this breakout
     const parent = room.parent ? this.rooms.get(room.parent) : undefined;
     if (parent) for (const p of parent.proposals.values()) if (p.status === "open" && p.lastCall) this.evaluate(parent, p);
-  }
-
-  /**
-   * Each breakout still open when its parent concludes is told at once that the parent's answer is fixed. In
-   * swarm-123021-1nwp the internal group kept waiting on a run with an ETA of 17:00 for 92 min after the leads room
-   * concluded at 14:34, never told, and its final board write was refused. Logged as parent_concluded in the breakout.
-   */
-  private tellOpenBreakouts(room: Room, pr: Proposal): void {
-    for (const name of this.openBreakouts(room)) {
-      const child = this.rooms.get(name)!;
-      this.persist({ type: "parent_concluded", room: name, parent: room.name, proposalId: pr.id, version: pr.version, ts: now() });
-      this.post(child, "system", undefined,
-        `${room.name}, this room's parent, concluded on ${pr.id} v${pr.version} at ${room.conclusion!.decidedAt}: its answer is fixed, and a conclusion here can no longer change it (at most it lands on its board as a late entry) ` +
-        `(its text: room_status room="${room.name}"). Decide whether the work still running here changes anything: if not, conclude or leave; if it does, say so in the parent's room or post_to_room it.`);
-    }
   }
 
   /**
@@ -3436,7 +3425,7 @@ export class Hub {
     this.onRoomState?.(room.name, state);
   }
 
-  /** Close a room without a conclusion (stale, abandoned, or a human decided to stop it). */
+  /** Close a room without a conclusion (stale, abandoned, or a human decided to stop it), and its open breakouts with it. */
   closeRoom(roomName: string, by: string, reason = ""): Room {
     const room = this.getRoom(roomName);
     if (room.state === "concluded") throw new HubError("Room already concluded.", undefined, "state");
@@ -3452,6 +3441,7 @@ export class Hub {
     if (room.nudgeTimer) clearTimeout(room.nudgeTimer);
     this.post(room, "system", undefined, `Room closed by ${by}${reason ? `: ${reason}` : ""}. No conclusion was recorded.`);
     this.releaseClaims(room, "Room closed");
+    breakouts.closeBreakouts(this, room, by, reason);
     return room;
   }
 
@@ -3468,9 +3458,10 @@ export class Hub {
     return room;
   }
 
-  /** A dead room has nobody in it and was not created in the last ten minutes (a launcher pre-creates rooms before seats join). */
+  /** A dead room has nobody in it and was not created in the last ten minutes (a launcher pre-creates rooms before seats join).
+   * A parent whose breakout still has seats is not dead: it is where that breakout's conclusion goes, and its close would close the breakout. */
   isDead(room: Room): boolean {
-    return this.activeParticipants(room).length === 0 && Date.now() - Date.parse(room.createdAt) > 10 * 60_000;
+    return this.activeParticipants(room).length === 0 && Date.now() - Date.parse(room.createdAt) > 10 * 60_000 && !this.openBreakouts(room).length;
   }
 
   archiveDead(by: string): string[] {

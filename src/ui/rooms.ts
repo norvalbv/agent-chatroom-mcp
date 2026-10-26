@@ -2,6 +2,8 @@ export const ROOMS_CSS = `
   .run > .rh.pin-group { width:100%; border:0; background:transparent; text-align:left; color:var(--dim) }
   .room-pin[aria-pressed="true"] { background:var(--acc-bg); color:var(--acc-fg) }
   .room-pin:focus-visible, .pin-group:focus-visible { outline:2px solid var(--acc); outline-offset:2px }
+  .chip.goto { border:0; font-family:inherit; cursor:pointer } .chip.goto:hover { color:var(--fg) } .chip.goto:focus-visible { outline:2px solid var(--acc); outline-offset:2px }
+  #head .fate { grid-column:1 / -1; color:var(--dim); font-size:12px } @media (max-width:720px) { #head .fate { flex:1 1 100% } }
 `;
 
 export const ROOMS_STATE = `
@@ -32,21 +34,50 @@ export const ROOMS_STATE = `
   var pinnedRooms = store.get('pins.room', []);
   pinnedRooms = Array.isArray(pinnedRooms) ? pinnedRooms.filter(function (name) { return typeof name === 'string'; }) : [];
   var isRoomPinned = function (name) { return pinnedRooms.indexOf(name) >= 0; };
+  // the header's breakout chips (fateChips) select the room they name; one listener, since renderHead rewrites the header
+  $('#head').addEventListener('click', function (e) { var b = e.target.closest && e.target.closest('[data-goto]'); if (b) select(b.dataset.goto); });
 `;
 
 export const ROOMS_JS = `
+  /*fate:start*/
+  // a room's run: its own name's prefix, else its parent's (a join_room(parent=) breakout keeps the name its opener
+  // gave it, so it used to fall under "Other rooms", away from the room it reports to)
+  function roomRun(r, byName) {
+    for (var x = r, i = 0; x && i < 8; x = x.parent ? byName[x.parent] : null, i++) { var g = runOf(x.name); if (g) return g; }
+    return null;
+  }
+  // header chips: the room a breakout reports to, with its fate line as the tooltip, and a parent's breakouts by state
+  function fateChips(r, esc) {
+    var out = '';
+    if (r.parent) out += '<button type="button" class="chip goto" data-goto="' + esc(r.parent) + '" title="' + esc(r.breakout_fate ? r.breakout_fate.line : '') + '">↳ breakout of ' + esc(r.parent) + '</button>';
+    (r.breakouts || []).forEach(function (b) {
+      out += '<button type="button" class="chip goto" data-goto="' + esc(b.room) + '" title="breakout of this room, ' + esc(b.state) + (b.members && b.members.length ? ': ' + esc(b.members.join(', ')) : '') + '">⤷ ' + esc(b.room) + ' · ' + esc(b.state) + '</button>';
+    });
+    return out;
+  }
+  // a breakout's fate line under the topic: where its conclusion goes and until when (room_status breakout_fate)
+  function fateLine(r, esc) {
+    return r.breakout_fate ? '<div class="fate" id="fate">' + esc(r.breakout_fate.line) + '</div>' : '';
+  }
+  // the close confirmation names the open breakouts that close with the room (src/hub/breakouts/lifecycle.ts closeBreakouts)
+  function closeWords(r) {
+    var open = (r.breakouts || []).filter(function (b) { return b.state === 'open' || b.state === 'stalled'; }).map(function (b) { return b.room; });
+    return 'Close ' + r.name + '? No conclusion will be recorded and agents still in it will be told to leave.' + (open.length ? ' Its open breakout' + (open.length === 1 ? ' ' : 's ') + open.join(', ') + (open.length === 1 ? ' closes' : ' close') + ' with it.' : '');
+  }
+  /*fate:end*/
   // ---------- rooms rail ----------
   function renderRooms() {
     var keepPinGroupFocus = document.activeElement && document.activeElement.classList.contains('pin-group');
     var q = ($('#filter').value || '').toLowerCase();
     var live = rooms.filter(function (r) { return r.state === 'open' || r.state === 'stalled'; }).length;
     var shown = 0;
-    var groups = {}, order = [];
+    var groups = {}, order = [], byName = {};
+    rooms.forEach(function (r) { byName[r.name] = r; });
     rooms.slice().sort(roomCmp).forEach(function (r) {
       if (stOff[stKey(r)]) return;
       if (q && r.name.toLowerCase().indexOf(q) < 0 && (r.topic || '').toLowerCase().indexOf(q) < 0) return;
       shown++;
-      var g = isRoomPinned(r.name) ? '!pinned' : runOf(r.name) || 'other';
+      var g = isRoomPinned(r.name) ? '!pinned' : roomRun(r, byName) || 'other';
       if (!groups[g]) { groups[g] = []; order.push(g); }
       groups[g].push(r);
     });
@@ -67,9 +98,10 @@ export const ROOMS_JS = `
       var closed = openRuns[g] === false && (g === '!pinned' || !rs.some(function (r) { return r.name === sel; }));
       var items = rs.map(function (r) {
         var unread = Math.max(0, (r.latest_seq || 0) - (lastSeen[r.name] || 0));
-        var short = g === 'other' || g === '!pinned' ? r.name : r.name.slice(g.length + 1);
+        var short = (g === 'other' || g === '!pinned' || r.name.indexOf(g + '-') !== 0 ? r.name : r.name.slice(g.length + 1));
+        if (r.parent) short = '↳ ' + short;
         var meta = (r.state === 'open' || r.state === 'stalled') ? r.active_count + ' active · ' + r.message_count + ' msgs' : r.state + ' · ' + r.message_count + ' msgs';
-        return '<button class="room' + (r.name === sel ? ' sel' : '') + '" data-r="' + esc(r.name) + '" title="' + esc(r.topic || r.name) + '">'
+        return '<button class="room' + (r.name === sel ? ' sel' : '') + '" data-r="' + esc(r.name) + '" title="' + esc((r.breakout_fate ? r.breakout_fate.line + '\\n\\n' : '') + (r.topic || r.name)) + '">'
           + '<span class="dot ' + r.state + '"></span><span class="n">' + esc(short) + '</span>'
           + (typeof window.crRoomBadge === 'function' ? window.crRoomBadge(r) : '')
           + (unread && r.name !== sel ? '<span class="u' + (r.state === 'open' ? '' : ' q') + '">' + (unread > 99 ? '99+' : unread) + '</span>' : '')

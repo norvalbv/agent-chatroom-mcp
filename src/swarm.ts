@@ -24,6 +24,7 @@ import { topicDigest } from "./hub/status-view.js";
 import { stopStrays } from "./strays.js";
 import { launchCostGuide } from "./cost-estimate.js";
 import { seatTarget } from "./seat-targets.js";
+import { runRooms } from "./launch/run-rooms.js";
 import { digestAcks, digestRecords, loadGroups, renderDigests, type GroupsFile } from "./groups.js";
 import { loadResources, seedResources } from "./resources.js";
 import { preflightAtLaunch } from "./launch/preflight.js";
@@ -871,10 +872,9 @@ const fetchText = async (url: string) => {
   if (!response.ok) throw new Error(`HTTP ${response.status}: ${url}`);
   return response.text();
 };
-// Fetch full GET payload for every room, including dynamically created break-outs.
+// Fetch full GET payload for every room, including dynamically created break-outs, by name and by parent link (src/launch/run-rooms.ts).
 try {
-  const all = JSON.parse(await fetchText(`${URL_}/rooms`)) as { name: string }[];
-  for (const room of all.filter(r => r.name.startsWith(`${SWARM_ID}-`) && r.name !== leadsRoom)) groupRooms.push(room.name);
+  groupRooms.push(...runRooms(JSON.parse(await fetchText(`${URL_}/rooms`)), SWARM_ID, [leadsRoom, ...groupRooms], log));
 } catch (e) { collectionErrors.push(`Room discovery: ${String(e)}`); }
 const snapshots: RoomSnapshot[] = [];
 for (const name of new Set([leadsRoom, ...groupRooms])) {

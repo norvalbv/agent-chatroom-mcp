@@ -100,8 +100,12 @@ export type Event =
   | { type: "board_edit"; room: string; key: string; by: string; sent_chars: number; entry_chars: number; ts: string }
   /** A proposal had the votes while these electorate members had not voted on its version, or these takes were held (replayed: Hub.armLastCall). */
   | { type: "last_call"; room: string; proposalId: string; version: number; startedAt: string; until: string; waiting_on: string[]; takes_held?: string[]; children_open?: string[] }
-  /** Telemetry only (replay ignores it): this breakout was still open when its parent concluded (Hub.tellOpenBreakouts). */
+  /** Telemetry only (replay ignores it): this breakout was still open when its parent concluded (src/hub/breakouts/lifecycle.ts tellOpenBreakouts). */
   | { type: "parent_concluded"; room: string; parent: string; proposalId: string; version: number; ts: string }
+  /** Telemetry only (replay ignores it; src/hub/breakouts/lifecycle.ts): one attempt to copy a breakout's conclusion to its parent's board, in the breakout's log. */
+  | { type: "breakout_carry"; room: string; parent: string; outcome: "delivered" | "late" | "dropped"; key?: string; after_s?: number; reason?: import("./breakouts/lifecycle.js").CarryDrop; ts: string }
+  /** Telemetry only: this breakout was closed because its parent was (src/hub/breakouts/lifecycle.ts closeBreakouts). */
+  | { type: "parent_closed"; room: string; parent: string; by: string; ts: string }
   /** A room-wide stall the hub told the room of, with the numbers it quoted, and its end (src/hub/idle.ts). */
   | { type: "hub_restart"; room: string; ts: string; down_s: number; down_upper_bound?: boolean; previous?: string }
   | { type: "room_idle"; room: string; ts: string; idle: import("./idle.js").RoomIdle; steps: number; seats: number; window_min: number; seconds_left?: number }

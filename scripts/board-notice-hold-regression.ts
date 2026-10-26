@@ -117,6 +117,24 @@ try {
     ];
     assert.deepEqual(Object.fromEntries(costByTool([seatLog]).map((t) => [t.tool, t.requests])), { "wait_for_messages (notices)": 1, "wait_for_messages (messages)": 1 }, "wait-cost splits a wait by why it returned; an older log keeps the old label");
   }
+  // (1e) a write that asks someone something follows its board line with an @-addressed chat line (board.ts reviewer,
+  //      take.ts offer): a claim's reviewer and a take handed over still wake a held wait at once (the verifier's check, #393)
+  {
+    const run = timed(held);
+    await sleep(200);
+    await b("board_set", { key: "claim/notice-hold", text: JSON.stringify({ area: "notice-hold", owner: "writer", team: ["writer"], status: "open", note: "the reviewer case" }) });
+    const got = await run;
+    assert.ok(got.ms < 800, `the reviewer assignment wakes the held wait at once (${got.ms} ms)`);
+    assert.ok(got.out.messages.some((m: string) => /@held you are the reviewer/.test(m)), JSON.stringify(got.out.messages));
+    await c("pass", {});
+    await b("board_set", { key: "take/slot", text: "writer: one run" });
+    const run2 = timed(held);
+    await sleep(200);
+    await b("board_set", { key: "take/slot", text: "@held the slot is yours" });
+    const got2 = await run2;
+    assert.ok(got2.ms < 800, `a take handed over wakes the held wait at once (${got2.ms} ms)`);
+    assert.ok(got2.out.messages.some((m: string) => /@held writer offers you "take\/slot"/.test(m)), JSON.stringify(got2.out.messages));
+  }
 
   // (2) one notice per board amend, carrying the diff and the size, and still the metadata review asks are settled by
   {

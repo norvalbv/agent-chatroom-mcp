@@ -80,8 +80,10 @@ export type Event =
   | { type: "owner_verdict"; room: string; verdict: "adopted" | "rejected" | "partial"; by: string; proposal_id: string | null; note?: string; ts: string }
   /** Telemetry only: the run that owns this room ended, as its launcher saw it. One per room: the first stands. */
   | { type: "run_end"; room: string; cause: import("../respawn.js").RunEndCause; detail?: string; ts: string }
-  /** Telemetry only: one per recruit the hub launched, with the settings it was started with and where each came from
-   * (src/seat/settings.ts effectiveSeatSettings: the run's seat_settings, the hub's environment, or Claude Code's default). */
+  /** Telemetry only: one per recruit the hub accepted, with the settings it is started with and where each came from
+   * (src/seat/settings.ts effectiveSeatSettings: the run's seat_settings, the hub's environment, or Claude Code's default).
+   * Written at the request, as the "recruited" line is: a write recruit stopped while its worktree is made has one but
+   * never starts. Whether a seat started is its join (review/a7d9f59e n1). */
   | ({ type: "recruit_spawn"; room: string; by_role?: string; ts: string } & RecruitSpawn)
   /** telemetry only (replay ignores it; Hub.recordCarried, inputs/owner-4): what seats were told was already settled and
    * read (src/settled.ts), as ids; from the launcher once per room (seats absent: every seat it started), from the spawner per recruit */

@@ -132,7 +132,8 @@ export function effectiveSeatSettings(childEnv: NodeJS.ProcessEnv, r: RecruitRun
   };
 }
 
-/** The recruit_spawn telemetry event's body (the hub adds room, the requester's role and the time). */
+/** The recruit_spawn telemetry event's body (the hub adds room, the requester's role and the time). It is written when the
+ * request is accepted, not when the seat starts (src/hub/internal.ts). */
 export type RecruitSpawn = { name: string; requested_by: string; kind: "in-room" | "breakout" | "replacement"; parent_room?: string; area?: string; depth: number; can_edit: boolean; agent: string; model: string | null; run_models?: string[] } & ReturnType<typeof effectiveSeatSettings>;
 
 /** The spawner's two hooks into the hub for this: a room's run settings, and one persisted recruit_spawn event per recruit. */

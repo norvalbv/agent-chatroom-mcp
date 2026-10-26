@@ -35,6 +35,9 @@ export type Event =
   | { type: "board"; room: string; key: string; entry: BoardEntry | null }
   /** telemetry: a review/* with a verify head was first written and the hub @-named the commit's author */
   | { type: "review_notice"; room: string; key: string; commit: string; author: string; by: string; passes: boolean; ts: string }
+  /** telemetry: the item/* ledger changed (src/hub/coverage/coverage.ts): counts by state, the items nobody is on, and
+   * each item's state and owners, so scripts/coverage-replay.ts can time every item without the board */
+  | { type: "coverage"; room: string; items: number; unowned: number; owned: number; reviewed: number; built: number; done: number; orphaned: number; dropped: number; open: string[]; states: Record<string, string>; owners: Record<string, string[]>; ts: string }
   /** telemetry only (replay rebuilds the entry from the "board" record): one board_set(append=true) line and where it landed */
   | { type: "board_append"; room: string; key: string; landed_key: string; by: string; chars: number; ts: string }
   | { type: "dev_receipt"; room: string; key: string; updatedAt: string; receipt: DevReceipt }
@@ -61,17 +64,19 @@ export type Event =
   /** Telemetry only (replay ignores it; src/hub/overlap/semantic.ts): one meaning check of a take or claim, notified or not, or the endpoint's error. */
   | { type: "semantic_check"; room: string; key: string; by: string; model: string; compared: number; notified: boolean; ms: number; ts: string; other?: string; other_by?: string; cos?: number; min?: number; error?: string }
   | { type: "outside_read"; room: string; by: { room: string; pid: string } | null; via: "http" | "http_pattern" | "file"; tool: string; ts: string }
-  /** ms: how long the call took; empty: a wait that returned no new message (run-metrics splits idle polling on it); outsider: the caller's seats elsewhere (name@room) when it holds none in this room; key: the entry a board_get read */
-  | { type: "call_completion"; room: string; tool: string; outcome: CallOutcome; ts: string; participant: string | null; ms?: number; empty?: boolean; outsider?: string; key?: string; key_rejected?: string }
+  /** ms: how long the call took; empty: a wait that returned no new message (run-metrics splits idle polling on it); woke: why a wait returned (hub/wait-view.ts WaitWoke) and board_notices: how many board notices it carried; outsider: the caller's seats elsewhere (name@room) when it holds none in this room; key: the entry a board_get read */
+  | { type: "call_completion"; room: string; tool: string; outcome: CallOutcome; ts: string; participant: string | null; ms?: number; empty?: boolean; woke?: string; board_notices?: number; outsider?: string; key?: string; key_rejected?: string }
   /** key: what the ledger dedupes on when it is not the target itself (a long target is shortened for display) */
-  | { type: "work"; room: string; pid: string; cls: WorkClass; tool: string; target: string; key?: string; ts: string }
+  /** prior: a prior-art search, a fetch of outside code or a run of it, tagged from the whole detail (src/telemetry/prior-art.ts) */
+  | { type: "work"; room: string; pid: string; cls: WorkClass; tool: string; target: string; key?: string; prior?: "search" | "fetch" | "run"; ts: string }
   /** a seat process's cumulative model usage (src/hub/usage.ts); seat is the seat key's sha256, never the key */
   | { type: "usage"; room: string; seat: string; usage: SeatUsage; ts: string }
   /** Telemetry only (replay ignores it; src/hub/memory.ts): a sample of what a seat's processes hold, or a warning/stop. */
   | { type: "memory"; room: string; seat: string; ts: string; memory?: SeatMemory; event?: "warn" | "over" | "ended" | "stop" | "high"; mb?: number; budget_mb?: number; mark_mb?: number; top?: SeatMemory["top"]; signal?: string }
   /** Telemetry only (replay ignores it; src/telemetry/machine.ts): the machine a room opened on, and each stall episode said in it. */
   | { type: "machine"; room: string; sample: MachineSample; ts: string }
-  | { type: "machine_stall"; room: string; event: "start" | "end"; sample: MachineSample; ts: string; at?: string; drift_ms?: number; since?: string; last_late?: string; seconds?: number; late_ticks?: number; max_drift_ms?: number }
+  /** cause "blocked": the hub waited on its own work while its reference clock kept time; ref_*: that clock's lateness */
+  | { type: "machine_stall"; room: string; event: "start" | "end"; sample: MachineSample; ts: string; at?: string; drift_ms?: number; since?: string; last_late?: string; seconds?: number; late_ticks?: number; max_drift_ms?: number; cause?: "machine" | "hub" | "blocked"; hub_cpu?: number | null; ref_drift_ms?: number | null; ref_max_drift_ms?: number | null }
   /** Telemetry only (replay ignores it; src/hub/take.ts): one step of a take/<what> entry. by and holder are seat names. */
   /** reason and commit only on action "refused": held (the same key), same-commit (another key naming the commit), assigned-reviewer */
   | { type: "take"; room: string; key: string; action: string; by: string; holder: string; ts: string; reason?: "held" | "same-commit" | "assigned-reviewer" | "already-reviewed" | "same-work"; commit?: string }
@@ -97,11 +102,15 @@ export type Event =
   /** Telemetry only (replay ignores it; Hub.noteUsed, gap G7): a seat of this room named a note it was sent, or acked it with a reply */
   | { type: "note_used"; room: string; note: string; by: string; via: string; after_s: number; ts: string }
   /** Telemetry only (replay ignores it; the board event carries the text): an entry edited in place with amend. sent_chars is what the seat sent, entry_chars what a whole board_set would have. */
-  | { type: "board_edit"; room: string; key: string; by: string; sent_chars: number; entry_chars: number; ts: string }
+  | { type: "board_edit"; room: string; key: string; by: string; sent_chars: number; entry_chars: number; notice_seq?: number; ts: string }
   /** A proposal had the votes while these electorate members had not voted on its version, or these takes were held (replayed: Hub.armLastCall). */
   | { type: "last_call"; room: string; proposalId: string; version: number; startedAt: string; until: string; waiting_on: string[]; takes_held?: string[]; children_open?: string[] }
-  /** Telemetry only (replay ignores it): this breakout was still open when its parent concluded (Hub.tellOpenBreakouts). */
+  /** Telemetry only (replay ignores it): this breakout was still open when its parent concluded (src/hub/breakouts/lifecycle.ts tellOpenBreakouts). */
   | { type: "parent_concluded"; room: string; parent: string; proposalId: string; version: number; ts: string }
+  /** Telemetry only (replay ignores it; src/hub/breakouts/lifecycle.ts): one attempt to copy a breakout's conclusion to its parent's board, in the breakout's log. */
+  | { type: "breakout_carry"; room: string; parent: string; outcome: "delivered" | "late" | "dropped"; key?: string; after_s?: number; reason?: import("./breakouts/lifecycle.js").CarryDrop; ts: string }
+  /** Telemetry only: this breakout was closed because its parent was (src/hub/breakouts/lifecycle.ts closeBreakouts). */
+  | { type: "parent_closed"; room: string; parent: string; by: string; ts: string }
   /** A room-wide stall the hub told the room of, with the numbers it quoted, and its end (src/hub/idle.ts). */
   | { type: "hub_restart"; room: string; ts: string; down_s: number; down_upper_bound?: boolean; previous?: string }
   | { type: "room_idle"; room: string; ts: string; idle: import("./idle.js").RoomIdle; steps: number; seats: number; window_min: number; seconds_left?: number }
@@ -109,10 +118,14 @@ export type Event =
   /** Telemetry only: a process the hub had counted as a seat's job (src/hub/memory.ts jobsOf) is gone, after ran_s seconds. told: the seat was waiting on the hub and got a line. */
   | { type: "job_wake"; room: string; seat: string; pid: number; key: string; successor: string | null; ts: string }
   | { type: "job_end"; room: string; seat: string; pid: number; command: string; ran_s: number; others?: number; told: boolean; departed?: true; ts: string }
+  /** a write recruit's worktree was made, off the hub's event loop (Spawner.worktreeFor): how long git ran and waited behind the others */
+  | { type: "worktree"; room: string; seat: string; branch: string; ms: number; waited_ms: number; ok: boolean; error?: string; ts: string }
   /** A quiet room excused by a seat's running job (start, with the jobs), and how that ended: work resumed (active), the
    * job ended with nobody picking up (idle), or the wait outlasted ROOM_JOB_WAIT_MS and the room was told (told). */
   | { type: "room_waiting"; room: string; ts: string; state: "start"; steps: number; seats: number; jobs: (import("./memory.js").Job & { seat: string })[] }
   | { type: "room_waiting"; room: string; ts: string; state: "end"; waited_min: number; then: "active" | "idle" | "told" }
+  /** Telemetry only: an MCP session idle past the window, once per episode: spared (alive_by says why), reaped, or a chair kept (src/hub/liveness.ts reapIdle). */
+  | { type: "reap_check"; room: string; participant: string; name: string; outcome: import("./liveness.js").ReapOutcome; alive_by: import("./liveness.js").AliveBy[]; waiting_on: string[]; past_ceiling?: true; idle_s: number; idle_min: number; ts: string }
   /** Telemetry only (replay ignores it): the open work an idle wait named to a seat, written when that list changes. */
   | { type: "open_work"; room: string; pid: string; ts: string; items: string[] }
   /** Telemetry only (replay ignores it): the launcher's preflight was seeded on this board (src/launch/preflight.ts), with its counts. */

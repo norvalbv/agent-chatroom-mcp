@@ -72,6 +72,8 @@ async function harness(entry: string, env: Record<string, string>, argv: string[
   const mocks: Record<string, any> = { 'node:fs': fs, 'node:path': path, 'node:os': os, 'node:url': url, 'node:child_process': cp, 'node:crypto': { randomUUID: () => 'synthetic-session-id' }, 'node:string_decoder': { StringDecoder }, './strays.js': { stopStrays: async () => 0 }, './hub/status-view.js': { topicDigest }, './hub.js': { HubError: Error }, './settled.js': { settledAxes: () => '' }, './resources.js': { loadResources: () => [], seedResources: async () => [] }, './seat.js': { runSeat: async () => ({ final: 'fixture', ok: true }) }, './seat-handoff-report.js': { handoffMarkerLine: () => '' },
     // launcher-side helpers with no part in a seat's argv or environment: the hooks copy and the join check (src/worktree-hooks.ts, src/join-check.ts)
     './worktree-hooks.js': { carryHooks: () => ({ hooks: 'shared' }), hooksLine: () => '', hooksOff: () => ({ hooks: 'shared' }) },
+    // where a recruit works (src/spawner/worktrees.ts): the fixture is outside git, so no worktree, branch or snapshot, as the real helpers say over the git mock above
+    './spawner/worktrees.js': { recruitWorkspace: () => undefined, recruitBase: () => undefined, createRecruitWorktree: async () => ({ ok: false }), projectOf: () => undefined, planSnapshot: () => undefined, createSnapshot: () => false, removeSnapshot: () => {}, workspaceOf: () => undefined, WorktreeMaker: class { hooksIn = new Map(); make() { return Promise.resolve(undefined); } } },
     // the launch preflight (src/launch/preflight.ts) runs a kit command before any seat and only adds brief text; no flag is given here
     './launch/preflight.js': { preflightAtLaunch: () => ({ text: '' }) },
     // the run's decision record (src/launch/decision-record.ts) is filed after every seat has exited; it adds nothing to a seat's argv or environment
@@ -85,7 +87,7 @@ async function harness(entry: string, env: Record<string, string>, argv: string[
       cache.set(name, mod); return mod;
     }
     const base = name.replace(/^\.\//, '').replace(/\.js$/, '');
-    assert.ok(['env', 'spawner', 'spawner/recruitment', 'swarm', 'openrouter', 'respawn', 'claude-args', 'codex-seat', 'sandbox', 'cost-estimate', 'seat-targets', 'groups'].includes(base), `unmocked import ${name}`); // respawn.ts, claude-args.ts, codex-seat.ts, sandbox.ts, cost-estimate.ts and seat-targets.ts are pure (sandbox over the mocked fs): real import
+    assert.ok(['env', 'spawner', 'spawner/recruitment', 'swarm', 'openrouter', 'respawn', 'claude-args', 'codex-seat', 'sandbox', 'cost-estimate', 'seat-targets', 'groups', 'launch/run-rooms'].includes(base), `unmocked import ${name}`); // respawn.ts, claude-args.ts, codex-seat.ts, sandbox.ts, cost-estimate.ts, seat-targets.ts and launch/run-rooms.ts are pure (sandbox over the mocked fs): real import
     // Only these explicitly allowlisted source files are read from disk.
     const source = readFileSync(path.join(root, 'src', `${base}.ts`), 'utf8');
     const code = transformSync(source, { loader: 'ts', format: 'esm', target: 'es2022' }).code;

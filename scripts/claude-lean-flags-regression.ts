@@ -88,6 +88,8 @@ async function harness(entry: string, env: Record<string, string>, argv: string[
     './seat-handoff-report.js': { handoffMarkerLine: () => '' },
     // launcher-side helpers with no part in a seat's argv or environment: the hooks copy and the join check (src/worktree-hooks.ts, src/join-check.ts)
     './worktree-hooks.js': { carryHooks: () => ({ hooks: 'shared' }), hooksLine: () => '', hooksOff: () => ({ hooks: 'shared' }) },
+    // where a recruit works (src/spawner/worktrees.ts): the fixture is outside git, so no worktree, branch or snapshot, as the real helpers say over the git mock above
+    './spawner/worktrees.js': { recruitWorkspace: () => undefined, recruitBase: () => undefined, createRecruitWorktree: async () => ({ ok: false }), projectOf: () => undefined, planSnapshot: () => undefined, createSnapshot: () => false, removeSnapshot: () => {}, workspaceOf: () => undefined, WorktreeMaker: class { hooksIn = new Map(); make() { return Promise.resolve(undefined); } } },
     // the launch preflight (src/launch/preflight.ts) runs a kit command before any seat and only adds brief text; no flag is given here
     './launch/preflight.js': { preflightAtLaunch: () => ({ text: '' }) },
     // the run's decision record (src/launch/decision-record.ts) is filed after every seat has exited; it adds nothing to a seat's argv or environment
@@ -103,8 +105,8 @@ async function harness(entry: string, env: Record<string, string>, argv: string[
       cache.set(name, mod); return mod;
     }
     const base = name.replace(/^\.\//, '').replace(/\.js$/, '');
-    // Real source for these only: swarm/spawner (under test), env/respawn (their real deps), claude-args (the shared lean-args builder, pure), sandbox (its --sandbox block, pure over the mocked fs), cost-estimate (the launch cost guide, pure).
-    assert.ok(['env', 'spawner', 'spawner/recruitment', 'swarm', 'respawn', 'claude-args', 'codex-seat', 'sandbox', 'cost-estimate', 'seat-targets', 'groups'].includes(base), `unmocked import ${name}`);
+    // Real source for these only: swarm/spawner (under test), env/respawn (their real deps), claude-args (the shared lean-args builder, pure), sandbox (its --sandbox block, pure over the mocked fs), cost-estimate (the launch cost guide, pure), launch/run-rooms (the run's room list, pure).
+    assert.ok(['env', 'spawner', 'spawner/recruitment', 'swarm', 'respawn', 'claude-args', 'codex-seat', 'sandbox', 'cost-estimate', 'seat-targets', 'groups', 'launch/run-rooms'].includes(base), `unmocked import ${name}`);
     const source = readFileSync(path.join(root, 'src', `${base}.ts`), 'utf8');
     const code = transformSync(source, { loader: 'ts', format: 'esm', target: 'es2022' }).code;
     const mod = new vm.SourceTextModule(code, { context, initializeImportMeta(meta) { meta.url = `file:///fixture/src/${base}.js`; meta.resolve = () => "file:///synthetic/tsx.mjs"; } });

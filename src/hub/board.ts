@@ -216,7 +216,7 @@ export function boardContinuation(room: Room, key: string, entry: BoardEntry): {
   };
 }
 
-export function setBoard(hub: Hub, roomName: string, pid: string, key: string, text: string, opts: BoardExpiryOptions & { ifAbsent?: boolean; ifByMe?: boolean; overwrite?: boolean; append?: boolean } = {}): BoardEntry | null {
+export function setBoard(hub: Hub, roomName: string, pid: string, key: string, text: string, opts: BoardExpiryOptions & { ifAbsent?: boolean; ifByMe?: boolean; overwrite?: boolean; append?: boolean; diff?: string } = {}): BoardEntry | null {
   const room = hub.getRoom(roomName);
   const p = hub.requireParticipant(room, pid);
   // A concluded room keeps taking results for a while (lateWrite): a rerun that lands after the vote is recorded, not lost.
@@ -371,7 +371,7 @@ export function setBoard(hub: Hub, roomName: string, pid: string, key: string, t
     // said once, when a round opens: what it is and what it asks of the others (3 of 8 rounds in the records were one seat's working draft)
     ? `opened a sealed draft round: each seat writes its own attempt as draft/<its name> before reading anyone else's, and they all become readable together (${hub.draftProgress(room)}). Nothing to draft? Say so; the deadline reveals what there is.`
     : sealedDraft ? `${previous ? "updated" : "wrote"} a sealed draft (${hub.draftProgress(room)})`
-    : `${previous ? "updated" : "added"} board entry "${key}" (${text.length} chars; read it with board_get)`
+    : opts.diff !== undefined ? `amended "${key}" (${text.length} chars): ${opts.diff}` : `${previous ? "updated" : "added"} board entry "${key}" (${text.length} chars; read it with board_get)`
     + (postReveal ? " — post-reveal: written after peers' drafts were readable, so not an independent attempt" : "")
     + (workspace ? ` — ${workspace.branch ? `branch ${workspace.branch} in ` : ""}${workspace.worktree}` : "")
     + (reviewer ? ` — reviewer: ${reviewer.name}` : "")
@@ -512,7 +512,7 @@ function checkAttack(room: Room, p: Participant, key: string, text: string): { t
 }
 
 /** Open until the author removes every clause the attack quotes, or adds a reply to the attacked entry. */
-function attackOpen(attack: BoardEntry, target: BoardEntry): boolean {
+export function attackOpen(attack: BoardEntry, target: BoardEntry): boolean {
   const text = norm(target.text);
   // growth from other seats' appended lines (board_set append) is not a reply by the author
   return [...attack.text.matchAll(QUOTED)].some((m) => text.includes(norm(m[1]))) && text.length - (target.othersChars ?? 0) < (attack.attackedChars ?? 0) + ATTACK_REPLY_MIN_CHARS;

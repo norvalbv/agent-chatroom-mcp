@@ -18,6 +18,7 @@ import type { MessageKind, Vote, Quorum, RoomState, VerifyHead, Role, Participan
 import { now, shortId, norm, emptyBoardManifestCounters, manifestBytes, codeState, commitsIn, keepRefusal, RECENT_REFUSALS, resourceEvents } from "./hub/internal.js";
 import type { Opts, Event, BoardManifestCounters } from "./hub/internal.js";
 import * as board from "./hub/board.js";
+import * as breakouts from "./hub/breakouts/lifecycle.js";
 import * as idle from "./hub/idle.js";
 import * as kick from "./hub/kick.js";
 import * as output from "./hub/output.js";
@@ -28,6 +29,7 @@ import { apiRequests, UsageLedger, usageTotal } from "./hub/usage.js";
 import { DevRuns, DevRunError, type DevRunHost } from "./hub/dev-runs.js";
 import { takesOf } from "./hub/take.js";
 import * as votes from "./hub/consensus/votes.js";
+import { coverage } from "./hub/coverage/coverage.js";
 import { registeredWakes, wakeSuccessors, type Wake } from "./hub/wake.js";
 import { MemoryWatch, memoryNotice, type Job, type MemoryEvent, type SeatMemory } from "./hub/memory.js";
 import { RUN_END_CAUSES, exitCause, type RunEndCause, type StoppedBy } from "./respawn.js";
@@ -223,7 +225,7 @@ export class Hub {
     return {
       name: room.name,
       topic: room.topic,
-      ...(room.parent ? { parent: room.parent } : {}),
+      ...(room.parent ? { parent: room.parent, breakout_fate: breakouts.breakoutFate(this, room, Hub.LAST_CALL_MS) } : {}),
       ...(this.breakouts(room).length ? { breakouts: this.breakouts(room) } : {}),
       mode: room.mode,
       quorum: room.quorum,
@@ -295,7 +297,7 @@ export class Hub {
       ...(idle.idleView(room) ? { idle: idle.idleView(room) } : {}),
       ...(idle.waitingView(room) ? { waiting: idle.waitingView(room) } : {}),
       // claim/* entries whose owner left: its registered successor may take one at once, anyone after Hub.STALE_CLAIM_MS
-      stale_claims: this.staleClaims(room, reveal), ...((n) => (n ? { open_needs: n } : {}))(board.openNeeds(room)), // needs/* filed for the owner and not cleared (src/hub/needs/); absent: none
+      stale_claims: this.staleClaims(room, reveal), ...((n) => (n ? { open_needs: n } : {}))(board.openNeeds(room)), ...((c) => (c ? { coverage: c } : {}))(coverage(room)), // needs/* filed for the owner and not cleared (src/hub/needs/); absent: none. coverage: each item/* the brief names, its owners and state (src/hub/coverage/); absent: no item/*
       // per commit, the verify/* and review/* entries whose head names it (telemetry G3/G14): coverage read from the hub, not key names
       ...((r) => (r.length ? { reviews: r } : {}))(this.reviewsByCommit(room)),
       // chat messages by the channel they came through (telemetry gap 8: owner, script, chair and seat were one column)
@@ -1356,7 +1358,7 @@ export class Hub {
    * Pending calls, schema rejections outside guard, roomless calls and failed room creation
    * are excluded. The rate uses this event's matched numerator, never lifetime refusals.
    */
-  recordCallCompletion(roomName: string | undefined, tool: string, outcome: CallOutcome, participant: string | null, timing: { ms?: number; empty?: boolean; outsider?: string; key?: string; key_rejected?: string; result_chars?: number; args_chars?: number } = {}) {
+  recordCallCompletion(roomName: string | undefined, tool: string, outcome: CallOutcome, participant: string | null, timing: { ms?: number; empty?: boolean; woke?: string; board_notices?: number; outsider?: string; key?: string; key_rejected?: string; result_chars?: number; args_chars?: number } = {}) {
     const room = roomName ? this.rooms.get(roomName) : undefined;
     if (!room) return;
     this.applyCallCompletion(room, tool, outcome, timing.outsider);
@@ -1534,12 +1536,11 @@ export class Hub {
   seedResources(roomName: string, entries: { key: string; text: string }[]): { room: string; keys: string[]; pending: boolean } {
     if (!Array.isArray(entries) || !entries.length) throw new HubError("resources need at least one entry: [{ key: \"resource/<name>\", text }].", undefined, "invalid-arg");
     for (const e of entries) {
-      if (typeof e?.key !== "string" || !/^resource\/./.test(e.key) || !board.BOARD_KEY.test(e.key)) throw new HubError(`A resource key is "resource/<name>" (got ${String(JSON.stringify(e?.key)).slice(0, 80)}).`, undefined, "key-format");
+      if (typeof e?.key !== "string" || !/^(resource|item)\/./.test(e.key) || !board.BOARD_KEY.test(e.key)) throw new HubError(`A resource key is "resource/<name>", or "item/<slug>" for a problem the brief names (got ${String(JSON.stringify(e?.key)).slice(0, 80)}).`, undefined, "key-format");
       if (typeof e.text !== "string" || !e.text.trim()) throw new HubError(`"${e.key}" has no text.`, undefined, "invalid-arg");
       if (e.text.length > board.BOARD_ENTRY_MAX) throw new HubError(board.tooLong(e.key, e.text.length), undefined, "size");
     }
-    const clean = entries.map((e) => ({ key: e.key, text: e.text }));
-    const room = this.rooms.get(roomName);
+    const clean = entries.map((e) => ({ key: e.key, text: e.text })), room = this.rooms.get(roomName);
     if (!room) {
       if (!Hub.ROOM_NAME.test(roomName)) throw new HubError("Invalid room name.", undefined, "invalid-arg");
       this.pendingResources.set(roomName, clean);
@@ -2109,7 +2110,7 @@ export class Hub {
     board_keys?: string[]; board_delta?: { keys: string[]; tombstones: string[] }; board_reset?: boolean;
   } { return board.boardManifest(this, roomName, pid, follow, forceFull); }
   private applyBoard(room: Room, key: string, entry: BoardEntry | null) { return board.applyBoard(room, key, entry); }
-  setBoard(roomName: string, pid: string, key: string, text: string, opts: BoardExpiryOptions & { ifAbsent?: boolean; ifByMe?: boolean; overwrite?: boolean; append?: boolean } = {}): BoardEntry | null {
+  setBoard(roomName: string, pid: string, key: string, text: string, opts: BoardExpiryOptions & { ifAbsent?: boolean; ifByMe?: boolean; overwrite?: boolean; append?: boolean; diff?: string } = {}): BoardEntry | null {
     const entry = board.setBoard(this, roomName, pid, key, text, opts);
     // a take released during a last call may be the last thing the conclusion was waiting for
     const room = this.rooms.get(roomName);
@@ -2122,7 +2123,7 @@ export class Hub {
   static claimOverlapScore(a: Set<string>, aKey: Set<string>, b: Set<string>, bKey: Set<string>) { return board.claimOverlapScore(a, aKey, b, bKey); }
   private activeReviewerFor(room: Room, authorName: string): Participant | undefined { return board.activeReviewerFor(room, authorName); }
   setBoardAs(roomName: string, byName: string, key: string, text: string): BoardEntry { return board.setBoardAs(this, roomName, byName, key, text); }
-  postToRoom(fromRoom: string, pid: string, toRoom: string, key: string, text: string, ackRequired = false, opts: BoardExpiryOptions = {}): { key: string; entry: BoardEntry } { return board.postToRoom(this, fromRoom, pid, toRoom, key, text, ackRequired, opts); }
+  postToRoom(fromRoom: string, pid: string, toRoom: string, key: string, text: string, ackRequired = false, opts: BoardExpiryOptions = {}): { key: string; entry: BoardEntry } { breakouts.refuseCarryKey(this, fromRoom, toRoom, key); return board.postToRoom(this, fromRoom, pid, toRoom, key, text, ackRequired, opts); }
 
   // ---------- proposals as documents ----------
 
@@ -2204,11 +2205,11 @@ export class Hub {
     }
     const next = this.spliced(e.text, `board entry "${key}"`, find, replace, replaceAll);
     if (next === e.text) throw new HubError("That amendment changes nothing.", undefined, "amend-find");
-    this.setBoard(roomName, pid, key, next);
     const clip = (t: string, n: number) => (t.length > n ? t.slice(0, n) + "…" : t);
-    const diff = replaceAll ? `replaced the whole entry (${next.length} chars)` : find ? `"${clip(find, 160)}" → "${clip(replace, 240)}"` : `appended "${clip(replace, 240)}"`;
-    this.persist({ type: "board_edit", room: roomName, key, by: p.name, sent_chars: find.length + replace.length, entry_chars: next.length, ts: now() });
-    this.post(room, "board", p, `amended "${key}": ${diff}`);
+    const diff = replaceAll ? "replaced the whole entry" : find ? `"${clip(find, 160)}" → "${clip(replace, 240)}"` : `appended "${clip(replace, 240)}"`;
+    const before = room.messages.at(-1)?.seq ?? 0; // the board's one notice carries the diff (a sealed draft's names none): two per amend were 25% of 9f66's messages
+    this.setBoard(roomName, pid, key, next, { diff });
+    this.persist({ type: "board_edit", room: roomName, key, by: p.name, sent_chars: find.length + replace.length, entry_chars: next.length, notice_seq: room.messages.find((m) => m.seq > before && m.kind === "board" && m.from.id === p.id)?.seq, ts: now() });
     return { key, chars: next.length, diff };
   }
 
@@ -3336,12 +3337,14 @@ export class Hub {
    * group's table landed 92 min after the leads room concluded and was lost); a closed parent, or one past the window,
    * is left alone. Objections go before the text, and a text past
    * the board cap is cut, never silently: where the whole of it lives (room_status on the child) leads the entry.
+   * A drop is said in the breakout, and every attempt is a breakout_carry event (src/hub/breakouts/lifecycle.ts).
    */
   private carryConclusion(room: Room): void {
-    const parent = room.parent ? this.rooms.get(room.parent) : undefined;
-    if (!parent || !room.conclusion || parent.state === "closed") return;
+    if (!room.parent || !room.conclusion) return;
+    const parent = this.rooms.get(room.parent);
+    const drop = breakouts.carryDrop(this, parent);
+    if (drop || !parent) return breakouts.carryDropped(this, room, drop ?? "parent_missing");
     const late = parent.state === "concluded" ? board.lateWindow(this, parent) : undefined;
-    if (parent.state === "concluded" && !late) return;
     const c = room.conclusion;
     const key = `inbox/${room.name}/conclusion`;
     // where the whole of it lives leads the entry, so no cut can drop it
@@ -3354,6 +3357,7 @@ export class Hub {
     board.applyBoard(parent, key, entry);
     this.persist({ type: "board", room: parent.name, key, entry });
     if (late) this.persist({ type: "late_write", room: parent.name, key, by: "system", after_s: late.after_s, ts: entry.updatedAt });
+    breakouts.carryRecorded(this, room, key, late);
     this.post(parent, "system", undefined, late
       ? `[BOARD] breakout ${room.name} concluded after this room did; its conclusion is on this board as ${key}, marked late (board_get). This room's conclusion does not change.`
       : `[BOARD] breakout ${room.name} concluded; its conclusion is on this board as ${key} (board_get).`);
@@ -3395,25 +3399,10 @@ export class Hub {
     );
     this.releaseClaims(room, "Room concluded");
     this.carryConclusion(room);
-    this.tellOpenBreakouts(room, pr);
+    breakouts.tellOpenBreakouts(this, room, pr);
     // a parent in last call may have been waiting only for this breakout
     const parent = room.parent ? this.rooms.get(room.parent) : undefined;
     if (parent) for (const p of parent.proposals.values()) if (p.status === "open" && p.lastCall) this.evaluate(parent, p);
-  }
-
-  /**
-   * Each breakout still open when its parent concludes is told at once that the parent's answer is fixed. In
-   * swarm-123021-1nwp the internal group kept waiting on a run with an ETA of 17:00 for 92 min after the leads room
-   * concluded at 14:34, never told, and its final board write was refused. Logged as parent_concluded in the breakout.
-   */
-  private tellOpenBreakouts(room: Room, pr: Proposal): void {
-    for (const name of this.openBreakouts(room)) {
-      const child = this.rooms.get(name)!;
-      this.persist({ type: "parent_concluded", room: name, parent: room.name, proposalId: pr.id, version: pr.version, ts: now() });
-      this.post(child, "system", undefined,
-        `${room.name}, this room's parent, concluded on ${pr.id} v${pr.version} at ${room.conclusion!.decidedAt}: its answer is fixed, and a conclusion here can no longer change it (at most it lands on its board as a late entry) ` +
-        `(its text: room_status room="${room.name}"). Decide whether the work still running here changes anything: if not, conclude or leave; if it does, say so in the parent's room or post_to_room it.`);
-    }
   }
 
   /**
@@ -3436,7 +3425,7 @@ export class Hub {
     this.onRoomState?.(room.name, state);
   }
 
-  /** Close a room without a conclusion (stale, abandoned, or a human decided to stop it). */
+  /** Close a room without a conclusion (stale, abandoned, or a human decided to stop it), and its open breakouts with it. */
   closeRoom(roomName: string, by: string, reason = ""): Room {
     const room = this.getRoom(roomName);
     if (room.state === "concluded") throw new HubError("Room already concluded.", undefined, "state");
@@ -3452,25 +3441,27 @@ export class Hub {
     if (room.nudgeTimer) clearTimeout(room.nudgeTimer);
     this.post(room, "system", undefined, `Room closed by ${by}${reason ? `: ${reason}` : ""}. No conclusion was recorded.`);
     this.releaseClaims(room, "Room closed");
+    breakouts.closeBreakouts(this, room, by, reason);
     return room;
   }
 
   /**
    * Hide a room from listings without deleting anything: the transcript stays on disk and GET /rooms/:room still
-   * answers. An open room is closed first (nobody is in it to object; if someone were, it would not be dead).
+   * answers. An open room is closed first (nobody is in it to object; if someone were, it would not be dead), unless a
+   * breakout of it still has seats: that close would close the breakout too (src/hub/breakouts/lifecycle.ts).
    */
   archiveRoom(roomName: string, by: string, archived = true): Room {
-    const room = this.getRoom(roomName);
-    if (archived && (room.state === "open" || room.state === "stalled") && this.activeParticipants(room).length === 0) this.closeRoom(roomName, by, "archived");
-    if (archived && (room.state === "open" || room.state === "stalled")) throw new HubError(`Room "${roomName}" still has participants; close it first.`, undefined, "state");
+    const room = this.getRoom(roomName), working = this.openBreakouts(room);
+    if (archived && (room.state === "open" || room.state === "stalled") && this.activeParticipants(room).length === 0 && !working.length) this.closeRoom(roomName, by, "archived");
+    if (archived && (room.state === "open" || room.state === "stalled")) throw new HubError(`Room "${roomName}" still has ${this.activeParticipants(room).length ? "participants" : `an open breakout with seats (${working.join(", ")})`}; close it first.`, undefined, "state");
     room.archived = archived;
     this.persist({ type: "archive", room: roomName, archived, by, ts: now() });
     return room;
   }
 
-  /** A dead room has nobody in it and was not created in the last ten minutes (a launcher pre-creates rooms before seats join). */
+  /** A dead room has nobody in it, no breakout with seats, and was not created in the last ten minutes (a launcher pre-creates rooms before seats join). */
   isDead(room: Room): boolean {
-    return this.activeParticipants(room).length === 0 && Date.now() - Date.parse(room.createdAt) > 10 * 60_000;
+    return this.activeParticipants(room).length === 0 && Date.now() - Date.parse(room.createdAt) > 10 * 60_000 && !this.openBreakouts(room).length;
   }
 
   archiveDead(by: string): string[] {
@@ -3794,13 +3785,13 @@ export class Hub {
     return p.working && Date.parse(p.working.at) > Date.parse(p.lastActiveAt) ? p.working.at : p.lastActiveAt;
   }
 
-  sweepIdle(idleMs: number, connected?: Set<string>): string[] {
+  sweepIdle(idleMs: number, connected?: Set<string>, keepChair = false): string[] {
     const swept: string[] = [];
     const cutoff = Date.now() - idleMs;
     for (const room of this.rooms.values()) {
       if (room.state === "concluded" || room.state === "closed") continue;
       for (const p of room.participants.values()) {
-        if (p.session && connected?.has(p.session)) continue;
+        if ((p.session && connected?.has(p.session)) || (keepChair && p.role === "chair")) continue;
         if (p.active && p.agent !== "human" && Date.parse(this.lastSeen(p)) < cutoff) {
           p.active = false;
           this.persist({ type: "leave", room: room.name, p });

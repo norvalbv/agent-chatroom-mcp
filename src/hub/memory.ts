@@ -134,8 +134,8 @@ const NOT_A_JOB = /^(?:sleep|sh|bash|zsh|dash|fish|tail|cat|tee|watch|timeout|ca
 /** Nor a server a seat left running: a private hub, its supervisor or a launcher never ends, so a room is not waiting on
  * it (review/966debc8: on this machine a 16.7-hour-old dev hub read as a job). */
 const A_SERVER = /(?:^|[\s/])(?:dist\/(?:index|hubd|swarm)\.js|src\/(?:index|hubd|swarm)\.ts)(?:\s|$)/;
-/** Younger than this it is a tool call still running, which the work ledger already counts as a step. */
-export const JOB_MIN_S = 60;
+/** Younger than this it is a tool call still running, which the work ledger already counts as a step. CHATROOM_JOB_MIN_S (tests). */
+export const JOB_MIN_S = Number(process.env.CHATROOM_JOB_MIN_S) > 0 ? Number(process.env.CHATROOM_JOB_MIN_S) : 60;
 /** Older than this it is not something a room waits on but something left running (the Polymarket lab's recorders were 30
  * hours old in the same review): a run is 8 hours and a scorer scheduled inside it is younger. CHATROOM_JOB_MAX_S. */
 export const JOB_MAX_S = Number(process.env.CHATROOM_JOB_MAX_S) > 0 ? Number(process.env.CHATROOM_JOB_MAX_S) : 6 * 3600;
@@ -215,6 +215,12 @@ export class MemoryWatch {
   }
 
   get(seat: string | undefined): SeatMemory | undefined { return seat ? this.bySeat.get(seat) : undefined; }
+  /** When the latest sample was taken, if it held this seat's agent process, not orphaned: the idle sweep's "process"
+   * signal (src/hub/liveness.ts, reapIdle). Asked of the sample, not the clock: one tick takes 4 s at load 40 (top -l 1),
+   * so a fixed freshness missed a live CLI between samples. A job a dead seat left behind is adopted by launchd (ppid 1). */
+  agentSeenAt(seat: string): number | undefined { const t = this.agentSeen.get(seat); return t === this.lastSample ? t : undefined; }
+  private readonly agentSeen = new Map<string, number>();
+  private lastSample = -1;
   /** The jobs a seat has running as of the last tick (jobsOf): none for a seat with no key or nothing started. */
   jobs(seat: string | undefined): Job[] { return (seat && this.jobsBySeat.get(seat)) || []; }
   /** What tagged processes of no live seat hold (a recorder a finished room left running, a respawned seat's old script). */
@@ -265,10 +271,12 @@ export class MemoryWatch {
       const at = new Date().toISOString();
       const seen = new Set<string>();
       const orphans: (Proc & { kb: number })[] = [];
+      if (table.length) this.lastSample = nowMs; // a sample with no agent in it says each is gone; a failed ps says nothing
       for (const [key, u] of usage) {
         const seat = seatHash(key);
         if (!this.o.watched(seat)) { orphans.push({ ...u.agent, kb: u.agentKb }, ...u.own); continue; }
         seen.add(seat);
+        if (u.agent.ppid !== 1) this.agentSeen.set(seat, nowMs);
         // the seat's jobs: what it started with its key showing, and what shows no key but descends from it
         const jobs = jobsOf([...u.own, ...table.filter((p) => !p.key && p.inherited === key)]);
         this.jobsBySeat.set(seat, jobs);

@@ -4,10 +4,13 @@
  * the beats were dropped after the last 60, so no room could say how much it read or searched before it concluded. */
 import { createHash } from "node:crypto";
 import { coordinates } from "./keys.js";
+import { isRemoteClone } from "../telemetry/prior-art.js";
 import type { Participant, Room, WorkClass, WorkCounts } from "./types.js";
 
 const CLASSES: WorkClass[] = ["read", "search", "web", "run", "edit"];
-const REMOTE_FETCH = /\b(curl|wget|gh\s+api|git\s+clone)\b/;
+/** a clone is web only when it fetches from elsewhere (isRemoteClone): `git clone . /tmp/x` of the room's own checkout
+ * was counted as web in 182a, zcd7, tky5, mrve and 8i07 (evidence/research-depth) */
+const REMOTE_FETCH = /\b(curl|wget|gh\s+api)\b/;
 const LOCAL_URL = /https?:\/\/(127\.0\.0\.1|localhost|\[::1\])/;
 const READ = /^(read|notebookread|read_file|view)$/;
 const SEARCH = /^(grep|glob|ls|search_files|list_dir)$/;
@@ -34,7 +37,7 @@ export function workClass(tool: string, detail = ""): WorkClass | undefined {
 
 /** Seats do most of their reading through the shell (cat, grep, curl), so a shell call is classed by the command it starts with. */
 function shellClass(command: string): WorkClass {
-  if (REMOTE_FETCH.test(command) && !LOCAL_URL.test(command)) return "web";
+  if ((REMOTE_FETCH.test(command) && !LOCAL_URL.test(command)) || isRemoteClone(command)) return "web";
   const first = command.replace(SHELL_PREFIX, "");
   if (SHELL_SEARCH.test(first)) return "search";
   if (SHELL_READ.test(first)) return "read";

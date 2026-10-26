@@ -42,7 +42,7 @@ function repo() {
 
 type Mod = typeof spawnerModule & {
   recruitBase?: (root: string, from?: string) => { sha: string; from: string } | undefined;
-  createRecruitWorktree?: (root: string, dir: string, branch: string, base?: string) => boolean;
+  createRecruitWorktree?: (root: string, dir: string, branch: string, base?: string) => Promise<{ ok: boolean; error?: string }>;
 };
 const mod = spawnerModule as Mod;
 
@@ -56,18 +56,18 @@ test("recruitBase: the recruiter's worktree HEAD, only when it is a checkout of 
   assert.equal(mod.recruitBase!(r.main, tmpdir()), undefined, "nor is a directory outside git");
 });
 
-test("a write recruit's worktree is cut from that commit, not from the main checkout's HEAD", () => {
+test("a write recruit's worktree is cut from that commit, not from the main checkout's HEAD", async () => {
   const r = repo();
   assert.equal(typeof mod.createRecruitWorktree, "function", "createRecruitWorktree is exported");
   const dir = join(r.main, ".swarm-worktrees", "room-a", "builder");
-  assert.ok(mod.createRecruitWorktree!(r.main, dir, "swarm/room-a/builder", r.seatHead));
+  assert.ok((await mod.createRecruitWorktree!(r.main, dir, "swarm/room-a/builder", r.seatHead)).ok);
   assert.equal(git(dir, "rev-parse", "HEAD"), r.seatHead, "the recruit starts at its recruiter's HEAD");
   assert.equal(git(dir, "show", "HEAD:bench.txt"), "model claude-haiku-5-5", "so it runs the benchmark the room is on");
   assert.ok(existsSync(join(dir, "result.txt")), "and has the recruiter's own commits");
   assert.equal(git(dir, "branch", "--show-current"), "swarm/room-a/builder");
   // without a base it is the old behaviour: the main checkout's HEAD
   const dir2 = join(r.main, ".swarm-worktrees", "room-a", "plain");
-  assert.ok(mod.createRecruitWorktree!(r.main, dir2, "swarm/room-a/plain"));
+  assert.ok((await mod.createRecruitWorktree!(r.main, dir2, "swarm/room-a/plain")).ok);
   assert.equal(git(dir2, "rev-parse", "HEAD"), r.stale);
 });
 

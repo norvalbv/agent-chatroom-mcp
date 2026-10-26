@@ -22,8 +22,9 @@ import { codexSeatCommand, codexUsageTracker } from "./codex-seat.js";
 import { claudeSandbox } from "./sandbox.js";
 import { topicDigest } from "./hub/status-view.js";
 import { stopStrays } from "./strays.js";
-import { launchCostGuide } from "./cost-estimate.js";
+import { launchGuide } from "./cost-estimate.js";
 import { seatTarget } from "./seat-targets.js";
+import { runRooms } from "./launch/run-rooms.js";
 import { digestAcks, digestRecords, loadGroups, renderDigests, type GroupsFile } from "./groups.js";
 import { loadResources, seedResources } from "./resources.js";
 import { preflightAtLaunch } from "./launch/preflight.js";
@@ -482,7 +483,7 @@ if (FLAT) {
   }
 }
 log(`swarm ${SWARM_ID}: ${TOTAL} agents (${WORKERS} workers + verifier), project ${CWD}`);
-log(launchCostGuide(TOTAL, TIMEOUT_MIN));
+const SIZING = launchGuide({ total: TOTAL, timeoutMin: TIMEOUT_MIN, flat: FLAT, groupWorkers: GROUPS?.groups.map((g) => g.workers), task, seatTargets: !NO_SEAT_TARGETS }, log);
 if (SANDBOX) log(`--sandbox: claude seats run Bash in Claude Code's sandbox, OpenRouter seats wrap run_command in sandbox-runtime${CODEX ? `; the ${CODEX} codex seat(s) are NOT sandboxed by this flag` : ""}`);
 /** Earlier runs in this checkout: a room should ratify or refute them by reference, not re-derive them. */
 function priorRuns(): string {
@@ -872,10 +873,9 @@ const fetchText = async (url: string) => {
   if (!response.ok) throw new Error(`HTTP ${response.status}: ${url}`);
   return response.text();
 };
-// Fetch full GET payload for every room, including dynamically created break-outs.
+// Fetch full GET payload for every room, including dynamically created break-outs, by name and by parent link (src/launch/run-rooms.ts).
 try {
-  const all = JSON.parse(await fetchText(`${URL_}/rooms`)) as { name: string }[];
-  for (const room of all.filter(r => r.name.startsWith(`${SWARM_ID}-`) && r.name !== leadsRoom)) groupRooms.push(room.name);
+  groupRooms.push(...runRooms(JSON.parse(await fetchText(`${URL_}/rooms`)), SWARM_ID, [leadsRoom, ...groupRooms], log));
 } catch (e) { collectionErrors.push(`Room discovery: ${String(e)}`); }
 const snapshots: RoomSnapshot[] = [];
 for (const name of new Set([leadsRoom, ...groupRooms])) {
@@ -902,7 +902,7 @@ const artifact: RunResult = {
   outcome: classifyOutcome(snapshots.find(r => r.name === leadsRoom)?.payload, { timedOut, atTimeout: leadAtTimeout }),
   hubUsage: hubUsageRollup(snapshots),
   scorecard: seatScorecard(snapshots, Object.fromEntries([...exitCodes].map(([name, exitCode]) => [name, { exitCode, cost: seatCosts.get(name), killedAtTimeout: killedAtTimeout.has(name), commits: branchCommits(name), ...(seatTranscripts.has(name) ? { transcript: seatTranscripts.get(name) } : {}) }]))),
-  ...(metrics ? { metrics } : {}), ...(PF.result ? { preflight: PF.result } : {}), prompts: promptDigests(resolve(repoRoot, "prompts"), ["verifier.md", FLAT ? FLAT_PROMPT : GROUPS ? "group.md" : "worker.md", "recruit.md", ...(FLAT ? [] : ["lead-tail.md"]), ...(OWNER_WORD_ON ? ["owner-word.md"] : [])]),
+  ...(metrics ? { metrics } : {}), ...(PF.result ? { preflight: PF.result } : {}), ...(SIZING ? { sizing: SIZING } : {}), prompts: promptDigests(resolve(repoRoot, "prompts"), ["verifier.md", FLAT ? FLAT_PROMPT : GROUPS ? "group.md" : "worker.md", "recruit.md", ...(FLAT ? [] : ["lead-tail.md"]), ...(OWNER_WORD_ON ? ["owner-word.md"] : [])]),
 };
 if (digestPasses.length) {
   const board = (room: string) => snapshots.find((r) => r.name === room)?.payload?.board as Record<string, { text?: string; updated_at?: string }> | undefined;

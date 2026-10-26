@@ -5,7 +5,7 @@
  *   words and how many ran over 100; the ones sent while its own disagree stood on the proposal's current text (an amend
  *   that does not carry the disagree ends it); hold/* writes; the review/ and verify/ entries it wrote; its Bash commands.
  * Before 6e6c5e67, over 149 rooms with a verifier: 74 had a verifier review/verify, 13 of 26 with a disagree had a re-cast
- * (21 in all), 21 had chat while it stood (121 messages, 9f66's "Verifier, still holding (this isn't silence)" among
+ * (21 in all), 11 had chat while it stood (39 messages, 9f66's "Verifier, still holding (this isn't silence)" among
  * them), 0 hold/* writes. Re-casts also fell with dd4195b8's disagree carry, so they credit the hub, not the prompt.
  *   npx tsx scripts/verifier-conduct.ts <data/room.jsonl>... [--json]
  * Reads each file as a stream; a room with no verifier has no row.

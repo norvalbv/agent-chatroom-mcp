@@ -33,6 +33,13 @@ export function disagreeStands(pr: Proposal, v: VoteEntry | undefined): boolean 
  * disagree, so a carried one must not hold a unanimous room for a seat nobody can ask to re-vote
  * (attack/decision/verifier-hold).
  */
+/** How the status view labels a vote cast on an earlier version. One an amend carried is not stale: its clause is still in
+ *  the text (review/dd4195b8 nit a: room_status said "stale" of the disagree that blocked_by called standing). */
+export function versionLabel(pr: Proposal, v: VoteEntry): { carried?: string; stale?: string } {
+  if (v.version === undefined || v.version === pr.version) return {};
+  return v.quote && norm(pr.text).includes(norm(v.quote)) ? { carried: `cast at v${v.version}; its quoted clause is unchanged in v${pr.version}` } : { stale: `cast at v${v.version}` };
+}
+
 export function standingDisagrees(pr: Proposal, present: (id: string) => boolean): { id: string; name: string }[] {
   return Object.entries(pr.votes)
     .filter(([id, v]) => disagreeStands(pr, v) && ((v.version ?? pr.version) === pr.version || present(id)))

@@ -51,6 +51,10 @@ test("a quoted disagree survives an amend that keeps its clause, and still block
   agree(a.id);
   assert.equal(r.state, "open", "4/5 agree on v3 but the verifier's carried disagree blocks");
   assert.ok(hub.blockedBy(r, pr).some((x) => /the verifier's agree/.test(x) && /HOLD/.test(x)), "blocked_by names the hold, not 'has not voted'");
+  // review/dd4195b8 nit a: room_status must not call the vote blocked_by names "stale"
+  const shown = hub.proposalView(r, pr).votes.find((x) => x.name === "verifier") as { stale?: string; carried?: string };
+  assert.equal(shown.stale, undefined, "a carried vote is not stale");
+  assert.equal(shown.carried, "cast at v1; its quoted clause is unchanged in v3");
 });
 
 test("an amend that replaces the quoted clause drops the disagree; the verifier then checks and agrees once", () => {

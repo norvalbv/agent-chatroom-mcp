@@ -109,6 +109,8 @@ test("the archive-dead sweep leaves a parent whose breakout still has seats in i
   for (const p of [...parent.participants.values()]) hub.leave("bf-parent", p.id);
   parent.createdAt = child.createdAt = new Date(Date.now() - 11 * 60_000).toISOString();
   assert.deepEqual(hub.archiveDead("benji"), [], "the parent is where the breakout's conclusion goes: not dead while the breakout works");
+  assert.throws(() => hub.archiveRoom("bf-parent", "benji"), /open breakout with seats \(bf-child\); close it first/, "archiving it by hand is refused too, rather than closing the breakout with it");
+  assert.equal(parent.state, "open");
   assert.equal(child.state, "open");
   for (const p of [...child.participants.values()]) hub.leave("bf-child", p.id);
   assert.deepEqual(hub.archiveDead("benji").sort(), ["bf-child", "bf-parent"]);

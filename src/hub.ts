@@ -3447,19 +3447,19 @@ export class Hub {
 
   /**
    * Hide a room from listings without deleting anything: the transcript stays on disk and GET /rooms/:room still
-   * answers. An open room is closed first (nobody is in it to object; if someone were, it would not be dead).
+   * answers. An open room is closed first (nobody is in it to object; if someone were, it would not be dead), unless a
+   * breakout of it still has seats: that close would close the breakout too (src/hub/breakouts/lifecycle.ts).
    */
   archiveRoom(roomName: string, by: string, archived = true): Room {
-    const room = this.getRoom(roomName);
-    if (archived && (room.state === "open" || room.state === "stalled") && this.activeParticipants(room).length === 0) this.closeRoom(roomName, by, "archived");
-    if (archived && (room.state === "open" || room.state === "stalled")) throw new HubError(`Room "${roomName}" still has participants; close it first.`, undefined, "state");
+    const room = this.getRoom(roomName), working = this.openBreakouts(room);
+    if (archived && (room.state === "open" || room.state === "stalled") && this.activeParticipants(room).length === 0 && !working.length) this.closeRoom(roomName, by, "archived");
+    if (archived && (room.state === "open" || room.state === "stalled")) throw new HubError(`Room "${roomName}" still has ${this.activeParticipants(room).length ? "participants" : `an open breakout with seats (${working.join(", ")})`}; close it first.`, undefined, "state");
     room.archived = archived;
     this.persist({ type: "archive", room: roomName, archived, by, ts: now() });
     return room;
   }
 
-  /** A dead room has nobody in it and was not created in the last ten minutes (a launcher pre-creates rooms before seats join).
-   * A parent whose breakout still has seats is not dead: it is where that breakout's conclusion goes, and its close would close the breakout. */
+  /** A dead room has nobody in it, no breakout with seats, and was not created in the last ten minutes (a launcher pre-creates rooms before seats join). */
   isDead(room: Room): boolean {
     return this.activeParticipants(room).length === 0 && Date.now() - Date.parse(room.createdAt) > 10 * 60_000 && !this.openBreakouts(room).length;
   }

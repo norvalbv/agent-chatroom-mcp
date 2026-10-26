@@ -57,3 +57,9 @@ test("other web pages only when asked, never a local one", () => {
 test("each id once, in the order first written", () => {
   assert.deepEqual(refsIn("arXiv:2409.07440 github.com/a/b arxiv.org/abs/2409.07440 api.github.com/repos/A/B"), ["arXiv:2409.07440", "gh:a/b"]);
 });
+
+test("an id refsIn wrote reads back as itself: a list printed into a prompt parses again (re-research-regression)", () => {
+  const ids = refsIn("arXiv:2409.07440 github.com/Owner/Repo doi 10.1145/2363.2433 https://pypi.org/project/py-clob-client/ https://www.npmjs.com/package/@polymarket/clob-client");
+  assert.deepEqual(refsIn(ids.join(", ")), ids);
+  assert.deepEqual(refsIn("eggh:a/b xpypi:c"), [], "only as a whole token");
+});

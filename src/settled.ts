@@ -5,6 +5,7 @@
  */
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { resolve } from "node:path";
+import { refsIn } from "./telemetry/source-refs.js";
 
 export function settledAxes(cwd: string): string {
   const dir = resolve(cwd, "docs", "decisions");
@@ -21,8 +22,12 @@ export function settledAxes(cwd: string): string {
     const title = /^## Target[^\n]*— ([^\n]+)/m.exec(cur)?.[1] ?? f.replace(/\.md$/, "");
     const ruling = /\*\*(?:Ruling|Decision)[^*]*\*\*:?\s*([^\n]+)/i.exec(cur)?.[1] ?? "";
     rows.push(`- ${f.replace(/\.md$/, "")}: ${title.replace(/\*/g, "").trim()}${ruling ? ` — ${ruling.trim().slice(0, 240)}` : ""}`);
-    for (const id of t.match(/arXiv:[a-z-]*\/?[0-9]{4}\.[0-9]{4,5}|arXiv:cs\/[0-9]{7}|10\.[0-9]{4,}\/[^ ),;]+/g) ?? []) sources.add(id.replace(/[.,;:]+$/, "")); // a DOI ending a sentence is the same source without its full stop
+    // repos and packages too (refsIn): the list knew arXiv ids and DOIs only, so a repo a room had read never reached the next (inputs/owner-4)
+    for (const id of refsIn(t)) sources.add(id);
   }
+  // records the launcher saved but nobody has promoted yet (RSI-3 and RSI-4 sat there): not settled, so not axes, but read
+  const proposed = resolve(dir, "proposed");
+  if (existsSync(proposed)) for (const f of readdirSync(proposed).filter((f) => f.endsWith(".md"))) for (const id of refsIn(readFileSync(resolve(proposed, f), "utf8"))) sources.add(id);
   return (
     "SETTLED AXES (this project's decision log, docs/decisions/; do NOT re-research or re-argue these; cite them by slug. " +
     "If you find evidence that contradicts one, say so explicitly as 'RE-TARGET <slug>: <evidence>' rather than silently deciding differently):\n" +
@@ -34,7 +39,28 @@ export function settledAxes(cwd: string): string {
   );
 }
 
-const SOURCE_ID = /arXiv:\s*([a-z-]*\/?\d{4}\.\d{4,5}|cs\/\d{7})|arxiv\.org\/(?:abs|pdf|html)\/(\d{4}\.\d{4,5})|\b(\d{4}\.\d{4,5})(?:v\d+)?\b|\b(10\.\d{4,9}\/[^\s"<>,;)]+)/gi;
+/**
+ * What a seat was told was already settled and read, as the room log records it (the `carried` event: recordCarried in
+ * src/telemetry/launch-reports.ts, from the launcher and from the spawner): the outside ids in the text (refsIn), how many settled axes it listed, and its
+ * length. Without it the log could not show whether the list works: a NO_CARRY arm looked like a run that had it.
+ */
+export function carriedSummary(text: string): { ids: string[]; axes: number; chars: number } {
+  const t = String(text ?? "");
+  const axes = t.slice(t.indexOf("SETTLED AXES"), t.includes("SOURCES ALREADY READ") ? t.indexOf("SOURCES ALREADY READ") : undefined);
+  return { ids: refsIn(t), axes: t.includes("SETTLED AXES") ? (axes.match(/^- \S/gm) ?? []).length : 0, chars: t.length };
+}
+
+/** How the hub records what a recruit was told (registerLaunchReports, src/telemetry/launch-reports.ts); unset outside a hub. */
+let recordTold: ((room: string, seats: string[], text: string) => void) | undefined;
+export function onTold(record: typeof recordTold): void { recordTold = record; }
+
+/** settledAxes for recruits' briefs (src/spawner.ts), recorded as their carried event when a hub is listening (onTold). */
+export function toldSettled(home: string, room: string, seats: string[]): string {
+  const text = settledAxes(home);
+  try { recordTold?.(room, seats, text); } catch {} // telemetry never stops a spawn
+  return text;
+}
+
 /** The newest runs, as PRIOR RUNS lists them (src/swarm.ts priorRuns): a run's report is written when it ends. */
 const PRIOR_RUN_COUNT = 6;
 
@@ -46,7 +72,7 @@ const PRIOR_RUN_COUNT = 6;
  */
 export function priorRunSources(swarmsDir: string, known: ReadonlySet<string> = new Set()): string {
   if (!existsSync(swarmsDir)) return "";
-  const seen = new Set([...known].map((s) => s.replace(/^arXiv:/i, "").toLowerCase()));
+  const seen = new Set(known);
   const runs = readdirSync(swarmsDir)
     .filter((d) => existsSync(resolve(swarmsDir, d, "report.md")) && existsSync(resolve(swarmsDir, d, "result.json")))
     .map((d) => ({ d, at: statSync(resolve(swarmsDir, d, "report.md")).mtimeMs }))
@@ -60,7 +86,8 @@ export function priorRunSources(swarmsDir: string, known: ReadonlySet<string> = 
     for (const room of rooms) {
       for (const [key, entry] of Object.entries(room.payload?.board ?? {})) {
         if (!key.startsWith("sources/")) continue;
-        const ids = [...String(entry?.text ?? "").matchAll(SOURCE_ID)].map((m) => (m[1] ?? m[2] ?? m[3] ?? m[4]!).replace(/[.]+$/, "").toLowerCase()).filter((id) => !seen.has(id));
+        // the key too: sources/2510.09462 names its paper even when the text only says "read again here"
+        const ids = refsIn(`${key.slice("sources/".length)} ${String(entry?.text ?? "")}`).filter((id) => !seen.has(id));
         for (const id of ids) seen.add(id);
         if (ids.length) byKey.push(`${[...new Set(ids)].join(", ")} (${key})`);
       }

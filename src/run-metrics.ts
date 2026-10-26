@@ -10,6 +10,7 @@ import { spawnSync } from "node:child_process";
 import type { WorkClass } from "./hub/types.js";
 import { coordinates } from "./hub/keys.js";
 import { researchLine, researchMetrics, type ResearchMetrics } from "./telemetry/prior-art.js";
+import { reResearch, reResearchSentence, type ReResearch } from "./telemetry/re-research.js";
 
 const CLASSES: WorkClass[] = ["read", "search", "web", "run", "edit"];
 const SHA = /\b[0-9a-f]{7,40}\b/g;
@@ -77,6 +78,8 @@ export interface RunMetrics {
   machine?: { stalls: number; stalled_s: number; worst_ms: number; hub_blocks?: number };
   /** seats with at least one web call in the ledger; undefined when the log has no ledger */
   webSeats?: number;
+  /** re-research (inputs/owner-4, src/telemetry/re-research.ts); absent when no seat fetched a paper, repo or package */
+  reResearch?: ReResearch;
   /** text the citation credit was read from */
   citedFrom: "conclusion" | "proposal" | "none";
   /** seats with findings on the board that the cited text never credits */
@@ -389,6 +392,7 @@ export function runMetrics(events: readonly Ev[], opts: MetricsOptions = {}): Ru
     ...(machine ? { machine } : {}),
     ...(ledger ? { webSeats: list.filter((s) => (s.work?.web ?? 0) > 0).length } : {}),
     ...(research ? { research } : {}),
+    ...((r) => (r.fetches || r.carriedSummaries ? { reResearch: r } : {}))(reResearch(events)),
     citedFrom: conclusion ? "conclusion" : proposal ? "proposal" : "none",
     uncited: cited ? list.filter((s) => s.findings > 0 && !s.cited.length).map((s) => s.name) : [],
     seats: list,
@@ -420,6 +424,7 @@ export function renderMetrics(m: RunMetrics): string {
     `${m.recruits.seats} of ${m.recruits.workers} workers recruited (${pct(m.recruits.rate)}); ${m.recruits.calls} recruit${m.recruits.calls === 1 ? "" : "s"} by any seat, see the recruits column; ` +
     (m.webSeats === undefined ? "no work ledger in this log, so reads, searches and web calls are unknown. " : `${m.webSeats} of ${m.seats.length} seats made a web call. `) +
     (m.research ? researchLine(m.research, t) : "") +
+    (m.reResearch ? `${reResearchSentence(m.reResearch)} ` : "") +
     (m.usage ? `Seat-reported usage: $${m.usage.cost_usd.toFixed(2)}, ${m.usage.input_tokens} input + ${m.usage.output_tokens} output tokens from ${m.usage.seatsWithUsage} of ${m.seats.length} seats (the rest unknown). ` : "No seat reported usage to the hub. ") +
     memoryLine(m.seats) +
     (m.machine?.stalls ? `The machine stalled ${m.machine.stalls} time${m.machine.stalls === 1 ? "" : "s"} (${m.machine.stalled_s} s in all, worst timer drift ${Math.round(m.machine.worst_ms / 100) / 10} s); timings measured then are the machine\'s. ` : "") +

@@ -14,7 +14,7 @@ import { hooksLine, type HooksCarried } from "./worktree-hooks.js";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { HubError } from "./hub.js";
-import { settledAxes } from "./settled.js";
+import { toldSettled } from "./settled.js";
 import { aiGatesLine, carrySettings, devHubRule, effectiveSeatSettings, heartbeatHookSettings, policyFromEnv, recruitRun, seatBeat, seatChildEnv, seatHoldMs, type RecruitPolicy, type RecruitSpawn, type SeatSettings } from "./env.js";
 import { claudeArgs } from "./claude-args.js";
 import { exitDetail } from "./respawn.js";
@@ -271,7 +271,7 @@ export class Spawner {
     const context =
       (targetTopic ? `The room's topic (the task everyone there is on): ${targetTopic}\n` : "") +
       (req.newRoom && req.parentTopic ? `The parent room's topic: ${req.parentTopic}\n` : "") +
-      (run.carry ? settledAxes(home) : ""); // --no-carry: the run's seats start from the brief alone, so its recruits do too
+      (run.carry ? toldSettled(home, target, names) : ""); // --no-carry: the run's seats start from the brief alone, so its recruits do too; else recorded as the recruits' carried event (inputs/owner-4)
     // one look for the whole request: every write recruit's branch is cut from the same commit
     const writeBase = req.canEdit ? recruitBase(recruitWorkspace(cwd, target, names[0]!)?.root ?? cwd, req.baseDir) : undefined;
     const out: SpawnedAgent[] = [];

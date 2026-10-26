@@ -83,6 +83,9 @@ export type Event =
   /** Telemetry only: one per recruit the hub launched, with the settings it was started with and where each came from
    * (src/seat/settings.ts effectiveSeatSettings: the run's seat_settings, the hub's environment, or Claude Code's default). */
   | ({ type: "recruit_spawn"; room: string; by_role?: string; ts: string } & RecruitSpawn)
+  /** telemetry only (replay ignores it; Hub.recordCarried, inputs/owner-4): what seats were told was already settled and
+   * read (src/settled.ts), as ids; from the launcher once per room (seats absent: every seat it started), from the spawner per recruit */
+  | { type: "carried"; room: string; from: "launcher" | "spawner"; seats?: string[]; ids: string[]; axes: number; chars: number; no_carry?: true; ts: string }
   // what happened to an MCP session that held a seat (bugs.md 3: nothing recorded a session moving, closing or being reaped).
   // seat_kept: the seat is still served by another session after this. Never a session key (identity-is-the-connection).
   | { type: "session"; room: string; event: "moved" | "closed"; participant: string; name: string; reason: string; seat_kept: boolean; ts: string }

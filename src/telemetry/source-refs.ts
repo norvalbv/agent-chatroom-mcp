@@ -9,8 +9,11 @@
 
 /** arXiv new-style ids: YYMM.NNNNN with a month of 01-12 and a year from 07, so prices and epochs are not ids. */
 const ARXIV_NEW = String.raw`(?:0[7-9]|[1-9]\d)(?:0[1-9]|1[0-2])\.\d{4,5}`;
-const ARXIV = new RegExp(String.raw`arXiv:\s*(cs\/\d{7}|${ARXIV_NEW})|arxiv\.org\/(?:abs|pdf|html)\/(${ARXIV_NEW})|id_list=([\d.,v]+)|(?<![\w.\/-])(${ARXIV_NEW})(?:v\d+)?(?![\w\/-]|\.\d)`, "gi");
+/** the last group: mirrors that serve an arXiv paper under its id (review/024099de) */
+const ARXIV = new RegExp(String.raw`arXiv:\s*(cs\/\d{7}|${ARXIV_NEW})|arxiv\.org\/(?:abs|pdf|html)\/(${ARXIV_NEW})|id_list=([\d.,v]+)|(?<![\w.\/-])(${ARXIV_NEW})(?:v\d+)?(?![\w\/-]|\.\d)|(?:alphaxiv\.org\/(?:abs|overview|pdf)|huggingface\.co\/papers|hyper\.ai\/(?:[a-z]{2}\/)?papers)\/(${ARXIV_NEW})`, "gi");
 const DOI = /\b(10\.\d{4,9}\/[^\s"'<>,;)]+)/gi;
+/** arXiv's own DOI for a paper, 10.48550/arXiv.<id>: the paper, not a second source */
+const ARXIV_DOI = new RegExp(String.raw`^10\.48550\/arxiv\.(${ARXIV_NEW})(?:v\d+)?$`, "i");
 /** owner/repo on GitHub's own hosts and from `gh repo clone`; owner names that are site sections are not owners */
 const GITHUB = /(?<![\w.-])(?:github\.com|codeload\.github\.com|raw\.githubusercontent\.com)\/([\w.-]+)\/([\w.-]+)|api\.github\.com\/repos\/([\w.-]+)\/([\w.-]+)|\bgh\s+repo\s+clone\s+([\w.-]+)\/([\w.-]+)/gi;
 const NOT_OWNER = new Set(["search", "topics", "orgs", "features", "settings", "marketplace", "apps", "sponsors", "login", "about", "pricing", "collections", "trending", "explore", "notifications", "issues", "pulls", "enterprise", "security", "site", "contact", "readme", "events", "users"]);
@@ -27,9 +30,13 @@ export function refsIn(text: string, opts: { pages?: boolean } = {}): string[] {
   const t = String(text ?? "");
   for (const m of t.matchAll(ARXIV)) {
     if (m[3]) { for (const id of m[3].split(",")) { const v = id.replace(/v\d+$/, ""); if (new RegExp(`^${ARXIV_NEW}$`).test(v)) add(m.index!, `arXiv:${v}`); } continue; }
-    add(m.index!, `arXiv:${(m[1] ?? m[2] ?? m[4])!.replace(/v\d+$/, "")}`);
+    add(m.index!, `arXiv:${(m[1] ?? m[2] ?? m[4] ?? m[5])!.replace(/v\d+$/, "")}`);
   }
-  for (const m of t.matchAll(DOI)) add(m.index!, `doi:${trimEnd(m[1]!).toLowerCase()}`);
+  for (const m of t.matchAll(DOI)) {
+    const doi = trimEnd(m[1]!);
+    const paper = ARXIV_DOI.exec(doi)?.[1];
+    add(m.index!, paper ? `arXiv:${paper}` : `doi:${doi.toLowerCase()}`);
+  }
   for (const m of t.matchAll(GITHUB)) {
     const owner = (m[1] ?? m[3] ?? m[5])!.toLowerCase();
     const repo = trimEnd((m[2] ?? m[4] ?? m[6])!).replace(/\.git$/i, "").toLowerCase();

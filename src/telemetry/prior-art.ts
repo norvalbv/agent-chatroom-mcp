@@ -22,7 +22,11 @@ export type PriorArt = "search" | "fetch" | "run";
 type Ev = Record<string, any>;
 
 const CODE_HOST = /^(github\.com|gist\.github\.com|api\.github\.com|gitlab\.com|bitbucket\.org|codeberg\.org|sourcegraph\.com|grep\.app|huggingface\.co|pypi\.org|(www\.)?npmjs\.com|crates\.io|pkg\.go\.dev|rubygems\.org|packagist\.org)$/i;
-const PAPER_HOST = /^((export\.)?arxiv\.org|(api\.)?semanticscholar\.org|paperswithcode\.com|openreview\.net|aclanthology\.org|dl\.acm\.org|scholar\.google\.[a-z.]+|ieeexplore\.ieee\.org|link\.springer\.com|(dx\.)?doi\.org|api\.crossref\.org|api\.openalex\.org)$/i;
+const PAPER_HOST = /^((export\.)?arxiv\.org|(api\.)?semanticscholar\.org|paperswithcode\.com|openreview\.net|aclanthology\.org|dl\.acm\.org|scholar\.google\.[a-z.]+|ieeexplore\.ieee\.org|link\.springer\.com|(dx\.)?doi\.org|api\.crossref\.org|api\.openalex\.org|(www\.)?alphaxiv\.org)$/i;
+/** a paper page on a site that is not only papers */
+const PAPER_PAGE = /^hyper\.ai\/([a-z]{2}\/)?papers\//i;
+/** the gh CLI's own search, which names no host: `gh search repos|code`, `gh api search/repositories|code` (review/d9dfa21f) */
+const GH_SEARCH = /\bgh\s+search\s+(repos|code)\b|\bgh\s+api\s+['"]?\/?search\/(repositories|code)\b/;
 /** outside code itself, not a page about it */
 const CODE_FETCH = /^(raw\.githubusercontent\.com|codeload\.github\.com|objects\.githubusercontent\.com|files\.pythonhosted\.org|registry\.npmjs\.org)\/|^github\.com\/[^/]+\/[^/]+\/(archive|releases\/download|raw)\/|^api\.github\.com\/repos\/[^/]+\/[^/]+\/(tarball|zipball|contents)/i;
 const QUERY = /\b(github|gitlab|repo|repos|repository|open[- ]source|source code|library|package|pypi|npm|crate|arxiv|paper|papers|preprint|prior art|implementation)\b/i;
@@ -98,12 +102,14 @@ export function priorArt(cls: string, tool: string, detail: string, clones: Set<
   if (/^(websearch|web_search)$/i.test(tool)) return QUERY.test(text) ? "search" : undefined;
   // a log from before isRemoteClone classed `gh repo clone` as run (kvkj-b at 1.2 min), so a clone is read from either class
   if (isRemoteClone(text)) { for (const d of cloneDestinations(text)) clones.add(d); return "fetch"; }
+  // `gh search` is a run step and `gh api` a web one
+  if (GH_SEARCH.test(text)) return "search";
   if (cls === "web") {
     const page = URL_PAGE.exec(text.replace(/^.*?(?=https?:\/\/)/, ""))?.[1];
     if (!page) return undefined;
     if (CODE_FETCH.test(page)) return "fetch";
     const host = page.split("/")[0]!;
-    return CODE_HOST.test(host) || PAPER_HOST.test(host) ? "search" : undefined;
+    return CODE_HOST.test(host) || PAPER_HOST.test(host) || PAPER_PAGE.test(page) ? "search" : undefined;
   }
   if (cls === "run") {
     if (INSTALL_FROM_REPO.test(text)) return "fetch";

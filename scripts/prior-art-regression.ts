@@ -39,6 +39,18 @@ test("searching for code, packages or papers is prior art; the target's own data
   assert.equal(tag("Bash", "curl -sL https://raw.githubusercontent.com/a/b/main/bot.py -o /tmp/s/bot.py"), "fetch");
 });
 
+test("the gh CLI's own search and the paper mirrors are prior-art searches", () => {
+  // review/d9dfa21f: 7 work events across the records start with `gh search`, and alphaxiv, hyper.ai and Hugging Face
+  // papers carry arXiv papers (review/024099de)
+  assert.equal(tag("Bash", "gh search repos polymarket bot --limit 30 --json fullName,stargazersCount"), "search");
+  assert.equal(tag("Bash", "gh search code 'py_clob_client' --language python"), "search");
+  assert.equal(tag("Bash", "gh api 'search/repositories?q=polymarket+5m+bot&sort=stars'"), "search");
+  assert.equal(tag("Bash", "gh api repos/a/b/pulls"), undefined);
+  assert.equal(tag("WebFetch", "https://www.alphaxiv.org/abs/2409.07440"), "search");
+  assert.equal(tag("WebFetch", "https://hyper.ai/en/papers/2409.07440"), "search");
+  assert.equal(tag("WebFetch", "https://hyper.ai/en/news/123"), undefined);
+});
+
 test("fetching outside code, then running it, are told apart from running your own code over it", () => {
   const clones = new Set<string>();
   assert.equal(tag("Bash", "git clone -q --depth 1 https://github.com/a/bot /tmp/s/bot", clones), "fetch");

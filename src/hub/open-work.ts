@@ -56,7 +56,7 @@ const area = (key: string) => key.slice(key.indexOf("/") + 1);
 /** Whether `commit` is on `branch` (git merge-base --is-ancestor, in the claim's worktree). Asked on idle waits, so a yes is
  * kept for good and a no for a minute (the branch may grow to include it). */
 const onBranchSeen = new Map<string, { yes: boolean; at: number }>();
-export function onBranch(worktree: string, branch: string, commit: string): boolean {
+function onBranch(worktree: string, branch: string, commit: string): boolean {
   if (!/^[0-9a-fA-F]{7,64}$/.test(commit)) return false;
   const k = `${worktree}\0${branch}\0${commit}`;
   const seen = onBranchSeen.get(k);

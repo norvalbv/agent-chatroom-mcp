@@ -12,7 +12,8 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join as pathJoin } from "node:path";
 import test from "node:test";
-import { renderRunShapes, runShape, shapeText } from "../src/metrics/run-shape.js";
+import { groupRuns, renderRunShapes, runShape, shapeText } from "../src/metrics/run-shape.js";
+import { runOf } from "../src/run-timeline.js";
 
 const at = (s: number) => new Date(Date.parse("2026-10-25T16:42:00Z") + s * 1000).toISOString();
 const roomEv = (room: string, s: number, opts: Record<string, unknown> = {}) => ({ type: "room", room, opts: { topic: room, ...opts }, createdAt: at(s) });
@@ -77,6 +78,47 @@ test("a break-out whose opener line is missing is still a break-out, opener unkn
   const s = runShape([main, bk], "swarm-003601-tky5");
   assert.deepEqual(s?.breakouts, [{ room: "swarm-003601-tky5-overflow", minute: 10 }]);
   assert.equal(shapeText(s), "flat + 1 break-out (unknown 1)");
+});
+
+test("an opener with no join line in the room it opened from has no role, not \"worker\" (review/8b73d0ed nit 2)", () => {
+  const main = [roomEv("swarm-003601-tky5-room", 0), sys("swarm-003601-tky5-room", "ghost-seat opened breakout room swarm-003601-tky5-side: x", 600)];
+  const side = [roomEv("swarm-003601-tky5-side", 600, { parent: "swarm-003601-tky5-room" })];
+  const s = runShape([main, side], "swarm-003601-tky5");
+  assert.deepEqual(s?.breakouts, [{ room: "swarm-003601-tky5-side", minute: 10, by: "ghost-seat" }]);
+  assert.equal(shapeText(s), "flat + 1 break-out (unknown 1)");
+});
+
+// kcj5: 6-1-sol-6 opened swarm-005617-verdict-telemetry from swarm-005617-kcj5-room; the name has no run tag
+const untaggedRun = () => [
+  [roomEv("swarm-005617-kcj5-room", 0), join("swarm-005617-kcj5-room", "6-1-sol-6", 5),
+    sys("swarm-005617-kcj5-room", "6-1-sol-6 opened breakout room swarm-005617-verdict-telemetry: Prototype the verdict", 1_200)],
+  [roomEv("swarm-005617-verdict-telemetry", 1_200, { parent: "swarm-005617-kcj5-room" }), join("swarm-005617-verdict-telemetry", "6-1-sol-6", 1_201)],
+];
+
+test("a break-out named without its run tag goes with the room it was opened from (review/8b73d0ed nit 1)", () => {
+  const byRun = groupRuns(untaggedRun(), runOf);
+  assert.deepEqual([...byRun.keys()], ["swarm-005617-kcj5"]);
+  assert.equal(shapeText(runShape(byRun.get("swarm-005617-kcj5")!, "swarm-005617-kcj5")), "flat + 1 break-out (worker 1)");
+  // a parent's parent: the chain is followed to the room the run was launched in
+  const nested = [...untaggedRun(), [roomEv("swarm-005617-deeper", 1_500, { parent: "swarm-005617-verdict-telemetry" })]];
+  assert.deepEqual([...groupRuns(nested, runOf).keys()], ["swarm-005617-kcj5"]);
+  // groups linked to their leads room stay in the run they were already in
+  assert.deepEqual([...groupRuns([[roomEv("swarm-130459-mrw4-leads", 0)], [roomEv("swarm-130459-mrw4-crypto", 1, { parent: "swarm-130459-mrw4-leads" })]], runOf)].map(([k, v]) => [k, v.length]), [["swarm-130459-mrw4", 2]]);
+});
+
+test("the command: runs-table --by-run puts an untagged break-out under its parent's run", () => {
+  const dir = mkdtempSync(pathJoin(tmpdir(), "run-shape-"));
+  try {
+    const files = untaggedRun().map((events) => {
+      const f = pathJoin(dir, `${(events[0] as { room: string }).room}.jsonl`);
+      writeFileSync(f, events.map((e) => JSON.stringify(e)).join("\n") + "\n");
+      return f;
+    });
+    const out = spawnSync(process.execPath, ["--import", "tsx", "scripts/runs-table.ts", "--by-run", ...files], { encoding: "utf8" });
+    assert.equal(out.status, 0, out.stderr);
+    assert.match(out.stdout, /\| swarm-005617-kcj5 \| flat \+ 1 break-out \(worker 1\) \| 20: 6-1-sol-6 \(worker\) \|/, out.stdout);
+    assert.doesNotMatch(out.stdout, /\| swarm-005617-verd \|/, out.stdout); // runOf of the untagged name, as a run of its own
+  } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
 test("the command: runs-table --by-run prints the shape per run and puts it in --json", () => {

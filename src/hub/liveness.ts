@@ -187,8 +187,14 @@ export class Seats {
  * - process: the seat key's agent process in the memory watcher's last process-table sample, while that process is not an
  *   orphan (a job left behind by a dead seat is adopted by launchd and does not keep its seat).
  * A session with none of these is reaped as before; a killed launched seat is closed sooner by its launcher's exit receipt.
+ * The three say the CLI is alive, not that it is getting anywhere: a background `until [ -f x ]; do sleep 30; done` on a
+ * file that never comes keeps the CLI, its stream and its process forever (attack/decision/reaping-liveness 1). So past
+ * spareMaxMs idle (CHATROOM_SESSION_SPARE_MAX_MS, default four windows: the live seats reaped in the records came back
+ * within 80 min) only a running job (memory.ts jobsOf: a sleep or a shell loop is not one) or a tool call within the
+ * window keeps the seat. Recorded jobs ran p95 48 min, p99 166 min, n=1628, so a job is not cut off at the ceiling.
  * A chair's idle session is closed but the chair keeps its seat: it is never waited on, so marking it left frees nothing,
- * and a departed chair cannot be @-named (departed-mention). Each idle episode writes one reap_check event.
+ * and a departed chair cannot be @-named (departed-mention). Each idle episode writes one reap_check event, with the jobs
+ * it waits on, and a spared seat's rooms get one line saying so, so a room waiting on it sees why it is quiet.
  */
 export type AliveBy = "stream" | "heartbeat" | "process";
 export type ReapOutcome = "spared" | "reaped" | "chair_kept";
@@ -231,34 +237,47 @@ export function noteBeat(transports: Map<string, SessionEntry>, mine: (e: Sessio
   for (const e of transports.values()) if (mine(e)) e.lastBeat = at;
 }
 
-/** One reap_check per seat the session holds in an open room: what kept it, or that nothing did. */
-export function recordReapCheck(hub: Hub, session: string, outcome: "spared" | "reaped", alive: AliveBy[], idleMs: number): void {
+/** One reap_check per seat the session holds in an open room: what kept it, or that nothing did. A spared seat that is
+ * not the chair also gets one line in that room. */
+export function recordReapCheck(hub: Hub, session: string, outcome: "spared" | "reaped", alive: AliveBy[], idleMs: number,
+  more: { waiting_on?: string[]; past_ceiling?: boolean; spareMaxMs?: number } = {}): void {
+  const { waiting_on = [], past_ceiling, spareMaxMs } = more;
   for (const room of hub.rooms.values()) {
     if (room.state === "concluded" || room.state === "closed") continue;
     for (const p of room.participants.values()) {
       if (!p.active || p.session !== session) continue;
       hub.persist({ type: "reap_check", room: room.name, participant: p.id, name: p.name,
-        outcome: outcome === "reaped" && p.role === "chair" ? "chair_kept" : outcome, alive_by: alive,
-        idle_s: Math.round(idleMs / 1000), idle_min: Math.round(idleMs / 60_000), ts: now() });
+        outcome: outcome === "reaped" && p.role === "chair" ? "chair_kept" : outcome, alive_by: alive, waiting_on,
+        ...(past_ceiling ? { past_ceiling } : {}), idle_s: Math.round(idleMs / 1000), idle_min: Math.round(idleMs / 60_000), ts: now() });
+      if (outcome !== "spared" || p.role === "chair") continue;
+      hub.post(room, "system", undefined, `${hub.shown(room, p)} has made no hub call for ${Math.round(idleMs / 60_000)} min, but its client is alive (${alive.join(", ")})` +
+        `${waiting_on.length ? `, running \`${waiting_on[0]!.slice(0, 120)}\`` : ", with no job the hub can see"}. It keeps its seat` +
+        `${spareMaxMs ? `; at ${Math.round(spareMaxMs / 60_000)} min idle with no job and no tool call it is reaped` : ""}.`);
     }
   }
 }
 
 /** The sweep: spare what is alive (once per idle episode on the record), reap the rest. */
-export function reapIdle(hub: Hub, transports: Map<string, SessionEntry>, opts: { idleMs: number; processFreshMs: number; at?: number }): void {
+export function reapIdle(hub: Hub, transports: Map<string, SessionEntry>, opts: { idleMs: number; processFreshMs: number; spareMaxMs?: number; at?: number }): void {
   const at = opts.at ?? Date.now();
+  const spareMaxMs = opts.spareMaxMs ?? 4 * opts.idleMs;
   for (const [id, e] of transports) {
     const idle = at - e.lastSeen;
     if (idle <= opts.idleMs) { e.spared = false; continue; }
-    const alive = aliveBy(e, at, opts.idleMs, e.seatKey ? hub.memory.agentSeenAt(seatHash(e.seatKey)) : undefined, opts.processFreshMs);
-    if (alive.length) {
-      if (!e.spared) recordReapCheck(hub, e.session, "spared", alive, idle);
+    const seat = e.seatKey ? seatHash(e.seatKey) : undefined;
+    const alive = aliveBy(e, at, opts.idleMs, seat ? hub.memory.agentSeenAt(seat) : undefined, opts.processFreshMs);
+    const waiting_on = hub.memory.jobs(seat).map((j) => j.command).slice(0, 3);
+    // past the ceiling a live client is kept only by work the hub can see: a job running, or a tool call in the window
+    const pastCeiling = idle > spareMaxMs && alive.length > 0 && !waiting_on.length && !alive.includes("heartbeat");
+    if (alive.length && !pastCeiling) {
+      if (!e.spared) recordReapCheck(hub, e.session, "spared", alive, idle, { waiting_on, spareMaxMs });
       e.spared = true;
       continue;
     }
-    recordReapCheck(hub, e.session, "reaped", [], idle);
+    recordReapCheck(hub, e.session, "reaped", alive, idle, { waiting_on, past_ceiling: pastCeiling });
     // the same opening words as a plain close: liveness.away and result.ts read them
-    e.leaveAll(`MCP session closed without leave_room (idle ${Math.round(opts.idleMs / 60_000)} min, reaped)`, false, true);
+    e.leaveAll(pastCeiling ? `MCP session closed without leave_room (idle ${Math.round(idle / 60_000)} min, client alive by ${alive.join("+")} but no job and no tool call past the ${Math.round(spareMaxMs / 60_000)} min ceiling, reaped)`
+      : `MCP session closed without leave_room (idle ${Math.round(opts.idleMs / 60_000)} min, reaped)`, false, true);
     e.t.close().catch(() => {});
     transports.delete(id);
   }

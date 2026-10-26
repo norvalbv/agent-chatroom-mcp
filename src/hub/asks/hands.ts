@@ -16,8 +16,9 @@
  *
  * An unowned item/<slug> (src/hub/coverage/coverage.ts: a problem the brief requires) is asked about the same way, and
  * the ledger decides when it stops being unowned: a claim naming it counts, not only claim/<slug>. One difference: an
- * idea with nobody to ask is only logged (hands_unasked), but an item the launcher seeded in a room with no chair goes
- * to the worker holding the fewest live claims, because nobody else will answer for a problem the brief requires.
+ * idea with nobody to ask is only logged (hands_unasked). An item whose author and chair are both absent (one the
+ * launcher seeded in a flat room, say) goes instead to the worker holding the fewest live claims, counting the asks this
+ * sweep already gave out, because nobody else will answer for a problem the brief requires.
  */
 import type { Hub } from "../../hub.js";
 import { claimReleased } from "../board.js";
@@ -131,6 +132,8 @@ export function checkHands(hub: Hub, room: Room, at = Date.now()): void {
       `Choose one: request_agent(area="${slug}", brief=<what it is and what done looks like; it may just say board_get ${idea.key}>) adds a seat for it; ` +
       `board_set claim/${slug} if you are building it already or will take it after your current work; or start ${idea.key} with "dropped:" and the reason. Reply to this message with which.`, { tag: "hands" });
     seen.set(idea.key, false);
+    // an owed ask is load: the next item goes to another worker (review/af7ae3e9 F1)
+    if (!author && !chair) held.set(to.name, (held.get(to.name) ?? 0) + 1);
     hub.persist({ type: "hands_asked", room: room.name, key: idea.key, author: idea.author, asked: to.name, workers: workers.length, idea_age_min: minutes, ts: new Date(at).toISOString() });
   }
 }

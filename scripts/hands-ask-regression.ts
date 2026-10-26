@@ -228,6 +228,16 @@ test("an item the launcher seeded, in a room with no chair, is put to the worker
   assert.equal(m.hands?.items, 1, "run-metrics tells brief items from ideas");
 });
 
+test("several items with nobody to answer for them are spread over the workers, not all put to the earliest joiner", () => {
+  const { h, name, r, a, b, hands } = room();
+  h.setBoard(name, a.id, "claim/alpha", JSON.stringify({ area: "alpha" }));
+  h.setBoard(name, b.id, "claim/beta", JSON.stringify({ area: "beta" }));
+  h.seedResources(name, ["p1", "p2", "p3", "p4"].map((s) => ({ key: `item/${s}`, text: `problem ${s}` })));
+  for (const s of ["p1", "p2", "p3", "p4"]) r.board.get(`item/${s}`)!.updatedAt = OLD();
+  h.sweepIdle(DAY);
+  assert.deepEqual(hands().map((m) => m.mentions?.[0]), [a.id, b.id, a.id, b.id], "review/af7ae3e9 F1: one sweep gave alice all 4");
+});
+
 test("run-metrics reports asks and how they were resolved", () => {
   const { h, name, busyWithIdea, dataDir } = room();
   busyWithIdea();

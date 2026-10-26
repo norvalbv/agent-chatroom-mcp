@@ -94,6 +94,12 @@ export type Event =
   | { type: "need_asked"; room: string; by: string; where: "proposal"; ts: string }
   /** Telemetry only: a needs/* entry was cleared (met or refused), and how long it stayed open. */
   | { type: "need_cleared"; room: string; key: string; by: string; filed_by: string; open_minutes: number; ts: string }
+  /** Telemetry only (src/hub/asks/hands.ts): an idea nobody was free to take was put to its author (or the chair) */
+  | { type: "hands_asked"; room: string; key: string; author: string; asked: string; workers: number; idea_age_min: number; ts: string }
+  /** Telemetry only: the same, with nobody in the room to ask */
+  | { type: "hands_unasked"; room: string; key: string; author: string; workers: number; idea_age_min: number; ts: string }
+  /** Telemetry only: an asked-about idea stopped being unowned, and how */
+  | { type: "hands_resolved"; room: string; key: string; how: "recruited" | "claimed" | "dropped" | "built"; by: string; after_min: number; ts: string }
   /** the owner named this room's chair through the human route (Hub.nameChair) */
   | { type: "chair_named"; room: string; name: string; by: string; ts: string }
   /** Telemetry only (replay ignores it; src/hub/checks.ts): a checking entry and the entries by other seats it checks. how: key | segment | text, the rule that found the first. */

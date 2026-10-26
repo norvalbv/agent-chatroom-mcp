@@ -56,6 +56,9 @@ export interface RunMetrics {
   research?: ResearchMetrics;
   /** needs/* the room filed for the owner (hub need_filed / need_cleared events, src/hub/needs.ts): filed, cleared, and claims named as blocked; absent: none */
   needs?: { filed: number; cleared: number; blocks: number; asked: number; askedThenFiled: number; asksOfOwners: number; ownersAnswered: number };
+  /** ideas nobody could take, put to their author or the chair (hub hands_asked / hands_resolved / hands_unasked, src/hub/asks/hands.ts):
+   * asks, asks with nobody to ask, asks answered by a reply, and how the idea stopped being unowned; absent: none */
+  hands?: { asked: number; unasked: number; answered: number; resolved: { recruited: number; claimed: number; dropped: number; built: number } };
   /** rate: workers who recruited at least once over workers; calls counts every role's recruits (a verifier's too) */
   recruits: { calls: number; seats: number; workers: number; rate: number };
   /** summed over seats that reported usage; seatsWithUsage of seats.length says how complete it is */
@@ -118,6 +121,9 @@ export function runMetrics(events: readonly Ev[], opts: MetricsOptions = {}): Ru
   const needs = { filed: 0, cleared: 0, blocks: 0, asked: 0, askedThenFiled: 0, asksOfOwners: 0, ownersAnswered: 0 };
   /** open "need" asks to blocked claims' owners (src/hub/needs/needs.ts), by message id; a reply_to one answers it */
   const ownerAsks = new Set<string>();
+  const hands = { asked: 0, unasked: 0, answered: 0, resolved: { recruited: 0, claimed: 0, dropped: 0, built: 0 } };
+  /** open "hands" asks (src/hub/asks/hands.ts), by message id; a reply_to one answers it */
+  const handsAsks = new Set<string>();
   /** when the hub last asked the room about an outside limit (need_asked; blocker_nudged in older logs); a need_filed within 15 min converts it */
   let askOpen: string | undefined;
   let firstNeed: string | undefined;
@@ -227,6 +233,18 @@ export function runMetrics(events: readonly Ev[], opts: MetricsOptions = {}): Ru
         stamp(e.ts);
         needs.cleared++;
         break;
+      case "hands_asked":
+        stamp(e.ts);
+        hands.asked++;
+        break;
+      case "hands_unasked":
+        stamp(e.ts);
+        hands.unasked++;
+        break;
+      case "hands_resolved":
+        stamp(e.ts);
+        if (e.how in hands.resolved) hands.resolved[e.how as keyof typeof hands.resolved]++;
+        break;
       case "need_asked":
       case "blocker_nudged":
         stamp(e.ts);
@@ -269,6 +287,8 @@ export function runMetrics(events: readonly Ev[], opts: MetricsOptions = {}): Ru
         if (m.kind === "chat") mention(m.content, m.from?.name);
         if (m.tag === "need") { needs.asksOfOwners++; ownerAsks.add(m.id); }
         else if (m.replyTo && ownerAsks.delete(m.replyTo)) needs.ownersAnswered++;
+        if (m.tag === "hands") handsAsks.add(m.id);
+        else if (m.replyTo && handsAsks.delete(m.replyTo)) hands.answered++;
         if (m.kind === "chat" && m.from?.agent !== "hub" && m.from?.agent !== "human") {
           quiet.chat++;
           if (m.autoQuiet) quiet.byHub++; else if (m.quiet) quiet.bySender++;
@@ -362,6 +382,7 @@ export function runMetrics(events: readonly Ev[], opts: MetricsOptions = {}): Ru
     ...(priced.length ? { usage: { cost_usd: sum("cost_usd"), input_tokens: sum("input_tokens"), output_tokens: sum("output_tokens"), seatsWithUsage: priced.length } } : {}),
     ...(Object.keys(takes).length ? { takes } : {}),
     ...(needs.filed || needs.cleared || needs.asked ? { needs } : {}),
+    ...(hands.asked || hands.unasked ? { hands } : {}),
     ...(quiet.chat ? { quiet } : {}),
     ...(appendsBy.size ? { appends: Object.fromEntries([...appendsBy].map(([k, a]) => [k, { lines: a.lines, seats: a.seats.size, continuations: a.landed.size }])) } : {}),
     ...(machine ? { machine } : {}),
@@ -404,6 +425,7 @@ export function renderMetrics(m: RunMetrics): string {
     (m.machine?.hub_blocks ? `The hub held up its own replies ${m.machine.hub_blocks} time${m.machine.hub_blocks === 1 ? "" : "s"} (busy, or waiting on its own work while its reference clock kept time); the machine did not stall then. ` : "") +
     (m.quiet && (m.quiet.bySender || m.quiet.byHub || m.quiet.keptPublicForBoardKey) ? `Of ${m.quiet.chat} agent chat messages, ${m.quiet.bySender} were sent quiet, ${m.quiet.byHub} were made quiet by the hub, and ${m.quiet.keptPublicForBoardKey} two-seat exchanges stayed public because they named a board entry. ` : "") +
     (m.needs ? `needs/* for the owner: ${m.needs.filed} filed${t.firstNeed !== undefined ? `, the first at ${t.firstNeed} min` : ""}, ${m.needs.cleared} cleared, ${m.needs.blocks} claim${m.needs.blocks === 1 ? "" : "s"} named as blocked, asked about outside limits ${m.needs.asked} time${m.needs.asked === 1 ? "" : "s"} (${m.needs.askedThenFiled} followed by a needs/* within 15 min), ${m.needs.ownersAnswered} of ${m.needs.asksOfOwners} blocked-claim owner${m.needs.asksOfOwners === 1 ? "" : "s"} answered. ` : "") +
+    (m.hands ? `Ideas nobody was free to take: ${m.hands.asked} put to their author or the chair (${m.hands.answered} answered by a reply)${m.hands.unasked ? `, ${m.hands.unasked} with nobody to ask` : ""}; resolved by ${m.hands.resolved.recruited} recruit${m.hands.resolved.recruited === 1 ? "" : "s"}, ${m.hands.resolved.claimed} claimed, ${m.hands.resolved.dropped} dropped, ${m.hands.resolved.built} built. ` : "") +
     (m.takes ? `take/* steps: ${Object.entries(m.takes).map(([k, n]) => `${n} ${k}`).join(", ")}. ` : "") +
     (m.appends ? `Shared logs (board_set append): ${Object.entries(m.appends).map(([k, a]) => `${k} ${a.lines} line${a.lines === 1 ? "" : "s"} from ${a.seats} seat${a.seats === 1 ? "" : "s"}${a.continuations ? `, ${a.continuations} continuation${a.continuations === 1 ? "" : "s"}` : ""}`).join("; ")}. ` : "") +
     (m.citedFrom === "none" ? "No proposal yet, so no citation credit.\n\n" : `Credit read from the ${m.citedFrom}${m.uncited.length ? `; findings never cited: ${m.uncited.join(", ")}` : ""}.\n\n`) +

@@ -65,7 +65,7 @@ const HUMAN_TOKEN = process.env.CHATROOM_HUMAN_TOKEN; // optional shared secret 
 const INSECURE_LOCAL = process.env.CHATROOM_INSECURE_LOCAL === "1";
 const LOOPBACK_HOST = HOST === "127.0.0.1" || HOST === "localhost" || HOST === "::1";
 const MAX_SESSIONS = 500;
-const SESSION_IDLE_MS = 30 * 60_000;
+const SESSION_IDLE_MS = Number(process.env.CHATROOM_SESSION_IDLE_MS) || 30 * 60_000, REAP_SWEEP_MS = Number(process.env.CHATROOM_REAP_SWEEP_MS) || 60_000; // tests shorten both
 const PARTICIPANT_IDLE_MS = 10 * 60_000;
 
 // before anything that can throw: why this process stops is written down by the process itself (src/lifecycle.ts)
@@ -334,7 +334,7 @@ setInterval(() => {
   // the sweep is for sessions that died without a DELETE (a killed CLI), which leaveAll above has not yet seen
   const connected = new Set([...transports.values()].map((e) => e.session));
   for (const name of hub.sweepIdle(PARTICIPANT_IDLE_MS, connected)) spawner.stop(name);
-}, 60_000).unref();
+}, REAP_SWEEP_MS).unref();
 
 /**
  * The seat whose process tree sent this loopback request, if any (src/hub/caller.ts). A seat acts through its MCP tools;

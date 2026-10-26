@@ -119,13 +119,7 @@ hub.onProposalOpened = (room, proposal) => {
   if (rec) hub.awaitScrutiny(room, proposal.id, rec.name, FRESH_CHALLENGER_WAIT_MS);
 };
 spawner.attach({
-  isHeld: (room) => {
-    try {
-      return Boolean(hub.hold(hub.getRoom(room)));
-    } catch {
-      return false;
-    }
-  },
+  isHeld: (room) => { try { return Boolean(hub.hold(hub.getRoom(room))); } catch { return false; } },
   claimArea: (room, requester, area, team) => {
     const r = hub.getRoom(room);
     const existing = r.board.get(`claim/${area}`);
@@ -204,6 +198,7 @@ spawner.attach({
     if (inboxKeys.length) parts.push(`Open room inbox/* keys (board_get to read): ${inboxKeys.join(", ")}`);
     return parts.join("\n\n").slice(0, 4000);
   },
+  recordWorktree: (room, e) => { if (hub.rooms.has(room)) hub.persist({ type: "worktree", room, ...e, ts: new Date().toISOString() }); },
 });
 process.on("exit", () => spawner.stopAll());
 const app = createMcpExpressApp({ host: HOST }); // already parses JSON bodies (100kb)

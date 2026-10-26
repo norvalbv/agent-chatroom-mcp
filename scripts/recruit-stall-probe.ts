@@ -81,7 +81,7 @@ await new Promise((r) => setTimeout(r, Math.max(0, WAIT_S * 1000 - 8000)));
 const log = readFileSync(join(data, `${room}.jsonl`), "utf8").split("\n").filter(Boolean).map((l) => JSON.parse(l));
 const stalls = log.filter((e) => e.type === "machine_stall").map((e) => ({ event: e.event, cause: e.cause, drift_ms: e.drift_ms ?? e.max_drift_ms, hub_cpu: e.hub_cpu, ref_ms: e.ref_drift_ms ?? e.ref_max_drift_ms }));
 const lines = log.filter((e) => e.type === "message" && e.msg.kind === "system" && /^MACHINE:/.test(e.msg.content)).map((e) => e.msg.content.slice(0, 160));
-const made = log.filter((e) => e.type === "worktree").map((e) => ({ seat: e.seat, ms: e.ms, ok: e.ok, async: e.async }));
+const made = log.filter((e) => e.type === "worktree").map((e) => ({ seat: e.seat, ms: e.ms, waited_ms: e.waited_ms, ok: e.ok }));
 const sorted = [...pings].sort((a, b) => a - b);
 console.log(JSON.stringify({
   dist: DIST, recruits: N, files: FILES, workspaces: (reply.workspaces ?? []).length,

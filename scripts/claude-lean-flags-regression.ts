@@ -88,6 +88,8 @@ async function harness(entry: string, env: Record<string, string>, argv: string[
     './seat-handoff-report.js': { handoffMarkerLine: () => '' },
     // launcher-side helpers with no part in a seat's argv or environment: the hooks copy and the join check (src/worktree-hooks.ts, src/join-check.ts)
     './worktree-hooks.js': { carryHooks: () => ({ hooks: 'shared' }), hooksLine: () => '', hooksOff: () => ({ hooks: 'shared' }) },
+    // where a recruit works (src/spawner/worktrees.ts): the fixture is outside git, so no worktree, branch or snapshot, as the real helpers say over the git mock above
+    './spawner/worktrees.js': { recruitWorkspace: () => undefined, recruitBase: () => undefined, createRecruitWorktree: async () => ({ ok: false }), projectOf: () => undefined, planSnapshot: () => undefined, createSnapshot: () => false, removeSnapshot: () => {}, workspaceOf: () => undefined, WorktreeMaker: class { hooksIn = new Map(); make() { return Promise.resolve(undefined); } } },
     // the launch preflight (src/launch/preflight.ts) runs a kit command before any seat and only adds brief text; no flag is given here
     './launch/preflight.js': { preflightAtLaunch: () => ({ text: '' }) },
     './join-check.js': { checkJoined: async () => ({ missing: [], unknown: [], none: false }), joinLines: () => [], roomNames: () => async () => [] },

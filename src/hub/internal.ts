@@ -110,6 +110,8 @@ export type Event =
   /** Telemetry only: a process the hub had counted as a seat's job (src/hub/memory.ts jobsOf) is gone, after ran_s seconds. told: the seat was waiting on the hub and got a line. */
   | { type: "job_wake"; room: string; seat: string; pid: number; key: string; successor: string | null; ts: string }
   | { type: "job_end"; room: string; seat: string; pid: number; command: string; ran_s: number; others?: number; told: boolean; departed?: true; ts: string }
+  /** a write recruit's worktree was made, off the hub's event loop (Spawner.worktreeFor): how long git ran and waited behind the others */
+  | { type: "worktree"; room: string; seat: string; branch: string; ms: number; waited_ms: number; ok: boolean; error?: string; ts: string }
   /** A quiet room excused by a seat's running job (start, with the jobs), and how that ended: work resumed (active), the
    * job ended with nobody picking up (idle), or the wait outlasted ROOM_JOB_WAIT_MS and the room was told (told). */
   | { type: "room_waiting"; room: string; ts: string; state: "start"; steps: number; seats: number; jobs: (import("./memory.js").Job & { seat: string })[] }

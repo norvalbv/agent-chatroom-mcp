@@ -7,12 +7,11 @@
  * taking the machine down: depth, live fan-out per requester, live per room,
  * live overall, cumulative per room and per run, and a wall-clock limit.
  */
-import { spawn, spawnSync, type ChildProcess } from "node:child_process";
+import { spawn, type ChildProcess } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, writeFileSync, createWriteStream, symlinkSync, realpathSync, rmSync, unlinkSync } from "node:fs";
-import { carryHooks, hooksLine, hooksOff, type HooksCarried } from "./worktree-hooks.js";
-import { tmpdir } from "node:os";
-import { basename, dirname, relative, resolve } from "node:path";
+import { existsSync, mkdirSync, readFileSync, writeFileSync, createWriteStream } from "node:fs";
+import { hooksLine, type HooksCarried } from "./worktree-hooks.js";
+import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { HubError } from "./hub.js";
 import { settledAxes } from "./settled.js";
@@ -23,6 +22,7 @@ import { codexSeatCommand } from "./codex-seat.js";
 import { claudeSandbox, hubPortOf, sandboxFromEnv } from "./sandbox.js";
 import { parseClaudeCliOutput, type SeatUsageRollup } from "./result.js";
 import { recruitmentLimits, recruitmentStatus, RUN_PREFIX, runPrefix } from "./spawner/recruitment.js";
+import { createRecruitWorktree, createSnapshot, planSnapshot, projectOf, recruitBase, recruitWorkspace, removeSnapshot, workspaceOf, WorktreeMaker, type Snapshot } from "./spawner/worktrees.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(here, "..");
@@ -117,6 +117,8 @@ export interface SpawnerHooks {
   predecessorContext?(room: string, name: string): string;
   /** whether `target` exists, and if so, whether it is still active/kicked and how long since it was last seen (ms). Undefined: no such participant. */
   targetStatus?(room: string, target: string): { active: boolean; kicked: boolean; staleMs: number; connected?: boolean } | undefined;
+  /** a write recruit's worktree was made (or git refused it): how long git ran, and how long it waited behind the ones before it */
+  recordWorktree?(room: string, e: { seat: string; branch: string; ms: number; waited_ms: number; ok: boolean; error?: string }): void;
 }
 
 export interface SpawnerOptions {
@@ -158,99 +160,7 @@ const CLAUDE_FULL = process.env.CHATROOM_CLAUDE_FULL === "1";
 /** CHATROOM_SANDBOX=1: recruits run their shell in an OS sandbox, matching the launcher's --sandbox (set in the hub's env when swarm.ts starts it). See src/sandbox.ts. */
 const SANDBOX = sandboxFromEnv();
 
-/** Where a write recruit works: .swarm-worktrees/<room>/<name> on branch swarm/<room>/<name> of the repository holding `cwd`. Undefined outside a git repository. Creates nothing. */
-export function recruitWorkspace(cwd: string, room: string, name: string): { root: string; worktree: string; branch: string } | undefined {
-  const top = spawnSync("git", ["-C", cwd, "rev-parse", "--show-toplevel"], { encoding: "utf8" });
-  if (top.status !== 0) return undefined;
-  const root = top.stdout.trim();
-  return { root, worktree: resolve(root, ".swarm-worktrees", room, name), branch: `swarm/${room}/${name}` };
-}
-
-/**
- * The commit a write recruit's branch starts from: HEAD of `from`, its recruiter's worktree, when that is a checkout of
- * the repository `root` belongs to. Without one, `git worktree add` starts at the HEAD of the project checkout, which
- * can be far behind the commit a room was launched on: swarm-123021-1nwp-audit #33, "Recruit worktrees are cut from
- * main-checkout HEAD 7c43aef4 (#781, Oct 3) ... The machine-rules command therefore runs gpt-5.6-sol" (the room ran in
- * devkit-correctness-swarm, a worktree of devkit, at eadfcdc2). Undefined when there is no such worktree.
- */
-export function recruitBase(root: string, from?: string): { sha: string; from: string } | undefined {
-  if (!from) return undefined;
-  const common = (d: string) => {
-    const r = spawnSync("git", ["-C", d, "rev-parse", "--path-format=absolute", "--git-common-dir"], { encoding: "utf8", timeout: 5_000 });
-    return r.status === 0 ? r.stdout.trim() : undefined;
-  };
-  const mine = common(from);
-  if (!mine || mine !== common(root)) return undefined;
-  const head = spawnSync("git", ["-C", from, "rev-parse", "HEAD"], { encoding: "utf8", timeout: 5_000 });
-  return head.status === 0 && head.stdout.trim() ? { sha: head.stdout.trim(), from } : undefined;
-}
-
-/** `git worktree add -b <branch> <dir> [<base>]` in `root`; without a base the branch starts at root's HEAD. */
-export function createRecruitWorktree(root: string, dir: string, branch: string, base?: string): boolean {
-  return spawnSync("git", ["-C", root, "worktree", "add", "-b", branch, dir, ...(base ? [base] : [])], { encoding: "utf8" }).status === 0;
-}
-
-/** The project a seat's worktree belongs to (the repository its .git is shared with), or undefined outside git. A recruit
- * of that seat works there, not in the hub's own directory (swarm-003601-tky5: a hub started from the agent-chatroom-mcp
- * checkout for a Polymarket room would have put builder recruits in agent-chatroom-mcp). */
-export function projectOf(worktree: string): string | undefined {
-  const r = spawnSync("git", ["-C", worktree, "rev-parse", "--path-format=absolute", "--git-common-dir"], { encoding: "utf8", timeout: 5_000 });
-  if (r.status !== 0) return undefined;
-  const common = r.stdout.trim();
-  if (basename(common) === ".git") return dirname(common);
-  const top = spawnSync("git", ["-C", worktree, "rev-parse", "--show-toplevel"], { encoding: "utf8", timeout: 5_000 });
-  return top.status === 0 ? top.stdout.trim() : undefined;
-}
-
-/** A detached checkout of a proposer's commit for a read-only checker: `dir` (outside the repository), the commit, how many files of the live tree it leaves out. */
-export interface Snapshot { repo: string; dir: string; sha: string; dirty: number; sub: string }
-
-/**
- * Where a fresh challenger checks `src` (the proposer's worktree): a detached worktree of its HEAD in the OS temp dir,
- * so the checker's shell can neither move nor rewrite the tree the proposer is still working in (swarm-000525-jcz8
- * remaining/recruiting 2; Claude Code isolates subagents the same way, with only tracked files of HEAD). Undefined
- * outside a git checkout or before the first commit. Creates nothing.
- */
-export function planSnapshot(src: string, label: string): Snapshot | undefined {
-  const g = (...args: string[]) => spawnSync("git", ["-C", src, ...args], { encoding: "utf8" });
-  const top = g("rev-parse", "--show-toplevel");
-  const head = g("rev-parse", "HEAD");
-  if (top.status !== 0 || head.status !== 0) return undefined;
-  const repo = top.stdout.trim();
-  // read-only: without --no-optional-locks this takes the proposer's index.lock while they may be committing
-  const status = spawnSync("git", ["--no-optional-locks", "-C", src, "status", "--porcelain", "--untracked-files=normal"], { encoding: "utf8" });
-  const dirty = status.status === 0 ? status.stdout.split("\n").filter(Boolean).length : 0;
-  const sub = relative(realpathSync(repo), realpathSync(src));
-  const dir = resolve(tmpdir(), `chatroom-snapshot-${label.replace(/[^\w-]/g, "-").slice(0, 60)}-${randomUUID().slice(0, 8)}`);
-  return { repo, dir, sha: head.stdout.trim(), dirty, sub };
-}
-
-/** Make the planned snapshot; false (nothing made) when git refuses. node_modules is linked from the proposer's tree so the checker can run the project's scripts. */
-export function createSnapshot(plan: Snapshot): boolean {
-  const made = spawnSync("git", ["-C", plan.repo, "worktree", "add", "--detach", "--quiet", plan.dir, plan.sha], { encoding: "utf8" });
-  if (made.status !== 0) return false;
-  const modules = resolve(plan.repo, "node_modules");
-  if (existsSync(modules) && !existsSync(resolve(plan.dir, "node_modules"))) {
-    try { symlinkSync(modules, resolve(plan.dir, "node_modules")); } catch {}
-  }
-  return true;
-}
-
-/** Remove a snapshot: the node_modules link first (never what it points at), then the worktree and git's record of it. */
-export function removeSnapshot(plan: Pick<Snapshot, "repo" | "dir">): void {
-  try { unlinkSync(resolve(plan.dir, "node_modules")); } catch {}
-  const removed = spawnSync("git", ["-C", plan.repo, "worktree", "remove", "--force", plan.dir], { encoding: "utf8" });
-  if (removed.status !== 0) {
-    try { rmSync(plan.dir, { recursive: true, force: true }); } catch {}
-    spawnSync("git", ["-C", plan.repo, "worktree", "prune"], { encoding: "utf8" });
-  }
-}
-
-const workspaceOf = (cwd: string, room: string, name: string, baseDir?: string) => {
-  const ws = recruitWorkspace(cwd, room, name);
-  const base = ws && recruitBase(ws.root, baseDir);
-  return ws && { worktree: ws.worktree, branch: ws.branch, ...(base ? { base } : {}) };
-};
+export { createRecruitWorktree, createSnapshot, planSnapshot, projectOf, recruitBase, recruitWorkspace, removeSnapshot, type Snapshot };
 
 export class Spawner {
   policy: RecruitPolicy = policyFromEnv();
@@ -369,6 +279,8 @@ export class Spawner {
       (targetTopic ? `The room's topic (the task everyone there is on): ${targetTopic}\n` : "") +
       (req.newRoom && req.parentTopic ? `The parent room's topic: ${req.parentTopic}\n` : "") +
       settledAxes(home);
+    // one look for the whole request: every write recruit's branch is cut from the same commit
+    const writeBase = req.canEdit ? recruitBase(recruitWorkspace(cwd, target, names[0]!)?.root ?? cwd, req.baseDir) : undefined;
     const out: SpawnedAgent[] = [];
     for (const name of names) {
       const log = resolve(o.logDir, `${name}.log`);
@@ -416,7 +328,7 @@ export class Spawner {
             : "You are the only recruit on this brief.",
         )
         .split("{{REPORT_TO}}").join(req.newRoom ? `This is a sub-room of ${req.room}: when it concludes, the hub puts its conclusion on that room's board as inbox/${target}/conclusion. For anything they need before then, use post_to_room(from_room="${target}", to_room="${req.room}", key="<short name>").` : "")
-        .split("{{WRITE_RULE}}").join(req.canEdit ? "You MAY edit files and run anything here. You are in your own git worktree on your own branch (git branch --show-current); commit there and name the branch in the room. Never touch the main checkout." + (recruitBase(recruitWorkspace(cwd, target, name)?.root ?? cwd, req.baseDir) ? ` Your branch was cut from the HEAD of ${by}'s worktree (${recruitBase(recruitWorkspace(cwd, target, name)?.root ?? cwd, req.baseDir)!.sha.slice(0, 8)}), so it holds their commits; their uncommitted changes are not in it.` : "") + devHubRule(cwd, SANDBOX) : "Do NOT modify files; investigate and report." + (snap && cwd !== home ? ` You are in a detached copy of the tree at commit ${snap.sha.slice(0, 8)}${snap.dirty ? ` (${snap.dirty} uncommitted change${snap.dirty === 1 ? "" : "s"} in the tree it was taken from ${snap.dirty === 1 ? "is" : "are"} not in it)` : ""}: name that commit in what you report.` : ""));
+        .split("{{WRITE_RULE}}").join(req.canEdit ? "You MAY edit files and run anything here. You are in your own git worktree on your own branch (git branch --show-current); commit there and name the branch in the room. Never touch the main checkout." + (writeBase ? ` Your branch was cut from the HEAD of ${by}'s worktree (${writeBase.sha.slice(0, 8)}), so it holds their commits; their uncommitted changes are not in it.` : "") + devHubRule(cwd, SANDBOX) : "Do NOT modify files; investigate and report." + (snap && cwd !== home ? ` You are in a detached copy of the tree at commit ${snap.sha.slice(0, 8)}${snap.dirty ? ` (${snap.dirty} uncommitted change${snap.dirty === 1 ? "" : "s"} in the tree it was taken from ${snap.dirty === 1 ? "is" : "are"} not in it)` : ""}: name that commit in what you report.` : ""));
 
       // a dry run plans the workspace without creating it, so what a seat is told matches what a real spawn does
       if (o.dryRun && req.canEdit) rec.workspace = workspaceOf(cwd, target, name, req.baseDir);
@@ -427,84 +339,107 @@ export class Spawner {
         out.push(rec);
         continue;
       }
-      // a write-enabled recruit works in its own worktree and branch, never in the shared checkout
-      const seatCwd = req.canEdit && !o.dryRun ? (this.worktreeFor(cwd, target, name, req.baseDir) ?? cwd) : cwd;
-      if (seatCwd !== cwd) rec.workspace = workspaceOf(cwd, target, name, this.basedOn.get(seatCwd));
-      const carried = this.hooksIn.get(seatCwd);
-      if (rec.workspace && carried) rec.workspace.hooks = carried.hooks;
-      if (rec.workspace) rec.workspace.aiGates = /gates off/.test(aiGatesLine(seatChildEnv(process.env, name))) ? "off" : "on";
-      // said in the room only when it matters: this seat's commits will run no hooks
-      if (carried?.hooks === "missing") this.hooks?.announce(target, hooksLine(name, carried));
-      // per seat: the MCP URL carries this seat's heartbeat key (so the file cannot be shared between recruits) and its
-      // worktree, which the hub stamps on the seat's claim/* entries
-      const beat = seatBeat(o.mcpUrl, randomUUID(), seatCwd, agent === "claude" ? seatHoldMs() : undefined);
-      const mcpJson = resolve(o.logDir, `${name}.mcp.json`);
-      writeFileSync(mcpJson, JSON.stringify({ mcpServers: { chatroom: { type: "http", url: beat.mcpUrl } } }));
-      let cmd: string;
-      let args: string[];
-      if (agent === "openrouter") {
-        // dist/ is gitignored, so a hub run from source has no build for the seat to load
-        cmd = existsSync(seatBuild) ? process.execPath : "npx";
-        args = [...(existsSync(seatBuild) ? [seatBuild] : ["tsx", resolve(repoRoot, "src", "openrouter.ts")]), "--mcp-url", beat.mcpUrl, "--cwd", seatCwd];
-        if (req.model) args.push("--model", req.model);
-        if (req.canEdit) args.push("--write");
-        if (SANDBOX) args.push("--sandbox");
-      } else if (agent === "codex") {
-        ({ cmd, args } = codexSeatCommand({ cwd: seatCwd, mcpUrl: beat.mcpUrl, model: req.model, readOnly: !req.canEdit, usageSidecar: resolve(o.logDir, `${name}.usage.json`) }));
-      } else {
-        cmd = "claude";
-        const sandbox = SANDBOX ? claudeSandbox({ cwd: seatCwd, write: !!req.canEdit, hubPort: hubPortOf(o.mcpUrl) }) : undefined;
-        args = claudeArgs({ mcpJson, tools: req.canEdit ? WRITE_TOOLS : READ_TOOLS, model: req.model, full: CLAUDE_FULL, settings: heartbeatHookSettings(), sandbox });
-      }
-      // every seat kind reads its prompt from stdin, never argv: claude -p, codex exec - and src/openrouter.ts (claude-args.ts)
-      const child = spawn(cmd, args, { cwd: seatCwd, env: { ...seatChildEnv(process.env, req.canEdit ? name : undefined, agent === "openrouter", cmd === "claude"), ...beat.env }, stdio: ["pipe", "pipe", "pipe"] });
-      child.stdin?.on("error", () => {});
-      child.stdin?.end(prompt);
-      // claude always runs --output-format json now (telemetry), so its raw stdout is a JSON blob, not the
-      // plain final-answer text every other seat's log holds. Buffer stdout+stderr instead of piping them
-      // live, and on close write only the unwrapped text (matches runClaude's outFile in swarm.ts) so a
-      // human tailing this recruit's log still sees prose, never JSON — --claude-full does not change this
-      // either, since --output-format json itself is unconditional (a telemetry fix, not a lean-flags
-      // opt-out concern). Every other agent kind keeps piping straight to the log file as before.
-      let claudeStdout = "";
-      let claudeStderr = "";
-      if (agent === "claude") {
-        child.stdout?.on("data", (d) => (claudeStdout += d));
-        child.stderr?.on("data", (d) => (claudeStderr += d));
-      } else {
-        const outStream = createWriteStream(log);
-        child.stdout?.pipe(outStream);
-        child.stderr?.pipe(outStream);
-      }
-      rec.pid = child.pid;
-      this.children.set(name, child);
-      // no limit unless configured: the idle sweep already stops a recruit whose session died
-      const wall = o.wallClockMs ? setTimeout(() => {
-        this.hooks?.announce(target, `${name} hit the ${Math.round(o.wallClockMs! / 60000)} min recruit limit and was stopped.`);
-        child.kill();
-      }, o.wallClockMs) : undefined;
-      wall?.unref();
-      child.on("close", (code, signal) => {
-        clearTimeout(wall);
-        rec.endedAt = new Date().toISOString();
-        rec.exitCode = code;
-        let said: string[] = [];
+      // a write-enabled recruit works in its own worktree and branch, never in the shared checkout. git checks it out in
+      // a child the hub does not wait on (worktreeFor) and the seat starts once it exists; the reply already names it
+      const ws = req.canEdit ? recruitWorkspace(cwd, target, name) : undefined;
+      if (ws) rec.workspace = { worktree: ws.worktree, branch: ws.branch, ...(writeBase && !existsSync(ws.worktree) ? { base: writeBase } : {}), aiGates: /gates off/.test(aiGatesLine(seatChildEnv(process.env, name))) ? "off" : "on" };
+      const launch = (seatCwd: string) => {
+        const carried = this.worktrees.hooksIn.get(seatCwd);
+        if (rec.workspace && carried) rec.workspace.hooks = carried.hooks;
+        // said in the room only when it matters: this seat's commits will run no hooks
+        if (carried?.hooks === "missing") this.hooks?.announce(target, hooksLine(name, carried));
+        // per seat: the MCP URL carries this seat's heartbeat key (so the file cannot be shared between recruits) and its
+        // worktree, which the hub stamps on the seat's claim/* entries
+        const beat = seatBeat(o.mcpUrl, randomUUID(), seatCwd, agent === "claude" ? seatHoldMs() : undefined);
+        const mcpJson = resolve(o.logDir, `${name}.mcp.json`);
+        writeFileSync(mcpJson, JSON.stringify({ mcpServers: { chatroom: { type: "http", url: beat.mcpUrl } } }));
+        let cmd: string;
+        let args: string[];
+        if (agent === "openrouter") {
+          // dist/ is gitignored, so a hub run from source has no build for the seat to load
+          cmd = existsSync(seatBuild) ? process.execPath : "npx";
+          args = [...(existsSync(seatBuild) ? [seatBuild] : ["tsx", resolve(repoRoot, "src", "openrouter.ts")]), "--mcp-url", beat.mcpUrl, "--cwd", seatCwd];
+          if (req.model) args.push("--model", req.model);
+          if (req.canEdit) args.push("--write");
+          if (SANDBOX) args.push("--sandbox");
+        } else if (agent === "codex") {
+          ({ cmd, args } = codexSeatCommand({ cwd: seatCwd, mcpUrl: beat.mcpUrl, model: req.model, readOnly: !req.canEdit, usageSidecar: resolve(o.logDir, `${name}.usage.json`) }));
+        } else {
+          cmd = "claude";
+          const sandbox = SANDBOX ? claudeSandbox({ cwd: seatCwd, write: !!req.canEdit, hubPort: hubPortOf(o.mcpUrl) }) : undefined;
+          args = claudeArgs({ mcpJson, tools: req.canEdit ? WRITE_TOOLS : READ_TOOLS, model: req.model, full: CLAUDE_FULL, settings: heartbeatHookSettings(), sandbox });
+        }
+        // every seat kind reads its prompt from stdin, never argv: claude -p, codex exec - and src/openrouter.ts (claude-args.ts)
+        const child = spawn(cmd, args, { cwd: seatCwd, env: { ...seatChildEnv(process.env, req.canEdit ? name : undefined, agent === "openrouter", cmd === "claude"), ...beat.env }, stdio: ["pipe", "pipe", "pipe"] });
+        child.stdin?.on("error", () => {});
+        child.stdin?.end(prompt);
+        // claude always runs --output-format json now (telemetry), so its raw stdout is a JSON blob, not the
+        // plain final-answer text every other seat's log holds. Buffer stdout+stderr instead of piping them
+        // live, and on close write only the unwrapped text (matches runClaude's outFile in swarm.ts) so a
+        // human tailing this recruit's log still sees prose, never JSON — --claude-full does not change this
+        // either, since --output-format json itself is unconditional (a telemetry fix, not a lean-flags
+        // opt-out concern). Every other agent kind keeps piping straight to the log file as before.
+        let claudeStdout = "";
+        let claudeStderr = "";
         if (agent === "claude") {
-          const { text, usage } = parseClaudeCliOutput(claudeStdout.trim());
-          writeFileSync(log, claudeStderr + text);
-          rec.usage = usage;
-          said = [text, claudeStderr];
+          child.stdout?.on("data", (d) => (claudeStdout += d));
+          child.stderr?.on("data", (d) => (claudeStderr += d));
+        } else {
+          const outStream = createWriteStream(log);
+          child.stdout?.pipe(outStream);
+          child.stderr?.pipe(outStream);
         }
-        this.hooks?.seatExited?.(beat.key, exitDetail(code, said, Date.now(), signal));
-        this.children.delete(name);
-        if (snap && cwd !== home && --snapUsers === 0) removeSnapshot(snap);
-        try {
-          this.checkConsolidators();
-        } catch (e) {
-          // never let a consolidator spawn failure crash the hub: announce and move on
-          this.hooks?.announce(rec.reportTo ?? target, `Consolidator spawn check failed: ${(e as Error).message}`);
-        }
-      });
+        rec.pid = child.pid;
+        this.children.set(name, child);
+        // no limit unless configured: the idle sweep already stops a recruit whose session died
+        const wall = o.wallClockMs ? setTimeout(() => {
+          this.hooks?.announce(target, `${name} hit the ${Math.round(o.wallClockMs! / 60000)} min recruit limit and was stopped.`);
+          child.kill();
+        }, o.wallClockMs) : undefined;
+        wall?.unref();
+        child.on("close", (code, signal) => {
+          clearTimeout(wall);
+          rec.endedAt = new Date().toISOString();
+          rec.exitCode = code;
+          let said: string[] = [];
+          if (agent === "claude") {
+            const { text, usage } = parseClaudeCliOutput(claudeStdout.trim());
+            writeFileSync(log, claudeStderr + text);
+            rec.usage = usage;
+            said = [text, claudeStderr];
+          }
+          this.hooks?.seatExited?.(beat.key, exitDetail(code, said, Date.now(), signal));
+          this.children.delete(name);
+          if (snap && cwd !== home && --snapUsers === 0) removeSnapshot(snap);
+          try {
+            this.checkConsolidators();
+          } catch (e) {
+            // never let a consolidator spawn failure crash the hub: announce and move on
+            this.hooks?.announce(rec.reportTo ?? target, `Consolidator spawn check failed: ${(e as Error).message}`);
+          }
+        });
+      };
+      if (!ws) launch(cwd);
+      else {
+        this.unlaunched.set(name, rec);
+        this.worktreeFor(cwd, target, name, req.baseDir, ws, writeBase)
+          .then((dir) => {
+            if (this.unlaunched.get(name) !== rec) return; // stopped while its worktree was being made
+            this.unlaunched.delete(name);
+            if (!dir) {
+              rec.workspace = undefined;
+              this.hooks?.announce(target, `The hub could not make ${name}'s worktree (branch ${ws.branch}), so ${name} works in ${cwd}, not on a branch of its own.`);
+            }
+            launch(dir ?? cwd);
+          })
+          .catch((e) => {
+            // the hub's caller has had its reply: a seat that cannot start is said in the room, never thrown
+            this.unlaunched.delete(name);
+            rec.endedAt = new Date().toISOString();
+            rec.exitCode = null;
+            this.hooks?.announce(target, `${name} could not start: ${(e as Error).message}`);
+          });
+      }
       out.push(rec);
     }
     if (policyOverride) this.hooks?.announce(req.room, `Recruits in this hub are pinned to ${launched}; ${req.requestedBy}'s ${wanted} request was accepted as ${launched}.`);
@@ -651,39 +586,30 @@ export class Spawner {
     }
   }
 
-  /** `git worktree add` for one recruit: .swarm-worktrees/<room>/<name> on branch swarm/<room>/<name>, node_modules linked so builds and tests work there. */
-  private readonly hooksIn = new Map<string, HooksCarried>();
-  /** the recruiter worktree each worktree made here was cut from; one that already existed has no entry, so nothing is claimed about it */
-  private readonly basedOn = new Map<string, string>();
-  private worktreeFor(cwd: string, room: string, name: string, baseDir?: string): string | undefined {
-    const ws = recruitWorkspace(cwd, room, name);
-    if (!ws) return undefined;
-    const { root, worktree: dir } = ws;
-    if (existsSync(dir)) return dir;
-    // cut from the recruiter's HEAD when it has a worktree of this repository, else from the project checkout's HEAD
-    const base = recruitBase(root, baseDir);
-    if (!createRecruitWorktree(root, dir, ws.branch, base?.sha)) return undefined;
-    if (base) this.basedOn.set(dir, base.from);
-    const mods = resolve(root, "node_modules");
-    if (existsSync(mods) && !existsSync(resolve(dir, "node_modules"))) {
-      try {
-        symlinkSync(mods, resolve(dir, "node_modules"), "dir");
-      } catch {}
-    }
-    // and no hooks runner either: without this every commit a write recruit makes skips the repository's hooks
-    // CHATROOM_SEAT_HOOKS=off (the launcher's --seat-hooks off): the run chose ungated seat commits
-    this.hooksIn.set(dir, process.env.CHATROOM_SEAT_HOOKS === "off" ? hooksOff(root) : carryHooks(root, dir));
-    return dir;
+  /** `git worktree add` for one recruit, off the hub's event loop (WorktreeMaker), recorded with how long git ran and waited (recordWorktree) */
+  private readonly worktrees = new WorktreeMaker();
+  /** write recruits whose worktree is still being made: stop() before their seat starts means it never starts */
+  private readonly unlaunched = new Map<string, SpawnedAgent>();
+  private worktreeFor(cwd: string, room: string, name: string, baseDir?: string, ws = recruitWorkspace(cwd, room, name), base = ws && recruitBase(ws.root, baseDir)): Promise<string | undefined> {
+    return ws ? this.worktrees.make(ws, base, (e) => this.hooks?.recordWorktree?.(room, { seat: name, ...e })) : Promise.resolve(undefined);
   }
 
   stop(name: string): boolean {
     const c = this.children.get(name);
+    const waiting = this.unlaunched.get(name);
+    if (!c && waiting) {
+      this.unlaunched.delete(name);
+      waiting.endedAt = new Date().toISOString();
+      waiting.exitCode = null;
+      return true;
+    }
     if (!c) return false;
     c.kill();
     return true;
   }
 
   stopAll(): void {
+    for (const name of [...this.unlaunched.keys()]) this.stop(name);
     for (const c of this.children.values()) c.kill();
   }
 }

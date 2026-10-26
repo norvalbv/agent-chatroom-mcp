@@ -72,6 +72,7 @@ export const offlineScripts = [
   'attention-gate-regression.ts',
   'away-seat-regression.ts',
   'seat-exit-regression.ts',
+  'reap-liveness-regression.ts',
   'wait-view-regression.ts',
   'hub-clock-regression.ts',
   'review-links-regression.ts',

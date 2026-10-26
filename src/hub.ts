@@ -3794,13 +3794,13 @@ export class Hub {
     return p.working && Date.parse(p.working.at) > Date.parse(p.lastActiveAt) ? p.working.at : p.lastActiveAt;
   }
 
-  sweepIdle(idleMs: number, connected?: Set<string>): string[] {
+  sweepIdle(idleMs: number, connected?: Set<string>, keepChair = false): string[] {
     const swept: string[] = [];
     const cutoff = Date.now() - idleMs;
     for (const room of this.rooms.values()) {
       if (room.state === "concluded" || room.state === "closed") continue;
       for (const p of room.participants.values()) {
-        if (p.session && connected?.has(p.session)) continue;
+        if ((p.session && connected?.has(p.session)) || (keepChair && p.role === "chair")) continue;
         if (p.active && p.agent !== "human" && Date.parse(this.lastSeen(p)) < cutoff) {
           p.active = false;
           this.persist({ type: "leave", room: room.name, p });

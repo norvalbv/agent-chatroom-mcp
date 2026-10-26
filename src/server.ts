@@ -57,7 +57,7 @@ const fail = (err: unknown) => ({
 export interface SessionServer {
   server: McpServer;
   /** Mark every participant this connection owns as left (called when the transport closes). */
-  leaveAll(reason?: string, final?: boolean): void;
+  leaveAll(reason?: string, final?: boolean, keepChair?: boolean): void;
   /** the session key stamped on every participant this connection joins as (Participant.session) */
   sessionKey: string;
 }
@@ -1016,15 +1016,15 @@ export function createSessionServer(hub: Hub, spawner?: Spawner, opts: { holdMs?
     },
   );
 
-  // `final`: the seat's process is known to have exited (launcher receipt), so a leave refused once as blocking is retried
-  const leaveAll = (reason = "MCP session closed without leave_room", final = false) => {
+  // `final`: the seat's process exited (launcher receipt), so a refused leave is retried; `keepChair`: src/hub/liveness.ts reapIdle
+  const leaveAll = (reason = "MCP session closed without leave_room", final = false, keepChair = false) => {
     for (const [room, ids] of me) {
       for (const id of ids) {
         const r = hub.rooms.get(room), p = r?.participants.get(id);
-        const held = hub.holds(room, id, sessionKey);
-        // only a seat that was in the room: a session ending after leave_room or a kick says nothing new
-        if (r && p?.active) hub.recordSession(r, p, "closed", reason, !held);
-        if (!held) continue; // re-seated on a newer connection: this one ending is not the seat leaving
+        // re-seated on a newer connection, or a chair an idle reap keeps: this one ending is not the seat leaving
+        const kept = !hub.holds(room, id, sessionKey) || (keepChair && p?.role === "chair");
+        if (r && p?.active) hub.recordSession(r, p, "closed", reason, kept); // only a seat that was in the room says anything
+        if (kept) continue;
         for (let attempt = 0; attempt < (final ? 2 : 1); attempt++) {
           try {
             hub.leave(room, id, reason);

@@ -71,7 +71,8 @@ export type Event =
   | { type: "memory"; room: string; seat: string; ts: string; memory?: SeatMemory; event?: "warn" | "over" | "ended" | "stop" | "high"; mb?: number; budget_mb?: number; mark_mb?: number; top?: SeatMemory["top"]; signal?: string }
   /** Telemetry only (replay ignores it; src/telemetry/machine.ts): the machine a room opened on, and each stall episode said in it. */
   | { type: "machine"; room: string; sample: MachineSample; ts: string }
-  | { type: "machine_stall"; room: string; event: "start" | "end"; sample: MachineSample; ts: string; at?: string; drift_ms?: number; since?: string; last_late?: string; seconds?: number; late_ticks?: number; max_drift_ms?: number }
+  /** cause "blocked": the hub waited on its own work while its reference clock kept time; ref_*: that clock's lateness */
+  | { type: "machine_stall"; room: string; event: "start" | "end"; sample: MachineSample; ts: string; at?: string; drift_ms?: number; since?: string; last_late?: string; seconds?: number; late_ticks?: number; max_drift_ms?: number; cause?: "machine" | "hub" | "blocked"; hub_cpu?: number | null; ref_drift_ms?: number | null; ref_max_drift_ms?: number | null }
   /** Telemetry only (replay ignores it; src/hub/take.ts): one step of a take/<what> entry. by and holder are seat names. */
   /** reason and commit only on action "refused": held (the same key), same-commit (another key naming the commit), assigned-reviewer */
   | { type: "take"; room: string; key: string; action: string; by: string; holder: string; ts: string; reason?: "held" | "same-commit" | "assigned-reviewer" | "already-reviewed" | "same-work"; commit?: string }

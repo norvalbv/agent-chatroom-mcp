@@ -87,16 +87,17 @@ async function harness(entry: string, env: Record<string, string>, argv: string[
       cache.set(name, mod); return mod;
     }
     const base = name.replace(/^\.\//, '').replace(/\.js$/, '');
-    assert.ok(['env', 'spawner', 'spawner/recruitment', 'swarm', 'openrouter', 'respawn', 'claude-args', 'codex-seat', 'sandbox', 'cost-estimate', 'seat-targets', 'groups', 'launch/run-rooms'].includes(base), `unmocked import ${name}`); // respawn.ts, claude-args.ts, codex-seat.ts, sandbox.ts, cost-estimate.ts, seat-targets.ts and launch/run-rooms.ts are pure (sandbox over the mocked fs): real import
+    assert.ok(['env', 'spawner', 'spawner/recruitment', 'swarm', 'openrouter', 'respawn', 'claude-args', 'codex-seat', 'sandbox', 'cost-estimate', 'seat-targets', 'groups', 'launch/run-rooms', 'seat/settings'].includes(base), `unmocked import ${name}`); // respawn.ts, claude-args.ts, codex-seat.ts, sandbox.ts, cost-estimate.ts, seat-targets.ts, launch/run-rooms.ts and seat/settings.ts are pure (sandbox over the mocked fs): real import
     // Only these explicitly allowlisted source files are read from disk.
     const source = readFileSync(path.join(root, 'src', `${base}.ts`), 'utf8');
     const code = transformSync(source, { loader: 'ts', format: 'esm', target: 'es2022' }).code;
     const mod = new vm.SourceTextModule(code, { context, initializeImportMeta(meta) { meta.url = `file:///fixture/src/${base}.js`; meta.resolve = () => "file:///synthetic/tsx.mjs"; } });
     cache.set(name, mod);
-    await mod.link((specifier: string) => module(specifier));
     return mod;
   }
   const mod = await module(entry);
+  // Node links each unlinked import itself, awaited by its first importer; a module this loader linked itself reached a second importer mid-link
+  await mod.link((specifier: string) => module(specifier));
   await mod.evaluate();
   return { exports: mod.namespace as any, env, calls, requests };
 }

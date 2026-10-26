@@ -10,8 +10,8 @@
     "src/run-timeline.ts": 522,
     "src/seat.ts": 719,
     "src/server.ts": 1042,
-    "src/spawner.ts": 615,
-    "src/swarm.ts": 928,
+    "src/spawner.ts": 613,
+    "src/swarm.ts": 924,
     "src/ui.ts": 615
   }
 }

@@ -105,16 +105,17 @@ async function harness(entry: string, env: Record<string, string>, argv: string[
       cache.set(name, mod); return mod;
     }
     const base = name.replace(/^\.\//, '').replace(/\.js$/, '');
-    // Real source for these only: swarm/spawner (under test), env/respawn (their real deps), claude-args (the shared lean-args builder, pure), sandbox (its --sandbox block, pure over the mocked fs), cost-estimate (the launch cost guide, pure), launch/run-rooms (the run's room list, pure).
-    assert.ok(['env', 'spawner', 'spawner/recruitment', 'swarm', 'respawn', 'claude-args', 'codex-seat', 'sandbox', 'cost-estimate', 'seat-targets', 'groups', 'launch/run-rooms'].includes(base), `unmocked import ${name}`);
+    // Real source for these only: swarm/spawner (under test), env/respawn (their real deps), claude-args (the shared lean-args builder, pure), sandbox (its --sandbox block, pure over the mocked fs), cost-estimate (the launch cost guide, pure), launch/run-rooms (the run's room list, pure), seat/settings (the run's seat settings, type imports only).
+    assert.ok(['env', 'spawner', 'spawner/recruitment', 'swarm', 'respawn', 'claude-args', 'codex-seat', 'sandbox', 'cost-estimate', 'seat-targets', 'groups', 'launch/run-rooms', 'seat/settings'].includes(base), `unmocked import ${name}`);
     const source = readFileSync(path.join(root, 'src', `${base}.ts`), 'utf8');
     const code = transformSync(source, { loader: 'ts', format: 'esm', target: 'es2022' }).code;
     const mod = new vm.SourceTextModule(code, { context, initializeImportMeta(meta) { meta.url = `file:///fixture/src/${base}.js`; meta.resolve = () => "file:///synthetic/tsx.mjs"; } });
     cache.set(name, mod);
-    await mod.link((specifier: string) => module(specifier));
     return mod;
   }
   const mod = await module(entry);
+  // Node links each unlinked import itself, awaited by its first importer; a module this loader linked itself reached a second importer mid-link
+  await mod.link((specifier: string) => module(specifier));
   await mod.evaluate();
   return { exports: mod.namespace as any, env, calls };
 }

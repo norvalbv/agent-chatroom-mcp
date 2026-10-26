@@ -272,6 +272,7 @@ export const offlineScripts = [
   'keepalive-regression.ts',
   'hubd-data-dir-regression.ts',
   'recruit-home-regression.ts',
+  'recruit-settings-regression.ts',
   'launcher-routes-regression.ts',
   'restart-notice-regression.ts',
   'stale-exit-line-regression.ts',

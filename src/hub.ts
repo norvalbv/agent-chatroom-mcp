@@ -15,7 +15,7 @@ import { analyzeReplyMetrics, type ReplyMetricEvent } from "./reply-metrics.js";
 export * from "./hub/types.js";
 import { VERIFY_HEAD_EXAMPLE, VERIFY_HEAD_RULE, isReviewKey, parseVerifyHead, readVerifyHead, failToPassShortfall, citesCommit, hexTokens, addedUnchecked, uncoveredCommits, verifyGaps, devRoomUrl, devReceiptFrom, type DevReceipt, ROLES, REFUSAL_CODES, HubError } from "./hub/types.js";
 import type { MessageKind, Vote, Quorum, RoomState, VerifyHead, Role, Participant, KickVote, Message, CodeState, BoardExpiryOptions, BoardEntry, Challenge, ElectorateSummary, ConclusionVerification, ConclusionClosing, Proposal, RoomOptions, JoinOptions, Room, CallOutcome, RefusalCode, BoardManifestObservation } from "./hub/types.js";
-import { now, shortId, norm, emptyBoardManifestCounters, manifestBytes, codeState, commitsIn, keepRefusal, RECENT_REFUSALS, resourceEvents } from "./hub/internal.js";
+import { now, shortId, norm, emptyBoardManifestCounters, manifestBytes, codeState, commitsIn, keepRefusal, RECENT_REFUSALS, resourceEvents, runPrefix, seatSettingsOf } from "./hub/internal.js";
 import type { Opts, Event, BoardManifestCounters } from "./hub/internal.js";
 import * as board from "./hub/board.js";
 import * as breakouts from "./hub/breakouts/lifecycle.js";
@@ -127,12 +127,11 @@ export class Hub {
 
   static codeState(cwd?: string): CodeState | undefined { return codeState(cwd); }
   /** "swarm-093235-fsxs-leads" -> "swarm-093235-fsxs" */
-  static runPrefix(name: string): string | undefined {
-    const m = /^(swarm-[0-9]{6}(?:-[a-z0-9]{4})?)-/.exec(name);
-    return m?.[1];
-  }
+  static runPrefix(name: string): string | undefined { return runPrefix(name); }
+  /** what a room's recruits inherit: the launching run's seat settings (hub/internal.ts seatSettingsOf, decision/recruit-settings) */
+  seatSettingsFor(name: string): Opts["seatSettings"] { return seatSettingsOf(this.rooms, name); }
 
-  createRoom(name: string, opts: RoomOptions = {}): Room {
+  createRoom(name: string, opts: RoomOptions & Pick<Opts, "seatSettings"> = {}): Room {
     const existing = this.rooms.get(name);
     if (existing) return existing;
     if (!Hub.ROOM_NAME.test(name)) {
@@ -155,6 +154,7 @@ export class Hub {
       ...(opts.chair ? { chair: opts.chair } : {}),
       ...(opts.chair && opts.chairNamed ? { chairNamed: true } : {}),
       ...(opts.parent ? { parent: opts.parent } : {}),
+      ...(opts.seatSettings ? { seatSettings: opts.seatSettings } : {}),
     };
     // Per-run room cap: rooms sharing a swarm prefix (swarm-<id>-*) are counted together.
     const prefix = Hub.runPrefix(name);

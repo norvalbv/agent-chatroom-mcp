@@ -998,7 +998,7 @@ export function createSessionServer(hub: Hub, spawner?: Spawner, opts: { holdMs?
       guard("list_agents", ({ room }) =>
         spawner.agents
           .filter((a) => !room || a.room === room)
-          .map((a) => ({ name: a.name, room: a.room, report_to: a.reportTo ?? null, agent: a.agent, model: a.model ?? null, requested_by: a.requestedBy, depth: a.depth, ...(a.workspace ? { branch: a.workspace.branch } : {}), running: a.endedAt === undefined, exit_code: a.exitCode ?? null, brief: a.brief.slice(0, 160) })),
+          .map((a) => ({ name: a.name, room: a.room, report_to: a.reportTo ?? null, agent: a.agent, model: a.model ?? null, requested_by: a.requestedBy, depth: a.depth, ...(a.workspace ? { branch: a.workspace.branch } : {}), ...(a.settings ? { settings: { effort: a.settings.effort, compact_window: a.settings.compact_window, from: a.settings.source.effort } } : {}), running: a.endedAt === undefined, exit_code: a.exitCode ?? null, brief: a.brief.slice(0, 160) })),
       ),
     );
   }

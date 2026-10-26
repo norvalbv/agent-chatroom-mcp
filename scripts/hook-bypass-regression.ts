@@ -54,8 +54,10 @@ await check("the launcher has --seat-hooks off, and the spawner honours it", () 
   const swarm = readFileSync("src/swarm.ts", "utf8");
   assert.match(swarm, /const SEAT_HOOKS_OFF = flag\("seat-hooks"\) === "off"/);
   assert.match(swarm, /SEAT_HOOKS_OFF \? \{ CHATROOM_SEAT_HOOKS: "off" \}/, "the hub it starts tells its recruits");
-  // a write recruit's worktree, and the hooks it carries, are fitted out in src/spawner/worktrees.ts (decision/machine-load)
-  assert.match(readFileSync("src/spawner/worktrees.ts", "utf8"), /process\.env\.CHATROOM_SEAT_HOOKS === "off"/);
+  // a write recruit's worktree, and the hooks it carries, are fitted out in src/spawner/worktrees.ts (decision/machine-load); the hub's
+  // own setting is its default, and a room's run settings (a hub this run did not start) are passed in (decision/recruit-settings)
+  assert.match(readFileSync("src/spawner/worktrees.ts", "utf8"), /hooksOff = process\.env\.CHATROOM_SEAT_HOOKS === "off"/);
+  assert.match(readFileSync("src/spawner.ts", "utf8"), /run\.env\.CHATROOM_SEAT_HOOKS === "off"/);
 });
 server.close();
 if (failed) { console.error(`HOOK BYPASS: ${failed} failed`); process.exitCode = 1; } else console.log("HOOK BYPASS OK");

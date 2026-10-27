@@ -361,14 +361,20 @@ export async function collectRoomSnapshot(baseUrl: string, name: string, opts: {
   if (opts.metrics) await collectRoomMetrics([snapshot], baseUrl);
   return snapshot;
 }
-export function readRunResult(path: string): RunResult {
+/** Normal consumers require a captured lead. Triage alone may recover a missing lead as an explicit capture gap. */
+export function readRunResult(path: string, opts: { triageMissingLead?: boolean } = {}): RunResult {
   const r = JSON.parse(readFileSync(path, 'utf8'));
   const bad = (why: string): never => { throw new Error(`Invalid or unsupported run result (${why}): ${path}`); };
   if (r?.schemaVersion !== 1 || typeof r.run?.id !== 'string' || typeof r.leadRoom !== 'string' || !Array.isArray(r.rooms) || !r.verifier || !(r.verifier.output === null || typeof r.verifier.output === 'string') || r.rooms.some((room: any) => typeof room?.name !== 'string' || !(room.payload === null || (typeof room.payload === 'object' && !Array.isArray(room.payload))))) bad('structure');
   if (r.usage !== undefined && (typeof r.usage !== 'object' || r.usage === null || Array.isArray(r.usage) || typeof r.usage.steps !== 'number' || !['complete', 'partial', 'none'].includes(r.usage.coverage))) bad('usage');
   // The lead room must exist, and a present conclusion must be a string: an artifact that
   // names a room we never captured, or a typed conclusion field, is corrupt, not empty.
-  const lead = r.rooms.find((room: any) => room.name === r.leadRoom);
+  let lead = r.rooms.find((room: any) => room.name === r.leadRoom);
+  if (!lead && opts.triageMissingLead) {
+    lead = { name: r.leadRoom, payload: null, error: 'lead room not captured', transcript: { text: null, sourceUrl: 'not captured', error: 'lead transcript not captured' } };
+    r.rooms.unshift(lead);
+    r.collectionErrors = [...(Array.isArray(r.collectionErrors) ? r.collectionErrors : []), `${r.leadRoom} payload: not captured; triage synthesized a missing capture, not a room result`];
+  }
   if (!lead) bad(`lead room ${r.leadRoom} not captured`);
   if (lead.payload !== null && lead.payload.conclusion !== undefined && lead.payload.conclusion !== null && typeof lead.payload.conclusion.text !== 'string' && typeof lead.payload.conclusion.text !== 'undefined') bad('lead conclusion.text is not a string');
   return r as RunResult;

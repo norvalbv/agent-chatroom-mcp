@@ -33,4 +33,12 @@ assert.equal(prefix.addressed, 0, "idea/ab and idea/a-2 in a claim do not name i
 const named = breadth([{ type: "room", room: "n", ts: at() }, write("idea/a", "A"), write("claim/b", "Working on idea/a.")], "n");
 assert.equal(named.addressed, 1, "a sentence-final period still names idea/a");
 
+// An idea attacked, conceded and then cleared before the end (arm B of probe/brainstorm-prereg, swarm-085234-dn6b) was
+// addressed: the count is over every idea ever written, not the final board's.
+const cleared = breadth([{ type: "room", room: "c", ts: at() }, write("idea/a", "A"), write("idea/b", "B"),
+  write("attack/idea/a", "Not the lead."), write("idea/a", "WITHDRAWN: conceded."), write("idea/a", "")], "c");
+assert.equal(cleared.ideas, 2, `both ideas ever written count: ${JSON.stringify(cleared)}`);
+assert.equal(cleared.addressed, 1, "the attacked-then-cleared idea was addressed");
+assert.equal(cleared.never_addressed, 1, "idea/b was never addressed");
+
 console.log("brainstorm-breadth-regression: OK");

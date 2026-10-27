@@ -6,7 +6,7 @@
  * the ones NEVER addressed, and how many of those the conclusion names. The seeded count is what the build writes;
  * "addressed" is textual attention (a claim saying "do not test idea/x" counts), not proof an idea was tested, and an idea
  * reopened after it was settled still counts as addressed (6-astra-4's review of e629cbba).
- * Baseline over MAIN/data before this change: 2 of 137 claimed rooms had an idea/* before their first claim; 11 of 62
+ * Baseline over MAIN/data before this change: 2 of 137 claimed rooms had an idea/* before their first claim; 17 of 80
  * ideas addressed (evidence/brainstorm-replay-200).
  *   npx tsx scripts/brainstorm-breadth.ts <room.jsonl | data dir> [...] [--json] [--concluded]
  */
@@ -52,8 +52,8 @@ export function breadth(events: Ev[], room = String(events[0]?.room ?? "")): Bre
     if (e.type === "openings_revealed" && Array.isArray(e.ideas_seeded)) seeded = e.ideas_seeded;
     if (e.type === "state" && e.state === "concluded") conclusion = String(e.conclusion?.text ?? "");
   }
-  const live = (k: string) => !!board.get(k)?.trim();
-  const ideas = [...board.keys()].filter((k) => k.startsWith("idea/") && live(k));
+  // every idea ever written: one attacked, conceded and cleared before the end was addressed, not absent
+  const ideas = [...ideaFirst.keys()];
   // a key named as itself: idea/a is not named by idea/ab, idea/a-2 or idea/a/b; a sentence-final period still names it
   const names = (text: string, k: string) => new RegExp(`(^|[^\\w./-])${k.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?![\\w/-]|\\.\\w)`).test(text);
   /** Acted on, as the record shows it at any point: settled with a label, claim/<slug> written, a claim naming the key

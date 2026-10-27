@@ -5,6 +5,7 @@ import { homedir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { renderMetrics, type RunMetrics } from './run-metrics.js';
 import { coordinates } from './hub/keys.js';
+import type { LaunchTargets } from './seat-targets.js';
 import { renderDigests, type DigestAck, type DigestRecord } from './groups.js';
 import { renderTimeline, type RunTimeline } from './run-timeline.js';
 import { renderPreflight, type PreflightResult } from './launch/preflight.js';
@@ -46,6 +47,8 @@ export interface RunResult {
   decisionRecord?: DecisionRecordSummary;
   /** The largest room the launcher started, the brief's numbered items, and whether the size note was printed
    * (src/cost-estimate.ts launchSizeNote); absent on older artifacts and planned runs. */
+  /** Starting assignments planned at dispatch, not proof of work; also written before seats to seat-targets.json. */
+  seatTargets?: LaunchTargets;
   sizing?: { room_seats: number; workers: number; brief_items: number; note: boolean };
   /** Template file -> first 12 hex of its sha256, for the prompts this run's seats were launched with (recruit.md as the
    * launcher's checkout has it); absent on older artifacts. promptDigests below */

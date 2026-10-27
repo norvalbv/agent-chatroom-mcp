@@ -6,8 +6,8 @@
  */
 import { StringDecoder } from "node:string_decoder";
 import { spawnSync } from "node:child_process";
-import { existsSync, realpathSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { existsSync, mkdirSync, realpathSync } from "node:fs";
+import { dirname, join, resolve } from "node:path";
 import { repoRoot } from "./env.js";
 
 export function codexConfigArgs(mcpUrl: string): string[] {
@@ -42,7 +42,7 @@ export interface CodexArgsOptions {
  * Sandbox: ~/.codex/config.toml on this machine sets sandbox_mode = "danger-full-access" with approval_policy =
  * "never", so a seat that passes no -s runs unsandboxed. A read-only seat gets `-s read-only`. A write seat gets
  * `-s workspace-write` (its cwd, $TMPDIR and /tmp) plus the git paths codexGitWriteRoots names, so it can still commit
- * on its swarm/<run>/<seat> branch, which the verifier, --apply and pool-run all read: workspace-write alone keeps every
+ * on its swarm/<run>/<seat> branch and no other, which the verifier, --apply and pool-run all read: workspace-write alone keeps every
  * .git under a writable root read-only (codex-rs default_read_only_subpaths_for_writable_root), and the shared .git
  * as a root is carved out the same way, so the roots are its subdirectories. Probed with codex-cli 0.164.0's
  * `codex sandbox` (scripts/codex-write-scope.test.ts). Before this a write seat inherited danger-full-access and could
@@ -74,16 +74,24 @@ export function codexSandboxMode(readOnly: boolean): "read-only" | "workspace-wr
 }
 
 /**
- * What a commit on a linked worktree's branch writes outside the worktree: its own gitdir (index, HEAD) and the shared
- * objects, refs and logs. Never the shared config or hooks. [] outside git, and for a plain checkout, whose .git codex
- * keeps read-only whatever the roots; both launchers give a write seat its own linked worktree.
+ * What a commit on a linked worktree's branch writes outside the worktree: its own gitdir (index, HEAD), the shared
+ * objects, and the ref and reflog directories holding its branch (refs/heads/swarm/<run> for swarm/<run>/<seat>), so
+ * it cannot move main or any branch outside its run, or create one (claude-opus-5-5-1's review of b7019097; `git stash`
+ * and tags are refused too). Never the shared config or hooks. [] outside git, and for a plain checkout, whose .git
+ * codex keeps read-only whatever the roots; both launchers give a write seat its own linked worktree. A detached HEAD
+ * or a branch directly under refs/heads gets no ref roots, since that directory holds main.
  */
 export function codexGitWriteRoots(cwd: string): string[] {
-  const r = spawnSync("git", ["-C", cwd, "rev-parse", "--path-format=absolute", "--git-dir", "--git-common-dir"], { encoding: "utf8" });
+  const r = spawnSync("git", ["-C", cwd, "rev-parse", "--path-format=absolute", "--git-dir", "--git-common-dir", "--symbolic-full-name", "HEAD"], { encoding: "utf8" });
   if (r.status !== 0) return [];
-  const [gitDir, common] = r.stdout.trim().split("\n").map((p) => { try { return realpathSync(p); } catch { return p; } });
+  const [gitDirRaw, commonRaw, ref = ""] = r.stdout.trim().split("\n");
+  const [gitDir, common] = [gitDirRaw, commonRaw].map((p) => { try { return realpathSync(p); } catch { return p; } });
   if (!gitDir || !common || gitDir === common) return [];
-  return [gitDir, join(common, "objects"), join(common, "refs"), join(common, "logs")];
+  const branchDir = dirname(ref);
+  if (!branchDir.startsWith("refs/heads/")) return [gitDir, join(common, "objects")];
+  // git writes the reflog there on commit; it must exist before the sandbox starts, and the launcher is outside it
+  try { mkdirSync(join(common, "logs", branchDir), { recursive: true }); } catch {}
+  return [gitDir, join(common, "objects"), join(common, branchDir), join(common, "logs", branchDir)];
 }
 
 /** -c overrides for workspace-write: extra roots, and the network (a seat's smoke starts a hub on localhost). */

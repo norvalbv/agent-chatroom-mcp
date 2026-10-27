@@ -875,7 +875,7 @@ try {
 } catch (e) { collectionErrors.push(`Room discovery: ${String(e)}`); }
 const snapshots: RoomSnapshot[] = [];
 for (const name of new Set([leadsRoom, ...groupRooms])) {
-  const snapshot = await collectRoomSnapshot(URL_, name);
+  const snapshot = await collectRoomSnapshot(URL_, name, { metrics: true });
   if (snapshot.error) collectionErrors.push(`${name} payload: ${snapshot.error}`);
   if (snapshot.transcript.error) collectionErrors.push(`${name} transcript: ${snapshot.transcript.error}`);
   snapshots.push(snapshot);
@@ -883,9 +883,8 @@ for (const name of new Set([leadsRoom, ...groupRooms])) {
 const leads = snapshots.find(r => r.name === leadsRoom)?.payload ?? { state: "missing", conclusion: null };
 // why the run ended, as this launcher saw it; after the snapshots, so the line it adds is not in this run's own transcript
 await postRunEnd(timedOut ? "timeout" : (leads as { state?: string }).state === "concluded" ? "concluded" : "seats_exited", timedOut ? `after ${TIMEOUT_MIN} min` : undefined);
-// headline numbers by code, from the hub's own log; a hub without one (in memory) answers 404 and the report omits them
-let metrics: RunResult["metrics"];
-try { metrics = JSON.parse(await fetchText(`${URL_}/rooms/${encodeURIComponent(leadsRoom)}/metrics`)); } catch (e) { collectionErrors.push(`${leadsRoom} metrics: ${String(e)}`); }
+// Each room was measured once above; the lead alias preserves existing artifact readers.
+const metrics = snapshots.find(r => r.name === leadsRoom)?.metrics;
 const artifactPath = resolve(flag("result-path", resolve(OUT, "result.json"))!);
 const artifact: RunResult = {
   schemaVersion: 1,
@@ -919,6 +918,7 @@ console.log("\n==================== FINAL ANSWER ====================");
 console.log(leads.conclusion?.text ?? "NO CONSENSUS");
 console.log("\n==================== VERIFIER ====================");
 console.log(results.find((r) => r.name === "verifier")?.text ?? "(none)");
+if (artifact.feedback) console.log("\nNEXT RUN (task attainment unassessed; top 3 actions, complete evidence in result.json):\n" + artifact.feedback.next.map(r => `${r.id}: ${r.observation} ${r.action} Check: ${r.check} Evidence: ${r.evidence.map(e => `${e.room}:${e.path}`).join(", ")}`).join("\n"));
 if (FULL && isGitRepo) console.log(`worker branches: git -C "${CWD}" branch --list "swarm/${SWARM_ID}/*"   (worktrees under .swarm-worktrees/${SWARM_ID}/)`);
 console.log(`\nreport: ${resolve(OUT, "report.md")}`);
 process.exit(leads.conclusion ? 0 : 1);

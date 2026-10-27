@@ -311,6 +311,7 @@ export const offlineScripts = [
   'seat-compact-default-regression.ts',
   'runs-table-regression.ts',
   'run-metrics-regression.ts',
+  'run-feedback-regression.ts',
   'launcher-authority-regression.ts',
   'exit-reason-regression.ts',
   'run-timeline-regression.ts',

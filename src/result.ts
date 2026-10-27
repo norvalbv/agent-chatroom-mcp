@@ -9,12 +9,15 @@ import { renderDigests, type DigestAck, type DigestRecord } from './groups.js';
 import { renderTimeline, type RunTimeline } from './run-timeline.js';
 import { renderPreflight, type PreflightResult } from './launch/preflight.js';
 import { renderDecisionRecord, type DecisionRecordSummary } from './launch/decision-record.js';
+import { collectRoomMetrics, renderFeedback, runFeedback, type RunFeedback } from './telemetry/feedback.js';
 
 export interface RoomSnapshot {
   name: string;
   payload: Record<string, any> | null;
   error: string | null;
   transcript: { text: string | null; sourceUrl: string; error: string | null };
+  metrics?: RunMetrics & { timeline?: RunTimeline };
+  metricsError?: string;
 }
 export interface RunResult {
   schemaVersion: 1;
@@ -50,6 +53,8 @@ export interface RunResult {
   /** Template file -> first 12 hex of its sha256, for the prompts this run's seats were launched with (recruit.md as the
    * launcher's checkout has it); absent on older artifacts. promptDigests below */
   prompts?: Record<string, string>;
+  /** Evidence-linked next-run triage, independently of consensus or task attainment. Recomputed when saved. */
+  feedback?: RunFeedback;
 }
 /**
  * Usage as the hub recorded it while the run went on, from the room snapshots alone: a launcher that crashed, or a
@@ -342,7 +347,7 @@ export function proposedDecisionDir(project: RunResult['project'], outDir: strin
   return devRoom ? outDir : resolve(project.cwd, 'docs', 'decisions', 'proposed');
 }
 /** Fetch the existing full room endpoint; no board/body projection or text slicing. */
-export async function collectRoomSnapshot(baseUrl: string, name: string): Promise<RoomSnapshot> {
+export async function collectRoomSnapshot(baseUrl: string, name: string, opts: { metrics?: boolean } = {}): Promise<RoomSnapshot> {
   const base = `${baseUrl}/rooms/${encodeURIComponent(name)}`;
   const snapshot: RoomSnapshot = { name, payload: null, error: null, transcript: { text: null, sourceUrl: `${base}/transcript`, error: null } };
   const get = async (url: string) => { const response = await fetch(url); if (!response.ok) throw new Error(`HTTP ${response.status}: ${url}`); return response; };
@@ -350,6 +355,7 @@ export async function collectRoomSnapshot(baseUrl: string, name: string): Promis
   catch (e) { snapshot.error = String(e); }
   try { snapshot.transcript.text = await (await get(`${base}/transcript`)).text(); }
   catch (e) { snapshot.transcript.error = String(e); }
+  if (opts.metrics) await collectRoomMetrics([snapshot], baseUrl);
   return snapshot;
 }
 export function readRunResult(path: string): RunResult {
@@ -365,6 +371,7 @@ export function readRunResult(path: string): RunResult {
   return r as RunResult;
 }
 export function writeRunResult(path: string, artifact: RunResult): void {
+  artifact.feedback = runFeedback(artifact);
   mkdirSync(dirname(resolve(path)), { recursive: true });
   const temp = `${path}.${process.pid}.tmp`;
   writeFileSync(temp, JSON.stringify(artifact, null, 2) + '\n');
@@ -420,7 +427,7 @@ export function renderRunReport(r: RunResult): string {
   // only a run whose groups keep a position prints it (or its absence): other runs' reports are unchanged
   const grouped = r.rooms.some(room => room.name !== r.leadRoom && ((room.payload?.board ?? {}) as BoardText).position);
   for (const room of r.rooms.filter(room => room.name !== r.leadRoom)) text += `### ${room.name} (${room.payload?.state ?? 'missing'})\n\n${room.payload?.conclusion?.text ?? '_no consensus_'}\n\n${grouped ? renderPosition(room.payload) : ''}`;
-  text += renderCoverage(lead) + renderPreflight(r.preflight);
+  text += renderCoverage(lead) + renderPreflight(r.preflight) + renderFeedback(runFeedback(r));
   text += `## Result artifact\n\nAuthoritative full room snapshots, board evidence and raw transcripts: ${r.artifactPath}\n\n`;
   if (r.usage) {
     // claude seats have no steps/prompt_tokens/completion_tokens; without this, a claude-only run's real

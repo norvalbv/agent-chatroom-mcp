@@ -95,6 +95,8 @@ export const offlineScripts = [
   'unclaimed-ideas-regression.ts',
   'idea-owner-regression.ts',
   'hands-ask-regression.ts',
+  'start-limit-ask-regression.ts',
+  'needs-escalation-regression.ts',
   'idle-leave-regression.ts',
   'idea-lists-regression.ts',
   'delivery-cap-regression.ts',

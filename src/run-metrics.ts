@@ -56,7 +56,7 @@ export interface RunMetrics {
   /** prior art (src/telemetry/prior-art.ts): steps by tag and outside references handed in against found; absent without a ledger */
   research?: ResearchMetrics;
   /** needs/* the room filed for the owner (hub need_filed / need_cleared events, src/hub/needs.ts): filed, cleared, and claims named as blocked; absent: none */
-  needs?: { filed: number; cleared: number; blocks: number; asked: number; askedThenFiled: number; asksOfOwners: number; ownersAnswered: number };
+  needs?: { filed: number; cleared: number; blocks: number; asked: number; askedThenFiled: number; askedAtStart: number; askedAtStartThenFiled: number; askedAtStartAnswered: number; asksOfOwners: number; ownersAnswered: number };
   /** ideas and brief items nobody could take, put to their author or the chair (hub hands_asked / hands_resolved / hands_unasked, src/hub/asks/hands.ts):
    * asks, of them about item/* (the brief's problems), asks with nobody to ask, asks answered by a reply, and how the work stopped being unowned; absent: none */
   hands?: { asked: number; items: number; unasked: number; answered: number; resolved: { recruited: number; claimed: number; dropped: number; built: number } };
@@ -121,7 +121,7 @@ export function runMetrics(events: readonly Ev[], opts: MetricsOptions = {}): Ru
   let proposal: string | undefined;
   let ledger = false;
   const takes: Record<string, number> = {};
-  const needs = { filed: 0, cleared: 0, blocks: 0, asked: 0, askedThenFiled: 0, asksOfOwners: 0, ownersAnswered: 0 };
+  const needs = { filed: 0, cleared: 0, blocks: 0, asked: 0, askedThenFiled: 0, askedAtStart: 0, askedAtStartThenFiled: 0, askedAtStartAnswered: 0, asksOfOwners: 0, ownersAnswered: 0 };
   /** open "need" asks to blocked claims' owners (src/hub/needs/needs.ts), by message id; a reply_to one answers it */
   const ownerAsks = new Set<string>();
   const hands = { asked: 0, items: 0, unasked: 0, answered: 0, resolved: { recruited: 0, claimed: 0, dropped: 0, built: 0 } };
@@ -129,6 +129,7 @@ export function runMetrics(events: readonly Ev[], opts: MetricsOptions = {}): Ru
   const handsAsks = new Set<string>();
   /** when the hub last asked the room about an outside limit (need_asked; blocker_nudged in older logs); a need_filed within 15 min converts it */
   let askOpen: string | undefined;
+  const startAsks = new Set<string>(); let askOpenAtStart = false; // the outside-limit asks at a room's first claim (tag "limits", decision/bar-check-at-start) not yet replied to; whether the open ask is one
   let firstNeed: string | undefined;
   const quiet = { chat: 0, bySender: 0, byHub: 0, keptPublicForBoardKey: 0 };
   const appendsBy = new Map<string, { lines: number; seats: Set<string>; landed: Set<string> }>();
@@ -228,8 +229,8 @@ export function runMetrics(events: readonly Ev[], opts: MetricsOptions = {}): Ru
       case "need_filed":
         stamp(e.ts);
         needs.filed++; needs.blocks += Array.isArray(e.blocks) ? e.blocks.length : 0;
-        if (askOpen && Date.parse(e.ts) - Date.parse(askOpen) <= 15 * 60_000) needs.askedThenFiled++;
-        askOpen = undefined;
+        if (askOpen && Date.parse(e.ts) - Date.parse(askOpen) <= 15 * 60_000) { needs.askedThenFiled++; if (askOpenAtStart) needs.askedAtStartThenFiled++; }
+        askOpen = undefined; askOpenAtStart = false;
         if (typeof e.ts === "string" && (!firstNeed || e.ts < firstNeed)) firstNeed = e.ts;
         break;
       case "need_cleared":
@@ -253,7 +254,7 @@ export function runMetrics(events: readonly Ev[], opts: MetricsOptions = {}): Ru
       case "blocker_nudged":
         stamp(e.ts);
         needs.asked++;
-        askOpen = e.ts;
+        askOpen = e.ts; if ((askOpenAtStart = e.where === "first-claim")) needs.askedAtStart++;
         break;
       case "board_append": {
         stamp(e.ts);
@@ -290,7 +291,8 @@ export function runMetrics(events: readonly Ev[], opts: MetricsOptions = {}): Ru
         stamp(m.ts);
         if (m.kind === "chat") mention(m.content, m.from?.name);
         if (m.tag === "need") { needs.asksOfOwners++; ownerAsks.add(m.id); }
-        else if (m.replyTo && ownerAsks.delete(m.replyTo)) needs.ownersAnswered++;
+        else if (m.tag === "limits") startAsks.add(m.id);
+        else if (m.replyTo && ownerAsks.delete(m.replyTo)) needs.ownersAnswered++; else if (m.replyTo && startAsks.delete(m.replyTo)) needs.askedAtStartAnswered++;
         if (m.tag === "hands") handsAsks.add(m.id);
         else if (m.replyTo && handsAsks.delete(m.replyTo)) hands.answered++;
         if (m.kind === "chat" && m.from?.agent !== "hub" && m.from?.agent !== "human") {
@@ -430,7 +432,7 @@ export function renderMetrics(m: RunMetrics): string {
     (m.machine?.stalls ? `The machine stalled ${m.machine.stalls} time${m.machine.stalls === 1 ? "" : "s"} (${m.machine.stalled_s} s in all, worst timer drift ${Math.round(m.machine.worst_ms / 100) / 10} s); timings measured then are the machine\'s. ` : "") +
     (m.machine?.hub_blocks ? `The hub held up its own replies ${m.machine.hub_blocks} time${m.machine.hub_blocks === 1 ? "" : "s"} (busy, or waiting on its own work while its reference clock kept time); the machine did not stall then. ` : "") +
     (m.quiet && (m.quiet.bySender || m.quiet.byHub || m.quiet.keptPublicForBoardKey) ? `Of ${m.quiet.chat} agent chat messages, ${m.quiet.bySender} were sent quiet, ${m.quiet.byHub} were made quiet by the hub, and ${m.quiet.keptPublicForBoardKey} two-seat exchanges stayed public because they named a board entry. ` : "") +
-    (m.needs ? `needs/* for the owner: ${m.needs.filed} filed${t.firstNeed !== undefined ? `, the first at ${t.firstNeed} min` : ""}, ${m.needs.cleared} cleared, ${m.needs.blocks} claim${m.needs.blocks === 1 ? "" : "s"} named as blocked, asked about outside limits ${m.needs.asked} time${m.needs.asked === 1 ? "" : "s"} (${m.needs.askedThenFiled} followed by a needs/* within 15 min), ${m.needs.ownersAnswered} of ${m.needs.asksOfOwners} blocked-claim owner${m.needs.asksOfOwners === 1 ? "" : "s"} answered. ` : "") +
+    (m.needs ? `needs/* for the owner: ${m.needs.filed} filed${t.firstNeed !== undefined ? `, the first at ${t.firstNeed} min` : ""}, ${m.needs.cleared} cleared, ${m.needs.blocks} claim${m.needs.blocks === 1 ? "" : "s"} named as blocked, asked about outside limits ${m.needs.asked} time${m.needs.asked === 1 ? "" : "s"} (${m.needs.askedThenFiled} followed by a needs/* within 15 min${m.needs.askedAtStart ? `; ${m.needs.askedAtStart} at the first claim, ${m.needs.askedAtStartAnswered} answered, ${m.needs.askedAtStartThenFiled} followed` : ""}), ${m.needs.ownersAnswered} of ${m.needs.asksOfOwners} blocked-claim owner${m.needs.asksOfOwners === 1 ? "" : "s"} answered. ` : "") +
     (m.hands ? `Ideas nobody was free to take: ${m.hands.asked} put to their author or the chair (${m.hands.items ? `${m.hands.items} of them brief items, ` : ""}${m.hands.answered} answered by a reply)${m.hands.unasked ? `, ${m.hands.unasked} with nobody to ask` : ""}; resolved by ${m.hands.resolved.recruited} recruit${m.hands.resolved.recruited === 1 ? "" : "s"}, ${m.hands.resolved.claimed} claimed, ${m.hands.resolved.dropped} dropped, ${m.hands.resolved.built} built. ` : "") +
     (m.takes ? `take/* steps: ${Object.entries(m.takes).map(([k, n]) => `${n} ${k}`).join(", ")}. ` : "") +
     (m.appends ? `Shared logs (board_set append): ${Object.entries(m.appends).map(([k, a]) => `${k} ${a.lines} line${a.lines === 1 ? "" : "s"} from ${a.seats} seat${a.seats === 1 ? "" : "s"}${a.continuations ? `, ${a.continuations} continuation${a.continuations === 1 ? "" : "s"}` : ""}`).join("; ")}. ` : "") +

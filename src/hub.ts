@@ -620,7 +620,7 @@ export class Hub {
       try { const j = JSON.parse(e.text) as { status?: string }; if (/^(done|fixed|handed|handed-over|closed|complete|completed)$/i.test(j.status ?? "")) return false; } catch {}
       return true;
     }).map(([k]) => k);
-    const owed = this.addressedBy(room, p);
+    const owed = this.addressedBy(room, p).filter((m) => m.tag !== "limits"); // a first-claim limits ask never holds a leave: a seat that never reads never gets it (audit/a87996d3, handoff-regression C)
     if (!orphaned.length && !owed.length) return null;
     p.leaveWarnedExit = true;
     const parts: string[] = [];
@@ -933,7 +933,7 @@ export class Hub {
     // reply_to, so once delivered it retires instead of staying the focused ask. Left as debt, it pinned every
     // later wait/read to that one message and refused send_message as "arrived while composing" until pass.
     for (const m of delivered) {
-      if (m.from.id !== "system" || m.kind !== "chat" || m.tag === "need" || m.tag === "hands" || !m.mentions?.includes(p.id) || p.declinedAsks?.includes(m.id)) continue;
+      if (m.from.id !== "system" || m.kind !== "chat" || m.tag === "need" || m.tag === "hands" || !m.mentions?.includes(p.id) || p.declinedAsks?.includes(m.id)) continue; // a first-claim limits ask retires here too: kept owed, it never let a wait drain (audit/f65acfac, idle-leave)
       p.declinedAsks = [...(p.declinedAsks ?? []), m.id];
       p.declinedAt = { ...(p.declinedAt ?? {}), [m.id]: m.seq };
     }
@@ -1848,7 +1848,7 @@ export class Hub {
     const human = [...room.messages].reverse().find((m) => m.kind === "chat" && m.tag !== "opening" &&
       m.from.agent === "human" && !this.isAnswered(room, m) && !p.declinedAsks?.includes(m.id) && this.responderFor(room, m, p.id).mine);
     // hub notices ride the normal stream (settleRead retires them on delivery); only an author can be answered
-    return human ?? this.addressedBy(room, p).find((m) => m.from.id !== "system" || m.tag === "need" || m.tag === "hands"); // needs/needs.ts: an ask to a blocked claim owner; asks/hands.ts: who adds a hand
+    const asks = this.addressedBy(room, p); return human ?? asks.find((m) => m.from.id !== "system" || m.tag === "need" || m.tag === "hands") ?? asks.find((m) => m.tag === "limits"); // needs/needs.ts: an ask to a blocked claim owner; asks/hands.ts: who adds a hand; the first-claim limits ask (needs.ts) leads only until delivered once, after any other ask, then retires like a hub notice (audit/f65acfac)
   }
 
   attentionHint(room: Room, p: Participant): string | undefined {

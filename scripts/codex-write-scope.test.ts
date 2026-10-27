@@ -21,6 +21,7 @@ git(base, "init", "-q", "repo");
 mkdirSync(join(base, "outside"));
 const repo = join(base, "repo"), wt = join(base, "wt"), common = join(repo, ".git"), outside = join(base, "outside");
 git(repo, "commit", "-q", "--allow-empty", "-m", "init");
+const main = git(repo, "branch", "--show-current").stdout.trim();
 git(repo, "worktree", "add", "-q", "-b", "swarm/run/seat", wt);
 const url = "http://127.0.0.1:1/mcp";
 const pair = (args: string[], key: string) => args.find((a, i) => args[i - 1] === "-c" && a.startsWith(`${key}=`))?.slice(key.length + 1);
@@ -29,13 +30,18 @@ test("a write seat runs workspace-write, scoped to the git paths a commit on its
   const rw = codexArgs({ cwd: wt, mcpUrl: url, readOnly: false });
   assert.deepEqual(rw.slice(rw.indexOf("-s"), rw.indexOf("-s") + 2), ["-s", "workspace-write"], rw.join(" "));
   assert.deepEqual(JSON.parse(pair(rw, "sandbox_workspace_write.writable_roots") ?? "null"),
-    [join(common, "worktrees", "wt"), join(common, "objects"), join(common, "refs"), join(common, "logs")]);
+    [join(common, "worktrees", "wt"), join(common, "objects"), join(common, "refs", "heads", "swarm", "run"), join(common, "logs", "refs", "heads", "swarm", "run")],
+    "refs and logs only for the seat's own run: not main, not any other branch (decision/chair-1009)");
   // the room's smoke starts a hub on localhost; workspace-write blocks the network by default
   assert.equal(pair(rw, "sandbox_workspace_write.network_access"), "true");
   assert.equal(rw.at(-1), "-", "the prompt still comes on stdin");
   const ro = codexArgs({ cwd: wt, mcpUrl: url, readOnly: true });
   assert.deepEqual(ro.slice(ro.indexOf("-s"), ro.indexOf("-s") + 2), ["-s", "read-only"]);
   assert.equal(pair(ro, "sandbox_workspace_write.writable_roots"), undefined, "a read-only seat gets no write roots");
+  // a detached worktree has no branch of its own: no ref roots, since refs/heads holds main
+  git(repo, "worktree", "add", "-q", "--detach", join(base, "detached"));
+  assert.deepEqual(JSON.parse(pair(codexArgs({ cwd: join(base, "detached"), mcpUrl: url, readOnly: false }), "sandbox_workspace_write.writable_roots") ?? "null"),
+    [join(common, "worktrees", "detached"), join(common, "objects")]);
   // outside git there is nothing to commit: workspace-write with no extra roots
   assert.equal(pair(codexArgs({ cwd: scratch, mcpUrl: url, readOnly: false }), "sandbox_workspace_write.writable_roots"), "[]");
 });
@@ -60,6 +66,8 @@ test("codex sandbox with the launcher's flags: writes in the worktree and /tmp, 
     `touch ${JSON.stringify(join(common, "config.probe"))} 2>/dev/null && echo common=written || echo common=denied`,
     `touch ${JSON.stringify(join(scratch, "t"))} && echo tmp=ok`,
     "git add inside.txt && git -c user.email=t@t -c user.name=t commit -q -m probe && echo commit=ok",
+    `git update-ref refs/heads/${main} HEAD 2>/dev/null && echo move-main=written || echo move-main=denied`,
+    "git branch other 2>/dev/null && echo new-branch=written || echo new-branch=denied",
   ].join("; ");
   const r = spawnSync("codex", ["sandbox", "-c", `sandbox_mode="${mode}"`, ...scope, "--", "sh", "-c", script], { cwd: wt, encoding: "utf8" });
   const out = r.stdout + r.stderr;
@@ -70,4 +78,8 @@ test("codex sandbox with the launcher's flags: writes in the worktree and /tmp, 
   assert.match(out, /tmp=ok/, out);
   assert.match(out, /commit=ok/, out);
   assert.equal(git(wt, "log", "-1", "--format=%s").stdout.trim(), "probe", "the commit landed on the seat branch");
+  // the shared repo's other branches, main included, stay where they were (claude-opus-5-5-1's review of b7019097)
+  assert.match(out, /move-main=denied/, out);
+  assert.match(out, /new-branch=denied/, out);
+  assert.equal(git(repo, "log", "-1", "--format=%s", main).stdout.trim(), "init", "main did not move");
 });

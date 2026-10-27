@@ -47,7 +47,7 @@ const ITEM_FILE = "## item: Explain winners\nCompare observed winners to the tes
 
 test("explicit resources override numbered operating rules in worker prompts", () => {
   const workers = launchWorkers("explicit", [], RULES, ITEM_FILE);
-  assert.match(workers[0], /Your starting area: item\/(explain-winners|reuse-data)/);
+  for (const worker of workers) assert.match(worker, /Your starting area: (?:a second angle on )?item\/(explain-winners|reuse-data)/);
   for (const worker of workers) assert.doesNotMatch(worker, /Your starting area:[^\n]*Make one final proposal/);
   assert.equal(workers.filter((w) => w.includes('starting area: item/explain-winners')).length, 1);
   assert.equal(workers.filter((w) => w.includes('starting area: item/reuse-data')).length, 1);

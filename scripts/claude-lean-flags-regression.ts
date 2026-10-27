@@ -22,6 +22,8 @@ import * as os from 'node:os';
 import * as url from 'node:url';
 import { EventEmitter } from 'node:events';
 import vm from 'node:vm';
+import { createHash } from 'node:crypto';
+import { z } from 'zod';
 import { StringDecoder } from 'node:string_decoder';
 import { transformSync } from 'esbuild';
 // swarm.ts imports topicDigest (scripts/join-topic-held-regression.ts): the real one, so a seat's topic_held is the true digest
@@ -39,11 +41,12 @@ type Capture = { cmd: string; args: string[]; options: any; stdin?: { text: stri
  * only job — the lean-flags argv contract — cannot be perturbed by unrelated edits to that file. */
 async function harness(entry: string, env: Record<string, string>, argv: string[] = [], opts: { hubAbsent?: boolean } = {}) {
   const calls: Capture[] = [];
+  const fsProbes: string[] = [];
   let hubAbsent = !!opts.hubAbsent; // the first fetch fails once, so swarm.ts's ensureHub spawns the hub and its env is captured
   const proc = { env, argv: ['node', entry, ...argv], execPath: '/synthetic/node', cwd: () => '/fixture', on() {}, stdout: { write() {} }, stderr: { write() {} }, exit(code: number) { if (code) throw new Error(`unexpected exit ${code}`); } };
   const fs = {
     realpathSync: (x: string) => x,
-    existsSync: (f: string) => f.endsWith('.env'),
+    existsSync: (f: string) => { fsProbes.push(f); return f.endsWith('.env'); },
     readFileSync(f: string) {
       if (f.endsWith('.env')) return fixture;
       if (f.endsWith('/prompts/planner.md')) return 'Synthetic fixture prompt planner';
@@ -75,7 +78,7 @@ async function harness(entry: string, env: Record<string, string>, argv: string[
     },
   };
   const context = vm.createContext({
-    process: proc, console: { log() {}, error() {} }, setTimeout, clearTimeout, setInterval, clearInterval, Date, URL, AbortSignal,
+    process: proc, console: { log() {}, error() {} }, setTimeout, clearTimeout, setInterval, clearInterval, Date, URL, AbortSignal, Buffer,
     async fetch(target: string) {
       if (hubAbsent) { hubAbsent = false; throw new Error('synthetic hub absent'); }
       return { status: 200, async json() { return target.endsWith('/rooms') || target.includes('/messages?') ? [] : { caps: { max_live_per_room: 12 }, state: 'concluded', conclusion: { text: 'fixture' } }; }, async text() { return ''; } };
@@ -83,7 +86,7 @@ async function harness(entry: string, env: Record<string, string>, argv: string[
   });
   const cache = new Map<string, any>();
   const mocks: Record<string, any> = {
-    'node:fs': fs, 'node:path': path, 'node:os': os, 'node:url': url, 'node:child_process': cp, 'node:crypto': { randomUUID: () => 'synthetic-session-id' }, 'node:string_decoder': { StringDecoder }, './strays.js': { stopStrays: async () => 0 }, './hub/status-view.js': { topicDigest },
+    'node:fs': fs, 'node:path': path, 'node:os': os, 'node:url': url, 'node:child_process': cp, 'node:crypto': { randomUUID: () => 'synthetic-session-id', createHash }, 'zod': { z }, 'node:string_decoder': { StringDecoder }, './strays.js': { stopStrays: async () => 0 }, './hub/status-view.js': { topicDigest },
     './hub.js': { HubError: Error }, './settled.js': { settledAxes: () => '', toldSettled: () => '', carriedSummary: () => ({ ids: [], axes: 0, chars: 0 }) }, './resources.js': { loadResources: () => [], seedResources: async () => [] }, './seat.js': { runSeat: async () => ({ final: 'fixture', ok: true }) },
     './seat-handoff-report.js': { handoffMarkerLine: () => '' },
     // launcher-side helpers with no part in a seat's argv or environment: the hooks copy and the join check (src/worktree-hooks.ts, src/join-check.ts)
@@ -106,7 +109,7 @@ async function harness(entry: string, env: Record<string, string>, argv: string[
     }
     const base = name.replace(/^\.\//, '').replace(/\.js$/, '');
     // Real source for these only: swarm/spawner (under test), env/respawn (their real deps), claude-args (the shared lean-args builder, pure), sandbox (its --sandbox block, pure over the mocked fs), cost-estimate (the launch cost guide, pure), launch/run-rooms (the run's room list, pure), seat/settings (the run's seat settings, type imports only).
-    assert.ok(['env', 'spawner', 'spawner/recruitment', 'swarm', 'respawn', 'claude-args', 'codex-seat', 'sandbox', 'cost-estimate', 'seat-targets', 'groups', 'launch/run-rooms', 'seat/settings'].includes(base), `unmocked import ${name}`);
+    assert.ok(['env', 'spawner', 'spawner/recruitment', 'swarm', 'respawn', 'claude-args', 'codex-seat', 'sandbox', 'cost-estimate', 'seat-targets', 'groups', 'launch/run-rooms', 'launch/source-feed', 'seat/settings'].includes(base), `unmocked import ${name}`);
     const source = readFileSync(path.join(root, 'src', `${base}.ts`), 'utf8');
     const code = transformSync(source, { loader: 'ts', format: 'esm', target: 'es2022' }).code;
     const mod = new vm.SourceTextModule(code, { context, initializeImportMeta(meta) { meta.url = `file:///fixture/src/${base}.js`; meta.resolve = () => "file:///synthetic/tsx.mjs"; } });
@@ -117,7 +120,7 @@ async function harness(entry: string, env: Record<string, string>, argv: string[
   // Node links each unlinked import itself, awaited by its first importer; a module this loader linked itself reached a second importer mid-link
   await mod.link((specifier: string) => module(specifier));
   await mod.evaluate();
-  return { exports: mod.namespace as any, env, calls };
+  return { exports: mod.namespace as any, fsProbes, env, calls };
 }
 
 /** The four lean flags, asserted together since a partial application is not the delivered contract. */
@@ -157,6 +160,12 @@ async function test(name: string, fn: () => Promise<void>) {
 }
 
 // ---- launcher: worker, verifier, planner (src/swarm.ts runClaude) ----
+await test('source feed with no project registry is optional under the synthetic filesystem', async () => {
+  const h = await harness('launch/source-feed', syntheticEnv());
+  assert.equal(h.exports.loadSourceFeed('/fixture'), undefined);
+  assert.ok(h.fsProbes.includes('/fixture/swarm.sources.json'), 'real loader checked the mocked project path');
+  assert.equal(h.exports.mergeSourceResources([]).length, 0, 'no feed preserves the empty manual resource set');
+});
 await test('swarm lean by default: planner, verifier and worker all get the lean flags', async () => {
   const h = await harness('swarm', syntheticEnv(), ['synthetic task', '--agents', '4', '--full-access']);
   const seats = h.calls.filter(c => c.cmd === 'claude');

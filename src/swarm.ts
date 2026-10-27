@@ -22,6 +22,7 @@ import { launchGuide } from "./cost-estimate.js";
 import { seatTarget, selectTargets, targetAssignment, targetSelectionNote, type LaunchTargets } from "./seat-targets.js";
 import { runRooms } from "./launch/run-rooms.js";
 import { digestAcks, digestRecords, loadGroups, renderDigests, type GroupsFile } from "./groups.js";
+import { loadSourceFeed, mergeSourceResources } from "./launch/source-feed.js";
 import { loadResources, seedResources } from "./resources.js";
 import { preflightAtLaunch } from "./launch/preflight.js";
 import { decisionRecordLine, fileRunDecisionRecord, isVerifierSeat } from "./launch/decision-record.js";
@@ -39,10 +40,9 @@ const flag = (name: string, def?: string) => {
 const has = (name: string) => argv.includes(`--${name}`);
 const BOOL_FLAGS = new Set(["--keep-hub", "--reuse-hub", "--apply", "--full-access", "--named", "--flat", "--require-verification", "--respawn", "--claude-full", "--no-carry", "--no-seat-targets", "--sandbox", "--no-web"]);
 const task = argv.find((a, i) => !a.startsWith("--") && (i === 0 || !argv[i - 1].startsWith("--") || BOOL_FLAGS.has(argv[i - 1])));
-if (!task) { console.error('usage: swarm "<task>" [--flat] [--done-when text] [--verify text] [--agents 6] [--cwd dir] [--models sonnet,haiku] [--lead-model opus] [--verifier-model opus] [--planner-model opus] [--codex k] [--codex-models gpt-6-astra,gpt-5.6-sol,gpt-5.6-terra] [--openrouter k] [--openrouter-models deepseek/deepseek-v4.1-flash,...] [--verifier-openrouter slug] [--openrouter-reasoning low|medium|high] [--require-verification] [--quorum unanimous|majority|supermajority] [--chair name] [--owner-word] [--seat-hooks off] [--seat-ai-gates on] [--prompt loop.md] [--groups groups.json [--digest-every 45]] [--resources file.md] [--preflight "<cmd>" | --preflight-strict "<cmd>"] [--respawn] [--apply] [--full-access] [--named] [--claude-full] [--no-carry] [--no-seat-targets] [--no-web] [--sandbox] [--timeout 30] [--port 7717] [--result-path path]'); process.exit(2); }
+if (!task) { console.error('usage: swarm "<task>" [--flat] [--done-when text] [--verify text] [--agents 6] [--cwd dir] [--models sonnet,haiku] [--lead-model opus] [--verifier-model opus] [--planner-model opus] [--codex k] [--codex-models gpt-6-astra,gpt-5.6-sol,gpt-5.6-terra] [--openrouter k] [--openrouter-models deepseek/deepseek-v4.1-flash,...] [--verifier-openrouter slug] [--openrouter-reasoning low|medium|high] [--require-verification] [--quorum unanimous|majority|supermajority] [--chair name] [--owner-word] [--seat-hooks off] [--seat-ai-gates on] [--prompt loop.md] [--groups groups.json [--digest-every 45]] [--resources file.md] [--sources registry.json] [--preflight "<cmd>" | --preflight-strict "<cmd>"] [--respawn] [--apply] [--full-access] [--named] [--claude-full] [--no-carry] [--no-seat-targets] [--no-web] [--sandbox] [--timeout 30] [--port 7717] [--result-path path]'); process.exit(2); }
 const PF = preflightAtLaunch(argv, resolve(flag("cwd", process.cwd())!)); // --preflight / --preflight-strict: the kit's environment checks, before anything starts (src/launch/preflight.ts)
-/** --groups <file.json>: the run's groups as the operator wrote them (src/groups.ts), one room and one brief each, on the
- * long-room brief (prompts/group.md). No planner runs, and --agents is the file's workers plus the verifier. */
+/** --groups <file.json>: operator-defined rooms/briefs (src/groups.ts, prompts/group.md), no planner; --agents is workers plus verifier. */
 let GROUPS: GroupsFile | undefined;
 if (flag("groups")) {
   if (has("flat")) { console.error("--groups gives each group its own room; --flat puts everyone in one. Pass one of them."); process.exit(2); }
@@ -90,11 +90,7 @@ const gitIdentity = () => {
 const PROJECT_IDENTITY = { cwd: CWD, canonicalPath: realpathSync(CWD), git: gitIdentity() };
 /** set by the signal handler: a seat that exits because the launcher is stopping is not a drop to respawn */
 let STOPPING = false;
-/**
- * --flat: no planner, no pre-assigned sub-rooms. Every agent gets the raw task in ONE room on the
- * minimal prompt and organises itself (board claims, request_agent, break-out rooms). The verifier sits
- * in the same room. Use it when the shape of the work is itself unknown (brainstorms, open questions).
- */
+/** --flat: one room and verifier, no planner; seats organise with claims/recruits/break-outs when the work's shape is unknown. */
 const FLAT = has("flat");
 /** --fresh-challenger: a hub this launcher starts recruits one read-only seat per opened proposal to check it (Spawner.freshChallenger) */
 const FRESH_CHALLENGER = has("fresh-challenger");
@@ -114,11 +110,15 @@ let RESOURCES: ReturnType<typeof loadResources> = [];
 if (has("resources")) {
   try { RESOURCES = loadResources(resolve(flag("resources") ?? "")); } catch (e) { console.error(e instanceof Error ? e.message : String(e)); process.exit(2); }
 }
-/**
- * --compact-at <tokens>: every Claude seat, and every recruit of this run's rooms, compacts its transcript at this size; unset, lean
- * seats compact at SEAT_COMPACT_DEFAULT (300000); "--compact-at off", or --claude-full, leaves Claude Code's own default. --effort
- * <level>: every Claude seat and recruit runs at this CLAUDE_CODE_EFFORT_LEVEL. The rooms carry both to a hub this run did not start.
- */
+// A project registers its sources once. Every launch reloads them before any seat starts.
+let SOURCE_FEED: ReturnType<typeof loadSourceFeed>;
+try {
+  if (has("sources") && (!flag("sources") || flag("sources")!.startsWith("--"))) throw new Error("--sources requires a registry file");
+  SOURCE_FEED = loadSourceFeed(CWD, flag("sources"));
+  RESOURCES = mergeSourceResources([...RESOURCES, ...(PF.resource ? [PF.resource] : [])], SOURCE_FEED);
+} catch (e) { console.error(e instanceof Error ? e.message : String(e)); process.exit(2); }
+/** --compact-at: Claude seats/recruits compact at this token count (lean default 300000); off/--claude-full retains Claude's default.
+ * --effort sets CLAUDE_CODE_EFFORT_LEVEL for those seats/recruits. Rooms carry both settings to reused hubs. */
 const COMPACT_AT = flag("compact-at") ?? (CLAUDE_FULL ? "off" : undefined);
 const SEAT_FLAGS = applySeatFlags(process.env, { compactAt: COMPACT_AT, effort: flag("effort") });
 for (const w of SEAT_FLAGS.warnings) console.error(w);
@@ -550,7 +550,7 @@ log(`plan: ${plan.groups.map((g) => `${g.title} ×${g.workers}`).join(" | ")}`);
 const leadsRoom = FLAT ? `${SWARM_ID}-room` : `${SWARM_ID}-leads`;
 const FLAT_TARGETS = TARGETS.items.length ? (i: number) => seatTarget(task, i, LENSES, TARGETS) : undefined;
 const groupRooms = FLAT ? [] : plan.groups.map((g) => `${SWARM_ID}-${g.id}`);
-if (PF.resource) RESOURCES.push(PF.resource);
+if (SOURCE_FEED) for (const s of SOURCE_FEED.receipt.sources) log(`source ${s.id}: ${s.records} records, sha256 ${s.sha256}, snapshot ${s.modifiedAt}`);
 if (RESOURCES.length) {
   try {
     for (const line of await seedResources(URL_, [...groupRooms, leadsRoom], RESOURCES, { headers: launcherHeaders(launcherToken) })) log(line);
@@ -839,7 +839,7 @@ const persistIncremental = (done: SeatRun[]) => {
   writeRunResult(resolve(OUT, "result.json"), {
     schemaVersion: 1,
     run: { id: SWARM_ID, startedAt: new Date(RUN_STARTED).toISOString(), completedAt: new Date().toISOString(), task, doneWhen: plan.done_when },
-    project: PROJECT_IDENTITY,
+    project: PROJECT_IDENTITY, ...(SOURCE_FEED ? { sourceFeed: SOURCE_FEED.receipt } : {}),
     leadRoom: leadsRoom,
     rooms: [],
     verifier: { name: "verifier", output: null },
@@ -889,7 +889,7 @@ const artifactPath = resolve(flag("result-path", resolve(OUT, "result.json"))!);
 const artifact: RunResult = {
   schemaVersion: 1,
   run: { id: SWARM_ID, startedAt: new Date(RUN_STARTED).toISOString(), completedAt: new Date().toISOString(), task, doneWhen: plan.done_when },
-  project: PROJECT_IDENTITY,
+  project: PROJECT_IDENTITY, ...(SOURCE_FEED ? { sourceFeed: SOURCE_FEED.receipt } : {}),
   leadRoom: leadsRoom,
   rooms: snapshots,
   verifier: { name: "verifier", output: results.find(r => r.name === "verifier")?.text ?? null },

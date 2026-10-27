@@ -391,6 +391,8 @@ export const offlineScripts = [
   'topic-once-regression.ts',
   'join-topic-held-regression.ts',
   'conduct-guidance-regression.ts',
+  'source-feed-regression.ts',
+  'source-feed-launch-regression.ts',
 ];
 
 export function offlineCommands() {

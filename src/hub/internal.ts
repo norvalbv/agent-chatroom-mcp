@@ -43,8 +43,10 @@ export type Event =
   | { type: "challenge"; room: string; proposalId: string; challenge: Challenge; votes?: Proposal["votes"] }
   | { type: "challenge_status"; room: string; proposalId: string; challengeId?: string; status: NonNullable<Challenge["status"]> }
   | { type: "state"; room: string; state: RoomState; conclusion?: Room["conclusion"] }
-  | { type: "opening"; room: string; pid: string; content: string }
-  | { type: "openings_revealed"; room: string }
+  /** alternatives: what the seat named besides its answer (decision/opening-alternatives); seeded as idea/* on reveal */
+  | { type: "opening"; room: string; pid: string; content: string; alternatives?: string[] }
+  /** ideas_seeded: the idea/* keys written from the openings' alternatives (telemetry; replay reads only the type) */
+  | { type: "openings_revealed"; room: string; ideas_seeded?: string[] }
   /** by/drafted/drafters/seconds are telemetry (replay reads only the type): how the round ended and how many had drafted */
   | { type: "drafts_revealed"; room: string; by?: "all" | "deadline"; drafted?: number; drafters?: number; seconds?: number }
   | { type: "drafts_opened"; room: string; at: string; by?: string; key?: string }

@@ -422,12 +422,12 @@ export function createSessionServer(hub: Hub, spawner?: Spawner, opts: { holdMs?
       description:
         "Submit your independent first answer. It is held privately and revealed together with everyone else's once all " +
         "participants have submitted, so nobody anchors on another agent's answer. Hard cap 400 characters regardless of the room's max_message_chars: one or two sentences. After it returns, call wait_for_messages.",
-      inputSchema: { room: roomArg, content: z.string().describe("Your opening position and the main reason, under 400 characters."), participant_id: asArg },
+      inputSchema: { room: roomArg, content: z.string().describe("Your opening position and the main reason, under 400 characters."), alternatives: z.array(z.string()).optional().describe("Up to 3 other ways the goal could be met or the question answered that you are not leading with, each with the cheapest check that would tell it from your answer (200 chars each). The hub writes each as idea/<slug> when the openings are revealed."), participant_id: asArg },
     },
-    guard("submit_opening", ({ room, content, participant_id }) => {
+    guard("submit_opening", ({ room, content, alternatives, participant_id }) => {
       const r = hub.getRoom(room);
       const id = pid(room, participant_id);
-      const out = hub.submitOpening(room, id, content);
+      const out = hub.submitOpening(room, id, content, alternatives);
       const mins = Math.round(r.nudgeAfterMs / 60000);
       // openings are where seats first list ideas (dev room swarm-013200-opmd-room): the same pointer as a chat list
       const listHint = ideaListHint(r, hub.requireParticipant(r, id), content, false);

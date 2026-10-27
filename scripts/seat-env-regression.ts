@@ -10,6 +10,8 @@ import * as os from 'node:os';
 import * as url from 'node:url';
 import { EventEmitter } from 'node:events';
 import vm from 'node:vm';
+import { createHash } from 'node:crypto';
+import { z } from 'zod';
 import { StringDecoder } from 'node:string_decoder';
 import { transformSync } from 'esbuild';
 // swarm.ts imports topicDigest (scripts/join-topic-held-regression.ts): the real one, so a seat's topic_held is the true digest
@@ -23,11 +25,12 @@ const syntheticEnv = () => ({ CHATROOM_HUMAN_TOKEN: HUMAN, OPENROUTER_API_KEY: P
 type Capture = { cmd: string; args: string[]; options: any; stdin?: { text: string } };
 async function harness(entry: string, env: Record<string, string>, argv: string[] = [], worktrees: "none" | "success" | "fail" = "none") {
   const calls: Capture[] = [];
+  const fsProbes: string[] = [];
   const requests: { target: string; options: any }[] = [];
   let initialFetch = true;
   const proc = { env, argv: ['node', entry, ...argv], execPath: '/synthetic/node', cwd: () => '/fixture', on() {}, stdout: { write() {} }, stderr: { write() {} }, exit(code: number) { if (code) throw new Error(`unexpected exit ${code}`); } };
   const fs = { realpathSync: (x: string) => x,
-    existsSync: (f: string) => f.endsWith('.env'),
+    existsSync: (f: string) => { fsProbes.push(f); return f.endsWith('.env'); },
     readFileSync(f: string) {
       // Deliberately no delegated disk reads: even dotenv and prompts are in-memory fixtures.
       if (f.endsWith('.env')) return fixture;
@@ -60,7 +63,7 @@ async function harness(entry: string, env: Record<string, string>, argv: string[
       return { status: 1, stdout: '', stderr: '' };
     },
   };
-  const context = vm.createContext({ process: proc, console: { log() {}, error() {} }, setTimeout, clearTimeout, setInterval, clearInterval, Date, URL, AbortSignal,
+  const context = vm.createContext({ process: proc, console: { log() {}, error() {} }, setTimeout, clearTimeout, setInterval, clearInterval, Date, URL, AbortSignal, Buffer,
     async fetch(target: string, options?: any) {
       requests.push({ target, options });
       // Exercise ensureHub's fallback spawn without contacting a hub.
@@ -69,7 +72,7 @@ async function harness(entry: string, env: Record<string, string>, argv: string[
     },
   });
   const cache = new Map<string, any>();
-  const mocks: Record<string, any> = { 'node:fs': fs, 'node:path': path, 'node:os': os, 'node:url': url, 'node:child_process': cp, 'node:crypto': { randomUUID: () => 'synthetic-session-id' }, 'node:string_decoder': { StringDecoder }, './strays.js': { stopStrays: async () => 0 }, './hub/status-view.js': { topicDigest }, './hub.js': { HubError: Error }, './settled.js': { settledAxes: () => '', toldSettled: () => '', carriedSummary: () => ({ ids: [], axes: 0, chars: 0 }) }, './resources.js': { loadResources: () => [], seedResources: async () => [] }, './seat.js': { runSeat: async () => ({ final: 'fixture', ok: true }) }, './seat-handoff-report.js': { handoffMarkerLine: () => '' },
+  const mocks: Record<string, any> = { 'node:fs': fs, 'node:path': path, 'node:os': os, 'node:url': url, 'node:child_process': cp, 'node:crypto': { randomUUID: () => 'synthetic-session-id', createHash }, 'zod': { z }, 'node:string_decoder': { StringDecoder }, './strays.js': { stopStrays: async () => 0 }, './hub/status-view.js': { topicDigest }, './hub.js': { HubError: Error }, './settled.js': { settledAxes: () => '', toldSettled: () => '', carriedSummary: () => ({ ids: [], axes: 0, chars: 0 }) }, './resources.js': { loadResources: () => [], seedResources: async () => [] }, './seat.js': { runSeat: async () => ({ final: 'fixture', ok: true }) }, './seat-handoff-report.js': { handoffMarkerLine: () => '' },
     // launcher-side helpers with no part in a seat's argv or environment: the hooks copy and the join check (src/worktree-hooks.ts, src/join-check.ts)
     './worktree-hooks.js': { carryHooks: () => ({ hooks: 'shared' }), hooksLine: () => '', hooksOff: () => ({ hooks: 'shared' }) },
     // where a recruit works (src/spawner/worktrees.ts): the fixture is outside git, so no worktree, branch or snapshot, as the real helpers say over the git mock above
@@ -87,7 +90,7 @@ async function harness(entry: string, env: Record<string, string>, argv: string[
       cache.set(name, mod); return mod;
     }
     const base = name.replace(/^\.\//, '').replace(/\.js$/, '');
-    assert.ok(['env', 'spawner', 'spawner/recruitment', 'swarm', 'openrouter', 'respawn', 'claude-args', 'codex-seat', 'sandbox', 'cost-estimate', 'seat-targets', 'groups', 'launch/run-rooms', 'seat/settings'].includes(base), `unmocked import ${name}`); // respawn.ts, claude-args.ts, codex-seat.ts, sandbox.ts, cost-estimate.ts, seat-targets.ts, launch/run-rooms.ts and seat/settings.ts are pure (sandbox over the mocked fs): real import
+    assert.ok(['env', 'spawner', 'spawner/recruitment', 'swarm', 'openrouter', 'respawn', 'claude-args', 'codex-seat', 'sandbox', 'cost-estimate', 'seat-targets', 'groups', 'launch/run-rooms', 'launch/source-feed', 'seat/settings'].includes(base), `unmocked import ${name}`); // respawn.ts, claude-args.ts, codex-seat.ts, sandbox.ts, cost-estimate.ts, seat-targets.ts, launch/run-rooms.ts and seat/settings.ts are pure (sandbox over the mocked fs): real import
     // Only these explicitly allowlisted source files are read from disk.
     const source = readFileSync(path.join(root, 'src', `${base}.ts`), 'utf8');
     const code = transformSync(source, { loader: 'ts', format: 'esm', target: 'es2022' }).code;
@@ -99,7 +102,7 @@ async function harness(entry: string, env: Record<string, string>, argv: string[
   // Node links each unlinked import itself, awaited by its first importer; a module this loader linked itself reached a second importer mid-link
   await mod.link((specifier: string) => module(specifier));
   await mod.evaluate();
-  return { exports: mod.namespace as any, env, calls, requests };
+  return { exports: mod.namespace as any, fsProbes, env, calls, requests };
 }
 function checkSeat(call: Capture) {
   assert.equal(Object.hasOwn(call.options.env, 'CHATROOM_HUMAN_TOKEN'), false, 'seat spawn options must omit human token');
@@ -121,6 +124,12 @@ for (const agent of ['claude', 'codex', 'openrouter']) await test(`spawner ${age
   const spawner = new h.exports.Spawner({ mcpUrl: 'http://synthetic.invalid/mcp', defaultCwd: '/fixture', logDir: '/fixture/logs' });
   spawner.request({ room: 'synthetic-room', requestedBy: 'synthetic-parent', brief: 'Synthetic non-networking credential minimization regression', agent, name: `fixture-${agent}` });
   assert.equal(h.calls.length, 1); checkSeat(h.calls[0]); assert.equal(h.env.CHATROOM_HUMAN_TOKEN, HUMAN, 'parent environment unchanged');
+});
+await test('source feed with no project registry is optional under the synthetic filesystem', async () => {
+  const h = await harness('launch/source-feed', syntheticEnv());
+  assert.equal(h.exports.loadSourceFeed('/fixture'), undefined);
+  assert.ok(h.fsProbes.includes('/fixture/swarm.sources.json'), 'real loader checked the mocked project path');
+  assert.equal(h.exports.mergeSourceResources([]).length, 0, 'no feed preserves the empty manual resource set');
 });
 await test('swarm all provider seats, hub env and controller header', async () => {
   const h = await harness('swarm', syntheticEnv(), ['synthetic task', '--flat', '--agents', '4', '--codex', '1', '--openrouter', '1', '--require-verification']);

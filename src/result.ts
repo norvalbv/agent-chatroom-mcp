@@ -12,6 +12,8 @@ import { renderPreflight, type PreflightResult } from './launch/preflight.js';
 import { renderDecisionRecord, type DecisionRecordSummary } from './launch/decision-record.js';
 import { collectRoomMetrics, renderFeedback, runFeedback, type RunFeedback } from './telemetry/feedback.js';
 
+import type { SourceFeed } from "./launch/source-feed.js";
+
 export interface RoomSnapshot {
   name: string;
   payload: Record<string, any> | null;
@@ -46,6 +48,8 @@ export interface RunResult {
   digestAcks?: DigestAck[];
   /** --preflight: the environment checks run before any seat started (src/preflight.ts); absent when none ran. */
   preflight?: PreflightResult;
+  /** Registered catalogues loaded for this launch, with original content hashes and status counts. */
+  sourceFeed?: SourceFeed;
   /** What the launcher filed from the verifier's DECISION RECORD, from where, or why nothing (src/launch/decision-record.ts); absent on older artifacts. */
   decisionRecord?: DecisionRecordSummary;
   /** The largest room the launcher started, the brief's numbered items, and whether the size note was printed

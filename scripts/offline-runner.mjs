@@ -368,6 +368,7 @@ export const offlineScripts = [
   'runs-table-truth-regression.ts',
   'runs-table-close-regression.ts',
   'room-size-regression.ts',
+  'seat-targets-regression.ts',
   'hold-lapses-regression.ts',
   'idle-jobs-regression.ts',
   'run-end-seat-exit-regression.ts',

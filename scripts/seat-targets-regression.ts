@@ -9,14 +9,13 @@ import { spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { writeFakeBins } from "./seat-launch-fixture.ts";
+import { freePort, writeFakeBins } from "./seat-launch-fixture.ts";
 import { briefSeeds, seatTarget } from "../src/seat-targets.ts";
 import * as targeting from "../src/seat-targets.ts";
 
 import { parseResources } from "../src/resources.ts";
 
-const PORT = process.env.PORT;
-if (!PORT) throw new Error("set PORT to a free port in your range");
+const PORT = process.env.PORT ?? String(await freePort());
 
 const TASK = [
   "Improve the widget service.",

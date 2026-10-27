@@ -1,4 +1,4 @@
-import { briefSeeds } from "./seat-targets.js";
+import { selectTargets, type TargetSelection } from "./seat-targets.js";
 
 /**
  * Rough pre-launch cost guide, printed by the launcher so whoever starts a run sees what seats x minutes means before
@@ -27,7 +27,7 @@ export const SIZE_NOTE_ABOVE = 6;
  * (37 rooms, sign test p=0.74), but landed results do not grow (paper Study 3: 15 seats landed no more of a 20-item pool
  * than 3, at 2.5-3.5x the cost per item), and the share of seats with no finding rises from 4% at 2-3 seats to 10% at
  * 9-12 and 18% at 13+ (runs-table idleSeats over 110 Claude rooms; task and era confound it). `briefItems` is the
- * brief's first numbered list (src/seat-targets.ts), so a brief that numbers its rules first counts the rules.
+ * selected target list (src/seat-targets.ts); explicit items take precedence over numbered prose.
  */
 export function launchSizeNote(o: { roomSeats: number; workers: number; briefItems: number }): string {
   if (o.roomSeats <= SIZE_NOTE_ABOVE) return "";
@@ -45,12 +45,12 @@ export interface LaunchSizing { room_seats: number; workers: number; brief_items
  * than SIZE_NOTE_ABOVE agents. --flat puts every agent in one room, verifier included; --groups puts each group's
  * workers in a room of its own (the verifier sits in the leads room); a planned run's rooms are the planner's to size,
  * so it gets no sizing record. Seat targets off (--no-seat-targets) means no seat starts on a listed item. */
-export function launchGuide(o: { total: number; timeoutMin: number; flat: boolean; groupWorkers?: number[]; task: string; seatTargets: boolean }, log: (line: string) => void): LaunchSizing | undefined {
+export function launchGuide(o: { total: number; timeoutMin: number; flat: boolean; groupWorkers?: number[]; task: string; seatTargets: boolean; targets?: TargetSelection }, log: (line: string) => void): LaunchSizing | undefined {
   log(launchCostGuide(o.total, o.timeoutMin));
   if (!o.flat && !o.groupWorkers?.length) return undefined;
   const room_seats = o.flat ? o.total : Math.max(...o.groupWorkers!);
   const workers = o.flat ? o.total - 1 : room_seats;
-  const brief_items = o.flat && o.seatTargets ? briefSeeds(o.task).length : 0;
+  const brief_items = o.flat && o.seatTargets ? (o.targets ?? selectTargets(o.task)).items.length : 0;
   const note = launchSizeNote({ roomSeats: room_seats, workers, briefItems: brief_items });
   if (note) log(note);
   return { room_seats, workers, brief_items, note: !!note };

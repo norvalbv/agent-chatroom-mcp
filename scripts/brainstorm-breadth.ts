@@ -33,7 +33,6 @@ const tsOf = (e: Ev): string | undefined => e.ts ?? e.msg?.ts ?? e.entry?.update
 /** Pure: one room's row from its events in log order. */
 export function breadth(events: Ev[], room = String(events[0]?.room ?? "")): Breadth {
   let start: string | undefined, firstClaim: string | undefined, conclusion: string | undefined;
-  const board = new Map<string, string>();
   const ideaFirst = new Map<string, string>();
   let seeded: string[] = [];
   // the whole history, not the final board: a claim cleared once its work landed still addressed its idea
@@ -41,9 +40,9 @@ export function breadth(events: Ev[], room = String(events[0]?.room ?? "")): Bre
   for (const e of events) {
     const ts = tsOf(e);
     start ??= ts;
-    if (e.type === "board" || e.type === "board_edit" || e.type === "board_append") {
+    // only "board" carries the entry; board_edit and board_append are telemetry with no text (src/hub/internal.ts)
+    if (e.type === "board") {
       const key = String(e.key ?? ""), text = String(e.entry?.text ?? "");
-      board.set(key, text);
       if (text.trim()) everLive.add(key);
       if (key.startsWith("claim/") && text.trim()) { firstClaim ??= e.entry?.updatedAt ?? ts; claimTexts.push(text); }
       if (key.startsWith("idea/") && text.trim() && !ideaFirst.has(key)) ideaFirst.set(key, e.entry?.updatedAt ?? ts ?? "");

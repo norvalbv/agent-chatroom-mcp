@@ -33,12 +33,20 @@ assert.equal(prefix.addressed, 0, "idea/ab and idea/a-2 in a claim do not name i
 const named = breadth([{ type: "room", room: "n", ts: at() }, write("idea/a", "A"), write("claim/b", "Working on idea/a.")], "n");
 assert.equal(named.addressed, 1, "a sentence-final period still names idea/a");
 
-// An idea attacked, conceded and then cleared before the end (arm B of probe/brainstorm-prereg, swarm-085234-dn6b) was
-// addressed: the count is over every idea ever written, not the final board's.
+// An idea attacked, conceded and then cleared before the end was addressed: the count is over every idea ever written,
+// not the final board's.
 const cleared = breadth([{ type: "room", room: "c", ts: at() }, write("idea/a", "A"), write("idea/b", "B"),
   write("attack/idea/a", "Not the lead."), write("idea/a", "WITHDRAWN: conceded."), write("idea/a", "")], "c");
 assert.equal(cleared.ideas, 2, `both ideas ever written count: ${JSON.stringify(cleared)}`);
 assert.equal(cleared.addressed, 1, "the attacked-then-cleared idea was addressed");
 assert.equal(cleared.never_addressed, 1, "idea/b was never addressed");
+
+// Arm B of probe/brainstorm-prereg (swarm-085234-dn6b) amended its attacked ideas in place: each amend logs a "board"
+// event with the text and a board_edit with none. The board_edit is telemetry, not a clear (an earlier reading took it
+// for one, and 0ab64b96's message calls those ideas "cleared"; they were amended).
+const edit = (key: string) => ({ type: "board_edit", room: "e", key, by: "a", sent_chars: 9, entry_chars: 30, ts: at() });
+const amended = breadth([{ type: "room", room: "e", ts: at() }, write("idea/a", "A"), write("attack/idea/a", "No."),
+  write("idea/a", "SCOPED after attack/idea/a."), edit("idea/a"), write("claim/b", "Building."), edit("claim/b")], "e");
+assert.deepEqual([amended.ideas, amended.addressed, amended.ideas_before_first_claim], [1, 1, 1], JSON.stringify(amended));
 
 console.log("brainstorm-breadth-regression: OK");

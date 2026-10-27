@@ -71,6 +71,13 @@ research.metrics.research!.steps.run = 0;
 research.metrics.research!.tagged = false;
 assert.ok(!runFeedback(research).recommendations.some(r => r.id === "exercise-fetched-code"), "truncated historical targets cannot establish outside code was not run");
 assert.ok(runFeedback(research).unknowns.some(s => /legacy|untagged/i.test(s)));
+const earlyLimit = result(room("lead", negative));
+earlyLimit.metrics = metric([]);
+Object.assign(earlyLimit.metrics, { needs: { filed: 1, cleared: 1, blocks: 1, asked: 1, askedThenFiled: 1, askedAtStart: 1, askedAtStartAnswered: 1, askedAtStartThenFiled: 1, asksOfOwners: 0, ownersAnswered: 0 } });
+const earlyFeedback = runFeedback(earlyLimit);
+assert.ok(earlyFeedback.recommendations.some(r => r.id === "review-start-limit"), "a resolved early need still informs the next setup without a negative verdict classifier");
+assert.match(earlyFeedback.recommendations.find(r => r.id === "review-start-limit")!.observation, /correlation/i);
+assert.ok(!/method fail/i.test(renderFeedback(runFeedback(result(room("lead", negative))))), "no escalation is not proof of method failure");
 
 const open = result(room("lead", { state: "open", board: {}, proposals: [{ id: "p", status: "open", blocked_by: ["verify missing"], waiting_on: ["a"] }] }));
 assert.ok(runFeedback(open).recommendations.some(r => r.id === "resume-open-work"));

@@ -11,6 +11,7 @@ import type { Participant, Proposal } from "./types.js";
 import { hexTokens } from "./types.js";
 import { now, keepRefusal } from "./internal.js";
 import type { Opts, Event } from "./internal.js";
+import { holdAlternatives } from "./openings/ideas.js";
 
 function recordReplyMetricEvent(hub: Hub, ev: Event) {
   const roomName = "room" in ev ? ev.room : ev.type === "message" ? ev.msg.room : ev.proposal.room;
@@ -204,9 +205,12 @@ export function replay(hub: Hub) {
           }
           break;
         }
-        case "opening":
-          hub.rooms.get(ev.room)?.openings.set(ev.pid, ev.content);
+        case "opening": {
+          const room = hub.rooms.get(ev.room);
+          room?.openings.set(ev.pid, ev.content);
+          if (room) holdAlternatives(room, ev.pid, ev.alternatives); // a resubmission without any withdraws the earlier ones
           break;
+        }
         case "drafts_revealed": {
           const room = hub.rooms.get(ev.room);
           if (room) room.draftsRevealed = true;

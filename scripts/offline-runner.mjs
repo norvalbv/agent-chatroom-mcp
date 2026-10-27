@@ -120,6 +120,7 @@ export const offlineScripts = [
   'seat-prompt-argv.test.ts',
   'codex-seat.test.ts',
   'codex-steering.test.ts',
+  'codex-write-scope.test.ts',
   'strays.test.ts',
   'sandbox-seats.test.ts',
   'pool-format.test.ts',

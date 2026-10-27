@@ -5,8 +5,9 @@
  * local `codex exec --help` (codex-cli 0.155.0-alpha.16.3).
  */
 import { StringDecoder } from "node:string_decoder";
-import { existsSync } from "node:fs";
-import { resolve } from "node:path";
+import { spawnSync } from "node:child_process";
+import { existsSync, realpathSync } from "node:fs";
+import { join, resolve } from "node:path";
 import { repoRoot } from "./env.js";
 
 export function codexConfigArgs(mcpUrl: string): string[] {
@@ -24,7 +25,7 @@ export interface CodexArgsOptions {
   /** the chatroom MCP URL carrying this seat's heartbeat key */
   mcpUrl: string;
   model?: string;
-  /** a seat that may not modify files: `-s read-only` */
+  /** a seat that may not modify files: `-s read-only`; otherwise `-s workspace-write` scoped by codexGitWriteRoots */
   readOnly: boolean;
   /** -o: codex writes the seat's final message here (the launcher's <name>.out) */
   outFile?: string;
@@ -39,11 +40,13 @@ export interface CodexArgsOptions {
  * (2026-09-23) one seat's `pkill -f "offline-runner"` matched the brief in 14 of 15 seats' argv (src/claude-args.ts).
  *
  * Sandbox: ~/.codex/config.toml on this machine sets sandbox_mode = "danger-full-access" with approval_policy =
- * "never", so a seat that passes no -s runs unsandboxed. A read-only seat gets `-s read-only`. A write seat keeps
- * whatever the user's config says: `-s workspace-write` marks the gitdir behind a linked worktree's .git file
- * read-only (codex-rs protocol/src/permissions.rs, default_read_only_subpaths_for_writable_root, per the survey's
- * skeptic check), so a write seat could not commit on its swarm/<run>/<seat> branch, which the verifier, --apply and
- * pool-run all read. The survey's alternative for write seats, wrapping the whole seat process in srt, is not done here.
+ * "never", so a seat that passes no -s runs unsandboxed. A read-only seat gets `-s read-only`. A write seat gets
+ * `-s workspace-write` (its cwd, $TMPDIR and /tmp) plus the git paths codexGitWriteRoots names, so it can still commit
+ * on its swarm/<run>/<seat> branch, which the verifier, --apply and pool-run all read: workspace-write alone keeps every
+ * .git under a writable root read-only (codex-rs default_read_only_subpaths_for_writable_root), and the shared .git
+ * as a root is carved out the same way, so the roots are its subdirectories. Probed with codex-cli 0.164.0's
+ * `codex sandbox` (scripts/codex-write-scope.test.ts). Before this a write seat inherited danger-full-access and could
+ * write anywhere the user can; CHATROOM_CODEX_WRITE_SANDBOX=inherit restores that.
  *
  * Under -s read-only codex asks for approval before every MCP tool call, and with approval_policy = "never" it
  * refuses them: a live gpt-6-astra seat's join_room failed with "MCP tool call requires approval, but approval policy
@@ -54,12 +57,38 @@ export interface CodexArgsOptions {
  */
 export function codexArgs({ cwd, mcpUrl, model, readOnly, outFile, json }: CodexArgsOptions): string[] {
   const args = ["exec", "--skip-git-repo-check", "-C", cwd, ...codexConfigArgs(mcpUrl)];
-  if (readOnly) args.push("-s", "read-only");
+  const mode = codexSandboxMode(readOnly);
+  if (mode === "read-only") args.push("-s", "read-only");
+  if (mode === "workspace-write") args.push("-s", "workspace-write", ...codexWriteScopeArgs(codexGitWriteRoots(cwd)));
   if (json) args.push("--json");
   if (outFile) args.push("-o", outFile);
   if (model) args.push("-m", model);
   args.push("-");
   return args;
+}
+
+/** The sandbox a seat runs: "inherited" is whatever ~/.codex/config.toml says (CHATROOM_CODEX_WRITE_SANDBOX=inherit). */
+export function codexSandboxMode(readOnly: boolean): "read-only" | "workspace-write" | "inherited" {
+  if (readOnly) return "read-only";
+  return process.env.CHATROOM_CODEX_WRITE_SANDBOX === "inherit" ? "inherited" : "workspace-write";
+}
+
+/**
+ * What a commit on a linked worktree's branch writes outside the worktree: its own gitdir (index, HEAD) and the shared
+ * objects, refs and logs. Never the shared config or hooks. [] outside git, and for a plain checkout, whose .git codex
+ * keeps read-only whatever the roots; both launchers give a write seat its own linked worktree.
+ */
+export function codexGitWriteRoots(cwd: string): string[] {
+  const r = spawnSync("git", ["-C", cwd, "rev-parse", "--path-format=absolute", "--git-dir", "--git-common-dir"], { encoding: "utf8" });
+  if (r.status !== 0) return [];
+  const [gitDir, common] = r.stdout.trim().split("\n").map((p) => { try { return realpathSync(p); } catch { return p; } });
+  if (!gitDir || !common || gitDir === common) return [];
+  return [gitDir, join(common, "objects"), join(common, "refs"), join(common, "logs")];
+}
+
+/** -c overrides for workspace-write: extra roots, and the network (a seat's smoke starts a hub on localhost). */
+export function codexWriteScopeArgs(roots: string[]): string[] {
+  return ["-c", `sandbox_workspace_write.writable_roots=${JSON.stringify(roots)}`, "-c", "sandbox_workspace_write.network_access=true"];
 }
 
 /** turn.completed's usage object as codex 0.155 emits it. */

@@ -475,7 +475,7 @@ log(`swarm ${SWARM_ID}: ${TOTAL} agents (${WORKERS} workers + verifier), project
 const TARGETS: LaunchTargets = { ...selectTargets(FLAT && !NO_SEAT_TARGETS ? task : "", FLAT && !NO_SEAT_TARGETS ? RESOURCES : []), assignments: [] };
 if (FLAT) log(targetSelectionNote(TARGETS));
 const SIZING = launchGuide({ total: TOTAL, timeoutMin: TIMEOUT_MIN, flat: FLAT, groupWorkers: GROUPS?.groups.map((g) => g.workers), task, seatTargets: !NO_SEAT_TARGETS, targets: TARGETS }, log);
-if (SANDBOX) log(`--sandbox: claude seats run Bash in Claude Code's sandbox, OpenRouter seats wrap run_command in sandbox-runtime${CODEX ? `; the ${CODEX} codex seat(s) are NOT sandboxed by this flag` : ""}`);
+if (SANDBOX) log(`--sandbox: claude seats run Bash in Claude Code's sandbox, OpenRouter seats wrap run_command in sandbox-runtime${CODEX ? `; the ${CODEX} codex seat(s) run codex's own sandbox whatever this flag says (read-only, or workspace-write for write seats)` : ""}`);
 /** Earlier runs in this checkout: a room should ratify or refute them by reference, not re-derive them. */
 function priorRuns(): string {
   const dir = resolve(repoRoot, "swarms");

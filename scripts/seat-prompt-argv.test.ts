@@ -66,7 +66,7 @@ process.stdout.write(JSON.stringify({ type: 'result', subtype: 'success', is_err
 });
 
 
-test("codexArgs: the prompt is read from stdin (-); read-only seats get -s read-only, write seats keep their configured sandbox", () => {
+test("codexArgs: the prompt is read from stdin (-); read-only seats get -s read-only, write seats -s workspace-write", () => {
   const ro = codexArgs({ cwd: "/w", mcpUrl: "http://127.0.0.1:1/mcp", model: "gpt-6-astra", readOnly: true, outFile: "/o/seat.out", json: true });
   assert.equal(ro.at(-1), "-", "codex exec reads instructions from stdin when the prompt argument is -");
   assert.deepEqual(ro.slice(ro.indexOf("-s"), ro.indexOf("-s") + 2), ["-s", "read-only"]);
@@ -75,12 +75,13 @@ test("codexArgs: the prompt is read from stdin (-); read-only seats get -s read-
   assert.ok(ro.includes("--json"));
   assert.equal(ro[ro.indexOf("-o") + 1], "/o/seat.out", "-o still writes the final message alongside --json");
   const rw = codexArgs({ cwd: "/w", mcpUrl: "http://127.0.0.1:1/mcp", readOnly: false });
-  assert.ok(!rw.includes("-s") && !rw.includes("--sandbox"), "a write seat's sandbox is left to the user's codex config");
+  // scoped by codexGitWriteRoots (scripts/codex-write-scope.test.ts); before, a write seat inherited danger-full-access
+  assert.deepEqual(rw.slice(rw.indexOf("-s"), rw.indexOf("-s") + 2), ["-s", "workspace-write"]);
   assert.equal(rw.at(-1), "-");
 });
 
 
-test("spawner: codex recruits read the brief from stdin; read-only recruits run -s read-only, write recruits do not", async () => {
+test("spawner: codex recruits read the brief from stdin; read-only recruits run read-only, write recruits workspace-write", async () => {
   Object.assign(process.env, seatEnv);
   const spawner = new Spawner({ mcpUrl: `${hubUrl}/mcp`, defaultCwd: work, logDir: logs });
   spawner.policy = {};
@@ -93,7 +94,9 @@ test("spawner: codex recruits read the brief from stdin; read-only recruits run 
     assert.ok(!seen.argv.some((a) => a.includes(MARKER)), "the brief is not in the codex recruit's argv");
     assert.ok(seen.stdin.includes(MARKER), "the codex recruit got its brief on stdin");
     assert.equal(seen.argv[0], "app-server");
-    assert.equal(seen.thread?.sandbox, canEdit ? undefined : "read-only", "read-only override is sent in thread/start; write seats retain configured sandbox");
+    assert.equal(seen.thread?.sandbox, canEdit ? "workspace-write" : "read-only", "the seat's sandbox is sent in thread/start");
+    // a write recruit's scope reaches the app-server as -c overrides; `work` is not a git checkout, so no extra roots
+    assert.equal(seen.argv.includes("sandbox_workspace_write.writable_roots=[]"), canEdit, seen.argv.join(" "));
     assert.ok(seen.argv.includes('mcp_servers.chatroom.default_tools_approval_mode="approve"'), "the recruit may call the chatroom tools under its sandbox");
   }
 });
@@ -163,6 +166,7 @@ test("swarm.ts: codex and OpenRouter seats get the prompt on stdin, never argv; 
     const seatName = codexSidecar.f.replace(/\.usage\.json$/, "");
     assert.equal(readFileSync(join(dir, `${seatName}.out`), "utf8").trim(), "codex final text", "-o still gives the seat's final text");
     assert.ok(readFileSync(join(dir, `${seatName}.events.jsonl`), "utf8").includes('"type":"turn.completed"'), "normalized protocol events are kept");
+    assert.ok(readFileSync(join(dir, `${seatName}.events.jsonl`), "utf8").includes('{"type":"seat.sandbox","mode":"read-only","writable_roots":[],"network":false}'), "telemetry: the seat's sandbox is in its event stream");
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 

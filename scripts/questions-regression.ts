@@ -66,6 +66,25 @@ assert.ok(!ids(humanQuestions(hub)).includes(q2.id), "archived rooms are left ou
 assert.ok(ids(humanQuestions(hub, { includeArchived: true })).includes(q2.id));
 assert.equal(asksSomething("see ```\nwhy?\n``` and `a?b`"), false);
 
+// Recorded js47 status reports became questions because relative API paths contain '?'.
+// Keep actual prose questions, including a question about the endpoint itself.
+for (const text of [
+  "@owner stopped; /orders?seat=beat-1 returns []",
+  "@owner /orders?all=1 is terminal; no code change",
+  "@owner GET /orders?seat=q-1&all=1 → []",
+]) assert.equal(asksSomething(text), false, `API query assignment is not an ask: ${text}`);
+for (const text of [
+  "@owner May I use /orders?",
+  "@owner Is /orders?all=1 final?",
+  "@owner Can I use /orders?seat=S&all=1?",
+  "@owner /orders?all=1 is empty. May I proceed?",
+]) assert.equal(asksSomething(text), true, `retain a prose question: ${text}`);
+const reporter = hub.join("query-meta", "reporter", "test").participant.id;
+const technical = say("query-meta", reporter, "@benji stopped; /orders?seat=beat-1 and /orders?all=1 are empty");
+const technicalItem = questionsIn(hub.getRoom("query-meta"), ["benji"]).find((q) => q.id === technical.id)!;
+assert.equal(technicalItem.kind, "mention");
+assert.equal(technicalItem.ignored_query_marks, 2, "query punctuation excluded from the count stays visible as telemetry");
+
 // the dashboard carries the inbox and its inline script still parses with the inbox spliced in
 assert.ok(UI_HTML.includes('id="qpanel"') && UI_HTML.includes("fetchQuestions"), "inbox is in the dashboard");
 new Script(UI_HTML.split("<script>")[1].split("</script>")[0]);
@@ -131,7 +150,7 @@ const call = async (tool: string, args: Record<string, unknown>) => {
 };
 const j = await call("join_room", { room: "web", name: "opus-x", agent: "claude", topic: "t" });
 const sent = await call("send_message", { room: "web", participant_id: j.participant_id, content: "@benji which port should I use?" });
-const get = async () => (await (await fetch(`${HTTP}/questions?names=benji`)).json()) as { id: string; room: string; from: string; kind: string }[];
+const get = async () => (await (await fetch(`${HTTP}/questions?names=benji`)).json()) as { id: string; room: string; from: string; kind: string; ignored_query_marks?: number }[];
 let list = await get();
 assert.equal(list.length, 1); assert.equal(list[0].id, sent.id); assert.equal(list[0].from, "opus-x"); assert.equal(list[0].kind, "question");
 assert.equal((await (await fetch(`${HTTP}/questions`)).json()).length, 0, "without names= benji is not a human name here yet");
@@ -140,6 +159,11 @@ assert.equal(post.status, 200);
 assert.equal(((await post.json()) as { replyTo?: string }).replyTo, sent.id, "the human's reply is threaded to the ask");
 list = await get();
 assert.equal(list.length, 0, "answered over HTTP");
+await call("send_message", { room: "web", participant_id: j.participant_id, content: "@benji stopped; /orders?seat=x&all=1 returns []", force: true });
+await call("send_message", { room: "web", participant_id: j.participant_id, content: "@benji Is /orders?all=1 final?", force: true });
+list = await get();
+assert.equal(list.filter((q) => q.kind === "question").length, 1, "only the prose ask enters the question count over HTTP");
+assert.ok(list.every((q) => q.ignored_query_marks === 1), "the endpoint exposes suppressed query punctuation for both kinds");
 await agent.close();
 server.kill();
 console.log("QUESTIONS OK");

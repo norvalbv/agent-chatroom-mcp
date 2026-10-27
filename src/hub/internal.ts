@@ -123,7 +123,7 @@ export type Event =
   /** Telemetry only (replay ignores it; src/hub/needs.ts): the first write of a needs/* entry, who was @-mentioned, the claims it names as blocked. */
   | { type: "need_filed"; room: string; key: string; by: string; minutes_since_open: number; blocks: string[]; told: string[]; ts: string }
   /** Telemetry only (src/hub/needs/needs.ts proposalNeedHint): a proposal in a room with no open needs/* was asked whether an outside limit decides it. */
-  | { type: "need_asked"; room: string; by: string; where: "proposal"; ts: string }
+  | { type: "need_asked"; room: string; by: string; where: "proposal" | "first-claim"; key?: string; minutes_since_open?: number; ts: string }
   /** Telemetry only: a needs/* entry was cleared (met or refused), and how long it stayed open. */
   | { type: "need_cleared"; room: string; key: string; by: string; filed_by: string; open_minutes: number; ts: string }
   /** Telemetry only (src/hub/asks/hands.ts): an idea nobody was free to take was put to its author (or the chair) */

@@ -207,6 +207,7 @@ export const offlineScripts = [
   'seat-output-regression.ts',
   'conclusion-output-regression.ts',
   'human-answering.test.ts',
+  'questions-regression.ts',
   'layer-rules-400-task.test.ts',
   'layer-views-task.test.ts',
   'leave-post-conclusion-regression.ts',

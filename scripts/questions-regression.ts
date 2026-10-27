@@ -12,9 +12,10 @@ import { Script } from "node:vm";
 import { asksSomething, humanQuestions, questionsIn } from "../src/questions.js";
 import { UI_HTML } from "../src/ui.js";
 import { ownHubPort } from "./lib/own-hub.js";
+import { freePort } from "./seat-launch-fixture.js";
 
 // before anything else: with the port taken, nothing below may run
-const PORT = await ownHubPort(Number(process.env.PORT ?? 7861));
+const PORT = await ownHubPort(process.env.PORT ? Number(process.env.PORT) : await freePort());
 
 // ---- unit: the hub's own log ----
 const hub = new Hub({ dataDir: mkdtempSync(join(tmpdir(), "questions-")) });

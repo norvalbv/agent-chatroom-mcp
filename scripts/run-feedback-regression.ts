@@ -4,7 +4,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { renderRunReport, writeRunResult, type RunResult, type RoomSnapshot } from "../src/result.js";
+import { readRunResult, renderRunReport, writeRunResult, type RunResult, type RoomSnapshot } from "../src/result.js";
 import { runMetrics } from "../src/run-metrics.js";
 
 const room = (name: string, payload: Record<string, any> | null): RoomSnapshot => ({ name, payload, error: null, transcript: { text: "", sourceUrl: "offline", error: null } });
@@ -19,6 +19,7 @@ const feedback = runFeedback(need);
 assert.equal(feedback.taskOutcome, "unassessed");
 assert.deepEqual(feedback.recommendations.map(r => r.id), ["review-needs"]);
 assert.match(feedback.recommendations[0].action, /review|confirm/i);
+assert.match(feedback.recommendations[0].action, /done-when.*known example/i, "legacy rooms also receive a concrete setup/brief check");
 assert.ok(!/blocked|failure caused by/i.test(feedback.recommendations[0].observation), "a still-listed need does not prove an active blocker");
 assert.equal(feedback.recommendations[0].evidence[0].room, "lead");
 assert.equal(feedback.recommendations[0].evidence[0].path, "board.needs/data");
@@ -130,5 +131,11 @@ try {
   assert.equal(replayed.rooms.withMetrics, 1);
   assert.ok(replayed.unknowns.some((s: string) => /2 unreadable.*partial/.test(s)));
   assert.equal(readFileSync(cliFile, "utf8"), original, "offline replay leaves the original artifact untouched");
+  const missingLeadFile = join(dir, "checkpoint.json");
+  writeFileSync(missingLeadFile, JSON.stringify(result()));
+  assert.throws(() => readRunResult(missingLeadFile), /not captured/, "normal consumers keep the strict missing-lead contract");
+  const partial = spawnSync(process.execPath, ["--import", "tsx", "scripts/run-feedback.ts", missingLeadFile, "--json"], { encoding: "utf8" });
+  assert.equal(partial.status, 0, "triage can diagnose a checkpoint whose lead was never captured: " + partial.stderr);
+  assert.ok(JSON.parse(partial.stdout).recommendations.some((r: { id: string }) => r.id === "restore-capture"));
 } finally { rmSync(dir, { recursive: true, force: true }); }
 console.log("RUN FEEDBACK REGRESSION OK (5 diagnostic fixtures, 1 clean negative control; task quality unmeasured)");

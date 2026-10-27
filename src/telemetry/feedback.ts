@@ -105,7 +105,7 @@ export function runFeedback(run: RunResult): RunFeedback {
     if (!p.coverage) feedback.unknowns.push(`${room.name}: no coverage ledger was captured; ownership completeness is unknown.`);
     const needs = Object.entries(p.board ?? {}).filter(([key, entry]) => key.startsWith("needs/") && typeof (entry as any)?.text === "string" && (entry as any).text.trim());
     if (needs.length) add({ id: "review-needs", category: "setup", observation: `${room.name}: ${needs.length} needs/* entry/entries remain listed on the final board.`, evidence: needs.map(([key]) => ({ room: room.name, path: `board.${key}` })),
-      action: "Review each listed need against the owner's answer. Confirm whether it remains open, was met, or was declined before reusing the same setup.", check: "Each retained need has a current disposition and the next brief states the scope it limits; do not treat its presence alone as a blocker." });
+      action: "Review each listed need against the owner's answer. Compare the original done-when with a known example under the stated constraint; if the bar was unreachable as given, revise the brief or setup. Confirm whether the need remains open, was met, or was declined.", check: "Each retained need has a current disposition and the next brief states the scope it limits; do not treat its presence alone as a blocker." });
     const proposals = Array.isArray(p.proposals) ? p.proposals : [];
     const latest = proposals.filter((proposal: any) => proposal.status === "open").at(-1);
     if (!p.conclusion && latest) add({ id: "resume-open-work", category: "coordination", observation: `${room.name}: proposal ${latest.id} remains open.`, evidence: [{ room: room.name, path: "proposals" }],

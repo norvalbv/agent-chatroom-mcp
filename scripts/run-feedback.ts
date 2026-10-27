@@ -13,7 +13,7 @@ if (!file || argv.includes("--help")) {
   console.error("usage: run-feedback <result.json> [--logs <data-dir>] [--json]");
   process.exit(argv.includes("--help") ? 0 : 2);
 }
-const run = readRunResult(file);
+const run = readRunResult(file, { triageMissingLead: true });
 const logAt = argv.indexOf("--logs");
 if (logAt >= 0 && !argv[logAt + 1]) throw new Error("--logs requires a recorded data directory");
 const logs = logAt >= 0 ? resolve(argv[logAt + 1]) : undefined;

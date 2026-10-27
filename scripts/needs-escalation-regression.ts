@@ -70,6 +70,8 @@ test("a blocks: line names the claims the blocker stops; their owners are pinged
 
 test("the owner of a blocked claim owes an answer (paused, or why it goes on) until it replies or passes; the chair is not pinned", () => {
   const { h, name, a, b, dataDir } = room({ chair: true });
+  // alice's claim is the room's first, so the outside-limit ask at the first claim (start-limit-ask-regression) is hers, not bob's
+  h.setBoard(name, a.id, "claim/crypto-maker", "{\"area\":\"crypto maker\"}");
   h.setBoard(name, b.id, "claim/goal-lag", "{\"area\":\"in-play goal sniping\"}");
   h.setBoard(name, a.id, "needs/colocated-feed", "Binance->Polymarket in <50 ms\nblocks: claim/goal-lag");
   const r = h.getRoom(name);

@@ -67,6 +67,26 @@ export function openNeeds(room: Room): { key: string; by: string; age_minutes: n
   return open.length ? open : undefined;
 }
 
+/** The same outside-limit question as proposalNeedHint, asked when the room narrows (decision/bar-check-at-start).
+ * swarm-210319-js47's done-when (~100 fills a round) could not be met under the run's own limits (25-30 placements a
+ * minute a seat, $40-60 a round, ~340 rounds needed against ~40-120), all on the board at minute 0, yet the limits came
+ * out at minutes 277 and 387.5, the later two right after the proposal-time ask (evidence/need-timing-replay). So the
+ * first claim/* an agent writes gets it once, as an owed ask to its author; "unknown" is a fine answer, since a first
+ * claim can come before the resources are read (6-astra-4's attack). Logged as need_asked {where:"first-claim"}. */
+export function startNeedAsk(hub: Hub, room: Room, p: Participant, key: string): void {
+  // asked once per room: the room's own messages say so (persisted, restart-safe, per hub), not a module-level set (audit/f65acfac)
+  if (p.agent === "human" || room.messages.some((m) => m.tag === "limits")) return;
+  const human = (name: string) => [...room.participants.values()].some((q) => q.name === name && q.agent === "human");
+  if ([...room.board].some(([k, e]) => k !== key && k.startsWith("claim/") && !human(e.by))) return;
+  const at = new Date().toISOString();
+  hub.post(room, "chat", undefined,
+    `@${hub.shown(room, p)} before this room narrows (first claim: ${key}): can what the room has to reach be reached inside the limits it was given ` +
+    "(rates, money a round, time or rounds to show it at the confidence asked), and does the best example already known reach it? " +
+    "A limit that stops it goes to needs/<limit> now (what, cost, what it unblocks, a blocks: claim/... line), even if you judge it not worth " +
+    "changing: the owner decides. Unknown is a fine answer: say what you would check and come back to it. Reply to this message.", { tag: "limits" });
+  hub.persist({ type: "need_asked", room: room.name, by: p.name, where: "first-claim", key, minutes_since_open: minutesSince(room.createdAt, at), ts: at });
+}
+
 /** The question every proposal gets back, whatever its words (decision/blocker-detection,
  * inputs/owner-3). A word list deciding which messages name a blocker scored 0 of 1 on held-out labels (esc-before-2),
  * and an embedding check did no better; the seats had known their blocker all along (lc0a #235; esc-before-1's final

@@ -31,6 +31,7 @@ import { DevRuns, DevRunError, type DevRunHost } from "./hub/dev-runs.js";
 import { takesOf } from "./hub/take.js";
 import * as votes from "./hub/consensus/votes.js";
 import { coverage } from "./hub/coverage/coverage.js";
+import * as openings from "./hub/openings/ideas.js";
 import { registeredWakes, wakeSuccessors, type Wake } from "./hub/wake.js";
 import { MemoryWatch, memoryNotice, type Job, type MemoryEvent, type SeatMemory } from "./hub/memory.js";
 import { RUN_END_CAUSES, exitCause, type RunEndCause, type StoppedBy } from "./respawn.js";
@@ -620,7 +621,7 @@ export class Hub {
       try { const j = JSON.parse(e.text) as { status?: string }; if (/^(done|fixed|handed|handed-over|closed|complete|completed)$/i.test(j.status ?? "")) return false; } catch {}
       return true;
     }).map(([k]) => k);
-    const owed = this.addressedBy(room, p);
+    const owed = this.addressedBy(room, p).filter((m) => m.tag !== "limits"); // a first-claim limits ask never holds a leave: a seat that never reads never gets it (audit/a87996d3, handoff-regression C)
     if (!orphaned.length && !owed.length) return null;
     p.leaveWarnedExit = true;
     const parts: string[] = [];
@@ -933,7 +934,7 @@ export class Hub {
     // reply_to, so once delivered it retires instead of staying the focused ask. Left as debt, it pinned every
     // later wait/read to that one message and refused send_message as "arrived while composing" until pass.
     for (const m of delivered) {
-      if (m.from.id !== "system" || m.kind !== "chat" || m.tag === "need" || m.tag === "hands" || !m.mentions?.includes(p.id) || p.declinedAsks?.includes(m.id)) continue;
+      if (m.from.id !== "system" || m.kind !== "chat" || m.tag === "need" || m.tag === "hands" || !m.mentions?.includes(p.id) || p.declinedAsks?.includes(m.id)) continue; // a first-claim limits ask retires here too: kept owed, it never let a wait drain (audit/f65acfac, idle-leave)
       p.declinedAsks = [...(p.declinedAsks ?? []), m.id];
       p.declinedAt = { ...(p.declinedAt ?? {}), [m.id]: m.seq };
     }
@@ -1451,16 +1452,16 @@ export class Hub {
     return Math.max(0, room.expectedParticipants - this.everJoinedVoters(room).filter((p) => p.role !== "recruit").length);
   }
 
-  submitOpening(roomName: string, pid: string, content: string): { revealed: boolean; waiting_on: string[] } {
+  submitOpening(roomName: string, pid: string, content: string, alternatives?: readonly string[]): { revealed: boolean; waiting_on: string[] } {
     const room = this.getRoom(roomName);
     const p = this.requireParticipant(room, pid);
     if (room.openingsRevealed) throw new HubError("Openings have already been revealed in this room; use send_message.", undefined, "state");
     if (!content.trim()) throw new HubError("Opening statement is empty.", undefined, "invalid-arg");
     const cap = Math.min(room.maxMessageChars, 400);
     if (content.length > cap) throw new HubError(`Opening is ${content.length} chars; openings are capped at ${cap}. One or two sentences: your answer and the main reason. Detail goes in the discussion or on the board.`, undefined, "size");
-    const first = room.openings.size === 0;
+    const alts = openings.holdAlternatives(room, p.id, alternatives), first = room.openings.size === 0; // alternatives become idea/* at the reveal
     room.openings.set(p.id, content);
-    this.persist({ type: "opening", room: roomName, pid: p.id, content });
+    this.persist({ type: "opening", room: roomName, pid: p.id, content, ...(alts.length ? { alternatives: alts } : {}) });
     if (first) this.armOpeningsDeadline(room, room.nudgeAfterMs); // the clock starts with the first opening, and chat does not reset it
     const waiting = this.openingsWaitingOn(room);
     if (waiting.length === 0) this.revealOpenings(room);
@@ -1652,18 +1653,8 @@ export class Hub {
     room.deadlineTimer.unref();
   }
 
-  private revealOpenings(room: Room, note?: string) {
-    if (room.openingsTimer) clearTimeout(room.openingsTimer);
-    room.openingsTimer = undefined;
-    room.openingsRevealed = true;
-    this.persist({ type: "openings_revealed", room: room.name });
-    this.post(room, "system", undefined, `Opening answers (${room.openings.size}${note ? ` of ${room.expectedParticipants}` : ""}, written independently${note ? `; ${note}` : ""}):`);
-    for (const [pid, content] of room.openings) {
-      const p = room.participants.get(pid);
-      if (p) this.post(room, "chat", p, content, { tag: "opening" });
-    }
-    if (room.mode === "round_robin") room.round = 2;
-  }
+  private revealOpenings(room: Room, note?: string) { openings.reveal(this, room, note); }
+
 
   // ---------- participation share ----------
 
@@ -1848,7 +1839,7 @@ export class Hub {
     const human = [...room.messages].reverse().find((m) => m.kind === "chat" && m.tag !== "opening" &&
       m.from.agent === "human" && !this.isAnswered(room, m) && !p.declinedAsks?.includes(m.id) && this.responderFor(room, m, p.id).mine);
     // hub notices ride the normal stream (settleRead retires them on delivery); only an author can be answered
-    return human ?? this.addressedBy(room, p).find((m) => m.from.id !== "system" || m.tag === "need" || m.tag === "hands"); // needs/needs.ts: an ask to a blocked claim owner; asks/hands.ts: who adds a hand
+    const asks = this.addressedBy(room, p); return human ?? asks.find((m) => m.from.id !== "system" || m.tag === "need" || m.tag === "hands") ?? asks.find((m) => m.tag === "limits"); // needs/needs.ts: an ask to a blocked claim owner; asks/hands.ts: who adds a hand; the first-claim limits ask (needs.ts) leads only until delivered once, after any other ask, then retires like a hub notice (audit/f65acfac)
   }
 
   attentionHint(room: Room, p: Participant): string | undefined {

@@ -25,6 +25,8 @@ export interface HumanQuestion {
   agent: string;
   kind: "question" | "mention";
   text: string;
+  /** Relative API query marks excluded from question detection; absent when none were excluded. */
+  ignored_query_marks?: number;
   /** the message it replies to, when it is threaded under one */
   reply_to: { seq: number; from: string; text: string } | null;
   room_state: string;
@@ -44,11 +46,19 @@ export function humanNames(room: Room, extra: string[] = []): string[] {
   return [...names];
 }
 
-/** "?" in prose, ignoring fenced and inline code and URLs (a query string is not a question). */
-export function asksSomething(text: string): boolean {
-  const prose = text.replace(/```[\s\S]*?```/g, " ").replace(/`[^`\n]*`/g, " ").replace(/\bhttps?:\/\/\S+/g, " ");
-  return /\?/.test(prose);
+/** A query assignment is technical punctuation; a trailing second '?' remains a prose question. */
+function questionSignal(text: string): { asks: boolean; ignoredQueryMarks: number } {
+  let prose = text.replace(/```[\s\S]*?```/g, " ").replace(/`[^`\n]*`/g, " ").replace(/\bhttps?:\/\/\S+/g, " ");
+  let ignoredQueryMarks = 0;
+  prose = prose.replace(/(^|[\s("'`])\/[^\s?<>`"]*\?[A-Za-z_][\w.%~-]*=[^\s?<>`"]*/g, (_token, boundary: string) => {
+    ignoredQueryMarks++;
+    return `${boundary} `;
+  });
+  return { asks: /\?/.test(prose), ignoredQueryMarks };
 }
+
+/** "?" in prose, ignoring code, URLs and relative API query assignments. */
+export function asksSomething(text: string): boolean { return questionSignal(text).asks; }
 
 export function questionsIn(room: Room, extraNames: string[] = []): HumanQuestion[] {
   const names = humanNames(room, extraNames);
@@ -64,7 +74,7 @@ export function questionsIn(room: Room, extraNames: string[] = []): HumanQuestio
     const repliesToHuman = parent?.from.agent === "human";
     const named = at.test(m.content);
     if (!named && !repliesToHuman) continue;
-    const asks = asksSomething(m.content);
+    const { asks, ignoredQueryMarks } = questionSignal(m.content);
     if (repliesToHuman && !asks) continue; // the answer to the human, not an ask of them
     if (isAnswered(m, humanChat)) continue;
     out.push({
@@ -76,6 +86,7 @@ export function questionsIn(room: Room, extraNames: string[] = []): HumanQuestio
       agent: m.from.agent,
       kind: asks ? "question" : "mention",
       text: m.content,
+      ...(ignoredQueryMarks ? { ignored_query_marks: ignoredQueryMarks } : {}),
       reply_to: parent ? { seq: parent.seq, from: parent.from.name, text: parent.content.slice(0, 200) } : null,
       room_state: room.state,
     });

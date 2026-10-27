@@ -43,8 +43,10 @@ export type Event =
   | { type: "challenge"; room: string; proposalId: string; challenge: Challenge; votes?: Proposal["votes"] }
   | { type: "challenge_status"; room: string; proposalId: string; challengeId?: string; status: NonNullable<Challenge["status"]> }
   | { type: "state"; room: string; state: RoomState; conclusion?: Room["conclusion"] }
-  | { type: "opening"; room: string; pid: string; content: string }
-  | { type: "openings_revealed"; room: string }
+  /** alternatives: what the seat named besides its answer (decision/opening-alternatives); seeded as idea/* on reveal */
+  | { type: "opening"; room: string; pid: string; content: string; alternatives?: string[] }
+  /** ideas_seeded: the idea/* keys written from the openings' alternatives (telemetry; replay reads only the type) */
+  | { type: "openings_revealed"; room: string; ideas_seeded?: string[] }
   /** by/drafted/drafters/seconds are telemetry (replay reads only the type): how the round ended and how many had drafted */
   | { type: "drafts_revealed"; room: string; by?: "all" | "deadline"; drafted?: number; drafters?: number; seconds?: number }
   | { type: "drafts_opened"; room: string; at: string; by?: string; key?: string }
@@ -123,7 +125,7 @@ export type Event =
   /** Telemetry only (replay ignores it; src/hub/needs.ts): the first write of a needs/* entry, who was @-mentioned, the claims it names as blocked. */
   | { type: "need_filed"; room: string; key: string; by: string; minutes_since_open: number; blocks: string[]; told: string[]; ts: string }
   /** Telemetry only (src/hub/needs/needs.ts proposalNeedHint): a proposal in a room with no open needs/* was asked whether an outside limit decides it. */
-  | { type: "need_asked"; room: string; by: string; where: "proposal"; ts: string }
+  | { type: "need_asked"; room: string; by: string; where: "proposal" | "first-claim"; key?: string; minutes_since_open?: number; ts: string }
   /** Telemetry only: a needs/* entry was cleared (met or refused), and how long it stayed open. */
   | { type: "need_cleared"; room: string; key: string; by: string; filed_by: string; open_minutes: number; ts: string }
   /** Telemetry only (src/hub/asks/hands.ts): an idea nobody was free to take was put to its author (or the chair) */

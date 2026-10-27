@@ -18,7 +18,7 @@ import { toldSettled } from "./settled.js";
 import { aiGatesLine, carrySettings, devHubRule, effectiveSeatSettings, heartbeatHookSettings, policyFromEnv, recruitRun, seatBeat, seatChildEnv, seatHoldMs, type RecruitPolicy, type RecruitSpawn, type SeatSettings } from "./env.js";
 import { claudeArgs } from "./claude-args.js";
 import { exitDetail } from "./respawn.js";
-import { codexSeatCommand } from "./codex-seat.js";
+import { codexSandboxMode, codexSeatCommand } from "./codex-seat.js";
 import { claudeSandbox, hubPortOf, sandboxFromEnv } from "./sandbox.js";
 import { parseClaudeCliOutput, type SeatUsageRollup } from "./result.js";
 import { recruitmentLimits, recruitmentStatus, RUN_PREFIX, runPrefix } from "./spawner/recruitment.js";
@@ -339,7 +339,7 @@ export class Spawner {
       // the seat's environment and its effective settings are known now, before any worktree exists: telemetry, read back from that environment
       const seatEnv = seatChildEnv(run.env, req.canEdit ? name : undefined, agent === "openrouter", agent === "claude");
       rec.settings = effectiveSeatSettings(seatEnv, run, agent === "claude");
-      this.hooks?.recordSpawn?.(target, { name, requested_by: req.requestedBy, kind: req.replacing ? "replacement" : newRoom ? "breakout" : "in-room", ...(newRoom ? { parent_room: req.room } : {}), ...(req.area ? { area: req.area } : {}), depth, can_edit: !!req.canEdit, agent, model: req.model ?? null, ...(run.run?.models ? { run_models: run.run.models } : {}), ...rec.settings });
+      this.hooks?.recordSpawn?.(target, { name, requested_by: req.requestedBy, kind: req.replacing ? "replacement" : newRoom ? "breakout" : "in-room", ...(newRoom ? { parent_room: req.room } : {}), ...(req.area ? { area: req.area } : {}), depth, can_edit: !!req.canEdit, agent, model: req.model ?? null, ...(agent === "codex" ? { codex_sandbox: codexSandboxMode(!req.canEdit) } : {}), ...(run.run?.models ? { run_models: run.run.models } : {}), ...rec.settings });
       const launch = (seatCwd: string) => {
         const carried = this.worktrees.hooksIn.get(seatCwd);
         if (rec.workspace && carried) rec.workspace.hooks = carried.hooks;

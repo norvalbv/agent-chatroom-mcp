@@ -4,7 +4,13 @@ import { codexConfigArgs } from "../codex-seat.js";
 import { CodexRpc, type RpcMessage } from "./rpc.js";
 
 interface PendingMention { id: string; from: string; room: string; text: string; seq?: number }
-interface LiveOptions extends CodexArgsOptions { prompt: string; binary?: string; pollMs?: number; emit?: (event: unknown) => void }
+interface LiveOptions extends CodexArgsOptions {
+  prompt: string; binary?: string; pollMs?: number; emit?: (event: unknown) => void;
+  /** thread/start's sandbox; unset: read-only when readOnly, else the user's config */
+  sandbox?: "read-only" | "workspace-write";
+  /** extra app-server -c overrides (codexWriteScopeArgs) */
+  configArgs?: string[];
+}
 
 /** Native steering keeps the running turn alive; a failed steer never acknowledges the hub's message. */
 export async function runCodexLive(options: LiveOptions): Promise<string> {
@@ -44,7 +50,8 @@ export async function runCodexLive(options: LiveOptions): Promise<string> {
       else resolveDone();
     }
   };
-  const rpc = new CodexRpc(["app-server", ...codexConfigArgs(options.mcpUrl)], options.cwd, onMessage, rejectDone, options.binary);
+  const rpc = new CodexRpc(["app-server", ...codexConfigArgs(options.mcpUrl), ...(options.configArgs ?? [])], options.cwd, onMessage, rejectDone, options.binary);
+  const sandbox = options.sandbox ?? (options.readOnly ? "read-only" : undefined);
   const attempted = new Set<string>();
   const unacked = new Set<string>();
   const key = process.env.CHATROOM_SEAT_KEY, heartbeatUrl = process.env.CHATROOM_HEARTBEAT_URL;
@@ -94,7 +101,7 @@ export async function runCodexLive(options: LiveOptions): Promise<string> {
   try {
     await rpc.request("initialize", { clientInfo: { name: "chatroom-seat", version: "0.1.0" }, capabilities: {} });
     rpc.notify("initialized");
-    const started = await rpc.request("thread/start", { cwd: options.cwd, model: options.model, approvalPolicy: "never", ...(options.readOnly ? { sandbox: "read-only" } : {}) });
+    const started = await rpc.request("thread/start", { cwd: options.cwd, model: options.model, approvalPolicy: "never", ...(sandbox ? { sandbox } : {}) });
     threadId = started.thread?.id;
     if (!threadId) throw new Error("Codex returned no thread id");
     emit({ type: "thread.started", thread_id: threadId });

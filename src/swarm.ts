@@ -1,10 +1,6 @@
 #!/usr/bin/env node
-/**
- * Swarm orchestrator: one command that turns "get N agents to solve X" into
- * plan -> sub-rooms of workers -> leads room -> verifier with veto -> report.
- *
- *   npx tsx src/swarm.ts "<task>" --agents 6 --cwd /path/to/project [--codex 2] [--openrouter 2] [--apply] [--timeout 30]
- */
+/** Swarm launcher: task -> workers (flat or grouped) -> verifier -> report.
+ * npx tsx src/swarm.ts "<task>" --agents 6 --cwd /path/to/project [--flat] [--apply] [--timeout 30] */
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
 import { createWriteStream, existsSync, mkdirSync, readFileSync, readdirSync, statSync, realpathSync, symlinkSync, writeFileSync } from "node:fs";
 import { carryHooks, hooksLine, hooksOff } from "./worktree-hooks.js";
@@ -23,9 +19,10 @@ import { claudeSandbox } from "./sandbox.js";
 import { topicDigest } from "./hub/status-view.js";
 import { stopStrays } from "./strays.js";
 import { launchGuide } from "./cost-estimate.js";
-import { seatTarget } from "./seat-targets.js";
+import { seatTarget, selectTargets, targetAssignment, targetSelectionNote, type LaunchTargets } from "./seat-targets.js";
 import { runRooms } from "./launch/run-rooms.js";
 import { digestAcks, digestRecords, loadGroups, renderDigests, type GroupsFile } from "./groups.js";
+import { loadSourceFeed, mergeSourceResources } from "./launch/source-feed.js";
 import { loadResources, seedResources } from "./resources.js";
 import { preflightAtLaunch } from "./launch/preflight.js";
 import { decisionRecordLine, fileRunDecisionRecord, isVerifierSeat } from "./launch/decision-record.js";
@@ -43,10 +40,9 @@ const flag = (name: string, def?: string) => {
 const has = (name: string) => argv.includes(`--${name}`);
 const BOOL_FLAGS = new Set(["--keep-hub", "--reuse-hub", "--apply", "--full-access", "--named", "--flat", "--require-verification", "--respawn", "--claude-full", "--no-carry", "--no-seat-targets", "--sandbox", "--no-web"]);
 const task = argv.find((a, i) => !a.startsWith("--") && (i === 0 || !argv[i - 1].startsWith("--") || BOOL_FLAGS.has(argv[i - 1])));
-if (!task) { console.error('usage: swarm "<task>" [--flat] [--done-when text] [--verify text] [--agents 6] [--cwd dir] [--models sonnet,haiku] [--lead-model opus] [--verifier-model opus] [--planner-model opus] [--codex k] [--codex-models gpt-6-astra,gpt-5.6-sol,gpt-5.6-terra] [--openrouter k] [--openrouter-models deepseek/deepseek-v4.1-flash,...] [--verifier-openrouter slug] [--openrouter-reasoning low|medium|high] [--require-verification] [--quorum unanimous|majority|supermajority] [--chair name] [--owner-word] [--seat-hooks off] [--seat-ai-gates on] [--prompt loop.md] [--groups groups.json [--digest-every 45]] [--resources file.md] [--preflight "<cmd>" | --preflight-strict "<cmd>"] [--respawn] [--apply] [--full-access] [--named] [--claude-full] [--no-carry] [--no-seat-targets] [--no-web] [--sandbox] [--timeout 30] [--port 7717] [--result-path path]'); process.exit(2); }
+if (!task) { console.error('usage: swarm "<task>" [--flat] [--done-when text] [--verify text] [--agents 6] [--cwd dir] [--models sonnet,haiku] [--lead-model opus] [--verifier-model opus] [--planner-model opus] [--codex k] [--codex-models gpt-6-astra,gpt-5.6-sol,gpt-5.6-terra] [--openrouter k] [--openrouter-models deepseek/deepseek-v4.1-flash,...] [--verifier-openrouter slug] [--openrouter-reasoning low|medium|high] [--require-verification] [--quorum unanimous|majority|supermajority] [--chair name] [--owner-word] [--seat-hooks off] [--seat-ai-gates on] [--prompt loop.md] [--groups groups.json [--digest-every 45]] [--resources file.md] [--sources registry.json] [--preflight "<cmd>" | --preflight-strict "<cmd>"] [--respawn] [--apply] [--full-access] [--named] [--claude-full] [--no-carry] [--no-seat-targets] [--no-web] [--sandbox] [--timeout 30] [--port 7717] [--result-path path]'); process.exit(2); }
 const PF = preflightAtLaunch(argv, resolve(flag("cwd", process.cwd())!)); // --preflight / --preflight-strict: the kit's environment checks, before anything starts (src/launch/preflight.ts)
-/** --groups <file.json>: the run's groups as the operator wrote them (src/groups.ts), one room and one brief each, on the
- * long-room brief (prompts/group.md). No planner runs, and --agents is the file's workers plus the verifier. */
+/** --groups <file.json>: operator-defined rooms/briefs (src/groups.ts, prompts/group.md), no planner; --agents is workers plus verifier. */
 let GROUPS: GroupsFile | undefined;
 if (flag("groups")) {
   if (has("flat")) { console.error("--groups gives each group its own room; --flat puts everyone in one. Pass one of them."); process.exit(2); }
@@ -94,11 +90,7 @@ const gitIdentity = () => {
 const PROJECT_IDENTITY = { cwd: CWD, canonicalPath: realpathSync(CWD), git: gitIdentity() };
 /** set by the signal handler: a seat that exits because the launcher is stopping is not a drop to respawn */
 let STOPPING = false;
-/**
- * --flat: no planner, no pre-assigned sub-rooms. Every agent gets the raw task in ONE room on the
- * minimal prompt and organises itself (board claims, request_agent, break-out rooms). The verifier sits
- * in the same room. Use it when the shape of the work is itself unknown (brainstorms, open questions).
- */
+/** --flat: one room and verifier, no planner; seats organise with claims/recruits/break-outs when the work's shape is unknown. */
 const FLAT = has("flat");
 /** --fresh-challenger: a hub this launcher starts recruits one read-only seat per opened proposal to check it (Spawner.freshChallenger) */
 const FRESH_CHALLENGER = has("fresh-challenger");
@@ -118,11 +110,15 @@ let RESOURCES: ReturnType<typeof loadResources> = [];
 if (has("resources")) {
   try { RESOURCES = loadResources(resolve(flag("resources") ?? "")); } catch (e) { console.error(e instanceof Error ? e.message : String(e)); process.exit(2); }
 }
-/**
- * --compact-at <tokens>: every Claude seat, and every recruit of this run's rooms, compacts its transcript at this size; unset, lean
- * seats compact at SEAT_COMPACT_DEFAULT (300000); "--compact-at off", or --claude-full, leaves Claude Code's own default. --effort
- * <level>: every Claude seat and recruit runs at this CLAUDE_CODE_EFFORT_LEVEL. The rooms carry both to a hub this run did not start.
- */
+// A project registers its sources once. Every launch reloads them before any seat starts.
+let SOURCE_FEED: ReturnType<typeof loadSourceFeed>;
+try {
+  if (has("sources") && (!flag("sources") || flag("sources")!.startsWith("--"))) throw new Error("--sources requires a registry file");
+  SOURCE_FEED = loadSourceFeed(CWD, flag("sources"));
+  RESOURCES = mergeSourceResources([...RESOURCES, ...(PF.resource ? [PF.resource] : [])], SOURCE_FEED);
+} catch (e) { console.error(e instanceof Error ? e.message : String(e)); process.exit(2); }
+/** --compact-at: Claude seats/recruits compact at this token count (lean default 300000); off/--claude-full retains Claude's default.
+ * --effort sets CLAUDE_CODE_EFFORT_LEVEL for those seats/recruits. Rooms carry both settings to reused hubs. */
 const COMPACT_AT = flag("compact-at") ?? (CLAUDE_FULL ? "off" : undefined);
 const SEAT_FLAGS = applySeatFlags(process.env, { compactAt: COMPACT_AT, effort: flag("effort") });
 for (const w of SEAT_FLAGS.warnings) console.error(w);
@@ -476,8 +472,10 @@ if (FLAT) {
   }
 }
 log(`swarm ${SWARM_ID}: ${TOTAL} agents (${WORKERS} workers + verifier), project ${CWD}`);
-const SIZING = launchGuide({ total: TOTAL, timeoutMin: TIMEOUT_MIN, flat: FLAT, groupWorkers: GROUPS?.groups.map((g) => g.workers), task, seatTargets: !NO_SEAT_TARGETS }, log);
-if (SANDBOX) log(`--sandbox: claude seats run Bash in Claude Code's sandbox, OpenRouter seats wrap run_command in sandbox-runtime${CODEX ? `; the ${CODEX} codex seat(s) are NOT sandboxed by this flag` : ""}`);
+const TARGETS: LaunchTargets = { ...selectTargets(FLAT && !NO_SEAT_TARGETS ? task : "", FLAT && !NO_SEAT_TARGETS ? RESOURCES : []), assignments: [] };
+if (FLAT) log(targetSelectionNote(TARGETS));
+const SIZING = launchGuide({ total: TOTAL, timeoutMin: TIMEOUT_MIN, flat: FLAT, groupWorkers: GROUPS?.groups.map((g) => g.workers), task, seatTargets: !NO_SEAT_TARGETS, targets: TARGETS }, log);
+if (SANDBOX) log(`--sandbox: claude seats run Bash in Claude Code's sandbox, OpenRouter seats wrap run_command in sandbox-runtime${CODEX ? `; the ${CODEX} codex seat(s) run codex's own sandbox whatever this flag says (read-only, or workspace-write for write seats)` : ""}`);
 /** Earlier runs in this checkout: a room should ratify or refute them by reference, not re-derive them. */
 function priorRuns(): string {
   const dir = resolve(repoRoot, "swarms");
@@ -550,9 +548,9 @@ writeFileSync(resolve(OUT, "plan.json"), JSON.stringify(plan, null, 2));
 log(`plan: ${plan.groups.map((g) => `${g.title} ×${g.workers}`).join(" | ")}`);
 
 const leadsRoom = FLAT ? `${SWARM_ID}-room` : `${SWARM_ID}-leads`;
-const FLAT_TARGETS = FLAT && !NO_SEAT_TARGETS && seatTarget(task, 1, LENSES) ? (i: number) => seatTarget(task, i, LENSES) : undefined;
+const FLAT_TARGETS = TARGETS.items.length ? (i: number) => seatTarget(task, i, LENSES, TARGETS) : undefined;
 const groupRooms = FLAT ? [] : plan.groups.map((g) => `${SWARM_ID}-${g.id}`);
-if (PF.resource) RESOURCES.push(PF.resource);
+if (SOURCE_FEED) for (const s of SOURCE_FEED.receipt.sources) log(`source ${s.id}: ${s.records} records, sha256 ${s.sha256}, snapshot ${s.modifiedAt}`);
 if (RESOURCES.length) {
   try {
     for (const line of await seedResources(URL_, [...groupRooms, leadsRoom], RESOURCES, { headers: launcherHeaders(launcherToken) })) log(line);
@@ -564,6 +562,11 @@ if (RESOURCES.length) {
 const runs: Promise<SeatRun>[] = [];
 /** Every seat this launcher started and the room it was told to join (checked once by the join check below). */
 const launched: LaunchedSeat[] = [];
+const recordTarget = (seat: string, room: string, i: number) => {
+  const row = targetAssignment(TARGETS, i, seat, room); TARGETS.assignments.push(row);
+  writeFileSync(resolve(OUT, "seat-targets.json"), JSON.stringify(TARGETS, null, 2));
+  log(`seat_target ${JSON.stringify(row)}`);
+};
 /**
  * Alternate-provider seats: --codex k and --openrouter k take non-lead seats, rotating over their
  * own model lists. Claude keeps the lead and verifier seats.
@@ -593,15 +596,9 @@ let workerIndex = 0;
 
 // verifier joins the leads room first so it is present for every report
 const verifierTools = APPLY || FULL ? WRITE_TOOLS : READ_TOOLS;
-/**
- * Appended to every seat's launch prompt: which room messages carry the owner's word. A seat's brief is its user
- * message and a room message is tool output, so an owner instruction in the room that changes the brief is ignored or
- * refused unless the brief itself delegates to that channel (sources/2404.13208; "a message in the room does not carry
- * that authority for me", swarm-115621-079m-benchmark #18). The tags it names are the hub's (Hub.speakerTag).
- * OFF unless the run is launched with --owner-word: it makes a token-tagged room message part of every seat's brief,
- * and the token is only as secret as this machine's process table (review/a9060d5e-verifier). The owner turns it on
- * for a run they mean to steer.
- */
+/** --owner-word delegates brief authority to token-tagged room messages (Hub.speakerTag), otherwise tool output
+ * cannot change the seat's task (swarm-115621-079m-benchmark #18, sources/2404.13208). Off unless asked; the token is
+ * only as secret as this machine's process table (review/a9060d5e-verifier). */
 const OWNER_WORD = OWNER_WORD_ON ? "\n\n" + readFileSync(resolve(repoRoot, "prompts", "owner-word.md"), "utf8").trim() : "";
 const verifierText = PF.text + SETTLED + "\n" + prompt("verifier.md", {
       NAME: "verifier",
@@ -650,6 +647,7 @@ if (REQUIRE_VERIFICATION || QUORUM || CHAIR) {
     }
   }
 }
+recordTarget("verifier", leadsRoom, 0);
 launched.push({ name: "verifier", room: leadsRoom });
 runs.push(
   withRespawn("verifier", leadsRoom, VERIFIER_OPENROUTER ? undefined : VERIFIER_MODEL, (nm, note) => (VERIFIER_OPENROUTER ? runOpenRouter(nm, verifierText.split("verifier\"").join(`${nm}\"`) + OWNER_WORD + note, CWD, VERIFIER_OPENROUTER, APPLY || FULL) : runClaude(nm, verifierText + OWNER_WORD + note, verifierTools, CWD, VERIFIER_MODEL))).then((o) => ({ name: "verifier", text: o.text, usage: o.usage })),
@@ -706,6 +704,7 @@ for (const g of plan.groups) {
           ? runOpenRouter(nm, buildText(nm) + OWNER_WORD + note, wcwd, model, mayWrite)
           : runClaude(nm, buildText(nm) + OWNER_WORD + note, mayWrite ? WRITE_TOOLS : READ_TOOLS, wcwd, model);
     };
+    recordTarget(name, room, FLAT ? i : 0);
     launched.push({ name, room });
     runs.push(withRespawn(name, room, agent === "claude" ? model : undefined, mk).then((o) => ({ name, text: o.text, usage: o.usage })));
   }
@@ -840,14 +839,14 @@ const persistIncremental = (done: SeatRun[]) => {
   writeRunResult(resolve(OUT, "result.json"), {
     schemaVersion: 1,
     run: { id: SWARM_ID, startedAt: new Date(RUN_STARTED).toISOString(), completedAt: new Date().toISOString(), task, doneWhen: plan.done_when },
-    project: PROJECT_IDENTITY,
+    project: PROJECT_IDENTITY, ...(SOURCE_FEED ? { sourceFeed: SOURCE_FEED.receipt } : {}),
     leadRoom: leadsRoom,
     rooms: [],
     verifier: { name: "verifier", output: null },
     reportPath: resolve(OUT, "report.md"),
     artifactPath: resolve(flag("result-path", resolve(OUT, "result.json"))!),
     collectionErrors: [`incremental checkpoint: ${done.length}/${runs.length} runs complete`],
-    usage: rollupUsage(done), ...(PF.result ? { preflight: PF.result } : {}),
+    usage: rollupUsage(done), seatTargets: TARGETS, ...(PF.result ? { preflight: PF.result } : {}),
   });
 };
 const completedRuns: SeatRun[] = [];
@@ -875,7 +874,7 @@ try {
 } catch (e) { collectionErrors.push(`Room discovery: ${String(e)}`); }
 const snapshots: RoomSnapshot[] = [];
 for (const name of new Set([leadsRoom, ...groupRooms])) {
-  const snapshot = await collectRoomSnapshot(URL_, name);
+  const snapshot = await collectRoomSnapshot(URL_, name, { metrics: true });
   if (snapshot.error) collectionErrors.push(`${name} payload: ${snapshot.error}`);
   if (snapshot.transcript.error) collectionErrors.push(`${name} transcript: ${snapshot.transcript.error}`);
   snapshots.push(snapshot);
@@ -883,14 +882,13 @@ for (const name of new Set([leadsRoom, ...groupRooms])) {
 const leads = snapshots.find(r => r.name === leadsRoom)?.payload ?? { state: "missing", conclusion: null };
 // why the run ended, as this launcher saw it; after the snapshots, so the line it adds is not in this run's own transcript
 await postRunEnd(timedOut ? "timeout" : (leads as { state?: string }).state === "concluded" ? "concluded" : "seats_exited", timedOut ? `after ${TIMEOUT_MIN} min` : undefined);
-// headline numbers by code, from the hub's own log; a hub without one (in memory) answers 404 and the report omits them
-let metrics: RunResult["metrics"];
-try { metrics = JSON.parse(await fetchText(`${URL_}/rooms/${encodeURIComponent(leadsRoom)}/metrics`)); } catch (e) { collectionErrors.push(`${leadsRoom} metrics: ${String(e)}`); }
+// Each room was measured once above; the lead alias preserves existing artifact readers.
+const metrics = snapshots.find(r => r.name === leadsRoom)?.metrics;
 const artifactPath = resolve(flag("result-path", resolve(OUT, "result.json"))!);
 const artifact: RunResult = {
   schemaVersion: 1,
   run: { id: SWARM_ID, startedAt: new Date(RUN_STARTED).toISOString(), completedAt: new Date().toISOString(), task, doneWhen: plan.done_when },
-  project: PROJECT_IDENTITY,
+  project: PROJECT_IDENTITY, ...(SOURCE_FEED ? { sourceFeed: SOURCE_FEED.receipt } : {}),
   leadRoom: leadsRoom,
   rooms: snapshots,
   verifier: { name: "verifier", output: results.find(r => r.name === "verifier")?.text ?? null },
@@ -898,7 +896,7 @@ const artifact: RunResult = {
   outcome: classifyOutcome(snapshots.find(r => r.name === leadsRoom)?.payload, { timedOut, atTimeout: leadAtTimeout }),
   hubUsage: hubUsageRollup(snapshots),
   scorecard: seatScorecard(snapshots, Object.fromEntries([...exitCodes].map(([name, exitCode]) => [name, { exitCode, cost: seatCosts.get(name), killedAtTimeout: killedAtTimeout.has(name), commits: branchCommits(name), ...(seatTranscripts.has(name) ? { transcript: seatTranscripts.get(name) } : {}) }]))),
-  ...(metrics ? { metrics } : {}), ...(PF.result ? { preflight: PF.result } : {}), ...(SIZING ? { sizing: SIZING } : {}), prompts: promptDigests(resolve(repoRoot, "prompts"), ["verifier.md", FLAT ? FLAT_PROMPT : GROUPS ? "group.md" : "worker.md", "recruit.md", ...(FLAT ? [] : ["lead-tail.md"]), ...(OWNER_WORD_ON ? ["owner-word.md"] : [])]),
+  ...(metrics ? { metrics } : {}), ...(PF.result ? { preflight: PF.result } : {}), ...(SIZING ? { sizing: SIZING } : {}), seatTargets: TARGETS, prompts: promptDigests(resolve(repoRoot, "prompts"), ["verifier.md", FLAT ? FLAT_PROMPT : GROUPS ? "group.md" : "worker.md", "recruit.md", ...(FLAT ? [] : ["lead-tail.md"]), ...(OWNER_WORD_ON ? ["owner-word.md"] : [])]),
 };
 if (digestPasses.length) {
   const board = (room: string) => snapshots.find((r) => r.name === room)?.payload?.board as Record<string, { text?: string; updated_at?: string }> | undefined;
@@ -919,6 +917,7 @@ console.log("\n==================== FINAL ANSWER ====================");
 console.log(leads.conclusion?.text ?? "NO CONSENSUS");
 console.log("\n==================== VERIFIER ====================");
 console.log(results.find((r) => r.name === "verifier")?.text ?? "(none)");
+if (artifact.feedback) console.log("\nNEXT RUN (task attainment unassessed; top 3 actions, complete evidence in result.json):\n" + artifact.feedback.next.map(r => `${r.id}: ${r.observation} ${r.action} Check: ${r.check} Evidence: ${r.evidence.map(e => `${e.room}:${e.path}`).join(", ")}`).join("\n"));
 if (FULL && isGitRepo) console.log(`worker branches: git -C "${CWD}" branch --list "swarm/${SWARM_ID}/*"   (worktrees under .swarm-worktrees/${SWARM_ID}/)`);
 console.log(`\nreport: ${resolve(OUT, "report.md")}`);
 process.exit(leads.conclusion ? 0 : 1);

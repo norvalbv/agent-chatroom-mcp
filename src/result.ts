@@ -11,6 +11,9 @@ import { renderTimeline, type RunTimeline } from './run-timeline.js';
 import { renderPreflight, type PreflightResult } from './launch/preflight.js';
 import { renderDecisionRecord, type DecisionRecordSummary } from './launch/decision-record.js';
 import { collectRoomMetrics, renderFeedback, runFeedback, type RunFeedback } from './telemetry/feedback.js';
+import { renderMeasurements, type RoomMeasurements } from './measurements/room.js';
+import { collectRoomMeasurements, measurementsLogLine, type RunMeasurements } from './measurements/collect.js';
+export { runMeasurements } from './measurements/collect.js';
 
 import type { SourceFeed } from "./launch/source-feed.js";
 
@@ -21,6 +24,9 @@ export interface RoomSnapshot {
   transcript: { text: string | null; sourceUrl: string; error: string | null };
   metrics?: RunMetrics & { timeline?: RunTimeline };
   metricsError?: string;
+  /** RSI-7's four measurements as the hub computed them from the room log (GET /rooms/:room/measurements). */
+  measurements?: RoomMeasurements;
+  measurementsError?: string;
 }
 export interface RunResult {
   schemaVersion: 1;
@@ -41,6 +47,9 @@ export interface RunResult {
   /** The lead room's metrics as the hub computed them from its own log (GET /rooms/:room/metrics); absent when the hub
    * kept no log or on older artifacts. After a crash the same numbers come from scripts/run-metrics.ts on the log. */
   metrics?: RunMetrics & { /** the same log on a time axis (src/run-timeline.ts); absent on older artifacts */ timeline?: RunTimeline };
+  /** Every captured room's measurements (src/measurements/room.ts), lead first, and the rooms that have none with why;
+   * absent on older artifacts. After a crash the same numbers come from scripts/run-metrics.ts on the log. */
+  measurements?: RunMeasurements;
   /** What seats reported to the hub live (participants[].usage, src/hub/usage.ts), recruits included; absent when no seat reported. */
   hubUsage?: HubUsageRollup;
   /** --digest-every: one row per consolidation pass, and each group's latest digest note at the end (src/groups.ts). */
@@ -354,7 +363,8 @@ export function proposedDecisionDir(project: RunResult['project'], outDir: strin
   return devRoom ? outDir : resolve(project.cwd, 'docs', 'decisions', 'proposed');
 }
 /** Fetch the existing full room endpoint; no board/body projection or text slicing. */
-export async function collectRoomSnapshot(baseUrl: string, name: string, opts: { metrics?: boolean } = {}): Promise<RoomSnapshot> {
+/** measurements: true, or the launcher's log, which then gets one line per room saying which blocks came back. */
+export async function collectRoomSnapshot(baseUrl: string, name: string, opts: { metrics?: boolean; measurements?: boolean | ((line: string) => void) } = {}): Promise<RoomSnapshot> {
   const base = `${baseUrl}/rooms/${encodeURIComponent(name)}`;
   const snapshot: RoomSnapshot = { name, payload: null, error: null, transcript: { text: null, sourceUrl: `${base}/transcript`, error: null } };
   const get = async (url: string) => { const response = await fetch(url); if (!response.ok) throw new Error(`HTTP ${response.status}: ${url}`); return response; };
@@ -363,6 +373,8 @@ export async function collectRoomSnapshot(baseUrl: string, name: string, opts: {
   try { snapshot.transcript.text = await (await get(`${base}/transcript`)).text(); }
   catch (e) { snapshot.transcript.error = String(e); }
   if (opts.metrics) await collectRoomMetrics([snapshot], baseUrl);
+  if (opts.measurements) await collectRoomMeasurements([snapshot], baseUrl);
+  if (typeof opts.measurements === 'function') opts.measurements(snapshot.measurements ? measurementsLogLine(snapshot.measurements) : `measurements ${name}: none (${snapshot.measurementsError})`);
   return snapshot;
 }
 /** Normal consumers require a captured lead. Triage alone may recover a missing lead as an explicit capture gap. */
@@ -460,6 +472,7 @@ export function renderRunReport(r: RunResult): string {
   }
   if (r.scorecard?.length) text += renderScorecard(r.scorecard);
   if (r.metrics) text += renderMetrics(r.metrics);
+  if (r.measurements) text += renderMeasurements(r.measurements.rooms, r.measurements.errors);
   if (r.digests?.length) text += renderDigests(r.digests, r.digestAcks ?? []);
   if (r.metrics?.timeline) text += renderTimeline(r.metrics.timeline);
   if (r.collectionErrors?.length) text += `Collection errors (partial snapshot):\n${r.collectionErrors.map(e => `- ${e}`).join('\n')}\n\n`;

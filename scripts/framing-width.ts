@@ -1,7 +1,8 @@
 /**
  * How many distinct framings a room holds over time, when it falls to one, and whether that came before its first evidence
  * (item/width-and-collapse; the rule was registered as decision/width-rule before any number was computed).
- * A framing statement is a seat's opening, its own idea/draft/position/decision/design/hypothesis/plan entry, a proposal or
+ * A framing statement is a seat's opening, its own board entry under any key that is not a work area, evidence or admin
+ * (NOT_FRAMING; --keys allow keeps the v2 draft/position/decision/design/hypothesis/plan list), an idea, a proposal or
  * amend text it wrote, or an agree vote (the voter now holds the proposal's current text). claim/take/evidence/result are
  * work areas and evidence, not framings: seat targets hand out items at launch, so a claim is not a hypothesis.
  * HELD width at time t = distinct framing labels among each present seat's latest statement; BOARD width adds idea/* entries
@@ -11,7 +12,7 @@
  * a chat passage with an observation also counts there and this script cannot see it, so its D2 is an upper bound) and,
  * as a sensitivity, the first run|web invocation in the work ledger.
  *   npx tsx scripts/framing-width.ts --dump <room.jsonl> [--stage reveal|chrono|all] [--messages]   statements, no clusters
- *   npx tsx scripts/framing-width.ts <room.jsonl | data dir> [...] [--labels labels.json] [--cut 0.x] [--centre] [--all-seats] [--json]
+ *   npx tsx scripts/framing-width.ts <room.jsonl | data dir> [...] [--labels labels.json] [--cut 0.x] [--centre] [--all-seats] [--keys allow|deny] [--json]
  */
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { basename, join } from "node:path";
@@ -29,14 +30,19 @@ export interface Extract {
   conclusion_proposal: string | null;
 }
 
+// v2 allow-list, kept for --keys allow; v3 (default) reads every worker key that is not a work area, evidence or room
+// administration, because framings also sit on ad-hoc keys ("fable-1-dissent", a bare "position", candidates/*, insight/*):
+// attack/result/width-and-collapse by claude-opus-5-5-1.
 const POSITION = /^(draft|position|decision|design|hypothesis|plan)\//;
+const NOT_FRAMING = /^(claim|take|evidence|result|findings|review|verify|verification|resource|inbox|handoff|sources|needs|item|wip|ledger|attack|friction|answered|digest|audit|pilot|integration|bench|benchlock|verifier|spec|inputs|contract|brief|filedigest|decode|ruling|chair|labels|probe|hold|wake|rerun|indep|valid|done|assign|approve|method|fact|live|status|guard|harness|tasks|exp|prereg|research|profile|decision-record|idea|benchqueue|benchjob|benchlock-text|owner-question|final|repro|intake|finding|rank1-shape)(\/|$)/;
+export const framingKey = (key: string, keys: "allow" | "deny" = "deny") => (keys === "allow" ? POSITION.test(key) : !NOT_FRAMING.test(key));
 const EVIDENCE = /^(result|evidence|findings|verify)\//;
 const SETTLED = /^\s*(dropped|done|tested|rejected|refuted)\s*:/i;
 const tsOf = (e: Ev): string | undefined => e.ts ?? e.msg?.ts ?? e.entry?.updatedAt ?? e.updatedAt ?? e.proposal?.createdAt ?? e.entry?.ts ?? e.p?.joinedAt;
 export const minutes = (a: string, b: string) => Math.round(((Date.parse(b) - Date.parse(a)) / 60000) * 10) / 10;
 
 /** Pure: the framing statements of one room, in log order, with the times the width rule needs. */
-export function extract(events: Ev[], room = String(events[0]?.room ?? ""), o: { allSeats?: boolean } = {}): Extract {
+export function extract(events: Ev[], room = String(events[0]?.room ?? ""), o: { allSeats?: boolean; keys?: "allow" | "deny" } = {}): Extract {
   const nameToSeat = new Map<string, string>(), excluded = new Set<string>(["launcher", "system", "hub"]);
   // workers only by default: a verifier's opening states how it will check, not an answer (attack/decision/width-rule);
   // --all-seats keeps the verifier as a sensitivity. Chairs and humans are never seats here.
@@ -73,7 +79,7 @@ export function extract(events: Ev[], room = String(events[0]?.room ?? ""), o: {
       if (key.startsWith("idea/")) {
         if (!text.trim() || SETTLED.test(text)) settled.push({ key, ts: when });
         else push({ ts: when, seat, source: "idea", key, text });
-      } else if (POSITION.test(key) && text.trim()) push({ ts: when, seat, source: "board", key, text });
+      } else if (framingKey(key, o.keys) && text.trim()) push({ ts: when, seat, source: "board", key, text });
     }
     // a proposal is logged again later with its final text and its creation time: the first event is the one stated then
     if (e.type === "proposal" && e.proposal && !proposalStmt.has(String(e.proposal.id))) {
@@ -257,12 +263,12 @@ const CUTS = Array.from({ length: 19 }, (_, k) => Math.round((0.05 * k + 0.05) *
  * pair F1, Rand and whether held width at the reveal (>= 2 or not) and collapse-before-evidence match the labels. A
  * constant "one framing" labeller is printed beside it: with few wide rooms, agreement alone does not show the clustering
  * can see width. */
-async function fit(files: string[], labels: Record<string, Record<string, string>>, allSeats: boolean, json: boolean) {
+async function fit(files: string[], labels: Record<string, Record<string, string>>, allSeats: boolean, json: boolean, keys: "allow" | "deny") {
   const { embedTexts } = await import("./embed-cache.ts");
   type R = { x: Extract; hand: (i: number) => string; idx: number[]; vecs: Record<string, number[][]> };
   const rooms: R[] = [];
   for (const f of files) {
-    const x = extract(read(f), basename(f, ".jsonl"), { allSeats });
+    const x = extract(read(f), basename(f, ".jsonl"), { allSeats, keys });
     const l = labels[x.room]; if (!l || !x.stmts.length) continue;
     const hand = (i: number) => { const s = x.stmts[i], k = String(s.adopts ?? i); return l[k] ?? l["*"] ?? `#${k}`; };
     const idx = x.stmts.filter((s) => s.source !== "vote").map((s) => s.i);
@@ -299,22 +305,25 @@ async function fit(files: string[], labels: Record<string, Record<string, string
 async function main() {
   const args = process.argv.slice(2);
   const opt = (k: string) => { const i = args.indexOf(k); return i >= 0 ? args[i + 1] : undefined; };
-  const files = args.filter((a, i) => !a.startsWith("--") && !["--stage", "--labels", "--cut"].includes(args[i - 1]))
-    .flatMap((p) => (statSync(p).isDirectory() ? readdirSync(p).filter((f) => f.endsWith(".jsonl")).map((f) => join(p, f)) : [p]));
-  if (!files.length) { console.error("usage: framing-width [--dump <room.jsonl> [--stage reveal|chrono|all] [--messages]] | <room.jsonl | dir> [...] [--labels f.json] [--cut c] [--centre] [--json]"); process.exit(2); }
+  // --rooms <file>: whitespace-separated room names (labels/cohort.txt), read from the data dir given as the path
+  const rooms = opt("--rooms") ? new Set(readFileSync(opt("--rooms")!, "utf8").split(/\s+/).filter(Boolean)) : null;
+  const files = args.filter((a, i) => !a.startsWith("--") && !["--stage", "--labels", "--cut", "--keys", "--rooms"].includes(args[i - 1]))
+    .flatMap((p) => (statSync(p).isDirectory() ? readdirSync(p).filter((f) => f.endsWith(".jsonl")).map((f) => join(p, f)) : [p]))
+    .filter((f) => !rooms || rooms.has(basename(f, ".jsonl")));
+  if (!files.length) { console.error("usage: framing-width [--dump <room.jsonl> [--stage reveal|chrono|all] [--messages]] | <room.jsonl | dir> [...] [--rooms names.txt] [--labels f.json] [--fit] [--cut c] [--centre] [--all-seats] [--keys allow|deny] [--json]"); process.exit(2); }
   if (args.includes("--dump")) {
-    for (const f of files) { const ev = read(f); dump(extract(ev, basename(f, ".jsonl"), { allSeats: args.includes("--all-seats") }), opt("--stage") ?? "all", ev, args.includes("--messages"), args.includes("--compact")); }
+    for (const f of files) { const ev = read(f); dump(extract(ev, basename(f, ".jsonl"), { allSeats: args.includes("--all-seats"), keys: opt("--keys") === "allow" ? "allow" : "deny" }), opt("--stage") ?? "all", ev, args.includes("--messages"), args.includes("--compact")); }
     return;
   }
   // --labels: {room: {statementIndex: label}}; statements without a label get their own singleton label
   const labels = opt("--labels") ? (JSON.parse(readFileSync(opt("--labels")!, "utf8")) as Record<string, Record<string, string>>) : null;
-  if (labels && args.includes("--fit")) { await fit(files, labels, args.includes("--all-seats"), args.includes("--json")); return; }
+  if (labels && args.includes("--fit")) { await fit(files, labels, args.includes("--all-seats"), args.includes("--json"), opt("--keys") === "allow" ? "allow" : "deny"); return; }
   const cut = Number(opt("--cut") ?? "NaN");
   const rows: Width[] = [];
   for (const f of files) {
     const ev = read(f);
     if (!ev.some((e) => e.type === "room")) continue;
-    const x = extract(ev, basename(f, ".jsonl"), { allSeats: args.includes("--all-seats") });
+    const x = extract(ev, basename(f, ".jsonl"), { allSeats: args.includes("--all-seats"), keys: opt("--keys") === "allow" ? "allow" : "deny" });
     if (!x.stmts.length) continue;
     let lab: (i: number) => string;
     if (labels) {

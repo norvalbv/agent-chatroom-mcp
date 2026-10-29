@@ -52,6 +52,7 @@ export function runCommands(commands, { cwd, timeout = defaultTimeout(), log = l
 
 export const offlineScripts = [
   'recruit-area-owner-regression.ts',
+  'delivery-receipts-regression.ts',
   'winner-provenance-regression.ts',
   'base-not-a-commit-regression.ts',
   'replay-skips-non-room-files-regression.ts',

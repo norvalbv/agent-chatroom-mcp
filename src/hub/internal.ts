@@ -34,6 +34,7 @@ export function seatSettingsOf(rooms: ReadonlyMap<string, Room & Pick<Opts, "sea
 }
 
 export type Event =
+  | import("./delivery/receipts.js").DeliveryReceipt
   | { type: "room"; room: string; opts: Opts; createdAt: string; telemetryVersion?: 1 }
   | { type: "message"; msg: Message }
   | { type: "attention"; room: string; pid: string; lastSeenSeq: number; withheld: number[]; quietReceipts: number[]; focusedAsk?: string; declinedAsks: string[]; declinedAt?: Record<string, number> }

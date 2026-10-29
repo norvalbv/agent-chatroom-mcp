@@ -9,7 +9,7 @@
     "src/index.ts": 754,
     "src/run-timeline.ts": 519,
     "src/seat.ts": 719,
-    "src/server.ts": 1042,
+    "src/server.ts": 1038,
     "src/spawner.ts": 613,
     "src/swarm.ts": 923,
     "src/ui.ts": 615

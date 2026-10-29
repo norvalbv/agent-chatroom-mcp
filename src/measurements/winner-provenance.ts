@@ -4,6 +4,7 @@
  * Optional vectors (text -> vector) and a fitted cosine cut enable alignment; absent vectors stay unknown.
  */
 import { createHash } from "node:crypto";
+import { receiptContains } from "./delivery-receipts.js";
 
 type Event = Record<string, any>;
 export interface Document {
@@ -14,6 +15,10 @@ interface Revision {
   author: string; stream: string; previous: Document; current: Document;
   similarity: number | null; framing_change: "candidate" | "unaligned_candidate" | "aligned_revision";
   peer_proposals: { event: number; seq: number; author: string }[];
+  peer_deliveries: { event: number; seq: number; author: string; receipt_event: number; via: string; ts: string | null }[];
+  trigger: "known" | "unknown";
+  trigger_note: string;
+  receipt_basis: "explicit" | "legacy_attention" | "missing";
   peer_board_reads: { event: number; key: string; author: string }[];
   evidence_candidates: { event: number; key: string; text: string; author: string }[];
   evidence_board_reads: { event: number; key: string; author: string }[];
@@ -111,15 +116,29 @@ function documents(events: Event[], allSeats = false) {
 /** Reconstruct only what receipts show: cursor passage by itself can skip quiet/withheld bodies. */
 function revisionContext(events: Event[], previous: Document, current: Document, pid: string) {
   const delivered = new Set<number>(), peers: Revision["peer_proposals"] = [], reads: Revision["peer_board_reads"] = [];
+  const peerDeliveries: Revision["peer_deliveries"] = [];
   const evidence: Revision["evidence_candidates"] = [], attempts: Revision["work_attempts"] = [];
   const messages = new Map<number, { event: number; msg: Event }>();
   const board = new Map<string, { text: string; by: string; event: number }>();
   let receipt = false, lastWake: Revision["last_wake"] = null;
+  const explicitLog = events.some(e => e.type === "delivery_receipt");
   for (let i = 0; i < current.event; i++) {
     const e = events[i]!;
     if (e.type === "message" && e.msg) messages.set(e.msg.seq, { event: i, msg: e.msg });
     if (e.type === "board" && e.entry) board.set(e.key, { text: e.entry.text ?? "", by: e.entry.by ?? "unknown", event: i });
-    if (e.type === "attention" && e.pid === pid) {
+    if (e.type === "delivery_receipt" && e.participant === pid) {
+      if (i > previous.event) receipt = true;
+      for (const [seq, m] of messages) {
+        if (!receiptContains(e, seq)) continue;
+        if (!delivered.has(seq) && i > previous.event && m.msg.from?.id !== pid && m.msg.from?.id !== "system" && m.msg.from?.agent !== "human") {
+          const author = m.msg.from?.name ?? "unknown";
+          peerDeliveries.push({ event: m.event, seq, author, receipt_event: i, via: e.via, ts: e.ts ?? null });
+          if (/^(proposal|amend)$/.test(m.msg.kind)) peers.push({ event: m.event, seq, author });
+        }
+        delivered.add(seq);
+      }
+    }
+    if (!explicitLog && e.type === "attention" && e.pid === pid) {
       const withheld = new Set(e.withheld ?? []), quiet = new Set(e.quietReceipts ?? []);
       if (i > previous.event) receipt = true;
       for (const [seq, m] of messages) {
@@ -144,10 +163,15 @@ function revisionContext(events: Event[], previous: Document, current: Document,
     }
   }
   // A retrieved board key is known, but not a complete receipt for the room's other delivered messages.
-  const peer = !!peers.length || reads.some(r => /^(draft|position|decision|design|hypothesis|plan)\//.test(r.key));
+  const peer = !!peerDeliveries.length || !!peers.length || reads.some(r => /^(draft|position|decision|design|hypothesis|plan)\//.test(r.key));
   const context: Revision["context"] = !receipt ? "unknown_exposure" : peer && evidence.length ? "both_logged"
     : peer ? "peer_only_logged" : evidence.length ? "evidence_only_logged" : "neither_logged";
-  return { peer_proposals: peers, peer_board_reads: reads, evidence_candidates: evidence,
+  const triggerKnown = !!peerDeliveries.length || !!reads.length;
+  return { peer_proposals: peers, peer_deliveries: peerDeliveries,
+    trigger: triggerKnown ? "known" as const : "unknown" as const,
+    trigger_note: triggerKnown ? "trigger known: earlier explicit exposure; causality unproven" : "unknown: no earlier explicit peer-body or board-read receipt in this revision interval",
+    receipt_basis: receipt ? explicitLog ? "explicit" as const : "legacy_attention" as const : "missing" as const,
+    peer_board_reads: reads, evidence_candidates: evidence,
     evidence_board_reads: reads.filter(r => /^(evidence|result|findings|verify|review)\//.test(r.key)),
     context_scope: "peer delivery versus room evidence arrivals; not evidence exposure" as const,
     work_attempts: attempts, last_wake: lastWake, context, exposure_coverage: receipt ? "receipt_present" as const : "missing" as const };
@@ -188,6 +212,7 @@ export function provenance(events: Event[], room: string, options: Options = {})
     named_ideas: d.ideas.filter(s => d.final && namesKey(d.final.text, s.key)).map(s => s.key),
     revisions, truncation: { openings: d.openings.filter(s => s.truncated).length, seeded: d.seeded.filter(s => s.truncated).length,
       snapshots: d.snapshots.filter(s => s.truncated).length, conclusion: d.final?.truncated ?? false },
+    exposure_limitations: "Message-body receipts exclude proposal/conclusion document envelopes. Explicit board_get reads remain a separate channel. Legacy attention is cursor inference, not exact handoff timing; causality unproven.",
     brief, vector_coverage: { available: [...d.openings, ...d.seeded, ...(d.final ? [d.final] : [])].filter(s => vectors.has(s.embedded_text)).length,
       requested: d.openings.length + d.seeded.length + (d.final ? 1 : 0) } };
 }

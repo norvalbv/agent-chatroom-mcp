@@ -9,6 +9,7 @@
  */
 import type { Hub } from "../hub.js";
 import type { Message, Participant, Room } from "./types.js";
+import { deliveryResult, recordDelivery } from "./delivery/receipts.js";
 
 /** One addressed ask as a consumer injects it mid-turn. */
 export interface SteerItem { room: string; id: string; seq: number; from: string; text: string }
@@ -46,6 +47,7 @@ export function steerAck(hub: Hub, room: Room, p: Participant, ids: string[], ca
   if (!carried) hub.persist({ type: "steer_injected", room: room.name, participant: p.id, asks: msgs.length, chars: msgs.reduce((n, m) => n + steerLine(hub, room, m).text.length, 0), ts: new Date().toISOString() });
   hub.settleRead(room, p, p.lastSeenSeq, msgs, Math.max(p.lastSeenSeq, ...msgs.map((m) => m.seq)));
   p.steered = [...(p.steered ?? []), ...msgs.map((m) => m.id)].slice(-100);
+  if (!carried) recordDelivery(hub, room, p, msgs, "steer");
   return msgs.length;
 }
 
@@ -82,5 +84,5 @@ export function steerCarry(hub: Hub, roomName: string, pid: string): string[] {
   if (!room || !p) return [];
   const msgs = steerPending(hub, room, p);
   if (msgs.length) steerAck(hub, room, p, msgs.map((m) => m.id), true);
-  return msgs.map((m) => steerLine(hub, room, m).text);
+  return deliveryResult(msgs.map((m) => steerLine(hub, room, m).text), room, p, msgs, "carry");
 }

@@ -33,7 +33,7 @@
  "model_dimensions": 768,
  "embedding_chars": 1200,
  "cut": null,
- "why_no_bulk_origin_classifier": "Adjudicated sample has no wholly-midroom negative class; a trustworthy cutoff cannot be fitted. Cosine is descriptive alignment, not influence or ancestry.",
+ "why_no_bulk_origin_classifier": "No unambiguous out-of-opening main-framing examples in the adjudicated sample to calibrate against. Cosine is descriptive alignment, not influence or ancestry.",
  "full_corpus_descriptor": {
   "concluded_main_n": 145,
   "nearest_opening_cosine_median": 0.6273210733414879,
@@ -67,7 +67,25 @@
   ],
   "conclusion_closer_to_brief_than_nearest_opening": 13,
   "truncated_conclusion_embeddings": 20,
-  "brief_openness_strata_source": "evidence/door-brief-strata: open9/prescribed10/mixed1, post-hoc topic-only and unaudited"
+  "brief_openness_strata_source": "evidence/door-brief-strata: open9/prescribed10/mixed1, post-hoc topic-only and unaudited",
+  "posthoc_topic_strata": {
+   "source": "evidence/door-brief-strata",
+   "open_question": {
+    "n": 9,
+    "opening_aligned": 8,
+    "mixed": 1,
+    "wholly_midroom": 0
+   },
+   "prescribed_plan": {
+    "n": 10,
+    "opening_aligned": 10
+   },
+   "mixed_topic": {
+    "n": 1,
+    "opening_aligned": 1
+   },
+   "caveat": "Topic-only and post-hoc, external brief/seat targets not reconstructed. Alignment is not independent seat invention. At least the10prescribed topics pass a launch-fixed plan through openings."
+  }
  },
  "candidate_revision_ledger": {
   "n": 138,

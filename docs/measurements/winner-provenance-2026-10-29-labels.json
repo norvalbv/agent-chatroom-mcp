@@ -11,7 +11,6 @@
    "room": "swarm-150725-3vny-room",
    "origin": "opening",
    "d3": false,
-   "brief_fixed": false,
    "reason": "Consolidate admitted suite, recover printf and extend the proven interpreter/format families; already shared at reveal.",
    "opening_sources": [
     {
@@ -44,14 +43,16 @@
    "primary_origin": "opening",
    "adjudicated_origin": "opening",
    "adjudicated_d3": false,
-   "adjudication": null
+   "adjudication": null,
+   "brief_fixed_primary_annotation": false,
+   "topic_stratum_posthoc": "prescribed_plan",
+   "independent_seat_invention": "unknown: external briefs and per-seat targets not reconstructed"
   },
   {
    "ordinal": 2,
    "room": "swarm-003938-i47r-whiskas",
    "origin": "mixed",
    "d3": false,
-   "brief_fixed": false,
    "reason": "Composite 12-bot close after a whiskas-only launch; 500ms reachability gate is opening-aligned, but no single final bot framing can be attributed.",
    "opening_sources": [],
    "conclusion_event": 16042,
@@ -75,14 +76,16 @@
      "pid": "p_4187f481",
      "text": "I take the kill check now (my seat: latency bin + fidelity comparator): whiskas maker fills from botlogs joined by tx to pmdata btc5m with pmkit.role; A = 1 s markout by level age via pmkit births; B = pmkit.reached at birth+100/500 ms, frozen bar from the carryover brief \u00a71B. Expect bin A (race) unless the >0.5 s-age levels carry edge."
     }
-   ]
+   ],
+   "brief_fixed_primary_annotation": false,
+   "topic_stratum_posthoc": "prescribed_plan",
+   "independent_seat_invention": "unknown: external briefs and per-seat targets not reconstructed"
   },
   {
    "ordinal": 3,
    "room": "swarm-211613-dpl4-room",
    "origin": "opening",
    "d3": false,
-   "brief_fixed": false,
    "reason": "Instrument-repair room followed by detached benchmark rounds, rather than an iterating swarm; several independent openings state it.",
    "opening_sources": [
     {
@@ -115,14 +118,16 @@
    "primary_origin": "opening",
    "adjudicated_origin": "opening",
    "adjudicated_d3": false,
-   "adjudication": null
+   "adjudication": null,
+   "brief_fixed_primary_annotation": false,
+   "topic_stratum_posthoc": "open_question",
+   "independent_seat_invention": "unknown: external briefs and per-seat targets not reconstructed"
   },
   {
    "ordinal": 4,
    "room": "swarm-191130-twok-room",
    "origin": "opening",
    "d3": false,
-   "brief_fixed": true,
    "reason": "Five-arm preregistration, effort pinning and cyclic order/caps were launch-fixed or explicit in openings; calibration fills in outcomes.",
    "opening_sources": [
     {
@@ -155,14 +160,16 @@
    "primary_origin": "opening",
    "adjudicated_origin": "opening",
    "adjudicated_d3": false,
-   "adjudication": null
+   "adjudication": null,
+   "brief_fixed_primary_annotation": true,
+   "topic_stratum_posthoc": "prescribed_plan",
+   "independent_seat_invention": "unknown: external briefs and per-seat targets not reconstructed"
   },
   {
    "ordinal": 5,
    "room": "swarm-170811-k1pq-room",
    "origin": "opening",
    "d3": false,
-   "brief_fixed": true,
    "reason": "Human-question inbox first, then navigation and glass; photo attachments are novel subordinate scope, not a new main framing.",
    "opening_sources": [
     {
@@ -195,14 +202,16 @@
    "primary_origin": "opening",
    "adjudicated_origin": "opening",
    "adjudicated_d3": false,
-   "adjudication": null
+   "adjudication": null,
+   "brief_fixed_primary_annotation": true,
+   "topic_stratum_posthoc": "mixed",
+   "independent_seat_invention": "unknown: external briefs and per-seat targets not reconstructed"
   },
   {
    "ordinal": 6,
    "room": "swarm-181650-0vn3-room",
    "origin": "opening",
    "d3": false,
-   "brief_fixed": false,
    "reason": "Audit prompt/decision drift against enforced code. Exact latest-Target parser defect is a new finding under that framing.",
    "opening_sources": [
     {
@@ -235,14 +244,16 @@
    "primary_origin": "opening",
    "adjudicated_origin": "opening",
    "adjudicated_d3": false,
-   "adjudication": null
+   "adjudication": null,
+   "brief_fixed_primary_annotation": false,
+   "topic_stratum_posthoc": "open_question",
+   "independent_seat_invention": "unknown: external briefs and per-seat targets not reconstructed"
   },
   {
    "ordinal": 7,
    "room": "swarm-163100-mugk-room",
    "origin": "opening",
    "d3": false,
-   "brief_fixed": true,
    "reason": "Split prescribed notification items; defer Home widgets while improving Live Activity, alerts, defaults and Settings.",
    "opening_sources": [
     {
@@ -281,14 +292,16 @@
    "primary_origin": "opening",
    "adjudicated_origin": "opening",
    "adjudicated_d3": false,
-   "adjudication": null
+   "adjudication": null,
+   "brief_fixed_primary_annotation": true,
+   "topic_stratum_posthoc": "prescribed_plan",
+   "independent_seat_invention": "unknown: external briefs and per-seat targets not reconstructed"
   },
   {
    "ordinal": 8,
    "room": "swarm-130459-mrw4-explorer",
    "origin": "mixed",
    "d3": false,
-   "brief_fixed": false,
    "reason": "Many niche rules tested and all rejected; weather, stock, barrier and final-bid results form a composite report without a unique winner.",
    "opening_sources": [],
    "conclusion_event": 8048,
@@ -318,14 +331,16 @@
      "pid": "p_81b89664",
      "text": "Split breadth 4 ways first: (1) weather/temperature wallets (HighTempTation, Kch-Temp), (2) US sports non-soccer/tennis (MLB/NBA/NFL in-game takers like justaluckydude), (3) the 552 dropped small wallets + week boards, (4) cross-niche maker/reward wallets (0xD9E0, 5% taker). My prior: weather is the most reproducible at $100-1k because a free forecast/obs feed is the signal. I'll take weather."
     }
-   ]
+   ],
+   "brief_fixed_primary_annotation": false,
+   "topic_stratum_posthoc": "open_question",
+   "independent_seat_invention": "unknown: external briefs and per-seat targets not reconstructed"
   },
   {
    "ordinal": 9,
    "room": "swarm-113947-ne8o-room",
    "origin": "opening",
    "d3": false,
-   "brief_fixed": true,
    "reason": "Produce seven paper files, protocol spine, no invented results; final records completion and limitations of the same plan.",
    "opening_sources": [
     {
@@ -358,14 +373,16 @@
    "primary_origin": "opening",
    "adjudicated_origin": "opening",
    "adjudicated_d3": false,
-   "adjudication": null
+   "adjudication": null,
+   "brief_fixed_primary_annotation": true,
+   "topic_stratum_posthoc": "prescribed_plan",
+   "independent_seat_invention": "unknown: external briefs and per-seat targets not reconstructed"
   },
   {
    "ordinal": 10,
    "room": "swarm-100622-6jdx-room",
    "origin": "opening",
    "d3": false,
-   "brief_fixed": false,
    "reason": "Hub-parsed verification and assigned risk-tiered review are already the shared opening framing; exact gate/guard details develop later.",
    "opening_sources": [
     {
@@ -404,14 +421,16 @@
    "primary_origin": "opening",
    "adjudicated_origin": "opening",
    "adjudicated_d3": false,
-   "adjudication": null
+   "adjudication": null,
+   "brief_fixed_primary_annotation": false,
+   "topic_stratum_posthoc": "open_question",
+   "independent_seat_invention": "unknown: external briefs and per-seat targets not reconstructed"
   },
   {
    "ordinal": 11,
    "room": "swarm-105804-4ssq-room",
    "origin": "opening",
    "d3": false,
-   "brief_fixed": true,
    "reason": "Build a prescribed pool with regression-first non-author checks; final expands to all pool items without a new common approach.",
    "opening_sources": [
     {
@@ -438,14 +457,16 @@
    "primary_origin": "opening",
    "adjudicated_origin": "opening",
    "adjudicated_d3": false,
-   "adjudication": null
+   "adjudication": null,
+   "brief_fixed_primary_annotation": true,
+   "topic_stratum_posthoc": "prescribed_plan",
+   "independent_seat_invention": "unknown: external briefs and per-seat targets not reconstructed"
   },
   {
    "ordinal": 12,
    "room": "swarm-223815-5zui-room",
    "origin": "mixed",
    "d3": false,
-   "brief_fixed": false,
    "reason": "Distribution/Show-HN action is inherited, but final rejects the opening causal claim that 6.7% star rate proves page conversion. Pitch/selection dissent is new material.",
    "opening_sources": [],
    "conclusion_event": 765,
@@ -453,14 +474,16 @@
    "primary_origin": "mixed",
    "adjudicated_origin": "mixed",
    "adjudicated_d3": false,
-   "adjudication": null
+   "adjudication": null,
+   "brief_fixed_primary_annotation": false,
+   "topic_stratum_posthoc": "open_question",
+   "independent_seat_invention": "unknown: external briefs and per-seat targets not reconstructed"
   },
   {
    "ordinal": 13,
    "room": "swarm-130459-mrw4-soccer",
    "origin": "opening",
    "d3": false,
-   "brief_fixed": false,
    "reason": "Soccer taker edge is score/price latency and unreachable on delayed free feeds; measured final retains that opening hypothesis.",
    "opening_sources": [
     {
@@ -493,14 +516,16 @@
    "primary_origin": "opening",
    "adjudicated_origin": "opening",
    "adjudicated_d3": false,
-   "adjudication": null
+   "adjudication": null,
+   "brief_fixed_primary_annotation": false,
+   "topic_stratum_posthoc": "open_question",
+   "independent_seat_invention": "unknown: external briefs and per-seat targets not reconstructed"
   },
   {
    "ordinal": 14,
    "room": "swarm-174537-07hw-room",
    "origin": "opening",
    "d3": false,
-   "brief_fixed": false,
    "reason": "Narrow residual redelivery/receipt faults and measurement under initial delivery-cost audit; broad unmeasured claims withdrawn, not every narrower finding is a new frame.",
    "opening_sources": [
     {
@@ -539,14 +564,16 @@
    "primary_origin": "opening",
    "adjudicated_origin": "opening",
    "adjudicated_d3": false,
-   "adjudication": null
+   "adjudication": null,
+   "brief_fixed_primary_annotation": false,
+   "topic_stratum_posthoc": "open_question",
+   "independent_seat_invention": "unknown: external briefs and per-seat targets not reconstructed"
   },
   {
    "ordinal": 15,
    "room": "swarm-234901-pmyh-room",
    "origin": "midroom",
    "d3": true,
-   "brief_fixed": false,
    "reason": "No opening recommends raising to2000 or replacing mandate with inline-clause dominance; the final ranks that measured action. Positive source exp/Q1 event3019, author claude-opus-5-5-1, 2026-10-11T00:24:46.909Z.",
    "opening_sources": [],
    "conclusion_event": 6327,
@@ -564,14 +591,16 @@
      "pid": "p_e70d7225",
      "text": "No position yet: nothing about caps or mandates is proven. Prior: the 320 cut probably costs little because agents rarely act on briefs (23% touch), so I expect small or null cap effects and a larger effect from WHICH clause is shown. I will build the shared hook-delivered behaviour harness and test Q1 on it; verdict follows the preregistered deterministic check, not my prior."
     }
-   ]
+   ],
+   "brief_fixed_primary_annotation": false,
+   "topic_stratum_posthoc": "open_question",
+   "independent_seat_invention": "unknown: external briefs and per-seat targets not reconstructed"
   },
   {
    "ordinal": 16,
    "room": "swarm-133013-64sr-room",
    "origin": "opening",
    "d3": false,
-   "brief_fixed": true,
    "reason": "Continue accepted mobile direction and integrate preserved patches; owner later changes commit handoff, an execution steer rather than a new product framing.",
    "opening_sources": [
     {
@@ -604,14 +633,16 @@
    "primary_origin": "opening",
    "adjudicated_origin": "opening",
    "adjudicated_d3": false,
-   "adjudication": null
+   "adjudication": null,
+   "brief_fixed_primary_annotation": true,
+   "topic_stratum_posthoc": "prescribed_plan",
+   "independent_seat_invention": "unknown: external briefs and per-seat targets not reconstructed"
   },
   {
    "ordinal": 17,
    "room": "swarm-102347-phin-room",
    "origin": "opening",
    "d3": false,
-   "brief_fixed": true,
    "reason": "Build ranks1-3 by reference, beginning with parsed verify head; prescribed by brief and restated at reveal.",
    "opening_sources": [
     {
@@ -650,14 +681,16 @@
    "primary_origin": "opening",
    "adjudicated_origin": "opening",
    "adjudicated_d3": false,
-   "adjudication": null
+   "adjudication": null,
+   "brief_fixed_primary_annotation": true,
+   "topic_stratum_posthoc": "prescribed_plan",
+   "independent_seat_invention": "unknown: external briefs and per-seat targets not reconstructed"
   },
   {
    "ordinal": 18,
    "room": "swarm-011152-pen5-room",
    "origin": "opening",
    "d3": false,
-   "brief_fixed": true,
    "reason": "Resume and integrate stranded settlement branches with crash fix first; S10 details and remaining limits are implementation outcomes.",
    "opening_sources": [
     {
@@ -696,14 +729,16 @@
    "primary_origin": "opening",
    "adjudicated_origin": "opening",
    "adjudicated_d3": false,
-   "adjudication": null
+   "adjudication": null,
+   "brief_fixed_primary_annotation": true,
+   "topic_stratum_posthoc": "prescribed_plan",
+   "independent_seat_invention": "unknown: external briefs and per-seat targets not reconstructed"
   },
   {
    "ordinal": 19,
    "room": "swarm-204607-mrkt-room",
    "origin": "midroom",
    "d3": true,
-   "brief_fixed": false,
    "reason": "Final top action headline-first rendering differs from shared opening checkable-marker proposal. Positive first passage evidence/consumers-b event268 by sonnet-3 at2026-10-10T20:47:02.275Z; title-renderer refinement event462.",
    "opening_sources": [],
    "conclusion_event": 654,
@@ -745,14 +780,16 @@
      "pid": "p_be424f3f",
      "text": "Format is a minor lever; retrieval precision, Scope globs and deterministic checks dominate (2602.07609 says so). Recommend small: keep devkit's fields, add one machine-readable \"Checkable-by\" marker (code-evidence vs principle-only) and optional deterministic rule; no MADR rename."
     }
-   ]
+   ],
+   "brief_fixed_primary_annotation": false,
+   "topic_stratum_posthoc": "open_question",
+   "independent_seat_invention": "unknown: external briefs and per-seat targets not reconstructed"
   },
   {
    "ordinal": 20,
    "room": "swarm-140213-25wq-room",
    "origin": "opening",
    "d3": false,
-   "brief_fixed": true,
    "reason": "Reproduce six alleged defects and ship only justified ones; specific surviving item4 and its cause were already stated at reveal.",
    "opening_sources": [
     {
@@ -785,7 +822,10 @@
    "primary_origin": "opening",
    "adjudicated_origin": "opening",
    "adjudicated_d3": false,
-   "adjudication": null
+   "adjudication": null,
+   "brief_fixed_primary_annotation": true,
+   "topic_stratum_posthoc": "prescribed_plan",
+   "independent_seat_invention": "unknown: external briefs and per-seat targets not reconstructed"
   }
  ],
  "independent_audit": {
@@ -795,5 +835,6 @@
   "first15_binary_D3_agreement": "14/15",
   "author_primary_seal": "5e61831bdeb47964c74d8e3f7c897a3defd450fa88d2b49114841b806b11a017",
   "primary_preserved": true
- }
+ },
+ "topic_strata_source": "evidence/door-brief-strata, post-hoc topic-only, not independently audited"
 }

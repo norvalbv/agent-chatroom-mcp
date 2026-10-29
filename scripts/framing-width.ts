@@ -45,10 +45,12 @@ export const minutes = (a: string, b: string) => Math.round(((Date.parse(b) - Da
 export function extract(events: Ev[], room = String(events[0]?.room ?? ""), o: { allSeats?: boolean; keys?: "allow" | "deny" } = {}): Extract {
   const nameToSeat = new Map<string, string>(), excluded = new Set<string>(["launcher", "system", "hub"]);
   // workers only by default: a verifier's opening states how it will check, not an answer (attack/decision/width-rule);
-  // --all-seats keeps the verifier as a sensitivity. Chairs and humans are never seats here.
+  // --all-seats keeps the verifier as a sensitivity. Chairs and humans are never seats here. Older logs set no role:
+  // the verifier is the seat named "verifier" and the chair the room's named chair (opts.chair).
+  const chair = String(events.find((e) => e.type === "room")?.opts?.chair ?? "");
   for (const e of events) if (e.type === "join" && e.p) {
     nameToSeat.set(String(e.p.name), String(e.p.id));
-    const role = e.p.role ?? (e.p.name === "verifier" ? "verifier" : "worker");
+    const role = e.p.role ?? (e.p.name === "verifier" ? "verifier" : chair && e.p.name === chair ? "chair" : "worker");
     if (role === "chair" || e.p.agent === "human" || (role === "verifier" && !o.allSeats)) { excluded.add(String(e.p.id)); excluded.add(String(e.p.name)); }
   }
   const stmts: Stmt[] = [], leaves: Extract["leaves"] = [], settled: Extract["settled"] = [];

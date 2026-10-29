@@ -83,6 +83,16 @@ assert.ok(!framingKey("fable-1-dissent", "allow") && framingKey("draft/x", "allo
 const dissent = extract([...events.slice(0, 9), board(1.5, "w1-dissent", "w1", "LFU after all.")], "r");
 assert.ok(dissent.stmts.some((s) => s.key === "w1-dissent"), "an ad-hoc dissent key is a framing statement");
 
+// Older logs set no role: the chair is the room's named chair (opts.chair), as cf8223aa does for opening-spread
+// (review/5f7fd4a9 §5). Its board writes are steers, not a seat's framing; a worker merely named like a chair stays.
+const roleless = [{ type: "room", room: "r", opts: { topic: "Which cache policy?", chair: "boss" } }, ...events.slice(1, 4),
+  { type: "join", room: "r", p: { id: "pb", name: "boss", agent: "claude", joinedAt: T(0) } },
+  { type: "join", room: "r", p: { id: "pk", name: "boss-2", agent: "claude", joinedAt: T(0) } },
+  ...events.slice(6, 9), board(1.5, "draft/boss", "boss", "LFU, final answer."), board(1.6, "draft/boss-2", "boss-2", "LRU.")];
+const xr = extract(roleless, "r");
+assert.ok(!xr.stmts.some((s) => s.key === "draft/boss"), "a roleless seat named as the room's chair is not a framing seat");
+assert.ok(xr.stmts.some((s) => s.key === "draft/boss-2"), "a worker whose name merely starts like the chair's stays");
+
 // Clustering: two tight groups split above their between-group similarity and merge below it.
 const vecs = [[1, 0, 0], [0.99, 0.1, 0], [0, 1, 0], [0.1, 0.99, 0]];
 assert.deepEqual(new Set(cluster(vecs, 0.9)).size, 2);

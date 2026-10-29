@@ -84,6 +84,24 @@ for (const cmd of [
 assert.ok(guard("pkill -f fetch_trades.py")!.includes(`stop fetch_trades.py`), "the replacement carries the seat's own pattern");
 assert.ok(guard("pkill -9 -f \"crypto/fetch.py markets\"; sleep 1")!.includes(`stop "crypto/fetch.py markets"`), "quoted, as most were typed");
 
+// A seat's dev hub must stop when asked: --always revives its listener after a deliberate stop.
+for (const cmd of [
+  'node dist/hubd.js --always --port 47881',
+  'CHATROOM_INSECURE_LOCAL=1 node dist/hubd.js --port 47881 --always',
+  'cd /work && node ./dist/hubd.js --always &',
+  'nohup node dist/hubd.js --always > /tmp/hub.log 2>&1 &',
+  'bash -lc "node dist/hubd.js --always --port 47881"',
+  'node "/tmp/work tree/dist/hubd.js" --always',
+  'npx tsx src/hubd.ts --always --port 47881',
+]) assert.match(guard(cmd) ?? '', /--always/, `persistent test hub refused: ${cmd}`);
+for (const cmd of [
+  'node dist/hubd.js --port 47881',
+  'node another-program.js --always',
+  'echo "node dist/hubd.js --always"',
+  'git commit -m "stop node dist/hubd.js --always in seats"',
+  "cat > fixture.txt <<'EOF'\nnode dist/hubd.js --always\nEOF",
+]) assert.equal(guard(cmd), null, `not a persistent test-hub launch: ${cmd}`);
+
 // 3. Not a kill by pattern: the word in a message, a search, a file being written; a kill by PID or by a PID file.
 for (const cmd of [
   "git commit -m \"guard: refuse pkill in a seat's shell\"",
@@ -132,8 +150,10 @@ assert.equal(spawnSync(process.execPath, [SEAT_GUARD_HOOK], { input: "not json",
     c.stdin.end(JSON.stringify({ hook_event_name: "PreToolUse", tool_name: "Bash", tool_input: { command } }));
   });
   assert.ok(await run("pkill -f fetch_trades.py", url));
+  const persistent = 'node dist/hubd.js --always --port 47881';
+  assert.ok(await run(persistent, url));
   assert.equal(await run("ls", url), "");
-  assert.deepEqual(seen, [{ seat_key: A.CHATROOM_SEAT_KEY, tool: "seat-guard", detail: "refused: pkill -f fetch_trades.py" }]);
+  assert.deepEqual(seen, ["pkill -f fetch_trades.py", persistent].map(command => ({ seat_key: A.CHATROOM_SEAT_KEY, tool: "seat-guard", detail: `refused: ${command}` })));
   hub.close();
   const t0 = Date.now();
   assert.ok(await run("pkill -f fetch_trades.py", "http://127.0.0.1:9/heartbeat"), "refused with the hub down");

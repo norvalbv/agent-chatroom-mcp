@@ -13,6 +13,7 @@ import { renderDecisionRecord, type DecisionRecordSummary } from './launch/decis
 import { collectRoomMetrics, renderFeedback, runFeedback, type RunFeedback } from './telemetry/feedback.js';
 
 import type { SourceFeed } from "./launch/source-feed.js";
+import type { StraySweep } from "./strays.js";
 
 export interface RoomSnapshot {
   name: string;
@@ -62,6 +63,8 @@ export interface RunResult {
   prompts?: Record<string, string>;
   /** Evidence-linked next-run triage, independently of consensus or task attainment. Recomputed when saved. */
   feedback?: RunFeedback;
+  /** Owned worktree cleanup, including recruit rooms; absent on older artifacts. */
+  straySweeps?: StraySweep[];
 }
 /**
  * Usage as the hub recorded it while the run went on, from the room snapshots alone: a launcher that crashed, or a

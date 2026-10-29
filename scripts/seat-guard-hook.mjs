@@ -34,9 +34,10 @@ const withoutHeredocs = (command) => command.replace(/<<-?\s*(['"]?)(\w+)\1([^\n
  * script handed to a shell (`sh -c '...'`, `bash -lc "..."`) or to eval: those are kept, everything else is emptied.
  * Double-quoted substitutions are kept too, since `kill "$(pgrep -f x)"` runs one. */
 const SHELL_ARG = /(?:\b(?:ba|z|da|k)?sh\b(?:\s+-\w+)*\s+-\w*c|\beval)\s+$/;
-function withoutQuotedText(command) {
+function withoutQuotedText(command, keepHubPaths = false) {
   return command.replace(/'[^']*'|"(?:[^"\\]|\\.)*"/g, (q, at) => {
     if (SHELL_ARG.test(command.slice(0, at))) return q;
+    if (keepHubPaths && /(?:^|\/)hubd\.(?:js|ts)$/.test(q.slice(1, -1))) return q;
     if (q[0] === "'") return "''";
     return `"${(q.match(/\$\([^)]*\)|`[^`]*`|\$\{?\w+\}?/g) ?? []).join(" ")}"`;
   });
@@ -62,6 +63,13 @@ export function hookBypass(command) {
 /** Why this Bash command is refused, or null. */
 export function refusal(command, key, keyOf = seatKeyOf) {
   const cmd = withoutQuotedText(withoutHeredocs(command));
+  const hubs = withoutQuotedText(withoutHeredocs(command), true);
+  const runtime = new RegExp(AT_COMMAND + String.raw`(?:env\s+)?(?:\w+=\S*\s+)*(?:\S*\/)?(?:node|tsx|npx\s+(?:--yes\s+)?tsx)\s+([^;&|\n]*)`, "g");
+  for (const m of hubs.matchAll(runtime)) {
+    const args = (m[1].match(/"[^"]*"|'[^']*'|\S+/g) ?? []).map(s => s.replace(/^['"]|['"]$/g, ""));
+    const script = args.findIndex(s => /(?:^|\/)hubd\.(?:js|ts)$/.test(s));
+    if (script >= 0 && args.slice(script + 1).includes("--always")) return "Refused: a seat's test hub must not use --always, which restarts a listener after a deliberate stop. Omit --always, keep the supervisor PID, and stop only the private hub you started.";
+  }
   const stop = (pattern) => `node ${JSON.stringify(SEAT_PROCS)} stop ${pattern}`;
   const named = BY_NAME.exec(cmd);
   const byXargs = BY_XARGS.test(cmd) && !(BY_PORT.test(cmd) && !BY_XARGS.test(cmd.replace(new RegExp(BY_PORT.source, "g"), ";")));

@@ -17,7 +17,7 @@ import { claudeArgs } from "./claude-args.js";
 import { codexSeatCommand, codexUsageTracker } from "./codex-seat.js";
 import { claudeSandbox } from "./sandbox.js";
 import { topicDigest } from "./hub/status-view.js";
-import { stopStrays } from "./strays.js";
+import { collectRunSweep, type StraySweep } from "./strays.js";
 import { launchGuide } from "./cost-estimate.js";
 import { seatTarget, selectTargets, targetAssignment, targetSelectionNote, type LaunchTargets } from "./seat-targets.js";
 import { runRooms } from "./launch/run-rooms.js";
@@ -714,17 +714,17 @@ for (const g of plan.groups) {
  * c.kill() reaches the seats themselves only. What a seat started in its own process group (a dev hub it detached, as
  * devHubRule tells write seats to start) survives that and outlives the run, so the launcher also stops whatever still
  * runs inside this run's own worktrees, with the lsof-cwd sweep pool-run uses (src/strays.ts; docs/reuse-survey-
- * 2026-09-23.md, "Process containment and the stray sweep"). Only .swarm-worktrees/<run>/ is swept, never the project
- * checkout: that also holds the user's shells and editors and anything else started there. Sweeps run one at a time.
+ * 2026-09-23.md, "Process containment and the stray sweep"). Recruits use sibling room roots, sometimes under the
+ * canonical project checkout rather than CWD. Only owned roots are swept, never either checkout itself.
  */
 let sweeping: Promise<void> = Promise.resolve();
+const straySweeps: StraySweep[] = [];
 function sweepStrays(why: string): Promise<void> {
-  const root = resolve(CWD, ".swarm-worktrees", SWARM_ID);
-  if (!existsSync(root)) return sweeping;
   sweeping = sweeping
     .then(async () => {
-      const n = await stopStrays(realpathSync(root)); // lsof reports real paths (/private/tmp, not /tmp)
-      if (n) log(`${why}: stopped ${n} process(es) still running in this run's worktrees`);
+      straySweeps.push(await collectRunSweep({ cwd: CWD, commonDir: PROJECT_IDENTITY.git?.commonDir, startedAt: RUN_STARTED,
+        run: SWARM_ID, rooms: [leadsRoom, ...groupRooms], url: URL_, reason: why, log }));
+      persistIncremental(completedRuns);
     })
     .catch((e) => log(`${why}: stray sweep failed: ${e instanceof Error ? e.message : String(e)}`));
   return sweeping;
@@ -846,7 +846,7 @@ const persistIncremental = (done: SeatRun[]) => {
     reportPath: resolve(OUT, "report.md"),
     artifactPath: resolve(flag("result-path", resolve(OUT, "result.json"))!),
     collectionErrors: [`incremental checkpoint: ${done.length}/${runs.length} runs complete`],
-    usage: rollupUsage(done), seatTargets: TARGETS, ...(PF.result ? { preflight: PF.result } : {}),
+    usage: rollupUsage(done), seatTargets: TARGETS, straySweeps, ...(PF.result ? { preflight: PF.result } : {}),
   });
 };
 const completedRuns: SeatRun[] = [];
@@ -888,7 +888,7 @@ const artifactPath = resolve(flag("result-path", resolve(OUT, "result.json"))!);
 const artifact: RunResult = {
   schemaVersion: 1,
   run: { id: SWARM_ID, startedAt: new Date(RUN_STARTED).toISOString(), completedAt: new Date().toISOString(), task, doneWhen: plan.done_when },
-  project: PROJECT_IDENTITY, ...(SOURCE_FEED ? { sourceFeed: SOURCE_FEED.receipt } : {}),
+  project: PROJECT_IDENTITY, straySweeps, ...(SOURCE_FEED ? { sourceFeed: SOURCE_FEED.receipt } : {}),
   leadRoom: leadsRoom,
   rooms: snapshots,
   verifier: { name: "verifier", output: results.find(r => r.name === "verifier")?.text ?? null },

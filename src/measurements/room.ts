@@ -109,19 +109,23 @@ async function winnerProvenance(events: Ev[], room: string, o: MeasureOptions): 
     if (!hand) unknown.push("no hand label: origin unknown");
     const nearest = p.opening_matches[0];
     const receipts = p.revisions.filter((r) => r.exposure_coverage === "receipt_present").length;
-    // delivery receipts (item/delivery-receipts) add revisions[].trigger; a build or log without them gives null, not 0
-    const triggered = p.revisions.some((r) => "trigger" in r) ? p.revisions.filter((r) => (r as { trigger?: string }).trigger === "known").length : null;
+    // by channel, never one "trigger known" total: a read of resource/* or item/* is not a peer's framing (review/389e411c).
+    // revisions[].peer_deliveries comes with item/delivery-receipts; a build or log without it gives null, not 0
+    const delivered = p.revisions.some((r) => "peer_deliveries" in r) ? p.revisions.filter((r) => ((r as { peer_deliveries?: unknown[] }).peer_deliveries ?? []).length > 0).length : null;
+    const framingRead = p.revisions.filter((r) => r.peer_board_reads.some((b) => PEER_FRAMING.test(b.key))).length;
     const value = {
       concluded: p.concluded, label: hand ? (hand.adjudicated_origin ?? hand.origin) : null, label_source: hand ? (hand.adjudicated_origin ? "hand (adjudicated)" : "hand (primary)") : null,
       origin: p.origin, nearest_opening: nearest && nearest.similarity !== null ? { author: nearest.author, similarity: round(nearest.similarity) } : null,
       brief_similarity: p.brief_similarity === null ? null : round(p.brief_similarity),
       closer_to_brief: p.brief_similarity !== null && nearest?.similarity != null ? p.brief_similarity > nearest.similarity : null,
-      named_ideas: p.named_ideas, candidate_revisions: p.revisions.length, revisions_with_receipt: receipts, revisions_trigger_known: triggered,
+      named_ideas: p.named_ideas, candidate_revisions: p.revisions.length, revisions_with_receipt: receipts, revisions_after_peer_delivery: delivered, revisions_after_peer_framing_read: framingRead,
     };
     return { status: (error ? "error" : p.final && (vectors || hand) ? "ok" : "unknown") as Block<unknown>["status"], value, coverage: { openings: p.openings.length, seeded: p.seeded.length, vectors: p.vector_coverage.available, requested: p.vector_coverage.requested }, unknown, source, validity, ...(error ? { error } : {}) };
   } catch (e) { return { status: "error" as const, value: null, coverage: {}, unknown: [], source, validity, error: ms(e) }; }
 }
 const round = (x: number) => Math.round(x * 1000) / 1000;
+/** The board keys winner-provenance counts as a peer's framing when a seat reads one (its revisionContext "peer" rule). */
+const PEER_FRAMING = /^(draft|position|decision|design|hypothesis|plan)\//;
 
 function steerSplit(events: Ev[], room: string): Block<Record<string, any>> {
   const source = "scripts/steer-split.ts --json";
@@ -165,7 +169,7 @@ export function renderMeasurements(rooms: readonly RoomMeasurements[], errors: r
     const times = wv ? `${wv.statements} framing statements by ${wv.seats} seat(s); first checkable evidence ${wv.first_evidence_min === null ? "none logged" : `at ${wv.first_evidence_min} min (${wv.first_evidence_ref})`}; first run/web call ${wv.first_invocation_min === null ? "none logged" : `at ${wv.first_invocation_min} min`}; end at ${f(wv.end_min)} min, from the reveal` : "";
     t += `- **Held width at the reveal**: ${wv?.labeller ? `${wv.held_at_reveal} (hand labels; ${w.coverage.labelled}/${w.coverage.statements} statements labelled), max ${wv.max_held}, to one framing at ${f(wv.minutes_to_one)} min, collapse before evidence ${f(wv.collapse_before_evidence)}. ${times}` : `unknown (${why(w)})${times ? `. ${times}` : ""}`}. _${w.validity}._\n`;
     const p = m.winner_provenance, pv = p.value;
-    t += `- **Winner provenance**: ${pv ? `${pv.label ? `${pv.label === "opening" ? "present at the reveal" : pv.label === "midroom" ? "mid-room" : pv.label} (${pv.label_source})` : "origin unknown"}; nearest opening ${pv.nearest_opening ? `cosine ${pv.nearest_opening.similarity} (${pv.nearest_opening.author})` : "?"}; conclusion-to-brief cosine ${f(pv.brief_similarity)}${pv.closer_to_brief === null ? "" : pv.closer_to_brief ? " (closer to the brief)" : " (closer to an opening)"}; ${pv.candidate_revisions} candidate revision(s), ${pv.revisions_with_receipt} with an attention receipt${pv.revisions_trigger_known === null || pv.revisions_trigger_known === undefined ? "" : `, ${pv.revisions_trigger_known} with a known trigger (a delivery before it; causality unproven)`}; idea keys named in the conclusion: ${pv.named_ideas.length ? pv.named_ideas.join(", ") : "none"}${why(p) ? ` (${why(p)})` : ""}` : `unknown (${why(p)})`}. _${p.validity}._\n`;
+    t += `- **Winner provenance**: ${pv ? `${pv.label ? `${pv.label === "opening" ? "present at the reveal" : pv.label === "midroom" ? "mid-room" : pv.label} (${pv.label_source})` : "origin unknown"}; nearest opening ${pv.nearest_opening ? `cosine ${pv.nearest_opening.similarity} (${pv.nearest_opening.author})` : "?"}; conclusion-to-brief cosine ${f(pv.brief_similarity)}${pv.closer_to_brief === null ? "" : pv.closer_to_brief ? " (closer to the brief)" : " (closer to an opening)"}; ${pv.candidate_revisions} candidate revision(s), ${pv.revisions_with_receipt} with an attention receipt${pv.revisions_after_peer_delivery === null || pv.revisions_after_peer_delivery === undefined ? "" : `, ${pv.revisions_after_peer_delivery} after a delivered peer message`}, ${pv.revisions_after_peer_framing_read ?? 0} after reading a peer's draft/decision entry (order only, causality unproven); idea keys named in the conclusion: ${pv.named_ideas.length ? pv.named_ideas.join(", ") : "none"}${why(p) ? ` (${why(p)})` : ""}` : `unknown (${why(p)})`}. _${p.validity}._\n`;
     const st = m.steer_split, sp = st.value;
     t += `- **Steer split**: ${sp ? `${sp.steers} steer(s): ${sp.human} human, ${sp.chair} chair, ${sp.notes} inbox note(s), ${sp.corrections} correction(s); lexical cues reframe ${sp.proxy.reframe}, unblock ${sp.proxy.unblock}, both ${sp.proxy.both}, other ${sp.proxy.other}, uncertain ${sp.proxy.uncertain}` : `unknown (${why(st)})`}. _${st.validity}._\n\n`;
   }

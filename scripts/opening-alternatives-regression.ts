@@ -18,6 +18,30 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { Hub } from "../src/hub.js";
 import { createSessionServer } from "../src/server.js";
+import { slugOf } from "../src/hub/openings/ideas.js";
+
+// All 18 alternatives from RSI-7's six opening events (swarm-193427-ztnx-room.jsonl).
+// The second field is a content word the key must retain, independent of probability notation.
+const rsi7: [string, string][] = [
+  ["Openings are wide but width dies at reveal (p=0.3). Check: mean pairwise cosine of openings vs the same seats' first post-reveal messages, per room.", "width"],
+  ["Width lives in the work ledger, not the board (p=0.15). Check: distinct search/fetch query clusters before first claim vs idea/* count.", "ledger"],
+  ["Winners are mostly born mid-room from evidence (p=0.2). Check: max cosine of conclusion text to any opening vs to post-opening evidence/result entries.", "winners"],
+  ["p=.30: launch targets already supply sufficient width; check oracle delta when explicit alternatives are disabled with targets held fixed.", "launch"],
+  ["p=.25: alternatives consume depth without changing discovery; check equal-budget paired oracle failures and time.", "alternatives"],
+  ["p=.20: evidence checkpoints beat extra openings; check whether failures occur after untested framing collapse in room replay.", "evidence"],
+  ["P=.25: openings already cover distinct hypotheses; check blinded same-question framing labels at reveal, excluding work-area claims.", "openings"],
+  ["P=.20: peers improve framing before evidence; check provenance-linked pivots against later independent oracle outcomes.", "peers"],
+  ["P=.15: allocation beats checkpoints; compare a fixed-budget oracle pair with no consensus-based branch pruning.", "allocation"],
+  ["Framings live in chat, not board keys; key-only clustering undercounts. Check: on the 10 labelled rooms, if messages add >=1 framing in >=5 rooms, keys mislead. P=0.35", "framings"],
+  ["Width is 1 from the reveal: openings already agree, so the lever is the opening, not a checkpoint. Check: width at tick 0 == 1 in >50% of rooms with openings. P=0.30", "width"],
+  ["Framing width is ill-posed when the brief assigns seat items; collapse is of items, not hypotheses. Check: rerun the curve on open-question rooms only; if it differs, split. P=0.25", "framing"],
+  ["Openings are wide; collapse comes after the reveal (item 2). Check: same embedding spread on openings vs first drafts/proposal. P(better framing)=0.30", "openings"],
+  ["Cosine can't tell framings apart: if the 20 labelled pairs give AUROC<0.7 for embeddinggemma, report labels via an LLM judge instead. P=0.25", "cosine"],
+  ["Spread is set by the brief, not the seats: compare rooms with per-seat targets vs one shared goal; if that explains most variance, width is a launcher setting. P=0.35", "spread"],
+  ["p=.30: peer text drives collapse; check pivots cite peers and precede evidence against independently labelled framing changes.", "peer"],
+  ["p=.25: shared launch targets explain similar winners; check ancestry to brief versus nearest sealed opening with blinded labels.", "shared"],
+  ["p=.20: useful convergence follows evidence; check matched pivot windows and inspect source-backed changes before adding a checkpoint.", "useful"],
+];
 
 Hub.DEFAULT_NUDGE_MS = 0;
 const dataDir = mkdtempSync(join(tmpdir(), "opening-alts-"));
@@ -50,6 +74,19 @@ async function rawSeat(name: string) {
 }
 
 try {
+  for (const [text, word] of rsi7) {
+    const slug = slugOf(text);
+    assert.ok(slug.split("-").includes(word), `RSI-7 key must describe the idea (${word}), got ${slug}: ${text}`);
+    assert.ok(!/^p-\d/.test(slug), `probability metadata must not enter the key: ${slug}`);
+    assert.ok(slug.length <= 40, `key remains bounded: ${slug}`);
+  }
+  assert.equal(slugOf("p=0.30 Launch targets; check: oracle"), "launch-targets");
+  assert.equal(slugOf("(P=.30): Launch targets; check: oracle"), "launch-targets");
+  assert.equal(slugOf("[p=30%] Launch targets; check: oracle"), "launch-targets");
+  assert.equal(slugOf("Launch targets (p=.30); check: oracle"), "launch-targets");
+  assert.equal(slugOf("p=0.30: ; check: oracle"), "alternative", "metadata-only input uses the existing fallback");
+  assert.equal(slugOf("P-value calibration; check: oracle"), "p-value-calibration", "a content word beginning with P is untouched");
+
   const room = "opening-alts";
   const a = await seat("a"); const b = await seat("b"); const c = await seat("c");
   await a("join_room", { room, name: "A", agent: "test", expected_participants: 3 });
@@ -148,6 +185,30 @@ try {
   await i("submit_opening", { room: room4, content: "I's answer." });
   const r4 = [...hub.getRoom(room4).board.keys()].filter((k) => k.startsWith("idea/"));
   assert.deepEqual(r4, ["idea/queue-position-level-s-birth"], `no duplicate of a seed already written: ${r4.join(", ")}`);
+
+  // Real texts traverse the public tool boundary and reveal path; a duplicate still merges,
+  // a separate idea with the same content slug still gets a suffix, and probabilities survive.
+  const corpusRoom = "opening-alts-rsi7";
+  const corpusSeats = await Promise.all(Array.from({ length: 7 }, (_, n) => seat(`corpus-${n}`)));
+  for (let n = 0; n < corpusSeats.length; n++) await corpusSeats[n]("join_room", { room: corpusRoom, name: `Corpus${n}`, agent: "test", expected_participants: 7 });
+  for (let n = 0; n < 6; n++) await corpusSeats[n]("submit_opening", { room: corpusRoom, content: "Independent corpus replay.", alternatives: rsi7.slice(n * 3, n * 3 + 3).map(([text]) => text) });
+  await corpusSeats[6]("submit_opening", { room: corpusRoom, content: "Duplicate and collision checks.", alternatives: [rsi7[3][0], "p=.90: launch targets already supply sufficient width; check: a different oracle"] });
+  const corpusIdeas = [...hub.getRoom(corpusRoom).board.entries()].filter(([key]) => key.startsWith("idea/"));
+  assert.equal(corpusIdeas.length, 19, "18 originals plus a distinct colliding idea; exact duplicate merged");
+  for (const [text, word] of rsi7) {
+    const idea = corpusIdeas.find(([, entry]) => entry.text.startsWith(`${text}\n\nFrom `));
+    assert.ok(idea, `original text, including probability, retained: ${text}`);
+    assert.ok(idea[0].slice(5).split("-").includes(word), `readable revealed key: ${idea[0]}`);
+  }
+  const launchIdeas = corpusIdeas.filter(([key]) => key.startsWith("idea/launch-targets-"));
+  assert.equal(launchIdeas.length, 2, "same-slug distinct ideas do not overwrite");
+  assert.match(launchIdeas[0][1].text, /Corpus1 and Corpus6/, "duplicate names both seats");
+  const corpusReveal = readFileSync(join(dataDir, `${corpusRoom}.jsonl`), "utf8").trim().split("\n").map((line) => JSON.parse(line)).find((event) => event.type === "openings_revealed");
+  assert.equal(corpusReveal.idea_slug_sources.length, 19, "telemetry names the content source for every seeded key");
+  const source = corpusReveal.idea_slug_sources.find((entry: { key: string; source: string }) => entry.key === launchIdeas[0][0]);
+  assert.equal(source.source, "launch targets already supply sufficient width", "the logged source excludes probability and the check clause");
+  assert.deepEqual(corpusReveal.idea_slug_sources.map((entry: { key: string }) => entry.key), corpusReveal.ideas_seeded, "source telemetry has the same order and key coverage");
+  console.log(`RSI-7 slug oracle: ${rsi7.length}/${rsi7.length} content keys; ${corpusIdeas.length} seeded; 1 duplicate merged; 1 distinct collision retained`);
 
   console.log("opening-alternatives-regression: OK");
 } finally {

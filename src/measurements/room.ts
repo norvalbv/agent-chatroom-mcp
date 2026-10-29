@@ -31,7 +31,11 @@ export interface Block<T> {
 export type WidthLabels = Record<string, Record<string, string>>;
 /** docs/measurements/winner-provenance-*-labels.json rows: the adjudicated origin when there is one. */
 export type ProvenanceLabels = { room: string; origin: string; adjudicated_origin?: string }[];
-export interface MeasureOptions { embedder?: Embedder | null; embedderError?: string; widthLabels?: WidthLabels; provenanceLabels?: ProvenanceLabels }
+export interface MeasureOptions { embedder?: Embedder | null; embedderError?: string; widthLabels?: WidthLabels; provenanceLabels?: ProvenanceLabels; budgetMs?: number }
+
+/** One bound on a room's whole embedding work (spread and provenance embed at once under it), so the launcher's fetch
+ * (collect.ts COLLECT_TIMEOUT_MS) always outlasts it and gets the label-free blocks back (attack/decision/report-wiring). */
+export const MEASURE_BUDGET_MS = 60_000;
 
 /** RSI-7's fitted opening cut (result/opening-spread: majority labels, AUROC 0.75, n=17). Cosines are the model's own. */
 export const SPREAD_CUTS: Record<string, number> = { embeddinggemma: 0.599 };
@@ -77,9 +81,12 @@ function framingWidth(events: Ev[], room: string, o: MeasureOptions): Block<Reco
     const timing = { statements: x.stmts.length, seats: new Set(x.stmts.map((s) => s.seat)).size, ...firstTimes(x) };
     if (!x.stmts.length) return { status: "unknown" as const, value: null, coverage, unknown: ["no framing statements"], source, validity };
     if (!labels) return { status: "unknown" as const, value: { labeller: null, held_at_reveal: null, ...timing }, coverage, unknown: ["no validated labeller"], source, validity };
-    const lab = (i: number) => { const s = x.stmts[i]!, k = String(s.adopts ?? i); return labels[k] ?? labels["*"] ?? `#${k}`; };
-    coverage.labelled = x.stmts.filter((s) => labels[String(s.adopts ?? s.i)] !== undefined || labels["*"] !== undefined).length;
-    const w = width(x, lab);
+    // a vote holds what its proposal holds; "*" labels every statement not listed
+    const lab = (i: number) => { const s = x.stmts[i]!; return labels[String(s.adopts ?? i)] ?? labels["*"]; };
+    coverage.labelled = x.stmts.filter((_, i) => lab(i) !== undefined).length;
+    // the script names an unlabelled statement its own framing ("#k"), which counts width nobody labelled: partial labels give none
+    if (coverage.labelled < x.stmts.length) return { status: "unknown" as const, value: { labeller: null, held_at_reveal: null, ...timing }, coverage, unknown: [`hand labels cover ${coverage.labelled}/${x.stmts.length} statements: a held width needs every one ("*" labels the rest)`], source, validity };
+    const w = width(x, (i) => lab(i)!);
     return { status: "ok" as const, value: { labeller: "hand", ...timing, held_at_reveal: w.held_at_reveal, board_at_reveal: w.board_at_reveal, max_held: w.max_held, minutes_to_one: w.minutes_to_one, collapse_before_evidence: w.collapse_before_evidence }, coverage, unknown: [], source, validity };
   } catch (e) { return { status: "error" as const, value: null, coverage: {}, unknown: [], source, validity, error: ms(e) }; }
 }
@@ -110,15 +117,17 @@ async function winnerProvenance(events: Ev[], room: string, o: MeasureOptions): 
     const nearest = p.opening_matches[0];
     const receipts = p.revisions.filter((r) => r.exposure_coverage === "receipt_present").length;
     // by channel, never one "trigger known" total: a read of resource/* or item/* is not a peer's framing (review/389e411c).
-    // revisions[].peer_deliveries comes with item/delivery-receipts; a build or log without it gives null, not 0
-    const delivered = p.revisions.some((r) => "peer_deliveries" in r) ? p.revisions.filter((r) => ((r as { peer_deliveries?: unknown[] }).peer_deliveries ?? []).length > 0).length : null;
+    // the message channel counts only revisions whose interval has an explicit delivery receipt (receipt_basis, from
+    // item/delivery-receipts); a build without the field, or a log with no explicit receipt, gives null, not 0
+    const explicit = p.revisions.filter((r) => (r as { receipt_basis?: string }).receipt_basis === "explicit");
+    const delivered = explicit.length ? explicit.filter((r) => ((r as { peer_deliveries?: unknown[] }).peer_deliveries ?? []).length > 0).length : null;
     const framingRead = p.revisions.filter((r) => r.peer_board_reads.some((b) => PEER_FRAMING.test(b.key))).length;
     const value = {
       concluded: p.concluded, label: hand ? (hand.adjudicated_origin ?? hand.origin) : null, label_source: hand ? (hand.adjudicated_origin ? "hand (adjudicated)" : "hand (primary)") : null,
       origin: p.origin, nearest_opening: nearest && nearest.similarity !== null ? { author: nearest.author, similarity: round(nearest.similarity) } : null,
       brief_similarity: p.brief_similarity === null ? null : round(p.brief_similarity),
       closer_to_brief: p.brief_similarity !== null && nearest?.similarity != null ? p.brief_similarity > nearest.similarity : null,
-      named_ideas: p.named_ideas, candidate_revisions: p.revisions.length, revisions_with_receipt: receipts, revisions_after_peer_delivery: delivered, revisions_after_peer_framing_read: framingRead,
+      named_ideas: p.named_ideas, candidate_revisions: p.revisions.length, revisions_with_receipt: receipts, revisions_with_explicit_receipt: explicit.length, revisions_after_peer_delivery: delivered, revisions_after_peer_framing_read: framingRead,
     };
     return { status: (error ? "error" : p.final && (vectors || hand) ? "ok" : "unknown") as Block<unknown>["status"], value, coverage: { openings: p.openings.length, seeded: p.seeded.length, vectors: p.vector_coverage.available, requested: p.vector_coverage.requested }, unknown, source, validity, ...(error ? { error } : {}) };
   } catch (e) { return { status: "error" as const, value: null, coverage: {}, unknown: [], source, validity, error: ms(e) }; }
@@ -143,10 +152,20 @@ export interface RoomMeasurements {
   opening_spread: Block<Record<string, any>>; framing_width: Block<Record<string, any>>; winner_provenance: Block<Record<string, any>>; steer_split: Block<Record<string, any>>;
 }
 
+/** The embedder raced against one deadline shared by every call: past it each pending call fails with the budget named. */
+function bounded(e: Embedder, budgetMs: number): { embedder: Embedder; done: () => void } {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const late = new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error(`embedder exceeded the ${budgetMs} ms measurement budget`)), budgetMs); });
+  late.catch(() => {});
+  return { embedder: { model: e.model, embed: (texts) => Promise.race([e.embed(texts), late]) }, done: () => clearTimeout(timer) };
+}
+
 export async function measureRoom(events: Ev[], room = String(events.find((e) => e.type === "room")?.room ?? events[0]?.room ?? ""), o: MeasureOptions = {}): Promise<RoomMeasurements> {
   const t0 = Date.now();
-  const opening_spread = await openingSpread(events, room, o), winner_provenance = await winnerProvenance(events, room, o);
   const framing_width = framingWidth(events, room, o), steer_split = steerSplit(events, room);
+  const bound = o.embedder ? bounded(o.embedder, o.budgetMs ?? MEASURE_BUDGET_MS) : null;
+  const oe = bound ? { ...o, embedder: bound.embedder } : o;
+  const [opening_spread, winner_provenance] = await Promise.all([openingSpread(events, room, oe), winnerProvenance(events, room, oe)]).finally(() => bound?.done());
   const embedError = [opening_spread, winner_provenance].find((b) => b.status === "error")?.error;
   const embedder: RoomMeasurements["embedder"] = o.embedder ? { status: embedError ? "error" : "present", model: o.embedder.model, ...(embedError ? { error: embedError } : {}) }
     : { status: o.embedderError ? "error" : "absent", model: null, ...(o.embedderError ? { error: o.embedderError } : {}) };
@@ -169,7 +188,7 @@ export function renderMeasurements(rooms: readonly RoomMeasurements[], errors: r
     const times = wv ? `${wv.statements} framing statements by ${wv.seats} seat(s); first checkable evidence ${wv.first_evidence_min === null ? "none logged" : `at ${wv.first_evidence_min} min (${wv.first_evidence_ref})`}; first run/web call ${wv.first_invocation_min === null ? "none logged" : `at ${wv.first_invocation_min} min`}; end at ${f(wv.end_min)} min, from the reveal` : "";
     t += `- **Held width at the reveal**: ${wv?.labeller ? `${wv.held_at_reveal} (hand labels; ${w.coverage.labelled}/${w.coverage.statements} statements labelled), max ${wv.max_held}, to one framing at ${f(wv.minutes_to_one)} min, collapse before evidence ${f(wv.collapse_before_evidence)}. ${times}` : `unknown (${why(w)})${times ? `. ${times}` : ""}`}. _${w.validity}._\n`;
     const p = m.winner_provenance, pv = p.value;
-    t += `- **Winner provenance**: ${pv ? `${pv.label ? `${pv.label === "opening" ? "present at the reveal" : pv.label === "midroom" ? "mid-room" : pv.label} (${pv.label_source})` : "origin unknown"}; nearest opening ${pv.nearest_opening ? `cosine ${pv.nearest_opening.similarity} (${pv.nearest_opening.author})` : "?"}; conclusion-to-brief cosine ${f(pv.brief_similarity)}${pv.closer_to_brief === null ? "" : pv.closer_to_brief ? " (closer to the brief)" : " (closer to an opening)"}; ${pv.candidate_revisions} candidate revision(s), ${pv.revisions_with_receipt} with an attention receipt${pv.revisions_after_peer_delivery === null || pv.revisions_after_peer_delivery === undefined ? "" : `, ${pv.revisions_after_peer_delivery} after a delivered peer message`}, ${pv.revisions_after_peer_framing_read ?? 0} after reading a peer's draft/decision entry (order only, causality unproven); idea keys named in the conclusion: ${pv.named_ideas.length ? pv.named_ideas.join(", ") : "none"}${why(p) ? ` (${why(p)})` : ""}` : `unknown (${why(p)})`}. _${p.validity}._\n`;
+    t += `- **Winner provenance**: ${pv && !pv.concluded ? `no winner (not concluded); ${pv.candidate_revisions} candidate revision(s) so far` : pv ? `${pv.label ? `${pv.label === "opening" ? "present at the reveal" : pv.label === "midroom" ? "mid-room" : pv.label} (${pv.label_source})` : "origin unknown"}; nearest opening ${pv.nearest_opening ? `cosine ${pv.nearest_opening.similarity} (${pv.nearest_opening.author})` : "?"}; conclusion-to-brief cosine ${f(pv.brief_similarity)}${pv.closer_to_brief === null ? "" : pv.closer_to_brief ? " (closer to the brief)" : " (closer to an opening)"}; ${pv.candidate_revisions} candidate revision(s), ${pv.revisions_with_receipt} with an attention receipt${pv.revisions_after_peer_delivery === null || pv.revisions_after_peer_delivery === undefined ? "" : `, ${pv.revisions_after_peer_delivery} of ${pv.revisions_with_explicit_receipt} with an explicit delivery receipt after a delivered peer message`}, ${pv.revisions_after_peer_framing_read ?? 0} after reading a peer's draft/decision entry (order only, causality unproven); idea keys named in the conclusion: ${pv.named_ideas.length ? pv.named_ideas.join(", ") : "none"}${why(p) ? ` (${why(p)})` : ""}` : `unknown (${why(p)})`}. _${p.validity}._\n`;
     const st = m.steer_split, sp = st.value;
     t += `- **Steer split**: ${sp ? `${sp.steers} steer(s): ${sp.human} human, ${sp.chair} chair, ${sp.notes} inbox note(s), ${sp.corrections} correction(s); lexical cues reframe ${sp.proxy.reframe}, unblock ${sp.proxy.unblock}, both ${sp.proxy.both}, other ${sp.proxy.other}, uncertain ${sp.proxy.uncertain}` : `unknown (${why(st)})`}. _${st.validity}._\n\n`;
   }

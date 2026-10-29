@@ -3,7 +3,7 @@
  * (GET /rooms/:room/measurements) once, at the final snapshot, and fold them into result.json's `measurements` block.
  * A room the hub cannot measure keeps its error beside the others, so the report says which room and why.
  */
-import type { RoomMeasurements } from "./room.js";
+import { MEASURE_BUDGET_MS, type RoomMeasurements } from "./room.js";
 
 export interface RunMeasurements {
   schema: "run-measurements-v1";
@@ -17,13 +17,16 @@ interface Measurable { name: string; measurements?: RoomMeasurements; measuremen
 const isMeasurements = (m: any, room: string): m is RoomMeasurements =>
   !!m && m.schema === "room-measurements-v1" && m.room === room && ["opening_spread", "framing_width", "winner_provenance", "steer_split"].every((k) => typeof m[k]?.status === "string");
 
+/** The hub's whole embedding budget plus 30 s for the log parse and the reply, so a slow embedder costs only its own blocks. */
+export const COLLECT_TIMEOUT_MS = MEASURE_BUDGET_MS + 30_000;
+
 /** Sequential, one request per room; the timeout covers a cold embedder load (a cold model took over 2 s here, src/hub/overlap/semantic.ts). */
 export async function collectRoomMeasurements(rooms: Measurable[], hubUrl: string, opts: { fetch?: typeof fetch; timeoutMs?: number } = {}): Promise<void> {
   for (const room of rooms) {
     delete room.measurements;
     delete room.measurementsError;
     try {
-      const response = await (opts.fetch ?? fetch)(`${hubUrl}/rooms/${encodeURIComponent(room.name)}/measurements`, { signal: AbortSignal.timeout(opts.timeoutMs ?? 90_000) });
+      const response = await (opts.fetch ?? fetch)(`${hubUrl}/rooms/${encodeURIComponent(room.name)}/measurements`, { signal: AbortSignal.timeout(opts.timeoutMs ?? COLLECT_TIMEOUT_MS) });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const m = await response.json();
       if (!isMeasurements(m, room.name)) throw new Error("measurements room/schema mismatch");

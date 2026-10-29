@@ -45,7 +45,8 @@ try {
     if (wl) { writeFileSync(join(tmp, "w.json"), JSON.stringify({ [room]: wl })); }
     const fw = run("framing-width.ts", [file, "--json", ...(wl ? ["--labels", join(tmp, "w.json")] : ["--cut", "0.5"])])[0] ?? null;
     for (const k of ["statements", "seats", "first_evidence_min", "first_evidence_ref", "first_invocation_min"]) add("framing_width", k, m.framing_width.value?.[k] ?? null, fw?.[k] ?? null);
-    if (wl) for (const k of ["held_at_reveal", "board_at_reveal", "max_held", "minutes_to_one", "collapse_before_evidence"]) add("framing_width", k, m.framing_width.value?.[k] ?? null, fw?.[k] ?? null);
+    // partial labels: the report prints no width where the script counts each unlabelled statement as its own framing
+    if (wl && m.framing_width.status === "ok") for (const k of ["held_at_reveal", "board_at_reveal", "max_held", "minutes_to_one", "collapse_before_evidence"]) add("framing_width", k, m.framing_width.value?.[k] ?? null, fw?.[k] ?? null);
 
     const texts: string[] = run("winner-provenance.ts", [file, "--texts"]);
     const vecs = await embedTexts(texts, { model: embedder.model, url: process.env.CHATROOM_EMBED_URL });
@@ -59,7 +60,9 @@ try {
     add("winner_provenance", "named_ideas", pv?.named_ideas ?? null, wp?.named_ideas ?? null);
     add("winner_provenance", "candidate_revisions", pv?.candidate_revisions ?? null, wp?.revisions?.length ?? null);
     add("winner_provenance", "revisions_with_receipt", pv?.revisions_with_receipt ?? null, wp?.revisions?.filter((r: any) => r.exposure_coverage === "receipt_present").length ?? null);
-    add("winner_provenance", "revisions_after_peer_delivery", pv?.revisions_after_peer_delivery ?? null, wp?.revisions?.some((r: any) => "peer_deliveries" in r) ? wp.revisions.filter((r: any) => r.peer_deliveries.length > 0).length : null);
+    const explicit = (wp?.revisions ?? []).filter((r: any) => r.receipt_basis === "explicit");
+    add("winner_provenance", "revisions_with_explicit_receipt", pv?.revisions_with_explicit_receipt ?? null, explicit.length);
+    add("winner_provenance", "revisions_after_peer_delivery", pv?.revisions_after_peer_delivery ?? null, explicit.length ? explicit.filter((r: any) => r.peer_deliveries.length > 0).length : null);
     add("winner_provenance", "revisions_after_peer_framing_read", pv?.revisions_after_peer_framing_read ?? null, wp?.revisions?.filter((r: any) => r.peer_board_reads.some((b: any) => /^(draft|position|decision|design|hypothesis|plan)\//.test(b.key))).length ?? null);
     const hand = labels.provenanceLabels?.find((l) => l.room === room);
     if (hand) add("winner_provenance", "label", pv?.label ?? null, hand.adjudicated_origin ?? hand.origin);

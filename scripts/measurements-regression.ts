@@ -62,6 +62,9 @@ assert.ok(none.winner_provenance.unknown.some((u: string) => /embedder absent/.t
 assert.equal(none.winner_provenance.value.candidate_revisions, provenance(events as any[], R).revisions.length);
 assert.equal(none.winner_provenance.value.revisions_after_peer_delivery, null, "a build without delivery receipts gives no delivery count, not 0");
 assert.equal(none.winner_provenance.value.revisions_after_peer_framing_read, 0);
+assert.equal(none.winner_provenance.value.revisions_with_explicit_receipt, 0);
+const open = await measureRoom(events.filter((e) => e.type !== "state") as any[], R, {});
+assert.match(renderMeasurements([open]), /\*\*Winner provenance\*\*: no winner \(not concluded\)/, "an open room says so before any cosine");
 assert.equal(none.framing_width.status, "unknown", "held width needs a validated labeller");
 assert.equal(none.framing_width.value.held_at_reveal, null);
 assert.equal(none.framing_width.value.first_evidence_min, 4, "evidence/bench at minute 5 is 4 min after the reveal");
@@ -96,6 +99,21 @@ assert.match(broken.opening_spread.error, /ECONNREFUSED/);
 assert.equal(broken.steer_split.status, "ok");
 assert.equal(broken.framing_width.value.statements, none.framing_width.value.statements);
 
+// 3b. one shared embedding budget, spread and provenance embedding at once: a slow embedder costs only its own blocks
+// and the launcher's wait outlasts the whole budget, so width and steers always reach result.json (attack/decision/report-wiring 1)
+const slow = (ms: number) => ({ model: "embeddinggemma", embed: (texts: string[]) => new Promise<number[][]>((res) => setTimeout(() => res(texts.map(vec)), ms)) });
+let t = Date.now();
+const late: any = await measureRoom(events as any[], R, { embedder: slow(1500), budgetMs: 600 } as any);
+assert.ok(Date.now() - t < 1200, `a slow embedder is cut at the budget, not waited for twice (took ${Date.now() - t} ms)`);
+assert.deepEqual([late.opening_spread.status, late.winner_provenance.status, late.steer_split.status, late.embedder.status], ["error", "error", "ok", "error"]);
+assert.match(late.opening_spread.error, /exceeded the 600 ms measurement budget/);
+assert.equal(late.framing_width.value.statements, none.framing_width.value.statements);
+t = Date.now();
+const both: any = await measureRoom(events as any[], R, { embedder: slow(400), budgetMs: 3000 } as any);
+assert.deepEqual([both.opening_spread.status, both.winner_provenance.status], ["ok", "ok"]);
+assert.ok(Date.now() - t < 700, `spread and provenance embed at once, not one after the other (took ${Date.now() - t} ms)`);
+assert.ok((await import("../src/measurements/collect.js")).COLLECT_TIMEOUT_MS >= mod.MEASURE_BUDGET_MS + 10_000, "the launcher waits past the hub's whole embedding budget");
+
 // 4. hand labels: held width from the labeller, the script's width() on the same labels; a hand provenance label wins
 const labelled: any = await measureRoom(events as any[], R, { widthLabels: { [R]: { "*": "A", "2": "B" } }, provenanceLabels: [{ room: R, origin: "midroom", adjudicated_origin: "opening" }] });
 const x = extract(events as any[], R), w = width(x, (i) => { const s = x.stmts[i]!, k = String(s.adopts ?? i); return ({ "*": "A", "2": "B" } as Record<string, string>)[k] ?? "A"; });
@@ -104,6 +122,17 @@ assert.equal(labelled.framing_width.value.held_at_reveal, w.held_at_reveal);
 assert.equal(labelled.framing_width.value.held_at_reveal, 2, "two labels among the openings at the reveal");
 assert.equal(labelled.winner_provenance.value.label, "opening");
 assert.equal(labelled.winner_provenance.value.label_source, "hand (adjudicated)");
+// 4b. labels that miss a statement give no width: an unlabelled statement is not its own framing (attack/decision/report-wiring 2)
+const partial: any[] = [];
+for (const l of [{}, { "2": "B" }] as Record<string, string>[]) {
+  const m: any = await measureRoom(events as any[], R, { widthLabels: { [R]: l } });
+  assert.equal(m.framing_width.status, "unknown", `labels ${JSON.stringify(l)} are not a labeller for every statement`);
+  assert.equal(m.framing_width.value.held_at_reveal, null);
+  assert.ok(m.framing_width.coverage.labelled < m.framing_width.coverage.statements);
+  assert.match(m.framing_width.unknown[0], new RegExp(`^hand labels cover ${m.framing_width.coverage.labelled}/${m.framing_width.coverage.statements} statements`));
+  partial.push(m);
+}
+assert.match(renderMeasurements(partial), /\*\*Held width at the reveal\*\*: unknown \(hand labels cover 0\//);
 
 // 5. the report section: every unknown says why, nothing prints undefined or NaN
 const md = renderMeasurements([none, withE, broken, labelled], ["swarm-210000-abcd-g1: HTTP 404"]);
@@ -137,6 +166,15 @@ const run = runMeasurements(rooms, R);
 assert.deepEqual([run.rooms.map((m: any) => m.room), run.errors], [[R], ["g1: Error: HTTP 404"]]);
 await collectRoomMeasurements(rooms, "http://hub", { fetch: (async () => new Response(JSON.stringify({ ...none, room: "other" }))) as any });
 assert.match(rooms[1].measurementsError, /schema mismatch/, "a payload for another room is not this room's");
+// a hub whose embedder hangs still answers inside the launcher's wait, with the label-free blocks
+const hung = { model: "embeddinggemma", embed: () => new Promise<number[][]>(() => {}) };
+const slowHub: any[] = [{ name: R }];
+await collectRoomMeasurements(slowHub, "http://hub", { timeoutMs: 1500, fetch: ((_: string, init: { signal: AbortSignal }) => new Promise((res, rej) => {
+  init.signal.addEventListener("abort", () => rej(init.signal.reason));
+  measureRoom(events as any[], R, { embedder: hung, budgetMs: 300 } as any).then((m) => res(new Response(JSON.stringify(m))));
+})) as any });
+assert.equal(slowHub[0].measurementsError, undefined, `a hung embedder costs the launcher no blocks: ${slowHub[0].measurementsError}`);
+assert.deepEqual([slowHub[0].measurements.steer_split.status, slowHub[0].measurements.opening_spread.status], ["ok", "error"]);
 
 // 8. report.md prints the section from result.json's block
 const report = renderRunReport({ schemaVersion: 1, run: { id: "swarm-210000-abcd", startedAt: at(0), completedAt: at(10), task: "t", doneWhen: "d" }, project: { cwd: "/x", canonicalPath: "/x", git: null },

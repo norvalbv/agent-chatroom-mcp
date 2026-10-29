@@ -1,0 +1,102 @@
+{
+  "slot": "S2",
+  "rivals": false,
+  "room": "swarm-224615-4sls-room",
+  "outcome": "pass",
+  "infra_reasons": [],
+  "counts_toward_gate": true,
+  "concluded": true,
+  "timed_out": false,
+  "primary_pass": true,
+  "launcher_exit_code": 0,
+  "logs_scanned": [
+    "/private/tmp/rlp-final/swarms/reveal-pair/S2/launcher.log",
+    "/private/tmp/rlp-final/swarms/swarm-224615-4sls/claude-opus-5-5-1.log",
+    "/private/tmp/rlp-final/swarms/swarm-224615-4sls/claude-opus-5-5-2.log",
+    "/private/tmp/rlp-final/swarms/swarm-224615-4sls/verifier.log",
+    "/private/tmp/rlp-final/swarms/swarm-224615-4sls/claude-opus-5-5-1.out",
+    "/private/tmp/rlp-final/swarms/swarm-224615-4sls/claude-opus-5-5-2.out",
+    "/private/tmp/rlp-final/swarms/swarm-224615-4sls/verifier.out"
+  ],
+  "seats_joined": [
+    "claude-opus-5-5-1",
+    "claude-opus-5-5-2",
+    "verifier"
+  ],
+  "run_outcome": {
+    "kind": "concluded",
+    "timedOut": false,
+    "detail": "The lead room concluded."
+  },
+  "artifact": "task_pass",
+  "failing_cases": [],
+  "failing_n": 0,
+  "anti_tamper_unchanged": true,
+  "frozen": {
+    "task_sha256": "1b5d5bd5add5731ab94112d920a2844d125b66119880bdc300209621fdd78c0a",
+    "scorer_sha256": "f4b645c670ae4655aec1189e4d7320294115f0e3c6da3b5ba41a7ee3b1cd00f8",
+    "hub_entry_sha256": "e2825af96f0451a88994de9b7274e34ed10c088aa24e70ec188a5a5b962d985f",
+    "dist_sha256": "014a198d19fe58d54c105325da96f4f6bc01da901354d8b51410ab022b32b55f",
+    "head": "e03bf696",
+    "runner_sha256": "ce0a15ffcadfb3f1eb6b0d1596df73f8d5ab8723cbf10e1d44a0240b15f095da"
+  },
+  "duration_s": 302.41,
+  "usage": {
+    "steps": 0,
+    "prompt_tokens": 0,
+    "completion_tokens": 0,
+    "cost_usd": 3.6108936,
+    "seats": 3,
+    "seats_with_usage": 3,
+    "coverage": "complete",
+    "input_tokens": 186,
+    "cache_read_input_tokens": 4121614,
+    "cache_creation_input_tokens": 158601,
+    "output_tokens": 75764
+  },
+  "per_seat": [
+    {
+      "name": "claude-opus-5-5-2",
+      "cost": 1.264902,
+      "killed_at_timeout": null
+    },
+    {
+      "name": "verifier",
+      "cost": 1.3159448999999999,
+      "killed_at_timeout": null
+    },
+    {
+      "name": "claude-opus-5-5-1",
+      "cost": 1.0300467000000002,
+      "killed_at_timeout": null
+    }
+  ],
+  "openings": 3,
+  "alternatives": 6,
+  "ideas_seeded": [
+    "idea/use-toexponential-tofixed-digits",
+    "idea/compare-against-python-formatting-as",
+    "idea/use-number-prototype-tofixed",
+    "idea/write-implementation-format-ts-directly",
+    "idea/use-number-prototype-tofixed-claude-opus-5-5-2",
+    "idea/shortest-repr-tostring-digits-manual"
+  ],
+  "framings_seeded": [
+    "idea/use-toexponential-tofixed-digits",
+    "idea/compare-against-python-formatting-as",
+    "idea/use-number-prototype-tofixed",
+    "idea/write-implementation-format-ts-directly",
+    "idea/use-number-prototype-tofixed-claude-opus-5-5-2",
+    "idea/shortest-repr-tostring-digits-manual"
+  ],
+  "rival_assigned": [],
+  "rival_answered": [],
+  "framing_events": {
+    "attacked": 1
+  },
+  "names_case458_error": true,
+  "names_catching_check": true,
+  "framing_texts_n": 6,
+  "conclusion": "format.ts in the shared workspace (8088 bytes, sha1 34d9097b246d6dc295d21c9944d282647f1277c0, the exact file all three seats tested; no edits until conclusion) is complete for an ES2020+ runtime (BigInt is required by the bigint signature): it exports format(fmt, ...args) with the original signature, parses %[flags][width][.precision]conv by hand, formats d/i/x/X/o via BigInt (number or bigint args), and formats e/E/f/F/g/G from the double's exact binary value (BigInt mantissa*2^exp -> exact decimal, round half-to-even), with g choosing style from the post-rounding exponent and stripping zeros unless '#'. No dependencies, no shelling out. Checked (evidence/p1-fuzz, evidence/p2-review, evidence/verifier-fuzz): (1) README examples and hand cases by all three seats (33 + 47 + 338 checks, 0 fails); (2) differential fuzzing vs a macOS C snprintf oracle (resource/c-printf-oracle): 260k cases (claude-opus-5-5-1), 150k g/tie-heavy + 30k 64-bit int cases (claude-opus-5-5-2), 550k cases (verifier) \u2014 all match except 8 cases, all one macOS libc bug (%g/%G on an exact decimal tie that rounds half-even to a trailing 0, e.g. %g of -6886405000, where libc keeps the 0). The oracle therefore cannot confirm that g/G tie-to-trailing-zero path; it rests on the README strip rule plus an independent check (evidence/p2-review item 6: %.5G 256905, %g -6886405000, %.3g 2505 \u2014 Python and the README rule give the format.ts output, and the same ties under %e/%f match libc); (3) bigint d/i up to 400 bits vs an independent spec reference, 0 mismatches; 200k random diffs vs claude-opus-5-5-2's independent implementation, 0 diffs; (4) tsc --strict --target es2020 clean; extreme precisions (%.1100f etc.) fast. toFixed/toPrecision alternatives rejected (half-up ties; attack/idea/use-number-prototype-tofixed).",
+  "room_log": "/private/tmp/rlp-final/swarms/reveal-pair/S2/data/swarm-224615-4sls-room.jsonl"
+}

@@ -1,0 +1,98 @@
+{
+  "slot": "S1",
+  "rivals": false,
+  "room": "swarm-224118-cv8z-room",
+  "outcome": "pass",
+  "infra_reasons": [],
+  "counts_toward_gate": true,
+  "concluded": true,
+  "timed_out": false,
+  "primary_pass": true,
+  "launcher_exit_code": 0,
+  "logs_scanned": [
+    "/private/tmp/rlp-final/swarms/reveal-pair/S1/launcher.log",
+    "/private/tmp/rlp-final/swarms/swarm-224118-cv8z/claude-opus-5-5-1.log",
+    "/private/tmp/rlp-final/swarms/swarm-224118-cv8z/claude-opus-5-5-2.log",
+    "/private/tmp/rlp-final/swarms/swarm-224118-cv8z/verifier.log",
+    "/private/tmp/rlp-final/swarms/swarm-224118-cv8z/claude-opus-5-5-1.out",
+    "/private/tmp/rlp-final/swarms/swarm-224118-cv8z/claude-opus-5-5-2.out",
+    "/private/tmp/rlp-final/swarms/swarm-224118-cv8z/verifier.out"
+  ],
+  "seats_joined": [
+    "claude-opus-5-5-1",
+    "claude-opus-5-5-2",
+    "verifier"
+  ],
+  "run_outcome": {
+    "kind": "concluded",
+    "timedOut": false,
+    "detail": "The lead room concluded."
+  },
+  "artifact": "task_pass",
+  "failing_cases": [],
+  "failing_n": 0,
+  "anti_tamper_unchanged": true,
+  "frozen": {
+    "task_sha256": "1b5d5bd5add5731ab94112d920a2844d125b66119880bdc300209621fdd78c0a",
+    "scorer_sha256": "f4b645c670ae4655aec1189e4d7320294115f0e3c6da3b5ba41a7ee3b1cd00f8",
+    "hub_entry_sha256": "e2825af96f0451a88994de9b7274e34ed10c088aa24e70ec188a5a5b962d985f",
+    "dist_sha256": "014a198d19fe58d54c105325da96f4f6bc01da901354d8b51410ab022b32b55f",
+    "head": "e03bf696",
+    "runner_sha256": "ce0a15ffcadfb3f1eb6b0d1596df73f8d5ab8723cbf10e1d44a0240b15f095da"
+  },
+  "duration_s": 274.14,
+  "usage": {
+    "steps": 0,
+    "prompt_tokens": 0,
+    "completion_tokens": 0,
+    "cost_usd": 3.4511063999999996,
+    "seats": 3,
+    "seats_with_usage": 3,
+    "coverage": "complete",
+    "input_tokens": 156,
+    "cache_read_input_tokens": 3260990,
+    "cache_creation_input_tokens": 184019,
+    "output_tokens": 66215
+  },
+  "per_seat": [
+    {
+      "name": "claude-opus-5-5-2",
+      "cost": 1.3643649,
+      "killed_at_timeout": null
+    },
+    {
+      "name": "claude-opus-5-5-1",
+      "cost": 0.8622371,
+      "killed_at_timeout": null
+    },
+    {
+      "name": "verifier",
+      "cost": 1.2245043999999998,
+      "killed_at_timeout": null
+    }
+  ],
+  "openings": 3,
+  "alternatives": 5,
+  "ideas_seeded": [
+    "idea/use-number-prototype-tofixed",
+    "idea/use-number-prototype-tofixed-claude-opus-5-5-1",
+    "idea/delegate-c-printf-via-child-process",
+    "idea/use-toexponential-min-p-100-digits-then",
+    "idea/grisu-ryu-shortest-digits-then-pad"
+  ],
+  "framings_seeded": [
+    "idea/use-number-prototype-tofixed",
+    "idea/use-number-prototype-tofixed-claude-opus-5-5-1",
+    "idea/delegate-c-printf-via-child-process",
+    "idea/use-toexponential-min-p-100-digits-then",
+    "idea/grisu-ryu-shortest-digits-then-pad"
+  ],
+  "rival_assigned": [],
+  "rival_answered": [],
+  "framing_events": {},
+  "names_case458_error": true,
+  "names_catching_check": true,
+  "framing_texts_n": 5,
+  "conclusion": "format.ts in the working directory (sha256 11c54aafb67097f9494a7c18ec3bd8a50eb28472bda31d8fb6d1dd80e90157c5) is complete: it keeps the export `format(fmt: string, ...args: (number | bigint | string)[]): string` and implements the README with no dependencies. How it works: a single-pass parser handles %[flags][width][.prec]conv and %%. Integers are formatted through BigInt. Floats are converted to their exact decimal value (DataView bits \u2192 BigInt m\u00b75^k/10^k), then rounded half-even by BigInt division; e, f and g share this path, and g takes X from the e-rounding at P-1. How it was checked: (1) verifier's differential against macOS libc snprintf: 140,000 single-spec cases over all conversions, flags, widths and precisions, plus 28,000 composite strings, with 0 failures; mutation sanity checks caught the injected faults; extreme precisions are byte-identical; bigint >2^64 cases were hand-derived; tsc --strict is clean (evidence/libc-sweep). (2) A float differential against Python % formatting: 19,211 random doubles with 0 mismatches (evidence/float-python-diff). (3) claude-opus-5-5-2's README-case table (/tmp/fmt2/readme_cases.ts) passes 193/193, also rerun by the verifier (evidence/readme-cases). An 800k-spec differential against the independently written /tmp/fmt2/format_b.ts gives 0 diffs (review/evidence-crosscheck). (4) My own hand cases in /tmp/c1/t.ts pass 37/37. One expectation in them was wrong: %.3g of 9.9951 is \"10\", as libc also prints. I corrected it and added %.4g \u2192 \"9.995\".",
+  "room_log": "/private/tmp/rlp-final/swarms/reveal-pair/S1/data/swarm-224118-cv8z-room.jsonl"
+}

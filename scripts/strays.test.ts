@@ -6,10 +6,12 @@ import assert from "node:assert/strict";
 import { after, test } from "node:test";
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
 import { randomBytes } from "node:crypto";
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { pidsUnder, stopStrays } from "../src/strays.ts";
+import { runWorktreePaths, sweepRunWorktrees } from "../src/strays.ts";
+import { runRooms } from "../src/launch/run-rooms.js";
 import * as poolRun from "./pool-run.ts";
 import { startHub } from "./seat-launch-fixture.ts";
 
@@ -31,7 +33,19 @@ const role = process.cwd().includes(path.sep + '.swarm-worktrees' + path.sep) ? 
 const c = cp.spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)', process.env.STRAY_MARKER + '-' + role], { cwd: process.cwd(), detached: true, stdio: 'ignore' });
 c.unref();
 fs.writeFileSync(path.join(process.env.STRAY_RECORD_DIR, role + '.pid'), String(c.pid));
-setInterval(() => {}, 1000);
+if (process.env.STRAY_RECRUITS === '1') {
+ if (role === 'worker') {
+  const run = path.basename(path.dirname(process.cwd())), trees = path.join(process.env.STRAY_PROJECT, '.swarm-worktrees');
+  const records = {};
+  for (const [label, room] of Object.entries({room:run+'-room', breakout:run+'-breakout-a', near:run+'x-room', other:'unrelated-room'})) {
+   const cwd = path.join(trees, room, 'codex-recruit-1'); fs.mkdirSync(cwd, {recursive:true});
+   const p = cp.spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)', process.env.STRAY_MARKER + '-' + label], {cwd, detached:true, stdio:'ignore'});
+   p.unref(); records[label] = {pid:p.pid, cwd};
+  }
+  fs.writeFileSync(path.join(process.env.STRAY_RECORD_DIR, 'recruits.json'), JSON.stringify(records));
+ }
+ setTimeout(() => process.exit(0), 300);
+} else setInterval(() => {}, 1000);
 `;
 const bin = join(base, "bin");
 mkdirSync(bin);
@@ -63,14 +77,16 @@ test("pool-run sweeps with the same functions, moved rather than copied", () => 
 });
 
 /** A --full-access flat run in a fresh git repo: one worker in .swarm-worktrees/<run>/, the verifier in the repo itself. */
-async function run(label: string, timeoutMin: string, stop?: (swarm: ChildProcess, records: string) => Promise<void>) {
+async function run(label: string, timeoutMin: string, stop?: (swarm: ChildProcess, records: string) => Promise<void>, recruits = false, linked = false) {
   const repo = join(base, label), records = join(base, `${label}-records`);
   mkdirSync(repo); mkdirSync(records);
   const git = (...a: string[]) => spawnSync("git", ["-C", repo, ...a], { encoding: "utf8" });
   git("init", "-q"); writeFileSync(join(repo, "README.md"), "fixture\n"); git("add", "."); git("-c", "user.name=fixture", "-c", "user.email=fixture@example.invalid", "commit", "-qm", "fixture");
+  const cwd = linked ? join(base, `${label}-linked`) : repo;
+  if (linked) assert.equal(git('worktree', 'add', '-b', 'linked-fixture', cwd).status, 0);
   const swarm = spawn(process.execPath, [resolve("dist", "swarm.js"), "Fixture task for the stray sweep.", "--flat", "--agents", "2", "--full-access", "--models", "claude-opus-5-5",
-    "--verifier-model", "claude-opus-5-5", "--port", String(port), "--timeout", timeoutMin, "--cwd", repo],
-    { env: { ...process.env, PATH: `${bin}:${process.env.PATH}`, STRAY_MARKER: MARKER, STRAY_RECORD_DIR: records }, stdio: ["ignore", "pipe", "pipe"] });
+    "--verifier-model", "claude-opus-5-5", "--port", String(port), "--timeout", timeoutMin, "--cwd", cwd],
+    { env: { ...process.env, PATH: `${bin}:${process.env.PATH}`, STRAY_MARKER: MARKER, STRAY_RECORD_DIR: records, STRAY_RECRUITS: recruits ? '1' : '', STRAY_PROJECT: repo }, stdio: ["ignore", "pipe", "pipe"] });
   started.add(swarm.pid!);
   let out = "";
   swarm.stdout!.on("data", (d) => (out += d));
@@ -81,10 +97,63 @@ async function run(label: string, timeoutMin: string, stop?: (swarm: ChildProces
   started.add(worker); started.add(verifier);
   if (stop) await stop(swarm, records);
   await closed;
+  const recruitFile = join(records, 'recruits.json');
+  const recruited: Record<string, {pid: number; cwd: string}> = existsSync(recruitFile) ? JSON.parse(readFileSync(recruitFile, 'utf8')) : {};
+  for (const r of Object.values(recruited)) started.add(r.pid);
   const id = /swarm (swarm-[0-9]+-[a-z0-9]+):/.exec(out)?.[1];
+  const resultFile = id && resolve('swarms', id, 'result.json');
+  const result = resultFile && existsSync(resultFile) ? JSON.parse(readFileSync(resultFile, 'utf8')) : null;
   if (id) rmSync(resolve("swarms", id), { recursive: true, force: true });
-  return { out, worker, verifier };
+  return { out, worker, verifier, recruited, result };
 }
+
+for (const linked of [false, true]) test(`normal end sweeps run AND every run-prefixed room worktree (linked=${linked}), preserves other runs, and records each worktree`, async () => {
+  const { out, worker, verifier, recruited, result } = await run(`recruits-${linked}`, '2', undefined, true, linked);
+  assert.ok(!alive(worker), `the run worktree child survived:\n${out.slice(-1200)}`);
+  for (const label of ['room', 'breakout']) {
+    const r = recruited[label];
+    assert.ok(r, `fixture started ${label}`);
+    assert.ok(!alive(r.pid), `${label} recruit child ${r.pid} outlived end-of-run sweep:\n${out.slice(-1200)}`);
+    const row = result?.straySweeps?.flatMap((s: any) => s.worktrees).find((w: any) => w.path === r.cwd);
+    assert.equal(row?.stopped, 1, `result.json records what was stopped in ${r.cwd}`);
+    assert.deepEqual(row.remaining, []);
+  }
+  for (const label of ['near', 'other']) assert.ok(alive(recruited[label].pid), `${label} sibling belongs to another run`);
+  assert.ok(alive(verifier), 'the project checkout stays outside the sweep');
+});
+
+test('room-only roots, parent-linked breakouts, symlink escapes and near-prefix siblings', () => {
+  const project = join(base, 'discovery'), trees = join(project, '.swarm-worktrees');
+  const id = 'swarm-fixture-a';
+  for (const name of [id + '-room', id + '-breakout-b', id + 'b-room', 'odd-breakout', 'unrelated']) mkdirSync(join(trees, name, 'seat'), {recursive:true});
+  const outside = join(base, 'outside-tree'); mkdirSync(outside);
+  symlinkSync(outside, join(trees, id + '-symlink'));
+  symlinkSync(outside, join(trees, id + '-room', 'escaped-seat'));
+  const rooms = runRooms([{name:id+'-room'}, {name:'odd-breakout', parent:id+'-room'}, {name:'unrelated'}], id, [id+'-room']);
+  const paths = runWorktreePaths([project, project], id, rooms).map(p => p.path);
+  for (const name of [id+'-room', id+'-breakout-b', 'odd-breakout']) assert.ok(paths.includes(join(trees, name, 'seat')), name);
+  for (const name of [id+'b-room', 'unrelated']) assert.ok(!paths.some(p => p.startsWith(join(trees, name))), name);
+  assert.ok(!paths.includes(outside));
+  assert.equal(new Set(paths).size, paths.length, 'deduplicated across project roots');
+  assert.deepEqual(runWorktreePaths([join(base, 'absent-project')], id), []);
+});
+
+test('denied signals report remaining PIDs and zero confirmed stops', async () => {
+  const project = join(base, 'denied'), cwd = join(project, '.swarm-worktrees', 'run-room', 'seat');
+  mkdirSync(cwd, {recursive:true});
+  const pid = idle(cwd, 'denied');
+  await waitFor(() => pidsUnder(cwd).includes(pid), 'denied fixture visible');
+  const kill = process.kill;
+  try {
+    process.kill = (() => { throw new Error('fixture: EPERM'); }) as typeof process.kill;
+    const rows = await sweepRunWorktrees([project], 'run');
+    const row = rows.find(r => r.path === cwd)!;
+    assert.ok(row.targeted.includes(pid));
+    assert.equal(row.stopped, 0);
+    assert.deepEqual(row.stoppedPids, []);
+    assert.ok(row.remaining?.includes(pid));
+  } finally { process.kill = kill; process.kill(pid); }
+});
 
 test("swarm.ts timeout: a child a seat detached inside its worktree is stopped; one in the project checkout is left alone", async () => {
   const { out, worker, verifier } = await run("timeout", "0.1");

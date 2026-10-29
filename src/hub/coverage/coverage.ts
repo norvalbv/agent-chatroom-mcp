@@ -63,15 +63,15 @@ const SETTLED_ITEM = /^\s*(dropped|done)\s*:/i;
 
 const slugOf = (key: string) => key.slice(key.indexOf("/") + 1);
 
-/** Who a claim belongs to: its writer and its JSON team. A claim the hub wrote at recruitment (src/index.ts claimArea)
- * names the requester as writer; the recruits on its team hold it, not the chair that asked (#254 in this room). */
+/** Writer and team hold a claim. Historical recruitment claims named the requester as writer; only their team
+ * held the work. New recruitment claims carry requested_by and name the actual recruit as writer and owner. */
 export function claimOwners(e: BoardEntry): string[] {
   let team: string[] = [];
   let atRecruitment = false;
   try {
-    const j = JSON.parse(e.text) as { team?: unknown; note?: unknown };
+    const j = JSON.parse(e.text) as { team?: unknown; note?: unknown; requested_by?: unknown };
     if (Array.isArray(j.team)) team = j.team.map(String);
-    atRecruitment = j.note === "claimed at recruitment";
+    atRecruitment = j.note === "claimed at recruitment" && j.requested_by === undefined;
   } catch {}
   const all = [...new Set([e.by, ...team])];
   return atRecruitment && all.length > 1 ? all.filter((n) => n !== e.by) : all;
@@ -188,7 +188,7 @@ export function coverage(room: Room): Coverage | undefined {
  * recruit sent to build items covers them from its first minute, not only once its handoff names them (#1358). */
 export function recruitmentClaim(room: Room, requester: string, area: string, team: string[], brief = ""): string {
   const items = [...room.board.entries()].filter(([k, e]) => k.startsWith(ITEM_PREFIX) && e.text.trim() && namedAsCovered(brief, k)).map(([k]) => k);
-  return JSON.stringify({ area, owner: requester, team: [requester, ...team], status: "open", note: "claimed at recruitment", ...(items.length ? { items } : {}) });
+  return JSON.stringify({ area, owner: team[0], team, requested_by: requester, status: "open", note: "claimed at recruitment", ...(items.length ? { items } : {}) });
 }
 
 /** Unowned items, oldest first, for whoever asks for a hand (open_work item_unowned; src/hub/asks/hands.ts). */

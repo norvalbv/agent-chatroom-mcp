@@ -89,7 +89,7 @@ export interface SpawnedAgent {
 export interface SpawnerHooks {
   /** is the room on hold? */
   isHeld(room: string): boolean;
-  /** create/claim an area on behalf of the requester; throw HubError if taken. The brief: the item/* keys it names go in the claim */
+  /** Reserve an area for the first recruit (other recruits are its team); refuse held claims. The brief supplies item/* coverage. */
   claimArea(room: string, requesterName: string, area: string, teamNames: string[], brief?: string): void;
   /** create a room with swarm defaults (require_challenge, verification), as a breakout of the requester's room */
   ensureRoom(room: string, topic: string, parent?: string): void;

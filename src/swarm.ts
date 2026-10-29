@@ -722,7 +722,7 @@ const straySweeps: StraySweep[] = [];
 function sweepStrays(why: string): Promise<void> {
   sweeping = sweeping
     .then(async () => {
-      straySweeps.push(await collectRunSweep({ cwd: CWD, commonDir: PROJECT_IDENTITY.git?.commonDir,
+      straySweeps.push(await collectRunSweep({ cwd: CWD, commonDir: PROJECT_IDENTITY.git?.commonDir, startedAt: RUN_STARTED,
         run: SWARM_ID, rooms: [leadsRoom, ...groupRooms], url: URL_, reason: why, log }));
       persistIncremental(completedRuns);
     })

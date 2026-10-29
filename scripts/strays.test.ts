@@ -6,11 +6,12 @@ import assert from "node:assert/strict";
 import { after, test } from "node:test";
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
 import { randomBytes } from "node:crypto";
+import { createServer } from "node:http";
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { pidsUnder, stopStrays } from "../src/strays.ts";
-import { runWorktreePaths, sweepRunWorktrees } from "../src/strays.ts";
+import { collectRunSweep, runWorktreePaths, sweepRunWorktrees } from "../src/strays.ts";
 import { runRooms } from "../src/launch/run-rooms.js";
 import * as poolRun from "./pool-run.ts";
 import { startHub } from "./seat-launch-fixture.ts";
@@ -130,12 +131,67 @@ test('room-only roots, parent-linked breakouts, symlink escapes and near-prefix 
   symlinkSync(outside, join(trees, id + '-symlink'));
   symlinkSync(outside, join(trees, id + '-room', 'escaped-seat'));
   const rooms = runRooms([{name:id+'-room'}, {name:'odd-breakout', parent:id+'-room'}, {name:'unrelated'}], id, [id+'-room']);
-  const paths = runWorktreePaths([project, project], id, rooms).map(p => p.path);
+  const paths = runWorktreePaths([project, project], id, rooms, [join(trees, 'odd-breakout', 'seat')]).map(p => p.path);
   for (const name of [id+'-room', id+'-breakout-b', 'odd-breakout']) assert.ok(paths.includes(join(trees, name, 'seat')), name);
   for (const name of [id+'b-room', 'unrelated']) assert.ok(!paths.some(p => p.startsWith(join(trees, name))), name);
   assert.ok(!paths.includes(outside));
   assert.equal(new Set(paths).size, paths.length, 'deduplicated across project roots');
   assert.deepEqual(runWorktreePaths([join(base, 'absent-project')], id), []);
+});
+
+test('a parent-linked room name alone never owns another session\'s worktrees', () => {
+  const project = join(base, 'collision'), cwd = join(project, '.swarm-worktrees', 'shared-room', 'other-seat');
+  mkdirSync(cwd, {recursive:true});
+  assert.deepEqual(runWorktreePaths([project], 'run', ['shared-room']), [], 'a room name is not proof of worktree ownership');
+});
+
+test('an arbitrary breakout needs this hub\'s fresh spawn record and the actual matching worktree branch', async () => {
+  const project = join(base, 'proven'), cwd = join(project, '.swarm-worktrees', 'odd-room', 'seat');
+  mkdirSync(project);
+  const git = (...args: string[]) => spawnSync('git', ['-C', project, ...args], {encoding:'utf8'});
+  assert.equal(git('init', '-q').status, 0);
+  writeFileSync(join(project, 'fixture'), 'x'); git('add', '.');
+  assert.equal(git('-c', 'user.name=fixture', '-c', 'user.email=fixture@example.invalid', 'commit', '-qm', 'fixture').status, 0);
+  const startedAt = Date.now();
+  assert.equal(git('worktree', 'add', '-b', 'swarm/odd-room/seat', cwd).status, 0);
+  const record = {room:'odd-room', name:'seat', startedAt:new Date(startedAt).toISOString(), workspace:{worktree:cwd, branch:'swarm/odd-room/seat'}};
+  let agents = [record];
+  const server = createServer((req, res) => {
+    res.setHeader('content-type', 'application/json');
+    res.end(JSON.stringify(req.url === '/rooms' ? [{name:'run-room'}, {name:'odd-room', parent:'run-room'}] : agents));
+  });
+  await new Promise<void>(done => server.listen(0, '127.0.0.1', done));
+  const options = {cwd:project, run:'run', startedAt, rooms:['run-room'], url:`http://127.0.0.1:${(server.address() as {port:number}).port}`, reason:'fixture', log:()=>{}};
+  try {
+    assert.deepEqual((await collectRunSweep(options)).worktrees.map(w => w.path), [cwd], 'only the proven leaf, never the entire arbitrary room root');
+    assert.deepEqual((await collectRunSweep({...options, startedAt:startedAt+60_000})).worktrees, [], 'old/reused worktree excluded');
+    record.workspace.branch = 'swarm/odd-room/wrong-seat';
+    assert.deepEqual((await collectRunSweep(options)).worktrees, [], 'record branch mismatch excluded');
+    record.workspace.branch = 'swarm/odd-room/seat';
+    assert.equal(git('-C', cwd, 'switch', '-c', 'different-actual-branch').status, 0);
+    assert.deepEqual((await collectRunSweep(options)).worktrees, [], 'actual branch mismatch excluded');
+    agents = [];
+    assert.deepEqual((await collectRunSweep(options)).ownershipUnknown, ['odd-room'], 'missing records explicit, no cross-hub cleanup');
+  } finally { await new Promise<void>(done => server.close(() => done())); }
+  assert.deepEqual((await collectRunSweep(options)).worktrees, [], 'hub down: no arbitrary name authority');
+});
+
+test('a SIGTERM handler that changes cwd and lives is escaped, never stopped', async () => {
+  const project = join(base, 'escaped'), cwd = join(project, '.swarm-worktrees', 'escape-room', 'seat'), outside = join(base, 'escaped-outside');
+  mkdirSync(cwd, {recursive:true}); mkdirSync(outside);
+  const ready = join(base, 'escaped-ready');
+  const child = spawn(process.execPath, ['-e', `const fs=require('node:fs'); process.on('SIGTERM',()=>process.chdir(${JSON.stringify(outside)})); fs.writeFileSync(${JSON.stringify(ready)},'ready'); setInterval(()=>{},1000);`], {cwd, detached:true, stdio:'ignore'});
+  child.unref(); started.add(child.pid!);
+  await waitFor(() => existsSync(ready), 'escape handler ready');
+  try {
+    const rows = await sweepRunWorktrees([project], 'escape');
+    const row = rows.find(r => r.path === cwd)!;
+    assert.ok(alive(child.pid!), 'the process remains alive outside cwd');
+    assert.equal(row.stopped, 0);
+    assert.deepEqual(row.stoppedPids, []);
+    assert.deepEqual((row as any).escaped, [child.pid]);
+    assert.deepEqual(row.remaining, []);
+  } finally { process.kill(child.pid!, 'SIGKILL'); }
 });
 
 test('denied signals report remaining PIDs and zero confirmed stops', async () => {
@@ -145,13 +201,14 @@ test('denied signals report remaining PIDs and zero confirmed stops', async () =
   await waitFor(() => pidsUnder(cwd).includes(pid), 'denied fixture visible');
   const kill = process.kill;
   try {
-    process.kill = (() => { throw new Error('fixture: EPERM'); }) as typeof process.kill;
+    process.kill = (() => { throw Object.assign(new Error('fixture: EPERM'), {code:'EPERM'}); }) as typeof process.kill;
     const rows = await sweepRunWorktrees([project], 'run');
     const row = rows.find(r => r.path === cwd)!;
     assert.ok(row.targeted.includes(pid));
     assert.equal(row.stopped, 0);
     assert.deepEqual(row.stoppedPids, []);
     assert.ok(row.remaining?.includes(pid));
+    assert.deepEqual(row.unknown, [pid]);
   } finally { process.kill = kill; process.kill(pid); }
 });
 

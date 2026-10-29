@@ -209,7 +209,23 @@ try {
   assert.equal(measureRecruitClaims(failedEvents).activation_failed_n, 1);
   assert.equal(failing.getRoom("activation-error").board.get("claim/activation-error")!.recruitment?.pending, true);
   console.log("ok activation failure is logged without failing admission");
-  console.log("RECRUIT AREA OWNER OK (14 checks)");
+  class BoundaryHub extends Hub {
+    override setBoard(...args: Parameters<Hub["setBoard"]>): ReturnType<Hub["setBoard"]> {
+      if (args[2] === "claim/boundary") this.getRoom(args[0]).board.get(args[2])!.updatedAt = new Date(Date.now() - Hub.STALE_CLAIM_MS - 1).toISOString();
+      return super.setBoard(...args);
+    }
+  }
+  const boundary = new BoundaryHub({ dataDir: join(scratch, "boundary-data") });
+  boundary.join("boundary", "requester", "codex", {}, undefined, "requester-session");
+  claimRecruitmentArea(boundary, "boundary", "requester", "boundary", ["admitted"]);
+  assert.equal(boundary.join("boundary", "admitted", "codex", {}, undefined, "admitted-session").participant.active, true);
+  const boundaryEvents = readFileSync(join(scratch, "boundary-data", "boundary.jsonl"), "utf8").trim().split("\n").map((l) => JSON.parse(l));
+  const boundaryMeasurement = measureRecruitClaims(boundaryEvents);
+  assert.equal(boundaryMeasurement.activation_failed_n, 0, "crossing the stale boundary cannot misreport a successful claim write as failure");
+  assert.equal(boundaryMeasurement.activated_n, 1);
+  assert.equal(boundaryEvents.find((e) => e.type === "recruit_claim" && e.phase === "activated").requested_by, "requester");
+  console.log("ok stale-boundary activation preserves telemetry attribution");
+  console.log("RECRUIT AREA OWNER OK (15 checks)");
 } finally {
   await stop();
   rmSync(scratch, { recursive: true, force: true });

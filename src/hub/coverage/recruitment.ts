@@ -28,7 +28,8 @@ export function activateRecruitmentClaims(hub: Hub, room: Room, owner: Participa
     if (!key.startsWith("claim/") || entry.by !== owner.name || !entry.recruitment?.pending || claimReleased(entry)) continue;
     try {
       const active = hub.setBoard(room.name, owner.id, key, entry.text);
-      if (active) recordClaim(hub, room, key, active, "activated");
+      // A stale-boundary reclaim can consume reservation metadata; retain the original server attribution.
+      if (active) recordClaim(hub, room, key, active, "activated", owner.name, undefined, entry.recruitment.requestedBy);
     } catch (error) {
       const detail = (error instanceof Error ? error.message : String(error)).slice(0, 280);
       recordClaim(hub, room, key, entry, "activation_failed", owner.name, detail);
@@ -51,8 +52,12 @@ export function expireRecruitmentClaims(hub: Hub, room: Room): void {
   }
 }
 
-function recordClaim(hub: Hub, room: Room, key: string, entry: BoardEntry, phase: "reserved" | "activated" | "expired" | "activation_failed", owner = entry.by, error?: string): void {
+function recordClaim(
+  hub: Hub, room: Room, key: string, entry: BoardEntry,
+  phase: "reserved" | "activated" | "expired" | "activation_failed", owner = entry.by,
+  error?: string, requestedBy = entry.recruitment!.requestedBy,
+): void {
   const { team } = JSON.parse(entry.text) as { team: string[] };
-  hub.persist({ type: "recruit_claim", room: room.name, key, phase, requested_by: entry.recruitment!.requestedBy,
+  hub.persist({ type: "recruit_claim", room: room.name, key, phase, requested_by: requestedBy,
     owner, team, reviewer: entry.reviewer ?? null, ...(error ? { error } : {}), ts: phase === "activation_failed" ? new Date().toISOString() : entry.updatedAt });
 }

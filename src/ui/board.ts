@@ -1,6 +1,6 @@
 export const BOARD_CSS = `
-  .btools { display:flex; gap:8px; align-items:center; margin-bottom:10px; flex-wrap:wrap } .btools label { color:var(--dim); font-size:12px } .btools select { flex:1; min-width:0; border:1px solid var(--control,var(--line)); border-radius:8px; color:var(--fg); background:var(--panel2); padding:7px }
-  .bentry button.bh { width:100%; min-height:44px; border:0; border-radius:9px; background:transparent; text-align:left; flex-wrap:wrap } .bentry button.bh:focus-visible { outline:2px solid var(--acc); outline-offset:2px } .bentry .bh .m { flex-basis:100%; text-align:left }
+  .btools { display:flex; gap:8px; align-items:center; margin-bottom:12px; flex-wrap:wrap } .btools label { color:var(--dim2); font-size:12.5px } .btools select { flex:1; min-width:0; height:34px; border-radius:999px; color:var(--fg); padding:0 12px }
+  .bentry button.bh { width:100%; min-height:44px; border:0; border-radius:14px; background:transparent; text-align:left; flex-wrap:wrap } .bentry button.bh:hover { background:var(--hover) } .bentry button.bh:focus-visible { outline:2px solid var(--acc); outline-offset:2px } .bentry .bh .m { flex-basis:100%; text-align:left }
 `;
 
 export const BOARD_JS = `

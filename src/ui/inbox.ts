@@ -8,46 +8,43 @@
  * String.raw keeps regex backslashes as written; neither string may contain a backtick or a dollar-brace.
  */
 export const INBOX_CSS = String.raw`  /* ---------- questions for you (inbox) ---------- */
-  .qbar { margin:0 12px 10px; display:flex; align-items:center; gap:8px; padding:7px 10px; border-radius:10px; border:1px solid var(--line); background:var(--panel2); text-align:left; font-size:12.5px }
-  .qbar .ql { font-weight:600 } .qbar .qs { flex:1; color:var(--dim); font-size:11.5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
-  .qbar .qc:empty { display:none } .qbar .qc { background:var(--hum); color:var(--hum-bg); font-size:11px; font-weight:700; border-radius:999px; padding:1px 8px }
-  .qbar.has { background:var(--hum-bg); border-color:color-mix(in srgb, var(--hum) 35%, transparent) } .qbar.has .ql { color:var(--hum) }
-  .room .qr { grid-column:3; grid-row:1; justify-self:end; background:var(--hum); color:var(--hum-bg); font-size:10.5px; font-weight:700; border-radius:999px; padding:1px 7px }
+  /* "For you" is the first row of the rail, shaped like a room row; the sheet and toasts are glass (src/ui/styles.ts) */
+  .qbar { display:grid; grid-template-columns:40px minmax(0,1fr) auto; column-gap:11px; align-items:center; width:100%; padding:8px 10px; margin:0 0 2px; border:0; border-radius:12px; background:transparent; color:var(--fg); text-align:left }
+  .qbar:hover { background:var(--hover) }
+  .qbar .qav { width:40px; height:40px; border-radius:50%; display:grid; place-items:center; background:var(--panel); color:var(--dim) }
+  .qbar .qtx { display:flex; flex-direction:column; min-width:0 } .qbar .ql { font-weight:500; font-size:14px; line-height:19px } .qbar .qs { color:var(--dim2); font-size:13px; line-height:18px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
+  .qbar .qc:empty { display:none } .qbar .qc { background:var(--hum); color:#fff; font-size:11px; font-weight:600; border-radius:999px; padding:0 7px; line-height:18px }
+  .qbar.has .qav { background:var(--hum-bg); color:var(--hum) }
+  .room .qr { grid-column:3; grid-row:1; justify-self:end; background:var(--hum); color:#fff; font-size:11px; font-weight:600; border-radius:999px; padding:0 6px; line-height:18px }
   .room .qr ~ .u { grid-row:2 }
   .room .m .qr { display:inline-block; margin-right:6px; padding:0 6px; font-size:10px; vertical-align:1px }
-  #qpanel { position:fixed; inset:0; z-index:50; display:grid; place-items:start center; padding:6vh 16px 16px; background:rgba(10,12,16,.32) }
+  #qpanel { position:fixed; inset:0; z-index:50; display:grid; place-items:start center; padding:6vh 16px 16px; background:rgb(0 0 0 / .32); -webkit-backdrop-filter:blur(3px); backdrop-filter:blur(3px) }
   #qpanel[hidden] { display:none }
-  .qsheet { width:min(760px, 100%); max-height:86vh; display:flex; flex-direction:column; border-radius:18px; border:1px solid var(--line); background:var(--panel); box-shadow:0 24px 60px rgba(0,0,0,.28); outline:none; overflow:hidden }
-  @supports ((-webkit-backdrop-filter:blur(1px)) or (backdrop-filter:blur(1px))) {
-    #qpanel { -webkit-backdrop-filter:blur(6px); backdrop-filter:blur(6px) }
-    .qsheet { background:color-mix(in srgb, var(--panel) 86%, transparent); -webkit-backdrop-filter:blur(24px) saturate(1.4); backdrop-filter:blur(24px) saturate(1.4) }
-  }
-  @media (prefers-reduced-transparency: reduce) { #qpanel { -webkit-backdrop-filter:none; backdrop-filter:none; background:rgba(10,12,16,.5) } .qsheet, #qtoast .qt { background:var(--panel) !important; -webkit-backdrop-filter:none !important; backdrop-filter:none !important } }
-  .qhead { display:flex; align-items:center; gap:10px; padding:14px 16px 8px } .qhead h2 { margin:0; font-size:15px; font-weight:700; letter-spacing:-.01em } .qhead .c { color:var(--dim); font-size:12px } .qhead .sp { flex:1 }
-  .qhead label { font-size:12px; color:var(--dim); display:flex; gap:5px; align-items:center; cursor:pointer }
-  .qkeys { padding:0 16px 10px; font-size:11.5px; color:var(--dim); border-bottom:1px solid var(--line2) } .qkeys kbd { font:600 10.5px "JetBrains Mono",monospace; border:1px solid var(--line); border-bottom-width:2px; border-radius:5px; padding:0 4px; background:var(--panel2); color:var(--fg) }
-  .qlist { overflow:auto; padding:10px 12px 14px; display:flex; flex-direction:column; gap:8px }
-  .qitem { border:1px solid var(--line); border-radius:14px; padding:10px 12px; background:var(--panel2); --clampbg:var(--panel2) }
-  .qitem.sel { border-color:var(--hum); box-shadow:0 0 0 3px color-mix(in srgb, var(--hum) 18%, transparent) }
-  .qitem .qm { display:flex; align-items:center; gap:7px; flex-wrap:wrap; font-size:12px; color:var(--dim); margin-bottom:6px } .qitem .qm b { color:var(--fg); font-size:13px }
-  .qitem .qm .room-l { font-family:"JetBrains Mono",monospace; font-size:11px; background:var(--panel); border:1px solid var(--line); border-radius:6px; padding:0 6px; max-width:280px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; cursor:pointer }
-  .qitem .qask { font-weight:600; font-size:13.5px; margin-bottom:6px; padding:6px 10px; border-radius:10px; background:var(--hum-bg); white-space:pre-wrap; word-break:break-word }
-  .qitem .qtx { white-space:pre-wrap; word-break:break-word; font-size:13.5px }
-  .qitem .qre { font-size:11.5px; color:var(--dim); margin-bottom:4px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
-  .qitem .qrow { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:6px; margin-top:8px; align-items:end }
-  .qitem textarea { resize:vertical; min-height:36px; max-height:200px; font-size:13px; line-height:1.4; background:var(--panel) }
+  .qsheet { position:relative; width:min(760px, 100%); max-height:86vh; display:flex; flex-direction:column; border-radius:24px; outline:none; overflow:hidden }
+  .qhead { display:flex; align-items:center; gap:10px; padding:16px 16px 8px 20px } .qhead h2 { margin:0; font-size:17px; font-weight:600 } .qhead .c { color:var(--dim2); font-size:13px } .qhead .sp { flex:1 }
+  .qhead label { font-size:13px; color:var(--dim); display:flex; gap:6px; align-items:center; cursor:pointer }
+  .qkeys { padding:0 20px 12px; font-size:12px; color:var(--dim2); border-bottom:1px solid var(--line) } .qkeys kbd { font:500 11px var(--mono); border-radius:6px; padding:0 5px; background:var(--active); color:var(--fg) }
+  .qlist { overflow:auto; padding:12px; display:flex; flex-direction:column; gap:10px }
+  .qitem { border-radius:20px; padding:12px 14px; background:var(--panel); --clampbg:var(--panel) }
+  .qitem.sel { box-shadow:0 0 0 2px var(--hum) }
+  .qitem .qm { display:flex; align-items:center; gap:8px; flex-wrap:wrap; font-size:12.5px; color:var(--dim2); margin-bottom:8px } .qitem .qm b { color:var(--fg); font-size:14px; font-weight:600 }
+  .qitem .qm .room-l { font-family:var(--mono); font-size:11.5px; background:var(--panel2); border-radius:999px; padding:0 8px; max-width:280px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; cursor:pointer }
+  .qitem .qask { font-weight:500; font-size:14px; margin-bottom:8px; padding:8px 12px; border-radius:14px; background:var(--hum-bg); white-space:pre-wrap; word-break:break-word }
+  .qitem .qtx { white-space:pre-wrap; word-break:break-word; font-size:14px; line-height:21px }
+  .qitem .qre { font-size:12px; color:var(--dim2); margin-bottom:4px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
+  .qitem .qrow { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:8px; margin-top:10px; align-items:end }
+  .qitem textarea { resize:vertical; min-height:40px; max-height:200px; font-size:14px; line-height:20px; border-radius:20px; padding:9px 14px; background:var(--bg) }
+  .qitem .qrow .btn.primary { min-height:40px }
   .qitem .qacts { display:flex; gap:6px; flex-wrap:wrap; grid-column:1 / -1; align-items:center } .qitem .qacts .qsp { flex:1 }
-  .qitem .qchip { border-color:color-mix(in srgb, var(--hum) 30%, var(--line)); max-width:220px; overflow:hidden; text-overflow:ellipsis } .qitem .qerr { color:var(--bad); font-size:12px; grid-column:1 / -1 } .qitem .qerr:empty { display:none }
-  .qempty { color:var(--dim); text-align:center; padding:36px 16px; font-size:13px }
-  .msg.q4u .body { border:1px solid color-mix(in srgb, var(--hum) 45%, transparent) }
-  .q4ub { display:block; width:fit-content; margin:4px 0 0; border:1px solid color-mix(in srgb, var(--hum) 40%, transparent); background:var(--hum-bg); color:var(--hum); border-radius:999px; padding:1px 10px; font-size:11.5px; font-weight:600 }
+  .qitem .qchip { max-width:220px; overflow:hidden; text-overflow:ellipsis } .qitem .qerr { color:var(--bad); font-size:12px; grid-column:1 / -1 } .qitem .qerr:empty { display:none }
+  .qempty { color:var(--dim2); text-align:center; padding:40px 16px; font-size:14px }
+  .msg.q4u .body { box-shadow:0 0 0 1.5px var(--hum) }
+  .q4ub { display:block; width:fit-content; margin:6px 0 0; border:0; background:var(--hum-bg); color:var(--hum); border-radius:999px; padding:4px 12px; font-size:12.5px; font-weight:500 }
   #qtoast { position:fixed; right:16px; bottom:16px; z-index:60; display:flex; flex-direction:column; gap:8px; max-width:min(380px, calc(100vw - 32px)) }
-  #qtoast .qt { border:1px solid color-mix(in srgb, var(--hum) 35%, var(--line)); border-radius:14px; padding:10px 12px; background:var(--panel); box-shadow:0 12px 32px rgba(0,0,0,.22); font-size:12.5px; animation:qin .2s ease-out }
-  @supports ((-webkit-backdrop-filter:blur(1px)) or (backdrop-filter:blur(1px))) { #qtoast .qt { background:color-mix(in srgb, var(--panel) 84%, transparent); -webkit-backdrop-filter:blur(20px) saturate(1.4); backdrop-filter:blur(20px) saturate(1.4) } }
-  #qtoast .qt b { color:var(--hum) } #qtoast .qt .x { color:var(--dim); margin:4px 0 8px; display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden } #qtoast .qt .a { display:flex; gap:6px }
+  #qtoast .qt { position:relative; border-radius:20px; padding:12px 14px; font-size:13px; animation:qin .2s ease-out }
+  #qtoast .qt b { color:var(--hum) } #qtoast .qt .x { color:var(--dim); margin:4px 0 10px; display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden } #qtoast .qt .a { display:flex; gap:6px }
   @keyframes qin { from { opacity:0; transform:translateY(8px) } }
-  @media (prefers-reduced-motion: reduce) { #qtoast .qt { animation:none } }
-  @media (max-width:720px) { #qpanel { padding:0 } .qsheet { width:100%; max-height:100%; height:100%; border-radius:0 } #qtoast { bottom:76px } }
+  @media (max-width:720px) { #qpanel { padding:0 } .qsheet { width:100%; max-height:100%; height:100%; border-radius:0 } #qtoast { bottom:84px } }
 `;
 
 export const INBOX_JS = String.raw`

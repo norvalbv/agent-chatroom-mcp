@@ -6,34 +6,28 @@
  */
 export const PALETTE_CSS = `
   /* ---------- palette + pins (claim/palette-filter) ---------- */
-  #pal { position:fixed; inset:0; z-index:60; display:none; align-items:flex-start; justify-content:center; padding:12vh 16px 16px; background:rgba(0,0,0,.35) }
+  /* the box is glass (src/ui/styles.ts); the scrim behind it dims and softens the page */
+  #pal { position:fixed; inset:0; z-index:60; display:none; align-items:flex-start; justify-content:center; padding:12vh 16px 16px; background:rgb(0 0 0 / .32); -webkit-backdrop-filter:blur(3px); backdrop-filter:blur(3px) }
   #pal.on { display:flex }
-  #pal .box { width:min(620px, 100%); max-height:70vh; display:flex; flex-direction:column; background:var(--panel); border:1px solid color-mix(in srgb, var(--line) 80%, transparent); border-radius:16px; box-shadow:0 24px 60px rgba(0,0,0,.28), inset 0 1px 0 rgba(255,255,255,.12); overflow:hidden }
-  /* glass only where backdrop-filter works; otherwise the opaque surfaces above stand */
-  @supports ((-webkit-backdrop-filter:blur(1px)) or (backdrop-filter:blur(1px))) {
-    #pal { background:color-mix(in srgb, var(--bg) 45%, transparent); -webkit-backdrop-filter:blur(6px); backdrop-filter:blur(6px) }
-    #pal .box { background:color-mix(in srgb, var(--panel) 86%, transparent); -webkit-backdrop-filter:blur(24px) saturate(1.4); backdrop-filter:blur(24px) saturate(1.4) }
-  }
-  #pal input { border:0; border-bottom:1px solid var(--line); border-radius:0; background:transparent; font-size:15px; padding:14px 16px }
+  #pal .box { position:relative; width:min(620px, 100%); max-height:70vh; display:flex; flex-direction:column; border-radius:22px; overflow:hidden }
+  #pal input { border:0; border-bottom:1px solid var(--line); border-radius:0; background:transparent; font-size:16px; padding:16px 18px }
   #pal input:focus, #pal input:focus-visible { outline:none; border-color:var(--line); box-shadow:inset 0 -2px 0 var(--acc) } /* the only control in the dialog: a bottom accent bar marks its focus */
   #pal ul { list-style:none; margin:0; padding:6px; overflow:auto }
-  #pal li { display:flex; align-items:center; gap:10px; padding:8px 10px; border-radius:10px; cursor:pointer; font-size:13.5px }
-  #pal li .g { font-size:10px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--dim); min-width:58px }
+  #pal li { display:flex; align-items:center; gap:10px; padding:9px 12px; border-radius:12px; cursor:pointer; font-size:14px }
+  #pal li .g { font-size:11.5px; color:var(--dim2); min-width:60px }
   #pal li .l { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
-  #pal li .h { color:var(--dim); font-size:11.5px; white-space:nowrap }
-  #pal li.on { background:var(--acc-bg); color:var(--acc-fg) } #pal li.on .g, #pal li.on .h { color:var(--acc-fg) }
-  #pal li b { color:var(--acc-fg) }
-  #pal .foot { border-top:1px solid var(--line); padding:7px 14px; font-size:11.5px; color:var(--dim); display:flex; gap:14px; flex-wrap:wrap }
-  #pal kbd, .kbd { font-family:"JetBrains Mono",monospace; font-size:10.5px; border:1px solid var(--line); border-bottom-width:2px; border-radius:5px; padding:0 5px; background:var(--panel2); color:var(--fg) }
-  #palbtn { font-size:11.5px; color:var(--dim) }
-  .pinb { border:0; background:transparent; color:var(--dim); font-size:11px; padding:0 4px; border-radius:5px; opacity:0; transition:opacity .12s }
-  .msg:hover .pinb, .msg:focus-within .pinb, .pinb.on { opacity:1 } .pinb.on { color:var(--warn) } .pinb:hover { color:var(--fg); background:var(--panel2) }
-  #pinstrip { grid-column:1 / -1; display:flex; gap:6px; flex-wrap:wrap; align-items:center } #pinstrip:empty { display:none }
-  #pinstrip .pin { border:1px solid color-mix(in srgb, var(--warn) 35%, transparent); background:var(--warn-bg); color:var(--fg); border-radius:999px; padding:1px 4px 1px 9px; font-size:11.5px; max-width:280px; display:inline-flex; align-items:center; gap:4px; cursor:pointer }
-  #pinstrip .pin span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap } #pinstrip .pin i { font-style:normal; color:var(--dim); padding:0 4px; border-radius:999px } #pinstrip .pin i:hover { color:var(--bad) }
-  @media (prefers-reduced-transparency: reduce) { #pal, #pal .box { -webkit-backdrop-filter:none; backdrop-filter:none } #pal { background:rgba(0,0,0,.35) } #pal .box { background:var(--panel) } }
-  @media (prefers-reduced-motion: reduce) { .pinb { transition:none } }
-  @media (hover: none) { .pinb { opacity:.6 } }
+  #pal li .h { color:var(--dim2); font-size:12px; white-space:nowrap }
+  #pal li.on { background:var(--active) }
+  #pal li b { color:var(--acc-fg); font-weight:600 }
+  #pal .foot { border-top:1px solid var(--line); padding:8px 16px; font-size:12px; color:var(--dim2); display:flex; gap:14px; flex-wrap:wrap }
+  #pal kbd, .kbd { font-family:var(--mono); font-size:11px; border-radius:6px; padding:0 5px; background:var(--active); color:var(--fg) }
+  .pinb { border:0; background:transparent; color:var(--dim); font-size:13px; line-height:1; width:22px; height:22px; border-radius:50% }
+  .pinb.on { color:var(--warn) } .pinb:hover { color:var(--fg); background:var(--hover) }
+  #pinstrip { grid-column:2 / -1; display:flex; gap:6px; flex-wrap:wrap; align-items:center; padding-top:5px } #pinstrip:empty { display:none }
+  #pinstrip .pin { border:0; background:var(--hover); color:var(--fg); border-radius:999px; padding:2px 4px 2px 10px; font-size:12px; max-width:280px; display:inline-flex; align-items:center; gap:4px; cursor:pointer }
+  #pinstrip .pin span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap } #pinstrip .pin i { font-style:normal; color:var(--dim2); padding:0 5px; border-radius:999px } #pinstrip .pin i:hover { color:var(--bad) }
+  /* no hover on touch: the pin stays reachable as a faint star, without the glass pill or the #seq */
+  @media (hover: none) { .mact { opacity:1; pointer-events:auto; background:none !important; box-shadow:none !important; -webkit-backdrop-filter:none !important; backdrop-filter:none !important } .mact .seq { display:none } .pinb { opacity:.5 } .pinb.on { opacity:1 } }
 `;
 
 export const PALETTE_HTML = `<div id="pal" role="dialog" aria-modal="true" aria-label="Command palette"><div class="box"><input id="palq" aria-label="Command palette: search rooms, tabs, pins and commands" role="combobox" aria-expanded="true" aria-autocomplete="list" placeholder="Jump to a room, tab, pinned message, #seq or command…" autocomplete="off" spellcheck="false" aria-controls="pall" /><ul id="pall" role="listbox"></ul><div class="foot"><span><kbd>↑</kbd> <kbd>↓</kbd> move</span><span><kbd>↵</kbd> run</span><span><kbd>esc</kbd> close</span><span><kbd>⌘K</kbd> / <kbd>Ctrl K</kbd> open</span></div></div></div>`;
@@ -78,7 +72,7 @@ export const PALETTE_JS = `
   document.addEventListener('click', function (e) {
     var un = e.target.closest('[data-unpin]'); if (un) { e.stopPropagation(); togglePin(Number(un.dataset.unpin)); return; }
     var pb = e.target.closest('[data-pin]'); if (pb) { togglePin(Number(pb.dataset.pin)); return; }
-    var go = e.target.closest('[data-goto]'); if (go) gotoSeq(Number(go.dataset.goto));
+    var go = e.target.closest('[data-goto]'); if (go && !go.classList.contains('goto')) gotoSeq(Number(go.dataset.goto)); // .goto chips name a room (src/ui/rooms.ts)
   });
   document.addEventListener('keydown', function (e) { if ((e.key === 'Enter' || e.key === ' ') && e.target.matches && e.target.matches('#pinstrip .pin')) { e.preventDefault(); gotoSeq(Number(e.target.dataset.goto)); } });
 
@@ -102,7 +96,7 @@ export const PALETTE_JS = `
       out.push({ group: 'view', label: 'Decisions only (proposals, votes, board)', hint: 'hide chat and system', run: function () { setKinds({ chat: true, system: true }); } });
       out.push({ group: 'view', label: 'Chat only', run: function () { setKinds({ cards: true, vote: true, board: true, system: true }); } });
       out.push({ group: 'view', label: 'Show everything', hint: 'clear transcript filters', run: function () { kindOff = {}; msgQuery = ''; whoF = ''; $('#msgq').value = ''; $('#whof').value = ''; setKinds({}); } });
-      out.push({ group: 'view', label: 'Search messages in this room', hint: 'focus search', run: function () { if (innerWidth <= 720) setView('chat'); $('#msgq').focus(); } });
+      out.push({ group: 'view', label: 'Search messages in this room', hint: 'focus search', run: function () { if (innerWidth <= 720) setView('chat'); var b = $('#lfbtn'); if (b && !popIs('lf')) openPop('lf', b); $('#msgq').focus(); } });
       out.push({ group: 'view', label: 'Jump to latest message', run: function () { if (innerWidth <= 720) setView('chat'); toBottom(); } });
       cur.participants.forEach(function (p) { out.push({ group: 'person', label: 'Only messages from or to ' + p.name, hint: p.agent + (p.active ? '' : ' · left'), run: function () { whoF = p.name; $('#whof').value = p.name; rerender(); toBottom(); } }); });
       var op = openProposal(cur); if (op) out.push({ group: 'action', label: 'Open proposal ' + op.id + ' v' + op.version, hint: op.tally.agree + '/' + voters(cur) + ' agree', run: function () { setTab('decision'); } });

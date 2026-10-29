@@ -1,30 +1,30 @@
-import { PHOTOS_CSS, PHOTOS_HTML, PHOTOS_JS } from "./ui/photos.js";
-import { UI_CSS } from "./ui/styles.js";
+import { AVATAR_JS } from "./ui/avatars.js";
 import { BOARD_CSS, BOARD_JS } from "./ui/board.js";
-import { ROOMS_CSS, ROOMS_STATE, ROOMS_JS } from "./ui/rooms.js";
+import { CATCHUP_CSS, CATCHUP_JS } from "./ui/catchup.js";
+import { CHROME_HTML, HEAD_JS, POPOVER_JS } from "./ui/chrome.js";
+import { INBOX_CSS, INBOX_JS } from "./ui/inbox.js";
+import { PALETTE_CSS, PALETTE_HTML, PALETTE_JS } from "./ui/palette.js";
+import { PHOTOS_BUTTON_HTML, PHOTOS_CSS, PHOTOS_JS, PHOTOS_TRAY_HTML } from "./ui/photos.js";
+import { ROOMS_CSS, ROOMS_JS, ROOMS_STATE } from "./ui/rooms.js";
+import { UI_CSS } from "./ui/styles.js";
 
 /**
  * Live dashboard served at /ui. No browser bundler: it polls the JSON endpoints
  * (/rooms, /rooms/:room/messages, /rooms/:room/stats) and posts as a human through
  * /rooms/:room/messages, /rooms/:room/vote and /rooms/:room/close.
  *
- * Built for one reader: a human watching up to a dozen agents across a run's rooms. Three
- * panes on a desktop (rooms, transcript, inspector), a bottom tab bar on a phone. Every
- * message kind the hub produces has its own rendering, and the inspector shows the
- * decision as the hub sees it: version, tally, who it waits on, what blocks it.
+ * Built for one reader: a human watching up to a dozen agents across a run's rooms. Laid out like Grok Bot: a sidebar of
+ * rooms (an avatar, a name, one line under it) and a centred column of bubbles, with Liquid Glass for what floats over the
+ * transcript (src/ui/styles.ts). Everything that is not reading or replying sits one click away: room options, message
+ * filters and room actions in glass menus, the decision as the hub sees it (version, tally, who it waits on, what blocks
+ * it) in an inspector the header opens. A phone gets one view at a time and a floating tab bar.
  */
-import { PALETTE_CSS, PALETTE_HTML, PALETTE_JS } from "./ui/palette.js";
-import { INBOX_CSS, INBOX_JS } from "./ui/inbox.js";
-import { CATCHUP_CSS, CATCHUP_JS } from "./ui/catchup.js";
-
 export const UI_HTML = `<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 <title>Agent Chatroom</title>
-<link rel="preconnect" href="https://fonts.googleapis.com" />
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
 <style>${UI_CSS}
 ${PALETTE_CSS}
 ${INBOX_CSS}
@@ -35,38 +35,36 @@ ${PHOTOS_CSS}</style>
 </head>
 <body data-view="chat">
 <aside id="rail">
-  <div class="brand"><div class="mark">✻</div><div><h1>Agent Chatroom</h1><div class="sub" id="sub">connecting…</div></div><div class="sp"></div><button class="btn icon" id="palbtn" title="Command palette (⌘K / Ctrl K)" aria-label="Open command palette">⌘</button><button class="btn icon" id="theme" title="Toggle theme">◐</button></div>
-  <button class="qbar" id="qbar" title="Questions agents asked you that nobody has answered (i)"><span class="ql">For you</span><span class="qs" id="qbars">checking…</span><span class="qc" id="qbarn"></span></button>
-  <div class="filter"><input id="filter" placeholder="Filter rooms" /></div>
-  <div class="rctl" id="rctl"><select id="sort" title="Sort rooms"><option value="newest">Newest</option><option value="active">Most active</option><option value="msgs">Most messages</option><option value="name">Name</option></select><button class="chip tog on" data-st="live" title="Show open and stalled rooms">live</button><button class="chip tog on" data-st="concluded">concluded</button><button class="chip tog on" data-st="closed">closed</button><button class="chip tog" id="showarch" title="Include archived rooms">archived</button><button class="btn" id="archdead" title="Hide every room nobody is in. Transcripts are kept; they reappear under 'archived'.">Archive dead</button></div>
-  <div class="policy" id="policy" title="Which provider and model every request_agent launches as. Click to change.">recruits: …</div>
+  <div class="rhead"><div class="brand"><div class="mark" aria-hidden="true">✻</div><div class="bt"><h1>Agent Chatroom</h1><div class="sub" id="sub">connecting…</div></div></div><button class="btn icon ghost" id="roomopts" data-pop="rctlpop" aria-haspopup="true" aria-expanded="false" title="Sort and filter rooms" aria-label="Sort and filter rooms"><span class="i i-sliders"></span></button><button class="btn icon ghost" id="palbtn" title="Command palette (⌘K / Ctrl K)" aria-label="Open command palette"><span class="i i-cmd"></span></button></div>
+  <div class="filter"><input id="filter" placeholder="Search rooms" aria-label="Search rooms" autocomplete="off" /></div>
+  <button class="qbar" id="qbar" title="Questions agents asked you that nobody has answered (i)"><span class="qav" aria-hidden="true"><span class="i i-inbox"></span></span><span class="qtx"><span class="ql">For you</span><span class="qs" id="qbars">checking…</span></span><span class="qc" id="qbarn"></span></button>
   <div id="rooms"></div>
+  <div class="rfoot"><button class="btn me" id="mebtn" data-pop="mepop" aria-haspopup="true" aria-expanded="false" title="Your name and the theme" aria-label="Your name and the theme"><span id="meini">B</span></button><button type="button" class="policy" id="policy" title="Which provider and model every request_agent launches as. Click to change.">recruits: …</button></div>
 </aside>
 <main id="main">
-  <div id="head"><div class="t1"><h2>Pick a room</h2></div></div>
-  <div class="lf" id="lf"><button class="chip tog on" data-k="chat">chat</button><button class="chip tog on" data-k="cards">proposals</button><button class="chip tog on" data-k="vote">votes</button><button class="chip tog on" data-k="board">board</button><button class="chip tog on" data-k="system">system</button><select id="whof" title="Only messages from, or addressed to, one participant"><option value="">everyone</option></select><input id="msgq" placeholder="Search messages" /></div>
+  <div id="top"><header id="head"><div class="t1"><h2>Pick a room</h2></div></header><div id="digest"></div></div>
   <div id="log"><div class="empty">Pick a room on the left.</div></div>
   <button id="newpill">↓ new messages</button>
   <form id="compose">
-    ${PHOTOS_HTML}
     <div class="quick" id="quick"></div>
-    <input id="name" placeholder="your name" />
-    <textarea id="text" rows="1" placeholder="Say something. Start with @name or @all to choose who answers."></textarea>
-    <button class="btn primary" id="sendbtn" type="submit">Send</button>
-    <div class="hint" id="hint">Humans bypass budgets and the stale-send guard; one agent answers unless you address @all.</div>
+    ${PHOTOS_TRAY_HTML}
+    <div class="cbar">${PHOTOS_BUTTON_HTML}<textarea id="text" rows="1" placeholder="Message the room" aria-label="Message"></textarea><button class="btn send" id="sendbtn" type="submit" title="Send (Enter)" aria-label="Send"><span class="i i-up"></span></button></div>
+    <div class="hint" id="hint" role="status" aria-live="polite"></div>
   </form>
 </main>
-<section id="inspect">
-  <div class="tabs" id="tabs">
-    <button data-tab="decision" class="on">Decision</button>
-    <button data-tab="people">People <span class="n" id="n-people"></span></button>
-    <button data-tab="board">Board <span class="n" id="n-board"></span></button>
-    <button data-tab="stats">Stats</button>
-    <div class="sp" style="flex:1"></div>
-    <button id="closeinspect" title="Hide inspector" style="align-self:center">✕</button>
+<section id="inspect" aria-label="Inspector">
+  <div class="ihead">
+    <div class="tabs" id="tabs">
+      <button data-tab="decision" class="on">Decision</button>
+      <button data-tab="people">People <span class="n" id="n-people"></span></button>
+      <button data-tab="board">Board <span class="n" id="n-board"></span></button>
+      <button data-tab="stats">Stats</button>
+    </div>
+    <button class="btn icon ghost" id="closeinspect" title="Hide inspector" aria-label="Hide inspector"><span class="i i-x"></span></button>
   </div>
   <div id="pane"><div class="empty">Nothing selected.</div></div>
 </section>
+${CHROME_HTML}
 ${PALETTE_HTML}
 <nav id="tabbar">
   <button data-view="rooms">Rooms</button>
@@ -195,8 +193,10 @@ ${ROOMS_STATE}
     var cur = document.documentElement.dataset.theme || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
     var next = cur === 'dark' ? 'light' : 'dark'; document.documentElement.dataset.theme = next; store.set('theme', next);
   };
-  $('#name').value = store.get('name', 'benji'); $('#name').onchange = function () { store.set('name', $('#name').value); };
-  if (store.get('noinspect', false)) document.body.classList.add('noinspect');
+  var meIni = function () { $('#meini').textContent = initials(myName()).slice(0, 2); };
+  $('#name').value = store.get('name', 'benji'); $('#name').onchange = function () { store.set('name', $('#name').value); meIni(); };
+  // the inspector starts closed: the header's proposal chip, a card's Open and the panel button open it
+  if (store.get('noinspect', true)) document.body.classList.add('noinspect');
   $('#closeinspect').onclick = function () {
     if (innerWidth <= 720) { setView('chat'); return; }
     if (innerWidth <= 1100) { document.body.classList.remove('inspect-open'); return; }
@@ -204,9 +204,11 @@ ${ROOMS_STATE}
   };
 
   // ---------- helpers ----------
-  var hue = function (s) { var h = 0; for (var i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0; return h % 360; };
+  var hsh = function (s) { var h = 0; for (var i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0; return h; };
   var initials = function (name) { var n = name.replace(/^participant\\s+/i, ''); var parts = n.split(/[-_\\s]+/).filter(Boolean); return (parts.length > 1 ? parts[0][0] + parts[parts.length - 1][0] : n.slice(0, 2)).toUpperCase(); };
-  var av = function (name, agent) { return '<span class="av" style="background:hsl(' + hue(name) + ' 45% ' + (agent === 'human' ? 42 : 50) + '%)" title="' + esc(name) + '">' + esc(initials(name)) + '</span>'; };
+${AVATAR_JS}
+  var av = function (name, agent) { return agent === 'human' ? '<span class="av hu" title="' + esc(name) + '">' + esc(initials(name)) + '</span>' : '<span class="av" title="' + esc(name) + '">' + creature(name) + '</span>'; };
+  meIni();
   var fmtT = function (ts) { return new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }); };
   var fmtTs = function (ts) { return new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }); };
   var rel = function (ts) { if (!ts) return ''; var s = Math.max(0, (Date.now() - Date.parse(ts)) / 1000); return s < 60 ? Math.round(s) + 's ago' : s < 3600 ? Math.round(s / 60) + 'm ago' : s < 86400 ? Math.round(s / 3600) + 'h ago' : Math.round(s / 86400) + 'd ago'; };
@@ -244,50 +246,13 @@ ${ROOMS_STATE}
   };
 
 ${ROOMS_JS}
-  // ---------- header ----------
-  function renderHead(r) {
-    var open = openProposal(r), pinFocus = document.activeElement && document.activeElement.id === 'pinroom';
-    var chips = '<span class="chip ' + r.state + '">' + r.state + '</span>';
-    if (open) chips += '<span class="chip prop">' + esc(open.id) + ' v' + open.version + ' · ' + open.tally.agree + '/' + voters(r) + ' agree' + (open.needs_challenge ? ' · needs challenge' : '') + '</span>';
-    if (r.conclusion) chips += '<span class="chip ok">concluded ' + rel(r.conclusion.decidedAt) + '</span>';
-    if (r.hold) chips += '<span class="chip bad">on hold by ' + esc(r.hold.by) + '</span>';
-    if (r.unanswered_human) chips += '<span class="chip hum">waiting on a reply to ' + esc(r.unanswered_human.name) + '</span>';
-    if (r.openings && r.openings !== 'revealed' && (r.state === 'open')) chips += '<span class="chip" title="openings: ' + esc(r.openings) + '">openings: ' + esc(r.openings.replace(/, waiting for nobody$/, '')) + '</span>';
-    var act = '<a class="btn hidephone" href="/rooms/' + encodeURIComponent(r.name) + '/transcript" target="_blank" title="Plain-text transcript">Transcript</a>'
-      + '<a class="btn hidephone" href="/rooms/' + encodeURIComponent(r.name) + '/metrics?format=md" target="_blank" title="Per-seat cost, context and waits; the run in half-hour steps; when it went quiet">Metrics</a>'
-      + ((r.state === 'open' || r.state === 'stalled') ? '<button class="btn danger" id="closeroom" title="Close this room without a conclusion">Close room</button>' : '')
-      + ((r.state === 'concluded' || r.state === 'closed') ? '<button class="btn hidephone" id="verdictroom" title="Record whether the answer of this room was used: adopted, rejected or partial (owner_verdict in its log; the runs table shows it)">Verdict</button>' : '')
-      + '<button class="btn" id="archroom" title="' + (r.archived ? 'Show this room in listings again' : 'Hide this room from listings; the transcript is kept') + '">' + (r.archived ? 'Unarchive' : 'Archive') + '</button>'
-      + roomPinButton(r) + '<button class="btn icon" id="toginspect" title="Inspector">☰</button>';
-    var topicOpen = !!expanded['topic'];
-    $('#head').innerHTML = '<div class="t1"><h2>' + esc(r.name) + '</h2>' + chips + fateChips(r, esc) + '</div><div class="acts">' + act + '</div>'
-      + '<div class="topic' + (topicOpen ? ' open' : '') + '" id="topic" title="Click to expand">' + esc(r.topic || '(no topic)') + '</div>' + fateLine(r, esc) + '<div id="pinstrip"></div>';
-    renderPins();
-    bindRoomPin(r, pinFocus);
-    $('#topic').onclick = function () { expanded['topic'] = !expanded['topic']; renderHead(r); };
-    var cb = $('#closeroom'); if (cb) cb.onclick = function () { closeRoom(r); };
-    var ab = $('#archroom'); if (ab) ab.onclick = function () { archiveRoom(r); };
-    var vb = $('#verdictroom'); if (vb) vb.onclick = function () { verdictRoom(r); };
-    var wf = $('#whof'), keep = wf.value;
-    wf.innerHTML = '<option value="">everyone</option>' + r.participants.slice().sort(function (a, b) { return a.name.localeCompare(b.name); }).map(function (p) { return '<option value="' + esc(p.name) + '">' + esc(p.name) + (p.active ? '' : ' (left)') + '</option>'; }).join('');
-    wf.value = keep; if (wf.value !== keep) { whoF = ''; }
-    $('#toginspect').onclick = function () {
-      if (innerWidth <= 720) { setView('inspect'); return; }
-      if (innerWidth <= 1100) { document.body.classList.toggle('inspect-open'); return; }
-      document.body.classList.toggle('noinspect'); store.set('noinspect', document.body.classList.contains('noinspect'));
-    };
-    $('#sendbtn').disabled = r.state === 'closed';
-    $('#hint').className = 'hint' + (r.state === 'closed' ? ' bad' : '');
-    $('#hint').textContent = r.state === 'closed' ? 'This room was closed; nobody is listening.' : r.state === 'concluded' ? 'The room has concluded; agents still present will answer a question.' : 'Humans bypass budgets and the stale-send guard; one agent answers unless you address @all.';
-    var quick = r.participants.filter(function (p) { return p.active && p.agent !== 'human'; }).map(function (p) { return '<button type="button" data-at="' + esc(p.name) + '">@' + esc(p.name) + '</button>'; });
-    $('#quick').innerHTML = quick.length ? '<button type="button" data-at="all">@all</button>' + quick.join('') : '';
-  }
+${HEAD_JS}
 
   // ---------- transcript ----------
   function seqLink(m) {
     if (!m.replyTo) return '';
     var t = null; for (var i = msgs.length - 1; i >= 0; i--) if (msgs[i].id === m.replyTo) { t = msgs[i]; break; }
-    return t ? '<span class="re" data-seq="' + t.seq + '"><i>↩</i> #' + t.seq + ' ' + esc(t.from.name) + ': ' + esc(t.content.slice(0, 70)) + (t.content.length > 70 ? '…' : '') + '</span><br>' : '';
+    return t ? '<span class="re" data-seq="' + t.seq + '"><i>↩</i> #' + t.seq + ' ' + esc(t.from.name) + ': ' + esc(t.content.slice(0, 70)) + (t.content.length > 70 ? '…' : '') + '</span>' : '';
   }
   function quietBadge(m) {
     if (!m.audience) return '';
@@ -297,8 +262,10 @@ ${ROOMS_JS}
   }
   function who(m, extra) {
     var p = pmap()[m.from.name] || {};
-    return '<div class="who"><b>' + esc(m.from.name) + '</b>' + roleTag({ agent: m.from.agent, role: p.role }) + (m.from.agent && m.from.agent !== 'human' ? '<span class="agent">' + esc(m.from.agent) + '</span>' : '') + (extra || '') + quietBadge(m) + pinBtn(m) + '<span class="seq">#' + m.seq + '</span><span class="t" title="' + esc(m.ts) + '">' + fmtTs(m.ts) + '</span></div>';
+    return '<div class="who"><b>' + esc(m.from.name) + '</b>' + roleTag({ agent: m.from.agent, role: p.role }) + (m.from.agent && m.from.agent !== 'human' ? '<span class="agent">' + esc(m.from.agent) + '</span>' : '') + (extra || '') + quietBadge(m) + '<span class="t" title="' + esc(m.ts) + '">' + fmtT(m.ts) + '</span></div>';
   }
+  // every row's hover actions (a small glass pill): its #seq and exact time, and the pin; a pinned row keeps it showing
+  var mact = function (m) { return '<div class="mact"><span class="seq" title="' + esc(m.ts) + '">#' + m.seq + ' · ' + fmtTs(m.ts) + '</span>' + pinBtn(m) + '</div>'; };
   function renderMsg(m) {
     if (!visible(m)) return;
     var log = $('#log');
@@ -313,34 +280,41 @@ ${ROOMS_JS}
       d.innerHTML = '<span title="' + fmtTs(m.ts) + '">' + esc(m.content) + '</span>';
       log.appendChild(d); return;
     }
-    var human = m.from.agent === 'human';
+    var human = m.from.agent === 'human', mine = human && m.from.name === myName();
     var cont = lastSender === m.from.id && m.kind === 'chat' && !m.replyTo;
     lastSender = (m.kind === 'chat') ? m.from.id : null;
     var key = 'm' + m.seq;
-    var inner;
+    var gut = '', inner;
+    d.className = 'msg';
     if (m.kind === 'chat') {
-      inner = seqLink(m) + clampable(key, photoText(m.content), 900, 'body' + (human ? ' human' : '') + (m.tag === 'opening' ? ' opening' : ''));
+      // Grok Bot's transcript: agents in grey bubbles under their name, your own lines on the right in the filled bubble
+      inner = (cont || mine ? '' : who(m, m.tag === 'opening' ? '<span class="chip">opening</span>' : '')) + seqLink(m) + clampable(key, photoText(m.content), 900, 'body' + (human && !mine ? ' human' : '') + (m.tag === 'opening' ? ' opening' : ''));
       inner += photoThumbnails(m.content);
-      d.className = 'msg' + (cont ? ' cont' : '');
-      d.innerHTML = '<div>' + (cont ? '' : av(m.from.name, m.from.agent)) + '</div><div>' + (cont ? '' : who(m, m.tag === 'opening' ? '<span class="chip">opening</span>' : '')) + inner + '</div>';
+      gut = cont || mine ? '' : av(m.from.name, m.from.agent);
+      d.className = 'msg' + (cont ? ' cont' : '') + (mine ? ' mine' : '');
     } else if (m.kind === 'proposal' || m.kind === 'amend' || m.kind === 'challenge' || m.kind === 'conclusion') {
+      // a decision step is a card, like Grok Bot's action cards: an icon tile, a title, one line, and Open for the inspector
       var label = m.kind === 'proposal' ? 'Proposal' : m.kind === 'amend' ? 'Amendment' : m.kind === 'challenge' ? 'Challenge' : 'Conclusion';
-      var head = '<div class="ch"><span>' + label + '</span>' + (m.proposalId ? '<span class="mono">' + esc(m.proposalId) + '</span>' : '') + '<span class="sp"></span><span class="mono">#' + m.seq + ' · ' + fmtTs(m.ts) + '</span></div>';
+      var icon = m.kind === 'proposal' ? 'doc' : m.kind === 'amend' ? 'edit' : m.kind === 'challenge' ? 'flag' : 'check';
+      var head = '<div class="ch"><span class="cic"><span class="i i-' + icon + '"></span></span><span class="ct"><b>' + label + '</b><span>' + (m.proposalId ? esc(m.proposalId) : 'the room’s decision') + '</span></span><span class="sp"></span><button type="button" class="btn pill" data-tab-open="decision" title="Open the decision">Open</button></div>';
       var text = m.content.replace(/^(PROPOSAL|AMENDED|CHALLENGE)\\s+\\S+:?\\s*/, '');
-      d.className = 'msg';
-      d.innerHTML = '<div>' + av(m.from.name, m.from.agent) + '</div><div>' + who(m) + '<div class="card ' + m.kind + '">' + head + '<div class="cb">' + clampable(key, text, m.kind === 'conclusion' ? 1200 : 700, '') + '</div></div></div>';
+      inner = who(m) + '<div class="card ' + m.kind + '">' + head + '<div class="cb">' + clampable(key, text, m.kind === 'conclusion' ? 1200 : 700, '') + '</div></div>';
+      gut = av(m.from.name, m.from.agent);
     } else if (m.kind === 'vote') {
-      var mv = /votes (AGREE|DISAGREE|ABSTAIN) on (\\S+?)(?::\\s*(.*))?$/s.exec(m.content) || [];
+      // "x votes AGREE on prop_1 (confidence 0.85): why" — the confidence is optional, and it used to defeat the parse
+      var mv = /votes (AGREE|DISAGREE|ABSTAIN) on (\\S+?)(?: \\(confidence ([\\d.]+)\\))?(?::\\s*(.*))?$/s.exec(m.content) || [];
       var v = (mv[1] || '').toLowerCase();
-      d.className = 'msg'; lastSender = null;
-      d.innerHTML = '<div></div><div class="row"><span class="v ' + v + '">' + (v === 'agree' ? '✓' : v === 'disagree' ? '✗' : '○') + '</span><b>' + esc(m.from.name) + '</b><span>' + (v || 'voted') + (mv[2] ? ' on <span class="k">' + esc(mv[2]) + '</span>' : '') + '</span><span class="t" style="color:var(--dim2);font-size:11px">#' + m.seq + ' ' + fmtTs(m.ts) + '</span>' + (mv[3] ? '<span class="why">' + withMentions(esc(mv[3])) + '</span>' : (!mv[1] ? '<span class="why">' + esc(m.content) + '</span>' : '')) + '</div>';
+      lastSender = null;
+      inner = '<div class="row"><span class="v ' + v + '">' + (v === 'agree' ? '✓' : v === 'disagree' ? '✗' : '○') + '</span><b>' + esc(m.from.name) + '</b><span>' + (v === 'agree' ? 'agrees' : v === 'disagree' ? 'disagrees' : v === 'abstain' ? 'abstains' : 'voted') + (mv[2] ? ' on <span class="k">' + esc(mv[2]) + '</span>' : '') + (mv[3] ? ' · ' + Math.round(Number(mv[3]) * 100) + '% sure' : '') + '</span><span class="t">' + fmtT(m.ts) + '</span>' + (mv[4] ? '<span class="why">' + withMentions(esc(mv[4])) + '</span>' : (!mv[1] ? '<span class="why">' + esc(m.content) + '</span>' : '')) + '</div>';
     } else if (m.kind === 'board') {
-      d.className = 'msg'; lastSender = null;
-      d.innerHTML = '<div></div><div class="row"><span class="chip">board</span><b>' + esc(m.from.name) + '</b><span>' + esc(m.content.replace(/\\s*\\(\\d+ chars; read it with board_get\\)/, '')) + '</span><span style="color:var(--dim2);font-size:11px">#' + m.seq + ' ' + fmtTs(m.ts) + '</span></div>';
+      lastSender = null;
+      inner = '<div class="row"><span class="chip">board</span><b>' + esc(m.from.name) + '</b><span class="t">' + fmtT(m.ts) + '</span><span class="why">' + esc(m.content.replace(/\\s*\\(\\d+ chars; read it with board_get\\)/, '')) + '</span></div>';
     } else {
-      d.className = 'msg'; lastSender = null;
-      d.innerHTML = '<div></div><div class="row"><span class="chip">' + esc(m.kind) + '</span><b>' + esc(m.from.name) + '</b><span>' + esc(m.content.slice(0, 400)) + '</span></div>';
+      lastSender = null;
+      inner = '<div class="row"><span class="chip">' + esc(m.kind) + '</span><b>' + esc(m.from.name) + '</b><span>' + esc(m.content.slice(0, 400)) + '</span></div>';
     }
+    // .mb stays the last child: the inbox appends its "Answer this question" button to it
+    d.innerHTML = mact(m) + '<div class="gut">' + gut + '</div><div class="mb">' + inner + '</div>';
     log.appendChild(d);
   }
   function rerender() {
@@ -353,7 +327,9 @@ ${ROOMS_JS}
       renderMsg(m);
     });
     catchupAfter();
+    var lb = $('#lfbtn'); if (lb) lb.classList.toggle('on', lfActive());
   }
+${POPOVER_JS}
   var atBottom = function () { var l = $('#log'); return l.scrollHeight - l.scrollTop - l.clientHeight < 60; };
   var toBottom = function () { var l = $('#log'); l.scrollTop = l.scrollHeight; unreadPill = 0; $('#newpill').style.display = 'none'; $('#n-unread').style.display = 'none'; if (sel) { lastSeen[sel] = seen; store.set('lastSeen', lastSeen); } };
   $('#newpill').onclick = toBottom;
@@ -547,6 +523,7 @@ ${ROOMS_JS}
 
   document.addEventListener('click', async function (e) {
     var rb = e.target.closest('.room'); if (rb) return select(rb.dataset.r);
+    var to = e.target.closest('[data-tab-open]'); if (to) { setTab(to.dataset.tabOpen); return; }
     var rh = e.target.closest('.run > .rh'); if (rh) { var g = rh.parentElement.dataset.g; openRuns[g] = rh.parentElement.classList.contains('closed'); store.set('openRuns', openRuns); renderRooms(); return; }
     var more = e.target.closest('.more'); if (more) { var k = more.dataset.x; expanded[k] = !expanded[k]; if (/^m\\d+$/.test(k)) { var l = $('#log'), keep = l.scrollTop; rerender(); l.scrollTop = keep; } else if (k === 'topic') renderHead(cur); else renderPane(); return; }
     var re = e.target.closest('.re'); if (re) { var t = $('#log [data-seq="' + re.dataset.seq + '"]'); if (t) { t.scrollIntoView({ block: 'center' }); t.classList.remove('hl'); void t.offsetWidth; t.classList.add('hl'); } return; }

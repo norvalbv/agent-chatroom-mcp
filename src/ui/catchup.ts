@@ -9,29 +9,28 @@
  * Escaping: this is a template literal, so regex backslashes are doubled as in ui.ts.
  */
 export const CATCHUP_CSS = `/* ---------- catch-up digest + signal-only folds (catchup) ---------- */
-  #catchup { position:sticky; top:-12px; z-index:3; margin:-12px -18px 10px; padding:8px 18px; border-bottom:1px solid var(--line);
-    background:color-mix(in srgb, var(--bg) 78%, transparent); -webkit-backdrop-filter:blur(18px) saturate(1.5); backdrop-filter:blur(18px) saturate(1.5) }
+  /* the bottom section of the floating header panel (#top), under a hairline; its text lines up with the room's topic */
+  #catchup { border-top:1px solid var(--line); padding:6px 8px 7px 39px }
   #catchup .cu-h { display:flex; align-items:center; gap:8px }
-  #catchup .cu-tog { flex:1; min-width:0; display:flex; align-items:center; gap:6px; border:0; background:none; padding:2px 0; color:var(--fg); font:inherit; font-size:12.5px; font-weight:600; text-align:left; cursor:pointer; white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
+  #catchup .cu-tog { flex:1; min-width:0; display:flex; align-items:center; gap:7px; border:0; background:none; padding:2px 0; color:var(--fg); font:inherit; font-size:13px; font-weight:600; text-align:left; cursor:pointer; white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
   #catchup .car, .fold .car { color:var(--dim2); width:10px; display:inline-block; font-size:10px }
-  #catchup .cu-s { font-weight:500; color:var(--dim) } #catchup .cu-ask { color:var(--hum) }
-  #catchup .cu-done { border:1px solid var(--line); background:var(--panel); color:var(--dim); border-radius:999px; padding:2px 10px; font:inherit; font-size:11.5px; cursor:pointer }
-  #catchup .cu-done:hover { color:var(--fg) }
-  #catchup .cu-b { display:grid; gap:4px; padding:6px 0 2px 16px; max-height:34vh; overflow:auto }
-  .cu-l { display:grid; grid-template-columns:82px minmax(0,1fr); gap:8px; align-items:baseline; font-size:12.5px }
-  .cu-k { color:var(--dim2); font-size:10.5px; font-weight:700; letter-spacing:.05em; text-transform:uppercase }
+  #catchup .cu-s { font-weight:400; color:var(--dim) } #catchup .cu-ask { color:var(--hum); font-weight:600 }
+  #catchup .cu-done { border:0; background:var(--cta); color:var(--on-cta); border-radius:999px; padding:0 12px; line-height:28px; font:inherit; font-size:12.5px; font-weight:500; cursor:pointer; flex:none }
+  #catchup .cu-done:hover { filter:brightness(.9) }
+  #catchup .cu-b { display:grid; gap:6px; padding:8px 0 2px 17px; max-height:34vh; overflow:auto }
+  .cu-l { display:grid; grid-template-columns:84px minmax(0,1fr); gap:8px; align-items:center; font-size:13px }
+  .cu-k { color:var(--dim2); font-size:12px }
   .cu-l.hum .cu-k { color:var(--hum) } .cu-l.prop .cu-k { color:var(--prop) } .cu-l.chal .cu-k { color:var(--chal) } .cu-l.ok .cu-k { color:var(--ok) }
   .cu-v { display:flex; flex-wrap:nowrap; gap:6px; min-width:0; overflow:hidden } .cu-v > * { flex:0 1 auto; min-width:0 } .cu-t { color:var(--dim); display:block; white-space:nowrap; overflow:hidden; text-overflow:ellipsis } .cu-t b { color:var(--fg); font-weight:600 }
-  .cu-j { border:1px solid var(--line); background:var(--panel); color:var(--fg); border-radius:8px; padding:1px 8px; font:inherit; font-size:12px; cursor:pointer; max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; text-align:left }
-  .cu-j:hover { border-color:var(--acc); } .cu-l.hum .cu-j { background:var(--hum-bg); border-color:color-mix(in srgb, var(--hum) 30%, transparent) }
-  .cu-more { color:var(--dim2); font-size:11.5px; align-self:center }
-  .fold { margin:4px 0 4px 38px; max-width:88ch }
-  .fold-h { display:flex; align-items:center; gap:6px; width:100%; border:1px dashed var(--line); background:transparent; color:var(--dim); border-radius:10px; padding:4px 10px; font:inherit; font-size:12px; cursor:pointer; text-align:left }
-  .fold-h:hover { color:var(--fg); border-style:solid } .fold-h b { font-weight:600; color:var(--fg) }
+  .cu-j { border:0; background:var(--hover); color:var(--fg); border-radius:999px; padding:0 10px; line-height:24px; font:inherit; font-size:12.5px; cursor:pointer; max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; text-align:left }
+  .cu-j:hover { background:var(--active) } .cu-l.hum .cu-j { background:var(--hum-bg) }
+  .cu-more { color:var(--dim2); font-size:12px; align-self:center }
+  .fold { margin:8px 0 4px 38px }
+  .fold-h { display:flex; align-items:center; gap:7px; width:fit-content; max-width:100%; border:0; background:var(--hover); color:var(--dim); border-radius:999px; padding:0 14px 0 12px; line-height:30px; font:inherit; font-size:12.5px; cursor:pointer; text-align:left }
+  .fold-h:hover { color:var(--fg); background:var(--active) } .fold-h b { font-weight:500; color:var(--fg) }
   .fold-b { display:none } .fold.open .fold-b { display:block; margin-left:-38px } .fold.open > .fold-h { margin-bottom:2px }
   #catchup button:focus-visible, .fold-h:focus-visible { outline:2px solid var(--acc); outline-offset:2px }
-  @media (prefers-reduced-transparency: reduce) { #catchup { background:var(--bg); -webkit-backdrop-filter:none; backdrop-filter:none } }
-  @media (max-width:720px) { #catchup { margin:-10px -12px 10px; padding:8px 12px; top:-10px } .cu-l { grid-template-columns:64px minmax(0,1fr) } .fold { margin-left:0 } .fold.open .fold-b { margin-left:0 } }`;
+  @media (max-width:720px) { #catchup { padding-left:12px } .cu-l { grid-template-columns:66px minmax(0,1fr) } .fold { margin-left:0 } .fold.open .fold-b { margin-left:0 } }`;
 
 export const CATCHUP_JS = `/*catchup:start*/
   // Catch-up: a "since you last looked" digest pinned to the top of the transcript, and a "Signal only" mode that
@@ -113,14 +112,15 @@ export const CATCHUP_JS = `/*catchup:start*/
     return { fresh: fresh.length, asks: asks, summary: summary, lines: lines };
   }
   /*catchup-pure:end*/
-  var catchSince = sel ? (lastSeen[sel] || 0) : 0, catchOpen = store.get('catchOpen', true), signalOnly = store.get('signalOnly', false), foldOpen = {};
+  var catchSince = sel ? (lastSeen[sel] || 0) : 0, catchOpen = store.get('catchOpen', false), signalOnly = store.get('signalOnly', false), foldOpen = {};
   var humanNames = function () {
     var names = ['human', 'user', 'owner', 'benji', myName().toLowerCase()];
     (cur ? cur.participants : []).forEach(function (p) { if (p.agent === 'human') names.push(p.name.toLowerCase()); });
     return names;
   };
   var msgBySeq = function (seq) { for (var i = msgs.length - 1; i >= 0; i--) if (msgs[i].seq === seq) return msgs[i]; return null; };
-  function catchupSelect(name) { catchSince = lastSeen[name] || 0; foldOpen = {}; }
+  // the digest lives in the header panel, not the log, so a room switch clears it until the new room's first poll draws one
+  function catchupSelect(name) { catchSince = lastSeen[name] || 0; foldOpen = {}; var o = $('#catchup'); if (o) o.remove(); }
   // Jump to a message, opening the fold that hides it. Other sections (inbox, palette) may call window.crJump(seq).
   function catchupJump(seq) {
     var t = $('#log [data-seq="' + seq + '"]'); if (!t) return false;
@@ -189,14 +189,14 @@ export const CATCHUP_JS = `/*catchup:start*/
     var html = '<div class="cu-h"><button type="button" class="cu-tog" aria-expanded="' + catchOpen + '"><span class="car">' + (catchOpen ? '▾' : '▸') + '</span>' + (catchSince ? 'Since you last looked' : 'Room so far') + ' <span class="cu-s">' + g.summary + '</span></button>'
       + '<button type="button" class="cu-done" title="Mark everything up to now as read (key: .)">Caught up</button></div>'
       + (catchOpen ? '<div class="cu-b">' + g.lines.join('') + '</div>' : '');
-    if (old && old === $('#log').firstChild && old.innerHTML === html) return;
+    if (old && old.parentNode === $('#digest') && old.innerHTML === html) return;
     // a keyboard reader on a digest button keeps their place across the re-render (new messages, rerender())
     var a = document.activeElement, focus = a && a.closest && a.closest('#catchup') ? (a.dataset.jump ? '[data-jump="' + a.dataset.jump + '"]' : '.' + a.className.split(' ')[0]) : null;
     if (old) old.remove();
     var d = document.createElement('div'); d.id = 'catchup';
     d.setAttribute('role', 'region'); d.setAttribute('aria-label', 'Catch-up digest');
     d.innerHTML = html;
-    $('#log').insertBefore(d, $('#log').firstChild);
+    $('#digest').appendChild(d); // docked under the room header, in its glass panel (src/ui.ts #top)
     var f = focus && d.querySelector(focus); if (f) f.focus({ preventScroll: true });
   }
   // the inbox's list and the room state change without new messages: refresh the digest, and unfold a newly pending ask
@@ -213,7 +213,7 @@ export const CATCHUP_JS = `/*catchup:start*/
   }
   (function () {
     var b = document.createElement('button'); b.type = 'button'; b.id = 'sigonly'; b.className = 'chip tog' + (signalOnly ? ' on' : '');
-    b.textContent = 'signal only'; b.title = 'Fold runs of plain agent chatter; keep proposals, votes, human messages and questions for you (key: s)';
+    b.textContent = 'Signal only'; b.title = 'Fold runs of plain agent chatter; keep proposals, votes, human messages and questions for you (key: s)';
     b.setAttribute('aria-pressed', signalOnly ? 'true' : 'false');
     b.onclick = function () { setSignal(!signalOnly); };
     $('#lf').insertBefore(b, $('#whof'));

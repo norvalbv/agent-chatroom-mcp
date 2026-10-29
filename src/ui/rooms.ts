@@ -1,9 +1,12 @@
 export const ROOMS_CSS = `
-  .run > .rh.pin-group { width:100%; border:0; background:transparent; text-align:left; color:var(--dim) }
-  .room-pin[aria-pressed="true"] { background:var(--acc-bg); color:var(--acc-fg) }
+  .run > .rh.pin-group { width:100%; border:0; background:transparent; text-align:left; color:var(--dim2) }
+  .room-pin span { width:18px; text-align:center; font-size:15px; opacity:.85 } .room-pin[aria-pressed="true"] span { color:var(--warn); opacity:1 }
   .room-pin:focus-visible, .pin-group:focus-visible { outline:2px solid var(--acc); outline-offset:2px }
-  .chip.goto { border:0; font-family:inherit; cursor:pointer } .chip.goto:hover { color:var(--fg) } .chip.goto:focus-visible { outline:2px solid var(--acc); outline-offset:2px }
-  #head .fate { grid-column:1 / -1; color:var(--dim); font-size:12px } @media (max-width:720px) { #head .fate { flex:1 1 100% } }
+  .chip.goto { font-family:inherit; cursor:pointer } .chip.goto:hover { color:var(--fg) } .chip.goto:focus-visible { outline:2px solid var(--acc); outline-offset:2px }
+  /* a parent's breakouts would wrap the header onto several rows: there they are rows of the room menu, and the rail nests them */
+  #head .chip.goto.sub { display:none } #morepop .chip.goto.sub { display:flex; width:100%; min-height:34px; border-radius:11px; background:transparent; color:var(--fg); font-size:13.5px; font-weight:400; padding:0 10px; overflow:hidden; text-overflow:ellipsis } #morepop .chip.goto.sub:hover { background:var(--hover) }
+  #head .fate { grid-column:2 / -1; color:var(--dim); font-size:12px; line-height:17px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis } #head .topic.open ~ .fate { white-space:normal }
+  @media (max-width:720px) { #head .fate { grid-column:1 / -1 } }
 `;
 
 export const ROOMS_STATE = `
@@ -34,8 +37,10 @@ export const ROOMS_STATE = `
   var pinnedRooms = store.get('pins.room', []);
   pinnedRooms = Array.isArray(pinnedRooms) ? pinnedRooms.filter(function (name) { return typeof name === 'string'; }) : [];
   var isRoomPinned = function (name) { return pinnedRooms.indexOf(name) >= 0; };
-  // the header's breakout chips (fateChips) select the room they name; one listener, since renderHead rewrites the header
-  $('#head').addEventListener('click', function (e) { var b = e.target.closest && e.target.closest('[data-goto]'); if (b) select(b.dataset.goto); });
+  // the header's breakout chips (fateChips) select the room they name; one listener, since renderHead rewrites the header.
+  // Only .goto chips: the pinned-message strip in the header also carries data-goto, a #seq, and was selecting room "2".
+  $('#head').addEventListener('click', function (e) { var b = e.target.closest && e.target.closest('[data-goto]'); if (b && b.classList.contains('goto')) select(b.dataset.goto); });
+  $('#morepop').addEventListener('click', function (e) { var b = e.target.closest && e.target.closest('[data-goto]'); if (b && b.classList.contains('goto')) { closePop(); select(b.dataset.goto); } });
 `;
 
 export const ROOMS_JS = `
@@ -51,7 +56,7 @@ export const ROOMS_JS = `
     var out = '';
     if (r.parent) out += '<button type="button" class="chip goto" data-goto="' + esc(r.parent) + '" title="' + esc(r.breakout_fate ? r.breakout_fate.line : '') + '">↳ breakout of ' + esc(r.parent) + '</button>';
     (r.breakouts || []).forEach(function (b) {
-      out += '<button type="button" class="chip goto" data-goto="' + esc(b.room) + '" title="breakout of this room, ' + esc(b.state) + (b.members && b.members.length ? ': ' + esc(b.members.join(', ')) : '') + '">⤷ ' + esc(b.room) + ' · ' + esc(b.state) + '</button>';
+      out += '<button type="button" class="chip goto sub" data-goto="' + esc(b.room) + '" title="breakout of this room, ' + esc(b.state) + (b.members && b.members.length ? ': ' + esc(b.members.join(', ')) : '') + '">⤷ ' + esc(b.room) + ' · ' + esc(b.state) + '</button>';
     });
     return out;
   }
@@ -100,9 +105,11 @@ export const ROOMS_JS = `
         var unread = Math.max(0, (r.latest_seq || 0) - (lastSeen[r.name] || 0));
         var short = (g === 'other' || g === '!pinned' || r.name.indexOf(g + '-') !== 0 ? r.name : r.name.slice(g.length + 1));
         if (r.parent) short = '↳ ' + short;
-        var meta = (r.state === 'open' || r.state === 'stalled') ? r.active_count + ' active · ' + r.message_count + ' msgs' : r.state + ' · ' + r.message_count + ' msgs';
+        var n = (r.message_count || 0).toLocaleString();
+        var meta = (r.state === 'open' || r.state === 'stalled') ? (r.state === 'stalled' ? 'stalled · ' : '') + r.active_count + ' here · ' + n + ' msgs' : r.state + ' · ' + n + ' msgs';
+        // a Grok Bot sidebar row: the room's avatar with its state as a badge, the name, and one line under it
         return '<button class="room' + (r.name === sel ? ' sel' : '') + '" data-r="' + esc(r.name) + '" title="' + esc((r.breakout_fate ? r.breakout_fate.line + '\\n\\n' : '') + (r.topic || r.name)) + '">'
-          + '<span class="dot ' + r.state + '"></span><span class="n">' + esc(short) + '</span>'
+          + '<span class="rav">' + creature(r.name) + '<i class="st ' + r.state + '" title="' + r.state + '"></i></span><span class="n">' + esc(short) + '</span>'
           + (typeof window.crRoomBadge === 'function' ? window.crRoomBadge(r) : '')
           + (unread && r.name !== sel ? '<span class="u' + (r.state === 'open' ? '' : ' q') + '">' + (unread > 99 ? '99+' : unread) + '</span>' : '')
           + '<span class="m">' + esc(meta) + '</span></button>';

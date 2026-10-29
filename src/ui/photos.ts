@@ -1,18 +1,21 @@
 export const PHOTOS_CSS = `
-  .photo-tools { grid-column:1 / -1; display:flex; gap:8px; align-items:center; flex-wrap:wrap; min-width:0 }
-  .photo-tools small { color:var(--dim); font-size:11px }
-  #photo-status { font-size:12px; color:var(--bad); overflow-wrap:anywhere }
+  .photo-tools { display:flex; gap:8px; align-items:center; flex-wrap:wrap; min-width:0 }
+  .photo-tools:has(#photo-status:empty):has(#photo-preview:empty) { display:none }
+  #photo-status { font-size:12px; color:var(--bad); overflow-wrap:anywhere; padding:0 6px } #photo-status:empty { display:none }
   #photo-preview { display:flex; flex-wrap:wrap; gap:8px; width:100% }
   #photo-preview:empty { display:none }
-  .photo-preview { display:flex; align-items:center; gap:6px; border:1px solid var(--line); border-radius:10px; padding:5px; max-width:100%; background:var(--panel) }
-  .photo-preview img { width:48px; height:48px; object-fit:cover; border-radius:6px }
-  .photo-preview span { max-width:140px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:12px }
+  .photo-preview { display:flex; align-items:center; gap:8px; border-radius:16px; padding:5px 5px 5px 5px; max-width:100%; background:var(--panel) }
+  .photo-preview img { width:44px; height:44px; object-fit:cover; border-radius:11px }
+  .photo-preview span { max-width:140px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:12.5px }
+  .photo-preview .btn { min-height:28px; padding:0 11px; font-size:12px; background:var(--panel2) }
   .photo-images { display:flex; gap:8px; flex-wrap:wrap; padding-top:6px }
-  .photo-images a { max-width:100%; display:block; border:1px solid var(--line); border-radius:10px; padding:4px; background:var(--panel) }
-  .photo-images img { display:block; max-width:100%; width:220px; max-height:180px; object-fit:contain; border-radius:6px }
+  .photo-images a { max-width:100%; display:block; border-radius:16px; overflow:hidden; background:var(--panel) }
+  .photo-images img { display:block; max-width:100%; width:240px; max-height:200px; object-fit:cover }
 `;
 
-export const PHOTOS_HTML = `<div class="photo-tools"><button class="btn" type="button" id="add-photo">Add photos</button><input type="file" id="photo-files" accept="image/png,image/jpeg,image/webp,image/gif" multiple hidden /><small>Up to 4 photos · 8 MB each · or paste an image</small><span id="photo-status" role="status" aria-live="polite"></span><div id="photo-preview"></div></div>`;
+/** The composer's "+" (left of the message box) and the tray above the box for previews and errors. */
+export const PHOTOS_BUTTON_HTML = `<button class="btn icon ghost" type="button" id="add-photo" title="Add photos: up to 4, 8 MB each, or paste an image" aria-label="Add photos"><span class="i i-plus"></span></button><input type="file" id="photo-files" accept="image/png,image/jpeg,image/webp,image/gif" multiple hidden />`;
+export const PHOTOS_TRAY_HTML = `<div class="photo-tools"><span id="photo-status" role="status" aria-live="polite"></span><div id="photo-preview"></div></div>`;
 
 export const PHOTOS_JS = String.raw`
   var photoDrafts = new Map(), photoSending = false;
@@ -81,7 +84,7 @@ export const PHOTOS_JS = String.raw`
       if (!res.ok) throw new Error(await res.text());
       pending.forEach(function (photo) { var list = photosFor(room), index = list.indexOf(photo); if (index >= 0) list.splice(index, 1); URL.revokeObjectURL(photo.preview); });
       if (sel === room && $('#text').value === text) { $('#text').value = ''; $('#text').style.height = ''; }
-      $('#hint').className = 'hint'; $('#hint').textContent = 'Message sent.';
+      $('#hint').className = 'hint'; $('#hint').textContent = ''; // the message itself appears in the transcript
     } catch (error) { $('#hint').className = 'hint bad'; $('#hint').textContent = 'Message not sent: ' + error.message; }
     finally { photoSending = false; $('#sendbtn').disabled = false; photoRoomChanged(); }
     poll();

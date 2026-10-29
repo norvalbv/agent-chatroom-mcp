@@ -1,0 +1,57 @@
+{
+  "schema": "steer-split-v1",
+  "population": "steer-count: human/chair chats and inbox notes; all input logs; injections excluded",
+  "warning": "Whole-corpus purpose cues are lexical proxies, not semantic counts or evidence of improved quality. Manual sample can be clustered by run.",
+  "inputs": [
+    {
+      "file": "/Users/benji/.frink/builds/room-rsi-7/hub-data/swarm-193427-ztnx-room.jsonl",
+      "sha256": "842ef791c38151c7d67f98c00d17066e64457b44a527d35311f3ed00d9cef395",
+      "events": 2670
+    }
+  ],
+  "totals": {
+    "logs": 1,
+    "rooms_with_steers": 1,
+    "steers": 8,
+    "human": 0,
+    "chair": 8,
+    "notes": 0,
+    "corrections": 0
+  },
+  "proxy": {
+    "n": 8,
+    "reframe": 0,
+    "unblock": 6,
+    "both": 0,
+    "other": 2,
+    "uncertain": 0
+  },
+  "manual": {
+    "n": 0,
+    "reframe": 0,
+    "unblock": 0,
+    "both": 0,
+    "other": 0,
+    "uncertain": 0
+  },
+  "proxy_vs_manual": {
+    "n": 0,
+    "exact": 0,
+    "rate": null,
+    "disagreements": []
+  },
+  "by_room": [
+    {
+      "file": "/Users/benji/.frink/builds/room-rsi-7/hub-data/swarm-193427-ztnx-room.jsonl",
+      "room": "swarm-193427-ztnx-room",
+      "proxy": {
+        "n": 8,
+        "reframe": 0,
+        "unblock": 6,
+        "both": 0,
+        "other": 2,
+        "uncertain": 0
+      }
+    }
+  ]
+}

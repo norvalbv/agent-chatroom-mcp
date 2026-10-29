@@ -11,7 +11,7 @@
  * a chat passage with an observation also counts there and this script cannot see it, so its D2 is an upper bound) and,
  * as a sensitivity, the first run|web invocation in the work ledger.
  *   npx tsx scripts/framing-width.ts --dump <room.jsonl> [--stage reveal|chrono|all] [--messages]   statements, no clusters
- *   npx tsx scripts/framing-width.ts <room.jsonl | data dir> [...] [--labels labels.json] [--cut 0.x] [--centre] [--json]
+ *   npx tsx scripts/framing-width.ts <room.jsonl | data dir> [...] [--labels labels.json] [--cut 0.x] [--centre] [--all-seats] [--json]
  */
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { basename, join } from "node:path";
@@ -36,11 +36,14 @@ const tsOf = (e: Ev): string | undefined => e.ts ?? e.msg?.ts ?? e.entry?.update
 export const minutes = (a: string, b: string) => Math.round(((Date.parse(b) - Date.parse(a)) / 60000) * 10) / 10;
 
 /** Pure: the framing statements of one room, in log order, with the times the width rule needs. */
-export function extract(events: Ev[], room = String(events[0]?.room ?? "")): Extract {
+export function extract(events: Ev[], room = String(events[0]?.room ?? ""), o: { allSeats?: boolean } = {}): Extract {
   const nameToSeat = new Map<string, string>(), excluded = new Set<string>(["launcher", "system", "hub"]);
+  // workers only by default: a verifier's opening states how it will check, not an answer (attack/decision/width-rule);
+  // --all-seats keeps the verifier as a sensitivity. Chairs and humans are never seats here.
   for (const e of events) if (e.type === "join" && e.p) {
     nameToSeat.set(String(e.p.name), String(e.p.id));
-    if (e.p.role === "chair" || e.p.agent === "human") { excluded.add(String(e.p.id)); excluded.add(String(e.p.name)); }
+    const role = e.p.role ?? (e.p.name === "verifier" ? "verifier" : "worker");
+    if (role === "chair" || e.p.agent === "human" || (role === "verifier" && !o.allSeats)) { excluded.add(String(e.p.id)); excluded.add(String(e.p.name)); }
   }
   const stmts: Stmt[] = [], leaves: Extract["leaves"] = [], settled: Extract["settled"] = [];
   const proposalStmt = new Map<string, number>();
@@ -72,7 +75,8 @@ export function extract(events: Ev[], room = String(events[0]?.room ?? "")): Ext
         else push({ ts: when, seat, source: "idea", key, text });
       } else if (POSITION.test(key) && text.trim()) push({ ts: when, seat, source: "board", key, text });
     }
-    if (e.type === "proposal" && e.proposal) {
+    // a proposal is logged again later with its final text and its creation time: the first event is the one stated then
+    if (e.type === "proposal" && e.proposal && !proposalStmt.has(String(e.proposal.id))) {
       const p = e.proposal;
       proposalStmt.set(String(p.id), push({ ts: p.createdAt ?? ts, seat: String(p.by?.id ?? ""), source: "proposal", key: String(p.id), text: String(p.text ?? "") }));
     }
@@ -206,7 +210,15 @@ function read(file: string): Ev[] {
   return readFileSync(file, "utf8").split("\n").filter(Boolean).flatMap((l) => { try { return [JSON.parse(l)]; } catch { return []; } });
 }
 
-function dump(x: Extract, stage: string, events: Ev[], messages: boolean) {
+/** Share of a's and b's lines that the other does not have, as a rough size of an amend. */
+const changed = (a: string, b: string) => {
+  const la = a.split("\n").map((l) => l.trim()).filter(Boolean), lb = b.split("\n").map((l) => l.trim()).filter(Boolean);
+  const sa = new Set(la), sb = new Set(lb);
+  const diff = la.filter((l) => !sb.has(l)).length + lb.filter((l) => !sa.has(l)).length;
+  return Math.round((100 * diff) / Math.max(1, la.length + lb.length));
+};
+
+function dump(x: Extract, stage: string, events: Ev[], messages: boolean, compact = false) {
   const seatName = new Map<string, string>();
   for (const e of events) if (e.type === "join" && e.p) seatName.set(String(e.p.id), String(e.p.name));
   const who = (s: string) => seatName.get(s) ?? s;
@@ -219,7 +231,12 @@ function dump(x: Extract, stage: string, events: Ev[], messages: boolean) {
     if (stop && s.ts > stop) continue;
     // chrono withholds the conclusion: the concluded proposal's versions and the votes on it
     if (stage === "chrono" && (s.source === "proposal" || s.source === "amend" || s.source === "vote") && s.key === x.conclusion_proposal) continue;
-    const body = s.source === "vote" ? `agrees with #${s.adopts}` : s.text.slice(0, stage === "reveal" ? 1200 : 700).replace(/\s+/g, " ");
+    // --compact: votes adopt their proposal's framing and an amend mostly rewords it, so show how much each amend changed
+    if (compact && s.source === "vote") continue;
+    const prev = s.source === "amend" || s.source === "board" || s.source === "idea" ? [...x.stmts.slice(0, s.i)].reverse().find((p) => p.key === s.key && p.source !== "vote") : undefined;
+    const body = s.source === "vote" ? `agrees with #${s.adopts}`
+      : prev && compact ? `changed ${changed(prev.text, s.text)}% of lines vs #${prev.i} (${s.text.length} chars)`
+      : s.text.slice(0, stage === "reveal" ? 1200 : compact ? 450 : 700).replace(/\s+/g, " ");
     rows.push({ ts: s.ts, line: `#${s.i} [${minutes(x.t0, s.ts)}m] ${who(s.seat)} ${s.source}${s.key && s.source !== "vote" ? ` ${s.key}` : ""}: ${body}` });
   }
   if (stage !== "reveal") {
@@ -233,6 +250,52 @@ function dump(x: Extract, stage: string, events: Ev[], messages: boolean) {
   rows.sort((a, b) => (a.ts < b.ts ? -1 : a.ts > b.ts ? 1 : 0)).forEach((r) => console.log(r.line));
 }
 
+const CUTS = Array.from({ length: 19 }, (_, k) => Math.round((0.05 * k + 0.05) * 100) / 100); // 0.05 .. 0.95
+
+/** --fit: the registered leave-one-room-out check. For each room, pick variant (raw|centred) and cut on the OTHER rooms by
+ * mean pair F1 against the hand labels (ties -> raw, then the lower cut), score the left-out room with them, and report
+ * pair F1, Rand and whether held width at the reveal (>= 2 or not) and collapse-before-evidence match the labels. A
+ * constant "one framing" labeller is printed beside it: with few wide rooms, agreement alone does not show the clustering
+ * can see width. */
+async function fit(files: string[], labels: Record<string, Record<string, string>>, allSeats: boolean, json: boolean) {
+  const { embedTexts } = await import("./embed-cache.ts");
+  type R = { x: Extract; hand: (i: number) => string; idx: number[]; vecs: Record<string, number[][]> };
+  const rooms: R[] = [];
+  for (const f of files) {
+    const x = extract(read(f), basename(f, ".jsonl"), { allSeats });
+    const l = labels[x.room]; if (!l || !x.stmts.length) continue;
+    const hand = (i: number) => { const s = x.stmts[i], k = String(s.adopts ?? i); return l[k] ?? l["*"] ?? `#${k}`; };
+    const idx = x.stmts.filter((s) => s.source !== "vote").map((s) => s.i);
+    const raw = await embedTexts(idx.map((i) => embedText(x.stmts[i])));
+    rooms.push({ x, hand, idx, vecs: { raw, centred: centre(raw) } });
+  }
+  const labelsAt = (r: R, variant: string, cut: number) => {
+    const c = cluster(r.vecs[variant], cut), at = new Map(r.idx.map((i, k) => [i, `c${c[k]}`]));
+    return (i: number) => at.get(r.x.stmts[i].adopts ?? i)!;
+  };
+  const score = (r: R, variant: string, cut: number) => pairAgreement(r.idx.map(r.hand), r.idx.map(labelsAt(r, variant, cut))).f1;
+  const out = rooms.map((r) => {
+    let best = { variant: "raw", cut: CUTS[0], f1: -1 };
+    for (const variant of ["raw", "centred"]) for (const cut of CUTS) {
+      const others = rooms.filter((o) => o !== r), f1 = others.reduce((s, o) => s + score(o, variant, cut), 0) / Math.max(1, others.length);
+      if (f1 > best.f1 + 1e-9) best = { variant, cut, f1 };
+    }
+    const script = width(r.x, labelsAt(r, best.variant, best.cut)), hand = width(r.x, r.hand), one = width(r.x, () => "A");
+    const pa = pairAgreement(r.idx.map(r.hand), r.idx.map(labelsAt(r, best.variant, best.cut)));
+    return {
+      room: r.x.room, variant: best.variant, cut: best.cut, pair_f1: Math.round(pa.f1 * 1000) / 1000, rand: Math.round(pa.rand * 1000) / 1000,
+      hand_wide_at_reveal: hand.held_at_reveal >= 2, script_wide_at_reveal: script.held_at_reveal >= 2, script_held_at_reveal: script.held_at_reveal,
+      hand_collapse_before_evidence: hand.collapse_before_evidence, script_collapse_before_evidence: script.collapse_before_evidence,
+      hand_minutes_to_one: hand.minutes_to_one, script_minutes_to_one: script.minutes_to_one, constant_wide_at_reveal: one.held_at_reveal >= 2,
+    };
+  });
+  if (json) { console.log(JSON.stringify(out, null, 1)); return; }
+  const n = out.length, agree = (k: (o: (typeof out)[number]) => boolean) => out.filter(k).length;
+  for (const o of out) console.log(`${o.room}: LOO ${o.variant}@${o.cut} pairF1=${o.pair_f1} rand=${o.rand} wide@reveal hand=${o.hand_wide_at_reveal} script=${o.script_wide_at_reveal}(${o.script_held_at_reveal}) to_one hand=${o.hand_minutes_to_one ?? "-"} script=${o.script_minutes_to_one ?? "-"} before_ev hand=${o.hand_collapse_before_evidence ?? "UNKNOWN"} script=${o.script_collapse_before_evidence ?? "UNKNOWN"}`);
+  console.log(`n=${n} rooms. wide@reveal agreement: script ${agree((o) => o.hand_wide_at_reveal === o.script_wide_at_reveal)}/${n}, constant one-framing ${agree((o) => o.hand_wide_at_reveal === o.constant_wide_at_reveal)}/${n}; ` +
+    `collapse_before_evidence agreement: ${agree((o) => o.hand_collapse_before_evidence === o.script_collapse_before_evidence)}/${n}; hand wide@reveal ${agree((o) => o.hand_wide_at_reveal)}/${n}, script ${agree((o) => o.script_wide_at_reveal)}/${n}`);
+}
+
 async function main() {
   const args = process.argv.slice(2);
   const opt = (k: string) => { const i = args.indexOf(k); return i >= 0 ? args[i + 1] : undefined; };
@@ -240,22 +303,24 @@ async function main() {
     .flatMap((p) => (statSync(p).isDirectory() ? readdirSync(p).filter((f) => f.endsWith(".jsonl")).map((f) => join(p, f)) : [p]));
   if (!files.length) { console.error("usage: framing-width [--dump <room.jsonl> [--stage reveal|chrono|all] [--messages]] | <room.jsonl | dir> [...] [--labels f.json] [--cut c] [--centre] [--json]"); process.exit(2); }
   if (args.includes("--dump")) {
-    for (const f of files) { const ev = read(f); dump(extract(ev, basename(f, ".jsonl")), opt("--stage") ?? "all", ev, args.includes("--messages")); }
+    for (const f of files) { const ev = read(f); dump(extract(ev, basename(f, ".jsonl"), { allSeats: args.includes("--all-seats") }), opt("--stage") ?? "all", ev, args.includes("--messages"), args.includes("--compact")); }
     return;
   }
   // --labels: {room: {statementIndex: label}}; statements without a label get their own singleton label
   const labels = opt("--labels") ? (JSON.parse(readFileSync(opt("--labels")!, "utf8")) as Record<string, Record<string, string>>) : null;
+  if (labels && args.includes("--fit")) { await fit(files, labels, args.includes("--all-seats"), args.includes("--json")); return; }
   const cut = Number(opt("--cut") ?? "NaN");
   const rows: Width[] = [];
   for (const f of files) {
     const ev = read(f);
     if (!ev.some((e) => e.type === "room")) continue;
-    const x = extract(ev, basename(f, ".jsonl"));
+    const x = extract(ev, basename(f, ".jsonl"), { allSeats: args.includes("--all-seats") });
     if (!x.stmts.length) continue;
     let lab: (i: number) => string;
     if (labels) {
       const l = labels[x.room]; if (!l) continue;
-      lab = (i) => l[String(i)] ?? `#${i}`;
+      // a vote holds what its proposal holds; "*" is the label of every statement not listed
+      lab = (i) => { const s = x.stmts[i], k = String(s.adopts ?? i); return l[k] ?? l["*"] ?? `#${k}`; };
     } else {
       if (!Number.isFinite(cut)) { console.error("--cut is required without --labels"); process.exit(2); }
       const { embedTexts } = await import("./embed-cache.ts");

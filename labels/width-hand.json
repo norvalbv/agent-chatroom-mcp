@@ -1,0 +1,23 @@
+{
+ "_meta": "claude-opus-5-5-2 hand labels, decision/width-rule v2 (workers only), decision/label-cohort rooms 1-20. Label = the competing answer a statement holds; complementary subtasks/items share the room's label (door rubric). Statement indices are framing-width.ts extract() order, workers only. Ambiguous: ne8o #4 (salvage prior drafts vs write fresh), 5zui (wedge variants kept as one). Exposed before labelling: mugk (tested the dump on it).",
+ "swarm-150725-3vny-room": {"*": "A"},
+ "swarm-003938-i47r-whiskas": {"*": "A", "5": "B", "6": "C", "7": "B", "8": "E", "10": "F", "11": "F"},
+ "swarm-211613-dpl4-room": {"*": "A"},
+ "swarm-191130-twok-room": {"*": "A"},
+ "swarm-170811-k1pq-room": {"*": "A"},
+ "swarm-181650-0vn3-room": {"*": "A"},
+ "swarm-163100-mugk-room": {"*": "A"},
+ "swarm-130459-mrw4-explorer": {"*": "A", "4": "B"},
+ "swarm-113947-ne8o-room": {"*": "A", "4": "B"},
+ "swarm-100622-6jdx-room": {"*": "A"},
+ "swarm-105804-4ssq-room": {"*": "A"},
+ "swarm-223815-5zui-room": {"*": "A"},
+ "swarm-130459-mrw4-soccer": {"*": "A"},
+ "swarm-174537-07hw-room": {"*": "A"},
+ "swarm-234901-pmyh-room": {"*": "A"},
+ "swarm-133013-64sr-room": {"*": "A"},
+ "swarm-102347-phin-room": {"*": "A"},
+ "swarm-011152-pen5-room": {"*": "A"},
+ "swarm-204607-mrkt-room": {"*": "A"},
+ "swarm-140213-25wq-room": {"*": "A"}
+}

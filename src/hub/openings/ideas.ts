@@ -13,6 +13,7 @@
 import type { Hub } from "../../hub.js";
 import { HubError, type BoardEntry, type Room } from "../types.js";
 import { applyBoard } from "../board.js";
+import { afterReveal } from "./rivals.js";
 
 export const MAX_ALTERNATIVES = 3;
 export const MAX_ALTERNATIVE_CHARS = 200;
@@ -67,7 +68,7 @@ export function slugOf(text: string): string {
 const seatSlug = (name: string) => name.toLowerCase().replace(/[^\w.-]+/g, "-");
 
 /** The first free idea/* key for this alternative: never one another entry holds. */
-function freeKey(room: Room, slug: string, seat: string): string {
+export function freeKey(room: Room, slug: string, seat: string): string {
   const base = `idea/${slug}`;
   if (!room.board.get(base)?.text.trim()) return base;
   const mine = `${base}-${seatSlug(seat)}`;
@@ -122,5 +123,6 @@ export function reveal(hub: Hub, room: Room, note?: string): void {
     if (p) hub.post(room, "chat", p, content, { tag: "opening" });
   }
   if (seeded.length) hub.post(room, "system", undefined, `Alternatives named in the sealed openings are on the board: ${seeded.join(", ")}. Claim one to test it, or attack/idea/<slug> to say why it should not be.`);
+  afterReveal(hub, room, seeded); // framing telemetry always; a rival framing per seat with CHATROOM_REVEAL_RIVALS (rivals.ts)
   if (room.mode === "round_robin") room.round = 2;
 }

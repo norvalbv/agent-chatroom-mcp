@@ -38,9 +38,9 @@ const flag = (name: string, def?: string) => {
   return i >= 0 ? argv[i + 1] : def;
 };
 const has = (name: string) => argv.includes(`--${name}`);
-const BOOL_FLAGS = new Set(["--keep-hub", "--reuse-hub", "--apply", "--full-access", "--named", "--flat", "--require-verification", "--respawn", "--claude-full", "--no-carry", "--no-seat-targets", "--sandbox", "--no-web"]);
+const BOOL_FLAGS = new Set(["--keep-hub", "--reuse-hub", "--apply", "--full-access", "--named", "--flat", "--require-verification", "--respawn", "--claude-full", "--no-carry", "--no-seat-targets", "--sandbox", "--no-web", "--reveal-rivals"]);
 const task = argv.find((a, i) => !a.startsWith("--") && (i === 0 || !argv[i - 1].startsWith("--") || BOOL_FLAGS.has(argv[i - 1])));
-if (!task) { console.error('usage: swarm "<task>" [--flat] [--done-when text] [--verify text] [--agents 6] [--cwd dir] [--models sonnet,haiku] [--lead-model opus] [--verifier-model opus] [--planner-model opus] [--codex k] [--codex-models gpt-6-astra,gpt-5.6-sol,gpt-5.6-terra] [--openrouter k] [--openrouter-models deepseek/deepseek-v4.1-flash,...] [--verifier-openrouter slug] [--openrouter-reasoning low|medium|high] [--require-verification] [--quorum unanimous|majority|supermajority] [--chair name] [--owner-word] [--seat-hooks off] [--seat-ai-gates on] [--prompt loop.md] [--groups groups.json [--digest-every 45]] [--resources file.md] [--sources registry.json] [--preflight "<cmd>" | --preflight-strict "<cmd>"] [--respawn] [--apply] [--full-access] [--named] [--claude-full] [--no-carry] [--no-seat-targets] [--no-web] [--sandbox] [--timeout 30] [--port 7717] [--result-path path]'); process.exit(2); }
+if (!task) { console.error('usage: swarm "<task>" [--flat] [--done-when text] [--verify text] [--agents 6] [--cwd dir] [--models sonnet,haiku] [--lead-model opus] [--verifier-model opus] [--planner-model opus] [--codex k] [--codex-models gpt-6-astra,gpt-5.6-sol,gpt-5.6-terra] [--openrouter k] [--openrouter-models deepseek/deepseek-v4.1-flash,...] [--verifier-openrouter slug] [--openrouter-reasoning low|medium|high] [--require-verification] [--quorum unanimous|majority|supermajority] [--chair name] [--owner-word] [--seat-hooks off] [--seat-ai-gates on] [--prompt loop.md] [--groups groups.json [--digest-every 45]] [--resources file.md] [--sources registry.json] [--preflight "<cmd>" | --preflight-strict "<cmd>"] [--respawn] [--apply] [--full-access] [--named] [--claude-full] [--no-carry] [--no-seat-targets] [--no-web] [--reveal-rivals] [--sandbox] [--timeout 30] [--port 7717] [--result-path path]'); process.exit(2); }
 const PF = preflightAtLaunch(argv, resolve(flag("cwd", process.cwd())!)); // --preflight / --preflight-strict: the kit's environment checks, before anything starts (src/launch/preflight.ts)
 /** --groups <file.json>: operator-defined rooms/briefs (src/groups.ts, prompts/group.md), no planner; --agents is workers plus verifier. */
 let GROUPS: GroupsFile | undefined;
@@ -93,7 +93,7 @@ let STOPPING = false;
 /** --flat: one room and verifier, no planner; seats organise with claims/recruits/break-outs when the work's shape is unknown. */
 const FLAT = has("flat");
 /** --fresh-challenger: a hub this launcher starts recruits one read-only seat per opened proposal to check it (Spawner.freshChallenger) */
-const FRESH_CHALLENGER = has("fresh-challenger");
+const FRESH_CHALLENGER = has("fresh-challenger"); const REVEAL_RIVALS = has("reveal-rivals"); // a hub this run starts hands each opener a rival framing (src/hub/openings/rivals.ts)
 /** --no-carry: seats start from the brief alone (no settled axes, no PRIOR RUNS, auto-memory off); see carrySettings in env.ts */
 const NO_CARRY = has("no-carry");
 /** --seat-hooks off: seat worktrees do not get the repository's commit hooks (c3d2d088 copies them by default). For runs whose
@@ -201,7 +201,7 @@ async function ensureHub() {
       console.error(`Refusing to run on :${PORT}: ${problem}. Pick a free port, or pass --reuse-hub if that is intended.`);
       process.exit(2);
     }
-    log(`using the hub already running on :${PORT} (not started by this run, so this run never stops it)${problem ? `; WARNING: ${problem}` : ""}`);
+    log(`using the hub already running on :${PORT} (not started by this run, so this run never stops it)${problem ? `; WARNING: ${problem}` : ""}${REVEAL_RIVALS ? "; --reveal-rivals does not reach it: that hub follows its own CHATROOM_REVEAL_RIVALS" : ""}`);
     // a supervised hub leaves its launcher token next to its log, in the checkout it was started from
     launcherToken ??= readLauncherToken(info.build?.root ?? repoRoot, PORT);
     return;
@@ -211,7 +211,7 @@ async function ensureHub() {
   const keeps = !Object.keys(ownHubEnv(HUB_IDLE_EXIT_MIN, PORT)).length;
   const child = spawn("node", [resolve(repoRoot, "dist/hubd.js"), "--port", String(PORT), ...(keeps ? ["--always"] : [])], {
     // CHATROOM_DEFAULT_CWD: a recruit with no cwd and no worktree to go by works in this run's project, not in this checkout
-    env: { ...process.env, PORT: String(PORT), CHATROOM_DATA_DIR: resolve(repoRoot, "data"), CHATROOM_DEFAULT_CWD: process.env.CHATROOM_DEFAULT_CWD || CWD, ...(SANDBOX ? { CHATROOM_SANDBOX: "1" } : {}), ...(OWNER_WORD_ON ? { CHATROOM_OWNER_WORD: "1" } : {}), ...(SEAT_HOOKS_OFF ? { CHATROOM_SEAT_HOOKS: "off" } : {}), ...(FRESH_CHALLENGER ? { CHATROOM_FRESH_CHALLENGER: "1" } : {}), ...ownHubEnv(HUB_IDLE_EXIT_MIN, PORT) },
+    env: { ...process.env, PORT: String(PORT), CHATROOM_DATA_DIR: resolve(repoRoot, "data"), CHATROOM_DEFAULT_CWD: process.env.CHATROOM_DEFAULT_CWD || CWD, ...(SANDBOX ? { CHATROOM_SANDBOX: "1" } : {}), ...(OWNER_WORD_ON ? { CHATROOM_OWNER_WORD: "1" } : {}), ...(SEAT_HOOKS_OFF ? { CHATROOM_SEAT_HOOKS: "off" } : {}), ...(FRESH_CHALLENGER ? { CHATROOM_FRESH_CHALLENGER: "1" } : {}), ...(REVEAL_RIVALS ? { CHATROOM_REVEAL_RIVALS: "1" } : {}), ...ownHubEnv(HUB_IDLE_EXIT_MIN, PORT) },
     detached: true,
     stdio: "ignore",
   });

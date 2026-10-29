@@ -12,6 +12,7 @@ import { hexTokens } from "./types.js";
 import { now, keepRefusal } from "./internal.js";
 import type { Opts, Event } from "./internal.js";
 import { holdAlternatives } from "./openings/ideas.js";
+import { restoreFramings } from "./openings/rivals.js";
 
 function recordReplyMetricEvent(hub: Hub, ev: Event) {
   const roomName = "room" in ev ? ev.room : ev.type === "message" ? ev.msg.room : ev.proposal.room;
@@ -242,6 +243,12 @@ export function replay(hub: Hub) {
         case "openings_revealed": {
           const room = hub.rooms.get(ev.room);
           if (room) room.openingsRevealed = true;
+          break;
+        }
+        case "framings_seeded":
+        case "rival_assigned": {
+          const room = hub.rooms.get(ev.room);
+          if (room) restoreFramings(room, ev);
           break;
         }
         case "kick_vote": {

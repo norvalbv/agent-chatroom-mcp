@@ -48,6 +48,13 @@ export type Event =
   | { type: "opening"; room: string; pid: string; content: string; alternatives?: string[] }
   /** ideas_seeded: the idea/* keys written from the openings' alternatives (telemetry; replay reads only the type) */
   | { type: "openings_revealed"; room: string; ideas_seeded?: string[]; idea_slug_sources?: { key: string; source: string }[] }
+  /** the framings a reveal seeded (alternatives, plus openings handed out as rivals) and whether rivals were on (hub/openings/rivals.ts) */
+  | { type: "framings_seeded"; room: string; keys: string[]; rivals: boolean; ts: string }
+  | { type: "rival_assigned"; room: string; seat: string; key: string; source: "alternative" | "opening"; from: string; overlap: number; method: "jaccard"; ask: string; ts: string }
+  /** telemetry only: a seat replied to (or passed on) its rival ask */
+  | { type: "rival_answered"; room: string; seat: string; key: string; via: "reply" | "pass"; chars?: number; held_claim: boolean; minutes_since_reveal: number; ts: string }
+  /** telemetry only: a seeded framing was claimed, attacked, given a disposition or cleared */
+  | { type: "framing"; room: string; key: string; action: string; by: string; author: string; assigned_to?: string[]; by_assigned: boolean; minutes_since_reveal: number; ts: string }
   /** by/drafted/drafters/seconds are telemetry (replay reads only the type): how the round ended and how many had drafted */
   | { type: "drafts_revealed"; room: string; by?: "all" | "deadline"; drafted?: number; drafters?: number; seconds?: number }
   | { type: "drafts_opened"; room: string; at: string; by?: string; key?: string }

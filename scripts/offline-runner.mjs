@@ -104,6 +104,7 @@ export const offlineScripts = [
   'idle-leave-regression.ts',
   'idea-lists-regression.ts',
   'opening-alternatives-regression.ts',
+  'reveal-rivals-regression.ts',
   'brainstorm-breadth-regression.ts',
   'opening-spread-regression.ts',
   'framing-width-regression.ts',

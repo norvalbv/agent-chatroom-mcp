@@ -32,7 +32,7 @@ import { DevRuns, DevRunError, type DevRunHost } from "./hub/dev-runs.js";
 import { takesOf } from "./hub/take.js";
 import * as votes from "./hub/consensus/votes.js";
 import { coverage } from "./hub/coverage/coverage.js";
-import * as openings from "./hub/openings/ideas.js";
+import * as openings from "./hub/openings/ideas.js"; import * as rivals from "./hub/openings/rivals.js";
 import { registeredWakes, wakeSuccessors, type Wake } from "./hub/wake.js";
 import { MemoryWatch, memoryNotice, type Job, type MemoryEvent, type SeatMemory } from "./hub/memory.js";
 import { RUN_END_CAUSES, exitCause, type RunEndCause, type StoppedBy } from "./respawn.js";
@@ -933,7 +933,7 @@ export class Hub {
     // reply_to, so once delivered it retires instead of staying the focused ask. Left as debt, it pinned every
     // later wait/read to that one message and refused send_message as "arrived while composing" until pass.
     for (const m of delivered) {
-      if (m.from.id !== "system" || m.kind !== "chat" || m.tag === "need" || m.tag === "hands" || !m.mentions?.includes(p.id) || p.declinedAsks?.includes(m.id)) continue; // a first-claim limits ask retires here too: kept owed, it never let a wait drain (audit/f65acfac, idle-leave)
+      if (m.from.id !== "system" || m.kind !== "chat" || m.tag === "need" || m.tag === "hands" || m.tag === "rival" || !m.mentions?.includes(p.id) || p.declinedAsks?.includes(m.id)) continue; // a first-claim limits ask retires here too: kept owed, it never let a wait drain (audit/f65acfac, idle-leave)
       p.declinedAsks = [...(p.declinedAsks ?? []), m.id];
       p.declinedAt = { ...(p.declinedAt ?? {}), [m.id]: m.seq };
     }
@@ -1171,7 +1171,7 @@ export class Hub {
     p.messageCount += 1;
     p.lastSeenSeq = Math.max(p.lastSeenSeq, msg.seq);
     this.persistAttention(room, p);
-    this.noteUsed(room, p, content, "chat");
+    this.noteUsed(room, p, content, "chat"); if (replyTo) rivals.noticeRivalReply(this, room, p, msg); // a reply to a rival ask (decision/reveal-rivals)
     return msg;
   }
 
@@ -1681,7 +1681,7 @@ export class Hub {
     }
     if (p.focusedAsk &&(this.addressedBy(room, p).some((m) => m.id === p.focusedAsk) || room.messages.some((m) => m.id === p.focusedAsk && m.from.agent === "human" && !this.isAnswered(room, m)))) {
       p.declinedAsks = [...new Set([...(p.declinedAsks ?? []), p.focusedAsk])];
-      p.declinedAt = { ...(p.declinedAt ?? {}), [p.focusedAsk]: room.messages.at(-1)?.seq ?? 0 };
+      p.declinedAt = { ...(p.declinedAt ?? {}), [p.focusedAsk]: room.messages.at(-1)?.seq ?? 0 }; rivals.noticeRivalPass(this, room, p, p.focusedAsk);
       p.focusedAsk = undefined;
       this.persistAttention(room, p);
     }
@@ -1838,7 +1838,7 @@ export class Hub {
     const human = [...room.messages].reverse().find((m) => m.kind === "chat" && m.tag !== "opening" &&
       m.from.agent === "human" && !this.isAnswered(room, m) && !p.declinedAsks?.includes(m.id) && this.responderFor(room, m, p.id).mine);
     // hub notices ride the normal stream (settleRead retires them on delivery); only an author can be answered
-    const asks = this.addressedBy(room, p); return human ?? asks.find((m) => m.from.id !== "system" || m.tag === "need" || m.tag === "hands") ?? asks.find((m) => m.tag === "limits"); // needs/needs.ts: an ask to a blocked claim owner; asks/hands.ts: who adds a hand; the first-claim limits ask (needs.ts) leads only until delivered once, after any other ask, then retires like a hub notice (audit/f65acfac)
+    const asks = this.addressedBy(room, p); return human ?? asks.find((m) => m.from.id !== "system" || m.tag === "need" || m.tag === "hands" || m.tag === "rival") ?? asks.find((m) => m.tag === "limits"); // needs/needs.ts: an ask to a blocked claim owner; asks/hands.ts: who adds a hand; the first-claim limits ask (needs.ts) leads only until delivered once, after any other ask, then retires like a hub notice (audit/f65acfac)
   }
 
   attentionHint(room: Room, p: Participant): string | undefined {

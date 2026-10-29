@@ -102,6 +102,7 @@ export const offlineScripts = [
   'idea-lists-regression.ts',
   'opening-alternatives-regression.ts',
   'brainstorm-breadth-regression.ts',
+  'opening-spread-regression.ts',
   'delivery-cap-regression.ts',
   'readas-limit-regression.ts',
   'baseline-freeze-guard-regression.ts',

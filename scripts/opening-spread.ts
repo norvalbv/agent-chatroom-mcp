@@ -28,8 +28,9 @@ export interface Spread {
   room: string; created: string; concluded: boolean; targets: TargetSource;
   seats: number; mix: string; mean_cos: number; min_cos: number; eff_rank: number; eff_rank_frac: number;
   framings: number | null; one_framing: boolean | null;
-  /** Mean cosine over pairs written by the same provider and by different ones: in a mixed room a gap between them is
-   * provider style, not framing, unless hand labels say otherwise. Null when the room has no such pair. */
+  /** Mean cosine over pairs written by the same provider and by different ones. In a mixed room a gap between them is
+   * consistent with provider style rather than framing (observational: provider, role and target choices may confound
+   * it); only hand labels say which. Null when the room has no such pair. */
   same_provider_cos: number | null; cross_provider_cos: number | null;
 }
 

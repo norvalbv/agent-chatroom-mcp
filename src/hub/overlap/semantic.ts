@@ -14,6 +14,7 @@ import type { Hub } from "../../hub.js";
 import { commitsIn } from "../internal.js";
 import type { Participant, Room } from "../types.js";
 import { workWords } from "../take.js";
+import { cosine } from "../../measurements/opening-spread.js";
 
 /** The cut is the model's: cosines are not comparable across models (MTEB, arXiv:2210.07316), so an unknown model needs CHATROOM_EMBED_MIN. */
 const MODEL_MIN: Record<string, number> = { embeddinggemma: 0.869 };
@@ -37,12 +38,6 @@ export function workText(key: string, text: string): string {
   } catch { /* a take is a plain line */ }
   return `${key.replace(/^(take|claim)\//, "").replace(/[-_/.:]+/g, " ")}: ${body}`.slice(0, 500);
 }
-
-const cosine = (a: number[], b: number[]) => {
-  let d = 0, x = 0, y = 0;
-  for (let i = 0; i < a.length; i++) { d += a[i]! * b[i]!; x += a[i]! * a[i]!; y += b[i]! * b[i]!; }
-  return d / (Math.sqrt(x * y) || 1);
-};
 
 async function embed(cfg: NonNullable<ReturnType<typeof semanticConfig>>, texts: string[]): Promise<number[][]> {
   const missing = [...new Set(texts.filter((t) => !cache.has(`${cfg.model}\n${t}`)))];

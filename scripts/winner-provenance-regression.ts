@@ -114,11 +114,18 @@ const legacyLead = structuredClone(events);
 const leadRow = provenance(legacyLead, "swarm-123456-abcd-room");
 assert.equal(leadRow.openings.length, 1, "legacy verifier-policy text is excluded from alignment");
 assert.equal(leadRow.eligible_main, true, "worker text filtering must not alter the preregistered population denominator");
+for (const [key, by] of [["resource/benchmarks", "b"], ["item/work", "b"], ["claim/other", "b"], ["take/check", "b"], ["evidence/check", "launcher"], ["draft/seed", "system"]]) {
+  const coordination = structuredClone(events);
+  coordination.splice(revisionIndex, 0, board(key!, "Choose B on this task.", by),
+    { type: "call_completion", participant: "a", tool: "board_get", key, outcome: "success", ts: at(4) } as any);
+  const revision = provenance(coordination, "fixture").revisions.find(x => x.stream === "claim/work")! as any;
+  assert.equal(revision.trigger, "unknown", `${by}:${key} is coordination or non-peer content, not a known trigger channel`);
+}
 const explicit = structuredClone(events).filter(x => x.type !== "attention");
 const pivotAt = explicit.findIndex((x: any) => x.type === "board" && x.entry?.text.includes("Implement B"));
 explicit.splice(pivotAt, 0, { type: "delivery_receipt", participant: "a", seat: "a", via: "wait", boundary: "hub_handoff", seq_ranges: [[2, 2]], count: 1, ts: at(3) } as any);
 const explicitRevision = provenance(explicit, "fixture").revisions.find(x => x.stream === "claim/work")! as any;
-assert.equal(explicitRevision.trigger, "known", "an explicit receipt before the revision establishes a temporal trigger candidate");
+assert.equal(explicitRevision.trigger, "known_message", "an explicit receipt before the revision establishes a message exposure candidate");
 assert.equal(explicitRevision.receipt_basis, "explicit");
 assert.equal(explicitRevision.peer_deliveries[0]?.seq, 2);
 assert.equal(explicitRevision.peer_deliveries[0]?.via, "wait");
@@ -135,4 +142,6 @@ const chatRevision = provenance(chatOnly, "fixture").revisions.find(x => x.strea
 assert.equal(chatRevision.peer_proposals.length, 0);
 assert.equal(chatRevision.peer_deliveries.length, 1, "ordinary peer chat is a possible temporal trigger too");
 assert.equal(chatRevision.context, "peer_only_logged");
+assert.equal((readRevision as any).trigger, "known_board", "an explicit peer draft read is a separate board channel");
+assert.equal((readRevision as any).trigger_board_reads.length, 1);
 console.log("winner-provenance-regression: OK");

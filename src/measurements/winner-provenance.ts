@@ -16,8 +16,9 @@ interface Revision {
   similarity: number | null; framing_change: "candidate" | "unaligned_candidate" | "aligned_revision";
   peer_proposals: { event: number; seq: number; author: string }[];
   peer_deliveries: { event: number; seq: number; author: string; receipt_event: number; via: string; ts: string | null }[];
-  trigger: "known" | "unknown";
+  trigger: "known_message" | "known_board" | "unknown";
   trigger_note: string;
+  trigger_board_reads: { event: number; key: string; author: string }[];
   receipt_basis: "explicit" | "legacy_attention" | "missing";
   peer_board_reads: { event: number; key: string; author: string }[];
   evidence_candidates: { event: number; key: string; text: string; author: string }[];
@@ -122,6 +123,7 @@ function revisionContext(events: Event[], previous: Document, current: Document,
   const board = new Map<string, { text: string; by: string; event: number }>();
   let receipt = false, lastWake: Revision["last_wake"] = null;
   const explicitLog = events.some(e => e.type === "delivery_receipt");
+  const peerAuthors = new Set(events.filter(e => e.type === "join" && e.p?.id !== pid && e.p?.agent !== "human" && !["launcher", "system"].includes(e.p?.name)).map(e => e.p?.name));
   for (let i = 0; i < current.event; i++) {
     const e = events[i]!;
     if (e.type === "message" && e.msg) messages.set(e.msg.seq, { event: i, msg: e.msg });
@@ -166,10 +168,11 @@ function revisionContext(events: Event[], previous: Document, current: Document,
   const peer = !!peerDeliveries.length || !!peers.length || reads.some(r => /^(draft|position|decision|design|hypothesis|plan)\//.test(r.key));
   const context: Revision["context"] = !receipt ? "unknown_exposure" : peer && evidence.length ? "both_logged"
     : peer ? "peer_only_logged" : evidence.length ? "evidence_only_logged" : "neither_logged";
-  const triggerKnown = !!peerDeliveries.length || !!reads.length;
+  const triggerBoardReads = reads.filter(r => peerAuthors.has(r.author) && /^(draft|position|decision|design|hypothesis|plan|evidence|result|findings|verify|review)\//.test(r.key));
   return { peer_proposals: peers, peer_deliveries: peerDeliveries,
-    trigger: triggerKnown ? "known" as const : "unknown" as const,
-    trigger_note: triggerKnown ? "trigger known: earlier explicit exposure; causality unproven" : "unknown: no earlier explicit peer-body or board-read receipt in this revision interval",
+    trigger: peerDeliveries.length ? "known_message" as const : triggerBoardReads.length ? "known_board" as const : "unknown" as const,
+    trigger_note: peerDeliveries.length || triggerBoardReads.length ? "trigger channel known: earlier explicit exposure; causality unproven" : "unknown: no earlier explicit peer-body or peer content-board read in this revision interval",
+    trigger_board_reads: triggerBoardReads,
     receipt_basis: receipt ? explicitLog ? "explicit" as const : "legacy_attention" as const : "missing" as const,
     peer_board_reads: reads, evidence_candidates: evidence,
     evidence_board_reads: reads.filter(r => /^(evidence|result|findings|verify|review)\//.test(r.key)),

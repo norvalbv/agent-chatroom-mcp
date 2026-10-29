@@ -1,0 +1,105 @@
+{
+ "_meta": "claude-opus-5-5-2 hand labels v3 (key set v3: every worker key except work/evidence/admin, after attack/result/width-and-collapse), decision/width-rule (workers only), decision/label-cohort rooms 1-20. Label = the competing answer a statement holds; complementary subtasks, items and parallel search candidates (explorer candidates/*) share the room's label (door rubric). Indices are framing-width.ts extract() order with default options. Ambiguous: ne8o #4 (salvage prior drafts vs write fresh). 5zui relabelled after the attack: fable-1-dissent and draft/fable-1 = B (page-converts is a selection effect; Show HN alone is a lottery), the merged draft/conclusion, opus-2 and fable-3 drafts and the proposal = M (A's plan with B's diagnosis). Exposed before labelling: mugk.",
+ "swarm-150725-3vny-room": {
+  "*": "A"
+ },
+ "swarm-003938-i47r-whiskas": {
+  "*": "A",
+  "5": "B",
+  "6": "C",
+  "7": "B",
+  "8": "E",
+  "14": "F",
+  "15": "F"
+ },
+ "swarm-211613-dpl4-room": {
+  "*": "A"
+ },
+ "swarm-191130-twok-room": {
+  "*": "A"
+ },
+ "swarm-170811-k1pq-room": {
+  "*": "A"
+ },
+ "swarm-181650-0vn3-room": {
+  "*": "A"
+ },
+ "swarm-163100-mugk-room": {
+  "*": "A"
+ },
+ "swarm-130459-mrw4-explorer": {
+  "*": "A",
+  "16": "B"
+ },
+ "swarm-113947-ne8o-room": {
+  "*": "A",
+  "4": "B"
+ },
+ "swarm-100622-6jdx-room": {
+  "*": "A"
+ },
+ "swarm-105804-4ssq-room": {
+  "*": "A"
+ },
+ "swarm-223815-5zui-room": {
+  "*": "A",
+  "5": "B",
+  "12": "B",
+  "6": "M",
+  "9": "M",
+  "11": "M",
+  "13": "M",
+  "8": "M",
+  "10": "M",
+  "14": "M",
+  "15": "M",
+  "16": "M",
+  "17": "M",
+  "18": "M",
+  "19": "M",
+  "20": "M",
+  "21": "M",
+  "22": "M",
+  "23": "M",
+  "24": "M",
+  "25": "M",
+  "26": "M",
+  "27": "M",
+  "28": "M",
+  "29": "M",
+  "30": "M",
+  "31": "M",
+  "32": "M",
+  "33": "M",
+  "34": "M",
+  "35": "M",
+  "36": "M",
+  "37": "M",
+  "38": "M",
+  "39": "M"
+ },
+ "swarm-130459-mrw4-soccer": {
+  "*": "A"
+ },
+ "swarm-174537-07hw-room": {
+  "*": "A"
+ },
+ "swarm-234901-pmyh-room": {
+  "*": "A"
+ },
+ "swarm-133013-64sr-room": {
+  "*": "A"
+ },
+ "swarm-102347-phin-room": {
+  "*": "A"
+ },
+ "swarm-011152-pen5-room": {
+  "*": "A"
+ },
+ "swarm-204607-mrkt-room": {
+  "*": "A"
+ },
+ "swarm-140213-25wq-room": {
+  "*": "A"
+ }
+}

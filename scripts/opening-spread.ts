@@ -28,6 +28,9 @@ export interface Spread {
   room: string; created: string; concluded: boolean; targets: TargetSource;
   seats: number; mix: string; mean_cos: number; min_cos: number; eff_rank: number; eff_rank_frac: number;
   framings: number | null; one_framing: boolean | null;
+  /** Mean cosine over pairs written by the same provider and by different ones: in a mixed room a gap between them is
+   * provider style, not framing, unless hand labels say otherwise. Null when the room has no such pair. */
+  same_provider_cos: number | null; cross_provider_cos: number | null;
 }
 
 /** e195b571 "launcher: each flat seat opens on a distinct item of the brief's numbered list". */
@@ -112,24 +115,32 @@ const r3 = (x: number) => Math.round(x * 1000) / 1000;
 export function spreadOf(r: RoomOpenings, vecs: number[][], cut?: number): Spread {
   const n = vecs.length;
   const cos = vecs.map((a) => vecs.map((b) => cosine(a, b)));
-  const pairs: number[] = [];
-  for (let i = 0; i < n; i++) for (let j = i + 1; j < n; j++) pairs.push(cos[i]![j]!);
+  const pairs: number[] = [], same: number[] = [], cross: number[] = [];
+  for (let i = 0; i < n; i++) for (let j = i + 1; j < n; j++) {
+    pairs.push(cos[i]![j]!);
+    (r.openings[i]?.agent === r.openings[j]?.agent ? same : cross).push(cos[i]![j]!);
+  }
+  const mean = (xs: number[]) => (xs.length ? r3(xs.reduce((s, x) => s + x, 0) / xs.length) : null);
   const er = effectiveRank(cos);
   const framings = cut === undefined ? null : framingsAt(cos, cut);
   return {
     room: r.room, created: r.created, concluded: r.concluded, targets: r.targets, seats: n, mix: mixOf(r.openings.map((o) => o.agent)),
     mean_cos: r3(pairs.reduce((s, x) => s + x, 0) / (pairs.length || 1)), min_cos: r3(Math.min(...pairs)),
     eff_rank: r3(er), eff_rank_frac: r3(er / (n || 1)), framings, one_framing: framings === null ? null : framings === 1,
+    same_provider_cos: mean(same), cross_provider_cos: mean(cross),
   };
 }
 
-export interface Label { room: string; a: string; b: string; label: "same" | "different" | "mixed" | "unknown" }
+export interface Label { room: string; a: string; b: string; label: "same" | "different" | "competing" | "complementary" | "mixed" | "unknown" }
+/** Not one framing: rival answers to the same question (competing) or different sub-areas (complementary). Text
+ * similarity cannot tell those two apart, so the cut is fitted on same against either. */
+const DIFFERENT = new Set(["different", "competing", "complementary"]);
 
-/** Fit the cut on labelled pairs: same=1, different=0; mixed and unknown are left out. Youden's J picks the threshold;
+/** Fit the cut on labelled pairs: same=1, different/competing/complementary=0; mixed and unknown are left out. Youden's J picks the threshold;
  * AUROC is the chance a random same pair scores above a random different one (ties half). */
 export function fitCut(scored: { cos: number; label: Label["label"] }[]) {
-  const xs = scored.filter((s) => s.label === "same" || s.label === "different");
-  const pos = xs.filter((s) => s.label === "same").map((s) => s.cos), neg = xs.filter((s) => s.label === "different").map((s) => s.cos);
+  const xs = scored.filter((s) => s.label === "same" || DIFFERENT.has(s.label));
+  const pos = xs.filter((s) => s.label === "same").map((s) => s.cos), neg = xs.filter((s) => DIFFERENT.has(s.label)).map((s) => s.cos);
   let auc = 0;
   for (const p of pos) for (const q of neg) auc += p > q ? 1 : p === q ? 0.5 : 0;
   auc = pos.length && neg.length ? auc / (pos.length * neg.length) : NaN;
@@ -169,6 +180,7 @@ export function summarise(rows: Spread[]) {
     group, n: rs.length, median_mean_cos: r3(median(rs.map((r) => r.mean_cos))), median_eff_rank_frac: r3(median(rs.map((r) => r.eff_rank_frac))),
     median_framings_frac: rs[0]!.framings === null ? null : r3(median(rs.map((r) => r.framings! / r.seats))),
     one_framing: rs[0]!.framings === null ? null : rs.filter((r) => r.one_framing).length,
+    median_same_minus_cross: (() => { const g = rs.filter((r) => r.same_provider_cos !== null && r.cross_provider_cos !== null).map((r) => r.same_provider_cos! - r.cross_provider_cos!); return g.length ? r3(median(g)) : null; })(),
   }));
 }
 
@@ -210,7 +222,7 @@ async function main() {
   const summary = summarise(rows);
   if (args.includes("--json")) { console.log(JSON.stringify({ model, cut: cut ?? null, rooms: rows, summary }, null, 1)); return; }
   console.log(`opening-spread: ${rows.length} rooms with >= ${opt("--min-seats") ?? 3} sealed openings, model ${model}, cut ${cut ?? "none"}`);
-  for (const s of summary) console.log(`  ${s.group.padEnd(28)} n=${String(s.n).padStart(3)}  median mean cos ${s.median_mean_cos}  median eff rank/n ${s.median_eff_rank_frac}` + (s.one_framing === null ? "" : `  median framings/n ${s.median_framings_frac}  one framing ${s.one_framing}/${s.n}`));
+  for (const s of summary) console.log(`  ${s.group.padEnd(28)} n=${String(s.n).padStart(3)}  median mean cos ${s.median_mean_cos}  median eff rank/n ${s.median_eff_rank_frac}` + (s.one_framing === null ? "" : `  median framings/n ${s.median_framings_frac}  one framing ${s.one_framing}/${s.n}`) + (s.median_same_minus_cross === null ? "" : `  same-minus-cross-provider cos ${s.median_same_minus_cross}`));
 }
 
 if (process.argv[1] && /^opening-spread\.[cm]?[jt]s$/.test(basename(process.argv[1]))) main().catch((e) => { console.error(e); process.exit(1); });

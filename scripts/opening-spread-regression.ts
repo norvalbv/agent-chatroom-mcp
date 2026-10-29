@@ -48,11 +48,16 @@ assert.equal(framingsAt(cosOf(near), 0.999), 3);
 const s = spreadOf(r, near, 0.9);
 assert.equal(s.seats, 3); assert.equal(s.framings, 2); assert.equal(s.one_framing, false); assert.equal(s.mix, "mixed(claude+codex)");
 assert.equal(s.min_cos, 0);
+// seats p1 and p3 are claude, p2 codex: the one same-provider pair is (near[0], near[2]) at cosine 0
+assert.equal(s.same_provider_cos, 0, JSON.stringify(s));
+assert.ok(s.cross_provider_cos! > 0.49 && s.cross_provider_cos! < 0.5, `cross pairs (0.99, 0) average ~0.495: ${s.cross_provider_cos}`);
 assert.ok(s.eff_rank > 2.2 && s.eff_rank < 2.3, `singular values ~1.41, 1, 0.1 give 2.27: ${s.eff_rank}`);
 
 // the cut: separable labels give AUROC 1 and a cut at the lowest same pair; mixed/unknown are left out
 const fit = fitCut([{ cos: 0.9, label: "same" }, { cos: 0.85, label: "same" }, { cos: 0.6, label: "different" }, { cos: 0.7, label: "different" }, { cos: 0.95, label: "mixed" }, { cos: 0.1, label: "unknown" }]);
 assert.deepEqual([fit.n_same, fit.n_different, fit.auroc, fit.cut, fit.youden_j], [2, 2, 1, 0.85, 1], JSON.stringify(fit));
+const rubric = fitCut([{ cos: 0.9, label: "same" }, { cos: 0.5, label: "competing" }, { cos: 0.4, label: "complementary" }]);
+assert.deepEqual([rubric.n_same, rubric.n_different, rubric.auroc], [1, 2, 1], "competing and complementary are both not-same");
 const tied = fitCut([{ cos: 0.8, label: "same" }, { cos: 0.8, label: "different" }]);
 assert.equal(tied.auroc, 0.5, "a tie counts half");
 

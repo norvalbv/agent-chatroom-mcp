@@ -1,0 +1,322 @@
+{
+ "schema": "winner-provenance-pivots-manual-v1",
+ "cohort": "fixed20 decision/label-cohort",
+ "sample_rule": "sha256(room+NUL+author+NUL+stream+NUL+current.event+rsi-pivots-v1) ascending first15",
+ "packet_sha256": "14a85f6f3fcce058d14cfc62f537b53075e02ad6cc2ca91ab815099b6894ee6e",
+ "rule": "decision/pivot-audit",
+ "label_scope": "subquestion-level revision, not necessarily a new room-wide frame; descriptive author labels, not independently audited",
+ "rows": [
+  {
+   "ordinal": 1,
+   "room": "swarm-170811-k1pq-room",
+   "author": "opus-claude",
+   "stream": "claim/catchup-signal",
+   "previous_event": 231,
+   "current_event": 1239,
+   "label": "work_scope",
+   "reason": "Claim moves from task plan/test state to implementation or validation status.",
+   "context": "evidence_only_logged",
+   "exposure_coverage": "receipt_present",
+   "peer_proposals": [],
+   "evidence_candidate_events": [
+    280,
+    305,
+    347,
+    448,
+    498,
+    534,
+    615,
+    640,
+    673,
+    793,
+    816,
+    863,
+    913,
+    965,
+    997,
+    1016,
+    1072,
+    1114,
+    1126,
+    1201,
+    1212
+   ],
+   "evidence_read_events": []
+  },
+  {
+   "ordinal": 2,
+   "room": "swarm-191130-twok-room",
+   "author": "haiku-2",
+   "stream": "claim/arms-ahb-sentinel",
+   "previous_event": 180,
+   "current_event": 321,
+   "label": "work_scope",
+   "reason": "Claim moves from task plan/test state to implementation or validation status.",
+   "context": "evidence_only_logged",
+   "exposure_coverage": "receipt_present",
+   "peer_proposals": [],
+   "evidence_candidate_events": [
+    259
+   ],
+   "evidence_read_events": []
+  },
+  {
+   "ordinal": 3,
+   "room": "swarm-191130-twok-room",
+   "author": "5-6-sol-4",
+   "stream": "claim/confirmatory-offline-regression",
+   "previous_event": 856,
+   "current_event": 902,
+   "label": "work_scope",
+   "reason": "Claim moves from task plan/test state to implementation or validation status.",
+   "context": "evidence_only_logged",
+   "exposure_coverage": "receipt_present",
+   "peer_proposals": [],
+   "evidence_candidate_events": [
+    898
+   ],
+   "evidence_read_events": []
+  },
+  {
+   "ordinal": 4,
+   "room": "swarm-174537-07hw-room",
+   "author": "union-alpha-5",
+   "stream": "draft/ranked-list",
+   "previous_event": 242,
+   "current_event": 261,
+   "label": "framing_change",
+   "reason": "Specific hint diagnosis changes: hint presumed lost -> hint survives but JSON parsing and lift fail; drops the unrelated lastHint change.",
+   "context": "unknown_exposure",
+   "exposure_coverage": "missing",
+   "peer_proposals": [],
+   "evidence_candidate_events": [
+    247
+   ],
+   "evidence_read_events": []
+  },
+  {
+   "ordinal": 5,
+   "room": "swarm-204607-mrkt-room",
+   "author": "sonnet-3",
+   "stream": "proposal/prop_3fd2030b",
+   "previous_event": 586,
+   "current_event": 592,
+   "label": "elaboration",
+   "reason": "Same main approach; adds evidence/caveats/corrects numbers or wording.",
+   "context": "unknown_exposure",
+   "exposure_coverage": "missing",
+   "peer_proposals": [],
+   "evidence_candidate_events": [],
+   "evidence_read_events": []
+  },
+  {
+   "ordinal": 6,
+   "room": "swarm-130459-mrw4-explorer",
+   "author": "explorer-claude-1",
+   "stream": "proposal/prop_3d75f2a4",
+   "previous_event": 7907,
+   "current_event": 7915,
+   "label": "elaboration",
+   "reason": "Same main approach; adds evidence/caveats/corrects numbers or wording.",
+   "context": "unknown_exposure",
+   "exposure_coverage": "missing",
+   "peer_proposals": [],
+   "evidence_candidate_events": [],
+   "evidence_read_events": []
+  },
+  {
+   "ordinal": 7,
+   "room": "swarm-170811-k1pq-room",
+   "author": "opus-2",
+   "stream": "proposal/prop_249ceeff",
+   "previous_event": 1936,
+   "current_event": 2034,
+   "label": "elaboration",
+   "reason": "Same main approach; adds evidence/caveats/corrects numbers or wording.",
+   "context": "evidence_only_logged",
+   "exposure_coverage": "receipt_present",
+   "peer_proposals": [],
+   "evidence_candidate_events": [
+    1948,
+    1954,
+    2017
+   ],
+   "evidence_read_events": []
+  },
+  {
+   "ordinal": 8,
+   "room": "swarm-011152-pen5-room",
+   "author": "opus-2",
+   "stream": "proposal/prop_92720b61",
+   "previous_event": 1806,
+   "current_event": 2098,
+   "label": "elaboration",
+   "reason": "Same main approach; adds evidence/caveats/corrects numbers or wording.",
+   "context": "both_logged",
+   "exposure_coverage": "receipt_present",
+   "peer_proposals": [
+    {
+     "event": 2057,
+     "seq": 191,
+     "author": "opus-1"
+    },
+    {
+     "event": 2068,
+     "seq": 193,
+     "author": "opus-1"
+    }
+   ],
+   "evidence_candidate_events": [
+    1929,
+    1978,
+    2096
+   ],
+   "evidence_read_events": []
+  },
+  {
+   "ordinal": 9,
+   "room": "swarm-174537-07hw-room",
+   "author": "union-alpha-5",
+   "stream": "proposal/prop_aad0b9a0",
+   "previous_event": 300,
+   "current_event": 329,
+   "label": "elaboration",
+   "reason": "Same main approach; adds evidence/caveats/corrects numbers or wording.",
+   "context": "unknown_exposure",
+   "exposure_coverage": "missing",
+   "peer_proposals": [],
+   "evidence_candidate_events": [],
+   "evidence_read_events": []
+  },
+  {
+   "ordinal": 10,
+   "room": "swarm-105804-4ssq-room",
+   "author": "claude-opus-5-5-2",
+   "stream": "proposal/prop_0d0c7e83",
+   "previous_event": 542,
+   "current_event": 619,
+   "label": "elaboration",
+   "reason": "Same main approach; adds evidence/caveats/corrects numbers or wording.",
+   "context": "evidence_only_logged",
+   "exposure_coverage": "receipt_present",
+   "peer_proposals": [],
+   "evidence_candidate_events": [
+    570,
+    578,
+    584
+   ],
+   "evidence_read_events": []
+  },
+  {
+   "ordinal": 11,
+   "room": "swarm-130459-mrw4-soccer",
+   "author": "soccer-claude-1",
+   "stream": "proposal/prop_116de729",
+   "previous_event": 8880,
+   "current_event": 8943,
+   "label": "elaboration",
+   "reason": "Same main approach; adds evidence/caveats/corrects numbers or wording.",
+   "context": "neither_logged",
+   "exposure_coverage": "receipt_present",
+   "peer_proposals": [],
+   "evidence_candidate_events": [],
+   "evidence_read_events": []
+  },
+  {
+   "ordinal": 12,
+   "room": "swarm-234901-pmyh-room",
+   "author": "claude-opus-5-5-2",
+   "stream": "proposal/prop_db9e59ea",
+   "previous_event": 5909,
+   "current_event": 6326,
+   "label": "elaboration",
+   "reason": "Same main approach; adds evidence/caveats/corrects numbers or wording.",
+   "context": "peer_only_logged",
+   "exposure_coverage": "receipt_present",
+   "peer_proposals": [
+    {
+     "event": 5757,
+     "seq": 419,
+     "author": "recruit-Q6"
+    },
+    {
+     "event": 5775,
+     "seq": 421,
+     "author": "recruit-Q8"
+    },
+    {
+     "event": 5798,
+     "seq": 425,
+     "author": "recruit-Q8"
+    },
+    {
+     "event": 6076,
+     "seq": 445,
+     "author": "claude-opus-5-5-4"
+    },
+    {
+     "event": 6100,
+     "seq": 446,
+     "author": "claude-opus-5-5-4"
+    },
+    {
+     "event": 6123,
+     "seq": 448,
+     "author": "claude-opus-5-5-4"
+    },
+    {
+     "event": 6207,
+     "seq": 455,
+     "author": "verifier"
+    }
+   ],
+   "evidence_candidate_events": [],
+   "evidence_read_events": []
+  },
+  {
+   "ordinal": 13,
+   "room": "swarm-234901-pmyh-room",
+   "author": "recruit-Q8",
+   "stream": "proposal/prop_db9e59ea",
+   "previous_event": 5774,
+   "current_event": 5797,
+   "label": "elaboration",
+   "reason": "Same main approach; adds evidence/caveats/corrects numbers or wording.",
+   "context": "unknown_exposure",
+   "exposure_coverage": "missing",
+   "peer_proposals": [],
+   "evidence_candidate_events": [],
+   "evidence_read_events": []
+  },
+  {
+   "ordinal": 14,
+   "room": "swarm-130459-mrw4-soccer",
+   "author": "soccer-claude-1",
+   "stream": "proposal/prop_116de729",
+   "previous_event": 8803,
+   "current_event": 8806,
+   "label": "elaboration",
+   "reason": "Same main approach; adds evidence/caveats/corrects numbers or wording.",
+   "context": "unknown_exposure",
+   "exposure_coverage": "missing",
+   "peer_proposals": [],
+   "evidence_candidate_events": [],
+   "evidence_read_events": []
+  },
+  {
+   "ordinal": 15,
+   "room": "swarm-223815-5zui-room",
+   "author": "fable-1",
+   "stream": "proposal/prop_a59035a6",
+   "previous_event": 643,
+   "current_event": 665,
+   "label": "elaboration",
+   "reason": "Same main approach; adds evidence/caveats/corrects numbers or wording.",
+   "context": "unknown_exposure",
+   "exposure_coverage": "missing",
+   "peer_proposals": [],
+   "evidence_candidate_events": [],
+   "evidence_read_events": []
+  }
+ ]
+}

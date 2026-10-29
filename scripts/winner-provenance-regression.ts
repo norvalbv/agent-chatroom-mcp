@@ -109,4 +109,9 @@ const replacedOpening = [...events.slice(0, 3), { type: "opening", pid: "a", con
 const replaced = provenance(replacedOpening, "fixture");
 assert.equal(replaced.openings.length, 2, "reveal holds the last opening per participant, not each submitted version");
 assert.equal(replaced.openings.some(x => x.text === "Retracted frame."), false);
+const legacyLead = structuredClone(events);
+((legacyLead.find((x: any) => x.type === "join" && x.p.id === "b") as any).p).name = "verifier";
+const leadRow = provenance(legacyLead, "swarm-123456-abcd-room");
+assert.equal(leadRow.openings.length, 1, "legacy verifier-policy text is excluded from alignment");
+assert.equal(leadRow.eligible_main, true, "worker text filtering must not alter the preregistered population denominator");
 console.log("winner-provenance-regression: OK");

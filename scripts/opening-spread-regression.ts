@@ -25,6 +25,12 @@ assert.deepEqual(r.openings.map((o) => [o.pid, o.text]), [["p1", "seat one, fina
 assert.equal(r.concluded, true);
 assert.equal(r.targets, "numbered", "a flat swarm room after e195b571 with a numbered brief");
 assert.equal(openingsOf(events, "swarm-101010-abcd-room", true).openings.length, 4, "--all-roles adds the verifier, never the human");
+// older logs set no role: a seat named "verifier", or the room's named chair, is still not a worker
+const legacy = [{ type: "room", room: "l", createdAt: "2026-09-18T10:00:00Z", opts: { topic: "t", chair: "chair-claude" } },
+  { type: "join", p: { id: "q1", name: "w1", agent: "claude" } }, { type: "join", p: { id: "q2", name: "verifier", agent: "claude" } },
+  { type: "join", p: { id: "q3", name: "chair-claude", agent: "claude" } }, { type: "join", p: { id: "q4", name: "artifact-verifier-2", agent: "codex" } },
+  open("q1", "a"), open("q2", "b"), open("q3", "c"), open("q4", "d"), { type: "openings_revealed" }];
+assert.deepEqual(openingsOf(legacy, "swarm-095400-1swa-leads").openings.map((o) => o.pid), ["q1", "q4"], "a worker merely named for verifying stays");
 const before = [...base("swarm-101010-abcd-room", "2026-10-01T10:00:00Z", "1. a.\n2. b.\n"), open("p1", "x"), { type: "openings_revealed" }];
 assert.equal(openingsOf(before, "swarm-101010-abcd-room").targets, "none", "before seat targets existed");
 const group = [...base("swarm-101010-abcd-leads", "2026-10-20T10:00:00Z", "1. a.\n2. b.\n"), open("p1", "x"), { type: "openings_revealed" }];

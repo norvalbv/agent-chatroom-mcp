@@ -42,9 +42,9 @@ const SKIP_ROLES = new Set(["verifier", "chair"]);
 export function openingsOf(events: Ev[], room = String(events[0]?.room ?? ""), allRoles = false): RoomOpenings {
   const joins = new Map<string, Ev>();
   const sealed = new Map<string, string>();
-  let revealed = false, itemBefore = false, concluded = false, created = "", topic = "";
+  let revealed = false, itemBefore = false, concluded = false, created = "", topic = "", chair = "";
   for (const e of events) {
-    if (e.type === "room") { created ||= String(e.createdAt ?? e.ts ?? ""); topic ||= String(e.opts?.topic ?? e.topic ?? ""); }
+    if (e.type === "room") { created ||= String(e.createdAt ?? e.ts ?? ""); topic ||= String(e.opts?.topic ?? e.topic ?? ""); chair ||= String(e.opts?.chair ?? ""); }
     if (e.type === "join" && e.p?.id) joins.set(e.p.id, e.p);
     if (e.type === "opening" && !revealed && e.pid) sealed.set(e.pid, String(e.content ?? ""));
     if (e.type === "openings_revealed") revealed = true;
@@ -54,9 +54,11 @@ export function openingsOf(events: Ev[], room = String(events[0]?.room ?? ""), a
   created ||= String(events.find((e) => e.ts)?.ts ?? "");
   const openings = [...sealed].flatMap(([pid, text]) => {
     const p = joins.get(pid) ?? {};
-    const role = String(p.role ?? "worker"), agent = String(p.agent ?? "unknown");
+    // older logs set no role: the verifier is the seat named "verifier" and the chair the room's named chair
+    const name = String(p.name ?? pid);
+    const role = String(p.role ?? (name === "verifier" ? "verifier" : chair && name === chair ? "chair" : "worker")), agent = String(p.agent ?? "unknown");
     if (!text.trim() || agent === "human" || (!allRoles && SKIP_ROLES.has(role))) return [];
-    return [{ pid, name: String(p.name ?? pid), agent, role, text }];
+    return [{ pid, name, agent, role, text }];
   });
   const swarm = /^swarm-\d{6}-[a-z0-9]{4}-/.test(room);
   const flat = /^swarm-\d{6}-[a-z0-9]{4}-room$/.test(room);

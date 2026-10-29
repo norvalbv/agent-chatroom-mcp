@@ -38,12 +38,19 @@ const norm = (s: string) => s.toLowerCase().replace(/\s+/g, " ").replace(/[\s.;,
 const STOP = new Set(["a", "an", "the", "of", "to", "and", "or", "in", "on", "for", "is", "it", "that", "with", "by", "be", "not", "than"]);
 const PROBABILITY_ANNOTATION = /(?:\(\s*|\[\s*)?\bp\s*=\s*(?:\d+(?:\.\d+)?|\.\d+)%?\s*[\])]?/gi;
 const LEADING_SEPARATORS = /^[\s:;,—-]+/;
-const IDEA_END = /[;:—]|\bcheck\b/i;
+const CHECK_START = /\bcheck\b/i;
+const IDEA_SEPARATOR = /[;:—]/;
+const LETTER_WORDS = /[a-z]+/g;
+const PROBABILITY_LABELS = new Set(["p", "prob", "probability", "confidence", "likelihood"]);
 
 /** Probability annotations stay in the entry, not its address. Strip them before splitting the idea from its check:
  * RSI-7's nine "p=.30: idea; check" alternatives otherwise stopped at the first colon and became idea/p-30. */
 function slugSource(text: string): string {
-  return text.replace(PROBABILITY_ANNOTATION, "").replace(LEADING_SEPARATORS, "").split(IDEA_END)[0].trim();
+  const beforeCheck = text.replace(PROBABILITY_ANNOTATION, "").replace(LEADING_SEPARATORS, "").split(CHECK_START)[0];
+  // Do not let another probability spelling ("30%:", "p≈.3:", "prob .1:") become the whole key.
+  // A genuine numeric idea ("3 seats") still contains a content word; the check is never used as its title.
+  return beforeCheck.split(IDEA_SEPARATOR).map((head) => head.trim())
+    .find((head) => (head.toLowerCase().match(LETTER_WORDS) ?? []).some((word) => !PROBABILITY_LABELS.has(word))) ?? "";
 }
 
 /** A short key slug from the alternative's opening words: the idea before its "check:" clause. */

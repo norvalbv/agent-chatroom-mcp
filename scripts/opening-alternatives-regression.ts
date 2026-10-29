@@ -86,6 +86,16 @@ try {
   assert.equal(slugOf("Launch targets (p=.30); check: oracle"), "launch-targets");
   assert.equal(slugOf("p=0.30: ; check: oracle"), "alternative", "metadata-only input uses the existing fallback");
   assert.equal(slugOf("P-value calibration; check: oracle"), "p-value-calibration", "a content word beginning with P is untouched");
+  // Independent verifier's probability spellings, and meaningful numeric/short-word ideas.
+  for (const [text, expected] of [
+    ["p≈0.3: rival framings in brief; check screen", "rival-framings-brief"],
+    ["30%: provider mixing at launch; check pairs", "provider-mixing-at-launch"],
+    ["0.05: seat guard on --always", "seat-guard-always"],
+    ["prob 0.1: nothing to build", "nothing-build"],
+    ["3 seats at launch; check pairs", "3-seats-at-launch"],
+    ["AI: rival framing; check pairs", "ai"],
+    ["30%; check: do not turn the check into an idea", "alternative"],
+  ]) assert.equal(slugOf(text), expected, `metadata-only heads are skipped, content is kept: ${text}`);
 
   const room = "opening-alts";
   const a = await seat("a"); const b = await seat("b"); const c = await seat("c");

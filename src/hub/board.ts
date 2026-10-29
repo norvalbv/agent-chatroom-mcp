@@ -246,7 +246,7 @@ export function setBoard(hub: Hub, roomName: string, pid: string, key: string, t
   if (key.startsWith("hold/")) {
     if (key !== `hold/${room.name}`) throw new HubError(`A hold for this room is the key "hold/${room.name}".`, undefined, "key-format");
     // a hold whose author has left the room is abandoned (Hub.hold): anyone may clear or replace it
-    if (previous && previous.by !== p.name && hub.holdAuthorPresent(room, previous)) throw new HubError(`The hold was placed by ${previous.by}; only they (or a human) can clear or change it.`, undefined, "ownership");
+    if (previous && previous.by !== p.name && p.agent !== "human" && hub.holdAuthorPresent(room, previous)) throw new HubError(`The hold was placed by ${previous.by}; only they (or a human) can clear or change it.`, undefined, "ownership");
   }
   // author-only, and refused without echoing the text: an ownership error that returned the entry would unseal it
   if (key.startsWith("draft/") && previous && previous.by !== p.name) throw new HubError(`"${key}" is ${previous.by}'s draft; draft/* entries are author-only. Write your own, e.g. draft/${p.name}.`, undefined, "ownership");

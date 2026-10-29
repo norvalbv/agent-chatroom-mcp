@@ -6,12 +6,12 @@
     "src/hub.ts": 3805,
     "src/hub/board.ts": 751,
     "src/hub/types.ts": 694,
-    "src/index.ts": 758,
+    "src/index.ts": 744,
     "src/run-timeline.ts": 519,
     "src/seat.ts": 719,
     "src/server.ts": 1042,
     "src/spawner.ts": 613,
     "src/swarm.ts": 923,
-    "src/ui.ts": 615
+    "src/ui.ts": 575
   }
 }

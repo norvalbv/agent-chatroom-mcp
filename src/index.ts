@@ -26,6 +26,7 @@ import { fileURLToPath } from "node:url";
 import { existsSync, readFileSync, realpathSync } from "node:fs";
 import { gitShaAuthor, parseRoomLog, renderMetrics, roomRepos, runMetrics } from "./run-metrics.js";
 import { renderTimeline, runTimeline } from "./run-timeline.js";
+import { registerAdminRoutes, sameOriginWrites } from "./launch/admin-routes.js";
 import { createMcpExpressApp } from "@modelcontextprotocol/sdk/server/express.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import express from "express";
@@ -33,7 +34,7 @@ import { Hub, HubError, type OwnerVerdict } from "./hub.js";
 import { STOPPED_BY, type StoppedBy } from "./respawn.js";
 import { parseReplyWindowMinutes } from "./reply-metrics.js";
 import { createSessionServer } from "./server.js";
-import { Spawner, type RecruitPolicy } from "./spawner.js";
+import { Spawner } from "./spawner.js";
 import { attachJobWake } from "./spawner/wake.js";
 import { UI_HTML } from "./ui.js";
 import { humanQuestions } from "./questions.js";
@@ -208,6 +209,7 @@ const app = createMcpExpressApp({ host: HOST }); // already parses JSON bodies (
 // the /mcp tool calls); read and reset by the health sample below
 let httpRequests = 0;
 app.use((_req, _res, next) => { httpRequests++; next(); });
+app.use(sameOriginWrites); // a write from another web page is refused (CHATROOM_INSECURE_LOCAL let a body-less POST through)
 /** The checkout and commit this process was started from; GET / reports it so a launcher can tell a stale hub. */
 const BUILD = (() => { const root = realpathSync(resolve(dirname(fileURLToPath(import.meta.url)), "..")); const st = Hub.codeState(root); return st ? { root, head: st.head } : null; })();
 // opt-in, for a hub a launcher started for one run: exit once no request has arrived or been in flight for this long.
@@ -357,7 +359,7 @@ const seatCallerAnnounced = new Map<string, number>();
  * the usage export, dev runs) are never resolved or announced: on integration every seat's 1 s /otlp/v1/logs export was
  * announced as a refused forgery when this was a deny-list (-3's composed dev room swarm-085449-i9fk). A new human route
  * must be added here, or it is open to loopback callers as it was before this check. */
-const HUMAN_ROUTES = /^\/rooms\/(archive-dead|[^/]+\/(messages|vote|kick|replace|create|deadline|resources|run-end|verdict|close|archive|attachments|chair))$/;
+const HUMAN_ROUTES = /^\/(runs(\/[^/]+\/stop)?|rooms\/(archive-dead|[^/]+\/(messages|vote|kick|replace|create|deadline|resources|run-end|verdict|close|archive|attachments|chair|recruit|hold)))$/;
 // Resolved before the routes, asynchronously, so requireToken stays a plain check and a lookup never blocks other rooms.
 // A request that carries the human token is looked up too: the hub's environment is readable by any process of the
 // same user, so a seat can read the token (`ps eww -p <hub pid>`) and, unchecked, post as "[human route: token]"
@@ -429,24 +431,8 @@ app.get("/", (_req, res) => res.json({ name: "agent-chatroom-mcp", mcp: "/mcp", 
 app.get("/ui", (_req, res) => res.type("html").send(UI_HTML));
 registerPhotoRoutes(app, { directory: photoDirectory(`${DATA_DIR ?? process.cwd()}@${HOST}:${PORT}`), authorize: requireToken, roomExists: (room) => hub.rooms.has(room) });
 app.get("/config", (_req, res) => res.json({ human_token_required: !(INSECURE_LOCAL && LOOPBACK_HOST), agent_control_token_required: true }));
-// Recruit policy: which provider/model every request_agent launches as. Readable by anyone, settable by the human (token if configured).
-app.get("/policy", (_req, res) => res.json({ recruits: spawner.policy }));
-app.post("/policy", (req, res) => {
-  if (!requireAgentControl(req, res)) return;
-  const b = (req.body ?? {}) as { agent?: string | null; model?: string | null };
-  const agent = b.agent === null || b.agent === "any" || b.agent === "" ? undefined : b.agent;
-  if (agent && !["claude", "codex", "openrouter"].includes(agent)) {
-    res.status(400).type("text/plain").send("agent must be claude, codex, openrouter or any");
-    return;
-  }
-  spawner.policy = { agent: agent as RecruitPolicy["agent"], model: b.model === null || b.model === "any" || b.model === "" ? undefined : b.model ?? undefined };
-  res.json({ recruits: spawner.policy });
-});
-app.get("/agents", (_req, res) => res.json(spawner.agents.map((a) => ({ ...a, brief: a.brief.slice(0, 300) }))));
-app.post("/agents/:name/stop", (req, res) => {
-  if (!requireAgentControl(req, res)) return;
-  res.json({ stopped: spawner.stop(req.params.name) });
-});
+// start/stop runs, add a seat, hold a decision, the recruit policy and hub-spawned agents (src/launch/admin-routes.ts)
+registerAdminRoutes(app, { hub, spawner, port: PORT, runDir: resolve(process.env.CHATROOM_UI_RUNS_DIR ?? "logs/ui-runs"), defaultCwd: resolve(process.env.CHATROOM_DEFAULT_CWD ?? process.cwd()), requireToken, requireAgentControl: (req, res) => !refuseSeatCaller(req, res) && requireAgentControl(req, res) });
 // Asks addressed to the human that no human has answered, newest first (src/questions.ts). names= adds the dashboard's name.
 app.get("/questions", (req, res) => {
   const names = String(req.query.names ?? "").split(",").map((n) => n.trim()).filter(Boolean).slice(0, 20);

@@ -60,6 +60,7 @@ export interface SpawnRequest {
   fresh?: boolean;
   /** run in this detached snapshot (planSnapshot) instead of `cwd`: made at spawn, removed when the recruit exits */
   snapshot?: Snapshot;
+  owner?: boolean; // the owner picked agent/model on the dashboard (src/launch/admin-routes.ts): the recruit pin binds agents, not them
 }
 
 export interface SpawnedAgent {
@@ -229,11 +230,10 @@ export class Spawner {
     if (cumRun + count > maxCumRun) refuse(`this run has used its ${maxCumRun} cumulative recruits.`);
     if (!req.newRoom && this.live(req.room).length + count > maxPerRoom) refuse(`${req.room} already has ${maxPerRoom} recruits live; spawn into a new room instead (new_room).`);
 
-    let agent = req.agent ?? this.policy.agent ?? "claude";
-    // the hub's recruit policy wins over the request: provider and model both (a run on a free model with no other quota)
+    let agent = req.agent ?? this.policy.agent ?? "claude"; // the hub's recruit policy wins over an agent's request, provider and model both (a run on a free model with no other quota)
     const wanted = `${req.agent ?? "(default)"}${req.model ? `/${req.model}` : ""}`;
-    if (this.policy.agent && agent !== this.policy.agent) agent = this.policy.agent;
-    if (this.policy.model && req.model !== this.policy.model) req = { ...req, model: this.policy.model };
+    if (this.policy.agent && agent !== this.policy.agent && !(req.owner && req.agent)) agent = this.policy.agent;
+    if (this.policy.model && req.model !== this.policy.model && !(req.owner && req.model)) req = { ...req, model: this.policy.model };
     if (!req.model && this.policy.agent === agent && this.policy.model) req = { ...req, model: this.policy.model };
     const launched = `${agent}${req.model ? `/${req.model}` : ""}`;
     const policyOverride = (req.agent && req.agent !== agent) || (this.policy.model && (req.agent ?? "") && wanted !== launched && wanted !== `(default)`);

@@ -80,6 +80,8 @@ export type Event =
   | { type: "seat_reconnected"; room: string; seat: string; away_s: number; ts: string }
   /** Telemetry only: the owner's verdict on the room's conclusion (proposal_id null: the room had none). The latest stands. */
   | { type: "owner_verdict"; room: string; verdict: "adopted" | "rejected" | "partial"; by: string; proposal_id: string | null; note?: string; ts: string }
+  // what the owner did from the dashboard (src/launch/admin-routes.ts): a recruit, or a hold placed or released
+  | { type: "owner_action"; room: string; action: "recruit" | "hold" | "release"; by: string; spawned?: string[]; agent?: string; model?: string | null; picked?: string | null; can_edit?: boolean; ts: string }
   /** Telemetry only: the run that owns this room ended, as its launcher saw it. One per room: the first stands. */
   | { type: "run_end"; room: string; cause: import("../respawn.js").RunEndCause; detail?: string; ts: string }
   /** Telemetry only: one per recruit the hub accepted, with the settings it is started with and where each came from

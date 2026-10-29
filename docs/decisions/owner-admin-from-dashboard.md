@@ -1,0 +1,20 @@
+---
+slug: owner-admin-from-dashboard
+created: 2026-10-29
+---
+
+# owner-admin-from-dashboard
+
+## Target · 2026-10-29 — The owner starts runs, adds seats and holds decisions from /ui
+
+**Context:** From the dashboard the owner could post, vote, kick, replace, close and archive, but not start a room with seats or add a recruit. Both needed a terminal: the launcher, or a seat's request_agent. No HTTP route recruited except /replace. Under CHATROOM_INSECURE_LOCAL a body-less POST from any web page (/rooms/:room/close, /rooms/archive-dead) reached the hub, because a text/plain form post needs no preflight.
+**Ruling:** src/launch/admin-routes.ts adds POST /runs, which starts dist/swarm.js detached with one flat room on this hub (`--flat --agents --models --verifier-model --timeout --port --cwd`, plus `--full-access` / `--require-verification` when asked) and without the human token in its environment. It also adds GET /runs (run id read from the launcher log, its rooms, whether it is still running; kept in logs/ui-runs/runs.json), POST /runs/:id/stop (SIGTERM, only for runs this hub started), POST /rooms/:room/recruit (request_agent's spawn, with the owner as requester), GET /rooms/:room/recruitment, and POST /rooms/:room/hold (hold/<room> written as the human). /policy and /agents moved there from index.ts. Runs and recruits need the human token even on loopback (requireAgentControl) and refuse a seat's process tree; hold needs requireToken. A model the owner picks overrides the recruit pin (SpawnRequest.owner); with no pick, the pin applies as before. A human may clear a seat's hold, as the refusal text already said. sameOriginWrites refuses any write whose Origin is another site. Telemetry: an owner_action event (recruit, hold, release) in the room log beside the prose announce. UI: src/ui/admin.ts, after Grok Bot's new-chat sheet and members panel (REA 6.4.0 on Grok Bot 0.75.8). It adds a New room sheet (`n` key), whose draft survives a failed launch and which lists runs with a Stop; an Add a seat sheet showing the room's recruit budgets; Hold decision / Release hold in the room menu; and a Hub key sheet. A stored key now loads at startup.
+**Consequences:**
+- Positive: scripts/admin-routes-regression.ts pins the launcher argv, the token and same-origin gates, a dry run (CHATROOM_SPAWN_DRY=1 writes the would-be argv under a run id), recruit budgets, the owner's pick over the pin and the owner_action events. The sheets were checked in Chrome against a dry hub, with field alignment measured.
+- Negative: The value of starting rooms from the dashboard is UNMEASURED; no real run has been started from it. Stop reaches only runs this hub started; a launcher started in a terminal is still stopped there. Anyone holding the human token can spend from the browser.
+**Vision-fit:** n/a — internal tooling: the owner runs rooms without a terminal
+**Researched:** Grok Bot 0.75.8 renderer and coordinator bundles via REA (rea-agents 6.4.0, --integrity-policy record-and-continue): new-chat bar and group creation with draft-preserving retry, members panel, cost notice before a group, ineligible picks shown with a reason. Not built from it yet: notifications when a room needs the owner, a cross-room "waiting on you" queue, a mid-turn count before close or kick, room templates, auto-pause of rooms nobody reads.
+**Rejected:** An empty room plus recruits as the "new room" path (loses: no verifier, and prompts/recruit.md assumes a room already at work). Overriding the pin for every dashboard recruit (loses: the pin is the operator's spend control; only an explicit pick overrides it).
+**Revisit-when:** a run started from /ui fails to reach its room or outlives its stop; or the owner asks for one of the unbuilt Grok Bot items.
+**Scope:** src/launch/admin-routes.ts,src/ui/admin.ts,src/ui.ts,src/ui/chrome.ts,src/ui/styles.ts,src/index.ts,src/spawner.ts,src/hub/board.ts,src/hub/internal.ts,scripts/admin-routes-regression.ts,scripts/offline-runner.mjs
+**Source:** manual (owner request 2026-10-29)

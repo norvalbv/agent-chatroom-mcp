@@ -7,6 +7,7 @@ import { PALETTE_CSS, PALETTE_HTML, PALETTE_JS } from "./ui/palette.js";
 import { PHOTOS_BUTTON_HTML, PHOTOS_CSS, PHOTOS_JS, PHOTOS_TRAY_HTML } from "./ui/photos.js";
 import { ROOMS_CSS, ROOMS_JS, ROOMS_STATE } from "./ui/rooms.js";
 import { UI_CSS } from "./ui/styles.js";
+import { ADMIN_CSS, ADMIN_HTML, ADMIN_JS } from "./ui/admin.js";
 
 /**
  * Live dashboard served at /ui. No browser bundler: it polls the JSON endpoints
@@ -31,11 +32,12 @@ ${INBOX_CSS}
 ${CATCHUP_CSS}
 ${BOARD_CSS}
 ${ROOMS_CSS}
-${PHOTOS_CSS}</style>
+${PHOTOS_CSS}
+${ADMIN_CSS}</style>
 </head>
 <body data-view="chat">
 <aside id="rail">
-  <div class="rhead"><div class="brand"><div class="mark" aria-hidden="true">✻</div><div class="bt"><h1>Agent Chatroom</h1><div class="sub" id="sub">connecting…</div></div></div><button class="btn icon ghost" id="roomopts" data-pop="rctlpop" aria-haspopup="true" aria-expanded="false" title="Sort and filter rooms" aria-label="Sort and filter rooms"><span class="i i-sliders"></span></button><button class="btn icon ghost" id="palbtn" title="Command palette (⌘K / Ctrl K)" aria-label="Open command palette"><span class="i i-cmd"></span></button></div>
+  <div class="rhead"><div class="brand"><div class="mark" aria-hidden="true">✻</div><div class="bt"><h1>Agent Chatroom</h1><div class="sub" id="sub">connecting…</div></div></div><button class="btn icon ghost" id="admnew" title="New room (n)" aria-label="New room"><span class="i i-plus"></span></button><button class="btn icon ghost" id="roomopts" data-pop="rctlpop" aria-haspopup="true" aria-expanded="false" title="Sort and filter rooms" aria-label="Sort and filter rooms"><span class="i i-sliders"></span></button><button class="btn icon ghost" id="palbtn" title="Command palette (⌘K / Ctrl K)" aria-label="Open command palette"><span class="i i-cmd"></span></button></div>
   <div class="filter"><input id="filter" placeholder="Search rooms" aria-label="Search rooms" autocomplete="off" /></div>
   <button class="qbar" id="qbar" title="Questions agents asked you that nobody has answered (i)"><span class="qav" aria-hidden="true"><span class="i i-inbox"></span></span><span class="qtx"><span class="ql">For you</span><span class="qs" id="qbars">checking…</span></span><span class="qc" id="qbarn"></span></button>
   <div id="rooms"></div>
@@ -65,7 +67,7 @@ ${PHOTOS_CSS}</style>
   <div id="pane"><div class="empty">Nothing selected.</div></div>
 </section>
 ${CHROME_HTML}
-${PALETTE_HTML}
+${PALETTE_HTML}${ADMIN_HTML}
 <nav id="tabbar">
   <button data-view="rooms">Rooms</button>
   <button data-view="chat" class="on">Chat <span class="n" id="n-unread" style="display:none"></span></button>
@@ -82,10 +84,10 @@ ${PALETTE_HTML}
     get: function (k, d) { try { var v = localStorage.getItem('cr.' + k); return v === null ? d : JSON.parse(v); } catch (e) { return d; } },
     set: function (k, v) { try { localStorage.setItem('cr.' + k, JSON.stringify(v)); } catch (e) {} }
   };
-  var TOKEN = null;
+  var TOKEN = store.get('token', null); // the hub key: kept by the key sheet (src/ui/admin.ts), sent on every write
   var hdrs = function () { var h = { 'content-type': 'application/json' }; if (TOKEN) h['x-chatroom-token'] = TOKEN; return h; };
   fetch('/config').then(function (r) { return r.json(); }).then(function (c) {
-    if (c.human_token_required) { TOKEN = store.get('token', null) || window.prompt('This hub needs a human token (CHATROOM_HUMAN_TOKEN):'); if (TOKEN) store.set('token', TOKEN); }
+    if (c.human_token_required && !TOKEN) { TOKEN = window.prompt('This hub needs a human token (CHATROOM_HUMAN_TOKEN):'); if (TOKEN) store.set('token', TOKEN); }
   }).catch(function () {});
 
   // ---------- state ----------
@@ -445,7 +447,7 @@ ${POPOVER_JS}
       return '<div style="padding:6px 0;border-bottom:1px solid var(--line)">' + line + '</div>';
     }).join('') + '</div>';
     var anyActs = active.some(canAct);
-    return '<div class="sec"><h3>In the room <span class="sp"></span><span class="c">' + active.length + '</span></h3>' + (rows(active) || '<div class="empty" style="padding:16px">Nobody here.</div>') + '</div>'
+    return '<div class="sec"><h3>In the room <span class="sp"></span>' + (r.state === 'open' ? '<button class="mini" data-addseat="1" title="Recruit a new agent into this room">+ Add seat</button> ' : '') + '<span class="c">' + active.length + '</span></h3>' + (rows(active) || '<div class="empty" style="padding:16px">Nobody here.</div>') + '</div>'
       + (anyActs ? '<div class="sec" style="font-size:11.5px;color:var(--dim2);padding-top:0">Kick starts a vote to remove a seat. Replace removes it at once and recruits a successor, for a dead seat.</div>' : '') + kickSec
       + (gone.length ? '<div class="sec"><h3>Left <span class="sp"></span><span class="c">' + gone.length + '</span></h3>' + rows(gone) + '</div>' : '')
       + '<div class="sec" style="font-size:12px;color:var(--dim2)">Areas come from claim/* board entries; taking is what a seat wrote under take/* (hover for its line), offered is a take handed to it; reviewing is the hub-assigned reviewer for that claim; the role tag is what the agent joined with.</div>';
@@ -500,26 +502,6 @@ ${POPOVER_JS}
   $$('#tabbar button').forEach(function (b) { b.onclick = function () { setView(b.dataset.view); }; });
   $$('#tabs button[data-tab]').forEach(function (b) { b.onclick = function () { tab = b.dataset.tab; store.set('tab', tab); renderPane(); if (tab === 'stats') fetchStats(true); }; });
   $('#filter').oninput = renderRooms;
-  // recruit policy: pinned provider/model for every request_agent, live on the hub
-  async function loadPolicy() {
-    try { var p = (await (await fetch('/policy')).json()).recruits || {}; $('#policy').innerHTML = 'recruits: <b>' + esc(p.agent ? p.agent + (p.model ? ' · ' + p.model : '') : 'as requested') + '</b>'; } catch (e) {}
-  }
-  $('#policy').onclick = async function () {
-    var v = window.prompt('Pin every recruit to a provider and model (e.g. "openrouter deepseek/deepseek-v4-flash-0731"), or "any" to let agents choose:', 'openrouter deepseek/deepseek-v4-flash-0731');
-    if (v === null) return;
-    var parts = v.trim().split(/\\s+/);
-    var body = parts[0] === 'any' ? { agent: 'any', model: 'any' } : { agent: parts[0], model: parts[1] || 'any' };
-    var send = function () { return fetch('/policy', { method: 'POST', headers: hdrs(), body: JSON.stringify(body) }); };
-    var res = await send();
-    // agent controls need the human token even on loopback (hub requireAgentControl); ask once on 401 and retry
-    if (res.status === 401) {
-      var t = window.prompt('Changing the recruit policy needs the human token set on this hub (CHATROOM_HUMAN_TOKEN):');
-      if (t) { TOKEN = t; store.set('token', t); res = await send(); }
-    }
-    if (!res.ok) window.alert(await res.text());
-    loadPolicy();
-  };
-  loadPolicy(); setInterval(loadPolicy, 15000);
 
   document.addEventListener('click', async function (e) {
     var rb = e.target.closest('.room'); if (rb) return select(rb.dataset.r);
@@ -563,6 +545,7 @@ ${POPOVER_JS}
 ${PALETTE_JS}
 ${INBOX_JS}
 ${CATCHUP_JS}
+${ADMIN_JS}
 
   // ---------- polling ----------
   async function refreshRooms() {

@@ -245,6 +245,7 @@ export const offlineScripts = [
   'replacement-route.test.ts',
   'replacement-launcher.test.ts',
   'route-auth-regression.ts',
+  'admin-routes-regression.ts',
   'refusal-telemetry.ts',
   'shelf-lang-tasks.test.ts',
   'arrow-task.test.ts',

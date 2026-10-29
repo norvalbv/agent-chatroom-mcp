@@ -167,6 +167,21 @@ test("reference oracle requires a receipt earlier than the reply and never expos
   const late = f.events().filter(e => e.type !== "delivery_receipt").concat(f.receipts());
   assert.equal(deliveryCoverage(late).covered, 0, "a later receipt does not cover a prior response");
 });
+test("reference coverage includes replied hub asks and human messages as separate channels", async () => {
+  const f = await fixture(), room = f.h.getRoom(f.room);
+  const hubAsk = f.h.post(room, "chat", undefined, "@bob inspect the evidence fixture", { tag: "hands" });
+  await f.call(1, "wait_for_messages", { timeout_ms: 0 });
+  await f.call(1, "send_message", { content: `For #${hubAsk.seq}: inspected`, reply_to: hubAsk.id, force: true });
+  const human = f.h.join(f.room, "benji", "human").participant;
+  const humanAsk = f.h.send(f.room, human.id, "@bob confirm the fixture result", undefined, true);
+  await f.call(1, "wait_for_messages", { timeout_ms: 0 });
+  await f.call(1, "send_message", { content: `For #${humanAsk.seq}: confirmed`, reply_to: humanAsk.id, force: true });
+  const result = deliveryCoverage(f.events()) as any;
+  assert.equal(result.n, 2, "coverage denominator includes every explicit incoming-message reference");
+  assert.equal(result.covered, 2);
+  assert.deepEqual(result.channels.hub, { n: 1, covered: 1, unknown: 0 });
+  assert.deepEqual(result.channels.human, { n: 1, covered: 1, unknown: 0 });
+});
 
 let failed = 0;
 try {

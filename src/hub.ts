@@ -561,7 +561,7 @@ export class Hub {
     // Bind the chair only after admission succeeds: rejected joins must not reserve it.
     if (role === "chair") room.chair = name;
     activateRecruitmentClaims(this, room, participant);
-    delete participant.lastBoardSeen;
+    delete participant.lastBoardSeen; // Explicit delivery reset on every reclaim (lost response recovery).
     delete participant.seenBoardKeys;
     for (const pr of room.proposals.values()) if (pr.status === "open") this.evaluate(room, pr);
     return { room, participant };

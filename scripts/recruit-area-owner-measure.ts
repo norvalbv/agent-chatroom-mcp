@@ -8,7 +8,7 @@ type Event = Record<string, any>;
 export function measureRecruitClaims(events: Event[]) {
   const board = new Map<string, Event>(), participants = new Map<string, Event>();
   const activated = new Set<string>();
-  let reserved = 0, ownerMatches = 0, activations = 0, reviewers = 0, independent = 0, ownerUpdates = 0, expired = 0;
+  let reserved = 0, ownerMatches = 0, activations = 0, reviewers = 0, independent = 0, ownerUpdates = 0, expired = 0, failures = 0;
   for (const e of events) {
     if (e.type === "join") participants.set(e.p.name, e.p);
     if (e.type === "board" && e.key?.startsWith("claim/")) {
@@ -16,6 +16,7 @@ export function measureRecruitClaims(events: Event[]) {
       if (e.entry) board.set(e.key, e.entry); else board.delete(e.key);
     }
     if (e.type !== "recruit_claim") continue;
+    if (e.phase === "activation_failed") failures++;
     if (e.phase === "expired") { expired++; activated.delete(e.key); }
     if (e.phase === "reserved") {
       reserved++;
@@ -38,7 +39,7 @@ export function measureRecruitClaims(events: Event[]) {
   }
   return { coverage: reserved ? "recorded" : "telemetry_absent", reserved_n: reserved, recruit_owner_matches_n: ownerMatches, activated_n: activations,
     reviewer_assigned_n: reviewers, independent_reviewer_n: independent, owner_updates_after_activation_n: ownerUpdates,
-    expired_n: expired, pending_n: [...board.values()].filter((e) => e.recruitment?.pending).length,
+    activation_failed_n: failures, expired_n: expired, pending_n: [...board.values()].filter((e) => e.recruitment?.pending).length,
     confound: "Ownership and connection-independent reviewer oracle only; no downstream task-quality effect measured. No reviewer is valid when no independent voter is present." };
 }
 

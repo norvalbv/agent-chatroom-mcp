@@ -22,11 +22,18 @@ export function claimRecruitmentArea(hub: Hub, roomName: string, requester: stri
 /** Runs after admission, when the owner's actual session and worktree can be used. Persisted pending metadata
  * makes this work after restart too; subsequent joins and ordinary edits never reassign the review. */
 export function activateRecruitmentClaims(hub: Hub, room: Room, owner: Participant): void {
+  if (room.state === "closed" || room.state === "concluded") return;
   expireRecruitmentClaims(hub, room);
   for (const [key, entry] of room.board) {
     if (!key.startsWith("claim/") || entry.by !== owner.name || !entry.recruitment?.pending || claimReleased(entry)) continue;
-    const active = hub.setBoard(room.name, owner.id, key, entry.text);
-    if (active) recordClaim(hub, room, key, active, "activated");
+    try {
+      const active = hub.setBoard(room.name, owner.id, key, entry.text);
+      if (active) recordClaim(hub, room, key, active, "activated");
+    } catch (error) {
+      const detail = (error instanceof Error ? error.message : String(error)).slice(0, 280);
+      recordClaim(hub, room, key, entry, "activation_failed", owner.name, detail);
+      hub.announce(room.name, `${key}: ${owner.name} joined, but claim activation failed (${detail}); the reservation remains pending.`);
+    }
   }
 }
 
@@ -44,8 +51,8 @@ export function expireRecruitmentClaims(hub: Hub, room: Room): void {
   }
 }
 
-function recordClaim(hub: Hub, room: Room, key: string, entry: BoardEntry, phase: "reserved" | "activated" | "expired", owner = entry.by): void {
+function recordClaim(hub: Hub, room: Room, key: string, entry: BoardEntry, phase: "reserved" | "activated" | "expired" | "activation_failed", owner = entry.by, error?: string): void {
   const { team } = JSON.parse(entry.text) as { team: string[] };
   hub.persist({ type: "recruit_claim", room: room.name, key, phase, requested_by: entry.recruitment!.requestedBy,
-    owner, team, reviewer: entry.reviewer ?? null, ts: entry.updatedAt });
+    owner, team, reviewer: entry.reviewer ?? null, ...(error ? { error } : {}), ts: phase === "activation_failed" ? new Date().toISOString() : entry.updatedAt });
 }

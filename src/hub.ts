@@ -18,6 +18,7 @@ import type { MessageKind, Vote, Quorum, RoomState, VerifyHead, Role, Participan
 import { now, shortId, norm, emptyBoardManifestCounters, manifestBytes, codeState, commitsIn, keepRefusal, RECENT_REFUSALS, resourceEvents, runPrefix, seatSettingsOf } from "./hub/internal.js";
 import type { Opts, Event, BoardManifestCounters } from "./hub/internal.js";
 import * as board from "./hub/board.js";
+import { activateRecruitmentClaims, expireRecruitmentClaims } from "./hub/coverage/recruitment.js";
 import * as breakouts from "./hub/breakouts/lifecycle.js";
 import * as hands from "./hub/asks/hands.js";
 import * as idle from "./hub/idle.js";
@@ -551,9 +552,7 @@ export class Hub {
       this.persist({ type: "join", room: roomName, p: participant });
       this.post(room, "system", undefined, `${this.shown(room, participant)} rejoined the room.`);
     }
-    // A live seat taken back by its participant_id on a newer connection moves there, as a seat-key reseat does. Left on
-    // the older session, the seat was thrown out when that one was reaped idle 30 minutes later, while the newer session
-    // was serving it (bugs.md 3: a chair on one-session-per-call tooling dropped out about every 31 minutes).
+    // Move a reclaimed seat to its newer connection so the old connection's reaper cannot drop it (bugs.md 3).
     if (session && reclaimId === participant.id && participant.session && participant.session !== session && participant.agent !== "human") {
       participant.session = session;
       participant.seatKeyHash = this.seats.hashOf(session) ?? participant.seatKeyHash;
@@ -561,7 +560,7 @@ export class Hub {
     }
     // Bind the chair only after admission succeeds: rejected joins must not reserve it.
     if (role === "chair") room.chair = name;
-    // Reclaiming even an active seat is an explicit delivery reset (lost response recovery).
+    activateRecruitmentClaims(this, room, participant);
     delete participant.lastBoardSeen;
     delete participant.seenBoardKeys;
     for (const pr of room.proposals.values()) if (pr.status === "open") this.evaluate(room, pr);
@@ -2114,7 +2113,7 @@ export class Hub {
   claimOverlaps(roomName: string, pid: string, key: string): { key: string; by: string; room?: string; shared_pct: number; shared: string[] }[] { return board.claimOverlaps(this, roomName, pid, key); }
   static claimOverlapScore(a: Set<string>, aKey: Set<string>, b: Set<string>, bKey: Set<string>) { return board.claimOverlapScore(a, aKey, b, bKey); }
   private activeReviewerFor(room: Room, authorName: string): Participant | undefined { return board.activeReviewerFor(room, authorName); }
-  setBoardAs(roomName: string, byName: string, key: string, text: string): BoardEntry { return board.setBoardAs(this, roomName, byName, key, text); }
+  setBoardAs(roomName: string, byName: string, key: string, text: string, recruitment?: BoardEntry["recruitment"]): BoardEntry { return board.setBoardAs(this, roomName, byName, key, text, recruitment); }
   postToRoom(fromRoom: string, pid: string, toRoom: string, key: string, text: string, ackRequired = false, opts: BoardExpiryOptions = {}): { key: string; entry: BoardEntry } { breakouts.refuseCarryKey(this, fromRoom, toRoom, key); return board.postToRoom(this, fromRoom, pid, toRoom, key, text, ackRequired, opts); }
 
   // ---------- proposals as documents ----------
@@ -3782,6 +3781,7 @@ export class Hub {
     const cutoff = Date.now() - idleMs;
     for (const room of this.rooms.values()) {
       if (room.state === "concluded" || room.state === "closed") continue;
+      expireRecruitmentClaims(this, room);
       for (const p of room.participants.values()) {
         if ((p.session && connected?.has(p.session)) || (keepChair && p.role === "chair")) continue;
         if (p.active && p.agent !== "human" && Date.parse(this.lastSeen(p)) < cutoff) {

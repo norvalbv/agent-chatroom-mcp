@@ -298,8 +298,8 @@ export interface BoardEntry {
   /** written after the room concluded, inside Hub.LATE_WRITE_MS (src/hub/board.ts lateWrite): on the record, not part of what was decided */
   late?: boolean;
   /** claim/* entries only: the reviewer the hub assigned at creation (name/id), never client-supplied. */
-  reviewer?: string;
-  reviewerId?: string;
+  reviewer?: string; reviewerId?: string;
+  /** Hub-only reservation, completed when the owner joins. */ recruitment?: { requestedBy: string; pending: boolean };
   /** claim/* entries only: the claimant's branch and worktree, read by the hub from the seat at each write, never client-supplied. */
   workspace?: { branch?: string; worktree: string };
   /** draft/* only: written or edited once peers' drafts were readable, so it is not an independent attempt (sticky). */

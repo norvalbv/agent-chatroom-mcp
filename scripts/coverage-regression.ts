@@ -15,6 +15,7 @@ import { Hub } from "../src/hub.js";
 import { recruitmentClaim, unownedItems } from "../src/hub/coverage/coverage.js";
 import { openWork } from "../src/hub/open-work.js";
 import { Spawner } from "../src/spawner.js";
+import { claimRecruitmentArea } from "../src/hub/coverage/recruitment.js";
 import { renderRunReport, type RunResult } from "../src/result.js";
 import { parseResources } from "../src/resources.js";
 import { replayCoverage } from "./coverage-replay.js";
@@ -124,7 +125,7 @@ test("a recruit whose brief names item/* keys covers them from recruitment, befo
   const spawner = new Spawner({ mcpUrl: "http://test/mcp", defaultCwd: process.cwd(), logDir: mkdtempSync(join(tmpdir(), "coverage-spawn-")), dryRun: true });
   // the hook as src/index.ts wires it
   spawner.attach({ isHeld: () => false, ensureRoom: () => {}, announce: () => {}, liveAgents: () => 0, roomTopic: () => "t",
-    claimArea: (r, by, area, team, brief) => void h.setBoardAs(r, by, `claim/${area}`, recruitmentClaim(h.getRoom(r), by, area, team, brief)) });
+    claimArea: (r, by, area, team, brief) => claimRecruitmentArea(h, r, by, area, team, brief) });
   spawner.request({ room: name, requestedBy: alice.name, area: "build-utils", name: "builder", canEdit: true,
     brief: "Build item/slugify and item/clamp in util.js, one commit each; chunk comes later. Post handoff/build-utils with the shas." });
   h.join(name, "builder", "claude", {}, undefined, "sess-builder", "recruit"); // the dry run spawns nothing; the recruit joins

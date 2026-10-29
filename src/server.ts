@@ -908,7 +908,7 @@ export function createSessionServer(hub: Hub, spawner?: Spawner, opts: { holdMs?
           room_topic: z.string().optional().describe("Topic for the new room."),
           count: z.number().int().min(1).max(3).optional().describe("How many to spawn (default 2 for a new room, 1 otherwise)."),
           replacing: z.string().optional().describe("Exact departed nonhuman seat to replace (room_status liveness \"left\"; an \"away\" seat is still running and is refused); single recruit in this room only."),
-          area: z.string().optional().describe("Claim this area (claim/<area>) for the newcomers first; refused if someone else owns it."),
+          area: z.string().optional().describe("Reserve claim/<area> for the first newcomer as owner; additional newcomers are its team, the requester is not added. Reviewer and worktree bind when the owner joins. Held claims are refused; recruit without area to help their owner. A reservation whose owner never joins expires after the stale-claim window."),
           participant_id: asArg,
         },
       },

@@ -18,7 +18,7 @@
 import "./node-compat.js";
 import { steerAckAs, steerAckSeat, steerPeek, steerPeekSeat } from "./hub/steer.js";
 import { SUSPECTED_DEAD_MS } from "./hub/kick.js";
-import { recruitmentClaim } from "./hub/coverage/coverage.js";
+import { claimRecruitmentArea } from "./hub/coverage/recruitment.js";
 import { callerSeatKeys, CALLER_TIMEOUT_MS } from "./hub/caller.js";
 import { randomUUID } from "node:crypto";
 import { dirname, resolve } from "node:path";
@@ -123,11 +123,7 @@ hub.onProposalOpened = (room, proposal) => {
 };
 spawner.attach({ ...recruitSettingsHooks(hub), // a room's run settings for its recruits, one recruit_spawn event each (src/seat/settings.ts)
   isHeld: (room) => { try { return Boolean(hub.hold(hub.getRoom(room))); } catch { return false; } },
-  claimArea: (room, requester, area, team, brief) => {
-    const r = hub.getRoom(room), existing = r.board.get(`claim/${area}`);
-    if (existing && existing.by !== requester) throw new HubError(`claim/${area} is owned by ${existing.by}; recruit into their team instead.`, undefined, "ownership");
-    hub.setBoardAs(room, requester, `claim/${area}`, recruitmentClaim(r, requester, area, team, brief));
-  },
+  claimArea: (room, requester, area, team, brief) => claimRecruitmentArea(hub, room, requester, area, team, brief),
   ensureRoom: (room, topic, parent) => {
     hub.recruitRoom(room, topic, parent);
   },

@@ -107,7 +107,7 @@ function documents(events: Event[], allSeats = false) {
   }
   const excluded = new Set(events.filter(e => e.type === "join" && (e.p?.agent === "human" || ["chair", "verifier"].includes(e.p?.role) || e.p?.name === "verifier"))
     .map(e => e.p.name));
-  return { openings: [...openings.values()].filter(s => allSeats || !excluded.has(s.author)), ideas: [...ideas.values()],
+  return { sealed_openings: openings.size, openings: [...openings.values()].filter(s => allSeats || !excluded.has(s.author)), ideas: [...ideas.values()],
     seeded: [...ideas.values()].filter(d => seeded.has(d.key) && (allSeats || !excluded.has(d.author))),
     snapshots: snapshots.filter(s => allSeats || !excluded.has(s.author)), final, names, reverse };
 }
@@ -182,7 +182,8 @@ export function provenance(events: Event[], room: string, options: Options = {})
   const brief = roomEvent ? { text: String(roomEvent.opts?.topic ?? ""), embedded_text: framingText(String(roomEvent.opts?.topic ?? "")) } : null;
   const workers = new Set(events.filter(e => e.type === "join" && e.p?.agent !== "human" && !["chair", "verifier"].includes(e.p?.role))
     .map(e => e.p.session ?? e.p.id));
-  return { room, concluded: !!d.final, eligible_main: /^swarm-\d{6}-[a-z0-9]{4}-/.test(room) && !!d.final && workers.size >= 2 && d.openings.length >= 2,
+  return { room, concluded: !!d.final, eligible_main: /^swarm-\d{6}-[a-z0-9]{4}-/.test(room) && !!d.final && workers.size >= 2 && d.sealed_openings >= 2,
+    sealed_openings: d.sealed_openings,
     parent: roomEvent?.opts?.parent ?? roomEvent?.parent ?? null,
     itemized: events.some(e => e.type === "board" && String(e.key).startsWith("item/")) || /starting area|seat.target|per.seat/i.test(brief?.text ?? ""),
     openings: d.openings, seeded: d.seeded, final: d.final, snapshots: d.snapshots, origin,

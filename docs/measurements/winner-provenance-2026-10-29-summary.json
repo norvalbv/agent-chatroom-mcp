@@ -1,0 +1,130 @@
+{
+ "schema": "winner-provenance-report-v1",
+ "date": "2026-10-29",
+ "script": "scripts/winner-provenance.ts",
+ "source_directory": "/Users/benji/Desktop/Personal and learning/agent-chatroom-mcp/data",
+ "source_log_count": 340,
+ "concluded": 208,
+ "main_eligible": 145,
+ "malformed_lines": 0,
+ "source_log_sha256": {
+  "swarm-150725-3vny-room.jsonl": "affa562228284192c0a4c8d6eb1f98ebd4c84a5cde7ac86ba2e4777aff8f1cb4",
+  "swarm-003938-i47r-whiskas.jsonl": "630c6dd8edb40ae7befaa25deb69b58d78da40ac547d326a190c542e1daaf322",
+  "swarm-211613-dpl4-room.jsonl": "3d1e2b0c9c36ee9e09b3ea2c0a570abcbe52bd60f65b2b7894d41cc560ddf2b4",
+  "swarm-191130-twok-room.jsonl": "b27ef2174a318e9201afd625d2786bb44e7ca247f8bb4e4b5700b17f71cd890c",
+  "swarm-170811-k1pq-room.jsonl": "e70896d502b653768ed4fe3e6dcf5c5ae3b9abe45748d1596d49bc64d174ea1f",
+  "swarm-181650-0vn3-room.jsonl": "695f245e0a1831111cf2300b3c96b53197e2839f9f388d0965eeb810cc7ba23e",
+  "swarm-163100-mugk-room.jsonl": "f7875d12681a80f951865d8f50f239d19e55dce8514790f42e357b184defd879",
+  "swarm-130459-mrw4-explorer.jsonl": "57eac1090aca7f628307e72f069093edff99aa615a8dfd920101a39791547349",
+  "swarm-113947-ne8o-room.jsonl": "b9173d46faab003d6779a2d341d4b612669191e19f43154977f29a7b8c2bf708",
+  "swarm-100622-6jdx-room.jsonl": "e8813844bb1025727e237c21878aa0490df84f67594d8d7823085581dc81117b",
+  "swarm-105804-4ssq-room.jsonl": "1cd2a71d5154e7ee0b97a905ac1f21743f2dee74dd755f39fd4336b478f186ff",
+  "swarm-223815-5zui-room.jsonl": "b272648cdad4e0d820a609b94eff0c68702bcb8e7d8a6b9fa4c34abda338054b",
+  "swarm-130459-mrw4-soccer.jsonl": "aac7ca2beb8d5c7cfd1f24bd0b05c72f857fd07a10eeef32f42f35b6023309d5",
+  "swarm-174537-07hw-room.jsonl": "59c16fbd60b986223c92d30a20738125379b44ddd9b7dcea651e46ecdc628385",
+  "swarm-234901-pmyh-room.jsonl": "89278a691558df89bdf8021718d28cc5b3965c76df8da2393eefd5ef9d885d2f",
+  "swarm-133013-64sr-room.jsonl": "c8a18142a10fcb57762ca1887cb9314b541dafbef6fab7b3e778db35ed07c1de",
+  "swarm-102347-phin-room.jsonl": "10b63ed1e2ef02b766082a21fdd8e8d796f516b7f9ad6aeb5d8b53e5b6c2085f",
+  "swarm-011152-pen5-room.jsonl": "54ea1fa8ab3011c2b243fd7148aaa7efd1b0b284580701b01647d5d0a9dff8fb",
+  "swarm-204607-mrkt-room.jsonl": "a7b7cf7daf7c8a52c8b0cc4831e769b8c40cf6c890bf5b87764aafc3fb3e6375",
+  "swarm-140213-25wq-room.jsonl": "76a756775f68123588bf32090e46bc04ca91ace361412ac0556de18cbb903f09"
+ },
+ "model": "embeddinggemma",
+ "model_dimensions": 768,
+ "embedding_chars": 1200,
+ "cut": null,
+ "why_no_bulk_origin_classifier": "Adjudicated sample has no wholly-midroom negative class; a trustworthy cutoff cannot be fitted. Cosine is descriptive alignment, not influence or ancestry.",
+ "full_corpus_descriptor": {
+  "concluded_main_n": 145,
+  "nearest_opening_cosine_median": 0.6273210733414879,
+  "conclusion_truncated_n": 145,
+  "seeded_alternative_rooms": 7,
+  "conclusion_idea_key_citation_rooms": 8,
+  "key_citation_caveat": "Citations include rejection; no endorsement or winning-idea claim."
+ },
+ "manual_fixed20": {
+  "n": 20,
+  "raw_primary": {
+   "opening": 15,
+   "mixed": 3,
+   "midroom": 2
+  },
+  "adjudicated": {
+   "opening": 19,
+   "mixed": 1
+  },
+  "first15_exact_origin_agreement": {
+   "agree": 12,
+   "n": 15
+  },
+  "first15_D3_binary_agreement": {
+   "agree": 14,
+   "n": 15
+  },
+  "audit_keys": [
+   "audit/d3-claude-opus-5-5-1",
+   "audit/d3-room19-6-1-sol-4"
+  ],
+  "conclusion_closer_to_brief_than_nearest_opening": 13,
+  "truncated_conclusion_embeddings": 20,
+  "brief_openness_strata_source": "evidence/door-brief-strata: open9/prescribed10/mixed1, post-hoc topic-only and unaudited"
+ },
+ "candidate_revision_ledger": {
+  "n": 138,
+  "rooms": 20,
+  "context_counts": {
+   "neither_logged": 35,
+   "unknown_exposure": 57,
+   "both_logged": 7,
+   "evidence_only_logged": 33,
+   "peer_only_logged": 6
+  },
+  "scope": "peer delivery versus room evidence arrivals; not evidence exposure",
+  "real_pivots_cannot_be_inferred_from_revision_count": true
+ },
+ "sampled_revision_audit": {
+  "n": 15,
+  "labels": {
+   "work_scope": 3,
+   "framing_change": 1,
+   "elaboration": 11
+  },
+  "independently_audited": false,
+  "framing_change_sample4": {
+   "room": "swarm-174537-07hw-room",
+   "previous_event": 242,
+   "current_event": 261,
+   "evidence_candidate_event": 247,
+   "evidence_source": "evidence/seat-hint-command",
+   "delivery_coverage": "unknown",
+   "trigger_causal_label": "unmeasured"
+  }
+ },
+ "novel_material_examples": [
+  {
+   "room": "swarm-223815-5zui-room",
+   "event": 138,
+   "source": "fable-1-dissent",
+   "what": "page-conversion selection effect; final main launch action still opening-aligned"
+  },
+  {
+   "room": "swarm-204607-mrkt-room",
+   "event": 268,
+   "source": "evidence/consumers-b",
+   "what": "headline-first ranked action; final broader format-minor framing already at reveal"
+  }
+ ],
+ "oracle_delta": "unmeasured: retrospective instrument only; no behavior/default changed",
+ "checks": {
+  "regression": "winner-provenance-regression: OK",
+  "build": "npm run build exit0",
+  "scripts_typecheck": "npx tsc -p tsconfig.scripts.json exit0",
+  "smoke": "PORT=7889 npx tsx scripts/smoke.ts SMOKE OK",
+  "broad_suite": "sandbox failures recorded; final unrestricted tip check belongs to verifier"
+ },
+ "commits": [
+  "31fec966",
+  "627020bd",
+  "dc0766ee"
+ ]
+}

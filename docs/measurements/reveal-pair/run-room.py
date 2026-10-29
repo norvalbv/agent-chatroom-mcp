@@ -3,10 +3,14 @@
   python3 -I docs/measurements/reveal-pair/run-room.py <S1|S2|S3|A1|B1|B2|A2|A3|B3|DEV> [--port 7881] [--task bench-printf-format]
 B* and DEV start the hub with CHATROOM_REVEAL_RIVALS=1; S* and A* without. Outputs go to swarms/reveal-pair/<slot>/.
 outcome is one of pass | fail | timeout | infra, decided only from the run's own artifacts (decision/reveal-rivals-protocol):
-infra if any infra_reasons (runner error, no result.json, room missing, fewer than 3 seats joined, a usage or session limit
-in the launcher log or result.json, the scorer's infrastructure_error, a frozen hash changed, a STOP file or the runner's
-1080 s guard); else pass or fail if the room concluded (oracle task_pass or not); else timeout. Infra rooms do not count
-toward the screen's 1-2/3 gate and are rerun once as <slot>r; a fail or timeout is never replaced.
+infra if any infra_reasons (runner error; no result.json, or only the launcher's crash-time checkpoint; a lead-room payload
+error; room missing; fewer than 3 seats joined; a launcher exit other than swarm.ts's 0-iff-concluded / 1-otherwise; a seat
+exit before the deadline in a room that did not conclude; a usage or session limit in the launcher or seat logs or
+result.json; the scorer's infrastructure_error; a frozen hash changed; a STOP file or the runner's 1080 s guard); else pass
+or fail if the room concluded (oracle task_pass or not); else timeout if the launcher's own outcome.timedOut is true; else
+no_conclusion (every seat exited cleanly with nothing agreed). Only infra is excluded from the screen's 1-2/3 gate, and it
+reruns once as <slot>r only if a physical room remains under the cap; a fail, timeout or no_conclusion is never replaced.
+python3 -I docs/measurements/reveal-pair/classify-check.py [ref] runs these statements on fixtures with no hub or seats.
 The hub and the launcher are this script's own children, stopped by PID in `finally`; the hub never runs --always."""
 import sys,os,json,time,pathlib,tempfile,subprocess,hashlib,shutil,re,urllib.request
 args=sys.argv[1:]; slot=args[0]
@@ -78,7 +82,7 @@ try:
   manifest['launcher_exit_code']=code;save('manifest.json',manifest)
   result=json.loads((root/'result.json').read_text()) if (root/'result.json').exists() else {}
   room=result.get('leadRoom'); payload=next((x['payload'] for x in result.get('rooms',[]) if x.get('name')==room),{})
-  conclusion=(payload.get('conclusion') or {}).get('text'); timed=bool(result.get('outcome',{}).get('timedOut',False)) or conclusion is None
+  conclusion=(payload.get('conclusion') or {}).get('text'); timed=bool((result.get('outcome') or {}).get('timedOut',False))  # the launcher's own deadline flag, never inferred from a missing conclusion
   js="import {scoreTask} from './scripts/bench-oracle.ts'; console.log(JSON.stringify(await scoreTask(process.argv[1],process.argv[2])));"
   scored=json.loads(subprocess.check_output(['node','--import','tsx','--input-type=module','-e',js,str(task),str(workspace)],cwd=repo,text=True))
   after={'task_sha256':tree_hash(task),'scorer_sha256':file_hash(repo/'scripts/bench-oracle.ts'),'hub_entry_sha256':file_hash(repo/'dist/index.js'),'dist_sha256':tree_hash(repo/'dist')}
@@ -104,14 +108,21 @@ try:
   logs=[root/'launcher.log']+(sorted(run_dir.glob('*.log'))+sorted(run_dir.glob('*.out')) if run_dir and run_dir.is_dir() else [])
   launcher_text='\n'.join(f.read_text(errors='replace') for f in logs if f.exists())
   infra=[]
+  # only the launcher's final artifact has outcome; the checkpoint it persists while seats run (src/swarm.ts persistIncremental) has none
+  final=result.get('outcome') if isinstance(result.get('outcome'),dict) else None
+  deadline=bool(final and final.get('timedOut') is True)
   if manifest.get('operator_stopped'): infra.append(str(manifest['operator_stopped']))
   if not (root/'result.json').exists(): infra.append('no_result_json')
-  if not room or (result.get('outcome') or {}).get('kind')=='room_missing': infra.append('room_missing')
+  elif final is None: infra.append('partial_result_json')
+  if any('incremental checkpoint' in str(x) or 'payload:' in str(x) for x in result.get('collectionErrors') or []): infra.append('collection_error')
+  if not room or (final or {}).get('kind')=='room_missing': infra.append('room_missing')
   if room and len(joined)<3: infra.append(f'seats_joined_{len(joined)}_of_3')
+  if code not in (0,1) or (code==0)!=(conclusion is not None): infra.append(f'launcher_exit_{code}')  # swarm.ts exits 0 iff the lead room concluded, else 1
+  if conclusion is None and not deadline and any(x.get('exitCode')!=0 for x in result.get('scorecard') or [] if 'exitCode' in x): infra.append('seat_exit_before_deadline')
   if limit_re.search(launcher_text) or limit_re.search(json.dumps(result)): infra.append('usage_or_session_limit')
   if scored.get('reason')=='infrastructure_error': infra.append('scorer_infrastructure_error')
   if not unchanged: infra.append('frozen_hash_changed')
-  outcome='infra' if infra else ('pass' if scored.get('passed') else 'fail') if conclusion is not None else 'timeout'
+  outcome='infra' if infra else ('pass' if scored.get('passed') else 'fail') if conclusion is not None else 'timeout' if deadline else 'no_conclusion'
   framing={}
   for e in count('framing'): framing[f"{e['action']}{'/assigned' if e.get('by_assigned') else ''}"]=framing.get(f"{e['action']}{'/assigned' if e.get('by_assigned') else ''}",0)+1
   summary={'slot':slot,'rivals':rivals,'room':room,'outcome':outcome,'infra_reasons':infra,'counts_toward_gate':outcome!='infra','concluded':conclusion is not None,'timed_out':timed,'primary_pass':outcome=='pass',

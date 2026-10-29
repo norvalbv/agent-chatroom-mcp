@@ -15,6 +15,8 @@ async function call(name:string,args:Record<string,unknown>) {
  assert.ok(!r.isError, JSON.stringify(r));
  return JSON.parse((r.content as {text:string}[])[0].text);
 }
+// what a wait says changed on the board: a key a delivered [BOARD] notice names is not repeated in board_delta (src/hub/wait-view.ts)
+const changed = (w: { messages?: string[]; board_delta?: { keys?: string[] } }) => [...new Set([...(w.messages ?? []).map((m) => /\[BOARD\] [^"]*"([^"]+)"/.exec(m)?.[1]).filter((k): k is string => !!k), ...(w.board_delta?.keys ?? [])])];
 try {
  const room='board-wire';
  await call('join_room',{room,name:'A',agent:'test'});
@@ -27,7 +29,9 @@ try {
  const pending = call('wait_for_messages',{room,timeout_ms:1000});
  await new Promise(r=>setTimeout(r,20));
  hub.setBoardAs(room,'system','evidence/woke','body');
- assert.deepEqual((await pending).board_delta.keys,['evidence/woke'],'assemble after wake');
+ const woke = await pending;
+ assert.deepEqual(changed(woke),['evidence/woke'],'assemble after wake');
+ assert.ok(!woke.board_delta?.keys?.includes('evidence/woke'),'a key its [BOARD] notice names is not repeated in board_delta');
  await call('board_set',{room,key:'handoff/old',text:'archive',expires_at:'2000-01-01T00:00:00Z'});
  const archived = await call('board_get',{room,key:'handoff/old'});
  assert.equal(archived.text,'archive'); assert.equal(archived.expired,true); assert.ok(archived.tombstone);
@@ -35,7 +39,7 @@ try {
  const full = await call('board_get',{room});
  assert.ok(!('handoff/old' in full)); assert.ok('other/no' in full);
  const afterFull = await call('wait_for_messages',{room,timeout_ms:0});
- assert.deepEqual(afterFull.board_delta.keys,['evidence/after'],'board_get does not consume wait cursor');
+ assert.deepEqual(changed(afterFull),['evidence/after'],'board_get does not consume wait cursor');
  const stats = hub.stats(hub.getRoom(room)).board_manifests;
  assert.equal(stats?.waits,4); assert.equal(stats?.empty,1);
  const b = hub.join(room,'B','test',{},undefined,'b').participant;
@@ -47,7 +51,7 @@ try {
  // with it and the cursor advances, so nothing is re-shipped after the ask is passed.
  const focused = await call('wait_for_messages',{room,timeout_ms:0});
  assert.equal(focused.addressed_to_you?.length,1,JSON.stringify(focused).slice(0,300));
- assert.deepEqual(focused.board_delta?.keys,['evidence/refusal'],'peer-focused envelope ships the board delta');
+ assert.deepEqual(changed(focused),['evidence/refusal'],'peer-focused envelope ships the board change');
  assert.notEqual([...hub.getRoom(room).participants.values()].find(p=>p.name==='A')!.lastBoardSeen,beforeCursor);
  await call('pass',{room});
  assert.ok(!('board_delta' in (await call('wait_for_messages',{room,timeout_ms:0}))),'delta shipped once');

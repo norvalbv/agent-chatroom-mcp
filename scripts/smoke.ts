@@ -364,7 +364,7 @@ assert.deepEqual(tools, ["amend", "board_get", "board_set", "challenge", "join_r
   assert.match(wa.hint, /addressed you directly/);
   await a.call("send_message", { room, content: "Evidence: the benchmark in the README.", reply_to: wa.addressed_to_you[0].id });
   const wa2 = await a.call("wait_for_messages", { room, timeout_ms: 0 });
-  assert.equal(wa2.addressed_to_you.length, 0, "answering clears the obligation");
+  assert.equal((wa2.addressed_to_you ?? []).length, 0, "answering clears the obligation (an empty list is left out)");
   const stats = (await (await fetch(`${HTTP}/rooms/${room}/stats`)).json()) as { per_participant: { name: string; passes: number }[] };
   assert.equal(stats.per_participant.find((p) => p.name === "claude-1")!.passes, 1);
 }
@@ -748,7 +748,7 @@ assert.deepEqual(tools, ["amend", "board_get", "board_set", "challenge", "join_r
   assert.equal(w3.messages.length, 1);
   assert.ok(w3.messages[0].includes("check the tests"), "second ask survives focused pass");
   await b.call("pass", { room });
-  assert.equal((await b.call("wait_for_messages", { room, timeout_ms: 0 })).addressed_to_you.length, 0);
+  assert.equal(((await b.call("wait_for_messages", { room, timeout_ms: 0 })).addressed_to_you ?? []).length, 0);
   await a.call("send_message", { room, content: "@deepseek-1 one more thing?", force: true });
   const w4 = await b.call("wait_for_messages", { room, timeout_ms: 0 });
   assert.equal(w4.addressed_to_you.length, 1);

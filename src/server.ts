@@ -8,7 +8,7 @@
  * Loop as an agent sees it: join_room -> submit_opening -> send_message /
  * wait_for_messages -> propose -> challenge -> vote -> room concludes -> leave_room.
  */
-import { statusView, topicDigest, topicHead } from "./hub/status-view.js";
+import { statusView, topicDigest } from "./hub/status-view.js";
 import { fmtWait, steerCarry } from "./hub/steer.js";
 import { McpServer, ResourceTemplate, type RegisteredTool } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { randomUUID } from "node:crypto";
@@ -23,7 +23,7 @@ import { createWaitView, WAIT_WOKE, withWoke, wokeOf, type WokeTag } from "./hub
 import { hubTime, timeClaims, timeNote } from "./hub/clock.js";
 import { VERDICT_HINT } from "./hub/checks.js";
 import { boardContinuation, noteBoardRead } from "./hub/board.js";
-import { IDLE_HINT, ideaListHint, proposalNeedHint, idleAgain, idleHint, idleStreak, leaveHint, leaveWaitsFor, listedItems, newlyNamed, offersLeave, openWork, stillOpenHint } from "./hub/open-work.js";
+import { IDLE_HINT, firstQuietNote, ideaListHint, proposalNeedHint, idleAgain, idleHint, idleStreak, leaveHint, leaveWaitsFor, listedItems, newlyNamed, offersLeave, openWork, stillOpenHint } from "./hub/open-work.js";
 
 /** The branch and worktree of each write recruit, for the reply of the call that spawned them; nothing for read-only recruits. */
 const workspaces = (recs: SpawnedAgent[]) => {
@@ -316,7 +316,7 @@ export function createSessionServer(hub: Hub, spawner?: Spawner, opts: { holdMs?
         humans_present: hub.activeParticipants(r).filter((x) => x.agent === "human").map((x) => x.name),
         // its own field, ahead of the summary: the hint is replaced whenever something is owed, and a board of 60 keys buries ten
         ...(hub.resourceNote(r.name) ? { resources: hub.resourceNote(r.name) } : {}),
-        room: ((s) => (opts.topicHeld && s.topic && topicDigest(s.topic) === opts.topicHeld ? { ...s, topic: topicHead(s.topic) } : s))(hub.summary(r)), // a seat whose brief holds it: its opening
+        room: ((s) => ({ ...statusView(s, !(opts.topicHeld && s.topic && topicDigest(s.topic) === opts.topicHeld)), limits: s.limits }))(hub.summary(r)), // a seat whose brief holds the topic gets its opening; limits are said here once
         recent_messages: recent.map((m) => hub.fmt(r, m)),
         next_seq: participant.lastSeenSeq,
         hint: hub.attentionHint(r, participant) ??
@@ -411,7 +411,7 @@ export function createSessionServer(hub: Hub, spawner?: Spawner, opts: { holdMs?
       // a list of ideas left in chat is owed by nobody: say where each one goes (once, until the seat writes an idea/*)
       const listHint = ideaListHint(r, hub.requireParticipant(r, id), content, !!quiet);
       if (listHint) hub.persist({ type: "open_work", room: r.name, pid: id, ts: new Date().toISOString(), items: [`idea_list_nudged:${listedItems(content)}`] });
-      return { sent: hub.fmt(r, { ...m, content: "" }).trimEnd(), id: m.id, seq: m.seq, ...(listHint ? { hint: listHint } : m.autoQuiet ? { hint: AUTO_QUIET_NOTE } : {}), ...clockReply(r.name, m.from.name, "message", content) };
+      return { sent: hub.fmt(r, { ...m, content: "" }).trimEnd(), id: m.id, seq: m.seq, ...(listHint ? { hint: listHint } : m.autoQuiet && firstQuietNote(hub.requireParticipant(r, id)) ? { hint: AUTO_QUIET_NOTE } : {}), ...clockReply(r.name, m.from.name, "message", content) };
     }),
   );
 
@@ -448,7 +448,7 @@ export function createSessionServer(hub: Hub, spawner?: Spawner, opts: { holdMs?
         "timeout_ms (default 55s, max 55s) for one to arrive; a launched seat's connection may hold a full-length wait up to 4 minutes before returning nothing, and still returns at once when something arrives. Call it again if it returns nothing; that is normal. " +
         "Also reports the open proposal (its text only when the version changed since you last saw it), what blocks it, whether your leaving would block it, " +
         "openings progress, humans present, your_turn (round_robin rooms), and whether the room has concluded. " +
-        "Only unchanged:true retains omitted fields from your last wait; otherwise the snapshot replaces them. Current hints still apply. " +
+        "Fields at their default are left out (remaining 0, room open, null, empty lists; your_turn only in round_robin rooms; leaving_would_block is always there); your_role and active_participants come on the first wait and when they change (room_status has them). unchanged:true means nothing else changed since your last wait. Current hints still apply. " +
         "hold_until_actionable=true keeps holding through plain chatter (still returns by timeout_ms, nothing is dropped) so a client that cannot " +
         "locally re-poll without spending a model turn still only wakes for something it must act on.",
       inputSchema: {
@@ -531,7 +531,7 @@ export function createSessionServer(hub: Hub, spawner?: Spawner, opts: { holdMs?
       // only a human's message strips the envelope; a peer ask rides the full one (proposal, board, queue)
       if (focus && hub.focusExclusive(focus)) return withWoke(compactWait(p, {
         hint: toolsRegainedNote || moreNote ? toolsRegainedNote + (hub.attentionHint(r, p) ?? "") + (moreNote ? ` ${moreNote}` : "") : hub.attentionHint(r, p), messages: msgs.map((m) => fmtWait(hub, r, p, m)), remaining,
-        next_seq: p.lastSeenSeq, room_state: r.state, your_turn: r.mode === "free" || hub.currentSpeaker(r)?.id === id,
+        next_seq: p.lastSeenSeq, room_state: r.state, your_turn: r.mode === "free" ? undefined : hub.currentSpeaker(r)?.id === id,
         your_role: p.role ?? "worker", humans_present: hub.activeParticipants(r).filter((x) => x.agent === "human").map((x) => x.name),
         unanswered_human: human ? (resp!.mine ? { id: human.id, name: hub.shown(r, human.from), text: human.content, you_answer: true } : { name: hub.shown(r, human.from), responder: resp!.who, you_answer: false }) : null,
         addressed_to_you: [{ id: focus.id, from: hub.shown(r, focus.from), ...(delivered.has(focus.id) ? { in_messages: true } : { text: focus.content }) }],
@@ -598,7 +598,7 @@ export function createSessionServer(hub: Hub, spawner?: Spawner, opts: { holdMs?
         // a capped page has not reached the end of the log: next_seq is the cursor, not the latest seq
         next_seq: remaining ? p.lastSeenSeq : (r.messages.at(-1)?.seq ?? since),
         room_state: r.state,
-        your_turn: r.mode === "round_robin" ? hub.currentSpeaker(r)?.id === id : true,
+        your_turn: r.mode === "round_robin" ? hub.currentSpeaker(r)?.id === id : undefined,
         your_role: p.role ?? "worker",
         active_participants: hub.activeParticipants(r).map((x) => hub.shown(r, x) + hub.roleTag(x)),
         humans_present: hub.activeParticipants(r).filter((x) => x.agent === "human").map((x) => x.name),

@@ -113,6 +113,9 @@ export function listedItems(content: string): number {
 
 export { proposalNeedHint } from "./needs/needs.js";
 const nudgedAt = new WeakMap<Participant, string>();
+const quietNoted = new WeakSet<Participant>();
+/** AUTO_QUIET_NOTE (about 270 chars) said the same thing on every auto-quiet send: a seat is told once. */
+export const firstQuietNote = (p: Participant): boolean => !quietNoted.has(p) && !!quietNoted.add(p);
 
 /** The line a list in chat gets back: once, then not again until the seat has written an idea/* entry since. A list left
  * in chat is owed by nobody; on idea/<slug> it is named to free seats until someone claims it (idea_unclaimed). */

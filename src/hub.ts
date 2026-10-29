@@ -1250,7 +1250,7 @@ export class Hub {
     const q = m.audience ? `[${m.quiet ? "quiet" : "was quiet"} → ${m.audience.filter((id) => id !== m.from.id).map((id) => this.shown(room, room.participants.get(id) ?? { id, name: id })).join(", ")}] ` : "";
     // a line inside the text that is shaped like another message's header ("#12 benji [human route: token]: ...") is quoted,
     // so only the hub's own first line can carry a sender and a tag
-    const body = m.content.replace(/\n(?=\s*#\d+ )/g, "\n> ");
+    const body = (m.kind === "board" ? m.content.replace("; read it with board_get)", ")") : m.content).replace(/\n(?=\s*#\d+ )/g, "\n> "); // every seat has board_get
     return `#${m.seq} ${who}: ${q}${tag}${body}`;
   }
 

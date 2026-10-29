@@ -63,6 +63,11 @@ assert.equal(none.winner_provenance.value.candidate_revisions, provenance(events
 assert.equal(none.winner_provenance.value.revisions_after_peer_delivery, null, "a build without delivery receipts gives no delivery count, not 0");
 assert.equal(none.winner_provenance.value.revisions_after_peer_framing_read, 0);
 assert.equal(none.winner_provenance.value.revisions_with_explicit_receipt, 0);
+assert.equal(none.winner_provenance.value.board_channel, "peer_board_reads", "this build's provenance has no trigger_board_reads");
+// after the merge with item/delivery-receipts the board channel reads trigger_board_reads, never the key regex (review/8c98df0f.verifier)
+const read = (key: string) => ({ key });
+assert.deepEqual(mod.boardChannel([{ peer_board_reads: [read("decision/x")] }, { peer_board_reads: [read("resource/x")] }]), { source: "peer_board_reads", count: 1 });
+assert.deepEqual(mod.boardChannel([{ peer_board_reads: [read("decision/x")], trigger_board_reads: [] }, { peer_board_reads: [read("evidence/y")], trigger_board_reads: [{ key: "evidence/y" }] }]), { source: "trigger_board_reads", count: 1 });
 const open = await measureRoom(events.filter((e) => e.type !== "state") as any[], R, {});
 assert.match(renderMeasurements([open]), /\*\*Winner provenance\*\*: no winner \(not concluded\)/, "an open room says so before any cosine");
 assert.equal(none.framing_width.status, "unknown", "held width needs a validated labeller");

@@ -63,7 +63,9 @@ try {
     const explicit = (wp?.revisions ?? []).filter((r: any) => r.receipt_basis === "explicit");
     add("winner_provenance", "revisions_with_explicit_receipt", pv?.revisions_with_explicit_receipt ?? null, explicit.length);
     add("winner_provenance", "revisions_after_peer_delivery", pv?.revisions_after_peer_delivery ?? null, explicit.length ? explicit.filter((r: any) => r.peer_deliveries.length > 0).length : null);
-    add("winner_provenance", "revisions_after_peer_framing_read", pv?.revisions_after_peer_framing_read ?? null, wp?.revisions?.filter((r: any) => r.peer_board_reads.some((b: any) => /^(draft|position|decision|design|hypothesis|plan)\//.test(b.key))).length ?? null);
+    const trig = (wp?.revisions ?? []).some((r: any) => Array.isArray(r.trigger_board_reads));
+    add("winner_provenance", "board_channel", pv?.board_channel ?? null, trig ? "trigger_board_reads" : "peer_board_reads");
+    add("winner_provenance", "revisions_after_peer_framing_read", pv?.revisions_after_peer_framing_read ?? null, (wp?.revisions ?? []).filter((r: any) => trig ? r.trigger_board_reads.length > 0 : r.peer_board_reads.some((b: any) => /^(draft|position|decision|design|hypothesis|plan)\//.test(b.key))).length);
     const hand = labels.provenanceLabels?.find((l) => l.room === room);
     if (hand) add("winner_provenance", "label", pv?.label ?? null, hand.adjudicated_origin ?? hand.origin);
 

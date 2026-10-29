@@ -11,6 +11,7 @@
  *   GET  /rooms/:room/transcript      -> plain text
  *   GET  /rooms/:room/stats
  *   GET  /rooms/:room/metrics[?format=md] -> run metrics computed from the room's log (src/run-metrics.ts)
+ *   GET  /rooms/:room/measurements[?format=md] -> RSI-7's four room measurements from the log (src/measurements/log-routes.ts)
  *   POST /rooms/:room/messages {name, content, reply_to?} -> speak as a human participant
  *   GET  /questions?names=benji       -> agents' unanswered asks to the human, across rooms
  *   POST /rooms/:room/vote {name, proposal_id, vote, reason} -> human vote (disagree = veto)
@@ -18,15 +19,14 @@
 import "./node-compat.js";
 import { steerAckAs, steerAckSeat, steerPeek, steerPeekSeat } from "./hub/steer.js";
 import { SUSPECTED_DEAD_MS } from "./hub/kick.js";
-import { recruitmentClaim } from "./hub/coverage/coverage.js";
+import { claimRecruitmentArea } from "./hub/coverage/recruitment.js";
 import { callerSeatKeys, CALLER_TIMEOUT_MS } from "./hub/caller.js";
 import { randomUUID } from "node:crypto";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { existsSync, readFileSync, realpathSync } from "node:fs";
-import { gitShaAuthor, parseRoomLog, renderMetrics, roomRepos, runMetrics } from "./run-metrics.js";
-import { renderTimeline, runTimeline } from "./run-timeline.js";
+import { realpathSync } from "node:fs";
 import { registerAdminRoutes, sameOriginWrites } from "./launch/admin-routes.js";
+import { registerLogRoutes } from "./measurements/log-routes.js";
 import { createMcpExpressApp } from "@modelcontextprotocol/sdk/server/express.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import express from "express";
@@ -124,11 +124,7 @@ hub.onProposalOpened = (room, proposal) => {
 };
 spawner.attach({ ...recruitSettingsHooks(hub), // a room's run settings for its recruits, one recruit_spawn event each (src/seat/settings.ts)
   isHeld: (room) => { try { return Boolean(hub.hold(hub.getRoom(room))); } catch { return false; } },
-  claimArea: (room, requester, area, team, brief) => {
-    const r = hub.getRoom(room), existing = r.board.get(`claim/${area}`);
-    if (existing && existing.by !== requester) throw new HubError(`claim/${area} is owned by ${existing.by}; recruit into their team instead.`, undefined, "ownership");
-    hub.setBoardAs(room, requester, `claim/${area}`, recruitmentClaim(r, requester, area, team, brief));
-  },
+  claimArea: (room, requester, area, team, brief) => claimRecruitmentArea(hub, room, requester, area, team, brief),
   ensureRoom: (room, topic, parent) => {
     hub.recruitRoom(room, topic, parent);
   },
@@ -707,21 +703,7 @@ app.post("/rooms/:room/close", (req, res) => {
     res.status(400).type("text/plain").send(e instanceof HubError ? e.message : "error");
   }
 });
-// reads the whole room log and runs git once per cited commit, synchronously: for a report or an operator's look, never a dashboard poll
-app.get("/rooms/:room/metrics", (req, res) => {
-  try {
-    const r = hub.getRoom(req.params.room);
-    const file = hub.dataDir ? resolve(hub.dataDir, `${r.name}.jsonl`) : undefined;
-    if (!file || !existsSync(file)) return void res.status(404).type("text/plain").send("no room log: this hub runs in memory");
-    const events = parseRoomLog(readFileSync(file, "utf8"));
-    const m = runMetrics(events, { shaAuthor: gitShaAuthor(...roomRepos(events), process.env.CHATROOM_DEFAULT_CWD, hub.cwd) });
-    const timeline = runTimeline(events);
-    if (req.query.format === "md") res.type("text/markdown").send(renderMetrics(m) + renderTimeline(timeline));
-    else res.json({ ...m, timeline });
-  } catch (e) {
-    notFound(res, e);
-  }
-});
+registerLogRoutes(app, hub, notFound);
 app.get("/rooms/:room/transcript", (req, res) => {
   try {
     const r = hub.getRoom(req.params.room);

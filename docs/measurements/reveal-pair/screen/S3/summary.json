@@ -1,0 +1,100 @@
+{
+  "slot": "S3",
+  "rivals": false,
+  "room": "swarm-225139-bn7x-room",
+  "outcome": "pass",
+  "infra_reasons": [],
+  "counts_toward_gate": true,
+  "concluded": true,
+  "timed_out": false,
+  "primary_pass": true,
+  "launcher_exit_code": 0,
+  "logs_scanned": [
+    "/private/tmp/rlp-final/swarms/reveal-pair/S3/launcher.log",
+    "/private/tmp/rlp-final/swarms/swarm-225139-bn7x/claude-opus-5-5-1.log",
+    "/private/tmp/rlp-final/swarms/swarm-225139-bn7x/claude-opus-5-5-2.log",
+    "/private/tmp/rlp-final/swarms/swarm-225139-bn7x/verifier.log",
+    "/private/tmp/rlp-final/swarms/swarm-225139-bn7x/claude-opus-5-5-1.out",
+    "/private/tmp/rlp-final/swarms/swarm-225139-bn7x/claude-opus-5-5-2.out",
+    "/private/tmp/rlp-final/swarms/swarm-225139-bn7x/verifier.out"
+  ],
+  "seats_joined": [
+    "claude-opus-5-5-1",
+    "claude-opus-5-5-2",
+    "verifier"
+  ],
+  "run_outcome": {
+    "kind": "concluded",
+    "timedOut": false,
+    "detail": "The lead room concluded."
+  },
+  "artifact": "task_pass",
+  "failing_cases": [],
+  "failing_n": 0,
+  "anti_tamper_unchanged": true,
+  "frozen": {
+    "task_sha256": "1b5d5bd5add5731ab94112d920a2844d125b66119880bdc300209621fdd78c0a",
+    "scorer_sha256": "f4b645c670ae4655aec1189e4d7320294115f0e3c6da3b5ba41a7ee3b1cd00f8",
+    "hub_entry_sha256": "e2825af96f0451a88994de9b7274e34ed10c088aa24e70ec188a5a5b962d985f",
+    "dist_sha256": "014a198d19fe58d54c105325da96f4f6bc01da901354d8b51410ab022b32b55f",
+    "head": "e03bf696",
+    "runner_sha256": "ce0a15ffcadfb3f1eb6b0d1596df73f8d5ab8723cbf10e1d44a0240b15f095da"
+  },
+  "duration_s": 446.19,
+  "usage": {
+    "steps": 0,
+    "prompt_tokens": 0,
+    "completion_tokens": 0,
+    "cost_usd": 4.771803199999999,
+    "seats": 3,
+    "seats_with_usage": 3,
+    "coverage": "complete",
+    "input_tokens": 252,
+    "cache_read_input_tokens": 6687464,
+    "cache_creation_input_tokens": 203342,
+    "output_tokens": 90239
+  },
+  "per_seat": [
+    {
+      "name": "claude-opus-5-5-1",
+      "cost": 1.3171018,
+      "killed_at_timeout": null
+    },
+    {
+      "name": "claude-opus-5-5-2",
+      "cost": 1.7254874999999996,
+      "killed_at_timeout": null
+    },
+    {
+      "name": "verifier",
+      "cost": 1.7292138999999995,
+      "killed_at_timeout": null
+    }
+  ],
+  "openings": 3,
+  "alternatives": 5,
+  "ideas_seeded": [
+    "idea/use-toprecision-100-tofixed-doubles-then",
+    "idea/compare-against-c-printf-output-via-pre",
+    "idea/use-tofixed-toexponential-digits-patch",
+    "idea/use-toprecision-tofixed-then-patch-exact",
+    "idea/python-formatting-as-float-oracle"
+  ],
+  "framings_seeded": [
+    "idea/use-toprecision-100-tofixed-doubles-then",
+    "idea/compare-against-c-printf-output-via-pre",
+    "idea/use-tofixed-toexponential-digits-patch",
+    "idea/use-toprecision-tofixed-then-patch-exact",
+    "idea/python-formatting-as-float-oracle"
+  ],
+  "rival_assigned": [],
+  "rival_answered": [],
+  "framing_events": {
+    "attacked": 4
+  },
+  "names_case458_error": true,
+  "names_catching_check": true,
+  "framing_texts_n": 5,
+  "conclusion": "format.ts in the workspace (sha1 6e08f0ddfa41e7bede38542db3b28bab50df4a1e, 257 lines) is the complete implementation of format(fmt, ...args) per README.md. The export and signature are unchanged, and it uses no dependencies, no network and no shelling out. Design: a hand-written parser; integers via BigInt toString with the README's precision, '#' and 0-flag rules; floats via exact decimal expansion of the double (m\u00b72^e as BigInt n/10^k) and its own round-half-even, with e/f/g sharing one rounding path and g choosing its style from the post-rounding exponent. How it was checked: evidence/o51-selftest has README smoke cases and 20k random specs vs cc printf with 0 mismatches, and tsc --strict is clean at targets es5, es2017 and es2022 when lib includes es2020. BigInt is required anyway because the signature takes bigint. The file uses no bigint literals or bigint **, so the target alone never blocks compilation. review/fuzz-o52 found 0 diffs over 700k specs vs an independent implementation and 0 over 60k boundary-weighted float cases vs cc printf. verify/fuzz found 0 failures over 200k specs plus 40k multi-conversion strings vs cc snprintf, its fuzzer caught all 4 planted mutants, and huge precisions up to %.1100f match C. For ints wider than the C oracle's 64 bits, /tmp/fmtv/bigint.mjs ran 100k random d/i/x/X/o specs on 60-400-bit bigints (widths and precisions up to 150, all legal flags) against an independent README-rule reference, with 0 failures (resource/fuzzer). bun and deno also give output identical to node. A rerun of the verifier's fuzzer with seed 777 also gave 50k cases and 0 failures. The toFixed/toPrecision and Python-oracle alternatives were rejected on the board (attack/idea/*).",
+  "room_log": "/private/tmp/rlp-final/swarms/reveal-pair/S3/data/swarm-225139-bn7x-room.jsonl"
+}

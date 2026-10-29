@@ -51,6 +51,8 @@ export function runCommands(commands, { cwd, timeout = defaultTimeout(), log = l
 }
 
 export const offlineScripts = [
+  'recruit-area-owner-regression.ts',
+  'delivery-receipts-regression.ts',
   'winner-provenance-regression.ts',
   'base-not-a-commit-regression.ts',
   'replay-skips-non-room-files-regression.ts',
@@ -102,6 +104,7 @@ export const offlineScripts = [
   'idle-leave-regression.ts',
   'idea-lists-regression.ts',
   'opening-alternatives-regression.ts',
+  'reveal-rivals-regression.ts',
   'brainstorm-breadth-regression.ts',
   'opening-spread-regression.ts',
   'framing-width-regression.ts',
@@ -267,6 +270,7 @@ export const offlineScripts = [
   'respawn-outage-regression.ts',
   'respawn-cut-body-regression.ts',
   'hub-supervisor-regression.ts',
+  'hubd-seat-guard-regression.ts',
   'hub-death-log-regression.ts',
   'reseat-regression.ts',
   'reseat-closed-room-regression.ts',
@@ -385,6 +389,7 @@ export const offlineScripts = [
   'result-chars-regression.ts',
   'steer-count-regression.ts',
   'steer-split-regression.ts',
+  'measurements-regression.ts',
   'p90-context-regression.ts',
   'absence-claim-regression.ts',
   'seat-hold-regression.ts',

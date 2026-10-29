@@ -6,7 +6,7 @@ import { createWriteStream, existsSync, mkdirSync, readFileSync, readdirSync, st
 import { carryHooks, hooksLine, hooksOff } from "./worktree-hooks.js";
 import { checkJoined, joinLines, roomNames, type LaunchedSeat } from "./join-check.js";
 import { dirname, resolve } from "node:path";
-import { collectRoomSnapshot, renderRunReport, writeRunResult, rollupUsage, hubUsageRollup, parseClaudeCliOutput, transcriptPath, seatScorecard, classifyOutcome, proposedDecisionDir, promptDigests, type RunResult, type RoomSnapshot, type SeatUsageRollup } from "./result.js";
+import { collectRoomSnapshot, runMeasurements, renderRunReport, writeRunResult, rollupUsage, hubUsageRollup, parseClaudeCliOutput, transcriptPath, seatScorecard, classifyOutcome, proposedDecisionDir, promptDigests, type RunResult, type RoomSnapshot, type SeatUsageRollup } from "./result.js";
 import { carriedSummary, settledAxes } from "./settled.js";
 import { registerRespawn, respawnProbe } from "./respawn.js";
 import { fileURLToPath } from "node:url";
@@ -17,7 +17,7 @@ import { claudeArgs } from "./claude-args.js";
 import { codexSeatCommand, codexUsageTracker } from "./codex-seat.js";
 import { claudeSandbox } from "./sandbox.js";
 import { topicDigest } from "./hub/status-view.js";
-import { stopStrays } from "./strays.js";
+import { collectRunSweep, type StraySweep } from "./strays.js";
 import { launchGuide } from "./cost-estimate.js";
 import { seatTarget, selectTargets, targetAssignment, targetSelectionNote, type LaunchTargets } from "./seat-targets.js";
 import { runRooms } from "./launch/run-rooms.js";
@@ -38,9 +38,9 @@ const flag = (name: string, def?: string) => {
   return i >= 0 ? argv[i + 1] : def;
 };
 const has = (name: string) => argv.includes(`--${name}`);
-const BOOL_FLAGS = new Set(["--keep-hub", "--reuse-hub", "--apply", "--full-access", "--named", "--flat", "--require-verification", "--respawn", "--claude-full", "--no-carry", "--no-seat-targets", "--sandbox", "--no-web"]);
+const BOOL_FLAGS = new Set(["--keep-hub", "--reuse-hub", "--apply", "--full-access", "--named", "--flat", "--require-verification", "--respawn", "--claude-full", "--no-carry", "--no-seat-targets", "--sandbox", "--no-web", "--reveal-rivals"]);
 const task = argv.find((a, i) => !a.startsWith("--") && (i === 0 || !argv[i - 1].startsWith("--") || BOOL_FLAGS.has(argv[i - 1])));
-if (!task) { console.error('usage: swarm "<task>" [--flat] [--done-when text] [--verify text] [--agents 6] [--cwd dir] [--models sonnet,haiku] [--lead-model opus] [--verifier-model opus] [--planner-model opus] [--codex k] [--codex-models gpt-6-astra,gpt-5.6-sol,gpt-5.6-terra] [--openrouter k] [--openrouter-models deepseek/deepseek-v4.1-flash,...] [--verifier-openrouter slug] [--openrouter-reasoning low|medium|high] [--require-verification] [--quorum unanimous|majority|supermajority] [--chair name] [--owner-word] [--seat-hooks off] [--seat-ai-gates on] [--prompt loop.md] [--groups groups.json [--digest-every 45]] [--resources file.md] [--sources registry.json] [--preflight "<cmd>" | --preflight-strict "<cmd>"] [--respawn] [--apply] [--full-access] [--named] [--claude-full] [--no-carry] [--no-seat-targets] [--no-web] [--sandbox] [--timeout 30] [--port 7717] [--result-path path]'); process.exit(2); }
+if (!task) { console.error('usage: swarm "<task>" [--flat] [--done-when text] [--verify text] [--agents 6] [--cwd dir] [--models sonnet,haiku] [--lead-model opus] [--verifier-model opus] [--planner-model opus] [--codex k] [--codex-models gpt-6-astra,gpt-5.6-sol,gpt-5.6-terra] [--openrouter k] [--openrouter-models deepseek/deepseek-v4.1-flash,...] [--verifier-openrouter slug] [--openrouter-reasoning low|medium|high] [--require-verification] [--quorum unanimous|majority|supermajority] [--chair name] [--owner-word] [--seat-hooks off] [--seat-ai-gates on] [--prompt loop.md] [--groups groups.json [--digest-every 45]] [--resources file.md] [--sources registry.json] [--preflight "<cmd>" | --preflight-strict "<cmd>"] [--respawn] [--apply] [--full-access] [--named] [--claude-full] [--no-carry] [--no-seat-targets] [--no-web] [--reveal-rivals] [--sandbox] [--timeout 30] [--port 7717] [--result-path path]'); process.exit(2); }
 const PF = preflightAtLaunch(argv, resolve(flag("cwd", process.cwd())!)); // --preflight / --preflight-strict: the kit's environment checks, before anything starts (src/launch/preflight.ts)
 /** --groups <file.json>: operator-defined rooms/briefs (src/groups.ts, prompts/group.md), no planner; --agents is workers plus verifier. */
 let GROUPS: GroupsFile | undefined;
@@ -93,7 +93,7 @@ let STOPPING = false;
 /** --flat: one room and verifier, no planner; seats organise with claims/recruits/break-outs when the work's shape is unknown. */
 const FLAT = has("flat");
 /** --fresh-challenger: a hub this launcher starts recruits one read-only seat per opened proposal to check it (Spawner.freshChallenger) */
-const FRESH_CHALLENGER = has("fresh-challenger");
+const FRESH_CHALLENGER = has("fresh-challenger"); const REVEAL_RIVALS = has("reveal-rivals"); // a hub this run starts hands each opener a rival framing (src/hub/openings/rivals.ts)
 /** --no-carry: seats start from the brief alone (no settled axes, no PRIOR RUNS, auto-memory off); see carrySettings in env.ts */
 const NO_CARRY = has("no-carry");
 /** --seat-hooks off: seat worktrees do not get the repository's commit hooks (c3d2d088 copies them by default). For runs whose
@@ -201,7 +201,7 @@ async function ensureHub() {
       console.error(`Refusing to run on :${PORT}: ${problem}. Pick a free port, or pass --reuse-hub if that is intended.`);
       process.exit(2);
     }
-    log(`using the hub already running on :${PORT} (not started by this run, so this run never stops it)${problem ? `; WARNING: ${problem}` : ""}`);
+    log(`using the hub already running on :${PORT} (not started by this run, so this run never stops it)${problem ? `; WARNING: ${problem}` : ""}${REVEAL_RIVALS ? "; --reveal-rivals does not reach it: that hub follows its own CHATROOM_REVEAL_RIVALS" : ""}`);
     // a supervised hub leaves its launcher token next to its log, in the checkout it was started from
     launcherToken ??= readLauncherToken(info.build?.root ?? repoRoot, PORT);
     return;
@@ -211,7 +211,7 @@ async function ensureHub() {
   const keeps = !Object.keys(ownHubEnv(HUB_IDLE_EXIT_MIN, PORT)).length;
   const child = spawn("node", [resolve(repoRoot, "dist/hubd.js"), "--port", String(PORT), ...(keeps ? ["--always"] : [])], {
     // CHATROOM_DEFAULT_CWD: a recruit with no cwd and no worktree to go by works in this run's project, not in this checkout
-    env: { ...process.env, PORT: String(PORT), CHATROOM_DATA_DIR: resolve(repoRoot, "data"), CHATROOM_DEFAULT_CWD: process.env.CHATROOM_DEFAULT_CWD || CWD, ...(SANDBOX ? { CHATROOM_SANDBOX: "1" } : {}), ...(OWNER_WORD_ON ? { CHATROOM_OWNER_WORD: "1" } : {}), ...(SEAT_HOOKS_OFF ? { CHATROOM_SEAT_HOOKS: "off" } : {}), ...(FRESH_CHALLENGER ? { CHATROOM_FRESH_CHALLENGER: "1" } : {}), ...ownHubEnv(HUB_IDLE_EXIT_MIN, PORT) },
+    env: { ...process.env, PORT: String(PORT), CHATROOM_DATA_DIR: resolve(repoRoot, "data"), CHATROOM_DEFAULT_CWD: process.env.CHATROOM_DEFAULT_CWD || CWD, ...(SANDBOX ? { CHATROOM_SANDBOX: "1" } : {}), ...(OWNER_WORD_ON ? { CHATROOM_OWNER_WORD: "1" } : {}), ...(SEAT_HOOKS_OFF ? { CHATROOM_SEAT_HOOKS: "off" } : {}), ...(FRESH_CHALLENGER ? { CHATROOM_FRESH_CHALLENGER: "1" } : {}), ...(REVEAL_RIVALS ? { CHATROOM_REVEAL_RIVALS: "1" } : {}), ...ownHubEnv(HUB_IDLE_EXIT_MIN, PORT) },
     detached: true,
     stdio: "ignore",
   });
@@ -714,17 +714,17 @@ for (const g of plan.groups) {
  * c.kill() reaches the seats themselves only. What a seat started in its own process group (a dev hub it detached, as
  * devHubRule tells write seats to start) survives that and outlives the run, so the launcher also stops whatever still
  * runs inside this run's own worktrees, with the lsof-cwd sweep pool-run uses (src/strays.ts; docs/reuse-survey-
- * 2026-09-23.md, "Process containment and the stray sweep"). Only .swarm-worktrees/<run>/ is swept, never the project
- * checkout: that also holds the user's shells and editors and anything else started there. Sweeps run one at a time.
+ * 2026-09-23.md, "Process containment and the stray sweep"). Recruits use sibling room roots, sometimes under the
+ * canonical project checkout rather than CWD. Only owned roots are swept, never either checkout itself.
  */
 let sweeping: Promise<void> = Promise.resolve();
+const straySweeps: StraySweep[] = [];
 function sweepStrays(why: string): Promise<void> {
-  const root = resolve(CWD, ".swarm-worktrees", SWARM_ID);
-  if (!existsSync(root)) return sweeping;
   sweeping = sweeping
     .then(async () => {
-      const n = await stopStrays(realpathSync(root)); // lsof reports real paths (/private/tmp, not /tmp)
-      if (n) log(`${why}: stopped ${n} process(es) still running in this run's worktrees`);
+      straySweeps.push(await collectRunSweep({ cwd: CWD, commonDir: PROJECT_IDENTITY.git?.commonDir, startedAt: RUN_STARTED,
+        run: SWARM_ID, rooms: [leadsRoom, ...groupRooms], url: URL_, reason: why, log }));
+      persistIncremental(completedRuns);
     })
     .catch((e) => log(`${why}: stray sweep failed: ${e instanceof Error ? e.message : String(e)}`));
   return sweeping;
@@ -846,7 +846,7 @@ const persistIncremental = (done: SeatRun[]) => {
     reportPath: resolve(OUT, "report.md"),
     artifactPath: resolve(flag("result-path", resolve(OUT, "result.json"))!),
     collectionErrors: [`incremental checkpoint: ${done.length}/${runs.length} runs complete`],
-    usage: rollupUsage(done), seatTargets: TARGETS, ...(PF.result ? { preflight: PF.result } : {}),
+    usage: rollupUsage(done), seatTargets: TARGETS, straySweeps, ...(PF.result ? { preflight: PF.result } : {}),
   });
 };
 const completedRuns: SeatRun[] = [];
@@ -874,7 +874,7 @@ try {
 } catch (e) { collectionErrors.push(`Room discovery: ${String(e)}`); }
 const snapshots: RoomSnapshot[] = [];
 for (const name of new Set([leadsRoom, ...groupRooms])) {
-  const snapshot = await collectRoomSnapshot(URL_, name, { metrics: true });
+  const snapshot = await collectRoomSnapshot(URL_, name, { metrics: true, measurements: log });
   if (snapshot.error) collectionErrors.push(`${name} payload: ${snapshot.error}`);
   if (snapshot.transcript.error) collectionErrors.push(`${name} transcript: ${snapshot.transcript.error}`);
   snapshots.push(snapshot);
@@ -888,7 +888,7 @@ const artifactPath = resolve(flag("result-path", resolve(OUT, "result.json"))!);
 const artifact: RunResult = {
   schemaVersion: 1,
   run: { id: SWARM_ID, startedAt: new Date(RUN_STARTED).toISOString(), completedAt: new Date().toISOString(), task, doneWhen: plan.done_when },
-  project: PROJECT_IDENTITY, ...(SOURCE_FEED ? { sourceFeed: SOURCE_FEED.receipt } : {}),
+  project: PROJECT_IDENTITY, straySweeps, ...(SOURCE_FEED ? { sourceFeed: SOURCE_FEED.receipt } : {}),
   leadRoom: leadsRoom,
   rooms: snapshots,
   verifier: { name: "verifier", output: results.find(r => r.name === "verifier")?.text ?? null },
@@ -896,7 +896,7 @@ const artifact: RunResult = {
   outcome: classifyOutcome(snapshots.find(r => r.name === leadsRoom)?.payload, { timedOut, atTimeout: leadAtTimeout }),
   hubUsage: hubUsageRollup(snapshots),
   scorecard: seatScorecard(snapshots, Object.fromEntries([...exitCodes].map(([name, exitCode]) => [name, { exitCode, cost: seatCosts.get(name), killedAtTimeout: killedAtTimeout.has(name), commits: branchCommits(name), ...(seatTranscripts.has(name) ? { transcript: seatTranscripts.get(name) } : {}) }]))),
-  ...(metrics ? { metrics } : {}), ...(PF.result ? { preflight: PF.result } : {}), ...(SIZING ? { sizing: SIZING } : {}), seatTargets: TARGETS, prompts: promptDigests(resolve(repoRoot, "prompts"), ["verifier.md", FLAT ? FLAT_PROMPT : GROUPS ? "group.md" : "worker.md", "recruit.md", ...(FLAT ? [] : ["lead-tail.md"]), ...(OWNER_WORD_ON ? ["owner-word.md"] : [])]),
+  ...(metrics ? { metrics } : {}), measurements: runMeasurements(snapshots, leadsRoom), ...(PF.result ? { preflight: PF.result } : {}), ...(SIZING ? { sizing: SIZING } : {}), seatTargets: TARGETS, prompts: promptDigests(resolve(repoRoot, "prompts"), ["verifier.md", FLAT ? FLAT_PROMPT : GROUPS ? "group.md" : "worker.md", "recruit.md", ...(FLAT ? [] : ["lead-tail.md"]), ...(OWNER_WORD_ON ? ["owner-word.md"] : [])]),
 };
 if (digestPasses.length) {
   const board = (room: string) => snapshots.find((r) => r.name === room)?.payload?.board as Record<string, { text?: string; updated_at?: string }> | undefined;

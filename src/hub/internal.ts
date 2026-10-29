@@ -34,6 +34,7 @@ export function seatSettingsOf(rooms: ReadonlyMap<string, Room & Pick<Opts, "sea
 }
 
 export type Event =
+  | import("./delivery/receipts.js").DeliveryReceipt
   | { type: "room"; room: string; opts: Opts; createdAt: string; telemetryVersion?: 1 }
   | { type: "message"; msg: Message }
   | { type: "attention"; room: string; pid: string; lastSeenSeq: number; withheld: number[]; quietReceipts: number[]; focusedAsk?: string; declinedAsks: string[]; declinedAt?: Record<string, number> }
@@ -46,7 +47,14 @@ export type Event =
   /** alternatives: what the seat named besides its answer (decision/opening-alternatives); seeded as idea/* on reveal */
   | { type: "opening"; room: string; pid: string; content: string; alternatives?: string[] }
   /** ideas_seeded: the idea/* keys written from the openings' alternatives (telemetry; replay reads only the type) */
-  | { type: "openings_revealed"; room: string; ideas_seeded?: string[] }
+  | { type: "openings_revealed"; room: string; ideas_seeded?: string[]; idea_slug_sources?: { key: string; source: string }[] }
+  /** the framings a reveal seeded (alternatives, plus openings handed out as rivals) and whether rivals were on (hub/openings/rivals.ts) */
+  | { type: "framings_seeded"; room: string; keys: string[]; rivals: boolean; ts: string }
+  | { type: "rival_assigned"; room: string; seat: string; key: string; source: "alternative" | "opening"; from: string; overlap: number; method: "jaccard"; ask: string; ts: string }
+  /** telemetry only: a seat replied to (or passed on) its rival ask */
+  | { type: "rival_answered"; room: string; seat: string; key: string; via: "reply" | "pass"; chars?: number; held_claim: boolean; minutes_since_reveal: number; ts: string }
+  /** telemetry only: a seeded framing was claimed, attacked, given a disposition or cleared */
+  | { type: "framing"; room: string; key: string; action: string; by: string; author: string; assigned_to?: string[]; by_assigned: boolean; minutes_since_reveal: number; ts: string }
   /** by/drafted/drafters/seconds are telemetry (replay reads only the type): how the round ended and how many had drafted */
   | { type: "drafts_revealed"; room: string; by?: "all" | "deadline"; drafted?: number; drafters?: number; seconds?: number }
   | { type: "drafts_opened"; room: string; at: string; by?: string; key?: string }
@@ -89,6 +97,7 @@ export type Event =
    * Written at the request, as the "recruited" line is: a write recruit stopped while its worktree is made has one but
    * never starts. Whether a seat started is its join (review/a7d9f59e n1). */
   | ({ type: "recruit_spawn"; room: string; by_role?: string; ts: string } & RecruitSpawn)
+  | { type: "recruit_claim"; room: string; key: string; phase: "reserved" | "activated" | "expired" | "activation_failed"; requested_by: string; owner: string; team: string[]; reviewer: string | null; error?: string; ts: string }
   /** telemetry only (replay ignores it; Hub.recordCarried, inputs/owner-4): what seats were told was already settled and
    * read (src/settled.ts), as ids; from the launcher once per room (seats absent: every seat it started), from the spawner per recruit */
   | { type: "carried"; room: string; from: "launcher" | "spawner"; seats?: string[]; ids: string[]; axes: number; chars: number; no_carry?: true; ts: string }

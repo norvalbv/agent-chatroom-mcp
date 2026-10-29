@@ -28,6 +28,16 @@ const root = resolve(dirname(self), "..");
 const argv = process.argv.slice(2);
 const PORT = Number(argv.includes("--port") ? argv[argv.indexOf("--port") + 1] : (process.env.PORT ?? 7717));
 const ALWAYS = argv.includes("--always");
+// Every provider's seat shell carries this key. Refuse before opening logs or spawning a hub: --always revives a
+// listener a seat deliberately stopped by port, and survived the RSI-7 recruit's launcher sweep.
+if (ALWAYS && process.env.CHATROOM_SEAT_KEY) {
+  const detail = "refused: hubd --always in a seat; omit --always and stop your private hub by PID";
+  console.error(`seat-guard: ${detail}`);
+  const heartbeat = process.env.CHATROOM_HEARTBEAT_URL;
+  if (heartbeat) await fetch(heartbeat, { method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ seat_key: process.env.CHATROOM_SEAT_KEY, tool: "seat-guard", detail }), signal: AbortSignal.timeout(2_000) }).catch(() => {});
+  process.exit(2);
+}
 if (!Number.isInteger(PORT) || PORT <= 0) {
   console.error("hubd: --port <number> (or PORT) is required");
   process.exit(2);

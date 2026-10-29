@@ -474,7 +474,10 @@ assert.deepEqual(tools, ["amend", "board_get", "board_set", "challenge", "join_r
   assert.equal(sub.require_verification, true);
   assert.equal(sub.require_challenge, true);
   const claim = await a.call("board_get", { room: "recruit-auth", key: "claim/auth" });
-  assert.match(claim.text, /"owner":"claude-1"/);
+  assert.equal(claim.by, st.spawned[0]);
+  assert.equal(JSON.parse(claim.text).owner, st.spawned[0]);
+  assert.deepEqual(JSON.parse(claim.text).team, st.spawned);
+  assert.equal(JSON.parse(claim.text).requested_by, "claude-1");
   const r2 = (await import("node:fs")).readFileSync(st.logs[1], "utf8");
   assert.match(r2, /your teammates are claude-recruit-2/);
   assert.match(r2, /post_to_room\(from_room="recruit-auth", to_room="recruit"/);

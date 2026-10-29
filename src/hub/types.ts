@@ -239,8 +239,8 @@ export interface Message {
   ts: string;
   replyTo?: string;
   proposalId?: string;
-  /** "opening" marks a blind opening revealed in a batch; "need" a needs/* ask to a blocked claim owner and "hands" one about an idea nobody can take (hub/asks/hands.ts), both owed until answered */
-  tag?: "opening" | "need" | "hands" | "limits";
+  /** "opening" marks a blind opening revealed in a batch; "need" a needs/* ask to a blocked claim owner, "hands" one about an idea nobody can take (hub/asks/hands.ts) and "rival" a seat's rival framing at the reveal (hub/openings/rivals.ts), all owed until answered */
+  tag?: "opening" | "need" | "hands" | "limits" | "rival";
   /** participant ids named with @ in the content */
   mentions?: string[];
   /** quiet: pushed only to `audience` (sender + mentions); still in the log for everyone */
@@ -298,8 +298,8 @@ export interface BoardEntry {
   /** written after the room concluded, inside Hub.LATE_WRITE_MS (src/hub/board.ts lateWrite): on the record, not part of what was decided */
   late?: boolean;
   /** claim/* entries only: the reviewer the hub assigned at creation (name/id), never client-supplied. */
-  reviewer?: string;
-  reviewerId?: string;
+  reviewer?: string; reviewerId?: string;
+  /** Hub-only reservation, completed when the owner joins. */ recruitment?: { requestedBy: string; pending: boolean };
   /** claim/* entries only: the claimant's branch and worktree, read by the hub from the seat at each write, never client-supplied. */
   workspace?: { branch?: string; worktree: string };
   /** draft/* only: written or edited once peers' drafts were readable, so it is not an independent attempt (sticky). */

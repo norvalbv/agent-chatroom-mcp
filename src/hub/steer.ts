@@ -9,6 +9,7 @@
  */
 import type { Hub } from "../hub.js";
 import type { Message, Participant, Room } from "./types.js";
+import { deliveryResult, recordDelivery } from "./delivery/receipts.js";
 
 /** One addressed ask as a consumer injects it mid-turn. */
 export interface SteerItem { room: string; id: string; seq: number; from: string; text: string }
@@ -16,7 +17,9 @@ export interface SteerItem { room: string; id: string; seq: number; from: string
 /**
  * Asks addressed to this seat and not delivered yet by any path (wait, read, carry, an earlier ack): the human message it
  * is the nominated responder for, then authored @-mentions and replies to it. Hub notices are news, not asks, except the
- * hands ask (hub/asks/hands.ts): it goes to a seat that is busy by construction, so it must reach it mid-turn.
+ * hands ask (hub/asks/hands.ts): it goes to a seat that is busy by construction, so it must reach it mid-turn; and the
+ * rival ask (hub/openings/rivals.ts): owed before a first claim, which the last opener can write straight after the
+ * submit_opening that revealed (attack/decision/reveal-rivals.6-1-sol-5), so that call's own result must carry it.
  */
 export function steerPending(hub: Hub, room: Room, p: Participant): Message[] {
   if (!p.active || p.agent === "human" || room.state === "concluded" || room.state === "closed") return [];
@@ -24,7 +27,7 @@ export function steerPending(hub: Hub, room: Room, p: Participant): Message[] {
   const steered = new Set(p.steered ?? []);
   const unseen = (m: Message) => (m.seq > p.lastSeenSeq || held.has(m.seq)) && !steered.has(m.id);
   const focus = hub.attentionFocus(room, p);
-  const asks = [...(focus?.from.agent === "human" ? [focus] : []), ...hub.addressedBy(room, p).filter((m) => m.from.id !== "system" || m.tag === "hands")];
+  const asks = [...(focus?.from.agent === "human" ? [focus] : []), ...hub.addressedBy(room, p).filter((m) => m.from.id !== "system" || m.tag === "hands" || m.tag === "rival")];
   return [...new Map(asks.filter(unseen).map((m) => [m.id, m])).values()].sort((a, b) => a.seq - b.seq);
 }
 
@@ -46,6 +49,7 @@ export function steerAck(hub: Hub, room: Room, p: Participant, ids: string[], ca
   if (!carried) hub.persist({ type: "steer_injected", room: room.name, participant: p.id, asks: msgs.length, chars: msgs.reduce((n, m) => n + steerLine(hub, room, m).text.length, 0), ts: new Date().toISOString() });
   hub.settleRead(room, p, p.lastSeenSeq, msgs, Math.max(p.lastSeenSeq, ...msgs.map((m) => m.seq)));
   p.steered = [...(p.steered ?? []), ...msgs.map((m) => m.id)].slice(-100);
+  if (!carried) recordDelivery(hub, room, p, msgs, "steer");
   return msgs.length;
 }
 
@@ -82,5 +86,5 @@ export function steerCarry(hub: Hub, roomName: string, pid: string): string[] {
   if (!room || !p) return [];
   const msgs = steerPending(hub, room, p);
   if (msgs.length) steerAck(hub, room, p, msgs.map((m) => m.id), true);
-  return msgs.map((m) => steerLine(hub, room, m).text);
+  return deliveryResult(msgs.map((m) => steerLine(hub, room, m).text), room, p, msgs, "carry");
 }

@@ -10,6 +10,7 @@
  */
 import { statusView, topicDigest } from "./hub/status-view.js";
 import { fmtWait, steerCarry } from "./hub/steer.js";
+import { deliveryResult, flushDelivery, readMessages, refusalDelivery } from "./hub/delivery/receipts.js";
 import { McpServer, ResourceTemplate, type RegisteredTool } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
@@ -173,6 +174,7 @@ export function createSessionServer(hub: Hub, spawner?: Spawner, opts: { holdMs?
       const room = typeof a?.room === "string" ? a.room : typeof a?.from_room === "string" ? a.from_room : undefined;
       let participant = telemetryActor(room, a?.participant_id);
       let outcome: CallOutcome = "error";
+      let carried: string[] | undefined;
       const started = Date.now();
       let from = outsider(room, tool);
       // the tool itself puts a reconnecting seat back (pid -> reseat), after the two lines above have read this connection
@@ -197,10 +199,11 @@ export function createSessionServer(hub: Hub, spawner?: Spawner, opts: { holdMs?
         if (tool === "wait_for_messages") { empty = !((data as { messages?: unknown[] })?.messages?.length); woke = (data as { [WAIT_WOKE]?: WokeTag })?.[WAIT_WOKE]; }
         // steering fallback: a hub tool result always reaches the model, so pending asks ride on it (and count as delivered)
         if (room && participant && !SELF_DELIVERING.has(tool)) {
-          const steer = steerCarry(hub, room, participant);
+          const steer = carried = steerCarry(hub, room, participant);
           if (steer.length) data = typeof data === "string" ? `${data}\n\naddressed_to_you_meanwhile:\n${steer.join("\n")}` : { ...(data as object), addressed_to_you_meanwhile: steer };
         }
         const result = ok(data); resultChars = result.content[0].text.length;
+        flushDelivery(hub, data); flushDelivery(hub, carried);
         // join_room can create a second identity: use its issued id, not an ambiguous
         // post-join default. leave_room retains the authenticated pre-call actor.
         if (tool === "join_room") participant = telemetryActor(room, (data as { participant_id?: string })?.participant_id);
@@ -212,7 +215,9 @@ export function createSessionServer(hub: Hub, spawner?: Spawner, opts: { holdMs?
           outcome = "hub_refusal";
           hub.recordRefusal(room, tool, e, participant);
         }
-        const failed = fail(e); resultChars = failed.content[0].text.length; return failed;
+        const failed = fail(e); resultChars = failed.content[0].text.length;
+        if (e instanceof HubError) refusalDelivery(hub, room, participant, e.data);
+        return failed;
       } finally {
         // which entry a board_get read or a board_set wrote (or was refused): a board key is a short name, not content, and
         // without it no record can say who read what, or what a refused write was for (review/take-keys)
@@ -308,7 +313,7 @@ export function createSessionServer(hub: Hub, spawner?: Spawner, opts: { holdMs?
           hint: `You are the fresh challenger for ${blind.id}: this join shows only its current text, not the discussion, the board or who agreed. Check one claim against the repository, report it (challenge with a command, or one message), then leave_room.`,
         };
       }
-      return {
+      return deliveryResult({
         participant_id: participant.id,
         you_are: hub.shown(r, participant),
         your_role: participant.role ?? "worker",
@@ -328,7 +333,7 @@ export function createSessionServer(hub: Hub, spawner?: Spawner, opts: { holdMs?
           (r.expectedParticipants && !r.openingsRevealed
             ? "This room uses blind openings: submit_opening with your own short answer before reading others'."
             : "Talk with send_message; wait_for_messages to hear replies. The topic above is the brief; do not restate it."),
-      };
+      }, r, participant, recent, "join");
     }),
   );
 
@@ -529,14 +534,14 @@ export function createSessionServer(hub: Hub, spawner?: Spawner, opts: { holdMs?
       // an ask already carried in this response's messages[] is referenced by id, not sent twice
       const delivered = new Set(msgs.map((m) => m.id));
       // only a human's message strips the envelope; a peer ask rides the full one (proposal, board, queue)
-      if (focus && hub.focusExclusive(focus)) return withWoke(compactWait(p, {
+      if (focus && hub.focusExclusive(focus)) return deliveryResult(withWoke(compactWait(p, {
         hint: toolsRegainedNote || moreNote ? toolsRegainedNote + (hub.attentionHint(r, p) ?? "") + (moreNote ? ` ${moreNote}` : "") : hub.attentionHint(r, p), messages: msgs.map((m) => fmtWait(hub, r, p, m)), remaining,
         next_seq: p.lastSeenSeq, room_state: r.state, your_turn: r.mode === "free" ? undefined : hub.currentSpeaker(r)?.id === id,
         your_role: p.role ?? "worker", humans_present: hub.activeParticipants(r).filter((x) => x.agent === "human").map((x) => x.name),
         unanswered_human: human ? (resp!.mine ? { id: human.id, name: hub.shown(r, human.from), text: human.content, you_answer: true } : { name: hub.shown(r, human.from), responder: resp!.who, you_answer: false }) : null,
         addressed_to_you: [{ id: focus.id, from: hub.shown(r, focus.from), ...(delivered.has(focus.id) ? { in_messages: true } : { text: focus.content }) }],
         open_proposal: null, conclusion: null, leaving_would_block: !!block,
-      }), woke);
+      }), woke), r, p, msgs, "wait");
       if (open) p.seenProposal = { ...(p.seenProposal ?? {}), [open.id]: open.version };
       const owed = hub.addressedBy(r, p);
       if (owed[0]) p.addressWarned = owed[0].id;
@@ -590,7 +595,7 @@ export function createSessionServer(hub: Hub, spawner?: Spawner, opts: { holdMs?
       const shownMsgs = blind ? msgs.filter((m) => m.mentions?.includes(id!) || m.from.agent === "human") : msgs;
       const blindHint = blind && (hub.attentionHint(r, p) ?? `You are the fresh challenger for ${blind.id}: check one claim of the text in open_proposal, report it (challenge with a command, or one message), then leave_room. The room's other messages are not pushed to you.`);
       // the hint goes first: it is the one line a weaker model must not lose to a clamp
-      return withWoke(compactWait(p, {
+      return deliveryResult(withWoke(compactWait(p, {
         hint: blindHint || (toolsRegainedNote || moreNote ? toolsRegainedNote + (hint ? `${hint} ` : "") + moreNote : named ? idleHint(idleWork) : idleWork.length ? stillOpenHint(idleWork) : (leaveOffer ?? hint)),
         messages: shownMsgs.map((m) => fmtWait(hub, r, p, m)),
         remaining,
@@ -620,7 +625,7 @@ export function createSessionServer(hub: Hub, spawner?: Spawner, opts: { holdMs?
           return { messages: sh.mine, of_last: sh.of, fair: sh.fair, over: sh.over };
         })(),
         conclusion,
-      }), woke);
+      }), woke), r, p, shownMsgs, "wait");
     }),
   );
 
@@ -652,16 +657,7 @@ export function createSessionServer(hub: Hub, spawner?: Spawner, opts: { holdMs?
         viewer = pid(room, participant_id);
       } catch {}
       const p = viewer ? r.participants.get(viewer) : undefined;
-      const msgs = p ? hub.readAs(r, p, since_seq, limit) : hub.read(room, since_seq ?? 0, limit, viewer);
-      const hint = p ? hub.attentionHint(r, p) : undefined;
-      // the focused ask leads the batch; the hint rides on it once, not on every queued message behind it
-      const lines = msgs.map((m, i) => hub.fmt(r, m) + (hint && i === 0 ? `\n[HINT] ${hint}` : ""));
-      const remaining = p ? hub.deliveryRemaining(p) : 0;
-      if (remaining) {
-        const last = Math.max(0, ...msgs.filter((m) => m.id !== hub.attentionFocus(r, p!)?.id).map((m) => m.seq));
-        lines.push(`[MORE] ${remaining} more message(s) remain (this page was capped); call read_messages again with since_seq=${last}.`);
-      }
-      return lines;
+      return readMessages(hub, r, p, viewer, since_seq, limit);
     }),
   );
 
@@ -908,7 +904,7 @@ export function createSessionServer(hub: Hub, spawner?: Spawner, opts: { holdMs?
           room_topic: z.string().optional().describe("Topic for the new room."),
           count: z.number().int().min(1).max(3).optional().describe("How many to spawn (default 2 for a new room, 1 otherwise)."),
           replacing: z.string().optional().describe("Exact departed nonhuman seat to replace (room_status liveness \"left\"; an \"away\" seat is still running and is refused); single recruit in this room only."),
-          area: z.string().optional().describe("Claim this area (claim/<area>) for the newcomers first; refused if someone else owns it."),
+          area: z.string().optional().describe("Reserve claim/<area> for the first newcomer as owner; additional newcomers are its team, the requester is not added. Reviewer and worktree bind when the owner joins. Held claims are refused; recruit without area to help their owner. A reservation whose owner never joins expires after the stale-claim window."),
           participant_id: asArg,
         },
       },

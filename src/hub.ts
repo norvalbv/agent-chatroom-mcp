@@ -18,6 +18,7 @@ import type { MessageKind, Vote, Quorum, RoomState, VerifyHead, Role, Participan
 import { now, shortId, norm, emptyBoardManifestCounters, manifestBytes, codeState, commitsIn, keepRefusal, RECENT_REFUSALS, resourceEvents, runPrefix, seatSettingsOf } from "./hub/internal.js";
 import type { Opts, Event, BoardManifestCounters } from "./hub/internal.js";
 import * as board from "./hub/board.js";
+import { activateRecruitmentClaims, expireRecruitmentClaims } from "./hub/coverage/recruitment.js";
 import * as breakouts from "./hub/breakouts/lifecycle.js";
 import * as hands from "./hub/asks/hands.js";
 import * as idle from "./hub/idle.js";
@@ -31,7 +32,7 @@ import { DevRuns, DevRunError, type DevRunHost } from "./hub/dev-runs.js";
 import { takesOf } from "./hub/take.js";
 import * as votes from "./hub/consensus/votes.js";
 import { coverage } from "./hub/coverage/coverage.js";
-import * as openings from "./hub/openings/ideas.js";
+import * as openings from "./hub/openings/ideas.js"; import * as rivals from "./hub/openings/rivals.js";
 import { registeredWakes, wakeSuccessors, type Wake } from "./hub/wake.js";
 import { MemoryWatch, memoryNotice, type Job, type MemoryEvent, type SeatMemory } from "./hub/memory.js";
 import { RUN_END_CAUSES, exitCause, type RunEndCause, type StoppedBy } from "./respawn.js";
@@ -551,9 +552,7 @@ export class Hub {
       this.persist({ type: "join", room: roomName, p: participant });
       this.post(room, "system", undefined, `${this.shown(room, participant)} rejoined the room.`);
     }
-    // A live seat taken back by its participant_id on a newer connection moves there, as a seat-key reseat does. Left on
-    // the older session, the seat was thrown out when that one was reaped idle 30 minutes later, while the newer session
-    // was serving it (bugs.md 3: a chair on one-session-per-call tooling dropped out about every 31 minutes).
+    // Move a reclaimed seat to its newer connection so the old connection's reaper cannot drop it (bugs.md 3).
     if (session && reclaimId === participant.id && participant.session && participant.session !== session && participant.agent !== "human") {
       participant.session = session;
       participant.seatKeyHash = this.seats.hashOf(session) ?? participant.seatKeyHash;
@@ -561,8 +560,8 @@ export class Hub {
     }
     // Bind the chair only after admission succeeds: rejected joins must not reserve it.
     if (role === "chair") room.chair = name;
-    // Reclaiming even an active seat is an explicit delivery reset (lost response recovery).
-    delete participant.lastBoardSeen;
+    activateRecruitmentClaims(this, room, participant);
+    delete participant.lastBoardSeen; // Explicit delivery reset on every reclaim (lost response recovery).
     delete participant.seenBoardKeys;
     for (const pr of room.proposals.values()) if (pr.status === "open") this.evaluate(room, pr);
     return { room, participant };
@@ -934,7 +933,7 @@ export class Hub {
     // reply_to, so once delivered it retires instead of staying the focused ask. Left as debt, it pinned every
     // later wait/read to that one message and refused send_message as "arrived while composing" until pass.
     for (const m of delivered) {
-      if (m.from.id !== "system" || m.kind !== "chat" || m.tag === "need" || m.tag === "hands" || !m.mentions?.includes(p.id) || p.declinedAsks?.includes(m.id)) continue; // a first-claim limits ask retires here too: kept owed, it never let a wait drain (audit/f65acfac, idle-leave)
+      if (m.from.id !== "system" || m.kind !== "chat" || m.tag === "need" || m.tag === "hands" || m.tag === "rival" || !m.mentions?.includes(p.id) || p.declinedAsks?.includes(m.id)) continue; // a first-claim limits ask retires here too: kept owed, it never let a wait drain (audit/f65acfac, idle-leave)
       p.declinedAsks = [...(p.declinedAsks ?? []), m.id];
       p.declinedAt = { ...(p.declinedAt ?? {}), [m.id]: m.seq };
     }
@@ -1172,7 +1171,7 @@ export class Hub {
     p.messageCount += 1;
     p.lastSeenSeq = Math.max(p.lastSeenSeq, msg.seq);
     this.persistAttention(room, p);
-    this.noteUsed(room, p, content, "chat");
+    this.noteUsed(room, p, content, "chat"); if (replyTo) rivals.noticeRivalReply(this, room, p, msg); // a reply to a rival ask (decision/reveal-rivals)
     return msg;
   }
 
@@ -1682,7 +1681,7 @@ export class Hub {
     }
     if (p.focusedAsk &&(this.addressedBy(room, p).some((m) => m.id === p.focusedAsk) || room.messages.some((m) => m.id === p.focusedAsk && m.from.agent === "human" && !this.isAnswered(room, m)))) {
       p.declinedAsks = [...new Set([...(p.declinedAsks ?? []), p.focusedAsk])];
-      p.declinedAt = { ...(p.declinedAt ?? {}), [p.focusedAsk]: room.messages.at(-1)?.seq ?? 0 };
+      p.declinedAt = { ...(p.declinedAt ?? {}), [p.focusedAsk]: room.messages.at(-1)?.seq ?? 0 }; rivals.noticeRivalPass(this, room, p, p.focusedAsk);
       p.focusedAsk = undefined;
       this.persistAttention(room, p);
     }
@@ -1839,7 +1838,7 @@ export class Hub {
     const human = [...room.messages].reverse().find((m) => m.kind === "chat" && m.tag !== "opening" &&
       m.from.agent === "human" && !this.isAnswered(room, m) && !p.declinedAsks?.includes(m.id) && this.responderFor(room, m, p.id).mine);
     // hub notices ride the normal stream (settleRead retires them on delivery); only an author can be answered
-    const asks = this.addressedBy(room, p); return human ?? asks.find((m) => m.from.id !== "system" || m.tag === "need" || m.tag === "hands") ?? asks.find((m) => m.tag === "limits"); // needs/needs.ts: an ask to a blocked claim owner; asks/hands.ts: who adds a hand; the first-claim limits ask (needs.ts) leads only until delivered once, after any other ask, then retires like a hub notice (audit/f65acfac)
+    const asks = this.addressedBy(room, p); return human ?? asks.find((m) => m.from.id !== "system" || m.tag === "need" || m.tag === "hands" || m.tag === "rival") ?? asks.find((m) => m.tag === "limits"); // needs/needs.ts: an ask to a blocked claim owner; asks/hands.ts: who adds a hand; the first-claim limits ask (needs.ts) leads only until delivered once, after any other ask, then retires like a hub notice (audit/f65acfac)
   }
 
   attentionHint(room: Room, p: Participant): string | undefined {
@@ -2114,7 +2113,7 @@ export class Hub {
   claimOverlaps(roomName: string, pid: string, key: string): { key: string; by: string; room?: string; shared_pct: number; shared: string[] }[] { return board.claimOverlaps(this, roomName, pid, key); }
   static claimOverlapScore(a: Set<string>, aKey: Set<string>, b: Set<string>, bKey: Set<string>) { return board.claimOverlapScore(a, aKey, b, bKey); }
   private activeReviewerFor(room: Room, authorName: string): Participant | undefined { return board.activeReviewerFor(room, authorName); }
-  setBoardAs(roomName: string, byName: string, key: string, text: string): BoardEntry { return board.setBoardAs(this, roomName, byName, key, text); }
+  setBoardAs(roomName: string, byName: string, key: string, text: string, recruitment?: BoardEntry["recruitment"]): BoardEntry { return board.setBoardAs(this, roomName, byName, key, text, recruitment); }
   postToRoom(fromRoom: string, pid: string, toRoom: string, key: string, text: string, ackRequired = false, opts: BoardExpiryOptions = {}): { key: string; entry: BoardEntry } { breakouts.refuseCarryKey(this, fromRoom, toRoom, key); return board.postToRoom(this, fromRoom, pid, toRoom, key, text, ackRequired, opts); }
 
   // ---------- proposals as documents ----------
@@ -3782,6 +3781,7 @@ export class Hub {
     const cutoff = Date.now() - idleMs;
     for (const room of this.rooms.values()) {
       if (room.state === "concluded" || room.state === "closed") continue;
+      expireRecruitmentClaims(this, room);
       for (const p of room.participants.values()) {
         if ((p.session && connected?.has(p.session)) || (keepChair && p.role === "chair")) continue;
         if (p.active && p.agent !== "human" && Date.parse(this.lastSeen(p)) < cutoff) {

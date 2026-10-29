@@ -8,7 +8,8 @@ import type { Quorum, Participant, BoardExpiryOptions, BoardEntry, Room } from "
 import { now, codeState, norm, commitsIn, commitKnown } from "./internal.js";
 import { announceTake, commitAuthor, noticeSameWork, takeWrite } from "./take.js";
 import { noticeSemantic } from "./overlap/semantic.js";
-import { NEEDS_PREFIX, noticeNeed, noticeNeedCleared, openNeeds, startNeedAsk } from "./needs/needs.js"; export { openNeeds };
+import { expireRecruitmentClaims } from "./coverage/recruitment.js";
+import { NEEDS_PREFIX, noticeNeed, noticeNeedCleared, openNeeds, startNeedAsk } from "./needs/needs.js"; export { openNeeds }; import { noticeFraming } from "./openings/rivals.js";
 function boardExpiry(key: string, opts: BoardExpiryOptions): string | undefined {
   if (opts.ttlSeconds === undefined && opts.expiresAt === undefined) return undefined;
   if (!key.startsWith("handoff/") && !key.startsWith("inbox/")) throw new HubError("Expiry is supported only for handoff/ and inbox/ entries.", undefined, "expiry-prefix");
@@ -218,7 +219,7 @@ export function boardContinuation(room: Room, key: string, entry: BoardEntry): {
 
 export function setBoard(hub: Hub, roomName: string, pid: string, key: string, text: string, opts: BoardExpiryOptions & { ifAbsent?: boolean; ifByMe?: boolean; overwrite?: boolean; append?: boolean; diff?: string } = {}): BoardEntry | null {
   const room = hub.getRoom(roomName);
-  const p = hub.requireParticipant(room, pid);
+  const p = hub.requireParticipant(room, pid); if (key.startsWith("claim/")) expireRecruitmentClaims(hub, room);
   // A concluded room keeps taking results for a while (lateWrite): a rerun that lands after the vote is recorded, not lost.
   const late = lateWrite(hub, room, key);
   if (room.state === "closed" || (room.state === "concluded" && !late)) {
@@ -251,8 +252,7 @@ export function setBoard(hub: Hub, roomName: string, pid: string, key: string, t
   // author-only, and refused without echoing the text: an ownership error that returned the entry would unseal it
   if (key.startsWith("draft/") && previous && previous.by !== p.name) throw new HubError(`"${key}" is ${previous.by}'s draft; draft/* entries are author-only. Write your own, e.g. draft/${p.name}.`, undefined, "ownership");
   const attacked = key.startsWith("attack/") && text.trim() ? checkAttack(room, p, key, text) : undefined;
-  // Assigned once, at creation only: later edits (status updates, notes) keep the same reviewer.
-  let reviewer: Participant | undefined;
+  let reviewer: Participant | undefined; // Assign at creation, reservation activation or released-claim reclaim; edits retain it.
   const takeover = key.startsWith("claim/") && previous && previous.by !== p.name && !claimReleased(previous) ? hub.claimTakeover(room, previous, p) : null;
   if (key.startsWith("claim/")) {
     // a claim released by removeParticipant (status "released", rewritten by the hub) is open to anyone; a departed
@@ -273,7 +273,7 @@ export function setBoard(hub: Hub, roomName: string, pid: string, key: string, t
         }
       }
     }
-    reviewer = previous ? undefined : assignReviewer(hub, room, p);
+    reviewer = !previous || previous.recruitment?.pending || claimReleased(previous) ? assignReviewer(hub, room, p) : undefined;
   }
   // take/<what>: holder-only, offered with a leading @name; refused before any other rule so overwrite cannot pass it
   const take = key.startsWith("take/") ? takeWrite(hub, room, p, key, text, previous?.text.trim() ? previous : undefined) : undefined;
@@ -317,7 +317,7 @@ export function setBoard(hub: Hub, roomName: string, pid: string, key: string, t
   }
   if (!text.trim()) {
     applyBoard(room, key, null);
-    hub.persist({ type: "board", room: roomName, key, entry: null }); if (key.startsWith(NEEDS_PREFIX) && previous?.text.trim()) noticeNeedCleared(hub, room, p, key, previous);
+    hub.persist({ type: "board", room: roomName, key, entry: null }); if (key.startsWith(NEEDS_PREFIX) && previous?.text.trim()) noticeNeedCleared(hub, room, p, key, previous); noticeFraming(hub, room, p, key, null, previous);
     if (take) { if (previous) announceTake(hub, room, p, key, text, take); return null; }
     hub.post(room, "board", p, `cleared board entry "${key}"${previous && previous.by !== p.name ? ` (${previous.by}'s)` : ""}`);
     if (key.startsWith("draft/")) hub.cancelDraftsIfEmpty(room, p);
@@ -353,6 +353,7 @@ export function setBoard(hub: Hub, roomName: string, pid: string, key: string, t
     ...(postReveal ? { postReveal: true } : {}),
     ...(attacked ? { attackedChars: norm(room.board.get(attacked.target)!.text).length - (room.board.get(attacked.target)!.othersChars ?? 0) } : {}),
     ...(workspace ? { workspace } : {}),
+    ...(previous?.recruitment && !claimReleased(previous) ? { recruitment: { ...previous.recruitment, pending: false } } : {}),
     ...(commitCheck ? { commitCheck } : {}),
     ...(late ? { late: true } : {}),
     ...(checks.length ? { checks: checks.map((c) => c.of) } : {}),
@@ -403,8 +404,7 @@ export function setBoard(hub: Hub, roomName: string, pid: string, key: string, t
     });
   }
   if (reviewer) {
-    // kind "chat", not "system": an owed @-mention is resolved from content, so it still wakes a held wait after hub.wait() advanced lastSeenSeq
-    // past this message; a "system" post with mentions arrives too late. "Exercise ... not only rerun" is the OpenHands qa-changes rule.
+    // Chat kind keeps the reviewer ask owed past a wait cursor; OpenHands qa-changes supplies the exercise-not-only-rerun rule.
     hub.post(room, "chat", undefined,
       `@${reviewer.name} you are the reviewer for ${p.name}'s "${key}" (fewest reviews assigned, then least-recently-verifying; picked by the hub). ` +
       `Once ${p.name} proposes work from it, require_verification prefers a verify/* entry from you over anyone else's while you're still active; ` +
@@ -417,9 +417,9 @@ export function setBoard(hub: Hub, roomName: string, pid: string, key: string, t
       `Answer it by editing "${attacked.target}": change the quoted clause, or add a line saying why it stands. An unanswered attack is listed to whoever proposes.`);
   }
   if (takeover) hub.post(room, "system", undefined, `${hub.shown(room, p)} took over "${key}" from ${hub.shown(room, takeover.owner)} (${takeover.reason === "successor" ? "registered successor" : `owner gone since ${hub.lastSeen(takeover.owner)}`}).`);
-  if (key.startsWith("claim/") && (!previous || claimReleased(previous))) { noticeClaimOverlap(hub, room, p, key, text); noticeSameWork(hub, room, p, key); void noticeSemantic(hub, room, p, key); startNeedAsk(hub, room, p, key); }
+  if (key.startsWith("claim/") && (!previous || previous.recruitment?.pending || claimReleased(previous))) { noticeClaimOverlap(hub, room, p, key, text); noticeSameWork(hub, room, p, key); void noticeSemantic(hub, room, p, key); startNeedAsk(hub, room, p, key); }
   if (key.endsWith(".ack") || key.startsWith("verify/")) for (const pr of room.proposals.values()) if (pr.status === "open") hub.evaluate(room, pr);
-  if (key.startsWith("draft/")) hub.latchDrafts(room); else if (key.startsWith(NEEDS_PREFIX) && !previous?.text.trim()) noticeNeed(hub, room, p, key, entry);
+  if (key.startsWith("draft/")) hub.latchDrafts(room); else if (key.startsWith(NEEDS_PREFIX) && !previous?.text.trim()) noticeNeed(hub, room, p, key, entry); noticeFraming(hub, room, p, key, entry, previous);
   return entry;
 }
 
@@ -677,10 +677,10 @@ export function activeReviewerFor(room: Room, authorName: string): Participant |
 }
 
 /** System-initiated board write on someone's behalf (e.g. a claim made at recruitment); no membership needed. */
-export function setBoardAs(hub: Hub, roomName: string, byName: string, key: string, text: string): BoardEntry {
+export function setBoardAs(hub: Hub, roomName: string, byName: string, key: string, text: string, recruitment?: BoardEntry["recruitment"]): BoardEntry {
   const room = hub.getRoom(roomName);
   if (!BOARD_KEY.test(key)) throw new HubError("Invalid board key.", undefined, "key-format");
-  const entry: BoardEntry = { text, by: byName, updatedAt: now() };
+  const entry: BoardEntry = { text, by: byName, updatedAt: now(), ...(recruitment ? { recruitment } : {}) };
   applyBoard(room, key, entry);
   hub.persist({ type: "board", room: roomName, key, entry });
   hub.post(room, "board", undefined, `${byName} added board entry "${key}" (${text.length} chars; read it with board_get)`);

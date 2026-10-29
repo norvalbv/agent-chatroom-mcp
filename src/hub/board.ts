@@ -252,7 +252,7 @@ export function setBoard(hub: Hub, roomName: string, pid: string, key: string, t
   // author-only, and refused without echoing the text: an ownership error that returned the entry would unseal it
   if (key.startsWith("draft/") && previous && previous.by !== p.name) throw new HubError(`"${key}" is ${previous.by}'s draft; draft/* entries are author-only. Write your own, e.g. draft/${p.name}.`, undefined, "ownership");
   const attacked = key.startsWith("attack/") && text.trim() ? checkAttack(room, p, key, text) : undefined;
-  let reviewer: Participant | undefined;
+  let reviewer: Participant | undefined; // Assign at creation, reservation activation or released-claim reclaim; edits retain it.
   const takeover = key.startsWith("claim/") && previous && previous.by !== p.name && !claimReleased(previous) ? hub.claimTakeover(room, previous, p) : null;
   if (key.startsWith("claim/")) {
     // a claim released by removeParticipant (status "released", rewritten by the hub) is open to anyone; a departed
@@ -404,7 +404,7 @@ export function setBoard(hub: Hub, roomName: string, pid: string, key: string, t
     });
   }
   if (reviewer) {
-    // Chat kind keeps the reviewer ask owed after a wait advances its cursor; a system mention would not.
+    // Chat kind keeps the reviewer ask owed past a wait cursor; OpenHands qa-changes supplies the exercise-not-only-rerun rule.
     hub.post(room, "chat", undefined,
       `@${reviewer.name} you are the reviewer for ${p.name}'s "${key}" (fewest reviews assigned, then least-recently-verifying; picked by the hub). ` +
       `Once ${p.name} proposes work from it, require_verification prefers a verify/* entry from you over anyone else's while you're still active; ` +

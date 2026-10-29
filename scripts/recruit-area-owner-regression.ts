@@ -8,7 +8,7 @@ import { join } from "node:path";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { ownHubPort } from "./lib/own-hub.js";
-import { Hub } from "../src/hub.js";
+import { Hub, HubError } from "../src/hub.js";
 import { claimRecruitmentArea } from "../src/hub/coverage/recruitment.js";
 import { claimOwners } from "../src/hub/coverage/coverage.js";
 import { measureRecruitClaims } from "./recruit-area-owner-measure.js";
@@ -183,7 +183,33 @@ try {
   assert.equal(expired.length, 1);
   assert.equal(expired[0].owner, "never-joins");
   console.log("ok pending reservation expires and a third seat reclaims it");
-  console.log("RECRUIT AREA OWNER OK (12 checks)");
+  const lateRoom = "recruit-after-conclusion";
+  const la = h.join(lateRoom, "first", "codex", { requireChallenge: false, requireVerification: false, quorum: "unanimous" }, undefined, "first-session").participant;
+  const lb = h.join(lateRoom, "second", "claude", {}, undefined, "second-session").participant;
+  claimRecruitmentArea(h, lateRoom, la.name, "late-area", ["late-recruit"]);
+  const proposal = h.propose(lateRoom, la.id, "The probe has concluded while the recruit starts.");
+  h.vote(lateRoom, lb.id, proposal.id, "agree", undefined, undefined, "The probe has concluded");
+  assert.equal(h.getRoom(lateRoom).state, "concluded");
+  const lateRecruit = h.join(lateRoom, "late-recruit", "codex", {}, undefined, "late-session", "recruit").participant;
+  assert.equal(lateRecruit.active, true, "claim activation cannot strand a late admission");
+  assert.equal(h.join(lateRoom, "late-recruit", "codex", {}, undefined, "late-session").participant.id, lateRecruit.id);
+  assert.equal(h.setBoard(lateRoom, lateRecruit.id, "result/late-arrival", "Arrived after conclusion; no work was claimed.")!.by, lateRecruit.name);
+  console.log("ok recruit joins a concluded room and can submit late results");
+  class RefusingActivationHub extends Hub {
+    override setBoard(...args: Parameters<Hub["setBoard"]>): ReturnType<Hub["setBoard"]> {
+      if (args[2] === "claim/activation-error") throw new HubError("fixture board refusal", undefined, "state");
+      return super.setBoard(...args);
+    }
+  }
+  const failing = new RefusingActivationHub({ dataDir: join(scratch, "failure-data") });
+  failing.join("activation-error", "requester", "codex", {}, undefined, "requester-session");
+  claimRecruitmentArea(failing, "activation-error", "requester", "activation-error", ["admitted"]);
+  assert.equal(failing.join("activation-error", "admitted", "codex", {}, undefined, "admitted-session").participant.active, true);
+  const failedEvents = readFileSync(join(scratch, "failure-data", "activation-error.jsonl"), "utf8").trim().split("\n").map((l) => JSON.parse(l));
+  assert.equal(measureRecruitClaims(failedEvents).activation_failed_n, 1);
+  assert.equal(failing.getRoom("activation-error").board.get("claim/activation-error")!.recruitment?.pending, true);
+  console.log("ok activation failure is logged without failing admission");
+  console.log("RECRUIT AREA OWNER OK (14 checks)");
 } finally {
   await stop();
   rmSync(scratch, { recursive: true, force: true });

@@ -87,7 +87,7 @@ export type Event =
    * Written at the request, as the "recruited" line is: a write recruit stopped while its worktree is made has one but
    * never starts. Whether a seat started is its join (review/a7d9f59e n1). */
   | ({ type: "recruit_spawn"; room: string; by_role?: string; ts: string } & RecruitSpawn)
-  | { type: "recruit_claim"; room: string; key: string; phase: "reserved" | "activated" | "expired"; requested_by: string; owner: string; team: string[]; reviewer: string | null; ts: string }
+  | { type: "recruit_claim"; room: string; key: string; phase: "reserved" | "activated" | "expired" | "activation_failed"; requested_by: string; owner: string; team: string[]; reviewer: string | null; error?: string; ts: string }
   /** telemetry only (replay ignores it; Hub.recordCarried, inputs/owner-4): what seats were told was already settled and
    * read (src/settled.ts), as ids; from the launcher once per room (seats absent: every seat it started), from the spawner per recruit */
   | { type: "carried"; room: string; from: "launcher" | "spawner"; seats?: string[]; ids: string[]; axes: number; chars: number; no_carry?: true; ts: string }

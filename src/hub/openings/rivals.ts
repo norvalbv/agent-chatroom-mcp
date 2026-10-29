@@ -20,7 +20,7 @@ import { applyBoard, attackTarget } from "../board.js";
 import { freeKey, slugOf } from "./ideas.js";
 import type { Event } from "../internal.js";
 
-export interface RivalAssignment { seat: string; key: string; source: "alternative" | "opening"; from: string; overlap: number; ask?: string }
+export interface RivalAssignment { seat: string; key: string; source: "alternative" | "opening"; from: string; overlap: number; ask?: string; answered?: boolean }
 /** The framings a reveal seeded and who each rival went to. Restored on replay from framings_seeded and rival_assigned. */
 export interface Framings { revealedAt: string; seeded: string[]; rivals: RivalAssignment[] }
 /** Off unless CHATROOM_REVEAL_RIVALS=1, so one build serves both arms of a pair; tests set it directly. */
@@ -28,12 +28,15 @@ export const rivalsConfig = { on: process.env.CHATROOM_REVEAL_RIVALS === "1" };
 const state = new WeakMap<Room, Framings>();
 export const framingsOf = (room: Room): Framings | undefined => state.get(room);
 
-/** Replay: framings_seeded opens the record, each rival_assigned adds its seat. */
+/** Replay: framings_seeded opens the record, each rival_assigned adds its seat, each rival_answered marks its ask. */
 export function restoreFramings(room: Room, ev: Event): void {
   if (ev.type === "framings_seeded") state.set(room, { revealedAt: ev.ts, seeded: [...ev.keys], rivals: [] });
   else if (ev.type === "rival_assigned") {
     const { seat, key, source, from, overlap, ask } = ev;
     state.get(room)?.rivals.push({ seat, key, source, from, overlap, ask });
+  } else if (ev.type === "rival_answered") {
+    const r = state.get(room)?.rivals.find((x) => x.seat === ev.seat && x.key === ev.key);
+    if (r) r.answered = true;
   }
 }
 
@@ -154,12 +157,9 @@ export function noticeRivalPass(hub: Hub, room: Room, p: Participant, askId: str
   if (r && r.seat === p.name) answered(hub, room, p, r, "pass");
 }
 
-const answeredAsks = new WeakMap<Room, Set<string>>();
 function answered(hub: Hub, room: Room, p: Participant, r: RivalAssignment, via: "reply" | "pass", chars?: number) {
-  let done = answeredAsks.get(room);
-  if (!done) answeredAsks.set(room, (done = new Set()));
-  if (done.has(r.ask!)) return;
-  done.add(r.ask!);
+  if (r.answered) return;
+  r.answered = true;
   const ts = new Date().toISOString();
   hub.persist({ type: "rival_answered", room: room.name, seat: p.name, key: r.key, via, ...(chars !== undefined ? { chars } : {}),
     held_claim: holdsClaim(room, p), minutes_since_reveal: minutesSince(state.get(room)!.revealedAt, ts), ts });

@@ -49,7 +49,7 @@ try {
   await b("submit_opening", { room, content: "Generate exact decimal digits with BigInt for e, f and g conversions, half to even rounding.", alternatives: [
     "Diff against the system printf over a grid of formats and values; check: any mismatch on a 10k grid.",
   ] });
-  await c("submit_opening", { room, content: "Write the flag and width parser first, table driven, then add conversions one by one." });
+  const last = await c("submit_opening", { room, content: "Write the flag and width parser first, table driven, then add conversions one by one." });
   const r = hub.getRoom(room);
 
   const assigned = ofType(room, "rival_assigned");
@@ -77,7 +77,11 @@ try {
   assert.equal(seeded[0].rivals, true);
   for (const e of assigned) assert.ok(seeded[0].keys.includes(e.key), `${e.key} is listed as a seeded framing`);
 
-  // 3. Each seat's ask is addressed to it, tagged rival, names the key and is owed after delivery (like hands).
+  // 3. The last opener's submit_opening caused the reveal: its own result carries its rival, so a claim it writes straight
+  // after is made with the rival in context (attack/decision/reveal-rivals.6-1-sol-5).
+  assert.ok(Array.isArray(last.addressed_to_you_meanwhile), `the revealing submit_opening carries pending asks: ${JSON.stringify(last)}`);
+  assert.ok(last.addressed_to_you_meanwhile.some((l: string) => l.includes(rivalOf.get("C").ask) && l.includes(rivalOf.get("C").key)), `C's rival ask rides on its submit_opening: ${JSON.stringify(last.addressed_to_you_meanwhile)}`);
+  // Each seat's ask is addressed to it, tagged rival, names the key and is owed after delivery (like hands).
   for (const [name, call] of [["A", a], ["B", b], ["C", c]] as const) {
     const p = [...r.participants.values()].find((q) => q.name === name)!;
     const ask = r.messages.find((m) => m.id === rivalOf.get(name).ask)!;
@@ -129,6 +133,12 @@ try {
   restored.setBoard(room, bId, `claim/${keyB.slice(5)}`, claim(keyB.slice(5), "B"));
   const late = ofType(room, "framing").find((e) => e.key === keyB && e.action === "claimed");
   assert.ok(late?.by_assigned, `a claim after a restore is logged with its assignment: ${JSON.stringify(late)}`);
+  const aId = restored.join(room, "A", "test", {}, [...rr.participants.values()].find((q) => q.name === "A")!.id).participant.id;
+  restored.send(room, aId, "One more input after the restart: 5e-324.", askA, true);
+  assert.equal(ofType(room, "rival_answered").length, 2, "an ask answered before a restore is not answered again after it");
+  const cId = restored.join(room, "C", "test", {}, [...rr.participants.values()].find((q) => q.name === "C")!.id).participant.id;
+  restored.send(room, cId, "C's input: a table-driven parser and exact digits agree on %5.2f of 3.14159; they differ on nothing I found.", rivalOf.get("C").ask, true);
+  assert.deepEqual(ofType(room, "rival_answered").map((e) => e.seat).sort(), ["A", "B", "C"], "an unanswered ask still logs its first answer after a restore");
 
   // 7. Flag off: no rival asks or rival-seeded openings, but the seeded alternatives still get framing events.
   rivalsConfig.on = false;

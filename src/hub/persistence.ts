@@ -246,7 +246,8 @@ export function replay(hub: Hub) {
           break;
         }
         case "framings_seeded":
-        case "rival_assigned": {
+        case "rival_assigned":
+        case "rival_answered": {
           const room = hub.rooms.get(ev.room);
           if (room) restoreFramings(room, ev);
           break;

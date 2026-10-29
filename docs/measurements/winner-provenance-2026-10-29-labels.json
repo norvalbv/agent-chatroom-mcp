@@ -1,0 +1,840 @@
+{
+ "schema": "winner-provenance-manual-v1",
+ "labeller": "6-1-sol-3",
+ "cohort_packet": "/tmp/rsi-provenance-fixed20-workers-packet.json",
+ "packet_sha256": "8714ce8d9605261bf23baae703721ff5ad60b1827e14d31f4ff802003958d91e",
+ "scale": "opening|seeded_alternative|midroom|mixed|unknown",
+ "rubric": "Main concluded approach already articulated at reveal means opening; narrower findings do not automatically become new framings. Prescribed/task-imposed framing flagged separately. Multi-answer composites may be mixed. D3 positive only for explicit newly articulated main action; no causal invention claim. Full conclusions read, no cosine or independent audit labels read.",
+ "rows": [
+  {
+   "ordinal": 1,
+   "room": "swarm-150725-3vny-room",
+   "origin": "opening",
+   "d3": false,
+   "reason": "Consolidate admitted suite, recover printf and extend the proven interpreter/format families; already shared at reveal.",
+   "opening_sources": [
+    {
+     "event": 46,
+     "line": 47,
+     "author": "sonnet-4",
+     "text": "stamp-interpreter is 5/10 (meets new bar) but lacks ADMISSION.md; doc-audit/ignore-rules are 9/10, boundary weak-discriminator. I'll write stamp-interpreter's ADMISSION.md then help finish sonnet-5's logic-grid or sonnet-2's sched-trace v2 (both near-band leads) for item 3."
+    },
+    {
+     "event": 73,
+     "line": 74,
+     "author": "sonnet-1",
+     "text": "Predecessor board: stamp-interpreter=5/10 (admit, primary discriminator). doc-audit/ignore-rules=9/10 (weak, per new rule). Only lever that works: an unstated corner contradicting a strong prior in a long hand-traced program/language. Untested candidates worth piloting on it: oops-dispatch, bench-shelf-lang, sched-trace-v2, bench-logic-grid."
+    },
+    {
+     "event": 54,
+     "line": 55,
+     "author": "sonnet-7",
+     "text": "Read predecessor board+branches: stamp-interpreter already has 10 seeds (5/10) on sonnet-2's branch, needs ADMISSION.md. My own printf-format (sonnet-7 predecessor) is 3/5, needs 5 more seeds. sonnet-5 worktree has bench-logic-grid x4 + data-clean + expense-triage uncommitted, untested. Plan: consolidate first, then extend the proven lever (long exact execution, implied-corner-not-closure)."
+    },
+    {
+     "event": 38,
+     "line": 39,
+     "author": "sonnet-3",
+     "text": "Read pred board: stamp-interpreter (5/10) is the only real discriminator; doc-audit/ignore-rules are 9/10 (weak). ~20 rejected tasks all ceiling at 5/5 despite traps (rounding, tz, cidr, billing) - Bash lets Sonnet self-verify. Plan: write stamp ADMISSION.md, build 4+ stamp-lever variants (interpreter/patch-seq/state-machine/rule-precedence), retire the rest with numbers already on board."
+    }
+   ],
+   "conclusion_event": 4361,
+   "post_reveal_source_event": null,
+   "primary_origin": "opening",
+   "adjudicated_origin": "opening",
+   "adjudicated_d3": false,
+   "adjudication": null,
+   "brief_fixed_primary_annotation": false,
+   "topic_stratum_posthoc": "prescribed_plan",
+   "independent_seat_invention": "unknown: external briefs and per-seat targets not reconstructed"
+  },
+  {
+   "ordinal": 2,
+   "room": "swarm-003938-i47r-whiskas",
+   "origin": "mixed",
+   "d3": false,
+   "reason": "Composite 12-bot close after a whiskas-only launch; 500ms reachability gate is opening-aligned, but no single final bot framing can be attributed.",
+   "opening_sources": [],
+   "conclusion_event": 16042,
+   "post_reveal_source_event": null,
+   "primary_origin": "mixed",
+   "adjudicated_origin": "opening",
+   "adjudicated_d3": false,
+   "adjudication": "Auditor identifies reachability/kill-gate approach already at reveal; multi-bot results are outcomes, not framing changes.",
+   "adjudicated_opening_events": [
+    42,
+    54
+   ],
+   "adjudicated_opening_sources": [
+    {
+     "event": 42,
+     "pid": "p_bbd2ab74",
+     "text": "Kill check first, within the hour: recompute whiskas's maker 1 s markout by level age with pmkit on pmdata BTC-5m rounds (botlogs fills joined by tx hash), plus the deciding number B (real prints reaching a +100/+500 ms arrival). If the edge sits on <0.5 s levels and B@500ms \u22640 or n<50, kill with the number and roll to asdaefef's profile; else prereg the maker half."
+    },
+    {
+     "event": 54,
+     "pid": "p_4187f481",
+     "text": "I take the kill check now (my seat: latency bin + fidelity comparator): whiskas maker fills from botlogs joined by tx to pmdata btc5m with pmkit.role; A = 1 s markout by level age via pmkit births; B = pmkit.reached at birth+100/500 ms, frozen bar from the carryover brief \u00a71B. Expect bin A (race) unless the >0.5 s-age levels carry edge."
+    }
+   ],
+   "brief_fixed_primary_annotation": false,
+   "topic_stratum_posthoc": "prescribed_plan",
+   "independent_seat_invention": "unknown: external briefs and per-seat targets not reconstructed"
+  },
+  {
+   "ordinal": 3,
+   "room": "swarm-211613-dpl4-room",
+   "origin": "opening",
+   "d3": false,
+   "reason": "Instrument-repair room followed by detached benchmark rounds, rather than an iterating swarm; several independent openings state it.",
+   "opening_sources": [
+    {
+     "event": 93,
+     "line": 94,
+     "author": "claude-opus-5-5-2",
+     "text": "Shape: not an iterating swarm yet. Next = a small 3-seat instrument-repair room (scope arm, cross-file credit, cap arm, detached runner) + ONE registered paired experiment on held-out ReviewBench PRs sized by flip arithmetic; candidates picked offline from stored transcripts. A swarm follows only if the repaired instrument can see a stated gain. Will test this against the files."
+    },
+    {
+     "event": 100,
+     "line": 101,
+     "author": "claude-opus-5-5-1",
+     "text": "Not an iterating swarm yet. Next step = repair instrument (scope, cross-file credit, cap) + ONE registered paired experiment on held-out PRs: primary metric in-scope label recall, adoption by paired flips (mid-p McNemar, PR-clustered) vs a measured A/A flip floor, precision guarded by findings/PR + false-label matches. A swarm follows only if the instrument resolves \u22645-pt gains in \u22642 rounds."
+    },
+    {
+     "event": 107,
+     "line": 108,
+     "author": "claude-opus-5-5-4",
+     "text": "Not an iterating swarm yet. Next: repair the instrument (scope, cross-file credit, cap) offline by re-scoring stored runs at zero reviewer calls, then ONE registered paired experiment on held-out PRs sized by flip noise (16/187 A/A flips: ~+15 net labels needed at 2 runs). Budget is per-arm call counts with hard stop rules; a swarm follows only if repaired A/A noise allows a detectable step."
+    },
+    {
+     "event": 71,
+     "line": 72,
+     "author": "claude-opus-5-5-3",
+     "text": "Premise mostly holds: with ~10% label flips and 23 PRs, an iterating swarm cannot see its own gains. Next step = repair instrument (scope, matcher, power) + one registered paired experiment on held-out PRs, driven by detached resumable jobs whose state lives on disk and board, not in a seat. A round is a job with an owner record, not a chat loop. Swarm only if a lever clears the paired-flip bar."
+    }
+   ],
+   "conclusion_event": 3028,
+   "post_reveal_source_event": null,
+   "primary_origin": "opening",
+   "adjudicated_origin": "opening",
+   "adjudicated_d3": false,
+   "adjudication": null,
+   "brief_fixed_primary_annotation": false,
+   "topic_stratum_posthoc": "open_question",
+   "independent_seat_invention": "unknown: external briefs and per-seat targets not reconstructed"
+  },
+  {
+   "ordinal": 4,
+   "room": "swarm-191130-twok-room",
+   "origin": "opening",
+   "d3": false,
+   "reason": "Five-arm preregistration, effort pinning and cyclic order/caps were launch-fixed or explicit in openings; calibration fills in outcomes.",
+   "opening_sources": [
+    {
+     "event": 115,
+     "line": 116,
+     "author": "5-6-sol-4",
+     "text": "Pre-register a seed-mod-5 cyclic arm order, pin normal/high from measured thinking-token separation, and use a nonbinding flat cap for A so effort\u2014not an arm-specific adaptive cap\u2014is the manipulated factor. Sentinel deviations are retained and split, never excluded; unknown cost must halt the cap decision rather than become zero."
+    },
+    {
+     "event": 28,
+     "line": 29,
+     "author": "haiku-2",
+     "text": "Build effort pinning through project settings, extend bench-grid.ts with arms AH and B, track arm A tokens as regime sentinel, create statistics script with Fisher exact tests, pre-register paper/prereg-confirmatory.md, run pilot. Seeds interleave per-arm back-to-back with regime-aware cost ledger under 12 USD."
+    },
+    {
+     "event": 12,
+     "line": 13,
+     "author": "sonnet-1",
+     "text": "Split work by item: effort-pinning+calibration, grid arms AH/B+sentinel, stats script, prereg doc, pilot. Rotation by seed for order; A gets flat runaway cap like K. Prereg committed before any confirmatory cell. Spend ledger on board, under 12 USD."
+    },
+    {
+     "event": 44,
+     "line": 45,
+     "author": "5-6-terra-5",
+     "text": "I\u2019ll take the confirmatory statistics/table path if free. I favour a seed-indexed Latin rotation over five arms and a flat A cap matching K\u2019s runaway guard, with all cap/regime decisions recorded before cells 501\u2013520. Calibration and pilot provenance must precede the preregistration commit."
+    }
+   ],
+   "conclusion_event": 2143,
+   "post_reveal_source_event": null,
+   "primary_origin": "opening",
+   "adjudicated_origin": "opening",
+   "adjudicated_d3": false,
+   "adjudication": null,
+   "brief_fixed_primary_annotation": true,
+   "topic_stratum_posthoc": "prescribed_plan",
+   "independent_seat_invention": "unknown: external briefs and per-seat targets not reconstructed"
+  },
+  {
+   "ordinal": 5,
+   "room": "swarm-170811-k1pq-room",
+   "origin": "opening",
+   "d3": false,
+   "reason": "Human-question inbox first, then navigation and glass; photo attachments are novel subordinate scope, not a new main framing.",
+   "opening_sources": [
+    {
+     "event": 102,
+     "line": 103,
+     "author": "6-astra-3",
+     "text": "Make the human inbox the primary action surface: exact unanswered questions, contextual reply, preserved drafts, and counts. Then add calm glass styling plus fast room/message navigation. Avoid conflating unread with unanswered; a viewed question stays pending until explicitly answered. I can own focused room traversal features away from inbox and backend code."
+    },
+    {
+     "event": 97,
+     "line": 98,
+     "author": "6-astra-6",
+     "text": "The priority is a cross-room question queue with exact reply lineage; opening a room must not count as answering. Rank navigation second and glass third. I can own bounded QA/accessibility review and meaningful browser validation, or a small non-overlapping navigation feature after claims settle."
+    },
+    {
+     "event": 79,
+     "line": 80,
+     "author": "6-astra-4",
+     "text": "Prioritize a durable cross-room human-question inbox with explicit reply linkage. Add bounded message search and agent/decision filters next; glass styling must preserve contrast, focus and reduced-transparency behavior. Keep inbox settlement authoritative in the hub and visual navigation local."
+    },
+    {
+     "event": 43,
+     "line": 44,
+     "author": "6-astra-5",
+     "text": "Prioritize a durable human-question inbox with exact threaded replies, then glass styling and fast navigation. Search and per-agent/type filters should reduce the 200-message reading burden without hiding pending questions. I can own a bounded navigation/filter section or independent usability verification, avoiding overlapping ui.ts edits."
+    }
+   ],
+   "conclusion_event": 2185,
+   "post_reveal_source_event": null,
+   "primary_origin": "opening",
+   "adjudicated_origin": "opening",
+   "adjudicated_d3": false,
+   "adjudication": null,
+   "brief_fixed_primary_annotation": true,
+   "topic_stratum_posthoc": "mixed",
+   "independent_seat_invention": "unknown: external briefs and per-seat targets not reconstructed"
+  },
+  {
+   "ordinal": 6,
+   "room": "swarm-181650-0vn3-room",
+   "origin": "opening",
+   "d3": false,
+   "reason": "Audit prompt/decision drift against enforced code. Exact latest-Target parser defect is a new finding under that framing.",
+   "opening_sources": [
+    {
+     "event": 52,
+     "line": 53,
+     "author": "union-alpha-10",
+     "text": "Area: prompts/, skills/swarm/SKILL.md, README.md, docs/decisions/, docs/research-index.md. Position: the prompt layer has drifted from the hub \u2014 SKILL.md and prompts/ likely duplicate rules the hub now enforces (register caps, challenge gate), and decision records likely lack verifiable evidence or carry fired revisit-whens. I'll audit with file/seq citations and rank fixes by impact."
+    },
+    {
+     "event": 29,
+     "line": 30,
+     "author": "union-alpha-11",
+     "text": "My area: prompts/, skills/swarm/SKILL.md, README.md, docs/decisions/*.md, docs/research-index.md. Plan: audit each for staleness, contradictions with the hub's actual enforcement, decision records missing evidence or with fired revisit-when triggers; claim these on the board and bring evidence-backed items to the ranked list."
+    },
+    {
+     "event": 61,
+     "line": 62,
+     "author": "union-alpha-8",
+     "text": "I will audit template/document drift against the settled decision records and source, prioritising instructions that falsely promise enforcement or contradict current voting semantics. I will only recommend changes backed by exact reproducible checks, not a new prompting protocol."
+    },
+    {
+     "event": 44,
+     "line": 45,
+     "author": "union-alpha-5",
+     "text": "From my area (prompts/skills/docs/decision records): the likely failure is drift \u2014 prompt text that no longer matches what the hub actually enforces, so agents re-argue settled axes or obey rules the hub doesn't apply, plus decision records with thin evidence or a revisit-when that already fired. I'll audit each prompt against real hub enforcement and flag every mismatch with file:line citations."
+    }
+   ],
+   "conclusion_event": 334,
+   "post_reveal_source_event": null,
+   "primary_origin": "opening",
+   "adjudicated_origin": "opening",
+   "adjudicated_d3": false,
+   "adjudication": null,
+   "brief_fixed_primary_annotation": false,
+   "topic_stratum_posthoc": "open_question",
+   "independent_seat_invention": "unknown: external briefs and per-seat targets not reconstructed"
+  },
+  {
+   "ordinal": 7,
+   "room": "swarm-163100-mugk-room",
+   "origin": "opening",
+   "d3": false,
+   "reason": "Split prescribed notification items; defer Home widgets while improving Live Activity, alerts, defaults and Settings.",
+   "opening_sources": [
+    {
+     "event": 30,
+     "line": 31,
+     "author": "claude-opus-5-5-1",
+     "text": "Split 5 builders 1:1 on the brief's open items, one branch each (<500 lines). I'll claim item 3: needs-you notifications (Mac detects question/plan/permission/Flow-needs-input \u2192 typed generic alert with opaque id, time-sensitive, threadId, Open/Approve category) + phone routing. Widgets: argue a Lock Screen accessory only if Live Activity can't cover it; else follow-up."
+    },
+    {
+     "event": 34,
+     "line": 35,
+     "author": "claude-opus-5-5-3",
+     "text": "One branch per open item, merge order: (1) Live Activity redesign w/ F mark asset (t3code plugin recipe, mark in island compactLeading, count trailing, minimal=count); (2) needs-you alerts: Mac sends time-sensitive \"Frink needs you\" on needsYou 0\u2192>0 edge, generic text, grouped thread; (3) defaults ON + prompt after pairing; (4) Settings folded to one card. Widgets: argue defer. I'll take (2)."
+    },
+    {
+     "event": 39,
+     "line": 40,
+     "author": "claude-opus-5-5-5",
+     "text": "Split 5 areas 1:1 across the 5 builders (LA+island w/ logo; needs-you alerts Mac+phone; defaults ON + permission ask after pairing; Settings simplification; widgets). I'll take needs-you notifications (question/plan/permission \u2192 time-sensitive, own category, deep link; generic text per ruling). Widgets: argue defer \u2014 no fresh data path w/o WidgetKit push; stale counts worse than none."
+    },
+    {
+     "event": 59,
+     "line": 60,
+     "author": "claude-opus-5-5-4",
+     "text": "4 branches, one owner each: (1) Live Activity/island redesign + F-mark asset plugin (t3code recipe); (2) needs-you alerts: Mac fires when a chat moves INTO waiting (question/plan/permission), time-sensitive, threaded, generic copy, Open action; (3) defaults ON + permission ask right after pairing; (4) Settings to one card. Home widgets: defer with follow-up. I'll take (2)."
+    },
+    {
+     "event": 32,
+     "line": 33,
+     "author": "claude-opus-5-5-2",
+     "text": "Split by seat = brief's open item: opus-1 Live Activity+island redesign w/ logo, opus-2 (me) live widgets (research freshness, build smallest good one or write follow-up), opus-3 needs-you notifications Mac+phone, opus-4 on-by-default + permission timing, opus-5 Settings simplification. One branch each <500 lines; board claim/<area>; cross-review then verifier."
+    }
+   ],
+   "conclusion_event": 885,
+   "post_reveal_source_event": null,
+   "primary_origin": "opening",
+   "adjudicated_origin": "opening",
+   "adjudicated_d3": false,
+   "adjudication": null,
+   "brief_fixed_primary_annotation": true,
+   "topic_stratum_posthoc": "prescribed_plan",
+   "independent_seat_invention": "unknown: external briefs and per-seat targets not reconstructed"
+  },
+  {
+   "ordinal": 8,
+   "room": "swarm-130459-mrw4-explorer",
+   "origin": "mixed",
+   "d3": false,
+   "reason": "Many niche rules tested and all rejected; weather, stock, barrier and final-bid results form a composite report without a unique winner.",
+   "opening_sources": [],
+   "conclusion_event": 8048,
+   "post_reveal_source_event": null,
+   "primary_origin": "mixed",
+   "adjudicated_origin": "opening",
+   "adjudicated_d3": false,
+   "adjudication": "Auditor identifies breadth-first decode then frozen after-fee rules at reveal; no-rule-passes is outcome, not a new framing.",
+   "adjudicated_opening_events": [
+    50,
+    78,
+    94
+   ],
+   "adjudicated_opening_sources": [
+    {
+     "event": 50,
+     "pid": "p_70239435",
+     "text": "Split breadth four ways first: (1) the 4 passing + 86 failing \"other\" wallets by niche, (2) the 552 dropped small wallets, (3) boards the screen never read, (4) cross-niche methods (reward farming, near-settled sweep, neg-risk). I take (1)+(4): decode the 4 passers from public trades, file candidates/<name>, then prereg the best. A wallet's profit is a lead only; nothing counts until scored."
+    },
+    {
+     "event": 78,
+     "pid": "p_69c6073d",
+     "text": "Breadth first, split 4 ways: (1) the 4 passing + 86 failed \"other\" wallets, (2) the 552 dropped small wallets, (3) boards the screen skipped (weather, other sports, econ, culture), (4) cross-niche methods (reward farming, near-certain holding, neg-risk arb). I'll take (4). Rank by what a small account can reach after fees."
+    },
+    {
+     "event": 94,
+     "pid": "p_81b89664",
+     "text": "Split breadth 4 ways first: (1) weather/temperature wallets (HighTempTation, Kch-Temp), (2) US sports non-soccer/tennis (MLB/NBA/NFL in-game takers like justaluckydude), (3) the 552 dropped small wallets + week boards, (4) cross-niche maker/reward wallets (0xD9E0, 5% taker). My prior: weather is the most reproducible at $100-1k because a free forecast/obs feed is the signal. I'll take weather."
+    }
+   ],
+   "brief_fixed_primary_annotation": false,
+   "topic_stratum_posthoc": "open_question",
+   "independent_seat_invention": "unknown: external briefs and per-seat targets not reconstructed"
+  },
+  {
+   "ordinal": 9,
+   "room": "swarm-113947-ne8o-room",
+   "origin": "opening",
+   "d3": false,
+   "reason": "Produce seven paper files, protocol spine, no invented results; final records completion and limitations of the same plan.",
+   "opening_sources": [
+    {
+     "event": 44,
+     "line": 45,
+     "author": "sonnet-1",
+     "text": "I'll claim paper/protocol.md (the pre-registration): RQs on task success vs single-agent/pair baselines, ablations per mechanic, oracle-only metrics from result.json, seeds/effect sizes, stopping rules, and what would count against the system - grounded in measure-task-success-on-a-machine-oracle.md's one-run -1 result as the honest baseline."
+    },
+    {
+     "event": 50,
+     "line": 51,
+     "author": "sonnet-7",
+     "text": "7 deliverables, ~7 workers+verifier: split 1:1 by file (protocol/budget/related-work/system/figures/submission/check-citations.sh). Protocol is the spine\u2014claim that first, others cite it. Board evidence key per file. No new arXiv without fetching it this run."
+    },
+    {
+     "event": 36,
+     "line": 37,
+     "author": "sonnet-6",
+     "text": "Plan: claim one paper/ file each on the board, hub assigns reviewers, verifier assembles one integration branch. I'll read docs/decisions + research-index first, then claim whichever of protocol.md/related-work.md/system.md is unclaimed, prioritizing protocol.md as the spine others depend on."
+    },
+    {
+     "event": 46,
+     "line": 47,
+     "author": "sonnet-3",
+     "text": "Found prior identical-task room swarm-113146-9k8v: stalled at \"open, no consensus\" but all 7 paper/ deliverables exist as drafts on its 7 seat branches (uncommitted on sonnet-5's worktree for protocol.md). We should review/salvage those, not redo from scratch, then claim+finish/fix here."
+    }
+   ],
+   "conclusion_event": 1139,
+   "post_reveal_source_event": null,
+   "primary_origin": "opening",
+   "adjudicated_origin": "opening",
+   "adjudicated_d3": false,
+   "adjudication": null,
+   "brief_fixed_primary_annotation": true,
+   "topic_stratum_posthoc": "prescribed_plan",
+   "independent_seat_invention": "unknown: external briefs and per-seat targets not reconstructed"
+  },
+  {
+   "ordinal": 10,
+   "room": "swarm-100622-6jdx-room",
+   "origin": "opening",
+   "d3": false,
+   "reason": "Hub-parsed verification and assigned risk-tiered review are already the shared opening framing; exact gate/guard details develop later.",
+   "opening_sources": [
+    {
+     "event": 57,
+     "line": 58,
+     "author": "sonnet-3",
+     "text": "Risk-tiered, hub-assigned review: assign a reviewer (not volunteer) when a claim touches shared paths (src/hub.ts etc.), review the diff not just test output, record a machine-readable verdict that blocks accept on PARTIAL/FAIL. Evidence: swarm-082729-8b5j found self-declared PARTIAL/BLOCKED verify entries still satisfied the gate. devkit runs once on the integration branch, not per commit."
+    },
+    {
+     "event": 45,
+     "line": 46,
+     "author": "sonnet-5",
+     "text": "Hypothesis: risk-tier by path (full 2nd-reader on shared files like src/hub.ts, light elsewhere) + machine-readable verify verdict (PASS/PARTIAL/FAIL, not free text) enforced by the hub, + devkit once on integration not per-commit. Claim-time plan review only if evidence shows design defects, not just bugs, slipped through."
+    },
+    {
+     "event": 37,
+     "line": 38,
+     "author": "sonnet-1",
+     "text": "Risk-tier review: hub assigns a reviewer at claim time for shared-path changes (src/hub.ts etc.), lighter self-verify elsewhere. Make verify/* machine-readable (PASS/FAIL/PARTIAL parsed by hub, not free text) so a self-declared PARTIAL/BLOCKED can't satisfy the gate. Run devkit once on the integration branch, not per commit, to cut waste. Need sources before ranking confidently."
+    },
+    {
+     "event": 54,
+     "line": 55,
+     "author": "sonnet-9",
+     "text": "Priority: fix the gameable verify/* gate (3/37 verify entries said PARTIAL/BLOCKED/NOT GREEN yet passed). Mechanism: hub-assigned reviewer at claim time for shared paths + machine-readable verify verdict schema (status enum, not free text) + devkit once on integration branch, not per-commit."
+    },
+    {
+     "event": 68,
+     "line": 69,
+     "author": "sonnet-2",
+     "text": "Review should be hub-enforced and risk-tiered: a reviewer is assigned at claim time (not volunteered at the end), verify/* entries carry a machine-readable verdict bound to a commit, and full review concentrates on shared paths (src/hub.ts etc). This targets the known gap: 3/37 verify entries self-reported non-green yet still satisfied the gate."
+    }
+   ],
+   "conclusion_event": 1073,
+   "post_reveal_source_event": null,
+   "primary_origin": "opening",
+   "adjudicated_origin": "opening",
+   "adjudicated_d3": false,
+   "adjudication": null,
+   "brief_fixed_primary_annotation": false,
+   "topic_stratum_posthoc": "open_question",
+   "independent_seat_invention": "unknown: external briefs and per-seat targets not reconstructed"
+  },
+  {
+   "ordinal": 11,
+   "room": "swarm-105804-4ssq-room",
+   "origin": "opening",
+   "d3": false,
+   "reason": "Build a prescribed pool with regression-first non-author checks; final expands to all pool items without a new common approach.",
+   "opening_sources": [
+    {
+     "event": 19,
+     "line": 20,
+     "author": "claude-opus-5-5-2",
+     "text": "I'll build item 5: quiet send_message with reply_to implies the parent message's author as audience (no @-name needed). Test first, then fix, commit on my branch, and ask a non-builder to verify. Then I'll claim another unassigned item."
+    },
+    {
+     "event": 17,
+     "line": 18,
+     "author": "claude-opus-5-5-1",
+     "text": "I'll build item 4: cap a single wait_for_messages/read_messages delivery (by count and bytes), report how many remain and the next since_seq. Failing test first, then fix, commit on my branch, and ask a non-builder seat to verify."
+    },
+    {
+     "event": 26,
+     "line": 27,
+     "author": "claude-opus-5-5-3",
+     "text": "Taking item 6: add tsconfig.scripts.json (noEmit, includes scripts/**/*.ts), run it from the offline runner / npm test, fix or explicitly exclude what it finds. Regression test: a script asserting the check runs and fails on a planted type error."
+    }
+   ],
+   "conclusion_event": 654,
+   "post_reveal_source_event": null,
+   "primary_origin": "opening",
+   "adjudicated_origin": "opening",
+   "adjudicated_d3": false,
+   "adjudication": null,
+   "brief_fixed_primary_annotation": true,
+   "topic_stratum_posthoc": "prescribed_plan",
+   "independent_seat_invention": "unknown: external briefs and per-seat targets not reconstructed"
+  },
+  {
+   "ordinal": 12,
+   "room": "swarm-223815-5zui-room",
+   "origin": "mixed",
+   "d3": false,
+   "reason": "Distribution/Show-HN action is inherited, but final rejects the opening causal claim that 6.7% star rate proves page conversion. Pitch/selection dissent is new material.",
+   "opening_sources": [],
+   "conclusion_event": 765,
+   "post_reveal_source_event": null,
+   "primary_origin": "mixed",
+   "adjudicated_origin": "mixed",
+   "adjudicated_d3": false,
+   "adjudication": null,
+   "brief_fixed_primary_annotation": false,
+   "topic_stratum_posthoc": "open_question",
+   "independent_seat_invention": "unknown: external briefs and per-seat targets not reconstructed"
+  },
+  {
+   "ordinal": 13,
+   "room": "swarm-130459-mrw4-soccer",
+   "origin": "opening",
+   "d3": false,
+   "reason": "Soccer taker edge is score/price latency and unreachable on delayed free feeds; measured final retains that opening hypothesis.",
+   "opening_sources": [
+    {
+     "event": 34,
+     "line": 35,
+     "author": "soccer-claude-4",
+     "text": "No view on the answer yet. Split by wallet: I take the taker-heavy pair ARocky33 (96% taker) vs failing namesake Rocky31, plus LonnieHawkins (82%): pull their fills, time each against in-match events (goals) and the price path, to tell score-latency taking from pre-match value. Expect: in-play latency edge exists but is not reachable at 2s+ delay with free score feeds; must be measured."
+    },
+    {
+     "event": 38,
+     "line": 39,
+     "author": "soccer-claude-1",
+     "text": "Split the 6 wallets by taker share: takers (LonnieHawkins 82%, ARocky33 96%, Betyourself 72%) vs posters (0xB595, ZaiZoiBele, Gordinho ~25-30%). First decode from public fills: which market types, timing vs kickoff/goals, hold-to-settlement share. My prior: takers snipe in-play after goals (needs feed lead, measure it); posters quote live books. I take the taker trio + ARocky33/Rocky31."
+    },
+    {
+     "event": 106,
+     "line": 107,
+     "author": "soccer-claude-3",
+     "text": "Decode from fills first: takers (ARocky33, LonnieHawkins, Betyourself) vs posters (0xB595, ZaiZoiBele, Gordinho). Prior: takers buy in-play near-certain outcomes late (score-lag harvest); posters quote both sides for spread+rewards. I take ARocky33 vs Rocky31 and taker timing vs match clock, then test if a 2s-delayed stranger paying taker fee keeps any edge."
+    },
+    {
+     "event": 55,
+     "line": 56,
+     "author": "soccer-claude-2",
+     "text": "Split the 6 wallets by taker share first: takers (ARocky33 96%, LonnieHawkins 82%, Betyourself 72%, holds 1-19 min) are probably in-play score/price-lag traders; makers (ZaiZoiBele, 0xB595, Gordinho ~25-30%) quote for spread/rewards. I'll decode the takers: timing of fills vs goals and price moves, then test whether a free score feed leads the book by >2s after fees."
+    }
+   ],
+   "conclusion_event": 9122,
+   "post_reveal_source_event": null,
+   "primary_origin": "opening",
+   "adjudicated_origin": "opening",
+   "adjudicated_d3": false,
+   "adjudication": null,
+   "brief_fixed_primary_annotation": false,
+   "topic_stratum_posthoc": "open_question",
+   "independent_seat_invention": "unknown: external briefs and per-seat targets not reconstructed"
+  },
+  {
+   "ordinal": 14,
+   "room": "swarm-174537-07hw-room",
+   "origin": "opening",
+   "d3": false,
+   "reason": "Narrow residual redelivery/receipt faults and measurement under initial delivery-cost audit; broad unmeasured claims withdrawn, not every narrower finding is a new frame.",
+   "opening_sources": [
+    {
+     "event": 35,
+     "line": 36,
+     "author": "union-alpha-9",
+     "text": "Delivery/context-cost area. The hub wastes tokens re-sending what agents already hold: wait/read payloads repeat held content, board manifests arrive whole, and hints repeat without escalation. I'll measure data/*.jsonl for duplicate delivery, repeating refusals (stale-send, timeouts), and ignored hints, then propose hub-side delta-only cursors and hint escalation."
+    },
+    {
+     "event": 38,
+     "line": 39,
+     "author": "union-alpha-8",
+     "text": "Delivery/context cost: the hub re-delivers what agents already hold \u2014 transcripts in wait results, repeated refusals after the same hint, full room state on every call. Fix: carry diffs (seq deltas, \"N new, 2 addressed to you\"), not transcripts; make each hint name the single expected next action; cap board manifests. Evidence to come from data/*.jsonl refusal and repeat-hint counts."
+    },
+    {
+     "event": 50,
+     "line": 51,
+     "author": "union-alpha-4",
+     "text": "The hub over-carries: wait_for_messages re-delivers text agents already hold, boilerplate hints repeat every call, board manifests carry no cost signal, and repeated stale-send refusals waste turns. Fix direction: deliver deltas with one-line notices, never re-deliver held text, and make each hint name the exact next action. I will measure this from data/*.jsonl before proposing."
+    },
+    {
+     "event": 31,
+     "line": 32,
+     "author": "union-alpha-6",
+     "text": "My area: delivery & context cost. Hypothesis: the hub over-delivers \u2014 full recent_messages on every tool call, verbose refusals repeated verbatim, hints re-explaining rules agents already hold \u2014 while under-delivering deltas (board diffs, amend diff-only). I'll quantify from data/*.jsonl: bytes re-sent vs new, refusal loops, hint-follow rate, then propose hub-carries-deltas with a measure loop."
+    },
+    {
+     "event": 55,
+     "line": 56,
+     "author": "union-alpha-3",
+     "text": "Delivery & context cost: hub.ts already does \"refusal as delivery\" (answerBeforeWaiting) and settles the read cursor on stale-send refusal so batches aren't re-shipped. I'll measure data/*.jsonl for redundant redelivery, repeated refusals, and hints weak models loop past, then propose what the hub should carry instead."
+    }
+   ],
+   "conclusion_event": 356,
+   "post_reveal_source_event": null,
+   "primary_origin": "opening",
+   "adjudicated_origin": "opening",
+   "adjudicated_d3": false,
+   "adjudication": null,
+   "brief_fixed_primary_annotation": false,
+   "topic_stratum_posthoc": "open_question",
+   "independent_seat_invention": "unknown: external briefs and per-seat targets not reconstructed"
+  },
+  {
+   "ordinal": 15,
+   "room": "swarm-234901-pmyh-room",
+   "origin": "midroom",
+   "d3": true,
+   "reason": "No opening recommends raising to2000 or replacing mandate with inline-clause dominance; the final ranks that measured action. Positive source exp/Q1 event3019, author claude-opus-5-5-1, 2026-10-11T00:24:46.909Z.",
+   "opening_sources": [],
+   "conclusion_event": 6327,
+   "post_reveal_source_event": 3019,
+   "primary_origin": "midroom",
+   "adjudicated_origin": "opening",
+   "adjudicated_d3": false,
+   "adjudication": "Opening event58 explicitly predicts WHICH clause is shown; clause-in-view remains final mechanism. Raising cap to2000 is an outcome/action detail.",
+   "adjudicated_opening_events": [
+    58
+   ],
+   "adjudicated_opening_sources": [
+    {
+     "event": 58,
+     "pid": "p_e70d7225",
+     "text": "No position yet: nothing about caps or mandates is proven. Prior: the 320 cut probably costs little because agents rarely act on briefs (23% touch), so I expect small or null cap effects and a larger effect from WHICH clause is shown. I will build the shared hook-delivered behaviour harness and test Q1 on it; verdict follows the preregistered deterministic check, not my prior."
+    }
+   ],
+   "brief_fixed_primary_annotation": false,
+   "topic_stratum_posthoc": "open_question",
+   "independent_seat_invention": "unknown: external briefs and per-seat targets not reconstructed"
+  },
+  {
+   "ordinal": 16,
+   "room": "swarm-133013-64sr-room",
+   "origin": "opening",
+   "d3": false,
+   "reason": "Continue accepted mobile direction and integrate preserved patches; owner later changes commit handoff, an execution steer rather than a new product framing.",
+   "opening_sources": [
+    {
+     "event": 9,
+     "line": 10,
+     "author": "opus-1",
+     "text": "I take step 1 now: merge 7aa74fa, apply opus-1.patch then 6-astra-5.patch on my branch, resolve the 4 overlaps, point Chats' NewChat calls at the blank-chat route, drop the linking harness, commit early. Others should not start Flows/onboarding edits until that commit exists to branch from; one seat owns the simulator at a time via claim/simulator."
+    },
+    {
+     "event": 44,
+     "line": 45,
+     "author": "6-astra-3",
+     "text": "I ratify the accepted native direction and preserved chat work. I can own Onboarding's double keyboard fix and supporting-screen inset/accessibility audit, then help native verification once the integrated branch stabilizes. No palette, bar or IA redesign; known lifecycle races need explicit regression checks."
+    },
+    {
+     "event": 39,
+     "line": 40,
+     "author": "6-astra-4",
+     "text": "Continue the approved native bars/palette and existing patches. I can own Onboarding's duplicate keyboard handling plus supporting-screen inset and accessibility audit; integration and Flows remain separate slices. Native proof must be taken from the combined branch with one simulator driver and no source edits during captures."
+    },
+    {
+     "event": 34,
+     "line": 35,
+     "author": "6-astra-2",
+     "text": "Continue from the prior verified direction, integrate first, then close specific behavioral and native-layout gaps. I can own the two use-start-chat regressions and their tests while integration and Flow completion proceed in separate files."
+    }
+   ],
+   "conclusion_event": 3413,
+   "post_reveal_source_event": null,
+   "primary_origin": "opening",
+   "adjudicated_origin": "opening",
+   "adjudicated_d3": false,
+   "adjudication": null,
+   "brief_fixed_primary_annotation": true,
+   "topic_stratum_posthoc": "prescribed_plan",
+   "independent_seat_invention": "unknown: external briefs and per-seat targets not reconstructed"
+  },
+  {
+   "ordinal": 17,
+   "room": "swarm-102347-phin-room",
+   "origin": "opening",
+   "d3": false,
+   "reason": "Build ranks1-3 by reference, beginning with parsed verify head; prescribed by brief and restated at reveal.",
+   "opening_sources": [
+    {
+     "event": 53,
+     "line": 54,
+     "author": "sonnet-5",
+     "text": "Ratify swarm-100622-6jdx's ranked plan; build ranks 1-3 only, verbatim per the assignment. I've read src/hub.ts's verifiedBy (2142-2155, content-blind, confirmed) and docs/swarm-protocol-spec.md C.3's JSON head shape. Propose claiming Rank 1 (hub.ts verifiedBy + prompts/scripts) since I've already traced the exact call sites."
+    },
+    {
+     "event": 25,
+     "line": 26,
+     "author": "sonnet-4",
+     "text": "I'll claim Rank 1 (verify-verdict JSON parsing in verifiedBy()) \u2014 smallest, most self-contained, and everything else deadlocks without it since every rank needs a verify/* entry. Will read src/hub.ts, the spec, and the unmerged crup branch before claiming on the board."
+    },
+    {
+     "event": 23,
+     "line": 24,
+     "author": "sonnet-1",
+     "text": "Ratifying swarm-100622-6jdx's plan by reference, no re-measurement. I'll take Rank 1 (JSON verify head, gate on exit_code===0) \u2014 I already traced verifiedBy() (hub.ts:2142-2155) in that room's evidence/verify-entry-content. Test-first, then update every prompt/tool desc + smoke.ts + regression scripts that write verify/* in the same commit."
+    },
+    {
+     "event": 28,
+     "line": 29,
+     "author": "sonnet-3",
+     "text": "I'll claim Rank 1 (machine-readable verify verdicts, hub-parsed) \u2014 foundational since Ranks 2/3 also write verify/* entries that must stay valid under the new gate. Plan: parse JSON head in verifiedBy(), gate on exit_code===0, update all prompts/tool descriptions/smoke scripts that write verify entries in the same commit."
+    },
+    {
+     "event": 37,
+     "line": 38,
+     "author": "sonnet-2",
+     "text": "Ratify swarm-100622-6jdx's plan by reference, no re-measurement. I'll take Rank 1 (JSON verify-head parsing in verifiedBy(), gated on exit_code===0) unless already claimed \u2014 it's the one that deadlocks every other rank if unshipped, per the task brief. Will check swarm/swarm-010513-crup-verify-verdicts/openrouter-recruit-2 first."
+    }
+   ],
+   "conclusion_event": 1466,
+   "post_reveal_source_event": null,
+   "primary_origin": "opening",
+   "adjudicated_origin": "opening",
+   "adjudicated_d3": false,
+   "adjudication": null,
+   "brief_fixed_primary_annotation": true,
+   "topic_stratum_posthoc": "prescribed_plan",
+   "independent_seat_invention": "unknown: external briefs and per-seat targets not reconstructed"
+  },
+  {
+   "ordinal": 18,
+   "room": "swarm-011152-pen5-room",
+   "origin": "opening",
+   "d3": false,
+   "reason": "Resume and integrate stranded settlement branches with crash fix first; S10 details and remaining limits are implementation outcomes.",
+   "opening_sources": [
+    {
+     "event": 39,
+     "line": 40,
+     "author": "opus-4",
+     "text": "I'll take stranded item 4: integrate opus-4-s4 @224098e (collision/doors/yards, catalog-range reseat) and opus-1-s4 @2449fc4 (landmark seating) onto 0dbe3f8 in one worktree, tsc+targeted tests+build, post sha for non-author verify. Crash fix (opus-8) should go first to whoever claims it; I'll rebase onto it if it lands before me."
+    },
+    {
+     "event": 27,
+     "line": 28,
+     "author": "opus-2",
+     "text": "opus-2: I'll take stranded branch #1 (opus-8 crash fix @5c434ca) first \u2014 merge into my worktree, tsc/tests/build, post sha for a non-author verify. Then #4 (opus-1-s4 + opus-4-s4) if unclaimed. Suggest one branch per worker, claims on board as claim/<branch>."
+    },
+    {
+     "event": 37,
+     "line": 38,
+     "author": "opus-5",
+     "text": "I'll take stranded branch #1 (opus-8 crash fix, 5c434ca) first: merge into my worktree, tsc + targeted tests + build, plus a browser reload-then-grow-2nd-culture repro. Then #3 (sonnet-3 wonders) if free. Suggest one integrator per branch, claims on board, serialize merges into alder/settlement-variety in order 1,4,2,3,5."
+    },
+    {
+     "event": 25,
+     "line": 26,
+     "author": "opus-1",
+     "text": "I'll take stranded branch #1 (opus-8 crash fix + crafting + grow hook): merge into my worktree on latest alder/settlement-variety, tsc/tests/build, and a reload-then-grow-2nd-culture repro. Others: split #2 sonnet-9, #3 sonnet-3, #4 s4 pair, #5 perf2; verifier cross-checks each sha. S10 after."
+    },
+    {
+     "event": 60,
+     "line": 61,
+     "author": "sonnet-3",
+     "text": "I authored the taller-wonders branch (sonnet-3@aecb8da) last room, so I'll bring it into a fresh worktree merged onto 0dbe3f8, run tsc/tests/build, and hand it to a non-author for verify. Branches 2 (sonnet-9 rural-ring) and 5 (opus-perf2) still need takers."
+    }
+   ],
+   "conclusion_event": 2099,
+   "post_reveal_source_event": null,
+   "primary_origin": "opening",
+   "adjudicated_origin": "opening",
+   "adjudicated_d3": false,
+   "adjudication": null,
+   "brief_fixed_primary_annotation": true,
+   "topic_stratum_posthoc": "prescribed_plan",
+   "independent_seat_invention": "unknown: external briefs and per-seat targets not reconstructed"
+  },
+  {
+   "ordinal": 19,
+   "room": "swarm-204607-mrkt-room",
+   "origin": "midroom",
+   "d3": true,
+   "reason": "Final top action headline-first rendering differs from shared opening checkable-marker proposal. Positive first passage evidence/consumers-b event268 by sonnet-3 at2026-10-10T20:47:02.275Z; title-renderer refinement event462.",
+   "opening_sources": [],
+   "conclusion_event": 654,
+   "post_reveal_source_event": 268,
+   "primary_origin": "midroom",
+   "adjudicated_origin": "opening",
+   "adjudicated_d3": false,
+   "adjudication": "Independent audit by6-1-sol-4: main format-minor/no-MADR/retrieval-scope framing already at reveal; rank1 headline-first is new action-level material.",
+   "adjudicated_opening_events": [
+    31,
+    33,
+    35,
+    37,
+    44
+   ],
+   "adjudicated_opening_sources": [
+    {
+     "event": 31,
+     "pid": "p_9752bd07",
+     "text": "Prior: format is a minor lever; retrieval precision, Scope globs and deterministic checks dominate. Keep devkit's own format (no MADR rename). Small changes only: a machine-readable \"Checkable-by\" marker (code/static/principle) so judges skip principle rulings. Will verify with sources."
+    },
+    {
+     "event": 33,
+     "pid": "p_95f8f47b",
+     "text": "Prior: format is a weak lever; retrieval/scoping/deterministic checks dominate. Keep devkit's own fields, no MADR migration. Small additions only: a \"code-checkable?\" marker for judges and optional machine-checkable rule per Target. Will verify with sources."
+    },
+    {
+     "event": 35,
+     "pid": "p_9b73f74f",
+     "text": "Prior: format is a weak lever; retrieval, Scope globs and deterministic checks dominate. Keep devkit's own fields; add at most a small \"Checkable-by\" marker (code-evidence vs principle) and optional machine rule. No MADR migration. Will verify with sources."
+    },
+    {
+     "event": 37,
+     "pid": "p_b1d4725b",
+     "text": "Prior: format is a minor lever; retrieval precision, Scope globs and deterministic checks dominate. Keep changes small: a machine-readable \"Checkable:\" marker (code-evidence vs principle-only) so judges abstain, optional deterministic rule per Target. Keep devkit's field names; add MADR-compatible export, not migration."
+    },
+    {
+     "event": 44,
+     "pid": "p_be424f3f",
+     "text": "Format is a minor lever; retrieval precision, Scope globs and deterministic checks dominate (2602.07609 says so). Recommend small: keep devkit's fields, add one machine-readable \"Checkable-by\" marker (code-evidence vs principle-only) and optional deterministic rule; no MADR rename."
+    }
+   ],
+   "brief_fixed_primary_annotation": false,
+   "topic_stratum_posthoc": "open_question",
+   "independent_seat_invention": "unknown: external briefs and per-seat targets not reconstructed"
+  },
+  {
+   "ordinal": 20,
+   "room": "swarm-140213-25wq-room",
+   "origin": "opening",
+   "d3": false,
+   "reason": "Reproduce six alleged defects and ship only justified ones; specific surviving item4 and its cause were already stated at reveal.",
+   "opening_sources": [
+    {
+     "event": 84,
+     "line": 85,
+     "author": "sonnet-5",
+     "text": "Sonnet-5: I'll do cause analysis + fixes. Already traced item 4 in code: server.ts's concluded-room hint branch relies on attentionFocus() which explicitly excludes concluded rooms (hub.ts:1523), but addressed_to_you uses addressedBy() which has no such check \u2014 real contradiction, real bug, small fix. Claiming it."
+    },
+    {
+     "event": 37,
+     "line": 38,
+     "author": "haiku-2",
+     "text": "Haiku-2 joining to verify each defect reproducibly. I'll confirm root causes in code, gather failing regression tests against main, and spot-check fixes on branches. Only items with all three (repro, backing, verify) board entries will appear in the final proposal\u2014dropped items with evidence count as good outcomes."
+    },
+    {
+     "event": 35,
+     "line": 36,
+     "author": "haiku-6",
+     "text": "Start with reproduction and evidence: read the frink room's messages and board to confirm each defect's symptoms, then build regression scripts. Verify each fix by running the test suite. Coordinate claims on the board to avoid conflicts. Maintain proven \u2192 shipped, unreproducible \u2192 dropped discipline."
+    },
+    {
+     "event": 39,
+     "line": 40,
+     "author": "haiku-4",
+     "text": "Haiku focus: reproduce each defect systematically, gather evidence from frink room, find backing in decisions and prior runs. New mechanics without measurement get dropped to recommendations. Known intended behaviors stay unless reason changes."
+    }
+   ],
+   "conclusion_event": 1623,
+   "post_reveal_source_event": null,
+   "primary_origin": "opening",
+   "adjudicated_origin": "opening",
+   "adjudicated_d3": false,
+   "adjudication": null,
+   "brief_fixed_primary_annotation": true,
+   "topic_stratum_posthoc": "prescribed_plan",
+   "independent_seat_invention": "unknown: external briefs and per-seat targets not reconstructed"
+  }
+ ],
+ "independent_audit": {
+  "first15": "audit/d3-claude-opus-5-5-1",
+  "room19": "audit/d3-room19-6-1-sol-4",
+  "first15_origin_agreement": "12/15",
+  "first15_binary_D3_agreement": "14/15",
+  "author_primary_seal": "5e61831bdeb47964c74d8e3f7c897a3defd450fa88d2b49114841b806b11a017",
+  "primary_preserved": true
+ },
+ "topic_strata_source": "evidence/door-brief-strata, post-hoc topic-only, not independently audited"
+}

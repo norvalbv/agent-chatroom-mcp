@@ -1,0 +1,16 @@
+{"type":"room","room":"fixture-steers","ts":"2026-10-29T00:00:00Z"}
+{"type":"join","room":"fixture-steers","p":{"name":"benji","agent":"human"}}
+{"type":"join","room":"fixture-steers","p":{"name":"chair","agent":"claude","role":"chair"}}
+{"type":"join","room":"fixture-steers","p":{"name":"worker","agent":"codex"}}
+{"type":"message","msg":{"seq":1,"kind":"chat","from":{"name":"worker","agent":"codex"},"content":"Our hypothesis is ready."}}
+{"type":"message","msg":{"seq":2,"kind":"chat","from":{"name":"benji","agent":"human"},"content":"Are we asking the wrong question?"}}
+{"type":"message","msg":{"seq":3,"kind":"chat","from":{"name":"chair","agent":"claude"},"content":"Please recruit a reviewer."}}
+{"type":"message","msg":{"seq":4,"kind":"chat","from":{"name":"chair","agent":"claude"},"content":"Compare the alternative hypotheses, then restart the blocked tool."}}
+{"type":"message","msg":{"seq":5,"kind":"chat","from":{"name":"benji","agent":"human"},"content":"thanks"}}
+{"type":"message","msg":{"seq":6,"kind":"board","from":{"name":"chair","agent":"claude"},"content":"[BOARD] update"}}
+{"type":"board","room":"fixture-steers","key":"inbox/parent/tool","entry":{"by":"chair","text":"Retry the tool."}}
+{"type":"board","room":"fixture-steers","key":"inbox/parent/tool","entry":{"by":"chair","text":"Correction: the alternative hypothesis may explain it."}}
+{"type":"board","room":"fixture-steers","key":"inbox/parent/tool.ack","entry":{"by":"chair","text":"ack"}}
+{"type":"board","room":"fixture-steers","key":"inbox/worker","entry":{"by":"worker","text":"wrong question"}}
+{"type":"steer_injected","room":"fixture-steers","content":"Are we asking the wrong question?"}
+{"type":"message","msg":{"seq":7,"kind":"chat","from":{"name":"benji","agent":"human"},"content":"Use sk-or-v1-fixture_secret_123 for the tool."}}

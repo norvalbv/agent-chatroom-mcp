@@ -105,4 +105,8 @@ const verifierOpening = [{ type: "join", p: { id: "v", name: "verifier", agent: 
   { type: "opening", pid: "v", content: "I will check the tests." }, ...events];
 assert.equal(provenance(verifierOpening, "fixture").openings.length, 2, "legacy verifier-policy opening is not a worker framing");
 assert.equal(provenance(verifierOpening, "fixture", { allSeats: true }).openings.length, 3, "all-seat sensitivity remains available");
+const replacedOpening = [...events.slice(0, 3), { type: "opening", pid: "a", content: "Retracted frame." }, ...events.slice(3)];
+const replaced = provenance(replacedOpening, "fixture");
+assert.equal(replaced.openings.length, 2, "reveal holds the last opening per participant, not each submitted version");
+assert.equal(replaced.openings.some(x => x.text === "Retracted frame."), false);
 console.log("winner-provenance-regression: OK");

@@ -73,12 +73,13 @@ function documents(events: Event[], allSeats = false) {
     source, key, author: names.get(author) ?? author, event, ts: stamp(events[event]!),
     text, embedded_text: framingText(text), truncated: text.trim().length > 1200,
   });
-  const openings: Document[] = [], ideas = new Map<string, Document>(), snapshots: Document[] = [];
+  const openings = new Map<string, Document>(), ideas = new Map<string, Document>(), snapshots: Document[] = [];
+  const reveal = events.findIndex(e => e.type === "openings_revealed");
   const proposals = new Map<string, string>();
   const seeded = new Set<string>(); let final: Document | null = null;
   for (let i = 0; i < events.length; i++) {
     const e = events[i]!;
-    if (e.type === "opening" && typeof e.content === "string") openings.push(make("opening", e.pid, e.pid, i, e.content));
+    if (e.type === "opening" && typeof e.content === "string" && (reveal < 0 || i < reveal)) openings.set(e.pid, make("opening", e.pid, e.pid, i, e.content));
     if (e.type === "openings_revealed") for (const key of e.ideas_seeded ?? []) seeded.add(key);
     if (e.type === "board" && typeof e.entry?.text === "string" && e.entry.text.trim()) {
       if (String(e.key).startsWith("idea/") && !ideas.has(e.key)) ideas.set(e.key, make("idea", e.key, e.entry.by ?? "unknown", i, e.entry.text));
@@ -106,7 +107,7 @@ function documents(events: Event[], allSeats = false) {
   }
   const excluded = new Set(events.filter(e => e.type === "join" && (e.p?.agent === "human" || ["chair", "verifier"].includes(e.p?.role) || e.p?.name === "verifier"))
     .map(e => e.p.name));
-  return { openings: openings.filter(s => allSeats || !excluded.has(s.author)), ideas: [...ideas.values()],
+  return { openings: [...openings.values()].filter(s => allSeats || !excluded.has(s.author)), ideas: [...ideas.values()],
     seeded: [...ideas.values()].filter(d => seeded.has(d.key) && (allSeats || !excluded.has(d.author))),
     snapshots: snapshots.filter(s => allSeats || !excluded.has(s.author)), final, names, reverse };
 }

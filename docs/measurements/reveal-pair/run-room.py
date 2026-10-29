@@ -2,13 +2,18 @@
 (swarm-193427-ztnx, 6-1-sol-4) for a code task. Run from the worktree whose dist/ is the build under test:
   python3 -I docs/measurements/reveal-pair/run-room.py <S1|S2|S3|A1|B1|B2|A2|A3|B3|DEV> [--port 7881] [--task bench-printf-format]
 B* and DEV start the hub with CHATROOM_REVEAL_RIVALS=1; S* and A* without. Outputs go to swarms/reveal-pair/<slot>/.
+outcome is one of pass | fail | timeout | infra, decided only from the run's own artifacts (decision/reveal-rivals-protocol):
+infra if any infra_reasons (runner error, no result.json, room missing, fewer than 3 seats joined, a usage or session limit
+in the launcher log or result.json, the scorer's infrastructure_error, a frozen hash changed, a STOP file or the runner's
+1080 s guard); else pass or fail if the room concluded (oracle task_pass or not); else timeout. Infra rooms do not count
+toward the screen's 1-2/3 gate and are rerun once as <slot>r; a fail or timeout is never replaced.
 The hub and the launcher are this script's own children, stopped by PID in `finally`; the hub never runs --always."""
 import sys,os,json,time,pathlib,tempfile,subprocess,hashlib,shutil,re,urllib.request
 args=sys.argv[1:]; slot=args[0]
 def opt(name,default):
   return args[args.index(name)+1] if name in args else default
 port=int(opt('--port','7881')); task_id=opt('--task','bench-printf-format')
-if not re.fullmatch(r'(S[1-3]|[AB][1-3]|DEV\d?|DRY\d?)',slot): raise SystemExit('unknown slot')
+if not re.fullmatch(r'((S[1-3]|[AB][1-3])r?|DEV\d?|DRY\d?)',slot): raise SystemExit('unknown slot')
 if slot.startswith('DRY')!=('--dry' in args): raise SystemExit('DRY slots and --dry go together')
 if not 7880<=port<=7887: raise SystemExit('port must be 7880-7887')
 repo=pathlib.Path.cwd(); task=repo/'tasks'/task_id
@@ -67,7 +72,7 @@ try:
     launch=subprocess.Popen(argv,cwd=repo,env=env,stdout=out,stderr=subprocess.STDOUT);manifest['launcher_pid']=launch.pid;save('manifest.json',manifest)
     while launch.poll() is None:
       if (root/'STOP').exists() or time.time()-start>1080:
-        manifest['operator_stopped']=True;launch.terminate();break
+        manifest['operator_stopped']='stop_file' if (root/'STOP').exists() else 'runner_guard';launch.terminate();break
       time.sleep(.5)
     code=launch.wait(timeout=30)
   manifest['launcher_exit_code']=code;save('manifest.json',manifest)
@@ -93,9 +98,24 @@ try:
     if isinstance(m,dict) and (m.get('tag')=='rival' or m.get('replyTo') in rival_asks): texts.append(c)
   names_error=any(re.search(r'exponent',t,re.I) and re.search(r'(exact|binary|power of (ten|10)|after rounding|1e-0?7|%\.17g|9\.99)',t,re.I) for t in texts)
   names_check=any(re.search(r'(/usr/bin/printf|system printf|real printf|libc|C printf|snprintf|python.{0,20}%)',t,re.I) for t in texts)
+  joined={(e.get('p') or {}).get('name') for e in count('join') if (e.get('p') or {}).get('agent')!='human'}
+  limit_re=re.compile(r"usage limit|session limit|hit your [^\n]{0,30}limit|rate.limited|overloaded_error",re.I)
+  run_dir=repo/'swarms'/room.removesuffix('-room') if room else None  # seat logs: a usage limit can be only in a seat's own output (src/respawn.ts)
+  logs=[root/'launcher.log']+(sorted(run_dir.glob('*.log'))+sorted(run_dir.glob('*.out')) if run_dir and run_dir.is_dir() else [])
+  launcher_text='\n'.join(f.read_text(errors='replace') for f in logs if f.exists())
+  infra=[]
+  if manifest.get('operator_stopped'): infra.append(str(manifest['operator_stopped']))
+  if not (root/'result.json').exists(): infra.append('no_result_json')
+  if not room or (result.get('outcome') or {}).get('kind')=='room_missing': infra.append('room_missing')
+  if room and len(joined)<3: infra.append(f'seats_joined_{len(joined)}_of_3')
+  if limit_re.search(launcher_text) or limit_re.search(json.dumps(result)): infra.append('usage_or_session_limit')
+  if scored.get('reason')=='infrastructure_error': infra.append('scorer_infrastructure_error')
+  if not unchanged: infra.append('frozen_hash_changed')
+  outcome='infra' if infra else ('pass' if scored.get('passed') else 'fail') if conclusion is not None else 'timeout'
   framing={}
   for e in count('framing'): framing[f"{e['action']}{'/assigned' if e.get('by_assigned') else ''}"]=framing.get(f"{e['action']}{'/assigned' if e.get('by_assigned') else ''}",0)+1
-  summary={'slot':slot,'rivals':rivals,'room':room,'concluded':conclusion is not None,'timed_out':timed,'primary_pass':bool(conclusion is not None and scored.get('passed') and unchanged),
+  summary={'slot':slot,'rivals':rivals,'room':room,'outcome':outcome,'infra_reasons':infra,'counts_toward_gate':outcome!='infra','concluded':conclusion is not None,'timed_out':timed,'primary_pass':outcome=='pass',
+    'launcher_exit_code':code,'logs_scanned':[str(f) for f in logs if f.exists()],'seats_joined':sorted(n for n in joined if n),'run_outcome':result.get('outcome'),
     'artifact':scored.get('reason'),'failing_cases':failing[:20],'failing_n':len(failing),'anti_tamper_unchanged':unchanged,'frozen':frozen,'duration_s':round(time.time()-start,2),
     'usage':result.get('usage'),'per_seat':[{'name':x.get('name'),'cost':x.get('cost'),'killed_at_timeout':x.get('killedAtTimeout')} for x in result.get('scorecard',[])],
     'openings':len(count('opening')),'alternatives':sum(len(e.get('alternatives') or []) for e in count('opening')),
@@ -105,9 +125,11 @@ try:
     'rival_answered':[{k:e.get(k) for k in ('seat','key','via','held_claim','minutes_since_reveal','chars')} for e in count('rival_answered')],
     'framing_events':framing,'names_case458_error':names_error,'names_catching_check':names_check,'framing_texts_n':len(texts),
     'conclusion':conclusion,'room_log':str(log) if log else None}
-  save('summary.json',summary);print(json.dumps({k:summary[k] for k in ('slot','room','concluded','timed_out','primary_pass','artifact','failing_n','failing_cases','rival_assigned','rival_answered','framing_events','names_case458_error','names_catching_check','duration_s')}),flush=True)
+  save('summary.json',summary);print(json.dumps({k:summary[k] for k in ('slot','room','outcome','infra_reasons','concluded','timed_out','primary_pass','artifact','failing_n','failing_cases','rival_assigned','rival_answered','framing_events','names_case458_error','names_catching_check','duration_s')}),flush=True)
 except Exception as e:
-  manifest['error']=str(e);save('manifest.json',manifest);print('ROOM ERROR:',str(e),flush=True);raise
+  manifest['error']=str(e);save('manifest.json',manifest)
+  if not (root/'summary.json').exists(): save('summary.json',{'slot':slot,'rivals':rivals,'outcome':'infra','infra_reasons':[f'runner: {e}'],'counts_toward_gate':False,'primary_pass':False})
+  print('ROOM ERROR (infra):',str(e),flush=True);raise
 finally:
   for child in [launch,hub]:
     if child and child.poll() is None:

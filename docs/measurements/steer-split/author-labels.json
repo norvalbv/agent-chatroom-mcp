@@ -1,0 +1,152 @@
+[
+  {
+    "id": "001a35c335e79e5f295edcf470a72126b793684a0e8307da93ce40bdbb4f2f47",
+    "label": "unblock",
+    "rationale": "Accounting/public scoring and slot approval allow current plan."
+  },
+  {
+    "id": "001ec76c6895cf98cdb195cbcfa538415293cfcea202c56a0b46fc0c568d5542",
+    "label": "both",
+    "rationale": "Replaces unreliable strategy replay with calibrated fill model, plus staged assignments."
+  },
+  {
+    "id": "0027ba4a2a0e86271eb8818b36da69a56aaa5a6a2545f40c22ba6b4da7ce1e98",
+    "label": "unblock",
+    "rationale": "Shares working websocket tooling for existing data task."
+  },
+  {
+    "id": "0044ef5c532263765ade2750355b88022dfa508aa2445d11012e546e32fe1d91",
+    "label": "unblock",
+    "rationale": "Deployment approval and safety conditions."
+  },
+  {
+    "id": "00d5616ee408ebca3428f1f95279f740bb1b755b808b6e72630f2ea13b193cd6",
+    "label": "reframe",
+    "rationale": "Corrects proposed source target: authenticated endpoint cannot reveal competitors orders."
+  },
+  {
+    "id": "00f150cbe8ad17ae2f1ef9d2f4968367d6ff6e743759f4cfe7947d298142c0b3",
+    "label": "other",
+    "rationale": "Asks sources for same current build; no alternative framing or discriminator."
+  },
+  {
+    "id": "00fa2466324a4738f205fc188a85f27a08bf85a61c01b8cefb6d7277100d45ff",
+    "label": "unblock",
+    "rationale": "Holds vote until existing build integration verified."
+  },
+  {
+    "id": "00fe435ca2b7e8bf98d2fff149b0f8c6c06155f01cb54abd1877799a0878ac52",
+    "label": "both",
+    "rationale": "Tests no-market-top versus feed fault explanation, plus stop/fix/refreeze process."
+  },
+  {
+    "id": "010ba0b9ccbcd3a54ef318810e8135b23cc712a48b9c0c31aa3630c86f1ffd55",
+    "label": "unblock",
+    "rationale": "Applies existing risk sizing rule and scoreboard escalation."
+  },
+  {
+    "id": "013efffead46e38d9b2e5aa0f447e5c7f8035f3150303072ef96c773dbf9aaa8",
+    "label": "unblock",
+    "rationale": "Exchange-error safety, pacing, relaunch gates."
+  },
+  {
+    "id": "015672144109c88bc627ad4eb1d0447b9087dce2256ea9f78f6898d83f190dea",
+    "label": "both",
+    "rationale": "Same simulator reframe as sample 2 in another destination room, plus assignments."
+  },
+  {
+    "id": "015789322010fc1df323a28dff7b93b07293686520734c9e36c484399058d146",
+    "label": "unblock",
+    "rationale": "Retire earlier live tests to meet existing loss bound."
+  },
+  {
+    "id": "0225fbd2c1dbd3276ca3cc95822dc817aa0351500589b6fd4dc73b9188c3cea0",
+    "label": "other",
+    "rationale": "Thanks only."
+  },
+  {
+    "id": "023845052b457f16068129ba5ffd656d0a1db842bb0d2d138bd1df97acf74991",
+    "label": "reframe",
+    "rationale": "Reinterprets both chart profit and lag: recorder, not exchange, explains delay."
+  },
+  {
+    "id": "02f9ee10cc7e39f109efe3d09e0b00ceac248a4ea224fc84cef72ad590cea5e8",
+    "label": "unblock",
+    "rationale": "Adopt safety bug fix and request non-author review."
+  },
+  {
+    "id": "030d25a79370a9e8bb1af9c81ce2ce0023a4b5458447d3978340e74fa9668bb8",
+    "label": "both",
+    "rationale": "New queue hypothesis and evidence gate replace loss-making strategy, plus sizing rule."
+  },
+  {
+    "id": "037f05fd9dc1c66750246c42f226700d18f782f557af464ce9d33e53e32f11f4",
+    "label": "reframe",
+    "rationale": "Conflicting charts invalidate gross/net assumption; changes decisive measurement to fills."
+  },
+  {
+    "id": "0396411315ef796db8329243db336113ff68c7bb5e69ad01d181694bf7008807",
+    "label": "unblock",
+    "rationale": "Fix causal timing in replay harness; same research objective."
+  },
+  {
+    "id": "03b63b6579cd2fd4aa900cdacd391d40a37bbef05f73dab0f1e31e9772f0f1b8",
+    "label": "unblock",
+    "rationale": "Clarifies risk permission: WCL rather than spending cap."
+  },
+  {
+    "id": "03b66de98da9deb194d348e417d96eeeb71156725d12f465324c7ed2e70e0713",
+    "label": "unblock",
+    "rationale": "Provides optional provider access. Secret token redacted in retained packet."
+  },
+  {
+    "id": "03dd4fb04acedfe208dab80de41d21fb946fff34755ac818875212c05ac11ccf",
+    "label": "other",
+    "rationale": "Retrospective proactivity criticism with no new framing or process instruction."
+  },
+  {
+    "id": "03fbccdd86ce7bb3ce353fee7d0cb24089ec24277e35b5b37f97ad478f7a0a35",
+    "label": "other",
+    "rationale": "Acknowledgment only."
+  },
+  {
+    "id": "042ef45d07ee53b8dbdc5df05f4cba4f88b44af24a1abad86b5b9ef549e4dd6b",
+    "label": "unblock",
+    "rationale": "Merge confirmation and sequencing."
+  },
+  {
+    "id": "04449134a05325306d9a33b3ab8e2ee70c6e0fa27103a56508b1592e6f3bd938",
+    "label": "unblock",
+    "rationale": "Runner freshness flag repair for current strategy."
+  },
+  {
+    "id": "04f05e9735d5d5426b6150ab3f97fcfcbce6a18b6161c0a2cbbb15490216b1ef",
+    "label": "both",
+    "rationale": "Changes bottleneck hypothesis from websocket/parallel POST to serialized lane, plus requote action."
+  },
+  {
+    "id": "04fb018ebc222debc30b5b67e333745d21e2f987ea1e7dcaeceabe07cd41b72d",
+    "label": "reframe",
+    "rationale": "Negative replay can be fill-selection artifact rather than strategy failure."
+  },
+  {
+    "id": "053d8bc94c7f0177ece4a1924ff7b6c79e673a6018d9e80f4c6fe14e95b3097c",
+    "label": "both",
+    "rationale": "Exchange-wide outage replaces single-market silence explanation, plus revised stop rules."
+  },
+  {
+    "id": "055223fdae28b1d83fa6eac143fdc62020e375555671b978e515d7db32d691fc",
+    "label": "unblock",
+    "rationale": "Same WCL risk permission clarification to another room."
+  },
+  {
+    "id": "05ab494db7a0601780b752215ccc773ee54ee1105510ffc44c62ba766cc59bc2",
+    "label": "unblock",
+    "rationale": "Deadline and conclusion scheduling."
+  },
+  {
+    "id": "05ba9cc074a0172808a7994154216c6b7672adaafad56d7706eea6b380149ccf",
+    "label": "unblock",
+    "rationale": "Recruit more capable seats."
+  }
+]

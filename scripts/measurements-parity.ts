@@ -59,6 +59,7 @@ try {
     add("winner_provenance", "named_ideas", pv?.named_ideas ?? null, wp?.named_ideas ?? null);
     add("winner_provenance", "candidate_revisions", pv?.candidate_revisions ?? null, wp?.revisions?.length ?? null);
     add("winner_provenance", "revisions_with_receipt", pv?.revisions_with_receipt ?? null, wp?.revisions?.filter((r: any) => r.exposure_coverage === "receipt_present").length ?? null);
+    add("winner_provenance", "revisions_trigger_known", pv?.revisions_trigger_known ?? null, wp?.revisions?.some((r: any) => "trigger" in r) ? wp.revisions.filter((r: any) => r.trigger === "known").length : null);
     const hand = labels.provenanceLabels?.find((l) => l.room === room);
     if (hand) add("winner_provenance", "label", pv?.label ?? null, hand.adjudicated_origin ?? hand.origin);
 

@@ -76,7 +76,7 @@ function framingWidth(events: Ev[], room: string, o: MeasureOptions): Block<Reco
     const coverage = { statements: x.stmts.length, labelled: 0 };
     const timing = { statements: x.stmts.length, seats: new Set(x.stmts.map((s) => s.seat)).size, ...firstTimes(x) };
     if (!x.stmts.length) return { status: "unknown" as const, value: null, coverage, unknown: ["no framing statements"], source, validity };
-    if (!labels) return { status: "unknown" as const, value: { labeller: null, held_at_reveal: null, ...timing }, coverage, unknown: ["no validated labeller: held width at the reveal unknown"], source, validity };
+    if (!labels) return { status: "unknown" as const, value: { labeller: null, held_at_reveal: null, ...timing }, coverage, unknown: ["no validated labeller"], source, validity };
     const lab = (i: number) => { const s = x.stmts[i]!, k = String(s.adopts ?? i); return labels[k] ?? labels["*"] ?? `#${k}`; };
     coverage.labelled = x.stmts.filter((s) => labels[String(s.adopts ?? s.i)] !== undefined || labels["*"] !== undefined).length;
     const w = width(x, lab);
@@ -109,12 +109,14 @@ async function winnerProvenance(events: Ev[], room: string, o: MeasureOptions): 
     if (!hand) unknown.push("no hand label: origin unknown");
     const nearest = p.opening_matches[0];
     const receipts = p.revisions.filter((r) => r.exposure_coverage === "receipt_present").length;
+    // delivery receipts (item/delivery-receipts) add revisions[].trigger; a build or log without them gives null, not 0
+    const triggered = p.revisions.some((r) => "trigger" in r) ? p.revisions.filter((r) => (r as { trigger?: string }).trigger === "known").length : null;
     const value = {
       concluded: p.concluded, label: hand ? (hand.adjudicated_origin ?? hand.origin) : null, label_source: hand ? (hand.adjudicated_origin ? "hand (adjudicated)" : "hand (primary)") : null,
       origin: p.origin, nearest_opening: nearest && nearest.similarity !== null ? { author: nearest.author, similarity: round(nearest.similarity) } : null,
       brief_similarity: p.brief_similarity === null ? null : round(p.brief_similarity),
       closer_to_brief: p.brief_similarity !== null && nearest?.similarity != null ? p.brief_similarity > nearest.similarity : null,
-      named_ideas: p.named_ideas, candidate_revisions: p.revisions.length, revisions_with_receipt: receipts,
+      named_ideas: p.named_ideas, candidate_revisions: p.revisions.length, revisions_with_receipt: receipts, revisions_trigger_known: triggered,
     };
     return { status: (error ? "error" : p.final && (vectors || hand) ? "ok" : "unknown") as Block<unknown>["status"], value, coverage: { openings: p.openings.length, seeded: p.seeded.length, vectors: p.vector_coverage.available, requested: p.vector_coverage.requested }, unknown, source, validity, ...(error ? { error } : {}) };
   } catch (e) { return { status: "error" as const, value: null, coverage: {}, unknown: [], source, validity, error: ms(e) }; }
@@ -163,7 +165,7 @@ export function renderMeasurements(rooms: readonly RoomMeasurements[], errors: r
     const times = wv ? `${wv.statements} framing statements by ${wv.seats} seat(s); first checkable evidence ${wv.first_evidence_min === null ? "none logged" : `at ${wv.first_evidence_min} min (${wv.first_evidence_ref})`}; first run/web call ${wv.first_invocation_min === null ? "none logged" : `at ${wv.first_invocation_min} min`}; end at ${f(wv.end_min)} min, from the reveal` : "";
     t += `- **Held width at the reveal**: ${wv?.labeller ? `${wv.held_at_reveal} (hand labels; ${w.coverage.labelled}/${w.coverage.statements} statements labelled), max ${wv.max_held}, to one framing at ${f(wv.minutes_to_one)} min, collapse before evidence ${f(wv.collapse_before_evidence)}. ${times}` : `unknown (${why(w)})${times ? `. ${times}` : ""}`}. _${w.validity}._\n`;
     const p = m.winner_provenance, pv = p.value;
-    t += `- **Winner provenance**: ${pv ? `${pv.label ? `${pv.label === "opening" ? "present at the reveal" : pv.label === "midroom" ? "mid-room" : pv.label} (${pv.label_source})` : "origin unknown"}; nearest opening ${pv.nearest_opening ? `cosine ${pv.nearest_opening.similarity} (${pv.nearest_opening.author})` : "?"}; conclusion-to-brief cosine ${f(pv.brief_similarity)}${pv.closer_to_brief === null ? "" : pv.closer_to_brief ? " (closer to the brief)" : " (closer to an opening)"}; ${pv.candidate_revisions} candidate revision(s), ${pv.revisions_with_receipt} with a delivery receipt; idea keys named in the conclusion: ${pv.named_ideas.length ? pv.named_ideas.join(", ") : "none"}${why(p) ? ` (${why(p)})` : ""}` : `unknown (${why(p)})`}. _${p.validity}._\n`;
+    t += `- **Winner provenance**: ${pv ? `${pv.label ? `${pv.label === "opening" ? "present at the reveal" : pv.label === "midroom" ? "mid-room" : pv.label} (${pv.label_source})` : "origin unknown"}; nearest opening ${pv.nearest_opening ? `cosine ${pv.nearest_opening.similarity} (${pv.nearest_opening.author})` : "?"}; conclusion-to-brief cosine ${f(pv.brief_similarity)}${pv.closer_to_brief === null ? "" : pv.closer_to_brief ? " (closer to the brief)" : " (closer to an opening)"}; ${pv.candidate_revisions} candidate revision(s), ${pv.revisions_with_receipt} with an attention receipt${pv.revisions_trigger_known === null || pv.revisions_trigger_known === undefined ? "" : `, ${pv.revisions_trigger_known} with a known trigger (a delivery before it; causality unproven)`}; idea keys named in the conclusion: ${pv.named_ideas.length ? pv.named_ideas.join(", ") : "none"}${why(p) ? ` (${why(p)})` : ""}` : `unknown (${why(p)})`}. _${p.validity}._\n`;
     const st = m.steer_split, sp = st.value;
     t += `- **Steer split**: ${sp ? `${sp.steers} steer(s): ${sp.human} human, ${sp.chair} chair, ${sp.notes} inbox note(s), ${sp.corrections} correction(s); lexical cues reframe ${sp.proxy.reframe}, unblock ${sp.proxy.unblock}, both ${sp.proxy.both}, other ${sp.proxy.other}, uncertain ${sp.proxy.uncertain}` : `unknown (${why(st)})`}. _${st.validity}._\n\n`;
   }

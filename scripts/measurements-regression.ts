@@ -60,6 +60,7 @@ assert.deepEqual(none.opening_spread.coverage, { worker_openings: 3, embedded: 0
 assert.equal(none.winner_provenance.status, "unknown");
 assert.ok(none.winner_provenance.unknown.some((u: string) => /embedder absent/.test(u)));
 assert.equal(none.winner_provenance.value.candidate_revisions, provenance(events as any[], R).revisions.length);
+assert.equal(none.winner_provenance.value.revisions_trigger_known, null, "a build without delivery receipts gives no trigger count, not 0");
 assert.equal(none.framing_width.status, "unknown", "held width needs a validated labeller");
 assert.equal(none.framing_width.value.held_at_reveal, null);
 assert.equal(none.framing_width.value.first_evidence_min, 4, "evidence/bench at minute 5 is 4 min after the reveal");
